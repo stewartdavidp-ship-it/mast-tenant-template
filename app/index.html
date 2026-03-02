@@ -10,6 +10,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
   <style>
     :root {
       --amber: #C4853C;
@@ -1570,6 +1571,93 @@
     body.dark-mode .prod-line-item-row { border-color: #3a3a3a; }
     body.dark-mode .operator-tag { background: #3a3a3a; }
 
+    /* ---- Build Media & Stories ---- */
+    .media-capture-btn {
+      display: inline-flex;align-items:center;gap:8px;padding:16px 28px;
+      background:var(--teal);color:#fff;border:none;border-radius:12px;
+      font-size:1.1rem;font-family:'DM Sans',sans-serif;font-weight:600;
+      cursor:pointer;transition:background 0.2s;
+    }
+    .media-capture-btn:hover { background: #00897B; }
+    .media-gallery { display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:10px;margin-top:16px; }
+    .media-thumb {
+      position:relative;aspect-ratio:1;border-radius:8px;overflow:hidden;
+      background:#f5f5f5;border:1px solid #e0e0e0;cursor:pointer;
+    }
+    .media-thumb img { width:100%;height:100%;object-fit:cover; }
+    .media-thumb .delete-media {
+      position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);color:#fff;
+      border:none;border-radius:50%;width:24px;height:24px;font-size:14px;
+      cursor:pointer;display:none;align-items:center;justify-content:center;line-height:1;
+    }
+    .media-thumb:hover .delete-media { display:flex; }
+    .media-thumb .upload-progress {
+      position:absolute;bottom:0;left:0;right:0;height:4px;background:rgba(0,0,0,0.2);
+    }
+    .media-thumb .upload-progress-fill { height:100%;background:var(--teal);transition:width 0.2s; }
+    .media-count-badge {
+      display:inline-flex;align-items:center;gap:4px;
+      background:var(--teal);color:#fff;font-size:0.7rem;
+      padding:2px 7px;border-radius:10px;font-weight:600;vertical-align:middle;
+    }
+    .photo-preview-overlay {
+      position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);
+      display:flex;align-items:center;justify-content:center;z-index:10000;cursor:pointer;
+    }
+    .photo-preview-overlay img { max-width:90vw;max-height:90vh;border-radius:8px; }
+    /* Story Curation */
+    .story-entry-card {
+      display:flex;gap:12px;padding:14px;background:#faf8f5;border:1px solid #e8e2d8;
+      border-radius:10px;margin-bottom:10px;align-items:flex-start;
+    }
+    .story-entry-thumb { width:80px;height:80px;border-radius:8px;object-fit:cover;flex-shrink:0; }
+    .story-entry-fields { flex:1;display:flex;flex-direction:column;gap:6px; }
+    .story-entry-fields textarea, .story-entry-fields input {
+      width:100%;padding:6px 10px;border:1px solid #ddd;border-radius:6px;
+      font-family:'DM Sans',sans-serif;font-size:0.85rem;box-sizing:border-box;
+    }
+    .story-entry-actions {
+      display:flex;flex-direction:column;gap:4px;flex-shrink:0;
+    }
+    .story-move-btn {
+      width:30px;height:30px;border:1px solid #ddd;border-radius:6px;
+      background:#fff;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;
+    }
+    .story-move-btn:hover { background:#f0e8df; }
+    .story-remove-btn {
+      width:30px;height:30px;border:1px solid #f0c0c0;border-radius:6px;
+      background:#fff;cursor:pointer;font-size:14px;color:#C62828;display:flex;align-items:center;justify-content:center;
+    }
+    .story-remove-btn:hover { background:#fde0e0; }
+    .story-preview-container {
+      max-width:640px;margin:0 auto;padding:32px 20px;font-family:'Cormorant Garamond',serif;
+    }
+    .story-preview-container h1 { font-size:2rem;text-align:center;margin-bottom:24px;font-weight:400; }
+    .story-preview-entry { margin-bottom:32px; }
+    .story-preview-entry img { width:100%;border-radius:8px;margin-bottom:12px; }
+    .story-preview-entry .milestone { font-size:0.85rem;color:var(--teal);font-weight:600;font-family:'DM Sans',sans-serif;margin-bottom:4px; }
+    .story-preview-entry .caption { font-size:1.05rem;line-height:1.6;color:#333; }
+    .media-select-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px; }
+    .media-select-thumb {
+      position:relative;aspect-ratio:1;border-radius:8px;overflow:hidden;cursor:pointer;
+      border:3px solid transparent;transition:border-color 0.2s;
+    }
+    .media-select-thumb.selected { border-color:var(--teal); }
+    .media-select-thumb img { width:100%;height:100%;object-fit:cover; }
+    .media-select-thumb .check-overlay {
+      position:absolute;top:4px;left:4px;width:22px;height:22px;background:var(--teal);
+      color:#fff;border-radius:50%;font-size:14px;display:none;align-items:center;justify-content:center;
+    }
+    .media-select-thumb.selected .check-overlay { display:flex; }
+    body.dark-mode .media-thumb { background:#2a2a2a;border-color:#3a3a3a; }
+    body.dark-mode .story-entry-card { background:#2a2a2a;border-color:#3a3a3a; }
+    body.dark-mode .story-entry-fields textarea, body.dark-mode .story-entry-fields input { background:#333;color:#ccc;border-color:#555; }
+    body.dark-mode .story-move-btn { background:#333;border-color:#555;color:#ccc; }
+    body.dark-mode .story-remove-btn { background:#333;border-color:#5a3a3a;color:#EF9A9A; }
+    body.dark-mode .story-preview-entry .caption { color:#ccc; }
+    body.dark-mode .media-select-thumb { border-color:transparent; }
+    body.dark-mode .media-select-thumb.selected { border-color:var(--teal); }
+
     body.dark-mode .order-card {
       background: #2a2a2a;
       border-color: #3a3a3a;
@@ -2287,6 +2375,16 @@
             <button class="btn btn-primary" onclick="addOperator()">Add</button>
           </div>
         </div>
+
+        <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
+
+        <div class="form-group">
+          <label style="font-size:1.1rem;font-weight:600;">Build Media Storage</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
+            Photos captured during production builds are stored in Firebase Storage.
+          </p>
+          <div id="storageInfo" style="font-size:0.85rem;color:var(--warm-gray);">Loading...</div>
+        </div>
       </div>
     </div>
   </div>
@@ -2310,9 +2408,11 @@ const firebaseConfig = {
   projectId: "word-boxing"
 };
 
+firebaseConfig.storageBucket = "word-boxing.firebasestorage.app";
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.database();
+const storage = firebase.storage();
 
 const ALLOWED_UIDS = ['oUt4ba0dYVRBfPREqoJ1yIsJKjr1'];
 const EVENTS_PATH = 'shirglassworks/public/events';
@@ -2381,6 +2481,11 @@ var productionLoaded = false;
 var selectedProductionJobId = null;
 var productionSubView = 'jobs';
 var activeBuildId = null;
+var BUILD_MEDIA_PATH = 'shirglassworks/admin/buildMedia';
+var STORIES_PATH = 'shirglassworks/public/stories';
+var currentBuildMedia = {};
+var storyDraft = null;
+var storyCurationJobId = null;
 var inventory = {};
 var inventoryListener = null;
 var INVENTORY_PATH = 'shirglassworks/admin/inventory';
@@ -2612,7 +2717,7 @@ function switchTab(tab) {
   document.getElementById('couponsTab').style.display = tab === 'coupons' ? '' : 'none';
   document.getElementById('analyticsTab').style.display = tab === 'analytics' ? '' : 'none';
   document.getElementById('settingsTab').style.display = tab === 'settings' ? '' : 'none';
-  if (tab === 'settings') { updateGitHubTokenStatus(); loadOperators(); }
+  if (tab === 'settings') { updateGitHubTokenStatus(); loadOperators(); loadStorageInfo(); }
   if (tab === 'analytics' && !analyticsLoaded) loadAnalytics();
   if (tab === 'products' && !productsLoaded) loadProducts();
   if (tab === 'orders' && !ordersLoaded) loadOrders();
@@ -5945,6 +6050,7 @@ function renderProductionJobDetail(jobId) {
           '<strong>Build #' + (b.buildNumber || '?') + '</strong>' +
           ' &middot; ' + (b.sessionDate || '') +
           ' &middot; <span class="prod-status-pill ' + bStatus + '">' + bStatus + '</span>' +
+          ' <span id="buildMediaBadge_' + k + '" class="media-count-badge" style="display:none;"></span>' +
         '</div>' +
         '<div style="font-size:0.82rem;color:var(--warm-gray);">' +
           duration +
@@ -5952,6 +6058,7 @@ function renderProductionJobDetail(jobId) {
         '</div>' +
       '</div>' +
       (b.operators && b.operators.length > 0 ? '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">Operators: ' + b.operators.map(esc).join(', ') + '</div>' : '') +
+      '<div id="buildMediaThumbs_' + k + '" style="display:none;margin-top:8px;" class="media-gallery"></div>' +
     '</div>';
   });
 
@@ -6003,7 +6110,29 @@ function renderProductionJobDetail(jobId) {
         '<div style="display:flex;gap:8px;">' + startBuildBtn + activeBuildBtn + '</div>' +
       '</div>' +
       (buildKeys.length > 0 ? buildsHtml : '<p style="font-size:0.85rem;color:var(--warm-gray);font-style:italic;">No builds yet. Start a build session to begin tracking production.</p>') +
-    '</div>';
+    '</div>' +
+
+    '<div class="prod-detail-section">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
+        '<strong>Story</strong>' +
+        '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 10px;" onclick="openStoryCuration(\'' + esc(jobId) + '\')">&#x1F4F7; Curate Story</button>' +
+      '</div>' +
+      '<div id="jobStoryStatus_' + jobId + '" style="font-size:0.85rem;color:var(--warm-gray);font-style:italic;">Loading...</div>' +
+    '</div>' +
+
+    (status === 'completed' ? '<div class="prod-detail-section">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
+        '<strong>Product Links</strong>' +
+      '</div>' +
+      '<div id="jobProductLinks_' + jobId + '"></div>' +
+    '</div>' : '');
+
+  // Load photo badges for each build
+  buildKeys.forEach(function(bk) { loadBuildMediaBadge(bk); });
+  // Load story status
+  loadJobStoryStatus(jobId);
+  // Load product links if completed
+  if (status === 'completed') loadJobProductLinks(jobId);
 }
 
 async function transitionProductionJob(jobId, newStatus) {
@@ -6263,6 +6392,15 @@ function renderActiveBuild(jobId, buildId) {
       '<p style="color:var(--warm-gray);font-size:0.82rem;">Operators: ' + (build.operators || []).map(esc).join(', ') + '</p>' +
     '</div>' +
 
+    '<div style="text-align:center;margin:24px 0;">' +
+      '<button class="media-capture-btn" onclick="capturePhoto(\'' + esc(jobId) + '\', \'' + esc(buildId) + '\')">' +
+        '&#x1F4F7; Capture Photo</button>' +
+      '<input type="file" id="buildPhotoInput" accept="image/*" capture="environment" multiple style="display:none;" ' +
+        'onchange="handlePhotoUpload(this, \'' + esc(jobId) + '\', \'' + esc(buildId) + '\')">' +
+    '</div>' +
+
+    '<div id="buildMediaGallery" class="media-gallery" style="margin-bottom:24px;"></div>' +
+
     '<div style="display:flex;gap:12px;justify-content:center;margin:24px 0;flex-wrap:wrap;">' +
       '<button class="build-touch-btn secondary" onclick="addBuildNote(\'' + esc(jobId) + '\', \'' + esc(buildId) + '\')">&#x1F4DD; Add Note</button>' +
       '<button class="build-touch-btn secondary" onclick="addBuildMilestone(\'' + esc(jobId) + '\', \'' + esc(buildId) + '\')">&#x2B50; Add Milestone</button>' +
@@ -6275,6 +6413,8 @@ function renderActiveBuild(jobId, buildId) {
     '<div style="text-align:center;margin-top:32px;">' +
       '<button class="build-touch-btn primary" style="min-width:200px;" onclick="openCompleteBuild(\'' + esc(jobId) + '\', \'' + esc(buildId) + '\')">&#x2705; Complete Build</button>' +
     '</div>';
+  // Load and display media for this build
+  loadBuildMedia(buildId);
 }
 
 function formatTime(isoStr) {
@@ -6356,8 +6496,13 @@ function openCompleteBuild(jobId, buildId) {
     '</div>';
   }).join('');
 
+  // Count photos for this build
+  var mediaCount = currentBuildMedia ? Object.keys(currentBuildMedia).length : 0;
+  var mediaNote = mediaCount > 0 ? '<p style="font-size:0.85rem;color:var(--teal);margin-bottom:12px;">📷 This build has ' + mediaCount + ' photo' + (mediaCount !== 1 ? 's' : '') + '</p>' : '';
+
   var html = '<div style="max-width:500px;">' +
     '<h3>Complete Build</h3>' +
+    mediaNote +
     (liKeys.length > 0 ? '<p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">Record output for each line item:</p>' + outputFields :
       '<p style="font-size:0.85rem;color:var(--warm-gray);">No line items to record output for.</p>') +
     '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;">' +
@@ -6457,6 +6602,616 @@ async function doCompleteBuild(jobId, buildId) {
     showToast('Build completed');
   } catch (err) {
     showToast('Error completing build: ' + err.message, true);
+  }
+}
+
+// ============================================================
+// Build Media — Compression, Capture, Upload, Gallery
+// ============================================================
+
+async function compressImage(file) {
+  var bitmap = await createImageBitmap(file);
+  var maxDim = 1600;
+  var w = bitmap.width, h = bitmap.height;
+  if (w > maxDim || h > maxDim) {
+    if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+    else { w = Math.round(w * maxDim / h); h = maxDim; }
+  }
+  var canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  var ctx = canvas.getContext('2d');
+  ctx.drawImage(bitmap, 0, 0, w, h);
+  bitmap.close();
+  return new Promise(function(resolve) {
+    canvas.toBlob(function(blob) { resolve(blob); }, 'image/jpeg', 0.8);
+  });
+}
+
+function capturePhoto(jobId, buildId) {
+  var input = document.getElementById('buildPhotoInput');
+  if (input) input.click();
+}
+
+async function handlePhotoUpload(input, jobId, buildId) {
+  var files = Array.from(input.files || []);
+  if (files.length === 0) return;
+  input.value = '';
+  for (var i = 0; i < files.length; i++) {
+    await uploadBuildPhoto(files[i], jobId, buildId);
+  }
+}
+
+async function uploadBuildPhoto(file, jobId, buildId) {
+  try {
+    var mediaId = db.ref().push().key;
+    var galleryEl = document.getElementById('buildMediaGallery');
+
+    // Create placeholder thumbnail with progress
+    if (galleryEl) {
+      var placeholder = document.createElement('div');
+      placeholder.className = 'media-thumb';
+      placeholder.id = 'upload_' + mediaId;
+      placeholder.innerHTML = '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--warm-gray);font-size:0.75rem;">Uploading...</div>' +
+        '<div class="upload-progress"><div class="upload-progress-fill" id="progress_' + mediaId + '" style="width:0%;"></div></div>';
+      galleryEl.appendChild(placeholder);
+    }
+
+    var compressed = await compressImage(file);
+    var storageRef = storage.ref('shirglassworks/builds/' + buildId + '/' + mediaId + '.jpg');
+    var uploadTask = storageRef.put(compressed);
+
+    await new Promise(function(resolve, reject) {
+      uploadTask.on('state_changed',
+        function(snapshot) {
+          var pct = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          var bar = document.getElementById('progress_' + mediaId);
+          if (bar) bar.style.width = pct + '%';
+        },
+        function(error) { reject(error); },
+        function() { resolve(); }
+      );
+    });
+
+    var url = await uploadTask.snapshot.ref.getDownloadURL();
+    await db.ref(BUILD_MEDIA_PATH + '/' + buildId + '/' + mediaId).set({
+      type: 'photo',
+      url: url,
+      caption: '',
+      uploadedAt: new Date().toISOString(),
+      uploadedBy: getActiveOperatorName(),
+      originalFilename: file.name,
+      sizeBytes: compressed.size
+    });
+
+    // Replace placeholder with actual thumbnail
+    var ph = document.getElementById('upload_' + mediaId);
+    if (ph) {
+      ph.innerHTML = '<img src="' + url + '" alt="Build photo" onclick="previewPhoto(\'' + esc(url) + '\')">' +
+        '<button class="delete-media" onclick="event.stopPropagation();deleteBuildMedia(\'' + esc(buildId) + '\', \'' + esc(mediaId) + '\')">×</button>';
+    }
+    updateBuildMediaCount(buildId);
+    showToast('Photo uploaded');
+  } catch (err) {
+    showToast('Upload error: ' + err.message, true);
+    var ph2 = document.getElementById('upload_' + mediaId);
+    if (ph2) ph2.remove();
+  }
+}
+
+function getActiveOperatorName() {
+  // Try to get from the current active build's operator list
+  if (activeBuildId && selectedProductionJobId) {
+    var job = productionJobs[selectedProductionJobId];
+    if (job && job.builds && job.builds[activeBuildId]) {
+      var ops = job.builds[activeBuildId].operators || [];
+      if (ops.length > 0) return ops[0];
+    }
+  }
+  return 'admin';
+}
+
+async function loadBuildMedia(buildId) {
+  try {
+    var snap = await db.ref(BUILD_MEDIA_PATH + '/' + buildId).once('value');
+    var media = snap.val() || {};
+    currentBuildMedia = media;
+    renderBuildMediaGallery(buildId, media);
+  } catch (err) {
+    console.error('Error loading build media:', err);
+  }
+}
+
+function renderBuildMediaGallery(buildId, media) {
+  var el = document.getElementById('buildMediaGallery');
+  if (!el) return;
+  var keys = Object.keys(media).sort(function(a, b) {
+    return (media[a].uploadedAt || '').localeCompare(media[b].uploadedAt || '');
+  });
+  if (keys.length === 0) {
+    el.innerHTML = '<p style="font-size:0.82rem;color:var(--warm-gray);text-align:center;grid-column:1/-1;">No photos yet. Tap the camera button to capture build photos.</p>';
+    return;
+  }
+  el.innerHTML = '<div style="grid-column:1/-1;font-size:0.82rem;color:var(--warm-gray);margin-bottom:4px;">' + keys.length + ' photo' + (keys.length !== 1 ? 's' : '') + '</div>' +
+    keys.map(function(k) {
+      var m = media[k];
+      return '<div class="media-thumb">' +
+        '<img src="' + esc(m.url) + '" alt="Build photo" onclick="previewPhoto(\'' + esc(m.url) + '\')">' +
+        '<button class="delete-media" onclick="event.stopPropagation();deleteBuildMedia(\'' + esc(buildId) + '\', \'' + esc(k) + '\')">×</button>' +
+      '</div>';
+    }).join('');
+}
+
+function updateBuildMediaCount(buildId) {
+  db.ref(BUILD_MEDIA_PATH + '/' + buildId).once('value').then(function(snap) {
+    var count = snap.numChildren();
+    var badge = document.getElementById('buildMediaBadge_' + buildId);
+    if (badge) {
+      badge.textContent = '📷 ' + count;
+      badge.style.display = count > 0 ? '' : 'none';
+    }
+  });
+}
+
+async function deleteBuildMedia(buildId, mediaId) {
+  if (!confirm('Delete this photo?')) return;
+  try {
+    await storage.ref('shirglassworks/builds/' + buildId + '/' + mediaId + '.jpg').delete();
+    await db.ref(BUILD_MEDIA_PATH + '/' + buildId + '/' + mediaId).remove();
+    showToast('Photo deleted');
+    loadBuildMedia(buildId);
+  } catch (err) {
+    showToast('Error deleting: ' + err.message, true);
+  }
+}
+
+function previewPhoto(url) {
+  var overlay = document.createElement('div');
+  overlay.className = 'photo-preview-overlay';
+  overlay.onclick = function() { overlay.remove(); };
+  overlay.innerHTML = '<img src="' + url + '">';
+  document.body.appendChild(overlay);
+}
+
+async function loadBuildMediaBadge(buildId) {
+  try {
+    var snap = await db.ref(BUILD_MEDIA_PATH + '/' + buildId).once('value');
+    var count = snap.numChildren();
+    var badge = document.getElementById('buildMediaBadge_' + buildId);
+    if (badge && count > 0) {
+      badge.textContent = '📷 ' + count;
+      badge.style.display = '';
+      // Also make build card clickable to expand photos
+      var thumbs = document.getElementById('buildMediaThumbs_' + buildId);
+      if (thumbs) {
+        var media = snap.val() || {};
+        var mKeys = Object.keys(media).sort(function(a, b) {
+          return (media[a].uploadedAt || '').localeCompare(media[b].uploadedAt || '');
+        });
+        thumbs.innerHTML = mKeys.map(function(k) {
+          return '<div class="media-thumb" style="max-width:80px;">' +
+            '<img src="' + esc(media[k].url) + '" alt="" onclick="previewPhoto(\'' + esc(media[k].url) + '\')">' +
+          '</div>';
+        }).join('');
+        // Toggle on badge click
+        badge.style.cursor = 'pointer';
+        badge.onclick = function(e) {
+          e.stopPropagation();
+          thumbs.style.display = thumbs.style.display === 'none' ? 'grid' : 'none';
+        };
+      }
+    }
+  } catch (err) { /* ignore badge load errors */ }
+}
+
+// ============================================================
+// Story Curation
+// ============================================================
+
+async function loadJobStoryStatus(jobId) {
+  var el = document.getElementById('jobStoryStatus_' + jobId);
+  if (!el) return;
+  try {
+    var snap = await db.ref(STORIES_PATH).orderByChild('jobId').equalTo(jobId).once('value');
+    var stories = snap.val() || {};
+    var keys = Object.keys(stories);
+    if (keys.length === 0) {
+      el.innerHTML = 'No story yet. Click "Curate Story" to create one from build photos.';
+      return;
+    }
+    var story = stories[keys[0]];
+    var storyId = keys[0];
+    var entryCount = story.entries ? Object.keys(story.entries).length : 0;
+    var statusColor = story.status === 'published' ? 'var(--teal)' : 'var(--amber)';
+    el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+      '<div><strong>' + esc(story.title || 'Untitled') + '</strong> &middot; ' +
+        '<span style="color:' + statusColor + ';font-weight:600;">' + (story.status || 'draft') + '</span> &middot; ' +
+        entryCount + ' entries</div>' +
+      '<div style="display:flex;gap:6px;">' +
+        '<button class="btn btn-secondary" style="font-size:0.75rem;padding:3px 8px;" onclick="previewStory(\'' + esc(storyId) + '\')">Preview</button>' +
+        (story.status === 'published' ? '<button class="btn btn-secondary" style="font-size:0.75rem;padding:3px 8px;" onclick="unpublishStory(\'' + esc(storyId) + '\')">Unpublish</button>' : '') +
+      '</div>' +
+    '</div>';
+  } catch (err) {
+    el.innerHTML = 'Error loading story status.';
+  }
+}
+
+async function openStoryCuration(jobId) {
+  storyCurationJobId = jobId;
+  var job = productionJobs[jobId];
+  if (!job) return;
+
+  // Load all media from all builds for this job
+  var builds = job.builds || {};
+  var buildKeys = Object.keys(builds).sort(function(a, b) {
+    return (builds[a].buildNumber || 0) - (builds[b].buildNumber || 0);
+  });
+
+  var allMedia = {};
+  for (var i = 0; i < buildKeys.length; i++) {
+    var bk = buildKeys[i];
+    try {
+      var snap = await db.ref(BUILD_MEDIA_PATH + '/' + bk).once('value');
+      var media = snap.val();
+      if (media) allMedia[bk] = media;
+    } catch (e) { /* skip */ }
+  }
+
+  // Load existing story draft if any
+  var existingStory = null;
+  var existingStoryId = null;
+  try {
+    var storySnap = await db.ref(STORIES_PATH).orderByChild('jobId').equalTo(jobId).once('value');
+    var stories = storySnap.val() || {};
+    var sKeys = Object.keys(stories);
+    if (sKeys.length > 0) {
+      existingStoryId = sKeys[0];
+      existingStory = stories[sKeys[0]];
+    }
+  } catch (e) { /* no existing story */ }
+
+  // Build the curation modal
+  var html = '<div style="max-width:700px;max-height:80vh;overflow-y:auto;">' +
+    '<h2 style="font-family:\'Cormorant Garamond\',serif;margin:0 0 16px 0;">Story: ' + esc(job.name || 'Untitled') + '</h2>' +
+    '<div class="form-group">' +
+      '<label>Title</label>' +
+      '<input type="text" id="storyTitle" value="' + esc(existingStory ? existingStory.title : job.name || '') + '" style="font-size:1rem;">' +
+    '</div>';
+
+  // Photo selection per build
+  html += '<div style="margin-bottom:20px;">' +
+    '<strong style="font-size:0.92rem;">Select Photos</strong>' +
+    '<p style="font-size:0.82rem;color:var(--warm-gray);margin:4px 0 12px;">Click photos to add them to the story.</p>';
+
+  var selectedMediaIds = {};
+  if (existingStory && existingStory.entries) {
+    Object.values(existingStory.entries).forEach(function(e) {
+      if (e.mediaUrl) selectedMediaIds[e.mediaUrl] = true;
+    });
+  }
+
+  buildKeys.forEach(function(bk) {
+    var b = builds[bk];
+    var media = allMedia[bk] || {};
+    var mKeys = Object.keys(media).sort(function(a, c) {
+      return (media[a].uploadedAt || '').localeCompare(media[c].uploadedAt || '');
+    });
+    if (mKeys.length === 0) return;
+    html += '<div style="margin-bottom:12px;">' +
+      '<div style="font-size:0.82rem;font-weight:600;margin-bottom:6px;">Build #' + (b.buildNumber || '?') + ' — ' + (b.sessionDate || '') + ' (' + mKeys.length + ' photos)</div>' +
+      '<div class="media-select-grid">';
+    mKeys.forEach(function(mk) {
+      var m = media[mk];
+      var sel = selectedMediaIds[m.url] ? ' selected' : '';
+      html += '<div class="media-select-thumb' + sel + '" data-url="' + esc(m.url) + '" data-buildid="' + esc(bk) + '" data-mediaid="' + esc(mk) + '" onclick="toggleStoryMediaSelect(this)">' +
+        '<img src="' + esc(m.url) + '" alt="">' +
+        '<div class="check-overlay">✓</div>' +
+      '</div>';
+    });
+    html += '</div></div>';
+  });
+
+  html += '</div>';
+
+  // Story entries assembly
+  html += '<div style="margin-bottom:20px;">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">' +
+      '<strong style="font-size:0.92rem;">Story Entries</strong>' +
+      '<button class="btn btn-secondary" style="font-size:0.75rem;padding:3px 8px;" onclick="addTextOnlyEntry()">+ Text Entry</button>' +
+    '</div>' +
+    '<div id="storyEntriesList"></div>' +
+  '</div>';
+
+  // Action buttons
+  html += '<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">' +
+    '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+    '<button class="btn btn-secondary" onclick="saveDraftStory(\'' + esc(existingStoryId || '') + '\')">Save Draft</button>' +
+    '<button class="btn btn-secondary" onclick="previewStoryFromCuration()">Preview</button>' +
+    '<button class="btn btn-primary" onclick="publishStory(\'' + esc(existingStoryId || '') + '\')">Publish</button>' +
+  '</div></div>';
+
+  openModal(html);
+
+  // Initialize entries from existing story or selected photos
+  if (existingStory && existingStory.entries) {
+    storyDraft = Object.keys(existingStory.entries).map(function(ek) {
+      var e = existingStory.entries[ek];
+      return { id: ek, mediaUrl: e.mediaUrl || '', milestone: e.milestone || '', caption: e.caption || '', buildId: e.buildId || '', order: e.order || 0 };
+    }).sort(function(a, b) { return a.order - b.order; });
+  } else {
+    storyDraft = [];
+  }
+  renderStoryEntries();
+}
+
+function toggleStoryMediaSelect(el) {
+  el.classList.toggle('selected');
+  var url = el.getAttribute('data-url');
+  var buildId = el.getAttribute('data-buildid');
+  if (el.classList.contains('selected')) {
+    // Add entry
+    var id = db.ref().push().key;
+    storyDraft.push({ id: id, mediaUrl: url, milestone: '', caption: '', buildId: buildId, order: storyDraft.length });
+  } else {
+    // Remove entry
+    storyDraft = storyDraft.filter(function(e) { return e.mediaUrl !== url; });
+    // Re-order
+    storyDraft.forEach(function(e, i) { e.order = i; });
+  }
+  renderStoryEntries();
+}
+
+function addTextOnlyEntry() {
+  var id = db.ref().push().key;
+  storyDraft.push({ id: id, mediaUrl: '', milestone: '', caption: '', buildId: '', order: storyDraft.length });
+  renderStoryEntries();
+}
+
+function renderStoryEntries() {
+  var el = document.getElementById('storyEntriesList');
+  if (!el) return;
+  if (storyDraft.length === 0) {
+    el.innerHTML = '<p style="font-size:0.82rem;color:var(--warm-gray);font-style:italic;">Select photos above to add them to the story, or add a text-only entry.</p>';
+    return;
+  }
+  el.innerHTML = storyDraft.map(function(entry, idx) {
+    return '<div class="story-entry-card" data-idx="' + idx + '">' +
+      (entry.mediaUrl ? '<img class="story-entry-thumb" src="' + esc(entry.mediaUrl) + '">' : '<div class="story-entry-thumb" style="background:#e8e2d8;display:flex;align-items:center;justify-content:center;font-size:0.75rem;color:var(--warm-gray);">Text</div>') +
+      '<div class="story-entry-fields">' +
+        '<input type="text" placeholder="Milestone (e.g. body formed...)" value="' + esc(entry.milestone) + '" onchange="updateStoryEntry(' + idx + ', \'milestone\', this.value)">' +
+        '<textarea rows="2" placeholder="Caption..." onchange="updateStoryEntry(' + idx + ', \'caption\', this.value)">' + esc(entry.caption) + '</textarea>' +
+      '</div>' +
+      '<div class="story-entry-actions">' +
+        '<button class="story-move-btn" onclick="moveStoryEntry(' + idx + ', -1)" ' + (idx === 0 ? 'disabled style="opacity:0.3;"' : '') + '>↑</button>' +
+        '<button class="story-move-btn" onclick="moveStoryEntry(' + idx + ', 1)" ' + (idx === storyDraft.length - 1 ? 'disabled style="opacity:0.3;"' : '') + '>↓</button>' +
+        '<button class="story-remove-btn" onclick="removeStoryEntry(' + idx + ')">×</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function updateStoryEntry(idx, field, value) {
+  if (storyDraft[idx]) storyDraft[idx][field] = value;
+}
+
+function moveStoryEntry(idx, dir) {
+  var newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= storyDraft.length) return;
+  var temp = storyDraft[idx];
+  storyDraft[idx] = storyDraft[newIdx];
+  storyDraft[newIdx] = temp;
+  storyDraft.forEach(function(e, i) { e.order = i; });
+  renderStoryEntries();
+}
+
+function removeStoryEntry(idx) {
+  storyDraft.splice(idx, 1);
+  storyDraft.forEach(function(e, i) { e.order = i; });
+  renderStoryEntries();
+  // Deselect the photo in the grid if it was a photo entry
+  var removed = storyDraft[idx];
+  // Sync selection visuals
+  document.querySelectorAll('.media-select-thumb').forEach(function(thumb) {
+    var url = thumb.getAttribute('data-url');
+    var inDraft = storyDraft.some(function(e) { return e.mediaUrl === url; });
+    if (inDraft) thumb.classList.add('selected');
+    else thumb.classList.remove('selected');
+  });
+}
+
+function getStoryData(storyId) {
+  var title = (document.getElementById('storyTitle') || {}).value || '';
+  var entries = {};
+  storyDraft.forEach(function(e) {
+    entries[e.id] = {
+      order: e.order,
+      milestone: e.milestone,
+      mediaUrl: e.mediaUrl,
+      mediaType: e.mediaUrl ? 'photo' : 'text',
+      caption: e.caption,
+      buildId: e.buildId
+    };
+  });
+  return {
+    jobId: storyCurationJobId,
+    title: title,
+    entries: entries
+  };
+}
+
+async function saveDraftStory(existingId) {
+  try {
+    var data = getStoryData();
+    data.status = 'draft';
+    data.updatedAt = new Date().toISOString();
+    if (existingId) {
+      await db.ref(STORIES_PATH + '/' + existingId).update(data);
+    } else {
+      data.createdAt = new Date().toISOString();
+      var ref = db.ref(STORIES_PATH).push();
+      await ref.set(data);
+    }
+    closeModal();
+    showToast('Story draft saved');
+    if (storyCurationJobId) loadJobStoryStatus(storyCurationJobId);
+  } catch (err) {
+    showToast('Error saving draft: ' + err.message, true);
+  }
+}
+
+async function publishStory(existingId) {
+  try {
+    var data = getStoryData();
+    data.status = 'published';
+    data.publishedAt = new Date().toISOString();
+    data.updatedAt = new Date().toISOString();
+    if (existingId) {
+      await db.ref(STORIES_PATH + '/' + existingId).update(data);
+    } else {
+      data.createdAt = new Date().toISOString();
+      var ref = db.ref(STORIES_PATH).push();
+      await ref.set(data);
+    }
+    closeModal();
+    showToast('Story published!');
+    if (storyCurationJobId) loadJobStoryStatus(storyCurationJobId);
+  } catch (err) {
+    showToast('Error publishing: ' + err.message, true);
+  }
+}
+
+async function unpublishStory(storyId) {
+  if (!confirm('Unpublish this story?')) return;
+  try {
+    await db.ref(STORIES_PATH + '/' + storyId).update({ status: 'draft', updatedAt: new Date().toISOString() });
+    showToast('Story unpublished');
+    if (selectedProductionJobId) loadJobStoryStatus(selectedProductionJobId);
+  } catch (err) {
+    showToast('Error: ' + err.message, true);
+  }
+}
+
+function previewStoryFromCuration() {
+  var data = getStoryData();
+  var entries = storyDraft.slice().sort(function(a, b) { return a.order - b.order; });
+  showStoryPreview(data.title, entries);
+}
+
+async function previewStory(storyId) {
+  try {
+    var snap = await db.ref(STORIES_PATH + '/' + storyId).once('value');
+    var story = snap.val();
+    if (!story) { showToast('Story not found', true); return; }
+    var entries = [];
+    if (story.entries) {
+      entries = Object.values(story.entries).sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
+    }
+    showStoryPreview(story.title || '', entries);
+  } catch (err) {
+    showToast('Error loading preview: ' + err.message, true);
+  }
+}
+
+function showStoryPreview(title, entries) {
+  var html = '<div class="story-preview-container">' +
+    '<h1>' + esc(title || 'Untitled Story') + '</h1>';
+  entries.forEach(function(e) {
+    html += '<div class="story-preview-entry">';
+    if (e.milestone) html += '<div class="milestone">' + esc(e.milestone) + '</div>';
+    if (e.mediaUrl) html += '<img src="' + esc(e.mediaUrl) + '" alt="">';
+    if (e.caption) html += '<div class="caption">' + esc(e.caption) + '</div>';
+    html += '</div>';
+  });
+  html += '<div style="text-align:center;margin-top:32px;">' +
+    '<button class="btn btn-secondary" onclick="closeModal()">Close Preview</button></div></div>';
+  openModal(html);
+}
+
+// ============================================================
+// Product ↔ Build Linkage
+// ============================================================
+
+async function loadJobProductLinks(jobId) {
+  var el = document.getElementById('jobProductLinks_' + jobId);
+  if (!el) return;
+  var job = productionJobs[jobId];
+  if (!job) return;
+  var lineItems = job.lineItems || {};
+  var liKeys = Object.keys(lineItems);
+  if (liKeys.length === 0) {
+    el.innerHTML = '<p style="font-size:0.85rem;color:var(--warm-gray);font-style:italic;">No line items to link.</p>';
+    return;
+  }
+
+  var html = '';
+  liKeys.forEach(function(lk) {
+    var li = lineItems[lk];
+    var linked = li.productLinked ? '<span style="color:var(--teal);font-size:0.82rem;">✓ Linked</span>' :
+      '<button class="btn btn-secondary" style="font-size:0.72rem;padding:2px 8px;" onclick="linkProductToBuild(\'' + esc(jobId) + '\', \'' + esc(lk) + '\')">Link to Product</button>';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #eee;">' +
+      '<span style="font-size:0.85rem;">' + esc(li.productName || 'Unknown') + '</span>' +
+      linked +
+    '</div>';
+  });
+  el.innerHTML = html;
+}
+
+async function linkProductToBuild(jobId, lineItemId) {
+  var job = productionJobs[jobId];
+  if (!job || !job.lineItems || !job.lineItems[lineItemId]) return;
+  var li = job.lineItems[lineItemId];
+  var productId = li.productId;
+  if (!productId) {
+    showToast('No product ID on this line item — select product manually', true);
+    return;
+  }
+  try {
+    // Get existing buildIds on the product
+    var snap = await db.ref('shirglassworks/public/products/' + productId + '/buildIds').once('value');
+    var existing = snap.val() || [];
+    if (!Array.isArray(existing)) existing = [];
+    // Add all build IDs from this job
+    var builds = job.builds || {};
+    Object.keys(builds).forEach(function(bk) {
+      if (existing.indexOf(bk) === -1) existing.push(bk);
+    });
+    await db.ref('shirglassworks/public/products/' + productId + '/buildIds').set(existing);
+    // Mark linked on line item
+    await db.ref(PRODUCTION_JOBS_PATH + '/' + jobId + '/lineItems/' + lineItemId + '/productLinked').set(true);
+    showToast('Product linked to builds');
+    loadJobProductLinks(jobId);
+  } catch (err) {
+    showToast('Error linking: ' + err.message, true);
+  }
+}
+
+// ============================================================
+// Storage Info (Settings)
+// ============================================================
+
+async function loadStorageInfo() {
+  var el = document.getElementById('storageInfo');
+  if (!el) return;
+  try {
+    var snap = await db.ref(BUILD_MEDIA_PATH).once('value');
+    var allMedia = snap.val() || {};
+    var totalPhotos = 0;
+    var totalBytes = 0;
+    Object.keys(allMedia).forEach(function(buildId) {
+      var media = allMedia[buildId] || {};
+      Object.values(media).forEach(function(m) {
+        totalPhotos++;
+        totalBytes += m.sizeBytes || 0;
+      });
+    });
+    var sizeMb = (totalBytes / (1024 * 1024)).toFixed(1);
+    el.innerHTML = '<div style="display:flex;gap:24px;flex-wrap:wrap;">' +
+      '<div>📷 <strong>' + totalPhotos + '</strong> photos</div>' +
+      '<div>💾 <strong>' + sizeMb + ' MB</strong> stored</div>' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);">Bucket: word-boxing.firebasestorage.app</div>' +
+    '</div>';
+  } catch (err) {
+    el.innerHTML = 'Error loading storage info.';
   }
 }
 
