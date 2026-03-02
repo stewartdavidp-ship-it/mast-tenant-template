@@ -961,7 +961,8 @@ const SECTIONS = [
   { id: 'hero', label: 'Hero', description: 'Homepage banner video & poster image' },
   { id: 'about', label: 'About', description: 'About page images' },
   { id: 'gallery', label: 'Gallery', description: 'Homepage gallery grid' },
-  { id: 'shop', label: 'Shop', description: 'Shop page products' }
+  { id: 'shop', label: 'Shop', description: 'Shop page products' },
+  { id: 'schedule', label: 'Schedule', description: 'Schedule page images' }
 ];
 const MIGRATION_FLAG_PATH = 'shirglassworks/admin/sectionsMigrated';
 
@@ -1246,23 +1247,22 @@ async function migrateAndSeedSections() {
     if (img.section) existingSections[img.section] = true;
   });
 
-  // 3. Seed hero (if missing)
-  if (!existingSections['hero']) {
-    var heroKey = db.ref(GALLERY_PATH).push().key;
-    updates[GALLERY_PATH + '/' + heroKey] = {
+  // 3. Seed schedule (if missing) — the glassblowing background image
+  if (!existingSections['schedule']) {
+    var schedKey = db.ref(GALLERY_PATH).push().key;
+    updates[GALLERY_PATH + '/' + schedKey] = {
       url: 'https://www.shirglassworks.com/uploads/3/7/0/8/37080241/background-images/1126466848.jpg',
       alt: 'Glassblowing workshop with molten glass',
-      caption: 'Hero Background',
-      section: 'hero',
+      caption: 'Schedule Background',
+      section: 'schedule',
       category: '',
-      videoUrl: 'https://assets.mixkit.co/videos/20977/20977-720.mp4',
       visible: true, order: 1,
       createdAt: firebase.database.ServerValue.TIMESTAMP,
       updatedAt: firebase.database.ServerValue.TIMESTAMP
     };
   }
 
-  // 4. Seed about (if missing)
+  // 4. Seed about (if missing) — only Ori
   if (!existingSections['about']) {
     var aboutKey1 = db.ref(GALLERY_PATH).push().key;
     updates[GALLERY_PATH + '/' + aboutKey1] = {
@@ -1271,34 +1271,31 @@ async function migrateAndSeedSections() {
       section: 'about', category: '', visible: true, order: 1,
       createdAt: firebase.database.ServerValue.TIMESTAMP, updatedAt: firebase.database.ServerValue.TIMESTAMP
     };
-    var aboutKey2 = db.ref(GALLERY_PATH).push().key;
-    updates[GALLERY_PATH + '/' + aboutKey2] = {
-      url: 'https://www.shirglassworks.com/uploads/3/7/0/8/37080241/madeline-glassblowing-tate-photo_orig.jpg',
-      alt: 'Madeline at work in the studio', caption: 'Madeline at the torch',
-      section: 'about', category: '', visible: true, order: 2,
-      createdAt: firebase.database.ServerValue.TIMESTAMP, updatedAt: firebase.database.ServerValue.TIMESTAMP
-    };
   }
 
-  // 5. Seed shop (if missing)
-  if (!existingSections['shop']) {
-    var shopItems = [
-      { url: 'https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_c5_i1_w3000.jpeg', alt: 'Octopus Figurine', productName: 'Octopus Figurine', category: 'figurines' },
-      { url: 'https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_c4_i3_w900.jpeg', alt: 'Sea Turtle Pendant', productName: 'Sea Turtle Pendant', category: 'jewelry' },
-      { url: 'https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_c3_i1_w3300.jpeg', alt: 'Handblown Cups', productName: 'Handblown Cups', category: 'drinkware' },
-      { url: 'https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_c8_i2_w4939.jpeg', alt: 'Glass Lotus', productName: 'Glass Lotus', category: 'sculptures' },
-      { url: 'https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_c6_i2_w1938.jpeg', alt: 'Flower Vases', productName: 'Flower Vases', category: 'vases' },
-      { url: 'https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_c7_i1_w3024.jpeg', alt: 'Glass Ornaments', productName: 'Glass Ornaments', category: 'decorations' },
-      { url: 'https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_c1_i1_w2000.jpg', alt: 'Glass Snakes', productName: 'Glass Snakes', category: 'figurines' },
-      { url: 'https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_c4_i2_w900.jpeg', alt: 'Jellyfish Pendant', productName: 'Jellyfish Pendant', category: 'jewelry' }
+  // 5. Seed additional gallery images (if no new ones were added yet)
+  // Existing 7 images get section:'gallery' from step 1 above.
+  // Add Madeline + shop-page images as gallery items too.
+  var existingGalleryCount = Object.values(data).filter(function(img) {
+    return img.section === 'gallery' || !img.section;
+  }).length;
+  if (existingGalleryCount <= 7) {
+    var extraGallery = [
+      { url: 'https://www.shirglassworks.com/uploads/3/7/0/8/37080241/madeline-glassblowing-tate-photo_orig.jpg', alt: 'Madeline at work in the studio', caption: 'Madeline at the torch', category: '' },
+      { url: 'https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_c5_i1_w3000.jpeg', alt: 'Octopus Figurine', caption: 'Octopus Figurine', category: 'figurines' },
+      { url: 'https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_c4_i3_w900.jpeg', alt: 'Sea Turtle Pendant', caption: 'Sea Turtle Pendant', category: 'jewelry' },
+      { url: 'https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_c3_i1_w3300.jpeg', alt: 'Handblown Cups', caption: 'Handblown Cups', category: 'drinkware' },
+      { url: 'https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_c8_i2_w4939.jpeg', alt: 'Glass Lotus', caption: 'Glass Lotus', category: 'sculptures' },
+      { url: 'https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_c6_i2_w1938.jpeg', alt: 'Flower Vases', caption: 'Flower Vases', category: 'vases' },
+      { url: 'https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_c7_i1_w3024.jpeg', alt: 'Glass Ornaments', caption: 'Glass Ornaments', category: 'decorations' },
+      { url: 'https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_c1_i1_w2000.jpg', alt: 'Glass Snakes', caption: 'Glass Snakes', category: 'figurines' },
+      { url: 'https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_c4_i2_w900.jpeg', alt: 'Jellyfish Pendant', caption: 'Jellyfish Pendant', category: 'jewelry' }
     ];
-    shopItems.forEach(function(item, i) {
+    extraGallery.forEach(function(item, i) {
       var key = db.ref(GALLERY_PATH).push().key;
       updates[GALLERY_PATH + '/' + key] = {
-        url: item.url, alt: item.alt, caption: '', section: 'shop',
-        category: item.category, productName: item.productName,
-        productLink: 'https://www.etsy.com/shop/ShirGlassworks',
-        visible: true, order: i + 1,
+        url: item.url, alt: item.alt, caption: item.caption, section: 'gallery',
+        category: item.category, visible: true, order: existingGalleryCount + i + 1,
         createdAt: firebase.database.ServerValue.TIMESTAMP,
         updatedAt: firebase.database.ServerValue.TIMESTAMP
       };
