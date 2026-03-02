@@ -1523,26 +1523,46 @@ async function migrateSectionsV2() {
 }
 
 async function cleanupBrokenRecords() {
-  var v3Flag = 'shirglassworks/admin/cleanupBrokenV3';
-  var flagSnap = await db.ref(v3Flag).once('value');
+  var v4Flag = 'shirglassworks/admin/cleanupBrokenV4';
+  var flagSnap = await db.ref(v4Flag).once('value');
   if (flagSnap.val()) return;
 
-  console.log('Running broken records cleanup...');
+  console.log('Running broken image cleanup...');
   var snap = await db.ref(GALLERY_PATH).once('value');
   var data = snap.val() || {};
+  var ids = Object.keys(data);
+
+  // Test each image URL by loading it
+  function testImage(url) {
+    return new Promise(function(resolve) {
+      if (!url || typeof url !== 'string' || url.indexOf('http') !== 0) {
+        resolve(false);
+        return;
+      }
+      var img = new Image();
+      img.onload = function() { resolve(true); };
+      img.onerror = function() { resolve(false); };
+      img.src = url;
+      // Timeout after 5 seconds
+      setTimeout(function() { resolve(false); }, 5000);
+    });
+  }
+
   var updates = {};
   var count = 0;
 
-  Object.keys(data).forEach(function(id) {
-    var img = data[id];
-    // Delete records with no URL or non-http URLs (bad seed data)
-    if (!img.url || (typeof img.url === 'string' && img.url.indexOf('http') !== 0)) {
+  for (var i = 0; i < ids.length; i++) {
+    var id = ids[i];
+    var record = data[id];
+    var works = await testImage(record.url);
+    if (!works) {
       updates[GALLERY_PATH + '/' + id] = null;
       count++;
+      console.log('Removing broken image: ' + (record.caption || record.alt || id));
     }
-  });
+  }
 
-  updates[v3Flag] = true;
+  updates[v4Flag] = true;
   await db.ref().update(updates);
   console.log('Cleanup complete — removed ' + count + ' broken records.');
 }
