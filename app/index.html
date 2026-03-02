@@ -1969,6 +1969,45 @@
             <span>Enable dark mode</span>
           </label>
         </div>
+
+        <hr style="margin:32px 0;border:none;border-top:1px solid var(--warm-gray-light);opacity:0.3;">
+
+        <div class="form-group">
+          <label style="font-size:1.1rem;font-weight:600;">Square Payments</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
+            Configure Square payment integration for checkout. Start with sandbox credentials for testing, then switch to production.
+          </p>
+
+          <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">Environment</label>
+          <select id="squareEnvironment" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;margin-bottom:12px;">
+            <option value="sandbox">Sandbox (Testing)</option>
+            <option value="production">Production (Live)</option>
+          </select>
+
+          <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">Access Token</label>
+          <input type="password" id="squareAccessToken" placeholder="EAAAl..."
+            style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;margin-bottom:12px;box-sizing:border-box;">
+
+          <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">Location ID</label>
+          <input type="text" id="squareLocationId" placeholder="L..."
+            style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;margin-bottom:12px;box-sizing:border-box;">
+
+          <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">Webhook Signature Key</label>
+          <input type="password" id="squareWebhookSignatureKey" placeholder="webhook-signature-key..."
+            style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;margin-bottom:12px;box-sizing:border-box;">
+
+          <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">Site URL</label>
+          <p style="font-size:0.8rem;color:var(--warm-gray);margin-bottom:4px;">
+            Where customers return after payment (e.g. https://yoursite.github.io/shirglassworks)
+          </p>
+          <input type="text" id="squareSiteUrl" placeholder="https://stewartdavidp-ship-it.github.io/shirglassworks"
+            style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;margin-bottom:16px;box-sizing:border-box;">
+
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-primary" onclick="saveSquareConfig()">Save</button>
+          </div>
+          <div id="squareConfigStatus" style="margin-top:8px;font-size:0.85rem;"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -2024,6 +2063,7 @@ const GITHUB_PAGES_BASE = 'https://stewartdavidp-ship-it.github.io/shirglasswork
 const GITHUB_TOKEN_PATH = 'shirglassworks/admin/githubToken';
 const SETTINGS_PATH = 'shirglassworks/public/settings';
 const ANALYTICS_HITS_PATH = 'shirglassworks/analytics/hits';
+const SQUARE_CONFIG_PATH = 'shirglassworks/config/square';
 
 // ============================================================
 // State
@@ -2372,6 +2412,7 @@ function loadSettings() {
       if (toggle) toggle.checked = true;
     }
   });
+  loadSquareConfig();
 }
 
 async function toggleDarkMode() {
@@ -2383,6 +2424,60 @@ async function toggleDarkMode() {
   } catch (err) {
     showToast('Error saving dark mode: ' + err.message, true);
   }
+}
+
+// ============================================================
+// Square Config Management
+// ============================================================
+async function saveSquareConfig() {
+  var config = {
+    accessToken: document.getElementById('squareAccessToken').value.trim(),
+    locationId: document.getElementById('squareLocationId').value.trim(),
+    environment: document.getElementById('squareEnvironment').value,
+    webhookSignatureKey: document.getElementById('squareWebhookSignatureKey').value.trim(),
+    siteUrl: document.getElementById('squareSiteUrl').value.trim(),
+    updatedAt: new Date().toISOString()
+  };
+
+  if (!config.accessToken || !config.locationId) {
+    showToast('Access Token and Location ID are required.', true);
+    return;
+  }
+
+  try {
+    await db.ref(SQUARE_CONFIG_PATH).set(config);
+    // Clear password fields after save
+    document.getElementById('squareAccessToken').value = '';
+    document.getElementById('squareWebhookSignatureKey').value = '';
+    document.getElementById('squareConfigStatus').innerHTML = '<span style="color:var(--teal);">&#10003; Square config saved (' + config.environment + ')</span>';
+    showToast('Square configuration saved.');
+  } catch (err) {
+    showToast('Error saving Square config: ' + err.message, true);
+  }
+}
+
+function loadSquareConfig() {
+  db.ref(SQUARE_CONFIG_PATH).once('value').then(function(snap) {
+    var config = snap.val();
+    var statusEl = document.getElementById('squareConfigStatus');
+    if (!config) {
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray-light);">No Square config set. Payment checkout will not work until configured.</span>';
+      return;
+    }
+    // Populate non-sensitive fields
+    var envEl = document.getElementById('squareEnvironment');
+    var locEl = document.getElementById('squareLocationId');
+    var urlEl = document.getElementById('squareSiteUrl');
+    if (envEl && config.environment) envEl.value = config.environment;
+    if (locEl && config.locationId) locEl.value = config.locationId;
+    if (urlEl && config.siteUrl) urlEl.value = config.siteUrl;
+    // Show masked indicators for sensitive fields
+    var tokenEl = document.getElementById('squareAccessToken');
+    var sigEl = document.getElementById('squareWebhookSignatureKey');
+    if (tokenEl && config.accessToken) tokenEl.placeholder = '••••••••  (saved)';
+    if (sigEl && config.webhookSignatureKey) sigEl.placeholder = '••••••••  (saved)';
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Configured (' + config.environment + ') — updated ' + new Date(config.updatedAt).toLocaleDateString() + '</span>';
+  });
 }
 
 // ============================================================
