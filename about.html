@@ -753,5 +753,44 @@
   });
 </script>
 
+<!-- ============ ANALYTICS TRACKING ============ -->
+<script>
+(function() {
+  var db = firebase.app('public-about').database();
+  var HITS = 'shirglassworks/analytics/hits';
+  var now = new Date();
+  var page = 'about';
+  var d = now.getFullYear() + '-' +
+    String(now.getMonth() + 1).padStart(2, '0') + '-' +
+    String(now.getDate()).padStart(2, '0');
+
+  function track(type, action) {
+    var hit = { t: type, p: page, ts: Date.now(), d: d };
+    if (action) hit.a = action;
+    db.ref(HITS).push(hit).catch(function() {});
+  }
+
+  setTimeout(function() { track('pv'); }, 100);
+
+  document.addEventListener('click', function(e) {
+    var el = e.target.closest('a, button');
+    if (!el) return;
+    var href = (el.href || '').toLowerCase();
+    var text = (el.textContent || '').trim().toLowerCase();
+    var action = null;
+
+    if (href.indexOf('instagram.com') !== -1) action = 'social_instagram';
+    else if (href.indexOf('etsy.com') !== -1) action = 'social_etsy';
+    else if (href.indexOf('schedule.html') !== -1) action = 'nav_schedule';
+    else if (href.indexOf('shop.html') !== -1) action = 'nav_shop';
+    else if (href.indexOf('index.html') !== -1 || href.endsWith('/')) action = 'nav_home';
+    else if (text.indexOf('see our work') !== -1) action = 'cta_see_work';
+    else if (text.indexOf('visit our etsy') !== -1) action = 'cta_etsy_shop';
+
+    if (action) track('ev', action);
+  }, true);
+})();
+</script>
+
 </body>
 </html>

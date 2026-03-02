@@ -921,6 +921,138 @@
     body.dark-mode .order-num { color: #888; }
     body.dark-mode .btn-primary { background: #d4a053; color: #1a1a1a; }
     body.dark-mode .btn-primary:hover { background: #c4903f; }
+
+    /* ========== ANALYTICS ========== */
+    .analytics-summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      text-align: center;
+    }
+    .stat-card-value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--amber);
+      line-height: 1;
+    }
+    .stat-card-label {
+      font-size: 0.8rem;
+      color: var(--warm-gray);
+      margin-top: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .analytics-columns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 768px) {
+      .analytics-columns { grid-template-columns: 1fr; }
+    }
+    .analytics-section-title {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: var(--charcoal);
+    }
+    .analytics-bar-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0;
+      border-bottom: 1px solid #f0ebe4;
+    }
+    .analytics-bar-label {
+      width: 120px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      flex-shrink: 0;
+    }
+    .analytics-bar-track {
+      flex: 1;
+      height: 20px;
+      background: var(--cream-dark);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .analytics-bar-fill {
+      height: 100%;
+      background: var(--amber);
+      border-radius: 4px;
+      min-width: 2px;
+      transition: width 0.3s ease;
+    }
+    .analytics-bar-count {
+      width: 40px;
+      text-align: right;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--charcoal);
+      flex-shrink: 0;
+    }
+    .analytics-feed-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-bottom: 1px solid #f0ebe4;
+      font-size: 0.85rem;
+    }
+    .analytics-feed-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      flex-shrink: 0;
+    }
+    .analytics-feed-icon.pv { background: #e8f4f0; color: var(--teal); }
+    .analytics-feed-icon.ev { background: #fdf3e7; color: var(--amber); }
+    .analytics-feed-time {
+      width: 70px;
+      flex-shrink: 0;
+      color: var(--warm-gray-light);
+      font-size: 0.78rem;
+    }
+    .analytics-feed-page {
+      font-weight: 500;
+      width: 70px;
+      flex-shrink: 0;
+    }
+    .analytics-feed-action { color: var(--warm-gray); }
+    .analytics-empty {
+      padding: 40px;
+      text-align: center;
+      color: var(--warm-gray-light);
+      font-style: italic;
+    }
+
+    /* Analytics dark mode */
+    body.dark-mode .stat-card { background: #2a2a2a; }
+    body.dark-mode .stat-card-label { color: #888; }
+    body.dark-mode .analytics-section-title { color: #e0e0e0; }
+    body.dark-mode .analytics-bar-row { border-bottom-color: #3a3a3a; }
+    body.dark-mode .analytics-bar-label { color: #ccc; }
+    body.dark-mode .analytics-bar-track { background: #333; }
+    body.dark-mode .analytics-bar-count { color: #ccc; }
+    body.dark-mode .analytics-feed-item { border-bottom-color: #3a3a3a; }
+    body.dark-mode .analytics-feed-icon.pv { background: #1a3a33; }
+    body.dark-mode .analytics-feed-icon.ev { background: #3a2e1a; }
+    body.dark-mode .analytics-feed-time { color: #666; }
+    body.dark-mode .analytics-feed-page { color: #ccc; }
+    body.dark-mode .analytics-feed-action { color: #888; }
+    body.dark-mode .analytics-empty { color: #666; }
   </style>
 </head>
 <body>
@@ -931,6 +1063,7 @@
     <div class="header-tabs">
       <button class="header-tab active" data-tab="schedule" onclick="switchTab('schedule')">Schedule</button>
       <button class="header-tab" data-tab="gallery" onclick="switchTab('gallery')">Gallery</button>
+      <button class="header-tab" data-tab="analytics" onclick="switchTab('analytics')">Analytics</button>
       <button class="header-tab" data-tab="settings" onclick="switchTab('settings')">Settings</button>
     </div>
     <div class="header-user">
@@ -998,6 +1131,43 @@
       </div>
       <div id="galleryLoading" class="loading">Loading...</div>
       <div id="gallerySections"></div>
+    </div>
+
+    <!-- Admin: Analytics Tab -->
+    <div id="analyticsTab" style="display:none;">
+      <div class="section-header">
+        <h2>Analytics</h2>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <select id="analyticsRange" onchange="loadAnalytics()" style="padding:6px 10px;border-radius:4px;border:1px solid #ddd;font-size:0.85rem;">
+            <option value="7">Last 7 days</option>
+            <option value="30" selected>Last 30 days</option>
+            <option value="90">Last 90 days</option>
+          </select>
+          <button class="btn btn-secondary" onclick="loadAnalytics()" style="font-size:0.85rem;">Refresh</button>
+        </div>
+      </div>
+      <div id="analyticsLoading" class="loading" style="display:none;padding:40px;text-align:center;">Loading analytics...</div>
+
+      <!-- Summary Cards -->
+      <div id="analyticsSummary" class="analytics-summary"></div>
+
+      <!-- Page Breakdown + Interactions -->
+      <div class="analytics-columns">
+        <div>
+          <h3 class="analytics-section-title">Page Views</h3>
+          <div id="analyticsPages"></div>
+        </div>
+        <div>
+          <h3 class="analytics-section-title">Top Interactions</h3>
+          <div id="analyticsInteractions"></div>
+        </div>
+      </div>
+
+      <!-- Recent Activity -->
+      <div style="margin-top:24px;">
+        <h3 class="analytics-section-title">Recent Activity</h3>
+        <div id="analyticsRecent"></div>
+      </div>
     </div>
 
     <!-- Admin: Settings Tab -->
@@ -1089,12 +1259,14 @@ const GITHUB_IMAGES_PATH = 'images';
 const GITHUB_PAGES_BASE = 'https://stewartdavidp-ship-it.github.io/shirglassworks';
 const GITHUB_TOKEN_PATH = 'shirglassworks/admin/githubToken';
 const SETTINGS_PATH = 'shirglassworks/public/settings';
+const ANALYTICS_HITS_PATH = 'shirglassworks/analytics/hits';
 
 // ============================================================
 // State
 // ============================================================
 let currentUser = null;
 let currentTab = 'schedule';
+var analyticsLoaded = false;
 let events = {};
 let gallery = {};
 let eventsListener = null;
@@ -1298,13 +1470,16 @@ function switchTab(tab) {
   });
   document.getElementById('scheduleTab').style.display = tab === 'schedule' ? '' : 'none';
   document.getElementById('galleryTab').style.display = tab === 'gallery' ? '' : 'none';
+  document.getElementById('analyticsTab').style.display = tab === 'analytics' ? '' : 'none';
   document.getElementById('settingsTab').style.display = tab === 'settings' ? '' : 'none';
   if (tab === 'settings') updateGitHubTokenStatus();
+  if (tab === 'analytics' && !analyticsLoaded) loadAnalytics();
 }
 
 function hideAdminTabs() {
   document.getElementById('scheduleTab').style.display = 'none';
   document.getElementById('galleryTab').style.display = 'none';
+  document.getElementById('analyticsTab').style.display = 'none';
   document.getElementById('settingsTab').style.display = 'none';
 }
 
@@ -1565,6 +1740,165 @@ async function cleanupBrokenRecords() {
   updates[v4Flag] = true;
   await db.ref().update(updates);
   console.log('Cleanup complete — removed ' + count + ' broken records.');
+}
+
+// ============================================================
+// Analytics
+// ============================================================
+
+var ACTION_LABELS = {
+  nav_about: 'Nav: About', nav_gallery: 'Nav: Gallery', nav_events: 'Nav: Events',
+  nav_process: 'Nav: Process', nav_contact: 'Nav: Contact', nav_schedule: 'Nav: Schedule',
+  nav_shop: 'Nav: Shop', nav_home: 'Nav: Home', nav_about_anchor: 'Nav: About (scroll)',
+  cta_explore: 'CTA: Explore Our Work', cta_events: 'CTA: Upcoming Events',
+  cta_full_schedule: 'CTA: Full Schedule', cta_contact: 'CTA: Contact Us',
+  cta_see_work: 'CTA: See Our Work', cta_etsy_shop: 'CTA: Visit Etsy Shop',
+  cta_subscribe: 'CTA: Subscribe', cta_contact_form: 'CTA: Send Message',
+  product_etsy: 'Product: View on Etsy',
+  social_instagram: 'Social: Instagram', social_etsy: 'Social: Etsy'
+};
+
+var PAGE_LABELS = { home: 'Home', about: 'About', shop: 'Shop', schedule: 'Schedule' };
+
+async function loadAnalytics() {
+  analyticsLoaded = true;
+  var loading = document.getElementById('analyticsLoading');
+  var summary = document.getElementById('analyticsSummary');
+  loading.style.display = '';
+
+  try {
+    var snap = await db.ref(ANALYTICS_HITS_PATH)
+      .orderByChild('ts')
+      .limitToLast(2000)
+      .once('value');
+    var data = snap.val() || {};
+    var hits = Object.values(data);
+    hits.sort(function(a, b) { return (b.ts || 0) - (a.ts || 0); });
+
+    var rangeDays = parseInt(document.getElementById('analyticsRange').value, 10) || 30;
+    var now = new Date();
+    var cutoff = new Date(now);
+    cutoff.setDate(cutoff.getDate() - rangeDays);
+    var cutoffStr = cutoff.getFullYear() + '-' +
+      String(cutoff.getMonth() + 1).padStart(2, '0') + '-' +
+      String(cutoff.getDate()).padStart(2, '0');
+    var todayStr = now.getFullYear() + '-' +
+      String(now.getMonth() + 1).padStart(2, '0') + '-' +
+      String(now.getDate()).padStart(2, '0');
+
+    var rangeHits = hits.filter(function(h) { return h.d >= cutoffStr; });
+    var todayHits = hits.filter(function(h) { return h.d === todayStr; });
+
+    var todayPV = todayHits.filter(function(h) { return h.t === 'pv'; }).length;
+    var rangePV = rangeHits.filter(function(h) { return h.t === 'pv'; }).length;
+    var rangeEV = rangeHits.filter(function(h) { return h.t === 'ev'; }).length;
+    var totalHits = hits.length;
+
+    renderAnalyticsSummary(todayPV, rangePV, rangeEV, totalHits, rangeDays);
+    renderAnalyticsPages(rangeHits);
+    renderAnalyticsInteractions(rangeHits);
+    renderAnalyticsRecent(hits.slice(0, 30));
+  } catch (err) {
+    showToast('Error loading analytics: ' + err.message, true);
+  } finally {
+    loading.style.display = 'none';
+  }
+}
+
+function renderAnalyticsSummary(todayPV, rangePV, rangeEV, total, days) {
+  var html = '' +
+    '<div class="stat-card"><div class="stat-card-value">' + todayPV + '</div><div class="stat-card-label">Today</div></div>' +
+    '<div class="stat-card"><div class="stat-card-value">' + rangePV + '</div><div class="stat-card-label">Views (' + days + 'd)</div></div>' +
+    '<div class="stat-card"><div class="stat-card-value">' + rangeEV + '</div><div class="stat-card-label">Clicks (' + days + 'd)</div></div>' +
+    '<div class="stat-card"><div class="stat-card-value">' + total + '</div><div class="stat-card-label">All Time</div></div>';
+  document.getElementById('analyticsSummary').innerHTML = html;
+}
+
+function renderAnalyticsPages(hits) {
+  var pvHits = hits.filter(function(h) { return h.t === 'pv'; });
+  var counts = {};
+  pvHits.forEach(function(h) {
+    counts[h.p] = (counts[h.p] || 0) + 1;
+  });
+  var sorted = Object.entries(counts).sort(function(a, b) { return b[1] - a[1]; });
+  var max = sorted.length > 0 ? sorted[0][1] : 1;
+
+  var html = '';
+  if (sorted.length === 0) {
+    html = '<div class="analytics-empty">No page views recorded yet.</div>';
+  } else {
+    sorted.forEach(function(entry) {
+      var pct = Math.round((entry[1] / max) * 100);
+      html += '<div class="analytics-bar-row">' +
+        '<div class="analytics-bar-label">' + esc(PAGE_LABELS[entry[0]] || entry[0]) + '</div>' +
+        '<div class="analytics-bar-track"><div class="analytics-bar-fill" style="width:' + pct + '%"></div></div>' +
+        '<div class="analytics-bar-count">' + entry[1] + '</div>' +
+        '</div>';
+    });
+  }
+  document.getElementById('analyticsPages').innerHTML = html;
+}
+
+function renderAnalyticsInteractions(hits) {
+  var evHits = hits.filter(function(h) { return h.t === 'ev'; });
+  var counts = {};
+  evHits.forEach(function(h) {
+    counts[h.a] = (counts[h.a] || 0) + 1;
+  });
+  var sorted = Object.entries(counts).sort(function(a, b) { return b[1] - a[1]; });
+  var max = sorted.length > 0 ? sorted[0][1] : 1;
+
+  var html = '';
+  if (sorted.length === 0) {
+    html = '<div class="analytics-empty">No interactions recorded yet.</div>';
+  } else {
+    sorted.slice(0, 15).forEach(function(entry) {
+      var pct = Math.round((entry[1] / max) * 100);
+      html += '<div class="analytics-bar-row">' +
+        '<div class="analytics-bar-label">' + esc(ACTION_LABELS[entry[0]] || entry[0]) + '</div>' +
+        '<div class="analytics-bar-track"><div class="analytics-bar-fill" style="width:' + pct + '%"></div></div>' +
+        '<div class="analytics-bar-count">' + entry[1] + '</div>' +
+        '</div>';
+    });
+  }
+  document.getElementById('analyticsInteractions').innerHTML = html;
+}
+
+function renderAnalyticsRecent(hits) {
+  var html = '';
+  if (hits.length === 0) {
+    html = '<div class="analytics-empty">No activity recorded yet.</div>';
+  } else {
+    hits.forEach(function(h) {
+      var icon = h.t === 'pv' ? 'pv' : 'ev';
+      var iconText = h.t === 'pv' ? '\u{1F441}' : '\u{1F517}';
+      var pageLabel = PAGE_LABELS[h.p] || h.p;
+      var desc = h.t === 'pv' ? 'Page view' : (ACTION_LABELS[h.a] || h.a || 'Click');
+      var time = formatTimeAgo(h.ts);
+
+      html += '<div class="analytics-feed-item">' +
+        '<div class="analytics-feed-icon ' + icon + '">' + iconText + '</div>' +
+        '<div class="analytics-feed-time">' + time + '</div>' +
+        '<div class="analytics-feed-page">' + esc(pageLabel) + '</div>' +
+        '<div class="analytics-feed-action">' + esc(desc) + '</div>' +
+        '</div>';
+    });
+  }
+  document.getElementById('analyticsRecent').innerHTML = html;
+}
+
+function formatTimeAgo(ts) {
+  var diff = Date.now() - ts;
+  var secs = Math.floor(diff / 1000);
+  if (secs < 60) return 'just now';
+  var mins = Math.floor(secs / 60);
+  if (mins < 60) return mins + 'm ago';
+  var hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + 'h ago';
+  var days = Math.floor(hrs / 24);
+  if (days < 7) return days + 'd ago';
+  var d = new Date(ts);
+  return (d.getMonth() + 1) + '/' + d.getDate();
 }
 
 // ============================================================

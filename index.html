@@ -1577,5 +1577,54 @@
 })();
 </script>
 
+<!-- ============ ANALYTICS TRACKING ============ -->
+<script>
+(function() {
+  var db = firebase.database();
+  var HITS = 'shirglassworks/analytics/hits';
+  var now = new Date();
+  var page = 'home';
+  var d = now.getFullYear() + '-' +
+    String(now.getMonth() + 1).padStart(2, '0') + '-' +
+    String(now.getDate()).padStart(2, '0');
+
+  function track(type, action) {
+    var hit = { t: type, p: page, ts: Date.now(), d: d };
+    if (action) hit.a = action;
+    db.ref(HITS).push(hit).catch(function() {});
+  }
+
+  // Page view
+  setTimeout(function() { track('pv'); }, 100);
+
+  // Click tracking via event delegation
+  document.addEventListener('click', function(e) {
+    var el = e.target.closest('a, button');
+    if (!el) return;
+    var href = (el.href || '').toLowerCase();
+    var text = (el.textContent || '').trim().toLowerCase();
+    var action = null;
+
+    if (href.indexOf('instagram.com') !== -1) action = 'social_instagram';
+    else if (href.indexOf('etsy.com') !== -1) action = 'social_etsy';
+    else if (href.indexOf('schedule.html') !== -1) action = 'nav_schedule';
+    else if (href.indexOf('about.html') !== -1) action = 'nav_about';
+    else if (href.indexOf('shop.html') !== -1) action = 'nav_shop';
+    else if (href.indexOf('#gallery') !== -1) action = 'nav_gallery';
+    else if (href.indexOf('#events') !== -1) action = 'nav_events';
+    else if (href.indexOf('#process') !== -1) action = 'nav_process';
+    else if (href.indexOf('#contact') !== -1) action = 'nav_contact';
+    else if (href.indexOf('#about') !== -1) action = 'nav_about_anchor';
+    else if (text.indexOf('explore our work') !== -1) action = 'cta_explore';
+    else if (text.indexOf('upcoming events') !== -1) action = 'cta_events';
+    else if (text.indexOf('full schedule') !== -1) action = 'cta_full_schedule';
+    else if (text.indexOf('subscribe') !== -1) action = 'cta_subscribe';
+    else if (text.indexOf('send message') !== -1) action = 'cta_contact_form';
+
+    if (action) track('ev', action);
+  }, true);
+})();
+</script>
+
 </body>
 </html>
