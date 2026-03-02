@@ -858,6 +858,15 @@
           </div>
           <div id="githubTokenStatus" style="margin-top:8px;font-size:0.85rem;"></div>
         </div>
+        <hr style="margin:24px 0;border:none;border-top:1px solid #ddd;">
+        <div class="form-group">
+          <label>Seed Initial Data</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">
+            One-time import of schedule events and gallery images. Skips if data already exists.
+          </p>
+          <button class="btn btn-secondary" onclick="seedData()">Seed Data</button>
+          <div id="seedStatus" style="margin-top:8px;font-size:0.85rem;"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -1139,6 +1148,72 @@ function updateGitHubTokenStatus() {
     el.innerHTML = '<span style="color:var(--teal);">&#10003; Token configured</span>';
   } else {
     el.innerHTML = '<span style="color:var(--warm-gray-light);">No token configured. Image upload requires a GitHub PAT.</span>';
+  }
+}
+
+// ============================================================
+// Seed Data (one-time import)
+// ============================================================
+async function seedData() {
+  var statusEl = document.getElementById('seedStatus');
+  statusEl.innerHTML = '<span style="color:var(--warm-gray);">Seeding...</span>';
+
+  var scheduleEvents = [
+    { name: 'Northampton Spring Arts Festival', date: '2026-03-15', dateEnd: null, location: 'Downtown Northampton, MA', description: 'Annual spring arts festival featuring local artists and craftspeople.', visible: true },
+    { name: 'Greenfield Makers Market', date: '2026-04-05', dateEnd: null, location: 'Greenfield Community Center, Greenfield, MA', description: 'Monthly makers market with handcrafted goods from Western Mass artisans.', visible: true },
+    { name: 'Paradise City Arts Festival', date: '2026-05-22', dateEnd: '2026-05-24', location: 'Three County Fairgrounds, Northampton, MA', description: 'Premier fine arts and craft festival showcasing hundreds of juried artists.', visible: true },
+    { name: 'Shelburne Falls Art Walk', date: '2026-06-14', dateEnd: null, location: 'Bridge of Flowers, Shelburne Falls, MA', description: 'Open studios and gallery walk through the charming village of Shelburne Falls.', visible: true },
+    { name: 'Northampton Sidewalk Sale', date: '2026-07-18', dateEnd: null, location: 'Main Street, Northampton, MA', description: 'Summer sidewalk sale with local businesses and artisan vendors.', visible: true },
+    { name: "Martha's Vineyard Artisan Fair", date: '2026-08-09', dateEnd: '2026-08-10', location: "Grange Hall, West Tisbury, Martha's Vineyard, MA", description: 'Two-day artisan fair featuring fine crafts and artwork on the island.', visible: true },
+    { name: 'Eastern States Exposition', date: '2026-09-18', dateEnd: '2026-10-04', location: 'West Springfield, MA', description: "The Big E — New England's great state fair with artisan exhibitions.", visible: true },
+    { name: 'Deerfield Craft Fair', date: '2026-10-10', dateEnd: '2026-10-11', location: 'Historic Deerfield, MA', description: 'Traditional craft fair set among the historic homes of Old Deerfield.', visible: true },
+    { name: 'Northampton Holiday Market', date: '2026-11-28', dateEnd: null, location: 'Academy of Music, Northampton, MA', description: 'Holiday gift market featuring local artisans and unique handmade gifts.', visible: true },
+    { name: 'First Night Northampton', date: '2026-12-31', dateEnd: null, location: 'Various venues, Northampton, MA', description: "New Year's Eve arts celebration with performances and artisan showcases.", visible: true }
+  ];
+
+  var galleryImages = [
+    { url: 'https://shirglassworks.com/uploads/1/4/6/0/146018125/img-5405_orig.jpg', alt: 'Ori glassblowing in the studio', caption: 'Ori at work in the hot shop', category: 'studio', visible: true, order: 1 },
+    { url: 'https://shirglassworks.com/uploads/1/4/6/0/146018125/c5-i1-w3000_orig.jpeg', alt: 'Handcrafted glass octopus sculpture', caption: 'Glass Octopus', category: 'sculpture', visible: true, order: 2 },
+    { url: 'https://shirglassworks.com/uploads/1/4/6/0/146018125/c4-i3-w900_orig.jpeg', alt: 'Sea turtle glass pendant', caption: 'Sea Turtle Pendant', category: 'jewelry', visible: true, order: 3 },
+    { url: 'https://shirglassworks.com/uploads/1/4/6/0/146018125/madeline-glassblowing-tate-photo_orig.jpg', alt: 'Madeline glassblowing', caption: 'Madeline at the torch', category: 'studio', visible: true, order: 4 },
+    { url: 'https://shirglassworks.com/uploads/1/4/6/0/146018125/c3-i1-w3300_orig.jpeg', alt: 'Hand-blown glass drinkware collection', caption: 'Drinkware Collection', category: 'functional', visible: true, order: 5 },
+    { url: 'https://shirglassworks.com/uploads/1/4/6/0/146018125/c8-i2-w4939_orig.jpeg', alt: 'Delicate glass lotus flower', caption: 'Glass Lotus', category: 'sculpture', visible: true, order: 6 },
+    { url: 'https://shirglassworks.com/uploads/1/4/6/0/146018125/c6-i2-w1938_orig.jpeg', alt: 'Colorful blown glass vases', caption: 'Glass Vases', category: 'functional', visible: true, order: 7 }
+  ];
+
+  var results = [];
+  try {
+    var existingEvents = await db.ref(EVENTS_PATH).once('value');
+    if (existingEvents.exists()) {
+      results.push('Events: skipped (' + Object.keys(existingEvents.val()).length + ' already exist)');
+    } else {
+      for (var i = 0; i < scheduleEvents.length; i++) {
+        var ev = scheduleEvents[i];
+        ev.createdAt = firebase.database.ServerValue.TIMESTAMP;
+        ev.updatedAt = firebase.database.ServerValue.TIMESTAMP;
+        await db.ref(EVENTS_PATH).push(ev);
+      }
+      results.push('Events: ' + scheduleEvents.length + ' seeded');
+    }
+
+    var existingGallery = await db.ref(GALLERY_PATH).once('value');
+    if (existingGallery.exists()) {
+      results.push('Gallery: skipped (' + Object.keys(existingGallery.val()).length + ' already exist)');
+    } else {
+      for (var j = 0; j < galleryImages.length; j++) {
+        var img = galleryImages[j];
+        img.createdAt = firebase.database.ServerValue.TIMESTAMP;
+        img.updatedAt = firebase.database.ServerValue.TIMESTAMP;
+        await db.ref(GALLERY_PATH).push(img);
+      }
+      results.push('Gallery: ' + galleryImages.length + ' seeded');
+    }
+
+    statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; ' + results.join(' | ') + '</span>';
+    showToast('Seed complete: ' + results.join(' | '));
+  } catch (err) {
+    statusEl.innerHTML = '<span style="color:var(--danger);">Error: ' + err.message + '</span>';
+    showToast('Seed failed: ' + err.message, true);
   }
 }
 
