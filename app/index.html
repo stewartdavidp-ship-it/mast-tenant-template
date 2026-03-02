@@ -1096,6 +1096,11 @@
     }
     .order-status.pending_payment { background: #FFF3E0; color: #E65100; }
     .order-status.payment_failed { background: #FFEBEE; color: #C62828; }
+    .order-source-badge {
+      display: inline-block; font-size: 0.7rem; padding: 1px 6px; border-radius: 4px;
+      font-weight: 600; vertical-align: middle; margin-left: 6px; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .order-source-badge.etsy { background: #F1641E; color: white; }
     .order-status.placed { background: #FFF3E0; color: #E65100; }
     .order-status.confirmed { background: #E3F2FD; color: #1565C0; }
     .order-status.building { background: #F3E5F5; color: #7B1FA2; }
@@ -1414,6 +1419,7 @@
     }
     body.dark-mode .order-status.pending_payment { background: #3a2a1a; color: #FFB74D; }
     body.dark-mode .order-status.payment_failed { background: #3a1a1a; color: #EF9A9A; }
+    body.dark-mode .order-source-badge.etsy { background: #c44e15; }
     body.dark-mode .order-status.placed { background: #3a2a1a; color: #FFB74D; }
     body.dark-mode .order-status.confirmed { background: #1a2a3a; color: #64B5F6; }
     body.dark-mode .order-status.building { background: #2a1a3a; color: #CE93D8; }
@@ -1864,9 +1870,19 @@
     <div id="ordersTab" style="display:none;">
       <!-- Order List View -->
       <div id="ordersListView">
-        <div class="section-header">
-          <h2>Orders</h2>
-          <span class="products-stat" id="ordersCount"></span>
+        <div class="section-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <h2 style="margin:0;">Orders</h2>
+            <span class="products-stat" id="ordersCount"></span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <select id="orderSourceFilter" onchange="filterOrdersBySource()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.85rem;">
+              <option value="all">All Sources</option>
+              <option value="direct">Direct Only</option>
+              <option value="etsy">Etsy Only</option>
+            </select>
+            <button id="etsySyncBtn" class="btn" onclick="syncEtsyOrders()" style="font-size:0.85rem;padding:6px 12px;">&#x21bb; Sync Etsy</button>
+          </div>
         </div>
         <div id="ordersFilterPills" class="order-filter-pills"></div>
         <div id="ordersLoading" class="loading">Loading...</div>
@@ -2007,6 +2023,36 @@
             <button class="btn btn-primary" onclick="saveSquareConfig()">Save</button>
           </div>
           <div id="squareConfigStatus" style="margin-top:8px;font-size:0.85rem;"></div>
+        </div>
+
+        <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
+
+        <div class="form-group">
+          <label style="font-size:1.1rem;font-weight:600;">Etsy Integration</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
+            Connect your Etsy shop to sync orders automatically. Etsy orders appear in the Orders tab with an "Etsy" badge.
+          </p>
+
+          <div id="etsyConfigStatus" style="margin-bottom:16px;font-size:0.85rem;"></div>
+
+          <div id="etsyDisconnected" style="display:none;">
+            <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">API Key (Keystring)</label>
+            <p style="font-size:0.8rem;color:var(--warm-gray);margin-bottom:4px;">
+              From your Etsy Developer app dashboard
+            </p>
+            <input type="text" id="etsyApiKey" placeholder="abc123def456..."
+              style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;margin-bottom:16px;box-sizing:border-box;">
+
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-primary" onclick="connectEtsy()">Connect Etsy Shop</button>
+            </div>
+          </div>
+
+          <div id="etsyConnected" style="display:none;">
+            <div style="display:flex;gap:8px;">
+              <button class="btn" style="background:#f44336;color:white;" onclick="disconnectEtsy()">Disconnect Etsy</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -2413,6 +2459,7 @@ function loadSettings() {
     }
   });
   loadSquareConfig();
+  loadEtsyConfig();
 }
 
 async function toggleDarkMode() {
@@ -2478,6 +2525,115 @@ function loadSquareConfig() {
     if (sigEl && config.webhookSignatureKey) sigEl.placeholder = '••••••••  (saved)';
     if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Configured (' + config.environment + ') — updated ' + new Date(config.updatedAt).toLocaleDateString() + '</span>';
   });
+}
+
+// ============================================================
+// Etsy Config Management
+// ============================================================
+const ETSY_CONFIG_PATH = 'shirglassworks/config/etsy';
+
+async function connectEtsy() {
+  var apiKey = document.getElementById('etsyApiKey').value.trim();
+  if (!apiKey) {
+    showToast('Enter your Etsy API Key (keystring) first.', true);
+    return;
+  }
+
+  // Save API key before starting OAuth
+  try {
+    await db.ref(ETSY_CONFIG_PATH + '/apiKey').set(apiKey);
+  } catch (err) {
+    showToast('Error saving API key: ' + err.message, true);
+    return;
+  }
+
+  showToast('Starting Etsy authorization...');
+
+  try {
+    var result = await firebase.functions().httpsCallable('shirEtsyOAuthStart')({});
+    if (result.data && result.data.authUrl) {
+      window.open(result.data.authUrl, '_blank');
+    } else {
+      showToast('Failed to get Etsy auth URL.', true);
+    }
+  } catch (err) {
+    showToast('Error: ' + err.message, true);
+  }
+}
+
+async function disconnectEtsy() {
+  if (!confirm('Disconnect Etsy? You will need to re-authorize to sync orders again.')) return;
+  try {
+    await db.ref(ETSY_CONFIG_PATH).remove();
+    loadEtsyConfig();
+    showToast('Etsy disconnected.');
+  } catch (err) {
+    showToast('Error disconnecting: ' + err.message, true);
+  }
+}
+
+function loadEtsyConfig() {
+  db.ref(ETSY_CONFIG_PATH).once('value').then(function(snap) {
+    var config = snap.val();
+    var statusEl = document.getElementById('etsyConfigStatus');
+    var connectedEl = document.getElementById('etsyConnected');
+    var disconnectedEl = document.getElementById('etsyDisconnected');
+
+    if (config && config.accessToken && config.shopId) {
+      // Connected
+      if (disconnectedEl) disconnectedEl.style.display = 'none';
+      if (connectedEl) connectedEl.style.display = 'block';
+      var shopName = config.shopName || 'Shop #' + config.shopId;
+      var lastSync = config.lastSyncAt ? new Date(config.lastSyncAt).toLocaleString() : 'Never';
+      if (statusEl) statusEl.innerHTML =
+        '<span style="color:var(--teal);">&#10003; Connected to <strong>' + shopName + '</strong></span>' +
+        '<br><span style="color:var(--warm-gray);">Last sync: ' + lastSync + '</span>';
+    } else {
+      // Disconnected
+      if (disconnectedEl) disconnectedEl.style.display = 'block';
+      if (connectedEl) connectedEl.style.display = 'none';
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray-light);">Not connected. Click "Connect Etsy Shop" to link your Etsy account.</span>';
+      // Pre-fill API key if we have one
+      if (config && config.apiKey) {
+        var keyEl = document.getElementById('etsyApiKey');
+        if (keyEl) keyEl.value = config.apiKey;
+      }
+    }
+  });
+
+  // Check for ?etsy=connected param (returning from OAuth)
+  var urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('etsy') === 'connected') {
+    showToast('Etsy connected successfully!');
+    // Clean URL
+    var cleanUrl = window.location.pathname;
+    window.history.replaceState({}, '', cleanUrl);
+  }
+}
+
+async function syncEtsyOrders() {
+  var btn = document.getElementById('etsySyncBtn');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-small"></span> Syncing...';
+  }
+
+  try {
+    var result = await firebase.functions().httpsCallable('shirEtsyOrderSync')({});
+    var data = result.data;
+    showToast('Etsy sync complete: ' + data.imported + ' imported, ' + data.skipped + ' skipped.');
+    // Refresh order list
+    loadOrders();
+    // Refresh last sync time in settings
+    loadEtsyConfig();
+  } catch (err) {
+    showToast('Etsy sync error: ' + err.message, true);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '&#x21bb; Sync Etsy';
+    }
+  }
 }
 
 // ============================================================
@@ -4343,8 +4499,16 @@ function getOrderItemsLabel(order) {
   return total + (total === 1 ? ' item' : ' items');
 }
 
+var orderSourceFilter = 'all';
+
 function setOrderFilter(filter) {
   orderFilter = filter;
+  renderOrders();
+}
+
+function filterOrdersBySource() {
+  var sel = document.getElementById('orderSourceFilter');
+  orderSourceFilter = sel ? sel.value : 'all';
   renderOrders();
 }
 
@@ -4396,16 +4560,24 @@ function renderOrders() {
   });
   if (pillsEl) pillsEl.innerHTML = pillHtml;
 
-  // Filter orders
+  // Filter by source
+  var sourceFiltered = all;
+  if (orderSourceFilter === 'direct') {
+    sourceFiltered = all.filter(function(o) { return !o.source || o.source === 'direct'; });
+  } else if (orderSourceFilter === 'etsy') {
+    sourceFiltered = all.filter(function(o) { return o.source === 'etsy'; });
+  }
+
+  // Filter orders by status
   var filtered;
   if (orderFilter === 'all') {
-    filtered = all;
+    filtered = sourceFiltered;
   } else if (orderFilter === 'active') {
-    filtered = all.filter(function(o) {
+    filtered = sourceFiltered.filter(function(o) {
       return o.status !== 'delivered' && o.status !== 'cancelled' && o.status !== 'payment_failed';
     });
   } else {
-    filtered = all.filter(function(o) { return (o.status || 'placed') === orderFilter; });
+    filtered = sourceFiltered.filter(function(o) { return (o.status || 'placed') === orderFilter; });
   }
 
   if (countEl) countEl.textContent = filtered.length + ' order' + (filtered.length !== 1 ? 's' : '');
@@ -4436,8 +4608,9 @@ function renderOrders() {
     var key = o._key;
     var num = esc(getOrderDisplayNumber(o));
     var status = o.status || 'placed';
+    var sourceBadge = o.source === 'etsy' ? ' <span class="order-source-badge etsy">Etsy</span>' : '';
     rowsHtml += '<tr onclick="viewOrder(\'' + esc(key) + '\')">' +
-      '<td><span style="font-family:monospace;font-weight:600;">' + num + '</span></td>' +
+      '<td><span style="font-family:monospace;font-weight:600;">' + num + '</span>' + sourceBadge + '</td>' +
       '<td>' + esc(o.email || '') + '</td>' +
       '<td>' + getOrderItemsLabel(o) + '</td>' +
       '<td>$' + (o.total || 0).toFixed(2) + '</td>' +
@@ -4453,9 +4626,10 @@ function renderOrders() {
     var key = o._key;
     var num = esc(getOrderDisplayNumber(o));
     var status = o.status || 'placed';
+    var cardSourceBadge = o.source === 'etsy' ? '<span class="order-source-badge etsy" style="margin-left:8px;">Etsy</span>' : '';
     cardHtml += '<div class="order-card" onclick="viewOrder(\'' + esc(key) + '\')">' +
       '<div class="order-card-header">' +
-        '<span class="order-card-number">' + num + '</span>' +
+        '<span class="order-card-number">' + num + cardSourceBadge + '</span>' +
         '<span class="order-status ' + status + '">' + status.replace(/_/g, ' ') + '</span>' +
       '</div>' +
       '<div class="order-card-details">' +
@@ -4600,6 +4774,26 @@ function renderOrderDetail(orderId) {
     '</div>';
   }
 
+  // Etsy info
+  var etsyHtml = '';
+  if (o.source === 'etsy' && o.etsyReceiptId) {
+    var etsyRows = '';
+    etsyRows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Source</span><span class="order-source-badge etsy">Etsy</span></div>';
+    etsyRows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Receipt ID</span><span style="font-family:monospace;font-size:0.82rem;">' +
+      (o.etsyOrderUrl ? '<a href="' + esc(o.etsyOrderUrl) + '" target="_blank" style="color:var(--teal);">' + esc(o.etsyReceiptId) + '</a>' : esc(o.etsyReceiptId)) +
+      '</span></div>';
+    if (o.etsyBuyerUsername) {
+      etsyRows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Buyer</span><span>' + esc(o.etsyBuyerUsername) + '</span></div>';
+    }
+    if (o.etsyTrackingPushed) {
+      etsyRows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Tracking Pushed</span><span style="color:var(--teal);">&#10003; ' + formatOrderDateTime(o.etsyTrackingPushedAt) + '</span></div>';
+    }
+    etsyHtml = '<div class="order-detail-section">' +
+      '<div class="order-detail-section-title">Etsy Order</div>' +
+      etsyRows +
+    '</div>';
+  }
+
   // Tracking
   var trackingHtml = '';
   if (o.tracking && o.tracking.trackingNumber) {
@@ -4690,7 +4884,7 @@ function renderOrderDetail(orderId) {
   detailEl.innerHTML = '<button class="order-detail-back" onclick="backToOrders()">&#8592; Back to Orders</button>' +
     '<div class="order-detail-header">' +
       '<div>' +
-        '<div class="order-detail-title">' + num + '</div>' +
+        '<div class="order-detail-title">' + num + (o.source === 'etsy' ? ' <span class="order-source-badge etsy">Etsy</span>' : '') + '</div>' +
         '<div class="order-detail-meta">' +
           '<span class="order-status ' + status + '">' + status.replace(/_/g, ' ') + '</span> &middot; ' +
           formatOrderDateTime(o.placedAt || o.pendingPaymentAt) + ' &middot; ' + esc(o.email || '') +
@@ -4714,6 +4908,7 @@ function renderOrderDetail(orderId) {
       '</div>' +
     '</div>' +
     paymentHtml +
+    etsyHtml +
     trackingHtml +
     buildJobsHtml +
     timelineHtml +
@@ -4978,8 +5173,14 @@ function showBuildQueue() {
 
 // ---- Shipping Modal ----
 function openShippingModal(orderId) {
+  var order = orders[orderId];
+  var etsyNote = (order && order.source === 'etsy') ?
+    '<div style="background:#FFF3E0;border:1px solid #F1641E;border-radius:6px;padding:8px 12px;margin-bottom:16px;font-size:0.85rem;color:#E65100;">' +
+      '<strong>Etsy Order</strong> — Tracking will be pushed to Etsy automatically when you mark shipped.' +
+    '</div>' : '';
   var html = '<div style="max-width:400px;">' +
     '<h3>Mark as Shipped</h3>' +
+    etsyNote +
     '<div class="form-group">' +
       '<label>Carrier</label>' +
       '<select id="shippingCarrier">' +
