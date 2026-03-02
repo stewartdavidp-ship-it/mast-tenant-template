@@ -1027,6 +1027,419 @@
       .coupon-cards { display: flex; }
     }
 
+    /* ========== INVENTORY ========== */
+    .product-inventory {
+      margin-top: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .stock-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .stock-badge.in-stock { background: #E8F5E9; color: #2E7D32; }
+    .stock-badge.low-stock { background: #FFF3E0; color: #E65100; }
+    .stock-badge.out-of-stock { background: #F8D7DA; color: #9B2335; }
+    .stock-badge.made-to-order { background: #F3E5F5; color: #7B1FA2; }
+    .stock-badge.limited { background: #FFF8E1; color: #F57F17; }
+    .stock-reserved { font-size: 0.72rem; color: var(--warm-gray-light); }
+    .btn-inv-edit {
+      background: none;
+      border: none;
+      color: var(--teal);
+      font-size: 0.72rem;
+      cursor: pointer;
+      font-family: 'DM Sans', sans-serif;
+      text-decoration: underline;
+      padding: 0;
+    }
+    .btn-inv-edit:hover { color: var(--teal-deep); }
+    .inventory-summary-bar {
+      display: flex;
+      gap: 16px;
+      padding: 10px 16px;
+      background: white;
+      border-radius: 8px;
+      border: 1px solid var(--cream-dark);
+      margin-bottom: 16px;
+      font-size: 0.82rem;
+      color: var(--warm-gray);
+      flex-wrap: wrap;
+    }
+    .inventory-summary-bar .inv-alert { color: var(--danger); font-weight: 500; }
+    .inventory-summary-bar .inv-warn { color: #E65100; font-weight: 500; }
+    body.dark-mode .stock-badge.in-stock { background: #1a3a1a; color: #81C784; }
+    body.dark-mode .stock-badge.low-stock { background: #3a2a1a; color: #FFB74D; }
+    body.dark-mode .stock-badge.out-of-stock { background: #3a1a1a; color: #f99; }
+    body.dark-mode .stock-badge.made-to-order { background: #2a1a3a; color: #CE93D8; }
+    body.dark-mode .inventory-summary-bar {
+      background: #2a2a2a;
+      border-color: #3a3a3a;
+    }
+
+    /* ========== ORDERS ========== */
+    .order-status {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .order-status.placed { background: #FFF3E0; color: #E65100; }
+    .order-status.confirmed { background: #E3F2FD; color: #1565C0; }
+    .order-status.building { background: #F3E5F5; color: #7B1FA2; }
+    .order-status.ready { background: #D4F0EB; color: #1B5C52; }
+    .order-status.packing { background: #FFF8E1; color: #F9A825; }
+    .order-status.shipped { background: #E8EAF6; color: #283593; }
+    .order-status.delivered { background: #E8F5E9; color: #2E7D32; }
+    .order-status.cancelled { background: #F8D7DA; color: #9B2335; }
+
+    .order-filter-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+    .order-filter-pill {
+      background: white;
+      border: 1px solid var(--cream-dark);
+      border-radius: 16px;
+      padding: 5px 14px;
+      font-size: 0.78rem;
+      font-weight: 500;
+      color: var(--warm-gray);
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: 'DM Sans', sans-serif;
+    }
+    .order-filter-pill:hover { border-color: var(--amber); color: var(--charcoal); }
+    .order-filter-pill.active { background: var(--charcoal); color: white; border-color: var(--charcoal); }
+    .order-filter-pill .pill-count {
+      font-size: 0.68rem;
+      opacity: 0.7;
+      margin-left: 4px;
+    }
+
+    .orders-table { margin-top: 12px; }
+    .orders-table table { width: 100%; border-collapse: collapse; }
+    .orders-table th {
+      text-align: left;
+      padding: 10px 12px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--warm-gray-light);
+      border-bottom: 1px solid var(--cream-dark);
+    }
+    .orders-table td {
+      padding: 12px;
+      font-size: 0.85rem;
+      border-bottom: 1px solid var(--cream-dark);
+      vertical-align: middle;
+    }
+    .orders-table tr { cursor: pointer; transition: background 0.15s; }
+    .orders-table tbody tr:hover { background: rgba(196,133,60,0.04); }
+
+    .order-cards {
+      display: none;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .order-card {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      padding: 16px;
+      border: 1px solid var(--cream-dark);
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+    .order-card:hover { border-color: var(--amber); }
+    .order-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .order-card-number {
+      font-family: monospace;
+      font-weight: 600;
+      font-size: 0.88rem;
+    }
+    .order-card-details {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 16px;
+      margin-top: 6px;
+    }
+    .order-card-detail {
+      font-size: 0.78rem;
+      color: var(--warm-gray);
+    }
+
+    /* Order Detail View */
+    .order-detail { display: none; }
+    .order-detail-back {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.82rem;
+      color: var(--teal);
+      cursor: pointer;
+      background: none;
+      border: none;
+      font-family: 'DM Sans', sans-serif;
+      padding: 0;
+      margin-bottom: 16px;
+    }
+    .order-detail-back:hover { color: var(--teal-deep); text-decoration: underline; }
+    .order-detail-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 20px;
+    }
+    .order-detail-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.5rem;
+      font-weight: 500;
+    }
+    .order-detail-meta {
+      font-size: 0.82rem;
+      color: var(--warm-gray);
+      margin-top: 4px;
+    }
+    .order-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .order-actions .btn { font-size: 0.78rem; padding: 8px 16px; }
+
+    .order-detail-section {
+      background: white;
+      border-radius: 8px;
+      border: 1px solid var(--cream-dark);
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .order-detail-section-title {
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--warm-gray-light);
+      margin-bottom: 12px;
+    }
+
+    .order-item-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--cream-dark);
+    }
+    .order-item-row:last-child { border-bottom: none; }
+    .order-item-name { font-weight: 500; font-size: 0.88rem; }
+    .order-item-options { font-size: 0.78rem; color: var(--warm-gray); margin-top: 2px; }
+    .order-item-price { font-weight: 500; white-space: nowrap; }
+    .order-item-fulfillment {
+      font-size: 0.72rem;
+      margin-top: 4px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      display: inline-block;
+    }
+    .order-item-fulfillment.stock { background: #E8F5E9; color: #2E7D32; }
+    .order-item-fulfillment.build { background: #F3E5F5; color: #7B1FA2; }
+
+    .order-summary-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      font-size: 0.85rem;
+      color: var(--warm-gray);
+    }
+    .order-summary-row.discount { color: var(--teal); }
+    .order-summary-row.total {
+      border-top: 1.5px solid var(--charcoal);
+      margin-top: 6px;
+      padding-top: 8px;
+      font-weight: 600;
+      font-size: 1rem;
+      color: var(--charcoal);
+    }
+    .order-summary-row.total .order-summary-value { color: var(--amber); }
+
+    .order-address-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .order-address-block p { font-size: 0.85rem; line-height: 1.6; }
+
+    .order-tracking-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 0.88rem;
+    }
+    .order-tracking-link {
+      color: var(--teal);
+      font-size: 0.82rem;
+      text-decoration: underline;
+    }
+
+    .order-timeline {
+      position: relative;
+      padding-left: 24px;
+    }
+    .order-timeline::before {
+      content: '';
+      position: absolute;
+      left: 7px;
+      top: 4px;
+      bottom: 4px;
+      width: 2px;
+      background: var(--cream-dark);
+    }
+    .order-timeline-entry {
+      position: relative;
+      padding: 6px 0;
+      font-size: 0.82rem;
+    }
+    .order-timeline-entry::before {
+      content: '';
+      position: absolute;
+      left: -20px;
+      top: 12px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--cream-dark);
+      border: 2px solid white;
+    }
+    .order-timeline-entry:first-child::before { background: var(--teal); }
+    .order-timeline-time {
+      font-size: 0.72rem;
+      color: var(--warm-gray-light);
+    }
+    .order-timeline-text {
+      color: var(--charcoal);
+      margin-top: 2px;
+    }
+
+    .order-notes-list {
+      margin-bottom: 12px;
+    }
+    .order-note {
+      padding: 8px 0;
+      border-bottom: 1px solid var(--cream-dark);
+      font-size: 0.85rem;
+    }
+    .order-note:last-child { border-bottom: none; }
+    .order-note-time {
+      font-size: 0.72rem;
+      color: var(--warm-gray-light);
+    }
+    .order-note-text { margin-top: 2px; }
+    .order-note-input {
+      display: flex;
+      gap: 8px;
+    }
+    .order-note-input input {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid var(--cream-dark);
+      border-radius: 4px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.85rem;
+    }
+
+    /* Build Queue */
+    .build-queue-summary {
+      background: #F3E5F5;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 0.85rem;
+      color: #7B1FA2;
+      cursor: pointer;
+    }
+    .build-queue-summary:hover { background: #EDE7F6; }
+
+    .build-job-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--cream-dark);
+      font-size: 0.85rem;
+    }
+    .build-job-row:last-child { border-bottom: none; }
+    .build-job-status {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .build-job-status.pending { background: #FFF3E0; color: #E65100; }
+    .build-job-status.in-progress { background: #F3E5F5; color: #7B1FA2; }
+    .build-job-status.completed { background: #E8F5E9; color: #2E7D32; }
+
+    body.dark-mode .order-card {
+      background: #2a2a2a;
+      border-color: #3a3a3a;
+    }
+    body.dark-mode .order-detail-section {
+      background: #2a2a2a;
+      border-color: #3a3a3a;
+    }
+    body.dark-mode .order-status.placed { background: #3a2a1a; color: #FFB74D; }
+    body.dark-mode .order-status.confirmed { background: #1a2a3a; color: #64B5F6; }
+    body.dark-mode .order-status.building { background: #2a1a3a; color: #CE93D8; }
+    body.dark-mode .order-status.ready { background: #1a3a35; color: #6fc; }
+    body.dark-mode .order-status.packing { background: #3a3a1a; color: #FFF176; }
+    body.dark-mode .order-status.shipped { background: #1a1a3a; color: #9FA8DA; }
+    body.dark-mode .order-status.delivered { background: #1a3a1a; color: #81C784; }
+    body.dark-mode .order-status.cancelled { background: #3a1a1a; color: #f99; }
+    body.dark-mode .order-filter-pill {
+      background: #333;
+      border-color: #555;
+      color: #ccc;
+    }
+    body.dark-mode .order-filter-pill.active {
+      background: #d4a053;
+      color: #1a1a1a;
+      border-color: #d4a053;
+    }
+    body.dark-mode .order-timeline::before { background: #3a3a3a; }
+    body.dark-mode .order-timeline-entry::before { border-color: #2a2a2a; background: #555; }
+    body.dark-mode .order-timeline-entry:first-child::before { background: var(--teal); }
+    body.dark-mode .build-queue-summary { background: #2a1a3a; color: #CE93D8; }
+
+    @media (max-width: 768px) {
+      .orders-table { display: none; }
+      .order-cards { display: flex; }
+      .order-detail-header { flex-direction: column; gap: 12px; }
+      .order-address-grid { grid-template-columns: 1fr; }
+    }
+
     /* ========== ANALYTICS ========== */
     .analytics-summary {
       display: grid;
@@ -1306,6 +1719,7 @@
       <button class="header-tab active" data-tab="schedule" onclick="switchTab('schedule')">Schedule</button>
       <button class="header-tab" data-tab="gallery" onclick="switchTab('gallery')">Gallery</button>
       <button class="header-tab" data-tab="products" onclick="switchTab('products')">Products</button>
+      <button class="header-tab" data-tab="orders" onclick="switchTab('orders')">Orders</button>
       <button class="header-tab" data-tab="coupons" onclick="switchTab('coupons')">Coupons</button>
       <button class="header-tab" data-tab="analytics" onclick="switchTab('analytics')">Analytics</button>
       <button class="header-tab" data-tab="settings" onclick="switchTab('settings')">Settings</button>
@@ -1438,7 +1852,43 @@
         </div>
       </div>
       <div id="productsLoading" class="loading" style="display:none;padding:40px;text-align:center;">Loading products...</div>
+      <div id="inventorySummaryBar" class="inventory-summary-bar" style="display:none;"></div>
       <div id="productsGrid" class="products-grid"></div>
+    </div>
+
+    <!-- Admin: Orders Tab -->
+    <div id="ordersTab" style="display:none;">
+      <!-- Order List View -->
+      <div id="ordersListView">
+        <div class="section-header">
+          <h2>Orders</h2>
+          <span class="products-stat" id="ordersCount"></span>
+        </div>
+        <div id="ordersFilterPills" class="order-filter-pills"></div>
+        <div id="ordersLoading" class="loading">Loading...</div>
+        <div id="ordersEmpty" class="empty-state" style="display:none;">
+          <p>No orders yet.</p>
+        </div>
+        <div class="orders-table" id="ordersTable" style="display:none;">
+          <table>
+            <thead>
+              <tr>
+                <th>Order</th>
+                <th>Customer</th>
+                <th>Items</th>
+                <th>Total</th>
+                <th>Status</th>
+                <th>Date</th>
+              </tr>
+            </thead>
+            <tbody id="ordersTableBody"></tbody>
+          </table>
+        </div>
+        <div class="order-cards" id="orderCards"></div>
+      </div>
+
+      <!-- Order Detail View -->
+      <div id="orderDetailView" class="order-detail"></div>
     </div>
 
     <!-- Admin: Coupons Tab -->
@@ -1589,6 +2039,35 @@ var couponsLoaded = false;
 var coupons = {};
 var couponsListener = null;
 var COUPONS_PATH = 'shirglassworks/admin/coupons';
+var ordersLoaded = false;
+var orders = {};
+var ordersListener = null;
+var ORDERS_PATH = 'shirglassworks/orders';
+var orderFilter = 'active';
+var selectedOrderId = null;
+var buildJobs = {};
+var buildJobsListener = null;
+var BUILD_JOBS_PATH = 'shirglassworks/admin/buildJobs';
+var inventory = {};
+var inventoryListener = null;
+var INVENTORY_PATH = 'shirglassworks/admin/inventory';
+
+var ORDER_VALID_TRANSITIONS = {
+  placed: ['confirmed', 'cancelled'],
+  confirmed: ['building', 'ready', 'cancelled'],
+  building: ['ready', 'cancelled'],
+  ready: ['packing', 'cancelled'],
+  packing: ['shipped', 'cancelled'],
+  shipped: ['delivered'],
+  delivered: [],
+  cancelled: []
+};
+
+var TRACKING_URLS = {
+  'USPS': function(n) { return 'https://tools.usps.com/go/TrackConfirmAction?tLabels=' + n; },
+  'UPS': function(n) { return 'https://www.ups.com/track?tracknum=' + n; },
+  'FedEx': function(n) { return 'https://www.fedex.com/fedextrack/?trknbr=' + n; }
+};
 
 // ============================================================
 // GitHub API
@@ -1793,12 +2272,14 @@ function switchTab(tab) {
   document.getElementById('scheduleTab').style.display = tab === 'schedule' ? '' : 'none';
   document.getElementById('galleryTab').style.display = tab === 'gallery' ? '' : 'none';
   document.getElementById('productsTab').style.display = tab === 'products' ? '' : 'none';
+  document.getElementById('ordersTab').style.display = tab === 'orders' ? '' : 'none';
   document.getElementById('couponsTab').style.display = tab === 'coupons' ? '' : 'none';
   document.getElementById('analyticsTab').style.display = tab === 'analytics' ? '' : 'none';
   document.getElementById('settingsTab').style.display = tab === 'settings' ? '' : 'none';
   if (tab === 'settings') updateGitHubTokenStatus();
   if (tab === 'analytics' && !analyticsLoaded) loadAnalytics();
   if (tab === 'products' && !productsLoaded) loadProducts();
+  if (tab === 'orders' && !ordersLoaded) loadOrders();
   if (tab === 'coupons' && !couponsLoaded) loadCoupons();
 }
 
@@ -1806,6 +2287,7 @@ function hideAdminTabs() {
   document.getElementById('scheduleTab').style.display = 'none';
   document.getElementById('galleryTab').style.display = 'none';
   document.getElementById('productsTab').style.display = 'none';
+  document.getElementById('ordersTab').style.display = 'none';
   document.getElementById('couponsTab').style.display = 'none';
   document.getElementById('analyticsTab').style.display = 'none';
   document.getElementById('settingsTab').style.display = 'none';
@@ -2334,6 +2816,37 @@ function renderProducts() {
 
     var imgCount = (p.images && p.images.length) ? p.images.length : 0;
 
+    // Inventory info
+    var inv = inventory[p.pid];
+    var invHtml = '';
+    if (inv) {
+      var stockType = inv.stockType || 'made-to-order';
+      var stockBadgeClass = 'stock-badge ';
+      if (stockType === 'made-to-order') {
+        stockBadgeClass += 'made-to-order';
+        invHtml = '<div class="product-inventory"><span class="' + stockBadgeClass + '">Made to Order</span></div>';
+      } else {
+        var avail = (inv.stock && inv.stock._default) ? inv.stock._default.available || 0 : 0;
+        var reserved = (inv.stock && inv.stock._default) ? inv.stock._default.reserved || 0 : 0;
+        var threshold = inv.lowStockThreshold || 2;
+        if (avail <= 0) {
+          stockBadgeClass += 'out-of-stock';
+          invHtml = '<div class="product-inventory"><span class="' + stockBadgeClass + '">Out of Stock</span></div>';
+        } else if (avail <= threshold) {
+          stockBadgeClass += 'low-stock';
+          invHtml = '<div class="product-inventory"><span class="' + stockBadgeClass + '">Low Stock (' + avail + ')</span>' +
+            (reserved > 0 ? ' <span class="stock-reserved">' + reserved + ' reserved</span>' : '') + '</div>';
+        } else {
+          stockBadgeClass += 'in-stock';
+          invHtml = '<div class="product-inventory"><span class="' + stockBadgeClass + '">In Stock (' + avail + ')</span>' +
+            (reserved > 0 ? ' <span class="stock-reserved">' + reserved + ' reserved</span>' : '') + '</div>';
+        }
+      }
+    } else {
+      invHtml = '<div class="product-inventory"><span class="stock-badge made-to-order">Made to Order</span> ' +
+        '<button class="btn-inv-edit" onclick="event.stopPropagation();openInventoryModal(\'' + esc(p.pid) + '\', \'' + esc(p.name) + '\')">Set Stock</button></div>';
+    }
+
     html += '<div class="product-card">'
       + (imgSrc ? '<img class="product-card-img" src="' + esc(imgSrc) + '" alt="' + esc(p.name) + '" loading="lazy">' : '<div class="product-card-img"></div>')
       + '<div class="product-card-body">'
@@ -2341,11 +2854,132 @@ function renderProducts() {
       + priceHtml
       + catsHtml
       + optionsHtml
-      + '<div class="product-card-images-count">' + imgCount + ' image' + (imgCount !== 1 ? 's' : '') + '</div>'
+      + invHtml
+      + '<div class="product-card-images-count">' + imgCount + ' image' + (imgCount !== 1 ? 's' : '')
+      + (inv ? ' &middot; <button class="btn-inv-edit" onclick="event.stopPropagation();openInventoryModal(\'' + esc(p.pid) + '\', \'' + esc(p.name) + '\')">Edit Inventory</button>' : '')
+      + '</div>'
       + '</div></div>';
   });
 
   document.getElementById('productsGrid').innerHTML = html || '<p class="empty-state">No products found.</p>';
+
+  // Inventory summary bar
+  var summaryBar = document.getElementById('inventorySummaryBar');
+  if (summaryBar) {
+    var lowCount = 0;
+    var outCount = 0;
+    productsData.forEach(function(p) {
+      var inv = inventory[p.pid];
+      if (inv && inv.stockType !== 'made-to-order' && inv.stock && inv.stock._default) {
+        var avail = inv.stock._default.available || 0;
+        var threshold = inv.lowStockThreshold || 2;
+        if (avail <= 0) outCount++;
+        else if (avail <= threshold) lowCount++;
+      }
+    });
+    if (lowCount > 0 || outCount > 0) {
+      summaryBar.style.display = '';
+      summaryBar.innerHTML = productsData.length + ' products' +
+        (lowCount > 0 ? ' &middot; <span class="inv-warn">' + lowCount + ' low stock</span>' : '') +
+        (outCount > 0 ? ' &middot; <span class="inv-alert">' + outCount + ' out of stock</span>' : '');
+    } else {
+      summaryBar.style.display = 'none';
+    }
+  }
+}
+
+function openInventoryModal(pid, productName) {
+  var inv = inventory[pid] || {};
+  var stockType = inv.stockType || 'made-to-order';
+  var avail = (inv.stock && inv.stock._default) ? (inv.stock._default.available || 0) : 0;
+  var reserved = (inv.stock && inv.stock._default) ? (inv.stock._default.reserved || 0) : 0;
+  var threshold = inv.lowStockThreshold || 2;
+  var leadTime = inv.leadTimeDays || 3;
+  var notes = inv.notes || '';
+
+  var html = '<div style="max-width:420px;">' +
+    '<h3>Inventory: ' + esc(productName) + '</h3>' +
+    '<div class="form-group" style="margin-top:16px;">' +
+      '<label>Stock Type</label>' +
+      '<select id="invStockType" onchange="invStockTypeChanged()">' +
+        '<option value="made-to-order"' + (stockType === 'made-to-order' ? ' selected' : '') + '>Made to Order</option>' +
+        '<option value="in-stock"' + (stockType === 'in-stock' ? ' selected' : '') + '>In Stock</option>' +
+        '<option value="limited"' + (stockType === 'limited' ? ' selected' : '') + '>Limited Edition</option>' +
+      '</select>' +
+    '</div>' +
+    '<div id="invStockFields" style="' + (stockType === 'made-to-order' ? 'display:none;' : '') + '">' +
+      '<div class="checkout-form-row">' +
+        '<div class="form-group">' +
+          '<label>Available</label>' +
+          '<input type="number" id="invAvailable" min="0" value="' + avail + '">' +
+        '</div>' +
+        '<div class="form-group">' +
+          '<label>Reserved</label>' +
+          '<input type="number" id="invReserved" value="' + reserved + '" readonly style="background:var(--cream);">' +
+        '</div>' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<label>Low Stock Alert At</label>' +
+        '<input type="number" id="invThreshold" min="0" value="' + threshold + '">' +
+      '</div>' +
+    '</div>' +
+    '<div class="form-group">' +
+      '<label>Lead Time (days)</label>' +
+      '<input type="number" id="invLeadTime" min="0" value="' + leadTime + '">' +
+    '</div>' +
+    '<div class="form-group">' +
+      '<label>Notes</label>' +
+      '<textarea id="invNotes" rows="2" placeholder="e.g. Need more cobalt glass rods">' + esc(notes) + '</textarea>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">' +
+      '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+      '<button class="btn btn-primary" onclick="saveInventory(\'' + esc(pid) + '\')">Save</button>' +
+    '</div>' +
+  '</div>';
+  openModal(html);
+}
+
+function invStockTypeChanged() {
+  var type = document.getElementById('invStockType').value;
+  document.getElementById('invStockFields').style.display = (type === 'made-to-order') ? 'none' : '';
+}
+
+async function saveInventory(pid) {
+  try {
+    var stockType = document.getElementById('invStockType').value;
+    var leadTime = parseInt(document.getElementById('invLeadTime').value) || 0;
+    var notes = document.getElementById('invNotes').value.trim();
+
+    var invData = {
+      pid: pid,
+      stockType: stockType,
+      leadTimeDays: leadTime,
+      notes: notes,
+      updatedAt: new Date().toISOString()
+    };
+
+    if (stockType !== 'made-to-order') {
+      var avail = parseInt(document.getElementById('invAvailable').value) || 0;
+      var threshold = parseInt(document.getElementById('invThreshold').value) || 2;
+      // Preserve existing reserved count
+      var existing = inventory[pid];
+      var reserved = (existing && existing.stock && existing.stock._default) ? (existing.stock._default.reserved || 0) : 0;
+      invData.stock = {
+        _default: { available: avail, reserved: reserved }
+      };
+      invData.lowStockThreshold = threshold;
+    } else {
+      invData.stock = null;
+      invData.lowStockThreshold = null;
+    }
+
+    await db.ref(INVENTORY_PATH + '/' + pid).set(invData);
+    closeModal();
+    showToast('Inventory saved');
+    renderProducts();
+  } catch (err) {
+    showToast('Error saving inventory: ' + err.message, true);
+  }
 }
 
 // ============================================================
@@ -2580,6 +3214,31 @@ function attachListeners() {
       showToast('Error loading coupons: ' + err.message, true);
     });
   }
+  if (!ordersListener) {
+    ordersListener = db.ref(ORDERS_PATH).limitToLast(100).on('value', function(snap) {
+      orders = snap.val() || {};
+      ordersLoaded = true;
+      renderOrders();
+      if (selectedOrderId) renderOrderDetail(selectedOrderId);
+    }, function(err) {
+      showToast('Error loading orders: ' + err.message, true);
+    });
+  }
+  if (!buildJobsListener) {
+    buildJobsListener = db.ref(BUILD_JOBS_PATH).limitToLast(100).on('value', function(snap) {
+      buildJobs = snap.val() || {};
+      if (selectedOrderId) renderOrderDetail(selectedOrderId);
+    }, function(err) {
+      showToast('Error loading build jobs: ' + err.message, true);
+    });
+  }
+  if (!inventoryListener) {
+    inventoryListener = db.ref(INVENTORY_PATH).on('value', function(snap) {
+      inventory = snap.val() || {};
+    }, function(err) {
+      showToast('Error loading inventory: ' + err.message, true);
+    });
+  }
 }
 
 function detachListeners() {
@@ -2595,9 +3254,24 @@ function detachListeners() {
     db.ref(COUPONS_PATH).off('value', couponsListener);
     couponsListener = null;
   }
+  if (ordersListener) {
+    db.ref(ORDERS_PATH).off('value', ordersListener);
+    ordersListener = null;
+  }
+  if (buildJobsListener) {
+    db.ref(BUILD_JOBS_PATH).off('value', buildJobsListener);
+    buildJobsListener = null;
+  }
+  if (inventoryListener) {
+    db.ref(INVENTORY_PATH).off('value', inventoryListener);
+    inventoryListener = null;
+  }
   events = {};
   gallery = {};
   coupons = {};
+  orders = {};
+  buildJobs = {};
+  inventory = {};
 }
 
 // ============================================================
@@ -3515,6 +4189,833 @@ async function deleteImage(imageId) {
 // ============================================================
 // Toast
 // ============================================================
+// ============================================================
+// Orders Management
+// ============================================================
+function loadOrders() {
+  if (ordersLoaded) {
+    renderOrders();
+  }
+}
+
+function getOrdersArray() {
+  var arr = [];
+  Object.keys(orders).forEach(function(key) {
+    var o = orders[key];
+    o._key = key;
+    arr.push(o);
+  });
+  arr.sort(function(a, b) {
+    return (b.placedAt || '').localeCompare(a.placedAt || '');
+  });
+  return arr;
+}
+
+function getOrderDisplayNumber(order) {
+  return order.orderNumber || order.orderId || order._key;
+}
+
+function formatOrderDate(isoStr) {
+  if (!isoStr) return '';
+  var d = new Date(isoStr);
+  if (isNaN(d.getTime())) return isoStr;
+  var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+}
+
+function formatOrderDateTime(isoStr) {
+  if (!isoStr) return '';
+  var d = new Date(isoStr);
+  if (isNaN(d.getTime())) return isoStr;
+  var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var hours = d.getHours();
+  var ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12 || 12;
+  var mins = d.getMinutes().toString().padStart(2, '0');
+  return months[d.getMonth()] + ' ' + d.getDate() + ', ' + hours + ':' + mins + ' ' + ampm;
+}
+
+function getOrderItemsLabel(order) {
+  if (!order.items || !order.items.length) return '0 items';
+  var total = 0;
+  order.items.forEach(function(item) { total += (item.qty || 1); });
+  return total + (total === 1 ? ' item' : ' items');
+}
+
+function setOrderFilter(filter) {
+  orderFilter = filter;
+  renderOrders();
+}
+
+function renderOrders() {
+  var loadingEl = document.getElementById('ordersLoading');
+  var emptyEl = document.getElementById('ordersEmpty');
+  var tableEl = document.getElementById('ordersTable');
+  var tbodyEl = document.getElementById('ordersTableBody');
+  var cardsEl = document.getElementById('orderCards');
+  var countEl = document.getElementById('ordersCount');
+  var pillsEl = document.getElementById('ordersFilterPills');
+
+  if (loadingEl) loadingEl.style.display = 'none';
+
+  var all = getOrdersArray();
+
+  // Count by status
+  var counts = {};
+  all.forEach(function(o) {
+    var s = o.status || 'placed';
+    counts[s] = (counts[s] || 0) + 1;
+  });
+
+  // Active count = not delivered, not cancelled
+  var activeCount = all.filter(function(o) {
+    return o.status !== 'delivered' && o.status !== 'cancelled';
+  }).length;
+
+  // Render filter pills
+  var pillStatuses = [
+    { key: 'active', label: 'Active', count: activeCount },
+    { key: 'all', label: 'All', count: all.length },
+    { key: 'placed', label: 'Placed', count: counts.placed || 0 },
+    { key: 'confirmed', label: 'Confirmed', count: counts.confirmed || 0 },
+    { key: 'building', label: 'Building', count: counts.building || 0 },
+    { key: 'ready', label: 'Ready', count: counts.ready || 0 },
+    { key: 'packing', label: 'Packing', count: counts.packing || 0 },
+    { key: 'shipped', label: 'Shipped', count: counts.shipped || 0 },
+    { key: 'delivered', label: 'Delivered', count: counts.delivered || 0 },
+    { key: 'cancelled', label: 'Cancelled', count: counts.cancelled || 0 }
+  ];
+  var pillHtml = '';
+  pillStatuses.forEach(function(p) {
+    pillHtml += '<button class="order-filter-pill' + (orderFilter === p.key ? ' active' : '') +
+      '" onclick="setOrderFilter(\'' + p.key + '\')">' + p.label +
+      '<span class="pill-count">(' + p.count + ')</span></button>';
+  });
+  if (pillsEl) pillsEl.innerHTML = pillHtml;
+
+  // Filter orders
+  var filtered;
+  if (orderFilter === 'all') {
+    filtered = all;
+  } else if (orderFilter === 'active') {
+    filtered = all.filter(function(o) {
+      return o.status !== 'delivered' && o.status !== 'cancelled';
+    });
+  } else {
+    filtered = all.filter(function(o) { return (o.status || 'placed') === orderFilter; });
+  }
+
+  if (countEl) countEl.textContent = filtered.length + ' order' + (filtered.length !== 1 ? 's' : '');
+
+  if (filtered.length === 0) {
+    if (emptyEl) emptyEl.style.display = '';
+    if (tableEl) tableEl.style.display = 'none';
+    if (cardsEl) cardsEl.innerHTML = '';
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+  if (tableEl) tableEl.style.display = '';
+
+  // Build queue summary
+  var pendingBuilds = Object.keys(buildJobs).filter(function(k) {
+    var j = buildJobs[k];
+    return j.status === 'pending' || j.status === 'in-progress';
+  });
+  var buildQueueHtml = '';
+  if (pendingBuilds.length > 0) {
+    buildQueueHtml = '<div class="build-queue-summary" onclick="showBuildQueue()">' +
+      pendingBuilds.length + ' build job' + (pendingBuilds.length !== 1 ? 's' : '') + ' in workshop queue</div>';
+  }
+
+  // Table rows
+  var rowsHtml = '';
+  filtered.forEach(function(o) {
+    var key = o._key;
+    var num = esc(getOrderDisplayNumber(o));
+    var status = o.status || 'placed';
+    rowsHtml += '<tr onclick="viewOrder(\'' + esc(key) + '\')">' +
+      '<td><span style="font-family:monospace;font-weight:600;">' + num + '</span></td>' +
+      '<td>' + esc(o.email || '') + '</td>' +
+      '<td>' + getOrderItemsLabel(o) + '</td>' +
+      '<td>$' + (o.total || 0).toFixed(2) + '</td>' +
+      '<td><span class="order-status ' + status + '">' + status + '</span></td>' +
+      '<td>' + formatOrderDate(o.placedAt) + '</td>' +
+      '</tr>';
+  });
+  if (tbodyEl) tbodyEl.innerHTML = rowsHtml;
+
+  // Mobile cards
+  var cardHtml = buildQueueHtml;
+  filtered.forEach(function(o) {
+    var key = o._key;
+    var num = esc(getOrderDisplayNumber(o));
+    var status = o.status || 'placed';
+    cardHtml += '<div class="order-card" onclick="viewOrder(\'' + esc(key) + '\')">' +
+      '<div class="order-card-header">' +
+        '<span class="order-card-number">' + num + '</span>' +
+        '<span class="order-status ' + status + '">' + status + '</span>' +
+      '</div>' +
+      '<div class="order-card-details">' +
+        '<span class="order-card-detail">' + esc(o.email || '') + '</span>' +
+        '<span class="order-card-detail">' + getOrderItemsLabel(o) + '</span>' +
+        '<span class="order-card-detail">$' + (o.total || 0).toFixed(2) + '</span>' +
+        '<span class="order-card-detail">' + formatOrderDate(o.placedAt) + '</span>' +
+      '</div>' +
+    '</div>';
+  });
+  if (cardsEl) cardsEl.innerHTML = cardHtml;
+}
+
+// ---- Order Detail View ----
+function viewOrder(orderId) {
+  selectedOrderId = orderId;
+  document.getElementById('ordersListView').style.display = 'none';
+  var detailEl = document.getElementById('orderDetailView');
+  detailEl.style.display = '';
+  renderOrderDetail(orderId);
+}
+
+function backToOrders() {
+  selectedOrderId = null;
+  document.getElementById('ordersListView').style.display = '';
+  document.getElementById('orderDetailView').style.display = 'none';
+  document.getElementById('orderDetailView').className = 'order-detail';
+}
+
+function renderOrderDetail(orderId) {
+  var o = orders[orderId];
+  if (!o) {
+    document.getElementById('orderDetailView').innerHTML = '<p>Order not found.</p>';
+    return;
+  }
+  var detailEl = document.getElementById('orderDetailView');
+  var status = o.status || 'placed';
+  var num = esc(getOrderDisplayNumber(o));
+
+  // Action buttons
+  var actionsHtml = '';
+  var transitions = ORDER_VALID_TRANSITIONS[status] || [];
+  transitions.forEach(function(t) {
+    if (t === 'cancelled') {
+      actionsHtml += '<button class="btn btn-danger" onclick="openCancelOrderModal(\'' + esc(orderId) + '\')">Cancel Order</button>';
+    } else if (t === 'confirmed') {
+      actionsHtml += '<button class="btn btn-primary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'confirmed\')">Confirm Order</button>';
+    } else if (t === 'ready') {
+      actionsHtml += '<button class="btn btn-primary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'ready\')">Mark Ready</button>';
+    } else if (t === 'building') {
+      actionsHtml += '<button class="btn btn-secondary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'building\')">Needs Building</button>';
+    } else if (t === 'packing') {
+      actionsHtml += '<button class="btn btn-primary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'packing\')">Start Packing</button>';
+    } else if (t === 'shipped') {
+      actionsHtml += '<button class="btn btn-primary" onclick="openShippingModal(\'' + esc(orderId) + '\')">Mark Shipped</button>';
+    } else if (t === 'delivered') {
+      actionsHtml += '<button class="btn btn-primary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'delivered\')">Mark Delivered</button>';
+    }
+  });
+
+  // Items section
+  var itemsHtml = '';
+  (o.items || []).forEach(function(item) {
+    var optStr = '';
+    if (item.options && typeof item.options === 'object') {
+      var parts = [];
+      Object.keys(item.options).forEach(function(k) { parts.push(k + ': ' + item.options[k]); });
+      optStr = parts.join(', ');
+    }
+    var ffHtml = '';
+    if (o.fulfillment) {
+      var ffKey = getItemFulfillmentKey(item);
+      var ff = o.fulfillment[ffKey];
+      if (ff) {
+        if (ff.source === 'stock') {
+          ffHtml = '<span class="order-item-fulfillment stock">From Stock</span>';
+        } else if (ff.source === 'build') {
+          var bjStatus = '';
+          if (ff.buildJobId && buildJobs[ff.buildJobId]) {
+            bjStatus = ' (' + buildJobs[ff.buildJobId].status + ')';
+          }
+          ffHtml = '<span class="order-item-fulfillment build">Build' + bjStatus + '</span>';
+        }
+      }
+    }
+    itemsHtml += '<div class="order-item-row">' +
+      '<div>' +
+        '<div class="order-item-name">' + esc(item.name) + ' x' + (item.qty || 1) + '</div>' +
+        (optStr ? '<div class="order-item-options">' + esc(optStr) + '</div>' : '') +
+        ffHtml +
+      '</div>' +
+      '<div class="order-item-price">$' + ((item.price || 0) * (item.qty || 1)).toFixed(2) + '</div>' +
+    '</div>';
+  });
+
+  // Order summary
+  var summaryHtml = '<div class="order-summary-row"><span>Subtotal</span><span>$' + (o.subtotal || 0).toFixed(2) + '</span></div>';
+  if (o.tax) {
+    summaryHtml += '<div class="order-summary-row"><span>Tax (' + ((o.taxRate || 0) * 100).toFixed(1) + '% ' + (o.taxState || '') + ')</span><span>$' + o.tax.toFixed(2) + '</span></div>';
+  }
+  summaryHtml += '<div class="order-summary-row"><span>Shipping (' + esc((o.shippingMethod && o.shippingMethod.label) || 'Standard') + ')</span><span>$' + (o.shippingCost || 0).toFixed(2) + '</span></div>';
+  if (o.coupon && o.coupon.discount) {
+    summaryHtml += '<div class="order-summary-row discount"><span>Coupon (' + esc(o.coupon.code) + ')</span><span>-$' + o.coupon.discount.toFixed(2) + '</span></div>';
+  }
+  summaryHtml += '<div class="order-summary-row total"><span>Total</span><span class="order-summary-value">$' + (o.total || 0).toFixed(2) + '</span></div>';
+
+  // Addresses
+  var ship = o.shipping || {};
+  var shipHtml = '<p>' + esc(ship.name || '') + '<br>' +
+    esc(ship.address1 || '') +
+    (ship.address2 ? '<br>' + esc(ship.address2) : '') +
+    '<br>' + esc(ship.city || '') + ', ' + esc(ship.state || '') + ' ' + esc(ship.zip || '') + '</p>';
+  var billHtml = '';
+  if (o.billing && !o.billing.same) {
+    var bill = o.billing;
+    billHtml = '<p>' + esc(bill.name || '') + '<br>' +
+      esc(bill.address1 || '') +
+      (bill.address2 ? '<br>' + esc(bill.address2) : '') +
+      '<br>' + esc(bill.city || '') + ', ' + esc(bill.state || '') + ' ' + esc(bill.zip || '') + '</p>';
+  } else {
+    billHtml = '<p style="color:var(--warm-gray);font-style:italic;">Same as shipping</p>';
+  }
+
+  // Tracking
+  var trackingHtml = '';
+  if (o.tracking && o.tracking.trackingNumber) {
+    trackingHtml = '<div class="order-detail-section">' +
+      '<div class="order-detail-section-title">Tracking</div>' +
+      '<div class="order-tracking-info">' +
+        '<strong>' + esc(o.tracking.carrier || '') + '</strong>' +
+        '<span style="font-family:monospace;">' + esc(o.tracking.trackingNumber) + '</span>' +
+        (o.tracking.trackingUrl ? '<a href="' + esc(o.tracking.trackingUrl) + '" target="_blank" class="order-tracking-link">Track Package</a>' : '') +
+      '</div>' +
+    '</div>';
+  }
+
+  // Timeline
+  var timelineHtml = '';
+  var history = o.statusHistory || [];
+  if (history.length > 0) {
+    var entries = '';
+    // Show most recent first
+    var reversed = history.slice().reverse();
+    reversed.forEach(function(h) {
+      entries += '<div class="order-timeline-entry">' +
+        '<div class="order-timeline-time">' + formatOrderDateTime(h.at) + '</div>' +
+        '<div class="order-timeline-text">' + esc(h.status.charAt(0).toUpperCase() + h.status.slice(1)) +
+          (h.note ? ' — ' + esc(h.note) : '') +
+          (h.by ? ' <span style="color:var(--warm-gray-light);">by ' + esc(h.by) + '</span>' : '') +
+        '</div>' +
+      '</div>';
+    });
+    timelineHtml = '<div class="order-detail-section">' +
+      '<div class="order-detail-section-title">Timeline</div>' +
+      '<div class="order-timeline">' + entries + '</div>' +
+    '</div>';
+  }
+
+  // Notes
+  var notesArr = o.notes || [];
+  var notesListHtml = '';
+  notesArr.forEach(function(n) {
+    notesListHtml += '<div class="order-note">' +
+      '<div class="order-note-time">' + formatOrderDateTime(n.at) + '</div>' +
+      '<div class="order-note-text">' + esc(n.text) + '</div>' +
+    '</div>';
+  });
+  var notesHtml = '<div class="order-detail-section">' +
+    '<div class="order-detail-section-title">Notes</div>' +
+    (notesListHtml ? '<div class="order-notes-list">' + notesListHtml + '</div>' : '') +
+    '<div class="order-note-input">' +
+      '<input type="text" id="orderNoteInput" placeholder="Add a note...">' +
+      '<button class="btn btn-secondary" onclick="addOrderNote(\'' + esc(orderId) + '\')">Add</button>' +
+    '</div>' +
+  '</div>';
+
+  // Build jobs for this order
+  var orderBuildJobs = Object.keys(buildJobs).filter(function(k) {
+    return buildJobs[k].orderId === orderId;
+  });
+  var buildJobsHtml = '';
+  if (orderBuildJobs.length > 0) {
+    var bjRows = '';
+    orderBuildJobs.forEach(function(k) {
+      var bj = buildJobs[k];
+      var bjStatus = bj.status || 'pending';
+      var bjActions = '';
+      if (bjStatus === 'pending') {
+        bjActions = '<button class="btn btn-secondary" style="font-size:0.72rem;padding:4px 10px;" onclick="updateBuildJobStatus(\'' + esc(k) + '\', \'in-progress\')">Start</button>';
+      } else if (bjStatus === 'in-progress') {
+        bjActions = '<button class="btn btn-primary" style="font-size:0.72rem;padding:4px 10px;" onclick="completeBuildJob(\'' + esc(k) + '\', \'' + esc(orderId) + '\')">Complete</button>';
+      }
+      bjRows += '<div class="build-job-row">' +
+        '<div>' +
+          '<strong>' + esc(bj.productName || '') + '</strong>' +
+          (bj.options ? ' <span style="color:var(--warm-gray);font-size:0.78rem;">(' + esc(Object.values(bj.options).join(', ')) + ')</span>' : '') +
+          ' x' + (bj.qty || 1) +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:8px;">' +
+          '<span class="build-job-status ' + bjStatus + '">' + bjStatus.replace('-', ' ') + '</span>' +
+          bjActions +
+        '</div>' +
+      '</div>';
+    });
+    buildJobsHtml = '<div class="order-detail-section">' +
+      '<div class="order-detail-section-title">Build Jobs</div>' +
+      bjRows +
+    '</div>';
+  }
+
+  detailEl.innerHTML = '<button class="order-detail-back" onclick="backToOrders()">&#8592; Back to Orders</button>' +
+    '<div class="order-detail-header">' +
+      '<div>' +
+        '<div class="order-detail-title">' + num + '</div>' +
+        '<div class="order-detail-meta">' +
+          '<span class="order-status ' + status + '">' + status + '</span> &middot; ' +
+          formatOrderDateTime(o.placedAt) + ' &middot; ' + esc(o.email || '') +
+        '</div>' +
+      '</div>' +
+      '<div class="order-actions">' + actionsHtml + '</div>' +
+    '</div>' +
+    '<div class="order-detail-section">' +
+      '<div class="order-detail-section-title">Items</div>' +
+      itemsHtml +
+    '</div>' +
+    '<div class="order-detail-section">' +
+      '<div class="order-detail-section-title">Summary</div>' +
+      summaryHtml +
+    '</div>' +
+    '<div class="order-detail-section">' +
+      '<div class="order-detail-section-title">Addresses</div>' +
+      '<div class="order-address-grid">' +
+        '<div><strong style="font-size:0.78rem;color:var(--warm-gray-light);">SHIPPING</strong>' + shipHtml + '</div>' +
+        '<div><strong style="font-size:0.78rem;color:var(--warm-gray-light);">BILLING</strong>' + billHtml + '</div>' +
+      '</div>' +
+    '</div>' +
+    trackingHtml +
+    buildJobsHtml +
+    timelineHtml +
+    notesHtml;
+}
+
+function getItemFulfillmentKey(item) {
+  var key = item.pid || '';
+  if (item.options && typeof item.options === 'object') {
+    var optVals = Object.values(item.options).map(function(v) {
+      return v.toString().toLowerCase().replace(/[^a-z0-9]/g, '');
+    });
+    if (optVals.length > 0) key += '_' + optVals.join('_');
+  }
+  return key;
+}
+
+// ---- Order Status Transitions ----
+async function transitionOrder(orderId, newStatus) {
+  var o = orders[orderId];
+  if (!o) return;
+  var currentStatus = o.status || 'placed';
+  var valid = ORDER_VALID_TRANSITIONS[currentStatus] || [];
+  if (!valid.includes(newStatus)) {
+    showToast('Cannot transition from ' + currentStatus + ' to ' + newStatus, true);
+    return;
+  }
+
+  try {
+    var now = new Date().toISOString();
+    var updates = {};
+    updates['status'] = newStatus;
+    updates[newStatus + 'At'] = now;
+
+    // Append to statusHistory
+    var history = o.statusHistory ? o.statusHistory.slice() : [];
+    history.push({ status: newStatus, at: now, by: 'admin' });
+    updates['statusHistory'] = history;
+
+    // On confirm: check inventory and create fulfillment map
+    if (newStatus === 'confirmed') {
+      var ff = {};
+      var needsBuilding = false;
+      (o.items || []).forEach(function(item) {
+        var ffKey = getItemFulfillmentKey(item);
+        var inv = inventory[item.pid];
+        var inStock = false;
+        if (inv && inv.stockType !== 'made-to-order') {
+          var stockEntry = (inv.stock && inv.stock._default) || null;
+          if (stockEntry && stockEntry.available >= (item.qty || 1)) {
+            inStock = true;
+          }
+        }
+        if (inStock) {
+          ff[ffKey] = { source: 'stock', buildJobId: null, ready: true };
+          // Reserve inventory
+          reserveInventory(item.pid, item.qty || 1);
+        } else {
+          ff[ffKey] = { source: 'build', buildJobId: null, ready: false };
+          needsBuilding = true;
+        }
+      });
+      updates['fulfillment'] = ff;
+
+      // If nothing needs building, go straight to ready
+      if (!needsBuilding) {
+        updates['status'] = 'ready';
+        updates['readyAt'] = now;
+        history.push({ status: 'ready', at: now, by: 'system', note: 'All items in stock' });
+        updates['statusHistory'] = history;
+      } else {
+        // Auto-set to building and create build jobs
+        updates['status'] = 'building';
+        updates['buildingAt'] = now;
+        history.push({ status: 'building', at: now, by: 'system', note: 'Items need to be made' });
+        updates['statusHistory'] = history;
+      }
+    }
+
+    await db.ref(ORDERS_PATH + '/' + orderId).update(updates);
+
+    // Create build jobs if moving to building
+    if (updates['status'] === 'building') {
+      await createBuildJobsForOrder(orderId, o, updates['fulfillment']);
+    }
+
+    showToast('Order updated to ' + updates['status']);
+  } catch (err) {
+    showToast('Error updating order: ' + err.message, true);
+  }
+}
+
+async function reserveInventory(pid, qty) {
+  var inv = inventory[pid];
+  if (!inv || !inv.stock || !inv.stock._default) return;
+  try {
+    var stockRef = db.ref(INVENTORY_PATH + '/' + pid + '/stock/_default');
+    await stockRef.update({
+      available: firebase.database.ServerValue.increment(-qty),
+      reserved: firebase.database.ServerValue.increment(qty)
+    });
+  } catch (err) {
+    console.error('Error reserving inventory:', err);
+  }
+}
+
+async function releaseInventory(pid, qty) {
+  var inv = inventory[pid];
+  if (!inv || !inv.stock || !inv.stock._default) return;
+  try {
+    var stockRef = db.ref(INVENTORY_PATH + '/' + pid + '/stock/_default');
+    await stockRef.update({
+      available: firebase.database.ServerValue.increment(qty),
+      reserved: firebase.database.ServerValue.increment(-qty)
+    });
+  } catch (err) {
+    console.error('Error releasing inventory:', err);
+  }
+}
+
+async function pullFromStock(pid, qty) {
+  var inv = inventory[pid];
+  if (!inv || !inv.stock || !inv.stock._default) return;
+  try {
+    var stockRef = db.ref(INVENTORY_PATH + '/' + pid + '/stock/_default');
+    await stockRef.update({
+      reserved: firebase.database.ServerValue.increment(-qty)
+    });
+  } catch (err) {
+    console.error('Error pulling from stock:', err);
+  }
+}
+
+// ---- Build Jobs ----
+async function createBuildJobsForOrder(orderId, order, fulfillment) {
+  if (!fulfillment) return;
+  var items = order.items || [];
+  for (var i = 0; i < items.length; i++) {
+    var item = items[i];
+    var ffKey = getItemFulfillmentKey(item);
+    var ff = fulfillment[ffKey];
+    if (ff && ff.source === 'build') {
+      var jobRef = db.ref(BUILD_JOBS_PATH).push();
+      var jobId = jobRef.key;
+      await jobRef.set({
+        jobId: jobId,
+        orderId: orderId,
+        orderNumber: order.orderNumber || order.orderId,
+        pid: item.pid,
+        productName: item.name,
+        options: item.options || null,
+        qty: item.qty || 1,
+        status: 'pending',
+        priority: 'normal',
+        notes: [],
+        estimatedCompletion: null,
+        createdAt: new Date().toISOString(),
+        startedAt: null,
+        completedAt: null,
+        cancelledAt: null
+      });
+      // Link build job to fulfillment
+      await db.ref(ORDERS_PATH + '/' + orderId + '/fulfillment/' + ffKey + '/buildJobId').set(jobId);
+    }
+  }
+}
+
+async function updateBuildJobStatus(jobId, newStatus) {
+  try {
+    var updates = { status: newStatus };
+    if (newStatus === 'in-progress') updates.startedAt = new Date().toISOString();
+    await db.ref(BUILD_JOBS_PATH + '/' + jobId).update(updates);
+    showToast('Build job updated');
+  } catch (err) {
+    showToast('Error updating build job: ' + err.message, true);
+  }
+}
+
+async function completeBuildJob(jobId, orderId) {
+  try {
+    var now = new Date().toISOString();
+    await db.ref(BUILD_JOBS_PATH + '/' + jobId).update({
+      status: 'completed',
+      completedAt: now
+    });
+
+    // Update order fulfillment - mark item as ready
+    var o = orders[orderId];
+    if (o && o.fulfillment) {
+      var allReady = true;
+      var ffUpdates = {};
+      Object.keys(o.fulfillment).forEach(function(key) {
+        var ff = o.fulfillment[key];
+        if (ff.buildJobId === jobId) {
+          ffUpdates['fulfillment/' + key + '/ready'] = true;
+        }
+        if (ff.buildJobId !== jobId && !ff.ready) {
+          allReady = false;
+        }
+      });
+      await db.ref(ORDERS_PATH + '/' + orderId).update(ffUpdates);
+
+      // If all items ready, auto-transition order to ready
+      if (allReady) {
+        var history = o.statusHistory ? o.statusHistory.slice() : [];
+        history.push({ status: 'ready', at: now, by: 'system', note: 'All build jobs completed' });
+        await db.ref(ORDERS_PATH + '/' + orderId).update({
+          status: 'ready',
+          readyAt: now,
+          statusHistory: history
+        });
+        showToast('All items ready! Order moved to Ready.');
+      } else {
+        showToast('Build job completed');
+      }
+    }
+  } catch (err) {
+    showToast('Error completing build job: ' + err.message, true);
+  }
+}
+
+function showBuildQueue() {
+  var pending = Object.keys(buildJobs).filter(function(k) {
+    var j = buildJobs[k];
+    return j.status === 'pending' || j.status === 'in-progress';
+  });
+  if (pending.length === 0) {
+    showToast('No active build jobs');
+    return;
+  }
+  var rows = '';
+  pending.forEach(function(k) {
+    var bj = buildJobs[k];
+    var bjStatus = bj.status || 'pending';
+    var bjActions = '';
+    if (bjStatus === 'pending') {
+      bjActions = '<button class="btn btn-secondary" style="font-size:0.72rem;padding:4px 10px;" onclick="updateBuildJobStatus(\'' + esc(k) + '\', \'in-progress\');closeModal();">Start</button>';
+    } else if (bjStatus === 'in-progress') {
+      bjActions = '<button class="btn btn-primary" style="font-size:0.72rem;padding:4px 10px;" onclick="completeBuildJob(\'' + esc(k) + '\', \'' + esc(bj.orderId) + '\');closeModal();">Complete</button>';
+    }
+    rows += '<div class="build-job-row">' +
+      '<div>' +
+        '<strong>' + esc(bj.productName || '') + '</strong>' +
+        ' x' + (bj.qty || 1) +
+        '<br><span style="font-size:0.72rem;color:var(--warm-gray);">Order: ' + esc(bj.orderNumber || bj.orderId) + '</span>' +
+      '</div>' +
+      '<div style="display:flex;align-items:center;gap:8px;">' +
+        '<span class="build-job-status ' + bjStatus + '">' + bjStatus.replace('-', ' ') + '</span>' +
+        bjActions +
+      '</div>' +
+    '</div>';
+  });
+  var html = '<div style="max-width:600px;">' +
+    '<h3>Workshop Build Queue</h3>' +
+    '<div style="margin-top:16px;">' + rows + '</div>' +
+    '<div style="margin-top:16px;text-align:right;">' +
+      '<button class="btn btn-secondary" onclick="closeModal()">Close</button>' +
+    '</div>' +
+  '</div>';
+  openModal(html);
+}
+
+// ---- Shipping Modal ----
+function openShippingModal(orderId) {
+  var html = '<div style="max-width:400px;">' +
+    '<h3>Mark as Shipped</h3>' +
+    '<div class="form-group">' +
+      '<label>Carrier</label>' +
+      '<select id="shippingCarrier">' +
+        '<option value="USPS">USPS</option>' +
+        '<option value="UPS">UPS</option>' +
+        '<option value="FedEx">FedEx</option>' +
+        '<option value="Other">Other</option>' +
+      '</select>' +
+    '</div>' +
+    '<div class="form-group">' +
+      '<label>Tracking Number</label>' +
+      '<input type="text" id="shippingTrackingNum" placeholder="Enter tracking number">' +
+    '</div>' +
+    '<div class="form-group">' +
+      '<label>Note (optional)</label>' +
+      '<input type="text" id="shippingNote" placeholder="e.g. Shipped Priority Mail">' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">' +
+      '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+      '<button class="btn btn-primary" onclick="submitShipping(\'' + esc(orderId) + '\')">Mark Shipped</button>' +
+    '</div>' +
+  '</div>';
+  openModal(html);
+}
+
+async function submitShipping(orderId) {
+  var carrier = document.getElementById('shippingCarrier').value;
+  var trackingNum = document.getElementById('shippingTrackingNum').value.trim();
+  var note = document.getElementById('shippingNote').value.trim();
+
+  if (!trackingNum) {
+    showToast('Please enter a tracking number', true);
+    return;
+  }
+
+  try {
+    var now = new Date().toISOString();
+    var trackingUrl = '';
+    if (TRACKING_URLS[carrier]) {
+      trackingUrl = TRACKING_URLS[carrier](trackingNum);
+    }
+
+    var o = orders[orderId];
+    var history = (o && o.statusHistory) ? o.statusHistory.slice() : [];
+    history.push({ status: 'shipped', at: now, by: 'admin', note: note || carrier + ' ' + trackingNum });
+
+    // Pull reserved items from stock
+    if (o && o.fulfillment) {
+      (o.items || []).forEach(function(item) {
+        var ffKey = getItemFulfillmentKey(item);
+        var ff = o.fulfillment[ffKey];
+        if (ff && ff.source === 'stock') {
+          pullFromStock(item.pid, item.qty || 1);
+        }
+      });
+    }
+
+    await db.ref(ORDERS_PATH + '/' + orderId).update({
+      status: 'shipped',
+      shippedAt: now,
+      tracking: {
+        carrier: carrier,
+        trackingNumber: trackingNum,
+        trackingUrl: trackingUrl
+      },
+      statusHistory: history
+    });
+
+    closeModal();
+    showToast('Order marked as shipped');
+  } catch (err) {
+    showToast('Error updating shipping: ' + err.message, true);
+  }
+}
+
+// ---- Cancel Order Modal ----
+function openCancelOrderModal(orderId) {
+  var o = orders[orderId];
+  var num = o ? getOrderDisplayNumber(o) : orderId;
+  var html = '<div style="max-width:400px;">' +
+    '<h3>Cancel Order</h3>' +
+    '<p style="margin:12px 0;color:var(--warm-gray);">Are you sure you want to cancel order <strong>' + esc(num) + '</strong>? ' +
+    'This will release reserved inventory and cancel any open build jobs.</p>' +
+    '<div class="form-group">' +
+      '<label>Reason (optional)</label>' +
+      '<textarea id="cancelReason" rows="3" placeholder="Why is this order being cancelled?"></textarea>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">' +
+      '<button class="btn btn-secondary" onclick="closeModal()">Keep Order</button>' +
+      '<button class="btn btn-danger" onclick="cancelOrder(\'' + esc(orderId) + '\')">Cancel Order</button>' +
+    '</div>' +
+  '</div>';
+  openModal(html);
+}
+
+async function cancelOrder(orderId) {
+  try {
+    var o = orders[orderId];
+    if (!o) return;
+    var now = new Date().toISOString();
+    var reason = document.getElementById('cancelReason').value.trim();
+
+    var history = o.statusHistory ? o.statusHistory.slice() : [];
+    history.push({ status: 'cancelled', at: now, by: 'admin', note: reason || null });
+
+    // Release reserved inventory
+    if (o.fulfillment) {
+      (o.items || []).forEach(function(item) {
+        var ffKey = getItemFulfillmentKey(item);
+        var ff = o.fulfillment[ffKey];
+        if (ff && ff.source === 'stock' && ff.ready) {
+          releaseInventory(item.pid, item.qty || 1);
+        }
+      });
+    }
+
+    // Cancel open build jobs
+    var jobKeys = Object.keys(buildJobs).filter(function(k) {
+      return buildJobs[k].orderId === orderId &&
+        (buildJobs[k].status === 'pending' || buildJobs[k].status === 'in-progress');
+    });
+    for (var i = 0; i < jobKeys.length; i++) {
+      await db.ref(BUILD_JOBS_PATH + '/' + jobKeys[i]).update({
+        status: 'cancelled',
+        cancelledAt: now
+      });
+    }
+
+    await db.ref(ORDERS_PATH + '/' + orderId).update({
+      status: 'cancelled',
+      cancelledAt: now,
+      cancelReason: reason || null,
+      statusHistory: history
+    });
+
+    closeModal();
+    showToast('Order cancelled');
+  } catch (err) {
+    showToast('Error cancelling order: ' + err.message, true);
+  }
+}
+
+// ---- Order Notes ----
+async function addOrderNote(orderId) {
+  var input = document.getElementById('orderNoteInput');
+  if (!input) return;
+  var text = input.value.trim();
+  if (!text) return;
+
+  try {
+    var o = orders[orderId];
+    var notes = o && o.notes ? o.notes.slice() : [];
+    notes.push({ text: text, at: new Date().toISOString(), by: 'admin' });
+    await db.ref(ORDERS_PATH + '/' + orderId + '/notes').set(notes);
+    input.value = '';
+    showToast('Note added');
+  } catch (err) {
+    showToast('Error adding note: ' + err.message, true);
+  }
+}
+
 // ============================================================
 // Coupons Management
 // ============================================================
