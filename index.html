@@ -1449,5 +1449,90 @@
 
 </script>
 
+<!-- Firebase (read-only, no auth needed for public data) -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script>
+(function() {
+  const firebaseConfig = {
+    apiKey: "AIzaSyBQVwn8vOrFTzLlm2MYIPBwgZV2xR9AuhM",
+    databaseURL: "https://word-boxing-default-rtdb.firebaseio.com",
+    projectId: "word-boxing"
+  };
+  if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+
+  // Helper: format date
+  function fmtDate(dateStr) {
+    const d = new Date(dateStr + 'T00:00:00');
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+  function fmtMonth(dateStr) {
+    const d = new Date(dateStr + 'T00:00:00');
+    return d.toLocaleDateString('en-US', { month: 'short' });
+  }
+  function fmtDay(dateStr) {
+    const d = new Date(dateStr + 'T00:00:00');
+    return d.getDate().toString();
+  }
+
+  // ---- GALLERY ----
+  db.ref('shirglassworks/public/gallery').orderByChild('order').once('value').then(function(snap) {
+    const data = snap.val();
+    if (!data) return; // keep hardcoded fallback
+    const items = Object.values(data).filter(function(i) { return i.visible !== false; });
+    items.sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
+    if (items.length === 0) return;
+
+    const grid = document.querySelector('.gallery-grid');
+    if (!grid) return;
+
+    var html = '';
+    items.forEach(function(item, idx) {
+      var cls = 'gallery-item fade-up';
+      if (idx === 0) cls += ' featured';
+      html += '<div class="' + cls + '" style="opacity:1;transform:translateY(0)">';
+      html += '<img src="' + item.url + '" alt="' + (item.alt || '') + '" />';
+      if (item.caption) html += '<span class="caption">' + item.caption + '</span>';
+      html += '</div>';
+    });
+    grid.innerHTML = html;
+  }).catch(function() { /* keep hardcoded fallback */ });
+
+  // ---- EVENTS (next 3 upcoming) ----
+  db.ref('shirglassworks/public/events').orderByChild('date').once('value').then(function(snap) {
+    const data = snap.val();
+    if (!data) return;
+    const today = new Date().toISOString().split('T')[0];
+    const events = Object.values(data)
+      .filter(function(e) { return e.visible !== false && e.date >= today; })
+      .sort(function(a, b) { return a.date.localeCompare(b.date); })
+      .slice(0, 3);
+    if (events.length === 0) return;
+
+    const list = document.querySelector('.events-list');
+    if (!list) return;
+
+    var html = '';
+    events.forEach(function(ev) {
+      var month = fmtMonth(ev.date);
+      var day = fmtDay(ev.date);
+      if (ev.dateEnd && ev.dateEnd !== ev.date) {
+        var endDay = fmtDay(ev.dateEnd);
+        day = day + '–' + endDay;
+      }
+      html += '<div class="event-card fade-up" style="opacity:1;transform:translateY(0)">';
+      html += '<div class="event-date"><div class="event-month">' + month + '</div>';
+      html += '<div class="event-day">' + day + '</div></div>';
+      html += '<div class="event-info"><h3>' + ev.name + '</h3>';
+      html += '<p>' + (ev.description || '') + '</p></div>';
+      html += '<div class="event-location">' + (ev.location || '').toUpperCase() + '</div>';
+      html += '</div>';
+    });
+    list.innerHTML = html;
+  }).catch(function() { /* keep hardcoded fallback */ });
+})();
+</script>
+
 </body>
 </html>

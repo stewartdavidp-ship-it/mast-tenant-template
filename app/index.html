@@ -1,0 +1,1517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shir Glassworks Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+  <style>
+    :root {
+      --amber: #C4853C;
+      --amber-light: #E8B679;
+      --amber-glow: #F5D5A8;
+      --teal: #2A7C6F;
+      --teal-deep: #1B5C52;
+      --teal-light: #A8D5CE;
+      --cream: #FAF6F0;
+      --cream-dark: #F0E8DB;
+      --charcoal: #1A1A1A;
+      --warm-gray: #6B6560;
+      --warm-gray-light: #9B958E;
+      --danger: #DC3545;
+      --danger-hover: #c82333;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--cream);
+      color: var(--charcoal);
+      min-height: 100vh;
+    }
+
+    h1, h2, h3, h4, h5 {
+      font-family: 'Cormorant Garamond', serif;
+    }
+
+    /* ========== HEADER ========== */
+    .header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      background: var(--charcoal);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      height: 60px;
+    }
+
+    .header-brand {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.4rem;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      color: var(--amber-glow);
+      white-space: nowrap;
+    }
+
+    .header-tabs {
+      display: flex;
+      gap: 4px;
+      height: 100%;
+    }
+
+    .header-tab {
+      background: none;
+      border: none;
+      color: var(--warm-gray-light);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.9rem;
+      font-weight: 500;
+      padding: 0 20px;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: color 0.2s, border-color 0.2s;
+      height: 100%;
+      display: flex;
+      align-items: center;
+    }
+
+    .header-tab:hover {
+      color: white;
+    }
+
+    .header-tab.active {
+      color: white;
+      border-bottom-color: var(--amber);
+    }
+
+    .header-user {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .header-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+
+    .header-signout {
+      background: none;
+      border: 1px solid var(--warm-gray);
+      color: var(--warm-gray-light);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.8rem;
+      padding: 5px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: color 0.2s, border-color 0.2s;
+    }
+
+    .header-signout:hover {
+      color: white;
+      border-color: white;
+    }
+
+    /* ========== MAIN CONTENT ========== */
+    .main {
+      padding-top: 80px;
+      padding-bottom: 40px;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding-left: 20px;
+      padding-right: 20px;
+    }
+
+    /* ========== AUTH SCREENS ========== */
+    .auth-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 80vh;
+      gap: 24px;
+      text-align: center;
+    }
+
+    .auth-screen h2 {
+      font-size: 2rem;
+      color: var(--charcoal);
+    }
+
+    .auth-screen p {
+      color: var(--warm-gray);
+      max-width: 400px;
+    }
+
+    .btn-google {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: white;
+      border: 1px solid #ddd;
+      padding: 12px 24px;
+      border-radius: 6px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: box-shadow 0.2s;
+      color: var(--charcoal);
+    }
+
+    .btn-google:hover {
+      box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    }
+
+    .btn-google svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    .access-denied {
+      color: var(--danger);
+      font-weight: 500;
+    }
+
+    /* ========== BUTTONS ========== */
+    .btn {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.9rem;
+      font-weight: 500;
+      padding: 8px 18px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.2s, opacity 0.2s;
+      border: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: var(--amber);
+      color: white;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: #b37832;
+    }
+
+    .btn-secondary {
+      background: white;
+      color: var(--charcoal);
+      border: 1px solid #ccc;
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: var(--cream);
+    }
+
+    .btn-danger {
+      background: var(--danger);
+      color: white;
+    }
+
+    .btn-danger:hover:not(:disabled) {
+      background: var(--danger-hover);
+    }
+
+    .btn-icon {
+      background: none;
+      border: 1px solid #ddd;
+      width: 32px;
+      height: 32px;
+      border-radius: 4px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+      font-size: 1rem;
+      padding: 0;
+    }
+
+    .btn-icon:hover {
+      background: var(--cream-dark);
+    }
+
+    .btn-icon.danger:hover {
+      background: #fde8ea;
+      border-color: var(--danger);
+      color: var(--danger);
+    }
+
+    /* ========== SECTION HEADER ========== */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+
+    .section-header h2 {
+      font-size: 1.6rem;
+      font-weight: 500;
+    }
+
+    /* ========== EVENTS TABLE ========== */
+    .events-table {
+      width: 100%;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      overflow: hidden;
+    }
+
+    .events-table table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .events-table th {
+      text-align: left;
+      padding: 12px 16px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--warm-gray);
+      background: var(--cream);
+      border-bottom: 1px solid var(--cream-dark);
+    }
+
+    .events-table td {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--cream-dark);
+      font-size: 0.9rem;
+      vertical-align: middle;
+    }
+
+    .events-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .events-table tr.past-event td {
+      opacity: 0.5;
+    }
+
+    .event-desc {
+      max-width: 250px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--warm-gray);
+    }
+
+    .event-actions {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .visibility-toggle {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 1.1rem;
+      padding: 4px;
+      border-radius: 4px;
+      transition: background 0.2s;
+      line-height: 1;
+    }
+
+    .visibility-toggle:hover {
+      background: var(--cream-dark);
+    }
+
+    .visibility-toggle.hidden {
+      opacity: 0.4;
+    }
+
+    /* ========== GALLERY GRID ========== */
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 20px;
+    }
+
+    .gallery-card {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      overflow: hidden;
+    }
+
+    .gallery-card-img {
+      width: 100%;
+      height: 200px;
+      object-fit: cover;
+      display: block;
+      background: var(--cream-dark);
+    }
+
+    .gallery-card-body {
+      padding: 12px 14px;
+    }
+
+    .gallery-card-caption {
+      font-size: 0.9rem;
+      font-weight: 500;
+      margin-bottom: 4px;
+      color: var(--charcoal);
+    }
+
+    .gallery-card-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .category-badge {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: var(--teal-light);
+      color: var(--teal-deep);
+    }
+
+    .order-num {
+      font-size: 0.78rem;
+      color: var(--warm-gray-light);
+    }
+
+    .gallery-card-actions {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    /* ========== MODAL ========== */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .modal-overlay.open {
+      display: flex;
+    }
+
+    .modal {
+      background: white;
+      border-radius: 10px;
+      width: 100%;
+      max-width: 520px;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+    }
+
+    .modal-header {
+      padding: 20px 24px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .modal-header h3 {
+      font-size: 1.3rem;
+      font-weight: 500;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      cursor: pointer;
+      color: var(--warm-gray);
+      line-height: 1;
+      padding: 4px;
+    }
+
+    .modal-close:hover {
+      color: var(--charcoal);
+    }
+
+    .modal-body {
+      padding: 20px 24px;
+    }
+
+    .modal-footer {
+      padding: 0 24px 20px;
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    /* ========== FORM ========== */
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 500;
+      margin-bottom: 5px;
+      color: var(--charcoal);
+    }
+
+    .form-group input[type="text"],
+    .form-group input[type="date"],
+    .form-group input[type="url"],
+    .form-group textarea,
+    .form-group select {
+      width: 100%;
+      padding: 9px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.9rem;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      background: white;
+      color: var(--charcoal);
+    }
+
+    .form-group input:focus,
+    .form-group textarea:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: var(--amber);
+      box-shadow: 0 0 0 3px var(--amber-glow);
+    }
+
+    .form-group textarea {
+      min-height: 80px;
+      resize: vertical;
+    }
+
+    .form-check {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .form-check input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--amber);
+      cursor: pointer;
+    }
+
+    .form-check label {
+      margin-bottom: 0;
+      cursor: pointer;
+    }
+
+    /* ========== IMAGE PREVIEW ========== */
+    .img-preview-container {
+      margin-top: 8px;
+      border: 1px dashed #ddd;
+      border-radius: 6px;
+      padding: 8px;
+      min-height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--cream);
+    }
+
+    .img-preview-container img {
+      max-width: 100%;
+      max-height: 200px;
+      border-radius: 4px;
+    }
+
+    .img-preview-container .error-msg {
+      color: var(--danger);
+      font-size: 0.85rem;
+    }
+
+    .img-preview-container .placeholder-msg {
+      color: var(--warm-gray-light);
+      font-size: 0.85rem;
+    }
+
+    /* ========== CONFIRM DIALOG ========== */
+    .confirm-body {
+      padding: 24px;
+      text-align: center;
+    }
+
+    .confirm-body p {
+      font-size: 1rem;
+      margin-bottom: 20px;
+      color: var(--charcoal);
+    }
+
+    .confirm-body .confirm-actions {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    /* ========== TOAST ========== */
+    .toast-container {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 300;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .toast {
+      background: var(--charcoal);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      animation: toastIn 0.3s ease, toastOut 0.3s ease 2.7s forwards;
+    }
+
+    .toast.error {
+      background: var(--danger);
+    }
+
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes toastOut {
+      from { opacity: 1; }
+      to { opacity: 0; }
+    }
+
+    /* ========== EMPTY STATE ========== */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--warm-gray);
+    }
+
+    .empty-state p {
+      font-size: 1rem;
+    }
+
+    /* ========== LOADING ========== */
+    .loading {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--warm-gray-light);
+      font-size: 1rem;
+    }
+
+    /* ========== EVENT CARDS (Mobile) ========== */
+    .event-cards {
+      display: none;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .event-card {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      padding: 16px;
+    }
+
+    .event-card.past-event {
+      opacity: 0.5;
+    }
+
+    .event-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 8px;
+    }
+
+    .event-card-date {
+      font-size: 0.8rem;
+      color: var(--amber);
+      font-weight: 500;
+    }
+
+    .event-card-name {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.15rem;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+
+    .event-card-location {
+      font-size: 0.85rem;
+      color: var(--warm-gray);
+      margin-bottom: 6px;
+    }
+
+    .event-card-desc {
+      font-size: 0.85rem;
+      color: var(--warm-gray-light);
+      margin-bottom: 10px;
+    }
+
+    .event-card-actions {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    /* ========== RESPONSIVE ========== */
+    @media (max-width: 767px) {
+      .header {
+        padding: 0 12px;
+      }
+
+      .header-brand {
+        font-size: 1.1rem;
+      }
+
+      .header-tabs {
+        position: fixed;
+        top: 60px;
+        left: 0;
+        right: 0;
+        background: var(--charcoal);
+        display: flex;
+        border-top: 1px solid rgba(255,255,255,0.1);
+        z-index: 99;
+      }
+
+      .header-tab {
+        flex: 1;
+        justify-content: center;
+        padding: 12px 0;
+      }
+
+      .main {
+        padding-top: 120px;
+      }
+
+      .events-table {
+        display: none;
+      }
+
+      .event-cards {
+        display: flex;
+      }
+
+      .gallery-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+      }
+
+      .gallery-card-img {
+        height: 140px;
+      }
+
+      .section-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+      }
+    }
+
+    @media (max-width: 400px) {
+      .gallery-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ===== HEADER ===== -->
+  <header class="header" id="header" style="display:none;">
+    <div class="header-brand">Shir Glassworks</div>
+    <div class="header-tabs">
+      <button class="header-tab active" data-tab="schedule" onclick="switchTab('schedule')">Schedule</button>
+      <button class="header-tab" data-tab="gallery" onclick="switchTab('gallery')">Gallery</button>
+    </div>
+    <div class="header-user">
+      <img class="header-avatar" id="userAvatar" src="" alt="User">
+      <button class="header-signout" onclick="signOut()">Sign Out</button>
+    </div>
+  </header>
+
+  <!-- ===== MAIN CONTENT ===== -->
+  <div class="main">
+
+    <!-- Auth: Sign In -->
+    <div class="auth-screen" id="authScreen">
+      <h2>Shir Glassworks</h2>
+      <p>Admin panel for managing schedule events and gallery images.</p>
+      <button class="btn-google" onclick="googleSignIn()">
+        <svg viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+        Sign in with Google
+      </button>
+    </div>
+
+    <!-- Auth: Access Denied -->
+    <div class="auth-screen" id="deniedScreen" style="display:none;">
+      <h2>Access Denied</h2>
+      <p class="access-denied">Your account is not authorized to access this admin panel.</p>
+      <button class="btn btn-secondary" onclick="signOut()">Sign Out</button>
+    </div>
+
+    <!-- Admin: Schedule Tab -->
+    <div id="scheduleTab" style="display:none;">
+      <div class="section-header">
+        <h2>Schedule</h2>
+        <button class="btn btn-primary" onclick="openEventModal()">+ Add Event</button>
+      </div>
+      <div id="eventsLoading" class="loading">Loading...</div>
+      <div id="eventsEmpty" class="empty-state" style="display:none;">
+        <p>No events yet. Click "Add Event" to create one.</p>
+      </div>
+
+      <!-- Desktop Table -->
+      <div class="events-table" id="eventsTable" style="display:none;">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Name</th>
+              <th>Location</th>
+              <th>Description</th>
+              <th>Visible</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="eventsTableBody"></tbody>
+        </table>
+      </div>
+
+      <!-- Mobile Cards -->
+      <div class="event-cards" id="eventCards"></div>
+    </div>
+
+    <!-- Admin: Gallery Tab -->
+    <div id="galleryTab" style="display:none;">
+      <div class="section-header">
+        <h2>Gallery</h2>
+        <button class="btn btn-primary" onclick="openImageModal()">+ Add Image</button>
+      </div>
+      <div id="galleryLoading" class="loading">Loading...</div>
+      <div id="galleryEmpty" class="empty-state" style="display:none;">
+        <p>No images yet. Click "Add Image" to create one.</p>
+      </div>
+      <div class="gallery-grid" id="galleryGrid"></div>
+    </div>
+  </div>
+
+  <!-- ===== MODAL ===== -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal" id="modalContent"></div>
+  </div>
+
+  <!-- ===== TOAST CONTAINER ===== -->
+  <div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ============================================================
+// Firebase Init
+// ============================================================
+const firebaseConfig = {
+  apiKey: "AIzaSyBQVwn8vOrFTzLlm2MYIPBwgZV2xR9AuhM",
+  authDomain: "word-boxing.firebaseapp.com",
+  databaseURL: "https://word-boxing-default-rtdb.firebaseio.com",
+  projectId: "word-boxing"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.database();
+
+const ALLOWED_UIDS = ['oUt4ba0dYVRBfPREqoJ1yIsJKjr1'];
+const EVENTS_PATH = 'shirglassworks/public/events';
+const GALLERY_PATH = 'shirglassworks/public/gallery';
+
+const CATEGORIES = ['figurines', 'jewelry', 'drinkware', 'sculptures', 'vases', 'decorations', 'studio', 'other'];
+
+// ============================================================
+// State
+// ============================================================
+let currentUser = null;
+let currentTab = 'schedule';
+let events = {};
+let gallery = {};
+let eventsListener = null;
+let galleryListener = null;
+
+// ============================================================
+// Auth
+// ============================================================
+function googleSignIn() {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider).catch(function(err) {
+    showToast('Sign-in failed: ' + err.message, true);
+  });
+}
+
+function signOut() {
+  auth.signOut();
+}
+
+auth.onAuthStateChanged(function(user) {
+  currentUser = user;
+  const authScreen = document.getElementById('authScreen');
+  const deniedScreen = document.getElementById('deniedScreen');
+  const header = document.getElementById('header');
+
+  if (!user) {
+    // Not signed in
+    authScreen.style.display = '';
+    deniedScreen.style.display = 'none';
+    header.style.display = 'none';
+    hideAdminTabs();
+    detachListeners();
+    return;
+  }
+
+  if (!ALLOWED_UIDS.includes(user.uid)) {
+    // Signed in but not authorized
+    authScreen.style.display = 'none';
+    deniedScreen.style.display = '';
+    header.style.display = 'none';
+    hideAdminTabs();
+    detachListeners();
+    return;
+  }
+
+  // Authorized
+  authScreen.style.display = 'none';
+  deniedScreen.style.display = 'none';
+  header.style.display = 'flex';
+  document.getElementById('userAvatar').src = user.photoURL || '';
+  switchTab(currentTab);
+  attachListeners();
+});
+
+// ============================================================
+// Tabs
+// ============================================================
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.header-tab').forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  });
+  document.getElementById('scheduleTab').style.display = tab === 'schedule' ? '' : 'none';
+  document.getElementById('galleryTab').style.display = tab === 'gallery' ? '' : 'none';
+}
+
+function hideAdminTabs() {
+  document.getElementById('scheduleTab').style.display = 'none';
+  document.getElementById('galleryTab').style.display = 'none';
+}
+
+// ============================================================
+// Firebase Listeners
+// ============================================================
+function attachListeners() {
+  if (!eventsListener) {
+    eventsListener = db.ref(EVENTS_PATH).on('value', function(snap) {
+      events = snap.val() || {};
+      renderEvents();
+    }, function(err) {
+      showToast('Error loading events: ' + err.message, true);
+    });
+  }
+  if (!galleryListener) {
+    galleryListener = db.ref(GALLERY_PATH).on('value', function(snap) {
+      gallery = snap.val() || {};
+      renderGallery();
+    }, function(err) {
+      showToast('Error loading gallery: ' + err.message, true);
+    });
+  }
+}
+
+function detachListeners() {
+  if (eventsListener) {
+    db.ref(EVENTS_PATH).off('value', eventsListener);
+    eventsListener = null;
+  }
+  if (galleryListener) {
+    db.ref(GALLERY_PATH).off('value', galleryListener);
+    galleryListener = null;
+  }
+  events = {};
+  gallery = {};
+}
+
+// ============================================================
+// Date Formatting
+// ============================================================
+function formatDate(dateStr) {
+  if (!dateStr) return '';
+  var parts = dateStr.split('-');
+  var d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+  var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+}
+
+function formatDateRange(start, end) {
+  if (!end) return formatDate(start);
+  var sp = start.split('-');
+  var ep = end.split('-');
+  var sd = new Date(parseInt(sp[0]), parseInt(sp[1]) - 1, parseInt(sp[2]));
+  var ed = new Date(parseInt(ep[0]), parseInt(ep[1]) - 1, parseInt(ep[2]));
+  var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  if (sp[0] === ep[0] && sp[1] === ep[1]) {
+    // Same month and year
+    return months[sd.getMonth()] + ' ' + sd.getDate() + '\u2013' + ed.getDate() + ', ' + sd.getFullYear();
+  }
+  return formatDate(start) + ' \u2013 ' + formatDate(end);
+}
+
+function isPast(dateStr) {
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
+  var parts = dateStr.split('-');
+  var d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+  return d < today;
+}
+
+// ============================================================
+// Escape HTML
+// ============================================================
+function esc(str) {
+  if (!str) return '';
+  var div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ============================================================
+// Render Events
+// ============================================================
+function renderEvents() {
+  var loading = document.getElementById('eventsLoading');
+  var empty = document.getElementById('eventsEmpty');
+  var table = document.getElementById('eventsTable');
+  var tbody = document.getElementById('eventsTableBody');
+  var cards = document.getElementById('eventCards');
+
+  loading.style.display = 'none';
+
+  var entries = Object.entries(events);
+  if (entries.length === 0) {
+    empty.style.display = '';
+    table.style.display = 'none';
+    cards.innerHTML = '';
+    return;
+  }
+
+  empty.style.display = 'none';
+  table.style.display = '';
+
+  // Sort by date ascending
+  entries.sort(function(a, b) {
+    return (a[1].date || '').localeCompare(b[1].date || '');
+  });
+
+  // Desktop table
+  var tableHtml = '';
+  entries.forEach(function(entry) {
+    var id = entry[0];
+    var ev = entry[1];
+    var past = isPast(ev.dateEnd || ev.date);
+    var dateDisplay = formatDateRange(ev.date, ev.dateEnd);
+    var desc = ev.description || '';
+    var truncDesc = desc.length > 80 ? desc.substring(0, 80) + '...' : desc;
+    var visIcon = ev.visible !== false ? '\u{1F441}' : '\u{1F441}\u200D\u{1F5E8}';
+    var visClass = ev.visible !== false ? '' : ' hidden';
+
+    tableHtml += '<tr class="' + (past ? 'past-event' : '') + '">' +
+      '<td>' + esc(dateDisplay) + '</td>' +
+      '<td><strong>' + esc(ev.name) + '</strong></td>' +
+      '<td>' + esc(ev.location) + '</td>' +
+      '<td><span class="event-desc">' + esc(truncDesc) + '</span></td>' +
+      '<td><button class="visibility-toggle' + visClass + '" onclick="toggleEventVisibility(\'' + id + '\')" title="Toggle visibility">' +
+        (ev.visible !== false ? '\u{1F441}' : '\u{1F6AB}') +
+      '</button></td>' +
+      '<td><div class="event-actions">' +
+        '<button class="btn-icon" onclick="openEventModal(\'' + id + '\')" title="Edit">\u270E</button>' +
+        '<button class="btn-icon danger" onclick="confirmDeleteEvent(\'' + id + '\')" title="Delete">\u2716</button>' +
+      '</div></td>' +
+    '</tr>';
+  });
+  tbody.innerHTML = tableHtml;
+
+  // Mobile cards
+  var cardsHtml = '';
+  entries.forEach(function(entry) {
+    var id = entry[0];
+    var ev = entry[1];
+    var past = isPast(ev.dateEnd || ev.date);
+    var dateDisplay = formatDateRange(ev.date, ev.dateEnd);
+    var desc = ev.description || '';
+    var truncDesc = desc.length > 120 ? desc.substring(0, 120) + '...' : desc;
+
+    cardsHtml += '<div class="event-card' + (past ? ' past-event' : '') + '">' +
+      '<div class="event-card-top">' +
+        '<div>' +
+          '<div class="event-card-date">' + esc(dateDisplay) + '</div>' +
+          '<div class="event-card-name">' + esc(ev.name) + '</div>' +
+          '<div class="event-card-location">' + esc(ev.location) + '</div>' +
+        '</div>' +
+        '<button class="visibility-toggle' + (ev.visible !== false ? '' : ' hidden') + '" onclick="toggleEventVisibility(\'' + id + '\')" title="Toggle visibility">' +
+          (ev.visible !== false ? '\u{1F441}' : '\u{1F6AB}') +
+        '</button>' +
+      '</div>' +
+      (desc ? '<div class="event-card-desc">' + esc(truncDesc) + '</div>' : '') +
+      '<div class="event-card-actions">' +
+        '<button class="btn-icon" onclick="openEventModal(\'' + id + '\')" title="Edit">\u270E</button>' +
+        '<button class="btn-icon danger" onclick="confirmDeleteEvent(\'' + id + '\')" title="Delete">\u2716</button>' +
+      '</div>' +
+    '</div>';
+  });
+  cards.innerHTML = cardsHtml;
+}
+
+// ============================================================
+// Render Gallery
+// ============================================================
+function renderGallery() {
+  var loading = document.getElementById('galleryLoading');
+  var empty = document.getElementById('galleryEmpty');
+  var grid = document.getElementById('galleryGrid');
+
+  loading.style.display = 'none';
+
+  var entries = Object.entries(gallery);
+  if (entries.length === 0) {
+    empty.style.display = '';
+    grid.innerHTML = '';
+    return;
+  }
+
+  empty.style.display = 'none';
+
+  // Sort by order ascending
+  entries.sort(function(a, b) {
+    return (a[1].order || 0) - (b[1].order || 0);
+  });
+
+  var html = '';
+  entries.forEach(function(entry, idx) {
+    var id = entry[0];
+    var img = entry[1];
+    var isFirst = idx === 0;
+    var isLast = idx === entries.length - 1;
+
+    html += '<div class="gallery-card">' +
+      '<img class="gallery-card-img" src="' + esc(img.url) + '" alt="' + esc(img.alt) + '" onerror="this.style.display=\'none\'">' +
+      '<div class="gallery-card-body">' +
+        '<div class="gallery-card-caption">' + esc(img.caption || img.alt) + '</div>' +
+        '<div class="gallery-card-meta">' +
+          '<span class="category-badge">' + esc(img.category || 'other') + '</span>' +
+          '<span class="order-num">#' + (img.order || 0) + '</span>' +
+        '</div>' +
+        '<div class="gallery-card-actions">' +
+          '<button class="btn-icon" onclick="moveImage(\'' + id + '\', \'up\')" title="Move up"' + (isFirst ? ' disabled' : '') + '>\u2191</button>' +
+          '<button class="btn-icon" onclick="moveImage(\'' + id + '\', \'down\')" title="Move down"' + (isLast ? ' disabled' : '') + '>\u2193</button>' +
+          '<button class="visibility-toggle' + (img.visible !== false ? '' : ' hidden') + '" onclick="toggleImageVisibility(\'' + id + '\')" title="Toggle visibility">' +
+            (img.visible !== false ? '\u{1F441}' : '\u{1F6AB}') +
+          '</button>' +
+          '<button class="btn-icon" onclick="openImageModal(\'' + id + '\')" title="Edit">\u270E</button>' +
+          '<button class="btn-icon danger" onclick="confirmDeleteImage(\'' + id + '\')" title="Delete">\u2716</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  });
+  grid.innerHTML = html;
+}
+
+// ============================================================
+// Modal
+// ============================================================
+function openModal(html) {
+  document.getElementById('modalContent').innerHTML = html;
+  document.getElementById('modalOverlay').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('open');
+  document.getElementById('modalContent').innerHTML = '';
+}
+
+// Close on backdrop click
+document.getElementById('modalOverlay').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+// Close on Escape
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeModal();
+});
+
+// ============================================================
+// Event Modal (Add / Edit)
+// ============================================================
+function openEventModal(eventId) {
+  var isEdit = !!eventId;
+  var ev = isEdit ? events[eventId] : {};
+  var title = isEdit ? 'Edit Event' : 'Add Event';
+
+  var html = '' +
+    '<div class="modal-header">' +
+      '<h3>' + title + '</h3>' +
+      '<button class="modal-close" onclick="closeModal()">&times;</button>' +
+    '</div>' +
+    '<div class="modal-body">' +
+      '<div class="form-group">' +
+        '<label for="evDate">Date *</label>' +
+        '<input type="date" id="evDate" value="' + (ev.date || '') + '" required>' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<label for="evDateEnd">End Date <span style="color:var(--warm-gray-light);font-weight:300;">(optional, for multi-day events)</span></label>' +
+        '<input type="date" id="evDateEnd" value="' + (ev.dateEnd || '') + '">' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<label for="evName">Event Name *</label>' +
+        '<input type="text" id="evName" value="' + esc(ev.name || '') + '" required>' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<label for="evDesc">Description</label>' +
+        '<textarea id="evDesc">' + esc(ev.description || '') + '</textarea>' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<label for="evLocation">Location *</label>' +
+        '<input type="text" id="evLocation" value="' + esc(ev.location || '') + '" required>' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<div class="form-check">' +
+          '<input type="checkbox" id="evVisible"' + (ev.visible !== false ? ' checked' : '') + '>' +
+          '<label for="evVisible">Visible on public site</label>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="modal-footer">' +
+      '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+      '<button class="btn btn-primary" onclick="saveEvent(\'' + (eventId || '') + '\')">' + (isEdit ? 'Update' : 'Save') + '</button>' +
+    '</div>';
+
+  openModal(html);
+  // Focus first field
+  setTimeout(function() {
+    var el = document.getElementById('evDate');
+    if (el) el.focus();
+  }, 100);
+}
+
+async function saveEvent(eventId) {
+  var date = document.getElementById('evDate').value.trim();
+  var dateEnd = document.getElementById('evDateEnd').value.trim() || null;
+  var name = document.getElementById('evName').value.trim();
+  var description = document.getElementById('evDesc').value.trim();
+  var location = document.getElementById('evLocation').value.trim();
+  var visible = document.getElementById('evVisible').checked;
+
+  if (!date || !name || !location) {
+    showToast('Please fill in all required fields.', true);
+    return;
+  }
+
+  var data = {
+    date: date,
+    dateEnd: dateEnd,
+    name: name,
+    description: description,
+    location: location,
+    visible: visible,
+    updatedAt: firebase.database.ServerValue.TIMESTAMP
+  };
+
+  try {
+    if (eventId) {
+      await db.ref(EVENTS_PATH + '/' + eventId).update(data);
+      showToast('Event updated.');
+    } else {
+      data.createdAt = firebase.database.ServerValue.TIMESTAMP;
+      await db.ref(EVENTS_PATH).push(data);
+      showToast('Event created.');
+    }
+    closeModal();
+  } catch (err) {
+    showToast('Error saving event: ' + err.message, true);
+  }
+}
+
+async function toggleEventVisibility(eventId) {
+  var ev = events[eventId];
+  if (!ev) return;
+  try {
+    await db.ref(EVENTS_PATH + '/' + eventId).update({
+      visible: ev.visible === false ? true : false,
+      updatedAt: firebase.database.ServerValue.TIMESTAMP
+    });
+  } catch (err) {
+    showToast('Error toggling visibility: ' + err.message, true);
+  }
+}
+
+function confirmDeleteEvent(eventId) {
+  var ev = events[eventId];
+  if (!ev) return;
+  var html = '' +
+    '<div class="confirm-body">' +
+      '<h3>Delete Event</h3>' +
+      '<p>Delete "' + esc(ev.name) + '"? This cannot be undone.</p>' +
+      '<div class="confirm-actions">' +
+        '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+        '<button class="btn btn-danger" onclick="deleteEvent(\'' + eventId + '\')">Delete</button>' +
+      '</div>' +
+    '</div>';
+  openModal(html);
+}
+
+async function deleteEvent(eventId) {
+  try {
+    await db.ref(EVENTS_PATH + '/' + eventId).remove();
+    showToast('Event deleted.');
+    closeModal();
+  } catch (err) {
+    showToast('Error deleting event: ' + err.message, true);
+  }
+}
+
+// ============================================================
+// Image Modal (Add / Edit)
+// ============================================================
+function openImageModal(imageId) {
+  var isEdit = !!imageId;
+  var img = isEdit ? gallery[imageId] : {};
+  var title = isEdit ? 'Edit Image' : 'Add Image';
+
+  var categoryOptions = CATEGORIES.map(function(cat) {
+    var selected = (img.category === cat) ? ' selected' : '';
+    return '<option value="' + cat + '"' + selected + '>' + cat.charAt(0).toUpperCase() + cat.slice(1) + '</option>';
+  }).join('');
+
+  var html = '' +
+    '<div class="modal-header">' +
+      '<h3>' + title + '</h3>' +
+      '<button class="modal-close" onclick="closeModal()">&times;</button>' +
+    '</div>' +
+    '<div class="modal-body">' +
+      '<div class="form-group">' +
+        '<label for="imgUrl">Image URL *</label>' +
+        '<input type="text" id="imgUrl" value="' + esc(img.url || '') + '" placeholder="https://..." oninput="previewImageUrl()">' +
+        '<div class="img-preview-container" id="imgPreviewContainer">' +
+          (img.url ? '<img src="' + esc(img.url) + '" onerror="this.parentNode.innerHTML=\'<span class=error-msg>Invalid image URL</span>\'">' : '<span class="placeholder-msg">Enter a URL to preview</span>') +
+        '</div>' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<label for="imgAlt">Alt Text *</label>' +
+        '<input type="text" id="imgAlt" value="' + esc(img.alt || '') + '" placeholder="Describe the image">' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<label for="imgCaption">Caption</label>' +
+        '<input type="text" id="imgCaption" value="' + esc(img.caption || '') + '">' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<label for="imgCategory">Category</label>' +
+        '<select id="imgCategory">' + categoryOptions + '</select>' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<div class="form-check">' +
+          '<input type="checkbox" id="imgVisible"' + (img.visible !== false ? ' checked' : '') + '>' +
+          '<label for="imgVisible">Visible on public site</label>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="modal-footer">' +
+      '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+      '<button class="btn btn-primary" onclick="saveImage(\'' + (imageId || '') + '\')">' + (isEdit ? 'Update' : 'Save') + '</button>' +
+    '</div>';
+
+  openModal(html);
+  setTimeout(function() {
+    var el = document.getElementById('imgUrl');
+    if (el) el.focus();
+  }, 100);
+}
+
+function previewImageUrl() {
+  var url = document.getElementById('imgUrl').value.trim();
+  var container = document.getElementById('imgPreviewContainer');
+  if (!url) {
+    container.innerHTML = '<span class="placeholder-msg">Enter a URL to preview</span>';
+    return;
+  }
+  container.innerHTML = '<img src="' + esc(url) + '" onerror="this.parentNode.innerHTML=\'<span class=error-msg>Invalid image URL</span>\'">';
+}
+
+function getNextOrder() {
+  var maxOrder = 0;
+  Object.values(gallery).forEach(function(img) {
+    if ((img.order || 0) > maxOrder) maxOrder = img.order;
+  });
+  return maxOrder + 1;
+}
+
+async function saveImage(imageId) {
+  var url = document.getElementById('imgUrl').value.trim();
+  var alt = document.getElementById('imgAlt').value.trim();
+  var caption = document.getElementById('imgCaption').value.trim();
+  var category = document.getElementById('imgCategory').value;
+  var visible = document.getElementById('imgVisible').checked;
+
+  if (!url || !alt) {
+    showToast('Please fill in all required fields.', true);
+    return;
+  }
+
+  var data = {
+    url: url,
+    alt: alt,
+    caption: caption,
+    category: category,
+    visible: visible,
+    updatedAt: firebase.database.ServerValue.TIMESTAMP
+  };
+
+  try {
+    if (imageId) {
+      await db.ref(GALLERY_PATH + '/' + imageId).update(data);
+      showToast('Image updated.');
+    } else {
+      data.order = getNextOrder();
+      data.createdAt = firebase.database.ServerValue.TIMESTAMP;
+      await db.ref(GALLERY_PATH).push(data);
+      showToast('Image added.');
+    }
+    closeModal();
+  } catch (err) {
+    showToast('Error saving image: ' + err.message, true);
+  }
+}
+
+async function toggleImageVisibility(imageId) {
+  var img = gallery[imageId];
+  if (!img) return;
+  try {
+    await db.ref(GALLERY_PATH + '/' + imageId).update({
+      visible: img.visible === false ? true : false,
+      updatedAt: firebase.database.ServerValue.TIMESTAMP
+    });
+  } catch (err) {
+    showToast('Error toggling visibility: ' + err.message, true);
+  }
+}
+
+async function moveImage(imageId, direction) {
+  var entries = Object.entries(gallery);
+  entries.sort(function(a, b) {
+    return (a[1].order || 0) - (b[1].order || 0);
+  });
+
+  var idx = entries.findIndex(function(e) { return e[0] === imageId; });
+  if (idx === -1) return;
+
+  var swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+  if (swapIdx < 0 || swapIdx >= entries.length) return;
+
+  var currentId = entries[idx][0];
+  var swapId = entries[swapIdx][0];
+  var currentOrder = entries[idx][1].order || 0;
+  var swapOrder = entries[swapIdx][1].order || 0;
+
+  // Atomic update: swap order values
+  var updates = {};
+  updates[GALLERY_PATH + '/' + currentId + '/order'] = swapOrder;
+  updates[GALLERY_PATH + '/' + currentId + '/updatedAt'] = firebase.database.ServerValue.TIMESTAMP;
+  updates[GALLERY_PATH + '/' + swapId + '/order'] = currentOrder;
+  updates[GALLERY_PATH + '/' + swapId + '/updatedAt'] = firebase.database.ServerValue.TIMESTAMP;
+
+  try {
+    await db.ref().update(updates);
+  } catch (err) {
+    showToast('Error reordering: ' + err.message, true);
+  }
+}
+
+function confirmDeleteImage(imageId) {
+  var img = gallery[imageId];
+  if (!img) return;
+  var label = img.caption || img.alt || 'this image';
+  var html = '' +
+    '<div class="confirm-body">' +
+      '<h3>Delete Image</h3>' +
+      '<p>Delete "' + esc(label) + '"? This cannot be undone.</p>' +
+      '<div class="confirm-actions">' +
+        '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+        '<button class="btn btn-danger" onclick="deleteImage(\'' + imageId + '\')">Delete</button>' +
+      '</div>' +
+    '</div>';
+  openModal(html);
+}
+
+async function deleteImage(imageId) {
+  try {
+    await db.ref(GALLERY_PATH + '/' + imageId).remove();
+    showToast('Image deleted.');
+    closeModal();
+  } catch (err) {
+    showToast('Error deleting image: ' + err.message, true);
+  }
+}
+
+// ============================================================
+// Toast
+// ============================================================
+function showToast(message, isError) {
+  var container = document.getElementById('toastContainer');
+  var toast = document.createElement('div');
+  toast.className = 'toast' + (isError ? ' error' : '');
+  toast.textContent = message;
+  container.appendChild(toast);
+  setTimeout(function() {
+    if (toast.parentNode) toast.parentNode.removeChild(toast);
+  }, 3000);
+}
+</script>
+</body>
+</html>

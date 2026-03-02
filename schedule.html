@@ -733,5 +733,59 @@
   });
 </script>
 
+<!-- Firebase (read-only, no auth needed for public data) -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script>
+(function() {
+  const firebaseConfig = {
+    apiKey: "AIzaSyBQVwn8vOrFTzLlm2MYIPBwgZV2xR9AuhM",
+    databaseURL: "https://word-boxing-default-rtdb.firebaseio.com",
+    projectId: "word-boxing"
+  };
+  if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+
+  function fmtMonth(dateStr) {
+    const d = new Date(dateStr + 'T00:00:00');
+    return d.toLocaleDateString('en-US', { month: 'short' });
+  }
+  function fmtDay(dateStr) {
+    const d = new Date(dateStr + 'T00:00:00');
+    return d.getDate().toString();
+  }
+
+  db.ref('shirglassworks/public/events').orderByChild('date').once('value').then(function(snap) {
+    const data = snap.val();
+    if (!data) return;
+    const events = Object.values(data)
+      .filter(function(e) { return e.visible !== false; })
+      .sort(function(a, b) { return a.date.localeCompare(b.date); });
+    if (events.length === 0) return;
+
+    const list = document.querySelector('.events-list');
+    if (!list) return;
+
+    var html = '';
+    events.forEach(function(ev) {
+      var month = fmtMonth(ev.date);
+      var day = fmtDay(ev.date);
+      if (ev.dateEnd && ev.dateEnd !== ev.date) {
+        var endDay = fmtDay(ev.dateEnd);
+        day = day + '\u2013' + endDay;
+      }
+      html += '<div class="event-card fade-up" style="opacity:1;transform:translateY(0)">';
+      html += '<div class="event-date"><div class="event-month">' + month + '</div>';
+      html += '<div class="event-day">' + day + '</div></div>';
+      html += '<div class="event-info"><h3>' + ev.name + '</h3>';
+      html += '<p>' + (ev.description || '') + '</p></div>';
+      html += '<div class="event-location">' + (ev.location || '').toUpperCase() + '</div>';
+      html += '</div>';
+    });
+    list.innerHTML = html;
+  }).catch(function() { /* keep hardcoded fallback */ });
+})();
+</script>
+
 </body>
 </html>
