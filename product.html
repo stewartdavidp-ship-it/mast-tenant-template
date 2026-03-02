@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Shop &mdash; Shir Glassworks</title>
+<title>Product &mdash; Shir Glassworks</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -555,6 +555,208 @@
     .nav-toggle { display: flex; }
     .footer-inner { flex-direction: column; gap: 1.5rem; text-align: center; }
   }
+
+  /* ========= PRODUCT DETAIL ========= */
+  .product-detail {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3rem;
+    align-items: start;
+  }
+
+  .product-gallery {
+    position: relative;
+  }
+
+  .product-gallery-main {
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #fff;
+    margin-bottom: 12px;
+  }
+
+  .product-gallery-main img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    cursor: zoom-in;
+    transition: transform 0.3s;
+  }
+
+  .product-thumbs {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .product-thumb {
+    width: 64px;
+    height: 64px;
+    border-radius: 4px;
+    overflow: hidden;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: border-color 0.2s;
+    flex-shrink: 0;
+  }
+
+  .product-thumb.active,
+  .product-thumb:hover {
+    border-color: var(--amber);
+  }
+
+  .product-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .product-detail-info {
+    padding-top: 1rem;
+  }
+
+  .product-detail-name {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(1.8rem, 3.5vw, 2.6rem);
+    font-weight: 400;
+    line-height: 1.2;
+    margin-bottom: 0.75rem;
+    color: var(--charcoal);
+  }
+
+  .product-detail-price {
+    font-size: 1.4rem;
+    font-weight: 500;
+    color: var(--amber);
+    margin-bottom: 1.5rem;
+  }
+
+  .product-detail-price.no-price {
+    color: var(--warm-gray);
+    font-style: italic;
+    font-weight: 300;
+  }
+
+  .product-detail-cats {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  .product-detail-cat {
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--warm-gray);
+    background: var(--cream-dark);
+    padding: 4px 14px;
+    border-radius: 50px;
+    text-decoration: none;
+    transition: all 0.3s;
+  }
+
+  .product-detail-cat:hover {
+    background: var(--charcoal);
+    color: #fff;
+  }
+
+  .product-option-group {
+    margin-bottom: 1.25rem;
+  }
+
+  .product-option-label {
+    font-size: 0.75rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--warm-gray);
+    margin-bottom: 8px;
+    font-weight: 500;
+  }
+
+  .product-option-choices {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .product-option-chip {
+    padding: 6px 16px;
+    border: 1px solid var(--cream-dark);
+    border-radius: 50px;
+    font-size: 0.82rem;
+    color: var(--charcoal);
+    background: #fff;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .product-option-chip:hover,
+  .product-option-chip.selected {
+    border-color: var(--amber);
+    color: var(--amber);
+  }
+
+  .product-detail-actions {
+    margin-top: 2rem;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .product-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--warm-gray);
+    text-decoration: none;
+    margin-bottom: 2rem;
+    transition: color 0.3s;
+  }
+
+  .product-back:hover { color: var(--amber); }
+
+  .product-loading {
+    text-align: center;
+    padding: 6rem 2rem;
+    color: var(--warm-gray);
+    font-size: 1rem;
+  }
+
+  .product-not-found {
+    text-align: center;
+    padding: 6rem 2rem;
+  }
+
+  .product-not-found h2 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 2rem;
+    font-weight: 300;
+    margin-bottom: 1rem;
+  }
+
+  .product-not-found p {
+    color: var(--warm-gray);
+    margin-bottom: 2rem;
+  }
+
+  @media (max-width: 768px) {
+    .product-detail {
+      grid-template-columns: 1fr;
+      gap: 2rem;
+    }
+    .product-thumb {
+      width: 52px;
+      height: 52px;
+    }
+  }
 </style>
 </head>
 <body>
@@ -588,36 +790,36 @@
 </div>
 
 
-<!-- ============ PAGE HEADER ============ -->
-<div class="page-header">
-  <p class="section-label fade-up">Our Creations</p>
-  <h1 class="section-title fade-up">Handmade Glass Art</h1>
-  <p class="section-subtitle fade-up">Each piece is shaped by hand &mdash; no two are ever alike.</p>
-</div>
-
-<!-- ============ SHOP ============ -->
-<section>
-  <div class="category-filter fade-up">
-    <span class="filter-pill active" onclick="filterShop('all', this)">All</span>
-    <span class="filter-pill" onclick="filterShop('figurines', this)">Figurines</span>
-    <span class="filter-pill" onclick="filterShop('jewelry', this)">Jewelry</span>
-    <span class="filter-pill" onclick="filterShop('drinkware', this)">Drinkware</span>
-    <span class="filter-pill" onclick="filterShop('vases', this)">Vases</span>
-    <span class="filter-pill" onclick="filterShop('decoration', this)">Decoration</span>
-    <span class="filter-pill" onclick="filterShop('sculpture', this)">Sculpture</span>
+<!-- ============ PRODUCT DETAIL ============ -->
+<section style="padding-top: 8rem;">
+  <div id="productLoading" class="product-loading">Loading product...</div>
+  <div id="productNotFound" class="product-not-found" style="display:none;">
+    <h2>Product Not Found</h2>
+    <p>The product you're looking for doesn't exist or may have been removed.</p>
+    <a href="shop.html" class="btn btn-outline">Browse All Products</a>
   </div>
-
-  <div id="shopContainer">
-    <p style="text-align:center;color:var(--warm-gray);padding:3rem;">Loading products...</p>
+  <div id="productContent" style="display:none;">
+    <a href="shop.html" class="product-back">&larr; Back to Shop</a>
+    <div class="product-detail">
+      <div class="product-gallery">
+        <div class="product-gallery-main">
+          <img id="mainImage" src="" alt="" />
+        </div>
+        <div class="product-thumbs" id="thumbsContainer"></div>
+      </div>
+      <div class="product-detail-info">
+        <h1 class="product-detail-name" id="productName"></h1>
+        <div class="product-detail-price" id="productPrice"></div>
+        <div class="product-detail-cats" id="productCats"></div>
+        <div id="productOptions"></div>
+        <div class="product-detail-actions">
+          <a id="productEtsy" href="https://www.etsy.com/shop/ShirGlassworks" class="btn btn-primary" target="_blank" rel="noopener">View on Etsy</a>
+          <a href="shop.html" class="btn btn-outline">Browse Collection</a>
+        </div>
+      </div>
+    </div>
   </div>
 </section>
-
-<!-- ============ ETSY CTA ============ -->
-<div class="etsy-cta">
-  <h2 class="fade-up">Shop the Full Collection on Etsy</h2>
-  <p class="fade-up">Browse all available pieces, custom commissions, and seasonal collections.</p>
-  <a href="https://www.etsy.com/shop/ShirGlassworks" class="btn fade-up" target="_blank" rel="noopener">Visit Our Etsy Shop</a>
-</div>
 
 <footer>
   <div class="footer-inner">
@@ -645,88 +847,115 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script>
-  // Firebase — load shop products dynamically grouped by category
-  var allShopItems = [];
-  var SHOP_CATS = [
-    { id: 'figurines', label: 'Figurines' },
-    { id: 'jewelry', label: 'Jewelry' },
-    { id: 'drinkware', label: 'Drinkware' },
-    { id: 'vases', label: 'Vases' },
-    { id: 'decoration', label: 'Decoration' },
-    { id: 'sculpture', label: 'Sculpture' }
-  ];
-  var SHOP_IDS = SHOP_CATS.map(function(c) { return c.id; });
-
+  // Firebase — load product detail from URL param ?id=pXXX
   (function() {
     var app = firebase.initializeApp({
       apiKey: "AIzaSyBQVwn8vOrFTzLlm2MYIPBwgZV2xR9AuhM",
       databaseURL: "https://word-boxing-default-rtdb.firebaseio.com",
       projectId: "word-boxing"
-    }, 'public-shop');
+    }, 'public-product');
     var db = app.database();
+    window._productDb = db;
 
-    db.ref('shirglassworks/public/gallery').orderByChild('order').once('value').then(function(snap) {
-      var data = snap.val();
-      if (!data) return;
-      allShopItems = Object.values(data)
-        .filter(function(i) { return SHOP_IDS.indexOf(i.section) !== -1 && i.visible !== false; })
-        .sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
-      renderShop('all');
-    }).catch(function() {
-      document.getElementById('shopContainer').innerHTML = '<p style="text-align:center;color:var(--warm-gray);padding:3rem;">Unable to load products.</p>';
-    });
-  })();
+    var params = new URLSearchParams(window.location.search);
+    var pid = params.get('id');
 
-  function renderShop(filter) {
-    var container = document.getElementById('shopContainer');
-    if (!container) return;
-    if (allShopItems.length === 0) {
-      container.innerHTML = '<p style="text-align:center;color:var(--warm-gray);padding:3rem;">No products found.</p>';
+    if (!pid) {
+      document.getElementById('productLoading').style.display = 'none';
+      document.getElementById('productNotFound').style.display = '';
       return;
     }
 
-    var html = '';
-    var catsToShow = filter === 'all' ? SHOP_CATS : SHOP_CATS.filter(function(c) { return c.id === filter; });
+    db.ref('shirglassworks/public/products/' + pid).once('value').then(function(snap) {
+      var p = snap.val();
+      document.getElementById('productLoading').style.display = 'none';
 
-    catsToShow.forEach(function(cat) {
-      var items = allShopItems.filter(function(i) { return i.section === cat.id; });
-      if (items.length === 0) return;
-
-      if (filter === 'all') {
-        html += '<h2 class="category-section-title">' + cat.label + '</h2>';
+      if (!p) {
+        document.getElementById('productNotFound').style.display = '';
+        return;
       }
-      html += '<div class="product-grid">';
-      items.forEach(function(item) {
-        var name = item.productName || item.caption || item.alt || '';
-        var price = item.price || '';
-        // Extract pid from Weebly URL (e.g. /store/p112/...) and link to local product page
-        var pid = '';
-        if (item.productLink) {
-          var m = item.productLink.match(/\/store\/(p\d+)\//);
-          if (m) pid = m[1];
+
+      // Update page title
+      document.title = p.name + ' — Shir Glassworks';
+
+      // Show content
+      document.getElementById('productContent').style.display = '';
+      document.getElementById('productName').textContent = p.name;
+
+      // Price
+      var priceEl = document.getElementById('productPrice');
+      if (p.price) {
+        priceEl.textContent = p.price;
+      } else {
+        priceEl.textContent = 'Price on request';
+        priceEl.classList.add('no-price');
+      }
+
+      // Categories
+      var catsHtml = '';
+      if (p.categories && p.categories.length) {
+        p.categories.forEach(function(c) {
+          catsHtml += '<a href="shop.html?cat=' + c + '" class="product-detail-cat">' + c + '</a>';
+        });
+      }
+      document.getElementById('productCats').innerHTML = catsHtml;
+
+      // Images
+      var images = p.images || [];
+      if (images.length > 0) {
+        var mainImg = document.getElementById('mainImage');
+        mainImg.src = images[0];
+        mainImg.alt = p.name;
+
+        if (images.length > 1) {
+          var thumbsHtml = '';
+          images.forEach(function(src, idx) {
+            thumbsHtml += '<div class="product-thumb' + (idx === 0 ? ' active' : '') + '" onclick="switchImage(' + idx + ')">' +
+              '<img src="' + src + '" alt="' + p.name + ' image ' + (idx + 1) + '" loading="lazy" />' +
+              '</div>';
+          });
+          document.getElementById('thumbsContainer').innerHTML = thumbsHtml;
         }
-        var link = pid ? 'product.html?id=' + pid : (item.productLink || 'https://www.etsy.com/shop/ShirGlassworks');
-        var isLocal = !!pid;
-        html += '<div class="product-card fade-up" style="opacity:1;transform:translateY(0)">' +
-          '<div class="product-image"><a href="' + link + '"' + (isLocal ? '' : ' target="_blank" rel="noopener"') + '><img src="' + item.url + '" alt="' + (item.alt || '') + '" loading="lazy" /></a></div>' +
-          '<div class="product-info">' +
-            '<span class="product-category">' + cat.label + '</span>' +
-            '<h3>' + name + '</h3>' +
-            (price ? '<p class="product-price">' + price + '</p>' : '') +
-            (link ? '<a href="' + link + '" class="product-link"' + (isLocal ? '' : ' target="_blank" rel="noopener"') + '>View Details</a>' : '') +
-          '</div></div>';
-      });
-      html += '</div>';
+      }
+
+      // Options
+      if (p.options && p.options.length) {
+        var optHtml = '';
+        p.options.forEach(function(opt) {
+          optHtml += '<div class="product-option-group">' +
+            '<div class="product-option-label">' + opt.label + '</div>' +
+            '<div class="product-option-choices">';
+          opt.choices.forEach(function(choice) {
+            optHtml += '<span class="product-option-chip">' + choice + '</span>';
+          });
+          optHtml += '</div></div>';
+        });
+        document.getElementById('productOptions').innerHTML = optHtml;
+      }
+
+      // Etsy link — use original Weebly URL or fallback to Etsy shop
+      if (p.url) {
+        document.getElementById('productEtsy').href = p.url;
+      }
+
+      // Store images array for gallery switching
+      window._productImages = images;
+
+    }).catch(function(err) {
+      console.error('Error loading product:', err);
+      document.getElementById('productLoading').style.display = 'none';
+      document.getElementById('productNotFound').style.display = '';
     });
+  })();
 
-    container.innerHTML = html;
-  }
-
-  function filterShop(cat, el) {
-    var pills = document.querySelectorAll('.filter-pill');
-    pills.forEach(function(p) { p.classList.remove('active'); });
-    el.classList.add('active');
-    renderShop(cat);
+  function switchImage(idx) {
+    var images = window._productImages || [];
+    if (!images[idx]) return;
+    document.getElementById('mainImage').src = images[idx];
+    var thumbs = document.querySelectorAll('.product-thumb');
+    thumbs.forEach(function(t, i) {
+      t.classList.toggle('active', i === idx);
+    });
   }
 </script>
 <script>
@@ -772,10 +1001,10 @@
 <!-- ============ ANALYTICS TRACKING ============ -->
 <script>
 (function() {
-  var db = firebase.app('public-shop').database();
+  var db = window._productDb || firebase.app('public-product').database();
   var HITS = 'shirglassworks/analytics/hits';
   var now = new Date();
-  var page = 'shop';
+  var page = 'product';
   var d = now.getFullYear() + '-' +
     String(now.getMonth() + 1).padStart(2, '0') + '-' +
     String(now.getDate()).padStart(2, '0');
@@ -803,8 +1032,8 @@
 
     if (href.indexOf('instagram.com') !== -1) action = 'social_instagram';
     else if (href.indexOf('etsy.com') !== -1 && text.indexOf('view on etsy') !== -1) action = 'product_etsy';
-    else if (href.indexOf('etsy.com') !== -1 && text.indexOf('visit our etsy') !== -1) action = 'cta_etsy_shop';
     else if (href.indexOf('etsy.com') !== -1) action = 'social_etsy';
+    else if (href.indexOf('shop.html') !== -1) action = 'nav_shop';
     else if (href.indexOf('about.html') !== -1) action = 'nav_about';
     else if (href.indexOf('schedule.html') !== -1) action = 'nav_schedule';
     else if (href.indexOf('index.html') !== -1 || href.endsWith('/')) action = 'nav_home';
