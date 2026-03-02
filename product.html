@@ -749,6 +749,100 @@
     margin-bottom: 2rem;
   }
 
+
+  /* ── How It Was Made ── */
+  .product-story {
+    max-width: 700px;
+    margin: 4rem auto 0;
+    padding: 3rem 0;
+    border-top: 1px solid var(--cream-dark);
+  }
+
+  .product-story-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 2rem;
+    font-weight: 300;
+    color: var(--charcoal);
+    margin: 0 0 0.5rem;
+    text-align: center;
+  }
+
+  .product-story-name {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.3rem;
+    font-weight: 400;
+    color: var(--warm-gray);
+    text-align: center;
+    margin-bottom: 2.5rem;
+  }
+
+  .product-story-entry {
+    margin-bottom: 2rem;
+  }
+
+  .product-story-entry img {
+    display: block;
+    width: 100%;
+    max-width: 600px;
+    margin: 0 auto;
+    border-radius: 6px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    object-fit: cover;
+  }
+
+  .product-story-caption {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.92rem;
+    color: var(--warm-gray);
+    text-align: center;
+    margin-top: 0.75rem;
+    line-height: 1.6;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .product-story-milestone {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.15rem;
+    font-weight: 500;
+    color: var(--charcoal);
+    text-align: center;
+    padding: 1.5rem 2rem;
+    line-height: 1.5;
+    max-width: 500px;
+    margin: 0.5rem auto;
+    position: relative;
+  }
+
+  .product-story-milestone::before {
+    content: '';
+    display: block;
+    width: 40px;
+    height: 1px;
+    background: var(--amber-light);
+    margin: 0 auto 1rem;
+  }
+
+  .product-story-credit {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.82rem;
+    color: var(--warm-gray-light);
+    text-align: center;
+    margin-top: 3rem;
+    letter-spacing: 0.05em;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .product-story { border-top-color: #333; }
+    .product-story-title { color: #f0e8db; }
+    .product-story-name { color: #9b958e; }
+    .product-story-milestone { color: #f0e8db; }
+    .product-story-caption { color: #9b958e; }
+    .product-story-credit { color: #6b6560; }
+    .product-story-entry img { box-shadow: 0 2px 12px rgba(0,0,0,0.3); }
+  }
+
   @media (max-width: 768px) {
     .product-detail {
       grid-template-columns: 1fr;
@@ -758,6 +852,12 @@
       width: 52px;
       height: 52px;
     }
+    .product-story {
+      padding: 2rem 0;
+      margin-top: 2rem;
+    }
+    .product-story-title { font-size: 1.6rem; }
+    .product-story-milestone { padding: 1rem; font-size: 1.05rem; }
   }
 </style>
 </head>
@@ -828,6 +928,8 @@
         </div>
       </div>
     </div>
+    <!-- How It Was Made story section (loaded dynamically) -->
+    <div id="productStory" style="display:none;"></div>
   </div>
 </section>
 
@@ -978,6 +1080,12 @@
       // Store images array for gallery switching
       window._productImages = images;
 
+
+
+      // ── How It Was Made: load story if product has storyId ──
+      if (p.storyId) {
+        loadProductStory(p.storyId);
+      }
     }).catch(function(err) {
       console.error('Error loading product:', err);
       document.getElementById('productLoading').style.display = 'none';
@@ -1047,6 +1155,68 @@
     });
     ShirCart.showToast(p.name + ' added to cart');
   });
+</script>
+<script>
+  // ── How It Was Made: render story section ──
+  function loadProductStory(storyId) {
+    var storyDb = window._productDb;
+    if (!storyDb) return;
+    storyDb.ref('shirglassworks/public/stories/' + storyId).once('value').then(function(snap) {
+      var story = snap.val();
+      if (!story || story.status !== 'published') return;
+
+      var entries = [];
+      if (story.entries) {
+        entries = Object.values(story.entries).sort(function(a, b) {
+          return (a.order || 0) - (b.order || 0);
+        });
+      }
+      if (entries.length === 0) return;
+
+      var html = '<div class="product-story">' +
+        '<h2 class="product-story-title">How It Was Made</h2>';
+      if (story.title) {
+        html += '<div class="product-story-name">' + escHtml(story.title) + '</div>';
+      }
+
+      entries.forEach(function(entry) {
+        html += '<div class="product-story-entry">';
+        if (entry.milestone && !entry.mediaUrl) {
+          html += '<div class="product-story-milestone">' + escHtml(entry.milestone) + '</div>';
+        }
+        if (entry.mediaUrl) {
+          if (entry.milestone) {
+            html += '<div class="product-story-milestone">' + escHtml(entry.milestone) + '</div>';
+          }
+          html += '<img src="' + escHtml(entry.mediaUrl) + '" alt="" loading="lazy" />';
+        }
+        if (entry.caption) {
+          html += '<div class="product-story-caption">' + escHtml(entry.caption) + '</div>';
+        }
+        html += '</div>';
+      });
+
+      // Credit line from operators
+      if (story.operators && story.operators.length > 0) {
+        html += '<div class="product-story-credit">Handcrafted by ' + story.operators.map(escHtml).join(' & ') + '</div>';
+      }
+
+      html += '</div>';
+
+      var el = document.getElementById('productStory');
+      if (el) {
+        el.innerHTML = html;
+        el.style.display = '';
+      }
+    }).catch(function(err) {
+      console.error('Error loading story:', err);
+    });
+  }
+
+  function escHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
 </script>
 <script>
   // Nav scroll effect

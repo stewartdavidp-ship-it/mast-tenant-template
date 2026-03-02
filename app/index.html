@@ -6125,7 +6125,39 @@ function renderProductionJobDetail(jobId) {
         '<strong>Product Links</strong>' +
       '</div>' +
       '<div id="jobProductLinks_' + jobId + '"></div>' +
-    '</div>' : '');
+    '</div>' : '') +
+
+    // Pipeline status section
+    (function() {
+      var purpose = job.purpose || '';
+      if (purpose === 'fulfillment' || purpose === 'custom') {
+        return '<div class="prod-detail-section">' +
+          '<strong style="display:block;margin-bottom:8px;">Pipeline</strong>' +
+          '<div id="jobPipelineStatus_' + jobId + '" style="font-size:0.85rem;color:var(--warm-gray);font-style:italic;">Loading order status...</div>' +
+        '</div>';
+      }
+      if (purpose === 'inventory-general') {
+        var invIndicators = '';
+        buildKeys.forEach(function(bk) {
+          var b = builds[bk];
+          if (b.status === 'completed') {
+            var pushed = b.inventoryPushed ? '✓ Pushed to inventory' : '— Not pushed';
+            var style = b.inventoryPushed ? 'color:var(--teal);' : 'color:var(--warm-gray);';
+            invIndicators += '<div style="font-size:0.82rem;' + style + '">Build #' + (b.buildNumber || '?') + ': ' + pushed + '</div>';
+          }
+        });
+        return '<div class="prod-detail-section">' +
+          '<strong style="display:block;margin-bottom:8px;">Pipeline — Inventory</strong>' +
+          (invIndicators || '<div style="font-size:0.85rem;color:var(--warm-gray);font-style:italic;">No completed builds yet.</div>') +
+        '</div>';
+      }
+      if (purpose === 'wholesale' || purpose === 'experimental' || purpose === 'inventory-event') {
+        return '<div class="prod-detail-section">' +
+          '<div style="font-size:0.85rem;color:var(--warm-gray);font-style:italic;">⚠ Manual handling required — no automated pipeline for ' + (PURPOSE_LABELS[purpose] || purpose) + ' jobs.</div>' +
+        '</div>';
+      }
+      return '';
+    })();
 
   // Load photo badges for each build
   buildKeys.forEach(function(bk) { loadBuildMediaBadge(bk); });
@@ -6133,6 +6165,8 @@ function renderProductionJobDetail(jobId) {
   loadJobStoryStatus(jobId);
   // Load product links if completed
   if (status === 'completed') loadJobProductLinks(jobId);
+  // Load pipeline status for fulfillment/custom
+  if (job.purpose === 'fulfillment' || job.purpose === 'custom') loadJobPipelineStatus(jobId);
 }
 
 async function transitionProductionJob(jobId, newStatus) {
@@ -6558,9 +6592,9 @@ async function doCompleteBuild(jobId, buildId) {
     // Re-read all builds to get accurate tallies
     var jobSnap = await db.ref(PRODUCTION_JOBS_PATH + '/' + jobId).once('value');
     var freshJob = jobSnap.val();
+    var tallies = {};
     if (freshJob && freshJob.lineItems) {
       var freshBuilds = freshJob.builds || {};
-      var tallies = {};
       liKeys.forEach(function(liKey) { tallies[liKey] = { completed: 0, loss: 0 }; });
       Object.values(freshBuilds).forEach(function(b) {
         if (b.status === 'completed' && b.output) {
@@ -6596,13 +6630,167 @@ async function doCompleteBuild(jobId, buildId) {
       }
     }
 
+    // ── Pipeline Automation Hooks ──
+    var purpose = freshJob ? freshJob.purpose : (job.purpose || '');
+    var summaryItems = [];
+    summaryItems.push('Build #' + (build ? build.buildNumber : '?') + ' completed' + (durationMinutes ? ' — ' + durationMinutes + ' min' : ''));
+
+    // Report line items that met target
+    if (freshJob && freshJob.lineItems) {
+      Object.keys(freshJob.lineItems).forEach(function(liKey) {
+        var li = freshJob.lineItems[liKey];
+        var target = li.targetQuantity || 0;
+        var completed = tallies[liKey] ? tallies[liKey].completed : 0;
+        if (completed >= target && target > 0) {
+          summaryItems.push('🎯 ' + (li.productName || 'Item') + ' reached target (' + completed + '/' + target + ')');
+        }
+      });
+    }
+
+    // Fulfillment auto-advance (fulfillment + custom purposes)
+    if (purpose === 'fulfillment' || purpose === 'custom') {
+      var fulfillResults = await autoFulfillLinkedRequests(jobId, freshJob, tallies);
+      fulfillResults.forEach(function(r) { summaryItems.push(r); });
+    }
+
+    // Inventory auto-push (inventory-general only)
+    if (purpose === 'inventory-general') {
+      var invResults = await autoUpdateInventory(jobId, buildId, output, freshJob);
+      invResults.forEach(function(r) { summaryItems.push(r); });
+    }
+
+    // Custom piece story prompt
+    if (purpose === 'custom' && freshJob) {
+      var hasStory = false;
+      try {
+        var storyCheck = await db.ref(STORIES_PATH).orderByChild('jobId').equalTo(jobId).once('value');
+        if (storyCheck.val()) {
+          Object.values(storyCheck.val()).forEach(function(s) {
+            if (s.status === 'published') hasStory = true;
+          });
+        }
+      } catch (e) { /* ignore */ }
+      if (hasStory) {
+        summaryItems.push('✨ Custom piece has a story — share with customer?');
+      }
+    }
+
     closeModal();
     activeBuildId = null;
     viewProductionJob(jobId);
-    showToast('Build completed');
+    showCompletionSummary(summaryItems);
   } catch (err) {
     showToast('Error completing build: ' + err.message, true);
   }
+}
+
+// ── Pipeline: Auto-fulfill linked production requests ──
+async function autoFulfillLinkedRequests(jobId, freshJob, tallies) {
+  var results = [];
+  if (!freshJob || !freshJob.lineItems) return results;
+  var lineItems = freshJob.lineItems;
+
+  for (var liKey of Object.keys(lineItems)) {
+    var li = lineItems[liKey];
+    if (!li.productionRequestId) continue;
+    if (li.requestFulfilled) continue; // double-fulfill guard
+    var target = li.targetQuantity || 0;
+    var completed = tallies[liKey] ? tallies[liKey].completed : 0;
+    if (completed < target) continue;
+
+    try {
+      // Read the production request to get orderId
+      var reqSnap = await db.ref(PRODUCTION_REQUESTS_PATH + '/' + li.productionRequestId).once('value');
+      var req = reqSnap.val();
+      if (!req || req.status !== 'assigned') continue;
+
+      // Get operator name from builds
+      var operatorName = 'admin';
+      if (freshJob.builds) {
+        var ops = {};
+        Object.values(freshJob.builds).forEach(function(b) {
+          if (b.operators) b.operators.forEach(function(o) { ops[o] = true; });
+        });
+        var opNames = Object.keys(ops);
+        if (opNames.length) operatorName = opNames[0];
+      }
+
+      await fulfillProductionRequest(li.productionRequestId, req.orderId || '', operatorName);
+      // Mark fulfilled on line item to prevent double-advance
+      await db.ref(PRODUCTION_JOBS_PATH + '/' + jobId + '/lineItems/' + liKey + '/requestFulfilled').set(true);
+
+      var orderNum = '';
+      if (req.orderId && orders[req.orderId]) {
+        orderNum = orders[req.orderId].orderNumber || req.orderId;
+      }
+      results.push('📋 Order #' + orderNum + ' item fulfilled');
+    } catch (e) {
+      console.error('Auto-fulfill error:', e);
+    }
+  }
+  return results;
+}
+
+// ── Pipeline: Auto-push inventory for inventory-general builds ──
+async function autoUpdateInventory(jobId, buildId, buildOutput, freshJob) {
+  var results = [];
+  if (!freshJob || !freshJob.lineItems) return results;
+
+  // Check double-push guard on the build
+  try {
+    var buildSnap = await db.ref(PRODUCTION_JOBS_PATH + '/' + jobId + '/builds/' + buildId + '/inventoryPushed').once('value');
+    if (buildSnap.val()) return results; // already pushed
+  } catch (e) { /* proceed */ }
+
+  var lineItems = freshJob.lineItems;
+
+  for (var liKey of Object.keys(buildOutput)) {
+    var qty = buildOutput[liKey].completedQuantity || 0;
+    if (qty <= 0) continue;
+    var li = lineItems[liKey];
+    if (!li || !li.productId) continue;
+
+    try {
+      // Firebase transaction for atomic increment
+      var stockRef = db.ref(INVENTORY_PATH + '/' + li.productId + '/stock/_default/available');
+      await stockRef.transaction(function(current) {
+        return (current || 0) + qty;
+      });
+      results.push('📦 Inventory +' + qty + ' ' + (li.productName || 'item'));
+    } catch (e) {
+      console.error('Inventory update error:', e);
+    }
+  }
+
+  // Set guard flag
+  if (results.length > 0) {
+    await db.ref(PRODUCTION_JOBS_PATH + '/' + jobId + '/builds/' + buildId + '/inventoryPushed').set(true);
+  }
+  return results;
+}
+
+// ── Pipeline: Completion summary feedback ──
+function showCompletionSummary(items) {
+  if (!items || items.length === 0) {
+    showToast('Build completed');
+    return;
+  }
+  if (items.length === 1) {
+    showToast(items[0]);
+    return;
+  }
+  // Multi-action: show summary modal
+  var html = '<div style="padding:16px;max-width:440px;">' +
+    '<h3 style="margin:0 0 16px;font-size:1.1rem;">Build Completed</h3>' +
+    '<div style="display:flex;flex-direction:column;gap:8px;">';
+  items.forEach(function(item) {
+    html += '<div style="font-size:0.9rem;padding:6px 10px;background:var(--cream-dark,#f5f0e8);border-radius:6px;">' + esc(item) + '</div>';
+  });
+  html += '</div>' +
+    '<div style="text-align:right;margin-top:16px;">' +
+    '<button class="btn btn-primary" onclick="closeModal()">OK</button>' +
+    '</div></div>';
+  openModal(html);
 }
 
 // ============================================================
@@ -6806,6 +6994,34 @@ async function loadBuildMediaBadge(buildId) {
 // ============================================================
 // Story Curation
 // ============================================================
+
+async function loadJobPipelineStatus(jobId) {
+  var el = document.getElementById('jobPipelineStatus_' + jobId);
+  if (!el) return;
+  var job = productionJobs[jobId];
+  if (!job || !job.lineItems) { el.innerHTML = 'No line items.'; return; }
+  var html = '';
+  var lineItems = job.lineItems;
+  for (var liKey of Object.keys(lineItems)) {
+    var li = lineItems[liKey];
+    if (!li.productionRequestId) continue;
+    var statusText = li.requestFulfilled ? '<span style="color:var(--teal);font-weight:600;">✓ Fulfilled</span>' : '<span style="color:var(--amber);">Pending</span>';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:0.85rem;">' +
+      '<span>' + esc(li.productName || 'Item') + '</span>' + statusText + '</div>';
+    // Try to show order status
+    if (li.productionRequestId) {
+      try {
+        var reqSnap = await db.ref(PRODUCTION_REQUESTS_PATH + '/' + li.productionRequestId).once('value');
+        var req = reqSnap.val();
+        if (req && req.orderId && orders[req.orderId]) {
+          var order = orders[req.orderId];
+          html += '<div style="font-size:0.78rem;color:var(--warm-gray);padding-left:12px;margin-bottom:4px;">Order #' + esc(order.orderNumber || req.orderId) + ' — ' + esc(order.status || '?') + '</div>';
+        }
+      } catch (e) { /* ignore */ }
+    }
+  }
+  el.innerHTML = html || '<div style="font-size:0.85rem;color:var(--warm-gray);">No linked production requests.</div>';
+}
 
 async function loadJobStoryStatus(jobId) {
   var el = document.getElementById('jobStoryStatus_' + jobId);
@@ -7065,13 +7281,46 @@ async function publishStory(existingId) {
     data.status = 'published';
     data.publishedAt = new Date().toISOString();
     data.updatedAt = new Date().toISOString();
+
+    // Collect deduplicated operators from all builds for public story
+    var jobId = data.jobId;
+    if (jobId) {
+      var job = productionJobs[jobId];
+      if (job && job.builds) {
+        var ops = {};
+        Object.values(job.builds).forEach(function(b) {
+          if (b.operators) b.operators.forEach(function(o) { ops[o] = true; });
+        });
+        data.operators = Object.keys(ops);
+      }
+    }
+
+    var storyId = existingId;
     if (existingId) {
       await db.ref(STORIES_PATH + '/' + existingId).update(data);
     } else {
       data.createdAt = new Date().toISOString();
       var ref = db.ref(STORIES_PATH).push();
+      storyId = ref.key;
       await ref.set(data);
     }
+
+    // Back-fill storyId on linked products
+    if (jobId && storyId) {
+      var job = productionJobs[jobId];
+      if (job && job.lineItems) {
+        var productUpdates = [];
+        Object.values(job.lineItems).forEach(function(li) {
+          if (li.productId && li.productLinked) {
+            productUpdates.push(
+              db.ref('shirglassworks/public/products/' + li.productId + '/storyId').set(storyId)
+            );
+          }
+        });
+        if (productUpdates.length) await Promise.all(productUpdates);
+      }
+    }
+
     closeModal();
     showToast('Story published!');
     if (storyCurationJobId) loadJobStoryStatus(storyCurationJobId);
@@ -7083,7 +7332,28 @@ async function publishStory(existingId) {
 async function unpublishStory(storyId) {
   if (!confirm('Unpublish this story?')) return;
   try {
+    // Read story to get jobId before unpublishing
+    var storySnap = await db.ref(STORIES_PATH + '/' + storyId).once('value');
+    var story = storySnap.val();
+
     await db.ref(STORIES_PATH + '/' + storyId).update({ status: 'draft', updatedAt: new Date().toISOString() });
+
+    // Clear storyId from linked products
+    if (story && story.jobId) {
+      var job = productionJobs[story.jobId];
+      if (job && job.lineItems) {
+        var clearUpdates = [];
+        Object.values(job.lineItems).forEach(function(li) {
+          if (li.productId && li.productLinked) {
+            clearUpdates.push(
+              db.ref('shirglassworks/public/products/' + li.productId + '/storyId').remove()
+            );
+          }
+        });
+        if (clearUpdates.length) await Promise.all(clearUpdates);
+      }
+    }
+
     showToast('Story unpublished');
     if (selectedProductionJobId) loadJobStoryStatus(selectedProductionJobId);
   } catch (err) {
@@ -7178,6 +7448,16 @@ async function linkProductToBuild(jobId, lineItemId) {
     await db.ref('shirglassworks/public/products/' + productId + '/buildIds').set(existing);
     // Mark linked on line item
     await db.ref(PRODUCTION_JOBS_PATH + '/' + jobId + '/lineItems/' + lineItemId + '/productLinked').set(true);
+
+    // Check if a published story exists for this job and write storyId
+    var storiesSnap = await db.ref(STORIES_PATH).orderByChild('jobId').equalTo(jobId).once('value');
+    var stories = storiesSnap.val() || {};
+    Object.keys(stories).forEach(function(sk) {
+      if (stories[sk].status === 'published') {
+        db.ref('shirglassworks/public/products/' + productId + '/storyId').set(sk);
+      }
+    });
+
     showToast('Product linked to builds');
     loadJobProductLinks(jobId);
   } catch (err) {
