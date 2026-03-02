@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Product &mdash; Shir Glassworks</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="cart.css">
 <style>
   :root {
     --amber: #C4853C;
@@ -812,9 +813,17 @@
         <div class="product-detail-price" id="productPrice"></div>
         <div class="product-detail-cats" id="productCats"></div>
         <div id="productOptions"></div>
+        <div class="product-qty-wrap" id="productQtyWrap" style="display:none;">
+          <div class="product-qty-label">Quantity</div>
+          <div class="qty-stepper">
+            <button class="qty-btn" id="qtyDec" disabled>&minus;</button>
+            <span class="qty-value" id="qtyValue">1</span>
+            <button class="qty-btn" id="qtyInc">+</button>
+          </div>
+        </div>
         <div class="product-detail-actions">
-          <a id="productEtsy" href="https://www.etsy.com/shop/ShirGlassworks" class="btn btn-primary" target="_blank" rel="noopener">View on Etsy</a>
-          <a href="shop.html" class="btn btn-outline">Browse Collection</a>
+          <button id="addToCartBtn" class="btn btn-primary" disabled style="opacity:0.5;cursor:not-allowed;">Add to Cart</button>
+          <a id="productEtsy" href="https://www.etsy.com/shop/ShirGlassworks" class="btn btn-outline" target="_blank" rel="noopener">View on Etsy</a>
         </div>
       </div>
     </div>
@@ -846,6 +855,7 @@
 
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script>
   // Firebase — load product detail from URL param ?id=pXXX
   (function() {
@@ -919,19 +929,45 @@
       }
 
       // Options
+      // Store product data for cart
+      window._productData = p;
+      window._selectedOptions = {};
+      window._productQty = 1;
+
       if (p.options && p.options.length) {
+        window._requiredOptions = p.options.map(function(o) { return o.label; });
         var optHtml = '';
         p.options.forEach(function(opt) {
-          optHtml += '<div class="product-option-group">' +
+          optHtml += '<div class="product-option-group" data-option-label="' + opt.label + '">' +
             '<div class="product-option-label">' + opt.label + '</div>' +
             '<div class="product-option-choices">';
           opt.choices.forEach(function(choice) {
-            optHtml += '<span class="product-option-chip">' + choice + '</span>';
+            optHtml += '<span class="product-option-chip" data-label="' + opt.label + '" data-value="' + choice + '">' + choice + '</span>';
           });
           optHtml += '</div></div>';
         });
         document.getElementById('productOptions').innerHTML = optHtml;
+
+        // Click handlers for option chips
+        document.querySelectorAll('.product-option-chip').forEach(function(chip) {
+          chip.addEventListener('click', function() {
+            var label = this.getAttribute('data-label');
+            var value = this.getAttribute('data-value');
+            // Deselect siblings in same group
+            var group = this.closest('.product-option-group');
+            group.querySelectorAll('.product-option-chip').forEach(function(c) { c.classList.remove('selected'); });
+            this.classList.add('selected');
+            window._selectedOptions[label] = value;
+            checkAddToCartReady();
+          });
+        });
+      } else {
+        window._requiredOptions = [];
+        checkAddToCartReady();
       }
+
+      // Show qty stepper
+      document.getElementById('productQtyWrap').style.display = '';
 
       // Etsy link — use original Weebly URL or fallback to Etsy shop
       if (p.url) {
@@ -957,6 +993,59 @@
       t.classList.toggle('active', i === idx);
     });
   }
+
+  // ── Qty Stepper ──
+  document.getElementById('qtyDec').addEventListener('click', function() {
+    if (window._productQty > 1) {
+      window._productQty--;
+      document.getElementById('qtyValue').textContent = window._productQty;
+      document.getElementById('qtyDec').disabled = (window._productQty <= 1);
+      document.getElementById('qtyInc').disabled = (window._productQty >= 10);
+    }
+  });
+  document.getElementById('qtyInc').addEventListener('click', function() {
+    if (window._productQty < 10) {
+      window._productQty++;
+      document.getElementById('qtyValue').textContent = window._productQty;
+      document.getElementById('qtyDec').disabled = (window._productQty <= 1);
+      document.getElementById('qtyInc').disabled = (window._productQty >= 10);
+    }
+  });
+
+  // ── Add to Cart readiness check ──
+  function checkAddToCartReady() {
+    var required = window._requiredOptions || [];
+    var selected = window._selectedOptions || {};
+    var allSelected = required.every(function(label) { return selected[label]; });
+    var btn = document.getElementById('addToCartBtn');
+    if (allSelected) {
+      btn.disabled = false;
+      btn.style.opacity = '1';
+      btn.style.cursor = 'pointer';
+    } else {
+      btn.disabled = true;
+      btn.style.opacity = '0.5';
+      btn.style.cursor = 'not-allowed';
+    }
+  }
+
+  // ── Add to Cart ──
+  document.getElementById('addToCartBtn').addEventListener('click', function() {
+    if (this.disabled) return;
+    var p = window._productData;
+    if (!p) return;
+
+    var images = window._productImages || [];
+    ShirCart.addItem({
+      pid: p.pid,
+      name: p.name,
+      price: p.price || '',
+      image: images[0] || '',
+      options: Object.assign({}, window._selectedOptions),
+      qty: window._productQty || 1
+    });
+    ShirCart.showToast(p.name + ' added to cart');
+  });
 </script>
 <script>
   // Nav scroll effect
@@ -1042,6 +1131,7 @@
   }, true);
 })();
 </script>
+<script src="cart.js"></script>
 
 </body>
 </html>
