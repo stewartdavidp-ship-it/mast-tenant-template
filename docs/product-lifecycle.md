@@ -11,6 +11,8 @@
 CATALOG → BROWSE → DETAIL → CART → CHECKOUT → PAYMENT → ORDER → CONFIRM → [BUILD] → PACK → SHIP → DELIVER
 ```
 
+**Dual-channel model:** Orders enter from two sources — the custom website (direct) and Etsy. Both feed into a single unified admin pipeline.
+
 ---
 
 ## Stage 1: Product Catalog (BUILT)
@@ -20,6 +22,7 @@ CATALOG → BROWSE → DETAIL → CART → CHECKOUT → PAYMENT → ORDER → CO
 - Product data at `shirglassworks/public/products/{pid}` with name, price, images, options (color, opacity, size), description
 - Admin Products tab for managing catalog: add/edit/delete products, option management, image uploads
 - Filter pills on public shop page for category browsing
+- Product images migrated to local repo (no longer dependent on Weebly)
 
 **Key decision:** Product-centric data model replaced the original image-centric gallery model for shop items.
 
@@ -32,8 +35,6 @@ CATALOG → BROWSE → DETAIL → CART → CHECKOUT → PAYMENT → ORDER → CO
 - Product detail pages with option selectors (color, opacity, size dropdowns)
 - Image gallery per product on detail pages
 - Price display, Add to Cart button
-
-**Note:** Product images currently hosted on shirglassworks.com (Weebly). If old site goes down, images need migration.
 
 ---
 
@@ -59,18 +60,21 @@ CATALOG → BROWSE → DETAIL → CART → CHECKOUT → PAYMENT → ORDER → CO
 
 ---
 
-## Stage 5: Payment (BUILT — with gaps)
+## Stage 5: Payment — Square Integration (BUILT)
 
 **What exists:**
-- Stripe Checkout Sessions created by `shirSubmitOrder` Cloud Function
-- Customer redirected to Stripe's hosted checkout page
-- On successful payment, order written to `shirglassworks/orders/{orderId}`
-- Sequential order numbers (SGW-XXXX) via Firebase transaction
+- Square Hosted Checkout via Payment Links API
+- `shirSubmitOrder` Cloud Function creates order as `pending_payment`, generates Square Payment Link, returns checkout URL
+- Customer redirected to Square's hosted checkout page for payment
+- `shirSquareWebhook` receives `payment.completed` event, transitions order to `placed`
+- Coupon claiming deferred until payment confirmed (prevents coupon consumption on abandoned checkouts)
+- Square config managed in admin Settings UI (environment, access token, location ID, webhook signature key)
+- Config stored in Firebase RTDB at `shirglassworks/config/square` (read by Cloud Functions at runtime)
+- Supports sandbox and production environments
 
-**Gap — Stripe Webhooks:**
-- No webhook handling currently
-- Risks: payment failure after redirect, no automated refunds on cancel, no chargeback handling
-- At minimum need `checkout.session.completed` webhook for payment reliability
+**Order statuses added for payment:**
+- `pending_payment` — order created, awaiting Square checkout completion
+- `payment_failed` — Square API error during checkout creation
 
 ---
 
@@ -78,8 +82,8 @@ CATALOG → BROWSE → DETAIL → CART → CHECKOUT → PAYMENT → ORDER → CO
 
 **What exists:**
 - Order written with status `placed`, full customer data, items, pricing
-- Admin Orders tab with list view, filter pills (by status), search
-- Order detail view with complete information
+- Admin Orders tab with list view, filter pills (by status), source filter (All/Direct/Etsy), search
+- Order detail view with complete information including payment info and source badges
 - "Confirm Order" action checks inventory:
   - In-stock items: reserved immediately (available--, reserved++)
   - Made-to-order items: build jobs auto-created
@@ -110,6 +114,7 @@ CATALOG → BROWSE → DETAIL → CART → CHECKOUT → PAYMENT → ORDER → CO
 - Shipped → Delivered: "Mark Delivered" button
 - Tracking info in order detail with clickable "Track Package" link
 - Full status timeline showing all transitions with timestamps
+- For Etsy orders: tracking automatically pushed to Etsy via `createReceiptShipment` API
 
 ---
 
@@ -121,6 +126,7 @@ CATALOG → BROWSE → DETAIL → CART → CHECKOUT → PAYMENT → ORDER → CO
 - Inventory release on cancel: reserved--, available++
 - Open build jobs cancelled on order cancel
 - Cancel reason and timestamp recorded in status history
+- No cancellation email for `pending_payment` or `payment_failed` orders (customer never completed payment)
 
 ---
 
@@ -132,20 +138,60 @@ CATALOG → BROWSE → DETAIL → CART → CHECKOUT → PAYMENT → ORDER → CO
 - Operations: reserve (confirm), pull (ship), release (cancel)
 - Admin Products tab shows stock badges (IN STOCK / MADE TO ORDER) and "Set Stock" links
 - Low stock threshold configuration
+- Inventory is soft/flexible — not strict count-based. Discrepancies handled at confirmation.
+
+---
+
+## Customer Notifications — Gmail (BUILT)
+
+**What exists:**
+- `shirOrderEmailNotification` DB trigger fires on order status changes
+- Email types: confirmed, shipped (with tracking link), delivered, cancelled
+- Gmail sent via Nodemailer with app password
+- Only fires for direct orders (`source !== 'etsy'`)
+- Etsy orders skip Gmail entirely — Etsy handles all buyer communications
+- No email on `pending_payment → placed` (internal payment transition)
+- No email on cancel from `pending_payment` or `payment_failed`
+- `shirTestOrderEmail` callable for admin testing of any email type
+
+---
+
+## Etsy Integration (BUILT)
+
+**What exists:**
+- **OAuth 2.0 + PKCE:** `shirEtsyOAuthStart` (callable) + `shirEtsyOAuthCallback` (HTTP) Cloud Functions
+- **Inbound sync:** `shirEtsyOrderSync` callable pulls Etsy receipts, maps to order schema, deduplicates via `etsyReceiptId`
+- **Outbound tracking:** On ship, `shirOrderEmailNotification` pushes tracking to Etsy via `createReceiptShipment` API
+- **Admin Settings:** Connect/disconnect Etsy shop, connection status, last sync timestamp
+- **Admin Orders:** "Sync Etsy" button, source filter (All/Direct/Etsy), orange "ETSY" source badges
+- **Order detail:** Etsy info section (receipt ID linked to Etsy, buyer username, tracking push status)
+- **Shipping modal:** Note for Etsy orders about automatic tracking push
+
+**Etsy order flow:**
+1. Admin clicks "Sync Etsy" → `shirEtsyOrderSync` pulls paid receipts from Etsy API
+2. New receipts mapped to order schema with `source: 'etsy'`, `status: 'placed'`
+3. From `placed` onward, workflow is identical to direct orders
+4. On ship: tracking pushed to Etsy automatically (no Gmail sent)
+
+**Config:** Tokens stored at `shirglassworks/config/etsy` in Firebase RTDB. Auto-refresh on token expiry.
 
 ---
 
 ## Order Status Lifecycle
 
 ```
-placed → confirmed → [building] → ready → packing → shipped → delivered
-                                                        |
-Any non-terminal → cancelled                            |
+pending_payment → placed → confirmed → [building] → ready → packing → shipped → delivered
+       |
+       +→ cancelled (abandoned/admin cancel)
+
+payment_failed → cancelled
 ```
 
 | Status | Meaning | Trigger |
 |--------|---------|---------|
-| `placed` | Customer submitted order | `shirSubmitOrder` function |
+| `pending_payment` | Awaiting Square checkout (direct orders only) | `shirSubmitOrder` function |
+| `payment_failed` | Square API error | `shirSubmitOrder` on Square failure |
+| `placed` | Payment confirmed (direct) or imported (Etsy) | Square webhook or Etsy sync |
 | `confirmed` | Admin reviewed, inventory checked | Admin clicks "Confirm" |
 | `building` | Item(s) need to be made | Auto when confirm finds made-to-order items |
 | `ready` | All items available | Auto when last build job completes, or immediate if all in stock |
@@ -159,8 +205,8 @@ Any non-terminal → cancelled                            |
 ## Active Constraints
 
 1. **GitHub Pages hosting** — static files only, no server-side code. All dynamic behavior via client-side JS + Firebase.
-2. **Etsy shop coexistence** — existing ShirGlassworks Etsy shop handles payments, shipping, inventory, buyer protection.
-3. **Product images on Weebly** — currently hosted on shirglassworks.com. Need migration plan if old site sunsets.
+2. **Etsy shop coexistence** — existing ShirGlassworks Etsy shop as a parallel sales channel, integrated via API.
+3. **Product images migrated** — images now stored locally in the repo (migrated from Weebly).
 
 ---
 
@@ -168,40 +214,6 @@ Any non-terminal → cancelled                            |
 
 1. **No unbounded Firebase listeners** — all reads must use `limitToLast(N)` or `.once('value')` to prevent billing spikes.
 2. **Admin writes go through auth check** — Firebase rules enforce `auth.uid` check for admin operations. Public pages have anonymous read access.
-
----
-
-## Unresolved Items (OPENs)
-
-### 1. Customer-Facing Order Status & Notifications
-Currently only admin can view orders. Customers have no visibility after payment. Options:
-- **(A)** Email notifications on status changes (confirmed, shipped with tracking, delivered)
-- **(B)** Customer order lookup page (enter email + order number to check status)
-- **(C)** Both
-- Shipping confirmation email with tracking link is the highest-priority gap.
-
-### 2. Stripe Webhook Integration
-No webhook handling means payment is not fully reliable. Needs:
-- `checkout.session.completed` webhook for payment confirmation
-- Refund processing on order cancellation
-- Chargeback/dispute handling
-
-### 3. Inventory Sync with Public Site
-Inventory is admin-only data. Should customers see availability? Options:
-- **(A)** Show "In Stock" / "Made to Order" / "Out of Stock" badges on product cards
-- **(B)** Hide out-of-stock products or disable add-to-cart
-- **(C)** Keep shop unaware of inventory, handle stock issues at confirmation
-
-### 4. Etsy Channel Coexistence
-With full custom checkout built, how do two sales channels work together?
-- **(A)** Unified inventory — Etsy sales decrement the same stock counts
-- **(B)** Separate inventory — manually manage both
-- **(C)** Phase out Etsy once custom site is proven
-
-### 5. Old Site Migration
-What happens to shirglassworks.com (Weebly)?
-- If it stays up: new site is a parallel storefront
-- If it goes away: need to migrate all product images, handle SEO redirects, fully replace checkout
 
 ---
 
@@ -217,7 +229,16 @@ What happens to shirglassworks.com (Weebly)?
 | Build jobs | Firebase RTDB: `shirglassworks/admin/buildJobs/` | Live |
 | Coupons | Firebase RTDB: `shirglassworks/admin/coupons/` | Live |
 | Order counter | Firebase RTDB: `shirglassworks/admin/orderCounter` | Live |
-| `shirSubmitOrder` function | Firebase Functions (Node.js 20, 1st Gen) | Deployed |
+| Square config | Firebase RTDB: `shirglassworks/config/square` | Live |
+| Etsy config + tokens | Firebase RTDB: `shirglassworks/config/etsy` | Live |
+| `shirSubmitOrder` | Firebase Functions (Node.js 20, 1st Gen) | Deployed |
+| `shirSquareWebhook` | Firebase Functions (HTTP) | Deployed |
+| `shirOrderEmailNotification` | Firebase Functions (DB trigger) | Deployed |
+| `shirTestOrderEmail` | Firebase Functions (callable) | Deployed |
+| `shirEtsyOAuthStart` | Firebase Functions (callable) | Deployed |
+| `shirEtsyOAuthCallback` | Firebase Functions (HTTP) | Deployed |
+| `shirEtsyOrderSync` | Firebase Functions (callable) | Deployed |
+| `shirValidateCoupon` | Firebase Functions (callable) | Deployed |
 | Firebase rules | `database.rules.json` | Deployed |
 
 ---
@@ -231,9 +252,28 @@ What happens to shirglassworks.com (Weebly)?
 | Analytics via Firebase RTDB append-only writes | Analytics | Built |
 | 6 flat shop categories (31 products) | Catalog | Built |
 | Product-centric data model (pid, name, price, options, images) | Data Model | Built |
-| Full custom checkout (cart, multi-step flow, Stripe Sessions) | Checkout | Built |
-| Order fulfillment lifecycle (8 statuses, sequential order numbers) | Orders | Built |
-| Inventory tracking (stock types, reserve/release/pull) | Inventory | Built |
+| Full custom checkout (cart, multi-step flow, Square Hosted Checkout) | Checkout | Built |
+| Square payment integration (Payment Links API, webhook, config in Settings) | Payments | Built |
+| Order fulfillment lifecycle (10 statuses, sequential order numbers) | Orders | Built |
+| Inventory tracking (stock types, reserve/release/pull, soft model) | Inventory | Built |
 | Build jobs (auto-create on confirm, auto-ready on complete) | Fulfillment | Built |
 | Coupon system (percentage, fixed, free-shipping) | Checkout | Built |
 | Shipping tracking (USPS, UPS, FedEx, auto URLs) | Shipping | Built |
+| Gmail notifications for direct orders (confirmed, shipped, delivered, cancelled) | Notifications | Built |
+| Dual-channel strategy (Etsy + direct, unified order pipeline) | Strategy | Built |
+| Etsy OAuth 2.0 + PKCE via Cloud Functions | Etsy | Built |
+| Etsy bidirectional sync (inbound orders, outbound tracking) | Etsy | Built |
+| Etsy orders enter as prepaid at `placed` status | Etsy | Built |
+| Image migration from Weebly to local repo | Images | Built |
+
+---
+
+## Deferred / Future Work
+
+- **Abandoned checkout cleanup:** Scheduled function to auto-cancel `pending_payment` orders older than 48h
+- **Auto Etsy sync:** Scheduled function to pull Etsy orders every 15 minutes (currently manual trigger)
+- **Etsy refund/cancellation sync:** Pull cancellation events from Etsy back into Firebase
+- **Payment received email:** Lightweight "we got your payment" email on `pending_payment → placed`
+- **Refund integration:** Square Refunds API for order cancellations after payment
+- **Customer order lookup:** Public page for customers to check order status by email + order number
+- **Inventory display on public site:** Show In Stock / Made to Order badges on product cards

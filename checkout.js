@@ -585,7 +585,7 @@
     // Footer
     footer.style.display = '';
     footer.innerHTML =
-      '<button class="checkout-btn-primary" data-co="place-order">Place Order</button>' +
+      '<button class="checkout-btn-primary" data-co="place-order">Proceed to Payment</button>' +
       '<button class="checkout-back-link" data-co="review-back">Back to Shipping</button>';
   }
 
@@ -597,7 +597,7 @@
     var btn = document.querySelector('[data-co="place-order"]');
     if (btn) {
       btn.disabled = true;
-      btn.innerHTML = '<span class="checkout-spinner"></span> Placing Order...';
+      btn.innerHTML = '<span class="checkout-spinner"></span> Processing...';
     }
 
     var items = window.ShirCart.getItems();
@@ -617,15 +617,26 @@
 
     callFunction('shirSubmitOrder', payload, function (result) {
       isSubmitting = false;
-      if (result && result.success) {
-        // Clear cart
+      if (result && result.success && result.checkoutUrl) {
+        // Save order info for post-payment confirmation
+        try {
+          sessionStorage.setItem('shir_pending_order', JSON.stringify({
+            orderId: result.orderId,
+            orderNumber: result.orderNumber,
+            email: checkoutData.email
+          }));
+        } catch (e) { /* sessionStorage not available */ }
+
+        // Clear cart before redirect (order is committed server-side)
         window.ShirCart.clear();
-        renderConfirmation(result.orderId);
-        trackCheckoutEvent('checkout_complete');
+        trackCheckoutEvent('checkout_redirect_to_payment');
+
+        // Redirect to Square hosted checkout
+        window.location.href = result.checkoutUrl;
       } else {
         if (btn) {
           btn.disabled = false;
-          btn.textContent = 'Place Order';
+          btn.textContent = 'Proceed to Payment';
         }
         window.ShirCart.showToast(result && result.error ? result.error : 'Order failed. Please try again.');
       }
@@ -770,6 +781,73 @@
     });
   }
 
+  // ── Payment Return Handler ──
+  // Detects ?payment=success&order={orderId} after Square checkout redirect
+  function checkPaymentReturn() {
+    var params = new URLSearchParams(window.location.search);
+    var paymentStatus = params.get('payment');
+    var orderId = params.get('order');
+
+    if (paymentStatus === 'success' && orderId) {
+      // Clean URL without reloading
+      window.history.replaceState({}, document.title, window.location.pathname);
+
+      // Get order details from sessionStorage
+      var pendingOrder = null;
+      try {
+        var stored = sessionStorage.getItem('shir_pending_order');
+        if (stored) {
+          pendingOrder = JSON.parse(stored);
+          sessionStorage.removeItem('shir_pending_order');
+        }
+      } catch (e) { /* silent */ }
+
+      var email = pendingOrder ? pendingOrder.email : '';
+      var orderNumber = pendingOrder ? pendingOrder.orderNumber : orderId;
+
+      // Open cart drawer and show payment confirmation
+      if (window.ShirCart && window.ShirCart.openDrawer) {
+        window.ShirCart.openDrawer();
+      }
+
+      setTimeout(function () {
+        renderPaymentConfirmation(orderNumber, email);
+      }, 150);
+    }
+  }
+
+  function renderPaymentConfirmation(orderNumber, email) {
+    currentStep = 'confirmation';
+    attachDelegate();
+    var body = document.getElementById('cartDrawerBody');
+    var footer = document.getElementById('cartDrawerFooter');
+    if (!body) return;
+
+    var titleEl = document.querySelector('.cart-drawer-title');
+    var countEl = document.getElementById('cartDrawerCount');
+    if (titleEl) titleEl.textContent = 'Order Confirmed';
+    if (countEl) countEl.textContent = '';
+
+    body.innerHTML =
+      '<div class="checkout-confirmation">' +
+        '<div class="confirmation-icon">&#10003;</div>' +
+        '<div class="confirmation-title">Payment Received!</div>' +
+        '<div class="confirmation-order-id">Order: ' + esc(orderNumber) + '</div>' +
+        '<div class="confirmation-message">' +
+          'Thank you for your order!' +
+          (email ? ' A confirmation will be sent to <strong>' + esc(email) + '</strong>.' : '') +
+        '</div>' +
+      '</div>';
+
+    if (footer) {
+      footer.style.display = '';
+      footer.innerHTML =
+        '<button class="checkout-btn-primary" data-co="conf-done">Continue Shopping</button>';
+    }
+
+    trackCheckoutEvent('payment_success');
+  }
+
   // ── Public API ──
   window.ShirCheckout = {
     start: function () {
@@ -783,7 +861,15 @@
       else if (step === 'shipping') renderShipping();
       else if (step === 'review') renderReview();
     },
-    cancel: cancelCheckout
+    cancel: cancelCheckout,
+    checkPaymentReturn: checkPaymentReturn
   };
+
+  // Auto-check for payment return on page load
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', checkPaymentReturn);
+  } else {
+    checkPaymentReturn();
+  }
 
 })();
