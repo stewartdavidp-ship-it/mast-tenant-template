@@ -426,6 +426,7 @@
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
       gap: 20px;
+      align-items: start;
     }
 
     .gallery-card {
@@ -441,6 +442,10 @@
       object-fit: cover;
       display: block;
       background: var(--cream-dark);
+    }
+
+    .gallery-card-img.broken {
+      display: none;
     }
 
     .gallery-card-body {
@@ -1739,7 +1744,7 @@ function renderGallery() {
 
         html += '<div class="gallery-card">';
         if (img.url) {
-          html += '<img class="gallery-card-img" src="' + esc(img.url) + '" alt="' + esc(img.alt || '') + '" onerror="this.style.display=\'none\'">';
+          html += '<img class="gallery-card-img" src="' + esc(img.url) + '" alt="' + esc(img.alt || '') + '" onerror="this.classList.add(\'broken\')">';
         }
         html +=
           '<div class="gallery-card-body">' +
