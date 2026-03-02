@@ -352,6 +352,7 @@
       '<div class="cart-drawer-footer" id="cartDrawerFooter">' +
         '<div class="cart-footer-summary" id="cartFooterSummary"></div>' +
         '<div class="cart-footer-actions">' +
+          '<button class="cart-checkout-btn" id="cartCheckoutBtn" style="display:none" onclick="if(window.ShirCheckout)ShirCheckout.start()">Checkout</button>' +
           '<button class="btn-primary" onclick="ShirCart.closeDrawer()" style="' +
             'display:inline-block;padding:12px 28px;background:#C4853C;color:#fff;' +
             'border:none;border-radius:4px;font-family:DM Sans,sans-serif;font-size:0.85rem;' +
@@ -447,6 +448,12 @@
     }
 
     if (footerEl) footerEl.style.display = '';
+
+    // Show/hide checkout button
+    var checkoutBtn = document.getElementById('cartCheckoutBtn');
+    if (checkoutBtn) {
+      checkoutBtn.style.display = cart.length > 0 ? '' : 'none';
+    }
 
     // Build items HTML
     var html = '';
@@ -600,7 +607,10 @@
     closeDrawer: closeDrawer,
     showToast: showToast,
     signIn: signIn,
-    signOut: signOut
+    signOut: signOut,
+    getCurrentUser: function () { return currentUser; },
+    getFirebaseApp: function () { return fireApp; },
+    refreshDrawer: function () { renderDrawerItems(); updateBadge(); }
   };
 
 })();
