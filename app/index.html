@@ -1094,6 +1094,8 @@
       letter-spacing: 0.04em;
       text-transform: uppercase;
     }
+    .order-status.pending_payment { background: #FFF3E0; color: #E65100; }
+    .order-status.payment_failed { background: #FFEBEE; color: #C62828; }
     .order-status.placed { background: #FFF3E0; color: #E65100; }
     .order-status.confirmed { background: #E3F2FD; color: #1565C0; }
     .order-status.building { background: #F3E5F5; color: #7B1FA2; }
@@ -1410,6 +1412,8 @@
       background: #2a2a2a;
       border-color: #3a3a3a;
     }
+    body.dark-mode .order-status.pending_payment { background: #3a2a1a; color: #FFB74D; }
+    body.dark-mode .order-status.payment_failed { background: #3a1a1a; color: #EF9A9A; }
     body.dark-mode .order-status.placed { background: #3a2a1a; color: #FFB74D; }
     body.dark-mode .order-status.confirmed { background: #1a2a3a; color: #64B5F6; }
     body.dark-mode .order-status.building { background: #2a1a3a; color: #CE93D8; }
@@ -2053,6 +2057,8 @@ var inventoryListener = null;
 var INVENTORY_PATH = 'shirglassworks/admin/inventory';
 
 var ORDER_VALID_TRANSITIONS = {
+  pending_payment: ['cancelled'],
+  payment_failed: ['cancelled'],
   placed: ['confirmed', 'cancelled'],
   confirmed: ['building', 'ready', 'cancelled'],
   building: ['ready', 'cancelled'],
@@ -4267,15 +4273,16 @@ function renderOrders() {
     counts[s] = (counts[s] || 0) + 1;
   });
 
-  // Active count = not delivered, not cancelled
+  // Active count = not delivered, not cancelled, not payment_failed
   var activeCount = all.filter(function(o) {
-    return o.status !== 'delivered' && o.status !== 'cancelled';
+    return o.status !== 'delivered' && o.status !== 'cancelled' && o.status !== 'payment_failed';
   }).length;
 
   // Render filter pills
   var pillStatuses = [
     { key: 'active', label: 'Active', count: activeCount },
     { key: 'all', label: 'All', count: all.length },
+    { key: 'pending_payment', label: 'Pending Payment', count: counts.pending_payment || 0 },
     { key: 'placed', label: 'Placed', count: counts.placed || 0 },
     { key: 'confirmed', label: 'Confirmed', count: counts.confirmed || 0 },
     { key: 'building', label: 'Building', count: counts.building || 0 },
@@ -4283,7 +4290,8 @@ function renderOrders() {
     { key: 'packing', label: 'Packing', count: counts.packing || 0 },
     { key: 'shipped', label: 'Shipped', count: counts.shipped || 0 },
     { key: 'delivered', label: 'Delivered', count: counts.delivered || 0 },
-    { key: 'cancelled', label: 'Cancelled', count: counts.cancelled || 0 }
+    { key: 'cancelled', label: 'Cancelled', count: counts.cancelled || 0 },
+    { key: 'payment_failed', label: 'Payment Failed', count: counts.payment_failed || 0 }
   ];
   var pillHtml = '';
   pillStatuses.forEach(function(p) {
@@ -4299,7 +4307,7 @@ function renderOrders() {
     filtered = all;
   } else if (orderFilter === 'active') {
     filtered = all.filter(function(o) {
-      return o.status !== 'delivered' && o.status !== 'cancelled';
+      return o.status !== 'delivered' && o.status !== 'cancelled' && o.status !== 'payment_failed';
     });
   } else {
     filtered = all.filter(function(o) { return (o.status || 'placed') === orderFilter; });
@@ -4338,8 +4346,8 @@ function renderOrders() {
       '<td>' + esc(o.email || '') + '</td>' +
       '<td>' + getOrderItemsLabel(o) + '</td>' +
       '<td>$' + (o.total || 0).toFixed(2) + '</td>' +
-      '<td><span class="order-status ' + status + '">' + status + '</span></td>' +
-      '<td>' + formatOrderDate(o.placedAt) + '</td>' +
+      '<td><span class="order-status ' + status + '">' + status.replace(/_/g, ' ') + '</span></td>' +
+      '<td>' + formatOrderDate(o.placedAt || o.pendingPaymentAt) + '</td>' +
       '</tr>';
   });
   if (tbodyEl) tbodyEl.innerHTML = rowsHtml;
@@ -4353,7 +4361,7 @@ function renderOrders() {
     cardHtml += '<div class="order-card" onclick="viewOrder(\'' + esc(key) + '\')">' +
       '<div class="order-card-header">' +
         '<span class="order-card-number">' + num + '</span>' +
-        '<span class="order-status ' + status + '">' + status + '</span>' +
+        '<span class="order-status ' + status + '">' + status.replace(/_/g, ' ') + '</span>' +
       '</div>' +
       '<div class="order-card-details">' +
         '<span class="order-card-detail">' + esc(o.email || '') + '</span>' +
@@ -4476,6 +4484,27 @@ function renderOrderDetail(orderId) {
     billHtml = '<p style="color:var(--warm-gray);font-style:italic;">Same as shipping</p>';
   }
 
+  // Square payment info
+  var paymentHtml = '';
+  if (o.squarePaymentId || o.squareOrderId || o.squareCheckoutId) {
+    var payRows = '';
+    if (o.squarePaymentId) {
+      payRows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Payment ID</span><span style="font-family:monospace;font-size:0.82rem;">' + esc(o.squarePaymentId) + '</span></div>';
+    }
+    if (o.paidAmount) {
+      payRows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Amount Paid</span><span>$' + (o.paidAmount / 100).toFixed(2) + '</span></div>';
+    }
+    if (o.squareOrderId) {
+      payRows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Square Order</span><span style="font-family:monospace;font-size:0.82rem;">' + esc(o.squareOrderId) + '</span></div>';
+    }
+    var payStatus = status === 'pending_payment' ? 'Awaiting Payment' : status === 'payment_failed' ? 'Failed' : 'Paid';
+    payRows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Payment Status</span><span>' + payStatus + '</span></div>';
+    paymentHtml = '<div class="order-detail-section">' +
+      '<div class="order-detail-section-title">Payment (Square)</div>' +
+      payRows +
+    '</div>';
+  }
+
   // Tracking
   var trackingHtml = '';
   if (o.tracking && o.tracking.trackingNumber) {
@@ -4568,8 +4597,8 @@ function renderOrderDetail(orderId) {
       '<div>' +
         '<div class="order-detail-title">' + num + '</div>' +
         '<div class="order-detail-meta">' +
-          '<span class="order-status ' + status + '">' + status + '</span> &middot; ' +
-          formatOrderDateTime(o.placedAt) + ' &middot; ' + esc(o.email || '') +
+          '<span class="order-status ' + status + '">' + status.replace(/_/g, ' ') + '</span> &middot; ' +
+          formatOrderDateTime(o.placedAt || o.pendingPaymentAt) + ' &middot; ' + esc(o.email || '') +
         '</div>' +
       '</div>' +
       '<div class="order-actions">' + actionsHtml + '</div>' +
@@ -4589,6 +4618,7 @@ function renderOrderDetail(orderId) {
         '<div><strong style="font-size:0.78rem;color:var(--warm-gray-light);">BILLING</strong>' + billHtml + '</div>' +
       '</div>' +
     '</div>' +
+    paymentHtml +
     trackingHtml +
     buildJobsHtml +
     timelineHtml +
