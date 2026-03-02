@@ -1,0 +1,434 @@
+{
+  "scrapedAt": "2026-03-02",
+  "source": "shirglassworks.com",
+  "categories": {
+    "figurines": { "label": "Figurines", "weeblyId": "c5", "products": ["p112","p73","p67","p70","p71","p74","p75","p76","p92","p93","p95","p98","p100","p101","p106","p115"] },
+    "jewelry": { "label": "Jewelry", "weeblyId": "c4", "products": ["p46","p66","p90","p116"] },
+    "drinkware": { "label": "Drinkware", "weeblyId": "c3", "products": ["p83","p84"] },
+    "vases": { "label": "Vases", "weeblyId": "c6", "products": ["p88"] },
+    "decoration": { "label": "Decoration", "weeblyId": "c15", "products": ["p112","p42","p78","p88","p102"] },
+    "sculpture": { "label": "Sculpture", "weeblyId": "c8", "products": ["p109","p101","p115"] }
+  },
+  "products": {
+    "p112": {
+      "name": "Hollow Bird",
+      "price": "$45.00",
+      "url": "https://www.shirglassworks.com/store/p112/Hollow_Bird.html",
+      "categories": ["figurines", "decoration"],
+      "images": [
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p112_i19_w2100.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p112_i1_w905.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p112_i2_w969.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p112_i3_w999.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p112_i4_w969.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p112_i5_w895.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p112_i7_w965.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p112_i8_w975.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p112_i9_w880.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p112_i11_w800.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p112_i12_w965.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p112_i14_w930.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p112_i15_w940.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p112_i17_w920.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p112_i18_w945.jpeg"
+      ],
+      "options": [
+        { "label": "Opacity", "choices": ["Transparent", "Opaque"] },
+        { "label": "Color", "choices": ["Light Blue", "Cobalt", "Green", "Lime", "Pink", "Orange", "Purple", "Red", "White", "Yellow", "Rainbow"] }
+      ]
+    },
+    "p73": {
+      "name": "Glass Caterpillar",
+      "price": "$35.00",
+      "url": "https://www.shirglassworks.com/store/p73/glass-caterpillar.html",
+      "categories": ["figurines"],
+      "images": [
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p73_i7_w2270.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p73_i8_w1974.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p73_i9_w1720.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p73_i10_w1350.jpeg"
+      ],
+      "options": [
+        { "label": "Color", "choices": ["red head", "light green", "dark green"] }
+      ]
+    },
+    "p67": {
+      "name": "Glass Ladybug",
+      "price": "$35.00",
+      "url": "https://www.shirglassworks.com/store/p67/Glass-Ladybug.html",
+      "categories": ["figurines"],
+      "images": [
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p67_i1_w1200.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p67_i2_w1200.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p67_i3_w1098.jpeg"
+      ],
+      "options": [
+        { "label": "Color", "choices": ["Red"] }
+      ]
+    },
+    "p70": {
+      "name": "Mini Glass Swan",
+      "price": "$45.00",
+      "url": "https://www.shirglassworks.com/store/p70/mini-glass-swan.html",
+      "categories": ["figurines"],
+      "images": [
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p70_i1_w1200.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p70_i2_w888.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p70_i3_w930.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p70_i4_w1200.jpeg"
+      ],
+      "options": [
+        { "label": "Color", "choices": ["White"] }
+      ]
+    },
+    "p71": {
+      "name": "Mini Glass Sea Turtle",
+      "price": "$45.00",
+      "url": "https://www.shirglassworks.com/store/p71/Mini-Glass-Sea-Turtle.html",
+      "categories": ["figurines"],
+      "images": [
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p71_i1_w2310.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p71_i4_w1776.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p71_i5_w1178.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p71_i8_w1348.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p71_i9_w675.jpeg"
+      ],
+      "options": [
+        { "label": "Color", "choices": ["transparent green", "opaque green", "lime green"] }
+      ]
+    },
+    "p74": {
+      "name": "Mini Glass Elephant",
+      "price": "$65.00",
+      "url": "https://www.shirglassworks.com/store/p74/mini-glass-elephant.html",
+      "categories": ["figurines"],
+      "images": [
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p74_i1_w2218.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p74_i4_w1980.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p74_i7_w2330.jpeg"
+      ],
+      "options": [
+        { "label": "Color", "choices": ["Blue", "Sparkle Grey"] }
+      ]
+    },
+    "p75": {
+      "name": "Mini Glass Penguin",
+      "price": "$45.00",
+      "url": "https://www.shirglassworks.com/store/p75/Mini-Glass-Penguin.html",
+      "categories": ["figurines"],
+      "images": [
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p75_i1_w1350.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p75_i2_w1350.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p75_i3_w1350.jpeg"
+      ],
+      "options": [
+        { "label": "Color", "choices": ["Black"] }
+      ]
+    },
+    "p76": {
+      "name": "Miniature Glass Snail",
+      "price": "$35.00",
+      "url": "https://www.shirglassworks.com/store/p76/Miniature_Glass_Snail.html",
+      "categories": ["figurines"],
+      "images": [
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p76_i10_w1800.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p76_i11_w600.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p76_i12_w600.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p76_i13_w600.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p76_i14_w600.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p76_i15_w600.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p76_i16_w600.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p76_i17_w600.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p76_i18_w600.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p76_i19_w600.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p76_i20_w1200.jpeg"
+      ],
+      "options": [
+        { "label": "Color", "choices": ["gold-green", "green-white", "rainbow", "rainbow-blue", "yellow-blue", "rainbow-pink", "Green-Pink", "Pink-Purple transparent"] }
+      ]
+    },
+    "p92": {
+      "name": "Whale",
+      "price": "$25.00",
+      "url": "https://www.shirglassworks.com/store/p92/Whale.html",
+      "categories": ["figurines"],
+      "images": [
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p92_i1_w1968.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p92_i2_w1515.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p92_i3_w1769.jpeg"
+      ],
+      "options": [
+        { "label": "Color", "choices": ["Blue"] }
+      ]
+    },
+    "p93": {
+      "name": "Orca",
+      "price": "$45.00",
+      "url": "https://www.shirglassworks.com/store/p93/Miniature-Orca.html",
+      "categories": ["figurines"],
+      "images": [
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p93_i1_w1991.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p93_i2_w634.jpeg"
+      ],
+      "options": [
+        { "label": "Color", "choices": ["Black"] }
+      ]
+    },
+    "p95": {
+      "name": "Miniature Mushroom",
+      "price": "$45.00",
+      "url": "https://www.shirglassworks.com/store/p95/Miniature-Mushroom.html",
+      "categories": ["figurines"],
+      "images": [
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p95_i1_w1154.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p95_i2_w1350.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p95_i3_w1246.jpeg"
+      ],
+      "options": [
+        { "label": "Color", "choices": ["Red"] }
+      ]
+    },
+    "p98": {
+      "name": "Miniature Glass Cardinal",
+      "price": "",
+      "url": "https://www.shirglassworks.com/store/p98/Miniature-Cardinal.html",
+      "categories": ["figurines"],
+      "images": [
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p98_i1_w1350.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p98_i2_w1350.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p98_i3_w926.jpeg"
+      ],
+      "options": [],
+      "notes": "No price or options — likely sold out or discontinued"
+    },
+    "p100": {
+      "name": "Miniature Glass Octopus",
+      "price": "$125.00",
+      "url": "https://www.shirglassworks.com/store/p100/Miniature-Octopus.html",
+      "categories": ["figurines"],
+      "images": [
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p100_i6_w3519.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p100_i1_w2496.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p100_i2_w2004.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p100_i3_w1705.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p100_i4_w1692.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p100_i5_w1855.jpeg"
+      ],
+      "options": [
+        { "label": "Octopus Color", "choices": ["Translucent Red", "Cobalt Blue", "Lime Green", "Sandy"] }
+      ]
+    },
+    "p101": {
+      "name": "Large Glass Octopus",
+      "price": "",
+      "url": "https://www.shirglassworks.com/store/p101/Sculptural-Octopus.html",
+      "categories": ["figurines", "sculpture"],
+      "images": [
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p101_i1_w3534.jpeg"
+      ],
+      "options": [],
+      "notes": "No price or options — likely inquiry-based or sold out"
+    },
+    "p106": {
+      "name": "Miniature Snakes",
+      "price": "$45.00",
+      "url": "https://www.shirglassworks.com/store/p106/Miniature_Snakes.html",
+      "categories": ["figurines"],
+      "images": [
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p106_i1_w2296.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p106_i2_w1200.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p106_i3_w1200.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p106_i4_w1200.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p106_i5_w1200.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p106_i6_w1200.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p106_i7_w1476.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p106_i8_w1200.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p106_i9_w1200.jpeg"
+      ],
+      "options": [
+        { "label": "Snake Colors", "choices": ["Navy", "green", "rainbow", "red", "lime green", "gold", "pink"] }
+      ]
+    },
+    "p115": {
+      "name": "X-Large Glass Octopus",
+      "price": "",
+      "url": "https://www.shirglassworks.com/store/p115/Sculptural-Octopus.html",
+      "categories": ["figurines", "sculpture"],
+      "images": [
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p115_i2_w5092.jpeg"
+      ],
+      "options": [],
+      "notes": "No price or options — likely inquiry-based or sold out"
+    },
+    "p46": {
+      "name": "Turtle Pendant",
+      "price": "$85.00",
+      "url": "https://www.shirglassworks.com/store/p46/turtle-pendant-purple-fins.html",
+      "categories": ["jewelry"],
+      "images": [
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p46_i9_w1202.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p46_i4_w2400.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p46_i5_w2400.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p46_i6_w2400.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p46_i7_w618.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p46_i8_w434.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p46_i3_w1648.jpeg"
+      ],
+      "options": [
+        { "label": "Fin Color", "choices": ["purple", "green", "red", "lime Green", "Transparent Green"] }
+      ]
+    },
+    "p66": {
+      "name": "Anatomical Heart Pendant",
+      "price": "",
+      "url": "https://www.shirglassworks.com/store/p66/anatomical-heart-pendant.html",
+      "categories": ["jewelry"],
+      "images": [
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p66_i14_w3600.jpeg"
+      ],
+      "options": [
+        { "label": "Heart Pendant", "choices": ["Transparent Ruby", "Crimson", "Rainbow", "Lavender"] }
+      ],
+      "notes": "No price displayed — may be out of stock for some variants"
+    },
+    "p90": {
+      "name": "JellyFish Pendants",
+      "price": "$85.00",
+      "url": "https://www.shirglassworks.com/store/p90/JellyFish_Pendants.html",
+      "categories": ["jewelry"],
+      "images": [
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p90_i1_w1350.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p90_i2_w1350.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p90_i3_w1350.jpeg"
+      ],
+      "options": [
+        { "label": "Jellyfish Colors", "choices": ["Multicolor", "Blues", "Greens"] }
+      ]
+    },
+    "p116": {
+      "name": "A Life's Work - Honey Pendant",
+      "price": "",
+      "url": "https://www.shirglassworks.com/store/p116/A_Life%27s_Work_-_Honey_Pendant.html",
+      "categories": ["jewelry"],
+      "images": [
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p116_i1_w3600.jpeg"
+      ],
+      "options": [],
+      "notes": "No price or options — likely new or inquiry-based"
+    },
+    "p83": {
+      "name": "Speckled Cups",
+      "price": "$45.00",
+      "url": "https://www.shirglassworks.com/store/p83/Speckled_Cups.html",
+      "categories": ["drinkware"],
+      "images": [
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p83_i8_w6000.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p83_i9_w1731.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p83_i10_w1933.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p83_i11_w1909.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p83_i12_w1830.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p83_i13_w1783.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p83_i14_w1823.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p83_i15_w2353.jpeg"
+      ],
+      "options": [
+        { "label": "6 color", "choices": ["Rose", "Gold", "Emerald", "Aqua", "Cobalt", "Violet"] }
+      ]
+    },
+    "p84": {
+      "name": "Spiral Cups",
+      "price": "$85.00",
+      "url": "https://www.shirglassworks.com/store/p84/Spiral_Cups.html",
+      "categories": ["drinkware"],
+      "images": [
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p84_i8_w3600.jpeg"
+      ],
+      "options": [
+        { "label": "6 color", "choices": ["Rose", "Gold", "Emerald", "Aqua", "Cobalt", "Violet"] }
+      ]
+    },
+    "p88": {
+      "name": "Glass Flowers",
+      "price": "$25.00",
+      "url": "https://www.shirglassworks.com/store/p88/Glass_Flowers.html",
+      "categories": ["vases", "decoration"],
+      "images": [
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p88_i1_w1350.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p88_i2_w432.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p88_i3_w500.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p88_i4_w318.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p88_i5_w381.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p88_i6_w354.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p88_i7_w381.jpeg"
+      ],
+      "options": [
+        { "label": "Color", "choices": ["Red", "Orange", "Yellow", "Blue", "Pink", "Teal"] }
+      ]
+    },
+    "p42": {
+      "name": "Glass Pumpkins",
+      "price": "$35.00",
+      "url": "https://www.shirglassworks.com/store/p42/glass-pumpkins.html",
+      "categories": ["decoration"],
+      "images": [
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p42_i3_w2700.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p42_i4_w1350.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p42_i5_w1478.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p42_i6_w1281.jpeg"
+      ],
+      "options": [
+        { "label": "size", "choices": ["small", "medium", "large"] }
+      ]
+    },
+    "p78": {
+      "name": "Orb Ornaments",
+      "price": "$35.00",
+      "url": "https://www.shirglassworks.com/store/p78/Orb_Ornaments.html",
+      "categories": ["decoration"],
+      "images": [
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p78_i11_w3600.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p78_i12_w3600.jpeg"
+      ],
+      "options": [
+        { "label": "6 color", "choices": ["Rose", "Gold", "Emerald", "Aqua", "Cobalt", "Violet", "Rainbow Mix", "Chartreuse"] }
+      ]
+    },
+    "p102": {
+      "name": "Cane Ornaments",
+      "price": "$165.00",
+      "url": "https://www.shirglassworks.com/store/p102/Cane_Ornaments.html",
+      "categories": ["decoration"],
+      "images": [
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p102_i1_w2107.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p102_i2_w1837.jpeg"
+      ],
+      "options": [
+        { "label": "Shape", "choices": ["Orb Ornament", "Drop Ornaments"] }
+      ]
+    },
+    "p109": {
+      "name": "Lotus in Trees",
+      "price": "",
+      "url": "https://www.shirglassworks.com/store/p109/Lotus-in-Trees.html",
+      "categories": ["sculpture"],
+      "images": [
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p109_i7_w5000.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p109_i1_w5226.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p109_i2_w4096.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p109_i3_w5400.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p109_i4_w5371.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p109_i5_w5400.jpeg",
+        "https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_p109_i6_w3782.jpeg"
+      ],
+      "options": [],
+      "notes": "Sculpture piece — likely inquiry-based pricing"
+    }
+  },
+  "summary": {
+    "totalProducts": 27,
+    "totalImages": 148,
+    "productsWithOptions": 20,
+    "productsWithoutPrice": 6,
+    "optionTypes": ["Color", "Opacity", "Fin Color", "Heart Pendant", "Jellyfish Colors", "Octopus Color", "Snake Colors", "6 color", "size", "Shape"]
+  }
+}

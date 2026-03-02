@@ -1511,6 +1511,10 @@ auth.onAuthStateChanged(function(user) {
   seedShopProducts().catch(function(err) {
     console.error('Shop seed error:', err);
   });
+  // V6: seed full product catalog with images, options, categories
+  seedProductCatalog().catch(function(err) {
+    console.error('Catalog seed error:', err);
+  });
 });
 
 // ============================================================
@@ -1870,6 +1874,137 @@ async function seedShopProducts() {
   updates[v5Flag] = true;
   await db.ref().update(updates);
   console.log('Seeded ' + (Object.keys(updates).length - 1) + ' shop products.');
+}
+
+async function seedProductCatalog() {
+  var flag = 'shirglassworks/admin/seedCatalogV1';
+  var flagSnap = await db.ref(flag).once('value');
+  if (flagSnap.val()) return;
+
+  console.log('Seeding product catalog...');
+  var I = 'https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_';
+  var S = 'https://www.shirglassworks.com/store/';
+  var updates = {};
+  var P = 'shirglassworks/public/products/';
+
+  function p(pid, name, price, url, cats, images, options) {
+    var data = { pid: pid, name: name, url: url, categories: cats, images: images };
+    if (price) data.price = price;
+    if (options && options.length) data.options = options;
+    updates[P + pid] = data;
+  }
+
+  // === FIGURINES ===
+  p('p112', 'Hollow Bird', '$45.00', S+'p112/Hollow_Bird.html', ['figurines','decoration'],
+    [I+'p112_i19_w2100.jpeg',I+'p112_i1_w905.jpeg',I+'p112_i2_w969.jpeg',I+'p112_i3_w999.jpeg',I+'p112_i4_w969.jpeg',I+'p112_i5_w895.jpeg',I+'p112_i7_w965.jpeg',I+'p112_i8_w975.jpeg',I+'p112_i9_w880.jpeg',I+'p112_i11_w800.jpeg',I+'p112_i12_w965.jpeg',I+'p112_i14_w930.jpeg',I+'p112_i15_w940.jpeg',I+'p112_i17_w920.jpeg',I+'p112_i18_w945.jpeg'],
+    [{label:'Opacity',choices:['Transparent','Opaque']},{label:'Color',choices:['Light Blue','Cobalt','Green','Lime','Pink','Orange','Purple','Red','White','Yellow','Rainbow']}]);
+
+  p('p73', 'Glass Caterpillar', '$35.00', S+'p73/glass-caterpillar.html', ['figurines'],
+    [I+'p73_i7_w2270.jpeg',I+'p73_i8_w1974.jpeg',I+'p73_i9_w1720.jpeg',I+'p73_i10_w1350.jpeg'],
+    [{label:'Color',choices:['red head','light green','dark green']}]);
+
+  p('p67', 'Glass Ladybug', '$35.00', S+'p67/Glass-Ladybug.html', ['figurines'],
+    [I+'p67_i1_w1200.jpeg',I+'p67_i2_w1200.jpeg',I+'p67_i3_w1098.jpeg'],
+    [{label:'Color',choices:['Red']}]);
+
+  p('p70', 'Mini Glass Swan', '$45.00', S+'p70/mini-glass-swan.html', ['figurines'],
+    [I+'p70_i1_w1200.jpeg',I+'p70_i2_w888.jpeg',I+'p70_i3_w930.jpeg',I+'p70_i4_w1200.jpeg'],
+    [{label:'Color',choices:['White']}]);
+
+  p('p71', 'Mini Glass Sea Turtle', '$45.00', S+'p71/Mini-Glass-Sea-Turtle.html', ['figurines'],
+    [I+'p71_i1_w2310.jpeg',I+'p71_i4_w1776.jpeg',I+'p71_i5_w1178.jpeg',I+'p71_i8_w1348.jpeg',I+'p71_i9_w675.jpeg'],
+    [{label:'Color',choices:['transparent green','opaque green','lime green']}]);
+
+  p('p74', 'Mini Glass Elephant', '$65.00', S+'p74/mini-glass-elephant.html', ['figurines'],
+    [I+'p74_i1_w2218.jpeg',I+'p74_i4_w1980.jpeg',I+'p74_i7_w2330.jpeg'],
+    [{label:'Color',choices:['Blue','Sparkle Grey']}]);
+
+  p('p75', 'Mini Glass Penguin', '$45.00', S+'p75/Mini-Glass-Penguin.html', ['figurines'],
+    [I+'p75_i1_w1350.jpeg',I+'p75_i2_w1350.jpeg',I+'p75_i3_w1350.jpeg'],
+    [{label:'Color',choices:['Black']}]);
+
+  p('p76', 'Miniature Glass Snail', '$35.00', S+'p76/Miniature_Glass_Snail.html', ['figurines'],
+    [I+'p76_i10_w1800.jpeg',I+'p76_i11_w600.jpeg',I+'p76_i12_w600.jpeg',I+'p76_i13_w600.jpeg',I+'p76_i14_w600.jpeg',I+'p76_i15_w600.jpeg',I+'p76_i16_w600.jpeg',I+'p76_i17_w600.jpeg',I+'p76_i18_w600.jpeg',I+'p76_i19_w600.jpeg',I+'p76_i20_w1200.jpeg'],
+    [{label:'Color',choices:['gold-green','green-white','rainbow','rainbow-blue','yellow-blue','rainbow-pink','Green-Pink','Pink-Purple transparent']}]);
+
+  p('p92', 'Whale', '$25.00', S+'p92/Whale.html', ['figurines'],
+    [I+'p92_i1_w1968.jpeg',I+'p92_i2_w1515.jpeg',I+'p92_i3_w1769.jpeg'],
+    [{label:'Color',choices:['Blue']}]);
+
+  p('p93', 'Orca', '$45.00', S+'p93/Miniature-Orca.html', ['figurines'],
+    [I+'p93_i1_w1991.jpeg',I+'p93_i2_w634.jpeg'],
+    [{label:'Color',choices:['Black']}]);
+
+  p('p95', 'Miniature Mushroom', '$45.00', S+'p95/Miniature-Mushroom.html', ['figurines'],
+    [I+'p95_i1_w1154.jpeg',I+'p95_i2_w1350.jpeg',I+'p95_i3_w1246.jpeg'],
+    [{label:'Color',choices:['Red']}]);
+
+  p('p98', 'Miniature Glass Cardinal', '', S+'p98/Miniature-Cardinal.html', ['figurines'],
+    [I+'p98_i1_w1350.jpeg',I+'p98_i2_w1350.jpeg',I+'p98_i3_w926.jpeg'], []);
+
+  p('p100', 'Miniature Glass Octopus', '$125.00', S+'p100/Miniature-Octopus.html', ['figurines'],
+    [I+'p100_i6_w3519.jpeg',I+'p100_i1_w2496.jpeg',I+'p100_i2_w2004.jpeg',I+'p100_i3_w1705.jpeg',I+'p100_i4_w1692.jpeg',I+'p100_i5_w1855.jpeg'],
+    [{label:'Octopus Color',choices:['Translucent Red','Cobalt Blue','Lime Green','Sandy']}]);
+
+  p('p101', 'Large Glass Octopus', '', S+'p101/Sculptural-Octopus.html', ['figurines','sculpture'],
+    [I+'p101_i1_w3534.jpeg'], []);
+
+  p('p106', 'Miniature Snakes', '$45.00', S+'p106/Miniature_Snakes.html', ['figurines'],
+    [I+'p106_i1_w2296.jpeg',I+'p106_i2_w1200.jpeg',I+'p106_i3_w1200.jpeg',I+'p106_i4_w1200.jpeg',I+'p106_i5_w1200.jpeg',I+'p106_i6_w1200.jpeg',I+'p106_i7_w1476.jpeg',I+'p106_i8_w1200.jpeg',I+'p106_i9_w1200.jpeg'],
+    [{label:'Snake Colors',choices:['Navy','green','rainbow','red','lime green','gold','pink']}]);
+
+  p('p115', 'X-Large Glass Octopus', '', S+'p115/Sculptural-Octopus.html', ['figurines','sculpture'],
+    [I+'p115_i2_w5092.jpeg'], []);
+
+  // === JEWELRY ===
+  p('p46', 'Turtle Pendant', '$85.00', S+'p46/turtle-pendant-purple-fins.html', ['jewelry'],
+    [I+'p46_i9_w1202.jpeg',I+'p46_i4_w2400.jpeg',I+'p46_i5_w2400.jpeg',I+'p46_i6_w2400.jpeg',I+'p46_i7_w618.jpeg',I+'p46_i8_w434.jpeg',I+'p46_i3_w1648.jpeg'],
+    [{label:'Fin Color',choices:['purple','green','red','lime Green','Transparent Green']}]);
+
+  p('p66', 'Anatomical Heart Pendant', '', S+'p66/anatomical-heart-pendant.html', ['jewelry'],
+    [I+'p66_i14_w3600.jpeg'],
+    [{label:'Heart Pendant',choices:['Transparent Ruby','Crimson','Rainbow','Lavender']}]);
+
+  p('p90', 'JellyFish Pendants', '$85.00', S+'p90/JellyFish_Pendants.html', ['jewelry'],
+    [I+'p90_i1_w1350.jpeg',I+'p90_i2_w1350.jpeg',I+'p90_i3_w1350.jpeg'],
+    [{label:'Jellyfish Colors',choices:['Multicolor','Blues','Greens']}]);
+
+  p('p116', "A Life's Work - Honey Pendant", '', S+'p116/A_Life%27s_Work_-_Honey_Pendant.html', ['jewelry'],
+    [I+'p116_i1_w3600.jpeg'], []);
+
+  // === DRINKWARE ===
+  p('p83', 'Speckled Cups', '$45.00', S+'p83/Speckled_Cups.html', ['drinkware'],
+    [I+'p83_i8_w6000.jpeg',I+'p83_i9_w1731.jpeg',I+'p83_i10_w1933.jpeg',I+'p83_i11_w1909.jpeg',I+'p83_i12_w1830.jpeg',I+'p83_i13_w1783.jpeg',I+'p83_i14_w1823.jpeg',I+'p83_i15_w2353.jpeg'],
+    [{label:'Color',choices:['Rose','Gold','Emerald','Aqua','Cobalt','Violet']}]);
+
+  p('p84', 'Spiral Cups', '$85.00', S+'p84/Spiral_Cups.html', ['drinkware'],
+    [I+'p84_i8_w3600.jpeg'],
+    [{label:'Color',choices:['Rose','Gold','Emerald','Aqua','Cobalt','Violet']}]);
+
+  // === VASES / DECORATION ===
+  p('p88', 'Glass Flowers', '$25.00', S+'p88/Glass_Flowers.html', ['vases','decoration'],
+    [I+'p88_i1_w1350.jpeg',I+'p88_i2_w432.jpeg',I+'p88_i3_w500.jpeg',I+'p88_i4_w318.jpeg',I+'p88_i5_w381.jpeg',I+'p88_i6_w354.jpeg',I+'p88_i7_w381.jpeg'],
+    [{label:'Color',choices:['Red','Orange','Yellow','Blue','Pink','Teal']}]);
+
+  p('p42', 'Glass Pumpkins', '$35.00', S+'p42/glass-pumpkins.html', ['decoration'],
+    [I+'p42_i3_w2700.jpeg',I+'p42_i4_w1350.jpeg',I+'p42_i5_w1478.jpeg',I+'p42_i6_w1281.jpeg'],
+    [{label:'size',choices:['small','medium','large']}]);
+
+  p('p78', 'Orb Ornaments', '$35.00', S+'p78/Orb_Ornaments.html', ['decoration'],
+    [I+'p78_i11_w3600.jpeg',I+'p78_i12_w3600.jpeg'],
+    [{label:'Color',choices:['Rose','Gold','Emerald','Aqua','Cobalt','Violet','Rainbow Mix','Chartreuse']}]);
+
+  p('p102', 'Cane Ornaments', '$165.00', S+'p102/Cane_Ornaments.html', ['decoration'],
+    [I+'p102_i1_w2107.jpeg',I+'p102_i2_w1837.jpeg'],
+    [{label:'Shape',choices:['Orb Ornament','Drop Ornaments']}]);
+
+  // === SCULPTURE ===
+  p('p109', 'Lotus in Trees', '', S+'p109/Lotus-in-Trees.html', ['sculpture'],
+    [I+'p109_i7_w5000.jpeg',I+'p109_i1_w5226.jpeg',I+'p109_i2_w4096.jpeg',I+'p109_i3_w5400.jpeg',I+'p109_i4_w5371.jpeg',I+'p109_i5_w5400.jpeg',I+'p109_i6_w3782.jpeg'], []);
+
+  updates[flag] = true;
+  await db.ref().update(updates);
+  console.log('Seeded product catalog: ' + Object.keys(updates).length + ' entries.');
 }
 
 // ============================================================
