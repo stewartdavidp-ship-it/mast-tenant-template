@@ -922,6 +922,111 @@
     body.dark-mode .btn-primary { background: #d4a053; color: #1a1a1a; }
     body.dark-mode .btn-primary:hover { background: #c4903f; }
 
+    /* ========== COUPONS ========== */
+    .coupon-status {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .coupon-status.pending { background: #E0D8CC; color: #6B6560; }
+    .coupon-status.active { background: #D4F0EB; color: #1B5C52; }
+    .coupon-status.expired { background: #F8D7DA; color: #9B2335; }
+
+    .coupon-code {
+      font-family: monospace;
+      font-weight: 600;
+      font-size: 0.88rem;
+      letter-spacing: 0.05em;
+    }
+
+    .coupon-value {
+      font-weight: 600;
+      color: var(--teal);
+    }
+
+    .coupon-meta {
+      font-size: 0.78rem;
+      color: var(--warm-gray);
+    }
+
+    .coupon-cards {
+      display: none;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .coupon-card {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      padding: 16px;
+      border: 1px solid var(--cream-dark);
+    }
+
+    .coupon-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .coupon-card-details {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+      margin-top: 8px;
+    }
+
+    .coupon-card-detail {
+      font-size: 0.78rem;
+      color: var(--warm-gray);
+    }
+
+    .coupon-card-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--cream-dark);
+    }
+
+    .oneoff-badge {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 0.68rem;
+      font-weight: 600;
+      background: #FFF3E0;
+      color: #C4853C;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    .checkout-form-row {
+      display: flex;
+      gap: 12px;
+    }
+    .checkout-form-row .form-group { flex: 1; }
+
+    body.dark-mode .coupon-card {
+      background: #2a2a2a;
+      border-color: #3a3a3a;
+    }
+    body.dark-mode .coupon-status.pending { background: #3a3a3a; color: #999; }
+    body.dark-mode .coupon-status.active { background: #1a3a35; color: #6fc; }
+    body.dark-mode .coupon-status.expired { background: #3a1a1a; color: #f99; }
+    body.dark-mode .oneoff-badge { background: #3a2a1a; color: #d4a053; }
+    body.dark-mode .coupon-code { color: #e0e0e0; }
+
+    @media (max-width: 768px) {
+      .coupons-table { display: none; }
+      .coupon-cards { display: flex; }
+    }
+
     /* ========== ANALYTICS ========== */
     .analytics-summary {
       display: grid;
@@ -1201,6 +1306,7 @@
       <button class="header-tab active" data-tab="schedule" onclick="switchTab('schedule')">Schedule</button>
       <button class="header-tab" data-tab="gallery" onclick="switchTab('gallery')">Gallery</button>
       <button class="header-tab" data-tab="products" onclick="switchTab('products')">Products</button>
+      <button class="header-tab" data-tab="coupons" onclick="switchTab('coupons')">Coupons</button>
       <button class="header-tab" data-tab="analytics" onclick="switchTab('analytics')">Analytics</button>
       <button class="header-tab" data-tab="settings" onclick="switchTab('settings')">Settings</button>
     </div>
@@ -1335,6 +1441,38 @@
       <div id="productsGrid" class="products-grid"></div>
     </div>
 
+    <!-- Admin: Coupons Tab -->
+    <div id="couponsTab" style="display:none;">
+      <div class="section-header">
+        <h2>Coupons</h2>
+        <button class="btn btn-primary" onclick="openCouponModal()">+ Add Coupon</button>
+      </div>
+      <div id="couponsLoading" class="loading">Loading...</div>
+      <div id="couponsEmpty" class="empty-state" style="display:none;">
+        <p>No coupons yet. Click "Add Coupon" to create one.</p>
+      </div>
+
+      <!-- Desktop Table -->
+      <div class="events-table coupons-table" id="couponsTable" style="display:none;">
+        <table>
+          <thead>
+            <tr>
+              <th>Code</th>
+              <th>Discount</th>
+              <th>Status</th>
+              <th>Dates</th>
+              <th>Claimed</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="couponsTableBody"></tbody>
+        </table>
+      </div>
+
+      <!-- Mobile Cards -->
+      <div class="coupon-cards" id="couponCards"></div>
+    </div>
+
     <!-- Admin: Settings Tab -->
     <div id="settingsTab" style="display:none;">
       <div class="section-header">
@@ -1447,6 +1585,10 @@ let githubToken = null;
 let pendingFile = null;
 let pendingBase64 = null;
 let pendingFilename = null;
+var couponsLoaded = false;
+var coupons = {};
+var couponsListener = null;
+var COUPONS_PATH = 'shirglassworks/admin/coupons';
 
 // ============================================================
 // GitHub API
@@ -1651,17 +1793,20 @@ function switchTab(tab) {
   document.getElementById('scheduleTab').style.display = tab === 'schedule' ? '' : 'none';
   document.getElementById('galleryTab').style.display = tab === 'gallery' ? '' : 'none';
   document.getElementById('productsTab').style.display = tab === 'products' ? '' : 'none';
+  document.getElementById('couponsTab').style.display = tab === 'coupons' ? '' : 'none';
   document.getElementById('analyticsTab').style.display = tab === 'analytics' ? '' : 'none';
   document.getElementById('settingsTab').style.display = tab === 'settings' ? '' : 'none';
   if (tab === 'settings') updateGitHubTokenStatus();
   if (tab === 'analytics' && !analyticsLoaded) loadAnalytics();
   if (tab === 'products' && !productsLoaded) loadProducts();
+  if (tab === 'coupons' && !couponsLoaded) loadCoupons();
 }
 
 function hideAdminTabs() {
   document.getElementById('scheduleTab').style.display = 'none';
   document.getElementById('galleryTab').style.display = 'none';
   document.getElementById('productsTab').style.display = 'none';
+  document.getElementById('couponsTab').style.display = 'none';
   document.getElementById('analyticsTab').style.display = 'none';
   document.getElementById('settingsTab').style.display = 'none';
 }
@@ -2426,6 +2571,15 @@ function attachListeners() {
       showToast('Error loading gallery: ' + err.message, true);
     });
   }
+  if (!couponsListener) {
+    couponsListener = db.ref(COUPONS_PATH).on('value', function(snap) {
+      coupons = snap.val() || {};
+      couponsLoaded = true;
+      renderCoupons();
+    }, function(err) {
+      showToast('Error loading coupons: ' + err.message, true);
+    });
+  }
 }
 
 function detachListeners() {
@@ -2437,8 +2591,13 @@ function detachListeners() {
     db.ref(GALLERY_PATH).off('value', galleryListener);
     galleryListener = null;
   }
+  if (couponsListener) {
+    db.ref(COUPONS_PATH).off('value', couponsListener);
+    couponsListener = null;
+  }
   events = {};
   gallery = {};
+  coupons = {};
 }
 
 // ============================================================
@@ -3356,6 +3515,345 @@ async function deleteImage(imageId) {
 // ============================================================
 // Toast
 // ============================================================
+// ============================================================
+// Coupons Management
+// ============================================================
+function loadCoupons() {
+  // Listener already attached in attachListeners — this just ensures loading state is correct
+  if (couponsLoaded) {
+    renderCoupons();
+  }
+}
+
+function getCouponEffectiveStatus(coupon) {
+  if (coupon.status === 'expired') return 'expired';
+  if (coupon.status === 'pending') {
+    // Auto-activate if startDate has passed
+    if (coupon.startDate) {
+      var today = getTodayStr();
+      if (coupon.startDate <= today) return 'active';
+    }
+    return 'pending';
+  }
+  // status === 'active' — check if it should be expired
+  if (coupon.endDate) {
+    var today2 = getTodayStr();
+    if (coupon.endDate < today2) return 'expired';
+  }
+  if (coupon.isOneOff && (coupon.claimedCount || 0) > 0) return 'expired';
+  if (coupon.maxUses && (coupon.claimedCount || 0) >= coupon.maxUses) return 'expired';
+  return 'active';
+}
+
+function getTodayStr() {
+  var now = new Date();
+  return now.getFullYear() + '-' +
+    String(now.getMonth() + 1).padStart(2, '0') + '-' +
+    String(now.getDate()).padStart(2, '0');
+}
+
+function formatCouponValue(coupon) {
+  if (coupon.type === 'percent') return coupon.value + '%';
+  return '$' + (coupon.value || 0).toFixed(2);
+}
+
+function renderCoupons() {
+  var loadingEl = document.getElementById('couponsLoading');
+  var emptyEl = document.getElementById('couponsEmpty');
+  var tableEl = document.getElementById('couponsTable');
+  var tbodyEl = document.getElementById('couponsTableBody');
+  var cardsEl = document.getElementById('couponCards');
+
+  if (loadingEl) loadingEl.style.display = 'none';
+
+  var codes = Object.keys(coupons);
+  if (codes.length === 0) {
+    if (emptyEl) emptyEl.style.display = '';
+    if (tableEl) tableEl.style.display = 'none';
+    if (cardsEl) cardsEl.innerHTML = '';
+    return;
+  }
+
+  if (emptyEl) emptyEl.style.display = 'none';
+  if (tableEl) tableEl.style.display = '';
+
+  // Sort: active first, then pending, then expired. Within group, by code alpha.
+  var statusOrder = { active: 0, pending: 1, expired: 2 };
+  codes.sort(function(a, b) {
+    var sa = getCouponEffectiveStatus(coupons[a]);
+    var sb = getCouponEffectiveStatus(coupons[b]);
+    if (statusOrder[sa] !== statusOrder[sb]) return statusOrder[sa] - statusOrder[sb];
+    return a.localeCompare(b);
+  });
+
+  // Desktop table
+  var tableHtml = '';
+  for (var i = 0; i < codes.length; i++) {
+    var code = codes[i];
+    var c = coupons[code];
+    var status = getCouponEffectiveStatus(c);
+    var claimed = c.claimedCount || 0;
+    var maxStr = c.isOneOff ? '1' : (c.maxUses ? c.maxUses : '\u221e');
+    var dateStr = '';
+    if (c.startDate && c.endDate) dateStr = formatDate(c.startDate) + ' \u2013 ' + formatDate(c.endDate);
+    else if (c.startDate) dateStr = 'From ' + formatDate(c.startDate);
+    else if (c.endDate) dateStr = 'Until ' + formatDate(c.endDate);
+    else dateStr = '\u2014';
+
+    tableHtml += '<tr>' +
+      '<td><span class="coupon-code">' + esc(code) + '</span>' +
+        (c.isOneOff ? ' <span class="oneoff-badge">One-Off</span>' : '') +
+        (c.description ? '<div class="coupon-meta">' + esc(c.description) + '</div>' : '') +
+      '</td>' +
+      '<td><span class="coupon-value">' + formatCouponValue(c) + ' ' + (c.type === 'percent' ? 'off' : 'off') + '</span>' +
+        (c.minOrder ? '<div class="coupon-meta">Min order: $' + c.minOrder.toFixed(2) + '</div>' : '') +
+      '</td>' +
+      '<td><span class="coupon-status ' + status + '">' + status + '</span></td>' +
+      '<td><span class="coupon-meta">' + dateStr + '</span></td>' +
+      '<td>' + claimed + ' / ' + maxStr + '</td>' +
+      '<td><div class="event-actions">' +
+        '<button class="btn-icon" onclick="openCouponModal(\'' + esc(code) + '\')" title="Edit">\u270E</button>' +
+        '<button class="btn-icon danger" onclick="confirmDeleteCoupon(\'' + esc(code) + '\')" title="Delete">\u2716</button>' +
+      '</div></td>' +
+    '</tr>';
+  }
+  if (tbodyEl) tbodyEl.innerHTML = tableHtml;
+
+  // Mobile cards
+  var cardHtml = '';
+  for (var j = 0; j < codes.length; j++) {
+    var code2 = codes[j];
+    var c2 = coupons[code2];
+    var status2 = getCouponEffectiveStatus(c2);
+    var claimed2 = c2.claimedCount || 0;
+    var maxStr2 = c2.isOneOff ? '1' : (c2.maxUses ? c2.maxUses : '\u221e');
+    var dateStr2 = '';
+    if (c2.startDate && c2.endDate) dateStr2 = formatDate(c2.startDate) + ' \u2013 ' + formatDate(c2.endDate);
+    else if (c2.startDate) dateStr2 = 'From ' + formatDate(c2.startDate);
+    else if (c2.endDate) dateStr2 = 'Until ' + formatDate(c2.endDate);
+    else dateStr2 = 'No date restriction';
+
+    cardHtml += '<div class="coupon-card">' +
+      '<div class="coupon-card-header">' +
+        '<span class="coupon-code">' + esc(code2) + '</span>' +
+        '<span class="coupon-status ' + status2 + '">' + status2 + '</span>' +
+      '</div>' +
+      '<div style="margin-bottom:4px;">' +
+        '<span class="coupon-value">' + formatCouponValue(c2) + ' off</span>' +
+        (c2.isOneOff ? ' <span class="oneoff-badge">One-Off</span>' : '') +
+      '</div>' +
+      (c2.description ? '<div class="coupon-meta">' + esc(c2.description) + '</div>' : '') +
+      '<div class="coupon-card-details">' +
+        '<span class="coupon-card-detail">' + dateStr2 + '</span>' +
+        '<span class="coupon-card-detail">Claimed: ' + claimed2 + ' / ' + maxStr2 + '</span>' +
+        (c2.minOrder ? '<span class="coupon-card-detail">Min: $' + c2.minOrder.toFixed(2) + '</span>' : '') +
+      '</div>' +
+      '<div class="coupon-card-actions">' +
+        '<button class="btn btn-secondary" onclick="openCouponModal(\'' + esc(code2) + '\')" style="flex:1;">Edit</button>' +
+        '<button class="btn btn-danger" onclick="confirmDeleteCoupon(\'' + esc(code2) + '\')" style="flex:1;">Delete</button>' +
+      '</div>' +
+    '</div>';
+  }
+  if (cardsEl) cardsEl.innerHTML = cardHtml;
+}
+
+function openCouponModal(code) {
+  var isEdit = !!code;
+  var c = isEdit ? (coupons[code] || {}) : {};
+  var title = isEdit ? 'Edit Coupon' : 'Add Coupon';
+
+  var html = '' +
+    '<div class="modal-header">' +
+      '<h3>' + title + '</h3>' +
+      '<button class="modal-close" onclick="closeModal()">&times;</button>' +
+    '</div>' +
+    '<div class="modal-body">' +
+      '<div class="form-group">' +
+        '<label for="cpCode">Code *</label>' +
+        '<input type="text" id="cpCode" value="' + esc(code || '') + '" placeholder="e.g. SUMMER20" style="text-transform:uppercase;"' +
+          (isEdit ? ' disabled' : '') + '>' +
+      '</div>' +
+      '<div class="checkout-form-row">' +
+        '<div class="form-group">' +
+          '<label for="cpType">Type *</label>' +
+          '<select id="cpType" onchange="couponTypeChanged()">' +
+            '<option value="percent"' + (c.type === 'percent' || !c.type ? ' selected' : '') + '>Percent Off</option>' +
+            '<option value="fixed"' + (c.type === 'fixed' ? ' selected' : '') + '>Fixed Amount</option>' +
+          '</select>' +
+        '</div>' +
+        '<div class="form-group">' +
+          '<label for="cpValue">Value *</label>' +
+          '<input type="number" id="cpValue" min="0" step="any" value="' + (c.value || '') + '" placeholder="e.g. 15">' +
+        '</div>' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<label for="cpMinOrder">Minimum Order ($)</label>' +
+        '<input type="number" id="cpMinOrder" min="0" step="0.01" value="' + (c.minOrder || '') + '" placeholder="Optional">' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<label for="cpStatus">Status *</label>' +
+        '<select id="cpStatus">' +
+          '<option value="pending"' + (c.status === 'pending' ? ' selected' : '') + '>Pending</option>' +
+          '<option value="active"' + (c.status === 'active' || !c.status ? ' selected' : '') + '>Active</option>' +
+          '<option value="expired"' + (c.status === 'expired' ? ' selected' : '') + '>Expired</option>' +
+        '</select>' +
+      '</div>' +
+      '<div class="checkout-form-row">' +
+        '<div class="form-group">' +
+          '<label for="cpStartDate">Start Date</label>' +
+          '<input type="date" id="cpStartDate" value="' + (c.startDate || '') + '">' +
+        '</div>' +
+        '<div class="form-group">' +
+          '<label for="cpEndDate">End Date</label>' +
+          '<input type="date" id="cpEndDate" value="' + (c.endDate || '') + '">' +
+        '</div>' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<div class="form-check">' +
+          '<input type="checkbox" id="cpOneOff"' + (c.isOneOff ? ' checked' : '') + ' onchange="couponOneOffChanged()">' +
+          '<label for="cpOneOff">One-off code (single use, auto-expires after claim)</label>' +
+        '</div>' +
+      '</div>' +
+      '<div class="form-group" id="cpMaxUsesGroup"' + (c.isOneOff ? ' style="display:none;"' : '') + '>' +
+        '<label for="cpMaxUses">Max Uses</label>' +
+        '<input type="number" id="cpMaxUses" min="1" value="' + (c.maxUses || '') + '" placeholder="Unlimited">' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<label for="cpDesc">Description <span style="color:var(--warm-gray-light);font-weight:300;">(admin note)</span></label>' +
+        '<input type="text" id="cpDesc" value="' + esc(c.description || '') + '" placeholder="e.g. Summer promo for returning customers">' +
+      '</div>' +
+      (isEdit ? '<div class="coupon-meta" style="margin-top:8px;">Claimed: ' + (c.claimedCount || 0) + ' time' + ((c.claimedCount || 0) !== 1 ? 's' : '') + '</div>' : '') +
+    '</div>' +
+    '<div class="modal-footer">' +
+      '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+      '<button class="btn btn-primary" onclick="saveCoupon(\'' + esc(code || '') + '\')">' + (isEdit ? 'Update' : 'Create') + '</button>' +
+    '</div>';
+
+  openModal(html);
+  setTimeout(function() {
+    var el = document.getElementById(isEdit ? 'cpValue' : 'cpCode');
+    if (el) el.focus();
+  }, 100);
+}
+
+function couponTypeChanged() {
+  var typeEl = document.getElementById('cpType');
+  var valueEl = document.getElementById('cpValue');
+  if (!typeEl || !valueEl) return;
+  valueEl.placeholder = typeEl.value === 'percent' ? 'e.g. 15' : 'e.g. 5.00';
+}
+
+function couponOneOffChanged() {
+  var cb = document.getElementById('cpOneOff');
+  var maxGroup = document.getElementById('cpMaxUsesGroup');
+  if (!cb || !maxGroup) return;
+  maxGroup.style.display = cb.checked ? 'none' : '';
+  if (cb.checked) {
+    var maxEl = document.getElementById('cpMaxUses');
+    if (maxEl) maxEl.value = '';
+  }
+}
+
+async function saveCoupon(existingCode) {
+  var isEdit = !!existingCode;
+  var codeEl = document.getElementById('cpCode');
+  var code = codeEl ? codeEl.value.trim().toUpperCase() : '';
+
+  if (!isEdit && !code) {
+    showToast('Coupon code is required.', true);
+    return;
+  }
+  if (!isEdit && code.length > 30) {
+    showToast('Code must be 30 characters or less.', true);
+    return;
+  }
+  if (!isEdit && coupons[code]) {
+    showToast('A coupon with code "' + code + '" already exists.', true);
+    return;
+  }
+
+  var type = document.getElementById('cpType').value;
+  var value = parseFloat(document.getElementById('cpValue').value);
+  if (isNaN(value) || value <= 0) {
+    showToast('Value must be greater than 0.', true);
+    return;
+  }
+  if (type === 'percent' && value > 100) {
+    showToast('Percent value cannot exceed 100.', true);
+    return;
+  }
+
+  var minOrderVal = document.getElementById('cpMinOrder').value.trim();
+  var minOrder = minOrderVal ? parseFloat(minOrderVal) : null;
+  var status = document.getElementById('cpStatus').value;
+  var startDate = document.getElementById('cpStartDate').value || null;
+  var endDate = document.getElementById('cpEndDate').value || null;
+  var isOneOff = document.getElementById('cpOneOff').checked;
+  var maxUsesVal = document.getElementById('cpMaxUses').value.trim();
+  var maxUses = isOneOff ? 1 : (maxUsesVal ? parseInt(maxUsesVal) : null);
+  var description = document.getElementById('cpDesc').value.trim();
+
+  if (startDate && endDate && endDate < startDate) {
+    showToast('End date must be after start date.', true);
+    return;
+  }
+
+  var key = isEdit ? existingCode : code;
+  var data = {
+    type: type,
+    value: value,
+    status: status,
+    startDate: startDate,
+    endDate: endDate,
+    isOneOff: isOneOff,
+    maxUses: maxUses,
+    description: description || null,
+    minOrder: minOrder,
+    updatedAt: firebase.database.ServerValue.TIMESTAMP
+  };
+
+  if (!isEdit) {
+    data.claimedCount = 0;
+    data.createdAt = firebase.database.ServerValue.TIMESTAMP;
+  }
+
+  try {
+    if (isEdit) {
+      await db.ref(COUPONS_PATH + '/' + key).update(data);
+      showToast('Coupon updated.');
+    } else {
+      await db.ref(COUPONS_PATH + '/' + key).set(data);
+      showToast('Coupon created.');
+    }
+    closeModal();
+  } catch (err) {
+    showToast('Error saving coupon: ' + err.message, true);
+  }
+}
+
+function confirmDeleteCoupon(code) {
+  var html = '' +
+    '<div class="confirm-body">' +
+      '<h3>Delete Coupon</h3>' +
+      '<p>Delete coupon "<strong>' + esc(code) + '</strong>"? This cannot be undone.</p>' +
+      '<div class="confirm-actions">' +
+        '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+        '<button class="btn btn-danger" onclick="deleteCoupon(\'' + esc(code) + '\')">Delete</button>' +
+      '</div>' +
+    '</div>';
+  openModal(html);
+}
+
+async function deleteCoupon(code) {
+  try {
+    await db.ref(COUPONS_PATH + '/' + code).remove();
+    showToast('Coupon deleted.');
+    closeModal();
+  } catch (err) {
+    showToast('Error deleting coupon: ' + err.message, true);
+  }
+}
+
 function showToast(message, isError) {
   var container = document.getElementById('toastContainer');
   var toast = document.createElement('div');
