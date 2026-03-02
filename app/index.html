@@ -766,6 +766,7 @@
     <div class="header-tabs">
       <button class="header-tab active" data-tab="schedule" onclick="switchTab('schedule')">Schedule</button>
       <button class="header-tab" data-tab="gallery" onclick="switchTab('gallery')">Gallery</button>
+      <button class="header-tab" data-tab="settings" onclick="switchTab('settings')">Settings</button>
     </div>
     <div class="header-user">
       <img class="header-avatar" id="userAvatar" src="" alt="User">
@@ -837,6 +838,28 @@
       </div>
       <div class="gallery-grid" id="galleryGrid"></div>
     </div>
+
+    <!-- Admin: Settings Tab -->
+    <div id="settingsTab" style="display:none;">
+      <div class="section-header">
+        <h2>Settings</h2>
+      </div>
+      <div style="max-width:500px;">
+        <div class="form-group">
+          <label>GitHub Personal Access Token</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">
+            Required for uploading images to the gallery. Token needs <strong>repo</strong> scope.
+          </p>
+          <div style="display:flex;gap:8px;">
+            <input type="password" id="githubTokenInput" placeholder="ghp_..."
+              style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
+            <button class="btn btn-primary" onclick="saveGitHubToken()">Save</button>
+            <button class="btn btn-secondary" onclick="testGitHubToken()">Test</button>
+          </div>
+          <div id="githubTokenStatus" style="margin-top:8px;font-size:0.85rem;"></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- ===== MODAL ===== -->
@@ -868,6 +891,12 @@ const GALLERY_PATH = 'shirglassworks/public/gallery';
 
 const CATEGORIES = ['figurines', 'jewelry', 'drinkware', 'sculptures', 'vases', 'decorations', 'studio', 'other'];
 
+// GitHub image upload
+const GITHUB_REPO = 'stewartdavidp-ship-it/shirglassworks';
+const GITHUB_IMAGES_PATH = 'images';
+const GITHUB_PAGES_BASE = 'https://stewartdavidp-ship-it.github.io/shirglassworks';
+const GITHUB_TOKEN_PATH = 'shirglassworks/admin/githubToken';
+
 // ============================================================
 // State
 // ============================================================
@@ -877,6 +906,124 @@ let events = {};
 let gallery = {};
 let eventsListener = null;
 let galleryListener = null;
+let githubToken = null;
+let pendingFile = null;
+let pendingBase64 = null;
+let pendingFilename = null;
+
+// ============================================================
+// GitHub API
+// ============================================================
+async function githubRequest(endpoint, options) {
+  options = options || {};
+  var url = 'https://api.github.com' + endpoint;
+  var response = await fetch(url, {
+    method: options.method || 'GET',
+    headers: {
+      'Authorization': 'token ' + githubToken,
+      'Accept': 'application/vnd.github.v3+json',
+      'Content-Type': 'application/json'
+    },
+    body: options.body || undefined
+  });
+  if (!response.ok) {
+    var error = {};
+    try { error = await response.json(); } catch(e) {}
+    throw new Error(error.message || 'GitHub API error: ' + response.status);
+  }
+  return response.json();
+}
+
+async function uploadImageToGitHub(filename, base64Content, commitMessage) {
+  // Check if file already exists (to get SHA for overwrite)
+  var sha = null;
+  try {
+    var existing = await githubRequest(
+      '/repos/' + GITHUB_REPO + '/contents/' + GITHUB_IMAGES_PATH + '/' + filename
+    );
+    sha = existing.sha;
+  } catch (e) {
+    // 404 = file doesn't exist yet, which is fine
+  }
+
+  var body = {
+    message: commitMessage || 'Add gallery image: ' + filename,
+    content: base64Content,
+    committer: { name: 'Shir Glassworks Admin', email: 'admin@shirglassworks.com' },
+    branch: 'main'
+  };
+  if (sha) body.sha = sha;
+
+  return githubRequest(
+    '/repos/' + GITHUB_REPO + '/contents/' + GITHUB_IMAGES_PATH + '/' + filename,
+    { method: 'PUT', body: JSON.stringify(body) }
+  );
+}
+
+function sanitizeFilename(name) {
+  var parts = name.split('.');
+  var ext = parts.length > 1 ? '.' + parts.pop().toLowerCase() : '.jpg';
+  var base = parts.join('.')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .substring(0, 50);
+  return Date.now() + '-' + base + ext;
+}
+
+// ============================================================
+// Image Compression
+// ============================================================
+function compressImage(file, maxWidth, quality) {
+  maxWidth = maxWidth || 1200;
+  quality = quality || 0.85;
+
+  return new Promise(function(resolve, reject) {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var img = new Image();
+      img.onload = function() {
+        var width = img.width;
+        var height = img.height;
+
+        if (width > maxWidth) {
+          height = Math.round(height * (maxWidth / width));
+          width = maxWidth;
+        }
+
+        var canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        var mimeType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+        var dataUrl = canvas.toDataURL(mimeType, quality);
+        var base64 = dataUrl.split(',')[1];
+
+        resolve({
+          base64: base64,
+          width: width,
+          height: height,
+          originalWidth: img.width,
+          originalHeight: img.height,
+          sizeEstimate: Math.round(base64.length * 0.75),
+          mimeType: mimeType
+        });
+      };
+      img.onerror = function() { reject(new Error('Failed to load image')); };
+      img.src = e.target.result;
+    };
+    reader.onerror = function() { reject(new Error('Failed to read file')); };
+    reader.readAsDataURL(file);
+  });
+}
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
 
 // ============================================================
 // Auth
@@ -925,6 +1072,11 @@ auth.onAuthStateChanged(function(user) {
   document.getElementById('userAvatar').src = user.photoURL || '';
   switchTab(currentTab);
   attachListeners();
+
+  // Load GitHub token for image uploads
+  db.ref(GITHUB_TOKEN_PATH).once('value').then(function(snap) {
+    githubToken = snap.val();
+  });
 });
 
 // ============================================================
@@ -937,11 +1089,57 @@ function switchTab(tab) {
   });
   document.getElementById('scheduleTab').style.display = tab === 'schedule' ? '' : 'none';
   document.getElementById('galleryTab').style.display = tab === 'gallery' ? '' : 'none';
+  document.getElementById('settingsTab').style.display = tab === 'settings' ? '' : 'none';
+  if (tab === 'settings') updateGitHubTokenStatus();
 }
 
 function hideAdminTabs() {
   document.getElementById('scheduleTab').style.display = 'none';
   document.getElementById('galleryTab').style.display = 'none';
+  document.getElementById('settingsTab').style.display = 'none';
+}
+
+// ============================================================
+// GitHub Token Management
+// ============================================================
+async function saveGitHubToken() {
+  var token = document.getElementById('githubTokenInput').value.trim();
+  if (!token) {
+    showToast('Please enter a token.', true);
+    return;
+  }
+  try {
+    await db.ref(GITHUB_TOKEN_PATH).set(token);
+    githubToken = token;
+    document.getElementById('githubTokenInput').value = '';
+    updateGitHubTokenStatus();
+    showToast('GitHub token saved.');
+  } catch (err) {
+    showToast('Error saving token: ' + err.message, true);
+  }
+}
+
+async function testGitHubToken() {
+  if (!githubToken) {
+    showToast('No token configured. Enter and save a token first.', true);
+    return;
+  }
+  try {
+    var user = await githubRequest('/user');
+    showToast('Connected as: ' + user.login);
+  } catch (err) {
+    showToast('Token test failed: ' + err.message, true);
+  }
+}
+
+function updateGitHubTokenStatus() {
+  var el = document.getElementById('githubTokenStatus');
+  if (!el) return;
+  if (githubToken) {
+    el.innerHTML = '<span style="color:var(--teal);">&#10003; Token configured</span>';
+  } else {
+    el.innerHTML = '<span style="color:var(--warm-gray-light);">No token configured. Image upload requires a GitHub PAT.</span>';
+  }
 }
 
 // ============================================================
@@ -1324,6 +1522,13 @@ function openImageModal(imageId) {
   var isEdit = !!imageId;
   var img = isEdit ? gallery[imageId] : {};
   var title = isEdit ? 'Edit Image' : 'Add Image';
+  // Default: upload mode for new, URL mode for edit
+  var defaultUpload = !isEdit;
+
+  // Reset pending state
+  pendingFile = null;
+  pendingBase64 = null;
+  pendingFilename = null;
 
   var categoryOptions = CATEGORIES.map(function(cat) {
     var selected = (img.category === cat) ? ' selected' : '';
@@ -1336,11 +1541,43 @@ function openImageModal(imageId) {
       '<button class="modal-close" onclick="closeModal()">&times;</button>' +
     '</div>' +
     '<div class="modal-body">' +
+      // Image source toggle
       '<div class="form-group">' +
-        '<label for="imgUrl">Image URL *</label>' +
-        '<input type="text" id="imgUrl" value="' + esc(img.url || '') + '" placeholder="https://..." oninput="previewImageUrl()">' +
+        '<label>Image Source</label>' +
+        '<div style="display:flex;gap:8px;margin-bottom:10px;">' +
+          '<button class="btn ' + (defaultUpload ? 'btn-primary' : 'btn-secondary') + '" ' +
+            'id="imgModeUpload" onclick="setImageMode(\'upload\')" type="button" style="flex:1;">Upload File</button>' +
+          '<button class="btn ' + (!defaultUpload ? 'btn-primary' : 'btn-secondary') + '" ' +
+            'id="imgModeUrl" onclick="setImageMode(\'url\')" type="button" style="flex:1;">Paste URL</button>' +
+        '</div>' +
+        // Upload mode
+        '<div id="imgUploadSection"' + (!defaultUpload ? ' style="display:none;"' : '') + '>' +
+          '<input type="file" id="imgFileInput" accept="image/*" onchange="handleFileSelect(this)" style="display:none;">' +
+          '<div id="imgDropZone" onclick="document.getElementById(\'imgFileInput\').click()" ' +
+            'style="border:2px dashed #ccc;border-radius:8px;padding:30px 20px;text-align:center;' +
+            'cursor:pointer;background:var(--cream);transition:border-color 0.2s,background 0.2s;">' +
+            '<div style="font-size:2rem;margin-bottom:8px;">&#128247;</div>' +
+            '<div style="color:var(--warm-gray);font-size:0.9rem;">Click to select or drag an image here</div>' +
+            '<div id="imgFileName" style="color:var(--amber);font-size:0.85rem;margin-top:8px;display:none;"></div>' +
+          '</div>' +
+        '</div>' +
+        // URL mode
+        '<div id="imgUrlSection"' + (defaultUpload ? ' style="display:none;"' : '') + '>' +
+          '<input type="text" id="imgUrl" value="' + esc(img.url || '') + '" placeholder="https://..." oninput="previewImageUrl()">' +
+        '</div>' +
+        // Shared preview
         '<div class="img-preview-container" id="imgPreviewContainer">' +
-          (img.url ? '<img src="' + esc(img.url) + '" onerror="this.parentNode.innerHTML=\'<span class=error-msg>Invalid image URL</span>\'">' : '<span class="placeholder-msg">Enter a URL to preview</span>') +
+          (img.url ? '<img src="' + esc(img.url) + '" onerror="this.parentNode.innerHTML=\'<span class=error-msg>Invalid image URL</span>\'">' : '<span class="placeholder-msg">Select an image or enter a URL to preview</span>') +
+        '</div>' +
+        // Upload progress (hidden by default)
+        '<div id="imgUploadProgress" style="display:none;margin-top:8px;">' +
+          '<div style="display:flex;align-items:center;gap:8px;">' +
+            '<div style="flex:1;height:6px;background:#eee;border-radius:3px;overflow:hidden;">' +
+              '<div id="imgProgressBar" style="height:100%;background:var(--amber);width:0%;transition:width 0.3s;border-radius:3px;"></div>' +
+            '</div>' +
+            '<span id="imgProgressText" style="font-size:0.8rem;color:var(--warm-gray);white-space:nowrap;">0%</span>' +
+          '</div>' +
+          '<div id="imgProgressStatus" style="font-size:0.8rem;color:var(--warm-gray);margin-top:4px;"></div>' +
         '</div>' +
       '</div>' +
       '<div class="form-group">' +
@@ -1364,14 +1601,97 @@ function openImageModal(imageId) {
     '</div>' +
     '<div class="modal-footer">' +
       '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
-      '<button class="btn btn-primary" onclick="saveImage(\'' + (imageId || '') + '\')">' + (isEdit ? 'Update' : 'Save') + '</button>' +
+      '<button class="btn btn-primary" id="imgSaveBtn" onclick="saveImage(\'' + (imageId || '') + '\')">' + (isEdit ? 'Update' : 'Save') + '</button>' +
     '</div>';
 
   openModal(html);
+
+  // Attach drag-and-drop after modal renders
   setTimeout(function() {
-    var el = document.getElementById('imgUrl');
-    if (el) el.focus();
+    var dropZone = document.getElementById('imgDropZone');
+    if (dropZone) {
+      dropZone.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        dropZone.style.borderColor = 'var(--amber)';
+        dropZone.style.background = 'var(--cream-dark)';
+      });
+      dropZone.addEventListener('dragleave', function(e) {
+        e.preventDefault();
+        dropZone.style.borderColor = '#ccc';
+        dropZone.style.background = 'var(--cream)';
+      });
+      dropZone.addEventListener('drop', function(e) {
+        e.preventDefault();
+        dropZone.style.borderColor = '#ccc';
+        dropZone.style.background = 'var(--cream)';
+        if (e.dataTransfer.files.length > 0) {
+          document.getElementById('imgFileInput').files = e.dataTransfer.files;
+          handleFileSelect(document.getElementById('imgFileInput'));
+        }
+      });
+    }
+    // Focus alt text if editing, otherwise leave on drop zone
+    if (isEdit) {
+      var el = document.getElementById('imgAlt');
+      if (el) el.focus();
+    }
   }, 100);
+}
+
+function setImageMode(mode) {
+  var uploadBtn = document.getElementById('imgModeUpload');
+  var urlBtn = document.getElementById('imgModeUrl');
+  var uploadSection = document.getElementById('imgUploadSection');
+  var urlSection = document.getElementById('imgUrlSection');
+
+  if (mode === 'upload') {
+    uploadBtn.className = 'btn btn-primary';
+    urlBtn.className = 'btn btn-secondary';
+    uploadSection.style.display = '';
+    urlSection.style.display = 'none';
+  } else {
+    uploadBtn.className = 'btn btn-secondary';
+    urlBtn.className = 'btn btn-primary';
+    uploadSection.style.display = 'none';
+    urlSection.style.display = '';
+  }
+}
+
+async function handleFileSelect(input) {
+  var file = input.files[0];
+  if (!file) return;
+
+  if (!file.type.startsWith('image/')) {
+    showToast('Please select an image file.', true);
+    return;
+  }
+
+  if (file.size > 10 * 1024 * 1024) {
+    showToast('Image too large. Maximum 10MB.', true);
+    return;
+  }
+
+  pendingFile = file;
+  pendingFilename = sanitizeFilename(file.name);
+
+  var nameEl = document.getElementById('imgFileName');
+  nameEl.textContent = file.name + ' (' + formatFileSize(file.size) + ')';
+  nameEl.style.display = '';
+
+  try {
+    var result = await compressImage(file, 1200, 0.85);
+    pendingBase64 = result.base64;
+
+    var container = document.getElementById('imgPreviewContainer');
+    container.innerHTML = '<img src="data:' + result.mimeType + ';base64,' + result.base64 + '">';
+
+    if (result.originalWidth > 1200) {
+      nameEl.textContent = file.name + ' (' + formatFileSize(file.size) +
+        ' \u2192 ~' + formatFileSize(result.sizeEstimate) + ', resized to ' + result.width + 'x' + result.height + ')';
+    }
+  } catch (err) {
+    showToast('Error processing image: ' + err.message, true);
+  }
 }
 
 function previewImageUrl() {
@@ -1393,15 +1713,79 @@ function getNextOrder() {
 }
 
 async function saveImage(imageId) {
-  var url = document.getElementById('imgUrl').value.trim();
   var alt = document.getElementById('imgAlt').value.trim();
   var caption = document.getElementById('imgCaption').value.trim();
   var category = document.getElementById('imgCategory').value;
   var visible = document.getElementById('imgVisible').checked;
 
-  if (!url || !alt) {
-    showToast('Please fill in all required fields.', true);
+  if (!alt) {
+    showToast('Please fill in the alt text.', true);
     return;
+  }
+
+  var url;
+
+  // Determine image source mode
+  var uploadSection = document.getElementById('imgUploadSection');
+  var isUploadMode = uploadSection && uploadSection.style.display !== 'none';
+
+  if (isUploadMode && pendingBase64) {
+    // Upload mode — push to GitHub first
+    if (!githubToken) {
+      showToast('GitHub token not configured. Go to Settings to add one.', true);
+      return;
+    }
+
+    var progressEl = document.getElementById('imgUploadProgress');
+    var progressBar = document.getElementById('imgProgressBar');
+    var progressText = document.getElementById('imgProgressText');
+    var progressStatus = document.getElementById('imgProgressStatus');
+    var saveBtn = document.getElementById('imgSaveBtn');
+
+    progressEl.style.display = '';
+    if (saveBtn) {
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Uploading...';
+    }
+
+    try {
+      progressBar.style.width = '20%';
+      progressText.textContent = '20%';
+      progressStatus.textContent = 'Uploading to GitHub...';
+
+      await uploadImageToGitHub(
+        pendingFilename,
+        pendingBase64,
+        'Add gallery image: ' + (caption || alt)
+      );
+
+      progressBar.style.width = '80%';
+      progressText.textContent = '80%';
+      progressStatus.textContent = 'Saving to database...';
+
+      url = GITHUB_PAGES_BASE + '/' + GITHUB_IMAGES_PATH + '/' + pendingFilename;
+
+    } catch (err) {
+      progressEl.style.display = 'none';
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = imageId ? 'Update' : 'Save';
+      }
+      showToast('Upload failed: ' + err.message, true);
+      return;
+    }
+  } else {
+    // URL mode
+    var urlInput = document.getElementById('imgUrl');
+    url = urlInput ? urlInput.value.trim() : '';
+    if (!url && !isUploadMode) {
+      showToast('Please provide an image URL.', true);
+      return;
+    }
+    if (!url) {
+      showToast('Please select a file to upload or switch to URL mode.', true);
+      return;
+    }
   }
 
   var data = {
@@ -1423,6 +1807,17 @@ async function saveImage(imageId) {
       await db.ref(GALLERY_PATH).push(data);
       showToast('Image added.');
     }
+
+    // Update progress to 100% if upload mode
+    var pb = document.getElementById('imgProgressBar');
+    var pt = document.getElementById('imgProgressText');
+    if (pb) { pb.style.width = '100%'; }
+    if (pt) { pt.textContent = '100%'; }
+
+    pendingFile = null;
+    pendingBase64 = null;
+    pendingFilename = null;
+
     closeModal();
   } catch (err) {
     showToast('Error saving image: ' + err.message, true);
