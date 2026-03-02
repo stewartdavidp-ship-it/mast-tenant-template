@@ -4371,13 +4371,13 @@ function viewOrder(orderId) {
   selectedOrderId = orderId;
   document.getElementById('ordersListView').style.display = 'none';
   var detailEl = document.getElementById('orderDetailView');
-  detailEl.style.display = '';
+  detailEl.style.display = 'block';
   renderOrderDetail(orderId);
 }
 
 function backToOrders() {
   selectedOrderId = null;
-  document.getElementById('ordersListView').style.display = '';
+  document.getElementById('ordersListView').style.display = 'block';
   document.getElementById('orderDetailView').style.display = 'none';
   document.getElementById('orderDetailView').className = 'order-detail';
 }
