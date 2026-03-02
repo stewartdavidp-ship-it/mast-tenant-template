@@ -477,6 +477,28 @@
     content: ' \2192';
   }
 
+  .product-price {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--charcoal);
+    margin: 0.3rem 0 0;
+  }
+
+  .category-section-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(1.6rem, 3vw, 2.2rem);
+    font-weight: 300;
+    color: var(--charcoal);
+    text-align: center;
+    margin: 3.5rem 0 1.5rem;
+    letter-spacing: 0.02em;
+  }
+
+  .category-section-title:first-of-type {
+    margin-top: 0;
+  }
+
   /* ========= ETSY CTA BANNER ========= */
   .etsy-cta {
     background: linear-gradient(135deg, var(--amber) 0%, var(--amber-light) 50%, var(--amber-glow) 100%);
@@ -576,102 +598,17 @@
 <!-- ============ SHOP ============ -->
 <section>
   <div class="category-filter fade-up">
-    <span class="filter-pill active">All</span>
-    <span class="filter-pill">Figurines</span>
-    <span class="filter-pill">Jewelry</span>
-    <span class="filter-pill">Drinkware</span>
-    <span class="filter-pill">Sculptures</span>
-    <span class="filter-pill">Vases</span>
+    <span class="filter-pill active" onclick="filterShop('all', this)">All</span>
+    <span class="filter-pill" onclick="filterShop('figurines', this)">Figurines</span>
+    <span class="filter-pill" onclick="filterShop('jewelry', this)">Jewelry</span>
+    <span class="filter-pill" onclick="filterShop('drinkware', this)">Drinkware</span>
+    <span class="filter-pill" onclick="filterShop('vases', this)">Vases</span>
+    <span class="filter-pill" onclick="filterShop('decoration', this)">Decoration</span>
+    <span class="filter-pill" onclick="filterShop('sculpture', this)">Sculpture</span>
   </div>
 
-  <div class="product-grid">
-    <div class="product-card fade-up">
-      <div class="product-image">
-        <img src="https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_c5_i1_w3000.jpeg" alt="Octopus Figurine" />
-      </div>
-      <div class="product-info">
-        <span class="product-category">Figurines</span>
-        <h3>Octopus Figurine</h3>
-        <a href="https://www.etsy.com/shop/ShirGlassworks" class="product-link" target="_blank" rel="noopener">View on Etsy</a>
-      </div>
-    </div>
-
-    <div class="product-card fade-up">
-      <div class="product-image">
-        <img src="https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_c4_i3_w900.jpeg" alt="Sea Turtle Pendant" />
-      </div>
-      <div class="product-info">
-        <span class="product-category">Jewelry</span>
-        <h3>Sea Turtle Pendant</h3>
-        <a href="https://www.etsy.com/shop/ShirGlassworks" class="product-link" target="_blank" rel="noopener">View on Etsy</a>
-      </div>
-    </div>
-
-    <div class="product-card fade-up">
-      <div class="product-image">
-        <img src="https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_c3_i1_w3300.jpeg" alt="Handblown Cups" />
-      </div>
-      <div class="product-info">
-        <span class="product-category">Drinkware</span>
-        <h3>Handblown Cups</h3>
-        <a href="https://www.etsy.com/shop/ShirGlassworks" class="product-link" target="_blank" rel="noopener">View on Etsy</a>
-      </div>
-    </div>
-
-    <div class="product-card fade-up">
-      <div class="product-image">
-        <img src="https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_c8_i2_w4939.jpeg" alt="Glass Lotus" />
-      </div>
-      <div class="product-info">
-        <span class="product-category">Sculptures</span>
-        <h3>Glass Lotus</h3>
-        <a href="https://www.etsy.com/shop/ShirGlassworks" class="product-link" target="_blank" rel="noopener">View on Etsy</a>
-      </div>
-    </div>
-
-    <div class="product-card fade-up">
-      <div class="product-image">
-        <img src="https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_c6_i2_w1938.jpeg" alt="Flower Vases" />
-      </div>
-      <div class="product-info">
-        <span class="product-category">Vases</span>
-        <h3>Flower Vases</h3>
-        <a href="https://www.etsy.com/shop/ShirGlassworks" class="product-link" target="_blank" rel="noopener">View on Etsy</a>
-      </div>
-    </div>
-
-    <div class="product-card fade-up">
-      <div class="product-image">
-        <img src="https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_c7_i1_w3024.jpeg" alt="Glass Ornaments" />
-      </div>
-      <div class="product-info">
-        <span class="product-category">Decorations</span>
-        <h3>Glass Ornaments</h3>
-        <a href="https://www.etsy.com/shop/ShirGlassworks" class="product-link" target="_blank" rel="noopener">View on Etsy</a>
-      </div>
-    </div>
-
-    <div class="product-card fade-up">
-      <div class="product-image">
-        <img src="https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_c1_i1_w2000.jpg" alt="Glass Snakes" />
-      </div>
-      <div class="product-info">
-        <span class="product-category">Figurines</span>
-        <h3>Glass Snakes</h3>
-        <a href="https://www.etsy.com/shop/ShirGlassworks" class="product-link" target="_blank" rel="noopener">View on Etsy</a>
-      </div>
-    </div>
-
-    <div class="product-card fade-up">
-      <div class="product-image">
-        <img src="https://www.shirglassworks.com/uploads/3/7/0/8/37080241/s595745330179078127_c4_i2_w900.jpeg" alt="Jellyfish Pendant" />
-      </div>
-      <div class="product-info">
-        <span class="product-category">Jewelry</span>
-        <h3>Jellyfish Pendant</h3>
-        <a href="https://www.etsy.com/shop/ShirGlassworks" class="product-link" target="_blank" rel="noopener">View on Etsy</a>
-      </div>
-    </div>
+  <div id="shopContainer">
+    <p style="text-align:center;color:var(--warm-gray);padding:3rem;">Loading products...</p>
   </div>
 </section>
 
@@ -708,7 +645,18 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script>
-  // Firebase — load shop products dynamically
+  // Firebase — load shop products dynamically grouped by category
+  var allShopItems = [];
+  var SHOP_CATS = [
+    { id: 'figurines', label: 'Figurines' },
+    { id: 'jewelry', label: 'Jewelry' },
+    { id: 'drinkware', label: 'Drinkware' },
+    { id: 'vases', label: 'Vases' },
+    { id: 'decoration', label: 'Decoration' },
+    { id: 'sculpture', label: 'Sculpture' }
+  ];
+  var SHOP_IDS = SHOP_CATS.map(function(c) { return c.id; });
+
   (function() {
     var app = firebase.initializeApp({
       apiKey: "AIzaSyBQVwn8vOrFTzLlm2MYIPBwgZV2xR9AuhM",
@@ -720,30 +668,59 @@
     db.ref('shirglassworks/public/gallery').orderByChild('order').once('value').then(function(snap) {
       var data = snap.val();
       if (!data) return;
-      var shopItems = Object.values(data)
-        .filter(function(i) { return i.section === 'shop' && i.visible !== false; })
+      allShopItems = Object.values(data)
+        .filter(function(i) { return SHOP_IDS.indexOf(i.section) !== -1 && i.visible !== false; })
         .sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
-      if (shopItems.length === 0) return;
+      renderShop('all');
+    }).catch(function() {
+      document.getElementById('shopContainer').innerHTML = '<p style="text-align:center;color:var(--warm-gray);padding:3rem;">Unable to load products.</p>';
+    });
+  })();
 
-      var grid = document.querySelector('.product-grid');
-      if (!grid) return;
+  function renderShop(filter) {
+    var container = document.getElementById('shopContainer');
+    if (!container) return;
+    if (allShopItems.length === 0) {
+      container.innerHTML = '<p style="text-align:center;color:var(--warm-gray);padding:3rem;">No products found.</p>';
+      return;
+    }
 
-      var html = '';
-      shopItems.forEach(function(item) {
-        var catLabel = (item.category || '').charAt(0).toUpperCase() + (item.category || '').slice(1);
+    var html = '';
+    var catsToShow = filter === 'all' ? SHOP_CATS : SHOP_CATS.filter(function(c) { return c.id === filter; });
+
+    catsToShow.forEach(function(cat) {
+      var items = allShopItems.filter(function(i) { return i.section === cat.id; });
+      if (items.length === 0) return;
+
+      if (filter === 'all') {
+        html += '<h2 class="category-section-title">' + cat.label + '</h2>';
+      }
+      html += '<div class="product-grid">';
+      items.forEach(function(item) {
         var name = item.productName || item.caption || item.alt || '';
         var link = item.productLink || 'https://www.etsy.com/shop/ShirGlassworks';
+        var price = item.price || '';
         html += '<div class="product-card fade-up" style="opacity:1;transform:translateY(0)">' +
-          '<div class="product-image"><img src="' + item.url + '" alt="' + (item.alt || '') + '" /></div>' +
+          '<div class="product-image"><img src="' + item.url + '" alt="' + (item.alt || '') + '" loading="lazy" /></div>' +
           '<div class="product-info">' +
-            '<span class="product-category">' + catLabel + '</span>' +
+            '<span class="product-category">' + cat.label + '</span>' +
             '<h3>' + name + '</h3>' +
-            '<a href="' + link + '" class="product-link" target="_blank" rel="noopener">View on Etsy</a>' +
+            (price ? '<p class="product-price">' + price + '</p>' : '') +
+            (link ? '<a href="' + link + '" class="product-link" target="_blank" rel="noopener">View Details</a>' : '') +
           '</div></div>';
       });
-      grid.innerHTML = html;
-    }).catch(function() { /* keep hardcoded fallback */ });
-  })();
+      html += '</div>';
+    });
+
+    container.innerHTML = html;
+  }
+
+  function filterShop(cat, el) {
+    var pills = document.querySelectorAll('.filter-pill');
+    pills.forEach(function(p) { p.classList.remove('active'); });
+    el.classList.add('active');
+    renderShop(cat);
+  }
 </script>
 <script>
   // Nav scroll effect

@@ -1248,9 +1248,16 @@ const SECTIONS = [
   { id: 'hero', label: 'Hero', description: 'Homepage banner video & poster image' },
   { id: 'about', label: 'About', description: 'About page images' },
   { id: 'gallery', label: 'Gallery', description: 'Homepage gallery grid' },
-  { id: 'shop', label: 'Shop', description: 'Shop page products' },
-  { id: 'schedule', label: 'Schedule', description: 'Schedule page images' }
+  { id: 'shop', label: 'Shop', description: 'Shop page featured images' },
+  { id: 'schedule', label: 'Schedule', description: 'Schedule page images' },
+  { id: 'figurines', label: 'Figurines', description: 'Glass figurines' },
+  { id: 'jewelry', label: 'Jewelry', description: 'Glass jewelry & pendants' },
+  { id: 'drinkware', label: 'Drinkware', description: 'Handblown glass cups' },
+  { id: 'vases', label: 'Vases', description: 'Glass vases & flowers' },
+  { id: 'decoration', label: 'Decoration', description: 'Ornaments & decorative pieces' },
+  { id: 'sculpture', label: 'Sculpture', description: 'Glass sculptures' }
 ];
+const SHOP_SECTION_IDS = ['shop', 'figurines', 'jewelry', 'drinkware', 'vases', 'decoration', 'sculpture'];
 const MIGRATION_FLAG_PATH = 'shirglassworks/admin/sectionsMigrated';
 
 // GitHub image upload
@@ -1457,6 +1464,10 @@ auth.onAuthStateChanged(function(user) {
   // V3: remove records with broken/missing URLs
   cleanupBrokenRecords().catch(function(err) {
     console.error('Cleanup error:', err);
+  });
+  // V5: seed shop products across 6 subcategories
+  seedShopProducts().catch(function(err) {
+    console.error('Shop seed error:', err);
   });
 });
 
@@ -1740,6 +1751,83 @@ async function cleanupBrokenRecords() {
   updates[v4Flag] = true;
   await db.ref().update(updates);
   console.log('Cleanup complete — removed ' + count + ' broken records.');
+}
+
+async function seedShopProducts() {
+  var v5Flag = 'shirglassworks/admin/seedShopV5';
+  var flagSnap = await db.ref(v5Flag).once('value');
+  if (flagSnap.val()) return;
+
+  console.log('Seeding shop products...');
+  var updates = {};
+  var order = {};
+  function add(section, name, price, url, link) {
+    if (!order[section]) order[section] = 0;
+    var key = db.ref(GALLERY_PATH).push().key;
+    updates[GALLERY_PATH + '/' + key] = {
+      section: section,
+      productName: name,
+      price: price,
+      url: url,
+      productLink: link || '',
+      alt: name,
+      caption: name,
+      visible: true,
+      order: order[section]++,
+      createdAt: firebase.database.ServerValue.TIMESTAMP,
+      updatedAt: firebase.database.ServerValue.TIMESTAMP
+    };
+  }
+
+  var I = 'https://www.shirglassworks.com/uploads/3/7/0/8/37080241/';
+  var S = 'https://www.shirglassworks.com/store/';
+
+  // Figurines (16)
+  add('figurines', 'Hollow Bird', '$45.00', I+'s595745330179078127_p112_i19_w2100.jpeg', S+'p112/Hollow_Bird.html');
+  add('figurines', 'Glass Caterpillar', '$35.00', I+'s595745330179078127_p73_i7_w2270.jpeg', S+'p73/glass-caterpillar.html');
+  add('figurines', 'Glass Ladybug', '$35.00', I+'s595745330179078127_p67_i1_w1200.jpeg', S+'p67/Glass-Ladybug.html');
+  add('figurines', 'Mini Glass Swan', '$45.00', I+'s595745330179078127_p70_i1_w1200.jpeg', S+'p70/mini-glass-swan.html');
+  add('figurines', 'Mini Glass Sea Turtle', '$45.00', I+'s595745330179078127_p71_i1_w2310.jpeg', S+'p71/Mini-Glass-Sea-Turtle.html');
+  add('figurines', 'Mini Elephant Figurine', '$65.00', I+'s595745330179078127_p74_i1_w2218.jpeg', S+'p74/mini-glass-elephant.html');
+  add('figurines', 'Mini Glass Penguin', '$45.00', I+'s595745330179078127_p75_i1_w1350.jpeg', S+'p75/Mini-Glass-Penguin.html');
+  add('figurines', 'Miniature Glass Snail', '$35.00', I+'s595745330179078127_p76_i10_w1800.jpeg', S+'p76/Miniature_Glass_Snail.html');
+  add('figurines', 'Whale', '$25.00', I+'s595745330179078127_p92_i1_w1968.jpeg', S+'p92/Whale.html');
+  add('figurines', 'Orca', '$45.00', I+'s595745330179078127_p93_i1_w1991.jpeg', S+'p93/Miniature-Orca.html');
+  add('figurines', 'Miniature Mushroom', '$45.00', I+'s595745330179078127_p95_i1_w1154.jpeg', S+'p95/Miniature-Mushroom.html');
+  add('figurines', 'Miniature Glass Cardinal', '$45.00', I+'s595745330179078127_p98_i1_w1350.jpeg', S+'p98/Miniature-Cardinal.html');
+  add('figurines', 'Miniature Glass Octopus', '$125.00', I+'s595745330179078127_p100_i6_w3519.jpeg', S+'p100/Miniature-Octopus.html');
+  add('figurines', 'Large Glass Octopus', '$1,200.00', I+'s595745330179078127_p101_i1_w3534.jpeg', S+'p101/Sculptural-Octopus.html');
+  add('figurines', 'Miniature Snakes', '$45.00', I+'s595745330179078127_p106_i1_w2296.jpeg', S+'p106/Miniature_Snakes.html');
+  add('figurines', 'X-Large Glass Octopus', '$2,400.00', I+'s595745330179078127_p115_i2_w5092.jpeg', S+'p115/Sculptural-Octopus.html');
+
+  // Jewelry (4)
+  add('jewelry', 'Turtle Pendant', '$85.00', I+'s595745330179078127_p46_i9_w1202.jpeg', S+'p46/turtle-pendant-purple-fins.html');
+  add('jewelry', 'Anatomical Heart Pendant', '$125.00', I+'s595745330179078127_p66_i14_w3600.jpeg', S+'p66/anatomical-heart-pendant.html');
+  add('jewelry', 'JellyFish Pendants', '$85.00', I+'s595745330179078127_p90_i1_w1350.jpeg', S+'p90/JellyFish_Pendants.html');
+  add('jewelry', 'A Life\'s Work - Honey Pendant', '$125.00', I+'s595745330179078127_p116_i1_w3600.jpeg', S+'p116/A_Life%27s_Work_-_Honey_Pendant.html');
+
+  // Drinkware (2)
+  add('drinkware', 'Speckled Cups', '$45.00', I+'s595745330179078127_p83_i8_w6000.jpeg', S+'p83/Speckled_Cups.html');
+  add('drinkware', 'Spiral Cups', '$85.00', I+'s595745330179078127_p84_i8_w3600.jpeg', S+'p84/Spiral_Cups.html');
+
+  // Vases (1)
+  add('vases', 'Glass Flowers', '$25.00', I+'s595745330179078127_p88_i1_w1350.jpeg', S+'p88/Glass_Flowers.html');
+
+  // Decoration (5)
+  add('decoration', 'Hollow Bird', '$45.00', I+'s595745330179078127_p112_i19_w2100.jpeg', S+'p112/Hollow_Bird.html');
+  add('decoration', 'Glass Pumpkin', '$35.00 - $55.00', I+'s595745330179078127_p42_i3_w2700.jpeg', S+'p42/glass-pumpkins.html');
+  add('decoration', 'Orb Ornaments', '$35.00', I+'s595745330179078127_p78_i11_w3600.jpeg', S+'p78/Orb_Ornaments.html');
+  add('decoration', 'Glass Flowers', '$25.00', I+'s595745330179078127_p88_i1_w1350.jpeg', S+'p88/Glass_Flowers.html');
+  add('decoration', 'Cane Ornaments', '$165.00', I+'s595745330179078127_p102_i1_w2107.jpeg', S+'p102/Cane_Ornaments.html');
+
+  // Sculpture (3)
+  add('sculpture', 'Float', '$4,600.00', I+'s595745330179078127_p109_i7_w5000.jpeg', S+'p109/Lotus-in-Trees.html');
+  add('sculpture', 'Large Glass Octopus', '$1,200.00', I+'s595745330179078127_p101_i1_w3534.jpeg', S+'p101/Sculptural-Octopus.html');
+  add('sculpture', 'X-Large Glass Octopus', '$2,400.00', I+'s595745330179078127_p115_i2_w5092.jpeg', S+'p115/Sculptural-Octopus.html');
+
+  updates[v5Flag] = true;
+  await db.ref().update(updates);
+  console.log('Seeded ' + (Object.keys(updates).length - 1) + ' shop products.');
 }
 
 // ============================================================
@@ -2135,8 +2223,9 @@ function renderGallery() {
             '<div class="gallery-card-meta">';
 
         // Show relevant metadata per section
-        if (sec.id === 'shop' && img.productName) {
-          html += '<span class="category-badge">' + esc(img.category || '') + '</span>';
+        if (SHOP_SECTION_IDS.indexOf(sec.id) !== -1 && img.productName) {
+          html += '<span class="category-badge">' + esc(img.productName) + '</span>';
+          if (img.price) html += '<span class="category-badge" style="background:#2A7C6F;color:white;">' + esc(img.price) + '</span>';
         } else if (sec.id === 'gallery') {
           html += '<span class="category-badge">' + esc(img.category || 'other') + '</span>';
         } else if (sec.id === 'hero' && img.videoUrl) {
@@ -2355,9 +2444,10 @@ function openImageModal(imageId, defaultSection) {
     return '<option value="' + cat + '"' + selected + '>' + cat.charAt(0).toUpperCase() + cat.slice(1) + '</option>';
   }).join('');
 
+  var isShopSection = SHOP_SECTION_IDS.indexOf(section) !== -1;
   var showCategory = (section === 'gallery' || section === 'shop');
   var showVideoUrl = (section === 'hero');
-  var showProductFields = (section === 'shop');
+  var showProductFields = isShopSection;
 
   var html = '' +
     '<div class="modal-header">' +
@@ -2438,6 +2528,10 @@ function openImageModal(imageId, defaultSection) {
           '<label for="imgProductLink">Product Link</label>' +
           '<input type="text" id="imgProductLink" value="' + esc(img.productLink || '') + '" placeholder="https://www.etsy.com/...">' +
         '</div>' +
+        '<div class="form-group">' +
+          '<label for="imgPrice">Price</label>' +
+          '<input type="text" id="imgPrice" value="' + esc(img.price || '') + '" placeholder="e.g. $45">' +
+        '</div>' +
       '</div>' +
       '<div class="form-group">' +
         '<div class="form-check">' +
@@ -2489,9 +2583,10 @@ function onSectionChange() {
   var videoGroup = document.getElementById('imgVideoUrlGroup');
   var categoryGroup = document.getElementById('imgCategoryGroup');
   var productFields = document.getElementById('imgProductFields');
+  var isShopSec = SHOP_SECTION_IDS.indexOf(sec) !== -1;
   videoGroup.style.display = sec === 'hero' ? '' : 'none';
   categoryGroup.style.display = (sec === 'gallery' || sec === 'shop') ? '' : 'none';
-  productFields.style.display = sec === 'shop' ? '' : 'none';
+  productFields.style.display = isShopSec ? '' : 'none';
 }
 
 function setImageMode(mode) {
@@ -2661,12 +2756,14 @@ async function saveImage(imageId) {
     if (videoUrl) data.videoUrl = videoUrl;
   }
 
-  // Shop: product fields
-  if (section === 'shop') {
+  // Shop sections: product fields
+  if (SHOP_SECTION_IDS.indexOf(section) !== -1) {
     var productName = document.getElementById('imgProductName').value.trim();
     var productLink = document.getElementById('imgProductLink').value.trim();
+    var price = document.getElementById('imgPrice').value.trim();
     if (productName) data.productName = productName;
     if (productLink) data.productLink = productLink;
+    if (price) data.price = price;
   }
 
   try {
