@@ -1483,7 +1483,7 @@
     const allItems = Object.values(data).filter(function(i) { return i.visible !== false; });
 
     // Hero: update video + poster
-    var heroItems = allItems.filter(function(i) { return i.section === 'hero'; });
+    var heroItems = allItems.filter(function(i) { return i.section === 'hero' && i.visible !== false; });
     if (heroItems.length > 0) {
       var hero = heroItems[0];
       var video = document.getElementById('heroVideo');
@@ -1499,7 +1499,7 @@
     }
 
     // About preview: update image
-    var aboutItems = allItems.filter(function(i) { return i.section === 'about'; });
+    var aboutItems = allItems.filter(function(i) { return i.section === 'about' && i.visible !== false; });
     aboutItems.sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
     if (aboutItems.length > 0) {
       var aboutImg = document.querySelector('.about-image img');
@@ -1510,7 +1510,7 @@
     }
 
     // Gallery grid: filter to gallery section only
-    var galleryItems = allItems.filter(function(i) { return i.section === 'gallery' || !i.section; });
+    var galleryItems = allItems.filter(function(i) { return (i.section === 'gallery' || !i.section) && i.visible !== false && i.url; });
     galleryItems.sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
     if (galleryItems.length === 0) return;
 
