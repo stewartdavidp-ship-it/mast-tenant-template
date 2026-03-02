@@ -1373,7 +1373,7 @@
       font-size: 0.85rem;
     }
 
-    /* Build Queue */
+    /* Production Request Queue */
     .build-queue-summary {
       background: #F3E5F5;
       border-radius: 8px;
@@ -1388,7 +1388,7 @@
     }
     .build-queue-summary:hover { background: #EDE7F6; }
 
-    .build-job-row {
+    .production-request-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -1396,8 +1396,8 @@
       border-bottom: 1px solid var(--cream-dark);
       font-size: 0.85rem;
     }
-    .build-job-row:last-child { border-bottom: none; }
-    .build-job-status {
+    .production-request-row:last-child { border-bottom: none; }
+    .production-request-status {
       display: inline-block;
       padding: 2px 8px;
       border-radius: 4px;
@@ -1405,9 +1405,170 @@
       font-weight: 600;
       text-transform: uppercase;
     }
-    .build-job-status.pending { background: #FFF3E0; color: #E65100; }
-    .build-job-status.in-progress { background: #F3E5F5; color: #7B1FA2; }
-    .build-job-status.completed { background: #E8F5E9; color: #2E7D32; }
+    .production-request-status.pending { background: #FFF3E0; color: #E65100; }
+    .production-request-status.in-progress { background: #F3E5F5; color: #7B1FA2; }
+    .production-request-status.completed { background: #E8F5E9; color: #2E7D32; }
+    .production-request-status.fulfilled { background: #E8F5E9; color: #2E7D32; }
+    .production-request-status.assigned { background: #E3F2FD; color: #1565C0; }
+    .production-request-status.cancelled { background: #FFEBEE; color: #C62828; }
+
+    /* Production Jobs */
+    .prod-job-card {
+      background: var(--cream);
+      border: 1px solid var(--cream-dark);
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 12px;
+      cursor: pointer;
+      transition: box-shadow 0.15s;
+    }
+    .prod-job-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .prod-purpose-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .prod-purpose-badge.fulfillment { background: #FFF3E0; color: #C4853C; }
+    .prod-purpose-badge.custom { background: #E0F2F1; color: #2A7C6F; }
+    .prod-purpose-badge.inventory-general { background: #F5F5F5; color: #6B6560; }
+    .prod-purpose-badge.inventory-event { background: #F3E5F5; color: #7B1FA2; }
+    .prod-purpose-badge.wholesale { background: #E3F2FD; color: #1565C0; }
+    .prod-purpose-badge.experimental { background: #F1F8E9; color: #558B2F; }
+    .prod-status-pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .prod-status-pill.definition { background: #FFF3E0; color: #E65100; }
+    .prod-status-pill.in-progress { background: #F3E5F5; color: #7B1FA2; }
+    .prod-status-pill.completed { background: #E8F5E9; color: #2E7D32; }
+    .prod-status-pill.on-hold { background: #FFF9C4; color: #F57F17; }
+    .prod-status-pill.cancelled { background: #FFEBEE; color: #C62828; }
+    .prod-priority-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 4px;
+    }
+    .prod-priority-dot.high { background: #C62828; }
+    .prod-priority-dot.medium { background: #F57F17; }
+    .prod-priority-dot.low { background: #9E9E9E; }
+    .prod-progress-bar {
+      height: 6px;
+      background: var(--cream-dark);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+    .prod-progress-fill {
+      height: 100%;
+      background: var(--teal);
+      border-radius: 3px;
+      transition: width 0.3s;
+    }
+    .prod-detail-section {
+      background: var(--cream);
+      border: 1px solid var(--cream-dark);
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .prod-line-item-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--cream-dark);
+      font-size: 0.85rem;
+    }
+    .prod-line-item-row:last-child { border-bottom: none; }
+    .prod-build-card {
+      background: var(--cream);
+      border: 1px solid var(--cream-dark);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 8px;
+    }
+    .prod-build-active {
+      border-color: var(--teal);
+      box-shadow: 0 0 0 2px rgba(42,124,111,0.15);
+    }
+    .prod-milestone {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 0;
+      font-size: 0.82rem;
+      color: var(--warm-gray);
+    }
+    .prod-milestone::before {
+      content: '●';
+      color: var(--teal);
+      font-size: 0.6rem;
+    }
+    /* Touch-friendly build controls */
+    .build-touch-btn {
+      min-height: 48px;
+      min-width: 48px;
+      font-size: 1rem;
+      padding: 12px 24px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 600;
+    }
+    .build-touch-btn.primary { background: var(--teal); color: white; }
+    .build-touch-btn.primary:hover { background: #1e6b5f; }
+    .build-touch-btn.secondary { background: var(--cream-dark); color: var(--charcoal); }
+    .build-touch-btn.danger { background: #C62828; color: white; }
+    .operator-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--cream-dark);
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 0.82rem;
+      margin: 2px;
+    }
+    .operator-tag .remove-op {
+      cursor: pointer;
+      color: var(--warm-gray);
+      font-size: 0.9rem;
+      line-height: 1;
+    }
+    .operator-tag .remove-op:hover { color: #C62828; }
+
+    /* Production Queue card */
+    .prod-queue-card {
+      background: var(--cream);
+      border: 1px solid #E65100;
+      border-left: 4px solid #E65100;
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+
+    /* Dark mode for production */
+    body.dark-mode .prod-job-card { background: #2a2a2a; border-color: #3a3a3a; }
+    body.dark-mode .prod-detail-section { background: #2a2a2a; border-color: #3a3a3a; }
+    body.dark-mode .prod-build-card { background: #2a2a2a; border-color: #3a3a3a; }
+    body.dark-mode .prod-queue-card { background: #2a2a2a; border-color: #E65100; }
+    body.dark-mode .prod-progress-bar { background: #3a3a3a; }
+    body.dark-mode .prod-line-item-row { border-color: #3a3a3a; }
+    body.dark-mode .operator-tag { background: #3a3a3a; }
 
     body.dark-mode .order-card {
       background: #2a2a2a;
@@ -1730,6 +1891,7 @@
       <button class="header-tab" data-tab="gallery" onclick="switchTab('gallery')">Gallery</button>
       <button class="header-tab" data-tab="products" onclick="switchTab('products')">Products</button>
       <button class="header-tab" data-tab="orders" onclick="switchTab('orders')">Orders</button>
+      <button class="header-tab" data-tab="production" onclick="switchTab('production')">Production</button>
       <button class="header-tab" data-tab="coupons" onclick="switchTab('coupons')">Coupons</button>
       <button class="header-tab" data-tab="analytics" onclick="switchTab('analytics')">Analytics</button>
       <button class="header-tab" data-tab="settings" onclick="switchTab('settings')">Settings</button>
@@ -1944,6 +2106,62 @@
     </div>
 
     <!-- Admin: Settings Tab -->
+    <!-- ===== PRODUCTION TAB ===== -->
+    <div id="productionTab" style="display:none;">
+      <div class="section-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+        <h2>Production</h2>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <div style="display:flex;border:1px solid var(--cream-dark);border-radius:6px;overflow:hidden;">
+            <button id="prodSubQueue" class="btn btn-secondary" style="border-radius:0;border:none;font-size:0.8rem;padding:6px 14px;" onclick="switchProductionSubView('queue')">Queue <span id="queueBadge" style="background:#E65100;color:white;border-radius:10px;padding:1px 6px;font-size:0.7rem;margin-left:4px;display:none;">0</span></button>
+            <button id="prodSubJobs" class="btn btn-primary" style="border-radius:0;border:none;font-size:0.8rem;padding:6px 14px;" onclick="switchProductionSubView('jobs')">Jobs</button>
+          </div>
+          <button class="btn btn-primary" onclick="openNewJobModal()">+ New Job</button>
+        </div>
+      </div>
+      <div id="productionQueueView" style="display:none;">
+        <div id="productionQueueEmpty" style="text-align:center;padding:48px 20px;color:var(--warm-gray);">
+          <div style="font-size:2rem;margin-bottom:12px;">&#x2705;</div>
+          <p>No pending production requests</p>
+        </div>
+        <div id="productionQueueList"></div>
+      </div>
+      <div id="productionJobsView">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
+          <select id="prodFilterStatus" onchange="renderProductionJobs()" style="padding:6px 10px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.82rem;font-family:'DM Sans',sans-serif;">
+            <option value="active">Active</option>
+            <option value="all">All Statuses</option>
+            <option value="definition">Definition</option>
+            <option value="in-progress">In Progress</option>
+            <option value="completed">Completed</option>
+            <option value="on-hold">On Hold</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+          <select id="prodFilterPurpose" onchange="renderProductionJobs()" style="padding:6px 10px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.82rem;font-family:'DM Sans',sans-serif;">
+            <option value="all">All Purposes</option>
+            <option value="inventory-event">🎪 Event Inventory</option>
+            <option value="inventory-general">📦 General Inventory</option>
+            <option value="fulfillment">📋 Fulfillment</option>
+            <option value="custom">✨ Custom</option>
+            <option value="wholesale">🏪 Wholesale</option>
+            <option value="experimental">🧪 Experimental</option>
+          </select>
+          <select id="prodFilterWorkType" onchange="renderProductionJobs()" style="padding:6px 10px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.82rem;font-family:'DM Sans',sans-serif;">
+            <option value="all">All Work Types</option>
+            <option value="flameshop">Flameshop</option>
+            <option value="hotshop">Hotshop</option>
+            <option value="hybrid">Hybrid</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div id="productionJobsList"></div>
+        <div id="productionJobsEmpty" style="text-align:center;padding:48px 20px;color:var(--warm-gray);display:none;">
+          <p>No jobs found. Create one to get started!</p>
+        </div>
+      </div>
+      <div id="productionJobDetail" style="display:none;"></div>
+      <div id="productionBuildView" style="display:none;"></div>
+    </div>
+
     <div id="settingsTab" style="display:none;">
       <div class="section-header">
         <h2>Settings</h2>
@@ -2054,6 +2272,21 @@
             </div>
           </div>
         </div>
+
+        <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
+
+        <div class="form-group">
+          <label style="font-size:1.1rem;font-weight:600;">Operators</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
+            Workshop operators who work on production builds. These names appear in the operator selector when starting builds.
+          </p>
+          <div id="operatorsList" style="margin-bottom:12px;"></div>
+          <div style="display:flex;gap:8px;">
+            <input type="text" id="newOperatorName" placeholder="Operator name..."
+              style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
+            <button class="btn btn-primary" onclick="addOperator()">Add</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -2135,9 +2368,19 @@ var ordersListener = null;
 var ORDERS_PATH = 'shirglassworks/orders';
 var orderFilter = 'active';
 var selectedOrderId = null;
-var buildJobs = {};
-var buildJobsListener = null;
-var BUILD_JOBS_PATH = 'shirglassworks/admin/buildJobs';
+var productionRequests = {};
+var productionRequestsListener = null;
+var PRODUCTION_REQUESTS_PATH = 'shirglassworks/admin/buildJobs';
+var productionJobs = {};
+var productionJobsListener = null;
+var PRODUCTION_JOBS_PATH = 'shirglassworks/admin/jobs';
+var operators = {};
+var operatorsListener = null;
+var OPERATORS_PATH = 'shirglassworks/admin/operators';
+var productionLoaded = false;
+var selectedProductionJobId = null;
+var productionSubView = 'jobs';
+var activeBuildId = null;
 var inventory = {};
 var inventoryListener = null;
 var INVENTORY_PATH = 'shirglassworks/admin/inventory';
@@ -2365,14 +2608,16 @@ function switchTab(tab) {
   document.getElementById('galleryTab').style.display = tab === 'gallery' ? '' : 'none';
   document.getElementById('productsTab').style.display = tab === 'products' ? '' : 'none';
   document.getElementById('ordersTab').style.display = tab === 'orders' ? '' : 'none';
+  document.getElementById('productionTab').style.display = tab === 'production' ? '' : 'none';
   document.getElementById('couponsTab').style.display = tab === 'coupons' ? '' : 'none';
   document.getElementById('analyticsTab').style.display = tab === 'analytics' ? '' : 'none';
   document.getElementById('settingsTab').style.display = tab === 'settings' ? '' : 'none';
-  if (tab === 'settings') updateGitHubTokenStatus();
+  if (tab === 'settings') { updateGitHubTokenStatus(); loadOperators(); }
   if (tab === 'analytics' && !analyticsLoaded) loadAnalytics();
   if (tab === 'products' && !productsLoaded) loadProducts();
   if (tab === 'orders' && !ordersLoaded) loadOrders();
   if (tab === 'coupons' && !couponsLoaded) loadCoupons();
+  if (tab === 'production' && !productionLoaded) loadProduction();
 }
 
 function hideAdminTabs() {
@@ -2380,6 +2625,7 @@ function hideAdminTabs() {
   document.getElementById('galleryTab').style.display = 'none';
   document.getElementById('productsTab').style.display = 'none';
   document.getElementById('ordersTab').style.display = 'none';
+  document.getElementById('productionTab').style.display = 'none';
   document.getElementById('couponsTab').style.display = 'none';
   document.getElementById('analyticsTab').style.display = 'none';
   document.getElementById('settingsTab').style.display = 'none';
@@ -3481,12 +3727,12 @@ function attachListeners() {
       showToast('Error loading orders: ' + err.message, true);
     });
   }
-  if (!buildJobsListener) {
-    buildJobsListener = db.ref(BUILD_JOBS_PATH).limitToLast(100).on('value', function(snap) {
-      buildJobs = snap.val() || {};
+  if (!productionRequestsListener) {
+    productionRequestsListener = db.ref(PRODUCTION_REQUESTS_PATH).limitToLast(100).on('value', function(snap) {
+      productionRequests = snap.val() || {};
       if (selectedOrderId) renderOrderDetail(selectedOrderId);
     }, function(err) {
-      showToast('Error loading build jobs: ' + err.message, true);
+      showToast('Error loading production requests: ' + err.message, true);
     });
   }
   if (!inventoryListener) {
@@ -3515,9 +3761,9 @@ function detachListeners() {
     db.ref(ORDERS_PATH).off('value', ordersListener);
     ordersListener = null;
   }
-  if (buildJobsListener) {
-    db.ref(BUILD_JOBS_PATH).off('value', buildJobsListener);
-    buildJobsListener = null;
+  if (productionRequestsListener) {
+    db.ref(PRODUCTION_REQUESTS_PATH).off('value', productionRequestsListener);
+    productionRequestsListener = null;
   }
   if (inventoryListener) {
     db.ref(INVENTORY_PATH).off('value', inventoryListener);
@@ -3527,7 +3773,8 @@ function detachListeners() {
   gallery = {};
   coupons = {};
   orders = {};
-  buildJobs = {};
+  productionRequests = {};
+  productionJobs = {};
   inventory = {};
 }
 
@@ -4591,15 +4838,15 @@ function renderOrders() {
   if (emptyEl) emptyEl.style.display = 'none';
   if (tableEl) tableEl.style.display = '';
 
-  // Build queue summary
-  var pendingBuilds = Object.keys(buildJobs).filter(function(k) {
-    var j = buildJobs[k];
-    return j.status === 'pending' || j.status === 'in-progress';
+  // Production request queue summary
+  var pendingRequests = Object.keys(productionRequests).filter(function(k) {
+    var j = productionRequests[k];
+    return j.status === 'pending';
   });
-  var buildQueueHtml = '';
-  if (pendingBuilds.length > 0) {
-    buildQueueHtml = '<div class="build-queue-summary" onclick="showBuildQueue()">' +
-      pendingBuilds.length + ' build job' + (pendingBuilds.length !== 1 ? 's' : '') + ' in workshop queue</div>';
+  var queueSummaryHtml = '';
+  if (pendingRequests.length > 0) {
+    queueSummaryHtml = '<div class="build-queue-summary" onclick="switchTab(\'production\')">' +
+      pendingRequests.length + ' production request' + (pendingRequests.length !== 1 ? 's' : '') + ' pending</div>';
   }
 
   // Table rows
@@ -4621,7 +4868,7 @@ function renderOrders() {
   if (tbodyEl) tbodyEl.innerHTML = rowsHtml;
 
   // Mobile cards
-  var cardHtml = buildQueueHtml;
+  var cardHtml = queueSummaryHtml;
   filtered.forEach(function(o) {
     var key = o._key;
     var num = esc(getOrderDisplayNumber(o));
@@ -4708,8 +4955,8 @@ function renderOrderDetail(orderId) {
           ffHtml = '<span class="order-item-fulfillment stock">From Stock</span>';
         } else if (ff.source === 'build') {
           var bjStatus = '';
-          if (ff.buildJobId && buildJobs[ff.buildJobId]) {
-            bjStatus = ' (' + buildJobs[ff.buildJobId].status + ')';
+          if (ff.buildJobId && productionRequests[ff.buildJobId]) {
+            bjStatus = ' (' + productionRequests[ff.buildJobId].status + ')';
           }
           ffHtml = '<span class="order-item-fulfillment build">Build' + bjStatus + '</span>';
         }
@@ -4847,37 +5094,41 @@ function renderOrderDetail(orderId) {
     '</div>' +
   '</div>';
 
-  // Build jobs for this order
-  var orderBuildJobs = Object.keys(buildJobs).filter(function(k) {
-    return buildJobs[k].orderId === orderId;
+  // Production requests for this order
+  var orderRequests = Object.keys(productionRequests).filter(function(k) {
+    return productionRequests[k].orderId === orderId;
   });
-  var buildJobsHtml = '';
-  if (orderBuildJobs.length > 0) {
-    var bjRows = '';
-    orderBuildJobs.forEach(function(k) {
-      var bj = buildJobs[k];
-      var bjStatus = bj.status || 'pending';
-      var bjActions = '';
-      if (bjStatus === 'pending') {
-        bjActions = '<button class="btn btn-secondary" style="font-size:0.72rem;padding:4px 10px;" onclick="updateBuildJobStatus(\'' + esc(k) + '\', \'in-progress\')">Start</button>';
-      } else if (bjStatus === 'in-progress') {
-        bjActions = '<button class="btn btn-primary" style="font-size:0.72rem;padding:4px 10px;" onclick="completeBuildJob(\'' + esc(k) + '\', \'' + esc(orderId) + '\')">Complete</button>';
+  var productionRequestsHtml = '';
+  if (orderRequests.length > 0) {
+    var prRows = '';
+    orderRequests.forEach(function(k) {
+      var pr = productionRequests[k];
+      var prStatus = pr.status || 'pending';
+      var prActions = '';
+      if (prStatus === 'pending') {
+        prActions = '<button class="btn btn-secondary" style="font-size:0.72rem;padding:4px 10px;" onclick="openFulfillModal(\'' + esc(k) + '\', \'' + esc(orderId) + '\')">Fulfill</button>' +
+          '<button class="btn btn-primary" style="font-size:0.72rem;padding:4px 10px;" onclick="openAssignToJobModal(\'' + esc(k) + '\')">Assign to Job</button>';
+      } else if (prStatus === 'assigned') {
+        var jobName = pr.jobId && productionJobs[pr.jobId] ? productionJobs[pr.jobId].name : 'Job';
+        prActions = '<a href="#" onclick="switchTab(\'production\');viewProductionJob(\'' + esc(pr.jobId) + '\');return false;" style="font-size:0.72rem;color:var(--teal);">View ' + esc(jobName) + '</a>';
+      } else if (prStatus === 'fulfilled') {
+        prActions = '<span style="font-size:0.72rem;color:var(--warm-gray);">Fulfilled' + (pr.fulfilledBy ? ' by ' + esc(pr.fulfilledBy) : '') + '</span>';
       }
-      bjRows += '<div class="build-job-row">' +
+      prRows += '<div class="production-request-row">' +
         '<div>' +
-          '<strong>' + esc(bj.productName || '') + '</strong>' +
-          (bj.options ? ' <span style="color:var(--warm-gray);font-size:0.78rem;">(' + esc(Object.values(bj.options).join(', ')) + ')</span>' : '') +
-          ' x' + (bj.qty || 1) +
+          '<strong>' + esc(pr.productName || '') + '</strong>' +
+          (pr.options ? ' <span style="color:var(--warm-gray);font-size:0.78rem;">(' + esc(Object.values(pr.options).join(', ')) + ')</span>' : '') +
+          ' x' + (pr.qty || 1) +
         '</div>' +
         '<div style="display:flex;align-items:center;gap:8px;">' +
-          '<span class="build-job-status ' + bjStatus + '">' + bjStatus.replace('-', ' ') + '</span>' +
-          bjActions +
+          '<span class="production-request-status ' + prStatus + '">' + prStatus.replace('-', ' ') + '</span>' +
+          prActions +
         '</div>' +
       '</div>';
     });
-    buildJobsHtml = '<div class="order-detail-section">' +
-      '<div class="order-detail-section-title">Build Jobs</div>' +
-      bjRows +
+    productionRequestsHtml = '<div class="order-detail-section">' +
+      '<div class="order-detail-section-title">Production Requests</div>' +
+      prRows +
     '</div>';
   }
 
@@ -4910,7 +5161,7 @@ function renderOrderDetail(orderId) {
     paymentHtml +
     etsyHtml +
     trackingHtml +
-    buildJobsHtml +
+    productionRequestsHtml +
     timelineHtml +
     notesHtml;
 }
@@ -4980,7 +5231,7 @@ async function transitionOrder(orderId, newStatus) {
         history.push({ status: 'ready', at: now, by: 'system', note: 'All items in stock' });
         updates['statusHistory'] = history;
       } else {
-        // Auto-set to building and create build jobs
+        // Auto-set to building and create production requests
         updates['status'] = 'building';
         updates['buildingAt'] = now;
         history.push({ status: 'building', at: now, by: 'system', note: 'Items need to be made' });
@@ -4990,9 +5241,9 @@ async function transitionOrder(orderId, newStatus) {
 
     await db.ref(ORDERS_PATH + '/' + orderId).update(updates);
 
-    // Create build jobs if moving to building
+    // Create production requests if moving to building
     if (updates['status'] === 'building') {
-      await createBuildJobsForOrder(orderId, o, updates['fulfillment']);
+      await createProductionRequests(orderId, o, updates['fulfillment']);
     }
 
     showToast('Order updated to ' + updates['status']);
@@ -5042,8 +5293,8 @@ async function pullFromStock(pid, qty) {
   }
 }
 
-// ---- Build Jobs ----
-async function createBuildJobsForOrder(orderId, order, fulfillment) {
+// ---- Production Requests ----
+async function createProductionRequests(orderId, order, fulfillment) {
   if (!fulfillment) return;
   var items = order.items || [];
   for (var i = 0; i < items.length; i++) {
@@ -5051,61 +5302,51 @@ async function createBuildJobsForOrder(orderId, order, fulfillment) {
     var ffKey = getItemFulfillmentKey(item);
     var ff = fulfillment[ffKey];
     if (ff && ff.source === 'build') {
-      var jobRef = db.ref(BUILD_JOBS_PATH).push();
-      var jobId = jobRef.key;
-      await jobRef.set({
-        jobId: jobId,
+      var reqRef = db.ref(PRODUCTION_REQUESTS_PATH).push();
+      var reqId = reqRef.key;
+      await reqRef.set({
+        requestId: reqId,
         orderId: orderId,
         orderNumber: order.orderNumber || order.orderId,
-        pid: item.pid,
+        productId: item.pid,
         productName: item.name,
         options: item.options || null,
         qty: item.qty || 1,
         status: 'pending',
         priority: 'normal',
-        notes: [],
-        estimatedCompletion: null,
-        createdAt: new Date().toISOString(),
-        startedAt: null,
-        completedAt: null,
-        cancelledAt: null
+        notes: '',
+        jobId: null,
+        lineItemId: null,
+        fulfilledAt: null,
+        fulfilledBy: null,
+        createdAt: new Date().toISOString()
       });
-      // Link build job to fulfillment
-      await db.ref(ORDERS_PATH + '/' + orderId + '/fulfillment/' + ffKey + '/buildJobId').set(jobId);
+      // Link production request to fulfillment
+      await db.ref(ORDERS_PATH + '/' + orderId + '/fulfillment/' + ffKey + '/buildJobId').set(reqId);
     }
   }
 }
 
-async function updateBuildJobStatus(jobId, newStatus) {
-  try {
-    var updates = { status: newStatus };
-    if (newStatus === 'in-progress') updates.startedAt = new Date().toISOString();
-    await db.ref(BUILD_JOBS_PATH + '/' + jobId).update(updates);
-    showToast('Build job updated');
-  } catch (err) {
-    showToast('Error updating build job: ' + err.message, true);
-  }
-}
-
-async function completeBuildJob(jobId, orderId) {
+async function fulfillProductionRequest(requestId, orderId, operatorName) {
   try {
     var now = new Date().toISOString();
-    await db.ref(BUILD_JOBS_PATH + '/' + jobId).update({
-      status: 'completed',
-      completedAt: now
+    await db.ref(PRODUCTION_REQUESTS_PATH + '/' + requestId).update({
+      status: 'fulfilled',
+      fulfilledAt: now,
+      fulfilledBy: operatorName || 'admin'
     });
 
-    // Update order fulfillment - mark item as ready
+    // Update order fulfillment - mark item as ready (same logic as before)
     var o = orders[orderId];
     if (o && o.fulfillment) {
       var allReady = true;
       var ffUpdates = {};
       Object.keys(o.fulfillment).forEach(function(key) {
         var ff = o.fulfillment[key];
-        if (ff.buildJobId === jobId) {
+        if (ff.buildJobId === requestId) {
           ffUpdates['fulfillment/' + key + '/ready'] = true;
         }
-        if (ff.buildJobId !== jobId && !ff.ready) {
+        if (ff.buildJobId !== requestId && !ff.ready) {
           allReady = false;
         }
       });
@@ -5114,7 +5355,7 @@ async function completeBuildJob(jobId, orderId) {
       // If all items ready, auto-transition order to ready
       if (allReady) {
         var history = o.statusHistory ? o.statusHistory.slice() : [];
-        history.push({ status: 'ready', at: now, by: 'system', note: 'All build jobs completed' });
+        history.push({ status: 'ready', at: now, by: 'system', note: 'All production requests fulfilled' });
         await db.ref(ORDERS_PATH + '/' + orderId).update({
           status: 'ready',
           readyAt: now,
@@ -5122,53 +5363,1101 @@ async function completeBuildJob(jobId, orderId) {
         });
         showToast('All items ready! Order moved to Ready.');
       } else {
-        showToast('Build job completed');
+        showToast('Production request fulfilled');
       }
     }
   } catch (err) {
-    showToast('Error completing build job: ' + err.message, true);
+    showToast('Error fulfilling request: ' + err.message, true);
   }
 }
 
-function showBuildQueue() {
-  var pending = Object.keys(buildJobs).filter(function(k) {
-    var j = buildJobs[k];
-    return j.status === 'pending' || j.status === 'in-progress';
+async function assignRequestToJob(requestId, jobId, lineItemId) {
+  try {
+    await db.ref(PRODUCTION_REQUESTS_PATH + '/' + requestId).update({
+      status: 'assigned',
+      jobId: jobId,
+      lineItemId: lineItemId
+    });
+    showToast('Request assigned to job');
+  } catch (err) {
+    showToast('Error assigning request: ' + err.message, true);
+  }
+}
+
+// ============================================================
+// PRODUCTION SYSTEM
+// ============================================================
+
+var PURPOSE_LABELS = {
+  'inventory-event': '🎪 Event Inventory',
+  'inventory-general': '📦 General Inventory',
+  'fulfillment': '📋 Fulfillment',
+  'custom': '✨ Custom',
+  'wholesale': '🏪 Wholesale',
+  'experimental': '🧪 Experimental'
+};
+
+var PROD_JOB_TRANSITIONS = {
+  definition: ['in-progress', 'on-hold', 'cancelled'],
+  'in-progress': ['completed', 'on-hold', 'cancelled'],
+  'on-hold': ['in-progress', 'cancelled'],
+  completed: [],
+  cancelled: []
+};
+
+function loadProduction() {
+  productionLoaded = true;
+  // Attach jobs listener
+  if (!productionJobsListener) {
+    productionJobsListener = db.ref(PRODUCTION_JOBS_PATH).limitToLast(100).on('value', function(snap) {
+      productionJobs = snap.val() || {};
+      renderProductionJobs();
+      if (selectedProductionJobId) renderProductionJobDetail(selectedProductionJobId);
+    }, function(err) {
+      showToast('Error loading production jobs: ' + err.message, true);
+    });
+  }
+  // Attach operators listener
+  if (!operatorsListener) {
+    operatorsListener = db.ref(OPERATORS_PATH).on('value', function(snap) {
+      operators = snap.val() || {};
+    });
+  }
+  renderProductionQueue();
+  renderProductionJobs();
+  updateQueueBadge();
+}
+
+function loadOperators() {
+  db.ref(OPERATORS_PATH).once('value').then(function(snap) {
+    operators = snap.val() || {};
+    renderOperatorsList();
   });
-  if (pending.length === 0) {
-    showToast('No active build jobs');
+}
+
+function renderOperatorsList() {
+  var el = document.getElementById('operatorsList');
+  if (!el) return;
+  var keys = Object.keys(operators);
+  if (keys.length === 0) {
+    el.innerHTML = '<p style="font-size:0.85rem;color:var(--warm-gray);font-style:italic;">No operators added yet.</p>';
     return;
   }
-  var rows = '';
+  var html = '';
+  keys.forEach(function(k) {
+    var op = operators[k];
+    html += '<span class="operator-tag">' + esc(op.name || k) +
+      ' <span class="remove-op" onclick="removeOperator(\'' + esc(k) + '\')">&times;</span></span>';
+  });
+  el.innerHTML = html;
+}
+
+async function addOperator() {
+  var input = document.getElementById('newOperatorName');
+  var name = input.value.trim();
+  if (!name) { showToast('Enter an operator name', true); return; }
+  try {
+    var ref = db.ref(OPERATORS_PATH).push();
+    await ref.set({ name: name, addedAt: new Date().toISOString() });
+    input.value = '';
+    loadOperators();
+    showToast('Operator added');
+  } catch (err) {
+    showToast('Error adding operator: ' + err.message, true);
+  }
+}
+
+async function removeOperator(opId) {
+  if (!confirm('Remove this operator?')) return;
+  try {
+    await db.ref(OPERATORS_PATH + '/' + opId).remove();
+    loadOperators();
+    showToast('Operator removed');
+  } catch (err) {
+    showToast('Error removing operator: ' + err.message, true);
+  }
+}
+
+function getOperatorNames() {
+  return Object.values(operators).map(function(op) { return op.name; });
+}
+
+function switchProductionSubView(view) {
+  productionSubView = view;
+  var queueBtn = document.getElementById('prodSubQueue');
+  var jobsBtn = document.getElementById('prodSubJobs');
+  var queueView = document.getElementById('productionQueueView');
+  var jobsView = document.getElementById('productionJobsView');
+  var detailView = document.getElementById('productionJobDetail');
+  var buildView = document.getElementById('productionBuildView');
+  if (view === 'queue') {
+    queueBtn.className = 'btn btn-primary';
+    jobsBtn.className = 'btn btn-secondary';
+    queueView.style.display = '';
+    jobsView.style.display = 'none';
+    detailView.style.display = 'none';
+    buildView.style.display = 'none';
+    renderProductionQueue();
+  } else {
+    queueBtn.className = 'btn btn-secondary';
+    jobsBtn.className = 'btn btn-primary';
+    queueView.style.display = 'none';
+    jobsView.style.display = '';
+    detailView.style.display = 'none';
+    buildView.style.display = 'none';
+    selectedProductionJobId = null;
+  }
+}
+
+function updateQueueBadge() {
+  var badge = document.getElementById('queueBadge');
+  if (!badge) return;
+  var count = Object.keys(productionRequests).filter(function(k) {
+    return productionRequests[k].status === 'pending';
+  }).length;
+  badge.textContent = count;
+  badge.style.display = count > 0 ? 'inline' : 'none';
+}
+
+// ---- Production Queue ----
+function renderProductionQueue() {
+  var listEl = document.getElementById('productionQueueList');
+  var emptyEl = document.getElementById('productionQueueEmpty');
+  if (!listEl) return;
+  var pending = Object.keys(productionRequests).filter(function(k) {
+    return productionRequests[k].status === 'pending';
+  }).sort(function(a, b) {
+    var pa = productionRequests[a].priority === 'urgent' ? 0 : 1;
+    var pb = productionRequests[b].priority === 'urgent' ? 0 : 1;
+    if (pa !== pb) return pa - pb;
+    return (productionRequests[a].createdAt || '').localeCompare(productionRequests[b].createdAt || '');
+  });
+  updateQueueBadge();
+  if (pending.length === 0) {
+    listEl.innerHTML = '';
+    if (emptyEl) emptyEl.style.display = '';
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+  var html = '';
   pending.forEach(function(k) {
-    var bj = buildJobs[k];
-    var bjStatus = bj.status || 'pending';
-    var bjActions = '';
-    if (bjStatus === 'pending') {
-      bjActions = '<button class="btn btn-secondary" style="font-size:0.72rem;padding:4px 10px;" onclick="updateBuildJobStatus(\'' + esc(k) + '\', \'in-progress\');closeModal();">Start</button>';
-    } else if (bjStatus === 'in-progress') {
-      bjActions = '<button class="btn btn-primary" style="font-size:0.72rem;padding:4px 10px;" onclick="completeBuildJob(\'' + esc(k) + '\', \'' + esc(bj.orderId) + '\');closeModal();">Complete</button>';
-    }
-    rows += '<div class="build-job-row">' +
+    var pr = productionRequests[k];
+    var ago = getTimeAgo(pr.createdAt);
+    var priorityBadge = pr.priority === 'urgent' ? '<span style="background:#C62828;color:white;padding:1px 6px;border-radius:4px;font-size:0.7rem;font-weight:600;">URGENT</span> ' : '';
+    html += '<div class="prod-queue-card">' +
       '<div>' +
-        '<strong>' + esc(bj.productName || '') + '</strong>' +
-        ' x' + (bj.qty || 1) +
-        '<br><span style="font-size:0.72rem;color:var(--warm-gray);">Order: ' + esc(bj.orderNumber || bj.orderId) + '</span>' +
+        priorityBadge +
+        '<strong>' + esc(pr.productName || '') + '</strong> x' + (pr.qty || 1) +
+        (pr.options ? '<br><span style="font-size:0.78rem;color:var(--warm-gray);">' + esc(Object.values(pr.options).join(', ')) + '</span>' : '') +
+        '<br><span style="font-size:0.78rem;color:var(--warm-gray);">Order: ' + esc(pr.orderNumber || pr.orderId || '') + ' &middot; ' + ago + '</span>' +
       '</div>' +
-      '<div style="display:flex;align-items:center;gap:8px;">' +
-        '<span class="build-job-status ' + bjStatus + '">' + bjStatus.replace('-', ' ') + '</span>' +
-        bjActions +
+      '<div style="display:flex;gap:6px;flex-shrink:0;">' +
+        '<button class="btn btn-secondary" style="font-size:0.78rem;padding:6px 12px;" onclick="openFulfillModal(\'' + esc(k) + '\', \'' + esc(pr.orderId || '') + '\')">Fulfill</button>' +
+        '<button class="btn btn-primary" style="font-size:0.78rem;padding:6px 12px;" onclick="openAssignToJobModal(\'' + esc(k) + '\')">Assign to Job</button>' +
       '</div>' +
     '</div>';
   });
-  var html = '<div style="max-width:600px;">' +
-    '<h3>Workshop Build Queue</h3>' +
-    '<div style="margin-top:16px;">' + rows + '</div>' +
-    '<div style="margin-top:16px;text-align:right;">' +
-      '<button class="btn btn-secondary" onclick="closeModal()">Close</button>' +
+  listEl.innerHTML = html;
+}
+
+function getTimeAgo(isoStr) {
+  if (!isoStr) return '';
+  var diff = Date.now() - new Date(isoStr).getTime();
+  var mins = Math.floor(diff / 60000);
+  if (mins < 60) return mins + 'm ago';
+  var hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + 'h ago';
+  var days = Math.floor(hrs / 24);
+  return days + 'd ago';
+}
+
+// ---- Fulfill Modal ----
+function openFulfillModal(requestId, orderId) {
+  var pr = productionRequests[requestId];
+  if (!pr) return;
+  var opOptions = getOperatorNames().map(function(name) {
+    return '<option value="' + esc(name) + '">' + esc(name) + '</option>';
+  }).join('');
+  var html = '<div style="max-width:400px;">' +
+    '<h3>Fulfill Production Request</h3>' +
+    '<p style="margin:8px 0;font-size:0.85rem;color:var(--warm-gray);">' +
+      '<strong>' + esc(pr.productName || '') + '</strong> x' + (pr.qty || 1) +
+      '<br>Order: ' + esc(pr.orderNumber || '') +
+    '</p>' +
+    '<div class="form-group">' +
+      '<label>Fulfilled By</label>' +
+      '<select id="fulfillOperator" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">' +
+        '<option value="">Select operator...</option>' +
+        opOptions +
+      '</select>' +
+    '</div>' +
+    '<div class="form-group">' +
+      '<label>Notes (optional)</label>' +
+      '<input type="text" id="fulfillNotes" placeholder="Quick note...">' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">' +
+      '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+      '<button class="btn btn-primary" onclick="doFulfillRequest(\'' + esc(requestId) + '\', \'' + esc(orderId) + '\')">Fulfill</button>' +
     '</div>' +
   '</div>';
   openModal(html);
+}
+
+async function doFulfillRequest(requestId, orderId) {
+  var operator = document.getElementById('fulfillOperator').value || 'admin';
+  var notes = document.getElementById('fulfillNotes').value.trim();
+  if (notes) {
+    await db.ref(PRODUCTION_REQUESTS_PATH + '/' + requestId + '/notes').set(notes);
+  }
+  await fulfillProductionRequest(requestId, orderId, operator);
+  closeModal();
+  renderProductionQueue();
+}
+
+// ---- Assign to Job Modal ----
+function openAssignToJobModal(requestId) {
+  var pr = productionRequests[requestId];
+  if (!pr) return;
+  // Get active production jobs for dropdown
+  var activeJobs = Object.keys(productionJobs).filter(function(k) {
+    var j = productionJobs[k];
+    return j.status === 'definition' || j.status === 'in-progress';
+  });
+  var jobOptions = activeJobs.map(function(k) {
+    var j = productionJobs[k];
+    return '<option value="' + esc(k) + '">' + esc(j.name || 'Untitled') + ' (' + (j.status || '') + ')</option>';
+  }).join('');
+
+  var html = '<div style="max-width:450px;">' +
+    '<h3>Assign to Production Job</h3>' +
+    '<p style="margin:8px 0;font-size:0.85rem;color:var(--warm-gray);">' +
+      '<strong>' + esc(pr.productName || '') + '</strong> x' + (pr.qty || 1) +
+      '<br>Order: ' + esc(pr.orderNumber || '') +
+    '</p>' +
+    '<div style="display:flex;gap:8px;margin:16px 0;">' +
+      '<button class="btn btn-primary" style="flex:1;" onclick="doAssignNewJob(\'' + esc(requestId) + '\')">New Job</button>' +
+      (activeJobs.length > 0 ? '<button class="btn btn-secondary" style="flex:1;" id="assignExistingBtn" onclick="document.getElementById(\'existingJobSelect\').style.display=\'\'">Existing Job</button>' : '') +
+    '</div>' +
+    (activeJobs.length > 0 ? '<div id="existingJobSelect" style="display:none;">' +
+      '<select id="assignJobDropdown" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;margin-bottom:12px;">' +
+        jobOptions +
+      '</select>' +
+      '<button class="btn btn-primary" onclick="doAssignExistingJob(\'' + esc(requestId) + '\')">Assign</button>' +
+    '</div>' : '') +
+    '<div style="margin-top:16px;text-align:right;">' +
+      '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+    '</div>' +
+  '</div>';
+  openModal(html);
+}
+
+async function doAssignNewJob(requestId) {
+  var pr = productionRequests[requestId];
+  if (!pr) return;
+  try {
+    // Create new job
+    var jobRef = db.ref(PRODUCTION_JOBS_PATH).push();
+    var jobId = jobRef.key;
+    var lineItemRef = db.ref(PRODUCTION_JOBS_PATH + '/' + jobId + '/lineItems').push();
+    var lineItemId = lineItemRef.key;
+    await jobRef.set({
+      name: 'Order ' + (pr.orderNumber || '') + ' - ' + (pr.productName || 'Fulfillment'),
+      description: '',
+      purpose: 'fulfillment',
+      workType: 'flameshop',
+      priority: pr.priority === 'urgent' ? 'high' : 'medium',
+      status: 'definition',
+      deadline: null,
+      eventName: null,
+      orderId: pr.orderId || null,
+      customerId: null,
+      createdAt: new Date().toISOString(),
+      startedAt: null,
+      completedAt: null
+    });
+    await lineItemRef.set({
+      productId: pr.productId || null,
+      productName: pr.productName || '',
+      targetQuantity: pr.qty || 1,
+      completedQuantity: 0,
+      lossQuantity: 0,
+      specifications: pr.options ? Object.values(pr.options).join(', ') : '',
+      productionRequestId: requestId
+    });
+    await assignRequestToJob(requestId, jobId, lineItemId);
+    closeModal();
+    switchTab('production');
+    switchProductionSubView('jobs');
+    viewProductionJob(jobId);
+    showToast('New job created and request assigned');
+  } catch (err) {
+    showToast('Error creating job: ' + err.message, true);
+  }
+}
+
+async function doAssignExistingJob(requestId) {
+  var pr = productionRequests[requestId];
+  var jobId = document.getElementById('assignJobDropdown').value;
+  if (!pr || !jobId) return;
+  try {
+    var lineItemRef = db.ref(PRODUCTION_JOBS_PATH + '/' + jobId + '/lineItems').push();
+    var lineItemId = lineItemRef.key;
+    await lineItemRef.set({
+      productId: pr.productId || null,
+      productName: pr.productName || '',
+      targetQuantity: pr.qty || 1,
+      completedQuantity: 0,
+      lossQuantity: 0,
+      specifications: pr.options ? Object.values(pr.options).join(', ') : '',
+      productionRequestId: requestId
+    });
+    await assignRequestToJob(requestId, jobId, lineItemId);
+    closeModal();
+    showToast('Request assigned to existing job');
+  } catch (err) {
+    showToast('Error assigning to job: ' + err.message, true);
+  }
+}
+
+// ---- Production Jobs List ----
+function renderProductionJobs() {
+  var listEl = document.getElementById('productionJobsList');
+  var emptyEl = document.getElementById('productionJobsEmpty');
+  if (!listEl) return;
+  var statusFilter = document.getElementById('prodFilterStatus');
+  var purposeFilter = document.getElementById('prodFilterPurpose');
+  var workTypeFilter = document.getElementById('prodFilterWorkType');
+  var sf = statusFilter ? statusFilter.value : 'active';
+  var pf = purposeFilter ? purposeFilter.value : 'all';
+  var wf = workTypeFilter ? workTypeFilter.value : 'all';
+
+  var jobs = Object.keys(productionJobs).map(function(k) {
+    var j = productionJobs[k];
+    j._key = k;
+    return j;
+  }).filter(function(j) {
+    if (sf === 'active') return j.status === 'definition' || j.status === 'in-progress';
+    if (sf !== 'all') return j.status === sf;
+    return true;
+  }).filter(function(j) {
+    if (pf !== 'all') return j.purpose === pf;
+    return true;
+  }).filter(function(j) {
+    if (wf !== 'all') return j.workType === wf;
+    return true;
+  });
+
+  // Sort: priority (high first), then deadline
+  var priorityOrder = { high: 0, medium: 1, low: 2 };
+  jobs.sort(function(a, b) {
+    var pa = priorityOrder[a.priority] || 1;
+    var pb = priorityOrder[b.priority] || 1;
+    if (pa !== pb) return pa - pb;
+    if (a.deadline && b.deadline) return a.deadline.localeCompare(b.deadline);
+    if (a.deadline) return -1;
+    if (b.deadline) return 1;
+    return (b.createdAt || '').localeCompare(a.createdAt || '');
+  });
+
+  if (jobs.length === 0) {
+    listEl.innerHTML = '';
+    if (emptyEl) emptyEl.style.display = '';
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  var html = '';
+  jobs.forEach(function(j) {
+    var progress = getJobProgress(j);
+    var deadlineHtml = '';
+    if (j.deadline) {
+      var daysLeft = Math.ceil((new Date(j.deadline) - Date.now()) / 86400000);
+      var deadlineColor = daysLeft < 3 ? '#C62828' : daysLeft < 7 ? '#F57F17' : 'var(--warm-gray)';
+      deadlineHtml = '<span style="font-size:0.78rem;color:' + deadlineColor + ';">Due: ' + j.deadline + '</span>';
+    }
+    var orderBadge = j.orderId ? '<span style="font-size:0.72rem;background:var(--cream-dark);padding:1px 6px;border-radius:4px;">Order</span> ' : '';
+    html += '<div class="prod-job-card" onclick="viewProductionJob(\'' + esc(j._key) + '\')">' +
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">' +
+        '<div style="flex:1;">' +
+          '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' +
+            '<span class="prod-priority-dot ' + (j.priority || 'medium') + '"></span>' +
+            '<strong style="font-size:0.95rem;">' + esc(j.name || 'Untitled') + '</strong>' +
+          '</div>' +
+          '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">' +
+            '<span class="prod-purpose-badge ' + (j.purpose || '') + '">' + (PURPOSE_LABELS[j.purpose] || j.purpose || '') + '</span>' +
+            '<span class="prod-status-pill ' + (j.status || '') + '">' + (j.status || '').replace('-', ' ') + '</span>' +
+            orderBadge +
+            deadlineHtml +
+          '</div>' +
+        '</div>' +
+        '<div style="text-align:right;font-size:0.82rem;color:var(--warm-gray);min-width:60px;">' +
+          progress.total > 0 ? Math.round(progress.pct) + '%' : '' +
+        '</div>' +
+      '</div>' +
+      (progress.total > 0 ? '<div class="prod-progress-bar"><div class="prod-progress-fill" style="width:' + progress.pct + '%;"></div></div>' : '') +
+    '</div>';
+  });
+  listEl.innerHTML = html;
+}
+
+function getJobProgress(job) {
+  var lineItems = job.lineItems || {};
+  var completed = 0;
+  var total = 0;
+  Object.values(lineItems).forEach(function(li) {
+    completed += (li.completedQuantity || 0);
+    total += (li.targetQuantity || 0);
+  });
+  return { completed: completed, total: total, pct: total > 0 ? Math.min(100, (completed / total) * 100) : 0 };
+}
+
+// ---- New Job Modal ----
+function openNewJobModal() {
+  var purposeButtons = Object.keys(PURPOSE_LABELS).map(function(key) {
+    return '<button class="btn btn-secondary" style="font-size:0.85rem;padding:8px 14px;margin:4px;" onclick="doCreateJob(\'' + key + '\')">' +
+      PURPOSE_LABELS[key] + '</button>';
+  }).join('');
+  var html = '<div style="max-width:450px;">' +
+    '<h3>New Production Job</h3>' +
+    '<div class="form-group">' +
+      '<label>Job Name</label>' +
+      '<input type="text" id="newJobName" placeholder="e.g. Spring Craft Fair Prep">' +
+    '</div>' +
+    '<div class="form-group">' +
+      '<label>Purpose</label>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:0;">' + purposeButtons + '</div>' +
+    '</div>' +
+    '<div style="margin-top:16px;text-align:right;">' +
+      '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+    '</div>' +
+  '</div>';
+  openModal(html);
+}
+
+async function doCreateJob(purpose) {
+  var nameInput = document.getElementById('newJobName');
+  var name = nameInput ? nameInput.value.trim() : '';
+  if (!name) { showToast('Enter a job name', true); return; }
+  try {
+    var jobRef = db.ref(PRODUCTION_JOBS_PATH).push();
+    var jobId = jobRef.key;
+    await jobRef.set({
+      name: name,
+      description: '',
+      purpose: purpose,
+      workType: 'flameshop',
+      priority: 'medium',
+      status: 'definition',
+      deadline: null,
+      eventName: null,
+      orderId: null,
+      customerId: null,
+      createdAt: new Date().toISOString(),
+      startedAt: null,
+      completedAt: null
+    });
+    closeModal();
+    viewProductionJob(jobId);
+    showToast('Job created');
+  } catch (err) {
+    showToast('Error creating job: ' + err.message, true);
+  }
+}
+
+// ---- Production Job Detail ----
+function viewProductionJob(jobId) {
+  selectedProductionJobId = jobId;
+  var jobsView = document.getElementById('productionJobsView');
+  var queueView = document.getElementById('productionQueueView');
+  var detailView = document.getElementById('productionJobDetail');
+  var buildView = document.getElementById('productionBuildView');
+  if (jobsView) jobsView.style.display = 'none';
+  if (queueView) queueView.style.display = 'none';
+  if (buildView) buildView.style.display = 'none';
+  if (detailView) detailView.style.display = '';
+  renderProductionJobDetail(jobId);
+}
+
+function backToProductionList() {
+  selectedProductionJobId = null;
+  var detailView = document.getElementById('productionJobDetail');
+  var buildView = document.getElementById('productionBuildView');
+  if (detailView) detailView.style.display = 'none';
+  if (buildView) buildView.style.display = 'none';
+  switchProductionSubView(productionSubView);
+}
+
+function renderProductionJobDetail(jobId) {
+  var el = document.getElementById('productionJobDetail');
+  if (!el) return;
+  var job = productionJobs[jobId];
+  if (!job) { el.innerHTML = '<p>Job not found.</p>'; return; }
+
+  var status = job.status || 'definition';
+  var transitions = PROD_JOB_TRANSITIONS[status] || [];
+  var statusBtns = transitions.map(function(t) {
+    var btnClass = t === 'cancelled' ? 'btn-danger' : (t === 'completed' ? 'btn-primary' : 'btn-secondary');
+    return '<button class="btn ' + btnClass + '" style="font-size:0.78rem;padding:4px 12px;" onclick="transitionProductionJob(\'' + esc(jobId) + '\', \'' + t + '\')">' + t.replace('-', ' ') + '</button>';
+  }).join(' ');
+
+  // Line items
+  var lineItems = job.lineItems || {};
+  var liKeys = Object.keys(lineItems);
+  var liHtml = '';
+  liKeys.forEach(function(k) {
+    var li = lineItems[k];
+    var pct = li.targetQuantity > 0 ? Math.min(100, Math.round((li.completedQuantity || 0) / li.targetQuantity * 100)) : 0;
+    liHtml += '<div class="prod-line-item-row">' +
+      '<div style="flex:1;">' +
+        '<strong>' + esc(li.productName || '') + '</strong>' +
+        (li.specifications ? '<br><span style="font-size:0.78rem;color:var(--warm-gray);">' + esc(li.specifications) + '</span>' : '') +
+      '</div>' +
+      '<div style="text-align:right;font-size:0.82rem;">' +
+        (li.completedQuantity || 0) + '/' + (li.targetQuantity || 0) +
+        (li.lossQuantity > 0 ? ' <span style="color:#C62828;">(-' + li.lossQuantity + ')</span>' : '') +
+        '<br><span style="font-size:0.72rem;color:var(--warm-gray);">' + pct + '%</span>' +
+      '</div>' +
+      (status !== 'completed' && status !== 'cancelled' ? '<div style="margin-left:8px;"><button class="btn btn-secondary" style="font-size:0.7rem;padding:2px 8px;" onclick="removeLineItem(\'' + esc(jobId) + '\', \'' + esc(k) + '\')">×</button></div>' : '') +
+    '</div>';
+  });
+
+  // Builds
+  var builds = job.builds || {};
+  var buildKeys = Object.keys(builds).sort(function(a, b) {
+    return (builds[a].buildNumber || 0) - (builds[b].buildNumber || 0);
+  });
+  var buildsHtml = '';
+  buildKeys.forEach(function(k) {
+    var b = builds[k];
+    var bStatus = b.status || 'draft';
+    var duration = b.durationMinutes ? b.durationMinutes + ' min' : (bStatus === 'draft' ? 'In progress...' : '');
+    var outputSummary = '';
+    if (b.output) {
+      var totalCompleted = 0, totalLoss = 0;
+      Object.values(b.output).forEach(function(o) { totalCompleted += (o.completedQuantity || 0); totalLoss += (o.lossQuantity || 0); });
+      outputSummary = totalCompleted + ' made' + (totalLoss > 0 ? ', ' + totalLoss + ' lost' : '');
+    }
+    buildsHtml += '<div class="prod-build-card' + (bStatus === 'draft' ? ' prod-build-active' : '') + '" ' +
+      (bStatus === 'draft' ? 'onclick="openActiveBuild(\'' + esc(jobId) + '\', \'' + esc(k) + '\')"' : '') +
+      ' style="cursor:' + (bStatus === 'draft' ? 'pointer' : 'default') + ';">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+        '<div>' +
+          '<strong>Build #' + (b.buildNumber || '?') + '</strong>' +
+          ' &middot; ' + (b.sessionDate || '') +
+          ' &middot; <span class="prod-status-pill ' + bStatus + '">' + bStatus + '</span>' +
+        '</div>' +
+        '<div style="font-size:0.82rem;color:var(--warm-gray);">' +
+          duration +
+          (outputSummary ? '<br>' + outputSummary : '') +
+        '</div>' +
+      '</div>' +
+      (b.operators && b.operators.length > 0 ? '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">Operators: ' + b.operators.map(esc).join(', ') + '</div>' : '') +
+    '</div>';
+  });
+
+  var progress = getJobProgress(job);
+  var deadlineHtml = job.deadline ? '<span style="font-size:0.85rem;color:var(--warm-gray);">Due: ' + job.deadline + '</span>' : '';
+  var eventHtml = job.eventName ? '<span style="font-size:0.85rem;color:var(--warm-gray);">Event: ' + esc(job.eventName) + '</span>' : '';
+
+  // Check for active (draft) build
+  var hasActiveBuild = buildKeys.some(function(k) { return builds[k].status === 'draft'; });
+  var startBuildBtn = (status === 'definition' || status === 'in-progress') && !hasActiveBuild ?
+    '<button class="build-touch-btn primary" onclick="startBuild(\'' + esc(jobId) + '\')">&#x1F525; Start Build</button>' : '';
+  var activeBuildBtn = hasActiveBuild ?
+    '<button class="build-touch-btn primary" onclick="openActiveBuild(\'' + esc(jobId) + '\', \'' + esc(buildKeys.find(function(k) { return builds[k].status === 'draft'; })) + '\')">&#x1F3AD; Continue Active Build</button>' : '';
+
+  el.innerHTML = '<button class="order-detail-back" onclick="backToProductionList()">&#8592; Back to Jobs</button>' +
+    '<div style="margin-bottom:16px;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;">' +
+        '<div>' +
+          '<h2 style="margin:0 0 8px 0;font-family:\'Cormorant Garamond\',serif;">' + esc(job.name || 'Untitled') + '</h2>' +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">' +
+            '<span class="prod-purpose-badge ' + (job.purpose || '') + '">' + (PURPOSE_LABELS[job.purpose] || '') + '</span>' +
+            '<span class="prod-status-pill ' + status + '">' + status.replace('-', ' ') + '</span>' +
+            '<span class="prod-priority-dot ' + (job.priority || 'medium') + '"></span>' +
+            '<span style="font-size:0.82rem;text-transform:capitalize;">' + (job.priority || 'medium') + '</span>' +
+            deadlineHtml + eventHtml +
+          '</div>' +
+        '</div>' +
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
+          statusBtns +
+          ' <button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 12px;" onclick="openEditJobModal(\'' + esc(jobId) + '\')">Edit</button>' +
+        '</div>' +
+      '</div>' +
+      (job.description ? '<p style="margin-top:8px;font-size:0.85rem;color:var(--warm-gray);">' + esc(job.description) + '</p>' : '') +
+      (progress.total > 0 ? '<div class="prod-progress-bar" style="margin-top:12px;height:8px;"><div class="prod-progress-fill" style="width:' + progress.pct + '%;"></div></div>' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">' + progress.completed + ' / ' + progress.total + ' (' + Math.round(progress.pct) + '%)</div>' : '') +
+    '</div>' +
+
+    '<div class="prod-detail-section">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
+        '<strong>Line Items</strong>' +
+        (status !== 'completed' && status !== 'cancelled' ? '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 10px;" onclick="openAddLineItemModal(\'' + esc(jobId) + '\')">+ Add Item</button>' : '') +
+      '</div>' +
+      (liKeys.length > 0 ? liHtml : '<p style="font-size:0.85rem;color:var(--warm-gray);font-style:italic;">No line items yet. Add items to track production goals.</p>') +
+    '</div>' +
+
+    '<div class="prod-detail-section">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
+        '<strong>Builds</strong>' +
+        '<div style="display:flex;gap:8px;">' + startBuildBtn + activeBuildBtn + '</div>' +
+      '</div>' +
+      (buildKeys.length > 0 ? buildsHtml : '<p style="font-size:0.85rem;color:var(--warm-gray);font-style:italic;">No builds yet. Start a build session to begin tracking production.</p>') +
+    '</div>';
+}
+
+async function transitionProductionJob(jobId, newStatus) {
+  if (newStatus === 'cancelled' && !confirm('Cancel this job?')) return;
+  try {
+    var updates = { status: newStatus };
+    var now = new Date().toISOString();
+    if (newStatus === 'in-progress') updates.startedAt = now;
+    if (newStatus === 'completed') updates.completedAt = now;
+    await db.ref(PRODUCTION_JOBS_PATH + '/' + jobId).update(updates);
+    showToast('Job status updated to ' + newStatus);
+  } catch (err) {
+    showToast('Error updating job: ' + err.message, true);
+  }
+}
+
+// ---- Edit Job Modal ----
+function openEditJobModal(jobId) {
+  var job = productionJobs[jobId];
+  if (!job) return;
+  var purposeOptions = Object.keys(PURPOSE_LABELS).map(function(k) {
+    return '<option value="' + k + '"' + (job.purpose === k ? ' selected' : '') + '>' + PURPOSE_LABELS[k] + '</option>';
+  }).join('');
+  var html = '<div style="max-width:450px;">' +
+    '<h3>Edit Job</h3>' +
+    '<div class="form-group"><label>Name</label><input type="text" id="editJobName" value="' + esc(job.name || '') + '"></div>' +
+    '<div class="form-group"><label>Description</label><textarea id="editJobDesc" rows="2">' + esc(job.description || '') + '</textarea></div>' +
+    '<div class="form-group"><label>Purpose</label><select id="editJobPurpose">' + purposeOptions + '</select></div>' +
+    '<div class="form-group"><label>Work Type</label><select id="editJobWorkType">' +
+      '<option value="flameshop"' + (job.workType === 'flameshop' ? ' selected' : '') + '>Flameshop</option>' +
+      '<option value="hotshop"' + (job.workType === 'hotshop' ? ' selected' : '') + '>Hotshop</option>' +
+      '<option value="hybrid"' + (job.workType === 'hybrid' ? ' selected' : '') + '>Hybrid</option>' +
+      '<option value="other"' + (job.workType === 'other' ? ' selected' : '') + '>Other</option>' +
+    '</select></div>' +
+    '<div class="form-group"><label>Priority</label><select id="editJobPriority">' +
+      '<option value="high"' + (job.priority === 'high' ? ' selected' : '') + '>High</option>' +
+      '<option value="medium"' + (job.priority === 'medium' ? ' selected' : '') + '>Medium</option>' +
+      '<option value="low"' + (job.priority === 'low' ? ' selected' : '') + '>Low</option>' +
+    '</select></div>' +
+    '<div class="form-group"><label>Deadline</label><input type="date" id="editJobDeadline" value="' + (job.deadline || '') + '"></div>' +
+    '<div class="form-group"><label>Event Name</label><input type="text" id="editJobEvent" value="' + esc(job.eventName || '') + '" placeholder="e.g. Spring Craft Fair March 15"></div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">' +
+      '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+      '<button class="btn btn-primary" onclick="doEditJob(\'' + esc(jobId) + '\')">Save</button>' +
+    '</div>' +
+  '</div>';
+  openModal(html);
+}
+
+async function doEditJob(jobId) {
+  try {
+    await db.ref(PRODUCTION_JOBS_PATH + '/' + jobId).update({
+      name: document.getElementById('editJobName').value.trim(),
+      description: document.getElementById('editJobDesc').value.trim(),
+      purpose: document.getElementById('editJobPurpose').value,
+      workType: document.getElementById('editJobWorkType').value,
+      priority: document.getElementById('editJobPriority').value,
+      deadline: document.getElementById('editJobDeadline').value || null,
+      eventName: document.getElementById('editJobEvent').value.trim() || null
+    });
+    closeModal();
+    showToast('Job updated');
+  } catch (err) {
+    showToast('Error updating job: ' + err.message, true);
+  }
+}
+
+// ---- Add Line Item Modal ----
+function openAddLineItemModal(jobId) {
+  // Build product picker from existing products
+  var productOptions = '<option value="">-- Freeform (type below) --</option>';
+  if (typeof products === 'object' && products) {
+    Object.keys(products).forEach(function(pid) {
+      var p = products[pid];
+      productOptions += '<option value="' + esc(pid) + '">' + esc(p.name || pid) + '</option>';
+    });
+  }
+  var html = '<div style="max-width:400px;">' +
+    '<h3>Add Line Item</h3>' +
+    '<div class="form-group"><label>Product</label><select id="liProductPicker" onchange="onLineItemProductSelect()" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">' + productOptions + '</select></div>' +
+    '<div class="form-group"><label>Product Name</label><input type="text" id="liProductName" placeholder="Product name"></div>' +
+    '<div class="form-group"><label>Target Quantity</label><input type="number" id="liTargetQty" min="1" value="1" style="width:100px;"></div>' +
+    '<div class="form-group"><label>Specifications</label><input type="text" id="liSpecs" placeholder="Color, size, notes..."></div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">' +
+      '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+      '<button class="btn btn-primary" onclick="doAddLineItem(\'' + esc(jobId) + '\')">Add</button>' +
+    '</div>' +
+  '</div>';
+  openModal(html);
+}
+
+function onLineItemProductSelect() {
+  var picker = document.getElementById('liProductPicker');
+  var nameInput = document.getElementById('liProductName');
+  if (picker.value && typeof products === 'object' && products[picker.value]) {
+    nameInput.value = products[picker.value].name || '';
+  }
+}
+
+async function doAddLineItem(jobId) {
+  var pid = document.getElementById('liProductPicker').value || null;
+  var name = document.getElementById('liProductName').value.trim();
+  var qty = parseInt(document.getElementById('liTargetQty').value) || 1;
+  var specs = document.getElementById('liSpecs').value.trim();
+  if (!name) { showToast('Enter a product name', true); return; }
+  try {
+    var ref = db.ref(PRODUCTION_JOBS_PATH + '/' + jobId + '/lineItems').push();
+    await ref.set({
+      productId: pid,
+      productName: name,
+      targetQuantity: qty,
+      completedQuantity: 0,
+      lossQuantity: 0,
+      specifications: specs,
+      productionRequestId: null
+    });
+    closeModal();
+    showToast('Line item added');
+  } catch (err) {
+    showToast('Error adding line item: ' + err.message, true);
+  }
+}
+
+async function removeLineItem(jobId, lineItemId) {
+  if (!confirm('Remove this line item?')) return;
+  try {
+    await db.ref(PRODUCTION_JOBS_PATH + '/' + jobId + '/lineItems/' + lineItemId).remove();
+    showToast('Line item removed');
+  } catch (err) {
+    showToast('Error removing line item: ' + err.message, true);
+  }
+}
+
+// ---- Build Workflow ----
+
+// START BUILD (Moment 1)
+function startBuild(jobId) {
+  var job = productionJobs[jobId];
+  if (!job) return;
+  var opNames = getOperatorNames();
+  var opCheckboxes = opNames.map(function(name) {
+    return '<label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer;font-size:0.9rem;">' +
+      '<input type="checkbox" class="buildOperatorCheck" value="' + esc(name) + '" style="width:20px;height:20px;cursor:pointer;"> ' +
+      esc(name) + '</label>';
+  }).join('');
+  var html = '<div style="max-width:400px;">' +
+    '<h3>Start Build Session</h3>' +
+    '<div class="form-group">' +
+      '<label>Operators</label>' +
+      opCheckboxes +
+      '<div style="margin-top:8px;"><input type="text" id="buildNewOperator" placeholder="Add new operator..." style="font-size:0.9rem;"></div>' +
+    '</div>' +
+    '<div class="form-group">' +
+      '<label>Work Type</label>' +
+      '<select id="buildWorkType" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">' +
+        '<option value="flameshop"' + (job.workType === 'flameshop' ? ' selected' : '') + '>Flameshop</option>' +
+        '<option value="hotshop"' + (job.workType === 'hotshop' ? ' selected' : '') + '>Hotshop</option>' +
+        '<option value="hybrid"' + (job.workType === 'hybrid' ? ' selected' : '') + '>Hybrid</option>' +
+        '<option value="other"' + (job.workType === 'other' ? ' selected' : '') + '>Other</option>' +
+      '</select>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;">' +
+      '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+      '<button class="build-touch-btn primary" onclick="doStartBuild(\'' + esc(jobId) + '\')">&#x1F525; Start</button>' +
+    '</div>' +
+  '</div>';
+  openModal(html);
+}
+
+async function doStartBuild(jobId) {
+  var job = productionJobs[jobId];
+  if (!job) return;
+  var selectedOps = [];
+  document.querySelectorAll('.buildOperatorCheck:checked').forEach(function(cb) {
+    selectedOps.push(cb.value);
+  });
+  var newOp = document.getElementById('buildNewOperator').value.trim();
+  if (newOp) selectedOps.push(newOp);
+  if (selectedOps.length === 0) { showToast('Select at least one operator', true); return; }
+
+  var workType = document.getElementById('buildWorkType').value;
+  var existingBuilds = job.builds || {};
+  var buildNumber = Object.keys(existingBuilds).length + 1;
+  var now = new Date();
+
+  try {
+    var buildRef = db.ref(PRODUCTION_JOBS_PATH + '/' + jobId + '/builds').push();
+    var buildId = buildRef.key;
+    await buildRef.set({
+      buildNumber: buildNumber,
+      sessionDate: now.toISOString().split('T')[0],
+      startTime: now.toISOString(),
+      endTime: null,
+      durationMinutes: null,
+      workType: workType,
+      status: 'draft',
+      operators: selectedOps,
+      notes: '',
+      createdAt: now.toISOString(),
+      completedAt: null
+    });
+
+    // Auto-transition job to in-progress if still in definition
+    if (job.status === 'definition') {
+      await db.ref(PRODUCTION_JOBS_PATH + '/' + jobId).update({
+        status: 'in-progress',
+        startedAt: now.toISOString()
+      });
+    }
+
+    closeModal();
+    openActiveBuild(jobId, buildId);
+    showToast('Build #' + buildNumber + ' started');
+  } catch (err) {
+    showToast('Error starting build: ' + err.message, true);
+  }
+}
+
+// DURING BUILD (Moment 2)
+function openActiveBuild(jobId, buildId) {
+  activeBuildId = buildId;
+  var jobsView = document.getElementById('productionJobsView');
+  var queueView = document.getElementById('productionQueueView');
+  var detailView = document.getElementById('productionJobDetail');
+  var buildView = document.getElementById('productionBuildView');
+  if (jobsView) jobsView.style.display = 'none';
+  if (queueView) queueView.style.display = 'none';
+  if (detailView) detailView.style.display = 'none';
+  if (buildView) buildView.style.display = '';
+  renderActiveBuild(jobId, buildId);
+}
+
+function renderActiveBuild(jobId, buildId) {
+  var el = document.getElementById('productionBuildView');
+  if (!el) return;
+  var job = productionJobs[jobId];
+  if (!job || !job.builds || !job.builds[buildId]) { el.innerHTML = '<p>Build not found.</p>'; return; }
+  var build = job.builds[buildId];
+  var milestones = build.milestones || {};
+  var milestoneKeys = Object.keys(milestones).sort();
+  var milestonesHtml = milestoneKeys.map(function(k) {
+    var m = milestones[k];
+    return '<div class="prod-milestone">' + esc(m.text || '') + ' <span style="font-size:0.72rem;">(' + formatTime(m.timestamp) + ')</span></div>';
+  }).join('');
+
+  var elapsed = '';
+  if (build.startTime) {
+    var mins = Math.round((Date.now() - new Date(build.startTime).getTime()) / 60000);
+    elapsed = mins + ' min elapsed';
+  }
+
+  el.innerHTML = '<button class="order-detail-back" onclick="viewProductionJob(\'' + esc(jobId) + '\')">&#8592; Back to Job</button>' +
+    '<div style="text-align:center;margin:20px 0;">' +
+      '<h2 style="font-family:\'Cormorant Garamond\',serif;margin:0;">Build #' + (build.buildNumber || '?') + '</h2>' +
+      '<p style="color:var(--warm-gray);font-size:0.85rem;">' + esc(job.name || '') + ' &middot; ' + (build.sessionDate || '') + '</p>' +
+      '<p style="color:var(--teal);font-size:1.1rem;font-weight:600;">' + elapsed + '</p>' +
+      '<p style="color:var(--warm-gray);font-size:0.82rem;">Operators: ' + (build.operators || []).map(esc).join(', ') + '</p>' +
+    '</div>' +
+
+    '<div style="display:flex;gap:12px;justify-content:center;margin:24px 0;flex-wrap:wrap;">' +
+      '<button class="build-touch-btn secondary" onclick="addBuildNote(\'' + esc(jobId) + '\', \'' + esc(buildId) + '\')">&#x1F4DD; Add Note</button>' +
+      '<button class="build-touch-btn secondary" onclick="addBuildMilestone(\'' + esc(jobId) + '\', \'' + esc(buildId) + '\')">&#x2B50; Add Milestone</button>' +
+    '</div>' +
+
+    (build.notes ? '<div class="prod-detail-section"><strong>Notes</strong><p style="margin-top:8px;font-size:0.85rem;white-space:pre-wrap;">' + esc(build.notes) + '</p></div>' : '') +
+
+    (milestoneKeys.length > 0 ? '<div class="prod-detail-section"><strong>Milestones</strong><div style="margin-top:8px;">' + milestonesHtml + '</div></div>' : '') +
+
+    '<div style="text-align:center;margin-top:32px;">' +
+      '<button class="build-touch-btn primary" style="min-width:200px;" onclick="openCompleteBuild(\'' + esc(jobId) + '\', \'' + esc(buildId) + '\')">&#x2705; Complete Build</button>' +
+    '</div>';
+}
+
+function formatTime(isoStr) {
+  if (!isoStr) return '';
+  var d = new Date(isoStr);
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function addBuildNote(jobId, buildId) {
+  var html = '<div style="max-width:400px;">' +
+    '<h3>Add Note</h3>' +
+    '<textarea id="buildNoteText" rows="4" placeholder="Kiln conditions, techniques, observations..." style="font-size:1rem;"></textarea>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">' +
+      '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+      '<button class="build-touch-btn primary" onclick="doAddBuildNote(\'' + esc(jobId) + '\', \'' + esc(buildId) + '\')">Save</button>' +
+    '</div>' +
+  '</div>';
+  openModal(html);
+}
+
+async function doAddBuildNote(jobId, buildId) {
+  var text = document.getElementById('buildNoteText').value.trim();
+  if (!text) { closeModal(); return; }
+  try {
+    var job = productionJobs[jobId];
+    var existing = (job && job.builds && job.builds[buildId]) ? job.builds[buildId].notes || '' : '';
+    var newNotes = existing ? existing + '\n' + text : text;
+    await db.ref(PRODUCTION_JOBS_PATH + '/' + jobId + '/builds/' + buildId + '/notes').set(newNotes);
+    closeModal();
+    renderActiveBuild(jobId, buildId);
+    showToast('Note added');
+  } catch (err) {
+    showToast('Error adding note: ' + err.message, true);
+  }
+}
+
+function addBuildMilestone(jobId, buildId) {
+  var html = '<div style="max-width:400px;">' +
+    '<h3>Add Milestone</h3>' +
+    '<input type="text" id="milestoneText" placeholder="e.g. body formed, first anneal..." style="font-size:1rem;">' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">' +
+      '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+      '<button class="build-touch-btn primary" onclick="doAddMilestone(\'' + esc(jobId) + '\', \'' + esc(buildId) + '\')">Add</button>' +
+    '</div>' +
+  '</div>';
+  openModal(html);
+}
+
+async function doAddMilestone(jobId, buildId) {
+  var text = document.getElementById('milestoneText').value.trim();
+  if (!text) { closeModal(); return; }
+  try {
+    var ref = db.ref(PRODUCTION_JOBS_PATH + '/' + jobId + '/builds/' + buildId + '/milestones').push();
+    await ref.set({ text: text, timestamp: new Date().toISOString() });
+    closeModal();
+    renderActiveBuild(jobId, buildId);
+    showToast('Milestone added');
+  } catch (err) {
+    showToast('Error adding milestone: ' + err.message, true);
+  }
+}
+
+// COMPLETE BUILD (Moment 3)
+function openCompleteBuild(jobId, buildId) {
+  var job = productionJobs[jobId];
+  if (!job) return;
+  var lineItems = job.lineItems || {};
+  var liKeys = Object.keys(lineItems);
+  var outputFields = liKeys.map(function(k) {
+    var li = lineItems[k];
+    return '<div style="margin-bottom:16px;padding:12px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;">' +
+      '<strong>' + esc(li.productName || '') + '</strong>' +
+      (li.specifications ? '<br><span style="font-size:0.78rem;color:var(--warm-gray);">' + esc(li.specifications) + '</span>' : '') +
+      '<div style="display:flex;gap:12px;margin-top:8px;">' +
+        '<div><label style="font-size:0.78rem;">Good pieces</label><input type="number" class="buildOutput" data-li="' + esc(k) + '" data-field="completed" min="0" value="0" style="width:70px;padding:8px;font-size:1rem;"></div>' +
+        '<div><label style="font-size:0.78rem;">Lost pieces</label><input type="number" class="buildOutput" data-li="' + esc(k) + '" data-field="loss" min="0" value="0" style="width:70px;padding:8px;font-size:1rem;"></div>' +
+      '</div>' +
+      '<div style="margin-top:6px;"><label style="font-size:0.78rem;">Loss notes</label><input type="text" class="buildOutput" data-li="' + esc(k) + '" data-field="lossNotes" placeholder="What went wrong?" style="width:100%;font-size:0.85rem;box-sizing:border-box;"></div>' +
+    '</div>';
+  }).join('');
+
+  var html = '<div style="max-width:500px;">' +
+    '<h3>Complete Build</h3>' +
+    (liKeys.length > 0 ? '<p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">Record output for each line item:</p>' + outputFields :
+      '<p style="font-size:0.85rem;color:var(--warm-gray);">No line items to record output for.</p>') +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;">' +
+      '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+      '<button class="build-touch-btn primary" onclick="doCompleteBuild(\'' + esc(jobId) + '\', \'' + esc(buildId) + '\')">&#x2705; Complete</button>' +
+    '</div>' +
+  '</div>';
+  openModal(html);
+}
+
+async function doCompleteBuild(jobId, buildId) {
+  var job = productionJobs[jobId];
+  if (!job) return;
+  var now = new Date();
+  var build = job.builds ? job.builds[buildId] : null;
+
+  // Gather output
+  var output = {};
+  document.querySelectorAll('.buildOutput').forEach(function(input) {
+    var li = input.dataset.li;
+    var field = input.dataset.field;
+    if (!output[li]) output[li] = { completedQuantity: 0, lossQuantity: 0, lossNotes: '' };
+    if (field === 'completed') output[li].completedQuantity = parseInt(input.value) || 0;
+    if (field === 'loss') output[li].lossQuantity = parseInt(input.value) || 0;
+    if (field === 'lossNotes') output[li].lossNotes = input.value.trim();
+  });
+
+  // Calculate duration
+  var durationMinutes = null;
+  if (build && build.startTime) {
+    durationMinutes = Math.round((now.getTime() - new Date(build.startTime).getTime()) / 60000);
+  }
+
+  try {
+    // Update build
+    await db.ref(PRODUCTION_JOBS_PATH + '/' + jobId + '/builds/' + buildId).update({
+      status: 'completed',
+      endTime: now.toISOString(),
+      durationMinutes: durationMinutes,
+      completedAt: now.toISOString(),
+      output: output
+    });
+
+    // Firebase transaction: aggregate tallies across all builds
+    var lineItems = job.lineItems || {};
+    var liKeys = Object.keys(lineItems);
+    var allBuilds = job.builds || {};
+    // Include current build output in aggregation
+    for (var bk in allBuilds) {
+      if (bk === buildId) continue; // skip — we'll use our fresh output
+    }
+
+    // Re-read all builds to get accurate tallies
+    var jobSnap = await db.ref(PRODUCTION_JOBS_PATH + '/' + jobId).once('value');
+    var freshJob = jobSnap.val();
+    if (freshJob && freshJob.lineItems) {
+      var freshBuilds = freshJob.builds || {};
+      var tallies = {};
+      liKeys.forEach(function(liKey) { tallies[liKey] = { completed: 0, loss: 0 }; });
+      Object.values(freshBuilds).forEach(function(b) {
+        if (b.status === 'completed' && b.output) {
+          Object.keys(b.output).forEach(function(liKey) {
+            if (!tallies[liKey]) tallies[liKey] = { completed: 0, loss: 0 };
+            tallies[liKey].completed += (b.output[liKey].completedQuantity || 0);
+            tallies[liKey].loss += (b.output[liKey].lossQuantity || 0);
+          });
+        }
+      });
+      // Write tallies
+      var tallyUpdates = {};
+      Object.keys(tallies).forEach(function(liKey) {
+        tallyUpdates['lineItems/' + liKey + '/completedQuantity'] = tallies[liKey].completed;
+        tallyUpdates['lineItems/' + liKey + '/lossQuantity'] = tallies[liKey].loss;
+      });
+      await db.ref(PRODUCTION_JOBS_PATH + '/' + jobId).update(tallyUpdates);
+
+      // Check if all line items met target
+      var allMet = true;
+      Object.keys(freshJob.lineItems).forEach(function(liKey) {
+        var target = freshJob.lineItems[liKey].targetQuantity || 0;
+        var completed = tallies[liKey] ? tallies[liKey].completed : 0;
+        if (completed < target) allMet = false;
+      });
+      if (allMet && liKeys.length > 0) {
+        if (confirm('All line items have met their targets! Mark job as completed?')) {
+          await db.ref(PRODUCTION_JOBS_PATH + '/' + jobId).update({
+            status: 'completed',
+            completedAt: now.toISOString()
+          });
+        }
+      }
+    }
+
+    closeModal();
+    activeBuildId = null;
+    viewProductionJob(jobId);
+    showToast('Build completed');
+  } catch (err) {
+    showToast('Error completing build: ' + err.message, true);
+  }
 }
 
 // ---- Shipping Modal ----
@@ -5263,7 +6552,7 @@ function openCancelOrderModal(orderId) {
   var html = '<div style="max-width:400px;">' +
     '<h3>Cancel Order</h3>' +
     '<p style="margin:12px 0;color:var(--warm-gray);">Are you sure you want to cancel order <strong>' + esc(num) + '</strong>? ' +
-    'This will release reserved inventory and cancel any open build jobs.</p>' +
+    'This will release reserved inventory and cancel any open production requests.</p>' +
     '<div class="form-group">' +
       '<label>Reason (optional)</label>' +
       '<textarea id="cancelReason" rows="3" placeholder="Why is this order being cancelled?"></textarea>' +
@@ -5297,13 +6586,13 @@ async function cancelOrder(orderId) {
       });
     }
 
-    // Cancel open build jobs
-    var jobKeys = Object.keys(buildJobs).filter(function(k) {
-      return buildJobs[k].orderId === orderId &&
-        (buildJobs[k].status === 'pending' || buildJobs[k].status === 'in-progress');
+    // Cancel open production requests
+    var reqKeys = Object.keys(productionRequests).filter(function(k) {
+      return productionRequests[k].orderId === orderId &&
+        (productionRequests[k].status === 'pending' || productionRequests[k].status === 'assigned');
     });
-    for (var i = 0; i < jobKeys.length; i++) {
-      await db.ref(BUILD_JOBS_PATH + '/' + jobKeys[i]).update({
+    for (var i = 0; i < reqKeys.length; i++) {
+      await db.ref(PRODUCTION_REQUESTS_PATH + '/' + reqKeys[i]).update({
         status: 'cancelled',
         cancelledAt: now
       });
