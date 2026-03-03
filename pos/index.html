@@ -187,7 +187,13 @@ body {
 <!-- Top Bar -->
 <div class="top-bar">
   <h1>Shir Glassworks</h1>
-  <span class="mode-badge">POS</span>
+  <span class="mode-badge" id="modeBadge">POS</span>
+</div>
+
+<!-- Event Banner (shown when linked to an event) -->
+<div id="eventBanner" style="display:none;background:#4CAF50;color:white;padding:8px 16px;font-size:13px;display:none;align-items:center;justify-content:space-between;">
+  <span>🎪 <strong id="eventBannerName">Event</strong> — <span id="eventBannerStats">0 packed, 0 sold</span></span>
+  <a href="../pos/" style="color:rgba(255,255,255,0.8);font-size:12px;text-decoration:underline;">Exit Event</a>
 </div>
 
 <!-- Auth Screen -->
@@ -277,6 +283,7 @@ var CLASSIFY_URL = 'https://us-central1-word-boxing.cloudfunctions.net/shirClass
 var UPLOAD_URL = 'https://us-central1-word-boxing.cloudfunctions.net/shirUploadImage';
 var PRODUCTS_PATH = 'shirglassworks/public/products';
 var SALES_PATH = 'shirglassworks/admin/sales';
+var SALES_EVENTS_PATH = 'shirglassworks/admin/salesEvents';
 
 // ============================================================
 // State
@@ -291,6 +298,16 @@ var capturedImageBase64 = null;
 var capturedPreviewUrl = null;
 var paymentType = 'cash';
 
+// Event context (from URL param)
+var eventId = null;
+var eventData = null;
+
+// Parse eventId from URL
+(function() {
+  var params = new URLSearchParams(window.location.search);
+  eventId = params.get('eventId') || null;
+})();
+
 // ============================================================
 // Auth
 // ============================================================
@@ -300,6 +317,7 @@ auth.onAuthStateChanged(function(user) {
     user.getIdToken().then(function(token) {
       authToken = token;
       loadProducts();
+      if (eventId) loadEventContext();
       showScreen('cameraScreen');
       initCamera();
     });
@@ -309,6 +327,29 @@ auth.onAuthStateChanged(function(user) {
     showScreen('authScreen');
   }
 });
+
+function loadEventContext() {
+  if (!eventId) return;
+  db.ref(SALES_EVENTS_PATH + '/' + eventId).on('value', function(snap) {
+    eventData = snap.val();
+    if (eventData) {
+      document.getElementById('modeBadge').textContent = 'FAIR';
+      document.getElementById('modeBadge').style.background = '#4CAF50';
+      var banner = document.getElementById('eventBanner');
+      banner.style.display = 'flex';
+      document.getElementById('eventBannerName').textContent = eventData.name || 'Event';
+      // Calculate stats
+      var totalPacked = 0, totalSold = 0;
+      if (eventData.allocations) {
+        Object.keys(eventData.allocations).forEach(function(pid) {
+          totalPacked += (eventData.allocations[pid].quantity || 0);
+          totalSold += (eventData.allocations[pid].sold || 0);
+        });
+      }
+      document.getElementById('eventBannerStats').textContent = totalPacked + ' packed, ' + totalSold + ' sold, ' + (totalPacked - totalSold) + ' remaining';
+    }
+  });
+}
 
 function signIn() {
   var provider = new firebase.auth.GoogleAuthProvider();
@@ -520,7 +561,7 @@ function saveSale() {
     receiptSent: false,
     customerContact: null,
     squarePaymentId: null,
-    eventId: null,
+    eventId: eventId || null,
     status: 'captured',
     notes: document.getElementById('saleNotes').value || null,
     recordedBy: currentUser ? currentUser.uid : null
@@ -557,6 +598,11 @@ function saveSale() {
     });
     return decrementInventory(updates);
   }).then(function() {
+    // Update event allocations if linked to an event
+    if (eventId && eventData && eventData.allocations) {
+      return updateEventAllocations(saleItems);
+    }
+  }).then(function() {
     btn.disabled = false;
     btn.textContent = 'Complete Sale';
     var totalStr = '$' + (amountCents / 100).toFixed(2);
@@ -582,6 +628,22 @@ function decrementInventory(productQtys) {
           return stockRef.set(Math.max(0, current - qty));
         }
         // Variant-based or no stock tracking — skip
+      })
+    );
+  });
+  return Promise.all(promises);
+}
+
+function updateEventAllocations(items) {
+  if (!eventId) return Promise.resolve();
+  var promises = [];
+  items.forEach(function(item) {
+    if (!item.productId) return;
+    var soldRef = db.ref(SALES_EVENTS_PATH + '/' + eventId + '/allocations/' + item.productId + '/sold');
+    promises.push(
+      soldRef.once('value').then(function(snap) {
+        var current = snap.val() || 0;
+        return soldRef.set(current + (item.quantity || 1));
       })
     );
   });

@@ -2257,6 +2257,7 @@
       <button class="header-tab" data-tab="products" onclick="switchTab('products')">Products</button>
       <button class="header-tab" data-tab="orders" onclick="switchTab('orders')">Orders</button>
       <button class="header-tab" data-tab="sales" onclick="switchTab('sales')">Sales</button>
+      <button class="header-tab" data-tab="salesEvents" onclick="switchTab('salesEvents')">Events</button>
       <button class="header-tab" data-tab="production" onclick="switchTab('production')">Production</button>
       <button class="header-tab" data-tab="coupons" onclick="switchTab('coupons')">Coupons</button>
       <button class="header-tab" data-tab="analytics" onclick="switchTab('analytics')">Analytics</button>
@@ -2520,6 +2521,117 @@
 
       <!-- Sale Detail View -->
       <div id="saleDetailView" style="display:none;"></div>
+    </div>
+
+    <!-- ===== SALES EVENTS TAB ===== -->
+    <div id="salesEventsTab" style="display:none;">
+      <div class="section-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <h2 style="margin:0;">Events</h2>
+          <span class="products-stat" id="salesEventsCount"></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <select id="salesEventsStatusFilter" onchange="renderSalesEvents()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.85rem;">
+            <option value="all">All Status</option>
+            <option value="planning">Planning</option>
+            <option value="packed">Packed</option>
+            <option value="active">Active</option>
+            <option value="closed">Closed</option>
+          </select>
+          <button class="btn btn-primary" onclick="openCreateEventModal()">+ New Event</button>
+        </div>
+      </div>
+
+      <!-- Events Loading / Empty -->
+      <div id="salesEventsLoading" class="loading">Loading...</div>
+      <div id="salesEventsEmpty" class="empty-state" style="display:none;">
+        <p>No events yet. Create your first craft fair event to start tracking inventory and sales.</p>
+      </div>
+
+      <!-- Events List -->
+      <div class="orders-table" id="salesEventsTableWrap" style="display:none;">
+        <table>
+          <thead>
+            <tr>
+              <th>Event</th>
+              <th>Date</th>
+              <th>Location</th>
+              <th>Items Packed</th>
+              <th>Sold</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="salesEventsTableBody"></tbody>
+        </table>
+      </div>
+
+      <!-- Mobile Cards -->
+      <div class="order-cards" id="salesEventsCards"></div>
+
+      <!-- Event Detail View -->
+      <div id="salesEventDetailView" style="display:none;"></div>
+
+      <!-- Create/Edit Event Modal -->
+      <div id="createEventModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;display:none;align-items:center;justify-content:center;">
+        <div style="background:white;border-radius:12px;padding:24px;max-width:480px;width:90%;max-height:80vh;overflow-y:auto;">
+          <h3 id="eventModalTitle" style="margin:0 0 16px;">Create Event</h3>
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            <div>
+              <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Event Name *</label>
+              <input type="text" id="eventNameInput" placeholder="e.g. Acton Farmers Market" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;">
+            </div>
+            <div>
+              <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Date *</label>
+              <input type="date" id="eventDateInput" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;">
+            </div>
+            <div>
+              <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Location</label>
+              <input type="text" id="eventLocationInput" placeholder="e.g. 123 Main St, Acton MA" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;">
+            </div>
+            <div>
+              <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Notes</label>
+              <textarea id="eventNotesInput" rows="3" placeholder="Booth number, setup time, etc." style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;resize:vertical;"></textarea>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;">
+            <button class="btn btn-secondary" onclick="closeCreateEventModal()">Cancel</button>
+            <button class="btn btn-primary" id="saveEventBtn" onclick="saveEvent()">Create Event</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Packing Mode Overlay -->
+      <div id="packingModeOverlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:var(--charcoal);z-index:1000;overflow-y:auto;">
+        <div style="padding:16px;max-width:600px;margin:0 auto;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <h3 style="margin:0;color:white;" id="packingModeTitle">Packing Mode</h3>
+            <button class="btn btn-secondary" onclick="exitPackingMode()" style="font-size:0.8rem;">Done Packing</button>
+          </div>
+          <div id="packingTally" style="color:var(--cream);font-size:0.9rem;margin-bottom:16px;">0 items packed (0 products)</div>
+          <!-- Camera area -->
+          <div id="packingCameraArea" style="margin-bottom:16px;">
+            <video id="packingVideo" autoplay playsinline style="width:100%;border-radius:8px;display:none;"></video>
+            <canvas id="packingCanvas" style="display:none;"></canvas>
+            <div id="packingCameraPlaceholder" style="background:var(--warm-gray);border-radius:8px;padding:48px 20px;text-align:center;cursor:pointer;" onclick="startPackingCamera()">
+              <div style="font-size:2rem;margin-bottom:8px;">📷</div>
+              <p style="color:white;margin:0;">Tap to open camera</p>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:16px;">
+            <button class="btn btn-primary" id="packingCaptureBtn" onclick="capturePackingPhoto()" style="flex:1;display:none;">📸 Snap</button>
+            <button class="btn btn-secondary" onclick="openManualPackPicker()" style="flex:1;">+ Add Manually</button>
+          </div>
+          <!-- Recognition result -->
+          <div id="packingRecognitionResult" style="display:none;background:rgba(255,255,255,0.1);border-radius:8px;padding:16px;margin-bottom:16px;"></div>
+          <!-- Manual picker -->
+          <div id="manualPackPicker" style="display:none;background:rgba(255,255,255,0.1);border-radius:8px;padding:16px;margin-bottom:16px;">
+            <input type="text" id="packProductSearch" placeholder="Search products..." oninput="filterPackProducts()" style="width:100%;padding:8px 12px;border:1px solid rgba(255,255,255,0.3);border-radius:6px;background:rgba(255,255,255,0.1);color:white;font-family:'DM Sans',sans-serif;margin-bottom:8px;">
+            <div id="packProductList" style="max-height:200px;overflow-y:auto;"></div>
+          </div>
+          <!-- Current allocations -->
+          <div id="packingAllocations" style="margin-top:16px;"></div>
+        </div>
+      </div>
     </div>
 
     <!-- Admin: Settings Tab -->
@@ -2807,6 +2919,15 @@ var sales = {};
 var salesListener = null;
 var SALES_PATH = 'shirglassworks/admin/sales';
 var selectedSaleId = null;
+var salesEventsLoaded = false;
+var salesEventsData = {};
+var salesEventsListener = null;
+var SALES_EVENTS_PATH = 'shirglassworks/admin/salesEvents';
+var selectedSalesEventId = null;
+var editingEventId = null;
+var packingEventId = null;
+var packingCamera = null;
+var activeEventId = null;
 var productionRequests = {};
 var productionRequestsListener = null;
 var PRODUCTION_REQUESTS_PATH = 'shirglassworks/admin/buildJobs';
@@ -3077,6 +3198,7 @@ function switchTab(tab) {
   document.getElementById('productsTab').style.display = tab === 'products' ? '' : 'none';
   document.getElementById('ordersTab').style.display = tab === 'orders' ? '' : 'none';
   document.getElementById('salesTab').style.display = tab === 'sales' ? '' : 'none';
+  document.getElementById('salesEventsTab').style.display = tab === 'salesEvents' ? '' : 'none';
   document.getElementById('productionTab').style.display = tab === 'production' ? '' : 'none';
   document.getElementById('couponsTab').style.display = tab === 'coupons' ? '' : 'none';
   document.getElementById('analyticsTab').style.display = tab === 'analytics' ? '' : 'none';
@@ -3086,6 +3208,11 @@ function switchTab(tab) {
   if (tab === 'products' && !productsLoaded) loadProducts();
   if (tab === 'orders' && !ordersLoaded) loadOrders();
   if (tab === 'sales' && !salesLoaded) loadSales();
+  if (tab === 'salesEvents') {
+    if (!salesEventsLoaded) loadSalesEvents();
+    if (!productsLoaded) loadProducts();
+    if (!salesLoaded) loadSales();
+  }
   if (tab === 'coupons' && !couponsLoaded) loadCoupons();
   if (tab === 'production') {
     if (!productsLoaded) loadProducts(); // needed for inventory overview
@@ -3100,6 +3227,7 @@ function hideAdminTabs() {
   document.getElementById('productsTab').style.display = 'none';
   document.getElementById('ordersTab').style.display = 'none';
   document.getElementById('salesTab').style.display = 'none';
+  document.getElementById('salesEventsTab').style.display = 'none';
   document.getElementById('productionTab').style.display = 'none';
   document.getElementById('couponsTab').style.display = 'none';
   document.getElementById('analyticsTab').style.display = 'none';
@@ -4676,6 +4804,21 @@ function attachListeners() {
       showToast('Error loading sales: ' + err.message, true);
     });
   }
+  if (!salesEventsListener) {
+    salesEventsListener = db.ref(SALES_EVENTS_PATH).limitToLast(100).on('value', function(snap) {
+      salesEventsData = snap.val() || {};
+      salesEventsLoaded = true;
+      // Track the active event
+      activeEventId = null;
+      Object.keys(salesEventsData).forEach(function(k) {
+        if (salesEventsData[k].status === 'active') activeEventId = k;
+      });
+      renderSalesEvents();
+      if (selectedSalesEventId) renderSalesEventDetail(selectedSalesEventId);
+    }, function(err) {
+      showToast('Error loading sales events: ' + err.message, true);
+    });
+  }
   if (!productionRequestsListener) {
     productionRequestsListener = db.ref(PRODUCTION_REQUESTS_PATH).limitToLast(100).on('value', function(snap) {
       productionRequests = snap.val() || {};
@@ -4718,10 +4861,15 @@ function detachListeners() {
     db.ref(INVENTORY_PATH).off('value', inventoryListener);
     inventoryListener = null;
   }
+  if (salesEventsListener) {
+    db.ref(SALES_EVENTS_PATH).off('value', salesEventsListener);
+    salesEventsListener = null;
+  }
   events = {};
   gallery = {};
   coupons = {};
   orders = {};
+  salesEventsData = {};
   productionRequests = {};
   productionJobs = {};
   inventory = {};
@@ -6617,6 +6765,668 @@ async function voidSale(saleId) {
   } catch (err) {
     showToast('Error: ' + err.message, true);
   }
+}
+
+// ============================================================
+// SALES EVENTS SYSTEM
+// ============================================================
+
+var EVENT_STATUS_COLORS = {
+  planning: '#2196F3',
+  packed: '#FF9800',
+  active: '#4CAF50',
+  closed: '#9E9E9E'
+};
+
+function loadSalesEvents() {
+  if (salesEventsLoaded) renderSalesEvents();
+}
+
+function getSalesEventsArray() {
+  var arr = [];
+  Object.keys(salesEventsData).forEach(function(key) {
+    var ev = salesEventsData[key];
+    ev._key = key;
+    arr.push(ev);
+  });
+  arr.sort(function(a, b) {
+    return (b.date || '').localeCompare(a.date || '');
+  });
+  return arr;
+}
+
+function getEventAllocationsStats(ev) {
+  var totalPacked = 0, totalSold = 0, productCount = 0;
+  if (ev.allocations) {
+    Object.keys(ev.allocations).forEach(function(pid) {
+      var alloc = ev.allocations[pid];
+      totalPacked += (alloc.quantity || 0);
+      totalSold += (alloc.sold || 0);
+      productCount++;
+    });
+  }
+  return { totalPacked: totalPacked, totalSold: totalSold, productCount: productCount };
+}
+
+function renderSalesEvents() {
+  var loadingEl = document.getElementById('salesEventsLoading');
+  var emptyEl = document.getElementById('salesEventsEmpty');
+  var tableWrap = document.getElementById('salesEventsTableWrap');
+  var tbody = document.getElementById('salesEventsTableBody');
+  var cardsEl = document.getElementById('salesEventsCards');
+  var countEl = document.getElementById('salesEventsCount');
+  var detailEl = document.getElementById('salesEventDetailView');
+  if (!loadingEl) return;
+
+  loadingEl.style.display = 'none';
+  if (detailEl && detailEl.style.display !== 'none') return;
+
+  var arr = getSalesEventsArray();
+  var statusFilter = document.getElementById('salesEventsStatusFilter').value;
+  if (statusFilter !== 'all') {
+    arr = arr.filter(function(ev) { return ev.status === statusFilter; });
+  }
+
+  countEl.textContent = arr.length + ' event' + (arr.length !== 1 ? 's' : '');
+
+  if (arr.length === 0) {
+    emptyEl.style.display = '';
+    tableWrap.style.display = 'none';
+    cardsEl.innerHTML = '';
+    return;
+  }
+
+  emptyEl.style.display = 'none';
+  tableWrap.style.display = '';
+
+  var rows = '';
+  var cards = '';
+  arr.forEach(function(ev) {
+    var stats = getEventAllocationsStats(ev);
+    var statusColor = EVENT_STATUS_COLORS[ev.status] || '#9E9E9E';
+    var sellThrough = stats.totalPacked > 0 ? Math.round(stats.totalSold / stats.totalPacked * 100) + '%' : '—';
+
+    rows += '<tr style="cursor:pointer;" onclick="viewSalesEventDetail(\'' + ev._key + '\')">' +
+      '<td style="font-weight:600;">' + (ev.name || 'Unnamed') + '</td>' +
+      '<td>' + formatSaleDate(ev.date || ev.createdAt) + '</td>' +
+      '<td>' + (ev.location || '—') + '</td>' +
+      '<td>' + stats.totalPacked + ' (' + stats.productCount + ' products)</td>' +
+      '<td>' + stats.totalSold + (stats.totalPacked > 0 ? ' (' + sellThrough + ')' : '') + '</td>' +
+      '<td><span style="background:' + statusColor + ';color:white;padding:2px 8px;border-radius:4px;font-size:0.75rem;text-transform:uppercase;">' + ev.status + '</span></td>' +
+      '</tr>';
+
+    cards += '<div class="order-card" onclick="viewSalesEventDetail(\'' + ev._key + '\')">' +
+      '<div class="order-card-header">' +
+        '<span class="order-card-id" style="font-weight:600;">' + (ev.name || 'Unnamed') + '</span>' +
+        '<span style="background:' + statusColor + ';color:white;padding:2px 8px;border-radius:4px;font-size:0.75rem;text-transform:uppercase;">' + ev.status + '</span>' +
+      '</div>' +
+      '<div class="order-card-details">' +
+        '<span>📅 ' + formatSaleDate(ev.date || ev.createdAt) + '</span>' +
+        (ev.location ? '<span>📍 ' + ev.location + '</span>' : '') +
+        '<span>📦 ' + stats.totalPacked + ' packed · ' + stats.totalSold + ' sold</span>' +
+      '</div>' +
+    '</div>';
+  });
+
+  tbody.innerHTML = rows;
+  cardsEl.innerHTML = cards;
+}
+
+// === Create / Edit Event ===
+
+function openCreateEventModal(eventId) {
+  editingEventId = eventId || null;
+  document.getElementById('eventModalTitle').textContent = eventId ? 'Edit Event' : 'Create Event';
+  document.getElementById('saveEventBtn').textContent = eventId ? 'Save Changes' : 'Create Event';
+
+  if (eventId && salesEventsData[eventId]) {
+    var ev = salesEventsData[eventId];
+    document.getElementById('eventNameInput').value = ev.name || '';
+    document.getElementById('eventDateInput').value = ev.date || '';
+    document.getElementById('eventLocationInput').value = ev.location || '';
+    document.getElementById('eventNotesInput').value = ev.notes || '';
+  } else {
+    document.getElementById('eventNameInput').value = '';
+    document.getElementById('eventDateInput').value = '';
+    document.getElementById('eventLocationInput').value = '';
+    document.getElementById('eventNotesInput').value = '';
+  }
+
+  document.getElementById('createEventModal').style.display = 'flex';
+}
+
+function closeCreateEventModal() {
+  document.getElementById('createEventModal').style.display = 'none';
+  editingEventId = null;
+}
+
+async function saveEvent() {
+  var name = document.getElementById('eventNameInput').value.trim();
+  var date = document.getElementById('eventDateInput').value;
+  var location = document.getElementById('eventLocationInput').value.trim();
+  var notes = document.getElementById('eventNotesInput').value.trim();
+
+  if (!name) { showToast('Event name is required', true); return; }
+  if (!date) { showToast('Event date is required', true); return; }
+
+  var btn = document.getElementById('saveEventBtn');
+  btn.disabled = true;
+
+  try {
+    var now = new Date().toISOString();
+    if (editingEventId) {
+      await db.ref(SALES_EVENTS_PATH + '/' + editingEventId).update({
+        name: name, date: date, location: location || null, notes: notes || null, updatedAt: now
+      });
+      showToast('Event updated.');
+    } else {
+      var newRef = db.ref(SALES_EVENTS_PATH).push();
+      await newRef.set({
+        eventId: newRef.key, name: name, date: date, location: location || null,
+        status: 'planning', allocations: null,
+        createdAt: now, updatedAt: now, closedAt: null, notes: notes || null
+      });
+      showToast('Event created!');
+    }
+    closeCreateEventModal();
+  } catch (err) {
+    showToast('Error: ' + err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// === Event Detail View ===
+
+function viewSalesEventDetail(eventId) {
+  selectedSalesEventId = eventId;
+  var ev = salesEventsData[eventId];
+  if (!ev) return;
+
+  var tableWrap = document.getElementById('salesEventsTableWrap');
+  var cardsEl = document.getElementById('salesEventsCards');
+  var emptyEl = document.getElementById('salesEventsEmpty');
+  var detailEl = document.getElementById('salesEventDetailView');
+  tableWrap.style.display = 'none';
+  cardsEl.style.display = 'none';
+  emptyEl.style.display = 'none';
+  detailEl.style.display = '';
+
+  renderSalesEventDetail(eventId);
+}
+
+function renderSalesEventDetail(eventId) {
+  var ev = salesEventsData[eventId];
+  if (!ev) return;
+  var detailEl = document.getElementById('salesEventDetailView');
+  var stats = getEventAllocationsStats(ev);
+  var statusColor = EVENT_STATUS_COLORS[ev.status] || '#9E9E9E';
+  var sellThrough = stats.totalPacked > 0 ? Math.round(stats.totalSold / stats.totalPacked * 100) : 0;
+
+  // Get event-linked sales
+  var eventSales = [];
+  var eventRevenue = 0;
+  Object.keys(sales).forEach(function(k) {
+    if (sales[k].eventId === eventId && sales[k].status !== 'voided') {
+      eventSales.push(sales[k]);
+      eventRevenue += (sales[k].amount || 0);
+    }
+  });
+
+  var html = '<div style="margin-bottom:16px;">' +
+    '<a href="#" onclick="closeSalesEventDetail(); return false;" style="color:var(--teal);text-decoration:none;font-size:0.85rem;">← Back to Events</a>' +
+    '</div>';
+
+  // Header
+  html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:20px;">' +
+    '<div>' +
+      '<h2 style="margin:0 0 4px;">' + (ev.name || 'Unnamed Event') + '</h2>' +
+      '<div style="color:var(--warm-gray);font-size:0.9rem;">' +
+        '📅 ' + formatSaleDate(ev.date || ev.createdAt) +
+        (ev.location ? ' · 📍 ' + ev.location : '') +
+      '</div>' +
+    '</div>' +
+    '<span style="background:' + statusColor + ';color:white;padding:4px 12px;border-radius:6px;font-size:0.8rem;text-transform:uppercase;font-weight:600;">' + ev.status + '</span>' +
+  '</div>';
+
+  // Summary cards
+  html += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;">' +
+    '<div style="background:var(--cream);border-radius:8px;padding:12px 16px;flex:1;min-width:120px;">' +
+      '<div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;">Packed</div>' +
+      '<div style="font-size:1.5rem;font-weight:700;">' + stats.totalPacked + '</div>' +
+      '<div style="font-size:0.8rem;color:var(--warm-gray);">' + stats.productCount + ' products</div>' +
+    '</div>' +
+    '<div style="background:var(--cream);border-radius:8px;padding:12px 16px;flex:1;min-width:120px;">' +
+      '<div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;">Sold</div>' +
+      '<div style="font-size:1.5rem;font-weight:700;">' + stats.totalSold + '</div>' +
+      '<div style="font-size:0.8rem;color:var(--warm-gray);">' + sellThrough + '% sell-through</div>' +
+    '</div>' +
+    '<div style="background:var(--cream);border-radius:8px;padding:12px 16px;flex:1;min-width:120px;">' +
+      '<div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;">Revenue</div>' +
+      '<div style="font-size:1.5rem;font-weight:700;">' + formatCents(eventRevenue) + '</div>' +
+      '<div style="font-size:0.8rem;color:var(--warm-gray);">' + eventSales.length + ' sale' + (eventSales.length !== 1 ? 's' : '') + '</div>' +
+    '</div>' +
+    '<div style="background:var(--cream);border-radius:8px;padding:12px 16px;flex:1;min-width:120px;">' +
+      '<div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;">Remaining</div>' +
+      '<div style="font-size:1.5rem;font-weight:700;">' + (stats.totalPacked - stats.totalSold) + '</div>' +
+      '<div style="font-size:0.8rem;color:var(--warm-gray);">unsold items</div>' +
+    '</div>' +
+  '</div>';
+
+  // Action buttons based on status
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;">';
+  if (ev.status === 'planning') {
+    html += '<button class="btn btn-primary" onclick="startPackingMode(\'' + eventId + '\')">📦 Start Packing</button>';
+    html += '<button class="btn btn-secondary" onclick="openCreateEventModal(\'' + eventId + '\')">✏️ Edit</button>';
+    html += '<button class="btn btn-secondary" style="color:#E53935;" onclick="deleteEvent(\'' + eventId + '\')">🗑️ Delete</button>';
+  } else if (ev.status === 'packed') {
+    html += '<button class="btn btn-primary" onclick="startPackingMode(\'' + eventId + '\')">📦 Add More Items</button>';
+    html += '<button class="btn btn-primary" style="background:#4CAF50;" onclick="startFairMode(\'' + eventId + '\')">🎪 Start Fair</button>';
+    html += '<button class="btn btn-secondary" onclick="revertToPlanningStatus(\'' + eventId + '\')">↩️ Back to Planning</button>';
+  } else if (ev.status === 'active') {
+    html += '<button class="btn btn-primary" onclick="window.open(\'../pos/?eventId=' + eventId + '\', \'_blank\')">💰 Open PoS</button>';
+    html += '<button class="btn btn-primary" onclick="startPackingMode(\'' + eventId + '\')">📦 Add More Items</button>';
+    html += '<button class="btn btn-secondary" style="background:#E53935;color:white;border-color:#E53935;" onclick="closeEvent(\'' + eventId + '\')">🏁 Close Event</button>';
+  } else if (ev.status === 'closed') {
+    html += '<button class="btn btn-secondary" onclick="openCreateEventModal(\'' + eventId + '\')">✏️ Edit Details</button>';
+  }
+  html += '</div>';
+
+  // Allocations table
+  html += '<h3 style="margin:0 0 12px;">Packed Items</h3>';
+  if (!ev.allocations || Object.keys(ev.allocations).length === 0) {
+    html += '<div style="text-align:center;padding:24px;color:var(--warm-gray);background:var(--cream);border-radius:8px;">' +
+      '<p>No items packed yet.</p>' +
+      (ev.status === 'planning' ? '<button class="btn btn-primary" onclick="startPackingMode(\'' + eventId + '\')">Start Packing</button>' : '') +
+    '</div>';
+  } else {
+    html += '<div class="orders-table"><table><thead><tr>' +
+      '<th>Product</th><th>Packed</th><th>Sold</th><th>Remaining</th>' +
+      (ev.status !== 'closed' ? '<th>Actions</th>' : '<th>Sell-Through</th>') +
+    '</tr></thead><tbody>';
+
+    Object.keys(ev.allocations).forEach(function(pid) {
+      var alloc = ev.allocations[pid];
+      var remaining = (alloc.quantity || 0) - (alloc.sold || 0);
+      var prodName = alloc.productName || pid;
+      var st = alloc.quantity > 0 ? Math.round((alloc.sold || 0) / alloc.quantity * 100) + '%' : '—';
+
+      html += '<tr>' +
+        '<td style="font-weight:600;">' + prodName + '</td>' +
+        '<td>' + (alloc.quantity || 0) + '</td>' +
+        '<td>' + (alloc.sold || 0) + '</td>' +
+        '<td>' + remaining + '</td>';
+
+      if (ev.status !== 'closed') {
+        html += '<td>' +
+          '<button class="btn btn-secondary" style="font-size:0.75rem;padding:2px 8px;" onclick="adjustAllocation(\'' + eventId + '\',\'' + pid + '\', 1)">+1</button> ' +
+          '<button class="btn btn-secondary" style="font-size:0.75rem;padding:2px 8px;" onclick="adjustAllocation(\'' + eventId + '\',\'' + pid + '\', -1)">-1</button> ' +
+          '<button class="btn btn-secondary" style="font-size:0.75rem;padding:2px 8px;color:#E53935;" onclick="removeAllocation(\'' + eventId + '\',\'' + pid + '\')">✕</button>' +
+        '</td>';
+      } else {
+        html += '<td>' + st + '</td>';
+      }
+      html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+  }
+
+  // Event sales list
+  if (eventSales.length > 0) {
+    html += '<h3 style="margin:20px 0 12px;">Event Sales</h3>';
+    html += '<div class="orders-table"><table><thead><tr>' +
+      '<th>Time</th><th>Items</th><th>Payment</th><th>Amount</th>' +
+    '</tr></thead><tbody>';
+    eventSales.sort(function(a, b) { return (b.timestamp || '').localeCompare(a.timestamp || ''); });
+    eventSales.forEach(function(sale) {
+      html += '<tr onclick="switchTab(\'sales\'); viewSaleDetail(\'' + (sale.saleId || sale._key) + '\')" style="cursor:pointer;">' +
+        '<td>' + formatSaleTime(sale.timestamp) + '</td>' +
+        '<td>' + getSaleItemsLabel(sale) + '</td>' +
+        '<td style="text-transform:capitalize;">' + (sale.paymentType || '—') + '</td>' +
+        '<td style="font-weight:600;">' + formatCents(sale.amount) + '</td>' +
+      '</tr>';
+    });
+    html += '</tbody></table></div>';
+  }
+
+  // Notes
+  if (ev.notes) {
+    html += '<div style="margin-top:20px;padding:12px 16px;background:var(--cream);border-radius:8px;">' +
+      '<strong>Notes:</strong> ' + ev.notes +
+    '</div>';
+  }
+
+  detailEl.innerHTML = html;
+}
+
+function closeSalesEventDetail() {
+  selectedSalesEventId = null;
+  var detailEl = document.getElementById('salesEventDetailView');
+  detailEl.style.display = 'none';
+  var cardsEl = document.getElementById('salesEventsCards');
+  cardsEl.style.display = '';
+  renderSalesEvents();
+}
+
+// === Event Status Transitions ===
+
+async function startFairMode(eventId) {
+  if (!confirm('Start fair mode? The PoS will link sales to this event.')) return;
+  try {
+    await db.ref(SALES_EVENTS_PATH + '/' + eventId).update({
+      status: 'active', updatedAt: new Date().toISOString()
+    });
+    activeEventId = eventId;
+    showToast('Fair mode activated! Sales will be linked to this event.');
+  } catch (err) {
+    showToast('Error: ' + err.message, true);
+  }
+}
+
+async function revertToPlanningStatus(eventId) {
+  try {
+    await db.ref(SALES_EVENTS_PATH + '/' + eventId).update({
+      status: 'planning', updatedAt: new Date().toISOString()
+    });
+    showToast('Event reverted to planning.');
+  } catch (err) {
+    showToast('Error: ' + err.message, true);
+  }
+}
+
+async function closeEvent(eventId) {
+  var ev = salesEventsData[eventId];
+  if (!ev) return;
+  var stats = getEventAllocationsStats(ev);
+  if (!confirm('Close this event?\n\n' + stats.totalSold + ' of ' + stats.totalPacked + ' items sold.\nUnsold items are assumed to come home.')) return;
+  try {
+    await db.ref(SALES_EVENTS_PATH + '/' + eventId).update({
+      status: 'closed', closedAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+    });
+    if (activeEventId === eventId) activeEventId = null;
+    showToast('Event closed.');
+  } catch (err) {
+    showToast('Error: ' + err.message, true);
+  }
+}
+
+async function deleteEvent(eventId) {
+  if (!confirm('Delete this event? This cannot be undone.')) return;
+  try {
+    await db.ref(SALES_EVENTS_PATH + '/' + eventId).remove();
+    showToast('Event deleted.');
+    closeSalesEventDetail();
+  } catch (err) {
+    showToast('Error: ' + err.message, true);
+  }
+}
+
+// === Allocation Adjustments ===
+
+async function adjustAllocation(eventId, productId, delta) {
+  var ev = salesEventsData[eventId];
+  if (!ev || !ev.allocations || !ev.allocations[productId]) return;
+  var current = ev.allocations[productId].quantity || 0;
+  var newQty = Math.max(0, current + delta);
+  try {
+    await db.ref(SALES_EVENTS_PATH + '/' + eventId + '/allocations/' + productId + '/quantity').set(newQty);
+  } catch (err) {
+    showToast('Error: ' + err.message, true);
+  }
+}
+
+async function removeAllocation(eventId, productId) {
+  if (!confirm('Remove this product from the packing list?')) return;
+  try {
+    await db.ref(SALES_EVENTS_PATH + '/' + eventId + '/allocations/' + productId).remove();
+    showToast('Product removed from packing list.');
+  } catch (err) {
+    showToast('Error: ' + err.message, true);
+  }
+}
+
+// === Packing Mode ===
+
+function startPackingMode(eventId) {
+  packingEventId = eventId;
+  var ev = salesEventsData[eventId];
+  if (!ev) return;
+
+  document.getElementById('packingModeTitle').textContent = 'Packing: ' + (ev.name || 'Event');
+  document.getElementById('packingModeOverlay').style.display = '';
+  document.getElementById('packingCameraPlaceholder').style.display = '';
+  document.getElementById('packingVideo').style.display = 'none';
+  document.getElementById('packingCaptureBtn').style.display = 'none';
+  document.getElementById('packingRecognitionResult').style.display = 'none';
+  document.getElementById('manualPackPicker').style.display = 'none';
+  updatePackingTally();
+  renderPackingAllocations();
+}
+
+function updatePackingTally() {
+  if (!packingEventId) return;
+  var ev = salesEventsData[packingEventId];
+  var stats = ev ? getEventAllocationsStats(ev) : { totalPacked: 0, productCount: 0 };
+  document.getElementById('packingTally').textContent = stats.totalPacked + ' items packed (' + stats.productCount + ' products)';
+}
+
+function renderPackingAllocations() {
+  var el = document.getElementById('packingAllocations');
+  if (!packingEventId || !salesEventsData[packingEventId]) { el.innerHTML = ''; return; }
+  var ev = salesEventsData[packingEventId];
+  if (!ev.allocations || Object.keys(ev.allocations).length === 0) {
+    el.innerHTML = '<div style="text-align:center;color:var(--cream);padding:16px;">No items packed yet. Use the camera or add manually.</div>';
+    return;
+  }
+  var html = '<div style="color:white;font-weight:600;margin-bottom:8px;">Current Packing List</div>';
+  Object.keys(ev.allocations).forEach(function(pid) {
+    var alloc = ev.allocations[pid];
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,0.1);border-radius:6px;padding:8px 12px;margin-bottom:4px;">' +
+      '<span style="color:white;">' + (alloc.productName || pid) + '</span>' +
+      '<div style="display:flex;align-items:center;gap:6px;">' +
+        '<button onclick="adjustAllocation(\'' + packingEventId + '\',\'' + pid + '\', -1)" style="background:rgba(255,255,255,0.2);border:none;color:white;width:28px;height:28px;border-radius:4px;cursor:pointer;font-size:1rem;">−</button>' +
+        '<span style="color:white;font-weight:700;min-width:24px;text-align:center;">' + (alloc.quantity || 0) + '</span>' +
+        '<button onclick="adjustAllocation(\'' + packingEventId + '\',\'' + pid + '\', 1)" style="background:rgba(255,255,255,0.2);border:none;color:white;width:28px;height:28px;border-radius:4px;cursor:pointer;font-size:1rem;">+</button>' +
+      '</div>' +
+    '</div>';
+  });
+  el.innerHTML = html;
+}
+
+async function startPackingCamera() {
+  try {
+    var stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+    });
+    var video = document.getElementById('packingVideo');
+    video.srcObject = stream;
+    video.style.display = '';
+    packingCamera = stream;
+    document.getElementById('packingCameraPlaceholder').style.display = 'none';
+    document.getElementById('packingCaptureBtn').style.display = '';
+  } catch (err) {
+    showToast('Camera error: ' + err.message, true);
+  }
+}
+
+function stopPackingCamera() {
+  if (packingCamera) {
+    packingCamera.getTracks().forEach(function(t) { t.stop(); });
+    packingCamera = null;
+  }
+  document.getElementById('packingVideo').style.display = 'none';
+  document.getElementById('packingCaptureBtn').style.display = 'none';
+  document.getElementById('packingCameraPlaceholder').style.display = '';
+}
+
+async function capturePackingPhoto() {
+  var video = document.getElementById('packingVideo');
+  var canvas = document.getElementById('packingCanvas');
+  canvas.width = Math.min(video.videoWidth, 1600);
+  canvas.height = Math.round(canvas.width * (video.videoHeight / video.videoWidth));
+  var ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  var base64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+  stopPackingCamera();
+
+  // Show recognition in progress
+  var resultEl = document.getElementById('packingRecognitionResult');
+  resultEl.style.display = '';
+  resultEl.innerHTML = '<div style="text-align:center;color:white;padding:12px;">🔍 Identifying products...</div>';
+
+  try {
+    var token = await auth.currentUser.getIdToken();
+    var catalogForApi = buildProductCatalogForVision();
+    var resp = await fetch('https://us-central1-word-boxing.cloudfunctions.net/shirClassifyImage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ image: base64, catalog: catalogForApi, context: 'inventory' })
+    });
+    var data = await resp.json();
+
+    if (data.productId) {
+      var prodName = getProductName(data.productId);
+      var confidence = data.confidence || 0;
+      var confColor = confidence >= 90 ? '#4CAF50' : confidence >= 70 ? '#FF9800' : '#E53935';
+      var confLabel = confidence >= 90 ? '✅ High' : confidence >= 70 ? '⚠️ Medium' : '❌ Low';
+
+      resultEl.innerHTML = '<div style="color:white;">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+          '<span style="font-weight:700;font-size:1.1rem;">' + prodName + '</span>' +
+          '<span style="color:' + confColor + ';font-size:0.85rem;">' + confLabel + ' (' + confidence + '%)</span>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px;align-items:center;">' +
+          '<label style="color:var(--cream);font-size:0.85rem;">Quantity:</label>' +
+          '<input type="number" id="packQtyInput" value="1" min="1" style="width:60px;padding:6px;border-radius:4px;border:1px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.1);color:white;text-align:center;">' +
+          '<button class="btn btn-primary" onclick="confirmPackItem(\'' + data.productId + '\', \'' + prodName.replace(/'/g, "\\'") + '\')">Add to Pack</button>' +
+          '<button class="btn btn-secondary" onclick="openManualPackPicker()">Wrong? Pick Manually</button>' +
+        '</div>' +
+      '</div>';
+    } else {
+      resultEl.innerHTML = '<div style="color:white;text-align:center;">' +
+        '<p>Could not identify product. Please pick manually.</p>' +
+        '<button class="btn btn-primary" onclick="openManualPackPicker()">Pick from Catalog</button>' +
+      '</div>';
+    }
+  } catch (err) {
+    resultEl.innerHTML = '<div style="color:#E53935;text-align:center;">' +
+      '<p>Recognition error: ' + err.message + '</p>' +
+      '<button class="btn btn-primary" onclick="openManualPackPicker()">Pick Manually</button>' +
+    '</div>';
+  }
+}
+
+function buildProductCatalogForVision() {
+  var catalog = [];
+  if (!productsData || !productsData.length) return catalog;
+  productsData.forEach(function(p) {
+    if (p.availability === 'discontinued') return;
+    catalog.push({
+      id: p.pid,
+      name: p.name || p.pid,
+      category: p.category || '',
+      description: p.shortDescription || p.description || ''
+    });
+  });
+  return catalog;
+}
+
+function getProductName(productId) {
+  if (productsData) {
+    var found = productsData.find(function(p) { return p.pid === productId; });
+    if (found) return found.name || productId;
+  }
+  return productId;
+}
+
+async function confirmPackItem(productId, productName) {
+  var qty = parseInt(document.getElementById('packQtyInput').value) || 1;
+  if (!packingEventId) return;
+
+  try {
+    var currentAlloc = salesEventsData[packingEventId] && salesEventsData[packingEventId].allocations && salesEventsData[packingEventId].allocations[productId];
+    var currentQty = currentAlloc ? (currentAlloc.quantity || 0) : 0;
+
+    await db.ref(SALES_EVENTS_PATH + '/' + packingEventId + '/allocations/' + productId).update({
+      quantity: currentQty + qty,
+      sold: currentAlloc ? (currentAlloc.sold || 0) : 0,
+      productName: productName
+    });
+
+    document.getElementById('packingRecognitionResult').style.display = 'none';
+    showToast(qty + 'x ' + productName + ' added to pack!');
+    updatePackingTally();
+    renderPackingAllocations();
+  } catch (err) {
+    showToast('Error: ' + err.message, true);
+  }
+}
+
+function openManualPackPicker() {
+  document.getElementById('manualPackPicker').style.display = '';
+  document.getElementById('packingRecognitionResult').style.display = 'none';
+  document.getElementById('packProductSearch').value = '';
+  filterPackProducts();
+}
+
+function filterPackProducts() {
+  var query = (document.getElementById('packProductSearch').value || '').toLowerCase();
+  var listEl = document.getElementById('packProductList');
+  if (!productsData || !productsData.length) { listEl.innerHTML = '<div style="color:var(--cream);padding:8px;">No products loaded.</div>'; return; }
+
+  var html = '';
+  productsData.forEach(function(p) {
+    if (p.availability === 'discontinued') return;
+    var pid = p.pid;
+    var name = p.name || pid;
+    if (query && name.toLowerCase().indexOf(query) === -1 && (p.category || '').toLowerCase().indexOf(query) === -1) return;
+
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid rgba(255,255,255,0.1);cursor:pointer;" onclick="selectManualPackProduct(\'' + pid + '\', \'' + name.replace(/'/g, "\\'") + '\')">' +
+      '<span style="color:white;">' + name + '</span>' +
+      '<span style="color:var(--cream);font-size:0.8rem;">' + (p.category || '') + '</span>' +
+    '</div>';
+  });
+
+  listEl.innerHTML = html || '<div style="color:var(--cream);padding:8px;">No matching products.</div>';
+}
+
+function selectManualPackProduct(productId, productName) {
+  document.getElementById('manualPackPicker').style.display = 'none';
+  var resultEl = document.getElementById('packingRecognitionResult');
+  resultEl.style.display = '';
+  resultEl.innerHTML = '<div style="color:white;">' +
+    '<div style="font-weight:700;font-size:1.1rem;margin-bottom:8px;">' + productName + '</div>' +
+    '<div style="display:flex;gap:8px;align-items:center;">' +
+      '<label style="color:var(--cream);font-size:0.85rem;">Quantity:</label>' +
+      '<input type="number" id="packQtyInput" value="1" min="1" style="width:60px;padding:6px;border-radius:4px;border:1px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.1);color:white;text-align:center;">' +
+      '<button class="btn btn-primary" onclick="confirmPackItem(\'' + productId + '\', \'' + productName.replace(/'/g, "\\'") + '\')">Add to Pack</button>' +
+    '</div>' +
+  '</div>';
+}
+
+async function exitPackingMode() {
+  stopPackingCamera();
+  document.getElementById('packingModeOverlay').style.display = 'none';
+  document.getElementById('manualPackPicker').style.display = 'none';
+  document.getElementById('packingRecognitionResult').style.display = 'none';
+
+  if (packingEventId) {
+    var ev = salesEventsData[packingEventId];
+    if (ev && ev.status === 'planning') {
+      var stats = getEventAllocationsStats(ev);
+      if (stats.totalPacked > 0) {
+        if (confirm('Mark event as packed? (' + stats.totalPacked + ' items, ' + stats.productCount + ' products)')) {
+          await db.ref(SALES_EVENTS_PATH + '/' + packingEventId).update({
+            status: 'packed', updatedAt: new Date().toISOString()
+          });
+          showToast('Event marked as packed!');
+        }
+      }
+    }
+    renderSalesEventDetail(packingEventId);
+  }
+  packingEventId = null;
 }
 
 // ============================================================
