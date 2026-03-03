@@ -1161,17 +1161,6 @@
     .stock-badge.made-to-order { background: #F3E5F5; color: #7B1FA2; }
     .stock-badge.limited { background: #FFF8E1; color: #F57F17; }
     .stock-reserved { font-size: 0.72rem; color: var(--warm-gray-light); }
-    .btn-inv-edit {
-      background: none;
-      border: none;
-      color: var(--teal);
-      font-size: 0.72rem;
-      cursor: pointer;
-      font-family: 'DM Sans', sans-serif;
-      text-decoration: underline;
-      padding: 0;
-    }
-    .btn-inv-edit:hover { color: var(--teal-deep); }
     .inventory-summary-bar {
       display: flex;
       gap: 16px;
@@ -1194,6 +1183,64 @@
       background: #2a2a2a;
       border-color: #3a3a3a;
     }
+
+    /* ========== INVENTORY OVERVIEW ========== */
+    .inv-overview-summary {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .inv-overview-stat {
+      background: var(--cream);
+      border: 1px solid var(--cream-dark);
+      border-radius: 8px;
+      padding: 12px 20px;
+      text-align: center;
+      min-width: 90px;
+    }
+    .inv-overview-stat-value {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--dark-brown);
+    }
+    .inv-overview-stat-label {
+      font-size: 0.72rem;
+      color: var(--warm-gray);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-top: 2px;
+    }
+    .inv-overview-stat-alert .inv-overview-stat-value { color: var(--danger); }
+    .inv-overview-stat-warn .inv-overview-stat-value { color: #E65100; }
+    .inv-overview-table { margin-top: 4px; overflow-x: auto; }
+    .inv-overview-table table { width: 100%; border-collapse: collapse; }
+    .inv-overview-table th {
+      text-align: left;
+      padding: 10px 12px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--warm-gray-light);
+      border-bottom: 1px solid var(--cream-dark);
+    }
+    .inv-overview-table td {
+      padding: 10px 12px;
+      font-size: 0.85rem;
+      border-bottom: 1px solid var(--cream-dark);
+      vertical-align: middle;
+    }
+    .inv-overview-row { transition: background 0.15s; }
+    .inv-overview-row:hover { background: rgba(196,133,60,0.04); }
+    body.dark-mode .inv-overview-stat {
+      background: #2a2a2a;
+      border-color: #3a3a3a;
+    }
+    body.dark-mode .inv-overview-stat-value { color: #e0d6c8; }
+    body.dark-mode .inv-overview-table th { border-color: #3a3a3a; }
+    body.dark-mode .inv-overview-table td { border-color: #3a3a3a; }
+    body.dark-mode .inv-overview-row:hover { background: rgba(255,255,255,0.04); }
 
     /* ========== ORDERS ========== */
     .order-status {
@@ -2433,6 +2480,7 @@
           <div style="display:flex;border:1px solid var(--cream-dark);border-radius:6px;overflow:hidden;">
             <button id="prodSubQueue" class="btn btn-secondary" style="border-radius:0;border:none;font-size:0.8rem;padding:6px 14px;" onclick="switchProductionSubView('queue')">Queue <span id="queueBadge" style="background:#E65100;color:white;border-radius:10px;padding:1px 6px;font-size:0.7rem;margin-left:4px;display:none;">0</span></button>
             <button id="prodSubJobs" class="btn btn-primary" style="border-radius:0;border:none;font-size:0.8rem;padding:6px 14px;" onclick="switchProductionSubView('jobs')">Jobs</button>
+            <button id="prodSubInventory" class="btn btn-secondary" style="border-radius:0;border:none;font-size:0.8rem;padding:6px 14px;" onclick="switchProductionSubView('inventory')">Inventory</button>
           </div>
           <button class="btn btn-primary" onclick="openNewJobModal()">+ New Job</button>
         </div>
@@ -2479,6 +2527,9 @@
       </div>
       <div id="productionJobDetail" style="display:none;"></div>
       <div id="productionBuildView" style="display:none;"></div>
+      <div id="productionInventoryView" style="display:none;">
+        <div id="inventoryOverviewContent"></div>
+      </div>
     </div>
 
     <div id="settingsTab" style="display:none;">
@@ -2990,6 +3041,7 @@ function switchTab(tab) {
   if (tab === 'orders' && !ordersLoaded) loadOrders();
   if (tab === 'coupons' && !couponsLoaded) loadCoupons();
   if (tab === 'production') {
+    if (!productsLoaded) loadProducts(); // needed for inventory overview
     if (!productionLoaded) loadProduction();
     else switchProductionSubView(productionSubView);
   }
@@ -3694,36 +3746,38 @@ function renderProducts() {
 
     var imgCount = (p.images && p.images.length) ? p.images.length : 0;
 
-    // Inventory info
+    // Inventory info — always show on-hand count
     var inv = inventory[p.pid];
     var invHtml = '';
-    if (inv) {
-      var stockType = inv.stockType || 'made-to-order';
-      var stockBadgeClass = 'stock-badge ';
-      if (stockType === 'made-to-order') {
-        stockBadgeClass += 'made-to-order';
-        invHtml = '<div class="product-inventory"><span class="' + stockBadgeClass + '">Made to Order</span></div>';
-      } else {
-        var totals = getInventoryTotals(inv);
-        var avail = totals.available;
-        var reserved = totals.reserved;
-        var threshold = inv.lowStockThreshold || 2;
-        if (avail <= 0) {
-          stockBadgeClass += 'out-of-stock';
-          invHtml = '<div class="product-inventory"><span class="' + stockBadgeClass + '">Out of Stock</span></div>';
-        } else if (avail <= threshold) {
-          stockBadgeClass += 'low-stock';
-          invHtml = '<div class="product-inventory"><span class="' + stockBadgeClass + '">Low Stock (' + avail + ')</span>' +
-            (reserved > 0 ? ' <span class="stock-reserved">' + reserved + ' reserved</span>' : '') + '</div>';
-        } else {
-          stockBadgeClass += 'in-stock';
-          invHtml = '<div class="product-inventory"><span class="' + stockBadgeClass + '">In Stock (' + avail + ')</span>' +
-            (reserved > 0 ? ' <span class="stock-reserved">' + reserved + ' reserved</span>' : '') + '</div>';
-        }
-      }
+    var totals = getInventoryTotals(inv);
+    var avail = totals.available;
+    var reserved = totals.reserved;
+    var stockType = (inv && inv.stockType) ? inv.stockType : 'made-to-order';
+    var threshold = (inv && inv.lowStockThreshold) ? inv.lowStockThreshold : 2;
+
+    // Stock type badge
+    var stockBadgeClass = 'stock-badge ';
+    if (stockType === 'made-to-order') {
+      stockBadgeClass += 'made-to-order';
+      invHtml = '<span class="' + stockBadgeClass + '">Made to Order</span>';
+    } else if (avail <= 0) {
+      stockBadgeClass += 'out-of-stock';
+      invHtml = '<span class="' + stockBadgeClass + '">Out of Stock</span>';
+    } else if (avail <= threshold) {
+      stockBadgeClass += 'low-stock';
+      invHtml = '<span class="' + stockBadgeClass + '">Low Stock</span>';
     } else {
-      invHtml = '<div class="product-inventory"><span class="stock-badge made-to-order">Made to Order</span></div>';
+      stockBadgeClass += 'in-stock';
+      invHtml = '<span class="' + stockBadgeClass + '">In Stock</span>';
     }
+
+    // On-hand count — always shown if there's any stock
+    var qtyHtml = '';
+    if (avail > 0 || reserved > 0) {
+      qtyHtml = ' <span class="stock-reserved" style="font-size:0.75rem;">' + avail + ' on hand' +
+        (reserved > 0 ? ' · ' + reserved + ' reserved' : '') + '</span>';
+    }
+    invHtml = '<div class="product-inventory">' + invHtml + qtyHtml + '</div>';
 
     html += '<div class="product-card" style="cursor:pointer;" onclick="viewProduct(\'' + esc(p.pid) + '\')">'
       + (imgSrc ? '<img class="product-card-img" src="' + esc(imgSrc) + '" alt="' + esc(p.name) + '" loading="lazy">' : '<div class="product-card-img"></div>')
@@ -3761,100 +3815,6 @@ function renderProducts() {
     } else {
       summaryBar.style.display = 'none';
     }
-  }
-}
-
-function openInventoryModal(pid, productName) {
-  var inv = inventory[pid] || {};
-  var stockType = inv.stockType || 'made-to-order';
-  var avail = (inv.stock && inv.stock._default) ? (inv.stock._default.available || 0) : 0;
-  var reserved = (inv.stock && inv.stock._default) ? (inv.stock._default.reserved || 0) : 0;
-  var threshold = inv.lowStockThreshold || 2;
-  var leadTime = inv.leadTimeDays || 3;
-  var notes = inv.notes || '';
-
-  var html = '<div style="max-width:420px;">' +
-    '<h3>Inventory: ' + esc(productName) + '</h3>' +
-    '<div class="form-group" style="margin-top:16px;">' +
-      '<label>Stock Type</label>' +
-      '<select id="invStockType" onchange="invStockTypeChanged()">' +
-        '<option value="made-to-order"' + (stockType === 'made-to-order' ? ' selected' : '') + '>Made to Order</option>' +
-        '<option value="in-stock"' + (stockType === 'in-stock' ? ' selected' : '') + '>In Stock</option>' +
-        '<option value="limited"' + (stockType === 'limited' ? ' selected' : '') + '>Limited Edition</option>' +
-      '</select>' +
-    '</div>' +
-    '<div id="invStockFields" style="' + (stockType === 'made-to-order' ? 'display:none;' : '') + '">' +
-      '<div class="checkout-form-row">' +
-        '<div class="form-group">' +
-          '<label>Available</label>' +
-          '<input type="number" id="invAvailable" min="0" value="' + avail + '">' +
-        '</div>' +
-        '<div class="form-group">' +
-          '<label>Reserved</label>' +
-          '<input type="number" id="invReserved" value="' + reserved + '" readonly style="background:var(--cream);">' +
-        '</div>' +
-      '</div>' +
-      '<div class="form-group">' +
-        '<label>Low Stock Alert At</label>' +
-        '<input type="number" id="invThreshold" min="0" value="' + threshold + '">' +
-      '</div>' +
-    '</div>' +
-    '<div class="form-group">' +
-      '<label>Lead Time (days)</label>' +
-      '<input type="number" id="invLeadTime" min="0" value="' + leadTime + '">' +
-    '</div>' +
-    '<div class="form-group">' +
-      '<label>Notes</label>' +
-      '<textarea id="invNotes" rows="2" placeholder="e.g. Need more cobalt glass rods">' + esc(notes) + '</textarea>' +
-    '</div>' +
-    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">' +
-      '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
-      '<button class="btn btn-primary" onclick="saveInventory(\'' + esc(pid) + '\')">Save</button>' +
-    '</div>' +
-  '</div>';
-  openModal(html);
-}
-
-function invStockTypeChanged() {
-  var type = document.getElementById('invStockType').value;
-  document.getElementById('invStockFields').style.display = (type === 'made-to-order') ? 'none' : '';
-}
-
-async function saveInventory(pid) {
-  try {
-    var stockType = document.getElementById('invStockType').value;
-    var leadTime = parseInt(document.getElementById('invLeadTime').value) || 0;
-    var notes = document.getElementById('invNotes').value.trim();
-
-    var invData = {
-      pid: pid,
-      stockType: stockType,
-      leadTimeDays: leadTime,
-      notes: notes,
-      updatedAt: new Date().toISOString()
-    };
-
-    if (stockType !== 'made-to-order') {
-      var avail = parseInt(document.getElementById('invAvailable').value) || 0;
-      var threshold = parseInt(document.getElementById('invThreshold').value) || 2;
-      // Preserve existing reserved count
-      var existing = inventory[pid];
-      var reserved = (existing && existing.stock && existing.stock._default) ? (existing.stock._default.reserved || 0) : 0;
-      invData.stock = {
-        _default: { available: avail, reserved: reserved }
-      };
-      invData.lowStockThreshold = threshold;
-    } else {
-      invData.stock = null;
-      invData.lowStockThreshold = null;
-    }
-
-    await db.ref(INVENTORY_PATH + '/' + pid).set(invData);
-    closeModal();
-    showToast('Inventory saved');
-    renderProducts();
-  } catch (err) {
-    showToast('Error saving inventory: ' + err.message, true);
   }
 }
 
@@ -3896,6 +3856,181 @@ function getProductVariantCombos(product) {
 
 function comboKey(values) {
   return values.join('|');
+}
+
+// ---- Inventory Overview (Production tab) ----
+function renderInventoryOverview() {
+  var el = document.getElementById('inventoryOverviewContent');
+  if (!el) return;
+
+  // Make sure products data is loaded
+  if (!productsData || !productsData.length) {
+    el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--warm-gray);">Loading product data...</div>';
+    if (!productsLoaded) {
+      loadProducts().then(function() { renderInventoryOverview(); });
+    }
+    return;
+  }
+
+  // Build summary stats
+  var totalProducts = productsData.length;
+  var totalOnHand = 0;
+  var totalReserved = 0;
+  var outOfStockCount = 0;
+  var lowStockCount = 0;
+  var madeToOrderCount = 0;
+
+  // Build rows data
+  var rows = productsData.map(function(p) {
+    var inv = inventory[p.pid] || {};
+    var totals = getInventoryTotals(inv);
+    var stockType = inv.stockType || 'made-to-order';
+    var threshold = inv.lowStockThreshold || 2;
+    var variantInfo = getProductVariantCombos(p);
+    var stock = (inv && inv.stock) ? inv.stock : {};
+
+    totalOnHand += totals.available;
+    totalReserved += totals.reserved;
+    if (stockType === 'made-to-order') madeToOrderCount++;
+    else if (totals.available <= 0) outOfStockCount++;
+    else if (totals.available <= threshold) lowStockCount++;
+
+    // Build attribute summary for this product
+    var attrSummary = '';
+    if (variantInfo.combos.length > 0) {
+      variantInfo.labels.forEach(function(label, labelIdx) {
+        var valueCounts = {};
+        variantInfo.combos.forEach(function(combo) {
+          var val = combo[labelIdx];
+          var key = comboKey(combo);
+          var s = stock[key] || { available: 0, reserved: 0 };
+          if (!valueCounts[val]) valueCounts[val] = 0;
+          valueCounts[val] += (s.available || 0);
+        });
+        var tags = '';
+        Object.keys(valueCounts).forEach(function(val) {
+          var count = valueCounts[val];
+          var style = count > 0
+            ? 'background:rgba(42,124,111,0.1);color:var(--teal);'
+            : 'background:var(--cream-dark);color:var(--warm-gray);opacity:0.6;';
+          tags += '<span style="display:inline-block;padding:2px 7px;border-radius:10px;font-size:0.72rem;margin:1px 2px;' + style + '">' +
+            esc(val) + (count > 0 ? ' (' + count + ')' : '') + '</span>';
+        });
+        attrSummary += '<div style="margin-bottom:2px;">' +
+          '<span style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--warm-gray-light);margin-right:4px;">' + esc(label) + ':</span>' +
+          tags + '</div>';
+      });
+    }
+
+    return {
+      pid: p.pid,
+      name: p.name,
+      price: p.price || '',
+      imgSrc: (p.images && p.images.length) ? p.images[0] : '',
+      categories: p.categories || [],
+      stockType: stockType,
+      threshold: threshold,
+      available: totals.available,
+      reserved: totals.reserved,
+      hasVariants: variantInfo.combos.length > 0,
+      attrSummary: attrSummary
+    };
+  });
+
+  // Sort: out of stock first, then low stock, then by available desc
+  rows.sort(function(a, b) {
+    // Made to order goes last
+    if (a.stockType === 'made-to-order' && b.stockType !== 'made-to-order') return 1;
+    if (b.stockType === 'made-to-order' && a.stockType !== 'made-to-order') return -1;
+    // Out of stock first (urgent)
+    var aOOS = (a.stockType !== 'made-to-order' && a.available <= 0) ? 1 : 0;
+    var bOOS = (b.stockType !== 'made-to-order' && b.available <= 0) ? 1 : 0;
+    if (aOOS !== bOOS) return bOOS - aOOS;
+    // Low stock next
+    var aLow = (a.stockType !== 'made-to-order' && a.available > 0 && a.available <= a.threshold) ? 1 : 0;
+    var bLow = (b.stockType !== 'made-to-order' && b.available > 0 && b.available <= b.threshold) ? 1 : 0;
+    if (aLow !== bLow) return bLow - aLow;
+    // Then by available descending
+    return b.available - a.available;
+  });
+
+  // Summary bar
+  var summaryHtml = '<div class="inv-overview-summary">' +
+    '<div class="inv-overview-stat">' +
+      '<div class="inv-overview-stat-value">' + totalProducts + '</div>' +
+      '<div class="inv-overview-stat-label">Products</div>' +
+    '</div>' +
+    '<div class="inv-overview-stat">' +
+      '<div class="inv-overview-stat-value">' + totalOnHand + '</div>' +
+      '<div class="inv-overview-stat-label">Total On Hand</div>' +
+    '</div>' +
+    '<div class="inv-overview-stat">' +
+      '<div class="inv-overview-stat-value">' + totalReserved + '</div>' +
+      '<div class="inv-overview-stat-label">Reserved</div>' +
+    '</div>' +
+    (outOfStockCount > 0 ? '<div class="inv-overview-stat inv-overview-stat-alert">' +
+      '<div class="inv-overview-stat-value">' + outOfStockCount + '</div>' +
+      '<div class="inv-overview-stat-label">Out of Stock</div>' +
+    '</div>' : '') +
+    (lowStockCount > 0 ? '<div class="inv-overview-stat inv-overview-stat-warn">' +
+      '<div class="inv-overview-stat-value">' + lowStockCount + '</div>' +
+      '<div class="inv-overview-stat-label">Low Stock</div>' +
+    '</div>' : '') +
+    '<div class="inv-overview-stat">' +
+      '<div class="inv-overview-stat-value" style="opacity:0.5;">' + madeToOrderCount + '</div>' +
+      '<div class="inv-overview-stat-label">Made to Order</div>' +
+    '</div>' +
+  '</div>';
+
+  // Table
+  var tableHtml = '<div class="inv-overview-table"><table>' +
+    '<thead><tr>' +
+      '<th style="width:40px;"></th>' +
+      '<th>Product</th>' +
+      '<th style="text-align:center;">Type</th>' +
+      '<th style="text-align:center;">On Hand</th>' +
+      '<th style="text-align:center;">Reserved</th>' +
+      '<th>Attributes</th>' +
+    '</tr></thead><tbody>';
+
+  rows.forEach(function(r) {
+    var statusBadge = '';
+    if (r.stockType === 'made-to-order') {
+      statusBadge = '<span class="stock-badge made-to-order" style="font-size:0.72rem;">Made to Order</span>';
+    } else if (r.available <= 0) {
+      statusBadge = '<span class="stock-badge out-of-stock" style="font-size:0.72rem;">Out of Stock</span>';
+    } else if (r.available <= r.threshold) {
+      statusBadge = '<span class="stock-badge low-stock" style="font-size:0.72rem;">Low Stock</span>';
+    } else {
+      statusBadge = '<span class="stock-badge in-stock" style="font-size:0.72rem;">In Stock</span>';
+    }
+
+    var imgHtml = r.imgSrc
+      ? '<img src="' + esc(r.imgSrc) + '" alt="" style="width:36px;height:36px;object-fit:cover;border-radius:6px;">'
+      : '<div style="width:36px;height:36px;border-radius:6px;background:var(--cream-dark);"></div>';
+
+    var qtyStyle = '';
+    if (r.stockType !== 'made-to-order') {
+      if (r.available <= 0) qtyStyle = 'color:var(--danger);font-weight:600;';
+      else if (r.available <= r.threshold) qtyStyle = 'color:#E65100;font-weight:600;';
+    }
+
+    tableHtml += '<tr class="inv-overview-row" onclick="switchTab(\'products\');setTimeout(function(){viewProduct(\'' + esc(r.pid) + '\');},100);" style="cursor:pointer;">' +
+      '<td>' + imgHtml + '</td>' +
+      '<td>' +
+        '<div style="font-weight:500;font-size:0.85rem;">' + esc(r.name) + '</div>' +
+        (r.price ? '<div style="font-size:0.75rem;color:var(--warm-gray);">' + esc(r.price) + '</div>' : '') +
+      '</td>' +
+      '<td style="text-align:center;">' + statusBadge + '</td>' +
+      '<td style="text-align:center;' + qtyStyle + '">' + (r.stockType === 'made-to-order' ? '<span style="color:var(--warm-gray-light);">—</span>' : r.available) + '</td>' +
+      '<td style="text-align:center;color:var(--warm-gray);">' + (r.reserved > 0 ? r.reserved : (r.stockType === 'made-to-order' ? '<span style="color:var(--warm-gray-light);">—</span>' : '0')) + '</td>' +
+      '<td>' + (r.attrSummary || '<span style="color:var(--warm-gray-light);font-size:0.78rem;">No variants</span>') + '</td>' +
+    '</tr>';
+  });
+
+  tableHtml += '</tbody></table></div>';
+
+  el.innerHTML = summaryHtml + tableHtml;
 }
 
 function viewProduct(pid) {
@@ -3972,39 +4107,62 @@ function renderProductDetail(pid) {
     '</div>' +
   '</div>';
 
-  // Inventory section
-  var inventoryHtml = '';
-  if (stockType !== 'made-to-order') {
-    if (hasVariants) {
-      inventoryHtml = buildVariantTable(pid, variantInfo.labels, variantInfo.combos, inv);
-    } else {
-      var defAvail = (inv.stock && inv.stock._default) ? (inv.stock._default.available || 0) : 0;
-      var defReserved = (inv.stock && inv.stock._default) ? (inv.stock._default.reserved || 0) : 0;
-      inventoryHtml = '<div class="product-detail-section">' +
-        '<div class="product-detail-section-title">Inventory</div>' +
-        '<div style="display:flex;gap:16px;align-items:flex-end;">' +
-          '<div class="form-group" style="margin:0;">' +
-            '<label style="font-size:0.78rem;">Available</label>' +
-            '<input type="number" id="pdDefaultAvailable" min="0" value="' + defAvail + '" style="width:80px;">' +
-          '</div>' +
-          '<div class="form-group" style="margin:0;">' +
-            '<label style="font-size:0.78rem;">Reserved</label>' +
-            '<input type="number" value="' + defReserved + '" readonly style="width:80px;opacity:0.6;">' +
-          '</div>' +
-        '</div>' +
+  // Inventory summary — read-only display of what's on hand
+  var totals = getInventoryTotals(inv);
+  var totalOnHand = totals.available;
+  var totalReserved = totals.reserved;
+
+  var inventoryHtml = '<div class="product-detail-section">' +
+    '<div class="product-detail-section-title">Inventory on Hand</div>' +
+    '<div style="display:flex;gap:24px;align-items:baseline;margin-bottom:12px;">' +
+      '<div style="font-size:1.5rem;font-weight:700;color:var(--dark-brown);">' + totalOnHand + ' <span style="font-size:0.85rem;font-weight:400;color:var(--warm-gray);">available</span></div>' +
+      (totalReserved > 0 ? '<div style="font-size:1rem;color:var(--warm-gray);">' + totalReserved + ' reserved</div>' : '') +
+    '</div>';
+
+  // Attribute breakdown — show counts per attribute value (not every combination)
+  if (hasVariants) {
+    var stock = (inv && inv.stock) ? inv.stock : {};
+    variantInfo.labels.forEach(function(label, labelIdx) {
+      var valueCounts = {};
+      variantInfo.combos.forEach(function(combo) {
+        var val = combo[labelIdx];
+        var key = comboKey(combo);
+        var s = stock[key] || { available: 0, reserved: 0 };
+        if (!valueCounts[val]) valueCounts[val] = 0;
+        valueCounts[val] += (s.available || 0);
+      });
+      var tags = '';
+      Object.keys(valueCounts).forEach(function(val) {
+        var count = valueCounts[val];
+        var style = count > 0
+          ? 'background:rgba(42,124,111,0.1);color:var(--teal);'
+          : 'background:var(--cream-dark);color:var(--warm-gray);opacity:0.6;';
+        tags += '<span style="display:inline-block;padding:3px 10px;border-radius:12px;font-size:0.8rem;margin:2px 4px 2px 0;' + style + '">' +
+          esc(val) + (count > 0 ? ' (' + count + ')' : '') + '</span>';
+      });
+      inventoryHtml += '<div style="margin-bottom:8px;">' +
+        '<div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--warm-gray);margin-bottom:4px;">' + esc(label) + '</div>' +
+        '<div>' + tags + '</div>' +
       '</div>';
-    }
+    });
   }
 
+  // Adjust button
+  inventoryHtml += '<div style="margin-top:12px;">' +
+    '<button class="btn btn-secondary" style="font-size:0.8rem;padding:5px 14px;" onclick="openAdjustStockModal(\'' + esc(pid) + '\')">Adjust Stock</button>' +
+  '</div>';
+
+  inventoryHtml += '</div>';
+
   var saveBtn = '<div style="display:flex;gap:8px;margin-top:20px;">' +
-    '<button class="btn btn-primary" onclick="saveProductInventory(\'' + esc(pid) + '\')">Save Inventory</button>' +
-    '<button class="btn btn-secondary" onclick="backToProducts()">Cancel</button>' +
+    '<button class="btn btn-primary" onclick="saveProductSettings(\'' + esc(pid) + '\')">Save Settings</button>' +
+    '<button class="btn btn-secondary" onclick="backToProducts()">Back</button>' +
   '</div>';
 
   el.innerHTML = '<button class="product-detail-back" onclick="backToProducts()">&larr; Back to Products</button>' +
-    headerHtml + stockSettingsHtml +
+    headerHtml +
     '<div id="pdInventorySection">' + inventoryHtml + '</div>' +
-    saveBtn;
+    stockSettingsHtml + saveBtn;
 }
 
 function buildVariantTable(pid, labels, combos, inv) {
@@ -4067,33 +4225,6 @@ function pdStockTypeChanged(pid) {
   var type = document.getElementById('pdStockType').value;
   var thresholdGroup = document.getElementById('pdThresholdGroup');
   if (thresholdGroup) thresholdGroup.hidden = (type === 'made-to-order');
-
-  var product = productsData.find(function(p) { return p.pid === pid; });
-  var inv = inventory[pid] || {};
-  var variantInfo = getProductVariantCombos(product);
-  var section = document.getElementById('pdInventorySection');
-
-  if (type === 'made-to-order') {
-    section.innerHTML = '';
-  } else if (variantInfo.combos.length > 0) {
-    section.innerHTML = buildVariantTable(pid, variantInfo.labels, variantInfo.combos, inv);
-  } else {
-    var defAvail = (inv.stock && inv.stock._default) ? (inv.stock._default.available || 0) : 0;
-    var defReserved = (inv.stock && inv.stock._default) ? (inv.stock._default.reserved || 0) : 0;
-    section.innerHTML = '<div class="product-detail-section">' +
-      '<div class="product-detail-section-title">Inventory</div>' +
-      '<div style="display:flex;gap:16px;align-items:flex-end;">' +
-        '<div class="form-group" style="margin:0;">' +
-          '<label style="font-size:0.78rem;">Available</label>' +
-          '<input type="number" id="pdDefaultAvailable" min="0" value="' + defAvail + '" style="width:80px;">' +
-        '</div>' +
-        '<div class="form-group" style="margin:0;">' +
-          '<label style="font-size:0.78rem;">Reserved</label>' +
-          '<input type="number" value="' + defReserved + '" readonly style="width:80px;opacity:0.6;">' +
-        '</div>' +
-      '</div>' +
-    '</div>';
-  }
 }
 
 function pdAdjustVariant(comboKey, delta) {
@@ -4114,60 +4245,106 @@ function pdRecalcTotal() {
   if (el) el.textContent = total;
 }
 
-async function saveProductInventory(pid) {
+async function saveProductSettings(pid) {
   try {
     var stockType = document.getElementById('pdStockType').value;
     var leadTime = parseInt(document.getElementById('pdLeadTime').value) || 0;
     var notes = document.getElementById('pdNotes').value.trim();
+    var thresholdEl = document.getElementById('pdThreshold');
+    var threshold = thresholdEl ? (parseInt(thresholdEl.value) || 2) : 2;
 
-    var invData = {
+    // Only save settings — stock counts are managed by production and orders
+    var updates = {
       pid: pid,
       stockType: stockType,
       leadTimeDays: leadTime,
+      lowStockThreshold: threshold,
       notes: notes,
       updatedAt: new Date().toISOString()
     };
 
-    if (stockType !== 'made-to-order') {
-      var product = productsData.find(function(p) { return p.pid === pid; });
-      var variantInfo = getProductVariantCombos(product);
-      var existing = inventory[pid];
-      var threshold = parseInt(document.getElementById('pdThreshold').value) || 2;
-      invData.lowStockThreshold = threshold;
-
-      if (variantInfo.combos.length > 0) {
-        var stock = {};
-        var totalAvail = 0;
-        var totalReserved = 0;
-        variantInfo.combos.forEach(function(combo) {
-          var key = comboKey(combo);
-          var availInput = document.querySelector('.pd-variant-avail[data-combo="' + key + '"]');
-          var avail = availInput ? (parseInt(availInput.value) || 0) : 0;
-          var reserved = (existing && existing.stock && existing.stock[key])
-            ? (existing.stock[key].reserved || 0) : 0;
-          stock[key] = { available: avail, reserved: reserved };
-          totalAvail += avail;
-          totalReserved += reserved;
-        });
-        stock._default = { available: totalAvail, reserved: totalReserved };
-        invData.stock = stock;
-      } else {
-        var avail = parseInt(document.getElementById('pdDefaultAvailable').value) || 0;
-        var reserved = (existing && existing.stock && existing.stock._default)
-          ? (existing.stock._default.reserved || 0) : 0;
-        invData.stock = { _default: { available: avail, reserved: reserved } };
-      }
-    } else {
-      invData.stock = null;
-      invData.lowStockThreshold = null;
-    }
-
-    await db.ref(INVENTORY_PATH + '/' + pid).set(invData);
-    showToast('Inventory saved');
-    inventory[pid] = invData;
+    await db.ref(INVENTORY_PATH + '/' + pid).update(updates);
+    showToast('Settings saved');
+    if (!inventory[pid]) inventory[pid] = {};
+    Object.assign(inventory[pid], updates);
     renderProductDetail(pid);
   } catch (err) {
-    showToast('Error saving inventory: ' + err.message, true);
+    showToast('Error saving settings: ' + err.message, true);
+  }
+}
+
+function openAdjustStockModal(pid) {
+  var product = productsData.find(function(p) { return p.pid === pid; });
+  if (!product) return;
+  var inv = inventory[pid] || {};
+  var variantInfo = getProductVariantCombos(product);
+  var stock = (inv && inv.stock) ? inv.stock : {};
+
+  var html = '<div style="max-width:560px;">' +
+    '<h3 style="margin:0 0 16px 0;">Adjust Stock: ' + esc(product.name) + '</h3>';
+
+  if (variantInfo.combos.length > 0) {
+    html += buildVariantTable(pid, variantInfo.labels, variantInfo.combos, inv);
+  } else {
+    var defAvail = (stock._default) ? (stock._default.available || 0) : 0;
+    var defReserved = (stock._default) ? (stock._default.reserved || 0) : 0;
+    html += '<div style="display:flex;gap:16px;align-items:flex-end;">' +
+      '<div class="form-group" style="margin:0;">' +
+        '<label style="font-size:0.78rem;">Available</label>' +
+        '<input type="number" id="adjDefaultAvail" min="0" value="' + defAvail + '" style="width:80px;">' +
+      '</div>' +
+      '<div class="form-group" style="margin:0;">' +
+        '<label style="font-size:0.78rem;">Reserved</label>' +
+        '<input type="number" value="' + defReserved + '" readonly style="width:80px;opacity:0.6;">' +
+      '</div>' +
+    '</div>';
+  }
+
+  html += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">' +
+    '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+    '<button class="btn btn-primary" onclick="saveAdjustStock(\'' + esc(pid) + '\')">Save</button>' +
+  '</div></div>';
+
+  openModal(html);
+}
+
+async function saveAdjustStock(pid) {
+  try {
+    var product = productsData.find(function(p) { return p.pid === pid; });
+    var variantInfo = getProductVariantCombos(product);
+    var existing = inventory[pid] || {};
+    var stockData = {};
+
+    if (variantInfo.combos.length > 0) {
+      var totalAvail = 0;
+      var totalReserved = 0;
+      variantInfo.combos.forEach(function(combo) {
+        var key = comboKey(combo);
+        var availInput = document.querySelector('.pd-variant-avail[data-combo="' + key + '"]');
+        var avail = availInput ? (parseInt(availInput.value) || 0) : 0;
+        var reserved = (existing.stock && existing.stock[key])
+          ? (existing.stock[key].reserved || 0) : 0;
+        stockData[key] = { available: avail, reserved: reserved };
+        totalAvail += avail;
+        totalReserved += reserved;
+      });
+      stockData._default = { available: totalAvail, reserved: totalReserved };
+    } else {
+      var avail = parseInt(document.getElementById('adjDefaultAvail').value) || 0;
+      var reserved = (existing.stock && existing.stock._default)
+        ? (existing.stock._default.reserved || 0) : 0;
+      stockData._default = { available: avail, reserved: reserved };
+    }
+
+    await db.ref(INVENTORY_PATH + '/' + pid + '/stock').set(stockData);
+    await db.ref(INVENTORY_PATH + '/' + pid + '/updatedAt').set(new Date().toISOString());
+    if (!inventory[pid]) inventory[pid] = { pid: pid };
+    inventory[pid].stock = stockData;
+    closeModal();
+    showToast('Stock updated');
+    renderProductDetail(pid);
+  } catch (err) {
+    showToast('Error updating stock: ' + err.message, true);
   }
 }
 
@@ -6182,25 +6359,33 @@ function switchProductionSubView(view) {
   productionSubView = view;
   var queueBtn = document.getElementById('prodSubQueue');
   var jobsBtn = document.getElementById('prodSubJobs');
+  var invBtn = document.getElementById('prodSubInventory');
   var queueView = document.getElementById('productionQueueView');
   var jobsView = document.getElementById('productionJobsView');
   var detailView = document.getElementById('productionJobDetail');
   var buildView = document.getElementById('productionBuildView');
+  var invView = document.getElementById('productionInventoryView');
+  // Reset all buttons
+  queueBtn.className = 'btn btn-secondary';
+  jobsBtn.className = 'btn btn-secondary';
+  invBtn.className = 'btn btn-secondary';
+  // Hide all views
+  queueView.style.display = 'none';
+  jobsView.style.display = 'none';
+  detailView.style.display = 'none';
+  buildView.style.display = 'none';
+  invView.style.display = 'none';
   if (view === 'queue') {
     queueBtn.className = 'btn btn-primary';
-    jobsBtn.className = 'btn btn-secondary';
     queueView.style.display = '';
-    jobsView.style.display = 'none';
-    detailView.style.display = 'none';
-    buildView.style.display = 'none';
     renderProductionQueue();
+  } else if (view === 'inventory') {
+    invBtn.className = 'btn btn-primary';
+    invView.style.display = '';
+    renderInventoryOverview();
   } else {
-    queueBtn.className = 'btn btn-secondary';
     jobsBtn.className = 'btn btn-primary';
-    queueView.style.display = 'none';
     jobsView.style.display = '';
-    detailView.style.display = 'none';
-    buildView.style.display = 'none';
     selectedProductionJobId = null;
   }
 }

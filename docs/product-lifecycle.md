@@ -1,6 +1,6 @@
 # Shir Glassworks — End-to-End Product Lifecycle
 
-**Last Updated:** 2026-03-02
+**Last Updated:** 2026-03-03
 **Purpose:** Living reference document covering the full product lifecycle, production system, and what's next.
 
 ---
@@ -24,7 +24,7 @@ CATALOG → BROWSE → DETAIL → CART → CHECKOUT → PAYMENT → ORDER → CO
 **What exists:**
 - 31 products across 6 categories (Figurines, Jewelry, Drinkware, Vases, Decoration, Sculpture)
 - Product data at `shirglassworks/public/products/{pid}` with name, price, images, options (color, opacity, size), description
-- Admin Products tab for managing catalog: add/edit/delete products, option management, image uploads
+- Admin Products tab for managing catalog: add/edit/delete products, option management, image uploads, variant inventory management
 - Filter pills on public shop page for category browsing
 - Product images migrated to local repo (no longer dependent on Weebly)
 
@@ -134,15 +134,75 @@ CATALOG → BROWSE → DETAIL → CART → CHECKOUT → PAYMENT → ORDER → CO
 
 ---
 
-## Inventory Management (BUILT)
+## Inventory Management — Phase 1: Product-Level Quantity (BUILT)
 
+**What exists:**
 - Inventory at `shirglassworks/admin/inventory/{pid}`
 - Stock types: in-stock, made-to-order (default), limited
-- Available/reserved tracking at product level
-- Operations: reserve (confirm), pull (ship), release (cancel)
-- Admin Products tab shows stock badges (IN STOCK / MADE TO ORDER) and "Set Stock" links
-- Low stock threshold configuration
+- Available/reserved quantity tracking at product level (`stock._default.available`, `stock._default.reserved`)
+- Fulfillment operations: reserve (on order confirm), pull (on ship), release (on cancel)
+- Admin Products tab shows stock badges (IN STOCK / MADE TO ORDER)
+- Low stock threshold configuration with lead time and notes
 - Inventory is soft/flexible — not strict count-based. Discrepancies handled at confirmation.
+
+**Key decision:** Inventory is a separate data object from the product (`admin/inventory/{pid}` vs `public/products/{pid}`). Products are public-facing catalog data; inventory is admin-only operational data.
+
+---
+
+## Inventory Management — Phase 2: Attribute-Based Variant Inventory (BUILT)
+
+**The attribute model:**
+- An **attribute** is a product dimension that defines inventory pools — color, size, thickness, opacity, etc.
+- Attributes map to the existing product `options[]` array (e.g., `{label: "Size", choices: ["Short", "Tall"]}`)
+- If a variant doesn't change the price, it lives under the same product (e.g., Short and Tall glasses at same price = one product with a Size attribute)
+- If a variant has a different price, it's a separate product card (different pid entirely)
+- Multiple attributes per product are supported — a product with Size (Short/Tall) and Color (Blue/Yellow/Clear) produces 6 inventory pools
+
+**How it works:**
+- All attribute combinations are auto-generated as the **cartesian product** of a product's `options[].choices`
+- Each combination becomes a **variant** with its own stock count, keyed by a pipe-delimited combo key (e.g., `"Short|Blue"`)
+- Stock stored at `admin/inventory/{pid}/stock/{comboKey}` with `available` and `reserved` per variant
+- `stock._default` is maintained as the aggregate total across all variants (backward compatible with Phase 1 fulfillment functions)
+
+**Product Detail — Read-Only Inventory Dashboard:**
+- Click any product card to open full detail with back navigation
+- **Inventory on Hand** section shows total available as a big number, plus reserved count
+- For products with attributes: tags show each attribute value with its count (e.g., `Blue (3)`, `Red (0)`)
+  - Tags with stock are highlighted in teal; zero-stock tags are greyed out
+  - Attribute values grouped by label (Color, Size, etc.)
+- For products without attributes: shows single total count
+- **"Adjust Stock" button** opens a modal for manual corrections (the exception case, not the normal flow)
+  - Modal shows variant table with +/- inputs per combination, or single quantity input for non-variant products
+  - Total row auto-calculated from variant inputs
+  - Saves to Firebase, updates local state, re-renders detail
+- **Stock Settings** section (separate from inventory counts): stock type, threshold, lead time, notes
+- **Key design principle:** Inventory is behind-the-scenes operational data. The product detail page is for *viewing* stock, not inputting it. Stock flows in from production builds and out from orders. Manual adjustment is the exception.
+
+**Product Card Badges:**
+- All product cards show stock type badge + on-hand count (e.g., "In Stock · 5 on hand")
+- Badge colors: green (in stock), orange (low stock), red (out of stock), purple (made to order)
+- Zero-count products suppress the quantity display
+
+**Inventory Overview (Production → Inventory sub-view):**
+- All-products-at-a-glance table in the Production tab alongside Queue and Jobs
+- Summary stat cards: total products, total on hand, reserved, out of stock, low stock, made to order
+- Table columns: thumbnail, product name/price, stock type badge, on hand, reserved, attribute breakdown tags
+- Smart sort: out of stock first (urgent), low stock next, then by quantity descending, made-to-order last
+- Click any row to navigate to that product's detail page
+- Dark mode fully supported
+- Foundation for future forecasting module (purchase history vs on-hand → production recommendations)
+
+**Example:** Spiral Cup has options Size (Short, Tall, Wide) and Color (Blue, Yellow). Product detail shows:
+
+| Size | Color | Available |
+|------|-------|-----------|
+| Short | Blue | 3 |
+| Short | Yellow | 2 |
+| Tall | Blue | 5 |
+| Tall | Yellow | 0 |
+| Wide | Blue | 1 |
+| Wide | Yellow | 4 |
+| **Total** | | **15** |
 
 ---
 
@@ -349,6 +409,15 @@ payment_failed → cancelled
 | Firebase RTDB structure for production system | Production | Built |
 | Admin UI for Production (own top-level section in admin nav) | Production | Built |
 | Production Request model (messages from Orders to Production) | Production | Built |
+| Attribute-based variant inventory (auto-generated combos from product options) | Inventory | Built |
+| Product detail view replaces modal-based stock editing | Inventory | Built |
+| Per-variant combo keys (`_default` aggregate for backward compat) | Data Model | Built |
+| CSS variables for dark mode (`--cream` flips to `#2a2a2a`) | UI | Built |
+| Gallery section group headers (Site Pages vs Product Categories) | UI | Built |
+| Product detail inventory is read-only dashboard (not input form) | Inventory UX | Built |
+| Manual stock adjustment via separate modal (exception case, not primary flow) | Inventory UX | Built |
+| Product cards always show on-hand count alongside stock type badge | Inventory UX | Built |
+| Inventory overview lives in Production tab (foundation for forecasting) | Inventory | Built |
 
 ---
 
@@ -363,4 +432,6 @@ payment_failed → cancelled
 - **Payment received email:** Lightweight "we got your payment" email on `pending_payment → placed`
 - **Refund integration:** Square Refunds API for order cancellations after payment
 - **Customer order lookup:** Public page for customers to check order status by email + order number
-- **Inventory display on public site:** Show In Stock / Made to Order badges on product cards
+- **Inventory display on public site:** Show In Stock / Made to Order badges on public product cards (admin already shows badges)
+- **Variant-level fulfillment:** Extend `reserveInventory`/`releaseInventory`/`pullFromStock` to operate on specific combo keys rather than `_default` only
+- **Production Forecasting:** Cross-reference order/purchase history against current on-hand inventory to surface production recommendations — what to build next, trending products, restock alerts. Builds on the Inventory Overview in the Production tab.
