@@ -2824,6 +2824,25 @@
         <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
 
         <div class="form-group">
+          <label style="font-size:1.1rem;font-weight:600;">Studio Locations</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">
+            Mark your studio and workshop locations. When using the PoS away from all studio locations, Studio Companion will detect you're at a remote event and offer to link sales.
+          </p>
+          <div id="studioLocationsList" style="margin-bottom:12px;"></div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <input type="text" id="newStudioLocationName" placeholder="Location name (e.g. Home Studio)"
+              style="flex:1;min-width:160px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
+            <button class="btn btn-primary" onclick="addStudioLocation()">📍 Add Current Location</button>
+          </div>
+          <p style="font-size:0.8rem;color:var(--warm-gray);margin-top:6px;">
+            Tap "Add Current Location" while at the studio — your GPS coordinates will be saved automatically. Detection radius: 500m.
+          </p>
+          <div id="studioLocationStatus" style="margin-top:8px;font-size:0.85rem;"></div>
+        </div>
+
+        <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
+
+        <div class="form-group">
           <label style="font-size:1.1rem;font-weight:600;">Build Media Storage</label>
           <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
             Photos captured during production builds are stored in Firebase Storage.
@@ -3203,7 +3222,7 @@ function switchTab(tab) {
   document.getElementById('couponsTab').style.display = tab === 'coupons' ? '' : 'none';
   document.getElementById('analyticsTab').style.display = tab === 'analytics' ? '' : 'none';
   document.getElementById('settingsTab').style.display = tab === 'settings' ? '' : 'none';
-  if (tab === 'settings') { updateGitHubTokenStatus(); loadOperators(); loadStorageInfo(); }
+  if (tab === 'settings') { updateGitHubTokenStatus(); loadOperators(); loadStorageInfo(); loadStudioLocations(); }
   if (tab === 'analytics' && !analyticsLoaded) loadAnalytics();
   if (tab === 'products' && !productsLoaded) loadProducts();
   if (tab === 'orders' && !ordersLoaded) loadOrders();
@@ -9447,6 +9466,115 @@ async function loadStorageInfo() {
   } catch (err) {
     el.innerHTML = 'Error loading storage info.';
   }
+}
+
+// ============================================================
+// Studio Locations (Settings)
+// ============================================================
+
+var STUDIO_LOCATIONS_PATH = 'shirglassworks/config/studioLocations';
+var studioLocations = {};
+var STUDIO_RADIUS_METERS = 500;
+
+function loadStudioLocations() {
+  db.ref(STUDIO_LOCATIONS_PATH).once('value').then(function(snap) {
+    studioLocations = snap.val() || {};
+    renderStudioLocations();
+  });
+}
+
+function renderStudioLocations() {
+  var el = document.getElementById('studioLocationsList');
+  if (!el) return;
+  var keys = Object.keys(studioLocations);
+  if (keys.length === 0) {
+    el.innerHTML = '<div style="padding:12px;background:var(--cream);border-radius:6px;color:var(--warm-gray);font-size:0.85rem;">No studio locations set. Add your first one while at the studio.</div>';
+    return;
+  }
+  var html = '';
+  keys.forEach(function(k) {
+    var loc = studioLocations[k];
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--cream);border-radius:6px;margin-bottom:6px;">' +
+      '<div>' +
+        '<div style="font-weight:600;font-size:0.9rem;">' + (loc.name || 'Unnamed') + '</div>' +
+        '<div style="font-size:0.8rem;color:var(--warm-gray);">📍 ' + loc.lat.toFixed(5) + ', ' + loc.lng.toFixed(5) + '</div>' +
+      '</div>' +
+      '<button class="btn btn-secondary" style="font-size:0.75rem;padding:4px 10px;color:#E53935;" onclick="removeStudioLocation(\'' + k + '\')">Remove</button>' +
+    '</div>';
+  });
+  el.innerHTML = html;
+}
+
+function addStudioLocation() {
+  var name = document.getElementById('newStudioLocationName').value.trim();
+  if (!name) { showToast('Enter a location name first', true); return; }
+
+  var statusEl = document.getElementById('studioLocationStatus');
+  statusEl.innerHTML = '<span style="color:var(--warm-gray);">📡 Getting your location...</span>';
+
+  if (!navigator.geolocation) {
+    statusEl.innerHTML = '<span style="color:#E53935;">Geolocation not supported on this device.</span>';
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    function(pos) {
+      var lat = pos.coords.latitude;
+      var lng = pos.coords.longitude;
+      var ref = db.ref(STUDIO_LOCATIONS_PATH).push();
+      ref.set({
+        name: name, lat: lat, lng: lng, radius: STUDIO_RADIUS_METERS, createdAt: new Date().toISOString()
+      }).then(function() {
+        document.getElementById('newStudioLocationName').value = '';
+        statusEl.innerHTML = '<span style="color:#4CAF50;">✅ ' + name + ' saved at ' + lat.toFixed(5) + ', ' + lng.toFixed(5) + '</span>';
+        loadStudioLocations();
+        setTimeout(function() { statusEl.innerHTML = ''; }, 5000);
+      }).catch(function(err) {
+        statusEl.innerHTML = '<span style="color:#E53935;">Error: ' + err.message + '</span>';
+      });
+    },
+    function(err) {
+      var msg = 'Location error: ';
+      if (err.code === 1) msg += 'Permission denied. Allow location access in your browser settings.';
+      else if (err.code === 2) msg += 'Position unavailable.';
+      else if (err.code === 3) msg += 'Request timed out.';
+      else msg += err.message;
+      statusEl.innerHTML = '<span style="color:#E53935;">' + msg + '</span>';
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+  );
+}
+
+async function removeStudioLocation(locId) {
+  if (!confirm('Remove this studio location?')) return;
+  try {
+    await db.ref(STUDIO_LOCATIONS_PATH + '/' + locId).remove();
+    showToast('Location removed.');
+    loadStudioLocations();
+  } catch (err) {
+    showToast('Error: ' + err.message, true);
+  }
+}
+
+// Haversine distance in meters
+function haversineDistance(lat1, lng1, lat2, lng2) {
+  var R = 6371000; // Earth radius meters
+  var dLat = (lat2 - lat1) * Math.PI / 180;
+  var dLng = (lng2 - lng1) * Math.PI / 180;
+  var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function isNearAnyStudio(lat, lng, locations) {
+  var keys = Object.keys(locations);
+  for (var i = 0; i < keys.length; i++) {
+    var loc = locations[keys[i]];
+    var dist = haversineDistance(lat, lng, loc.lat, loc.lng);
+    if (dist <= (loc.radius || STUDIO_RADIUS_METERS)) return { near: true, name: loc.name, distance: Math.round(dist) };
+  }
+  return { near: false };
 }
 
 // ---- Shipping Modal ----

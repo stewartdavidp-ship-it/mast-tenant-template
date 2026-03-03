@@ -284,6 +284,8 @@ var UPLOAD_URL = 'https://us-central1-word-boxing.cloudfunctions.net/shirUploadI
 var PRODUCTS_PATH = 'shirglassworks/public/products';
 var SALES_PATH = 'shirglassworks/admin/sales';
 var SALES_EVENTS_PATH = 'shirglassworks/admin/salesEvents';
+var STUDIO_LOCATIONS_PATH = 'shirglassworks/config/studioLocations';
+var STUDIO_RADIUS_METERS = 500;
 
 // ============================================================
 // State
@@ -298,15 +300,106 @@ var capturedImageBase64 = null;
 var capturedPreviewUrl = null;
 var paymentType = 'cash';
 
-// Event context (from URL param)
+// Event context (from URL param or GPS detection)
 var eventId = null;
 var eventData = null;
+var isRemote = false;
 
 // Parse eventId from URL
 (function() {
   var params = new URLSearchParams(window.location.search);
   eventId = params.get('eventId') || null;
 })();
+
+// Haversine distance in meters
+function haversineDistance(lat1, lng1, lat2, lng2) {
+  var R = 6371000;
+  var dLat = (lat2 - lat1) * Math.PI / 180;
+  var dLng = (lng2 - lng1) * Math.PI / 180;
+  var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function detectLocation() {
+  if (eventId) return; // Already linked via URL param
+  if (!navigator.geolocation) return;
+
+  db.ref(STUDIO_LOCATIONS_PATH).once('value').then(function(snap) {
+    var locations = snap.val();
+    if (!locations || Object.keys(locations).length === 0) return; // No studios configured
+
+    navigator.geolocation.getCurrentPosition(function(pos) {
+      var lat = pos.coords.latitude;
+      var lng = pos.coords.longitude;
+      var nearStudio = false;
+
+      Object.keys(locations).forEach(function(k) {
+        var loc = locations[k];
+        var dist = haversineDistance(lat, lng, loc.lat, loc.lng);
+        if (dist <= (loc.radius || STUDIO_RADIUS_METERS)) nearStudio = true;
+      });
+
+      if (!nearStudio) {
+        isRemote = true;
+        db.ref(SALES_EVENTS_PATH).orderByChild('status').equalTo('active').once('value').then(function(evSnap) {
+          var activeEvents = evSnap.val() || {};
+          var eventKeys = Object.keys(activeEvents);
+
+          if (eventKeys.length > 0) {
+            var ev = activeEvents[eventKeys[0]];
+            showRemoteNotice(
+              'You\u2019re using Studio Companion away from your studios.',
+              '<strong>' + (ev.name || 'Active Event') + '</strong> is in progress. Link sales to this event?',
+              eventKeys[0]
+            );
+          } else {
+            showRemoteNotice(
+              'You\u2019re using Studio Companion away from your studios.',
+              'No active events found. Sales will be recorded without an event link.',
+              null
+            );
+          }
+        });
+      }
+    }, function() {
+      // Geolocation failed silently — continue normally
+    }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
+  });
+}
+
+function showRemoteNotice(title, message, offerEventId) {
+  var existing = document.getElementById('remoteNotice');
+  if (existing) existing.remove();
+
+  var html = '<div id="remoteNotice" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px;">' +
+    '<div style="background:var(--card);border-radius:12px;padding:24px;max-width:360px;width:100%;text-align:center;">' +
+      '<div style="font-size:2.5rem;margin-bottom:12px;">🎪</div>' +
+      '<h3 style="margin:0 0 8px;font-size:16px;">' + title + '</h3>' +
+      '<p style="color:var(--muted);font-size:14px;margin-bottom:20px;">' + message + '</p>' +
+      '<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">';
+
+  if (offerEventId) {
+    html += '<button onclick="linkToEvent(\'' + offerEventId + '\')" style="padding:12px 24px;border-radius:8px;border:none;background:var(--green);color:white;font-size:14px;font-weight:600;cursor:pointer;">Yes, Link to Event</button>';
+  }
+  html += '<button onclick="dismissRemoteNotice()" style="padding:12px 24px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:14px;cursor:pointer;">Continue Without</button>';
+  html += '</div></div></div>';
+
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function linkToEvent(evId) {
+  eventId = evId;
+  loadEventContext();
+  dismissRemoteNotice();
+  showToast('Linked to event!');
+}
+
+function dismissRemoteNotice() {
+  var el = document.getElementById('remoteNotice');
+  if (el) el.remove();
+}
 
 // ============================================================
 // Auth
@@ -318,6 +411,7 @@ auth.onAuthStateChanged(function(user) {
       authToken = token;
       loadProducts();
       if (eventId) loadEventContext();
+      else detectLocation(); // GPS check if no event pre-linked
       showScreen('cameraScreen');
       initCamera();
     });
