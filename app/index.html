@@ -70,6 +70,9 @@
       white-space: nowrap;
     }
 
+    .hamburger-btn { display: none; }
+    .mobile-menu-overlay { display: none; }
+
     .header-tabs {
       display: flex;
       gap: 4px;
@@ -783,31 +786,60 @@
         font-size: 1.1rem;
       }
 
+      .hamburger-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        background: none;
+        border: none;
+        color: var(--warm-gray-light);
+        font-size: 22px;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+      }
+
       .header-tabs {
         position: fixed;
         top: 60px;
         left: 0;
         right: 0;
         background: var(--charcoal);
-        display: flex;
+        display: none;
+        flex-direction: column;
         border-top: 1px solid rgba(255,255,255,0.1);
         z-index: 99;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: none;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
       }
-      .header-tabs::-webkit-scrollbar { display: none; }
+      .header-tabs.open { display: flex; }
 
       .header-tab {
-        flex: 0 0 auto;
-        justify-content: center;
-        padding: 12px 16px;
-        font-size: 0.82rem;
-        white-space: nowrap;
+        height: auto;
+        justify-content: flex-start;
+        padding: 14px 20px;
+        font-size: 0.95rem;
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+        border-left: 3px solid transparent;
+      }
+      .header-tab:last-child { border-bottom: none; }
+      .header-tab.active {
+        border-left-color: var(--amber);
+        background: rgba(255,255,255,0.05);
       }
 
+      .mobile-menu-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        top: 60px;
+        background: rgba(0,0,0,0.4);
+        z-index: 98;
+      }
+      .mobile-menu-overlay.open { display: block; }
+
       .main {
-        padding-top: 120px;
+        padding-top: 80px;
       }
 
       .events-table {
@@ -1986,9 +2018,11 @@
 <body>
 
   <!-- ===== HEADER ===== -->
+  <div class="mobile-menu-overlay" id="mobileMenuOverlay"></div>
   <header class="header" id="header" style="display:none;">
     <div class="header-brand">Shir Glassworks</div>
-    <div class="header-tabs">
+    <button class="hamburger-btn" id="hamburgerBtn" onclick="toggleMobileMenu(event)">&#9776;</button>
+    <div class="header-tabs" id="headerTabs">
       <button class="header-tab active" data-tab="schedule" onclick="switchTab('schedule')">Schedule</button>
       <button class="header-tab" data-tab="gallery" onclick="switchTab('gallery')">Gallery</button>
       <button class="header-tab" data-tab="products" onclick="switchTab('products')">Products</button>
@@ -2429,6 +2463,7 @@ const db = firebase.database();
 const storage = firebase.storage();
 
 const ALLOWED_UIDS = ['oUt4ba0dYVRBfPREqoJ1yIsJKjr1'];
+const TEST_MODE = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
 const EVENTS_PATH = 'shirglassworks/public/events';
 const GALLERY_PATH = 'shirglassworks/public/gallery';
 
@@ -2651,14 +2686,27 @@ function signOut() {
   auth.signOut();
 }
 
+function enterAuthorizedState() {
+  document.getElementById('authScreen').style.display = 'none';
+  document.getElementById('deniedScreen').style.display = 'none';
+  document.getElementById('header').style.display = 'flex';
+  switchTab(currentTab);
+}
+
+if (TEST_MODE) {
+  // Bypass auth on localhost for preview/testing
+  currentUser = { uid: 'test', photoURL: '', displayName: 'Test User' };
+  enterAuthorizedState();
+}
+
 auth.onAuthStateChanged(function(user) {
+  if (TEST_MODE) return; // Already handled above
   currentUser = user;
   const authScreen = document.getElementById('authScreen');
   const deniedScreen = document.getElementById('deniedScreen');
   const header = document.getElementById('header');
 
   if (!user) {
-    // Not signed in
     authScreen.style.display = '';
     deniedScreen.style.display = 'none';
     header.style.display = 'none';
@@ -2668,7 +2716,6 @@ auth.onAuthStateChanged(function(user) {
   }
 
   if (!ALLOWED_UIDS.includes(user.uid)) {
-    // Signed in but not authorized
     authScreen.style.display = 'none';
     deniedScreen.style.display = '';
     header.style.display = 'none';
@@ -2718,8 +2765,30 @@ auth.onAuthStateChanged(function(user) {
 // ============================================================
 // Tabs
 // ============================================================
+function toggleMobileMenu(e) {
+  if (e) e.stopPropagation();
+  var tabs = document.getElementById('headerTabs');
+  var overlay = document.getElementById('mobileMenuOverlay');
+  var isOpen = tabs.classList.contains('open');
+  tabs.classList.toggle('open', !isOpen);
+  overlay.classList.toggle('open', !isOpen);
+}
+
+function closeMobileMenu() {
+  var tabs = document.getElementById('headerTabs');
+  var overlay = document.getElementById('mobileMenuOverlay');
+  if (tabs) tabs.classList.remove('open');
+  if (overlay) overlay.classList.remove('open');
+}
+
+// Close menu when tapping overlay
+document.getElementById('mobileMenuOverlay').addEventListener('mousedown', function() {
+  closeMobileMenu();
+});
+
 function switchTab(tab) {
   currentTab = tab;
+  closeMobileMenu();
   document.querySelectorAll('.header-tab').forEach(function(btn) {
     btn.classList.toggle('active', btn.dataset.tab === tab);
   });
