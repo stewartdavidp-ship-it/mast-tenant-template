@@ -868,9 +868,17 @@
     body.dark-mode input,
     body.dark-mode select,
     body.dark-mode textarea {
+      background: #333 !important;
+      color: #e0e0e0 !important;
+      border-color: #555 !important;
+    }
+    body.dark-mode select option {
       background: #333;
       color: #e0e0e0;
-      border-color: #555;
+    }
+    body.dark-mode input::placeholder,
+    body.dark-mode textarea::placeholder {
+      color: #777 !important;
     }
     body.dark-mode .btn-secondary {
       background: #3a3a3a;
@@ -2722,7 +2730,10 @@ function switchTab(tab) {
   if (tab === 'products' && !productsLoaded) loadProducts();
   if (tab === 'orders' && !ordersLoaded) loadOrders();
   if (tab === 'coupons' && !couponsLoaded) loadCoupons();
-  if (tab === 'production' && !productionLoaded) loadProduction();
+  if (tab === 'production') {
+    if (!productionLoaded) loadProduction();
+    else switchProductionSubView(productionSubView);
+  }
 }
 
 function hideAdminTabs() {
