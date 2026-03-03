@@ -17,8 +17,6 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
 
-  <!-- TensorFlow.js -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
 
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -288,7 +286,7 @@
   <!-- Menu Screen -->
   <div class="screen" id="menuScreen">
     <div class="menu-header">
-      <h1>Studio <span style="font-size:12px;font-weight:400;color:var(--text-dim)">v14</span></h1>
+      <h1>Studio <span style="font-size:12px;font-weight:400;color:var(--text-dim)">v15</span></h1>
       <img class="menu-avatar" id="userAvatar" src="" alt="" onclick="signOut()">
     </div>
     <div class="menu-grid">
@@ -300,7 +298,7 @@
       <div class="menu-card" onclick="openCamera('test')">
         <div class="card-icon">&#129504;</div>
         <h2>Test</h2>
-        <p>Compare TF.js vs Claude Vision recognition side-by-side</p>
+        <p>Test Claude Vision product recognition accuracy</p>
       </div>
       <div class="menu-card" onclick="showScreen('resultsScreen')">
         <div class="card-icon">&#128202;</div>
@@ -349,20 +347,7 @@
       <!-- Test results -->
       <div class="results-panel" id="testResults" style="display:none">
         <div class="result-row">
-          <span class="result-label">TF.js</span>
-          <span class="result-value" id="tfjsResult">--</span>
-        </div>
-        <div class="result-row">
-          <span class="result-label">Confidence</span>
-          <span class="result-value" id="tfjsConfidence">--</span>
-        </div>
-        <div class="result-row">
-          <span class="result-label">Latency</span>
-          <span class="result-value" id="tfjsLatency">--</span>
-        </div>
-        <hr style="border:0;border-top:1px solid rgba(255,255,255,0.1);margin:12px 0">
-        <div class="result-row">
-          <span class="result-label">Claude Vision</span>
+          <span class="result-label">Product</span>
           <span class="result-value" id="claudeResult">--</span>
         </div>
         <div class="result-row">
@@ -370,10 +355,13 @@
           <span class="result-value" id="claudeConfidence">--</span>
         </div>
         <div class="result-row">
+          <span class="result-label">Color</span>
+          <span class="result-value" id="claudeReasoning" style="font-weight:400;font-size:13px">--</span>
+        </div>
+        <div class="result-row">
           <span class="result-label">Latency</span>
           <span class="result-value" id="claudeLatency">--</span>
         </div>
-        <div class="result-reasoning" id="claudeReasoning" style="display:none"></div>
       </div>
 
       <div class="capture-actions">
@@ -397,11 +385,7 @@
       </div>
       <div class="stat-card">
         <div class="stat-value" id="statAgreement">--</div>
-        <div class="stat-label">Agreement Rate</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value" id="statTfjsAvg">--</div>
-        <div class="stat-label">TF.js Avg Conf.</div>
+        <div class="stat-label">High Confidence</div>
       </div>
       <div class="stat-card">
         <div class="stat-value" id="statClaudeAvg">--</div>
@@ -450,8 +434,6 @@ var cameraStream = null;
 var selectedProductId = null;
 var trainingCounts = {};
 var testResults = [];
-var tfjsModel = null;
-var tfjsLabels = [];
 var isProcessing = false;
 
 // ============================================================
@@ -478,7 +460,6 @@ auth.onAuthStateChanged(function(user) {
     document.getElementById('userAvatar').src = user.photoURL || '';
     loadProducts();
     loadTrainingCounts();
-    loadTfjsModel();
   } else {
     showScreen('authScreen');
   }
@@ -795,9 +776,6 @@ function handleTestCapture(blob, canvas) {
   document.getElementById('keepBtn').style.display = 'none';
 
   // Reset displays
-  document.getElementById('tfjsResult').textContent = 'Processing...';
-  document.getElementById('tfjsConfidence').textContent = '--';
-  document.getElementById('tfjsLatency').textContent = '--';
   document.getElementById('claudeResult').textContent = 'Processing...';
   document.getElementById('claudeConfidence').textContent = '--';
   document.getElementById('claudeLatency').textContent = '--';
@@ -805,109 +783,28 @@ function handleTestCapture(blob, canvas) {
 
   var result = {
     timestamp: new Date().toISOString(),
-    tfjs: null,
     claude: null
   };
 
-  // Run both layers in parallel
-  var tfjsPromise = runTfjsRecognition(canvas).then(function(r) {
-    result.tfjs = r;
-    displayTfjsResult(r);
-  }).catch(function(err) {
-    var isNoModel = err.message === 'No model loaded';
-    result.tfjs = { product: isNoModel ? 'Not trained' : 'Error', confidence: 0, latencyMs: 0, error: err.message };
-    document.getElementById('tfjsResult').textContent = isNoModel ? 'Not trained yet' : 'Error';
-    document.getElementById('tfjsConfidence').textContent = isNoModel ? 'Run train-model.py' : err.message;
-    document.getElementById('tfjsConfidence').className = 'result-value' + (isNoModel ? '' : ' confidence-low');
-  });
+  document.getElementById('claudeResult').textContent = 'Identifying...';
 
-  var claudePromise = runClaudeVision(blob).then(function(r) {
+  runClaudeVision(blob).then(function(r) {
     result.claude = r;
     displayClaudeResult(r);
-  }).catch(function(err) {
-    result.claude = { product: 'Error', confidence: 0, latencyMs: 0, error: err.message };
-    document.getElementById('claudeResult').textContent = 'Error';
-    document.getElementById('claudeConfidence').textContent = err.message;
-    document.getElementById('claudeConfidence').className = 'result-value confidence-low';
-  });
-
-  Promise.all([tfjsPromise, claudePromise]).then(function() {
     testResults.push(result);
     isProcessing = false;
     document.getElementById('captureBtn').classList.remove('processing');
     document.getElementById('keepBtn').style.display = '';
     document.getElementById('keepBtn').textContent = 'Done';
+  }).catch(function(err) {
+    result.claude = { product: 'Error', confidence: 0, latencyMs: 0, error: err.message };
+    document.getElementById('claudeResult').textContent = 'Error';
+    document.getElementById('claudeConfidence').textContent = err.message;
+    document.getElementById('claudeConfidence').className = 'result-value confidence-low';
+    testResults.push(result);
+    isProcessing = false;
+    document.getElementById('captureBtn').classList.remove('processing');
   });
-}
-
-// ============================================================
-// TF.js Recognition Layer
-// ============================================================
-function loadTfjsModel() {
-  // Try to load a custom-trained model from /studio/model/
-  tf.loadLayersModel('model/model.json')
-    .then(function(model) {
-      tfjsModel = model;
-      // Load label map
-      fetch('model/labels.json')
-        .then(function(r) { return r.json(); })
-        .then(function(labels) { tfjsLabels = labels; })
-        .catch(function() { tfjsLabels = []; });
-      showToast('TF.js model loaded');
-    })
-    .catch(function() {
-      // No model yet — that's expected for initial setup
-      console.log('No TF.js model found at model/model.json — train first');
-    });
-}
-
-function runTfjsRecognition(canvas) {
-  return new Promise(function(resolve, reject) {
-    if (!tfjsModel) {
-      reject(new Error('No model loaded'));
-      return;
-    }
-
-    var start = performance.now();
-
-    // Preprocess: resize to 224x224 for MobileNet
-    var resized = document.createElement('canvas');
-    resized.width = 224; resized.height = 224;
-    resized.getContext('2d').drawImage(canvas, 0, 0, 224, 224);
-
-    var tensor = tf.browser.fromPixels(resized)
-      .toFloat()
-      .div(tf.scalar(127.5))
-      .sub(tf.scalar(1))
-      .expandDims(0);
-
-    var prediction = tfjsModel.predict(tensor);
-    prediction.data().then(function(scores) {
-      var maxIdx = 0;
-      for (var i = 1; i < scores.length; i++) {
-        if (scores[i] > scores[maxIdx]) maxIdx = i;
-      }
-      var latency = Math.round(performance.now() - start);
-      var confidence = Math.round(scores[maxIdx] * 100);
-      var productName = tfjsLabels[maxIdx] || 'Class ' + maxIdx;
-
-      tensor.dispose();
-      prediction.dispose();
-
-      resolve({
-        product: productName,
-        confidence: confidence,
-        latencyMs: latency
-      });
-    });
-  });
-}
-
-function displayTfjsResult(r) {
-  document.getElementById('tfjsResult').textContent = r.product;
-  document.getElementById('tfjsConfidence').textContent = r.confidence + '%';
-  document.getElementById('tfjsConfidence').className = 'result-value ' + confidenceClass(r.confidence);
-  document.getElementById('tfjsLatency').textContent = r.latencyMs + 'ms';
 }
 
 // ============================================================
@@ -983,29 +880,23 @@ function renderResultsHistory() {
 
   if (total === 0) {
     document.getElementById('statAgreement').textContent = '--';
-    document.getElementById('statTfjsAvg').textContent = '--';
     document.getElementById('statClaudeAvg').textContent = '--';
     document.getElementById('historyList').innerHTML = '';
     return;
   }
 
-  var agreements = 0, tfjsSum = 0, claudeSum = 0;
-  var tfjsCount = 0, claudeCount = 0;
+  var claudeSum = 0, claudeCount = 0;
+  var correctCount = 0;
 
   testResults.forEach(function(r) {
-    if (r.tfjs && !r.tfjs.error) { tfjsSum += r.tfjs.confidence; tfjsCount++; }
-    if (r.claude && !r.claude.error) { claudeSum += r.claude.confidence; claudeCount++; }
-    if (r.tfjs && r.claude && !r.tfjs.error && !r.claude.error) {
-      if (r.tfjs.product === r.claude.product) agreements++;
+    if (r.claude && !r.claude.error) {
+      claudeSum += r.claude.confidence;
+      claudeCount++;
+      if (r.claude.confidence >= 70) correctCount++;
     }
   });
 
-  var bothValid = testResults.filter(function(r) {
-    return r.tfjs && r.claude && !r.tfjs.error && !r.claude.error;
-  }).length;
-
-  document.getElementById('statAgreement').textContent = bothValid ? Math.round(agreements / bothValid * 100) + '%' : '--';
-  document.getElementById('statTfjsAvg').textContent = tfjsCount ? Math.round(tfjsSum / tfjsCount) + '%' : '--';
+  document.getElementById('statAgreement').textContent = claudeCount ? Math.round(correctCount / claudeCount * 100) + '%' : '--';
   document.getElementById('statClaudeAvg').textContent = claudeCount ? Math.round(claudeSum / claudeCount) + '%' : '--';
 
   var html = '';
@@ -1014,13 +905,13 @@ function renderResultsHistory() {
     var time = new Date(r.timestamp).toLocaleTimeString();
     html += '<div class="history-item">';
     html += '<div class="hi-product">#' + (i + 1) + ' — ' + time + '</div>';
-    if (r.tfjs) {
-      html += '<div class="hi-row"><span>TF.js</span><span class="' + confidenceClass(r.tfjs.confidence) + '">' +
-        (r.tfjs.error ? 'Error' : r.tfjs.product + ' (' + r.tfjs.confidence + '%, ' + r.tfjs.latencyMs + 'ms)') + '</span></div>';
-    }
     if (r.claude) {
-      html += '<div class="hi-row"><span>Claude</span><span class="' + confidenceClass(r.claude.confidence) + '">' +
-        (r.claude.error ? 'Error' : r.claude.product + ' (' + r.claude.confidence + '%, ' + r.claude.latencyMs + 'ms)') + '</span></div>';
+      html += '<div class="hi-row"><span>Product</span><span class="' + confidenceClass(r.claude.confidence) + '">' +
+        (r.claude.error ? 'Error' : r.claude.product + ' (' + r.claude.confidence + '%)') + '</span></div>';
+      if (r.claude.color) {
+        html += '<div class="hi-row"><span>Color</span><span>' + r.claude.color + '</span></div>';
+      }
+      html += '<div class="hi-row"><span>Latency</span><span>' + r.claude.latencyMs + 'ms</span></div>';
     }
     html += '</div>';
   }
