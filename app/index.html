@@ -2386,6 +2386,7 @@
             <option value="sculpture">Sculpture</option>
           </select>
           <span class="products-stat" id="productsCount"></span>
+          <button class="btn btn-primary" style="margin-left:auto;font-size:0.82rem;padding:6px 16px;" onclick="createNewProduct()">+ New Product</button>
         </div>
       </div>
       <div id="productsLoading" class="loading" style="display:none;padding:40px;text-align:center;">Loading products...</div>
@@ -2772,7 +2773,15 @@ var storyCurationJobId = null;
 var inventory = {};
 var inventoryListener = null;
 var INVENTORY_PATH = 'shirglassworks/admin/inventory';
+var PRODUCTS_PATH = 'shirglassworks/public/products';
+var IMAGES_PATH = 'shirglassworks/images';
 var selectedProductPid = null;
+var productEditMode = false; // false = view, true = editing/creating
+var productCreateMode = false; // true when creating new product
+var productEditTab = 'details'; // details | variants | images | production | inventory
+var imageLibrary = {};
+var imageLibraryLoaded = false;
+var CLOUD_FUNCTIONS_BASE = 'https://us-central1-word-boxing.cloudfunctions.net';
 
 var ORDER_VALID_TRANSITIONS = {
   pending_payment: ['cancelled'],
@@ -3746,6 +3755,12 @@ function renderProducts() {
 
     var imgCount = (p.images && p.images.length) ? p.images.length : 0;
 
+    // Availability badge
+    var availBadge = '';
+    if (p.availability === 'discontinued') {
+      availBadge = '<span class="stock-badge out-of-stock" style="font-size:0.7rem;">Discontinued</span> ';
+    }
+
     // Inventory info — always show on-hand count
     var inv = inventory[p.pid];
     var invHtml = '';
@@ -3784,6 +3799,7 @@ function renderProducts() {
       + '<div class="product-card-body">'
       + '<div class="product-card-name">' + esc(p.name) + '</div>'
       + priceHtml
+      + availBadge
       + catsHtml
       + optionsHtml
       + invHtml
@@ -4070,115 +4086,501 @@ function backToProducts() {
   renderProducts();
 }
 
+function createNewProduct() {
+  productCreateMode = true;
+  productEditMode = true;
+  productEditTab = 'details';
+  selectedProductPid = null;
+  document.getElementById('productsGrid').style.display = 'none';
+  document.getElementById('inventorySummaryBar').style.display = 'none';
+  document.querySelector('#productsTab .section-header').style.display = 'none';
+  document.getElementById('productsLoading').style.display = 'none';
+  var detailEl = document.getElementById('productDetailView');
+  detailEl.style.display = '';
+  renderProductDetail(null);
+}
+
+function editProduct(pid) {
+  productEditMode = true;
+  productEditTab = 'details';
+  renderProductDetail(pid);
+}
+
+function switchProductTab(tab) {
+  productEditTab = tab;
+  document.querySelectorAll('.pd-tab-btn').forEach(function(b) {
+    b.classList.toggle('active', b.dataset.tab === tab);
+  });
+  document.querySelectorAll('.pd-tab-content').forEach(function(c) {
+    c.style.display = c.dataset.tab === tab ? '' : 'none';
+  });
+}
+
+function generateSlug(name) {
+  return name ? name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') : '';
+}
+
+function formatPriceCents(cents) {
+  if (cents === null || cents === undefined) return '';
+  return '$' + (cents / 100).toFixed(2);
+}
+
+function parsePriceToCents(str) {
+  if (!str) return null;
+  var cleaned = str.replace(/[^0-9.]/g, '');
+  var parsed = parseFloat(cleaned);
+  return isNaN(parsed) ? null : Math.round(parsed * 100);
+}
+
 function renderProductDetail(pid) {
   var el = document.getElementById('productDetailView');
-  var product = productsData.find(function(p) { return p.pid === pid; });
-  if (!product) { el.innerHTML = '<p>Product not found.</p>'; return; }
+  var product = pid ? productsData.find(function(p) { return p.pid === pid; }) : null;
+  var isCreate = productCreateMode && !product;
 
-  var inv = inventory[pid] || {};
-  var stockType = inv.stockType || 'made-to-order';
-  var variantInfo = getProductVariantCombos(product);
-  var hasVariants = variantInfo.combos.length > 0;
-  var threshold = inv.lowStockThreshold || 2;
-  var leadTime = inv.leadTimeDays || 3;
-  var notes = inv.notes || '';
+  if (!isCreate && !product) { el.innerHTML = '<p>Product not found.</p>'; return; }
 
-  // Product header
-  var imgSrc = (product.images && product.images.length) ? product.images[0] : '';
-  var headerHtml = '<div class="product-detail-header">' +
-    (imgSrc ? '<img class="product-detail-img" src="' + esc(imgSrc) + '" alt="' + esc(product.name) + '">' : '') +
-    '<div>' +
-      '<h2 class="product-detail-name">' + esc(product.name) + '</h2>' +
-      (product.price ? '<div class="product-detail-price">' + esc(product.price) + '</div>' : '<div style="color:var(--warm-gray);font-style:italic;margin-bottom:8px;">Price on request</div>') +
-      (product.categories ? '<div class="product-card-cats">' + product.categories.map(function(c) {
-        return '<span class="product-cat-tag">' + esc(c) + '</span>';
-      }).join('') + '</div>' : '') +
-    '</div>' +
-  '</div>';
-
-  // Stock settings section
-  var stockSettingsHtml = '<div class="product-detail-section">' +
-    '<div class="product-detail-section-title">Stock Settings</div>' +
-    '<div style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;">' +
-      '<div class="form-group" style="margin:0;min-width:150px;">' +
-        '<label style="font-size:0.78rem;">Stock Type</label>' +
-        '<select id="pdStockType" onchange="pdStockTypeChanged(\'' + esc(pid) + '\')">' +
-          '<option value="made-to-order"' + (stockType === 'made-to-order' ? ' selected' : '') + '>Made to Order</option>' +
-          '<option value="in-stock"' + (stockType === 'in-stock' ? ' selected' : '') + '>In Stock</option>' +
-          '<option value="limited"' + (stockType === 'limited' ? ' selected' : '') + '>Limited Edition</option>' +
-        '</select>' +
-      '</div>' +
-      '<div class="form-group" style="margin:0;" id="pdThresholdGroup"' + (stockType === 'made-to-order' ? ' hidden' : '') + '>' +
-        '<label style="font-size:0.78rem;">Low Stock Alert At</label>' +
-        '<input type="number" id="pdThreshold" min="0" value="' + threshold + '" style="width:80px;">' +
-      '</div>' +
-      '<div class="form-group" style="margin:0;">' +
-        '<label style="font-size:0.78rem;">Lead Time (days)</label>' +
-        '<input type="number" id="pdLeadTime" min="0" value="' + leadTime + '" style="width:80px;">' +
-      '</div>' +
-    '</div>' +
-    '<div class="form-group" style="margin-top:12px;">' +
-      '<label style="font-size:0.78rem;">Notes</label>' +
-      '<textarea id="pdNotes" rows="2" placeholder="e.g. Need more cobalt glass rods">' + esc(notes) + '</textarea>' +
-    '</div>' +
-  '</div>';
-
-  // Inventory summary — read-only display of what's on hand
-  var totals = getInventoryTotals(inv);
-  var totalOnHand = totals.available;
-  var totalReserved = totals.reserved;
-
-  var inventoryHtml = '<div class="product-detail-section">' +
-    '<div class="product-detail-section-title">Inventory on Hand</div>' +
-    '<div style="display:flex;gap:24px;align-items:baseline;margin-bottom:12px;">' +
-      '<div style="font-size:1.5rem;font-weight:700;color:var(--dark-brown);">' + totalOnHand + ' <span style="font-size:0.85rem;font-weight:400;color:var(--warm-gray);">available</span></div>' +
-      (totalReserved > 0 ? '<div style="font-size:1rem;color:var(--warm-gray);">' + totalReserved + ' reserved</div>' : '') +
-    '</div>';
-
-  // Attribute breakdown — show counts per attribute value (not every combination)
-  if (hasVariants) {
-    var stock = (inv && inv.stock) ? inv.stock : {};
-    variantInfo.labels.forEach(function(label, labelIdx) {
-      var valueCounts = {};
-      variantInfo.combos.forEach(function(combo) {
-        var val = combo[labelIdx];
-        var key = comboKey(combo);
-        var s = stock[key] || { available: 0, reserved: 0 };
-        if (!valueCounts[val]) valueCounts[val] = 0;
-        valueCounts[val] += (s.available || 0);
-      });
-      var tags = '';
-      Object.keys(valueCounts).forEach(function(val) {
-        var count = valueCounts[val];
-        var style = count > 0
-          ? 'background:rgba(42,124,111,0.1);color:var(--teal);'
-          : 'background:var(--cream-dark);color:var(--warm-gray);opacity:0.6;';
-        tags += '<span style="display:inline-block;padding:3px 10px;border-radius:12px;font-size:0.8rem;margin:2px 4px 2px 0;' + style + '">' +
-          esc(val) + (count > 0 ? ' (' + count + ')' : '') + '</span>';
-      });
-      inventoryHtml += '<div style="margin-bottom:8px;">' +
-        '<div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--warm-gray);margin-bottom:4px;">' + esc(label) + '</div>' +
-        '<div>' + tags + '</div>' +
-      '</div>';
-    });
+  // Defaults for new product
+  if (isCreate) {
+    product = {
+      pid: '', name: '', description: '', shortDescription: '', price: '', priceCents: null,
+      slug: '', categories: [], availability: 'available', sortOrder: null,
+      options: [], images: [], imageIds: [],
+      buildTime: null, costToBuild: null, materials: '',
+      introducedAt: null, discontinuedAt: null, etsyListingId: null,
+      priceHistory: [], buildTimeHistory: [], costToBuildHistory: []
+    };
   }
 
-  // Adjust button
-  inventoryHtml += '<div style="margin-top:12px;">' +
-    '<button class="btn btn-secondary" style="font-size:0.8rem;padding:5px 14px;" onclick="openAdjustStockModal(\'' + esc(pid) + '\')">Adjust Stock</button>' +
+  var inv = pid ? (inventory[pid] || {}) : {};
+  var isEditing = productEditMode;
+  var tab = productEditTab;
+
+  // Header with name and edit toggle
+  var imgSrc = (product.images && product.images.length) ? product.images[0] : '';
+  var headerHtml = '<div class="product-detail-header">' +
+    (imgSrc ? '<img class="product-detail-img" src="' + esc(imgSrc) + '" alt="' + esc(product.name || 'New Product') + '">' : '') +
+    '<div style="flex:1;">' +
+      '<h2 class="product-detail-name">' + esc(product.name || 'New Product') + '</h2>' +
+      (product.priceCents ? '<div class="product-detail-price">' + formatPriceCents(product.priceCents) + '</div>' :
+       product.price ? '<div class="product-detail-price">' + esc(product.price) + '</div>' :
+       '<div style="color:var(--warm-gray);font-style:italic;margin-bottom:8px;">Price on request</div>') +
+      (product.availability === 'discontinued' ? '<span class="stock-badge out-of-stock">Discontinued</span>' : '') +
+    '</div>' +
+    (!isCreate ? '<button class="btn btn-secondary" style="font-size:0.8rem;" onclick="' + (isEditing ? 'productEditMode=false;renderProductDetail(\'' + esc(pid) + '\')' : 'editProduct(\'' + esc(pid) + '\')') + '">' + (isEditing ? 'Cancel Edit' : 'Edit Product') + '</button>' : '') +
   '</div>';
 
-  inventoryHtml += '</div>';
+  // Tab bar
+  var tabs = [
+    { id: 'details', label: 'Details' },
+    { id: 'variants', label: 'Variants' },
+    { id: 'images', label: 'Images' },
+    { id: 'production', label: 'Production' }
+  ];
+  if (!isCreate) tabs.push({ id: 'inventory', label: 'Inventory' });
 
-  var saveBtn = '<div style="display:flex;gap:8px;margin-top:20px;">' +
-    '<button class="btn btn-primary" onclick="saveProductSettings(\'' + esc(pid) + '\')">Save Settings</button>' +
-    '<button class="btn btn-secondary" onclick="backToProducts()">Back</button>' +
-  '</div>';
+  var tabBarHtml = '<div style="display:flex;gap:0;border-bottom:2px solid var(--cream-dark);margin:16px 0 0 0;">';
+  tabs.forEach(function(t) {
+    var active = t.id === tab;
+    tabBarHtml += '<button class="pd-tab-btn' + (active ? ' active' : '') + '" data-tab="' + t.id + '" onclick="switchProductTab(\'' + t.id + '\')" style="padding:8px 18px;border:none;background:none;cursor:pointer;font-size:0.85rem;font-weight:' + (active ? '600' : '400') + ';color:' + (active ? 'var(--teal)' : 'var(--warm-gray)') + ';border-bottom:2px solid ' + (active ? 'var(--teal)' : 'transparent') + ';margin-bottom:-2px;">' + t.label + '</button>';
+  });
+  tabBarHtml += '</div>';
+
+  // ---- Details Tab ----
+  var catOptions = ['figurines', 'jewelry', 'drinkware', 'vases', 'decoration', 'sculpture'];
+  var currentPrice = product.priceCents !== null && product.priceCents !== undefined
+    ? (product.priceCents / 100).toFixed(2)
+    : (product.price ? product.price.replace('$', '') : '');
+
+  var detailsHtml = '<div class="pd-tab-content" data-tab="details" style="' + (tab !== 'details' ? 'display:none;' : '') + 'padding:16px 0;">';
+  if (isEditing) {
+    detailsHtml +=
+      '<div class="form-group"><label>Name</label><input type="text" id="pdName" value="' + esc(product.name) + '" onchange="if(productCreateMode){document.getElementById(\'pdSlug\').value=generateSlug(this.value);}"></div>' +
+      '<div class="form-group"><label>Description</label><textarea id="pdDescription" rows="3">' + esc(product.description || '') + '</textarea></div>' +
+      '<div class="form-group"><label>Short Description</label><input type="text" id="pdShortDesc" value="' + esc(product.shortDescription || '') + '"></div>' +
+      '<div style="display:flex;gap:16px;flex-wrap:wrap;">' +
+        '<div class="form-group" style="min-width:150px;"><label>Category</label><select id="pdCategory">' +
+          catOptions.map(function(c) { return '<option value="' + c + '"' + (product.categories && product.categories.indexOf(c) !== -1 ? ' selected' : '') + '>' + c.charAt(0).toUpperCase() + c.slice(1) + '</option>'; }).join('') +
+        '</select></div>' +
+        '<div class="form-group" style="min-width:120px;"><label>Price ($)</label><input type="text" id="pdPrice" value="' + esc(currentPrice) + '" placeholder="45.00"></div>' +
+        '<div class="form-group" style="min-width:120px;"><label>Availability</label><select id="pdAvailability">' +
+          '<option value="available"' + (product.availability !== 'discontinued' ? ' selected' : '') + '>Available</option>' +
+          '<option value="discontinued"' + (product.availability === 'discontinued' ? ' selected' : '') + '>Discontinued</option>' +
+        '</select></div>' +
+      '</div>' +
+      '<div style="display:flex;gap:16px;flex-wrap:wrap;">' +
+        '<div class="form-group" style="min-width:200px;"><label>Slug (URL-safe)</label><input type="text" id="pdSlug" value="' + esc(product.slug || '') + '"></div>' +
+        '<div class="form-group" style="min-width:100px;"><label>Sort Order</label><input type="number" id="pdSortOrder" value="' + (product.sortOrder !== null && product.sortOrder !== undefined ? product.sortOrder : '') + '" placeholder="auto"></div>' +
+        '<div class="form-group" style="min-width:150px;"><label>Etsy Listing ID</label><input type="text" id="pdEtsyId" value="' + esc(product.etsyListingId || '') + '"></div>' +
+      '</div>' +
+      '<div class="form-group"><label>Introduced Date</label><input type="date" id="pdIntroducedAt" value="' + esc(product.introducedAt || '') + '"></div>';
+  } else {
+    detailsHtml +=
+      '<div class="product-detail-section"><div class="product-detail-section-title">Product Info</div>' +
+      '<div style="display:grid;grid-template-columns:120px 1fr;gap:8px 16px;font-size:0.88rem;">' +
+        '<span style="color:var(--warm-gray);">Name</span><span>' + esc(product.name) + '</span>' +
+        '<span style="color:var(--warm-gray);">Description</span><span>' + esc(product.description || '—') + '</span>' +
+        '<span style="color:var(--warm-gray);">Category</span><span>' + (product.categories || []).join(', ') + '</span>' +
+        '<span style="color:var(--warm-gray);">Slug</span><span>' + esc(product.slug || '—') + '</span>' +
+        '<span style="color:var(--warm-gray);">Availability</span><span>' + esc(product.availability || 'available') + '</span>' +
+        '<span style="color:var(--warm-gray);">Sort Order</span><span>' + (product.sortOrder !== null && product.sortOrder !== undefined ? product.sortOrder : 'auto') + '</span>' +
+        '<span style="color:var(--warm-gray);">Etsy ID</span><span>' + esc(product.etsyListingId || '—') + '</span>' +
+        '<span style="color:var(--warm-gray);">Introduced</span><span>' + esc(product.introducedAt || '—') + '</span>' +
+      '</div></div>';
+  }
+  detailsHtml += '</div>';
+
+  // ---- Variants Tab ----
+  var variantsHtml = '<div class="pd-tab-content" data-tab="variants" style="' + (tab !== 'variants' ? 'display:none;' : '') + 'padding:16px 0;">';
+  var options = product.options || [];
+  if (isEditing) {
+    variantsHtml += '<div class="product-detail-section"><div class="product-detail-section-title">Variant Attributes (for inventory tracking)</div>' +
+      '<p style="font-size:0.82rem;color:var(--warm-gray);margin:0 0 12px 0;">Define attributes like Color, Opacity, etc. These create inventory tracking combinations. Pricing is per-product, not per-variant.</p>' +
+      '<div id="pdOptionsContainer">';
+    options.forEach(function(opt, idx) {
+      variantsHtml += '<div class="pd-option-row" style="display:flex;gap:8px;align-items:flex-start;margin-bottom:12px;padding:12px;background:var(--cream);border-radius:8px;">' +
+        '<div class="form-group" style="margin:0;min-width:120px;"><label style="font-size:0.72rem;">Label</label><input type="text" class="pd-opt-label" value="' + esc(opt.label) + '"></div>' +
+        '<div class="form-group" style="margin:0;flex:1;"><label style="font-size:0.72rem;">Choices (comma-separated)</label><input type="text" class="pd-opt-choices" value="' + esc((opt.choices || []).join(', ')) + '"></div>' +
+        '<button class="btn btn-secondary" style="margin-top:18px;padding:4px 10px;font-size:0.75rem;" onclick="this.closest(\'.pd-option-row\').remove()">Remove</button>' +
+      '</div>';
+    });
+    variantsHtml += '</div>' +
+      '<button class="btn btn-secondary" style="font-size:0.8rem;" onclick="addVariantOption()">+ Add Attribute</button>' +
+    '</div>';
+  } else {
+    if (options.length) {
+      variantsHtml += '<div class="product-detail-section"><div class="product-detail-section-title">Variant Attributes</div>';
+      options.forEach(function(opt) {
+        variantsHtml += '<div style="margin-bottom:8px;"><strong style="font-size:0.85rem;">' + esc(opt.label) + ':</strong> ' +
+          '<span style="font-size:0.85rem;">' + (opt.choices || []).map(function(c) { return esc(c); }).join(', ') + '</span></div>';
+      });
+      variantsHtml += '</div>';
+    } else {
+      variantsHtml += '<div style="text-align:center;padding:40px;color:var(--warm-gray);">No variant attributes defined.</div>';
+    }
+  }
+  variantsHtml += '</div>';
+
+  // ---- Images Tab ----
+  var imagesHtml = '<div class="pd-tab-content" data-tab="images" style="' + (tab !== 'images' ? 'display:none;' : '') + 'padding:16px 0;">';
+  var productImages = product.images || [];
+  imagesHtml += '<div class="product-detail-section"><div class="product-detail-section-title">Product Images (' + productImages.length + ')</div>';
+  if (productImages.length > 0) {
+    imagesHtml += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;">';
+    productImages.forEach(function(url, idx) {
+      imagesHtml += '<div style="position:relative;border-radius:8px;overflow:hidden;aspect-ratio:1;background:var(--cream);">' +
+        '<img src="' + esc(url) + '" style="width:100%;height:100%;object-fit:cover;" loading="lazy">' +
+        (idx === 0 ? '<span style="position:absolute;top:4px;left:4px;background:var(--teal);color:white;font-size:0.65rem;padding:2px 6px;border-radius:4px;">Primary</span>' : '') +
+      '</div>';
+    });
+    imagesHtml += '</div>';
+  } else {
+    imagesHtml += '<div style="text-align:center;padding:30px;color:var(--warm-gray);">No images yet.</div>';
+  }
+  if (isEditing && !isCreate) {
+    imagesHtml += '<div style="margin-top:12px;">' +
+      '<label class="btn btn-secondary" style="font-size:0.8rem;cursor:pointer;">' +
+        '<input type="file" accept="image/*" style="display:none;" onchange="uploadProductImage(\'' + esc(pid) + '\', this)">' +
+        'Upload New Image' +
+      '</label>' +
+    '</div>';
+  }
+  imagesHtml += '</div></div>';
+
+  // ---- Production Tab ----
+  var prodHtml = '<div class="pd-tab-content" data-tab="production" style="' + (tab !== 'production' ? 'display:none;' : '') + 'padding:16px 0;">';
+  if (isEditing) {
+    var currentBuildTime = product.buildTime !== null && product.buildTime !== undefined ? product.buildTime : '';
+    var currentCostToBuild = product.costToBuild !== null && product.costToBuild !== undefined ? (product.costToBuild / 100).toFixed(2) : '';
+    prodHtml += '<div class="product-detail-section"><div class="product-detail-section-title">Production Details</div>' +
+      '<div style="display:flex;gap:16px;flex-wrap:wrap;">' +
+        '<div class="form-group" style="min-width:150px;"><label>Build Time (minutes)</label><input type="number" id="pdBuildTime" min="0" value="' + currentBuildTime + '" placeholder="e.g. 120"></div>' +
+        '<div class="form-group" style="min-width:150px;"><label>Cost to Build ($)</label><input type="text" id="pdCostToBuild" value="' + currentCostToBuild + '" placeholder="e.g. 15.00"></div>' +
+      '</div>' +
+      '<div class="form-group"><label>Materials / Techniques Notes</label><textarea id="pdMaterials" rows="3" placeholder="e.g. Borosilicate glass, lampwork technique">' + esc(product.materials || '') + '</textarea></div>' +
+    '</div>';
+
+    // Price history (read-only display)
+    var priceHistory = product.priceHistory || [];
+    if (priceHistory.length > 0) {
+      prodHtml += '<div class="product-detail-section"><div class="product-detail-section-title">Price History</div>';
+      priceHistory.slice().reverse().forEach(function(h) {
+        prodHtml += '<div style="font-size:0.82rem;margin-bottom:4px;">' + formatPriceCents(h.value) + ' &mdash; ' + esc(h.effectiveDate) + ' <span style="color:var(--warm-gray);">(' + esc(h.changedBy || '') + ')</span></div>';
+      });
+      prodHtml += '</div>';
+    }
+  } else {
+    prodHtml += '<div class="product-detail-section"><div class="product-detail-section-title">Production Details</div>' +
+      '<div style="display:grid;grid-template-columns:140px 1fr;gap:8px 16px;font-size:0.88rem;">' +
+        '<span style="color:var(--warm-gray);">Build Time</span><span>' + (product.buildTime ? product.buildTime + ' min' : '—') + '</span>' +
+        '<span style="color:var(--warm-gray);">Cost to Build</span><span>' + (product.costToBuild ? formatPriceCents(product.costToBuild) : '—') + '</span>' +
+        '<span style="color:var(--warm-gray);">Materials</span><span>' + esc(product.materials || '—') + '</span>' +
+      '</div></div>';
+  }
+  prodHtml += '</div>';
+
+  // ---- Inventory Tab (existing, only for saved products) ----
+  var invTabHtml = '';
+  if (!isCreate) {
+    invTabHtml = '<div class="pd-tab-content" data-tab="inventory" style="' + (tab !== 'inventory' ? 'display:none;' : '') + 'padding:16px 0;">';
+    var stockType = inv.stockType || 'made-to-order';
+    var threshold = inv.lowStockThreshold || 2;
+    var leadTime = inv.leadTimeDays || 3;
+    var notes = inv.notes || '';
+    var variantInfo = getProductVariantCombos(product);
+    var hasVariants = variantInfo.combos.length > 0;
+    var totals = getInventoryTotals(inv);
+
+    // Stock settings
+    invTabHtml += '<div class="product-detail-section">' +
+      '<div class="product-detail-section-title">Stock Settings</div>' +
+      '<div style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;">' +
+        '<div class="form-group" style="margin:0;min-width:150px;"><label style="font-size:0.78rem;">Stock Type</label>' +
+          '<select id="pdStockType" onchange="pdStockTypeChanged(\'' + esc(pid) + '\')">' +
+            '<option value="made-to-order"' + (stockType === 'made-to-order' ? ' selected' : '') + '>Made to Order</option>' +
+            '<option value="in-stock"' + (stockType === 'in-stock' ? ' selected' : '') + '>In Stock</option>' +
+            '<option value="limited"' + (stockType === 'limited' ? ' selected' : '') + '>Limited Edition</option>' +
+          '</select></div>' +
+        '<div class="form-group" style="margin:0;" id="pdThresholdGroup"' + (stockType === 'made-to-order' ? ' hidden' : '') + '>' +
+          '<label style="font-size:0.78rem;">Low Stock Alert At</label>' +
+          '<input type="number" id="pdThreshold" min="0" value="' + threshold + '" style="width:80px;"></div>' +
+        '<div class="form-group" style="margin:0;"><label style="font-size:0.78rem;">Lead Time (days)</label>' +
+          '<input type="number" id="pdLeadTime" min="0" value="' + leadTime + '" style="width:80px;"></div>' +
+      '</div>' +
+      '<div class="form-group" style="margin-top:12px;"><label style="font-size:0.78rem;">Notes</label>' +
+        '<textarea id="pdNotes" rows="2" placeholder="e.g. Need more cobalt glass rods">' + esc(notes) + '</textarea></div>' +
+      '<button class="btn btn-primary" style="font-size:0.8rem;margin-top:8px;" onclick="saveProductSettings(\'' + esc(pid) + '\')">Save Stock Settings</button>' +
+    '</div>';
+
+    // Inventory on hand
+    invTabHtml += '<div class="product-detail-section">' +
+      '<div class="product-detail-section-title">Inventory on Hand</div>' +
+      '<div style="display:flex;gap:24px;align-items:baseline;margin-bottom:12px;">' +
+        '<div style="font-size:1.5rem;font-weight:700;color:var(--dark-brown);">' + totals.available + ' <span style="font-size:0.85rem;font-weight:400;color:var(--warm-gray);">available</span></div>' +
+        (totals.reserved > 0 ? '<div style="font-size:1rem;color:var(--warm-gray);">' + totals.reserved + ' reserved</div>' : '') +
+      '</div>';
+
+    if (hasVariants) {
+      var stock = (inv && inv.stock) ? inv.stock : {};
+      variantInfo.labels.forEach(function(label, labelIdx) {
+        var valueCounts = {};
+        variantInfo.combos.forEach(function(combo) {
+          var val = combo[labelIdx];
+          var key = comboKey(combo);
+          var s = stock[key] || { available: 0, reserved: 0 };
+          if (!valueCounts[val]) valueCounts[val] = 0;
+          valueCounts[val] += (s.available || 0);
+        });
+        var tags = '';
+        Object.keys(valueCounts).forEach(function(val) {
+          var count = valueCounts[val];
+          var style = count > 0
+            ? 'background:rgba(42,124,111,0.1);color:var(--teal);'
+            : 'background:var(--cream-dark);color:var(--warm-gray);opacity:0.6;';
+          tags += '<span style="display:inline-block;padding:3px 10px;border-radius:12px;font-size:0.8rem;margin:2px 4px 2px 0;' + style + '">' +
+            esc(val) + (count > 0 ? ' (' + count + ')' : '') + '</span>';
+        });
+        invTabHtml += '<div style="margin-bottom:8px;">' +
+          '<div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--warm-gray);margin-bottom:4px;">' + esc(label) + '</div>' +
+          '<div>' + tags + '</div></div>';
+      });
+    }
+
+    invTabHtml += '<div style="margin-top:12px;">' +
+      '<button class="btn btn-secondary" style="font-size:0.8rem;padding:5px 14px;" onclick="openAdjustStockModal(\'' + esc(pid) + '\')">Adjust Stock</button>' +
+    '</div></div>';
+    invTabHtml += '</div>';
+  }
+
+  // Save / Back buttons
+  var actionHtml = '<div style="display:flex;gap:8px;margin-top:20px;padding-top:16px;border-top:1px solid var(--cream-dark);">';
+  if (isEditing) {
+    actionHtml += '<button class="btn btn-primary" onclick="saveProduct(\'' + esc(pid || '') + '\')">' + (isCreate ? 'Create Product' : 'Save Product') + '</button>';
+  }
+  actionHtml += '<button class="btn btn-secondary" onclick="backToProducts()">Back</button></div>';
 
   el.innerHTML = '<button class="product-detail-back" onclick="backToProducts()">&larr; Back to Products</button>' +
-    headerHtml +
-    '<div id="pdInventorySection">' + inventoryHtml + '</div>' +
-    stockSettingsHtml + saveBtn;
+    headerHtml + tabBarHtml + detailsHtml + variantsHtml + imagesHtml + prodHtml + invTabHtml + actionHtml;
+}
+
+function addVariantOption() {
+  var container = document.getElementById('pdOptionsContainer');
+  if (!container) return;
+  var html = '<div class="pd-option-row" style="display:flex;gap:8px;align-items:flex-start;margin-bottom:12px;padding:12px;background:var(--cream);border-radius:8px;">' +
+    '<div class="form-group" style="margin:0;min-width:120px;"><label style="font-size:0.72rem;">Label</label><input type="text" class="pd-opt-label" value="" placeholder="e.g. Color"></div>' +
+    '<div class="form-group" style="margin:0;flex:1;"><label style="font-size:0.72rem;">Choices (comma-separated)</label><input type="text" class="pd-opt-choices" value="" placeholder="e.g. Blue, Red, Green"></div>' +
+    '<button class="btn btn-secondary" style="margin-top:18px;padding:4px 10px;font-size:0.75rem;" onclick="this.closest(\'.pd-option-row\').remove()">Remove</button>' +
+  '</div>';
+  container.insertAdjacentHTML('beforeend', html);
+}
+
+async function saveProduct(pid) {
+  try {
+    var name = document.getElementById('pdName').value.trim();
+    if (!name) { showToast('Product name is required', true); return; }
+
+    var priceStr = document.getElementById('pdPrice').value.trim();
+    var priceCents = parsePriceToCents(priceStr);
+    var slug = document.getElementById('pdSlug').value.trim() || generateSlug(name);
+    var category = document.getElementById('pdCategory').value;
+    var availability = document.getElementById('pdAvailability').value;
+    var sortOrderVal = document.getElementById('pdSortOrder').value;
+    var sortOrder = sortOrderVal !== '' ? parseInt(sortOrderVal) : null;
+    var description = document.getElementById('pdDescription').value.trim();
+    var shortDesc = document.getElementById('pdShortDesc').value.trim();
+    var etsyId = document.getElementById('pdEtsyId').value.trim() || null;
+    var introducedAt = document.getElementById('pdIntroducedAt').value || null;
+
+    // Production fields
+    var buildTimeEl = document.getElementById('pdBuildTime');
+    var buildTime = buildTimeEl && buildTimeEl.value !== '' ? parseInt(buildTimeEl.value) : null;
+    var costToBuildEl = document.getElementById('pdCostToBuild');
+    var costToBuild = costToBuildEl ? parsePriceToCents(costToBuildEl.value) : null;
+    var materialsEl = document.getElementById('pdMaterials');
+    var materials = materialsEl ? materialsEl.value.trim() : '';
+
+    // Collect variant options from DOM
+    var options = [];
+    document.querySelectorAll('.pd-option-row').forEach(function(row) {
+      var label = row.querySelector('.pd-opt-label').value.trim();
+      var choicesStr = row.querySelector('.pd-opt-choices').value.trim();
+      if (label && choicesStr) {
+        var choices = choicesStr.split(',').map(function(c) { return c.trim(); }).filter(Boolean);
+        if (choices.length > 0) options.push({ label: label, choices: choices });
+      }
+    });
+
+    var isCreate = productCreateMode && !pid;
+    var targetPid = pid;
+
+    if (isCreate) {
+      // Generate new pid
+      targetPid = 'p' + Date.now().toString(36);
+    }
+
+    // Get existing product for history comparison
+    var existing = pid ? productsData.find(function(p) { return p.pid === pid; }) : null;
+
+    // Build product object
+    var productData = {
+      pid: targetPid,
+      name: name,
+      description: description,
+      shortDescription: shortDesc,
+      slug: slug,
+      categories: [category],
+      availability: availability,
+      sortOrder: sortOrder,
+      options: options,
+      priceCents: priceCents,
+      price: priceCents !== null ? '$' + (priceCents / 100).toFixed(2) : '',
+      etsyListingId: etsyId,
+      buildTime: buildTime,
+      costToBuild: costToBuild,
+      materials: materials,
+      introducedAt: introducedAt,
+      discontinuedAt: availability === 'discontinued' ? (existing && existing.discontinuedAt ? existing.discontinuedAt : new Date().toISOString().split('T')[0]) : null
+    };
+
+    // Preserve existing fields we don't edit here
+    if (existing) {
+      productData.images = existing.images || [];
+      productData.imageIds = existing.imageIds || [];
+      productData.url = existing.url || '';
+      productData.storyId = existing.storyId || null;
+      productData.buildIds = existing.buildIds || [];
+    } else {
+      productData.images = [];
+      productData.imageIds = [];
+    }
+
+    // Handle history-tracked fields
+    var priceHistory = (existing && existing.priceHistory) ? existing.priceHistory.slice() : [];
+    if (priceCents !== null) {
+      var lastPrice = priceHistory.length > 0 ? priceHistory[priceHistory.length - 1].value : null;
+      if (lastPrice !== priceCents) {
+        priceHistory.push({ value: priceCents, effectiveDate: new Date().toISOString().split('T')[0], changedBy: 'admin' });
+      }
+    }
+    productData.priceHistory = priceHistory;
+
+    var buildTimeHistory = (existing && existing.buildTimeHistory) ? existing.buildTimeHistory.slice() : [];
+    if (buildTime !== null) {
+      var lastBT = buildTimeHistory.length > 0 ? buildTimeHistory[buildTimeHistory.length - 1].value : null;
+      if (lastBT !== buildTime) {
+        buildTimeHistory.push({ value: buildTime, effectiveDate: new Date().toISOString().split('T')[0], changedBy: 'admin' });
+      }
+    }
+    productData.buildTimeHistory = buildTimeHistory;
+
+    var costToBuildHistory = (existing && existing.costToBuildHistory) ? existing.costToBuildHistory.slice() : [];
+    if (costToBuild !== null) {
+      var lastCost = costToBuildHistory.length > 0 ? costToBuildHistory[costToBuildHistory.length - 1].value : null;
+      if (lastCost !== costToBuild) {
+        costToBuildHistory.push({ value: costToBuild, effectiveDate: new Date().toISOString().split('T')[0], changedBy: 'admin' });
+      }
+    }
+    productData.costToBuildHistory = costToBuildHistory;
+
+    // Save to Firebase
+    await db.ref(PRODUCTS_PATH + '/' + targetPid).set(productData);
+
+    showToast(isCreate ? 'Product created' : 'Product saved');
+    productCreateMode = false;
+    productEditMode = false;
+
+    // Refresh products list
+    productsLoaded = false;
+    await loadProducts();
+    viewProduct(targetPid);
+  } catch (err) {
+    showToast('Error saving product: ' + err.message, true);
+  }
+}
+
+async function uploadProductImage(pid, fileInput) {
+  if (!fileInput.files || !fileInput.files[0]) return;
+  var file = fileInput.files[0];
+
+  try {
+    showToast('Uploading image...');
+    var reader = new FileReader();
+    reader.onload = async function(e) {
+      try {
+        var base64 = e.target.result.split(',')[1]; // Remove data:image/...;base64, prefix
+        var token = await auth.currentUser.getIdToken();
+
+        var resp = await fetch(CLOUD_FUNCTIONS_BASE + '/shirUploadImage', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({ image: base64, tags: [], source: 'admin-upload' })
+        });
+
+        var result = await resp.json();
+        if (!result.success) throw new Error(result.error || 'Upload failed');
+
+        // Add image to product
+        var product = productsData.find(function(p) { return p.pid === pid; });
+        if (product) {
+          var images = product.images || [];
+          var imageIds = product.imageIds || [];
+          images.push(result.url);
+          imageIds.push(result.imageId);
+          await db.ref(PRODUCTS_PATH + '/' + pid + '/images').set(images);
+          await db.ref(PRODUCTS_PATH + '/' + pid + '/imageIds').set(imageIds);
+          product.images = images;
+          product.imageIds = imageIds;
+        }
+
+        showToast('Image uploaded');
+        renderProductDetail(pid);
+      } catch (err) {
+        showToast('Upload failed: ' + err.message, true);
+      }
+    };
+    reader.readAsDataURL(file);
+  } catch (err) {
+    showToast('Error: ' + err.message, true);
+  }
 }
 
 function buildVariantTable(pid, labels, combos, inv) {

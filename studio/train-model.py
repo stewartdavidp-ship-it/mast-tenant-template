@@ -117,14 +117,21 @@ def download_training_images(tmp_dir):
 
             img_path = os.path.join(class_dir, f"{img_id}.jpg")
 
-            # Download via URL
-            import urllib.request
             try:
-                urllib.request.urlretrieve(url, img_path)
+                if url.startswith('data:'):
+                    # Base64 data URL — decode directly
+                    import base64
+                    b64_data = url.split(',', 1)[1]
+                    with open(img_path, 'wb') as f:
+                        f.write(base64.b64decode(b64_data))
+                else:
+                    # Regular URL — download
+                    import urllib.request
+                    urllib.request.urlretrieve(url, img_path)
                 image_list.append(img_path)
                 total += 1
             except Exception as e:
-                print(f"  Failed to download {img_id}: {e}")
+                print(f"  Failed to load {img_id}: {e}")
 
         if len(image_list) >= MIN_IMAGES_PER_CLASS:
             classes[product_id] = {
