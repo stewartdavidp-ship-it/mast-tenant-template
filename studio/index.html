@@ -670,54 +670,59 @@ function handleTrainingCapture(blob) {
   document.getElementById('uploadStatus').textContent = 'Compressing...';
 
   compressImage(blob).then(function(compressed) {
-    document.getElementById('uploadStatus').textContent = 'Uploading...';
+    console.log('[Studio] Compressed:', compressed.size, 'bytes');
+    document.getElementById('uploadStatus').textContent = 'Uploading (' + Math.round(compressed.size/1024) + 'KB)...';
     var imageId = db.ref().push().key;
     var storagePath = 'shirglassworks/builds/training-' + selectedProductId + '/' + imageId + '.jpg';
+    console.log('[Studio] Uploading to:', storagePath);
     var storageRef = storage.ref(storagePath);
-    var task = storageRef.put(compressed);
 
-    task.on('state_changed',
-      function(snap) {
-        var pct = (snap.bytesTransferred / snap.totalBytes) * 100;
-        document.getElementById('uploadProgress').style.width = pct + '%';
-      },
-      function(err) {
-        isProcessing = false;
-        document.getElementById('captureBtn').classList.remove('processing');
-        document.getElementById('uploadStatus').textContent = 'Upload failed';
-        showToast('Upload error: ' + err.message, true);
-      },
-      function() {
-        task.snapshot.ref.getDownloadURL().then(function(downloadUrl) {
-          // Save metadata to RTDB
-          db.ref(TRAINING_IMAGES_PATH + '/' + selectedProductId + '/' + imageId).set({
-            url: downloadUrl,
-            uploadedAt: new Date().toISOString(),
-            uploadedBy: currentUser.displayName || currentUser.email,
-            sizeBytes: compressed.size
-          }).then(function() {
-            trainingCounts[selectedProductId] = (trainingCounts[selectedProductId] || 0) + 1;
-            updateTrainingCountDisplay();
-            document.getElementById('uploadStatus').textContent = 'Saved!';
-            document.getElementById('keepBtn').style.display = '';
-            document.getElementById('keepBtn').textContent = 'Next';
-            isProcessing = false;
-            document.getElementById('captureBtn').classList.remove('processing');
-            showToast('Training photo saved');
-          }).catch(function(err) {
-            isProcessing = false;
-            document.getElementById('captureBtn').classList.remove('processing');
-            document.getElementById('uploadStatus').textContent = 'Save failed';
-            showToast('DB error: ' + err.message, true);
-          });
-        }).catch(function(err) {
-          isProcessing = false;
-          document.getElementById('captureBtn').classList.remove('processing');
-          document.getElementById('uploadStatus').textContent = 'URL fetch failed';
-          showToast('URL error: ' + err.message, true);
-        });
-      }
-    );
+    // Use promise-based upload with timeout
+    var uploadTimeout = setTimeout(function() {
+      isProcessing = false;
+      document.getElementById('captureBtn').classList.remove('processing');
+      document.getElementById('uploadStatus').textContent = 'Upload timed out (30s)';
+      showToast('Upload timed out — check connection & auth', true);
+    }, 30000);
+
+    storageRef.put(compressed).then(function(snapshot) {
+      clearTimeout(uploadTimeout);
+      console.log('[Studio] Upload complete, getting URL...');
+      document.getElementById('uploadProgress').style.width = '100%';
+      return snapshot.ref.getDownloadURL();
+    }).then(function(downloadUrl) {
+      console.log('[Studio] Got URL, saving to RTDB...');
+      document.getElementById('uploadStatus').textContent = 'Saving metadata...';
+      return db.ref(TRAINING_IMAGES_PATH + '/' + selectedProductId + '/' + imageId).set({
+        url: downloadUrl,
+        uploadedAt: new Date().toISOString(),
+        uploadedBy: currentUser.displayName || currentUser.email,
+        sizeBytes: compressed.size
+      });
+    }).then(function() {
+      console.log('[Studio] Done!');
+      trainingCounts[selectedProductId] = (trainingCounts[selectedProductId] || 0) + 1;
+      updateTrainingCountDisplay();
+      document.getElementById('uploadStatus').textContent = 'Saved!';
+      document.getElementById('keepBtn').style.display = '';
+      document.getElementById('keepBtn').textContent = 'Next';
+      isProcessing = false;
+      document.getElementById('captureBtn').classList.remove('processing');
+      showToast('Training photo saved');
+    }).catch(function(err) {
+      clearTimeout(uploadTimeout);
+      console.error('[Studio] Upload chain error:', err.code, err.message);
+      isProcessing = false;
+      document.getElementById('captureBtn').classList.remove('processing');
+      document.getElementById('uploadStatus').textContent = 'Error: ' + (err.code || err.message);
+      showToast('Error: ' + err.message, true);
+    });
+  }).catch(function(err) {
+    console.error('[Studio] Compression error:', err);
+    isProcessing = false;
+    document.getElementById('captureBtn').classList.remove('processing');
+    document.getElementById('uploadStatus').textContent = 'Compress failed';
+    showToast('Compress error: ' + err.message, true);
   });
 }
 
