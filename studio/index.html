@@ -288,7 +288,7 @@
   <!-- Menu Screen -->
   <div class="screen" id="menuScreen">
     <div class="menu-header">
-      <h1>Studio <span style="font-size:12px;font-weight:400;color:var(--text-dim)">v6</span></h1>
+      <h1>Studio <span style="font-size:12px;font-weight:400;color:var(--text-dim)">v7</span></h1>
       <img class="menu-avatar" id="userAvatar" src="" alt="" onclick="signOut()">
     </div>
     <div class="menu-grid">
@@ -670,13 +670,21 @@ function handleTrainingCapture(blob) {
   document.getElementById('uploadStatus').textContent = 'Compressing...';
 
   compressImage(blob).then(function(compressed) {
-    console.log('[Studio] Compressed:', compressed.size, 'bytes');
-    console.log('[Studio] Auth state:', currentUser ? currentUser.uid : 'NOT SIGNED IN');
-    console.log('[Studio] Storage bucket:', storage.app.options.storageBucket);
-    document.getElementById('uploadStatus').textContent = 'Uploading (' + Math.round(compressed.size/1024) + 'KB)...';
+    var uid = currentUser ? currentUser.uid : 'NO_AUTH';
+    var bucket = storage.app.options.storageBucket || 'NO_BUCKET';
+    var sizeKB = Math.round(compressed.size / 1024);
     var imageId = db.ref().push().key;
     var storagePath = 'shirglassworks/builds/training-' + selectedProductId + '/' + imageId + '.jpg';
-    console.log('[Studio] Uploading to:', storagePath);
+
+    // Show debug info directly in the UI
+    document.getElementById('uploadStatus').innerHTML =
+      '<small style="word-break:break-all">' +
+      'UID: ' + uid + '<br>' +
+      'Bucket: ' + bucket + '<br>' +
+      'Size: ' + sizeKB + 'KB<br>' +
+      'Path: ' + storagePath + '<br>' +
+      'Status: calling put()...</small>';
+
     var storageRef = storage.ref(storagePath);
     var metadata = { contentType: 'image/jpeg' };
 
@@ -684,11 +692,10 @@ function handleTrainingCapture(blob) {
     var uploadTimeout = setTimeout(function() {
       isProcessing = false;
       document.getElementById('captureBtn').classList.remove('processing');
-      document.getElementById('uploadStatus').textContent = 'Upload timed out (30s)';
-      showToast('Upload timed out — check connection & auth', true);
+      document.getElementById('uploadStatus').textContent = 'Upload timed out (30s) — put() never resolved';
+      showToast('Upload timed out', true);
     }, 30000);
 
-    console.log('[Studio] Calling put()...');
     storageRef.put(compressed, metadata).then(function(snapshot) {
       clearTimeout(uploadTimeout);
       console.log('[Studio] Upload complete, getting URL...');
