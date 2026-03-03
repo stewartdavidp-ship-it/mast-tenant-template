@@ -288,7 +288,7 @@
   <!-- Menu Screen -->
   <div class="screen" id="menuScreen">
     <div class="menu-header">
-      <h1>Studio <span style="font-size:12px;font-weight:400;color:var(--text-dim)">v12</span></h1>
+      <h1>Studio <span style="font-size:12px;font-weight:400;color:var(--text-dim)">v13</span></h1>
       <img class="menu-avatar" id="userAvatar" src="" alt="" onclick="signOut()">
     </div>
     <div class="menu-grid">
@@ -955,7 +955,7 @@ function runClaudeVision(blob) {
             product: data.product || 'Unknown',
             productId: data.productId || null,
             confidence: data.confidence || 0,
-            reasoning: data.reasoning || '',
+            color: data.color || '',
             latencyMs: latency
           });
         })
@@ -972,8 +972,8 @@ function displayClaudeResult(r) {
   document.getElementById('claudeConfidence').textContent = r.confidence + '%';
   document.getElementById('claudeConfidence').className = 'result-value ' + confidenceClass(r.confidence);
   document.getElementById('claudeLatency').textContent = r.latencyMs + 'ms';
-  if (r.reasoning) {
-    document.getElementById('claudeReasoning').textContent = r.reasoning;
+  if (r.color) {
+    document.getElementById('claudeReasoning').textContent = r.color;
     document.getElementById('claudeReasoning').style.display = '';
   }
 }
