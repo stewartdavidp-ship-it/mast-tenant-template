@@ -3858,6 +3858,22 @@ function comboKey(values) {
   return values.join('|');
 }
 
+// Convert order item options object to inventory combo key
+// Order items store options as { "Color": "Blue", "Size": "Short" }
+// Inventory combo keys are "Short|Blue" (values in product.options order)
+function getItemComboKey(pid, itemOptions) {
+  if (!itemOptions || typeof itemOptions !== 'object' || !Object.keys(itemOptions).length) return '_default';
+  var product = productsData ? productsData.find(function(p) { return p.pid === pid; }) : null;
+  if (!product) return '_default';
+  var variantInfo = getProductVariantCombos(product);
+  if (!variantInfo.labels.length) return '_default';
+  var values = variantInfo.labels.map(function(label) {
+    return itemOptions[label] || '';
+  });
+  if (values.some(function(v) { return !v; })) return '_default';
+  return comboKey(values);
+}
+
 // ---- Inventory Overview (Production tab) ----
 function renderInventoryOverview() {
   var el = document.getElementById('inventoryOverviewContent');
@@ -4312,34 +4328,32 @@ async function saveAdjustStock(pid) {
   try {
     var product = productsData.find(function(p) { return p.pid === pid; });
     var variantInfo = getProductVariantCombos(product);
-    var existing = inventory[pid] || {};
-    var stockData = {};
 
+    // Use multi-path update instead of set() to avoid overwriting
+    // concurrent reservation changes. Only write 'available' fields;
+    // 'reserved' is managed atomically by reserveInventory/releaseInventory/pullFromStock.
+    var updates = {};
     if (variantInfo.combos.length > 0) {
       var totalAvail = 0;
-      var totalReserved = 0;
       variantInfo.combos.forEach(function(combo) {
         var key = comboKey(combo);
         var availInput = document.querySelector('.pd-variant-avail[data-combo="' + key + '"]');
         var avail = availInput ? (parseInt(availInput.value) || 0) : 0;
-        var reserved = (existing.stock && existing.stock[key])
-          ? (existing.stock[key].reserved || 0) : 0;
-        stockData[key] = { available: avail, reserved: reserved };
+        updates['stock/' + key + '/available'] = avail;
         totalAvail += avail;
-        totalReserved += reserved;
       });
-      stockData._default = { available: totalAvail, reserved: totalReserved };
+      updates['stock/_default/available'] = totalAvail;
     } else {
       var avail = parseInt(document.getElementById('adjDefaultAvail').value) || 0;
-      var reserved = (existing.stock && existing.stock._default)
-        ? (existing.stock._default.reserved || 0) : 0;
-      stockData._default = { available: avail, reserved: reserved };
+      updates['stock/_default/available'] = avail;
     }
+    updates['updatedAt'] = new Date().toISOString();
 
-    await db.ref(INVENTORY_PATH + '/' + pid + '/stock').set(stockData);
-    await db.ref(INVENTORY_PATH + '/' + pid + '/updatedAt').set(new Date().toISOString());
+    await db.ref(INVENTORY_PATH + '/' + pid).update(updates);
+    // Refresh local cache from Firebase to pick up current reserved values
     if (!inventory[pid]) inventory[pid] = { pid: pid };
-    inventory[pid].stock = stockData;
+    var freshSnap = await db.ref(INVENTORY_PATH + '/' + pid + '/stock').once('value');
+    inventory[pid].stock = freshSnap.val() || {};
     closeModal();
     showToast('Stock updated');
     renderProductDetail(pid);
@@ -6080,16 +6094,20 @@ async function transitionOrder(orderId, newStatus) {
         var ffKey = getItemFulfillmentKey(item);
         var inv = inventory[item.pid];
         var inStock = false;
+        var ck = getItemComboKey(item.pid, item.options);
         if (inv && inv.stockType !== 'made-to-order') {
-          var stockEntry = (inv.stock && inv.stock._default) || null;
+          // Check variant-specific stock first, fall back to _default
+          var stockEntry = (ck !== '_default' && inv.stock && inv.stock[ck])
+            ? inv.stock[ck]
+            : (inv.stock && inv.stock._default) || null;
           if (stockEntry && stockEntry.available >= (item.qty || 1)) {
             inStock = true;
           }
         }
         if (inStock) {
           ff[ffKey] = { source: 'stock', buildJobId: null, ready: true };
-          // Reserve inventory
-          reserveInventory(item.pid, item.qty || 1);
+          // Reserve inventory (variant-aware)
+          reserveInventory(item.pid, item.qty || 1, ck);
         } else {
           ff[ffKey] = { source: 'build', buildJobId: null, ready: false };
           needsBuilding = true;
@@ -6125,42 +6143,54 @@ async function transitionOrder(orderId, newStatus) {
   }
 }
 
-async function reserveInventory(pid, qty) {
+async function reserveInventory(pid, qty, ck) {
   var inv = inventory[pid];
   if (!inv || !inv.stock || !inv.stock._default) return;
   try {
-    var stockRef = db.ref(INVENTORY_PATH + '/' + pid + '/stock/_default');
-    await stockRef.update({
-      available: firebase.database.ServerValue.increment(-qty),
-      reserved: firebase.database.ServerValue.increment(qty)
-    });
+    var stockRef = db.ref(INVENTORY_PATH + '/' + pid + '/stock');
+    var updates = {};
+    updates['_default/available'] = firebase.database.ServerValue.increment(-qty);
+    updates['_default/reserved'] = firebase.database.ServerValue.increment(qty);
+    // Also update specific variant if combo key exists in stock
+    if (ck && ck !== '_default' && inv.stock[ck]) {
+      updates[ck + '/available'] = firebase.database.ServerValue.increment(-qty);
+      updates[ck + '/reserved'] = firebase.database.ServerValue.increment(qty);
+    }
+    await stockRef.update(updates);
   } catch (err) {
     console.error('Error reserving inventory:', err);
   }
 }
 
-async function releaseInventory(pid, qty) {
+async function releaseInventory(pid, qty, ck) {
   var inv = inventory[pid];
   if (!inv || !inv.stock || !inv.stock._default) return;
   try {
-    var stockRef = db.ref(INVENTORY_PATH + '/' + pid + '/stock/_default');
-    await stockRef.update({
-      available: firebase.database.ServerValue.increment(qty),
-      reserved: firebase.database.ServerValue.increment(-qty)
-    });
+    var stockRef = db.ref(INVENTORY_PATH + '/' + pid + '/stock');
+    var updates = {};
+    updates['_default/available'] = firebase.database.ServerValue.increment(qty);
+    updates['_default/reserved'] = firebase.database.ServerValue.increment(-qty);
+    if (ck && ck !== '_default' && inv.stock[ck]) {
+      updates[ck + '/available'] = firebase.database.ServerValue.increment(qty);
+      updates[ck + '/reserved'] = firebase.database.ServerValue.increment(-qty);
+    }
+    await stockRef.update(updates);
   } catch (err) {
     console.error('Error releasing inventory:', err);
   }
 }
 
-async function pullFromStock(pid, qty) {
+async function pullFromStock(pid, qty, ck) {
   var inv = inventory[pid];
   if (!inv || !inv.stock || !inv.stock._default) return;
   try {
-    var stockRef = db.ref(INVENTORY_PATH + '/' + pid + '/stock/_default');
-    await stockRef.update({
-      reserved: firebase.database.ServerValue.increment(-qty)
-    });
+    var stockRef = db.ref(INVENTORY_PATH + '/' + pid + '/stock');
+    var updates = {};
+    updates['_default/reserved'] = firebase.database.ServerValue.increment(-qty);
+    if (ck && ck !== '_default' && inv.stock[ck]) {
+      updates[ck + '/reserved'] = firebase.database.ServerValue.increment(-qty);
+    }
+    await stockRef.update(updates);
   } catch (err) {
     console.error('Error pulling from stock:', err);
   }
@@ -7526,7 +7556,11 @@ async function autoUpdateInventory(jobId, buildId, buildOutput, freshJob) {
     var qty = buildOutput[liKey].completedQuantity || 0;
     if (qty <= 0) continue;
     var li = lineItems[liKey];
-    if (!li || !li.productId) continue;
+    if (!li) continue;
+    if (!li.productId) {
+      results.push('⚠️ ' + (li.productName || 'item') + ': no product linked, inventory not updated');
+      continue;
+    }
 
     try {
       // Firebase transaction for atomic increment
@@ -8329,13 +8363,13 @@ async function submitShipping(orderId) {
     var history = (o && o.statusHistory) ? o.statusHistory.slice() : [];
     history.push({ status: 'shipped', at: now, by: 'admin', note: note || carrier + ' ' + trackingNum });
 
-    // Pull reserved items from stock
+    // Pull reserved items from stock (variant-aware)
     if (o && o.fulfillment) {
       (o.items || []).forEach(function(item) {
         var ffKey = getItemFulfillmentKey(item);
         var ff = o.fulfillment[ffKey];
         if (ff && ff.source === 'stock') {
-          pullFromStock(item.pid, item.qty || 1);
+          pullFromStock(item.pid, item.qty || 1, getItemComboKey(item.pid, item.options));
         }
       });
     }
@@ -8388,13 +8422,13 @@ async function cancelOrder(orderId) {
     var history = o.statusHistory ? o.statusHistory.slice() : [];
     history.push({ status: 'cancelled', at: now, by: 'admin', note: reason || null });
 
-    // Release reserved inventory
+    // Release reserved inventory (variant-aware)
     if (o.fulfillment) {
       (o.items || []).forEach(function(item) {
         var ffKey = getItemFulfillmentKey(item);
         var ff = o.fulfillment[ffKey];
         if (ff && ff.source === 'stock' && ff.ready) {
-          releaseInventory(item.pid, item.qty || 1);
+          releaseInventory(item.pid, item.qty || 1, getItemComboKey(item.pid, item.options));
         }
       });
     }
