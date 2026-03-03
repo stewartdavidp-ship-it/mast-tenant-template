@@ -164,8 +164,8 @@
     }
     .capture-preview.active { display: flex; }
     .capture-preview img {
-      max-width: 100%; max-height: 50vh;
-      border-radius: var(--radius); margin-bottom: 20px;
+      max-width: 100%; max-height: 30vh;
+      border-radius: var(--radius); margin-bottom: 12px;
     }
 
     /* Results panel */
@@ -288,7 +288,7 @@
   <!-- Menu Screen -->
   <div class="screen" id="menuScreen">
     <div class="menu-header">
-      <h1>Studio <span style="font-size:12px;font-weight:400;color:var(--text-dim)">v13</span></h1>
+      <h1>Studio <span style="font-size:12px;font-weight:400;color:var(--text-dim)">v14</span></h1>
       <img class="menu-avatar" id="userAvatar" src="" alt="" onclick="signOut()">
     </div>
     <div class="menu-grid">
@@ -306,11 +306,6 @@
         <div class="card-icon">&#128202;</div>
         <h2>Results</h2>
         <p>View recognition accuracy and comparison history</p>
-      </div>
-      <div class="menu-card" onclick="scanCatalog()">
-        <div class="card-icon">&#128270;</div>
-        <h2>Scan Catalog</h2>
-        <p id="scanStatus">Generate visual descriptions from product thumbnails (one-time)</p>
       </div>
     </div>
   </div>
