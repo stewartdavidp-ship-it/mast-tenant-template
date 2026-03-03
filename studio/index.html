@@ -672,7 +672,7 @@ function handleTrainingCapture(blob) {
   compressImage(blob).then(function(compressed) {
     document.getElementById('uploadStatus').textContent = 'Uploading...';
     var imageId = db.ref().push().key;
-    var storagePath = 'shirglassworks/training-images/' + selectedProductId + '/' + imageId + '.jpg';
+    var storagePath = 'shirglassworks/builds/training-' + selectedProductId + '/' + imageId + '.jpg';
     var storageRef = storage.ref(storagePath);
     var task = storageRef.put(compressed);
 
@@ -704,7 +704,17 @@ function handleTrainingCapture(blob) {
             isProcessing = false;
             document.getElementById('captureBtn').classList.remove('processing');
             showToast('Training photo saved');
+          }).catch(function(err) {
+            isProcessing = false;
+            document.getElementById('captureBtn').classList.remove('processing');
+            document.getElementById('uploadStatus').textContent = 'Save failed';
+            showToast('DB error: ' + err.message, true);
           });
+        }).catch(function(err) {
+          isProcessing = false;
+          document.getElementById('captureBtn').classList.remove('processing');
+          document.getElementById('uploadStatus').textContent = 'URL fetch failed';
+          showToast('URL error: ' + err.message, true);
         });
       }
     );
