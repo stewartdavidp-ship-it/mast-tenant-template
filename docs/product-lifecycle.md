@@ -1,21 +1,34 @@
 # Shir Glassworks — End-to-End Product Lifecycle
 
-**Last Updated:** 2026-03-03
-**Purpose:** Living reference document covering the full product lifecycle, production system, and what's next.
+**Last Updated:** 2026-03-03 (post Phase D)
+**Purpose:** Living reference document covering the full product lifecycle, production system, studio companion features, and what's next.
 
 ---
 
 ## Lifecycle Overview
 
 ```
+ONLINE CHANNEL:
 CATALOG → BROWSE → DETAIL → CART → CHECKOUT → PAYMENT → ORDER → CONFIRM → [BUILD] → PACK → SHIP → DELIVER
                                                                              ↕
                                                           PRODUCTION SYSTEM (Jobs → Builds → Stories)
+
+IN-PERSON CHANNEL (PoS):
+CAMERA/PICKER → ITEMS → PAYMENT (Cash/Square) → SALE → RECEIPT → [SQUARE RECONCILIATION]
+                                                    ↓
+                                              INVENTORY DECREMENT
+
+PRODUCTION → INTAKE:
+BUILD COMPLETE → CAMERA INTAKE (per piece) → VISION ID + CONFIRM → INVENTORY +1 → TRAINING PHOTO
+                                                                                      ↓
+                                                                               LOCATION ASSIGNMENT
 ```
 
-**Dual-channel model:** Orders enter from two sources — the custom website (direct) and Etsy. Both feed into a single unified admin pipeline.
+**Dual-channel model:** Orders enter from three sources — the custom website (direct), Etsy, and in-person PoS sales. All feed into a single unified admin pipeline.
 
 **Production system:** Independent production tracking for all glasswork — order fulfillment, inventory building, custom pieces, and experimental work. Includes photo capture, story curation, and customer-facing "How It Was Made" narratives.
+
+**Studio companion features:** Camera-first inventory intake, GPS-aware mode switching, inventory location tracking with QR codes, and event-integrated packing/selling/return flows.
 
 ---
 
@@ -26,7 +39,7 @@ CATALOG → BROWSE → DETAIL → CART → CHECKOUT → PAYMENT → ORDER → CO
 - Product data at `shirglassworks/public/products/{pid}` with name, price, images, options (color, opacity, size), description
 - Admin Products tab for managing catalog: add/edit/delete products, option management, image uploads, variant inventory management
 - Filter pills on public shop page for category browsing
-- Product images migrated to local repo (no longer dependent on Weebly)
+- Product images migrated from Weebly to Firebase Storage via `shirMigrateImagesToStorage`
 
 **Key decision:** Product-centric data model replaced the original image-centric gallery model for shop items.
 
@@ -75,6 +88,8 @@ CATALOG → BROWSE → DETAIL → CART → CHECKOUT → PAYMENT → ORDER → CO
 - Square config managed in admin Settings UI (environment, access token, location ID, webhook signature key)
 - Config stored in Firebase RTDB at `shirglassworks/config/square` (read by Cloud Functions at runtime)
 - Supports sandbox and production environments
+
+**Phase D extension:** `shirSquareWebhook` now also stores ALL completed payments to `shirglassworks/admin/square-payments/{paymentId}` for PoS reconciliation. Payments without a `squareOrderId` (i.e., PoS terminal payments) are stored for timestamp-based matching to PoS sales.
 
 **Order statuses added for payment:**
 - `pending_payment` — order created, awaiting Square checkout completion
@@ -189,8 +204,7 @@ CATALOG → BROWSE → DETAIL → CART → CHECKOUT → PAYMENT → ORDER → CO
 - Table columns: thumbnail, product name/price, stock type badge, on hand, reserved, attribute breakdown tags
 - Smart sort: out of stock first (urgent), low stock next, then by quantity descending, made-to-order last
 - Click any row to navigate to that product's detail page
-- Dark mode fully supported
-- Foundation for future forecasting module (purchase history vs on-hand → production recommendations)
+- Foundation for future forecasting module
 
 **Example:** Spiral Cup has options Size (Short, Tall, Wide) and Color (Blue, Yellow). Product detail shows:
 
@@ -206,6 +220,153 @@ CATALOG → BROWSE → DETAIL → CART → CHECKOUT → PAYMENT → ORDER → CO
 
 ---
 
+## Inventory Management — Phase 3: Location-Tracked Inventory (BUILT — Phase D)
+
+**What exists:**
+- Inventory locations at `shirglassworks/admin/locations/{locationId}`
+- Location types: `home` (permanent, auto-created, cannot archive), `event` (auto-created with sales events), `container` (portable boxes), `other`
+- Each location has: `name`, `type`, `status` (active/archived), `createdAt`, optional `eventId` link
+- QR code URL format: `https://shirglassworks.com/scan/location/{locationId}`
+- LabelKeeper export for printing QR labels (Avery 5160 format)
+
+**Location-tracked inventory model:**
+- Extended stock structure: `inventory/{pid}/stock/{variantCombo}/locations/{locationId}: count`
+- `_default.available` remains the sum total (backward compatible)
+- Atomic multi-path Firebase updates for moving items between locations
+- `addToLocation(pid, variant, locationId, qty)` — increments available + location count
+- `decrementFromLocation(pid, variant, locationId, qty)` — decrements from specific location
+- `moveInventory(pid, variant, fromLocId, toLocId, qty)` — atomic transfer
+
+**Move Items modal:**
+- Product picker, variant selector, from/to location dropdowns, quantity input
+- Max quantity enforced from source location count
+- Accessible from inventory overview action bar
+
+**Admin Settings UI:**
+- Inventory Locations section with status filter (all/active/archived)
+- Location list with item counts, QR copy, LabelKeeper export, rename, archive/reactivate
+- Create form with name input and type selector
+- "Home" location auto-ensured on first load
+
+---
+
+## Inventory Management — Phase 4: Camera-First Intake (BUILT — Phase D)
+
+**What exists:**
+- Full-screen intake overlay (`intakeOverlay`) for piece-by-piece inventory logging
+- Camera capture sends photo to `shirClassifyImage` with `intake` context
+- Vision API returns: `productId`, `confidence`, `color`, `attributes` (colorFamily, form, size, texture), `visualDescription`
+- Confirm/reject flow: matched product shown with confidence, manual picker as fallback
+- First photo per piece = inventory increment (+1 to stock + location assignment)
+- Subsequent photos = training-only (no inventory increment, stored as reference images)
+- Dynamic training suggestion based on existing photo count:
+  - < 5 photos: "Suggest 3 angles — this helps future recognition"
+  - < 15 photos: "Additional angles help with unusual lighting/backgrounds"
+  - 15+: skip training prompt unless unusual piece
+- Running tally of logged items with session summary
+- Accessible from: build completion summary ("Camera Intake" button) and inventory overview ("Inventory Intake" button)
+
+**Vision API prompt tuning (Phase D):**
+- `intake` context extracts structured attributes: `colorFamily`, `form`, `size`, `texture`, `distinguishing`
+- `training` context focuses on maximum visual description detail for reference
+- Auto-saves `visualDescription` to `shirglassworks/admin/visual-descriptions/{pid}` for improving future classifications
+- Visual descriptions included in catalog text sent to Claude for better matching
+
+---
+
+## Image Library (BUILT — Phase A)
+
+**What exists:**
+- Image library at `shirglassworks/images/{imageId}` with Firebase Storage backing
+- `shirUploadImage` Cloud Function: receives base64, compresses via sharp (1600px max), generates thumbnail, uploads to Storage, creates RTDB record
+- Image records: `url`, `thumbnailUrl`, `tags`, `source`, `uploadedAt`, `sizeBytes`
+- Training images at `shirglassworks/admin/training-images/{productId}/{imageId}` for Vision API learning
+- `shirUploadTrainingImage` Cloud Function for storing product reference photos
+- `shirBootstrapImageLibrary` seeded 119 entries from legacy Weebly URLs
+- `shirMigrateImagesToStorage` batch-migrated all product images to Firebase Storage (2GB memory, 540s timeout)
+
+---
+
+## Point-of-Sale App (BUILT — Phase B)
+
+**What exists:**
+- Standalone mobile-first app at `shirglassworks/pos/index.html`
+- Camera-first workflow: photo → `shirClassifyImage` → product match → confirm/edit → payment → save
+- Manual product picker with search as fallback
+- Payment type selection: cash or Square
+- Amount auto-calculated from identified items, manually editable
+- Sale record at `shirglassworks/admin/sales/{saleId}` with items, amount, payment type, timestamp, event link
+- Inventory auto-decremented on sale
+- Event-aware: accepts `?eventId=` URL parameter, shows event banner, auto-links sales, updates event allocations
+
+**Receipt flow (Phase D):**
+- Success screen shows receipt form: email input, phone input, opt-in checkbox
+- `sendReceipt()` calls `shirSendReceipt` (SendGrid email) and/or `shirSendSMS` (Twilio SMS)
+- Branded HTML email receipt with items, total, date, thank you message
+- Plain text SMS receipt summary
+- `autoReconcileSquare()` called after Square payment sales — matches to webhook-received payments
+- Sale record updated with `receiptSent`, `customerContact` (email, phone, optIn)
+
+**Admin Sales tab:**
+- Sales list with date filter, status filter (all/captured/reconciled/voided)
+- Daily summary stats (total sales, cash, square, average)
+- Sale detail view with items, payment info, notes
+- Reconcile and void actions
+- Square Payments view (toggle from sales list):
+  - Summary cards: total, matched, unmatched, unmatched amount
+  - Filter: unmatched only, matched only, all
+  - Manual match modal: shows candidate sales sorted by time proximity, amount match highlighting
+  - `executeManualMatch()` atomic update: sale gets squarePaymentId + authoritative amount, payment gets matchedSaleId
+
+---
+
+## Sales Events System (BUILT — Phase C)
+
+**What exists:**
+- Sales events at `shirglassworks/admin/salesEvents/{eventId}` for craft fair management
+- Event lifecycle: `planning` → `packed` → `active` → `closed`
+- Per-event allocations: `allocations/{pid}` with `quantity` (packed), `sold`, `sourceLocationId`
+- Admin Events tab with event list, status badges, create/edit modal
+
+**Packing mode:**
+- Camera-based product scanning during packing
+- Manual product picker fallback
+- Items confirmed against master inventory, allocated to event
+- Phase D: packing moves inventory from Home location to event location
+- Tracks `sourceLocationId` per allocation for return routing
+
+**Fair mode (PoS integration):**
+- PoS app accepts `?eventId=` parameter
+- Green banner shows event name, packed vs sold vs remaining stats
+- Sales auto-linked to event, allocations.sold auto-incremented
+
+**Event close:**
+- Freezes event data as historical snapshot
+- Sell-through rates calculated per product
+- Phase D: unsold items auto-returned to source locations, event location archived
+
+**Event location lifecycle (Phase D):**
+- `createEventLocation(eventId, name)` auto-called when saving a new event
+- Location type `event`, linked via `eventId`
+- Packing moves items: Home → Event Location
+- Close moves unsold items: Event Location → Source Location (or Home)
+- Event location auto-archived on close
+
+---
+
+## GPS-Aware Mode Switching (BUILT — Phase C)
+
+**What exists:**
+- Studio Locations configuration in Settings: latitude, longitude, detection radius (default 500m)
+- `detectStudioProximity()` uses Geolocation API to check distance from studio
+- Automatic mode switching based on location:
+  - Within studio radius: production-focused UI
+  - Outside studio: event/selling-focused UI
+- Visual indicator showing current detected mode
+- Graceful fallback when GPS unavailable or denied
+
+---
+
 ## Customer Notifications — Gmail (BUILT)
 
 **What exists:**
@@ -217,6 +378,24 @@ CATALOG → BROWSE → DETAIL → CART → CHECKOUT → PAYMENT → ORDER → CO
 - No email on `pending_payment → placed` (internal payment transition)
 - No email on cancel from `pending_payment` or `payment_failed`
 - `shirTestOrderEmail` callable for admin testing of any email type
+
+---
+
+## Receipt System — PoS (BUILT — Phase D)
+
+**What exists:**
+- `shirSendReceipt` Cloud Function: branded HTML email via SendGrid
+  - Shir Glassworks logo, itemized list, total, date, thank you message
+  - Auth: Firebase ID token required
+  - Config: `sendgrid.api_key`, `shir.from_email` in Firebase Functions config
+- `shirSendSMS` Cloud Function: plain text SMS via Twilio HTTP API (no SDK)
+  - Format: "Shir Glassworks — {items}, ${amount}, {date}. Thank you!"
+  - Config: `twilio.account_sid`, `twilio.auth_token`, `twilio.from_number`
+- `shirReconcileSquarePayment` Cloud Function: timestamp-based auto-matching
+  - Takes `saleId`, `saleTimestamp`, `toleranceMinutes` (default 5)
+  - Finds closest unmatched Square payment within tolerance window
+  - Updates both records atomically: sale gets `squarePaymentId`, payment gets `matchedSaleId`
+  - Square amount is authoritative (overwrites sale amount)
 
 ---
 
@@ -296,6 +475,7 @@ CATALOG → BROWSE → DETAIL → CART → CHECKOUT → PAYMENT → ORDER → CO
 - When completing a build on `inventory-general` jobs, stock auto-increments
 - Firebase transaction for atomic `available` stock increment
 - `inventoryPushed` guard flag on build prevents double-push
+- Build completion summary now offers "Camera Intake" button for piece-by-piece logging (Phase D)
 
 **Completion feedback:**
 - `showCompletionSummary()` displays pipeline results after build completion
@@ -338,7 +518,12 @@ payment_failed → cancelled
 
 1. **GitHub Pages hosting** — static files only, no server-side code. All dynamic behavior via client-side JS + Firebase.
 2. **Etsy shop coexistence** — existing ShirGlassworks Etsy shop as a parallel sales channel, integrated via API.
-3. **Product images migrated** — images now stored locally in the repo (migrated from Weebly).
+3. **Product images in Firebase Storage** — migrated from Weebly, served via Storage URLs.
+4. **Orders don't track variant-level combo keys** — fulfillment operates on `stock._default` only. Variant-level fulfillment requires future work.
+5. **No historical inventory snapshots** — Firebase stores current state only, no time-series.
+6. **Artisan-scale volume** — 2-5 units per product per month limits statistical significance for forecasting.
+7. **Etsy order history partial** — only exists from when sync was first enabled.
+8. **No cost/margin data** — products have selling price but no cost-of-materials or labor time fields.
 
 ---
 
@@ -355,69 +540,104 @@ payment_failed → cancelled
 |-----------|----------|--------|
 | Public site (landing, about, shop, schedule) | GitHub Pages: `shirglassworks` repo | Live |
 | Admin app | GitHub Pages: `shirglassworks/app/` | Live |
+| PoS app | GitHub Pages: `shirglassworks/pos/` | Live |
 | Product data | Firebase RTDB: `shirglassworks/public/products/` | Live |
 | Order data | Firebase RTDB: `shirglassworks/orders/` | Live |
 | Inventory data | Firebase RTDB: `shirglassworks/admin/inventory/` | Live |
-| Build jobs | Firebase RTDB: `shirglassworks/admin/buildJobs/` | Live |
-| Coupons | Firebase RTDB: `shirglassworks/admin/coupons/` | Live |
-| Order counter | Firebase RTDB: `shirglassworks/admin/orderCounter` | Live |
-| Square config | Firebase RTDB: `shirglassworks/config/square` | Live |
-| Etsy config + tokens | Firebase RTDB: `shirglassworks/config/etsy` | Live |
-| `shirSubmitOrder` | Firebase Functions (Node.js 20, 1st Gen) | Deployed |
-| `shirSquareWebhook` | Firebase Functions (HTTP) | Deployed |
-| `shirOrderEmailNotification` | Firebase Functions (DB trigger) | Deployed |
-| `shirTestOrderEmail` | Firebase Functions (callable) | Deployed |
-| `shirEtsyOAuthStart` | Firebase Functions (callable) | Deployed |
-| `shirEtsyOAuthCallback` | Firebase Functions (HTTP) | Deployed |
-| `shirEtsyOrderSync` | Firebase Functions (callable) | Deployed |
-| `shirValidateCoupon` | Firebase Functions (callable) | Deployed |
+| Inventory locations | Firebase RTDB: `shirglassworks/admin/locations/` | Live |
+| Sales data | Firebase RTDB: `shirglassworks/admin/sales/` | Live |
+| Sales events | Firebase RTDB: `shirglassworks/admin/salesEvents/` | Live |
+| Square payments | Firebase RTDB: `shirglassworks/admin/square-payments/` | Live |
+| Visual descriptions | Firebase RTDB: `shirglassworks/admin/visual-descriptions/` | Live |
+| Training images | Firebase RTDB: `shirglassworks/admin/training-images/` | Live |
+| Build jobs (order) | Firebase RTDB: `shirglassworks/admin/buildJobs/` | Live |
 | Production jobs | Firebase RTDB: `shirglassworks/admin/jobs/` | Live |
 | Production requests | Firebase RTDB: `shirglassworks/admin/productionRequests/` | Live |
+| Coupons | Firebase RTDB: `shirglassworks/admin/coupons/` | Live |
+| Order counter | Firebase RTDB: `shirglassworks/admin/orderCounter` | Live |
 | Stories (public) | Firebase RTDB: `shirglassworks/public/stories/` | Live |
-| Build photos | Firebase Storage | Live |
+| Image library | Firebase RTDB: `shirglassworks/images/` + Firebase Storage | Live |
+| Square config | Firebase RTDB: `shirglassworks/config/square` | Live |
+| Etsy config + tokens | Firebase RTDB: `shirglassworks/config/etsy` | Live |
+| `shirSubmitOrder` | Cloud Functions (callable) | Deployed |
+| `shirSquareWebhook` | Cloud Functions (HTTP) | Deployed |
+| `shirOrderEmailNotification` | Cloud Functions (DB trigger) | Deployed |
+| `shirTestOrderEmail` | Cloud Functions (callable) | Deployed |
+| `shirValidateCoupon` | Cloud Functions (callable) | Deployed |
+| `shirEtsyOAuthStart` | Cloud Functions (callable) | Deployed |
+| `shirEtsyOAuthCallback` | Cloud Functions (HTTP) | Deployed |
+| `shirEtsyOrderSync` | Cloud Functions (callable) | Deployed |
+| `shirClassifyImage` | Cloud Functions (HTTP) | Deployed |
+| `shirUploadImage` | Cloud Functions (HTTP, 512MB) | Deployed |
+| `shirUploadTrainingImage` | Cloud Functions (HTTP) | Deployed |
+| `shirScanCatalog` | Cloud Functions (HTTP, 300s timeout) | Deployed |
+| `shirMigrateProducts` | Cloud Functions (HTTP, one-time) | Deployed |
+| `shirBootstrapImageLibrary` | Cloud Functions (HTTP, one-time) | Deployed |
+| `shirMigrateImagesToStorage` | Cloud Functions (HTTP, 2GB, 540s) | Deployed |
+| `shirSendReceipt` | Cloud Functions (HTTP) | Deployed |
+| `shirSendSMS` | Cloud Functions (HTTP) | Deployed |
+| `shirReconcileSquarePayment` | Cloud Functions (HTTP) | Deployed |
 | Firebase rules | `database.rules.json` | Deployed |
 
 ---
 
 ## Decisions Log (Built)
 
-| Decision | Scope | Status |
-|----------|-------|--------|
-| Site architecture: single-page HTML per section + admin app | Architecture | Built |
-| Admin app sections: hero, about, gallery, shop (6 categories), schedule | Admin | Built |
-| Analytics via Firebase RTDB append-only writes | Analytics | Built |
-| 6 flat shop categories (31 products) | Catalog | Built |
-| Product-centric data model (pid, name, price, options, images) | Data Model | Built |
-| Full custom checkout (cart, multi-step flow, Square Hosted Checkout) | Checkout | Built |
-| Square payment integration (Payment Links API, webhook, config in Settings) | Payments | Built |
-| Order fulfillment lifecycle (10 statuses, sequential order numbers) | Orders | Built |
-| Inventory tracking (stock types, reserve/release/pull, soft model) | Inventory | Built |
-| Build jobs (auto-create on confirm, auto-ready on complete) | Fulfillment | Built |
-| Coupon system (percentage, fixed, free-shipping) | Checkout | Built |
-| Shipping tracking (USPS, UPS, FedEx, auto URLs) | Shipping | Built |
-| Gmail notifications for direct orders (confirmed, shipped, delivered, cancelled) | Notifications | Built |
-| Dual-channel strategy (Etsy + direct, unified order pipeline) | Strategy | Built |
-| Etsy OAuth 2.0 + PKCE via Cloud Functions | Etsy | Built |
-| Etsy bidirectional sync (inbound orders, outbound tracking) | Etsy | Built |
-| Etsy orders enter as prepaid at `placed` status | Etsy | Built |
-| Image migration from Weebly to local repo | Images | Built |
-| Production job data model (6 purposes, multi-build, line items with targets) | Production | Built |
-| Build data model (sequential builds, operator tracking, tallies) | Production | Built |
-| Expected vs Actual tracking (per-build counts at line item level) | Production | Built |
-| Build-to-inventory/order pipeline (auto-push vs manual by purpose) | Production | Built |
-| Build media and storytelling (capture private, curate selectively) | Production | Built |
-| Firebase RTDB structure for production system | Production | Built |
-| Admin UI for Production (own top-level section in admin nav) | Production | Built |
-| Production Request model (messages from Orders to Production) | Production | Built |
-| Attribute-based variant inventory (auto-generated combos from product options) | Inventory | Built |
-| Product detail view replaces modal-based stock editing | Inventory | Built |
-| Per-variant combo keys (`_default` aggregate for backward compat) | Data Model | Built |
-| CSS variables for dark mode (`--cream` flips to `#2a2a2a`) | UI | Built |
-| Gallery section group headers (Site Pages vs Product Categories) | UI | Built |
-| Product detail inventory is read-only dashboard (not input form) | Inventory UX | Built |
-| Manual stock adjustment via separate modal (exception case, not primary flow) | Inventory UX | Built |
-| Product cards always show on-hand count alongside stock type badge | Inventory UX | Built |
-| Inventory overview lives in Production tab (foundation for forecasting) | Inventory | Built |
+| Decision | Scope | Phase |
+|----------|-------|-------|
+| Site architecture: single-page HTML per section + admin app | Architecture | Original |
+| Admin app sections: hero, about, gallery, shop (6 categories), schedule | Admin | Original |
+| Analytics via Firebase RTDB append-only writes | Analytics | Original |
+| 6 flat shop categories (31 products) | Catalog | Original |
+| Product-centric data model (pid, name, price, options, images) | Data Model | Original |
+| Full custom checkout (cart, multi-step flow, Square Hosted Checkout) | Checkout | Original |
+| Square payment integration (Payment Links API, webhook, config in Settings) | Payments | Original |
+| Order fulfillment lifecycle (10 statuses, sequential order numbers) | Orders | Original |
+| Inventory tracking (stock types, reserve/release/pull, soft model) | Inventory | Original |
+| Build jobs (auto-create on confirm, auto-ready on complete) | Fulfillment | Original |
+| Coupon system (percentage, fixed, free-shipping) | Checkout | Original |
+| Shipping tracking (USPS, UPS, FedEx, auto URLs) | Shipping | Original |
+| Gmail notifications for direct orders (confirmed, shipped, delivered, cancelled) | Notifications | Original |
+| Dual-channel strategy (Etsy + direct, unified order pipeline) | Strategy | Original |
+| Etsy OAuth 2.0 + PKCE via Cloud Functions | Etsy | Original |
+| Etsy bidirectional sync (inbound orders, outbound tracking) | Etsy | Original |
+| Etsy orders enter as prepaid at `placed` status | Etsy | Original |
+| Production job data model (6 purposes, multi-build, line items with targets) | Production | Original |
+| Build data model (sequential builds, operator tracking, tallies) | Production | Original |
+| Expected vs Actual tracking (per-build counts at line item level) | Production | Original |
+| Build-to-inventory/order pipeline (auto-push vs manual by purpose) | Production | Original |
+| Build media and storytelling (capture private, curate selectively) | Production | Original |
+| Firebase RTDB structure for production system | Production | Original |
+| Admin UI for Production (own top-level section in admin nav) | Production | Original |
+| Production Request model (messages from Orders to Production) | Production | Original |
+| Attribute-based variant inventory (auto-generated combos from product options) | Inventory | Original |
+| Product detail view replaces modal-based stock editing | Inventory | Original |
+| Per-variant combo keys (`_default` aggregate for backward compat) | Data Model | Original |
+| CSS variables for dark mode (`--cream` flips to `#2a2a2a`) | UI | Original |
+| Gallery section group headers (Site Pages vs Product Categories) | UI | Original |
+| Product detail inventory is read-only dashboard (not input form) | Inventory UX | Original |
+| Manual stock adjustment via separate modal (exception case, not primary flow) | Inventory UX | Original |
+| Product cards always show on-hand count alongside stock type badge | Inventory UX | Original |
+| Inventory overview lives in Production tab (foundation for forecasting) | Inventory | Original |
+| Image migration from Weebly to Firebase Storage | Images | Phase A |
+| Full product CRUD in admin (create, edit, delete with tabbed detail form) | Admin | Phase A |
+| Shop migrated from gallery path to products path | Shop | Phase A |
+| Camera-first PoS workflow (photo → Vision ID → confirm → sale) | PoS | Phase B |
+| Reusable camera component for cross-app use | Architecture | Phase B |
+| Sales admin tab with daily summary, filters, detail view | Admin | Phase B |
+| Sales events for craft fair management (plan → pack → sell → close) | Events | Phase C |
+| Packing mode with camera scanning and manual picker | Events | Phase C |
+| Fair mode: PoS event linking via URL parameter | Events | Phase C |
+| GPS-aware mode switching based on studio proximity | Studio | Phase C |
+| Camera-first inventory intake (piece-by-piece with Vision API) | Inventory | Phase D |
+| Multi-photo training during intake (first = +1 stock, rest = training) | Vision | Phase D |
+| Inventory locations with QR codes and LabelKeeper export | Inventory | Phase D |
+| Location-tracked inventory (nested under variant stock structure) | Data Model | Phase D |
+| Event location lifecycle (auto-create, pack into, return, archive) | Events | Phase D |
+| Square PoS reconciliation (timestamp-based auto-match + manual match UI) | Payments | Phase D |
+| Receipt delivery via SendGrid email + Twilio SMS | Receipts | Phase D |
+| Vision API attribute extraction for intake/training contexts | Vision | Phase D |
+| Auto-save visual descriptions for progressive classification improvement | Vision | Phase D |
 
 ---
 
@@ -435,49 +655,47 @@ Full end-to-end "day in the life" walkthrough covering: Production → Inventory
 | Variant-blind `pullFromStock()` | **High** | Now accepts optional combo key, decrements reserved on both variant and `_default`. |
 | Variant-blind `releaseInventory()` | **High** | Now accepts optional combo key, releases on both variant and `_default`. |
 | `saveAdjustStock()` uses `set()` not transaction | **Medium** | Changed from `.set()` on entire stock object to `.update()` with specific `available` paths. Reserved counts are no longer overwritten — managed atomically by reserve/release/pull. Local cache refreshed from Firebase after save. |
-| Freeform line items silently break `autoUpdateInventory()` | **Medium** | Now shows "⚠️ item: no product linked, inventory not updated" feedback instead of silent skip. |
+| Freeform line items silently break `autoUpdateInventory()` | **Medium** | Now shows warning feedback instead of silent skip. |
 
 ### Known Bugs (Not Yet Fixed)
 
 | Bug | Severity | Description |
 |-----|----------|-------------|
-| `autoUpdateInventory()` only pushes to `_default` | **Medium** | Production line items don't carry variant info, so auto-push still only increments `_default.available`. Variant distribution must be done manually via stock adjust. |
-
-### Missing Features
-
-| Feature | Priority | Description |
-|---------|----------|-------------|
-| Product CRUD in admin | **Critical** | Cannot create, edit, or delete products. Only populated by one-time seed function. |
-| Shop/Products data disconnect | **Critical** | Public shop reads from `shirglassworks/public/gallery`, admin reads from `shirglassworks/public/products`. Completely separate data sets. Adding a product in admin doesn't make it appear on the website. |
-| Manual order creation | **High** | Admin cannot create orders — only Etsy sync or public shop checkout. No way to test order flow without external source. |
-| `inventory-event` automation | **Medium** | Event inventory jobs show "manual handling required" — no auto-push to inventory. |
-| No inventory audit trail | **Medium** | No history of stock changes beyond `inventoryPushed` flag on builds. |
-| No auto-assignment of production requests | **Medium** | Production requests sit in queue until manually assigned. |
+| `autoUpdateInventory()` only pushes to `_default` | **Medium** | Production line items don't carry variant info, so auto-push still only increments `_default.available`. Variant distribution must be done manually via stock adjust. Camera intake (Phase D) handles this better — individual pieces go to specific variants. |
 
 ### Pipeline Verification
 
 | Pipeline | Status | Notes |
 |----------|--------|-------|
-| Job creation → line items → build → complete | ✅ Works | Full lifecycle tested live. Job auto-completes when targets met. |
-| Build completion → inventory auto-push | ✅ Works | Product picker bug fixed (was causing null productId). Auto-push works for `_default`; variant distribution is manual. Freeform items now show warning instead of silent skip. |
-| Build completion → completion summary | ✅ Works | Shows target met, duration, and pipeline status. |
-| Build completion → fulfillment auto-advance | ✅ Works (code trace) | Linked production requests auto-fulfill on build complete. |
-| Order confirm → reserve/build routing | ✅ Works (code trace) | In-stock items reserved (variant-aware), out-of-stock creates production requests. |
-| Production queue → assign → job creation | ✅ Works (code trace) | Both "new job" and "existing job" assignment paths functional. |
-| Shipping → pull from stock | ✅ Works (code trace) | Correctly decrements reserved (variant-aware). |
+| Job creation → line items → build → complete | ✅ Works | Full lifecycle tested live. |
+| Build completion → inventory auto-push | ✅ Works | Auto-push works for `_default`; camera intake handles per-variant. |
+| Build completion → completion summary | ✅ Works | Shows target met, duration, pipeline status, camera intake button. |
+| Build completion → fulfillment auto-advance | ✅ Works | Linked production requests auto-fulfill on build complete. |
+| Order confirm → reserve/build routing | ✅ Works | In-stock items reserved (variant-aware), out-of-stock creates production requests. |
+| Production queue → assign → job creation | ✅ Works | Both "new job" and "existing job" assignment paths functional. |
+| Shipping → pull from stock | ✅ Works | Correctly decrements reserved (variant-aware). |
+| PoS sale → inventory decrement | ✅ Works | Camera ID or manual pick, auto-decrements on save. |
+| PoS sale → Square reconciliation | ✅ Works | Auto-reconcile on Square sales, manual match for misses. |
+| PoS sale → receipt delivery | ✅ Works | Email (SendGrid) and SMS (Twilio) from success screen. |
+| Event packing → location move | ✅ Works | Items move from Home to event location on pack confirm. |
+| Event close → inventory return | ✅ Works | Unsold items returned to source locations, event location archived. |
+| Camera intake → inventory + training | ✅ Works | First photo = +1 stock, subsequent = training reference. |
 
 ---
 
 ## Deferred / Future Work
 
-- **Studio Companion App:** Camera-first PWA for in-studio production management — QR scanning, photo recognition, contextual actions based on job state
-- **Photo Recognition:** Hybrid TensorFlow.js + Claude Vision model for identifying products from photos
-- **QR Code System:** URL-based QR codes for jobs, products, and shelves with LabelKeeper printing
-- **Abandoned checkout cleanup:** Scheduled function to auto-cancel `pending_payment` orders older than 48h
-- **Auto Etsy sync:** Scheduled function to pull Etsy orders every 15 minutes (currently manual trigger)
-- **Etsy refund/cancellation sync:** Pull cancellation events from Etsy back into Firebase
-- **Payment received email:** Lightweight "we got your payment" email on `pending_payment → placed`
-- **Refund integration:** Square Refunds API for order cancellations after payment
-- **Customer order lookup:** Public page for customers to check order status by email + order number
-- **Inventory display on public site:** Show In Stock / Made to Order badges on public product cards (admin already shows badges)
-- **Production Forecasting:** Cross-reference order/purchase history against current on-hand inventory to surface production recommendations — what to build next, trending products, restock alerts. Builds on the Inventory Overview in the Production tab.
+- **Studio Companion PWA:** Full standalone camera-first PWA for in-studio production management — QR scanning, photo recognition, contextual actions based on job state. Currently features are embedded in admin app; future is a dedicated mobile-optimized PWA.
+- **QR Scan Routing:** URL-based QR codes for jobs, products, and locations (`studio.shirglassworks.com/scan/{type}/{id}`) with contextual action resolution. Location QR codes exist (Phase D), job/product QR codes planned.
+- **Product Reference Grid Sheet:** Printable grid of all products (or filtered) for studio wall display — product photo, name, QR code per cell.
+- **New Product Discovery via Camera:** When Vision API doesn't recognize a piece, onboard it as a new product — photo becomes first reference, guided product creation.
+- **Production Forecasting:** Cross-reference order/sales history against current inventory to surface production recommendations. Data model decisions made, OPENs remain on time horizon, trending metrics, event-awareness, and auto-job creation.
+- **Abandoned checkout cleanup:** Scheduled function to auto-cancel `pending_payment` orders older than 48h.
+- **Auto Etsy sync:** Scheduled function to pull Etsy orders every 15 minutes (currently manual trigger).
+- **Etsy refund/cancellation sync:** Pull cancellation events from Etsy back into Firebase.
+- **Payment received email:** Lightweight "we got your payment" email on `pending_payment → placed`.
+- **Refund integration:** Square Refunds API for order cancellations after payment.
+- **Customer order lookup:** Public page for customers to check order status by email + order number.
+- **Inventory display on public site:** Show In Stock / Made to Order badges on public product cards.
+- **Inventory audit trail:** History of stock changes beyond current guard flags.
+- **SendGrid/Twilio configuration:** Store API keys in Firebase Functions config; admin UI for from-email and phone number settings.
