@@ -5948,6 +5948,14 @@ function renderProductionJobs() {
   });
   console.log('[PROD DEBUG] Total jobs before filter:', allJobs.length);
 
+  // Debug: check each job against each filter
+  allJobs.forEach(function(j) {
+    var statusPass = sf === 'all' ? true : (sf === 'active' ? (j.status === 'definition' || j.status === 'in-progress') : j.status === sf);
+    var purposePass = pf === 'all' ? true : j.purpose === pf;
+    var workTypePass = wf === 'all' ? true : j.workType === wf;
+    console.log('[PROD DEBUG] FILTER CHECK "' + (j.name || 'Untitled') + '": status=' + j.status + ' (' + (statusPass ? 'PASS' : 'FAIL: need definition/in-progress') + '), purpose=' + j.purpose + ' (' + (purposePass ? 'PASS' : 'FAIL') + '), workType=' + j.workType + ' (' + (workTypePass ? 'PASS' : 'FAIL') + ')');
+  });
+
   var jobs = allJobs.filter(function(j) {
     if (sf === 'active') return j.status === 'definition' || j.status === 'in-progress';
     if (sf !== 'all') return j.status === sf;
