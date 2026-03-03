@@ -37,7 +37,7 @@
       --safe-top: env(safe-area-inset-top, 0px);
       --safe-bottom: env(safe-area-inset-bottom, 0px);
     }
-    html, body { height: 100%; overflow: hidden; }
+    html, body { height: 100%; }
     body {
       font-family: 'DM Sans', -apple-system, sans-serif;
       background: var(--bg);
@@ -47,8 +47,9 @@
     }
 
     /* Screens */
-    .screen { display: none; position: absolute; inset: 0; flex-direction: column; }
+    .screen { display: none; position: absolute; inset: 0; flex-direction: column; overflow-y: auto; }
     .screen.active { display: flex; }
+    #cameraScreen { overflow: hidden; }
 
     /* Auth screen */
     #authScreen {
@@ -87,7 +88,7 @@
       width: 36px; height: 36px; border-radius: 50%; cursor: pointer;
       border: 2px solid rgba(255,255,255,0.1);
     }
-    .menu-grid { display: flex; flex-direction: column; gap: 16px; flex: 1; justify-content: center; }
+    .menu-grid { display: flex; flex-direction: column; gap: 16px; padding-bottom: 24px; }
     .menu-card {
       background: var(--surface);
       border-radius: var(--radius);
