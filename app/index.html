@@ -2806,6 +2806,7 @@ function switchTab(tab) {
   if (tab === 'orders' && !ordersLoaded) loadOrders();
   if (tab === 'coupons' && !couponsLoaded) loadCoupons();
   if (tab === 'production') {
+    console.log('[PROD DEBUG] switchTab to production. productionLoaded:', productionLoaded, '| productionSubView:', productionSubView);
     if (!productionLoaded) loadProduction();
     else switchProductionSubView(productionSubView);
   }
@@ -5598,15 +5599,27 @@ var PROD_JOB_TRANSITIONS = {
 
 function loadProduction() {
   productionLoaded = true;
+  console.log('[PROD DEBUG] loadProduction called. productionJobsListener exists:', !!productionJobsListener);
   // Attach jobs listener
   if (!productionJobsListener) {
+    console.log('[PROD DEBUG] Attaching Firebase listener on:', PRODUCTION_JOBS_PATH);
     productionJobsListener = db.ref(PRODUCTION_JOBS_PATH).limitToLast(100).on('value', function(snap) {
       productionJobs = snap.val() || {};
+      var jobKeys = Object.keys(productionJobs);
+      console.log('[PROD DEBUG] Listener fired. Jobs count:', jobKeys.length, 'Keys:', jobKeys);
+      if (jobKeys.length > 0) {
+        jobKeys.forEach(function(k) {
+          console.log('[PROD DEBUG]   Job:', k, '| status:', productionJobs[k].status, '| name:', productionJobs[k].name, '| purpose:', productionJobs[k].purpose, '| workType:', productionJobs[k].workType);
+        });
+      }
       renderProductionJobs();
       if (selectedProductionJobId) renderProductionJobDetail(selectedProductionJobId);
     }, function(err) {
+      console.error('[PROD DEBUG] Firebase listener ERROR:', err.message);
       showToast('Error loading production jobs: ' + err.message, true);
     });
+  } else {
+    console.log('[PROD DEBUG] Listener already exists, skipping attach. Current productionJobs keys:', Object.keys(productionJobs));
   }
   // Attach operators listener
   if (!operatorsListener) {
@@ -5674,6 +5687,7 @@ function getOperatorNames() {
 }
 
 function switchProductionSubView(view) {
+  console.log('[PROD DEBUG] switchProductionSubView:', view);
   productionSubView = view;
   var queueBtn = document.getElementById('prodSubQueue');
   var jobsBtn = document.getElementById('prodSubJobs');
@@ -5681,6 +5695,7 @@ function switchProductionSubView(view) {
   var jobsView = document.getElementById('productionJobsView');
   var detailView = document.getElementById('productionJobDetail');
   var buildView = document.getElementById('productionBuildView');
+  console.log('[PROD DEBUG] View elements found - queue:', !!queueView, 'jobs:', !!jobsView, 'detail:', !!detailView, 'build:', !!buildView);
   if (view === 'queue') {
     queueBtn.className = 'btn btn-primary';
     jobsBtn.className = 'btn btn-secondary';
@@ -5697,6 +5712,8 @@ function switchProductionSubView(view) {
     detailView.style.display = 'none';
     buildView.style.display = 'none';
     selectedProductionJobId = null;
+    console.log('[PROD DEBUG] Jobs view shown. jobsView.display:', jobsView.style.display, '| innerHTML length:', jobsView.innerHTML.length);
+    console.log('[PROD DEBUG] productionJobsList innerHTML length:', document.getElementById('productionJobsList').innerHTML.length);
   }
 }
 
@@ -5914,19 +5931,24 @@ async function doAssignExistingJob(requestId) {
 function renderProductionJobs() {
   var listEl = document.getElementById('productionJobsList');
   var emptyEl = document.getElementById('productionJobsEmpty');
-  if (!listEl) return;
+  console.log('[PROD DEBUG] renderProductionJobs called. listEl found:', !!listEl, '| productionJobs keys:', Object.keys(productionJobs).length);
+  if (!listEl) { console.warn('[PROD DEBUG] productionJobsList element NOT FOUND - aborting render'); return; }
   var statusFilter = document.getElementById('prodFilterStatus');
   var purposeFilter = document.getElementById('prodFilterPurpose');
   var workTypeFilter = document.getElementById('prodFilterWorkType');
   var sf = statusFilter ? statusFilter.value : 'active';
   var pf = purposeFilter ? purposeFilter.value : 'all';
   var wf = workTypeFilter ? workTypeFilter.value : 'all';
+  console.log('[PROD DEBUG] Filters: status=' + sf + ', purpose=' + pf + ', workType=' + wf);
 
-  var jobs = Object.keys(productionJobs).map(function(k) {
+  var allJobs = Object.keys(productionJobs).map(function(k) {
     var j = productionJobs[k];
     j._key = k;
     return j;
-  }).filter(function(j) {
+  });
+  console.log('[PROD DEBUG] Total jobs before filter:', allJobs.length);
+
+  var jobs = allJobs.filter(function(j) {
     if (sf === 'active') return j.status === 'definition' || j.status === 'in-progress';
     if (sf !== 'all') return j.status === sf;
     return true;
@@ -5937,6 +5959,7 @@ function renderProductionJobs() {
     if (wf !== 'all') return j.workType === wf;
     return true;
   });
+  console.log('[PROD DEBUG] Jobs after filter:', jobs.length);
 
   // Sort: priority (high first), then deadline
   var priorityOrder = { high: 0, medium: 1, low: 2 };
