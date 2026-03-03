@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Shir Glassworks — Point of Sale</title>
+<link rel="icon" href="../images/favicon.svg" type="image/svg+xml">
+<style>
+:root {
+  --bg: #1a1a1a;
+  --card: #242424;
+  --border: #333;
+  --text: #e8e0d4;
+  --muted: #9a9089;
+  --gold: #c4944a;
+  --green: #4caf50;
+  --yellow: #ffc107;
+  --red: #f44336;
+  --blue: #42a5f5;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg); color: var(--text);
+  min-height: 100vh; min-height: -webkit-fill-available;
+  -webkit-user-select: none; user-select: none;
+  padding-top: var(--safe-top); padding-bottom: var(--safe-bottom);
+}
+
+/* Top bar */
+.top-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 16px; background: var(--card); border-bottom: 1px solid var(--border);
+}
+.top-bar h1 { font-size: 16px; font-weight: 600; }
+.top-bar .mode-badge { font-size: 11px; background: var(--gold); color: #000; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+
+/* Screens */
+.screen { display: none; height: calc(100vh - 50px - var(--safe-top) - var(--safe-bottom)); overflow-y: auto; }
+.screen.active { display: flex; flex-direction: column; }
+
+/* Camera screen */
+#cameraScreen { position: relative; background: #000; overflow: hidden; }
+#cameraScreen video { width: 100%; height: 100%; object-fit: cover; }
+.capture-btn {
+  position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+  width: 80px; height: 80px; border-radius: 50%; border: 4px solid #fff;
+  background: rgba(255,255,255,0.3); cursor: pointer; z-index: 10;
+  -webkit-tap-highlight-color: transparent;
+}
+.capture-btn:active { background: rgba(255,255,255,0.6); }
+.capture-btn.processing { opacity: 0.5; pointer-events: none; }
+.camera-denied {
+  display: none; position: absolute; inset: 0; background: var(--bg);
+  flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+  padding: 24px; text-align: center;
+}
+.camera-denied p { color: var(--muted); }
+.manual-btn {
+  position: absolute; bottom: 36px; right: 24px; z-index: 10;
+  background: var(--card); color: var(--text); border: 1px solid var(--border);
+  padding: 10px 16px; border-radius: 8px; font-size: 14px; cursor: pointer;
+}
+
+/* Result screen */
+#resultScreen { padding: 0; }
+.result-header { display: flex; gap: 12px; padding: 12px 16px; background: var(--card); border-bottom: 1px solid var(--border); }
+.result-thumb { width: 80px; height: 80px; border-radius: 8px; object-fit: cover; }
+.result-info { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+.result-name { font-size: 18px; font-weight: 600; }
+.result-confidence { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; margin-top: 4px; }
+.conf-high { color: var(--green); }
+.conf-med { color: var(--yellow); }
+.conf-low { color: var(--red); }
+
+/* Items list */
+.items-list { flex: 1; overflow-y: auto; padding: 12px 16px; }
+.sale-item {
+  display: flex; align-items: center; gap: 12px; padding: 12px;
+  background: var(--card); border-radius: 8px; margin-bottom: 8px; border: 1px solid var(--border);
+}
+.sale-item img { width: 50px; height: 50px; border-radius: 6px; object-fit: cover; }
+.sale-item-info { flex: 1; }
+.sale-item-name { font-weight: 600; font-size: 15px; }
+.sale-item-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.sale-item-qty { display: flex; align-items: center; gap: 8px; }
+.qty-btn { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border); background: var(--card); color: var(--text); font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.qty-val { font-size: 16px; font-weight: 600; min-width: 20px; text-align: center; }
+.remove-btn { color: var(--red); font-size: 20px; cursor: pointer; padding: 4px 8px; }
+
+/* Add more items button */
+.add-more-btn {
+  display: block; width: 100%; padding: 12px; margin-top: 4px;
+  background: transparent; border: 2px dashed var(--border); border-radius: 8px;
+  color: var(--muted); font-size: 14px; cursor: pointer; text-align: center;
+}
+.add-more-btn:active { background: var(--card); }
+
+/* Payment section */
+.payment-section { padding: 16px; border-top: 1px solid var(--border); background: var(--card); }
+.payment-row { display: flex; gap: 8px; margin-bottom: 12px; }
+.payment-type-btn {
+  flex: 1; padding: 14px; border-radius: 8px; border: 2px solid var(--border);
+  background: var(--card); color: var(--text); font-size: 16px; font-weight: 600;
+  cursor: pointer; text-align: center;
+}
+.payment-type-btn.selected { border-color: var(--gold); background: rgba(196,148,74,0.15); }
+.amount-input {
+  width: 100%; padding: 14px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text); font-size: 24px; font-weight: 600;
+  text-align: center; margin-bottom: 12px;
+}
+.amount-input::placeholder { color: var(--muted); }
+.save-sale-btn {
+  width: 100%; padding: 16px; border-radius: 8px; border: none;
+  background: var(--green); color: #fff; font-size: 18px; font-weight: 700;
+  cursor: pointer;
+}
+.save-sale-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.save-sale-btn:active:not(:disabled) { opacity: 0.8; }
+
+/* Product picker */
+#pickerScreen { padding: 0; }
+.picker-search { padding: 12px 16px; background: var(--card); border-bottom: 1px solid var(--border); }
+.picker-search input {
+  width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text); font-size: 15px;
+}
+.picker-grid { flex: 1; overflow-y: auto; padding: 12px; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; align-content: start; }
+.picker-card {
+  background: var(--card); border-radius: 8px; border: 1px solid var(--border);
+  overflow: hidden; cursor: pointer;
+}
+.picker-card:active { border-color: var(--gold); }
+.picker-card img { width: 100%; aspect-ratio: 1; object-fit: cover; }
+.picker-card-info { padding: 8px; }
+.picker-card-name { font-size: 13px; font-weight: 600; }
+.picker-card-price { font-size: 12px; color: var(--gold); margin-top: 2px; }
+
+/* Success screen */
+#successScreen { align-items: center; justify-content: center; padding: 40px; text-align: center; gap: 16px; }
+#successScreen .checkmark { font-size: 72px; }
+#successScreen h2 { font-size: 24px; }
+#successScreen p { color: var(--muted); font-size: 16px; }
+.new-sale-btn {
+  margin-top: 16px; padding: 16px 40px; border-radius: 8px; border: none;
+  background: var(--gold); color: #000; font-size: 18px; font-weight: 700; cursor: pointer;
+}
+
+/* Toast */
+.toast {
+  position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+  background: var(--card); color: var(--text); padding: 10px 20px; border-radius: 8px;
+  font-size: 14px; z-index: 100; border: 1px solid var(--border);
+  opacity: 0; transition: opacity 0.3s;
+}
+.toast.show { opacity: 1; }
+.toast.error { border-color: var(--red); }
+
+/* Loading overlay */
+.loading-overlay {
+  display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+  align-items: center; justify-content: center; flex-direction: column; gap: 12px;
+  z-index: 50;
+}
+.loading-overlay.show { display: flex; }
+.loading-overlay .spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--gold); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-overlay p { color: var(--text); font-size: 14px; }
+
+/* Auth screen */
+#authScreen { align-items: center; justify-content: center; padding: 40px; text-align: center; gap: 16px; }
+#authScreen h2 { font-size: 20px; }
+#authScreen p { color: var(--muted); }
+.sign-in-btn {
+  padding: 14px 32px; border-radius: 8px; border: none;
+  background: var(--gold); color: #000; font-size: 16px; font-weight: 600; cursor: pointer;
+}
+</style>
+</head>
+<body>
+
+<!-- Top Bar -->
+<div class="top-bar">
+  <h1>Shir Glassworks</h1>
+  <span class="mode-badge">POS</span>
+</div>
+
+<!-- Auth Screen -->
+<div id="authScreen" class="screen">
+  <h2>Sign In Required</h2>
+  <p>You need to sign in to use the Point of Sale.</p>
+  <button class="sign-in-btn" onclick="signIn()">Sign In with Google</button>
+</div>
+
+<!-- Camera Screen -->
+<div id="cameraScreen" class="screen">
+  <video id="cameraVideo" autoplay playsinline muted></video>
+  <button class="capture-btn" id="captureBtn" onclick="capturePhoto()"></button>
+  <button class="manual-btn" onclick="openPicker()">Pick Manually</button>
+  <div class="camera-denied" id="cameraDenied">
+    <p>Camera access is needed to identify products.<br>Please allow camera access in your browser settings.</p>
+    <button class="manual-btn" style="position:static" onclick="openPicker()">Pick Manually Instead</button>
+  </div>
+</div>
+
+<!-- Result / Cart Screen -->
+<div id="resultScreen" class="screen">
+  <div class="result-header" id="resultHeader"></div>
+  <div class="items-list" id="itemsList"></div>
+  <button class="add-more-btn" onclick="addMoreItems()">+ Add Another Item</button>
+  <div class="payment-section">
+    <div class="payment-row">
+      <button class="payment-type-btn selected" id="cashBtn" onclick="selectPayment('cash')">Cash</button>
+      <button class="payment-type-btn" id="squareBtn" onclick="selectPayment('square')">Square</button>
+    </div>
+    <input type="text" class="amount-input" id="amountInput" placeholder="$0.00" inputmode="decimal" onfocus="this.select()">
+    <div style="display:flex;gap:8px;margin-bottom:12px;" id="notesRow">
+      <input type="text" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;" id="saleNotes" placeholder="Notes (optional)">
+    </div>
+    <button class="save-sale-btn" id="saveSaleBtn" onclick="saveSale()">Complete Sale</button>
+  </div>
+</div>
+
+<!-- Product Picker Screen -->
+<div id="pickerScreen" class="screen">
+  <div class="picker-search">
+    <input type="text" id="pickerSearchInput" placeholder="Search products..." oninput="filterPicker(this.value)">
+  </div>
+  <div class="picker-grid" id="pickerGrid"></div>
+  <div style="padding:12px 16px;background:var(--card);border-top:1px solid var(--border);">
+    <button style="width:100%;padding:12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:15px;cursor:pointer;" onclick="closePicker()">Cancel</button>
+  </div>
+</div>
+
+<!-- Success Screen -->
+<div id="successScreen" class="screen">
+  <div class="checkmark">&#10003;</div>
+  <h2>Sale Recorded!</h2>
+  <p id="successSummary"></p>
+  <button class="new-sale-btn" onclick="newSale()">New Sale</button>
+</div>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <p id="loadingText">Identifying product...</p>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Firebase + Camera -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="../shared/camera.js"></script>
+<script>
+// ============================================================
+// Firebase Init
+// ============================================================
+var firebaseApp = firebase.initializeApp({
+  apiKey: "AIzaSyBQVwn8vOrFTzLlm2MYIPBwgZV2xR9AuhM",
+  authDomain: "word-boxing.firebaseapp.com",
+  databaseURL: "https://word-boxing-default-rtdb.firebaseio.com",
+  projectId: "word-boxing",
+  storageBucket: "word-boxing.firebasestorage.app"
+}, 'pos-app');
+var db = firebaseApp.database();
+var auth = firebaseApp.auth();
+
+var CLASSIFY_URL = 'https://us-central1-word-boxing.cloudfunctions.net/shirClassifyImage';
+var UPLOAD_URL = 'https://us-central1-word-boxing.cloudfunctions.net/shirUploadImage';
+var PRODUCTS_PATH = 'shirglassworks/public/products';
+var SALES_PATH = 'shirglassworks/admin/sales';
+
+// ============================================================
+// State
+// ============================================================
+var products = {};
+var productsList = [];
+var camera = null;
+var currentUser = null;
+var authToken = null;
+var saleItems = [];       // [{ productId, productName, quantity, confidence, price }]
+var capturedImageBase64 = null;
+var capturedPreviewUrl = null;
+var paymentType = 'cash';
+
+// ============================================================
+// Auth
+// ============================================================
+auth.onAuthStateChanged(function(user) {
+  if (user) {
+    currentUser = user;
+    user.getIdToken().then(function(token) {
+      authToken = token;
+      loadProducts();
+      showScreen('cameraScreen');
+      initCamera();
+    });
+  } else {
+    currentUser = null;
+    authToken = null;
+    showScreen('authScreen');
+  }
+});
+
+function signIn() {
+  var provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider).catch(function(err) {
+    showToast('Sign in failed: ' + err.message, true);
+  });
+}
+
+// ============================================================
+// Products
+// ============================================================
+function loadProducts() {
+  db.ref(PRODUCTS_PATH).once('value').then(function(snap) {
+    products = snap.val() || {};
+    productsList = Object.values(products)
+      .filter(function(p) { return !p.availability || p.availability === 'available'; })
+      .sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
+    renderPicker();
+  });
+}
+
+// ============================================================
+// Camera
+// ============================================================
+function initCamera() {
+  var video = document.getElementById('cameraVideo');
+  camera = new ShirCamera({
+    videoElement: video,
+    onCapture: handleCapture,
+    onError: function(err) {
+      if (err.type === 'permission') {
+        document.getElementById('cameraDenied').style.display = 'flex';
+      } else {
+        showToast('Camera error: ' + err.message, true);
+      }
+    },
+    onReady: function() {}
+  });
+  camera.start();
+}
+
+function capturePhoto() {
+  if (!camera || !camera.isActive()) return;
+  var btn = document.getElementById('captureBtn');
+  btn.classList.add('processing');
+  camera.capture().then(function() {
+    btn.classList.remove('processing');
+  }).catch(function() {
+    btn.classList.remove('processing');
+  });
+}
+
+function handleCapture(result) {
+  capturedImageBase64 = result.base64;
+  capturedPreviewUrl = result.previewUrl;
+  camera.stop();
+
+  // Show loading, call classify
+  showLoading('Identifying product...');
+
+  fetch(CLASSIFY_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
+    body: JSON.stringify({ image: result.base64, context: 'pos' })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    hideLoading();
+    if (data.error) { showToast('Classification failed', true); showResultScreen([]); return; }
+
+    // Multi-item response
+    var items = data.items || [{ productId: data.productId, product: data.product, confidence: data.confidence, color: data.color, quantity: 1 }];
+
+    saleItems = items.map(function(item) {
+      var prod = item.productId ? products[item.productId] : null;
+      return {
+        productId: item.productId || null,
+        productName: item.product || (prod ? prod.name : 'Unknown'),
+        quantity: item.quantity || 1,
+        confidence: item.confidence || 0,
+        price: prod ? prod.price : '',
+        priceCents: prod ? (prod.priceCents || 0) : 0,
+        imageUrl: prod && prod.images && prod.images.length > 0 ? prod.images[0] : ''
+      };
+    }).filter(function(item) { return item.productId; });
+
+    showResultScreen(saleItems);
+  })
+  .catch(function(err) {
+    hideLoading();
+    showToast('Error: ' + err.message, true);
+    showResultScreen([]);
+  });
+}
+
+// ============================================================
+// Result / Cart Screen
+// ============================================================
+function showResultScreen(items) {
+  if (items.length === 0) {
+    // No match — go to picker
+    showToast('Could not identify product — please pick manually');
+    openPicker();
+    return;
+  }
+  renderItems();
+  autoFillAmount();
+  showScreen('resultScreen');
+}
+
+function renderItems() {
+  var html = '';
+  saleItems.forEach(function(item, idx) {
+    var confClass = item.confidence >= 90 ? 'conf-high' : item.confidence >= 70 ? 'conf-med' : 'conf-low';
+    var confIcon = item.confidence >= 90 ? '&#10003;' : item.confidence >= 70 ? '?' : '!';
+    html += '<div class="sale-item">' +
+      (item.imageUrl ? '<img src="' + item.imageUrl + '" alt="">' : '<div style="width:50px;height:50px;background:var(--border);border-radius:6px;"></div>') +
+      '<div class="sale-item-info">' +
+        '<div class="sale-item-name">' + item.productName + '</div>' +
+        '<div class="sale-item-meta">' +
+          (item.price ? item.price + ' &bull; ' : '') +
+          '<span class="' + confClass + '">' + confIcon + ' ' + item.confidence + '%</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="sale-item-qty">' +
+        '<button class="qty-btn" onclick="adjustQty(' + idx + ',-1)">-</button>' +
+        '<span class="qty-val">' + item.quantity + '</span>' +
+        '<button class="qty-btn" onclick="adjustQty(' + idx + ',1)">+</button>' +
+      '</div>' +
+      '<span class="remove-btn" onclick="removeItem(' + idx + ')">&times;</span>' +
+    '</div>';
+  });
+  document.getElementById('itemsList').innerHTML = html;
+
+  // Update result header with captured photo
+  document.getElementById('resultHeader').innerHTML =
+    (capturedPreviewUrl ? '<img class="result-thumb" src="' + capturedPreviewUrl + '">' : '') +
+    '<div class="result-info">' +
+      '<div class="result-name">' + saleItems.length + ' item' + (saleItems.length !== 1 ? 's' : '') + '</div>' +
+      '<div style="font-size:13px;color:var(--muted)">Confirm items and complete sale</div>' +
+    '</div>';
+}
+
+function adjustQty(idx, delta) {
+  saleItems[idx].quantity = Math.max(1, saleItems[idx].quantity + delta);
+  renderItems();
+  autoFillAmount();
+}
+
+function removeItem(idx) {
+  saleItems.splice(idx, 1);
+  if (saleItems.length === 0) { newSale(); return; }
+  renderItems();
+  autoFillAmount();
+}
+
+function autoFillAmount() {
+  var total = 0;
+  saleItems.forEach(function(item) {
+    total += (item.priceCents || 0) * item.quantity;
+  });
+  if (total > 0) {
+    document.getElementById('amountInput').value = '$' + (total / 100).toFixed(2);
+  } else {
+    document.getElementById('amountInput').value = '';
+  }
+}
+
+function addMoreItems() {
+  openPicker();
+}
+
+// ============================================================
+// Payment
+// ============================================================
+function selectPayment(type) {
+  paymentType = type;
+  document.getElementById('cashBtn').classList.toggle('selected', type === 'cash');
+  document.getElementById('squareBtn').classList.toggle('selected', type === 'square');
+}
+
+// ============================================================
+// Save Sale
+// ============================================================
+function saveSale() {
+  if (saleItems.length === 0) { showToast('No items in sale', true); return; }
+
+  var amountStr = document.getElementById('amountInput').value.replace(/[^0-9.]/g, '');
+  var amountCents = Math.round(parseFloat(amountStr) * 100);
+  if (isNaN(amountCents) || amountCents <= 0) { showToast('Enter a valid amount', true); return; }
+
+  var btn = document.getElementById('saveSaleBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  var saleId = db.ref(SALES_PATH).push().key;
+  var now = new Date().toISOString();
+
+  var saleRecord = {
+    saleId: saleId,
+    timestamp: now,
+    createdAt: now,
+    paymentType: paymentType,
+    amount: amountCents,
+    items: saleItems.map(function(item) {
+      return { productId: item.productId, productName: item.productName, quantity: item.quantity, confidence: item.confidence };
+    }),
+    imageId: null,
+    receiptSent: false,
+    customerContact: null,
+    squarePaymentId: null,
+    eventId: null,
+    status: 'captured',
+    notes: document.getElementById('saleNotes').value || null,
+    recordedBy: currentUser ? currentUser.uid : null
+  };
+
+  // Save image to library if we have one, then save sale
+  var savePromise;
+  if (capturedImageBase64 && authToken) {
+    savePromise = fetch(UPLOAD_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
+      body: JSON.stringify({ image: capturedImageBase64, tags: ['pos', 'sale'], source: 'pos' })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.imageId) saleRecord.imageId = data.imageId;
+    })
+    .catch(function() { /* Image save failed — continue without */ });
+  } else {
+    savePromise = Promise.resolve();
+  }
+
+  savePromise.then(function() {
+    // Save sale record
+    return db.ref(SALES_PATH + '/' + saleId).set(saleRecord);
+  }).then(function() {
+    // Decrement inventory for each item
+    var updates = {};
+    saleItems.forEach(function(item) {
+      if (item.productId) {
+        // Read current stock and decrement
+        updates[item.productId] = item.quantity;
+      }
+    });
+    return decrementInventory(updates);
+  }).then(function() {
+    btn.disabled = false;
+    btn.textContent = 'Complete Sale';
+    var totalStr = '$' + (amountCents / 100).toFixed(2);
+    var itemNames = saleItems.map(function(i) { return i.productName; }).join(', ');
+    document.getElementById('successSummary').textContent = totalStr + ' ' + paymentType + ' — ' + itemNames;
+    showScreen('successScreen');
+  }).catch(function(err) {
+    btn.disabled = false;
+    btn.textContent = 'Complete Sale';
+    showToast('Error saving sale: ' + err.message, true);
+  });
+}
+
+function decrementInventory(productQtys) {
+  var promises = [];
+  Object.keys(productQtys).forEach(function(pid) {
+    var qty = productQtys[pid];
+    var stockRef = db.ref('shirglassworks/admin/inventory/' + pid + '/stock');
+    promises.push(
+      stockRef.once('value').then(function(snap) {
+        var current = snap.val();
+        if (current !== null && typeof current === 'number') {
+          return stockRef.set(Math.max(0, current - qty));
+        }
+        // Variant-based or no stock tracking — skip
+      })
+    );
+  });
+  return Promise.all(promises);
+}
+
+// ============================================================
+// Product Picker
+// ============================================================
+function openPicker() {
+  renderPicker();
+  showScreen('pickerScreen');
+  document.getElementById('pickerSearchInput').value = '';
+  document.getElementById('pickerSearchInput').focus();
+}
+
+function closePicker() {
+  if (saleItems.length > 0) {
+    showScreen('resultScreen');
+  } else {
+    showScreen('cameraScreen');
+    if (camera && !camera.isActive()) camera.start();
+  }
+}
+
+function renderPicker(filter) {
+  var filtered = filter
+    ? productsList.filter(function(p) { return (p.name || '').toLowerCase().indexOf(filter.toLowerCase()) !== -1; })
+    : productsList;
+
+  var html = '';
+  filtered.forEach(function(p) {
+    var img = p.images && p.images.length > 0 ? p.images[0] : '';
+    html += '<div class="picker-card" onclick="pickProduct(\'' + p.pid + '\')">' +
+      (img ? '<img src="' + img + '" alt="" loading="lazy">' : '<div style="width:100%;aspect-ratio:1;background:var(--border);"></div>') +
+      '<div class="picker-card-info">' +
+        '<div class="picker-card-name">' + (p.name || '') + '</div>' +
+        '<div class="picker-card-price">' + (p.price || '') + '</div>' +
+      '</div>' +
+    '</div>';
+  });
+  document.getElementById('pickerGrid').innerHTML = html;
+}
+
+function filterPicker(val) { renderPicker(val); }
+
+function pickProduct(pid) {
+  var prod = products[pid];
+  if (!prod) return;
+
+  // Check if already in sale items
+  var existing = saleItems.findIndex(function(i) { return i.productId === pid; });
+  if (existing >= 0) {
+    saleItems[existing].quantity++;
+  } else {
+    saleItems.push({
+      productId: pid,
+      productName: prod.name,
+      quantity: 1,
+      confidence: 100, // manual pick
+      price: prod.price || '',
+      priceCents: prod.priceCents || 0,
+      imageUrl: prod.images && prod.images.length > 0 ? prod.images[0] : ''
+    });
+  }
+
+  renderItems();
+  autoFillAmount();
+  showScreen('resultScreen');
+}
+
+// ============================================================
+// New Sale (reset)
+// ============================================================
+function newSale() {
+  saleItems = [];
+  capturedImageBase64 = null;
+  capturedPreviewUrl = null;
+  paymentType = 'cash';
+  document.getElementById('amountInput').value = '';
+  document.getElementById('saleNotes').value = '';
+  document.getElementById('cashBtn').classList.add('selected');
+  document.getElementById('squareBtn').classList.remove('selected');
+  showScreen('cameraScreen');
+  if (camera && !camera.isActive()) camera.start();
+}
+
+// ============================================================
+// Screen Management
+// ============================================================
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(function(s) { s.classList.remove('active'); });
+  document.getElementById(id).classList.add('active');
+}
+
+function showLoading(text) {
+  document.getElementById('loadingText').textContent = text || 'Loading...';
+  document.getElementById('loadingOverlay').classList.add('show');
+}
+function hideLoading() {
+  document.getElementById('loadingOverlay').classList.remove('show');
+}
+
+function showToast(msg, isError) {
+  var el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.toggle('error', !!isError);
+  el.classList.add('show');
+  setTimeout(function() { el.classList.remove('show'); }, 3000);
+}
+</script>
+</body>
+</html>
