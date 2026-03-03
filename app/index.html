@@ -354,19 +354,54 @@
       opacity: 0.4;
     }
 
+    /* ========== GALLERY SECTION GROUPS ========== */
+    .section-group-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 28px 0 14px 0;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--cream-dark);
+    }
+
+    .section-group-header:first-child {
+      margin-top: 8px;
+    }
+
+    .section-group-header h3 {
+      font-size: 0.82rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--warm-gray);
+      margin: 0;
+    }
+
+    .section-group-header .group-line {
+      flex: 1;
+      height: 1px;
+      background: var(--cream-dark);
+    }
+
     /* ========== GALLERY GRID ========== */
     .section-panel {
-      margin-bottom: 20px;
+      margin-bottom: 16px;
       border: 1px solid #e0dcd6;
       border-radius: 8px;
       overflow: hidden;
+      border-left: 3px solid var(--teal);
+    }
+
+    .section-panel.empty-section {
+      border-left-color: #ccc;
+      opacity: 0.7;
     }
 
     .section-panel-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 12px 16px;
+      padding: 14px 16px;
       background: var(--cream);
       cursor: pointer;
       user-select: none;
@@ -380,25 +415,36 @@
       display: flex;
       align-items: center;
       gap: 10px;
+      flex-wrap: wrap;
     }
 
     .section-panel-title h3 {
-      font-size: 1.1rem;
-      font-weight: 600;
+      font-size: 1.15rem;
+      font-weight: 700;
       margin: 0;
     }
 
     .section-panel-count {
-      font-size: 0.78rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--teal);
+      background: rgba(42, 124, 111, 0.1);
+      padding: 2px 10px;
+      border-radius: 10px;
+      min-width: 20px;
+      text-align: center;
+    }
+
+    .section-panel.empty-section .section-panel-count {
       color: var(--warm-gray-light);
       background: var(--cream-dark);
-      padding: 2px 8px;
-      border-radius: 10px;
     }
 
     .section-panel-desc {
-      font-size: 0.8rem;
+      font-size: 0.78rem;
       color: var(--warm-gray-light);
+      width: 100%;
+      margin-top: 2px;
     }
 
     .section-panel-actions {
@@ -420,6 +466,7 @@
     .section-panel-body {
       padding: 12px 16px;
       background: var(--cream);
+      border-top: 1px solid var(--cream-dark);
     }
 
     .section-panel.collapsed .section-panel-body {
@@ -892,9 +939,22 @@
       background: #2a2a2a;
       border-color: #3a3a3a;
     }
+    body.dark-mode .section-group-header {
+      border-bottom-color: #3a3a3a;
+    }
+    body.dark-mode .section-group-header h3 { color: #888; }
+    body.dark-mode .section-group-header .group-line { background: #3a3a3a; }
     body.dark-mode .section-panel {
       background: #222;
       border-color: #3a3a3a;
+    }
+    body.dark-mode .section-panel-count {
+      color: #6fc;
+      background: rgba(42, 124, 111, 0.2);
+    }
+    body.dark-mode .section-panel.empty-section .section-panel-count {
+      color: #666;
+      background: #333;
     }
     body.dark-mode .section-panel-header {
       background: #2a2a2a;
@@ -2476,8 +2536,8 @@ const SECTIONS = [
   { id: 'hero', label: 'Hero', description: 'Homepage banner video & poster image' },
   { id: 'about', label: 'About', description: 'About page images' },
   { id: 'gallery', label: 'Gallery', description: 'Homepage gallery grid' },
-  { id: 'shop', label: 'Shop', description: 'Shop page featured images' },
   { id: 'schedule', label: 'Schedule', description: 'Schedule page images' },
+  { id: 'shop', label: 'Shop', description: 'Shop page featured images' },
   { id: 'figurines', label: 'Figurines', description: 'Glass figurines' },
   { id: 'jewelry', label: 'Jewelry', description: 'Glass jewelry & pendants' },
   { id: 'drinkware', label: 'Drinkware', description: 'Handblown glass cups' },
@@ -4132,12 +4192,22 @@ function renderGallery() {
   });
 
   var html = '';
+  var lastGroup = '';
   SECTIONS.forEach(function(sec) {
     var items = grouped[sec.id] || [];
     var isCollapsed = container.querySelector('[data-section="' + sec.id + '"]');
     var collapsed = isCollapsed && isCollapsed.classList.contains('collapsed');
+    var isShop = SHOP_SECTION_IDS.indexOf(sec.id) !== -1;
+    var group = isShop ? 'Product Categories' : 'Site Pages';
 
-    html += '<div class="section-panel' + (collapsed ? ' collapsed' : '') + '" data-section="' + sec.id + '">' +
+    // Insert group header when switching between groups
+    if (group !== lastGroup) {
+      html += '<div class="section-group-header"><h3>' + group + '</h3><span class="group-line"></span></div>';
+      lastGroup = group;
+    }
+
+    var emptyClass = items.length === 0 ? ' empty-section' : '';
+    html += '<div class="section-panel' + emptyClass + (collapsed ? ' collapsed' : '') + '" data-section="' + sec.id + '">' +
       '<div class="section-panel-header" onclick="toggleSectionPanel(\'' + sec.id + '\')">' +
         '<div class="section-panel-title">' +
           '<h3>' + sec.label + '</h3>' +
