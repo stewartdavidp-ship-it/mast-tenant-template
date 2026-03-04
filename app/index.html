@@ -5888,6 +5888,9 @@ function openImageModal(imageId, defaultSection) {
   var showCategory = (section === 'gallery' || section === 'shop');
   var showVideoUrl = (section === 'hero');
   var showProductFields = isShopSection;
+  // Look up video duration from library
+  var libItem = (img.libraryImageId && imageLibrary[img.libraryImageId]) ? imageLibrary[img.libraryImageId] : {};
+  var videoDuration = libItem.duration || 0;
 
   var html = '' +
     '<div class="modal-header">' +
@@ -5958,14 +5961,15 @@ function openImageModal(imageId, defaultSection) {
         '</select>' +
       '</div>' +
       '<div id="imgVideoTimingGroup"' + (!showVideoUrl ? ' style="display:none;"' : '') + '>' +
+        (videoDuration ? '<div style="background:var(--charcoal);border-radius:6px;padding:8px 12px;margin-bottom:12px;display:flex;align-items:center;gap:8px;"><span style="font-size:1.1rem;">&#9202;</span><span style="color:var(--warm-gray-light);font-size:0.85rem;">Video duration: <strong style="color:var(--amber-light);">' + videoDuration.toFixed(1) + 's</strong></span></div>' : '') +
         '<div style="display:flex;gap:12px;">' +
           '<div class="form-group" style="flex:1;">' +
             '<label for="imgVideoStart">Start Time (seconds)</label>' +
-            '<input type="number" id="imgVideoStart" value="' + (img.videoStart || 0) + '" min="0" step="0.5" placeholder="0">' +
+            '<input type="number" id="imgVideoStart" value="' + (img.videoStart || 0) + '" min="0" step="0.5" placeholder="0"' + (videoDuration ? ' max="' + videoDuration + '"' : '') + '>' +
           '</div>' +
           '<div class="form-group" style="flex:1;">' +
             '<label for="imgVideoEnd">End Time (seconds)</label>' +
-            '<input type="number" id="imgVideoEnd" value="' + (img.videoEnd || '') + '" min="0" step="0.5" placeholder="End of video">' +
+            '<input type="number" id="imgVideoEnd" value="' + (img.videoEnd || '') + '" min="0" step="0.5" placeholder="End of video"' + (videoDuration ? ' max="' + videoDuration + '"' : '') + '>' +
           '</div>' +
         '</div>' +
         '<p style="font-size:0.8rem;color:var(--warm-gray);margin-top:-8px;margin-bottom:12px;">Leave end time empty to play to end of video</p>' +
@@ -6841,7 +6845,8 @@ function openGalleryMetadataModal(sectionId, imageUrl, libraryImageId, libImg) {
       '</div>' : '') +
       (showVideoUrl ? '<div class="form-group"><label for="galVideoUrl">Video URL' + (isVideo ? ' (auto-filled from library)' : '') + '</label><input type="text" id="galVideoUrl" value="' + esc(videoUrlDefault) + '" placeholder="https://...video.mp4"></div>' +
         '<div class="form-group"><label for="galPlaybackSpeed">Playback Speed</label><select id="galPlaybackSpeed"><option value="0.25">0.25x (very slow)</option><option value="0.5">0.5x (slow)</option><option value="0.75">0.75x</option><option value="1" selected>1x (normal)</option><option value="1.25">1.25x</option><option value="1.5">1.5x</option><option value="2">2x (fast)</option></select></div>' +
-        '<div style="display:flex;gap:12px;"><div class="form-group" style="flex:1;"><label for="galVideoStart">Start Time (sec)</label><input type="number" id="galVideoStart" value="0" min="0" step="0.5" placeholder="0"></div><div class="form-group" style="flex:1;"><label for="galVideoEnd">End Time (sec)</label><input type="number" id="galVideoEnd" min="0" step="0.5" placeholder="End of video"></div></div>' +
+        (isVideo && libImg.duration ? '<div style="background:var(--charcoal);border-radius:6px;padding:8px 12px;margin-bottom:12px;display:flex;align-items:center;gap:8px;"><span style="font-size:1.1rem;">&#9202;</span><span style="color:var(--warm-gray-light);font-size:0.85rem;">Video duration: <strong style="color:var(--amber-light);">' + libImg.duration.toFixed(1) + 's</strong></span></div>' : '') +
+        '<div style="display:flex;gap:12px;"><div class="form-group" style="flex:1;"><label for="galVideoStart">Start Time (sec)</label><input type="number" id="galVideoStart" value="0" min="0" step="0.5" placeholder="0"' + (libImg.duration ? ' max="' + libImg.duration + '"' : '') + '></div><div class="form-group" style="flex:1;"><label for="galVideoEnd">End Time (sec)</label><input type="number" id="galVideoEnd" min="0" step="0.5" placeholder="End of video"' + (libImg.duration ? ' max="' + libImg.duration + '"' : '') + '></div></div>' +
         '<p style="font-size:0.8rem;color:var(--warm-gray);margin-top:-8px;margin-bottom:12px;">Leave end time empty to play to end of video</p>' : '') +
       (showCategory ? '<div class="form-group"><label for="galCategory">Category</label><select id="galCategory">' + categoryOptions + '</select></div>' : '') +
       (isShopSection ? '<div class="form-group"><label for="galProductName">Product Name</label><input type="text" id="galProductName"></div>' +
