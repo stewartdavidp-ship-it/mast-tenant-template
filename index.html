@@ -1501,31 +1501,68 @@
     var video = document.getElementById('heroVideo');
     var poster = document.getElementById('heroPoster');
     if (video && heroItems.length > 0) {
-      var heroPlaylist = heroItems.map(function(h) { return { url: h.videoUrl, speed: h.playbackSpeed || 1 }; });
+      var heroPlaylist = heroItems.map(function(h) {
+        return { url: h.videoUrl, speed: h.playbackSpeed || 1, start: h.videoStart || 0, end: h.videoEnd || 0 };
+      });
       var heroIndex = 0;
+      var endCheckTimer = null;
+
+      function loadHeroVideo(idx) {
+        var item = heroPlaylist[idx];
+        video.src = item.url;
+        if (heroItems[idx] && heroItems[idx].url) video.poster = heroItems[idx].url;
+        video.load();
+        video.addEventListener('loadedmetadata', function onMeta() {
+          video.removeEventListener('loadedmetadata', onMeta);
+          if (item.start > 0) video.currentTime = item.start;
+        });
+        video.play().catch(function() {});
+        // If end time is set, check periodically and advance when reached
+        if (endCheckTimer) clearInterval(endCheckTimer);
+        if (item.end > 0) {
+          endCheckTimer = setInterval(function() {
+            if (video.currentTime >= item.end) {
+              clearInterval(endCheckTimer);
+              endCheckTimer = null;
+              advanceHero();
+            }
+          }, 250);
+        }
+      }
+
+      function advanceHero() {
+        if (heroPlaylist.length > 1) {
+          heroIndex = (heroIndex + 1) % heroPlaylist.length;
+          loadHeroVideo(heroIndex);
+        } else {
+          // Single video: loop back to start
+          var item = heroPlaylist[0];
+          video.currentTime = item.start || 0;
+          video.play().catch(function() {});
+          if (item.end > 0) {
+            endCheckTimer = setInterval(function() {
+              if (video.currentTime >= item.end) {
+                clearInterval(endCheckTimer);
+                advanceHero();
+              }
+            }, 250);
+          }
+        }
+      }
+
       // Apply playback speed after video loads (load() resets playbackRate)
       video.addEventListener('playing', function() {
         if (video.playbackRate !== heroPlaylist[heroIndex].speed) {
           video.playbackRate = heroPlaylist[heroIndex].speed;
         }
       });
-      // Disable loop before loading so 'ended' event fires for playlist cycling
-      if (heroPlaylist.length > 1) {
-        video.loop = false;
-        video.removeAttribute('loop');
-      }
-      video.src = heroPlaylist[0].url;
-      if (heroItems[0].url) video.poster = heroItems[0].url;
-      video.load();
-      video.play().catch(function() {});
-      if (heroPlaylist.length > 1) {
-        video.addEventListener('ended', function() {
-          heroIndex = (heroIndex + 1) % heroPlaylist.length;
-          video.src = heroPlaylist[heroIndex].url;
-          video.load();
-          video.play().catch(function() {});
-        });
-      }
+      // When video ends naturally, advance to next
+      video.addEventListener('ended', function() { advanceHero(); });
+      // Disable loop so 'ended' event fires
+      video.loop = false;
+      video.removeAttribute('loop');
+      // Load first video
+      loadHeroVideo(0);
       if (poster && heroItems[0].url) {
         poster.style.backgroundImage = "url('" + heroItems[0].url + "')";
       }

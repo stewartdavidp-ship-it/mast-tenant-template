@@ -5957,6 +5957,19 @@ function openImageModal(imageId, defaultSection) {
           '<option value="2"' + (img.playbackSpeed == 2 ? ' selected' : '') + '>2x (fast)</option>' +
         '</select>' +
       '</div>' +
+      '<div id="imgVideoTimingGroup"' + (!showVideoUrl ? ' style="display:none;"' : '') + '>' +
+        '<div style="display:flex;gap:12px;">' +
+          '<div class="form-group" style="flex:1;">' +
+            '<label for="imgVideoStart">Start Time (seconds)</label>' +
+            '<input type="number" id="imgVideoStart" value="' + (img.videoStart || 0) + '" min="0" step="0.5" placeholder="0">' +
+          '</div>' +
+          '<div class="form-group" style="flex:1;">' +
+            '<label for="imgVideoEnd">End Time (seconds)</label>' +
+            '<input type="number" id="imgVideoEnd" value="' + (img.videoEnd || '') + '" min="0" step="0.5" placeholder="End of video">' +
+          '</div>' +
+        '</div>' +
+        '<p style="font-size:0.8rem;color:var(--warm-gray);margin-top:-8px;margin-bottom:12px;">Leave end time empty to play to end of video</p>' +
+      '</div>' +
       '<div class="form-group">' +
         '<label for="imgAlt">Alt Text *</label>' +
         '<input type="text" id="imgAlt" value="' + esc(img.alt || '') + '" placeholder="Describe the image">' +
@@ -6037,8 +6050,10 @@ function onSectionChange() {
   var productFields = document.getElementById('imgProductFields');
   var isShopSec = SHOP_SECTION_IDS.indexOf(sec) !== -1;
   var speedGroup = document.getElementById('imgPlaybackSpeedGroup');
+  var timingGroup = document.getElementById('imgVideoTimingGroup');
   videoGroup.style.display = sec === 'hero' ? '' : 'none';
   if (speedGroup) speedGroup.style.display = sec === 'hero' ? '' : 'none';
+  if (timingGroup) timingGroup.style.display = sec === 'hero' ? '' : 'none';
   categoryGroup.style.display = (sec === 'gallery' || sec === 'shop') ? '' : 'none';
   productFields.style.display = isShopSec ? '' : 'none';
 }
@@ -6204,13 +6219,17 @@ async function saveImage(imageId) {
     updatedAt: firebase.database.ServerValue.TIMESTAMP
   };
 
-  // Hero: video URL + playback speed
+  // Hero: video URL + playback speed + timing
   if (section === 'hero') {
     var videoUrl = document.getElementById('imgVideoUrl').value.trim();
     if (videoUrl) data.videoUrl = videoUrl;
     var speed = parseFloat(((document.getElementById('imgPlaybackSpeed') || {}).value || '1'));
     if (speed && speed !== 1) data.playbackSpeed = speed;
     else data.playbackSpeed = null;
+    var videoStart = parseFloat(((document.getElementById('imgVideoStart') || {}).value || '0'));
+    var videoEnd = parseFloat(((document.getElementById('imgVideoEnd') || {}).value || ''));
+    data.videoStart = videoStart > 0 ? videoStart : null;
+    data.videoEnd = videoEnd > 0 ? videoEnd : null;
   }
 
   // Shop sections: product fields
@@ -6821,7 +6840,9 @@ function openGalleryMetadataModal(sectionId, imageUrl, libraryImageId, libImg) {
         '<input type="text" id="galCaption">' +
       '</div>' : '') +
       (showVideoUrl ? '<div class="form-group"><label for="galVideoUrl">Video URL' + (isVideo ? ' (auto-filled from library)' : '') + '</label><input type="text" id="galVideoUrl" value="' + esc(videoUrlDefault) + '" placeholder="https://...video.mp4"></div>' +
-        '<div class="form-group"><label for="galPlaybackSpeed">Playback Speed</label><select id="galPlaybackSpeed"><option value="0.25">0.25x (very slow)</option><option value="0.5">0.5x (slow)</option><option value="0.75">0.75x</option><option value="1" selected>1x (normal)</option><option value="1.25">1.25x</option><option value="1.5">1.5x</option><option value="2">2x (fast)</option></select></div>' : '') +
+        '<div class="form-group"><label for="galPlaybackSpeed">Playback Speed</label><select id="galPlaybackSpeed"><option value="0.25">0.25x (very slow)</option><option value="0.5">0.5x (slow)</option><option value="0.75">0.75x</option><option value="1" selected>1x (normal)</option><option value="1.25">1.25x</option><option value="1.5">1.5x</option><option value="2">2x (fast)</option></select></div>' +
+        '<div style="display:flex;gap:12px;"><div class="form-group" style="flex:1;"><label for="galVideoStart">Start Time (sec)</label><input type="number" id="galVideoStart" value="0" min="0" step="0.5" placeholder="0"></div><div class="form-group" style="flex:1;"><label for="galVideoEnd">End Time (sec)</label><input type="number" id="galVideoEnd" min="0" step="0.5" placeholder="End of video"></div></div>' +
+        '<p style="font-size:0.8rem;color:var(--warm-gray);margin-top:-8px;margin-bottom:12px;">Leave end time empty to play to end of video</p>' : '') +
       (showCategory ? '<div class="form-group"><label for="galCategory">Category</label><select id="galCategory">' + categoryOptions + '</select></div>' : '') +
       (isShopSection ? '<div class="form-group"><label for="galProductName">Product Name</label><input type="text" id="galProductName"></div>' +
         '<div class="form-group"><label for="galProductLink">Product Link</label><input type="text" id="galProductLink"></div>' +
@@ -6861,6 +6882,10 @@ async function saveGalleryFromLibrary(sectionId, imageUrl, libraryImageId) {
     if (videoUrl) data.videoUrl = videoUrl;
     var speed = parseFloat(((document.getElementById('galPlaybackSpeed') || {}).value || '1'));
     if (speed && speed !== 1) data.playbackSpeed = speed;
+    var videoStart = parseFloat(((document.getElementById('galVideoStart') || {}).value || '0'));
+    var videoEnd = parseFloat(((document.getElementById('galVideoEnd') || {}).value || ''));
+    if (videoStart > 0) data.videoStart = videoStart;
+    if (videoEnd > 0) data.videoEnd = videoEnd;
   }
   if (SHOP_SECTION_IDS.indexOf(sectionId) !== -1) {
     var pn = ((document.getElementById('galProductName') || {}).value || '').trim();
