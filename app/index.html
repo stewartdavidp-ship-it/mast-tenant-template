@@ -664,6 +664,56 @@
       flex-wrap: wrap;
     }
 
+    /* ========== IMAGE LIBRARY ========== */
+    .img-lib-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 16px;
+      align-items: start;
+    }
+    .img-lib-card {
+      background: var(--cream);
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      overflow: hidden;
+      cursor: pointer;
+      transition: box-shadow 0.15s;
+    }
+    .img-lib-card:hover { box-shadow: 0 3px 10px rgba(0,0,0,0.15); }
+    .img-lib-card img {
+      width: 100%; height: 140px; object-fit: cover; display: block; background: var(--cream-dark);
+    }
+    .img-lib-card-body { padding: 8px 10px; }
+    .img-lib-card-tags { font-size: 0.75rem; color: var(--warm-gray); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .img-lib-card-badges { display: flex; gap: 4px; flex-wrap: wrap; }
+    .img-lib-badge {
+      display: inline-block; font-size: 0.65rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.03em; padding: 2px 6px; border-radius: 3px;
+    }
+    .img-lib-badge.website { background: var(--teal-light); color: var(--teal-deep); }
+    .img-lib-badge.product { background: #FFF3CD; color: #856404; }
+    .img-lib-badge.source { background: #e2e3e5; color: #383d41; }
+    .img-lib-stats { display: flex; gap: 16px; padding: 8px 0 12px; font-size: 0.85rem; color: var(--warm-gray); }
+    .img-lib-stat-num { font-weight: 600; color: var(--charcoal); }
+
+    /* ========== IMAGE PICKER MODAL ========== */
+    .img-picker-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px;
+      max-height: 400px; overflow-y: auto; padding: 4px;
+    }
+    .img-picker-item {
+      border-radius: 6px; overflow: hidden; cursor: pointer; border: 3px solid transparent;
+      transition: border-color 0.15s; position: relative;
+    }
+    .img-picker-item:hover { border-color: var(--amber); }
+    .img-picker-item.selected { border-color: var(--teal); }
+    .img-picker-item img { width: 100%; height: 100px; object-fit: cover; display: block; }
+    .img-picker-item .picker-check {
+      position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%;
+      background: var(--teal); color: white; display: none; align-items: center; justify-content: center; font-size: 0.75rem;
+    }
+    .img-picker-item.selected .picker-check { display: flex; }
+
     /* ========== MODAL ========== */
     .modal-overlay {
       display: none;
@@ -2494,10 +2544,23 @@
       <div class="event-cards" id="eventCards"></div>
     </div>
 
-    <!-- Admin: Gallery Tab -->
+    <!-- Admin: Image Library Tab -->
+    <div id="imagesTab" style="display:none;">
+      <div class="section-header">
+        <h2>Image Library</h2>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input type="text" id="imageLibrarySearch" placeholder="Search tags..." oninput="renderImageLibrary()" style="padding:6px 10px;border-radius:4px;border:1px solid #ddd;font-size:0.85rem;width:160px;">
+          <button class="btn btn-primary" onclick="openLibraryUploadModal()">Upload Image</button>
+        </div>
+      </div>
+      <div id="imageLibraryStats" style="display:flex;gap:16px;padding:8px 0;font-size:0.85rem;color:var(--warm-gray);"></div>
+      <div id="imageLibraryGrid"></div>
+    </div>
+
+    <!-- Admin: Gallery Tab (Website Content) -->
     <div id="galleryTab" style="display:none;">
       <div class="section-header">
-        <h2>Images</h2>
+        <h2>Website Content</h2>
       </div>
       <div id="galleryLoading" class="loading">Loading...</div>
       <div id="gallerySections"></div>
@@ -3261,6 +3324,7 @@ var productCreateMode = false; // true when creating new product
 var productEditTab = 'details'; // details | variants | images | production | inventory
 var imageLibrary = {};
 var imageLibraryLoaded = false;
+var imageLibraryListener = null;
 var CLOUD_FUNCTIONS_BASE = 'https://us-central1-word-boxing.cloudfunctions.net';
 
 var ORDER_VALID_TRANSITIONS = {
@@ -3502,7 +3566,7 @@ var ROUTE_MAP = {
   'products':    { tab: 'productsTab' },
   'inventory':   { tab: 'productionTab', setup: function() { switchProductionSubView('inventory'); } },
   'customers':   { tab: null, placeholder: { name: 'Customers', desc: 'Contacts, collectors, purchase history.', badge: 'new' } },
-  'images':      { tab: 'galleryTab' },
+  'images':      { tab: 'imagesTab' },
   'employees':   { tab: null, placeholder: { name: 'Employees & Permissions', desc: 'Team access, feature-level permissions.', badge: 'new' } },
   'financials':  { tab: null, placeholder: { name: 'Financials', desc: 'Revenue, costs, P&L.', badge: 'new' } },
   'settings':    { tab: 'settingsTab' },
@@ -3524,7 +3588,7 @@ var SECTION_ROUTES = {
   'manage': ['products', 'inventory', 'customers', 'images', 'employees', 'financials', 'settings']
 };
 
-var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'placeholderTab'];
+var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'placeholderTab'];
 
 var currentRoute = 'dashboard';
 
@@ -3579,6 +3643,10 @@ function lazyLoadForRoute(route) {
   if (route === 'production' || route === 'inventory' || route === 'stories') {
     if (!productsLoaded) loadProducts();
     if (!productionLoaded) loadProduction();
+  }
+  if (route === 'images') {
+    if (!productsLoaded) loadProducts();
+    renderImageLibrary();
   }
   if (route === 'schedule') { /* schedule loads on auth */ }
 }
@@ -4524,10 +4592,11 @@ function renderProductDetail(pid) {
     imagesHtml += '<div style="text-align:center;padding:30px;color:var(--warm-gray);">No images yet.</div>';
   }
   if (isEditing && !isCreate) {
-    imagesHtml += '<div style="margin-top:12px;">' +
+    imagesHtml += '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">' +
+      '<button class="btn btn-primary" style="font-size:0.8rem;" onclick="selectProductImageFromLibrary(\'' + esc(pid) + '\')">Select from Library</button>' +
       '<label class="btn btn-secondary" style="font-size:0.8rem;cursor:pointer;">' +
         '<input type="file" accept="image/*" style="display:none;" onchange="uploadProductImage(\'' + esc(pid) + '\', this)">' +
-        'Upload New Image' +
+        'Upload New' +
       '</label>' +
     '</div>';
   }
@@ -4827,6 +4896,23 @@ async function uploadProductImage(pid, fileInput) {
   } catch (err) {
     showToast('Error: ' + err.message, true);
   }
+}
+
+function selectProductImageFromLibrary(pid) {
+  openImagePicker(function(imgId, url, thumbUrl) {
+    var product = productsData.find(function(p) { return p.pid === pid; });
+    if (!product) return;
+    var images = product.images || [];
+    var imageIds = product.imageIds || [];
+    images.push(url);
+    imageIds.push(imgId);
+    db.ref(PRODUCTS_PATH + '/' + pid + '/images').set(images);
+    db.ref(PRODUCTS_PATH + '/' + pid + '/imageIds').set(imageIds);
+    product.images = images;
+    product.imageIds = imageIds;
+    showToast('Image linked to product.');
+    renderProductDetail(pid);
+  });
 }
 
 function buildVariantTable(pid, labels, combos, inv) {
@@ -5242,6 +5328,15 @@ function attachListeners() {
       showToast('Error loading gallery: ' + err.message, true);
     });
   }
+  if (!imageLibraryListener) {
+    imageLibraryListener = db.ref(IMAGES_PATH).limitToLast(500).on('value', function(snap) {
+      imageLibrary = snap.val() || {};
+      imageLibraryLoaded = true;
+      if (currentRoute === 'images') renderImageLibrary();
+    }, function(err) {
+      showToast('Error loading image library: ' + err.message, true);
+    });
+  }
   if (!couponsListener) {
     couponsListener = db.ref(COUPONS_PATH).on('value', function(snap) {
       coupons = snap.val() || {};
@@ -5319,6 +5414,10 @@ function detachListeners() {
   if (galleryListener) {
     db.ref(GALLERY_PATH).off('value', galleryListener);
     galleryListener = null;
+  }
+  if (imageLibraryListener) {
+    db.ref(IMAGES_PATH).off('value', imageLibraryListener);
+    imageLibraryListener = null;
   }
   if (couponsListener) {
     db.ref(COUPONS_PATH).off('value', couponsListener);
@@ -5538,7 +5637,7 @@ function renderGallery() {
           '<span class="section-panel-desc">' + sec.description + '</span>' +
         '</div>' +
         '<div class="section-panel-actions">' +
-          '<button class="btn btn-primary" onclick="event.stopPropagation();openImageModal(null, \'' + sec.id + '\')" style="font-size:0.8rem;padding:4px 12px;">+ Add</button>' +
+          '<button class="btn btn-primary" onclick="event.stopPropagation();addGalleryImageFromLibrary(\'' + sec.id + '\')" style="font-size:0.8rem;padding:4px 12px;">+ Add from Library</button>' +
           '<span class="section-panel-toggle">\u25BC</span>' +
         '</div>' +
       '</div>' +
@@ -6275,6 +6374,460 @@ async function deleteImage(imageId) {
     closeModal();
   } catch (err) {
     showToast('Error deleting image: ' + err.message, true);
+  }
+}
+
+// ============================================================
+// Image Library
+// ============================================================
+function computeImageUsage() {
+  var usage = {};
+  // Scan gallery for URL matches to library images
+  Object.values(gallery).forEach(function(g) {
+    Object.keys(imageLibrary).forEach(function(imgId) {
+      var img = imageLibrary[imgId];
+      if (g.url === img.url || g.url === img.thumbnailUrl) {
+        if (!usage[imgId]) usage[imgId] = { onWebsite: false, products: [], galleryCount: 0 };
+        usage[imgId].onWebsite = true;
+        usage[imgId].galleryCount++;
+      }
+    });
+  });
+  // Scan products for imageId matches
+  productsData.forEach(function(p) {
+    (p.imageIds || []).forEach(function(iid) {
+      if (!usage[iid]) usage[iid] = { onWebsite: false, products: [], galleryCount: 0 };
+      usage[iid].products.push(p.name || p.pid);
+    });
+    // Also check image URL matches for products that only have urls but no imageIds
+    (p.images || []).forEach(function(pUrl) {
+      Object.keys(imageLibrary).forEach(function(imgId) {
+        if (imageLibrary[imgId].url === pUrl && (!usage[imgId] || usage[imgId].products.indexOf(p.name || p.pid) === -1)) {
+          if (!usage[imgId]) usage[imgId] = { onWebsite: false, products: [], galleryCount: 0 };
+          usage[imgId].products.push(p.name || p.pid);
+        }
+      });
+    });
+  });
+  return usage;
+}
+
+function renderImageLibrary() {
+  var grid = document.getElementById('imageLibraryGrid');
+  var statsEl = document.getElementById('imageLibraryStats');
+  if (!grid) return;
+
+  if (!imageLibraryLoaded) {
+    grid.innerHTML = '<div class="loading">Loading image library...</div>';
+    return;
+  }
+
+  var entries = Object.entries(imageLibrary);
+  var search = (document.getElementById('imageLibrarySearch') || {}).value || '';
+  search = search.toLowerCase().trim();
+
+  // Filter by search
+  if (search) {
+    entries = entries.filter(function(e) {
+      var img = e[1];
+      var tagStr = (img.tags || []).join(' ').toLowerCase();
+      var src = (img.source || '').toLowerCase();
+      return tagStr.indexOf(search) !== -1 || src.indexOf(search) !== -1 || (img.id || '').toLowerCase().indexOf(search) !== -1;
+    });
+  }
+
+  // Sort newest first
+  entries.sort(function(a, b) {
+    return (b[1].uploadedAt || '').localeCompare(a[1].uploadedAt || '');
+  });
+
+  var usage = computeImageUsage();
+  var totalOnWebsite = 0;
+  var totalLinked = 0;
+  Object.keys(imageLibrary).forEach(function(imgId) {
+    var u = usage[imgId];
+    if (u && u.onWebsite) totalOnWebsite++;
+    if (u && u.products.length > 0) totalLinked++;
+  });
+
+  // Stats
+  statsEl.innerHTML =
+    '<span><span class="img-lib-stat-num">' + Object.keys(imageLibrary).length + '</span> total images</span>' +
+    '<span><span class="img-lib-stat-num">' + totalOnWebsite + '</span> on website</span>' +
+    '<span><span class="img-lib-stat-num">' + totalLinked + '</span> linked to products</span>';
+
+  if (entries.length === 0) {
+    grid.innerHTML = '<div style="text-align:center;padding:40px;color:var(--warm-gray);">' +
+      (search ? 'No images match "' + esc(search) + '".' : 'No images in library yet. Upload one to get started.') + '</div>';
+    return;
+  }
+
+  var html = '<div class="img-lib-grid">';
+  entries.forEach(function(entry) {
+    var id = entry[0];
+    var img = entry[1];
+    var u = usage[id] || { onWebsite: false, products: [], galleryCount: 0 };
+    var thumb = img.thumbnailUrl || img.url || '';
+    var tags = (img.tags || []).join(', ') || '';
+    var date = img.uploadedAt ? new Date(img.uploadedAt).toLocaleDateString() : '';
+
+    html += '<div class="img-lib-card" onclick="viewLibraryImage(\'' + esc(id) + '\')">' +
+      '<img src="' + esc(thumb) + '" alt="" loading="lazy" onerror="this.style.display=\'none\'">' +
+      '<div class="img-lib-card-body">' +
+        (tags ? '<div class="img-lib-card-tags">' + esc(tags) + '</div>' : '') +
+        '<div class="img-lib-card-badges">';
+    if (u.onWebsite) html += '<span class="img-lib-badge website">Website</span>';
+    if (u.products.length > 0) html += '<span class="img-lib-badge product">Product</span>';
+    if (img.source && img.source !== 'admin-upload') html += '<span class="img-lib-badge source">' + esc(img.source) + '</span>';
+    html += '</div>' +
+        (date ? '<div style="font-size:0.7rem;color:var(--warm-gray-light);margin-top:2px;">' + date + '</div>' : '') +
+      '</div>' +
+    '</div>';
+  });
+  html += '</div>';
+  grid.innerHTML = html;
+}
+
+function viewLibraryImage(imageId) {
+  var img = imageLibrary[imageId];
+  if (!img) return;
+  var usage = computeImageUsage();
+  var u = usage[imageId] || { onWebsite: false, products: [], galleryCount: 0 };
+  var tags = (img.tags || []).join(', ') || 'none';
+  var dims = img.dimensions ? (img.dimensions.width + ' x ' + img.dimensions.height) : 'unknown';
+
+  var html =
+    '<div class="modal-header">' +
+      '<h3>Image Details</h3>' +
+      '<button class="modal-close" onclick="closeModal()">&times;</button>' +
+    '</div>' +
+    '<div class="modal-body">' +
+      '<div style="text-align:center;margin-bottom:16px;">' +
+        '<img src="' + esc(img.url || img.thumbnailUrl) + '" style="max-width:100%;max-height:300px;border-radius:8px;" loading="lazy">' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:0.9rem;">' +
+        '<span style="color:var(--warm-gray);">Source</span><span>' + esc(img.source || 'unknown') + '</span>' +
+        '<span style="color:var(--warm-gray);">Dimensions</span><span>' + dims + '</span>' +
+        '<span style="color:var(--warm-gray);">Tags</span><span>' + esc(tags) + '</span>' +
+        '<span style="color:var(--warm-gray);">Uploaded</span><span>' + (img.uploadedAt ? new Date(img.uploadedAt).toLocaleString() : 'unknown') + '</span>' +
+        '<span style="color:var(--warm-gray);">On Website</span><span>' + (u.onWebsite ? 'Yes (' + u.galleryCount + ' placement' + (u.galleryCount !== 1 ? 's' : '') + ')' : 'No') + '</span>' +
+        '<span style="color:var(--warm-gray);">Products</span><span>' + (u.products.length > 0 ? esc(u.products.join(', ')) : 'None') + '</span>' +
+      '</div>' +
+      '<div style="margin-top:12px;">' +
+        '<label style="font-size:0.85rem;color:var(--warm-gray);">Image URL</label>' +
+        '<input type="text" value="' + esc(img.url || '') + '" readonly onclick="this.select()" style="width:100%;font-size:0.8rem;">' +
+      '</div>' +
+    '</div>' +
+    '<div class="modal-footer">' +
+      '<button class="btn btn-secondary" onclick="closeModal()">Close</button>' +
+    '</div>';
+  openModal(html);
+}
+
+function openLibraryUploadModal() {
+  pendingFile = null;
+  pendingBase64 = null;
+  pendingFilename = null;
+
+  var html =
+    '<div class="modal-header">' +
+      '<h3>Upload to Image Library</h3>' +
+      '<button class="modal-close" onclick="closeModal()">&times;</button>' +
+    '</div>' +
+    '<div class="modal-body">' +
+      '<input type="file" id="libUploadFileInput" accept="image/*" onchange="handleLibUploadFile(this)" style="display:none;">' +
+      '<div id="libDropZone" onclick="document.getElementById(\'libUploadFileInput\').click()" ' +
+        'style="border:2px dashed #ccc;border-radius:8px;padding:30px 20px;text-align:center;cursor:pointer;background:var(--cream);transition:border-color 0.2s,background 0.2s;">' +
+        '<div style="font-size:2rem;margin-bottom:8px;">&#128247;</div>' +
+        '<div style="color:var(--warm-gray);font-size:0.9rem;">Click to select or drag an image here</div>' +
+        '<div id="libFileName" style="color:var(--amber);font-size:0.85rem;margin-top:8px;display:none;"></div>' +
+      '</div>' +
+      '<div class="img-preview-container" id="libPreviewContainer">' +
+        '<span class="placeholder-msg">Select an image to preview</span>' +
+      '</div>' +
+      '<div class="form-group" style="margin-top:12px;">' +
+        '<label for="libTags">Tags (comma-separated)</label>' +
+        '<input type="text" id="libTags" placeholder="e.g. figurine, blue, pendant">' +
+      '</div>' +
+      '<div id="libUploadProgress" style="display:none;margin-top:8px;">' +
+        '<div style="display:flex;align-items:center;gap:8px;">' +
+          '<div style="flex:1;height:6px;background:#eee;border-radius:3px;overflow:hidden;">' +
+            '<div id="libProgressBar" style="height:100%;background:var(--amber);width:0%;transition:width 0.3s;border-radius:3px;"></div>' +
+          '</div>' +
+          '<span id="libProgressText" style="font-size:0.8rem;color:var(--warm-gray);white-space:nowrap;">0%</span>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="modal-footer">' +
+      '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+      '<button class="btn btn-primary" id="libUploadBtn" onclick="uploadToLibrary()">Upload</button>' +
+    '</div>';
+
+  openModal(html);
+
+  setTimeout(function() {
+    var dropZone = document.getElementById('libDropZone');
+    if (dropZone) {
+      dropZone.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        dropZone.style.borderColor = 'var(--amber)';
+        dropZone.style.background = 'var(--cream-dark)';
+      });
+      dropZone.addEventListener('dragleave', function(e) {
+        e.preventDefault();
+        dropZone.style.borderColor = '#ccc';
+        dropZone.style.background = 'var(--cream)';
+      });
+      dropZone.addEventListener('drop', function(e) {
+        e.preventDefault();
+        dropZone.style.borderColor = '#ccc';
+        dropZone.style.background = 'var(--cream)';
+        if (e.dataTransfer.files.length > 0) {
+          document.getElementById('libUploadFileInput').files = e.dataTransfer.files;
+          handleLibUploadFile(document.getElementById('libUploadFileInput'));
+        }
+      });
+    }
+  }, 100);
+}
+
+async function handleLibUploadFile(input) {
+  if (!input.files || !input.files[0]) return;
+  var file = input.files[0];
+  if (!file.type.startsWith('image/')) {
+    showToast('Please select an image file.', true);
+    return;
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    showToast('File is too large (max 10MB).', true);
+    return;
+  }
+  try {
+    var compressed = await compressImage(file, 1200, 0.85);
+    pendingBase64 = compressed.base64;
+    var preview = document.getElementById('libPreviewContainer');
+    if (preview) preview.innerHTML = '<img src="data:' + compressed.mimeType + ';base64,' + compressed.base64 + '" style="max-width:100%;max-height:200px;border-radius:8px;">';
+    var nameEl = document.getElementById('libFileName');
+    if (nameEl) { nameEl.textContent = file.name + ' (' + formatFileSize(compressed.sizeEstimate) + ')'; nameEl.style.display = ''; }
+  } catch (err) {
+    showToast('Error processing image: ' + err.message, true);
+  }
+}
+
+async function uploadToLibrary() {
+  if (!pendingBase64) {
+    showToast('Please select an image first.', true);
+    return;
+  }
+  var tagsInput = document.getElementById('libTags');
+  var tags = tagsInput ? tagsInput.value.split(',').map(function(t) { return t.trim(); }).filter(Boolean) : [];
+  var btn = document.getElementById('libUploadBtn');
+  var progress = document.getElementById('libUploadProgress');
+  var bar = document.getElementById('libProgressBar');
+  var text = document.getElementById('libProgressText');
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Uploading...'; }
+  if (progress) progress.style.display = '';
+  if (bar) bar.style.width = '30%';
+  if (text) text.textContent = '30%';
+
+  try {
+    var token = await auth.currentUser.getIdToken();
+    var resp = await fetch(CLOUD_FUNCTIONS_BASE + '/shirUploadImage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ image: pendingBase64, tags: tags, source: 'admin-upload' })
+    });
+
+    if (bar) bar.style.width = '90%';
+    if (text) text.textContent = '90%';
+
+    var result = await resp.json();
+    if (!result.success) throw new Error(result.error || 'Upload failed');
+
+    if (bar) bar.style.width = '100%';
+    if (text) text.textContent = '100%';
+
+    showToast('Image uploaded to library.');
+    pendingBase64 = null;
+    closeModal();
+  } catch (err) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Upload'; }
+    if (progress) progress.style.display = 'none';
+    showToast('Upload failed: ' + err.message, true);
+  }
+}
+
+// ============================================================
+// Image Picker (shared component for Gallery + Products)
+// ============================================================
+var imagePickerCallback = null;
+
+function openImagePicker(callback, options) {
+  imagePickerCallback = callback;
+  options = options || {};
+  var multi = options.multi || false;
+
+  var entries = Object.entries(imageLibrary);
+  entries.sort(function(a, b) {
+    return (b[1].uploadedAt || '').localeCompare(a[1].uploadedAt || '');
+  });
+
+  var html =
+    '<div class="modal-header">' +
+      '<h3>Select from Image Library</h3>' +
+      '<button class="modal-close" onclick="closeModal()">&times;</button>' +
+    '</div>' +
+    '<div class="modal-body">' +
+      '<input type="text" id="pickerSearch" placeholder="Search tags..." oninput="filterImagePicker()" style="width:100%;padding:8px 10px;border-radius:4px;border:1px solid #ddd;font-size:0.85rem;margin-bottom:10px;">';
+
+  if (entries.length === 0) {
+    html += '<div style="text-align:center;padding:30px;color:var(--warm-gray);">No images in library. Upload images first from the Images page.</div>';
+  } else {
+    html += '<div class="img-picker-grid" id="pickerGrid">';
+    entries.forEach(function(entry) {
+      var id = entry[0];
+      var img = entry[1];
+      var thumb = img.thumbnailUrl || img.url || '';
+      var tagStr = (img.tags || []).join(',');
+      html += '<div class="img-picker-item" data-imgid="' + esc(id) + '" data-tags="' + esc(tagStr) + '" onclick="togglePickerItem(this)">' +
+        '<img src="' + esc(thumb) + '" alt="" loading="lazy">' +
+        '<div class="picker-check">&#10003;</div>' +
+      '</div>';
+    });
+    html += '</div>';
+  }
+
+  html += '</div>' +
+    '<div class="modal-footer">' +
+      '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+      '<button class="btn btn-primary" onclick="confirmPickerSelection()">Select</button>' +
+    '</div>';
+
+  openModal(html);
+}
+
+function filterImagePicker() {
+  var search = (document.getElementById('pickerSearch') || {}).value.toLowerCase().trim();
+  var items = document.querySelectorAll('.img-picker-item');
+  items.forEach(function(item) {
+    var tags = (item.getAttribute('data-tags') || '').toLowerCase();
+    item.style.display = (!search || tags.indexOf(search) !== -1) ? '' : 'none';
+  });
+}
+
+function togglePickerItem(el) {
+  // Single select: clear others first
+  document.querySelectorAll('.img-picker-item.selected').forEach(function(item) {
+    if (item !== el) item.classList.remove('selected');
+  });
+  el.classList.toggle('selected');
+}
+
+function confirmPickerSelection() {
+  var selected = document.querySelector('.img-picker-item.selected');
+  if (!selected) {
+    showToast('Please select an image.', true);
+    return;
+  }
+  var imgId = selected.getAttribute('data-imgid');
+  var img = imageLibrary[imgId];
+  if (img && imagePickerCallback) {
+    imagePickerCallback(imgId, img.url, img.thumbnailUrl);
+  }
+  imagePickerCallback = null;
+  closeModal();
+}
+
+// ---- Gallery: Add from Library flow ----
+function addGalleryImageFromLibrary(sectionId) {
+  openImagePicker(function(imgId, url, thumbUrl) {
+    // After picking, open metadata modal for gallery entry
+    setTimeout(function() { openGalleryMetadataModal(sectionId, url, imgId); }, 200);
+  });
+}
+
+function openGalleryMetadataModal(sectionId, imageUrl, libraryImageId) {
+  var sec = SECTIONS.find(function(s) { return s.id === sectionId; }) || { label: sectionId };
+  var isShopSection = SHOP_SECTION_IDS.indexOf(sectionId) !== -1;
+  var showCategory = (sectionId === 'gallery' || sectionId === 'shop');
+  var showVideoUrl = (sectionId === 'hero');
+
+  var categoryOptions = CATEGORIES.map(function(cat) {
+    return '<option value="' + cat + '">' + cat.charAt(0).toUpperCase() + cat.slice(1) + '</option>';
+  }).join('');
+
+  var html =
+    '<div class="modal-header">' +
+      '<h3>Add to ' + esc(sec.label) + '</h3>' +
+      '<button class="modal-close" onclick="closeModal()">&times;</button>' +
+    '</div>' +
+    '<div class="modal-body">' +
+      '<div style="text-align:center;margin-bottom:12px;">' +
+        '<img src="' + esc(imageUrl) + '" style="max-width:100%;max-height:150px;border-radius:8px;">' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<label for="galAlt">Alt Text *</label>' +
+        '<input type="text" id="galAlt" placeholder="Describe the image">' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<label for="galCaption">Caption</label>' +
+        '<input type="text" id="galCaption">' +
+      '</div>' +
+      (showVideoUrl ? '<div class="form-group"><label for="galVideoUrl">Video URL</label><input type="text" id="galVideoUrl" placeholder="https://...video.mp4"></div>' : '') +
+      (showCategory ? '<div class="form-group"><label for="galCategory">Category</label><select id="galCategory">' + categoryOptions + '</select></div>' : '') +
+      (isShopSection ? '<div class="form-group"><label for="galProductName">Product Name</label><input type="text" id="galProductName"></div>' +
+        '<div class="form-group"><label for="galProductLink">Product Link</label><input type="text" id="galProductLink"></div>' +
+        '<div class="form-group"><label for="galPrice">Price</label><input type="text" id="galPrice"></div>' : '') +
+      '<div class="form-group"><div class="form-check"><input type="checkbox" id="galVisible" checked><label for="galVisible">Visible on public site</label></div></div>' +
+    '</div>' +
+    '<div class="modal-footer">' +
+      '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+      '<button class="btn btn-primary" onclick="saveGalleryFromLibrary(\'' + esc(sectionId) + '\', \'' + esc(imageUrl) + '\', \'' + esc(libraryImageId) + '\')">Save</button>' +
+    '</div>';
+
+  openModal(html);
+  setTimeout(function() { var el = document.getElementById('galAlt'); if (el) el.focus(); }, 100);
+}
+
+async function saveGalleryFromLibrary(sectionId, imageUrl, libraryImageId) {
+  var alt = (document.getElementById('galAlt') || {}).value || '';
+  if (!alt.trim()) { showToast('Please fill in the alt text.', true); return; }
+
+  var data = {
+    url: imageUrl,
+    alt: alt.trim(),
+    caption: ((document.getElementById('galCaption') || {}).value || '').trim(),
+    section: sectionId,
+    visible: document.getElementById('galVisible') ? document.getElementById('galVisible').checked : true,
+    order: getNextOrder(sectionId),
+    libraryImageId: libraryImageId,
+    createdAt: firebase.database.ServerValue.TIMESTAMP,
+    updatedAt: firebase.database.ServerValue.TIMESTAMP
+  };
+
+  if (sectionId === 'gallery' || sectionId === 'shop') {
+    data.category = (document.getElementById('galCategory') || {}).value || '';
+  }
+  if (sectionId === 'hero') {
+    var videoUrl = ((document.getElementById('galVideoUrl') || {}).value || '').trim();
+    if (videoUrl) data.videoUrl = videoUrl;
+  }
+  if (SHOP_SECTION_IDS.indexOf(sectionId) !== -1) {
+    var pn = ((document.getElementById('galProductName') || {}).value || '').trim();
+    var pl = ((document.getElementById('galProductLink') || {}).value || '').trim();
+    var pp = ((document.getElementById('galPrice') || {}).value || '').trim();
+    if (pn) data.productName = pn;
+    if (pl) data.productLink = pl;
+    if (pp) data.price = pp;
+  }
+
+  try {
+    await db.ref(GALLERY_PATH).push(data);
+    showToast('Image added to ' + sectionId + '.');
+    closeModal();
+  } catch (err) {
+    showToast('Error: ' + err.message, true);
   }
 }
 
