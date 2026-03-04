@@ -1503,13 +1503,18 @@
     if (video && heroItems.length > 0) {
       var heroPlaylist = heroItems.map(function(h) { return { url: h.videoUrl, speed: h.playbackSpeed || 1 }; });
       var heroIndex = 0;
+      // Apply playback speed after video loads (load() resets playbackRate)
+      video.addEventListener('playing', function() {
+        if (video.playbackRate !== heroPlaylist[heroIndex].speed) {
+          video.playbackRate = heroPlaylist[heroIndex].speed;
+        }
+      });
       // Disable loop before loading so 'ended' event fires for playlist cycling
       if (heroPlaylist.length > 1) {
         video.loop = false;
         video.removeAttribute('loop');
       }
       video.src = heroPlaylist[0].url;
-      video.playbackRate = heroPlaylist[0].speed;
       if (heroItems[0].url) video.poster = heroItems[0].url;
       video.load();
       video.play().catch(function() {});
@@ -1517,7 +1522,6 @@
         video.addEventListener('ended', function() {
           heroIndex = (heroIndex + 1) % heroPlaylist.length;
           video.src = heroPlaylist[heroIndex].url;
-          video.playbackRate = heroPlaylist[heroIndex].speed;
           video.load();
           video.play().catch(function() {});
         });
