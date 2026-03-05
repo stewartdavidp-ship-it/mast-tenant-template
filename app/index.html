@@ -3324,6 +3324,12 @@ var productCreateMode = false; // true when creating new product
 var productEditTab = 'details'; // details | variants | images | production | inventory
 
 // ============================================================
+// Audit Trail (Phase E2)
+// ============================================================
+var AUDIT_LOG_PATH = 'shirglassworks/admin/auditLog';
+var AUDIT_INDEX_PATH = 'shirglassworks/admin/auditIndex';
+
+// ============================================================
 // RBAC — Roles & Permissions (Phase E1)
 // ============================================================
 var ROLES_PATH = 'shirglassworks/admin/roles';
@@ -3662,6 +3668,58 @@ async function seedRolesAndAdminUser() {
 }
 
 // ============================================================
+// Audit Trail Utility (Phase E2)
+// ============================================================
+
+/**
+ * Write an audit entry to both the global log and per-entity index.
+ * Uses multi-path update for atomic write.
+ *
+ * @param {string} action - 'create', 'update', or 'delete'
+ * @param {string} entity - Entity type (orders, inventory, products, etc.)
+ * @param {string} entityId - The record's Firebase key
+ *
+ * Usage:
+ *   await writeAudit('create', 'orders', newOrderId);   // AFTER create
+ *   await writeAudit('update', 'inventory', pid);       // AFTER update
+ *   await writeAudit('delete', 'products', productId);  // BEFORE remove()
+ *
+ * Non-blocking: audit failures log to console but never throw.
+ */
+async function writeAudit(action, entity, entityId) {
+  try {
+    var entry = {
+      event: {
+        action: action,
+        entity: entity,
+        entityId: entityId || null
+      },
+      actor: {
+        uid: currentUser ? currentUser.uid : 'unknown',
+        displayName: currentUser ? (currentUser.displayName || currentUser.email || 'Unknown') : 'Unknown',
+        role: currentUserRole || 'unknown'
+      },
+      time: firebase.database.ServerValue.TIMESTAMP,
+      context: {
+        gpsMode: activeEventId ? 'fair' : 'studio',
+        eventId: activeEventId || null
+      }
+    };
+
+    var logKey = db.ref(AUDIT_LOG_PATH).push().key;
+    var updates = {};
+    updates[AUDIT_LOG_PATH + '/' + logKey] = entry;
+    if (entityId) {
+      updates[AUDIT_INDEX_PATH + '/' + entity + '/' + entityId + '/' + logKey] = entry;
+    }
+    await db.ref().update(updates);
+  } catch (err) {
+    // Audit failures must NEVER block the operation
+    console.error('Audit write failed:', err);
+  }
+}
+
+// ============================================================
 // Auth
 // ============================================================
 function googleSignIn() {
@@ -3993,6 +4051,7 @@ async function saveGitHubToken() {
   }
   try {
     await db.ref(GITHUB_TOKEN_PATH).set(token);
+    await writeAudit('update', 'settings', 'githubToken');
     githubToken = token;
     document.getElementById('githubTokenInput').value = '';
     updateGitHubTokenStatus();
@@ -4034,6 +4093,7 @@ async function saveEventsCount() {
   }
   try {
     await db.ref(SETTINGS_PATH + '/homepageEventsCount').set(count);
+    await writeAudit('update', 'settings', 'homepageEventsCount');
     showToast('Events count saved: ' + count);
     document.getElementById('eventsCountStatus').innerHTML = '<span style="color:var(--teal);">&#10003; Saved</span>';
   } catch (err) {
@@ -4065,6 +4125,7 @@ async function toggleDarkMode() {
   document.body.classList.toggle('dark-mode', enabled);
   try {
     await db.ref(SETTINGS_PATH + '/adminDarkMode').set(enabled);
+    await writeAudit('update', 'settings', 'adminDarkMode');
   } catch (err) {
     showToast('Error saving dark mode: ' + err.message, true);
   }
@@ -4090,6 +4151,7 @@ async function saveSquareConfig() {
 
   try {
     await db.ref(SQUARE_CONFIG_PATH).set(config);
+    await writeAudit('update', 'settings', 'squareConfig');
     // Clear password fields after save
     document.getElementById('squareAccessToken').value = '';
     document.getElementById('squareWebhookSignatureKey').value = '';
@@ -4139,6 +4201,7 @@ async function connectEtsy() {
   // Save API key before starting OAuth
   try {
     await db.ref(ETSY_CONFIG_PATH + '/apiKey').set(apiKey);
+    await writeAudit('update', 'settings', 'etsyApiKey');
   } catch (err) {
     showToast('Error saving API key: ' + err.message, true);
     return;
@@ -4161,6 +4224,7 @@ async function connectEtsy() {
 async function disconnectEtsy() {
   if (!confirm('Disconnect Etsy? You will need to re-authorize to sync orders again.')) return;
   try {
+    await writeAudit('delete', 'settings', 'etsyConfig');
     await db.ref(ETSY_CONFIG_PATH).remove();
     loadEtsyConfig();
     showToast('Etsy disconnected.');
@@ -5066,6 +5130,7 @@ async function saveProduct(pid) {
 
     // Save to Firebase
     await db.ref(PRODUCTS_PATH + '/' + targetPid).set(productData);
+    await writeAudit(isCreate ? 'create' : 'update', 'products', targetPid);
 
     showToast(isCreate ? 'Product created' : 'Product saved');
     productCreateMode = false;
@@ -5110,6 +5175,7 @@ async function uploadProductImage(pid, fileInput) {
           imageIds.push(result.imageId);
           await db.ref(PRODUCTS_PATH + '/' + pid + '/images').set(images);
           await db.ref(PRODUCTS_PATH + '/' + pid + '/imageIds').set(imageIds);
+          await writeAudit('update', 'products', pid);
           product.images = images;
           product.imageIds = imageIds;
         }
@@ -5136,6 +5202,7 @@ function selectProductImageFromLibrary(pid) {
     imageIds.push(imgId);
     db.ref(PRODUCTS_PATH + '/' + pid + '/images').set(images);
     db.ref(PRODUCTS_PATH + '/' + pid + '/imageIds').set(imageIds);
+    writeAudit('update', 'products', pid);
     product.images = images;
     product.imageIds = imageIds;
     showToast('Image linked to product.');
@@ -5242,6 +5309,7 @@ async function saveProductSettings(pid) {
     };
 
     await db.ref(INVENTORY_PATH + '/' + pid).update(updates);
+    await writeAudit('update', 'inventory', pid);
     showToast('Settings saved');
     if (!inventory[pid]) inventory[pid] = {};
     Object.assign(inventory[pid], updates);
@@ -5321,6 +5389,7 @@ async function saveAdjustStock(pid) {
     }
 
     await db.ref(INVENTORY_PATH + '/' + pid).update(updates);
+    await writeAudit('update', 'inventory', pid);
     // Refresh local cache from Firebase to pick up current reserved values
     if (!inventory[pid]) inventory[pid] = { pid: pid };
     var freshSnap = await db.ref(INVENTORY_PATH + '/' + pid + '/stock').once('value');
@@ -6039,10 +6108,12 @@ async function saveEvent(eventId) {
   try {
     if (eventId) {
       await db.ref(EVENTS_PATH + '/' + eventId).update(data);
+      await writeAudit('update', 'schedule', eventId);
       showToast('Event updated.');
     } else {
       data.createdAt = firebase.database.ServerValue.TIMESTAMP;
-      await db.ref(EVENTS_PATH).push(data);
+      var newEvRef = await db.ref(EVENTS_PATH).push(data);
+      await writeAudit('create', 'schedule', newEvRef.key);
       showToast('Event created.');
     }
     closeModal();
@@ -6059,6 +6130,7 @@ async function toggleEventVisibility(eventId) {
       visible: ev.visible === false ? true : false,
       updatedAt: firebase.database.ServerValue.TIMESTAMP
     });
+    await writeAudit('update', 'schedule', eventId);
   } catch (err) {
     showToast('Error toggling visibility: ' + err.message, true);
   }
@@ -6081,6 +6153,7 @@ function confirmDeleteEvent(eventId) {
 
 async function deleteEvent(eventId) {
   try {
+    await writeAudit('delete', 'schedule', eventId);
     await db.ref(EVENTS_PATH + '/' + eventId).remove();
     showToast('Event deleted.');
     closeModal();
@@ -6484,11 +6557,13 @@ async function saveImage(imageId) {
   try {
     if (imageId) {
       await db.ref(GALLERY_PATH + '/' + imageId).update(data);
+      await writeAudit('update', 'gallery', imageId);
       showToast('Image updated.');
     } else {
       data.order = getNextOrder(section);
       data.createdAt = firebase.database.ServerValue.TIMESTAMP;
-      await db.ref(GALLERY_PATH).push(data);
+      var newImgRef = await db.ref(GALLERY_PATH).push(data);
+      await writeAudit('create', 'gallery', newImgRef.key);
       showToast('Image added.');
     }
 
@@ -6516,6 +6591,7 @@ async function toggleImageVisibility(imageId) {
       visible: img.visible === false ? true : false,
       updatedAt: firebase.database.ServerValue.TIMESTAMP
     });
+    await writeAudit('update', 'gallery', imageId);
   } catch (err) {
     showToast('Error toggling visibility: ' + err.message, true);
   }
@@ -6644,6 +6720,7 @@ function confirmDeleteImage(imageId) {
 
 async function deleteImage(imageId) {
   try {
+    await writeAudit('delete', 'gallery', imageId);
     await db.ref(GALLERY_PATH + '/' + imageId).remove();
     showToast('Image deleted.');
     closeModal();
@@ -7137,7 +7214,8 @@ async function saveGalleryFromLibrary(sectionId, imageUrl, libraryImageId) {
   }
 
   try {
-    await db.ref(GALLERY_PATH).push(data);
+    var galRef = await db.ref(GALLERY_PATH).push(data);
+    await writeAudit('create', 'gallery', galRef.key);
     showToast('Image added to ' + sectionId + '.');
     closeModal();
   } catch (err) {
@@ -7700,6 +7778,7 @@ async function transitionOrder(orderId, newStatus) {
     }
 
     await db.ref(ORDERS_PATH + '/' + orderId).update(updates);
+    await writeAudit('update', 'orders', orderId);
 
     // Create production requests if moving to building
     if (updates['status'] === 'building') {
@@ -7726,6 +7805,7 @@ async function reserveInventory(pid, qty, ck) {
       updates[ck + '/reserved'] = firebase.database.ServerValue.increment(qty);
     }
     await stockRef.update(updates);
+    await writeAudit('update', 'inventory', pid);
   } catch (err) {
     console.error('Error reserving inventory:', err);
   }
@@ -7744,6 +7824,7 @@ async function releaseInventory(pid, qty, ck) {
       updates[ck + '/reserved'] = firebase.database.ServerValue.increment(-qty);
     }
     await stockRef.update(updates);
+    await writeAudit('update', 'inventory', pid);
   } catch (err) {
     console.error('Error releasing inventory:', err);
   }
@@ -7760,6 +7841,7 @@ async function pullFromStock(pid, qty, ck) {
       updates[ck + '/reserved'] = firebase.database.ServerValue.increment(-qty);
     }
     await stockRef.update(updates);
+    await writeAudit('update', 'inventory', pid);
   } catch (err) {
     console.error('Error pulling from stock:', err);
   }
@@ -7793,6 +7875,7 @@ async function createProductionRequests(orderId, order, fulfillment) {
         fulfilledBy: null,
         createdAt: new Date().toISOString()
       });
+      await writeAudit('create', 'buildJobs', reqId);
       // Link production request to fulfillment
       await db.ref(ORDERS_PATH + '/' + orderId + '/fulfillment/' + ffKey + '/buildJobId').set(reqId);
     }
@@ -7807,6 +7890,7 @@ async function fulfillProductionRequest(requestId, orderId, operatorName) {
       fulfilledAt: now,
       fulfilledBy: operatorName || 'admin'
     });
+    await writeAudit('update', 'buildJobs', requestId);
 
     // Update order fulfillment - mark item as ready (same logic as before)
     var o = orders[orderId];
@@ -7850,6 +7934,7 @@ async function assignRequestToJob(requestId, jobId, lineItemId) {
       jobId: jobId,
       lineItemId: lineItemId
     });
+    await writeAudit('update', 'buildJobs', requestId);
     showToast('Request assigned to job');
   } catch (err) {
     showToast('Error assigning request: ' + err.message, true);
@@ -8100,6 +8185,7 @@ async function reconcileSale(saleId) {
   if (!confirm('Mark this sale as reconciled?')) return;
   try {
     await db.ref(SALES_PATH + '/' + saleId + '/status').set('reconciled');
+    await writeAudit('update', 'pos', saleId);
     showToast('Sale reconciled.');
     if (selectedSaleId === saleId) viewSaleDetail(saleId);
   } catch (err) {
@@ -8111,6 +8197,7 @@ async function voidSale(saleId) {
   if (!confirm('Void this sale? Inventory will NOT be restored automatically.')) return;
   try {
     await db.ref(SALES_PATH + '/' + saleId + '/status').set('voided');
+    await writeAudit('update', 'pos', saleId);
     showToast('Sale voided.');
     if (selectedSaleId === saleId) viewSaleDetail(saleId);
   } catch (err) {
@@ -8515,6 +8602,7 @@ async function saveEvent() {
       await db.ref(SALES_EVENTS_PATH + '/' + editingEventId).update({
         name: name, date: date, location: location || null, notes: notes || null, updatedAt: now
       });
+      await writeAudit('update', 'salesEvents', editingEventId);
       showToast('Event updated.');
     } else {
       var newRef = db.ref(SALES_EVENTS_PATH).push();
@@ -8523,6 +8611,7 @@ async function saveEvent() {
         status: 'planning', allocations: null,
         createdAt: now, updatedAt: now, closedAt: null, notes: notes || null
       });
+      await writeAudit('create', 'salesEvents', newRef.key);
       // Auto-create an inventory location for this event
       createEventLocation(newRef.key, name);
       showToast('Event created!');
@@ -8715,6 +8804,7 @@ async function startFairMode(eventId) {
     await db.ref(SALES_EVENTS_PATH + '/' + eventId).update({
       status: 'active', updatedAt: new Date().toISOString()
     });
+    await writeAudit('update', 'salesEvents', eventId);
     activeEventId = eventId;
     showToast('Fair mode activated! Sales will be linked to this event.');
   } catch (err) {
@@ -8727,6 +8817,7 @@ async function revertToPlanningStatus(eventId) {
     await db.ref(SALES_EVENTS_PATH + '/' + eventId).update({
       status: 'planning', updatedAt: new Date().toISOString()
     });
+    await writeAudit('update', 'salesEvents', eventId);
     showToast('Event reverted to planning.');
   } catch (err) {
     showToast('Error: ' + err.message, true);
@@ -8743,6 +8834,7 @@ async function closeEvent(eventId) {
     await db.ref(SALES_EVENTS_PATH + '/' + eventId).update({
       status: 'closed', closedAt: new Date().toISOString(), updatedAt: new Date().toISOString()
     });
+    await writeAudit('update', 'salesEvents', eventId);
     if (activeEventId === eventId) activeEventId = null;
 
     // Move unsold items back to source locations
@@ -8763,7 +8855,9 @@ async function closeEvent(eventId) {
 
     // Archive the event location
     if (eventLocId) {
-      db.ref(LOCATIONS_PATH + '/' + eventLocId).update({ status: 'archived', updatedAt: new Date().toISOString() }).catch(function() {});
+      db.ref(LOCATIONS_PATH + '/' + eventLocId).update({ status: 'archived', updatedAt: new Date().toISOString() }).then(function() {
+        writeAudit('update', 'locations', eventLocId);
+      }).catch(function() {});
     }
 
     showToast('Event closed.' + (unsoldCount > 0 ? ' ' + unsoldCount + ' items returned.' : ''));
@@ -8775,6 +8869,7 @@ async function closeEvent(eventId) {
 async function deleteEvent(eventId) {
   if (!confirm('Delete this event? This cannot be undone.')) return;
   try {
+    await writeAudit('delete', 'salesEvents', eventId);
     await db.ref(SALES_EVENTS_PATH + '/' + eventId).remove();
     showToast('Event deleted.');
     closeSalesEventDetail();
@@ -8792,6 +8887,7 @@ async function adjustAllocation(eventId, productId, delta) {
   var newQty = Math.max(0, current + delta);
   try {
     await db.ref(SALES_EVENTS_PATH + '/' + eventId + '/allocations/' + productId + '/quantity').set(newQty);
+    await writeAudit('update', 'salesEvents', eventId);
   } catch (err) {
     showToast('Error: ' + err.message, true);
   }
@@ -8800,6 +8896,7 @@ async function adjustAllocation(eventId, productId, delta) {
 async function removeAllocation(eventId, productId) {
   if (!confirm('Remove this product from the packing list?')) return;
   try {
+    await writeAudit('update', 'salesEvents', eventId);
     await db.ref(SALES_EVENTS_PATH + '/' + eventId + '/allocations/' + productId).remove();
     showToast('Product removed from packing list.');
   } catch (err) {
@@ -8983,6 +9080,7 @@ async function confirmPackItem(productId, productName) {
     if (sourceLocId) allocUpdate.sourceLocationId = currentAlloc ? (currentAlloc.sourceLocationId || sourceLocId) : sourceLocId;
 
     await db.ref(SALES_EVENTS_PATH + '/' + packingEventId + '/allocations/' + productId).update(allocUpdate);
+    await writeAudit('update', 'salesEvents', packingEventId);
 
     // Move items from source to event location if locations are configured
     if (sourceLocId && eventLocId) {
@@ -9057,6 +9155,7 @@ async function exitPackingMode() {
           await db.ref(SALES_EVENTS_PATH + '/' + packingEventId).update({
             status: 'packed', updatedAt: new Date().toISOString()
           });
+          await writeAudit('update', 'salesEvents', packingEventId);
           showToast('Event marked as packed!');
         }
       }
@@ -9530,6 +9629,7 @@ async function addOperator() {
   try {
     var ref = db.ref(OPERATORS_PATH).push();
     await ref.set({ name: name, addedAt: new Date().toISOString() });
+    await writeAudit('create', 'operators', ref.key);
     input.value = '';
     loadOperators();
     showToast('Operator added');
@@ -9541,6 +9641,7 @@ async function addOperator() {
 async function removeOperator(opId) {
   if (!confirm('Remove this operator?')) return;
   try {
+    await writeAudit('delete', 'operators', opId);
     await db.ref(OPERATORS_PATH + '/' + opId).remove();
     loadOperators();
     showToast('Operator removed');
@@ -9688,6 +9789,7 @@ async function doFulfillRequest(requestId, orderId) {
   if (notes) {
     await db.ref(PRODUCTION_REQUESTS_PATH + '/' + requestId + '/notes').set(notes);
   }
+  await writeAudit('update', 'buildJobs', requestId);
   await fulfillProductionRequest(requestId, orderId, operator);
   closeModal();
   renderProductionQueue();
@@ -9763,6 +9865,7 @@ async function doAssignNewJob(requestId) {
       specifications: pr.options ? Object.values(pr.options).join(', ') : '',
       productionRequestId: requestId
     });
+    await writeAudit('create', 'jobs', jobId);
     await assignRequestToJob(requestId, jobId, lineItemId);
     closeModal();
     switchTab('production');
@@ -9790,6 +9893,7 @@ async function doAssignExistingJob(requestId) {
       specifications: pr.options ? Object.values(pr.options).join(', ') : '',
       productionRequestId: requestId
     });
+    await writeAudit('update', 'jobs', jobId);
     await assignRequestToJob(requestId, jobId, lineItemId);
     closeModal();
     showToast('Request assigned to existing job');
@@ -9935,6 +10039,7 @@ async function doCreateJob(purpose) {
       startedAt: null,
       completedAt: null
     });
+    await writeAudit('create', 'jobs', jobId);
     closeModal();
     viewProductionJob(jobId);
     showToast('Job created');
@@ -10151,6 +10256,7 @@ async function transitionProductionJob(jobId, newStatus) {
     if (newStatus === 'in-progress') updates.startedAt = now;
     if (newStatus === 'completed') updates.completedAt = now;
     await db.ref(PRODUCTION_JOBS_PATH + '/' + jobId).update(updates);
+    await writeAudit('update', 'jobs', jobId);
     showToast('Job status updated to ' + newStatus);
   } catch (err) {
     showToast('Error updating job: ' + err.message, true);
@@ -10201,6 +10307,7 @@ async function doEditJob(jobId) {
       deadline: document.getElementById('editJobDeadline').value || null,
       eventName: document.getElementById('editJobEvent').value.trim() || null
     });
+    await writeAudit('update', 'jobs', jobId);
     closeModal();
     showToast('Job updated');
   } catch (err) {
@@ -10259,6 +10366,7 @@ async function doAddLineItem(jobId) {
       specifications: specs,
       productionRequestId: null
     });
+    await writeAudit('update', 'jobs', jobId);
     closeModal();
     showToast('Line item added');
   } catch (err) {
@@ -10269,6 +10377,7 @@ async function doAddLineItem(jobId) {
 async function removeLineItem(jobId, lineItemId) {
   if (!confirm('Remove this line item?')) return;
   try {
+    await writeAudit('update', 'jobs', jobId);
     await db.ref(PRODUCTION_JOBS_PATH + '/' + jobId + '/lineItems/' + lineItemId).remove();
     showToast('Line item removed');
   } catch (err) {
@@ -10344,6 +10453,7 @@ async function doStartBuild(jobId) {
       createdAt: now.toISOString(),
       completedAt: null
     });
+    await writeAudit('update', 'jobs', jobId);
 
     // Auto-transition job to in-progress if still in definition
     if (job.status === 'definition') {
@@ -10453,6 +10563,7 @@ async function doAddBuildNote(jobId, buildId) {
     var existing = (job && job.builds && job.builds[buildId]) ? job.builds[buildId].notes || '' : '';
     var newNotes = existing ? existing + '\n' + text : text;
     await db.ref(PRODUCTION_JOBS_PATH + '/' + jobId + '/builds/' + buildId + '/notes').set(newNotes);
+    await writeAudit('update', 'jobs', jobId);
     closeModal();
     renderActiveBuild(jobId, buildId);
     showToast('Note added');
@@ -10479,6 +10590,7 @@ async function doAddMilestone(jobId, buildId) {
   try {
     var ref = db.ref(PRODUCTION_JOBS_PATH + '/' + jobId + '/builds/' + buildId + '/milestones').push();
     await ref.set({ text: text, timestamp: new Date().toISOString() });
+    await writeAudit('update', 'jobs', jobId);
     closeModal();
     renderActiveBuild(jobId, buildId);
     showToast('Milestone added');
@@ -10555,6 +10667,7 @@ async function doCompleteBuild(jobId, buildId) {
       completedAt: now.toISOString(),
       output: output
     });
+    await writeAudit('update', 'jobs', jobId);
 
     // Firebase transaction: aggregate tallies across all builds
     var lineItems = job.lineItems || {};
@@ -10694,6 +10807,7 @@ async function autoFulfillLinkedRequests(jobId, freshJob, tallies) {
       await fulfillProductionRequest(li.productionRequestId, req.orderId || '', operatorName);
       // Mark fulfilled on line item to prevent double-advance
       await db.ref(PRODUCTION_JOBS_PATH + '/' + jobId + '/lineItems/' + liKey + '/requestFulfilled').set(true);
+      await writeAudit('update', 'buildJobs', li.productionRequestId);
 
       var orderNum = '';
       if (req.orderId && orders[req.orderId]) {
@@ -10745,6 +10859,7 @@ async function autoUpdateInventory(jobId, buildId, buildOutput, freshJob) {
   // Set guard flag
   if (results.length > 0) {
     await db.ref(PRODUCTION_JOBS_PATH + '/' + jobId + '/builds/' + buildId + '/inventoryPushed').set(true);
+    await writeAudit('update', 'jobs', jobId);
   }
   return results;
 }
@@ -10857,6 +10972,7 @@ async function uploadBuildPhoto(file, jobId, buildId) {
       originalFilename: file.name,
       sizeBytes: compressed.size
     });
+    await writeAudit('update', 'jobs', jobId);
 
     // Replace placeholder with actual thumbnail
     var ph = document.getElementById('upload_' + mediaId);
@@ -10930,6 +11046,7 @@ function updateBuildMediaCount(buildId) {
 async function deleteBuildMedia(buildId, mediaId) {
   if (!confirm('Delete this photo?')) return;
   try {
+    await writeAudit('update', 'jobs', selectedProductionJobId || buildId);
     await storage.ref('shirglassworks/builds/' + buildId + '/' + mediaId + '.jpg').delete();
     await db.ref(BUILD_MEDIA_PATH + '/' + buildId + '/' + mediaId).remove();
     showToast('Photo deleted');
@@ -11249,10 +11366,12 @@ async function saveDraftStory(existingId) {
     data.updatedAt = new Date().toISOString();
     if (existingId) {
       await db.ref(STORIES_PATH + '/' + existingId).update(data);
+      await writeAudit('update', 'products', existingId);
     } else {
       data.createdAt = new Date().toISOString();
       var ref = db.ref(STORIES_PATH).push();
       await ref.set(data);
+      await writeAudit('update', 'products', ref.key);
     }
     closeModal();
     showToast('Story draft saved');
@@ -11291,6 +11410,7 @@ async function publishStory(existingId) {
       storyId = ref.key;
       await ref.set(data);
     }
+    await writeAudit('update', 'products', storyId);
 
     // Back-fill storyId on linked products
     if (jobId && storyId) {
@@ -11324,6 +11444,7 @@ async function unpublishStory(storyId) {
     var story = storySnap.val();
 
     await db.ref(STORIES_PATH + '/' + storyId).update({ status: 'draft', updatedAt: new Date().toISOString() });
+    await writeAudit('update', 'products', storyId);
 
     // Clear storyId from linked products
     if (story && story.jobId) {
@@ -11435,6 +11556,7 @@ async function linkProductToBuild(jobId, lineItemId) {
     await db.ref('shirglassworks/public/products/' + productId + '/buildIds').set(existing);
     // Mark linked on line item
     await db.ref(PRODUCTION_JOBS_PATH + '/' + jobId + '/lineItems/' + lineItemId + '/productLinked').set(true);
+    await writeAudit('update', 'jobs', jobId);
 
     // Check if a published story exists for this job and write storyId
     var storiesSnap = await db.ref(STORIES_PATH).orderByChild('jobId').equalTo(jobId).once('value');
@@ -11539,6 +11661,7 @@ function addStudioLocation() {
       ref.set({
         name: name, lat: lat, lng: lng, radius: STUDIO_RADIUS_METERS, createdAt: new Date().toISOString()
       }).then(function() {
+        writeAudit('create', 'locations', ref.key);
         document.getElementById('newStudioLocationName').value = '';
         statusEl.innerHTML = '<span style="color:#4CAF50;">✅ ' + name + ' saved at ' + lat.toFixed(5) + ', ' + lng.toFixed(5) + '</span>';
         loadStudioLocations();
@@ -11562,6 +11685,7 @@ function addStudioLocation() {
 async function removeStudioLocation(locId) {
   if (!confirm('Remove this studio location?')) return;
   try {
+    await writeAudit('delete', 'locations', locId);
     await db.ref(STUDIO_LOCATIONS_PATH + '/' + locId).remove();
     showToast('Location removed.');
     loadStudioLocations();
@@ -11723,6 +11847,7 @@ async function createLocation() {
       updatedAt: new Date().toISOString()
     };
     await ref.set(record);
+    await writeAudit('create', 'locations', ref.key);
     locationsData[ref.key] = record;
     document.getElementById('newLocationName').value = '';
     showToast('Location "' + name + '" created');
@@ -11746,6 +11871,7 @@ function createEventLocation(eventId, eventName) {
     updatedAt: new Date().toISOString()
   };
   return ref.set(record).then(function() {
+    writeAudit('create', 'locations', ref.key);
     locationsData[ref.key] = record;
     return ref.key;
   });
@@ -11775,6 +11901,7 @@ async function renameLocation(locId) {
   if (!newName || newName.trim() === loc.name) return;
   try {
     await db.ref(LOCATIONS_PATH + '/' + locId).update({ name: newName.trim(), updatedAt: new Date().toISOString() });
+    await writeAudit('update', 'locations', locId);
     locationsData[locId].name = newName.trim();
     showToast('Location renamed');
     renderLocationsList();
@@ -11794,6 +11921,7 @@ async function archiveLocation(locId) {
   if (!confirm('Archive "' + loc.name + '"? You can reactivate it later.')) return;
   try {
     await db.ref(LOCATIONS_PATH + '/' + locId).update({ status: 'archived', updatedAt: new Date().toISOString() });
+    await writeAudit('update', 'locations', locId);
     locationsData[locId].status = 'archived';
     showToast('Location archived');
     renderLocationsList();
@@ -11805,6 +11933,7 @@ async function archiveLocation(locId) {
 async function reactivateLocation(locId) {
   try {
     await db.ref(LOCATIONS_PATH + '/' + locId).update({ status: 'active', updatedAt: new Date().toISOString() });
+    await writeAudit('update', 'locations', locId);
     locationsData[locId].status = 'active';
     showToast('Location reactivated');
     renderLocationsList();
@@ -12221,6 +12350,7 @@ async function submitShipping(orderId) {
       },
       statusHistory: history
     });
+    await writeAudit('update', 'orders', orderId);
 
     closeModal();
     showToast('Order marked as shipped');
@@ -12280,6 +12410,7 @@ async function cancelOrder(orderId) {
         status: 'cancelled',
         cancelledAt: now
       });
+      await writeAudit('update', 'buildJobs', reqKeys[i]);
     }
 
     await db.ref(ORDERS_PATH + '/' + orderId).update({
@@ -12288,6 +12419,7 @@ async function cancelOrder(orderId) {
       cancelReason: reason || null,
       statusHistory: history
     });
+    await writeAudit('update', 'orders', orderId);
 
     closeModal();
     showToast('Order cancelled');
@@ -12308,6 +12440,7 @@ async function addOrderNote(orderId) {
     var notes = o && o.notes ? o.notes.slice() : [];
     notes.push({ text: text, at: new Date().toISOString(), by: 'admin' });
     await db.ref(ORDERS_PATH + '/' + orderId + '/notes').set(notes);
+    await writeAudit('update', 'orders', orderId);
     input.value = '';
     showToast('Note added');
   } catch (err) {
@@ -12620,9 +12753,11 @@ async function saveCoupon(existingCode) {
   try {
     if (isEdit) {
       await db.ref(COUPONS_PATH + '/' + key).update(data);
+      await writeAudit('update', 'coupons', key);
       showToast('Coupon updated.');
     } else {
       await db.ref(COUPONS_PATH + '/' + key).set(data);
+      await writeAudit('create', 'coupons', key);
       showToast('Coupon created.');
     }
     closeModal();
@@ -12646,6 +12781,7 @@ function confirmDeleteCoupon(code) {
 
 async function deleteCoupon(code) {
   try {
+    await writeAudit('delete', 'coupons', code);
     await db.ref(COUPONS_PATH + '/' + code).remove();
     showToast('Coupon deleted.');
     closeModal();
