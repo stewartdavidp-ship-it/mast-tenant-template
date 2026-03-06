@@ -331,6 +331,8 @@
       display: inline-flex;
       align-items: center;
       gap: 6px;
+      background: var(--cream);
+      color: var(--charcoal);
     }
 
     .btn:disabled {
@@ -2423,7 +2425,7 @@
       border: 1px solid var(--cream-dark);
       border-radius: 6px;
       font-size: 0.82rem;
-      background: #fff;
+      background: var(--cream);
       color: var(--charcoal);
     }
     .audit-table { margin-top: 12px; }
@@ -2480,7 +2482,7 @@
       gap: 10px;
     }
     .audit-card {
-      background: #fff;
+      background: var(--cream);
       border: 1px solid var(--cream-dark);
       border-radius: 8px;
       padding: 14px;
@@ -2614,7 +2616,7 @@
       border: 1px solid var(--cream-dark);
       border-radius: 6px;
       font-size: 0.82rem;
-      background: #fff;
+      background: var(--cream);
       color: var(--charcoal);
     }
     .user-avatar {
@@ -2731,7 +2733,7 @@
 
     /* Interaction Timeline */
     .interaction-timeline { margin-top:16px; }
-    .interaction-card { border:1px solid var(--cream-dark); border-radius:8px; padding:14px 16px; margin-bottom:10px; background:#fff; }
+    .interaction-card { border:1px solid var(--cream-dark); border-radius:8px; padding:14px 16px; margin-bottom:10px; background:var(--cream); }
     .interaction-card:hover { border-color:var(--amber-light); }
     .interaction-header { display:flex; align-items:center; gap:10px; margin-bottom:6px; flex-wrap:wrap; }
     .interaction-date { font-weight:600; font-size:0.88rem; }
@@ -3233,7 +3235,7 @@
 
       <!-- Create/Edit Event Modal -->
       <div id="createEventModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;display:none;align-items:center;justify-content:center;">
-        <div style="background:white;border-radius:12px;padding:24px;max-width:480px;width:90%;max-height:80vh;overflow-y:auto;">
+        <div style="background:var(--cream);border-radius:12px;padding:24px;max-width:480px;width:90%;max-height:80vh;overflow-y:auto;">
           <h3 id="eventModalTitle" style="margin:0 0 16px;">Create Event</h3>
           <div style="display:flex;flex-direction:column;gap:12px;">
             <div>
@@ -10474,20 +10476,20 @@ function renderSales() {
 
   if (summaryEl) {
     summaryEl.innerHTML =
-      '<div style="flex:1;min-width:140px;background:white;border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;">' +
+      '<div style="flex:1;min-width:140px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;">' +
         '<div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Total</div>' +
         '<div style="font-size:1.4rem;font-weight:600;font-family:Cormorant Garamond,serif;">' + formatCents(totalAmount) + '</div>' +
         '<div style="font-size:0.75rem;color:var(--warm-gray);">' + all.filter(function(s){return s.status !== 'voided';}).length + ' sales</div>' +
       '</div>' +
-      '<div style="flex:1;min-width:140px;background:white;border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;">' +
+      '<div style="flex:1;min-width:140px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;">' +
         '<div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Cash</div>' +
         '<div style="font-size:1.4rem;font-weight:600;font-family:Cormorant Garamond,serif;color:var(--teal);">' + formatCents(totalCash) + '</div>' +
       '</div>' +
-      '<div style="flex:1;min-width:140px;background:white;border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;">' +
+      '<div style="flex:1;min-width:140px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;">' +
         '<div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Square</div>' +
         '<div style="font-size:1.4rem;font-weight:600;font-family:Cormorant Garamond,serif;color:var(--amber);">' + formatCents(totalSquare) + '</div>' +
       '</div>' +
-      (totalVoided > 0 ? '<div style="flex:1;min-width:140px;background:white;border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;">' +
+      (totalVoided > 0 ? '<div style="flex:1;min-width:140px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;">' +
         '<div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Voided</div>' +
         '<div style="font-size:1.4rem;font-weight:600;font-family:Cormorant Garamond,serif;color:var(--danger);">' + totalVoided + '</div>' +
       '</div>' : '');
@@ -10578,7 +10580,7 @@ function viewSaleDetail(saleId) {
     '<div style="margin-bottom:16px;">' +
       '<button class="btn btn-secondary" onclick="closeSaleDetail()" style="font-size:0.85rem;padding:6px 12px;">&larr; Back to Sales</button>' +
     '</div>' +
-    '<div style="background:white;border:1px solid var(--cream-dark);border-radius:8px;padding:20px;">' +
+    '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:20px;">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
         '<h3 style="margin:0;">Sale Detail</h3>' +
         '<span style="font-size:0.85rem;color:' + statusColor + ';text-transform:capitalize;font-weight:500;">' + esc(s.status || 'captured') + '</span>' +
@@ -10708,19 +10710,19 @@ function renderSquarePayments() {
   var unmatchedAmount = all.filter(function(p) { return !p.matchedSaleId; }).reduce(function(sum, p) { return sum + (p.amount || 0); }, 0);
 
   summaryEl.innerHTML =
-    '<div style="background:white;border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;min-width:120px;">' +
+    '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;min-width:120px;">' +
       '<div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;">Total</div>' +
       '<div style="font-size:1.3rem;font-weight:600;">' + totalCount + '</div>' +
     '</div>' +
-    '<div style="background:white;border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;min-width:120px;">' +
+    '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;min-width:120px;">' +
       '<div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;">Matched</div>' +
       '<div style="font-size:1.3rem;font-weight:600;color:var(--teal);">' + matchedCount + '</div>' +
     '</div>' +
-    '<div style="background:white;border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;min-width:120px;">' +
+    '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;min-width:120px;">' +
       '<div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;">Unmatched</div>' +
       '<div style="font-size:1.3rem;font-weight:600;color:' + (unmatchedCount > 0 ? '#FF9800' : 'var(--teal)') + ';">' + unmatchedCount + '</div>' +
     '</div>' +
-    (unmatchedAmount > 0 ? '<div style="background:white;border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;min-width:120px;">' +
+    (unmatchedAmount > 0 ? '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;min-width:120px;">' +
       '<div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;">Unmatched $</div>' +
       '<div style="font-size:1.3rem;font-weight:600;color:#FF9800;">' + formatCents(unmatchedAmount) + '</div>' +
     '</div>' : '');
@@ -10844,7 +10846,7 @@ function openManualMatchModal(paymentKey) {
   modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
   modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
   modal.innerHTML =
-    '<div style="background:white;border-radius:12px;padding:24px;max-width:500px;width:100%;max-height:80vh;overflow-y:auto;">' +
+    '<div style="background:var(--cream);border-radius:12px;padding:24px;max-width:500px;width:100%;max-height:80vh;overflow-y:auto;">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
         '<h3 style="margin:0;">Match Square Payment</h3>' +
         '<button onclick="document.getElementById(\'manualMatchModal\').remove()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;">✕</button>' +
