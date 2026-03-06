@@ -1069,6 +1069,16 @@
             checkAddToCartReady();
           });
         });
+
+        // Auto-select options that have only one choice
+        document.querySelectorAll('.product-option-group').forEach(function(group) {
+          var chips = group.querySelectorAll('.product-option-chip');
+          if (chips.length === 1) {
+            chips[0].classList.add('selected');
+            window._selectedOptions[chips[0].getAttribute('data-label')] = chips[0].getAttribute('data-value');
+          }
+        });
+        checkAddToCartReady();
       } else {
         window._requiredOptions = [];
         checkAddToCartReady();

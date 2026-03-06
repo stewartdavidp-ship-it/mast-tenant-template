@@ -284,6 +284,15 @@
       '</div>' +
     '</div>';
 
+    // Free shipping reminder on address step
+    var addrSubtotal = calcSubtotal();
+    if (addrSubtotal >= 100) {
+      html += '<div style="text-align:center;color:#2D7D46;font-size:0.75rem;margin:12px 0 4px;letter-spacing:0.08em;">&#10003; FREE SHIPPING on this order!</div>';
+    } else if (addrSubtotal > 0) {
+      var addrAway = (100 - addrSubtotal).toFixed(2);
+      html += '<div style="text-align:center;color:var(--warm-gray,#9B958E);font-size:0.75rem;margin:12px 0 4px;letter-spacing:0.08em;">You\'re $' + addrAway + ' away from free shipping!</div>';
+    }
+
     body.innerHTML = html;
 
     // Test mode banner
@@ -605,6 +614,12 @@
     }
 
     html += '<div class="order-total-row grand-total"><span class="order-total-label">Total</span><span class="order-total-value">' + formatMoney(total) + '</span></div>';
+    if (subtotal >= 100) {
+      html += '<div style="text-align:center;color:#2D7D46;font-size:0.75rem;margin-top:8px;letter-spacing:0.08em;">&#10003; FREE SHIPPING</div>';
+    } else if (subtotal > 0) {
+      var away = (100 - subtotal).toFixed(2);
+      html += '<div style="text-align:center;color:var(--warm-gray,#9B958E);font-size:0.75rem;margin-top:8px;letter-spacing:0.08em;">You\'re $' + away + ' away from free shipping!</div>';
+    }
     html += '</div>';
     return html;
   }
