@@ -1201,6 +1201,26 @@
     });
   }
 
+  // ── Customer Account ──
+  function ensureCustomerAccount(user) {
+    var ref = db.ref('shirglassworks/customers/' + user.uid);
+    ref.once('value').then(function(snap) {
+      var existing = snap.val();
+      var updates = {
+        email: user.email || '',
+        displayName: user.displayName || '',
+        photoURL: user.photoURL || '',
+        lastSignIn: new Date().toISOString()
+      };
+      if (!existing) {
+        updates.createdAt = new Date().toISOString();
+        updates.phone = user.phoneNumber || '';
+        updates.address = { address1: '', address2: '', city: '', state: '', zip: '', country: 'US' };
+      }
+      ref.update(updates);
+    });
+  }
+
   // ── Auth State ──
   function handleAuthState(user) {
     var signedInSection = document.getElementById('signedInSection');
@@ -1209,6 +1229,7 @@
     if (user && !user.isAnonymous) {
       signedInSection.style.display = 'block';
       anonymousSection.style.display = 'none';
+      ensureCustomerAccount(user);
       fetchSignedInOrders();
     } else {
       signedInSection.style.display = 'none';

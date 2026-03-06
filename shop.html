@@ -119,6 +119,28 @@
 
   .nav-shop::after { display: none !important; }
 
+  /* Nav account button */
+  .nav-account {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    cursor: pointer;
+    color: rgba(255,255,255,0.8);
+    font-size: 0.8rem;
+    font-weight: 400;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    text-decoration: none;
+    transition: color 0.3s;
+  }
+  .nav-account:hover { color: var(--amber-light); }
+  .nav-account-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(255,255,255,0.4);
+  }
+
   /* Mobile menu toggle */
   .nav-toggle {
     display: none;
@@ -567,6 +589,13 @@
     <li><a href="index.html#process">Process</a></li>
     <li><a href="index.html#contact">Contact</a></li>
     <li><a href="orders.html">Orders</a></li>
+    <li id="navAccountItem" style="display:none;">
+      <span id="navSignIn" class="nav-account" style="display:none;">Sign In</span>
+      <a id="navUserLink" href="orders.html" class="nav-account" style="display:none;">
+        <img id="navUserAvatar" class="nav-account-avatar" src="" alt="">
+        <span id="navUserName"></span>
+      </a>
+    </li>
     <li><a href="shop.html" class="nav-shop">Shop</a></li>
   </ul>
   <button class="nav-toggle" aria-label="Menu">
@@ -582,6 +611,8 @@
   <a href="index.html#process" onclick="closeMobileMenu()">Process</a>
   <a href="index.html#contact" onclick="closeMobileMenu()">Contact</a>
   <a href="orders.html" onclick="closeMobileMenu()">Orders</a>
+  <a id="mobileSignIn" href="#" onclick="event.preventDefault(); shopSignIn(); closeMobileMenu();" style="display:none;">Sign In</a>
+  <a id="mobileUserLink" href="orders.html" onclick="closeMobileMenu()" style="display:none;">My Account</a>
   <a href="shop.html" class="btn-shop" onclick="closeMobileMenu()">Shop</a>
 </div>
 
@@ -657,6 +688,7 @@
   (function() {
     var app = firebase.initializeApp({
       apiKey: "AIzaSyBQVwn8vOrFTzLlm2MYIPBwgZV2xR9AuhM",
+      authDomain: "word-boxing.firebaseapp.com",
       databaseURL: "https://word-boxing-default-rtdb.firebaseio.com",
       projectId: "word-boxing"
     }, 'public-shop');
@@ -813,6 +845,92 @@
 
     if (action) track('ev', action);
   }, true);
+})();
+</script>
+<!-- ============ AUTH + ACCOUNT ============ -->
+<script>
+(function() {
+  var shopApp = firebase.app('public-shop');
+  var auth = shopApp.auth();
+  var db = shopApp.database();
+
+  // Sign in with Google
+  window.shopSignIn = function() {
+    var provider = new firebase.auth.GoogleAuthProvider();
+    auth.signInWithPopup(provider).catch(function(err) {
+      console.error('Sign-in error:', err);
+    });
+  };
+
+  // Create or update customer account on sign-in
+  function ensureCustomerAccount(user) {
+    var ref = db.ref('shirglassworks/customers/' + user.uid);
+    ref.once('value').then(function(snap) {
+      var existing = snap.val();
+      var updates = {
+        email: user.email || '',
+        displayName: user.displayName || '',
+        photoURL: user.photoURL || '',
+        lastSignIn: new Date().toISOString()
+      };
+      if (!existing) {
+        // New customer — create full record
+        updates.createdAt = new Date().toISOString();
+        updates.phone = user.phoneNumber || '';
+        updates.address = { address1: '', address2: '', city: '', state: '', zip: '', country: 'US' };
+      }
+      ref.update(updates);
+    });
+  }
+
+  // Update nav UI based on auth state
+  function updateNavAuth(user) {
+    var accountItem = document.getElementById('navAccountItem');
+    var signInEl = document.getElementById('navSignIn');
+    var userLink = document.getElementById('navUserLink');
+    var avatar = document.getElementById('navUserAvatar');
+    var userName = document.getElementById('navUserName');
+    var mobileSignIn = document.getElementById('mobileSignIn');
+    var mobileUserLink = document.getElementById('mobileUserLink');
+
+    if (!accountItem) return;
+    accountItem.style.display = '';
+
+    if (user && !user.isAnonymous) {
+      signInEl.style.display = 'none';
+      userLink.style.display = 'flex';
+      if (user.photoURL) {
+        avatar.src = user.photoURL;
+        avatar.style.display = '';
+      } else {
+        avatar.style.display = 'none';
+      }
+      var firstName = (user.displayName || 'Account').split(' ')[0];
+      userName.textContent = firstName;
+
+      if (mobileSignIn) mobileSignIn.style.display = 'none';
+      if (mobileUserLink) {
+        mobileUserLink.style.display = '';
+        mobileUserLink.textContent = firstName;
+      }
+
+      ensureCustomerAccount(user);
+    } else {
+      signInEl.style.display = '';
+      userLink.style.display = 'none';
+      if (mobileSignIn) mobileSignIn.style.display = '';
+      if (mobileUserLink) mobileUserLink.style.display = 'none';
+    }
+  }
+
+  // Click handler for desktop sign-in
+  var signInEl = document.getElementById('navSignIn');
+  if (signInEl) {
+    signInEl.addEventListener('click', window.shopSignIn);
+  }
+
+  // Listen for auth state changes
+  auth.onAuthStateChanged(updateNavAuth);
 })();
 </script>
 <script src="cart.js"></script>
