@@ -187,13 +187,15 @@ body {
 <!-- Top Bar -->
 <div class="top-bar">
   <h1>Shir Glassworks</h1>
-  <span class="mode-badge" id="modeBadge">POS</span>
+  <div style="display:flex;align-items:center;gap:8px;">
+    <span class="mode-badge" id="modeBadge">POS</span>
+    <button id="eventSettingsBtn" onclick="showEventSettings()" style="display:none;background:none;border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:16px;cursor:pointer;color:var(--text);">⚙</button>
+  </div>
 </div>
 
 <!-- Event Banner (shown when linked to an event) -->
-<div id="eventBanner" style="display:none;background:#4CAF50;color:white;padding:8px 16px;font-size:13px;display:none;align-items:center;justify-content:space-between;">
+<div id="eventBanner" style="display:none;background:#4CAF50;color:white;padding:8px 16px;font-size:13px;align-items:center;justify-content:space-between;">
   <span>🎪 <strong id="eventBannerName">Event</strong> — <span id="eventBannerStats">0 packed, 0 sold</span></span>
-  <a href="../pos/" style="color:rgba(255,255,255,0.8);font-size:12px;text-decoration:underline;">Exit Event</a>
 </div>
 
 <!-- Auth Screen -->
@@ -347,80 +349,216 @@ function haversineDistance(lat1, lng1, lat2, lng2) {
 
 function detectLocation() {
   if (eventId) return; // Already linked via URL param
-  if (!navigator.geolocation) return;
 
-  db.ref(STUDIO_LOCATIONS_PATH).once('value').then(function(snap) {
-    var locations = snap.val();
-    if (!locations || Object.keys(locations).length === 0) return; // No studios configured
+  // Fetch active events first (needed for all scenarios)
+  db.ref(SALES_EVENTS_PATH).orderByChild('status').equalTo('active').once('value').then(function(evSnap) {
+    var activeEvents = evSnap.val() || {};
+    var eventKeys = Object.keys(activeEvents);
 
-    navigator.geolocation.getCurrentPosition(function(pos) {
-      var lat = pos.coords.latitude;
-      var lng = pos.coords.longitude;
-      var nearStudio = false;
+    // Show gear icon now that detection is running
+    document.getElementById('eventSettingsBtn').style.display = '';
 
-      Object.keys(locations).forEach(function(k) {
-        var loc = locations[k];
-        var dist = haversineDistance(lat, lng, loc.lat, loc.lng);
-        if (dist <= (loc.radius || STUDIO_RADIUS_METERS)) nearStudio = true;
-      });
+    if (!navigator.geolocation) {
+      // No geolocation — show event picker if events exist, else skip
+      if (eventKeys.length > 0) showEventModal(activeEvents, null);
+      return;
+    }
 
-      if (!nearStudio) {
-        isRemote = true;
-        db.ref(SALES_EVENTS_PATH).orderByChild('status').equalTo('active').once('value').then(function(evSnap) {
-          var activeEvents = evSnap.val() || {};
-          var eventKeys = Object.keys(activeEvents);
-
-          if (eventKeys.length > 0) {
-            var ev = activeEvents[eventKeys[0]];
-            showRemoteNotice(
-              'You\u2019re using Studio Companion away from your studios.',
-              '<strong>' + (ev.name || 'Active Event') + '</strong> is in progress. Link sales to this event?',
-              eventKeys[0]
-            );
-          } else {
-            showRemoteNotice(
-              'You\u2019re using Studio Companion away from your studios.',
-              'No active events found. Sales will be recorded without an event link.',
-              null
-            );
-          }
-        });
+    db.ref(STUDIO_LOCATIONS_PATH).once('value').then(function(snap) {
+      var locations = snap.val();
+      if (!locations || Object.keys(locations).length === 0) {
+        // No studios configured — show modal if events exist
+        if (eventKeys.length > 0) showEventModal(activeEvents, null);
+        return;
       }
-    }, function() {
-      // Geolocation failed silently — continue normally
-    }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
+
+      navigator.geolocation.getCurrentPosition(function(pos) {
+        var lat = pos.coords.latitude;
+        var lng = pos.coords.longitude;
+        var nearStudio = false;
+
+        Object.keys(locations).forEach(function(k) {
+          var loc = locations[k];
+          var dist = haversineDistance(lat, lng, loc.lat, loc.lng);
+          if (dist <= (loc.radius || STUDIO_RADIUS_METERS)) nearStudio = true;
+        });
+
+        if (!nearStudio) {
+          isRemote = true;
+          if (eventKeys.length === 1) {
+            // Single active event — suggest it
+            showEventModal(activeEvents, eventKeys[0]);
+          } else if (eventKeys.length > 1) {
+            // Multiple — let user pick
+            showEventModal(activeEvents, null);
+          } else {
+            // Away from studio, no events
+            showEventModal({}, null);
+          }
+        }
+        // At studio — no modal, POS opens normally
+      }, function() {
+        // GPS failed — show event picker if events exist, else show away notice
+        if (eventKeys.length > 0) showEventModal(activeEvents, null);
+        else showEventModal({}, null);
+      }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
+    });
   });
 }
 
-function showRemoteNotice(title, message, offerEventId) {
-  var existing = document.getElementById('remoteNotice');
+function showEventModal(activeEvents, suggestedEventId) {
+  var existing = document.getElementById('eventModeModal');
   if (existing) existing.remove();
 
-  var html = '<div id="remoteNotice" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px;">' +
-    '<div style="background:var(--card);border-radius:12px;padding:24px;max-width:360px;width:100%;text-align:center;">' +
-      '<div style="font-size:2.5rem;margin-bottom:12px;">🎪</div>' +
-      '<h3 style="margin:0 0 8px;font-size:16px;">' + title + '</h3>' +
-      '<p style="color:var(--muted);font-size:14px;margin-bottom:20px;">' + message + '</p>' +
-      '<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">';
+  var eventKeys = Object.keys(activeEvents);
+  var html = '<div id="eventModeModal" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px;">' +
+    '<div style="background:var(--card);border-radius:12px;padding:24px;max-width:380px;width:100%;text-align:center;">';
 
-  if (offerEventId) {
-    html += '<button onclick="linkToEvent(\'' + offerEventId + '\')" style="padding:12px 24px;border-radius:8px;border:none;background:var(--green);color:white;font-size:14px;font-weight:600;cursor:pointer;">Yes, Link to Event</button>';
+  if (eventKeys.length === 0) {
+    // Scenario C: No active events
+    html += '<div style="font-size:2.5rem;margin-bottom:12px;">📍</div>' +
+      '<h3 style="margin:0 0 8px;font-size:16px;">You\u2019re away from the studio</h3>' +
+      '<p style="color:var(--muted);font-size:14px;margin-bottom:20px;">No active events found. Sales will record without an event link.</p>' +
+      '<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">' +
+        '<button onclick="dismissEventModal()" style="padding:12px 24px;border-radius:8px;border:none;background:var(--green);color:white;font-size:14px;font-weight:600;cursor:pointer;">Continue</button>' +
+      '</div>';
+  } else if (suggestedEventId && activeEvents[suggestedEventId]) {
+    // Scenario A: Single suggested event
+    var ev = activeEvents[suggestedEventId];
+    var evDate = ev.date ? new Date(ev.date).toLocaleDateString() : '';
+    var evInfo = ev.name || 'Active Event';
+    if (evDate) evInfo += ' \u00b7 ' + evDate;
+    if (ev.location) evInfo += ' \u00b7 ' + ev.location;
+
+    html += '<div style="font-size:2.5rem;margin-bottom:12px;">🎪</div>' +
+      '<h3 style="margin:0 0 8px;font-size:16px;">Craft Fair Mode</h3>' +
+      '<p style="color:var(--muted);font-size:14px;margin-bottom:20px;">Detected: <strong>' + evInfo + '</strong></p>' +
+      '<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">' +
+        '<button onclick="linkToEvent(\'' + suggestedEventId + '\')" style="padding:12px 24px;border-radius:8px;border:none;background:var(--green);color:white;font-size:14px;font-weight:600;cursor:pointer;">\u2713 Yes, that\u2019s right</button>' +
+        (eventKeys.length > 1 ? '<button onclick="expandEventList()" style="padding:12px 24px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:14px;cursor:pointer;">Pick different \u25be</button>' : '') +
+        '<button onclick="dismissEventModal()" style="padding:12px 24px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:14px;cursor:pointer;">No event</button>' +
+      '</div>' +
+      '<div id="eventListExpanded" style="display:none;margin-top:16px;"></div>';
+  } else {
+    // Scenario B: Multiple events, no suggestion
+    html += '<div style="font-size:2.5rem;margin-bottom:12px;">🎪</div>' +
+      '<h3 style="margin:0 0 8px;font-size:16px;">Which event are you at?</h3>' +
+      '<div style="margin-top:12px;text-align:left;">';
+    eventKeys.forEach(function(eid) {
+      var ev = activeEvents[eid];
+      var evDate = ev.date ? new Date(ev.date).toLocaleDateString() : '';
+      html += '<button onclick="linkToEvent(\'' + eid + '\')" style="display:block;width:100%;padding:12px 16px;margin-bottom:8px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:14px;cursor:pointer;text-align:left;">' +
+        '<strong>' + (ev.name || 'Event') + '</strong>' + (evDate ? ' <span style="color:var(--muted);">\u00b7 ' + evDate + '</span>' : '') +
+        '</button>';
+    });
+    html += '<button onclick="dismissEventModal()" style="display:block;width:100%;padding:12px 16px;border-radius:8px;border:none;background:transparent;color:var(--muted);font-size:14px;cursor:pointer;text-align:center;">No event \u2014 just record sales</button>';
+    html += '</div>';
   }
-  html += '<button onclick="dismissRemoteNotice()" style="padding:12px 24px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:14px;cursor:pointer;">Continue Without</button>';
-  html += '</div></div></div>';
+
+  html += '</div></div>';
+
+  // Store active events for expandEventList / event settings
+  window._activeEvents = activeEvents;
 
   document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function expandEventList() {
+  var container = document.getElementById('eventListExpanded');
+  if (!container) return;
+  var activeEvents = window._activeEvents || {};
+  var html = '';
+  Object.keys(activeEvents).forEach(function(eid) {
+    var ev = activeEvents[eid];
+    var evDate = ev.date ? new Date(ev.date).toLocaleDateString() : '';
+    html += '<button onclick="linkToEvent(\'' + eid + '\')" style="display:block;width:100%;padding:10px 14px;margin-bottom:6px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:13px;cursor:pointer;text-align:left;">' +
+      '<strong>' + (ev.name || 'Event') + '</strong>' + (evDate ? ' <span style="color:var(--muted);">\u00b7 ' + evDate + '</span>' : '') +
+      '</button>';
+  });
+  container.innerHTML = html;
+  container.style.display = 'block';
 }
 
 function linkToEvent(evId) {
   eventId = evId;
   loadEventContext();
-  dismissRemoteNotice();
+  dismissEventModal();
+  document.getElementById('eventSettingsBtn').style.display = '';
   showToast('Linked to event!');
 }
 
-function dismissRemoteNotice() {
-  var el = document.getElementById('remoteNotice');
+function dismissEventModal() {
+  var el = document.getElementById('eventModeModal');
+  if (el) el.remove();
+}
+
+function showEventSettings() {
+  var existing = document.getElementById('eventSettingsModal');
+  if (existing) existing.remove();
+
+  // Fetch fresh active events
+  db.ref(SALES_EVENTS_PATH).orderByChild('status').equalTo('active').once('value').then(function(evSnap) {
+    var activeEvents = evSnap.val() || {};
+    var eventKeys = Object.keys(activeEvents);
+
+    var html = '<div id="eventSettingsModal" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:200;display:flex;align-items:flex-end;justify-content:center;padding:0;">' +
+      '<div style="background:var(--card);border-radius:12px 12px 0 0;padding:24px;max-width:400px;width:100%;max-height:70vh;overflow-y:auto;">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
+          '<h3 style="margin:0;font-size:16px;">Event Settings</h3>' +
+          '<button onclick="closeEventSettings()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);">\u2715</button>' +
+        '</div>' +
+        '<p style="color:var(--muted);font-size:13px;margin-bottom:16px;">Current: <strong>' + (eventData ? (eventData.name || 'Event') : 'No event linked') + '</strong></p>';
+
+    if (eventKeys.length > 0) {
+      html += '<div style="margin-bottom:12px;">';
+      eventKeys.forEach(function(eid) {
+        var ev = activeEvents[eid];
+        var evDate = ev.date ? new Date(ev.date).toLocaleDateString() : '';
+        var isCurrent = eid === eventId;
+        html += '<button onclick="switchEvent(\'' + eid + '\')" style="display:block;width:100%;padding:12px 16px;margin-bottom:8px;border-radius:8px;border:1px solid ' + (isCurrent ? 'var(--green)' : 'var(--border)') + ';background:' + (isCurrent ? 'rgba(76,175,80,0.1)' : 'transparent') + ';color:var(--text);font-size:14px;cursor:pointer;text-align:left;">' +
+          (isCurrent ? '\u2713 ' : '') + '<strong>' + (ev.name || 'Event') + '</strong>' + (evDate ? ' <span style="color:var(--muted);">\u00b7 ' + evDate + '</span>' : '') +
+          '</button>';
+      });
+      html += '</div>';
+    } else {
+      html += '<p style="color:var(--muted);font-size:14px;">No active events found.</p>';
+    }
+
+    if (eventId) {
+      html += '<button onclick="unlinkEvent()" style="display:block;width:100%;padding:12px 16px;border-radius:8px;border:none;background:transparent;color:#C62828;font-size:14px;cursor:pointer;text-align:center;">Unlink event</button>';
+    }
+
+    html += '</div></div>';
+    document.body.insertAdjacentHTML('beforeend', html);
+  });
+}
+
+function switchEvent(evId) {
+  if (evId === eventId) {
+    closeEventSettings();
+    return;
+  }
+  // Detach old listener
+  if (eventId) db.ref(SALES_EVENTS_PATH + '/' + eventId).off();
+  eventId = evId;
+  loadEventContext();
+  closeEventSettings();
+  showToast('Switched to event!');
+}
+
+function unlinkEvent() {
+  if (eventId) db.ref(SALES_EVENTS_PATH + '/' + eventId).off();
+  eventId = null;
+  eventData = null;
+  document.getElementById('modeBadge').textContent = 'POS';
+  document.getElementById('modeBadge').style.background = '';
+  document.getElementById('eventBanner').style.display = 'none';
+  closeEventSettings();
+  showToast('Event unlinked');
+}
+
+function closeEventSettings() {
+  var el = document.getElementById('eventSettingsModal');
   if (el) el.remove();
 }
 
@@ -433,8 +571,12 @@ auth.onAuthStateChanged(function(user) {
     user.getIdToken().then(function(token) {
       authToken = token;
       loadProducts();
-      if (eventId) loadEventContext();
-      else detectLocation(); // GPS check if no event pre-linked
+      if (eventId) {
+        loadEventContext();
+        document.getElementById('eventSettingsBtn').style.display = '';
+      } else {
+        detectLocation(); // GPS check if no event pre-linked
+      }
       showScreen('cameraScreen');
       initCamera();
     });

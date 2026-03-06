@@ -86,9 +86,11 @@ How to create an event in the system, allocate the inventory you're bringing, an
 2. Click New Event — enter the event name, date, and location
 3. Add the pieces you're bringing: search by product name and set the quantity for each
 4. Print the packing list if needed
-5. At the fair, open the POS app — it automatically detects the active event
-6. Ring up sales as normal — sold quantities are tracked against your allocation
-7. The event banner shows: packed / sold / remaining at a glance
+5. At the fair, open the POS app — the recommended way is to click "Open PoS" on the active event in the admin app, which pre-links the event automatically
+6. If you open the POS without a pre-linked event, it detects your location and shows a confirmation dialog with the active event(s) — confirm the right one, pick a different event, or dismiss
+7. Use the ⚙ button in the top bar at any time to switch events, unlink, or link to a different active event
+8. Ring up sales as normal — sold quantities are tracked against your allocation
+9. The event banner shows: packed / sold / remaining at a glance
 
 ### Wrap Up After a Craft Fair
 **Status:** Live
@@ -273,6 +275,47 @@ Reviewing a history of who did what and when — useful for reconciliation or tr
 1. Open the admin app and go to Manage → Audit Log
 2. Filter by date range, user, or action type
 3. Each entry shows who performed the action, what changed, and whether they were at the studio or a fair
+
+---
+
+## Contacts & Vendors
+
+### Manage Contacts
+**Status:** Live
+
+Tracking the people and businesses Shir Glassworks works with — suppliers, galleries, event organizers, and more.
+
+1. Open the admin app and go to Manage → Contacts
+2. View all contacts in a searchable, filterable list
+3. Filter by category: Supplier, Facilities, Gallery, Marketplace, Event Organizer, Partner, Student, Press, Other
+4. Click "+ Add Contact" to create a new contact — enter name, category, email, phone, and notes
+5. Optionally sync the new contact to Google Contacts (creates a record in the "Shir Glassworks" group)
+6. Click a contact row to view their full detail and interaction history
+
+### Log an Interaction
+**Status:** Live
+
+Recording a phone call, email, meeting, or other touchpoint with a contact so nothing falls through the cracks.
+
+1. Open a contact's detail view (Manage → Contacts → click the contact)
+2. Click "Log Interaction"
+3. Select the interaction type: Call, Email, Meeting, Site Visit, Payment, Signed Document, or Other
+4. Enter the date and who logged it (Ori or Madeline)
+5. Add notes describing what happened
+6. Optionally attach a Google Drive document link — the app fetches the file metadata automatically
+7. Save — the interaction appears in the contact's timeline, most recent first
+
+### Sync Contacts from Google
+**Status:** Live
+
+Pulling in contacts that were added directly to the "Shir Glassworks" group in Google Contacts, so they appear in the admin app too.
+
+1. Open the admin app and go to Manage → Contacts
+2. Click the "Sync Google" button
+3. Grant Google Contacts access if prompted (one-time per session)
+4. The app checks the "Shir Glassworks" contact group in Google Contacts
+5. Any contacts in that group that don't exist in Firebase are created automatically
+6. Existing contacts are not overwritten — sync only adds new ones
 
 ---
 
