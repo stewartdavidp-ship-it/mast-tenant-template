@@ -3122,6 +3122,7 @@
             <option value="built">Built</option>
             <option value="completed">Completed</option>
           </select>
+          <button onclick="openNewCommissionModal()" style="font-size:0.82rem;padding:6px 14px;border-radius:6px;background:var(--teal);color:white;border:none;cursor:pointer;">+ New Commission</button>
         </div>
         <div id="commissionsLoading" class="loading" style="display:none;">Loading commissions...</div>
         <div id="commissionsEmpty" class="empty-state" style="display:none;"><div class="empty-icon">&#127912;</div><p>No commission inquiries yet.</p></div>
@@ -17383,6 +17384,149 @@ async function removeCommissionDoc(commId, docId) {
     viewCommissionDetail(commId);
   } catch (err) {
     showToast('Error removing document: ' + err.message, true);
+  }
+}
+
+function openNewCommissionModal() {
+  window._newCommInspirationPids = [];
+  var modal = document.createElement('div');
+  modal.id = 'newCommissionModal';
+  modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;';
+
+  // Build product grid for inspiration picker
+  var catalogHtml = '';
+  (productsData || []).forEach(function(p) {
+    if (!p.images || !p.images.length) return;
+    catalogHtml += '<div class="new-comm-catalog-item" data-pid="' + esc(p.pid) + '" onclick="toggleNewCommInspiration(this,\'' + esc(p.pid) + '\')" ' +
+      'style="width:64px;cursor:pointer;text-align:center;border:2px solid transparent;border-radius:6px;padding:4px;">' +
+      '<img src="' + esc(p.images[0]) + '" style="width:56px;height:56px;border-radius:4px;object-fit:cover;" />' +
+      '<div style="font-size:0.68rem;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(p.name) + '</div>' +
+    '</div>';
+  });
+
+  modal.innerHTML = '<div style="background:var(--cream,#f5f0e8);border-radius:12px;padding:24px;max-width:560px;width:90%;max-height:85vh;overflow-y:auto;">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
+      '<h3 style="margin:0;font-size:1.1rem;">New Commission</h3>' +
+      '<span onclick="closeNewCommissionModal()" style="cursor:pointer;font-size:1.3rem;color:var(--warm-gray);">&times;</span>' +
+    '</div>' +
+
+    '<div style="margin-bottom:14px;">' +
+      '<label style="font-size:0.82rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Customer Name *</label>' +
+      '<input type="text" id="newCommName" placeholder="Jane Smith" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--cream-dark);font-size:0.88rem;background:var(--cream,#f5f0e8);box-sizing:border-box;">' +
+    '</div>' +
+
+    '<div style="margin-bottom:14px;">' +
+      '<label style="font-size:0.82rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Email or Phone *</label>' +
+      '<input type="text" id="newCommContact" placeholder="jane@example.com or (555) 123-4567" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--cream-dark);font-size:0.88rem;background:var(--cream,#f5f0e8);box-sizing:border-box;">' +
+    '</div>' +
+
+    '<div style="margin-bottom:14px;">' +
+      '<label style="font-size:0.82rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Channel</label>' +
+      '<select id="newCommChannel" style="padding:8px 10px;border-radius:6px;border:1px solid var(--cream-dark);font-size:0.88rem;background:var(--cream,#f5f0e8);">' +
+        '<option value="phone">Phone Call</option>' +
+        '<option value="email">Email</option>' +
+        '<option value="in-person">In Person</option>' +
+        '<option value="social">Social Media</option>' +
+        '<option value="other">Other</option>' +
+      '</select>' +
+    '</div>' +
+
+    '<div style="margin-bottom:14px;">' +
+      '<label style="font-size:0.82rem;color:var(--warm-gray);display:block;margin-bottom:4px;">What are they looking for?</label>' +
+      '<textarea id="newCommNotes" rows="3" placeholder="Describe what the customer asked about — size, colors, style, occasion..." style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--cream-dark);font-size:0.88rem;resize:vertical;background:var(--cream,#f5f0e8);box-sizing:border-box;"></textarea>' +
+    '</div>' +
+
+    (catalogHtml ? '<div style="margin-bottom:14px;">' +
+      '<label style="font-size:0.82rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Inspiration pieces <span style="font-size:0.75rem;">(optional — click to select)</span></label>' +
+      '<div id="newCommCatalogGrid" style="display:flex;flex-wrap:wrap;gap:6px;max-height:180px;overflow-y:auto;padding:4px;">' + catalogHtml + '</div>' +
+    '</div>' : '') +
+
+    '<div id="newCommError" style="color:#DC3545;font-size:0.82rem;margin-bottom:8px;display:none;"></div>' +
+
+    '<div style="display:flex;gap:8px;justify-content:flex-end;">' +
+      '<button onclick="closeNewCommissionModal()" style="padding:8px 16px;border-radius:6px;border:1px solid var(--cream-dark);background:transparent;cursor:pointer;font-size:0.88rem;">Cancel</button>' +
+      '<button id="newCommSaveBtn" onclick="saveNewCommission()" style="padding:8px 16px;border-radius:6px;background:var(--teal);color:white;border:none;cursor:pointer;font-size:0.88rem;">Create Commission</button>' +
+    '</div>' +
+  '</div>';
+  document.body.appendChild(modal);
+}
+
+function toggleNewCommInspiration(el, pid) {
+  var idx = window._newCommInspirationPids.indexOf(pid);
+  if (idx === -1) {
+    window._newCommInspirationPids.push(pid);
+    el.style.borderColor = 'var(--teal)';
+    el.style.background = 'rgba(0,128,128,0.1)';
+  } else {
+    window._newCommInspirationPids.splice(idx, 1);
+    el.style.borderColor = 'transparent';
+    el.style.background = 'transparent';
+  }
+}
+
+function closeNewCommissionModal() {
+  var modal = document.getElementById('newCommissionModal');
+  if (modal) modal.remove();
+  window._newCommInspirationPids = [];
+}
+
+async function saveNewCommission() {
+  var name = document.getElementById('newCommName').value.trim();
+  var contact = document.getElementById('newCommContact').value.trim();
+  var channel = document.getElementById('newCommChannel').value;
+  var notes = document.getElementById('newCommNotes').value.trim();
+  var errorEl = document.getElementById('newCommError');
+
+  if (!name || !contact) {
+    errorEl.textContent = 'Customer name and contact info are required.';
+    errorEl.style.display = '';
+    return;
+  }
+
+  var btn = document.getElementById('newCommSaveBtn');
+  btn.disabled = true;
+  btn.textContent = 'Creating...';
+  errorEl.style.display = 'none';
+
+  try {
+    var commRef = db.ref(COMMISSIONS_PATH);
+    var commId = commRef.push().key;
+
+    // Build inspiration list
+    var inspirationPieces = [];
+    (window._newCommInspirationPids || []).forEach(function(pid) {
+      var match = productsData.find(function(p) { return p.pid === pid; });
+      inspirationPieces.push({ pid: pid, name: match ? match.name : pid });
+    });
+
+    var record = {
+      customerName: name,
+      customerContact: contact,
+      channel: channel,
+      notes: notes || null,
+      inspirationPieces: inspirationPieces.length > 0 ? inspirationPieces : null,
+      referenceImageUrl: null,
+      status: 'new',
+      createdAt: new Date().toISOString()
+    };
+
+    await commRef.child(commId).set(record);
+    await writeAudit('create', 'commission', commId);
+
+    // Update local data
+    commissionsData[commId] = record;
+    renderCommissions();
+
+    closeNewCommissionModal();
+    showToast('Commission created');
+
+    // Open detail view for the new commission
+    viewCommissionDetail(commId);
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = 'Create Commission';
+    errorEl.textContent = 'Error: ' + err.message;
+    errorEl.style.display = '';
   }
 }
 
