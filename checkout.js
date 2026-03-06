@@ -913,6 +913,9 @@
   // ── Payment Return Handler ──
   // Detects ?payment=success&order={orderId} after Square checkout redirect
   function checkPaymentReturn() {
+    // Skip on orders.html — that page handles payment return itself
+    if (window.location.pathname.indexOf('orders.html') !== -1) return;
+
     var params = new URLSearchParams(window.location.search);
     var paymentStatus = params.get('payment');
     var orderId = params.get('order');
@@ -1181,7 +1184,11 @@
       else if (step === 'review') renderReview();
     },
     cancel: cancelCheckout,
-    checkPaymentReturn: checkPaymentReturn
+    checkPaymentReturn: checkPaymentReturn,
+    // Expose CSV helpers for orders page
+    watchOrderAndDownloadCSV: watchOrderAndDownloadCSV,
+    generatePirateShipCSV: generatePirateShipCSV,
+    downloadCSV: downloadCSV
   };
 
   // Auto-check for payment return on page load
