@@ -619,6 +619,7 @@
 
 <!-- ============ PAGE HEADER ============ -->
 <div class="page-header">
+  <p id="shopWelcome" class="section-label fade-up" style="display:none; font-size:0.85rem; letter-spacing:0.15em; margin-bottom:0.5rem;"></p>
   <p class="section-label fade-up">Our Creations</p>
   <h1 class="section-title fade-up">Handmade Glass Art</h1>
   <p class="section-subtitle fade-up">Each piece is shaped by hand &mdash; no two are ever alike.</p>
@@ -915,11 +916,22 @@
       }
 
       ensureCustomerAccount(user);
+
+      // Welcome message
+      var welcome = document.getElementById('shopWelcome');
+      if (welcome) {
+        var firstName = (user.displayName || '').split(' ')[0] || 'friend';
+        welcome.textContent = 'Welcome back, ' + firstName + '!';
+        welcome.style.display = '';
+      }
     } else {
       signInEl.style.display = '';
       userLink.style.display = 'none';
       if (mobileSignIn) mobileSignIn.style.display = '';
       if (mobileUserLink) mobileUserLink.style.display = 'none';
+
+      var welcome = document.getElementById('shopWelcome');
+      if (welcome) welcome.style.display = 'none';
     }
   }
 
