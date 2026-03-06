@@ -387,7 +387,7 @@
     // Public site reads from shirglassworks/public (no auth).
     // Admin writes require Google Sign-In with whitelisted UID.
     "shirglassworks": {
-      ".write": "auth.uid === 'oUt4ba0dYVRBfPREqoJ1yIsJKjr1'",
+      ".write": "auth.uid === 'Y8RX1PIzccfT95WIIFl4I37VZZ72'",
 
       "public": {
         ".read": true,
@@ -421,14 +421,14 @@
 
       "admin": {
         // Read: admin always, or any user with a non-guest RBAC role
-        ".read": "auth.uid === 'oUt4ba0dYVRBfPREqoJ1yIsJKjr1' || (auth != null && root.child('shirglassworks/admin/users').child(auth.uid).child('role').exists() && root.child('shirglassworks/admin/users').child(auth.uid).child('role').val() !== 'guest')",
+        ".read": "auth.uid === 'Y8RX1PIzccfT95WIIFl4I37VZZ72' || (auth != null && root.child('shirglassworks/admin/users').child(auth.uid).child('role').exists() && root.child('shirglassworks/admin/users').child(auth.uid).child('role').val() !== 'guest')",
         // Write: admin always, or any user with a non-guest RBAC role
-        ".write": "auth.uid === 'oUt4ba0dYVRBfPREqoJ1yIsJKjr1' || (auth != null && root.child('shirglassworks/admin/users').child(auth.uid).child('role').exists() && root.child('shirglassworks/admin/users').child(auth.uid).child('role').val() !== 'guest')",
+        ".write": "auth.uid === 'Y8RX1PIzccfT95WIIFl4I37VZZ72' || (auth != null && root.child('shirglassworks/admin/users').child(auth.uid).child('role').exists() && root.child('shirglassworks/admin/users').child(auth.uid).child('role').val() !== 'guest')",
 
         // Invites — any authenticated user can read (first-login lookup), admin-only write
         "invites": {
           ".read": "auth != null",
-          ".write": "auth.uid === 'oUt4ba0dYVRBfPREqoJ1yIsJKjr1' || (auth != null && root.child('shirglassworks/admin/users').child(auth.uid).child('role').val() === 'admin')"
+          ".write": "auth.uid === 'Y8RX1PIzccfT95WIIFl4I37VZZ72' || (auth != null && root.child('shirglassworks/admin/users').child(auth.uid).child('role').val() === 'admin')"
         },
 
         // RBAC roles — any authenticated user can read (to cache their permission config)
@@ -507,7 +507,7 @@
       // Analytics: anonymous push-only writes, admin-only reads
       "analytics": {
         "hits": {
-          ".read": "auth.uid === 'oUt4ba0dYVRBfPREqoJ1yIsJKjr1'",
+          ".read": "auth.uid === 'Y8RX1PIzccfT95WIIFl4I37VZZ72'",
           ".indexOn": ["ts", "d"],
           "$hitId": {
             ".write": "!data.exists()",
@@ -533,8 +533,8 @@
       // Individual order status is publicly readable (orderId acts as auth token)
       // for the confirmation page Firebase listener
       "orders": {
-        ".read": "auth.uid === 'oUt4ba0dYVRBfPREqoJ1yIsJKjr1'",
-        ".write": "auth.uid === 'oUt4ba0dYVRBfPREqoJ1yIsJKjr1'",
+        ".read": "auth.uid === 'Y8RX1PIzccfT95WIIFl4I37VZZ72'",
+        ".write": "auth.uid === 'Y8RX1PIzccfT95WIIFl4I37VZZ72'",
         ".indexOn": ["squareOrderId", "etsyReceiptId", "source", "uid", "orderNumber"],
         "$orderId": {
           "status": {
@@ -547,8 +547,8 @@
       // Secrets (accessToken, webhookSignatureKey, apiKey, refreshToken) have been migrated
       // to GCP Secret Manager and removed from RTDB. Admin UI uses shirSecretsManager callable.
       "config": {
-        ".read": "auth.uid === 'oUt4ba0dYVRBfPREqoJ1yIsJKjr1'",
-        ".write": "auth.uid === 'oUt4ba0dYVRBfPREqoJ1yIsJKjr1'"
+        ".read": "auth.uid === 'Y8RX1PIzccfT95WIIFl4I37VZZ72'",
+        ".write": "auth.uid === 'Y8RX1PIzccfT95WIIFl4I37VZZ72'"
       }
     },
 
