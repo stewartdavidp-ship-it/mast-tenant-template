@@ -11383,8 +11383,10 @@ function renderSalesEventDetail(eventId) {
   } else if (ev.status === 'active') {
     html += '<button class="btn btn-primary" onclick="window.open(\'../pos/?eventId=' + eventId + '\', \'_blank\')">💰 Open PoS</button>';
     html += '<button class="btn btn-primary" onclick="startPackingMode(\'' + eventId + '\')">📦 Add More Items</button>';
+    html += '<button class="btn btn-secondary" onclick="showManualSaleModal(\'' + eventId + '\')">+ Manual Sale</button>';
     html += '<button class="btn btn-secondary" style="background:#E53935;color:white;border-color:#E53935;" onclick="closeEvent(\'' + eventId + '\')">🏁 Close Event</button>';
   } else if (ev.status === 'closed') {
+    html += '<button class="btn btn-secondary" onclick="showManualSaleModal(\'' + eventId + '\')">+ Manual Sale</button>';
     html += '<button class="btn btn-secondary" onclick="openCreateEventModal(\'' + eventId + '\')">✏️ Edit Details</button>';
   }
   html += '</div>';
@@ -11532,6 +11534,137 @@ async function closeEvent(eventId) {
     showToast('Event closed.' + (unsoldCount > 0 ? ' ' + unsoldCount + ' items returned.' : ''));
   } catch (err) {
     showToast('Error: ' + err.message, true);
+  }
+}
+
+// === Offline Sale Reconciliation ===
+
+function showManualSaleModal(eventId) {
+  var ev = salesEventsData[eventId];
+  if (!ev || !ev.allocations) {
+    showToast('No allocations on this event — pack items first.', true);
+    return;
+  }
+  var productOpts = '';
+  Object.keys(ev.allocations).forEach(function(pid) {
+    var alloc = ev.allocations[pid];
+    var name = alloc.productName || pid;
+    var remaining = (alloc.quantity || 0) - (alloc.sold || 0);
+    productOpts += '<option value="' + pid + '">' + name + ' (' + remaining + ' remaining)</option>';
+  });
+  if (!productOpts) {
+    showToast('No products allocated to this event.', true);
+    return;
+  }
+
+  var today = new Date().toISOString().split('T')[0];
+  var html = '<div class="modal-header">' +
+    '<h3>Add Manual Sale</h3>' +
+    '<button class="modal-close" onclick="closeModal()">&times;</button>' +
+  '</div>' +
+  '<div class="modal-body">' +
+    '<div class="form-group">' +
+      '<label for="manualSaleProduct">Product <span class="field-required">*</span></label>' +
+      '<select id="manualSaleProduct" style="width:100%;padding:8px;border:1px solid var(--cream-dark);border-radius:6px;">' + productOpts + '</select>' +
+    '</div>' +
+    '<div style="display:flex;gap:12px;">' +
+      '<div class="form-group" style="flex:1;">' +
+        '<label for="manualSaleQty">Quantity</label>' +
+        '<input type="number" id="manualSaleQty" value="1" min="1" style="width:100%;padding:8px;border:1px solid var(--cream-dark);border-radius:6px;">' +
+      '</div>' +
+      '<div class="form-group" style="flex:1;">' +
+        '<label for="manualSaleAmount">Amount ($)</label>' +
+        '<input type="number" id="manualSaleAmount" step="0.01" min="0" placeholder="0.00" style="width:100%;padding:8px;border:1px solid var(--cream-dark);border-radius:6px;">' +
+      '</div>' +
+    '</div>' +
+    '<div style="display:flex;gap:12px;">' +
+      '<div class="form-group" style="flex:1;">' +
+        '<label for="manualSalePayment">Payment Type</label>' +
+        '<select id="manualSalePayment" style="width:100%;padding:8px;border:1px solid var(--cream-dark);border-radius:6px;">' +
+          '<option value="cash">Cash</option>' +
+          '<option value="card">Square (Card)</option>' +
+        '</select>' +
+      '</div>' +
+      '<div class="form-group" style="flex:1;">' +
+        '<label for="manualSaleDate">Date</label>' +
+        '<input type="date" id="manualSaleDate" value="' + today + '" style="width:100%;padding:8px;border:1px solid var(--cream-dark);border-radius:6px;">' +
+      '</div>' +
+    '</div>' +
+    '<div class="form-group">' +
+      '<label for="manualSaleNotes">Notes (optional)</label>' +
+      '<input type="text" id="manualSaleNotes" placeholder="e.g. Cash sale while reader was offline" style="width:100%;padding:8px;border:1px solid var(--cream-dark);border-radius:6px;">' +
+    '</div>' +
+  '</div>' +
+  '<div class="modal-footer">' +
+    '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+    '<button class="btn btn-primary" onclick="saveManualSale(\'' + eventId + '\')">Save Sale</button>' +
+  '</div>';
+  openModal(html);
+}
+
+async function saveManualSale(eventId) {
+  var ev = salesEventsData[eventId];
+  if (!ev) return;
+  var pid = document.getElementById('manualSaleProduct').value;
+  var qty = parseInt(document.getElementById('manualSaleQty').value) || 1;
+  var amountDollars = parseFloat(document.getElementById('manualSaleAmount').value) || 0;
+  var paymentType = document.getElementById('manualSalePayment').value;
+  var saleDate = document.getElementById('manualSaleDate').value;
+  var notes = (document.getElementById('manualSaleNotes').value || '').trim();
+
+  if (!pid) { showToast('Select a product.', true); return; }
+  var alloc = ev.allocations[pid];
+  if (!alloc) { showToast('Product not found in allocations.', true); return; }
+  var remaining = (alloc.quantity || 0) - (alloc.sold || 0);
+  if (qty > remaining) {
+    showToast('Only ' + remaining + ' remaining — cannot sell ' + qty + '.', true);
+    return;
+  }
+
+  var amountCents = Math.round(amountDollars * 100);
+  var now = new Date().toISOString();
+  var saleId = 'manual_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+
+  try {
+    // 1. Write sale record
+    var saleRecord = {
+      saleId: saleId,
+      eventId: eventId,
+      status: 'captured',
+      source: 'manual-reconciliation',
+      paymentType: paymentType,
+      amount: amountCents,
+      timestamp: saleDate ? saleDate + 'T12:00:00.000Z' : now,
+      createdAt: now,
+      createdBy: currentUser ? currentUser.uid : 'admin',
+      items: [{ productId: pid, productName: alloc.productName || pid, quantity: qty, price: amountCents }]
+    };
+    if (notes) saleRecord.notes = notes;
+    await db.ref(SALES_PATH + '/' + saleId).set(saleRecord);
+
+    // 2. Update event allocation sold count
+    var newSold = (alloc.sold || 0) + qty;
+    await db.ref(SALES_EVENTS_PATH + '/' + eventId + '/allocations/' + pid + '/sold').set(newSold);
+
+    // 3. Decrement main inventory
+    var stockRef = db.ref(INVENTORY_PATH + '/' + pid + '/stock/_default/available');
+    await stockRef.transaction(function(current) { return Math.max(0, (current || 0) - qty); });
+
+    // 4. Audit
+    await writeAudit('create', 'sales', saleId);
+
+    closeModal();
+    showToast('Manual sale recorded — ' + qty + ' × ' + (alloc.productName || pid));
+
+    // 5. Refresh — local data update + re-render
+    if (salesEventsData[eventId] && salesEventsData[eventId].allocations && salesEventsData[eventId].allocations[pid]) {
+      salesEventsData[eventId].allocations[pid].sold = newSold;
+    }
+    sales[saleId] = saleRecord;
+    renderSalesEventDetail(eventId);
+  } catch (err) {
+    console.error('Manual sale error:', err);
+    showToast('Failed to save sale: ' + err.message, true);
   }
 }
 

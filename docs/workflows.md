@@ -99,9 +99,9 @@ Reconciling what sold at a fair so inventory stays accurate back at the studio.
 
 1. After the event, open the admin app and go to Sell → Events
 2. Open the event and review the sold vs. packed summary
-3. Confirm any sales that were taken offline or outside the POS
-4. Mark the event as complete
-5. Inventory is updated automatically based on what was sold
+3. For any sales taken offline or outside the POS: click + Manual Sale, pick the product from your event allocations, enter the quantity, amount, and payment type, then save
+4. The manual sale is recorded, the event allocation sold count is updated, and inventory is decremented automatically
+5. When reconciliation is complete, click Close Event
 6. Unsold pieces are returned to available stock
 
 ---
