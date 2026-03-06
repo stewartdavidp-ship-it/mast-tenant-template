@@ -4116,7 +4116,7 @@ var contactsLoaded = false;
 var selectedContactId = null;
 var contactInteractions = [];
 var contactInteractionsLoaded = false;
-var googleOAuthToken = null; // In-memory only — Google API access token
+var googleOAuthTokens = {}; // In-memory only — Google API access tokens, keyed by scope
 
 var CONTACT_CATEGORIES = ['Supplier', 'Facilities', 'Gallery', 'Marketplace', 'Event Organizer', 'Partner', 'Student', 'Press', 'Other'];
 var INTERACTION_TYPES = ['Call', 'Email', 'Meeting', 'Site Visit', 'Payment', 'Signed Doc', 'Other'];
@@ -4556,6 +4556,7 @@ function googleSignIn() {
 }
 
 function signOut() {
+  googleOAuthTokens = {};
   auth.signOut();
 }
 
@@ -16026,8 +16027,8 @@ async function saveInteraction(contactId) {
 // ============================================================
 
 async function requestGoogleOAuthToken(scope) {
-  // If we already have a token, return it
-  if (googleOAuthToken) return googleOAuthToken;
+  // If we already have a token for this scope, return it
+  if (googleOAuthTokens[scope]) return googleOAuthTokens[scope];
 
   try {
     // Use Firebase Auth's signInWithPopup with additional scopes
@@ -16037,8 +16038,8 @@ async function requestGoogleOAuthToken(scope) {
 
     var result = await firebase.auth().signInWithPopup(provider);
     if (result.credential && result.credential.accessToken) {
-      googleOAuthToken = result.credential.accessToken;
-      return googleOAuthToken;
+      googleOAuthTokens[scope] = result.credential.accessToken;
+      return googleOAuthTokens[scope];
     }
 
     showToast('Could not get Google API access token.', true);
@@ -16243,6 +16244,7 @@ async function fetchDriveFileMetadata(driveUrl) {
     }
 
     var meta = await response.json();
+    googleOAuthTokens['https://www.googleapis.com/auth/drive.readonly'] = null;
     return {
       name: meta.name || 'Unknown file',
       createdTime: meta.createdTime || null,
@@ -16251,6 +16253,7 @@ async function fetchDriveFileMetadata(driveUrl) {
       webViewLink: meta.webViewLink || driveUrl
     };
   } catch (err) {
+    googleOAuthTokens['https://www.googleapis.com/auth/drive.readonly'] = null;
     console.error('Drive metadata fetch failed:', err);
     showToast('Drive file fetch failed.', true);
     return null;
