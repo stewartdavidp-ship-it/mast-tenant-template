@@ -9619,6 +9619,30 @@ async function transitionOrder(orderId, newStatus) {
       await createProductionRequests(orderId, o, updates['fulfillment']);
     }
 
+    // Auto-progress handed_to_carrier → shipped (triggers email notification via Cloud Function)
+    if (newStatus === 'handed_to_carrier') {
+      var shippedAt = new Date().toISOString();
+      var shippedUpdates = {
+        status: 'shipped',
+        shippedAt: shippedAt
+      };
+      var sh = updates['statusHistory'] || history;
+      sh.push({ status: 'shipped', at: shippedAt, by: 'system', note: 'Auto-shipped on carrier hand-off' });
+      shippedUpdates['statusHistory'] = sh;
+      var ffLog2 = (updates['fulfillmentLog'] || o.fulfillmentLog || []).slice();
+      ffLog2.push({ event: 'shipped', timestamp: shippedAt, userId: 'system', method: 'auto' });
+      shippedUpdates['fulfillmentLog'] = ffLog2;
+      await db.ref(ORDERS_PATH + '/' + orderId).update(shippedUpdates);
+
+      var hasContact = !!(o.email);
+      if (hasContact) {
+        showToast('Order handed to carrier — customer notified');
+      } else {
+        showToast('Order handed to carrier — no customer contact on file');
+      }
+      return;
+    }
+
     showToast('Order updated to ' + updates['status']);
   } catch (err) {
     showToast('Error updating order: ' + err.message, true);

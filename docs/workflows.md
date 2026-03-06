@@ -71,7 +71,7 @@ What Ori or Madeline does after a customer places an order online — from confi
 10. Print the label and attach it to the package
 11. Return to the admin app and scan packages at drop-off to bundle them
 12. Confirm drop-off — carrier and location are recorded
-13. Customer receives notification that their order is on its way
+13. The order auto-transitions to Shipped and the customer receives an email notification with tracking info (if available)
 
 ---
 
