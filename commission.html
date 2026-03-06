@@ -704,8 +704,8 @@
   <!-- Success state (shown after submit) -->
   <div class="comm-success" id="commSuccess">
     <div class="check-circle">&#10003;</div>
-    <h2>Inquiry Sent!</h2>
-    <p>Thank you for reaching out. We'll review your request and get back to you within a few days with a proposal.</p>
+    <h2>Thank You!</h2>
+    <p>Thank you for your submission. We will review and get back to you with acknowledgment within 48 hours.</p>
     <a href="shop.html" class="btn-browse">Browse the Shop</a>
   </div>
 
@@ -917,7 +917,7 @@ function submitCommission() {
 
     // Show success
     document.getElementById('commFormCard').style.display = 'none';
-    document.getElementById('commSuccess').style.display = '';
+    document.getElementById('commSuccess').style.display = 'block';
   }).catch(function(err) {
     console.error('Commission submit error:', err);
     btn.disabled = false;
