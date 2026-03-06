@@ -742,6 +742,28 @@
     text-decoration: underline;
   }
 
+  .order-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    font-size: 0.9rem;
+  }
+
+  .order-timeline-entry {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .order-timeline-label {
+    font-weight: 500;
+    color: #333;
+  }
+
+  .order-timeline-date {
+    color: var(--warm-gray);
+  }
+
   .no-orders {
     text-align: center;
     padding: 3rem 2rem;
@@ -1120,14 +1142,38 @@
       html += '</div></div>';
     }
 
-    // Tracking
-    if (order.trackingNumber) {
+    // Tracking (nested under order.tracking or flat)
+    var tNum = (order.tracking && order.tracking.trackingNumber) || order.trackingNumber;
+    var tUrl = (order.tracking && order.tracking.trackingUrl) || order.trackingUrl;
+    var tCarrier = (order.tracking && order.tracking.carrier) || '';
+    if (tNum) {
       html += '<div class="order-detail-section"><div class="order-detail-label">Tracking</div>' +
         '<div class="order-tracking">';
-      if (order.trackingUrl) {
-        html += '<a href="' + esc(order.trackingUrl) + '" target="_blank" rel="noopener">' + esc(order.trackingNumber) + '</a>';
+      if (tCarrier) html += '<strong>' + esc(tCarrier) + '</strong> ';
+      if (tUrl) {
+        html += '<a href="' + esc(tUrl) + '" target="_blank" rel="noopener">' + esc(tNum) + '</a>';
       } else {
-        html += esc(order.trackingNumber);
+        html += '<span style="font-family:monospace;">' + esc(tNum) + '</span>';
+      }
+      html += '</div></div>';
+    }
+
+    // Order timeline
+    var timeline = [];
+    if (order.placedAt) timeline.push({ label: 'Placed', date: order.placedAt });
+    else if (order.pendingPaymentAt) timeline.push({ label: 'Order Created', date: order.pendingPaymentAt });
+    if (order.processingAt) timeline.push({ label: 'Processing', date: order.processingAt });
+    if (order.buildingAt) timeline.push({ label: 'Building', date: order.buildingAt });
+    if (order.readyAt) timeline.push({ label: 'Ready', date: order.readyAt });
+    if (order.shippedAt) timeline.push({ label: 'Shipped', date: order.shippedAt });
+    if (order.deliveredAt) timeline.push({ label: 'Delivered', date: order.deliveredAt });
+    if (timeline.length > 1) {
+      html += '<div class="order-detail-section"><div class="order-detail-label">Timeline</div><div class="order-timeline">';
+      for (var t = 0; t < timeline.length; t++) {
+        html += '<div class="order-timeline-entry">' +
+          '<span class="order-timeline-label">' + timeline[t].label + '</span>' +
+          '<span class="order-timeline-date">' + formatDate(timeline[t].date) + '</span>' +
+        '</div>';
       }
       html += '</div></div>';
     }
