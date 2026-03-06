@@ -304,6 +304,8 @@ var firebaseApp = firebase.initializeApp({
 var db = firebaseApp.database();
 var auth = firebaseApp.auth();
 
+function esc(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
 var CLASSIFY_URL = 'https://us-central1-word-boxing.cloudfunctions.net/shirClassifyImage';
 var UPLOAD_URL = 'https://us-central1-word-boxing.cloudfunctions.net/shirUploadImage';
 var PRODUCTS_PATH = 'shirglassworks/public/products';
@@ -426,9 +428,9 @@ function showEventModal(activeEvents, suggestedEventId) {
     // Scenario A: Single suggested event
     var ev = activeEvents[suggestedEventId];
     var evDate = ev.date ? new Date(ev.date).toLocaleDateString() : '';
-    var evInfo = ev.name || 'Active Event';
-    if (evDate) evInfo += ' \u00b7 ' + evDate;
-    if (ev.location) evInfo += ' \u00b7 ' + ev.location;
+    var evInfo = esc(ev.name || 'Active Event');
+    if (evDate) evInfo += ' \u00b7 ' + esc(evDate);
+    if (ev.location) evInfo += ' \u00b7 ' + esc(ev.location);
 
     html += '<div style="font-size:2.5rem;margin-bottom:12px;">🎪</div>' +
       '<h3 style="margin:0 0 8px;font-size:16px;">Craft Fair Mode</h3>' +
@@ -448,7 +450,7 @@ function showEventModal(activeEvents, suggestedEventId) {
       var ev = activeEvents[eid];
       var evDate = ev.date ? new Date(ev.date).toLocaleDateString() : '';
       html += '<button onclick="linkToEvent(\'' + eid + '\')" style="display:block;width:100%;padding:12px 16px;margin-bottom:8px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:14px;cursor:pointer;text-align:left;">' +
-        '<strong>' + (ev.name || 'Event') + '</strong>' + (evDate ? ' <span style="color:var(--muted);">\u00b7 ' + evDate + '</span>' : '') +
+        '<strong>' + esc(ev.name || 'Event') + '</strong>' + (evDate ? ' <span style="color:var(--muted);">\u00b7 ' + esc(evDate) + '</span>' : '') +
         '</button>';
     });
     html += '<button onclick="dismissEventModal()" style="display:block;width:100%;padding:12px 16px;border-radius:8px;border:none;background:transparent;color:var(--muted);font-size:14px;cursor:pointer;text-align:center;">No event \u2014 just record sales</button>';
@@ -472,7 +474,7 @@ function expandEventList() {
     var ev = activeEvents[eid];
     var evDate = ev.date ? new Date(ev.date).toLocaleDateString() : '';
     html += '<button onclick="linkToEvent(\'' + eid + '\')" style="display:block;width:100%;padding:10px 14px;margin-bottom:6px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:13px;cursor:pointer;text-align:left;">' +
-      '<strong>' + (ev.name || 'Event') + '</strong>' + (evDate ? ' <span style="color:var(--muted);">\u00b7 ' + evDate + '</span>' : '') +
+      '<strong>' + esc(ev.name || 'Event') + '</strong>' + (evDate ? ' <span style="color:var(--muted);">\u00b7 ' + esc(evDate) + '</span>' : '') +
       '</button>';
   });
   container.innerHTML = html;
@@ -507,7 +509,7 @@ function showEventSettings() {
           '<h3 style="margin:0;font-size:16px;">Event Settings</h3>' +
           '<button onclick="closeEventSettings()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);">\u2715</button>' +
         '</div>' +
-        '<p style="color:var(--muted);font-size:13px;margin-bottom:16px;">Current: <strong>' + (eventData ? (eventData.name || 'Event') : 'No event linked') + '</strong></p>';
+        '<p style="color:var(--muted);font-size:13px;margin-bottom:16px;">Current: <strong>' + esc(eventData ? (eventData.name || 'Event') : 'No event linked') + '</strong></p>';
 
     if (eventKeys.length > 0) {
       html += '<div style="margin-bottom:12px;">';
@@ -516,7 +518,7 @@ function showEventSettings() {
         var evDate = ev.date ? new Date(ev.date).toLocaleDateString() : '';
         var isCurrent = eid === eventId;
         html += '<button onclick="switchEvent(\'' + eid + '\')" style="display:block;width:100%;padding:12px 16px;margin-bottom:8px;border-radius:8px;border:1px solid ' + (isCurrent ? 'var(--green)' : 'var(--border)') + ';background:' + (isCurrent ? 'rgba(76,175,80,0.1)' : 'transparent') + ';color:var(--text);font-size:14px;cursor:pointer;text-align:left;">' +
-          (isCurrent ? '\u2713 ' : '') + '<strong>' + (ev.name || 'Event') + '</strong>' + (evDate ? ' <span style="color:var(--muted);">\u00b7 ' + evDate + '</span>' : '') +
+          (isCurrent ? '\u2713 ' : '') + '<strong>' + esc(ev.name || 'Event') + '</strong>' + (evDate ? ' <span style="color:var(--muted);">\u00b7 ' + esc(evDate) + '</span>' : '') +
           '</button>';
       });
       html += '</div>';

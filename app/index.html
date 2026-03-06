@@ -4403,7 +4403,7 @@ async function loadUserRole(uid) {
         try {
           var inviteSnap = await db.ref(INVITES_PATH + '/' + inviteKey).once('value');
           var invite = inviteSnap.val();
-          if (invite && invite.status === 'pending' && invite.role) {
+          if (invite && invite.status === 'pending' && invite.role && invite.invitedBy !== uid) {
             initialRole = invite.role;
             await db.ref(INVITES_PATH + '/' + inviteKey).update({
               status: 'accepted',
@@ -7535,8 +7535,8 @@ function renderUsersList() {
       var tr = document.createElement('tr');
       tr.style.opacity = '0.6';
       tr.innerHTML = '<td><span style="display:inline-block;width:32px;height:32px;border-radius:50%;background:var(--cream-dark);text-align:center;line-height:32px;font-size:0.85rem;margin-right:8px;">✉</span>Pending Invite</td>' +
-        '<td>' + inv.email + '</td>' +
-        '<td><span class="status-badge">' + roleName + '</span></td>' +
+        '<td>' + esc(inv.email) + '</td>' +
+        '<td><span class="status-badge">' + esc(roleName) + '</span></td>' +
         '<td>Invited ' + new Date(inv.invitedAt).toLocaleDateString() + '</td>' +
         '<td><button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 8px;" onclick="cancelInvite(\'' + invKey + '\')">Cancel</button></td>';
       tbody.appendChild(tr);
@@ -11598,7 +11598,7 @@ function showManualSaleModal(eventId) {
     var alloc = ev.allocations[pid];
     var name = alloc.productName || pid;
     var remaining = (alloc.quantity || 0) - (alloc.sold || 0);
-    productOpts += '<option value="' + pid + '">' + name + ' (' + remaining + ' remaining)</option>';
+    productOpts += '<option value="' + esc(pid) + '">' + esc(name) + ' (' + remaining + ' remaining)</option>';
   });
   if (!productOpts) {
     showToast('No products allocated to this event.', true);
@@ -11651,11 +11651,19 @@ function showManualSaleModal(eventId) {
 }
 
 async function saveManualSale(eventId) {
+  if (!hasPermission('sales', 'create')) {
+    showToast('You do not have permission to record sales.', true);
+    return;
+  }
   var ev = salesEventsData[eventId];
   if (!ev) return;
   var pid = document.getElementById('manualSaleProduct').value;
   var qty = parseInt(document.getElementById('manualSaleQty').value) || 1;
   var amountDollars = parseFloat(document.getElementById('manualSaleAmount').value) || 0;
+  if (amountDollars < 0 || amountDollars > 100000) {
+    showToast('Amount must be between $0 and $100,000.', true);
+    return;
+  }
   var paymentType = document.getElementById('manualSalePayment').value;
   var saleDate = document.getElementById('manualSaleDate').value;
   var notes = (document.getElementById('manualSaleNotes').value || '').trim();
