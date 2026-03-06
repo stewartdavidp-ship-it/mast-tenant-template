@@ -1094,12 +1094,18 @@
     var desc = items.map(function (it) { return it.name + ' x' + (it.qty || 1); }).join(', ');
     if (desc.length > 100) desc = desc.substring(0, 97) + '...';
 
-    var headers = ['Name', 'Company', 'Address1', 'Address2', 'City', 'State', 'Zip', 'Country', 'Phone', 'Weight_oz', 'Length', 'Width', 'Height', 'Description', 'Order_ID'];
+    // Rubber Stamp 1: ######SG-XXXX###### (USPS 25 char limit)
+    var orderNum = orderData.orderNumber || orderData.orderId || '';
+    var digits = orderNum.replace(/[^0-9]/g, '');
+    while (digits.length < 4) digits = '0' + digits;
+    var rubberStamp = '######SG-' + digits + '######';
+
+    var headers = ['Name', 'Company', 'Address1', 'Address2', 'City', 'State', 'Zip', 'Country', 'Phone', 'Weight_oz', 'Length', 'Width', 'Height', 'Description', 'Order_ID', 'Rubber_Stamp_1'];
     var row = [
       s.name || '', '', s.address1 || '', s.address2 || '', s.city || '', s.state || '', s.zip || '',
       'US', '', Math.ceil(totalWeightOz),
       box.boxL || 6, box.boxW || 6, box.boxH || 6,
-      desc, orderData.orderNumber || orderData.orderId || ''
+      desc, orderNum, rubberStamp
     ];
 
     function csvEsc(val) {
