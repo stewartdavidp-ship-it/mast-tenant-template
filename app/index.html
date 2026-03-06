@@ -3113,7 +3113,7 @@
       <!-- Commission List View -->
       <div id="commissionsListView">
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">
-          <select id="commissionsStatusFilter" onchange="renderCommissions()" style="font-size:0.82rem;padding:6px 10px;border-radius:6px;border:1px solid var(--cream-dark);background:white;">
+          <select id="commissionsStatusFilter" onchange="renderCommissions()" style="font-size:0.82rem;padding:6px 10px;border-radius:6px;border:1px solid var(--cream-dark);">
             <option value="all">All</option>
             <option value="new" selected>New</option>
             <option value="in-discussion">In Discussion</option>
@@ -5853,16 +5853,17 @@ function renderForecastEventBanner() {
   upcoming.sort(function(a, b) { return a.daysAway - b.daysAway; });
   upcoming.forEach(function(ev) {
     var isUrgent = ev.daysAway <= 14;
-    var bgColor = isUrgent ? '#FFF3E0' : '#FFF9C4';
+    var bgColor = isUrgent ? 'rgba(230,81,0,0.15)' : 'rgba(249,168,37,0.15)';
     var borderColor = isUrgent ? '#E65100' : '#F9A825';
+    var textColor = isUrgent ? '#ff9800' : '#fbc02d';
     html += '<div style="background:' + bgColor + ';border:1px solid ' + borderColor + ';border-radius:8px;padding:12px 16px;margin-bottom:12px;cursor:pointer;" onclick="navigateTo(\'events\')">' +
-      '<div style="font-weight:600;color:#333;">&#x1F4C5; ' + esc(ev.name) + ' in ' + ev.daysAway + ' days &mdash; review your inventory before building.</div>' +
+      '<div style="font-weight:600;color:' + textColor + ';">&#x1F4C5; ' + esc(ev.name) + ' in ' + ev.daysAway + ' days &mdash; review your inventory before building.</div>' +
     '</div>';
   });
 
   if (seasonalProducts.length > 0) {
-    html += '<div style="background:#E8F5E9;border:1px solid #4CAF50;border-radius:8px;padding:12px 16px;margin-bottom:12px;">' +
-      '<div style="font-weight:600;color:#333;">Trending products that spiked before past events: ' + seasonalProducts.map(function(n) { return esc(n); }).join(', ') + '</div>' +
+    html += '<div style="background:rgba(76,175,80,0.15);border:1px solid #4CAF50;border-radius:8px;padding:12px 16px;margin-bottom:12px;">' +
+      '<div style="font-weight:600;color:#4caf50;">Trending products that spiked before past events: ' + seasonalProducts.map(function(n) { return esc(n); }).join(', ') + '</div>' +
     '</div>';
   }
 
@@ -5909,12 +5910,12 @@ function renderForecastSuggestedBuilds() {
     if (f.trending) reasons.push('Trending &#x2191;');
     if (hasUpcomingEvent) reasons.push('Upcoming Event');
 
-    html += '<div style="background:white;border:1px solid var(--cream-dark,#e8e0d4);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:8px;">' +
+    html += '<div style="background:var(--cream,#f5f0e8);border:1px solid var(--cream-dark,#e8e0d4);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:8px;">' +
       '<div style="display:flex;gap:12px;align-items:flex-start;">' +
-        (imgUrl ? '<img src="' + esc(imgUrl) + '" style="width:56px;height:56px;border-radius:8px;object-fit:cover;" loading="lazy">' : '<div style="width:56px;height:56px;border-radius:8px;background:var(--cream,#f5f0e8);display:flex;align-items:center;justify-content:center;font-size:1.4rem;">&#x1F3A8;</div>') +
+        (imgUrl ? '<img src="' + esc(imgUrl) + '" style="width:56px;height:56px;border-radius:8px;object-fit:cover;" loading="lazy">' : '<div style="width:56px;height:56px;border-radius:8px;background:var(--cream-dark,#e8e0d4);display:flex;align-items:center;justify-content:center;font-size:1.4rem;">&#x1F3A8;</div>') +
         '<div style="flex:1;min-width:0;">' +
           '<div style="font-weight:600;font-size:0.95rem;">' + esc(f.name) + '</div>' +
-          (catBadge ? '<span style="background:var(--cream,#f5f0e8);padding:2px 8px;border-radius:4px;font-size:0.72rem;color:var(--warm-gray);">' + esc(catBadge) + '</span>' : '') +
+          (catBadge ? '<span style="background:var(--cream-dark,#e8e0d4);padding:2px 8px;border-radius:4px;font-size:0.72rem;color:var(--warm-gray);">' + esc(catBadge) + '</span>' : '') +
         '</div>' +
       '</div>' +
       '<div style="font-size:0.82rem;color:var(--warm-gray);">' +
@@ -5922,8 +5923,8 @@ function renderForecastSuggestedBuilds() {
       '</div>' +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
         reasons.map(function(r) {
-          var bg = r.indexOf('Trending') >= 0 ? '#E8F5E9' : r.indexOf('Event') >= 0 ? '#FFF3E0' : '#FFF9C4';
-          var color = r.indexOf('Trending') >= 0 ? '#2E7D32' : r.indexOf('Event') >= 0 ? '#E65100' : '#F57F17';
+          var bg = r.indexOf('Trending') >= 0 ? 'rgba(46,125,50,0.15)' : r.indexOf('Event') >= 0 ? 'rgba(230,81,0,0.15)' : 'rgba(245,127,23,0.15)';
+          var color = r.indexOf('Trending') >= 0 ? '#4caf50' : r.indexOf('Event') >= 0 ? '#ff9800' : '#fbc02d';
           return '<span style="background:' + bg + ';color:' + color + ';padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;">' + r + '</span>';
         }).join('') +
       '</div>' +
@@ -5939,12 +5940,12 @@ function renderForecastSuggestedBuilds() {
     html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;">';
     mtoConsider.forEach(function(f) {
       var imgUrl = (f.images && f.images.length) ? f.images[0] : '';
-      html += '<div style="background:white;border:1px solid var(--cream-dark,#e8e0d4);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:8px;">' +
+      html += '<div style="background:var(--cream,#f5f0e8);border:1px solid var(--cream-dark,#e8e0d4);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:8px;">' +
         '<div style="display:flex;gap:12px;align-items:flex-start;">' +
-          (imgUrl ? '<img src="' + esc(imgUrl) + '" style="width:56px;height:56px;border-radius:8px;object-fit:cover;" loading="lazy">' : '<div style="width:56px;height:56px;border-radius:8px;background:var(--cream,#f5f0e8);display:flex;align-items:center;justify-content:center;font-size:1.4rem;">&#x1F3A8;</div>') +
+          (imgUrl ? '<img src="' + esc(imgUrl) + '" style="width:56px;height:56px;border-radius:8px;object-fit:cover;" loading="lazy">' : '<div style="width:56px;height:56px;border-radius:8px;background:var(--cream-dark,#e8e0d4);display:flex;align-items:center;justify-content:center;font-size:1.4rem;">&#x1F3A8;</div>') +
           '<div style="flex:1;min-width:0;">' +
             '<div style="font-weight:600;font-size:0.95rem;">' + esc(f.name) + '</div>' +
-            '<span style="background:#E3F2FD;padding:2px 8px;border-radius:4px;font-size:0.72rem;color:#1565C0;">MTO</span>' +
+            '<span style="background:rgba(21,101,192,0.15);padding:2px 8px;border-radius:4px;font-size:0.72rem;color:#42a5f5;">MTO</span>' +
           '</div>' +
         '</div>' +
         '<div style="font-size:0.82rem;color:var(--warm-gray);">' + f.last90 + ' ordered in 90 days &middot; Selling ' + f.monthlyRate + '/mo</div>' +
@@ -6091,13 +6092,13 @@ function renderForecastDemandTable() {
     var soldVal = forecastTimeHorizon === '30d' ? f.last30 : forecastTimeHorizon === '90d' ? f.last90 : forecastTimeHorizon === 'all' ? f.allTimeSold : f.recentSold;
     var imgUrl = (f.images && f.images.length) ? f.images[0] : '';
     var trendBadge = f.trending
-      ? '<span style="background:#E8F5E9;color:#2E7D32;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;">&#x2191;</span>'
+      ? '<span style="background:rgba(46,125,50,0.15);color:#4caf50;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;">&#x2191;</span>'
       : f.declining
-        ? '<span style="background:#FFEBEE;color:#C62828;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;">&#x2193;</span>'
+        ? '<span style="background:rgba(198,40,40,0.15);color:#ef5350;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;">&#x2193;</span>'
         : '<span style="color:var(--warm-gray);">&mdash;</span>';
     var typeBadge = f.isStocked
-      ? '<span style="background:#E8F5E9;color:#2E7D32;padding:2px 8px;border-radius:4px;font-size:0.72rem;">Stocked</span>'
-      : '<span style="background:#E3F2FD;color:#1565C0;padding:2px 8px;border-radius:4px;font-size:0.72rem;">MTO</span>';
+      ? '<span style="background:rgba(46,125,50,0.15);color:#4caf50;padding:2px 8px;border-radius:4px;font-size:0.72rem;">Stocked</span>'
+      : '<span style="background:rgba(21,101,192,0.15);color:#42a5f5;padding:2px 8px;border-radius:4px;font-size:0.72rem;">MTO</span>';
 
     html += '<tr style="border-bottom:1px solid var(--cream-dark,#e8e0d4);cursor:pointer;" onclick="navigateTo(\'products\')">' +
       '<td style="padding:8px;">' +
@@ -17057,7 +17058,7 @@ function viewCommissionDetail(commId) {
   if (showProposal || c.proposalPrice || c.proposalTimeline || c.proposalSpec) {
     var hasProposal = c.proposalPrice || c.proposalTimeline || c.proposalSpec;
     proposalSection =
-      '<div style="background:white;border-radius:8px;padding:24px;box-shadow:0 1px 3px rgba(0,0,0,0.08);margin-top:16px;">' +
+      '<div style="background:var(--cream,#f5f0e8);border-radius:8px;padding:24px;box-shadow:0 1px 3px rgba(0,0,0,0.08);margin-top:16px;">' +
         '<h4 style="margin:0 0 16px 0;font-size:1rem;">Proposal</h4>' +
         '<div style="display:grid;grid-template-columns:120px 1fr;gap:8px 16px;font-size:0.88rem;">' +
           '<span style="color:var(--warm-gray);">Price</span>' +
@@ -17076,18 +17077,50 @@ function viewCommissionDetail(commId) {
       '</div>';
   }
 
+  // Documents section — visible when status is in-discussion or later
+  var docsSection = '';
+  var showDocs = ['in-discussion', 'accepted', 'built', 'completed'].indexOf(c.status) !== -1;
+  var docs = c.documents ? Object.keys(c.documents).map(function(k) { var d = c.documents[k]; d.id = k; return d; }) : [];
+  if (showDocs || docs.length > 0) {
+    var docsListHtml = '';
+    docs.sort(function(a, b) { return (b.addedAt || '').localeCompare(a.addedAt || ''); });
+    docs.forEach(function(doc) {
+      var icon = doc.type === 'drive' ? '&#x1F4C4;' : '&#x1F4CE;';
+      var dateStr = doc.addedAt ? new Date(doc.addedAt).toLocaleDateString() : '';
+      docsListHtml += '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--cream-dark,#e8e0d4);font-size:0.85rem;">' +
+        '<span style="font-size:1.1rem;">' + icon + '</span>' +
+        '<div style="flex:1;min-width:0;">' +
+          '<a href="' + esc(doc.url || doc.webViewLink || '#') + '" target="_blank" style="color:var(--teal);text-decoration:none;font-weight:500;">' + esc(doc.name || 'Untitled') + '</a>' +
+          (doc.mimeType ? '<span style="color:var(--warm-gray);font-size:0.75rem;margin-left:8px;">' + esc(doc.mimeType.split('/').pop()) + '</span>' : '') +
+        '</div>' +
+        '<span style="color:var(--warm-gray);font-size:0.78rem;white-space:nowrap;">' + esc(dateStr) + '</span>' +
+        '<button class="btn-icon danger" style="padding:4px 6px;font-size:0.75rem;" onclick="event.stopPropagation();removeCommissionDoc(\'' + esc(commId) + '\',\'' + esc(doc.id) + '\')" title="Remove">&times;</button>' +
+      '</div>';
+    });
+
+    docsSection =
+      '<div style="background:var(--cream,#f5f0e8);border-radius:8px;padding:24px;box-shadow:0 1px 3px rgba(0,0,0,0.08);margin-top:16px;">' +
+        '<h4 style="margin:0 0 12px 0;font-size:1rem;">Documents</h4>' +
+        (docsListHtml ? '<div style="margin-bottom:16px;">' + docsListHtml + '</div>' : '<p style="font-size:0.82rem;color:var(--warm-gray);margin:0 0 16px 0;">No documents attached yet.</p>') +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+          '<button class="btn btn-secondary" style="font-size:0.82rem;" onclick="openCommissionDocLinkModal(\'' + esc(commId) + '\')">+ Link Google Doc</button>' +
+          '<button class="btn btn-secondary" style="font-size:0.82rem;" onclick="openCommissionDocUploadModal(\'' + esc(commId) + '\')">+ Upload File</button>' +
+        '</div>' +
+      '</div>';
+  }
+
   // Production job link — visible when accepted
   var jobSection = '';
   if (c.status === 'accepted' && !c.productionJobId) {
     jobSection =
-      '<div style="background:white;border-radius:8px;padding:24px;box-shadow:0 1px 3px rgba(0,0,0,0.08);margin-top:16px;">' +
+      '<div style="background:var(--cream,#f5f0e8);border-radius:8px;padding:24px;box-shadow:0 1px 3px rgba(0,0,0,0.08);margin-top:16px;">' +
         '<h4 style="margin:0 0 8px 0;font-size:1rem;">Production</h4>' +
         '<p style="font-size:0.85rem;color:var(--warm-gray);margin:0 0 12px 0;">Customer accepted — create a production job to track the build.</p>' +
         '<button class="btn btn-primary" style="font-size:0.82rem;" onclick="createCommissionJob(\'' + esc(commId) + '\')">Create Production Job</button>' +
       '</div>';
   } else if (c.productionJobId) {
     jobSection =
-      '<div style="background:white;border-radius:8px;padding:24px;box-shadow:0 1px 3px rgba(0,0,0,0.08);margin-top:16px;">' +
+      '<div style="background:var(--cream,#f5f0e8);border-radius:8px;padding:24px;box-shadow:0 1px 3px rgba(0,0,0,0.08);margin-top:16px;">' +
         '<h4 style="margin:0 0 8px 0;font-size:1rem;">Production</h4>' +
         '<p style="font-size:0.85rem;margin:0;">Linked to production job. <a href="#" onclick="event.preventDefault();navigateTo(\'production\')" style="color:var(--teal);">View in Production</a></p>' +
       '</div>';
@@ -17096,7 +17129,7 @@ function viewCommissionDetail(commId) {
   var html = '<div style="margin-bottom:16px;">' +
     '<button class="btn btn-secondary" style="font-size:0.82rem;" onclick="closeCommissionDetail()">&larr; Back to List</button>' +
   '</div>' +
-  '<div style="background:white;border-radius:8px;padding:24px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">' +
+  '<div style="background:var(--cream,#f5f0e8);border-radius:8px;padding:24px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">' +
     '<div style="display:flex;gap:16px;align-items:flex-start;margin-bottom:20px;">' +
       (imgSrc ? '<img src="' + esc(imgSrc) + '" style="width:80px;height:80px;border-radius:8px;object-fit:cover;">' : '') +
       '<div>' +
@@ -17116,6 +17149,7 @@ function viewCommissionDetail(commId) {
     '</div>' +
   '</div>' +
   proposalSection +
+  docsSection +
   jobSection;
 
   document.getElementById('commissionDetailView').innerHTML = html;
@@ -17218,6 +17252,140 @@ async function createCommissionJob(commId) {
   }
 }
 
+function openCommissionDocLinkModal(commId) {
+  var html =
+    '<div style="max-width:450px;">' +
+      '<h3>Link Google Doc</h3>' +
+      '<div class="form-group">' +
+        '<label>Google Drive URL</label>' +
+        '<input type="text" id="commDocDriveUrl" placeholder="https://docs.google.com/document/d/...">' +
+        '<p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Paste a link to a Google Doc, Sheet, or Drive file.</p>' +
+      '</div>' +
+      '<div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end;">' +
+        '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+        '<button class="btn btn-primary" onclick="saveCommissionDocLink(\'' + esc(commId) + '\')">Add Link</button>' +
+      '</div>' +
+    '</div>';
+  openModal(html);
+}
+
+async function saveCommissionDocLink(commId) {
+  var url = document.getElementById('commDocDriveUrl').value.trim();
+  if (!url) { showToast('Paste a Google Drive URL', true); return; }
+
+  try {
+    var meta = await fetchDriveFileMetadata(url);
+    var docData = {
+      type: 'drive',
+      name: meta ? meta.name : url.split('/').pop() || 'Google Doc',
+      url: url,
+      webViewLink: meta ? meta.webViewLink : url,
+      mimeType: meta ? meta.mimeType : null,
+      addedAt: new Date().toISOString()
+    };
+    var docRef = db.ref(COMMISSIONS_PATH + '/' + commId + '/documents').push();
+    await docRef.set(docData);
+    if (!commissionsData[commId].documents) commissionsData[commId].documents = {};
+    commissionsData[commId].documents[docRef.key] = docData;
+    await writeAudit('update', 'commission', commId);
+    closeModal();
+    showToast('Document linked');
+    viewCommissionDetail(commId);
+  } catch (err) {
+    showToast('Error linking document: ' + err.message, true);
+  }
+}
+
+function openCommissionDocUploadModal(commId) {
+  var html =
+    '<div style="max-width:450px;">' +
+      '<h3>Upload File</h3>' +
+      '<div class="form-group">' +
+        '<label>Select File</label>' +
+        '<input type="file" id="commDocFileInput" style="font-size:0.85rem;">' +
+        '<p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Max 10 MB. PDFs, images, and documents accepted.</p>' +
+      '</div>' +
+      '<div id="commDocUploadStatus" style="font-size:0.82rem;margin-top:8px;"></div>' +
+      '<div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end;">' +
+        '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+        '<button class="btn btn-primary" id="commDocUploadBtn" onclick="uploadCommissionDoc(\'' + esc(commId) + '\')">Upload</button>' +
+      '</div>' +
+    '</div>';
+  openModal(html);
+}
+
+async function uploadCommissionDoc(commId) {
+  var fileInput = document.getElementById('commDocFileInput');
+  var statusEl = document.getElementById('commDocUploadStatus');
+  var uploadBtn = document.getElementById('commDocUploadBtn');
+
+  if (!fileInput || !fileInput.files || !fileInput.files[0]) {
+    showToast('Select a file first', true); return;
+  }
+  var file = fileInput.files[0];
+  if (file.size > 10 * 1024 * 1024) {
+    showToast('File must be under 10 MB', true); return;
+  }
+
+  if (uploadBtn) { uploadBtn.disabled = true; uploadBtn.textContent = 'Uploading...'; }
+  if (statusEl) { statusEl.textContent = 'Uploading...'; statusEl.style.color = 'var(--warm-gray)'; }
+
+  try {
+    var ext = file.name.split('.').pop() || 'bin';
+    var fileName = Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    var storageRef = storage.ref('shirglassworks/commission-docs/' + commId + '/' + fileName);
+    var uploadTask = storageRef.put(file);
+
+    await new Promise(function(resolve, reject) {
+      uploadTask.on('state_changed',
+        function(snapshot) {
+          var pct = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+          if (statusEl) statusEl.textContent = 'Uploading... ' + pct + '%';
+        },
+        reject,
+        resolve
+      );
+    });
+
+    var downloadUrl = await uploadTask.snapshot.ref.getDownloadURL();
+
+    var docData = {
+      type: 'upload',
+      name: file.name,
+      url: downloadUrl,
+      mimeType: file.type || null,
+      size: file.size,
+      addedAt: new Date().toISOString()
+    };
+    var docRef = db.ref(COMMISSIONS_PATH + '/' + commId + '/documents').push();
+    await docRef.set(docData);
+    if (!commissionsData[commId].documents) commissionsData[commId].documents = {};
+    commissionsData[commId].documents[docRef.key] = docData;
+    await writeAudit('update', 'commission', commId);
+    closeModal();
+    showToast('File uploaded');
+    viewCommissionDetail(commId);
+  } catch (err) {
+    if (statusEl) { statusEl.textContent = 'Error: ' + err.message; statusEl.style.color = '#ef5350'; }
+    if (uploadBtn) { uploadBtn.disabled = false; uploadBtn.textContent = 'Upload'; }
+  }
+}
+
+async function removeCommissionDoc(commId, docId) {
+  if (!confirm('Remove this document?')) return;
+  try {
+    await db.ref(COMMISSIONS_PATH + '/' + commId + '/documents/' + docId).remove();
+    if (commissionsData[commId] && commissionsData[commId].documents) {
+      delete commissionsData[commId].documents[docId];
+    }
+    await writeAudit('update', 'commission', commId);
+    showToast('Document removed');
+    viewCommissionDetail(commId);
+  } catch (err) {
+    showToast('Error removing document: ' + err.message, true);
+  }
+}
+
 function closeCommissionDetail() {
   document.getElementById('commissionDetailView').style.display = 'none';
   document.getElementById('commissionDetailView').innerHTML = '';
@@ -17230,6 +17398,8 @@ async function updateCommissionStatus(commId, newStatus) {
     commissionsData[commId].status = newStatus;
     await writeAudit('update', 'commission', commId);
     showToast('Status updated');
+    // Re-render detail to show/hide proposal and production sections
+    viewCommissionDetail(commId);
   } catch (err) {
     showToast('Error updating status: ' + err.message, true);
   }
