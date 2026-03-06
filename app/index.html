@@ -3856,6 +3856,7 @@
     <div id="employeesTab" style="display:none;">
       <div class="section-header">
         <h2>Employees &amp; Permissions</h2>
+        <button class="btn btn-primary" onclick="showInviteUserModal()" style="font-size:0.82rem;padding:6px 14px;">+ Add User</button>
       </div>
       <div class="view-tabs" id="empSubNav">
         <button class="view-tab active" onclick="switchEmployeesView('users')">Users</button>
@@ -4131,6 +4132,8 @@ var AUDIT_INDEX_PATH = 'shirglassworks/admin/auditIndex';
 // ============================================================
 var ROLES_PATH = 'shirglassworks/admin/roles';
 var ADMIN_USERS_PATH = 'shirglassworks/admin/users';
+var INVITES_PATH = 'shirglassworks/admin/invites';
+var ROLE_DISPLAY_NAMES = { admin: 'Owner', user: 'Manager', guest: 'Staff' };
 var currentUserRole = null;   // 'admin' | 'user' | 'guest' | null
 var currentRoleConfig = null; // Full role record with permissions map
 var rbacReady = false;        // True once role + permissions loaded
@@ -4138,7 +4141,7 @@ var rbacReady = false;        // True once role + permissions loaded
 // Default role definitions — seeded on first admin bootstrap
 var DEFAULT_ROLES = {
   admin: {
-    name: 'Admin',
+    name: 'Owner',
     description: 'Full access to all system functions.',
     isDefault: true,
     permissions: {
@@ -4162,7 +4165,7 @@ var DEFAULT_ROLES = {
     }
   },
   user: {
-    name: 'User',
+    name: 'Manager',
     description: 'Operational access — PoS, inventory, fulfillment. No pricing, settings, or user management.',
     isDefault: true,
     permissions: {
@@ -4186,8 +4189,8 @@ var DEFAULT_ROLES = {
     }
   },
   guest: {
-    name: 'Guest',
-    description: 'Customer-facing — own orders and profile only.',
+    name: 'Staff',
+    description: 'Basic access — POS, inventory, and fulfillment.',
     isDefault: true,
     permissions: {
       orders:       { create: false, read: true, update: false, delete: false },
@@ -4390,8 +4393,29 @@ async function loadUserRole(uid) {
     if (!userData) {
       // Determine initial role:
       // - Known admin UIDs (ALLOWED_UIDS) bootstrap as admin (migration path)
+      // - Check for pending invite by email — assign invited role
       // - Everyone else auto-provisions as guest
       var initialRole = ALLOWED_UIDS.includes(uid) ? 'admin' : 'guest';
+
+      // Check for pending invite
+      if (initialRole !== 'admin' && currentUser.email) {
+        var inviteKey = currentUser.email.toLowerCase().replace(/\./g, ',');
+        try {
+          var inviteSnap = await db.ref(INVITES_PATH + '/' + inviteKey).once('value');
+          var invite = inviteSnap.val();
+          if (invite && invite.status === 'pending' && invite.role) {
+            initialRole = invite.role;
+            await db.ref(INVITES_PATH + '/' + inviteKey).update({
+              status: 'accepted',
+              acceptedAt: new Date().toISOString(),
+              acceptedByUid: uid
+            });
+          }
+        } catch (invErr) {
+          console.error('Invite check failed:', invErr);
+        }
+      }
+
       userData = {
         uid: uid,
         displayName: currentUser.displayName || '',
@@ -4591,8 +4615,8 @@ auth.onAuthStateChanged(async function(user) {
   }
 
   if (!isStaff()) {
-    // Guest role — show denied screen with guest message for now
-    // (Guest portal UI is a future phase)
+    // Staff role — show denied screen for now
+    // (Staff portal UI is a future phase)
     authScreen.style.display = 'none';
     deniedScreen.style.display = '';
     header.style.display = 'none';
@@ -7345,7 +7369,7 @@ var rolesLoaded = false;
 var editingPermissions = {}; // temp state for permission matrix edits
 
 function loadAdminUsers() {
-  if (adminUsersLoaded) { renderUsersList(); return; }
+  if (adminUsersLoaded) { renderUsersList(); loadPendingInvites(); return; }
   if (!hasPermission('users', 'read')) {
     document.getElementById('usersEmpty').style.display = '';
     document.getElementById('usersEmpty').innerHTML = '<p>You do not have permission to manage users.</p>';
@@ -7357,6 +7381,7 @@ function loadAdminUsers() {
     adminUsersLoaded = true;
     document.getElementById('usersLoading').style.display = 'none';
     renderUsersList();
+    loadPendingInvites();
   }).catch(function(err) {
     console.error('Failed to load admin users:', err);
     document.getElementById('usersLoading').style.display = 'none';
@@ -7452,6 +7477,24 @@ function renderUsersList() {
       '<td>' + (isSelf ? '' : '<button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 8px;" onclick="viewUserAudit(\'' + uid + '\')">History</button>') + '</td>';
     tbody.appendChild(tr);
   });
+
+  // Show pending invites
+  var inviteEntries = Object.entries(pendingInvites).filter(function(p) { return p[1].status === 'pending'; });
+  if (inviteEntries.length > 0) {
+    inviteEntries.forEach(function(pair) {
+      var inv = pair[1];
+      var invKey = pair[0];
+      var roleName = ROLE_DISPLAY_NAMES[inv.role] || inv.role;
+      var tr = document.createElement('tr');
+      tr.style.opacity = '0.6';
+      tr.innerHTML = '<td><span style="display:inline-block;width:32px;height:32px;border-radius:50%;background:var(--cream-dark);text-align:center;line-height:32px;font-size:0.85rem;margin-right:8px;">✉</span>Pending Invite</td>' +
+        '<td>' + inv.email + '</td>' +
+        '<td><span class="status-badge">' + roleName + '</span></td>' +
+        '<td>Invited ' + new Date(inv.invitedAt).toLocaleDateString() + '</td>' +
+        '<td><button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 8px;" onclick="cancelInvite(\'' + invKey + '\')">Cancel</button></td>';
+      tbody.appendChild(tr);
+    });
+  }
 }
 
 async function changeUserRole(uid, newRole) {
@@ -7472,7 +7515,7 @@ async function changeUserRole(uid, newRole) {
       renderUsersList(); // reset dropdown
       return;
     }
-    if (!confirm('Change ' + (user.displayName || user.email) + ' from Admin to ' + newRole + '? They will lose admin access on next login.')) {
+    if (!confirm('Change ' + (user.displayName || user.email) + ' from Owner to ' + (ROLE_DISPLAY_NAMES[newRole] || newRole) + '? They will lose Owner access on next login.')) {
       renderUsersList(); // reset dropdown
       return;
     }
@@ -7482,7 +7525,7 @@ async function changeUserRole(uid, newRole) {
     await db.ref(ADMIN_USERS_PATH + '/' + uid + '/role').set(newRole);
     adminUsers[uid].role = newRole;
     await writeAudit('update', 'users', uid);
-    showToast('Role changed to ' + newRole + '.');
+    showToast('Role changed to ' + (ROLE_DISPLAY_NAMES[newRole] || newRole) + '.');
     renderUsersList();
   } catch (err) {
     console.error('Role change failed:', err);
@@ -7498,6 +7541,107 @@ function viewUserAudit(uid) {
     document.getElementById('auditFilterActor').value = uid;
     renderAuditLog();
   }, 100);
+}
+
+// ============================================================
+// User Invite Flow
+// ============================================================
+function showInviteUserModal() {
+  if (!hasPermission('users', 'create')) {
+    showToast('You do not have permission to add users.', true);
+    return;
+  }
+  var roleKeys = Object.keys(rolesData).length > 0 ? Object.keys(rolesData) : Object.keys(DEFAULT_ROLES);
+  var roleOpts = '';
+  roleKeys.forEach(function(rk) {
+    if (rk === 'guest') return; // Skip staff/guest as default — select manager
+    var rName = ROLE_DISPLAY_NAMES[rk] || (rolesData[rk] ? rolesData[rk].name : rk);
+    var selected = rk === 'user' ? ' selected' : '';
+    roleOpts += '<option value="' + rk + '"' + selected + '>' + rName + '</option>';
+  });
+  // Add staff option last
+  var staffName = ROLE_DISPLAY_NAMES['guest'] || 'Staff';
+  roleOpts += '<option value="guest">' + staffName + '</option>';
+
+  var html = '<div class="modal-header">' +
+    '<h3>Invite User</h3>' +
+    '<button class="modal-close" onclick="closeModal()">&times;</button>' +
+  '</div>' +
+  '<div class="modal-body">' +
+    '<div class="form-group">' +
+      '<label for="inviteEmail">Email Address <span class="field-required">*</span></label>' +
+      '<input type="email" id="inviteEmail" placeholder="name@example.com" style="width:100%;padding:8px;border:1px solid var(--cream-dark);border-radius:6px;">' +
+    '</div>' +
+    '<div class="form-group">' +
+      '<label for="inviteRole">Role</label>' +
+      '<select id="inviteRole" style="width:100%;padding:8px;border:1px solid var(--cream-dark);border-radius:6px;">' + roleOpts + '</select>' +
+    '</div>' +
+  '</div>' +
+  '<div class="modal-footer">' +
+    '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+    '<button class="btn btn-primary" onclick="sendUserInvite()">Send Invite</button>' +
+  '</div>';
+  openModal(html);
+  setTimeout(function() { document.getElementById('inviteEmail').focus(); }, 100);
+}
+
+async function sendUserInvite() {
+  var email = (document.getElementById('inviteEmail').value || '').trim().toLowerCase();
+  var role = document.getElementById('inviteRole').value || 'user';
+  if (!email || !email.includes('@')) {
+    showToast('Please enter a valid email address.', true);
+    return;
+  }
+
+  // Check if user already exists
+  var existingUsers = Object.values(adminUsers);
+  for (var i = 0; i < existingUsers.length; i++) {
+    if ((existingUsers[i].email || '').toLowerCase() === email) {
+      showToast('A user with this email already exists.', true);
+      return;
+    }
+  }
+
+  // Encode email for use as Firebase key (replace . with ,)
+  var emailKey = email.replace(/\./g, ',');
+  try {
+    await db.ref(INVITES_PATH + '/' + emailKey).set({
+      email: email,
+      role: role,
+      invitedAt: new Date().toISOString(),
+      invitedBy: currentUser.uid,
+      status: 'pending'
+    });
+    await writeAudit('create', 'users', emailKey);
+    closeModal();
+    var roleName = ROLE_DISPLAY_NAMES[role] || role;
+    showToast('Invite recorded — ask them to sign in with their Google account. They\'ll be assigned the ' + roleName + ' role automatically.');
+    loadPendingInvites();
+  } catch (err) {
+    console.error('Invite failed:', err);
+    showToast('Failed to record invite.', true);
+  }
+}
+
+var pendingInvites = {};
+
+function loadPendingInvites() {
+  db.ref(INVITES_PATH).orderByChild('status').equalTo('pending').once('value').then(function(snap) {
+    pendingInvites = snap.val() || {};
+    renderUsersList();
+  });
+}
+
+async function cancelInvite(emailKey) {
+  if (!confirm('Cancel this invite?')) return;
+  try {
+    await db.ref(INVITES_PATH + '/' + emailKey).remove();
+    delete pendingInvites[emailKey];
+    renderUsersList();
+    showToast('Invite cancelled.');
+  } catch (err) {
+    showToast('Failed to cancel invite.', true);
+  }
 }
 
 // ============================================================

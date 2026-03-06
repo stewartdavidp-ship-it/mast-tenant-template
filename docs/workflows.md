@@ -263,11 +263,13 @@ Switching between sandbox (test) mode and live payments, and updating Square cre
 Adding a new team member or updating what someone can access in the admin app.
 
 1. Open the admin app and go to Manage → Employees & Permissions
-2. To add someone: click Add User and enter their email
-3. Assign a role: Owner, Manager, or Staff
-4. Staff can access POS, inventory, and fulfillment — not pricing or settings
-5. Save — the new user receives an invitation
-6. To change a role: find the user and update their role, then save
+2. To invite someone: click + Add User in the section header
+3. Enter their email address and select a role: Owner, Manager, or Staff
+4. Click Send Invite — the invite is recorded and you'll see it as a pending row in the users list
+5. Tell the person to sign in with their Google account — they'll be assigned the invited role automatically on first login
+6. To change an existing user's role: use the role dropdown next to their name in the users list
+7. Managers can access POS, inventory, and fulfillment — not pricing, settings, or user management
+8. Staff have basic access to POS and inventory
 
 ### View the Audit Log
 **Status:** Live
