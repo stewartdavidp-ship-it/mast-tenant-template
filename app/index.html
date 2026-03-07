@@ -3802,14 +3802,42 @@
 
     <!-- ===== STORIES TAB (standalone) ===== -->
     <div id="storiesTab" style="display:none;">
-      <div class="section-header">
-        <h2>Stories</h2>
+      <!-- Stories List View -->
+      <div id="storiesListView">
+        <div class="section-header">
+          <h2>Stories</h2>
+        </div>
+        <!-- Missing stories prompt -->
+        <div id="storiesMissingPrompt" style="display:none;margin-bottom:16px;">
+          <div onclick="toggleMissingStories()" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;">
+            <span style="font-size:1rem;">💡</span>
+            <span style="font-weight:600;font-size:0.85rem;">Completed Jobs Without Stories</span>
+            <span id="missingStoriesBadge" style="background:#E65100;color:white;border-radius:10px;padding:1px 6px;font-size:0.7rem;display:none;">0</span>
+            <span id="missingStoriesArrow" style="margin-left:auto;font-size:0.7rem;color:var(--warm-gray);transition:transform 0.2s;">▶</span>
+          </div>
+          <div id="missingStoriesContent" style="display:none;padding:12px 14px;border:1px solid var(--cream-dark);border-top:none;border-radius:0 0 8px 8px;">
+            <div id="missingStoriesList"></div>
+          </div>
+        </div>
+        <!-- Stories filter -->
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">
+          <select id="storiesStatusFilter" onchange="renderStoriesList()" style="padding:6px 10px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.82rem;background:white;">
+            <option value="all">All Stories</option>
+            <option value="draft">Drafts</option>
+            <option value="published">Published</option>
+          </select>
+        </div>
+        <div id="storiesListContent"></div>
+        <div id="storiesEmpty" style="display:none;text-align:center;padding:48px 20px;color:var(--warm-gray);">
+          <div style="font-size:2.5rem;margin-bottom:12px;">📖</div>
+          <h3 style="color:var(--text);margin:0 0 8px;">No Stories Yet</h3>
+          <p style="max-width:400px;margin:0 auto 16px;font-size:0.9rem;">Stories are curated from completed jobs. Open a completed job and click <strong>Curate Story</strong> to create one.</p>
+          <button class="btn btn-secondary" onclick="navigateTo('jobs')">View Jobs</button>
+        </div>
       </div>
-      <div style="text-align:center;padding:48px 20px;color:var(--warm-gray);">
-        <div style="font-size:2.5rem;margin-bottom:12px;">📖</div>
-        <h3 style="color:var(--text);margin:0 0 8px;">Stories</h3>
-        <p style="max-width:400px;margin:0 auto 16px;font-size:0.9rem;">Stories are curated from completed production jobs. Open a job and click <strong>Curate Story</strong> to create or edit its story.</p>
-        <button class="btn btn-secondary" onclick="navigateTo('jobs')">View Jobs</button>
+      <!-- Story Detail View -->
+      <div id="storyDetailView" style="display:none;">
+        <div id="storyDetailContent"></div>
       </div>
     </div>
 
@@ -4462,6 +4490,10 @@ var productionSubView = 'jobs';
 var activeBuildId = null;
 var BUILD_MEDIA_PATH = 'shirglassworks/admin/buildMedia';
 var STORIES_PATH = 'shirglassworks/public/stories';
+var storiesData = {};
+var storiesLoaded = false;
+var storiesListener = null;
+var selectedStoryId = null;
 var currentBuildMedia = {};
 var storyDraft = null;
 var storyCurationJobId = null;
@@ -5074,7 +5106,14 @@ var ROUTE_MAP = {
   'receipts':    { tab: 'salesTab', setup: function() { if (!showingSquarePayments) toggleSquarePayments(); } },
   'social':      { tab: 'socialMediaTab' },
   'newsletter':  { tab: 'newsletterTab' },
-  'stories':     { tab: 'storiesTab' },
+  'stories':     { tab: 'storiesTab', setup: function() {
+    var listView = document.getElementById('storiesListView');
+    var detailView = document.getElementById('storyDetailView');
+    if (listView) listView.style.display = '';
+    if (detailView) detailView.style.display = 'none';
+    selectedStoryId = null;
+    loadStories();
+  } },
   'website':     { tab: 'galleryTab' },
   'products':    { tab: 'productsTab' },
   'inventory':   { tab: 'inventoryTab', setup: function() { renderInventoryOverview(); } },
@@ -5163,6 +5202,7 @@ function lazyLoadForRoute(route) {
   if (route === 'jobs' || route === 'production' || route === 'inventory' || route === 'stories') {
     if (!productsLoaded) loadProducts();
     if (!productionLoaded) loadProduction();
+    if (route === 'stories' && !storiesLoaded) loadStories();
   }
   if (route === 'images') {
     if (!productsLoaded) loadProducts();
@@ -15231,6 +15271,341 @@ async function loadJobPipelineStatus(jobId) {
     }
   }
   el.innerHTML = html || '<div style="font-size:0.85rem;color:var(--warm-gray);">No linked production requests.</div>';
+}
+
+// ---- Stories Tab: Data Loading & List View ----
+function loadStories() {
+  if (storiesLoaded) {
+    renderStoriesList();
+    return;
+  }
+  storiesLoaded = true;
+  if (!storiesListener) {
+    storiesListener = db.ref(STORIES_PATH).limitToLast(200).on('value', function(snap) {
+      storiesData = snap.val() || {};
+      renderStoriesList();
+      if (selectedStoryId) renderStoryDetail(selectedStoryId);
+    }, function(err) {
+      showToast('Error loading stories: ' + err.message, true);
+    });
+  }
+}
+
+function renderStoriesList() {
+  var listEl = document.getElementById('storiesListContent');
+  var emptyEl = document.getElementById('storiesEmpty');
+  if (!listEl) return;
+
+  var filterVal = (document.getElementById('storiesStatusFilter') || {}).value || 'all';
+
+  // Build stories array with keys
+  var items = Object.keys(storiesData).map(function(k) {
+    var s = storiesData[k];
+    s._key = k;
+    return s;
+  }).filter(function(s) {
+    if (filterVal === 'all') return true;
+    return s.status === filterVal;
+  }).sort(function(a, b) {
+    // Published first, then drafts, then by updatedAt desc
+    var statusOrder = { published: 0, draft: 1 };
+    var sa = statusOrder[a.status] !== undefined ? statusOrder[a.status] : 2;
+    var sb = statusOrder[b.status] !== undefined ? statusOrder[b.status] : 2;
+    if (sa !== sb) return sa - sb;
+    return (b.updatedAt || b.createdAt || '').localeCompare(a.updatedAt || a.createdAt || '');
+  });
+
+  if (items.length === 0) {
+    listEl.innerHTML = '';
+    if (emptyEl) emptyEl.style.display = '';
+    renderMissingStories();
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  var html = '';
+  items.forEach(function(s) {
+    var entryCount = s.entries ? Object.keys(s.entries).length : 0;
+    var jobName = '';
+    if (s.jobId && productionJobs[s.jobId]) {
+      jobName = productionJobs[s.jobId].name || 'Untitled Job';
+    }
+    var statusColor = s.status === 'published' ? 'var(--teal)' : 'var(--amber)';
+    var statusLabel = s.status || 'draft';
+
+    // Find first image from entries for thumbnail
+    var thumbUrl = '';
+    if (s.entries) {
+      var sorted = Object.values(s.entries).sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
+      for (var i = 0; i < sorted.length; i++) {
+        if (sorted[i].mediaUrl) { thumbUrl = sorted[i].mediaUrl; break; }
+      }
+    }
+
+    var publishedInfo = s.status === 'published' && s.publishedAt
+      ? '<span style="font-size:0.75rem;color:var(--warm-gray);">Published ' + getTimeAgo(s.publishedAt) + '</span>'
+      : '<span style="font-size:0.75rem;color:var(--warm-gray);">Updated ' + getTimeAgo(s.updatedAt || s.createdAt) + '</span>';
+
+    html += '<div class="prod-job-card" onclick="viewStoryDetail(\'' + esc(s._key) + '\')" style="display:flex;gap:12px;align-items:flex-start;">' +
+      (thumbUrl ? '<div style="width:60px;height:60px;border-radius:6px;overflow:hidden;flex-shrink:0;background:var(--cream);">' +
+        '<img src="' + esc(thumbUrl) + '" style="width:100%;height:100%;object-fit:cover;" alt="">' +
+      '</div>' : '<div style="width:60px;height:60px;border-radius:6px;flex-shrink:0;background:var(--cream);display:flex;align-items:center;justify-content:center;font-size:1.5rem;">📖</div>') +
+      '<div style="flex:1;min-width:0;">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' +
+          '<strong style="font-size:0.95rem;">' + esc(s.title || 'Untitled Story') + '</strong>' +
+          '<span class="status-badge prod-status-pill" style="background:' + statusColor + ';color:white;font-size:0.7rem;padding:1px 8px;border-radius:4px;">' + statusLabel + '</span>' +
+        '</div>' +
+        '<div style="font-size:0.82rem;color:var(--warm-gray);">' +
+          (jobName ? '🔗 ' + esc(jobName) + ' · ' : '') +
+          entryCount + ' entr' + (entryCount === 1 ? 'y' : 'ies') +
+        '</div>' +
+        '<div style="margin-top:4px;">' + publishedInfo + '</div>' +
+      '</div>' +
+    '</div>';
+  });
+  listEl.innerHTML = html;
+  renderMissingStories();
+}
+
+function renderMissingStories() {
+  var promptEl = document.getElementById('storiesMissingPrompt');
+  var listEl = document.getElementById('missingStoriesList');
+  var badgeEl = document.getElementById('missingStoriesBadge');
+  if (!promptEl || !listEl) return;
+
+  // Find completed jobs that have no story
+  var jobsWithStories = {};
+  Object.values(storiesData).forEach(function(s) {
+    if (s.jobId) jobsWithStories[s.jobId] = true;
+  });
+
+  var missing = Object.keys(productionJobs).filter(function(k) {
+    var j = productionJobs[k];
+    return j.status === 'completed' && !jobsWithStories[k];
+  }).map(function(k) {
+    return { key: k, job: productionJobs[k] };
+  }).sort(function(a, b) {
+    return (b.job.updatedAt || b.job.createdAt || '').localeCompare(a.job.updatedAt || a.job.createdAt || '');
+  });
+
+  if (missing.length === 0) {
+    promptEl.style.display = 'none';
+    return;
+  }
+  promptEl.style.display = '';
+  if (badgeEl) {
+    badgeEl.textContent = missing.length;
+    badgeEl.style.display = 'inline';
+  }
+
+  var html = '';
+  missing.forEach(function(m) {
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #eee;">' +
+      '<div>' +
+        '<strong style="font-size:0.85rem;">' + esc(m.job.name || 'Untitled') + '</strong>' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);">Completed ' + getTimeAgo(m.job.updatedAt || m.job.createdAt) + '</div>' +
+      '</div>' +
+      '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 10px;" onclick="event.stopPropagation(); openStoryCuration(\'' + esc(m.key) + '\')">📷 Create Story</button>' +
+    '</div>';
+  });
+  listEl.innerHTML = html;
+}
+
+function toggleMissingStories() {
+  var content = document.getElementById('missingStoriesContent');
+  var arrow = document.getElementById('missingStoriesArrow');
+  if (!content) return;
+  var isOpen = content.style.display !== 'none';
+  content.style.display = isOpen ? 'none' : '';
+  if (arrow) arrow.style.transform = isOpen ? '' : 'rotate(90deg)';
+}
+
+function viewStoryDetail(storyId) {
+  selectedStoryId = storyId;
+  var listView = document.getElementById('storiesListView');
+  var detailView = document.getElementById('storyDetailView');
+  if (listView) listView.style.display = 'none';
+  if (detailView) detailView.style.display = '';
+  renderStoryDetail(storyId);
+}
+
+function backToStoriesList() {
+  selectedStoryId = null;
+  var listView = document.getElementById('storiesListView');
+  var detailView = document.getElementById('storyDetailView');
+  if (detailView) detailView.style.display = 'none';
+  if (listView) listView.style.display = '';
+  renderStoriesList();
+}
+
+function renderStoryDetail(storyId) {
+  var el = document.getElementById('storyDetailContent');
+  if (!el) return;
+  var story = storiesData[storyId];
+  if (!story) {
+    el.innerHTML = '<p style="color:var(--warm-gray);">Story not found.</p>';
+    return;
+  }
+
+  var jobName = '';
+  var jobId = story.jobId;
+  if (jobId && productionJobs[jobId]) {
+    jobName = productionJobs[jobId].name || 'Untitled Job';
+  }
+
+  var statusColor = story.status === 'published' ? 'var(--teal)' : 'var(--amber)';
+  var statusLabel = story.status || 'draft';
+  var entryCount = story.entries ? Object.keys(story.entries).length : 0;
+
+  // Sort entries by order
+  var entries = [];
+  if (story.entries) {
+    entries = Object.keys(story.entries).map(function(ek) {
+      var e = story.entries[ek];
+      e._key = ek;
+      return e;
+    }).sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
+  }
+
+  // Action buttons
+  var actions = '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 10px;" onclick="previewStory(\'' + esc(storyId) + '\')">👁 Preview</button> ';
+  if (jobId) {
+    actions += '<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 10px;" onclick="openStoryCuration(\'' + esc(jobId) + '\')">✏️ Edit Story</button> ';
+  }
+  if (story.status === 'published') {
+    actions += '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 10px;" onclick="unpublishStoryFromDetail(\'' + esc(storyId) + '\')">Unpublish</button>';
+  } else if (story.status === 'draft' && entryCount > 0) {
+    actions += '<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 10px;" onclick="publishStoryFromDetail(\'' + esc(storyId) + '\')">🚀 Publish</button>';
+  }
+
+  var html = '<div class="detail-back" onclick="backToStoriesList()">← Back to Stories</div>' +
+    '<div class="section-header" style="margin-bottom:0;">' +
+      '<h2>' + esc(story.title || 'Untitled Story') + '</h2>' +
+    '</div>' +
+    '<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap;">' +
+      '<span class="status-badge prod-status-pill" style="background:' + statusColor + ';color:white;">' + statusLabel + '</span>' +
+      (jobName ? '<span style="font-size:0.85rem;color:var(--warm-gray);">🔗 From job: <strong style="color:var(--text);">' + esc(jobName) + '</strong></span>' : '') +
+      '<span style="font-size:0.85rem;color:var(--warm-gray);">' + entryCount + ' entr' + (entryCount === 1 ? 'y' : 'ies') + '</span>' +
+      (story.publishedAt ? '<span style="font-size:0.85rem;color:var(--warm-gray);">Published ' + getTimeAgo(story.publishedAt) + '</span>' : '') +
+    '</div>' +
+    '<div style="display:flex;gap:8px;margin-bottom:20px;">' + actions + '</div>';
+
+  // Show entries
+  if (entries.length > 0) {
+    html += '<div class="prod-detail-section"><strong>Entries</strong>';
+    entries.forEach(function(e, i) {
+      html += '<div style="display:flex;gap:12px;padding:12px 0;border-bottom:1px solid #eee;align-items:flex-start;">';
+      if (e.mediaUrl) {
+        html += '<div style="width:80px;height:80px;border-radius:6px;overflow:hidden;flex-shrink:0;background:var(--cream);">' +
+          '<img src="' + esc(e.mediaUrl) + '" style="width:100%;height:100%;object-fit:cover;" alt="">' +
+        '</div>';
+      } else {
+        html += '<div style="width:80px;height:80px;border-radius:6px;flex-shrink:0;background:var(--cream);display:flex;align-items:center;justify-content:center;font-size:0.8rem;color:var(--warm-gray);">Text</div>';
+      }
+      html += '<div style="flex:1;min-width:0;">' +
+        (e.milestone ? '<div style="font-weight:600;font-size:0.85rem;margin-bottom:4px;">' + esc(e.milestone) + '</div>' : '') +
+        (e.caption ? '<div style="font-size:0.85rem;color:var(--warm-gray);">' + esc(e.caption) + '</div>' : '<div style="font-size:0.85rem;color:var(--warm-gray);font-style:italic;">No caption</div>') +
+      '</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+  } else {
+    html += '<div class="prod-detail-section">' +
+      '<p style="font-size:0.85rem;color:var(--warm-gray);font-style:italic;">No entries yet. Click <strong>Edit Story</strong> to add photos and narrative.</p>' +
+    '</div>';
+  }
+
+  // Operators
+  if (story.operators && story.operators.length > 0) {
+    html += '<div class="prod-detail-section"><strong>Artists</strong>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">';
+    story.operators.forEach(function(op) {
+      var opName = operators[op] ? (operators[op].name || op) : op;
+      html += '<span style="background:var(--cream);padding:4px 10px;border-radius:12px;font-size:0.82rem;">' + esc(opName) + '</span>';
+    });
+    html += '</div></div>';
+  }
+
+  el.innerHTML = html;
+}
+
+async function publishStoryFromDetail(storyId) {
+  var story = storiesData[storyId];
+  if (!story) return;
+  if (!confirm('Publish this story? It will be visible to customers.')) return;
+  try {
+    var updates = {
+      status: 'published',
+      publishedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    // Collect operators from job builds
+    if (story.jobId) {
+      var job = productionJobs[story.jobId];
+      if (job && job.builds) {
+        var ops = {};
+        Object.values(job.builds).forEach(function(b) {
+          if (b.operators) b.operators.forEach(function(o) { ops[o] = true; });
+        });
+        updates.operators = Object.keys(ops);
+      }
+    }
+
+    await db.ref(STORIES_PATH + '/' + storyId).update(updates);
+    await writeAudit('update', 'products', storyId);
+
+    // Back-fill storyId on linked products
+    if (story.jobId) {
+      var job = productionJobs[story.jobId];
+      if (job && job.lineItems) {
+        var productUpdates = [];
+        Object.values(job.lineItems).forEach(function(li) {
+          if (li.productId && li.productLinked) {
+            productUpdates.push(
+              db.ref('shirglassworks/public/products/' + li.productId + '/storyId').set(storyId)
+            );
+          }
+        });
+        if (productUpdates.length) await Promise.all(productUpdates);
+      }
+    }
+
+    showToast('Story published!');
+    renderStoryDetail(storyId);
+  } catch (err) {
+    showToast('Error publishing: ' + err.message, true);
+  }
+}
+
+async function unpublishStoryFromDetail(storyId) {
+  if (!confirm('Unpublish this story?')) return;
+  try {
+    var story = storiesData[storyId];
+    await db.ref(STORIES_PATH + '/' + storyId).update({ status: 'draft', updatedAt: new Date().toISOString() });
+    await writeAudit('update', 'products', storyId);
+
+    // Clear storyId from linked products
+    if (story && story.jobId) {
+      var job = productionJobs[story.jobId];
+      if (job && job.lineItems) {
+        var clearUpdates = [];
+        Object.values(job.lineItems).forEach(function(li) {
+          if (li.productId && li.productLinked) {
+            clearUpdates.push(
+              db.ref('shirglassworks/public/products/' + li.productId + '/storyId').remove()
+            );
+          }
+        });
+        if (clearUpdates.length) await Promise.all(clearUpdates);
+      }
+    }
+
+    showToast('Story unpublished');
+    renderStoryDetail(storyId);
+  } catch (err) {
+    showToast('Error: ' + err.message, true);
+  }
 }
 
 async function loadJobStoryStatus(jobId) {
