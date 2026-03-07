@@ -15575,7 +15575,7 @@ function printProductCard(productId, productName, storyUrl) {
 
   function openLabelKeeper(payload) {
     localStorage.setItem('lk_printCard', JSON.stringify(payload));
-    window.open('https://stewartdavidp-ship-it.github.io/labelkeeper/?action=printCard', '_blank');
+    window.open('https://stewartdavidp-ship-it.github.io/labelkeeper/?action=printCard&t=' + Date.now(), '_blank');
     showToast('Opening Label Keeper...');
   }
 
