@@ -3123,7 +3123,7 @@
         <span class="sidebar-section-arrow">&#9654;</span>
       </div>
       <div class="sidebar-items">
-        <div class="sidebar-item" data-route="production" onclick="navigateTo('production')">Production</div>
+        <div class="sidebar-item" data-route="jobs" onclick="navigateTo('jobs')">Jobs</div>
         <div class="sidebar-item muted" data-route="procurement" onclick="navigateTo('procurement')">Procurement <span class="sidebar-badge new">New</span></div>
       </div>
     </div>
@@ -3735,27 +3735,27 @@
     <!-- ===== PRODUCTION TAB ===== -->
     <div id="productionTab" style="display:none;">
       <div class="section-header">
-        <h2>Production</h2>
+        <h2>Jobs</h2>
         <button class="btn btn-primary" onclick="openNewJobModal()">+ New Job</button>
       </div>
-      <div class="view-tabs" id="prodSubNav">
-        <button id="prodSubQueue" class="view-tab" onclick="switchProductionSubView('queue')">Queue <span id="queueBadge" style="background:#E65100;color:white;border-radius:10px;padding:1px 6px;font-size:0.7rem;margin-left:4px;display:none;">0</span></button>
-        <button id="prodSubJobs" class="view-tab active" onclick="switchProductionSubView('jobs')">Jobs</button>
-        <button id="prodSubInventory" class="view-tab" onclick="switchProductionSubView('inventory')">Inventory</button>
-        <button id="prodSubForecast" class="view-tab" onclick="switchProductionSubView('forecast')" style="display:none;">Forecast</button>
-      </div>
-      <div id="productionQueueView" style="display:none;">
-        <div id="productionQueueEmpty" style="text-align:center;padding:48px 20px;color:var(--warm-gray);">
-          <div style="font-size:2rem;margin-bottom:12px;">&#x2705;</div>
-          <p>No pending production requests</p>
+      <!-- Pending requests banner (replaces Queue sub-tab) -->
+      <div id="pendingRequestsBanner" style="display:none;margin-bottom:16px;">
+        <div onclick="togglePendingRequests()" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;">
+          <span style="font-size:1rem;">📋</span>
+          <span style="font-weight:600;font-size:0.85rem;">Pending Requests</span>
+          <span id="queueBadge" style="background:#E65100;color:white;border-radius:10px;padding:1px 6px;font-size:0.7rem;display:none;">0</span>
+          <span id="pendingRequestsArrow" style="margin-left:auto;font-size:0.7rem;color:var(--warm-gray);transition:transform 0.2s;">▶</span>
         </div>
-        <div id="productionQueueList"></div>
+        <div id="pendingRequestsContent" style="display:none;padding:12px 14px;border:1px solid var(--cream-dark);border-top:none;border-radius:0 0 8px 8px;">
+          <div id="productionQueueList"></div>
+        </div>
       </div>
       <div id="productionJobsView">
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
           <select id="prodFilterStatus" onchange="renderProductionJobs()" style="padding:6px 10px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.82rem;font-family:'DM Sans',sans-serif;">
             <option value="active">Active</option>
             <option value="all">All Statuses</option>
+            <option value="requested">Requested</option>
             <option value="definition">Definition</option>
             <option value="in-progress">In Progress</option>
             <option value="completed">Completed</option>
@@ -3786,14 +3786,30 @@
       </div>
       <div id="productionJobDetail" style="display:none;"></div>
       <div id="productionBuildView" style="display:none;"></div>
-      <div id="productionInventoryView" style="display:none;">
-        <div id="inventoryOverviewContent"></div>
+    </div>
+
+    <!-- ===== INVENTORY TAB (standalone) ===== -->
+    <div id="inventoryTab" style="display:none;">
+      <div class="section-header">
+        <h2>Inventory</h2>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-primary" onclick="startIntakeMode()">📷 Inventory Intake</button>
+          <button class="btn btn-secondary" onclick="openMoveItemsModal()">↔ Move Items</button>
+        </div>
       </div>
-      <div id="productionForecastView" style="display:none;">
-        <div id="forecastEventBanner"></div>
-        <div id="forecastSuggestedBuilds"></div>
-        <div id="forecastDemandOverview"></div>
-        <div id="forecastSlowMovement"></div>
+      <div id="inventoryOverviewContent"></div>
+    </div>
+
+    <!-- ===== STORIES TAB (standalone) ===== -->
+    <div id="storiesTab" style="display:none;">
+      <div class="section-header">
+        <h2>Stories</h2>
+      </div>
+      <div style="text-align:center;padding:48px 20px;color:var(--warm-gray);">
+        <div style="font-size:2.5rem;margin-bottom:12px;">📖</div>
+        <h3 style="color:var(--text);margin:0 0 8px;">Stories</h3>
+        <p style="max-width:400px;margin:0 auto 16px;font-size:0.9rem;">Stories are curated from completed production jobs. Open a job and click <strong>Curate Story</strong> to create or edit its story.</p>
+        <button class="btn btn-secondary" onclick="navigateTo('jobs')">View Jobs</button>
       </div>
     </div>
 
@@ -5022,19 +5038,18 @@ auth.onAuthStateChanged(async function(user) {
 // Route → tab element + optional setup
 var ROUTE_MAP = {
   'dashboard':   { tab: null, placeholder: { name: 'Dashboard', desc: 'Overview of your studio at a glance.', badge: 'new' } },
-  'production':  { tab: 'productionTab', setup: function() {
-    switchProductionSubView('jobs');
-    // Restore header if coming from Stories context
-    var header = document.querySelector('#productionTab .section-header');
-    if (header) {
-      header.querySelector('h2').textContent = 'Production';
-      header.querySelector('.btn-primary').style.display = '';
-    }
-    var subNav = document.getElementById('prodSubNav');
-    if (subNav) subNav.style.display = '';
-    var storiesMsg = document.getElementById('storiesContextMsg');
-    if (storiesMsg) storiesMsg.remove();
+  'jobs':        { tab: 'productionTab', setup: function() {
+    // Show jobs list, hide detail/build views
+    var jobsView = document.getElementById('productionJobsView');
+    var detailView = document.getElementById('productionJobDetail');
+    var buildView = document.getElementById('productionBuildView');
+    if (jobsView) jobsView.style.display = '';
+    if (detailView) detailView.style.display = 'none';
+    if (buildView) buildView.style.display = 'none';
+    selectedProductionJobId = null;
+    renderPendingRequestsBanner();
   } },
+  'production':  { tab: 'productionTab', setup: function() { navigateTo('jobs'); } },
   'procurement': { tab: null, placeholder: { name: 'Procurement', desc: 'Track materials, supplies, purchase orders.', badge: 'new' } },
   'commissions': { tab: 'commissionsTab', setup: function() {
     if (!commissionsLoaded) loadCommissions();
@@ -5059,41 +5074,10 @@ var ROUTE_MAP = {
   'receipts':    { tab: 'salesTab', setup: function() { if (!showingSquarePayments) toggleSquarePayments(); } },
   'social':      { tab: 'socialMediaTab' },
   'newsletter':  { tab: 'newsletterTab' },
-  'stories':     { tab: 'productionTab', setup: function() {
-    switchProductionSubView('jobs');
-    // Override header for Stories context
-    var header = document.querySelector('#productionTab .section-header');
-    if (header) {
-      header.querySelector('h2').textContent = 'Stories';
-      header.querySelector('.btn-primary').style.display = 'none';
-    }
-    var subNav = document.getElementById('prodSubNav');
-    if (subNav) subNav.style.display = 'none';
-    // Add stories context message
-    var jobsView = document.getElementById('productionJobsView');
-    if (jobsView && !document.getElementById('storiesContextMsg')) {
-      var msg = document.createElement('div');
-      msg.id = 'storiesContextMsg';
-      msg.style.cssText = 'padding:12px 16px;background:var(--cream-dark);border-radius:8px;margin-bottom:16px;font-size:0.85rem;color:var(--warm-gray);';
-      msg.innerHTML = 'Stories are curated from production jobs. Open a job and click <strong>Curate Story</strong> to create or edit its story.';
-      jobsView.insertBefore(msg, jobsView.firstChild);
-    }
-  } },
+  'stories':     { tab: 'storiesTab' },
   'website':     { tab: 'galleryTab' },
   'products':    { tab: 'productsTab' },
-  'inventory':   { tab: 'productionTab', setup: function() {
-    switchProductionSubView('inventory');
-    // Restore header if coming from Stories context
-    var header = document.querySelector('#productionTab .section-header');
-    if (header) {
-      header.querySelector('h2').textContent = 'Production';
-      header.querySelector('.btn-primary').style.display = '';
-    }
-    var subNav = document.getElementById('prodSubNav');
-    if (subNav) subNav.style.display = '';
-    var storiesMsg = document.getElementById('storiesContextMsg');
-    if (storiesMsg) storiesMsg.remove();
-  } },
+  'inventory':   { tab: 'inventoryTab', setup: function() { renderInventoryOverview(); } },
   'customers':   { tab: null, placeholder: { name: 'Customers', desc: 'Contacts, collectors, purchase history.', badge: 'new' } },
   'images':      { tab: 'imagesTab' },
   'employees':   { tab: 'employeesTab', setup: function() { switchEmployeesView('users'); } },
@@ -5113,13 +5097,13 @@ var ROUTE_MAP = {
 
 // Section → which routes belong to it (for auto-expanding)
 var SECTION_ROUTES = {
-  'make':   ['production', 'procurement'],
+  'make':   ['jobs', 'production', 'procurement'],
   'sell':   ['pos', 'events', 'orders', 'commissions', 'wholesale', 'galleries', 'fulfillment', 'receipts'],
   'market': ['social', 'newsletter', 'stories'],
   'manage': ['products', 'inventory', 'customers', 'images', 'website', 'employees', 'contacts', 'auditlog', 'financials', 'settings']
 };
 
-var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'fulfillmentTab', 'commissionsTab', 'socialMediaTab', 'newsletterTab', 'placeholderTab'];
+var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'fulfillmentTab', 'commissionsTab', 'socialMediaTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab'];
 
 var currentRoute = 'dashboard';
 
@@ -5176,7 +5160,7 @@ function lazyLoadForRoute(route) {
     if (!salesLoaded) loadSales();
   }
   if (route === 'coupons' && !couponsLoaded) loadCoupons();
-  if (route === 'production' || route === 'inventory' || route === 'stories') {
+  if (route === 'jobs' || route === 'production' || route === 'inventory' || route === 'stories') {
     if (!productsLoaded) loadProducts();
     if (!productionLoaded) loadProduction();
   }
@@ -6572,7 +6556,7 @@ function toggleForecastSlow() {
   if (arrow) arrow.innerHTML = forecastSlowExpanded ? '&#x25BC;' : '&#x25B6;';
 }
 
-// ---- Inventory Overview (Production tab) ----
+// ---- Inventory Overview (standalone Inventory tab) ----
 function renderInventoryOverview() {
   var el = document.getElementById('inventoryOverviewContent');
   if (!el) return;
@@ -6668,14 +6652,8 @@ function renderInventoryOverview() {
     return b.available - a.available;
   });
 
-  // Action bar
-  var actionBarHtml = '<div style="display:flex;gap:8px;margin-bottom:12px;">' +
-    '<button class="btn btn-primary" style="font-size:0.82rem;" onclick="startIntakeMode(null)">📷 Inventory Intake</button>' +
-    '<button class="btn btn-secondary" style="font-size:0.82rem;" onclick="openMoveItemsModal()">↔ Move Items</button>' +
-  '</div>';
-
   // Summary bar
-  var summaryHtml = actionBarHtml + '<div class="inv-overview-summary">' +
+  var summaryHtml = '<div class="inv-overview-summary">' +
     '<div class="inv-overview-stat">' +
       '<div class="inv-overview-stat-value">' + totalProducts + '</div>' +
       '<div class="inv-overview-stat-label">Products</div>' +
@@ -13737,38 +13715,25 @@ function getOperatorNames() {
   return Object.values(operators).map(function(op) { return op.name; });
 }
 
-function switchProductionSubView(view) {
-  productionSubView = view;
-  // Toggle active tab
-  document.querySelectorAll('#prodSubNav .view-tab').forEach(function(b) { b.classList.remove('active'); });
-  var activeBtn = document.getElementById('prodSub' + view.charAt(0).toUpperCase() + view.slice(1));
-  if (activeBtn) activeBtn.classList.add('active');
-  // Hide all views
-  var queueView = document.getElementById('productionQueueView');
-  var jobsView = document.getElementById('productionJobsView');
-  var detailView = document.getElementById('productionJobDetail');
-  var buildView = document.getElementById('productionBuildView');
-  var invView = document.getElementById('productionInventoryView');
-  var forecastView = document.getElementById('productionForecastView');
-  queueView.style.display = 'none';
-  jobsView.style.display = 'none';
-  detailView.style.display = 'none';
-  buildView.style.display = 'none';
-  invView.style.display = 'none';
-  if (forecastView) forecastView.style.display = 'none';
-  if (view === 'queue') {
-    queueView.style.display = '';
-    renderProductionQueue();
-  } else if (view === 'inventory') {
-    invView.style.display = '';
-    renderInventoryOverview();
-  } else if (view === 'forecast') {
-    if (forecastView) forecastView.style.display = '';
-    loadAndRenderForecast();
-  } else {
-    jobsView.style.display = '';
-    selectedProductionJobId = null;
-  }
+// Pending requests banner (replaces Queue sub-tab)
+function renderPendingRequestsBanner() {
+  var banner = document.getElementById('pendingRequestsBanner');
+  if (!banner) return;
+  var count = Object.keys(productionRequests).filter(function(k) {
+    return productionRequests[k].status === 'pending';
+  }).length;
+  banner.style.display = count > 0 ? '' : 'none';
+  updateQueueBadge();
+  renderProductionQueue();
+}
+
+function togglePendingRequests() {
+  var content = document.getElementById('pendingRequestsContent');
+  var arrow = document.getElementById('pendingRequestsArrow');
+  if (!content) return;
+  var isOpen = content.style.display !== 'none';
+  content.style.display = isOpen ? 'none' : '';
+  if (arrow) arrow.style.transform = isOpen ? '' : 'rotate(90deg)';
 }
 
 function updateQueueBadge() {
@@ -13950,8 +13915,7 @@ async function doAssignNewJob(requestId) {
     await writeAudit('create', 'jobs', jobId);
     await assignRequestToJob(requestId, jobId, lineItemId);
     closeModal();
-    switchTab('production');
-    switchProductionSubView('jobs');
+    navigateTo('jobs');
     viewProductionJob(jobId);
     showToast('New job created and request assigned');
   } catch (err) {
@@ -14136,23 +14100,25 @@ async function doCreateJob(purpose) {
 function viewProductionJob(jobId) {
   selectedProductionJobId = jobId;
   var jobsView = document.getElementById('productionJobsView');
-  var queueView = document.getElementById('productionQueueView');
   var detailView = document.getElementById('productionJobDetail');
   var buildView = document.getElementById('productionBuildView');
+  var banner = document.getElementById('pendingRequestsBanner');
   if (jobsView) jobsView.style.display = 'none';
-  if (queueView) queueView.style.display = 'none';
   if (buildView) buildView.style.display = 'none';
+  if (banner) banner.style.display = 'none';
   if (detailView) detailView.style.display = '';
   renderProductionJobDetail(jobId);
 }
 
 function backToProductionList() {
   selectedProductionJobId = null;
+  var jobsView = document.getElementById('productionJobsView');
   var detailView = document.getElementById('productionJobDetail');
   var buildView = document.getElementById('productionBuildView');
   if (detailView) detailView.style.display = 'none';
   if (buildView) buildView.style.display = 'none';
-  switchProductionSubView(productionSubView);
+  if (jobsView) jobsView.style.display = '';
+  renderPendingRequestsBanner();
 }
 
 function renderProductionJobDetail(jobId) {
@@ -14615,12 +14581,12 @@ async function doStartBuild(jobId) {
 function openActiveBuild(jobId, buildId) {
   activeBuildId = buildId;
   var jobsView = document.getElementById('productionJobsView');
-  var queueView = document.getElementById('productionQueueView');
   var detailView = document.getElementById('productionJobDetail');
   var buildView = document.getElementById('productionBuildView');
+  var banner = document.getElementById('pendingRequestsBanner');
   if (jobsView) jobsView.style.display = 'none';
-  if (queueView) queueView.style.display = 'none';
   if (detailView) detailView.style.display = 'none';
+  if (banner) banner.style.display = 'none';
   if (buildView) buildView.style.display = '';
   renderActiveBuild(jobId, buildId);
 }
