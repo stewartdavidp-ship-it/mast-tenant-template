@@ -15535,9 +15535,10 @@ function renderStoryDetail(storyId) {
       html += '<div style="text-align:center;background:white;padding:12px;border-radius:8px;border:1px solid var(--cream-dark);">' +
         '<img src="' + esc(qr.dataUrl) + '" style="width:150px;height:150px;" alt="QR Code">' +
         '<div style="font-size:0.82rem;font-weight:600;margin-top:6px;">' + esc(qr.productName) + '</div>' +
-        '<div style="display:flex;gap:6px;margin-top:8px;justify-content:center;">' +
+        '<div style="display:flex;gap:6px;margin-top:8px;justify-content:center;flex-wrap:wrap;">' +
           '<button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 8px;" onclick="printStoryQR(\'' + esc(qr.dataUrl) + '\', \'' + esc(qr.productName) + '\')">🖨 Print</button>' +
           '<button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 8px;" onclick="copyStoryQRUrl(\'' + esc(qr.url) + '\')">📋 Copy URL</button>' +
+          '<button class="btn btn-primary" style="font-size:0.72rem;padding:3px 8px;" onclick="printProductCard(\'' + esc(qr.productId) + '\', \'' + esc(qr.productName) + '\', \'' + esc(qr.url) + '\')">🃏 Print Card</button>' +
         '</div>' +
       '</div>';
     });
@@ -15566,6 +15567,51 @@ function copyStoryQRUrl(url) {
   }).catch(function() {
     prompt('Copy this URL:', url);
   });
+}
+
+function printProductCard(productId, productName, storyUrl) {
+  var product = productsData ? productsData.find(function(p) { return p.pid === productId; }) : null;
+  var imageUrl = product && product.images && product.images.length ? product.images[0] : null;
+
+  function openLabelKeeper(payload) {
+    localStorage.setItem('lk_printCard', JSON.stringify(payload));
+    window.open('https://stewartdavidp-ship-it.github.io/labelkeeper/?action=printCard', '_blank');
+    showToast('Opening Label Keeper...');
+  }
+
+  var basePayload = {
+    productId: productId,
+    productName: productName,
+    storyUrl: storyUrl,
+    productImage: null,
+    source: 'shirglassworks-admin',
+    timestamp: new Date().toISOString()
+  };
+
+  if (!imageUrl) {
+    openLabelKeeper(basePayload);
+    return;
+  }
+
+  // Convert product image to base64 via canvas (avoids CORS issues at print time)
+  var img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = function() {
+    var canvas = document.createElement('canvas');
+    var maxDim = 400;
+    var scale = Math.min(maxDim / img.width, maxDim / img.height, 1);
+    canvas.width = img.width * scale;
+    canvas.height = img.height * scale;
+    var ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    basePayload.productImage = canvas.toDataURL('image/jpeg', 0.8);
+    openLabelKeeper(basePayload);
+  };
+  img.onerror = function() {
+    showToast('Could not load product image, opening without it');
+    openLabelKeeper(basePayload);
+  };
+  img.src = imageUrl;
 }
 
 // ---- QR Code Generation for Stories ----
