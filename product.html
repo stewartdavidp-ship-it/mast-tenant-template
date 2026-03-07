@@ -982,6 +982,7 @@
 
     var params = new URLSearchParams(window.location.search);
     var pid = params.get('id');
+    var isStoryView = params.get('view') === 'story';
 
     if (!pid) {
       document.getElementById('productLoading').style.display = 'none';
@@ -999,10 +1000,18 @@
       }
 
       // Update page title
-      document.title = p.name + ' — Shir Glassworks';
+      document.title = (isStoryView ? 'How It Was Made: ' : '') + p.name + ' — Shir Glassworks';
 
       // Show content
       document.getElementById('productContent').style.display = '';
+
+      // Story-only view: hide product details, show only story
+      if (isStoryView) {
+        var productDetail = document.querySelector('.product-detail');
+        var backLink = document.querySelector('.product-back');
+        if (productDetail) productDetail.style.display = 'none';
+        if (backLink) backLink.style.display = 'none';
+      }
       document.getElementById('productName').textContent = p.name;
 
       // Price
@@ -1466,6 +1475,16 @@
       }
 
       html += '</div>';
+
+      // Story-only view: add link back to product page
+      if (isStoryView) {
+        var productUrl = 'product.html?id=' + encodeURIComponent(pid);
+        html += '<div style="text-align:center;margin:2rem auto;max-width:700px;">' +
+          '<a href="' + productUrl + '" style="display:inline-block;padding:10px 24px;font-size:0.9rem;color:var(--amber);border:1px solid var(--amber);border-radius:6px;text-decoration:none;transition:all 0.2s;"' +
+          ' onmouseover="this.style.background=\'var(--amber)\';this.style.color=\'var(--charcoal)\'"' +
+          ' onmouseout="this.style.background=\'transparent\';this.style.color=\'var(--amber)\'"' +
+          '>View Product &rarr;</a></div>';
+      }
 
       var el = document.getElementById('productStory');
       if (el) {

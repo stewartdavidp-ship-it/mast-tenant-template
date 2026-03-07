@@ -15598,7 +15598,7 @@ async function generateStoryQRCodes(storyId, jobId) {
 
   var qrCodes = [];
   linkedProducts.forEach(function(p) {
-    var url = GITHUB_PAGES_BASE + '/product.html?id=' + p.productId;
+    var url = GITHUB_PAGES_BASE + '/product.html?id=' + p.productId + '&view=story';
     // Generate QR code data URL
     var qr = qrcode(0, 'M');
     qr.addData(url);
