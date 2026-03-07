@@ -451,6 +451,33 @@ Adding, removing, and exporting the mailing list for the Shir Glassworks newslet
 7. Customers can also sign up via the newsletter form on the website footer — those appear with a "Website" source badge
 8. Customers can unsubscribe via the link in newsletter emails — their status updates automatically
 
+### Create and Curate a Product Story
+**Status:** Live
+
+Building a "How It Was Made" story for a product — linking production photos from a build job into a narrative that shows on the product page.
+
+1. Open the admin app and go to Market → Stories
+2. If a completed job has no story yet, a "Missing Stories" prompt appears at the top — click "Create Story" on any job
+3. Alternatively, open a job detail in Make → Jobs and click "Create Story"
+4. In the story editor: enter a title and select photos from the build's media library
+5. For each selected photo, add a milestone label (e.g. "Gather", "Shaping", "Annealing") and a caption
+6. Reorder entries by dragging, or remove entries you don't want
+7. Click "Save Draft" to save without publishing, or "Publish" to go live
+8. On publish: the story is linked to all products from that job, and QR codes are automatically generated for each linked product
+9. The story appears as a "How It Was Made" section on each linked product's page
+
+### View and Manage Published Stories
+**Status:** Live
+
+Reviewing, editing, and managing stories from the Stories list view.
+
+1. Open the admin app and go to Market → Stories
+2. Browse all stories — filter by Draft or Published status
+3. Click a story to see its full detail: entries, linked products, artists, and QR codes
+4. To edit: click "Edit Story" to re-enter the curation editor
+5. To unpublish: click "Unpublish" — the story is removed from product pages but kept as a draft
+6. Published stories show QR codes for each linked product — use "Print QR" to print a label or "Copy URL" to share the product page link
+
 ---
 
 ## Not Yet Built
