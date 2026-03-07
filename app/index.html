@@ -15526,7 +15526,92 @@ function renderStoryDetail(storyId) {
     html += '</div></div>';
   }
 
+  // QR Codes
+  if (story.qrCodes && story.qrCodes.length > 0) {
+    html += '<div class="prod-detail-section"><strong>QR Codes</strong>' +
+      '<p style="font-size:0.82rem;color:var(--warm-gray);margin:4px 0 12px;">Scan to view the product page with this story.</p>' +
+      '<div style="display:flex;gap:16px;flex-wrap:wrap;">';
+    story.qrCodes.forEach(function(qr) {
+      html += '<div style="text-align:center;background:white;padding:12px;border-radius:8px;border:1px solid var(--cream-dark);">' +
+        '<img src="' + esc(qr.dataUrl) + '" style="width:150px;height:150px;" alt="QR Code">' +
+        '<div style="font-size:0.82rem;font-weight:600;margin-top:6px;">' + esc(qr.productName) + '</div>' +
+        '<div style="display:flex;gap:6px;margin-top:8px;justify-content:center;">' +
+          '<button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 8px;" onclick="printStoryQR(\'' + esc(qr.dataUrl) + '\', \'' + esc(qr.productName) + '\')">🖨 Print</button>' +
+          '<button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 8px;" onclick="copyStoryQRUrl(\'' + esc(qr.url) + '\')">📋 Copy URL</button>' +
+        '</div>' +
+      '</div>';
+    });
+    html += '</div></div>';
+  }
+
   el.innerHTML = html;
+}
+
+function printStoryQR(dataUrl, productName) {
+  var win = window.open('', '_blank', 'width=400,height=500');
+  win.document.write('<html><head><title>QR Code - ' + productName + '</title>' +
+    '<style>body{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:sans-serif;margin:0;}' +
+    'img{width:250px;height:250px;}h3{margin:16px 0 4px;font-size:1rem;}p{font-size:0.8rem;color:#666;}</style></head><body>' +
+    '<img src="' + dataUrl + '" alt="QR Code">' +
+    '<h3>' + productName + '</h3>' +
+    '<p>Shir Glassworks</p>' +
+    '<script>setTimeout(function(){window.print();},300);</script>' +
+    '</body></html>');
+  win.document.close();
+}
+
+function copyStoryQRUrl(url) {
+  navigator.clipboard.writeText(url).then(function() {
+    showToast('Product URL copied');
+  }).catch(function() {
+    prompt('Copy this URL:', url);
+  });
+}
+
+// ---- QR Code Generation for Stories ----
+function ensureQRLib() {
+  return new Promise(function(resolve, reject) {
+    if (window.qrcode) { resolve(); return; }
+    var script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js';
+    script.onload = resolve;
+    script.onerror = function() { reject(new Error('Failed to load QR library')); };
+    document.head.appendChild(script);
+  });
+}
+
+async function generateStoryQRCodes(storyId, jobId) {
+  var job = productionJobs[jobId];
+  if (!job || !job.lineItems) return [];
+
+  // Find linked products
+  var linkedProducts = [];
+  Object.values(job.lineItems).forEach(function(li) {
+    if (li.productId && li.productLinked) {
+      linkedProducts.push({ productId: li.productId, productName: li.productName || 'Unknown' });
+    }
+  });
+  if (linkedProducts.length === 0) return [];
+
+  // Load QR library
+  try { await ensureQRLib(); } catch (e) { console.error(e); return []; }
+
+  var qrCodes = [];
+  linkedProducts.forEach(function(p) {
+    var url = GITHUB_PAGES_BASE + '/product.html?id=' + p.productId;
+    // Generate QR code data URL
+    var qr = qrcode(0, 'M');
+    qr.addData(url);
+    qr.make();
+    var dataUrl = qr.createDataURL(6, 0);
+    qrCodes.push({
+      productId: p.productId,
+      productName: p.productName,
+      url: url,
+      dataUrl: dataUrl
+    });
+  });
+  return qrCodes;
 }
 
 async function publishStoryFromDetail(storyId) {
@@ -15550,6 +15635,12 @@ async function publishStoryFromDetail(storyId) {
         });
         updates.operators = Object.keys(ops);
       }
+    }
+
+    // Generate QR codes for linked products
+    if (story.jobId) {
+      var qrCodes = await generateStoryQRCodes(storyId, story.jobId);
+      if (qrCodes.length > 0) updates.qrCodes = qrCodes;
     }
 
     await db.ref(STORIES_PATH + '/' + storyId).update(updates);
@@ -15941,6 +16032,12 @@ async function publishStory(existingId) {
         });
         data.operators = Object.keys(ops);
       }
+    }
+
+    // Generate QR codes for linked products
+    if (jobId) {
+      var qrCodes = await generateStoryQRCodes(existingId || 'new', jobId);
+      if (qrCodes.length > 0) data.qrCodes = qrCodes;
     }
 
     var storyId = existingId;
