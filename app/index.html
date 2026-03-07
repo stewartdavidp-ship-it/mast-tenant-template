@@ -15588,40 +15588,9 @@ function printProductCard(productId, productName, storyUrl) {
     timestamp: new Date().toISOString()
   };
 
-  if (!imageUrl) {
-    openLabelKeeper(basePayload);
-    return;
-  }
-
-  // Fetch image as blob to avoid CORS canvas tainting, then convert to base64
-  fetch(imageUrl)
-    .then(function(res) { return res.blob(); })
-    .then(function(blob) {
-      var img = new Image();
-      var blobUrl = URL.createObjectURL(blob);
-      img.onload = function() {
-        var canvas = document.createElement('canvas');
-        var maxDim = 400;
-        var scale = Math.min(maxDim / img.width, maxDim / img.height, 1);
-        canvas.width = img.width * scale;
-        canvas.height = img.height * scale;
-        var ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        basePayload.productImage = canvas.toDataURL('image/jpeg', 0.8);
-        URL.revokeObjectURL(blobUrl);
-        openLabelKeeper(basePayload);
-      };
-      img.onerror = function() {
-        URL.revokeObjectURL(blobUrl);
-        showToast('Could not process product image, opening without it');
-        openLabelKeeper(basePayload);
-      };
-      img.src = blobUrl;
-    })
-    .catch(function() {
-      showToast('Could not load product image, opening without it');
-      openLabelKeeper(basePayload);
-    });
+  // Pass image URL directly — Label Keeper renders it as <img src>, no CORS issues
+  basePayload.productImage = imageUrl;
+  openLabelKeeper(basePayload);
 }
 
 // ---- QR Code Generation for Stories ----
