@@ -3343,6 +3343,7 @@
           </div>
         </div>
         <div id="ordersFilterPills" class="order-filter-pills"></div>
+        <div style="font-size:0.78rem;color:var(--warm-gray);margin:4px 0 12px 0;">Click an order to view details, update status, add tracking, or manage production requests.</div>
         <div id="ordersLoading" class="loading">Loading...</div>
         <div id="ordersEmpty" class="empty-state" style="display:none;">
           <div class="empty-icon">&#128230;</div>
@@ -3381,8 +3382,8 @@
       <div id="commissionsListView">
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">
           <select id="commissionsStatusFilter" onchange="renderCommissions()" style="font-size:0.82rem;padding:6px 10px;border-radius:6px;border:1px solid var(--cream-dark);">
-            <option value="all">All</option>
-            <option value="new" selected>New</option>
+            <option value="all" selected>All</option>
+            <option value="new">New</option>
             <option value="in-discussion">In Discussion</option>
             <option value="accepted">Accepted</option>
             <option value="declined">Declined</option>
@@ -3471,7 +3472,7 @@
           <span class="products-stat" id="salesCount"></span>
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
-          <button class="btn btn-small" id="squarePaymentsToggle" onclick="toggleSquarePayments()" style="font-size:0.8rem;padding:4px 12px;background:var(--teal);color:#fff;border:none;border-radius:6px;cursor:pointer;">💳 Square Payments</button>
+          <button class="btn btn-secondary" id="squarePaymentsToggle" onclick="toggleSquarePayments()" style="font-size:0.8rem;padding:4px 12px;">💳 Square Payments</button>
           <div id="salesFilterControls" style="display:flex;align-items:center;gap:8px;">
             <input type="date" id="salesDateFilter" onchange="filterSalesByDate()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.85rem;">
             <select id="salesStatusFilter" onchange="renderSales()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.85rem;">
@@ -3486,6 +3487,12 @@
 
       <!-- Sales List View -->
       <div id="salesListView">
+        <!-- Quick Actions -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0;align-items:center;">
+          <a href="../pos/" target="_blank" class="btn btn-primary" style="font-size:0.82rem;text-decoration:none;">💰 Open Point of Sale</a>
+          <span style="font-size:0.78rem;color:var(--warm-gray);">Use the PoS app to start a transaction — works for studio sales, trade shows, or anywhere with a phone/tablet.</span>
+        </div>
+
         <!-- Daily Summary -->
         <div id="salesSummary" style="display:flex;gap:16px;flex-wrap:wrap;margin:16px 0;"></div>
 
@@ -3493,7 +3500,8 @@
         <div id="salesLoading" class="loading">Loading...</div>
         <div id="salesEmpty" class="empty-state" style="display:none;">
           <div class="empty-icon">&#128176;</div>
-          <p>No sales recorded yet. Use the <a href="../pos/" style="color:var(--teal);">PoS app</a> to capture sales.</p>
+          <p>No sales recorded yet.</p>
+          <p style="font-size:0.85rem;color:var(--warm-gray);">Open the <a href="../pos/" target="_blank" style="color:var(--teal);">Point of Sale</a> app on your phone or tablet to start recording sales at any location.</p>
         </div>
         <div class="orders-table data-table" id="salesTableWrap" style="display:none;">
           <table>
@@ -3520,6 +3528,9 @@
 
       <!-- Square Payments View -->
       <div id="squarePaymentsView" style="display:none;">
+        <div style="padding:10px 14px;background:var(--cream);border-radius:8px;margin:12px 0;font-size:0.82rem;color:var(--warm-gray);">
+          Square card payments appear here automatically. Match unmatched payments to your PoS sales to reconcile your records.
+        </div>
         <div style="display:flex;gap:16px;flex-wrap:wrap;margin:16px 0;">
           <div id="squarePaymentsSummary" style="display:flex;gap:16px;flex-wrap:wrap;"></div>
         </div>
@@ -5947,11 +5958,31 @@ function renderProducts() {
 // ============================================================
 
 function getInventoryTotals(inv) {
-  if (!inv || !inv.stock || !inv.stock._default) return { available: 0, reserved: 0 };
-  return {
-    available: inv.stock._default.available || 0,
-    reserved: inv.stock._default.reserved || 0
-  };
+  if (!inv || !inv.stock) return { available: 0, reserved: 0 };
+  // If _default summary exists (has available property), use it as the source of truth
+  if (inv.stock._default && typeof inv.stock._default.available === 'number') {
+    return {
+      available: inv.stock._default.available,
+      reserved: inv.stock._default.reserved || 0
+    };
+  }
+  // Fallback: sum across all variant keys (excluding _default)
+  var total = 0;
+  var reserved = 0;
+  Object.keys(inv.stock).forEach(function(k) {
+    if (k === '_default') return; // skip _default in fallback to avoid double-count
+    var entry = inv.stock[k];
+    if (entry && typeof entry.available === 'number') {
+      total += entry.available;
+    } else if (entry && entry.locations) {
+      // Sum from locations if available field not set
+      Object.keys(entry.locations).forEach(function(locId) {
+        total += (entry.locations[locId] || 0);
+      });
+    }
+    if (entry && entry.reserved) reserved += entry.reserved;
+  });
+  return { available: total, reserved: reserved };
 }
 
 function getProductVariantCombos(product) {
@@ -6687,7 +6718,7 @@ function renderInventoryOverview() {
       else if (r.available <= r.threshold) qtyStyle = 'color:#E65100;font-weight:600;';
     }
 
-    tableHtml += '<tr class="inv-overview-row" onclick="switchTab(\'products\');setTimeout(function(){viewProduct(\'' + esc(r.pid) + '\');},100);" style="cursor:pointer;">' +
+    tableHtml += '<tr class="inv-overview-row" onclick="viewProductFromInventory(\'' + esc(r.pid) + '\');" style="cursor:pointer;">' +
       '<td>' + imgHtml + '</td>' +
       '<td>' +
         '<div style="font-weight:500;font-size:0.85rem;">' + esc(r.name) + '</div>' +
@@ -6705,7 +6736,10 @@ function renderInventoryOverview() {
   el.innerHTML = summaryHtml + tableHtml;
 }
 
+var productViewOrigin = 'products'; // 'products' or 'inventory'
+
 function viewProduct(pid) {
+  productViewOrigin = 'products';
   selectedProductPid = pid;
   document.getElementById('productsGrid').style.display = 'none';
   document.getElementById('inventorySummaryBar').style.display = 'none';
@@ -6716,14 +6750,35 @@ function viewProduct(pid) {
   renderProductDetail(pid);
 }
 
+function viewProductFromInventory(pid) {
+  productViewOrigin = 'inventory';
+  switchTab('products');
+  setTimeout(function() {
+    selectedProductPid = pid;
+    document.getElementById('productsGrid').style.display = 'none';
+    document.getElementById('inventorySummaryBar').style.display = 'none';
+    document.querySelector('#productsTab .section-header').style.display = 'none';
+    document.getElementById('productsLoading').style.display = 'none';
+    var detailEl = document.getElementById('productDetailView');
+    detailEl.style.display = '';
+    productEditTab = 'inventory';
+    renderProductDetail(pid);
+  }, 100);
+}
+
 function backToProducts() {
   selectedProductPid = null;
-  document.getElementById('productsGrid').style.display = '';
-  document.querySelector('#productsTab .section-header').style.display = '';
   var detailEl = document.getElementById('productDetailView');
   detailEl.style.display = 'none';
   detailEl.innerHTML = '';
-  renderProducts();
+  if (productViewOrigin === 'inventory') {
+    productViewOrigin = 'products';
+    navigateTo('inventory');
+  } else {
+    document.getElementById('productsGrid').style.display = '';
+    document.querySelector('#productsTab .section-header').style.display = '';
+    renderProducts();
+  }
 }
 
 function createNewProduct() {
@@ -6753,6 +6808,62 @@ function switchProductTab(tab) {
   });
   document.querySelectorAll('.pd-tab-content').forEach(function(c) {
     c.style.display = c.dataset.tab === tab ? '' : 'none';
+  });
+  if (tab === 'inventory' && selectedProductPid) {
+    loadProductInventoryHistory(selectedProductPid);
+  }
+}
+
+function loadProductInventoryHistory(pid) {
+  var el = document.getElementById('pdInventoryHistory');
+  if (!el) return;
+  // Query audit log for inventory changes for this product
+  db.ref('shirglassworks/admin/auditLog').orderByChild('objectId').equalTo(pid).limitToLast(20).once('value', function(snap) {
+    var entries = [];
+    snap.forEach(function(child) {
+      var e = child.val();
+      if (e.objectType === 'inventory' || e.objectType === 'stock') entries.push(e);
+    });
+    // Also check sales that include this product
+    db.ref(SALES_PATH).orderByKey().limitToLast(100).once('value', function(salesSnap) {
+      var salesVal = salesSnap.val() || {};
+      Object.keys(salesVal).forEach(function(k) {
+        var s = salesVal[k];
+        if (s.items && s.items.some(function(i) { return i.productId === pid; })) {
+          var item = s.items.find(function(i) { return i.productId === pid; });
+          entries.push({
+            timestamp: s.timestamp || s.createdAt,
+            action: 'sale',
+            objectType: 'sale',
+            detail: 'Sold ' + (item.quantity || 1) + 'x',
+            qty: -(item.quantity || 1)
+          });
+        }
+      });
+      // Sort by timestamp descending
+      entries.sort(function(a, b) { return (b.timestamp || '').localeCompare(a.timestamp || ''); });
+      if (entries.length === 0) {
+        el.innerHTML = '<div style="color:var(--warm-gray-light);font-size:0.82rem;">No inventory changes recorded yet.</div>';
+        return;
+      }
+      var html = '<table style="width:100%;font-size:0.82rem;border-collapse:collapse;"><thead><tr style="border-bottom:1px solid var(--cream-dark);">' +
+        '<th style="text-align:left;padding:6px 8px;color:var(--warm-gray);">Date</th>' +
+        '<th style="text-align:left;padding:6px 8px;color:var(--warm-gray);">Type</th>' +
+        '<th style="text-align:left;padding:6px 8px;color:var(--warm-gray);">Detail</th>' +
+      '</tr></thead><tbody>';
+      entries.slice(0, 15).forEach(function(e) {
+        var date = e.timestamp ? new Date(e.timestamp).toLocaleDateString() : '—';
+        var type = e.action === 'sale' ? '📦 Sold' : e.action === 'update' ? '✏️ Updated' : e.action === 'create' ? '➕ Added' : esc(e.action || '—');
+        var detail = e.detail || e.action || '';
+        html += '<tr style="border-bottom:1px solid var(--cream);">' +
+          '<td style="padding:6px 8px;">' + date + '</td>' +
+          '<td style="padding:6px 8px;">' + type + '</td>' +
+          '<td style="padding:6px 8px;">' + esc(detail) + '</td>' +
+        '</tr>';
+      });
+      html += '</tbody></table>';
+      el.innerHTML = html;
+    });
   });
 }
 
@@ -6806,7 +6917,7 @@ function renderProductDetail(pid) {
        '<div style="color:var(--warm-gray);font-style:italic;margin-bottom:8px;">Price on request</div>') +
       (product.availability === 'discontinued' ? '<span class="status-badge stock-badge out-of-stock">Discontinued</span>' : '') +
     '</div>' +
-    (!isCreate ? '<button class="btn btn-secondary" style="font-size:0.8rem;" onclick="' + (isEditing ? 'productEditMode=false;renderProductDetail(\'' + esc(pid) + '\')' : 'editProduct(\'' + esc(pid) + '\')') + '">' + (isEditing ? 'Cancel Edit' : 'Edit Product') + '</button>' : '') +
+    (!isCreate && !isEditing ? '<button class="btn btn-secondary" style="font-size:0.8rem;" onclick="editProduct(\'' + esc(pid) + '\')">Edit Product</button>' : '') +
   '</div>';
 
   // Tab bar
@@ -6871,6 +6982,18 @@ function renderProductDetail(pid) {
         '<span style="color:var(--warm-gray);">Etsy ID</span><span>' + esc(product.etsyListingId || '—') + '</span>' +
         '<span style="color:var(--warm-gray);">Introduced</span><span>' + esc(product.introducedAt || '—') + '</span>' +
       '</div></div>';
+    // Inventory summary on Details tab
+    var pdInv = inventory[pid] || {};
+    var pdTotals = getInventoryTotals(pdInv);
+    var invColor = pdTotals.available <= 0 ? 'var(--danger)' : 'var(--teal)';
+    detailsHtml += '<div class="product-detail-section" style="margin-top:16px;">' +
+      '<div class="product-detail-section-title">Inventory Summary</div>' +
+      '<div style="display:flex;gap:24px;flex-wrap:wrap;font-size:0.88rem;">' +
+        '<div><span style="color:var(--warm-gray);">On Hand</span> <strong style="color:' + invColor + ';">' + pdTotals.available + '</strong></div>' +
+        (pdTotals.reserved > 0 ? '<div><span style="color:var(--warm-gray);">Reserved</span> <strong>' + pdTotals.reserved + '</strong></div>' : '') +
+        '<div style="font-size:0.78rem;"><a href="#" onclick="event.preventDefault();switchProductTab(\'inventory\');" style="color:var(--teal);text-decoration:none;">View full inventory →</a></div>' +
+      '</div>' +
+    '</div>';
   }
   detailsHtml += '</div>';
 
@@ -6990,28 +7113,7 @@ function renderProductDetail(pid) {
     var hasVariants = variantInfo.combos.length > 0;
     var totals = getInventoryTotals(inv);
 
-    // Stock settings
-    invTabHtml += '<div class="product-detail-section">' +
-      '<div class="product-detail-section-title">Stock Settings</div>' +
-      '<div style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;">' +
-        '<div class="form-group" style="margin:0;min-width:150px;"><label style="font-size:0.78rem;">Stock Type</label>' +
-          '<select id="pdStockType" onchange="pdStockTypeChanged(\'' + esc(pid) + '\')">' +
-            '<option value="made-to-order"' + (stockType === 'made-to-order' ? ' selected' : '') + '>Made to Order</option>' +
-            '<option value="in-stock"' + (stockType === 'in-stock' ? ' selected' : '') + '>In Stock</option>' +
-            '<option value="limited"' + (stockType === 'limited' ? ' selected' : '') + '>Limited Edition</option>' +
-          '</select></div>' +
-        '<div class="form-group" style="margin:0;" id="pdThresholdGroup"' + (stockType === 'made-to-order' ? ' hidden' : '') + '>' +
-          '<label style="font-size:0.78rem;">Low Stock Alert At</label>' +
-          '<input type="number" id="pdThreshold" min="0" value="' + threshold + '" style="width:80px;"></div>' +
-        '<div class="form-group" style="margin:0;"><label style="font-size:0.78rem;">Lead Time (days)</label>' +
-          '<input type="number" id="pdLeadTime" min="0" value="' + leadTime + '" style="width:80px;"></div>' +
-      '</div>' +
-      '<div class="form-group" style="margin-top:12px;"><label style="font-size:0.78rem;">Notes</label>' +
-        '<textarea id="pdNotes" rows="2" placeholder="e.g. Need more cobalt glass rods">' + esc(notes) + '</textarea></div>' +
-      '<button class="btn btn-primary" style="font-size:0.8rem;margin-top:8px;" onclick="saveProductSettings(\'' + esc(pid) + '\')">Save Stock Settings</button>' +
-    '</div>';
-
-    // Inventory on hand
+    // Inventory on hand (FIRST)
     invTabHtml += '<div class="product-detail-section">' +
       '<div class="product-detail-section-title">Inventory on Hand</div>' +
       '<div style="display:flex;gap:24px;align-items:baseline;margin-bottom:12px;">' +
@@ -7048,18 +7150,54 @@ function renderProductDetail(pid) {
     invTabHtml += '<div style="margin-top:12px;">' +
       '<button class="btn btn-secondary" style="font-size:0.8rem;padding:5px 14px;" onclick="openAdjustStockModal(\'' + esc(pid) + '\')">Adjust Stock</button>' +
     '</div></div>';
+
+    // Inventory History
+    invTabHtml += '<div class="product-detail-section">' +
+      '<div class="product-detail-section-title">Inventory History</div>' +
+      '<div id="pdInventoryHistory" style="font-size:0.82rem;color:var(--warm-gray);">Loading...</div>' +
+    '</div>';
+
+    // Stock settings (AFTER inventory)
+    invTabHtml += '<div class="product-detail-section">' +
+      '<div class="product-detail-section-title">Stock Settings</div>' +
+      '<div style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;">' +
+        '<div class="form-group" style="margin:0;min-width:150px;"><label style="font-size:0.78rem;">Stock Type</label>' +
+          '<select id="pdStockType" onchange="pdStockTypeChanged(\'' + esc(pid) + '\')">' +
+            '<option value="made-to-order"' + (stockType === 'made-to-order' ? ' selected' : '') + '>Made to Order</option>' +
+            '<option value="in-stock"' + (stockType === 'in-stock' ? ' selected' : '') + '>In Stock</option>' +
+            '<option value="limited"' + (stockType === 'limited' ? ' selected' : '') + '>Limited Edition</option>' +
+          '</select></div>' +
+        '<div class="form-group" style="margin:0;" id="pdThresholdGroup"' + (stockType === 'made-to-order' ? ' hidden' : '') + '>' +
+          '<label style="font-size:0.78rem;">Low Stock Alert At</label>' +
+          '<input type="number" id="pdThreshold" min="0" value="' + threshold + '" style="width:80px;"></div>' +
+        '<div class="form-group" style="margin:0;"><label style="font-size:0.78rem;">Lead Time (days)</label>' +
+          '<input type="number" id="pdLeadTime" min="0" value="' + leadTime + '" style="width:80px;"></div>' +
+      '</div>' +
+      '<div class="form-group" style="margin-top:12px;"><label style="font-size:0.78rem;">Notes</label>' +
+        '<textarea id="pdNotes" rows="2" placeholder="e.g. Need more cobalt glass rods">' + esc(notes) + '</textarea></div>' +
+      '<button class="btn btn-primary" style="font-size:0.8rem;margin-top:8px;" onclick="saveProductSettings(\'' + esc(pid) + '\')">Save Stock Settings</button>' +
+    '</div>';
+
     invTabHtml += '</div>';
   }
 
-  // Save / Back buttons
-  var actionHtml = '<div style="display:flex;gap:8px;margin-top:20px;padding-top:16px;border-top:1px solid var(--cream-dark);">';
+  // Action buttons (save/cancel when editing, nothing when viewing — back arrow at top handles navigation)
+  var actionHtml = '';
   if (isEditing) {
-    actionHtml += '<button class="btn btn-primary" onclick="saveProduct(\'' + esc(pid || '') + '\')">' + (isCreate ? 'Create Product' : 'Save Product') + '</button>';
+    actionHtml = '<div style="display:flex;gap:8px;margin-top:20px;padding-top:16px;border-top:1px solid var(--cream-dark);">' +
+      '<button class="btn btn-primary" onclick="saveProduct(\'' + esc(pid || '') + '\')">' + (isCreate ? 'Create Product' : 'Save Changes') + '</button>' +
+      '<button class="btn btn-secondary" onclick="' + (isCreate ? 'backToProducts()' : 'productEditMode=false;renderProductDetail(\\\'' + esc(pid) + '\\\')') + '">Cancel</button>' +
+    '</div>';
   }
-  actionHtml += '<button class="btn btn-secondary" onclick="backToProducts()">Back</button></div>';
 
-  el.innerHTML = '<button class="product-detail-back" onclick="backToProducts()">&larr; Back to Products</button>' +
+  var backLabel = productViewOrigin === 'inventory' ? 'Back to Inventory' : 'Back to Products';
+  el.innerHTML = '<button class="product-detail-back" onclick="backToProducts()">&larr; ' + backLabel + '</button>' +
     headerHtml + tabBarHtml + detailsHtml + variantsHtml + imagesHtml + prodHtml + invTabHtml + actionHtml;
+
+  // Load inventory history if starting on inventory tab
+  if (tab === 'inventory' && pid) {
+    loadProductInventoryHistory(pid);
+  }
 }
 
 function addVariantOption() {
@@ -10474,17 +10612,57 @@ function renderOrderDetail(orderId) {
     '</div>';
   }
 
-  // Timeline
+  // Timeline — always show, built from statusHistory + fallback to timestamp fields
   var timelineHtml = '';
   var history = o.statusHistory || [];
+  var timelineEntries = [];
+
   if (history.length > 0) {
+    // Use statusHistory if available
+    history.forEach(function(h) {
+      timelineEntries.push({
+        status: h.status,
+        at: h.at,
+        by: h.by || '',
+        note: h.note || ''
+      });
+    });
+  } else {
+    // Reconstruct timeline from individual timestamp fields
+    var statusTimestamps = [
+      { key: 'pending_payment', field: 'pendingPaymentAt' },
+      { key: 'placed', field: 'placedAt' },
+      { key: 'confirmed', field: 'confirmedAt' },
+      { key: 'building', field: 'buildingAt' },
+      { key: 'ready', field: 'readyAt' },
+      { key: 'packing', field: 'packingAt' },
+      { key: 'packed', field: 'packedAt' },
+      { key: 'handed_to_carrier', field: 'handedToCarrierAt' },
+      { key: 'shipped', field: 'shippedAt' },
+      { key: 'delivered', field: 'deliveredAt' },
+      { key: 'cancelled', field: 'cancelledAt' }
+    ];
+    statusTimestamps.forEach(function(st) {
+      if (o[st.field]) {
+        timelineEntries.push({ status: st.key, at: o[st.field], by: '', note: '' });
+      }
+    });
+    // If no timestamps found, at least show creation
+    if (timelineEntries.length === 0 && (o.createdAt || o.placedAt)) {
+      timelineEntries.push({ status: status, at: o.createdAt || o.placedAt || '', by: '', note: '' });
+    }
+  }
+
+  if (timelineEntries.length > 0) {
+    // Sort chronologically then show most recent first
+    timelineEntries.sort(function(a, b) { return (a.at || '').localeCompare(b.at || ''); });
     var entries = '';
-    // Show most recent first
-    var reversed = history.slice().reverse();
-    reversed.forEach(function(h) {
+    timelineEntries.slice().reverse().forEach(function(h) {
+      var statusLabel = h.status.replace(/_/g, ' ');
+      statusLabel = statusLabel.charAt(0).toUpperCase() + statusLabel.slice(1);
       entries += '<div class="order-timeline-entry">' +
         '<div class="order-timeline-time">' + formatOrderDateTime(h.at) + '</div>' +
-        '<div class="order-timeline-text">' + esc(h.status.charAt(0).toUpperCase() + h.status.slice(1)) +
+        '<div class="order-timeline-text">' + esc(statusLabel) +
           (h.note ? ' — ' + esc(h.note) : '') +
           (h.by ? ' <span style="color:var(--warm-gray-light);">by ' + esc(h.by) + '</span>' : '') +
         '</div>' +
@@ -10493,6 +10671,12 @@ function renderOrderDetail(orderId) {
     timelineHtml = '<div class="order-detail-section">' +
       '<div class="order-detail-section-title">Timeline</div>' +
       '<div class="order-timeline">' + entries + '</div>' +
+    '</div>';
+  } else {
+    // Always show timeline section even if empty
+    timelineHtml = '<div class="order-detail-section">' +
+      '<div class="order-detail-section-title">Timeline</div>' +
+      '<div style="font-size:0.82rem;color:var(--warm-gray-light);padding:8px 0;">No history recorded yet.</div>' +
     '</div>';
   }
 
@@ -10578,12 +10762,12 @@ function renderOrderDetail(orderId) {
         '<div><strong style="font-size:0.78rem;color:var(--warm-gray-light);">BILLING</strong>' + billHtml + '</div>' +
       '</div>' +
     '</div>' +
+    timelineHtml +
     paymentHtml +
     etsyHtml +
     trackingHtml +
     ffLogHtml +
     productionRequestsHtml +
-    timelineHtml +
     notesHtml;
 }
 
@@ -12444,10 +12628,10 @@ function renderSalesEventDetail(eventId) {
   } else if (ev.status === 'active') {
     html += '<button class="btn btn-primary" onclick="window.open(\'../pos/?eventId=' + eventId + '\', \'_blank\')">💰 Open PoS</button>';
     html += '<button class="btn btn-primary" onclick="startPackingMode(\'' + eventId + '\')">📦 Add More Items</button>';
-    html += '<button class="btn btn-secondary" onclick="showManualSaleModal(\'' + eventId + '\')">+ Manual Sale</button>';
+    html += '<button class="btn btn-secondary" onclick="showManualSaleModal(\'' + eventId + '\')" title="Record a cash or offline sale that wasn\'t captured through the PoS">+ Manual Sale</button>';
     html += '<button class="btn btn-secondary" style="background:#E53935;color:white;border-color:#E53935;" onclick="closeEvent(\'' + eventId + '\')">🏁 Close Event</button>';
   } else if (ev.status === 'closed') {
-    html += '<button class="btn btn-secondary" onclick="showManualSaleModal(\'' + eventId + '\')">+ Manual Sale</button>';
+    html += '<button class="btn btn-secondary" onclick="showManualSaleModal(\'' + eventId + '\')" title="Record a missed sale (e.g. cash sale not captured during the event)">+ Manual Sale</button>';
     html += '<button class="btn btn-secondary" onclick="openCreateEventModal(\'' + eventId + '\')">✏️ Edit Details</button>';
   }
   html += '</div>';
@@ -13207,11 +13391,17 @@ function showIntakeResult(result) {
       '</div>' +
     '</div>' +
     variantHtml +
-    '<div style="margin-bottom:8px;">' +
-      '<label style="font-size:0.78rem;color:rgba(255,255,255,0.6);">Storage Location</label>' +
-      '<select id="intakeLocation" style="width:100%;padding:8px;border-radius:6px;border:1px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.1);color:white;font-family:\'DM Sans\',sans-serif;">' +
-        locOptions +
-      '</select>' +
+    '<div style="display:flex;gap:12px;margin-bottom:8px;">' +
+      '<div style="flex:1;">' +
+        '<label style="font-size:0.78rem;color:rgba(255,255,255,0.6);">Storage Location</label>' +
+        '<select id="intakeLocation" style="width:100%;padding:8px;border-radius:6px;border:1px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.1);color:white;font-family:\'DM Sans\',sans-serif;">' +
+          locOptions +
+        '</select>' +
+      '</div>' +
+      '<div style="width:80px;">' +
+        '<label style="font-size:0.78rem;color:rgba(255,255,255,0.6);">Qty</label>' +
+        '<input type="number" id="intakeQty" min="1" value="1" style="width:100%;padding:8px;border-radius:6px;border:1px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.1);color:white;font-family:\'DM Sans\',sans-serif;text-align:center;font-size:1rem;">' +
+      '</div>' +
     '</div>' +
     '<div style="display:flex;gap:8px;margin-top:12px;">' +
       '<button onclick="confirmIntakeItem(\'' + esc(pid) + '\')" style="flex:1;background:#4CAF50;color:white;border:none;padding:10px;border-radius:6px;cursor:pointer;font-family:\'DM Sans\',sans-serif;font-weight:600;">✅ Confirm & Log</button>' +
@@ -13242,10 +13432,13 @@ async function confirmIntakeItem(pid) {
 
   var locationId = document.getElementById('intakeLocation').value || getHomeLocationId();
   var locationName = locationsData[locationId] ? locationsData[locationId].name : 'Home';
+  var intakeQtyEl = document.getElementById('intakeQty');
+  var qty = intakeQtyEl ? (parseInt(intakeQtyEl.value) || 1) : 1;
+  if (qty < 1) qty = 1;
 
   try {
-    // 1. Add to inventory at location
-    await addToLocation(pid, variantKey, locationId, 1);
+    // 1. Add to inventory at location (supports qty > 1)
+    await addToLocation(pid, variantKey, locationId, qty);
 
     // 2. Upload training image to library
     if (intakeLastBase64) {
@@ -13259,19 +13452,20 @@ async function confirmIntakeItem(pid) {
     }
 
     // 3. Track logged item
-    intakeLoggedCount++;
+    intakeLoggedCount += qty;
     intakeItems.push({
       pid: pid,
       productName: product.name,
       variant: variantDesc,
       location: locationName,
+      qty: qty,
       timestamp: new Date().toISOString()
     });
 
     updateIntakeTally();
     renderIntakeLoggedItems();
     intakeLastBase64 = null;
-    showToast('+1 ' + product.name + (variantDesc ? ' (' + variantDesc + ')' : '') + ' → ' + locationName);
+    showToast('+' + qty + ' ' + product.name + (variantDesc ? ' (' + variantDesc + ')' : '') + ' → ' + locationName);
 
     // 4. Check if product needs more training photos — offer multi-photo mode
     intakeCurrentPiece = { pid: pid, variantKey: variantKey, variantDesc: variantDesc, locationId: locationId, attrTags: attrTags };
@@ -13405,7 +13599,7 @@ function renderIntakeLoggedItems() {
   var html = '<h4 style="color:rgba(255,255,255,0.6);margin:0 0 8px 0;font-size:0.85rem;">Logged Items</h4>';
   intakeItems.slice().reverse().forEach(function(item, idx) {
     html += '<div style="display:flex;justify-content:space-between;padding:6px 10px;background:rgba(255,255,255,0.05);border-radius:4px;margin-bottom:4px;color:white;font-size:0.82rem;">' +
-      '<span>' + esc(item.productName) + (item.variant ? ' (' + item.variant + ')' : '') + '</span>' +
+      '<span>' + (item.qty && item.qty > 1 ? item.qty + 'x ' : '') + esc(item.productName) + (item.variant ? ' (' + item.variant + ')' : '') + '</span>' +
       '<span style="color:rgba(255,255,255,0.5);">→ ' + esc(item.location) + '</span>' +
     '</div>';
   });
@@ -16058,15 +16252,15 @@ function openMoveItemsModal(prefillPid, prefillVariant, prefillFrom) {
   if (!locationsLoaded) { loadLocations(); }
   var activeLocs = getLocationsArray('active');
 
-  // Build product picker options
+  // Build product picker options — show all products (some may have unassigned stock)
   var productOptions = '<option value="">— Select product —</option>';
   if (productsData && productsData.length) {
     productsData.forEach(function(p) {
+      if (p.status === 'discontinued') return;
       var inv = inventory[p.pid] || {};
       var totals = getInventoryTotals(inv);
-      if (totals.available > 0) {
-        productOptions += '<option value="' + esc(p.pid) + '"' + (prefillPid === p.pid ? ' selected' : '') + '>' + esc(p.name) + ' (' + totals.available + ')</option>';
-      }
+      var stockLabel = totals.available > 0 ? ' (' + totals.available + ' on hand)' : '';
+      productOptions += '<option value="' + esc(p.pid) + '"' + (prefillPid === p.pid ? ' selected' : '') + '>' + esc(p.name) + stockLabel + '</option>';
     });
   }
 
@@ -16101,8 +16295,9 @@ function openMoveItemsModal(prefillPid, prefillVariant, prefillFrom) {
     '</div>' +
     '<div class="form-group">' +
       '<label>Quantity <span id="moveMaxLabel" style="font-size:0.78rem;color:var(--warm-gray);"></span></label>' +
-      '<input type="number" id="moveQty" min="1" value="1" style="width:100px;">' +
+      '<input type="number" id="moveQty" min="1" value="1" style="width:100%;max-width:120px;padding:8px 10px;font-size:0.9rem;border:1px solid var(--cream-dark);border-radius:6px;">' +
     '</div>' +
+    '<div id="moveStatusMsg" style="display:none;padding:8px 12px;border-radius:6px;margin-top:8px;font-size:0.85rem;"></div>' +
     '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">' +
       '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
       '<button class="btn btn-primary" onclick="executeMoveItems()">Move</button>' +
@@ -16190,19 +16385,29 @@ async function executeMoveItems() {
   var variantEl = document.getElementById('moveVariant');
   var varKey = (variantEl && variantEl.value && document.getElementById('moveVariantRow').style.display !== 'none') ? variantEl.value : '_default';
 
-  if (!pid) { showToast('Select a product', true); return; }
-  if (!fromLocId) { showToast('Select source location', true); return; }
-  if (!toLocId) { showToast('Select destination location', true); return; }
-  if (fromLocId === toLocId) { showToast('Source and destination must be different', true); return; }
-  if (qty <= 0) { showToast('Enter a positive quantity', true); return; }
+  var msgEl = document.getElementById('moveStatusMsg');
+  function showMoveMsg(msg, isError) {
+    if (msgEl) {
+      msgEl.style.display = '';
+      msgEl.style.background = isError ? '#FFEBEE' : '#E8F5E9';
+      msgEl.style.color = isError ? '#C62828' : '#2E7D32';
+      msgEl.textContent = msg;
+    }
+  }
+
+  if (!pid) { showMoveMsg('Select a product.', true); return; }
+  if (!fromLocId) { showMoveMsg('Select a source location.', true); return; }
+  if (!toLocId) { showMoveMsg('Select a destination location.', true); return; }
+  if (fromLocId === toLocId) { showMoveMsg('Source and destination must be different.', true); return; }
+  if (qty <= 0) { showMoveMsg('Enter a positive quantity.', true); return; }
 
   var ok = await moveInventory(pid, varKey, fromLocId, toLocId, qty);
   if (ok) {
     var product = productsData.find(function(p) { return p.pid === pid; });
     var fromName = fromLocId === '__unassigned__' ? 'Unassigned Stock' : (locationsData[fromLocId] ? locationsData[fromLocId].name : fromLocId);
     var toName = locationsData[toLocId] ? locationsData[toLocId].name : toLocId;
-    showToast('Moved ' + qty + 'x ' + (product ? product.name : pid) + ': ' + fromName + ' → ' + toName);
-    closeModal();
+    showMoveMsg('✓ Moved ' + qty + 'x ' + (product ? product.name : pid) + ': ' + fromName + ' → ' + toName, false);
+    setTimeout(function() { closeModal(); }, 1200);
   }
 }
 
@@ -17330,7 +17535,7 @@ function loadCommissions() {
 
 function renderCommissions() {
   var filterEl = document.getElementById('commissionsStatusFilter');
-  var filter = filterEl ? filterEl.value : 'new';
+  var filter = filterEl ? filterEl.value : 'all';
   var items = Object.keys(commissionsData).map(function(k) {
     var c = commissionsData[k];
     c.id = k;
