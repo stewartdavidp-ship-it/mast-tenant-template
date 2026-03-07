@@ -36,7 +36,7 @@ Used at craft fairs and shows to ring up a sale, take payment, and send the cust
 ## Selling — Online
 
 ### Customer Purchases from the Website
-**Status:** In Progress
+**Status:** Live
 
 How a customer buys from shirglassworks.com — from browsing to payment confirmation.
 
@@ -421,39 +421,37 @@ Use Studio to get specific shooting guidance before you pick up your camera.
 6. When you return with the edited video, go back to Studio → New Post → "I already have a clip"
 7. The pending post record is waiting — upload your clip and continue from Step 4 in the workflow above
 
----
+### Write and Send a Newsletter Issue
+**Status:** Planned
 
-## Newsletter & Blog
+How to compose, polish, and export a newsletter issue using Studio's section-based editor with optional AI assistance.
 
-### Compose and Publish a Newsletter Issue
-**Status:** Live
-
-How to create a newsletter issue in Studio — from blank template to published blog post or HTML export for email.
-
-1. Open the admin app and go to Market → Blog & Newsletter
-2. Click "New Issue" — a new draft is created with 7 default sections pre-populated
-3. Enter the issue title at the top of the compose screen
-4. Expand each section and write your content in the text area
-5. Optionally click "Polish with AI" to get a cleaned-up version — compare side-by-side and pick your preferred version
-6. Add images from the Studio image library (up to 3 per section)
-7. Toggle off any sections you want to skip for this issue
-8. To send via email: click "Export HTML" — downloads a styled email file ready for your email tool
-9. To publish on the website: click "Publish to Website" — the issue appears on shirglassworks.com/blog
-10. After sending the email externally, click "Mark as Sent" to record the send date and subscriber count
+1. Open the admin app and go to Market → Newsletter
+2. Tap "New Issue" — Studio creates a new issue with 7 default sections and assigns it an issue number
+3. Enter a title for the issue (e.g. "March Studio Update" or "Fair Season Preview")
+4. Work through each section — tap a section card to expand it:
+   - Read the guided prompt (e.g. "What happened at the most recent show?")
+   - Write your response in the text area — you can ignore the prompt and write freely
+   - Tap "Polish with AI" if you'd like Studio to clean up grammar and flow — a side-by-side view shows your original and the polished version, pick one
+   - Add up to 3 photos from your image library to the section (optional)
+   - Toggle "Include in issue" off to skip a section with nothing to say
+5. To add a section not in the default template, tap "Add Section" at the bottom
+6. To reorder sections, use the drag handles
+7. When the issue looks ready, tap "Export HTML" — Studio downloads a formatted HTML file you can upload to your email platform (Mailchimp, Klaviyo, etc.)
+8. Tap "Publish to Website" to make the issue live on shirglassworks.com/blog
+9. After sending via your email tool, tap "Mark as Sent" in Studio to close the loop
 
 ### Manage Newsletter Subscribers
-**Status:** Live
+**Status:** Planned
 
-Adding, removing, and exporting the mailing list for the Shir Glassworks newsletter.
+Adding subscribers, reviewing the list, and exporting for use in your email platform.
 
-1. Open the admin app and go to Market → Blog & Newsletter
-2. Click the "Subscribers" tab
-3. View all active subscribers — name, email, source (Website or Manual), and date
-4. To add someone manually: click "+ Add Subscriber" and enter their name and email
-5. To remove someone: click "Remove" on their row — they're marked as unsubscribed (not deleted)
-6. To export the list for an email tool: click "Export CSV" — downloads a CSV with name, email, and subscribe date
-7. Customers can also sign up via the newsletter form on the website footer — those appear with a "Website" source badge
-8. Customers can unsubscribe via the link in newsletter emails — their status updates automatically
+1. Open Market → Newsletter → Subscribers
+2. The list shows all subscribers: name, email, source (website sign-up or manual), date added, and status
+3. To add someone manually: tap "Add Subscriber", enter their name, email, and an optional note (e.g. "met at Portland fair"), then save
+4. To remove someone: tap the row and select Remove — they're marked unsubscribed but not deleted
+5. To export the active list for upload to your email platform: tap "Export CSV"
+6. Customers can also subscribe themselves via the sign-up form on the shirglassworks.com website — new sign-ups appear in the list automatically
 
 ---
 
