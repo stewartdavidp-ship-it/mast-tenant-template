@@ -983,6 +983,8 @@
     var params = new URLSearchParams(window.location.search);
     var pid = params.get('id');
     var isStoryView = params.get('view') === 'story';
+    window._isStoryView = isStoryView;
+    window._pid = pid;
 
     if (!pid) {
       document.getElementById('productLoading').style.display = 'none';
@@ -1477,8 +1479,8 @@
       html += '</div>';
 
       // Story-only view: add link back to product page
-      if (isStoryView) {
-        var productUrl = 'product.html?id=' + encodeURIComponent(pid);
+      if (window._isStoryView) {
+        var productUrl = 'product.html?id=' + encodeURIComponent(window._pid);
         html += '<div style="text-align:center;margin:2rem auto;max-width:700px;">' +
           '<a href="' + productUrl + '" style="display:inline-block;padding:10px 24px;font-size:0.9rem;color:var(--amber);border:1px solid var(--amber);border-radius:6px;text-decoration:none;transition:all 0.2s;"' +
           ' onmouseover="this.style.background=\'var(--amber)\';this.style.color=\'var(--charcoal)\'"' +
