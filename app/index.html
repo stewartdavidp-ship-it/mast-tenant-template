@@ -15642,6 +15642,9 @@ async function openStoryCuration(jobId) {
   var job = productionJobs[jobId];
   if (!job) return;
 
+  // Determine if we should render inline (on stories tab) or in modal
+  var isInline = currentRoute === 'stories';
+
   // Load all media from all builds for this job
   var builds = job.builds || {};
   var buildKeys = Object.keys(builds).sort(function(a, b) {
@@ -15671,67 +15674,30 @@ async function openStoryCuration(jobId) {
     }
   } catch (e) { /* no existing story */ }
 
-  // Build the curation modal
-  var html = '<div style="max-width:700px;max-height:80vh;overflow-y:auto;">' +
-    '<h2 style="font-family:\'Cormorant Garamond\',serif;margin:0 0 16px 0;">Story: ' + esc(job.name || 'Untitled') + '</h2>' +
-    '<div class="form-group">' +
-      '<label>Title</label>' +
-      '<input type="text" id="storyTitle" value="' + esc(existingStory ? existingStory.title : job.name || '') + '" style="font-size:1rem;">' +
-    '</div>';
+  var html = buildStoryCurationHtml(job, builds, buildKeys, allMedia, existingStory, existingStoryId, isInline);
 
-  // Photo selection per build
-  html += '<div style="margin-bottom:20px;">' +
-    '<strong style="font-size:0.92rem;">Select Photos</strong>' +
-    '<p style="font-size:0.82rem;color:var(--warm-gray);margin:4px 0 12px;">Click photos to add them to the story.</p>';
-
-  var selectedMediaIds = {};
-  if (existingStory && existingStory.entries) {
-    Object.values(existingStory.entries).forEach(function(e) {
-      if (e.mediaUrl) selectedMediaIds[e.mediaUrl] = true;
-    });
+  if (isInline) {
+    // Render inline in the stories tab detail view
+    selectedStoryId = existingStoryId;
+    var listView = document.getElementById('storiesListView');
+    var detailView = document.getElementById('storyDetailView');
+    var detailContent = document.getElementById('storyDetailContent');
+    if (listView) listView.style.display = 'none';
+    if (detailView) detailView.style.display = '';
+    if (detailContent) detailContent.innerHTML = html;
+  } else {
+    // Navigate to stories tab and render inline there
+    navigateTo('stories');
+    // Small delay to let the tab render
+    await new Promise(function(r) { setTimeout(r, 50); });
+    selectedStoryId = existingStoryId;
+    var listView = document.getElementById('storiesListView');
+    var detailView = document.getElementById('storyDetailView');
+    var detailContent = document.getElementById('storyDetailContent');
+    if (listView) listView.style.display = 'none';
+    if (detailView) detailView.style.display = '';
+    if (detailContent) detailContent.innerHTML = html;
   }
-
-  buildKeys.forEach(function(bk) {
-    var b = builds[bk];
-    var media = allMedia[bk] || {};
-    var mKeys = Object.keys(media).sort(function(a, c) {
-      return (media[a].uploadedAt || '').localeCompare(media[c].uploadedAt || '');
-    });
-    if (mKeys.length === 0) return;
-    html += '<div style="margin-bottom:12px;">' +
-      '<div style="font-size:0.82rem;font-weight:600;margin-bottom:6px;">Build #' + (b.buildNumber || '?') + ' — ' + (b.sessionDate || '') + ' (' + mKeys.length + ' photos)</div>' +
-      '<div class="media-select-grid">';
-    mKeys.forEach(function(mk) {
-      var m = media[mk];
-      var sel = selectedMediaIds[m.url] ? ' selected' : '';
-      html += '<div class="media-select-thumb' + sel + '" data-url="' + esc(m.url) + '" data-buildid="' + esc(bk) + '" data-mediaid="' + esc(mk) + '" onclick="toggleStoryMediaSelect(this)">' +
-        '<img src="' + esc(m.url) + '" alt="">' +
-        '<div class="check-overlay">✓</div>' +
-      '</div>';
-    });
-    html += '</div></div>';
-  });
-
-  html += '</div>';
-
-  // Story entries assembly
-  html += '<div style="margin-bottom:20px;">' +
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">' +
-      '<strong style="font-size:0.92rem;">Story Entries</strong>' +
-      '<button class="btn btn-secondary" style="font-size:0.75rem;padding:3px 8px;" onclick="addTextOnlyEntry()">+ Text Entry</button>' +
-    '</div>' +
-    '<div id="storyEntriesList"></div>' +
-  '</div>';
-
-  // Action buttons
-  html += '<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">' +
-    '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
-    '<button class="btn btn-secondary" onclick="saveDraftStory(\'' + esc(existingStoryId || '') + '\')">Save Draft</button>' +
-    '<button class="btn btn-secondary" onclick="previewStoryFromCuration()">Preview</button>' +
-    '<button class="btn btn-primary" onclick="publishStory(\'' + esc(existingStoryId || '') + '\')">Publish</button>' +
-  '</div></div>';
-
-  openModal(html);
 
   // Initialize entries from existing story or selected photos
   if (existingStory && existingStory.entries) {
@@ -15743,6 +15709,94 @@ async function openStoryCuration(jobId) {
     storyDraft = [];
   }
   renderStoryEntries();
+}
+
+function buildStoryCurationHtml(job, builds, buildKeys, allMedia, existingStory, existingStoryId, isInline) {
+  var totalPhotos = 0;
+  buildKeys.forEach(function(bk) { totalPhotos += Object.keys(allMedia[bk] || {}).length; });
+
+  var html = '';
+
+  // Back button and header
+  if (existingStoryId) {
+    html += '<div class="detail-back" onclick="viewStoryDetail(\'' + esc(existingStoryId) + '\')">← Back to Story</div>';
+  } else {
+    html += '<div class="detail-back" onclick="backToStoriesList()">← Back to Stories</div>';
+  }
+
+  html += '<div class="section-header" style="margin-bottom:4px;">' +
+    '<h2>' + (existingStory ? 'Edit Story' : 'Create Story') + '</h2>' +
+  '</div>' +
+  '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:20px;">From job: <strong style="color:var(--text);">' + esc(job.name || 'Untitled') + '</strong></div>';
+
+  // Title input
+  html += '<div class="form-group" style="margin-bottom:20px;">' +
+    '<label style="font-weight:600;font-size:0.85rem;margin-bottom:4px;display:block;">Story Title</label>' +
+    '<input type="text" id="storyTitle" value="' + esc(existingStory ? existingStory.title : job.name || '') + '" placeholder="Give your story a title..." style="font-size:1rem;width:100%;padding:10px 14px;border:1px solid var(--cream-dark);border-radius:8px;box-sizing:border-box;">' +
+  '</div>';
+
+  // Photo selection per build
+  if (totalPhotos > 0) {
+    html += '<div class="prod-detail-section">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+        '<strong>Select Photos</strong>' +
+        '<span style="font-size:0.78rem;color:var(--warm-gray);">' + totalPhotos + ' available</span>' +
+      '</div>' +
+      '<p style="font-size:0.82rem;color:var(--warm-gray);margin:0 0 12px;">Tap photos to add or remove them from the story.</p>';
+
+    var selectedMediaIds = {};
+    if (existingStory && existingStory.entries) {
+      Object.values(existingStory.entries).forEach(function(e) {
+        if (e.mediaUrl) selectedMediaIds[e.mediaUrl] = true;
+      });
+    }
+
+    buildKeys.forEach(function(bk) {
+      var b = builds[bk];
+      var media = allMedia[bk] || {};
+      var mKeys = Object.keys(media).sort(function(a, c) {
+        return (media[a].uploadedAt || '').localeCompare(media[c].uploadedAt || '');
+      });
+      if (mKeys.length === 0) return;
+      html += '<div style="margin-bottom:12px;">' +
+        '<div style="font-size:0.82rem;font-weight:600;margin-bottom:6px;">Build #' + (b.buildNumber || '?') + ' — ' + (b.sessionDate || '') + ' (' + mKeys.length + ' photos)</div>' +
+        '<div class="media-select-grid">';
+      mKeys.forEach(function(mk) {
+        var m = media[mk];
+        var sel = selectedMediaIds[m.url] ? ' selected' : '';
+        html += '<div class="media-select-thumb' + sel + '" data-url="' + esc(m.url) + '" data-buildid="' + esc(bk) + '" data-mediaid="' + esc(mk) + '" onclick="toggleStoryMediaSelect(this)">' +
+          '<img src="' + esc(m.url) + '" alt="">' +
+          '<div class="check-overlay">✓</div>' +
+        '</div>';
+      });
+      html += '</div></div>';
+    });
+
+    html += '</div>';
+  } else {
+    html += '<div class="prod-detail-section">' +
+      '<strong>Photos</strong>' +
+      '<p style="font-size:0.85rem;color:var(--warm-gray);font-style:italic;margin:8px 0 0;">No build photos found for this job. Add photos during a build session, or add text-only entries below.</p>' +
+    '</div>';
+  }
+
+  // Story entries assembly
+  html += '<div class="prod-detail-section">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">' +
+      '<strong>Story Entries</strong>' +
+      '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 10px;" onclick="addTextOnlyEntry()">+ Text Entry</button>' +
+    '</div>' +
+    '<div id="storyEntriesList"></div>' +
+  '</div>';
+
+  // Action buttons — sticky at bottom
+  html += '<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;padding:16px 0;border-top:1px solid var(--cream-dark);margin-top:8px;">' +
+    '<button class="btn btn-secondary" onclick="previewStoryFromCuration()">👁 Preview</button>' +
+    '<button class="btn btn-secondary" onclick="saveDraftStory(\'' + esc(existingStoryId || '') + '\')">💾 Save Draft</button>' +
+    '<button class="btn btn-primary" onclick="publishStory(\'' + esc(existingStoryId || '') + '\')">🚀 Publish</button>' +
+  '</div>';
+
+  return html;
 }
 
 function toggleStoryMediaSelect(el) {
@@ -15845,18 +15899,25 @@ async function saveDraftStory(existingId) {
     var data = getStoryData();
     data.status = 'draft';
     data.updatedAt = new Date().toISOString();
+    var storyId = existingId;
     if (existingId) {
       await db.ref(STORIES_PATH + '/' + existingId).update(data);
       await writeAudit('update', 'products', existingId);
     } else {
       data.createdAt = new Date().toISOString();
       var ref = db.ref(STORIES_PATH).push();
+      storyId = ref.key;
       await ref.set(data);
       await writeAudit('update', 'products', ref.key);
     }
-    closeModal();
     showToast('Story draft saved');
     if (storyCurationJobId) loadJobStoryStatus(storyCurationJobId);
+    // Navigate to story detail view if on stories tab
+    if (currentRoute === 'stories' && storyId) {
+      viewStoryDetail(storyId);
+    } else {
+      closeModal();
+    }
   } catch (err) {
     showToast('Error saving draft: ' + err.message, true);
   }
@@ -15909,9 +15970,14 @@ async function publishStory(existingId) {
       }
     }
 
-    closeModal();
     showToast('Story published!');
     if (storyCurationJobId) loadJobStoryStatus(storyCurationJobId);
+    // Navigate to story detail view if on stories tab
+    if (currentRoute === 'stories' && storyId) {
+      viewStoryDetail(storyId);
+    } else {
+      closeModal();
+    }
   } catch (err) {
     showToast('Error publishing: ' + err.message, true);
   }
