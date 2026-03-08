@@ -1701,6 +1701,22 @@
     }
     .order-item-fulfillment.stock { background: rgba(46,125,50,0.25); color: #66BB6A; border: 1px solid rgba(46,125,50,0.4); }
     .order-item-fulfillment.build { background: rgba(123,31,162,0.2); color: #CE93D8; border: 1px solid rgba(123,31,162,0.35); }
+    /* Order Progress Flow */
+    .order-progress { display: flex; align-items: center; padding: 14px 16px; margin-bottom: 12px; background: var(--cream); border: 1px solid var(--cream-dark); border-radius: 8px; overflow-x: auto; }
+    .order-progress-step { display: flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 0.75rem; font-weight: 600; color: var(--warm-gray); }
+    .order-progress-step.completed { color: #66BB6A; }
+    .order-progress-step.current { color: var(--amber); }
+    .order-progress-step.upcoming { color: var(--warm-gray); opacity: 0.5; }
+    .order-progress-step.cancelled { color: #EF5350; }
+    .order-progress-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .order-progress-step.completed .order-progress-dot { background: #66BB6A; }
+    .order-progress-step.current .order-progress-dot { background: var(--amber); box-shadow: 0 0 6px rgba(196,133,60,0.5); }
+    .order-progress-step.upcoming .order-progress-dot { background: var(--warm-gray); opacity: 0.4; }
+    .order-progress-step.cancelled .order-progress-dot { background: #EF5350; }
+    .order-progress-connector { flex: 0 0 24px; height: 2px; margin: 0 4px; background: var(--warm-gray); opacity: 0.2; }
+    .order-progress-connector.done { background: #66BB6A; opacity: 1; }
+    .order-progress-connector.active { background: var(--amber); opacity: 0.4; }
+
     .order-item-inv { font-size: 0.72rem; margin-top: 4px; padding: 2px 8px; border-radius: 4px; display: inline-block; font-weight: 600; }
     .order-item-inv.inv-stock { background: rgba(46,125,50,0.25); color: #66BB6A; border: 1px solid rgba(46,125,50,0.4); }
     .order-item-inv.inv-partial { background: rgba(230,81,0,0.2); color: #FFB74D; border: 1px solid rgba(230,81,0,0.35); }
@@ -10477,6 +10493,56 @@ function renderOrders() {
   if (cardsEl) cardsEl.innerHTML = cardHtml;
 }
 
+// ---- Order Progress Flow ----
+function renderOrderProgress(status) {
+  // Define the happy-path steps
+  var steps = ['placed', 'confirmed', 'ready', 'packing', 'packed', 'shipped', 'delivered'];
+  // Insert building after confirmed if order went through building
+  if (status === 'building' || (status !== 'placed' && status !== 'confirmed')) {
+    // Check if building should be shown — include it if current or past
+    // We'll detect by checking if building is in the path
+  }
+
+  // Simplified: define all possible steps, determine which are in the flow
+  var allSteps = ['placed', 'confirmed', 'building', 'ready', 'packing', 'packed', 'shipped', 'delivered'];
+  var stepLabels = {
+    placed: 'Placed', confirmed: 'Confirmed', building: 'Building',
+    ready: 'Ready', packing: 'Packing', packed: 'Packed',
+    handed_to_carrier: 'With Carrier', shipped: 'Shipped', delivered: 'Delivered'
+  };
+
+  // Determine which steps to show
+  var flow;
+  if (status === 'cancelled') {
+    return '<div class="order-progress"><div class="order-progress-step cancelled"><span class="order-progress-dot"></span>Cancelled</div></div>';
+  } else if (status === 'pending_payment' || status === 'payment_failed') {
+    var plabel = status === 'pending_payment' ? 'Pending Payment' : 'Payment Failed';
+    return '<div class="order-progress"><div class="order-progress-step current"><span class="order-progress-dot"></span>' + plabel + '</div></div>';
+  } else if (status === 'building') {
+    flow = ['placed', 'confirmed', 'building', 'ready', 'packing', 'packed', 'shipped', 'delivered'];
+  } else if (status === 'handed_to_carrier') {
+    flow = ['placed', 'confirmed', 'ready', 'packing', 'packed', 'handed_to_carrier', 'shipped', 'delivered'];
+  } else {
+    flow = ['placed', 'confirmed', 'ready', 'packing', 'packed', 'shipped', 'delivered'];
+  }
+
+  var currentIdx = flow.indexOf(status);
+  var html = '<div class="order-progress">';
+  flow.forEach(function(step, idx) {
+    var cls = idx < currentIdx ? 'completed' : idx === currentIdx ? 'current' : 'upcoming';
+    html += '<div class="order-progress-step ' + cls + '">' +
+      '<span class="order-progress-dot"></span>' +
+      stepLabels[step] +
+    '</div>';
+    if (idx < flow.length - 1) {
+      var connCls = idx < currentIdx ? 'done' : idx === currentIdx ? 'active' : '';
+      html += '<div class="order-progress-connector ' + connCls + '"></div>';
+    }
+  });
+  html += '</div>';
+  return html;
+}
+
 // ---- Order Detail View ----
 var _viewOrderReturnRoute = null;
 
@@ -10822,6 +10888,7 @@ function renderOrderDetail(orderId) {
       '</div>' +
       '<div class="order-actions">' + actionsHtml + '</div>' +
     '</div>' +
+    renderOrderProgress(status) +
     '<div class="order-detail-section">' +
       '<div class="order-detail-section-title">Items</div>' +
       itemsHtml +
