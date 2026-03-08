@@ -781,8 +781,8 @@
       letter-spacing: 0.03em; padding: 2px 6px; border-radius: 3px;
     }
     .img-lib-badge.website { background: var(--teal-light); color: var(--teal-deep); }
-    .img-lib-badge.product { background: #FFF3CD; color: #856404; }
-    .img-lib-badge.source { background: #e2e3e5; color: #383d41; }
+    .img-lib-badge.product { background: rgba(133,100,4,0.2); color: #FFD54F; border: 1px solid rgba(133,100,4,0.35); }
+    .img-lib-badge.source { background: rgba(158,158,158,0.15); color: #BDBDBD; border: 1px solid rgba(158,158,158,0.25); }
     .img-lib-stats { display: flex; gap: 16px; padding: 8px 0 12px; font-size: 0.85rem; color: var(--warm-gray); }
     .img-lib-stat-num { font-weight: 600; color: var(--charcoal); }
 
@@ -1329,9 +1329,9 @@
       letter-spacing: 0.04em;
       text-transform: uppercase;
     }
-    .coupon-status.pending { background: #E0D8CC; color: #6B6560; }
-    .coupon-status.active { background: #D4F0EB; color: #1B5C52; }
-    .coupon-status.expired { background: #F8D7DA; color: #9B2335; }
+    .coupon-status.pending { background: rgba(158,158,158,0.15); color: #BDBDBD; border: 1px solid rgba(158,158,158,0.25); }
+    .coupon-status.active { background: rgba(27,92,82,0.25); color: #4DB6AC; border: 1px solid rgba(27,92,82,0.4); }
+    .coupon-status.expired { background: rgba(155,35,53,0.2); color: #EF5350; border: 1px solid rgba(155,35,53,0.35); }
 
     .coupon-code {
       font-family: monospace;
@@ -1433,11 +1433,11 @@
       flex-wrap: wrap;
     }
     .stock-badge { /* base from .status-badge */ }
-    .stock-badge.in-stock { background: #E8F5E9; color: #2E7D32; }
-    .stock-badge.low-stock { background: #FFF3E0; color: #E65100; }
-    .stock-badge.out-of-stock { background: #F8D7DA; color: #9B2335; }
-    .stock-badge.made-to-order { background: #F3E5F5; color: #7B1FA2; }
-    .stock-badge.limited { background: #FFF8E1; color: #F57F17; }
+    .stock-badge.in-stock { background: rgba(46,125,50,0.25); color: #66BB6A; border: 1px solid rgba(46,125,50,0.4); }
+    .stock-badge.low-stock { background: rgba(230,81,0,0.2); color: #FFB74D; border: 1px solid rgba(230,81,0,0.35); }
+    .stock-badge.out-of-stock { background: rgba(198,40,40,0.2); color: #EF5350; border: 1px solid rgba(198,40,40,0.35); }
+    .stock-badge.made-to-order { background: rgba(123,31,162,0.2); color: #CE93D8; border: 1px solid rgba(123,31,162,0.35); }
+    .stock-badge.limited { background: rgba(245,127,23,0.2); color: #FFD54F; border: 1px solid rgba(245,127,23,0.35); }
     .stock-reserved { font-size: 0.72rem; color: var(--warm-gray-light); }
     .inventory-summary-bar {
       display: flex;
@@ -1524,23 +1524,23 @@
     .order-status {
       /* base from .status-badge.pill */
     }
-    .order-status.pending_payment { background: #FFF3E0; color: #E65100; }
-    .order-status.payment_failed { background: #FFEBEE; color: #C62828; }
+    .order-status.pending_payment { background: rgba(230,81,0,0.2); color: #FFB74D; border: 1px solid rgba(230,81,0,0.35); }
+    .order-status.payment_failed { background: rgba(198,40,40,0.2); color: #EF5350; border: 1px solid rgba(198,40,40,0.35); }
     .order-source-badge {
       display: inline-block; font-size: 0.7rem; padding: 1px 6px; border-radius: 4px;
       font-weight: 600; vertical-align: middle; margin-left: 6px; text-transform: uppercase; letter-spacing: 0.5px;
     }
     .order-source-badge.etsy { background: #F1641E; color: white; }
-    .order-status.placed { background: #FFF3E0; color: #E65100; }
-    .order-status.confirmed { background: #E3F2FD; color: #1565C0; }
-    .order-status.building { background: #F3E5F5; color: #7B1FA2; }
-    .order-status.ready { background: #D4F0EB; color: #1B5C52; }
-    .order-status.packing { background: #FFF8E1; color: #F9A825; }
-    .order-status.packed { background: #C8E6C9; color: #2E7D32; }
-    .order-status.handed_to_carrier { background: #D1C4E9; color: #4527A0; }
-    .order-status.shipped { background: #E8EAF6; color: #283593; }
-    .order-status.delivered { background: #E8F5E9; color: #2E7D32; }
-    .order-status.cancelled { background: #F8D7DA; color: #9B2335; }
+    .order-status.placed { background: rgba(230,81,0,0.2); color: #FFB74D; border: 1px solid rgba(230,81,0,0.35); }
+    .order-status.confirmed { background: rgba(21,101,192,0.2); color: #64B5F6; border: 1px solid rgba(21,101,192,0.35); }
+    .order-status.building { background: rgba(123,31,162,0.2); color: #CE93D8; border: 1px solid rgba(123,31,162,0.35); }
+    .order-status.ready { background: rgba(27,92,82,0.25); color: #4DB6AC; border: 1px solid rgba(27,92,82,0.4); }
+    .order-status.packing { background: rgba(249,168,37,0.2); color: #FFD54F; border: 1px solid rgba(249,168,37,0.35); }
+    .order-status.packed { background: rgba(46,125,50,0.25); color: #66BB6A; border: 1px solid rgba(46,125,50,0.4); }
+    .order-status.handed_to_carrier { background: rgba(69,39,160,0.2); color: #B39DDB; border: 1px solid rgba(69,39,160,0.35); }
+    .order-status.shipped { background: rgba(40,53,147,0.2); color: #7986CB; border: 1px solid rgba(40,53,147,0.35); }
+    .order-status.delivered { background: rgba(46,125,50,0.25); color: #66BB6A; border: 1px solid rgba(46,125,50,0.4); }
+    .order-status.cancelled { background: rgba(155,35,53,0.2); color: #EF5350; border: 1px solid rgba(155,35,53,0.35); }
 
     .order-filter-pills {
       display: flex;
@@ -1699,14 +1699,14 @@
       border-radius: 4px;
       display: inline-block;
     }
-    .order-item-fulfillment.stock { background: #E8F5E9; color: #2E7D32; }
-    .order-item-fulfillment.build { background: #F3E5F5; color: #7B1FA2; }
-    .order-item-inv { font-size: 0.72rem; margin-top: 4px; padding: 2px 8px; border-radius: 4px; display: inline-block; }
-    .order-item-inv.inv-stock { background: #E8F5E9; color: #2E7D32; }
-    .order-item-inv.inv-partial { background: #FFF3E0; color: #E65100; }
-    .order-item-inv.inv-out { background: #FFEBEE; color: #C62828; }
-    .order-item-inv.inv-build { background: #F3E5F5; color: #7B1FA2; }
-    .order-item-inv.inv-unknown { background: #F5F5F5; color: #757575; }
+    .order-item-fulfillment.stock { background: rgba(46,125,50,0.25); color: #66BB6A; border: 1px solid rgba(46,125,50,0.4); }
+    .order-item-fulfillment.build { background: rgba(123,31,162,0.2); color: #CE93D8; border: 1px solid rgba(123,31,162,0.35); }
+    .order-item-inv { font-size: 0.72rem; margin-top: 4px; padding: 2px 8px; border-radius: 4px; display: inline-block; font-weight: 600; }
+    .order-item-inv.inv-stock { background: rgba(46,125,50,0.25); color: #66BB6A; border: 1px solid rgba(46,125,50,0.4); }
+    .order-item-inv.inv-partial { background: rgba(230,81,0,0.2); color: #FFB74D; border: 1px solid rgba(230,81,0,0.35); }
+    .order-item-inv.inv-out { background: rgba(198,40,40,0.2); color: #EF5350; border: 1px solid rgba(198,40,40,0.35); }
+    .order-item-inv.inv-build { background: rgba(123,31,162,0.2); color: #CE93D8; border: 1px solid rgba(123,31,162,0.35); }
+    .order-item-inv.inv-unknown { background: rgba(158,158,158,0.15); color: #BDBDBD; border: 1px solid rgba(158,158,158,0.25); }
 
     .order-summary-row {
       display: flex;
@@ -1813,7 +1813,8 @@
 
     /* Production Request Queue */
     .build-queue-summary {
-      background: #F3E5F5;
+      background: rgba(123,31,162,0.15);
+      border: 1px solid rgba(123,31,162,0.3);
       border-radius: 8px;
       padding: 12px 16px;
       margin-bottom: 16px;
@@ -1821,10 +1822,10 @@
       align-items: center;
       gap: 12px;
       font-size: 0.85rem;
-      color: #7B1FA2;
+      color: #CE93D8;
       cursor: pointer;
     }
-    .build-queue-summary:hover { background: #EDE7F6; }
+    .build-queue-summary:hover { background: rgba(123,31,162,0.25); }
 
     .production-request-row {
       display: flex;
@@ -1843,12 +1844,12 @@
       font-weight: 600;
       text-transform: uppercase;
     }
-    .production-request-status.pending { background: #FFF3E0; color: #E65100; }
-    .production-request-status.in-progress { background: #F3E5F5; color: #7B1FA2; }
-    .production-request-status.completed { background: #E8F5E9; color: #2E7D32; }
-    .production-request-status.fulfilled { background: #E8F5E9; color: #2E7D32; }
-    .production-request-status.assigned { background: #E3F2FD; color: #1565C0; }
-    .production-request-status.cancelled { background: #FFEBEE; color: #C62828; }
+    .production-request-status.pending { background: rgba(230,81,0,0.2); color: #FFB74D; border: 1px solid rgba(230,81,0,0.35); }
+    .production-request-status.in-progress { background: rgba(123,31,162,0.2); color: #CE93D8; border: 1px solid rgba(123,31,162,0.35); }
+    .production-request-status.completed { background: rgba(46,125,50,0.25); color: #66BB6A; border: 1px solid rgba(46,125,50,0.4); }
+    .production-request-status.fulfilled { background: rgba(46,125,50,0.25); color: #66BB6A; border: 1px solid rgba(46,125,50,0.4); }
+    .production-request-status.assigned { background: rgba(21,101,192,0.2); color: #64B5F6; border: 1px solid rgba(21,101,192,0.35); }
+    .production-request-status.cancelled { background: rgba(198,40,40,0.2); color: #EF5350; border: 1px solid rgba(198,40,40,0.35); }
 
     /* Production Jobs */
     .prod-job-card {
@@ -1869,20 +1870,20 @@
       font-weight: 600;
       text-transform: uppercase;
     }
-    .prod-purpose-badge.fulfillment { background: #FFF3E0; color: #C4853C; }
-    .prod-purpose-badge.custom { background: #E0F2F1; color: #2A7C6F; }
-    .prod-purpose-badge.inventory-general { background: #F5F5F5; color: #6B6560; }
-    .prod-purpose-badge.inventory-event { background: #F3E5F5; color: #7B1FA2; }
-    .prod-purpose-badge.wholesale { background: #E3F2FD; color: #1565C0; }
-    .prod-purpose-badge.experimental { background: #F1F8E9; color: #558B2F; }
+    .prod-purpose-badge.fulfillment { background: rgba(196,133,60,0.2); color: #FFB74D; border: 1px solid rgba(196,133,60,0.35); }
+    .prod-purpose-badge.custom { background: rgba(42,124,111,0.2); color: #4DB6AC; border: 1px solid rgba(42,124,111,0.35); }
+    .prod-purpose-badge.inventory-general { background: rgba(158,158,158,0.15); color: #BDBDBD; border: 1px solid rgba(158,158,158,0.25); }
+    .prod-purpose-badge.inventory-event { background: rgba(123,31,162,0.2); color: #CE93D8; border: 1px solid rgba(123,31,162,0.35); }
+    .prod-purpose-badge.wholesale { background: rgba(21,101,192,0.2); color: #64B5F6; border: 1px solid rgba(21,101,192,0.35); }
+    .prod-purpose-badge.experimental { background: rgba(85,139,47,0.2); color: #AED581; border: 1px solid rgba(85,139,47,0.35); }
     .prod-status-pill {
       /* base from .status-badge */
     }
-    .prod-status-pill.definition { background: #FFF3E0; color: #E65100; }
-    .prod-status-pill.in-progress { background: #F3E5F5; color: #7B1FA2; }
-    .prod-status-pill.completed { background: #E8F5E9; color: #2E7D32; }
-    .prod-status-pill.on-hold { background: #FFF9C4; color: #F57F17; }
-    .prod-status-pill.cancelled { background: #FFEBEE; color: #C62828; }
+    .prod-status-pill.definition { background: rgba(230,81,0,0.2); color: #FFB74D; border: 1px solid rgba(230,81,0,0.35); }
+    .prod-status-pill.in-progress { background: rgba(123,31,162,0.2); color: #CE93D8; border: 1px solid rgba(123,31,162,0.35); }
+    .prod-status-pill.completed { background: rgba(46,125,50,0.25); color: #66BB6A; border: 1px solid rgba(46,125,50,0.4); }
+    .prod-status-pill.on-hold { background: rgba(245,127,23,0.2); color: #FFD54F; border: 1px solid rgba(245,127,23,0.35); }
+    .prod-status-pill.cancelled { background: rgba(198,40,40,0.2); color: #EF5350; border: 1px solid rgba(198,40,40,0.35); }
     .prod-priority-dot {
       display: inline-block;
       width: 8px;
@@ -2226,8 +2227,8 @@
       font-size: 0.8rem;
       flex-shrink: 0;
     }
-    .analytics-feed-icon.pv { background: #e8f4f0; color: var(--teal); }
-    .analytics-feed-icon.ev { background: #fdf3e7; color: var(--amber); }
+    .analytics-feed-icon.pv { background: rgba(42,124,111,0.2); color: var(--teal); border: 1px solid rgba(42,124,111,0.35); }
+    .analytics-feed-icon.ev { background: rgba(196,133,60,0.2); color: var(--amber); border: 1px solid rgba(196,133,60,0.35); }
     .analytics-feed-time {
       width: 70px;
       flex-shrink: 0;
@@ -2571,9 +2572,9 @@
     .audit-action-badge {
       /* base from .status-badge */
     }
-    .audit-action-badge.create { background: #E8F5E9; color: #2E7D32; }
-    .audit-action-badge.update { background: #E3F2FD; color: #1565C0; }
-    .audit-action-badge.delete { background: #F8D7DA; color: #9B2335; }
+    .audit-action-badge.create { background: rgba(46,125,50,0.25); color: #66BB6A; border: 1px solid rgba(46,125,50,0.4); }
+    .audit-action-badge.update { background: rgba(21,101,192,0.2); color: #64B5F6; border: 1px solid rgba(21,101,192,0.35); }
+    .audit-action-badge.delete { background: rgba(155,35,53,0.2); color: #EF5350; border: 1px solid rgba(155,35,53,0.35); }
     .audit-entity-badge {
       display: inline-block;
       padding: 2px 8px;
@@ -2588,8 +2589,8 @@
       border-radius: 4px;
       font-size: 0.68rem;
     }
-    .audit-gps-badge.fair { background: #FFF8E1; color: #F57F17; }
-    .audit-gps-badge.studio { background: #F3E5F5; color: #7B1FA2; }
+    .audit-gps-badge.fair { background: rgba(245,127,23,0.2); color: #FFD54F; border: 1px solid rgba(245,127,23,0.35); }
+    .audit-gps-badge.studio { background: rgba(123,31,162,0.2); color: #CE93D8; border: 1px solid rgba(123,31,162,0.35); }
     .audit-cards {
       display: none;
       flex-direction: column;
@@ -2744,9 +2745,9 @@
     .role-badge {
       /* base from .status-badge */
     }
-    .role-badge.admin { background: #F3E5F5; color: #7B1FA2; }
-    .role-badge.user { background: #E3F2FD; color: #1565C0; }
-    .role-badge.guest { background: #FFF8E1; color: #F57F17; }
+    .role-badge.admin { background: rgba(123,31,162,0.2); color: #CE93D8; border: 1px solid rgba(123,31,162,0.35); }
+    .role-badge.user { background: rgba(21,101,192,0.2); color: #64B5F6; border: 1px solid rgba(21,101,192,0.35); }
+    .role-badge.guest { background: rgba(245,127,23,0.2); color: #FFD54F; border: 1px solid rgba(245,127,23,0.35); }
 
     /* emp-sub-nav replaced by .view-tabs */
 
@@ -2794,15 +2795,15 @@
     .contacts-table th { text-align:left; padding:8px 12px; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.04em; color:var(--warm-gray); border-bottom:2px solid var(--cream-dark); }
     .contacts-table td { padding:10px 12px; border-bottom:1px solid var(--cream-dark); font-size:0.88rem; vertical-align:top; }
     .contacts-table tr:hover { background:var(--cream); cursor:pointer; }
-    .contact-cat-badge { /* base from .status-badge */ background:var(--cream-dark); color:var(--warm-gray); }
-    .contact-cat-badge.supplier { background:#dbeafe; color:#1e40af; }
-    .contact-cat-badge.facilities { background:#fef3c7; color:#92400e; }
-    .contact-cat-badge.gallery { background:#ede9fe; color:#5b21b6; }
-    .contact-cat-badge.marketplace { background:#d1fae5; color:#065f46; }
-    .contact-cat-badge.event-organizer { background:#fce7f3; color:#9d174d; }
-    .contact-cat-badge.partner { background:#e0e7ff; color:#3730a3; }
-    .contact-cat-badge.student { background:#ccfbf1; color:#0f766e; }
-    .contact-cat-badge.press { background:#fef9c3; color:#854d0e; }
+    .contact-cat-badge { /* base from .status-badge */ background:rgba(158,158,158,0.15); color:#BDBDBD; }
+    .contact-cat-badge.supplier { background:rgba(30,64,175,0.2); color:#64B5F6; border:1px solid rgba(30,64,175,0.35); }
+    .contact-cat-badge.facilities { background:rgba(146,64,14,0.2); color:#FFD54F; border:1px solid rgba(146,64,14,0.35); }
+    .contact-cat-badge.gallery { background:rgba(91,33,182,0.2); color:#B39DDB; border:1px solid rgba(91,33,182,0.35); }
+    .contact-cat-badge.marketplace { background:rgba(6,95,70,0.25); color:#4DB6AC; border:1px solid rgba(6,95,70,0.4); }
+    .contact-cat-badge.event-organizer { background:rgba(157,23,77,0.2); color:#F48FB1; border:1px solid rgba(157,23,77,0.35); }
+    .contact-cat-badge.partner { background:rgba(55,48,163,0.2); color:#7986CB; border:1px solid rgba(55,48,163,0.35); }
+    .contact-cat-badge.student { background:rgba(15,118,110,0.2); color:#4DB6AC; border:1px solid rgba(15,118,110,0.35); }
+    .contact-cat-badge.press { background:rgba(133,77,14,0.2); color:#FFD54F; border:1px solid rgba(133,77,14,0.35); }
     .contact-last-interaction { font-size:0.8rem; color:var(--warm-gray); }
     .contact-last-interaction .type-badge { font-weight:600; color:var(--charcoal); }
 
@@ -2820,20 +2821,20 @@
     .interaction-card:hover { border-color:var(--amber-light); }
     .interaction-header { display:flex; align-items:center; gap:10px; margin-bottom:6px; flex-wrap:wrap; }
     .interaction-date { font-weight:600; font-size:0.88rem; }
-    .interaction-type-badge { /* base from .status-badge */ background:var(--cream-dark); color:var(--warm-gray); }
-    .interaction-type-badge.call { background:#dbeafe; color:#1e40af; }
-    .interaction-type-badge.email { background:#d1fae5; color:#065f46; }
-    .interaction-type-badge.meeting { background:#ede9fe; color:#5b21b6; }
-    .interaction-type-badge.site-visit { background:#fef3c7; color:#92400e; }
-    .interaction-type-badge.payment { background:#d1fae5; color:#065f46; }
-    .interaction-type-badge.signed-doc { background:#fce7f3; color:#9d174d; }
+    .interaction-type-badge { /* base from .status-badge */ background:rgba(158,158,158,0.15); color:#BDBDBD; }
+    .interaction-type-badge.call { background:rgba(30,64,175,0.2); color:#64B5F6; border:1px solid rgba(30,64,175,0.35); }
+    .interaction-type-badge.email { background:rgba(6,95,70,0.25); color:#4DB6AC; border:1px solid rgba(6,95,70,0.4); }
+    .interaction-type-badge.meeting { background:rgba(91,33,182,0.2); color:#B39DDB; border:1px solid rgba(91,33,182,0.35); }
+    .interaction-type-badge.site-visit { background:rgba(146,64,14,0.2); color:#FFD54F; border:1px solid rgba(146,64,14,0.35); }
+    .interaction-type-badge.payment { background:rgba(6,95,70,0.25); color:#4DB6AC; border:1px solid rgba(6,95,70,0.4); }
+    .interaction-type-badge.signed-doc { background:rgba(157,23,77,0.2); color:#F48FB1; border:1px solid rgba(157,23,77,0.35); }
     .interaction-notes { font-size:0.88rem; color:var(--charcoal); white-space:pre-wrap; }
     .interaction-docs { margin-top:8px; display:flex; flex-direction:column; gap:4px; }
     .interaction-doc-link { display:flex; align-items:center; gap:6px; font-size:0.82rem; color:var(--teal); text-decoration:none; }
     .interaction-doc-link:hover { text-decoration:underline; }
     .interaction-doc-source { font-size:0.68rem; padding:1px 5px; border-radius:3px; font-weight:600; }
-    .interaction-doc-source.studio { background:#d1fae5; color:#065f46; }
-    .interaction-doc-source.historical { background:#e5e7eb; color:#6b7280; }
+    .interaction-doc-source.studio { background:rgba(6,95,70,0.25); color:#4DB6AC; border:1px solid rgba(6,95,70,0.4); }
+    .interaction-doc-source.historical { background:rgba(158,158,158,0.15); color:#BDBDBD; border:1px solid rgba(158,158,158,0.25); }
 
     /* Dark mode — Contacts */
     body.dark-mode .contacts-search { background:#2a2a2a; border-color:#444; color:#eee; }
@@ -10478,6 +10479,7 @@ function renderOrders() {
 // ---- Order Detail View ----
 function viewOrder(orderId) {
   selectedOrderId = orderId;
+  navigateTo('orders');
   document.getElementById('ordersListView').style.display = 'none';
   var detailEl = document.getElementById('orderDetailView');
   detailEl.style.display = 'block';
@@ -11237,8 +11239,7 @@ function renderPackQueue() {
     if (status === 'packed') {
       html += '<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 12px;" onclick="transitionOrder(\'' + esc(key) + '\', \'handed_to_carrier\')">Handed to Carrier</button>';
     }
-    html += '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 12px;" onclick="downloadOrderCSV(\'' + esc(key) + '\')">CSV</button>' +
-      '<a href="https://ship.pirateship.com/import" target="_blank" rel="noopener" class="btn btn-secondary" style="font-size:0.78rem;padding:4px 12px;text-decoration:none;">Pirate Ship &rarr;</a>' +
+    html += '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 12px;" onclick="openPirateShip(\'' + esc(key) + '\')">Pirate Ship &rarr;</button>' +
       '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 12px;" onclick="viewOrder(\'' + esc(key) + '\')">View</button>' +
       '</div></div>';
   });
@@ -11259,6 +11260,72 @@ function downloadOrderCSV(orderId) {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(link.href);
+}
+
+var _pirateShipCSVDownloaded = {};
+
+function openPirateShip(orderId) {
+  // Step 1: Download CSV if not already done for this order
+  if (!_pirateShipCSVDownloaded[orderId]) {
+    downloadOrderCSV(orderId);
+    _pirateShipCSVDownloaded[orderId] = true;
+  }
+
+  // Step 2: Check first-time usage — show mapping guide or go straight to Pirate Ship
+  var hasUsed = localStorage.getItem('sgw_pirateship_mapped');
+  if (hasUsed) {
+    window.open('https://ship.pirateship.com/ship/spreadsheet', '_blank');
+    return;
+  }
+  var html = '<div class="modal-header">' +
+    '<h3 style="margin:0;">First Time Using Pirate Ship CSV?</h3>' +
+    '<button class="modal-close" onclick="closeModal()">&times;</button>' +
+  '</div>' +
+  '<div class="modal-body" style="padding:16px;">' +
+    '<p style="margin:0 0 12px;color:var(--warm-gray-light);font-size:0.9rem;">Your CSV has been downloaded. Pirate Ship auto-maps address fields, but the following fields need to be <strong style="color:var(--amber);">manually mapped</strong> the first time you upload a CSV:</p>' +
+    '<table style="width:100%;border-collapse:collapse;margin:12px 0;">' +
+      '<thead><tr style="border-bottom:2px solid var(--cream-dark);text-align:left;">' +
+        '<th style="padding:6px 10px;font-size:0.82rem;">Our CSV Column</th>' +
+        '<th style="padding:6px 10px;font-size:0.82rem;">Map To in Pirate Ship</th>' +
+      '</tr></thead>' +
+      '<tbody>' +
+        '<tr style="border-bottom:1px solid var(--cream-dark);">' +
+          '<td style="padding:6px 10px;font-size:0.85rem;">Weight (oz)</td>' +
+          '<td style="padding:6px 10px;font-size:0.85rem;color:var(--amber);">Weight (oz)</td>' +
+        '</tr>' +
+        '<tr style="border-bottom:1px solid var(--cream-dark);">' +
+          '<td style="padding:6px 10px;font-size:0.85rem;">Package Length</td>' +
+          '<td style="padding:6px 10px;font-size:0.85rem;color:var(--amber);">Length</td>' +
+        '</tr>' +
+        '<tr style="border-bottom:1px solid var(--cream-dark);">' +
+          '<td style="padding:6px 10px;font-size:0.85rem;">Package Width</td>' +
+          '<td style="padding:6px 10px;font-size:0.85rem;color:var(--amber);">Width</td>' +
+        '</tr>' +
+        '<tr style="border-bottom:1px solid var(--cream-dark);">' +
+          '<td style="padding:6px 10px;font-size:0.85rem;">Package Height</td>' +
+          '<td style="padding:6px 10px;font-size:0.85rem;color:var(--amber);">Height</td>' +
+        '</tr>' +
+        '<tr style="border-bottom:1px solid var(--cream-dark);">' +
+          '<td style="padding:6px 10px;font-size:0.85rem;">Order ID</td>' +
+          '<td style="padding:6px 10px;font-size:0.85rem;color:var(--amber);">Order ID</td>' +
+        '</tr>' +
+        '<tr style="border-bottom:1px solid var(--cream-dark);">' +
+          '<td style="padding:6px 10px;font-size:0.85rem;">Description</td>' +
+          '<td style="padding:6px 10px;font-size:0.85rem;color:var(--amber);">Description</td>' +
+        '</tr>' +
+        '<tr>' +
+          '<td style="padding:6px 10px;font-size:0.85rem;">Rubber Stamp 1</td>' +
+          '<td style="padding:6px 10px;font-size:0.85rem;color:var(--amber);">Rubber Stamp 1</td>' +
+        '</tr>' +
+      '</tbody>' +
+    '</table>' +
+    '<p style="margin:12px 0 0;color:var(--warm-gray);font-size:0.82rem;">Pirate Ship remembers your mappings — you only need to do this once.</p>' +
+  '</div>' +
+  '<div class="modal-footer" style="padding:12px 16px;display:flex;gap:8px;justify-content:flex-end;">' +
+    '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+    '<button class="btn btn-primary" onclick="localStorage.setItem(\'sgw_pirateship_mapped\',\'1\');closeModal();window.open(\'https://ship.pirateship.com/ship/spreadsheet\',\'_blank\');">Got It — Open Pirate Ship</button>' +
+  '</div>';
+  openModal(html);
 }
 
 function generateAdminPirateShipCSV(o) {
