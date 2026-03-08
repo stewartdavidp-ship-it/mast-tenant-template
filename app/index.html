@@ -11289,7 +11289,7 @@ function generateAdminPirateShipCSV(o) {
     if (str.indexOf(',') !== -1 || str.indexOf('"') !== -1 || str.indexOf('\n') !== -1) return '"' + str.replace(/"/g, '""') + '"';
     return str;
   }
-  var headers = ['Name', 'Company', 'Address1', 'Address2', 'City', 'State', 'Zip', 'Country', 'Phone', 'Weight_oz', 'Length', 'Width', 'Height', 'Description', 'Order_ID', 'Rubber_Stamp_1'];
+  var headers = ['Name', 'Company', 'Address Line 1', 'Address Line 2', 'City', 'State', 'Zip', 'Country', 'Phone', 'Weight (oz)', 'Package Length', 'Package Width', 'Package Height', 'Description', 'Order ID', 'Rubber Stamp 1'];
   var row = [s.name || '', '', s.address1 || '', s.address2 || '', s.city || '', s.state || '', s.zip || '', 'US', '', Math.ceil(totalWeightOz), box.boxL || 6, box.boxW || 6, box.boxH || 6, desc, orderNum, rubberStamp];
   return headers.map(csvEsc).join(',') + '\n' + row.map(csvEsc).join(',') + '\n';
 }
