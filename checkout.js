@@ -344,7 +344,30 @@
       });
     }
 
-    // Restore saved checkout info from localStorage
+    // Pre-fill from logged-in user (Google auth)
+    if (window.ShirCart && window.ShirCart.getCurrentUser) {
+      var authUser = window.ShirCart.getCurrentUser();
+      if (authUser) {
+        if (!checkoutData.email && authUser.email) {
+          checkoutData.email = authUser.email;
+          var authEml = document.getElementById('coEmail');
+          if (authEml) {
+            authEml.value = authUser.email;
+            authEml.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+        }
+        if (!checkoutData.shipping.name && authUser.displayName) {
+          checkoutData.shipping.name = authUser.displayName;
+          var authName = document.getElementById('shipName');
+          if (authName) {
+            authName.value = authUser.displayName;
+            authName.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+        }
+      }
+    }
+
+    // Restore saved checkout info from localStorage (fills remaining fields)
     var saved = null;
     try { saved = JSON.parse(localStorage.getItem('shir_checkout_info')); } catch (e) { /* ignore */ }
     if (saved) {
