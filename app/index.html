@@ -7971,6 +7971,7 @@ function attachListeners() {
       ordersLoaded = true;
       renderOrders();
       if (selectedOrderId) renderOrderDetail(selectedOrderId);
+      if (currentRoute === 'fulfillment') renderPackQueue();
     }, function(err) {
       showToast('Error loading orders: ' + err.message, true);
     });
