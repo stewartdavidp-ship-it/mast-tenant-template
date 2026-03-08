@@ -338,17 +338,29 @@
       if (saved.email && !checkoutData.email) {
         checkoutData.email = saved.email;
         var eml = document.getElementById('coEmail');
-        if (eml) eml.value = saved.email;
+        if (eml) {
+          eml.value = saved.email;
+          eml.dispatchEvent(new Event('input', { bubbles: true }));
+          eml.dispatchEvent(new Event('change', { bubbles: true }));
+        }
       }
       if (saved.shipping) {
         var shipMap = { name: 'shipName', address1: 'shipAddr1', address2: 'shipAddr2', city: 'shipCity', state: 'shipState', zip: 'shipZip' };
+        var restoredAddr = false;
         for (var sKey in shipMap) {
           if (saved.shipping[sKey] && !checkoutData.shipping[sKey]) {
             checkoutData.shipping[sKey] = saved.shipping[sKey];
             var sEl = document.getElementById(shipMap[sKey]);
-            if (sEl) sEl.value = saved.shipping[sKey];
+            if (sEl) {
+              sEl.value = saved.shipping[sKey];
+              sEl.dispatchEvent(new Event('input', { bubbles: true }));
+              sEl.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            if (sKey === 'address1') restoredAddr = true;
           }
         }
+        // Trust address from a previous order — skip Places validation gate
+        if (restoredAddr) checkoutData._addressValidated = true;
       }
       if (saved.billing && !saved.billing.same) {
         var cb = document.getElementById('billingSame');
@@ -364,7 +376,11 @@
             if (saved.billing[bKey] && !checkoutData.billing[bKey]) {
               checkoutData.billing[bKey] = saved.billing[bKey];
               var bEl = document.getElementById(billMap[bKey]);
-              if (bEl) bEl.value = saved.billing[bKey];
+              if (bEl) {
+                bEl.value = saved.billing[bKey];
+                bEl.dispatchEvent(new Event('input', { bubbles: true }));
+                bEl.dispatchEvent(new Event('change', { bubbles: true }));
+              }
             }
           }
         }, 50);

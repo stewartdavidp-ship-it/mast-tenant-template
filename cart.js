@@ -620,7 +620,7 @@
     clearTimeout(toast._timer);
     toast._timer = setTimeout(function () {
       toast.classList.remove('show');
-    }, 2500);
+    }, 3500);
   }
 
   // ── Helpers ──
