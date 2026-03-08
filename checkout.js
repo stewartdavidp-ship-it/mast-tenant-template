@@ -331,6 +331,19 @@
       document.getElementById('billingFields').style.display = this.checked ? 'none' : '';
     });
 
+    // Auto-save email on change so it persists for returning customers
+    var coEmailEl = document.getElementById('coEmail');
+    if (coEmailEl) {
+      coEmailEl.addEventListener('change', function () {
+        checkoutData.email = this.value.trim();
+        try {
+          var existing = JSON.parse(localStorage.getItem('shir_checkout_info') || '{}');
+          existing.email = checkoutData.email;
+          localStorage.setItem('shir_checkout_info', JSON.stringify(existing));
+        } catch (e) { /* private browsing */ }
+      });
+    }
+
     // Restore saved checkout info from localStorage
     var saved = null;
     try { saved = JSON.parse(localStorage.getItem('shir_checkout_info')); } catch (e) { /* ignore */ }
