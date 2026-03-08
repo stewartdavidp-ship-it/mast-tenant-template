@@ -364,6 +364,30 @@
             authName.dispatchEvent(new Event('input', { bubbles: true }));
           }
         }
+        // Load saved address from Firebase customer record
+        if (!authUser.isAnonymous && window.ShirCart.getFirebaseApp) {
+          try {
+            var custDb = window.ShirCart.getFirebaseApp().database();
+            custDb.ref('shirglassworks/customers/' + authUser.uid + '/address').once('value').then(function(snap) {
+              var addr = snap.val();
+              if (!addr || !addr.address1) return;
+              var addrMap = { address1: 'shipAddr1', address2: 'shipAddr2', city: 'shipCity', state: 'shipState', zip: 'shipZip' };
+              var filled = false;
+              for (var aKey in addrMap) {
+                if (addr[aKey] && !checkoutData.shipping[aKey]) {
+                  checkoutData.shipping[aKey] = addr[aKey];
+                  var aEl = document.getElementById(addrMap[aKey]);
+                  if (aEl) {
+                    aEl.value = addr[aKey];
+                    aEl.dispatchEvent(new Event('input', { bubbles: true }));
+                  }
+                  if (aKey === 'address1') filled = true;
+                }
+              }
+              if (filled) setTimeout(function () { checkoutData._addressValidated = true; }, 0);
+            }).catch(function() { /* silent */ });
+          } catch (e) { /* silent */ }
+        }
       }
     }
 
@@ -853,9 +877,23 @@
           }));
         } catch (e) { /* sessionStorage not available */ }
 
-        // Clear cart and saved checkout info before redirect
+        // Clear cart before redirect but keep checkout info for returning customer auto-fill
         window.ShirCart.clear();
-        try { localStorage.removeItem('shir_checkout_info'); } catch (e) { /* ignore */ }
+
+        // Save address to Firebase customer record for logged-in users
+        if (user && !user.isAnonymous && window.ShirCart.getFirebaseApp) {
+          try {
+            var custDb = window.ShirCart.getFirebaseApp().database();
+            custDb.ref('shirglassworks/customers/' + user.uid + '/address').update({
+              address1: checkoutData.shipping.address1 || '',
+              address2: checkoutData.shipping.address2 || '',
+              city: checkoutData.shipping.city || '',
+              state: checkoutData.shipping.state || '',
+              zip: checkoutData.shipping.zip || '',
+              country: 'US'
+            });
+          } catch (e) { /* silent */ }
+        }
         trackCheckoutEvent('checkout_redirect_to_payment');
 
         // Redirect to Square hosted checkout
