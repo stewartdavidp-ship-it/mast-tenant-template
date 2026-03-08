@@ -10478,7 +10478,10 @@ function renderOrders() {
 }
 
 // ---- Order Detail View ----
+var _viewOrderReturnRoute = null;
+
 function viewOrder(orderId) {
+  _viewOrderReturnRoute = currentRoute !== 'orders' ? currentRoute : null;
   selectedOrderId = orderId;
   navigateTo('orders');
   document.getElementById('ordersListView').style.display = 'none';
@@ -10489,9 +10492,17 @@ function viewOrder(orderId) {
 
 function backToOrders() {
   selectedOrderId = null;
-  document.getElementById('ordersListView').style.display = 'block';
-  document.getElementById('orderDetailView').style.display = 'none';
-  document.getElementById('orderDetailView').className = 'order-detail';
+  if (_viewOrderReturnRoute) {
+    var route = _viewOrderReturnRoute;
+    _viewOrderReturnRoute = null;
+    document.getElementById('orderDetailView').style.display = 'none';
+    document.getElementById('orderDetailView').className = 'order-detail';
+    navigateTo(route);
+  } else {
+    document.getElementById('ordersListView').style.display = 'block';
+    document.getElementById('orderDetailView').style.display = 'none';
+    document.getElementById('orderDetailView').className = 'order-detail';
+  }
 }
 
 function renderOrderDetail(orderId) {
@@ -10799,7 +10810,8 @@ function renderOrderDetail(orderId) {
     '</div>';
   }
 
-  detailEl.innerHTML = '<button class="order-detail-back" onclick="backToOrders()">&#8592; Back to Orders</button>' +
+  var backLabel = _viewOrderReturnRoute ? 'Back to ' + _viewOrderReturnRoute.charAt(0).toUpperCase() + _viewOrderReturnRoute.slice(1) : 'Back to Orders';
+  detailEl.innerHTML = '<button class="order-detail-back" onclick="backToOrders()">&#8592; ' + backLabel + '</button>' +
     '<div class="order-detail-header">' +
       '<div>' +
         '<div class="order-detail-title">' + num + (o.source === 'etsy' ? ' <span class="order-source-badge etsy">Etsy</span>' : '') + '</div>' +
