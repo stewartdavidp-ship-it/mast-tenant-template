@@ -579,6 +579,7 @@
     overflow: hidden;
     background: #fff;
     margin-bottom: 12px;
+    position: relative;
   }
 
   .product-gallery-main img {
@@ -586,7 +587,30 @@
     height: 100%;
     object-fit: contain;
     cursor: zoom-in;
-    transition: transform 0.3s;
+    transition: opacity 0.2s;
+  }
+
+  /* Zoom lens overlay */
+  .product-zoom-lens {
+    display: none;
+    position: absolute;
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    border: 3px solid rgba(255,255,255,0.9);
+    box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+    pointer-events: none;
+    background-repeat: no-repeat;
+    z-index: 10;
+    transform: translate(-50%, -50%);
+  }
+
+  .product-gallery-main:hover .product-zoom-lens {
+    display: block;
+  }
+
+  @media (max-width: 768px) {
+    .product-zoom-lens { display: none !important; }
   }
 
   .product-thumbs {
@@ -912,8 +936,9 @@
     <a href="shop.html" class="product-back">&larr; Back to Shop</a>
     <div class="product-detail">
       <div class="product-gallery">
-        <div class="product-gallery-main">
+        <div class="product-gallery-main" id="galleryMain">
           <img id="mainImage" src="" alt="" />
+          <div class="product-zoom-lens" id="zoomLens"></div>
         </div>
         <div class="product-thumbs" id="thumbsContainer"></div>
       </div>
@@ -1146,6 +1171,39 @@
       t.classList.toggle('active', i === idx);
     });
   }
+
+  // ── Image Zoom on Hover ──
+  (function() {
+    var container = document.getElementById('galleryMain');
+    var lens = document.getElementById('zoomLens');
+    var img = document.getElementById('mainImage');
+    if (!container || !lens || !img) return;
+    var ZOOM = 2.5;
+
+    function updateLens(e) {
+      var rect = container.getBoundingClientRect();
+      var x = e.clientX - rect.left;
+      var y = e.clientY - rect.top;
+      // Position lens centered on cursor
+      lens.style.left = x + 'px';
+      lens.style.top = y + 'px';
+      // Set background to zoomed image at correct offset
+      lens.style.backgroundImage = 'url(' + img.src + ')';
+      lens.style.backgroundSize = (rect.width * ZOOM) + 'px ' + (rect.height * ZOOM) + 'px';
+      // Center the zoom on cursor position
+      var bgX = -(x * ZOOM - 90);
+      var bgY = -(y * ZOOM - 90);
+      lens.style.backgroundPosition = bgX + 'px ' + bgY + 'px';
+    }
+
+    container.addEventListener('mousemove', updateLens);
+    container.addEventListener('mouseenter', function() {
+      lens.style.display = 'block';
+    });
+    container.addEventListener('mouseleave', function() {
+      lens.style.display = 'none';
+    });
+  })();
 
   // ── Qty Stepper ──
   document.getElementById('qtyDec').addEventListener('click', function() {
