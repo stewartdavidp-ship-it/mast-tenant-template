@@ -360,7 +360,8 @@
           }
         }
         // Trust address from a previous order — skip Places validation gate
-        if (restoredAddr) checkoutData._addressValidated = true;
+        // Use setTimeout to ensure this runs after any input listeners triggered by value restore
+        if (restoredAddr) setTimeout(function () { checkoutData._addressValidated = true; }, 0);
       }
       if (saved.billing && !saved.billing.same) {
         var cb = document.getElementById('billingSame');
@@ -1078,10 +1079,18 @@
         checkoutData._addressValidated = true;
       }
     });
-    // Reset validation if user manually edits
+    // Reset validation if user manually edits (but not if restored from previous order)
     ['shipAddr1', 'shipCity', 'shipState', 'shipZip'].forEach(function (id) {
       var el = document.getElementById(id);
-      if (el) el.addEventListener('input', function () { checkoutData._addressValidated = false; });
+      if (el) {
+        var lastKnown = el.value;
+        el.addEventListener('input', function () {
+          if (el.value !== lastKnown) {
+            checkoutData._addressValidated = false;
+            lastKnown = el.value;
+          }
+        });
+      }
     });
   }
 
