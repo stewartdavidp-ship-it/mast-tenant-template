@@ -207,6 +207,7 @@
     .sidebar-badge.new { background: #2563eb; color: white; }
     .sidebar-badge.partial { background: var(--amber); color: white; }
     .sidebar-badge.future { background: rgba(255,255,255,0.1); color: var(--warm-gray); }
+    .sidebar-badge.alert { background: #C4853C; color: white; font-size: 0.65rem; padding: 2px 6px; border-radius: 10px; min-width: 18px; text-align: center; }
 
     /* Dashboard is a direct-click section header */
     .sidebar-section-header.dashboard-link { cursor: pointer; }
@@ -1700,6 +1701,12 @@
     }
     .order-item-fulfillment.stock { background: #E8F5E9; color: #2E7D32; }
     .order-item-fulfillment.build { background: #F3E5F5; color: #7B1FA2; }
+    .order-item-inv { font-size: 0.72rem; margin-top: 4px; padding: 2px 8px; border-radius: 4px; display: inline-block; }
+    .order-item-inv.inv-stock { background: #E8F5E9; color: #2E7D32; }
+    .order-item-inv.inv-partial { background: #FFF3E0; color: #E65100; }
+    .order-item-inv.inv-out { background: #FFEBEE; color: #C62828; }
+    .order-item-inv.inv-build { background: #F3E5F5; color: #7B1FA2; }
+    .order-item-inv.inv-unknown { background: #F5F5F5; color: #757575; }
 
     .order-summary-row {
       display: flex;
@@ -3137,7 +3144,7 @@
       <div class="sidebar-items">
         <div class="sidebar-item" data-route="pos" onclick="navigateTo('pos')">Point of Sale</div>
         <div class="sidebar-item" data-route="events" onclick="navigateTo('events')">Events</div>
-        <div class="sidebar-item" data-route="orders" onclick="navigateTo('orders')">Retail Orders</div>
+        <div class="sidebar-item" data-route="orders" onclick="navigateTo('orders')">Retail Orders <span id="sidebarOrdersBadge" class="sidebar-badge alert" style="display:none;"></span></div>
         <div class="sidebar-item" data-route="commissions" onclick="navigateTo('commissions')">Commissions</div>
         <div class="sidebar-item muted" data-route="wholesale" onclick="navigateTo('wholesale')">Wholesale <span class="sidebar-badge new">New</span></div>
         <div class="sidebar-item muted" data-route="galleries" onclick="navigateTo('galleries')">Galleries &amp; Consignment <span class="sidebar-badge new">New</span></div>
@@ -10348,6 +10355,18 @@ function renderOrders() {
     return o.status !== 'delivered' && o.status !== 'cancelled' && o.status !== 'payment_failed';
   }).length;
 
+  // Update sidebar badge with placed order count
+  var placedCount = counts.placed || 0;
+  var badge = document.getElementById('sidebarOrdersBadge');
+  if (badge) {
+    if (placedCount > 0) {
+      badge.textContent = placedCount;
+      badge.style.display = '';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+
   // Render filter pills
   var pillStatuses = [
     { key: 'active', label: 'Active', count: activeCount },
@@ -10489,7 +10508,7 @@ function renderOrderDetail(orderId) {
     if (t === 'cancelled') {
       actionsHtml += '<button class="btn btn-danger" onclick="openCancelOrderModal(\'' + esc(orderId) + '\')">Cancel Order</button>';
     } else if (t === 'confirmed') {
-      actionsHtml += '<button class="btn btn-primary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'confirmed\')">Confirm Order</button>';
+      actionsHtml += '<button class="btn btn-primary" onclick="openTriageDialog(\'' + esc(orderId) + '\')">Confirm Order</button>';
     } else if (t === 'ready') {
       actionsHtml += '<button class="btn btn-primary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'ready\')">Mark Ready</button>';
     } else if (t === 'building') {
@@ -10531,6 +10550,11 @@ function renderOrderDetail(orderId) {
           ffHtml = '<span class="order-item-fulfillment build">Build' + bjStatus + '</span>';
         }
       }
+    } else if (o.status === 'placed') {
+      var invStatus = getItemInventoryStatus(item);
+      var invCls = invStatus.status === 'stock' ? 'inv-stock' : invStatus.status === 'partial' ? 'inv-partial' : invStatus.status === 'build' ? 'inv-build' : invStatus.status === 'out' ? 'inv-out' : 'inv-unknown';
+      var invIcon = invStatus.status === 'stock' ? '&#10003; ' : invStatus.status === 'partial' ? '&#9888; ' : invStatus.status === 'build' ? '&#128296; ' : invStatus.status === 'out' ? '&#10007; ' : '';
+      ffHtml = '<span class="order-item-inv ' + invCls + '">' + invIcon + esc(invStatus.label) + '</span>';
     }
     itemsHtml += '<div class="order-item-row">' +
       '<div>' +
@@ -10807,6 +10831,27 @@ function renderOrderDetail(orderId) {
     notesHtml;
 }
 
+function getItemInventoryStatus(item) {
+  var inv = inventory[item.pid];
+  var qty = item.qty || 1;
+  if (!inv) return { status: 'unknown', label: 'No inventory data', available: 0 };
+  if (inv.stockType === 'made-to-order' || inv.stockType === 'made-to-order-only') {
+    return { status: 'build', label: 'Made to Order', available: 0 };
+  }
+  var ck = getItemComboKey(item.pid, item.options);
+  var stockEntry = (ck !== '_default' && inv.stock && inv.stock[ck])
+    ? inv.stock[ck]
+    : (inv.stock && inv.stock._default) || null;
+  var available = stockEntry ? (stockEntry.available || 0) : 0;
+  if (available >= qty) {
+    return { status: 'stock', label: 'In Stock (' + available + ' available)', available: available };
+  } else if (available > 0) {
+    return { status: 'partial', label: 'Low Stock (' + available + ' available, need ' + qty + ')', available: available };
+  } else {
+    return { status: 'out', label: 'Not in Stock', available: 0 };
+  }
+}
+
 function getItemFulfillmentKey(item) {
   var key = item.pid || '';
   if (item.options && typeof item.options === 'object') {
@@ -10816,6 +10861,176 @@ function getItemFulfillmentKey(item) {
     if (optVals.length > 0) key += '_' + optVals.join('_');
   }
   return key;
+}
+
+// ---- Order Triage Dialog ----
+function openTriageDialog(orderId) {
+  var o = orders[orderId];
+  if (!o) return;
+  var orderNum = getOrderDisplayNumber(o);
+  var items = o.items || [];
+
+  var rowsHtml = '';
+  items.forEach(function(item, idx) {
+    var qty = item.qty || 1;
+    var invStatus = getItemInventoryStatus(item);
+    var optStr = '';
+    if (item.options && typeof item.options === 'object') {
+      var parts = [];
+      Object.keys(item.options).forEach(function(k) { parts.push(k + ': ' + item.options[k]); });
+      optStr = parts.join(', ');
+    }
+
+    var invCls = invStatus.status === 'stock' ? 'inv-stock' : invStatus.status === 'partial' ? 'inv-partial' : invStatus.status === 'build' ? 'inv-build' : invStatus.status === 'out' ? 'inv-out' : 'inv-unknown';
+    var autoAction = (invStatus.status === 'stock') ? 'stock' : 'build';
+
+    rowsHtml += '<tr>' +
+      '<td style="padding:8px 10px;">' +
+        '<div style="font-weight:500;">' + esc(item.name) + ' x' + qty + '</div>' +
+        (optStr ? '<div style="font-size:0.8rem;color:var(--warm-gray);">' + esc(optStr) + '</div>' : '') +
+      '</td>' +
+      '<td style="padding:8px 10px;text-align:center;">' + invStatus.available + '</td>' +
+      '<td style="padding:8px 10px;"><span class="order-item-inv ' + invCls + '">' + esc(invStatus.label) + '</span></td>' +
+      '<td style="padding:8px 10px;">' +
+        '<label style="margin-right:12px;cursor:pointer;font-size:0.85rem;">' +
+          '<input type="radio" name="triage_' + idx + '" value="stock" ' + (autoAction === 'stock' ? 'checked' : '') +
+          (invStatus.status === 'out' || invStatus.status === 'build' ? ' disabled' : '') +
+          ' onchange="updateTriageSummary(\'' + esc(orderId) + '\')" style="margin-right:4px;">From Stock' +
+        '</label>' +
+        '<label style="cursor:pointer;font-size:0.85rem;">' +
+          '<input type="radio" name="triage_' + idx + '" value="build" ' + (autoAction === 'build' ? 'checked' : '') +
+          ' onchange="updateTriageSummary(\'' + esc(orderId) + '\')" style="margin-right:4px;">Send to Build' +
+        '</label>' +
+      '</td>' +
+    '</tr>';
+  });
+
+  var html = '<div class="modal-header">' +
+    '<h3 style="margin:0;">Order Triage &#8212; ' + esc(orderNum) + '</h3>' +
+    '<button class="modal-close" onclick="closeModal()">&times;</button>' +
+  '</div>' +
+  '<div class="modal-body" style="padding:16px;max-height:60vh;overflow-y:auto;">' +
+    '<p style="margin:0 0 12px;color:var(--warm-gray);font-size:0.9rem;">Review inventory for each item and choose how to fulfill.</p>' +
+    '<table style="width:100%;border-collapse:collapse;">' +
+      '<thead><tr style="border-bottom:2px solid var(--cream-dark);text-align:left;">' +
+        '<th style="padding:8px 10px;">Item</th>' +
+        '<th style="padding:8px 10px;text-align:center;">Avail</th>' +
+        '<th style="padding:8px 10px;">Inventory</th>' +
+        '<th style="padding:8px 10px;">Action</th>' +
+      '</tr></thead>' +
+      '<tbody>' + rowsHtml + '</tbody>' +
+    '</table>' +
+    '<div id="triageSummary" style="margin-top:16px;padding:12px;background:var(--cream-dark);border-radius:6px;font-size:0.9rem;"></div>' +
+  '</div>' +
+  '<div class="modal-footer" style="padding:12px 16px;display:flex;gap:8px;justify-content:flex-end;">' +
+    '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+    '<button class="btn btn-primary" id="triageConfirmBtn" onclick="executeTriageConfirm(\'' + esc(orderId) + '\')">Confirm &amp; Route</button>' +
+  '</div>';
+
+  openModal(html);
+  updateTriageSummary(orderId);
+}
+
+function updateTriageSummary(orderId) {
+  var o = orders[orderId];
+  if (!o) return;
+  var items = o.items || [];
+  var stockCount = 0;
+  var buildCount = 0;
+  items.forEach(function(item, idx) {
+    var radios = document.getElementsByName('triage_' + idx);
+    for (var i = 0; i < radios.length; i++) {
+      if (radios[i].checked) {
+        if (radios[i].value === 'stock') stockCount++;
+        else buildCount++;
+      }
+    }
+  });
+  var summaryEl = document.getElementById('triageSummary');
+  if (!summaryEl) return;
+  var msg = '';
+  if (buildCount === 0) {
+    msg = '<strong>' + stockCount + ' item' + (stockCount !== 1 ? 's' : '') + ' from stock.</strong> Order will advance to <strong style="color:#2E7D32;">Ready</strong> for packing.';
+  } else if (stockCount === 0) {
+    msg = '<strong>' + buildCount + ' item' + (buildCount !== 1 ? 's' : '') + ' need building.</strong> Order will advance to <strong style="color:#7B1FA2;">Building</strong> with production requests created.';
+  } else {
+    msg = '<strong>' + stockCount + ' from stock, ' + buildCount + ' need building.</strong> Stock items reserved. Build items sent to production. Order status: <strong style="color:#7B1FA2;">Building</strong>';
+  }
+  summaryEl.innerHTML = msg;
+}
+
+async function executeTriageConfirm(orderId) {
+  var o = orders[orderId];
+  if (!o) return;
+  var items = o.items || [];
+  var itemActions = [];
+  items.forEach(function(item, idx) {
+    var action = 'build';
+    var radios = document.getElementsByName('triage_' + idx);
+    for (var i = 0; i < radios.length; i++) {
+      if (radios[i].checked) { action = radios[i].value; break; }
+    }
+    itemActions.push({ item: item, action: action });
+  });
+
+  // Disable button to prevent double-click
+  var btn = document.getElementById('triageConfirmBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Processing...'; }
+
+  try {
+    await triageAndConfirmOrder(orderId, itemActions);
+    closeModal();
+    showToast('Order confirmed and routed');
+    renderOrderDetail(orderId);
+  } catch (err) {
+    showToast('Error: ' + err.message, true);
+    if (btn) { btn.disabled = false; btn.textContent = 'Confirm & Route'; }
+  }
+}
+
+async function triageAndConfirmOrder(orderId, itemActions) {
+  var o = orders[orderId];
+  if (!o) throw new Error('Order not found');
+  var now = new Date().toISOString();
+  var updates = {};
+  var history = o.statusHistory ? o.statusHistory.slice() : [];
+
+  // Build fulfillment map from admin choices
+  var ff = {};
+  var needsBuilding = false;
+  itemActions.forEach(function(ia) {
+    var ffKey = getItemFulfillmentKey(ia.item);
+    if (ia.action === 'stock') {
+      ff[ffKey] = { source: 'stock', buildJobId: null, ready: true };
+      var ck = getItemComboKey(ia.item.pid, ia.item.options);
+      reserveInventory(ia.item.pid, ia.item.qty || 1, ck);
+    } else {
+      ff[ffKey] = { source: 'build', buildJobId: null, ready: false };
+      needsBuilding = true;
+    }
+  });
+
+  updates['fulfillment'] = ff;
+  updates['confirmedAt'] = now;
+  history.push({ status: 'confirmed', at: now, by: 'admin' });
+
+  if (!needsBuilding) {
+    updates['status'] = 'ready';
+    updates['readyAt'] = now;
+    history.push({ status: 'ready', at: now, by: 'system', note: 'All items in stock' });
+  } else {
+    updates['status'] = 'building';
+    updates['buildingAt'] = now;
+    history.push({ status: 'building', at: now, by: 'system', note: 'Items need to be made' });
+  }
+  updates['statusHistory'] = history;
+
+  await db.ref(ORDERS_PATH + '/' + orderId).update(updates);
+  await writeAudit('update', 'orders', orderId);
+
+  if (updates['status'] === 'building') {
+    await createProductionRequests(orderId, o, ff);
+  }
 }
 
 // ---- Order Status Transitions ----
@@ -10847,57 +11062,19 @@ async function transitionOrder(orderId, newStatus) {
       updates['fulfillmentLog'] = ffLog;
     }
 
-    // On confirm: check inventory and create fulfillment map
+    // On confirm: use triage function with auto-determined actions
     if (newStatus === 'confirmed') {
-      var ff = {};
-      var needsBuilding = false;
-      (o.items || []).forEach(function(item) {
-        var ffKey = getItemFulfillmentKey(item);
-        var inv = inventory[item.pid];
-        var inStock = false;
-        var ck = getItemComboKey(item.pid, item.options);
-        if (inv && inv.stockType !== 'made-to-order') {
-          // Check variant-specific stock first, fall back to _default
-          var stockEntry = (ck !== '_default' && inv.stock && inv.stock[ck])
-            ? inv.stock[ck]
-            : (inv.stock && inv.stock._default) || null;
-          if (stockEntry && stockEntry.available >= (item.qty || 1)) {
-            inStock = true;
-          }
-        }
-        if (inStock) {
-          ff[ffKey] = { source: 'stock', buildJobId: null, ready: true };
-          // Reserve inventory (variant-aware)
-          reserveInventory(item.pid, item.qty || 1, ck);
-        } else {
-          ff[ffKey] = { source: 'build', buildJobId: null, ready: false };
-          needsBuilding = true;
-        }
+      var autoActions = (o.items || []).map(function(item) {
+        var invStatus = getItemInventoryStatus(item);
+        return { item: item, action: invStatus.status === 'stock' ? 'stock' : 'build' };
       });
-      updates['fulfillment'] = ff;
-
-      // If nothing needs building, go straight to ready
-      if (!needsBuilding) {
-        updates['status'] = 'ready';
-        updates['readyAt'] = now;
-        history.push({ status: 'ready', at: now, by: 'system', note: 'All items in stock' });
-        updates['statusHistory'] = history;
-      } else {
-        // Auto-set to building and create production requests
-        updates['status'] = 'building';
-        updates['buildingAt'] = now;
-        history.push({ status: 'building', at: now, by: 'system', note: 'Items need to be made' });
-        updates['statusHistory'] = history;
-      }
+      await triageAndConfirmOrder(orderId, autoActions);
+      renderOrderDetail(orderId);
+      return; // triageAndConfirmOrder handles all updates
     }
 
     await db.ref(ORDERS_PATH + '/' + orderId).update(updates);
     await writeAudit('update', 'orders', orderId);
-
-    // Create production requests if moving to building
-    if (updates['status'] === 'building') {
-      await createProductionRequests(orderId, o, updates['fulfillment']);
-    }
 
     // Auto-progress handed_to_carrier → shipped (triggers email notification via Cloud Function)
     if (newStatus === 'handed_to_carrier') {
