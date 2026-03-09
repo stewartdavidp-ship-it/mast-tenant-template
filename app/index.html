@@ -20663,7 +20663,7 @@ var NL_CARD_SIZE_MAP = {
   'studio-update':   { cardSize: 'medium', gridWidth: 1 },
   'new-products':    { cardSize: 'medium', gridWidth: 1 },
   'event-recap':     { cardSize: 'medium', gridWidth: 1 },
-  'upcoming-events': { cardSize: 'medium', gridWidth: 1 },
+  'upcoming-events': { cardSize: 'large',  gridWidth: 2 },
   'behind-process':  { cardSize: 'large',  gridWidth: 2 },
   'featured-piece':  { cardSize: 'large',  gridWidth: 2 },
   'from-studio':     { cardSize: 'large',  gridWidth: 2 },
@@ -20826,14 +20826,19 @@ function nlOpenIssue(issueId) {
   nlCurrentView = 'compose';
   nlExpandedSections = {};
   nlAiResults = {};
-  // Migrate legacy issues that lack grid fields
+  // Migrate legacy issues that lack grid fields or have outdated defaults
   if (nlCurrentIssue.sections) {
     var needsMigration = false;
     var sections = Object.values(nlCurrentIssue.sections);
     sections.forEach(function(sec) {
+      var sizeInfo = NL_CARD_SIZE_MAP[sec.type] || NL_CARD_SIZE_MAP['custom'];
       if (sec.cardSize === undefined) {
         needsMigration = true;
-        var sizeInfo = NL_CARD_SIZE_MAP[sec.type] || NL_CARD_SIZE_MAP['custom'];
+        sec.cardSize = sizeInfo.cardSize;
+        sec.gridWidth = sizeInfo.gridWidth;
+      } else if (sec.gridWidth !== sizeInfo.gridWidth && sec.cardSize !== sizeInfo.cardSize) {
+        // Update sections whose defaults changed (e.g. upcoming-events medium→large)
+        needsMigration = true;
         sec.cardSize = sizeInfo.cardSize;
         sec.gridWidth = sizeInfo.gridWidth;
       }
