@@ -3552,7 +3552,7 @@
     .nl-grid-canvas { max-width:600px; margin:0 auto; background:#FFFFFF; border-radius:8px; overflow:hidden; box-shadow:0 2px 16px rgba(0,0,0,0.15); }
     /* Newsletter header — branded masthead */
     .nl-grid-header { background:#2C2C2C; padding:28px 30px 24px; text-align:center; position:relative; }
-    .nl-grid-header-logo { width:48px; height:48px; margin:0 auto 10px; border-radius:50%; background:rgba(245,240,235,0.12); display:flex; align-items:center; justify-content:center; font-size:24px; }
+    .nl-grid-header-logo { width:72px; height:72px; margin:0 auto 10px; border-radius:50%; background:rgba(245,240,235,0.1); display:flex; align-items:center; justify-content:center; overflow:hidden; }
     .nl-grid-header h1 { font-family:'Cormorant Garamond',Georgia,serif; color:#F5F0EB; font-size:26px; margin:0; font-weight:300; letter-spacing:0.02em; }
     .nl-grid-header-tagline { color:rgba(245,240,235,0.45); font-size:10px; margin:4px 0 0; letter-spacing:0.15em; text-transform:uppercase; font-family:'DM Sans',Arial,sans-serif; }
     .nl-grid-header-meta { display:flex; justify-content:center; gap:16px; margin-top:14px; padding-top:12px; border-top:1px solid rgba(245,240,235,0.12); }
@@ -20922,7 +20922,7 @@ function renderNLCompose() {
     // Newsletter header — branded masthead
     var issueDate = nlCurrentIssue.createdAt ? new Date(nlCurrentIssue.createdAt).toLocaleDateString('en-US', { year:'numeric', month:'long' }) : new Date().toLocaleDateString('en-US', { year:'numeric', month:'long' });
     html += '<div class="nl-grid-header">' +
-      '<div class="nl-grid-header-logo">🔥</div>' +
+      '<div class="nl-grid-header-logo"><img src="https://www.shirglassworks.com/uploads/3/7/0/8/37080241/octopus-logo-final-12x7.jpg" alt="Shir Glassworks" style="width:100%;height:100%;object-fit:contain;border-radius:50%;" /></div>' +
       '<h1>Shir Glassworks</h1>' +
       '<div class="nl-grid-header-tagline">Handcrafted Glass &bull; Western Massachusetts</div>' +
       '<div class="nl-grid-header-meta">' +
@@ -20930,8 +20930,10 @@ function renderNLCompose() {
       '<span>' + issueDate + '</span>' +
       '</div></div>';
 
-    // Issue title
-    html += '<div class="nl-grid-title">' + nlEscHtml(nlCurrentIssue.title || 'Untitled Issue') + '</div>';
+    // Issue title (only show if set)
+    if (nlCurrentIssue.title && nlCurrentIssue.title.trim()) {
+      html += '<div class="nl-grid-title">' + nlEscHtml(nlCurrentIssue.title) + '</div>';
+    }
 
     // Group sections into rows (same logic as export)
     var rows = [], currentRow = [], currentRowCols = 0;
