@@ -22261,7 +22261,7 @@ function renderBlogEditor() {
     html += '<div class="blog-body-editable" id="blogBodyEditable" contenteditable="true" data-placeholder="Write your post here..." oninput="blogBodyChanged()"></div>';
   }
 
-  // Inline image thumbnails with labels and captions
+  // Inline image thumbnails with labels, captions, and reorder controls
   var inlineImages = post.inlineImages || [];
   if (inlineImages.length > 0) {
     html += '<div class="blog-inline-images">';
@@ -22269,6 +22269,8 @@ function renderBlogEditor() {
       var imgData = imageLibrary[img.imageId];
       var thumbUrl = imgData ? (imgData.thumbnailUrl || imgData.url) : '';
       var caption = img.caption || '';
+      var isFirst = idx === 0;
+      var isLast = idx === inlineImages.length - 1;
       html += '<div style="text-align:center;">' +
         '<div class="blog-inline-img" onclick="blogEditCaption(' + idx + ')" style="cursor:pointer;" title="Click to edit caption">' +
         '<img src="' + thumbUrl + '" alt="inline image" />' +
@@ -22276,6 +22278,10 @@ function renderBlogEditor() {
         (caption ? '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.6);color:#fff;font-size:0.6rem;padding:2px 4px;text-align:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">💬</div>' : '') +
         '</div>' +
         '<div class="blog-inline-img-label">Image ' + (idx + 1) + '</div>' +
+        (inlineImages.length > 1 ? '<div style="display:flex;justify-content:center;gap:2px;margin-top:2px;">' +
+          '<button onclick="event.stopPropagation();blogMoveImage(' + idx + ',-1)" style="background:none;border:none;cursor:pointer;font-size:0.7rem;color:' + (isFirst ? 'var(--border)' : 'var(--text-secondary)') + ';padding:1px 4px;"' + (isFirst ? ' disabled' : '') + ' title="Move left">◀</button>' +
+          '<button onclick="event.stopPropagation();blogMoveImage(' + idx + ',1)" style="background:none;border:none;cursor:pointer;font-size:0.7rem;color:' + (isLast ? 'var(--border)' : 'var(--text-secondary)') + ';padding:1px 4px;"' + (isLast ? ' disabled' : '') + ' title="Move right">▶</button>' +
+          '</div>' : '') +
         '</div>';
     });
     html += '</div>';
@@ -22629,6 +22635,42 @@ async function blogSaveCaption(idx, caption) {
     renderBlogEditor();
     showToast('Caption updated');
   } catch (err) { showToast('Error saving caption: ' + err.message, true); }
+}
+
+async function blogMoveImage(idx, direction) {
+  if (!blogCurrentPost) return;
+  var inlineImages = blogCurrentPost.inlineImages || [];
+  var newIdx = idx + direction;
+  if (newIdx < 0 || newIdx >= inlineImages.length) return;
+
+  // Save current editor content (converts spans back to [Image N] text)
+  var editable = document.getElementById('blogBodyEditable');
+  if (editable) blogCurrentPost.body = blogSaveBodyFromEditor();
+  var body = blogCurrentPost.body || '';
+
+  // Swap the two images in the array
+  var temp = inlineImages[idx];
+  inlineImages[idx] = inlineImages[newIdx];
+  inlineImages[newIdx] = temp;
+
+  // Swap the [Image N] markers in the body using a temp placeholder
+  var markerA = '[Image ' + (idx + 1) + ']';
+  var markerB = '[Image ' + (newIdx + 1) + ']';
+  body = body.replace(markerA, '[__SWAP__]');
+  body = body.replace(markerB, markerA);
+  body = body.replace('[__SWAP__]', markerB);
+
+  blogCurrentPost.body = body;
+  blogCurrentPost.inlineImages = inlineImages;
+  blogCurrentPost.updatedAt = new Date().toISOString();
+  try {
+    await db.ref('shirglassworks/blog/posts/' + blogCurrentPostId).update({
+      body: body,
+      inlineImages: inlineImages,
+      updatedAt: blogCurrentPost.updatedAt
+    });
+    renderBlogEditor();
+  } catch (err) { showToast('Error reordering images: ' + err.message, true); }
 }
 
 async function blogRemoveInlineImage(idx) {
