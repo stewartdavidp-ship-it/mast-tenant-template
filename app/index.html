@@ -22196,12 +22196,7 @@ function renderBlogEditor() {
       html += '<button class="btn btn-primary" onclick="blogMarkComplete()">✅ Finish Post</button>';
     } else if (status === 'complete') {
       html += '<button class="btn" onclick="blogBackToDraft()">✏️ Back to Draft</button>';
-      html += '<button class="btn btn-primary" onclick="blogPostToSubstack()">📤 Post to Substack</button>';
-    } else if (status === 'posted') {
-      html += '<button class="btn" onclick="blogUnpublish()">Unpublish</button>';
-      if (post.substackDraftUrl) {
-        html += '<a href="' + post.substackDraftUrl + '" target="_blank" class="btn btn-primary" style="text-decoration:none;">View on Substack ↗</a>';
-      }
+      html += '<button class="btn" disabled style="opacity:0.5;cursor:default;" title="Substack integration coming soon">📤 Post to Substack (Coming Soon)</button>';
     }
     html += '</div>';
     document.getElementById('blogContent').innerHTML = html;
@@ -22307,12 +22302,7 @@ function renderBlogEditor() {
     html += '<button class="btn btn-primary" onclick="blogMarkComplete()">✅ Finish Post</button>';
   } else if (status === 'complete') {
     html += '<button class="btn" onclick="blogBackToDraft()">✏️ Back to Draft</button>';
-    html += '<button class="btn btn-primary" onclick="blogPostToSubstack()">📤 Post to Substack</button>';
-  } else if (status === 'posted') {
-    html += '<button class="btn" onclick="blogUnpublish()">Unpublish</button>';
-    if (post.substackDraftUrl) {
-      html += '<a href="' + post.substackDraftUrl + '" target="_blank" class="btn btn-primary" style="text-decoration:none;">View on Substack ↗</a>';
-    }
+    html += '<button class="btn" disabled style="opacity:0.5;cursor:default;" title="Substack integration coming soon">📤 Post to Substack (Coming Soon)</button>';
   }
   html += '</div>';
 
@@ -22801,6 +22791,20 @@ function blogRenderBodyToHtml(body, inlineImages) {
     return '[Image ' + num + ']';
   });
 
+  // Convert deprecated <font> tags (from execCommand) to modern <span style>
+  var fontSizeMap = { '1': '0.625rem', '2': '0.8125rem', '3': '1rem', '4': '1.125rem', '5': '1.5rem', '6': '2rem', '7': '3rem' };
+  html = html.replace(/<font([^>]*)>([\s\S]*?)<\/font>/gi, function(match, attrs, inner) {
+    var styles = [];
+    var faceMatch = attrs.match(/face="([^"]*)"/i);
+    var sizeMatch = attrs.match(/size="([^"]*)"/i);
+    var colorMatch = attrs.match(/color="([^"]*)"/i);
+    if (faceMatch) styles.push('font-family:' + faceMatch[1]);
+    if (sizeMatch) styles.push('font-size:' + (fontSizeMap[sizeMatch[1]] || '1rem'));
+    if (colorMatch) styles.push('color:' + colorMatch[1]);
+    if (styles.length > 0) return '<span style="' + styles.join(';') + '">' + inner + '</span>';
+    return inner;
+  });
+
   // Replace [Image N] with <img> tags
   (inlineImages || []).forEach(function(img, idx) {
     var imgData = imageLibrary[img.imageId];
@@ -22964,52 +22968,9 @@ async function blogBackToDraft() {
   } catch (err) { showToast('Error: ' + err.message, true); }
 }
 
-async function blogPostToSubstack() {
-  if (!blogCurrentPost) return;
-  var btn = event.target;
-  if (btn) { btn.disabled = true; btn.textContent = 'Posting...'; }
-  try {
-    var bodyHtml = blogRenderBodyToHtml(blogCurrentPost.body, blogCurrentPost.inlineImages);
-    var author = BLOG_AUTHORS[blogCurrentPost.author] || BLOG_AUTHORS['madeline'];
-    var result = await firebase.functions().httpsCallable('blogPostToSubstack')({
-      title: blogCurrentPost.title,
-      bodyHtml: bodyHtml,
-      author: author.name,
-      tags: blogCurrentPost.tags || []
-    });
-    var draftUrl = result.data.draftUrl || '';
-    blogCurrentPost.status = 'posted';
-    blogCurrentPost.substackDraftUrl = draftUrl;
-    blogCurrentPost.publishedAt = new Date().toISOString();
-    blogCurrentPost.updatedAt = new Date().toISOString();
-    await db.ref('shirglassworks/blog/posts/' + blogCurrentPostId).update({
-      status: 'posted',
-      substackDraftUrl: draftUrl,
-      publishedAt: blogCurrentPost.publishedAt,
-      updatedAt: blogCurrentPost.updatedAt
-    });
-    renderBlogEditor();
-    showToast('Draft created on Substack — review and publish there');
-  } catch (err) {
-    showToast('Substack posting failed: ' + err.message, true);
-    if (btn) { btn.disabled = false; btn.textContent = '📤 Post to Substack'; }
-  }
-}
-
-async function blogUnpublish() {
-  if (!blogCurrentPost) return;
-  blogCurrentPost.status = 'complete';
-  blogCurrentPost.substackDraftUrl = null;
-  blogCurrentPost.updatedAt = new Date().toISOString();
-  try {
-    await db.ref('shirglassworks/blog/posts/' + blogCurrentPostId).update({
-      status: 'complete',
-      substackDraftUrl: null,
-      updatedAt: blogCurrentPost.updatedAt
-    });
-    renderBlogEditor();
-    showToast('Post unpublished');
-  } catch (err) { showToast('Error: ' + err.message, true); }
+// Substack integration — placeholder until backend is built
+function blogPostToSubstack() {
+  showToast('Substack integration coming soon — a backend function is needed to connect to Substack', true);
 }
 
 // ============================================================
