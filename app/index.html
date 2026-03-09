@@ -3549,30 +3549,39 @@
     body.dark-mode .nl-section-prompt { background:rgba(196,133,60,0.08); }
 
     /* ===== Newsletter Grid Canvas ===== */
-    .nl-grid-canvas { display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:4px 0; min-height:300px; }
-    .nl-grid-card { background:var(--card-bg); border:1px solid var(--border); border-radius:10px; overflow:hidden; cursor:pointer; transition:box-shadow 0.2s, border-color 0.2s, transform 0.15s, opacity 0.15s; display:flex; flex-direction:column; position:relative; }
-    .nl-grid-card:hover { border-color:var(--amber); box-shadow:0 2px 12px rgba(196,133,60,0.15); }
-    .nl-grid-card.dragging { opacity:0.4; transform:scale(0.97); }
-    .nl-grid-card.drag-over { border-color:var(--amber); border-style:dashed; border-width:2px; }
-    .nl-grid-card.size-full, .nl-grid-card.size-large { grid-column:span 2; }
-    .nl-grid-card.size-medium, .nl-grid-card.size-small { grid-column:span 1; }
-    .nl-grid-card.excluded { opacity:0.45; }
-    .nl-grid-card-header { display:flex; align-items:center; padding:10px 14px; gap:8px; border-bottom:1px solid var(--border); min-height:40px; }
-    .nl-grid-card-icon { font-size:1rem; flex-shrink:0; }
-    .nl-grid-card-title { flex:1; font-size:0.85rem; font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .nl-grid-card-body { flex:1; padding:12px 14px; font-size:0.82rem; line-height:1.5; color:var(--text-secondary); overflow:hidden; position:relative; min-height:60px; }
-    .nl-grid-card-body.size-small { min-height:40px; }
-    .nl-grid-card-body.size-large, .nl-grid-card-body.size-full { min-height:80px; }
-    .nl-grid-card-body::after { content:''; position:absolute; bottom:0; left:0; right:0; height:24px; background:linear-gradient(transparent, var(--card-bg)); pointer-events:none; }
-    .nl-grid-card-body .placeholder { font-style:italic; opacity:0.4; }
-    .nl-grid-card-images { display:flex; gap:4px; padding:0 14px 10px; }
-    .nl-grid-card-images img { width:40px; height:40px; object-fit:cover; border-radius:4px; border:1px solid var(--border); }
-    .nl-grid-card-footer { display:flex; align-items:center; justify-content:space-between; padding:8px 14px; border-top:1px solid var(--border); font-size:0.72rem; color:var(--text-secondary); }
-    .nl-grid-card-chars { font-size:0.7rem; padding:2px 6px; border-radius:8px; }
-    .nl-grid-card-chars.near-limit { color:var(--amber); background:rgba(196,133,60,0.12); }
-    .nl-grid-card-chars.at-limit { color:#dc3545; background:rgba(220,53,69,0.12); }
-    .nl-grid-card-size { font-size:0.65rem; padding:2px 6px; border-radius:8px; text-transform:uppercase; font-weight:600; letter-spacing:0.03em; background:rgba(196,133,60,0.08); color:var(--amber); }
-    .nl-grid-card-include { width:14px; height:14px; accent-color:var(--amber); cursor:pointer; flex-shrink:0; }
+    .nl-grid-canvas { max-width:600px; margin:0 auto; background:#FFFFFF; border-radius:8px; overflow:hidden; box-shadow:0 2px 16px rgba(0,0,0,0.15); }
+    .nl-grid-header { background:#2C2C2C; padding:24px 30px; text-align:center; }
+    .nl-grid-header h1 { font-family:'Cormorant Garamond',Georgia,serif; color:#F5F0EB; font-size:24px; margin:0; font-weight:300; }
+    .nl-grid-header p { color:rgba(245,240,235,0.6); font-size:11px; margin:6px 0 0; letter-spacing:0.1em; text-transform:uppercase; }
+    .nl-grid-title { padding:24px 30px 8px; font-family:'Cormorant Garamond',Georgia,serif; font-size:22px; color:#2C2C2C; font-weight:400; }
+    .nl-grid-row { display:flex; gap:0; padding:0 30px 0; }
+    .nl-grid-section { position:relative; cursor:pointer; padding:16px 0; transition:background 0.2s; flex:1; min-width:0; }
+    .nl-grid-section:hover { background:rgba(196,133,60,0.06); }
+    .nl-grid-section.dragging { opacity:0.4; }
+    .nl-grid-section.drag-over { outline:2px dashed var(--amber); outline-offset:-2px; border-radius:4px; }
+    .nl-grid-section.excluded { opacity:0.35; }
+    .nl-grid-section-title { font-family:'Cormorant Garamond',Georgia,serif; color:#2C2C2C; margin:0 0 8px; font-weight:600; }
+    .nl-grid-section.size-large .nl-grid-section-title,
+    .nl-grid-section.size-full .nl-grid-section-title { font-size:20px; }
+    .nl-grid-section.size-medium .nl-grid-section-title,
+    .nl-grid-section.size-small .nl-grid-section-title { font-size:17px; }
+    .nl-grid-section-body { font-family:'DM Sans',Arial,sans-serif; color:#444; margin:0; }
+    .nl-grid-section.size-large .nl-grid-section-body,
+    .nl-grid-section.size-full .nl-grid-section-body { font-size:14px; line-height:1.7; }
+    .nl-grid-section.size-medium .nl-grid-section-body,
+    .nl-grid-section.size-small .nl-grid-section-body { font-size:13px; line-height:1.6; }
+    .nl-grid-section-body .placeholder { font-style:italic; color:#aaa; }
+    .nl-grid-section img { max-width:100%; height:auto; border-radius:4px; margin-top:12px; }
+    .nl-grid-divider { border:none; border-top:1px solid #E8DDD0; margin:0 30px; }
+    .nl-grid-col-gap { width:15px; flex-shrink:0; }
+    .nl-grid-overlay { position:absolute; top:4px; right:4px; display:flex; align-items:center; gap:4px; opacity:0; transition:opacity 0.2s; z-index:2; }
+    .nl-grid-section:hover .nl-grid-overlay { opacity:1; }
+    .nl-grid-overlay-badge { font-size:0.65rem; padding:2px 6px; border-radius:8px; background:rgba(44,44,44,0.85); color:#F5F0EB; font-weight:500; }
+    .nl-grid-overlay-badge.near-limit { background:rgba(196,133,60,0.9); }
+    .nl-grid-overlay-badge.at-limit { background:rgba(220,53,69,0.9); }
+    .nl-grid-include { width:14px; height:14px; accent-color:var(--amber); cursor:pointer; }
+    .nl-grid-footer { background:#2C2C2C; padding:18px 30px; text-align:center; }
+    .nl-grid-footer p { color:rgba(245,240,235,0.5); font-size:11px; margin:0; }
     .nl-view-toggle { display:inline-flex; gap:2px; background:var(--surface); border-radius:6px; padding:2px; }
     .nl-view-toggle button { font-size:0.75rem; padding:4px 10px; border:none; background:transparent; color:var(--text-secondary); border-radius:4px; cursor:pointer; }
     .nl-view-toggle button.active { background:var(--amber); color:#fff; }
@@ -3581,16 +3590,12 @@
     .nl-editor-size-btn:hover { border-color:var(--amber); }
     .nl-editor-size-btn.active { background:var(--amber); color:#fff; border-color:var(--amber); }
     .nl-editor-char-counter { text-align:right; font-size:0.75rem; color:var(--text-secondary); margin-top:4px; }
-    /* Dark mode grid */
-    body.dark-mode .nl-grid-card { background:#1e1e1e; border-color:#333; }
-    body.dark-mode .nl-grid-card:hover { border-color:var(--amber); }
-    body.dark-mode .nl-grid-card-header { border-bottom-color:#333; }
-    body.dark-mode .nl-grid-card-footer { border-top-color:#333; }
-    body.dark-mode .nl-grid-card-body::after { background:linear-gradient(transparent, #1e1e1e); }
+    /* Newsletter preview stays light regardless of app dark mode */
     body.dark-mode .nl-editor-size-btn { border-color:#444; color:#aaa; }
     @media (max-width:768px) {
-      .nl-grid-canvas { grid-template-columns:1fr; }
-      .nl-grid-card.size-full, .nl-grid-card.size-large { grid-column:span 1; }
+      .nl-grid-canvas { margin:0 -8px; border-radius:0; }
+      .nl-grid-row { flex-direction:column; padding:0 20px; }
+      .nl-grid-col-gap { display:none; }
     }
   </style>
 </head>
@@ -20899,57 +20904,78 @@ function renderNLCompose() {
       html += '</div>';
     });
   } else {
-    // ===== GRID VIEW =====
+    // ===== GRID VIEW — Newsletter Preview =====
     html += '<div class="nl-grid-canvas" id="nlGridCanvas">';
+
+    // Newsletter header
+    html += '<div class="nl-grid-header"><h1>Shir Glassworks</h1>' +
+      '<p>Issue #' + (nlCurrentIssue.issueNumber || '') + '</p></div>';
+
+    // Issue title
+    html += '<div class="nl-grid-title">' + nlEscHtml(nlCurrentIssue.title || 'Untitled Issue') + '</div>';
+
+    // Group sections into rows (same logic as export)
+    var rows = [], currentRow = [], currentRowCols = 0;
     sections.forEach(function(sec) {
-      var sizeClass = 'size-' + (sec.cardSize || 'medium');
-      var content = sec.finalContent || sec.rawInput || '';
-      var charLimit = NL_CHAR_LIMITS[sec.cardSize || 'medium'];
-      var charCount = content.length;
-      var charClass = charCount >= charLimit ? 'at-limit' : charCount >= charLimit * 0.8 ? 'near-limit' : '';
-      var statusLabel = sec.finalContent ? 'Ready' : (sec.rawInput ? 'Draft' : 'Empty');
-      var statusClass = sec.finalContent ? 'ready' : (sec.rawInput ? 'has-draft' : 'empty');
-      var typeIcon = nlGetTypeIcon(sec.type);
-      var preview = nlTruncatePreview(content, sec.cardSize || 'medium');
+      var width = sec.gridWidth || 1;
+      if (currentRowCols + width > 2) {
+        if (currentRow.length > 0) rows.push(currentRow);
+        currentRow = [sec]; currentRowCols = width;
+      } else {
+        currentRow.push(sec); currentRowCols += width;
+      }
+    });
+    if (currentRow.length > 0) rows.push(currentRow);
 
-      html += '<div class="nl-grid-card ' + sizeClass + (!sec.included ? ' excluded' : '') + '"' +
-        ' draggable="true" data-section-id="' + sec.id + '"' +
-        ' ondragstart="nlDragStart(event,\'' + sec.id + '\')"' +
-        ' ondragend="nlDragEnd(event)"' +
-        ' ondragover="nlDragOver(event)"' +
-        ' ondrop="nlDrop(event,\'' + sec.id + '\')"' +
-        ' onclick="nlOpenCardEditor(\'' + sec.id + '\')">';
+    rows.forEach(function(row, rowIdx) {
+      html += '<div class="nl-grid-row">';
+      row.forEach(function(sec, colIdx) {
+        var sizeClass = 'size-' + (sec.cardSize || 'medium');
+        var content = sec.finalContent || sec.rawInput || '';
+        var charLimit = NL_CHAR_LIMITS[sec.cardSize || 'medium'];
+        var charCount = content.length;
+        var charClass = charCount >= charLimit ? 'at-limit' : charCount >= charLimit * 0.8 ? 'near-limit' : '';
 
-      // Header
-      html += '<div class="nl-grid-card-header" onclick="event.stopPropagation()">' +
-        '<input type="checkbox" class="nl-grid-card-include" ' + (sec.included ? 'checked' : '') +
-        ' onclick="event.stopPropagation(); nlToggleInclude(\'' + sec.id + '\', this.checked)" />' +
-        '<span class="nl-grid-card-icon">' + typeIcon + '</span>' +
-        '<span class="nl-grid-card-title">' + nlEscHtml(sec.title) + '</span>' +
-        '<span class="nl-section-status ' + statusClass + '">' + statusLabel + '</span></div>';
+        if (colIdx > 0) html += '<div class="nl-grid-col-gap"></div>';
 
-      // Body
-      html += '<div class="nl-grid-card-body ' + sizeClass + '">' +
-        (preview ? nlEscHtml(preview) : '<span class="placeholder">Click to add content...</span>') + '</div>';
+        html += '<div class="nl-grid-section ' + sizeClass + (!sec.included ? ' excluded' : '') + '"' +
+          ' draggable="true" data-section-id="' + sec.id + '"' +
+          ' ondragstart="nlDragStart(event,\'' + sec.id + '\')"' +
+          ' ondragend="nlDragEnd(event)"' +
+          ' ondragover="nlDragOver(event)"' +
+          ' ondrop="nlDrop(event,\'' + sec.id + '\')"' +
+          ' onclick="nlOpenCardEditor(\'' + sec.id + '\')">';
 
-      // Images
-      var imgs = sec.images || [];
-      if (imgs.length > 0) {
-        html += '<div class="nl-grid-card-images">';
+        // Hover overlay with controls
+        html += '<div class="nl-grid-overlay" onclick="event.stopPropagation()">' +
+          '<input type="checkbox" class="nl-grid-include" ' + (sec.included ? 'checked' : '') +
+          ' onclick="event.stopPropagation(); nlToggleInclude(\'' + sec.id + '\', this.checked)" title="Include in newsletter" />' +
+          '<span class="nl-grid-overlay-badge ' + charClass + '">' + charCount + '/' + charLimit + '</span></div>';
+
+        // Section title (newsletter style)
+        html += '<h2 class="nl-grid-section-title">' + nlEscHtml(sec.title) + '</h2>';
+
+        // Section body
+        html += '<div class="nl-grid-section-body">' +
+          (content ? content.replace(/\n/g, '<br>') : '<span class="placeholder">Click to add content...</span>') + '</div>';
+
+        // Images (full-width in section, like the newsletter)
+        var imgs = sec.images || [];
         imgs.forEach(function(imgId) {
           var img = imageLibrary ? imageLibrary[imgId] : null;
-          if (img) html += '<img src="' + img.url + '" alt="" />';
+          if (img) html += '<img class="nl-grid-section-img" src="' + img.url + '" alt="' + (img.alt || '') + '" />';
         });
-        html += '</div>';
-      }
 
-      // Footer
-      html += '<div class="nl-grid-card-footer">' +
-        '<span class="nl-grid-card-chars ' + charClass + '">' + charCount + '/' + charLimit + '</span>' +
-        '<span class="nl-grid-card-size">' + (sec.cardSize || 'medium') + '</span></div>';
+        html += '</div>'; // end section
+      });
+      html += '</div>'; // end row
 
-      html += '</div>';
+      // Divider between rows
+      if (rowIdx < rows.length - 1) html += '<hr class="nl-grid-divider" />';
     });
+
+    // Newsletter footer
+    html += '<div class="nl-grid-footer"><p>Shir Glassworks &bull; Western Massachusetts</p></div>';
     html += '</div>';
   }
 
@@ -21014,7 +21040,7 @@ function nlDragStart(e, secId) {
 
 function nlDragEnd(e) {
   nlDragSourceId = null;
-  document.querySelectorAll('.nl-grid-card').forEach(function(card) {
+  document.querySelectorAll('.nl-grid-section').forEach(function(card) {
     card.classList.remove('dragging', 'drag-over');
   });
 }
@@ -21022,9 +21048,9 @@ function nlDragEnd(e) {
 function nlDragOver(e) {
   e.preventDefault();
   e.dataTransfer.dropEffect = 'move';
-  var card = e.target.closest('.nl-grid-card');
+  var card = e.target.closest('.nl-grid-section');
   if (card && !card.classList.contains('dragging')) {
-    document.querySelectorAll('.nl-grid-card.drag-over').forEach(function(c) { c.classList.remove('drag-over'); });
+    document.querySelectorAll('.nl-grid-section.drag-over').forEach(function(c) { c.classList.remove('drag-over'); });
     card.classList.add('drag-over');
   }
 }
