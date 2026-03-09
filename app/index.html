@@ -1394,6 +1394,28 @@
     .tm-mission-header:hover {
       opacity: 0.85;
     }
+    .tm-mission-status {
+      flex-shrink: 0;
+      font-size: 0.65rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 10px;
+      white-space: nowrap;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .tm-status-new {
+      background: #e8e8e8;
+      color: #888;
+    }
+    .tm-status-active {
+      background: #fff3e0;
+      color: #e65100;
+    }
+    .tm-status-done {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
     .tm-precondition-notice {
       background: #fef3cd;
       border-left: 3px solid #f0ad4e;
@@ -21588,9 +21610,11 @@ function renderTestingMode() {
     html += '<span style="flex-shrink:0;font-size:0.75rem;color:var(--warm-gray);">' + (isExpanded ? '▼' : '▶') + '</span>';
     html += '<span class="tm-mission-title" style="flex:1;margin:0;">' + escapeHtml(mission.title) + '</span>';
     if (accomplished) {
-      html += '<span class="tm-accomplished-badge" style="margin:0;">✅</span>';
+      html += '<span class="tm-mission-status tm-status-done">✅ Done</span>';
     } else if (hasPreReflection) {
-      html += '<span style="font-size:0.7rem;color:var(--warm-gray);white-space:nowrap;">' + completedCount + '/' + requiredCount + '</span>';
+      html += '<span class="tm-mission-status tm-status-active">⚡ ' + completedCount + '/' + requiredCount + '</span>';
+    } else {
+      html += '<span class="tm-mission-status tm-status-new">New</span>';
     }
     html += '</div>';
 
