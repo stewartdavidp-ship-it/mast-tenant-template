@@ -83,15 +83,50 @@
       line-height: 1.2;
     }
 
+    .post-author {
+      color: rgba(44,44,44,0.55);
+      font-size: 0.85rem;
+      margin-bottom: 4px;
+    }
+
     .post-date {
       color: rgba(44,44,44,0.45);
       font-size: 0.85rem;
       margin-bottom: 2.5rem;
     }
 
-    .post-section {
-      margin-bottom: 2.5rem;
+    /* Rich HTML body (blog posts) */
+    .post-body {
+      line-height: 1.8;
+      font-size: 0.95rem;
+      color: rgba(44,44,44,0.85);
     }
+    .post-body p { margin-bottom: 1rem; }
+    .post-body img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 6px;
+      margin: 1.2rem 0;
+    }
+    .post-body b, .post-body strong { font-weight: 600; }
+    .post-body i, .post-body em { font-style: italic; }
+    .post-body u { text-decoration: underline; }
+    .post-body h2 {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.5rem;
+      font-weight: 500;
+      margin: 2rem 0 0.75rem;
+    }
+    .post-body .blog-img-caption {
+      font-size: 0.8rem;
+      color: rgba(44,44,44,0.5);
+      text-align: center;
+      margin-top: -0.5rem;
+      margin-bottom: 1.2rem;
+    }
+
+    /* Section-based (newsletter issues) */
+    .post-section { margin-bottom: 2.5rem; }
     .post-section h2 {
       font-family: 'Cormorant Garamond', serif;
       font-size: 1.5rem;
@@ -116,6 +151,22 @@
       border: none;
       border-top: 1px solid rgba(44,44,44,0.1);
       margin: 2rem 0;
+    }
+
+    .post-tags {
+      margin-top: 2.5rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid rgba(44,44,44,0.1);
+    }
+    .post-tag {
+      display: inline-block;
+      font-size: 0.75rem;
+      color: var(--amber);
+      background: rgba(196,133,60,0.08);
+      padding: 4px 12px;
+      border-radius: 12px;
+      margin-right: 6px;
+      margin-bottom: 6px;
     }
 
     footer {
@@ -178,13 +229,16 @@
 
   var params = new URLSearchParams(window.location.search);
   var postId = params.get('id');
+  var source = params.get('source') || 'blog';
 
   if (!postId) {
     document.getElementById('postContent').innerHTML = '<div class="error"><p>Post not found. <a href="/blog/">Back to blog</a></p></div>';
     return;
   }
 
-  db.ref('shirglassworks/newsletter/published/' + postId).once('value').then(function(snap) {
+  var path = source === 'newsletter' ? 'shirglassworks/newsletter/published/' : 'shirglassworks/blog/published/';
+
+  db.ref(path + postId).once('value').then(function(snap) {
     var post = snap.val();
     if (!post) {
       document.getElementById('postContent').innerHTML = '<div class="error"><p>Post not found. <a href="/blog/">Back to blog</a></p></div>';
@@ -194,42 +248,48 @@
     document.title = post.title + ' — Shir Glassworks Blog';
 
     var date = post.publishedAt ? new Date(post.publishedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
-    var html = '<div class="post-meta">Issue #' + (post.issueNumber || '?') + '</div>' +
+    var numLabel = source === 'newsletter' ? 'Issue #' + (post.issueNumber || '?') : 'Post #' + (post.postNumber || '?');
+
+    var html = '<div class="post-meta">' + numLabel + '</div>' +
       '<h1>' + escHtml(post.title || 'Untitled') + '</h1>' +
+      (post.author ? '<div class="post-author">By ' + escHtml(post.author) + '</div>' : '') +
       '<div class="post-date">' + date + '</div>';
 
-    var sections = post.sections || [];
-    sections.forEach(function(sec, idx) {
-      if (!sec.content || !sec.content.trim()) return;
-      html += '<div class="post-section">';
-      if (sec.title) {
-        html += '<h2>' + escHtml(sec.title) + '</h2>';
-      }
-      // Split content into paragraphs
-      var paragraphs = sec.content.split('\n').filter(function(p) { return p.trim(); });
-      paragraphs.forEach(function(p) {
-        html += '<p>' + escHtml(p) + '</p>';
-      });
-      // Section images
-      var images = sec.images || [];
-      images.forEach(function(imgId) {
-        // Try to load image from the image library
-        db.ref('shirglassworks/images/' + imgId).once('value').then(function(imgSnap) {
-          var img = imgSnap.val();
-          if (img && img.url) {
-            var imgEl = document.createElement('img');
-            imgEl.src = img.url;
-            imgEl.alt = img.alt || '';
-            var sectionDiv = document.querySelectorAll('.post-section')[idx];
-            if (sectionDiv) sectionDiv.appendChild(imgEl);
-          }
+    if (post.bodyHtml) {
+      // Blog post — render rich HTML body
+      html += '<div class="post-body">' + post.bodyHtml + '</div>';
+      if (post.tags && post.tags.length > 0) {
+        html += '<div class="post-tags">';
+        post.tags.forEach(function(tag) {
+          html += '<span class="post-tag">' + escHtml(tag) + '</span>';
         });
-      });
-      html += '</div>';
-      if (idx < sections.length - 1) {
-        html += '<hr class="post-divider">';
+        html += '</div>';
       }
-    });
+    } else if (post.sections) {
+      // Newsletter — render sections with lazy-loaded images
+      var sections = post.sections || [];
+      sections.forEach(function(sec, idx) {
+        if (!sec.content || !sec.content.trim()) return;
+        html += '<div class="post-section">';
+        if (sec.title) html += '<h2>' + escHtml(sec.title) + '</h2>';
+        var paragraphs = sec.content.split('\n').filter(function(p) { return p.trim(); });
+        paragraphs.forEach(function(p) { html += '<p>' + escHtml(p) + '</p>'; });
+        (sec.images || []).forEach(function(imgId) {
+          db.ref('shirglassworks/images/' + imgId).once('value').then(function(imgSnap) {
+            var img = imgSnap.val();
+            if (img && img.url) {
+              var imgEl = document.createElement('img');
+              imgEl.src = img.url;
+              imgEl.alt = img.alt || '';
+              var sectionDiv = document.querySelectorAll('.post-section')[idx];
+              if (sectionDiv) sectionDiv.appendChild(imgEl);
+            }
+          });
+        });
+        html += '</div>';
+        if (idx < sections.length - 1) html += '<hr class="post-divider">';
+      });
+    }
 
     document.getElementById('postContent').innerHTML = html;
   }).catch(function(err) {

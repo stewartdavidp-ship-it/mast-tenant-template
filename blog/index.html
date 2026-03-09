@@ -22,7 +22,6 @@
       min-height: 100vh;
     }
 
-    /* Nav */
     nav {
       background: var(--charcoal);
       padding: 1rem 2rem;
@@ -51,7 +50,6 @@
     }
     nav .nav-links a:hover { color: var(--amber-light); }
 
-    /* Main */
     .container {
       max-width: 720px;
       margin: 0 auto;
@@ -67,7 +65,32 @@
     .subtitle {
       color: rgba(44,44,44,0.5);
       font-size: 0.9rem;
-      margin-bottom: 2.5rem;
+      margin-bottom: 2rem;
+    }
+
+    /* Tabs */
+    .blog-tabs {
+      display: flex;
+      gap: 0;
+      margin-bottom: 2rem;
+      border-bottom: 1px solid rgba(44,44,44,0.1);
+    }
+    .blog-tab {
+      padding: 10px 24px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: rgba(44,44,44,0.45);
+      cursor: pointer;
+      border: none;
+      background: none;
+      border-bottom: 2px solid transparent;
+      transition: color 0.2s, border-color 0.2s;
+      font-family: 'DM Sans', sans-serif;
+    }
+    .blog-tab:hover { color: var(--charcoal); }
+    .blog-tab.active {
+      color: var(--charcoal);
+      border-bottom-color: var(--amber);
     }
 
     /* Post cards */
@@ -100,6 +123,11 @@
       font-weight: 500;
       margin-bottom: 6px;
     }
+    .post-card-author {
+      font-size: 0.8rem;
+      color: rgba(44,44,44,0.5);
+      margin-bottom: 4px;
+    }
     .post-card-date {
       font-size: 0.8rem;
       color: rgba(44,44,44,0.45);
@@ -118,7 +146,6 @@
     }
     .empty-state-icon { font-size: 2.5rem; margin-bottom: 1rem; }
 
-    /* Footer */
     footer {
       background: var(--charcoal);
       color: rgba(245,240,235,0.5);
@@ -134,6 +161,7 @@
       nav .nav-links { display: none; }
       .container { padding: 2rem 1rem; }
       h1 { font-size: 1.8rem; }
+      .blog-tab { padding: 10px 16px; font-size: 0.85rem; }
     }
     .free-ship-banner{background:#1a1714;text-align:center;padding:6px 0;font-family:"DM Sans",sans-serif;font-size:0.7rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--amber-light,#E8D5B5);border-bottom:1px solid rgba(196,133,60,0.15);}
   </style>
@@ -154,6 +182,10 @@
 <div class="container">
   <h1>From the Studio</h1>
   <p class="subtitle">News, stories, and behind-the-scenes from Shir Glassworks.</p>
+  <div class="blog-tabs">
+    <button class="blog-tab active" id="tabBlog" onclick="switchTab('blog')">Blog</button>
+    <button class="blog-tab" id="tabNewsletter" onclick="switchTab('newsletter')">Newsletter</button>
+  </div>
   <div id="postList">
     <div class="loading">Loading posts...</div>
   </div>
@@ -176,46 +208,72 @@
   };
   if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
   var db = firebase.database();
+  var currentTab = 'blog';
 
-  db.ref('shirglassworks/newsletter/published').orderByChild('publishedAt').limitToLast(50).once('value').then(function(snap) {
-    var val = snap.val();
-    var posts = val ? Object.keys(val).map(function(k) { var p = val[k]; p._id = k; return p; }) : [];
-    posts.sort(function(a, b) {
-      return new Date(b.publishedAt || 0) - new Date(a.publishedAt || 0);
-    });
+  // Make switchTab available globally
+  window.switchTab = function(tab) {
+    currentTab = tab;
+    document.getElementById('tabBlog').classList.toggle('active', tab === 'blog');
+    document.getElementById('tabNewsletter').classList.toggle('active', tab === 'newsletter');
+    document.getElementById('postList').innerHTML = '<div class="loading">Loading posts...</div>';
+    loadPosts(tab);
+  };
 
-    var container = document.getElementById('postList');
-    if (posts.length === 0) {
-      container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📰</div><p>No posts yet. Check back soon!</p></div>';
-      return;
-    }
+  function loadPosts(tab) {
+    var path = tab === 'blog' ? 'shirglassworks/blog/published' : 'shirglassworks/newsletter/published';
+    db.ref(path).orderByChild('publishedAt').limitToLast(50).once('value').then(function(snap) {
+      var val = snap.val();
+      var posts = val ? Object.keys(val).map(function(k) { var p = val[k]; p._id = k; return p; }) : [];
+      posts.sort(function(a, b) {
+        return new Date(b.publishedAt || 0) - new Date(a.publishedAt || 0);
+      });
 
-    var html = '';
-    posts.forEach(function(post) {
-      var date = post.publishedAt ? new Date(post.publishedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
-      var excerpt = '';
-      if (post.sections && post.sections.length > 0) {
-        var firstContent = post.sections[0].content || '';
-        excerpt = firstContent.substring(0, 200);
-        if (firstContent.length > 200) excerpt += '...';
+      var container = document.getElementById('postList');
+      if (posts.length === 0) {
+        var emptyMsg = tab === 'blog' ? 'No blog posts yet. Check back soon!' : 'No newsletter issues yet. Check back soon!';
+        container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">' + (tab === 'blog' ? '✍️' : '📰') + '</div><p>' + emptyMsg + '</p></div>';
+        return;
       }
-      html += '<a class="post-card" href="/blog/post.html?id=' + post._id + '">' +
-        '<div class="post-card-num">Issue #' + (post.issueNumber || '?') + '</div>' +
-        '<div class="post-card-title">' + escHtml(post.title || 'Untitled') + '</div>' +
-        '<div class="post-card-date">' + date + '</div>' +
-        '<div class="post-card-excerpt">' + escHtml(excerpt) + '</div>' +
-        '</a>';
+
+      var html = '';
+      posts.forEach(function(post) {
+        var date = post.publishedAt ? new Date(post.publishedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
+        var excerpt = '';
+        if (tab === 'blog' && post.bodyHtml) {
+          // Strip HTML tags to get plain text excerpt
+          var tmp = document.createElement('div');
+          tmp.innerHTML = post.bodyHtml;
+          var text = tmp.textContent || tmp.innerText || '';
+          excerpt = text.substring(0, 200);
+          if (text.length > 200) excerpt += '...';
+        } else if (post.sections && post.sections.length > 0) {
+          var firstContent = post.sections[0].content || '';
+          excerpt = firstContent.substring(0, 200);
+          if (firstContent.length > 200) excerpt += '...';
+        }
+        var numLabel = tab === 'blog' ? 'Post #' + (post.postNumber || '?') : 'Issue #' + (post.issueNumber || '?');
+        html += '<a class="post-card" href="/blog/post.html?id=' + post._id + '&source=' + tab + '">' +
+          '<div class="post-card-num">' + numLabel + '</div>' +
+          '<div class="post-card-title">' + escHtml(post.title || 'Untitled') + '</div>' +
+          (post.author ? '<div class="post-card-author">By ' + escHtml(post.author) + '</div>' : '') +
+          '<div class="post-card-date">' + date + '</div>' +
+          '<div class="post-card-excerpt">' + escHtml(excerpt) + '</div>' +
+          '</a>';
+      });
+      container.innerHTML = html;
+    }).catch(function(err) {
+      console.error('Error loading posts:', err);
+      document.getElementById('postList').innerHTML = '<div class="empty-state"><p>Unable to load posts. Please try again later.</p></div>';
     });
-    container.innerHTML = html;
-  }).catch(function(err) {
-    console.error('Error loading posts:', err);
-    document.getElementById('postList').innerHTML = '<div class="empty-state"><p>Unable to load posts. Please try again later.</p></div>';
-  });
+  }
 
   function escHtml(str) {
     if (!str) return '';
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
+
+  // Load blog tab by default
+  loadPosts('blog');
 })();
 </script>
 </body>

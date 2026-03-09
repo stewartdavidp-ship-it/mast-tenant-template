@@ -3595,7 +3595,20 @@
     .blog-inline-img { position:relative; width:80px; height:80px; border-radius:6px; overflow:hidden; border:1px solid var(--border); }
     .blog-inline-img img { width:100%; height:100%; object-fit:cover; }
     .blog-inline-img .remove-btn { position:absolute; top:2px; right:2px; width:20px; height:20px; border-radius:50%; background:rgba(0,0,0,0.6); color:#fff; border:none; font-size:0.7rem; cursor:pointer; display:flex; align-items:center; justify-content:center; }
-    .blog-actions { display:flex; gap:8px; flex-wrap:wrap; padding:16px 0; border-top:1px solid var(--border); margin-top:16px; }
+    .blog-actions { display:flex; gap:8px; flex-wrap:wrap; padding:16px 0; border-top:1px solid var(--border); margin-top:16px; align-items:center; }
+    .blog-published-badge { display:inline-flex; align-items:center; gap:4px; font-size:0.8rem; font-weight:500; color:#4CAF50; background:rgba(76,175,80,0.08); padding:6px 14px; border-radius:20px; }
+    .blog-publish-platform { display:flex; align-items:center; gap:12px; padding:14px 16px; border:1px solid var(--border); border-radius:10px; margin-bottom:8px; transition:border-color 0.15s,background 0.15s; }
+    .blog-publish-platform.enabled { cursor:pointer; }
+    .blog-publish-platform.enabled:hover { border-color:var(--amber); background:rgba(184,151,90,0.04); }
+    .blog-publish-platform.disabled { opacity:0.45; cursor:default; }
+    .blog-publish-platform .platform-icon { font-size:1.4rem; flex-shrink:0; }
+    .blog-publish-platform .platform-info { flex:1; }
+    .blog-publish-platform .platform-name { font-weight:500; font-size:0.95rem; }
+    .blog-publish-platform .platform-status { font-size:0.75rem; color:var(--text-secondary); margin-top:2px; }
+    .blog-publish-platform .platform-badge { display:inline-block; font-size:0.65rem; padding:2px 8px; border-radius:10px; font-weight:500; text-transform:uppercase; letter-spacing:0.03em; }
+    .blog-publish-platform .platform-badge.ready { background:rgba(76,175,80,0.1); color:#4CAF50; }
+    .blog-publish-platform .platform-badge.coming-soon { background:rgba(158,158,158,0.1); color:#9e9e9e; }
+    .blog-publish-platform .platform-check { width:20px; height:20px; accent-color:var(--amber); flex-shrink:0; }
     .blog-ideas-section { margin-top:24px; padding-top:20px; border-top:1px solid var(--border); }
     .blog-ideas-section h3 { font-size:0.95rem; font-weight:600; margin-bottom:12px; color:var(--text); }
     .blog-idea-row { display:flex; align-items:flex-start; padding:10px 14px; background:var(--card-bg); border:1px solid var(--border); border-radius:8px; margin-bottom:6px; gap:10px; }
@@ -22043,6 +22056,7 @@ function renderBlogList() {
         '<span class="blog-post-title">' + (post.title || 'Untitled Post') + '</span>' +
         '<span class="blog-post-author">' + author.name + '</span>' +
         '<span class="nl-status-badge ' + (post.status || 'draft') + '">' + (post.status || 'draft') + '</span>' +
+        (post.publishedToWebsite ? '<span style="font-size:0.75rem;" title="Published to website">🌐</span>' : '') +
         '<span class="blog-post-date">' + dateStr + '</span>' +
         '</div>';
     });
@@ -22196,7 +22210,12 @@ function renderBlogEditor() {
       html += '<button class="btn btn-primary" onclick="blogMarkComplete()">✅ Finish Post</button>';
     } else if (status === 'complete') {
       html += '<button class="btn" onclick="blogBackToDraft()">✏️ Back to Draft</button>';
-      html += '<button class="btn" disabled style="opacity:0.5;cursor:default;" title="Substack integration coming soon">📤 Post to Substack (Coming Soon)</button>';
+      if (post.publishedToWebsite) {
+        html += '<span class="blog-published-badge">🌐 Published</span>';
+        html += '<button class="btn" onclick="blogUnpublishFromWebsite()" style="font-size:0.8rem;">Unpublish</button>';
+      } else {
+        html += '<button class="btn btn-primary" onclick="blogOpenPublishDialog()">📤 Publish</button>';
+      }
     }
     html += '</div>';
     document.getElementById('blogContent').innerHTML = html;
@@ -22302,7 +22321,12 @@ function renderBlogEditor() {
     html += '<button class="btn btn-primary" onclick="blogMarkComplete()">✅ Finish Post</button>';
   } else if (status === 'complete') {
     html += '<button class="btn" onclick="blogBackToDraft()">✏️ Back to Draft</button>';
-    html += '<button class="btn" disabled style="opacity:0.5;cursor:default;" title="Substack integration coming soon">📤 Post to Substack (Coming Soon)</button>';
+    if (post.publishedToWebsite) {
+      html += '<span class="blog-published-badge">🌐 Published</span>';
+      html += '<button class="btn" onclick="blogUnpublishFromWebsite()" style="font-size:0.8rem;">Unpublish</button>';
+    } else {
+      html += '<button class="btn btn-primary" onclick="blogOpenPublishDialog()">📤 Publish</button>';
+    }
   }
   html += '</div>';
 
@@ -22968,9 +22992,113 @@ async function blogBackToDraft() {
   } catch (err) { showToast('Error: ' + err.message, true); }
 }
 
-// Substack integration — placeholder until backend is built
-function blogPostToSubstack() {
-  showToast('Substack integration coming soon — a backend function is needed to connect to Substack', true);
+// ===== PUBLISH DIALOG =====
+
+function blogOpenPublishDialog() {
+  if (!blogCurrentPost) return;
+  var html = '<div class="modal-header"><h3>Publish Post</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>' +
+    '<div class="modal-body">' +
+    '<p style="font-size:0.9rem;color:var(--text-secondary);margin-bottom:16px;">Publishing: <strong>' + escapeHtml(blogCurrentPost.title || 'Untitled Post') + '</strong></p>' +
+    '<div class="blog-publish-platform enabled" onclick="document.getElementById(\'publishWebsite\').checked=!document.getElementById(\'publishWebsite\').checked">' +
+    '<span class="platform-icon">🌐</span>' +
+    '<div class="platform-info"><div class="platform-name">Website</div>' +
+    '<div class="platform-status">Publish to your public blog page</div></div>' +
+    '<span class="platform-badge ready">Ready</span>' +
+    '<input type="checkbox" id="publishWebsite" class="platform-check" checked onclick="event.stopPropagation()" />' +
+    '</div>' +
+    '<div class="blog-publish-platform disabled">' +
+    '<span class="platform-icon">📧</span>' +
+    '<div class="platform-info"><div class="platform-name">Substack</div>' +
+    '<div class="platform-status">Send as Substack newsletter draft</div></div>' +
+    '<span class="platform-badge coming-soon">Coming Soon</span>' +
+    '<input type="checkbox" class="platform-check" disabled />' +
+    '</div>' +
+    '</div>' +
+    '<div class="modal-footer">' +
+    '<button class="btn" onclick="closeModal()">Cancel</button>' +
+    '<button class="btn btn-primary" onclick="blogPublishSelected()">📤 Publish</button>' +
+    '</div>';
+  openModal(html);
+}
+
+async function blogPublishSelected() {
+  var websiteChecked = document.getElementById('publishWebsite');
+  if (websiteChecked && websiteChecked.checked) {
+    await blogPublishToWebsite();
+  } else {
+    showToast('Select at least one platform', true);
+  }
+}
+
+async function blogPublishToWebsite() {
+  if (!blogCurrentPost) return;
+  closeModal();
+
+  // Save editor content first
+  var editable = document.getElementById('blogBodyEditable');
+  if (editable) blogCurrentPost.body = blogSaveBodyFromEditor();
+
+  try {
+    // Generate rendered HTML with resolved images
+    var bodyHtml = blogRenderBodyToHtml(blogCurrentPost.body || '', blogCurrentPost.inlineImages || []);
+    var author = BLOG_AUTHORS[blogCurrentPost.author] || BLOG_AUTHORS['madeline'];
+
+    // Generate slug
+    var slug = (blogCurrentPost.title || 'untitled').toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').substring(0, 80);
+
+    var publishedAt = new Date().toISOString();
+    var publishedData = {
+      title: blogCurrentPost.title || 'Untitled',
+      postNumber: blogCurrentPost.postNumber || 0,
+      slug: slug,
+      publishedAt: publishedAt,
+      author: author.name,
+      bodyHtml: bodyHtml,
+      tags: blogCurrentPost.tags || []
+    };
+
+    // Write to public blog path
+    await db.ref('shirglassworks/blog/published/' + blogCurrentPostId).set(publishedData);
+
+    // Update admin post
+    blogCurrentPost.publishedToWebsite = true;
+    blogCurrentPost.publishedAt = publishedAt;
+    blogCurrentPost.updatedAt = publishedAt;
+    await db.ref('shirglassworks/blog/posts/' + blogCurrentPostId).update({
+      publishedToWebsite: true,
+      publishedAt: publishedAt,
+      updatedAt: publishedAt
+    });
+
+    renderBlogEditor();
+    showToast('Published to website! 🌐');
+  } catch (err) {
+    showToast('Publish failed: ' + err.message, true);
+  }
+}
+
+async function blogUnpublishFromWebsite() {
+  if (!blogCurrentPost) return;
+  try {
+    // Remove from public path
+    await db.ref('shirglassworks/blog/published/' + blogCurrentPostId).remove();
+
+    // Update admin post
+    blogCurrentPost.publishedToWebsite = false;
+    blogCurrentPost.publishedAt = null;
+    blogCurrentPost.updatedAt = new Date().toISOString();
+    await db.ref('shirglassworks/blog/posts/' + blogCurrentPostId).update({
+      publishedToWebsite: false,
+      publishedAt: null,
+      updatedAt: blogCurrentPost.updatedAt
+    });
+
+    renderBlogEditor();
+    showToast('Unpublished from website');
+  } catch (err) {
+    showToast('Unpublish failed: ' + err.message, true);
+  }
 }
 
 // ============================================================
