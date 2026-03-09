@@ -3151,6 +3151,19 @@
         <div class="sidebar-item muted" data-route="procurement" onclick="navigateTo('procurement')">Procurement <span class="sidebar-badge new">New</span></div>
       </div>
     </div>
+    <!-- Market -->
+    <div class="sidebar-section" data-section="market">
+      <div class="sidebar-section-header" onclick="toggleSection('market')">
+        <span class="sidebar-section-icon">&#128227;</span>
+        <span class="sidebar-section-label">Market</span>
+        <span class="sidebar-section-arrow">&#9654;</span>
+      </div>
+      <div class="sidebar-items">
+        <div class="sidebar-item" data-route="social" onclick="navigateTo('social')">Social Media</div>
+        <div class="sidebar-item" data-route="newsletter" onclick="navigateTo('newsletter')">Blog &amp; Newsletter</div>
+        <div class="sidebar-item" data-route="stories" onclick="navigateTo('stories')">Stories</div>
+      </div>
+    </div>
     <!-- Sell -->
     <div class="sidebar-section" data-section="sell">
       <div class="sidebar-section-header" onclick="toggleSection('sell')">
@@ -3166,21 +3179,27 @@
         <div class="sidebar-item muted" data-route="wholesale" onclick="navigateTo('wholesale')">Wholesale <span class="sidebar-badge new">New</span></div>
         <div class="sidebar-item muted" data-route="galleries" onclick="navigateTo('galleries')">Galleries &amp; Consignment <span class="sidebar-badge new">New</span></div>
         <div class="sidebar-item" data-route="coupons" onclick="navigateTo('coupons')">Coupons</div>
-        <div class="sidebar-item" data-route="fulfillment" onclick="navigateTo('fulfillment')">Fulfillment</div>
         <div class="sidebar-item" data-route="receipts" onclick="navigateTo('receipts')">Receipts &amp; Reconciliation</div>
       </div>
     </div>
-    <!-- Market -->
-    <div class="sidebar-section" data-section="market">
-      <div class="sidebar-section-header" onclick="toggleSection('market')">
-        <span class="sidebar-section-icon">&#128227;</span>
-        <span class="sidebar-section-label">Market</span>
+    <!-- Ship -->
+    <div class="sidebar-section" data-section="ship">
+      <div class="sidebar-section-header" onclick="toggleSection('ship')">
+        <span class="sidebar-section-icon">&#128230;</span>
+        <span class="sidebar-section-label">Ship</span>
         <span class="sidebar-section-arrow">&#9654;</span>
       </div>
       <div class="sidebar-items">
-        <div class="sidebar-item" data-route="social" onclick="navigateTo('social')">Social Media</div>
-        <div class="sidebar-item" data-route="newsletter" onclick="navigateTo('newsletter')">Blog &amp; Newsletter</div>
-        <div class="sidebar-item" data-route="stories" onclick="navigateTo('stories')">Stories</div>
+        <div class="sidebar-item" data-route="pack" onclick="navigateTo('pack')">Pack</div>
+        <div class="sidebar-item" data-route="ship" onclick="navigateTo('ship')">Ship</div>
+      </div>
+    </div>
+    <!-- Teach -->
+    <div class="sidebar-section">
+      <div class="sidebar-section-header dashboard-link muted" onclick="navigateTo('teach')" style="opacity:0.55;">
+        <span class="sidebar-section-icon">&#127891;</span>
+        <span class="sidebar-section-label">Teach</span>
+        <span class="sidebar-badge future" style="margin-left:auto;">Future</span>
       </div>
     </div>
     <!-- Manage -->
@@ -3201,14 +3220,6 @@
         <div class="sidebar-item" data-route="auditlog" onclick="navigateTo('auditlog')">Audit Log</div>
         <div class="sidebar-item muted" data-route="financials" onclick="navigateTo('financials')">Financials <span class="sidebar-badge new">New</span></div>
         <div class="sidebar-item" data-route="settings" onclick="navigateTo('settings')">Settings &amp; Integrations <span id="settingsSandboxBadge" style="display:none;background:#f59e0b;color:#fff;font-size:0.65rem;padding:2px 6px;border-radius:4px;margin-left:4px;font-weight:700;vertical-align:middle;">SANDBOX</span></div>
-      </div>
-    </div>
-    <!-- Teach -->
-    <div class="sidebar-section">
-      <div class="sidebar-section-header dashboard-link muted" onclick="navigateTo('teach')" style="opacity:0.55;">
-        <span class="sidebar-section-icon">&#127891;</span>
-        <span class="sidebar-section-label">Teach</span>
-        <span class="sidebar-badge future" style="margin-left:auto;">Future</span>
       </div>
     </div>
   </nav>
@@ -3459,19 +3470,26 @@
     </div>
 
     <!-- Admin: Fulfillment Tab -->
-    <div id="fulfillmentTab" style="display:none;">
+    <div id="packTab" style="display:none;">
       <div class="section-header">
-        <h2>Fulfillment</h2>
+        <h2>Pack</h2>
       </div>
-      <div class="view-tabs" id="fulfSubNav">
-        <button id="fulfSubPack" class="view-tab active" onclick="switchFulfillmentSubView('pack')">Pack Queue</button>
-        <button id="fulfSubScan" class="view-tab" onclick="switchFulfillmentSubView('scan')">Studio Scan</button>
-        <button id="fulfSubDeliver" class="view-tab" onclick="switchFulfillmentSubView('deliver')">Drop-off</button>
-        <button id="fulfSubBundles" class="view-tab" onclick="switchFulfillmentSubView('bundles')">Bundles</button>
+      <div class="view-tabs" id="packSubNav">
+        <button id="packSubQueue" class="view-tab active" onclick="switchPackSubView('queue')">Pack Queue</button>
+        <button id="packSubScan" class="view-tab" onclick="switchPackSubView('scan')">Studio Scan</button>
       </div>
       <div id="fulfPackView"></div>
       <div id="fulfScanView" style="display:none;"></div>
-      <div id="fulfDeliverView" style="display:none;"></div>
+    </div>
+    <div id="shipTab" style="display:none;">
+      <div class="section-header">
+        <h2>Ship</h2>
+      </div>
+      <div class="view-tabs" id="shipSubNav">
+        <button id="shipSubDeliver" class="view-tab active" onclick="switchShipSubView('deliver')">Drop-off</button>
+        <button id="shipSubBundles" class="view-tab" onclick="switchShipSubView('bundles')">Bundles</button>
+      </div>
+      <div id="fulfDeliverView"></div>
       <div id="fulfBundlesView" style="display:none;"></div>
     </div>
 
@@ -5127,7 +5145,9 @@ var ROUTE_MAP = {
   'orders':      { tab: 'ordersTab' },
   'wholesale':   { tab: null, placeholder: { name: 'Wholesale', desc: 'Bulk buyer accounts, pricing, terms.', badge: 'new' } },
   'galleries':   { tab: null, placeholder: { name: 'Galleries & Consignment', desc: 'Track consigned pieces at galleries.', badge: 'new' } },
-  'fulfillment': { tab: 'fulfillmentTab', setup: function() { switchFulfillmentSubView('pack'); } },
+  'pack':        { tab: 'packTab', setup: function() { switchPackSubView('queue'); } },
+  'ship':        { tab: 'shipTab', setup: function() { switchShipSubView('deliver'); } },
+  'fulfillment': { tab: 'packTab', setup: function() { switchPackSubView('queue'); currentRoute = 'pack'; location.hash = 'pack'; } },
   'receipts':    { tab: 'salesTab', setup: function() { if (!showingSquarePayments) toggleSquarePayments(); } },
   'social':      { tab: 'socialMediaTab' },
   'newsletter':  { tab: 'newsletterTab' },
@@ -5162,12 +5182,13 @@ var ROUTE_MAP = {
 // Section → which routes belong to it (for auto-expanding)
 var SECTION_ROUTES = {
   'make':   ['jobs', 'production', 'procurement'],
-  'sell':   ['pos', 'events', 'orders', 'commissions', 'wholesale', 'galleries', 'fulfillment', 'receipts'],
   'market': ['social', 'newsletter', 'stories'],
+  'sell':   ['pos', 'events', 'orders', 'commissions', 'wholesale', 'galleries', 'receipts'],
+  'ship':   ['pack', 'ship'],
   'manage': ['products', 'inventory', 'customers', 'images', 'website', 'employees', 'contacts', 'auditlog', 'financials', 'settings']
 };
 
-var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'fulfillmentTab', 'commissionsTab', 'socialMediaTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab'];
+var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab'];
 
 var currentRoute = 'dashboard';
 
@@ -5239,7 +5260,10 @@ function lazyLoadForRoute(route) {
   if (route === 'contacts' && !contactsLoaded) loadContacts();
   if (route === 'social') { if (!socialMediaLoaded) loadSocialMedia(); if (!productsLoaded) loadProducts(); }
   if (route === 'newsletter') { if (!newsletterLoaded) loadNewsletter(); }
-  if (route === 'fulfillment') {
+  if (route === 'pack') {
+    if (!ordersLoaded) loadOrders();
+  }
+  if (route === 'ship') {
     if (!ordersLoaded) loadOrders();
     if (!bundlesLoaded) loadBundles();
   }
@@ -7987,7 +8011,7 @@ function attachListeners() {
       ordersLoaded = true;
       renderOrders();
       if (selectedOrderId) renderOrderDetail(selectedOrderId);
-      if (currentRoute === 'fulfillment') renderPackQueue();
+      if (currentRoute === 'pack') renderPackQueue();
     }, function(err) {
       showToast('Error loading orders: ' + err.message, true);
     });
@@ -11249,7 +11273,8 @@ var BUNDLES_PATH = 'shirglassworks/admin/bundles';
 var bundles = {};
 var bundlesLoaded = false;
 var bundlesListener = null;
-var fulfillmentSubView = 'pack';
+var packSubView = 'queue';
+var shipSubView = 'deliver';
 var activeBundleId = null;
 var scanCamera = null;
 var scanInterval = null;
@@ -11261,30 +11286,42 @@ function loadBundles() {
   bundlesListener = db.ref(BUNDLES_PATH).limitToLast(50).on('value', function(snap) {
     bundles = snap.val() || {};
     bundlesLoaded = true;
-    if (currentRoute === 'fulfillment') {
-      if (fulfillmentSubView === 'bundles') renderBundlesView();
-      if (fulfillmentSubView === 'deliver') renderDeliverView();
+    if (currentRoute === 'ship') {
+      if (shipSubView === 'bundles') renderBundlesView();
+      if (shipSubView === 'deliver') renderDeliverView();
     }
   }, function(err) {
     showToast('Error loading bundles: ' + err.message, true);
   });
 }
 
-function switchFulfillmentSubView(view) {
-  fulfillmentSubView = view;
-  document.querySelectorAll('#fulfSubNav .view-tab').forEach(function(b) { b.classList.remove('active'); });
-  ['pack', 'scan', 'deliver', 'bundles'].forEach(function(v) {
-    var btn = document.getElementById('fulfSub' + v.charAt(0).toUpperCase() + v.slice(1));
-    var el = document.getElementById('fulf' + v.charAt(0).toUpperCase() + v.slice(1) + 'View');
+function switchPackSubView(view) {
+  packSubView = view;
+  document.querySelectorAll('#packSubNav .view-tab').forEach(function(b) { b.classList.remove('active'); });
+  var views = { queue: 'fulfPackView', scan: 'fulfScanView' };
+  Object.keys(views).forEach(function(v) {
+    var btn = document.getElementById('packSub' + v.charAt(0).toUpperCase() + v.slice(1));
+    var el = document.getElementById(views[v]);
     if (btn && v === view) btn.classList.add('active');
     if (el) el.style.display = v === view ? '' : 'none';
   });
-  // Stop camera if leaving scan/deliver
-  if (view !== 'scan' && view !== 'deliver') stopScanCamera();
-  // Render the selected sub-view
-  if (view === 'pack') renderPackQueue();
+  if (view !== 'scan') stopScanCamera();
+  if (view === 'queue') renderPackQueue();
   else if (view === 'scan') renderScanView();
-  else if (view === 'deliver') renderDeliverView();
+}
+
+function switchShipSubView(view) {
+  shipSubView = view;
+  document.querySelectorAll('#shipSubNav .view-tab').forEach(function(b) { b.classList.remove('active'); });
+  var views = { deliver: 'fulfDeliverView', bundles: 'fulfBundlesView' };
+  Object.keys(views).forEach(function(v) {
+    var btn = document.getElementById('shipSub' + v.charAt(0).toUpperCase() + v.slice(1));
+    var el = document.getElementById(views[v]);
+    if (btn && v === view) btn.classList.add('active');
+    if (el) el.style.display = v === view ? '' : 'none';
+  });
+  stopScanCamera();
+  if (view === 'deliver') renderDeliverView();
   else if (view === 'bundles') renderBundlesView();
 }
 
@@ -11307,12 +11344,16 @@ function renderPackQueue() {
     var status = o.status || 'placed';
     var itemNames = (o.items || []).map(function(it) { return it.name + ' x' + (it.qty || 1); }).join(', ');
     var custName = o.shipping ? esc(o.shipping.name || '') : '';
-    html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">' +
-      '<div>' +
-        '<div style="font-weight:600;font-family:monospace;">' + num + ' <span class="status-badge pill order-status ' + status + '">' + status.replace(/_/g, ' ') + '</span></div>' +
-        '<div style="font-size:0.85rem;color:var(--warm-gray);">' + custName + ' &mdash; ' + esc(itemNames) + '</div>' +
-      '</div>' +
-      '<div style="display:flex;gap:6px;">';
+    html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;margin-bottom:8px;">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">' +
+        '<div>' +
+          '<div style="font-weight:600;font-family:monospace;">' + num + ' <span class="status-badge pill order-status ' + status + '">' + status.replace(/_/g, ' ') + '</span></div>' +
+          '<div style="font-size:0.85rem;color:var(--warm-gray);">' + custName + ' &mdash; ' + esc(itemNames) + '</div>' +
+        '</div>' +
+        '<div style="display:flex;gap:6px;">';
+    if (status === 'ready') {
+      html += '<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 12px;" onclick="transitionOrder(\'' + esc(key) + '\', \'packing\')">Start Packing</button>';
+    }
     if (status === 'packing') {
       html += '<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 12px;" onclick="transitionOrder(\'' + esc(key) + '\', \'packed\')">Mark Packed</button>';
     }
@@ -11321,7 +11362,9 @@ function renderPackQueue() {
     }
     html += '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 12px;" onclick="openPirateShip(\'' + esc(key) + '\')">Pirate Ship &rarr;</button>' +
       '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 12px;" onclick="viewOrder(\'' + esc(key) + '\')">View</button>' +
-      '</div></div>';
+      '</div></div>' +
+      renderOrderProgress(status) +
+      '</div>';
   });
   html += '</div>';
   el.innerHTML = html;
@@ -11621,7 +11664,7 @@ function renderScanView() {
     '<div id="scanResult" style="display:none;margin-top:12px;"></div>' +
     '<div style="display:flex;gap:8px;justify-content:center;margin-top:12px;">' +
       '<button class="btn btn-secondary" id="scanManualBtn" style="display:none;" onclick="showManualOrderEntry()">Enter Order # Manually</button>' +
-      '<button class="btn btn-secondary" onclick="switchFulfillmentSubView(\'pack\')">Done Packing</button>' +
+      '<button class="btn btn-secondary" onclick="switchPackSubView(\'queue\')">Done Packing</button>' +
     '</div>' +
     '<div id="scanManualEntry" style="display:none;margin-top:12px;text-align:center;">' +
       '<input type="text" id="scanManualInput" placeholder="Order number (e.g. SGW-0042)" style="padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;width:200px;">' +
