@@ -1391,6 +1391,17 @@
       font-weight: 700;
       font-size: 0.85rem;
     }
+    .tm-category-group {
+      margin-bottom: 12px;
+    }
+    .tm-category-header {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--warm-gray);
+      padding: 8px 12px 4px;
+    }
     .tm-mission-header:hover {
       opacity: 0.85;
     }
@@ -21575,6 +21586,126 @@ function areMissionTasksDone(mission) {
 }
 
 // --- Render ---
+function renderMissionCard(mission) {
+  var mp = testingModeState.missionProgress[mission.id] || { progress: {}, reflections: {} };
+  var accomplished = isMissionAccomplished(mission.id);
+  var isExpanded = testingModeState.expandedMissionId === mission.id;
+  var hasPreReflection = !!(mp.reflections && mp.reflections.pre);
+  var completedCount = 0;
+  var requiredCount = 0;
+  mission.tasks.forEach(function(t, i) {
+    if (!t.optional) {
+      requiredCount++;
+      if (mp.progress[i] === true) completedCount++;
+    }
+  });
+  var allRequiredDone = requiredCount > 0 && completedCount === requiredCount;
+  var h = '';
+
+  // Mission card header — always clickable
+  var cardClasses = 'tm-mission-card';
+  if (accomplished) cardClasses += ' accomplished';
+  if (allRequiredDone && !accomplished) cardClasses += ' tm-pulse';
+  h += '<div class="' + cardClasses + '">';
+
+  // Clickable header
+  h += '<div class="tm-mission-header" onclick="toggleMissionExpand(\'' + mission.id + '\')" style="cursor:pointer;display:flex;align-items:center;gap:8px;">';
+  h += '<span style="flex-shrink:0;font-size:0.75rem;color:var(--warm-gray);">' + (isExpanded ? '▼' : '▶') + '</span>';
+  h += '<span class="tm-mission-title" style="flex:1;margin:0;">' + escapeHtml(mission.title) + '</span>';
+  if (accomplished) {
+    h += '<span class="tm-mission-status tm-status-done">✅ Done</span>';
+  } else if (hasPreReflection) {
+    h += '<span class="tm-mission-status tm-status-active">⚡ ' + completedCount + '/' + requiredCount + '</span>';
+  } else {
+    h += '<span class="tm-mission-status tm-status-new">New</span>';
+  }
+  h += '</div>';
+
+  // Collapsed — stop here
+  if (!isExpanded) {
+    h += '</div>';
+    return h;
+  }
+
+  // Expanded content
+  h += '<div class="tm-scenario">' + escapeHtml(mission.scenario) + '</div>';
+
+  // Precondition notice
+  if (mission.preconditionNotice) {
+    h += '<div class="tm-precondition-notice">' + escapeHtml(mission.preconditionNotice) + '</div>';
+  }
+
+  // Pre-prompt (if not yet started)
+  if (!hasPreReflection) {
+    h += '<div class="tm-prompt-area">';
+    h += '<label>' + escapeHtml(mission.prePrompt) + '</label>';
+    h += '<textarea id="tmPrePrompt" placeholder="Share your thinking..."></textarea>';
+    h += '<button onclick="handlePrePromptSubmit(\'' + mission.id + '\')">Submit & Start</button>';
+    h += '</div>';
+    h += '</div>';
+    return h;
+  }
+
+  // Tasks
+  h += '<ul class="tm-task-list">';
+  mission.tasks.forEach(function(task, idx) {
+    var checked = mp.progress[idx] === true;
+    var isManual = !task.trigger;
+    var isOptional = !!task.optional;
+    h += '<li class="tm-task-item' + (checked ? ' checked' : '') + (isOptional ? ' tm-optional' : '') + '">';
+    if (isManual && !checked && !accomplished) {
+      h += '<span style="flex-shrink:0;width:20px;text-align:center;cursor:pointer;" onclick="toggleManualTask(\'' + mission.id + '\',' + idx + ')">⬜</span>';
+    } else {
+      h += '<span style="flex-shrink:0;width:20px;text-align:center;">' + (checked ? '✅' : '⬜') + '</span>';
+    }
+    h += '<span class="tm-task-text">' + escapeHtml(task.text) + (isOptional ? ' <em>(optional)</em>' : '') + '</span>';
+    if (!accomplished) {
+      h += '<button class="tm-task-hint-btn" onclick="openAssistant(\'' + mission.id + '\',' + idx + ')" title="Ask for a hint">?</button>';
+    }
+    h += '</li>';
+  });
+  h += '</ul>';
+
+  // Assistant area
+  if (testingModeState.assistantTaskIdx !== null && testingModeState.expandedMissionId === mission.id && !accomplished) {
+    h += '<div class="tm-assistant-area">';
+    h += '<div class="tm-assistant-label">Studio Assistant — Task ' + (testingModeState.assistantTaskIdx + 1) + '</div>';
+    testingModeState.assistantMessages.forEach(function(msg) {
+      h += '<div class="tm-assistant-response" style="' + (msg.role === 'user' ? 'color:var(--warm-gray);font-style:italic;' : '') + '">';
+      h += msg.role === 'user' ? '→ ' + escapeHtml(msg.text) : msg.text;
+      h += '</div>';
+    });
+    if (testingModeState.assistantLoading) {
+      h += '<div class="tm-typing-dots"><span></span><span></span><span></span></div>';
+    }
+    h += '<div class="tm-assistant-input-row">';
+    h += '<input type="text" id="tmAssistantInput" placeholder="Ask a question..." onkeydown="if(event.key===\'Enter\')askStudioAssistant()">';
+    h += '<button onclick="askStudioAssistant()" ' + (testingModeState.assistantLoading ? 'disabled' : '') + '>Ask</button>';
+    h += '</div>';
+    h += '</div>';
+  }
+
+  // Post-prompt (all required tasks done, not yet accomplished)
+  if (allRequiredDone && !accomplished) {
+    h += '<div class="tm-prompt-area">';
+    h += '<label>' + escapeHtml(mission.postPrompt) + '</label>';
+    h += '<textarea id="tmPostPrompt" placeholder="Your feedback..."></textarea>';
+    h += '<button onclick="handlePostPromptSubmit(\'' + mission.id + '\')">Submit Feedback</button>';
+    h += '</div>';
+  }
+
+  h += '</div>';
+  return h;
+}
+
+var MISSION_CATEGORIES = [
+  { key: 'Selling', emoji: '🛒' },
+  { key: 'Making', emoji: '🔨' },
+  { key: 'Shipping', emoji: '📦' },
+  { key: 'Marketing', emoji: '📣' },
+  { key: 'Managing', emoji: '🗂️' }
+];
+
 function renderTestingMode() {
   var body = document.getElementById('testingModeBody');
   var footer = document.getElementById('testingModeFooter');
@@ -21583,116 +21714,35 @@ function renderTestingMode() {
     footer.innerHTML = '';
     return;
   }
-  var html = '';
-  testingMissions.forEach(function(mission) {
-    var mp = testingModeState.missionProgress[mission.id] || { progress: {}, reflections: {} };
-    var accomplished = isMissionAccomplished(mission.id);
-    var isExpanded = testingModeState.expandedMissionId === mission.id;
-    var hasPreReflection = !!(mp.reflections && mp.reflections.pre);
-    var completedCount = 0;
-    var requiredCount = 0;
-    mission.tasks.forEach(function(t, i) {
-      if (!t.optional) {
-        requiredCount++;
-        if (mp.progress[i] === true) completedCount++;
-      }
-    });
-    var allRequiredDone = requiredCount > 0 && completedCount === requiredCount;
 
-    // Mission card header — always clickable
-    var cardClasses = 'tm-mission-card';
-    if (accomplished) cardClasses += ' accomplished';
-    if (allRequiredDone && !accomplished) cardClasses += ' tm-pulse';
-    html += '<div class="' + cardClasses + '">';
-
-    // Clickable header
-    html += '<div class="tm-mission-header" onclick="toggleMissionExpand(\'' + mission.id + '\')" style="cursor:pointer;display:flex;align-items:center;gap:8px;">';
-    html += '<span style="flex-shrink:0;font-size:0.75rem;color:var(--warm-gray);">' + (isExpanded ? '▼' : '▶') + '</span>';
-    html += '<span class="tm-mission-title" style="flex:1;margin:0;">' + escapeHtml(mission.title) + '</span>';
-    if (accomplished) {
-      html += '<span class="tm-mission-status tm-status-done">✅ Done</span>';
-    } else if (hasPreReflection) {
-      html += '<span class="tm-mission-status tm-status-active">⚡ ' + completedCount + '/' + requiredCount + '</span>';
+  // Group missions by category
+  var grouped = {};
+  var uncategorized = [];
+  testingMissions.forEach(function(m) {
+    if (m.category) {
+      if (!grouped[m.category]) grouped[m.category] = [];
+      grouped[m.category].push(m);
     } else {
-      html += '<span class="tm-mission-status tm-status-new">New</span>';
+      uncategorized.push(m);
     }
-    html += '</div>';
+  });
 
-    // Collapsed — stop here
-    if (!isExpanded) {
-      html += '</div>';
-      return;
-    }
+  var html = '';
 
-    // Expanded content
-    html += '<div class="tm-scenario">' + escapeHtml(mission.scenario) + '</div>';
-
-    // Precondition notice
-    if (mission.preconditionNotice) {
-      html += '<div class="tm-precondition-notice">' + escapeHtml(mission.preconditionNotice) + '</div>';
-    }
-
-    // Pre-prompt (if not yet started)
-    if (!hasPreReflection) {
-      html += '<div class="tm-prompt-area">';
-      html += '<label>' + escapeHtml(mission.prePrompt) + '</label>';
-      html += '<textarea id="tmPrePrompt" placeholder="Share your thinking..."></textarea>';
-      html += '<button onclick="handlePrePromptSubmit(\'' + mission.id + '\')">Submit & Start</button>';
-      html += '</div>';
-      html += '</div>';
-      return;
-    }
-
-    // Tasks
-    html += '<ul class="tm-task-list">';
-    mission.tasks.forEach(function(task, idx) {
-      var checked = mp.progress[idx] === true;
-      var isManual = !task.trigger;
-      var isOptional = !!task.optional;
-      html += '<li class="tm-task-item' + (checked ? ' checked' : '') + (isOptional ? ' tm-optional' : '') + '">';
-      if (isManual && !checked && !accomplished) {
-        html += '<span style="flex-shrink:0;width:20px;text-align:center;cursor:pointer;" onclick="toggleManualTask(\'' + mission.id + '\',' + idx + ')">⬜</span>';
-      } else {
-        html += '<span style="flex-shrink:0;width:20px;text-align:center;">' + (checked ? '✅' : '⬜') + '</span>';
-      }
-      html += '<span class="tm-task-text">' + escapeHtml(task.text) + (isOptional ? ' <em>(optional)</em>' : '') + '</span>';
-      if (!accomplished) {
-        html += '<button class="tm-task-hint-btn" onclick="openAssistant(\'' + mission.id + '\',' + idx + ')" title="Ask for a hint">?</button>';
-      }
-      html += '</li>';
+  // Render each category that has missions
+  MISSION_CATEGORIES.forEach(function(cat) {
+    if (!grouped[cat.key] || !grouped[cat.key].length) return;
+    html += '<div class="tm-category-group">';
+    html += '<div class="tm-category-header">' + cat.emoji + ' ' + cat.key + '</div>';
+    grouped[cat.key].forEach(function(mission) {
+      html += renderMissionCard(mission);
     });
-    html += '</ul>';
-
-    // Assistant area
-    if (testingModeState.assistantTaskIdx !== null && testingModeState.expandedMissionId === mission.id && !accomplished) {
-      var taskCtx = mission.tasks[testingModeState.assistantTaskIdx];
-      html += '<div class="tm-assistant-area">';
-      html += '<div class="tm-assistant-label">Studio Assistant — Task ' + (testingModeState.assistantTaskIdx + 1) + '</div>';
-      testingModeState.assistantMessages.forEach(function(msg) {
-        html += '<div class="tm-assistant-response" style="' + (msg.role === 'user' ? 'color:var(--warm-gray);font-style:italic;' : '') + '">';
-        html += msg.role === 'user' ? '→ ' + escapeHtml(msg.text) : msg.text;
-        html += '</div>';
-      });
-      if (testingModeState.assistantLoading) {
-        html += '<div class="tm-typing-dots"><span></span><span></span><span></span></div>';
-      }
-      html += '<div class="tm-assistant-input-row">';
-      html += '<input type="text" id="tmAssistantInput" placeholder="Ask a question..." onkeydown="if(event.key===\'Enter\')askStudioAssistant()">';
-      html += '<button onclick="askStudioAssistant()" ' + (testingModeState.assistantLoading ? 'disabled' : '') + '>Ask</button>';
-      html += '</div>';
-      html += '</div>';
-    }
-
-    // Post-prompt (all required tasks done, not yet accomplished)
-    if (allRequiredDone && !accomplished) {
-      html += '<div class="tm-prompt-area">';
-      html += '<label>' + escapeHtml(mission.postPrompt) + '</label>';
-      html += '<textarea id="tmPostPrompt" placeholder="Your feedback..."></textarea>';
-      html += '<button onclick="handlePostPromptSubmit(\'' + mission.id + '\')">Submit Feedback</button>';
-      html += '</div>';
-    }
-
     html += '</div>';
+  });
+
+  // Uncategorized missions (backwards compat)
+  uncategorized.forEach(function(mission) {
+    html += renderMissionCard(mission);
   });
 
   body.innerHTML = html;
