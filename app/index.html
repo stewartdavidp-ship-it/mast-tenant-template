@@ -3547,6 +3547,51 @@
     body.dark-mode .nl-ai-panel { background:#1e1e1e; border-color:#444; }
     body.dark-mode .nl-img-picker { background:#1e1e1e; }
     body.dark-mode .nl-section-prompt { background:rgba(196,133,60,0.08); }
+
+    /* ===== Newsletter Grid Canvas ===== */
+    .nl-grid-canvas { display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:4px 0; min-height:300px; }
+    .nl-grid-card { background:var(--card-bg); border:1px solid var(--border); border-radius:10px; overflow:hidden; cursor:pointer; transition:box-shadow 0.2s, border-color 0.2s, transform 0.15s, opacity 0.15s; display:flex; flex-direction:column; position:relative; }
+    .nl-grid-card:hover { border-color:var(--amber); box-shadow:0 2px 12px rgba(196,133,60,0.15); }
+    .nl-grid-card.dragging { opacity:0.4; transform:scale(0.97); }
+    .nl-grid-card.drag-over { border-color:var(--amber); border-style:dashed; border-width:2px; }
+    .nl-grid-card.size-full, .nl-grid-card.size-large { grid-column:span 2; }
+    .nl-grid-card.size-medium, .nl-grid-card.size-small { grid-column:span 1; }
+    .nl-grid-card.excluded { opacity:0.45; }
+    .nl-grid-card-header { display:flex; align-items:center; padding:10px 14px; gap:8px; border-bottom:1px solid var(--border); min-height:40px; }
+    .nl-grid-card-icon { font-size:1rem; flex-shrink:0; }
+    .nl-grid-card-title { flex:1; font-size:0.85rem; font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .nl-grid-card-body { flex:1; padding:12px 14px; font-size:0.82rem; line-height:1.5; color:var(--text-secondary); overflow:hidden; position:relative; min-height:60px; }
+    .nl-grid-card-body.size-small { min-height:40px; }
+    .nl-grid-card-body.size-large, .nl-grid-card-body.size-full { min-height:80px; }
+    .nl-grid-card-body::after { content:''; position:absolute; bottom:0; left:0; right:0; height:24px; background:linear-gradient(transparent, var(--card-bg)); pointer-events:none; }
+    .nl-grid-card-body .placeholder { font-style:italic; opacity:0.4; }
+    .nl-grid-card-images { display:flex; gap:4px; padding:0 14px 10px; }
+    .nl-grid-card-images img { width:40px; height:40px; object-fit:cover; border-radius:4px; border:1px solid var(--border); }
+    .nl-grid-card-footer { display:flex; align-items:center; justify-content:space-between; padding:8px 14px; border-top:1px solid var(--border); font-size:0.72rem; color:var(--text-secondary); }
+    .nl-grid-card-chars { font-size:0.7rem; padding:2px 6px; border-radius:8px; }
+    .nl-grid-card-chars.near-limit { color:var(--amber); background:rgba(196,133,60,0.12); }
+    .nl-grid-card-chars.at-limit { color:#dc3545; background:rgba(220,53,69,0.12); }
+    .nl-grid-card-size { font-size:0.65rem; padding:2px 6px; border-radius:8px; text-transform:uppercase; font-weight:600; letter-spacing:0.03em; background:rgba(196,133,60,0.08); color:var(--amber); }
+    .nl-grid-card-include { width:14px; height:14px; accent-color:var(--amber); cursor:pointer; flex-shrink:0; }
+    .nl-view-toggle { display:inline-flex; gap:2px; background:var(--surface); border-radius:6px; padding:2px; }
+    .nl-view-toggle button { font-size:0.75rem; padding:4px 10px; border:none; background:transparent; color:var(--text-secondary); border-radius:4px; cursor:pointer; }
+    .nl-view-toggle button.active { background:var(--amber); color:#fff; }
+    /* Card editor modal extras */
+    .nl-editor-size-btn { font-size:0.75rem; padding:4px 10px; border:1px solid var(--border); background:transparent; color:var(--text-secondary); border-radius:6px; cursor:pointer; transition:all 0.15s; }
+    .nl-editor-size-btn:hover { border-color:var(--amber); }
+    .nl-editor-size-btn.active { background:var(--amber); color:#fff; border-color:var(--amber); }
+    .nl-editor-char-counter { text-align:right; font-size:0.75rem; color:var(--text-secondary); margin-top:4px; }
+    /* Dark mode grid */
+    body.dark-mode .nl-grid-card { background:#1e1e1e; border-color:#333; }
+    body.dark-mode .nl-grid-card:hover { border-color:var(--amber); }
+    body.dark-mode .nl-grid-card-header { border-bottom-color:#333; }
+    body.dark-mode .nl-grid-card-footer { border-top-color:#333; }
+    body.dark-mode .nl-grid-card-body::after { background:linear-gradient(transparent, #1e1e1e); }
+    body.dark-mode .nl-editor-size-btn { border-color:#444; color:#aaa; }
+    @media (max-width:768px) {
+      .nl-grid-canvas { grid-template-columns:1fr; }
+      .nl-grid-card.size-full, .nl-grid-card.size-large { grid-column:span 1; }
+    }
   </style>
 </head>
 <body>
@@ -20579,6 +20624,26 @@ var nlCurrentIssue = null;
 var nlExpandedSections = {};
 var nlAiResults = {};
 var nlImagePickerSection = null;
+var nlViewMode = 'grid';
+var nlDragSourceId = null;
+
+var NL_CARD_SIZE_MAP = {
+  'studio-update':   { cardSize: 'medium', gridWidth: 1 },
+  'new-products':    { cardSize: 'medium', gridWidth: 1 },
+  'event-recap':     { cardSize: 'medium', gridWidth: 1 },
+  'upcoming-events': { cardSize: 'medium', gridWidth: 1 },
+  'behind-process':  { cardSize: 'large',  gridWidth: 2 },
+  'featured-piece':  { cardSize: 'large',  gridWidth: 2 },
+  'from-studio':     { cardSize: 'large',  gridWidth: 2 },
+  'custom':          { cardSize: 'medium', gridWidth: 1 }
+};
+
+var NL_CHAR_LIMITS = {
+  'small':  150,
+  'medium': 300,
+  'large':  600,
+  'full':   800
+};
 
 var NL_DEFAULT_SECTIONS = [
   { type: 'studio-update', title: 'What We\'ve Been Making', guidedPrompt: 'What has the studio been working on lately? Any new techniques, materials, or directions?' },
@@ -20682,8 +20747,12 @@ async function nlCreateIssue() {
 
     // Pre-populate default sections
     var sections = {};
+    var gridCol = 0, gridRow = 0;
     NL_DEFAULT_SECTIONS.forEach(function(def, idx) {
       var secId = db.ref().push().key;
+      var sizeInfo = NL_CARD_SIZE_MAP[def.type] || NL_CARD_SIZE_MAP['custom'];
+      // Auto-pack into 2-column grid
+      if (sizeInfo.gridWidth === 2 && gridCol !== 0) { gridRow++; gridCol = 0; }
       sections[secId] = {
         id: secId,
         type: def.type,
@@ -20695,8 +20764,14 @@ async function nlCreateIssue() {
         usedAI: false,
         images: [],
         order: idx,
-        included: true
+        included: true,
+        cardSize: sizeInfo.cardSize,
+        gridWidth: sizeInfo.gridWidth,
+        gridCol: gridCol,
+        gridRow: gridRow
       };
+      gridCol += sizeInfo.gridWidth;
+      if (gridCol >= 2) { gridCol = 0; gridRow++; }
     });
 
     issueData.sections = sections;
@@ -20719,6 +20794,33 @@ function nlOpenIssue(issueId) {
   nlCurrentView = 'compose';
   nlExpandedSections = {};
   nlAiResults = {};
+  // Migrate legacy issues that lack grid fields
+  if (nlCurrentIssue.sections) {
+    var needsMigration = false;
+    var sections = Object.values(nlCurrentIssue.sections);
+    sections.forEach(function(sec) {
+      if (sec.cardSize === undefined) {
+        needsMigration = true;
+        var sizeInfo = NL_CARD_SIZE_MAP[sec.type] || NL_CARD_SIZE_MAP['custom'];
+        sec.cardSize = sizeInfo.cardSize;
+        sec.gridWidth = sizeInfo.gridWidth;
+      }
+    });
+    if (needsMigration) {
+      sections.sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
+      nlRepackGrid(sections);
+      // Save migration to Firebase
+      var fbUpdates = {};
+      sections.forEach(function(sec) {
+        var prefix = 'shirglassworks/newsletter/issues/' + issueId + '/sections/' + sec.id + '/';
+        fbUpdates[prefix + 'cardSize'] = sec.cardSize;
+        fbUpdates[prefix + 'gridWidth'] = sec.gridWidth;
+        fbUpdates[prefix + 'gridCol'] = sec.gridCol;
+        fbUpdates[prefix + 'gridRow'] = sec.gridRow;
+      });
+      db.ref().update(fbUpdates).catch(function(err) { console.error('Grid migration error:', err); });
+    }
+  }
   renderNLCompose();
 }
 
@@ -20729,86 +20831,122 @@ function renderNLCompose() {
 
   var sections = issue.sections ? Object.keys(issue.sections).map(function(k) { var s = issue.sections[k]; s.id = s.id || k; return s; }).sort(function(a, b) { return (a.order || 0) - (b.order || 0); }) : [];
 
-  var html = '<div style="margin-bottom:16px;">' +
+  var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">' +
+    '<div style="display:flex;align-items:center;gap:12px;">' +
     '<button class="btn btn-outline" onclick="nlBackToList()" style="font-size:0.85rem;">← Back to Issues</button>' +
-    '<span class="nl-status-badge ' + (issue.status || 'draft') + '" style="margin-left:12px;">' + (issue.status || 'draft') + '</span>' +
+    '<span class="nl-status-badge ' + (issue.status || 'draft') + '">' + (issue.status || 'draft') + '</span>' +
     '</div>' +
+    '<div class="nl-view-toggle">' +
+    '<button class="' + (nlViewMode !== 'list' ? 'active' : '') + '" onclick="nlSetViewMode(\'grid\')">Grid</button>' +
+    '<button class="' + (nlViewMode === 'list' ? 'active' : '') + '" onclick="nlSetViewMode(\'list\')">List</button>' +
+    '</div></div>' +
     '<div class="nl-compose-header">' +
     '<span style="font-weight:600;color:var(--text-secondary);white-space:nowrap;">#' + (issue.issueNumber || '?') + '</span>' +
     '<input type="text" value="' + (issue.title || '').replace(/"/g, '&quot;') + '" placeholder="Issue title..." onchange="nlUpdateTitle(this.value)" />' +
     '</div>';
 
-  // Section cards
-  sections.forEach(function(sec) {
-    var isExpanded = nlExpandedSections[sec.id];
-    var contentStatus = sec.finalContent ? 'ready' : (sec.rawInput ? 'has-draft' : 'empty');
-    var statusLabel = sec.finalContent ? 'Ready' : (sec.rawInput ? 'Draft' : 'Empty');
-    var aiResult = nlAiResults[sec.id];
-
-    html += '<div class="nl-section-card">' +
-      '<div class="nl-section-header" onclick="nlToggleSection(\'' + sec.id + '\')">' +
-      '<span class="nl-section-drag">⠿</span>' +
-      '<input type="checkbox" class="nl-section-include" ' + (sec.included ? 'checked' : '') +
-      ' onclick="event.stopPropagation(); nlToggleInclude(\'' + sec.id + '\', this.checked)" title="Include in issue" />' +
-      '<input type="text" class="nl-section-title-input" value="' + (sec.title || '').replace(/"/g, '&quot;') + '"' +
-      ' onclick="event.stopPropagation()" onchange="nlUpdateSectionTitle(\'' + sec.id + '\', this.value)" />' +
-      '<span class="nl-section-status ' + contentStatus + '">' + statusLabel + '</span>' +
-      '<span class="nl-section-toggle ' + (isExpanded ? 'open' : '') + '">▶</span>' +
-      '</div>';
-
-    if (isExpanded) {
-      html += '<div class="nl-section-body">';
-      if (sec.guidedPrompt) {
-        html += '<div class="nl-section-prompt">' + sec.guidedPrompt + '</div>';
-      }
-
-      // Check if we're showing AI comparison
-      if (aiResult && !sec.finalContent) {
-        html += '<div class="nl-ai-compare">' +
-          '<div class="nl-ai-panel original"><div class="nl-ai-panel-label">Your Original</div>' + nlEscHtml(sec.rawInput) + '</div>' +
-          '<div class="nl-ai-panel polished"><div class="nl-ai-panel-label">AI Polished</div>' + nlEscHtml(aiResult) + '</div>' +
-          '</div>' +
-          '<div class="nl-ai-actions">' +
-          '<button class="btn btn-outline" onclick="nlPickVersion(\'' + sec.id + '\', \'original\')">Use Original</button>' +
-          '<button class="btn btn-primary" onclick="nlPickVersion(\'' + sec.id + '\', \'ai\')">Use AI Version</button>' +
-          '</div>';
-      } else if (sec.finalContent) {
-        // Final content editing
-        html += '<textarea class="nl-section-textarea" id="nlFinal_' + sec.id + '" onchange="nlUpdateFinalContent(\'' + sec.id + '\', this.value)">' +
-          nlEscHtml(sec.finalContent) + '</textarea>';
-        html += '<div style="margin-top:8px;"><button class="btn btn-outline" style="font-size:0.8rem;" onclick="nlResetSection(\'' + sec.id + '\')">Reset to Draft</button></div>';
-      } else {
-        // Raw input
-        html += '<textarea class="nl-section-textarea" id="nlRaw_' + sec.id + '" placeholder="Write your content here..." onchange="nlUpdateRawInput(\'' + sec.id + '\', this.value)">' +
-          nlEscHtml(sec.rawInput || '') + '</textarea>';
-        var hasContent = !!(sec.rawInput && sec.rawInput.trim());
-        html += '<div style="margin-top:8px;display:flex;gap:8px;align-items:center;">' +
-          '<button class="btn btn-outline" style="font-size:0.8rem;" ' + (hasContent ? '' : 'disabled') +
-          ' onclick="nlPolishSection(\'' + sec.id + '\')">✨ Polish with AI</button>';
-        if (hasContent) {
-          html += '<button class="btn btn-outline" style="font-size:0.8rem;" onclick="nlUseAsIs(\'' + sec.id + '\')">Use as-is</button>';
+  if (nlViewMode === 'list') {
+    // ===== LIST VIEW (original) =====
+    sections.forEach(function(sec) {
+      var isExpanded = nlExpandedSections[sec.id];
+      var contentStatus = sec.finalContent ? 'ready' : (sec.rawInput ? 'has-draft' : 'empty');
+      var statusLabel = sec.finalContent ? 'Ready' : (sec.rawInput ? 'Draft' : 'Empty');
+      var aiResult = nlAiResults[sec.id];
+      html += '<div class="nl-section-card">' +
+        '<div class="nl-section-header" onclick="nlToggleSection(\'' + sec.id + '\')">' +
+        '<span class="nl-section-drag">⠿</span>' +
+        '<input type="checkbox" class="nl-section-include" ' + (sec.included ? 'checked' : '') +
+        ' onclick="event.stopPropagation(); nlToggleInclude(\'' + sec.id + '\', this.checked)" title="Include in issue" />' +
+        '<input type="text" class="nl-section-title-input" value="' + (sec.title || '').replace(/"/g, '&quot;') + '"' +
+        ' onclick="event.stopPropagation()" onchange="nlUpdateSectionTitle(\'' + sec.id + '\', this.value)" />' +
+        '<span class="nl-section-status ' + contentStatus + '">' + statusLabel + '</span>' +
+        '<span class="nl-section-toggle ' + (isExpanded ? 'open' : '') + '">▶</span>' +
+        '</div>';
+      if (isExpanded) {
+        html += '<div class="nl-section-body">';
+        if (sec.guidedPrompt) html += '<div class="nl-section-prompt">' + sec.guidedPrompt + '</div>';
+        if (aiResult && !sec.finalContent) {
+          html += '<div class="nl-ai-compare">' +
+            '<div class="nl-ai-panel original"><div class="nl-ai-panel-label">Your Original</div>' + nlEscHtml(sec.rawInput) + '</div>' +
+            '<div class="nl-ai-panel polished"><div class="nl-ai-panel-label">AI Polished</div>' + nlEscHtml(aiResult) + '</div></div>' +
+            '<div class="nl-ai-actions"><button class="btn btn-outline" onclick="nlPickVersion(\'' + sec.id + '\', \'original\')">Use Original</button>' +
+            '<button class="btn btn-primary" onclick="nlPickVersion(\'' + sec.id + '\', \'ai\')">Use AI Version</button></div>';
+        } else if (sec.finalContent) {
+          html += '<textarea class="nl-section-textarea" id="nlFinal_' + sec.id + '" onchange="nlUpdateFinalContent(\'' + sec.id + '\', this.value)">' + nlEscHtml(sec.finalContent) + '</textarea>';
+          html += '<div style="margin-top:8px;"><button class="btn btn-outline" style="font-size:0.8rem;" onclick="nlResetSection(\'' + sec.id + '\')">Reset to Draft</button></div>';
+        } else {
+          html += '<textarea class="nl-section-textarea" id="nlRaw_' + sec.id + '" placeholder="Write your content here..." onchange="nlUpdateRawInput(\'' + sec.id + '\', this.value)">' + nlEscHtml(sec.rawInput || '') + '</textarea>';
+          var hasContent = !!(sec.rawInput && sec.rawInput.trim());
+          html += '<div style="margin-top:8px;display:flex;gap:8px;align-items:center;">' +
+            '<button class="btn btn-outline" style="font-size:0.8rem;" ' + (hasContent ? '' : 'disabled') + ' onclick="nlPolishSection(\'' + sec.id + '\')">✨ Polish with AI</button>';
+          if (hasContent) html += '<button class="btn btn-outline" style="font-size:0.8rem;" onclick="nlUseAsIs(\'' + sec.id + '\')">Use as-is</button>';
+          html += '</div>';
         }
+        var images = sec.images || [];
+        html += '<div class="nl-section-images">';
+        images.forEach(function(imgId, idx) {
+          var img = imageLibrary ? imageLibrary[imgId] : null;
+          if (img) html += '<div style="position:relative;"><img class="nl-section-img-thumb" src="' + img.url + '" alt="" /><span style="position:absolute;top:-4px;right:-4px;cursor:pointer;background:var(--danger);color:#fff;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;font-size:0.6rem;" onclick="nlRemoveImage(\'' + sec.id + '\',' + idx + ')">×</span></div>';
+        });
+        if (images.length < 3) html += '<div class="nl-section-img-add" onclick="nlOpenImagePicker(\'' + sec.id + '\')">+</div>';
+        html += '</div></div>';
+      }
+      html += '</div>';
+    });
+  } else {
+    // ===== GRID VIEW =====
+    html += '<div class="nl-grid-canvas" id="nlGridCanvas">';
+    sections.forEach(function(sec) {
+      var sizeClass = 'size-' + (sec.cardSize || 'medium');
+      var content = sec.finalContent || sec.rawInput || '';
+      var charLimit = NL_CHAR_LIMITS[sec.cardSize || 'medium'];
+      var charCount = content.length;
+      var charClass = charCount >= charLimit ? 'at-limit' : charCount >= charLimit * 0.8 ? 'near-limit' : '';
+      var statusLabel = sec.finalContent ? 'Ready' : (sec.rawInput ? 'Draft' : 'Empty');
+      var statusClass = sec.finalContent ? 'ready' : (sec.rawInput ? 'has-draft' : 'empty');
+      var typeIcon = nlGetTypeIcon(sec.type);
+      var preview = nlTruncatePreview(content, sec.cardSize || 'medium');
+
+      html += '<div class="nl-grid-card ' + sizeClass + (!sec.included ? ' excluded' : '') + '"' +
+        ' draggable="true" data-section-id="' + sec.id + '"' +
+        ' ondragstart="nlDragStart(event,\'' + sec.id + '\')"' +
+        ' ondragend="nlDragEnd(event)"' +
+        ' ondragover="nlDragOver(event)"' +
+        ' ondrop="nlDrop(event,\'' + sec.id + '\')"' +
+        ' onclick="nlOpenCardEditor(\'' + sec.id + '\')">';
+
+      // Header
+      html += '<div class="nl-grid-card-header" onclick="event.stopPropagation()">' +
+        '<input type="checkbox" class="nl-grid-card-include" ' + (sec.included ? 'checked' : '') +
+        ' onclick="event.stopPropagation(); nlToggleInclude(\'' + sec.id + '\', this.checked)" />' +
+        '<span class="nl-grid-card-icon">' + typeIcon + '</span>' +
+        '<span class="nl-grid-card-title">' + nlEscHtml(sec.title) + '</span>' +
+        '<span class="nl-section-status ' + statusClass + '">' + statusLabel + '</span></div>';
+
+      // Body
+      html += '<div class="nl-grid-card-body ' + sizeClass + '">' +
+        (preview ? nlEscHtml(preview) : '<span class="placeholder">Click to add content...</span>') + '</div>';
+
+      // Images
+      var imgs = sec.images || [];
+      if (imgs.length > 0) {
+        html += '<div class="nl-grid-card-images">';
+        imgs.forEach(function(imgId) {
+          var img = imageLibrary ? imageLibrary[imgId] : null;
+          if (img) html += '<img src="' + img.url + '" alt="" />';
+        });
         html += '</div>';
       }
 
-      // Section images
-      var images = sec.images || [];
-      html += '<div class="nl-section-images">';
-      images.forEach(function(imgId, idx) {
-        var img = imageLibrary ? imageLibrary[imgId] : null;
-        if (img) {
-          html += '<div style="position:relative;"><img class="nl-section-img-thumb" src="' + img.url + '" alt="" />' +
-            '<span style="position:absolute;top:-4px;right:-4px;cursor:pointer;background:var(--danger);color:#fff;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;font-size:0.6rem;" onclick="nlRemoveImage(\'' + sec.id + '\',' + idx + ')">×</span></div>';
-        }
-      });
-      if (images.length < 3) {
-        html += '<div class="nl-section-img-add" onclick="nlOpenImagePicker(\'' + sec.id + '\')">+</div>';
-      }
+      // Footer
+      html += '<div class="nl-grid-card-footer">' +
+        '<span class="nl-grid-card-chars ' + charClass + '">' + charCount + '/' + charLimit + '</span>' +
+        '<span class="nl-grid-card-size">' + (sec.cardSize || 'medium') + '</span></div>';
+
       html += '</div>';
-      html += '</div>'; // end section body
-    }
-    html += '</div>'; // end section card
-  });
+    });
+    html += '</div>';
+  }
 
   // Add section button
   html += '<div style="text-align:center;margin:16px 0;">' +
@@ -20827,6 +20965,218 @@ function renderNLCompose() {
 function nlEscHtml(str) {
   if (!str) return '';
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/\n/g, '<br>');
+}
+
+// ===== GRID VIEW HELPERS =====
+function nlSetViewMode(mode) { nlViewMode = mode; renderNLCompose(); }
+
+function nlGetTypeIcon(type) {
+  var icons = { 'studio-update':'🔥', 'new-products':'✨', 'event-recap':'🎪', 'upcoming-events':'📅', 'behind-process':'🔧', 'featured-piece':'💎', 'from-studio':'💌', 'custom':'📝' };
+  return icons[type] || '📝';
+}
+
+function nlTruncatePreview(content, cardSize) {
+  if (!content) return '';
+  var maxPreview = { small:60, medium:120, large:200, full:300 };
+  var limit = maxPreview[cardSize] || 120;
+  var text = content.replace(/\n/g, ' ');
+  return text.length > limit ? text.substring(0, limit) + '...' : text;
+}
+
+function nlRepackGrid(sections) {
+  var currentRow = 0, currentCol = 0;
+  sections.forEach(function(sec, idx) {
+    sec.order = idx;
+    var width = sec.gridWidth || (NL_CARD_SIZE_MAP[sec.type] || NL_CARD_SIZE_MAP['custom']).gridWidth;
+    if (width >= 2 && currentCol !== 0) { currentRow++; currentCol = 0; }
+    sec.gridCol = currentCol;
+    sec.gridRow = currentRow;
+    currentCol += width;
+    if (currentCol >= 2) { currentCol = 0; currentRow++; }
+  });
+}
+
+// ===== DRAG AND DROP =====
+function nlDragStart(e, secId) {
+  nlDragSourceId = secId;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', secId);
+  setTimeout(function() {
+    var el = document.querySelector('[data-section-id="' + secId + '"]');
+    if (el) el.classList.add('dragging');
+  }, 0);
+}
+
+function nlDragEnd(e) {
+  nlDragSourceId = null;
+  document.querySelectorAll('.nl-grid-card').forEach(function(card) {
+    card.classList.remove('dragging', 'drag-over');
+  });
+}
+
+function nlDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  var card = e.target.closest('.nl-grid-card');
+  if (card && !card.classList.contains('dragging')) {
+    document.querySelectorAll('.nl-grid-card.drag-over').forEach(function(c) { c.classList.remove('drag-over'); });
+    card.classList.add('drag-over');
+  }
+}
+
+async function nlDrop(e, targetSecId) {
+  e.preventDefault();
+  var sourceSecId = nlDragSourceId;
+  if (!sourceSecId || sourceSecId === targetSecId) return;
+  if (!nlCurrentIssue || !nlCurrentIssue.sections) return;
+
+  var sections = Object.values(nlCurrentIssue.sections).sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
+  var sourceIdx = sections.findIndex(function(s) { return s.id === sourceSecId; });
+  var targetIdx = sections.findIndex(function(s) { return s.id === targetSecId; });
+  if (sourceIdx === -1 || targetIdx === -1) return;
+
+  var moved = sections.splice(sourceIdx, 1)[0];
+  sections.splice(targetIdx, 0, moved);
+  nlRepackGrid(sections);
+
+  var fbUpdates = {};
+  sections.forEach(function(sec) {
+    var prefix = 'shirglassworks/newsletter/issues/' + nlCurrentIssueId + '/sections/' + sec.id + '/';
+    fbUpdates[prefix + 'order'] = sec.order;
+    fbUpdates[prefix + 'gridCol'] = sec.gridCol;
+    fbUpdates[prefix + 'gridRow'] = sec.gridRow;
+  });
+
+  try {
+    await db.ref().update(fbUpdates);
+    renderNLCompose();
+  } catch (err) { showToast('Error reordering: ' + err.message, true); }
+}
+
+// ===== CARD EDITOR MODAL =====
+function nlOpenCardEditor(secId) {
+  if (!nlCurrentIssue || !nlCurrentIssue.sections || !nlCurrentIssue.sections[secId]) return;
+  var sec = nlCurrentIssue.sections[secId];
+  var charLimit = NL_CHAR_LIMITS[sec.cardSize || 'medium'];
+  var content = sec.finalContent || sec.rawInput || '';
+  var charCount = content.length;
+  var aiResult = nlAiResults[secId];
+
+  var html = '<div style="display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--border);">' +
+    '<div style="display:flex;align-items:center;gap:8px;flex:1;">' +
+    '<span style="font-size:1.2rem;">' + nlGetTypeIcon(sec.type) + '</span>' +
+    '<input type="text" value="' + (sec.title || '').replace(/"/g, '&quot;') + '"' +
+    ' style="border:none;background:transparent;font-size:1.1rem;font-weight:600;color:var(--text);flex:1;padding:4px 0;"' +
+    ' onchange="nlUpdateSectionTitle(\'' + secId + '\', this.value)" />' +
+    '</div>' +
+    '<button style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--text-secondary);padding:4px 8px;" onclick="closeModal()">×</button></div>';
+
+  html += '<div style="padding:16px 24px;">';
+
+  // Card size selector
+  html += '<div style="display:flex;gap:6px;margin-bottom:16px;align-items:center;flex-wrap:wrap;">' +
+    '<span style="font-size:0.8rem;color:var(--text-secondary);margin-right:4px;">Size:</span>';
+  ['small', 'medium', 'large', 'full'].forEach(function(size) {
+    var isActive = (sec.cardSize || 'medium') === size;
+    html += '<button class="nl-editor-size-btn ' + (isActive ? 'active' : '') + '"' +
+      ' onclick="nlChangeCardSize(\'' + secId + '\',\'' + size + '\')">' +
+      size.charAt(0).toUpperCase() + size.slice(1) + ' (' + NL_CHAR_LIMITS[size] + ')</button>';
+  });
+  html += '</div>';
+
+  // Guided prompt
+  if (sec.guidedPrompt) {
+    html += '<div class="nl-section-prompt" style="margin-bottom:12px;">' + sec.guidedPrompt + '</div>';
+  }
+
+  // Content editing
+  if (aiResult && !sec.finalContent) {
+    html += '<div class="nl-ai-compare">' +
+      '<div class="nl-ai-panel original"><div class="nl-ai-panel-label">Your Original</div>' + nlEscHtml(sec.rawInput) + '</div>' +
+      '<div class="nl-ai-panel polished"><div class="nl-ai-panel-label">AI Polished</div>' + nlEscHtml(aiResult) + '</div></div>' +
+      '<div class="nl-ai-actions" style="margin-top:8px;">' +
+      '<button class="btn btn-outline" onclick="nlPickVersion(\'' + secId + '\',\'original\'); setTimeout(function(){nlOpenCardEditor(\'' + secId + '\')},100);">Use Original</button>' +
+      '<button class="btn btn-primary" onclick="nlPickVersion(\'' + secId + '\',\'ai\'); setTimeout(function(){nlOpenCardEditor(\'' + secId + '\')},100);">Use AI Version</button></div>';
+  } else if (sec.finalContent) {
+    html += '<textarea class="nl-section-textarea" id="nlModalFinal_' + secId + '"' +
+      ' maxlength="' + charLimit + '" style="min-height:120px;"' +
+      ' oninput="nlEditorCharCount(\'' + secId + '\', this.value, ' + charLimit + ')"' +
+      ' onchange="nlUpdateFinalContent(\'' + secId + '\', this.value)">' +
+      nlEscHtml(sec.finalContent) + '</textarea>' +
+      '<div class="nl-editor-char-counter" id="nlCharCounter_' + secId + '">' + charCount + '/' + charLimit + '</div>' +
+      '<div style="margin-top:8px;"><button class="btn btn-outline" style="font-size:0.8rem;" onclick="nlResetSection(\'' + secId + '\'); setTimeout(function(){nlOpenCardEditor(\'' + secId + '\')},100);">Reset to Draft</button></div>';
+  } else {
+    html += '<textarea class="nl-section-textarea" id="nlModalRaw_' + secId + '"' +
+      ' placeholder="Write your content here..." maxlength="' + charLimit + '" style="min-height:120px;"' +
+      ' oninput="nlEditorCharCount(\'' + secId + '\', this.value, ' + charLimit + ')"' +
+      ' onchange="nlUpdateRawInput(\'' + secId + '\', this.value)">' +
+      nlEscHtml(sec.rawInput || '') + '</textarea>' +
+      '<div class="nl-editor-char-counter" id="nlCharCounter_' + secId + '">' + charCount + '/' + charLimit + '</div>';
+    var hasContent = !!(sec.rawInput && sec.rawInput.trim());
+    html += '<div style="margin-top:8px;display:flex;gap:8px;">' +
+      '<button class="btn btn-outline" style="font-size:0.8rem;" ' + (hasContent ? '' : 'disabled') +
+      ' onclick="nlPolishSection(\'' + secId + '\')">✨ Polish with AI</button>';
+    if (hasContent) html += '<button class="btn btn-outline" style="font-size:0.8rem;" onclick="nlUseAsIs(\'' + secId + '\'); setTimeout(function(){nlOpenCardEditor(\'' + secId + '\')},100);">Use as-is</button>';
+    html += '</div>';
+  }
+
+  // Images
+  var images = sec.images || [];
+  html += '<div style="margin-top:16px;"><div style="font-size:0.8rem;font-weight:600;margin-bottom:8px;">Images (max 3)</div>';
+  html += '<div class="nl-section-images">';
+  images.forEach(function(imgId, idx) {
+    var img = imageLibrary ? imageLibrary[imgId] : null;
+    if (img) html += '<div style="position:relative;"><img class="nl-section-img-thumb" src="' + img.url + '" alt="" />' +
+      '<span style="position:absolute;top:-4px;right:-4px;cursor:pointer;background:var(--danger);color:#fff;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;font-size:0.6rem;" onclick="nlRemoveImage(\'' + secId + '\',' + idx + '); setTimeout(function(){nlOpenCardEditor(\'' + secId + '\')},100);">×</span></div>';
+  });
+  if (images.length < 3) html += '<div class="nl-section-img-add" onclick="closeModal(); nlOpenImagePicker(\'' + secId + '\')">+</div>';
+  html += '</div></div>';
+
+  html += '</div>'; // end body
+
+  openModal(html);
+  var modal = document.getElementById('modalContent');
+  if (modal) modal.style.maxWidth = '640px';
+}
+
+function nlEditorCharCount(secId, val, limit) {
+  var counter = document.getElementById('nlCharCounter_' + secId);
+  if (!counter) return;
+  var count = val.length;
+  counter.textContent = count + '/' + limit;
+  counter.style.color = count >= limit ? '#dc3545' : count >= limit * 0.8 ? 'var(--amber)' : 'var(--text-secondary)';
+}
+
+async function nlChangeCardSize(secId, newSize) {
+  if (!nlCurrentIssue || !nlCurrentIssue.sections || !nlCurrentIssue.sections[secId]) return;
+  var sec = nlCurrentIssue.sections[secId];
+  sec.cardSize = newSize;
+  sec.gridWidth = (newSize === 'full' || newSize === 'large') ? 2 : 1;
+  sec.gridHeight = 1;
+
+  var content = sec.finalContent || sec.rawInput || '';
+  var charLimit = NL_CHAR_LIMITS[newSize];
+  if (content.length > charLimit) {
+    showToast('Content (' + content.length + ' chars) exceeds ' + newSize + ' limit (' + charLimit + '). Trim before saving.', true);
+  }
+
+  var sections = Object.values(nlCurrentIssue.sections).sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
+  nlRepackGrid(sections);
+
+  var fbUpdates = {};
+  sections.forEach(function(s) {
+    var prefix = 'shirglassworks/newsletter/issues/' + nlCurrentIssueId + '/sections/' + s.id + '/';
+    fbUpdates[prefix + 'cardSize'] = s.cardSize;
+    fbUpdates[prefix + 'gridWidth'] = s.gridWidth;
+    fbUpdates[prefix + 'gridCol'] = s.gridCol;
+    fbUpdates[prefix + 'gridRow'] = s.gridRow;
+  });
+
+  try {
+    await db.ref().update(fbUpdates);
+    closeModal();
+    renderNLCompose();
+  } catch (err) { showToast('Error saving: ' + err.message, true); }
 }
 
 function nlBackToList() {
@@ -20871,7 +21221,13 @@ async function nlToggleInclude(secId, checked) {
 
 async function nlUpdateRawInput(secId, val) {
   if (!nlCurrentIssue || !nlCurrentIssue.sections || !nlCurrentIssue.sections[secId]) return;
-  nlCurrentIssue.sections[secId].rawInput = val;
+  var sec = nlCurrentIssue.sections[secId];
+  var charLimit = NL_CHAR_LIMITS[sec.cardSize || 'medium'];
+  if (val.length > charLimit) {
+    val = val.substring(0, charLimit);
+    showToast('Content trimmed to ' + charLimit + ' char limit');
+  }
+  sec.rawInput = val;
   try {
     await db.ref('shirglassworks/newsletter/issues/' + nlCurrentIssueId + '/sections/' + secId + '/rawInput').set(val);
   } catch (err) { showToast('Error saving: ' + err.message, true); }
@@ -20879,7 +21235,13 @@ async function nlUpdateRawInput(secId, val) {
 
 async function nlUpdateFinalContent(secId, val) {
   if (!nlCurrentIssue || !nlCurrentIssue.sections || !nlCurrentIssue.sections[secId]) return;
-  nlCurrentIssue.sections[secId].finalContent = val;
+  var sec = nlCurrentIssue.sections[secId];
+  var charLimit = NL_CHAR_LIMITS[sec.cardSize || 'medium'];
+  if (val.length > charLimit) {
+    val = val.substring(0, charLimit);
+    showToast('Content trimmed to ' + charLimit + ' char limit');
+  }
+  sec.finalContent = val;
   try {
     await db.ref('shirglassworks/newsletter/issues/' + nlCurrentIssueId + '/sections/' + secId + '/finalContent').set(val);
   } catch (err) { showToast('Error saving: ' + err.message, true); }
@@ -20963,13 +21325,18 @@ async function nlAddSection() {
   var secId = db.ref().push().key;
   var sections = nlCurrentIssue.sections ? Object.values(nlCurrentIssue.sections) : [];
   var maxOrder = sections.reduce(function(m, s) { return Math.max(m, s.order || 0); }, -1);
+  var sizeInfo = NL_CARD_SIZE_MAP['custom'];
   var newSec = {
     id: secId, type: 'custom', title: 'New Section', guidedPrompt: '',
     rawInput: '', aiVersion: null, finalContent: '', usedAI: false,
-    images: [], order: maxOrder + 1, included: true
+    images: [], order: maxOrder + 1, included: true,
+    cardSize: sizeInfo.cardSize, gridWidth: sizeInfo.gridWidth, gridCol: 0, gridRow: 0
   };
+  // Repack grid positions after adding
   if (!nlCurrentIssue.sections) nlCurrentIssue.sections = {};
   nlCurrentIssue.sections[secId] = newSec;
+  var allSections = Object.values(nlCurrentIssue.sections).sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
+  nlRepackGrid(allSections);
   nlExpandedSections[secId] = true;
   try {
     await db.ref('shirglassworks/newsletter/issues/' + nlCurrentIssueId + '/sections/' + secId).set(newSec);
@@ -21047,23 +21414,64 @@ function nlExportHTML() {
     .filter(function(s) { return s.included; })
     .sort(function(a, b) { return (a.order || 0) - (b.order || 0); }) : [];
 
+  // Group sections by grid rows for 2-column layout
   var sectionsHtml = '';
+  var rows = [], currentRow = [], currentRowCols = 0;
   sections.forEach(function(sec) {
     var content = sec.finalContent || sec.rawInput || '';
     if (!content.trim()) return;
-    sectionsHtml += '<tr><td style="padding:0 30px 30px;">' +
-      '<h2 style="font-family:\'Cormorant Garamond\',Georgia,serif;font-size:22px;color:#2C2C2C;margin:0 0 12px;font-weight:600;">' + nlEscHtml(sec.title) + '</h2>' +
-      '<p style="font-size:15px;line-height:1.7;color:#444;margin:0;">' + content.replace(/\n/g, '<br>') + '</p>';
+    var width = sec.gridWidth || 1;
+    if (currentRowCols + width > 2) {
+      if (currentRow.length > 0) rows.push(currentRow);
+      currentRow = [sec]; currentRowCols = width;
+    } else {
+      currentRow.push(sec); currentRowCols += width;
+    }
+  });
+  if (currentRow.length > 0) rows.push(currentRow);
 
-    // Images
-    var images = sec.images || [];
-    images.forEach(function(imgId) {
-      var img = imageLibrary ? imageLibrary[imgId] : null;
-      if (img) {
-        sectionsHtml += '<img src="' + img.url + '" alt="' + (img.alt || '') + '" style="max-width:100%;height:auto;border-radius:4px;margin-top:16px;" />';
-      }
-    });
-    sectionsHtml += '</td></tr><tr><td style="padding:0 30px;"><hr style="border:none;border-top:1px solid #E8DDD0;margin:10px 0 20px;" /></td></tr>';
+  rows.forEach(function(row) {
+    if (row.length === 1 && (row[0].gridWidth || 1) >= 2) {
+      // Full-width section
+      var sec = row[0];
+      var content = sec.finalContent || sec.rawInput || '';
+      sectionsHtml += '<tr><td style="padding:0 30px 30px;">' +
+        '<h2 style="font-family:\'Cormorant Garamond\',Georgia,serif;font-size:22px;color:#2C2C2C;margin:0 0 12px;font-weight:600;">' + nlEscHtml(sec.title) + '</h2>' +
+        '<p style="font-size:15px;line-height:1.7;color:#444;margin:0;">' + content.replace(/\n/g, '<br>') + '</p>';
+      (sec.images || []).forEach(function(imgId) {
+        var img = imageLibrary ? imageLibrary[imgId] : null;
+        if (img) sectionsHtml += '<img src="' + img.url + '" alt="' + (img.alt || '') + '" style="max-width:100%;height:auto;border-radius:4px;margin-top:16px;" />';
+      });
+      sectionsHtml += '</td></tr>';
+    } else if (row.length === 1) {
+      // Single medium section on its own row
+      var sec = row[0];
+      var content = sec.finalContent || sec.rawInput || '';
+      sectionsHtml += '<tr><td style="padding:0 30px 30px;">' +
+        '<h2 style="font-family:\'Cormorant Garamond\',Georgia,serif;font-size:22px;color:#2C2C2C;margin:0 0 12px;font-weight:600;">' + nlEscHtml(sec.title) + '</h2>' +
+        '<p style="font-size:15px;line-height:1.7;color:#444;margin:0;">' + content.replace(/\n/g, '<br>') + '</p>';
+      (sec.images || []).forEach(function(imgId) {
+        var img = imageLibrary ? imageLibrary[imgId] : null;
+        if (img) sectionsHtml += '<img src="' + img.url + '" alt="' + (img.alt || '') + '" style="max-width:100%;height:auto;border-radius:4px;margin-top:16px;" />';
+      });
+      sectionsHtml += '</td></tr>';
+    } else {
+      // Two-column row
+      sectionsHtml += '<tr><td style="padding:0 30px 30px;"><table width="100%" cellpadding="0" cellspacing="0"><tr>';
+      row.forEach(function(sec, idx) {
+        var content = sec.finalContent || sec.rawInput || '';
+        sectionsHtml += '<td style="width:50%;vertical-align:top;' + (idx > 0 ? 'padding-left:15px;' : 'padding-right:15px;') + '">' +
+          '<h2 style="font-family:\'Cormorant Garamond\',Georgia,serif;font-size:18px;color:#2C2C2C;margin:0 0 8px;font-weight:600;">' + nlEscHtml(sec.title) + '</h2>' +
+          '<p style="font-size:14px;line-height:1.6;color:#444;margin:0;">' + content.replace(/\n/g, '<br>') + '</p>';
+        (sec.images || []).forEach(function(imgId) {
+          var img = imageLibrary ? imageLibrary[imgId] : null;
+          if (img) sectionsHtml += '<img src="' + img.url + '" alt="' + (img.alt || '') + '" style="max-width:100%;height:auto;border-radius:4px;margin-top:12px;" />';
+        });
+        sectionsHtml += '</td>';
+      });
+      sectionsHtml += '</tr></table></td></tr>';
+    }
+    sectionsHtml += '<tr><td style="padding:0 30px;"><hr style="border:none;border-top:1px solid #E8DDD0;margin:10px 0 20px;" /></td></tr>';
   });
 
   var emailHtml = '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">' +
@@ -21108,7 +21516,7 @@ async function nlPublishToWebsite() {
     .filter(function(s) { return s.included && (s.finalContent || s.rawInput); })
     .sort(function(a, b) { return (a.order || 0) - (b.order || 0); })
     .map(function(s) {
-      return { title: s.title, content: s.finalContent || s.rawInput, images: s.images || [] };
+      return { title: s.title, content: s.finalContent || s.rawInput, images: s.images || [], cardSize: s.cardSize || 'medium', gridWidth: s.gridWidth || 1 };
     }) : [];
 
   if (sections.length === 0) { showToast('Add content to at least one section before publishing', true); return; }
