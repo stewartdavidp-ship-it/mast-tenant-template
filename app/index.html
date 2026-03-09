@@ -3550,13 +3550,16 @@
 
     /* ===== Newsletter Grid Canvas ===== */
     .nl-grid-canvas { max-width:600px; margin:0 auto; background:#FFFFFF; border-radius:8px; overflow:hidden; box-shadow:0 2px 16px rgba(0,0,0,0.15); }
-    /* Newsletter header — branded masthead */
-    .nl-grid-header { background:#2C2C2C; padding:28px 30px 24px; text-align:center; position:relative; }
-    .nl-grid-header-logo { width:72px; height:72px; margin:0 auto 10px; border-radius:50%; background:rgba(245,240,235,0.1); display:flex; align-items:center; justify-content:center; overflow:hidden; }
-    .nl-grid-header h1 { font-family:'Cormorant Garamond',Georgia,serif; color:#F5F0EB; font-size:26px; margin:0; font-weight:300; letter-spacing:0.02em; }
-    .nl-grid-header-tagline { color:rgba(245,240,235,0.45); font-size:10px; margin:4px 0 0; letter-spacing:0.15em; text-transform:uppercase; font-family:'DM Sans',Arial,sans-serif; }
-    .nl-grid-header-meta { display:flex; justify-content:center; gap:16px; margin-top:14px; padding-top:12px; border-top:1px solid rgba(245,240,235,0.12); }
-    .nl-grid-header-meta span { color:rgba(245,240,235,0.55); font-size:11px; font-family:'DM Sans',Arial,sans-serif; letter-spacing:0.03em; }
+    /* Newsletter header — compact branded masthead */
+    .nl-grid-header { background:#2C2C2C; padding:16px 30px; position:relative; }
+    .nl-grid-header-top { display:flex; align-items:center; gap:14px; }
+    .nl-grid-header-logo { width:48px; height:28px; flex-shrink:0; }
+    .nl-grid-header-logo img { width:100%; height:100%; object-fit:contain; }
+    .nl-grid-header-text { flex:1; }
+    .nl-grid-header h1 { font-family:'Cormorant Garamond',Georgia,serif; color:#F5F0EB; font-size:20px; margin:0; font-weight:300; letter-spacing:0.02em; line-height:1.2; }
+    .nl-grid-header-tagline { color:rgba(245,240,235,0.4); font-size:9px; letter-spacing:0.12em; text-transform:uppercase; font-family:'DM Sans',Arial,sans-serif; margin:0; }
+    .nl-grid-header-meta { display:flex; align-items:center; gap:12px; flex-shrink:0; }
+    .nl-grid-header-meta span { color:rgba(245,240,235,0.5); font-size:10px; font-family:'DM Sans',Arial,sans-serif; letter-spacing:0.03em; }
     /* Issue title */
     .nl-grid-title { padding:24px 30px 8px; font-family:'Cormorant Garamond',Georgia,serif; font-size:22px; color:#2C2C2C; font-weight:400; }
     /* Section rows */
@@ -3592,8 +3595,15 @@
     .nl-grid-overlay-badge.at-limit { background:rgba(220,53,69,0.9); }
     .nl-grid-include { width:14px; height:14px; accent-color:var(--amber); cursor:pointer; }
     /* Footer */
-    .nl-grid-footer { background:#2C2C2C; padding:18px 30px; text-align:center; }
+    .nl-grid-footer { background:#2C2C2C; padding:24px 30px; text-align:center; }
     .nl-grid-footer p { color:rgba(245,240,235,0.5); font-size:11px; margin:0; }
+    .nl-grid-footer a { color:rgba(245,240,235,0.5); text-decoration:underline; }
+    .nl-grid-footer a:hover { color:rgba(245,240,235,0.8); }
+    .nl-grid-footer .footer-brand { font-family:'Cormorant Garamond',Georgia,serif; font-size:14px; color:rgba(245,240,235,0.7); letter-spacing:0.02em; margin-bottom:6px; }
+    .nl-grid-footer .footer-links { margin:8px 0; }
+    .nl-grid-footer .footer-links a { margin:0 8px; font-size:11px; }
+    .nl-grid-footer .footer-divider { width:40px; height:1px; background:rgba(245,240,235,0.15); margin:10px auto; }
+    .nl-grid-footer .footer-unsub { font-size:10px; color:rgba(245,240,235,0.3); }
     .nl-view-toggle { display:inline-flex; gap:2px; background:var(--surface); border-radius:6px; padding:2px; }
     .nl-view-toggle button { font-size:0.75rem; padding:4px 10px; border:none; background:transparent; color:var(--text-secondary); border-radius:4px; cursor:pointer; }
     .nl-view-toggle button.active { background:var(--amber); color:#fff; }
@@ -20921,14 +20931,14 @@ function renderNLCompose() {
 
     // Newsletter header — branded masthead
     var issueDate = nlCurrentIssue.createdAt ? new Date(nlCurrentIssue.createdAt).toLocaleDateString('en-US', { year:'numeric', month:'long' }) : new Date().toLocaleDateString('en-US', { year:'numeric', month:'long' });
-    html += '<div class="nl-grid-header">' +
-      '<div class="nl-grid-header-logo"><img src="https://www.shirglassworks.com/uploads/3/7/0/8/37080241/octopus-logo-final-12x7.jpg" alt="Shir Glassworks" style="width:100%;height:100%;object-fit:contain;border-radius:50%;" /></div>' +
-      '<h1>Shir Glassworks</h1>' +
-      '<div class="nl-grid-header-tagline">Handcrafted Glass &bull; Western Massachusetts</div>' +
+    html += '<div class="nl-grid-header"><div class="nl-grid-header-top">' +
+      '<div class="nl-grid-header-logo"><img src="https://stewartdavidp-ship-it.github.io/shirglassworks/images/logo.png" alt="Shir Glassworks" /></div>' +
+      '<div class="nl-grid-header-text"><h1>Shir Glassworks</h1>' +
+      '<div class="nl-grid-header-tagline">Handcrafted Glass &bull; Western Massachusetts</div></div>' +
       '<div class="nl-grid-header-meta">' +
       '<span>Issue #' + (nlCurrentIssue.issueNumber || '') + '</span>' +
       '<span>' + issueDate + '</span>' +
-      '</div></div>';
+      '</div></div></div>';
 
     // Issue title (only show if set)
     if (nlCurrentIssue.title && nlCurrentIssue.title.trim()) {
@@ -20951,6 +20961,10 @@ function renderNLCompose() {
     rows.forEach(function(row, rowIdx) {
       html += '<div class="nl-grid-row">';
       row.forEach(function(sec, colIdx) {
+        // Auto-load upcoming events if section is empty
+        if (sec.type === 'upcoming-events' && !sec.rawInput && !sec.finalContent) {
+          nlAutoLoadUpcomingEvents(sec.id);
+        }
         var sizeClass = 'size-' + (sec.cardSize || 'medium');
         var content = sec.finalContent || sec.rawInput || '';
         var charLimit = NL_CHAR_LIMITS[sec.cardSize || 'medium'];
@@ -20996,8 +21010,18 @@ function renderNLCompose() {
     });
 
     // Newsletter footer
-    html += '<div class="nl-grid-footer"><p>Shir Glassworks &bull; Western Massachusetts</p>' +
-      '<p style="margin-top:6px;font-size:10px;color:rgba(245,240,235,0.3);">Unsubscribe</p></div>';
+    html += '<div class="nl-grid-footer">' +
+      '<p class="footer-brand">Shir Glassworks</p>' +
+      '<p>Handcrafted glass from Western Massachusetts</p>' +
+      '<div class="footer-links">' +
+      '<a href="https://shirglassworks.com">Website</a>' +
+      '<a href="https://shirglassworks.com/shop">Shop</a>' +
+      '<a href="https://shirglassworks.com/schedule">Events</a>' +
+      '</div>' +
+      '<div class="footer-divider"></div>' +
+      '<p class="footer-unsub">You received this because you subscribed to Shir Glassworks updates.</p>' +
+      '<p class="footer-unsub" style="margin-top:4px;"><a href="#" style="color:rgba(245,240,235,0.35);">Unsubscribe</a> &bull; <a href="#" style="color:rgba(245,240,235,0.35);">Manage Preferences</a></p>' +
+      '</div>';
     html += '</div>';
   }
 
@@ -21106,10 +21130,66 @@ async function nlDrop(e, targetSecId) {
   } catch (err) { showToast('Error reordering: ' + err.message, true); }
 }
 
+// ===== AUTO-LOAD UPCOMING EVENTS =====
+function nlGetUpcomingEvents(maxCount) {
+  maxCount = maxCount || 5;
+  var now = new Date();
+  now.setHours(0, 0, 0, 0);
+  var upcoming = [];
+  Object.keys(events).forEach(function(k) {
+    var ev = events[k];
+    if (ev.visible === false) return;
+    var endDate = ev.dateEnd || ev.date;
+    if (!endDate) return;
+    var parts = endDate.split('-');
+    var d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    if (d >= now) {
+      upcoming.push(ev);
+    }
+  });
+  upcoming.sort(function(a, b) { return (a.date || '').localeCompare(b.date || ''); });
+  return upcoming.slice(0, maxCount);
+}
+
+function nlFormatUpcomingEvents(evList) {
+  if (!evList || evList.length === 0) return 'No upcoming events scheduled.';
+  var lines = [];
+  evList.forEach(function(ev) {
+    var dateStr = formatDateRange(ev.date, ev.dateEnd);
+    var line = '📅 ' + dateStr + ' — ' + (ev.name || 'Unnamed Event');
+    if (ev.location) line += ' @ ' + ev.location;
+    if (ev.description) {
+      var desc = ev.description.length > 80 ? ev.description.substring(0, 80) + '...' : ev.description;
+      line += '\n   ' + desc;
+    }
+    lines.push(line);
+  });
+  return lines.join('\n\n');
+}
+
+function nlAutoLoadUpcomingEvents(secId) {
+  if (!nlCurrentIssue || !nlCurrentIssue.sections || !nlCurrentIssue.sections[secId]) return false;
+  var sec = nlCurrentIssue.sections[secId];
+  if (sec.type !== 'upcoming-events') return false;
+  if (sec.rawInput || sec.finalContent) return false; // already has content
+  var upcoming = nlGetUpcomingEvents(5);
+  if (upcoming.length === 0) return false;
+  var formatted = nlFormatUpcomingEvents(upcoming);
+  sec.rawInput = formatted;
+  nlUpdateRawInput(secId, formatted);
+  return true;
+}
+
 // ===== CARD EDITOR MODAL =====
 function nlOpenCardEditor(secId) {
   if (!nlCurrentIssue || !nlCurrentIssue.sections || !nlCurrentIssue.sections[secId]) return;
   var sec = nlCurrentIssue.sections[secId];
+
+  // Auto-load upcoming events if section is empty
+  if (sec.type === 'upcoming-events' && !sec.rawInput && !sec.finalContent) {
+    nlAutoLoadUpcomingEvents(secId);
+  }
+
   var charLimit = NL_CHAR_LIMITS[sec.cardSize || 'medium'];
   var content = sec.finalContent || sec.rawInput || '';
   var charCount = content.length;
@@ -21550,9 +21630,14 @@ function nlExportHTML() {
     '<table width="100%" cellpadding="0" cellspacing="0" style="background:#F5F0EB;"><tr><td align="center" style="padding:30px 10px;">' +
     '<table width="600" cellpadding="0" cellspacing="0" style="background:#FFFFFF;border-radius:8px;overflow:hidden;max-width:600px;">' +
     '<!-- Header -->' +
-    '<tr><td style="background:#2C2C2C;padding:30px;text-align:center;">' +
-    '<h1 style="font-family:\'Cormorant Garamond\',Georgia,serif;color:#F5F0EB;font-size:28px;margin:0;font-weight:300;">Shir Glassworks</h1>' +
-    '<p style="color:rgba(245,240,235,0.6);font-size:12px;margin:8px 0 0;letter-spacing:0.1em;text-transform:uppercase;">Issue #' + nlCurrentIssue.issueNumber + '</p>' +
+    '<tr><td style="background:#2C2C2C;padding:16px 30px;">' +
+    '<table width="100%" cellpadding="0" cellspacing="0"><tr>' +
+    '<td style="width:48px;"><img src="https://stewartdavidp-ship-it.github.io/shirglassworks/images/logo.png" alt="Shir Glassworks" width="48" style="display:block;" /></td>' +
+    '<td style="padding-left:14px;">' +
+    '<h1 style="font-family:\'Cormorant Garamond\',Georgia,serif;color:#F5F0EB;font-size:20px;margin:0;font-weight:300;letter-spacing:0.02em;">Shir Glassworks</h1>' +
+    '<p style="color:rgba(245,240,235,0.4);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;margin:0;">Handcrafted Glass &bull; Western Massachusetts</p></td>' +
+    '<td style="text-align:right;white-space:nowrap;"><span style="color:rgba(245,240,235,0.5);font-size:10px;">Issue #' + nlCurrentIssue.issueNumber + '</span></td>' +
+    '</tr></table>' +
     '</td></tr>' +
     '<!-- Title -->' +
     '<tr><td style="padding:30px 30px 10px;"><h1 style="font-family:\'Cormorant Garamond\',Georgia,serif;font-size:26px;color:#2C2C2C;margin:0;font-weight:400;">' + nlEscHtml(nlCurrentIssue.title) + '</h1></td></tr>' +
@@ -21560,9 +21645,16 @@ function nlExportHTML() {
     sectionsHtml +
     '<!-- Footer -->' +
     '<tr><td style="background:#2C2C2C;padding:24px 30px;text-align:center;">' +
-    '<p style="color:rgba(245,240,235,0.6);font-size:12px;margin:0;">Shir Glassworks &bull; Western Massachusetts</p>' +
-    '<p style="margin:10px 0 0;"><a href="https://shirglassworks.com/newsletter/unsubscribe?token={SUBSCRIBER_TOKEN}" style="color:rgba(245,240,235,0.4);font-size:11px;">Unsubscribe</a></p>' +
-    '<p style="color:rgba(245,240,235,0.3);font-size:10px;margin:8px 0 0;font-style:italic;">Note: The unsubscribe link above contains a placeholder token. When sending via an email tool, replace {SUBSCRIBER_TOKEN} with each subscriber\'s unique token.</p>' +
+    '<p style="font-family:\'Cormorant Garamond\',Georgia,serif;color:rgba(245,240,235,0.7);font-size:14px;margin:0;">Shir Glassworks</p>' +
+    '<p style="color:rgba(245,240,235,0.5);font-size:11px;margin:4px 0 0;">Handcrafted glass from Western Massachusetts</p>' +
+    '<p style="margin:10px 0 8px;">' +
+    '<a href="https://shirglassworks.com" style="color:rgba(245,240,235,0.5);font-size:11px;text-decoration:underline;margin:0 8px;">Website</a>' +
+    '<a href="https://shirglassworks.com/shop" style="color:rgba(245,240,235,0.5);font-size:11px;text-decoration:underline;margin:0 8px;">Shop</a>' +
+    '<a href="https://shirglassworks.com/schedule" style="color:rgba(245,240,235,0.5);font-size:11px;text-decoration:underline;margin:0 8px;">Events</a></p>' +
+    '<hr style="border:none;border-top:1px solid rgba(245,240,235,0.15);width:40px;margin:10px auto;" />' +
+    '<p style="color:rgba(245,240,235,0.3);font-size:10px;margin:0;">You received this because you subscribed to Shir Glassworks updates.</p>' +
+    '<p style="margin:4px 0 0;"><a href="https://shirglassworks.com/newsletter/unsubscribe?token={SUBSCRIBER_TOKEN}" style="color:rgba(245,240,235,0.35);font-size:10px;text-decoration:underline;">Unsubscribe</a>' +
+    ' &bull; <a href="https://shirglassworks.com/newsletter/preferences" style="color:rgba(245,240,235,0.35);font-size:10px;text-decoration:underline;">Manage Preferences</a></p>' +
     '</td></tr></table></td></tr></table></body></html>';
 
   var blob = new Blob([emailHtml], { type: 'text/html' });
