@@ -3572,6 +3572,17 @@
     .blog-body-toolbar { display:flex; gap:8px; margin-bottom:8px; }
     .blog-body-textarea { width:100%; min-height:400px; padding:16px; border:1px solid var(--border); border-radius:8px; background:var(--card-bg); color:var(--text); font-family:'DM Sans',Arial,sans-serif; font-size:0.95rem; line-height:1.8; resize:vertical; }
     .blog-body-textarea:focus { outline:none; border-color:var(--amber); }
+    /* Rich text editor */
+    .blog-format-toolbar { display:flex; align-items:center; gap:4px; padding:6px 8px; background:var(--card-bg); border:1px solid var(--border); border-bottom:none; border-radius:8px 8px 0 0; flex-wrap:wrap; }
+    .blog-format-btn { width:32px; height:32px; border:1px solid transparent; border-radius:4px; background:none; cursor:pointer; font-size:0.85rem; color:var(--text); display:flex; align-items:center; justify-content:center; font-weight:400; }
+    .blog-format-btn:hover { background:rgba(184,151,90,0.1); border-color:var(--border); }
+    .blog-format-btn.active { background:rgba(184,151,90,0.15); border-color:var(--amber); color:var(--amber); }
+    .blog-format-sep { width:1px; height:20px; background:var(--border); margin:0 4px; }
+    .blog-format-select { font-size:0.8rem; padding:4px 6px; border:1px solid var(--border); border-radius:4px; background:var(--card-bg); color:var(--text); cursor:pointer; height:32px; }
+    .blog-body-editable { width:100%; min-height:400px; padding:16px; border:1px solid var(--border); border-radius:0 0 8px 8px; background:var(--card-bg); color:var(--text); font-family:'DM Sans',Arial,sans-serif; font-size:0.95rem; line-height:1.8; outline:none; overflow-y:auto; }
+    .blog-body-editable:focus { border-color:var(--amber); }
+    .blog-body-editable:empty:before { content:attr(data-placeholder); color:var(--text-secondary); opacity:0.5; pointer-events:none; }
+    .blog-img-marker { display:inline-block; background:rgba(184,151,90,0.1); border:1px solid var(--amber); border-radius:4px; padding:2px 8px; font-size:0.8rem; color:var(--amber); cursor:default; margin:4px 0; }
     .blog-inline-images { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
     .blog-inline-img { position:relative; width:80px; height:80px; border-radius:6px; overflow:hidden; border:1px solid var(--border); }
     .blog-inline-img img { width:100%; height:100%; object-fit:cover; }
@@ -3617,6 +3628,9 @@
     body.dark-mode .blog-preview-article { background:#1e1e1e; border-color:#333; }
     body.dark-mode .blog-preview-tag { background:rgba(184,151,90,0.2); }
     body.dark-mode .blog-inline-img-caption input { background:transparent; color:#ccc; }
+    body.dark-mode .blog-format-toolbar { background:#2a2a2a; border-color:#444; }
+    body.dark-mode .blog-body-editable { background:#2a2a2a; border-color:#444; color:#eee; }
+    body.dark-mode .blog-format-select { background:#333; border-color:#555; color:#eee; }
 
     /* ===== Newsletter Grid Canvas ===== */
     .nl-grid-canvas { max-width:600px; margin:0 auto; background:#FFFFFF; border-radius:8px; overflow:hidden; box-shadow:0 2px 16px rgba(0,0,0,0.15); }
@@ -22205,25 +22219,46 @@ function renderBlogEditor() {
     '<button class="btn" id="blogSuggestTagsBtn" onclick="blogSuggestTags()" style="white-space:nowrap;font-size:0.8rem;padding:6px 10px;" title="AI-suggested tags based on your content">💡 Suggest</button>' +
     '</div>';
 
-  // Body toolbar
-  html += '<div class="blog-body-toolbar">' +
-    '<button class="btn" onclick="blogInsertImage()">📷 Insert Image</button>' +
-    '</div>';
-
-  // AI compare mode or regular textarea
+  // AI compare mode or rich text editor
   if (blogAiResult) {
     html += '<div class="nl-ai-compare">' +
       '<div class="nl-ai-panel original"><div class="nl-ai-panel-label">Your Original</div>' +
-      '<div style="white-space:pre-wrap;font-size:0.9rem;line-height:1.7;">' + escapeHtml(post.body || '') + '</div></div>' +
+      '<div style="font-size:0.9rem;line-height:1.7;">' + (blogIsHtmlBody(post.body) ? (post.body || '') : escapeHtml(post.body || '').replace(/\n/g, '<br>')) + '</div></div>' +
       '<div class="nl-ai-panel polished"><div class="nl-ai-panel-label">AI Polished</div>' +
       '<div style="white-space:pre-wrap;font-size:0.9rem;line-height:1.7;">' + escapeHtml(blogAiResult) + '</div></div>' +
       '</div>' +
+      '<div style="font-size:0.75rem;color:var(--text-secondary);margin-top:6px;font-style:italic;">Note: AI works with text content. Formatting won\'t carry over to the polished version.</div>' +
       '<div class="nl-ai-actions">' +
       '<button class="btn" onclick="blogPickVersion(\'original\')">Keep Original</button>' +
       '<button class="btn btn-primary" onclick="blogPickVersion(\'ai\')">Use Polished</button>' +
       '</div>';
   } else {
-    html += '<textarea class="blog-body-textarea" id="blogBodyTextarea" placeholder="Write your post here..." onchange="blogUpdateBody(this.value)">' + escapeHtml(post.body || '') + '</textarea>';
+    // Formatting toolbar
+    html += '<div class="blog-format-toolbar">' +
+      '<button class="blog-format-btn" id="blogBtnBold" onmousedown="event.preventDefault();blogFormatCmd(\'bold\')" title="Bold"><b>B</b></button>' +
+      '<button class="blog-format-btn" id="blogBtnItalic" onmousedown="event.preventDefault();blogFormatCmd(\'italic\')" title="Italic"><i>I</i></button>' +
+      '<button class="blog-format-btn" id="blogBtnUnderline" onmousedown="event.preventDefault();blogFormatCmd(\'underline\')" title="Underline"><u>U</u></button>' +
+      '<div class="blog-format-sep"></div>' +
+      '<select class="blog-format-select" onchange="blogFormatFont(this.value);this.value=\'\'" title="Font">' +
+      '<option value="" disabled selected>Font</option>' +
+      '<option value="DM Sans, Arial, sans-serif" style="font-family:DM Sans,Arial,sans-serif">Sans Serif</option>' +
+      '<option value="Cormorant Garamond, Georgia, serif" style="font-family:Cormorant Garamond,Georgia,serif">Serif</option>' +
+      '<option value="Georgia, Times New Roman, serif" style="font-family:Georgia,serif">Classic</option>' +
+      '<option value="Courier New, monospace" style="font-family:Courier New,monospace">Monospace</option>' +
+      '</select>' +
+      '<select class="blog-format-select" onchange="blogFormatSize(this.value);this.value=\'\'" title="Size">' +
+      '<option value="" disabled selected>Size</option>' +
+      '<option value="2">Small</option>' +
+      '<option value="3">Normal</option>' +
+      '<option value="5">Large</option>' +
+      '<option value="6">X-Large</option>' +
+      '</select>' +
+      '<div class="blog-format-sep"></div>' +
+      '<button class="blog-format-btn" onmousedown="event.preventDefault();blogInsertImage()" title="Insert Image" style="font-size:1rem;width:auto;padding:0 8px;">📷</button>' +
+      '</div>';
+
+    // ContentEditable body
+    html += '<div class="blog-body-editable" id="blogBodyEditable" contenteditable="true" data-placeholder="Write your post here..." oninput="blogBodyChanged()"></div>';
   }
 
   // Inline image thumbnails with labels and captions
@@ -22263,6 +22298,14 @@ function renderBlogEditor() {
   html += '</div>';
 
   document.getElementById('blogContent').innerHTML = html;
+
+  // Load body content into contentEditable div (must be done after innerHTML is set)
+  if (!blogAiResult && !blogShowPreview) {
+    var editable = document.getElementById('blogBodyEditable');
+    if (editable) {
+      editable.innerHTML = blogLoadBodyToEditor(post.body || '', post.inlineImages || []);
+    }
+  }
 }
 
 function blogBackToList() {
@@ -22273,6 +22316,109 @@ function blogBackToList() {
   blogShowPreview = false;
   renderBlog();
 }
+
+// ===== RICH TEXT EDITOR FUNCTIONS =====
+
+var blogBodySaveTimer = null;
+
+function blogIsHtmlBody(body) {
+  return body && /<[a-z][\s\S]*>/i.test(body);
+}
+
+function blogPlainToHtml(text) {
+  if (!text) return '';
+  var escaped = escapeHtml(text);
+  return escaped.split(/\n\n+/).map(function(p) { return '<p>' + p.replace(/\n/g, '<br>') + '</p>'; }).join('');
+}
+
+function blogLoadBodyToEditor(body, inlineImages) {
+  if (!body) return '';
+  var html = body;
+  // Convert legacy plain text to HTML
+  if (!blogIsHtmlBody(html)) {
+    html = blogPlainToHtml(html);
+  }
+  // Replace [Image N] text markers with styled spans
+  (inlineImages || []).forEach(function(img, idx) {
+    var marker = '[Image ' + (idx + 1) + ']';
+    var span = '<span class="blog-img-marker" contenteditable="false" data-image="' + (idx + 1) + '">\ud83d\udcf7 Image ' + (idx + 1) + '</span>';
+    html = html.replace(marker, span);
+  });
+  // Also handle legacy [IMG:markerId] format
+  (inlineImages || []).forEach(function(img, idx) {
+    var marker = '[IMG:' + img.markerId + ']';
+    var span = '<span class="blog-img-marker" contenteditable="false" data-image="' + (idx + 1) + '">\ud83d\udcf7 Image ' + (idx + 1) + '</span>';
+    html = html.replace(marker, span);
+  });
+  return html;
+}
+
+function blogSaveBodyFromEditor() {
+  var editable = document.getElementById('blogBodyEditable');
+  if (!editable) return blogCurrentPost ? (blogCurrentPost.body || '') : '';
+  var html = editable.innerHTML || '';
+  // Replace styled image marker spans back to [Image N] text
+  html = html.replace(/<span[^>]*class="blog-img-marker"[^>]*data-image="(\d+)"[^>]*>[^<]*<\/span>/gi, function(match, num) {
+    return '[Image ' + num + ']';
+  });
+  // Clean up empty divs/paragraphs that browsers add
+  html = html.replace(/<(div|p)><br\s*\/?><\/(div|p)>/gi, '<p><br></p>');
+  // Remove trailing <br> in otherwise empty editor
+  if (html === '<br>' || html === '<div><br></div>') html = '';
+  return html;
+}
+
+function blogBodyChanged() {
+  if (!blogCurrentPost) return;
+  clearTimeout(blogBodySaveTimer);
+  blogBodySaveTimer = setTimeout(function() {
+    var body = blogSaveBodyFromEditor();
+    blogCurrentPost.body = body;
+    blogCurrentPost.updatedAt = new Date().toISOString();
+    db.ref('shirglassworks/blog/posts/' + blogCurrentPostId).update({
+      body: body,
+      updatedAt: blogCurrentPost.updatedAt
+    }).catch(function(err) { showToast('Auto-save failed: ' + err.message, true); });
+  }, 500);
+}
+
+function blogFormatCmd(cmd) {
+  document.execCommand(cmd, false, null);
+  blogUpdateToolbarState();
+}
+
+function blogFormatFont(fontName) {
+  if (!fontName) return;
+  document.execCommand('fontName', false, fontName);
+  var editable = document.getElementById('blogBodyEditable');
+  if (editable) editable.focus();
+}
+
+function blogFormatSize(size) {
+  if (!size) return;
+  document.execCommand('fontSize', false, size);
+  var editable = document.getElementById('blogBodyEditable');
+  if (editable) editable.focus();
+}
+
+function blogUpdateToolbarState() {
+  var btnBold = document.getElementById('blogBtnBold');
+  var btnItalic = document.getElementById('blogBtnItalic');
+  var btnUnderline = document.getElementById('blogBtnUnderline');
+  if (btnBold) btnBold.classList.toggle('active', document.queryCommandState('bold'));
+  if (btnItalic) btnItalic.classList.toggle('active', document.queryCommandState('italic'));
+  if (btnUnderline) btnUnderline.classList.toggle('active', document.queryCommandState('underline'));
+}
+
+// Listen for selection changes to update toolbar state
+document.addEventListener('selectionchange', function() {
+  var editable = document.getElementById('blogBodyEditable');
+  if (!editable) return;
+  var sel = window.getSelection();
+  if (sel && sel.rangeCount > 0 && editable.contains(sel.anchorNode)) {
+    blogUpdateToolbarState();
+  }
+});
 
 // ===== CRUD FUNCTIONS =====
 
@@ -22418,19 +22564,21 @@ function blogFinishInsertImage(imageId, caption) {
   if (!blogCurrentPost) return;
   var inlineImages = blogCurrentPost.inlineImages || [];
   var imageNum = inlineImages.length + 1;
-  var textarea = document.getElementById('blogBodyTextarea');
-  var body = blogCurrentPost.body || '';
+  var editable = document.getElementById('blogBodyEditable');
 
-  if (textarea) {
-    var start = textarea.selectionStart || body.length;
-    body = body.substring(0, start) + '\n[Image ' + imageNum + ']\n' + body.substring(start);
-  } else {
-    body += '\n[Image ' + imageNum + ']\n';
+  // Insert styled marker span into contentEditable at cursor
+  if (editable) {
+    editable.focus();
+    var markerHtml = '<br><span class="blog-img-marker" contenteditable="false" data-image="' + imageNum + '">\ud83d\udcf7 Image ' + imageNum + '</span><br>';
+    document.execCommand('insertHTML', false, markerHtml);
   }
 
   inlineImages.push({ markerId: 'image_' + imageNum, imageId: imageId, caption: caption || '' });
-  blogCurrentPost.body = body;
   blogCurrentPost.inlineImages = inlineImages;
+
+  // Save body from editor (picks up the new marker)
+  var body = blogSaveBodyFromEditor();
+  blogCurrentPost.body = body;
   blogCurrentPost.updatedAt = new Date().toISOString();
 
   db.ref('shirglassworks/blog/posts/' + blogCurrentPostId).update({
@@ -22438,6 +22586,7 @@ function blogFinishInsertImage(imageId, caption) {
     inlineImages: inlineImages,
     updatedAt: blogCurrentPost.updatedAt
   }).then(function() {
+    // Re-render to update thumbnail list
     renderBlogEditor();
   }).catch(function(err) { showToast('Error inserting image: ' + err.message, true); });
 }
@@ -22487,18 +22636,27 @@ async function blogRemoveInlineImage(idx) {
   var inlineImages = blogCurrentPost.inlineImages || [];
   if (idx < 0 || idx >= inlineImages.length) return;
   var totalBefore = inlineImages.length;
+
+  // Save current editor content first
+  var editable = document.getElementById('blogBodyEditable');
+  if (editable) {
+    blogCurrentPost.body = blogSaveBodyFromEditor();
+  }
   var body = blogCurrentPost.body || '';
 
-  // Remove marker from body — handle both [Image N] and legacy [IMG:markerId] formats
-  body = body.replace(new RegExp('\\n?\\[Image ' + (idx + 1) + '\\]\\n?', 'g'), '\n');
+  // Remove marker from body — handle both [Image N], styled spans, and legacy [IMG:markerId] formats
+  body = body.replace(new RegExp('<span[^>]*data-image="' + (idx + 1) + '"[^>]*>[^<]*</span>', 'gi'), '');
+  body = body.replace(new RegExp('\\[Image ' + (idx + 1) + '\\]', 'g'), '');
   var marker = inlineImages[idx].markerId;
-  body = body.replace(new RegExp('\\n?\\[IMG:' + marker + '\\]\\n?', 'g'), '\n');
+  body = body.replace(new RegExp('\\[IMG:' + marker + '\\]', 'g'), '');
 
   inlineImages.splice(idx, 1);
 
-  // Renumber subsequent image markers
+  // Renumber subsequent image markers (both text and span formats)
   for (var n = idx + 2; n <= totalBefore; n++) {
     body = body.replace('[Image ' + n + ']', '[Image ' + (n - 1) + ']');
+    // Also renumber any leftover spans
+    body = body.replace(new RegExp('data-image="' + n + '"', 'g'), 'data-image="' + (n - 1) + '"');
   }
 
   blogCurrentPost.body = body;
@@ -22516,7 +22674,19 @@ async function blogRemoveInlineImage(idx) {
 
 function blogRenderBodyToHtml(body, inlineImages) {
   var html = body || '';
-  // Replace [Image N] with <img> tags (new format)
+  var isHtml = blogIsHtmlBody(html);
+
+  // If legacy plain text, convert to HTML first
+  if (!isHtml) {
+    html = blogPlainToHtml(html);
+  }
+
+  // Remove any editor marker spans that may have leaked into stored body
+  html = html.replace(/<span[^>]*class="blog-img-marker"[^>]*data-image="(\d+)"[^>]*>[^<]*<\/span>/gi, function(match, num) {
+    return '[Image ' + num + ']';
+  });
+
+  // Replace [Image N] with <img> tags
   (inlineImages || []).forEach(function(img, idx) {
     var imgData = imageLibrary[img.imageId];
     if (imgData) {
@@ -22534,8 +22704,6 @@ function blogRenderBodyToHtml(body, inlineImages) {
       html = html.replace('[IMG:' + img.markerId + ']', imgTag);
     }
   });
-  // Convert line breaks to paragraphs
-  html = html.split(/\n\n+/).map(function(p) { return '<p>' + p.replace(/\n/g, '<br>') + '</p>'; }).join('');
   return html;
 }
 
@@ -22547,11 +22715,17 @@ function blogTogglePreview() {
 }
 
 async function blogSuggestTags() {
+  // Save editor content first
+  var editable = document.getElementById('blogBodyEditable');
+  if (editable) blogCurrentPost.body = blogSaveBodyFromEditor();
   if (!blogCurrentPost || !blogCurrentPost.body) { showToast('Write some content first', true); return; }
   var btn = document.getElementById('blogSuggestTagsBtn');
   if (btn) { btn.disabled = true; btn.textContent = 'Thinking...'; }
   try {
-    var cleanBody = (blogCurrentPost.body || '').replace(/\[Image \d+\]/g, '').replace(/\[IMG:[^\]]+\]/g, '').trim();
+    // Strip HTML tags and image markers for clean text
+    var tempDiv = document.createElement('div');
+    tempDiv.innerHTML = blogCurrentPost.body || '';
+    var cleanBody = (tempDiv.textContent || tempDiv.innerText || '').replace(/\[Image \d+\]/g, '').replace(/\[IMG:[^\]]+\]/g, '').trim();
     var result = await firebase.functions().httpsCallable('shirSocialAI')({
       action: 'suggestBlogTags',
       body: cleanBody,
@@ -22585,11 +22759,19 @@ async function blogSuggestTags() {
 
 async function blogPolishWithAI() {
   if (!blogCurrentPost || !blogCurrentPost.body) { showToast('Write some content first before polishing', true); return; }
+  // Save current editor content first
+  var editable = document.getElementById('blogBodyEditable');
+  if (editable) {
+    blogCurrentPost.body = blogSaveBodyFromEditor();
+  }
   var btn = document.getElementById('blogPolishBtn');
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="nl-ai-loading">Polishing...</span>'; }
   try {
-    // Strip image markers before sending to AI
-    var cleanBody = blogCurrentPost.body.replace(/\[IMG:[^\]]+\]/g, '').replace(/\[Image \d+\]/g, '').trim();
+    // Strip HTML tags and image markers before sending to AI
+    var tempDiv = document.createElement('div');
+    tempDiv.innerHTML = blogCurrentPost.body || '';
+    var plainText = tempDiv.textContent || tempDiv.innerText || '';
+    var cleanBody = plainText.replace(/\[Image \d+\]/g, '').replace(/\[IMG:[^\]]+\]/g, '').trim();
     var author = BLOG_AUTHORS[blogCurrentPost.author] || BLOG_AUTHORS['madeline'];
     var result = await firebase.functions().httpsCallable('shirSocialAI')({
       action: 'blogPolish',
@@ -22608,13 +22790,13 @@ async function blogPolishWithAI() {
 async function blogPickVersion(version) {
   if (!blogCurrentPost) return;
   if (version === 'ai' && blogAiResult) {
-    // Re-inject image markers into AI version
-    var aiBody = blogAiResult;
+    // Convert AI plain text to HTML paragraphs, re-inject image markers
+    var aiHtml = blogPlainToHtml(blogAiResult);
     var images = blogCurrentPost.inlineImages || [];
-    images.forEach(function(img) {
-      aiBody += '\n[IMG:' + img.markerId + ']';
+    images.forEach(function(img, idx) {
+      aiHtml += '<p>[Image ' + (idx + 1) + ']</p>';
     });
-    blogCurrentPost.body = aiBody;
+    blogCurrentPost.body = aiHtml;
     blogCurrentPost.aiVersion = blogAiResult;
     blogCurrentPost.usedAI = true;
   }
@@ -22637,11 +22819,15 @@ async function blogPickVersion(version) {
 
 async function blogMarkComplete() {
   if (!blogCurrentPost) return;
+  // Save editor content first
+  var editable = document.getElementById('blogBodyEditable');
+  if (editable) blogCurrentPost.body = blogSaveBodyFromEditor();
   blogCurrentPost.status = 'complete';
   blogCurrentPost.updatedAt = new Date().toISOString();
   try {
     await db.ref('shirglassworks/blog/posts/' + blogCurrentPostId).update({
       status: 'complete',
+      body: blogCurrentPost.body,
       updatedAt: blogCurrentPost.updatedAt
     });
     renderBlogEditor();
