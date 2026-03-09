@@ -7,7 +7,7 @@
  *
  * Requirements:
  *   - Firebase must be initialized before this script runs
- *   - firebase.database() must be available
+ *   - At least one Firebase app must be available (default or named)
  *
  * Usage:
  *   <script src="feedback-widget.js"></script>
@@ -18,7 +18,19 @@
   var FEEDBACK_PATH = 'shirglassworks/feedbackReports';
   var SETTINGS_PATH = 'shirglassworks/admin/feedbackSettings/publicEnabled';
   var APP_ID = 'shirglassworks';
-  var db = firebase.database();
+
+  // Use default app if available, otherwise use first available named app
+  var fbApp;
+  try {
+    fbApp = firebase.app();
+  } catch (e) {
+    if (firebase.apps && firebase.apps.length > 0) {
+      fbApp = firebase.apps[0];
+    } else {
+      return; // No Firebase app available
+    }
+  }
+  var db = fbApp.database();
 
   // Console error capture — rolling buffer of last 20
   var _consoleBuffer = [];

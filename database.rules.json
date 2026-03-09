@@ -461,6 +461,13 @@
           ".write": "auth.uid === 'Y8RX1PIzccfT95WIIFl4I37VZZ72'"
         },
 
+        // Feedback settings — publicEnabled flag readable by anyone (drives widget visibility)
+        "feedbackSettings": {
+          "publicEnabled": {
+            ".read": true
+          }
+        },
+
         // Inventory — staff can write (POS needs to decrement stock during sales)
         "inventory": {
           ".write": "auth.uid === 'Y8RX1PIzccfT95WIIFl4I37VZZ72' || (auth != null && root.child('shirglassworks/admin/users').child(auth.uid).child('role').exists() && root.child('shirglassworks/admin/users').child(auth.uid).child('role').val() !== 'guest')"
