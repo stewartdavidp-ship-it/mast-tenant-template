@@ -9377,6 +9377,7 @@ async function sendUserInvite() {
     closeModal();
     var roleName = ROLE_DISPLAY_NAMES[role] || role;
     showToast('Invite recorded — ask them to sign in with their Google account. They\'ll be assigned the ' + roleName + ' role automatically.');
+    emitTestingEvent('inviteUser', {});
     loadPendingInvites();
   } catch (err) {
     console.error('Invite failed:', err);
@@ -16655,6 +16656,8 @@ async function openStoryCuration(jobId) {
 
   var html = buildStoryCurationHtml(job, builds, buildKeys, allMedia, existingStory, existingStoryId, isInline);
 
+  emitTestingEvent('openStoryCuration', {});
+
   if (isInline) {
     // Render inline in the stories tab detail view
     selectedStoryId = existingStoryId;
@@ -16956,6 +16959,7 @@ async function publishStory(existingId) {
     }
 
     showToast('Story published!');
+    emitTestingEvent('publishStory', {});
     if (storyCurationJobId) loadJobStoryStatus(storyCurationJobId);
     // Navigate to story detail view if on stories tab
     if (currentRoute === 'stories' && storyId) {
