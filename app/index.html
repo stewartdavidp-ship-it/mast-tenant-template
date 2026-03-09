@@ -21476,7 +21476,8 @@ var testingModeState = {
   missionProgress: {},    // { missionId: { progress: {}, reflections: {} } }
   assistantTaskIdx: null,
   assistantMessages: [],
-  assistantLoading: false
+  assistantLoading: false,
+  collapsedCategories: {}  // { categoryKey: true } — which categories are collapsed
 };
 
 // --- Event System ---
@@ -21575,6 +21576,15 @@ function toggleMissionExpand(missionId) {
   testingModeState.expandedMissionId = (testingModeState.expandedMissionId === missionId) ? null : missionId;
   testingModeState.assistantTaskIdx = null;
   testingModeState.assistantMessages = [];
+  renderTestingMode();
+}
+
+function toggleCategoryCollapse(catKey) {
+  if (testingModeState.collapsedCategories[catKey]) {
+    delete testingModeState.collapsedCategories[catKey];
+  } else {
+    testingModeState.collapsedCategories[catKey] = true;
+  }
   renderTestingMode();
 }
 
@@ -21738,22 +21748,40 @@ function renderTestingMode() {
   });
 
   var html = '';
+  var focusedMission = testingModeState.expandedMissionId;
 
-  // Render each category that has missions
-  MISSION_CATEGORIES.forEach(function(cat) {
-    if (!grouped[cat.key] || !grouped[cat.key].length) return;
-    html += '<div class="tm-category-group">';
-    html += '<div class="tm-category-header">' + cat.emoji + ' ' + cat.key + '</div>';
-    grouped[cat.key].forEach(function(mission) {
+  // If a mission is expanded/focused, only show that mission
+  if (focusedMission) {
+    var mission = testingMissions.find(function(m) { return m.id === focusedMission; });
+    if (mission) {
+      html += renderMissionCard(mission);
+    }
+  } else {
+    // No mission focused — show all categories with collapse support
+    MISSION_CATEGORIES.forEach(function(cat) {
+      if (!grouped[cat.key] || !grouped[cat.key].length) return;
+      var missions = grouped[cat.key];
+      var doneCount = missions.filter(function(m) { return isMissionAccomplished(m.id); }).length;
+      var isCollapsed = !!testingModeState.collapsedCategories[cat.key];
+      html += '<div class="tm-category-group">';
+      html += '<div class="tm-category-header" onclick="toggleCategoryCollapse(\'' + cat.key + '\')" style="cursor:pointer;display:flex;align-items:center;gap:6px;">';
+      html += '<span style="font-size:0.65rem;color:var(--warm-gray);">' + (isCollapsed ? '▶' : '▼') + '</span>';
+      html += '<span>' + cat.emoji + ' ' + cat.key + '</span>';
+      html += '<span style="margin-left:auto;font-size:0.7rem;color:var(--warm-gray);">' + doneCount + '/' + missions.length + '</span>';
+      html += '</div>';
+      if (!isCollapsed) {
+        missions.forEach(function(mission) {
+          html += renderMissionCard(mission);
+        });
+      }
+      html += '</div>';
+    });
+
+    // Uncategorized missions (backwards compat)
+    uncategorized.forEach(function(mission) {
       html += renderMissionCard(mission);
     });
-    html += '</div>';
-  });
-
-  // Uncategorized missions (backwards compat)
-  uncategorized.forEach(function(mission) {
-    html += renderMissionCard(mission);
-  });
+  }
 
   body.innerHTML = html;
 
