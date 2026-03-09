@@ -21635,7 +21635,8 @@ async function askStudioAssistant() {
         body: JSON.stringify({
           question: question,
           missionIndex: 0,
-          taskIndex: testingModeState.assistantTaskIdx
+          taskIndex: testingModeState.assistantTaskIdx,
+          taskText: TESTING_MISSIONS[0].tasks[testingModeState.assistantTaskIdx].text
         })
       }
     );
