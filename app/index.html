@@ -3589,6 +3589,24 @@
     .blog-idea-input { display:flex; gap:8px; margin-bottom:12px; }
     .blog-idea-input input { flex:1; padding:8px 12px; border:1px solid var(--border); border-radius:6px; background:var(--card-bg); color:var(--text); font-size:0.9rem; }
     .blog-idea-input input:focus { outline:none; border-color:var(--amber); }
+    /* Blog Preview */
+    .blog-preview { max-width:680px; margin:0 auto; }
+    .blog-preview-article { background:#FDFBF8; border:1px solid var(--border); border-radius:12px; padding:40px 48px; }
+    .blog-preview-byline { display:flex; align-items:center; gap:12px; margin-bottom:28px; }
+    .blog-preview-byline-photo { width:48px; height:48px; border-radius:50%; object-fit:cover; }
+    .blog-preview-byline-name { font-family:'DM Sans',Arial,sans-serif; font-weight:600; font-size:0.95rem; color:var(--text); }
+    .blog-preview-byline-date { font-size:0.8rem; color:var(--text-secondary); }
+    .blog-preview-title { font-family:'Cormorant Garamond',Georgia,serif; font-size:2.4rem; font-weight:400; line-height:1.2; margin:0 0 16px 0; color:var(--text); }
+    .blog-preview-tags { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:24px; }
+    .blog-preview-tag { font-size:0.75rem; padding:3px 10px; background:rgba(184,151,90,0.1); color:var(--amber); border-radius:20px; }
+    .blog-preview-body { font-family:'DM Sans',Georgia,serif; font-size:1.05rem; line-height:1.9; color:var(--text); }
+    .blog-preview-body p { margin:0 0 1.2em 0; }
+    .blog-preview-body img { max-width:100%; border-radius:8px; margin:16px 0; display:block; }
+    .blog-preview-body .blog-img-caption { font-size:0.85rem; color:var(--text-secondary); text-align:center; margin:-10px 0 16px 0; font-style:italic; }
+    .blog-inline-img-label { font-size:0.7rem; color:var(--text-secondary); text-align:center; margin-top:2px; }
+    .blog-inline-img-caption { font-size:0.7rem; color:var(--text-secondary); padding:0 2px; }
+    .blog-inline-img-caption input { width:100%; font-size:0.7rem; border:none; border-bottom:1px solid var(--border); background:transparent; color:var(--text); padding:2px 0; outline:none; }
+    .blog-inline-img-caption input:focus { border-bottom-color:var(--amber); }
 
     body.dark-mode .blog-post-row { background:#1e1e1e; border-color:#333; }
     body.dark-mode .blog-post-row:hover { border-color:var(--amber); }
@@ -3596,6 +3614,9 @@
     body.dark-mode .blog-body-textarea { background:#2a2a2a; border-color:#444; color:#eee; }
     body.dark-mode .blog-idea-row { background:#1e1e1e; border-color:#333; }
     body.dark-mode .blog-idea-input input { background:#2a2a2a; border-color:#444; color:#eee; }
+    body.dark-mode .blog-preview-article { background:#1e1e1e; border-color:#333; }
+    body.dark-mode .blog-preview-tag { background:rgba(184,151,90,0.2); }
+    body.dark-mode .blog-inline-img-caption input { background:transparent; color:#ccc; }
 
     /* ===== Newsletter Grid Canvas ===== */
     .nl-grid-canvas { max-width:600px; margin:0 auto; background:#FFFFFF; border-radius:8px; overflow:hidden; box-shadow:0 2px 16px rgba(0,0,0,0.15); }
@@ -21934,6 +21955,7 @@ var blogCurrentView = 'list'; // list | editor
 var blogCurrentPostId = null;
 var blogCurrentPost = null;
 var blogAiResult = null;
+var blogShowPreview = false;
 
 var BLOG_AUTHORS = {
   'madeline': {
@@ -22106,6 +22128,7 @@ function blogOpenPost(postId) {
   blogCurrentPost = post;
   blogCurrentView = 'editor';
   blogAiResult = null;
+  blogShowPreview = false;
   renderBlog();
 }
 
@@ -22121,9 +22144,46 @@ function renderBlogEditor() {
   // Top bar
   html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">' +
     '<button class="btn" onclick="blogBackToList()">← Back to Posts</button>' +
+    '<button class="btn" onclick="blogTogglePreview()" style="' + (blogShowPreview ? 'background:var(--amber);color:#fff;border-color:var(--amber);' : '') + '">' + (blogShowPreview ? '✏️ Edit' : '👁 Preview') + '</button>' +
     '<span class="nl-status-badge ' + status + '" style="margin-left:auto;">' + status + '</span>' +
     '<button class="btn" style="color:#c44;border-color:#c44;" onclick="blogDeletePost()">Delete</button>' +
     '</div>';
+
+  // Preview mode
+  if (blogShowPreview) {
+    var bodyHtml = blogRenderBodyToHtml(post.body || '', post.inlineImages || []);
+    var tags = post.tags || [];
+    var dateStr = post.updatedAt ? new Date(post.updatedAt).toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' }) : '';
+    html += '<div class="blog-preview">' +
+      '<article class="blog-preview-article">' +
+      '<div class="blog-preview-byline">' +
+      '<img src="' + author.photoUrl + '" alt="' + author.name + '" class="blog-preview-byline-photo" />' +
+      '<div>' +
+      '<div class="blog-preview-byline-name">' + author.name + '</div>' +
+      '<div class="blog-preview-byline-date">' + dateStr + '</div>' +
+      '</div></div>' +
+      '<h1 class="blog-preview-title">' + escapeHtml(post.title || 'Untitled Post') + '</h1>' +
+      (tags.length > 0 ? '<div class="blog-preview-tags">' + tags.map(function(t) { return '<span class="blog-preview-tag">' + escapeHtml(t) + '</span>'; }).join('') + '</div>' : '') +
+      '<div class="blog-preview-body">' + bodyHtml + '</div>' +
+      '</article></div>';
+    // Actions bar even in preview
+    html += '<div class="blog-actions" style="max-width:680px;margin:16px auto 0;">';
+    if (status === 'draft') {
+      html += '<button class="btn" onclick="blogPolishWithAI()" id="blogPolishBtn">✨ Polish with AI</button>';
+      html += '<button class="btn btn-primary" onclick="blogMarkComplete()">✅ Finish Post</button>';
+    } else if (status === 'complete') {
+      html += '<button class="btn" onclick="blogBackToDraft()">✏️ Back to Draft</button>';
+      html += '<button class="btn btn-primary" onclick="blogPostToSubstack()">📤 Post to Substack</button>';
+    } else if (status === 'posted') {
+      html += '<button class="btn" onclick="blogUnpublish()">Unpublish</button>';
+      if (post.substackDraftUrl) {
+        html += '<a href="' + post.substackDraftUrl + '" target="_blank" class="btn btn-primary" style="text-decoration:none;">View on Substack ↗</a>';
+      }
+    }
+    html += '</div>';
+    document.getElementById('blogContent').innerHTML = html;
+    return;
+  }
 
   // Author header card
   html += '<div class="blog-author-card">' +
@@ -22140,7 +22200,10 @@ function renderBlogEditor() {
   html += '<input class="blog-title-input" type="text" value="' + escapeHtml(post.title || '') + '" placeholder="Post title..." onchange="blogUpdateTitle(this.value)" />';
 
   // Tags
-  html += '<input class="blog-tags-input" type="text" value="' + (post.tags || []).join(', ') + '" placeholder="Tags (comma-separated)..." onchange="blogUpdateTags(this.value)" />';
+  html += '<div style="display:flex;align-items:center;gap:8px;">' +
+    '<input class="blog-tags-input" style="margin-bottom:0;" type="text" value="' + (post.tags || []).join(', ') + '" placeholder="Tags (comma-separated)..." onchange="blogUpdateTags(this.value)" />' +
+    '<button class="btn" id="blogSuggestTagsBtn" onclick="blogSuggestTags()" style="white-space:nowrap;font-size:0.8rem;padding:6px 10px;" title="AI-suggested tags based on your content">💡 Suggest</button>' +
+    '</div>';
 
   // Body toolbar
   html += '<div class="blog-body-toolbar">' +
@@ -22163,16 +22226,21 @@ function renderBlogEditor() {
     html += '<textarea class="blog-body-textarea" id="blogBodyTextarea" placeholder="Write your post here..." onchange="blogUpdateBody(this.value)">' + escapeHtml(post.body || '') + '</textarea>';
   }
 
-  // Inline image thumbnails
+  // Inline image thumbnails with labels and captions
   var inlineImages = post.inlineImages || [];
   if (inlineImages.length > 0) {
     html += '<div class="blog-inline-images">';
     inlineImages.forEach(function(img, idx) {
       var imgData = imageLibrary[img.imageId];
       var thumbUrl = imgData ? (imgData.thumbnailUrl || imgData.url) : '';
-      html += '<div class="blog-inline-img">' +
+      var caption = img.caption || '';
+      html += '<div style="text-align:center;">' +
+        '<div class="blog-inline-img" onclick="blogEditCaption(' + idx + ')" style="cursor:pointer;" title="Click to edit caption">' +
         '<img src="' + thumbUrl + '" alt="inline image" />' +
-        '<button class="remove-btn" onclick="blogRemoveInlineImage(' + idx + ')">×</button>' +
+        '<button class="remove-btn" onclick="event.stopPropagation();blogRemoveInlineImage(' + idx + ')">×</button>' +
+        (caption ? '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.6);color:#fff;font-size:0.6rem;padding:2px 4px;text-align:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">💬</div>' : '') +
+        '</div>' +
+        '<div class="blog-inline-img-label">Image ' + (idx + 1) + '</div>' +
         '</div>';
     });
     html += '</div>';
@@ -22202,6 +22270,7 @@ function blogBackToList() {
   blogCurrentPostId = null;
   blogCurrentPost = null;
   blogAiResult = null;
+  blogShowPreview = false;
   renderBlog();
 }
 
@@ -22275,44 +22344,163 @@ async function blogDeletePost() {
 // ===== INLINE IMAGE INSERTION =====
 
 function blogInsertImage() {
+  var html = '<div class="modal-header">' +
+    '<h3>Insert Image</h3>' +
+    '<button class="modal-close" onclick="closeModal()">&times;</button>' +
+    '</div>' +
+    '<div class="modal-body" style="text-align:center;padding:30px;">' +
+    '<p style="margin-bottom:20px;color:var(--text-secondary);">Choose how to add an image to your post:</p>' +
+    '<div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;">' +
+    '<button class="btn btn-primary" onclick="closeModal();blogInsertFromLibrary()" style="padding:16px 24px;font-size:0.95rem;">📚 From Library</button>' +
+    '<button class="btn btn-primary" onclick="closeModal();blogUploadFromComputer()" style="padding:16px 24px;font-size:0.95rem;">💻 From Computer</button>' +
+    '</div></div>';
+  openModal(html);
+}
+
+function blogInsertFromLibrary() {
   openImagePicker(function(imageId) {
     if (!imageId || !blogCurrentPost) return;
-    var markerId = 'img_' + Date.now();
-    var textarea = document.getElementById('blogBodyTextarea');
-    var body = blogCurrentPost.body || '';
+    blogPromptCaption(imageId);
+  });
+}
 
-    // Insert marker at cursor position or end
-    if (textarea) {
-      var start = textarea.selectionStart || body.length;
-      body = body.substring(0, start) + '\n[IMG:' + markerId + ']\n' + body.substring(start);
-    } else {
-      body += '\n[IMG:' + markerId + ']\n';
-    }
+function blogUploadFromComputer() {
+  var input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.onchange = async function() {
+    if (!input.files || !input.files[0]) return;
+    var file = input.files[0];
+    showToast('Uploading image...');
+    var reader = new FileReader();
+    reader.onload = async function(e) {
+      try {
+        var base64 = e.target.result.split(',')[1];
+        var token = await auth.currentUser.getIdToken();
+        var resp = await fetch(CLOUD_FUNCTIONS_BASE + '/shirUploadImage', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({ image: base64, tags: [], source: 'blog-upload' })
+        });
+        var result = await resp.json();
+        if (!result.success) throw new Error(result.error || 'Upload failed');
+        showToast('Image uploaded to library');
+        blogPromptCaption(result.imageId);
+      } catch (err) {
+        showToast('Upload failed: ' + err.message, true);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+  input.click();
+}
 
-    var inlineImages = blogCurrentPost.inlineImages || [];
-    inlineImages.push({ markerId: markerId, imageId: imageId, caption: '' });
-    blogCurrentPost.body = body;
-    blogCurrentPost.inlineImages = inlineImages;
-    blogCurrentPost.updatedAt = new Date().toISOString();
+function blogPromptCaption(imageId) {
+  var imgData = imageLibrary[imageId];
+  var thumbUrl = imgData ? (imgData.thumbnailUrl || imgData.url) : '';
+  var html = '<div class="modal-header">' +
+    '<h3>Add Caption</h3>' +
+    '<button class="modal-close" onclick="closeModal()">&times;</button>' +
+    '</div>' +
+    '<div class="modal-body" style="text-align:center;padding:20px;">' +
+    (thumbUrl ? '<img src="' + thumbUrl + '" style="max-width:200px;max-height:200px;border-radius:8px;margin-bottom:16px;" />' : '') +
+    '<input type="text" id="blogCaptionInput" placeholder="Caption (optional)..." style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:6px;background:var(--card-bg);color:var(--text);font-size:0.9rem;font-style:italic;" />' +
+    '</div>' +
+    '<div class="modal-footer">' +
+    '<button class="btn btn-secondary" onclick="blogFinishInsertImage(\'' + imageId + '\', \'\')">Skip</button>' +
+    '<button class="btn btn-primary" onclick="blogFinishInsertImage(\'' + imageId + '\', document.getElementById(\'blogCaptionInput\').value)">Add Image</button>' +
+    '</div>';
+  setTimeout(function() { openModal(html); }, 200);
+}
 
-    db.ref('shirglassworks/blog/posts/' + blogCurrentPostId).update({
-      body: body,
+function blogFinishInsertImage(imageId, caption) {
+  closeModal();
+  if (!blogCurrentPost) return;
+  var inlineImages = blogCurrentPost.inlineImages || [];
+  var imageNum = inlineImages.length + 1;
+  var textarea = document.getElementById('blogBodyTextarea');
+  var body = blogCurrentPost.body || '';
+
+  if (textarea) {
+    var start = textarea.selectionStart || body.length;
+    body = body.substring(0, start) + '\n[Image ' + imageNum + ']\n' + body.substring(start);
+  } else {
+    body += '\n[Image ' + imageNum + ']\n';
+  }
+
+  inlineImages.push({ markerId: 'image_' + imageNum, imageId: imageId, caption: caption || '' });
+  blogCurrentPost.body = body;
+  blogCurrentPost.inlineImages = inlineImages;
+  blogCurrentPost.updatedAt = new Date().toISOString();
+
+  db.ref('shirglassworks/blog/posts/' + blogCurrentPostId).update({
+    body: body,
+    inlineImages: inlineImages,
+    updatedAt: blogCurrentPost.updatedAt
+  }).then(function() {
+    renderBlogEditor();
+  }).catch(function(err) { showToast('Error inserting image: ' + err.message, true); });
+}
+
+function blogEditCaption(idx) {
+  if (!blogCurrentPost) return;
+  var inlineImages = blogCurrentPost.inlineImages || [];
+  if (idx < 0 || idx >= inlineImages.length) return;
+  var img = inlineImages[idx];
+  var imgData = imageLibrary[img.imageId];
+  var thumbUrl = imgData ? (imgData.thumbnailUrl || imgData.url) : '';
+  var html = '<div class="modal-header">' +
+    '<h3>Edit Caption — Image ' + (idx + 1) + '</h3>' +
+    '<button class="modal-close" onclick="closeModal()">&times;</button>' +
+    '</div>' +
+    '<div class="modal-body" style="text-align:center;padding:20px;">' +
+    (thumbUrl ? '<img src="' + thumbUrl + '" style="max-width:200px;max-height:200px;border-radius:8px;margin-bottom:16px;" />' : '') +
+    '<input type="text" id="blogCaptionEditInput" value="' + escapeHtml(img.caption || '') + '" placeholder="Caption..." style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:6px;background:var(--card-bg);color:var(--text);font-size:0.9rem;font-style:italic;" />' +
+    '</div>' +
+    '<div class="modal-footer">' +
+    '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+    '<button class="btn btn-primary" onclick="blogSaveCaption(' + idx + ', document.getElementById(\'blogCaptionEditInput\').value)">Save</button>' +
+    '</div>';
+  openModal(html);
+}
+
+async function blogSaveCaption(idx, caption) {
+  closeModal();
+  if (!blogCurrentPost) return;
+  var inlineImages = blogCurrentPost.inlineImages || [];
+  if (idx < 0 || idx >= inlineImages.length) return;
+  inlineImages[idx].caption = caption || '';
+  blogCurrentPost.inlineImages = inlineImages;
+  blogCurrentPost.updatedAt = new Date().toISOString();
+  try {
+    await db.ref('shirglassworks/blog/posts/' + blogCurrentPostId).update({
       inlineImages: inlineImages,
       updatedAt: blogCurrentPost.updatedAt
-    }).then(function() {
-      renderBlogEditor();
-    }).catch(function(err) { showToast('Error inserting image: ' + err.message, true); });
-  });
+    });
+    renderBlogEditor();
+    showToast('Caption updated');
+  } catch (err) { showToast('Error saving caption: ' + err.message, true); }
 }
 
 async function blogRemoveInlineImage(idx) {
   if (!blogCurrentPost) return;
   var inlineImages = blogCurrentPost.inlineImages || [];
   if (idx < 0 || idx >= inlineImages.length) return;
+  var totalBefore = inlineImages.length;
+  var body = blogCurrentPost.body || '';
+
+  // Remove marker from body — handle both [Image N] and legacy [IMG:markerId] formats
+  body = body.replace(new RegExp('\\n?\\[Image ' + (idx + 1) + '\\]\\n?', 'g'), '\n');
   var marker = inlineImages[idx].markerId;
-  // Remove marker from body
-  var body = (blogCurrentPost.body || '').replace(new RegExp('\\n?\\[IMG:' + marker + '\\]\\n?', 'g'), '\n');
+  body = body.replace(new RegExp('\\n?\\[IMG:' + marker + '\\]\\n?', 'g'), '\n');
+
   inlineImages.splice(idx, 1);
+
+  // Renumber subsequent image markers
+  for (var n = idx + 2; n <= totalBefore; n++) {
+    body = body.replace('[Image ' + n + ']', '[Image ' + (n - 1) + ']');
+  }
+
   blogCurrentPost.body = body;
   blogCurrentPost.inlineImages = inlineImages;
   blogCurrentPost.updatedAt = new Date().toISOString();
@@ -22328,17 +22516,69 @@ async function blogRemoveInlineImage(idx) {
 
 function blogRenderBodyToHtml(body, inlineImages) {
   var html = body || '';
-  // Replace [IMG:markerId] with <img> tags
+  // Replace [Image N] with <img> tags (new format)
+  (inlineImages || []).forEach(function(img, idx) {
+    var imgData = imageLibrary[img.imageId];
+    if (imgData) {
+      var captionHtml = img.caption ? '<div class="blog-img-caption">' + escapeHtml(img.caption) + '</div>' : '';
+      var imgTag = '<img src="' + (imgData.url || imgData.thumbnailUrl) + '" alt="' + escapeHtml(img.caption || '') + '" style="max-width:100%;border-radius:6px;margin:12px 0;" />' + captionHtml;
+      html = html.replace('[Image ' + (idx + 1) + ']', imgTag);
+    }
+  });
+  // Also handle legacy [IMG:markerId] format
   (inlineImages || []).forEach(function(img) {
     var imgData = imageLibrary[img.imageId];
     if (imgData) {
-      var imgTag = '<img src="' + (imgData.url || imgData.thumbnailUrl) + '" alt="' + escapeHtml(img.caption || '') + '" style="max-width:100%;border-radius:6px;margin:12px 0;" />';
+      var captionHtml = img.caption ? '<div class="blog-img-caption">' + escapeHtml(img.caption) + '</div>' : '';
+      var imgTag = '<img src="' + (imgData.url || imgData.thumbnailUrl) + '" alt="' + escapeHtml(img.caption || '') + '" style="max-width:100%;border-radius:6px;margin:12px 0;" />' + captionHtml;
       html = html.replace('[IMG:' + img.markerId + ']', imgTag);
     }
   });
   // Convert line breaks to paragraphs
   html = html.split(/\n\n+/).map(function(p) { return '<p>' + p.replace(/\n/g, '<br>') + '</p>'; }).join('');
   return html;
+}
+
+// ===== PREVIEW + TAG SUGGESTIONS =====
+
+function blogTogglePreview() {
+  blogShowPreview = !blogShowPreview;
+  renderBlogEditor();
+}
+
+async function blogSuggestTags() {
+  if (!blogCurrentPost || !blogCurrentPost.body) { showToast('Write some content first', true); return; }
+  var btn = document.getElementById('blogSuggestTagsBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Thinking...'; }
+  try {
+    var cleanBody = (blogCurrentPost.body || '').replace(/\[Image \d+\]/g, '').replace(/\[IMG:[^\]]+\]/g, '').trim();
+    var result = await firebase.functions().httpsCallable('shirSocialAI')({
+      action: 'suggestBlogTags',
+      body: cleanBody,
+      title: blogCurrentPost.title || ''
+    });
+    var suggestedTags = result.data.tags || [];
+    if (suggestedTags.length > 0) {
+      var existing = blogCurrentPost.tags || [];
+      var merged = existing.slice();
+      suggestedTags.forEach(function(t) {
+        if (merged.indexOf(t) === -1) merged.push(t);
+      });
+      blogCurrentPost.tags = merged;
+      blogCurrentPost.updatedAt = new Date().toISOString();
+      await db.ref('shirglassworks/blog/posts/' + blogCurrentPostId).update({
+        tags: merged,
+        updatedAt: blogCurrentPost.updatedAt
+      });
+      renderBlogEditor();
+      showToast('Tags suggested: ' + suggestedTags.join(', '));
+    } else {
+      showToast('No tag suggestions generated');
+    }
+  } catch (err) {
+    showToast('Tag suggestion failed: ' + err.message, true);
+  }
+  if (btn) { btn.disabled = false; btn.textContent = '💡 Suggest'; }
 }
 
 // ===== AI POLISH =====
@@ -22349,7 +22589,7 @@ async function blogPolishWithAI() {
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="nl-ai-loading">Polishing...</span>'; }
   try {
     // Strip image markers before sending to AI
-    var cleanBody = blogCurrentPost.body.replace(/\[IMG:[^\]]+\]/g, '').trim();
+    var cleanBody = blogCurrentPost.body.replace(/\[IMG:[^\]]+\]/g, '').replace(/\[Image \d+\]/g, '').trim();
     var author = BLOG_AUTHORS[blogCurrentPost.author] || BLOG_AUTHORS['madeline'];
     var result = await firebase.functions().httpsCallable('shirSocialAI')({
       action: 'blogPolish',
