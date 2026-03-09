@@ -10,6 +10,8 @@ Updated by Claude Code as builds complete.
 - `Planned` — designed but not yet started
 - `Not Started` — identified but not yet designed
 
+**Navigation sections:** Dashboard → Make → Market → Sell → Ship → Teach → Manage
+
 ---
 
 ## Selling — Craft Fair
@@ -42,36 +44,52 @@ How a customer buys from shirglassworks.com — from browsing to payment confirm
 
 1. Customer browses the shop and adds pieces to their cart
 2. Customer opens the cart and proceeds to checkout
-3. Customer enters their shipping address
+3. Customer enters their shipping address (pre-filled if logged in)
 4. Address is validated automatically — customer corrects it if needed
 5. Shipping cost is calculated and shown (free for orders over $100)
 6. Customer reviews the order total including shipping
 7. Customer enters payment details via Square's secure checkout
 8. Payment is processed — customer sees an order confirmation
-9. Order appears in the admin app under Retail Orders
+9. Order appears in the admin app under Sell → Retail Orders
 
 ---
 
 ## Order Fulfillment
 
-### Process and Ship a Website Order
+### Confirm and Triage a New Order
 **Status:** Live
 
-What Ori or Madeline does after a customer places an order online — from confirming the order through to dropping it at the post office.
+When a new order comes in, the admin triages it — checking inventory and deciding whether items ship from stock or need to be built.
 
 1. Open the admin app and go to Sell → Retail Orders
-2. Find the new order (status: Placed)
+2. Find the new order (status: Placed) — a badge on "Retail Orders" in the sidebar shows the count of placed orders
 3. Review the order details — items, options, shipping address
-4. If the item is in stock: click Confirm Order (status moves to Packing)
-5. If the item needs to be made: a production job is created automatically
-6. Pack the order — scan the QR label to mark it packed in the system
-7. Click Download Shipping CSV on the confirmed order
-8. Open Pirate Ship (ship.pirateship.com) and import the CSV — the admin app has a direct link next to the CSV button
-9. Purchase the shipping label in Pirate Ship
-10. Print the label and attach it to the package
-11. Return to the admin app and scan packages at drop-off to bundle them
-12. Confirm drop-off — carrier and location are recorded
-13. The order auto-transitions to Shipped and the customer receives an email notification with tracking info (if available)
+4. Each item shows its inventory status inline: In Stock, Low Stock, Not in Stock, or Made to Order
+5. Click "Confirm Order" — the Triage Dialog opens
+6. The dialog shows each item with available stock and a pre-selected action: "From Stock" or "Send to Build"
+7. Override any item's action if needed (e.g., force build even if in stock)
+8. Review the summary: how many items from stock vs. build, and what status the order will advance to
+9. Click "Confirm & Route" — inventory is reserved for stock items, production requests are created for build items
+10. If all items are from stock: order advances to Ready
+11. If any items need building: order advances to Building — a linked production request appears in Make → Jobs
+
+### Pack and Ship an Order
+**Status:** Live
+
+What happens after an order is confirmed — from packing through to drop-off at the post office.
+
+1. Open the admin app and go to Ship → Pack
+2. The Pack Queue shows orders at Ready, Packing, and Packed status — each with a progress bar showing where it is in the pipeline
+3. For a Ready order: click "Start Packing" to move it to Packing status
+4. Pack the order — optionally use the Studio Scan tab to scan QR labels
+5. Click "Mark Packed" on the order in the Pack Queue
+6. Click "Pirate Ship →" — the CSV is automatically downloaded (first time) and Pirate Ship opens in a new tab
+7. First-time users see a mapping guide dialog explaining which CSV fields need manual mapping in Pirate Ship (Weight, Dimensions, Order ID, Rubber Stamp) — Pirate Ship remembers mappings after the first time
+8. In Pirate Ship: import the CSV, purchase the shipping label, print and attach it to the package
+9. Back in the Pack Queue: click "Handed to Carrier" on the packed order
+10. Go to Ship → Ship → Drop-off to scan packages and bundle them for carrier pickup
+11. Confirm drop-off — carrier and location are recorded
+12. The order auto-transitions to Shipped and the customer receives an email notification with tracking info (if available)
 
 ---
 
@@ -88,7 +106,7 @@ How to create an event in the system, allocate the inventory you're bringing, an
 4. Print the packing list if needed
 5. At the fair, open the POS app — the recommended way is to click "Open PoS" on the active event in the admin app, which pre-links the event automatically
 6. If you open the POS without a pre-linked event, it detects your location and shows a confirmation dialog with the active event(s) — confirm the right one, pick a different event, or dismiss
-7. Use the ⚙ button in the top bar at any time to switch events, unlink, or link to a different active event
+7. Use the gear button in the top bar at any time to switch events, unlink, or link to a different active event
 8. Ring up sales as normal — sold quantities are tracked against your allocation
 9. The event banner shows: packed / sold / remaining at a glance
 
@@ -113,7 +131,7 @@ Reconciling what sold at a fair so inventory stays accurate back at the studio.
 
 Creating a build job when it's time to make a batch of pieces — whether triggered by a customer order or to restock.
 
-1. Open the admin app and go to Make → Production
+1. Open the admin app and go to Make → Jobs
 2. Click New Job
 3. Enter the job name (e.g. "Spring restock — small bowls")
 4. Add the pieces to make: search by product name and set the target quantity for each
@@ -128,7 +146,7 @@ Creating a build job when it's time to make a batch of pieces — whether trigge
 
 Closing out a build job once the pieces are finished and ready for sale.
 
-1. Open the admin app and go to Make → Production → Jobs
+1. Open the admin app and go to Make → Jobs
 2. Find the job and open it
 3. While the job is in progress, update completed and loss quantities inline on each line item — changes save automatically
 4. Review the finished quantities before completing — adjust if any pieces didn't turn out
@@ -139,6 +157,27 @@ Closing out a build job once the pieces are finished and ready for sale.
 
 ---
 
+## Forecasting
+
+### Forecasting — What to Build Next
+**Status:** Live
+
+Use the Forecast view to see what's selling, what's running low, and what to build next — all in one place.
+
+1. Open the admin app and go to Make → Jobs
+2. Click the Forecast tab (Owner and Manager only — Staff cannot see this tab)
+3. If there are upcoming events within 60 days, a banner appears at the top — click it to review the event
+4. The Suggested Builds section shows cards for products that are selling faster than current stock
+5. Each card shows current stock, monthly sales rate, and weeks of coverage remaining
+6. Click Create Job on a card to open a pre-filled production job with the suggested quantity
+7. Below stocked products, any Made-to-Order products with high demand (10+ orders in 90 days) appear under "Consider Stocking"
+8. The Demand Overview table shows all production products with order history — sortable by any column
+9. Use the time horizon toggle (Adaptive / 30d / 90d / All) to change the Sold column display
+10. Click any row to jump to the product detail
+11. The Slow/No Movement section (collapsed by default) lists products with stock but no recent orders
+
+---
+
 ## Inventory
 
 ### Update Stock After a Firing
@@ -146,7 +185,7 @@ Closing out a build job once the pieces are finished and ready for sale.
 
 A quick way to update inventory counts after pieces come out of the kiln, without going through a full production job.
 
-1. Open the admin app and go to Make → Production → Inventory
+1. Open the admin app and go to Manage → Inventory
 2. Find the product you're updating and click Adjust Stock
 3. Choose a mode: **Set Count** (enter an absolute number) or **Add Pieces** (enter how many to add to current stock)
 4. Save — the updated count is immediately reflected in the shop
@@ -156,7 +195,7 @@ A quick way to update inventory counts after pieces come out of the kiln, withou
 
 Tracking where pieces are stored — studio shelves, display cases, fair bins — so you always know where to find something.
 
-1. Open the admin app and go to Make → Production → Inventory
+1. Open the admin app and go to Manage → Inventory
 2. Select the piece you're moving
 3. Update the location — or scan the QR code at the destination location
 4. Confirm the move
@@ -202,125 +241,26 @@ Uploading photos to the image library and assigning them to products or website 
 2. Click Upload and select photos from your device
 3. Tag the image with the relevant product or website section
 4. To assign to a product: open the product in Manage → Products and select from the image library
-5. To use on the website: assign the image to the relevant section in Market → Website Content
+5. To use on the website: assign the image to the relevant section in Manage → Website Content
 
 ---
 
-## Contacts & Relationships
+## Coupons
 
-### Add a New Contact
+### Create and Manage Coupons
 **Status:** Live
 
-Bringing a vendor, partner, gallery, or other business contact into the system so interactions can be tracked over time.
+Creating discount codes for customers — percentage or fixed-amount, with optional minimum order, usage limits, and date ranges.
 
-1. Open the admin app and go to Manage → Contacts
-2. Click Add Contact
-3. Enter the contact name, category (Supplier, Gallery, Event Organizer, etc.), and optional notes
-4. Optionally paste their Google Drive folder link for document access (Studio won't create a folder automatically — paste a link to an existing folder)
-5. Save — the contact is created in Studio and synced to Google Contacts automatically
-6. A "Shir Glassworks" label is added to the contact in Google Contacts
-
-### Log an Interaction with a Contact
-**Status:** Live
-
-Recording a call, meeting, payment, or other touchpoint so there's a full history of the relationship.
-
-1. Open the admin app and go to Manage → Contacts
-2. Find the contact and open their record
-3. Click Log Interaction
-4. Set the date (defaults to today), type (Call, Email, Meeting, etc.), and add notes on what happened
-5. Optionally attach a document — paste a Google Drive link to attach file metadata to the interaction
-6. Save — the interaction appears in the contact's timeline, newest first
-
-### Sync Contacts from Google
-**Status:** Live
-
-Pulling in contacts that were added directly to the "Shir Glassworks" group in Google Contacts, rather than through Studio.
-
-1. Open the admin app and go to Manage → Contacts
-2. Click Sync from Google Contacts
-3. Studio fetches all contacts in the "Shir Glassworks" group and creates any missing records
-4. New contacts appear with category set to "Other" — update their category as needed
-
----
-
-## Admin
-
-### Configure Square Payment Settings
-**Status:** Live
-
-Switching between sandbox (test) mode and live payments, and updating Square credentials. Sandbox mode is for testing only — no real money moves.
-
-1. Open the admin app and go to Manage → Settings & Integrations
-2. Find the Square section
-3. To test: set Environment to Sandbox and enter the Sandbox Application ID and Location ID
-4. To go live: set Environment to Production (live credentials are already saved)
-5. Click Save
-6. In Sandbox mode a TEST MODE banner appears on the checkout page — verify this is visible before testing
-
-### Manage Employees and Permissions
-**Status:** Live
-
-Adding a new team member or updating what someone can access in the admin app.
-
-1. Open the admin app and go to Manage → Employees & Permissions
-2. To invite someone: click + Add User in the section header
-3. Enter their email address and select a role: Owner, Manager, or Staff
-4. Click Send Invite — the invite is recorded and you'll see it as a pending row in the users list
-5. Tell the person to sign in with their Google account — they'll be assigned the invited role automatically on first login
-6. To change an existing user's role: use the role dropdown next to their name in the users list
-7. Managers can access POS, inventory, and fulfillment — not pricing, settings, or user management
-8. Staff have basic access to POS and inventory
-
-### View the Audit Log
-**Status:** Live
-
-Reviewing a history of who did what and when — useful for reconciliation or troubleshooting.
-
-1. Open the admin app and go to Manage → Audit Log
-2. Filter by date range, user, or action type
-3. Each entry shows who performed the action, what changed, and whether they were in fair mode or studio mode
-
----
-
-## Contacts & Vendors
-
-### Manage Contacts
-**Status:** Live
-
-Tracking the people and businesses Shir Glassworks works with — suppliers, galleries, event organizers, and more.
-
-1. Open the admin app and go to Manage → Contacts
-2. View all contacts in a searchable, filterable list
-3. Filter by category: Supplier, Facilities, Gallery, Marketplace, Event Organizer, Partner, Student, Press, Other
-4. Click "+ Add Contact" to create a new contact — enter name, category, email, phone, and notes
-5. Optionally sync the new contact to Google Contacts (creates a record in the "Shir Glassworks" group)
-6. Click a contact row to view their full detail and interaction history
-
-### Log an Interaction
-**Status:** Live
-
-Recording a phone call, email, meeting, or other touchpoint with a contact so nothing falls through the cracks.
-
-1. Open a contact's detail view (Manage → Contacts → click the contact)
-2. Click "Log Interaction"
-3. Select the interaction type: Call, Email, Meeting, Site Visit, Payment, Signed Document, or Other
-4. Enter the date and who logged it (Ori or Madeline)
-5. Add notes describing what happened
-6. Optionally attach a Google Drive document link — the app fetches the file metadata automatically
-7. Save — the interaction appears in the contact's timeline, most recent first
-
-### Sync Contacts from Google
-**Status:** Live
-
-Pulling in contacts that were added directly to the "Shir Glassworks" group in Google Contacts, so they appear in the admin app too.
-
-1. Open the admin app and go to Manage → Contacts
-2. Click the "Sync Google" button
-3. Grant Google Contacts access if prompted (one-time per session)
-4. The app checks the "Shir Glassworks" contact group in Google Contacts
-5. Any contacts in that group that don't exist in Firebase are created automatically
-6. Existing contacts are not overwritten — sync only adds new ones
+1. Open the admin app and go to Sell → Coupons
+2. Click "+ New Coupon"
+3. Enter the coupon code (e.g. "SPRING25")
+4. Choose the discount type: Percentage or Fixed Amount
+5. Set the discount value (e.g. 25% or $10)
+6. Optionally set: start/end dates, minimum order amount, maximum uses, and one-per-customer flag
+7. Add an optional description for internal reference
+8. Save — the coupon is active and can be used at checkout
+9. The coupons list shows status (Active, Pending, Expired) auto-calculated from dates and usage
 
 ---
 
@@ -331,11 +271,11 @@ Pulling in contacts that were added directly to the "Shir Glassworks" group in G
 
 Bringing a one-of-a-kind sculpture into the system so it can be listed on the website and tracked separately from production pieces.
 
-1. Create the product in the usual way (Studio Companion → Identify & Train, or manually in admin)
+1. Create the product in the usual way (Studio Companion or manually in admin)
 2. In the admin app, go to Manage → Products and open the product
 3. Set the Business Line to **Sculpture**
 4. Set price, add photos, and toggle to Published
-5. In Make → Production → Inventory, set the stock to 1
+5. In Manage → Inventory, set the stock to 1
 6. The product now appears in the shop — sculptures are limited to 1 unit in stock
 7. When the sculpture sells (POS or website), stock goes to 0 and the product is automatically marked **Sold**
 8. On the website, sold sculptures remain visible with a "Sold" badge and a "Request a Commission" link
@@ -363,31 +303,10 @@ Handling a customer request for a custom or commission piece — from initial in
 4. Update the status to **In Discussion** and start the conversation
 5. Fill in the Proposal section: price, estimated timeline, and design/spec notes
 6. Click **Send Proposal to Customer** — the customer receives an email with the proposal details and a QR code linking back to the commission
-7. If the customer agrees: update status to **Accepted** and click **Create Production Job** — a linked job appears in Make → Production
+7. If the customer agrees: update status to **Accepted** and click **Create Production Job** — a linked job appears in Make → Jobs
 8. Build the piece and mark the production job as complete — update commission status to **Built**
 9. Ship or hand off the piece, then mark the commission as **Completed**
 10. If the customer declines: update status to **Declined**
-
----
-
-## Forecasting
-
-### Forecasting — What to Build Next
-**Status:** Live
-
-Use the Forecast view to see what's selling, what's running low, and what to build next — all in one place.
-
-1. Open the admin app and go to Make → Production
-2. Click the Forecast tab (Owner and Manager only — Staff cannot see this tab)
-3. If there are upcoming events within 60 days, a banner appears at the top — click it to review the event
-4. The Suggested Builds section shows cards for products that are selling faster than current stock
-5. Each card shows current stock, monthly sales rate, and weeks of coverage remaining
-6. Click Create Job on a card to open a pre-filled production job with the suggested quantity
-7. Below stocked products, any Made-to-Order products with high demand (10+ orders in 90 days) appear under "Consider Stocking"
-8. The Demand Overview table shows all production products with order history — sortable by any column
-9. Use the time horizon toggle (Adaptive / 30d / 90d / All) to change the Sold column display
-10. Click any row to jump to the product detail
-11. The Slow/No Movement section (collapsed by default) lists products with stock but no recent orders
 
 ---
 
@@ -406,7 +325,7 @@ How to take a finished video from your camera roll to a ready-to-post Instagram 
 6. Review the 3 caption variants and tap the one that fits best — edit inline if needed
 7. Follow the Instagram Posting Guide steps A–E: Open Instagram, select your video, paste the caption, paste hashtags, set your cover frame
 8. Back in Studio, tap "Mark as Posted" to record it
-9. Later, if the post performs well, tap 👍 or 🔥 on the post in your Posted History to log the signal
+9. Later, if the post performs well, tap the thumbs-up or fire icon on the post in your Posted History to log the signal
 
 ### Pre-Shoot: Get a Shoot Card Before You Film
 **Status:** Live
@@ -480,6 +399,97 @@ Reviewing, editing, and managing stories from the Stories list view.
 
 ---
 
+## Contacts & Relationships
+
+### Add a New Contact
+**Status:** Live
+
+Bringing a vendor, partner, gallery, or other business contact into the system so interactions can be tracked over time.
+
+1. Open the admin app and go to Manage → Contacts
+2. Click "+ Add Contact"
+3. Enter the contact name, category (Supplier, Facilities, Gallery, Marketplace, Event Organizer, Partner, Student, Press, or Other), and optional notes
+4. Optionally paste a Google Drive folder link for document access
+5. Save — the contact is created in Studio and synced to Google Contacts automatically
+6. A "Shir Glassworks" group is created in Google Contacts if it doesn't exist, and the contact is added to it
+
+### Log an Interaction with a Contact
+**Status:** Live
+
+Recording a call, meeting, payment, or other touchpoint so there's a full history of the relationship.
+
+1. Open the admin app and go to Manage → Contacts
+2. Find the contact and open their record
+3. Click "Log Interaction"
+4. Select the interaction type: Call, Email, Meeting, Site Visit, Payment, Signed Doc, or Other
+5. Set the date (defaults to today) and add notes on what happened
+6. Optionally attach a document — paste a Google Drive link to attach file metadata to the interaction
+7. Save — the interaction appears in the contact's timeline, newest first
+
+### Sync Contacts from Google
+**Status:** Live
+
+Pulling in contacts that were added directly to the "Shir Glassworks" group in Google Contacts, rather than through Studio.
+
+1. Open the admin app and go to Manage → Contacts
+2. Click "Sync Google"
+3. Grant Google Contacts access if prompted (one-time per session)
+4. The app checks the "Shir Glassworks" group in Google Contacts (creates the group automatically if it doesn't exist)
+5. Any contacts in that group that don't exist in Firebase are created automatically with category set to "Other"
+6. Existing contacts are not overwritten — sync only adds new ones
+7. Update the category on imported contacts as needed
+
+---
+
+## Admin
+
+### Configure Square Payment Settings
+**Status:** Live
+
+Switching between sandbox (test) mode and live payments, and updating Square credentials. Sandbox mode is for testing only — no real money moves.
+
+1. Open the admin app and go to Manage → Settings & Integrations
+2. Find the Square section
+3. To test: set Environment to Sandbox and enter the Sandbox Application ID and Location ID
+4. To go live: set Environment to Production (live credentials are already saved)
+5. Click Save
+6. In Sandbox mode a TEST MODE banner appears on the checkout page — verify this is visible before testing
+
+### Manage Employees and Permissions
+**Status:** Live
+
+Adding a new team member or updating what someone can access in the admin app.
+
+1. Open the admin app and go to Manage → Employees & Permissions
+2. To invite someone: click + Add User in the section header
+3. Enter their email address and select a role: Owner, Manager, or Staff
+4. Click Send Invite — the invite is recorded and you'll see it as a pending row in the users list
+5. Tell the person to sign in with their Google account — they'll be assigned the invited role automatically on first login
+6. To change an existing user's role: use the role dropdown next to their name in the users list
+7. Managers can access POS, inventory, and packing — not pricing, settings, or user management
+8. Staff have basic access to POS and inventory
+
+### View Analytics
+**Status:** Live
+
+Reviewing website traffic, page views, and visitor activity over time.
+
+1. Open the admin app and go to Manage → Analytics
+2. Select a time range: Last 7 days, Last 30 days, or Last 90 days
+3. Review the summary cards for key metrics
+4. Click Refresh to pull the latest data
+
+### View the Audit Log
+**Status:** Live
+
+Reviewing a history of who did what and when — useful for reconciliation or troubleshooting.
+
+1. Open the admin app and go to Manage → Audit Log
+2. Filter by date range, user, or action type
+3. Each entry shows who performed the action, what changed, and whether they were in fair mode or studio mode
+
+---
+
 ## Not Yet Built
 
 The following workflows have been identified but not yet designed or built. These are candidates for the next planning session with Ori and Madeline.
@@ -491,3 +501,4 @@ The following workflows have been identified but not yet designed or built. Thes
 | Customer Follow-Up | Sending updates or follow-up messages to buyers. Not yet designed. |
 | End-of-Year Financials Summary | Pulling together sales, costs, and reconciliation. Not yet designed. |
 | Contact History Import | Retroactive import of existing Google Drive documents into contact interaction timelines. Deferred pending proof of value from Phase 1. |
+| Ship Bundles | Creating and managing carrier bundles for batch drop-offs. Ship → Ship → Bundles. |
