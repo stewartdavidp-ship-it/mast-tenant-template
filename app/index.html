@@ -5619,6 +5619,9 @@ function navigateTo(route) {
   location.hash = route;
   applyRoute(route);
   closeMobileMenu();
+  // Testing Mode auto-detection
+  if (route === 'orders') notifyTestingMode(0);
+  if (route === 'jobs') notifyTestingMode(3);
 }
 
 function applyRoute(route) {
@@ -10999,6 +11002,7 @@ function viewOrder(orderId) {
   var detailEl = document.getElementById('orderDetailView');
   detailEl.style.display = 'block';
   renderOrderDetail(orderId);
+  notifyTestingMode(1); // Testing Mode: reviewed order detail
 }
 
 function backToOrders() {
@@ -11509,6 +11513,7 @@ async function executeTriageConfirm(orderId) {
     closeModal();
     showToast('Order confirmed and routed');
     renderOrderDetail(orderId);
+    notifyTestingMode(2); // Testing Mode: confirmed and routed order
   } catch (err) {
     showToast('Error: ' + err.message, true);
     if (btn) { btn.disabled = false; btn.textContent = 'Confirm & Route'; }
@@ -11602,6 +11607,11 @@ async function transitionOrder(orderId, newStatus) {
 
     await db.ref(ORDERS_PATH + '/' + orderId).update(updates);
     await writeAudit('update', 'orders', orderId);
+
+    // Testing Mode auto-detection
+    if (newStatus === 'packing') notifyTestingMode(4);
+    if (newStatus === 'packed') notifyTestingMode(5);
+    if (newStatus === 'handed_to_carrier') notifyTestingMode(7);
 
     // Auto-progress handed_to_carrier → shipped (triggers email notification via Cloud Function)
     if (newStatus === 'handed_to_carrier') {
@@ -11814,6 +11824,7 @@ function openPirateShip(orderId) {
     downloadOrderCSV(orderId);
     _pirateShipCSVDownloaded[orderId] = true;
   }
+  notifyTestingMode(6); // Testing Mode: exported Pirate Ship CSV
 
   // Step 2: Check first-time usage — show mapping guide or go straight to Pirate Ship
   var hasUsed = localStorage.getItem('sgw_pirateship_mapped');
@@ -21490,7 +21501,7 @@ function renderTestingMode() {
   mission.tasks.forEach(function(task, idx) {
     var checked = progress[idx] === true;
     html += '<li class="tm-task-item' + (checked ? ' checked' : '') + '">';
-    html += '<input type="checkbox" ' + (checked ? 'checked' : '') + ' onchange="toggleTask(' + idx + ')">';
+    html += '<span style="flex-shrink:0;width:20px;text-align:center;">' + (checked ? '✅' : '⬜') + '</span>';
     html += '<span class="tm-task-text">' + task.text + '</span>';
     html += '<button class="tm-task-hint-btn" onclick="openAssistant(' + idx + ')" title="Ask for a hint">?</button>';
     html += '</li>';
@@ -21553,12 +21564,15 @@ function handlePrePromptSubmit() {
   renderTestingMode();
 }
 
-function toggleTask(taskIdx) {
+function notifyTestingMode(taskIdx) {
+  // Auto-detect task completion — called from app action hooks
+  if (!testingModeState.loaded) return;
+  if (!testingModeState.reflections.pre) return; // hasn't started yet
+  if (testingModeState.progress[taskIdx] === true) return; // already done
   var user = auth.currentUser;
   if (!user) return;
-  var current = testingModeState.progress[taskIdx] === true;
-  testingModeState.progress[taskIdx] = !current;
-  db.ref('shirglassworks/admin/testingMode/' + user.uid + '/mission1/progress/' + taskIdx).set(!current);
+  testingModeState.progress[taskIdx] = true;
+  db.ref('shirglassworks/admin/testingMode/' + user.uid + '/mission1/progress/' + taskIdx).set(true);
 
   // Check if all done
   var mission = TESTING_MISSIONS[0];
@@ -21567,6 +21581,12 @@ function toggleTask(taskIdx) {
   if (allDone) {
     var card = document.querySelector('.tm-mission-card');
     if (card) card.classList.add('tm-pulse');
+    // Auto-open panel if closed
+    if (!testingModeState.open) toggleTestingMode();
+  } else if (testingModeState.open) {
+    // Scroll to show the newly checked task
+    var body = document.getElementById('testingModeBody');
+    if (body) body.scrollTop = 0;
   }
 }
 
