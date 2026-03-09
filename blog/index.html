@@ -527,7 +527,7 @@ window.addEventListener('resize', function() {
         html += '<div class="featured-post-body">';
         latest.sections.forEach(function(sec, idx) {
           if (!sec.content || !sec.content.trim()) return;
-          html += '<div class="post-section">';
+          html += '<div class="post-section" data-sec-idx="' + idx + '">';
           if (sec.title) html += '<h2>' + escHtml(sec.title) + '</h2>';
           var paragraphs = sec.content.split('\n').filter(function(p) { return p.trim(); });
           paragraphs.forEach(function(p) { html += '<p>' + escHtml(p) + '</p>'; });
@@ -535,6 +535,28 @@ window.addEventListener('resize', function() {
           if (idx < latest.sections.length - 1) html += '<hr class="post-divider">';
         });
         html += '</div>';
+        // Load section images after render
+        setTimeout(function() {
+          latest.sections.forEach(function(sec, idx) {
+            (sec.images || []).forEach(function(imgId) {
+              db.ref('shirglassworks/images/' + imgId).once('value').then(function(imgSnap) {
+                var img = imgSnap.val();
+                if (img && img.url) {
+                  var secEl = document.querySelector('[data-sec-idx="' + idx + '"]');
+                  if (secEl) {
+                    var imgEl = document.createElement('img');
+                    imgEl.src = img.url;
+                    imgEl.alt = img.alt || '';
+                    imgEl.style.maxWidth = '100%';
+                    imgEl.style.borderRadius = '6px';
+                    imgEl.style.margin = '1.2rem 0';
+                    secEl.appendChild(imgEl);
+                  }
+                }
+              });
+            });
+          });
+        }, 50);
       }
       html += '</div>';
 
