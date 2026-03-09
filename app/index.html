@@ -1391,6 +1391,26 @@
       font-weight: 700;
       font-size: 0.85rem;
     }
+    .tm-locked {
+      opacity: 0.45;
+      pointer-events: none;
+    }
+    .tm-precondition-notice {
+      background: #fef3cd;
+      border-left: 3px solid #f0ad4e;
+      padding: 8px 12px;
+      font-size: 0.78rem;
+      color: #856404;
+      margin: 8px 0;
+      border-radius: 4px;
+    }
+    .tm-optional {
+      opacity: 0.7;
+    }
+    .tm-optional em {
+      font-size: 0.7rem;
+      color: var(--warm-gray);
+    }
     .tm-footer {
       padding: 10px 18px;
       border-top: 1px solid #e0dbd4;
@@ -5619,9 +5639,8 @@ function navigateTo(route) {
   location.hash = route;
   applyRoute(route);
   closeMobileMenu();
-  // Testing Mode auto-detection
-  if (route === 'orders') notifyTestingMode(0);
-  if (route === 'jobs') notifyTestingMode(3);
+  // Testing Mode event
+  emitTestingEvent('navigate', { route: route });
 }
 
 function applyRoute(route) {
@@ -7843,6 +7862,7 @@ async function saveProduct(pid) {
     await writeAudit(isCreate ? 'create' : 'update', 'products', targetPid);
 
     showToast(isCreate ? 'Product created' : 'Product saved');
+    emitTestingEvent('saveProduct', {});
     productCreateMode = false;
     productEditMode = false;
 
@@ -8130,6 +8150,7 @@ async function saveAdjustStock(pid) {
 
     await db.ref(INVENTORY_PATH + '/' + pid).update(updates);
     await writeAudit('update', 'inventory', pid);
+    emitTestingEvent('adjustStock', {});
 
     // Auto-set sold status when sculpture stock reaches 0
     if (isSculptureAdj) {
@@ -11002,7 +11023,7 @@ function viewOrder(orderId) {
   var detailEl = document.getElementById('orderDetailView');
   detailEl.style.display = 'block';
   renderOrderDetail(orderId);
-  notifyTestingMode(1); // Testing Mode: reviewed order detail
+  emitTestingEvent('viewOrder', {}); // Testing Mode
 }
 
 function backToOrders() {
@@ -11513,7 +11534,7 @@ async function executeTriageConfirm(orderId) {
     closeModal();
     showToast('Order confirmed and routed');
     renderOrderDetail(orderId);
-    notifyTestingMode(2); // Testing Mode: confirmed and routed order
+    emitTestingEvent('triageConfirm', {}); // Testing Mode
   } catch (err) {
     showToast('Error: ' + err.message, true);
     if (btn) { btn.disabled = false; btn.textContent = 'Confirm & Route'; }
@@ -11608,10 +11629,8 @@ async function transitionOrder(orderId, newStatus) {
     await db.ref(ORDERS_PATH + '/' + orderId).update(updates);
     await writeAudit('update', 'orders', orderId);
 
-    // Testing Mode auto-detection
-    if (newStatus === 'packing') notifyTestingMode(4);
-    if (newStatus === 'packed') notifyTestingMode(5);
-    if (newStatus === 'handed_to_carrier') notifyTestingMode(7);
+    // Testing Mode event
+    emitTestingEvent('transitionOrder', { newStatus: newStatus });
 
     // Auto-progress handed_to_carrier → shipped (triggers email notification via Cloud Function)
     if (newStatus === 'handed_to_carrier') {
@@ -11824,7 +11843,7 @@ function openPirateShip(orderId) {
     downloadOrderCSV(orderId);
     _pirateShipCSVDownloaded[orderId] = true;
   }
-  notifyTestingMode(6); // Testing Mode: exported Pirate Ship CSV
+  emitTestingEvent('openPirateShip', {}); // Testing Mode
 
   // Step 2: Check first-time usage — show mapping guide or go straight to Pirate Ship
   var hasUsed = localStorage.getItem('sgw_pirateship_mapped');
@@ -12670,6 +12689,7 @@ async function fulfillProductionRequest(requestId, orderId, operatorName) {
       } else {
         showToast('Production request fulfilled');
       }
+      emitTestingEvent('fulfillRequest', {});
     }
   } catch (err) {
     showToast('Error fulfilling request: ' + err.message, true);
@@ -13554,6 +13574,7 @@ async function startFairMode(eventId) {
     await writeAudit('update', 'salesEvents', eventId);
     activeEventId = eventId;
     showToast('Fair mode activated! Sales will be linked to this event.');
+    emitTestingEvent('startFairMode', {});
   } catch (err) {
     showToast('Error: ' + err.message, true);
   }
@@ -13608,6 +13629,7 @@ async function closeEvent(eventId) {
     }
 
     showToast('Event closed.' + (unsoldCount > 0 ? ' ' + unsoldCount + ' items returned.' : ''));
+    emitTestingEvent('closeEvent', {});
   } catch (err) {
     showToast('Error: ' + err.message, true);
   }
@@ -14931,6 +14953,7 @@ async function doCreateJob(purpose) {
     closeModal();
     viewProductionJob(jobId);
     showToast('Job created');
+    emitTestingEvent('createJob', {});
   } catch (err) {
     showToast('Error creating job: ' + err.message, true);
   }
@@ -15189,6 +15212,7 @@ async function transitionProductionJob(jobId, newStatus) {
     } else {
       showToast('Job status updated to ' + newStatus);
     }
+    emitTestingEvent('transitionJob', { newStatus: newStatus });
   } catch (err) {
     showToast('Error updating job: ' + err.message, true);
   }
@@ -15204,6 +15228,7 @@ async function updateLineItemProgress(jobId, liKey, completedQty, lossQty) {
     if (productionJobs[jobId] && productionJobs[jobId].lineItems && productionJobs[jobId].lineItems[liKey]) {
       Object.assign(productionJobs[jobId].lineItems[liKey], updates);
     }
+    emitTestingEvent('updateLineItem', {});
   } catch (err) {
     showToast('Error saving progress: ' + err.message, true);
   }
@@ -15412,6 +15437,7 @@ async function doStartBuild(jobId) {
     closeModal();
     openActiveBuild(jobId, buildId);
     showToast('Build #' + buildNumber + ' started');
+    emitTestingEvent('startBuild', {});
   } catch (err) {
     showToast('Error starting build: ' + err.message, true);
   }
@@ -15513,6 +15539,7 @@ async function doAddBuildNote(jobId, buildId) {
     closeModal();
     renderActiveBuild(jobId, buildId);
     showToast('Note added');
+    emitTestingEvent('addBuildNote', {});
   } catch (err) {
     showToast('Error adding note: ' + err.message, true);
   }
@@ -15540,6 +15567,7 @@ async function doAddMilestone(jobId, buildId) {
     closeModal();
     renderActiveBuild(jobId, buildId);
     showToast('Milestone added');
+    emitTestingEvent('addMilestone', {});
   } catch (err) {
     showToast('Error adding milestone: ' + err.message, true);
   }
@@ -15714,6 +15742,7 @@ async function doCompleteBuild(jobId, buildId) {
     activeBuildId = null;
     viewProductionJob(jobId);
     showCompletionSummary(summaryItems);
+    emitTestingEvent('completeBuild', {});
   } catch (err) {
     showToast('Error completing build: ' + err.message, true);
   }
@@ -17510,6 +17539,7 @@ async function moveInventory(pid, variantKey, fromLocationId, toLocationId, qty)
       inventory[pid].stock[key].locations = freshSnap.val() || {};
     }
 
+    emitTestingEvent('moveInventory', {});
     return true;
   } catch (err) {
     showToast('Move error: ' + err.message, true);
@@ -19439,6 +19469,7 @@ async function saveNewCommission() {
 
     closeNewCommissionModal();
     showToast('Commission created');
+    emitTestingEvent('createCommission', {});
 
     // Open detail view for the new commission
     viewCommissionDetail(commId);
@@ -19462,6 +19493,7 @@ async function updateCommissionStatus(commId, newStatus) {
     commissionsData[commId].status = newStatus;
     await writeAudit('update', 'commission', commId);
     showToast('Status updated');
+    emitTestingEvent('commissionStatus', { newStatus: newStatus });
     // Re-render detail to show/hide proposal and production sections
     viewCommissionDetail(commId);
   } catch (err) {
@@ -19686,6 +19718,7 @@ function smStartNewPost() {
     readinessScore: null
   };
   renderSocialMedia();
+  emitTestingEvent('startPost', {});
 }
 
 function renderSMNewPost(container) {
@@ -20484,6 +20517,7 @@ async function smMarkPosted() {
     smPosts.unshift(postData);
 
     showToast('Post recorded! 🎉');
+    emitTestingEvent('markPosted', {});
     smGoHome();
   } catch (err) {
     showToast('Error: ' + err.message, true);
@@ -20628,6 +20662,7 @@ async function nlCreateIssue() {
 
     nlIssues.unshift(issueData);
     showToast('Issue #' + issueNumber + ' created');
+    emitTestingEvent('createNewsletter', {});
     nlOpenIssue(issueId);
   } catch (err) {
     showToast('Error creating issue: ' + err.message, true);
@@ -21054,6 +21089,7 @@ async function nlPublishToWebsite() {
       status: 'published', publishedAt: publishedAt, updatedAt: nlCurrentIssue.updatedAt
     });
     showToast('Published to website! 🌐');
+    emitTestingEvent('publishNewsletter', {});
     renderNLCompose();
   } catch (err) { showToast('Error publishing: ' + err.message, true); }
 }
@@ -21388,34 +21424,44 @@ function escapeHtml(str) {
   div.textContent = str;
   return div.innerHTML;
 }
-var TESTING_MISSIONS = [{
-  id: 'mission1',
-  title: 'From Website Order to UPS Drop-off',
-  scenario: 'A customer just placed an order on shirglassworks.com for two pieces. One is in stock, one needs to be made. Your job: get everything confirmed, built, packed, and handed off to UPS.',
-  prePrompt: 'Before you start — if an order has items from stock AND items that need building, would you split the shipment or wait until everything is ready? Why?',
-  postPrompt: 'You did it! Now that you\'ve been through the full flow — what felt clunky? What did the app miss? Anything that confused you?',
-  tasks: [
-    { text: 'Find the new order in the admin app', hint: 'Look for where orders show up — there should be a count badge somewhere.' },
-    { text: 'Review the order details and figure out which items need building', hint: 'Each item should show its inventory status.' },
-    { text: 'Confirm and route the order (stock vs. build)', hint: 'There\'s a button that kicks off the triage process.' },
-    { text: 'Check that the production job was created for the build item', hint: 'Production requests go to a specific section under Make.' },
-    { text: 'Once all items are ready, move the order into packing', hint: 'There\'s a packing queue somewhere under Ship.' },
-    { text: 'Pack the order and get it ready to ship', hint: 'Look for buttons that move the order through packing stages.' },
-    { text: 'Generate a shipping label using Pirate Ship', hint: 'There should be a way to export order data for Pirate Ship.' },
-    { text: 'Hand the package off to UPS and confirm the drop-off', hint: 'The final step involves carrier selection and drop-off confirmation.' }
-  ]
-}];
+// ===== Testing Mode — Data-Driven Missions with Event-Based Auto-Detection =====
 
+var testingMissions = [];  // loaded from Firebase
 var testingModeState = {
   open: false,
   loaded: false,
-  progress: {},       // { taskIdx: true/false }
-  reflections: {},    // { pre: '...', post: '...' }
+  activeMissionId: null,  // currently expanded mission
+  missionProgress: {},    // { missionId: { progress: {}, reflections: {} } }
   assistantTaskIdx: null,
   assistantMessages: [],
   assistantLoading: false
 };
 
+// --- Event System ---
+function emitTestingEvent(eventName, context) {
+  if (!testingModeState.loaded) return;
+  if (!testingMissions.length) return;
+  context = context || {};
+  testingMissions.forEach(function(mission) {
+    var mp = testingModeState.missionProgress[mission.id];
+    if (!mp || !mp.reflections || !mp.reflections.pre) return; // hasn't started
+    if (mp.reflections.post) return; // already accomplished
+    mission.tasks.forEach(function(task, idx) {
+      if (!task.trigger) return; // manual task
+      if (mp.progress[idx] === true) return; // already done
+      if (task.trigger.event !== eventName) return;
+      if (task.trigger.match) {
+        var allMatch = Object.keys(task.trigger.match).every(function(key) {
+          return context[key] === task.trigger.match[key];
+        });
+        if (!allMatch) return;
+      }
+      notifyTestingMode(mission.id, idx);
+    });
+  });
+}
+
+// --- Panel Toggle ---
 function toggleTestingMode() {
   var panel = document.getElementById('testingModePanel');
   var handle = document.getElementById('testingModeHandle');
@@ -21432,115 +21478,202 @@ function toggleTestingMode() {
     panel.classList.remove('open');
     if (handle) handle.classList.remove('hidden');
   }
-  // Close sidebar on mobile when opening testing mode
   if (testingModeState.open && window.innerWidth <= 768) {
     hideSidebar();
   }
 }
 
+// --- Load Missions + Progress from Firebase ---
 function loadTestingProgress() {
   var user = auth.currentUser;
   if (!user) return;
-  var basePath = 'shirglassworks/admin/testingMode/' + user.uid + '/mission1';
   Promise.all([
-    db.ref(basePath + '/progress').once('value'),
-    db.ref(basePath + '/reflections').once('value')
+    db.ref('shirglassworks/admin/testingMissions').once('value'),
+    db.ref('shirglassworks/admin/testingMode/' + user.uid).once('value')
   ]).then(function(snaps) {
-    testingModeState.progress = snaps[0].val() || {};
-    testingModeState.reflections = snaps[1].val() || {};
+    var missionsData = snaps[0].val() || {};
+    var progressData = snaps[1].val() || {};
+    // Convert missions object to sorted array
+    testingMissions = Object.keys(missionsData).map(function(key) {
+      var m = missionsData[key];
+      m.id = m.id || key;
+      if (m.tasks && !Array.isArray(m.tasks)) {
+        m.tasks = Object.keys(m.tasks).sort(function(a, b) { return Number(a) - Number(b); }).map(function(k) { return m.tasks[k]; });
+      }
+      return m;
+    }).sort(function(a, b) { return (a.sequence || 0) - (b.sequence || 0); });
+    // Load per-mission progress
+    testingModeState.missionProgress = {};
+    testingMissions.forEach(function(m) {
+      var pd = progressData[m.id] || {};
+      testingModeState.missionProgress[m.id] = {
+        progress: pd.progress || {},
+        reflections: pd.reflections || {}
+      };
+    });
+    // Set active mission
+    testingModeState.activeMissionId = getActiveMissionId();
     testingModeState.loaded = true;
     renderTestingMode();
   });
 }
 
+function getActiveMissionId() {
+  for (var i = 0; i < testingMissions.length; i++) {
+    var m = testingMissions[i];
+    var mp = testingModeState.missionProgress[m.id];
+    if (mp && mp.reflections && mp.reflections.post) continue; // accomplished
+    if (m.requires) {
+      var reqMp = testingModeState.missionProgress[m.requires];
+      if (!reqMp || !reqMp.reflections || !reqMp.reflections.post) return null; // prereq not done, locked
+    }
+    return m.id;
+  }
+  return null; // all done
+}
+
+function isMissionAccomplished(missionId) {
+  var mp = testingModeState.missionProgress[missionId];
+  return mp && mp.reflections && !!mp.reflections.post;
+}
+
+function isMissionLocked(mission) {
+  if (!mission.requires) return false;
+  return !isMissionAccomplished(mission.requires);
+}
+
+function areMissionTasksDone(mission) {
+  var mp = testingModeState.missionProgress[mission.id];
+  if (!mp) return false;
+  return mission.tasks.filter(function(t) { return !t.optional; }).every(function(_, i) {
+    // find the actual index in the full tasks array
+    var realIdx = 0;
+    var nonOptCount = 0;
+    for (var j = 0; j < mission.tasks.length; j++) {
+      if (!mission.tasks[j].optional) {
+        if (nonOptCount === i) { realIdx = j; break; }
+        nonOptCount++;
+      }
+    }
+    return mp.progress[realIdx] === true;
+  });
+}
+
+// --- Render ---
 function renderTestingMode() {
   var body = document.getElementById('testingModeBody');
   var footer = document.getElementById('testingModeFooter');
-  var mission = TESTING_MISSIONS[0];
-  var progress = testingModeState.progress;
-  var reflections = testingModeState.reflections;
-
-  // Check completion states
-  var hasPreReflection = !!reflections.pre;
-  var allTasksDone = mission.tasks.every(function(_, i) { return progress[i] === true; });
-  var hasPostReflection = !!reflections.post;
-
-  var html = '';
-
-  // Mission card
-  html += '<div class="tm-mission-card' + (hasPostReflection ? ' accomplished tm-pulse' : '') + '">';
-  html += '<div class="tm-mission-title">' + mission.title + '</div>';
-
-  if (hasPostReflection) {
-    // Accomplished state — collapsed
-    html += '<div class="tm-accomplished-badge">✅ Mission Accomplished</div>';
-    html += '</div>';
-    body.innerHTML = html;
-    // Owner-only reset
-    footer.innerHTML = isAdmin() ? '<button onclick="resetTestingProgress()">Reset Progress</button>' : '';
-    return;
-  }
-
-  html += '<div class="tm-scenario">' + mission.scenario + '</div>';
-
-  // Pre-prompt
-  if (!hasPreReflection) {
-    html += '<div class="tm-prompt-area">';
-    html += '<label>' + mission.prePrompt + '</label>';
-    html += '<textarea id="tmPrePrompt" placeholder="Share your thinking..."></textarea>';
-    html += '<button onclick="handlePrePromptSubmit()">Submit & Start</button>';
-    html += '</div>';
-    html += '</div>';
-    body.innerHTML = html;
+  if (!testingMissions.length) {
+    body.innerHTML = '<div style="padding:16px;color:var(--warm-gray);">No missions available yet.</div>';
     footer.innerHTML = '';
     return;
   }
-
-  // Tasks
-  html += '<ul class="tm-task-list">';
-  mission.tasks.forEach(function(task, idx) {
-    var checked = progress[idx] === true;
-    html += '<li class="tm-task-item' + (checked ? ' checked' : '') + '">';
-    html += '<span style="flex-shrink:0;width:20px;text-align:center;">' + (checked ? '✅' : '⬜') + '</span>';
-    html += '<span class="tm-task-text">' + task.text + '</span>';
-    html += '<button class="tm-task-hint-btn" onclick="openAssistant(' + idx + ')" title="Ask for a hint">?</button>';
-    html += '</li>';
-  });
-  html += '</ul>';
-
-  // Assistant area (if active)
-  if (testingModeState.assistantTaskIdx !== null) {
-    var taskCtx = mission.tasks[testingModeState.assistantTaskIdx];
-    html += '<div class="tm-assistant-area">';
-    html += '<div class="tm-assistant-label">Studio Assistant — Task ' + (testingModeState.assistantTaskIdx + 1) + '</div>';
-    // Show previous messages
-    testingModeState.assistantMessages.forEach(function(msg) {
-      html += '<div class="tm-assistant-response" style="' + (msg.role === 'user' ? 'color:var(--warm-gray);font-style:italic;' : '') + '">';
-      html += msg.role === 'user' ? '→ ' + escapeHtml(msg.text) : msg.text;
-      html += '</div>';
+  var html = '';
+  testingMissions.forEach(function(mission) {
+    var mp = testingModeState.missionProgress[mission.id] || { progress: {}, reflections: {} };
+    var locked = isMissionLocked(mission);
+    var accomplished = isMissionAccomplished(mission.id);
+    var isActive = testingModeState.activeMissionId === mission.id;
+    var hasPreReflection = !!(mp.reflections && mp.reflections.pre);
+    var allRequiredDone = mission.tasks.filter(function(t) { return !t.optional; }).every(function(_, i) {
+      var count = 0;
+      for (var j = 0; j < mission.tasks.length; j++) {
+        if (!mission.tasks[j].optional) {
+          if (count === i) return mp.progress[j] === true;
+          count++;
+        }
+      }
+      return false;
     });
-    // Typing indicator
-    if (testingModeState.assistantLoading) {
-      html += '<div class="tm-typing-dots"><span></span><span></span><span></span></div>';
+
+    // Locked mission
+    if (locked) {
+      html += '<div class="tm-mission-card tm-locked">';
+      html += '<div class="tm-mission-title">🔒 ' + escapeHtml(mission.title) + '</div>';
+      html += '</div>';
+      return;
     }
-    // Input
-    html += '<div class="tm-assistant-input-row">';
-    html += '<input type="text" id="tmAssistantInput" placeholder="Ask a question..." onkeydown="if(event.key===\'Enter\')askStudioAssistant()">';
-    html += '<button onclick="askStudioAssistant()" ' + (testingModeState.assistantLoading ? 'disabled' : '') + '>Ask</button>';
-    html += '</div>';
-    html += '</div>';
-  }
 
-  // Post-prompt (all tasks done)
-  if (allTasksDone) {
-    html += '<div class="tm-prompt-area">';
-    html += '<label>' + mission.postPrompt + '</label>';
-    html += '<textarea id="tmPostPrompt" placeholder="Your feedback..."></textarea>';
-    html += '<button onclick="handlePostPromptSubmit()">Submit Feedback</button>';
-    html += '</div>';
-  }
+    // Accomplished mission
+    if (accomplished) {
+      html += '<div class="tm-mission-card accomplished">';
+      html += '<div class="tm-mission-title">' + escapeHtml(mission.title) + '</div>';
+      html += '<div class="tm-accomplished-badge">✅ Mission Accomplished</div>';
+      html += '</div>';
+      return;
+    }
 
-  html += '</div>';
+    // Active mission
+    html += '<div class="tm-mission-card' + (allRequiredDone ? ' tm-pulse' : '') + '">';
+    html += '<div class="tm-mission-title">' + escapeHtml(mission.title) + '</div>';
+    html += '<div class="tm-scenario">' + escapeHtml(mission.scenario) + '</div>';
+
+    // Precondition notice
+    if (mission.preconditionNotice) {
+      html += '<div class="tm-precondition-notice">' + escapeHtml(mission.preconditionNotice) + '</div>';
+    }
+
+    // Pre-prompt
+    if (!hasPreReflection) {
+      html += '<div class="tm-prompt-area">';
+      html += '<label>' + escapeHtml(mission.prePrompt) + '</label>';
+      html += '<textarea id="tmPrePrompt" placeholder="Share your thinking..."></textarea>';
+      html += '<button onclick="handlePrePromptSubmit(\'' + mission.id + '\')">Submit & Start</button>';
+      html += '</div>';
+      html += '</div>';
+      return; // don't render tasks yet
+    }
+
+    // Tasks
+    html += '<ul class="tm-task-list">';
+    mission.tasks.forEach(function(task, idx) {
+      var checked = mp.progress[idx] === true;
+      var isManual = !task.trigger;
+      var isOptional = !!task.optional;
+      html += '<li class="tm-task-item' + (checked ? ' checked' : '') + (isOptional ? ' tm-optional' : '') + '">';
+      if (isManual && !checked) {
+        html += '<span style="flex-shrink:0;width:20px;text-align:center;cursor:pointer;" onclick="toggleManualTask(\'' + mission.id + '\',' + idx + ')">⬜</span>';
+      } else {
+        html += '<span style="flex-shrink:0;width:20px;text-align:center;">' + (checked ? '✅' : '⬜') + '</span>';
+      }
+      html += '<span class="tm-task-text">' + escapeHtml(task.text) + (isOptional ? ' <em>(optional)</em>' : '') + '</span>';
+      html += '<button class="tm-task-hint-btn" onclick="openAssistant(\'' + mission.id + '\',' + idx + ')" title="Ask for a hint">?</button>';
+      html += '</li>';
+    });
+    html += '</ul>';
+
+    // Assistant area
+    if (testingModeState.assistantTaskIdx !== null && testingModeState.activeMissionId === mission.id) {
+      var taskCtx = mission.tasks[testingModeState.assistantTaskIdx];
+      html += '<div class="tm-assistant-area">';
+      html += '<div class="tm-assistant-label">Studio Assistant — Task ' + (testingModeState.assistantTaskIdx + 1) + '</div>';
+      testingModeState.assistantMessages.forEach(function(msg) {
+        html += '<div class="tm-assistant-response" style="' + (msg.role === 'user' ? 'color:var(--warm-gray);font-style:italic;' : '') + '">';
+        html += msg.role === 'user' ? '→ ' + escapeHtml(msg.text) : msg.text;
+        html += '</div>';
+      });
+      if (testingModeState.assistantLoading) {
+        html += '<div class="tm-typing-dots"><span></span><span></span><span></span></div>';
+      }
+      html += '<div class="tm-assistant-input-row">';
+      html += '<input type="text" id="tmAssistantInput" placeholder="Ask a question..." onkeydown="if(event.key===\'Enter\')askStudioAssistant()">';
+      html += '<button onclick="askStudioAssistant()" ' + (testingModeState.assistantLoading ? 'disabled' : '') + '>Ask</button>';
+      html += '</div>';
+      html += '</div>';
+    }
+
+    // Post-prompt (all required tasks done)
+    if (allRequiredDone) {
+      html += '<div class="tm-prompt-area">';
+      html += '<label>' + escapeHtml(mission.postPrompt) + '</label>';
+      html += '<textarea id="tmPostPrompt" placeholder="Your feedback..."></textarea>';
+      html += '<button onclick="handlePostPromptSubmit(\'' + mission.id + '\')">Submit Feedback</button>';
+      html += '</div>';
+    }
+
+    html += '</div>';
+  });
+
   body.innerHTML = html;
 
   // Focus assistant input if open
@@ -21549,60 +21682,79 @@ function renderTestingMode() {
     if (inp && !testingModeState.assistantLoading) inp.focus();
   }
 
-  // Owner-only reset
   footer.innerHTML = isAdmin() ? '<button onclick="resetTestingProgress()">Reset Progress</button>' : '';
 }
 
-function handlePrePromptSubmit() {
+// --- Pre/Post Prompt Handlers ---
+function handlePrePromptSubmit(missionId) {
   var textarea = document.getElementById('tmPrePrompt');
   var value = textarea ? textarea.value.trim() : '';
   if (!value) { showToast('Please share your thinking before starting.', true); return; }
   var user = auth.currentUser;
   if (!user) return;
-  testingModeState.reflections.pre = value;
-  db.ref('shirglassworks/admin/testingMode/' + user.uid + '/mission1/reflections/pre').set(value);
+  if (!testingModeState.missionProgress[missionId]) testingModeState.missionProgress[missionId] = { progress: {}, reflections: {} };
+  testingModeState.missionProgress[missionId].reflections.pre = value;
+  db.ref('shirglassworks/admin/testingMode/' + user.uid + '/' + missionId + '/reflections/pre').set(value);
   renderTestingMode();
 }
 
-function notifyTestingMode(taskIdx) {
-  // Auto-detect task completion — called from app action hooks
-  if (!testingModeState.loaded) return;
-  if (!testingModeState.reflections.pre) return; // hasn't started yet
-  if (testingModeState.progress[taskIdx] === true) return; // already done
-  var user = auth.currentUser;
-  if (!user) return;
-  testingModeState.progress[taskIdx] = true;
-  db.ref('shirglassworks/admin/testingMode/' + user.uid + '/mission1/progress/' + taskIdx).set(true);
-
-  // Check if all done
-  var mission = TESTING_MISSIONS[0];
-  var allDone = mission.tasks.every(function(_, i) { return testingModeState.progress[i] === true; });
-  renderTestingMode();
-  if (allDone) {
-    var card = document.querySelector('.tm-mission-card');
-    if (card) card.classList.add('tm-pulse');
-    // Auto-open panel if closed
-    if (!testingModeState.open) toggleTestingMode();
-  } else if (testingModeState.open) {
-    // Scroll to show the newly checked task
-    var body = document.getElementById('testingModeBody');
-    if (body) body.scrollTop = 0;
-  }
-}
-
-function handlePostPromptSubmit() {
+function handlePostPromptSubmit(missionId) {
   var textarea = document.getElementById('tmPostPrompt');
   var value = textarea ? textarea.value.trim() : '';
   if (!value) { showToast('Please share your feedback.', true); return; }
   var user = auth.currentUser;
   if (!user) return;
-  testingModeState.reflections.post = value;
-  db.ref('shirglassworks/admin/testingMode/' + user.uid + '/mission1/reflections/post').set(value);
+  testingModeState.missionProgress[missionId].reflections.post = value;
+  db.ref('shirglassworks/admin/testingMode/' + user.uid + '/' + missionId + '/reflections/post').set(value);
   showToast('Feedback saved — thank you!');
+  // Advance active mission
+  testingModeState.activeMissionId = getActiveMissionId();
   renderTestingMode();
 }
 
-function openAssistant(taskIdx) {
+// --- Task Completion ---
+function notifyTestingMode(missionId, taskIdx) {
+  if (!testingModeState.loaded) return;
+  var mp = testingModeState.missionProgress[missionId];
+  if (!mp || !mp.reflections || !mp.reflections.pre) return;
+  if (mp.progress[taskIdx] === true) return;
+  var user = auth.currentUser;
+  if (!user) return;
+  mp.progress[taskIdx] = true;
+  db.ref('shirglassworks/admin/testingMode/' + user.uid + '/' + missionId + '/progress/' + taskIdx).set(true);
+
+  var mission = testingMissions.find(function(m) { return m.id === missionId; });
+  if (!mission) return;
+  var allRequiredDone = mission.tasks.filter(function(t) { return !t.optional; }).every(function(_, i) {
+    var count = 0;
+    for (var j = 0; j < mission.tasks.length; j++) {
+      if (!mission.tasks[j].optional) {
+        if (count === i) return mp.progress[j] === true;
+        count++;
+      }
+    }
+    return false;
+  });
+  renderTestingMode();
+  if (allRequiredDone) {
+    var card = document.querySelector('.tm-mission-card.tm-pulse');
+    if (!testingModeState.open) toggleTestingMode();
+  } else if (testingModeState.open) {
+    var body = document.getElementById('testingModeBody');
+    if (body) body.scrollTop = 0;
+  }
+}
+
+function toggleManualTask(missionId, taskIdx) {
+  var mp = testingModeState.missionProgress[missionId];
+  if (!mp) return;
+  if (mp.progress[taskIdx] === true) return; // can't uncheck
+  notifyTestingMode(missionId, taskIdx);
+}
+
+// --- Assistant ---
+function openAssistant(missionId, taskIdx) {
+  testingModeState.activeMissionId = missionId;
   if (testingModeState.assistantTaskIdx === taskIdx) {
     testingModeState.assistantTaskIdx = null;
     testingModeState.assistantMessages = [];
@@ -21617,9 +21769,13 @@ async function askStudioAssistant() {
   var input = document.getElementById('tmAssistantInput');
   var question = input ? input.value.trim() : '';
   if (!question || testingModeState.assistantLoading) return;
-
   var user = auth.currentUser;
   if (!user) return;
+  var missionId = testingModeState.activeMissionId;
+  var mission = testingMissions.find(function(m) { return m.id === missionId; });
+  if (!mission) return;
+  var task = mission.tasks[testingModeState.assistantTaskIdx];
+  if (!task) return;
 
   testingModeState.assistantMessages.push({ role: 'user', text: question });
   testingModeState.assistantLoading = true;
@@ -21627,24 +21783,28 @@ async function askStudioAssistant() {
 
   try {
     var token = await auth.currentUser.getIdToken();
+    var missionIdx = testingMissions.indexOf(mission);
+    var body = {
+      question: question,
+      missionIndex: missionIdx,
+      taskIndex: testingModeState.assistantTaskIdx,
+      taskText: task.text
+    };
+    if (task.assistantContext) {
+      body.assistantContext = task.assistantContext;
+    }
     var resp = await fetch(
       'https://us-central1-shir-glassworks.cloudfunctions.net/shirStudioAssistant',
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-        body: JSON.stringify({
-          question: question,
-          missionIndex: 0,
-          taskIndex: testingModeState.assistantTaskIdx,
-          taskText: TESTING_MISSIONS[0].tasks[testingModeState.assistantTaskIdx].text
-        })
+        body: JSON.stringify(body)
       }
     );
     var data = await resp.json();
     testingModeState.assistantMessages.push({ role: 'assistant', text: data.answer || 'Hmm, I\'m not sure about that one.' });
 
-    // Log question to Firebase
-    db.ref('shirglassworks/admin/testingMode/' + user.uid + '/mission1/questions').push({
+    db.ref('shirglassworks/admin/testingMode/' + user.uid + '/' + missionId + '/questions').push({
       taskIndex: testingModeState.assistantTaskIdx,
       question: question,
       answer: data.answer || '',
@@ -21658,14 +21818,18 @@ async function askStudioAssistant() {
   renderTestingMode();
 }
 
+// --- Reset ---
 function resetTestingProgress() {
   if (!isAdmin()) return;
-  if (!confirm('Reset all testing progress? This clears tasks, reflections, and questions.')) return;
+  if (!confirm('Reset all testing progress? This clears tasks, reflections, and questions for all missions.')) return;
   var user = auth.currentUser;
   if (!user) return;
-  db.ref('shirglassworks/admin/testingMode/' + user.uid + '/mission1').remove();
-  testingModeState.progress = {};
-  testingModeState.reflections = {};
+  db.ref('shirglassworks/admin/testingMode/' + user.uid).remove();
+  testingModeState.missionProgress = {};
+  testingMissions.forEach(function(m) {
+    testingModeState.missionProgress[m.id] = { progress: {}, reflections: {} };
+  });
+  testingModeState.activeMissionId = getActiveMissionId();
   testingModeState.assistantTaskIdx = null;
   testingModeState.assistantMessages = [];
   renderTestingMode();
