@@ -198,6 +198,7 @@
     /* Tabs */
     .blog-tabs {
       display: flex;
+      justify-content: center;
       gap: 0;
       margin-bottom: 2rem;
       border-bottom: 1px solid rgba(44,44,44,0.1);
@@ -265,6 +266,101 @@
       line-height: 1.6;
       color: rgba(44,44,44,0.7);
     }
+
+    /* ===== FEATURED (LATEST) POST ===== */
+    .featured-post {
+      background: #fff;
+      border-radius: 8px;
+      padding: 2.5rem;
+      margin-bottom: 2rem;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+    }
+    .featured-post-num {
+      font-size: 0.7rem;
+      color: var(--amber);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 6px;
+    }
+    .featured-post-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 2rem;
+      font-weight: 500;
+      margin-bottom: 8px;
+      color: var(--charcoal);
+    }
+    .featured-post-meta {
+      font-size: 0.8rem;
+      color: rgba(44,44,44,0.5);
+      margin-bottom: 1.5rem;
+    }
+    .featured-post-body {
+      line-height: 1.8;
+      font-size: 0.95rem;
+      color: rgba(44,44,44,0.85);
+    }
+    .featured-post-body p { margin-bottom: 1rem; }
+    .featured-post-body img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 6px;
+      margin: 1.2rem 0;
+    }
+    .featured-post-body b, .featured-post-body strong { font-weight: 600; }
+    .featured-post-body i, .featured-post-body em { font-style: italic; }
+    .featured-post-body u { text-decoration: underline; }
+    .featured-post-body h2 {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.5rem;
+      font-weight: 500;
+      margin: 2rem 0 0.75rem;
+    }
+    .featured-post-body .blog-img-caption {
+      font-size: 0.8rem;
+      color: rgba(44,44,44,0.5);
+      text-align: center;
+      margin-top: -0.5rem;
+      margin-bottom: 1.2rem;
+    }
+    .featured-post-tags { margin-top: 1.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .featured-post-tag {
+      background: rgba(196,133,60,0.1);
+      color: var(--amber);
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      letter-spacing: 0.04em;
+    }
+    .featured-post-body .post-section { margin-bottom: 1.5rem; }
+    .featured-post-body .post-divider {
+      border: none;
+      border-top: 1px solid rgba(44,44,44,0.1);
+      margin: 2rem 0;
+    }
+
+    /* ===== PREVIOUS POSTS TOGGLE ===== */
+    .previous-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: none;
+      border: 1px solid rgba(196,133,60,0.3);
+      color: var(--amber);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.8rem;
+      letter-spacing: 0.06em;
+      padding: 8px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.3s;
+      margin-bottom: 1.5rem;
+    }
+    .previous-toggle:hover { border-color: var(--amber); background: rgba(196,133,60,0.05); }
+    .previous-toggle .arrow { transition: transform 0.3s; }
+    .previous-toggle.open .arrow { transform: rotate(90deg); }
+    .previous-list { display: none; }
+    .previous-list.show { display: block; }
 
     .empty-state {
       text-align: center;
@@ -404,36 +500,89 @@ window.addEventListener('resize', function() {
         return;
       }
 
+      // Render latest post in full
+      var latest = posts[0];
+      var older = posts.slice(1);
       var html = '';
-      posts.forEach(function(post) {
-        var date = post.publishedAt ? new Date(post.publishedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
-        var excerpt = '';
-        if (tab === 'blog' && post.bodyHtml) {
-          var tmp = document.createElement('div');
-          tmp.innerHTML = post.bodyHtml;
-          var text = tmp.textContent || tmp.innerText || '';
-          excerpt = text.substring(0, 200);
-          if (text.length > 200) excerpt += '...';
-        } else if (post.sections && post.sections.length > 0) {
-          var firstContent = post.sections[0].content || '';
-          excerpt = firstContent.substring(0, 200);
-          if (firstContent.length > 200) excerpt += '...';
+
+      // --- Featured (latest) post ---
+      var date = latest.publishedAt ? new Date(latest.publishedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
+      var numLabel = tab === 'blog' ? 'Post #' + (latest.postNumber || '?') : 'Issue #' + (latest.issueNumber || '?');
+      html += '<div class="featured-post">';
+      html += '<div class="featured-post-num">' + numLabel + '</div>';
+      html += '<div class="featured-post-title">' + escHtml(latest.title || 'Untitled') + '</div>';
+      html += '<div class="featured-post-meta">';
+      if (latest.author) html += 'By ' + escHtml(latest.author) + ' &middot; ';
+      html += date + '</div>';
+
+      // Full body content
+      if (tab === 'blog' && latest.bodyHtml) {
+        html += '<div class="featured-post-body">' + latest.bodyHtml + '</div>';
+        if (latest.tags && latest.tags.length > 0) {
+          html += '<div class="featured-post-tags">';
+          latest.tags.forEach(function(tag) { html += '<span class="featured-post-tag">' + escHtml(tag) + '</span>'; });
+          html += '</div>';
         }
-        var numLabel = tab === 'blog' ? 'Post #' + (post.postNumber || '?') : 'Issue #' + (post.issueNumber || '?');
-        html += '<a class="post-card" href="post.html?id=' + post._id + '&source=' + tab + '">' +
-          '<div class="post-card-num">' + numLabel + '</div>' +
-          '<div class="post-card-title">' + escHtml(post.title || 'Untitled') + '</div>' +
-          (post.author ? '<div class="post-card-author">By ' + escHtml(post.author) + '</div>' : '') +
-          '<div class="post-card-date">' + date + '</div>' +
-          '<div class="post-card-excerpt">' + escHtml(excerpt) + '</div>' +
-          '</a>';
-      });
+      } else if (latest.sections) {
+        html += '<div class="featured-post-body">';
+        latest.sections.forEach(function(sec, idx) {
+          if (!sec.content || !sec.content.trim()) return;
+          html += '<div class="post-section">';
+          if (sec.title) html += '<h2>' + escHtml(sec.title) + '</h2>';
+          var paragraphs = sec.content.split('\n').filter(function(p) { return p.trim(); });
+          paragraphs.forEach(function(p) { html += '<p>' + escHtml(p) + '</p>'; });
+          html += '</div>';
+          if (idx < latest.sections.length - 1) html += '<hr class="post-divider">';
+        });
+        html += '</div>';
+      }
+      html += '</div>';
+
+      // --- Previous posts toggle ---
+      if (older.length > 0) {
+        html += '<button class="previous-toggle" onclick="togglePrevious(this)"><span class="arrow">&#9654;</span> Show previous (' + older.length + ')</button>';
+        html += '<div class="previous-list" id="previousList">';
+        older.forEach(function(post) {
+          var pDate = post.publishedAt ? new Date(post.publishedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
+          var excerpt = '';
+          if (tab === 'blog' && post.bodyHtml) {
+            var tmp = document.createElement('div');
+            tmp.innerHTML = post.bodyHtml;
+            var text = tmp.textContent || tmp.innerText || '';
+            excerpt = text.substring(0, 200);
+            if (text.length > 200) excerpt += '...';
+          } else if (post.sections && post.sections.length > 0) {
+            var firstContent = post.sections[0].content || '';
+            excerpt = firstContent.substring(0, 200);
+            if (firstContent.length > 200) excerpt += '...';
+          }
+          var pNumLabel = tab === 'blog' ? 'Post #' + (post.postNumber || '?') : 'Issue #' + (post.issueNumber || '?');
+          html += '<a class="post-card" href="post.html?id=' + post._id + '&source=' + tab + '">' +
+            '<div class="post-card-num">' + pNumLabel + '</div>' +
+            '<div class="post-card-title">' + escHtml(post.title || 'Untitled') + '</div>' +
+            (post.author ? '<div class="post-card-author">By ' + escHtml(post.author) + '</div>' : '') +
+            '<div class="post-card-date">' + pDate + '</div>' +
+            '<div class="post-card-excerpt">' + escHtml(excerpt) + '</div>' +
+            '</a>';
+        });
+        html += '</div>';
+      }
+
       container.innerHTML = html;
     }).catch(function(err) {
       console.error('Error loading posts:', err);
       document.getElementById('postList').innerHTML = '<div class="empty-state"><p>Unable to load posts. Please try again later.</p></div>';
     });
   }
+
+  // Toggle previous posts list
+  window.togglePrevious = function(btn) {
+    btn.classList.toggle('open');
+    var list = document.getElementById('previousList');
+    list.classList.toggle('show');
+    var isOpen = list.classList.contains('show');
+    btn.innerHTML = '<span class="arrow">&#9654;</span> ' + (isOpen ? 'Hide previous' : 'Show previous') + ' (' + list.children.length + ')';
+  };
 
   function escHtml(str) {
     if (!str) return '';
