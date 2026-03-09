@@ -22643,29 +22643,16 @@ async function blogMoveImage(idx, direction) {
   var newIdx = idx + direction;
   if (newIdx < 0 || newIdx >= inlineImages.length) return;
 
-  // Save current editor content (converts spans back to [Image N] text)
-  var editable = document.getElementById('blogBodyEditable');
-  if (editable) blogCurrentPost.body = blogSaveBodyFromEditor();
-  var body = blogCurrentPost.body || '';
-
-  // Swap the two images in the array
+  // Swap the two images in the array only — text markers like [Image 1] are positional
+  // placeholders that resolve to whatever image is at that index, so we don't touch the body
   var temp = inlineImages[idx];
   inlineImages[idx] = inlineImages[newIdx];
   inlineImages[newIdx] = temp;
 
-  // Swap the [Image N] markers in the body using a temp placeholder
-  var markerA = '[Image ' + (idx + 1) + ']';
-  var markerB = '[Image ' + (newIdx + 1) + ']';
-  body = body.replace(markerA, '[__SWAP__]');
-  body = body.replace(markerB, markerA);
-  body = body.replace('[__SWAP__]', markerB);
-
-  blogCurrentPost.body = body;
   blogCurrentPost.inlineImages = inlineImages;
   blogCurrentPost.updatedAt = new Date().toISOString();
   try {
     await db.ref('shirglassworks/blog/posts/' + blogCurrentPostId).update({
-      body: body,
       inlineImages: inlineImages,
       updatedAt: blogCurrentPost.updatedAt
     });
