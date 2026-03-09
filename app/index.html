@@ -21985,25 +21985,22 @@ function renderBlogList() {
   var html = '<div class="blog-header"><h2>Blog Posts</h2>' +
     '<button class="btn btn-primary" onclick="blogCreatePost()">+ New Post</button></div>';
 
-  if (blogPosts.length === 0 && blogIdeas.length === 0) {
+  if (blogPosts.length === 0) {
     html += '<div class="nl-empty"><div class="nl-empty-icon">✍️</div>' +
       '<div class="nl-empty-text">No blog posts yet</div>' +
       '<p style="font-size:0.85rem;color:var(--text-secondary);">Write your first post to share your voice as an artist in the glass community.</p></div>';
   } else {
-    // Post rows
-    if (blogPosts.length > 0) {
-      blogPosts.forEach(function(post) {
-        var author = BLOG_AUTHORS[post.author] || BLOG_AUTHORS['madeline'];
-        var dateStr = post.createdAt ? new Date(post.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
-        html += '<div class="blog-post-row" onclick="blogOpenPost(\'' + post.id + '\')">' +
-          '<img class="blog-avatar" src="' + author.photoUrl + '" alt="' + author.name + '" />' +
-          '<span class="blog-post-title">' + (post.title || 'Untitled Post') + '</span>' +
-          '<span class="blog-post-author">' + author.name + '</span>' +
-          '<span class="nl-status-badge ' + (post.status || 'draft') + '">' + (post.status || 'draft') + '</span>' +
-          '<span class="blog-post-date">' + dateStr + '</span>' +
-          '</div>';
-      });
-    }
+    blogPosts.forEach(function(post) {
+      var author = BLOG_AUTHORS[post.author] || BLOG_AUTHORS['madeline'];
+      var dateStr = post.createdAt ? new Date(post.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+      html += '<div class="blog-post-row" onclick="blogOpenPost(\'' + post.id + '\')">' +
+        '<img class="blog-avatar" src="' + author.photoUrl + '" alt="' + author.name + '" />' +
+        '<span class="blog-post-title">' + (post.title || 'Untitled Post') + '</span>' +
+        '<span class="blog-post-author">' + author.name + '</span>' +
+        '<span class="nl-status-badge ' + (post.status || 'draft') + '">' + (post.status || 'draft') + '</span>' +
+        '<span class="blog-post-date">' + dateStr + '</span>' +
+        '</div>';
+    });
   }
 
   // Blog Ideas section — always visible
