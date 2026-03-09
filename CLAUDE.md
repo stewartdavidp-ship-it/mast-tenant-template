@@ -1,5 +1,8 @@
 # CLAUDE.md — Shir Glassworks
 
+## What This App Is
+Full website + studio admin platform for Shir Glassworks glass art studio. Covers: public storefront (shop, commissions, blog), Studio Companion PWA (camera-first POS, production management, inventory, QR scanning), and Market tools (social media content pipeline, newsletter/blog, stories). Firebase RTDB + Storage + Functions. GitHub Pages hosting.
+
 ## Current Idea
 **Shir Glassworks Website + Storefront** — Full website redesign and storefront for Shir Glassworks. Phase 1: landing page, about, schedule, admin app with gallery management. Phase 2: shop with product catalog (6 categories, 31 products), analytics tracking. Phase 3: product detail pages with color variants, cart/checkout strategy. Phase 4: Studio Companion — camera-first PWA for production management and craft fair sales. Hybrid photo recognition (TensorFlow.js + Claude Vision), QR code system, GPS-based mode switching (studio/fair/packing), batch counting, new product onboarding via camera, travel inventory for events.
 
@@ -51,6 +54,24 @@ The Market feature's primary job is:
 
 **The right mental model:**
 Think of it as a **video post assistant** that lives in the moment of creation — capture → quick edit → platform-optimized output → publish → track what lands. The caption and hashtag tools exist to serve that pipeline, not as the pipeline themselves. _(from: Shir Glassworks Website + Storefront)_
+- docs/workflows.md is owned by Claude Code. Claude Chat must not push updates to workflows.md directly. When workflows change, Chat can send a message to Code describing the needed updates — Code makes the edit and commits. This prevents Chat overwrites of Code's more accurate, build-time status updates. _(from: Shir Glassworks Website + Storefront)_
+- UI Design System — Consistent Standards Applied Across All Views (finalized).
+
+A UI design system was documented and added to CLAUDE.md as part of a compliance pass (Mar 6 2026). All new and existing views must conform to these standards:
+
+- Typography, color, spacing, and component patterns are defined in CLAUDE.md under the UI Standards section
+- Dark mode compliance is required on all views — any new UI must be tested in both light and dark modes
+- Tab patterns, card patterns, badge/status patterns, and modal patterns follow documented standards
+- Code must run a dark mode compliance check before marking any build job complete
+- The design system lives in CLAUDE.md and is the authoritative reference for Claude Code during builds _(from: Shir Glassworks Website + Storefront)_
+- Security — Firebase Rules for Invites Path: Hardened and Committed to Repo (finalized).
+
+Firebase security rules for the invites path were hardened and the rules file was committed to the repo (not just deployed).
+
+- The invites path previously had looser rules — now enforces auth.uid check for writes
+- firebase.rules file is now tracked in the shirglassworks repo (not just a console-side deployment)
+- Code must run firebase deploy --only firestore:rules (or RTDB equivalent) as part of any job that modifies data access patterns — rules file is the source of truth
+- Built in Firebase Rules — Harden Invites Path + Commit Rules to Repo (Mar 6 2026) _(from: Shir Glassworks Website + Storefront)_
 
 ## CONSTRAINTs — External realities. Work within these.
 
