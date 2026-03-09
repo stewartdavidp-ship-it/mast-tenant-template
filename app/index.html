@@ -14097,6 +14097,7 @@ async function exitPackingMode() {
           });
           await writeAudit('update', 'salesEvents', packingEventId);
           showToast('Event marked as packed!');
+          emitTestingEvent('packEvent', {});
         }
       }
     }
