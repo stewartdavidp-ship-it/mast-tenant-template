@@ -1165,6 +1165,250 @@
       color: var(--charcoal);
     }
 
+    /* ========== TESTING MODE ========== */
+    .testing-mode-handle {
+      position: fixed;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 28px;
+      height: 52px;
+      background: var(--teal);
+      color: #fff;
+      border-radius: 6px 0 0 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 99;
+      font-size: 1rem;
+      box-shadow: -2px 0 8px rgba(0,0,0,0.15);
+      transition: opacity 0.2s;
+      writing-mode: vertical-rl;
+      letter-spacing: 1px;
+      font-weight: 600;
+      font-size: 0.7rem;
+    }
+    .testing-mode-handle:hover { background: #237064; }
+    .testing-mode-handle.hidden { opacity: 0; pointer-events: none; }
+    .testing-mode-panel {
+      position: fixed;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      width: 340px;
+      background: var(--cream);
+      color: var(--charcoal);
+      transform: translateX(100%);
+      transition: transform 0.25s ease;
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      box-shadow: -4px 0 20px rgba(0,0,0,0.15);
+      font-family: 'DM Sans', sans-serif;
+    }
+    .testing-mode-panel.open { transform: translateX(0); }
+    .tm-header {
+      padding: 16px 18px 12px;
+      border-bottom: 1px solid #e0dbd4;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .tm-header h3 { margin: 0; font-size: 1rem; font-weight: 700; }
+    .tm-close {
+      background: none;
+      border: none;
+      font-size: 1.3rem;
+      cursor: pointer;
+      color: var(--warm-gray);
+      padding: 0 4px;
+    }
+    .tm-close:hover { color: var(--charcoal); }
+    .tm-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 18px;
+    }
+    .tm-mission-card {
+      background: #fff;
+      border-radius: 8px;
+      border: 1px solid #e0dbd4;
+      padding: 14px;
+      margin-bottom: 14px;
+    }
+    .tm-mission-card.accomplished {
+      border-left: 4px solid var(--teal);
+      opacity: 0.7;
+    }
+    .tm-mission-title {
+      font-weight: 700;
+      font-size: 0.92rem;
+      margin-bottom: 6px;
+    }
+    .tm-scenario {
+      font-size: 0.82rem;
+      color: var(--warm-gray);
+      margin-bottom: 12px;
+      line-height: 1.45;
+    }
+    .tm-prompt-area { margin-bottom: 14px; }
+    .tm-prompt-area label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: var(--charcoal);
+    }
+    .tm-prompt-area textarea {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.82rem;
+      resize: vertical;
+      min-height: 60px;
+      box-sizing: border-box;
+    }
+    .tm-prompt-area button {
+      margin-top: 8px;
+      background: var(--teal);
+      color: #fff;
+      border: none;
+      padding: 7px 16px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .tm-prompt-area button:hover { background: #237064; }
+    .tm-task-list { list-style: none; padding: 0; margin: 0 0 14px; }
+    .tm-task-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 8px 0;
+      border-bottom: 1px solid #f0ece6;
+      font-size: 0.84rem;
+    }
+    .tm-task-item:last-child { border-bottom: none; }
+    .tm-task-item input[type="checkbox"] {
+      margin-top: 2px;
+      accent-color: var(--teal);
+      cursor: pointer;
+    }
+    .tm-task-item.checked .tm-task-text {
+      text-decoration: line-through;
+      opacity: 0.5;
+    }
+    .tm-task-text { flex: 1; line-height: 1.4; }
+    .tm-task-hint-btn {
+      background: none;
+      border: 1px solid #ddd;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      color: var(--teal);
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .tm-task-hint-btn:hover { background: #f0ece6; }
+    .tm-assistant-area {
+      background: #f7f4ef;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 14px;
+    }
+    .tm-assistant-area .tm-assistant-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--teal);
+      margin-bottom: 8px;
+    }
+    .tm-assistant-response {
+      font-size: 0.82rem;
+      line-height: 1.5;
+      margin-bottom: 8px;
+      color: var(--charcoal);
+    }
+    .tm-assistant-input-row {
+      display: flex;
+      gap: 6px;
+    }
+    .tm-assistant-input-row input {
+      flex: 1;
+      padding: 7px 10px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.82rem;
+    }
+    .tm-assistant-input-row button {
+      background: var(--teal);
+      color: #fff;
+      border: none;
+      padding: 7px 12px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .tm-assistant-input-row button:hover { background: #237064; }
+    .tm-typing-dots {
+      display: inline-flex;
+      gap: 4px;
+      padding: 6px 0;
+    }
+    .tm-typing-dots span {
+      width: 6px; height: 6px;
+      background: var(--teal);
+      border-radius: 50%;
+      animation: tmBounce 1.2s infinite;
+    }
+    .tm-typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .tm-typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes tmBounce {
+      0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+      40% { opacity: 1; transform: scale(1); }
+    }
+    @keyframes tmPulse {
+      0% { box-shadow: 0 0 0 0 rgba(42, 124, 111, 0.4); }
+      70% { box-shadow: 0 0 0 12px rgba(42, 124, 111, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(42, 124, 111, 0); }
+    }
+    .tm-pulse { animation: tmPulse 1.5s ease-out 3; }
+    .tm-accomplished-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--teal);
+      font-weight: 700;
+      font-size: 0.85rem;
+    }
+    .tm-footer {
+      padding: 10px 18px;
+      border-top: 1px solid #e0dbd4;
+      font-size: 0.75rem;
+      text-align: center;
+    }
+    .tm-footer button {
+      background: none;
+      border: none;
+      color: var(--danger);
+      font-size: 0.75rem;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+    @media (max-width: 768px) {
+      .testing-mode-panel { width: 100%; }
+    }
+
     /* ========== EMPTY STATE ========== */
     .empty-state {
       text-align: center;
@@ -3359,6 +3603,7 @@
         <div class="sidebar-item" data-route="auditlog" onclick="navigateTo('auditlog')">Audit Log</div>
         <div class="sidebar-item muted" data-route="financials" onclick="navigateTo('financials')">Financials <span class="sidebar-badge new">New</span></div>
         <div class="sidebar-item" data-route="settings" onclick="navigateTo('settings')">Settings &amp; Integrations <span id="settingsSandboxBadge" style="display:none;background:#f59e0b;color:#fff;font-size:0.65rem;padding:2px 6px;border-radius:4px;margin-left:4px;font-weight:700;vertical-align:middle;">SANDBOX</span></div>
+        <div class="sidebar-item" id="testingModeItem" onclick="toggleTestingMode()" style="display:none;">🧪 Testing Mode</div>
       </div>
     </div>
   </nav>
@@ -4574,6 +4819,17 @@
     <div class="feedback-dialog" id="feedbackDialog"></div>
   </div>
 
+  <!-- ===== TESTING MODE ===== -->
+  <div class="testing-mode-handle" id="testingModeHandle" onclick="toggleTestingMode()" style="display:none;">🧪</div>
+  <div class="testing-mode-panel" id="testingModePanel">
+    <div class="tm-header">
+      <h3>🧪 Testing Mode</h3>
+      <button class="tm-close" onclick="toggleTestingMode()">&times;</button>
+    </div>
+    <div class="tm-body" id="testingModeBody"></div>
+    <div class="tm-footer" id="testingModeFooter"></div>
+  </div>
+
   <!-- ===== TOAST CONTAINER ===== -->
   <div class="toast-container" id="toastContainer"></div>
 
@@ -5526,6 +5782,11 @@ function showSidebar() {
   // Hide Settings sidebar item for non-admin users
   var settingsItem = sidebar && sidebar.querySelector('[data-route="settings"]');
   if (settingsItem) settingsItem.style.display = isAdmin() ? '' : 'none';
+  // Show Testing Mode for Owner + Manager (isStaff), hide for Staff (guest)
+  var tmItem = document.getElementById('testingModeItem');
+  if (tmItem) tmItem.style.display = isStaff() ? '' : 'none';
+  var tmHandle = document.getElementById('testingModeHandle');
+  if (tmHandle) tmHandle.style.display = isStaff() ? '' : 'none';
 }
 
 function hideSidebar() {
@@ -21106,6 +21367,288 @@ function loadPublicFeedbackSetting() {
     var toggle = document.getElementById('publicFeedbackToggle');
     if (toggle) toggle.checked = snap.val() === true;
   });
+}
+
+// ============================================================
+// Testing Mode
+// ============================================================
+function escapeHtml(str) {
+  var div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+var TESTING_MISSIONS = [{
+  id: 'mission1',
+  title: 'From Website Order to UPS Drop-off',
+  scenario: 'A customer just placed an order on shirglassworks.com for two pieces. One is in stock, one needs to be made. Your job: get everything confirmed, built, packed, and handed off to UPS.',
+  prePrompt: 'Before you start — if an order has items from stock AND items that need building, would you split the shipment or wait until everything is ready? Why?',
+  postPrompt: 'You did it! Now that you\'ve been through the full flow — what felt clunky? What did the app miss? Anything that confused you?',
+  tasks: [
+    { text: 'Find the new order in the admin app', hint: 'Look for where orders show up — there should be a count badge somewhere.' },
+    { text: 'Review the order details and figure out which items need building', hint: 'Each item should show its inventory status.' },
+    { text: 'Confirm and route the order (stock vs. build)', hint: 'There\'s a button that kicks off the triage process.' },
+    { text: 'Check that the production job was created for the build item', hint: 'Production requests go to a specific section under Make.' },
+    { text: 'Once all items are ready, move the order into packing', hint: 'There\'s a packing queue somewhere under Ship.' },
+    { text: 'Pack the order and get it ready to ship', hint: 'Look for buttons that move the order through packing stages.' },
+    { text: 'Generate a shipping label using Pirate Ship', hint: 'There should be a way to export order data for Pirate Ship.' },
+    { text: 'Hand the package off to UPS and confirm the drop-off', hint: 'The final step involves carrier selection and drop-off confirmation.' }
+  ]
+}];
+
+var testingModeState = {
+  open: false,
+  loaded: false,
+  progress: {},       // { taskIdx: true/false }
+  reflections: {},    // { pre: '...', post: '...' }
+  assistantTaskIdx: null,
+  assistantMessages: [],
+  assistantLoading: false
+};
+
+function toggleTestingMode() {
+  var panel = document.getElementById('testingModePanel');
+  var handle = document.getElementById('testingModeHandle');
+  testingModeState.open = !testingModeState.open;
+  if (testingModeState.open) {
+    panel.classList.add('open');
+    if (handle) handle.classList.add('hidden');
+    if (!testingModeState.loaded) {
+      loadTestingProgress();
+    } else {
+      renderTestingMode();
+    }
+  } else {
+    panel.classList.remove('open');
+    if (handle) handle.classList.remove('hidden');
+  }
+  // Close sidebar on mobile when opening testing mode
+  if (testingModeState.open && window.innerWidth <= 768) {
+    hideSidebar();
+  }
+}
+
+function loadTestingProgress() {
+  var user = auth.currentUser;
+  if (!user) return;
+  var basePath = 'shirglassworks/admin/testingMode/' + user.uid + '/mission1';
+  Promise.all([
+    db.ref(basePath + '/progress').once('value'),
+    db.ref(basePath + '/reflections').once('value')
+  ]).then(function(snaps) {
+    testingModeState.progress = snaps[0].val() || {};
+    testingModeState.reflections = snaps[1].val() || {};
+    testingModeState.loaded = true;
+    renderTestingMode();
+  });
+}
+
+function renderTestingMode() {
+  var body = document.getElementById('testingModeBody');
+  var footer = document.getElementById('testingModeFooter');
+  var mission = TESTING_MISSIONS[0];
+  var progress = testingModeState.progress;
+  var reflections = testingModeState.reflections;
+
+  // Check completion states
+  var hasPreReflection = !!reflections.pre;
+  var allTasksDone = mission.tasks.every(function(_, i) { return progress[i] === true; });
+  var hasPostReflection = !!reflections.post;
+
+  var html = '';
+
+  // Mission card
+  html += '<div class="tm-mission-card' + (hasPostReflection ? ' accomplished tm-pulse' : '') + '">';
+  html += '<div class="tm-mission-title">' + mission.title + '</div>';
+
+  if (hasPostReflection) {
+    // Accomplished state — collapsed
+    html += '<div class="tm-accomplished-badge">✅ Mission Accomplished</div>';
+    html += '</div>';
+    body.innerHTML = html;
+    // Owner-only reset
+    footer.innerHTML = isAdmin() ? '<button onclick="resetTestingProgress()">Reset Progress</button>' : '';
+    return;
+  }
+
+  html += '<div class="tm-scenario">' + mission.scenario + '</div>';
+
+  // Pre-prompt
+  if (!hasPreReflection) {
+    html += '<div class="tm-prompt-area">';
+    html += '<label>' + mission.prePrompt + '</label>';
+    html += '<textarea id="tmPrePrompt" placeholder="Share your thinking..."></textarea>';
+    html += '<button onclick="handlePrePromptSubmit()">Submit & Start</button>';
+    html += '</div>';
+    html += '</div>';
+    body.innerHTML = html;
+    footer.innerHTML = '';
+    return;
+  }
+
+  // Tasks
+  html += '<ul class="tm-task-list">';
+  mission.tasks.forEach(function(task, idx) {
+    var checked = progress[idx] === true;
+    html += '<li class="tm-task-item' + (checked ? ' checked' : '') + '">';
+    html += '<input type="checkbox" ' + (checked ? 'checked' : '') + ' onchange="toggleTask(' + idx + ')">';
+    html += '<span class="tm-task-text">' + task.text + '</span>';
+    html += '<button class="tm-task-hint-btn" onclick="openAssistant(' + idx + ')" title="Ask for a hint">?</button>';
+    html += '</li>';
+  });
+  html += '</ul>';
+
+  // Assistant area (if active)
+  if (testingModeState.assistantTaskIdx !== null) {
+    var taskCtx = mission.tasks[testingModeState.assistantTaskIdx];
+    html += '<div class="tm-assistant-area">';
+    html += '<div class="tm-assistant-label">Studio Assistant — Task ' + (testingModeState.assistantTaskIdx + 1) + '</div>';
+    // Show previous messages
+    testingModeState.assistantMessages.forEach(function(msg) {
+      html += '<div class="tm-assistant-response" style="' + (msg.role === 'user' ? 'color:var(--warm-gray);font-style:italic;' : '') + '">';
+      html += msg.role === 'user' ? '→ ' + escapeHtml(msg.text) : msg.text;
+      html += '</div>';
+    });
+    // Typing indicator
+    if (testingModeState.assistantLoading) {
+      html += '<div class="tm-typing-dots"><span></span><span></span><span></span></div>';
+    }
+    // Input
+    html += '<div class="tm-assistant-input-row">';
+    html += '<input type="text" id="tmAssistantInput" placeholder="Ask a question..." onkeydown="if(event.key===\'Enter\')askStudioAssistant()">';
+    html += '<button onclick="askStudioAssistant()" ' + (testingModeState.assistantLoading ? 'disabled' : '') + '>Ask</button>';
+    html += '</div>';
+    html += '</div>';
+  }
+
+  // Post-prompt (all tasks done)
+  if (allTasksDone) {
+    html += '<div class="tm-prompt-area">';
+    html += '<label>' + mission.postPrompt + '</label>';
+    html += '<textarea id="tmPostPrompt" placeholder="Your feedback..."></textarea>';
+    html += '<button onclick="handlePostPromptSubmit()">Submit Feedback</button>';
+    html += '</div>';
+  }
+
+  html += '</div>';
+  body.innerHTML = html;
+
+  // Focus assistant input if open
+  if (testingModeState.assistantTaskIdx !== null) {
+    var inp = document.getElementById('tmAssistantInput');
+    if (inp && !testingModeState.assistantLoading) inp.focus();
+  }
+
+  // Owner-only reset
+  footer.innerHTML = isAdmin() ? '<button onclick="resetTestingProgress()">Reset Progress</button>' : '';
+}
+
+function handlePrePromptSubmit() {
+  var textarea = document.getElementById('tmPrePrompt');
+  var value = textarea ? textarea.value.trim() : '';
+  if (!value) { showToast('Please share your thinking before starting.', true); return; }
+  var user = auth.currentUser;
+  if (!user) return;
+  testingModeState.reflections.pre = value;
+  db.ref('shirglassworks/admin/testingMode/' + user.uid + '/mission1/reflections/pre').set(value);
+  renderTestingMode();
+}
+
+function toggleTask(taskIdx) {
+  var user = auth.currentUser;
+  if (!user) return;
+  var current = testingModeState.progress[taskIdx] === true;
+  testingModeState.progress[taskIdx] = !current;
+  db.ref('shirglassworks/admin/testingMode/' + user.uid + '/mission1/progress/' + taskIdx).set(!current);
+
+  // Check if all done
+  var mission = TESTING_MISSIONS[0];
+  var allDone = mission.tasks.every(function(_, i) { return testingModeState.progress[i] === true; });
+  renderTestingMode();
+  if (allDone) {
+    var card = document.querySelector('.tm-mission-card');
+    if (card) card.classList.add('tm-pulse');
+  }
+}
+
+function handlePostPromptSubmit() {
+  var textarea = document.getElementById('tmPostPrompt');
+  var value = textarea ? textarea.value.trim() : '';
+  if (!value) { showToast('Please share your feedback.', true); return; }
+  var user = auth.currentUser;
+  if (!user) return;
+  testingModeState.reflections.post = value;
+  db.ref('shirglassworks/admin/testingMode/' + user.uid + '/mission1/reflections/post').set(value);
+  showToast('Feedback saved — thank you!');
+  renderTestingMode();
+}
+
+function openAssistant(taskIdx) {
+  if (testingModeState.assistantTaskIdx === taskIdx) {
+    testingModeState.assistantTaskIdx = null;
+    testingModeState.assistantMessages = [];
+  } else {
+    testingModeState.assistantTaskIdx = taskIdx;
+    testingModeState.assistantMessages = [];
+  }
+  renderTestingMode();
+}
+
+async function askStudioAssistant() {
+  var input = document.getElementById('tmAssistantInput');
+  var question = input ? input.value.trim() : '';
+  if (!question || testingModeState.assistantLoading) return;
+
+  var user = auth.currentUser;
+  if (!user) return;
+
+  testingModeState.assistantMessages.push({ role: 'user', text: question });
+  testingModeState.assistantLoading = true;
+  renderTestingMode();
+
+  try {
+    var token = await auth.currentUser.getIdToken();
+    var resp = await fetch(
+      'https://us-central1-shir-glassworks.cloudfunctions.net/shirStudioAssistant',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({
+          question: question,
+          missionIndex: 0,
+          taskIndex: testingModeState.assistantTaskIdx
+        })
+      }
+    );
+    var data = await resp.json();
+    testingModeState.assistantMessages.push({ role: 'assistant', text: data.answer || 'Hmm, I\'m not sure about that one.' });
+
+    // Log question to Firebase
+    db.ref('shirglassworks/admin/testingMode/' + user.uid + '/mission1/questions').push({
+      taskIndex: testingModeState.assistantTaskIdx,
+      question: question,
+      answer: data.answer || '',
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    testingModeState.assistantMessages.push({ role: 'assistant', text: 'Sorry, I couldn\'t connect. Try again in a moment.' });
+  }
+
+  testingModeState.assistantLoading = false;
+  renderTestingMode();
+}
+
+function resetTestingProgress() {
+  if (!isAdmin()) return;
+  if (!confirm('Reset all testing progress? This clears tasks, reflections, and questions.')) return;
+  var user = auth.currentUser;
+  if (!user) return;
+  db.ref('shirglassworks/admin/testingMode/' + user.uid + '/mission1').remove();
+  testingModeState.progress = {};
+  testingModeState.reflections = {};
+  testingModeState.assistantTaskIdx = null;
+  testingModeState.assistantMessages = [];
+  renderTestingMode();
+  showToast('Testing progress reset.');
 }
 
 function showToast(message, isError) {
