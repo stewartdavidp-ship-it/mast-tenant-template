@@ -545,6 +545,15 @@
         }
       },
 
+      // Blog — published posts readable by public blog page
+      "blog": {
+        "published": {
+          ".read": true,
+          ".write": "auth.uid === 'Y8RX1PIzccfT95WIIFl4I37VZZ72' || (auth != null && root.child('shirglassworks/admin/users').child(auth.uid).child('role').val() === 'admin')",
+          ".indexOn": ["publishedAt"]
+        }
+      },
+
       // Newsletter & Blog — issue composition, subscribers, blog posts
       "newsletter": {
         // Issues — admin auth required
