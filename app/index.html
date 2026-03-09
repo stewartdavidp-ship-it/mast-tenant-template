@@ -16623,28 +16623,43 @@ function copyStoryQRUrl(url) {
   });
 }
 
-function printProductCard(productId, productName, storyUrl) {
+var LK_API_URL = 'https://labelkeeper-api-300155036194.us-central1.run.app';
+var LK_API_KEY = 'lk_7d22ec38c0d9bb395a6781cbd6947a79';
+
+async function printProductCard(productId, productName, storyUrl) {
   var product = productsData ? productsData.find(function(p) { return p.pid === productId; }) : null;
   var imageUrl = product && product.images && product.images.length ? product.images[0] : null;
 
-  function openLabelKeeper(payload) {
-    localStorage.setItem('lk_printCard', JSON.stringify(payload));
-    window.open('https://stewartdavidp-ship-it.github.io/labelkeeper/?action=printCard&t=' + Date.now(), '_blank');
-    showToast('Opening Label Keeper...');
-  }
-
-  var basePayload = {
+  var payload = {
     productId: productId,
     productName: productName,
     storyUrl: storyUrl,
-    productImage: null,
+    productImage: imageUrl,
     source: 'shirglassworks-admin',
     timestamp: new Date().toISOString()
   };
 
-  // Pass image URL directly — Label Keeper renders it as <img src>, no CORS issues
-  basePayload.productImage = imageUrl;
-  openLabelKeeper(basePayload);
+  try {
+    showToast('Creating print session...');
+    var resp = await fetch(LK_API_URL + '/sessions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + LK_API_KEY
+      },
+      body: JSON.stringify(payload)
+    });
+    if (!resp.ok) throw new Error('Failed to create session');
+    var result = await resp.json();
+    window.open(result.url, '_blank');
+    showToast('Opening Label Keeper...');
+  } catch (e) {
+    // Fallback to legacy localStorage method
+    console.warn('LK API failed, falling back to localStorage:', e.message);
+    localStorage.setItem('lk_printCard', JSON.stringify(payload));
+    window.open('https://stewartdavidp-ship-it.github.io/labelkeeper/?action=printCard&t=' + Date.now(), '_blank');
+    showToast('Opening Label Keeper...');
+  }
 }
 
 // ---- QR Code Generation for Stories ----
