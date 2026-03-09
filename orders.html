@@ -793,13 +793,6 @@
     .order-item-row { flex-wrap: wrap; }
   }
   
-  .shop-subnav{background:rgba(26,26,26,0.88);backdrop-filter:blur(10px);border-bottom:1px solid rgba(196,133,60,0.15);position:fixed;top:0;left:0;right:0;z-index:98;padding:0;transform:translateY(70px);transition:transform 0.4s ease;}
-  nav.scrolled ~ .shop-subnav{transform:translateY(56px);}
-  .shop-subnav-inner{max-width:1200px;margin:0 auto;display:flex;gap:2rem;padding:7px 3rem;justify-content:center;}
-  .shop-subnav a{color:rgba(255,255,255,0.55);text-decoration:none;font-size:0.72rem;letter-spacing:0.1em;text-transform:uppercase;transition:color 0.3s;font-family:'DM Sans',sans-serif;}
-  .shop-subnav a:hover{color:var(--amber-light);}
-  .shop-subnav a.active{color:var(--amber);}
-  @media(max-width:768px){.shop-subnav{position:relative;transform:none!important;}.shop-subnav-inner{padding:7px 1.5rem;}}
   .free-ship-banner{background:#1a1714;text-align:center;padding:6px 0;font-family:"DM Sans",sans-serif;font-size:0.7rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--amber-light,#E8D5B5);border-bottom:1px solid rgba(196,133,60,0.15);}
 </style>
 </head>
@@ -814,8 +807,8 @@
   <ul class="nav-links">
     <li><a href="index.html">Home</a></li>
     <li><a href="shop.html" class="nav-shop">Shop</a></li>
-    <li><a href="blog/">From the Studio</a></li>
-    <li><a href="about.html">About</a></li>
+    <li><a href="commission.html">Commissions</a></li>
+    <li><a href="orders.html">Orders</a></li>
   </ul>
   <button class="nav-toggle" aria-label="Menu">
     <span></span><span></span><span></span>
@@ -826,15 +819,8 @@
 <div class="nav-mobile-menu" id="mobileMenu">
   <a href="index.html" onclick="closeMobileMenu()">Home</a>
   <a href="shop.html" class="btn-shop" onclick="closeMobileMenu()">Shop</a>
-  <a href="blog/" onclick="closeMobileMenu()">From the Studio</a>
-  <a href="about.html" onclick="closeMobileMenu()">About</a>
-</div>
-
-<div class="shop-subnav">
-  <div class="shop-subnav-inner">
-    <a href="commission.html">Commissions</a>
-    <a href="orders.html">Orders</a>
-  </div>
+  <a href="commission.html" onclick="closeMobileMenu()">Commissions</a>
+  <a href="orders.html" onclick="closeMobileMenu()">Orders</a>
 </div>
 
 
