@@ -1027,6 +1027,144 @@
       to { opacity: 0; }
     }
 
+    /* ========== FEEDBACK BUTTON ========== */
+    .feedback-fab {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 250;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: var(--teal);
+      color: white;
+      border: none;
+      font-size: 1.3rem;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s, transform 0.2s;
+    }
+    .feedback-fab:hover {
+      background: var(--teal-deep);
+      transform: scale(1.08);
+    }
+
+    .feedback-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 260;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .feedback-overlay.open {
+      display: flex;
+    }
+    .feedback-dialog {
+      background: var(--cream);
+      border-radius: 10px;
+      width: 100%;
+      max-width: 440px;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+    }
+    .feedback-dialog-header {
+      padding: 20px 24px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .feedback-dialog-header h3 {
+      font-size: 1.2rem;
+      font-weight: 600;
+      margin: 0;
+    }
+    .feedback-dialog-body {
+      padding: 16px 24px 20px;
+    }
+    .feedback-screen-badge {
+      background: var(--teal-light);
+      color: var(--teal-deep);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 500;
+      margin-bottom: 16px;
+      display: inline-block;
+    }
+    .feedback-segmented {
+      display: flex;
+      gap: 0;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      overflow: hidden;
+      margin-bottom: 14px;
+    }
+    .feedback-segmented label {
+      flex: 1;
+      text-align: center;
+      padding: 7px 4px;
+      font-size: 0.82rem;
+      font-weight: 500;
+      cursor: pointer;
+      background: white;
+      transition: background 0.15s, color 0.15s;
+      border-right: 1px solid #ddd;
+      margin: 0;
+    }
+    .feedback-segmented label:last-child { border-right: none; }
+    .feedback-segmented input { display: none; }
+    .feedback-segmented input:checked + span {
+      background: var(--teal);
+      color: white;
+    }
+    .feedback-segmented label:has(input:checked) {
+      background: var(--teal);
+      color: white;
+    }
+    .feedback-dialog textarea {
+      width: 100%;
+      min-height: 100px;
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.9rem;
+      resize: vertical;
+      box-sizing: border-box;
+    }
+    .feedback-dialog input[type="email"] {
+      width: 100%;
+      padding: 9px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.9rem;
+      box-sizing: border-box;
+    }
+    .feedback-dialog-footer {
+      padding: 0 24px 20px;
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+    .feedback-form-group {
+      margin-bottom: 14px;
+    }
+    .feedback-form-group label.feedback-label {
+      display: block;
+      font-size: 0.82rem;
+      font-weight: 600;
+      margin-bottom: 5px;
+      color: var(--charcoal);
+    }
+
     /* ========== EMPTY STATE ========== */
     .empty-state {
       text-align: center;
@@ -3933,6 +4071,18 @@
             <span>Enable dark mode</span>
           </label>
         </div>
+        <div class="form-group" style="margin-top:24px;">
+          <label>Public Feedback</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">
+            Allow visitors on the public site to submit feedback via a floating button.
+          </p>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+            <input type="checkbox" id="publicFeedbackToggle" onchange="togglePublicFeedback()"
+              style="width:18px;height:18px;cursor:pointer;">
+            <span>Enable public feedback button</span>
+          </label>
+          <div id="publicFeedbackStatus" style="margin-top:8px;font-size:0.85rem;"></div>
+        </div>
 
       </div>
       <div id="settingsSubPayments" style="display:none;max-width:500px;">
@@ -4416,6 +4566,12 @@
   <!-- ===== MODAL ===== -->
   <div class="modal-overlay" id="modalOverlay">
     <div class="modal" id="modalContent"></div>
+  </div>
+
+  <!-- ===== FEEDBACK BUTTON ===== -->
+  <button class="feedback-fab" id="feedbackFab" onclick="openFeedbackDialog()" title="Send feedback" style="display:none;">💬</button>
+  <div class="feedback-overlay" id="feedbackOverlay">
+    <div class="feedback-dialog" id="feedbackDialog"></div>
   </div>
 
   <!-- ===== TOAST CONTAINER ===== -->
@@ -5097,6 +5253,9 @@ auth.onAuthStateChanged(async function(user) {
   // Load settings (events count, dark mode)
   loadSettings();
 
+  // Show feedback button for all logged-in users
+  initFeedbackFab();
+
   // One-time RBAC seed — creates default roles if they don't exist yet.
   // Only runs for admin users, safe to call repeatedly (idempotent).
   if (isAdmin()) {
@@ -5235,7 +5394,7 @@ function applyRoute(route) {
 }
 
 function lazyLoadForRoute(route) {
-  if (route === 'settings') { updateGitHubTokenStatus(); loadOperators(); loadStorageInfo(); loadStudioLocations(); loadLocations(); }
+  if (route === 'settings') { updateGitHubTokenStatus(); loadOperators(); loadStorageInfo(); loadStudioLocations(); loadLocations(); loadPublicFeedbackSetting(); }
   if (route === 'analytics' && !analyticsLoaded) loadAnalytics();
   if (route === 'products' && !productsLoaded) loadProducts();
   if (route === 'orders' && !ordersLoaded) loadOrders();
@@ -20780,6 +20939,173 @@ function nlExportSubscribersCSV() {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
   showToast('CSV exported with ' + active.length + ' subscribers 📤');
+}
+
+// ============================================================
+// Feedback Widget
+// ============================================================
+var FEEDBACK_PATH = 'shirglassworks/feedbackReports';
+var FEEDBACK_SETTINGS_PATH = 'shirglassworks/admin/feedbackSettings';
+
+// Console capture — rolling buffer of errors/warnings
+(function() {
+  window._consoleBuffer = [];
+  var _origError = console.error;
+  var _origWarn = console.warn;
+  console.error = function() {
+    var args = Array.prototype.slice.call(arguments);
+    window._consoleBuffer.push({ level: 'error', msg: args.join(' '), t: Date.now() });
+    if (window._consoleBuffer.length > 20) window._consoleBuffer.shift();
+    _origError.apply(console, args);
+  };
+  console.warn = function() {
+    var args = Array.prototype.slice.call(arguments);
+    window._consoleBuffer.push({ level: 'warn', msg: args.join(' '), t: Date.now() });
+    if (window._consoleBuffer.length > 20) window._consoleBuffer.shift();
+    _origWarn.apply(console, args);
+  };
+})();
+
+// Route → human-readable label
+var ROUTE_LABELS = {
+  'dashboard': 'Dashboard', 'schedule': 'Schedule', 'gallery': 'Website',
+  'pos': 'Point of Sale', 'orders': 'Orders', 'commissions': 'Commissions',
+  'wholesale': 'Wholesale', 'galleries': 'Galleries', 'events': 'Sales Events',
+  'pack': 'Pack & Ship', 'ship': 'Shipping', 'receipts': 'Receipts',
+  'social': 'Social Media', 'newsletter': 'Newsletter', 'stories': 'Stories',
+  'products': 'Products', 'inventory': 'Inventory', 'customers': 'Customers',
+  'images': 'Images', 'website': 'Website', 'employees': 'Employees',
+  'contacts': 'Contacts', 'analytics': 'Analytics', 'auditlog': 'Audit Log',
+  'financials': 'Financials', 'settings': 'Settings', 'production': 'Production',
+  'jobs': 'Jobs'
+};
+
+function getScreenLabel() {
+  return ROUTE_LABELS[currentRoute] || currentRoute || 'Unknown';
+}
+
+// Show floating button once user is logged in
+function initFeedbackFab() {
+  var fab = document.getElementById('feedbackFab');
+  if (fab && currentUser) fab.style.display = 'flex';
+}
+
+function openFeedbackDialog() {
+  var screenLabel = getScreenLabel();
+  var html = '<div class="feedback-dialog-header">' +
+    '<h3>Send Feedback</h3>' +
+    '<button class="modal-close" onclick="closeFeedbackDialog()">&times;</button>' +
+  '</div>' +
+  '<div class="feedback-dialog-body">' +
+    '<div class="feedback-screen-badge">\uD83D\uDCCD You\'re on: ' + screenLabel + '</div>' +
+    '<div class="feedback-form-group">' +
+      '<label class="feedback-label">Type</label>' +
+      '<div class="feedback-segmented">' +
+        '<label><input type="radio" name="fbType" value="bug" checked><span>Bug</span></label>' +
+        '<label><input type="radio" name="fbType" value="enhancement"><span>Enhancement</span></label>' +
+        '<label><input type="radio" name="fbType" value="question"><span>Question</span></label>' +
+      '</div>' +
+    '</div>' +
+    '<div class="feedback-form-group">' +
+      '<label class="feedback-label">Severity</label>' +
+      '<div class="feedback-segmented">' +
+        '<label><input type="radio" name="fbSeverity" value="low"><span>Low</span></label>' +
+        '<label><input type="radio" name="fbSeverity" value="medium" checked><span>Medium</span></label>' +
+        '<label><input type="radio" name="fbSeverity" value="high"><span>High</span></label>' +
+      '</div>' +
+    '</div>' +
+    '<div class="feedback-form-group">' +
+      '<label class="feedback-label">Description</label>' +
+      '<textarea id="fbDescription" placeholder="What\'s wrong or what do you need?" oninput="updateFbSubmitState()"></textarea>' +
+    '</div>' +
+  '</div>' +
+  '<div class="feedback-dialog-footer">' +
+    '<button class="btn btn-secondary" onclick="closeFeedbackDialog()">Cancel</button>' +
+    '<button class="btn btn-primary" id="fbSubmitBtn" onclick="submitFeedback()" disabled>Submit</button>' +
+  '</div>';
+  document.getElementById('feedbackDialog').innerHTML = html;
+  document.getElementById('feedbackOverlay').classList.add('open');
+  setTimeout(function() {
+    var ta = document.getElementById('fbDescription');
+    if (ta) ta.focus();
+  }, 100);
+}
+
+function closeFeedbackDialog() {
+  document.getElementById('feedbackOverlay').classList.remove('open');
+  document.getElementById('feedbackDialog').innerHTML = '';
+}
+
+// Close on backdrop click
+document.getElementById('feedbackOverlay').addEventListener('click', function(e) {
+  if (e.target === this) closeFeedbackDialog();
+});
+
+function updateFbSubmitState() {
+  var desc = document.getElementById('fbDescription');
+  var btn = document.getElementById('fbSubmitBtn');
+  if (btn) btn.disabled = !(desc && desc.value.trim());
+}
+
+async function submitFeedback() {
+  var desc = document.getElementById('fbDescription');
+  if (!desc || !desc.value.trim()) return;
+
+  var type = document.querySelector('input[name="fbType"]:checked');
+  var severity = document.querySelector('input[name="fbSeverity"]:checked');
+
+  var report = {
+    appId: 'shirglassworks',
+    source: 'internal',
+    screen: currentRoute || 'unknown',
+    screenLabel: getScreenLabel(),
+    type: type ? type.value : 'bug',
+    severity: severity ? severity.value : 'medium',
+    description: desc.value.trim(),
+    email: null,
+    userId: currentUser ? currentUser.uid : null,
+    userName: currentUser ? (currentUser.displayName || currentUser.email || '') : null,
+    timestamp: new Date().toISOString(),
+    consoleBuffer: window._consoleBuffer ? window._consoleBuffer.slice() : [],
+    status: 'open',
+    jobId: null,
+    createdAt: firebase.database.ServerValue.TIMESTAMP
+  };
+
+  try {
+    var btn = document.getElementById('fbSubmitBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+    await db.ref(FEEDBACK_PATH).push(report);
+    closeFeedbackDialog();
+    showToast('Feedback submitted \u2014 thanks!');
+  } catch (err) {
+    showToast('Error submitting feedback: ' + err.message, true);
+    if (btn) { btn.disabled = false; btn.textContent = 'Submit'; }
+  }
+}
+
+// Public feedback toggle
+async function togglePublicFeedback() {
+  var toggle = document.getElementById('publicFeedbackToggle');
+  var enabled = toggle && toggle.checked;
+  var statusEl = document.getElementById('publicFeedbackStatus');
+  try {
+    await db.ref(FEEDBACK_SETTINGS_PATH + '/publicEnabled').set(enabled);
+    if (statusEl) {
+      statusEl.textContent = enabled ? 'Public feedback enabled.' : 'Public feedback disabled.';
+      statusEl.style.color = 'var(--teal)';
+    }
+    showToast(enabled ? 'Public feedback enabled' : 'Public feedback disabled');
+  } catch (err) {
+    if (statusEl) { statusEl.textContent = 'Error: ' + err.message; statusEl.style.color = 'var(--danger)'; }
+  }
+}
+
+function loadPublicFeedbackSetting() {
+  db.ref(FEEDBACK_SETTINGS_PATH + '/publicEnabled').once('value', function(snap) {
+    var toggle = document.getElementById('publicFeedbackToggle');
+    if (toggle) toggle.checked = snap.val() === true;
+  });
 }
 
 function showToast(message, isError) {
