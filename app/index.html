@@ -3583,6 +3583,14 @@
     .blog-body-editable:focus { border-color:var(--amber); }
     .blog-body-editable:empty:before { content:attr(data-placeholder); color:var(--text-secondary); opacity:0.5; pointer-events:none; }
     .blog-img-marker { display:inline-block; background:rgba(184,151,90,0.1); border:1px solid var(--amber); border-radius:4px; padding:2px 8px; font-size:0.8rem; color:var(--amber); cursor:default; margin:4px 0; }
+    .blog-emoji-picker { position:absolute; bottom:100%; left:50%; transform:translateX(-50%); margin-bottom:6px; background:var(--card-bg); border:1px solid var(--border); border-radius:10px; padding:10px; width:280px; box-shadow:0 4px 16px rgba(0,0,0,0.2); z-index:100; }
+    .blog-emoji-picker .emoji-tabs { display:flex; gap:2px; margin-bottom:8px; border-bottom:1px solid var(--border); padding-bottom:6px; }
+    .blog-emoji-picker .emoji-tab { background:none; border:none; font-size:1.1rem; cursor:pointer; padding:4px 6px; border-radius:4px; opacity:0.5; }
+    .blog-emoji-picker .emoji-tab.active { opacity:1; background:rgba(184,151,90,0.1); }
+    .blog-emoji-picker .emoji-tab:hover { opacity:1; }
+    .blog-emoji-picker .emoji-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:2px; max-height:180px; overflow-y:auto; }
+    .blog-emoji-picker .emoji-grid button { background:none; border:1px solid transparent; border-radius:4px; font-size:1.3rem; cursor:pointer; padding:4px; line-height:1; }
+    .blog-emoji-picker .emoji-grid button:hover { background:rgba(184,151,90,0.15); border-color:var(--border); }
     .blog-inline-images { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
     .blog-inline-img { position:relative; width:80px; height:80px; border-radius:6px; overflow:hidden; border:1px solid var(--border); }
     .blog-inline-img img { width:100%; height:100%; object-fit:cover; }
@@ -3631,6 +3639,7 @@
     body.dark-mode .blog-format-toolbar { background:#2a2a2a; border-color:#444; }
     body.dark-mode .blog-body-editable { background:#2a2a2a; border-color:#444; color:#eee; }
     body.dark-mode .blog-format-select { background:#333; border-color:#555; color:#eee; }
+    body.dark-mode .blog-emoji-picker { background:#2a2a2a; border-color:#444; }
 
     /* ===== Newsletter Grid Canvas ===== */
     .nl-grid-canvas { max-width:600px; margin:0 auto; background:#FFFFFF; border-radius:8px; overflow:hidden; box-shadow:0 2px 16px rgba(0,0,0,0.15); }
@@ -22254,6 +22263,10 @@ function renderBlogEditor() {
       '<option value="6">X-Large</option>' +
       '</select>' +
       '<div class="blog-format-sep"></div>' +
+      '<div style="position:relative;display:inline-block;">' +
+      '<button class="blog-format-btn" onmousedown="event.preventDefault();blogToggleEmojiPicker()" title="Insert Emoji" style="font-size:1rem;width:auto;padding:0 8px;">😊</button>' +
+      '<div id="blogEmojiPicker" class="blog-emoji-picker" style="display:none;"></div>' +
+      '</div>' +
       '<button class="blog-format-btn" onmousedown="event.preventDefault();blogInsertImage()" title="Insert Image" style="font-size:1rem;width:auto;padding:0 8px;">📷</button>' +
       '</div>';
 
@@ -22406,6 +22419,79 @@ function blogFormatSize(size) {
   var editable = document.getElementById('blogBodyEditable');
   if (editable) editable.focus();
 }
+
+var blogEmojiCategories = {
+  'Smileys': ['😊','😂','🥰','😍','😎','🤩','😢','😭','🥺','😮','🤔','🙏','👏','🎉','❤️','🔥','✨','💫','⭐','🌟','💪','👍','👋','🤗','😇','🥳','💀','😱','🤯','💯'],
+  'Nature': ['🌸','🌺','🌻','🌹','🌷','🌿','🍃','🍂','🌊','☀️','🌙','⛅','🦋','🐝','🐚','🌈','💐','🪻','🌾','🍁','🪸','🐙','🐟','🐬','🦭','🐢','🪼','🌅','🏔️','🌲'],
+  'Art': ['🎨','🖼️','✏️','🖌️','💎','🪩','🏺','🫧','🪬','🧿','🔮','🪭','🎭','🎪','🗿','⚱️','🏛️','🎀','🪆','💝','🎁','🕯️','🪔','🫖','🍶','🥂','🍷','🫗','🧊','💍'],
+  'Symbols': ['→','←','↑','↓','•','▪','★','♥','♦','♣','♠','✓','✕','∞','©','®','™','§','¶','†','‡','°','‰','№','⁂','☞','☛','❧','✿','❀']
+};
+var blogEmojiActiveTab = 'Smileys';
+
+function blogToggleEmojiPicker() {
+  var picker = document.getElementById('blogEmojiPicker');
+  if (!picker) return;
+  if (picker.style.display === 'none') {
+    // Save selection before opening
+    var sel = window.getSelection();
+    if (sel.rangeCount > 0) window._blogSavedRange = sel.getRangeAt(0).cloneRange();
+    blogRenderEmojiPicker();
+    picker.style.display = 'block';
+  } else {
+    picker.style.display = 'none';
+  }
+}
+
+function blogRenderEmojiPicker() {
+  var picker = document.getElementById('blogEmojiPicker');
+  if (!picker) return;
+  var html = '<div class="emoji-tabs">';
+  var catKeys = Object.keys(blogEmojiCategories);
+  var tabEmojis = { 'Smileys': '😊', 'Nature': '🌿', 'Art': '🎨', 'Symbols': '★' };
+  catKeys.forEach(function(cat) {
+    html += '<button class="emoji-tab' + (cat === blogEmojiActiveTab ? ' active' : '') + '" onmousedown="event.preventDefault();blogEmojiSwitchTab(\'' + cat + '\')" title="' + cat + '">' + (tabEmojis[cat] || cat[0]) + '</button>';
+  });
+  html += '</div><div class="emoji-grid">';
+  var emojis = blogEmojiCategories[blogEmojiActiveTab] || [];
+  emojis.forEach(function(e) {
+    html += '<button onmousedown="event.preventDefault();blogInsertEmoji(\'' + e + '\')">' + e + '</button>';
+  });
+  html += '</div>';
+  picker.innerHTML = html;
+}
+
+function blogEmojiSwitchTab(cat) {
+  blogEmojiActiveTab = cat;
+  blogRenderEmojiPicker();
+}
+
+function blogInsertEmoji(emoji) {
+  var editable = document.getElementById('blogBodyEditable');
+  if (!editable) return;
+  editable.focus();
+  // Restore saved selection
+  if (window._blogSavedRange) {
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(window._blogSavedRange);
+    window._blogSavedRange = null;
+  }
+  document.execCommand('insertText', false, emoji);
+  // Close picker
+  var picker = document.getElementById('blogEmojiPicker');
+  if (picker) picker.style.display = 'none';
+  blogBodyChanged();
+}
+
+// Close emoji picker when clicking outside
+document.addEventListener('mousedown', function(e) {
+  var picker = document.getElementById('blogEmojiPicker');
+  if (picker && picker.style.display !== 'none') {
+    if (!e.target.closest('.blog-emoji-picker') && !e.target.closest('[title="Insert Emoji"]')) {
+      picker.style.display = 'none';
+    }
+  }
+});
 
 function blogUpdateToolbarState() {
   var btnBold = document.getElementById('blogBtnBold');
