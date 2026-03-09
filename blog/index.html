@@ -362,6 +362,171 @@
     .previous-list { display: none; }
     .previous-list.show { display: block; }
 
+    /* ===== STORY CARDS ===== */
+    .story-card {
+      background: #fff;
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+      text-decoration: none;
+      color: inherit;
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+      transition: box-shadow 0.2s, transform 0.2s;
+      border: 1px solid rgba(0,0,0,0.06);
+      cursor: pointer;
+    }
+    .story-card:hover {
+      box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+      transform: translateY(-1px);
+    }
+    .story-card-thumb {
+      width: 80px;
+      height: 80px;
+      border-radius: 6px;
+      object-fit: cover;
+      flex-shrink: 0;
+      background: rgba(196,133,60,0.08);
+    }
+    .story-card-info { flex: 1; min-width: 0; }
+    .story-card-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.3rem;
+      font-weight: 500;
+      margin-bottom: 4px;
+      color: var(--charcoal);
+    }
+    .story-card-meta {
+      font-size: 0.8rem;
+      color: rgba(44,44,44,0.5);
+    }
+    .story-card-arrow {
+      color: var(--amber);
+      font-size: 1.2rem;
+      flex-shrink: 0;
+    }
+
+    /* ===== STORY DETAIL VIEW ===== */
+    .story-detail { max-width: 720px; margin: 0 auto; }
+    .story-back {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: none;
+      border: none;
+      color: var(--amber);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.85rem;
+      cursor: pointer;
+      margin-bottom: 1.5rem;
+      padding: 0;
+      letter-spacing: 0.04em;
+    }
+    .story-back:hover { color: var(--amber-light); }
+    .story-detail-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 2rem;
+      font-weight: 500;
+      color: var(--charcoal);
+      margin-bottom: 6px;
+    }
+    .story-detail-meta {
+      font-size: 0.85rem;
+      color: rgba(44,44,44,0.5);
+      margin-bottom: 2rem;
+    }
+    .story-entry {
+      margin-bottom: 2rem;
+    }
+    .story-entry-milestone {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.2rem;
+      font-weight: 500;
+      color: var(--charcoal);
+      margin-bottom: 0.5rem;
+      padding: 0.6rem 1rem;
+      background: rgba(196,133,60,0.06);
+      border-left: 3px solid var(--amber);
+      border-radius: 0 4px 4px 0;
+    }
+    .story-entry img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 6px;
+      margin: 0.5rem 0;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+    .story-entry-caption {
+      font-size: 0.9rem;
+      color: rgba(44,44,44,0.65);
+      line-height: 1.6;
+      margin-top: 0.5rem;
+    }
+    .story-credit {
+      font-size: 0.8rem;
+      color: rgba(44,44,44,0.4);
+      margin-top: 2rem;
+      text-align: center;
+      font-style: italic;
+    }
+
+    /* ===== SOCIAL MEDIA TAB ===== */
+    .social-page {
+      text-align: center;
+      padding: 3rem 1rem;
+    }
+    .social-page h2 {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.8rem;
+      font-weight: 400;
+      color: var(--charcoal);
+      margin-bottom: 0.5rem;
+    }
+    .social-page p {
+      color: rgba(44,44,44,0.55);
+      font-size: 0.95rem;
+      margin-bottom: 2rem;
+    }
+    .social-links {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      align-items: center;
+      max-width: 320px;
+      margin: 0 auto;
+    }
+    .social-link {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 1rem 2rem;
+      background: #fff;
+      border: 1px solid rgba(0,0,0,0.06);
+      border-radius: 8px;
+      text-decoration: none;
+      color: var(--charcoal);
+      width: 100%;
+      transition: box-shadow 0.2s, transform 0.2s;
+    }
+    .social-link:hover {
+      box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+      transform: translateY(-1px);
+    }
+    .social-link svg {
+      width: 28px;
+      height: 28px;
+      flex-shrink: 0;
+    }
+    .social-link-name {
+      font-weight: 500;
+      font-size: 1rem;
+    }
+    .social-link-handle {
+      font-size: 0.8rem;
+      color: rgba(44,44,44,0.5);
+    }
+
     .empty-state {
       text-align: center;
       padding: 4rem 1rem;
@@ -422,6 +587,8 @@
   <div class="blog-tabs">
     <button class="blog-tab active" id="tabBlog" onclick="switchTab('blog')">Blog</button>
     <button class="blog-tab" id="tabNewsletter" onclick="switchTab('newsletter')">Newsletter</button>
+    <button class="blog-tab" id="tabStories" onclick="switchTab('stories')">Stories</button>
+    <button class="blog-tab" id="tabSocial" onclick="switchTab('social')">Social Media</button>
   </div>
   <div id="postList">
     <div class="loading">Loading posts...</div>
@@ -480,6 +647,18 @@ window.addEventListener('resize', function() {
     currentTab = tab;
     document.getElementById('tabBlog').classList.toggle('active', tab === 'blog');
     document.getElementById('tabNewsletter').classList.toggle('active', tab === 'newsletter');
+    document.getElementById('tabStories').classList.toggle('active', tab === 'stories');
+    document.getElementById('tabSocial').classList.toggle('active', tab === 'social');
+
+    if (tab === 'social') {
+      renderSocialPage();
+      return;
+    }
+    if (tab === 'stories') {
+      document.getElementById('postList').innerHTML = '<div class="loading">Loading stories...</div>';
+      loadStories();
+      return;
+    }
     document.getElementById('postList').innerHTML = '<div class="loading">Loading posts...</div>';
     loadPosts(tab);
   };
@@ -611,9 +790,154 @@ window.addEventListener('resize', function() {
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
+  // ===== STORIES TAB =====
+  var storiesCache = null;
+
+  function loadStories() {
+    var container = document.getElementById('postList');
+    if (storiesCache) {
+      renderStoriesList(storiesCache);
+      return;
+    }
+    db.ref('shirglassworks/public/stories').once('value').then(function(snap) {
+      var val = snap.val();
+      var stories = val ? Object.keys(val).map(function(k) { var s = val[k]; s._id = k; return s; }) : [];
+      stories = stories.filter(function(s) { return s.status === 'published'; });
+      stories.sort(function(a, b) {
+        return new Date(b.publishedAt || 0) - new Date(a.publishedAt || 0);
+      });
+      storiesCache = stories;
+      renderStoriesList(stories);
+    }).catch(function(err) {
+      console.error('Error loading stories:', err);
+      container.innerHTML = '<div class="empty-state"><p>Unable to load stories. Please try again later.</p></div>';
+    });
+  }
+
+  function renderStoriesList(stories) {
+    var container = document.getElementById('postList');
+    if (stories.length === 0) {
+      container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">\ud83c\udfa8</div><p>No stories yet. Check back soon!</p></div>';
+      return;
+    }
+    var html = '';
+    stories.forEach(function(story) {
+      var date = story.publishedAt ? new Date(story.publishedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
+      var operators = story.operators ? story.operators.join(' & ') : '';
+      // Find first image from entries for thumbnail
+      var thumbUrl = '';
+      if (story.entries) {
+        var entries = Object.values(story.entries).sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
+        for (var i = 0; i < entries.length; i++) {
+          if (entries[i].mediaUrl && entries[i].mediaType === 'photo') {
+            thumbUrl = entries[i].mediaUrl;
+            break;
+          }
+        }
+      }
+      html += '<div class="story-card" onclick="viewStory(\'' + story._id + '\')">';
+      if (thumbUrl) {
+        html += '<img class="story-card-thumb" src="' + escHtml(thumbUrl) + '" alt="" loading="lazy" />';
+      }
+      html += '<div class="story-card-info">';
+      html += '<div class="story-card-title">' + escHtml(story.title || 'Untitled') + '</div>';
+      html += '<div class="story-card-meta">';
+      if (operators) html += 'By ' + escHtml(operators);
+      if (operators && date) html += ' \u00b7 ';
+      html += date + '</div>';
+      html += '</div>';
+      html += '<div class="story-card-arrow">\u203a</div>';
+      html += '</div>';
+    });
+    container.innerHTML = html;
+  }
+
+  window.viewStory = function(storyId) {
+    var container = document.getElementById('postList');
+    container.innerHTML = '<div class="loading">Loading story...</div>';
+    // Find in cache or fetch
+    var story = null;
+    if (storiesCache) {
+      for (var i = 0; i < storiesCache.length; i++) {
+        if (storiesCache[i]._id === storyId) { story = storiesCache[i]; break; }
+      }
+    }
+    if (story) {
+      renderStoryDetail(story);
+    } else {
+      db.ref('shirglassworks/public/stories/' + storyId).once('value').then(function(snap) {
+        var s = snap.val();
+        if (s) { s._id = storyId; renderStoryDetail(s); }
+        else { container.innerHTML = '<div class="empty-state"><p>Story not found.</p></div>'; }
+      });
+    }
+  };
+
+  function renderStoryDetail(story) {
+    var container = document.getElementById('postList');
+    var date = story.publishedAt ? new Date(story.publishedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
+    var operators = story.operators ? story.operators.join(' & ') : '';
+
+    var entries = [];
+    if (story.entries) {
+      entries = Object.values(story.entries).sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
+    }
+
+    var html = '<div class="story-detail">';
+    html += '<button class="story-back" onclick="switchTab(\'stories\')">\u2190 Back to Stories</button>';
+    html += '<div class="story-detail-title">' + escHtml(story.title || 'Untitled') + '</div>';
+    html += '<div class="story-detail-meta">';
+    if (operators) html += 'By ' + escHtml(operators);
+    if (operators && date) html += ' \u00b7 ';
+    html += date + '</div>';
+
+    entries.forEach(function(entry) {
+      if (entry.mediaType === 'text' && !entry.caption && !entry.milestone) return;
+      html += '<div class="story-entry">';
+      if (entry.milestone) {
+        html += '<div class="story-entry-milestone">' + escHtml(entry.milestone) + '</div>';
+      }
+      if (entry.mediaUrl && entry.mediaType === 'photo') {
+        html += '<img src="' + escHtml(entry.mediaUrl) + '" alt="" loading="lazy" />';
+      }
+      if (entry.caption) {
+        html += '<div class="story-entry-caption">' + escHtml(entry.caption) + '</div>';
+      }
+      html += '</div>';
+    });
+
+    if (operators) {
+      html += '<div class="story-credit">Handcrafted by ' + escHtml(operators) + '</div>';
+    }
+
+    html += '</div>';
+    container.innerHTML = html;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // ===== SOCIAL MEDIA TAB =====
+  function renderSocialPage() {
+    var container = document.getElementById('postList');
+    var html = '<div class="social-page">';
+    html += '<h2>Find Us Online</h2>';
+    html += '<p>Follow along for new work, behind-the-scenes, and studio updates.</p>';
+    html += '<div class="social-links">';
+
+    // Instagram
+    html += '<a class="social-link" href="https://www.instagram.com/shirglassworks/" target="_blank">';
+    html += '<svg viewBox="0 0 24 24" fill="#E1306C"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>';
+    html += '<div><div class="social-link-name">Instagram</div><div class="social-link-handle">@shirglassworks</div></div>';
+    html += '</a>';
+
+    html += '</div>';
+    html += '</div>';
+    container.innerHTML = html;
+  }
+
   // Load blog tab by default
   loadPosts('blog');
 })();
 </script>
+<script src="../feedback-widget.js"></script>
 </body>
 </html>
