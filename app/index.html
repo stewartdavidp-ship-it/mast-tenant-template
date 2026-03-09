@@ -8900,6 +8900,10 @@ function openModal(html) {
 }
 
 function closeModal() {
+  if (typeof nlEditingCardId !== 'undefined' && nlEditingCardId) {
+    nlCloseCardEditor(nlEditingCardId);
+    return;
+  }
   document.getElementById('modalOverlay').classList.remove('open');
   document.getElementById('modalContent').innerHTML = '';
 }
@@ -20626,6 +20630,7 @@ var nlAiResults = {};
 var nlImagePickerSection = null;
 var nlViewMode = 'grid';
 var nlDragSourceId = null;
+var nlEditingCardId = null;
 
 var NL_CARD_SIZE_MAP = {
   'studio-update':   { cardSize: 'medium', gridWidth: 1 },
@@ -21069,7 +21074,7 @@ function nlOpenCardEditor(secId) {
     ' style="border:none;background:transparent;font-size:1.1rem;font-weight:600;color:var(--text);flex:1;padding:4px 0;"' +
     ' onchange="nlUpdateSectionTitle(\'' + secId + '\', this.value)" />' +
     '</div>' +
-    '<button style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--text-secondary);padding:4px 8px;" onclick="closeModal()">×</button></div>';
+    '<button style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--text-secondary);padding:4px 8px;" onclick="nlCloseCardEditor(\'' + secId + '\')">×</button></div>';
 
   html += '<div style="padding:16px 24px;">';
 
@@ -21134,6 +21139,7 @@ function nlOpenCardEditor(secId) {
 
   html += '</div>'; // end body
 
+  nlEditingCardId = secId;
   openModal(html);
   var modal = document.getElementById('modalContent');
   if (modal) modal.style.maxWidth = '640px';
@@ -21145,6 +21151,22 @@ function nlEditorCharCount(secId, val, limit) {
   var count = val.length;
   counter.textContent = count + '/' + limit;
   counter.style.color = count >= limit ? '#dc3545' : count >= limit * 0.8 ? 'var(--amber)' : 'var(--text-secondary)';
+}
+
+function nlCloseCardEditor(secId) {
+  // Save any unsaved textarea content before closing
+  if (secId && nlCurrentIssue && nlCurrentIssue.sections && nlCurrentIssue.sections[secId]) {
+    var rawEl = document.getElementById('nlModalRaw_' + secId);
+    var finalEl = document.getElementById('nlModalFinal_' + secId);
+    if (rawEl && rawEl.value !== (nlCurrentIssue.sections[secId].rawInput || '')) {
+      nlUpdateRawInput(secId, rawEl.value);
+    } else if (finalEl && finalEl.value !== (nlCurrentIssue.sections[secId].finalContent || '')) {
+      nlUpdateFinalContent(secId, finalEl.value);
+    }
+  }
+  nlEditingCardId = null;
+  closeModal();
+  renderNLCompose();
 }
 
 async function nlChangeCardSize(secId, newSize) {
