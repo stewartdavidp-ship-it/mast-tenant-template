@@ -20,6 +20,23 @@
   var APP_ID = 'shirglassworks';
   var db = firebase.database();
 
+  // Console error capture — rolling buffer of last 20
+  var _consoleBuffer = [];
+  var _origError = console.error;
+  var _origWarn = console.warn;
+  console.error = function() {
+    var args = Array.prototype.slice.call(arguments);
+    _consoleBuffer.push({ level: 'error', msg: args.join(' '), t: Date.now() });
+    if (_consoleBuffer.length > 20) _consoleBuffer.shift();
+    _origError.apply(console, args);
+  };
+  console.warn = function() {
+    var args = Array.prototype.slice.call(arguments);
+    _consoleBuffer.push({ level: 'warn', msg: args.join(' '), t: Date.now() });
+    if (_consoleBuffer.length > 20) _consoleBuffer.shift();
+    _origWarn.apply(console, args);
+  };
+
   // Rate limiting — one submission per 30 seconds
   function canSubmit() {
     try {
@@ -114,6 +131,14 @@
           '</div>' +
         '</div>' +
         '<div class="sg-fb-grp">' +
+          '<label class="sg-fb-lbl">Severity</label>' +
+          '<div class="sg-fb-seg">' +
+            '<label><input type="radio" name="sgFbSeverity" value="low"><span>Low</span></label>' +
+            '<label><input type="radio" name="sgFbSeverity" value="medium" checked><span>Medium</span></label>' +
+            '<label><input type="radio" name="sgFbSeverity" value="high"><span>High</span></label>' +
+          '</div>' +
+        '</div>' +
+        '<div class="sg-fb-grp">' +
           '<label class="sg-fb-lbl">What\'s on your mind?</label>' +
           '<textarea id="sgFbDesc" placeholder="Tell us what\'s on your mind"></textarea>' +
         '</div>' +
@@ -169,6 +194,7 @@
     }
 
     var type = document.querySelector('input[name="sgFbType"]:checked');
+    var severity = document.querySelector('input[name="sgFbSeverity"]:checked');
     var screen = dialog ? dialog.getAttribute('data-screen') : 'unknown';
 
     var report = {
@@ -177,7 +203,8 @@
       screen: screen,
       screenLabel: null,
       type: type ? type.value : 'bug',
-      severity: null,
+      severity: severity ? severity.value : 'medium',
+      consoleBuffer: _consoleBuffer.slice(),
       description: desc.value.trim(),
       email: (email && email.value.trim()) || null,
       userId: null,
