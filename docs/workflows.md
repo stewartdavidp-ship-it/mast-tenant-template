@@ -1,504 +1,1634 @@
----
-# Shir Glassworks — Workflow Reference
-
-A living document tracking all key workflows in the Shir Glassworks business app.
-Updated by Claude Code as builds complete.
-
-**Status values:**
-- `Live` — built and available today
-- `In Progress` — currently being built
-- `Planned` — designed but not yet started
-- `Not Started` — identified but not yet designed
-
-**Navigation sections:** Dashboard → Make → Market → Sell → Ship → Teach → Manage
-
----
-
-## Selling — Craft Fair
-
-### Run the Point of Sale at a Craft Fair
-**Status:** Live
-
-Used at craft fairs and shows to ring up a sale, take payment, and send the customer a receipt — all from a phone or tablet.
-
-1. Open the Shir POS app on your phone or tablet
-2. Point the camera at the piece the customer wants to buy
-3. The app identifies the piece and shows the price — confirm it's correct
-4. If the piece isn't recognized, select it manually from the product list
-5. Add more pieces to the cart if the customer is buying multiple items
-6. Review the cart total with the customer
-7. Select payment method: Cash or Square (card)
-8. For Square: hand the reader to the customer to tap or swipe
-9. For Cash: enter the amount tendered and confirm
-10. Ask if the customer wants a receipt — enter their email or phone number
-11. Sale is recorded and inventory is updated automatically
-
----
-
-## Selling — Online
-
-### Customer Purchases from the Website
-**Status:** Live
-
-How a customer buys from shirglassworks.com — from browsing to payment confirmation.
-
-1. Customer browses the shop and adds pieces to their cart
-2. Customer opens the cart and proceeds to checkout
-3. Customer enters their shipping address (pre-filled if logged in)
-4. Address is validated automatically — customer corrects it if needed
-5. Shipping cost is calculated and shown (free for orders over $100)
-6. Customer reviews the order total including shipping
-7. Customer enters payment details via Square's secure checkout
-8. Payment is processed — customer sees an order confirmation
-9. Order appears in the admin app under Sell → Retail Orders
-
----
-
-## Order Fulfillment
-
-### Confirm and Triage a New Order
-**Status:** Live
-
-When a new order comes in, the admin triages it — checking inventory and deciding whether items ship from stock or need to be built.
-
-1. Open the admin app and go to Sell → Retail Orders
-2. Find the new order (status: Placed) — a badge on "Retail Orders" in the sidebar shows the count of placed orders
-3. Review the order details — items, options, shipping address
-4. Each item shows its inventory status inline: In Stock, Low Stock, Not in Stock, or Made to Order
-5. Click "Confirm Order" — the Triage Dialog opens
-6. The dialog shows each item with available stock and a pre-selected action: "From Stock" or "Send to Build"
-7. Override any item's action if needed (e.g., force build even if in stock)
-8. Review the summary: how many items from stock vs. build, and what status the order will advance to
-9. Click "Confirm & Route" — inventory is reserved for stock items, production requests are created for build items
-10. If all items are from stock: order advances to Ready
-11. If any items need building: order advances to Building — a linked production request appears in Make → Jobs
-
-### Pack and Ship an Order
-**Status:** Live
-
-What happens after an order is confirmed — from packing through to drop-off at the post office.
-
-1. Open the admin app and go to Ship → Pack
-2. The Pack Queue shows orders at Ready, Packing, and Packed status — each with a progress bar showing where it is in the pipeline
-3. For a Ready order: click "Start Packing" to move it to Packing status
-4. Pack the order — optionally use the Studio Scan tab to scan QR labels
-5. Click "Mark Packed" on the order in the Pack Queue
-6. Click "Pirate Ship →" — the CSV is automatically downloaded (first time) and Pirate Ship opens in a new tab
-7. First-time users see a mapping guide dialog explaining which CSV fields need manual mapping in Pirate Ship (Weight, Dimensions, Order ID, Rubber Stamp) — Pirate Ship remembers mappings after the first time
-8. In Pirate Ship: import the CSV, purchase the shipping label, print and attach it to the package
-9. Back in the Pack Queue: click "Handed to Carrier" on the packed order
-10. Go to Ship → Ship → Drop-off to scan packages and bundle them for carrier pickup
-11. Confirm drop-off — carrier and location are recorded
-12. The order auto-transitions to Shipped and the customer receives an email notification with tracking info (if available)
-
----
-
-## Events
-
-### Set Up and Run a Craft Fair Event
-**Status:** Live
-
-How to create an event in the system, allocate the inventory you're bringing, and track sales during the show.
-
-1. Open the admin app and go to Sell → Events
-2. Click New Event — enter the event name, date, and location
-3. Add the pieces you're bringing: search by product name and set the quantity for each
-4. Print the packing list if needed
-5. At the fair, open the POS app — the recommended way is to click "Open PoS" on the active event in the admin app, which pre-links the event automatically
-6. If you open the POS without a pre-linked event, it detects your location and shows a confirmation dialog with the active event(s) — confirm the right one, pick a different event, or dismiss
-7. Use the gear button in the top bar at any time to switch events, unlink, or link to a different active event
-8. Ring up sales as normal — sold quantities are tracked against your allocation
-9. The event banner shows: packed / sold / remaining at a glance
-
-### Wrap Up After a Craft Fair
-**Status:** Live
-
-Reconciling what sold at a fair so inventory stays accurate back at the studio.
-
-1. After the event, open the admin app and go to Sell → Events
-2. Open the event and review the sold vs. packed summary
-3. For any sales taken offline or outside the POS: click + Manual Sale, pick the product from your event allocations, enter the quantity, amount, and payment type, then save
-4. The manual sale is recorded, the event allocation sold count is updated, and inventory is decremented automatically
-5. When reconciliation is complete, click Close Event
-6. Unsold pieces are returned to available stock
-
----
-
-## Production
-
-### Start a Production Run
-**Status:** Live
-
-Creating a build job when it's time to make a batch of pieces — whether triggered by a customer order or to restock.
-
-1. Open the admin app and go to Make → Jobs
-2. Click New Job
-3. Enter the job name (e.g. "Spring restock — small bowls")
-4. Add the pieces to make: search by product name and set the target quantity for each
-5. Set the expected completion date
-6. Save the job — it appears in the Jobs list
-7. As work progresses, update the status: In Progress → Ready
-
-> **Note:** The Queue tab shows production requests generated automatically from online orders — these are separate from manually created jobs.
-
-### Complete a Production Run and Update Inventory
-**Status:** Live
-
-Closing out a build job once the pieces are finished and ready for sale.
-
-1. Open the admin app and go to Make → Jobs
-2. Find the job and open it
-3. While the job is in progress, update completed and loss quantities inline on each line item — changes save automatically
-4. Review the finished quantities before completing — adjust if any pieces didn't turn out
-5. Mark the job as Complete
-6. Inventory is updated automatically — each line item's completed quantity (minus losses) is added to stock
-7. A confirmation toast shows how many products were updated
-8. Pieces are now available for sale online and at events
-
----
-
-## Forecasting
-
-### Forecasting — What to Build Next
-**Status:** Live
-
-Use the Forecast view to see what's selling, what's running low, and what to build next — all in one place.
-
-1. Open the admin app and go to Make → Jobs
-2. Click the Forecast tab (Owner and Manager only — Staff cannot see this tab)
-3. If there are upcoming events within 60 days, a banner appears at the top — click it to review the event
-4. The Suggested Builds section shows cards for products that are selling faster than current stock
-5. Each card shows current stock, monthly sales rate, and weeks of coverage remaining
-6. Click Create Job on a card to open a pre-filled production job with the suggested quantity
-7. Below stocked products, any Made-to-Order products with high demand (10+ orders in 90 days) appear under "Consider Stocking"
-8. The Demand Overview table shows all production products with order history — sortable by any column
-9. Use the time horizon toggle (Adaptive / 30d / 90d / All) to change the Sold column display
-10. Click any row to jump to the product detail
-11. The Slow/No Movement section (collapsed by default) lists products with stock but no recent orders
-
----
-
-## Inventory
-
-### Update Stock After a Firing
-**Status:** Live
-
-A quick way to update inventory counts after pieces come out of the kiln, without going through a full production job.
-
-1. Open the admin app and go to Manage → Inventory
-2. Find the product you're updating and click Adjust Stock
-3. Choose a mode: **Set Count** (enter an absolute number) or **Add Pieces** (enter how many to add to current stock)
-4. Save — the updated count is immediately reflected in the shop
-
-### Move Inventory Between Locations
-**Status:** Live
-
-Tracking where pieces are stored — studio shelves, display cases, fair bins — so you always know where to find something.
-
-1. Open the admin app and go to Manage → Inventory
-2. Select the piece you're moving
-3. Update the location — or scan the QR code at the destination location
-4. Confirm the move
-5. The piece now shows as being at the new location
-
----
-
-## Product Management
-
-### Add a New Product
-**Status:** Live
-
-Bringing a new piece into the system so it can be sold online and tracked in inventory.
-
-1. Open the Studio Companion app on your phone
-2. Tap Identify & Train
-3. Take a photo of the piece
-4. The app suggests a name and category based on what it sees — confirm or correct
-5. A new product record is created automatically
-6. In the admin app, go to Manage → Products and open the new product
-7. Set the price, options (color, size, etc.), weight, and shipping category
-8. Add more photos if needed
-9. Toggle the product to Published when it's ready to appear in the shop
-10. Print a QR label from the product record to attach to the piece or its storage location
-
-### Edit an Existing Product
-**Status:** Live
-
-Updating price, options, images, or visibility for a product already in the system.
-
-1. Open the admin app and go to Manage → Products
-2. Find the product — search by name or browse by category
-3. Click Edit
-4. Make changes: price, options, description, images, or visibility
-5. Save — changes are live on the website immediately
-
-### Manage Product Images
-**Status:** Live
-
-Uploading photos to the image library and assigning them to products or website sections.
-
-1. Open the admin app and go to Manage → Images
-2. Click Upload and select photos from your device
-3. Tag the image with the relevant product or website section
-4. To assign to a product: open the product in Manage → Products and select from the image library
-5. To use on the website: assign the image to the relevant section in Manage → Website Content
-
----
-
-## Coupons
-
-### Create and Manage Coupons
-**Status:** Live
-
-Creating discount codes for customers — percentage or fixed-amount, with optional minimum order, usage limits, and date ranges.
-
-1. Open the admin app and go to Sell → Coupons
-2. Click "+ New Coupon"
-3. Enter the coupon code (e.g. "SPRING25")
-4. Choose the discount type: Percentage or Fixed Amount
-5. Set the discount value (e.g. 25% or $10)
-6. Optionally set: start/end dates, minimum order amount, maximum uses, and one-per-customer flag
-7. Add an optional description for internal reference
-8. Save — the coupon is active and can be used at checkout
-9. The coupons list shows status (Active, Pending, Expired) auto-calculated from dates and usage
-
----
-
-## Sculptures & Commissions
-
-### Add a New Sculpture
-**Status:** Live
-
-Bringing a one-of-a-kind sculpture into the system so it can be listed on the website and tracked separately from production pieces.
-
-1. Create the product in the usual way (Studio Companion or manually in admin)
-2. In the admin app, go to Manage → Products and open the product
-3. Set the Business Line to **Sculpture**
-4. Set price, add photos, and toggle to Published
-5. In Manage → Inventory, set the stock to 1
-6. The product now appears in the shop — sculptures are limited to 1 unit in stock
-7. When the sculpture sells (POS or website), stock goes to 0 and the product is automatically marked **Sold**
-8. On the website, sold sculptures remain visible with a "Sold" badge and a "Request a Commission" link
-
-### Request a Custom Commission (Customer)
-**Status:** Live
-
-How a customer requests a custom piece — either from the dedicated commission page or from a sold sculpture's product page.
-
-1. Customer navigates to the Commissions page (linked in the site nav on every page) or clicks "Request a Commission" on a sold sculpture's product page
-2. Browse the product catalog and select pieces for inspiration (optional)
-3. Upload a reference image showing what they have in mind (optional, max 5MB)
-4. Enter their name, email or phone, and a description of what they're looking for
-5. Submit the inquiry — a confirmation message appears
-6. The studio receives a notification email with the customer's details and a QR code linking to the commission record
-
-### Respond to a Commission Inquiry
-**Status:** Live
-
-Handling a customer request for a custom or commission piece — from initial inquiry through to delivery.
-
-1. A notification email arrives with a QR code when a new inquiry comes in (from the website or POS)
-2. Scan the QR code or open the admin app → Sell → Commissions
-3. Review the inquiry: inspiration pieces the customer selected, any reference image they uploaded, their notes, and contact info
-4. Update the status to **In Discussion** and start the conversation
-5. Fill in the Proposal section: price, estimated timeline, and design/spec notes
-6. Click **Send Proposal to Customer** — the customer receives an email with the proposal details and a QR code linking back to the commission
-7. If the customer agrees: update status to **Accepted** and click **Create Production Job** — a linked job appears in Make → Jobs
-8. Build the piece and mark the production job as complete — update commission status to **Built**
-9. Ship or hand off the piece, then mark the commission as **Completed**
-10. If the customer declines: update status to **Declined**
-
----
-
-## Market
-
-### Create and Post a Social Media Video
-**Status:** Live
-
-How to take a finished video from your camera roll to a ready-to-post Instagram Reel in Studio.
-
-1. Open the admin app and go to Market → Social Media
-2. Tap "New Post"
-3. Choose "I already have a clip" and pick your edited video from your camera roll
-4. In the Enhancement dialog: link to a product or event (or describe the video), choose a content style (treatment), and select Instagram Reels as the destination
-5. Review the Clip Readiness score — proceed even if amber (it's advisory only)
-6. Review the 3 caption variants and tap the one that fits best — edit inline if needed
-7. Follow the Instagram Posting Guide steps A–E: Open Instagram, select your video, paste the caption, paste hashtags, set your cover frame
-8. Back in Studio, tap "Mark as Posted" to record it
-9. Later, if the post performs well, tap the thumbs-up or fire icon on the post in your Posted History to log the signal
-
-### Pre-Shoot: Get a Shoot Card Before You Film
-**Status:** Live
-
-Use Studio to get specific shooting guidance before you pick up your camera.
-
-1. Open Market → Social Media and tap "New Post"
-2. Choose "I'm about to shoot"
-3. Select a content style (treatment) and link to the product or event you're about to film
-4. Studio generates a Shoot Card — 4–6 specific instructions for your exact subject and style
-5. Read the card, then tap "Ready to Shoot" and open your camera app
-6. When you return with the edited video, go back to Studio → New Post → "I already have a clip"
-7. The pending post record is waiting — upload your clip and continue from Step 4 in the workflow above
-
-### Compose and Publish a Newsletter Issue
-**Status:** Live
-
-How to create a newsletter issue in Studio — from blank template to published blog post or HTML export for email.
-
-1. Open the admin app and go to Market → Blog & Newsletter
-2. Click "+ New Issue" — a new draft is created with 7 default sections pre-populated
-3. Enter the issue title at the top of the compose screen
-4. Expand each section and write your content in the text area (each has a guided prompt to help)
-5. Optionally click "Polish with AI" to get a cleaned-up version — compare side-by-side and pick your preferred version
-6. Add images from the Studio image library to any section (optional)
-7. Toggle off any sections you want to skip for this issue
-8. To send via email: click "Export HTML" — downloads a styled email file ready for your email tool
-9. To publish on the website: click "Publish to Website" — the issue appears on shirglassworks.com/blog
-10. After sending the email externally, click "Mark as Sent" to record the send date and subscriber count
-
-### Manage Newsletter Subscribers
-**Status:** Live
-
-Adding, removing, and exporting the mailing list for the Shir Glassworks newsletter.
-
-1. Open the admin app and go to Market → Blog & Newsletter
-2. Click the "Subscribers" tab
-3. View all active subscribers — name, email, source (Website or Manual), and date
-4. To add someone manually: click "+ Add Subscriber" and enter their name and email
-5. To remove someone: click "Remove" on their row — they're marked as unsubscribed (not deleted)
-6. To export the list for an email tool: click "Export CSV" — downloads a CSV with name, email, and subscribe date
-7. Customers can also sign up via the newsletter form on the website footer — those appear with a "Website" source badge
-8. Customers can unsubscribe via the link in newsletter emails — their status updates automatically
-
-### Create and Curate a Product Story
-**Status:** Live
-
-Building a "How It Was Made" story for a product — linking production photos from a build job into a narrative that shows on the product page.
-
-1. Open the admin app and go to Market → Stories
-2. If a completed job has no story yet, a "Missing Stories" prompt appears at the top — click "Create Story" on any job
-3. Alternatively, open a job detail in Make → Jobs and click "Create Story"
-4. In the story editor: enter a title and select photos from the build's media library
-5. For each selected photo, add a milestone label (e.g. "Gather", "Shaping", "Annealing") and a caption
-6. Reorder entries by dragging, or remove entries you don't want
-7. Click "Save Draft" to save without publishing, or "Publish" to go live
-8. On publish: the story is linked to all products from that job, and QR codes are automatically generated for each linked product
-9. The story appears as a "How It Was Made" section on each linked product's page
-
-### View and Manage Published Stories
-**Status:** Live
-
-Reviewing, editing, and managing stories from the Stories list view.
-
-1. Open the admin app and go to Market → Stories
-2. Browse all stories — filter by Draft or Published status
-3. Click a story to see its full detail: entries, linked products, artists, and QR codes
-4. To edit: click "Edit Story" to re-enter the curation editor
-5. To unpublish: click "Unpublish" — the story is removed from product pages but kept as a draft
-6. Published stories show QR codes for each linked product — use "Print QR" to print a label or "Copy URL" to share the product page link
-
----
-
-## Contacts & Relationships
-
-### Add a New Contact
-**Status:** Live
-
-Bringing a vendor, partner, gallery, or other business contact into the system so interactions can be tracked over time.
-
-1. Open the admin app and go to Manage → Contacts
-2. Click "+ Add Contact"
-3. Enter the contact name, category (Supplier, Facilities, Gallery, Marketplace, Event Organizer, Partner, Student, Press, or Other), and optional notes
-4. Optionally paste a Google Drive folder link for document access
-5. Save — the contact is created in Studio and synced to Google Contacts automatically
-6. A "Shir Glassworks" group is created in Google Contacts if it doesn't exist, and the contact is added to it
-
-### Log an Interaction with a Contact
-**Status:** Live
-
-Recording a call, meeting, payment, or other touchpoint so there's a full history of the relationship.
-
-1. Open the admin app and go to Manage → Contacts
-2. Find the contact and open their record
-3. Click "Log Interaction"
-4. Select the interaction type: Call, Email, Meeting, Site Visit, Payment, Signed Doc, or Other
-5. Set the date (defaults to today) and add notes on what happened
-6. Optionally attach a document — paste a Google Drive link to attach file metadata to the interaction
-7. Save — the interaction appears in the contact's timeline, newest first
-
-### Sync Contacts from Google
-**Status:** Live
-
-Pulling in contacts that were added directly to the "Shir Glassworks" group in Google Contacts, rather than through Studio.
-
-1. Open the admin app and go to Manage → Contacts
-2. Click "Sync Google"
-3. Grant Google Contacts access if prompted (one-time per session)
-4. The app checks the "Shir Glassworks" group in Google Contacts (creates the group automatically if it doesn't exist)
-5. Any contacts in that group that don't exist in Firebase are created automatically with category set to "Other"
-6. Existing contacts are not overwritten — sync only adds new ones
-7. Update the category on imported contacts as needed
-
----
-
-## Admin
-
-### Configure Square Payment Settings
-**Status:** Live
-
-Switching between sandbox (test) mode and live payments, and updating Square credentials. Sandbox mode is for testing only — no real money moves.
-
-1. Open the admin app and go to Manage → Settings & Integrations
-2. Find the Square section
-3. To test: set Environment to Sandbox and enter the Sandbox Application ID and Location ID
-4. To go live: set Environment to Production (live credentials are already saved)
-5. Click Save
-6. In Sandbox mode a TEST MODE banner appears on the checkout page — verify this is visible before testing
-
-### Manage Employees and Permissions
-**Status:** Live
-
-Adding a new team member or updating what someone can access in the admin app.
-
-1. Open the admin app and go to Manage → Employees & Permissions
-2. To invite someone: click + Add User in the section header
-3. Enter their email address and select a role: Owner, Manager, or Staff
-4. Click Send Invite — the invite is recorded and you'll see it as a pending row in the users list
-5. Tell the person to sign in with their Google account — they'll be assigned the invited role automatically on first login
-6. To change an existing user's role: use the role dropdown next to their name in the users list
-7. Managers can access POS, inventory, and packing — not pricing, settings, or user management
-8. Staff have basic access to POS and inventory
-
-### View Analytics
-**Status:** Live
-
-Reviewing website traffic, page views, and visitor activity over time.
-
-1. Open the admin app and go to Manage → Analytics
-2. Select a time range: Last 7 days, Last 30 days, or Last 90 days
-3. Review the summary cards for key metrics
-4. Click Refresh to pull the latest data
-
-### View the Audit Log
-**Status:** Live
-
-Reviewing a history of who did what and when — useful for reconciliation or troubleshooting.
-
-1. Open the admin app and go to Manage → Audit Log
-2. Filter by date range, user, or action type
-3. Each entry shows who performed the action, what changed, and whether they were in fair mode or studio mode
-
----
-
-## Not Yet Built
-
-The following workflows have been identified but not yet designed or built. These are candidates for the next planning session with Ori and Madeline.
-
-| Workflow | Notes |
-|---|---|
-| Promo Photo Shoot | Guided lightbox shoot for website and Etsy photos. Studio Companion currently handles Vision training only. |
-| Etsy / Wholesale Order Management | Handling orders from channels outside the website. Not yet designed. |
-| Customer Follow-Up | Sending updates or follow-up messages to buyers. Not yet designed. |
-| End-of-Year Financials Summary | Pulling together sales, costs, and reconciliation. Not yet designed. |
-| Contact History Import | Retroactive import of existing Google Drive documents into contact interaction timelines. Deferred pending proof of value from Phase 1. |
-| Ship Bundles | Creating and managing carrier bundles for batch drop-offs. Ship → Ship → Bundles. |
+```yaml
+# Shir Glassworks — Workflow Reference (Machine-Readable)
+#
+# Format: YAML. Consumers: Claude API (Studio Assistant), Claude Code (build reference).
+# Human-readable rendering: ask Claude on demand.
+#
+# Status values: live | in-progress | planned | not-started
+# Roles: owner (admin), manager (user), staff (guest)
+# Nav: sidebar section → item [→ sub-tab]
+
+workflows:
+
+  # ============================================================
+  # SELLING
+  # ============================================================
+
+  - id: selling.craft-fair-pos
+    section: Selling
+    title: Run the Point of Sale at a Craft Fair
+    status: live
+    roles: [owner, manager, staff]
+    nav: [Sell, Sales]
+    description: Ring up sales at craft fairs using the POS app — scan or select products, take payment, send receipts.
+    steps:
+      - Open POS app on phone/tablet (via "Open Point of Sale" link in admin, or directly)
+      - Point camera at piece — app identifies it and shows price
+      - If not recognized, select manually from product list
+      - Add more pieces to cart if needed
+      - Review cart total with customer
+      - Select payment method — Cash or Square (card)
+      - For Square — hand reader to customer for tap/swipe
+      - For Cash — enter amount tendered and confirm
+      - Optionally enter customer email/phone for receipt
+      - Sale recorded and inventory updated automatically
+    ui:
+      screen: Sell → Sales
+      route: pos
+      tab_id: salesTab
+      elements:
+        - label: "Open Point of Sale"
+          type: link
+          action: Opens separate POS app at ../pos/
+        - label: "Square Payments"
+          type: button
+          action: Toggles to Square payments sub-view
+      filters:
+        - Date picker (HTML date input)
+        - "Status: All Status | Captured | Reconciled | Voided"
+      summary_cards: [Total, Cash, Square, Voided]
+      gotchas:
+        - POS is a separate app (../pos/), not a view in the admin app
+        - If opened without event link, POS detects GPS location and shows event confirmation dialog
+        - Use gear button in POS top bar to switch/link/unlink events
+    questions:
+      - how do I ring up a sale at a craft fair
+      - where is the point of sale app
+      - can I take cash and card payments
+      - what happens if the camera doesn't recognize a piece
+
+  - id: selling.online-purchase
+    section: Selling
+    title: Customer Purchases from the Website
+    status: live
+    roles: []
+    nav: []
+    description: Customer-facing checkout flow on shirglassworks.com — browse, cart, address, payment, confirmation.
+    steps:
+      - Customer browses shop and adds pieces to cart
+      - Opens cart and proceeds to checkout
+      - Enters shipping address (pre-filled if logged in)
+      - Address validated automatically — correct if needed
+      - Shipping cost calculated (free for orders over $100)
+      - Reviews order total including shipping
+      - Enters payment via Square secure checkout
+      - Payment processed — order confirmation shown
+      - Order appears in admin app under Sell → Orders
+    ui:
+      screen: Public website (shirglassworks.com)
+      elements:
+        - label: "Add to Cart"
+          type: button
+          action: Adds product to shopping cart
+        - label: "Checkout"
+          type: button
+          action: Proceeds to checkout flow
+      gotchas:
+        - Free shipping threshold configurable in admin Settings → Shipping
+        - Address validation runs automatically on entry
+        - Orders land in admin with status "Placed"
+    questions:
+      - how does a customer buy from the website
+      - where do online orders show up in the admin
+      - is there free shipping
+
+  # ============================================================
+  # ORDER FULFILLMENT
+  # ============================================================
+
+  - id: order-fulfillment.confirm-triage
+    section: Order Fulfillment
+    title: Confirm and Triage a New Order
+    status: live
+    roles: [owner, manager]
+    nav: [Sell, Orders]
+    description: When a new order arrives, admin triages it — routing items from stock or to production.
+    steps:
+      - Go to Sell → Orders
+      - Find order with status "Placed" — badge on nav shows count
+      - Review order details — items, options, shipping address
+      - Each item shows inline inventory status (In Stock / Low Stock / Not in Stock / Made to Order)
+      - Click "Confirm Order" — Triage Dialog opens
+      - Dialog shows each item with stock and pre-selected action (From Stock / Send to Build)
+      - Override item routing if needed
+      - Review summary — items from stock vs. build
+      - Click "Confirm & Route" — stock reserved, production requests created
+      - All from stock → order advances to Ready
+      - Any build items → order advances to Building, linked job in Make → Jobs
+    ui:
+      screen: Sell → Orders
+      route: orders
+      tab_id: ordersTab
+      nav_badge: count of Placed orders
+      elements:
+        - label: "Confirm Order"
+          type: button
+          when: order.status == placed
+          action: Opens Triage Dialog
+        - label: "Cancel Order"
+          type: button
+          when: order.status == placed
+          action: Opens Cancel Order modal
+        - label: "Confirm & Route"
+          type: button
+          when: Triage Dialog open
+          action: Routes items, advances order status
+        - label: "Mark Ready"
+          type: button
+          when: order.status == confirmed
+        - label: "Needs Building"
+          type: button
+          when: order.status == confirmed
+        - label: "Sync Etsy"
+          type: button
+          action: Triggers Etsy order synchronization
+      filters:
+        - "Source: All Sources | Direct Only | Etsy Only"
+        - "Status pills: Active | All | Pending Payment | Placed | Confirmed | Building | Ready | Packing | Packed | Handed to Carrier | Shipped | Delivered | Cancelled | Payment Failed"
+      gotchas:
+        - "Confirm Order" only appears when order status is Placed
+        - Production requests appear in Make → Jobs Queue tab, not the main Jobs list
+        - Source badge shows "Direct" or "Etsy" per order
+        - Order progress bar renders below each order showing pipeline position
+    questions:
+      - where do I find new orders
+      - how do I confirm an order
+      - where do orders go after I confirm them
+      - why is there no Confirm button
+
+  - id: order-fulfillment.pack-ship
+    section: Order Fulfillment
+    title: Pack and Ship an Order
+    status: live
+    roles: [owner, manager]
+    nav: [Ship, Pack]
+    description: From packing through carrier handoff — pack queue, Pirate Ship CSV, label printing, drop-off scanning.
+    steps:
+      - Go to Ship → Pack
+      - Pack Queue shows orders at Ready, Packing, and Packed status with progress bars
+      - For Ready order — click "Start Packing" to move to Packing
+      - Pack the order — optionally use Studio Scan tab to scan QR labels
+      - Click "Mark Packed" on the order
+      - Click "Pirate Ship →" — CSV auto-downloads, Pirate Ship opens in new tab
+      - First-time users see mapping guide dialog for manual field mapping
+      - In Pirate Ship — import CSV, purchase label, print and attach
+      - Back in Pack Queue — click "Handed to Carrier"
+      - Go to Ship → Ship → Drop-off to scan packages and bundle for carrier
+      - Confirm drop-off — carrier and location recorded
+      - Order auto-transitions to Shipped, customer gets email notification
+    ui:
+      screen: Ship → Pack
+      route: pack
+      tab_id: packTab
+      sub_tabs: [Pack Queue, Studio Scan]
+      elements:
+        - label: "Start Packing"
+          type: button
+          when: order.status == ready
+          action: Transitions to Packing
+        - label: "Mark Packed"
+          type: button
+          when: order.status == packing
+          action: Transitions to Packed
+        - label: "Handed to Carrier"
+          type: button
+          when: order.status == packed
+          action: Transitions to Handed to Carrier
+        - label: "Pirate Ship →"
+          type: button
+          action: Downloads CSV, opens pirateship.com
+        - label: "View"
+          type: button
+          action: Navigates to order detail
+        - label: "Enter Order # Manually"
+          type: button
+          when: Studio Scan active, no OCR match after ~5 seconds
+        - label: "Done Packing"
+          type: button
+          when: Studio Scan active
+          action: Returns to Pack Queue
+      drop_off:
+        screen: Ship → Ship → Drop-off
+        route: ship
+        tab_id: shipTab
+        sub_tabs: [Drop-off, Bundles]
+        elements:
+          - label: "Set"
+            type: button
+            when: Carrier not yet set on bundle
+            action: Sets carrier and drop-off location
+        carrier_options: [USPS, UPS, Other]
+      gotchas:
+        - Pirate Ship mapping guide only shows on first CSV export (modal titled "First Time Using Pirate Ship CSV?")
+        - Studio Scan uses Tesseract.js OCR to read shipping labels via camera
+        - Manual order entry fallback appears after ~5 seconds of no OCR match
+        - Drop-off requires an open bundle — create one in Studio Scan first
+        - Mark Shipped modal asks for carrier (USPS/UPS/FedEx/Other) and tracking number
+    questions:
+      - how do I pack and ship an order
+      - where is the pack queue
+      - how do I use Pirate Ship
+      - what do I do at the post office
+
+  # ============================================================
+  # EVENTS
+  # ============================================================
+
+  - id: events.setup-craft-fair
+    section: Events
+    title: Set Up and Run a Craft Fair Event
+    status: live
+    roles: [owner, manager]
+    nav: [Sell, Events]
+    description: Create an event, allocate inventory, and track sales during a show.
+    steps:
+      - Go to Sell → Events
+      - Click "+ New Event" — enter name, date, location
+      - Add pieces to bring — search by product name, set quantity each
+      - Print packing list if needed
+      - At fair — click "Open PoS" on the active event (pre-links event automatically)
+      - If POS opened without event link — GPS detection shows event confirmation dialog
+      - Use gear button in POS to switch events at any time
+      - Ring up sales — sold quantities tracked against allocation
+      - Event banner shows packed / sold / remaining
+    ui:
+      screen: Sell → Events
+      route: events
+      tab_id: salesEventsTab
+      elements:
+        - label: "+ New Event"
+          type: button
+          action: Opens Create Event modal
+        - label: "Start Packing"
+          type: button
+          when: event.status == planning
+          action: Enters Packing Mode overlay
+        - label: "Start Fair"
+          type: button
+          when: event.status == packed
+          action: Transitions to Active
+        - label: "Open PoS"
+          type: button
+          when: event.status == active
+          action: Opens POS app with event context
+        - label: "+ Manual Sale"
+          type: button
+          when: event.status == active || event.status == closed
+          action: Opens Add Manual Sale modal
+        - label: "Close Event"
+          type: button
+          when: event.status == active
+        - label: "Back to Planning"
+          type: button
+          when: event.status == packed
+        - label: "Edit"
+          type: button
+          when: event.status == planning
+        - label: "Delete"
+          type: button
+          when: event.status == planning
+        - label: "Snap"
+          type: button
+          when: Packing Mode active
+          action: Camera capture for scanning
+        - label: "+ Add Manually"
+          type: button
+          when: Packing Mode active
+        - label: "Done Packing"
+          type: button
+          when: Packing Mode active
+      modals:
+        - title: "Create Event"
+          fields: [Event Name*, Date*, Location, Notes]
+          buttons: [Cancel, Create Event]
+        - title: "Edit Event"
+          fields: [Event Name*, Date*, Location, Notes]
+          buttons: [Cancel, Save Changes]
+        - title: "Add Manual Sale"
+          fields: [Product*, Quantity, Amount ($), Payment Type (Cash/Square Card), Date, Notes]
+          buttons: [Cancel, Save Sale]
+        - title: "Packing Mode"
+          overlay: true
+      filters:
+        - "Status: All | Planning | Packed | Active | Closed"
+      gotchas:
+        - Delete is only available in Planning status
+        - Packing Mode overlay covers the entire screen — use "Done Packing" to exit
+        - POS GPS detection has a 500m radius for studio locations (configurable in Settings → Workshop)
+        - Manual sales in closed events still update inventory and allocation counts
+        - hasPermission('sales', 'create') gates manual sale creation
+    questions:
+      - how do I set up for a craft fair
+      - how do I track what I'm bringing to a show
+      - can I add a sale manually after the fact
+      - how does the POS know which event I'm at
+
+  - id: events.wrap-up
+    section: Events
+    title: Wrap Up After a Craft Fair
+    status: live
+    roles: [owner, manager]
+    nav: [Sell, Events]
+    description: Reconcile sales after an event — add any offline sales, close the event, return unsold inventory.
+    steps:
+      - Go to Sell → Events
+      - Open the event — review sold vs. packed summary
+      - For offline sales — click "+ Manual Sale", pick product from event allocations, enter quantity/amount/payment type
+      - Manual sale recorded, allocation updated, inventory decremented
+      - When reconciliation complete — click "Close Event"
+      - Unsold pieces returned to available stock
+    ui:
+      screen: Sell → Events
+      route: events
+      tab_id: salesEventsTab
+      elements:
+        - label: "+ Manual Sale"
+          type: button
+          when: event.status == active || event.status == closed
+          action: Opens Add Manual Sale modal
+        - label: "Close Event"
+          type: button
+          when: event.status == active
+        - label: "Edit Details"
+          type: button
+          when: event.status == closed
+      gotchas:
+        - Manual sales can be added even after the event is closed
+        - Closing the event automatically returns unsold inventory to stock
+        - Event status flow is Planning → Packed → Active → Closed (no skipping)
+    questions:
+      - how do I close out a craft fair
+      - can I add a sale after the event is over
+      - what happens to unsold pieces when I close the event
+
+  # ============================================================
+  # PRODUCTION
+  # ============================================================
+
+  - id: production.start-job
+    section: Production
+    title: Start a Production Run
+    status: live
+    roles: [owner, manager]
+    nav: [Make, Jobs]
+    description: Create a build job for a batch of pieces — restock or fulfillment.
+    steps:
+      - Go to Make → Jobs
+      - Click "+ New Job"
+      - Enter job name (e.g. "Spring restock — small bowls")
+      - Select purpose from button grid
+      - Add line items — search by product name, set target quantity
+      - Set expected completion date
+      - Save — job appears in Jobs list
+      - Update status as work progresses — In Progress → Ready
+    ui:
+      screen: Make → Jobs
+      route: jobs
+      tab_id: productionTab
+      elements:
+        - label: "+ New Job"
+          type: button
+          action: Opens New Production Job modal
+        - label: "Start Work"
+          type: button
+          when: job.status == definition
+        - label: "Put On Hold"
+          type: button
+          when: job.status == in_progress
+        - label: "Cancel Job"
+          type: button
+        - label: "Edit"
+          type: button
+        - label: "+ Add Item"
+          type: button
+          action: Adds line item to job
+        - label: "Start Build"
+          type: button
+          action: Starts a new build session with operator selector
+        - label: "Continue Active Build"
+          type: button
+          when: Build already in progress
+      modals:
+        - title: "New Production Job"
+          fields: [Job Name*, Purpose (button grid)]
+          purpose_options: [Event Inventory, General Inventory, Fulfillment, Custom, Wholesale, Experimental]
+      filters:
+        - "Status: Active | All | Requested | Definition | In Progress | Completed | On Hold | Cancelled"
+        - "Purpose: All | Event Inventory | General Inventory | Fulfillment | Custom | Wholesale | Experimental"
+        - "Work Type: All | Flameshop | Hotshop | Hybrid | Other"
+      gotchas:
+        - Pending requests banner appears at top when jobs have "Requested" status (auto-generated from order triage)
+        - Queue tab shows production requests from orders — separate from manually created jobs
+        - Build sessions capture start/end time, operator, photos, quantities
+        - Operator list configured in Settings → Workshop
+    questions:
+      - how do I create a new production job
+      - where do I see jobs from customer orders
+      - what are the different job purposes
+      - how do I track who worked on a build
+
+  - id: production.complete-job
+    section: Production
+    title: Complete a Production Run and Update Inventory
+    status: live
+    roles: [owner, manager]
+    nav: [Make, Jobs]
+    description: Close out a build job — finalize quantities, update inventory, pieces become available for sale.
+    steps:
+      - Go to Make → Jobs — find and open the job
+      - Update completed and loss quantities inline on each line item (auto-saves)
+      - Review finished quantities before completing
+      - Click "Mark Complete"
+      - Inventory updated — each line item's completed qty minus losses added to stock
+      - Confirmation toast shows how many products updated
+      - Pieces now available for sale online and at events
+    ui:
+      screen: Make → Jobs
+      route: jobs
+      tab_id: productionTab
+      elements:
+        - label: "Mark Complete"
+          type: button
+          when: job.status == in_progress
+          action: Completes job, updates inventory
+        - label: "Curate Story"
+          type: button
+          action: Opens story curation for this job (links to Market → Stories)
+      gotchas:
+        - Completed and loss quantities are editable inline — changes save automatically
+        - Inventory is only updated when "Mark Complete" is clicked, not on individual line item saves
+        - Product Links section only appears on completed jobs
+        - "Curate Story" button available on completed jobs to create How It Was Made story
+    questions:
+      - how do I finish a production job
+      - when does inventory get updated
+      - what happens to pieces that didn't turn out (losses)
+      - can I create a story from a completed job
+
+  # ============================================================
+  # FORECASTING
+  # ============================================================
+
+  - id: forecasting.what-to-build
+    section: Forecasting
+    title: Forecasting — What to Build Next
+    status: live
+    roles: [owner, manager]
+    nav: [Make, Jobs]
+    description: See what's selling, what's running low, and what to build next — suggested builds, demand overview, slow movers.
+    steps:
+      - Go to Make → Jobs
+      - Click the Forecast button (owner and manager only — staff cannot see it)
+      - If upcoming events within 60 days — banner appears at top with event link
+      - Suggested Builds section shows cards for products selling faster than stock
+      - Each card shows stock, monthly sales rate, weeks of coverage
+      - Click "Create Job (N pcs)" on a card to open pre-filled production job
+      - Below stocked products — MTO products with high demand (10+ orders/90 days) under "Consider Stocking"
+      - Demand Overview table shows all production products with order history
+      - Use time horizon toggle (Adaptive / 30d / 90d / All) to change Sold column
+      - Click any row to jump to product detail
+      - Slow/No Movement section (collapsed) lists products with stock but no recent orders
+    ui:
+      screen: Make → Jobs (Forecast view)
+      route: jobs
+      tab_id: productionTab
+      role_gate: hasPermission('forecast', 'read')
+      elements:
+        - label: "Create Job (N pcs)"
+          type: button
+          when: Suggested build card
+          action: Opens pre-filled New Production Job modal
+        - label: "Update Product Type →"
+          type: button
+          when: Consider Stocking card (MTO product)
+          action: Navigates to Products tab
+      sections:
+        - name: Event Banner
+          when: Upcoming events within 60 days
+          urgent_styling: Orange when event ≤14 days away
+        - name: Suggested Builds
+          cards: [product image, name, category, stock, sales rate, weeks of coverage]
+          reason_badges: ["Low Stock (amber)", "Trending ↑ (green)", "Upcoming Event (orange)"]
+        - name: Consider Stocking
+          when: MTO products with 10+ orders in 90 days
+          badge: "MTO (blue)"
+        - name: Demand Overview
+          type: sortable table
+          columns: [Product, In Stock, Sold (horizon), Prior Avg/mo, Trending, Type, Last Ordered]
+          time_toggle: [Adaptive, 30d, 90d, All]
+        - name: Slow/No Movement
+          type: collapsible panel
+          default: collapsed
+      gotchas:
+        - Forecast button visibility gated by hasPermission('forecast', 'read') — staff cannot see it
+        - Seasonal products banner (green) shows when currently trending products also spiked in same month last year
+        - Demand Overview table is sortable — click column headers to toggle asc/desc
+        - "Never" shown in italic for products that have never been ordered
+    questions:
+      - what should I build next
+      - which products are running low
+      - how do I see what's selling
+      - can I see slow-moving inventory
+
+  # ============================================================
+  # INVENTORY
+  # ============================================================
+
+  - id: inventory.update-stock
+    section: Inventory
+    title: Update Stock After a Firing
+    status: live
+    roles: [owner, manager]
+    nav: [Manage, Inventory]
+    description: Quick way to update inventory counts — set absolute count or add pieces.
+    steps:
+      - Go to Manage → Inventory
+      - Find the product — click the row to open product detail with Inventory tab pre-selected
+      - Click "Adjust Stock"
+      - Choose mode — Set Count (absolute) or Add Pieces (delta)
+      - Save — updated count reflected in shop immediately
+    ui:
+      screen: Manage → Inventory
+      route: inventory
+      tab_id: inventoryTab
+      elements:
+        - label: "Adjust Stock"
+          type: button
+          action: Opens stock adjustment modal
+        - label: "Inventory Intake"
+          type: button
+          action: Opens camera-based inventory intake overlay
+        - label: "Save Stock Settings"
+          type: button
+          action: Saves stock type, low stock threshold, lead time, notes
+      summary_cards: [Products, Total On Hand, Reserved, Out of Stock, Low Stock, Made to Order]
+      table_columns: [Image, Product, Type, On Hand, Reserved, Attributes]
+      stock_settings_fields:
+        - "Stock Type: Made to Order | In Stock | Limited Edition"
+        - "Low Stock Alert At (number, hidden for MTO)"
+        - "Lead Time (days)"
+        - "Notes"
+      gotchas:
+        - Clicking an inventory row navigates to product detail with Inventory tab pre-selected
+        - Back button says "Back to Inventory" (not "Back to Products") when coming from inventory
+        - Out of stock items sorted first (red), then low stock (orange), then by quantity desc, MTO last
+        - MTO products show dash instead of quantity
+        - Variant breakdown shows colored tags with per-attribute quantities
+        - Out of Stock and Low Stock summary cards only appear when count > 0
+    questions:
+      - how do I update stock after a kiln firing
+      - where do I see what's out of stock
+      - how do I change a product's stock type
+
+  - id: inventory.move-between-locations
+    section: Inventory
+    title: Move Inventory Between Locations
+    status: live
+    roles: [owner, manager]
+    nav: [Manage, Inventory]
+    description: Track where pieces are stored — move between studio shelves, display cases, fair bins.
+    steps:
+      - Go to Manage → Inventory
+      - Click "Move Items"
+      - Select the product from dropdown (shows stock counts)
+      - Select variant if applicable (shows per-variant counts)
+      - Select From Location and To Location
+      - Enter quantity to move (max constrained by available at source)
+      - Click "Move" — confirm the transfer
+    ui:
+      screen: Manage → Inventory
+      route: inventory
+      tab_id: inventoryTab
+      elements:
+        - label: "Move Items"
+          type: button
+          action: Opens "Move Items Between Locations" modal
+        - label: "Move"
+          type: button
+          when: Modal open, fields filled
+          action: Executes the inventory move
+      modals:
+        - title: "Move Items Between Locations"
+          fields:
+            - "Product (select, shows 'Product Name (N on hand)')"
+            - "Variant (conditional, shows 'Blue / Opaque (3)')"
+            - "From Location (select, includes 'Unassigned Stock' + active locations)"
+            - "To Location (select, same options)"
+            - "Quantity (number, dynamic max from source availability)"
+          location_types: ["Storage (cabinet icon)", "Home (house icon)", "Event (tent icon)", "Container (package icon)", "Other (pin icon)"]
+          buttons: [Cancel, Move]
+      gotchas:
+        - Variant dropdown only appears if selected product has variants
+        - From Location stock counts update dynamically when variant is selected
+        - Quantity max is constrained by available stock at the selected source location
+        - Location types configured in Settings → Workshop → Inventory Locations
+    questions:
+      - how do I move pieces between locations
+      - how do I track where my inventory is stored
+      - can I move specific variants
+
+  # ============================================================
+  # PRODUCT MANAGEMENT
+  # ============================================================
+
+  - id: product-management.add-product
+    section: Product Management
+    title: Add a New Product
+    status: live
+    roles: [owner, manager]
+    nav: [Manage, Products]
+    description: Bring a new piece into the system via Studio Companion (camera) or admin app for sale and inventory tracking.
+    steps:
+      - Option A — Studio Companion app → Tap "Identify & Train" → photo → app suggests name/category → product created
+      - Option B — Admin app → Manage → Products → click "+ New Product"
+      - Set price, options, weight, shipping category
+      - Add photos — "Select from Library" or "Upload New"
+      - Toggle to Published when ready for shop
+      - Print QR label from product record
+    ui:
+      screen: Manage → Products
+      route: products
+      tab_id: productsTab
+      tab_title: "Product Catalog"
+      elements:
+        - label: "+ New Product"
+          type: button
+          action: Enters product creation mode
+        - label: "Create Product"
+          type: button
+          when: Create mode, form filled
+          action: Saves new product
+        - label: "Cancel"
+          type: button
+          when: Create mode
+          action: Returns to product list
+        - label: "Select from Library"
+          type: button
+          when: Edit mode, Images tab
+          action: Opens image library picker
+        - label: "Upload New"
+          type: button
+          when: Edit mode, Images tab
+          action: Opens file upload
+      detail_tabs: [Details, Variants, Images, Production, Inventory]
+      detail_fields:
+        - "Name (text)"
+        - "Description (textarea)"
+        - "Short Description (text)"
+        - "Category: figurines | jewelry | drinkware | vases | decoration | sculpture"
+        - "Price ($) (text, placeholder '45.00')"
+        - "Availability: Available | Discontinued"
+        - "Business Line: Production | Sculpture (only visible to owner/manager via isStaff())"
+        - "Slug (auto-generated from name)"
+        - "Sort Order (number)"
+        - "Etsy Listing ID (text)"
+        - "Introduced Date (date)"
+      category_filter_pills: [All, Figurines, Jewelry, Drinkware, Vases, Decoration, Sculpture]
+      gotchas:
+        - Inventory tab not shown during product creation (only after save)
+        - Business Line field gated by isStaff() — only owner and manager can see/set it
+        - Price can be in cents (formatted) or string — no price shows "Price on request"
+        - Primary image indicated by teal "Primary" badge overlay on first image
+        - Discontinued products show a "Discontinued" badge in header
+    questions:
+      - how do I add a new product
+      - can I add a product from my phone
+      - how do I set the price and shipping category
+      - how do I mark a product as a sculpture
+
+  - id: product-management.edit-product
+    section: Product Management
+    title: Edit an Existing Product
+    status: live
+    roles: [owner, manager]
+    nav: [Manage, Products]
+    description: Update price, options, images, or visibility for an existing product.
+    steps:
+      - Go to Manage → Products
+      - Find the product — search by name or browse by category filter pills
+      - Click the product card to open detail view
+      - Click "Edit Product"
+      - Make changes across tabs — Details, Variants, Images, Production
+      - Click "Save Changes" — changes live on website immediately
+    ui:
+      screen: Manage → Products
+      route: products
+      tab_id: productsTab
+      elements:
+        - label: "Edit Product"
+          type: button
+          when: Product detail, read mode
+          action: Enters edit mode
+        - label: "Save Changes"
+          type: button
+          when: Edit mode
+          action: Saves and returns to read mode
+        - label: "Cancel"
+          type: button
+          when: Edit mode
+          action: Exits edit mode without saving
+        - label: "+ Add Attribute"
+          type: button
+          when: Edit mode, Variants tab
+          action: Adds new variant attribute row
+        - label: "Remove"
+          type: button
+          when: Edit mode, per variant attribute
+          action: Removes attribute
+      variants_tab:
+        edit_fields:
+          - "Attribute Label (text, e.g. 'Color')"
+          - "Choices (text, comma-separated, e.g. 'Blue, Green, Clear')"
+        description: "Variant Attributes (for inventory tracking) — define attributes like Color, Opacity. Creates inventory tracking combinations. Pricing is per-product, not per-variant."
+      production_tab:
+        fields:
+          - "Build Time (minutes)"
+          - "Cost to Build ($)"
+          - "Materials / Techniques Notes"
+          - "Shipping Category: Not set (defaults to Small) | Small | Medium | Large | Oversized"
+          - "Weight (oz)"
+        includes: Price History (read-only, reverse chronological)
+      gotchas:
+        - Variant attributes create inventory tracking combinations — not separate prices
+        - Price history tracked automatically (shows price, date, who changed it)
+        - Sculpture business line products shown with teal badge
+    questions:
+      - how do I change a product's price
+      - how do I add color variants
+      - how do I update shipping weight
+
+  - id: product-management.manage-images
+    section: Product Management
+    title: Manage Product Images
+    status: live
+    roles: [owner, manager]
+    nav: [Manage, Image Library]
+    description: Upload photos to the image library and assign to products or website sections.
+    steps:
+      - Go to Manage → Image Library
+      - Click "Upload Image" and select photos
+      - Tag image with relevant product or website section
+      - To assign to product — open product in Manage → Products → Images tab → "Select from Library"
+      - To use on website — assign in Manage → Website Content
+    ui:
+      screen: Manage → Image Library
+      route: images
+      tab_id: imagesTab
+      tab_title: "Image Library"
+      elements:
+        - label: "Upload Image"
+          type: button
+          action: Opens file upload dialog
+      search: "Search tags..." text input
+      gotchas:
+        - Images are stored via GitHub API (admin-only, requires GitHub PAT in Settings → General)
+        - Image library is shared across products, newsletter, social media, and website content
+        - Product images can also be uploaded directly from the product Images tab via "Upload New"
+    questions:
+      - how do I upload product photos
+      - where is the image library
+      - can I use the same image on multiple products
+
+  # ============================================================
+  # COUPONS
+  # ============================================================
+
+  - id: coupons.create-manage
+    section: Coupons
+    title: Create and Manage Coupons
+    status: live
+    roles: [owner, manager]
+    nav: [Sell, Coupons]
+    description: Create discount codes — percentage or fixed-amount, with optional limits and date ranges.
+    steps:
+      - Go to Sell → Coupons
+      - Click "+ Add Coupon"
+      - Enter coupon code (e.g. "SPRING25")
+      - Choose type — Percent Off or Fixed Amount
+      - Set value (e.g. 25% or $10)
+      - Optionally set dates, minimum order, max uses, one-per-customer
+      - Add optional description for internal reference
+      - Save — coupon is active and usable at checkout
+      - Coupons list shows auto-calculated status (Active / Pending / Expired)
+    ui:
+      screen: Sell → Coupons
+      route: coupons
+      tab_id: couponsTab
+      elements:
+        - label: "+ Add Coupon"
+          type: button
+          action: Opens Add Coupon modal
+      modals:
+        - title: "Add Coupon"
+          fields:
+            - "Code* (text)"
+            - "Type*: Percent Off | Fixed Amount"
+            - "Value* (number)"
+            - "Minimum Order ($) (number)"
+            - "Status*: Pending | Active | Expired"
+            - "Start Date (date)"
+            - "End Date (date)"
+            - "One-off code (checkbox: 'This is a single-use code')"
+            - "Max Uses (number)"
+            - "Description (textarea)"
+          buttons: [Cancel, Create]
+        - title: "Edit Coupon"
+          buttons: [Cancel, Update]
+          includes_delete: true
+      table_columns: [Code, Discount, Status, Dates, Claimed, Actions]
+      gotchas:
+        - Status auto-calculated from dates and usage — can also be set manually
+        - Edit modal includes a separate delete button with confirmation
+        - hasPermission('coupons', ...) gates access
+    questions:
+      - how do I create a discount code
+      - can I set an expiration date on a coupon
+      - how do I see how many times a coupon was used
+
+  # ============================================================
+  # SCULPTURES & COMMISSIONS
+  # ============================================================
+
+  - id: sculptures.add-sculpture
+    section: Sculptures & Commissions
+    title: Add a New Sculpture
+    status: live
+    roles: [owner, manager]
+    nav: [Manage, Products]
+    description: List a one-of-a-kind sculpture — tracked separately from production pieces, auto-marked Sold when purchased.
+    steps:
+      - Create product via Studio Companion or admin app
+      - Go to Manage → Products and open the product
+      - Set Business Line to "Sculpture"
+      - Set price, add photos, toggle to Published
+      - In Manage → Inventory, set stock to 1
+      - Product appears in shop — sculptures limited to 1 unit
+      - When sold (POS or website) — stock goes to 0, product auto-marked "Sold"
+      - On website — sold sculptures remain visible with "Sold" badge and "Request a Commission" link
+    ui:
+      screen: Manage → Products
+      route: products
+      tab_id: productsTab
+      elements:
+        - label: "Business Line"
+          type: select
+          options: [Production, Sculpture]
+          when: isStaff() (owner/manager only)
+      gotchas:
+        - Business Line field only visible to owner/manager (gated by isStaff())
+        - Sculpture business line shown with teal badge in read mode
+        - Sold sculptures stay visible on website with "Sold" badge — not hidden
+        - "Request a Commission" CTA appears on sold sculpture product pages
+    questions:
+      - how do I add a sculpture to the shop
+      - what happens when a sculpture sells
+      - do sold sculptures disappear from the website
+
+  - id: sculptures.customer-commission-request
+    section: Sculptures & Commissions
+    title: Request a Custom Commission (Customer)
+    status: live
+    roles: []
+    nav: []
+    description: Customer-facing flow — request a custom piece from the commissions page or a sold sculpture's page.
+    steps:
+      - Customer navigates to Commissions page (linked in site nav on every page) or clicks "Request a Commission" on a sold sculpture
+      - Browse product catalog and select inspiration pieces (optional)
+      - Upload reference image (optional, max 5MB)
+      - Enter name, email or phone, and description
+      - Submit — confirmation message appears
+      - Studio receives notification email with customer details and QR code
+    ui:
+      screen: Public website (Commissions page)
+      gotchas:
+        - Commission form available from two entry points — dedicated page and sold sculpture pages
+        - Reference image upload capped at 5MB
+        - Notification email includes QR code linking directly to the commission record in admin
+    questions:
+      - how does a customer request a custom piece
+      - where is the commissions page on the website
+      - can a customer upload a photo of what they want
+
+  - id: sculptures.respond-to-inquiry
+    section: Sculptures & Commissions
+    title: Respond to a Commission Inquiry
+    status: live
+    roles: [owner, manager]
+    nav: [Sell, Commissions]
+    description: Handle a custom piece request — from inquiry through proposal, build, and delivery.
+    steps:
+      - Notification email arrives with QR code — scan or open admin → Sell → Commissions
+      - Review inquiry — inspiration pieces, reference image, notes, contact info
+      - Update status to "In Discussion" and start conversation
+      - Fill in Proposal section — price, timeline, design/spec notes
+      - Click "Send Proposal to Customer" — customer receives email with proposal and QR code
+      - Customer agrees → update to "Accepted" → click "Create Production Job" — linked job in Make → Jobs
+      - Build the piece → mark production job complete → update commission to "Built"
+      - Ship or hand off → mark "Completed"
+      - If customer declines → update to "Declined"
+    ui:
+      screen: Sell → Commissions
+      route: commissions
+      tab_id: commissionsTab
+      elements:
+        - label: "+ New Commission"
+          type: button
+          action: Opens New Commission modal
+        - label: "Save Proposal"
+          type: button
+          action: Saves proposal details on commission
+        - label: "Add Link"
+          type: button
+          action: Adds reference links to commission
+      modals:
+        - title: "New Commission"
+          fields:
+            - "Customer Name* (text)"
+            - "Email or Phone* (text)"
+            - "Channel: Phone Call | Email | In Person | Social Media | Other"
+            - "What are they looking for? (textarea)"
+            - "Inspiration pieces (product grid picker — click products to select)"
+          buttons: [Cancel, Create Commission]
+      filters:
+        - "Status: All | New | In Discussion | Accepted | Declined | Built | Completed"
+      table_columns: [Piece, Customer, Contact, Notes, Status, Channel, Date]
+      status_flow: New → In Discussion → Accepted → Built → Completed (or Declined from any active status)
+      gotchas:
+        - Status dropdown on commission detail view allows direct status changes
+        - "Send Proposal to Customer" triggers email with proposal details and QR code back to commission
+        - "Create Production Job" creates a linked job in Make → Jobs
+        - hasPermission('commissions', ...) gates access
+    questions:
+      - how do I respond to a commission inquiry
+      - how do I send a proposal to a customer
+      - where do commission production jobs appear
+      - what are the commission status options
+
+  # ============================================================
+  # MARKET
+  # ============================================================
+
+  - id: market.social-media-post
+    section: Market
+    title: Create and Post a Social Media Video
+    status: live
+    roles: [owner, manager]
+    nav: [Market, Social Media]
+    description: Take a finished video from camera roll to a ready-to-post Instagram Reel with AI-generated captions.
+    steps:
+      - Go to Market → Social Media
+      - Tap "+ New Post"
+      - Choose "I already have a clip" — pick video from camera roll
+      - Enhancement dialog — link to product or event (or describe), choose content style, select destinations
+      - Review Clip Readiness score (advisory only)
+      - Review 3 caption variants — tap preferred, edit inline if needed
+      - Follow Instagram Posting Guide (steps A–E) — open IG, select video, paste caption, paste hashtags, set cover
+      - Tap "Mark as Posted"
+      - Later — tap thumbs-up or fire icon on posted clips to log performance signals
+    ui:
+      screen: Market → Social Media
+      route: social
+      tab_id: socialMediaTab
+      views: [home, newPost, enhance, shootCard, staging]
+      elements:
+        - label: "+ New Post"
+          type: button
+          action: Opens new post intent selection
+        - label: "I'm about to shoot"
+          type: button
+          when: New Post screen
+          action: Enters pre-shoot flow
+        - label: "I already have a clip"
+          type: button
+          when: New Post screen
+          action: Enters post-capture upload flow
+        - label: "Mark as Posted"
+          type: button
+          when: Post staged
+          action: Records post in history
+        - label: "Enhance →"
+          type: button
+          when: Pending clip card
+          action: Opens enhance flow for pending clip
+      content_styles:
+        - { id: hot-glass, name: "Hot Glass", tips: "Portrait 9:16, 15-30 sec, capture the glow" }
+        - { id: finished-piece, name: "Finished Piece", tips: "Portrait or Square, slow pan or static, clean background" }
+        - { id: studio-life, name: "Studio Life", tips: "Portrait 9:16, 15-60 sec, handheld is fine" }
+        - { id: fair-day, name: "Fair Day", tips: "Portrait 9:16, 15-45 sec, show crowd and location" }
+        - { id: process-story, name: "Process Story", tips: "Portrait 9:16, 30-90 sec, start-to-finish arc" }
+      destinations: ["Instagram Reels (default)", "Instagram Feed", "Facebook Post (coming soon, disabled)"]
+      signal_buttons: ["👍 (score 1)", "🔥 (score 2)"]
+      quick_stats: ["Posts this month", "'This worked' signals"]
+      enhance_fields:
+        - "Subject toggle: Product | Event | No specific product"
+        - "Select Product (dropdown, when Product selected)"
+        - "Select Event (text, when Event selected)"
+        - "Describe video (textarea, when no product/event)"
+        - "Date Captured (date, post-capture only)"
+        - "Location (text, post-capture only)"
+      gotchas:
+        - Facebook destination is disabled with "(Coming soon)" label
+        - Clip Readiness score is advisory — can proceed even if amber
+        - Signal buttons (thumbs-up, fire) are toggleable on posted clips
+        - Pending clips persist — returning to "I already have a clip" finds the pending record
+        - Upload shows progress bar with percentage
+    questions:
+      - how do I post a video to Instagram
+      - what are the content styles
+      - how do I get caption suggestions
+      - can I track which posts performed well
+
+  - id: market.pre-shoot-card
+    section: Market
+    title: Pre-Shoot — Get a Shoot Card Before You Film
+    status: live
+    roles: [owner, manager]
+    nav: [Market, Social Media]
+    description: Get specific shooting guidance before filming — AI generates a shoot card with 4–6 instructions.
+    steps:
+      - Go to Market → Social Media → tap "+ New Post"
+      - Choose "I'm about to shoot"
+      - Select content style and link to product or event
+      - Studio generates Shoot Card — 4–6 specific shooting instructions
+      - Read card, tap "Ready to Shoot" — open camera app
+      - After filming — return to Studio → New Post → "I already have a clip"
+      - Pending post record waiting — upload clip and continue enhancement flow
+    ui:
+      screen: Market → Social Media
+      route: social
+      tab_id: socialMediaTab
+      elements:
+        - label: "I'm about to shoot"
+          type: button
+          when: New Post screen
+          action: Enters pre-shoot setup
+        - label: "Generate Shoot Card"
+          type: button
+          when: Pre-shoot, content style selected
+          action: Generates AI shoot card
+        - label: "Ready to Shoot"
+          type: button
+          when: Shoot card displayed
+          action: Exits to camera
+      gotchas:
+        - "Generate Shoot Card" disabled until a content style is selected
+        - Shoot card is specific to the selected product/event and style
+        - Pending record persists — pick up where you left off after filming
+    questions:
+      - how do I get shooting tips before I film
+      - what is a shoot card
+      - do I need to select a product first
+
+  - id: market.newsletter-compose
+    section: Market
+    title: Compose and Publish a Newsletter Issue
+    status: live
+    roles: [owner, manager]
+    nav: [Market, Newsletter]
+    description: Create a newsletter from blank template to published blog post or HTML export for email.
+    steps:
+      - Go to Market → Newsletter (Issues sub-tab)
+      - Click "+ New Issue" — draft created with 7 default sections
+      - Enter issue title
+      - Expand each section — write content (guided prompt provided)
+      - Optionally click "Polish with AI" for a cleaned-up version — compare side-by-side
+      - Add images from library to any section (max 3 per section)
+      - Toggle off sections to skip
+      - To send via email — click "Export HTML" — downloads styled email file
+      - To publish on website — click "Publish to Website" — appears on shirglassworks.com/blog
+      - After external send — click "Mark as Sent" to record send date and subscriber count
+    ui:
+      screen: Market → Newsletter
+      route: newsletter
+      tab_id: newsletterTab
+      sub_tabs: [Issues, Subscribers]
+      elements:
+        - label: "+ New Issue"
+          type: button
+          action: Creates new draft with 7 default sections
+        - label: "Polish with AI"
+          type: button
+          when: Section has content
+          action: Generates AI-polished version
+        - label: "Use Original"
+          type: button
+          when: AI comparison panel visible
+        - label: "Use AI Version"
+          type: button
+          when: AI comparison panel visible
+        - label: "Use as-is"
+          type: button
+          when: Section has content (skip AI)
+        - label: "Reset to Draft"
+          type: button
+          when: Section content finalized
+        - label: "+ Add Section"
+          type: button
+          action: Adds new section to issue
+        - label: "Export HTML"
+          type: button
+          action: Downloads styled email HTML file
+        - label: "Publish to Website"
+          type: button
+          action: Publishes to shirglassworks.com/blog
+        - label: "Mark as Sent"
+          type: button
+          action: Records send date and subscriber count
+      section_statuses: ["Ready (green)", "Draft (amber)", "Empty (gray)"]
+      section_features:
+        - Drag reordering via dot grid handle
+        - Include/exclude checkbox per section
+        - Guided prompt text per section
+        - Image picker (max 3 per section, from image library)
+      gotchas:
+        - "Polish with AI" shows side-by-side comparison — must explicitly choose Original or AI Version
+        - Sections can be reordered by dragging
+        - Include checkbox controls whether section appears in export/publish
+        - Issue list shows draft/published status badges
+        - Back button says "Back to Issues"
+    questions:
+      - how do I create a newsletter
+      - can I use AI to help write it
+      - how do I send the newsletter via email
+      - how do I publish to the blog
+
+  - id: market.manage-subscribers
+    section: Market
+    title: Manage Newsletter Subscribers
+    status: live
+    roles: [owner, manager]
+    nav: [Market, Newsletter]
+    description: Add, remove, and export the mailing list for the newsletter.
+    steps:
+      - Go to Market → Newsletter → click "Subscribers" tab
+      - View all active subscribers — name, email, source, date
+      - To add manually — click "+ Add Subscriber", enter name and email
+      - To remove — click "Remove" on their row (marked unsubscribed, not deleted)
+      - To export — click "Export CSV" — downloads CSV with name, email, subscribe date
+      - Website signups appear with "Website" source badge
+      - Unsubscribes via email link update status automatically
+    ui:
+      screen: Market → Newsletter → Subscribers
+      route: newsletter
+      tab_id: newsletterTab
+      sub_tab: Subscribers
+      elements:
+        - label: "+ Add Subscriber"
+          type: button
+          action: Opens Add Subscriber modal
+        - label: "Export CSV"
+          type: button
+          action: Downloads shir-subscribers-{date}.csv
+        - label: "Remove"
+          type: button
+          when: Per active subscriber row
+          action: Marks subscriber as unsubscribed
+      modals:
+        - title: "Add Subscriber"
+          fields: [Name*, Email*, Notes]
+          buttons: [Cancel, Add]
+      filters:
+        - "Show unsubscribed (checkbox)"
+      table_columns: [Name, Email, Source, Subscribed, Status, Notes, Actions]
+      source_badges: ["Website", "Manual"]
+      status_display: ["Active (green)", "Unsubscribed (gray)"]
+      empty_state: "No subscribers yet — Add subscribers manually or share the sign-up form on your website."
+      gotchas:
+        - Remove marks as unsubscribed — does not delete the record
+        - Website form signups appear automatically with "Website" source
+        - CSV export filename includes current date
+        - Title shows count — "Subscribers (N active)"
+    questions:
+      - how do I add someone to the mailing list
+      - how do I export my subscriber list
+      - can people unsubscribe on their own
+
+  - id: market.create-story
+    section: Market
+    title: Create and Curate a Product Story
+    status: live
+    roles: [owner, manager]
+    nav: [Market, Stories]
+    description: Build a "How It Was Made" story linking production photos to a narrative on the product page.
+    steps:
+      - Go to Market → Stories
+      - If completed jobs have no story — "Missing Stories" prompt appears at top
+      - Click "Create Story" on a job, or open job in Make → Jobs and click "Curate Story"
+      - Enter title, select photos from build's media library
+      - For each photo — add milestone label (e.g. "Gather", "Shaping", "Annealing") and caption
+      - Reorder entries by dragging, remove unwanted entries
+      - Click "Save Draft" to save without publishing, or "Publish" to go live
+      - On publish — story linked to all products from job, QR codes auto-generated
+      - Story appears as "How It Was Made" section on each linked product's page
+    ui:
+      screen: Market → Stories
+      route: stories
+      tab_id: storiesTab
+      elements:
+        - label: "Create Story"
+          type: button
+          when: Missing Stories prompt (completed job without story)
+        - label: "Curate Story"
+          type: button
+          when: Job detail view (completed job)
+          action: Opens story curation editor
+        - label: "Save Draft"
+          type: button
+          action: Saves story without publishing
+        - label: "Publish"
+          type: button
+          action: Publishes story, links to products, generates QR codes
+      filters:
+        - "Status filter (select)"
+      gotchas:
+        - Stories can only be created from completed production jobs
+        - QR codes auto-generated per linked product on publish
+        - "Missing Stories" prompt highlights jobs needing stories
+        - Entry point from job detail ("Curate Story") links to Stories workflow
+        - Empty state shows "No Stories Yet" with "View Jobs" button
+    questions:
+      - how do I create a product story
+      - where do stories show up on the website
+      - what are the QR codes for
+
+  - id: market.manage-stories
+    section: Market
+    title: View and Manage Published Stories
+    status: live
+    roles: [owner, manager]
+    nav: [Market, Stories]
+    description: Review, edit, and manage stories from the Stories list view.
+    steps:
+      - Go to Market → Stories
+      - Browse stories — filter by Draft or Published status
+      - Click a story for full detail — entries, linked products, artists, QR codes
+      - To edit — click "Edit Story" to re-enter curation editor
+      - To unpublish — click "Unpublish" (removed from product pages, kept as draft)
+      - Published stories show QR codes — use "Print QR" or "Copy URL"
+    ui:
+      screen: Market → Stories
+      route: stories
+      tab_id: storiesTab
+      elements:
+        - label: "Edit Story"
+          type: button
+          action: Re-enters curation editor
+        - label: "Unpublish"
+          type: button
+          when: Story is published
+          action: Removes from product pages, reverts to draft
+        - label: "Print QR"
+          type: button
+          when: Story is published
+          action: Prints QR label for linked product
+        - label: "Copy URL"
+          type: button
+          when: Story is published
+          action: Copies product page link
+      gotchas:
+        - Unpublish removes story from product pages but preserves the draft
+        - QR codes are per-product, not per-story
+    questions:
+      - how do I edit a published story
+      - can I unpublish a story without deleting it
+      - how do I print QR codes for products
+
+  # ============================================================
+  # CONTACTS & RELATIONSHIPS
+  # ============================================================
+
+  - id: contacts.add-contact
+    section: Contacts & Relationships
+    title: Add a New Contact
+    status: live
+    roles: [owner, manager]
+    nav: [Manage, Contacts]
+    description: Add a vendor, partner, gallery, or other business contact for interaction tracking.
+    steps:
+      - Go to Manage → Contacts
+      - Click "+ Add Contact"
+      - Enter name, category, and optional notes
+      - Optionally paste a Google Drive folder link
+      - Save — contact created and synced to Google Contacts automatically
+      - "Shir Glassworks" group created in Google Contacts if it doesn't exist
+    ui:
+      screen: Manage → Contacts
+      route: contacts
+      tab_id: contactsTab
+      elements:
+        - label: "+ Add Contact"
+          type: button
+          action: Opens Add Contact modal
+        - label: "Sync Google"
+          type: button
+          action: Syncs from Google Contacts API
+      modals:
+        - title: "Add Contact"
+          fields:
+            - "Name* (text)"
+            - "Category*: Supplier | Facilities | Gallery | Marketplace | Event Organizer | Partner | Student | Press | Other"
+            - "Notes (textarea)"
+            - "Drive Folder Link (text)"
+          buttons: [Cancel, Save Contact]
+      filters:
+        - "Search by name (text input)"
+        - "Category: All | Supplier | Facilities | Gallery | Marketplace | Event Organizer | Partner | Student | Press | Other"
+      table_columns: [Name, Category, Last Interaction, Drive]
+      gotchas:
+        - Contacts auto-sync to Google Contacts "Shir Glassworks" group on save
+        - Google Contacts group created automatically if it doesn't exist
+        - hasPermission('contacts', ...) gates access
+    questions:
+      - how do I add a new vendor or partner
+      - does it sync with Google Contacts
+      - what categories can I assign
+
+  - id: contacts.log-interaction
+    section: Contacts & Relationships
+    title: Log an Interaction with a Contact
+    status: live
+    roles: [owner, manager]
+    nav: [Manage, Contacts]
+    description: Record a call, meeting, payment, or other touchpoint with a full relationship history.
+    steps:
+      - Go to Manage → Contacts — find and open the contact
+      - Click "+ Log Interaction"
+      - Select type (Call, Email, Meeting, Site Visit, Payment, Signed Doc, Other)
+      - Set date (defaults to today) and add notes
+      - Optionally attach a document — paste Google Drive URL
+      - Save — interaction appears in contact's timeline (newest first)
+    ui:
+      screen: Manage → Contacts (contact detail)
+      route: contacts
+      tab_id: contactsTab
+      elements:
+        - label: "+ Log Interaction"
+          type: button
+          action: Opens Log Interaction modal
+      modals:
+        - title: "Log Interaction"
+          fields:
+            - "Date (date, defaults to today)"
+            - "Type: Call | Email | Meeting | Site Visit | Payment | Signed Doc | Other"
+            - "Notes* (textarea, placeholder: 'What happened? What was decided?')"
+            - "Attach Document (text, placeholder: 'Paste Google Drive file URL')"
+          buttons: [Cancel, Save Interaction]
+      detail_view:
+        header: [Contact name, Category badge, Notes, Drive Folder link, Google Contact link]
+        timeline_title: "Interaction History (N)"
+        empty_state: "No interactions logged yet."
+      gotchas:
+        - Notes is required — toast "Notes are required." if empty
+        - Date is required — toast "Date is required." if empty
+        - Drive URL attachment auto-fetches file metadata via fetchDriveFileMetadata()
+        - Timeline sorted newest first
+    questions:
+      - how do I log a call or meeting with a contact
+      - can I attach documents to interactions
+      - where do I see the full interaction history
+
+  - id: contacts.sync-google
+    section: Contacts & Relationships
+    title: Sync Contacts from Google
+    status: live
+    roles: [owner, manager]
+    nav: [Manage, Contacts]
+    description: Pull in contacts added directly to the "Shir Glassworks" group in Google Contacts.
+    steps:
+      - Go to Manage → Contacts
+      - Click "Sync Google"
+      - Grant Google Contacts access if prompted (one-time per session)
+      - App checks "Shir Glassworks" group in Google Contacts (creates group if missing)
+      - New contacts in that group are created in Firebase with category "Other"
+      - Existing contacts not overwritten — sync only adds new ones
+      - Update category on imported contacts as needed
+    ui:
+      screen: Manage → Contacts
+      route: contacts
+      tab_id: contactsTab
+      elements:
+        - label: "Sync Google"
+          type: button
+          action: Initiates Google Contacts API sync
+      gotchas:
+        - Sync is one-directional for new contacts — adds from Google, does not push to Google
+        - Creating contacts in the admin DOES push to Google (on save)
+        - Imported contacts default to category "Other"
+        - Google Contacts access grant may be needed (OAuth, one-time per session)
+    questions:
+      - how do I import contacts from Google
+      - will it overwrite my existing contacts
+      - do I need to grant permissions
+
+  # ============================================================
+  # ADMIN
+  # ============================================================
+
+  - id: admin.square-settings
+    section: Admin
+    title: Configure Square Payment Settings
+    status: live
+    roles: [owner]
+    nav: [Manage, Settings, Payments]
+    description: Switch between sandbox (test) and live Square payments, update credentials.
+    steps:
+      - Go to Manage → Settings → Payments tab
+      - To test — set Environment to Sandbox, enter Sandbox Application ID and Location ID
+      - To go live — set Environment to Production (live credentials pre-saved)
+      - Click Save
+      - In Sandbox mode — TEST MODE banner appears on checkout page
+    ui:
+      screen: Manage → Settings → Payments
+      route: settings
+      tab_id: settingsTab
+      sub_tabs: [General, Payments, Shipping, Integrations, Workshop]
+      role_gate: isAdmin() required (entire Settings route blocked for non-admin)
+      elements:
+        - label: "Save"
+          type: button
+          action: Saves payment configuration
+      payments_fields:
+        - "Active Environment toggle: Sandbox | Production"
+        - "Sandbox: Access Token (password), Location ID (text), Webhook Signature Key (password)"
+        - "Production: Access Token (password), Location ID (text), Webhook Signature Key (password)"
+        - "Site URL (text)"
+      gotchas:
+        - Settings route entirely blocked for non-admin — redirects with toast
+        - Settings sidebar item hidden for non-admin users
+        - TEST MODE banner visible on checkout in sandbox mode — verify before testing
+        - Sub-tab switching via switchSettingsSubView() function
+    questions:
+      - how do I switch to test mode for payments
+      - where do I update Square credentials
+      - why can't I see the Settings page
+
+  - id: admin.employees-permissions
+    section: Admin
+    title: Manage Employees and Permissions
+    status: live
+    roles: [owner]
+    nav: [Manage, Employees]
+    description: Invite team members, assign roles, configure RBAC permissions.
+    steps:
+      - Go to Manage → Employees & Permissions
+      - To invite — click "+ Add User", enter email, select role (Owner/Manager/Staff)
+      - Click "Send Invite" — invite recorded as pending
+      - Invitee signs in with Google account — role auto-assigned on first login
+      - To change role — use role dropdown next to user name
+      - Manager access — POS, inventory, packing (not pricing, settings, user management)
+      - Staff access — POS and inventory only
+    ui:
+      screen: Manage → Employees & Permissions
+      route: employees
+      tab_id: employeesTab
+      tab_title: "Employees & Permissions"
+      sub_tabs: [Users, Roles & Permissions]
+      elements:
+        - label: "+ Add User"
+          type: button
+          action: Opens user invite flow
+          gate: hasPermission('users', 'create')
+        - label: "Save Permissions"
+          type: button
+          when: Roles & Permissions tab
+          gate: hasPermission('roles', 'update')
+        - label: "Reset"
+          type: button
+          when: Roles & Permissions tab
+          action: Reverts unsaved permission changes
+        - label: "+ New Role"
+          type: button
+          when: Roles & Permissions tab
+          gate: hasPermission('roles', 'create')
+        - label: "Cancel"
+          type: button
+          when: Pending invite row
+          action: Revokes invitation
+        - label: "History"
+          type: button
+          when: Per user row
+          action: Shows user's audit trail
+      users_table: [User, Email, Role, Last Login, Actions]
+      roles_table: "Permission matrix — 17 entities × 4 actions (CRUD checkboxes)"
+      permission_entities: [orders, products, inventory, gallery, schedule, settings, users, roles, auditLog, analytics, sales, salesEvents, commissions, coupons, forecast, contacts, stories]
+      role_gates:
+        - "hasPermission('users', 'read') — gates user list loading"
+        - "hasPermission('users', 'update') — gates role change dropdown (hidden for own row)"
+        - "hasPermission('users', 'create') — gates new invites"
+        - "hasPermission('roles', 'read') — gates Roles & Permissions tab visibility"
+        - "hasPermission('roles', 'update') — gates permission edit controls and save"
+        - "hasPermission('roles', 'create') — gates new role creation"
+      gotchas:
+        - Cannot change your own role (dropdown hidden on own row)
+        - Three default roles — admin (Owner), user (Manager), guest (Staff)
+        - Pending invites show separately with Cancel button
+        - Role change takes effect immediately
+        - 17 permission entities with CRUD matrix
+    questions:
+      - how do I add a new team member
+      - what can managers and staff access
+      - how do I change someone's role
+      - can I create custom roles
+
+  - id: admin.analytics
+    section: Admin
+    title: View Analytics
+    status: live
+    roles: [owner, manager]
+    nav: [Manage, Analytics]
+    description: Review website traffic, page views, and visitor activity.
+    steps:
+      - Go to Manage → Analytics
+      - Select time range — Last 7 days, Last 30 days, or Last 90 days
+      - Review summary cards for key metrics
+      - Click Refresh to pull latest data
+    ui:
+      screen: Manage → Analytics
+      route: analytics
+      tab_id: analyticsTab
+      elements:
+        - label: "Refresh"
+          type: button
+          action: Reloads analytics data
+      filters:
+        - "Range: Last 7 days | Last 30 days | Last 90 days"
+      sections: [Summary Cards, Page Views, Top Interactions, Visitors, Recent Activity]
+      role_gate: hasPermission('analytics', 'read') (manager has read-only, no create/update/delete)
+      gotchas:
+        - Analytics is read-only for managers
+        - Data must be manually refreshed — not real-time
+    questions:
+      - where do I see website analytics
+      - how far back can I view traffic data
+      - what metrics are available
+
+  - id: admin.audit-log
+    section: Admin
+    title: View the Audit Log
+    status: live
+    roles: [owner]
+    nav: [Manage, Audit Log]
+    description: History of who did what and when — filterable by entity, action, actor, and date.
+    steps:
+      - Go to Manage → Audit Log
+      - Filter by entity, action, actor, and/or date range
+      - Each entry shows actor, action, entity, ID, mode (fair mode or studio mode)
+      - Click "Load More" for additional entries
+    ui:
+      screen: Manage → Audit Log
+      route: auditlog
+      tab_id: auditLogTab
+      elements:
+        - label: "Clear"
+          type: button
+          action: Resets all filters
+        - label: "Load More"
+          type: button
+          action: Loads additional audit entries
+      filters:
+        - "Entity: All Entities | Orders | Products | Inventory | Jobs | Build Jobs | Sales Events | Gallery | Schedule | Locations | Coupons | Settings | Operators | PoS | Stories"
+        - "Action: All Actions | Create | Update | Delete"
+        - "Actor: All Actors (dynamically populated)"
+        - "Date: From / To (date inputs)"
+      table_columns: [Time, Actor, Action, Entity, ID, Mode]
+      role_gate: hasPermission('auditLog', 'read')
+      empty_state: "No audit entries found matching your filters."
+      gotchas:
+        - Entire audit log tab gated by hasPermission('auditLog', 'read') — only owner by default
+        - Mode column shows whether action was in fair mode or studio mode
+        - Audit trail link from order detail also checks auditLog permission
+        - "Load More" pagination — not all entries loaded at once
+    questions:
+      - where do I see who changed what
+      - can I filter the audit log by user
+      - what is the Mode column
+
+# ============================================================
+# NOT YET BUILT
+# ============================================================
+
+not_yet_built:
+  - id: promo-photo-shoot
+    title: Promo Photo Shoot
+    notes: Guided lightbox shoot for website and Etsy photos. Studio Companion currently handles Vision training only.
+
+  - id: etsy-wholesale-orders
+    title: Etsy / Wholesale Order Management
+    notes: Handling orders from channels outside the website. Not yet designed.
+
+  - id: customer-follow-up
+    title: Customer Follow-Up
+    notes: Sending updates or follow-up messages to buyers. Not yet designed.
+
+  - id: end-of-year-financials
+    title: End-of-Year Financials Summary
+    notes: Pulling together sales, costs, and reconciliation. Not yet designed.
+
+  - id: contact-history-import
+    title: Contact History Import
+    notes: Retroactive import of existing Google Drive documents into contact interaction timelines. Deferred pending proof of value from Phase 1.
+
+  - id: ship-bundles
+    title: Ship Bundles
+    notes: Creating and managing carrier bundles for batch drop-offs. Ship → Ship → Bundles.
+```
