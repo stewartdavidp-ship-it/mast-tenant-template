@@ -18467,6 +18467,7 @@ async function saveNewContact() {
     await db.ref(CONTACTS_PATH + '/' + id).set(contactData);
     await writeAudit('create', 'contacts', id);
     showToast('Contact created.');
+    emitTestingEvent('createContact', {});
     closeModal();
     contactsLoaded = false;
     loadContacts();
@@ -18654,6 +18655,7 @@ async function saveInteraction(contactId) {
     await db.ref(CONTACTS_PATH + '/' + contactId + '/interactions/' + interactionId).set(interactionData);
     await writeAudit('create', 'contacts', contactId);
     showToast('Interaction logged.');
+    emitTestingEvent('logInteraction', {});
     closeModal();
     // Reload detail view
     loadContactDetail(contactId);
@@ -19203,6 +19205,7 @@ async function sendCommissionProposal(commId) {
       await db.ref(COMMISSIONS_PATH + '/' + commId + '/proposalSentAt').set(new Date().toISOString());
       commissionsData[commId].proposalSentAt = new Date().toISOString();
       showToast('Proposal sent to ' + contact);
+      emitTestingEvent('sendProposal', {});
       viewCommissionDetail(commId); // Refresh
     } else {
       showToast('Failed to send: ' + (result.error || 'Unknown error'), true);
@@ -19230,6 +19233,7 @@ async function createCommissionJob(commId) {
     await db.ref(COMMISSIONS_PATH + '/' + commId + '/productionJobId').set(jobId);
     commissionsData[commId].productionJobId = jobId;
     showToast('Production job created');
+    emitTestingEvent('createCommissionJob', {});
     await writeAudit('create', 'productionJob', jobId);
     viewCommissionDetail(commId); // Refresh
   } catch (err) {
