@@ -20893,8 +20893,8 @@ function nlOpenIssue(issueId) {
         needsMigration = true;
         sec.cardSize = sizeInfo.cardSize;
         sec.gridWidth = sizeInfo.gridWidth;
-      } else if (sec.gridWidth !== sizeInfo.gridWidth && sec.cardSize !== sizeInfo.cardSize) {
-        // Update sections whose defaults changed (e.g. upcoming-events medium→large)
+      } else if (sec.type === 'upcoming-events' && sec.cardSize === 'medium' && sizeInfo.cardSize === 'large') {
+        // One-time upgrade: upcoming-events default changed from medium→large
         needsMigration = true;
         sec.cardSize = sizeInfo.cardSize;
         sec.gridWidth = sizeInfo.gridWidth;
