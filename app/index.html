@@ -1391,9 +1391,8 @@
       font-weight: 700;
       font-size: 0.85rem;
     }
-    .tm-locked {
-      opacity: 0.45;
-      pointer-events: none;
+    .tm-mission-header:hover {
+      opacity: 0.85;
     }
     .tm-precondition-notice {
       background: #fef3cd;
@@ -21430,7 +21429,7 @@ var testingMissions = [];  // loaded from Firebase
 var testingModeState = {
   open: false,
   loaded: false,
-  activeMissionId: null,  // currently expanded mission
+  expandedMissionId: null,  // which mission card is expanded
   missionProgress: {},    // { missionId: { progress: {}, reflections: {} } }
   assistantTaskIdx: null,
   assistantMessages: [],
@@ -21511,25 +21510,17 @@ function loadTestingProgress() {
         reflections: pd.reflections || {}
       };
     });
-    // Set active mission
-    testingModeState.activeMissionId = getActiveMissionId();
+    // Expand first non-accomplished mission by default
+    testingModeState.expandedMissionId = null;
+    for (var i = 0; i < testingMissions.length; i++) {
+      if (!isMissionAccomplished(testingMissions[i].id)) {
+        testingModeState.expandedMissionId = testingMissions[i].id;
+        break;
+      }
+    }
     testingModeState.loaded = true;
     renderTestingMode();
   });
-}
-
-function getActiveMissionId() {
-  for (var i = 0; i < testingMissions.length; i++) {
-    var m = testingMissions[i];
-    var mp = testingModeState.missionProgress[m.id];
-    if (mp && mp.reflections && mp.reflections.post) continue; // accomplished
-    if (m.requires) {
-      var reqMp = testingModeState.missionProgress[m.requires];
-      if (!reqMp || !reqMp.reflections || !reqMp.reflections.post) return null; // prereq not done, locked
-    }
-    return m.id;
-  }
-  return null; // all done
 }
 
 function isMissionAccomplished(missionId) {
@@ -21537,9 +21528,11 @@ function isMissionAccomplished(missionId) {
   return mp && mp.reflections && !!mp.reflections.post;
 }
 
-function isMissionLocked(mission) {
-  if (!mission.requires) return false;
-  return !isMissionAccomplished(mission.requires);
+function toggleMissionExpand(missionId) {
+  testingModeState.expandedMissionId = (testingModeState.expandedMissionId === missionId) ? null : missionId;
+  testingModeState.assistantTaskIdx = null;
+  testingModeState.assistantMessages = [];
+  renderTestingMode();
 }
 
 function areMissionTasksDone(mission) {
@@ -21571,41 +21564,43 @@ function renderTestingMode() {
   var html = '';
   testingMissions.forEach(function(mission) {
     var mp = testingModeState.missionProgress[mission.id] || { progress: {}, reflections: {} };
-    var locked = isMissionLocked(mission);
     var accomplished = isMissionAccomplished(mission.id);
-    var isActive = testingModeState.activeMissionId === mission.id;
+    var isExpanded = testingModeState.expandedMissionId === mission.id;
     var hasPreReflection = !!(mp.reflections && mp.reflections.pre);
-    var allRequiredDone = mission.tasks.filter(function(t) { return !t.optional; }).every(function(_, i) {
-      var count = 0;
-      for (var j = 0; j < mission.tasks.length; j++) {
-        if (!mission.tasks[j].optional) {
-          if (count === i) return mp.progress[j] === true;
-          count++;
-        }
+    var completedCount = 0;
+    var requiredCount = 0;
+    mission.tasks.forEach(function(t, i) {
+      if (!t.optional) {
+        requiredCount++;
+        if (mp.progress[i] === true) completedCount++;
       }
-      return false;
     });
+    var allRequiredDone = requiredCount > 0 && completedCount === requiredCount;
 
-    // Locked mission
-    if (locked) {
-      html += '<div class="tm-mission-card tm-locked">';
-      html += '<div class="tm-mission-title">🔒 ' + escapeHtml(mission.title) + '</div>';
-      html += '</div>';
-      return;
-    }
+    // Mission card header — always clickable
+    var cardClasses = 'tm-mission-card';
+    if (accomplished) cardClasses += ' accomplished';
+    if (allRequiredDone && !accomplished) cardClasses += ' tm-pulse';
+    html += '<div class="' + cardClasses + '">';
 
-    // Accomplished mission
+    // Clickable header
+    html += '<div class="tm-mission-header" onclick="toggleMissionExpand(\'' + mission.id + '\')" style="cursor:pointer;display:flex;align-items:center;gap:8px;">';
+    html += '<span style="flex-shrink:0;font-size:0.75rem;color:var(--warm-gray);">' + (isExpanded ? '▼' : '▶') + '</span>';
+    html += '<span class="tm-mission-title" style="flex:1;margin:0;">' + escapeHtml(mission.title) + '</span>';
     if (accomplished) {
-      html += '<div class="tm-mission-card accomplished">';
-      html += '<div class="tm-mission-title">' + escapeHtml(mission.title) + '</div>';
-      html += '<div class="tm-accomplished-badge">✅ Mission Accomplished</div>';
+      html += '<span class="tm-accomplished-badge" style="margin:0;">✅</span>';
+    } else if (hasPreReflection) {
+      html += '<span style="font-size:0.7rem;color:var(--warm-gray);white-space:nowrap;">' + completedCount + '/' + requiredCount + '</span>';
+    }
+    html += '</div>';
+
+    // Collapsed — stop here
+    if (!isExpanded) {
       html += '</div>';
       return;
     }
 
-    // Active mission
-    html += '<div class="tm-mission-card' + (allRequiredDone ? ' tm-pulse' : '') + '">';
-    html += '<div class="tm-mission-title">' + escapeHtml(mission.title) + '</div>';
+    // Expanded content
     html += '<div class="tm-scenario">' + escapeHtml(mission.scenario) + '</div>';
 
     // Precondition notice
@@ -21613,7 +21608,7 @@ function renderTestingMode() {
       html += '<div class="tm-precondition-notice">' + escapeHtml(mission.preconditionNotice) + '</div>';
     }
 
-    // Pre-prompt
+    // Pre-prompt (if not yet started)
     if (!hasPreReflection) {
       html += '<div class="tm-prompt-area">';
       html += '<label>' + escapeHtml(mission.prePrompt) + '</label>';
@@ -21621,7 +21616,7 @@ function renderTestingMode() {
       html += '<button onclick="handlePrePromptSubmit(\'' + mission.id + '\')">Submit & Start</button>';
       html += '</div>';
       html += '</div>';
-      return; // don't render tasks yet
+      return;
     }
 
     // Tasks
@@ -21631,19 +21626,21 @@ function renderTestingMode() {
       var isManual = !task.trigger;
       var isOptional = !!task.optional;
       html += '<li class="tm-task-item' + (checked ? ' checked' : '') + (isOptional ? ' tm-optional' : '') + '">';
-      if (isManual && !checked) {
+      if (isManual && !checked && !accomplished) {
         html += '<span style="flex-shrink:0;width:20px;text-align:center;cursor:pointer;" onclick="toggleManualTask(\'' + mission.id + '\',' + idx + ')">⬜</span>';
       } else {
         html += '<span style="flex-shrink:0;width:20px;text-align:center;">' + (checked ? '✅' : '⬜') + '</span>';
       }
       html += '<span class="tm-task-text">' + escapeHtml(task.text) + (isOptional ? ' <em>(optional)</em>' : '') + '</span>';
-      html += '<button class="tm-task-hint-btn" onclick="openAssistant(\'' + mission.id + '\',' + idx + ')" title="Ask for a hint">?</button>';
+      if (!accomplished) {
+        html += '<button class="tm-task-hint-btn" onclick="openAssistant(\'' + mission.id + '\',' + idx + ')" title="Ask for a hint">?</button>';
+      }
       html += '</li>';
     });
     html += '</ul>';
 
     // Assistant area
-    if (testingModeState.assistantTaskIdx !== null && testingModeState.activeMissionId === mission.id) {
+    if (testingModeState.assistantTaskIdx !== null && testingModeState.expandedMissionId === mission.id && !accomplished) {
       var taskCtx = mission.tasks[testingModeState.assistantTaskIdx];
       html += '<div class="tm-assistant-area">';
       html += '<div class="tm-assistant-label">Studio Assistant — Task ' + (testingModeState.assistantTaskIdx + 1) + '</div>';
@@ -21662,8 +21659,8 @@ function renderTestingMode() {
       html += '</div>';
     }
 
-    // Post-prompt (all required tasks done)
-    if (allRequiredDone) {
+    // Post-prompt (all required tasks done, not yet accomplished)
+    if (allRequiredDone && !accomplished) {
       html += '<div class="tm-prompt-area">';
       html += '<label>' + escapeHtml(mission.postPrompt) + '</label>';
       html += '<textarea id="tmPostPrompt" placeholder="Your feedback..."></textarea>';
@@ -21707,8 +21704,14 @@ function handlePostPromptSubmit(missionId) {
   testingModeState.missionProgress[missionId].reflections.post = value;
   db.ref('shirglassworks/admin/testingMode/' + user.uid + '/' + missionId + '/reflections/post').set(value);
   showToast('Feedback saved — thank you!');
-  // Advance active mission
-  testingModeState.activeMissionId = getActiveMissionId();
+  // Expand next non-accomplished mission
+  testingModeState.expandedMissionId = null;
+  for (var i = 0; i < testingMissions.length; i++) {
+    if (!isMissionAccomplished(testingMissions[i].id)) {
+      testingModeState.expandedMissionId = testingMissions[i].id;
+      break;
+    }
+  }
   renderTestingMode();
 }
 
@@ -21754,7 +21757,7 @@ function toggleManualTask(missionId, taskIdx) {
 
 // --- Assistant ---
 function openAssistant(missionId, taskIdx) {
-  testingModeState.activeMissionId = missionId;
+  testingModeState.expandedMissionId = missionId;
   if (testingModeState.assistantTaskIdx === taskIdx) {
     testingModeState.assistantTaskIdx = null;
     testingModeState.assistantMessages = [];
@@ -21771,7 +21774,7 @@ async function askStudioAssistant() {
   if (!question || testingModeState.assistantLoading) return;
   var user = auth.currentUser;
   if (!user) return;
-  var missionId = testingModeState.activeMissionId;
+  var missionId = testingModeState.expandedMissionId;
   var mission = testingMissions.find(function(m) { return m.id === missionId; });
   if (!mission) return;
   var task = mission.tasks[testingModeState.assistantTaskIdx];
@@ -21829,7 +21832,7 @@ function resetTestingProgress() {
   testingMissions.forEach(function(m) {
     testingModeState.missionProgress[m.id] = { progress: {}, reflections: {} };
   });
-  testingModeState.activeMissionId = getActiveMissionId();
+  testingModeState.expandedMissionId = testingMissions.length ? testingMissions[0].id : null;
   testingModeState.assistantTaskIdx = null;
   testingModeState.assistantMessages = [];
   renderTestingMode();
