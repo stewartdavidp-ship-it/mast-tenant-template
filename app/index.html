@@ -24008,19 +24008,22 @@ var tripLocationsLoaded = false;
 var tripSettingsData = { irsRates: { '2025': 70, '2026': 70 }, knownLocations: ['home-studio', 'new-studio'] };
 var activeTripData = null; // current user's open trip
 var selectedTripPurpose = null;
+var selectedTripPurposeLabel = null; // For custom "Other" purposes
 var tripMilesSource = null;
 var tripPulseTimer = null;
+var customTripPurposes = []; // User-added custom purposes
+var TRIP_CUSTOM_PURPOSES_PATH = 'shirglassworks/tripCustomPurposes';
 
-// Trip purpose options
-var TRIP_PURPOSES = [
+// Default trip purpose options (Other always last)
+var DEFAULT_TRIP_PURPOSES = [
   { key: 'fair-market', icon: '🎪', label: 'Fair/Market' },
   { key: 'vendor', icon: '🏭', label: 'Vendor' },
   { key: 'supplies', icon: '🛒', label: 'Supplies' },
   { key: 'studio-run', icon: '🏠', label: 'Studio Run' },
   { key: 'bank', icon: '🏦', label: 'Bank' },
-  { key: 'delivery', icon: '📦', label: 'Delivery' },
-  { key: 'other', icon: '✏️', label: 'Other' }
+  { key: 'delivery', icon: '📦', label: 'Delivery' }
 ];
+var TRIP_PURPOSES = DEFAULT_TRIP_PURPOSES.concat([{ key: 'other', icon: '✏️', label: 'Other' }]);
 
 // Quick action tile definitions
 var QUICK_ACTION_DEFS = {
@@ -24037,6 +24040,8 @@ var DEFAULT_QUICK_ACTIONS = ['start-trip', 'add-inventory', 'start-production-jo
 function loadTrips() {
   var user = auth.currentUser;
   if (!user) return;
+  // Load custom purposes on first load
+  if (!tripsLoaded) loadCustomTripPurposes();
   var loading = document.getElementById('tripsLoading');
   if (loading) loading.style.display = '';
 
@@ -24421,6 +24426,7 @@ function openEndTripSheet() {
 
   // Reset purpose selection
   selectedTripPurpose = null;
+  selectedTripPurposeLabel = null;
   renderPurposeQuickPick();
 
   // Auto-calculate miles via Maps API
@@ -24449,8 +24455,106 @@ function renderPurposeQuickPick() {
 }
 
 function selectTripPurpose(key) {
+  if (key === 'other') {
+    showOtherPurposeModal();
+    return;
+  }
   selectedTripPurpose = key;
+  selectedTripPurposeLabel = null;
   renderPurposeQuickPick();
+}
+
+function showOtherPurposeModal() {
+  // Remove existing modal if any
+  var existing = document.getElementById('otherPurposeModal');
+  if (existing) existing.remove();
+
+  var isDark = document.body.classList.contains('dark-mode');
+  var bg = isDark ? '#2a2a2a' : 'white';
+  var border = isDark ? '#444' : '#ddd';
+  var textColor = isDark ? '#e0e0e0' : '#1A1A1A';
+  var inputBg = isDark ? '#1e1e1e' : '#f9f9f9';
+
+  var overlay = document.createElement('div');
+  overlay.id = 'otherPurposeModal';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10001;display:flex;align-items:center;justify-content:center;padding:20px;';
+  overlay.innerHTML =
+    '<div style="background:' + bg + ';border-radius:12px;padding:24px;width:100%;max-width:340px;box-shadow:0 8px 32px rgba(0,0,0,0.3);">' +
+      '<div style="font-weight:700;font-size:1rem;margin-bottom:4px;color:' + textColor + ';">What was this trip for?</div>' +
+      '<div style="font-size:0.8rem;color:var(--warm-gray);margin-bottom:16px;">Enter a purpose — it will be saved for future trips.</div>' +
+      '<input id="otherPurposeInput" type="text" placeholder="e.g. Glass class, Repair job, Post office" ' +
+        'style="width:100%;padding:10px 12px;border:1px solid ' + border + ';border-radius:8px;font-size:0.9rem;' +
+        'background:' + inputBg + ';color:' + textColor + ';box-sizing:border-box;font-family:DM Sans,sans-serif;" />' +
+      '<div style="display:flex;gap:10px;margin-top:16px;">' +
+        '<button onclick="cancelOtherPurpose()" style="flex:1;padding:10px;border:1px solid ' + border + ';border-radius:8px;background:transparent;color:' + textColor + ';cursor:pointer;font-family:DM Sans,sans-serif;font-size:0.85rem;">Cancel</button>' +
+        '<button onclick="confirmOtherPurpose()" style="flex:1;padding:10px;border:none;border-radius:8px;background:var(--amber-glow,#C4853C);color:white;cursor:pointer;font-weight:600;font-family:DM Sans,sans-serif;font-size:0.85rem;">Save</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(overlay);
+
+  // Focus input
+  setTimeout(function() {
+    var input = document.getElementById('otherPurposeInput');
+    if (input) input.focus();
+  }, 100);
+
+  // Enter key to confirm
+  var input = document.getElementById('otherPurposeInput');
+  if (input) {
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') confirmOtherPurpose();
+      if (e.key === 'Escape') cancelOtherPurpose();
+    });
+  }
+}
+
+function cancelOtherPurpose() {
+  var modal = document.getElementById('otherPurposeModal');
+  if (modal) modal.remove();
+}
+
+function confirmOtherPurpose() {
+  var input = document.getElementById('otherPurposeInput');
+  var value = input ? input.value.trim() : '';
+  if (!value) {
+    showToast('Enter a purpose description', true);
+    return;
+  }
+
+  // Generate a key from the label
+  var key = 'custom-' + value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
+  // Save to Firebase so it appears in future trips
+  var alreadyExists = customTripPurposes.some(function(p) { return p.key === key; });
+  if (!alreadyExists) {
+    var newPurpose = { key: key, icon: '📌', label: value };
+    customTripPurposes.push(newPurpose);
+    rebuildTripPurposes();
+    // Persist to Firebase
+    db.ref(TRIP_CUSTOM_PURPOSES_PATH + '/' + key).set({ icon: '📌', label: value, createdAt: new Date().toISOString() });
+  }
+
+  // Select it
+  selectedTripPurpose = key;
+  selectedTripPurposeLabel = value;
+  renderPurposeQuickPick();
+  cancelOtherPurpose();
+}
+
+function rebuildTripPurposes() {
+  TRIP_PURPOSES = DEFAULT_TRIP_PURPOSES.concat(customTripPurposes).concat([{ key: 'other', icon: '✏️', label: 'Other' }]);
+}
+
+function loadCustomTripPurposes() {
+  db.ref(TRIP_CUSTOM_PURPOSES_PATH).once('value').then(function(snap) {
+    var data = snap.val();
+    if (!data) return;
+    customTripPurposes = [];
+    Object.keys(data).forEach(function(key) {
+      customTripPurposes.push({ key: key, icon: data[key].icon || '📌', label: data[key].label });
+    });
+    rebuildTripPurposes();
+  });
 }
 
 function closeEndTripSheet() {
@@ -24468,7 +24572,7 @@ function confirmEndTrip() {
   var notes = document.getElementById('endTripNotes').value.trim();
 
   if (!selectedTripPurpose) { showToast('Select a trip purpose', true); return; }
-  if (miles <= 0) { showToast('Enter the miles driven', true); return; }
+  if (miles < 0 || (miles === 0 && tripMilesSource !== 'same-location')) { showToast('Enter the miles driven', true); return; }
 
   var source = tripMilesSource || 'manual-override';
   var rate = activeTripData.irsRateCentsPerMile || 70;
@@ -24480,12 +24584,18 @@ function confirmEndTrip() {
     destination.label = destValue;
   }
 
+  // For custom purposes, store the label too
+  var purposeLabel = selectedTripPurposeLabel || null;
+  var purposeObj = TRIP_PURPOSES.find(function(p) { return p.key === selectedTripPurpose; });
+  if (purposeObj && !purposeLabel) purposeLabel = purposeObj.label;
+
   var updates = {
     status: 'completed',
     endTime: new Date().toISOString(),
     miles: miles,
     milesSource: source,
     purpose: selectedTripPurpose,
+    purposeLabel: purposeLabel,
     notes: notes,
     destination: destination,
     deductibleValue: deductible
@@ -24534,6 +24644,8 @@ function incrementLocationUseCount(locationObj) {
 
 // ─── Distance Calculation (Google Maps Directions API) ──────
 
+var distanceCalcTimeout = null;
+
 function calculateTripDistance() {
   if (!activeTripData) return;
   var origin = activeTripData.origin;
@@ -24542,6 +24654,17 @@ function calculateTripDistance() {
   if (!origin || !dest) {
     setManualMilesMode('No origin/destination');
     return;
+  }
+
+  // Check if origin and destination are the same location (user hasn't moved)
+  if (origin.lat && origin.lng && dest.lat && dest.lng) {
+    var distMetersHav = haversineMeters(origin.lat, origin.lng, dest.lat, dest.lng);
+    if (distMetersHav < 100) { // Less than 100 meters — effectively same spot
+      document.getElementById('endTripMiles').value = 0;
+      document.getElementById('endTripMilesSource').textContent = '📍 Same location';
+      tripMilesSource = 'same-location';
+      return;
+    }
   }
 
   // Try using coordinates if available
@@ -24553,13 +24676,21 @@ function calculateTripDistance() {
     return;
   }
 
-  // Use Google Maps Directions API via proxy or direct
-  var apiKey = 'AIzaSyDZevV_F87F1AKGqUPKuNIrHMybOc61D7s';
-  var url = 'https://maps.googleapis.com/maps/api/directions/json?origin=' +
-    encodeURIComponent(originStr) + '&destination=' + encodeURIComponent(destStr) +
-    '&mode=driving&key=' + apiKey;
+  // Set a timeout — if Maps API callback doesn't fire within 5s, fall back to manual/haversine
+  if (distanceCalcTimeout) clearTimeout(distanceCalcTimeout);
+  distanceCalcTimeout = setTimeout(function() {
+    // API didn't respond in time — try haversine fallback
+    if (origin.lat && origin.lng && dest.lat && dest.lng) {
+      var fallbackMeters = haversineMeters(origin.lat, origin.lng, dest.lat, dest.lng);
+      var fallbackMiles = Math.round((fallbackMeters / 1609.344) * 10) / 10;
+      document.getElementById('endTripMiles').value = fallbackMiles;
+      document.getElementById('endTripMilesSource').textContent = '📍 Estimated (straight-line)';
+      tripMilesSource = 'haversine-fallback';
+    } else {
+      setManualMilesMode('Enter miles manually');
+    }
+  }, 5000);
 
-  // Note: Direct API call may be blocked by CORS. Use distance matrix via JS API as fallback
   try {
     if (window.google && window.google.maps) {
       var service = new google.maps.DistanceMatrixService();
@@ -24569,6 +24700,8 @@ function calculateTripDistance() {
         travelMode: 'DRIVING',
         unitSystem: google.maps.UnitSystem.IMPERIAL
       }, function(response, status) {
+        // Cancel timeout — we got a response
+        if (distanceCalcTimeout) { clearTimeout(distanceCalcTimeout); distanceCalcTimeout = null; }
         if (status === 'OK' && response.rows[0] && response.rows[0].elements[0].status === 'OK') {
           var distMeters = response.rows[0].elements[0].distance.value;
           var miles = Math.round((distMeters / 1609.344) * 10) / 10;
@@ -24580,9 +24713,20 @@ function calculateTripDistance() {
         }
       });
     } else {
-      setManualMilesMode('Enter miles manually');
+      // No Google Maps JS — cancel timeout and fall back immediately
+      if (distanceCalcTimeout) { clearTimeout(distanceCalcTimeout); distanceCalcTimeout = null; }
+      if (origin.lat && origin.lng && dest.lat && dest.lng) {
+        var hvMeters = haversineMeters(origin.lat, origin.lng, dest.lat, dest.lng);
+        var hvMiles = Math.round((hvMeters / 1609.344) * 10) / 10;
+        document.getElementById('endTripMiles').value = hvMiles;
+        document.getElementById('endTripMilesSource').textContent = '📍 Estimated (straight-line)';
+        tripMilesSource = 'haversine-fallback';
+      } else {
+        setManualMilesMode('Enter miles manually');
+      }
     }
   } catch (e) {
+    if (distanceCalcTimeout) { clearTimeout(distanceCalcTimeout); distanceCalcTimeout = null; }
     setManualMilesMode('Enter miles manually');
   }
 }
@@ -24776,7 +24920,7 @@ function renderTripsList() {
     var dateStr = (d.getMonth()+1) + '/' + d.getDate() + '/' + d.getFullYear();
     var dest = t.destination ? t.destination.label : 'Unknown';
     var purposeObj = TRIP_PURPOSES.find(function(p) { return p.key === t.purpose; });
-    var purposeIcon = purposeObj ? purposeObj.icon : '•';
+    var purposeIcon = purposeObj ? purposeObj.icon : (t.purpose && t.purpose.indexOf('custom-') === 0 ? '📌' : '•');
     var driverNote = t.driverName && t.driverId !== (auth.currentUser ? auth.currentUser.uid : '') ? ' · ' + esc(t.driverName) : '';
 
     html += '<div style="background:white;border:1px solid #eee;border-radius:8px;padding:12px 16px;margin-bottom:8px;cursor:pointer;" onclick="toggleTripDetail(\'' + t.id + '\')">' +
@@ -24793,7 +24937,7 @@ function renderTripsList() {
       '<div id="tripDetail_' + t.id + '" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid #eee;font-size:0.85rem;color:var(--warm-gray);">' +
         '<div>Origin: ' + esc(t.origin ? t.origin.label : 'Unknown') + '</div>' +
         '<div>Destination: ' + esc(dest) + '</div>' +
-        '<div>Purpose: ' + (purposeObj ? purposeObj.icon + ' ' + purposeObj.label : t.purpose) + '</div>' +
+        '<div>Purpose: ' + (purposeObj ? purposeObj.icon + ' ' + purposeObj.label : (t.purposeLabel ? '📌 ' + esc(t.purposeLabel) : t.purpose)) + '</div>' +
         '<div>Miles: ' + (t.miles || 0).toFixed(1) + ' (' + (t.milesSource || 'unknown') + ')</div>' +
         '<div>IRS Rate: ' + (t.irsRateCentsPerMile || 0) + '¢/mi (' + (t.irsRateYear || '') + ')</div>' +
         '<div>Deductible: $' + (t.deductibleValue || 0).toFixed(2) + '</div>' +
@@ -24915,7 +25059,7 @@ function renderTaxReport() {
         '<td style="padding:8px;">' + dateStr + '</td>' +
         '<td style="padding:8px;">' + esc(t.driverName || 'Unknown') + '</td>' +
         '<td style="padding:8px;">' + esc(origin) + ' → ' + esc(dest) + '</td>' +
-        '<td style="padding:8px;">' + (purposeObj ? purposeObj.icon + ' ' + purposeObj.label : t.purpose || '') + '</td>' +
+        '<td style="padding:8px;">' + (purposeObj ? purposeObj.icon + ' ' + purposeObj.label : (t.purposeLabel ? '📌 ' + esc(t.purposeLabel) : t.purpose || '')) + '</td>' +
         '<td style="padding:8px;text-align:right;">' + (t.miles || 0).toFixed(1) + '</td>' +
         '<td style="padding:8px;text-align:right;">$' + (t.deductibleValue || 0).toFixed(2) + '</td>' +
       '</tr>';
