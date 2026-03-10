@@ -1476,6 +1476,31 @@
       font-size: 1rem;
     }
 
+    /* ========== TRIP PULSING INDICATOR ========== */
+    @keyframes tripPulse {
+      0%, 100% { box-shadow: 0 4px 12px rgba(245,158,11,0.4); }
+      50% { box-shadow: 0 4px 20px rgba(245,158,11,0.7); transform: scale(1.02); }
+    }
+    .purpose-chip {
+      display:inline-flex;align-items:center;gap:4px;padding:8px 14px;border-radius:20px;
+      font-size:0.85rem;cursor:pointer;border:2px solid #ddd;background:white;
+      transition:all 0.15s;font-family:'DM Sans',sans-serif;
+    }
+    .purpose-chip:hover { border-color: var(--amber-glow, #C4853C); }
+    .purpose-chip.selected { border-color: var(--amber-glow, #C4853C); background: rgba(196,133,60,0.1); font-weight:600; }
+    .quick-action-tile {
+      flex:1;min-width:100px;max-width:180px;padding:16px 12px;border-radius:10px;
+      background:white;border:1px solid #eee;text-align:center;cursor:pointer;
+      transition:all 0.15s;font-family:'DM Sans',sans-serif;
+    }
+    .quick-action-tile:hover { border-color:var(--amber-glow,#C4853C);box-shadow:0 2px 8px rgba(0,0,0,0.06);transform:translateY(-1px); }
+    .quick-action-tile .qa-icon { font-size:1.8rem;margin-bottom:6px; }
+    .quick-action-tile .qa-label { font-size:0.8rem;font-weight:600;color:var(--charcoal,#1A1A1A); }
+    body.dark-mode .quick-action-tile { background:var(--dm-card,#1e1e1e);border-color:var(--dm-border,#333); }
+    body.dark-mode .quick-action-tile .qa-label { color:#e0e0e0; }
+    body.dark-mode .purpose-chip { background:var(--dm-card,#1e1e1e);border-color:var(--dm-border,#333);color:#e0e0e0; }
+    body.dark-mode .purpose-chip.selected { background:rgba(196,133,60,0.2); }
+
     /* ========== LOADING ========== */
     @keyframes spin { to { transform: rotate(360deg); } }
     .loading {
@@ -3807,6 +3832,19 @@
         <div class="sidebar-item" data-route="ship" onclick="navigateTo('ship')">Ship</div>
       </div>
     </div>
+    <!-- Run -->
+    <div class="sidebar-section" data-section="run">
+      <div class="sidebar-section-header" onclick="toggleSection('run')">
+        <span class="sidebar-section-icon">&#128203;</span>
+        <span class="sidebar-section-label">Run</span>
+        <span class="sidebar-section-arrow">&#9654;</span>
+      </div>
+      <div class="sidebar-items">
+        <div class="sidebar-item" data-route="trips" onclick="navigateTo('trips')">Trips</div>
+        <div class="sidebar-item muted" data-route="expenses" onclick="navigateTo('expenses')">Expenses <span class="sidebar-badge new">New</span></div>
+        <div class="sidebar-item muted" data-route="reports" onclick="navigateTo('reports')">Reports <span class="sidebar-badge new">New</span></div>
+      </div>
+    </div>
     <!-- Teach -->
     <div class="sidebar-section">
       <div class="sidebar-section-header dashboard-link muted" onclick="navigateTo('teach')" style="opacity:0.55;">
@@ -3857,8 +3895,110 @@
       <div id="newsletterContent"></div>
     </div>
 
+    <!-- ===== DASHBOARD TAB ===== -->
+    <div id="dashboardTab" style="display:none;">
+      <div class="section-header">
+        <h2>Dashboard</h2>
+      </div>
+      <!-- Quick Actions -->
+      <div id="quickActionsRow" style="display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap;"></div>
+      <!-- Dashboard content placeholder -->
+      <div id="dashboardContent" style="color:var(--warm-gray);font-size:0.9rem;">
+        <p>Welcome to Shir Glassworks. Use the Quick Actions above or navigate using the sidebar.</p>
+      </div>
+    </div>
+
+    <!-- ===== TRIPS TAB ===== -->
+    <div id="tripsTab" style="display:none;">
+      <div class="section-header" style="display:flex;justify-content:space-between;align-items:center;">
+        <h2>Trips</h2>
+        <div id="tripsHeaderActions"></div>
+      </div>
+      <!-- Active Trip Banner -->
+      <div id="activeTripBanner" style="display:none;"></div>
+      <!-- Trips sub-views -->
+      <div class="view-tabs" id="tripsSubNav">
+        <button class="view-tab active" onclick="switchTripsSubView('history')">History</button>
+        <button class="view-tab" onclick="switchTripsSubView('report')">Tax Report</button>
+      </div>
+      <div id="tripsSubHistory">
+        <div id="tripsFilters" style="display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap;"></div>
+        <div id="tripsLoading" style="display:none;text-align:center;padding:40px;color:var(--warm-gray);">Loading trips...</div>
+        <div id="tripsList"></div>
+      </div>
+      <div id="tripsSubReport" style="display:none;">
+        <div id="taxReportContent"></div>
+      </div>
+    </div>
+
     <!-- ===== PLACEHOLDER CONTAINER ===== -->
     <div id="placeholderTab" style="display:none;"></div>
+
+    <!-- ===== PULSING TRIP INDICATOR ===== -->
+    <div id="tripPulsingIndicator" onclick="openEndTripSheet()" style="display:none;position:fixed;bottom:20px;right:20px;z-index:999;background:#f59e0b;color:#fff;padding:10px 18px;border-radius:24px;font-size:0.85rem;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(245,158,11,0.4);animation:tripPulse 2s infinite;font-family:'DM Sans',sans-serif;">
+      🚗 <span id="tripPulseLabel">Trip in progress</span>
+    </div>
+
+    <!-- ===== START TRIP MODAL ===== -->
+    <div id="startTripModal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.5);display:none;justify-content:center;align-items:center;">
+      <div style="background:var(--cream,#FAF6F0);border-radius:12px;padding:28px;max-width:440px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+        <h3 style="margin:0 0 4px;font-family:'Cormorant Garabaldi',serif;font-size:1.3rem;">Start Trip</h3>
+        <p id="startTripGpsStatus" style="font-size:0.8rem;color:var(--warm-gray);margin-bottom:16px;">📡 Getting your location...</p>
+        <div class="form-group" style="margin-bottom:14px;">
+          <label style="font-size:0.85rem;font-weight:600;">Origin</label>
+          <select id="startTripOrigin" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:white;">
+            <option value="">Detecting location...</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:14px;">
+          <label style="font-size:0.85rem;font-weight:600;">Destination</label>
+          <div style="position:relative;">
+            <input type="text" id="startTripDestination" placeholder="Type or select destination..." list="destinationList"
+              style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
+            <datalist id="destinationList"></datalist>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:18px;">
+          <button class="btn btn-primary" onclick="confirmStartTrip()" style="flex:1;">🚗 Start Trip</button>
+          <button class="btn btn-secondary" onclick="closeStartTripModal()">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== END TRIP ACTION SHEET ===== -->
+    <div id="endTripSheet" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.5);">
+      <div style="position:absolute;bottom:0;left:0;right:0;background:var(--cream,#FAF6F0);border-radius:16px 16px 0 0;padding:24px;max-height:85vh;overflow-y:auto;box-shadow:0 -4px 24px rgba(0,0,0,0.15);">
+        <div style="width:40px;height:4px;background:#ccc;border-radius:2px;margin:0 auto 16px;"></div>
+        <h3 style="margin:0 0 4px;font-family:'Cormorant Garabaldi',serif;font-size:1.3rem;">End Trip</h3>
+        <p id="endTripElapsed" style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;"></p>
+        <div class="form-group" style="margin-bottom:14px;">
+          <label style="font-size:0.85rem;font-weight:600;">Miles</label>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input type="number" id="endTripMiles" placeholder="Calculating..." step="0.1" min="0"
+              style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
+            <span id="endTripMilesSource" style="font-size:0.75rem;color:var(--warm-gray);"></span>
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:14px;">
+          <label style="font-size:0.85rem;font-weight:600;">Destination</label>
+          <input type="text" id="endTripDestination" list="destinationList"
+            style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
+        </div>
+        <div class="form-group" style="margin-bottom:14px;">
+          <label style="font-size:0.85rem;font-weight:600;">Purpose</label>
+          <div id="purposeQuickPick" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+        </div>
+        <div class="form-group" style="margin-bottom:14px;">
+          <label style="font-size:0.85rem;font-weight:600;">Notes <span style="font-weight:400;color:var(--warm-gray);">(optional)</span></label>
+          <textarea id="endTripNotes" rows="2" placeholder="Quick note about this trip..."
+            style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;resize:vertical;"></textarea>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:18px;">
+          <button class="btn btn-primary" onclick="confirmEndTrip()" style="flex:1;">✅ Complete Trip</button>
+          <button class="btn btn-secondary" onclick="closeEndTripSheet()">Cancel</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Auth: Sign In -->
     <div class="auth-screen" id="authScreen">
@@ -4514,6 +4654,7 @@
         <button class="view-tab" onclick="switchSettingsSubView('shipping')">Shipping</button>
         <button class="view-tab" onclick="switchSettingsSubView('integrations')">Integrations</button>
         <button class="view-tab" onclick="switchSettingsSubView('workshop')">Workshop</button>
+        <button class="view-tab" onclick="switchSettingsSubView('trips')">Trips</button>
       </div>
       <div id="settingsSubGeneral" style="max-width:500px;">
         <div class="form-group">
@@ -4838,6 +4979,38 @@
             Photos captured during production builds are stored in Firebase Storage.
           </p>
           <div id="storageInfo" style="font-size:0.85rem;color:var(--warm-gray);">Loading...</div>
+        </div>
+      </div>
+      <!-- Trips Settings -->
+      <div id="settingsSubTrips" style="display:none;max-width:500px;">
+        <div class="form-group">
+          <label style="font-size:1.1rem;font-weight:600;">IRS Mileage Rates</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">
+            Standard mileage rates for tax deduction. Rate is locked to the year when a trip is created.
+          </p>
+          <div id="irsRatesList" style="margin-bottom:12px;"></div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input type="number" id="newIrsYear" placeholder="Year" min="2020" max="2040"
+              style="width:90px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
+            <input type="number" id="newIrsRate" placeholder="¢/mile" min="1" max="200" step="0.5"
+              style="width:100px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
+            <button class="btn btn-primary" onclick="addIrsRate()">Add</button>
+          </div>
+        </div>
+
+        <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
+
+        <div class="form-group">
+          <label style="font-size:1.1rem;font-weight:600;">Trip Locations</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">
+            Saved locations used in trip origin/destination pickers. Locations are auto-added when new destinations are entered during trips.
+          </p>
+          <div id="tripLocationsList" style="margin-bottom:12px;"></div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <input type="text" id="newTripLocationName" placeholder="Location name"
+              style="flex:1;min-width:160px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
+            <button class="btn btn-primary" onclick="addTripLocationManual()">+ Add</button>
+          </div>
         </div>
       </div>
     </div>
@@ -5746,6 +5919,9 @@ auth.onAuthStateChanged(async function(user) {
   // Load settings (events count, dark mode)
   loadSettings();
 
+  // Init trips module (locations, settings, active trip check, notifications)
+  initTripsModule();
+
   // Show feedback button for all logged-in users
   initFeedbackFab();
 
@@ -5765,7 +5941,7 @@ auth.onAuthStateChanged(async function(user) {
 
 // Route → tab element + optional setup
 var ROUTE_MAP = {
-  'dashboard':   { tab: null, placeholder: { name: 'Dashboard', desc: 'Overview of your studio at a glance.', badge: 'new' } },
+  'dashboard':   { tab: 'dashboardTab', setup: function() { renderDashboardQuickActions(); } },
   'jobs':        { tab: 'productionTab', setup: function() {
     // Show jobs list, hide detail/build views
     var jobsView = document.getElementById('productionJobsView');
@@ -5823,6 +5999,9 @@ var ROUTE_MAP = {
   'auditlog':    { tab: 'auditLogTab' },
   'financials':  { tab: null, placeholder: { name: 'Financials', desc: 'Revenue, costs, P&L.', badge: 'new' } },
   'settings':    { tab: 'settingsTab' },
+  'trips':       { tab: 'tripsTab', setup: function() { if (!tripsLoaded) loadTrips(); switchTripsSubView('history'); checkForActiveTrip(); } },
+  'expenses':    { tab: null, placeholder: { name: 'Expenses', desc: 'Track business expenses, categorize for tax time.', badge: 'new' } },
+  'reports':     { tab: null, placeholder: { name: 'Reports', desc: 'Tax reports, mileage summaries, expense exports.', badge: 'new' } },
   'teach':       { tab: null, placeholder: { name: 'Teach', desc: 'Coming when Studio 2 opens \u2014 classes, workshops, scheduling.', badge: 'future' } },
   // Legacy routes for backward compatibility
   'schedule':    { tab: 'scheduleTab' },
@@ -5839,10 +6018,11 @@ var SECTION_ROUTES = {
   'market': ['social', 'blog', 'newsletter', 'stories'],
   'sell':   ['pos', 'events', 'orders', 'commissions', 'wholesale', 'galleries', 'receipts'],
   'ship':   ['pack', 'ship'],
+  'run':    ['trips', 'expenses', 'reports'],
   'manage': ['products', 'inventory', 'customers', 'images', 'website', 'employees', 'contacts', 'analytics', 'auditlog', 'financials', 'settings']
 };
 
-var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab'];
+var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab'];
 
 var currentRoute = 'dashboard';
 
@@ -5917,6 +6097,9 @@ function lazyLoadForRoute(route) {
   if (route === 'social') { if (!socialMediaLoaded) loadSocialMedia(); if (!productsLoaded) loadProducts(); }
   if (route === 'blog') { if (!blogLoaded) loadBlog(); }
   if (route === 'newsletter') { if (!newsletterLoaded) loadNewsletter(); }
+  if (route === 'trips') {
+    if (!tripsLoaded) loadTrips();
+  }
   if (route === 'pack') {
     if (!ordersLoaded) loadOrders();
   }
@@ -6040,7 +6223,7 @@ function hideSidebar() {
 // ============================================================
 // Settings Sub-Tabs
 // ============================================================
-var settingsSubViews = ['general', 'payments', 'shipping', 'integrations', 'workshop'];
+var settingsSubViews = ['general', 'payments', 'shipping', 'integrations', 'workshop', 'trips'];
 function switchSettingsSubView(view) {
   // Hide all sub-views
   settingsSubViews.forEach(function(v) {
@@ -6058,6 +6241,8 @@ function switchSettingsSubView(view) {
   document.querySelectorAll('#settingsSubNav .view-tab').forEach(function(btn) {
     if (btn.textContent.toLowerCase().trim() === view) btn.classList.add('active');
   });
+  // Trips settings lazy load
+  if (view === 'trips') loadTripsSettings();
 }
 
 // ============================================================
@@ -23776,6 +23961,1093 @@ function resetTestingProgress() {
   renderTestingMode();
   showToast('Testing progress reset.');
 }
+
+// ============================================================
+// BUSINESS TRIPS & MILEAGE TRACKER
+// ============================================================
+
+var TRIPS_PATH = 'shirglassworks/trips';
+var TRIP_LOCATIONS_PATH = 'shirglassworks/tripLocations';
+var TRIP_SETTINGS_PATH = 'shirglassworks/settings/trips';
+var QUICK_ACTIONS_PATH = 'shirglassworks/quickActions';
+
+var tripsData = [];
+var tripsLoaded = false;
+var tripLocationsData = {};
+var tripLocationsLoaded = false;
+var tripSettingsData = { irsRates: { '2025': 70, '2026': 70 }, knownLocations: ['home-studio', 'new-studio'] };
+var activeTripData = null; // current user's open trip
+var selectedTripPurpose = null;
+var tripMilesSource = null;
+var tripPulseTimer = null;
+
+// Trip purpose options
+var TRIP_PURPOSES = [
+  { key: 'fair-market', icon: '🎪', label: 'Fair/Market' },
+  { key: 'vendor', icon: '🏭', label: 'Vendor' },
+  { key: 'supplies', icon: '🛒', label: 'Supplies' },
+  { key: 'studio-run', icon: '🏠', label: 'Studio Run' },
+  { key: 'bank', icon: '🏦', label: 'Bank' },
+  { key: 'delivery', icon: '📦', label: 'Delivery' },
+  { key: 'other', icon: '✏️', label: 'Other' }
+];
+
+// Quick action tile definitions
+var QUICK_ACTION_DEFS = {
+  'start-trip': { icon: '🚗', label: 'Start Trip', action: function() { openStartTripModal(); } },
+  'add-inventory': { icon: '📸', label: 'Add to Inventory', action: function() { navigateTo('inventory'); } },
+  'start-production-job': { icon: '🔨', label: 'Start Job', action: function() { navigateTo('jobs'); } },
+  'new-sale': { icon: '💳', label: 'New Sale', action: function() { navigateTo('pos'); } },
+  'mark-shipped': { icon: '📦', label: 'Mark Shipped', action: function() { navigateTo('ship'); } }
+};
+var DEFAULT_QUICK_ACTIONS = ['start-trip', 'add-inventory', 'start-production-job'];
+
+// ─── Load Functions ────────────────────────────────────────
+
+function loadTrips() {
+  var user = auth.currentUser;
+  if (!user) return;
+  var loading = document.getElementById('tripsLoading');
+  if (loading) loading.style.display = '';
+
+  var path = TRIPS_PATH + '/' + user.uid;
+  db.ref(path).orderByChild('startTime').limitToLast(200).once('value').then(function(snap) {
+    var val = snap.val();
+    tripsData = val ? Object.keys(val).map(function(k) { var t = val[k]; t.id = k; return t; }) : [];
+    tripsData.sort(function(a, b) { return (b.startTime || '').localeCompare(a.startTime || ''); });
+    tripsLoaded = true;
+    // Check for active trip
+    activeTripData = tripsData.find(function(t) { return t.status === 'open'; }) || null;
+    if (activeTripData) showTripPulsingIndicator();
+    renderTripsHistory();
+    if (loading) loading.style.display = 'none';
+  }).catch(function(err) {
+    console.error('Error loading trips:', err);
+    if (loading) loading.style.display = 'none';
+  });
+}
+
+function loadTripLocations() {
+  db.ref(TRIP_LOCATIONS_PATH).once('value').then(function(snap) {
+    tripLocationsData = snap.val() || {};
+    tripLocationsLoaded = true;
+    // Auto-seed default locations if empty
+    if (Object.keys(tripLocationsData).length === 0 && isAdmin()) {
+      var seeds = {
+        'home-studio': { label: 'Home Studio', lat: 0, lng: 0, useCount: 0, lastUsed: new Date().toISOString() },
+        'new-studio': { label: 'New Studio', lat: 0, lng: 0, useCount: 0, lastUsed: new Date().toISOString() }
+      };
+      db.ref(TRIP_LOCATIONS_PATH).set(seeds).then(function() {
+        tripLocationsData = seeds;
+      }).catch(function() {});
+    }
+  });
+}
+
+function loadTripSettings() {
+  db.ref(TRIP_SETTINGS_PATH).once('value').then(function(snap) {
+    var val = snap.val();
+    if (val) {
+      tripSettingsData = val;
+      if (!tripSettingsData.irsRates) tripSettingsData.irsRates = { '2025': 70, '2026': 70 };
+    } else if (isAdmin()) {
+      // Auto-seed defaults
+      var defaults = { irsRates: { '2025': 70, '2026': 70 }, knownLocations: ['home-studio', 'new-studio'] };
+      db.ref(TRIP_SETTINGS_PATH).set(defaults).then(function() {
+        tripSettingsData = defaults;
+      }).catch(function() {}); // silent if write fails
+    }
+  });
+}
+
+// ─── Dashboard Quick Actions ────────────────────────────────
+
+function renderDashboardQuickActions() {
+  var container = document.getElementById('quickActionsRow');
+  if (!container) return;
+  var user = auth.currentUser;
+  if (!user) { container.innerHTML = ''; return; }
+
+  // Load frequency data
+  db.ref(QUICK_ACTIONS_PATH + '/' + user.uid).once('value').then(function(snap) {
+    var freq = snap.val() || {};
+    // Sort by count desc, pick top 3
+    var allKeys = Object.keys(QUICK_ACTION_DEFS);
+    allKeys.sort(function(a, b) {
+      var ca = freq[a] ? freq[a].count : 0;
+      var cb = freq[b] ? freq[b].count : 0;
+      return cb - ca;
+    });
+    // If no data, use defaults
+    var hasAnyData = allKeys.some(function(k) { return freq[k] && freq[k].count > 0; });
+    var top3 = hasAnyData ? allKeys.slice(0, 3) : DEFAULT_QUICK_ACTIONS;
+
+    var html = '';
+    top3.forEach(function(key) {
+      var def = QUICK_ACTION_DEFS[key];
+      if (!def) return;
+      html += '<div class="quick-action-tile" onclick="triggerQuickAction(\'' + key + '\')">' +
+        '<div class="qa-icon">' + def.icon + '</div>' +
+        '<div class="qa-label">' + esc(def.label) + '</div>' +
+      '</div>';
+    });
+    container.innerHTML = html;
+  });
+}
+
+function triggerQuickAction(key) {
+  var def = QUICK_ACTION_DEFS[key];
+  if (def && def.action) def.action();
+}
+
+function incrementQuickAction(actionKey) {
+  var user = auth.currentUser;
+  if (!user) return;
+  var ref = db.ref(QUICK_ACTIONS_PATH + '/' + user.uid + '/' + actionKey);
+  ref.child('count').set(firebase.database.ServerValue.increment(1));
+  ref.child('lastUsed').set(new Date().toISOString());
+}
+
+// ─── Check for Active Trip ──────────────────────────────────
+
+function checkForActiveTrip() {
+  var user = auth.currentUser;
+  if (!user) return;
+  db.ref(TRIPS_PATH + '/' + user.uid).orderByChild('status').equalTo('open').limitToLast(1).once('value').then(function(snap) {
+    var val = snap.val();
+    if (val) {
+      var key = Object.keys(val)[0];
+      activeTripData = val[key];
+      activeTripData.id = key;
+      showTripPulsingIndicator();
+      renderActiveTripBanner();
+    } else {
+      activeTripData = null;
+      hideTripPulsingIndicator();
+    }
+  });
+}
+
+// ─── Pulsing Indicator ──────────────────────────────────────
+
+function showTripPulsingIndicator() {
+  var el = document.getElementById('tripPulsingIndicator');
+  if (el) el.style.display = '';
+  updatePulseLabel();
+  if (tripPulseTimer) clearInterval(tripPulseTimer);
+  tripPulseTimer = setInterval(updatePulseLabel, 60000);
+}
+
+function hideTripPulsingIndicator() {
+  var el = document.getElementById('tripPulsingIndicator');
+  if (el) el.style.display = 'none';
+  if (tripPulseTimer) { clearInterval(tripPulseTimer); tripPulseTimer = null; }
+}
+
+function updatePulseLabel() {
+  if (!activeTripData || !activeTripData.startTime) return;
+  var elapsed = Date.now() - new Date(activeTripData.startTime).getTime();
+  var mins = Math.floor(elapsed / 60000);
+  var hrs = Math.floor(mins / 60);
+  mins = mins % 60;
+  var label = hrs > 0 ? hrs + 'h ' + mins + 'm' : mins + 'm';
+  var el = document.getElementById('tripPulseLabel');
+  if (el) el.textContent = 'Trip in progress · ' + label;
+}
+
+// ─── Active Trip Banner ─────────────────────────────────────
+
+function renderActiveTripBanner() {
+  var banner = document.getElementById('activeTripBanner');
+  if (!banner) return;
+  if (!activeTripData) { banner.style.display = 'none'; return; }
+  var elapsed = Date.now() - new Date(activeTripData.startTime).getTime();
+  var mins = Math.floor(elapsed / 60000);
+  var hrs = Math.floor(mins / 60);
+  mins = mins % 60;
+  var timeStr = hrs > 0 ? hrs + 'h ' + mins + 'm' : mins + 'm';
+  var dest = activeTripData.destination ? activeTripData.destination.label : 'Unknown';
+  banner.style.display = '';
+  banner.innerHTML = '<div style="background:linear-gradient(135deg,#f59e0b,#d97706);color:white;border-radius:10px;padding:16px 20px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;" onclick="openEndTripSheet()">' +
+    '<div>' +
+      '<div style="font-weight:700;font-size:1rem;">🚗 Trip in Progress</div>' +
+      '<div style="font-size:0.85rem;opacity:0.9;">To ' + esc(dest) + ' · ' + timeStr + '</div>' +
+    '</div>' +
+    '<button class="btn" style="background:white;color:#d97706;font-weight:700;border:none;padding:8px 16px;border-radius:8px;font-size:0.85rem;">End Trip</button>' +
+  '</div>';
+}
+
+// ─── Start Trip ─────────────────────────────────────────────
+
+function openStartTripModal() {
+  // Check for existing open trip first
+  if (activeTripData) {
+    showToast('You already have an open trip. End it first.', true);
+    openEndTripSheet();
+    return;
+  }
+
+  var modal = document.getElementById('startTripModal');
+  if (modal) modal.style.display = 'flex';
+
+  // Load locations if not loaded
+  if (!tripLocationsLoaded) loadTripLocations();
+  loadTripSettings();
+
+  // GPS
+  var statusEl = document.getElementById('startTripGpsStatus');
+  var originSelect = document.getElementById('startTripOrigin');
+  originSelect.innerHTML = '<option value="">Detecting location...</option>';
+
+  if (!navigator.geolocation) {
+    statusEl.textContent = '⚠️ GPS not available — select origin manually';
+    populateOriginDropdown(null);
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    function(pos) {
+      var lat = pos.coords.latitude;
+      var lng = pos.coords.longitude;
+      statusEl.textContent = '📍 Location found';
+      populateOriginDropdown({ lat: lat, lng: lng });
+    },
+    function(err) {
+      statusEl.textContent = '⚠️ Could not get GPS — select origin manually';
+      populateOriginDropdown(null);
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+  );
+
+  // Populate destination datalist
+  populateDestinationList();
+}
+
+function populateOriginDropdown(gpsCoords) {
+  var select = document.getElementById('startTripOrigin');
+  var options = '<option value="">-- Select Origin --</option>';
+
+  // Find nearest location if GPS available
+  var nearestKey = null;
+  if (gpsCoords && tripLocationsLoaded) {
+    var minDist = Infinity;
+    Object.keys(tripLocationsData).forEach(function(k) {
+      var loc = tripLocationsData[k];
+      if (!loc.lat || !loc.lng) return;
+      var dist = haversineMeters(gpsCoords.lat, gpsCoords.lng, loc.lat, loc.lng);
+      if (dist < minDist) { minDist = dist; nearestKey = k; }
+    });
+    if (minDist > 500) nearestKey = null; // not close enough
+  }
+
+  // Add locations sorted by use count
+  var locKeys = Object.keys(tripLocationsData);
+  locKeys.sort(function(a, b) {
+    return (tripLocationsData[b].useCount || 0) - (tripLocationsData[a].useCount || 0);
+  });
+  locKeys.forEach(function(k) {
+    var loc = tripLocationsData[k];
+    var selected = k === nearestKey ? ' selected' : '';
+    options += '<option value="' + k + '"' + selected + '>' + esc(loc.label || k) + '</option>';
+  });
+
+  // Also check studio locations
+  Object.keys(studioLocations).forEach(function(k) {
+    var sl = studioLocations[k];
+    var alreadyInTrips = locKeys.some(function(lk) {
+      return tripLocationsData[lk].label === sl.name;
+    });
+    if (!alreadyInTrips) {
+      options += '<option value="studio_' + k + '">' + esc(sl.name) + ' (Studio)</option>';
+    }
+  });
+
+  select.innerHTML = options;
+}
+
+function populateDestinationList() {
+  var datalist = document.getElementById('destinationList');
+  if (!datalist) return;
+  var html = '';
+  var locKeys = Object.keys(tripLocationsData);
+  locKeys.sort(function(a, b) {
+    return (tripLocationsData[b].useCount || 0) - (tripLocationsData[a].useCount || 0);
+  });
+  locKeys.forEach(function(k) {
+    var loc = tripLocationsData[k];
+    html += '<option value="' + esc(loc.label || k) + '">';
+  });
+  datalist.innerHTML = html;
+}
+
+function closeStartTripModal() {
+  var modal = document.getElementById('startTripModal');
+  if (modal) modal.style.display = 'none';
+}
+
+function confirmStartTrip() {
+  var user = auth.currentUser;
+  if (!user) { showToast('Not signed in', true); return; }
+
+  var originKey = document.getElementById('startTripOrigin').value;
+  var destInput = document.getElementById('startTripDestination').value.trim();
+
+  if (!originKey) { showToast('Select an origin', true); return; }
+  if (!destInput) { showToast('Enter a destination', true); return; }
+
+  // Resolve origin
+  var origin = { label: 'Unknown', lat: 0, lng: 0, geocoded: false };
+  if (originKey.startsWith('studio_')) {
+    var studioKey = originKey.replace('studio_', '');
+    var sl = studioLocations[studioKey];
+    if (sl) origin = { label: sl.name, lat: sl.lat, lng: sl.lng, geocoded: true };
+  } else if (tripLocationsData[originKey]) {
+    var loc = tripLocationsData[originKey];
+    origin = { label: loc.label || originKey, lat: loc.lat || 0, lng: loc.lng || 0, geocoded: !!loc.lat };
+  }
+
+  // Resolve destination — check if it matches existing location
+  var destination = { label: destInput, lat: 0, lng: 0, geocoded: false };
+  var matchedDestKey = Object.keys(tripLocationsData).find(function(k) {
+    return (tripLocationsData[k].label || '').toLowerCase() === destInput.toLowerCase();
+  });
+  if (matchedDestKey) {
+    var dl = tripLocationsData[matchedDestKey];
+    destination = { label: dl.label, lat: dl.lat || 0, lng: dl.lng || 0, geocoded: !!dl.lat };
+  }
+
+  // Get IRS rate for current year
+  var year = new Date().getFullYear();
+  var rate = tripSettingsData.irsRates ? (tripSettingsData.irsRates[year] || tripSettingsData.irsRates[year - 1] || 70) : 70;
+
+  var tripRef = db.ref(TRIPS_PATH + '/' + user.uid).push();
+  var tripData = {
+    tripId: tripRef.key,
+    driverId: user.uid,
+    driverName: user.displayName || user.email || 'Unknown',
+    status: 'open',
+    startTime: new Date().toISOString(),
+    endTime: null,
+    origin: origin,
+    destination: destination,
+    miles: 0,
+    milesSource: null,
+    purpose: null,
+    notes: '',
+    irsRateYear: year,
+    irsRateCentsPerMile: rate,
+    deductibleValue: 0,
+    expenses: []
+  };
+
+  tripRef.set(tripData).then(function() {
+    // Add destination to tripLocations if new
+    if (!matchedDestKey) {
+      var slug = destInput.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      db.ref(TRIP_LOCATIONS_PATH + '/' + slug).set({
+        label: destInput, lat: 0, lng: 0, useCount: 0, lastUsed: new Date().toISOString()
+      });
+      tripLocationsData[slug] = { label: destInput, lat: 0, lng: 0, useCount: 0 };
+    }
+
+    activeTripData = tripData;
+    activeTripData.id = tripRef.key;
+    showTripPulsingIndicator();
+    closeStartTripModal();
+    showToast('Trip started — drive safe! 🚗');
+    writeAudit('create', 'trips', tripRef.key);
+    emitTestingEvent('trip_started', { tripId: tripRef.key });
+    emitTestingEvent('trip_destination_set', { tripId: tripRef.key, destination: destInput });
+
+    // Schedule 4hr notification
+    scheduleTripReminder();
+
+    // Refresh if on trips page
+    if (currentRoute === 'trips') { tripsLoaded = false; loadTrips(); }
+    if (currentRoute === 'dashboard') renderActiveTripBanner();
+  }).catch(function(err) {
+    showToast('Error starting trip: ' + err.message, true);
+  });
+}
+
+// ─── End Trip ───────────────────────────────────────────────
+
+function openEndTripSheet() {
+  if (!activeTripData) { showToast('No active trip', true); return; }
+  var sheet = document.getElementById('endTripSheet');
+  if (sheet) sheet.style.display = '';
+
+  // Elapsed time
+  var elapsed = Date.now() - new Date(activeTripData.startTime).getTime();
+  var mins = Math.floor(elapsed / 60000);
+  var hrs = Math.floor(mins / 60);
+  mins = mins % 60;
+  var elapsedEl = document.getElementById('endTripElapsed');
+  if (elapsedEl) elapsedEl.textContent = '⏱️ ' + (hrs > 0 ? hrs + 'h ' + mins + 'm' : mins + ' minutes');
+
+  // Pre-fill destination
+  var destEl = document.getElementById('endTripDestination');
+  if (destEl && activeTripData.destination) destEl.value = activeTripData.destination.label || '';
+
+  // Reset purpose selection
+  selectedTripPurpose = null;
+  renderPurposeQuickPick();
+
+  // Auto-calculate miles via Maps API
+  var milesEl = document.getElementById('endTripMiles');
+  var sourceEl = document.getElementById('endTripMilesSource');
+  if (milesEl) milesEl.value = '';
+  if (sourceEl) sourceEl.textContent = 'Calculating...';
+  tripMilesSource = null;
+
+  calculateTripDistance();
+
+  // Populate destination datalist
+  populateDestinationList();
+}
+
+function renderPurposeQuickPick() {
+  var container = document.getElementById('purposeQuickPick');
+  if (!container) return;
+  var html = '';
+  TRIP_PURPOSES.forEach(function(p) {
+    var selected = selectedTripPurpose === p.key ? ' selected' : '';
+    html += '<div class="purpose-chip' + selected + '" onclick="selectTripPurpose(\'' + p.key + '\')">' +
+      p.icon + ' ' + p.label + '</div>';
+  });
+  container.innerHTML = html;
+}
+
+function selectTripPurpose(key) {
+  selectedTripPurpose = key;
+  renderPurposeQuickPick();
+}
+
+function closeEndTripSheet() {
+  var sheet = document.getElementById('endTripSheet');
+  if (sheet) sheet.style.display = 'none';
+}
+
+function confirmEndTrip() {
+  if (!activeTripData) return;
+  var user = auth.currentUser;
+  if (!user) return;
+
+  var miles = parseFloat(document.getElementById('endTripMiles').value) || 0;
+  var destValue = document.getElementById('endTripDestination').value.trim();
+  var notes = document.getElementById('endTripNotes').value.trim();
+
+  if (!selectedTripPurpose) { showToast('Select a trip purpose', true); return; }
+  if (miles <= 0) { showToast('Enter the miles driven', true); return; }
+
+  var source = tripMilesSource || 'manual-override';
+  var rate = activeTripData.irsRateCentsPerMile || 70;
+  var deductible = Math.round(miles * (rate / 100) * 100) / 100;
+
+  // Update destination if changed
+  var destination = activeTripData.destination || { label: destValue, lat: 0, lng: 0, geocoded: false };
+  if (destValue && destValue !== destination.label) {
+    destination.label = destValue;
+  }
+
+  var updates = {
+    status: 'completed',
+    endTime: new Date().toISOString(),
+    miles: miles,
+    milesSource: source,
+    purpose: selectedTripPurpose,
+    notes: notes,
+    destination: destination,
+    deductibleValue: deductible
+  };
+
+  var tripPath = TRIPS_PATH + '/' + user.uid + '/' + activeTripData.id;
+  db.ref(tripPath).update(updates).then(function() {
+    // Increment location use counts
+    incrementLocationUseCount(activeTripData.origin);
+    incrementLocationUseCount(destination);
+
+    // Increment quick action count
+    incrementQuickAction('start-trip');
+
+    hideTripPulsingIndicator();
+    closeEndTripSheet();
+    activeTripData = null;
+    showToast('Trip logged — ' + miles.toFixed(1) + ' miles · $' + deductible.toFixed(2) + ' deductible');
+    writeAudit('update', 'trips', activeTripData ? activeTripData.id : 'unknown');
+    emitTestingEvent('trip_completed', { tripId: activeTripData ? activeTripData.id : null, miles: miles, deductible: deductible });
+
+    // Cancel reminder
+    cancelTripReminder();
+
+    // Refresh
+    tripsLoaded = false;
+    if (currentRoute === 'trips') loadTrips();
+    if (currentRoute === 'dashboard') {
+      var banner = document.getElementById('activeTripBanner');
+      if (banner) banner.style.display = 'none';
+    }
+  }).catch(function(err) {
+    showToast('Error ending trip: ' + err.message, true);
+  });
+}
+
+function incrementLocationUseCount(locationObj) {
+  if (!locationObj || !locationObj.label) return;
+  var slug = locationObj.label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  var ref = db.ref(TRIP_LOCATIONS_PATH + '/' + slug);
+  ref.child('useCount').set(firebase.database.ServerValue.increment(1));
+  ref.child('lastUsed').set(new Date().toISOString());
+  // Ensure label is set
+  ref.child('label').set(locationObj.label);
+}
+
+// ─── Distance Calculation (Google Maps Directions API) ──────
+
+function calculateTripDistance() {
+  if (!activeTripData) return;
+  var origin = activeTripData.origin;
+  var dest = activeTripData.destination;
+
+  if (!origin || !dest) {
+    setManualMilesMode('No origin/destination');
+    return;
+  }
+
+  // Try using coordinates if available
+  var originStr = origin.lat && origin.lng ? origin.lat + ',' + origin.lng : origin.label;
+  var destStr = dest.lat && dest.lng ? dest.lat + ',' + dest.lng : dest.label;
+
+  if (!originStr || !destStr) {
+    setManualMilesMode('Missing location data');
+    return;
+  }
+
+  // Use Google Maps Directions API via proxy or direct
+  var apiKey = 'AIzaSyDZevV_F87F1AKGqUPKuNIrHMybOc61D7s';
+  var url = 'https://maps.googleapis.com/maps/api/directions/json?origin=' +
+    encodeURIComponent(originStr) + '&destination=' + encodeURIComponent(destStr) +
+    '&mode=driving&key=' + apiKey;
+
+  // Note: Direct API call may be blocked by CORS. Use distance matrix via JS API as fallback
+  try {
+    if (window.google && window.google.maps) {
+      var service = new google.maps.DistanceMatrixService();
+      service.getDistanceMatrix({
+        origins: [originStr],
+        destinations: [destStr],
+        travelMode: 'DRIVING',
+        unitSystem: google.maps.UnitSystem.IMPERIAL
+      }, function(response, status) {
+        if (status === 'OK' && response.rows[0] && response.rows[0].elements[0].status === 'OK') {
+          var distMeters = response.rows[0].elements[0].distance.value;
+          var miles = Math.round((distMeters / 1609.344) * 10) / 10;
+          document.getElementById('endTripMiles').value = miles;
+          document.getElementById('endTripMilesSource').textContent = '📍 via Google Maps';
+          tripMilesSource = 'maps-api';
+        } else {
+          setManualMilesMode('Maps unavailable');
+        }
+      });
+    } else {
+      setManualMilesMode('Enter miles manually');
+    }
+  } catch (e) {
+    setManualMilesMode('Enter miles manually');
+  }
+}
+
+function setManualMilesMode(reason) {
+  var sourceEl = document.getElementById('endTripMilesSource');
+  if (sourceEl) sourceEl.textContent = reason || 'Enter miles manually';
+  tripMilesSource = 'manual-override';
+}
+
+// ─── Haversine Distance ─────────────────────────────────────
+
+function haversineMeters(lat1, lng1, lat2, lng2) {
+  var R = 6371000;
+  var dLat = (lat2 - lat1) * Math.PI / 180;
+  var dLng = (lng2 - lng1) * Math.PI / 180;
+  var a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng/2) * Math.sin(dLng/2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+// ─── Trip Reminder (Push Notification fallback: in-app timer) ──
+
+var tripReminderTimer = null;
+
+function scheduleTripReminder() {
+  cancelTripReminder();
+  // 4 hours
+  tripReminderTimer = setTimeout(function() {
+    if (activeTripData) {
+      showToast('⚠️ You have an open trip — still traveling?');
+      // Also try browser notification
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('Shir Glassworks', {
+          body: 'You have an open trip — still traveling? Tap to end it.',
+          icon: '/favicon.svg'
+        });
+      }
+    }
+  }, 4 * 60 * 60 * 1000);
+}
+
+function cancelTripReminder() {
+  if (tripReminderTimer) { clearTimeout(tripReminderTimer); tripReminderTimer = null; }
+}
+
+// Request notification permission on first trip
+function requestNotificationPermission() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}
+
+// ─── On-launch safety net: check if user is near known location ──
+
+function checkForgottenTrip() {
+  if (!activeTripData) return;
+  if (!navigator.geolocation) return;
+
+  navigator.geolocation.getCurrentPosition(function(pos) {
+    var lat = pos.coords.latitude;
+    var lng = pos.coords.longitude;
+
+    // Check against studio locations
+    var nearLocation = null;
+    Object.keys(studioLocations).forEach(function(k) {
+      var sl = studioLocations[k];
+      if (haversineMeters(lat, lng, sl.lat, sl.lng) < 200) {
+        nearLocation = sl.name;
+      }
+    });
+    // Check trip locations too
+    if (!nearLocation) {
+      Object.keys(tripLocationsData).forEach(function(k) {
+        var tl = tripLocationsData[k];
+        if (tl.lat && tl.lng && haversineMeters(lat, lng, tl.lat, tl.lng) < 200) {
+          nearLocation = tl.label || k;
+        }
+      });
+    }
+
+    if (nearLocation) {
+      // Show soft prompt
+      var banner = document.getElementById('activeTripBanner');
+      if (banner && currentRoute === 'trips') {
+        banner.innerHTML += '<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:12px 16px;margin-bottom:12px;font-size:0.85rem;color:#92400e;">' +
+          '📍 Looks like you\'re back at <strong>' + esc(nearLocation) + '</strong> — ' +
+          '<a href="#" onclick="openEndTripSheet();return false;" style="color:#d97706;font-weight:600;">end your trip?</a>' +
+        '</div>';
+      }
+    }
+  }, function() {}, { enableHighAccuracy: false, timeout: 5000, maximumAge: 120000 });
+}
+
+// ─── Trips History View ─────────────────────────────────────
+
+function switchTripsSubView(view) {
+  var history = document.getElementById('tripsSubHistory');
+  var report = document.getElementById('tripsSubReport');
+  if (history) history.style.display = view === 'history' ? '' : 'none';
+  if (report) report.style.display = view === 'report' ? '' : 'none';
+
+  document.querySelectorAll('#tripsSubNav .view-tab').forEach(function(btn) { btn.classList.remove('active'); });
+  document.querySelectorAll('#tripsSubNav .view-tab').forEach(function(btn, i) {
+    if ((i === 0 && view === 'history') || (i === 1 && view === 'report')) btn.classList.add('active');
+  });
+
+  if (view === 'report') {
+    renderTaxReport();
+    emitTestingEvent('trip_report_viewed', {});
+  }
+}
+
+function renderTripsHistory() {
+  var headerActions = document.getElementById('tripsHeaderActions');
+  if (headerActions) {
+    headerActions.innerHTML = '<button class="btn btn-primary" onclick="openStartTripModal()">🚗 Start Trip</button>';
+  }
+
+  // Filters
+  var filtersEl = document.getElementById('tripsFilters');
+  if (filtersEl) {
+    var currentYear = new Date().getFullYear();
+    var currentMonth = new Date().getMonth();
+    filtersEl.innerHTML = '<select id="tripsMonthFilter" onchange="renderTripsList()" style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.85rem;">' +
+      '<option value="all">All Time</option>' +
+      '<option value="' + currentYear + '-' + (currentMonth + 1) + '" selected>This Month</option>' +
+      '<option value="' + currentYear + '-' + currentMonth + '">' + getMonthName(currentMonth - 1) + '</option>' +
+      '<option value="' + currentYear + '">This Year (' + currentYear + ')</option>' +
+      '<option value="' + (currentYear - 1) + '">' + (currentYear - 1) + '</option>' +
+    '</select>' +
+    (isAdmin() ? ' <label style="font-size:0.85rem;display:flex;align-items:center;gap:6px;"><input type="checkbox" id="tripsAllDrivers" onchange="loadAllDriversTrips()"> All Drivers</label>' : '');
+  }
+
+  renderActiveTripBanner();
+  renderTripsList();
+}
+
+function getMonthName(idx) {
+  var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return months[((idx % 12) + 12) % 12];
+}
+
+function renderTripsList() {
+  var container = document.getElementById('tripsList');
+  if (!container) return;
+
+  var completed = tripsData.filter(function(t) { return t.status === 'completed'; });
+
+  // Apply date filter
+  var filterVal = document.getElementById('tripsMonthFilter') ? document.getElementById('tripsMonthFilter').value : 'all';
+  if (filterVal !== 'all') {
+    var parts = filterVal.split('-');
+    var filterYear = parseInt(parts[0]);
+    var filterMonth = parts[1] ? parseInt(parts[1]) : null;
+    completed = completed.filter(function(t) {
+      var d = new Date(t.startTime);
+      if (filterMonth) return d.getFullYear() === filterYear && (d.getMonth() + 1) === filterMonth;
+      return d.getFullYear() === filterYear;
+    });
+  }
+
+  if (completed.length === 0) {
+    container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--warm-gray);"><p style="font-size:1.2rem;margin-bottom:8px;">No trips yet</p><p style="font-size:0.85rem;">Start your first business trip to begin tracking mileage.</p></div>';
+    return;
+  }
+
+  // Summary
+  var totalMiles = 0, totalDeductible = 0;
+  completed.forEach(function(t) { totalMiles += (t.miles || 0); totalDeductible += (t.deductibleValue || 0); });
+
+  var html = '<div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap;">' +
+    '<div style="background:var(--cream,#FAF6F0);border-radius:8px;padding:12px 18px;flex:1;min-width:120px;text-align:center;">' +
+      '<div style="font-size:1.5rem;font-weight:700;color:var(--charcoal);">' + completed.length + '</div>' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);">Trips</div>' +
+    '</div>' +
+    '<div style="background:var(--cream,#FAF6F0);border-radius:8px;padding:12px 18px;flex:1;min-width:120px;text-align:center;">' +
+      '<div style="font-size:1.5rem;font-weight:700;color:var(--charcoal);">' + totalMiles.toFixed(1) + '</div>' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);">Miles</div>' +
+    '</div>' +
+    '<div style="background:var(--cream,#FAF6F0);border-radius:8px;padding:12px 18px;flex:1;min-width:120px;text-align:center;">' +
+      '<div style="font-size:1.5rem;font-weight:700;color:var(--charcoal);">$' + totalDeductible.toFixed(2) + '</div>' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);">Deductible</div>' +
+    '</div>' +
+  '</div>';
+
+  // Trip rows
+  completed.forEach(function(t) {
+    var d = new Date(t.startTime);
+    var dateStr = (d.getMonth()+1) + '/' + d.getDate() + '/' + d.getFullYear();
+    var dest = t.destination ? t.destination.label : 'Unknown';
+    var purposeObj = TRIP_PURPOSES.find(function(p) { return p.key === t.purpose; });
+    var purposeIcon = purposeObj ? purposeObj.icon : '•';
+    var driverNote = t.driverName && t.driverId !== (auth.currentUser ? auth.currentUser.uid : '') ? ' · ' + esc(t.driverName) : '';
+
+    html += '<div style="background:white;border:1px solid #eee;border-radius:8px;padding:12px 16px;margin-bottom:8px;cursor:pointer;" onclick="toggleTripDetail(\'' + t.id + '\')">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+        '<div>' +
+          '<span style="font-weight:600;font-size:0.9rem;">' + purposeIcon + ' ' + esc(dest) + '</span>' +
+          '<div style="font-size:0.8rem;color:var(--warm-gray);">' + dateStr + driverNote + '</div>' +
+        '</div>' +
+        '<div style="text-align:right;">' +
+          '<div style="font-weight:600;">' + (t.miles || 0).toFixed(1) + ' mi</div>' +
+          '<div style="font-size:0.8rem;color:#059669;">$' + (t.deductibleValue || 0).toFixed(2) + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div id="tripDetail_' + t.id + '" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid #eee;font-size:0.85rem;color:var(--warm-gray);">' +
+        '<div>Origin: ' + esc(t.origin ? t.origin.label : 'Unknown') + '</div>' +
+        '<div>Destination: ' + esc(dest) + '</div>' +
+        '<div>Purpose: ' + (purposeObj ? purposeObj.icon + ' ' + purposeObj.label : t.purpose) + '</div>' +
+        '<div>Miles: ' + (t.miles || 0).toFixed(1) + ' (' + (t.milesSource || 'unknown') + ')</div>' +
+        '<div>IRS Rate: ' + (t.irsRateCentsPerMile || 0) + '¢/mi (' + (t.irsRateYear || '') + ')</div>' +
+        '<div>Deductible: $' + (t.deductibleValue || 0).toFixed(2) + '</div>' +
+        (t.notes ? '<div>Notes: ' + esc(t.notes) + '</div>' : '') +
+        '<div>Time: ' + formatTripTime(t.startTime) + ' → ' + formatTripTime(t.endTime) + '</div>' +
+      '</div>' +
+    '</div>';
+  });
+
+  container.innerHTML = html;
+}
+
+function toggleTripDetail(tripId) {
+  var el = document.getElementById('tripDetail_' + tripId);
+  if (el) {
+    el.style.display = el.style.display === 'none' ? '' : 'none';
+    emitTestingEvent('trip_history_viewed', { tripId: tripId });
+  }
+}
+
+function formatTripTime(iso) {
+  if (!iso) return '—';
+  var d = new Date(iso);
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+
+function loadAllDriversTrips() {
+  var checkbox = document.getElementById('tripsAllDrivers');
+  if (!checkbox || !isAdmin()) return;
+
+  if (checkbox.checked) {
+    // Load all drivers
+    db.ref(TRIPS_PATH).once('value').then(function(snap) {
+      var val = snap.val() || {};
+      tripsData = [];
+      Object.keys(val).forEach(function(uid) {
+        var userTrips = val[uid];
+        Object.keys(userTrips).forEach(function(k) {
+          var t = userTrips[k];
+          t.id = k;
+          t.driverId = uid;
+          tripsData.push(t);
+        });
+      });
+      tripsData.sort(function(a, b) { return (b.startTime || '').localeCompare(a.startTime || ''); });
+      renderTripsList();
+    });
+  } else {
+    tripsLoaded = false;
+    loadTrips();
+  }
+}
+
+// ─── Tax Report ─────────────────────────────────────────────
+
+function renderTaxReport() {
+  var container = document.getElementById('taxReportContent');
+  if (!container) return;
+
+  var currentYear = new Date().getFullYear();
+  var completed = tripsData.filter(function(t) {
+    return t.status === 'completed' && new Date(t.startTime).getFullYear() === currentYear;
+  });
+
+  var totalMiles = 0, totalDeductible = 0;
+  completed.forEach(function(t) { totalMiles += (t.miles || 0); totalDeductible += (t.deductibleValue || 0); });
+  var rate = tripSettingsData.irsRates ? (tripSettingsData.irsRates[currentYear] || 70) : 70;
+
+  var html = '<div style="margin-bottom:20px;">' +
+    '<div style="display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">' +
+      '<select id="taxReportYear" onchange="renderTaxReport()" style="padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+  for (var y = currentYear; y >= currentYear - 3; y--) {
+    html += '<option value="' + y + '"' + (y === currentYear ? ' selected' : '') + '>' + y + '</option>';
+  }
+  html += '</select>' +
+      '<button class="btn btn-secondary" style="font-size:0.82rem;" onclick="exportTripsCSV()">📄 Export CSV</button>' +
+      '<button class="btn btn-secondary" style="font-size:0.82rem;" onclick="printTaxReport()">🖨️ Print Report</button>' +
+    '</div>' +
+  '</div>';
+
+  // Summary cards
+  html += '<div style="display:flex;gap:16px;margin-bottom:24px;flex-wrap:wrap;">' +
+    '<div style="background:var(--cream,#FAF6F0);border-radius:8px;padding:16px 20px;flex:1;min-width:140px;">' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Total Trips</div>' +
+      '<div style="font-size:1.8rem;font-weight:700;margin-top:4px;">' + completed.length + '</div>' +
+    '</div>' +
+    '<div style="background:var(--cream,#FAF6F0);border-radius:8px;padding:16px 20px;flex:1;min-width:140px;">' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Total Miles</div>' +
+      '<div style="font-size:1.8rem;font-weight:700;margin-top:4px;">' + totalMiles.toFixed(1) + '</div>' +
+    '</div>' +
+    '<div style="background:var(--cream,#FAF6F0);border-radius:8px;padding:16px 20px;flex:1;min-width:140px;">' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">IRS Rate</div>' +
+      '<div style="font-size:1.8rem;font-weight:700;margin-top:4px;">' + rate + '¢</div>' +
+    '</div>' +
+    '<div style="background:#ecfdf5;border-radius:8px;padding:16px 20px;flex:1;min-width:140px;">' +
+      '<div style="font-size:0.78rem;color:#059669;text-transform:uppercase;letter-spacing:0.5px;">Total Deductible</div>' +
+      '<div style="font-size:1.8rem;font-weight:700;margin-top:4px;color:#059669;">$' + totalDeductible.toFixed(2) + '</div>' +
+    '</div>' +
+  '</div>';
+
+  // Trip table
+  if (completed.length > 0) {
+    html += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;">' +
+      '<thead><tr style="border-bottom:2px solid #eee;text-align:left;">' +
+        '<th style="padding:8px;">Date</th>' +
+        '<th style="padding:8px;">Driver</th>' +
+        '<th style="padding:8px;">Route</th>' +
+        '<th style="padding:8px;">Purpose</th>' +
+        '<th style="padding:8px;text-align:right;">Miles</th>' +
+        '<th style="padding:8px;text-align:right;">Deductible</th>' +
+      '</tr></thead><tbody>';
+    completed.forEach(function(t) {
+      var d = new Date(t.startTime);
+      var dateStr = (d.getMonth()+1) + '/' + d.getDate() + '/' + d.getFullYear();
+      var origin = t.origin ? t.origin.label : '?';
+      var dest = t.destination ? t.destination.label : '?';
+      var purposeObj = TRIP_PURPOSES.find(function(p) { return p.key === t.purpose; });
+      html += '<tr style="border-bottom:1px solid #f0f0f0;">' +
+        '<td style="padding:8px;">' + dateStr + '</td>' +
+        '<td style="padding:8px;">' + esc(t.driverName || 'Unknown') + '</td>' +
+        '<td style="padding:8px;">' + esc(origin) + ' → ' + esc(dest) + '</td>' +
+        '<td style="padding:8px;">' + (purposeObj ? purposeObj.icon + ' ' + purposeObj.label : t.purpose || '') + '</td>' +
+        '<td style="padding:8px;text-align:right;">' + (t.miles || 0).toFixed(1) + '</td>' +
+        '<td style="padding:8px;text-align:right;">$' + (t.deductibleValue || 0).toFixed(2) + '</td>' +
+      '</tr>';
+    });
+    html += '</tbody></table></div>';
+  }
+
+  container.innerHTML = html;
+}
+
+function exportTripsCSV() {
+  var yearEl = document.getElementById('taxReportYear');
+  var year = yearEl ? parseInt(yearEl.value) : new Date().getFullYear();
+  var completed = tripsData.filter(function(t) {
+    return t.status === 'completed' && new Date(t.startTime).getFullYear() === year;
+  });
+
+  var csv = 'Date,Driver,Origin,Destination,Purpose,Miles,IRS Rate (¢/mi),Deductible ($),Notes\n';
+  completed.forEach(function(t) {
+    var d = new Date(t.startTime);
+    var dateStr = (d.getMonth()+1) + '/' + d.getDate() + '/' + d.getFullYear();
+    csv += '"' + dateStr + '","' + (t.driverName || '') + '","' + (t.origin ? t.origin.label : '') + '","' +
+      (t.destination ? t.destination.label : '') + '","' + (t.purpose || '') + '",' +
+      (t.miles || 0).toFixed(1) + ',' + (t.irsRateCentsPerMile || 70) + ',' +
+      (t.deductibleValue || 0).toFixed(2) + ',"' + (t.notes || '').replace(/"/g, '""') + '"\n';
+  });
+
+  var blob = new Blob([csv], { type: 'text/csv' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'trip-mileage-report-' + year + '.csv';
+  a.click();
+  showToast('CSV exported');
+}
+
+function printTaxReport() {
+  window.print();
+}
+
+// ─── Settings: IRS Rates ────────────────────────────────────
+
+function renderIrsRates() {
+  var container = document.getElementById('irsRatesList');
+  if (!container) return;
+  var rates = tripSettingsData.irsRates || {};
+  var years = Object.keys(rates).sort().reverse();
+  if (years.length === 0) {
+    container.innerHTML = '<div style="padding:8px;color:var(--warm-gray);font-size:0.85rem;">No rates configured.</div>';
+    return;
+  }
+  var html = '';
+  years.forEach(function(y) {
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--cream,#FAF6F0);border-radius:6px;margin-bottom:6px;">' +
+      '<span style="font-weight:600;">' + y + '</span>' +
+      '<span>' + rates[y] + '¢/mile</span>' +
+      '<button class="btn btn-secondary" style="font-size:0.75rem;padding:4px 10px;color:#E53935;" onclick="removeIrsRate(\'' + y + '\')">Remove</button>' +
+    '</div>';
+  });
+  container.innerHTML = html;
+}
+
+function addIrsRate() {
+  var yearEl = document.getElementById('newIrsYear');
+  var rateEl = document.getElementById('newIrsRate');
+  var year = yearEl ? yearEl.value.trim() : '';
+  var rate = rateEl ? parseFloat(rateEl.value) : 0;
+  if (!year || rate <= 0) { showToast('Enter year and rate', true); return; }
+
+  db.ref(TRIP_SETTINGS_PATH + '/irsRates/' + year).set(rate).then(function() {
+    tripSettingsData.irsRates[year] = rate;
+    yearEl.value = '';
+    rateEl.value = '';
+    renderIrsRates();
+    showToast('IRS rate saved: ' + year + ' = ' + rate + '¢/mile');
+    writeAudit('update', 'settings', 'irsRate-' + year);
+  });
+}
+
+function removeIrsRate(year) {
+  if (!confirm('Remove IRS rate for ' + year + '?')) return;
+  db.ref(TRIP_SETTINGS_PATH + '/irsRates/' + year).remove().then(function() {
+    delete tripSettingsData.irsRates[year];
+    renderIrsRates();
+    showToast('Rate removed');
+  });
+}
+
+// ─── Settings: Trip Locations ───────────────────────────────
+
+function renderTripLocations() {
+  var container = document.getElementById('tripLocationsList');
+  if (!container) return;
+  var keys = Object.keys(tripLocationsData);
+  keys.sort(function(a, b) { return (tripLocationsData[b].useCount || 0) - (tripLocationsData[a].useCount || 0); });
+  if (keys.length === 0) {
+    container.innerHTML = '<div style="padding:8px;color:var(--warm-gray);font-size:0.85rem;">No saved locations yet. Locations are auto-added when you start trips.</div>';
+    return;
+  }
+  var html = '';
+  keys.forEach(function(k) {
+    var loc = tripLocationsData[k];
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--cream,#FAF6F0);border-radius:6px;margin-bottom:6px;">' +
+      '<div>' +
+        '<div style="font-weight:600;font-size:0.9rem;">' + esc(loc.label || k) + '</div>' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);">Used ' + (loc.useCount || 0) + ' times</div>' +
+      '</div>' +
+      '<button class="btn btn-secondary" style="font-size:0.75rem;padding:4px 10px;color:#E53935;" onclick="removeTripLocation(\'' + k + '\')">Remove</button>' +
+    '</div>';
+  });
+  container.innerHTML = html;
+}
+
+function addTripLocationManual() {
+  var nameEl = document.getElementById('newTripLocationName');
+  var name = nameEl ? nameEl.value.trim() : '';
+  if (!name) { showToast('Enter a location name', true); return; }
+  var slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  db.ref(TRIP_LOCATIONS_PATH + '/' + slug).set({
+    label: name, lat: 0, lng: 0, useCount: 0, lastUsed: new Date().toISOString()
+  }).then(function() {
+    tripLocationsData[slug] = { label: name, lat: 0, lng: 0, useCount: 0 };
+    nameEl.value = '';
+    renderTripLocations();
+    showToast('Location added: ' + name);
+  });
+}
+
+function removeTripLocation(key) {
+  if (!confirm('Remove this location?')) return;
+  db.ref(TRIP_LOCATIONS_PATH + '/' + key).remove().then(function() {
+    delete tripLocationsData[key];
+    renderTripLocations();
+    showToast('Location removed');
+  });
+}
+
+// ─── Init: Load on auth ─────────────────────────────────────
+
+function initTripsModule() {
+  loadTripLocations();
+  loadTripSettings();
+  checkForActiveTrip();
+  requestNotificationPermission();
+  // Forgotten trip check
+  setTimeout(checkForgottenTrip, 3000);
+}
+
+// ─── Settings lazy load for trips sub-view ──────────────────
+
+function loadTripsSettings() {
+  loadTripLocations();
+  loadTripSettings();
+  // Wait briefly for data, then render
+  setTimeout(function() {
+    renderIrsRates();
+    renderTripLocations();
+  }, 500);
+}
+
+// ============================================================
+// END BUSINESS TRIPS
+// ============================================================
 
 function showToast(message, isError) {
   var container = document.getElementById('toastContainer');

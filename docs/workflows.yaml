@@ -1604,6 +1604,79 @@ workflows:
       - can I filter the audit log by user
       - what is the Mode column
 
+  # ============================================================
+  # RUNNING (Business Operations)
+  # ============================================================
+
+  - id: run.business-trips
+    section: Running
+    title: Log a Business Trip for Mileage Deduction
+    status: live
+    roles: [owner, manager, staff]
+    nav: [Run, Trips]
+    description: GPS-assisted business trip logging for IRS standard mileage deduction.
+    steps:
+      - Tap Start Trip from dashboard Quick Action or Run → Trips
+      - GPS captures departure coordinates and auto-matches to known location
+      - Select or type destination (auto-saved to learned location library)
+      - Confirm to start trip — pulsing amber indicator appears across all screens
+      - Drive to destination
+      - Tap pulsing indicator to open End Trip action sheet
+      - Miles auto-calculated via Google Maps (manual override available)
+      - Select purpose (Fair/Market, Vendor, Supplies, Studio Run, Bank, Delivery, Other)
+      - Add optional notes and confirm
+      - Trip saved with IRS deductible value — toast shows miles and dollar amount
+    ui:
+      screen: Run → Trips
+      route: trips
+      tab_id: tripsTab
+      elements:
+        - label: "Start Trip"
+          type: button
+          action: Opens Start Trip modal with GPS origin detection
+        - label: "Pulsing Indicator"
+          type: fixed overlay
+          action: Opens End Trip action sheet from any screen
+        - label: "Tax Report"
+          type: sub-tab
+          action: Shows year summary with CSV export and print
+      filters:
+        - Month picker (this month, last month, year, all time)
+        - All Drivers toggle (admin only)
+      summary_cards: [Trips, Miles, Deductible]
+      gotchas:
+        - Only one open trip per user at a time
+        - IRS rate is locked at trip creation — no retroactive recalculation
+        - Google Maps distance may fail; manual entry always available
+        - 4-hour reminder notification if trip left open
+    data_paths:
+      trips: shirglassworks/trips/{userId}/{tripId}
+      location_library: shirglassworks/tripLocations/{label_slug}
+      irs_rates: shirglassworks/settings/trips/irsRates/{year}
+      quick_action_counts: shirglassworks/quickActions/{userId}/{actionKey}
+    safety_nets:
+      - 4-hour in-app + browser notification if trip still open
+      - On-launch GPS check — prompts to end trip if near known location
+
+  - id: run.quick-actions
+    section: Running
+    title: Dashboard Quick Actions
+    status: live
+    roles: [owner, manager, staff]
+    nav: [Dashboard]
+    description: Per-user frequency-sorted action tiles on the dashboard for fast workflow initiation.
+    steps:
+      - Open Dashboard (default landing page)
+      - Three Quick Action tiles shown, sorted by personal usage frequency
+      - Tap a tile to initiate the workflow inline
+      - Completing the workflow increments the tile's frequency counter
+      - Tiles re-sort over time based on actual usage
+    data_paths:
+      tracking: shirglassworks/quickActions/{userId}/{actionKey}
+    notes: >
+      Default seed order: Start Trip, Add to Inventory, Start Production Job.
+      Available actions: start-trip, add-inventory, start-production-job, new-sale, mark-shipped.
+
 # ============================================================
 # NOT YET BUILT
 # ============================================================
