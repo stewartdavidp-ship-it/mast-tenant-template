@@ -5,6 +5,7 @@
 *.pem
 serviceAccountKey.json
 *-credentials.json
+.mcp.json
 
 # OS files
 .DS_Store
@@ -12,6 +13,7 @@ Thumbs.db
 
 # Node
 node_modules/
+dist/
 
 # Python
 __pycache__/

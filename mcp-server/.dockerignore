@@ -1,0 +1,6 @@
+node_modules
+dist
+*.md
+.git
+.github
+e2e-test.sh
