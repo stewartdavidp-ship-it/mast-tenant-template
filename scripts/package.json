@@ -1,0 +1,9 @@
+{
+  "name": "shirglassworks-scripts",
+  "private": true,
+  "description": "Build and sync scripts for Shir Glassworks",
+  "dependencies": {
+    "js-yaml": "^4.1.0",
+    "google-auth-library": "^9.0.0"
+  }
+}

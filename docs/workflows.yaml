@@ -1,4 +1,3 @@
-```yaml
 # Shir Glassworks — Workflow Reference (Machine-Readable)
 #
 # Format: YAML. Consumers: Claude API (Studio Assistant), Claude Code (build reference).
@@ -146,7 +145,7 @@ workflows:
         - "Source: All Sources | Direct Only | Etsy Only"
         - "Status pills: Active | All | Pending Payment | Placed | Confirmed | Building | Ready | Packing | Packed | Handed to Carrier | Shipped | Delivered | Cancelled | Payment Failed"
       gotchas:
-        - "Confirm Order" only appears when order status is Placed
+        - '"Confirm Order" only appears when order status is Placed'
         - Production requests appear in Make → Jobs Queue tab, not the main Jobs list
         - Source badge shows "Direct" or "Etsy" per order
         - Order progress bar renders below each order showing pipeline position
@@ -458,7 +457,7 @@ workflows:
         - Completed and loss quantities are editable inline — changes save automatically
         - Inventory is only updated when "Mark Complete" is clicked, not on individual line item saves
         - Product Links section only appears on completed jobs
-        - "Curate Story" button available on completed jobs to create How It Was Made story
+        - '"Curate Story" button available on completed jobs to create How It Was Made story'
     questions:
       - how do I finish a production job
       - when does inventory get updated
@@ -523,7 +522,7 @@ workflows:
         - Forecast button visibility gated by hasPermission('forecast', 'read') — staff cannot see it
         - Seasonal products banner (green) shows when currently trending products also spiked in same month last year
         - Demand Overview table is sortable — click column headers to toggle asc/desc
-        - "Never" shown in italic for products that have never been ordered
+        - '"Never" shown in italic for products that have never been ordered'
     questions:
       - what should I build next
       - which products are running low
@@ -779,7 +778,9 @@ workflows:
         - label: "Upload Image"
           type: button
           action: Opens file upload dialog
-      search: "Search tags..." text input
+        - label: "Search tags..."
+          type: text input
+          action: Search/filter images by tag
       gotchas:
         - Images are stored via GitHub API (admin-only, requires GitHub PAT in Settings → General)
         - Image library is shared across products, newsletter, social media, and website content
@@ -878,7 +879,7 @@ workflows:
         - Business Line field only visible to owner/manager (gated by isStaff())
         - Sculpture business line shown with teal badge in read mode
         - Sold sculptures stay visible on website with "Sold" badge — not hidden
-        - "Request a Commission" CTA appears on sold sculpture product pages
+        - '"Request a Commission" CTA appears on sold sculpture product pages'
     questions:
       - how do I add a sculpture to the shop
       - what happens when a sculpture sells
@@ -955,8 +956,8 @@ workflows:
       status_flow: New → In Discussion → Accepted → Built → Completed (or Declined from any active status)
       gotchas:
         - Status dropdown on commission detail view allows direct status changes
-        - "Send Proposal to Customer" triggers email with proposal details and QR code back to commission
-        - "Create Production Job" creates a linked job in Make → Jobs
+        - '"Send Proposal to Customer" triggers email with proposal details and QR code back to commission'
+        - '"Create Production Job" creates a linked job in Make → Jobs'
         - hasPermission('commissions', ...) gates access
     questions:
       - how do I respond to a commission inquiry
@@ -1071,7 +1072,7 @@ workflows:
           when: Shoot card displayed
           action: Exits to camera
       gotchas:
-        - "Generate Shoot Card" disabled until a content style is selected
+        - '"Generate Shoot Card" disabled until a content style is selected'
         - Shoot card is specific to the selected product/event and style
         - Pending record persists — pick up where you left off after filming
     questions:
@@ -1141,7 +1142,7 @@ workflows:
         - Guided prompt text per section
         - Image picker (max 3 per section, from image library)
       gotchas:
-        - "Polish with AI" shows side-by-side comparison — must explicitly choose Original or AI Version
+        - '"Polish with AI" shows side-by-side comparison — must explicitly choose Original or AI Version'
         - Sections can be reordered by dragging
         - Include checkbox controls whether section appears in export/publish
         - Issue list shows draft/published status badges
@@ -1243,7 +1244,7 @@ workflows:
       gotchas:
         - Stories can only be created from completed production jobs
         - QR codes auto-generated per linked product on publish
-        - "Missing Stories" prompt highlights jobs needing stories
+        - '"Missing Stories" prompt highlights jobs needing stories'
         - Entry point from job detail ("Curate Story") links to Stories workflow
         - Empty state shows "No Stories Yet" with "View Jobs" button
     questions:
@@ -1310,7 +1311,7 @@ workflows:
       - Enter name, category, and optional notes
       - Optionally paste a Google Drive folder link
       - Save — contact created and synced to Google Contacts automatically
-      - "Shir Glassworks" group created in Google Contacts if it doesn't exist
+      - '"Shir Glassworks" group created in Google Contacts if it doesn''t exist'
     ui:
       screen: Manage → Contacts
       route: contacts
@@ -1597,7 +1598,7 @@ workflows:
         - Entire audit log tab gated by hasPermission('auditLog', 'read') — only owner by default
         - Mode column shows whether action was in fair mode or studio mode
         - Audit trail link from order detail also checks auditLog permission
-        - "Load More" pagination — not all entries loaded at once
+        - '"Load More" pagination — not all entries loaded at once'
     questions:
       - where do I see who changed what
       - can I filter the audit log by user
@@ -1631,4 +1632,3 @@ not_yet_built:
   - id: ship-bundles
     title: Ship Bundles
     notes: Creating and managing carrier bundles for batch drop-offs. Ship → Ship → Bundles.
-```
