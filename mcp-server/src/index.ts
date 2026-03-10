@@ -3,11 +3,14 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { initFirebase } from "./firebase.js";
 import { createServer } from "./server.js";
 import { validateApiKey } from "./auth.js";
+import { createOAuthRouter } from "./auth/oauth.js";
+import { validateAccessToken } from "./auth/store.js";
 
 // Initialize Firebase before anything else
 initFirebase();
 
 const PORT = parseInt(process.env.PORT || "8080");
+const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
 
 // SAFETY: Block SKIP_AUTH in production
 if (process.env.K_SERVICE && process.env.SKIP_AUTH === "true") {
@@ -47,18 +50,21 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
+// Mount OAuth router (handles /.well-known/*, /authorize, /token, /register, /revoke)
+app.use(createOAuthRouter(BASE_URL));
+
 // Health check
 app.get("/", (_req: Request, res: Response) => {
   res.json({
     name: "mast-mcp-server",
     version: "1.0.0",
-    environment: process.env.BASE_URL?.includes("-test-") ? "test" : "prod",
+    environment: BASE_URL.includes("-test-") ? "test" : "prod",
     description: "MAST MCP Server — AI API layer for Shir Glassworks",
     status: "ok",
   });
 });
 
-// Auth middleware — validates MAST API key
+// Auth middleware — validates MAST API key OR OAuth access token
 async function authMiddleware(req: Request, res: Response, next: NextFunction) {
   // Dev mode: skip auth
   if (process.env.NODE_ENV === "development" || process.env.SKIP_AUTH === "true") {
@@ -77,6 +83,7 @@ async function authMiddleware(req: Request, res: Response, next: NextFunction) {
 
   const token = authHeader.slice(7);
 
+  // Path 1: MAST API key (mast_*)
   if (token.startsWith("mast_")) {
     try {
       const valid = await validateApiKey(token);
@@ -94,9 +101,20 @@ async function authMiddleware(req: Request, res: Response, next: NextFunction) {
     return;
   }
 
+  // Path 2: OAuth access token (from Claude.ai)
+  try {
+    const validToken = await validateAccessToken(token);
+    if (validToken) {
+      next();
+      return;
+    }
+  } catch (err) {
+    console.error("OAuth token validation error:", err);
+  }
+
   res.status(401).json({
     error: "invalid_token",
-    error_description: "Token must be a mast_ API key",
+    error_description: "Token invalid or expired",
   });
 }
 
@@ -159,9 +177,9 @@ app.head("/mcp", (_req: Request, res: Response) => {
 
 // Start
 app.listen(PORT, () => {
-  const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
   console.log(`MAST MCP Server listening on :${PORT}`);
   console.log(`Base URL: ${BASE_URL}`);
   console.log(`MCP endpoint: ${BASE_URL}/mcp`);
-  console.log(`Auth: ${process.env.SKIP_AUTH === "true" || process.env.NODE_ENV === "development" ? "DISABLED (dev mode)" : "API key"}`);
+  console.log(`OAuth: ${BASE_URL}/.well-known/oauth-authorization-server`);
+  console.log(`Auth: ${process.env.SKIP_AUTH === "true" || process.env.NODE_ENV === "development" ? "DISABLED (dev mode)" : "API key + OAuth"}`);
 });
