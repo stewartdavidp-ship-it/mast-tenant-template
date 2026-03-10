@@ -21,6 +21,7 @@ if (process.env.K_SERVICE && process.env.SKIP_AUTH === "true") {
 // Create Express app
 const app = express();
 app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true }));
 
 // CORS — allow Claude.ai origins + localhost for dev
 app.use((req: Request, res: Response, next: NextFunction) => {
