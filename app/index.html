@@ -6,7 +6,7 @@
   <title>Shir Glassworks Admin</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
@@ -62,6 +62,31 @@
       justify-content: space-between;
       padding: 0 24px;
       height: 60px;
+    }
+
+    .header-brand-lockup {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      white-space: nowrap;
+    }
+
+    .header-mast-mark { width: 10px; height: 20px; flex-shrink: 0; }
+
+    .header-mast-wm {
+      font-family: 'Archivo', sans-serif;
+      font-weight: 800;
+      font-size: 16px;
+      letter-spacing: -0.025em;
+      color: #f0ebe0;
+      line-height: 1;
+    }
+
+    .header-brand-divider {
+      color: rgba(255,255,255,0.15);
+      font-size: 18px;
+      font-weight: 300;
+      margin: 0 2px;
     }
 
     .header-brand {
@@ -3759,7 +3784,12 @@
   <header class="header" id="header" style="display:none;">
     <div style="display:flex;align-items:center;gap:12px;">
       <button class="hamburger-btn" id="hamburgerBtn" onclick="toggleMobileMenu(event)">&#9776;</button>
-      <div class="header-brand">Shir Glassworks</div>
+      <div class="header-brand-lockup">
+        <svg class="header-mast-mark" viewBox="0 0 32 64" fill="none"><rect x="14" y="0" width="3.5" height="64" rx="1.75" fill="#f0ebe0"/><path d="M17.5 3 L32 11 L17.5 20 Z" fill="#e8a84c"/><path d="M17.5 24 L28 30.5 L17.5 38 Z" fill="#f0ebe0" opacity="0.25"/></svg>
+        <span class="header-mast-wm">Mast</span>
+        <span class="header-brand-divider">/</span>
+        <div class="header-brand">Shir Glassworks</div>
+      </div>
     </div>
     <div class="header-user">
       <img class="header-avatar" id="userAvatar" src="" alt="User">
