@@ -2839,6 +2839,23 @@
     body.dark-mode .dash-inv-item { border-bottom-color: #3a3a3a; }
     body.dark-mode .dash-inv-thumb { background: #333; }
     body.dark-mode .dash-inv-name { color: #e0e0e0; }
+
+    /* Dashboard Settings Gear + Card Settings */
+    .dash-settings-gear { font-size: 1.3rem; cursor: pointer; opacity: 0.45; transition: opacity 0.2s; }
+    .dash-settings-gear:hover { opacity: 1; }
+    .dash-card-setting {
+      display: flex; align-items: center; gap: 12px; padding: 12px 8px;
+      border-bottom: 1px solid var(--cream-dark); border-radius: 4px;
+    }
+    .dash-card-setting:last-child { border-bottom: none; }
+    .dash-card-setting.dragging { opacity: 0.4; }
+    .dash-card-setting.drag-over { outline: 2px dashed var(--amber); outline-offset: -2px; }
+    .dash-card-setting-drag { cursor: grab; color: var(--warm-gray-light); font-size: 1.1rem; user-select: none; line-height: 1; }
+    .dash-card-setting-label { flex: 1; font-weight: 500; font-size: 0.95rem; }
+    body.dark-mode .dash-card-setting { border-bottom-color: #3a3a3a; }
+    body.dark-mode .dash-card-setting-drag { color: #666; }
+    body.dark-mode .dash-card-setting-label { color: #e0e0e0; }
+
     body.dark-mode .order-detail-section {
       background: #2a2a2a;
       border-color: #3a3a3a;
@@ -4171,8 +4188,9 @@
 
     <!-- ===== DASHBOARD TAB ===== -->
     <div id="dashboardTab" style="display:none;">
-      <div class="section-header">
+      <div class="section-header" style="display:flex;justify-content:space-between;align-items:center;">
         <h2>Dashboard</h2>
+        <span class="dash-settings-gear" onclick="navigateTo('settings'); setTimeout(function(){ switchSettingsSubView('dashboard'); }, 50);" title="Dashboard settings">&#9881;&#65039;</span>
       </div>
       <!-- Active Trip Banner (outside card system) -->
       <div id="activeTripBanner" style="display:none;"></div>
@@ -4936,6 +4954,7 @@
         <button class="view-tab" onclick="switchSettingsSubView('integrations')">Integrations</button>
         <button class="view-tab" onclick="switchSettingsSubView('workshop')">Workshop</button>
         <button class="view-tab" onclick="switchSettingsSubView('trips')">Trips</button>
+        <button class="view-tab" onclick="switchSettingsSubView('dashboard')">Dashboard</button>
       </div>
       <div id="settingsSubGeneral" style="max-width:500px;">
         <div class="form-group">
@@ -5292,6 +5311,16 @@
               style="flex:1;min-width:160px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
             <button class="btn btn-primary" onclick="addTripLocationManual()">+ Add</button>
           </div>
+        </div>
+      </div>
+      <!-- Dashboard Card Settings -->
+      <div id="settingsSubDashboard" style="display:none;max-width:500px;">
+        <div class="form-group">
+          <label style="font-size:1.1rem;font-weight:600;">Dashboard Cards</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">
+            Toggle cards on or off, and drag to reorder. Changes apply to your account only.
+          </p>
+          <div id="dashCardSettingsList"></div>
         </div>
       </div>
     </div>
@@ -7285,7 +7314,7 @@ function hideSidebar() {
 // ============================================================
 // Settings Sub-Tabs
 // ============================================================
-var settingsSubViews = ['general', 'payments', 'shipping', 'integrations', 'workshop', 'trips'];
+var settingsSubViews = ['general', 'payments', 'shipping', 'integrations', 'workshop', 'trips', 'dashboard'];
 function switchSettingsSubView(view) {
   // Hide all sub-views
   settingsSubViews.forEach(function(v) {
@@ -7303,8 +7332,9 @@ function switchSettingsSubView(view) {
   document.querySelectorAll('#settingsSubNav .view-tab').forEach(function(btn) {
     if (btn.textContent.toLowerCase().trim() === view) btn.classList.add('active');
   });
-  // Trips settings lazy load
+  // Lazy loads
   if (view === 'trips') loadTripsSettings();
+  if (view === 'dashboard') renderDashCardSettings();
 }
 
 // ============================================================
@@ -25180,6 +25210,110 @@ async function loadDashboardPrefs() {
   }
 }
 
+// ─── Dashboard Card Settings (Settings > Dashboard tab) ─────
+
+function getDashCardsInOrder() {
+  return DASHBOARD_CARDS.slice().sort(function(a, b) {
+    var pa = dashboardCardPrefs[a.id];
+    var pb = dashboardCardPrefs[b.id];
+    var oa = (pa && typeof pa.order === 'number') ? pa.order : DASHBOARD_CARDS.indexOf(a);
+    var ob = (pb && typeof pb.order === 'number') ? pb.order : DASHBOARD_CARDS.indexOf(b);
+    return oa - ob;
+  });
+}
+
+async function renderDashCardSettings() {
+  await loadDashboardPrefs();
+  var container = document.getElementById('dashCardSettingsList');
+  if (!container) return;
+
+  var ordered = getDashCardsInOrder();
+  var html = '';
+  ordered.forEach(function(card) {
+    var prefs = dashboardCardPrefs[card.id] || {};
+    var isVisible = !prefs.hidden;
+    html += '<div class="dash-card-setting" draggable="true" data-card-id="' + card.id + '"' +
+      ' ondragstart="dashSettingDragStart(event, \'' + card.id + '\')"' +
+      ' ondragend="dashSettingDragEnd(event)"' +
+      ' ondragover="dashSettingDragOver(event)"' +
+      ' ondrop="dashSettingDrop(event, \'' + card.id + '\')">' +
+      '<span class="dash-card-setting-drag" title="Drag to reorder">⠿</span>' +
+      '<span class="dash-card-setting-label">' + esc(card.title) + '</span>' +
+      '<input type="checkbox" ' + (isVisible ? 'checked' : '') +
+        ' onchange="toggleDashCardVisibility(\'' + card.id + '\')"' +
+        ' style="width:18px;height:18px;cursor:pointer;" title="' + (isVisible ? 'Visible' : 'Hidden') + '">' +
+    '</div>';
+  });
+  container.innerHTML = html;
+}
+
+function toggleDashCardVisibility(cardId) {
+  var user = auth.currentUser;
+  if (!user) return;
+  dashboardCardPrefs[cardId] = dashboardCardPrefs[cardId] || {};
+  var isHidden = !dashboardCardPrefs[cardId].hidden;
+  dashboardCardPrefs[cardId].hidden = isHidden;
+  MastDB.dashboardPrefs.setCard(user.uid, cardId, { hidden: isHidden });
+  renderDashCardSettings();
+}
+
+var dashSettingDragSourceId = null;
+
+function dashSettingDragStart(e, cardId) {
+  dashSettingDragSourceId = cardId;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', cardId);
+  setTimeout(function() {
+    var el = document.querySelector('.dash-card-setting[data-card-id="' + cardId + '"]');
+    if (el) el.classList.add('dragging');
+  }, 0);
+}
+
+function dashSettingDragEnd(e) {
+  dashSettingDragSourceId = null;
+  document.querySelectorAll('.dash-card-setting').forEach(function(row) {
+    row.classList.remove('dragging', 'drag-over');
+  });
+}
+
+function dashSettingDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  var row = e.target.closest('.dash-card-setting');
+  if (row && !row.classList.contains('dragging')) {
+    document.querySelectorAll('.dash-card-setting.drag-over').forEach(function(r) { r.classList.remove('drag-over'); });
+    row.classList.add('drag-over');
+  }
+}
+
+function dashSettingDrop(e, targetCardId) {
+  e.preventDefault();
+  var sourceId = dashSettingDragSourceId;
+  if (!sourceId || sourceId === targetCardId) return;
+  var user = auth.currentUser;
+  if (!user) return;
+
+  // Get current order, swap source into target's position
+  var ordered = getDashCardsInOrder();
+  var ids = ordered.map(function(c) { return c.id; });
+  var fromIdx = ids.indexOf(sourceId);
+  var toIdx = ids.indexOf(targetCardId);
+  if (fromIdx === -1 || toIdx === -1) return;
+
+  // Remove source and insert at target position
+  ids.splice(fromIdx, 1);
+  ids.splice(toIdx, 0, sourceId);
+
+  // Assign sequential order values and persist
+  ids.forEach(function(id, idx) {
+    dashboardCardPrefs[id] = dashboardCardPrefs[id] || {};
+    dashboardCardPrefs[id].order = idx;
+    MastDB.dashboardPrefs.setCard(user.uid, id, { order: idx });
+  });
+
+  renderDashCardSettings();
+}
+
 async function ensureProductsLoaded() {
   if (productsLoaded && productsData.length > 0) return;
   try {
@@ -25195,6 +25329,15 @@ async function ensureProductsLoaded() {
 
 async function renderAllDashboardCards() {
   await loadDashboardPrefs();
+  // Reorder DOM containers to match user preferences
+  var ordered = getDashCardsInOrder();
+  var parent = document.getElementById('dashboardCards');
+  if (parent) {
+    ordered.forEach(function(card) {
+      var el = document.getElementById(card.containerId);
+      if (el) parent.appendChild(el); // appendChild moves existing elements
+    });
+  }
   renderDashCardQuickActions();
   renderDashCardNewOrders();
   renderDashCardReadyToShip();
