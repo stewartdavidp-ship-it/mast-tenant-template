@@ -1031,20 +1031,32 @@
     .toast {
       background: var(--charcoal);
       color: white;
-      padding: 10px 20px;
-      border-radius: 6px;
-      font-size: 0.9rem;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-      animation: toastIn 0.3s ease, toastOut 0.3s ease 2.7s forwards;
+      padding: 14px 28px;
+      border-radius: 10px;
+      font-size: 1.05rem;
+      font-weight: 500;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+      animation: toastIn 0.3s ease, toastOut 0.3s ease 4.7s forwards;
+      max-width: 90vw;
+      text-align: center;
     }
 
     .toast.error {
       background: var(--danger);
+      animation: toastIn 0.3s ease, toastShake 0.5s ease 0.3s, toastOut 0.3s ease 4.7s forwards;
     }
 
     @keyframes toastIn {
       from { opacity: 0; transform: translateY(10px); }
       to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes toastShake {
+      0%, 100% { transform: translateX(0); }
+      20% { transform: translateX(-8px); }
+      40% { transform: translateX(8px); }
+      60% { transform: translateX(-6px); }
+      80% { transform: translateX(6px); }
     }
 
     @keyframes toastOut {
@@ -26034,7 +26046,7 @@ function showToast(message, isError) {
   container.appendChild(toast);
   setTimeout(function() {
     if (toast.parentNode) toast.parentNode.removeChild(toast);
-  }, 3000);
+  }, 5000);
 }
 </script>
 </body>
