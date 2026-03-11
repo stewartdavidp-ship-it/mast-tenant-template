@@ -2249,6 +2249,103 @@
       padding: 16px 0;
     }
 
+    /* ===== Dashboard Collapsible Cards ===== */
+    .dash-card {
+      margin-bottom: 16px;
+      border: 1px solid var(--cream-dark);
+      border-radius: 8px;
+      overflow: hidden;
+      background: white;
+    }
+    .dash-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.15s;
+    }
+    .dash-card-header:hover { background: var(--cream); }
+    .dash-card-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .dash-card-title h3 {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.15rem;
+      font-weight: 600;
+      margin: 0;
+    }
+    .dash-card-count {
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--amber);
+      background: rgba(196, 133, 60, 0.12);
+      padding: 2px 10px;
+      border-radius: 10px;
+      min-width: 20px;
+      text-align: center;
+    }
+    .dash-card-count.zero {
+      color: var(--warm-gray-light);
+      background: var(--cream-dark);
+    }
+    .dash-card-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .dash-card-viewall {
+      font-size: 0.8rem;
+      color: var(--teal);
+      cursor: pointer;
+      font-weight: 500;
+    }
+    .dash-card-viewall:hover { text-decoration: underline; }
+    .dash-card-toggle {
+      font-size: 0.85rem;
+      color: var(--warm-gray-light);
+      transition: transform 0.2s;
+    }
+    .dash-card.collapsed .dash-card-toggle { transform: rotate(-90deg); }
+    .dash-card-body {
+      padding: 0 16px 12px;
+    }
+    .dash-card.collapsed .dash-card-body { display: none; }
+    .dash-card.hidden-card { display: none; }
+
+    /* Low Inventory card items */
+    .dash-inv-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--cream-dark);
+      cursor: pointer;
+    }
+    .dash-inv-item:last-child { border-bottom: none; }
+    .dash-inv-thumb {
+      width: 40px;
+      height: 40px;
+      border-radius: 6px;
+      object-fit: cover;
+      background: var(--cream-dark);
+      flex-shrink: 0;
+    }
+    .dash-inv-info { flex: 1; min-width: 0; }
+    .dash-inv-name {
+      font-size: 0.85rem;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .dash-inv-stock { font-size: 0.75rem; font-weight: 600; }
+    .dash-inv-stock.out { color: var(--danger); }
+    .dash-inv-stock.low { color: var(--amber); }
+
     /* Order Detail View */
     .order-detail { display: none; }
     .detail-back, .order-detail-back {
@@ -2735,6 +2832,13 @@
       background: #2a2a2a;
       border-color: #3a3a3a;
     }
+    body.dark-mode .dash-card { background: #2a2a2a; border-color: #3a3a3a; }
+    body.dark-mode .dash-card-header:hover { background: #333; }
+    body.dark-mode .dash-card-count { color: #E8B679; background: rgba(196,133,60,0.2); }
+    body.dark-mode .dash-card-count.zero { color: #666; background: #333; }
+    body.dark-mode .dash-inv-item { border-bottom-color: #3a3a3a; }
+    body.dark-mode .dash-inv-thumb { background: #333; }
+    body.dark-mode .dash-inv-name { color: #e0e0e0; }
     body.dark-mode .order-detail-section {
       background: #2a2a2a;
       border-color: #3a3a3a;
@@ -4070,13 +4174,15 @@
       <div class="section-header">
         <h2>Dashboard</h2>
       </div>
-      <!-- Quick Actions -->
-      <div id="quickActionsRow" style="display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap;"></div>
-      <!-- Active Trip Banner (on dashboard) -->
+      <!-- Active Trip Banner (outside card system) -->
       <div id="activeTripBanner" style="display:none;"></div>
-      <!-- Order Queue -->
-      <div id="dashboardOrderQueue"></div>
-      <!-- Dashboard content placeholder -->
+      <!-- Dashboard Cards -->
+      <div id="dashboardCards">
+        <div id="dashCardQuickActions"></div>
+        <div id="dashCardNewOrders"></div>
+        <div id="dashCardReadyToShip"></div>
+        <div id="dashCardLowInventory"></div>
+      </div>
       <div id="dashboardContent" style="color:var(--warm-gray);font-size:0.9rem;"></div>
     </div>
 
@@ -6056,6 +6162,14 @@ MastDB.quickActions = {
   set: function(uid, data) { return this.ref(uid).set(data); }
 };
 
+MastDB.dashboardPrefs = {
+  PATH: 'admin/users',
+  ref: function(uid) { return MastDB._ref(this.PATH + '/' + uid + '/dashboardPrefs'); },
+  cardRef: function(uid, cardId) { return MastDB._ref(this.PATH + '/' + uid + '/dashboardPrefs/cards/' + cardId); },
+  get: function(uid) { return this.ref(uid).once('value'); },
+  setCard: function(uid, cardId, data) { return this.cardRef(uid, cardId).update(data); }
+};
+
 MastDB.tripCustomPurposes = {
   PATH: 'tripCustomPurposes',
   ref: function() { return MastDB._ref(this.PATH); },
@@ -6889,7 +7003,7 @@ auth.onAuthStateChanged(async function(user) {
 
 // Route → tab element + optional setup
 var ROUTE_MAP = {
-  'dashboard':   { tab: 'dashboardTab', setup: function() { renderDashboardQuickActions(); renderDashboardOrderQueue(); } },
+  'dashboard':   { tab: 'dashboardTab', setup: function() { renderAllDashboardCards(); } },
   'jobs':        { tab: 'productionTab', setup: function() {
     // Show jobs list, hide detail/build views
     var jobsView = document.getElementById('productionJobsView');
@@ -9804,7 +9918,7 @@ function attachListeners() {
       renderOrders();
       if (selectedOrderId) renderOrderDetail(selectedOrderId);
       if (currentRoute === 'pack') renderPackQueue();
-      if (currentRoute === 'dashboard') renderDashboardOrderQueue();
+      if (currentRoute === 'dashboard') { renderDashCardNewOrders(); renderDashCardReadyToShip(); }
     }, function(err) {
       showToast('Error loading orders: ' + err.message, true);
     });
@@ -9853,6 +9967,7 @@ function attachListeners() {
   if (!inventoryListener) {
     inventoryListener = MastDB.inventory.listen(500, function(snap) {
       inventory = snap.val() || {};
+      if (currentRoute === 'dashboard') renderDashCardLowInventory();
     }, function(err) {
       showToast('Error loading inventory: ' + err.message, true);
     });
@@ -24998,29 +25113,115 @@ function loadTripSettings() {
   });
 }
 
-// ─── Dashboard Quick Actions ────────────────────────────────
+// ─── Dashboard Collapsible Card System ──────────────────────
 
-function renderDashboardQuickActions() {
-  var container = document.getElementById('quickActionsRow');
+var DASHBOARD_CARDS = [
+  { id: 'quickActions', title: 'Quick Actions', containerId: 'dashCardQuickActions' },
+  { id: 'newOrders',    title: 'New Orders',    containerId: 'dashCardNewOrders',    viewAllRoute: 'orders' },
+  { id: 'readyToShip',  title: 'Ready to Ship', containerId: 'dashCardReadyToShip',  viewAllRoute: 'ship' },
+  { id: 'lowInventory', title: 'Low Inventory', containerId: 'dashCardLowInventory', viewAllRoute: 'inventory' }
+];
+var dashboardCardPrefs = {};
+var dashboardPrefsLoaded = false;
+
+function renderDashboardCard(cardConfig, count, contentHtml) {
+  var prefs = dashboardCardPrefs[cardConfig.id] || {};
+  var collapsed = prefs.collapsed ? ' collapsed' : '';
+  var hidden = prefs.hidden ? ' hidden-card' : '';
+  var countClass = (count === 0) ? 'dash-card-count zero' : 'dash-card-count';
+  var viewAllHtml = cardConfig.viewAllRoute
+    ? '<span class="dash-card-viewall" onclick="event.stopPropagation(); navigateTo(\'' + cardConfig.viewAllRoute + '\')">View all</span>'
+    : '';
+  var countHtml = (typeof count === 'number')
+    ? '<span class="' + countClass + '">' + count + '</span>'
+    : '';
+
+  return '<div class="dash-card' + collapsed + hidden + '" id="dashCard_' + cardConfig.id + '">' +
+    '<div class="dash-card-header" onclick="toggleDashCard(\'' + cardConfig.id + '\')">' +
+      '<div class="dash-card-title">' +
+        '<h3>' + esc(cardConfig.title) + '</h3>' +
+        countHtml +
+      '</div>' +
+      '<div class="dash-card-actions">' +
+        viewAllHtml +
+        '<span class="dash-card-toggle">▼</span>' +
+      '</div>' +
+    '</div>' +
+    '<div class="dash-card-body">' + contentHtml + '</div>' +
+  '</div>';
+}
+
+function toggleDashCard(cardId) {
+  var el = document.getElementById('dashCard_' + cardId);
+  if (!el) return;
+  var isCollapsed = el.classList.toggle('collapsed');
+  // Persist to Firebase
+  dashboardCardPrefs[cardId] = dashboardCardPrefs[cardId] || {};
+  dashboardCardPrefs[cardId].collapsed = isCollapsed;
+  var user = auth.currentUser;
+  if (user) {
+    MastDB.dashboardPrefs.setCard(user.uid, cardId, { collapsed: isCollapsed });
+  }
+}
+
+async function loadDashboardPrefs() {
+  if (dashboardPrefsLoaded) return;
+  var user = auth.currentUser;
+  if (!user) return;
+  try {
+    var snap = await MastDB.dashboardPrefs.get(user.uid);
+    var val = snap.val();
+    if (val && val.cards) {
+      dashboardCardPrefs = val.cards;
+    }
+    dashboardPrefsLoaded = true;
+  } catch (err) {
+    console.error('Error loading dashboard prefs:', err);
+  }
+}
+
+async function ensureProductsLoaded() {
+  if (productsLoaded && productsData.length > 0) return;
+  try {
+    var snap = await MastDB.products.ref().once('value');
+    var val = snap.val();
+    productsData = val ? Object.values(val) : [];
+    productsData.sort(function(a, b) { return a.name.localeCompare(b.name); });
+    productsLoaded = true;
+  } catch (err) {
+    console.error('Error loading products for dashboard:', err);
+  }
+}
+
+async function renderAllDashboardCards() {
+  await loadDashboardPrefs();
+  renderDashCardQuickActions();
+  renderDashCardNewOrders();
+  renderDashCardReadyToShip();
+  renderDashCardLowInventory();
+}
+
+// ─── Dashboard Card: Quick Actions ──────────────────────────
+
+function renderDashCardQuickActions() {
+  var container = document.getElementById('dashCardQuickActions');
   if (!container) return;
   var user = auth.currentUser;
   if (!user) { container.innerHTML = ''; return; }
+  var cardConfig = DASHBOARD_CARDS[0]; // quickActions
 
-  // Load frequency data
   MastDB.quickActions.ref(user.uid).once('value').then(function(snap) {
     var freq = snap.val() || {};
-    // Sort by count desc, pick top 3
     var allKeys = Object.keys(QUICK_ACTION_DEFS);
     allKeys.sort(function(a, b) {
       var ca = freq[a] ? freq[a].count : 0;
       var cb = freq[b] ? freq[b].count : 0;
       return cb - ca;
     });
-    // If no data, use defaults
     var hasAnyData = allKeys.some(function(k) { return freq[k] && freq[k].count > 0; });
     var top3 = hasAnyData ? allKeys.slice(0, 3) : DEFAULT_QUICK_ACTIONS;
 
-    var html = '';
+    var html = '<div class="quick-actions-row" style="display:flex;gap:12px;flex-wrap:wrap;">';
     top3.forEach(function(key) {
       var def = QUICK_ACTION_DEFS[key];
       if (!def) return;
@@ -25029,58 +25230,164 @@ function renderDashboardQuickActions() {
         '<div class="qa-label">' + esc(def.label) + '</div>' +
       '</div>';
     });
-    container.innerHTML = html;
+    html += '</div>';
+    container.innerHTML = renderDashboardCard(cardConfig, null, html);
   });
 }
 
-// ─── Dashboard Order Queue ──────────────────────────────────
+// ─── Dashboard Card: New Orders ─────────────────────────────
 
-function renderDashboardOrderQueue() {
-  var container = document.getElementById('dashboardOrderQueue');
+function renderDashCardNewOrders() {
+  var container = document.getElementById('dashCardNewOrders');
   if (!container) return;
-  if (!ordersLoaded) {
-    container.innerHTML = '';
-    return;
-  }
+  if (!ordersLoaded) { container.innerHTML = ''; return; }
+  var cardConfig = DASHBOARD_CARDS[1]; // newOrders
 
-  // Only show new orders (status = placed) that haven't been reviewed yet
   var newOrders = getOrdersArray().filter(function(o) {
     return (o.status || 'placed') === 'placed';
   });
 
+  var contentHtml = '';
   if (newOrders.length === 0) {
-    container.innerHTML = '<div class="dash-queue-empty">No new orders.</div>';
-    return;
+    contentHtml = '<div class="dash-queue-empty">No new orders.</div>';
+  } else {
+    contentHtml = '<div class="dash-queue-grid">';
+    newOrders.forEach(function(o) {
+      var key = o._key;
+      var num = esc(getOrderDisplayNumber(o));
+      var status = o.status || 'placed';
+      var customer = o.customerName || o.email || '';
+      var sourceBadge = o.source === 'etsy' ? ' <span class="order-source-badge etsy" style="font-size:0.7rem;">Etsy</span>' : '';
+      contentHtml += '<div class="dash-queue-item" onclick="viewOrder(\'' + esc(key) + '\')">' +
+        '<div class="dash-queue-row">' +
+          '<span class="dash-queue-order-num">' + num + sourceBadge + '</span>' +
+          '<span class="status-badge pill order-status ' + status + '" style="font-size:0.7rem;padding:2px 8px;">' + status.replace(/_/g, ' ') + '</span>' +
+        '</div>' +
+        (customer ? '<div class="dash-queue-customer">' + esc(customer) + '</div>' : '') +
+        '<div class="dash-queue-meta">' +
+          '<span>' + getOrderItemsLabel(o) + '</span>' +
+          '<span>$' + (o.total || 0).toFixed(2) + '</span>' +
+          '<span>' + formatOrderDate(o.placedAt || o.pendingPaymentAt) + '</span>' +
+        '</div>' +
+      '</div>';
+    });
+    contentHtml += '</div>';
   }
 
-  var html = '<div class="dash-queue-header">' +
-    '<h3>New Orders (' + newOrders.length + ')</h3>' +
-    '<span class="dash-queue-viewall" onclick="navigateTo(\'orders\')">View all orders</span>' +
-  '</div>' +
-  '<div class="dash-queue-grid">';
+  container.innerHTML = renderDashboardCard(cardConfig, newOrders.length, contentHtml);
+}
 
-  newOrders.forEach(function(o) {
-    var key = o._key;
-    var num = esc(getOrderDisplayNumber(o));
-    var status = o.status || 'placed';
-    var customer = o.customerName || o.email || '';
-    var sourceBadge = o.source === 'etsy' ? ' <span class="order-source-badge etsy" style="font-size:0.7rem;">Etsy</span>' : '';
-    html += '<div class="dash-queue-item" onclick="viewOrder(\'' + esc(key) + '\')">' +
-      '<div class="dash-queue-row">' +
-        '<span class="dash-queue-order-num">' + num + sourceBadge + '</span>' +
-        '<span class="status-badge pill order-status ' + status + '" style="font-size:0.7rem;padding:2px 8px;">' + status.replace(/_/g, ' ') + '</span>' +
-      '</div>' +
-      (customer ? '<div class="dash-queue-customer">' + esc(customer) + '</div>' : '') +
-      '<div class="dash-queue-meta">' +
-        '<span>' + getOrderItemsLabel(o) + '</span>' +
-        '<span>$' + (o.total || 0).toFixed(2) + '</span>' +
-        '<span>' + formatOrderDate(o.placedAt || o.pendingPaymentAt) + '</span>' +
-      '</div>' +
-    '</div>';
+// ─── Dashboard Card: Ready to Ship ──────────────────────────
+
+function renderDashCardReadyToShip() {
+  var container = document.getElementById('dashCardReadyToShip');
+  if (!container) return;
+  if (!ordersLoaded) { container.innerHTML = ''; return; }
+  var cardConfig = DASHBOARD_CARDS[2]; // readyToShip
+
+  var packedOrders = getOrdersArray().filter(function(o) {
+    return o.status === 'packed';
   });
 
-  html += '</div>';
-  container.innerHTML = html;
+  var contentHtml = '';
+  if (packedOrders.length === 0) {
+    contentHtml = '<div class="dash-queue-empty">No packed orders awaiting pickup.</div>';
+  } else {
+    contentHtml = '<div class="dash-queue-grid">';
+    packedOrders.forEach(function(o) {
+      var key = o._key;
+      var num = esc(getOrderDisplayNumber(o));
+      var customer = o.customerName || o.email || '';
+      var sourceBadge = o.source === 'etsy' ? ' <span class="order-source-badge etsy" style="font-size:0.7rem;">Etsy</span>' : '';
+      contentHtml += '<div class="dash-queue-item" onclick="viewOrder(\'' + esc(key) + '\')">' +
+        '<div class="dash-queue-row">' +
+          '<span class="dash-queue-order-num">' + num + sourceBadge + '</span>' +
+          '<span class="status-badge pill order-status packed" style="font-size:0.7rem;padding:2px 8px;">packed</span>' +
+        '</div>' +
+        (customer ? '<div class="dash-queue-customer">' + esc(customer) + '</div>' : '') +
+        '<div class="dash-queue-meta">' +
+          '<span>' + getOrderItemsLabel(o) + '</span>' +
+          '<span>$' + (o.total || 0).toFixed(2) + '</span>' +
+          '<span>' + formatOrderDate(o.placedAt || o.pendingPaymentAt) + '</span>' +
+        '</div>' +
+      '</div>';
+    });
+    contentHtml += '</div>';
+  }
+
+  container.innerHTML = renderDashboardCard(cardConfig, packedOrders.length, contentHtml);
+}
+
+// ─── Dashboard Card: Low Inventory ──────────────────────────
+
+function renderDashCardLowInventory() {
+  var container = document.getElementById('dashCardLowInventory');
+  if (!container) return;
+  var cardConfig = DASHBOARD_CARDS[3]; // lowInventory
+
+  ensureProductsLoaded().then(function() {
+    var lowItems = [];
+
+    productsData.forEach(function(p) {
+      if (!p || !p.pid) return;
+      var inv = inventory[p.pid];
+      if (!inv) return;
+      // Skip made-to-order and sculpture products
+      if (inv.stockType === 'made-to-order') return;
+      if (p.categories && p.categories.indexOf('Sculptures') !== -1) return;
+
+      var totals = getInventoryTotals(inv);
+      var threshold = inv.lowStockThreshold || 2;
+      if (totals.available <= threshold) {
+        lowItems.push({
+          pid: p.pid,
+          name: p.name || p.pid,
+          image: (p.images && p.images.length) ? p.images[0].url : '',
+          available: totals.available,
+          threshold: threshold,
+          isOut: totals.available === 0
+        });
+      }
+    });
+
+    // Sort: out-of-stock first, then by available ascending
+    lowItems.sort(function(a, b) {
+      if (a.isOut && !b.isOut) return -1;
+      if (!a.isOut && b.isOut) return 1;
+      return a.available - b.available;
+    });
+
+    var contentHtml = '';
+    if (lowItems.length === 0) {
+      contentHtml = '<div class="dash-queue-empty">All products are well stocked.</div>';
+    } else {
+      var displayItems = lowItems.slice(0, 8);
+      var remaining = lowItems.length - displayItems.length;
+
+      displayItems.forEach(function(item) {
+        var stockClass = item.isOut ? 'out' : 'low';
+        var stockLabel = item.isOut ? 'Out of stock' : item.available + ' left';
+        var thumbHtml = item.image
+          ? '<img class="dash-inv-thumb" src="' + esc(item.image) + '" alt="">'
+          : '<div class="dash-inv-thumb"></div>';
+        contentHtml += '<div class="dash-inv-item" onclick="navigateTo(\'inventory\'); setTimeout(function(){ var el = document.querySelector(\'[data-pid=\\x27' + esc(item.pid) + '\\x27]\'); if(el) el.click(); }, 300);">' +
+          thumbHtml +
+          '<div class="dash-inv-info">' +
+            '<div class="dash-inv-name">' + esc(item.name) + '</div>' +
+            '<div class="dash-inv-stock ' + stockClass + '">' + stockLabel + '</div>' +
+          '</div>' +
+        '</div>';
+      });
+
+      if (remaining > 0) {
+        contentHtml += '<div style="text-align:center;padding:8px 0;">' +
+          '<span class="dash-card-viewall" onclick="navigateTo(\'inventory\')">+' + remaining + ' more</span>' +
+        '</div>';
+      }
+    }
+
+    container.innerHTML = renderDashboardCard(cardConfig, lowItems.length, contentHtml);
+  });
 }
 
 function triggerQuickAction(key) {
