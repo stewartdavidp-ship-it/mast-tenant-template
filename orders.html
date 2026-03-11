@@ -845,6 +845,7 @@
     <li><a href="shop.html" class="nav-shop">Shop</a></li>
     <li><a href="commission.html">Commissions</a></li>
     <li><a href="orders.html">Orders</a></li>
+  <li><a href="#" onclick="event.preventDefault(); siteSignIn();">Sign In</a></li>
   </ul>
   <button class="nav-toggle" aria-label="Menu">
     <span></span><span></span><span></span>
@@ -854,6 +855,7 @@
 <!-- Mobile Menu Overlay -->
 <div class="nav-mobile-menu" id="mobileMenu">
   <a href="index.html" onclick="closeMobileMenu()">Home</a>
+  <a href="#" onclick="event.preventDefault(); siteSignIn(); closeMobileMenu();">Sign In</a>
   <a href="shop.html" class="btn-shop" onclick="closeMobileMenu()">Shop</a>
   <a href="commission.html" onclick="closeMobileMenu()">Commissions</a>
   <a href="orders.html" onclick="closeMobileMenu()">Orders</a>
