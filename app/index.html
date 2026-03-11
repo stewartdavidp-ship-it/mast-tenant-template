@@ -6412,8 +6412,11 @@ async function seedRolesAndAdminUser() {
  */
 async function seedPlatformRegistry() {
   try {
-    var registrySnap = await db.ref('mast-platform/tenants/shirglassworks').once('value');
-    if (registrySnap.exists()) {
+    // Check if current user already has a tenant mapping — means registry was seeded.
+    // We check userTenantMap/{uid} (not tenants/) because the user always has read
+    // access to their own entry via the "$uid === auth.uid" rule.
+    var myMappingSnap = await db.ref('mast-platform/userTenantMap/' + currentUser.uid).once('value');
+    if (myMappingSnap.exists()) {
       console.log('Platform registry already seeded.');
       return false;
     }
