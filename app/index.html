@@ -5290,10 +5290,653 @@ const auth = firebase.auth();
 const db = firebase.database();
 const storage = firebase.storage();
 
-const ALLOWED_UIDS = ['Y8RX1PIzccfT95WIIFl4I37VZZ72'];
 const TEST_MODE = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-const EVENTS_PATH = 'shirglassworks/public/events';
-const GALLERY_PATH = 'shirglassworks/public/gallery';
+
+// ============================================================
+// MastDB — Database Abstraction Layer
+// All data access routes through this object. No code should
+// call db.ref('shirglassworks/...') directly.
+// ============================================================
+var MastDB = (function() {
+  var _db = null;
+  var _tenantId = null;
+
+  function init(config) {
+    _db = config.db;
+    _tenantId = config.tenantId;
+  }
+
+  function _ref(path) {
+    return _db.ref(_tenantId + '/' + path);
+  }
+
+  function _rootRef() {
+    return _db.ref();
+  }
+
+  function _newKey(path) {
+    return _ref(path).push().key;
+  }
+
+  function _newRootKey() {
+    return _db.ref().push().key;
+  }
+
+  function _prefixPaths(updates) {
+    var prefixed = {};
+    Object.keys(updates).forEach(function(key) {
+      prefixed[_tenantId + '/' + key] = updates[key];
+    });
+    return prefixed;
+  }
+
+  async function _multiUpdate(updates) {
+    return _rootRef().update(_prefixPaths(updates));
+  }
+
+  return {
+    init: init,
+    _ref: _ref,
+    _rootRef: _rootRef,
+    _newKey: _newKey,
+    _newRootKey: _newRootKey,
+    _prefixPaths: _prefixPaths,
+    _multiUpdate: _multiUpdate,
+    tenantId: function() { return _tenantId; }
+  };
+})();
+
+// --- MastDB Entity Namespaces ---
+
+MastDB.events = {
+  PATH: 'public/events',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  list: function(limit) { return this.ref().limitToLast(limit || 200).once('value'); },
+  get: function(id) { return this.ref(id).once('value'); },
+  set: function(id, data) { return this.ref(id).set(data); },
+  update: function(id, data) { return this.ref(id).update(data); },
+  remove: function(id) { return this.ref(id).remove(); },
+  push: function() { return this.ref().push(); },
+  newKey: function() { return this.ref().push().key; },
+  listen: function(limit, cb, errCb) {
+    return this.ref().limitToLast(limit || 200).on('value', cb, errCb);
+  },
+  unlisten: function(handle) { this.ref().off('value', handle); }
+};
+
+MastDB.gallery = {
+  PATH: 'public/gallery',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  list: function(limit) { return this.ref().limitToLast(limit || 500).once('value'); },
+  get: function(id) { return this.ref(id).once('value'); },
+  set: function(id, data) { return this.ref(id).set(data); },
+  update: function(id, data) { return this.ref(id).update(data); },
+  remove: function(id) { return this.ref(id).remove(); },
+  push: function() { return this.ref().push(); },
+  newKey: function() { return this.ref().push().key; },
+  listen: function(limit, cb, errCb) {
+    return this.ref().limitToLast(limit || 500).on('value', cb, errCb);
+  },
+  unlisten: function(handle) { this.ref().off('value', handle); }
+};
+
+MastDB.images = {
+  PATH: 'images',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  listen: function(limit, cb, errCb) {
+    return this.ref().limitToLast(limit || 500).on('value', cb, errCb);
+  },
+  unlisten: function(handle) { this.ref().off('value', handle); }
+};
+
+MastDB.products = {
+  PATH: 'public/products',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  list: function() { return this.ref().once('value'); },
+  get: function(id) { return this.ref(id).once('value'); },
+  set: function(id, data) { return this.ref(id).set(data); },
+  update: function(id, data) { return this.ref(id).update(data); },
+  remove: function(id) { return this.ref(id).remove(); },
+  imagesRef: function(id) { return MastDB._ref(this.PATH + '/' + id + '/images'); },
+  imageIdsRef: function(id) { return MastDB._ref(this.PATH + '/' + id + '/imageIds'); },
+  statusRef: function(id) { return MastDB._ref(this.PATH + '/' + id + '/status'); },
+  buildIdsRef: function(id) { return MastDB._ref(this.PATH + '/' + id + '/buildIds'); },
+  storyIdRef: function(id) { return MastDB._ref(this.PATH + '/' + id + '/storyId'); },
+  fieldRef: function(id, field) { return MastDB._ref(this.PATH + '/' + id + '/' + field); }
+};
+
+MastDB.inventory = {
+  PATH: 'admin/inventory',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  list: function(limit) { return this.ref().limitToLast(limit || 500).once('value'); },
+  get: function(id) { return this.ref(id).once('value'); },
+  set: function(id, data) { return this.ref(id).set(data); },
+  update: function(id, data) { return this.ref(id).update(data); },
+  remove: function(id) { return this.ref(id).remove(); },
+  listen: function(limit, cb, errCb) {
+    return this.ref().limitToLast(limit || 500).on('value', cb, errCb);
+  },
+  unlisten: function(handle) { this.ref().off('value', handle); },
+  stockRef: function(pid) { return MastDB._ref(this.PATH + '/' + pid + '/stock'); },
+  stockAvailable: function(pid, variant) {
+    return MastDB._ref(this.PATH + '/' + pid + '/stock/' + (variant || '_default') + '/available');
+  },
+  stockLocations: function(pid, variant) {
+    return MastDB._ref(this.PATH + '/' + pid + '/stock/' + (variant || '_default') + '/locations');
+  },
+  subRef: function() { return MastDB._ref(this.PATH + '/' + Array.from(arguments).join('/')); }
+};
+
+MastDB.orders = {
+  PATH: 'orders',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  list: function(limit) { return this.ref().limitToLast(limit || 100).once('value'); },
+  get: function(id) { return this.ref(id).once('value'); },
+  set: function(id, data) { return this.ref(id).set(data); },
+  update: function(id, data) { return this.ref(id).update(data); },
+  remove: function(id) { return this.ref(id).remove(); },
+  listen: function(limit, cb, errCb) {
+    return this.ref().limitToLast(limit || 100).on('value', cb, errCb);
+  },
+  unlisten: function(handle) { this.ref().off('value', handle); },
+  subRef: function() { return MastDB._ref(this.PATH + '/' + Array.from(arguments).join('/')); }
+};
+
+MastDB.sales = {
+  PATH: 'admin/sales',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  list: function(limit) { return this.ref().limitToLast(limit || 200).once('value'); },
+  get: function(id) { return this.ref(id).once('value'); },
+  set: function(id, data) { return this.ref(id).set(data); },
+  update: function(id, data) { return this.ref(id).update(data); },
+  listen: function(limit, cb, errCb) {
+    return this.ref().limitToLast(limit || 200).on('value', cb, errCb);
+  },
+  unlisten: function(handle) { this.ref().off('value', handle); }
+};
+
+MastDB.squarePayments = {
+  PATH: 'admin/square-payments',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  listen: function(limit, cb, errCb) {
+    return this.ref().limitToLast(limit || 200).on('value', cb, errCb);
+  },
+  unlisten: function(handle) { this.ref().off('value', handle); }
+};
+
+MastDB.coupons = {
+  PATH: 'admin/coupons',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  list: function(limit) { return this.ref().limitToLast(limit || 200).once('value'); },
+  get: function(id) { return this.ref(id).once('value'); },
+  set: function(id, data) { return this.ref(id).set(data); },
+  update: function(id, data) { return this.ref(id).update(data); },
+  remove: function(id) { return this.ref(id).remove(); },
+  listen: function(limit, cb, errCb) {
+    return this.ref().limitToLast(limit || 200).on('value', cb, errCb);
+  },
+  unlisten: function(handle) { this.ref().off('value', handle); }
+};
+
+MastDB.salesEvents = {
+  PATH: 'admin/salesEvents',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  list: function(limit) { return this.ref().limitToLast(limit || 100).once('value'); },
+  get: function(id) { return this.ref(id).once('value'); },
+  set: function(id, data) { return this.ref(id).set(data); },
+  update: function(id, data) { return this.ref(id).update(data); },
+  remove: function(id) { return this.ref(id).remove(); },
+  listen: function(limit, cb, errCb) {
+    return this.ref().limitToLast(limit || 100).on('value', cb, errCb);
+  },
+  unlisten: function(handle) { this.ref().off('value', handle); },
+  allocations: function(eventId, pid) {
+    return MastDB._ref(this.PATH + '/' + eventId + '/allocations' + (pid ? '/' + pid : ''));
+  },
+  allocationField: function(eventId, pid, field) {
+    return MastDB._ref(this.PATH + '/' + eventId + '/allocations/' + pid + '/' + field);
+  },
+  subRef: function() { return MastDB._ref(this.PATH + '/' + Array.from(arguments).join('/')); }
+};
+
+MastDB.bundles = {
+  PATH: 'admin/bundles',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  list: function(limit) { return this.ref().limitToLast(limit || 50).once('value'); },
+  get: function(id) { return this.ref(id).once('value'); },
+  set: function(id, data) { return this.ref(id).set(data); },
+  update: function(id, data) { return this.ref(id).update(data); },
+  remove: function(id) { return this.ref(id).remove(); },
+  push: function() { return this.ref().push(); },
+  newKey: function() { return this.ref().push().key; },
+  listen: function(limit, cb, errCb) {
+    return this.ref().limitToLast(limit || 50).on('value', cb, errCb);
+  },
+  unlisten: function(handle) { this.ref().off('value', handle); },
+  subRef: function() { return MastDB._ref(this.PATH + '/' + Array.from(arguments).join('/')); }
+};
+
+MastDB.productionRequests = {
+  PATH: 'admin/buildJobs',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  list: function(limit) { return this.ref().limitToLast(limit || 100).once('value'); },
+  get: function(id) { return this.ref(id).once('value'); },
+  set: function(id, data) { return this.ref(id).set(data); },
+  update: function(id, data) { return this.ref(id).update(data); },
+  remove: function(id) { return this.ref(id).remove(); },
+  listen: function(limit, cb, errCb) {
+    return this.ref().limitToLast(limit || 100).on('value', cb, errCb);
+  },
+  unlisten: function(handle) { this.ref().off('value', handle); },
+  subRef: function() { return MastDB._ref(this.PATH + '/' + Array.from(arguments).join('/')); }
+};
+
+MastDB.productionJobs = {
+  PATH: 'admin/jobs',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  list: function(limit) { return this.ref().limitToLast(limit || 100).once('value'); },
+  get: function(id) { return this.ref(id).once('value'); },
+  set: function(id, data) { return this.ref(id).set(data); },
+  update: function(id, data) { return this.ref(id).update(data); },
+  remove: function(id) { return this.ref(id).remove(); },
+  push: function() { return this.ref().push(); },
+  newKey: function() { return this.ref().push().key; },
+  listen: function(limit, cb, errCb) {
+    return this.ref().limitToLast(limit || 100).on('value', cb, errCb);
+  },
+  unlisten: function(handle) { this.ref().off('value', handle); },
+  lineItems: function(jobId, liId) {
+    return MastDB._ref(this.PATH + '/' + jobId + '/lineItems' + (liId ? '/' + liId : ''));
+  },
+  builds: function(jobId, buildId) {
+    return MastDB._ref(this.PATH + '/' + jobId + '/builds' + (buildId ? '/' + buildId : ''));
+  },
+  buildField: function(jobId, buildId, field) {
+    return MastDB._ref(this.PATH + '/' + jobId + '/builds/' + buildId + '/' + field);
+  },
+  notes: function(jobId) {
+    return MastDB._ref(this.PATH + '/' + jobId + '/notes');
+  },
+  subRef: function() { return MastDB._ref(this.PATH + '/' + Array.from(arguments).join('/')); }
+};
+
+MastDB.operators = {
+  PATH: 'admin/operators',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  list: function(limit) { return this.ref().limitToLast(limit || 50).once('value'); },
+  get: function(id) { return this.ref(id).once('value'); },
+  set: function(id, data) { return this.ref(id).set(data); },
+  remove: function(id) { return this.ref(id).remove(); },
+  listen: function(limit, cb, errCb) {
+    return this.ref().limitToLast(limit || 50).on('value', cb, errCb);
+  },
+  unlisten: function(handle) { this.ref().off('value', handle); }
+};
+
+MastDB.buildMedia = {
+  PATH: 'admin/buildMedia',
+  ref: function(buildId, mediaId) {
+    var p = this.PATH;
+    if (buildId) p += '/' + buildId;
+    if (mediaId) p += '/' + mediaId;
+    return MastDB._ref(p);
+  },
+  get: function(buildId) { return this.ref(buildId).once('value'); },
+  set: function(buildId, mediaId, data) { return this.ref(buildId, mediaId).set(data); },
+  remove: function(buildId, mediaId) { return this.ref(buildId, mediaId).remove(); },
+  listAll: function() { return MastDB._ref(this.PATH).once('value'); }
+};
+
+MastDB.stories = {
+  PATH: 'public/stories',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  list: function(limit) { return this.ref().limitToLast(limit || 200).once('value'); },
+  get: function(id) { return this.ref(id).once('value'); },
+  set: function(id, data) { return this.ref(id).set(data); },
+  update: function(id, data) { return this.ref(id).update(data); },
+  remove: function(id) { return this.ref(id).remove(); },
+  push: function() { return this.ref().push(); },
+  newKey: function() { return this.ref().push().key; },
+  listen: function(limit, cb, errCb) {
+    return this.ref().limitToLast(limit || 200).on('value', cb, errCb);
+  },
+  unlisten: function(handle) { this.ref().off('value', handle); },
+  queryByJob: function(jobId) {
+    return this.ref().orderByChild('jobId').equalTo(jobId).once('value');
+  }
+};
+
+MastDB.contacts = {
+  PATH: 'admin/contacts',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  list: function() { return this.ref().once('value'); },
+  get: function(id) { return this.ref(id).once('value'); },
+  set: function(id, data) { return this.ref(id).set(data); },
+  update: function(id, data) { return this.ref(id).update(data); },
+  remove: function(id) { return this.ref(id).remove(); },
+  interactions: function(contactId, interactionId) {
+    var p = this.PATH + '/' + contactId + '/interactions';
+    if (interactionId) p += '/' + interactionId;
+    return MastDB._ref(p);
+  },
+  interactionsList: function(contactId, opts) {
+    var ref = this.interactions(contactId);
+    if (opts && opts.orderBy) ref = ref.orderByChild(opts.orderBy);
+    if (opts && opts.limit) ref = ref.limitToLast(opts.limit);
+    return ref.once('value');
+  },
+  googleContactId: function(id) { return MastDB._ref(this.PATH + '/' + id + '/googleContactId'); },
+  subRef: function() { return MastDB._ref(this.PATH + '/' + Array.from(arguments).join('/')); }
+};
+
+MastDB.commissions = {
+  PATH: 'admin/commissions',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  get: function(id) { return this.ref(id).once('value'); },
+  set: function(id, data) { return this.ref(id).set(data); },
+  update: function(id, data) { return this.ref(id).update(data); },
+  documents: function(commId, docId) {
+    var p = this.PATH + '/' + commId + '/documents';
+    if (docId) p += '/' + docId;
+    return MastDB._ref(p);
+  },
+  subRef: function() { return MastDB._ref(this.PATH + '/' + Array.from(arguments).join('/')); }
+};
+
+MastDB.locations = {
+  PATH: 'admin/locations',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  list: function() { return this.ref().once('value'); },
+  get: function(id) { return this.ref(id).once('value'); },
+  set: function(id, data) { return this.ref(id).set(data); },
+  update: function(id, data) { return this.ref(id).update(data); },
+  remove: function(id) { return this.ref(id).remove(); },
+  subRef: function() { return MastDB._ref(this.PATH + '/' + Array.from(arguments).join('/')); }
+};
+
+MastDB.studioLocations = {
+  PATH: 'config/studioLocations',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  list: function() { return this.ref().once('value'); },
+  get: function(id) { return this.ref(id).once('value'); },
+  set: function(id, data) { return this.ref(id).set(data); },
+  remove: function(id) { return this.ref(id).remove(); }
+};
+
+MastDB.newsletter = {
+  issues: {
+    PATH: 'newsletter/issues',
+    ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+    list: function(limit) {
+      return this.ref().orderByChild('issueNumber').limitToLast(limit || 50).once('value');
+    },
+    get: function(id) { return this.ref(id).once('value'); },
+    set: function(id, data) { return this.ref(id).set(data); },
+    update: function(id, data) { return this.ref(id).update(data); },
+    newKey: function() { return this.ref().push().key; },
+    section: function(issueId, secId) {
+      return MastDB._ref(this.PATH + '/' + issueId + '/sections/' + secId);
+    },
+    sectionField: function(issueId, secId, field) {
+      return MastDB._ref(this.PATH + '/' + issueId + '/sections/' + secId + '/' + field);
+    }
+  },
+  subscribers: {
+    PATH: 'newsletter/subscribers',
+    ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+    list: function(limit) {
+      return this.ref().orderByChild('subscribedAt').limitToLast(limit || 200).once('value');
+    },
+    get: function(id) { return this.ref(id).once('value'); },
+    set: function(id, data) { return this.ref(id).set(data); },
+    update: function(id, data) { return this.ref(id).update(data); },
+    newKey: function() { return this.ref().push().key; }
+  },
+  published: {
+    PATH: 'newsletter/published',
+    ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+    set: function(id, data) { return this.ref(id).set(data); },
+    remove: function(id) { return this.ref(id).remove(); }
+  },
+  meta: {
+    PATH: 'newsletter/meta',
+    issueCounter: function() { return MastDB._ref(this.PATH + '/issueCounter'); }
+  }
+};
+
+MastDB.blog = {
+  posts: {
+    PATH: 'blog/posts',
+    ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+    list: function(limit) {
+      return this.ref().orderByChild('createdAt').limitToLast(limit || 100).once('value');
+    },
+    get: function(id) { return this.ref(id).once('value'); },
+    set: function(id, data) { return this.ref(id).set(data); },
+    update: function(id, data) { return this.ref(id).update(data); },
+    remove: function(id) { return this.ref(id).remove(); },
+    fieldRef: function(id, field) { return MastDB._ref(this.PATH + '/' + id + '/' + field); }
+  },
+  ideas: {
+    PATH: 'blog/ideas',
+    ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+    list: function(limit) {
+      return this.ref().orderByChild('createdAt').limitToLast(limit || 50).once('value');
+    },
+    get: function(id) { return this.ref(id).once('value'); },
+    set: function(id, data) { return this.ref(id).set(data); },
+    remove: function(id) { return this.ref(id).remove(); }
+  },
+  published: {
+    PATH: 'blog/published',
+    ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+    set: function(id, data) { return this.ref(id).set(data); },
+    remove: function(id) { return this.ref(id).remove(); }
+  },
+  meta: {
+    PATH: 'blog/meta',
+    postCounter: function() { return MastDB._ref(this.PATH + '/postCounter'); }
+  }
+};
+
+MastDB.market = {
+  pendingClips: {
+    PATH: 'market/pendingClips',
+    ref: function(uid, clipId) {
+      var p = this.PATH + '/' + uid;
+      if (clipId) p += '/' + clipId;
+      return MastDB._ref(p);
+    },
+    list: function(uid) { return this.ref(uid).once('value'); },
+    set: function(uid, clipId, data) { return this.ref(uid, clipId).set(data); },
+    statusRef: function(uid, clipId) {
+      return MastDB._ref(this.PATH + '/' + uid + '/' + clipId + '/status');
+    }
+  },
+  posts: {
+    PATH: 'market/posts',
+    ref: function(uid, postId) {
+      var p = this.PATH + '/' + uid;
+      if (postId) p += '/' + postId;
+      return MastDB._ref(p);
+    },
+    list: function(uid) { return this.ref(uid).once('value'); },
+    set: function(uid, postId, data) { return this.ref(uid, postId).set(data); },
+    update: function(uid, postId, data) { return this.ref(uid, postId).update(data); }
+  }
+};
+
+MastDB.adminUsers = {
+  PATH: 'admin/users',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  list: function() { return this.ref().once('value'); },
+  get: function(id) { return this.ref(id).once('value'); },
+  set: function(id, data) { return this.ref(id).set(data); },
+  update: function(id, data) { return this.ref(id).update(data); },
+  subRef: function() { return MastDB._ref(this.PATH + '/' + Array.from(arguments).join('/')); }
+};
+
+MastDB.roles = {
+  PATH: 'admin/roles',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  list: function() { return this.ref().once('value'); },
+  get: function(id) { return this.ref(id).once('value'); },
+  set: function(id, data) { return this.ref(id).set(data); },
+  permissions: function(roleKey) { return MastDB._ref(this.PATH + '/' + roleKey + '/permissions'); }
+};
+
+MastDB.invites = {
+  PATH: 'admin/invites',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  list: function() { return this.ref().once('value'); },
+  get: function(id) { return this.ref(id).once('value'); },
+  set: function(id, data) { return this.ref(id).set(data); },
+  update: function(id, data) { return this.ref(id).update(data); },
+  remove: function(id) { return this.ref(id).remove(); },
+  queryPending: function() {
+    return this.ref().orderByChild('status').equalTo('pending').once('value');
+  }
+};
+
+MastDB.auditLog = {
+  PATH: 'admin/auditLog',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  push: function(data) { return MastDB._ref(this.PATH).push(data); },
+  newKey: function() { return MastDB._ref(this.PATH).push().key; },
+  queryByKey: function(opts) {
+    var q = this.ref().orderByKey();
+    if (opts && opts.endBefore) q = q.endBefore(opts.endBefore);
+    if (opts && opts.limit) q = q.limitToLast(opts.limit);
+    return q.once('value');
+  },
+  queryByEntity: function(entity, entityId, opts) {
+    var q = this.ref().orderByChild('objectId').equalTo(entity + ':' + entityId);
+    if (opts && opts.limit) q = q.limitToLast(opts.limit);
+    return q.once('value');
+  }
+};
+
+MastDB.auditIndex = {
+  PATH: 'admin/auditIndex',
+  ref: function() { return MastDB._ref(this.PATH + '/' + Array.from(arguments).join('/')); },
+  get: function(entity, entityId, opts) {
+    var ref = this.ref(entity, entityId);
+    if (opts && opts.limit) ref = ref.limitToLast(opts.limit);
+    return ref.once('value');
+  }
+};
+
+MastDB.feedback = {
+  PATH: 'feedbackReports',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  push: function(data) { return this.ref().push(data); }
+};
+
+MastDB.feedbackSettings = {
+  PATH: 'admin/feedbackSettings',
+  ref: function(field) { return MastDB._ref(this.PATH + (field ? '/' + field : '')); },
+  get: function() { return this.ref().once('value'); },
+  set: function(data) { return this.ref().set(data); }
+};
+
+MastDB.testingMissions = {
+  PATH: 'admin/testingMissions',
+  ref: function() { return MastDB._ref(this.PATH); },
+  list: function() { return this.ref().once('value'); }
+};
+
+MastDB.testingMode = {
+  PATH: 'admin/testingMode',
+  ref: function(uid, missionId) {
+    var p = this.PATH + '/' + uid;
+    if (missionId) p += '/' + missionId;
+    return MastDB._ref(p);
+  },
+  get: function(uid) { return this.ref(uid).once('value'); },
+  remove: function(uid) { return this.ref(uid).remove(); },
+  reflections: function(uid, missionId, type) {
+    return MastDB._ref(this.PATH + '/' + uid + '/' + missionId + '/reflections/' + type);
+  },
+  progress: function(uid, missionId, taskIdx) {
+    return MastDB._ref(this.PATH + '/' + uid + '/' + missionId + '/progress/' + taskIdx);
+  },
+  questions: function(uid, missionId) {
+    return MastDB._ref(this.PATH + '/' + uid + '/' + missionId + '/questions');
+  }
+};
+
+MastDB.trips = {
+  PATH: 'trips',
+  ref: function(uid, tripId) {
+    var p = this.PATH;
+    if (uid) p += '/' + uid;
+    if (tripId) p += '/' + tripId;
+    return MastDB._ref(p);
+  },
+  list: function(uid, opts) {
+    var q = this.ref(uid);
+    if (opts && opts.orderBy) q = q.orderByChild(opts.orderBy);
+    if (opts && opts.equalTo !== undefined) q = q.equalTo(opts.equalTo);
+    if (opts && opts.limit) q = q.limitToLast(opts.limit);
+    return q.once('value');
+  },
+  get: function(uid, tripId) { return this.ref(uid, tripId).once('value'); },
+  set: function(uid, tripId, data) { return this.ref(uid, tripId).set(data); },
+  update: function(uid, tripId, data) { return this.ref(uid, tripId).update(data); },
+  push: function(uid) { return this.ref(uid).push(); },
+  allDrivers: function() { return MastDB._ref(this.PATH).once('value'); }
+};
+
+MastDB.tripLocations = {
+  PATH: 'tripLocations',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  list: function() { return this.ref().once('value'); },
+  set: function(id, data) { return this.ref(id).set(data); },
+  setAll: function(data) { return this.ref().set(data); },
+  remove: function(id) { return this.ref(id).remove(); }
+};
+
+MastDB.tripSettings = {
+  PATH: 'settings/trips',
+  ref: function(field) { return MastDB._ref(this.PATH + (field ? '/' + field : '')); },
+  get: function() { return this.ref().once('value'); },
+  set: function(data) { return this.ref().set(data); },
+  subRef: function() { return MastDB._ref(this.PATH + '/' + Array.from(arguments).join('/')); }
+};
+
+MastDB.quickActions = {
+  PATH: 'quickActions',
+  ref: function(uid) { return MastDB._ref(this.PATH + (uid ? '/' + uid : '')); },
+  get: function(uid) { return this.ref(uid).once('value'); },
+  set: function(uid, data) { return this.ref(uid).set(data); }
+};
+
+MastDB.tripCustomPurposes = {
+  PATH: 'tripCustomPurposes',
+  ref: function() { return MastDB._ref(this.PATH); },
+  list: function() { return this.ref().once('value'); }
+};
+
+MastDB.config = {
+  square: function() { return MastDB._ref('config/square'); },
+  etsy: function() { return MastDB._ref('config/etsy'); },
+  shipping: function() { return MastDB._ref('public/config/shippingRates'); },
+  googleMaps: function() { return MastDB._ref('public/config/googleMapsApiKey'); },
+  testMode: function() { return MastDB._ref('public/config/testMode'); },
+  githubToken: function() { return MastDB._ref('admin/githubToken'); },
+  settings: function() { return MastDB._ref('public/settings'); },
+  settingsField: function(field) { return MastDB._ref('public/settings/' + field); },
+  migrationFlag: function() { return MastDB._ref('admin/sectionsMigrated'); },
+  analyticsHits: function() { return MastDB._ref('analytics/hits'); }
+};
+
+// MastDB.init() is called dynamically in the auth flow after tenant resolution.
+// Entity namespace definitions above are safe — they define functions but
+// don't call _ref() until invoked after init.
+
+// ============================================================
+// End MastDB
+// ============================================================
 
 const CATEGORIES = ['figurines', 'jewelry', 'drinkware', 'sculptures', 'vases', 'decorations', 'studio', 'other'];
 const SECTIONS = [
@@ -5310,17 +5953,10 @@ const SECTIONS = [
   { id: 'sculpture', label: 'Sculpture', description: 'Glass sculptures' }
 ];
 const SHOP_SECTION_IDS = ['shop', 'figurines', 'jewelry', 'drinkware', 'vases', 'decoration', 'sculpture'];
-const MIGRATION_FLAG_PATH = 'shirglassworks/admin/sectionsMigrated';
-
 // GitHub image upload
 const GITHUB_REPO = 'stewartdavidp-ship-it/shirglassworks';
 const GITHUB_IMAGES_PATH = 'images';
 const GITHUB_PAGES_BASE = 'https://stewartdavidp-ship-it.github.io/shirglassworks';
-const GITHUB_TOKEN_PATH = 'shirglassworks/admin/githubToken';
-const SETTINGS_PATH = 'shirglassworks/public/settings';
-const ANALYTICS_HITS_PATH = 'shirglassworks/analytics/hits';
-const SQUARE_CONFIG_PATH = 'shirglassworks/config/square';
-
 // ============================================================
 // State
 // ============================================================
@@ -5338,54 +5974,42 @@ let pendingFilename = null;
 var couponsLoaded = false;
 var coupons = {};
 var couponsListener = null;
-var COUPONS_PATH = 'shirglassworks/admin/coupons';
 var ordersLoaded = false;
 var orders = {};
 var ordersListener = null;
-var ORDERS_PATH = 'shirglassworks/orders';
 var orderFilter = 'active';
 var selectedOrderId = null;
 var salesLoaded = false;
 var sales = {};
 var salesListener = null;
-var SALES_PATH = 'shirglassworks/admin/sales';
 var selectedSaleId = null;
-var SQUARE_PAYMENTS_PATH = 'shirglassworks/admin/square-payments';
 var squarePayments = {};
 var squarePaymentsLoaded = false;
 var squarePaymentsListener = null;
 var showingSquarePayments = false;
-var COMMISSIONS_PATH = 'shirglassworks/admin/commissions';
 var commissionsData = {};
 var commissionsLoaded = false;
 var salesEventsLoaded = false;
 var salesEventsData = {};
 var salesEventsListener = null;
-var SALES_EVENTS_PATH = 'shirglassworks/admin/salesEvents';
 var selectedSalesEventId = null;
 var editingEventId = null;
 var packingEventId = null;
 var packingCamera = null;
 var activeEventId = null;
-var LOCATIONS_PATH = 'shirglassworks/admin/locations';
 var locationsData = {};
 var locationsLoaded = false;
 var locationsListener = null;
 var productionRequests = {};
 var productionRequestsListener = null;
-var PRODUCTION_REQUESTS_PATH = 'shirglassworks/admin/buildJobs';
 var productionJobs = {};
 var productionJobsListener = null;
-var PRODUCTION_JOBS_PATH = 'shirglassworks/admin/jobs';
 var operators = {};
 var operatorsListener = null;
-var OPERATORS_PATH = 'shirglassworks/admin/operators';
 var productionLoaded = false;
 var selectedProductionJobId = null;
 var productionSubView = 'jobs';
 var activeBuildId = null;
-var BUILD_MEDIA_PATH = 'shirglassworks/admin/buildMedia';
-var STORIES_PATH = 'shirglassworks/public/stories';
 var storiesData = {};
 var storiesLoaded = false;
 var storiesListener = null;
@@ -5395,9 +6019,6 @@ var storyDraft = null;
 var storyCurationJobId = null;
 var inventory = {};
 var inventoryListener = null;
-var INVENTORY_PATH = 'shirglassworks/admin/inventory';
-var PRODUCTS_PATH = 'shirglassworks/public/products';
-var IMAGES_PATH = 'shirglassworks/images';
 var selectedProductPid = null;
 var productEditMode = false; // false = view, true = editing/creating
 var productCreateMode = false; // true when creating new product
@@ -5406,7 +6027,6 @@ var productEditTab = 'details'; // details | variants | images | production | in
 // ============================================================
 // Contacts
 // ============================================================
-var CONTACTS_PATH = 'shirglassworks/admin/contacts';
 var contactsData = [];
 var contactsLoaded = false;
 var selectedContactId = null;
@@ -5418,17 +6038,8 @@ var CONTACT_CATEGORIES = ['Supplier', 'Facilities', 'Gallery', 'Marketplace', 'E
 var INTERACTION_TYPES = ['Call', 'Email', 'Meeting', 'Site Visit', 'Payment', 'Signed Doc', 'Other'];
 
 // ============================================================
-// Audit Trail (Phase E2)
-// ============================================================
-var AUDIT_LOG_PATH = 'shirglassworks/admin/auditLog';
-var AUDIT_INDEX_PATH = 'shirglassworks/admin/auditIndex';
-
-// ============================================================
 // RBAC — Roles & Permissions (Phase E1)
 // ============================================================
-var ROLES_PATH = 'shirglassworks/admin/roles';
-var ADMIN_USERS_PATH = 'shirglassworks/admin/users';
-var INVITES_PATH = 'shirglassworks/admin/invites';
 var ROLE_DISPLAY_NAMES = { admin: 'Owner', user: 'Manager', guest: 'Staff' };
 var currentUserRole = null;   // 'admin' | 'user' | 'guest' | null
 var currentRoleConfig = null; // Full role record with permissions map
@@ -5686,25 +6297,26 @@ function isStaff() {
  */
 async function loadUserRole(uid) {
   try {
-    var userSnap = await db.ref(ADMIN_USERS_PATH + '/' + uid).once('value');
+    var userSnap = await MastDB.adminUsers.ref(uid).once('value');
     var userData = userSnap.val();
 
     if (!userData) {
       // Determine initial role:
-      // - Known admin UIDs (ALLOWED_UIDS) bootstrap as admin (migration path)
       // - Check for pending invite by email — assign invited role
       // - Everyone else auto-provisions as guest
-      var initialRole = ALLOWED_UIDS.includes(uid) ? 'admin' : 'guest';
+      // Admin status is now determined by the platform registry (mast-platform/userTenantMap),
+      // not a hardcoded UID array. Existing admins already have role:'admin' in their user record.
+      var initialRole = 'guest';
 
       // Check for pending invite
       if (initialRole !== 'admin' && currentUser.email) {
         var inviteKey = currentUser.email.toLowerCase().replace(/\./g, ',');
         try {
-          var inviteSnap = await db.ref(INVITES_PATH + '/' + inviteKey).once('value');
+          var inviteSnap = await MastDB.invites.ref(inviteKey).once('value');
           var invite = inviteSnap.val();
           if (invite && invite.status === 'pending' && invite.role && invite.invitedBy !== uid) {
             initialRole = invite.role;
-            await db.ref(INVITES_PATH + '/' + inviteKey).update({
+            await MastDB.invites.ref(inviteKey).update({
               status: 'accepted',
               acceptedAt: new Date().toISOString(),
               acceptedByUid: uid
@@ -5724,17 +6336,17 @@ async function loadUserRole(uid) {
         createdAt: firebase.database.ServerValue.TIMESTAMP,
         lastLoginAt: firebase.database.ServerValue.TIMESTAMP
       };
-      await db.ref(ADMIN_USERS_PATH + '/' + uid).set(userData);
+      await MastDB.adminUsers.ref(uid).set(userData);
     } else {
       // Update lastLoginAt only — don't overwrite role (may have been elevated)
-      await db.ref(ADMIN_USERS_PATH + '/' + uid + '/lastLoginAt')
+      await MastDB.adminUsers.subRef(uid, 'lastLoginAt')
         .set(firebase.database.ServerValue.TIMESTAMP);
     }
 
     currentUserRole = userData.role || 'guest';
 
     // Load role permission config
-    var roleSnap = await db.ref(ROLES_PATH + '/' + currentUserRole).once('value');
+    var roleSnap = await MastDB.roles.ref(currentUserRole).once('value');
     currentRoleConfig = roleSnap.val();
 
     // Fallback: if role config missing in Firebase, use built-in defaults
@@ -5760,18 +6372,18 @@ async function loadUserRole(uid) {
  */
 async function seedRolesAndAdminUser() {
   try {
-    var rolesSnap = await db.ref(ROLES_PATH).once('value');
+    var rolesSnap = await MastDB.roles.ref().once('value');
     if (rolesSnap.exists()) {
       console.log('RBAC: Roles already seeded, skipping.');
       return false;
     }
 
     // Seed all three default roles
-    await db.ref(ROLES_PATH).set(DEFAULT_ROLES);
+    await MastDB.roles.ref().set(DEFAULT_ROLES);
 
     // Create admin user record for current user (must be the original admin)
     if (currentUser && currentUser.uid) {
-      await db.ref(ADMIN_USERS_PATH + '/' + currentUser.uid).set({
+      await MastDB.adminUsers.ref(currentUser.uid).set({
         uid: currentUser.uid,
         displayName: currentUser.displayName || 'Admin',
         email: currentUser.email || '',
@@ -5789,6 +6401,104 @@ async function seedRolesAndAdminUser() {
     console.error('RBAC seed failed:', err);
     showToast('RBAC seed failed: ' + err.message, true);
     return false;
+  }
+}
+
+/**
+ * Seed the Mast platform registry (mast-platform/ in Firebase).
+ * Creates tenant config, userTenantMap, and domain lookup.
+ * Auto-discovers existing admin/user-role users from tenant data.
+ * Idempotent — skips if already seeded.
+ */
+async function seedPlatformRegistry() {
+  try {
+    var registrySnap = await db.ref('mast-platform/tenants/shirglassworks').once('value');
+    if (registrySnap.exists()) {
+      console.log('Platform registry already seeded.');
+      return false;
+    }
+
+    // Discover existing users from tenant data
+    var usersSnap = await MastDB.adminUsers.ref().once('value');
+    var existingUsers = usersSnap.val() || {};
+
+    // Build userTenantMap from existing admin/user records
+    var userTenantMap = {};
+    Object.keys(existingUsers).forEach(function(uid) {
+      var user = existingUsers[uid];
+      if (user.role === 'admin' || user.role === 'user') {
+        userTenantMap[uid] = {
+          shirglassworks: {
+            role: user.role,
+            joinedAt: new Date().toISOString()
+          }
+        };
+      }
+    });
+
+    // Ensure current user is included as admin
+    if (!userTenantMap[currentUser.uid]) {
+      userTenantMap[currentUser.uid] = {
+        shirglassworks: {
+          role: 'admin',
+          joinedAt: new Date().toISOString()
+        }
+      };
+    }
+
+    // Seed the full registry
+    await db.ref('mast-platform').set({
+      tenants: {
+        shirglassworks: {
+          config: {
+            businessName: 'Shir Glassworks',
+            domain: 'shirglassworks.com',
+            databaseUrl: null
+          },
+          subscription: {
+            tier: 'pro',
+            enabledModules: ['make', 'market', 'sell', 'ship', 'run', 'team'],
+            status: 'active'
+          },
+          status: 'active'
+        }
+      },
+      tenantsByDomain: {
+        shirglassworks_com: 'shirglassworks'
+      },
+      userTenantMap: userTenantMap
+    });
+
+    console.log('Platform registry seeded with', Object.keys(userTenantMap).length, 'users');
+    showToast('Platform registry seeded');
+    return true;
+  } catch (err) {
+    console.error('Platform registry seed failed:', err);
+    showToast('Platform registry seed failed: ' + err.message, true);
+    return false;
+  }
+}
+
+/**
+ * Resolve which tenant a user belongs to by checking the platform registry.
+ * Returns tenantId string or null if user has no tenant membership.
+ * For single-tenant users, auto-selects. Multi-tenant picker deferred to Phase 6.
+ */
+async function resolveTenant(uid) {
+  try {
+    var mapSnap = await db.ref('mast-platform/userTenantMap/' + uid).once('value');
+    var tenantMap = mapSnap.val();
+    if (!tenantMap) return null;
+
+    var tenantIds = Object.keys(tenantMap);
+    if (tenantIds.length === 0) return null;
+    if (tenantIds.length === 1) return tenantIds[0];
+
+    // Multiple tenants — return first for now (picker UI is Phase 6)
+    return tenantIds[0];
+  } catch (err) {
+    console.error('Tenant resolution failed:', err);
+    return null;
   }
 }
 
@@ -5831,13 +6541,13 @@ async function writeAudit(action, entity, entityId) {
       }
     };
 
-    var logKey = db.ref(AUDIT_LOG_PATH).push().key;
+    var logKey = MastDB.auditLog.newKey();
     var updates = {};
-    updates[AUDIT_LOG_PATH + '/' + logKey] = entry;
+    updates['admin/auditLog/' + logKey] = entry;
     if (entityId) {
-      updates[AUDIT_INDEX_PATH + '/' + entity + '/' + entityId + '/' + logKey] = entry;
+      updates['admin/auditIndex/' + entity + '/' + entityId + '/' + logKey] = entry;
     }
-    await db.ref().update(updates);
+    await MastDB._multiUpdate(updates);
   } catch (err) {
     // Audit failures must NEVER block the operation
     console.error('Audit write failed:', err);
@@ -5875,6 +6585,7 @@ if (TEST_MODE && new URLSearchParams(window.location.search).get('testmode') ===
   // Uses a non-privileged UID that has NO Firebase write permissions,
   // so the UI is viewable but writes will fail (safe for previewing layout).
   console.warn('[TEST_MODE] Running in test mode — Firebase writes will fail.');
+  MastDB.init({ tenantId: 'shirglassworks', db: db }); // Default tenant for test mode
   currentUser = { uid: 'test-local-preview', photoURL: '', displayName: 'Test User (Local)' };
   currentUserRole = 'admin';
   currentRoleConfig = DEFAULT_ROLES.admin;
@@ -5902,6 +6613,45 @@ auth.onAuthStateChanged(async function(user) {
     rbacReady = false;
     return;
   }
+
+  // --- Tenant Resolution ---
+  // Resolve tenant membership from platform registry before loading any data.
+  // MastDB.init() must happen before loadUserRole() since role loading uses MastDB.
+  var tenantId = await resolveTenant(user.uid);
+  if (!tenantId) {
+    // No tenant membership in platform registry yet.
+    // Bootstrap check: if mast-platform doesn't exist at all, this is first login
+    // after Phase 1b deploy. Temporarily init MastDB to check if user has an existing
+    // admin record in the tenant data (pre-registry admin). If so, seed the registry.
+    MastDB.init({ tenantId: 'shirglassworks', db: db });
+    try {
+      var existingUserSnap = await MastDB.adminUsers.ref(user.uid).once('value');
+      var existingUser = existingUserSnap.val();
+      if (existingUser && existingUser.role === 'admin') {
+        // Existing admin — seed the platform registry now
+        console.log('Bootstrap: existing admin detected, seeding platform registry...');
+        await seedPlatformRegistry();
+        // Re-resolve tenant — should succeed now
+        tenantId = await resolveTenant(user.uid);
+      }
+    } catch (bootstrapErr) {
+      console.error('Bootstrap check failed:', bootstrapErr);
+    }
+
+    if (!tenantId) {
+      // Still no tenant — genuinely unauthorized user
+      console.warn('No tenant membership for UID:', user.uid);
+      authScreen.style.display = 'none';
+      deniedScreen.style.display = '';
+      header.style.display = 'none';
+      hideSidebar();
+      hideAdminTabs();
+      detachListeners();
+      return;
+    }
+  }
+  MastDB.init({ tenantId: tenantId, db: db });
+  // --- End Tenant Resolution ---
 
   // Load user role from Firebase (auto-provisions as guest if new)
   var role = await loadUserRole(user.uid);
@@ -5941,7 +6691,7 @@ auth.onAuthStateChanged(async function(user) {
 
   // Load GitHub token for image uploads — admin only
   if (isAdmin()) {
-    db.ref(GITHUB_TOKEN_PATH).once('value').then(function(snap) {
+    MastDB.config.githubToken().once('value').then(function(snap) {
       githubToken = snap.val();
     });
   }
@@ -5955,10 +6705,11 @@ auth.onAuthStateChanged(async function(user) {
   // Show feedback button for all logged-in users
   initFeedbackFab();
 
-  // One-time RBAC seed — creates default roles if they don't exist yet.
+  // One-time seeds — creates default roles and platform registry if they don't exist.
   // Only runs for admin users, safe to call repeatedly (idempotent).
   if (isAdmin()) {
     seedRolesAndAdminUser();
+    seedPlatformRegistry();
   }
 });
 
@@ -6285,7 +7036,7 @@ async function saveGitHubToken() {
     return;
   }
   try {
-    await db.ref(GITHUB_TOKEN_PATH).set(token);
+    await MastDB.config.githubToken().set(token);
     await writeAudit('update', 'settings', 'githubToken');
     githubToken = token;
     document.getElementById('githubTokenInput').value = '';
@@ -6327,7 +7078,7 @@ async function saveEventsCount() {
     return;
   }
   try {
-    await db.ref(SETTINGS_PATH + '/homepageEventsCount').set(count);
+    await MastDB.config.settingsField('homepageEventsCount').set(count);
     await writeAudit('update', 'settings', 'homepageEventsCount');
     showToast('Events count saved: ' + count);
     document.getElementById('eventsCountStatus').innerHTML = '<span style="color:var(--teal);">&#10003; Saved</span>';
@@ -6337,7 +7088,7 @@ async function saveEventsCount() {
 }
 
 function loadSettings() {
-  db.ref(SETTINGS_PATH).once('value').then(function(snap) {
+  MastDB.config.settings().once('value').then(function(snap) {
     var settings = snap.val() || {};
     var countInput = document.getElementById('eventsCountInput');
     if (countInput && settings.homepageEventsCount) {
@@ -6361,7 +7112,7 @@ async function toggleDarkMode() {
   var enabled = toggle.checked;
   document.body.classList.toggle('dark-mode', enabled);
   try {
-    await db.ref(SETTINGS_PATH + '/adminDarkMode').set(enabled);
+    await MastDB.config.settingsField('adminDarkMode').set(enabled);
     await writeAudit('update', 'settings', 'adminDarkMode');
   } catch (err) {
     showToast('Error saving dark mode: ' + err.message, true);
@@ -6457,7 +7208,7 @@ async function saveSquareConfig() {
       secrets: secrets,
       metadata: metadata
     });
-    await db.ref('shirglassworks/public/config/testMode').set(env === 'sandbox');
+    await MastDB.config.testMode().set(env === 'sandbox');
     await writeAudit('update', 'settings', 'squareConfig');
     // Re-mask all fields after save
     loadSquareConfig();
@@ -6505,7 +7256,7 @@ function loadSquareConfig() {
   }).catch(function(err) {
     // Fallback to direct RTDB read (pre-migration)
     console.warn('shirSecretsManager read failed, falling back to RTDB:', err.message);
-    db.ref(SQUARE_CONFIG_PATH).once('value').then(function(snap) {
+    MastDB.config.square().once('value').then(function(snap) {
       var config = snap.val();
       if (!config) {
         if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray-light);">No Square config set.</span>';
@@ -6535,7 +7286,6 @@ function loadSquareConfig() {
 // ============================================================
 // Shipping Config Management
 // ============================================================
-var SHIPPING_CONFIG_PATH = 'shirglassworks/public/config/shippingRates';
 
 async function saveShippingConfig() {
   var categories = ['small', 'medium', 'large', 'oversized'];
@@ -6564,7 +7314,7 @@ async function saveShippingConfig() {
   config.updatedAt = new Date().toISOString();
 
   try {
-    await db.ref(SHIPPING_CONFIG_PATH).set(config);
+    await MastDB.config.shipping().set(config);
     await writeAudit('update', 'settings', 'shippingConfig');
     document.getElementById('shippingConfigStatus').innerHTML = '<span style="color:var(--teal);">&#10003; Shipping config saved</span>';
     showToast('Shipping configuration saved.');
@@ -6574,7 +7324,7 @@ async function saveShippingConfig() {
 }
 
 function loadShippingConfig() {
-  db.ref(SHIPPING_CONFIG_PATH).once('value').then(function(snap) {
+  MastDB.config.shipping().once('value').then(function(snap) {
     var config = snap.val();
     var statusEl = document.getElementById('shippingConfigStatus');
     if (!config) {
@@ -6608,14 +7358,12 @@ function loadShippingConfig() {
 // ============================================================
 // Google Maps API Key Management
 // ============================================================
-var GOOGLE_CONFIG_PATH = 'shirglassworks/public/config/googleMapsApiKey';
-
 async function saveGoogleConfig() {
   var key = getFieldValue('googleMapsApiKey');
   if (!key) { showToast('API key is required.', true); return; }
 
   try {
-    await db.ref(GOOGLE_CONFIG_PATH).set(key);
+    await MastDB.config.googleMaps().set(key);
     await writeAudit('update', 'settings', 'googleMapsApiKey');
     setMaskedField('googleMapsApiKey', key);
     document.getElementById('googleConfigStatus').innerHTML = '<span style="color:var(--teal);">&#10003; Google Maps API key saved</span>';
@@ -6626,7 +7374,7 @@ async function saveGoogleConfig() {
 }
 
 function loadGoogleConfig() {
-  db.ref(GOOGLE_CONFIG_PATH).once('value').then(function(snap) {
+  MastDB.config.googleMaps().once('value').then(function(snap) {
     var key = snap.val();
     var statusEl = document.getElementById('googleConfigStatus');
     if (key) {
@@ -6641,8 +7389,6 @@ function loadGoogleConfig() {
 // ============================================================
 // Etsy Config Management
 // ============================================================
-const ETSY_CONFIG_PATH = 'shirglassworks/config/etsy';
-
 async function connectEtsy() {
   var apiKey = document.getElementById('etsyApiKey').value.trim();
   if (!apiKey) {
@@ -6682,7 +7428,7 @@ async function disconnectEtsy() {
   try {
     await writeAudit('delete', 'settings', 'etsyConfig');
     // Remove metadata from RTDB (secrets in Secret Manager become stale — overwritten on reconnect)
-    await db.ref(ETSY_CONFIG_PATH).remove();
+    await MastDB.config.etsy().remove();
     loadEtsyConfig();
     showToast('Etsy disconnected.');
   } catch (err) {
@@ -6719,7 +7465,7 @@ function loadEtsyConfig() {
   }).catch(function(err) {
     // Fallback to RTDB (pre-migration)
     console.warn('shirSecretsManager Etsy read failed, falling back:', err.message);
-    db.ref(ETSY_CONFIG_PATH).once('value').then(function(snap) {
+    MastDB.config.etsy().once('value').then(function(snap) {
       var config = snap.val();
       if (config && config.accessToken && config.shopId) {
         if (disconnectedEl) disconnectedEl.style.display = 'none';
@@ -6786,7 +7532,7 @@ async function loadProducts() {
   var loading = document.getElementById('productsLoading');
   loading.style.display = '';
   try {
-    var snap = await db.ref('shirglassworks/public/products').once('value');
+    var snap = await MastDB.products.ref().once('value');
     var val = snap.val();
     productsData = val ? Object.values(val) : [];
     productsData.sort(function(a, b) { return a.name.localeCompare(b.name); });
@@ -7013,7 +7759,7 @@ function loadAndRenderForecast() {
   if (!salesEventsLoaded) loadSalesEvents();
   // Load orders with limitToLast(500) for forecast (separate from main orders listener)
   if (!forecastOrdersLoaded) {
-    db.ref(ORDERS_PATH).limitToLast(500).once('value').then(function(snap) {
+    MastDB.orders.ref().limitToLast(500).once('value').then(function(snap) {
       forecastOrders = snap.val() || {};
       forecastOrdersLoaded = true;
       computeAndRenderForecast();
@@ -7341,9 +8087,9 @@ async function doCreateForecastJob(pid, suggestedQty, purpose) {
   }
   try {
     var product = productsData.find(function(p) { return p.pid === pid; });
-    var jobRef = db.ref(PRODUCTION_JOBS_PATH).push();
+    var jobRef = MastDB.productionJobs.ref().push();
     var jobId = jobRef.key;
-    var lineItemId = db.ref(PRODUCTION_JOBS_PATH + '/' + jobId + '/lineItems').push().key;
+    var lineItemId = MastDB.productionJobs.lineItems(jobId).push().key;
     await jobRef.set({
       name: name,
       description: 'Auto-suggested from Forecast view',
@@ -7361,7 +8107,7 @@ async function doCreateForecastJob(pid, suggestedQty, purpose) {
       lineItems: {}
     });
     // Add pre-populated line item
-    await db.ref(PRODUCTION_JOBS_PATH + '/' + jobId + '/lineItems/' + lineItemId).set({
+    await MastDB.productionJobs.lineItems(jobId, lineItemId).set({
       productId: pid,
       productName: product ? product.name : pid,
       targetQuantity: suggestedQty,
@@ -7779,14 +8525,14 @@ function loadProductInventoryHistory(pid) {
   var el = document.getElementById('pdInventoryHistory');
   if (!el) return;
   // Query audit log for inventory changes for this product
-  db.ref('shirglassworks/admin/auditLog').orderByChild('objectId').equalTo(pid).limitToLast(20).once('value', function(snap) {
+  MastDB.auditLog.ref().orderByChild('objectId').equalTo(pid).limitToLast(20).once('value', function(snap) {
     var entries = [];
     snap.forEach(function(child) {
       var e = child.val();
       if (e.objectType === 'inventory' || e.objectType === 'stock') entries.push(e);
     });
     // Also check sales that include this product
-    db.ref(SALES_PATH).orderByKey().limitToLast(100).once('value', function(salesSnap) {
+    MastDB.sales.ref().orderByKey().limitToLast(100).once('value', function(salesSnap) {
       var salesVal = salesSnap.val() || {};
       Object.keys(salesVal).forEach(function(k) {
         var s = salesVal[k];
@@ -8292,7 +9038,7 @@ async function saveProduct(pid) {
     productData.costToBuildHistory = costToBuildHistory;
 
     // Save to Firebase
-    await db.ref(PRODUCTS_PATH + '/' + targetPid).set(productData);
+    await MastDB.products.ref(targetPid).set(productData);
     await writeAudit(isCreate ? 'create' : 'update', 'products', targetPid);
 
     showToast(isCreate ? 'Product created' : 'Product saved');
@@ -8337,8 +9083,8 @@ async function uploadProductImage(pid, fileInput) {
           var imageIds = product.imageIds || [];
           images.push(result.url);
           imageIds.push(result.imageId);
-          await db.ref(PRODUCTS_PATH + '/' + pid + '/images').set(images);
-          await db.ref(PRODUCTS_PATH + '/' + pid + '/imageIds').set(imageIds);
+          await MastDB.products.imagesRef(pid).set(images);
+          await MastDB.products.imageIdsRef(pid).set(imageIds);
           await writeAudit('update', 'products', pid);
           product.images = images;
           product.imageIds = imageIds;
@@ -8364,8 +9110,8 @@ function selectProductImageFromLibrary(pid) {
     var imageIds = product.imageIds || [];
     images.push(url);
     imageIds.push(imgId);
-    db.ref(PRODUCTS_PATH + '/' + pid + '/images').set(images);
-    db.ref(PRODUCTS_PATH + '/' + pid + '/imageIds').set(imageIds);
+    MastDB.products.imagesRef(pid).set(images);
+    MastDB.products.imageIdsRef(pid).set(imageIds);
     writeAudit('update', 'products', pid);
     product.images = images;
     product.imageIds = imageIds;
@@ -8472,7 +9218,7 @@ async function saveProductSettings(pid) {
       updatedAt: new Date().toISOString()
     };
 
-    await db.ref(INVENTORY_PATH + '/' + pid).update(updates);
+    await MastDB.inventory.ref(pid).update(updates);
     await writeAudit('update', 'inventory', pid);
     showToast('Settings saved');
     if (!inventory[pid]) inventory[pid] = {};
@@ -8582,7 +9328,7 @@ async function saveAdjustStock(pid) {
       }
     }
 
-    await db.ref(INVENTORY_PATH + '/' + pid).update(updates);
+    await MastDB.inventory.ref(pid).update(updates);
     await writeAudit('update', 'inventory', pid);
     emitTestingEvent('adjustStock', {});
 
@@ -8590,12 +9336,12 @@ async function saveAdjustStock(pid) {
     if (isSculptureAdj) {
       var finalAvail = updates['stock/_default/available'] || 0;
       if (finalAvail <= 0) {
-        await db.ref(PRODUCTS_PATH + '/' + pid + '/status').set('sold');
+        await MastDB.products.statusRef(pid).set('sold');
         var localP = productsData.find(function(x) { return x.pid === pid; });
         if (localP) localP.status = 'sold';
       } else {
         // Clear sold status if restocked
-        await db.ref(PRODUCTS_PATH + '/' + pid + '/status').remove();
+        await MastDB.products.statusRef(pid).remove();
         var localP = productsData.find(function(x) { return x.pid === pid; });
         if (localP) delete localP.status;
       }
@@ -8603,7 +9349,7 @@ async function saveAdjustStock(pid) {
 
     // Refresh local cache from Firebase to pick up current reserved values
     if (!inventory[pid]) inventory[pid] = { pid: pid };
-    var freshSnap = await db.ref(INVENTORY_PATH + '/' + pid + '/stock').once('value');
+    var freshSnap = await MastDB.inventory.stockRef(pid).once('value');
     inventory[pid].stock = freshSnap.val() || {};
     closeModal();
     showToast('Stock updated');
@@ -8668,7 +9414,7 @@ async function loadAnalytics() {
   loading.style.display = '';
 
   try {
-    var snap = await db.ref(ANALYTICS_HITS_PATH)
+    var snap = await MastDB.config.analyticsHits()
       .orderByChild('ts')
       .limitToLast(2000)
       .once('value');
@@ -8850,7 +9596,7 @@ function formatTimeAgo(ts) {
 // ============================================================
 function attachListeners() {
   if (!eventsListener) {
-    eventsListener = db.ref(EVENTS_PATH).limitToLast(200).on('value', function(snap) {
+    eventsListener = MastDB.events.listen(200, function(snap) {
       events = snap.val() || {};
       renderEvents();
     }, function(err) {
@@ -8858,7 +9604,7 @@ function attachListeners() {
     });
   }
   if (!galleryListener) {
-    galleryListener = db.ref(GALLERY_PATH).limitToLast(500).on('value', function(snap) {
+    galleryListener = MastDB.gallery.listen(500, function(snap) {
       gallery = snap.val() || {};
       autoReindexIfNeeded();
       renderGallery();
@@ -8867,7 +9613,7 @@ function attachListeners() {
     });
   }
   if (!imageLibraryListener) {
-    imageLibraryListener = db.ref(IMAGES_PATH).limitToLast(500).on('value', function(snap) {
+    imageLibraryListener = MastDB.images.listen(500, function(snap) {
       imageLibrary = snap.val() || {};
       imageLibraryLoaded = true;
       if (currentRoute === 'images') renderImageLibrary();
@@ -8876,7 +9622,7 @@ function attachListeners() {
     });
   }
   if (!couponsListener) {
-    couponsListener = db.ref(COUPONS_PATH).limitToLast(200).on('value', function(snap) {
+    couponsListener = MastDB.coupons.listen(200, function(snap) {
       coupons = snap.val() || {};
       couponsLoaded = true;
       renderCoupons();
@@ -8885,7 +9631,7 @@ function attachListeners() {
     });
   }
   if (!ordersListener) {
-    ordersListener = db.ref(ORDERS_PATH).limitToLast(100).on('value', function(snap) {
+    ordersListener = MastDB.orders.listen(100, function(snap) {
       orders = snap.val() || {};
       ordersLoaded = true;
       renderOrders();
@@ -8896,7 +9642,7 @@ function attachListeners() {
     });
   }
   if (!salesListener) {
-    salesListener = db.ref(SALES_PATH).limitToLast(200).on('value', function(snap) {
+    salesListener = MastDB.sales.listen(200, function(snap) {
       sales = snap.val() || {};
       salesLoaded = true;
       renderSales();
@@ -8905,7 +9651,7 @@ function attachListeners() {
     });
   }
   if (!squarePaymentsListener) {
-    squarePaymentsListener = db.ref(SQUARE_PAYMENTS_PATH).limitToLast(200).on('value', function(snap) {
+    squarePaymentsListener = MastDB.squarePayments.listen(200, function(snap) {
       squarePayments = snap.val() || {};
       squarePaymentsLoaded = true;
       if (showingSquarePayments) renderSquarePayments();
@@ -8914,7 +9660,7 @@ function attachListeners() {
     });
   }
   if (!salesEventsListener) {
-    salesEventsListener = db.ref(SALES_EVENTS_PATH).limitToLast(100).on('value', function(snap) {
+    salesEventsListener = MastDB.salesEvents.listen(100, function(snap) {
       salesEventsData = snap.val() || {};
       salesEventsLoaded = true;
       // Track the active event
@@ -8929,7 +9675,7 @@ function attachListeners() {
     });
   }
   if (!productionRequestsListener) {
-    productionRequestsListener = db.ref(PRODUCTION_REQUESTS_PATH).limitToLast(100).on('value', function(snap) {
+    productionRequestsListener = MastDB.productionRequests.listen(100, function(snap) {
       productionRequests = snap.val() || {};
       if (selectedOrderId) renderOrderDetail(selectedOrderId);
     }, function(err) {
@@ -8937,7 +9683,7 @@ function attachListeners() {
     });
   }
   if (!inventoryListener) {
-    inventoryListener = db.ref(INVENTORY_PATH).limitToLast(500).on('value', function(snap) {
+    inventoryListener = MastDB.inventory.listen(500, function(snap) {
       inventory = snap.val() || {};
     }, function(err) {
       showToast('Error loading inventory: ' + err.message, true);
@@ -8947,39 +9693,39 @@ function attachListeners() {
 
 function detachListeners() {
   if (eventsListener) {
-    db.ref(EVENTS_PATH).off('value', eventsListener);
+    MastDB.events.unlisten(eventsListener);
     eventsListener = null;
   }
   if (galleryListener) {
-    db.ref(GALLERY_PATH).off('value', galleryListener);
+    MastDB.gallery.unlisten(galleryListener);
     galleryListener = null;
   }
   if (imageLibraryListener) {
-    db.ref(IMAGES_PATH).off('value', imageLibraryListener);
+    MastDB.images.unlisten(imageLibraryListener);
     imageLibraryListener = null;
   }
   if (couponsListener) {
-    db.ref(COUPONS_PATH).off('value', couponsListener);
+    MastDB.coupons.unlisten(couponsListener);
     couponsListener = null;
   }
   if (ordersListener) {
-    db.ref(ORDERS_PATH).off('value', ordersListener);
+    MastDB.orders.unlisten(ordersListener);
     ordersListener = null;
   }
   if (productionRequestsListener) {
-    db.ref(PRODUCTION_REQUESTS_PATH).off('value', productionRequestsListener);
+    MastDB.productionRequests.unlisten(productionRequestsListener);
     productionRequestsListener = null;
   }
   if (inventoryListener) {
-    db.ref(INVENTORY_PATH).off('value', inventoryListener);
+    MastDB.inventory.unlisten(inventoryListener);
     inventoryListener = null;
   }
   if (salesEventsListener) {
-    db.ref(SALES_EVENTS_PATH).off('value', salesEventsListener);
+    MastDB.salesEvents.unlisten(salesEventsListener);
     salesEventsListener = null;
   }
   if (squarePaymentsListener) {
-    db.ref(SQUARE_PAYMENTS_PATH).off('value', squarePaymentsListener);
+    MastDB.squarePayments.unlisten(squarePaymentsListener);
     squarePaymentsListener = null;
   }
   events = {};
@@ -9302,7 +10048,7 @@ function loadAuditLog() {
   }
   if (auditLoaded) { renderAuditLog(); return; }
   document.getElementById('auditLoading').style.display = '';
-  var ref = db.ref(AUDIT_LOG_PATH).orderByKey().limitToLast(auditPageSize + 1);
+  var ref = MastDB.auditLog.ref().orderByKey().limitToLast(auditPageSize + 1);
   ref.once('value').then(function(snap) {
     auditEntries = [];
     auditKnownActors = {};
@@ -9336,7 +10082,7 @@ function loadAuditLog() {
 
 function loadMoreAuditEntries() {
   if (!auditLastKey) return;
-  var ref = db.ref(AUDIT_LOG_PATH).orderByKey().endBefore(auditLastKey).limitToLast(auditPageSize + 1);
+  var ref = MastDB.auditLog.ref().orderByKey().endBefore(auditLastKey).limitToLast(auditPageSize + 1);
   ref.once('value').then(function(snap) {
     var newEntries = [];
     snap.forEach(function(child) {
@@ -9478,7 +10224,7 @@ function clearAuditFilters() {
 async function renderRecordHistory(entity, entityId) {
   if (!hasPermission('auditLog', 'read') || !entityId) return '';
   try {
-    var snap = await db.ref(AUDIT_INDEX_PATH + '/' + entity + '/' + entityId)
+    var snap = await MastDB.auditIndex.ref(entity, entityId)
       .orderByKey().limitToLast(20).once('value');
     if (!snap.exists()) return '';
     var entries = [];
@@ -9525,7 +10271,7 @@ function loadAdminUsers() {
     return;
   }
   document.getElementById('usersLoading').style.display = '';
-  db.ref(ADMIN_USERS_PATH).once('value').then(function(snap) {
+  MastDB.adminUsers.ref().once('value').then(function(snap) {
     adminUsers = snap.val() || {};
     adminUsersLoaded = true;
     document.getElementById('usersLoading').style.display = 'none';
@@ -9540,7 +10286,7 @@ function loadAdminUsers() {
 function loadRoles() {
   if (rolesLoaded) { populateRoleSelector(); return; }
   if (!hasPermission('roles', 'read')) return;
-  db.ref(ROLES_PATH).once('value').then(function(snap) {
+  MastDB.roles.ref().once('value').then(function(snap) {
     rolesData = snap.val() || DEFAULT_ROLES;
     rolesLoaded = true;
     populateRoleSelector();
@@ -9671,7 +10417,7 @@ async function changeUserRole(uid, newRole) {
   }
 
   try {
-    await db.ref(ADMIN_USERS_PATH + '/' + uid + '/role').set(newRole);
+    await MastDB.adminUsers.subRef(uid, 'role').set(newRole);
     adminUsers[uid].role = newRole;
     await writeAudit('update', 'users', uid);
     showToast('Role changed to ' + (ROLE_DISPLAY_NAMES[newRole] || newRole) + '.');
@@ -9771,7 +10517,7 @@ async function sendUserInvite() {
   // Encode email for use as Firebase key (replace . with ,)
   var emailKey = email.replace(/\./g, ',');
   try {
-    await db.ref(INVITES_PATH + '/' + emailKey).set({
+    await MastDB.invites.ref(emailKey).set({
       email: email,
       role: role,
       invitedAt: new Date().toISOString(),
@@ -9793,7 +10539,7 @@ async function sendUserInvite() {
 var pendingInvites = {};
 
 function loadPendingInvites() {
-  db.ref(INVITES_PATH).orderByChild('status').equalTo('pending').once('value').then(function(snap) {
+  MastDB.invites.queryPending().then(function(snap) {
     pendingInvites = snap.val() || {};
     renderUsersList();
   });
@@ -9802,7 +10548,7 @@ function loadPendingInvites() {
 async function cancelInvite(emailKey) {
   if (!confirm('Cancel this invite?')) return;
   try {
-    await db.ref(INVITES_PATH + '/' + emailKey).remove();
+    await MastDB.invites.ref(emailKey).remove();
     delete pendingInvites[emailKey];
     renderUsersList();
     showToast('Invite cancelled.');
@@ -9894,7 +10640,7 @@ async function savePermissionMatrix() {
   if (!roleKey) return;
 
   try {
-    await db.ref(ROLES_PATH + '/' + roleKey + '/permissions').set(editingPermissions);
+    await MastDB.roles.permissions(roleKey).set(editingPermissions);
     rolesData[roleKey].permissions = editingPermissions;
     await writeAudit('update', 'roles', roleKey);
     showToast('Permissions saved for ' + (rolesData[roleKey].name || roleKey) + '.');
@@ -9974,7 +10720,7 @@ async function saveNewRole() {
   };
 
   try {
-    await db.ref(ROLES_PATH + '/' + key).set(roleData);
+    await MastDB.roles.ref(key).set(roleData);
     rolesData[key] = roleData;
     await writeAudit('create', 'roles', key);
     closeModal();
@@ -10071,12 +10817,13 @@ async function saveEvent(eventId) {
 
   try {
     if (eventId) {
-      await db.ref(EVENTS_PATH + '/' + eventId).update(data);
+      await MastDB.events.ref(eventId).update(data);
       await writeAudit('update', 'schedule', eventId);
       showToast('Event updated.');
     } else {
       data.createdAt = firebase.database.ServerValue.TIMESTAMP;
-      var newEvRef = await db.ref(EVENTS_PATH).push(data);
+      var newEvRef = MastDB.events.push();
+      await newEvRef.set(data);
       await writeAudit('create', 'schedule', newEvRef.key);
       showToast('Event created.');
     }
@@ -10090,7 +10837,7 @@ async function toggleEventVisibility(eventId) {
   var ev = events[eventId];
   if (!ev) return;
   try {
-    await db.ref(EVENTS_PATH + '/' + eventId).update({
+    await MastDB.events.ref(eventId).update({
       visible: ev.visible === false ? true : false,
       updatedAt: firebase.database.ServerValue.TIMESTAMP
     });
@@ -10118,7 +10865,7 @@ function confirmDeleteEvent(eventId) {
 async function deleteEvent(eventId) {
   try {
     await writeAudit('delete', 'schedule', eventId);
-    await db.ref(EVENTS_PATH + '/' + eventId).remove();
+    await MastDB.events.ref(eventId).remove();
     showToast('Event deleted.');
     closeModal();
   } catch (err) {
@@ -10520,13 +11267,14 @@ async function saveImage(imageId) {
 
   try {
     if (imageId) {
-      await db.ref(GALLERY_PATH + '/' + imageId).update(data);
+      await MastDB.gallery.ref(imageId).update(data);
       await writeAudit('update', 'gallery', imageId);
       showToast('Image updated.');
     } else {
       data.order = getNextOrder(section);
       data.createdAt = firebase.database.ServerValue.TIMESTAMP;
-      var newImgRef = await db.ref(GALLERY_PATH).push(data);
+      var newImgRef = MastDB.gallery.push();
+      await newImgRef.set(data);
       await writeAudit('create', 'gallery', newImgRef.key);
       showToast('Image added.');
     }
@@ -10551,7 +11299,7 @@ async function toggleImageVisibility(imageId) {
   var img = gallery[imageId];
   if (!img) return;
   try {
-    await db.ref(GALLERY_PATH + '/' + imageId).update({
+    await MastDB.gallery.ref(imageId).update({
       visible: img.visible === false ? true : false,
       updatedAt: firebase.database.ServerValue.TIMESTAMP
     });
@@ -10599,13 +11347,13 @@ async function reindexSection(section) {
   var needsUpdate = false;
   entries.forEach(function(entry, i) {
     if ((entry[1].order || 0) !== i) {
-      updates[GALLERY_PATH + '/' + entry[0] + '/order'] = i;
+      updates['public/gallery/' + entry[0] + '/order'] = i;
       needsUpdate = true;
     }
   });
 
   if (needsUpdate) {
-    await db.ref().update(updates);
+    await MastDB._multiUpdate(updates);
   }
 }
 
@@ -10654,13 +11402,13 @@ async function moveImage(imageId, direction) {
 
   // Swap order values
   var updates = {};
-  updates[GALLERY_PATH + '/' + currentId + '/order'] = swapOrder;
-  updates[GALLERY_PATH + '/' + currentId + '/updatedAt'] = firebase.database.ServerValue.TIMESTAMP;
-  updates[GALLERY_PATH + '/' + swapId + '/order'] = currentOrder;
-  updates[GALLERY_PATH + '/' + swapId + '/updatedAt'] = firebase.database.ServerValue.TIMESTAMP;
+  updates['public/gallery/' + currentId + '/order'] = swapOrder;
+  updates['public/gallery/' + currentId + '/updatedAt'] = firebase.database.ServerValue.TIMESTAMP;
+  updates['public/gallery/' + swapId + '/order'] = currentOrder;
+  updates['public/gallery/' + swapId + '/updatedAt'] = firebase.database.ServerValue.TIMESTAMP;
 
   try {
-    await db.ref().update(updates);
+    await MastDB._multiUpdate(updates);
   } catch (err) {
     showToast('Error reordering: ' + err.message, true);
   }
@@ -10685,7 +11433,7 @@ function confirmDeleteImage(imageId) {
 async function deleteImage(imageId) {
   try {
     await writeAudit('delete', 'gallery', imageId);
-    await db.ref(GALLERY_PATH + '/' + imageId).remove();
+    await MastDB.gallery.ref(imageId).remove();
     showToast('Image deleted.');
     closeModal();
   } catch (err) {
@@ -11178,7 +11926,8 @@ async function saveGalleryFromLibrary(sectionId, imageUrl, libraryImageId) {
   }
 
   try {
-    var galRef = await db.ref(GALLERY_PATH).push(data);
+    var galRef = MastDB.gallery.push();
+    await galRef.set(data);
     await writeAudit('create', 'gallery', galRef.key);
     showToast('Image added to ' + sectionId + '.');
     closeModal();
@@ -12017,7 +12766,7 @@ async function triageAndConfirmOrder(orderId, itemActions) {
   }
   updates['statusHistory'] = history;
 
-  await db.ref(ORDERS_PATH + '/' + orderId).update(updates);
+  await MastDB.orders.ref(orderId).update(updates);
   await writeAudit('update', 'orders', orderId);
 
   if (updates['status'] === 'building') {
@@ -12065,7 +12814,7 @@ async function transitionOrder(orderId, newStatus) {
       return; // triageAndConfirmOrder handles all updates
     }
 
-    await db.ref(ORDERS_PATH + '/' + orderId).update(updates);
+    await MastDB.orders.ref(orderId).update(updates);
     await writeAudit('update', 'orders', orderId);
 
     // Testing Mode event
@@ -12084,7 +12833,7 @@ async function transitionOrder(orderId, newStatus) {
       var ffLog2 = (updates['fulfillmentLog'] || o.fulfillmentLog || []).slice();
       ffLog2.push({ event: 'shipped', timestamp: shippedAt, userId: 'system', method: 'auto' });
       shippedUpdates['fulfillmentLog'] = ffLog2;
-      await db.ref(ORDERS_PATH + '/' + orderId).update(shippedUpdates);
+      await MastDB.orders.ref(orderId).update(shippedUpdates);
 
       var hasContact = !!(o.email);
       if (hasContact) {
@@ -12105,7 +12854,7 @@ async function reserveInventory(pid, qty, ck) {
   var inv = inventory[pid];
   if (!inv || !inv.stock || !inv.stock._default) return;
   try {
-    var stockRef = db.ref(INVENTORY_PATH + '/' + pid + '/stock');
+    var stockRef = MastDB.inventory.stockRef(pid);
     var updates = {};
     updates['_default/available'] = firebase.database.ServerValue.increment(-qty);
     updates['_default/reserved'] = firebase.database.ServerValue.increment(qty);
@@ -12125,7 +12874,7 @@ async function releaseInventory(pid, qty, ck) {
   var inv = inventory[pid];
   if (!inv || !inv.stock || !inv.stock._default) return;
   try {
-    var stockRef = db.ref(INVENTORY_PATH + '/' + pid + '/stock');
+    var stockRef = MastDB.inventory.stockRef(pid);
     var updates = {};
     updates['_default/available'] = firebase.database.ServerValue.increment(qty);
     updates['_default/reserved'] = firebase.database.ServerValue.increment(-qty);
@@ -12144,7 +12893,7 @@ async function pullFromStock(pid, qty, ck) {
   var inv = inventory[pid];
   if (!inv || !inv.stock || !inv.stock._default) return;
   try {
-    var stockRef = db.ref(INVENTORY_PATH + '/' + pid + '/stock');
+    var stockRef = MastDB.inventory.stockRef(pid);
     var updates = {};
     updates['_default/reserved'] = firebase.database.ServerValue.increment(-qty);
     if (ck && ck !== '_default' && inv.stock[ck]) {
@@ -12158,7 +12907,6 @@ async function pullFromStock(pid, qty, ck) {
 }
 
 // ---- Fulfillment: Scan-to-Ship ----
-var BUNDLES_PATH = 'shirglassworks/admin/bundles';
 var bundles = {};
 var bundlesLoaded = false;
 var bundlesListener = null;
@@ -12172,7 +12920,7 @@ var tesseractLoaded = false;
 
 function loadBundles() {
   if (bundlesListener) return;
-  bundlesListener = db.ref(BUNDLES_PATH).limitToLast(50).on('value', function(snap) {
+  bundlesListener = MastDB.bundles.listen(50, function(snap) {
     bundles = snap.val() || {};
     bundlesLoaded = true;
     if (currentRoute === 'ship') {
@@ -12377,7 +13125,7 @@ function generateAdminPirateShipCSV(o) {
 // ---- Bundles ----
 async function createBundle() {
   try {
-    var ref = db.ref(BUNDLES_PATH).push();
+    var ref = MastDB.bundles.push();
     var bundleId = ref.key;
     await ref.set({
       id: bundleId,
@@ -12406,7 +13154,7 @@ async function addToBundle(bundleId, orderId) {
     var orderIds = (bundle.orderIds || []).slice();
     if (orderIds.indexOf(orderId) === -1) {
       orderIds.push(orderId);
-      await db.ref(BUNDLES_PATH + '/' + bundleId + '/orderIds').set(orderIds);
+      await MastDB.bundles.subRef(bundleId, 'orderIds').set(orderIds);
     }
   } catch (err) {
     showToast('Error adding to bundle: ' + err.message, true);
@@ -12427,7 +13175,7 @@ async function markScannedAtDropOff(bundleId, orderId) {
         updates.status = 'delivered';
         updates.deliveredAt = new Date().toISOString();
       }
-      await db.ref(BUNDLES_PATH + '/' + bundleId).update(updates);
+      await MastDB.bundles.update(bundleId, updates);
       if (updates.status === 'delivered') {
         showToast('Bundle delivered! All packages confirmed.');
       }
@@ -12443,7 +13191,7 @@ async function updateBundleCarrier(bundleId, carrier, location) {
     if (!bundle) return;
     var count = (bundle.orderIds || []).length;
     var name = count + ' Package' + (count !== 1 ? 's' : '') + ' Drop-off ' + carrier;
-    await db.ref(BUNDLES_PATH + '/' + bundleId).update({
+    await MastDB.bundles.update(bundleId, {
       carrier: carrier,
       dropOffLocation: location || null,
       name: name
@@ -12966,7 +13714,7 @@ async function processDeliverMatch(sgId) {
         last.carrier = bundle.carrier || '';
         last.dropOffLocation = bundle.dropOffLocation || '';
         last.method = 'ocr';
-        await db.ref(ORDERS_PATH + '/' + matchedKey + '/fulfillmentLog').set(ffLog);
+        await MastDB.orders.subRef(matchedKey, 'fulfillmentLog').set(ffLog);
       }
     }
   }
@@ -13032,7 +13780,7 @@ async function submitConfirmAllDelivered() {
             ffLog[ffLog.length - 1].bundleId = activeBundleId;
             ffLog[ffLog.length - 1].carrier = bundle.carrier || '';
             ffLog[ffLog.length - 1].dropOffLocation = bundle.dropOffLocation || '';
-            await db.ref(ORDERS_PATH + '/' + oid + '/fulfillmentLog').set(ffLog);
+            await MastDB.orders.subRef(oid, 'fulfillmentLog').set(ffLog);
           }
         }
       }
@@ -13045,7 +13793,7 @@ async function submitConfirmAllDelivered() {
     updates.status = 'delivered';
     updates.deliveredAt = new Date().toISOString();
   }
-  await db.ref(BUNDLES_PATH + '/' + activeBundleId).update(updates);
+  await MastDB.bundles.update(activeBundleId, updates);
 
   closeModal();
   if (updates.status === 'delivered') {
@@ -13063,7 +13811,7 @@ async function createProductionRequests(orderId, order, fulfillment) {
     var ffKey = getItemFulfillmentKey(item);
     var ff = fulfillment[ffKey];
     if (ff && ff.source === 'build') {
-      var reqRef = db.ref(PRODUCTION_REQUESTS_PATH).push();
+      var reqRef = MastDB.productionRequests.ref().push();
       var reqId = reqRef.key;
       await reqRef.set({
         requestId: reqId,
@@ -13084,7 +13832,7 @@ async function createProductionRequests(orderId, order, fulfillment) {
       });
       await writeAudit('create', 'buildJobs', reqId);
       // Link production request to fulfillment
-      await db.ref(ORDERS_PATH + '/' + orderId + '/fulfillment/' + ffKey + '/buildJobId').set(reqId);
+      await MastDB.orders.subRef(orderId, 'fulfillment', ffKey, 'buildJobId').set(reqId);
     }
   }
 }
@@ -13092,7 +13840,7 @@ async function createProductionRequests(orderId, order, fulfillment) {
 async function fulfillProductionRequest(requestId, orderId, operatorName) {
   try {
     var now = new Date().toISOString();
-    await db.ref(PRODUCTION_REQUESTS_PATH + '/' + requestId).update({
+    await MastDB.productionRequests.ref(requestId).update({
       status: 'fulfilled',
       fulfilledAt: now,
       fulfilledBy: operatorName || 'admin'
@@ -13113,13 +13861,13 @@ async function fulfillProductionRequest(requestId, orderId, operatorName) {
           allReady = false;
         }
       });
-      await db.ref(ORDERS_PATH + '/' + orderId).update(ffUpdates);
+      await MastDB.orders.ref(orderId).update(ffUpdates);
 
       // If all items ready, auto-transition order to ready
       if (allReady) {
         var history = o.statusHistory ? o.statusHistory.slice() : [];
         history.push({ status: 'ready', at: now, by: 'system', note: 'All production requests fulfilled' });
-        await db.ref(ORDERS_PATH + '/' + orderId).update({
+        await MastDB.orders.ref(orderId).update({
           status: 'ready',
           readyAt: now,
           statusHistory: history
@@ -13137,7 +13885,7 @@ async function fulfillProductionRequest(requestId, orderId, operatorName) {
 
 async function assignRequestToJob(requestId, jobId, lineItemId) {
   try {
-    await db.ref(PRODUCTION_REQUESTS_PATH + '/' + requestId).update({
+    await MastDB.productionRequests.ref(requestId).update({
       status: 'assigned',
       jobId: jobId,
       lineItemId: lineItemId
@@ -13390,7 +14138,7 @@ function closeSaleDetail() {
 async function reconcileSale(saleId) {
   if (!confirm('Mark this sale as reconciled?')) return;
   try {
-    await db.ref(SALES_PATH + '/' + saleId + '/status').set('reconciled');
+    await MastDB.sales.ref(saleId).child('status').set('reconciled');
     await writeAudit('update', 'pos', saleId);
     showToast('Sale reconciled.');
     if (selectedSaleId === saleId) viewSaleDetail(saleId);
@@ -13402,7 +14150,7 @@ async function reconcileSale(saleId) {
 async function voidSale(saleId) {
   if (!confirm('Void this sale? Inventory will NOT be restored automatically.')) return;
   try {
-    await db.ref(SALES_PATH + '/' + saleId + '/status').set('voided');
+    await MastDB.sales.ref(saleId).child('status').set('voided');
     await writeAudit('update', 'pos', saleId);
     showToast('Sale voided.');
     if (selectedSaleId === saleId) viewSaleDetail(saleId);
@@ -13641,13 +14389,13 @@ async function executeManualMatch(paymentKey, saleId) {
   try {
     var updates = {};
     // Update sale with Square payment info — Square amount is authoritative
-    updates[SALES_PATH + '/' + saleId + '/squarePaymentId'] = payment.paymentId || paymentKey;
-    updates[SALES_PATH + '/' + saleId + '/amount'] = payment.amount || 0;
-    updates[SALES_PATH + '/' + saleId + '/status'] = 'reconciled';
+    updates['admin/sales/' + saleId + '/squarePaymentId'] = payment.paymentId || paymentKey;
+    updates['admin/sales/' + saleId + '/amount'] = payment.amount || 0;
+    updates['admin/sales/' + saleId + '/status'] = 'reconciled';
     // Update payment with matched sale
-    updates[SQUARE_PAYMENTS_PATH + '/' + paymentKey + '/matchedSaleId'] = saleId;
+    updates['admin/square-payments/' + paymentKey + '/matchedSaleId'] = saleId;
 
-    await db.ref().update(updates);
+    await MastDB._multiUpdate(updates);
     showToast('Payment matched to sale.');
     var modal = document.getElementById('manualMatchModal');
     if (modal) modal.remove();
@@ -13805,13 +14553,13 @@ async function saveEvent() {
   try {
     var now = new Date().toISOString();
     if (editingEventId) {
-      await db.ref(SALES_EVENTS_PATH + '/' + editingEventId).update({
+      await MastDB.salesEvents.ref(editingEventId).update({
         name: name, date: date, location: location || null, notes: notes || null, updatedAt: now
       });
       await writeAudit('update', 'salesEvents', editingEventId);
       showToast('Event updated.');
     } else {
-      var newRef = db.ref(SALES_EVENTS_PATH).push();
+      var newRef = MastDB.salesEvents.ref().push();
       await newRef.set({
         eventId: newRef.key, name: name, date: date, location: location || null,
         status: 'planning', allocations: null,
@@ -14007,7 +14755,7 @@ function closeSalesEventDetail() {
 async function startFairMode(eventId) {
   if (!confirm('Start fair mode? The PoS will link sales to this event.')) return;
   try {
-    await db.ref(SALES_EVENTS_PATH + '/' + eventId).update({
+    await MastDB.salesEvents.ref(eventId).update({
       status: 'active', updatedAt: new Date().toISOString()
     });
     await writeAudit('update', 'salesEvents', eventId);
@@ -14021,7 +14769,7 @@ async function startFairMode(eventId) {
 
 async function revertToPlanningStatus(eventId) {
   try {
-    await db.ref(SALES_EVENTS_PATH + '/' + eventId).update({
+    await MastDB.salesEvents.ref(eventId).update({
       status: 'planning', updatedAt: new Date().toISOString()
     });
     await writeAudit('update', 'salesEvents', eventId);
@@ -14038,7 +14786,7 @@ async function closeEvent(eventId) {
   var unsoldCount = stats.totalPacked - stats.totalSold;
   if (!confirm('Close this event?\n\n' + stats.totalSold + ' of ' + stats.totalPacked + ' items sold.' + (unsoldCount > 0 ? '\n' + unsoldCount + ' unsold items will be returned to their source location.' : ''))) return;
   try {
-    await db.ref(SALES_EVENTS_PATH + '/' + eventId).update({
+    await MastDB.salesEvents.ref(eventId).update({
       status: 'closed', closedAt: new Date().toISOString(), updatedAt: new Date().toISOString()
     });
     await writeAudit('update', 'salesEvents', eventId);
@@ -14062,7 +14810,7 @@ async function closeEvent(eventId) {
 
     // Archive the event location
     if (eventLocId) {
-      db.ref(LOCATIONS_PATH + '/' + eventLocId).update({ status: 'archived', updatedAt: new Date().toISOString() }).then(function() {
+      MastDB.locations.ref(eventLocId).update({ status: 'archived', updatedAt: new Date().toISOString() }).then(function() {
         writeAudit('update', 'locations', eventLocId);
       }).catch(function() {});
     }
@@ -14185,14 +14933,14 @@ async function saveManualSale(eventId) {
       items: [{ productId: pid, productName: alloc.productName || pid, quantity: qty, price: amountCents }]
     };
     if (notes) saleRecord.notes = notes;
-    await db.ref(SALES_PATH + '/' + saleId).set(saleRecord);
+    await MastDB.sales.ref(saleId).set(saleRecord);
 
     // 2. Update event allocation sold count
     var newSold = (alloc.sold || 0) + qty;
-    await db.ref(SALES_EVENTS_PATH + '/' + eventId + '/allocations/' + pid + '/sold').set(newSold);
+    await MastDB.salesEvents.allocationField(eventId, pid, 'sold').set(newSold);
 
     // 3. Decrement main inventory
-    var stockRef = db.ref(INVENTORY_PATH + '/' + pid + '/stock/_default/available');
+    var stockRef = MastDB.inventory.stockAvailable(pid);
     await stockRef.transaction(function(current) { return Math.max(0, (current || 0) - qty); });
 
     // 4. Audit
@@ -14217,7 +14965,7 @@ async function deleteEvent(eventId) {
   if (!confirm('Delete this event? This cannot be undone.')) return;
   try {
     await writeAudit('delete', 'salesEvents', eventId);
-    await db.ref(SALES_EVENTS_PATH + '/' + eventId).remove();
+    await MastDB.salesEvents.ref(eventId).remove();
     showToast('Event deleted.');
     closeSalesEventDetail();
   } catch (err) {
@@ -14233,7 +14981,7 @@ async function adjustAllocation(eventId, productId, delta) {
   var current = ev.allocations[productId].quantity || 0;
   var newQty = Math.max(0, current + delta);
   try {
-    await db.ref(SALES_EVENTS_PATH + '/' + eventId + '/allocations/' + productId + '/quantity').set(newQty);
+    await MastDB.salesEvents.allocationField(eventId, productId, 'quantity').set(newQty);
     await writeAudit('update', 'salesEvents', eventId);
   } catch (err) {
     showToast('Error: ' + err.message, true);
@@ -14244,7 +14992,7 @@ async function removeAllocation(eventId, productId) {
   if (!confirm('Remove this product from the packing list?')) return;
   try {
     await writeAudit('update', 'salesEvents', eventId);
-    await db.ref(SALES_EVENTS_PATH + '/' + eventId + '/allocations/' + productId).remove();
+    await MastDB.salesEvents.allocations(eventId, productId).remove();
     showToast('Product removed from packing list.');
   } catch (err) {
     showToast('Error: ' + err.message, true);
@@ -14426,7 +15174,7 @@ async function confirmPackItem(productId, productName) {
     };
     if (sourceLocId) allocUpdate.sourceLocationId = currentAlloc ? (currentAlloc.sourceLocationId || sourceLocId) : sourceLocId;
 
-    await db.ref(SALES_EVENTS_PATH + '/' + packingEventId + '/allocations/' + productId).update(allocUpdate);
+    await MastDB.salesEvents.allocations(packingEventId, productId).update(allocUpdate);
     await writeAudit('update', 'salesEvents', packingEventId);
 
     // Move items from source to event location if locations are configured
@@ -14499,7 +15247,7 @@ async function exitPackingMode() {
       var stats = getEventAllocationsStats(ev);
       if (stats.totalPacked > 0) {
         if (confirm('Mark event as packed? (' + stats.totalPacked + ' items, ' + stats.productCount + ' products)')) {
-          await db.ref(SALES_EVENTS_PATH + '/' + packingEventId).update({
+          await MastDB.salesEvents.ref(packingEventId).update({
             status: 'packed', updatedAt: new Date().toISOString()
           });
           await writeAudit('update', 'salesEvents', packingEventId);
@@ -14937,7 +15685,7 @@ function loadProduction() {
   productionLoaded = true;
   // Attach jobs listener
   if (!productionJobsListener) {
-    productionJobsListener = db.ref(PRODUCTION_JOBS_PATH).limitToLast(100).on('value', function(snap) {
+    productionJobsListener = MastDB.productionJobs.listen(100, function(snap) {
       productionJobs = snap.val() || {};
       renderProductionJobs();
       if (selectedProductionJobId) renderProductionJobDetail(selectedProductionJobId);
@@ -14947,7 +15695,7 @@ function loadProduction() {
   }
   // Attach operators listener
   if (!operatorsListener) {
-    operatorsListener = db.ref(OPERATORS_PATH).limitToLast(50).on('value', function(snap) {
+    operatorsListener = MastDB.operators.listen(50, function(snap) {
       operators = snap.val() || {};
     });
   }
@@ -14962,7 +15710,7 @@ function loadProduction() {
 }
 
 function loadOperators() {
-  db.ref(OPERATORS_PATH).once('value').then(function(snap) {
+  MastDB.operators.ref().once('value').then(function(snap) {
     operators = snap.val() || {};
     renderOperatorsList();
   });
@@ -14990,7 +15738,7 @@ async function addOperator() {
   var name = input.value.trim();
   if (!name) { showToast('Enter an operator name', true); return; }
   try {
-    var ref = db.ref(OPERATORS_PATH).push();
+    var ref = MastDB.operators.ref().push();
     await ref.set({ name: name, addedAt: new Date().toISOString() });
     await writeAudit('create', 'operators', ref.key);
     input.value = '';
@@ -15005,7 +15753,7 @@ async function removeOperator(opId) {
   if (!confirm('Remove this operator?')) return;
   try {
     await writeAudit('delete', 'operators', opId);
-    await db.ref(OPERATORS_PATH + '/' + opId).remove();
+    await MastDB.operators.ref(opId).remove();
     loadOperators();
     showToast('Operator removed');
   } catch (err) {
@@ -15136,7 +15884,7 @@ async function doFulfillRequest(requestId, orderId) {
   var operator = document.getElementById('fulfillOperator').value || 'admin';
   var notes = document.getElementById('fulfillNotes').value.trim();
   if (notes) {
-    await db.ref(PRODUCTION_REQUESTS_PATH + '/' + requestId + '/notes').set(notes);
+    await MastDB.productionRequests.subRef(requestId, 'notes').set(notes);
   }
   await writeAudit('update', 'buildJobs', requestId);
   await fulfillProductionRequest(requestId, orderId, operator);
@@ -15186,9 +15934,9 @@ async function doAssignNewJob(requestId) {
   if (!pr) return;
   try {
     // Create new job
-    var jobRef = db.ref(PRODUCTION_JOBS_PATH).push();
+    var jobRef = MastDB.productionJobs.ref().push();
     var jobId = jobRef.key;
-    var lineItemRef = db.ref(PRODUCTION_JOBS_PATH + '/' + jobId + '/lineItems').push();
+    var lineItemRef = MastDB.productionJobs.lineItems(jobId).push();
     var lineItemId = lineItemRef.key;
     await jobRef.set({
       name: 'Order ' + (pr.orderNumber || '') + ' - ' + (pr.productName || 'Fulfillment'),
@@ -15230,7 +15978,7 @@ async function doAssignExistingJob(requestId) {
   var jobId = document.getElementById('assignJobDropdown').value;
   if (!pr || !jobId) return;
   try {
-    var lineItemRef = db.ref(PRODUCTION_JOBS_PATH + '/' + jobId + '/lineItems').push();
+    var lineItemRef = MastDB.productionJobs.lineItems(jobId).push();
     var lineItemId = lineItemRef.key;
     await lineItemRef.set({
       productId: pr.productId || null,
@@ -15372,7 +16120,7 @@ async function doCreateJob(purpose) {
     showToast('Enter a job name', true); return;
   }
   try {
-    var jobRef = db.ref(PRODUCTION_JOBS_PATH).push();
+    var jobRef = MastDB.productionJobs.ref().push();
     var jobId = jobRef.key;
     await jobRef.set({
       name: name,
@@ -15638,14 +16386,14 @@ async function transitionProductionJob(jobId, newStatus) {
         var qty = (li.completedQuantity || 0) - (li.lossQuantity || 0);
         if (qty <= 0) continue;
         try {
-          var stockRef = db.ref(INVENTORY_PATH + '/' + li.productId + '/stock/_default/available');
+          var stockRef = MastDB.inventory.stockAvailable(li.productId);
           await stockRef.transaction(function(current) { return (current || 0) + qty; });
           await writeAudit('update', 'inventory', li.productId);
           invCount++;
         } catch (e) { console.error('Inventory update error for ' + li.productId + ':', e); }
       }
     }
-    await db.ref(PRODUCTION_JOBS_PATH + '/' + jobId).update(updates);
+    await MastDB.productionJobs.ref(jobId).update(updates);
     await writeAudit('update', 'jobs', jobId);
     if (newStatus === 'completed' && invCount > 0) {
       showToast('Job completed — ' + invCount + ' product' + (invCount > 1 ? 's' : '') + ' updated in inventory');
@@ -15663,7 +16411,7 @@ async function updateLineItemProgress(jobId, liKey, completedQty, lossQty) {
     var updates = {};
     if (completedQty !== null) updates.completedQuantity = parseInt(completedQty) || 0;
     if (lossQty !== null) updates.lossQuantity = parseInt(lossQty) || 0;
-    await db.ref(PRODUCTION_JOBS_PATH + '/' + jobId + '/lineItems/' + liKey).update(updates);
+    await MastDB.productionJobs.lineItems(jobId, liKey).update(updates);
     // Update local cache
     if (productionJobs[jobId] && productionJobs[jobId].lineItems && productionJobs[jobId].lineItems[liKey]) {
       Object.assign(productionJobs[jobId].lineItems[liKey], updates);
@@ -15709,7 +16457,7 @@ function openEditJobModal(jobId) {
 
 async function doEditJob(jobId) {
   try {
-    await db.ref(PRODUCTION_JOBS_PATH + '/' + jobId).update({
+    await MastDB.productionJobs.ref(jobId).update({
       name: document.getElementById('editJobName').value.trim(),
       description: document.getElementById('editJobDesc').value.trim(),
       purpose: document.getElementById('editJobPurpose').value,
@@ -15767,7 +16515,7 @@ async function doAddLineItem(jobId) {
   var specs = document.getElementById('liSpecs').value.trim();
   if (!name) { showToast('Enter a product name', true); return; }
   try {
-    var ref = db.ref(PRODUCTION_JOBS_PATH + '/' + jobId + '/lineItems').push();
+    var ref = MastDB.productionJobs.lineItems(jobId).push();
     await ref.set({
       productId: pid,
       productName: name,
@@ -15789,7 +16537,7 @@ async function removeLineItem(jobId, lineItemId) {
   if (!confirm('Remove this line item?')) return;
   try {
     await writeAudit('update', 'jobs', jobId);
-    await db.ref(PRODUCTION_JOBS_PATH + '/' + jobId + '/lineItems/' + lineItemId).remove();
+    await MastDB.productionJobs.lineItems(jobId, lineItemId).remove();
     showToast('Line item removed');
   } catch (err) {
     showToast('Error removing line item: ' + err.message, true);
@@ -15849,7 +16597,7 @@ async function doStartBuild(jobId) {
   var now = new Date();
 
   try {
-    var buildRef = db.ref(PRODUCTION_JOBS_PATH + '/' + jobId + '/builds').push();
+    var buildRef = MastDB.productionJobs.builds(jobId).push();
     var buildId = buildRef.key;
     await buildRef.set({
       buildNumber: buildNumber,
@@ -15868,7 +16616,7 @@ async function doStartBuild(jobId) {
 
     // Auto-transition job to in-progress if still in definition
     if (job.status === 'definition') {
-      await db.ref(PRODUCTION_JOBS_PATH + '/' + jobId).update({
+      await MastDB.productionJobs.ref(jobId).update({
         status: 'in-progress',
         startedAt: now.toISOString()
       });
@@ -15974,7 +16722,7 @@ async function doAddBuildNote(jobId, buildId) {
     var job = productionJobs[jobId];
     var existing = (job && job.builds && job.builds[buildId]) ? job.builds[buildId].notes || '' : '';
     var newNotes = existing ? existing + '\n' + text : text;
-    await db.ref(PRODUCTION_JOBS_PATH + '/' + jobId + '/builds/' + buildId + '/notes').set(newNotes);
+    await MastDB.productionJobs.buildField(jobId, buildId, 'notes').set(newNotes);
     await writeAudit('update', 'jobs', jobId);
     closeModal();
     renderActiveBuild(jobId, buildId);
@@ -16001,7 +16749,7 @@ async function doAddMilestone(jobId, buildId) {
   var text = document.getElementById('milestoneText').value.trim();
   if (!text) { closeModal(); return; }
   try {
-    var ref = db.ref(PRODUCTION_JOBS_PATH + '/' + jobId + '/builds/' + buildId + '/milestones').push();
+    var ref = MastDB.productionJobs.subRef(jobId, 'builds', buildId, 'milestones').push();
     await ref.set({ text: text, timestamp: new Date().toISOString() });
     await writeAudit('update', 'jobs', jobId);
     closeModal();
@@ -16074,7 +16822,7 @@ async function doCompleteBuild(jobId, buildId) {
 
   try {
     // Update build
-    await db.ref(PRODUCTION_JOBS_PATH + '/' + jobId + '/builds/' + buildId).update({
+    await MastDB.productionJobs.builds(jobId, buildId).update({
       status: 'completed',
       endTime: now.toISOString(),
       durationMinutes: durationMinutes,
@@ -16093,7 +16841,7 @@ async function doCompleteBuild(jobId, buildId) {
     }
 
     // Re-read all builds to get accurate tallies
-    var jobSnap = await db.ref(PRODUCTION_JOBS_PATH + '/' + jobId).once('value');
+    var jobSnap = await MastDB.productionJobs.ref(jobId).once('value');
     var freshJob = jobSnap.val();
     var tallies = {};
     if (freshJob && freshJob.lineItems) {
@@ -16114,7 +16862,7 @@ async function doCompleteBuild(jobId, buildId) {
         tallyUpdates['lineItems/' + liKey + '/completedQuantity'] = tallies[liKey].completed;
         tallyUpdates['lineItems/' + liKey + '/lossQuantity'] = tallies[liKey].loss;
       });
-      await db.ref(PRODUCTION_JOBS_PATH + '/' + jobId).update(tallyUpdates);
+      await MastDB.productionJobs.ref(jobId).update(tallyUpdates);
 
       // Check if all line items met target
       var allMet = true;
@@ -16125,7 +16873,7 @@ async function doCompleteBuild(jobId, buildId) {
       });
       if (allMet && liKeys.length > 0) {
         if (confirm('All line items have met their targets! Mark job as completed?')) {
-          await db.ref(PRODUCTION_JOBS_PATH + '/' + jobId).update({
+          await MastDB.productionJobs.ref(jobId).update({
             status: 'completed',
             completedAt: now.toISOString()
           });
@@ -16166,7 +16914,7 @@ async function doCompleteBuild(jobId, buildId) {
     if (purpose === 'custom' && freshJob) {
       var hasStory = false;
       try {
-        var storyCheck = await db.ref(STORIES_PATH).orderByChild('jobId').equalTo(jobId).once('value');
+        var storyCheck = await MastDB.stories.queryByJob(jobId);
         if (storyCheck.val()) {
           Object.values(storyCheck.val()).forEach(function(s) {
             if (s.status === 'published') hasStory = true;
@@ -16204,7 +16952,7 @@ async function autoFulfillLinkedRequests(jobId, freshJob, tallies) {
 
     try {
       // Read the production request to get orderId
-      var reqSnap = await db.ref(PRODUCTION_REQUESTS_PATH + '/' + li.productionRequestId).once('value');
+      var reqSnap = await MastDB.productionRequests.ref(li.productionRequestId).once('value');
       var req = reqSnap.val();
       if (!req || req.status !== 'assigned') continue;
 
@@ -16221,7 +16969,7 @@ async function autoFulfillLinkedRequests(jobId, freshJob, tallies) {
 
       await fulfillProductionRequest(li.productionRequestId, req.orderId || '', operatorName);
       // Mark fulfilled on line item to prevent double-advance
-      await db.ref(PRODUCTION_JOBS_PATH + '/' + jobId + '/lineItems/' + liKey + '/requestFulfilled').set(true);
+      await MastDB.productionJobs.subRef(jobId, 'lineItems', liKey, 'requestFulfilled').set(true);
       await writeAudit('update', 'buildJobs', li.productionRequestId);
 
       var orderNum = '';
@@ -16243,7 +16991,7 @@ async function autoUpdateInventory(jobId, buildId, buildOutput, freshJob) {
 
   // Check double-push guard on the build
   try {
-    var buildSnap = await db.ref(PRODUCTION_JOBS_PATH + '/' + jobId + '/builds/' + buildId + '/inventoryPushed').once('value');
+    var buildSnap = await MastDB.productionJobs.buildField(jobId, buildId, 'inventoryPushed').once('value');
     if (buildSnap.val()) return results; // already pushed
   } catch (e) { /* proceed */ }
 
@@ -16261,7 +17009,7 @@ async function autoUpdateInventory(jobId, buildId, buildOutput, freshJob) {
 
     try {
       // Firebase transaction for atomic increment
-      var stockRef = db.ref(INVENTORY_PATH + '/' + li.productId + '/stock/_default/available');
+      var stockRef = MastDB.inventory.stockAvailable(li.productId);
       await stockRef.transaction(function(current) {
         return (current || 0) + qty;
       });
@@ -16273,7 +17021,7 @@ async function autoUpdateInventory(jobId, buildId, buildOutput, freshJob) {
 
   // Set guard flag
   if (results.length > 0) {
-    await db.ref(PRODUCTION_JOBS_PATH + '/' + jobId + '/builds/' + buildId + '/inventoryPushed').set(true);
+    await MastDB.productionJobs.buildField(jobId, buildId, 'inventoryPushed').set(true);
     await writeAudit('update', 'jobs', jobId);
   }
   return results;
@@ -16378,7 +17126,7 @@ async function uploadBuildPhoto(file, jobId, buildId) {
     });
 
     var url = await uploadTask.snapshot.ref.getDownloadURL();
-    await db.ref(BUILD_MEDIA_PATH + '/' + buildId + '/' + mediaId).set({
+    await MastDB.buildMedia.ref(buildId, mediaId).set({
       type: 'photo',
       url: url,
       caption: '',
@@ -16418,7 +17166,7 @@ function getActiveOperatorName() {
 
 async function loadBuildMedia(buildId) {
   try {
-    var snap = await db.ref(BUILD_MEDIA_PATH + '/' + buildId).once('value');
+    var snap = await MastDB.buildMedia.ref(buildId).once('value');
     var media = snap.val() || {};
     currentBuildMedia = media;
     renderBuildMediaGallery(buildId, media);
@@ -16448,7 +17196,7 @@ function renderBuildMediaGallery(buildId, media) {
 }
 
 function updateBuildMediaCount(buildId) {
-  db.ref(BUILD_MEDIA_PATH + '/' + buildId).once('value').then(function(snap) {
+  MastDB.buildMedia.ref(buildId).once('value').then(function(snap) {
     var count = snap.numChildren();
     var badge = document.getElementById('buildMediaBadge_' + buildId);
     if (badge) {
@@ -16463,7 +17211,7 @@ async function deleteBuildMedia(buildId, mediaId) {
   try {
     await writeAudit('update', 'jobs', selectedProductionJobId || buildId);
     await storage.ref('shirglassworks/builds/' + buildId + '/' + mediaId + '.jpg').delete();
-    await db.ref(BUILD_MEDIA_PATH + '/' + buildId + '/' + mediaId).remove();
+    await MastDB.buildMedia.ref(buildId, mediaId).remove();
     showToast('Photo deleted');
     loadBuildMedia(buildId);
   } catch (err) {
@@ -16481,7 +17229,7 @@ function previewPhoto(url) {
 
 async function loadBuildMediaBadge(buildId) {
   try {
-    var snap = await db.ref(BUILD_MEDIA_PATH + '/' + buildId).once('value');
+    var snap = await MastDB.buildMedia.ref(buildId).once('value');
     var count = snap.numChildren();
     var badge = document.getElementById('buildMediaBadge_' + buildId);
     if (badge && count > 0) {
@@ -16530,7 +17278,7 @@ async function loadJobPipelineStatus(jobId) {
     // Try to show order status
     if (li.productionRequestId) {
       try {
-        var reqSnap = await db.ref(PRODUCTION_REQUESTS_PATH + '/' + li.productionRequestId).once('value');
+        var reqSnap = await MastDB.productionRequests.ref(li.productionRequestId).once('value');
         var req = reqSnap.val();
         if (req && req.orderId && orders[req.orderId]) {
           var order = orders[req.orderId];
@@ -16550,7 +17298,7 @@ function loadStories() {
   }
   storiesLoaded = true;
   if (!storiesListener) {
-    storiesListener = db.ref(STORIES_PATH).limitToLast(200).on('value', function(snap) {
+    storiesListener = MastDB.stories.listen(200, function(snap) {
       storiesData = snap.val() || {};
       renderStoriesList();
       if (selectedStoryId) renderStoryDetail(selectedStoryId);
@@ -16952,7 +17700,7 @@ async function publishStoryFromDetail(storyId) {
       if (qrCodes.length > 0) updates.qrCodes = qrCodes;
     }
 
-    await db.ref(STORIES_PATH + '/' + storyId).update(updates);
+    await MastDB.stories.ref(storyId).update(updates);
     await writeAudit('update', 'products', storyId);
 
     // Back-fill storyId on linked products
@@ -16963,7 +17711,7 @@ async function publishStoryFromDetail(storyId) {
         Object.values(job.lineItems).forEach(function(li) {
           if (li.productId && li.productLinked) {
             productUpdates.push(
-              db.ref('shirglassworks/public/products/' + li.productId + '/storyId').set(storyId)
+              MastDB.products.storyIdRef(li.productId).set(storyId)
             );
           }
         });
@@ -16982,7 +17730,7 @@ async function unpublishStoryFromDetail(storyId) {
   if (!confirm('Unpublish this story?')) return;
   try {
     var story = storiesData[storyId];
-    await db.ref(STORIES_PATH + '/' + storyId).update({ status: 'draft', updatedAt: new Date().toISOString() });
+    await MastDB.stories.ref(storyId).update({ status: 'draft', updatedAt: new Date().toISOString() });
     await writeAudit('update', 'products', storyId);
 
     // Clear storyId from linked products
@@ -16993,7 +17741,7 @@ async function unpublishStoryFromDetail(storyId) {
         Object.values(job.lineItems).forEach(function(li) {
           if (li.productId && li.productLinked) {
             clearUpdates.push(
-              db.ref('shirglassworks/public/products/' + li.productId + '/storyId').remove()
+              MastDB.products.storyIdRef(li.productId).remove()
             );
           }
         });
@@ -17012,7 +17760,7 @@ async function loadJobStoryStatus(jobId) {
   var el = document.getElementById('jobStoryStatus_' + jobId);
   if (!el) return;
   try {
-    var snap = await db.ref(STORIES_PATH).orderByChild('jobId').equalTo(jobId).once('value');
+    var snap = await MastDB.stories.queryByJob(jobId);
     var stories = snap.val() || {};
     var keys = Object.keys(stories);
     if (keys.length === 0) {
@@ -17055,7 +17803,7 @@ async function openStoryCuration(jobId) {
   for (var i = 0; i < buildKeys.length; i++) {
     var bk = buildKeys[i];
     try {
-      var snap = await db.ref(BUILD_MEDIA_PATH + '/' + bk).once('value');
+      var snap = await MastDB.buildMedia.ref(bk).once('value');
       var media = snap.val();
       if (media) allMedia[bk] = media;
     } catch (e) { /* skip */ }
@@ -17065,7 +17813,7 @@ async function openStoryCuration(jobId) {
   var existingStory = null;
   var existingStoryId = null;
   try {
-    var storySnap = await db.ref(STORIES_PATH).orderByChild('jobId').equalTo(jobId).once('value');
+    var storySnap = await MastDB.stories.queryByJob(jobId);
     var stories = storySnap.val() || {};
     var sKeys = Object.keys(stories);
     if (sKeys.length > 0) {
@@ -17303,11 +18051,11 @@ async function saveDraftStory(existingId) {
     data.updatedAt = new Date().toISOString();
     var storyId = existingId;
     if (existingId) {
-      await db.ref(STORIES_PATH + '/' + existingId).update(data);
+      await MastDB.stories.ref(existingId).update(data);
       await writeAudit('update', 'products', existingId);
     } else {
       data.createdAt = new Date().toISOString();
-      var ref = db.ref(STORIES_PATH).push();
+      var ref = MastDB.stories.ref().push();
       storyId = ref.key;
       await ref.set(data);
       await writeAudit('update', 'products', ref.key);
@@ -17353,10 +18101,10 @@ async function publishStory(existingId) {
 
     var storyId = existingId;
     if (existingId) {
-      await db.ref(STORIES_PATH + '/' + existingId).update(data);
+      await MastDB.stories.ref(existingId).update(data);
     } else {
       data.createdAt = new Date().toISOString();
-      var ref = db.ref(STORIES_PATH).push();
+      var ref = MastDB.stories.ref().push();
       storyId = ref.key;
       await ref.set(data);
     }
@@ -17370,7 +18118,7 @@ async function publishStory(existingId) {
         Object.values(job.lineItems).forEach(function(li) {
           if (li.productId && li.productLinked) {
             productUpdates.push(
-              db.ref('shirglassworks/public/products/' + li.productId + '/storyId').set(storyId)
+              MastDB.products.storyIdRef(li.productId).set(storyId)
             );
           }
         });
@@ -17396,10 +18144,10 @@ async function unpublishStory(storyId) {
   if (!confirm('Unpublish this story?')) return;
   try {
     // Read story to get jobId before unpublishing
-    var storySnap = await db.ref(STORIES_PATH + '/' + storyId).once('value');
+    var storySnap = await MastDB.stories.ref(storyId).once('value');
     var story = storySnap.val();
 
-    await db.ref(STORIES_PATH + '/' + storyId).update({ status: 'draft', updatedAt: new Date().toISOString() });
+    await MastDB.stories.ref(storyId).update({ status: 'draft', updatedAt: new Date().toISOString() });
     await writeAudit('update', 'products', storyId);
 
     // Clear storyId from linked products
@@ -17410,7 +18158,7 @@ async function unpublishStory(storyId) {
         Object.values(job.lineItems).forEach(function(li) {
           if (li.productId && li.productLinked) {
             clearUpdates.push(
-              db.ref('shirglassworks/public/products/' + li.productId + '/storyId').remove()
+              MastDB.products.storyIdRef(li.productId).remove()
             );
           }
         });
@@ -17433,7 +18181,7 @@ function previewStoryFromCuration() {
 
 async function previewStory(storyId) {
   try {
-    var snap = await db.ref(STORIES_PATH + '/' + storyId).once('value');
+    var snap = await MastDB.stories.ref(storyId).once('value');
     var story = snap.val();
     if (!story) { showToast('Story not found', true); return; }
     var entries = [];
@@ -17501,7 +18249,7 @@ async function linkProductToBuild(jobId, lineItemId) {
   }
   try {
     // Get existing buildIds on the product
-    var snap = await db.ref('shirglassworks/public/products/' + productId + '/buildIds').once('value');
+    var snap = await MastDB.products.buildIdsRef(productId).once('value');
     var existing = snap.val() || [];
     if (!Array.isArray(existing)) existing = [];
     // Add all build IDs from this job
@@ -17509,17 +18257,17 @@ async function linkProductToBuild(jobId, lineItemId) {
     Object.keys(builds).forEach(function(bk) {
       if (existing.indexOf(bk) === -1) existing.push(bk);
     });
-    await db.ref('shirglassworks/public/products/' + productId + '/buildIds').set(existing);
+    await MastDB.products.buildIdsRef(productId).set(existing);
     // Mark linked on line item
-    await db.ref(PRODUCTION_JOBS_PATH + '/' + jobId + '/lineItems/' + lineItemId + '/productLinked').set(true);
+    await MastDB.productionJobs.subRef(jobId, 'lineItems', lineItemId, 'productLinked').set(true);
     await writeAudit('update', 'jobs', jobId);
 
     // Check if a published story exists for this job and write storyId
-    var storiesSnap = await db.ref(STORIES_PATH).orderByChild('jobId').equalTo(jobId).once('value');
+    var storiesSnap = await MastDB.stories.queryByJob(jobId);
     var stories = storiesSnap.val() || {};
     Object.keys(stories).forEach(function(sk) {
       if (stories[sk].status === 'published') {
-        db.ref('shirglassworks/public/products/' + productId + '/storyId').set(sk);
+        MastDB.products.storyIdRef(productId).set(sk);
       }
     });
 
@@ -17538,7 +18286,7 @@ async function loadStorageInfo() {
   var el = document.getElementById('storageInfo');
   if (!el) return;
   try {
-    var snap = await db.ref(BUILD_MEDIA_PATH).once('value');
+    var snap = await MastDB.buildMedia.ref().once('value');
     var allMedia = snap.val() || {};
     var totalPhotos = 0;
     var totalBytes = 0;
@@ -17564,12 +18312,11 @@ async function loadStorageInfo() {
 // Studio Locations (Settings)
 // ============================================================
 
-var STUDIO_LOCATIONS_PATH = 'shirglassworks/config/studioLocations';
 var studioLocations = {};
 var STUDIO_RADIUS_METERS = 500;
 
 function loadStudioLocations() {
-  db.ref(STUDIO_LOCATIONS_PATH).once('value').then(function(snap) {
+  MastDB.studioLocations.ref().once('value').then(function(snap) {
     studioLocations = snap.val() || {};
     renderStudioLocations();
   });
@@ -17613,7 +18360,7 @@ function addStudioLocation() {
     function(pos) {
       var lat = pos.coords.latitude;
       var lng = pos.coords.longitude;
-      var ref = db.ref(STUDIO_LOCATIONS_PATH).push();
+      var ref = MastDB.studioLocations.ref().push();
       ref.set({
         name: name, lat: lat, lng: lng, radius: STUDIO_RADIUS_METERS, createdAt: new Date().toISOString()
       }).then(function() {
@@ -17642,7 +18389,7 @@ async function removeStudioLocation(locId) {
   if (!confirm('Remove this studio location?')) return;
   try {
     await writeAudit('delete', 'locations', locId);
-    await db.ref(STUDIO_LOCATIONS_PATH + '/' + locId).remove();
+    await MastDB.studioLocations.ref(locId).remove();
     showToast('Location removed.');
     loadStudioLocations();
   } catch (err) {
@@ -17677,7 +18424,7 @@ function isNearAnyStudio(lat, lng, locations) {
 
 function loadLocations() {
   if (locationsLoaded) { renderLocationsList(); return; }
-  db.ref(LOCATIONS_PATH).once('value').then(function(snap) {
+  MastDB.locations.ref().once('value').then(function(snap) {
     locationsData = snap.val() || {};
     locationsLoaded = true;
     ensureHomeLocation();
@@ -17691,7 +18438,7 @@ function ensureHomeLocation() {
     return locationsData[k].type === 'home' && locationsData[k].status === 'active';
   });
   if (!hasHome) {
-    var ref = db.ref(LOCATIONS_PATH).push();
+    var ref = MastDB.locations.ref().push();
     var homeRecord = {
       locationId: ref.key,
       name: 'Home',
@@ -17791,7 +18538,7 @@ async function createLocation() {
   var type = document.getElementById('newLocationType').value;
 
   try {
-    var ref = db.ref(LOCATIONS_PATH).push();
+    var ref = MastDB.locations.ref().push();
     var record = {
       locationId: ref.key,
       name: name,
@@ -17815,7 +18562,7 @@ async function createLocation() {
 
 function createEventLocation(eventId, eventName) {
   // Auto-create a location linked to a sales event
-  var ref = db.ref(LOCATIONS_PATH).push();
+  var ref = MastDB.locations.ref().push();
   var record = {
     locationId: ref.key,
     name: eventName,
@@ -17856,7 +18603,7 @@ async function renameLocation(locId) {
   var newName = prompt('Rename location:', loc.name);
   if (!newName || newName.trim() === loc.name) return;
   try {
-    await db.ref(LOCATIONS_PATH + '/' + locId).update({ name: newName.trim(), updatedAt: new Date().toISOString() });
+    await MastDB.locations.ref(locId).update({ name: newName.trim(), updatedAt: new Date().toISOString() });
     await writeAudit('update', 'locations', locId);
     locationsData[locId].name = newName.trim();
     showToast('Location renamed');
@@ -17876,7 +18623,7 @@ async function archiveLocation(locId) {
   }
   if (!confirm('Archive "' + loc.name + '"? You can reactivate it later.')) return;
   try {
-    await db.ref(LOCATIONS_PATH + '/' + locId).update({ status: 'archived', updatedAt: new Date().toISOString() });
+    await MastDB.locations.ref(locId).update({ status: 'archived', updatedAt: new Date().toISOString() });
     await writeAudit('update', 'locations', locId);
     locationsData[locId].status = 'archived';
     showToast('Location archived');
@@ -17888,7 +18635,7 @@ async function archiveLocation(locId) {
 
 async function reactivateLocation(locId) {
   try {
-    await db.ref(LOCATIONS_PATH + '/' + locId).update({ status: 'active', updatedAt: new Date().toISOString() });
+    await MastDB.locations.ref(locId).update({ status: 'active', updatedAt: new Date().toISOString() });
     await writeAudit('update', 'locations', locId);
     locationsData[locId].status = 'active';
     showToast('Location reactivated');
@@ -17963,36 +18710,36 @@ async function moveInventory(pid, variantKey, fromLocationId, toLocationId, qty)
   // Atomically move qty items from one location to another
   if (!pid || !fromLocationId || !toLocationId || qty <= 0) return;
   var key = variantKey || '_default';
-  var basePath = INVENTORY_PATH + '/' + pid + '/stock/' + key + '/locations/';
+  var locsRef = MastDB.inventory.stockLocations(pid, key);
 
   try {
     var updates = {};
 
     if (fromLocationId === '__unassigned__') {
       // Moving from unassigned stock — just assign to destination location
-      var toSnap = await db.ref(basePath + toLocationId).once('value');
+      var toSnap = await locsRef.child(toLocationId).once('value');
       var toCount = toSnap.val() || 0;
-      updates[basePath + toLocationId] = toCount + qty;
+      updates[toLocationId] = toCount + qty;
     } else {
       // Read current counts
-      var fromSnap = await db.ref(basePath + fromLocationId).once('value');
+      var fromSnap = await locsRef.child(fromLocationId).once('value');
       var fromCount = fromSnap.val() || 0;
       if (fromCount < qty) throw new Error('Only ' + fromCount + ' available at source location');
 
-      var toSnap = await db.ref(basePath + toLocationId).once('value');
+      var toSnap = await locsRef.child(toLocationId).once('value');
       var toCount = toSnap.val() || 0;
 
-      updates[basePath + fromLocationId] = fromCount - qty;
-      updates[basePath + toLocationId] = toCount + qty;
+      updates[fromLocationId] = fromCount - qty;
+      updates[toLocationId] = toCount + qty;
 
       // Clean up zero counts
-      if (fromCount - qty <= 0) updates[basePath + fromLocationId] = null;
+      if (fromCount - qty <= 0) updates[fromLocationId] = null;
     }
 
-    await db.ref().update(updates);
+    await locsRef.update(updates);
 
     // Refresh local cache
-    var freshSnap = await db.ref(INVENTORY_PATH + '/' + pid + '/stock/' + key + '/locations').once('value');
+    var freshSnap = await locsRef.once('value');
     if (inventory[pid] && inventory[pid].stock && inventory[pid].stock[key]) {
       inventory[pid].stock[key].locations = freshSnap.val() || {};
     }
@@ -18011,23 +18758,23 @@ async function addToLocation(pid, variantKey, locationId, qty) {
   // Recomputes _default.available as sum of all variants to avoid double-counting.
   if (!pid || !locationId || qty <= 0) return;
   var key = variantKey || '_default';
-  var basePath = INVENTORY_PATH + '/' + pid + '/stock/';
-  var locPath = basePath + key + '/locations/' + locationId;
+  var stockRef = MastDB.inventory.stockRef(pid);
+  var locRef = MastDB.inventory.subRef(pid, 'stock', key, 'locations', locationId);
 
-  var snap = await db.ref(locPath).once('value');
+  var snap = await locRef.once('value');
   var current = snap.val() || 0;
 
   var updates = {};
   updates[key + '/locations/' + locationId] = current + qty;
 
   // Increment variant available
-  var availSnap = await db.ref(basePath + key + '/available').once('value');
+  var availSnap = await MastDB.inventory.stockAvailable(pid, key).once('value');
   var availCurrent = availSnap.val() || 0;
   updates[key + '/available'] = availCurrent + qty;
 
   // Recompute _default.available as sum of all variant availables
   if (key !== '_default') {
-    var stockSnap = await db.ref(basePath).once('value');
+    var stockSnap = await stockRef.once('value');
     var stockData = stockSnap.val() || {};
     var total = 0;
     Object.keys(stockData).forEach(function(k) {
@@ -18038,7 +18785,7 @@ async function addToLocation(pid, variantKey, locationId, qty) {
     updates['_default/available'] = total;
   }
 
-  await db.ref(basePath).update(updates);
+  await stockRef.update(updates);
 
   // Refresh local cache
   if (!inventory[pid]) inventory[pid] = { pid: pid, stock: {} };
@@ -18062,15 +18809,15 @@ async function decrementFromLocation(pid, variantKey, locationId, qty) {
   // Remove qty items from a location (used during sales)
   if (!pid || !locationId || qty <= 0) return;
   var key = variantKey || '_default';
-  var path = INVENTORY_PATH + '/' + pid + '/stock/' + key + '/locations/' + locationId;
+  var locRef = MastDB.inventory.subRef(pid, 'stock', key, 'locations', locationId);
 
-  var snap = await db.ref(path).once('value');
+  var snap = await locRef.once('value');
   var current = snap.val() || 0;
   var newVal = Math.max(0, current - qty);
   if (newVal <= 0) {
-    await db.ref(path).remove();
+    await locRef.remove();
   } else {
-    await db.ref(path).set(newVal);
+    await locRef.set(newVal);
   }
 }
 
@@ -18308,7 +19055,7 @@ async function submitShipping(orderId) {
       });
     }
 
-    await db.ref(ORDERS_PATH + '/' + orderId).update({
+    await MastDB.orders.ref(orderId).update({
       status: 'shipped',
       shippedAt: now,
       tracking: {
@@ -18374,14 +19121,14 @@ async function cancelOrder(orderId) {
         (productionRequests[k].status === 'pending' || productionRequests[k].status === 'assigned');
     });
     for (var i = 0; i < reqKeys.length; i++) {
-      await db.ref(PRODUCTION_REQUESTS_PATH + '/' + reqKeys[i]).update({
+      await MastDB.productionRequests.ref(reqKeys[i]).update({
         status: 'cancelled',
         cancelledAt: now
       });
       await writeAudit('update', 'buildJobs', reqKeys[i]);
     }
 
-    await db.ref(ORDERS_PATH + '/' + orderId).update({
+    await MastDB.orders.ref(orderId).update({
       status: 'cancelled',
       cancelledAt: now,
       cancelReason: reason || null,
@@ -18407,7 +19154,7 @@ async function addOrderNote(orderId) {
     var o = orders[orderId];
     var notes = o && o.notes ? o.notes.slice() : [];
     notes.push({ text: text, at: new Date().toISOString(), by: 'admin' });
-    await db.ref(ORDERS_PATH + '/' + orderId + '/notes').set(notes);
+    await MastDB.orders.subRef(orderId, 'notes').set(notes);
     await writeAudit('update', 'orders', orderId);
     input.value = '';
     showToast('Note added');
@@ -18720,11 +19467,11 @@ async function saveCoupon(existingCode) {
 
   try {
     if (isEdit) {
-      await db.ref(COUPONS_PATH + '/' + key).update(data);
+      await MastDB.coupons.ref(key).update(data);
       await writeAudit('update', 'coupons', key);
       showToast('Coupon updated.');
     } else {
-      await db.ref(COUPONS_PATH + '/' + key).set(data);
+      await MastDB.coupons.ref(key).set(data);
       await writeAudit('create', 'coupons', key);
       showToast('Coupon created.');
     }
@@ -18750,7 +19497,7 @@ function confirmDeleteCoupon(code) {
 async function deleteCoupon(code) {
   try {
     await writeAudit('delete', 'coupons', code);
-    await db.ref(COUPONS_PATH + '/' + code).remove();
+    await MastDB.coupons.ref(code).remove();
     showToast('Coupon deleted.');
     closeModal();
   } catch (err) {
@@ -18768,7 +19515,7 @@ async function loadContacts() {
   document.getElementById('contactsTableWrap').style.display = 'none';
   document.getElementById('contactsEmpty').style.display = 'none';
   try {
-    var snap = await db.ref(CONTACTS_PATH).once('value');
+    var snap = await MastDB.contacts.ref().once('value');
     var val = snap.val();
     contactsData = val ? Object.values(val) : [];
     contactsData.sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
@@ -18777,7 +19524,7 @@ async function loadContacts() {
     for (var i = 0; i < contactsData.length; i++) {
       var c = contactsData[i];
       try {
-        var iSnap = await db.ref(CONTACTS_PATH + '/' + c.id + '/interactions')
+        var iSnap = await MastDB.contacts.interactions(c.id)
           .orderByChild('date').limitToLast(1).once('value');
         var iVal = iSnap.val();
         c._lastInteraction = iVal ? Object.values(iVal)[0] : null;
@@ -18888,7 +19635,7 @@ async function saveNewContact() {
   };
 
   try {
-    await db.ref(CONTACTS_PATH + '/' + id).set(contactData);
+    await MastDB.contacts.ref(id).set(contactData);
     await writeAudit('create', 'contacts', id);
     showToast('Contact created.');
     emitTestingEvent('createContact', {});
@@ -18931,7 +19678,7 @@ async function loadContactDetail(contactId) {
 
   try {
     // Load contact record
-    var cSnap = await db.ref(CONTACTS_PATH + '/' + contactId).once('value');
+    var cSnap = await MastDB.contacts.ref(contactId).once('value');
     var contact = cSnap.val();
     if (!contact) {
       container.innerHTML = '<p style="color:var(--danger);">Contact not found.</p>';
@@ -18939,7 +19686,7 @@ async function loadContactDetail(contactId) {
     }
 
     // Load interactions
-    var iSnap = await db.ref(CONTACTS_PATH + '/' + contactId + '/interactions')
+    var iSnap = await MastDB.contacts.interactions(contactId)
       .orderByChild('date').once('value');
     var iVal = iSnap.val();
     contactInteractions = iVal ? Object.values(iVal) : [];
@@ -19076,7 +19823,7 @@ async function saveInteraction(contactId) {
   };
 
   try {
-    await db.ref(CONTACTS_PATH + '/' + contactId + '/interactions/' + interactionId).set(interactionData);
+    await MastDB.contacts.interactions(contactId, interactionId).set(interactionData);
     await writeAudit('create', 'contacts', contactId);
     showToast('Interaction logged.');
     emitTestingEvent('logInteraction', {});
@@ -19161,7 +19908,7 @@ async function createGoogleContact(contactData) {
     var result = await response.json();
     if (result.resourceName) {
       // Update Firebase with the Google Contact ID
-      await db.ref(CONTACTS_PATH + '/' + contactData.id + '/googleContactId').set(result.resourceName);
+      await MastDB.contacts.googleContactId(contactData.id).set(result.resourceName);
     }
   } catch (err) {
     // Silently fail — Google Contact creation is best-effort
@@ -19248,7 +19995,7 @@ async function syncGoogleContacts() {
       var personName = (person.names && person.names[0]) ? person.names[0].displayName : 'Unknown';
       var id = 'contact_' + Date.now().toString(36) + '_' + i;
       var now = new Date().toISOString();
-      await db.ref(CONTACTS_PATH + '/' + id).set({
+      await MastDB.contacts.ref(id).set({
         id: id,
         name: personName,
         category: 'Other',
@@ -19357,7 +20104,7 @@ function validateRequired(fields) {
 function loadCommissions() {
   var loading = document.getElementById('commissionsLoading');
   if (loading) loading.style.display = '';
-  db.ref(COMMISSIONS_PATH).limitToLast(200).once('value', function(snap) {
+  MastDB.commissions.ref().limitToLast(200).once('value', function(snap) {
     commissionsData = snap.val() || {};
     commissionsLoaded = true;
     if (loading) loading.style.display = 'none';
@@ -19578,7 +20325,7 @@ async function saveCommissionProposal(commId) {
     updates['proposalPrice'] = price || null;
     updates['proposalTimeline'] = timeline || null;
     updates['proposalSpec'] = spec || null;
-    await db.ref(COMMISSIONS_PATH + '/' + commId).update(updates);
+    await MastDB.commissions.ref(commId).update(updates);
     Object.assign(commissionsData[commId], updates);
     if (statusEl) { statusEl.textContent = 'Proposal saved.'; statusEl.style.color = 'var(--teal)'; }
     await writeAudit('update', 'commission', commId);
@@ -19626,7 +20373,7 @@ async function sendCommissionProposal(commId) {
     });
     var result = await resp.json();
     if (result.success) {
-      await db.ref(COMMISSIONS_PATH + '/' + commId + '/proposalSentAt').set(new Date().toISOString());
+      await MastDB.commissions.subRef(commId, 'proposalSentAt').set(new Date().toISOString());
       commissionsData[commId].proposalSentAt = new Date().toISOString();
       showToast('Proposal sent to ' + contact);
       emitTestingEvent('sendProposal', {});
@@ -19643,7 +20390,7 @@ async function createCommissionJob(commId) {
   var c = commissionsData[commId];
   if (!c) return;
   try {
-    var jobRef = db.ref('shirglassworks/admin/production/jobs').push();
+    var jobRef = MastDB.productionJobs.ref().push();
     var jobId = jobRef.key;
     var jobData = {
       name: 'Commission: ' + (c.sourcePieceName || 'Custom Piece') + ' for ' + (c.customerName || 'Customer'),
@@ -19654,7 +20401,7 @@ async function createCommissionJob(commId) {
       createdAt: new Date().toISOString()
     };
     await jobRef.set(jobData);
-    await db.ref(COMMISSIONS_PATH + '/' + commId + '/productionJobId').set(jobId);
+    await MastDB.commissions.subRef(commId, 'productionJobId').set(jobId);
     commissionsData[commId].productionJobId = jobId;
     showToast('Production job created');
     emitTestingEvent('createCommissionJob', {});
@@ -19696,7 +20443,7 @@ async function saveCommissionDocLink(commId) {
       mimeType: meta ? meta.mimeType : null,
       addedAt: new Date().toISOString()
     };
-    var docRef = db.ref(COMMISSIONS_PATH + '/' + commId + '/documents').push();
+    var docRef = MastDB.commissions.documents(commId).push();
     await docRef.set(docData);
     if (!commissionsData[commId].documents) commissionsData[commId].documents = {};
     commissionsData[commId].documents[docRef.key] = docData;
@@ -19770,7 +20517,7 @@ async function uploadCommissionDoc(commId) {
       size: file.size,
       addedAt: new Date().toISOString()
     };
-    var docRef = db.ref(COMMISSIONS_PATH + '/' + commId + '/documents').push();
+    var docRef = MastDB.commissions.documents(commId).push();
     await docRef.set(docData);
     if (!commissionsData[commId].documents) commissionsData[commId].documents = {};
     commissionsData[commId].documents[docRef.key] = docData;
@@ -19787,7 +20534,7 @@ async function uploadCommissionDoc(commId) {
 async function removeCommissionDoc(commId, docId) {
   if (!confirm('Remove this document?')) return;
   try {
-    await db.ref(COMMISSIONS_PATH + '/' + commId + '/documents/' + docId).remove();
+    await MastDB.commissions.documents(commId, docId).remove();
     if (commissionsData[commId] && commissionsData[commId].documents) {
       delete commissionsData[commId].documents[docId];
     }
@@ -19901,7 +20648,7 @@ async function saveNewCommission() {
   errorEl.style.display = 'none';
 
   try {
-    var commRef = db.ref(COMMISSIONS_PATH);
+    var commRef = MastDB.commissions.ref();
     var commId = commRef.push().key;
 
     // Build inspiration list
@@ -19951,7 +20698,7 @@ function closeCommissionDetail() {
 
 async function updateCommissionStatus(commId, newStatus) {
   try {
-    await db.ref(COMMISSIONS_PATH + '/' + commId + '/status').set(newStatus);
+    await MastDB.commissions.subRef(commId, 'status').set(newStatus);
     commissionsData[commId].status = newStatus;
     await writeAudit('update', 'commission', commId);
     showToast('Status updated');
@@ -20004,12 +20751,12 @@ async function loadSocialMedia() {
     return;
   }
   try {
-    var clipSnap = await db.ref('shirglassworks/market/pendingClips/' + uid).once('value');
+    var clipSnap = await MastDB.market.pendingClips.list(uid);
     var clipVal = clipSnap.val();
     smPendingClips = clipVal ? Object.values(clipVal) : [];
     smPendingClips.sort(function(a, b) { return (b.uploadedAt || 0) - (a.uploadedAt || 0); });
 
-    var postSnap = await db.ref('shirglassworks/market/posts/' + uid).once('value');
+    var postSnap = await MastDB.market.posts.list(uid);
     var postVal = postSnap.val();
     smPosts = postVal ? Object.values(postVal) : [];
     smPosts.sort(function(a, b) { return (b.postedAt || 0) - (a.postedAt || 0); });
@@ -20140,7 +20887,7 @@ async function smSetSignal(postId, score) {
   try {
     var post = smPosts.find(function(p) { return p.postId === postId; });
     var newScore = post && post.signalScore === score ? null : score;
-    await db.ref('shirglassworks/market/posts/' + uid + '/' + postId).update({
+    await MastDB.market.posts.update(uid, postId, {
       signalScore: newScore,
       scoredAt: newScore ? firebase.database.ServerValue.TIMESTAMP : null
     });
@@ -20300,7 +21047,7 @@ async function smHandleFileSelected(file) {
       duration: duration,
       fileSize: file.size
     };
-    await db.ref('shirglassworks/market/pendingClips/' + uid + '/' + clipId).set(clipData);
+    await MastDB.market.pendingClips.set(uid, clipId, clipData);
 
     // Add to local array
     clipData.uploadedAt = Date.now();
@@ -20674,7 +21421,7 @@ async function smFinishPreShoot() {
   };
 
   try {
-    await db.ref('shirglassworks/market/pendingClips/' + uid + '/' + clipId).set(clipData);
+    await MastDB.market.pendingClips.set(uid, clipId, clipData);
     clipData.uploadedAt = Date.now();
     smPendingClips.unshift(clipData);
     showToast('Shoot Card saved — ready to film!');
@@ -20965,11 +21712,11 @@ async function smMarkPosted() {
   };
 
   try {
-    await db.ref('shirglassworks/market/posts/' + uid + '/' + postId).set(postData);
+    await MastDB.market.posts.set(uid, postId, postData);
 
     // Move clip from pending
     if (d.clipId) {
-      await db.ref('shirglassworks/market/pendingClips/' + uid + '/' + d.clipId + '/status').set('processed');
+      await MastDB.market.pendingClips.statusRef(uid, d.clipId).set('processed');
       var clipIdx = smPendingClips.findIndex(function(c) { return c.clipId === d.clipId; });
       if (clipIdx !== -1) smPendingClips[clipIdx].status = 'processed';
     }
@@ -21042,11 +21789,11 @@ async function loadNewsletter() {
     return;
   }
   try {
-    var issueSnap = await db.ref('shirglassworks/newsletter/issues').orderByChild('issueNumber').limitToLast(50).once('value');
+    var issueSnap = await MastDB.newsletter.issues.ref().orderByChild('issueNumber').limitToLast(50).once('value');
     var issueVal = issueSnap.val();
     nlIssues = issueVal ? Object.values(issueVal).sort(function(a, b) { return (b.issueNumber || 0) - (a.issueNumber || 0); }) : [];
 
-    var subSnap = await db.ref('shirglassworks/newsletter/subscribers').orderByChild('subscribedAt').limitToLast(200).once('value');
+    var subSnap = await MastDB.newsletter.subscribers.ref().orderByChild('subscribedAt').limitToLast(200).once('value');
     var subVal = subSnap.val();
     nlSubscribers = subVal ? Object.values(subVal).sort(function(a, b) { return (b.subscribedAt || 0) - (a.subscribedAt || 0); }) : [];
 
@@ -21101,13 +21848,13 @@ function nlSwitchView(view) {
 async function nlCreateIssue() {
   try {
     // Atomic increment of issue counter
-    var counterRef = db.ref('shirglassworks/newsletter/meta/issueCounter');
+    var counterRef = MastDB.newsletter.meta.issueCounter();
     var result = await counterRef.transaction(function(current) {
       return (current || 0) + 1;
     });
     var issueNumber = result.snapshot.val();
 
-    var issueId = db.ref('shirglassworks/newsletter/issues').push().key;
+    var issueId = MastDB.newsletter.issues.newKey();
     var issueData = {
       id: issueId,
       issueNumber: issueNumber,
@@ -21125,7 +21872,7 @@ async function nlCreateIssue() {
     var sections = {};
     var gridCol = 0, gridRow = 0;
     NL_DEFAULT_SECTIONS.forEach(function(def, idx) {
-      var secId = db.ref().push().key;
+      var secId = MastDB._newRootKey();
       var sizeInfo = NL_CARD_SIZE_MAP[def.type] || NL_CARD_SIZE_MAP['custom'];
       // Auto-pack into 2-column grid
       if (sizeInfo.gridWidth === 2 && gridCol !== 0) { gridRow++; gridCol = 0; }
@@ -21151,7 +21898,7 @@ async function nlCreateIssue() {
     });
 
     issueData.sections = sections;
-    await db.ref('shirglassworks/newsletter/issues/' + issueId).set(issueData);
+    await MastDB.newsletter.issues.ref(issueId).set(issueData);
 
     nlIssues.unshift(issueData);
     showToast('Issue #' + issueNumber + ' created');
@@ -21193,13 +21940,13 @@ function nlOpenIssue(issueId) {
       // Save migration to Firebase
       var fbUpdates = {};
       sections.forEach(function(sec) {
-        var prefix = 'shirglassworks/newsletter/issues/' + issueId + '/sections/' + sec.id + '/';
+        var prefix = 'newsletter/issues/' + issueId + '/sections/' + sec.id + '/';
         fbUpdates[prefix + 'cardSize'] = sec.cardSize;
         fbUpdates[prefix + 'gridWidth'] = sec.gridWidth;
         fbUpdates[prefix + 'gridCol'] = sec.gridCol;
         fbUpdates[prefix + 'gridRow'] = sec.gridRow;
       });
-      db.ref().update(fbUpdates).catch(function(err) { console.error('Grid migration error:', err); });
+      MastDB._multiUpdate(fbUpdates).catch(function(err) { console.error('Grid migration error:', err); });
     }
   }
   renderNLCompose();
@@ -21467,14 +22214,14 @@ async function nlDrop(e, targetSecId) {
 
   var fbUpdates = {};
   sections.forEach(function(sec) {
-    var prefix = 'shirglassworks/newsletter/issues/' + nlCurrentIssueId + '/sections/' + sec.id + '/';
+    var prefix = 'newsletter/issues/' + nlCurrentIssueId + '/sections/' + sec.id + '/';
     fbUpdates[prefix + 'order'] = sec.order;
     fbUpdates[prefix + 'gridCol'] = sec.gridCol;
     fbUpdates[prefix + 'gridRow'] = sec.gridRow;
   });
 
   try {
-    await db.ref().update(fbUpdates);
+    await MastDB._multiUpdate(fbUpdates);
     renderNLCompose();
   } catch (err) { showToast('Error reordering: ' + err.message, true); }
 }
@@ -21664,7 +22411,7 @@ async function nlChangeCardSize(secId, newSize) {
 
   var fbUpdates = {};
   sections.forEach(function(s) {
-    var prefix = 'shirglassworks/newsletter/issues/' + nlCurrentIssueId + '/sections/' + s.id + '/';
+    var prefix = 'newsletter/issues/' + nlCurrentIssueId + '/sections/' + s.id + '/';
     fbUpdates[prefix + 'cardSize'] = s.cardSize;
     fbUpdates[prefix + 'gridWidth'] = s.gridWidth;
     fbUpdates[prefix + 'gridCol'] = s.gridCol;
@@ -21672,7 +22419,7 @@ async function nlChangeCardSize(secId, newSize) {
   });
 
   try {
-    await db.ref().update(fbUpdates);
+    await MastDB._multiUpdate(fbUpdates);
     closeModal();
     renderNLCompose();
   } catch (err) { showToast('Error saving: ' + err.message, true); }
@@ -21696,7 +22443,7 @@ async function nlUpdateTitle(val) {
   nlCurrentIssue.slug = val.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').substring(0, 60);
   nlCurrentIssue.updatedAt = new Date().toISOString();
   try {
-    await db.ref('shirglassworks/newsletter/issues/' + nlCurrentIssueId).update({
+    await MastDB.newsletter.issues.ref(nlCurrentIssueId).update({
       title: val, slug: nlCurrentIssue.slug, updatedAt: nlCurrentIssue.updatedAt
     });
   } catch (err) { showToast('Error saving title: ' + err.message, true); }
@@ -21706,7 +22453,7 @@ async function nlUpdateSectionTitle(secId, val) {
   if (!nlCurrentIssue || !nlCurrentIssue.sections || !nlCurrentIssue.sections[secId]) return;
   nlCurrentIssue.sections[secId].title = val;
   try {
-    await db.ref('shirglassworks/newsletter/issues/' + nlCurrentIssueId + '/sections/' + secId + '/title').set(val);
+    await MastDB.newsletter.issues.sectionField(nlCurrentIssueId, secId, 'title').set(val);
   } catch (err) { showToast('Error saving: ' + err.message, true); }
 }
 
@@ -21714,7 +22461,7 @@ async function nlToggleInclude(secId, checked) {
   if (!nlCurrentIssue || !nlCurrentIssue.sections || !nlCurrentIssue.sections[secId]) return;
   nlCurrentIssue.sections[secId].included = checked;
   try {
-    await db.ref('shirglassworks/newsletter/issues/' + nlCurrentIssueId + '/sections/' + secId + '/included').set(checked);
+    await MastDB.newsletter.issues.sectionField(nlCurrentIssueId, secId, 'included').set(checked);
   } catch (err) { showToast('Error saving: ' + err.message, true); }
 }
 
@@ -21728,7 +22475,7 @@ async function nlUpdateRawInput(secId, val) {
   }
   sec.rawInput = val;
   try {
-    await db.ref('shirglassworks/newsletter/issues/' + nlCurrentIssueId + '/sections/' + secId + '/rawInput').set(val);
+    await MastDB.newsletter.issues.sectionField(nlCurrentIssueId, secId, 'rawInput').set(val);
   } catch (err) { showToast('Error saving: ' + err.message, true); }
 }
 
@@ -21742,7 +22489,7 @@ async function nlUpdateFinalContent(secId, val) {
   }
   sec.finalContent = val;
   try {
-    await db.ref('shirglassworks/newsletter/issues/' + nlCurrentIssueId + '/sections/' + secId + '/finalContent').set(val);
+    await MastDB.newsletter.issues.sectionField(nlCurrentIssueId, secId, 'finalContent').set(val);
   } catch (err) { showToast('Error saving: ' + err.message, true); }
 }
 
@@ -21752,7 +22499,7 @@ async function nlUseAsIs(secId) {
   sec.finalContent = sec.rawInput;
   sec.usedAI = false;
   try {
-    await db.ref('shirglassworks/newsletter/issues/' + nlCurrentIssueId + '/sections/' + secId).update({
+    await MastDB.newsletter.issues.section(nlCurrentIssueId, secId).update({
       finalContent: sec.rawInput, usedAI: false
     });
     renderNLCompose();
@@ -21778,7 +22525,7 @@ async function nlPolishSection(secId) {
 
     nlAiResults[secId] = polished;
     sec.aiVersion = polished;
-    await db.ref('shirglassworks/newsletter/issues/' + nlCurrentIssueId + '/sections/' + secId + '/aiVersion').set(polished);
+    await MastDB.newsletter.issues.sectionField(nlCurrentIssueId, secId, 'aiVersion').set(polished);
     renderNLCompose();
   } catch (err) {
     console.error('AI polish error:', err);
@@ -21796,7 +22543,7 @@ async function nlPickVersion(secId, version) {
   sec.usedAI = version === 'ai';
   delete nlAiResults[secId];
   try {
-    await db.ref('shirglassworks/newsletter/issues/' + nlCurrentIssueId + '/sections/' + secId).update({
+    await MastDB.newsletter.issues.section(nlCurrentIssueId, secId).update({
       finalContent: content, usedAI: sec.usedAI
     });
     renderNLCompose();
@@ -21811,7 +22558,7 @@ async function nlResetSection(secId) {
   sec.aiVersion = null;
   delete nlAiResults[secId];
   try {
-    await db.ref('shirglassworks/newsletter/issues/' + nlCurrentIssueId + '/sections/' + secId).update({
+    await MastDB.newsletter.issues.section(nlCurrentIssueId, secId).update({
       finalContent: '', usedAI: false, aiVersion: null
     });
     renderNLCompose();
@@ -21821,7 +22568,7 @@ async function nlResetSection(secId) {
 // Add custom section
 async function nlAddSection() {
   if (!nlCurrentIssue) return;
-  var secId = db.ref().push().key;
+  var secId = MastDB._newRootKey();
   var sections = nlCurrentIssue.sections ? Object.values(nlCurrentIssue.sections) : [];
   var maxOrder = sections.reduce(function(m, s) { return Math.max(m, s.order || 0); }, -1);
   var sizeInfo = NL_CARD_SIZE_MAP['custom'];
@@ -21838,7 +22585,7 @@ async function nlAddSection() {
   nlRepackGrid(allSections);
   nlExpandedSections[secId] = true;
   try {
-    await db.ref('shirglassworks/newsletter/issues/' + nlCurrentIssueId + '/sections/' + secId).set(newSec);
+    await MastDB.newsletter.issues.section(nlCurrentIssueId, secId).set(newSec);
     renderNLCompose();
   } catch (err) { showToast('Error adding section: ' + err.message, true); }
 }
@@ -21887,7 +22634,7 @@ async function nlSelectImage(imgId) {
   if (sec.images.length >= 3) { showToast('Max 3 images per section', true); return; }
   sec.images.push(imgId);
   try {
-    await db.ref('shirglassworks/newsletter/issues/' + nlCurrentIssueId + '/sections/' + secId + '/images').set(sec.images);
+    await MastDB.newsletter.issues.sectionField(nlCurrentIssueId, secId, 'images').set(sec.images);
     nlCloseImagePicker();
     renderNLCompose();
   } catch (err) { showToast('Error adding image: ' + err.message, true); }
@@ -21899,7 +22646,7 @@ async function nlRemoveImage(secId, idx) {
   if (!sec.images) return;
   sec.images.splice(idx, 1);
   try {
-    await db.ref('shirglassworks/newsletter/issues/' + nlCurrentIssueId + '/sections/' + secId + '/images').set(sec.images.length > 0 ? sec.images : []);
+    await MastDB.newsletter.issues.sectionField(nlCurrentIssueId, secId, 'images').set(sec.images.length > 0 ? sec.images : []);
     renderNLCompose();
   } catch (err) { showToast('Error removing image: ' + err.message, true); }
 }
@@ -22042,11 +22789,11 @@ async function nlPublishToWebsite() {
   };
 
   try {
-    await db.ref('shirglassworks/newsletter/published/' + nlCurrentIssueId).set(postData);
+    await MastDB.newsletter.published.ref(nlCurrentIssueId).set(postData);
     nlCurrentIssue.status = 'published';
     nlCurrentIssue.publishedAt = publishedAt;
     nlCurrentIssue.updatedAt = new Date().toISOString();
-    await db.ref('shirglassworks/newsletter/issues/' + nlCurrentIssueId).update({
+    await MastDB.newsletter.issues.ref(nlCurrentIssueId).update({
       status: 'published', publishedAt: publishedAt, updatedAt: nlCurrentIssue.updatedAt
     });
     showToast('Published to website! 🌐');
@@ -22066,7 +22813,7 @@ async function nlMarkAsSent() {
     nlCurrentIssue.sentAt = sentAt;
     nlCurrentIssue.sentSubscriberCount = activeSubs;
     nlCurrentIssue.updatedAt = new Date().toISOString();
-    await db.ref('shirglassworks/newsletter/issues/' + nlCurrentIssueId).update({
+    await MastDB.newsletter.issues.ref(nlCurrentIssueId).update({
       status: 'sent', sentAt: sentAt, sentSubscriberCount: activeSubs, updatedAt: nlCurrentIssue.updatedAt
     });
     showToast('Marked as sent to ' + activeSubs + ' subscribers ✉️');
@@ -22159,7 +22906,7 @@ async function nlSaveSubscriber() {
   var exists = nlSubscribers.some(function(s) { return s.email.toLowerCase() === email.toLowerCase() && s.status === 'active'; });
   if (exists) { showToast('This email is already subscribed', true); return; }
 
-  var subId = db.ref('shirglassworks/newsletter/subscribers').push().key;
+  var subId = MastDB.newsletter.subscribers.newKey();
   var token = subId + '-' + Date.now().toString(36);
   var subData = {
     id: subId, name: name, email: email, notes: notes || null,
@@ -22168,7 +22915,7 @@ async function nlSaveSubscriber() {
   };
 
   try {
-    await db.ref('shirglassworks/newsletter/subscribers/' + subId).set(subData);
+    await MastDB.newsletter.subscribers.ref(subId).set(subData);
     nlSubscribers.unshift(subData);
     nlCloseSubModal();
     showToast('Subscriber added');
@@ -22183,7 +22930,7 @@ async function nlUnsubscribe(subId) {
   try {
     sub.status = 'unsubscribed';
     sub.unsubscribedAt = new Date().toISOString();
-    await db.ref('shirglassworks/newsletter/subscribers/' + subId).update({
+    await MastDB.newsletter.subscribers.ref(subId).update({
       status: 'unsubscribed', unsubscribedAt: sub.unsubscribedAt
     });
     showToast('Subscriber removed');
@@ -22242,11 +22989,11 @@ async function loadBlog() {
   var uid = nlGetUid();
   if (!uid) { blogLoaded = true; renderBlog(); return; }
   try {
-    var postSnap = await db.ref('shirglassworks/blog/posts').orderByChild('createdAt').limitToLast(100).once('value');
+    var postSnap = await MastDB.blog.posts.ref().orderByChild('createdAt').limitToLast(100).once('value');
     var postVal = postSnap.val();
     blogPosts = postVal ? Object.values(postVal).sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); }) : [];
 
-    var ideaSnap = await db.ref('shirglassworks/blog/ideas').orderByChild('createdAt').limitToLast(50).once('value');
+    var ideaSnap = await MastDB.blog.ideas.ref().orderByChild('createdAt').limitToLast(50).once('value');
     var ideaVal = ideaSnap.val();
     blogIdeas = ideaVal ? Object.values(ideaVal).sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); }) : [];
 
@@ -22328,7 +23075,7 @@ async function blogAddIdea() {
   var id = 'idea_' + Date.now();
   var idea = { id: id, text: text, createdAt: new Date().toISOString() };
   try {
-    await db.ref('shirglassworks/blog/ideas/' + id).set(idea);
+    await MastDB.blog.ideas.ref(id).set(idea);
     blogIdeas.unshift(idea);
     input.value = '';
     renderBlogList();
@@ -22338,7 +23085,7 @@ async function blogAddIdea() {
 
 async function blogDeleteIdea(id) {
   try {
-    await db.ref('shirglassworks/blog/ideas/' + id).remove();
+    await MastDB.blog.ideas.ref(id).remove();
     blogIdeas = blogIdeas.filter(function(i) { return i.id !== id; });
     renderBlogList();
   } catch (err) { showToast('Error deleting idea: ' + err.message, true); }
@@ -22354,7 +23101,7 @@ function blogStartFromIdea(ideaId) {
 async function blogCreatePost(initialTitle) {
   try {
     // Atomic counter
-    var counterRef = db.ref('shirglassworks/blog/meta/postCounter');
+    var counterRef = MastDB.blog.meta.postCounter();
     var result = await counterRef.transaction(function(current) { return (current || 0) + 1; });
     var postNumber = result.snapshot.val();
     var id = 'post_' + Date.now();
@@ -22375,7 +23122,7 @@ async function blogCreatePost(initialTitle) {
       publishedAt: null,
       substackDraftUrl: null
     };
-    await db.ref('shirglassworks/blog/posts/' + id).set(post);
+    await MastDB.blog.posts.ref(id).set(post);
     blogPosts.unshift(post);
     blogCurrentPostId = id;
     blogCurrentPost = post;
@@ -22638,7 +23385,7 @@ function blogBodyChanged() {
     var body = blogSaveBodyFromEditor();
     blogCurrentPost.body = body;
     blogCurrentPost.updatedAt = new Date().toISOString();
-    db.ref('shirglassworks/blog/posts/' + blogCurrentPostId).update({
+    MastDB.blog.posts.ref(blogCurrentPostId).update({
       body: body,
       updatedAt: blogCurrentPost.updatedAt
     }).catch(function(err) { showToast('Auto-save failed: ' + err.message, true); });
@@ -22763,8 +23510,8 @@ async function blogChangeAuthor(key) {
   blogCurrentPost.author = key;
   blogCurrentPost.updatedAt = new Date().toISOString();
   try {
-    await db.ref('shirglassworks/blog/posts/' + blogCurrentPostId + '/author').set(key);
-    await db.ref('shirglassworks/blog/posts/' + blogCurrentPostId + '/updatedAt').set(blogCurrentPost.updatedAt);
+    await MastDB.blog.posts.fieldRef(blogCurrentPostId, 'author').set(key);
+    await MastDB.blog.posts.fieldRef(blogCurrentPostId, 'updatedAt').set(blogCurrentPost.updatedAt);
     var author = BLOG_AUTHORS[key];
     var photo = document.getElementById('blogAuthorPhoto');
     var bio = document.getElementById('blogAuthorBio');
@@ -22779,7 +23526,7 @@ async function blogUpdateTitle(val) {
   blogCurrentPost.slug = val.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   blogCurrentPost.updatedAt = new Date().toISOString();
   try {
-    await db.ref('shirglassworks/blog/posts/' + blogCurrentPostId).update({
+    await MastDB.blog.posts.ref(blogCurrentPostId).update({
       title: val,
       slug: blogCurrentPost.slug,
       updatedAt: blogCurrentPost.updatedAt
@@ -22792,7 +23539,7 @@ async function blogUpdateBody(val) {
   blogCurrentPost.body = val;
   blogCurrentPost.updatedAt = new Date().toISOString();
   try {
-    await db.ref('shirglassworks/blog/posts/' + blogCurrentPostId).update({
+    await MastDB.blog.posts.ref(blogCurrentPostId).update({
       body: val,
       updatedAt: blogCurrentPost.updatedAt
     });
@@ -22805,7 +23552,7 @@ async function blogUpdateTags(val) {
   blogCurrentPost.tags = tags;
   blogCurrentPost.updatedAt = new Date().toISOString();
   try {
-    await db.ref('shirglassworks/blog/posts/' + blogCurrentPostId).update({
+    await MastDB.blog.posts.ref(blogCurrentPostId).update({
       tags: tags,
       updatedAt: blogCurrentPost.updatedAt
     });
@@ -22816,7 +23563,7 @@ async function blogDeletePost() {
   if (!blogCurrentPost) return;
   if (!confirm('Delete this blog post? This cannot be undone.')) return;
   try {
-    await db.ref('shirglassworks/blog/posts/' + blogCurrentPostId).remove();
+    await MastDB.blog.posts.ref(blogCurrentPostId).remove();
     blogPosts = blogPosts.filter(function(p) { return p.id !== blogCurrentPostId; });
     showToast('Post deleted');
     blogBackToList();
@@ -22917,7 +23664,7 @@ function blogFinishInsertImage(imageId, caption) {
   blogCurrentPost.body = body;
   blogCurrentPost.updatedAt = new Date().toISOString();
 
-  db.ref('shirglassworks/blog/posts/' + blogCurrentPostId).update({
+  MastDB.blog.posts.ref(blogCurrentPostId).update({
     body: body,
     inlineImages: inlineImages,
     updatedAt: blogCurrentPost.updatedAt
@@ -22958,7 +23705,7 @@ async function blogSaveCaption(idx, caption) {
   blogCurrentPost.inlineImages = inlineImages;
   blogCurrentPost.updatedAt = new Date().toISOString();
   try {
-    await db.ref('shirglassworks/blog/posts/' + blogCurrentPostId).update({
+    await MastDB.blog.posts.ref(blogCurrentPostId).update({
       inlineImages: inlineImages,
       updatedAt: blogCurrentPost.updatedAt
     });
@@ -22982,7 +23729,7 @@ async function blogMoveImage(idx, direction) {
   blogCurrentPost.inlineImages = inlineImages;
   blogCurrentPost.updatedAt = new Date().toISOString();
   try {
-    await db.ref('shirglassworks/blog/posts/' + blogCurrentPostId).update({
+    await MastDB.blog.posts.ref(blogCurrentPostId).update({
       inlineImages: inlineImages,
       updatedAt: blogCurrentPost.updatedAt
     });
@@ -23022,7 +23769,7 @@ async function blogRemoveInlineImage(idx) {
   blogCurrentPost.inlineImages = inlineImages;
   blogCurrentPost.updatedAt = new Date().toISOString();
   try {
-    await db.ref('shirglassworks/blog/posts/' + blogCurrentPostId).update({
+    await MastDB.blog.posts.ref(blogCurrentPostId).update({
       body: body,
       inlineImages: inlineImages,
       updatedAt: blogCurrentPost.updatedAt
@@ -23113,7 +23860,7 @@ async function blogSuggestTags() {
       });
       blogCurrentPost.tags = merged;
       blogCurrentPost.updatedAt = new Date().toISOString();
-      await db.ref('shirglassworks/blog/posts/' + blogCurrentPostId).update({
+      await MastDB.blog.posts.ref(blogCurrentPostId).update({
         tags: merged,
         updatedAt: blogCurrentPost.updatedAt
       });
@@ -23177,7 +23924,7 @@ async function blogPickVersion(version) {
   blogCurrentPost.updatedAt = new Date().toISOString();
   blogAiResult = null;
   try {
-    await db.ref('shirglassworks/blog/posts/' + blogCurrentPostId).update({
+    await MastDB.blog.posts.ref(blogCurrentPostId).update({
       body: blogCurrentPost.body,
       aiVersion: blogCurrentPost.aiVersion || '',
       usedAI: blogCurrentPost.usedAI || false,
@@ -23198,7 +23945,7 @@ async function blogMarkComplete() {
   blogCurrentPost.status = 'complete';
   blogCurrentPost.updatedAt = new Date().toISOString();
   try {
-    await db.ref('shirglassworks/blog/posts/' + blogCurrentPostId).update({
+    await MastDB.blog.posts.ref(blogCurrentPostId).update({
       status: 'complete',
       body: blogCurrentPost.body,
       updatedAt: blogCurrentPost.updatedAt
@@ -23213,7 +23960,7 @@ async function blogBackToDraft() {
   blogCurrentPost.status = 'draft';
   blogCurrentPost.updatedAt = new Date().toISOString();
   try {
-    await db.ref('shirglassworks/blog/posts/' + blogCurrentPostId).update({
+    await MastDB.blog.posts.ref(blogCurrentPostId).update({
       status: 'draft',
       updatedAt: blogCurrentPost.updatedAt
     });
@@ -23289,13 +24036,13 @@ async function blogPublishToWebsite() {
     };
 
     // Write to public blog path
-    await db.ref('shirglassworks/blog/published/' + blogCurrentPostId).set(publishedData);
+    await MastDB.blog.published.ref(blogCurrentPostId).set(publishedData);
 
     // Update admin post
     blogCurrentPost.publishedToWebsite = true;
     blogCurrentPost.publishedAt = publishedAt;
     blogCurrentPost.updatedAt = publishedAt;
-    await db.ref('shirglassworks/blog/posts/' + blogCurrentPostId).update({
+    await MastDB.blog.posts.ref(blogCurrentPostId).update({
       publishedToWebsite: true,
       publishedAt: publishedAt,
       updatedAt: publishedAt
@@ -23312,13 +24059,13 @@ async function blogUnpublishFromWebsite() {
   if (!blogCurrentPost) return;
   try {
     // Remove from public path
-    await db.ref('shirglassworks/blog/published/' + blogCurrentPostId).remove();
+    await MastDB.blog.published.ref(blogCurrentPostId).remove();
 
     // Update admin post
     blogCurrentPost.publishedToWebsite = false;
     blogCurrentPost.publishedAt = null;
     blogCurrentPost.updatedAt = new Date().toISOString();
-    await db.ref('shirglassworks/blog/posts/' + blogCurrentPostId).update({
+    await MastDB.blog.posts.ref(blogCurrentPostId).update({
       publishedToWebsite: false,
       publishedAt: null,
       updatedAt: blogCurrentPost.updatedAt
@@ -23334,8 +24081,6 @@ async function blogUnpublishFromWebsite() {
 // ============================================================
 // Feedback Widget
 // ============================================================
-var FEEDBACK_PATH = 'shirglassworks/feedbackReports';
-var FEEDBACK_SETTINGS_PATH = 'shirglassworks/admin/feedbackSettings';
 
 // Console capture — rolling buffer of errors/warnings
 (function() {
@@ -23465,7 +24210,7 @@ async function submitFeedback() {
   try {
     var btn = document.getElementById('fbSubmitBtn');
     if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
-    await db.ref(FEEDBACK_PATH).push(report);
+    await MastDB.feedback.ref().push(report);
     closeFeedbackDialog();
     showToast('Feedback submitted \u2014 thanks!');
   } catch (err) {
@@ -23480,7 +24225,7 @@ async function togglePublicFeedback() {
   var enabled = toggle && toggle.checked;
   var statusEl = document.getElementById('publicFeedbackStatus');
   try {
-    await db.ref(FEEDBACK_SETTINGS_PATH + '/publicEnabled').set(enabled);
+    await MastDB.feedbackSettings.ref('publicEnabled').set(enabled);
     if (statusEl) {
       statusEl.textContent = enabled ? 'Public feedback enabled.' : 'Public feedback disabled.';
       statusEl.style.color = 'var(--teal)';
@@ -23492,7 +24237,7 @@ async function togglePublicFeedback() {
 }
 
 function loadPublicFeedbackSetting() {
-  db.ref(FEEDBACK_SETTINGS_PATH + '/publicEnabled').once('value', function(snap) {
+  MastDB.feedbackSettings.ref('publicEnabled').once('value', function(snap) {
     var toggle = document.getElementById('publicFeedbackToggle');
     if (toggle) toggle.checked = snap.val() === true;
   });
@@ -23571,8 +24316,8 @@ function loadTestingProgress() {
   var user = auth.currentUser;
   if (!user) return;
   Promise.all([
-    db.ref('shirglassworks/admin/testingMissions').once('value'),
-    db.ref('shirglassworks/admin/testingMode/' + user.uid).once('value')
+    MastDB.testingMissions.ref().once('value'),
+    MastDB.testingMode.ref(user.uid).once('value')
   ]).then(function(snaps) {
     var missionsData = snaps[0].val() || {};
     var progressData = snaps[1].val() || {};
@@ -23843,7 +24588,7 @@ function handlePrePromptSubmit(missionId) {
   if (!user) return;
   if (!testingModeState.missionProgress[missionId]) testingModeState.missionProgress[missionId] = { progress: {}, reflections: {} };
   testingModeState.missionProgress[missionId].reflections.pre = value;
-  db.ref('shirglassworks/admin/testingMode/' + user.uid + '/' + missionId + '/reflections/pre').set(value);
+  MastDB.testingMode.reflections(user.uid, missionId, 'pre').set(value);
   renderTestingMode();
 }
 
@@ -23854,7 +24599,7 @@ function handlePostPromptSubmit(missionId) {
   var user = auth.currentUser;
   if (!user) return;
   testingModeState.missionProgress[missionId].reflections.post = value;
-  db.ref('shirglassworks/admin/testingMode/' + user.uid + '/' + missionId + '/reflections/post').set(value);
+  MastDB.testingMode.reflections(user.uid, missionId, 'post').set(value);
   showToast('Feedback saved — thank you!');
   // Expand next non-accomplished mission
   testingModeState.expandedMissionId = null;
@@ -23876,7 +24621,7 @@ function notifyTestingMode(missionId, taskIdx) {
   var user = auth.currentUser;
   if (!user) return;
   mp.progress[taskIdx] = true;
-  db.ref('shirglassworks/admin/testingMode/' + user.uid + '/' + missionId + '/progress/' + taskIdx).set(true);
+  MastDB.testingMode.progress(user.uid, missionId, taskIdx).set(true);
 
   var mission = testingMissions.find(function(m) { return m.id === missionId; });
   if (!mission) return;
@@ -23960,7 +24705,7 @@ async function askStudioAssistant() {
     var data = await resp.json();
     testingModeState.assistantMessages.push({ role: 'assistant', text: data.answer || 'Hmm, I\'m not sure about that one.' });
 
-    db.ref('shirglassworks/admin/testingMode/' + user.uid + '/' + missionId + '/questions').push({
+    MastDB.testingMode.questions(user.uid, missionId).push({
       taskIndex: testingModeState.assistantTaskIdx,
       question: question,
       answer: data.answer || '',
@@ -23980,7 +24725,7 @@ function resetTestingProgress() {
   if (!confirm('Reset all testing progress? This clears tasks, reflections, and questions for all missions.')) return;
   var user = auth.currentUser;
   if (!user) return;
-  db.ref('shirglassworks/admin/testingMode/' + user.uid).remove();
+  MastDB.testingMode.ref(user.uid).remove();
   testingModeState.missionProgress = {};
   testingMissions.forEach(function(m) {
     testingModeState.missionProgress[m.id] = { progress: {}, reflections: {} };
@@ -23996,11 +24741,6 @@ function resetTestingProgress() {
 // BUSINESS TRIPS & MILEAGE TRACKER
 // ============================================================
 
-var TRIPS_PATH = 'shirglassworks/trips';
-var TRIP_LOCATIONS_PATH = 'shirglassworks/tripLocations';
-var TRIP_SETTINGS_PATH = 'shirglassworks/settings/trips';
-var QUICK_ACTIONS_PATH = 'shirglassworks/quickActions';
-
 var tripsData = [];
 var tripsLoaded = false;
 var tripLocationsData = {};
@@ -24012,7 +24752,6 @@ var selectedTripPurposeLabel = null; // For custom "Other" purposes
 var tripMilesSource = null;
 var tripPulseTimer = null;
 var customTripPurposes = []; // User-added custom purposes
-var TRIP_CUSTOM_PURPOSES_PATH = 'shirglassworks/tripCustomPurposes';
 
 // Default trip purpose options (Other always last)
 var DEFAULT_TRIP_PURPOSES = [
@@ -24045,8 +24784,7 @@ function loadTrips() {
   var loading = document.getElementById('tripsLoading');
   if (loading) loading.style.display = '';
 
-  var path = TRIPS_PATH + '/' + user.uid;
-  db.ref(path).orderByChild('startTime').limitToLast(200).once('value').then(function(snap) {
+  MastDB.trips.ref(user.uid).orderByChild('startTime').limitToLast(200).once('value').then(function(snap) {
     var val = snap.val();
     tripsData = val ? Object.keys(val).map(function(k) { var t = val[k]; t.id = k; return t; }) : [];
     tripsData.sort(function(a, b) { return (b.startTime || '').localeCompare(a.startTime || ''); });
@@ -24063,7 +24801,7 @@ function loadTrips() {
 }
 
 function loadTripLocations() {
-  db.ref(TRIP_LOCATIONS_PATH).once('value').then(function(snap) {
+  MastDB.tripLocations.ref().once('value').then(function(snap) {
     tripLocationsData = snap.val() || {};
     tripLocationsLoaded = true;
     // Auto-seed default locations if empty
@@ -24072,7 +24810,7 @@ function loadTripLocations() {
         'home-studio': { label: 'Home Studio', lat: 0, lng: 0, useCount: 0, lastUsed: new Date().toISOString() },
         'new-studio': { label: 'New Studio', lat: 0, lng: 0, useCount: 0, lastUsed: new Date().toISOString() }
       };
-      db.ref(TRIP_LOCATIONS_PATH).set(seeds).then(function() {
+      MastDB.tripLocations.ref().set(seeds).then(function() {
         tripLocationsData = seeds;
       }).catch(function() {});
     }
@@ -24080,7 +24818,7 @@ function loadTripLocations() {
 }
 
 function loadTripSettings() {
-  db.ref(TRIP_SETTINGS_PATH).once('value').then(function(snap) {
+  MastDB.tripSettings.ref().once('value').then(function(snap) {
     var val = snap.val();
     if (val) {
       tripSettingsData = val;
@@ -24088,7 +24826,7 @@ function loadTripSettings() {
     } else if (isAdmin()) {
       // Auto-seed defaults
       var defaults = { irsRates: { '2025': 70, '2026': 70 }, knownLocations: ['home-studio', 'new-studio'] };
-      db.ref(TRIP_SETTINGS_PATH).set(defaults).then(function() {
+      MastDB.tripSettings.ref().set(defaults).then(function() {
         tripSettingsData = defaults;
       }).catch(function() {}); // silent if write fails
     }
@@ -24104,7 +24842,7 @@ function renderDashboardQuickActions() {
   if (!user) { container.innerHTML = ''; return; }
 
   // Load frequency data
-  db.ref(QUICK_ACTIONS_PATH + '/' + user.uid).once('value').then(function(snap) {
+  MastDB.quickActions.ref(user.uid).once('value').then(function(snap) {
     var freq = snap.val() || {};
     // Sort by count desc, pick top 3
     var allKeys = Object.keys(QUICK_ACTION_DEFS);
@@ -24138,7 +24876,7 @@ function triggerQuickAction(key) {
 function incrementQuickAction(actionKey) {
   var user = auth.currentUser;
   if (!user) return;
-  var ref = db.ref(QUICK_ACTIONS_PATH + '/' + user.uid + '/' + actionKey);
+  var ref = MastDB.quickActions.ref(user.uid).child(actionKey);
   ref.child('count').set(firebase.database.ServerValue.increment(1));
   ref.child('lastUsed').set(new Date().toISOString());
 }
@@ -24148,7 +24886,7 @@ function incrementQuickAction(actionKey) {
 function checkForActiveTrip() {
   var user = auth.currentUser;
   if (!user) return;
-  db.ref(TRIPS_PATH + '/' + user.uid).orderByChild('status').equalTo('open').limitToLast(1).once('value').then(function(snap) {
+  MastDB.trips.ref(user.uid).orderByChild('status').equalTo('open').limitToLast(1).once('value').then(function(snap) {
     var val = snap.val();
     if (val) {
       var key = Object.keys(val)[0];
@@ -24355,7 +25093,7 @@ function confirmStartTrip() {
   var year = new Date().getFullYear();
   var rate = tripSettingsData.irsRates ? (tripSettingsData.irsRates[year] || tripSettingsData.irsRates[year - 1] || 70) : 70;
 
-  var tripRef = db.ref(TRIPS_PATH + '/' + user.uid).push();
+  var tripRef = MastDB.trips.push(user.uid);
   var tripData = {
     tripId: tripRef.key,
     driverId: user.uid,
@@ -24379,7 +25117,7 @@ function confirmStartTrip() {
     // Add destination to tripLocations if new
     if (!matchedDestKey) {
       var slug = destInput.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-      db.ref(TRIP_LOCATIONS_PATH + '/' + slug).set({
+      MastDB.tripLocations.ref(slug).set({
         label: destInput, lat: 0, lng: 0, useCount: 0, lastUsed: new Date().toISOString()
       });
       tripLocationsData[slug] = { label: destInput, lat: 0, lng: 0, useCount: 0 };
@@ -24531,7 +25269,7 @@ function confirmOtherPurpose() {
     customTripPurposes.push(newPurpose);
     rebuildTripPurposes();
     // Persist to Firebase
-    db.ref(TRIP_CUSTOM_PURPOSES_PATH + '/' + key).set({ icon: '📌', label: value, createdAt: new Date().toISOString() });
+    MastDB.tripCustomPurposes.ref().child(key).set({ icon: '📌', label: value, createdAt: new Date().toISOString() });
   }
 
   // Select it
@@ -24546,7 +25284,7 @@ function rebuildTripPurposes() {
 }
 
 function loadCustomTripPurposes() {
-  db.ref(TRIP_CUSTOM_PURPOSES_PATH).once('value').then(function(snap) {
+  MastDB.tripCustomPurposes.ref().once('value').then(function(snap) {
     var data = snap.val();
     if (!data) return;
     customTripPurposes = [];
@@ -24601,8 +25339,7 @@ function confirmEndTrip() {
     deductibleValue: deductible
   };
 
-  var tripPath = TRIPS_PATH + '/' + user.uid + '/' + activeTripData.id;
-  db.ref(tripPath).update(updates).then(function() {
+  MastDB.trips.update(user.uid, activeTripData.id, updates).then(function() {
     // Increment location use counts
     incrementLocationUseCount(activeTripData.origin);
     incrementLocationUseCount(destination);
@@ -24635,7 +25372,7 @@ function confirmEndTrip() {
 function incrementLocationUseCount(locationObj) {
   if (!locationObj || !locationObj.label) return;
   var slug = locationObj.label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-  var ref = db.ref(TRIP_LOCATIONS_PATH + '/' + slug);
+  var ref = MastDB.tripLocations.ref(slug);
   ref.child('useCount').set(firebase.database.ServerValue.increment(1));
   ref.child('lastUsed').set(new Date().toISOString());
   // Ensure label is set
@@ -24970,7 +25707,7 @@ function loadAllDriversTrips() {
 
   if (checkbox.checked) {
     // Load all drivers
-    db.ref(TRIPS_PATH).once('value').then(function(snap) {
+    MastDB.trips.allDrivers().then(function(snap) {
       var val = snap.val() || {};
       tripsData = [];
       Object.keys(val).forEach(function(uid) {
@@ -25128,7 +25865,7 @@ function addIrsRate() {
   var rate = rateEl ? parseFloat(rateEl.value) : 0;
   if (!year || rate <= 0) { showToast('Enter year and rate', true); return; }
 
-  db.ref(TRIP_SETTINGS_PATH + '/irsRates/' + year).set(rate).then(function() {
+  MastDB.tripSettings.subRef('irsRates', year).set(rate).then(function() {
     tripSettingsData.irsRates[year] = rate;
     yearEl.value = '';
     rateEl.value = '';
@@ -25140,7 +25877,7 @@ function addIrsRate() {
 
 function removeIrsRate(year) {
   if (!confirm('Remove IRS rate for ' + year + '?')) return;
-  db.ref(TRIP_SETTINGS_PATH + '/irsRates/' + year).remove().then(function() {
+  MastDB.tripSettings.subRef('irsRates', year).remove().then(function() {
     delete tripSettingsData.irsRates[year];
     renderIrsRates();
     showToast('Rate removed');
@@ -25177,7 +25914,7 @@ function addTripLocationManual() {
   var name = nameEl ? nameEl.value.trim() : '';
   if (!name) { showToast('Enter a location name', true); return; }
   var slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-  db.ref(TRIP_LOCATIONS_PATH + '/' + slug).set({
+  MastDB.tripLocations.ref(slug).set({
     label: name, lat: 0, lng: 0, useCount: 0, lastUsed: new Date().toISOString()
   }).then(function() {
     tripLocationsData[slug] = { label: name, lat: 0, lng: 0, useCount: 0 };
@@ -25189,7 +25926,7 @@ function addTripLocationManual() {
 
 function removeTripLocation(key) {
   if (!confirm('Remove this location?')) return;
-  db.ref(TRIP_LOCATIONS_PATH + '/' + key).remove().then(function() {
+  MastDB.tripLocations.ref(key).remove().then(function() {
     delete tripLocationsData[key];
     renderTripLocations();
     showToast('Location removed');
