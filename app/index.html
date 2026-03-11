@@ -25043,23 +25043,23 @@ function renderDashboardOrderQueue() {
     return;
   }
 
-  // Get active orders (not delivered, cancelled, or payment_failed)
-  var active = getOrdersArray().filter(function(o) {
-    return o.status !== 'delivered' && o.status !== 'cancelled' && o.status !== 'payment_failed';
+  // Only show new orders (status = placed) that haven't been reviewed yet
+  var newOrders = getOrdersArray().filter(function(o) {
+    return (o.status || 'placed') === 'placed';
   });
 
-  if (active.length === 0) {
-    container.innerHTML = '<div class="dash-queue-empty">No active orders.</div>';
+  if (newOrders.length === 0) {
+    container.innerHTML = '<div class="dash-queue-empty">No new orders.</div>';
     return;
   }
 
   var html = '<div class="dash-queue-header">' +
-    '<h3>Order Queue (' + active.length + ')</h3>' +
-    '<span class="dash-queue-viewall" onclick="navigateTo(\'orders\')">View all</span>' +
+    '<h3>New Orders (' + newOrders.length + ')</h3>' +
+    '<span class="dash-queue-viewall" onclick="navigateTo(\'orders\')">View all orders</span>' +
   '</div>' +
   '<div class="dash-queue-grid">';
 
-  active.forEach(function(o) {
+  newOrders.forEach(function(o) {
     var key = o._key;
     var num = esc(getOrderDisplayNumber(o));
     var status = o.status || 'placed';
