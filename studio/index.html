@@ -16,7 +16,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
-
+  <script src="../storefront-tenant.js"></script>
 
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -418,8 +418,8 @@ var auth = firebase.auth();
 var db = firebase.database();
 var storage = firebase.storage();
 
-var PRODUCTS_PATH = 'shirglassworks/public/products';
-var TRAINING_IMAGES_PATH = 'shirglassworks/admin/training-images';
+var PRODUCTS_PATH = TENANT_ID + '/public/products';
+var TRAINING_IMAGES_PATH = TENANT_ID + '/admin/training-images';
 var CLASSIFY_FUNCTION_URL = 'https://us-central1-shir-glassworks.cloudfunctions.net/shirClassifyImage';
 var UPLOAD_FUNCTION_URL = 'https://us-central1-shir-glassworks.cloudfunctions.net/shirUploadTrainingImage';
 var SCAN_FUNCTION_URL = 'https://us-central1-shir-glassworks.cloudfunctions.net/shirScanCatalog';
@@ -555,7 +555,8 @@ function scanCatalog() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + token
+        'Authorization': 'Bearer ' + token,
+        'X-Tenant-ID': TENANT_ID
       },
       body: JSON.stringify({ catalog: catalog }),
       signal: controller.signal
@@ -717,7 +718,8 @@ function handleTrainingCapture(blob) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + idToken
+            'Authorization': 'Bearer ' + idToken,
+            'X-Tenant-ID': TENANT_ID
           },
           body: JSON.stringify({
             image: base64,
@@ -830,7 +832,8 @@ function runClaudeVision(blob) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + token
+            'Authorization': 'Bearer ' + token,
+            'X-Tenant-ID': TENANT_ID
           },
           body: JSON.stringify({
             image: base64,

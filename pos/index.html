@@ -290,6 +290,7 @@ body {
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="../shared/camera.js"></script>
+<script src="../storefront-tenant.js"></script>
 <script>
 // ============================================================
 // Firebase Init
@@ -308,10 +309,10 @@ function esc(s) { var d = document.createElement('div'); d.textContent = s || ''
 
 var CLASSIFY_URL = 'https://us-central1-shir-glassworks.cloudfunctions.net/shirClassifyImage';
 var UPLOAD_URL = 'https://us-central1-shir-glassworks.cloudfunctions.net/shirUploadImage';
-var PRODUCTS_PATH = 'shirglassworks/public/products';
-var SALES_PATH = 'shirglassworks/admin/sales';
-var SALES_EVENTS_PATH = 'shirglassworks/admin/salesEvents';
-var STUDIO_LOCATIONS_PATH = 'shirglassworks/config/studioLocations';
+var PRODUCTS_PATH = TENANT_ID + '/public/products';
+var SALES_PATH = TENANT_ID + '/admin/sales';
+var SALES_EVENTS_PATH = TENANT_ID + '/admin/salesEvents';
+var STUDIO_LOCATIONS_PATH = TENANT_ID + '/config/studioLocations';
 var STUDIO_RADIUS_METERS = 500;
 
 // ============================================================
@@ -901,7 +902,7 @@ function decrementInventory(productQtys) {
   Object.keys(productQtys).forEach(function(pid) {
     var qty = productQtys[pid];
     var prod = products[pid];
-    var stockRef = db.ref('shirglassworks/admin/inventory/' + pid + '/stock');
+    var stockRef = db.ref(TENANT_ID + '/admin/inventory/' + pid + '/stock');
     promises.push(
       stockRef.once('value').then(function(snap) {
         var current = snap.val();
@@ -910,7 +911,7 @@ function decrementInventory(productQtys) {
           return stockRef.set(newVal).then(function() {
             // Auto-set sold status for sculptures when stock reaches 0
             if (prod && prod.businessLine === 'sculpture' && newVal <= 0) {
-              return db.ref('shirglassworks/public/products/' + pid + '/status').set('sold');
+              return db.ref(TENANT_ID + '/public/products/' + pid + '/status').set('sold');
             }
           });
         }
@@ -918,9 +919,9 @@ function decrementInventory(productQtys) {
         if (current && typeof current === 'object' && current._default) {
           var curAvail = current._default.available || 0;
           var newAvail = Math.max(0, curAvail - qty);
-          return db.ref('shirglassworks/admin/inventory/' + pid + '/stock/_default/available').set(newAvail).then(function() {
+          return db.ref(TENANT_ID + '/admin/inventory/' + pid + '/stock/_default/available').set(newAvail).then(function() {
             if (prod && prod.businessLine === 'sculpture' && newAvail <= 0) {
-              return db.ref('shirglassworks/public/products/' + pid + '/status').set('sold');
+              return db.ref(TENANT_ID + '/public/products/' + pid + '/status').set('sold');
             }
           });
         }
@@ -1056,7 +1057,7 @@ async function sendReceipt() {
     if (email) {
       var emailResp = await fetch(base + '/shirSendReceipt', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, 'X-Tenant-ID': TENANT_ID },
         body: JSON.stringify(Object.assign({}, receiptData, { email: email }))
       });
       var emailResult = await emailResp.json();
@@ -1066,7 +1067,7 @@ async function sendReceipt() {
     if (phone) {
       var smsResp = await fetch(base + '/shirSendSMS', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, 'X-Tenant-ID': TENANT_ID },
         body: JSON.stringify(Object.assign({}, receiptData, { phone: phone }))
       });
       var smsResult = await smsResp.json();
@@ -1099,7 +1100,7 @@ async function autoReconcileSquare(saleId, saleTimestamp) {
     var token = authToken;
     var resp = await fetch('https://us-central1-shir-glassworks.cloudfunctions.net/shirReconcileSquarePayment', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, 'X-Tenant-ID': TENANT_ID },
       body: JSON.stringify({ saleId: saleId, saleTimestamp: saleTimestamp, toleranceMinutes: 5 })
     });
     var result = await resp.json();
@@ -1183,7 +1184,7 @@ async function submitCommission(pid, pieceName) {
   btn.textContent = 'Saving...';
 
   try {
-    var commId = db.ref('shirglassworks/admin/commissions').push().key;
+    var commId = db.ref(TENANT_ID + '/admin/commissions').push().key;
     var record = {
       sourcePieceId: pid,
       sourcePieceName: pieceName,
@@ -1194,7 +1195,7 @@ async function submitCommission(pid, pieceName) {
       channel: 'pos',
       createdAt: new Date().toISOString()
     };
-    await db.ref('shirglassworks/admin/commissions/' + commId).set(record);
+    await db.ref(TENANT_ID + '/admin/commissions/' + commId).set(record);
 
     // Trigger SendGrid notification via Cloud Function
     try {
@@ -1202,7 +1203,7 @@ async function submitCommission(pid, pieceName) {
       if (token) {
         fetch('https://us-central1-shir-glassworks.cloudfunctions.net/shirCommissionNotify', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, 'X-Tenant-ID': TENANT_ID },
           body: JSON.stringify({ commissionId: commId, pieceName: pieceName, customerName: name, customerContact: contact, notes: notes, channel: 'pos' })
         }).catch(function() { /* notification failed silently */ });
       }
