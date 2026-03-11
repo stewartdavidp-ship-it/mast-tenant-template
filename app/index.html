@@ -2182,6 +2182,73 @@
       color: var(--warm-gray);
     }
 
+    /* Dashboard Order Queue */
+    .dash-queue-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .dash-queue-header h3 {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.2rem;
+      font-weight: 600;
+      margin: 0;
+    }
+    .dash-queue-viewall {
+      font-size: 0.8rem;
+      color: var(--teal);
+      cursor: pointer;
+      font-weight: 500;
+    }
+    .dash-queue-viewall:hover { text-decoration: underline; }
+    .dash-queue-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+    .dash-queue-item {
+      background: var(--cream);
+      border: 1px solid var(--cream-dark);
+      border-radius: 8px;
+      padding: 12px 14px;
+      cursor: pointer;
+      transition: border-color 0.2s;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .dash-queue-item:hover { border-color: var(--amber); }
+    .dash-queue-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .dash-queue-order-num {
+      font-family: monospace;
+      font-weight: 600;
+      font-size: 0.85rem;
+    }
+    .dash-queue-customer {
+      font-size: 0.78rem;
+      color: var(--warm-gray);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .dash-queue-meta {
+      display: flex;
+      gap: 12px;
+      font-size: 0.75rem;
+      color: var(--warm-gray);
+    }
+    .dash-queue-empty {
+      color: var(--warm-gray);
+      font-size: 0.85rem;
+      padding: 16px 0;
+    }
+
     /* Order Detail View */
     .order-detail { display: none; }
     .detail-back, .order-detail-back {
@@ -2663,7 +2730,8 @@
     body.dark-mode .media-select-thumb { border-color:transparent; }
     body.dark-mode .media-select-thumb.selected { border-color:var(--teal); }
 
-    body.dark-mode .order-card {
+    body.dark-mode .order-card,
+    body.dark-mode .dash-queue-item {
       background: #2a2a2a;
       border-color: #3a3a3a;
     }
@@ -4004,10 +4072,12 @@
       </div>
       <!-- Quick Actions -->
       <div id="quickActionsRow" style="display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap;"></div>
+      <!-- Active Trip Banner (on dashboard) -->
+      <div id="activeTripBanner" style="display:none;"></div>
+      <!-- Order Queue -->
+      <div id="dashboardOrderQueue"></div>
       <!-- Dashboard content placeholder -->
-      <div id="dashboardContent" style="color:var(--warm-gray);font-size:0.9rem;">
-        <p>Welcome to Shir Glassworks. Use the Quick Actions above or navigate using the sidebar.</p>
-      </div>
+      <div id="dashboardContent" style="color:var(--warm-gray);font-size:0.9rem;"></div>
     </div>
 
     <!-- ===== TRIPS TAB ===== -->
@@ -6819,7 +6889,7 @@ auth.onAuthStateChanged(async function(user) {
 
 // Route → tab element + optional setup
 var ROUTE_MAP = {
-  'dashboard':   { tab: 'dashboardTab', setup: function() { renderDashboardQuickActions(); } },
+  'dashboard':   { tab: 'dashboardTab', setup: function() { renderDashboardQuickActions(); renderDashboardOrderQueue(); } },
   'jobs':        { tab: 'productionTab', setup: function() {
     // Show jobs list, hide detail/build views
     var jobsView = document.getElementById('productionJobsView');
@@ -9734,6 +9804,7 @@ function attachListeners() {
       renderOrders();
       if (selectedOrderId) renderOrderDetail(selectedOrderId);
       if (currentRoute === 'pack') renderPackQueue();
+      if (currentRoute === 'dashboard') renderDashboardOrderQueue();
     }, function(err) {
       showToast('Error loading orders: ' + err.message, true);
     });
@@ -24960,6 +25031,56 @@ function renderDashboardQuickActions() {
     });
     container.innerHTML = html;
   });
+}
+
+// ─── Dashboard Order Queue ──────────────────────────────────
+
+function renderDashboardOrderQueue() {
+  var container = document.getElementById('dashboardOrderQueue');
+  if (!container) return;
+  if (!ordersLoaded) {
+    container.innerHTML = '';
+    return;
+  }
+
+  // Get active orders (not delivered, cancelled, or payment_failed)
+  var active = getOrdersArray().filter(function(o) {
+    return o.status !== 'delivered' && o.status !== 'cancelled' && o.status !== 'payment_failed';
+  });
+
+  if (active.length === 0) {
+    container.innerHTML = '<div class="dash-queue-empty">No active orders.</div>';
+    return;
+  }
+
+  var html = '<div class="dash-queue-header">' +
+    '<h3>Order Queue (' + active.length + ')</h3>' +
+    '<span class="dash-queue-viewall" onclick="navigateTo(\'orders\')">View all</span>' +
+  '</div>' +
+  '<div class="dash-queue-grid">';
+
+  active.forEach(function(o) {
+    var key = o._key;
+    var num = esc(getOrderDisplayNumber(o));
+    var status = o.status || 'placed';
+    var customer = o.customerName || o.email || '';
+    var sourceBadge = o.source === 'etsy' ? ' <span class="order-source-badge etsy" style="font-size:0.7rem;">Etsy</span>' : '';
+    html += '<div class="dash-queue-item" onclick="viewOrder(\'' + esc(key) + '\')">' +
+      '<div class="dash-queue-row">' +
+        '<span class="dash-queue-order-num">' + num + sourceBadge + '</span>' +
+        '<span class="status-badge pill order-status ' + status + '" style="font-size:0.7rem;padding:2px 8px;">' + status.replace(/_/g, ' ') + '</span>' +
+      '</div>' +
+      (customer ? '<div class="dash-queue-customer">' + esc(customer) + '</div>' : '') +
+      '<div class="dash-queue-meta">' +
+        '<span>' + getOrderItemsLabel(o) + '</span>' +
+        '<span>$' + (o.total || 0).toFixed(2) + '</span>' +
+        '<span>' + formatOrderDate(o.placedAt || o.pendingPaymentAt) + '</span>' +
+      '</div>' +
+    '</div>';
+  });
+
+  html += '</div>';
+  container.innerHTML = html;
 }
 
 function triggerQuickAction(key) {
