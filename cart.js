@@ -406,11 +406,11 @@
       '</div>';
     document.body.appendChild(drawer);
 
-    // Toast
-    var toast = document.createElement('div');
-    toast.className = 'cart-toast';
-    toast.id = 'cartToast';
-    document.body.appendChild(toast);
+    // Toast container (stacking, bottom-center — matches admin app)
+    var toastContainer = document.createElement('div');
+    toastContainer.className = 'cart-toast-container';
+    toastContainer.id = 'cartToastContainer';
+    document.body.appendChild(toastContainer);
 
     // Event listeners
     document.getElementById('cartIconWrap').addEventListener('click', openDrawer);
@@ -612,15 +612,16 @@
   }
 
   // ── Toast ──
-  function showToast(message) {
-    var toast = document.getElementById('cartToast');
-    if (!toast) return;
-    toast.innerHTML = '<span class="toast-check">&#10003;</span> ' + escHtml(message);
-    toast.classList.add('show');
-    clearTimeout(toast._timer);
-    toast._timer = setTimeout(function () {
-      toast.classList.remove('show');
-    }, 3500);
+  function showToast(message, isError) {
+    var container = document.getElementById('cartToastContainer');
+    if (!container) return;
+    var toast = document.createElement('div');
+    toast.className = 'cart-toast' + (isError ? ' error' : '');
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(function () {
+      if (toast.parentNode) toast.parentNode.removeChild(toast);
+    }, 5000);
   }
 
   // ── Helpers ──

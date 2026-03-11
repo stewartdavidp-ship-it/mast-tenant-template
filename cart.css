@@ -357,35 +357,55 @@
 }
 
 /* ========= TOAST NOTIFICATION ========= */
-.cart-toast {
+.cart-toast-container {
   position: fixed;
-  top: 24px;
+  bottom: 24px;
   left: 50%;
-  transform: translate(-50%, -20px);
+  transform: translateX(-50%);
+  z-index: 10100;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  pointer-events: none;
+}
+
+.cart-toast {
   background: #1A1A1A;
   color: #fff;
-  padding: 16px 32px;
-  border-radius: 8px;
+  padding: 14px 28px;
+  border-radius: 10px;
   font-family: 'DM Sans', sans-serif;
-  font-size: 1rem;
+  font-size: 1.05rem;
   font-weight: 500;
-  z-index: 1100;
-  opacity: 0;
-  transition: all 0.35s ease;
-  pointer-events: none;
-  box-shadow: 0 6px 28px rgba(0,0,0,0.25);
-  white-space: nowrap;
-}
-
-.cart-toast.show {
+  box-shadow: 0 6px 20px rgba(0,0,0,0.3);
   opacity: 1;
-  transform: translate(-50%, 0);
+  animation: cartToastIn 0.3s ease, cartToastOut 0.3s ease 4.7s forwards;
+  max-width: 90vw;
+  text-align: center;
 }
 
-.cart-toast .toast-check {
-  color: #C4853C;
-  margin-right: 8px;
-  font-size: 1.1rem;
+.cart-toast.error {
+  background: #dc3545;
+  animation: cartToastIn 0.3s ease, cartToastShake 0.5s ease 0.3s, cartToastOut 0.3s ease 4.7s forwards;
+}
+
+@keyframes cartToastIn {
+  from { transform: translateY(10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes cartToastShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-6px); }
+  80% { transform: translateX(6px); }
+}
+
+@keyframes cartToastOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 
 /* ========= MOBILE CART ICON ========= */
@@ -404,15 +424,10 @@
     width: 100vw;
   }
 
-  .cart-toast {
+  .cart-toast-container {
+    bottom: 16px;
     left: 16px;
     right: 16px;
-    top: 16px;
-    transform: translateY(-20px);
-    text-align: center;
-    white-space: normal;
-  }
-  .cart-toast.show {
-    transform: translateY(0);
+    transform: none;
   }
 }
