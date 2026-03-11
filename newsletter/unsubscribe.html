@@ -82,6 +82,7 @@
 
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="../storefront-tenant.js"></script>
 <script>
 (function() {
   var firebaseConfig = {
@@ -102,7 +103,7 @@
   }
 
   // Find subscriber by token
-  db.ref('shirglassworks/newsletter/subscribers').orderByChild('unsubscribeToken').equalTo(token).once('value').then(function(snap) {
+  db.ref(TENANT_ID + '/newsletter/subscribers').orderByChild('unsubscribeToken').equalTo(token).once('value').then(function(snap) {
     var val = snap.val();
     if (!val) {
       showResult('error', 'Link Not Found', 'This unsubscribe link is not valid or has already been used.');
@@ -119,8 +120,8 @@
 
     // Unsubscribe
     var updates = {};
-    updates['shirglassworks/newsletter/subscribers/' + subId + '/status'] = 'unsubscribed';
-    updates['shirglassworks/newsletter/subscribers/' + subId + '/unsubscribedAt'] = new Date().toISOString();
+    updates[TENANT_ID + '/newsletter/subscribers/' + subId + '/status'] = 'unsubscribed';
+    updates[TENANT_ID + '/newsletter/subscribers/' + subId + '/unsubscribedAt'] = new Date().toISOString();
 
     db.ref().update(updates).then(function() {
       showResult('success', 'You\'ve Been Unsubscribed', 'You will no longer receive newsletters from Shir Glassworks. We\'re sorry to see you go!');

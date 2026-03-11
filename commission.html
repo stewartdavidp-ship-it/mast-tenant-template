@@ -779,6 +779,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
+<script src="storefront-tenant.js"></script>
 <script>
 (function() {
   var app = firebase.initializeApp({
@@ -818,7 +819,7 @@
 function loadProductCatalog() {
   var db = window._commDb;
   if (!db) return;
-  db.ref('shirglassworks/public/products').once('value').then(function(snap) {
+  db.ref(TENANT_ID + '/public/products').once('value').then(function(snap) {
     var products = [];
     snap.forEach(function(child) {
       var p = child.val();
@@ -917,7 +918,7 @@ function submitCommission() {
   var commDb = window._commDb;
   if (!commDb) { statusEl.textContent = 'Unable to connect.'; statusEl.style.color = '#DC3545'; return; }
 
-  var commRef = commDb.ref('shirglassworks/admin/commissions');
+  var commRef = commDb.ref(TENANT_ID + '/admin/commissions');
   var commId = commRef.push().key;
 
   // Build inspiration list with names
@@ -930,7 +931,7 @@ function submitCommission() {
   // Upload image first if present, then save commission
   var uploadPromise;
   if (window._commUploadFile) {
-    var storageRef = window._commApp.storage().ref('shirglassworks/commissions/' + commId + '/reference.' + window._commUploadFile.name.split('.').pop());
+    var storageRef = window._commApp.storage().ref(TENANT_ID + '/commissions/' + commId + '/reference.' + window._commUploadFile.name.split('.').pop());
     uploadPromise = storageRef.put(window._commUploadFile).then(function(snapshot) {
       return snapshot.ref.getDownloadURL();
     });
@@ -960,7 +961,7 @@ function submitCommission() {
     // Trigger notification (fire and forget)
     fetch('https://us-central1-shir-glassworks.cloudfunctions.net/shirCommissionNotify', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Tenant-ID': TENANT_ID },
       body: JSON.stringify({ commissionId: commId, pieceName: pieceName, customerName: name, customerContact: contact, notes: notes, channel: 'web' })
     }).catch(function() {});
 

@@ -675,6 +675,7 @@ window.addEventListener('resize', function() {
 
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="../storefront-tenant.js"></script>
 <script>
 (function() {
   var firebaseConfig = {
@@ -709,7 +710,7 @@ window.addEventListener('resize', function() {
   };
 
   function loadPosts(tab) {
-    var path = tab === 'blog' ? 'shirglassworks/blog/published' : 'shirglassworks/newsletter/published';
+    var path = tab === 'blog' ? TENANT_ID + '/blog/published' : TENANT_ID + '/newsletter/published';
     db.ref(path).orderByChild('publishedAt').limitToLast(50).once('value').then(function(snap) {
       var val = snap.val();
       var posts = val ? Object.keys(val).map(function(k) { var p = val[k]; p._id = k; return p; }) : [];
@@ -763,7 +764,7 @@ window.addEventListener('resize', function() {
         setTimeout(function() {
           latest.sections.forEach(function(sec, idx) {
             (sec.images || []).forEach(function(imgId) {
-              db.ref('shirglassworks/images/' + imgId).once('value').then(function(imgSnap) {
+              db.ref(TENANT_ID + '/images/' + imgId).once('value').then(function(imgSnap) {
                 var img = imgSnap.val();
                 if (img && img.url) {
                   var secEl = document.querySelector('[data-sec-idx="' + idx + '"]');
@@ -844,7 +845,7 @@ window.addEventListener('resize', function() {
       renderStoriesList(storiesCache);
       return;
     }
-    db.ref('shirglassworks/public/stories').once('value').then(function(snap) {
+    db.ref(TENANT_ID + '/public/stories').once('value').then(function(snap) {
       var val = snap.val();
       var stories = val ? Object.keys(val).map(function(k) { var s = val[k]; s._id = k; return s; }) : [];
       stories = stories.filter(function(s) { return s.status === 'published'; });
@@ -910,7 +911,7 @@ window.addEventListener('resize', function() {
     if (story) {
       renderStoryDetail(story);
     } else {
-      db.ref('shirglassworks/public/stories/' + storyId).once('value').then(function(snap) {
+      db.ref(TENANT_ID + '/public/stories/' + storyId).once('value').then(function(snap) {
         var s = snap.val();
         if (s) { s._id = storyId; renderStoryDetail(s); }
         else { container.innerHTML = '<div class="empty-state"><p>Story not found.</p></div>'; }

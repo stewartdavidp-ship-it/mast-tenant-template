@@ -1029,6 +1029,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
+<script src="storefront-tenant.js"></script>
 <script>
   // Firebase — load product detail from URL param ?id=pXXX
   (function() {
@@ -1054,7 +1055,7 @@
       return;
     }
 
-    db.ref('shirglassworks/public/products/' + pid).once('value').then(function(snap) {
+    db.ref(TENANT_ID + '/public/products/' + pid).once('value').then(function(snap) {
       var p = snap.val();
       document.getElementById('productLoading').style.display = 'none';
 
@@ -1365,7 +1366,7 @@
   function loadProductCatalog() {
     var db = window._productDb;
     if (!db) return;
-    db.ref('shirglassworks/public/products').once('value').then(function(snap) {
+    db.ref(TENANT_ID + '/public/products').once('value').then(function(snap) {
       var products = [];
       snap.forEach(function(child) {
         var p = child.val();
@@ -1464,7 +1465,7 @@
     var commDb = window._productDb;
     if (!commDb) { statusEl.textContent = 'Unable to connect.'; statusEl.style.color = '#DC3545'; return; }
 
-    var commRef = commDb.ref('shirglassworks/admin/commissions');
+    var commRef = commDb.ref(TENANT_ID + '/admin/commissions');
     var commId = commRef.push().key;
 
     // Build inspiration list with names
@@ -1478,7 +1479,7 @@
     var uploadPromise;
     if (window._commUploadFile) {
       var storageApp = firebase.app('public-product');
-      var storageRef = storageApp.storage().ref('shirglassworks/commissions/' + commId + '/reference.' + window._commUploadFile.name.split('.').pop());
+      var storageRef = storageApp.storage().ref(TENANT_ID + '/commissions/' + commId + '/reference.' + window._commUploadFile.name.split('.').pop());
       uploadPromise = storageRef.put(window._commUploadFile).then(function(snapshot) {
         return snapshot.ref.getDownloadURL();
       });
@@ -1511,7 +1512,7 @@
       // Trigger notification (fire and forget)
       fetch('https://us-central1-shir-glassworks.cloudfunctions.net/shirCommissionNotify', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Tenant-ID': TENANT_ID },
         body: JSON.stringify({ commissionId: commId, pieceName: pieceName, customerName: name, customerContact: contact, notes: notes, channel: 'web' })
       }).catch(function() {});
 
@@ -1531,7 +1532,7 @@
   function loadProductStory(storyId) {
     var storyDb = window._productDb;
     if (!storyDb) return;
-    storyDb.ref('shirglassworks/public/stories/' + storyId).once('value').then(function(snap) {
+    storyDb.ref(TENANT_ID + '/public/stories/' + storyId).once('value').then(function(snap) {
       var story = snap.val();
       if (!story || story.status !== 'published') return;
 
@@ -1642,7 +1643,7 @@
 <script>
 (function() {
   var db = window._productDb || firebase.app('public-product').database();
-  var HITS = 'shirglassworks/analytics/hits';
+  var HITS = TENANT_ID + '/analytics/hits';
   var now = new Date();
   var page = 'product';
   var d = now.getFullYear() + '-' +

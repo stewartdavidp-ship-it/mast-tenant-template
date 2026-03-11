@@ -720,6 +720,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="storefront-tenant.js"></script>
 <script>
   // Firebase — load about images dynamically
   (function() {
@@ -731,7 +732,7 @@
     }, 'public-about');
     var db = app.database();
 
-    db.ref('shirglassworks/public/gallery').orderByChild('order').once('value').then(function(snap) {
+    db.ref(TENANT_ID + '/public/gallery').orderByChild('order').once('value').then(function(snap) {
       var data = snap.val();
       if (!data) return;
       var aboutImages = Object.values(data)
@@ -803,7 +804,7 @@
 <script>
 (function() {
   var db = firebase.app('public-about').database();
-  var HITS = 'shirglassworks/analytics/hits';
+  var HITS = TENANT_ID + '/analytics/hits';
   var now = new Date();
   var page = 'about';
   var d = now.getFullYear() + '-' +

@@ -3,7 +3,7 @@
  *
  * Drop-in floating feedback button for public-facing pages.
  * Reads `feedbackSettings/publicEnabled` from Firebase to determine visibility.
- * Submits reports to `shirglassworks/feedbackReports`.
+ * Submits reports to `{TENANT_ID}/feedbackReports`.
  *
  * Requirements:
  *   - Firebase must be initialized before this script runs
@@ -15,9 +15,9 @@
 (function() {
   'use strict';
 
-  var FEEDBACK_PATH = 'shirglassworks/feedbackReports';
-  var SETTINGS_PATH = 'shirglassworks/admin/feedbackSettings/publicEnabled';
-  var APP_ID = 'shirglassworks';
+  var FEEDBACK_PATH = (typeof TENANT_ID !== 'undefined' ? TENANT_ID : 'shirglassworks') + '/feedbackReports';
+  var SETTINGS_PATH = (typeof TENANT_ID !== 'undefined' ? TENANT_ID : 'shirglassworks') + '/admin/feedbackSettings/publicEnabled';
+  var APP_ID = (typeof TENANT_ID !== 'undefined' ? TENANT_ID : 'shirglassworks');
 
   // Use default app if available, otherwise use first available named app
   var fbApp;

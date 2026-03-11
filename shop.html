@@ -707,6 +707,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="storefront-tenant.js"></script>
 <script>
   // Firebase — load shop products dynamically grouped by category
   var allShopItems = [];
@@ -729,7 +730,7 @@
     }, 'public-shop');
     var db = app.database();
 
-    db.ref('shirglassworks/public/products').once('value').then(function(snap) {
+    db.ref(TENANT_ID + '/public/products').once('value').then(function(snap) {
       var data = snap.val();
       if (!data) return;
       allShopItems = Object.values(data)
@@ -848,7 +849,7 @@
 <script>
 (function() {
   var db = firebase.app('public-shop').database();
-  var HITS = 'shirglassworks/analytics/hits';
+  var HITS = TENANT_ID + '/analytics/hits';
   var now = new Date();
   var page = 'shop';
   var d = now.getFullYear() + '-' +

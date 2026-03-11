@@ -84,7 +84,7 @@
     if (shippingConfigCache) { callback(shippingConfigCache); return; }
     var db = getDb();
     if (!db) { callback(DEFAULT_SHIPPING_CONFIG); return; }
-    db.ref('shirglassworks/public/config/shippingRates').once('value').then(function (snap) {
+    db.ref(TENANT_ID + '/public/config/shippingRates').once('value').then(function (snap) {
       shippingConfigCache = snap.val() || DEFAULT_SHIPPING_CONFIG;
       callback(shippingConfigCache);
     }).catch(function () { callback(DEFAULT_SHIPPING_CONFIG); });
@@ -97,7 +97,7 @@
     var remaining = pids.length;
     for (var i = 0; i < pids.length; i++) {
       (function (pid) {
-        db.ref('shirglassworks/public/products/' + pid).once('value').then(function (snap) {
+        db.ref(TENANT_ID + '/public/products/' + pid).once('value').then(function (snap) {
           var prod = snap.val();
           if (prod) {
             result[pid] = { weightOz: prod.weightOz || 16, shippingCategory: prod.shippingCategory || 'small' };
@@ -143,7 +143,7 @@
   function fetchTaxRate(state, callback) {
     var db = getDb();
     if (!db || !state) { callback(0); return; }
-    db.ref('shirglassworks/public/taxRates/' + state.toUpperCase()).once('value').then(function (snap) {
+    db.ref(TENANT_ID + '/public/taxRates/' + state.toUpperCase()).once('value').then(function (snap) {
       callback(snap.val() || 0);
     }).catch(function () { callback(0); });
   }
@@ -185,6 +185,8 @@
       xhr.onerror = function () {
         callback({ success: false, error: 'Network error' });
       };
+      data = data || {};
+      data.tenantId = TENANT_ID;
       xhr.send(JSON.stringify({ data: data }));
     }).catch(function(err) {
       callback({ success: false, error: 'Authentication failed: ' + err.message });
@@ -368,7 +370,7 @@
         if (!authUser.isAnonymous && window.ShirCart.getFirebaseApp) {
           try {
             var custDb = window.ShirCart.getFirebaseApp().database();
-            custDb.ref('shirglassworks/customers/' + authUser.uid + '/address').once('value').then(function(snap) {
+            custDb.ref(TENANT_ID + '/customers/' + authUser.uid + '/address').once('value').then(function(snap) {
               var addr = snap.val();
               if (!addr || !addr.address1) return;
               var addrMap = { address1: 'shipAddr1', address2: 'shipAddr2', city: 'shipCity', state: 'shipState', zip: 'shipZip' };
@@ -884,7 +886,7 @@
         if (user && !user.isAnonymous && window.ShirCart.getFirebaseApp) {
           try {
             var custDb = window.ShirCart.getFirebaseApp().database();
-            custDb.ref('shirglassworks/customers/' + user.uid + '/address').update({
+            custDb.ref(TENANT_ID + '/customers/' + user.uid + '/address').update({
               address1: checkoutData.shipping.address1 || '',
               address2: checkoutData.shipping.address2 || '',
               city: checkoutData.shipping.city || '',
@@ -937,7 +939,7 @@
     try {
       var db = getDb();
       if (!db) return;
-      var hitRef = db.ref('shirglassworks/analytics/hits').push();
+      var hitRef = db.ref(TENANT_ID + '/analytics/hits').push();
       var page = location.pathname.split('/').pop().replace('.html', '') || 'index';
       if (page.length > 20) page = page.substring(0, 20);
       var now = new Date();
@@ -1117,7 +1119,7 @@
     if (!placesApiKey) {
       var db = getDb();
       if (!db) { callback(); return; }
-      db.ref('shirglassworks/public/config/googleMapsApiKey').once('value').then(function (snap) {
+      db.ref(TENANT_ID + '/public/config/googleMapsApiKey').once('value').then(function (snap) {
         placesApiKey = snap.val();
         if (!placesApiKey) { callback(); return; }
         injectPlacesScript(callback);
@@ -1190,7 +1192,7 @@
   function checkTestMode(callback) {
     var db = getDb();
     if (!db) { callback(false); return; }
-    db.ref('shirglassworks/public/config/testMode').once('value').then(function (snap) {
+    db.ref(TENANT_ID + '/public/config/testMode').once('value').then(function (snap) {
       callback(snap.val() === true);
     }).catch(function () { callback(false); });
   }
@@ -1270,7 +1272,7 @@
     var db = getDb();
     if (!db || !pendingOrder) return;
 
-    var ref = db.ref('shirglassworks/orders/' + orderId + '/status');
+    var ref = db.ref(TENANT_ID + '/orders/' + orderId + '/status');
     var handler = ref.on('value', function (snap) {
       var status = snap.val();
       if (status === 'placed') {

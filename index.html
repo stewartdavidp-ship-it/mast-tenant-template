@@ -1509,6 +1509,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="storefront-tenant.js"></script>
 <script>
 (function() {
   const firebaseConfig = {
@@ -1535,7 +1536,7 @@
   }
 
   // ---- IMAGES (all sections from one query) ----
-  db.ref('shirglassworks/public/gallery').orderByChild('order').once('value').then(function(snap) {
+  db.ref(TENANT_ID + '/public/gallery').orderByChild('order').once('value').then(function(snap) {
     const data = snap.val();
     if (!data) return; // keep hardcoded fallback
     const allItems = Object.values(data).filter(function(i) { return i.visible !== false; });
@@ -1645,9 +1646,9 @@
   }).catch(function() { /* keep hardcoded fallback */ });
 
   // ---- EVENTS (configurable count, default 3) ----
-  db.ref('shirglassworks/public/settings/homepageEventsCount').once('value').then(function(countSnap) {
+  db.ref(TENANT_ID + '/public/settings/homepageEventsCount').once('value').then(function(countSnap) {
     var eventsCount = countSnap.val() || 3;
-    return db.ref('shirglassworks/public/events').orderByChild('date').once('value').then(function(snap) {
+    return db.ref(TENANT_ID + '/public/events').orderByChild('date').once('value').then(function(snap) {
       var data = snap.val();
       if (!data) return;
       var today = new Date().toISOString().split('T')[0];
@@ -1686,7 +1687,7 @@
 <script>
 (function() {
   var db = firebase.database();
-  var HITS = 'shirglassworks/analytics/hits';
+  var HITS = TENANT_ID + '/analytics/hits';
   var now = new Date();
   var page = 'home';
   var d = now.getFullYear() + '-' +
@@ -1748,7 +1749,7 @@ function nlSubmitSignup() {
   btn.textContent = 'Subscribing...';
 
   var db = firebase.database();
-  var subRef = db.ref('shirglassworks/newsletter/subscribers').push();
+  var subRef = db.ref(TENANT_ID + '/newsletter/subscribers').push();
   var token = subRef.key + '-' + Date.now().toString(36);
   subRef.set({
     id: subRef.key, name: name, email: email, notes: null,

@@ -168,7 +168,7 @@
   // ── Firebase Sync ──
   function cartRef() {
     if (!fireDb || !currentUser) return null;
-    return fireDb.ref('shirglassworks/users/' + currentUser.uid + '/cart');
+    return fireDb.ref(TENANT_ID + '/users/' + currentUser.uid + '/cart');
   }
 
   function syncToFirebase() {
@@ -278,7 +278,7 @@
   // Create or update customer record in Firebase on sign-in
   function ensureCustomerAccount(user) {
     if (!fireDb || !user) return;
-    var ref = fireDb.ref('shirglassworks/customers/' + user.uid);
+    var ref = fireDb.ref(TENANT_ID + '/customers/' + user.uid);
     ref.once('value').then(function(snap) {
       var existing = snap.val();
       var updates = { email: user.email || '', displayName: user.displayName || '', photoURL: user.photoURL || '', lastSignIn: new Date().toISOString() };
@@ -315,7 +315,7 @@
   // ── Analytics ──
   function trackEvent(action, pid) {
     try {
-      var hitRef = fireDb.ref('shirglassworks/analytics/hits').push();
+      var hitRef = fireDb.ref(TENANT_ID + '/analytics/hits').push();
       var page = location.pathname.split('/').pop().replace('.html', '') || 'index';
       if (page.length > 20) page = page.substring(0, 20);
 

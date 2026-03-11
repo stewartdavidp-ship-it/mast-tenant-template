@@ -419,6 +419,7 @@ window.addEventListener('resize', function() {
 
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="../storefront-tenant.js"></script>
 <script>
 (function() {
   var firebaseConfig = {
@@ -439,7 +440,7 @@ window.addEventListener('resize', function() {
     return;
   }
 
-  var path = source === 'newsletter' ? 'shirglassworks/newsletter/published/' : 'shirglassworks/blog/published/';
+  var path = source === 'newsletter' ? TENANT_ID + '/newsletter/published/' : TENANT_ID + '/blog/published/';
 
   db.ref(path + postId).once('value').then(function(snap) {
     var post = snap.val();
@@ -476,7 +477,7 @@ window.addEventListener('resize', function() {
         var paragraphs = sec.content.split('\n').filter(function(p) { return p.trim(); });
         paragraphs.forEach(function(p) { html += '<p>' + escHtml(p) + '</p>'; });
         (sec.images || []).forEach(function(imgId) {
-          db.ref('shirglassworks/images/' + imgId).once('value').then(function(imgSnap) {
+          db.ref(TENANT_ID + '/images/' + imgId).once('value').then(function(imgSnap) {
             var img = imgSnap.val();
             if (img && img.url) {
               var imgEl = document.createElement('img');

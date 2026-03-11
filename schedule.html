@@ -793,6 +793,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="storefront-tenant.js"></script>
 <script>
 (function() {
   const firebaseConfig = {
@@ -814,7 +815,7 @@
   }
 
   // Load schedule background image
-  db.ref('shirglassworks/public/gallery').orderByChild('section').equalTo('schedule').once('value').then(function(snap) {
+  db.ref(TENANT_ID + '/public/gallery').orderByChild('section').equalTo('schedule').once('value').then(function(snap) {
     var data = snap.val();
     if (!data) return;
     var items = Object.values(data).filter(function(i) { return i.visible !== false && i.url; });
@@ -825,7 +826,7 @@
   }).catch(function() {});
 
   // Load events
-  db.ref('shirglassworks/public/events').orderByChild('date').once('value').then(function(snap) {
+  db.ref(TENANT_ID + '/public/events').orderByChild('date').once('value').then(function(snap) {
     const data = snap.val();
     if (!data) return;
     const events = Object.values(data)
@@ -861,7 +862,7 @@
 <script>
 (function() {
   var db = firebase.database();
-  var HITS = 'shirglassworks/analytics/hits';
+  var HITS = TENANT_ID + '/analytics/hits';
   var now = new Date();
   var page = 'schedule';
   var d = now.getFullYear() + '-' +
