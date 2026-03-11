@@ -6203,6 +6203,14 @@ var imageLibraryLoaded = false;
 var imageLibraryListener = null;
 var CLOUD_FUNCTIONS_BASE = 'https://us-central1-shir-glassworks.cloudfunctions.net';
 
+// callCF — fetch wrapper that injects X-Tenant-ID header on all Cloud Function calls
+function callCF(path, options) {
+    options = options || {};
+    options.headers = options.headers || {};
+    options.headers['X-Tenant-ID'] = MastDB.tenantId();
+    return fetch(CLOUD_FUNCTIONS_BASE + path, options);
+}
+
 var ORDER_VALID_TRANSITIONS = {
   pending_payment: ['cancelled'],
   payment_failed: ['cancelled'],
@@ -9156,7 +9164,7 @@ async function uploadProductImage(pid, fileInput) {
         var base64 = e.target.result.split(',')[1]; // Remove data:image/...;base64, prefix
         var token = await auth.currentUser.getIdToken();
 
-        var resp = await fetch(CLOUD_FUNCTIONS_BASE + '/shirUploadImage', {
+        var resp = await callCF('/shirUploadImage', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
           body: JSON.stringify({ image: base64, tags: [], source: 'admin-upload' })
@@ -11797,7 +11805,7 @@ async function uploadToLibrary() {
 
   try {
     var token = await auth.currentUser.getIdToken();
-    var resp = await fetch(CLOUD_FUNCTIONS_BASE + '/shirUploadImage', {
+    var resp = await callCF('/shirUploadImage', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
       body: JSON.stringify({ image: pendingBase64, tags: tags, source: 'admin-upload' })
@@ -15181,7 +15189,7 @@ async function capturePackingPhoto() {
   try {
     var token = await auth.currentUser.getIdToken();
     var catalogForApi = buildProductCatalogForVision();
-    var resp = await fetch('https://us-central1-shir-glassworks.cloudfunctions.net/shirClassifyImage', {
+    var resp = await callCF('/shirClassifyImage', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
       body: JSON.stringify({ image: base64, catalog: catalogForApi, context: 'inventory' })
@@ -15447,7 +15455,7 @@ async function captureIntakePhoto() {
   try {
     var token = await auth.currentUser.getIdToken();
     var catalog = buildProductCatalogForVision();
-    var resp = await fetch(CLOUD_FUNCTIONS_BASE + '/shirClassifyImage', {
+    var resp = await callCF('/shirClassifyImage', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
       body: JSON.stringify({ image: base64, catalog: catalog, context: 'inventory' })
@@ -15574,7 +15582,7 @@ async function confirmIntakeItem(pid) {
     if (intakeLastBase64) {
       var token = await auth.currentUser.getIdToken();
       var tags = ['training', 'inventory-intake', pid].concat(attrTags);
-      fetch(CLOUD_FUNCTIONS_BASE + '/shirUploadImage', {
+      callCF('/shirUploadImage', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
         body: JSON.stringify({ image: intakeLastBase64, tags: tags, source: 'intake', productId: pid })
@@ -15662,7 +15670,7 @@ async function captureTrainingPhoto() {
   try {
     var token = await auth.currentUser.getIdToken();
     var tags = ['training', 'inventory-intake', intakeCurrentPiece.pid].concat(intakeCurrentPiece.attrTags);
-    fetch(CLOUD_FUNCTIONS_BASE + '/shirUploadImage', {
+    callCF('/shirUploadImage', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
       body: JSON.stringify({ image: base64, tags: tags, source: 'training', productId: intakeCurrentPiece.pid })
@@ -20447,7 +20455,7 @@ async function sendCommissionProposal(commId) {
     if (!user) { showToast('Sign in required', true); return; }
     var token = await user.getIdToken();
 
-    var resp = await fetch('https://us-central1-shir-glassworks.cloudfunctions.net/shirCommissionProposal', {
+    var resp = await callCF('/shirCommissionProposal', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
       body: JSON.stringify({
@@ -23695,7 +23703,7 @@ function blogUploadFromComputer() {
       try {
         var base64 = e.target.result.split(',')[1];
         var token = await auth.currentUser.getIdToken();
-        var resp = await fetch(CLOUD_FUNCTIONS_BASE + '/shirUploadImage', {
+        var resp = await callCF('/shirUploadImage', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
           body: JSON.stringify({ image: base64, tags: [], source: 'blog-upload' })
@@ -24279,7 +24287,7 @@ async function submitFeedback() {
   var severity = document.querySelector('input[name="fbSeverity"]:checked');
 
   var report = {
-    appId: 'shirglassworks',
+    appId: MastDB.tenantId(),
     source: 'internal',
     screen: currentRoute || 'unknown',
     screenLabel: getScreenLabel(),
@@ -24783,14 +24791,11 @@ async function askStudioAssistant() {
     if (task.assistantContext) {
       body.assistantContext = task.assistantContext;
     }
-    var resp = await fetch(
-      'https://us-central1-shir-glassworks.cloudfunctions.net/shirStudioAssistant',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-        body: JSON.stringify(body)
-      }
-    );
+    var resp = await callCF('/shirStudioAssistant', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify(body)
+    });
     var data = await resp.json();
     testingModeState.assistantMessages.push({ role: 'assistant', text: data.answer || 'Hmm, I\'m not sure about that one.' });
 
