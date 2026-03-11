@@ -1021,7 +1021,7 @@
       bottom: 24px;
       left: 50%;
       transform: translateX(-50%);
-      z-index: 300;
+      z-index: 10100;
       display: flex;
       flex-direction: column;
       gap: 8px;
@@ -25316,15 +25316,33 @@ function confirmEndTrip() {
   var destValue = document.getElementById('endTripDestination').value.trim();
   var notes = document.getElementById('endTripNotes').value.trim();
 
-  if (!selectedTripPurpose) { showToast('Select a trip purpose', true); return; }
-  if (miles < 0) { showToast('Miles cannot be negative', true); return; }
+  // Inline validation with visual feedback
+  var hasError = false;
+
+  if (!selectedTripPurpose) {
+    showToast('Select a trip purpose', true);
+    var purposeContainer = document.getElementById('purposeQuickPick');
+    if (purposeContainer) {
+      purposeContainer.style.outline = '2px solid #dc2626';
+      purposeContainer.style.borderRadius = '8px';
+      purposeContainer.style.padding = '4px';
+      purposeContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setTimeout(function() { purposeContainer.style.outline = ''; purposeContainer.style.padding = ''; }, 3000);
+    }
+    hasError = true;
+  }
+
+  if (miles < 0) { showToast('Miles cannot be negative', true); hasError = true; }
   if (miles === 0 && tripMilesSource !== 'same-location') {
-    // Allow 0 miles if user explicitly entered it (manual override), but warn otherwise
     if (!tripMilesSource || tripMilesSource === null) {
-      showToast('Enter the miles driven (or 0 if same location)', true);
-      return;
+      showToast('Enter miles or tap "Enter miles manually"', true);
+      var milesInput = document.getElementById('endTripMiles');
+      if (milesInput) { milesInput.style.outline = '2px solid #dc2626'; setTimeout(function() { milesInput.style.outline = ''; }, 3000); }
+      hasError = true;
     }
   }
+
+  if (hasError) return;
 
   var source = tripMilesSource || 'manual-override';
   var rate = activeTripData.irsRateCentsPerMile || 70;
