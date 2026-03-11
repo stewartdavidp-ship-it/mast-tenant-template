@@ -1036,6 +1036,7 @@
       font-size: 1.05rem;
       font-weight: 500;
       box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+      opacity: 1;
       animation: toastIn 0.3s ease, toastOut 0.3s ease 4.7s forwards;
       max-width: 90vw;
       text-align: center;
@@ -1047,8 +1048,8 @@
     }
 
     @keyframes toastIn {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
+      from { transform: translateY(10px); }
+      to { transform: translateY(0); }
     }
 
     @keyframes toastShake {
@@ -1538,6 +1539,64 @@
     body.dark-mode .purpose-chip { background:var(--dm-card,#1e1e1e);border-color:var(--dm-border,#333);color:#e0e0e0; }
     body.dark-mode .purpose-chip.selected { background:rgba(196,133,60,0.2); }
 
+    /* ========== TRIPS DARK MODE ========== */
+    body.dark-mode .trip-stat-card {
+      background: var(--dm-card, #1e1e1e) !important;
+      border-color: var(--dm-border, #333) !important;
+    }
+    body.dark-mode .trip-stat-card .trip-stat-value {
+      color: #e0e0e0 !important;
+    }
+    body.dark-mode .trip-stat-card.trip-stat-highlight {
+      background: rgba(5, 150, 105, 0.15) !important;
+    }
+    body.dark-mode .trip-stat-card.trip-stat-highlight .trip-stat-value {
+      color: #34d399 !important;
+    }
+    body.dark-mode .trip-stat-card.trip-stat-highlight .trip-stat-label {
+      color: #34d399 !important;
+    }
+    body.dark-mode .trip-card {
+      background: var(--dm-card, #1e1e1e) !important;
+      border-color: var(--dm-border, #333) !important;
+    }
+    body.dark-mode .trip-card .trip-dest {
+      color: #e0e0e0 !important;
+    }
+    body.dark-mode .trip-card .trip-miles {
+      color: #e0e0e0 !important;
+    }
+    body.dark-mode .trip-card .trip-deductible {
+      color: #34d399 !important;
+    }
+    body.dark-mode .trip-detail {
+      border-top-color: var(--dm-border, #333) !important;
+      color: #999 !important;
+    }
+    body.dark-mode .trip-table th {
+      color: #999 !important;
+      border-bottom-color: #444 !important;
+    }
+    body.dark-mode .trip-table td {
+      color: #ccc !important;
+      border-bottom-color: #333 !important;
+    }
+    body.dark-mode .trip-table tr:hover td {
+      background: rgba(196,133,60,0.08);
+    }
+    body.dark-mode #startTripModal > div,
+    body.dark-mode #endTripSheet > div {
+      background: var(--dm-card, #1e1e1e) !important;
+    }
+    body.dark-mode #startTripModal h3,
+    body.dark-mode #endTripSheet h3 {
+      color: #e0e0e0 !important;
+    }
+    body.dark-mode #startTripModal label,
+    body.dark-mode #endTripSheet label {
+      color: #ccc !important;
+    }
+
     /* ========== LOADING ========== */
     @keyframes spin { to { transform: rotate(360deg); } }
     .loading {
@@ -1761,6 +1820,7 @@
     }
     body.dark-mode .form-group label { color: #ccc; }
     body.dark-mode .toast { background: #333; color: #e0e0e0; }
+    body.dark-mode .toast.error { background: var(--danger); color: #fff; }
     body.dark-mode .data-table th { color: #999; border-bottom-color: #444; }
     body.dark-mode .data-table td { color: #ccc; border-bottom-color: #333; }
     body.dark-mode .data-table tbody tr:hover { background: rgba(196,133,60,0.08); }
@@ -25715,17 +25775,17 @@ function renderTripsList() {
   completed.forEach(function(t) { totalMiles += (t.miles || 0); totalDeductible += (t.deductibleValue || 0); });
 
   var html = '<div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap;">' +
-    '<div style="background:var(--cream,#FAF6F0);border-radius:8px;padding:12px 18px;flex:1;min-width:120px;text-align:center;">' +
-      '<div style="font-size:1.5rem;font-weight:700;color:var(--charcoal);">' + completed.length + '</div>' +
-      '<div style="font-size:0.78rem;color:var(--warm-gray);">Trips</div>' +
+    '<div class="trip-stat-card" style="background:var(--cream,#FAF6F0);border-radius:8px;padding:12px 18px;flex:1;min-width:120px;text-align:center;">' +
+      '<div class="trip-stat-value" style="font-size:1.5rem;font-weight:700;color:var(--charcoal);">' + completed.length + '</div>' +
+      '<div class="trip-stat-label" style="font-size:0.78rem;color:var(--warm-gray);">Trips</div>' +
     '</div>' +
-    '<div style="background:var(--cream,#FAF6F0);border-radius:8px;padding:12px 18px;flex:1;min-width:120px;text-align:center;">' +
-      '<div style="font-size:1.5rem;font-weight:700;color:var(--charcoal);">' + totalMiles.toFixed(1) + '</div>' +
-      '<div style="font-size:0.78rem;color:var(--warm-gray);">Miles</div>' +
+    '<div class="trip-stat-card" style="background:var(--cream,#FAF6F0);border-radius:8px;padding:12px 18px;flex:1;min-width:120px;text-align:center;">' +
+      '<div class="trip-stat-value" style="font-size:1.5rem;font-weight:700;color:var(--charcoal);">' + totalMiles.toFixed(1) + '</div>' +
+      '<div class="trip-stat-label" style="font-size:0.78rem;color:var(--warm-gray);">Miles</div>' +
     '</div>' +
-    '<div style="background:var(--cream,#FAF6F0);border-radius:8px;padding:12px 18px;flex:1;min-width:120px;text-align:center;">' +
-      '<div style="font-size:1.5rem;font-weight:700;color:var(--charcoal);">$' + totalDeductible.toFixed(2) + '</div>' +
-      '<div style="font-size:0.78rem;color:var(--warm-gray);">Deductible</div>' +
+    '<div class="trip-stat-card" style="background:var(--cream,#FAF6F0);border-radius:8px;padding:12px 18px;flex:1;min-width:120px;text-align:center;">' +
+      '<div class="trip-stat-value" style="font-size:1.5rem;font-weight:700;color:var(--charcoal);">$' + totalDeductible.toFixed(2) + '</div>' +
+      '<div class="trip-stat-label" style="font-size:0.78rem;color:var(--warm-gray);">Deductible</div>' +
     '</div>' +
   '</div>';
 
@@ -25738,18 +25798,18 @@ function renderTripsList() {
     var purposeIcon = purposeObj ? purposeObj.icon : (t.purpose && t.purpose.indexOf('custom-') === 0 ? '📌' : '•');
     var driverNote = t.driverName && t.driverId !== (auth.currentUser ? auth.currentUser.uid : '') ? ' · ' + esc(t.driverName) : '';
 
-    html += '<div style="background:white;border:1px solid #eee;border-radius:8px;padding:12px 16px;margin-bottom:8px;cursor:pointer;" onclick="toggleTripDetail(\'' + t.id + '\')">' +
+    html += '<div class="trip-card" style="background:white;border:1px solid #eee;border-radius:8px;padding:12px 16px;margin-bottom:8px;cursor:pointer;" onclick="toggleTripDetail(\'' + t.id + '\')">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;">' +
         '<div>' +
-          '<span style="font-weight:600;font-size:0.9rem;">' + purposeIcon + ' ' + esc(dest) + '</span>' +
+          '<span class="trip-dest" style="font-weight:600;font-size:0.9rem;">' + purposeIcon + ' ' + esc(dest) + '</span>' +
           '<div style="font-size:0.8rem;color:var(--warm-gray);">' + dateStr + driverNote + '</div>' +
         '</div>' +
         '<div style="text-align:right;">' +
-          '<div style="font-weight:600;">' + (t.miles || 0).toFixed(1) + ' mi</div>' +
-          '<div style="font-size:0.8rem;color:#059669;">$' + (t.deductibleValue || 0).toFixed(2) + '</div>' +
+          '<div class="trip-miles" style="font-weight:600;">' + (t.miles || 0).toFixed(1) + ' mi</div>' +
+          '<div class="trip-deductible" style="font-size:0.8rem;color:#059669;">$' + (t.deductibleValue || 0).toFixed(2) + '</div>' +
         '</div>' +
       '</div>' +
-      '<div id="tripDetail_' + t.id + '" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid #eee;font-size:0.85rem;color:var(--warm-gray);">' +
+      '<div class="trip-detail" id="tripDetail_' + t.id + '" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid #eee;font-size:0.85rem;color:var(--warm-gray);">' +
         '<div>Origin: ' + esc(t.origin ? t.origin.label : 'Unknown') + '</div>' +
         '<div>Destination: ' + esc(dest) + '</div>' +
         '<div>Purpose: ' + (purposeObj ? purposeObj.icon + ' ' + purposeObj.label : (t.purposeLabel ? '📌 ' + esc(t.purposeLabel) : t.purpose)) + '</div>' +
@@ -25835,27 +25895,27 @@ function renderTaxReport() {
 
   // Summary cards
   html += '<div style="display:flex;gap:16px;margin-bottom:24px;flex-wrap:wrap;">' +
-    '<div style="background:var(--cream,#FAF6F0);border-radius:8px;padding:16px 20px;flex:1;min-width:140px;">' +
-      '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Total Trips</div>' +
-      '<div style="font-size:1.8rem;font-weight:700;margin-top:4px;">' + completed.length + '</div>' +
+    '<div class="trip-stat-card" style="background:var(--cream,#FAF6F0);border-radius:8px;padding:16px 20px;flex:1;min-width:140px;">' +
+      '<div class="trip-stat-label" style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Total Trips</div>' +
+      '<div class="trip-stat-value" style="font-size:1.8rem;font-weight:700;margin-top:4px;">' + completed.length + '</div>' +
     '</div>' +
-    '<div style="background:var(--cream,#FAF6F0);border-radius:8px;padding:16px 20px;flex:1;min-width:140px;">' +
-      '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Total Miles</div>' +
-      '<div style="font-size:1.8rem;font-weight:700;margin-top:4px;">' + totalMiles.toFixed(1) + '</div>' +
+    '<div class="trip-stat-card" style="background:var(--cream,#FAF6F0);border-radius:8px;padding:16px 20px;flex:1;min-width:140px;">' +
+      '<div class="trip-stat-label" style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Total Miles</div>' +
+      '<div class="trip-stat-value" style="font-size:1.8rem;font-weight:700;margin-top:4px;">' + totalMiles.toFixed(1) + '</div>' +
     '</div>' +
-    '<div style="background:var(--cream,#FAF6F0);border-radius:8px;padding:16px 20px;flex:1;min-width:140px;">' +
-      '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">IRS Rate</div>' +
-      '<div style="font-size:1.8rem;font-weight:700;margin-top:4px;">' + rate + '¢</div>' +
+    '<div class="trip-stat-card" style="background:var(--cream,#FAF6F0);border-radius:8px;padding:16px 20px;flex:1;min-width:140px;">' +
+      '<div class="trip-stat-label" style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">IRS Rate</div>' +
+      '<div class="trip-stat-value" style="font-size:1.8rem;font-weight:700;margin-top:4px;">' + rate + '¢</div>' +
     '</div>' +
-    '<div style="background:#ecfdf5;border-radius:8px;padding:16px 20px;flex:1;min-width:140px;">' +
-      '<div style="font-size:0.78rem;color:#059669;text-transform:uppercase;letter-spacing:0.5px;">Total Deductible</div>' +
-      '<div style="font-size:1.8rem;font-weight:700;margin-top:4px;color:#059669;">$' + totalDeductible.toFixed(2) + '</div>' +
+    '<div class="trip-stat-card trip-stat-highlight" style="background:#ecfdf5;border-radius:8px;padding:16px 20px;flex:1;min-width:140px;">' +
+      '<div class="trip-stat-label" style="font-size:0.78rem;color:#059669;text-transform:uppercase;letter-spacing:0.5px;">Total Deductible</div>' +
+      '<div class="trip-stat-value" style="font-size:1.8rem;font-weight:700;margin-top:4px;color:#059669;">$' + totalDeductible.toFixed(2) + '</div>' +
     '</div>' +
   '</div>';
 
   // Trip table
   if (completed.length > 0) {
-    html += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;">' +
+    html += '<div style="overflow-x:auto;"><table class="trip-table" style="width:100%;border-collapse:collapse;font-size:0.85rem;">' +
       '<thead><tr style="border-bottom:2px solid #eee;text-align:left;">' +
         '<th style="padding:8px;">Date</th>' +
         '<th style="padding:8px;">Driver</th>' +
