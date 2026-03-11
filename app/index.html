@@ -4006,7 +4006,7 @@
           <div style="display:flex;gap:8px;align-items:center;">
             <input type="number" id="endTripMiles" placeholder="Calculating..." step="0.1" min="0"
               style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
-            <span id="endTripMilesSource" style="font-size:0.75rem;color:var(--warm-gray);"></span>
+            <span id="endTripMilesSource" style="font-size:0.75rem;color:var(--warm-gray);cursor:pointer;text-decoration:underline;" onclick="setManualMilesMode('Enter miles manually');document.getElementById('endTripMiles').focus();">Enter miles manually</span>
           </div>
         </div>
         <div class="form-group" style="margin-bottom:14px;">
@@ -4026,6 +4026,9 @@
         <div style="display:flex;gap:10px;margin-top:18px;">
           <button class="btn btn-primary" onclick="confirmEndTrip()" style="flex:1;">✅ Complete Trip</button>
           <button class="btn btn-secondary" onclick="closeEndTripSheet()">Cancel</button>
+        </div>
+        <div style="text-align:center;margin-top:12px;">
+          <button onclick="discardActiveTrip()" style="background:none;border:none;color:#dc2626;font-size:0.8rem;cursor:pointer;text-decoration:underline;font-family:'DM Sans',sans-serif;">Discard this trip</button>
         </div>
       </div>
     </div>
@@ -25131,6 +25134,7 @@ function confirmStartTrip() {
     showTripPulsingIndicator();
     closeStartTripModal();
     showToast('Trip started — drive safe! 🚗');
+    requestNotificationPermission(); // Ask for notification permission when starting a trip
     writeAudit('create', 'trips', tripRef.key);
     emitTestingEvent('trip_started', { tripId: tripRef.key });
     emitTestingEvent('trip_destination_set', { tripId: tripRef.key, destination: destInput });
@@ -25313,7 +25317,14 @@ function confirmEndTrip() {
   var notes = document.getElementById('endTripNotes').value.trim();
 
   if (!selectedTripPurpose) { showToast('Select a trip purpose', true); return; }
-  if (miles < 0 || (miles === 0 && tripMilesSource !== 'same-location')) { showToast('Enter the miles driven', true); return; }
+  if (miles < 0) { showToast('Miles cannot be negative', true); return; }
+  if (miles === 0 && tripMilesSource !== 'same-location') {
+    // Allow 0 miles if user explicitly entered it (manual override), but warn otherwise
+    if (!tripMilesSource || tripMilesSource === null) {
+      showToast('Enter the miles driven (or 0 if same location)', true);
+      return;
+    }
+  }
 
   var source = tripMilesSource || 'manual-override';
   var rate = activeTripData.irsRateCentsPerMile || 70;
@@ -25380,6 +25391,25 @@ function incrementLocationUseCount(locationObj) {
   ref.child('lastUsed').set(new Date().toISOString());
   // Ensure label is set
   ref.child('label').set(locationObj.label);
+}
+
+function discardActiveTrip() {
+  if (!activeTripData) return;
+  if (!confirm('Discard this trip? It will be deleted and not logged.')) return;
+  var user = auth.currentUser;
+  if (!user) return;
+  MastDB.trips.ref(user.uid + '/' + activeTripData.id).remove().then(function() {
+    hideTripPulsingIndicator();
+    closeEndTripSheet();
+    activeTripData = null;
+    showToast('Trip discarded');
+    tripsLoaded = false;
+    if (currentRoute === 'trips') loadTrips();
+    var banner = document.getElementById('activeTripBanner');
+    if (banner) banner.style.display = 'none';
+  }).catch(function(err) {
+    showToast('Error discarding trip: ' + err.message, true);
+  });
 }
 
 // ─── Distance Calculation (Google Maps Directions API) ──────
@@ -25527,6 +25557,21 @@ function checkForgottenTrip() {
   if (!activeTripData) return;
   if (!navigator.geolocation) return;
 
+  // Only check GPS if permission was already granted — don't prompt on startup
+  if (navigator.permissions) {
+    navigator.permissions.query({ name: 'geolocation' }).then(function(result) {
+      if (result.state === 'granted') {
+        doForgottenTripCheck();
+      }
+      // If 'prompt' or 'denied', skip silently — don't bother user on launch
+    }).catch(function() {
+      // permissions API not supported — skip to avoid popup
+    });
+  }
+  return;
+}
+
+function doForgottenTripCheck() {
   navigator.geolocation.getCurrentPosition(function(pos) {
     var lat = pos.coords.latitude;
     var lng = pos.coords.longitude;
@@ -25942,8 +25987,8 @@ function initTripsModule() {
   loadTripLocations();
   loadTripSettings();
   checkForActiveTrip();
-  requestNotificationPermission();
-  // Forgotten trip check
+  // Notification permission is now requested when starting a trip, not on every login.
+  // Forgotten trip GPS check only runs if permission was already granted (no popup).
   setTimeout(checkForgottenTrip, 3000);
 }
 
