@@ -5322,6 +5322,19 @@
           </p>
           <div id="dashCardSettingsList"></div>
         </div>
+        <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
+        <div class="form-group">
+          <label style="font-size:1.1rem;font-weight:600;">Quick Actions Count</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">
+            Number of quick action tiles to show on the dashboard. Your most-used actions appear first.
+          </p>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <input type="number" id="quickActionCountInput" min="1" max="13" value="3"
+              style="width:70px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
+            <button class="btn btn-primary" onclick="saveQuickActionCount()">Save</button>
+            <span id="qaCountStatus" style="font-size:0.85rem;color:var(--sage);"></span>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -7123,6 +7136,13 @@ function navigateTo(route) {
   if (route === 'settings' && !isAdmin()) {
     showToast('Settings is restricted to admin users.', true);
     route = 'dashboard';
+  }
+  // Track quick action frequency from sidebar navigation (skip if triggered from tile click)
+  if (window._skipRouteTrack) {
+    window._skipRouteTrack = false;
+  } else {
+    var actionKey = ROUTE_ACTION_MAP[route];
+    if (actionKey) incrementQuickAction(actionKey);
   }
   currentRoute = route;
   location.hash = route;
@@ -25080,9 +25100,33 @@ var QUICK_ACTION_DEFS = {
   'add-inventory': { icon: '📸', label: 'Add to Inventory', action: function() { navigateTo('inventory'); } },
   'start-production-job': { icon: '🔨', label: 'Start Job', action: function() { navigateTo('jobs'); } },
   'new-sale': { icon: '💳', label: 'New Sale', action: function() { navigateTo('pos'); } },
-  'mark-shipped': { icon: '📦', label: 'Mark Shipped', action: function() { navigateTo('ship'); } }
+  'mark-shipped': { icon: '📦', label: 'Mark Shipped', action: function() { navigateTo('ship'); } },
+  'view-orders': { icon: '📋', label: 'View Orders', action: function() { navigateTo('orders'); } },
+  'pack-orders': { icon: '📥', label: 'Pack Orders', action: function() { navigateTo('pack'); } },
+  'new-blog-post': { icon: '✍️', label: 'New Blog Post', action: function() { navigateTo('blog'); } },
+  'view-events': { icon: '🎪', label: 'Events', action: function() { navigateTo('events'); } },
+  'social-media': { icon: '📱', label: 'Social Media', action: function() { navigateTo('social'); } },
+  'newsletter': { icon: '📧', label: 'Newsletter', action: function() { navigateTo('newsletter'); } },
+  'view-analytics': { icon: '📊', label: 'Analytics', action: function() { navigateTo('analytics'); } },
+  'contacts': { icon: '👥', label: 'Contacts', action: function() { navigateTo('contacts'); } }
 };
-var DEFAULT_QUICK_ACTIONS = ['start-trip', 'add-inventory', 'start-production-job'];
+var DEFAULT_QUICK_ACTIONS = ['start-trip', 'add-inventory', 'start-production-job', 'view-orders', 'mark-shipped'];
+
+// Map routes to quick action keys for frequency tracking via sidebar navigation
+var ROUTE_ACTION_MAP = {
+  'orders': 'view-orders',
+  'pack': 'pack-orders',
+  'ship': 'mark-shipped',
+  'blog': 'new-blog-post',
+  'events': 'view-events',
+  'social': 'social-media',
+  'newsletter': 'newsletter',
+  'analytics': 'view-analytics',
+  'contacts': 'contacts',
+  'inventory': 'add-inventory',
+  'jobs': 'start-production-job',
+  'pos': 'new-sale'
+};
 
 // ─── Load Functions ────────────────────────────────────────
 
@@ -25204,6 +25248,9 @@ async function loadDashboardPrefs() {
     if (val && val.cards) {
       dashboardCardPrefs = val.cards;
     }
+    if (val && typeof val.quickActionCount === 'number') {
+      dashboardCardPrefs.quickActionCount = val.quickActionCount;
+    }
     dashboardPrefsLoaded = true;
   } catch (err) {
     console.error('Error loading dashboard prefs:', err);
@@ -25245,6 +25292,12 @@ async function renderDashCardSettings() {
     '</div>';
   });
   container.innerHTML = html;
+
+  // Populate quick action count input
+  var qaInput = document.getElementById('quickActionCountInput');
+  if (qaInput) {
+    qaInput.value = dashboardCardPrefs.quickActionCount || 3;
+  }
 }
 
 function toggleDashCardVisibility(cardId) {
@@ -25255,6 +25308,24 @@ function toggleDashCardVisibility(cardId) {
   dashboardCardPrefs[cardId].hidden = isHidden;
   MastDB.dashboardPrefs.setCard(user.uid, cardId, { hidden: isHidden });
   renderDashCardSettings();
+}
+
+function saveQuickActionCount() {
+  var user = auth.currentUser;
+  if (!user) return;
+  var input = document.getElementById('quickActionCountInput');
+  var status = document.getElementById('qaCountStatus');
+  if (!input) return;
+  var count = parseInt(input.value, 10);
+  if (isNaN(count) || count < 1) count = 1;
+  if (count > 13) count = 13;
+  input.value = count;
+  dashboardCardPrefs.quickActionCount = count;
+  MastDB.dashboardPrefs.ref(user.uid).child('quickActionCount').set(count).then(function() {
+    if (status) { status.textContent = 'Saved!'; setTimeout(function() { status.textContent = ''; }, 2000); }
+    // Re-render dashboard quick actions if visible
+    if (currentRoute === 'dashboard') renderDashCardQuickActions();
+  });
 }
 
 var dashSettingDragSourceId = null;
@@ -25362,10 +25433,11 @@ function renderDashCardQuickActions() {
       return cb - ca;
     });
     var hasAnyData = allKeys.some(function(k) { return freq[k] && freq[k].count > 0; });
-    var top3 = hasAnyData ? allKeys.slice(0, 3) : DEFAULT_QUICK_ACTIONS;
+    var count = dashboardCardPrefs.quickActionCount || 3;
+    var topN = hasAnyData ? allKeys.slice(0, count) : DEFAULT_QUICK_ACTIONS.slice(0, count);
 
     var html = '<div class="quick-actions-row" style="display:flex;gap:12px;flex-wrap:wrap;">';
-    top3.forEach(function(key) {
+    topN.forEach(function(key) {
       var def = QUICK_ACTION_DEFS[key];
       if (!def) return;
       html += '<div class="quick-action-tile" onclick="triggerQuickAction(\'' + key + '\')">' +
@@ -25535,7 +25607,10 @@ function renderDashCardLowInventory() {
 
 function triggerQuickAction(key) {
   var def = QUICK_ACTION_DEFS[key];
-  if (def && def.action) def.action();
+  if (!def || !def.action) return;
+  incrementQuickAction(key);
+  window._skipRouteTrack = true;
+  def.action();
 }
 
 function incrementQuickAction(actionKey) {
