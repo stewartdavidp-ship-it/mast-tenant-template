@@ -6524,8 +6524,19 @@ async function seedPlatformRegistry() {
       };
     }
 
+    // Build platformAdmins from users with admin role
+    var platformAdmins = {};
+    Object.keys(userTenantMap).forEach(function(uid) {
+      if (userTenantMap[uid].shirglassworks && userTenantMap[uid].shirglassworks.role === 'admin') {
+        platformAdmins[uid] = true;
+      }
+    });
+    // Ensure current user (who is running the seed) is a platform admin
+    platformAdmins[currentUser.uid] = true;
+
     // Seed the full registry
     await db.ref('mast-platform').set({
+      platformAdmins: platformAdmins,
       tenants: {
         shirglassworks: {
           config: {
