@@ -13,9 +13,11 @@
  * a new tenant.
  */
 var TENANT_ID = (function() {
-  // 1. URL param override (for testing): ?tenant=other_tenant
-  var p = new URLSearchParams(window.location.search).get('tenant');
-  if (p) return p;
+  // 1. URL param override (local dev only): ?tenant=other_tenant
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    var p = new URLSearchParams(window.location.search).get('tenant');
+    if (p) return p;
+  }
 
   // 2. Domain → tenant mapping
   //    DEPLOY: Update this map for each tenant deployment.

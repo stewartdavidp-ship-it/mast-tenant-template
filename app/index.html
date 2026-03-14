@@ -6835,96 +6835,6 @@ async function seedRolesAndAdminUser() {
  * Auto-discovers existing admin/user-role users from tenant data.
  * Idempotent — skips if already seeded.
  */
-// SEED_ENABLED: Legacy bootstrap for Shir Glassworks (tenant #1).
-// New tenants are provisioned via mast_tenants MCP tool — this function is not needed.
-// Set to true only for first-time migration of pre-registry tenants.
-var SEED_ENABLED = false;
-
-async function seedPlatformRegistry() {
-  if (!SEED_ENABLED) {
-    console.log('Platform registry seeding disabled — use mast_tenants MCP tool to provision tenants.');
-    return false;
-  }
-  try {
-    // Check if current user already has a tenant mapping — means registry was seeded.
-    // We check userTenantMap/{uid} (not tenants/) because the user always has read
-    // access to their own entry via the "$uid === auth.uid" rule.
-    var myMappingSnap = await db.ref('mast-platform/userTenantMap/' + currentUser.uid).once('value');
-    if (myMappingSnap.exists()) {
-      console.log('Platform registry already seeded.');
-      return false;
-    }
-
-    // Discover existing users from tenant data
-    var usersSnap = await MastDB.adminUsers.ref().once('value');
-    var existingUsers = usersSnap.val() || {};
-
-    // Build userTenantMap from existing admin/user records
-    var userTenantMap = {};
-    Object.keys(existingUsers).forEach(function(uid) {
-      var user = existingUsers[uid];
-      if (user.role === 'admin' || user.role === 'user') {
-        userTenantMap[uid] = {
-          shirglassworks: {
-            role: user.role,
-            joinedAt: new Date().toISOString()
-          }
-        };
-      }
-    });
-
-    // Ensure current user is included as admin
-    if (!userTenantMap[currentUser.uid]) {
-      userTenantMap[currentUser.uid] = {
-        shirglassworks: {
-          role: 'admin',
-          joinedAt: new Date().toISOString()
-        }
-      };
-    }
-
-    // Build platformAdmins from users with admin role
-    var platformAdmins = {};
-    Object.keys(userTenantMap).forEach(function(uid) {
-      if (userTenantMap[uid].shirglassworks && userTenantMap[uid].shirglassworks.role === 'admin') {
-        platformAdmins[uid] = true;
-      }
-    });
-    // Ensure current user (who is running the seed) is a platform admin
-    platformAdmins[currentUser.uid] = true;
-
-    // Seed the full registry
-    await db.ref('mast-platform').set({
-      platformAdmins: platformAdmins,
-      tenants: {
-        shirglassworks: {
-          config: {
-            businessName: 'Shir Glassworks',
-            domain: 'shirglassworks.com',
-            databaseUrl: null
-          },
-          subscription: {
-            tier: 'pro',
-            enabledModules: ['make', 'market', 'sell', 'ship', 'run', 'team'],
-            status: 'active'
-          },
-          status: 'active'
-        }
-      },
-      tenantsByDomain: {
-        shirglassworks_com: 'shirglassworks'
-      },
-      userTenantMap: userTenantMap
-    });
-
-    console.log('Platform registry seeded with', Object.keys(userTenantMap).length, 'users');
-    showToast('Platform registry seeded');
-    return true;
-  } catch (err) {
-    console.warn('Platform registry seed skipped:', err.message);
-    return false;
-  }
-}
 
 /**
  * Resolve which tenant a user belongs to by checking the platform registry.
@@ -7092,15 +7002,6 @@ auth.onAuthStateChanged(async function(user) {
           console.log('Bootstrap: verified existing ' + existingUser.role + ' role for UID ' + user.uid + ' in tenant "' + domainTenant + '"');
           tenantId = domainTenant;
 
-          // Optionally seed platform registry for future logins
-          if (SEED_ENABLED) {
-            try {
-              await seedPlatformRegistry();
-              console.log('Platform registry seeded for future logins.');
-            } catch (seedErr) {
-              console.warn('Platform registry seed failed (may already exist):', seedErr.message);
-            }
-          }
         } else {
           console.warn('User ' + user.uid + ' has no admin/user role in tenant "' + domainTenant + '"');
         }
@@ -7183,7 +7084,6 @@ auth.onAuthStateChanged(async function(user) {
   // Only runs for admin users, safe to call repeatedly (idempotent).
   if (isAdmin()) {
     seedRolesAndAdminUser();
-    seedPlatformRegistry();
   }
 });
 
