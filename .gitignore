@@ -23,3 +23,9 @@ __pycache__/
 # IDE
 .vscode/
 .idea/
+
+# Firebase CLI cache
+.firebase/
+
+# Claude Code
+.claude/
