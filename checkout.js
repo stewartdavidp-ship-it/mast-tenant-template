@@ -17,7 +17,8 @@
     paymentMethod: 'card',     // 'card' | 'check' — check bypasses Square for wholesale
     coupon: null,              // { code, type, value, discount } or null
     taxRate: 0,
-    taxState: ''
+    taxState: '',
+    resaleCertNumber: ''       // wholesale: state tax resale certificate number
   };
 
   var shippingConfigCache = null; // cached flat-rate config
@@ -317,6 +318,18 @@
       '</div>' +
     '</div>';
 
+    // Resale certificate field (wholesale only)
+    if (isWholesaleCart()) {
+      html += '<div class="checkout-section">' +
+        '<div class="checkout-section-title">Tax Exemption</div>' +
+        '<div class="checkout-form-group">' +
+          '<label class="checkout-label" for="coResaleCert">State Tax Resale Certificate #</label>' +
+          '<input class="checkout-input" id="coResaleCert" type="text" value="' + esc(checkoutData.resaleCertNumber) + '" placeholder="Required for tax-exempt wholesale orders">' +
+        '</div>' +
+        '<div style="font-size:0.75rem;color:var(--warm-gray,#9B958E);margin-top:4px;">Provide your resale certificate number for tax-exempt status.</div>' +
+      '</div>';
+    }
+
     // Free shipping reminder on address step
     var addrSubtotal = calcSubtotal();
     var addrFreeThreshold = getShippingThreshold();
@@ -406,6 +419,22 @@
             }).catch(function() { /* silent */ });
           } catch (e) { /* silent */ }
         }
+
+        // Fetch resale cert from wholesaleAuthorized record
+        if (isWholesaleCart() && authUser.email) {
+          try {
+            var wsDb = window.ShirCart.getFirebaseApp().database();
+            var emailKey = authUser.email.toLowerCase().replace(/\./g, ',');
+            wsDb.ref(TENANT_ID + '/admin/wholesaleAuthorized/' + emailKey + '/resaleCertNumber').once('value').then(function(snap) {
+              var cert = snap.val();
+              if (cert && !checkoutData.resaleCertNumber) {
+                checkoutData.resaleCertNumber = cert;
+                var certEl = document.getElementById('coResaleCert');
+                if (certEl) certEl.value = cert;
+              }
+            }).catch(function() { /* silent */ });
+          } catch (e) { /* silent */ }
+        }
       }
     }
 
@@ -490,6 +519,10 @@
         }
       }
     }
+
+    // Capture resale cert for wholesale
+    var certEl = document.getElementById('coResaleCert');
+    if (certEl) checkoutData.resaleCertNumber = certEl.value.trim();
 
     // Persist to localStorage so returning users don't re-enter
     try {
@@ -917,7 +950,9 @@
       }),
       shippingMethodKey: 'calculated',
       couponCode: checkoutData.coupon ? checkoutData.coupon.code : null,
-      uid: user ? user.uid : 'anonymous'
+      uid: user ? user.uid : 'anonymous',
+      isWholesale: isWholesaleCart(),
+      resaleCertNumber: checkoutData.resaleCertNumber || ''
     };
 
     callFunction('shirSubmitOrder', payload, function (result) {
@@ -951,6 +986,12 @@
               zip: checkoutData.shipping.zip || '',
               country: 'US'
             });
+            // Update wholesaler resale cert if provided
+            if (checkoutData.resaleCertNumber && user.email) {
+              var emailKey = user.email.toLowerCase().replace(/\./g, ',');
+              custDb.ref(TENANT_ID + '/admin/wholesaleAuthorized/' + emailKey + '/resaleCertNumber')
+                .set(checkoutData.resaleCertNumber);
+            }
           } catch (e) { /* silent */ }
         }
         trackCheckoutEvent('checkout_redirect_to_payment');
@@ -1016,6 +1057,9 @@
       total: totalCents / 100,
       shippingMethod: checkoutData.shippingMethod || null,
       uid: user ? user.uid : 'anonymous',
+      resaleCertNumber: checkoutData.resaleCertNumber || '',
+      taxExempt: true,
+      taxCents: 0,
       placedAt: new Date().toISOString(),
       createdAt: new Date().toISOString()
     };
@@ -1034,6 +1078,16 @@
       isSubmitting = false;
       window.ShirCart.clear();
       trackCheckoutEvent('wholesale_check_order_placed');
+
+      // Update wholesaler resale cert if provided
+      if (checkoutData.resaleCertNumber && user && user.email && window.ShirCart.getFirebaseApp) {
+        try {
+          var wsDb = window.ShirCart.getFirebaseApp().database();
+          var emailKey = user.email.toLowerCase().replace(/\./g, ',');
+          wsDb.ref(TENANT_ID + '/admin/wholesaleAuthorized/' + emailKey + '/resaleCertNumber')
+            .set(checkoutData.resaleCertNumber);
+        } catch (e) { /* silent — order already placed successfully */ }
+      }
 
       // Show confirmation
       renderCheckOrderConfirmation(orderNumber);
