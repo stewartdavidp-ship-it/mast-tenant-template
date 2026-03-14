@@ -1,5 +1,18 @@
 {
   "database": {
     "rules": "database.rules.json"
+  },
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      "database.rules.json",
+      "**/node_modules/**",
+      "mcp-server/**",
+      "docs/**",
+      ".git/**",
+      "CLAUDE.md",
+      "ARCHITECTURE.md"
+    ]
   }
 }
