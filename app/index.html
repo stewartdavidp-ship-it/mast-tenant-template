@@ -4990,6 +4990,18 @@
           <div id="githubTokenStatus" style="margin-top:8px;font-size:0.85rem;"></div>
         </div>
         <div class="form-group" style="margin-top:24px;">
+          <label>LabelKeeper API Key</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">
+            API key for the LabelKeeper print card integration. Get it from the LabelKeeper project's GCP Secret Manager.
+          </p>
+          <div style="display:flex;gap:8px;">
+            <input type="password" id="lkApiKeyInput" placeholder="lk_..."
+              style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
+            <button class="btn btn-primary" onclick="saveLkApiKey()">Save</button>
+          </div>
+          <div id="lkApiKeyStatus" style="margin-top:8px;font-size:0.85rem;"></div>
+        </div>
+        <div class="form-group" style="margin-top:24px;">
           <label>Events to Show on Homepage</label>
           <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">
             Number of upcoming events displayed in the homepage schedule section.
@@ -7317,7 +7329,7 @@ function applyRoute(route) {
 }
 
 function lazyLoadForRoute(route) {
-  if (route === 'settings') { updateGitHubTokenStatus(); loadOperators(); loadStorageInfo(); loadStudioLocations(); loadLocations(); loadPublicFeedbackSetting(); }
+  if (route === 'settings') { updateGitHubTokenStatus(); updateLkApiKeyStatus(); loadOperators(); loadStorageInfo(); loadStudioLocations(); loadLocations(); loadPublicFeedbackSetting(); }
   if (route === 'analytics' && !analyticsLoaded) loadAnalytics();
   if (route === 'products' && !productsLoaded) loadProducts();
   if (route === 'orders' && !ordersLoaded) loadOrders();
@@ -7514,6 +7526,27 @@ async function saveGitHubToken() {
   }
 }
 
+async function saveLkApiKey() {
+  if (!hasPermission('settings', 'update')) {
+    showToast('You do not have permission to update settings.', true);
+    return;
+  }
+  var key = document.getElementById('lkApiKeyInput').value.trim();
+  if (!key) { showToast('Please enter an API key.', true); return; }
+  if (!/^lk_[a-f0-9]{32}$/.test(key)) { showToast('Invalid LabelKeeper key format (expected lk_ + 32 hex chars).', true); return; }
+  try {
+    await MastDB._ref('admin/config/labelkeeper/apiKey').set(key);
+    await writeAudit('update', 'settings', 'labelkeeperApiKey');
+    _lkApiKeyCache = key;
+    document.getElementById('lkApiKeyInput').value = '';
+    var st = document.getElementById('lkApiKeyStatus');
+    if (st) st.innerHTML = '<span style="color:var(--success);">&#10003; Key saved</span>';
+    showToast('LabelKeeper API key saved.');
+  } catch (err) {
+    showToast('Error saving key: ' + err.message, true);
+  }
+}
+
 async function testGitHubToken() {
   if (!githubToken) {
     showToast('No token configured. Enter and save a token first.', true);
@@ -7535,6 +7568,18 @@ function updateGitHubTokenStatus() {
   } else {
     el.innerHTML = '<span style="color:var(--warm-gray-light);">No token configured. Image upload requires a GitHub PAT.</span>';
   }
+}
+
+function updateLkApiKeyStatus() {
+  var el = document.getElementById('lkApiKeyStatus');
+  if (!el) return;
+  _getLkApiKey().then(function(key) {
+    if (key) {
+      el.innerHTML = '<span style="color:var(--teal);">&#10003; Key configured</span>';
+    } else {
+      el.innerHTML = '<span style="color:var(--warm-gray-light);">No key configured. Print card feature requires a LabelKeeper API key.</span>';
+    }
+  });
 }
 
 // Events count setting
@@ -8547,6 +8592,10 @@ function openForecastJobModal(pid, suggestedQty) {
 }
 
 async function doCreateForecastJob(pid, suggestedQty, purpose) {
+  if (!hasPermission('jobs', 'create')) {
+    showToast('You do not have permission to create production jobs.', true);
+    return;
+  }
   var nameInput = document.getElementById('newJobName');
   var name = nameInput ? nameInput.value.trim() : '';
   if (!validateRequired([{ el: 'newJobName', msg: 'Job name is required' }])) {
@@ -18056,7 +18105,14 @@ function copyStoryQRUrl(url) {
 }
 
 var LK_API_URL = 'https://labelkeeper-api-1075204398975.us-central1.run.app';
-var LK_API_KEY = 'lk_7d22ec38c0d9bb395a6781cbd6947a79';
+var _lkApiKeyCache = null;
+
+async function _getLkApiKey() {
+  if (_lkApiKeyCache) return _lkApiKeyCache;
+  var snap = await MastDB._ref('admin/config/labelkeeper/apiKey').once('value');
+  _lkApiKeyCache = snap.val();
+  return _lkApiKeyCache;
+}
 
 async function printProductCard(productId, productName, storyUrl) {
   var product = productsData ? productsData.find(function(p) { return p.pid === productId; }) : null;
@@ -18073,11 +18129,13 @@ async function printProductCard(productId, productName, storyUrl) {
 
   try {
     showToast('Creating print session...');
+    var apiKey = await _getLkApiKey();
+    if (!apiKey) throw new Error('LabelKeeper API key not configured — add it in Settings > Integrations');
     var resp = await fetch(LK_API_URL + '/sessions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + LK_API_KEY
+        'Authorization': 'Bearer ' + apiKey
       },
       body: JSON.stringify(payload)
     });
