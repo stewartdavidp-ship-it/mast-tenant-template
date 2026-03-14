@@ -7512,6 +7512,7 @@ function switchSettingsSubView(view) {
 // GitHub Token Management
 // ============================================================
 async function saveGitHubToken() {
+  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
   var token = document.getElementById('githubTokenInput').value.trim();
   if (!token) {
     showToast('Please enter a token.', true);
@@ -7587,6 +7588,7 @@ function updateLkApiKeyStatus() {
 
 // Events count setting
 async function saveEventsCount() {
+  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
   var count = parseInt(document.getElementById('eventsCountInput').value, 10);
   if (isNaN(count) || count < 1 || count > 20) {
     showToast('Enter a number between 1 and 20.', true);
@@ -7680,6 +7682,7 @@ function getFieldValue(inputId) {
 }
 
 async function saveSquareConfig() {
+  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
   var env = document.getElementById('squareEnvironment').value;
 
   var sandboxToken = getFieldValue('sqSandboxToken');
@@ -7803,6 +7806,7 @@ function loadSquareConfig() {
 // ============================================================
 
 async function saveShippingConfig() {
+  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
   var categories = ['small', 'medium', 'large', 'oversized'];
   var config = { additionalItemSurcharge: 2, freeThreshold: 100, packingBufferOz: 8 };
 
@@ -7874,6 +7878,7 @@ function loadShippingConfig() {
 // Google Maps API Key Management
 // ============================================================
 async function saveGoogleConfig() {
+  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
   var key = getFieldValue('googleMapsApiKey');
   if (!key) { showToast('API key is required.', true); return; }
 
@@ -7969,8 +7974,8 @@ function loadEtsyConfig() {
       var shopName = config.shopName || 'Shop #' + config.shopId;
       var lastSync = config.lastSyncAt ? new Date(config.lastSyncAt).toLocaleString() : 'Never';
       if (statusEl) statusEl.innerHTML =
-        '<span style="color:var(--teal);">&#10003; Connected to <strong>' + shopName + '</strong></span>' +
-        '<br><span style="color:var(--warm-gray);">Last sync: ' + lastSync + '</span>';
+        '<span style="color:var(--teal);">&#10003; Connected to <strong>' + esc(shopName) + '</strong></span>' +
+        '<br><span style="color:var(--warm-gray);">Last sync: ' + esc(lastSync) + '</span>';
     } else {
       // Disconnected
       if (disconnectedEl) disconnectedEl.style.display = 'block';
@@ -7988,8 +7993,8 @@ function loadEtsyConfig() {
         var shopName = config.shopName || 'Shop #' + config.shopId;
         var lastSync = config.lastSyncAt ? new Date(config.lastSyncAt).toLocaleString() : 'Never';
         if (statusEl) statusEl.innerHTML =
-          '<span style="color:var(--teal);">&#10003; Connected to <strong>' + shopName + '</strong></span>' +
-          '<br><span style="color:var(--warm-gray);">Last sync: ' + lastSync + '</span>';
+          '<span style="color:var(--teal);">&#10003; Connected to <strong>' + esc(shopName) + '</strong></span>' +
+          '<br><span style="color:var(--warm-gray);">Last sync: ' + esc(lastSync) + '</span>';
       } else {
         if (disconnectedEl) disconnectedEl.style.display = 'block';
         if (connectedEl) connectedEl.style.display = 'none';
@@ -9438,6 +9443,7 @@ function addVariantOption() {
 }
 
 async function saveProduct(pid) {
+  if (!hasPermission('products', 'update')) { showToast('You do not have permission to update products.', true); return; }
   try {
     var name = document.getElementById('pdName').value.trim();
     if (!validateRequired([{ el: 'pdName', msg: 'Product name is required' }])) {
@@ -9720,6 +9726,7 @@ function pdRecalcTotal() {
 }
 
 async function saveProductSettings(pid) {
+  if (!hasPermission('inventory', 'update')) { showToast('You do not have permission to update inventory.', true); return; }
   try {
     var stockType = document.getElementById('pdStockType').value;
     var leadTime = parseInt(document.getElementById('pdLeadTime').value) || 0;
@@ -10886,8 +10893,8 @@ function renderUsersList() {
     }
 
     var tr = document.createElement('tr');
-    tr.innerHTML = '<td>' + avatar + (u.displayName || 'Unnamed') + '</td>' +
-      '<td>' + (u.email || '—') + '</td>' +
+    tr.innerHTML = '<td>' + avatar + esc(u.displayName || 'Unnamed') + '</td>' +
+      '<td>' + esc(u.email || '—') + '</td>' +
       '<td>' + roleCell + '</td>' +
       '<td>' + lastLogin + '</td>' +
       '<td>' + (isSelf ? '' : '<button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 8px;" onclick="viewUserAudit(\'' + uid + '\')">History</button>') + '</td>';
@@ -18088,11 +18095,11 @@ function renderStoryDetail(storyId) {
 
 function printStoryQR(dataUrl, productName) {
   var win = window.open('', '_blank', 'width=400,height=500');
-  win.document.write('<html><head><title>QR Code - ' + productName + '</title>' +
+  win.document.write('<html><head><title>QR Code - ' + esc(productName) + '</title>' +
     '<style>body{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:sans-serif;margin:0;}' +
     'img{width:250px;height:250px;}h3{margin:16px 0 4px;font-size:1rem;}p{font-size:0.8rem;color:#666;}</style></head><body>' +
-    '<img src="' + dataUrl + '" alt="QR Code">' +
-    '<h3>' + productName + '</h3>' +
+    '<img src="' + esc(dataUrl) + '" alt="QR Code">' +
+    '<h3>' + esc(productName) + '</h3>' +
     '<p>Shir Glassworks</p>' +
     '<script>setTimeout(function(){window.print();},300);<\/script>' +
     '</body></html>');
@@ -23870,6 +23877,17 @@ function blogPlainToHtml(text) {
   return escaped.split(/\n\n+/).map(function(p) { return '<p>' + p.replace(/\n/g, '<br>') + '</p>'; }).join('');
 }
 
+function blogSanitizeHtml(html) {
+  // Strip script tags, event handlers, and dangerous elements
+  html = html.replace(/<script[\s\S]*?<\/script>/gi, '');
+  html = html.replace(/<iframe[\s\S]*?<\/iframe>/gi, '');
+  html = html.replace(/<object[\s\S]*?<\/object>/gi, '');
+  html = html.replace(/<embed[\s\S]*?>/gi, '');
+  html = html.replace(/\son\w+\s*=\s*(['"]?)[\s\S]*?\1/gi, '');
+  html = html.replace(/javascript\s*:/gi, '');
+  return html;
+}
+
 function blogLoadBodyToEditor(body, inlineImages) {
   if (!body) return '';
   var html = body;
@@ -23877,6 +23895,7 @@ function blogLoadBodyToEditor(body, inlineImages) {
   if (!blogIsHtmlBody(html)) {
     html = blogPlainToHtml(html);
   }
+  html = blogSanitizeHtml(html);
   // Replace [Image N] text markers with styled spans
   (inlineImages || []).forEach(function(img, idx) {
     var marker = '[Image ' + (idx + 1) + ']';
