@@ -9,6 +9,7 @@ Shir Glassworks is a multi-tenant storefront deployed to Firebase Hosting with a
 **Hosting:** `https://shir-glassworks.web.app` (Firebase Hosting, deployed via `mast_hosting` MCP tool)
 **GitHub Pages:** `stewartdavidp-ship-it.github.io/shirglassworks` (legacy, still active)
 **RTDB:** `https://shir-glassworks-default-rtdb.firebaseio.com`
+**Storage:** `gs://shir-glassworks.firebasestorage.app` (product images at `shirglassworks/images/{pid}/main.jpg`)
 **Cloud Functions:** `shirglassworks-functions/functions/` (Shir-specific) + `gameshelf-functions/functions/index.js` (shared)
 
 ## Deployment
@@ -40,6 +41,7 @@ Static HTML pages. No build system, no bundler.
 | `schedule.html` | Events / schedule |
 | `commission.html` | Commission request page |
 | `orders.html` | Customer order lookup |
+| `wholesale.html` | Wholesale catalog (auth-gated, Google Sign-In required) |
 | `checkout.html` | Multi-step checkout flow |
 | `checkout.js` | Checkout logic (IIFE `ShirCheckout`, ~1140 lines) |
 | `checkout.css` | Checkout-specific styles |
@@ -76,6 +78,42 @@ Bottom-center stacking toasts matching the admin app pattern. Implemented in `ca
 - Toasts: `.cart-toast` — slide-up animation, auto-fade after 5s
 - Error variant: `.cart-toast.error` — red background with shake animation
 - API: `showToast(message, isError)` — creates a new DOM element per toast
+
+## Wholesale Catalog
+
+Auth-gated wholesale page at `wholesale.html`. Requires Google Sign-In + admin approval.
+
+### Auth Flow
+
+1. **Google Sign-In** — Same Firebase Auth as rest of site
+2. **Access Check** — Reads `{TENANT_ID}/admin/wholesaleAuthorized/{emailKey}` (email with `.` replaced by `,`)
+3. **Access Request** — If not authorized, user can submit a request (writes to `admin/wholesaleRequests/{requestId}`)
+4. **Denied Screen** — If not authorized and no pending request, shows "not authorized" message
+
+### Product Display
+
+- Products loaded from `{TENANT_ID}/public/products/` — only products with a `wpid` field are shown
+- Organized by category (Drinkware, Dispensers, Vases, etc.)
+- Each card shows: product image (`object-fit: contain`), wholesale price, option selectors (Color, Size chips)
+- Wholesale pricing: `wholesalePriceCents` (flat) or `wholesalePriceVariants` (size-dependent, e.g., Small/Large)
+- Add to Cart button disabled until all required options selected — amber hint text shows which options to pick
+
+### Cart
+
+Wholesale cart is separate from the retail cart. Stored in `sessionStorage`. Cart drawer shows selected items with variant details and quantity.
+
+### Admin Features
+
+- **Wholesale PDF generation** — Admin app has a wholesale section to generate PDF catalogs
+- **QR code** — Generated QR links to `wholesale.html`, image can be copied to clipboard via `copyQRImage()`
+- **Access management** — Admin approves/denies wholesale access requests
+
+### Firebase Paths
+
+| Path | Purpose |
+|------|---------|
+| `admin/wholesaleAuthorized/{emailKey}` | Approved buyer lookup |
+| `admin/wholesaleRequests/{requestId}` | Pending access requests |
 
 ## Checkout Flow
 
@@ -263,6 +301,8 @@ Database: `shir-glassworks-default-rtdb`
 | `shirglassworks/admin/roles/` | Staff+ | Role definitions |
 | `shirglassworks/admin/auditLog/` | Staff+ | Audit trail entries |
 | `shirglassworks/admin/feedbackSettings/` | Admin only | Feedback widget config |
+| `shirglassworks/admin/wholesaleAuthorized/` | Admin only | Approved wholesale buyer lookup (keyed by email) |
+| `shirglassworks/admin/wholesaleRequests/` | Authenticated write | Wholesale access requests from buyers |
 | `shirglassworks/orders/` | Mixed | Order records (write: cloud function + admin, read: status field public for confirmation listener) |
 | `shirglassworks/feedbackReports/` | Public write | Customer feedback submissions |
 
