@@ -27210,16 +27210,30 @@ function loadQRLibrary(callback) {
 // ── PDF Catalog hosting ──
 
 function copyQRImage() {
+  // Try canvas first, fall back to img (qrcodejs generates both)
   var canvas = document.querySelector('#pdfQRCanvas canvas');
-  if (!canvas) { showToast('QR code not ready yet'); return; }
-  canvas.toBlob(function(blob) {
-    if (!blob) { showToast('Failed to capture QR image'); return; }
-    navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]).then(function() {
-      showToast('QR image copied to clipboard!');
-    }).catch(function(err) {
-      showToast('Copy failed: ' + err.message);
-    });
-  }, 'image/png');
+  var img = document.querySelector('#pdfQRCanvas img');
+  var src = canvas ? canvas.toDataURL('image/png') : (img ? img.src : null);
+  if (!src) { showToast('QR code not ready yet'); return; }
+
+  // Convert data URL to blob synchronously to preserve user gesture
+  var parts = src.split(',');
+  var mime = parts[0].match(/:(.*?);/)[1];
+  var raw = atob(parts[1]);
+  var arr = new Uint8Array(raw.length);
+  for (var i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  var blob = new Blob([arr], { type: mime });
+
+  navigator.clipboard.write([new ClipboardItem({ [mime]: blob })]).then(function() {
+    showToast('QR image copied to clipboard!');
+  }).catch(function() {
+    // Fallback: download if clipboard blocked
+    var a = document.createElement('a');
+    a.href = src;
+    a.download = 'shir-wholesale-qr.png';
+    a.click();
+    showToast('QR image downloaded (clipboard not available)');
+  });
 }
 
 function uploadWholesalePDF() {
