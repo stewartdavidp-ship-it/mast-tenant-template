@@ -7054,28 +7054,46 @@ auth.onAuthStateChanged(async function(user) {
   // MastDB.init() must happen before loadUserRole() since role loading uses MastDB.
   var tenantId = await resolveTenant(user.uid);
   if (!tenantId) {
-    // No tenant membership in platform registry.
-    // Legacy bootstrap: attempt to seed from existing admin records (Shir Glassworks migration only).
-    // For new tenants, platform registry is provisioned via mast_tenants MCP tool.
-    if (SEED_ENABLED) {
-      MastDB.init({ tenantId: MastDB.tenantId() || 'unknown', db: db });
+    // Platform registry lookup failed (no entry or permission denied).
+    // Fallback: This is a per-tenant deployment — resolve tenant from domain,
+    // then verify the user has an admin/user role in that tenant's data.
+    // DEPLOY: Update this map when cloning for a new tenant.
+    var domainTenantMap = {
+      'shirglassworks.com':              'shirglassworks',
+      'www.shirglassworks.com':          'shirglassworks',
+      'shir-glassworks.web.app':         'shirglassworks',
+      'stewartdavidp-ship-it.github.io': 'shirglassworks',
+      'localhost':                        'shirglassworks'
+    };
+    var domainTenant = domainTenantMap[window.location.hostname];
+    if (domainTenant) {
+      console.log('Tenant resolution fallback: using domain-based tenant "' + domainTenant + '" for ' + window.location.hostname);
+      // Temporarily init MastDB so we can check admin records
+      MastDB.init({ tenantId: domainTenant, db: db });
       try {
         var existingUserSnap = await MastDB.adminUsers.ref(user.uid).once('value');
         var existingUser = existingUserSnap.val();
         if (existingUser && (existingUser.role === 'admin' || existingUser.role === 'user')) {
-          console.log('Bootstrap: existing ' + existingUser.role + ' detected, seeding platform registry...');
-          try {
-            await seedPlatformRegistry();
-          } catch (seedErr) {
-            console.warn('Platform registry seed failed (may already exist):', seedErr.message);
+          console.log('Bootstrap: verified existing ' + existingUser.role + ' role for UID ' + user.uid + ' in tenant "' + domainTenant + '"');
+          tenantId = domainTenant;
+
+          // Optionally seed platform registry for future logins
+          if (SEED_ENABLED) {
+            try {
+              await seedPlatformRegistry();
+              console.log('Platform registry seeded for future logins.');
+            } catch (seedErr) {
+              console.warn('Platform registry seed failed (may already exist):', seedErr.message);
+            }
           }
-          tenantId = await resolveTenant(user.uid);
+        } else {
+          console.warn('User ' + user.uid + ' has no admin/user role in tenant "' + domainTenant + '"');
         }
       } catch (bootstrapErr) {
-        console.error('Bootstrap check failed:', bootstrapErr);
+        console.error('Bootstrap admin check failed:', bootstrapErr);
       }
     } else {
-      console.warn('No tenant membership for UID:', user.uid, '— platform registry seeding is disabled.');
+      console.warn('No tenant membership for UID:', user.uid, '— unknown domain:', window.location.hostname);
     }
 
     if (!tenantId) {
