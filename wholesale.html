@@ -273,6 +273,13 @@
   }
   .ws-add-btn:hover { background: var(--teal-deep); }
   .ws-add-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .ws-select-hint {
+    font-size: 0.7rem;
+    color: var(--amber);
+    text-align: center;
+    margin-top: 6px;
+    letter-spacing: 0.04em;
+  }
 
   /* ===== FOOTER ===== */
   .ws-footer {
@@ -812,6 +819,9 @@
             (!allSelected && p.options && p.options.length > 0 ? ' disabled title="Select options first"' : '') +
             '>Add to Cart</button>' +
         '</div>' +
+        (!allSelected && p.options && p.options.length > 0
+          ? '<div class="ws-select-hint" id="wsHint_' + esc(pid) + '">\u2191 Select ' + p.options.map(function(o){return o.label.toLowerCase();}).join(' & ') + ' first</div>'
+          : '') +
       '</div>' +
     '</div>';
   }
@@ -853,6 +863,9 @@
       btn.disabled = !allSel;
       btn.title = allSel ? '' : 'Select options first';
     }
+    // Hide/show hint
+    var hint = document.getElementById('wsHint_' + pid);
+    if (hint) hint.style.display = allSel ? 'none' : '';
   };
 
   // ── Add to cart ──

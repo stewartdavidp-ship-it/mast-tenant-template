@@ -27209,6 +27209,19 @@ function loadQRLibrary(callback) {
 
 // ── PDF Catalog hosting ──
 
+function copyQRImage() {
+  var canvas = document.querySelector('#pdfQRCanvas canvas');
+  if (!canvas) { showToast('QR code not ready yet'); return; }
+  canvas.toBlob(function(blob) {
+    if (!blob) { showToast('Failed to capture QR image'); return; }
+    navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]).then(function() {
+      showToast('QR image copied to clipboard!');
+    }).catch(function(err) {
+      showToast('Copy failed: ' + err.message);
+    });
+  }, 'image/png');
+}
+
 function uploadWholesalePDF() {
   var input = document.createElement('input');
   input.type = 'file';
@@ -27250,6 +27263,7 @@ function checkWholesalePdfStatus() {
             '<div style="font-size:0.8rem;font-weight:600;">PDF Catalog QR</div>' +
             '<div style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Links directly to the downloadable PDF</div>' +
             '<button onclick="copyToClipboard(\'' + esc(url) + '\'); showToast(\'PDF link copied!\')" style="margin-top:8px;background:none;border:1px solid #ccc;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:0.72rem;">Copy PDF Link</button>' +
+            '<button onclick="copyQRImage()" style="margin-top:4px;background:none;border:1px solid #ccc;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:0.72rem;">Copy QR Image</button>' +
           '</div>' +
         '</div>';
         loadQRLibrary(function() {
