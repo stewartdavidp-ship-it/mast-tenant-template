@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Shir Glassworks — Point of Sale</title>
+<title>Shir Glassworks — Point of Sale</title><!-- TENANT: brand -->
 <link rel="icon" href="../images/favicon.svg" type="image/svg+xml">
 <style>
 :root {
@@ -186,7 +186,7 @@ body {
 
 <!-- Top Bar -->
 <div class="top-bar">
-  <h1>Shir Glassworks</h1>
+  <h1>Shir Glassworks</h1><!-- TENANT: brand -->
   <div style="display:flex;align-items:center;gap:8px;">
     <span class="mode-badge" id="modeBadge">POS</span>
     <button id="eventSettingsBtn" onclick="showEventSettings()" style="display:none;background:none;border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:16px;cursor:pointer;color:var(--text);">⚙</button>
@@ -295,20 +295,14 @@ body {
 // ============================================================
 // Firebase Init
 // ============================================================
-var firebaseApp = firebase.initializeApp({
-  apiKey: "AIzaSyDZevV_F87F1AKGqUPKuNIrHMybOc61D7s",
-  authDomain: "shir-glassworks.firebaseapp.com",
-  databaseURL: "https://shir-glassworks-default-rtdb.firebaseio.com",
-  projectId: "shir-glassworks",
-  storageBucket: "shir-glassworks.firebasestorage.app"
-}, 'pos-app');
+var firebaseApp = firebase.initializeApp(TENANT_FIREBASE_CONFIG, 'pos-app');
 var db = firebaseApp.database();
 var auth = firebaseApp.auth();
 
 function esc(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
-var CLASSIFY_URL = 'https://us-central1-shir-glassworks.cloudfunctions.net/classifyImage';
-var UPLOAD_URL = 'https://us-central1-shir-glassworks.cloudfunctions.net/uploadImage';
+var CLASSIFY_URL = TENANT_FIREBASE_CONFIG.cloudFunctionsBase + '/classifyImage';
+var UPLOAD_URL = TENANT_FIREBASE_CONFIG.cloudFunctionsBase + '/uploadImage';
 var PRODUCTS_PATH = TENANT_ID + '/public/products';
 var SALES_PATH = TENANT_ID + '/admin/sales';
 var SALES_EVENTS_PATH = TENANT_ID + '/admin/salesEvents';
@@ -1043,7 +1037,7 @@ async function sendReceipt() {
   statusEl.textContent = '';
 
   var token = authToken;
-  var base = 'https://us-central1-shir-glassworks.cloudfunctions.net';
+  var base = TENANT_FIREBASE_CONFIG.cloudFunctionsBase;
   var results = [];
 
   try {
@@ -1098,7 +1092,7 @@ async function autoReconcileSquare(saleId, saleTimestamp) {
   if (paymentType !== 'square') return;
   try {
     var token = authToken;
-    var resp = await fetch('https://us-central1-shir-glassworks.cloudfunctions.net/reconcileSquarePayment', {
+    var resp = await fetch(TENANT_FIREBASE_CONFIG.cloudFunctionsBase + '/reconcileSquarePayment', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, 'X-Tenant-ID': TENANT_ID },
       body: JSON.stringify({ saleId: saleId, saleTimestamp: saleTimestamp, toleranceMinutes: 5 })
@@ -1201,7 +1195,7 @@ async function submitCommission(pid, pieceName) {
     try {
       var token = currentUser ? await currentUser.getIdToken() : null;
       if (token) {
-        fetch('https://us-central1-shir-glassworks.cloudfunctions.net/commissionNotify', {
+        fetch(TENANT_FIREBASE_CONFIG.cloudFunctionsBase + '/commissionNotify', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, 'X-Tenant-ID': TENANT_ID },
           body: JSON.stringify({ commissionId: commId, pieceName: pieceName, customerName: name, customerContact: contact, notes: notes, channel: 'pos' })

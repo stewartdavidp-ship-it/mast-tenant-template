@@ -180,9 +180,11 @@
     if (!app) { callback({ success: false, error: 'Firebase not available' }); return; }
 
     // Get auth token before calling Cloud Function
-    // Derive projectId from the initialized Firebase app — no hardcoded tenant reference
-    var projectId = (app.options && app.options.projectId) ? app.options.projectId : 'shir-glassworks';
-    var url = 'https://us-central1-' + projectId + '.cloudfunctions.net/' + name;
+    // Derive Cloud Functions base URL from shared tenant config
+    var cfBase = (typeof TENANT_FIREBASE_CONFIG !== 'undefined' && TENANT_FIREBASE_CONFIG.cloudFunctionsBase)
+      ? TENANT_FIREBASE_CONFIG.cloudFunctionsBase
+      : 'https://us-central1-' + ((app.options && app.options.projectId) || 'unknown') + '.cloudfunctions.net';
+    var url = cfBase + '/' + name;
 
     ensureAuth().then(function(token) {
       var xhr = new XMLHttpRequest();
@@ -1114,8 +1116,8 @@
         '<div class="confirmation-message">' +
           'Thank you for your wholesale order! Your order is being held pending check payment.<br><br>' +
           '<strong>Please mail your check to:</strong><br>' +
-          'Shir Glassworks<br>' +
-          '139 Conway St.<br>' +
+          ((typeof TENANT_BRAND !== 'undefined') ? TENANT_BRAND.name : 'Shir Glassworks') + '<br>' +
+          '139 Conway St.<br>' + /* TENANT: mailing address */
           'Greenfield, MA 01301<br><br>' +
           'A confirmation has been sent to <strong>' + esc(checkoutData.email) + '</strong>.<br>' +
           'Your order will be processed once payment is verified.' +

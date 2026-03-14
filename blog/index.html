@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>From the Studio — Shir Glassworks</title>
+  <title>From the Studio — Shir Glassworks</title><!-- TENANT: brand -->
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Cormorant+Garamond:wght@300;400;500;600&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link rel="icon" type="image/svg+xml" href="../favicon.svg">
   <style>
@@ -632,7 +632,7 @@
 </div>
 
 <footer>
-  <p>Shir Glassworks &bull; Western Massachusetts</p>
+  <p>Shir Glassworks &bull; Western Massachusetts</p><!-- TENANT: brand -->
   <p style="margin-top:6px;"><a href="../index.html">Home</a> &bull; <a href="../shop.html">Shop</a> &bull; <a href="./">From the Studio</a></p>
   <div class="powered-by-mast">
     <a href="https://runmast.com" target="_blank" rel="noopener">
@@ -678,13 +678,7 @@ window.addEventListener('resize', function() {
 <script src="../storefront-tenant.js"></script>
 <script>
 (function() {
-  var firebaseConfig = {
-    apiKey: "AIzaSyDZevV_F87F1AKGqUPKuNIrHMybOc61D7s",
-    authDomain: "shir-glassworks.firebaseapp.com",
-    databaseURL: "https://shir-glassworks-default-rtdb.firebaseio.com",
-    projectId: "shir-glassworks"
-  };
-  if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+  if (!firebase.apps.length) firebase.initializeApp(TENANT_FIREBASE_CONFIG);
   var db = firebase.database();
   var currentTab = 'blog';
 

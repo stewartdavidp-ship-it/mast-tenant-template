@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Shir Glassworks Studio</title>
+  <title>Shir Glassworks Studio</title><!-- TENANT: brand -->
   <link rel="manifest" href="manifest.json">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -405,14 +405,7 @@
 // ============================================================
 // Firebase Init
 // ============================================================
-var firebaseConfig = {
-  apiKey: "AIzaSyDZevV_F87F1AKGqUPKuNIrHMybOc61D7s",
-  authDomain: "shir-glassworks.firebaseapp.com",
-  databaseURL: "https://shir-glassworks-default-rtdb.firebaseio.com",
-  projectId: "shir-glassworks"
-};
-firebaseConfig.storageBucket = "shir-glassworks.firebasestorage.app";
-firebase.initializeApp(firebaseConfig);
+firebase.initializeApp(TENANT_FIREBASE_CONFIG);
 
 var auth = firebase.auth();
 var db = firebase.database();
@@ -420,9 +413,9 @@ var storage = firebase.storage();
 
 var PRODUCTS_PATH = TENANT_ID + '/public/products';
 var TRAINING_IMAGES_PATH = TENANT_ID + '/admin/training-images';
-var CLASSIFY_FUNCTION_URL = 'https://us-central1-shir-glassworks.cloudfunctions.net/classifyImage';
-var UPLOAD_FUNCTION_URL = 'https://us-central1-shir-glassworks.cloudfunctions.net/uploadTrainingImage';
-var SCAN_FUNCTION_URL = 'https://us-central1-shir-glassworks.cloudfunctions.net/scanCatalog';
+var CLASSIFY_FUNCTION_URL = TENANT_FIREBASE_CONFIG.cloudFunctionsBase + '/classifyImage';
+var UPLOAD_FUNCTION_URL = TENANT_FIREBASE_CONFIG.cloudFunctionsBase + '/uploadTrainingImage';
+var SCAN_FUNCTION_URL = TENANT_FIREBASE_CONFIG.cloudFunctionsBase + '/scanCatalog';
 
 // ============================================================
 // State

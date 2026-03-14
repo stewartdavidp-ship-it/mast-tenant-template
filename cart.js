@@ -12,14 +12,8 @@
 
   // ── Constants ──
   var STORAGE_KEY = (typeof TENANT_ID !== 'undefined' ? TENANT_ID : 'shir') + '_cart';
-  // DEPLOY: Firebase config can be set per-tenant via window.STOREFRONT_FIREBASE_CONFIG
-  // before this script loads. Falls back to default project config.
-  var FIREBASE_CONFIG = window.STOREFRONT_FIREBASE_CONFIG || {
-    apiKey: 'AIzaSyDZevV_F87F1AKGqUPKuNIrHMybOc61D7s',
-    authDomain: 'shir-glassworks.firebaseapp.com',
-    databaseURL: 'https://shir-glassworks-default-rtdb.firebaseio.com',
-    projectId: "shir-glassworks"
-  };
+  // Firebase config from storefront-tenant.js (loaded before this script)
+  var FIREBASE_CONFIG = (typeof TENANT_FIREBASE_CONFIG !== 'undefined') ? TENANT_FIREBASE_CONFIG : {};
   var MAX_QTY = 10;
   var MAX_QTY_WHOLESALE = 9999;
 

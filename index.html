@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Shir Glassworks — Handmade Glass Art</title>
+<title>Shir Glassworks — Handmade Glass Art</title><!-- TENANT: brand -->
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="cart.css">
 <link rel="stylesheet" href="checkout.css">
@@ -1514,13 +1514,7 @@
 <script src="storefront-tenant.js"></script>
 <script>
 (function() {
-  const firebaseConfig = {
-    apiKey: "AIzaSyDZevV_F87F1AKGqUPKuNIrHMybOc61D7s",
-    authDomain: "shir-glassworks.firebaseapp.com",
-    databaseURL: "https://shir-glassworks-default-rtdb.firebaseio.com",
-    projectId: "shir-glassworks"
-  };
-  if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+  if (!firebase.apps.length) firebase.initializeApp(TENANT_FIREBASE_CONFIG);
   const db = firebase.database();
 
   // Helper: format date

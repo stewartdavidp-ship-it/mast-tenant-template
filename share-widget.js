@@ -14,8 +14,9 @@
 (function() {
   'use strict';
 
-  var SHARE_TITLE = 'Shir Glassworks';
-  var SHARE_TEXT = 'Check out Shir Glassworks — handmade glass art from Western Massachusetts.';
+  var _brand = (typeof TENANT_BRAND !== 'undefined') ? TENANT_BRAND : { name: 'Shir Glassworks', tagline: 'Handmade Glass Art', location: 'Western Massachusetts' };
+  var SHARE_TITLE = _brand.name;
+  var SHARE_TEXT = 'Check out ' + _brand.name + ' — ' + _brand.tagline.toLowerCase() + ' from ' + _brand.location + '.';
 
   function getShareUrl() {
     // Always share the homepage URL, not whatever page you're on
@@ -88,7 +89,7 @@
     overlay.innerHTML =
       '<div class="sg-share-dialog">' +
         '<div class="sg-share-header">' +
-          '<h3>Share Shir Glassworks</h3>' +
+          '<h3>Share ' + SHARE_TITLE + '</h3>' +
           '<button class="sg-share-close" id="sgShareClose">&times;</button>' +
         '</div>' +
         '<div class="sg-share-body">' +

@@ -6541,7 +6541,9 @@ var imageLibrary = {};
 var imageLibraryLoaded = false;
 var imageLibraryListener = null;
 // DEPLOY: Default Cloud Functions URL — overwritten by loadTenantConfig() after auth
-var CLOUD_FUNCTIONS_BASE = 'https://us-central1-shir-glassworks.cloudfunctions.net';
+var CLOUD_FUNCTIONS_BASE = (typeof TENANT_FIREBASE_CONFIG !== 'undefined' && TENANT_FIREBASE_CONFIG.cloudFunctionsBase)
+  ? TENANT_FIREBASE_CONFIG.cloudFunctionsBase
+  : 'https://us-central1-shir-glassworks.cloudfunctions.net';
 
 // callCF — fetch wrapper that injects X-Tenant-ID header on all Cloud Function calls
 function callCF(path, options) {

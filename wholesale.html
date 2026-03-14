@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>2026 Wholesale Catalog &mdash; Shir Glassworks</title>
+<title>2026 Wholesale Catalog &mdash; Shir Glassworks</title><!-- TENANT: brand -->
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="cart.css">
 <link rel="stylesheet" href="checkout.css">
@@ -481,7 +481,7 @@
         Questions? <a href="mailto:ShirGlassworks@gmail.com">ShirGlassworks@gmail.com</a> &nbsp;&middot;&nbsp; <a href="tel:9782012458">978-201-2458</a>
       </div>
       <div style="margin-top:24px;font-size:0.7rem;color:rgba(255,255,255,0.3);">
-        &copy; 2026 Shir Glassworks &nbsp;&middot;&nbsp; Handmade in Greenfield, MA
+        &copy; 2026 Shir Glassworks &nbsp;&middot;&nbsp; Handmade in Greenfield, MA<!-- TENANT: brand -->
       </div>
     </footer>
   </div>
@@ -529,12 +529,7 @@
   function init() {
     // Initialize Firebase
     try { db = firebase.app().database(); } catch (e) {
-      firebase.initializeApp({
-        apiKey: 'AIzaSyDZevV_F87F1AKGqUPKuNIrHMybOc61D7s',
-        authDomain: 'shir-glassworks.firebaseapp.com',
-        databaseURL: 'https://shir-glassworks-default-rtdb.firebaseio.com',
-        projectId: 'shir-glassworks'
-      });
+      firebase.initializeApp(TENANT_FIREBASE_CONFIG);
       db = firebase.database();
     }
 
