@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2026 Wholesale Catalog &mdash; Shir Glassworks</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="cart.css">
+<link rel="stylesheet" href="checkout.css">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<style>
+  :root {
+    --amber: #C4853C;
+    --amber-light: #E8B679;
+    --amber-glow: #F5D5A8;
+    --teal: #2A7C6F;
+    --teal-deep: #1B5C52;
+    --teal-light: #A8D5CE;
+    --cream: #FAF6F0;
+    --cream-dark: #F0E8DB;
+    --charcoal: #1A1A1A;
+    --warm-gray: #6B6560;
+    --warm-gray-light: #9B958E;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    color: var(--charcoal);
+    background: var(--cream);
+    overflow-x: hidden;
+    font-weight: 300;
+  }
+
+  /* ===== NAV ===== */
+  nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    padding: 1.25rem 3rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(26, 26, 26, 0.95);
+    backdrop-filter: blur(20px);
+    box-shadow: 0 2px 40px rgba(0,0,0,0.2);
+  }
+  .nav-logo {
+    display: flex; align-items: center; gap: 0.75rem; text-decoration: none;
+  }
+  .nav-logo img { height: 52px; }
+  .nav-links {
+    display: flex; gap: 2.5rem; list-style: none; align-items: center;
+  }
+  .nav-links a {
+    text-decoration: none; color: rgba(255,255,255,0.8);
+    font-size: 0.8rem; font-weight: 400; letter-spacing: 0.14em;
+    text-transform: uppercase; transition: color 0.3s;
+  }
+  .nav-links a:hover { color: var(--amber-light); }
+
+  .nav-toggle {
+    display: none; flex-direction: column; gap: 5px;
+    cursor: pointer; background: none; border: none; padding: 5px;
+  }
+  .nav-toggle span { display: block; width: 24px; height: 1.5px; background: #fff; }
+
+  @media (max-width: 768px) {
+    nav { padding: 1rem 1.5rem; }
+    .nav-links { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(26,26,26,0.98); flex-direction: column;
+      justify-content: center; align-items: center; gap: 2rem; z-index: 200; }
+    .nav-links.open { display: flex; }
+    .nav-toggle { display: flex; }
+    .nav-logo img { height: 40px; }
+  }
+
+  /* ===== HEADER ===== */
+  .ws-header {
+    padding: 120px 3rem 40px;
+    text-align: center;
+    background: var(--charcoal);
+    color: #fff;
+  }
+  .ws-header h1 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 2.8rem;
+    font-weight: 300;
+    letter-spacing: 0.08em;
+    margin-bottom: 8px;
+  }
+  .ws-header .ws-subtitle {
+    font-size: 0.85rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--amber-light);
+    margin-bottom: 16px;
+  }
+  .ws-header .ws-contact {
+    font-size: 0.8rem;
+    color: rgba(255,255,255,0.6);
+  }
+  .ws-header .ws-contact a { color: var(--amber-light); text-decoration: none; }
+
+  /* ===== CATEGORY FILTER ===== */
+  .ws-filters {
+    position: sticky; top: 72px; z-index: 50;
+    background: var(--cream);
+    padding: 16px 3rem;
+    display: flex; gap: 12px; flex-wrap: wrap;
+    justify-content: center;
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+  }
+  .ws-filter-btn {
+    padding: 6px 16px;
+    border: 1px solid #ccc;
+    border-radius: 20px;
+    background: #fff;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.78rem;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: var(--charcoal);
+  }
+  .ws-filter-btn:hover { border-color: var(--teal); color: var(--teal); }
+  .ws-filter-btn.active {
+    background: var(--teal); color: #fff; border-color: var(--teal);
+  }
+
+  /* ===== PRODUCT GRID ===== */
+  .ws-grid {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 32px 3rem 60px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 24px;
+  }
+
+  .ws-category-heading {
+    grid-column: 1 / -1;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.6rem;
+    font-weight: 400;
+    color: var(--charcoal);
+    padding: 20px 0 8px;
+    border-bottom: 1px solid rgba(0,0,0,0.08);
+    margin-top: 16px;
+  }
+
+  .ws-card {
+    background: #fff;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid rgba(0,0,0,0.06);
+    transition: box-shadow 0.3s, transform 0.2s;
+    display: flex;
+    flex-direction: column;
+  }
+  .ws-card:hover {
+    box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+    transform: translateY(-2px);
+  }
+
+  .ws-card-img {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    background: #f5f0ea;
+  }
+  .ws-card-img-placeholder {
+    width: 100%;
+    aspect-ratio: 1;
+    background: #f5f0ea;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--warm-gray-light);
+    font-size: 2rem;
+  }
+
+  .ws-card-body {
+    padding: 16px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .ws-card-wpid {
+    font-size: 0.7rem;
+    color: var(--warm-gray-light);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  .ws-card-name {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.2rem;
+    font-weight: 500;
+    margin-bottom: 8px;
+    color: var(--charcoal);
+  }
+
+  .ws-card-price {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--teal-deep);
+    margin-bottom: 12px;
+  }
+
+  .ws-card-variants {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+
+  .ws-variant-chip {
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    letter-spacing: 0.04em;
+    background: rgba(0,0,0,0.04);
+    color: var(--warm-gray);
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1px solid transparent;
+  }
+  .ws-variant-chip:hover {
+    border-color: var(--teal-light);
+    background: rgba(42,124,111,0.06);
+  }
+  .ws-variant-chip.selected {
+    background: var(--teal);
+    color: #fff;
+    border-color: var(--teal);
+  }
+
+  .ws-card-actions {
+    margin-top: auto;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .ws-qty-input {
+    width: 60px;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    text-align: center;
+    font-size: 0.85rem;
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  .ws-add-btn {
+    flex: 1;
+    padding: 10px 16px;
+    background: var(--teal);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.78rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.3s;
+  }
+  .ws-add-btn:hover { background: var(--teal-deep); }
+  .ws-add-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* ===== FOOTER ===== */
+  .ws-footer {
+    background: var(--charcoal);
+    color: rgba(255,255,255,0.7);
+    padding: 48px 3rem;
+    text-align: center;
+  }
+  .ws-footer h3 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.4rem;
+    font-weight: 400;
+    color: #fff;
+    margin-bottom: 20px;
+  }
+  .ws-footer-terms {
+    max-width: 600px;
+    margin: 0 auto 24px;
+    font-size: 0.8rem;
+    line-height: 1.8;
+    text-align: left;
+  }
+  .ws-footer-contact {
+    font-size: 0.85rem;
+    margin-top: 24px;
+  }
+  .ws-footer-contact a { color: var(--amber-light); text-decoration: none; }
+
+  /* ===== ACCESS DENIED / SIGN IN ===== */
+  .ws-denied {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 40px;
+    background: var(--charcoal);
+    color: #fff;
+  }
+  .ws-denied h1 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 2rem;
+    font-weight: 300;
+    margin-bottom: 16px;
+  }
+  .ws-denied p {
+    font-size: 0.9rem;
+    color: rgba(255,255,255,0.6);
+    max-width: 400px;
+    line-height: 1.6;
+    margin-bottom: 24px;
+  }
+  .ws-denied a {
+    color: var(--amber-light);
+    text-decoration: none;
+    font-size: 0.85rem;
+  }
+  .ws-signin-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 28px;
+    background: #fff;
+    color: var(--charcoal);
+    border: none;
+    border-radius: 4px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: box-shadow 0.2s;
+    margin-bottom: 16px;
+  }
+  .ws-signin-btn:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+  .ws-signin-btn img { width: 20px; height: 20px; }
+  .ws-request-btn {
+    display: inline-block;
+    padding: 10px 24px;
+    background: var(--teal);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.85rem;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    transition: background 0.3s;
+    margin-top: 12px;
+  }
+  .ws-request-btn:hover { background: var(--teal-deep); }
+  .ws-request-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .ws-request-sent {
+    display: inline-block;
+    padding: 10px 24px;
+    background: rgba(45,125,70,0.2);
+    color: #8CD5A0;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    margin-top: 12px;
+  }
+
+  /* ===== LOADING ===== */
+  .ws-loading {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--warm-gray);
+    font-size: 0.9rem;
+  }
+
+  @media (max-width: 768px) {
+    .ws-header { padding: 100px 1.5rem 32px; }
+    .ws-header h1 { font-size: 2rem; }
+    .ws-filters { padding: 12px 1rem; top: 60px; }
+    .ws-grid { padding: 20px 1rem 40px; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+    .ws-footer { padding: 32px 1.5rem; }
+  }
+</style>
+</head>
+<body>
+
+  <!-- Loading state -->
+  <div id="wsLoading" class="ws-loading">Loading catalog...</div>
+
+  <!-- Sign in prompt (shown when not logged in) -->
+  <div id="wsSignIn" class="ws-denied" style="display:none;">
+    <img src="images/logo.png" alt="Shir Glassworks" style="width:140px;margin-bottom:24px;">
+    <h1>Shir Glassworks</h1>
+    <p>Sign in to access the wholesale catalog.</p>
+    <button class="ws-signin-btn" onclick="wsGoogleSignIn()">
+      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google">
+      Sign in with Google
+    </button>
+    <div style="margin-top:8px;">
+      <a href="shop.html" style="color:var(--amber-light);text-decoration:none;font-size:0.8rem;">Browse retail shop instead &rarr;</a>
+    </div>
+  </div>
+
+  <!-- Access denied (shown when signed in but not authorized) -->
+  <div id="wsDenied" class="ws-denied" style="display:none;">
+    <img src="images/logo.png" alt="Shir Glassworks" style="width:140px;margin-bottom:24px;">
+    <h1>Shir Glassworks</h1>
+    <p>This catalog is available to authorized wholesale buyers.</p>
+    <div id="wsDeniedUserInfo" style="font-size:0.8rem;color:rgba(255,255,255,0.5);margin-bottom:16px;"></div>
+    <div id="wsRequestArea"></div>
+    <div style="margin-top:16px;">
+      <a href="shop.html" style="color:var(--amber-light);text-decoration:none;font-size:0.8rem;">Browse retail shop instead &rarr;</a>
+    </div>
+  </div>
+
+  <!-- Main catalog (hidden until token validated) -->
+  <div id="wsMain" style="display:none;">
+    <nav>
+      <a href="index.html" class="nav-logo">
+        <img src="favicon.svg" alt="Shir Glassworks">
+      </a>
+      <ul class="nav-links" id="navLinks">
+        <li><a href="index.html">Home</a></li>
+        <li><a href="shop.html" class="nav-shop">Shop</a></li>
+        <li><a href="commission.html">Commissions</a></li>
+        <li><a href="orders.html">Orders</a></li>
+        <li><a href="wholesale.html">Wholesale</a></li>
+        <li><a href="#" onclick="event.preventDefault(); siteSignIn();">Sign In</a></li>
+      </ul>
+      <button class="nav-toggle" onclick="document.getElementById('navLinks').classList.toggle('open');">
+        <span></span><span></span><span></span>
+      </button>
+    </nav>
+
+    <header class="ws-header">
+      <div class="ws-subtitle">2026 Wholesale Catalog</div>
+      <h1>Shir Glassworks</h1>
+      <div class="ws-contact">
+        139 Conway St., Greenfield, MA 01301 &nbsp;&middot;&nbsp;
+        <a href="tel:9782012458">978-201-2458</a> &nbsp;&middot;&nbsp;
+        <a href="mailto:ShirGlassworks@gmail.com">ShirGlassworks@gmail.com</a>
+      </div>
+    </header>
+
+    <div class="ws-filters" id="wsFilters"></div>
+
+    <div class="ws-grid" id="wsGrid">
+      <div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--warm-gray);">Loading products...</div>
+    </div>
+
+    <footer class="ws-footer">
+      <h3>Shipping &amp; Credit Terms</h3>
+      <div class="ws-footer-terms">
+        <strong>First Order Minimum:</strong> $300<br>
+        <strong>Payment:</strong> Check or credit card<br>
+        <strong>Credit Terms:</strong> Full payment on first three orders. Net 30 for following orders.<br>
+        <strong>Shipping:</strong> Estimated at time of first order. Following orders charged exact shipping. Free on orders over $350.<br>
+        <strong>Turnaround:</strong> Orders filled in sequence. Most ship within 30 days.<br>
+        <strong>Returns:</strong> Notify within one week of receipt with photos for damaged goods. Case-by-case basis.
+      </div>
+      <div class="ws-footer-contact">
+        Questions? <a href="mailto:ShirGlassworks@gmail.com">ShirGlassworks@gmail.com</a> &nbsp;&middot;&nbsp; <a href="tel:9782012458">978-201-2458</a>
+      </div>
+      <div style="margin-top:24px;font-size:0.7rem;color:rgba(255,255,255,0.3);">
+        &copy; 2026 Shir Glassworks &nbsp;&middot;&nbsp; Handmade in Greenfield, MA
+      </div>
+    </footer>
+  </div>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
+<script src="storefront-tenant.js"></script>
+<script src="cart.js"></script>
+<script src="checkout.js"></script>
+<script>
+(function() {
+  'use strict';
+
+  var db, products = {}, allProducts = [];
+  var currentCategory = 'all';
+  var selectedOptions = {}; // pid -> { label: value }
+
+  // Category mapping for wholesale products
+  var CATEGORY_MAP = {
+    'drinkware': 'Drinkware',
+    'decoration': 'Decorative',
+    'jewelry': 'Jewelry',
+    'figurines': 'Figurines',
+    'vases': 'Decorative'
+  };
+  var CATEGORY_ORDER = ['Drinkware', 'Decorative', 'Jewelry', 'Figurines'];
+
+  // Color swatch mapping for visual chips
+  var COLOR_HEX = {
+    'Rose': '#E8A0BF', 'Gold': '#D4A843', 'Emerald': '#2E8B57',
+    'Aqua': '#7EC8C8', 'Cobalt': '#2A4FC0', 'Violet': '#8B5CF6',
+    'White': '#F5F5F5', 'Tangerine': '#FF8C42', 'Blue': '#4A90D9',
+    'Mix': 'linear-gradient(135deg, #E8A0BF, #D4A843, #2E8B57, #7EC8C8)',
+    'Pink': '#FFB6C1', 'Yellow': '#F5D547', 'Scarlet': '#CF2734',
+    'Red': '#CC3333', 'Orange': '#FF8C42', 'Teal': '#2A7C6F',
+    'Rainbow Mix': 'linear-gradient(135deg, #E8A0BF, #D4A843, #2E8B57, #7EC8C8, #8B5CF6)'
+  };
+
+  var wsCurrentUser = null;
+
+  // ── Auth-based access control ──
+  function init() {
+    // Initialize Firebase
+    try { db = firebase.app().database(); } catch (e) {
+      firebase.initializeApp({
+        apiKey: 'AIzaSyDZevV_F87F1AKGqUPKuNIrHMybOc61D7s',
+        authDomain: 'shir-glassworks.firebaseapp.com',
+        databaseURL: 'https://shir-glassworks-default-rtdb.firebaseio.com',
+        projectId: 'shir-glassworks'
+      });
+      db = firebase.database();
+    }
+
+    // Listen for auth state changes
+    firebase.auth().onAuthStateChanged(function(user) {
+      wsCurrentUser = user;
+      if (!user || user.isAnonymous) {
+        showSignIn();
+      } else {
+        checkWholesaleAccess(user);
+      }
+    });
+  }
+
+  function showSignIn() {
+    document.getElementById('wsLoading').style.display = 'none';
+    document.getElementById('wsSignIn').style.display = '';
+    document.getElementById('wsDenied').style.display = 'none';
+    document.getElementById('wsMain').style.display = 'none';
+  }
+
+  function showDenied(user) {
+    document.getElementById('wsLoading').style.display = 'none';
+    document.getElementById('wsSignIn').style.display = 'none';
+    document.getElementById('wsDenied').style.display = '';
+    document.getElementById('wsMain').style.display = 'none';
+
+    // Show who is signed in
+    var infoEl = document.getElementById('wsDeniedUserInfo');
+    if (infoEl && user) {
+      infoEl.textContent = 'Signed in as ' + (user.email || user.displayName || 'unknown');
+    }
+
+    // Check if a request is already pending
+    var emailKey = emailToKey(user.email);
+    db.ref(TENANT_ID + '/admin/wholesaleRequests')
+      .orderByChild('emailKey').equalTo(emailKey)
+      .limitToLast(1).once('value').then(function(snap) {
+        var area = document.getElementById('wsRequestArea');
+        if (!area) return;
+        var val = snap.val();
+        var hasPending = false;
+        if (val) {
+          Object.keys(val).forEach(function(k) {
+            if (val[k].status === 'pending') hasPending = true;
+          });
+        }
+        if (hasPending) {
+          area.innerHTML = '<div class="ws-request-sent">Access request pending — you\'ll be notified when approved.</div>';
+        } else {
+          area.innerHTML = '<button class="ws-request-btn" onclick="wsRequestAccess()">Request Wholesale Access</button>';
+        }
+      });
+  }
+
+  function showCatalog() {
+    document.getElementById('wsLoading').style.display = 'none';
+    document.getElementById('wsSignIn').style.display = 'none';
+    document.getElementById('wsDenied').style.display = 'none';
+    document.getElementById('wsMain').style.display = '';
+    loadProducts();
+  }
+
+  function checkWholesaleAccess(user) {
+    if (!user || !user.email) { showDenied(user); return; }
+    var emailKey = emailToKey(user.email);
+    db.ref(TENANT_ID + '/admin/wholesaleAuthorized/' + emailKey)
+      .once('value').then(function(snap) {
+        var val = snap.val();
+        if (val && val.active !== false) {
+          showCatalog();
+        } else {
+          showDenied(user);
+        }
+      }).catch(function() {
+        showDenied(user);
+      });
+  }
+
+  // Sanitize email for use as Firebase key (replace . with ,)
+  function emailToKey(email) {
+    if (!email) return '';
+    return email.toLowerCase().replace(/\./g, ',');
+  }
+
+  // Google sign-in for wholesale
+  window.wsGoogleSignIn = function() {
+    var provider = new firebase.auth.GoogleAuthProvider();
+    firebase.auth().signInWithPopup(provider).catch(function(err) {
+      if (err.code !== 'auth/popup-closed-by-user') {
+        console.warn('Sign-in error:', err.message);
+      }
+    });
+  };
+
+  // Request wholesale access
+  window.wsRequestAccess = function() {
+    if (!wsCurrentUser || !wsCurrentUser.email) return;
+
+    var btn = document.querySelector('.ws-request-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+
+    var requestId = db.ref(TENANT_ID + '/admin/wholesaleRequests').push().key;
+    var data = {
+      email: wsCurrentUser.email,
+      emailKey: emailToKey(wsCurrentUser.email),
+      displayName: wsCurrentUser.displayName || '',
+      photoURL: wsCurrentUser.photoURL || '',
+      uid: wsCurrentUser.uid,
+      status: 'pending',
+      createdAt: new Date().toISOString()
+    };
+
+    db.ref(TENANT_ID + '/admin/wholesaleRequests/' + requestId).set(data).then(function() {
+      var area = document.getElementById('wsRequestArea');
+      if (area) {
+        area.innerHTML = '<div class="ws-request-sent">Access request sent! You\'ll be notified when approved.</div>';
+      }
+    }).catch(function(err) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Request Wholesale Access'; }
+      alert('Error sending request: ' + err.message);
+    });
+  };
+
+  // ── Load products ──
+  function loadProducts() {
+    db.ref(TENANT_ID + '/public/products').once('value').then(function(snap) {
+      products = snap.val() || {};
+      allProducts = [];
+
+      Object.keys(products).forEach(function(pid) {
+        var p = products[pid];
+        // Only show products with a wpid (wholesale product ID)
+        if (!p.wpid) return;
+        if (p.availability === 'discontinued') return;
+        p._pid = pid;
+        allProducts.push(p);
+      });
+
+      // Sort by wpid numeric value
+      allProducts.sort(function(a, b) {
+        var na = parseFloat(a.wpid) || 0;
+        var nb = parseFloat(b.wpid) || 0;
+        return na - nb;
+      });
+
+      renderFilters();
+      renderGrid();
+    });
+  }
+
+  // ── Filters ──
+  function renderFilters() {
+    var cats = {};
+    allProducts.forEach(function(p) {
+      var cat = getCategory(p);
+      cats[cat] = (cats[cat] || 0) + 1;
+    });
+
+    var el = document.getElementById('wsFilters');
+    var html = '<button class="ws-filter-btn' + (currentCategory === 'all' ? ' active' : '') + '" onclick="wsFilter(\'all\')">All (' + allProducts.length + ')</button>';
+    CATEGORY_ORDER.forEach(function(cat) {
+      if (cats[cat]) {
+        html += '<button class="ws-filter-btn' + (currentCategory === cat ? ' active' : '') + '" onclick="wsFilter(\'' + cat + '\')">' + cat + ' (' + cats[cat] + ')</button>';
+      }
+    });
+    el.innerHTML = html;
+  }
+
+  window.wsFilter = function(cat) {
+    currentCategory = cat;
+    renderFilters();
+    renderGrid();
+  };
+
+  function getCategory(p) {
+    if (!p.categories || !p.categories.length) return 'Decorative';
+    for (var i = 0; i < p.categories.length; i++) {
+      if (CATEGORY_MAP[p.categories[i]]) return CATEGORY_MAP[p.categories[i]];
+    }
+    return 'Decorative';
+  }
+
+  // ── Grid ──
+  function renderGrid() {
+    var filtered = currentCategory === 'all'
+      ? allProducts
+      : allProducts.filter(function(p) { return getCategory(p) === currentCategory; });
+
+    var el = document.getElementById('wsGrid');
+
+    if (filtered.length === 0) {
+      el.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:60px;color:var(--warm-gray);">No products in this category.</div>';
+      return;
+    }
+
+    // Group by category
+    var groups = {};
+    filtered.forEach(function(p) {
+      var cat = getCategory(p);
+      if (!groups[cat]) groups[cat] = [];
+      groups[cat].push(p);
+    });
+
+    var html = '';
+    CATEGORY_ORDER.forEach(function(cat) {
+      if (!groups[cat]) return;
+      if (currentCategory === 'all') {
+        html += '<div class="ws-category-heading">' + cat + '</div>';
+      }
+      groups[cat].forEach(function(p) {
+        html += renderCard(p);
+      });
+    });
+
+    el.innerHTML = html;
+  }
+
+  function renderCard(p) {
+    var pid = p._pid;
+    var imgHtml = (p.images && p.images.length > 0)
+      ? '<img class="ws-card-img" src="' + esc(p.images[0]) + '" alt="' + esc(p.name) + '" loading="lazy">'
+      : '<div class="ws-card-img-placeholder">&#9670;</div>';
+
+    // Price display
+    var priceHtml = '';
+    if (p.wholesalePriceVariants) {
+      // Multiple prices (e.g., Pumpkins L/M/S)
+      var prices = [];
+      Object.keys(p.wholesalePriceVariants).forEach(function(k) {
+        var label = k.replace(/^\d+/, '');
+        prices.push(label + ': $' + (p.wholesalePriceVariants[k] / 100).toFixed(0));
+      });
+      priceHtml = prices.join(' / ');
+    } else {
+      priceHtml = '$' + (p.wholesalePriceCents / 100).toFixed(0);
+    }
+
+    // Variant chips
+    var variantsHtml = '';
+    if (p.options && p.options.length > 0) {
+      p.options.forEach(function(opt) {
+        variantsHtml += '<div class="ws-card-variants" data-pid="' + esc(pid) + '" data-label="' + esc(opt.label) + '">';
+        opt.choices.forEach(function(choice) {
+          var sel = selectedOptions[pid] && selectedOptions[pid][opt.label] === choice;
+          var colorStyle = '';
+          if (COLOR_HEX[choice]) {
+            var bg = COLOR_HEX[choice];
+            if (bg.indexOf('gradient') !== -1) {
+              colorStyle = 'background:' + bg + ';color:#fff;border-color:transparent;';
+            } else {
+              colorStyle = 'background:' + bg + ';color:' + (isLight(bg) ? '#333' : '#fff') + ';border-color:transparent;';
+            }
+          }
+          variantsHtml += '<span class="ws-variant-chip' + (sel ? ' selected' : '') + '" ' +
+            'data-pid="' + esc(pid) + '" data-label="' + esc(opt.label) + '" data-value="' + esc(choice) + '" ' +
+            'onclick="wsSelectVariant(this)" ' +
+            'style="' + colorStyle + '">' + esc(choice) + '</span>';
+        });
+        variantsHtml += '</div>';
+      });
+    }
+
+    // Check if all required options are selected
+    var allSelected = true;
+    if (p.options && p.options.length > 0) {
+      p.options.forEach(function(opt) {
+        if (!selectedOptions[pid] || !selectedOptions[pid][opt.label]) allSelected = false;
+      });
+    }
+
+    return '<div class="ws-card">' +
+      imgHtml +
+      '<div class="ws-card-body">' +
+        '<div class="ws-card-wpid">#' + esc(p.wpid) + '</div>' +
+        '<div class="ws-card-name">' + esc(p.name) + '</div>' +
+        '<div class="ws-card-price">' + priceHtml + '</div>' +
+        variantsHtml +
+        '<div class="ws-card-actions">' +
+          '<input type="number" class="ws-qty-input" id="wsQty_' + esc(pid) + '" value="6" min="1" max="9999">' +
+          '<button class="ws-add-btn" onclick="wsAddToCart(\'' + esc(pid) + '\')"' +
+            (!allSelected && p.options && p.options.length > 0 ? ' disabled title="Select options first"' : '') +
+            '>Add to Cart</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function isLight(hex) {
+    if (!hex || hex.indexOf('#') !== 0) return false;
+    var r = parseInt(hex.substr(1,2), 16);
+    var g = parseInt(hex.substr(3,2), 16);
+    var b = parseInt(hex.substr(5,2), 16);
+    return (r * 299 + g * 587 + b * 114) / 1000 > 160;
+  }
+
+  // ── Variant selection ──
+  window.wsSelectVariant = function(el) {
+    var pid = el.getAttribute('data-pid');
+    var label = el.getAttribute('data-label');
+    var value = el.getAttribute('data-value');
+
+    if (!selectedOptions[pid]) selectedOptions[pid] = {};
+    selectedOptions[pid][label] = value;
+
+    // Re-render just the variant chips for this product (toggle selected class)
+    var chips = document.querySelectorAll('.ws-variant-chip[data-pid="' + pid + '"][data-label="' + label + '"]');
+    chips.forEach(function(c) {
+      c.classList.toggle('selected', c.getAttribute('data-value') === value);
+    });
+
+    // Enable/disable add button
+    var p = products[pid];
+    var allSel = true;
+    if (p.options) {
+      p.options.forEach(function(opt) {
+        if (!selectedOptions[pid] || !selectedOptions[pid][opt.label]) allSel = false;
+      });
+    }
+    // Find the add button in this card
+    var btn = el.closest('.ws-card').querySelector('.ws-add-btn');
+    if (btn) {
+      btn.disabled = !allSel;
+      btn.title = allSel ? '' : 'Select options first';
+    }
+  };
+
+  // ── Add to cart ──
+  window.wsAddToCart = function(pid) {
+    var p = products[pid];
+    if (!p) return;
+
+    var qtyInput = document.getElementById('wsQty_' + pid);
+    var qty = parseInt(qtyInput ? qtyInput.value : '1', 10) || 1;
+
+    var opts = selectedOptions[pid] || {};
+
+    // Determine wholesale price — check for variant-specific pricing
+    var priceCents = p.wholesalePriceCents;
+    if (p.wholesalePriceVariants && opts.Size) {
+      // Map size to variant key (e.g., "large" -> "10L")
+      var sizeMap = { 'small': 'S', 'medium': 'M', 'large': 'L' };
+      var sizeKey = p.wpid + (sizeMap[(opts.Size || '').toLowerCase()] || 'M');
+      if (p.wholesalePriceVariants[sizeKey]) {
+        priceCents = p.wholesalePriceVariants[sizeKey];
+      }
+    }
+
+    var priceDisplay = '$' + (priceCents / 100).toFixed(2);
+
+    ShirCart.addItem({
+      pid: pid,
+      name: p.name,
+      price: priceDisplay,
+      priceCents: priceCents,
+      image: (p.images && p.images.length > 0) ? p.images[0] : '',
+      options: Object.assign({}, opts),
+      qty: qty,
+      isWholesale: true
+    });
+
+    ShirCart.showToast(qty + 'x ' + p.name + ' added to cart');
+  };
+
+  // ── Helpers ──
+  function esc(s) {
+    if (!s) return '';
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  // ── Init ──
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+</body>
+</html>

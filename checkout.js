@@ -14,6 +14,7 @@
     shipping: { name: '', address1: '', address2: '', city: '', state: '', zip: '' },
     billing: { same: true, name: '', address1: '', address2: '', city: '', state: '', zip: '' },
     shippingMethod: null,      // { key, label, description, price }
+    paymentMethod: 'card',     // 'card' | 'check' — check bypasses Square for wholesale
     coupon: null,              // { code, type, value, discount } or null
     taxRate: 0,
     taxState: ''
@@ -820,6 +821,25 @@
       '<div class="review-address">' + esc(checkoutData.email) + '</div>' +
     '</div>';
 
+    // Payment method — show check option for wholesale orders
+    var hasWholesale = window.ShirCart.hasWholesaleItems && window.ShirCart.hasWholesaleItems();
+    if (hasWholesale) {
+      var selectedMethod = checkoutData.paymentMethod || 'card';
+      html += '<div class="review-section">' +
+        '<div class="review-section-header"><span class="review-section-title">Payment Method</span></div>' +
+        '<div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">' +
+          '<label style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid ' + (selectedMethod === 'card' ? 'var(--teal)' : '#ddd') + ';border-radius:6px;cursor:pointer;background:' + (selectedMethod === 'card' ? 'rgba(42,124,111,0.05)' : '#fff') + ';">' +
+            '<input type="radio" name="payMethod" value="card" data-co="pay-method"' + (selectedMethod === 'card' ? ' checked' : '') + '>' +
+            '<div><div style="font-size:0.85rem;font-weight:500;">Credit Card</div><div style="font-size:0.75rem;color:var(--warm-gray);">Pay now via Square</div></div>' +
+          '</label>' +
+          '<label style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid ' + (selectedMethod === 'check' ? 'var(--teal)' : '#ddd') + ';border-radius:6px;cursor:pointer;background:' + (selectedMethod === 'check' ? 'rgba(42,124,111,0.05)' : '#fff') + ';">' +
+            '<input type="radio" name="payMethod" value="check" data-co="pay-method"' + (selectedMethod === 'check' ? ' checked' : '') + '>' +
+            '<div><div style="font-size:0.85rem;font-weight:500;">Pay by Check</div><div style="font-size:0.75rem;color:var(--warm-gray);">Mail check — order held until verification</div></div>' +
+          '</label>' +
+        '</div>' +
+      '</div>';
+    }
+
     // Totals
     html += '<div class="review-section">' + buildTotalsHtml(subtotal) + '</div>';
 
@@ -827,16 +847,36 @@
 
     body.innerHTML = html;
 
+    // Attach payment method change listeners
+    if (hasWholesale) {
+      var radios = body.querySelectorAll('[data-co="pay-method"]');
+      for (var r = 0; r < radios.length; r++) {
+        radios[r].addEventListener('change', function() {
+          checkoutData.paymentMethod = this.value;
+          renderReview(); // re-render to update styling
+        });
+      }
+    }
+
     // Footer
+    var btnLabel = (hasWholesale && checkoutData.paymentMethod === 'check') ? 'Place Order (Pay by Check)' : 'Proceed to Payment';
     footer.style.display = '';
     footer.innerHTML =
-      '<button class="checkout-btn-primary" data-co="place-order">Proceed to Payment</button>' +
+      '<button class="checkout-btn-primary" data-co="place-order">' + btnLabel + '</button>' +
       '<button class="checkout-back-link" data-co="review-back">Back to Shipping</button>';
   }
 
   // ── Place Order ──
   function placeOrder() {
     if (isSubmitting) return;
+
+    // Check if this is a pay-by-check wholesale order
+    var hasWholesale = window.ShirCart.hasWholesaleItems && window.ShirCart.hasWholesaleItems();
+    if (hasWholesale && checkoutData.paymentMethod === 'check') {
+      placeCheckOrder();
+      return;
+    }
+
     isSubmitting = true;
 
     var btn = document.querySelector('[data-co="place-order"]');
@@ -856,7 +896,7 @@
       shipping: checkoutData.shipping,
       billing: checkoutData.billing,
       items: items.map(function (it) {
-        return { pid: it.pid, name: it.name, options: it.options, price: it.price, qty: it.qty };
+        return { pid: it.pid, name: it.name, options: it.options, price: it.price, qty: it.qty, isWholesale: it.isWholesale || false };
       }),
       shippingMethodKey: 'calculated',
       couponCode: checkoutData.coupon ? checkoutData.coupon.code : null,
@@ -908,6 +948,112 @@
         window.ShirCart.showToast(result && result.error ? result.error : 'Order failed. Please try again.');
       }
     });
+  }
+
+  // ── Place Order: Pay by Check (wholesale) ──
+  // Bypasses Square — creates order in Firebase wholesale orders queue
+  function placeCheckOrder() {
+    isSubmitting = true;
+    var btn = document.querySelector('[data-co="place-order"]');
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="checkout-spinner"></span> Placing Order...';
+    }
+
+    var items = window.ShirCart.getItems();
+    var user = window.ShirCart.getCurrentUser();
+    var subtotal = calcSubtotal();
+    var shippingCost = checkoutData.shippingMethod ? checkoutData.shippingMethod.price : 0;
+    var totalCents = Math.round((subtotal + shippingCost) * 100);
+
+    var orderNumber = 'WS-' + Date.now().toString(36).toUpperCase();
+
+    var orderData = {
+      orderNumber: orderNumber,
+      status: 'pending_check_verification',
+      paymentMethod: 'check',
+      type: 'wholesale',
+      source: 'wholesale_catalog',
+      buyerName: checkoutData.shipping.name || '',
+      buyerEmail: checkoutData.email || '',
+      email: checkoutData.email || '',
+      buyerPhone: '',
+      shipping: checkoutData.shipping,
+      billing: checkoutData.billing,
+      items: items.map(function(it) {
+        return {
+          pid: it.pid,
+          name: it.name,
+          productName: it.name,
+          options: it.options || {},
+          selectedOptions: it.options || {},
+          priceCents: it.priceCents || Math.round(parsePrice(it.price) * 100),
+          price: (it.priceCents || Math.round(parsePrice(it.price) * 100)) / 100,
+          qty: it.qty || 1,
+          isWholesale: it.isWholesale || false
+        };
+      }),
+      subtotalCents: Math.round(subtotal * 100),
+      shippingCents: Math.round(shippingCost * 100),
+      totalCents: totalCents,
+      total: totalCents / 100,
+      shippingMethod: checkoutData.shippingMethod || null,
+      uid: user ? user.uid : 'anonymous',
+      placedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString()
+    };
+
+    // Write to Firebase orders (same path as retail, with type: 'wholesale')
+    var db = getDb();
+    if (!db) {
+      isSubmitting = false;
+      if (btn) { btn.disabled = false; btn.textContent = 'Place Order (Pay by Check)'; }
+      window.ShirCart.showToast('Database not available', true);
+      return;
+    }
+
+    var orderRef = db.ref(TENANT_ID + '/orders').push();
+    orderRef.set(orderData).then(function() {
+      isSubmitting = false;
+      window.ShirCart.clear();
+      trackCheckoutEvent('wholesale_check_order_placed');
+
+      // Show confirmation
+      renderCheckOrderConfirmation(orderNumber);
+    }).catch(function(err) {
+      isSubmitting = false;
+      if (btn) { btn.disabled = false; btn.textContent = 'Place Order (Pay by Check)'; }
+      window.ShirCart.showToast('Order failed: ' + err.message, true);
+    });
+  }
+
+  function renderCheckOrderConfirmation(orderNumber) {
+    currentStep = 'confirmation';
+    var body = document.getElementById('cartDrawerBody');
+    var footer = document.getElementById('cartDrawerFooter');
+    if (!body) return;
+
+    body.innerHTML =
+      '<div class="checkout-confirmation">' +
+        '<div class="confirmation-icon">&#10003;</div>' +
+        '<div class="confirmation-title">Order Placed!</div>' +
+        '<div class="confirmation-order-id">Order: ' + esc(orderNumber) + '</div>' +
+        '<div class="confirmation-message">' +
+          'Thank you for your wholesale order! Your order is being held pending check payment.<br><br>' +
+          '<strong>Please mail your check to:</strong><br>' +
+          'Shir Glassworks<br>' +
+          '139 Conway St.<br>' +
+          'Greenfield, MA 01301<br><br>' +
+          'A confirmation has been sent to <strong>' + esc(checkoutData.email) + '</strong>.<br>' +
+          'Your order will be processed once payment is verified.' +
+        '</div>' +
+      '</div>';
+
+    if (footer) {
+      footer.style.display = '';
+      footer.innerHTML =
+        '<button class="checkout-btn-primary" data-co="conf-done">Continue Browsing</button>';
+    }
   }
 
   // ── Render: Confirmation ──
@@ -969,6 +1115,7 @@
       shipping: { name: '', address1: '', address2: '', city: '', state: '', zip: '' },
       billing: { same: true, name: '', address1: '', address2: '', city: '', state: '', zip: '' },
       shippingMethod: null,
+      paymentMethod: 'card',
       coupon: null,
       taxRate: 0,
       taxState: ''

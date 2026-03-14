@@ -845,6 +845,7 @@
     <li><a href="shop.html" class="nav-shop">Shop</a></li>
     <li><a href="commission.html">Commissions</a></li>
     <li><a href="orders.html">Orders</a></li>
+    <li><a href="wholesale.html">Wholesale</a></li>
   <li><a href="#" onclick="event.preventDefault(); siteSignIn();">Sign In</a></li>
   </ul>
   <button class="nav-toggle" aria-label="Menu">
@@ -1025,7 +1026,10 @@
       'delivered': 'Delivered',
       'cancelled': 'Cancelled',
       'payment_failed': 'Payment Failed',
-      'refunded': 'Refunded'
+      'refunded': 'Refunded',
+      'pending_check_verification': 'Pending Check',
+      'paid': 'Paid',
+      'completed': 'Completed'
     };
     return labels[status] || (status || 'Unknown');
   }
@@ -1228,11 +1232,13 @@
     var status = order.status || 'unknown';
     var date = formatDate(order.placedAt || order.pendingPaymentAt || order.createdAt);
     var total = order.total != null ? formatPrice(order.total) : '';
+    var wsBadge = order._isWholesale ? '<span style="display:inline-block;font-size:0.6rem;padding:2px 6px;background:rgba(42,124,111,0.15);color:#2A7C6F;border-radius:3px;margin-left:6px;vertical-align:middle;letter-spacing:0.06em;">WHOLESALE</span>' : '';
+    var payBadge = order.paymentMethod === 'check' ? '<span style="display:inline-block;font-size:0.6rem;padding:2px 6px;background:rgba(196,133,60,0.15);color:#C4853C;border-radius:3px;margin-left:4px;vertical-align:middle;">CHECK</span>' : '';
 
     return '<div class="order-card" data-order-id="' + esc(order.orderId || order.id || '') + '">' +
       '<div class="order-card-header" onclick="toggleOrderDetail(this)">' +
         '<div class="order-card-left">' +
-          '<div class="order-number">' + esc(orderNum) + '</div>' +
+          '<div class="order-number">' + esc(orderNum) + wsBadge + payBadge + '</div>' +
           '<div class="order-date">' + esc(date) + '</div>' +
         '</div>' +
         '<div class="order-card-right">' +
@@ -1304,6 +1310,8 @@
   };
 
   // ── Signed-In Order Fetch ──
+  // All orders (retail + wholesale) live in the unified /orders/ path.
+  // shirGetMyOrders cloud function returns all orders for the authenticated user.
   function fetchSignedInOrders() {
     var container = document.getElementById('signedInOrders');
     container.innerHTML = '<div class="lookup-loading" style="display:block;">Loading your orders...</div>';
@@ -1313,7 +1321,12 @@
         container.innerHTML = '<div class="no-orders">Unable to load orders. Please try again.</div>';
         return;
       }
-      renderOrderList(result.orders, container);
+      // Tag wholesale orders for badge display
+      var orders = (result.orders || []).map(function(o) {
+        if (o.type === 'wholesale') o._isWholesale = true;
+        return o;
+      });
+      renderOrderList(orders, container);
     });
   }
 

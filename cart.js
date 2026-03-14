@@ -19,6 +19,7 @@
     projectId: "shir-glassworks"
   };
   var MAX_QTY = 10;
+  var MAX_QTY_WHOLESALE = 9999;
 
   // ── Firebase App ──
   // Use the default Firebase app (initialized by the page) so auth state
@@ -87,10 +88,12 @@
   function addItem(item) {
     if (!item || !item.pid || !item.name) return cart;
 
+    var maxQty = item.isWholesale ? MAX_QTY_WHOLESALE : MAX_QTY;
     var key = optionKey(item.pid, item.options);
     for (var i = 0; i < cart.length; i++) {
       if (optionKey(cart[i].pid, cart[i].options) === key) {
-        cart[i].qty = Math.min((cart[i].qty || 1) + (item.qty || 1), MAX_QTY);
+        var itemMax = cart[i].isWholesale ? MAX_QTY_WHOLESALE : MAX_QTY;
+        cart[i].qty = Math.min((cart[i].qty || 1) + (item.qty || 1), itemMax);
         persist();
         trackEvent('cart_add', item.pid);
         renderDrawerItems();
@@ -104,9 +107,11 @@
       pid: item.pid,
       name: item.name,
       price: item.price || '',
+      priceCents: item.priceCents || 0,
       image: item.image || '',
       options: item.options || {},
-      qty: Math.min(Math.max(item.qty || 1, 1), MAX_QTY),
+      qty: Math.min(Math.max(item.qty || 1, 1), maxQty),
+      isWholesale: item.isWholesale || false,
       addedAt: Date.now()
     };
     cart.push(newItem);
@@ -136,10 +141,10 @@
     qty = parseInt(qty, 10);
     if (isNaN(qty) || qty < 0) return cart;
     if (qty === 0) return removeItem(cartItemId);
-    qty = Math.min(qty, MAX_QTY);
-
     for (var i = 0; i < cart.length; i++) {
       if (cart[i].cartItemId === cartItemId) {
+        var itemMaxQty = cart[i].isWholesale ? MAX_QTY_WHOLESALE : MAX_QTY;
+        qty = Math.min(qty, itemMaxQty);
         cart[i].qty = qty;
         persist();
         trackEvent('cart_update', cart[i].pid);
@@ -516,21 +521,37 @@
         ? '<img class="cart-item-img" src="' + escAttr(item.image) + '" alt="' + escAttr(item.name) + '">'
         : '<div class="cart-item-img" style="display:flex;align-items:center;justify-content:center;color:#9B958E;font-size:1.5rem;">&#9670;</div>';
 
+      var itemMaxQty = item.isWholesale ? MAX_QTY_WHOLESALE : MAX_QTY;
+      var qtyHtml;
+      if (item.isWholesale) {
+        // Wholesale: editable input for qty
+        qtyHtml = '<div class="qty-stepper">' +
+          '<button class="qty-btn" data-action="dec" data-id="' + escAttr(item.cartItemId) + '"' +
+            (item.qty <= 1 ? ' disabled' : '') + '>&minus;</button>' +
+          '<input type="number" class="qty-input" data-id="' + escAttr(item.cartItemId) + '" value="' + item.qty + '" min="1" max="' + itemMaxQty + '" style="width:48px;text-align:center;border:1px solid #ddd;border-radius:3px;padding:2px 4px;font-size:0.85rem;">' +
+          '<button class="qty-btn" data-action="inc" data-id="' + escAttr(item.cartItemId) + '">+</button>' +
+        '</div>';
+      } else {
+        qtyHtml = '<div class="qty-stepper">' +
+          '<button class="qty-btn" data-action="dec" data-id="' + escAttr(item.cartItemId) + '"' +
+            (item.qty <= 1 ? ' disabled' : '') + '>&minus;</button>' +
+          '<span class="qty-value">' + item.qty + '</span>' +
+          '<button class="qty-btn" data-action="inc" data-id="' + escAttr(item.cartItemId) + '"' +
+            (item.qty >= MAX_QTY ? ' disabled' : '') + '>+</button>' +
+        '</div>';
+      }
+
+      var wholesaleBadge = item.isWholesale ? '<span style="font-size:0.65rem;background:rgba(21,101,192,0.15);color:#1565C0;padding:2px 6px;border-radius:3px;margin-left:6px;">WHOLESALE</span>' : '';
+
       html +=
         '<div class="cart-item" data-cart-id="' + escAttr(item.cartItemId) + '">' +
           imgHtml +
           '<div class="cart-item-details">' +
-            '<div class="cart-item-name">' + escHtml(item.name) + '</div>' +
+            '<div class="cart-item-name">' + escHtml(item.name) + wholesaleBadge + '</div>' +
             optionsHtml +
             '<div class="cart-item-row">' +
               '<span class="cart-item-price">' + escHtml(item.price || 'Price on request') + '</span>' +
-              '<div class="qty-stepper">' +
-                '<button class="qty-btn" data-action="dec" data-id="' + escAttr(item.cartItemId) + '"' +
-                  (item.qty <= 1 ? ' disabled' : '') + '>&minus;</button>' +
-                '<span class="qty-value">' + item.qty + '</span>' +
-                '<button class="qty-btn" data-action="inc" data-id="' + escAttr(item.cartItemId) + '"' +
-                  (item.qty >= MAX_QTY ? ' disabled' : '') + '>+</button>' +
-              '</div>' +
+              qtyHtml +
             '</div>' +
             '<button class="cart-item-remove" data-action="remove" data-id="' + escAttr(item.cartItemId) + '">Remove</button>' +
           '</div>' +
@@ -541,17 +562,20 @@
     // Summary + free shipping reminder
     if (summaryEl) {
       var subtotal = 0;
+      var hasWholesale = false;
       for (var s = 0; s < cart.length; s++) {
         var p = parseFloat(String(cart[s].price || '0').replace(/[^0-9.]/g, '')) || 0;
         subtotal += p * (cart[s].qty || 1);
+        if (cart[s].isWholesale) hasWholesale = true;
       }
+      var freeThreshold = hasWholesale ? 350 : 100;
       var summaryText = count + ' item' + (count !== 1 ? 's' : '') + ' in cart';
       if (subtotal > 0) summaryText += ' \u00B7 $' + subtotal.toFixed(2);
       var shippingHtml = '';
-      if (subtotal >= 100) {
+      if (subtotal >= freeThreshold) {
         shippingHtml = '<div style="color:#2D7D46;font-size:0.75rem;margin-top:6px;letter-spacing:0.08em;">&#10003; FREE SHIPPING</div>';
       } else if (subtotal > 0) {
-        var away = (100 - subtotal).toFixed(2);
+        var away = (freeThreshold - subtotal).toFixed(2);
         shippingHtml = '<div style="color:var(--warm-gray);font-size:0.75rem;margin-top:6px;letter-spacing:0.08em;">You\'re $' + away + ' away from free shipping!</div>';
       }
       summaryEl.innerHTML = summaryText + shippingHtml;
@@ -562,6 +586,16 @@
 
     // Delegate clicks on qty buttons and remove
     body.addEventListener('click', handleDrawerClick);
+
+    // Handle wholesale qty input changes
+    body.querySelectorAll('.qty-input').forEach(function(inp) {
+      inp.addEventListener('change', function() {
+        var id = this.getAttribute('data-id');
+        var val = parseInt(this.value, 10);
+        if (isNaN(val) || val < 1) val = 1;
+        updateQty(id, val);
+      });
+    });
   }
 
   function handleDrawerClick(e) {
@@ -652,6 +686,13 @@
   }
 
   // ── Expose Public API ──
+  function hasWholesaleItems() {
+    for (var i = 0; i < cart.length; i++) {
+      if (cart[i].isWholesale) return true;
+    }
+    return false;
+  }
+
   window.ShirCart = {
     getItems: getItems,
     getCount: getCount,
@@ -666,7 +707,8 @@
     signOut: signOut,
     getCurrentUser: function () { return currentUser; },
     getFirebaseApp: function () { return fireApp; },
-    refreshDrawer: function () { renderDrawerItems(); updateBadge(); }
+    refreshDrawer: function () { renderDrawerItems(); updateBadge(); },
+    hasWholesaleItems: hasWholesaleItems
   };
 
   // Global auth functions — used by nav onclick handlers across all pages.
