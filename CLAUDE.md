@@ -1,5 +1,14 @@
 # CLAUDE.md — Shir Glassworks
 
+## Claude Code Bootstrap
+
+**Before making any changes, do the following:**
+
+1. **Read ARCHITECTURE.md** in this repo — it documents the Mast three-app architecture, deployment procedures, data model, and key patterns. Do NOT assume hosting strategy, deploy process, or auth flow.
+2. **Read memory files** — Check `~/.claude/projects/-Users-davidstewart-Downloads/memory/MEMORY.md` for cross-project context, active jobs, and deployment procedures.
+3. **Deploy via `mast_hosting`** — This tenant deploys via the Mast MCP tool, NOT Firebase CLI. Standard command: `mast_hosting(action: "deploy", tenantId: "shirglassworks")`. If MCP tools aren't in your tool list, use the HTTP fallback documented in memory.
+4. **After context compaction** — Re-read this bootstrap section, ARCHITECTURE.md, and memory files. Never improvise from summary alone.
+
 ## What This App Is
 Full website + studio admin platform for Shir Glassworks glass art studio. Covers: public storefront (shop, commissions, blog), Studio Companion PWA (camera-first POS, production management, inventory, QR scanning), and Market tools (social media content pipeline, newsletter/blog, stories). Firebase RTDB + Storage + Functions. GitHub Pages hosting.
 

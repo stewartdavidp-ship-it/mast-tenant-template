@@ -1,5 +1,17 @@
 # ARCHITECTURE.md — Shir Glassworks
 
+## Mast Platform Context
+
+Shir Glassworks exists within the **Mast three-app architecture**:
+
+1. **Mast** (the platform) — The SaaS product customers subscribe to. The "hosting app" shown to potential customers. When a customer subscribes, a tenant is spun up for them. Think: Shopify (the platform), not a Shopify store.
+2. **Tenants** (e.g., Shir Glassworks) — Each tenant is a self-contained business app (storefront, admin, POS, inventory, orders). Shir Glassworks is tenant #1 (Madeline and Ori's instance). The architecture supports tenant 2, 3... 200, 201.
+3. **Mast Events** — Separate application for show/event organizers (organizers, attendees, vendors). Integrates back to Mast tenants — a Mast tenant (e.g., Shir Glassworks) can also be a vendor at a show managed by Mast Events.
+
+**Key relationship:** Mast Events vendors ARE Mast tenants. A glass artist who subscribes to Mast for their storefront is also a vendor who does craft fairs managed through Mast Events.
+
+**Current state (Mar 2026):** Shir Glassworks (tenant #1) is close to complete. The Mast MCP server was built specifically to onboard customer #2 — `mast_tenants`, `mast_hosting`, `mast_config`, `mast_users` are the tenant provisioning tools. The MastDB abstraction layer in the admin app needs generalization so it works for ANY tenant, not just Shir Glassworks.
+
 ## Overview
 
 Shir Glassworks is a multi-tenant storefront deployed to Firebase Hosting with a Firebase Realtime Database backend. The public site (product catalog, gallery, checkout) uses vanilla JS with no framework. The admin app (`/app/index.html`) is a single-file React 18 app with multi-tenant auth and RBAC.
