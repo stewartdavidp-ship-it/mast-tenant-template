@@ -12,6 +12,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-functions-compat.js"></script>
+  <script src="../storefront-tenant.js"></script>
   <style>
     :root {
       --amber: #C4853C;
@@ -5603,18 +5604,16 @@
 <script>
 // ============================================================
 // Firebase Init
-// DEPLOY: This is the bootstrap Firebase project config. Each tenant
-// deployment has its own Firebase project — update these values when
-// cloning for a new tenant. Cannot be loaded dynamically (chicken-and-egg).
+// Config sourced from storefront-tenant.js (loaded via <script> tag).
+// Each tenant repo has its own copy with the correct values.
 // ============================================================
 const firebaseConfig = {
-  apiKey: "AIzaSyDZevV_F87F1AKGqUPKuNIrHMybOc61D7s",
-  authDomain: "shir-glassworks.firebaseapp.com",
-  databaseURL: "https://shir-glassworks-default-rtdb.firebaseio.com",
-  projectId: "shir-glassworks"
+  apiKey: TENANT_FIREBASE_CONFIG.apiKey,
+  authDomain: TENANT_FIREBASE_CONFIG.authDomain,
+  databaseURL: TENANT_FIREBASE_CONFIG.databaseURL,
+  projectId: TENANT_FIREBASE_CONFIG.projectId,
+  storageBucket: TENANT_FIREBASE_CONFIG.storageBucket
 };
-
-firebaseConfig.storageBucket = "shir-glassworks.firebasestorage.app";
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.database();
@@ -6364,13 +6363,21 @@ const SECTIONS = [
 ];
 const SHOP_SECTION_IDS = ['shop', 'figurines', 'jewelry', 'drinkware', 'vases', 'decoration', 'sculpture'];
 // GitHub image upload
-// GitHub config — resolved from TENANT_CONFIG after auth, with hardcoded fallbacks
-function getGithubRepo() { return (TENANT_CONFIG && TENANT_CONFIG.site && TENANT_CONFIG.site.github) ? TENANT_CONFIG.site.github.repo : 'stewartdavidp-ship-it/shirglassworks'; }
-function getGithubPagesBase() { return (TENANT_CONFIG && TENANT_CONFIG.site && TENANT_CONFIG.site.github) ? TENANT_CONFIG.site.github.pagesBase : 'https://stewartdavidp-ship-it.github.io/shirglassworks'; }
+// GitHub config — resolved from TENANT_CONFIG after auth. No hardcoded fallbacks.
+function getGithubRepo() {
+  if (TENANT_CONFIG && TENANT_CONFIG.site && TENANT_CONFIG.site.github) return TENANT_CONFIG.site.github.repo;
+  console.error('GitHub repo not configured in TENANT_CONFIG — ensure platform RTDB has site.github.repo');
+  return null;
+}
+function getGithubPagesBase() {
+  if (TENANT_CONFIG && TENANT_CONFIG.site && TENANT_CONFIG.site.github) return TENANT_CONFIG.site.github.pagesBase;
+  console.error('GitHub pages base not configured in TENANT_CONFIG — ensure platform RTDB has site.github.pagesBase');
+  return null;
+}
 const GITHUB_IMAGES_PATH = 'images';
-// Legacy constants — used only before TENANT_CONFIG loads. After auth, use getGithubRepo()/getGithubPagesBase().
-var GITHUB_REPO = 'stewartdavidp-ship-it/shirglassworks';
-var GITHUB_PAGES_BASE = 'https://stewartdavidp-ship-it.github.io/shirglassworks';
+// Dynamic — set by loadTenantConfig() after auth
+var GITHUB_REPO = null;
+var GITHUB_PAGES_BASE = null;
 // ============================================================
 // State
 // ============================================================
@@ -6540,10 +6547,8 @@ var DEFAULT_ROLES = {
 var imageLibrary = {};
 var imageLibraryLoaded = false;
 var imageLibraryListener = null;
-// DEPLOY: Default Cloud Functions URL — overwritten by loadTenantConfig() after auth
-var CLOUD_FUNCTIONS_BASE = (typeof TENANT_FIREBASE_CONFIG !== 'undefined' && TENANT_FIREBASE_CONFIG.cloudFunctionsBase)
-  ? TENANT_FIREBASE_CONFIG.cloudFunctionsBase
-  : 'https://us-central1-shir-glassworks.cloudfunctions.net';
+// Cloud Functions URL — sourced from storefront-tenant.js, overwritten by loadTenantConfig() after auth
+var CLOUD_FUNCTIONS_BASE = TENANT_FIREBASE_CONFIG.cloudFunctionsBase;
 
 // callCF — fetch wrapper that injects X-Tenant-ID header on all Cloud Function calls
 function callCF(path, options) {
@@ -6944,7 +6949,7 @@ if (TEST_MODE && new URLSearchParams(window.location.search).get('testmode') ===
   // Uses a non-privileged UID that has NO Firebase write permissions,
   // so the UI is viewable but writes will fail (safe for previewing layout).
   console.warn('[TEST_MODE] Running in test mode — Firebase writes will fail.');
-  var testTenantId = new URLSearchParams(window.location.search).get('tenant') || 'shirglassworks';
+  var testTenantId = new URLSearchParams(window.location.search).get('tenant') || TENANT_ID;
   MastDB.init({ tenantId: testTenantId, db: db }); // Test mode: override with ?tenant= param
   loadTenantConfig(testTenantId).then(function() {
     currentUser = { uid: 'test-local-preview', photoURL: '', displayName: 'Test User (Local)' };
@@ -6982,17 +6987,10 @@ auth.onAuthStateChanged(async function(user) {
   var tenantId = await resolveTenant(user.uid);
   if (!tenantId) {
     // Platform registry lookup failed (no entry or permission denied).
-    // Fallback: This is a per-tenant deployment — resolve tenant from domain,
-    // then verify the user has an admin/user role in that tenant's data.
-    // DEPLOY: Update this map when cloning for a new tenant.
-    var domainTenantMap = {
-      'shirglassworks.com':              'shirglassworks',
-      'www.shirglassworks.com':          'shirglassworks',
-      'shir-glassworks.web.app':         'shirglassworks',
-      'stewartdavidp-ship-it.github.io': 'shirglassworks',
-      'localhost':                        'shirglassworks'
-    };
-    var domainTenant = domainTenantMap[window.location.hostname];
+    // Fallback: This is a per-tenant deployment — resolve tenant from domain
+    // using TENANT_ID from storefront-tenant.js, then verify the user has
+    // an admin/user role in that tenant's data.
+    var domainTenant = (typeof TENANT_ID !== 'undefined' && TENANT_ID !== 'unknown') ? TENANT_ID : null;
     if (domainTenant) {
       console.log('Tenant resolution fallback: using domain-based tenant "' + domainTenant + '" for ' + window.location.hostname);
       // Temporarily init MastDB so we can check admin records
