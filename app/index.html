@@ -7669,7 +7669,7 @@ async function saveSquareConfig() {
   };
 
   try {
-    await firebase.functions().httpsCallable('shirSecretsManager')({
+    await firebase.functions().httpsCallable('secretsManager')({
       action: 'write',
       service: 'square',
       secrets: secrets,
@@ -7688,7 +7688,7 @@ async function saveSquareConfig() {
 
 function loadSquareConfig() {
   var statusEl = document.getElementById('squareConfigStatus');
-  firebase.functions().httpsCallable('shirSecretsManager')({
+  firebase.functions().httpsCallable('secretsManager')({
     action: 'read',
     service: 'square'
   }).then(function(result) {
@@ -7722,7 +7722,7 @@ function loadSquareConfig() {
     if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Configured (' + config.environment + ') — updated ' + (config.updatedAt ? new Date(config.updatedAt).toLocaleDateString() : 'unknown') + '</span>';
   }).catch(function(err) {
     // Fallback to direct RTDB read (pre-migration)
-    console.warn('shirSecretsManager read failed, falling back to RTDB:', err.message);
+    console.warn('secretsManager read failed, falling back to RTDB:', err.message);
     MastDB.config.square().once('value').then(function(snap) {
       var config = snap.val();
       if (!config) {
@@ -7865,7 +7865,7 @@ async function connectEtsy() {
 
   // Save API key via Secret Manager
   try {
-    await firebase.functions().httpsCallable('shirSecretsManager')({
+    await firebase.functions().httpsCallable('secretsManager')({
       action: 'write',
       service: 'etsy',
       secrets: { 'shir-etsy-api-key': apiKey }
@@ -7879,7 +7879,7 @@ async function connectEtsy() {
   showToast('Starting Etsy authorization...');
 
   try {
-    var result = await firebase.functions().httpsCallable('shirEtsyOAuthStart')({});
+    var result = await firebase.functions().httpsCallable('etsyOAuthStart')({});
     if (result.data && result.data.authUrl) {
       window.open(result.data.authUrl, '_blank');
     } else {
@@ -7908,7 +7908,7 @@ function loadEtsyConfig() {
   var connectedEl = document.getElementById('etsyConnected');
   var disconnectedEl = document.getElementById('etsyDisconnected');
 
-  firebase.functions().httpsCallable('shirSecretsManager')({
+  firebase.functions().httpsCallable('secretsManager')({
     action: 'read',
     service: 'etsy'
   }).then(function(result) {
@@ -7931,7 +7931,7 @@ function loadEtsyConfig() {
     }
   }).catch(function(err) {
     // Fallback to RTDB (pre-migration)
-    console.warn('shirSecretsManager Etsy read failed, falling back:', err.message);
+    console.warn('secretsManager Etsy read failed, falling back:', err.message);
     MastDB.config.etsy().once('value').then(function(snap) {
       var config = snap.val();
       if (config && config.accessToken && config.shopId) {
@@ -7968,7 +7968,7 @@ async function syncEtsyOrders() {
   }
 
   try {
-    var result = await firebase.functions().httpsCallable('shirEtsyOrderSync')({});
+    var result = await firebase.functions().httpsCallable('etsyOrderSync')({});
     var data = result.data;
     showToast('Etsy sync complete: ' + data.imported + ' imported, ' + data.skipped + ' skipped.');
     // Refresh order list
@@ -9534,7 +9534,7 @@ async function uploadProductImage(pid, fileInput) {
         var base64 = e.target.result.split(',')[1]; // Remove data:image/...;base64, prefix
         var token = await auth.currentUser.getIdToken();
 
-        var resp = await callCF('/shirUploadImage', {
+        var resp = await callCF('/uploadImage', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
           body: JSON.stringify({ image: base64, tags: [], source: 'admin-upload' })
@@ -12177,7 +12177,7 @@ async function uploadToLibrary() {
 
   try {
     var token = await auth.currentUser.getIdToken();
-    var resp = await callCF('/shirUploadImage', {
+    var resp = await callCF('/uploadImage', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
       body: JSON.stringify({ image: pendingBase64, tags: tags, source: 'admin-upload' })
@@ -15561,7 +15561,7 @@ async function capturePackingPhoto() {
   try {
     var token = await auth.currentUser.getIdToken();
     var catalogForApi = buildProductCatalogForVision();
-    var resp = await callCF('/shirClassifyImage', {
+    var resp = await callCF('/classifyImage', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
       body: JSON.stringify({ image: base64, catalog: catalogForApi, context: 'inventory' })
@@ -15827,7 +15827,7 @@ async function captureIntakePhoto() {
   try {
     var token = await auth.currentUser.getIdToken();
     var catalog = buildProductCatalogForVision();
-    var resp = await callCF('/shirClassifyImage', {
+    var resp = await callCF('/classifyImage', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
       body: JSON.stringify({ image: base64, catalog: catalog, context: 'inventory' })
@@ -15954,7 +15954,7 @@ async function confirmIntakeItem(pid) {
     if (intakeLastBase64) {
       var token = await auth.currentUser.getIdToken();
       var tags = ['training', 'inventory-intake', pid].concat(attrTags);
-      callCF('/shirUploadImage', {
+      callCF('/uploadImage', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
         body: JSON.stringify({ image: intakeLastBase64, tags: tags, source: 'intake', productId: pid })
@@ -16042,7 +16042,7 @@ async function captureTrainingPhoto() {
   try {
     var token = await auth.currentUser.getIdToken();
     var tags = ['training', 'inventory-intake', intakeCurrentPiece.pid].concat(intakeCurrentPiece.attrTags);
-    callCF('/shirUploadImage', {
+    callCF('/uploadImage', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
       body: JSON.stringify({ image: base64, tags: tags, source: 'training', productId: intakeCurrentPiece.pid })
@@ -20827,7 +20827,7 @@ async function sendCommissionProposal(commId) {
     if (!user) { showToast('Sign in required', true); return; }
     var token = await user.getIdToken();
 
-    var resp = await callCF('/shirCommissionProposal', {
+    var resp = await callCF('/commissionProposal', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
       body: JSON.stringify({
@@ -21843,7 +21843,7 @@ async function smGenerateShootCard() {
   var subject = d.productName || d.eventName || d.description || 'glass art piece';
 
   try {
-    var result = await firebase.functions().httpsCallable('shirSocialAI')({
+    var result = await firebase.functions().httpsCallable('socialAI')({
       action: 'shootCard',
       treatment: treatmentName,
       subject: subject,
@@ -21951,7 +21951,7 @@ async function smRunReadinessAndCaptions() {
   // Try treatment alignment via Claude Vision
   if (d.thumbnailBase64) {
     try {
-      var visionResult = await firebase.functions().httpsCallable('shirSocialAI')({
+      var visionResult = await firebase.functions().httpsCallable('socialAI')({
         action: 'readiness',
         treatment: d.treatment,
         thumbnailBase64: d.thumbnailBase64
@@ -21972,7 +21972,7 @@ async function smRunReadinessAndCaptions() {
 
   try {
     var treatment = SM_TREATMENTS.find(function(t) { return t.id === d.treatment; });
-    var captionResult = await firebase.functions().httpsCallable('shirSocialAI')({
+    var captionResult = await firebase.functions().httpsCallable('socialAI')({
       action: 'captions',
       treatment: treatment ? treatment.name : d.treatment,
       platform: d.destinations.join(', '),
@@ -22989,7 +22989,7 @@ async function nlPolishSection(secId) {
   btn.innerHTML = '<span class="nl-ai-loading">Polishing...</span>';
 
   try {
-    var polishFn = firebase.functions().httpsCallable('shirSocialAI');
+    var polishFn = firebase.functions().httpsCallable('socialAI');
     var result = await polishFn({ action: 'newsletterPolish', rawInput: sec.rawInput, sectionType: sec.type });
     var polished = result.data && result.data.polished ? result.data.polished : sec.rawInput;
 
@@ -24074,7 +24074,7 @@ function blogUploadFromComputer() {
       try {
         var base64 = e.target.result.split(',')[1];
         var token = await auth.currentUser.getIdToken();
-        var resp = await callCF('/shirUploadImage', {
+        var resp = await callCF('/uploadImage', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
           body: JSON.stringify({ image: base64, tags: [], source: 'blog-upload' })
@@ -24314,7 +24314,7 @@ async function blogSuggestTags() {
     var tempDiv = document.createElement('div');
     tempDiv.innerHTML = blogCurrentPost.body || '';
     var cleanBody = (tempDiv.textContent || tempDiv.innerText || '').replace(/\[Image \d+\]/g, '').replace(/\[IMG:[^\]]+\]/g, '').trim();
-    var result = await firebase.functions().httpsCallable('shirSocialAI')({
+    var result = await firebase.functions().httpsCallable('socialAI')({
       action: 'suggestBlogTags',
       body: cleanBody,
       title: blogCurrentPost.title || ''
@@ -24361,7 +24361,7 @@ async function blogPolishWithAI() {
     var plainText = tempDiv.textContent || tempDiv.innerText || '';
     var cleanBody = plainText.replace(/\[Image \d+\]/g, '').replace(/\[IMG:[^\]]+\]/g, '').trim();
     var author = BLOG_AUTHORS[blogCurrentPost.author] || BLOG_AUTHORS['madeline'] || { name: blogCurrentPost.author || 'Author', photoUrl: '', bio: '' };
-    var result = await firebase.functions().httpsCallable('shirSocialAI')({
+    var result = await firebase.functions().httpsCallable('socialAI')({
       action: 'blogPolish',
       body: cleanBody,
       authorName: author.name,
@@ -25162,7 +25162,7 @@ async function askStudioAssistant() {
     if (task.assistantContext) {
       body.assistantContext = task.assistantContext;
     }
-    var resp = await callCF('/shirStudioAssistant', {
+    var resp = await callCF('/studioAssistant', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
       body: JSON.stringify(body)

@@ -720,7 +720,7 @@
 
     if (btn) { btn.disabled = true; btn.textContent = '...'; }
 
-    callFunction('shirValidateCoupon', { code: code, subtotal: calcSubtotal() }, function (result) {
+    callFunction('validateCoupon', { code: code, subtotal: calcSubtotal() }, function (result) {
       if (btn) { btn.disabled = false; btn.textContent = 'Apply'; }
 
       if (result && result.valid) {
@@ -941,7 +941,7 @@
     var user = window.ShirCart.getCurrentUser();
 
     // SECURITY: prices are sent for display/logging only.
-    // The Cloud Function (shirSubmitOrder) MUST look up prices from its own
+    // The Cloud Function (submitOrder) MUST look up prices from its own
     // product database and calculate totals server-side. Never trust client prices.
     var payload = {
       email: checkoutData.email,
@@ -957,7 +957,7 @@
       resaleCertNumber: checkoutData.resaleCertNumber || ''
     };
 
-    callFunction('shirSubmitOrder', payload, function (result) {
+    callFunction('submitOrder', payload, function (result) {
       isSubmitting = false;
       if (result && result.success && result.checkoutUrl) {
         // Save order info for post-payment confirmation

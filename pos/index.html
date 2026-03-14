@@ -307,8 +307,8 @@ var auth = firebaseApp.auth();
 
 function esc(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
-var CLASSIFY_URL = 'https://us-central1-shir-glassworks.cloudfunctions.net/shirClassifyImage';
-var UPLOAD_URL = 'https://us-central1-shir-glassworks.cloudfunctions.net/shirUploadImage';
+var CLASSIFY_URL = 'https://us-central1-shir-glassworks.cloudfunctions.net/classifyImage';
+var UPLOAD_URL = 'https://us-central1-shir-glassworks.cloudfunctions.net/uploadImage';
 var PRODUCTS_PATH = TENANT_ID + '/public/products';
 var SALES_PATH = TENANT_ID + '/admin/sales';
 var SALES_EVENTS_PATH = TENANT_ID + '/admin/salesEvents';
@@ -1055,7 +1055,7 @@ async function sendReceipt() {
     };
 
     if (email) {
-      var emailResp = await fetch(base + '/shirSendReceipt', {
+      var emailResp = await fetch(base + '/sendReceipt', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, 'X-Tenant-ID': TENANT_ID },
         body: JSON.stringify(Object.assign({}, receiptData, { email: email }))
@@ -1065,7 +1065,7 @@ async function sendReceipt() {
     }
 
     if (phone) {
-      var smsResp = await fetch(base + '/shirSendSMS', {
+      var smsResp = await fetch(base + '/sendSMS', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, 'X-Tenant-ID': TENANT_ID },
         body: JSON.stringify(Object.assign({}, receiptData, { phone: phone }))
@@ -1098,7 +1098,7 @@ async function autoReconcileSquare(saleId, saleTimestamp) {
   if (paymentType !== 'square') return;
   try {
     var token = authToken;
-    var resp = await fetch('https://us-central1-shir-glassworks.cloudfunctions.net/shirReconcileSquarePayment', {
+    var resp = await fetch('https://us-central1-shir-glassworks.cloudfunctions.net/reconcileSquarePayment', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, 'X-Tenant-ID': TENANT_ID },
       body: JSON.stringify({ saleId: saleId, saleTimestamp: saleTimestamp, toleranceMinutes: 5 })
@@ -1201,7 +1201,7 @@ async function submitCommission(pid, pieceName) {
     try {
       var token = currentUser ? await currentUser.getIdToken() : null;
       if (token) {
-        fetch('https://us-central1-shir-glassworks.cloudfunctions.net/shirCommissionNotify', {
+        fetch('https://us-central1-shir-glassworks.cloudfunctions.net/commissionNotify', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, 'X-Tenant-ID': TENANT_ID },
           body: JSON.stringify({ commissionId: commId, pieceName: pieceName, customerName: name, customerContact: contact, notes: notes, channel: 'pos' })

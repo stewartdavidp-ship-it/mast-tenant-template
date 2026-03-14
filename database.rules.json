@@ -681,7 +681,7 @@
 
       // Private config: admin-only metadata (environment, locationId, shopId, etc.)
       // Secrets (accessToken, webhookSignatureKey, apiKey, refreshToken) have been migrated
-      // to GCP Secret Manager and removed from RTDB. Admin UI uses shirSecretsManager callable.
+      // to GCP Secret Manager and removed from RTDB. Admin UI uses secretsManager callable.
       "config": {
         ".read": "auth.uid === 'Y8RX1PIzccfT95WIIFl4I37VZZ72'",
         ".write": "auth.uid === 'Y8RX1PIzccfT95WIIFl4I37VZZ72'"

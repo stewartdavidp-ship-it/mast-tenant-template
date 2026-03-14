@@ -1289,7 +1289,7 @@
     loadingEl.style.display = 'block';
     document.getElementById('lookupBtn').disabled = true;
 
-    callFunction('shirGetMyOrders', { email: email, orderNumber: orderNum }, function(result) {
+    callFunction('getMyOrders', { email: email, orderNumber: orderNum }, function(result) {
       loadingEl.style.display = 'none';
       document.getElementById('lookupBtn').disabled = false;
 
@@ -1311,12 +1311,12 @@
 
   // ── Signed-In Order Fetch ──
   // All orders (retail + wholesale) live in the unified /orders/ path.
-  // shirGetMyOrders cloud function returns all orders for the authenticated user.
+  // getMyOrders cloud function returns all orders for the authenticated user.
   function fetchSignedInOrders() {
     var container = document.getElementById('signedInOrders');
     container.innerHTML = '<div class="lookup-loading" style="display:block;">Loading your orders...</div>';
 
-    callFunction('shirGetMyOrders', {}, function(result) {
+    callFunction('getMyOrders', {}, function(result) {
       if (!result.success) {
         container.innerHTML = '<div class="no-orders">Unable to load orders. Please try again.</div>';
         return;

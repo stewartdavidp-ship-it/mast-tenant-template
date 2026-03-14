@@ -57,8 +57,8 @@ This analysis evaluates what would need to change to support a second customer (
 - Con: More complex deployment, need a "registry" to map tenant → Firebase config
 
 **Cloud Functions (5 functions):**
-- `shirClassifyImage`, `shirCommissionProposal`, `shirStudioAssistant`, `shirEtsyOAuthStart`, `shirEtsyOrderSync`
-- All prefixed with `shir` — would need neutral naming (`mastClassifyImage` or parameterized)
+- `classifyImage`, `commissionProposal`, `studioAssistant`, `etsyOAuthStart`, `etsyOrderSync`
+- Functions use generic names (no tenant prefix) — tenant scoping comes from the Firebase project
 - Base URL: `https://us-central1-shir-glassworks.cloudfunctions.net` — tied to project
 
 **Cloud Storage:**

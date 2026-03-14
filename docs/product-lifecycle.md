@@ -39,7 +39,7 @@ BUILD COMPLETE → CAMERA INTAKE (per piece) → VISION ID + CONFIRM → INVENTO
 - Product data at `shirglassworks/public/products/{pid}` with name, price, images, options (color, opacity, size), description
 - Admin Products tab for managing catalog: add/edit/delete products, option management, image uploads, variant inventory management
 - Filter pills on public shop page for category browsing
-- Product images migrated from Weebly to Firebase Storage via `shirMigrateImagesToStorage`
+- Product images migrated from Weebly to Firebase Storage via `migrateImagesToStorage`
 
 **Key decision:** Product-centric data model replaced the original image-centric gallery model for shop items.
 
@@ -82,15 +82,15 @@ BUILD COMPLETE → CAMERA INTAKE (per piece) → VISION ID + CONFIRM → INVENTO
 
 **What exists:**
 - Square Hosted Checkout via Payment Links API
-- `shirSubmitOrder` Cloud Function creates order as `pending_payment`, generates Square Payment Link, returns checkout URL
+- `submitOrder` Cloud Function creates order as `pending_payment`, generates Square Payment Link, returns checkout URL
 - Customer redirected to Square's hosted checkout page for payment
-- `shirSquareWebhook` receives `payment.completed` event, transitions order to `placed`
+- `squareWebhook` receives `payment.completed` event, transitions order to `placed`
 - Coupon claiming deferred until payment confirmed (prevents coupon consumption on abandoned checkouts)
 - Square config managed in admin Settings UI (environment, access token, location ID, webhook signature key)
 - Config stored in Firebase RTDB at `shirglassworks/config/square` (read by Cloud Functions at runtime)
 - Supports sandbox and production environments
 
-**Phase D extension:** `shirSquareWebhook` now also stores ALL completed payments to `shirglassworks/admin/square-payments/{paymentId}` for PoS reconciliation. Payments without a `squareOrderId` (i.e., PoS terminal payments) are stored for timestamp-based matching to PoS sales.
+**Phase D extension:** `squareWebhook` now also stores ALL completed payments to `shirglassworks/admin/square-payments/{paymentId}` for PoS reconciliation. Payments without a `squareOrderId` (i.e., PoS terminal payments) are stored for timestamp-based matching to PoS sales.
 
 **Order statuses added for payment:**
 - `pending_payment` — order created, awaiting Square checkout completion
@@ -255,7 +255,7 @@ BUILD COMPLETE → CAMERA INTAKE (per piece) → VISION ID + CONFIRM → INVENTO
 
 **What exists:**
 - Full-screen intake overlay (`intakeOverlay`) for piece-by-piece inventory logging
-- Camera capture sends photo to `shirClassifyImage` with `intake` context
+- Camera capture sends photo to `classifyImage` with `intake` context
 - Vision API returns: `productId`, `confidence`, `color`, `attributes` (colorFamily, form, size, texture), `visualDescription`
 - Confirm/reject flow: matched product shown with confidence, manual picker as fallback
 - First photo per piece = inventory increment (+1 to stock + location assignment)
@@ -279,12 +279,12 @@ BUILD COMPLETE → CAMERA INTAKE (per piece) → VISION ID + CONFIRM → INVENTO
 
 **What exists:**
 - Image library at `shirglassworks/images/{imageId}` with Firebase Storage backing
-- `shirUploadImage` Cloud Function: receives base64, compresses via sharp (1600px max), generates thumbnail, uploads to Storage, creates RTDB record
+- `uploadImage` Cloud Function: receives base64, compresses via sharp (1600px max), generates thumbnail, uploads to Storage, creates RTDB record
 - Image records: `url`, `thumbnailUrl`, `tags`, `source`, `uploadedAt`, `sizeBytes`
 - Training images at `shirglassworks/admin/training-images/{productId}/{imageId}` for Vision API learning
-- `shirUploadTrainingImage` Cloud Function for storing product reference photos
-- `shirBootstrapImageLibrary` seeded 119 entries from legacy Weebly URLs
-- `shirMigrateImagesToStorage` batch-migrated all product images to Firebase Storage (2GB memory, 540s timeout)
+- `uploadTrainingImage` Cloud Function for storing product reference photos
+- `bootstrapImageLibrary` seeded 119 entries from legacy Weebly URLs
+- `migrateImagesToStorage` batch-migrated all product images to Firebase Storage (2GB memory, 540s timeout)
 
 ---
 
@@ -292,7 +292,7 @@ BUILD COMPLETE → CAMERA INTAKE (per piece) → VISION ID + CONFIRM → INVENTO
 
 **What exists:**
 - Standalone mobile-first app at `shirglassworks/pos/index.html`
-- Camera-first workflow: photo → `shirClassifyImage` → product match → confirm/edit → payment → save
+- Camera-first workflow: photo → `classifyImage` → product match → confirm/edit → payment → save
 - Manual product picker with search as fallback
 - Payment type selection: cash or Square
 - Amount auto-calculated from identified items, manually editable
@@ -302,7 +302,7 @@ BUILD COMPLETE → CAMERA INTAKE (per piece) → VISION ID + CONFIRM → INVENTO
 
 **Receipt flow (Phase D):**
 - Success screen shows receipt form: email input, phone input, opt-in checkbox
-- `sendReceipt()` calls `shirSendReceipt` (SendGrid email) and/or `shirSendSMS` (Twilio SMS)
+- `sendReceipt()` calls `sendReceipt` (SendGrid email) and/or `sendSMS` (Twilio SMS)
 - Branded HTML email receipt with items, total, date, thank you message
 - Plain text SMS receipt summary
 - `autoReconcileSquare()` called after Square payment sales — matches to webhook-received payments
@@ -431,28 +431,28 @@ BUILD COMPLETE → CAMERA INTAKE (per piece) → VISION ID + CONFIRM → INVENTO
 ## Customer Notifications — Gmail (BUILT)
 
 **What exists:**
-- `shirOrderEmailNotification` DB trigger fires on order status changes
+- `orderEmailNotification` DB trigger fires on order status changes
 - Email types: confirmed, shipped (with tracking link), delivered, cancelled
 - Gmail sent via Nodemailer with app password
 - Only fires for direct orders (`source !== 'etsy'`)
 - Etsy orders skip Gmail entirely — Etsy handles all buyer communications
 - No email on `pending_payment → placed` (internal payment transition)
 - No email on cancel from `pending_payment` or `payment_failed`
-- `shirTestOrderEmail` callable for admin testing of any email type
+- `testOrderEmail` callable for admin testing of any email type
 
 ---
 
 ## Receipt System — PoS (BUILT — Phase D)
 
 **What exists:**
-- `shirSendReceipt` Cloud Function: branded HTML email via SendGrid
+- `sendReceipt` Cloud Function: branded HTML email via SendGrid
   - Shir Glassworks logo, itemized list, total, date, thank you message
   - Auth: Firebase ID token required
   - Config: `sendgrid.api_key`, `shir.from_email` in Firebase Functions config
-- `shirSendSMS` Cloud Function: plain text SMS via Twilio HTTP API (no SDK)
+- `sendSMS` Cloud Function: plain text SMS via Twilio HTTP API (no SDK)
   - Format: "Shir Glassworks — {items}, ${amount}, {date}. Thank you!"
   - Config: `twilio.account_sid`, `twilio.auth_token`, `twilio.from_number`
-- `shirReconcileSquarePayment` Cloud Function: timestamp-based auto-matching
+- `reconcileSquarePayment` Cloud Function: timestamp-based auto-matching
   - Takes `saleId`, `saleTimestamp`, `toleranceMinutes` (default 5)
   - Finds closest unmatched Square payment within tolerance window
   - Updates both records atomically: sale gets `squarePaymentId`, payment gets `matchedSaleId`
@@ -463,16 +463,16 @@ BUILD COMPLETE → CAMERA INTAKE (per piece) → VISION ID + CONFIRM → INVENTO
 ## Etsy Integration (BUILT)
 
 **What exists:**
-- **OAuth 2.0 + PKCE:** `shirEtsyOAuthStart` (callable) + `shirEtsyOAuthCallback` (HTTP) Cloud Functions
-- **Inbound sync:** `shirEtsyOrderSync` callable pulls Etsy receipts, maps to order schema, deduplicates via `etsyReceiptId`
-- **Outbound tracking:** On ship, `shirOrderEmailNotification` pushes tracking to Etsy via `createReceiptShipment` API
+- **OAuth 2.0 + PKCE:** `etsyOAuthStart` (callable) + `etsyOAuthCallback` (HTTP) Cloud Functions
+- **Inbound sync:** `etsyOrderSync` callable pulls Etsy receipts, maps to order schema, deduplicates via `etsyReceiptId`
+- **Outbound tracking:** On ship, `orderEmailNotification` pushes tracking to Etsy via `createReceiptShipment` API
 - **Admin Settings:** Connect/disconnect Etsy shop, connection status, last sync timestamp
 - **Admin Orders:** "Sync Etsy" button, source filter (All/Direct/Etsy), orange "ETSY" source badges
 - **Order detail:** Etsy info section (receipt ID linked to Etsy, buyer username, tracking push status)
 - **Shipping modal:** Note for Etsy orders about automatic tracking push
 
 **Etsy order flow:**
-1. Admin clicks "Sync Etsy" → `shirEtsyOrderSync` pulls paid receipts from Etsy API
+1. Admin clicks "Sync Etsy" → `etsyOrderSync` pulls paid receipts from Etsy API
 2. New receipts mapped to order schema with `source: 'etsy'`, `status: 'placed'`
 3. From `placed` onward, workflow is identical to direct orders
 4. On ship: tracking pushed to Etsy automatically (no Gmail sent)
@@ -562,8 +562,8 @@ payment_failed → cancelled
 
 | Status | Meaning | Trigger |
 |--------|---------|---------|
-| `pending_payment` | Awaiting Square checkout (direct orders only) | `shirSubmitOrder` function |
-| `payment_failed` | Square API error | `shirSubmitOrder` on Square failure |
+| `pending_payment` | Awaiting Square checkout (direct orders only) | `submitOrder` function |
+| `payment_failed` | Square API error | `submitOrder` on Square failure |
 | `placed` | Payment confirmed (direct) or imported (Etsy) | Square webhook or Etsy sync |
 | `confirmed` | Admin reviewed, inventory checked | Admin clicks "Confirm" |
 | `building` | Item(s) need to be made | Auto when confirm finds made-to-order items |
@@ -627,24 +627,24 @@ payment_failed → cancelled
 | Square config | Firebase RTDB: `shirglassworks/config/square` | Live |
 | Studio locations (GPS) | Firebase RTDB: `shirglassworks/config/studioLocations` | Live |
 | Etsy config + tokens | Firebase RTDB: `shirglassworks/config/etsy` | Live |
-| `shirSubmitOrder` | Cloud Functions (callable) | Deployed |
-| `shirSquareWebhook` | Cloud Functions (HTTP) | Deployed |
-| `shirOrderEmailNotification` | Cloud Functions (DB trigger) | Deployed |
-| `shirTestOrderEmail` | Cloud Functions (callable) | Deployed |
-| `shirValidateCoupon` | Cloud Functions (callable) | Deployed |
-| `shirEtsyOAuthStart` | Cloud Functions (callable) | Deployed |
-| `shirEtsyOAuthCallback` | Cloud Functions (HTTP) | Deployed |
-| `shirEtsyOrderSync` | Cloud Functions (callable) | Deployed |
-| `shirClassifyImage` | Cloud Functions (HTTP) | Deployed |
-| `shirUploadImage` | Cloud Functions (HTTP, 512MB) | Deployed |
-| `shirUploadTrainingImage` | Cloud Functions (HTTP) | Deployed |
-| `shirScanCatalog` | Cloud Functions (HTTP, 300s timeout) | Deployed |
-| `shirMigrateProducts` | Cloud Functions (HTTP, one-time) | Deployed |
-| `shirBootstrapImageLibrary` | Cloud Functions (HTTP, one-time) | Deployed |
-| `shirMigrateImagesToStorage` | Cloud Functions (HTTP, 2GB, 540s) | Deployed |
-| `shirSendReceipt` | Cloud Functions (HTTP) | Deployed |
-| `shirSendSMS` | Cloud Functions (HTTP) | Deployed |
-| `shirReconcileSquarePayment` | Cloud Functions (HTTP) | Deployed |
+| `submitOrder` | Cloud Functions (callable) | Deployed |
+| `squareWebhook` | Cloud Functions (HTTP) | Deployed |
+| `orderEmailNotification` | Cloud Functions (DB trigger) | Deployed |
+| `testOrderEmail` | Cloud Functions (callable) | Deployed |
+| `validateCoupon` | Cloud Functions (callable) | Deployed |
+| `etsyOAuthStart` | Cloud Functions (callable) | Deployed |
+| `etsyOAuthCallback` | Cloud Functions (HTTP) | Deployed |
+| `etsyOrderSync` | Cloud Functions (callable) | Deployed |
+| `classifyImage` | Cloud Functions (HTTP) | Deployed |
+| `uploadImage` | Cloud Functions (HTTP, 512MB) | Deployed |
+| `uploadTrainingImage` | Cloud Functions (HTTP) | Deployed |
+| `scanCatalog` | Cloud Functions (HTTP, 300s timeout) | Deployed |
+| `migrateProducts` | Cloud Functions (HTTP, one-time) | Deployed |
+| `bootstrapImageLibrary` | Cloud Functions (HTTP, one-time) | Deployed |
+| `migrateImagesToStorage` | Cloud Functions (HTTP, 2GB, 540s) | Deployed |
+| `sendReceipt` | Cloud Functions (HTTP) | Deployed |
+| `sendSMS` | Cloud Functions (HTTP) | Deployed |
+| `reconcileSquarePayment` | Cloud Functions (HTTP) | Deployed |
 | Firebase rules | `database.rules.json` | Deployed |
 
 ---

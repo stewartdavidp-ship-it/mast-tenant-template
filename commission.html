@@ -960,7 +960,7 @@ function submitCommission() {
     var pieceName = pieceNames.join(', ') || 'Custom Piece';
 
     // Trigger notification (fire and forget)
-    fetch('https://us-central1-shir-glassworks.cloudfunctions.net/shirCommissionNotify', {
+    fetch('https://us-central1-shir-glassworks.cloudfunctions.net/commissionNotify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Tenant-ID': TENANT_ID },
       body: JSON.stringify({ commissionId: commId, pieceName: pieceName, customerName: name, customerContact: contact, notes: notes, channel: 'web' })

@@ -139,9 +139,9 @@ Multi-step checkout implemented in `checkout.js` as an IIFE (`ShirCheckout`).
 
 3. **Review** — Shows line items, address, shipping, estimated tax, total. Edit links return to prior steps.
 
-4. **Payment** — Calls `shirSubmitOrder` cloud function which creates a Square Payment Link. Customer is redirected to Square's hosted checkout. On completion, Square redirects back to the confirmation page.
+4. **Payment** — Calls `submitOrder` cloud function which creates a Square Payment Link. Customer is redirected to Square's hosted checkout. On completion, Square redirects back to the confirmation page.
 
-5. **Confirmation** — Reads `pendingOrder` from sessionStorage (survives the Square redirect). Firebase listener watches `shirglassworks/orders/{orderId}/status` for transition from `pending_payment` to `placed` (triggered by Square webhook → `shirSquareWebhook` cloud function). On detection, auto-generates and downloads Pirate Ship CSV.
+5. **Confirmation** — Reads `pendingOrder` from sessionStorage (survives the Square redirect). Firebase listener watches `shirglassworks/orders/{orderId}/status` for transition from `pending_payment` to `placed` (triggered by Square webhook → `squareWebhook` cloud function). On detection, auto-generates and downloads Pirate Ship CSV.
 
 ### Shipping Calculation
 
@@ -197,7 +197,7 @@ Generated client-side from sessionStorage data after payment confirmation.
 
 Located in a dedicated Firebase Functions project for Shir Glassworks.
 
-### `shirSubmitOrder`
+### `submitOrder`
 
 HTTP callable function. Receives order data from checkout, creates Square Payment Link.
 
@@ -209,7 +209,7 @@ HTTP callable function. Receives order data from checkout, creates Square Paymen
 6. Writes order to `shirglassworks/orders/{orderId}` with status `pending_payment`
 7. Returns `{ success, orderId, orderNumber, checkoutUrl }`
 
-### `shirSquareWebhook`
+### `squareWebhook`
 
 HTTP endpoint receiving Square webhook notifications.
 
