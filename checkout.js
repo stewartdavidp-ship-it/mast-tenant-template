@@ -784,6 +784,7 @@
     var body = document.getElementById('cartDrawerBody');
     var footer = document.getElementById('cartDrawerFooter');
     if (!body || !footer) return;
+    attachDelegate(); // ensure delegation is live before rendering Place Order button
 
     var items = window.ShirCart.getItems();
     var subtotal = calcSubtotal();
@@ -1198,61 +1199,68 @@
 
   // ── Delegated Click Handler ──
   // Single handler on the drawer body — survives innerHTML replacements.
-  var delegateAttached = false;
+  // Uses a WeakSet to track which elements have listeners, so we can
+  // safely re-call attachDelegate() without duplicating handlers.
+  var _delegatedElements = typeof WeakSet !== 'undefined' ? new WeakSet() : null;
 
-  function attachDelegate() {
-    if (delegateAttached) return;
-    var body = document.getElementById('cartDrawerBody');
-    var footer = document.getElementById('cartDrawerFooter');
-    if (!body) return;
-    delegateAttached = true;
+  function handleCheckoutClick(e) {
+    var btn = e.target.closest('[data-co]');
+    if (!btn) return;
+    var action = btn.getAttribute('data-co');
 
-    function handleClick(e) {
-      var btn = e.target.closest('[data-co]');
-      if (!btn) return;
-      var action = btn.getAttribute('data-co');
-
-      if (action === 'apply-coupon') {
-        applyCoupon();
-      } else if (action === 'addr-next') {
-        if (validateAddress()) { saveAddressData(); renderShipping(); }
-      } else if (action === 'addr-back') {
-        saveAddressData(); cancelCheckout();
-      } else if (action === 'ship-next') {
-        if (!checkoutData.shippingMethod) { window.ShirCart.showToast('Shipping is still loading, please wait'); return; }
-        renderReview();
-      } else if (action === 'ship-back') {
-        renderAddress();
-      } else if (action === 'place-order') {
-        placeOrder();
-      } else if (action === 'review-back') {
-        renderShipping();
-      } else if (action === 'conf-done') {
-        resetCheckout(); window.ShirCart.closeDrawer();
-      } else if (action === 'edit-address') {
-        renderAddress();
-      } else if (action === 'edit-shipping') {
-        renderShipping();
-      }
-
-      // CSV download button
-      if (action === 'download-csv') {
-        var csvData = sessionStorage.getItem('shir_csv_data');
-        var csvName = sessionStorage.getItem('shir_csv_name') || 'pirateship-order.csv';
-        if (csvData) downloadCSV(csvData, csvName);
-      }
+    if (action === 'apply-coupon') {
+      applyCoupon();
+    } else if (action === 'addr-next') {
+      if (validateAddress()) { saveAddressData(); renderShipping(); }
+    } else if (action === 'addr-back') {
+      saveAddressData(); cancelCheckout();
+    } else if (action === 'ship-next') {
+      if (!checkoutData.shippingMethod) { window.ShirCart.showToast('Shipping is still loading, please wait'); return; }
+      renderReview();
+    } else if (action === 'ship-back') {
+      renderAddress();
+    } else if (action === 'place-order') {
+      placeOrder();
+    } else if (action === 'review-back') {
+      renderShipping();
+    } else if (action === 'conf-done') {
+      resetCheckout(); window.ShirCart.closeDrawer();
+    } else if (action === 'edit-address') {
+      renderAddress();
+    } else if (action === 'edit-shipping') {
+      renderShipping();
     }
 
-    body.addEventListener('click', handleClick);
-    footer.addEventListener('click', handleClick);
+    // CSV download button
+    if (action === 'download-csv') {
+      var csvData = sessionStorage.getItem('shir_csv_data');
+      var csvName = sessionStorage.getItem('shir_csv_name') || 'pirateship-order.csv';
+      if (csvData) downloadCSV(csvData, csvName);
+    }
+  }
 
-    // Enter key on coupon input
-    body.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' && e.target.id === 'coCouponInput') {
-        e.preventDefault();
-        applyCoupon();
-      }
-    });
+  function attachDelegate() {
+    var body = document.getElementById('cartDrawerBody');
+    var footer = document.getElementById('cartDrawerFooter');
+    if (!body || !footer) return;
+
+    // Attach to body if not already attached
+    if (!_delegatedElements || !_delegatedElements.has(body)) {
+      body.addEventListener('click', handleCheckoutClick);
+      body.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && e.target.id === 'coCouponInput') {
+          e.preventDefault();
+          applyCoupon();
+        }
+      });
+      if (_delegatedElements) _delegatedElements.add(body);
+    }
+
+    // Attach to footer if not already attached
+    if (!_delegatedElements || !_delegatedElements.has(footer)) {
+      footer.addEventListener('click', handleCheckoutClick);
+      if (_delegatedElements) _delegatedElements.add(footer);
+    }
   }
 
   // ── Payment Return Handler ──
