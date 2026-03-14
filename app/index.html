@@ -6736,8 +6736,7 @@ async function seedRolesAndAdminUser() {
     showToast('RBAC initialized — roles seeded');
     return true;
   } catch (err) {
-    console.error('RBAC seed failed:', err);
-    showToast('RBAC seed failed: ' + err.message, true);
+    console.warn('RBAC seed skipped:', err.message);
     return false;
   }
 }
@@ -6825,8 +6824,7 @@ async function seedPlatformRegistry() {
     showToast('Platform registry seeded');
     return true;
   } catch (err) {
-    console.error('Platform registry seed failed:', err);
-    showToast('Platform registry seed failed: ' + err.message, true);
+    console.warn('Platform registry seed skipped:', err.message);
     return false;
   }
 }
