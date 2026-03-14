@@ -5088,9 +5088,9 @@
 
           <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">Site URL</label>
           <p style="font-size:0.8rem;color:var(--warm-gray);margin-bottom:4px;">
-            Where customers return after payment (e.g. https://yoursite.github.io/shirglassworks)
+            Where customers return after payment (e.g. https://yoursite.com)
           </p>
-          <input type="text" id="squareSiteUrl" placeholder="https://stewartdavidp-ship-it.github.io/shirglassworks"
+          <input type="text" id="squareSiteUrl" placeholder="https://yoursite.com"
             style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;margin-bottom:16px;box-sizing:border-box;">
 
           <div style="display:flex;gap:8px;">
@@ -5588,6 +5588,9 @@
 <script>
 // ============================================================
 // Firebase Init
+// DEPLOY: This is the bootstrap Firebase project config. Each tenant
+// deployment has its own Firebase project — update these values when
+// cloning for a new tenant. Cannot be loaded dynamically (chicken-and-egg).
 // ============================================================
 const firebaseConfig = {
   apiKey: "AIzaSyDZevV_F87F1AKGqUPKuNIrHMybOc61D7s",
@@ -5654,9 +5657,57 @@ var MastDB = (function() {
     _newRootKey: _newRootKey,
     _prefixPaths: _prefixPaths,
     _multiUpdate: _multiUpdate,
-    tenantId: function() { return _tenantId; }
+    tenantId: function() { return _tenantId; },
+    storagePath: function(subpath) { return _tenantId + '/' + subpath; }
   };
 })();
+
+// ============================================================
+// TENANT_CONFIG — Loaded from platform registry after tenant resolution.
+// All tenant-specific branding, URLs, and service config reads from this.
+// Defaults match Shir Glassworks for backward compatibility.
+// ============================================================
+var TENANT_CONFIG = null;
+
+async function loadTenantConfig(tenantId) {
+  try {
+    var snap = await db.ref('mast-platform/tenants/' + tenantId + '/config').once('value');
+    TENANT_CONFIG = snap.val() || {};
+  } catch (err) {
+    console.warn('Tenant config load failed, using defaults:', err.message);
+    TENANT_CONFIG = {};
+  }
+  // Merge defaults so missing fields never break anything
+  var defaults = {
+    brand: { name: 'Tenant', tagline: '', location: '', logoUrl: '', newsletterDownloadPrefix: 'newsletter', authors: {} },
+    site: { siteUrl: 'https://' + (TENANT_CONFIG.domain || window.location.hostname), shopUrl: '', adminUrl: '', cloudFunctionsBase: '', github: { repo: '', pagesBase: '', committerName: 'Admin', committerEmail: '' } },
+    email: { from: '', fromName: '', owner: '' }
+  };
+  Object.keys(defaults).forEach(function(section) {
+    if (!TENANT_CONFIG[section]) TENANT_CONFIG[section] = {};
+    Object.keys(defaults[section]).forEach(function(key) {
+      if (TENANT_CONFIG[section][key] === undefined || TENANT_CONFIG[section][key] === null) {
+        TENANT_CONFIG[section][key] = defaults[section][key];
+      }
+    });
+  });
+  // Convenience: domain from top-level or derive from siteUrl
+  if (!TENANT_CONFIG.domain) {
+    try { TENANT_CONFIG.domain = new URL(TENANT_CONFIG.site.siteUrl).hostname; } catch(e) { TENANT_CONFIG.domain = window.location.hostname; }
+  }
+  // Sync legacy constants so existing code referencing them picks up config values
+  if (TENANT_CONFIG.site.github && TENANT_CONFIG.site.github.repo) {
+    GITHUB_REPO = TENANT_CONFIG.site.github.repo;
+  }
+  if (TENANT_CONFIG.site.github && TENANT_CONFIG.site.github.pagesBase) {
+    GITHUB_PAGES_BASE = TENANT_CONFIG.site.github.pagesBase;
+  }
+  if (TENANT_CONFIG.site.cloudFunctionsBase) {
+    CLOUD_FUNCTIONS_BASE = TENANT_CONFIG.site.cloudFunctionsBase;
+  }
+  // Sync blog authors from config
+  if (typeof loadBlogAuthors === 'function') loadBlogAuthors();
+}
 
 // --- MastDB Entity Namespaces ---
 
@@ -6298,9 +6349,13 @@ const SECTIONS = [
 ];
 const SHOP_SECTION_IDS = ['shop', 'figurines', 'jewelry', 'drinkware', 'vases', 'decoration', 'sculpture'];
 // GitHub image upload
-const GITHUB_REPO = 'stewartdavidp-ship-it/shirglassworks';
+// GitHub config — resolved from TENANT_CONFIG after auth, with hardcoded fallbacks
+function getGithubRepo() { return (TENANT_CONFIG && TENANT_CONFIG.site && TENANT_CONFIG.site.github) ? TENANT_CONFIG.site.github.repo : 'stewartdavidp-ship-it/shirglassworks'; }
+function getGithubPagesBase() { return (TENANT_CONFIG && TENANT_CONFIG.site && TENANT_CONFIG.site.github) ? TENANT_CONFIG.site.github.pagesBase : 'https://stewartdavidp-ship-it.github.io/shirglassworks'; }
 const GITHUB_IMAGES_PATH = 'images';
-const GITHUB_PAGES_BASE = 'https://stewartdavidp-ship-it.github.io/shirglassworks';
+// Legacy constants — used only before TENANT_CONFIG loads. After auth, use getGithubRepo()/getGithubPagesBase().
+var GITHUB_REPO = 'stewartdavidp-ship-it/shirglassworks';
+var GITHUB_PAGES_BASE = 'https://stewartdavidp-ship-it.github.io/shirglassworks';
 // ============================================================
 // State
 // ============================================================
@@ -6470,6 +6525,7 @@ var DEFAULT_ROLES = {
 var imageLibrary = {};
 var imageLibraryLoaded = false;
 var imageLibraryListener = null;
+// DEPLOY: Default Cloud Functions URL — overwritten by loadTenantConfig() after auth
 var CLOUD_FUNCTIONS_BASE = 'https://us-central1-shir-glassworks.cloudfunctions.net';
 
 // callCF — fetch wrapper that injects X-Tenant-ID header on all Cloud Function calls
@@ -6539,7 +6595,10 @@ async function uploadImageToGitHub(filename, base64Content, commitMessage) {
   var body = {
     message: commitMessage || 'Add gallery image: ' + filename,
     content: base64Content,
-    committer: { name: 'Shir Glassworks Admin', email: 'admin@shirglassworks.com' },
+    committer: {
+      name: (TENANT_CONFIG && TENANT_CONFIG.site && TENANT_CONFIG.site.github) ? TENANT_CONFIG.site.github.committerName : 'Admin',
+      email: (TENANT_CONFIG && TENANT_CONFIG.site && TENANT_CONFIG.site.github) ? TENANT_CONFIG.site.github.committerEmail : ''
+    },
     branch: 'main'
   };
   if (sha) body.sha = sha;
@@ -6761,7 +6820,16 @@ async function seedRolesAndAdminUser() {
  * Auto-discovers existing admin/user-role users from tenant data.
  * Idempotent — skips if already seeded.
  */
+// SEED_ENABLED: Legacy bootstrap for Shir Glassworks (tenant #1).
+// New tenants are provisioned via mast_tenants MCP tool — this function is not needed.
+// Set to true only for first-time migration of pre-registry tenants.
+var SEED_ENABLED = false;
+
 async function seedPlatformRegistry() {
+  if (!SEED_ENABLED) {
+    console.log('Platform registry seeding disabled — use mast_tenants MCP tool to provision tenants.');
+    return false;
+  }
   try {
     // Check if current user already has a tenant mapping — means registry was seeded.
     // We check userTenantMap/{uid} (not tenants/) because the user always has read
@@ -6949,7 +7017,7 @@ if (TEST_MODE && new URLSearchParams(window.location.search).get('testmode') ===
   // Uses a non-privileged UID that has NO Firebase write permissions,
   // so the UI is viewable but writes will fail (safe for previewing layout).
   console.warn('[TEST_MODE] Running in test mode — Firebase writes will fail.');
-  MastDB.init({ tenantId: 'shirglassworks', db: db }); // Default tenant for test mode
+  MastDB.init({ tenantId: new URLSearchParams(window.location.search).get('tenant') || 'shirglassworks', db: db }); // Test mode: override with ?tenant= param
   currentUser = { uid: 'test-local-preview', photoURL: '', displayName: 'Test User (Local)' };
   currentUserRole = 'admin';
   currentRoleConfig = DEFAULT_ROLES.admin;
@@ -6983,33 +7051,28 @@ auth.onAuthStateChanged(async function(user) {
   // MastDB.init() must happen before loadUserRole() since role loading uses MastDB.
   var tenantId = await resolveTenant(user.uid);
   if (!tenantId) {
-    // No tenant membership in platform registry yet.
-    // Bootstrap check: if mast-platform doesn't exist at all, this is first login
-    // after Phase 1b deploy. Temporarily init MastDB to check if user has an existing
-    // admin record in the tenant data (pre-registry admin). If so, seed the registry.
-    MastDB.init({ tenantId: 'shirglassworks', db: db });
-    try {
-      var existingUserSnap = await MastDB.adminUsers.ref(user.uid).once('value');
-      var existingUser = existingUserSnap.val();
-      if (existingUser && (existingUser.role === 'admin' || existingUser.role === 'user')) {
-        // Existing admin/user — try to seed the platform registry
-        console.log('Bootstrap: existing ' + existingUser.role + ' detected, seeding platform registry...');
-        try {
-          await seedPlatformRegistry();
-        } catch (seedErr) {
-          console.warn('Platform registry seed failed (may already exist):', seedErr.message);
+    // No tenant membership in platform registry.
+    // Legacy bootstrap: attempt to seed from existing admin records (Shir Glassworks migration only).
+    // For new tenants, platform registry is provisioned via mast_tenants MCP tool.
+    if (SEED_ENABLED) {
+      MastDB.init({ tenantId: MastDB.tenantId() || 'unknown', db: db });
+      try {
+        var existingUserSnap = await MastDB.adminUsers.ref(user.uid).once('value');
+        var existingUser = existingUserSnap.val();
+        if (existingUser && (existingUser.role === 'admin' || existingUser.role === 'user')) {
+          console.log('Bootstrap: existing ' + existingUser.role + ' detected, seeding platform registry...');
+          try {
+            await seedPlatformRegistry();
+          } catch (seedErr) {
+            console.warn('Platform registry seed failed (may already exist):', seedErr.message);
+          }
+          tenantId = await resolveTenant(user.uid);
         }
-        // Re-resolve tenant — if seed worked, this returns the tenant
-        tenantId = await resolveTenant(user.uid);
-        if (!tenantId) {
-          // Seed failed or registry incomplete — fall back to local admin record.
-          // User has a valid role in shirglassworks/admin/users, so allow access.
-          console.log('Bootstrap: platform registry unavailable, using local tenant resolution');
-          tenantId = 'shirglassworks';
-        }
+      } catch (bootstrapErr) {
+        console.error('Bootstrap check failed:', bootstrapErr);
       }
-    } catch (bootstrapErr) {
-      console.error('Bootstrap check failed:', bootstrapErr);
+    } else {
+      console.warn('No tenant membership for UID:', user.uid, '— platform registry seeding is disabled.');
     }
 
     if (!tenantId) {
@@ -7025,6 +7088,7 @@ auth.onAuthStateChanged(async function(user) {
     }
   }
   MastDB.init({ tenantId: tenantId, db: db });
+  await loadTenantConfig(tenantId);
   // --- End Tenant Resolution ---
 
   // Load user role from Firebase (auto-provisions as guest if new)
@@ -17494,7 +17558,7 @@ async function uploadBuildPhoto(file, jobId, buildId) {
     }
 
     var compressed = await compressImage(file);
-    var storageRef = storage.ref('shirglassworks/builds/' + buildId + '/' + mediaId + '.jpg');
+    var storageRef = storage.ref(MastDB.storagePath('builds/' + buildId + '/' + mediaId + '.jpg'));
     var uploadTask = storageRef.put(compressed);
 
     await new Promise(function(resolve, reject) {
@@ -17594,7 +17658,7 @@ async function deleteBuildMedia(buildId, mediaId) {
   if (!confirm('Delete this photo?')) return;
   try {
     await writeAudit('update', 'jobs', selectedProductionJobId || buildId);
-    await storage.ref('shirglassworks/builds/' + buildId + '/' + mediaId + '.jpg').delete();
+    await storage.ref(MastDB.storagePath('builds/' + buildId + '/' + mediaId + '.jpg')).delete();
     await MastDB.buildMedia.ref(buildId, mediaId).remove();
     showToast('Photo deleted');
     loadBuildMedia(buildId);
@@ -17982,7 +18046,7 @@ async function printProductCard(productId, productName, storyUrl) {
     productName: productName,
     storyUrl: storyUrl,
     productImage: imageUrl,
-    source: 'shirglassworks-admin',
+    source: MastDB.tenantId() + '-admin',
     timestamp: new Date().toISOString()
   };
 
@@ -18685,7 +18749,7 @@ async function loadStorageInfo() {
     el.innerHTML = '<div style="display:flex;gap:24px;flex-wrap:wrap;">' +
       '<div>📷 <strong>' + totalPhotos + '</strong> photos</div>' +
       '<div>💾 <strong>' + sizeMb + ' MB</strong> stored</div>' +
-      '<div style="font-size:0.78rem;color:var(--warm-gray);">Bucket: shir-glassworks.firebasestorage.app</div>' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);">Bucket: ' + (firebaseConfig.storageBucket || 'unknown') + '</div>' +
     '</div>';
   } catch (err) {
     el.innerHTML = 'Error loading storage info.';
@@ -18829,7 +18893,7 @@ function ensureHomeLocation() {
       type: 'home',
       status: 'active',
       eventId: null,
-      qrUrl: 'https://shirglassworks.com/scan/location/' + ref.key,
+      qrUrl: 'https://' + (TENANT_CONFIG ? TENANT_CONFIG.domain : 'localhost') + '/scan/location/' + ref.key,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -18929,7 +18993,7 @@ async function createLocation() {
       type: type,
       status: 'active',
       eventId: null,
-      qrUrl: 'https://shirglassworks.com/scan/location/' + ref.key,
+      qrUrl: 'https://' + (TENANT_CONFIG ? TENANT_CONFIG.domain : 'localhost') + '/scan/location/' + ref.key,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -18953,7 +19017,7 @@ function createEventLocation(eventId, eventName) {
     type: 'event',
     status: 'active',
     eventId: eventId,
-    qrUrl: 'https://shirglassworks.com/scan/location/' + ref.key,
+    qrUrl: 'https://' + (TENANT_CONFIG ? TENANT_CONFIG.domain : 'localhost') + '/scan/location/' + ref.key,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };
@@ -19032,7 +19096,7 @@ async function reactivateLocation(locId) {
 function copyLocationQR(locId) {
   var loc = locationsData[locId];
   if (!loc) return;
-  var url = loc.qrUrl || ('https://shirglassworks.com/scan/location/' + locId);
+  var url = loc.qrUrl || ('https://' + (TENANT_CONFIG ? TENANT_CONFIG.domain : 'localhost') + '/scan/location/' + locId);
   navigator.clipboard.writeText(url).then(function() {
     showToast('QR URL copied: ' + url);
   }).catch(function() {
@@ -19043,7 +19107,7 @@ function copyLocationQR(locId) {
 function exportLocationToLabelKeeper(locId) {
   var loc = locationsData[locId];
   if (!loc) return;
-  var url = loc.qrUrl || ('https://shirglassworks.com/scan/location/' + locId);
+  var url = loc.qrUrl || ('https://' + (TENANT_CONFIG ? TENANT_CONFIG.domain : 'localhost') + '/scan/location/' + locId);
   var labelData = '#LABELKEEPER\ntype: 5160\nqty: 1\n---\n' + loc.name + '\n' + url;
   navigator.clipboard.writeText(labelData).then(function() {
     showToast('LabelKeeper format copied to clipboard');
@@ -20877,7 +20941,7 @@ async function uploadCommissionDoc(commId) {
   try {
     var ext = file.name.split('.').pop() || 'bin';
     var fileName = Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-    var storageRef = storage.ref('shirglassworks/commission-docs/' + commId + '/' + fileName);
+    var storageRef = storage.ref(MastDB.storagePath('commission-docs/' + commId + '/' + fileName));
     var uploadTask = storageRef.put(file);
 
     await new Promise(function(resolve, reject) {
@@ -22412,9 +22476,9 @@ function renderNLCompose() {
     // Newsletter header — branded masthead
     var issueDate = nlCurrentIssue.createdAt ? new Date(nlCurrentIssue.createdAt).toLocaleDateString('en-US', { year:'numeric', month:'long' }) : new Date().toLocaleDateString('en-US', { year:'numeric', month:'long' });
     html += '<div class="nl-grid-header"><div class="nl-grid-header-top">' +
-      '<div class="nl-grid-header-logo"><img src="https://stewartdavidp-ship-it.github.io/shirglassworks/images/logo.png" alt="Shir Glassworks" /></div>' +
-      '<div class="nl-grid-header-text"><h1>Shir Glassworks</h1>' +
-      '<div class="nl-grid-header-tagline">Handcrafted Glass &bull; Western Massachusetts</div></div>' +
+      '<div class="nl-grid-header-logo"><img src="' + (TENANT_CONFIG ? TENANT_CONFIG.brand.logoUrl : '') + '" alt="' + (TENANT_CONFIG ? TENANT_CONFIG.brand.name : '') + '" /></div>' +
+      '<div class="nl-grid-header-text"><h1>' + (TENANT_CONFIG ? TENANT_CONFIG.brand.name : 'Newsletter') + '</h1>' +
+      '<div class="nl-grid-header-tagline">' + (TENANT_CONFIG ? TENANT_CONFIG.brand.tagline : '') + ' &bull; ' + (TENANT_CONFIG ? TENANT_CONFIG.brand.location : '') + '</div></div>' +
       '<div class="nl-grid-header-meta">' +
       '<span>Issue #' + (nlCurrentIssue.issueNumber || '') + '</span>' +
       '<span>' + issueDate + '</span>' +
@@ -22490,16 +22554,17 @@ function renderNLCompose() {
     });
 
     // Newsletter footer
+    var _tc = TENANT_CONFIG || { brand: { name: 'Newsletter' }, domain: 'localhost', site: { siteUrl: '#' } };
     html += '<div class="nl-grid-footer">' +
-      '<p class="footer-brand">Shir Glassworks</p>' +
-      '<p>Handcrafted glass from Western Massachusetts</p>' +
+      '<p class="footer-brand">' + _tc.brand.name + '</p>' +
+      '<p>' + (_tc.brand.tagline || '') + ' from ' + (_tc.brand.location || '') + '</p>' +
       '<div class="footer-links">' +
-      '<a href="https://shirglassworks.com">Website</a>' +
-      '<a href="https://shirglassworks.com/shop">Shop</a>' +
-      '<a href="https://shirglassworks.com/schedule">Events</a>' +
+      '<a href="https://' + _tc.domain + '">Website</a>' +
+      '<a href="https://' + _tc.domain + '/shop">Shop</a>' +
+      '<a href="https://' + _tc.domain + '/schedule">Events</a>' +
       '</div>' +
       '<div class="footer-divider"></div>' +
-      '<p class="footer-unsub">You received this because you subscribed to Shir Glassworks updates.</p>' +
+      '<p class="footer-unsub">You received this because you subscribed to ' + _tc.brand.name + ' updates.</p>' +
       '<p class="footer-unsub" style="margin-top:4px;"><a href="#" style="color:rgba(245,240,235,0.35);">Unsubscribe</a> &bull; <a href="#" style="color:rgba(245,240,235,0.35);">Manage Preferences</a></p>' +
       '</div>';
     html += '</div>';
@@ -23104,18 +23169,19 @@ function nlExportHTML() {
     sectionsHtml += '<tr><td style="padding:0 30px;"><hr style="border:none;border-top:1px solid #E8DDD0;margin:10px 0 20px;" /></td></tr>';
   });
 
+  var _ec = TENANT_CONFIG || { brand: { name: 'Newsletter', tagline: '', location: '', logoUrl: '' }, domain: 'localhost' };
   var emailHtml = '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">' +
-    '<title>Shir Glassworks — Issue #' + nlCurrentIssue.issueNumber + '</title></head>' +
+    '<title>' + _ec.brand.name + ' — Issue #' + nlCurrentIssue.issueNumber + '</title></head>' +
     '<body style="margin:0;padding:0;background:#F5F0EB;font-family:\'DM Sans\',Arial,sans-serif;">' +
     '<table width="100%" cellpadding="0" cellspacing="0" style="background:#F5F0EB;"><tr><td align="center" style="padding:30px 10px;">' +
     '<table width="600" cellpadding="0" cellspacing="0" style="background:#FFFFFF;border-radius:8px;overflow:hidden;max-width:600px;">' +
     '<!-- Header -->' +
     '<tr><td style="background:#2C2C2C;padding:16px 30px;">' +
     '<table width="100%" cellpadding="0" cellspacing="0"><tr>' +
-    '<td style="width:48px;"><img src="https://stewartdavidp-ship-it.github.io/shirglassworks/images/logo.png" alt="Shir Glassworks" width="48" style="display:block;" /></td>' +
+    '<td style="width:48px;"><img src="' + _ec.brand.logoUrl + '" alt="' + _ec.brand.name + '" width="48" style="display:block;" /></td>' +
     '<td style="padding-left:14px;">' +
-    '<h1 style="font-family:\'Cormorant Garamond\',Georgia,serif;color:#F5F0EB;font-size:20px;margin:0;font-weight:300;letter-spacing:0.02em;">Shir Glassworks</h1>' +
-    '<p style="color:rgba(245,240,235,0.4);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;margin:0;">Handcrafted Glass &bull; Western Massachusetts</p></td>' +
+    '<h1 style="font-family:\'Cormorant Garamond\',Georgia,serif;color:#F5F0EB;font-size:20px;margin:0;font-weight:300;letter-spacing:0.02em;">' + _ec.brand.name + '</h1>' +
+    '<p style="color:rgba(245,240,235,0.4);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;margin:0;">' + _ec.brand.tagline + ' &bull; ' + _ec.brand.location + '</p></td>' +
     '<td style="text-align:right;white-space:nowrap;"><span style="color:rgba(245,240,235,0.5);font-size:10px;">Issue #' + nlCurrentIssue.issueNumber + '</span></td>' +
     '</tr></table>' +
     '</td></tr>' +
@@ -23125,23 +23191,23 @@ function nlExportHTML() {
     sectionsHtml +
     '<!-- Footer -->' +
     '<tr><td style="background:#2C2C2C;padding:24px 30px;text-align:center;">' +
-    '<p style="font-family:\'Cormorant Garamond\',Georgia,serif;color:rgba(245,240,235,0.7);font-size:14px;margin:0;">Shir Glassworks</p>' +
-    '<p style="color:rgba(245,240,235,0.5);font-size:11px;margin:4px 0 0;">Handcrafted glass from Western Massachusetts</p>' +
+    '<p style="font-family:\'Cormorant Garamond\',Georgia,serif;color:rgba(245,240,235,0.7);font-size:14px;margin:0;">' + _ec.brand.name + '</p>' +
+    '<p style="color:rgba(245,240,235,0.5);font-size:11px;margin:4px 0 0;">' + _ec.brand.tagline + ' from ' + _ec.brand.location + '</p>' +
     '<p style="margin:10px 0 8px;">' +
-    '<a href="https://shirglassworks.com" style="color:rgba(245,240,235,0.5);font-size:11px;text-decoration:underline;margin:0 8px;">Website</a>' +
-    '<a href="https://shirglassworks.com/shop" style="color:rgba(245,240,235,0.5);font-size:11px;text-decoration:underline;margin:0 8px;">Shop</a>' +
-    '<a href="https://shirglassworks.com/schedule" style="color:rgba(245,240,235,0.5);font-size:11px;text-decoration:underline;margin:0 8px;">Events</a></p>' +
+    '<a href="https://' + _ec.domain + '" style="color:rgba(245,240,235,0.5);font-size:11px;text-decoration:underline;margin:0 8px;">Website</a>' +
+    '<a href="https://' + _ec.domain + '/shop" style="color:rgba(245,240,235,0.5);font-size:11px;text-decoration:underline;margin:0 8px;">Shop</a>' +
+    '<a href="https://' + _ec.domain + '/schedule" style="color:rgba(245,240,235,0.5);font-size:11px;text-decoration:underline;margin:0 8px;">Events</a></p>' +
     '<hr style="border:none;border-top:1px solid rgba(245,240,235,0.15);width:40px;margin:10px auto;" />' +
-    '<p style="color:rgba(245,240,235,0.3);font-size:10px;margin:0;">You received this because you subscribed to Shir Glassworks updates.</p>' +
-    '<p style="margin:4px 0 0;"><a href="https://shirglassworks.com/newsletter/unsubscribe?token={SUBSCRIBER_TOKEN}" style="color:rgba(245,240,235,0.35);font-size:10px;text-decoration:underline;">Unsubscribe</a>' +
-    ' &bull; <a href="https://shirglassworks.com/newsletter/preferences" style="color:rgba(245,240,235,0.35);font-size:10px;text-decoration:underline;">Manage Preferences</a></p>' +
+    '<p style="color:rgba(245,240,235,0.3);font-size:10px;margin:0;">You received this because you subscribed to ' + _ec.brand.name + ' updates.</p>' +
+    '<p style="margin:4px 0 0;"><a href="https://' + _ec.domain + '/newsletter/unsubscribe?token={SUBSCRIBER_TOKEN}" style="color:rgba(245,240,235,0.35);font-size:10px;text-decoration:underline;">Unsubscribe</a>' +
+    ' &bull; <a href="https://' + _ec.domain + '/newsletter/preferences" style="color:rgba(245,240,235,0.35);font-size:10px;text-decoration:underline;">Manage Preferences</a></p>' +
     '</td></tr></table></td></tr></table></body></html>';
 
   var blob = new Blob([emailHtml], { type: 'text/html' });
   var url = URL.createObjectURL(blob);
   var a = document.createElement('a');
   a.href = url;
-  a.download = 'shir-glassworks-' + nlCurrentIssue.issueNumber + '-' + (nlCurrentIssue.slug || 'newsletter') + '.html';
+  a.download = ((TENANT_CONFIG && TENANT_CONFIG.brand.newsletterDownloadPrefix) || 'newsletter') + '-' + nlCurrentIssue.issueNumber + '-' + (nlCurrentIssue.slug || 'newsletter') + '.html';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -23354,18 +23420,15 @@ var blogCurrentPost = null;
 var blogAiResult = null;
 var blogShowPreview = false;
 
-var BLOG_AUTHORS = {
-  'madeline': {
-    name: 'Madeline',
-    photoUrl: 'https://stewartdavidp-ship-it.github.io/shirglassworks/images/madeline-glassblowing.jpg',
-    bio: 'Co-founder of Shir Glassworks. Madeline brings a sculptor\'s eye to molten glass, specializing in organic forms and botanical-inspired work.'
-  },
-  'ori': {
-    name: 'Ori',
-    photoUrl: 'https://stewartdavidp-ship-it.github.io/shirglassworks/images/ori-glassblowing.jpg',
-    bio: 'Co-founder of Shir Glassworks. Ori melds traditional glassblowing technique with experimental color work, creating one-of-a-kind functional art.'
+// Blog authors — loaded from TENANT_CONFIG.brand.authors after auth.
+// Hardcoded defaults here are overwritten by loadBlogAuthors() when TENANT_CONFIG loads.
+var BLOG_AUTHORS = {};
+
+function loadBlogAuthors() {
+  if (TENANT_CONFIG && TENANT_CONFIG.brand && TENANT_CONFIG.brand.authors) {
+    BLOG_AUTHORS = TENANT_CONFIG.brand.authors;
   }
-};
+}
 
 // ===== DATA LOADING =====
 

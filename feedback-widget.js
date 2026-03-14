@@ -15,9 +15,11 @@
 (function() {
   'use strict';
 
-  var FEEDBACK_PATH = (typeof TENANT_ID !== 'undefined' ? TENANT_ID : 'shirglassworks') + '/feedbackReports';
-  var SETTINGS_PATH = (typeof TENANT_ID !== 'undefined' ? TENANT_ID : 'shirglassworks') + '/admin/feedbackSettings/publicEnabled';
-  var APP_ID = (typeof TENANT_ID !== 'undefined' ? TENANT_ID : 'shirglassworks');
+  var _tenantFallback = (typeof TENANT_ID !== 'undefined' && TENANT_ID !== 'unknown') ? TENANT_ID : null;
+  if (!_tenantFallback) { console.warn('feedback-widget: No TENANT_ID resolved, widget disabled.'); return; }
+  var FEEDBACK_PATH = _tenantFallback + '/feedbackReports';
+  var SETTINGS_PATH = _tenantFallback + '/admin/feedbackSettings/publicEnabled';
+  var APP_ID = _tenantFallback;
 
   // Use default app if available, otherwise use first available named app
   var fbApp;

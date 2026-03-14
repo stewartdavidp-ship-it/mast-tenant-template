@@ -180,7 +180,8 @@
     if (!app) { callback({ success: false, error: 'Firebase not available' }); return; }
 
     // Get auth token before calling Cloud Function
-    var projectId = 'shir-glassworks';
+    // Derive projectId from the initialized Firebase app — no hardcoded tenant reference
+    var projectId = (app.options && app.options.projectId) ? app.options.projectId : 'shir-glassworks';
     var url = 'https://us-central1-' + projectId + '.cloudfunctions.net/' + name;
 
     ensureAuth().then(function(token) {

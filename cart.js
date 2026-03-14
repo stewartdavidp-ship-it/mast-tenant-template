@@ -11,8 +11,10 @@
   'use strict';
 
   // ── Constants ──
-  var STORAGE_KEY = 'shir_cart';
-  var FIREBASE_CONFIG = {
+  var STORAGE_KEY = (typeof TENANT_ID !== 'undefined' ? TENANT_ID : 'shir') + '_cart';
+  // DEPLOY: Firebase config can be set per-tenant via window.STOREFRONT_FIREBASE_CONFIG
+  // before this script loads. Falls back to default project config.
+  var FIREBASE_CONFIG = window.STOREFRONT_FIREBASE_CONFIG || {
     apiKey: 'AIzaSyDZevV_F87F1AKGqUPKuNIrHMybOc61D7s',
     authDomain: 'shir-glassworks.firebaseapp.com',
     databaseURL: 'https://shir-glassworks-default-rtdb.firebaseio.com',
