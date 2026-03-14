@@ -4990,18 +4990,6 @@
           <div id="githubTokenStatus" style="margin-top:8px;font-size:0.85rem;"></div>
         </div>
         <div class="form-group" style="margin-top:24px;">
-          <label>LabelKeeper API Key</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">
-            API key for the LabelKeeper print card integration. Get it from the LabelKeeper project's GCP Secret Manager.
-          </p>
-          <div style="display:flex;gap:8px;">
-            <input type="password" id="lkApiKeyInput" placeholder="lk_..."
-              style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
-            <button class="btn btn-primary" onclick="saveLkApiKey()">Save</button>
-          </div>
-          <div id="lkApiKeyStatus" style="margin-top:8px;font-size:0.85rem;"></div>
-        </div>
-        <div class="form-group" style="margin-top:24px;">
           <label>Events to Show on Homepage</label>
           <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">
             Number of upcoming events displayed in the homepage schedule section.
@@ -5239,6 +5227,21 @@
               <button class="btn btn-danger" onclick="disconnectEtsy()">Disconnect Etsy</button>
             </div>
           </div>
+        </div>
+
+        <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
+
+        <div class="form-group">
+          <label style="font-size:1.1rem;font-weight:600;">LabelKeeper API Key</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">
+            API key for the LabelKeeper print card integration. Get it from the LabelKeeper project's GCP Secret Manager.
+          </p>
+          <div style="display:flex;gap:8px;">
+            <input type="password" id="lkApiKeyInput" placeholder="lk_..."
+              style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
+            <button class="btn btn-primary" onclick="saveLkApiKey()">Save</button>
+          </div>
+          <div id="lkApiKeyStatus" style="margin-top:8px;font-size:0.85rem;"></div>
         </div>
       </div>
       <div id="settingsSubWorkshop" style="display:none;max-width:500px;">
