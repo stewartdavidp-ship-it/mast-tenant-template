@@ -23494,7 +23494,7 @@ function renderBlogList() {
       '<p style="font-size:0.85rem;color:var(--text-secondary);">Write your first post to share your voice as an artist in the glass community.</p></div>';
   } else {
     blogPosts.forEach(function(post) {
-      var author = BLOG_AUTHORS[post.author] || BLOG_AUTHORS['madeline'];
+      var author = BLOG_AUTHORS[post.author] || BLOG_AUTHORS['madeline'] || { name: post.author || 'Author', photoUrl: '', bio: '' };
       var dateStr = post.createdAt ? new Date(post.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
       html += '<div class="blog-post-row" onclick="blogOpenPost(\'' + post.id + '\')">' +
         '<img class="blog-avatar" src="' + esc(author.photoUrl) + '" alt="' + esc(author.name) + '" />' +
@@ -23619,7 +23619,7 @@ function blogOpenPost(postId) {
 function renderBlogEditor() {
   var post = blogCurrentPost;
   if (!post) { renderBlogList(); return; }
-  var author = BLOG_AUTHORS[post.author] || BLOG_AUTHORS['madeline'];
+  var author = BLOG_AUTHORS[post.author] || BLOG_AUTHORS['madeline'] || { name: post.author || 'Author', photoUrl: '', bio: '' };
   var status = post.status || 'draft';
 
   var html = '';
@@ -24360,7 +24360,7 @@ async function blogPolishWithAI() {
     tempDiv.innerHTML = blogCurrentPost.body || '';
     var plainText = tempDiv.textContent || tempDiv.innerText || '';
     var cleanBody = plainText.replace(/\[Image \d+\]/g, '').replace(/\[IMG:[^\]]+\]/g, '').trim();
-    var author = BLOG_AUTHORS[blogCurrentPost.author] || BLOG_AUTHORS['madeline'];
+    var author = BLOG_AUTHORS[blogCurrentPost.author] || BLOG_AUTHORS['madeline'] || { name: blogCurrentPost.author || 'Author', photoUrl: '', bio: '' };
     var result = await firebase.functions().httpsCallable('shirSocialAI')({
       action: 'blogPolish',
       body: cleanBody,
@@ -24486,7 +24486,7 @@ async function blogPublishToWebsite() {
   try {
     // Generate rendered HTML with resolved images
     var bodyHtml = blogRenderBodyToHtml(blogCurrentPost.body || '', blogCurrentPost.inlineImages || []);
-    var author = BLOG_AUTHORS[blogCurrentPost.author] || BLOG_AUTHORS['madeline'];
+    var author = BLOG_AUTHORS[blogCurrentPost.author] || BLOG_AUTHORS['madeline'] || { name: blogCurrentPost.author || 'Author', photoUrl: '', bio: '' };
 
     // Generate slug
     var slug = (blogCurrentPost.title || 'untitled').toLowerCase()
