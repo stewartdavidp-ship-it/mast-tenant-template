@@ -4031,6 +4031,20 @@
     .nl-editor-char-counter { text-align:right; font-size:0.75rem; color:var(--text-secondary); margin-top:4px; }
     /* Newsletter preview stays light regardless of app dark mode */
     body.dark-mode .nl-editor-size-btn { border-color:#444; color:#aaa; }
+
+    /* ── Wholesale admin dark mode ── */
+    body.dark-mode #wholesaleContent h2,
+    body.dark-mode #wholesaleContent h3,
+    body.dark-mode #wholesaleContent h4 { color: #e0e0e0; }
+    body.dark-mode #wholesaleSubContent > div[style*="background:#fff"],
+    body.dark-mode #wholesaleSubContent div[style*="background:#fff"] { background: #1e1e1e !important; border-color: #333 !important; }
+    body.dark-mode #wholesaleSubContent div[style*="background:rgba(42,124,111,0.08)"] { background: rgba(42,124,111,0.15) !important; border-color: rgba(42,124,111,0.3) !important; }
+    body.dark-mode #wholesaleSubContent div[style*="font-weight:500"] { color: #e0e0e0; }
+    body.dark-mode #wholesaleSubContent select { background: #2a2a2a; border-color: #444; color: #e0e0e0; }
+    body.dark-mode #wholesaleSubContent button[style*="border:1px solid #ccc"] { border-color: #555 !important; color: #ccc !important; }
+    body.dark-mode #wholesaleContent .view-tab { color: #888; }
+    body.dark-mode #wholesaleContent .view-tab.active { color: var(--amber); }
+
     @media (max-width:768px) {
       .nl-grid-canvas { margin:0 -8px; border-radius:0; }
       .nl-grid-row { flex-direction:column; padding:0 20px; }
@@ -26805,7 +26819,7 @@ var wholesaleTokensData = {};
 var wholesaleOrdersData = {};
 var wholesaleAuthorizedData = {};
 var wholesaleRequestsData = {};
-var wholesaleSubView = 'users'; // users | requests | orders | setup
+var wholesaleSubView = 'orders'; // orders | users | requests | setup
 var wholesaleQRLib = null; // lazy-loaded QRCode library
 
 // ── Wholesale catalog product seed data ──
@@ -26921,9 +26935,9 @@ function renderWholesaleAdmin() {
       '<h2 style="font-size:1.4rem;font-weight:700;color:var(--charcoal);">Wholesale</h2>' +
     '</div>' +
     '<div class="view-tabs" style="margin-bottom:20px;">' +
+      '<div class="view-tab' + (wholesaleSubView === 'orders' ? ' active' : '') + '" onclick="switchWholesaleView(\'orders\')">Orders</div>' +
       '<div class="view-tab' + (wholesaleSubView === 'users' ? ' active' : '') + '" onclick="switchWholesaleView(\'users\')">Authorized Users</div>' +
       '<div class="view-tab' + (wholesaleSubView === 'requests' ? ' active' : '') + '" onclick="switchWholesaleView(\'requests\')">Access Requests <span id="wsRequestBadge"></span></div>' +
-      '<div class="view-tab' + (wholesaleSubView === 'orders' ? ' active' : '') + '" onclick="switchWholesaleView(\'orders\')">Orders</div>' +
       '<div class="view-tab' + (wholesaleSubView === 'setup' ? ' active' : '') + '" onclick="switchWholesaleView(\'setup\')">Setup</div>' +
     '</div>' +
     '<div id="wholesaleSubContent"></div>' +
