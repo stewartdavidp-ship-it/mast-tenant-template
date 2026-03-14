@@ -23,7 +23,8 @@ var TENANT_ID = (function() {
     'shirglassworks.com':                'shirglassworks',
     'www.shirglassworks.com':            'shirglassworks',
     'shir-glassworks.web.app':           'shirglassworks',
-    'stewartdavidp-ship-it.github.io':   'shirglassworks'
+    'stewartdavidp-ship-it.github.io':   'shirglassworks',
+    'localhost':                         'shirglassworks'  // local dev
   };
 
   return map[window.location.hostname] || 'unknown';

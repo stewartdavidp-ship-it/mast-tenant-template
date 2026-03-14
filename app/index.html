@@ -7017,12 +7017,15 @@ if (TEST_MODE && new URLSearchParams(window.location.search).get('testmode') ===
   // Uses a non-privileged UID that has NO Firebase write permissions,
   // so the UI is viewable but writes will fail (safe for previewing layout).
   console.warn('[TEST_MODE] Running in test mode — Firebase writes will fail.');
-  MastDB.init({ tenantId: new URLSearchParams(window.location.search).get('tenant') || 'shirglassworks', db: db }); // Test mode: override with ?tenant= param
-  currentUser = { uid: 'test-local-preview', photoURL: '', displayName: 'Test User (Local)' };
-  currentUserRole = 'admin';
-  currentRoleConfig = DEFAULT_ROLES.admin;
-  rbacReady = true;
-  setTimeout(enterAuthorizedState, 0);
+  var testTenantId = new URLSearchParams(window.location.search).get('tenant') || 'shirglassworks';
+  MastDB.init({ tenantId: testTenantId, db: db }); // Test mode: override with ?tenant= param
+  loadTenantConfig(testTenantId).then(function() {
+    currentUser = { uid: 'test-local-preview', photoURL: '', displayName: 'Test User (Local)' };
+    currentUserRole = 'admin';
+    currentRoleConfig = DEFAULT_ROLES.admin;
+    rbacReady = true;
+    setTimeout(enterAuthorizedState, 0);
+  });
 }
 
 auth.onAuthStateChanged(async function(user) {
