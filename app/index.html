@@ -22497,9 +22497,9 @@ function renderNLCompose() {
     // Newsletter header — branded masthead
     var issueDate = nlCurrentIssue.createdAt ? new Date(nlCurrentIssue.createdAt).toLocaleDateString('en-US', { year:'numeric', month:'long' }) : new Date().toLocaleDateString('en-US', { year:'numeric', month:'long' });
     html += '<div class="nl-grid-header"><div class="nl-grid-header-top">' +
-      '<div class="nl-grid-header-logo"><img src="' + (TENANT_CONFIG ? TENANT_CONFIG.brand.logoUrl : '') + '" alt="' + (TENANT_CONFIG ? TENANT_CONFIG.brand.name : '') + '" /></div>' +
-      '<div class="nl-grid-header-text"><h1>' + (TENANT_CONFIG ? TENANT_CONFIG.brand.name : 'Newsletter') + '</h1>' +
-      '<div class="nl-grid-header-tagline">' + (TENANT_CONFIG ? TENANT_CONFIG.brand.tagline : '') + ' &bull; ' + (TENANT_CONFIG ? TENANT_CONFIG.brand.location : '') + '</div></div>' +
+      '<div class="nl-grid-header-logo"><img src="' + esc(TENANT_CONFIG ? TENANT_CONFIG.brand.logoUrl : '') + '" alt="' + esc(TENANT_CONFIG ? TENANT_CONFIG.brand.name : '') + '" /></div>' +
+      '<div class="nl-grid-header-text"><h1>' + esc(TENANT_CONFIG ? TENANT_CONFIG.brand.name : 'Newsletter') + '</h1>' +
+      '<div class="nl-grid-header-tagline">' + esc(TENANT_CONFIG ? TENANT_CONFIG.brand.tagline : '') + ' &bull; ' + esc(TENANT_CONFIG ? TENANT_CONFIG.brand.location : '') + '</div></div>' +
       '<div class="nl-grid-header-meta">' +
       '<span>Issue #' + (nlCurrentIssue.issueNumber || '') + '</span>' +
       '<span>' + issueDate + '</span>' +
@@ -22577,15 +22577,15 @@ function renderNLCompose() {
     // Newsletter footer
     var _tc = TENANT_CONFIG || { brand: { name: 'Newsletter' }, domain: 'localhost', site: { siteUrl: '#' } };
     html += '<div class="nl-grid-footer">' +
-      '<p class="footer-brand">' + _tc.brand.name + '</p>' +
-      '<p>' + (_tc.brand.tagline || '') + ' from ' + (_tc.brand.location || '') + '</p>' +
+      '<p class="footer-brand">' + esc(_tc.brand.name) + '</p>' +
+      '<p>' + esc(_tc.brand.tagline || '') + ' from ' + esc(_tc.brand.location || '') + '</p>' +
       '<div class="footer-links">' +
-      '<a href="https://' + _tc.domain + '">Website</a>' +
-      '<a href="https://' + _tc.domain + '/shop">Shop</a>' +
-      '<a href="https://' + _tc.domain + '/schedule">Events</a>' +
+      '<a href="https://' + esc(_tc.domain) + '">Website</a>' +
+      '<a href="https://' + esc(_tc.domain) + '/shop">Shop</a>' +
+      '<a href="https://' + esc(_tc.domain) + '/schedule">Events</a>' +
       '</div>' +
       '<div class="footer-divider"></div>' +
-      '<p class="footer-unsub">You received this because you subscribed to ' + _tc.brand.name + ' updates.</p>' +
+      '<p class="footer-unsub">You received this because you subscribed to ' + esc(_tc.brand.name) + ' updates.</p>' +
       '<p class="footer-unsub" style="margin-top:4px;"><a href="#" style="color:rgba(245,240,235,0.35);">Unsubscribe</a> &bull; <a href="#" style="color:rgba(245,240,235,0.35);">Manage Preferences</a></p>' +
       '</div>';
     html += '</div>';
@@ -23192,17 +23192,17 @@ function nlExportHTML() {
 
   var _ec = TENANT_CONFIG || { brand: { name: 'Newsletter', tagline: '', location: '', logoUrl: '' }, domain: 'localhost' };
   var emailHtml = '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">' +
-    '<title>' + _ec.brand.name + ' — Issue #' + nlCurrentIssue.issueNumber + '</title></head>' +
+    '<title>' + esc(_ec.brand.name) + ' — Issue #' + nlCurrentIssue.issueNumber + '</title></head>' +
     '<body style="margin:0;padding:0;background:#F5F0EB;font-family:\'DM Sans\',Arial,sans-serif;">' +
     '<table width="100%" cellpadding="0" cellspacing="0" style="background:#F5F0EB;"><tr><td align="center" style="padding:30px 10px;">' +
     '<table width="600" cellpadding="0" cellspacing="0" style="background:#FFFFFF;border-radius:8px;overflow:hidden;max-width:600px;">' +
     '<!-- Header -->' +
     '<tr><td style="background:#2C2C2C;padding:16px 30px;">' +
     '<table width="100%" cellpadding="0" cellspacing="0"><tr>' +
-    '<td style="width:48px;"><img src="' + _ec.brand.logoUrl + '" alt="' + _ec.brand.name + '" width="48" style="display:block;" /></td>' +
+    '<td style="width:48px;"><img src="' + esc(_ec.brand.logoUrl) + '" alt="' + esc(_ec.brand.name) + '" width="48" style="display:block;" /></td>' +
     '<td style="padding-left:14px;">' +
-    '<h1 style="font-family:\'Cormorant Garamond\',Georgia,serif;color:#F5F0EB;font-size:20px;margin:0;font-weight:300;letter-spacing:0.02em;">' + _ec.brand.name + '</h1>' +
-    '<p style="color:rgba(245,240,235,0.4);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;margin:0;">' + _ec.brand.tagline + ' &bull; ' + _ec.brand.location + '</p></td>' +
+    '<h1 style="font-family:\'Cormorant Garamond\',Georgia,serif;color:#F5F0EB;font-size:20px;margin:0;font-weight:300;letter-spacing:0.02em;">' + esc(_ec.brand.name) + '</h1>' +
+    '<p style="color:rgba(245,240,235,0.4);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;margin:0;">' + esc(_ec.brand.tagline) + ' &bull; ' + esc(_ec.brand.location) + '</p></td>' +
     '<td style="text-align:right;white-space:nowrap;"><span style="color:rgba(245,240,235,0.5);font-size:10px;">Issue #' + nlCurrentIssue.issueNumber + '</span></td>' +
     '</tr></table>' +
     '</td></tr>' +
@@ -23212,16 +23212,16 @@ function nlExportHTML() {
     sectionsHtml +
     '<!-- Footer -->' +
     '<tr><td style="background:#2C2C2C;padding:24px 30px;text-align:center;">' +
-    '<p style="font-family:\'Cormorant Garamond\',Georgia,serif;color:rgba(245,240,235,0.7);font-size:14px;margin:0;">' + _ec.brand.name + '</p>' +
-    '<p style="color:rgba(245,240,235,0.5);font-size:11px;margin:4px 0 0;">' + _ec.brand.tagline + ' from ' + _ec.brand.location + '</p>' +
+    '<p style="font-family:\'Cormorant Garamond\',Georgia,serif;color:rgba(245,240,235,0.7);font-size:14px;margin:0;">' + esc(_ec.brand.name) + '</p>' +
+    '<p style="color:rgba(245,240,235,0.5);font-size:11px;margin:4px 0 0;">' + esc(_ec.brand.tagline) + ' from ' + esc(_ec.brand.location) + '</p>' +
     '<p style="margin:10px 0 8px;">' +
-    '<a href="https://' + _ec.domain + '" style="color:rgba(245,240,235,0.5);font-size:11px;text-decoration:underline;margin:0 8px;">Website</a>' +
-    '<a href="https://' + _ec.domain + '/shop" style="color:rgba(245,240,235,0.5);font-size:11px;text-decoration:underline;margin:0 8px;">Shop</a>' +
-    '<a href="https://' + _ec.domain + '/schedule" style="color:rgba(245,240,235,0.5);font-size:11px;text-decoration:underline;margin:0 8px;">Events</a></p>' +
+    '<a href="https://' + esc(_ec.domain) + '" style="color:rgba(245,240,235,0.5);font-size:11px;text-decoration:underline;margin:0 8px;">Website</a>' +
+    '<a href="https://' + esc(_ec.domain) + '/shop" style="color:rgba(245,240,235,0.5);font-size:11px;text-decoration:underline;margin:0 8px;">Shop</a>' +
+    '<a href="https://' + esc(_ec.domain) + '/schedule" style="color:rgba(245,240,235,0.5);font-size:11px;text-decoration:underline;margin:0 8px;">Events</a></p>' +
     '<hr style="border:none;border-top:1px solid rgba(245,240,235,0.15);width:40px;margin:10px auto;" />' +
-    '<p style="color:rgba(245,240,235,0.3);font-size:10px;margin:0;">You received this because you subscribed to ' + _ec.brand.name + ' updates.</p>' +
-    '<p style="margin:4px 0 0;"><a href="https://' + _ec.domain + '/newsletter/unsubscribe?token={SUBSCRIBER_TOKEN}" style="color:rgba(245,240,235,0.35);font-size:10px;text-decoration:underline;">Unsubscribe</a>' +
-    ' &bull; <a href="https://' + _ec.domain + '/newsletter/preferences" style="color:rgba(245,240,235,0.35);font-size:10px;text-decoration:underline;">Manage Preferences</a></p>' +
+    '<p style="color:rgba(245,240,235,0.3);font-size:10px;margin:0;">You received this because you subscribed to ' + esc(_ec.brand.name) + ' updates.</p>' +
+    '<p style="margin:4px 0 0;"><a href="https://' + esc(_ec.domain) + '/newsletter/unsubscribe?token={SUBSCRIBER_TOKEN}" style="color:rgba(245,240,235,0.35);font-size:10px;text-decoration:underline;">Unsubscribe</a>' +
+    ' &bull; <a href="https://' + esc(_ec.domain) + '/newsletter/preferences" style="color:rgba(245,240,235,0.35);font-size:10px;text-decoration:underline;">Manage Preferences</a></p>' +
     '</td></tr></table></td></tr></table></body></html>';
 
   var blob = new Blob([emailHtml], { type: 'text/html' });
@@ -23497,9 +23497,9 @@ function renderBlogList() {
       var author = BLOG_AUTHORS[post.author] || BLOG_AUTHORS['madeline'];
       var dateStr = post.createdAt ? new Date(post.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
       html += '<div class="blog-post-row" onclick="blogOpenPost(\'' + post.id + '\')">' +
-        '<img class="blog-avatar" src="' + author.photoUrl + '" alt="' + author.name + '" />' +
-        '<span class="blog-post-title">' + (post.title || 'Untitled Post') + '</span>' +
-        '<span class="blog-post-author">' + author.name + '</span>' +
+        '<img class="blog-avatar" src="' + esc(author.photoUrl) + '" alt="' + esc(author.name) + '" />' +
+        '<span class="blog-post-title">' + esc(post.title || 'Untitled Post') + '</span>' +
+        '<span class="blog-post-author">' + esc(author.name) + '</span>' +
         '<span class="nl-status-badge ' + (post.status || 'draft') + '">' + (post.status || 'draft') + '</span>' +
         (post.publishedToWebsite ? '<span style="font-size:0.75rem;" title="Published to website">🌐</span>' : '') +
         '<span class="blog-post-date">' + dateStr + '</span>' +
@@ -23639,9 +23639,9 @@ function renderBlogEditor() {
     html += '<div class="blog-preview">' +
       '<article class="blog-preview-article">' +
       '<div class="blog-preview-byline">' +
-      '<img src="' + author.photoUrl + '" alt="' + author.name + '" class="blog-preview-byline-photo" />' +
+      '<img src="' + esc(author.photoUrl) + '" alt="' + esc(author.name) + '" class="blog-preview-byline-photo" />' +
       '<div>' +
-      '<div class="blog-preview-byline-name">' + author.name + '</div>' +
+      '<div class="blog-preview-byline-name">' + esc(author.name) + '</div>' +
       '<div class="blog-preview-byline-date">' + dateStr + '</div>' +
       '</div></div>' +
       '<h1 class="blog-preview-title">' + escapeHtml(post.title || 'Untitled Post') + '</h1>' +
@@ -23669,13 +23669,13 @@ function renderBlogEditor() {
 
   // Author header card
   html += '<div class="blog-author-card">' +
-    '<img class="blog-author-photo" id="blogAuthorPhoto" src="' + author.photoUrl + '" alt="' + author.name + '" />' +
+    '<img class="blog-author-photo" id="blogAuthorPhoto" src="' + esc(author.photoUrl) + '" alt="' + esc(author.name) + '" />' +
     '<div class="blog-author-info">' +
     '<select onchange="blogChangeAuthor(this.value)">' +
     '<option value="madeline"' + (post.author === 'madeline' ? ' selected' : '') + '>Madeline</option>' +
     '<option value="ori"' + (post.author === 'ori' ? ' selected' : '') + '>Ori</option>' +
     '</select>' +
-    '<div class="blog-author-bio" id="blogAuthorBio">' + author.bio + '</div>' +
+    '<div class="blog-author-bio" id="blogAuthorBio">' + esc(author.bio) + '</div>' +
     '</div></div>';
 
   // Title
