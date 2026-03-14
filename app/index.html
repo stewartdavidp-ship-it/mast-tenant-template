@@ -6979,12 +6979,22 @@ auth.onAuthStateChanged(async function(user) {
     try {
       var existingUserSnap = await MastDB.adminUsers.ref(user.uid).once('value');
       var existingUser = existingUserSnap.val();
-      if (existingUser && existingUser.role === 'admin') {
-        // Existing admin — seed the platform registry now
-        console.log('Bootstrap: existing admin detected, seeding platform registry...');
-        await seedPlatformRegistry();
-        // Re-resolve tenant — should succeed now
+      if (existingUser && (existingUser.role === 'admin' || existingUser.role === 'user')) {
+        // Existing admin/user — try to seed the platform registry
+        console.log('Bootstrap: existing ' + existingUser.role + ' detected, seeding platform registry...');
+        try {
+          await seedPlatformRegistry();
+        } catch (seedErr) {
+          console.warn('Platform registry seed failed (may already exist):', seedErr.message);
+        }
+        // Re-resolve tenant — if seed worked, this returns the tenant
         tenantId = await resolveTenant(user.uid);
+        if (!tenantId) {
+          // Seed failed or registry incomplete — fall back to local admin record.
+          // User has a valid role in shirglassworks/admin/users, so allow access.
+          console.log('Bootstrap: platform registry unavailable, using local tenant resolution');
+          tenantId = 'shirglassworks';
+        }
       }
     } catch (bootstrapErr) {
       console.error('Bootstrap check failed:', bootstrapErr);
