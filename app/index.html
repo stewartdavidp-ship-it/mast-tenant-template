@@ -4311,6 +4311,7 @@
         <div class="sidebar-item" data-route="trips" onclick="navigateTo('trips')">Trips</div>
         <div class="sidebar-item muted" data-route="expenses" onclick="navigateTo('expenses')">Expenses <span class="sidebar-badge new">New</span></div>
         <div class="sidebar-item muted" data-route="reports" onclick="navigateTo('reports')">Reports <span class="sidebar-badge new">New</span></div>
+        <div class="sidebar-item" data-route="financials" onclick="navigateTo('financials')">Financials</div>
       </div>
     </div>
     <!-- Teach -->
@@ -4338,7 +4339,6 @@
         <div class="sidebar-item" data-route="contacts" onclick="navigateTo('contacts')">Contacts</div>
         <div class="sidebar-item" data-route="analytics" onclick="navigateTo('analytics')">Analytics</div>
         <div class="sidebar-item" data-route="auditlog" onclick="navigateTo('auditlog')">Audit Log</div>
-        <div class="sidebar-item muted" data-route="financials" onclick="navigateTo('financials')">Financials <span class="sidebar-badge new">New</span></div>
         <div class="sidebar-item" data-route="coupons" onclick="navigateTo('coupons')">Coupons</div>
         <div class="sidebar-item" data-route="settings" onclick="navigateTo('settings')">Settings &amp; Integrations <span id="settingsSandboxBadge" style="display:none;background:#f59e0b;color:#fff;font-size:0.65rem;padding:2px 6px;border-radius:4px;margin-left:4px;font-weight:700;vertical-align:middle;">SANDBOX</span></div>
         <div class="sidebar-item" id="testingModeItem" onclick="toggleTestingMode()" style="display:none;">🧪 Testing Mode</div>
@@ -4637,6 +4637,33 @@
       <div id="tripsSubReport" style="display:none;">
         <div id="taxReportContent"></div>
       </div>
+    </div>
+
+    <!-- ===== FINANCIALS TAB ===== -->
+    <div id="financialsTab" style="display:none;">
+      <div class="section-header" style="display:flex;justify-content:space-between;align-items:center;">
+        <h2>Financials</h2>
+      </div>
+      <div style="display:flex;gap:12px;align-items:center;margin-bottom:20px;flex-wrap:wrap;">
+        <div>
+          <label style="font-size:0.8rem;color:var(--text-secondary, #888);display:block;margin-bottom:4px;">Start Date</label>
+          <input type="date" id="financialsStartDate" style="padding:8px 10px;border:1px solid var(--border-color, #ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--bg-primary, #fff);color:var(--text-primary, #333);">
+        </div>
+        <div>
+          <label style="font-size:0.8rem;color:var(--text-secondary, #888);display:block;margin-bottom:4px;">End Date</label>
+          <input type="date" id="financialsEndDate" style="padding:8px 10px;border:1px solid var(--border-color, #ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--bg-primary, #fff);color:var(--text-primary, #333);">
+        </div>
+        <div style="align-self:flex-end;">
+          <button class="btn btn-primary" onclick="fetchSquareSales()" style="background:var(--primary, #2a7c6f);color:white;border:none;padding:8px 16px;border-radius:6px;font-family:'DM Sans',sans-serif;cursor:pointer;">Load Sales</button>
+        </div>
+        <div style="align-self:flex-end;">
+          <button class="btn" id="syncSquareBtn" onclick="syncSquareSales()" style="background:none;border:1px solid var(--border-color, #ddd);color:var(--text-primary, #333);padding:8px 16px;border-radius:6px;font-family:'DM Sans',sans-serif;cursor:pointer;">Sync from Square</button>
+        </div>
+      </div>
+      <div id="financialsSyncStatus" style="font-size:0.8rem;color:var(--text-secondary, #888);margin-bottom:12px;display:none;"></div>
+      <div id="financialsSummary" style="display:none;"></div>
+      <div id="financialsTransactions"></div>
+      <div id="financialsEmpty" style="color:var(--text-secondary, #888);font-size:0.9rem;">Select a date range and click Load Sales to view Square transactions.</div>
     </div>
 
     <!-- ===== PLACEHOLDER CONTAINER ===== -->
@@ -7884,7 +7911,7 @@ var ROUTE_MAP = {
   'employees':   { tab: 'employeesTab', setup: function() { switchEmployeesView('users'); } },
   'contacts':    { tab: 'contactsTab' },
   'auditlog':    { tab: 'auditLogTab' },
-  'financials':  { tab: null, placeholder: { name: 'Financials', desc: 'Revenue, costs, P&L.', badge: 'new' } },
+  'financials':  { tab: 'financialsTab', setup: function() { loadFinancials(); } },
   'settings':    { tab: 'settingsTab' },
   'trips':       { tab: 'tripsTab', setup: function() { if (!tripsLoaded) loadTrips(); switchTripsSubView('history'); checkForActiveTrip(); } },
   'expenses':    { tab: null, placeholder: { name: 'Expenses', desc: 'Track business expenses, categorize for tax time.', badge: 'new' } },
@@ -7913,11 +7940,11 @@ var SECTION_ROUTES = {
   'sell':   ['pos', 'orders', 'commissions', 'wholesale', 'galleries', 'receipts'],
   'show':   ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'],
   'ship':   ['pack', 'ship'],
-  'run':    ['trips', 'expenses', 'reports'],
-  'manage': ['products', 'inventory', 'customers', 'images', 'website', 'employees', 'contacts', 'analytics', 'auditlog', 'financials', 'coupons', 'settings']
+  'run':    ['trips', 'expenses', 'reports', 'financials'],
+  'manage': ['products', 'inventory', 'customers', 'images', 'website', 'employees', 'contacts', 'analytics', 'auditlog', 'coupons', 'settings']
 };
 
-var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab'];
+var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab'];
 
 var currentRoute = 'dashboard';
 
@@ -31616,6 +31643,229 @@ function copyToClipboard(text) {
 
 // ============================================================
 // END WHOLESALE ADMIN
+// ============================================================
+
+// ============================================================
+// FINANCIALS — SQUARE SALES
+// ============================================================
+
+var financialsData = null;
+
+function loadFinancials() {
+  var startEl = document.getElementById('financialsStartDate');
+  var endEl = document.getElementById('financialsEndDate');
+  if (startEl && !startEl.value) {
+    var today = new Date().toISOString().split('T')[0];
+    startEl.value = today;
+    endEl.value = today;
+  }
+}
+
+// Load sales from Firebase cache
+async function fetchSquareSales() {
+  var startDate = document.getElementById('financialsStartDate').value;
+  var endDate = document.getElementById('financialsEndDate').value;
+  if (!startDate) { showToast('Please select a start date.', true); return; }
+
+  var summaryEl = document.getElementById('financialsSummary');
+  var txnEl = document.getElementById('financialsTransactions');
+  var emptyEl = document.getElementById('financialsEmpty');
+
+  txnEl.innerHTML = '<p style="color:var(--text-secondary, #888);">Loading sales...</p>';
+  summaryEl.style.display = 'none';
+  emptyEl.style.display = 'none';
+
+  try {
+    var token = await auth.currentUser.getIdToken();
+    var resp = await callCF('/squareSales', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ action: 'read', startDate: startDate, endDate: endDate || startDate })
+    });
+    var data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Failed to load sales');
+
+    financialsData = data;
+    renderFinancials(data);
+
+    // Show sync status
+    var statusEl = document.getElementById('financialsSyncStatus');
+    if (statusEl && data.lastSync) {
+      statusEl.style.display = '';
+      statusEl.textContent = 'Last synced: ' + new Date(data.lastSync).toLocaleString() + (data.source === 'cache' ? ' (from cache)' : '');
+    }
+  } catch (err) {
+    txnEl.innerHTML = '<p style="color:#dc2626;">' + esc(err.message) + '</p>';
+    showToast('Failed to load sales: ' + err.message, true);
+  }
+}
+
+// Pull new data from Square API → store in Firebase
+async function syncSquareSales() {
+  var btn = document.getElementById('syncSquareBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Syncing...'; }
+
+  try {
+    var token = await auth.currentUser.getIdToken();
+    var startDate = document.getElementById('financialsStartDate').value;
+    var body = { action: 'sync' };
+    // If a start date is set, sync from that date. Otherwise incremental from last sync.
+    if (startDate) body.startDate = startDate;
+    var endDate = document.getElementById('financialsEndDate').value;
+    if (endDate) body.endDate = endDate;
+
+    var resp = await callCF('/squareSales', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify(body)
+    });
+    var data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Sync failed');
+
+    showToast('Synced ' + data.synced + ' transactions from Square.');
+
+    var statusEl = document.getElementById('financialsSyncStatus');
+    if (statusEl) {
+      statusEl.style.display = '';
+      statusEl.textContent = 'Last synced: ' + new Date(data.lastSync).toLocaleString() + ' — ' + data.synced + ' new transactions';
+    }
+
+    // Reload from cache to show updated data
+    if (document.getElementById('financialsStartDate').value) {
+      fetchSquareSales();
+    }
+  } catch (err) {
+    showToast('Sync failed: ' + err.message, true);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Sync from Square'; }
+  }
+}
+
+function renderFinancials(data) {
+  var summaryEl = document.getElementById('financialsSummary');
+  var txnEl = document.getElementById('financialsTransactions');
+  var emptyEl = document.getElementById('financialsEmpty');
+
+  if (!data.payments || data.payments.length === 0) {
+    summaryEl.style.display = 'none';
+    txnEl.innerHTML = '';
+    emptyEl.style.display = '';
+    emptyEl.textContent = 'No completed transactions found for this date range.';
+    return;
+  }
+
+  emptyEl.style.display = 'none';
+  summaryEl.style.display = '';
+
+  // --- Summary cards ---
+  var netRevenue = data.totalRevenue - data.totalFees;
+  var h = '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:24px;">';
+  h += financialCard('Revenue', '$' + (data.totalRevenue / 100).toFixed(2), '#16a34a');
+  h += financialCard('Processing Fees', '-$' + (data.totalFees / 100).toFixed(2), '#dc2626');
+  h += financialCard('Net', '$' + (netRevenue / 100).toFixed(2), 'var(--primary, #2a7c6f)');
+  h += financialCard('Tips', '$' + (data.totalTips / 100).toFixed(2), '#f59e0b');
+  h += financialCard('Transactions', String(data.totalPayments), 'var(--text-primary, #333)');
+  h += '</div>';
+
+  // --- Source breakdown ---
+  var bySource = {};
+  data.payments.forEach(function(p) {
+    var src = p.orderSource || p.sourceType || 'Unknown';
+    if (!bySource[src]) bySource[src] = { count: 0, total: 0 };
+    bySource[src].count++;
+    bySource[src].total += p.totalAmount;
+  });
+  var sourceKeys = Object.keys(bySource).sort(function(a, b) { return bySource[b].total - bySource[a].total; });
+  if (sourceKeys.length > 1) {
+    h += '<div style="margin-bottom:24px;">';
+    h += '<h3 style="margin:0 0 12px 0;">By Source</h3>';
+    h += '<div style="display:flex;gap:12px;flex-wrap:wrap;">';
+    sourceKeys.forEach(function(src) {
+      var s = bySource[src];
+      h += '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:10px 16px;min-width:140px;">';
+      h += '<div style="font-weight:600;font-size:0.9rem;">' + esc(src) + '</div>';
+      h += '<div style="font-size:1.1rem;font-weight:700;">$' + (s.total / 100).toFixed(2) + '</div>';
+      h += '<div style="font-size:0.75rem;color:var(--text-secondary, #888);">' + s.count + ' txn' + (s.count !== 1 ? 's' : '') + '</div>';
+      h += '</div>';
+    });
+    h += '</div></div>';
+  }
+
+  // --- Payment method breakdown ---
+  var byMethod = {};
+  data.payments.forEach(function(p) {
+    var method = p.cardBrand || p.sourceType || 'Other';
+    if (!byMethod[method]) byMethod[method] = { count: 0, total: 0 };
+    byMethod[method].count++;
+    byMethod[method].total += p.totalAmount;
+  });
+  var methodKeys = Object.keys(byMethod).sort(function(a, b) { return byMethod[b].total - byMethod[a].total; });
+  if (methodKeys.length > 0) {
+    h += '<div style="margin-bottom:24px;">';
+    h += '<h3 style="margin:0 0 12px 0;">By Payment Method</h3>';
+    h += '<div style="display:flex;gap:12px;flex-wrap:wrap;">';
+    methodKeys.forEach(function(m) {
+      var d = byMethod[m];
+      h += '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:10px 16px;min-width:120px;">';
+      h += '<div style="font-weight:600;font-size:0.85rem;">' + esc(m) + '</div>';
+      h += '<div style="font-size:1rem;font-weight:700;">$' + (d.total / 100).toFixed(2) + '</div>';
+      h += '<div style="font-size:0.75rem;color:var(--text-secondary, #888);">' + d.count + '</div>';
+      h += '</div>';
+    });
+    h += '</div></div>';
+  }
+
+  summaryEl.innerHTML = h;
+
+  // --- Transaction list ---
+  var txnH = '<h3 style="margin:0 0 12px 0;">Transactions</h3>';
+  txnH += '<div style="display:flex;flex-direction:column;gap:8px;">';
+  data.payments.forEach(function(p) {
+    var time = p.createdAt ? new Date(p.createdAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '';
+    var date = p.createdAt ? new Date(p.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+
+    txnH += '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:12px 14px;">';
+    txnH += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">';
+    txnH += '<div>';
+
+    // Line items or note
+    if (p.lineItems && p.lineItems.length > 0) {
+      p.lineItems.forEach(function(li) {
+        txnH += '<div style="font-weight:600;font-size:0.9rem;">' + esc(li.name) + (li.variationName ? ' <span style="font-weight:400;color:var(--text-secondary, #888);">(' + esc(li.variationName) + ')</span>' : '') + ' <span style="font-weight:400;color:var(--text-secondary, #888);">&times;' + esc(li.quantity) + '</span></div>';
+      });
+    } else if (p.note) {
+      txnH += '<div style="font-weight:600;font-size:0.9rem;">' + esc(p.note) + '</div>';
+    } else {
+      txnH += '<div style="font-weight:600;font-size:0.9rem;">Payment</div>';
+    }
+
+    txnH += '<div style="font-size:0.8rem;color:var(--text-secondary, #888);">' + date + ' ' + time;
+    if (p.cardBrand) txnH += ' · ' + esc(p.cardBrand);
+    if (p.cardLast4) txnH += ' ••' + esc(p.cardLast4);
+    if (p.orderSource) txnH += ' · ' + esc(p.orderSource);
+    txnH += '</div>';
+    txnH += '</div>';
+
+    txnH += '<div style="text-align:right;">';
+    txnH += '<div style="font-weight:700;font-size:1rem;">$' + (p.totalAmount / 100).toFixed(2) + '</div>';
+    if (p.tipAmount > 0) txnH += '<div style="font-size:0.75rem;color:#f59e0b;">tip $' + (p.tipAmount / 100).toFixed(2) + '</div>';
+    if (p.processingFee > 0) txnH += '<div style="font-size:0.75rem;color:var(--text-secondary, #888);">fee -$' + (p.processingFee / 100).toFixed(2) + '</div>';
+    txnH += '</div>';
+
+    txnH += '</div></div>';
+  });
+  txnH += '</div>';
+  txnEl.innerHTML = txnH;
+}
+
+function financialCard(label, value, color) {
+  return '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:12px 18px;text-align:center;min-width:120px;">' +
+    '<div style="font-size:1.3rem;font-weight:700;color:' + color + ';">' + value + '</div>' +
+    '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;letter-spacing:0.5px;">' + label + '</div></div>';
+}
+
+// ============================================================
+// END FINANCIALS
 // ============================================================
 
 function showToast(message, isError) {
