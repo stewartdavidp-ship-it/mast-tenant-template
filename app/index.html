@@ -6360,6 +6360,8 @@ async function loadTenantConfig(tenantId) {
   }
   if (TENANT_CONFIG.site.cloudFunctionsBase) {
     CLOUD_FUNCTIONS_BASE = TENANT_CONFIG.site.cloudFunctionsBase;
+  } else if (typeof TENANT_FIREBASE_CONFIG !== 'undefined' && TENANT_FIREBASE_CONFIG && TENANT_FIREBASE_CONFIG.cloudFunctionsBase) {
+    CLOUD_FUNCTIONS_BASE = TENANT_FIREBASE_CONFIG.cloudFunctionsBase;
   }
   // Sync blog authors from config
   if (typeof loadBlogAuthors === 'function') loadBlogAuthors();
