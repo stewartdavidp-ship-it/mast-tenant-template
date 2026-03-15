@@ -16971,10 +16971,12 @@ function renderShowsList() {
 
   if (arr.length === 0) {
     if (emptyEl) emptyEl.style.display = '';
+    cardsEl.style.display = 'none';
     cardsEl.innerHTML = '';
     return;
   }
   if (emptyEl) emptyEl.style.display = 'none';
+  cardsEl.style.display = 'flex';
 
   var cards = '';
   arr.forEach(function(s) {
@@ -17724,11 +17726,13 @@ function renderShowPrepView() {
   });
 
   if (accepted.length === 0) {
+    cardsEl.style.display = 'none';
     cardsEl.innerHTML = '';
     if (emptyEl) emptyEl.style.display = '';
     return;
   }
   if (emptyEl) emptyEl.style.display = 'none';
+  cardsEl.style.display = 'flex';
 
   var cards = '';
   accepted.forEach(function(s) {
