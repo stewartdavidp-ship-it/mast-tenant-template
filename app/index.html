@@ -31661,7 +31661,7 @@ function loadFinancials() {
   }
 }
 
-// Load sales from Firebase cache
+// Load sales from Firebase cache (all processors)
 async function fetchSquareSales() {
   var startDate = document.getElementById('financialsStartDate').value;
   var endDate = document.getElementById('financialsEndDate').value;
@@ -31677,7 +31677,7 @@ async function fetchSquareSales() {
 
   try {
     var token = await auth.currentUser.getIdToken();
-    var resp = await callCF('/squareSales', {
+    var resp = await callCF('/salesSync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
       body: JSON.stringify({ action: 'read', startDate: startDate, endDate: endDate || startDate })
@@ -31688,11 +31688,18 @@ async function fetchSquareSales() {
     financialsData = data;
     renderFinancials(data);
 
-    // Show sync status
+    // Show sync status per processor
     var statusEl = document.getElementById('financialsSyncStatus');
-    if (statusEl && data.lastSync) {
-      statusEl.style.display = '';
-      statusEl.textContent = 'Last synced: ' + new Date(data.lastSync).toLocaleString() + (data.source === 'cache' ? ' (from cache)' : '');
+    if (statusEl && data.syncMeta) {
+      var parts = [];
+      Object.keys(data.syncMeta).forEach(function(proc) {
+        var m = data.syncMeta[proc];
+        if (m.lastSyncAt) parts.push(proc + ': ' + new Date(m.lastSyncAt).toLocaleString());
+      });
+      if (parts.length) {
+        statusEl.style.display = '';
+        statusEl.textContent = 'Last synced — ' + parts.join(' | ');
+      }
     }
   } catch (err) {
     txnEl.innerHTML = '<p style="color:#dc2626;">' + esc(err.message) + '</p>';
@@ -31700,21 +31707,21 @@ async function fetchSquareSales() {
   }
 }
 
-// Pull new data from Square API → store in Firebase
-async function syncSquareSales() {
+// Pull new data from processor API → store in Firebase
+async function syncSquareSales(processor) {
+  processor = processor || 'square';
   var btn = document.getElementById('syncSquareBtn');
   if (btn) { btn.disabled = true; btn.textContent = 'Syncing...'; }
 
   try {
     var token = await auth.currentUser.getIdToken();
     var startDate = document.getElementById('financialsStartDate').value;
-    var body = { action: 'sync' };
-    // If a start date is set, sync from that date. Otherwise incremental from last sync.
+    var body = { action: 'sync', processor: processor };
     if (startDate) body.startDate = startDate;
     var endDate = document.getElementById('financialsEndDate').value;
     if (endDate) body.endDate = endDate;
 
-    var resp = await callCF('/squareSales', {
+    var resp = await callCF('/salesSync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
       body: JSON.stringify(body)
@@ -31722,12 +31729,12 @@ async function syncSquareSales() {
     var data = await resp.json();
     if (!resp.ok) throw new Error(data.error || 'Sync failed');
 
-    showToast('Synced ' + data.synced + ' transactions from Square.');
+    showToast('Synced ' + data.synced + ' transactions from ' + data.processor + '.');
 
     var statusEl = document.getElementById('financialsSyncStatus');
     if (statusEl) {
       statusEl.style.display = '';
-      statusEl.textContent = 'Last synced: ' + new Date(data.lastSync).toLocaleString() + ' — ' + data.synced + ' new transactions';
+      statusEl.textContent = 'Last synced ' + data.processor + ': ' + new Date(data.lastSync).toLocaleString() + ' — ' + data.synced + ' transactions';
     }
 
     // Reload from cache to show updated data
@@ -31791,6 +31798,33 @@ function renderFinancials(data) {
     h += '</div></div>';
   }
 
+  // --- By Processor ---
+  var byProc = {};
+  data.payments.forEach(function(p) {
+    var proc = p.processor || 'unknown';
+    if (!byProc[proc]) byProc[proc] = { count: 0, total: 0, fees: 0 };
+    byProc[proc].count++;
+    byProc[proc].total += p.totalAmount || 0;
+    byProc[proc].fees += p.processingFee || 0;
+  });
+  var procKeys = Object.keys(byProc).sort(function(a, b) { return byProc[b].total - byProc[a].total; });
+  if (procKeys.length > 0) {
+    var procColors = { square: '#7c3aed', stripe: '#635bff', etsy: '#f1641e', manual: '#6b7280' };
+    h += '<div style="margin-bottom:24px;">';
+    h += '<h3 style="margin:0 0 12px 0;">By Processor</h3>';
+    h += '<div style="display:flex;gap:12px;flex-wrap:wrap;">';
+    procKeys.forEach(function(proc) {
+      var d = byProc[proc];
+      var color = procColors[proc] || '#888';
+      h += '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:10px 16px;min-width:140px;border-left:3px solid ' + color + ';">';
+      h += '<div style="font-weight:600;font-size:0.9rem;text-transform:capitalize;">' + esc(proc) + '</div>';
+      h += '<div style="font-size:1.1rem;font-weight:700;">$' + (d.total / 100).toFixed(2) + '</div>';
+      h += '<div style="font-size:0.75rem;color:var(--text-secondary, #888);">' + d.count + ' txn' + (d.count !== 1 ? 's' : '') + ' · fees $' + (d.fees / 100).toFixed(2) + '</div>';
+      h += '</div>';
+    });
+    h += '</div></div>';
+  }
+
   // --- Payment method breakdown ---
   var byMethod = {};
   data.payments.forEach(function(p) {
@@ -31839,7 +31873,10 @@ function renderFinancials(data) {
       txnH += '<div style="font-weight:600;font-size:0.9rem;">Payment</div>';
     }
 
+    var procColors = { square: '#7c3aed', stripe: '#635bff', etsy: '#f1641e', manual: '#6b7280' };
+    var procColor = procColors[p.processor] || '#888';
     txnH += '<div style="font-size:0.8rem;color:var(--text-secondary, #888);">' + date + ' ' + time;
+    if (p.processor) txnH += ' <span style="font-size:0.7rem;background:' + procColor + ';color:white;padding:1px 5px;border-radius:3px;text-transform:capitalize;">' + esc(p.processor) + '</span>';
     if (p.cardBrand) txnH += ' · ' + esc(p.cardBrand);
     if (p.cardLast4) txnH += ' ••' + esc(p.cardLast4);
     if (p.orderSource) txnH += ' · ' + esc(p.orderSource);
