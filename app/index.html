@@ -7133,7 +7133,7 @@ var imageLibrary = {};
 var imageLibraryLoaded = false;
 var imageLibraryListener = null;
 // Cloud Functions URL — sourced from storefront-tenant.js, overwritten by loadTenantConfig() after auth
-var CLOUD_FUNCTIONS_BASE = TENANT_FIREBASE_CONFIG.cloudFunctionsBase;
+var CLOUD_FUNCTIONS_BASE = (typeof TENANT_FIREBASE_CONFIG !== 'undefined' && TENANT_FIREBASE_CONFIG) ? TENANT_FIREBASE_CONFIG.cloudFunctionsBase : '';
 
 // callCF — fetch wrapper that injects X-Tenant-ID header on all Cloud Function calls
 function callCF(path, options) {
