@@ -403,19 +403,10 @@
 
 <script>
 // ============================================================
-// Firebase Init
+// Firebase Init — deferred until tenant config resolves
 // ============================================================
-firebase.initializeApp(TENANT_FIREBASE_CONFIG);
-
-var auth = firebase.auth();
-var db = firebase.database();
-var storage = firebase.storage();
-
-var PRODUCTS_PATH = TENANT_ID + '/public/products';
-var TRAINING_IMAGES_PATH = TENANT_ID + '/admin/training-images';
-var CLASSIFY_FUNCTION_URL = TENANT_FIREBASE_CONFIG.cloudFunctionsBase + '/classifyImage';
-var UPLOAD_FUNCTION_URL = TENANT_FIREBASE_CONFIG.cloudFunctionsBase + '/uploadTrainingImage';
-var SCAN_FUNCTION_URL = TENANT_FIREBASE_CONFIG.cloudFunctionsBase + '/scanCatalog';
+var auth, db, storage;
+var PRODUCTS_PATH, TRAINING_IMAGES_PATH, CLASSIFY_FUNCTION_URL, UPLOAD_FUNCTION_URL, SCAN_FUNCTION_URL;
 
 // ============================================================
 // State
@@ -446,16 +437,32 @@ function signOut() {
   }
 }
 
-auth.onAuthStateChanged(function(user) {
-  currentUser = user;
-  if (user) {
-    showScreen('menuScreen');
-    document.getElementById('userAvatar').src = user.photoURL || '';
-    loadProducts();
-    loadTrainingCounts();
-  } else {
-    showScreen('authScreen');
-  }
+// Init Firebase and attach auth listener after tenant resolves
+window.TENANT_READY.then(function() {
+  firebase.initializeApp(TENANT_FIREBASE_CONFIG);
+  auth = firebase.auth();
+  db = firebase.database();
+  storage = firebase.storage();
+
+  PRODUCTS_PATH = TENANT_ID + '/public/products';
+  TRAINING_IMAGES_PATH = TENANT_ID + '/admin/training-images';
+  CLASSIFY_FUNCTION_URL = TENANT_FIREBASE_CONFIG.cloudFunctionsBase + '/classifyImage';
+  UPLOAD_FUNCTION_URL = TENANT_FIREBASE_CONFIG.cloudFunctionsBase + '/uploadTrainingImage';
+  SCAN_FUNCTION_URL = TENANT_FIREBASE_CONFIG.cloudFunctionsBase + '/scanCatalog';
+
+  auth.onAuthStateChanged(function(user) {
+    currentUser = user;
+    if (user) {
+      showScreen('menuScreen');
+      document.getElementById('userAvatar').src = user.photoURL || '';
+      loadProducts();
+      loadTrainingCounts();
+    } else {
+      showScreen('authScreen');
+    }
+  });
+}).catch(function(err) {
+  console.error('[studio] Tenant resolution failed:', err.message);
 });
 
 // ============================================================

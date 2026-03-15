@@ -677,7 +677,7 @@ window.addEventListener('resize', function() {
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script src="../storefront-tenant.js"></script>
 <script>
-(function() {
+window.TENANT_READY.then(function() {
   if (!firebase.apps.length) firebase.initializeApp(TENANT_FIREBASE_CONFIG);
   var db = firebase.database();
   var currentTab = 'blog';
@@ -976,7 +976,9 @@ window.addEventListener('resize', function() {
 
   // Load blog tab by default
   loadPosts('blog');
-})();
+}).catch(function(err) {
+  console.error('[blog] Tenant resolution failed:', err.message);
+});
 </script>
 <script src="../feedback-widget.js"></script>
 <script src="../share-widget.js"></script>

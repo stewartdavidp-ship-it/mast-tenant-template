@@ -421,7 +421,7 @@ window.addEventListener('resize', function() {
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script src="../storefront-tenant.js"></script>
 <script>
-(function() {
+window.TENANT_READY.then(function() {
   if (!firebase.apps.length) firebase.initializeApp(TENANT_FIREBASE_CONFIG);
   var db = firebase.database();
 
@@ -497,7 +497,9 @@ window.addEventListener('resize', function() {
     if (!str) return '';
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
-})();
+}).catch(function(err) {
+  console.error('[blog-post] Tenant resolution failed:', err.message);
+});
 </script>
 <script src="../feedback-widget.js"></script>
 <script src="../share-widget.js"></script>

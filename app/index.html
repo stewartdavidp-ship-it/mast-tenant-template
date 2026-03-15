@@ -5603,21 +5603,32 @@
 
 <script>
 // ============================================================
-// Firebase Init
-// Config sourced from storefront-tenant.js (loaded via <script> tag).
-// Each tenant repo has its own copy with the correct values.
+// Firebase Init — deferred until storefront-tenant.js resolves
+// On cache hit (repeat visits), TENANT_FIREBASE_CONFIG is set
+// synchronously and init happens immediately. On cache miss
+// (first visit), init waits for the platform RTDB fetch.
 // ============================================================
-const firebaseConfig = {
-  apiKey: TENANT_FIREBASE_CONFIG.apiKey,
-  authDomain: TENANT_FIREBASE_CONFIG.authDomain,
-  databaseURL: TENANT_FIREBASE_CONFIG.databaseURL,
-  projectId: TENANT_FIREBASE_CONFIG.projectId,
-  storageBucket: TENANT_FIREBASE_CONFIG.storageBucket
-};
-firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const db = firebase.database();
-const storage = firebase.storage();
+var auth, db, storage;
+var FIREBASE_INIT_READY = (function() {
+  function doInit() {
+    var config = {
+      apiKey: TENANT_FIREBASE_CONFIG.apiKey,
+      authDomain: TENANT_FIREBASE_CONFIG.authDomain,
+      databaseURL: TENANT_FIREBASE_CONFIG.databaseURL,
+      projectId: TENANT_FIREBASE_CONFIG.projectId,
+      storageBucket: TENANT_FIREBASE_CONFIG.storageBucket
+    };
+    firebase.initializeApp(config);
+    auth = firebase.auth();
+    db = firebase.database();
+    storage = firebase.storage();
+  }
+  if (typeof TENANT_FIREBASE_CONFIG !== 'undefined' && TENANT_FIREBASE_CONFIG) {
+    doInit();
+    return Promise.resolve();
+  }
+  return window.TENANT_READY.then(doInit);
+})();
 
 const TEST_MODE = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
 
@@ -6952,6 +6963,9 @@ function enterAuthorizedState() {
   navigateTo(initialRoute);
 }
 
+// Wait for Firebase init before setting up auth listener
+FIREBASE_INIT_READY.then(function() {
+
 if (TEST_MODE && new URLSearchParams(window.location.search).get('testmode') === '1') {
   // Bypass auth on localhost for preview/testing — requires ?testmode=1 URL param.
   // Uses a non-privileged UID that has NO Firebase write permissions,
@@ -7094,6 +7108,8 @@ auth.onAuthStateChanged(async function(user) {
     seedRolesAndAdminUser();
   }
 });
+
+}); // end FIREBASE_INIT_READY.then()
 
 // ============================================================
 // Tabs

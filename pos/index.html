@@ -293,20 +293,12 @@ body {
 <script src="../storefront-tenant.js"></script>
 <script>
 // ============================================================
-// Firebase Init
+// Firebase Init — deferred until tenant config resolves
 // ============================================================
-var firebaseApp = firebase.initializeApp(TENANT_FIREBASE_CONFIG, 'pos-app');
-var db = firebaseApp.database();
-var auth = firebaseApp.auth();
+var firebaseApp, db, auth;
+var CLASSIFY_URL, UPLOAD_URL, PRODUCTS_PATH, SALES_PATH, SALES_EVENTS_PATH, STUDIO_LOCATIONS_PATH;
 
 function esc(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
-
-var CLASSIFY_URL = TENANT_FIREBASE_CONFIG.cloudFunctionsBase + '/classifyImage';
-var UPLOAD_URL = TENANT_FIREBASE_CONFIG.cloudFunctionsBase + '/uploadImage';
-var PRODUCTS_PATH = TENANT_ID + '/public/products';
-var SALES_PATH = TENANT_ID + '/admin/sales';
-var SALES_EVENTS_PATH = TENANT_ID + '/admin/salesEvents';
-var STUDIO_LOCATIONS_PATH = TENANT_ID + '/config/studioLocations';
 var STUDIO_RADIUS_METERS = 500;
 
 // ============================================================
@@ -560,28 +552,43 @@ function closeEventSettings() {
 }
 
 // ============================================================
-// Auth
+// Auth — init Firebase and attach listener after tenant resolves
 // ============================================================
-auth.onAuthStateChanged(function(user) {
-  if (user) {
-    currentUser = user;
-    user.getIdToken().then(function(token) {
-      authToken = token;
-      loadProducts();
-      if (eventId) {
-        loadEventContext();
-        document.getElementById('eventSettingsBtn').style.display = '';
-      } else {
-        detectLocation(); // GPS check if no event pre-linked
-      }
-      showScreen('cameraScreen');
-      initCamera();
-    });
-  } else {
-    currentUser = null;
-    authToken = null;
-    showScreen('authScreen');
-  }
+window.TENANT_READY.then(function() {
+  firebaseApp = firebase.initializeApp(TENANT_FIREBASE_CONFIG, 'pos-app');
+  db = firebaseApp.database();
+  auth = firebaseApp.auth();
+
+  CLASSIFY_URL = TENANT_FIREBASE_CONFIG.cloudFunctionsBase + '/classifyImage';
+  UPLOAD_URL = TENANT_FIREBASE_CONFIG.cloudFunctionsBase + '/uploadImage';
+  PRODUCTS_PATH = TENANT_ID + '/public/products';
+  SALES_PATH = TENANT_ID + '/admin/sales';
+  SALES_EVENTS_PATH = TENANT_ID + '/admin/salesEvents';
+  STUDIO_LOCATIONS_PATH = TENANT_ID + '/config/studioLocations';
+
+  auth.onAuthStateChanged(function(user) {
+    if (user) {
+      currentUser = user;
+      user.getIdToken().then(function(token) {
+        authToken = token;
+        loadProducts();
+        if (eventId) {
+          loadEventContext();
+          document.getElementById('eventSettingsBtn').style.display = '';
+        } else {
+          detectLocation(); // GPS check if no event pre-linked
+        }
+        showScreen('cameraScreen');
+        initCamera();
+      });
+    } else {
+      currentUser = null;
+      authToken = null;
+      showScreen('authScreen');
+    }
+  });
+}).catch(function(err) {
+  console.error('[pos] Tenant resolution failed:', err.message);
 });
 
 function loadEventContext() {
