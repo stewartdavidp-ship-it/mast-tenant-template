@@ -1083,6 +1083,11 @@
       } else {
         priceEl.textContent = 'Price on request';
         priceEl.classList.add('no-price');
+        // Hide cart controls for items without a price
+        var cartBtn = document.getElementById('addToCartBtn');
+        if (cartBtn) { cartBtn.style.display = 'none'; }
+        var qtyControls = document.querySelector('.qty-controls');
+        if (qtyControls) { qtyControls.style.display = 'none'; }
       }
 
       // Categories
@@ -1263,8 +1268,9 @@
     var required = window._requiredOptions || [];
     var selected = window._selectedOptions || {};
     var allSelected = required.every(function(label) { return selected[label]; });
+    var hasPrice = window._productData && window._productData.price;
     var btn = document.getElementById('addToCartBtn');
-    if (allSelected) {
+    if (allSelected && hasPrice) {
       btn.disabled = false;
       btn.style.opacity = '1';
       btn.style.cursor = 'pointer';
