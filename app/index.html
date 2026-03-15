@@ -19393,11 +19393,11 @@ async function runShowDeepDive(showId) {
     // Update show record with deep dive details
     var updates = { deepDive: details };
 
-    // Also update top-level fields if they were missing and deep dive found them
-    if (!s.boothFee && details.boothFee) updates.boothFee = Math.round(details.boothFee * 100);
-    if (!s.juryFee && details.juryFee) updates.juryFee = Math.round(details.juryFee * 100);
-    if (!s.applicationDeadline && details.applicationDeadline) updates.applicationDeadline = details.applicationDeadline;
-    if (!s.applicationUrl && details.applicationUrl) updates.applicationUrl = details.applicationUrl;
+    // Deep dive has more accurate data from the actual application page — always overwrite
+    if (details.boothFee) updates.boothFee = Math.round(details.boothFee * 100);
+    if (details.juryFee) updates.juryFee = Math.round(details.juryFee * 100);
+    if (details.applicationDeadline) updates.applicationDeadline = details.applicationDeadline;
+    if (details.applicationUrl) updates.applicationUrl = details.applicationUrl;
 
     await MastDB.shows.update(showId, updates);
     showToast('Deep dive complete! Details updated.');
