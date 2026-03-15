@@ -651,6 +651,14 @@
     body.dark-mode .history-modal-wrap label { color: #ccc !important; }
     body.dark-mode .review-attend-btn { background: #2a2a2a !important; border-color: #444 !important; color: #ccc !important; }
     body.dark-mode .history-comparison-card .order-card-details { color: #aaa; }
+    /* Pipeline card metric boxes — Prep, Execute, History cards in list views */
+    body.dark-mode #showPrepCards .order-card div[style*="background:var(--bg-secondary"] { background: #2a2a2a !important; }
+    body.dark-mode #showPrepCards .order-card div[style*="background:var(--bg-tertiary"] { background: #333 !important; color: #ccc !important; }
+    body.dark-mode #showExecuteCards .order-card div[style*="background:var(--bg-secondary"] { background: #2a2a2a !important; }
+    body.dark-mode #showHistoryCards .order-card div[style*="background:var(--bg-secondary"] { background: #2a2a2a !important; }
+    /* Show detail info cards */
+    body.dark-mode #showDetailView div[style*="background:var(--bg-secondary, #f9f9f9)"] { background: #2a2a2a !important; }
+    body.dark-mode #showDetailView div[style*="background:var(--bg-secondary, #f5f5f5)"] { background: #2a2a2a !important; }
 
     /* ========== EVENTS TABLE ========== */
     .events-table {
@@ -16920,7 +16928,16 @@ function switchShowSubView(view) {
   // Update route
   currentRoute = 'show-' + view;
   location.hash = currentRoute;
-  // Toggle all show views
+
+  // If a show detail is open, switch its content section via sidebar
+  if (selectedShowId && view !== 'find') {
+    var tabMap = { apply: 'info', prep: 'prep', execute: 'execute', history: 'history' };
+    showDetailTab = tabMap[view] || 'info';
+    renderShowDetail(selectedShowId);
+    return;
+  }
+
+  // Otherwise show the list view
   var viewIds = ['showFindView', 'showApplyView', 'showPrepView', 'showExecuteView', 'showHistoryView', 'showDetailView'];
   var activeId = {
     find: 'showFindView',
@@ -17184,21 +17201,7 @@ function renderShowDetail(showId) {
   h += '</div>';
   h += '</div>';
 
-  // Detail tabs
-  var detailTabs = [
-    { id: 'info', label: 'Info' },
-    { id: 'prep', label: 'Prep' },
-    { id: 'execute', label: 'Execute' },
-    { id: 'history', label: 'History' }
-  ];
-  h += '<div style="display:flex;gap:0;border-bottom:2px solid var(--border-color, #e5e5e5);margin-bottom:20px;">';
-  detailTabs.forEach(function(t) {
-    var isActive = showDetailTab === t.id;
-    h += '<button onclick="switchShowDetailTab(\'' + t.id + '\')" style="padding:8px 16px;font-size:0.9rem;font-weight:' + (isActive ? '600' : '400') + ';' +
-      'border:none;background:none;cursor:pointer;border-bottom:2px solid ' + (isActive ? 'var(--primary, #2a7c6f)' : 'transparent') + ';' +
-      'margin-bottom:-2px;color:' + (isActive ? 'var(--primary, #2a7c6f)' : 'var(--text-secondary, #888)') + ';font-family:inherit;">' + t.label + '</button>';
-  });
-  h += '</div>';
+  // Detail tab is driven by sidebar — no tab bar rendered
 
   // Tab content
   if (showDetailTab === 'info') {
