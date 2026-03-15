@@ -4392,11 +4392,11 @@
             <h3 style="margin:0 0 16px 0;font-size:1rem;">Find Shows</h3>
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:16px;">
               <div>
-                <label style="font-size:0.8rem;color:var(--text-secondary, #888);display:block;margin-bottom:4px;">City</label>
+                <label style="font-size:0.8rem;color:var(--text-secondary, #888);display:block;margin-bottom:4px;">City *</label>
                 <input type="text" id="showFinderCity" placeholder="e.g. Pittsburgh" style="width:100%;padding:8px 10px;border:1px solid var(--border-color, #ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--bg-primary, #fff);color:var(--text-primary, #333);box-sizing:border-box;">
               </div>
               <div>
-                <label style="font-size:0.8rem;color:var(--text-secondary, #888);display:block;margin-bottom:4px;">State</label>
+                <label style="font-size:0.8rem;color:var(--text-secondary, #888);display:block;margin-bottom:4px;">State *</label>
                 <input type="text" id="showFinderState" placeholder="e.g. PA" maxlength="2" style="width:100%;padding:8px 10px;border:1px solid var(--border-color, #ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--bg-primary, #fff);color:var(--text-primary, #333);box-sizing:border-box;">
               </div>
               <div>
@@ -17154,7 +17154,13 @@ function viewShowDetail(showId, tab) {
   selectedShowId = showId;
   var s = showsData[showId];
   if (!s) { showToast('Show not found.', true); return; }
-  if (tab) showDetailTab = tab;
+  // Default tab from sidebar context if not explicitly passed
+  if (tab) {
+    showDetailTab = tab;
+  } else {
+    var tabMap = { apply: 'info', prep: 'prep', execute: 'execute', history: 'history' };
+    showDetailTab = tabMap[showSubView] || 'info';
+  }
 
   ['showApplyView', 'showFindView', 'showPrepView', 'showExecuteView', 'showHistoryView'].forEach(function(id) {
     var el = document.getElementById(id);
@@ -19085,7 +19091,7 @@ async function runShowFinder() {
   var city = document.getElementById('showFinderCity').value.trim();
   var state = document.getElementById('showFinderState').value.trim().toUpperCase();
   if (!city && !state) {
-    showToast('Enter a city or state to search.', true);
+    showToast('City or State is required to search.', true);
     return;
   }
 
