@@ -347,6 +347,64 @@
       font-weight: 500;
     }
 
+    /* ========== SETUP WIZARD ========== */
+    .wizard-step-dot {
+      width: 32px; height: 32px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.8rem; font-weight: 600; flex-shrink: 0;
+      background: var(--cream-dark, #f0e8db); color: var(--warm-gray);
+      border: 2px solid var(--cream-dark, #f0e8db);
+      transition: all 0.3s;
+    }
+    .wizard-step-dot.active {
+      background: var(--teal); color: white; border-color: var(--teal);
+    }
+    .wizard-step-dot.completed {
+      background: var(--teal-light, #A8D5CE); color: var(--teal-deep, #1B5C52); border-color: var(--teal);
+    }
+    .wizard-step-line {
+      flex: 1; height: 2px; background: var(--cream-dark, #f0e8db);
+      transition: background 0.3s;
+    }
+    .wizard-step-line.completed { background: var(--teal); }
+    .wizard-step { animation: wizardFadeIn 0.3s ease; }
+    @keyframes wizardFadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* Feature gating callout */
+    .feature-gate-callout {
+      background: var(--cream-dark, #f0e8db); border: 1px solid #e8e0d4;
+      border-radius: 8px; padding: 20px; text-align: center;
+    }
+    .feature-gate-callout h3 { font-size: 1.1rem; margin-bottom: 8px; color: var(--charcoal); }
+    .feature-gate-callout p { color: var(--warm-gray); font-size: 0.9rem; margin-bottom: 12px; }
+    .feature-gate-callout .btn { font-size: 0.85rem; }
+
+    /* Setup banner */
+    .setup-banner {
+      background: linear-gradient(135deg, var(--teal-deep, #1B5C52), var(--teal));
+      color: white; padding: 12px 20px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 16px; font-size: 0.9rem;
+    }
+    .setup-banner a { color: var(--amber-glow); font-weight: 600; text-decoration: none; }
+    .setup-banner a:hover { text-decoration: underline; }
+
+    @media (prefers-color-scheme: dark) {
+      .feature-gate-callout { background: #2a2a2a; border-color: #444; }
+      .feature-gate-callout h3 { color: #e0e0e0; }
+      .feature-gate-callout p { color: #999; }
+      .setup-banner { background: linear-gradient(135deg, #1a3a34, #2A7C6F); }
+    }
+    body.dark-mode .feature-gate-callout { background: #2a2a2a; border-color: #444; }
+    body.dark-mode .feature-gate-callout h3 { color: #e0e0e0; }
+    body.dark-mode .feature-gate-callout p { color: #999; }
+    body.dark-mode .setup-banner { background: linear-gradient(135deg, #1a3a34, #2A7C6F); }
+    body.dark-mode .wizard-step-dot { background: #333; color: #999; border-color: #444; }
+    body.dark-mode .wizard-step-dot.active { background: var(--teal); color: white; border-color: var(--teal); }
+    body.dark-mode .wizard-step-dot.completed { background: #1a3a34; color: var(--teal-light); border-color: var(--teal); }
+    body.dark-mode .wizard-step-line { background: #444; }
+    body.dark-mode .wizard-step-line.completed { background: var(--teal); }
+
     /* ========== BUTTONS ========== */
     .btn {
       font-family: 'DM Sans', sans-serif;
@@ -4336,6 +4394,184 @@
       <button class="btn btn-secondary" onclick="signOut()">Sign Out</button>
     </div>
 
+    <!-- Setup Wizard — shown for onboarding tenants -->
+    <div id="setupWizardScreen" style="display:none;">
+      <div style="max-width:600px;margin:80px auto 40px;padding:0 24px;">
+        <!-- Progress bar -->
+        <div id="wizardProgress" style="display:flex;align-items:center;gap:4px;margin-bottom:32px;">
+          <div class="wizard-step-dot active" data-step="1">1</div>
+          <div class="wizard-step-line"></div>
+          <div class="wizard-step-dot" data-step="2">2</div>
+          <div class="wizard-step-line"></div>
+          <div class="wizard-step-dot" data-step="3">3</div>
+          <div class="wizard-step-line"></div>
+          <div class="wizard-step-dot" data-step="4">4</div>
+          <div class="wizard-step-line"></div>
+          <div class="wizard-step-dot" data-step="5">5</div>
+          <div class="wizard-step-line"></div>
+          <div class="wizard-step-dot" data-step="6">6</div>
+        </div>
+
+        <!-- Step 1: Welcome -->
+        <div id="wizardStep1" class="wizard-step">
+          <h2 style="font-size:1.8rem;margin-bottom:8px;">Welcome to Mast</h2>
+          <p style="color:var(--warm-gray);margin-bottom:24px;">Let's get your shop set up. Confirm your business details to get started.</p>
+          <div class="form-group" style="margin-bottom:16px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Business Name</label>
+            <input type="text" id="wizardBizName" placeholder="Your Business Name"
+              style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;">
+          </div>
+          <div class="form-group" style="margin-bottom:16px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Description</label>
+            <textarea id="wizardBizDesc" rows="3" placeholder="A short description of your business"
+              style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;resize:vertical;box-sizing:border-box;"></textarea>
+          </div>
+          <div class="form-group" style="margin-bottom:24px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Tagline</label>
+            <input type="text" id="wizardBizTagline" placeholder="e.g. Handcrafted glass art"
+              style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;">
+          </div>
+          <div style="display:flex;justify-content:flex-end;">
+            <button class="btn btn-primary" onclick="wizardNext(1)">Continue</button>
+          </div>
+        </div>
+
+        <!-- Step 2: Payment Setup -->
+        <div id="wizardStep2" class="wizard-step" style="display:none;">
+          <h2 style="font-size:1.8rem;margin-bottom:8px;">Payment Setup</h2>
+          <p style="color:var(--warm-gray);margin-bottom:24px;">Connect Square to accept payments through your storefront. You can skip this and set it up later in Settings.</p>
+          <div class="form-group" style="margin-bottom:16px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Square Environment</label>
+            <select id="wizardSquareEnv" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;">
+              <option value="sandbox">Sandbox (Testing)</option>
+              <option value="production">Production (Live)</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:16px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Access Token</label>
+            <input type="password" id="wizardSquareToken" placeholder="EAAAl..."
+              style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;">
+          </div>
+          <div class="form-group" style="margin-bottom:24px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Location ID</label>
+            <input type="password" id="wizardSquareLocation" placeholder="L..."
+              style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;">
+          </div>
+          <div id="wizardSquareStatus" style="font-size:0.85rem;margin-bottom:16px;"></div>
+          <div style="display:flex;justify-content:space-between;">
+            <button class="btn btn-secondary" onclick="wizardPrev(2)">Back</button>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-secondary" onclick="wizardNext(2)">Skip</button>
+              <button class="btn btn-primary" onclick="wizardSaveSquare()">Save &amp; Continue</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 3: Email Setup -->
+        <div id="wizardStep3" class="wizard-step" style="display:none;">
+          <h2 style="font-size:1.8rem;margin-bottom:8px;">Email Notifications</h2>
+          <p style="color:var(--warm-gray);margin-bottom:24px;">Set up SendGrid to send order receipts and notifications. You can skip this and configure it later.</p>
+          <div class="form-group" style="margin-bottom:16px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">SendGrid API Key</label>
+            <input type="password" id="wizardSendgridKey" placeholder="SG...."
+              style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;">
+          </div>
+          <div class="form-group" style="margin-bottom:16px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">From Email</label>
+            <input type="email" id="wizardSendgridFrom" placeholder="orders@yourbusiness.com"
+              style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;">
+          </div>
+          <div class="form-group" style="margin-bottom:24px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">From Name</label>
+            <input type="text" id="wizardSendgridName" placeholder="Your Business Name"
+              style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;">
+          </div>
+          <div id="wizardEmailStatus" style="font-size:0.85rem;margin-bottom:16px;"></div>
+          <div style="display:flex;justify-content:space-between;">
+            <button class="btn btn-secondary" onclick="wizardPrev(3)">Back</button>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-secondary" onclick="wizardNext(3)">Skip</button>
+              <button class="btn btn-primary" onclick="wizardSaveEmail()">Save &amp; Continue</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 4: Brand Customization -->
+        <div id="wizardStep4" class="wizard-step" style="display:none;">
+          <h2 style="font-size:1.8rem;margin-bottom:8px;">Brand Your Shop</h2>
+          <p style="color:var(--warm-gray);margin-bottom:24px;">Customize how your storefront looks to customers.</p>
+          <div class="form-group" style="margin-bottom:16px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Primary Color</label>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <input type="color" id="wizardPrimaryColor" value="#C4853C"
+                style="width:48px;height:36px;border:1px solid #ddd;border-radius:6px;cursor:pointer;padding:2px;">
+              <input type="text" id="wizardPrimaryColorHex" value="#C4853C" placeholder="#C4853C"
+                style="width:100px;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom:16px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Accent Color</label>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <input type="color" id="wizardAccentColor" value="#2A7C6F"
+                style="width:48px;height:36px;border:1px solid #ddd;border-radius:6px;cursor:pointer;padding:2px;">
+              <input type="text" id="wizardAccentColorHex" value="#2A7C6F" placeholder="#2A7C6F"
+                style="width:100px;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom:24px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Logo URL</label>
+            <input type="url" id="wizardLogoUrl" placeholder="https://your-logo-url.com/logo.png"
+              style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;">
+            <p style="font-size:0.8rem;color:var(--warm-gray);margin-top:4px;">Enter a URL to your logo image. You can upload one later via the Images section.</p>
+          </div>
+          <div style="display:flex;justify-content:space-between;">
+            <button class="btn btn-secondary" onclick="wizardPrev(4)">Back</button>
+            <button class="btn btn-primary" onclick="wizardSaveBrand()">Save &amp; Continue</button>
+          </div>
+        </div>
+
+        <!-- Step 5: First Product -->
+        <div id="wizardStep5" class="wizard-step" style="display:none;">
+          <h2 style="font-size:1.8rem;margin-bottom:8px;">Add Your First Product</h2>
+          <p style="color:var(--warm-gray);margin-bottom:24px;">Optional — add a product now to see your shop come alive, or skip and add products later.</p>
+          <div class="form-group" style="margin-bottom:16px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Product Name</label>
+            <input type="text" id="wizardProductName" placeholder="e.g. Hand-blown Glass Vase"
+              style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;">
+          </div>
+          <div class="form-group" style="margin-bottom:16px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Price ($)</label>
+            <input type="number" id="wizardProductPrice" min="0" step="0.01" placeholder="45.00"
+              style="width:160px;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;">
+          </div>
+          <div class="form-group" style="margin-bottom:24px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Description</label>
+            <textarea id="wizardProductDesc" rows="2" placeholder="A short description"
+              style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;resize:vertical;box-sizing:border-box;"></textarea>
+          </div>
+          <div id="wizardProductStatus" style="font-size:0.85rem;margin-bottom:16px;"></div>
+          <div style="display:flex;justify-content:space-between;">
+            <button class="btn btn-secondary" onclick="wizardPrev(5)">Back</button>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-secondary" onclick="wizardNext(5)">Skip</button>
+              <button class="btn btn-primary" onclick="wizardSaveProduct()">Add &amp; Continue</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 6: Done -->
+        <div id="wizardStep6" class="wizard-step" style="display:none;">
+          <div style="text-align:center;padding:40px 0;">
+            <div style="font-size:3rem;margin-bottom:16px;">&#127881;</div>
+            <h2 style="font-size:1.8rem;margin-bottom:8px;">You're All Set!</h2>
+            <p style="color:var(--warm-gray);margin-bottom:8px;">Your shop is ready to go. You can always configure more in Settings.</p>
+            <div id="wizardSummary" style="text-align:left;background:var(--cream-dark,#f0e8db);border-radius:8px;padding:16px;margin:24px 0;font-size:0.9rem;"></div>
+            <button class="btn btn-primary" style="font-size:1rem;padding:12px 32px;" onclick="wizardComplete()">Launch Dashboard</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Admin: Schedule Tab -->
     <div id="scheduleTab" style="display:none;">
       <div class="section-header">
@@ -5233,6 +5469,31 @@
         <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
 
         <div class="form-group">
+          <label style="font-size:1.1rem;font-weight:600;">Email (SendGrid)</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
+            SendGrid API key for sending order receipts, commission notifications, and other emails.
+          </p>
+          <div id="sendgridConfigStatus" style="margin-bottom:12px;font-size:0.85rem;"></div>
+          <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">API Key</label>
+          <div style="display:flex;gap:6px;margin-bottom:8px;">
+            <input type="password" id="sendgridApiKey" placeholder="SG...."
+              style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
+            <button type="button" onclick="toggleReveal('sendgridApiKey',this)" class="btn btn-small" style="font-size:0.75rem;padding:6px 10px;white-space:nowrap;">Show</button>
+          </div>
+          <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">From Email</label>
+          <input type="email" id="sendgridFromEmail" placeholder="orders@yourbusiness.com"
+            style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;margin-bottom:8px;box-sizing:border-box;">
+          <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">From Name</label>
+          <input type="text" id="sendgridFromName" placeholder="Your Business Name"
+            style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;margin-bottom:12px;box-sizing:border-box;">
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-primary" onclick="saveSendgridConfig()">Save</button>
+          </div>
+        </div>
+
+        <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
+
+        <div class="form-group">
           <label style="font-size:1.1rem;font-weight:600;">LabelKeeper API Key</label>
           <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">
             API key for the LabelKeeper print card integration. Get it from the LabelKeeper project's GCP Secret Manager.
@@ -5702,13 +5963,19 @@ async function loadTenantConfig(tenantId) {
     console.warn('Tenant config load failed, using defaults:', err.message);
     TENANT_CONFIG = {};
   }
-  // Read secretPrefix from tenant registry (top-level field, not under /config)
+  // Read top-level tenant registry fields (not under /config)
   try {
-    var prefixSnap = await db.ref('mast-platform/tenants/' + tenantId + '/secretPrefix').once('value');
-    TENANT_CONFIG.secretPrefix = prefixSnap.val() || tenantId;
+    var registrySnap = await db.ref('mast-platform/tenants/' + tenantId).once('value');
+    var registry = registrySnap.val() || {};
+    TENANT_CONFIG.secretPrefix = registry.secretPrefix || tenantId;
+    TENANT_CONFIG.tenantStatus = registry.status || 'active';
+    TENANT_CONFIG.configChecklist = registry.configChecklist || {};
+    TENANT_CONFIG.registryName = registry.name || '';
   } catch (err) {
-    console.warn('secretPrefix load failed, using tenantId as fallback:', err.message);
+    console.warn('Tenant registry load failed, using defaults:', err.message);
     TENANT_CONFIG.secretPrefix = tenantId;
+    TENANT_CONFIG.tenantStatus = 'active';
+    TENANT_CONFIG.configChecklist = {};
   }
   // Merge defaults so missing fields never break anything
   var defaults = {
@@ -6322,6 +6589,7 @@ MastDB.tripCustomPurposes = {
 };
 
 MastDB.config = {
+  ref: function(subpath) { return MastDB._ref('config' + (subpath ? '/' + subpath : '')); },
   square: function() { return MastDB._ref('config/square'); },
   etsy: function() { return MastDB._ref('config/etsy'); },
   shipping: function() { return MastDB._ref('public/config/shippingRates'); },
@@ -7076,6 +7344,21 @@ auth.onAuthStateChanged(async function(user) {
     return;
   }
 
+  // --- Onboarding Check: Show setup wizard for new tenants ---
+  if (TENANT_CONFIG && TENANT_CONFIG.tenantStatus === 'onboarding') {
+    // Check if wizard was already completed (setupProgress.completed)
+    var setupSnap = await MastDB.config.ref('setupProgress/completed').once('value');
+    if (!setupSnap.val()) {
+      authScreen.style.display = 'none';
+      deniedScreen.style.display = 'none';
+      header.style.display = 'none';
+      hideSidebar();
+      document.getElementById('setupWizardScreen').style.display = '';
+      initSetupWizard();
+      return;
+    }
+  }
+
   // Staff (Admin or User) — enter authorized state
   authScreen.style.display = 'none';
   deniedScreen.style.display = 'none';
@@ -7085,6 +7368,10 @@ auth.onAuthStateChanged(async function(user) {
   var initialRoute = location.hash.replace('#', '') || 'dashboard';
   navigateTo(initialRoute);
   attachListeners();
+
+  // Load configChecklist for progressive feature gating
+  await loadConfigChecklist();
+  renderSetupBanner();
 
   // Load GitHub token for image uploads — admin only
   if (isAdmin()) {
@@ -7251,12 +7538,15 @@ function applyRoute(route) {
   // Lazy-load data
   lazyLoadForRoute(route);
 
+  // Progressive feature gating — show callouts for unconfigured features
+  applyFeatureGating(route);
+
   // Update sidebar active state
   updateSidebarActive(route);
 }
 
 function lazyLoadForRoute(route) {
-  if (route === 'settings') { updateGitHubTokenStatus(); updateLkApiKeyStatus(); loadOperators(); loadStorageInfo(); loadStudioLocations(); loadLocations(); loadPublicFeedbackSetting(); }
+  if (route === 'settings') { updateGitHubTokenStatus(); updateLkApiKeyStatus(); loadOperators(); loadStorageInfo(); loadStudioLocations(); loadLocations(); loadPublicFeedbackSetting(); loadSendgridConfig(); }
   if (route === 'analytics' && !analyticsLoaded) loadAnalytics();
   if (route === 'products' && !productsLoaded) loadProducts();
   if (route === 'orders' && !ordersLoaded) loadOrders();
@@ -7832,6 +8122,56 @@ function loadGoogleConfig() {
 }
 
 // ============================================================
+// SendGrid Config Management
+// ============================================================
+async function saveSendgridConfig() {
+  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
+  var apiKey = getFieldValue('sendgridApiKey');
+  var fromEmail = document.getElementById('sendgridFromEmail').value.trim();
+  var fromName = document.getElementById('sendgridFromName').value.trim();
+
+  if (!apiKey) { showToast('API key is required.', true); return; }
+
+  var sp = (TENANT_CONFIG && TENANT_CONFIG.secretPrefix) || MastDB.tenantId();
+  var secrets = {};
+  if (apiKey && !apiKey.includes('••••')) secrets[sp + '-sendgrid-api-key'] = apiKey;
+
+  var metadata = { fromEmail: fromEmail, fromName: fromName, updatedAt: new Date().toISOString() };
+
+  try {
+    await firebase.functions().httpsCallable('secretsManager')({
+      action: 'write', service: 'sendgrid', secrets: secrets, metadata: metadata
+    });
+    await updateConfigChecklist('email', true);
+    await writeAudit('update', 'settings', 'sendgridConfig');
+    loadSendgridConfig();
+    showToast('SendGrid configuration saved.');
+  } catch (err) {
+    showToast('Error saving SendGrid config: ' + err.message, true);
+  }
+}
+
+function loadSendgridConfig() {
+  var statusEl = document.getElementById('sendgridConfigStatus');
+  firebase.functions().httpsCallable('secretsManager')({
+    action: 'read', service: 'sendgrid'
+  }).then(function(result) {
+    var config = result.data;
+    if (config && config.configured) {
+      setMaskedField('sendgridApiKey', config.apiKey || '');
+      if (config.fromEmail) document.getElementById('sendgridFromEmail').value = config.fromEmail;
+      if (config.fromName) document.getElementById('sendgridFromName').value = config.fromName;
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; SendGrid configured</span>';
+    } else {
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray-light);">Not configured. Email notifications will not work.</span>';
+    }
+  }).catch(function(err) {
+    console.warn('SendGrid config read failed:', err.message);
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray-light);">Could not load config.</span>';
+  });
+}
+
+// ============================================================
 // Etsy Config Management
 // ============================================================
 async function connectEtsy() {
@@ -7966,6 +8306,395 @@ async function syncEtsyOrders() {
 // Legacy seed/migration functions removed (migrateAndSeedSections, migrateSectionsV2,
 // cleanupBrokenRecords, seedShopProducts, seedProductCatalog).
 // All completed — flags set in RTDB. Weebly URLs fully migrated to Firebase Storage.
+
+// ============================================================
+// Setup Wizard — First-login flow for onboarding tenants
+// ============================================================
+var wizardCurrentStep = 1;
+var wizardProgress = {};
+
+function initSetupWizard() {
+  // Load saved progress
+  MastDB.config.ref('setupProgress').once('value').then(function(snap) {
+    wizardProgress = snap.val() || {};
+    wizardCurrentStep = wizardProgress.currentStep || 1;
+    showWizardStep(wizardCurrentStep);
+  }).catch(function() {
+    showWizardStep(1);
+  });
+
+  // Pre-populate Step 1 from tenant config or platform registry
+  if (TENANT_CONFIG) {
+    var nameEl = document.getElementById('wizardBizName');
+    var descEl = document.getElementById('wizardBizDesc');
+    var taglineEl = document.getElementById('wizardBizTagline');
+    // Try brand.name first, then fall back to registry top-level name
+    var brandName = (TENANT_CONFIG.brand && TENANT_CONFIG.brand.name && TENANT_CONFIG.brand.name !== 'Tenant') ? TENANT_CONFIG.brand.name : null;
+    if (!brandName && TENANT_CONFIG.registryName) brandName = TENANT_CONFIG.registryName;
+    if (nameEl && brandName) nameEl.value = brandName;
+    if (taglineEl && TENANT_CONFIG.brand && TENANT_CONFIG.brand.tagline) taglineEl.value = TENANT_CONFIG.brand.tagline;
+    // Pre-populate sendgrid from name
+    var sgNameEl = document.getElementById('wizardSendgridName');
+    if (sgNameEl && TENANT_CONFIG.brand && TENANT_CONFIG.brand.name && TENANT_CONFIG.brand.name !== 'Tenant') sgNameEl.value = TENANT_CONFIG.brand.name;
+  }
+
+  // Color picker sync
+  var pc = document.getElementById('wizardPrimaryColor');
+  var pch = document.getElementById('wizardPrimaryColorHex');
+  var ac = document.getElementById('wizardAccentColor');
+  var ach = document.getElementById('wizardAccentColorHex');
+  if (pc && pch) {
+    pc.addEventListener('input', function() { pch.value = pc.value; });
+    pch.addEventListener('input', function() { if (/^#[0-9A-Fa-f]{6}$/.test(pch.value)) pc.value = pch.value; });
+  }
+  if (ac && ach) {
+    ac.addEventListener('input', function() { ach.value = ac.value; });
+    ach.addEventListener('input', function() { if (/^#[0-9A-Fa-f]{6}$/.test(ach.value)) ac.value = ach.value; });
+  }
+}
+
+function showWizardStep(step) {
+  wizardCurrentStep = step;
+  for (var i = 1; i <= 6; i++) {
+    var el = document.getElementById('wizardStep' + i);
+    if (el) el.style.display = i === step ? '' : 'none';
+  }
+  updateWizardProgress();
+}
+
+function updateWizardProgress() {
+  var dots = document.querySelectorAll('#wizardProgress .wizard-step-dot');
+  var lines = document.querySelectorAll('#wizardProgress .wizard-step-line');
+  dots.forEach(function(dot) {
+    var s = parseInt(dot.dataset.step);
+    dot.className = 'wizard-step-dot';
+    if (s < wizardCurrentStep) dot.className += ' completed';
+    else if (s === wizardCurrentStep) dot.className += ' active';
+  });
+  lines.forEach(function(line, idx) {
+    line.className = 'wizard-step-line' + (idx < wizardCurrentStep - 1 ? ' completed' : '');
+  });
+}
+
+function wizardNext(fromStep) {
+  var next = fromStep + 1;
+  if (next > 6) return;
+  // Step 1: validate business name before proceeding
+  if (fromStep === 1) {
+    var name = document.getElementById('wizardBizName').value.trim();
+    if (!name) { showToast('Please enter your business name.', true); return; }
+  }
+  showWizardStep(next);
+  saveWizardProgress(next);
+  // Step 5 → 6: render summary
+  if (next === 6) renderWizardSummary();
+}
+
+function wizardPrev(fromStep) {
+  var prev = fromStep - 1;
+  if (prev < 1) return;
+  showWizardStep(prev);
+}
+
+function saveWizardProgress(step, extras) {
+  var update = { currentStep: step, updatedAt: new Date().toISOString() };
+  if (extras) Object.assign(update, extras);
+  MastDB.config.ref('setupProgress').update(update).catch(function(e) {
+    console.warn('Failed to save wizard progress:', e.message);
+  });
+}
+
+async function wizardSaveSquare() {
+  var env = document.getElementById('wizardSquareEnv').value;
+  var token = document.getElementById('wizardSquareToken').value.trim();
+  var location = document.getElementById('wizardSquareLocation').value.trim();
+  var statusEl = document.getElementById('wizardSquareStatus');
+
+  if (!token || !location) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger);">Access Token and Location ID are required.</span>';
+    return;
+  }
+
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Saving...</span>';
+
+  var sp = (TENANT_CONFIG && TENANT_CONFIG.secretPrefix) || MastDB.tenantId();
+  var secrets = {};
+  secrets[sp + '-square-' + env + '-access-token'] = token;
+  var metadata = {
+    environment: env,
+    [env]: { locationId: location },
+    updatedAt: new Date().toISOString()
+  };
+
+  try {
+    await firebase.functions().httpsCallable('secretsManager')({
+      action: 'write', service: 'square', secrets: secrets, metadata: metadata
+    });
+    await MastDB.config.testMode().set(env === 'sandbox');
+    // Update configChecklist on platform registry
+    await updateConfigChecklist('square', true);
+    saveWizardProgress(3, { squareConfigured: true });
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Square configured!</span>';
+    showToast('Square credentials saved.');
+    setTimeout(function() { showWizardStep(3); }, 500);
+  } catch (err) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger);">Error: ' + esc(err.message) + '</span>';
+  }
+}
+
+async function wizardSaveEmail() {
+  var apiKey = document.getElementById('wizardSendgridKey').value.trim();
+  var fromEmail = document.getElementById('wizardSendgridFrom').value.trim();
+  var fromName = document.getElementById('wizardSendgridName').value.trim();
+  var statusEl = document.getElementById('wizardEmailStatus');
+
+  if (!apiKey) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger);">API key is required.</span>';
+    return;
+  }
+
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Saving...</span>';
+
+  var sp = (TENANT_CONFIG && TENANT_CONFIG.secretPrefix) || MastDB.tenantId();
+  var secrets = {};
+  secrets[sp + '-sendgrid-api-key'] = apiKey;
+  var metadata = { fromEmail: fromEmail, fromName: fromName, updatedAt: new Date().toISOString() };
+
+  try {
+    await firebase.functions().httpsCallable('secretsManager')({
+      action: 'write', service: 'sendgrid', secrets: secrets, metadata: metadata
+    });
+    await updateConfigChecklist('email', true);
+    saveWizardProgress(4, { emailConfigured: true });
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Email configured!</span>';
+    showToast('SendGrid credentials saved.');
+    setTimeout(function() { showWizardStep(4); }, 500);
+  } catch (err) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger);">Error: ' + esc(err.message) + '</span>';
+  }
+}
+
+async function wizardSaveBrand() {
+  var primaryColor = document.getElementById('wizardPrimaryColorHex').value.trim() || '#C4853C';
+  var accentColor = document.getElementById('wizardAccentColorHex').value.trim() || '#2A7C6F';
+  var logoUrl = document.getElementById('wizardLogoUrl').value.trim();
+
+  try {
+    var brandUpdate = {
+      primaryColor: primaryColor,
+      accentColor: accentColor,
+      updatedAt: new Date().toISOString()
+    };
+    if (logoUrl) brandUpdate.logoUrl = logoUrl;
+    await MastDB.config.ref('brand').update(brandUpdate);
+    // Also update platform registry publicConfig
+    await db.ref('mast-platform/tenants/' + MastDB.tenantId() + '/publicConfig').update({
+      primaryColor: primaryColor,
+      accentColor: accentColor
+    });
+    await updateConfigChecklist('brand', true);
+    saveWizardProgress(5, { brandConfigured: true });
+    showToast('Brand customization saved.');
+    showWizardStep(5);
+  } catch (err) {
+    showToast('Error saving brand: ' + err.message, true);
+  }
+}
+
+async function wizardSaveProduct() {
+  var name = document.getElementById('wizardProductName').value.trim();
+  var price = parseFloat(document.getElementById('wizardProductPrice').value);
+  var desc = document.getElementById('wizardProductDesc').value.trim();
+  var statusEl = document.getElementById('wizardProductStatus');
+
+  if (!name) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger);">Product name is required.</span>';
+    return;
+  }
+  if (isNaN(price) || price <= 0) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger);">Enter a valid price.</span>';
+    return;
+  }
+
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Adding product...</span>';
+
+  try {
+    var pid = MastDB.products.newKey();
+    await MastDB.products.ref(pid).set({
+      id: pid,
+      name: name,
+      description: desc || '',
+      priceCents: Math.round(price * 100),
+      categories: ['general'],
+      status: 'active',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+    saveWizardProgress(6, { firstProductAdded: true });
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Product added!</span>';
+    showToast('Product "' + name + '" created.');
+    setTimeout(function() { showWizardStep(6); renderWizardSummary(); }, 500);
+  } catch (err) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger);">Error: ' + esc(err.message) + '</span>';
+  }
+}
+
+function renderWizardSummary() {
+  var el = document.getElementById('wizardSummary');
+  if (!el) return;
+  var items = [];
+  items.push('<strong>Business:</strong> ' + esc(document.getElementById('wizardBizName').value || 'Configured'));
+  if (wizardProgress.squareConfigured) items.push('<strong>Payments:</strong> Square connected &#10003;');
+  else items.push('<strong>Payments:</strong> <span style="color:var(--warm-gray);">Skipped — configure in Settings > Payments</span>');
+  if (wizardProgress.emailConfigured) items.push('<strong>Email:</strong> SendGrid connected &#10003;');
+  else items.push('<strong>Email:</strong> <span style="color:var(--warm-gray);">Skipped — configure in Settings > Integrations</span>');
+  if (wizardProgress.brandConfigured) items.push('<strong>Brand:</strong> Customized &#10003;');
+  if (wizardProgress.firstProductAdded) items.push('<strong>Products:</strong> First product added &#10003;');
+  else items.push('<strong>Products:</strong> <span style="color:var(--warm-gray);">None yet — add in Products tab</span>');
+  el.innerHTML = items.join('<br style="margin-bottom:8px;">');
+}
+
+async function wizardComplete() {
+  try {
+    // Save Step 1 data (business info) to tenant config
+    var bizName = document.getElementById('wizardBizName').value.trim();
+    var bizDesc = document.getElementById('wizardBizDesc').value.trim();
+    var bizTagline = document.getElementById('wizardBizTagline').value.trim();
+    if (bizName) {
+      await MastDB.config.ref('brand').update({
+        name: bizName,
+        tagline: bizTagline || ''
+      });
+      // Update platform registry
+      await db.ref('mast-platform/tenants/' + MastDB.tenantId()).update({
+        name: bizName
+      });
+      await db.ref('mast-platform/tenants/' + MastDB.tenantId() + '/publicConfig').update({
+        brandName: bizName,
+        brandTagline: bizTagline || ''
+      });
+    }
+    if (bizDesc) {
+      await MastDB.config.ref('brand/description').set(bizDesc);
+    }
+    // Set tenant status to active
+    await db.ref('mast-platform/tenants/' + MastDB.tenantId() + '/status').set('active');
+    // Mark setup complete
+    await MastDB.config.ref('setupProgress/completed').set(true);
+    await MastDB.config.ref('setupProgress/completedAt').set(new Date().toISOString());
+
+    showToast('Setup complete! Welcome to your dashboard.');
+
+    // Transition to dashboard
+    document.getElementById('setupWizardScreen').style.display = 'none';
+    document.getElementById('header').style.display = 'flex';
+    showSidebar();
+    navigateTo('dashboard');
+    attachListeners();
+    loadSettings();
+  } catch (err) {
+    showToast('Error completing setup: ' + err.message, true);
+  }
+}
+
+// Update configChecklist on platform registry
+async function updateConfigChecklist(field, value) {
+  try {
+    var update = {};
+    update['configChecklist/' + field] = value;
+    update['configChecklist/updatedAt'] = new Date().toISOString();
+    await db.ref('mast-platform/tenants/' + MastDB.tenantId()).update(update);
+  } catch (err) {
+    console.warn('Failed to update configChecklist:', err.message);
+  }
+}
+
+// ============================================================
+// Progressive Feature Gating
+// ============================================================
+var tenantConfigChecklist = null;
+
+async function loadConfigChecklist() {
+  try {
+    var snap = await db.ref('mast-platform/tenants/' + MastDB.tenantId() + '/configChecklist').once('value');
+    tenantConfigChecklist = snap.val() || {};
+  } catch (err) {
+    console.warn('Failed to load configChecklist:', err.message);
+    tenantConfigChecklist = {};
+  }
+  return tenantConfigChecklist;
+}
+
+function isFeatureConfigured(feature) {
+  if (!tenantConfigChecklist) return true; // Default: assume configured (for existing tenants)
+  return !!tenantConfigChecklist[feature];
+}
+
+function renderFeatureGate(containerId, feature, title, message, settingsRoute) {
+  var el = document.getElementById(containerId);
+  if (!el) return;
+  if (isFeatureConfigured(feature)) return; // Feature is configured, don't gate
+
+  var callout = document.createElement('div');
+  callout.className = 'feature-gate-callout';
+  callout.id = 'featureGate_' + feature;
+  callout.innerHTML =
+    '<h3>' + esc(title) + '</h3>' +
+    '<p>' + esc(message) + '</p>' +
+    '<button class="btn btn-primary" onclick="navigateTo(\'' + settingsRoute + '\')">Configure Now</button>';
+  el.insertBefore(callout, el.firstChild);
+}
+
+function renderSetupBanner() {
+  if (!tenantConfigChecklist) return;
+  // Count incomplete required items
+  var required = ['square', 'email', 'brand'];
+  var incomplete = required.filter(function(k) { return !tenantConfigChecklist[k]; });
+  if (incomplete.length === 0) return;
+
+  var banner = document.getElementById('setupBanner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'setupBanner';
+    banner.className = 'setup-banner';
+    var dashTab = document.getElementById('dashboardTab');
+    if (dashTab) dashTab.insertBefore(banner, dashTab.firstChild);
+  }
+  banner.innerHTML = incomplete.length + ' setup step' + (incomplete.length > 1 ? 's' : '') +
+    ' remaining — <a href="#settings" onclick="navigateTo(\'settings\');return false;">Complete Setup</a>';
+}
+
+// Feature gating map: route → { feature, title, message, settingsRoute }
+var FEATURE_GATE_MAP = {
+  'orders':  { feature: 'square', title: 'Payment Setup Required', message: 'Set up Square to accept online payments and manage orders.', settingsRoute: 'settings', tabId: 'ordersTab' },
+  'pos':     { feature: 'square', title: 'Payment Setup Required', message: 'Set up Square to use the point-of-sale system.', settingsRoute: 'settings', tabId: 'salesTab' }
+};
+
+function applyFeatureGating(route) {
+  // Clean up any existing gate callouts
+  var existing = document.querySelectorAll('.feature-gate-callout');
+  existing.forEach(function(el) { el.remove(); });
+
+  if (!tenantConfigChecklist) return;
+
+  var gate = FEATURE_GATE_MAP[route];
+  if (!gate) return;
+  if (isFeatureConfigured(gate.feature)) return;
+
+  var tabEl = document.getElementById(gate.tabId);
+  if (!tabEl) return;
+
+  var callout = document.createElement('div');
+  callout.className = 'feature-gate-callout';
+  callout.style.margin = '40px auto';
+  callout.style.maxWidth = '400px';
+  callout.innerHTML =
+    '<h3>' + esc(gate.title) + '</h3>' +
+    '<p>' + esc(gate.message) + '</p>' +
+    '<button class="btn btn-primary" onclick="navigateTo(\'' + gate.settingsRoute + '\')">Configure Now</button>';
+  tabEl.insertBefore(callout, tabEl.firstChild);
+}
+
 // ============================================================
 // Products Catalog
 // ============================================================
