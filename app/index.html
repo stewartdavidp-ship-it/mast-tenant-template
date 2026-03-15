@@ -7217,6 +7217,17 @@ var CLOUD_FUNCTIONS_BASE = (typeof TENANT_FIREBASE_CONFIG !== 'undefined' && TEN
 
 // callCF — fetch wrapper that injects X-Tenant-ID header on all Cloud Function calls
 function callCF(path, options) {
+    if (!CLOUD_FUNCTIONS_BASE) {
+      // Attempt recovery from TENANT_FIREBASE_CONFIG or TENANT_CONFIG
+      if (typeof TENANT_FIREBASE_CONFIG !== 'undefined' && TENANT_FIREBASE_CONFIG && TENANT_FIREBASE_CONFIG.cloudFunctionsBase) {
+        CLOUD_FUNCTIONS_BASE = TENANT_FIREBASE_CONFIG.cloudFunctionsBase;
+      } else if (typeof TENANT_CONFIG !== 'undefined' && TENANT_CONFIG && TENANT_CONFIG.site && TENANT_CONFIG.site.cloudFunctionsBase) {
+        CLOUD_FUNCTIONS_BASE = TENANT_CONFIG.site.cloudFunctionsBase;
+      }
+    }
+    if (!CLOUD_FUNCTIONS_BASE) {
+      return Promise.reject(new Error('Cloud Functions URL not configured. Please refresh the page.'));
+    }
     options = options || {};
     options.headers = options.headers || {};
     options.headers['X-Tenant-ID'] = MastDB.tenantId();
@@ -7450,6 +7461,15 @@ async function loadUserRole(uid) {
     // Fallback: if role config missing in Firebase, use built-in defaults
     if (!currentRoleConfig && DEFAULT_ROLES[currentUserRole]) {
       currentRoleConfig = DEFAULT_ROLES[currentUserRole];
+    }
+    // Merge any missing permission entities from defaults (handles newly added entities like 'shows')
+    if (currentRoleConfig && currentRoleConfig.permissions && DEFAULT_ROLES[currentUserRole]) {
+      var defaultPerms = DEFAULT_ROLES[currentUserRole].permissions;
+      Object.keys(defaultPerms).forEach(function(entity) {
+        if (!currentRoleConfig.permissions[entity]) {
+          currentRoleConfig.permissions[entity] = defaultPerms[entity];
+        }
+      });
     }
 
     rbacReady = true;
