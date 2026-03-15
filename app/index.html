@@ -621,6 +621,22 @@
     body.dark-mode #showHistoryStats > div { background: #2a2a2a !important; }
     body.dark-mode #showHistoryStats div:last-child { color: #ccc; }
 
+    /* Show Execute tab dark mode */
+    body.dark-mode .exec-status-gate { background: #2a2a2a !important; color: #ccc !important; }
+    body.dark-mode .exec-upcoming-banner { background: #2a2a2a !important; }
+    body.dark-mode .exec-day-btn { background: #2a2a2a !important; border-color: #444 !important; color: #ccc !important; }
+    body.dark-mode .exec-day-btn.active { background: var(--teal, #2a7c6f) !important; color: white !important; border-color: var(--teal, #2a7c6f) !important; }
+    body.dark-mode #executeContent div[style*="background:var(--bg-secondary"] { background: #2a2a2a !important; }
+    body.dark-mode #executeContent div[style*="background:#16a34a22"] { background: #16a34a22 !important; }
+    body.dark-mode #executeContent div[style*="background:#dc262622"] { background: #dc262622 !important; }
+    body.dark-mode #executeContent button[style*="border:1px solid var(--border-color"] { border-color: #444 !important; color: #ccc !important; }
+    body.dark-mode #executeContent span[style*="border-top:1px solid var(--border-color"] { border-color: #444 !important; }
+    body.dark-mode .exec-modal-wrap > div { background: #1e1e1e !important; color: #e0e0e0 !important; }
+    body.dark-mode .exec-modal-wrap input,
+    body.dark-mode .exec-modal-wrap select,
+    body.dark-mode .exec-modal-wrap textarea { background: #2a2a2a !important; color: #e0e0e0 !important; border-color: #444 !important; }
+    body.dark-mode .exec-modal-wrap label { color: #ccc !important; }
+
     /* ========== EVENTS TABLE ========== */
     .events-table {
       width: 100%;
@@ -17389,14 +17405,14 @@ function renderShowDetailExecute(showId, s) {
     h += '</div></div>';
   } else if (s.applicationStatus === 'accepted' && s.startDate && s.startDate > today) {
     var daysUntil = Math.ceil((new Date(s.startDate + 'T00:00:00') - new Date()) / 86400000);
-    h += '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:12px;padding:16px 20px;margin-bottom:24px;display:flex;align-items:center;gap:12px;">';
+    h += '<div class="exec-upcoming-banner" style="background:var(--bg-secondary, #f5f5f5);border-radius:12px;padding:16px 20px;margin-bottom:24px;display:flex;align-items:center;gap:12px;">';
     h += '<div style="font-size:1.5rem;">&#128197;</div>';
     h += '<div>';
     h += '<div style="font-weight:600;">Show starts in ' + daysUntil + ' day' + (daysUntil !== 1 ? 's' : '') + '</div>';
     h += '<div style="font-size:0.85rem;color:var(--text-secondary, #888);">Execute tools become active on show day.</div>';
     h += '</div></div>';
   } else if (s.applicationStatus !== 'accepted') {
-    h += '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:12px;padding:16px 20px;margin-bottom:24px;color:var(--text-secondary, #888);text-align:center;">';
+    h += '<div class="exec-status-gate" style="background:var(--bg-secondary, #f5f5f5);border-radius:12px;padding:16px 20px;margin-bottom:24px;color:var(--text-secondary, #888);text-align:center;">';
     h += '<p style="margin:0;">Show must be in "Accepted" status to use Execute tools.</p>';
     h += '</div>';
   }
@@ -17414,7 +17430,7 @@ function renderShowDetailExecute(showId, s) {
       var isSelected = dt === selectedDate;
       var dayLabel = new Date(dt + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
       var isToday = dt === today;
-      h += '<button onclick="switchExecuteDate(\'' + showId + '\', \'' + dt + '\')" style="padding:6px 12px;border-radius:6px;font-size:0.85rem;font-family:inherit;cursor:pointer;' +
+      h += '<button class="exec-day-btn' + (isSelected ? ' active' : '') + '" onclick="switchExecuteDate(\'' + showId + '\', \'' + dt + '\')" style="padding:6px 12px;border-radius:6px;font-size:0.85rem;font-family:inherit;cursor:pointer;' +
         'border:1px solid ' + (isSelected ? 'var(--primary, #2a7c6f)' : 'var(--border-color, #ddd)') + ';' +
         'background:' + (isSelected ? 'var(--primary, #2a7c6f)' : 'var(--bg-primary, #fff)') + ';' +
         'color:' + (isSelected ? 'white' : 'var(--text-primary, #333)') + ';font-weight:' + (isSelected ? '600' : '400') + ';">' +
@@ -17668,7 +17684,7 @@ function openShowSaleModal(showId, saleId) {
   }
   var sale = existing || {};
 
-  var h = '<div id="showSaleModal" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this)this.remove()">';
+  var h = '<div id="showSaleModal" class="exec-modal-wrap" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this)this.remove()">';
   h += '<div style="background:var(--bg-primary, #fff);border-radius:12px;padding:24px;max-width:450px;width:90%;max-height:80vh;overflow-y:auto;">';
   h += '<h3 style="margin:0 0 16px 0;">' + (saleId ? 'Edit' : 'Record') + ' Sale</h3>';
   // Description
@@ -17813,7 +17829,7 @@ function editShowNotes(showId) {
   var notes = exec.notes || {};
   var currentNotes = multiDay ? (notes[selectedDate] || '') : (typeof notes === 'string' ? notes : (notes._default || ''));
 
-  var h = '<div id="showNotesModal" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this)this.remove()">';
+  var h = '<div id="showNotesModal" class="exec-modal-wrap" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this)this.remove()">';
   h += '<div style="background:var(--bg-primary, #fff);border-radius:12px;padding:24px;max-width:500px;width:90%;max-height:80vh;overflow-y:auto;">';
   h += '<h3 style="margin:0 0 16px 0;">Show Notes' + (multiDay ? ' — ' + new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : '') + '</h3>';
   h += '<div style="margin-bottom:12px;">';
