@@ -15,6 +15,7 @@
 (function() {
   'use strict';
 
+  function initFeedbackWidget() {
   var _tenantFallback = (typeof TENANT_ID !== 'undefined' && TENANT_ID !== 'unknown') ? TENANT_ID : null;
   if (!_tenantFallback) { console.warn('feedback-widget: No TENANT_ID resolved, widget disabled.'); return; }
   var FEEDBACK_PATH = _tenantFallback + '/feedbackReports';
@@ -251,5 +252,12 @@
     setTimeout(function() {
       if (toast.parentNode) toast.parentNode.removeChild(toast);
     }, 3000);
+  }
+  } // end initFeedbackWidget
+
+  if (typeof window.TENANT_READY !== 'undefined') {
+    window.TENANT_READY.then(initFeedbackWidget).catch(function() {});
+  } else {
+    initFeedbackWidget();
   }
 })();

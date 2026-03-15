@@ -797,7 +797,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="storefront-tenant.js"></script>
 <script>
-(function() {
+window.TENANT_READY.then(function() {
   if (!firebase.apps.length) firebase.initializeApp(TENANT_FIREBASE_CONFIG);
   const db = firebase.database();
 
@@ -851,12 +851,12 @@
     });
     list.innerHTML = html;
   }).catch(function() { /* keep hardcoded fallback */ });
-})();
+}).catch(function(err) { console.error('[schedule] Tenant resolution failed:', err.message); });
 </script>
 
 <!-- ============ ANALYTICS TRACKING ============ -->
 <script>
-(function() {
+window.TENANT_READY.then(function() {
   var db = firebase.database();
   var HITS = TENANT_ID + '/analytics/hits';
   var now = new Date();
@@ -894,7 +894,7 @@
 
     if (action) track('ev', action);
   }, true);
-})();
+}).catch(function(err) { console.error('[schedule] Analytics failed:', err.message); });
 </script>
 <script src="cart.js"></script>
 <script src="checkout.js?v=2"></script>

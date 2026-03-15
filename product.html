@@ -1035,7 +1035,7 @@
 <script src="storefront-tenant.js"></script>
 <script>
   // Firebase — load product detail from URL param ?id=pXXX
-  (function() {
+  window.TENANT_READY.then(function() {
     var app = firebase.initializeApp(TENANT_FIREBASE_CONFIG, 'public-product');
     var db = app.database();
     window._productDb = db;
@@ -1195,7 +1195,7 @@
       document.getElementById('productLoading').style.display = 'none';
       document.getElementById('productNotFound').style.display = '';
     });
-  })();
+  }).catch(function(err) { console.error('[product] Tenant resolution failed:', err.message); });
 
   function switchImage(idx) {
     var images = window._productImages || [];
@@ -1292,8 +1292,7 @@
     });
     ShirCart.showToast(p.name + ' added to cart');
   });
-</script>
-<script>
+
   // ── Commission Form (sold sculptures) ──
   window._commInspirationPids = [];
   window._commUploadFile = null;
@@ -1638,7 +1637,7 @@
 
 <!-- ============ ANALYTICS TRACKING ============ -->
 <script>
-(function() {
+window.TENANT_READY.then(function() {
   var db = window._productDb || firebase.app('public-product').database();
   var HITS = TENANT_ID + '/analytics/hits';
   var now = new Date();
@@ -1676,7 +1675,7 @@
 
     if (action) track('ev', action);
   }, true);
-})();
+}).catch(function(err) { console.error('[product] Analytics failed:', err.message); });
 </script>
 <script src="cart.js"></script>
 <script src="checkout.js?v=2"></script>

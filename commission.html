@@ -782,6 +782,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
 <script src="storefront-tenant.js"></script>
 <script>
+window.TENANT_READY.then(function() {
 (function() {
   var app = firebase.initializeApp(TENANT_FIREBASE_CONFIG, 'commission-page');
   var db = app.database();
@@ -810,6 +811,7 @@
   // Load catalog on page load
   loadProductCatalog();
 })();
+}).catch(function(err) { console.error('[commission] Tenant resolution failed:', err.message); });
 
 function loadProductCatalog() {
   var db = window._commDb;

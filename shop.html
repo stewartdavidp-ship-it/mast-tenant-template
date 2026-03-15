@@ -712,6 +712,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="storefront-tenant.js"></script>
 <script>
+window.TENANT_READY.then(function() {
   // Firebase — load shop products dynamically grouped by category
   var allShopItems = [];
   var SHOP_CATS = [
@@ -796,12 +797,13 @@
     container.innerHTML = html;
   }
 
-  function filterShop(cat, el) {
+  window.filterShop = function(cat, el) {
     var pills = document.querySelectorAll('.filter-pill');
     pills.forEach(function(p) { p.classList.remove('active'); });
     el.classList.add('active');
     renderShop(cat);
-  }
+  };
+}).catch(function(err) { console.error('[shop] Tenant resolution failed:', err.message); });
 </script>
 <script>
   // Nav scroll effect
@@ -845,7 +847,7 @@
 
 <!-- ============ ANALYTICS TRACKING ============ -->
 <script>
-(function() {
+window.TENANT_READY.then(function() {
   var db = firebase.app('public-shop').database();
   var HITS = TENANT_ID + '/analytics/hits';
   var now = new Date();
@@ -882,13 +884,13 @@
 
     if (action) track('ev', action);
   }, true);
-})();
+}).catch(function(err) { console.error('[shop] Analytics failed:', err.message); });
 </script>
 <script src="cart.js"></script>
 <script src="checkout.js?v=2"></script>
 <!-- Auth (siteSignIn/siteSignOut/ensureCustomerAccount) handled by cart.js -->
 <script>
-(function() {
+window.TENANT_READY.then(function() {
   // Page-specific: show welcome message when signed in
   var auth = firebase.app('public-shop').auth();
   auth.onAuthStateChanged(function(user) {
@@ -903,7 +905,7 @@
       if (welcome) welcome.style.display = 'none';
     }
   });
-})();
+}).catch(function(err) { console.error('[shop] Auth welcome failed:', err.message); });
 </script>
 <script src="feedback-widget.js"></script>
 <script src="share-widget.js"></script>

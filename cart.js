@@ -11,9 +11,9 @@
   'use strict';
 
   // ── Constants ──
-  var STORAGE_KEY = (typeof TENANT_ID !== 'undefined' ? TENANT_ID : 'shir') + '_cart';
-  // Firebase config from storefront-tenant.js (loaded before this script)
-  var FIREBASE_CONFIG = (typeof TENANT_FIREBASE_CONFIG !== 'undefined') ? TENANT_FIREBASE_CONFIG : {};
+  // These are set lazily in init() after TENANT_READY resolves
+  var STORAGE_KEY = 'shir_cart'; // default; overwritten in init()
+  var FIREBASE_CONFIG = {};      // default; overwritten in init()
   var MAX_QTY = 10;
   var MAX_QTY_WHOLESALE = 9999;
 
@@ -667,6 +667,9 @@
 
   // ── Initialize ──
   function init() {
+    // Re-read tenant globals now that TENANT_READY has resolved
+    STORAGE_KEY = (typeof TENANT_ID !== 'undefined' ? TENANT_ID : 'shir') + '_cart';
+    FIREBASE_CONFIG = (typeof TENANT_FIREBASE_CONFIG !== 'undefined') ? TENANT_FIREBASE_CONFIG : {};
     loadLocal();
     initFirebase();
     injectDrawer();
@@ -674,11 +677,21 @@
     renderDrawerItems();
   }
 
-  // Wait for DOM ready
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
+  // Wait for tenant resolution then DOM ready
+  function startCart() {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  }
+
+  if (typeof window.TENANT_READY !== 'undefined') {
+    window.TENANT_READY.then(startCart).catch(function(err) {
+      console.error('[cart] Tenant resolution failed:', err.message);
+    });
   } else {
-    init();
+    startCart();
   }
 
   // ── Expose Public API ──

@@ -14,6 +14,7 @@
 (function() {
   'use strict';
 
+  function initShareWidget() {
   var _brand = (typeof TENANT_BRAND !== 'undefined') ? TENANT_BRAND : { name: 'Shir Glassworks', tagline: 'Handmade Glass Art', location: 'Western Massachusetts' };
   var SHARE_TITLE = _brand.name;
   var SHARE_TEXT = 'Check out ' + _brand.name + ' — ' + _brand.tagline.toLowerCase() + ' from ' + _brand.location + '.';
@@ -128,5 +129,12 @@
     setTimeout(function() {
       if (toast.parentNode) toast.parentNode.removeChild(toast);
     }, 3000);
+  }
+  } // end initShareWidget
+
+  if (typeof window.TENANT_READY !== 'undefined') {
+    window.TENANT_READY.then(initShareWidget).catch(function() {});
+  } else {
+    initShareWidget();
   }
 })();

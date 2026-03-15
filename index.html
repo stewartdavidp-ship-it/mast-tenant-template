@@ -1513,7 +1513,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="storefront-tenant.js"></script>
 <script>
-(function() {
+window.TENANT_READY.then(function() {
   if (!firebase.apps.length) firebase.initializeApp(TENANT_FIREBASE_CONFIG);
   const db = firebase.database();
 
@@ -1676,12 +1676,12 @@
     list.innerHTML = html;
     });
   }).catch(function() { /* keep hardcoded fallback */ });
-})();
+}).catch(function(err) { console.error('[index] Tenant resolution failed:', err.message); });
 </script>
 
 <!-- ============ ANALYTICS TRACKING ============ -->
 <script>
-(function() {
+window.TENANT_READY.then(function() {
   var db = firebase.database();
   var HITS = TENANT_ID + '/analytics/hits';
   var now = new Date();
@@ -1730,11 +1730,12 @@
 
     if (action) track('ev', action);
   }, true);
-})();
+}).catch(function(err) { console.error('[index] Analytics failed:', err.message); });
 </script>
 <script>
 // Newsletter sign-up (public — no auth required)
-function nlSubmitSignup() {
+window.TENANT_READY.then(function() {
+window.nlSubmitSignup = function() {
   var name = document.getElementById('nlSignupName').value.trim();
   var email = document.getElementById('nlSignupEmail').value.trim();
   if (!name) { alert('Please enter your name.'); return; }
@@ -1760,7 +1761,8 @@ function nlSubmitSignup() {
     btn.textContent = 'Subscribe';
     alert('Something went wrong. Please try again.');
   });
-}
+};
+}).catch(function(err) { console.error('[index] Newsletter init failed:', err.message); });
 </script>
 <script src="cart.js"></script>
 <script src="checkout.js?v=2"></script>

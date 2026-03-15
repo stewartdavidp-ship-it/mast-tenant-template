@@ -975,7 +975,7 @@
 <script src="storefront-tenant.js"></script>
 <script>
 // ============ ORDERS PAGE LOGIC ============
-(function() {
+window.TENANT_READY.then(function() {
   // Firebase init — named app for data, default app for auth (shared with cart.js)
   var firebaseApp;
   try { firebaseApp = firebase.app('public-orders'); } catch (e) {
@@ -1362,7 +1362,7 @@
   document.getElementById('lookupOrderNum').addEventListener('keydown', function(e) {
     if (e.key === 'Enter') { e.preventDefault(); lookupOrder(); }
   });
-})();
+}).catch(function(err) { console.error('[orders] Tenant resolution failed:', err.message); });
 </script>
 
 <script>
@@ -1406,7 +1406,7 @@
 
 <!-- ============ ANALYTICS TRACKING ============ -->
 <script>
-(function() {
+window.TENANT_READY.then(function() {
   try {
     var app = firebase.app('public-orders');
     var db = app.database();
@@ -1446,7 +1446,7 @@
 
     if (action) track('ev', action);
   }, true);
-})();
+}).catch(function(err) { console.error('[orders] Analytics failed:', err.message); });
 </script>
 <script src="cart.js"></script>
 <script src="checkout.js?v=2"></script>

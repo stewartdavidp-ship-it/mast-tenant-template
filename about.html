@@ -725,7 +725,7 @@
 <script src="storefront-tenant.js"></script>
 <script>
   // Firebase — load about images dynamically
-  (function() {
+  window.TENANT_READY.then(function() {
     var app = firebase.initializeApp(TENANT_FIREBASE_CONFIG, 'public-about');
     var db = app.database();
 
@@ -755,7 +755,7 @@
         }
       }
     }).catch(function() { /* keep hardcoded fallback */ });
-  })();
+  }).catch(function(err) { console.error('[about] Tenant resolution failed:', err.message); });
 </script>
 <script>
   // Nav scroll effect
@@ -799,7 +799,7 @@
 
 <!-- ============ ANALYTICS TRACKING ============ -->
 <script>
-(function() {
+window.TENANT_READY.then(function() {
   var db = firebase.app('public-about').database();
   var HITS = TENANT_ID + '/analytics/hits';
   var now = new Date();
@@ -837,7 +837,7 @@
 
     if (action) track('ev', action);
   }, true);
-})();
+}).catch(function(err) { console.error('[about] Analytics failed:', err.message); });
 </script>
 <script src="cart.js"></script>
 <script src="checkout.js?v=2"></script>

@@ -907,11 +907,17 @@
   }
 
   // ── Init ──
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
+  function startInit() {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
   }
+
+  window.TENANT_READY.then(startInit).catch(function(err) {
+    console.error('[wholesale] Tenant resolution failed:', err.message);
+  });
 })();
 </script>
 </body>
