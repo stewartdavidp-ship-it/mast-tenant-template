@@ -17241,6 +17241,7 @@ function renderShowDetail(showId) {
   if (s.aiGenerated) h += ' <span style="font-size:0.75rem;background:var(--teal, #2a7c6f);color:white;padding:2px 6px;border-radius:4px;">AI Found</span>';
   h += '</div>';
   h += '<div style="display:flex;gap:8px;">';
+  if (hasPermission('shows', 'update') && s.websiteUrl) h += '<button id="deepDiveBtn-' + showId + '" class="btn btn-sm" onclick="runShowDeepDive(\'' + showId + '\')" style="background:var(--teal, #2a7c6f);color:white;border:none;">Deep Dive</button>';
   if (hasPermission('shows', 'update')) h += '<button class="btn btn-secondary btn-sm" onclick="openCreateShowModal(\'' + showId + '\')">Edit</button>';
   if (hasPermission('shows', 'delete')) h += '<button class="btn btn-sm" onclick="archiveShow(\'' + showId + '\')" style="background:#dc2626;color:white;border:none;">Delete</button>';
   h += '</div>';
@@ -17275,6 +17276,32 @@ function renderShowDetailInfo(showId, s, location, dates, statusClass) {
   h += showDetailCard('Application URL', s.applicationUrl ? '<a href="' + esc(s.applicationUrl) + '" target="_blank" style="color:var(--primary, #2a7c6f);">Open</a>' : '—');
   h += showDetailCard('Notes', s.notes ? esc(s.notes) : '—');
   h += '</div>';
+
+  // Deep dive details (if available)
+  var dd = s.deepDive || {};
+  if (Object.keys(dd).length > 0) {
+    h += '<div style="margin-bottom:24px;">';
+    h += '<h3 style="margin:0 0 12px 0;">Deep Dive Details <span style="font-size:0.75rem;background:var(--teal, #2a7c6f);color:white;padding:2px 6px;border-radius:4px;">AI Researched</span></h3>';
+    h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px;">';
+    if (dd.applicationMethod) h += showDetailCard('Apply Via', esc(dd.applicationMethod) + (dd.applicationUrl ? ' — <a href="' + esc(dd.applicationUrl) + '" target="_blank" style="color:var(--primary, #2a7c6f);">Open</a>' : ''));
+    if (dd.boothFeeNotes) h += showDetailCard('Booth Fee Details', esc(dd.boothFeeNotes));
+    if (dd.juryFeeNotes) h += showDetailCard('Jury Fee Details', esc(dd.juryFeeNotes));
+    if (dd.applicationDeadline) h += showDetailCard('Application Deadline', formatShowDate(dd.applicationDeadline) + (dd.lateDeadline ? ' (Late: ' + formatShowDate(dd.lateDeadline) + ')' : ''));
+    if (dd.notificationDate) h += showDetailCard('Notification Date', formatShowDate(dd.notificationDate));
+    if (dd.juryRequirements) h += showDetailCard('Jury Requirements', esc(dd.juryRequirements));
+    if (dd.boothSize) h += showDetailCard('Booth Size', esc(dd.boothSize));
+    if (dd.boothOptions) h += showDetailCard('Booth Options', esc(dd.boothOptions));
+    h += showDetailCard('Electricity', dd.electricity === true ? 'Yes' + (dd.electricityNotes ? ' — ' + esc(dd.electricityNotes) : '') : dd.electricity === false ? 'No' + (dd.electricityNotes ? ' — ' + esc(dd.electricityNotes) : '') : '—');
+    h += showDetailCard('WiFi', dd.wifi === true ? 'Yes' : dd.wifi === false ? 'No' : '—');
+    if (dd.setupTime) h += showDetailCard('Setup', esc(dd.setupTime));
+    if (dd.teardownTime) h += showDetailCard('Teardown', esc(dd.teardownTime));
+    if (dd.insuranceRequired !== null && dd.insuranceRequired !== undefined) h += showDetailCard('Insurance', (dd.insuranceRequired ? 'Required' : 'Not required') + (dd.insuranceNotes ? ' — ' + esc(dd.insuranceNotes) : ''));
+    if (dd.permits) h += showDetailCard('Permits', esc(dd.permits));
+    if (dd.attendance) h += showDetailCard('Attendance', esc(String(dd.attendance)));
+    if (dd.eligibility) h += showDetailCard('Eligibility', esc(dd.eligibility));
+    if (dd.additionalNotes) h += showDetailCard('Additional Notes', esc(dd.additionalNotes));
+    h += '</div></div>';
+  }
 
   // Application status actions
   h += '<div style="margin-bottom:24px;">';
@@ -19320,6 +19347,63 @@ function clearShowFinderResults() {
   document.getElementById('showFinderResults').style.display = 'none';
   document.getElementById('showFinderCards').innerHTML = '';
   document.getElementById('showFinderError').style.display = 'none';
+}
+
+// === Show Deep Dive ===
+
+async function runShowDeepDive(showId) {
+  var s = showsData[showId];
+  if (!s || !s.websiteUrl) {
+    showToast('No website URL available for deep dive.', true);
+    return;
+  }
+
+  var btn = document.getElementById('deepDiveBtn-' + showId);
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Researching...';
+  }
+
+  try {
+    var token = await auth.currentUser.getIdToken();
+    var resp = await callCF('/showDeepDive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({
+        websiteUrl: s.websiteUrl,
+        showName: s.name || '',
+        notes: s.notes || ''
+      })
+    });
+    var data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Deep dive failed');
+
+    var details = data.details || {};
+    if (Object.keys(details).length === 0) {
+      showToast('Deep dive completed but no additional details found.', true);
+      return;
+    }
+
+    // Update show record with deep dive details
+    var updates = { deepDive: details };
+
+    // Also update top-level fields if they were missing and deep dive found them
+    if (!s.boothFee && details.boothFee) updates.boothFee = Math.round(details.boothFee * 100);
+    if (!s.juryFee && details.juryFee) updates.juryFee = Math.round(details.juryFee * 100);
+    if (!s.applicationDeadline && details.applicationDeadline) updates.applicationDeadline = details.applicationDeadline;
+    if (!s.applicationUrl && details.applicationUrl) updates.applicationUrl = details.applicationUrl;
+
+    await MastDB.shows.update(showId, updates);
+    showToast('Deep dive complete! Details updated.');
+    renderShowDetail(showId);
+  } catch (err) {
+    showToast('Deep dive failed: ' + err.message, true);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Deep Dive';
+    }
+  }
 }
 
 // === Packing Mode ===
