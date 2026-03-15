@@ -5691,6 +5691,14 @@ async function loadTenantConfig(tenantId) {
     console.warn('Tenant config load failed, using defaults:', err.message);
     TENANT_CONFIG = {};
   }
+  // Read secretPrefix from tenant registry (top-level field, not under /config)
+  try {
+    var prefixSnap = await db.ref('mast-platform/tenants/' + tenantId + '/secretPrefix').once('value');
+    TENANT_CONFIG.secretPrefix = prefixSnap.val() || tenantId;
+  } catch (err) {
+    console.warn('secretPrefix load failed, using tenantId as fallback:', err.message);
+    TENANT_CONFIG.secretPrefix = tenantId;
+  }
   // Merge defaults so missing fields never break anything
   var defaults = {
     brand: { name: 'Tenant', tagline: '', location: '', logoUrl: '', newsletterDownloadPrefix: 'newsletter', authors: {} },
@@ -7605,10 +7613,11 @@ async function saveSquareConfig() {
 
   // Build secrets object (only include non-masked values)
   var secrets = {};
-  if (sandboxToken && !sandboxToken.includes('••••')) secrets['shir-square-sandbox-access-token'] = sandboxToken;
-  if (sandboxWebhook && !sandboxWebhook.includes('••••')) secrets['shir-square-sandbox-webhook-signature-key'] = sandboxWebhook;
-  if (prodToken && !prodToken.includes('••••')) secrets['shir-square-production-access-token'] = prodToken;
-  if (prodWebhook && !prodWebhook.includes('••••')) secrets['shir-square-production-webhook-signature-key'] = prodWebhook;
+  var sp = (TENANT_CONFIG && TENANT_CONFIG.secretPrefix) || MastDB.tenantId();
+  if (sandboxToken && !sandboxToken.includes('••••')) secrets[sp + '-square-sandbox-access-token'] = sandboxToken;
+  if (sandboxWebhook && !sandboxWebhook.includes('••••')) secrets[sp + '-square-sandbox-webhook-signature-key'] = sandboxWebhook;
+  if (prodToken && !prodToken.includes('••••')) secrets[sp + '-square-production-access-token'] = prodToken;
+  if (prodWebhook && !prodWebhook.includes('••••')) secrets[sp + '-square-production-webhook-signature-key'] = prodWebhook;
 
   // Non-secret metadata for RTDB
   var metadata = {
@@ -7821,7 +7830,7 @@ async function connectEtsy() {
     await firebase.functions().httpsCallable('secretsManager')({
       action: 'write',
       service: 'etsy',
-      secrets: { 'shir-etsy-api-key': apiKey }
+      secrets: { [((TENANT_CONFIG && TENANT_CONFIG.secretPrefix) || MastDB.tenantId()) + '-etsy-api-key']: apiKey }
     });
     await writeAudit('update', 'settings', 'etsyApiKey');
   } catch (err) {
@@ -23388,7 +23397,7 @@ function nlExportSubscribersCSV() {
   var url = URL.createObjectURL(blob);
   var a = document.createElement('a');
   a.href = url;
-  a.download = 'shir-subscribers-' + new Date().toISOString().split('T')[0] + '.csv';
+  a.download = MastDB.tenantId() + '-subscribers-' + new Date().toISOString().split('T')[0] + '.csv';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -27294,7 +27303,7 @@ function copyQRImage() {
     // Fallback: download if clipboard blocked
     var a = document.createElement('a');
     a.href = src;
-    a.download = 'shir-wholesale-qr.png';
+    a.download = MastDB.tenantId() + '-wholesale-qr.png';
     a.click();
     showToast('QR image downloaded (clipboard not available)');
   });
