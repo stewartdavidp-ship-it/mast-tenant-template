@@ -5211,6 +5211,7 @@
         <button class="view-tab" onclick="switchSettingsSubView('workshop')">Workshop</button>
         <button class="view-tab" onclick="switchSettingsSubView('trips')">Trips</button>
         <button class="view-tab" onclick="switchSettingsSubView('dashboard')">Dashboard</button>
+        <button class="view-tab" onclick="switchSettingsSubView('domains')">Domains</button>
       </div>
       <div id="settingsSubGeneral" style="max-width:500px;">
         <div class="form-group">
@@ -5629,6 +5630,43 @@
               style="width:70px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
             <button class="btn btn-primary" onclick="saveQuickActionCount()">Save</button>
             <span id="qaCountStatus" style="font-size:0.85rem;color:var(--sage);"></span>
+          </div>
+        </div>
+      </div>
+      <!-- Domain Settings -->
+      <div id="settingsSubDomains" style="display:none;max-width:600px;">
+        <div class="form-group">
+          <label style="font-size:1.1rem;font-weight:600;">Domain Configuration</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
+            Manage the domains that point to your storefront. Your primary domain and Firebase default domain are set automatically.
+          </p>
+        </div>
+        <div id="domainsList" style="margin-bottom:24px;">
+          <div style="text-align:center;padding:20px;color:var(--warm-gray);">Loading domains...</div>
+        </div>
+        <hr style="border:none;border-top:1px solid var(--border,#eee);margin:24px 0;">
+        <div class="form-group">
+          <label style="font-size:1rem;font-weight:600;">Add Custom Domain</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">
+            Point your own domain to this storefront. You'll get step-by-step DNS setup instructions with links to your registrar's settings page.
+          </p>
+          <div style="display:flex;gap:8px;">
+            <input type="text" id="customDomainInput" placeholder="mycoolshop.com"
+              style="flex:1;padding:9px 12px;border:1px solid var(--border,#ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--input-bg,#fff);color:var(--text,#333);">
+            <button class="btn btn-primary" onclick="addCustomDomain()" id="addDomainBtn">Add Domain</button>
+          </div>
+          <div id="addDomainStatus" style="margin-top:12px;font-size:0.85rem;"></div>
+        </div>
+        <!-- DNS Instructions (shown after adding domain) -->
+        <div id="dnsInstructions" style="display:none;margin-top:16px;">
+          <div style="background:var(--cream,#faf8f5);border:1px solid var(--border,#e8e0d4);border-radius:8px;padding:16px;">
+            <div style="font-weight:600;margin-bottom:8px;color:var(--text,#333);">DNS Setup Required</div>
+            <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;" id="dnsInstructionsText"></p>
+            <div id="dnsRegistrarLinks" style="margin-bottom:12px;display:flex;flex-wrap:wrap;gap:6px;"></div>
+            <div id="dnsRecordsList" style="font-family:monospace;font-size:0.85rem;margin-bottom:12px;"></div>
+            <div id="dnsStepsList" style="font-size:0.85rem;margin-bottom:12px;"></div>
+            <p style="font-size:0.8rem;color:var(--warm-gray);margin-bottom:12px;" id="dnsNote"></p>
+            <button class="btn btn-secondary" style="margin-top:4px;" onclick="verifyCustomDomain()">Verify DNS</button>
           </div>
         </div>
       </div>
@@ -7699,7 +7737,7 @@ function hideSidebar() {
 // ============================================================
 // Settings Sub-Tabs
 // ============================================================
-var settingsSubViews = ['general', 'payments', 'shipping', 'integrations', 'workshop', 'trips', 'dashboard'];
+var settingsSubViews = ['general', 'payments', 'shipping', 'integrations', 'workshop', 'trips', 'dashboard', 'domains'];
 function switchSettingsSubView(view) {
   // Hide all sub-views
   settingsSubViews.forEach(function(v) {
@@ -7720,6 +7758,291 @@ function switchSettingsSubView(view) {
   // Lazy loads
   if (view === 'trips') loadTripsSettings();
   if (view === 'dashboard') renderDashCardSettings();
+  if (view === 'domains') loadDomainSettings();
+}
+
+// ============================================================
+// Domain Management
+// ============================================================
+var domainsLoaded = false;
+var tenantDomains = [];
+
+async function loadDomainSettings() {
+  if (domainsLoaded) return;
+  var container = document.getElementById('domainsList');
+  if (!container) return;
+
+  try {
+    var token = await firebase.auth().currentUser.getIdToken();
+    var resp = await fetch(CLOUD_FUNCTIONS_BASE + '/manageDomain', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token,
+        'X-Tenant-ID': MastDB.tenantId(),
+      },
+      body: JSON.stringify({ action: 'list', tenantId: MastDB.tenantId() }),
+    });
+
+    if (!resp.ok) throw new Error('Failed to load domains');
+    var data = await resp.json();
+    tenantDomains = data.domains || [];
+    domainsLoaded = true;
+    renderDomainsList();
+  } catch (err) {
+    container.innerHTML = '<div style="color:var(--warm-gray);padding:12px;">Unable to load domains: ' + esc(err.message) + '</div>';
+  }
+}
+
+function renderDomainsList() {
+  var container = document.getElementById('domainsList');
+  if (!container || !tenantDomains.length) {
+    if (container) container.innerHTML = '<div style="color:var(--warm-gray);padding:12px;">No domains configured.</div>';
+    return;
+  }
+
+  var html = '';
+  tenantDomains.forEach(function(d) {
+    var typeBadge = '';
+    var statusBadge = '';
+    var actions = '';
+
+    if (d.type === 'primary') {
+      typeBadge = '<span style="display:inline-block;padding:2px 8px;background:#e0f2fe;color:#0369a1;border-radius:4px;font-size:0.75rem;font-weight:600;">PRIMARY</span>';
+    } else if (d.type === 'firebase_default') {
+      typeBadge = '<span style="display:inline-block;padding:2px 8px;background:#f0fdf4;color:#166534;border-radius:4px;font-size:0.75rem;font-weight:600;">DEFAULT</span>';
+    } else {
+      typeBadge = '<span style="display:inline-block;padding:2px 8px;background:#fef3c7;color:#92400e;border-radius:4px;font-size:0.75rem;font-weight:600;">CUSTOM</span>';
+
+      // Status badge for custom domains
+      var status = d.hostingStatus || 'pending';
+      if (status === 'CONNECTED') {
+        statusBadge = ' <span style="display:inline-block;padding:2px 8px;background:#d1fae5;color:#065f46;border-radius:4px;font-size:0.75rem;">SSL Active</span>';
+      } else if (d.dnsVerified) {
+        statusBadge = ' <span style="display:inline-block;padding:2px 8px;background:#e0f2fe;color:#0369a1;border-radius:4px;font-size:0.75rem;">DNS Verified</span>';
+      } else {
+        statusBadge = ' <span style="display:inline-block;padding:2px 8px;background:#fee2e2;color:#991b1b;border-radius:4px;font-size:0.75rem;">Pending</span>';
+      }
+
+      actions = '<div style="display:flex;gap:6px;margin-top:8px;">' +
+        '<button class="btn btn-small btn-secondary" onclick="verifyDomainStatus(\'' + esc(d.domain) + '\')">Verify</button>' +
+        '<button class="btn btn-small" style="color:#dc2626;border-color:#dc2626;" onclick="removeCustomDomain(\'' + esc(d.domain) + '\')">Remove</button>' +
+        '</div>';
+    }
+
+    var autoTag = d.dnsAutoConfigured ? ' <span style="font-size:0.75rem;color:var(--sage);">(auto-configured)</span>' : '';
+    var lastCheck = d.lastVerifiedAt ? '<div style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Last checked: ' + new Date(d.lastVerifiedAt).toLocaleString() + '</div>' : '';
+
+    html += '<div style="padding:12px;border:1px solid var(--border,#e5e7eb);border-radius:8px;margin-bottom:8px;background:var(--card-bg,#fff);">' +
+      '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
+        '<span style="font-weight:600;color:var(--text,#333);">' + esc(d.domain) + '</span>' +
+        typeBadge + statusBadge + autoTag +
+      '</div>' +
+      lastCheck +
+      actions +
+    '</div>';
+  });
+
+  container.innerHTML = html;
+}
+
+async function addCustomDomain() {
+  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
+
+  var domainInput = document.getElementById('customDomainInput');
+  var domain = domainInput.value.trim().toLowerCase();
+  var statusEl = document.getElementById('addDomainStatus');
+  var btn = document.getElementById('addDomainBtn');
+
+  if (!domain) { showToast('Please enter a domain.', true); return; }
+
+  // Basic validation
+  if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(domain)) {
+    showToast('Invalid domain format. Use lowercase letters, numbers, and hyphens.', true);
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Adding...';
+  statusEl.innerHTML = '<span style="color:var(--warm-gray);">Configuring domain...</span>';
+
+  try {
+    var token = await firebase.auth().currentUser.getIdToken();
+    var resp = await fetch(CLOUD_FUNCTIONS_BASE + '/manageDomain', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token,
+        'X-Tenant-ID': MastDB.tenantId(),
+      },
+      body: JSON.stringify({ action: 'add', tenantId: MastDB.tenantId(), domain: domain }),
+    });
+
+    var data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Failed to add domain');
+
+    domainInput.value = '';
+    showToast('Domain added! Follow the DNS instructions below.');
+
+    // Show DNS setup instructions
+    if (data.dnsInstructions) {
+      showDnsInstructions(data.dnsInstructions, domain);
+      statusEl.innerHTML = '<span style="color:var(--sage);">Domain registered. Complete the DNS setup below to connect it.</span>';
+    }
+
+    // Refresh domains list
+    domainsLoaded = false;
+    loadDomainSettings();
+  } catch (err) {
+    statusEl.innerHTML = '<span style="color:#dc2626;">' + esc(err.message) + '</span>';
+    showToast('Failed to add domain: ' + err.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Add Domain';
+  }
+}
+
+function showDnsInstructions(instructions, domain) {
+  var container = document.getElementById('dnsInstructions');
+  var textEl = document.getElementById('dnsInstructionsText');
+  var recordsEl = document.getElementById('dnsRecordsList');
+  var stepsEl = document.getElementById('dnsStepsList');
+  var linksEl = document.getElementById('dnsRegistrarLinks');
+  var noteEl = document.getElementById('dnsNote');
+
+  if (!container || !textEl || !recordsEl) return;
+
+  textEl.textContent = instructions.message;
+
+  // Registrar quick-links
+  if (linksEl && instructions.registrarLinks) {
+    var linksHtml = '<span style="font-size:0.8rem;color:var(--warm-gray);margin-right:4px;">Open your registrar:</span>';
+    var registrarNames = { porkbun: 'Porkbun', godaddy: 'GoDaddy', namecheap: 'Namecheap', cloudflare: 'Cloudflare', squarespace: 'Squarespace', google: 'Google Domains' };
+    for (var key in instructions.registrarLinks) {
+      var label = registrarNames[key] || key;
+      linksHtml += '<a href="' + esc(instructions.registrarLinks[key]) + '" target="_blank" rel="noopener" ' +
+        'style="display:inline-block;padding:4px 10px;font-size:0.8rem;border:1px solid var(--border,#ddd);border-radius:4px;' +
+        'text-decoration:none;color:var(--text,#333);background:var(--input-bg,#fff);">' + esc(label) + '</a>';
+    }
+    linksEl.innerHTML = linksHtml;
+  }
+
+  // DNS records table with copy buttons
+  var recordsHtml = '<table style="width:100%;border-collapse:collapse;">' +
+    '<tr style="border-bottom:1px solid var(--border,#ddd);">' +
+    '<th style="text-align:left;padding:6px 8px;font-size:0.8rem;">Type</th>' +
+    '<th style="text-align:left;padding:6px 8px;font-size:0.8rem;">Name</th>' +
+    '<th style="text-align:left;padding:6px 8px;font-size:0.8rem;">Value</th>' +
+    '<th style="text-align:left;padding:6px 8px;font-size:0.8rem;">TTL</th>' +
+    '<th style="padding:6px 8px;font-size:0.8rem;"></th>' +
+    '</tr>';
+
+  (instructions.records || []).forEach(function(r) {
+    var copyVal = r.value;
+    recordsHtml += '<tr>' +
+      '<td style="padding:6px 8px;font-size:0.85rem;font-weight:600;">' + esc(r.type) + '</td>' +
+      '<td style="padding:6px 8px;font-size:0.85rem;">' + esc(r.name) + '</td>' +
+      '<td style="padding:6px 8px;font-size:0.85rem;">' + esc(r.value) + '</td>' +
+      '<td style="padding:6px 8px;font-size:0.85rem;color:var(--warm-gray);">' + esc(r.ttl || '600') + '</td>' +
+      '<td style="padding:6px 8px;text-align:right;">' +
+        '<button onclick="navigator.clipboard.writeText(\'' + esc(copyVal).replace(/'/g, "\\'") + '\');showToast(\'Copied!\')" ' +
+        'style="padding:2px 8px;font-size:0.75rem;border:1px solid var(--border,#ddd);border-radius:3px;cursor:pointer;' +
+        'background:var(--input-bg,#fff);color:var(--text,#333);">Copy</button>' +
+      '</td></tr>';
+  });
+
+  recordsHtml += '</table>';
+  recordsEl.innerHTML = recordsHtml;
+
+  // Numbered steps
+  if (stepsEl && instructions.steps && instructions.steps.length) {
+    var stepsHtml = '<ol style="margin:0;padding-left:20px;color:var(--text,#333);">';
+    instructions.steps.forEach(function(step) {
+      stepsHtml += '<li style="margin-bottom:4px;">' + esc(step) + '</li>';
+    });
+    stepsHtml += '</ol>';
+    stepsEl.innerHTML = stepsHtml;
+  }
+
+  // Note
+  if (noteEl && instructions.note) {
+    noteEl.textContent = instructions.note;
+  }
+
+  // Store domain for verify button
+  container.dataset.domain = domain;
+  container.style.display = '';
+}
+
+async function verifyCustomDomain() {
+  var container = document.getElementById('dnsInstructions');
+  var domain = container ? container.dataset.domain : null;
+  if (!domain) return;
+  await verifyDomainStatus(domain);
+}
+
+async function verifyDomainStatus(domain) {
+  try {
+    var token = await firebase.auth().currentUser.getIdToken();
+    var resp = await fetch(CLOUD_FUNCTIONS_BASE + '/manageDomain', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token,
+        'X-Tenant-ID': MastDB.tenantId(),
+      },
+      body: JSON.stringify({ action: 'verify', tenantId: MastDB.tenantId(), domain: domain }),
+    });
+
+    var data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Verification failed');
+
+    if (data.sslActive) {
+      showToast('Domain is fully connected with SSL!');
+      document.getElementById('dnsInstructions').style.display = 'none';
+    } else if (data.dnsVerified) {
+      showToast('DNS verified! SSL is being provisioned by Firebase. This may take a few minutes.');
+    } else {
+      showToast('DNS not yet propagated. This can take up to 48 hours. Try again later.', true);
+      // Re-show instructions if returned
+      if (data.dnsInstructions) {
+        showDnsInstructions(data.dnsInstructions, domain);
+      }
+    }
+
+    // Refresh domains list
+    domainsLoaded = false;
+    loadDomainSettings();
+  } catch (err) {
+    showToast('Verification failed: ' + err.message, true);
+  }
+}
+
+async function removeCustomDomain(domain) {
+  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
+  if (!confirm('Remove domain "' + domain + '"? This will disconnect it from your storefront.')) return;
+
+  try {
+    var token = await firebase.auth().currentUser.getIdToken();
+    var resp = await fetch(CLOUD_FUNCTIONS_BASE + '/manageDomain', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token,
+        'X-Tenant-ID': MastDB.tenantId(),
+      },
+      body: JSON.stringify({ action: 'remove', tenantId: MastDB.tenantId(), domain: domain }),
+    });
+
+    var data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Failed to remove domain');
+
+    showToast('Domain removed.');
+    domainsLoaded = false;
+    loadDomainSettings();
+  } catch (err) {
+    showToast('Failed to remove domain: ' + err.message, true);
+  }
 }
 
 // ============================================================
