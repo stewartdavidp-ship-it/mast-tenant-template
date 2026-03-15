@@ -4423,15 +4423,24 @@
                 <label style="font-size:0.8rem;color:var(--text-secondary, #888);display:block;margin-bottom:4px;">Shows Before</label>
                 <input type="date" id="showFinderDateEnd" style="width:100%;padding:8px 10px;border:1px solid var(--border-color, #ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--bg-primary, #fff);color:var(--text-primary, #333);box-sizing:border-box;">
               </div>
-            </div>
-            <div style="margin-bottom:16px;">
-              <label style="font-size:0.8rem;color:var(--text-secondary, #888);display:block;margin-bottom:6px;">Show Types <span style="font-weight:normal;opacity:0.7;">— only checked types will be included</span></label>
-              <div style="display:flex;flex-wrap:wrap;gap:12px;">
-                <label style="font-size:0.85rem;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" class="showFinderType" value="juried" checked> Juried</label>
-                <label style="font-size:0.85rem;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" class="showFinderType" value="market"> Market</label>
-                <label style="font-size:0.85rem;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" class="showFinderType" value="pop-up"> Pop-Up</label>
-                <label style="font-size:0.85rem;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" class="showFinderType" value="recurring"> Recurring</label>
-                <label style="font-size:0.85rem;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" class="showFinderType" value="trade"> Trade</label>
+              <div>
+                <label style="font-size:0.8rem;color:var(--text-secondary, #888);display:block;margin-bottom:4px;">Entry Type</label>
+                <select id="showFinderEntry" style="width:100%;padding:8px 10px;border:1px solid var(--border-color, #ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--bg-primary, #fff);color:var(--text-primary, #333);box-sizing:border-box;">
+                  <option value="" selected>Any</option>
+                  <option value="juried">Juried</option>
+                  <option value="open">Open (no jury)</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:0.8rem;color:var(--text-secondary, #888);display:block;margin-bottom:4px;">Show Format</label>
+                <select id="showFinderFormat" style="width:100%;padding:8px 10px;border:1px solid var(--border-color, #ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--bg-primary, #fff);color:var(--text-primary, #333);box-sizing:border-box;">
+                  <option value="" selected>Any</option>
+                  <option value="market">Market</option>
+                  <option value="festival">Festival</option>
+                  <option value="pop-up">Pop-Up</option>
+                  <option value="trade">Trade Show</option>
+                  <option value="recurring">Recurring</option>
+                </select>
               </div>
             </div>
             <button id="showFinderBtn" class="btn btn-primary" onclick="runShowFinder()" style="min-width:140px;">Find Shows</button>
@@ -19125,16 +19134,15 @@ async function runShowFinder() {
     return;
   }
 
-  var showTypes = [];
-  document.querySelectorAll('.showFinderType:checked').forEach(function(cb) {
-    showTypes.push(cb.value);
-  });
+  var entryType = document.getElementById('showFinderEntry').value || undefined;
+  var showFormat = document.getElementById('showFinderFormat').value || undefined;
 
   var body = {
     locationCity: city || undefined,
     locationState: state || undefined,
     radius: parseInt(document.getElementById('showFinderRadius').value) || undefined,
-    showTypes: showTypes.length > 0 ? showTypes : undefined,
+    entryType: entryType,
+    showFormat: showFormat,
     dateRangeStart: document.getElementById('showFinderDateStart').value || undefined,
     dateRangeEnd: document.getElementById('showFinderDateEnd').value || undefined,
     maxFee: parseInt(document.getElementById('showFinderMaxFee').value) || undefined,
@@ -19196,7 +19204,10 @@ function renderShowFinderResults() {
 
   var cards = '';
   showFinderResults.forEach(function(s, idx) {
-    var typeLabel = SHOW_TYPE_LABELS[s.type] || s.type || 'Other';
+    var entryLabel = s.entryType === 'juried' ? 'Juried' : s.entryType === 'open' ? 'Open' : '';
+    var formatLabels = { market: 'Market', festival: 'Festival', 'pop-up': 'Pop-Up', trade: 'Trade Show', recurring: 'Recurring', other: 'Other' };
+    var formatLabel = formatLabels[s.format] || s.format || '';
+    var typeLabel = [entryLabel, formatLabel].filter(Boolean).join(' · ') || SHOW_TYPE_LABELS[s.type] || s.type || 'Other';
     var location = [s.locationCity, s.locationState].filter(Boolean).join(', ');
     var dates = '';
     if (s.startDate) {
@@ -19254,7 +19265,9 @@ async function addShowToPipeline(idx) {
     var data = {
       id: key,
       name: s.name,
-      type: s.type || 'other',
+      type: s.format || s.type || 'other',
+      entryType: s.entryType || 'unknown',
+      format: s.format || s.type || 'other',
       locationCity: s.locationCity || '',
       locationState: s.locationState || '',
       startDate: s.startDate || null,
