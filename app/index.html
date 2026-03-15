@@ -4396,7 +4396,8 @@
         <div id="showFindContent">
           <!-- Search criteria form -->
           <div style="background:var(--bg-secondary, #f9f9f9);border-radius:10px;padding:20px;margin-bottom:20px;">
-            <h3 style="margin:0 0 16px 0;font-size:1rem;">Find Shows</h3>
+            <h3 style="margin:0 0 4px 0;font-size:1rem;">Find Shows</h3>
+            <p style="margin:0 0 16px 0;font-size:0.8rem;color:var(--text-secondary, #888);">AI-powered search for upcoming art &amp; craft shows. Enter a location and optionally narrow by distance, dates, fee budget, or show type.</p>
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:16px;">
               <div>
                 <label style="font-size:0.8rem;color:var(--text-secondary, #888);display:block;margin-bottom:4px;">City *</label>
@@ -4407,7 +4408,7 @@
                 <input type="text" id="showFinderState" placeholder="e.g. PA" maxlength="2" style="width:100%;padding:8px 10px;border:1px solid var(--border-color, #ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--bg-primary, #fff);color:var(--text-primary, #333);box-sizing:border-box;">
               </div>
               <div>
-                <label style="font-size:0.8rem;color:var(--text-secondary, #888);display:block;margin-bottom:4px;">Radius (miles)</label>
+                <label style="font-size:0.8rem;color:var(--text-secondary, #888);display:block;margin-bottom:4px;">Search Radius (miles)</label>
                 <input type="number" id="showFinderRadius" placeholder="50" min="1" max="500" style="width:100%;padding:8px 10px;border:1px solid var(--border-color, #ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--bg-primary, #fff);color:var(--text-primary, #333);box-sizing:border-box;">
               </div>
               <div>
@@ -4415,16 +4416,16 @@
                 <input type="number" id="showFinderMaxFee" placeholder="500" min="0" style="width:100%;padding:8px 10px;border:1px solid var(--border-color, #ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--bg-primary, #fff);color:var(--text-primary, #333);box-sizing:border-box;">
               </div>
               <div>
-                <label style="font-size:0.8rem;color:var(--text-secondary, #888);display:block;margin-bottom:4px;">From Date</label>
+                <label style="font-size:0.8rem;color:var(--text-secondary, #888);display:block;margin-bottom:4px;">Shows After</label>
                 <input type="date" id="showFinderDateStart" style="width:100%;padding:8px 10px;border:1px solid var(--border-color, #ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--bg-primary, #fff);color:var(--text-primary, #333);box-sizing:border-box;">
               </div>
               <div>
-                <label style="font-size:0.8rem;color:var(--text-secondary, #888);display:block;margin-bottom:4px;">To Date</label>
+                <label style="font-size:0.8rem;color:var(--text-secondary, #888);display:block;margin-bottom:4px;">Shows Before</label>
                 <input type="date" id="showFinderDateEnd" style="width:100%;padding:8px 10px;border:1px solid var(--border-color, #ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--bg-primary, #fff);color:var(--text-primary, #333);box-sizing:border-box;">
               </div>
             </div>
             <div style="margin-bottom:16px;">
-              <label style="font-size:0.8rem;color:var(--text-secondary, #888);display:block;margin-bottom:6px;">Show Types</label>
+              <label style="font-size:0.8rem;color:var(--text-secondary, #888);display:block;margin-bottom:6px;">Show Types <span style="font-weight:normal;opacity:0.7;">— only checked types will be included</span></label>
               <div style="display:flex;flex-wrap:wrap;gap:12px;">
                 <label style="font-size:0.85rem;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" class="showFinderType" value="juried" checked> Juried</label>
                 <label style="font-size:0.85rem;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" class="showFinderType" value="market"> Market</label>
@@ -4450,7 +4451,7 @@
               <h3 style="margin:0;font-size:1rem;" id="showFinderResultsCount">Results</h3>
               <button class="btn btn-secondary btn-sm" onclick="clearShowFinderResults()">Clear Results</button>
             </div>
-            <div id="showFinderCards" class="order-cards"></div>
+            <div id="showFinderCards" class="order-cards" style="display:flex;"></div>
           </div>
         </div>
       </div>
