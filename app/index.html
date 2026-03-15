@@ -4346,7 +4346,64 @@
       <!-- Find sub-view -->
       <div id="showFindView" style="display:none;">
         <div id="showFindContent">
-          <p style="color:var(--text-secondary, #888);margin:32px 0;text-align:center;">AI-assisted show discovery coming in Session B. Use "+ New Show" to manually add shows.</p>
+          <!-- Search criteria form -->
+          <div style="background:var(--bg-secondary, #f9f9f9);border-radius:10px;padding:20px;margin-bottom:20px;">
+            <h3 style="margin:0 0 16px 0;font-size:1rem;">Find Shows</h3>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:16px;">
+              <div>
+                <label style="font-size:0.8rem;color:var(--text-secondary, #888);display:block;margin-bottom:4px;">City</label>
+                <input type="text" id="showFinderCity" placeholder="e.g. Pittsburgh" style="width:100%;padding:8px 10px;border:1px solid var(--border-color, #ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--bg-primary, #fff);color:var(--text-primary, #333);box-sizing:border-box;">
+              </div>
+              <div>
+                <label style="font-size:0.8rem;color:var(--text-secondary, #888);display:block;margin-bottom:4px;">State</label>
+                <input type="text" id="showFinderState" placeholder="e.g. PA" maxlength="2" style="width:100%;padding:8px 10px;border:1px solid var(--border-color, #ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--bg-primary, #fff);color:var(--text-primary, #333);box-sizing:border-box;">
+              </div>
+              <div>
+                <label style="font-size:0.8rem;color:var(--text-secondary, #888);display:block;margin-bottom:4px;">Radius (miles)</label>
+                <input type="number" id="showFinderRadius" placeholder="50" min="1" max="500" style="width:100%;padding:8px 10px;border:1px solid var(--border-color, #ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--bg-primary, #fff);color:var(--text-primary, #333);box-sizing:border-box;">
+              </div>
+              <div>
+                <label style="font-size:0.8rem;color:var(--text-secondary, #888);display:block;margin-bottom:4px;">Max Booth Fee ($)</label>
+                <input type="number" id="showFinderMaxFee" placeholder="500" min="0" style="width:100%;padding:8px 10px;border:1px solid var(--border-color, #ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--bg-primary, #fff);color:var(--text-primary, #333);box-sizing:border-box;">
+              </div>
+              <div>
+                <label style="font-size:0.8rem;color:var(--text-secondary, #888);display:block;margin-bottom:4px;">From Date</label>
+                <input type="date" id="showFinderDateStart" style="width:100%;padding:8px 10px;border:1px solid var(--border-color, #ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--bg-primary, #fff);color:var(--text-primary, #333);box-sizing:border-box;">
+              </div>
+              <div>
+                <label style="font-size:0.8rem;color:var(--text-secondary, #888);display:block;margin-bottom:4px;">To Date</label>
+                <input type="date" id="showFinderDateEnd" style="width:100%;padding:8px 10px;border:1px solid var(--border-color, #ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--bg-primary, #fff);color:var(--text-primary, #333);box-sizing:border-box;">
+              </div>
+            </div>
+            <div style="margin-bottom:16px;">
+              <label style="font-size:0.8rem;color:var(--text-secondary, #888);display:block;margin-bottom:6px;">Show Types</label>
+              <div style="display:flex;flex-wrap:wrap;gap:12px;">
+                <label style="font-size:0.85rem;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" class="showFinderType" value="juried" checked> Juried</label>
+                <label style="font-size:0.85rem;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" class="showFinderType" value="market"> Market</label>
+                <label style="font-size:0.85rem;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" class="showFinderType" value="pop-up"> Pop-Up</label>
+                <label style="font-size:0.85rem;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" class="showFinderType" value="recurring"> Recurring</label>
+                <label style="font-size:0.85rem;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" class="showFinderType" value="trade"> Trade</label>
+              </div>
+            </div>
+            <button id="showFinderBtn" class="btn btn-primary" onclick="runShowFinder()" style="min-width:140px;">Find Shows</button>
+          </div>
+          <!-- Loading state -->
+          <div id="showFinderLoading" style="display:none;text-align:center;padding:40px 0;">
+            <div class="loading-spinner" style="margin:0 auto 12px;width:32px;height:32px;border:3px solid var(--border-color, #ddd);border-top-color:var(--primary, #2a7c6f);border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+            <p style="color:var(--text-secondary, #888);margin:0;">Searching for shows... this may take a moment.</p>
+          </div>
+          <!-- Error state -->
+          <div id="showFinderError" style="display:none;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px;margin-bottom:16px;">
+            <p style="color:#dc2626;margin:0;" id="showFinderErrorMsg">Something went wrong.</p>
+          </div>
+          <!-- Results -->
+          <div id="showFinderResults" style="display:none;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+              <h3 style="margin:0;font-size:1rem;" id="showFinderResultsCount">Results</h3>
+              <button class="btn btn-secondary btn-sm" onclick="clearShowFinderResults()">Clear Results</button>
+            </div>
+            <div id="showFinderCards" class="order-cards"></div>
+          </div>
         </div>
       </div>
       <!-- Apply sub-view (default) -->
@@ -17133,6 +17190,202 @@ async function archiveShow(showId) {
   } catch (err) {
     showToast('Error deleting show: ' + err.message, true);
   }
+}
+
+// === Show Finder (AI-assisted discovery) ===
+
+var showFinderResults = [];
+
+async function runShowFinder() {
+  var city = document.getElementById('showFinderCity').value.trim();
+  var state = document.getElementById('showFinderState').value.trim().toUpperCase();
+  if (!city && !state) {
+    showToast('Enter a city or state to search.', true);
+    return;
+  }
+
+  var showTypes = [];
+  document.querySelectorAll('.showFinderType:checked').forEach(function(cb) {
+    showTypes.push(cb.value);
+  });
+
+  var body = {
+    locationCity: city || undefined,
+    locationState: state || undefined,
+    radius: parseInt(document.getElementById('showFinderRadius').value) || undefined,
+    showTypes: showTypes.length > 0 ? showTypes : undefined,
+    dateRangeStart: document.getElementById('showFinderDateStart').value || undefined,
+    dateRangeEnd: document.getElementById('showFinderDateEnd').value || undefined,
+    maxFee: parseInt(document.getElementById('showFinderMaxFee').value) || undefined,
+    count: 10
+  };
+
+  // UI states
+  var btn = document.getElementById('showFinderBtn');
+  var loadingEl = document.getElementById('showFinderLoading');
+  var errorEl = document.getElementById('showFinderError');
+  var resultsEl = document.getElementById('showFinderResults');
+  btn.disabled = true;
+  btn.textContent = 'Searching...';
+  loadingEl.style.display = '';
+  errorEl.style.display = 'none';
+  resultsEl.style.display = 'none';
+
+  try {
+    var token = await auth.currentUser.getIdToken();
+    var resp = await callCF('/showFinder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify(body)
+    });
+    var data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Search failed');
+
+    showFinderResults = data.shows || [];
+    loadingEl.style.display = 'none';
+
+    if (showFinderResults.length === 0) {
+      errorEl.style.display = '';
+      document.getElementById('showFinderErrorMsg').textContent = 'No shows found matching your criteria. Try broadening your search.';
+      document.getElementById('showFinderErrorMsg').style.color = 'var(--text-secondary, #888)';
+      errorEl.style.background = 'var(--bg-secondary, #f9f9f9)';
+      errorEl.style.borderColor = 'var(--border-color, #ddd)';
+    } else {
+      renderShowFinderResults();
+    }
+  } catch (err) {
+    loadingEl.style.display = 'none';
+    errorEl.style.display = '';
+    document.getElementById('showFinderErrorMsg').textContent = 'Search failed: ' + err.message;
+    document.getElementById('showFinderErrorMsg').style.color = '#dc2626';
+    errorEl.style.background = '#fef2f2';
+    errorEl.style.borderColor = '#fecaca';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Find Shows';
+  }
+}
+
+function renderShowFinderResults() {
+  var resultsEl = document.getElementById('showFinderResults');
+  var cardsEl = document.getElementById('showFinderCards');
+  var countEl = document.getElementById('showFinderResultsCount');
+  resultsEl.style.display = '';
+  countEl.textContent = showFinderResults.length + ' show' + (showFinderResults.length !== 1 ? 's' : '') + ' found';
+
+  var cards = '';
+  showFinderResults.forEach(function(s, idx) {
+    var typeLabel = SHOW_TYPE_LABELS[s.type] || s.type || 'Other';
+    var location = [s.locationCity, s.locationState].filter(Boolean).join(', ');
+    var dates = '';
+    if (s.startDate) {
+      dates = formatShowDate(s.startDate);
+      if (s.endDate && s.endDate !== s.startDate) dates += ' – ' + formatShowDate(s.endDate);
+    }
+    var fees = '';
+    if (s.boothFee) fees += 'Booth: $' + (s.boothFee / 100).toFixed(0);
+    if (s.juryFee) fees += (fees ? ' · ' : '') + 'Jury: $' + (s.juryFee / 100).toFixed(0);
+    var deadline = s.applicationDeadline ? 'Deadline: ' + formatShowDate(s.applicationDeadline) : '';
+
+    cards += '<div class="order-card" id="showFinderCard-' + idx + '" style="position:relative;">' +
+      '<div class="order-card-header" style="display:flex;justify-content:space-between;align-items:center;">' +
+        '<span class="order-card-id" style="font-weight:600;">' + esc(s.name) + '</span>' +
+        '<span style="font-size:0.75rem;background:var(--teal, #2a7c6f);color:white;padding:2px 6px;border-radius:4px;">AI Found</span>' +
+      '</div>' +
+      '<div class="order-card-details">' +
+        '<span>' + esc(typeLabel) + '</span>' +
+        (location ? '<span>' + esc(location) + '</span>' : '') +
+        (dates ? '<span>' + dates + '</span>' : '') +
+        (fees ? '<span>' + fees + '</span>' : '') +
+        (deadline ? '<span style="color:var(--text-secondary, #888);">' + deadline + '</span>' : '') +
+      '</div>';
+
+    // Extra details
+    if (s.audienceProfile) {
+      cards += '<div style="margin-top:8px;font-size:0.8rem;color:var(--text-secondary, #888);">' + esc(s.audienceProfile) + '</div>';
+    }
+    if (s.notes) {
+      cards += '<div style="margin-top:4px;font-size:0.8rem;color:var(--text-secondary, #888);font-style:italic;">' + esc(s.notes) + '</div>';
+    }
+
+    // Links
+    var links = '';
+    if (s.websiteUrl) links += '<a href="' + esc(s.websiteUrl) + '" target="_blank" style="color:var(--primary, #2a7c6f);font-size:0.8rem;">Website</a>';
+    if (s.applicationUrl) links += (links ? ' · ' : '') + '<a href="' + esc(s.applicationUrl) + '" target="_blank" style="color:var(--primary, #2a7c6f);font-size:0.8rem;">Apply</a>';
+    if (links) cards += '<div style="margin-top:8px;">' + links + '</div>';
+
+    // Action buttons
+    cards += '<div style="margin-top:12px;display:flex;gap:8px;">' +
+      '<button class="btn btn-primary btn-sm" onclick="addShowToPipeline(' + idx + ')">Add to Pipeline</button>' +
+      '<button class="btn btn-secondary btn-sm" onclick="dismissFinderResult(' + idx + ')">Dismiss</button>' +
+    '</div>' +
+    '</div>';
+  });
+  cardsEl.innerHTML = cards;
+}
+
+async function addShowToPipeline(idx) {
+  var s = showFinderResults[idx];
+  if (!s) return;
+
+  try {
+    var key = MastDB.shows.newKey();
+    var data = {
+      id: key,
+      name: s.name,
+      type: s.type || 'other',
+      locationCity: s.locationCity || '',
+      locationState: s.locationState || '',
+      startDate: s.startDate || null,
+      endDate: s.endDate || null,
+      websiteUrl: s.websiteUrl || null,
+      boothFee: s.boothFee || null,
+      juryFee: s.juryFee || null,
+      applicationDeadline: s.applicationDeadline || null,
+      applicationUrl: s.applicationUrl || null,
+      audienceProfile: s.audienceProfile || null,
+      juryType: s.juryType || 'unknown',
+      notes: s.notes || null,
+      applicationStatus: 'considering',
+      aiGenerated: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      createdBy: auth.currentUser ? auth.currentUser.uid : 'unknown'
+    };
+    await MastDB.shows.set(key, data);
+    showToast(esc(s.name) + ' added to pipeline.');
+
+    // Remove from finder results and re-render
+    showFinderResults.splice(idx, 1);
+    if (showFinderResults.length > 0) {
+      renderShowFinderResults();
+    } else {
+      clearShowFinderResults();
+    }
+  } catch (err) {
+    showToast('Error adding show: ' + err.message, true);
+  }
+}
+
+function dismissFinderResult(idx) {
+  var card = document.getElementById('showFinderCard-' + idx);
+  if (card) card.style.display = 'none';
+  showFinderResults[idx] = null;
+
+  // Check if all dismissed
+  var remaining = showFinderResults.filter(function(s) { return s !== null; });
+  if (remaining.length === 0) {
+    clearShowFinderResults();
+  } else {
+    document.getElementById('showFinderResultsCount').textContent = remaining.length + ' show' + (remaining.length !== 1 ? 's' : '') + ' found';
+  }
+}
+
+function clearShowFinderResults() {
+  showFinderResults = [];
+  document.getElementById('showFinderResults').style.display = 'none';
+  document.getElementById('showFinderCards').innerHTML = '';
+  document.getElementById('showFinderError').style.display = 'none';
 }
 
 // === Packing Mode ===
