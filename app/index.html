@@ -650,6 +650,13 @@
     body.dark-mode .history-modal-wrap textarea { background: #2a2a2a !important; color: #e0e0e0 !important; border-color: #444 !important; }
     body.dark-mode .history-modal-wrap label { color: #ccc !important; }
     body.dark-mode .review-attend-btn { background: #2a2a2a !important; border-color: #444 !important; color: #ccc !important; }
+    /* Show modals — Staffing, Inventory, Logistics */
+    body.dark-mode .show-modal-wrap > div { background: #1e1e1e !important; color: #e0e0e0 !important; }
+    body.dark-mode .show-modal-wrap input,
+    body.dark-mode .show-modal-wrap textarea,
+    body.dark-mode .show-modal-wrap select { background: #2a2a2a !important; color: #e0e0e0 !important; border-color: #444 !important; }
+    body.dark-mode .show-modal-wrap label { color: #ccc !important; }
+    body.dark-mode .show-modal-wrap h3 { color: #e0e0e0 !important; }
     body.dark-mode .history-comparison-card .order-card-details { color: #aaa; }
     /* Pipeline card metric boxes — Prep, Execute, History cards in list views */
     body.dark-mode #showPrepCards .order-card div[style*="background:var(--bg-secondary"] { background: #2a2a2a !important; }
@@ -18423,7 +18430,7 @@ async function openShowStaffingModal(showId) {
     return;
   }
 
-  var h = '<div id="showStaffingModal" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this)this.remove()">';
+  var h = '<div id="showStaffingModal" class="show-modal-wrap" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this)this.remove()">';
   h += '<div style="background:var(--bg-primary, #fff);border-radius:12px;padding:24px;max-width:400px;width:90%;max-height:80vh;overflow-y:auto;">';
   h += '<h3 style="margin:0 0 16px 0;">Assign Staff to Show</h3>';
   h += '<div style="margin-bottom:16px;">';
@@ -18492,7 +18499,7 @@ function editShowInventoryItem(showId, itemId) {
 
 function openShowInventoryModal(showId, itemId, existing) {
   var item = existing || {};
-  var h = '<div id="showInventoryModal" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this)this.remove()">';
+  var h = '<div id="showInventoryModal" class="show-modal-wrap" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this)this.remove()">';
   h += '<div style="background:var(--bg-primary, #fff);border-radius:12px;padding:24px;max-width:450px;width:90%;max-height:80vh;overflow-y:auto;">';
   h += '<h3 style="margin:0 0 16px 0;">' + (itemId ? 'Edit' : 'Add') + ' Inventory Item</h3>';
   h += '<div style="margin-bottom:12px;">';
@@ -18575,7 +18582,7 @@ async function removeShowInventoryItem(showId, itemId) {
 function editShowLogistics(showId) {
   var s = showsData[showId];
   var logistics = (s && s.prep && s.prep.logistics) || {};
-  var h = '<div id="showLogisticsModal" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this)this.remove()">';
+  var h = '<div id="showLogisticsModal" class="show-modal-wrap" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this)this.remove()">';
   h += '<div style="background:var(--bg-primary, #fff);border-radius:12px;padding:24px;max-width:500px;width:90%;max-height:80vh;overflow-y:auto;">';
   h += '<h3 style="margin:0 0 16px 0;">Show Logistics</h3>';
   h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">';
