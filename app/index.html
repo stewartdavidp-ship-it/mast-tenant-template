@@ -636,6 +636,21 @@
     body.dark-mode .exec-modal-wrap select,
     body.dark-mode .exec-modal-wrap textarea { background: #2a2a2a !important; color: #e0e0e0 !important; border-color: #444 !important; }
     body.dark-mode .exec-modal-wrap label { color: #ccc !important; }
+    /* History tab dark mode */
+    body.dark-mode .history-empty-msg { background: #2a2a2a !important; color: #aaa !important; }
+    body.dark-mode .history-stat-card { background: #2a2a2a !important; }
+    body.dark-mode .history-payment-breakdown { background: #2a2a2a !important; }
+    body.dark-mode .history-daily-breakdown { background: #2a2a2a !important; }
+    body.dark-mode .history-pl-row { background: #2a2a2a !important; }
+    body.dark-mode .history-pl-net { background: #1e1e1e !important; }
+    body.dark-mode .history-note-entry { background: #2a2a2a !important; }
+    body.dark-mode .history-card-metrics > div { background: #2a2a2a !important; }
+    body.dark-mode .history-modal-wrap > div { background: #1e1e1e !important; color: #e0e0e0 !important; }
+    body.dark-mode .history-modal-wrap input,
+    body.dark-mode .history-modal-wrap textarea { background: #2a2a2a !important; color: #e0e0e0 !important; border-color: #444 !important; }
+    body.dark-mode .history-modal-wrap label { color: #ccc !important; }
+    body.dark-mode .review-attend-btn { background: #2a2a2a !important; border-color: #444 !important; color: #ccc !important; }
+    body.dark-mode .history-comparison-card .order-card-details { color: #aaa; }
 
     /* ========== EVENTS TABLE ========== */
     .events-table {
@@ -17858,13 +17873,470 @@ async function saveShowNotes(showId) {
   }
 }
 
-// === Show Detail — History Tab (placeholder for Session C) ===
+// === Show Detail — History Tab ===
 
 function renderShowDetailHistory(showId, s) {
-  return '<div style="padding:24px;text-align:center;color:var(--text-secondary, #888);">' +
-    '<p style="font-size:1.1rem;">History tab — coming in Phase 2 Session C</p>' +
-    '<p style="font-size:0.9rem;">Post-show review, revenue tracking, and performance history will be built here.</p>' +
+  var h = '';
+  var exec = s.execute || {};
+  var multiDay = isMultiDayShow(s);
+  var today = new Date().toISOString().split('T')[0];
+  var endDate = s.endDate || s.startDate;
+  var showEnded = endDate && endDate < today;
+  var historyData = s.history || {};
+
+  // --- Post-Show Summary ---
+  h += '<div style="margin-bottom:32px;">';
+  h += '<h3 style="margin:0 0 16px 0;">Post-Show Summary</h3>';
+
+  if (!showEnded) {
+    h += '<div class="history-empty-msg" style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:16px;color:var(--text-secondary, #888);font-size:0.9rem;">';
+    h += 'Summary will be available after the show ends' + (endDate ? ' (' + formatShowDate(endDate) + ')' : '') + '.';
+    h += '</div>';
+  } else {
+    var sales = exec.sales || {};
+    var reconciliation = exec.reconciliation || {};
+    var totalRevenue = 0;
+    var totalSalesCount = 0;
+    var cashCount = 0; var cardCount = 0; var squareCount = 0;
+    var cashRevenue = 0; var cardRevenue = 0; var squareRevenue = 0;
+    var perDayRevenue = {};
+
+    if (multiDay) {
+      var showDates = getShowDates(s);
+      showDates.forEach(function(dt) {
+        var daySales = sales[dt] || {};
+        var dayRev = 0;
+        var dayCount = 0;
+        Object.keys(daySales).forEach(function(k) {
+          var sl = daySales[k];
+          var amt = sl.priceCents || 0;
+          totalRevenue += amt;
+          totalSalesCount++;
+          dayRev += amt;
+          dayCount++;
+          if (sl.paymentMethod === 'cash') { cashCount++; cashRevenue += amt; }
+          else if (sl.paymentMethod === 'card') { cardCount++; cardRevenue += amt; }
+          else if (sl.paymentMethod === 'square') { squareCount++; squareRevenue += amt; }
+        });
+        perDayRevenue[dt] = { revenue: dayRev, count: dayCount };
+      });
+    } else {
+      Object.keys(sales).forEach(function(k) {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(k)) return;
+        var sl = sales[k];
+        var amt = sl.priceCents || 0;
+        totalRevenue += amt;
+        totalSalesCount++;
+        if (sl.paymentMethod === 'cash') { cashCount++; cashRevenue += amt; }
+        else if (sl.paymentMethod === 'card') { cardCount++; cardRevenue += amt; }
+        else if (sl.paymentMethod === 'square') { squareCount++; squareRevenue += amt; }
+      });
+    }
+
+    // Reconciliation totals
+    var totalItemsSold = 0; var totalDamaged = 0; var totalGifted = 0;
+    Object.keys(reconciliation).forEach(function(itemId) {
+      var rec = reconciliation[itemId];
+      totalItemsSold += (rec.sold || 0);
+      totalDamaged += (rec.damaged || 0);
+      totalGifted += (rec.gifted || 0);
+    });
+
+    // Summary stats row
+    h += '<div class="history-summary-stats" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:16px;">';
+    h += historyStat('$' + (totalRevenue / 100).toFixed(2), 'Total Revenue', '#16a34a');
+    h += historyStat(totalSalesCount.toString(), 'Total Sales', '');
+    h += historyStat(totalItemsSold.toString(), 'Items Sold', '');
+    if (totalDamaged > 0) h += historyStat(totalDamaged.toString(), 'Damaged', '#dc2626');
+    if (totalGifted > 0) h += historyStat(totalGifted.toString(), 'Gifted', '#7c3aed');
+    h += '</div>';
+
+    // Payment method breakdown
+    if (cashCount || cardCount || squareCount) {
+      h += '<div class="history-payment-breakdown" style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:12px 16px;margin-bottom:16px;">';
+      h += '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:8px;">Sales by Payment Method</div>';
+      h += '<div style="display:flex;gap:16px;flex-wrap:wrap;">';
+      if (cashCount) h += '<div><span style="font-weight:600;color:#16a34a;">Cash:</span> ' + cashCount + ' sales / $' + (cashRevenue / 100).toFixed(2) + '</div>';
+      if (cardCount) h += '<div><span style="font-weight:600;color:#2563eb;">Card:</span> ' + cardCount + ' sales / $' + (cardRevenue / 100).toFixed(2) + '</div>';
+      if (squareCount) h += '<div><span style="font-weight:600;color:#7c3aed;">Square:</span> ' + squareCount + ' sales / $' + (squareRevenue / 100).toFixed(2) + '</div>';
+      h += '</div></div>';
+    }
+
+    // Per-day breakdown for multi-day shows
+    if (multiDay && Object.keys(perDayRevenue).length > 0) {
+      h += '<div class="history-daily-breakdown" style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:12px 16px;margin-bottom:16px;">';
+      h += '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:8px;">Per-Day Revenue</div>';
+      h += '<div style="display:flex;flex-direction:column;gap:6px;">';
+      Object.keys(perDayRevenue).sort().forEach(function(dt) {
+        var d = perDayRevenue[dt];
+        var dayLabel = new Date(dt + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+        var pct = totalRevenue > 0 ? Math.round((d.revenue / totalRevenue) * 100) : 0;
+        h += '<div style="display:flex;justify-content:space-between;align-items:center;">';
+        h += '<span style="font-size:0.9rem;">' + dayLabel + ' <span style="color:var(--text-secondary, #888);font-size:0.8rem;">(' + d.count + ' sale' + (d.count !== 1 ? 's' : '') + ')</span></span>';
+        h += '<span style="font-weight:600;">$' + (d.revenue / 100).toFixed(2) + ' <span style="color:var(--text-secondary, #888);font-size:0.8rem;">(' + pct + '%)</span></span>';
+        h += '</div>';
+      });
+      h += '</div></div>';
+    }
+
+    if (totalSalesCount === 0 && totalItemsSold === 0) {
+      h += '<div class="history-empty-msg" style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:16px;color:var(--text-secondary, #888);font-size:0.9rem;">No sales or reconciliation data recorded for this show.</div>';
+    }
+  }
+  h += '</div>';
+
+  // --- P&L Section ---
+  h += '<div style="margin-bottom:32px;">';
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
+  h += '<h3 style="margin:0;">Profit &amp; Loss</h3>';
+  if (hasPermission('shows', 'update')) {
+    h += '<button class="btn btn-sm" onclick="openShowExpenseModal(\'' + showId + '\')" style="background:var(--primary, #2a7c6f);color:white;border:none;">+ Add Expense</button>';
+  }
+  h += '</div>';
+
+  // Revenue
+  var plRevenue = 0;
+  if (showEnded) {
+    var plSales = exec.sales || {};
+    if (multiDay) {
+      getShowDates(s).forEach(function(dt) {
+        var ds = plSales[dt] || {};
+        Object.keys(ds).forEach(function(k) { plRevenue += (ds[k].priceCents || 0); });
+      });
+    } else {
+      Object.keys(plSales).forEach(function(k) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(k)) plRevenue += (plSales[k].priceCents || 0);
+      });
+    }
+  }
+
+  // Costs
+  var boothFeeCents = s.boothFee || 0;
+  var juryFeeCents = s.juryFee || 0;
+  var expenses = historyData.expenses || {};
+  var expenseKeys = Object.keys(expenses);
+  var additionalExpensesCents = 0;
+  expenseKeys.forEach(function(k) { additionalExpensesCents += (expenses[k].amountCents || 0); });
+  var totalCostsCents = boothFeeCents + juryFeeCents + additionalExpensesCents;
+  var netCents = plRevenue - totalCostsCents;
+  var roi = totalCostsCents > 0 ? ((netCents / totalCostsCents) * 100).toFixed(1) : '—';
+
+  h += '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">';
+  // Revenue line
+  h += '<div class="history-pl-row" style="display:flex;justify-content:space-between;padding:8px 12px;background:var(--bg-secondary, #f5f5f5);border-radius:6px;">';
+  h += '<span style="font-size:0.9rem;">Revenue</span>';
+  h += '<span style="font-weight:600;color:#16a34a;">$' + (plRevenue / 100).toFixed(2) + '</span>';
+  h += '</div>';
+  // Booth fee
+  if (boothFeeCents) {
+    h += '<div class="history-pl-row" style="display:flex;justify-content:space-between;padding:8px 12px;background:var(--bg-secondary, #f5f5f5);border-radius:6px;">';
+    h += '<span style="font-size:0.9rem;">Booth Fee</span>';
+    h += '<span style="font-weight:600;color:#dc2626;">-$' + (boothFeeCents / 100).toFixed(2) + '</span>';
+    h += '</div>';
+  }
+  // Jury fee
+  if (juryFeeCents) {
+    h += '<div class="history-pl-row" style="display:flex;justify-content:space-between;padding:8px 12px;background:var(--bg-secondary, #f5f5f5);border-radius:6px;">';
+    h += '<span style="font-size:0.9rem;">Jury Fee</span>';
+    h += '<span style="font-weight:600;color:#dc2626;">-$' + (juryFeeCents / 100).toFixed(2) + '</span>';
+    h += '</div>';
+  }
+  // Additional expenses
+  expenseKeys.forEach(function(k) {
+    var exp = expenses[k];
+    h += '<div class="history-pl-row" style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--bg-secondary, #f5f5f5);border-radius:6px;">';
+    h += '<span style="font-size:0.9rem;">' + esc(exp.description || 'Expense') + '</span>';
+    h += '<div style="display:flex;align-items:center;gap:8px;">';
+    h += '<span style="font-weight:600;color:#dc2626;">-$' + ((exp.amountCents || 0) / 100).toFixed(2) + '</span>';
+    if (hasPermission('shows', 'update')) {
+      h += '<button onclick="editShowExpense(\'' + showId + '\', \'' + k + '\')" style="background:none;border:none;color:var(--text-secondary, #888);cursor:pointer;font-size:0.85rem;" title="Edit">&#9998;</button>';
+      h += '<button onclick="deleteShowExpense(\'' + showId + '\', \'' + k + '\')" style="background:none;border:none;color:var(--text-secondary, #888);cursor:pointer;font-size:1.1rem;" title="Delete">&times;</button>';
+    }
+    h += '</div></div>';
+  });
+  h += '</div>';
+
+  // Net result
+  var netColor = netCents >= 0 ? '#16a34a' : '#dc2626';
+  h += '<div class="history-pl-net" style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:' + (netCents >= 0 ? '#16a34a15' : '#dc262615') + ';border-radius:8px;border:1px solid ' + netColor + '33;">';
+  h += '<div>';
+  h += '<div style="font-weight:700;font-size:1.1rem;color:' + netColor + ';">' + (netCents >= 0 ? 'Profit' : 'Loss') + ': $' + (Math.abs(netCents) / 100).toFixed(2) + '</div>';
+  h += '<div style="font-size:0.8rem;color:var(--text-secondary, #888);">ROI: ' + (roi === '—' ? '—' : roi + '%') + '</div>';
+  h += '</div>';
+  h += '<div style="text-align:right;font-size:0.8rem;color:var(--text-secondary, #888);">';
+  h += 'Costs: $' + (totalCostsCents / 100).toFixed(2);
+  h += '</div></div>';
+  h += '</div>';
+
+  // --- Show Review ---
+  h += '<div style="margin-bottom:32px;">';
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
+  h += '<h3 style="margin:0;">Show Review</h3>';
+  if (hasPermission('shows', 'update')) {
+    h += '<button class="btn btn-sm" onclick="openShowReviewModal(\'' + showId + '\')" style="background:var(--primary, #2a7c6f);color:white;border:none;">Edit Review</button>';
+  }
+  h += '</div>';
+  var review = historyData.review || {};
+  if (!review.rating && !review.wouldAttendAgain && !review.bestSellers && !review.lessonsLearned) {
+    h += '<div class="history-empty-msg" style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:16px;color:var(--text-secondary, #888);font-size:0.9rem;">No review yet. Add your post-show reflection.</div>';
+  } else {
+    h += '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:12px;padding:16px;">';
+    // Rating
+    if (review.rating) {
+      h += '<div style="margin-bottom:12px;">';
+      h += '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:4px;">Rating</div>';
+      h += '<div style="font-size:1.2rem;">';
+      for (var i = 1; i <= 5; i++) {
+        h += '<span style="color:' + (i <= review.rating ? '#f59e0b' : '#d1d5db') + ';">&#9733;</span>';
+      }
+      h += '</div></div>';
+    }
+    // Would attend again
+    if (review.wouldAttendAgain) {
+      var attendColors = { yes: '#16a34a', maybe: '#f59e0b', no: '#dc2626' };
+      var attendLabels = { yes: 'Yes', maybe: 'Maybe', no: 'No' };
+      h += '<div style="margin-bottom:12px;">';
+      h += '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:4px;">Would Attend Again</div>';
+      h += '<span style="font-size:0.85rem;font-weight:600;color:' + (attendColors[review.wouldAttendAgain] || '#888') + ';">' + (attendLabels[review.wouldAttendAgain] || review.wouldAttendAgain) + '</span>';
+      h += '</div>';
+    }
+    // Best sellers
+    if (review.bestSellers) {
+      h += '<div style="margin-bottom:12px;">';
+      h += '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:4px;">Best Sellers</div>';
+      h += '<div style="font-size:0.9rem;white-space:pre-wrap;line-height:1.5;">' + esc(review.bestSellers) + '</div>';
+      h += '</div>';
+    }
+    // Lessons learned
+    if (review.lessonsLearned) {
+      h += '<div>';
+      h += '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:4px;">Lessons Learned</div>';
+      h += '<div style="font-size:0.9rem;white-space:pre-wrap;line-height:1.5;">' + esc(review.lessonsLearned) + '</div>';
+      h += '</div>';
+    }
+    h += '</div>';
+  }
+  h += '</div>';
+
+  // --- Notes Archive ---
+  h += '<div style="margin-bottom:32px;">';
+  h += '<h3 style="margin:0 0 12px 0;">Notes Archive</h3>';
+  var notes = exec.notes || {};
+  var hasNotes = false;
+  if (multiDay) {
+    var showDates = getShowDates(s);
+    var notesHtml = '';
+    showDates.forEach(function(dt) {
+      var noteText = notes[dt];
+      if (noteText) {
+        hasNotes = true;
+        var dayLabel = new Date(dt + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+        notesHtml += '<div class="history-note-entry" style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:12px 16px;margin-bottom:8px;border-left:3px solid var(--primary, #2a7c6f);">';
+        notesHtml += '<div style="font-size:0.8rem;font-weight:600;color:var(--primary, #2a7c6f);margin-bottom:6px;">' + dayLabel + '</div>';
+        notesHtml += '<div style="font-size:0.9rem;white-space:pre-wrap;line-height:1.5;">' + esc(noteText) + '</div>';
+        notesHtml += '</div>';
+      }
+    });
+    if (hasNotes) h += notesHtml;
+  } else {
+    var singleNote = typeof notes === 'string' ? notes : (notes._default || '');
+    if (singleNote) {
+      hasNotes = true;
+      h += '<div class="history-note-entry" style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:12px 16px;border-left:3px solid var(--primary, #2a7c6f);">';
+      h += '<div style="font-size:0.9rem;white-space:pre-wrap;line-height:1.5;">' + esc(singleNote) + '</div>';
+      h += '</div>';
+    }
+  }
+  if (!hasNotes) {
+    h += '<div class="history-empty-msg" style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:16px;color:var(--text-secondary, #888);font-size:0.9rem;">No show notes recorded.</div>';
+  }
+  h += '</div>';
+
+  return h;
+}
+
+function historyStat(value, label, color) {
+  return '<div class="history-stat-card" style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:10px 16px;text-align:center;">' +
+    '<div style="font-size:1.25rem;font-weight:700;' + (color ? 'color:' + color + ';' : '') + '">' + value + '</div>' +
+    '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;">' + label + '</div>' +
   '</div>';
+}
+
+// === History Tab — Expense CRUD ===
+
+function openShowExpenseModal(showId, expenseId) {
+  var s = showsData[showId];
+  var existing = null;
+  if (expenseId && s && s.history && s.history.expenses) {
+    existing = s.history.expenses[expenseId];
+  }
+  var exp = existing || {};
+
+  var h = '<div id="showExpenseModal" class="history-modal-wrap" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this)this.remove()">';
+  h += '<div style="background:var(--bg-primary, #fff);border-radius:12px;padding:24px;max-width:400px;width:90%;">';
+  h += '<h3 style="margin:0 0 16px 0;">' + (expenseId ? 'Edit' : 'Add') + ' Expense</h3>';
+  h += '<div style="margin-bottom:12px;">';
+  h += '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Description *</label>';
+  h += '<input id="expenseDescription" type="text" placeholder="e.g. Gas, Parking, Supplies" value="' + esc(exp.description || '') + '" style="width:100%;padding:8px;border:1px solid var(--border-color, #ddd);border-radius:6px;font-family:inherit;font-size:0.9rem;background:var(--bg-primary, #fff);color:var(--text-primary, #333);box-sizing:border-box;">';
+  h += '</div>';
+  h += '<div style="margin-bottom:16px;">';
+  h += '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Amount ($) *</label>';
+  h += '<input id="expenseAmount" type="number" step="0.01" min="0" placeholder="25.00" value="' + (exp.amountCents ? (exp.amountCents / 100).toFixed(2) : '') + '" style="width:100%;padding:8px;border:1px solid var(--border-color, #ddd);border-radius:6px;font-family:inherit;font-size:0.9rem;background:var(--bg-primary, #fff);color:var(--text-primary, #333);box-sizing:border-box;">';
+  h += '</div>';
+  h += '<div style="display:flex;gap:8px;justify-content:flex-end;">';
+  h += '<button class="btn btn-secondary btn-sm" onclick="document.getElementById(\'showExpenseModal\').remove()">Cancel</button>';
+  h += '<button class="btn btn-sm" onclick="saveShowExpense(\'' + showId + '\', ' + (expenseId ? '\'' + expenseId + '\'' : 'null') + ')" style="background:var(--primary, #2a7c6f);color:white;border:none;">Save</button>';
+  h += '</div></div></div>';
+  document.body.insertAdjacentHTML('beforeend', h);
+}
+
+async function saveShowExpense(showId, expenseId) {
+  var desc = document.getElementById('expenseDescription').value.trim();
+  if (!desc) { showToast('Description is required.', true); return; }
+  var amtVal = parseFloat(document.getElementById('expenseAmount').value);
+  if (isNaN(amtVal) || amtVal < 0) { showToast('Valid amount is required.', true); return; }
+  var amountCents = Math.round(amtVal * 100);
+
+  var data = {
+    description: desc,
+    amountCents: amountCents,
+    updatedAt: new Date().toISOString()
+  };
+
+  try {
+    if (expenseId) {
+      await MastDB.shows.subRef(showId, 'history', 'expenses', expenseId).update(data);
+    } else {
+      data.createdAt = new Date().toISOString();
+      await MastDB.shows.subRef(showId, 'history', 'expenses').push().set(data);
+    }
+    var modal = document.getElementById('showExpenseModal');
+    if (modal) modal.remove();
+    showToast(expenseId ? 'Expense updated.' : 'Expense added.');
+    renderShowDetail(showId);
+  } catch (err) {
+    showToast('Error saving expense: ' + err.message, true);
+  }
+}
+
+function editShowExpense(showId, expenseId) {
+  openShowExpenseModal(showId, expenseId);
+}
+
+async function deleteShowExpense(showId, expenseId) {
+  if (!confirm('Delete this expense?')) return;
+  try {
+    await MastDB.shows.subRef(showId, 'history', 'expenses', expenseId).remove();
+    showToast('Expense deleted.');
+    renderShowDetail(showId);
+  } catch (err) {
+    showToast('Error deleting expense: ' + err.message, true);
+  }
+}
+
+// === History Tab — Show Review CRUD ===
+
+function openShowReviewModal(showId) {
+  var s = showsData[showId];
+  var review = (s && s.history && s.history.review) || {};
+
+  var h = '<div id="showReviewModal" class="history-modal-wrap" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this)this.remove()">';
+  h += '<div style="background:var(--bg-primary, #fff);border-radius:12px;padding:24px;max-width:500px;width:90%;max-height:80vh;overflow-y:auto;">';
+  h += '<h3 style="margin:0 0 16px 0;">Show Review</h3>';
+
+  // Rating
+  h += '<div style="margin-bottom:16px;">';
+  h += '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Rating</label>';
+  h += '<div id="reviewStars" style="display:flex;gap:4px;">';
+  for (var i = 1; i <= 5; i++) {
+    h += '<span class="review-star" data-value="' + i + '" onclick="setReviewRating(' + i + ')" style="font-size:1.8rem;cursor:pointer;color:' + (i <= (review.rating || 0) ? '#f59e0b' : '#d1d5db') + ';">&#9733;</span>';
+  }
+  h += '</div>';
+  h += '<input type="hidden" id="reviewRating" value="' + (review.rating || 0) + '">';
+  h += '</div>';
+
+  // Would attend again
+  h += '<div style="margin-bottom:16px;">';
+  h += '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Would Attend Again</label>';
+  h += '<div style="display:flex;gap:8px;">';
+  ['yes', 'maybe', 'no'].forEach(function(val) {
+    var label = val.charAt(0).toUpperCase() + val.slice(1);
+    var colors = { yes: '#16a34a', maybe: '#f59e0b', no: '#dc2626' };
+    var isSelected = review.wouldAttendAgain === val;
+    h += '<button class="review-attend-btn" data-value="' + val + '" onclick="setReviewAttend(\'' + val + '\')" style="padding:6px 16px;border-radius:6px;font-size:0.85rem;font-family:inherit;cursor:pointer;' +
+      'border:1px solid ' + (isSelected ? colors[val] : 'var(--border-color, #ddd)') + ';' +
+      'background:' + (isSelected ? colors[val] : 'var(--bg-primary, #fff)') + ';' +
+      'color:' + (isSelected ? 'white' : 'var(--text-primary, #333)') + ';font-weight:' + (isSelected ? '600' : '400') + ';">' + label + '</button>';
+  });
+  h += '</div>';
+  h += '<input type="hidden" id="reviewAttend" value="' + (review.wouldAttendAgain || '') + '">';
+  h += '</div>';
+
+  // Best sellers
+  h += '<div style="margin-bottom:16px;">';
+  h += '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Best Sellers</label>';
+  h += '<textarea id="reviewBestSellers" rows="3" placeholder="What sold best? What got the most attention?" style="width:100%;padding:8px;border:1px solid var(--border-color, #ddd);border-radius:6px;font-family:inherit;font-size:0.9rem;resize:vertical;background:var(--bg-primary, #fff);color:var(--text-primary, #333);box-sizing:border-box;line-height:1.5;">' + esc(review.bestSellers || '') + '</textarea>';
+  h += '</div>';
+
+  // Lessons learned
+  h += '<div style="margin-bottom:16px;">';
+  h += '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Lessons Learned</label>';
+  h += '<textarea id="reviewLessons" rows="3" placeholder="What would you do differently? Any surprises?" style="width:100%;padding:8px;border:1px solid var(--border-color, #ddd);border-radius:6px;font-family:inherit;font-size:0.9rem;resize:vertical;background:var(--bg-primary, #fff);color:var(--text-primary, #333);box-sizing:border-box;line-height:1.5;">' + esc(review.lessonsLearned || '') + '</textarea>';
+  h += '</div>';
+
+  h += '<div style="display:flex;gap:8px;justify-content:flex-end;">';
+  h += '<button class="btn btn-secondary btn-sm" onclick="document.getElementById(\'showReviewModal\').remove()">Cancel</button>';
+  h += '<button class="btn btn-sm" onclick="saveShowReview(\'' + showId + '\')" style="background:var(--primary, #2a7c6f);color:white;border:none;">Save</button>';
+  h += '</div></div></div>';
+  document.body.insertAdjacentHTML('beforeend', h);
+}
+
+function setReviewRating(val) {
+  document.getElementById('reviewRating').value = val;
+  var stars = document.querySelectorAll('#reviewStars .review-star');
+  stars.forEach(function(star) {
+    var sv = parseInt(star.getAttribute('data-value'));
+    star.style.color = sv <= val ? '#f59e0b' : '#d1d5db';
+  });
+}
+
+function setReviewAttend(val) {
+  document.getElementById('reviewAttend').value = val;
+  var colors = { yes: '#16a34a', maybe: '#f59e0b', no: '#dc2626' };
+  var btns = document.querySelectorAll('.review-attend-btn');
+  btns.forEach(function(btn) {
+    var bv = btn.getAttribute('data-value');
+    var isSelected = bv === val;
+    btn.style.background = isSelected ? colors[bv] : 'var(--bg-primary, #fff)';
+    btn.style.color = isSelected ? 'white' : 'var(--text-primary, #333)';
+    btn.style.borderColor = isSelected ? colors[bv] : 'var(--border-color, #ddd)';
+    btn.style.fontWeight = isSelected ? '600' : '400';
+  });
+}
+
+async function saveShowReview(showId) {
+  var rating = parseInt(document.getElementById('reviewRating').value) || 0;
+  var wouldAttendAgain = document.getElementById('reviewAttend').value || null;
+  var bestSellers = document.getElementById('reviewBestSellers').value.trim() || null;
+  var lessonsLearned = document.getElementById('reviewLessons').value.trim() || null;
+
+  var data = {
+    rating: rating || null,
+    wouldAttendAgain: wouldAttendAgain,
+    bestSellers: bestSellers,
+    lessonsLearned: lessonsLearned,
+    updatedAt: new Date().toISOString()
+  };
+
+  try {
+    await MastDB.shows.subRef(showId, 'history', 'review').set(data);
+    var modal = document.getElementById('showReviewModal');
+    if (modal) modal.remove();
+    showToast('Review saved.');
+    renderShowDetail(showId);
+  } catch (err) {
+    showToast('Error saving review: ' + err.message, true);
+  }
 }
 
 function showDetailCard(label, value) {
@@ -18476,7 +18948,53 @@ function renderShowHistoryView() {
       if (s.endDate && s.endDate !== s.startDate) dates += ' – ' + formatShowDate(s.endDate);
     }
 
-    cards += '<div class="order-card" onclick="viewShowDetail(\'' + s._key + '\')" style="cursor:pointer;">' +
+    // Calculate metrics for comparison view
+    var exec = s.execute || {};
+    var salesObj = exec.sales || {};
+    var totalRevenue = 0;
+    var totalSalesCount = 0;
+    var multiDay = s.startDate && s.endDate && s.endDate !== s.startDate;
+    if (multiDay) {
+      Object.keys(salesObj).forEach(function(dateKey) {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateKey) && typeof salesObj[dateKey] === 'object') {
+          Object.keys(salesObj[dateKey]).forEach(function(saleKey) {
+            totalSalesCount++;
+            totalRevenue += (salesObj[dateKey][saleKey].priceCents || 0);
+          });
+        }
+      });
+    } else {
+      Object.keys(salesObj).forEach(function(k) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(k)) {
+          totalSalesCount++;
+          totalRevenue += (salesObj[k].priceCents || 0);
+        }
+      });
+    }
+
+    var reconObj = exec.reconciliation || {};
+    var itemsSold = 0;
+    Object.keys(reconObj).forEach(function(k) { itemsSold += (reconObj[k].sold || 0); });
+
+    // P&L
+    var totalCosts = (s.boothFee || 0) + (s.juryFee || 0);
+    var histExpenses = (s.history && s.history.expenses) || {};
+    Object.keys(histExpenses).forEach(function(k) { totalCosts += (histExpenses[k].amountCents || 0); });
+    var net = totalRevenue - totalCosts;
+
+    // Review
+    var review = (s.history && s.history.review) || {};
+    var ratingStars = '';
+    if (review.rating) {
+      for (var i = 1; i <= 5; i++) {
+        ratingStars += '<span style="color:' + (i <= review.rating ? '#f59e0b' : '#d1d5db') + ';font-size:0.85rem;">&#9733;</span>';
+      }
+    }
+
+    var endDate = s.endDate || s.startDate;
+    var showEnded = endDate && endDate < today;
+
+    cards += '<div class="order-card history-comparison-card" onclick="viewShowDetail(\'' + s._key + '\', \'history\')" style="cursor:pointer;">' +
       '<div class="order-card-header" style="display:flex;justify-content:space-between;align-items:center;">' +
         '<span class="order-card-id" style="font-weight:600;">' + esc(s.name || 'Unnamed Show') + '</span>' +
         '<span class="show-status ' + statusClass + '">' + statusLabel + '</span>' +
@@ -18485,9 +19003,74 @@ function renderShowHistoryView() {
         '<span>' + esc(typeLabel) + '</span>' +
         (location ? '<span>' + esc(location) + '</span>' : '') +
         (dates ? '<span>' + dates + '</span>' : '') +
-      '</div>' +
-    '</div>';
+      '</div>';
+
+    // Metrics row (only for accepted shows that have ended)
+    if (showEnded && s.applicationStatus === 'accepted') {
+      cards += '<div class="history-card-metrics" style="margin-top:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px;">';
+      cards += '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:6px;padding:8px;text-align:center;">' +
+        '<div style="font-size:1rem;font-weight:700;color:#16a34a;">$' + (totalRevenue / 100).toFixed(0) + '</div>' +
+        '<div style="font-size:0.7rem;color:var(--text-secondary, #888);text-transform:uppercase;">Revenue</div></div>';
+      cards += '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:6px;padding:8px;text-align:center;">' +
+        '<div style="font-size:1rem;font-weight:700;">' + (itemsSold || totalSalesCount) + '</div>' +
+        '<div style="font-size:0.7rem;color:var(--text-secondary, #888);text-transform:uppercase;">Items</div></div>';
+      var netColor = net >= 0 ? '#16a34a' : '#dc2626';
+      cards += '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:6px;padding:8px;text-align:center;">' +
+        '<div style="font-size:1rem;font-weight:700;color:' + netColor + ';">' + (net >= 0 ? '+' : '-') + '$' + (Math.abs(net) / 100).toFixed(0) + '</div>' +
+        '<div style="font-size:0.7rem;color:var(--text-secondary, #888);text-transform:uppercase;">Net</div></div>';
+      if (ratingStars) {
+        cards += '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:6px;padding:8px;text-align:center;">' +
+          '<div>' + ratingStars + '</div>' +
+          '<div style="font-size:0.7rem;color:var(--text-secondary, #888);text-transform:uppercase;">Rating</div></div>';
+      }
+      cards += '</div>';
+    }
+
+    cards += '</div>';
   });
+
+  // Update summary stats to include total revenue across all history shows
+  if (statsEl && historyShows.length > 0) {
+    var totalHistoryRevenue = 0;
+    historyShows.forEach(function(s) {
+      var exec = s.execute || {};
+      var salesObj = exec.sales || {};
+      var multiDay = s.startDate && s.endDate && s.endDate !== s.startDate;
+      if (multiDay) {
+        Object.keys(salesObj).forEach(function(dateKey) {
+          if (/^\d{4}-\d{2}-\d{2}$/.test(dateKey) && typeof salesObj[dateKey] === 'object') {
+            Object.keys(salesObj[dateKey]).forEach(function(saleKey) {
+              totalHistoryRevenue += (salesObj[dateKey][saleKey].priceCents || 0);
+            });
+          }
+        });
+      } else {
+        Object.keys(salesObj).forEach(function(k) {
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(k)) totalHistoryRevenue += (salesObj[k].priceCents || 0);
+        });
+      }
+    });
+    var acceptedCount = historyShows.filter(function(s) { return s.applicationStatus === 'accepted'; }).length;
+    var rejectedCount = historyShows.filter(function(s) { return s.applicationStatus === 'rejected'; }).length;
+    statsEl.innerHTML =
+      '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:10px 16px;text-align:center;">' +
+        '<div style="font-size:1.25rem;font-weight:700;">' + historyShows.length + '</div>' +
+        '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;">Total</div>' +
+      '</div>' +
+      '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:10px 16px;text-align:center;">' +
+        '<div style="font-size:1.25rem;font-weight:700;color:#16a34a;">' + acceptedCount + '</div>' +
+        '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;">Accepted</div>' +
+      '</div>' +
+      '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:10px 16px;text-align:center;">' +
+        '<div style="font-size:1.25rem;font-weight:700;color:#dc2626;">' + rejectedCount + '</div>' +
+        '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;">Rejected</div>' +
+      '</div>' +
+      (totalHistoryRevenue > 0 ? '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:10px 16px;text-align:center;">' +
+        '<div style="font-size:1.25rem;font-weight:700;color:#16a34a;">$' + (totalHistoryRevenue / 100).toFixed(0) + '</div>' +
+        '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;">Total Revenue</div>' +
+      '</div>' : '');
+  }
+
   cardsEl.innerHTML = cards;
 }
 
