@@ -618,6 +618,8 @@
     body.dark-mode #showFindContent > div:first-child { background: #2a2a2a !important; }
     body.dark-mode #showFinderError { background: #3a1a1a !important; border-color: #7f1d1d !important; }
     body.dark-mode #showFinderErrorMsg { color: #fca5a5 !important; }
+    body.dark-mode #showHistoryStats > div { background: #2a2a2a !important; }
+    body.dark-mode #showHistoryStats div:last-child { color: #ccc; }
 
     /* ========== EVENTS TABLE ========== */
     .events-table {
@@ -1700,6 +1702,7 @@
 
     /* ========== LOADING ========== */
     @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
     .loading {
       text-align: center;
       padding: 60px 20px;
@@ -4345,6 +4348,9 @@
       <div class="show-sub-nav" style="display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid var(--border-color, #e5e5e5);padding-bottom:0;">
         <button class="show-sub-tab active" data-show-view="find" onclick="switchShowSubView('find')">Find</button>
         <button class="show-sub-tab" data-show-view="apply" onclick="switchShowSubView('apply')">Apply</button>
+        <button class="show-sub-tab" data-show-view="prep" onclick="switchShowSubView('prep')">Prep</button>
+        <button class="show-sub-tab" data-show-view="execute" onclick="switchShowSubView('execute')">Execute</button>
+        <button class="show-sub-tab" data-show-view="history" onclick="switchShowSubView('history')">History</button>
       </div>
       <!-- Find sub-view -->
       <div id="showFindView" style="display:none;">
@@ -4437,6 +4443,45 @@
           <p>No shows yet. Click "+ New Show" or use Find to discover shows.</p>
         </div>
         <div class="order-cards" id="showsCards"></div>
+      </div>
+      <!-- Prep sub-view -->
+      <div id="showPrepView" style="display:none;">
+        <div id="showPrepCards" class="order-cards"></div>
+        <div id="showPrepEmpty" class="empty-state" style="display:none;">
+          <p>No accepted shows to prepare for. Shows move here when their application status is set to Accepted.</p>
+        </div>
+      </div>
+      <!-- Execute sub-view -->
+      <div id="showExecuteView" style="display:none;">
+        <div id="showExecuteCards" class="order-cards"></div>
+        <div id="showExecuteEmpty" class="empty-state" style="display:none;">
+          <p>No shows happening right now. Active shows appear here during their event dates.</p>
+        </div>
+      </div>
+      <!-- History sub-view -->
+      <div id="showHistoryView" style="display:none;">
+        <div id="showHistoryStats" style="display:none;gap:16px;margin-bottom:16px;flex-wrap:wrap;"></div>
+        <div id="showHistoryFilters" style="display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">
+          <select id="showHistoryStatusFilter" onchange="renderShowHistoryView()" style="padding:6px 10px;border:1px solid var(--border-color, #ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.85rem;background:var(--bg-primary, #fff);color:var(--text-primary, #333);">
+            <option value="all">All Statuses</option>
+            <option value="accepted">Accepted</option>
+            <option value="rejected">Rejected</option>
+            <option value="withdrawn">Withdrawn</option>
+          </select>
+          <select id="showHistoryTypeFilter" onchange="renderShowHistoryView()" style="padding:6px 10px;border:1px solid var(--border-color, #ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.85rem;background:var(--bg-primary, #fff);color:var(--text-primary, #333);">
+            <option value="all">All Types</option>
+            <option value="juried">Juried</option>
+            <option value="pop-up">Pop-Up</option>
+            <option value="market">Market</option>
+            <option value="recurring">Recurring</option>
+            <option value="trade">Trade</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div id="showHistoryCards" class="order-cards"></div>
+        <div id="showHistoryEmpty" class="empty-state" style="display:none;">
+          <p>No show history yet. Completed and past shows will appear here.</p>
+        </div>
       </div>
       <!-- Show detail view -->
       <div id="showDetailView" style="display:none;"></div>
@@ -7774,9 +7819,9 @@ var ROUTE_MAP = {
   'show':          { tab: 'showTab', setup: function() { navigateTo('show-apply'); } },
   'show-find':     { tab: 'showTab', setup: function() { switchShowSubView('find'); } },
   'show-apply':    { tab: 'showTab', setup: function() { switchShowSubView('apply'); } },
-  'show-prep':     { tab: null, placeholder: { name: 'Prep', desc: 'Staffing assignments, inventory pull lists, logistics for upcoming shows.', badge: 'new' } },
-  'show-execute':  { tab: null, placeholder: { name: 'Execute', desc: 'At-show sales recording, inventory reconciliation.', badge: 'new' } },
-  'show-history':  { tab: null, placeholder: { name: 'History', desc: 'Post-show performance review, ROI analysis.', badge: 'new' } },
+  'show-prep':     { tab: 'showTab', setup: function() { switchShowSubView('prep'); } },
+  'show-execute':  { tab: 'showTab', setup: function() { switchShowSubView('execute'); } },
+  'show-history':  { tab: 'showTab', setup: function() { switchShowSubView('history'); } },
   // Legacy routes for backward compatibility
   'schedule':    { tab: 'scheduleTab' },
   'sales':       { tab: 'salesTab' },
@@ -7882,7 +7927,7 @@ function lazyLoadForRoute(route) {
   if (route === 'social') { if (!socialMediaLoaded) loadSocialMedia(); if (!productsLoaded) loadProducts(); }
   if (route === 'blog') { if (!blogLoaded) loadBlog(); }
   if (route === 'newsletter') { if (!newsletterLoaded) loadNewsletter(); }
-  if (route === 'show' || route === 'show-find' || route === 'show-apply') {
+  if (route === 'show' || route === 'show-find' || route === 'show-apply' || route === 'show-prep' || route === 'show-execute' || route === 'show-history') {
     if (!showsLoaded) loadShows();
     if (!productsLoaded) loadProducts();
   }
@@ -16808,6 +16853,40 @@ var SHOW_TYPE_LABELS = {
   other: 'Other'
 };
 
+function updateShowTabBadges() {
+  var today = new Date().toISOString().split('T')[0];
+  var arr = getShowsArray();
+  // Apply: active applications (considering + applied + waitlisted)
+  var applyCount = arr.filter(function(s) {
+    var st = s.applicationStatus;
+    return st === 'considering' || st === 'applied' || st === 'waitlisted';
+  }).length;
+  // Prep: accepted shows
+  var prepCount = arr.filter(function(s) { return s.applicationStatus === 'accepted'; }).length;
+  // History: past or terminal
+  var historyCount = arr.filter(function(s) {
+    var endDate = s.endDate || s.startDate;
+    return (endDate && endDate < today) || s.applicationStatus === 'rejected' || s.applicationStatus === 'withdrawn';
+  }).length;
+  var badges = { apply: applyCount, prep: prepCount, history: historyCount };
+  document.querySelectorAll('.show-sub-tab').forEach(function(tab) {
+    var view = tab.getAttribute('data-show-view');
+    var count = badges[view];
+    var badge = tab.querySelector('.show-tab-badge');
+    if (count && count > 0) {
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'show-tab-badge';
+        badge.style.cssText = 'font-size:0.7rem;background:var(--text-secondary, #888);color:white;padding:1px 6px;border-radius:8px;margin-left:4px;';
+        tab.appendChild(badge);
+      }
+      badge.textContent = count;
+    } else if (badge) {
+      badge.remove();
+    }
+  });
+}
+
 function switchShowSubView(view) {
   showSubView = view;
   // Update sub-nav active state
@@ -16817,15 +16896,24 @@ function switchShowSubView(view) {
   // Update route
   currentRoute = 'show-' + view;
   location.hash = currentRoute;
-  // Toggle views
-  var findView = document.getElementById('showFindView');
-  var applyView = document.getElementById('showApplyView');
-  var detailView = document.getElementById('showDetailView');
-  if (findView) findView.style.display = view === 'find' ? '' : 'none';
-  if (applyView) applyView.style.display = view === 'apply' ? '' : 'none';
-  if (detailView) detailView.style.display = 'none';
+  // Toggle all show views
+  var viewIds = ['showFindView', 'showApplyView', 'showPrepView', 'showExecuteView', 'showHistoryView', 'showDetailView'];
+  var activeId = {
+    find: 'showFindView',
+    apply: 'showApplyView',
+    prep: 'showPrepView',
+    execute: 'showExecuteView',
+    history: 'showHistoryView'
+  }[view];
+  viewIds.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.style.display = id === activeId ? '' : 'none';
+  });
   selectedShowId = null;
   if (view === 'apply') renderShowsList();
+  if (view === 'prep') renderShowPrepView();
+  if (view === 'execute') renderShowExecuteView();
+  if (view === 'history') renderShowHistoryView();
 }
 
 function loadShows() {
@@ -16835,7 +16923,11 @@ function loadShows() {
     showsLoaded = true;
     var loading = document.getElementById('showsLoading');
     if (loading) loading.style.display = 'none';
-    renderShowsList();
+    updateShowTabBadges();
+    if (showSubView === 'apply') renderShowsList();
+    else if (showSubView === 'prep') renderShowPrepView();
+    else if (showSubView === 'execute') renderShowExecuteView();
+    else if (showSubView === 'history') renderShowHistoryView();
   }, function(err) {
     console.error('Shows listen error:', err);
     var loading = document.getElementById('showsLoading');
@@ -17018,11 +17110,11 @@ function viewShowDetail(showId) {
   var s = showsData[showId];
   if (!s) { showToast('Show not found.', true); return; }
 
-  var applyView = document.getElementById('showApplyView');
-  var findView = document.getElementById('showFindView');
+  ['showApplyView', 'showFindView', 'showPrepView', 'showExecuteView', 'showHistoryView'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
   var detailView = document.getElementById('showDetailView');
-  if (applyView) applyView.style.display = 'none';
-  if (findView) findView.style.display = 'none';
   if (detailView) detailView.style.display = '';
 
   renderShowDetail(showId);
@@ -17116,12 +17208,17 @@ function backToShowsList() {
   selectedShowId = null;
   var detailView = document.getElementById('showDetailView');
   if (detailView) detailView.style.display = 'none';
-  if (showSubView === 'apply') {
-    var applyView = document.getElementById('showApplyView');
-    if (applyView) applyView.style.display = '';
-  } else if (showSubView === 'find') {
-    var findView = document.getElementById('showFindView');
-    if (findView) findView.style.display = '';
+  var viewMap = {
+    find: 'showFindView',
+    apply: 'showApplyView',
+    prep: 'showPrepView',
+    execute: 'showExecuteView',
+    history: 'showHistoryView'
+  };
+  var targetId = viewMap[showSubView];
+  if (targetId) {
+    var el = document.getElementById(targetId);
+    if (el) el.style.display = '';
   }
 }
 
@@ -17193,6 +17290,246 @@ async function archiveShow(showId) {
   } catch (err) {
     showToast('Error deleting show: ' + err.message, true);
   }
+}
+
+// === Show Prep View ===
+
+function renderShowPrepView() {
+  var cardsEl = document.getElementById('showPrepCards');
+  var emptyEl = document.getElementById('showPrepEmpty');
+  if (!cardsEl) return;
+
+  var today = new Date().toISOString().split('T')[0];
+  var accepted = getShowsArray().filter(function(s) {
+    return s.applicationStatus === 'accepted';
+  });
+  // Sort by startDate ascending (soonest first)
+  accepted.sort(function(a, b) {
+    return (a.startDate || '9999').localeCompare(b.startDate || '9999');
+  });
+
+  if (accepted.length === 0) {
+    cardsEl.innerHTML = '';
+    if (emptyEl) emptyEl.style.display = '';
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  var cards = '';
+  accepted.forEach(function(s) {
+    var location = [s.locationCity, s.locationState].filter(Boolean).join(', ');
+    var dates = '';
+    if (s.startDate) {
+      dates = formatShowDate(s.startDate);
+      if (s.endDate && s.endDate !== s.startDate) dates += ' – ' + formatShowDate(s.endDate);
+    }
+    var daysUntil = s.startDate ? Math.ceil((new Date(s.startDate + 'T00:00:00') - new Date()) / 86400000) : null;
+    var daysBadge = '';
+    if (daysUntil !== null) {
+      if (daysUntil < 0) {
+        daysBadge = '<span style="background:#16a34a;color:white;padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;">In Progress</span>';
+      } else if (daysUntil === 0) {
+        daysBadge = '<span style="background:#f59e0b;color:white;padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;">Today</span>';
+      } else {
+        daysBadge = '<span style="background:var(--bg-tertiary, #e5e5e5);color:var(--text-primary, #333);padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;">' + daysUntil + ' day' + (daysUntil !== 1 ? 's' : '') + ' away</span>';
+      }
+    }
+
+    cards += '<div class="order-card" onclick="viewShowDetail(\'' + s._key + '\')" style="cursor:pointer;">' +
+      '<div class="order-card-header" style="display:flex;justify-content:space-between;align-items:center;">' +
+        '<span class="order-card-id" style="font-weight:600;">' + esc(s.name || 'Unnamed Show') + '</span>' +
+        daysBadge +
+      '</div>' +
+      '<div class="order-card-details">' +
+        (dates ? '<span>' + dates + '</span>' : '') +
+        (location ? '<span>' + esc(location) + '</span>' : '') +
+      '</div>' +
+      '<div style="margin-top:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;">' +
+        '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:6px;padding:10px;">' +
+          '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:4px;">Staffing</div>' +
+          '<div style="font-size:0.85rem;color:var(--text-secondary, #888);font-style:italic;">Assign staff for this show</div>' +
+        '</div>' +
+        '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:6px;padding:10px;">' +
+          '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:4px;">Inventory</div>' +
+          '<div style="font-size:0.85rem;color:var(--text-secondary, #888);font-style:italic;">Plan inventory to bring</div>' +
+        '</div>' +
+        '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:6px;padding:10px;">' +
+          '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:4px;">Logistics</div>' +
+          '<div style="font-size:0.85rem;color:var(--text-secondary, #888);font-style:italic;">Travel, setup, booth details</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  });
+  cardsEl.innerHTML = cards;
+}
+
+// === Show Execute View ===
+
+function renderShowExecuteView() {
+  var cardsEl = document.getElementById('showExecuteCards');
+  var emptyEl = document.getElementById('showExecuteEmpty');
+  if (!cardsEl) return;
+
+  var today = new Date().toISOString().split('T')[0];
+  var accepted = getShowsArray().filter(function(s) {
+    return s.applicationStatus === 'accepted';
+  });
+
+  // Shows happening now: startDate <= today <= endDate
+  var liveShows = accepted.filter(function(s) {
+    return s.startDate && s.startDate <= today && (s.endDate || s.startDate) >= today;
+  });
+
+  var displayShows;
+  var isUpcoming = false;
+  if (liveShows.length > 0) {
+    displayShows = liveShows;
+  } else {
+    // Upcoming within 7 days
+    var sevenDaysOut = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
+    displayShows = accepted.filter(function(s) {
+      return s.startDate && s.startDate > today && s.startDate <= sevenDaysOut;
+    });
+    isUpcoming = true;
+  }
+  // Sort by startDate ascending
+  displayShows.sort(function(a, b) {
+    return (a.startDate || '9999').localeCompare(b.startDate || '9999');
+  });
+
+  if (accepted.length === 0) {
+    cardsEl.innerHTML = '';
+    if (emptyEl) { emptyEl.style.display = ''; emptyEl.querySelector('p').textContent = 'No accepted shows yet.'; }
+    return;
+  }
+  if (displayShows.length === 0) {
+    cardsEl.innerHTML = '';
+    if (emptyEl) { emptyEl.style.display = ''; emptyEl.querySelector('p').textContent = 'No shows happening right now. Active shows appear here during their event dates.'; }
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  var cards = '';
+  displayShows.forEach(function(s) {
+    var location = [s.locationCity, s.locationState].filter(Boolean).join(', ');
+    var liveBadge = '';
+    if (!isUpcoming) {
+      liveBadge = '<span style="background:#16a34a;color:white;padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;animation:pulse 2s infinite;">Live Now</span>';
+    } else {
+      var daysUntil = Math.ceil((new Date(s.startDate + 'T00:00:00') - new Date()) / 86400000);
+      liveBadge = '<span style="background:#2563eb;color:white;padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;">Starts in ' + daysUntil + ' day' + (daysUntil !== 1 ? 's' : '') + '</span>';
+    }
+
+    cards += '<div class="order-card" onclick="viewShowDetail(\'' + s._key + '\')" style="cursor:pointer;">' +
+      '<div class="order-card-header" style="display:flex;justify-content:space-between;align-items:center;">' +
+        '<span class="order-card-id" style="font-weight:600;">' + esc(s.name || 'Unnamed Show') + '</span>' +
+        liveBadge +
+      '</div>' +
+      '<div class="order-card-details">' +
+        (location ? '<span>' + esc(location) + '</span>' : '') +
+      '</div>' +
+      '<div style="margin-top:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;">' +
+        '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:6px;padding:10px;">' +
+          '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:4px;">Sales</div>' +
+          '<div style="font-size:0.85rem;color:var(--text-secondary, #888);font-style:italic;">Record sales at this show</div>' +
+        '</div>' +
+        '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:6px;padding:10px;">' +
+          '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:4px;">Inventory</div>' +
+          '<div style="font-size:0.85rem;color:var(--text-secondary, #888);font-style:italic;">Track what\'s selling</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  });
+  cardsEl.innerHTML = cards;
+}
+
+// === Show History View ===
+
+function renderShowHistoryView() {
+  var cardsEl = document.getElementById('showHistoryCards');
+  var emptyEl = document.getElementById('showHistoryEmpty');
+  var statsEl = document.getElementById('showHistoryStats');
+  if (!cardsEl) return;
+
+  var today = new Date().toISOString().split('T')[0];
+  var allShows = getShowsArray();
+
+  // Past shows: endDate < today OR rejected/withdrawn
+  var historyShows = allShows.filter(function(s) {
+    var endDate = s.endDate || s.startDate;
+    var isPast = endDate && endDate < today;
+    var isTerminal = s.applicationStatus === 'rejected' || s.applicationStatus === 'withdrawn';
+    return isPast || isTerminal;
+  });
+
+  // Apply filters
+  var statusFilter = document.getElementById('showHistoryStatusFilter');
+  var typeFilter = document.getElementById('showHistoryTypeFilter');
+  var filtered = historyShows.slice();
+  if (statusFilter && statusFilter.value !== 'all') {
+    filtered = filtered.filter(function(s) { return s.applicationStatus === statusFilter.value; });
+  }
+  if (typeFilter && typeFilter.value !== 'all') {
+    filtered = filtered.filter(function(s) { return s.type === typeFilter.value; });
+  }
+
+  // Sort by endDate descending (most recent first)
+  filtered.sort(function(a, b) {
+    return (b.endDate || b.startDate || '').localeCompare(a.endDate || a.startDate || '');
+  });
+
+  // Summary stats (before filtering)
+  if (statsEl) {
+    var acceptedCount = historyShows.filter(function(s) { return s.applicationStatus === 'accepted'; }).length;
+    var rejectedCount = historyShows.filter(function(s) { return s.applicationStatus === 'rejected'; }).length;
+    statsEl.style.display = historyShows.length > 0 ? 'flex' : 'none';
+    statsEl.innerHTML =
+      '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:10px 16px;text-align:center;">' +
+        '<div style="font-size:1.25rem;font-weight:700;">' + historyShows.length + '</div>' +
+        '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;">Total</div>' +
+      '</div>' +
+      '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:10px 16px;text-align:center;">' +
+        '<div style="font-size:1.25rem;font-weight:700;color:#16a34a;">' + acceptedCount + '</div>' +
+        '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;">Accepted</div>' +
+      '</div>' +
+      '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:10px 16px;text-align:center;">' +
+        '<div style="font-size:1.25rem;font-weight:700;color:#dc2626;">' + rejectedCount + '</div>' +
+        '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;">Rejected</div>' +
+      '</div>';
+  }
+
+  if (filtered.length === 0) {
+    cardsEl.innerHTML = '';
+    if (emptyEl) emptyEl.style.display = '';
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  var cards = '';
+  filtered.forEach(function(s) {
+    var statusClass = s.applicationStatus || 'considering';
+    var statusLabel = statusClass.charAt(0).toUpperCase() + statusClass.slice(1);
+    var typeLabel = SHOW_TYPE_LABELS[s.type] || s.type || 'Other';
+    var location = [s.locationCity, s.locationState].filter(Boolean).join(', ');
+    var dates = '';
+    if (s.startDate) {
+      dates = formatShowDate(s.startDate);
+      if (s.endDate && s.endDate !== s.startDate) dates += ' – ' + formatShowDate(s.endDate);
+    }
+
+    cards += '<div class="order-card" onclick="viewShowDetail(\'' + s._key + '\')" style="cursor:pointer;">' +
+      '<div class="order-card-header" style="display:flex;justify-content:space-between;align-items:center;">' +
+        '<span class="order-card-id" style="font-weight:600;">' + esc(s.name || 'Unnamed Show') + '</span>' +
+        '<span class="show-status ' + statusClass + '">' + statusLabel + '</span>' +
+      '</div>' +
+      '<div class="order-card-details">' +
+        '<span>' + esc(typeLabel) + '</span>' +
+        (location ? '<span>' + esc(location) + '</span>' : '') +
+        (dates ? '<span>' + dates + '</span>' : '') +
+      '</div>' +
+    '</div>';
+  });
+  cardsEl.innerHTML = cards;
 }
 
 // === Show Finder (AI-assisted discovery) ===
