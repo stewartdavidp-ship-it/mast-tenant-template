@@ -4397,14 +4397,18 @@
           <!-- Search criteria form -->
           <div style="background:var(--bg-secondary, #f9f9f9);border-radius:10px;padding:20px;margin-bottom:20px;">
             <h3 style="margin:0 0 4px 0;font-size:1rem;">Find Shows</h3>
-            <p style="margin:0 0 16px 0;font-size:0.8rem;color:var(--text-secondary, #888);">AI-powered search for upcoming art &amp; craft shows. Enter a location and optionally narrow by distance, dates, fee budget, or show type.</p>
+            <p style="margin:0 0 16px 0;font-size:0.8rem;color:var(--text-secondary, #888);">AI-powered search for upcoming art &amp; craft shows. Search by name, location, or both.</p>
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:16px;">
+              <div style="grid-column: span 2;">
+                <label style="font-size:0.8rem;color:var(--text-secondary, #888);display:block;margin-bottom:4px;">Show Name</label>
+                <input type="text" id="showFinderName" placeholder="e.g. Paradise City Arts Festival" style="width:100%;padding:8px 10px;border:1px solid var(--border-color, #ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--bg-primary, #fff);color:var(--text-primary, #333);box-sizing:border-box;">
+              </div>
               <div>
-                <label style="font-size:0.8rem;color:var(--text-secondary, #888);display:block;margin-bottom:4px;">City *</label>
+                <label style="font-size:0.8rem;color:var(--text-secondary, #888);display:block;margin-bottom:4px;">City</label>
                 <input type="text" id="showFinderCity" placeholder="e.g. Pittsburgh" style="width:100%;padding:8px 10px;border:1px solid var(--border-color, #ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--bg-primary, #fff);color:var(--text-primary, #333);box-sizing:border-box;">
               </div>
               <div>
-                <label style="font-size:0.8rem;color:var(--text-secondary, #888);display:block;margin-bottom:4px;">State *</label>
+                <label style="font-size:0.8rem;color:var(--text-secondary, #888);display:block;margin-bottom:4px;">State</label>
                 <input type="text" id="showFinderState" placeholder="e.g. PA" maxlength="2" style="width:100%;padding:8px 10px;border:1px solid var(--border-color, #ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--bg-primary, #fff);color:var(--text-primary, #333);box-sizing:border-box;">
               </div>
               <div>
@@ -19154,10 +19158,11 @@ function renderShowHistoryView() {
 var showFinderResults = [];
 
 async function runShowFinder() {
+  var showName = document.getElementById('showFinderName').value.trim();
   var city = document.getElementById('showFinderCity').value.trim();
   var state = document.getElementById('showFinderState').value.trim().toUpperCase();
-  if (!city && !state) {
-    showToast('City or State is required to search.', true);
+  if (!showName && !city && !state) {
+    showToast('Enter a show name or location to search.', true);
     return;
   }
 
@@ -19165,6 +19170,7 @@ async function runShowFinder() {
   var showFormat = document.getElementById('showFinderFormat').value || undefined;
 
   var body = {
+    showName: showName || undefined,
     locationCity: city || undefined,
     locationState: state || undefined,
     radius: parseInt(document.getElementById('showFinderRadius').value) || undefined,
