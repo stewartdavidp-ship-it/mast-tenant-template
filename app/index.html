@@ -235,6 +235,37 @@
     .sidebar-badge.future { background: rgba(255,255,255,0.1); color: var(--warm-gray); }
     .sidebar-badge.alert { background: #C4853C; color: white; font-size: 0.65rem; padding: 2px 6px; border-radius: 10px; min-width: 18px; text-align: center; }
 
+    /* Show sub-nav tabs */
+    .show-sub-tab {
+      padding: 8px 16px;
+      border: none;
+      background: none;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.9rem;
+      color: var(--text-secondary, #888);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .show-sub-tab:hover { color: var(--text-primary, #333); }
+    .show-sub-tab.active {
+      color: var(--primary, #2a7c6f);
+      border-bottom-color: var(--primary, #2a7c6f);
+      font-weight: 600;
+    }
+    /* Show status badges */
+    .show-status { display:inline-block; padding:2px 8px; border-radius:4px; font-size:0.75rem; text-transform:uppercase; color:white; font-weight:600; }
+    .show-status.considering { background:#6366f1; }
+    .show-status.applied { background:#2563eb; }
+    .show-status.accepted { background:#16a34a; }
+    .show-status.waitlisted { background:#f59e0b; }
+    .show-status.rejected { background:#dc2626; }
+    .show-status.withdrawn { background:#9ca3af; }
+    /* Show card deadline badges */
+    .show-deadline-badge { font-size:0.75rem; padding:2px 6px; border-radius:4px; font-weight:600; }
+    .show-deadline-badge.overdue { background:#fecaca; color:#dc2626; }
+    .show-deadline-badge.soon { background:#fef3c7; color:#92400e; }
+
     /* Dashboard is a direct-click section header */
     .sidebar-section-header.dashboard-link { cursor: pointer; }
     .sidebar-section-header.dashboard-link.active {
@@ -576,6 +607,14 @@
     body.dark-mode .view-tab { color: #888; }
     body.dark-mode .view-tab:hover { color: #ccc; }
     body.dark-mode .view-tab.active { color: var(--amber); border-bottom-color: var(--amber); }
+
+    /* Show section dark mode */
+    body.dark-mode .show-sub-tab { color: #888; }
+    body.dark-mode .show-sub-tab:hover { color: #ccc; }
+    body.dark-mode .show-sub-tab.active { color: var(--teal-light, #5ab8a9); border-bottom-color: var(--teal-light, #5ab8a9); }
+    body.dark-mode .show-sub-nav { border-bottom-color: #444; }
+    body.dark-mode .show-deadline-badge.overdue { background: #7f1d1d; color: #fca5a5; }
+    body.dark-mode .show-deadline-badge.soon { background: #78350f; color: #fde68a; }
 
     /* ========== EVENTS TABLE ========== */
     .events-table {
@@ -4175,13 +4214,26 @@
       </div>
       <div class="sidebar-items">
         <div class="sidebar-item" data-route="pos" onclick="navigateTo('pos')">Point of Sale</div>
-        <div class="sidebar-item" data-route="events" onclick="navigateTo('events')">Events</div>
         <div class="sidebar-item" data-route="orders" onclick="navigateTo('orders')">Retail Orders <span id="sidebarOrdersBadge" class="sidebar-badge alert" style="display:none;"></span></div>
         <div class="sidebar-item" data-route="commissions" onclick="navigateTo('commissions')">Commissions</div>
         <div class="sidebar-item" data-route="wholesale" onclick="navigateTo('wholesale')">Wholesale</div>
         <div class="sidebar-item muted" data-route="galleries" onclick="navigateTo('galleries')">Galleries &amp; Consignment <span class="sidebar-badge new">New</span></div>
-        <div class="sidebar-item" data-route="coupons" onclick="navigateTo('coupons')">Coupons</div>
         <div class="sidebar-item" data-route="receipts" onclick="navigateTo('receipts')">Receipts &amp; Reconciliation</div>
+      </div>
+    </div>
+    <!-- Show -->
+    <div class="sidebar-section" data-section="show">
+      <div class="sidebar-section-header" onclick="toggleSection('show')">
+        <span class="sidebar-section-icon">&#127914;</span>
+        <span class="sidebar-section-label">Show</span>
+        <span class="sidebar-section-arrow">&#9654;</span>
+      </div>
+      <div class="sidebar-items">
+        <div class="sidebar-item" data-route="show-find" onclick="navigateTo('show-find')">Find</div>
+        <div class="sidebar-item" data-route="show-apply" onclick="navigateTo('show-apply')">Apply</div>
+        <div class="sidebar-item muted" data-route="show-prep" onclick="navigateTo('show-prep')">Prep <span class="sidebar-badge new">New</span></div>
+        <div class="sidebar-item muted" data-route="show-execute" onclick="navigateTo('show-execute')">Execute <span class="sidebar-badge new">New</span></div>
+        <div class="sidebar-item muted" data-route="show-history" onclick="navigateTo('show-history')">History <span class="sidebar-badge new">New</span></div>
       </div>
     </div>
     <!-- Ship -->
@@ -4235,6 +4287,7 @@
         <div class="sidebar-item" data-route="analytics" onclick="navigateTo('analytics')">Analytics</div>
         <div class="sidebar-item" data-route="auditlog" onclick="navigateTo('auditlog')">Audit Log</div>
         <div class="sidebar-item muted" data-route="financials" onclick="navigateTo('financials')">Financials <span class="sidebar-badge new">New</span></div>
+        <div class="sidebar-item" data-route="coupons" onclick="navigateTo('coupons')">Coupons</div>
         <div class="sidebar-item" data-route="settings" onclick="navigateTo('settings')">Settings &amp; Integrations <span id="settingsSandboxBadge" style="display:none;background:#f59e0b;color:#fff;font-size:0.65rem;padding:2px 6px;border-radius:4px;margin-left:4px;font-weight:700;vertical-align:middle;">SANDBOX</span></div>
         <div class="sidebar-item" id="testingModeItem" onclick="toggleTestingMode()" style="display:none;">🧪 Testing Mode</div>
       </div>
@@ -4275,6 +4328,134 @@
         <div id="dashCardLowInventory"></div>
       </div>
       <div id="dashboardContent" style="color:var(--warm-gray);font-size:0.9rem;"></div>
+    </div>
+
+    <!-- ===== SHOW TAB ===== -->
+    <div id="showTab" style="display:none;">
+      <div class="section-header" style="display:flex;justify-content:space-between;align-items:center;">
+        <h2>Show</h2>
+        <div id="showHeaderActions">
+          <button class="btn btn-primary btn-sm" onclick="openCreateShowModal()">+ New Show</button>
+        </div>
+      </div>
+      <!-- Show sub-nav tabs -->
+      <div class="show-sub-nav" style="display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid var(--border-color, #e5e5e5);padding-bottom:0;">
+        <button class="show-sub-tab active" data-show-view="find" onclick="switchShowSubView('find')">Find</button>
+        <button class="show-sub-tab" data-show-view="apply" onclick="switchShowSubView('apply')">Apply</button>
+      </div>
+      <!-- Find sub-view -->
+      <div id="showFindView" style="display:none;">
+        <div id="showFindContent">
+          <p style="color:var(--text-secondary, #888);margin:32px 0;text-align:center;">AI-assisted show discovery coming in Session B. Use "+ New Show" to manually add shows.</p>
+        </div>
+      </div>
+      <!-- Apply sub-view (default) -->
+      <div id="showApplyView">
+        <div style="display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">
+          <span class="products-stat" id="showsCount"></span>
+          <select id="showStatusFilter" onchange="renderShowsList()" style="padding:6px 10px;border:1px solid var(--border-color, #ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.85rem;background:var(--bg-primary, #fff);color:var(--text-primary, #333);">
+            <option value="all">All Statuses</option>
+            <option value="considering">Considering</option>
+            <option value="applied">Applied</option>
+            <option value="accepted">Accepted</option>
+            <option value="waitlisted">Waitlisted</option>
+            <option value="rejected">Rejected</option>
+            <option value="withdrawn">Withdrawn</option>
+          </select>
+          <select id="showTypeFilter" onchange="renderShowsList()" style="padding:6px 10px;border:1px solid var(--border-color, #ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.85rem;background:var(--bg-primary, #fff);color:var(--text-primary, #333);">
+            <option value="all">All Types</option>
+            <option value="juried">Juried</option>
+            <option value="pop-up">Pop-Up</option>
+            <option value="market">Market</option>
+            <option value="recurring">Recurring</option>
+            <option value="trade">Trade</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div id="showsLoading" class="loading">Loading shows...</div>
+        <div id="showsEmpty" class="empty-state" style="display:none;">
+          <p>No shows yet. Click "+ New Show" or use Find to discover shows.</p>
+        </div>
+        <div class="order-cards" id="showsCards"></div>
+      </div>
+      <!-- Show detail view -->
+      <div id="showDetailView" style="display:none;"></div>
+      <!-- Create/Edit show modal -->
+      <div id="createShowModal" class="modal-overlay" style="display:none;">
+        <div class="modal-content" style="max-width:600px;">
+          <div class="modal-header">
+            <h3 id="showModalTitle">New Show</h3>
+            <button class="modal-close" onclick="closeCreateShowModal()">&times;</button>
+          </div>
+          <div class="modal-body" style="max-height:70vh;overflow-y:auto;">
+            <div class="form-group">
+              <label>Show Name *</label>
+              <input type="text" id="showNameInput" placeholder="e.g., Paradise City Arts Festival" style="width:100%;">
+            </div>
+            <div class="form-group">
+              <label>Type</label>
+              <select id="showTypeInput" style="width:100%;">
+                <option value="juried">Juried Art Show</option>
+                <option value="pop-up">Pop-Up</option>
+                <option value="market">Market</option>
+                <option value="recurring">Recurring Market</option>
+                <option value="trade">Trade Show</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+              <div class="form-group">
+                <label>City</label>
+                <input type="text" id="showCityInput" placeholder="e.g., Northampton" style="width:100%;">
+              </div>
+              <div class="form-group">
+                <label>State</label>
+                <input type="text" id="showStateInput" placeholder="e.g., MA" style="width:100%;">
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+              <div class="form-group">
+                <label>Start Date</label>
+                <input type="date" id="showStartDateInput" style="width:100%;">
+              </div>
+              <div class="form-group">
+                <label>End Date</label>
+                <input type="date" id="showEndDateInput" style="width:100%;">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Website</label>
+              <input type="text" id="showWebsiteInput" placeholder="https://..." style="width:100%;">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+              <div class="form-group">
+                <label>Booth Fee ($)</label>
+                <input type="number" id="showBoothFeeInput" placeholder="0.00" step="0.01" style="width:100%;">
+              </div>
+              <div class="form-group">
+                <label>Jury Fee ($)</label>
+                <input type="number" id="showJuryFeeInput" placeholder="0.00" step="0.01" style="width:100%;">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Application Deadline</label>
+              <input type="date" id="showDeadlineInput" style="width:100%;">
+            </div>
+            <div class="form-group">
+              <label>Application URL</label>
+              <input type="text" id="showAppUrlInput" placeholder="https://..." style="width:100%;">
+            </div>
+            <div class="form-group">
+              <label>Notes</label>
+              <textarea id="showNotesInput" rows="3" placeholder="Any additional notes..." style="width:100%;"></textarea>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeCreateShowModal()">Cancel</button>
+            <button class="btn btn-primary" id="saveShowBtn" onclick="saveShow()">Create Show</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- ===== TRIPS TAB ===== -->
@@ -6200,6 +6381,25 @@ MastDB.salesEvents = {
   subRef: function() { return MastDB._ref(this.PATH + '/' + Array.from(arguments).join('/')); }
 };
 
+MastDB.shows = {
+  PATH: 'admin/shows',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  list: function(limit) { return this.ref().limitToLast(limit || 100).once('value'); },
+  get: function(id) { return this.ref(id).once('value'); },
+  set: function(id, data) { return this.ref(id).set(data); },
+  update: function(id, data) { return this.ref(id).update(data); },
+  remove: function(id) { return this.ref(id).remove(); },
+  newKey: function() { return this.ref().push().key; },
+  listen: function(limit, cb, errCb) {
+    return this.ref().limitToLast(limit || 100).on('value', cb, errCb);
+  },
+  unlisten: function(handle) { this.ref().off('value', handle); },
+  applicationHistory: function(showId) {
+    return MastDB._ref(this.PATH + '/' + showId + '/applicationHistory');
+  },
+  subRef: function() { return MastDB._ref(this.PATH + '/' + Array.from(arguments).join('/')); }
+};
+
 MastDB.bundles = {
   PATH: 'admin/bundles',
   ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
@@ -6804,6 +7004,7 @@ var DEFAULT_ROLES = {
       jobs:         { create: true, read: true, update: true, delete: true },
       buildJobs:    { create: true, read: true, update: true, delete: true },
       salesEvents:  { create: true, read: true, update: true, delete: true },
+      shows:        { create: true, read: true, update: true, delete: true },
       gallery:      { create: true, read: true, update: true, delete: true },
       schedule:     { create: true, read: true, update: true, delete: true },
       locations:    { create: true, read: true, update: true, delete: true },
@@ -6829,6 +7030,7 @@ var DEFAULT_ROLES = {
       jobs:         { create: true, read: true, update: true, delete: false },
       buildJobs:    { create: true, read: true, update: true, delete: false },
       salesEvents:  { create: false, read: true, update: true, delete: false },
+      shows:        { create: true, read: true, update: true, delete: false },
       gallery:      { create: false, read: true, update: false, delete: false },
       schedule:     { create: false, read: true, update: false, delete: false },
       locations:    { create: false, read: true, update: false, delete: false },
@@ -6854,6 +7056,7 @@ var DEFAULT_ROLES = {
       jobs:         { create: false, read: false, update: false, delete: false },
       buildJobs:    { create: false, read: false, update: false, delete: false },
       salesEvents:  { create: false, read: false, update: false, delete: false },
+      shows:        { create: false, read: true, update: false, delete: false },
       gallery:      { create: false, read: false, update: false, delete: false },
       schedule:     { create: false, read: true, update: false, delete: false },
       locations:    { create: false, read: false, update: false, delete: false },
@@ -7507,6 +7710,13 @@ var ROUTE_MAP = {
   'expenses':    { tab: null, placeholder: { name: 'Expenses', desc: 'Track business expenses, categorize for tax time.', badge: 'new' } },
   'reports':     { tab: null, placeholder: { name: 'Reports', desc: 'Tax reports, mileage summaries, expense exports.', badge: 'new' } },
   'teach':       { tab: null, placeholder: { name: 'Teach', desc: 'Coming when Studio 2 opens \u2014 classes, workshops, scheduling.', badge: 'future' } },
+  // Show section routes
+  'show':          { tab: 'showTab', setup: function() { navigateTo('show-apply'); } },
+  'show-find':     { tab: 'showTab', setup: function() { switchShowSubView('find'); } },
+  'show-apply':    { tab: 'showTab', setup: function() { switchShowSubView('apply'); } },
+  'show-prep':     { tab: null, placeholder: { name: 'Prep', desc: 'Staffing assignments, inventory pull lists, logistics for upcoming shows.', badge: 'new' } },
+  'show-execute':  { tab: null, placeholder: { name: 'Execute', desc: 'At-show sales recording, inventory reconciliation.', badge: 'new' } },
+  'show-history':  { tab: null, placeholder: { name: 'History', desc: 'Post-show performance review, ROI analysis.', badge: 'new' } },
   // Legacy routes for backward compatibility
   'schedule':    { tab: 'scheduleTab' },
   'sales':       { tab: 'salesTab' },
@@ -7520,13 +7730,14 @@ var ROUTE_MAP = {
 var SECTION_ROUTES = {
   'make':   ['jobs', 'production', 'procurement'],
   'market': ['social', 'blog', 'newsletter', 'stories'],
-  'sell':   ['pos', 'events', 'orders', 'commissions', 'wholesale', 'galleries', 'receipts'],
+  'sell':   ['pos', 'orders', 'commissions', 'wholesale', 'galleries', 'receipts'],
+  'show':   ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'],
   'ship':   ['pack', 'ship'],
   'run':    ['trips', 'expenses', 'reports'],
-  'manage': ['products', 'inventory', 'customers', 'images', 'website', 'employees', 'contacts', 'analytics', 'auditlog', 'financials', 'settings']
+  'manage': ['products', 'inventory', 'customers', 'images', 'website', 'employees', 'contacts', 'analytics', 'auditlog', 'financials', 'coupons', 'settings']
 };
 
-var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab'];
+var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab'];
 
 var currentRoute = 'dashboard';
 
@@ -7611,6 +7822,10 @@ function lazyLoadForRoute(route) {
   if (route === 'social') { if (!socialMediaLoaded) loadSocialMedia(); if (!productsLoaded) loadProducts(); }
   if (route === 'blog') { if (!blogLoaded) loadBlog(); }
   if (route === 'newsletter') { if (!newsletterLoaded) loadNewsletter(); }
+  if (route === 'show' || route === 'show-find' || route === 'show-apply') {
+    if (!showsLoaded) loadShows();
+    if (!productsLoaded) loadProducts();
+  }
   if (route === 'trips') {
     if (!tripsLoaded) loadTrips();
   }
@@ -16501,6 +16716,422 @@ async function removeAllocation(eventId, productId) {
     showToast('Product removed from packing list.');
   } catch (err) {
     showToast('Error: ' + err.message, true);
+  }
+}
+
+// ============================================================
+// SHOW SECTION
+// ============================================================
+
+var showsLoaded = false;
+var showsData = {};
+var showsListener = null;
+var selectedShowId = null;
+var editingShowId = null;
+var showSubView = 'apply';
+
+var SHOW_STATUS_COLORS = {
+  considering: '#6366f1',
+  applied: '#2563eb',
+  accepted: '#16a34a',
+  waitlisted: '#f59e0b',
+  rejected: '#dc2626',
+  withdrawn: '#9ca3af'
+};
+
+var SHOW_TYPE_LABELS = {
+  juried: 'Juried',
+  'pop-up': 'Pop-Up',
+  market: 'Market',
+  recurring: 'Recurring',
+  trade: 'Trade',
+  other: 'Other'
+};
+
+function switchShowSubView(view) {
+  showSubView = view;
+  // Update sub-nav active state
+  document.querySelectorAll('.show-sub-tab').forEach(function(tab) {
+    tab.classList.toggle('active', tab.getAttribute('data-show-view') === view);
+  });
+  // Update route
+  currentRoute = 'show-' + view;
+  location.hash = currentRoute;
+  // Toggle views
+  var findView = document.getElementById('showFindView');
+  var applyView = document.getElementById('showApplyView');
+  var detailView = document.getElementById('showDetailView');
+  if (findView) findView.style.display = view === 'find' ? '' : 'none';
+  if (applyView) applyView.style.display = view === 'apply' ? '' : 'none';
+  if (detailView) detailView.style.display = 'none';
+  selectedShowId = null;
+  if (view === 'apply') renderShowsList();
+}
+
+function loadShows() {
+  if (showsLoaded) { renderShowsList(); return; }
+  showsListener = MastDB.shows.listen(200, function(snap) {
+    showsData = snap.val() || {};
+    showsLoaded = true;
+    var loading = document.getElementById('showsLoading');
+    if (loading) loading.style.display = 'none';
+    renderShowsList();
+  }, function(err) {
+    console.error('Shows listen error:', err);
+    var loading = document.getElementById('showsLoading');
+    if (loading) loading.style.display = 'none';
+  });
+}
+
+function getShowsArray() {
+  var arr = [];
+  Object.keys(showsData).forEach(function(key) {
+    var s = showsData[key];
+    s._key = key;
+    arr.push(s);
+  });
+  arr.sort(function(a, b) {
+    return (b.createdAt || '').localeCompare(a.createdAt || '');
+  });
+  return arr;
+}
+
+function renderShowsList() {
+  var emptyEl = document.getElementById('showsEmpty');
+  var cardsEl = document.getElementById('showsCards');
+  var countEl = document.getElementById('showsCount');
+  var loadingEl = document.getElementById('showsLoading');
+  if (!cardsEl) return;
+
+  if (loadingEl) loadingEl.style.display = 'none';
+
+  var arr = getShowsArray();
+  var statusFilter = document.getElementById('showStatusFilter');
+  var typeFilter = document.getElementById('showTypeFilter');
+  if (statusFilter && statusFilter.value !== 'all') {
+    arr = arr.filter(function(s) { return s.applicationStatus === statusFilter.value; });
+  }
+  if (typeFilter && typeFilter.value !== 'all') {
+    arr = arr.filter(function(s) { return s.type === typeFilter.value; });
+  }
+
+  if (countEl) countEl.textContent = arr.length + ' show' + (arr.length !== 1 ? 's' : '');
+
+  if (arr.length === 0) {
+    if (emptyEl) emptyEl.style.display = '';
+    cardsEl.innerHTML = '';
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  var cards = '';
+  arr.forEach(function(s) {
+    var statusClass = s.applicationStatus || 'considering';
+    var statusLabel = statusClass.charAt(0).toUpperCase() + statusClass.slice(1);
+    var typeLabel = SHOW_TYPE_LABELS[s.type] || s.type || 'Other';
+    var location = [s.locationCity, s.locationState].filter(Boolean).join(', ');
+    var dates = '';
+    if (s.startDate) {
+      dates = formatShowDate(s.startDate);
+      if (s.endDate && s.endDate !== s.startDate) dates += ' – ' + formatShowDate(s.endDate);
+    }
+    var deadlineBadge = '';
+    if (s.applicationDeadline && (statusClass === 'considering' || statusClass === 'applied')) {
+      var daysUntil = Math.ceil((new Date(s.applicationDeadline + 'T00:00:00') - new Date()) / 86400000);
+      if (daysUntil < 0) {
+        deadlineBadge = '<span class="show-deadline-badge overdue">Past due</span>';
+      } else if (daysUntil <= 14) {
+        deadlineBadge = '<span class="show-deadline-badge soon">' + daysUntil + 'd left</span>';
+      }
+    }
+    var fees = '';
+    if (s.boothFee) fees += 'Booth: $' + (s.boothFee / 100).toFixed(0);
+    if (s.juryFee) fees += (fees ? ' · ' : '') + 'Jury: $' + (s.juryFee / 100).toFixed(0);
+
+    cards += '<div class="order-card" onclick="viewShowDetail(\'' + s._key + '\')" style="cursor:pointer;">' +
+      '<div class="order-card-header" style="display:flex;justify-content:space-between;align-items:center;">' +
+        '<span class="order-card-id" style="font-weight:600;">' + esc(s.name || 'Unnamed Show') + '</span>' +
+        '<span class="show-status ' + statusClass + '">' + statusLabel + '</span>' +
+      '</div>' +
+      '<div class="order-card-details">' +
+        '<span>' + esc(typeLabel) + '</span>' +
+        (location ? '<span>' + esc(location) + '</span>' : '') +
+        (dates ? '<span>' + dates + '</span>' : '') +
+        (fees ? '<span>' + fees + '</span>' : '') +
+        (deadlineBadge ? '<span>' + deadlineBadge + '</span>' : '') +
+      '</div>' +
+    '</div>';
+  });
+  cardsEl.innerHTML = cards;
+}
+
+function formatShowDate(dateStr) {
+  if (!dateStr) return '';
+  var parts = dateStr.split('-');
+  var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return months[parseInt(parts[1], 10) - 1] + ' ' + parseInt(parts[2], 10) + ', ' + parts[0];
+}
+
+// === Create / Edit Show ===
+
+function openCreateShowModal(showId) {
+  editingShowId = showId || null;
+  document.getElementById('showModalTitle').textContent = showId ? 'Edit Show' : 'New Show';
+  document.getElementById('saveShowBtn').textContent = showId ? 'Save Changes' : 'Create Show';
+
+  if (showId && showsData[showId]) {
+    var s = showsData[showId];
+    document.getElementById('showNameInput').value = s.name || '';
+    document.getElementById('showTypeInput').value = s.type || 'juried';
+    document.getElementById('showCityInput').value = s.locationCity || '';
+    document.getElementById('showStateInput').value = s.locationState || '';
+    document.getElementById('showStartDateInput').value = s.startDate || '';
+    document.getElementById('showEndDateInput').value = s.endDate || '';
+    document.getElementById('showWebsiteInput').value = s.websiteUrl || '';
+    document.getElementById('showBoothFeeInput').value = s.boothFee ? (s.boothFee / 100).toFixed(2) : '';
+    document.getElementById('showJuryFeeInput').value = s.juryFee ? (s.juryFee / 100).toFixed(2) : '';
+    document.getElementById('showDeadlineInput').value = s.applicationDeadline || '';
+    document.getElementById('showAppUrlInput').value = s.applicationUrl || '';
+    document.getElementById('showNotesInput').value = s.notes || '';
+  } else {
+    ['showNameInput', 'showCityInput', 'showStateInput', 'showStartDateInput', 'showEndDateInput',
+     'showWebsiteInput', 'showBoothFeeInput', 'showJuryFeeInput', 'showDeadlineInput', 'showAppUrlInput', 'showNotesInput'].forEach(function(id) {
+      document.getElementById(id).value = '';
+    });
+    document.getElementById('showTypeInput').value = 'juried';
+  }
+  document.getElementById('createShowModal').style.display = 'flex';
+}
+
+function closeCreateShowModal() {
+  document.getElementById('createShowModal').style.display = 'none';
+  editingShowId = null;
+}
+
+async function saveShow() {
+  var name = document.getElementById('showNameInput').value.trim();
+  if (!name) { showToast('Show name is required.', true); return; }
+
+  var boothFeeVal = parseFloat(document.getElementById('showBoothFeeInput').value);
+  var juryFeeVal = parseFloat(document.getElementById('showJuryFeeInput').value);
+
+  var data = {
+    name: name,
+    type: document.getElementById('showTypeInput').value,
+    locationCity: document.getElementById('showCityInput').value.trim(),
+    locationState: document.getElementById('showStateInput').value.trim(),
+    startDate: document.getElementById('showStartDateInput').value || null,
+    endDate: document.getElementById('showEndDateInput').value || null,
+    websiteUrl: document.getElementById('showWebsiteInput').value.trim() || null,
+    boothFee: boothFeeVal ? Math.round(boothFeeVal * 100) : null,
+    juryFee: juryFeeVal ? Math.round(juryFeeVal * 100) : null,
+    applicationDeadline: document.getElementById('showDeadlineInput').value || null,
+    applicationUrl: document.getElementById('showAppUrlInput').value.trim() || null,
+    notes: document.getElementById('showNotesInput').value.trim() || null,
+    updatedAt: new Date().toISOString()
+  };
+
+  try {
+    if (editingShowId) {
+      await MastDB.shows.update(editingShowId, data);
+      showToast('Show updated.');
+    } else {
+      var key = MastDB.shows.newKey();
+      data.id = key;
+      data.applicationStatus = 'considering';
+      data.aiGenerated = false;
+      data.createdAt = new Date().toISOString();
+      data.createdBy = auth.currentUser ? auth.currentUser.uid : 'unknown';
+      await MastDB.shows.set(key, data);
+      showToast('Show created.');
+    }
+    closeCreateShowModal();
+  } catch (err) {
+    showToast('Error saving show: ' + err.message, true);
+  }
+}
+
+// === Show Detail View ===
+
+function viewShowDetail(showId) {
+  selectedShowId = showId;
+  var s = showsData[showId];
+  if (!s) { showToast('Show not found.', true); return; }
+
+  var applyView = document.getElementById('showApplyView');
+  var findView = document.getElementById('showFindView');
+  var detailView = document.getElementById('showDetailView');
+  if (applyView) applyView.style.display = 'none';
+  if (findView) findView.style.display = 'none';
+  if (detailView) detailView.style.display = '';
+
+  renderShowDetail(showId);
+}
+
+function renderShowDetail(showId) {
+  var s = showsData[showId];
+  if (!s) return;
+  var detailView = document.getElementById('showDetailView');
+  var statusClass = s.applicationStatus || 'considering';
+  var statusLabel = statusClass.charAt(0).toUpperCase() + statusClass.slice(1);
+  var typeLabel = SHOW_TYPE_LABELS[s.type] || s.type || 'Other';
+  var location = [s.locationCity, s.locationState].filter(Boolean).join(', ');
+  var dates = '';
+  if (s.startDate) {
+    dates = formatShowDate(s.startDate);
+    if (s.endDate && s.endDate !== s.startDate) dates += ' – ' + formatShowDate(s.endDate);
+  }
+
+  var h = '<div style="margin-bottom:16px;">' +
+    '<button class="btn btn-secondary btn-sm" onclick="backToShowsList()">&larr; Back to Shows</button>' +
+  '</div>';
+  h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:20px;">';
+  h += '<div>';
+  h += '<h2 style="margin:0 0 4px 0;">' + esc(s.name || 'Unnamed Show') + '</h2>';
+  h += '<span class="show-status ' + statusClass + '">' + statusLabel + '</span>';
+  h += ' <span style="font-size:0.85rem;color:var(--text-secondary, #888);">' + esc(typeLabel) + '</span>';
+  if (s.aiGenerated) h += ' <span style="font-size:0.75rem;background:var(--teal, #2a7c6f);color:white;padding:2px 6px;border-radius:4px;">AI Found</span>';
+  h += '</div>';
+  h += '<div style="display:flex;gap:8px;">';
+  h += '<button class="btn btn-secondary btn-sm" onclick="openCreateShowModal(\'' + showId + '\')">Edit</button>';
+  h += '<button class="btn btn-sm" onclick="archiveShow(\'' + showId + '\')" style="background:#dc2626;color:white;border:none;">Delete</button>';
+  h += '</div>';
+  h += '</div>';
+
+  // Info grid
+  h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px;margin-bottom:24px;">';
+  h += showDetailCard('Location', location || '—');
+  h += showDetailCard('Dates', dates || '—');
+  h += showDetailCard('Website', s.websiteUrl ? '<a href="' + esc(s.websiteUrl) + '" target="_blank" style="color:var(--primary, #2a7c6f);">' + esc(s.websiteUrl) + '</a>' : '—');
+  h += showDetailCard('Booth Fee', s.boothFee ? '$' + (s.boothFee / 100).toFixed(2) : '—');
+  h += showDetailCard('Jury Fee', s.juryFee ? '$' + (s.juryFee / 100).toFixed(2) : '—');
+  h += showDetailCard('Application Deadline', s.applicationDeadline ? formatShowDate(s.applicationDeadline) : '—');
+  h += showDetailCard('Application URL', s.applicationUrl ? '<a href="' + esc(s.applicationUrl) + '" target="_blank" style="color:var(--primary, #2a7c6f);">Open</a>' : '—');
+  h += showDetailCard('Notes', s.notes ? esc(s.notes) : '—');
+  h += '</div>';
+
+  // Application status actions
+  h += '<div style="margin-bottom:24px;">';
+  h += '<h3 style="margin:0 0 12px 0;">Application Status</h3>';
+  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
+  var statuses = ['considering', 'applied', 'accepted', 'waitlisted', 'rejected', 'withdrawn'];
+  statuses.forEach(function(st) {
+    var isCurrent = statusClass === st;
+    h += '<button class="btn btn-sm" onclick="updateShowStatus(\'' + showId + '\', \'' + st + '\')" ' +
+      'style="background:' + (isCurrent ? SHOW_STATUS_COLORS[st] : 'var(--bg-secondary, #f5f5f5)') + ';' +
+      'color:' + (isCurrent ? 'white' : 'var(--text-primary, #333)') + ';' +
+      'border:1px solid ' + (isCurrent ? SHOW_STATUS_COLORS[st] : 'var(--border-color, #ddd)') + ';">' +
+      st.charAt(0).toUpperCase() + st.slice(1) + '</button>';
+  });
+  h += '</div></div>';
+
+  // Application history
+  h += '<div>';
+  h += '<h3 style="margin:0 0 12px 0;">Status History</h3>';
+  var history = s.applicationHistory ? Object.values(s.applicationHistory).sort(function(a, b) { return (b.timestamp || '').localeCompare(a.timestamp || ''); }) : [];
+  if (history.length === 0) {
+    h += '<p style="color:var(--text-secondary, #888);font-size:0.9rem;">No status changes yet.</p>';
+  } else {
+    history.forEach(function(entry) {
+      h += '<div style="padding:8px 0;border-bottom:1px solid var(--border-color, #eee);font-size:0.9rem;">';
+      h += '<span class="show-status ' + (entry.newStatus || '') + '" style="font-size:0.7rem;">' + (entry.newStatus || '').charAt(0).toUpperCase() + (entry.newStatus || '').slice(1) + '</span>';
+      if (entry.oldStatus) h += ' <span style="color:var(--text-secondary, #888);">from ' + entry.oldStatus + '</span>';
+      h += ' <span style="color:var(--text-secondary, #888);font-size:0.8rem;">' + (entry.timestamp ? new Date(entry.timestamp).toLocaleDateString() : '') + '</span>';
+      h += '</div>';
+    });
+  }
+  h += '</div>';
+
+  detailView.innerHTML = h;
+}
+
+function showDetailCard(label, value) {
+  return '<div style="background:var(--bg-secondary, #f9f9f9);border-radius:8px;padding:12px;">' +
+    '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:4px;">' + label + '</div>' +
+    '<div style="font-size:0.9rem;">' + value + '</div>' +
+  '</div>';
+}
+
+function backToShowsList() {
+  selectedShowId = null;
+  var detailView = document.getElementById('showDetailView');
+  if (detailView) detailView.style.display = 'none';
+  if (showSubView === 'apply') {
+    var applyView = document.getElementById('showApplyView');
+    if (applyView) applyView.style.display = '';
+  } else if (showSubView === 'find') {
+    var findView = document.getElementById('showFindView');
+    if (findView) findView.style.display = '';
+  }
+}
+
+async function updateShowStatus(showId, newStatus) {
+  var s = showsData[showId];
+  if (!s) return;
+  var oldStatus = s.applicationStatus || 'considering';
+  if (oldStatus === newStatus) return;
+
+  try {
+    var updates = {
+      applicationStatus: newStatus,
+      updatedAt: new Date().toISOString()
+    };
+    // Track specific timestamps
+    if (newStatus === 'applied') updates.appliedAt = new Date().toISOString();
+    if (newStatus === 'accepted' || newStatus === 'rejected' || newStatus === 'waitlisted') updates.resultNotifiedAt = new Date().toISOString();
+
+    await MastDB.shows.update(showId, updates);
+
+    // Log to applicationHistory
+    var historyRef = MastDB.shows.applicationHistory(showId).push();
+    await historyRef.set({
+      oldStatus: oldStatus,
+      newStatus: newStatus,
+      timestamp: new Date().toISOString(),
+      changedBy: auth.currentUser ? auth.currentUser.uid : 'unknown'
+    });
+
+    // Auto-publish to public events when accepted
+    if (newStatus === 'accepted') {
+      await autoPublishShow(showId, s);
+    }
+
+    showToast('Status updated to ' + newStatus + '.');
+    renderShowDetail(showId);
+  } catch (err) {
+    showToast('Error updating status: ' + err.message, true);
+  }
+}
+
+async function autoPublishShow(showId, showData) {
+  try {
+    var publicEvent = {
+      name: showData.name || 'Unnamed Show',
+      date: showData.startDate || '',
+      endDate: showData.endDate || null,
+      location: [showData.locationCity, showData.locationState].filter(Boolean).join(', '),
+      description: (SHOW_TYPE_LABELS[showData.type] || 'Show') + (showData.websiteUrl ? ' — ' + showData.websiteUrl : ''),
+      visible: true,
+      source: 'show-section',
+      showId: showId,
+      updatedAt: new Date().toISOString()
+    };
+    await MastDB.events.ref(showId).set(publicEvent);
+  } catch (err) {
+    console.error('Auto-publish failed:', err);
+  }
+}
+
+async function archiveShow(showId) {
+  if (!confirm('Delete this show? This cannot be undone.')) return;
+  try {
+    await MastDB.shows.remove(showId);
+    // Also remove from public events if it was published
+    try { await MastDB.events.ref(showId).remove(); } catch(e) { /* ignore */ }
+    showToast('Show deleted.');
+    backToShowsList();
+  } catch (err) {
+    showToast('Error deleting show: ' + err.message, true);
   }
 }
 
@@ -26317,7 +26948,9 @@ var ROUTE_ACTION_MAP = {
   'contacts': 'contacts',
   'inventory': 'add-inventory',
   'jobs': 'start-production-job',
-  'pos': 'new-sale'
+  'pos': 'new-sale',
+  'show-find': 'find-shows',
+  'show-apply': 'manage-shows'
 };
 
 // ─── Load Functions ────────────────────────────────────────
