@@ -2025,6 +2025,20 @@
     body.dark-mode .btn-danger:hover { background: #B71C1C; }
     body.dark-mode .detail-back { color: #6fc; }
 
+    /* ========== MODULE SELECTION (Subscription Settings) ========== */
+    body.dark-mode #moduleSelectionUI div[style*="background:var(--cream-dark"],
+    body.dark-mode #subscriptionTierSelector div[style*="background:var(--cream-dark"] { background: #2a2a2a !important; border-color: #444 !important; }
+    body.dark-mode #moduleSelectionUI div[style*="background:var(--cream,"],
+    body.dark-mode #subscriptionTierSelector div[style*="background:var(--cream,"] { background: #333 !important; }
+    body.dark-mode #moduleSelectionUI span[style*="color:var(--charcoal"],
+    body.dark-mode #moduleSelectionUI div[style*="color:var(--charcoal"],
+    body.dark-mode #subscriptionTierSelector div[style*="color:var(--charcoal"] { color: #e0e0e0 !important; }
+    body.dark-mode #moduleSelectionUI div[style*="color:var(--warm-gray"],
+    body.dark-mode #subscriptionTierSelector div[style*="color:var(--warm-gray"] { color: #aaa !important; }
+    body.dark-mode #moduleSelectionUI div[style*="border:2px solid var(--cream-dark"] { border-color: #444 !important; }
+    body.dark-mode #moduleSelectionUI div[style*="border:2px solid var(--amber"] { border-color: var(--amber) !important; background: #333 !important; }
+    body.dark-mode #subscriptionTierSelector div[style*="border:2px solid var(--amber"] { border-color: var(--amber) !important; background: #333 !important; }
+
     /* ========== COUPONS ========== */
     .coupon-status {
       display: inline-block;
@@ -5578,6 +5592,11 @@
         <button class="view-tab" onclick="switchSettingsSubView('trips')">Trips</button>
         <button class="view-tab" onclick="switchSettingsSubView('dashboard')">Dashboard</button>
         <button class="view-tab" onclick="switchSettingsSubView('domains')">Domains</button>
+        <button class="view-tab" onclick="switchSettingsSubView('subscription')">Subscription</button>
+      </div>
+      <div id="settingsSubSubscription" style="display:none;padding-top:16px;">
+        <div id="subscriptionTierSelector" style="margin-bottom:24px;"></div>
+        <div id="moduleSelectionUI"></div>
       </div>
       <div id="settingsSubGeneral" style="max-width:500px;">
         <div class="form-group">
@@ -7051,12 +7070,432 @@ MastDB.wholesaleOrders = {
   unlisten: function(handle) { this.ref().off('value', handle); }
 };
 
+MastDB.subscription = {
+  PATH: 'admin/subscription',
+  ref: function(subpath) { return MastDB._ref(this.PATH + (subpath ? '/' + subpath : '')); },
+  get: function() { return this.ref().once('value'); },
+  set: function(data) { return this.ref().set(data); },
+  update: function(data) { return this.ref().update(data); }
+};
+
 // MastDB.init() is called dynamically in the auth flow after tenant resolution.
 // Entity namespace definitions above are safe — they define functions but
 // don't call _ref() until invoked after init.
 
 // ============================================================
 // End MastDB
+// ============================================================
+
+// ============================================================
+// Subscription Model — Module Registry, Tier Config, Enforcement
+// ============================================================
+
+// Canonical module definitions. Single source of truth for nav, gating, and locked UX.
+// Web is the base module (always included, not purchasable). All others are purchasable.
+var MODULE_REGISTRY = {
+  web:    { id: 'web',    name: 'Web',    icon: '\uD83C\uDF10', description: 'Website pages and content management.', section: 'web', navPosition: 0, purchasable: false, routes: ['website'], manageSettings: [], synergies: ['market', 'sell'], status: 'active' },
+  sell:   { id: 'sell',   name: 'Sell',   icon: '\uD83D\uDCB0', description: 'Point of sale, orders, commissions, wholesale.', section: 'sell', navPosition: 1, purchasable: true, routes: ['pos', 'orders', 'commissions', 'wholesale', 'galleries', 'receipts', 'coupons'], manageSettings: ['square'], synergies: ['ship', 'make'], status: 'active' },
+  make:   { id: 'make',   name: 'Make',   icon: '\uD83D\uDD25', description: 'Production jobs, build tracking, procurement.', section: 'make', navPosition: 2, purchasable: true, routes: ['jobs', 'production', 'procurement'], manageSettings: [], synergies: ['sell', 'market'], status: 'active' },
+  ship:   { id: 'ship',   name: 'Ship',   icon: '\uD83D\uDCE6', description: 'Pack orders, ship deliveries, track fulfillment.', section: 'ship', navPosition: 3, purchasable: true, routes: ['pack', 'ship'], manageSettings: ['shippingRates'], synergies: ['sell', 'show'], status: 'active' },
+  market: { id: 'market', name: 'Market', icon: '\uD83D\uDCE3', description: 'Social media, blog, newsletter, stories.', section: 'market', navPosition: 4, purchasable: true, routes: ['social', 'blog', 'newsletter', 'stories'], manageSettings: ['newsletter', 'email'], synergies: ['sell', 'show'], status: 'active' },
+  show:   { id: 'show',   name: 'Show',   icon: '\uD83C\uDFAA', description: 'Find, apply, prep, and execute craft fairs and events.', section: 'show', navPosition: 5, purchasable: true, routes: ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'], manageSettings: [], synergies: ['sell', 'ship', 'make'], status: 'active' },
+  book:   { id: 'book',   name: 'Book',   icon: '\uD83D\uDCC5', description: 'Appointments, classes, studio time.', section: 'book', navPosition: 6, purchasable: true, routes: [], manageSettings: [], synergies: ['sell', 'market'], status: 'coming-soon' },
+  run:    { id: 'run',    name: 'Run',    icon: '\uD83D\uDCCB', description: 'Trips, expenses, reports, financials, contacts.', section: 'run', navPosition: 7, purchasable: true, routes: ['trips', 'expenses', 'reports', 'financials', 'contacts', 'customers'], manageSettings: [], synergies: ['sell', 'show'], status: 'active' }
+};
+
+// Synergy messaging for locked module previews.
+// Key: "{activeModule}:{lockedModule}" → message shown when tenant has activeModule but not lockedModule.
+var MODULE_SYNERGY_MAP = {
+  'sell:ship':    "You're taking orders. Ship closes the loop.",
+  'sell:make':    "You're selling it. Make tracks how it gets built.",
+  'sell:market':  "You have products to sell. Market gets them seen.",
+  'sell:show':    "You're selling online. Show takes you to craft fairs.",
+  'sell:run':     "You're making sales. Run tracks the business side.",
+  'make:sell':    "You're building it. Sell gets it to customers.",
+  'make:market':  "What you make becomes what you promote.",
+  'make:ship':    "You're building it. Ship gets it out the door.",
+  'ship:sell':    "You're shipping. Sell brings in what to ship.",
+  'ship:show':    "You're fulfilling orders. Show adds in-person sales.",
+  'market:sell':  "You're getting attention. Sell converts it to revenue.",
+  'market:show':  "You're promoting online. Show takes it in person.",
+  'show:sell':    "You're doing shows. Sell handles the rest of your orders.",
+  'show:ship':    "You're doing shows. Ship handles what gets ordered there.",
+  'show:make':    "You're doing shows. Make tracks what to bring next time.",
+  'show:market':  "You're doing shows. Market turns them into content.",
+  'run:sell':     "You're tracking the business. Sell is where revenue starts."
+};
+
+// Tier definitions. Journey stages, not feature lists.
+var TIER_CONFIG = {
+  publish: { id: 'publish', name: 'Publish', price: 0,   moduleLimit: 0, studioAssistant: false, description: 'Public site + product catalog. Your digital presence.' },
+  launch:  { id: 'launch',  name: 'Launch',  price: 49,  moduleLimit: 1, studioAssistant: true,  description: 'Choose 1 module. Start running your business.' },
+  operate: { id: 'operate', name: 'Operate', price: 99,  moduleLimit: 3, studioAssistant: true,  description: 'Up to 3 modules. Your operations, connected.' },
+  command: { id: 'command', name: 'Command', price: 149, moduleLimit: 7, studioAssistant: true,  description: 'All modules. Full command of your business.' }
+};
+
+// Tier ordering for upgrade path
+var TIER_ORDER = ['publish', 'launch', 'operate', 'command'];
+
+// --- Subscription State ---
+var _tenantSubscription = null;
+
+function getTenantSubscription() {
+  // Default: command with all purchasable modules (backward compat for existing tenants)
+  if (!_tenantSubscription) {
+    return {
+      tier: 'command',
+      modules: Object.keys(MODULE_REGISTRY).filter(function(id) { return MODULE_REGISTRY[id].purchasable; })
+    };
+  }
+  return _tenantSubscription;
+}
+
+// Load subscription from Firebase; seed default for existing tenants if missing.
+async function loadTenantSubscription() {
+  try {
+    var snap = await MastDB.subscription.get();
+    var data = snap.val();
+    if (!data) {
+      // Existing tenant with no subscription record — seed as command tier
+      var allPurchasable = Object.keys(MODULE_REGISTRY).filter(function(id) { return MODULE_REGISTRY[id].purchasable; });
+      data = {
+        tier: 'command',
+        modules: allPurchasable,
+        effectiveDate: new Date().toISOString(),
+        billingAnchor: new Date().getDate(),
+        updatedAt: new Date().toISOString()
+      };
+      await MastDB.subscription.set(data);
+      console.log('Subscription: seeded command tier for existing tenant');
+    }
+    _tenantSubscription = data;
+    return data;
+  } catch (err) {
+    console.warn('Subscription load failed, defaulting to command:', err.message);
+    _tenantSubscription = null; // getTenantSubscription() returns command default
+    return getTenantSubscription();
+  }
+}
+
+// --- Tier Enforcement Utilities ---
+
+// Does the tenant have a specific purchasable module active?
+function hasModule(moduleId) {
+  var sub = getTenantSubscription();
+  if (sub.tier === 'command') return true;
+  return (sub.modules || []).indexOf(moduleId) >= 0;
+}
+
+// Can the tenant access a module? (checks both subscription and module status)
+function canAccessModule(moduleId) {
+  var mod = MODULE_REGISTRY[moduleId];
+  if (!mod) return false;
+  if (mod.status === 'coming-soon') return false;
+  if (!mod.purchasable) return true; // Web (base) always accessible
+  return hasModule(moduleId);
+}
+
+// Get list of active module IDs
+function getActiveModules() {
+  return Object.keys(MODULE_REGISTRY).filter(function(id) { return canAccessModule(id); });
+}
+
+// Get list of locked (purchasable, active-status, not subscribed) module IDs
+function getLockedModules() {
+  return Object.keys(MODULE_REGISTRY).filter(function(id) {
+    var mod = MODULE_REGISTRY[id];
+    return mod.purchasable && mod.status === 'active' && !hasModule(id);
+  });
+}
+
+// Can the tenant access the Studio Assistant?
+function canAccessStudioAssistant() {
+  var sub = getTenantSubscription();
+  var tier = TIER_CONFIG[sub.tier];
+  return tier ? tier.studioAssistant : false;
+}
+
+// Which module owns a given route? Returns moduleId or null (Manage/Dashboard).
+function getModuleForRoute(route) {
+  for (var id in MODULE_REGISTRY) {
+    if (MODULE_REGISTRY[id].routes.indexOf(route) >= 0) return id;
+  }
+  return null;
+}
+
+// Can the tenant access a route based on subscription?
+// Special case: inventory is accessible if Make OR Sell is active.
+function canAccessRoute(route) {
+  if (route === 'inventory') {
+    return hasModule('make') || hasModule('sell');
+  }
+  var moduleId = getModuleForRoute(route);
+  if (!moduleId) return true; // Manage/Dashboard routes always accessible
+  return canAccessModule(moduleId);
+}
+
+// Get the next tier up from the tenant's current tier (for upgrade CTAs)
+function getNextTier() {
+  var sub = getTenantSubscription();
+  var currentIdx = TIER_ORDER.indexOf(sub.tier);
+  if (currentIdx < 0 || currentIdx >= TIER_ORDER.length - 1) return null;
+  return TIER_CONFIG[TIER_ORDER[currentIdx + 1]];
+}
+
+// Get synergy message for a locked module based on tenant's active modules
+function getSynergyMessage(lockedModuleId) {
+  var activeModules = getActiveModules();
+  for (var i = 0; i < activeModules.length; i++) {
+    var key = activeModules[i] + ':' + lockedModuleId;
+    if (MODULE_SYNERGY_MAP[key]) return MODULE_SYNERGY_MAP[key];
+  }
+  return null;
+}
+
+// ============================================================
+// End Subscription Model
+// ============================================================
+
+// ============================================================
+// Module Selection UI — Session B
+// ============================================================
+
+// In-memory selection state for module picker
+var _moduleSelectionState = {
+  selected: [],
+  locked: [],
+  tier: null,
+  saving: false,
+  onConfirm: null,
+  onCancel: null,
+  containerId: null
+};
+
+// Get synergy hint text for a module (which other modules it pairs with)
+function getModuleSynergyHints(moduleId) {
+  var mod = MODULE_REGISTRY[moduleId];
+  if (!mod || !mod.synergies || mod.synergies.length === 0) return '';
+  var names = mod.synergies.map(function(sid) {
+    var s = MODULE_REGISTRY[sid];
+    return s ? s.name : sid;
+  });
+  return 'Pairs with ' + names.join(' &amp; ');
+}
+
+// Render the module selection UI into a container element
+// options: { tier, currentModules, lockedModules, isUpgrade, onConfirm, onCancel }
+function renderModuleSelectionUI(containerId, options) {
+  var container = document.getElementById(containerId);
+  if (!container) return;
+
+  var sub = getTenantSubscription();
+  var tier = (options && options.tier) || sub.tier || 'command';
+  var tierConfig = TIER_CONFIG[tier];
+  if (!tierConfig) { container.innerHTML = '<p>Invalid tier: ' + esc(tier) + '</p>'; return; }
+
+  var currentModules = (options && options.currentModules) || sub.modules || [];
+  var lockedModules = (options && options.lockedModules) || [];
+  if (options && options.isUpgrade && currentModules.length > 0) {
+    lockedModules = currentModules.slice();
+  }
+
+  // Initialize state
+  _moduleSelectionState.tier = tier;
+  _moduleSelectionState.locked = lockedModules;
+  _moduleSelectionState.onConfirm = (options && options.onConfirm) || null;
+  _moduleSelectionState.onCancel = (options && options.onCancel) || null;
+  _moduleSelectionState.containerId = containerId;
+  // Only reset selected if tier changed or first render
+  if (!_moduleSelectionState._lastTier || _moduleSelectionState._lastTier !== tier) {
+    _moduleSelectionState.selected = currentModules.slice();
+    _moduleSelectionState._lastTier = tier;
+  }
+
+  var limit = tierConfig.moduleLimit;
+  var isCommand = tier === 'command';
+  var isPublish = tier === 'publish';
+  var purchasable = Object.keys(MODULE_REGISTRY)
+    .filter(function(id) { return MODULE_REGISTRY[id].purchasable; })
+    .sort(function(a, b) { return MODULE_REGISTRY[a].navPosition - MODULE_REGISTRY[b].navPosition; });
+
+  var effectiveSelected = isCommand
+    ? purchasable.filter(function(id) { return MODULE_REGISTRY[id].status !== 'coming-soon'; })
+    : _moduleSelectionState.selected;
+  var atLimit = !isCommand && effectiveSelected.length >= limit;
+
+  var h = '';
+
+  // --- Tier Context Bar ---
+  var priceLabel = tierConfig.price === 0 ? 'Free' : '$' + tierConfig.price + '/mo';
+  var counterText = isCommand ? 'All modules included'
+    : isPublish ? 'Web only — no additional modules'
+    : 'Choose ' + limit + ' module' + (limit !== 1 ? 's' : '') + ' — ' + effectiveSelected.length + ' of ' + limit + ' selected';
+
+  h += '<div style="background:var(--cream-dark, #F0E8DB);border-radius:10px;padding:16px 20px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">';
+  h += '<div>';
+  h += '<span style="font-size:1.2rem;font-weight:700;font-family:\'Cormorant Garamond\', serif;color:var(--charcoal, #1a1a1a);">' + esc(tierConfig.name) + ' Tier</span>';
+  h += '<span style="margin-left:12px;font-size:1rem;font-weight:600;color:var(--amber, #C4853C);">' + priceLabel + '</span>';
+  h += '</div>';
+  h += '<div style="font-size:0.9rem;color:var(--warm-gray, #6B6560);">' + counterText + '</div>';
+  h += '</div>';
+
+  // --- Module Cards ---
+  if (isPublish) {
+    h += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray, #6B6560);font-size:0.95rem;">';
+    h += '<div style="font-size:2rem;margin-bottom:12px;">&#127760;</div>';
+    h += 'The Publish tier includes your website and product catalog.<br>Upgrade to add business modules.';
+    h += '</div>';
+  } else {
+    h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;margin-bottom:24px;">';
+    purchasable.forEach(function(moduleId) {
+      var mod = MODULE_REGISTRY[moduleId];
+      var isSelected = effectiveSelected.indexOf(moduleId) >= 0;
+      var isComingSoon = mod.status === 'coming-soon';
+      var isLocked = lockedModules.indexOf(moduleId) >= 0;
+      var canClick = !isComingSoon && !isCommand && !isPublish && !isLocked && (!atLimit || isSelected);
+
+      var borderStyle = isSelected ? '2px solid var(--amber, #C4853C)' : '2px solid var(--cream-dark, #F0E8DB)';
+      var bgStyle = isSelected ? 'var(--cream, #FAF6F0)' : 'var(--cream-dark, #F0E8DB)';
+      var opacityStyle = (isComingSoon || (atLimit && !isSelected && !isCommand)) ? '0.5' : '1';
+      var shadowStyle = isSelected ? '0 2px 12px rgba(196, 133, 60, 0.25)' : '0 1px 4px rgba(0,0,0,0.06)';
+      var cursorStyle = canClick ? 'pointer' : 'default';
+      var onclick = canClick ? 'onclick="toggleModuleSelection(\'' + moduleId + '\')"' : '';
+
+      h += '<div ' + onclick + ' style="background:' + bgStyle + ';border:' + borderStyle + ';border-radius:12px;padding:20px;cursor:' + cursorStyle + ';opacity:' + opacityStyle + ';box-shadow:' + shadowStyle + ';transition:all 0.2s ease;position:relative;min-height:140px;display:flex;flex-direction:column;justify-content:space-between;">';
+
+      // Badge (top-right)
+      if (isComingSoon) {
+        h += '<span style="position:absolute;top:10px;right:10px;background:var(--warm-gray, #6B6560);color:white;font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:4px;text-transform:uppercase;letter-spacing:0.5px;">Coming Soon</span>';
+      } else if (isLocked && isSelected) {
+        h += '<span style="position:absolute;top:10px;right:10px;background:var(--teal, #2A7C6F);color:white;font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:4px;">Current</span>';
+      } else if (isSelected && !isCommand) {
+        h += '<span style="position:absolute;top:10px;right:10px;background:var(--amber, #C4853C);color:white;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.85rem;font-weight:700;">&#10003;</span>';
+      }
+
+      // Icon + Name + Description
+      h += '<div>';
+      h += '<div style="font-size:2rem;margin-bottom:6px;">' + mod.icon + '</div>';
+      h += '<div style="font-size:1.1rem;font-weight:700;font-family:\'Cormorant Garamond\', serif;color:var(--charcoal, #1a1a1a);margin-bottom:4px;">' + esc(mod.name) + '</div>';
+      h += '<div style="font-size:0.85rem;color:var(--warm-gray, #6B6560);line-height:1.4;margin-bottom:8px;">' + esc(mod.description) + '</div>';
+      h += '</div>';
+
+      // Synergy hint
+      var hint = getModuleSynergyHints(moduleId);
+      if (hint) {
+        h += '<div style="font-size:0.75rem;color:var(--teal, #2A7C6F);font-style:italic;margin-top:auto;padding-top:8px;border-top:1px solid rgba(0,0,0,0.06);">' + hint + '</div>';
+      }
+
+      h += '</div>';
+    });
+    h += '</div>';
+  }
+
+  // --- Confirm / Cancel ---
+  var confirmLabel = isPublish ? 'Confirm — Web Only'
+    : isCommand ? 'Confirm — All Modules'
+    : 'Confirm Selection (' + effectiveSelected.length + '/' + limit + ')';
+  var confirmDisabled = _moduleSelectionState.saving || (!isCommand && !isPublish && effectiveSelected.length === 0);
+
+  h += '<div style="display:flex;gap:12px;justify-content:flex-end;flex-wrap:wrap;">';
+  if (_moduleSelectionState.onCancel) {
+    h += '<button class="btn" onclick="cancelModuleSelection()" style="background:var(--cream, #FAF6F0);color:var(--charcoal, #1a1a1a);">Cancel</button>';
+  }
+  h += '<button class="btn btn-primary" onclick="confirmModuleSelection()" ' + (confirmDisabled ? 'disabled' : '') + ' style="min-width:160px;">';
+  h += _moduleSelectionState.saving ? 'Saving...' : esc(confirmLabel);
+  h += '</button>';
+  h += '</div>';
+
+  container.innerHTML = '<div style="max-width:900px;margin:0 auto;">' + h + '</div>';
+}
+
+// Toggle a module in the selection state and re-render
+function toggleModuleSelection(moduleId) {
+  var state = _moduleSelectionState;
+  if (state.saving) return;
+  var mod = MODULE_REGISTRY[moduleId];
+  if (!mod || mod.status === 'coming-soon') return;
+  if (state.locked.indexOf(moduleId) >= 0) return;
+
+  var tierConfig = TIER_CONFIG[state.tier];
+  if (!tierConfig) return;
+  var limit = tierConfig.moduleLimit;
+
+  var idx = state.selected.indexOf(moduleId);
+  if (idx >= 0) {
+    state.selected.splice(idx, 1);
+  } else if (state.selected.length < limit) {
+    state.selected.push(moduleId);
+  }
+
+  // Re-render
+  renderModuleSelectionUI(state.containerId, {
+    tier: state.tier,
+    currentModules: state.selected,
+    lockedModules: state.locked,
+    onConfirm: state.onConfirm,
+    onCancel: state.onCancel
+  });
+}
+
+// Confirm the module selection — save to Firebase
+function confirmModuleSelection() {
+  var state = _moduleSelectionState;
+  if (state.saving) return;
+
+  var tier = state.tier;
+  var tierConfig = TIER_CONFIG[tier];
+  if (!tierConfig) return;
+
+  var isCommand = tier === 'command';
+  var isPublish = tier === 'publish';
+  var purchasable = Object.keys(MODULE_REGISTRY)
+    .filter(function(id) { return MODULE_REGISTRY[id].purchasable; })
+    .sort(function(a, b) { return MODULE_REGISTRY[a].navPosition - MODULE_REGISTRY[b].navPosition; });
+
+  var modulesToSave = isCommand
+    ? purchasable.filter(function(id) { return MODULE_REGISTRY[id].status !== 'coming-soon'; })
+    : isPublish ? [] : state.selected.slice();
+
+  state.saving = true;
+  // Re-render to show "Saving..."
+  renderModuleSelectionUI(state.containerId, {
+    tier: tier, currentModules: state.selected, lockedModules: state.locked,
+    onConfirm: state.onConfirm, onCancel: state.onCancel
+  });
+
+  var updateData = {
+    tier: tier,
+    modules: modulesToSave,
+    updatedAt: new Date().toISOString()
+  };
+  if (!_tenantSubscription || !_tenantSubscription.effectiveDate) {
+    updateData.effectiveDate = new Date().toISOString();
+    updateData.billingAnchor = new Date().getDate();
+  }
+
+  MastDB.subscription.update(updateData).then(function() {
+    _tenantSubscription = Object.assign({}, _tenantSubscription || {}, updateData);
+    state.saving = false;
+    showToast('Subscription updated — ' + tierConfig.name + ' tier with ' + modulesToSave.length + ' module' + (modulesToSave.length !== 1 ? 's' : ''));
+    if (state.onConfirm) state.onConfirm(modulesToSave);
+  }).catch(function(err) {
+    state.saving = false;
+    showToast('Failed to save: ' + err.message, true);
+    renderModuleSelectionUI(state.containerId, {
+      tier: tier, currentModules: state.selected, lockedModules: state.locked,
+      onConfirm: state.onConfirm, onCancel: state.onCancel
+    });
+  });
+}
+
+// Cancel module selection
+function cancelModuleSelection() {
+  var state = _moduleSelectionState;
+  if (state.onCancel) state.onCancel();
+}
+
+// ============================================================
+// End Module Selection UI
 // ============================================================
 
 const CATEGORIES = ['figurines', 'jewelry', 'drinkware', 'sculptures', 'vases', 'decorations', 'studio', 'other'];
@@ -7690,6 +8129,8 @@ if (TEST_MODE && new URLSearchParams(window.location.search).get('testmode') ===
   var testTenantId = new URLSearchParams(window.location.search).get('tenant') || TENANT_ID;
   MastDB.init({ tenantId: testTenantId, db: db }); // Test mode: override with ?tenant= param
   loadTenantConfig(testTenantId).then(function() {
+    return loadTenantSubscription();
+  }).then(function() {
     currentUser = { uid: 'test-local-preview', photoURL: '', displayName: 'Test User (Local)' };
     currentUserRole = 'admin';
     currentRoleConfig = DEFAULT_ROLES.admin;
@@ -7764,6 +8205,7 @@ auth.onAuthStateChanged(async function(user) {
   }
   MastDB.init({ tenantId: tenantId, db: db });
   await loadTenantConfig(tenantId);
+  await loadTenantSubscription();
   // --- End Tenant Resolution ---
 
   // Load user role from Firebase (auto-provisions as guest if new)
@@ -8159,7 +8601,7 @@ function hideSidebar() {
 // ============================================================
 // Settings Sub-Tabs
 // ============================================================
-var settingsSubViews = ['general', 'payments', 'shipping', 'integrations', 'workshop', 'trips', 'dashboard', 'domains'];
+var settingsSubViews = ['general', 'payments', 'shipping', 'integrations', 'workshop', 'trips', 'dashboard', 'domains', 'subscription'];
 function switchSettingsSubView(view) {
   // Hide all sub-views
   settingsSubViews.forEach(function(v) {
@@ -8181,6 +8623,71 @@ function switchSettingsSubView(view) {
   if (view === 'trips') loadTripsSettings();
   if (view === 'dashboard') renderDashCardSettings();
   if (view === 'domains') loadDomainSettings();
+  if (view === 'subscription') renderSubscriptionSettings();
+}
+
+// ============================================================
+// Subscription Settings (Module Selection entry point)
+// ============================================================
+
+var _subscriptionSettingsTier = null;
+
+function renderSubscriptionSettings() {
+  var sub = getTenantSubscription();
+  var currentTier = _subscriptionSettingsTier || sub.tier || 'command';
+  _subscriptionSettingsTier = currentTier;
+
+  // Render tier selector
+  var selectorEl = document.getElementById('subscriptionTierSelector');
+  if (selectorEl) {
+    var h = '<div style="margin-bottom:8px;">';
+    h += '<label style="font-weight:600;font-size:0.95rem;color:var(--charcoal, #1a1a1a);display:block;margin-bottom:12px;">Select Your Tier</label>';
+    h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;">';
+    TIER_ORDER.forEach(function(tierId) {
+      var tc = TIER_CONFIG[tierId];
+      var isActive = tierId === currentTier;
+      var borderColor = isActive ? 'var(--amber, #C4853C)' : 'var(--cream-dark, #F0E8DB)';
+      var bg = isActive ? 'var(--cream, #FAF6F0)' : 'var(--cream-dark, #F0E8DB)';
+      var shadow = isActive ? '0 2px 8px rgba(196, 133, 60, 0.2)' : 'none';
+      h += '<div onclick="selectSubscriptionTier(\'' + tierId + '\')" style="' +
+        'background:' + bg + ';border:2px solid ' + borderColor + ';border-radius:10px;padding:14px 16px;cursor:pointer;' +
+        'box-shadow:' + shadow + ';transition:all 0.2s;">';
+      h += '<div style="font-weight:700;font-family:\'Cormorant Garamond\', serif;font-size:1.1rem;color:var(--charcoal, #1a1a1a);">' + esc(tc.name) + '</div>';
+      h += '<div style="font-size:0.9rem;color:var(--amber, #C4853C);font-weight:600;">' + (tc.price === 0 ? 'Free' : '$' + tc.price + '/mo') + '</div>';
+      h += '<div style="font-size:0.8rem;color:var(--warm-gray, #6B6560);margin-top:4px;">' + esc(tc.description) + '</div>';
+      h += '</div>';
+    });
+    h += '</div></div>';
+    selectorEl.innerHTML = h;
+  }
+
+  // Render module selection
+  var isUpgrade = TIER_ORDER.indexOf(currentTier) > TIER_ORDER.indexOf(sub.tier);
+  var currentModules = sub.modules || [];
+  // On upgrade: keep existing modules pre-selected and locked
+  var lockedMods = isUpgrade ? currentModules.slice() : [];
+  var preSelected = isUpgrade ? currentModules.slice() : (currentTier === sub.tier ? currentModules.slice() : []);
+
+  renderModuleSelectionUI('moduleSelectionUI', {
+    tier: currentTier,
+    currentModules: preSelected,
+    lockedModules: lockedMods,
+    isUpgrade: isUpgrade,
+    onConfirm: function(modules) {
+      _subscriptionSettingsTier = null;
+      // Re-render to reflect saved state
+      setTimeout(function() { renderSubscriptionSettings(); }, 100);
+    },
+    onCancel: function() {
+      _subscriptionSettingsTier = null;
+      renderSubscriptionSettings();
+    }
+  });
+}
+
+function selectSubscriptionTier(tierId) {
+  _subscriptionSettingsTier = tierId;
+  renderSubscriptionSettings();
 }
 
 // ============================================================
