@@ -95,19 +95,19 @@
           break;
         case 'location':
           if (location) { el.textContent = location; }
-          else { el.closest('.contact-info-item')?.remove(); }
+          else { var lp = el.closest('.contact-info-item'); if (lp) lp.style.display = 'none'; }
           break;
         case 'email':
           if (email) {
             el.textContent = email;
             if (el.tagName === 'A') el.href = 'mailto:' + email;
-          } else { el.closest('.contact-info-item')?.remove(); }
+          } else { var ep = el.closest('.contact-info-item'); if (ep) ep.style.display = 'none'; }
           break;
         case 'instagram':
           if (instagram) {
             el.textContent = '@' + instagram.replace(/.*instagram\.com\//, '').replace(/\/$/, '');
             if (el.tagName === 'A') el.href = instagram;
-          } else { el.closest('.contact-info-item')?.remove(); }
+          } else { var ip = el.closest('.contact-info-item'); if (ip) ip.style.display = 'none'; }
           break;
         case 'year-brand':
           el.innerHTML = '&copy; ' + year + ' ' + name;
@@ -117,14 +117,16 @@
           break;
         case 'description':
           if (brand.description) el.textContent = brand.description;
+          else el.style.display = 'none';
           break;
         case 'ownerNames':
           if (brand.ownerNames) el.textContent = brand.ownerNames;
+          else el.style.display = 'none';
           break;
         case 'location-description':
           if (location && brand.description) {
             el.textContent = 'Based in ' + location + ', ' + brand.description.charAt(0).toLowerCase() + brand.description.slice(1);
-          }
+          } else { el.style.display = 'none'; }
           break;
       }
     }
