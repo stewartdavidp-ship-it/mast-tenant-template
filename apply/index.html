@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Apply — Vendor Application</title>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #faf8f5;
+  --card: #ffffff;
+  --border: #e5e2dd;
+  --text: #1a1a1a;
+  --text-secondary: #6b6560;
+  --primary: #2a7c6f;
+  --primary-bg: rgba(42,124,111,0.08);
+  --amber: #c4853c;
+  --green: #10b981;
+  --red: #ef4444;
+  --shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+.loading { display: flex; align-items: center; justify-content: center; min-height: 60vh; }
+.spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.error-page, .success-page { text-align: center; padding: 80px 20px; max-width: 500px; margin: 0 auto; }
+.error-page h2, .success-page h2 { font-size: 22px; margin-bottom: 8px; }
+.error-page p, .success-page p { color: var(--text-secondary); line-height: 1.5; }
+.success-page { color: var(--text); }
+.success-icon { font-size: 48px; margin-bottom: 16px; }
+
+.page-header { background: var(--card); border-bottom: 1px solid var(--border); padding: 24px 20px; text-align: center; }
+.page-header h1 { font-size: 24px; font-weight: 700; margin-bottom: 4px; }
+.page-header .show-info { color: var(--text-secondary); font-size: 14px; }
+
+.form-container { max-width: 560px; margin: 24px auto; padding: 0 20px; }
+.criteria-box { background: var(--primary-bg); border-radius: 10px; padding: 16px; margin-bottom: 24px; font-size: 14px; line-height: 1.5; }
+.criteria-box h3 { font-size: 14px; font-weight: 600; margin-bottom: 6px; color: var(--primary); }
+
+.form-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 24px; }
+.form-group { margin-bottom: 18px; }
+.form-label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 5px; color: var(--text-secondary); }
+.form-label .required { color: var(--red); }
+.form-input, .form-textarea, .form-select {
+  width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px;
+  font-size: 14px; background: var(--bg); color: var(--text); font-family: inherit;
+}
+.form-input:focus, .form-textarea:focus, .form-select:focus { outline: none; border-color: var(--primary); }
+.form-textarea { min-height: 80px; resize: vertical; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 480px) { .form-row { grid-template-columns: 1fr; } }
+
+.image-upload { border: 2px dashed var(--border); border-radius: 10px; padding: 20px; text-align: center; cursor: pointer; transition: border-color 0.15s; }
+.image-upload:hover { border-color: var(--primary); }
+.image-upload p { font-size: 13px; color: var(--text-secondary); }
+.image-previews { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.image-preview { width: 80px; height: 80px; border-radius: 8px; object-fit: cover; border: 1px solid var(--border); }
+.image-remove { position: relative; }
+.image-remove button { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%; background: var(--red); color: #fff; border: none; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+
+.submit-btn {
+  width: 100%; padding: 14px; background: var(--primary); color: #fff; border: none;
+  border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 8px;
+  transition: opacity 0.15s;
+}
+.submit-btn:hover { opacity: 0.9; }
+.submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.form-error { color: var(--red); font-size: 13px; margin-top: 8px; }
+.rate-limit-msg { color: var(--amber); font-size: 13px; margin-top: 8px; text-align: center; }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div class="loading"><div class="spinner"></div></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
+<script src="../storefront-tenant.js"></script>
+<script src="../tenant-brand.js?v=2"></script>
+<script>
+(function() {
+  'use strict';
+
+  var FUNCTIONS_BASE = 'https://us-central1-mast-platform-prod.cloudfunctions.net';
+  var app = document.getElementById('app');
+  var slug = '';
+  var showData = null;
+  var submitting = false;
+  var submitted = false;
+  var formError = '';
+  var imageFiles = [];
+  var imageUrls = [];
+
+  function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  function init() {
+    var path = window.location.pathname;
+    var parts = path.split('/').filter(Boolean);
+    var idx = parts.indexOf('apply');
+    if (idx >= 0 && parts[idx + 1] && parts[idx + 1] !== 'index.html') {
+      slug = decodeURIComponent(parts[idx + 1]);
+    } else {
+      slug = new URLSearchParams(window.location.search).get('slug') || '';
+    }
+
+    if (!slug) {
+      renderError('No show specified', 'Please check the URL and try again.');
+      return;
+    }
+
+    loadPageData();
+  }
+
+  function loadPageData() {
+    fetch(FUNCTIONS_BASE + '/eventsGetSubmissionPageData?slug=' + encodeURIComponent(slug))
+      .then(function(r) {
+        if (r.status === 410) throw new Error('Submissions are closed for this show.');
+        if (!r.ok) throw new Error('Show not found or submissions not open.');
+        return r.json();
+      })
+      .then(function(d) {
+        showData = d;
+        document.title = 'Apply — ' + (d.show.name || 'Vendor Application');
+        render();
+      })
+      .catch(function(err) {
+        renderError('Unavailable', err.message);
+      });
+  }
+
+  function renderError(title, msg) {
+    app.innerHTML = '<div class="error-page"><h2>' + esc(title) + '</h2><p>' + esc(msg) + '</p></div>';
+  }
+
+  function render() {
+    if (submitted) {
+      app.innerHTML = '<div class="success-page">' +
+        '<div class="success-icon">✅</div>' +
+        '<h2>Application Submitted!</h2>' +
+        '<p>Thank you for applying. The organizer will review your submission and get back to you.</p>' +
+        '</div>';
+      return;
+    }
+
+    var show = showData.show;
+    var config = showData.submissionConfig || {};
+
+    var h = '';
+    h += '<div class="page-header">';
+    h += '<h1>Vendor Application</h1>';
+    h += '<p class="show-info">' + esc(show.name);
+    if (show.startDate) h += ' — ' + esc(show.startDate);
+    if (show.venue) h += ' at ' + esc(show.venue);
+    h += '</p></div>';
+
+    h += '<div class="form-container">';
+
+    if (config.criteria) {
+      h += '<div class="criteria-box"><h3>Submission Criteria</h3>' + esc(config.criteria) + '</div>';
+    }
+
+    h += '<form class="form-card" onsubmit="submitApplication(event)">';
+
+    h += '<div class="form-row">';
+    h += '<div class="form-group"><label class="form-label">Business Name <span class="required">*</span></label>';
+    h += '<input class="form-input" type="text" id="f_businessName" required></div>';
+    h += '<div class="form-group"><label class="form-label">Owner Name <span class="required">*</span></label>';
+    h += '<input class="form-input" type="text" id="f_ownerName" required></div>';
+    h += '</div>';
+
+    h += '<div class="form-row">';
+    h += '<div class="form-group"><label class="form-label">Email <span class="required">*</span></label>';
+    h += '<input class="form-input" type="email" id="f_email" required></div>';
+    h += '<div class="form-group"><label class="form-label">Phone</label>';
+    h += '<input class="form-input" type="tel" id="f_phone"></div>';
+    h += '</div>';
+
+    h += '<div class="form-group"><label class="form-label">Category</label>';
+    h += '<input class="form-input" type="text" id="f_category" placeholder="e.g. Pottery, Jewelry, Woodwork"></div>';
+
+    h += '<div class="form-group"><label class="form-label">Business Description</label>';
+    h += '<textarea class="form-textarea" id="f_businessDescription" placeholder="Tell us about your business..."></textarea></div>';
+
+    h += '<div class="form-row">';
+    h += '<div class="form-group"><label class="form-label">Website</label>';
+    h += '<input class="form-input" type="url" id="f_websiteUrl" placeholder="https://"></div>';
+    h += '<div class="form-group"><label class="form-label">Instagram Handle</label>';
+    h += '<input class="form-input" type="text" id="f_instagramHandle" placeholder="@yourhandle"></div>';
+    h += '</div>';
+
+    h += '<div class="form-group"><label class="form-label">Additional Info</label>';
+    h += '<textarea class="form-textarea" id="f_additionalInfo" placeholder="Anything else you\'d like us to know?"></textarea></div>';
+
+    // Image upload
+    var maxImages = config.maxImages || 5;
+    h += '<div class="form-group"><label class="form-label">Images (up to ' + maxImages + ')</label>';
+    h += '<div class="image-upload" onclick="document.getElementById(\'imageInput\').click()">';
+    h += '<p>Click to upload images</p>';
+    h += '<input type="file" id="imageInput" accept="image/*" multiple style="display:none" onchange="handleImages(this)">';
+    h += '</div>';
+    h += '<div class="image-previews" id="imagePreviews"></div>';
+    h += '</div>';
+
+    if (formError) h += '<div class="form-error">' + esc(formError) + '</div>';
+
+    h += '<button class="submit-btn" type="submit"' + (submitting ? ' disabled' : '') + '>' +
+      (submitting ? 'Submitting...' : 'Submit Application') + '</button>';
+
+    h += '</form></div>';
+
+    app.innerHTML = h;
+    renderImagePreviews();
+  }
+
+  function renderImagePreviews() {
+    var container = document.getElementById('imagePreviews');
+    if (!container) return;
+    container.innerHTML = '';
+    imageFiles.forEach(function(file, i) {
+      var wrapper = document.createElement('div');
+      wrapper.className = 'image-remove';
+      wrapper.style.display = 'inline-block';
+      var img = document.createElement('img');
+      img.className = 'image-preview';
+      img.src = URL.createObjectURL(file);
+      var btn = document.createElement('button');
+      btn.textContent = '✕';
+      btn.onclick = function() { imageFiles.splice(i, 1); render(); };
+      wrapper.appendChild(img);
+      wrapper.appendChild(btn);
+      container.appendChild(wrapper);
+    });
+  }
+
+  window.handleImages = function(input) {
+    var maxImages = (showData.submissionConfig || {}).maxImages || 5;
+    var files = Array.from(input.files);
+    files.forEach(function(f) {
+      if (imageFiles.length < maxImages) imageFiles.push(f);
+    });
+    render();
+  };
+
+  window.submitApplication = function(e) {
+    e.preventDefault();
+    if (submitting) return;
+    formError = '';
+    submitting = true;
+    render();
+
+    var formData = {
+      tenantId: showData.tenantId,
+      showId: showData.show.id,
+      businessName: document.getElementById('f_businessName').value.trim(),
+      ownerName: document.getElementById('f_ownerName').value.trim(),
+      email: document.getElementById('f_email').value.trim(),
+      phone: document.getElementById('f_phone').value.trim(),
+      category: document.getElementById('f_category').value.trim(),
+      businessDescription: document.getElementById('f_businessDescription').value.trim(),
+      websiteUrl: document.getElementById('f_websiteUrl').value.trim(),
+      instagramHandle: document.getElementById('f_instagramHandle').value.trim(),
+      additionalInfo: document.getElementById('f_additionalInfo').value.trim(),
+      imageUrls: []
+    };
+
+    // Upload images first if any, then submit
+    if (imageFiles.length > 0) {
+      uploadImages(formData.showId).then(function(urls) {
+        formData.imageUrls = urls;
+        doSubmit(formData);
+      }).catch(function(err) {
+        formError = 'Image upload failed: ' + err.message;
+        submitting = false;
+        render();
+      });
+    } else {
+      doSubmit(formData);
+    }
+  };
+
+  function uploadImages(showId) {
+    // Upload to Firebase Storage using tenant config
+    return window.TENANT_READY.then(function() {
+      var fbApp;
+      try { fbApp = firebase.app('apply-upload'); } catch (e) {
+        fbApp = firebase.initializeApp(window.TENANT_FIREBASE_CONFIG, 'apply-upload');
+      }
+      var storage = fbApp.storage();
+      var tempId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      return Promise.all(imageFiles.map(function(file, i) {
+        var ext = file.name.split('.').pop() || 'jpg';
+        var path = window.TENANT_ID + '/events/submissions/' + showId + '/' + tempId + '/image-' + i + '.' + ext;
+        return storage.ref(path).put(file).then(function(snap) {
+          return snap.ref.getDownloadURL();
+        });
+      }));
+    });
+  }
+
+  function doSubmit(formData) {
+    fetch(FUNCTIONS_BASE + '/eventsSubmitApplication', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(formData)
+    })
+    .then(function(r) {
+      if (r.status === 429) throw new Error('Too many requests. Please wait a moment and try again.');
+      if (!r.ok) return r.json().then(function(d) { throw new Error(d.error || 'Submission failed'); });
+      return r.json();
+    })
+    .then(function() {
+      submitted = true;
+      submitting = false;
+      render();
+    })
+    .catch(function(err) {
+      formError = err.message;
+      submitting = false;
+      render();
+    });
+  }
+
+  window.TENANT_READY ? window.TENANT_READY.then(init) : init();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scavenger Hunt</title>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #faf8f5;
+  --card: #ffffff;
+  --border: #e5e2dd;
+  --text: #1a1a1a;
+  --text-secondary: #6b6560;
+  --primary: #2a7c6f;
+  --primary-bg: rgba(42,124,111,0.08);
+  --amber: #c4853c;
+  --green: #10b981;
+  --red: #ef4444;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+
+.container { max-width: 420px; width: 100%; padding: 20px; margin: 0 auto; }
+
+.loading { text-align: center; padding: 40px; }
+.spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.error-card { text-align: center; padding: 40px 20px; }
+.error-card h2 { font-size: 20px; margin-bottom: 8px; }
+.error-card p { color: var(--text-secondary); font-size: 14px; margin-bottom: 16px; }
+
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 24px; text-align: center; }
+
+/* Vendor card at top */
+.vendor-banner { display: flex; align-items: center; gap: 12px; padding: 14px; background: var(--primary-bg); border-radius: 12px; margin-bottom: 20px; text-align: left; }
+.vendor-logo { width: 48px; height: 48px; border-radius: 10px; object-fit: cover; }
+.vendor-logo-placeholder { width: 48px; height: 48px; border-radius: 10px; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; }
+.vendor-name { font-size: 16px; font-weight: 600; }
+.vendor-booth { font-size: 12px; color: var(--text-secondary); }
+
+/* Check-in animation */
+.check-icon { font-size: 56px; margin-bottom: 12px; }
+.check-message { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+.check-sub { font-size: 14px; color: var(--text-secondary); }
+
+/* Progress */
+.progress-section { margin-top: 20px; }
+.progress-label { font-size: 14px; color: var(--text-secondary); margin-bottom: 6px; }
+.progress-count { font-size: 32px; font-weight: 700; color: var(--primary); }
+.progress-target { font-size: 14px; color: var(--text-secondary); }
+.progress-bar { height: 10px; background: var(--border); border-radius: 5px; overflow: hidden; margin-top: 10px; }
+.progress-fill { height: 100%; background: linear-gradient(90deg, var(--primary), var(--green)); border-radius: 5px; transition: width 0.5s ease-out; }
+
+/* Completion */
+.completion-card { background: linear-gradient(135deg, var(--primary), #1a6b5f); color: #fff; border-radius: 16px; padding: 32px 24px; text-align: center; }
+.completion-card h2 { font-size: 24px; margin-bottom: 8px; }
+.completion-code { display: inline-block; padding: 10px 24px; background: rgba(255,255,255,0.2); border-radius: 10px; font-size: 24px; font-weight: 700; letter-spacing: 2px; margin: 12px 0; }
+.completion-prize { font-size: 15px; opacity: 0.95; margin-bottom: 8px; }
+.completion-instructions { font-size: 13px; opacity: 0.8; line-height: 1.5; }
+
+/* Name form */
+.name-form { text-align: left; }
+.name-form h3 { font-size: 18px; font-weight: 600; margin-bottom: 4px; text-align: center; }
+.name-form p { font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; text-align: center; }
+.form-group { margin-bottom: 14px; }
+.form-label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; color: var(--text-secondary); }
+.form-input {
+  width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px;
+  font-size: 15px; background: var(--bg); color: var(--text); font-family: inherit;
+}
+.form-input:focus { outline: none; border-color: var(--primary); }
+
+.btn {
+  width: 100%; padding: 14px; background: var(--primary); color: #fff; border: none;
+  border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer;
+}
+.btn:hover { opacity: 0.9; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-outline { background: transparent; border: 1px solid var(--primary); color: var(--primary); }
+
+.show-link { display: block; margin-top: 16px; text-align: center; font-size: 13px; color: var(--primary); }
+</style>
+</head>
+<body>
+
+<div class="container" id="app">
+  <div class="loading"><div class="spinner"></div><p style="color:var(--text-secondary);font-size:14px;">Loading...</p></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="../storefront-tenant.js"></script>
+<script src="../tenant-brand.js?v=2"></script>
+<script>
+(function() {
+  'use strict';
+
+  var FUNCTIONS_BASE = 'https://us-central1-mast-platform-prod.cloudfunctions.net';
+  var app = document.getElementById('app');
+  var slug = '';
+  var vendorId = '';
+  var showData = null;
+  var vendor = null;
+  var huntConfig = null;
+  var huntStatus = null;
+  var participantId = null;
+  var phase = 'loading'; // loading, name, registering, progress, completed, error
+  var errorMsg = '';
+
+  function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  function init() {
+    // Parse: /scan/{slug}/{vendorId}
+    var path = window.location.pathname;
+    var parts = path.split('/').filter(Boolean);
+    var scanIdx = parts.indexOf('scan');
+    if (scanIdx >= 0) {
+      slug = decodeURIComponent(parts[scanIdx + 1] || '');
+      vendorId = decodeURIComponent(parts[scanIdx + 2] || '');
+    }
+
+    if (!slug || !vendorId) {
+      phase = 'error';
+      errorMsg = 'Invalid scan link. Please try scanning the QR code again.';
+      render();
+      return;
+    }
+
+    // Check for existing participant
+    participantId = localStorage.getItem('mast-hunt-' + slug) || null;
+
+    loadShowData();
+  }
+
+  function loadShowData() {
+    fetch(FUNCTIONS_BASE + '/eventsGetPublicShowData?slug=' + encodeURIComponent(slug))
+      .then(function(r) {
+        if (!r.ok) throw new Error('Show not found');
+        return r.json();
+      })
+      .then(function(d) {
+        showData = d;
+        huntConfig = d.huntConfig;
+
+        if (!d.huntEnabled || !huntConfig) {
+          phase = 'error';
+          errorMsg = 'Scavenger hunt is not active for this show.';
+          render();
+          return;
+        }
+
+        // Find vendor
+        vendor = (d.vendors || []).find(function(v) { return v.id === vendorId; });
+        if (!vendor) {
+          phase = 'error';
+          errorMsg = 'Vendor not found at this show.';
+          render();
+          return;
+        }
+
+        document.title = 'Hunt — ' + (vendor.businessName || 'Vendor');
+
+        if (participantId) {
+          // Returning participant — auto-register visit
+          registerVisit(participantId, null, null);
+        } else {
+          // New participant — show name form
+          phase = 'name';
+          render();
+        }
+      })
+      .catch(function(err) {
+        phase = 'error';
+        errorMsg = 'Could not load show data. Please try again.';
+        render();
+      });
+  }
+
+  function registerVisit(pid, name, contact) {
+    phase = 'registering';
+    render();
+
+    var body = {
+      tenantId: showData.tenantId,
+      showId: showData.show.id,
+      vendorId: vendorId
+    };
+    if (pid) body.participantId = pid;
+    if (name) body.name = name;
+    if (contact) body.contact = contact;
+
+    fetch(FUNCTIONS_BASE + '/eventsRegisterHuntVisit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.error) throw new Error(d.error);
+
+      participantId = d.participantId;
+      localStorage.setItem('mast-hunt-' + slug, participantId);
+
+      // Also pin this vendor for the attendee show page
+      var pins = JSON.parse(localStorage.getItem('mast-pins-' + slug) || '[]');
+      if (pins.indexOf(vendorId) < 0) {
+        pins.push(vendorId);
+        localStorage.setItem('mast-pins-' + slug, JSON.stringify(pins));
+      }
+
+      huntStatus = {
+        visitCount: d.visitCount,
+        target: d.target || huntConfig.target,
+        completed: d.completed,
+        completionCode: d.completionCode || null
+      };
+
+      phase = d.completed ? 'completed' : 'progress';
+      render();
+    })
+    .catch(function(err) {
+      phase = 'error';
+      errorMsg = 'Failed to register visit: ' + err.message;
+      render();
+    });
+  }
+
+  function render() {
+    var h = '';
+
+    // Vendor banner (show on most phases)
+    if (vendor && phase !== 'loading' && phase !== 'error') {
+      var booth = vendor.boothId && showData.booths[vendor.boothId] ? showData.booths[vendor.boothId] : null;
+      h += '<div class="vendor-banner">';
+      if (vendor.logoUrl) {
+        h += '<img class="vendor-logo" src="' + esc(vendor.logoUrl) + '" alt="" onerror="this.style.display=\'none\'">';
+      } else {
+        h += '<div class="vendor-logo-placeholder">' + esc((vendor.businessName || '?')[0].toUpperCase()) + '</div>';
+      }
+      h += '<div><div class="vendor-name">' + esc(vendor.businessName) + '</div>';
+      if (booth) h += '<div class="vendor-booth">Booth ' + esc(booth.name) + '</div>';
+      h += '</div></div>';
+    }
+
+    if (phase === 'loading' || phase === 'registering') {
+      h += '<div class="card"><div class="loading"><div class="spinner"></div><p style="color:var(--text-secondary);font-size:14px;">' + (phase === 'registering' ? 'Checking in...' : 'Loading...') + '</p></div></div>';
+    } else if (phase === 'error') {
+      h += '<div class="card error-card"><h2>Oops</h2><p>' + esc(errorMsg) + '</p>';
+      h += '<button class="btn btn-outline" onclick="location.reload()" style="width:auto;display:inline-flex;padding:10px 20px;">Try Again</button></div>';
+    } else if (phase === 'name') {
+      h += '<div class="card name-form">';
+      h += '<h3>🔍 Join the Hunt!</h3>';
+      h += '<p>Visit ' + (huntConfig.target || 10) + ' vendor booths to win' + (huntConfig.prize ? ': ' + esc(huntConfig.prize) : '') + '!</p>';
+      h += '<form onsubmit="submitName(event)">';
+      h += '<div class="form-group"><label class="form-label">Your Name *</label>';
+      h += '<input class="form-input" type="text" id="huntName" required placeholder="First name"></div>';
+      h += '<div class="form-group"><label class="form-label">Contact (optional)</label>';
+      h += '<input class="form-input" type="text" id="huntContact" placeholder="Email or phone"></div>';
+      h += '<button class="btn" type="submit">Start Hunting!</button>';
+      h += '</form></div>';
+    } else if (phase === 'progress') {
+      h += '<div class="card">';
+      h += '<div class="check-icon">✅</div>';
+      h += '<div class="check-message">Checked in!</div>';
+      h += '<div class="check-sub">Visit recorded at ' + esc(vendor.businessName) + '</div>';
+      h += '<div class="progress-section">';
+      h += '<div class="progress-count">' + huntStatus.visitCount + '<span class="progress-target"> / ' + huntStatus.target + '</span></div>';
+      h += '<div class="progress-label">vendors visited</div>';
+      var pct = Math.min(100, Math.round((huntStatus.visitCount / huntStatus.target) * 100));
+      h += '<div class="progress-bar"><div class="progress-fill" style="width:' + pct + '%"></div></div>';
+      h += '<p style="margin-top:12px;font-size:13px;color:var(--text-secondary);">' + (huntStatus.target - huntStatus.visitCount) + ' more to go!</p>';
+      h += '</div></div>';
+      if (showData.show.slug) {
+        h += '<a class="show-link" href="../show/' + esc(showData.show.slug) + '">View all vendors →</a>';
+      }
+    } else if (phase === 'completed') {
+      h += '<div class="completion-card">';
+      h += '<div style="font-size:48px;margin-bottom:8px;">🎉</div>';
+      h += '<h2>Hunt Complete!</h2>';
+      h += '<p style="opacity:0.9;">You visited all ' + huntStatus.target + ' booths!</p>';
+      if (huntStatus.completionCode) {
+        h += '<div class="completion-code">' + esc(huntStatus.completionCode) + '</div>';
+      }
+      if (huntConfig.prize) h += '<div class="completion-prize">Prize: ' + esc(huntConfig.prize) + '</div>';
+      if (huntConfig.claimInstructions) h += '<div class="completion-instructions">' + esc(huntConfig.claimInstructions) + '</div>';
+      h += '</div>';
+      if (showData.show.slug) {
+        h += '<a class="show-link" href="../show/' + esc(showData.show.slug) + '" style="color:#fff;margin-top:20px;">View show page →</a>';
+      }
+    }
+
+    app.innerHTML = h;
+  }
+
+  window.submitName = function(e) {
+    e.preventDefault();
+    var name = document.getElementById('huntName').value.trim();
+    var contact = document.getElementById('huntContact').value.trim();
+    if (!name) return;
+    registerVisit(null, name, contact);
+  };
+
+  window.TENANT_READY ? window.TENANT_READY.then(init) : init();
+})();
+</script>
+</body>
+</html>
