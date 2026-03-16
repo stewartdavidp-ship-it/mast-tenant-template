@@ -566,6 +566,10 @@ function navigateTo(view, showId) {
     loadSubmissions(showId);
     loadAnnouncements(showId);
     renderShowDetail(showId);
+  } else if (view === 'settings') {
+    currentView = 'settings';
+    selectedShowId = null;
+    renderSettings();
   }
 }
 
@@ -602,7 +606,8 @@ function renderShowsDashboard() {
   var actions = document.getElementById('pageActions');
   var content = document.getElementById('pageContent');
   title.textContent = 'Shows';
-  actions.innerHTML = '<button class="btn btn-primary btn-sm" onclick="openCreateShowModal()">+ New Show</button>';
+  actions.innerHTML = '<button class="btn btn-secondary btn-sm" onclick="navigateTo(\'settings\')" style="margin-right:8px;">&#9881; Settings</button>' +
+    '<button class="btn btn-primary btn-sm" onclick="openCreateShowModal()">+ New Show</button>';
 
   var shows = [];
   for (var id in showsData) shows.push(Object.assign({ id: id }, showsData[id]));
@@ -1788,6 +1793,36 @@ function objToList(obj) {
   var list = [];
   for (var id in obj) list.push(Object.assign({ id: id }, obj[id]));
   return list;
+}
+
+// ============================================================
+// Settings View — Events Configuration
+// ============================================================
+
+function renderSettings() {
+  var title = document.getElementById('pageTitle');
+  var actions = document.getElementById('pageActions');
+  var content = document.getElementById('pageContent');
+  title.textContent = 'Settings';
+  actions.innerHTML = '<button class="btn btn-secondary btn-sm" onclick="navigateTo(\'shows-list\')">&larr; Back to Shows</button>';
+
+  var html = '';
+
+  // Payment Processing — points to tenant's existing payment config
+  html += '<div class="card">';
+  html += '<h3 style="display:flex;align-items:center;gap:8px;"><span style="font-size:1.2rem;">&#128179;</span> Payment Processing</h3>';
+  html += '<p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:16px;">Booth fees and vendor payments use your tenant\'s configured payment processor (Square, Stripe, etc.). Configure your payment processor in your main Mast admin settings.</p>';
+  html += '<a href="../app/" class="btn btn-secondary btn-sm" target="_blank">Open Admin Settings</a>';
+  html += '</div>';
+
+  // Events Defaults
+  html += '<div class="card">';
+  html += '<h3 style="display:flex;align-items:center;gap:8px;"><span style="font-size:1.2rem;">&#9881;</span> Events Defaults</h3>';
+  html += '<p style="font-size:0.85rem;color:var(--text-secondary);">Default settings for new shows. These can be overridden per show.</p>';
+  html += '<div style="margin-top:16px;color:var(--text-secondary);font-size:0.85rem;font-style:italic;">Coming soon — default booth types, pricing, vendor categories, and email templates.</div>';
+  html += '</div>';
+
+  content.innerHTML = html;
 }
 
 </script>
