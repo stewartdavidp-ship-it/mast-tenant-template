@@ -66,7 +66,7 @@
   });
 
   function applyBrand(brand) {
-    console.log('[tenant-brand] applyBrand called', JSON.stringify(brand));
+
     var name = brand.name || 'Shop';
     var tagline = brand.tagline || '';
     var domain = brand.domain || '';
@@ -74,7 +74,7 @@
     var email = brand.ownerEmail || brand.email || '';
     var instagram = brand.instagram || '';
     var year = new Date().getFullYear();
-    console.log('[tenant-brand] vars:', JSON.stringify({name:name,location:location,email:email,instagram:instagram}));
+
 
     // Update document.title
     document.title = document.title.replace(/Shir Glassworks/g, name);
