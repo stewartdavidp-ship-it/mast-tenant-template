@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Shir Glassworks Admin</title>
+  <title>Shir Glassworks Admin</title><!-- TENANT: brand -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
@@ -13,6 +13,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-functions-compat.js"></script>
   <script src="../storefront-tenant.js"></script>
+  <script src="../tenant-brand.js"></script>
   <style>
     :root {
       --amber: #C4853C;
@@ -4293,7 +4294,7 @@
         <svg class="header-mast-mark" viewBox="0 0 32 64" fill="none"><rect x="14" y="0" width="3.5" height="64" rx="1.75" fill="#f0ebe0"/><path d="M17.5 3 L32 11 L17.5 20 Z" fill="#e8a84c"/><path d="M17.5 24 L28 30.5 L17.5 38 Z" fill="#f0ebe0" opacity="0.25"/></svg>
         <span class="header-mast-wm">Mast</span>
         <span class="header-brand-divider">/</span>
-        <div class="header-brand">Shir Glassworks</div>
+        <div class="header-brand" data-tenant="brand">Shir Glassworks</div>
       </div>
     </div>
     <div class="header-user">
@@ -4825,7 +4826,7 @@
 
     <!-- Auth: Sign In -->
     <div class="auth-screen" id="authScreen">
-      <h2>Shir Glassworks</h2>
+      <h2 data-tenant="brand">Shir Glassworks</h2>
       <p>Admin panel for managing schedule events and gallery images.</p>
       <button class="btn-google" onclick="googleSignIn()">
         <svg viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
@@ -22785,7 +22786,7 @@ function printStoryQR(dataUrl, productName) {
     'img{width:250px;height:250px;}h3{margin:16px 0 4px;font-size:1rem;}p{font-size:0.8rem;color:#666;}</style></head><body>' +
     '<img src="' + esc(dataUrl) + '" alt="QR Code">' +
     '<h3>' + esc(productName) + '</h3>' +
-    '<p>Shir Glassworks</p>' +
+    '<p>' + ((typeof TENANT_BRAND !== 'undefined' && TENANT_BRAND.name) || 'My Business') + '</p>' +
     '<script>setTimeout(function(){window.print();},300);<\/script>' +
     '</body></html>');
   win.document.close();
@@ -25100,7 +25101,7 @@ async function createGoogleContact(contactData) {
     if (!token) return; // User cancelled or error
 
     // Ensure contact group exists
-    var groupId = await getOrCreateContactGroup(token, 'Shir Glassworks');
+    var groupId = await getOrCreateContactGroup(token, (TENANT_BRAND && TENANT_BRAND.name) || 'My Business');
     if (!groupId) return;
 
     // Create the contact
@@ -25177,9 +25178,9 @@ async function syncGoogleContacts() {
 
     showToast('Syncing Google Contacts...');
 
-    var groupId = await getOrCreateContactGroup(token, 'Shir Glassworks');
+    var groupId = await getOrCreateContactGroup(token, (TENANT_BRAND && TENANT_BRAND.name) || 'My Business');
     if (!groupId) {
-      showToast('Could not find or create "Shir Glassworks" contact group.', true);
+      showToast('Could not find or create contact group.', true);
       return;
     }
 
@@ -26997,7 +26998,7 @@ var NL_DEFAULT_SECTIONS = [
   { type: 'upcoming-events', title: 'Upcoming Events', guidedPrompt: 'What fairs, shows, or events are coming up? Where can people find you?' },
   { type: 'behind-process', title: 'Behind the Process', guidedPrompt: 'Walk us through how a specific piece or technique is made. What makes it interesting?' },
   { type: 'featured-piece', title: 'Featured Piece', guidedPrompt: 'Spotlight one piece from the current collection. What\'s the story behind it?' },
-  { type: 'from-studio', title: 'From the Studio', guidedPrompt: 'A personal note from Ori or Madeline. What\'s on your mind this month?' }
+  { type: 'from-studio', title: 'From the Studio', guidedPrompt: 'A personal note from the studio. What\'s on your mind this month?' }
 ];
 
 function nlGetUid() { return currentUser ? currentUser.uid : null; }
@@ -28247,7 +28248,7 @@ function renderBlogList() {
       '<p style="font-size:0.85rem;color:var(--text-secondary);">Write your first post to share your voice as an artist in the glass community.</p></div>';
   } else {
     blogPosts.forEach(function(post) {
-      var author = BLOG_AUTHORS[post.author] || BLOG_AUTHORS['madeline'] || { name: post.author || 'Author', photoUrl: '', bio: '' };
+      var author = BLOG_AUTHORS[post.author] || BLOG_AUTHORS[Object.keys(BLOG_AUTHORS)[0]] || { name: post.author || 'Author', photoUrl: '', bio: '' };
       var dateStr = post.createdAt ? new Date(post.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
       html += '<div class="blog-post-row" onclick="blogOpenPost(\'' + post.id + '\')">' +
         '<img class="blog-avatar" src="' + esc(author.photoUrl) + '" alt="' + esc(author.name) + '" />' +
@@ -28331,7 +28332,7 @@ async function blogCreatePost(initialTitle) {
       postNumber: postNumber,
       title: initialTitle || '',
       slug: '',
-      author: 'madeline',
+      author: Object.keys(BLOG_AUTHORS)[0] || 'author',
       body: '',
       aiVersion: '',
       usedAI: false,
@@ -28372,7 +28373,7 @@ function blogOpenPost(postId) {
 function renderBlogEditor() {
   var post = blogCurrentPost;
   if (!post) { renderBlogList(); return; }
-  var author = BLOG_AUTHORS[post.author] || BLOG_AUTHORS['madeline'] || { name: post.author || 'Author', photoUrl: '', bio: '' };
+  var author = BLOG_AUTHORS[post.author] || BLOG_AUTHORS[Object.keys(BLOG_AUTHORS)[0]] || { name: post.author || 'Author', photoUrl: '', bio: '' };
   var status = post.status || 'draft';
 
   var html = '';
@@ -28425,8 +28426,7 @@ function renderBlogEditor() {
     '<img class="blog-author-photo" id="blogAuthorPhoto" src="' + esc(author.photoUrl) + '" alt="' + esc(author.name) + '" />' +
     '<div class="blog-author-info">' +
     '<select onchange="blogChangeAuthor(this.value)">' +
-    '<option value="madeline"' + (post.author === 'madeline' ? ' selected' : '') + '>Madeline</option>' +
-    '<option value="ori"' + (post.author === 'ori' ? ' selected' : '') + '>Ori</option>' +
+    Object.keys(BLOG_AUTHORS).map(function(k) { return '<option value="' + k + '"' + (post.author === k ? ' selected' : '') + '>' + esc(BLOG_AUTHORS[k].name || k) + '</option>'; }).join('') +
     '</select>' +
     '<div class="blog-author-bio" id="blogAuthorBio">' + esc(author.bio) + '</div>' +
     '</div></div>';
@@ -29125,7 +29125,7 @@ async function blogPolishWithAI() {
     tempDiv.innerHTML = blogCurrentPost.body || '';
     var plainText = tempDiv.textContent || tempDiv.innerText || '';
     var cleanBody = plainText.replace(/\[Image \d+\]/g, '').replace(/\[IMG:[^\]]+\]/g, '').trim();
-    var author = BLOG_AUTHORS[blogCurrentPost.author] || BLOG_AUTHORS['madeline'] || { name: blogCurrentPost.author || 'Author', photoUrl: '', bio: '' };
+    var author = BLOG_AUTHORS[blogCurrentPost.author] || BLOG_AUTHORS[Object.keys(BLOG_AUTHORS)[0]] || { name: blogCurrentPost.author || 'Author', photoUrl: '', bio: '' };
     var result = await firebase.functions().httpsCallable('socialAI')({
       action: 'blogPolish',
       body: cleanBody,
@@ -29251,7 +29251,7 @@ async function blogPublishToWebsite() {
   try {
     // Generate rendered HTML with resolved images
     var bodyHtml = blogRenderBodyToHtml(blogCurrentPost.body || '', blogCurrentPost.inlineImages || []);
-    var author = BLOG_AUTHORS[blogCurrentPost.author] || BLOG_AUTHORS['madeline'] || { name: blogCurrentPost.author || 'Author', photoUrl: '', bio: '' };
+    var author = BLOG_AUTHORS[blogCurrentPost.author] || BLOG_AUTHORS[Object.keys(BLOG_AUTHORS)[0]] || { name: blogCurrentPost.author || 'Author', photoUrl: '', bio: '' };
 
     // Generate slug
     var slug = (blogCurrentPost.title || 'untitled').toLowerCase()
@@ -31186,7 +31186,7 @@ function scheduleTripReminder() {
       showToast('⚠️ You have an open trip — still traveling?');
       // Also try browser notification
       if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification('Shir Glassworks', {
+        new Notification((TENANT_BRAND && TENANT_BRAND.name) || 'Admin', {
           body: 'You have an open trip — still traveling? Tap to end it.',
           icon: '/favicon.svg'
         });

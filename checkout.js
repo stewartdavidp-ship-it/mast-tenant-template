@@ -1,5 +1,5 @@
 /* =========================================================
-   Shir Glassworks — Checkout Module
+   Tenant Checkout Module
    Multi-step checkout within the cart drawer.
    Steps: Cart → Address → Shipping → Review → Confirmation
    Depends on: cart.js (ShirCart), Firebase compat SDK
@@ -1116,7 +1116,7 @@
         '<div class="confirmation-message">' +
           'Thank you for your wholesale order! Your order is being held pending check payment.<br><br>' +
           '<strong>Please mail your check to:</strong><br>' +
-          ((typeof TENANT_BRAND !== 'undefined') ? TENANT_BRAND.name : 'Shir Glassworks') + '<br>' +
+          ((typeof TENANT_BRAND !== 'undefined') ? TENANT_BRAND.name : 'Shop') + '<br>' +
           '139 Conway St.<br>' + /* TENANT: mailing address */
           'Greenfield, MA 01301<br><br>' +
           'A confirmation has been sent to <strong>' + esc(checkoutData.email) + '</strong>.<br>' +

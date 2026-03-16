@@ -95,18 +95,41 @@ window.TENANT_READY = new Promise(function(resolve, reject) {
     var urlParams = new URLSearchParams(window.location.search);
     var override = urlParams.get('tenant');
     if (override) {
-      // For local dev, use hardcoded Shir config as fallback
+      // For local dev, resolve tenant from platform RTDB same as production.
+      // The override just sets the tenantId — config comes from publicConfig.
       TENANT_ID = override;
-      TENANT_FIREBASE_CONFIG = {
-        apiKey: '',
-        authDomain: '',
-        databaseURL: 'https://shir-glassworks-default-rtdb.firebaseio.com',
-        projectId: 'shir-glassworks',
-        storageBucket: 'shir-glassworks.appspot.com',
-        cloudFunctionsBase: 'https://us-central1-shir-glassworks.cloudfunctions.net'
-      };
-      TENANT_BRAND = { name: 'Dev Tenant', tagline: '', domain: 'localhost' };
-      resolve({ tenantId: override, source: 'url-override' });
+      var devConfigUrl = PLATFORM_RTDB_BASE + '/tenants/' + override + '/publicConfig.json';
+      fetch(devConfigUrl)
+        .then(function(resp) { return resp.ok ? resp.json() : null; })
+        .then(function(publicConfig) {
+          if (publicConfig) {
+            setGlobals(override, publicConfig);
+          } else {
+            // Minimal fallback for truly local dev
+            TENANT_FIREBASE_CONFIG = {
+              apiKey: '',
+              authDomain: 'mast-platform-prod.firebaseapp.com',
+              databaseURL: 'https://mast-platform-prod-default-rtdb.firebaseio.com',
+              projectId: 'mast-platform-prod',
+              storageBucket: 'mast-platform-prod.firebasestorage.app',
+              cloudFunctionsBase: 'https://us-central1-mast-platform-prod.cloudfunctions.net'
+            };
+            TENANT_BRAND = { name: 'Dev Tenant', tagline: '', domain: 'localhost' };
+          }
+          resolve({ tenantId: override, source: 'url-override' });
+        })
+        .catch(function() {
+          TENANT_FIREBASE_CONFIG = {
+            apiKey: '',
+            authDomain: 'mast-platform-prod.firebaseapp.com',
+            databaseURL: 'https://mast-platform-prod-default-rtdb.firebaseio.com',
+            projectId: 'mast-platform-prod',
+            storageBucket: 'mast-platform-prod.firebasestorage.app',
+            cloudFunctionsBase: 'https://us-central1-mast-platform-prod.cloudfunctions.net'
+          };
+          TENANT_BRAND = { name: 'Dev Tenant', tagline: '', domain: 'localhost' };
+          resolve({ tenantId: override, source: 'url-override' });
+        });
       return;
     }
   }

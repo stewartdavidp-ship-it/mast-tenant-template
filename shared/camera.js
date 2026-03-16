@@ -1,5 +1,5 @@
 /**
- * Shir Glassworks — Reusable Camera Capture Component
+ * Tenant Reusable Camera Capture Component
  *
  * Usage:
  *   var cam = new ShirCamera({

@@ -1,5 +1,5 @@
 /* =========================================================
-   Shir Glassworks — Shopping Cart Module
+   Tenant Shopping Cart Module
    Loaded on all public pages. Provides:
      - window.ShirCart API (localStorage + Firebase sync)
      - Cart drawer UI (injected into DOM)

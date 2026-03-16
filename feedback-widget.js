@@ -1,5 +1,5 @@
 /**
- * Shir Glassworks — Public Feedback Widget
+ * Tenant Public Feedback Widget
  *
  * Drop-in floating feedback button for public-facing pages.
  * Reads `feedbackSettings/publicEnabled` from Firebase to determine visibility.

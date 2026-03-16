@@ -376,7 +376,7 @@
 </div>
 
 <footer>
-  <p>Shir Glassworks &bull; Western Massachusetts</p><!-- TENANT: brand -->
+  <p data-tenant="brand-location">Shir Glassworks &bull; Western Massachusetts</p>
   <p style="margin-top:6px;"><a href="../index.html">Home</a> &bull; <a href="../shop.html">Shop</a> &bull; <a href="./">From the Studio</a></p>
   <div class="powered-by-mast">
     <a href="https://runmast.com" target="_blank" rel="noopener">
@@ -443,7 +443,7 @@ window.TENANT_READY.then(function() {
       return;
     }
 
-    document.title = post.title + ' \u2014 Shir Glassworks';
+    document.title = post.title + ' \u2014 ' + TENANT_TITLE_SUFFIX();
 
     var date = post.publishedAt ? new Date(post.publishedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
     var numLabel = source === 'newsletter' ? 'Issue #' + (post.issueNumber || '?') : 'Post #' + (post.postNumber || '?');

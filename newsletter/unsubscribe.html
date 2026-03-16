@@ -70,7 +70,7 @@
 </head>
 <body>
 
-<nav><a href="/">Shir Glassworks</a></nav>
+<nav><a href="/"><span data-tenant="brand">Shir Glassworks</span></a></nav>
 
 <div class="container" id="content">
   <div class="icon">...</div>
@@ -78,7 +78,7 @@
   <p>Please wait while we process your request.</p>
 </div>
 
-<footer><p>Shir Glassworks</p><!-- TENANT: brand --></footer>
+<footer><p data-tenant="brand">Shir Glassworks</p></footer>
 
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
@@ -118,7 +118,7 @@
     updates[TENANT_ID + '/newsletter/subscribers/' + subId + '/unsubscribedAt'] = new Date().toISOString();
 
     db.ref().update(updates).then(function() {
-      showResult('success', 'You\'ve Been Unsubscribed', 'You will no longer receive newsletters from Shir Glassworks. We\'re sorry to see you go!');
+      showResult('success', 'You\'ve Been Unsubscribed', 'You will no longer receive newsletters from ' + TENANT_TITLE_SUFFIX() + '. We\'re sorry to see you go!');
     }).catch(function(err) {
       console.error('Unsubscribe error:', err);
       showResult('error', 'Something Went Wrong', 'We couldn\'t process your request. Please try again or contact us directly.');
@@ -134,7 +134,7 @@
       '<div class="icon">' + (icons[type] || '') + '</div>' +
       '<h1>' + title + '</h1>' +
       '<p>' + message + '</p>' +
-      '<a href="/" class="home-link">Back to Shir Glassworks</a>';
+      '<a href="/" class="home-link">Back to ' + TENANT_TITLE_SUFFIX() + '</a>';
   }
 })();
 </script>

@@ -1,5 +1,5 @@
 /**
- * Shir Glassworks — Share Widget
+ * Tenant Share Widget
  *
  * Floating share button for public-facing pages.
  * Uses navigator.share() on supported devices (mobile),
@@ -15,7 +15,7 @@
   'use strict';
 
   function initShareWidget() {
-  var _brand = (typeof TENANT_BRAND !== 'undefined') ? TENANT_BRAND : { name: 'Shir Glassworks', tagline: 'Handmade Glass Art', location: 'Western Massachusetts' };
+  var _brand = (typeof TENANT_BRAND !== 'undefined') ? TENANT_BRAND : { name: 'Shop', tagline: '', location: '' };
   var SHARE_TITLE = _brand.name;
   var SHARE_TEXT = 'Check out ' + _brand.name + ' — ' + _brand.tagline.toLowerCase() + ' from ' + _brand.location + '.';
 
