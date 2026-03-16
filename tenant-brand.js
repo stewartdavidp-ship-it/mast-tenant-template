@@ -31,26 +31,26 @@
     var config = window.TENANT_FIREBASE_CONFIG || {};
     var tenantId = window.TENANT_ID;
 
-    // Fetch extended brand config (location, email, social) from tenant RTDB
-    if (config.databaseURL && tenantId) {
-      var configUrl = config.databaseURL + '/' + tenantId + '/config.json';
-      fetch(configUrl)
+    // Fetch extended brand config from platform publicConfig (world-readable)
+    // and optionally from tenant RTDB public path
+    var PLATFORM_BASE = 'https://mast-platform-prod-default-rtdb.firebaseio.com/mast-platform';
+    if (tenantId) {
+      var publicConfigUrl = PLATFORM_BASE + '/tenants/' + tenantId + '/publicConfig.json';
+      fetch(publicConfigUrl)
         .then(function(resp) { return resp.ok ? resp.json() : null; })
-        .then(function(tenantConfig) {
-          if (tenantConfig) {
-            brand.location = (tenantConfig.brand && tenantConfig.brand.location) || brand.location || '';
-            brand.email = (tenantConfig.email && tenantConfig.email.fromEmail) || '';
-            brand.ownerEmail = (tenantConfig.email && tenantConfig.email.ownerEmail) || brand.email || '';
-            brand.instagram = (tenantConfig.brand && tenantConfig.brand.instagram) || '';
-            brand.etsy = (tenantConfig.brand && tenantConfig.brand.etsy) || '';
-            brand.description = (tenantConfig.brand && tenantConfig.brand.description) || '';
-            brand.ownerNames = (tenantConfig.brand && tenantConfig.brand.ownerNames) || '';
-            brand.brandVoice = (tenantConfig.brand && tenantConfig.brand.brandVoice) || '';
+        .then(function(pc) {
+          if (pc) {
+            brand.location = pc.brandLocation || brand.location || '';
+            brand.email = pc.contactEmail || '';
+            brand.instagram = pc.instagramUrl || '';
+            brand.etsy = pc.etsyUrl || '';
+            brand.description = pc.brandDescription || '';
+            brand.ownerNames = pc.ownerNames || '';
           }
           applyBrand(brand);
         })
         .catch(function() {
-          // Config fetch failed — apply what we have from publicConfig
+          // Config fetch failed — apply what we have from storefront-tenant.js
           applyBrand(brand);
         });
     } else {
@@ -87,23 +87,37 @@
           el.textContent = domain;
           break;
         case 'location':
-          el.textContent = location;
+          if (location) { el.textContent = location; }
+          else { el.closest('.contact-info-item')?.remove(); }
           break;
         case 'email':
-          el.textContent = email;
-          if (el.tagName === 'A') el.href = 'mailto:' + email;
+          if (email) {
+            el.textContent = email;
+            if (el.tagName === 'A') el.href = 'mailto:' + email;
+          } else { el.closest('.contact-info-item')?.remove(); }
           break;
         case 'instagram':
           if (instagram) {
             el.textContent = '@' + instagram.replace(/.*instagram\.com\//, '').replace(/\/$/, '');
             if (el.tagName === 'A') el.href = instagram;
-          }
+          } else { el.closest('.contact-info-item')?.remove(); }
           break;
         case 'year-brand':
           el.innerHTML = '&copy; ' + year + ' ' + name;
           break;
         case 'brand-location':
-          el.innerHTML = name + ' &bull; ' + location;
+          el.innerHTML = location ? (name + ' &bull; ' + location) : name;
+          break;
+        case 'description':
+          if (brand.description) el.textContent = brand.description;
+          break;
+        case 'ownerNames':
+          if (brand.ownerNames) el.textContent = brand.ownerNames;
+          break;
+        case 'location-description':
+          if (location && brand.description) {
+            el.textContent = 'Based in ' + location + ', ' + brand.description.charAt(0).toLowerCase() + brand.description.slice(1);
+          }
           break;
       }
     }
