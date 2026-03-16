@@ -2039,6 +2039,72 @@
     body.dark-mode #moduleSelectionUI div[style*="border:2px solid var(--amber"] { border-color: var(--amber) !important; background: #333 !important; }
     body.dark-mode #subscriptionTierSelector div[style*="border:2px solid var(--amber"] { border-color: var(--amber) !important; background: #333 !important; }
 
+    /* ========== SIDEBAR GATING (Subscription Enforcement) ========== */
+    .sidebar-section.locked .sidebar-items { display: none !important; }
+    .sidebar-section.locked .sidebar-section-arrow { display: none; }
+    .sidebar-section.locked .sidebar-section-header { cursor: pointer; opacity: 0.55; }
+    .sidebar-section.locked .sidebar-section-header:hover { opacity: 0.75; }
+    .sidebar-lock-icon { font-size: 0.7rem; margin-left: auto; flex-shrink: 0; opacity: 0.6; }
+    .sidebar-upgrade-nudge {
+      display: none;
+      padding: 12px 16px;
+      margin: 0 8px 8px 8px;
+      background: rgba(196, 133, 60, 0.08);
+      border: 1px solid rgba(196, 133, 60, 0.2);
+      border-radius: 8px;
+      font-size: 0.82rem;
+      color: var(--warm-gray-light);
+      line-height: 1.5;
+    }
+    .sidebar-section.locked.nudge-open .sidebar-upgrade-nudge { display: block; }
+    .sidebar-upgrade-nudge .nudge-module-name { font-weight: 600; color: var(--amber-glow, #d4a053); }
+    .sidebar-upgrade-nudge .nudge-desc { display: block; margin: 4px 0; font-size: 0.78rem; opacity: 0.8; }
+    .sidebar-upgrade-nudge .nudge-synergy { display: block; margin: 4px 0; font-size: 0.78rem; color: var(--teal, #2A7C6F); font-style: italic; }
+    .sidebar-upgrade-nudge .nudge-link {
+      display: inline-block;
+      margin-top: 6px;
+      color: var(--amber-glow, #d4a053);
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    .sidebar-upgrade-nudge .nudge-link:hover { color: white; }
+
+    /* Locked module preview card */
+    .locked-module-card {
+      background: var(--cream-dark, #F0E8DB);
+      border: 2px solid rgba(196, 133, 60, 0.25);
+      border-radius: 12px;
+      padding: 32px;
+      max-width: 480px;
+      margin: 60px auto;
+      text-align: center;
+    }
+    .locked-module-card .lmc-icon { font-size: 2.5rem; margin-bottom: 12px; }
+    .locked-module-card .lmc-name { font-size: 1.3rem; font-weight: 700; font-family: 'Cormorant Garamond', serif; color: var(--charcoal, #1a1a1a); margin-bottom: 6px; }
+    .locked-module-card .lmc-desc { font-size: 0.9rem; color: var(--warm-gray, #6B6560); line-height: 1.5; margin-bottom: 12px; }
+    .locked-module-card .lmc-synergy { font-size: 0.85rem; color: var(--teal, #2A7C6F); font-style: italic; margin-bottom: 16px; }
+    .locked-module-card .lmc-cta {
+      display: inline-block;
+      padding: 10px 24px;
+      background: var(--amber, #C4853C);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .locked-module-card .lmc-cta:hover { background: #b3752f; }
+
+    /* Dark mode overrides for locked module card */
+    body.dark-mode .locked-module-card { background: #2a2a2a; border-color: rgba(196, 133, 60, 0.3); }
+    body.dark-mode .locked-module-card .lmc-name { color: #e0e0e0; }
+    body.dark-mode .locked-module-card .lmc-desc { color: #aaa; }
+
     /* ========== COUPONS ========== */
     .coupon-status {
       display: inline-block;
@@ -7477,6 +7543,9 @@ function confirmModuleSelection() {
     _tenantSubscription = Object.assign({}, _tenantSubscription || {}, updateData);
     state.saving = false;
     showToast('Subscription updated — ' + tierConfig.name + ' tier with ' + modulesToSave.length + ' module' + (modulesToSave.length !== 1 ? 's' : ''));
+    // Re-apply gating after subscription change
+    applySidebarGating();
+    applySettingsGating();
     if (state.onConfirm) state.onConfirm(modulesToSave);
   }).catch(function(err) {
     state.saving = false;
@@ -7496,6 +7565,182 @@ function cancelModuleSelection() {
 
 // ============================================================
 // End Module Selection UI
+// ============================================================
+
+// ============================================================
+// Subscription Enforcement & Gating UI — Session C
+// ============================================================
+
+// --- Locked Module Preview Card (reusable) ---
+// Returns HTML string for a locked module preview. Used by route guard and sidebar nudge.
+function renderLockedModuleCard(moduleId) {
+  var mod = MODULE_REGISTRY[moduleId];
+  if (!mod) return '';
+  var synergy = getSynergyMessage(moduleId);
+  var nextTier = getNextTier();
+  var ctaLabel = nextTier ? 'Upgrade to ' + nextTier.name : 'View Plans';
+
+  var h = '<div class="locked-module-card">';
+  h += '<div class="lmc-icon">' + mod.icon + '</div>';
+  h += '<div class="lmc-name">' + esc(mod.name) + '</div>';
+  h += '<div class="lmc-desc">' + esc(mod.description) + '</div>';
+  if (synergy) {
+    h += '<div class="lmc-synergy">' + esc(synergy) + '</div>';
+  }
+  h += '<button class="lmc-cta" onclick="navigateTo(\'settings\'); setTimeout(function(){ switchSettingsSubView(\'subscription\'); }, 100);">' + esc(ctaLabel) + '</button>';
+  h += '</div>';
+  return h;
+}
+
+// --- Sidebar Gating ---
+// Dynamically applies locked/unlocked state to sidebar sections based on subscription.
+// Maps sidebar data-section values to module IDs.
+var SIDEBAR_SECTION_MODULE_MAP = {
+  'make': 'make',
+  'market': 'market',
+  'sell': 'sell',
+  'show': 'show',
+  'ship': 'ship',
+  'run': 'run'
+};
+
+function applySidebarGating() {
+  for (var section in SIDEBAR_SECTION_MODULE_MAP) {
+    var moduleId = SIDEBAR_SECTION_MODULE_MAP[section];
+    var sectionEl = document.querySelector('.sidebar-section[data-section="' + section + '"]');
+    if (!sectionEl) continue;
+
+    var mod = MODULE_REGISTRY[moduleId];
+    if (!mod) continue;
+
+    if (canAccessModule(moduleId)) {
+      // Unlock: restore normal behavior
+      sectionEl.classList.remove('locked', 'nudge-open');
+      var header = sectionEl.querySelector('.sidebar-section-header');
+      if (header) {
+        header.setAttribute('onclick', "toggleSection('" + section + "')");
+      }
+      // Remove any lock icon or nudge we added
+      var lockIcon = sectionEl.querySelector('.sidebar-lock-icon');
+      if (lockIcon) lockIcon.remove();
+      var nudge = sectionEl.querySelector('.sidebar-upgrade-nudge');
+      if (nudge) nudge.remove();
+    } else {
+      // Lock: collapse, add lock icon, wire nudge
+      sectionEl.classList.add('locked');
+      sectionEl.classList.remove('open', 'nudge-open');
+
+      var header = sectionEl.querySelector('.sidebar-section-header');
+      if (header) {
+        header.setAttribute('onclick', "toggleLockedSidebarNudge('" + section + "')");
+
+        // Add lock icon if not already present
+        if (!sectionEl.querySelector('.sidebar-lock-icon')) {
+          var lockSpan = document.createElement('span');
+          lockSpan.className = 'sidebar-lock-icon';
+          lockSpan.innerHTML = '&#128274;';
+          header.appendChild(lockSpan);
+        }
+      }
+
+      // Add upgrade nudge if not already present
+      if (!sectionEl.querySelector('.sidebar-upgrade-nudge')) {
+        var synergy = getSynergyMessage(moduleId);
+        var nudgeDiv = document.createElement('div');
+        nudgeDiv.className = 'sidebar-upgrade-nudge';
+        var nudgeHtml = '<span class="nudge-module-name">' + esc(mod.name) + '</span>';
+        nudgeHtml += '<span class="nudge-desc">' + esc(mod.description) + '</span>';
+        if (synergy) {
+          nudgeHtml += '<span class="nudge-synergy">' + esc(synergy) + '</span>';
+        }
+        nudgeHtml += '<span class="nudge-link" onclick="event.stopPropagation(); navigateTo(\'settings\'); setTimeout(function(){ switchSettingsSubView(\'subscription\'); }, 100);">Upgrade</span>';
+        nudgeDiv.innerHTML = nudgeHtml;
+        sectionEl.appendChild(nudgeDiv);
+      }
+    }
+  }
+}
+
+function toggleLockedSidebarNudge(section) {
+  var el = document.querySelector('.sidebar-section[data-section="' + section + '"]');
+  if (el && el.classList.contains('locked')) {
+    el.classList.toggle('nudge-open');
+  }
+}
+
+// --- Settings Sub-View Gating ---
+// Maps settings sub-view names to the module that owns them.
+var SETTINGS_MODULE_MAP = {
+  'payments': 'sell',
+  'shipping': 'ship',
+  'workshop': 'make',
+  'trips': 'run'
+};
+
+function applySettingsGating() {
+  var nav = document.getElementById('settingsSubNav');
+  if (!nav) return;
+  var tabs = nav.querySelectorAll('.view-tab');
+  tabs.forEach(function(btn) {
+    var viewName = btn.textContent.toLowerCase().trim();
+    var owningModule = SETTINGS_MODULE_MAP[viewName];
+    if (owningModule && !canAccessModule(owningModule)) {
+      btn.style.opacity = '0.35';
+      btn.style.pointerEvents = 'none';
+      btn.title = MODULE_REGISTRY[owningModule].name + ' module required';
+    } else {
+      btn.style.opacity = '';
+      btn.style.pointerEvents = '';
+      btn.title = '';
+    }
+  });
+}
+
+// --- Dashboard Module Awareness ---
+// Maps dashboard card IDs to the module they depend on.
+var DASHBOARD_CARD_MODULE_MAP = {
+  'newOrders': 'sell',
+  'readyToShip': 'ship',
+  'lowInventory': null // accessible if make OR sell
+};
+
+function getDashboardCardModuleAccess(cardId) {
+  if (cardId === 'lowInventory') return hasModule('make') || hasModule('sell');
+  var moduleId = DASHBOARD_CARD_MODULE_MAP[cardId];
+  if (!moduleId) return true; // quickActions and unmapped cards always visible
+  return canAccessModule(moduleId);
+}
+
+// Wraps an existing renderDashCard* function to add module gating.
+// If the module is locked, shows a discover card instead of data.
+function renderDashCardWithGating(cardConfig, renderFn) {
+  var container = document.getElementById(cardConfig.containerId);
+  if (!container) return;
+
+  if (!getDashboardCardModuleAccess(cardConfig.id)) {
+    var moduleId = DASHBOARD_CARD_MODULE_MAP[cardConfig.id];
+    var mod = moduleId ? MODULE_REGISTRY[moduleId] : null;
+    if (!mod) { container.innerHTML = ''; return; }
+    var synergy = getSynergyMessage(moduleId);
+    var discoverHtml = '<div style="padding:16px;text-align:center;">';
+    discoverHtml += '<div style="font-size:1.5rem;margin-bottom:8px;">' + mod.icon + '</div>';
+    discoverHtml += '<div style="font-weight:600;color:var(--charcoal,#1a1a1a);margin-bottom:4px;">' + esc(mod.name) + '</div>';
+    discoverHtml += '<div style="font-size:0.85rem;color:var(--warm-gray,#6B6560);margin-bottom:8px;">' + esc(mod.description) + '</div>';
+    if (synergy) {
+      discoverHtml += '<div style="font-size:0.8rem;color:var(--teal,#2A7C6F);font-style:italic;margin-bottom:8px;">' + esc(synergy) + '</div>';
+    }
+    discoverHtml += '<span style="font-size:0.8rem;color:var(--amber,#C4853C);cursor:pointer;text-decoration:underline;" onclick="navigateTo(\'settings\'); setTimeout(function(){ switchSettingsSubView(\'subscription\'); }, 100);">Upgrade to unlock</span>';
+    discoverHtml += '</div>';
+    container.innerHTML = renderDashboardCard(cardConfig, null, discoverHtml);
+    return;
+  }
+
+  // Module is accessible — render normally
+  renderFn();
+}
+
+// ============================================================
+// End Subscription Enforcement & Gating UI
 // ============================================================
 
 const CATEGORIES = ['figurines', 'jewelry', 'drinkware', 'sculptures', 'vases', 'decorations', 'studio', 'other'];
@@ -8112,6 +8357,7 @@ function enterAuthorizedState() {
   document.getElementById('deniedScreen').style.display = 'none';
   document.getElementById('header').style.display = 'flex';
   showSidebar();
+  applySidebarGating();
   // Route from hash, ?view= param, or default to dashboard
   var viewParam = new URLSearchParams(window.location.search).get('view');
   var initialRoute = viewParam || location.hash.replace('#', '') || 'dashboard';
@@ -8254,6 +8500,7 @@ auth.onAuthStateChanged(async function(user) {
   deniedScreen.style.display = 'none';
   header.style.display = 'flex';
   showSidebar();
+  applySidebarGating();
   document.getElementById('userAvatar').src = user.photoURL || '';
   var initialRoute = location.hash.replace('#', '') || 'dashboard';
   navigateTo(initialRoute);
@@ -8397,6 +8644,15 @@ function navigateTo(route) {
     showToast('Settings is restricted to admin users.', true);
     route = 'dashboard';
   }
+  // Subscription module gating — block routes for locked modules
+  if (!canAccessRoute(route)) {
+    var blockedModuleId = getModuleForRoute(route);
+    if (blockedModuleId) {
+      var mod = MODULE_REGISTRY[blockedModuleId];
+      showToast('This feature requires the ' + (mod ? mod.name : blockedModuleId) + ' module.', true);
+    }
+    route = 'dashboard';
+  }
   // Track quick action frequency from sidebar navigation (skip if triggered from tile click)
   if (window._skipRouteTrack) {
     window._skipRouteTrack = false;
@@ -8444,7 +8700,7 @@ function applyRoute(route) {
 }
 
 function lazyLoadForRoute(route) {
-  if (route === 'settings') { updateGitHubTokenStatus(); updateLkApiKeyStatus(); loadOperators(); loadStorageInfo(); loadStudioLocations(); loadLocations(); loadPublicFeedbackSetting(); loadSendgridConfig(); }
+  if (route === 'settings') { updateGitHubTokenStatus(); updateLkApiKeyStatus(); loadOperators(); loadStorageInfo(); loadStudioLocations(); loadLocations(); loadPublicFeedbackSetting(); loadSendgridConfig(); applySettingsGating(); }
   if (route === 'analytics' && !analyticsLoaded) loadAnalytics();
   if (route === 'products' && !productsLoaded) loadProducts();
   if (route === 'orders' && !ordersLoaded) loadOrders();
@@ -8557,6 +8813,16 @@ document.getElementById('mobileMenuOverlay').addEventListener('mousedown', funct
 // Hash routing
 window.addEventListener('hashchange', function() {
   var hash = location.hash.replace('#', '') || 'dashboard';
+  // Subscription gating on deep links
+  if (!canAccessRoute(hash)) {
+    var blockedModuleId = getModuleForRoute(hash);
+    if (blockedModuleId) {
+      var mod = MODULE_REGISTRY[blockedModuleId];
+      showToast('This feature requires the ' + (mod ? mod.name : blockedModuleId) + ' module.', true);
+    }
+    hash = 'dashboard';
+    location.hash = 'dashboard';
+  }
   if (hash !== currentRoute) {
     currentRoute = hash;
     applyRoute(hash);
@@ -30046,9 +30312,10 @@ async function renderAllDashboardCards() {
     });
   }
   renderDashCardQuickActions();
-  renderDashCardNewOrders();
-  renderDashCardReadyToShip();
-  renderDashCardLowInventory();
+  // Dashboard cards with module gating
+  renderDashCardWithGating(DASHBOARD_CARDS[1], renderDashCardNewOrders);
+  renderDashCardWithGating(DASHBOARD_CARDS[2], renderDashCardReadyToShip);
+  renderDashCardWithGating(DASHBOARD_CARDS[3], renderDashCardLowInventory);
 }
 
 // ─── Dashboard Card: Quick Actions ──────────────────────────
