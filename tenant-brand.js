@@ -25,18 +25,18 @@
 (function() {
   if (typeof window.TENANT_READY === 'undefined') return;
 
-  // Extend TENANT_BRAND with additional config from RTDB
+  // Wait for both TENANT_READY and DOM before applying brand
   window.TENANT_READY.then(function() {
     var brand = window.TENANT_BRAND || {};
     var config = window.TENANT_FIREBASE_CONFIG || {};
     var tenantId = window.TENANT_ID;
 
     // Fetch extended brand config from platform publicConfig (world-readable)
-    // and optionally from tenant RTDB public path
     var PLATFORM_BASE = 'https://mast-platform-prod-default-rtdb.firebaseio.com/mast-platform';
+    var brandReady;
     if (tenantId) {
       var publicConfigUrl = PLATFORM_BASE + '/tenants/' + tenantId + '/publicConfig.json';
-      fetch(publicConfigUrl)
+      brandReady = fetch(publicConfigUrl)
         .then(function(resp) { return resp.ok ? resp.json() : null; })
         .then(function(pc) {
           if (pc) {
@@ -47,15 +47,22 @@
             brand.description = pc.brandDescription || '';
             brand.ownerNames = pc.ownerNames || '';
           }
-          applyBrand(brand);
+          return brand;
         })
-        .catch(function() {
-          // Config fetch failed — apply what we have from storefront-tenant.js
-          applyBrand(brand);
-        });
+        .catch(function() { return brand; });
     } else {
-      applyBrand(brand);
+      brandReady = Promise.resolve(brand);
     }
+
+    // Ensure DOM is loaded before manipulating elements
+    var domReady = new Promise(function(resolve) {
+      if (document.readyState !== 'loading') resolve();
+      else document.addEventListener('DOMContentLoaded', resolve);
+    });
+
+    Promise.all([brandReady, domReady]).then(function(results) {
+      applyBrand(results[0]);
+    });
   });
 
   function applyBrand(brand) {
