@@ -571,6 +571,38 @@
   // Overview Tab
   // ============================================================
 
+  function evLoadShowQRLib(callback) {
+    if (window.QRCode) { callback(); return; }
+    var script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+    script.onload = callback;
+    document.head.appendChild(script);
+  }
+
+  function copyShowUrl(showId) {
+    var show = showsData[showId];
+    if (!show || !show.slug) return;
+    var domain = (typeof TENANT_CONFIG !== 'undefined' && TENANT_CONFIG && TENANT_CONFIG.domain) ? TENANT_CONFIG.domain : window.location.hostname;
+    var url = 'https://' + domain + '/show/' + show.slug;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(url).then(function() { showToast('URL copied!'); });
+    } else {
+      prompt('Copy this URL:', url);
+    }
+  }
+
+  function downloadShowQR(showId) {
+    var show = showsData[showId];
+    var qrDiv = document.getElementById('ev-show-qr-' + showId);
+    if (!qrDiv) return;
+    var canvas = qrDiv.querySelector('canvas');
+    if (!canvas) { showToast('QR code not ready', true); return; }
+    var link = document.createElement('a');
+    link.download = 'qr-' + (show ? show.slug : showId) + '.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  }
+
   function renderOverviewTab(showId) {
     var show = showsData[showId];
     if (!show) return;
@@ -615,11 +647,32 @@
     html += '</div>';
 
     if (show.slug) {
-      html += '<div class="ev-card"><h3>Show URL</h3><p style="font-size:0.8rem;color:var(--warm-gray);word-break:break-all;">Slug: <strong>' + esc(show.slug) + '</strong></p><p style="font-size:0.75rem;color:var(--warm-gray);margin-top:8px;">Attendee page: /show/' + esc(show.slug) + '</p></div>';
+      var showDomain = (typeof TENANT_CONFIG !== 'undefined' && TENANT_CONFIG && TENANT_CONFIG.domain) ? TENANT_CONFIG.domain : window.location.hostname;
+      var attendeeUrl = 'https://' + showDomain + '/show/' + esc(show.slug);
+      html += '<div class="ev-card"><h3>Show QR Code</h3>';
+      html += '<div style="display:flex;justify-content:center;margin-bottom:10px;"><div id="ev-show-qr-' + esc(showId) + '" style="background:#fff;padding:10px;border-radius:8px;"></div></div>';
+      html += '<p style="font-size:0.72rem;color:var(--warm-gray);text-align:center;word-break:break-all;margin:0 0 10px;">' + attendeeUrl + '</p>';
+      html += '<div style="display:flex;gap:8px;">';
+      html += '<button class="ev-btn ev-btn-sm" style="flex:1;" onclick="evDownloadShowQR(\'' + esc(showId) + '\')">&#11015; Download</button>';
+      html += '<button class="ev-btn ev-btn-sm" style="flex:1;" onclick="evCopyShowUrl(\'' + esc(showId) + '\')">&#128203; Copy URL</button>';
+      html += '</div>';
+      html += '<p style="font-size:0.72rem;color:var(--warm-gray);margin-top:8px;">Add this QR code to your show program or entrance signage so attendees can browse vendors on their phones.</p>';
+      html += '</div>';
     }
     html += '<button class="ev-btn ev-btn-danger" style="width:100%;" onclick="evDeleteShow(\'' + esc(showId) + '\')">Delete Show</button>';
     html += '</div></div>';
     container.innerHTML = html;
+
+    // Generate QR code after DOM is ready
+    if (show.slug) {
+      var showDomain2 = (typeof TENANT_CONFIG !== 'undefined' && TENANT_CONFIG && TENANT_CONFIG.domain) ? TENANT_CONFIG.domain : window.location.hostname;
+      var attendeeUrl2 = 'https://' + showDomain2 + '/show/' + show.slug;
+      evLoadShowQRLib(function() {
+        var qrDiv = document.getElementById('ev-show-qr-' + showId);
+        if (!qrDiv) return;
+        new QRCode(qrDiv, { text: attendeeUrl2, width: 180, height: 180, colorDark: '#1e293b', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M });
+      });
+    }
   }
 
   function updateShowStatus(showId, status) {
@@ -1875,6 +1928,8 @@
   window.evCloseSubmissions = closeSubmissions;
   window.evOpenImageViewer = openImageViewer;
   window.evImageViewerNav = imageViewerNav;
+  window.evCopyShowUrl = copyShowUrl;
+  window.evDownloadShowQR = downloadShowQR;
 
   // ============================================================
   // Register with MastAdmin
