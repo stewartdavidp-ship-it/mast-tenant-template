@@ -5688,10 +5688,10 @@
         <div id="moduleSelectionUI"></div>
       </div>
       <div id="settingsSubGeneral" style="max-width:500px;">
-        <div class="form-group">
+        <div id="githubPatSection" class="form-group" style="display:none;">
           <label>GitHub Personal Access Token</label>
           <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">
-            Required for uploading images to the gallery. Token needs <strong>repo</strong> scope.
+            Required for uploading images to the gallery via GitHub. Token needs <strong>repo</strong> scope.
           </p>
           <div style="display:flex;gap:8px;">
             <input type="password" id="githubTokenInput" placeholder="ghp_..."
@@ -8063,6 +8063,43 @@ async function uploadImageToGitHub(filename, base64Content, commitMessage) {
   );
 }
 
+/**
+ * Upload an image to Firebase Storage. Used for gallery images when GitHub
+ * is not configured (new tenants). Returns the public download URL.
+ */
+async function uploadImageToStorage(filename, base64Content) {
+  var tenantId = MastDB.tenantId();
+  if (!tenantId) throw new Error('Tenant not initialized');
+  if (!storage) throw new Error('Firebase Storage not initialized');
+
+  var binaryStr = atob(base64Content);
+  var bytes = new Uint8Array(binaryStr.length);
+  for (var i = 0; i < binaryStr.length; i++) {
+    bytes[i] = binaryStr.charCodeAt(i);
+  }
+
+  var storagePath = tenantId + '/images/' + filename;
+  var ref = storage.ref(storagePath);
+  var ext = filename.split('.').pop().toLowerCase();
+  var contentType = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+
+  await ref.put(bytes.buffer, { contentType: contentType });
+  var url = await ref.getDownloadURL();
+  return url;
+}
+
+/**
+ * Determine the image storage backend for the current tenant.
+ * Returns 'storage' (Firebase Storage) or 'github'.
+ * New tenants default to Firebase Storage. Tenants with GitHub config use GitHub.
+ */
+function getImageStorageBackend() {
+  if (TENANT_CONFIG && TENANT_CONFIG.site && TENANT_CONFIG.site.github && TENANT_CONFIG.site.github.repo && githubToken) {
+    return 'github';
+  }
+  return 'storage';
+}
+
 function sanitizeFilename(name) {
   var parts = name.split('.');
   var ext = parts.length > 1 ? '.' + parts.pop().toLowerCase() : '.jpg';
@@ -8446,6 +8483,33 @@ auth.onAuthStateChanged(async function(user) {
   // Resolve tenant membership from platform registry before loading any data.
   // MastDB.init() must happen before loadUserRole() since role loading uses MastDB.
   var tenantId = await resolveTenant(user.uid);
+  if (!tenantId) {
+    // Try first-login claim: check if this user's email matches a pending owner
+    // from provisioning. The claimTenant cloud function handles the full flow
+    // (writes userTenantMap, admin user record, cleans up pending entries).
+    try {
+      var claimToken = await user.getIdToken();
+      var cfBase = '';
+      if (typeof TENANT_FIREBASE_CONFIG !== 'undefined' && TENANT_FIREBASE_CONFIG && TENANT_FIREBASE_CONFIG.cloudFunctionsBase) {
+        cfBase = TENANT_FIREBASE_CONFIG.cloudFunctionsBase;
+      }
+      if (cfBase) {
+        var claimResp = await fetch(cfBase + '/claimTenant', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + claimToken }
+        });
+        if (claimResp.ok) {
+          var claimResult = await claimResp.json();
+          if (claimResult.claimed) {
+            console.log('Tenant claimed via pendingOwner:', claimResult.tenantId);
+            tenantId = claimResult.tenantId;
+          }
+        }
+      }
+    } catch (claimErr) {
+      console.warn('Tenant claim check failed:', claimErr);
+    }
+  }
   if (!tenantId) {
     // Platform registry lookup failed (no entry or permission denied).
     // Fallback: This is a per-tenant deployment — resolve tenant from domain
@@ -9482,12 +9546,17 @@ async function testGitHubToken() {
 }
 
 function updateGitHubTokenStatus() {
+  // Show/hide the entire GitHub PAT section based on image storage backend
+  var patSection = document.getElementById('githubPatSection');
+  if (patSection) {
+    patSection.style.display = getImageStorageBackend() === 'github' || (TENANT_CONFIG && TENANT_CONFIG.site && TENANT_CONFIG.site.github && TENANT_CONFIG.site.github.repo) ? '' : 'none';
+  }
   var el = document.getElementById('githubTokenStatus');
   if (!el) return;
   if (githubToken) {
     el.innerHTML = '<span style="color:var(--teal);">&#10003; Token configured</span>';
   } else {
-    el.innerHTML = '<span style="color:var(--warm-gray-light);">No token configured. Image upload requires a GitHub PAT.</span>';
+    el.innerHTML = '<span style="color:var(--warm-gray-light);">No token configured. Gallery image upload requires a GitHub PAT.</span>';
   }
 }
 
@@ -14069,8 +14138,9 @@ async function saveImage(imageId) {
   var isUploadMode = uploadSectionEl && uploadSectionEl.style.display !== 'none';
 
   if (isUploadMode && pendingBase64) {
-    // Upload mode — push to GitHub first
-    if (!githubToken) {
+    // Upload mode — use Firebase Storage or GitHub depending on tenant config
+    var imageBackend = getImageStorageBackend();
+    if (imageBackend === 'github' && !githubToken) {
       showToast('GitHub token not configured. Go to Settings to add one.', true);
       return;
     }
@@ -14090,19 +14160,23 @@ async function saveImage(imageId) {
     try {
       progressBar.style.width = '20%';
       progressText.textContent = '20%';
-      progressStatus.textContent = 'Uploading to GitHub...';
 
-      await uploadImageToGitHub(
-        pendingFilename,
-        pendingBase64,
-        'Add ' + section + ' image: ' + (caption || alt)
-      );
+      if (imageBackend === 'github') {
+        progressStatus.textContent = 'Uploading to GitHub...';
+        await uploadImageToGitHub(
+          pendingFilename,
+          pendingBase64,
+          'Add ' + section + ' image: ' + (caption || alt)
+        );
+        url = GITHUB_PAGES_BASE + '/' + GITHUB_IMAGES_PATH + '/' + pendingFilename;
+      } else {
+        progressStatus.textContent = 'Uploading image...';
+        url = await uploadImageToStorage(pendingFilename, pendingBase64);
+      }
 
       progressBar.style.width = '80%';
       progressText.textContent = '80%';
       progressStatus.textContent = 'Saving to database...';
-
-      url = GITHUB_PAGES_BASE + '/' + GITHUB_IMAGES_PATH + '/' + pendingFilename;
 
     } catch (err) {
       progressEl.style.display = 'none';
