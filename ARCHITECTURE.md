@@ -44,7 +44,7 @@ Static HTML pages. No build system, no bundler.
 | `orders.html` | Customer order lookup |
 | `wholesale.html` | Wholesale catalog (auth-gated, Google Sign-In required) |
 | `checkout.html` | Multi-step checkout flow |
-| `checkout.js` | Checkout logic (IIFE `ShirCheckout`, ~1140 lines) |
+| `checkout.js` | Checkout logic (IIFE `MastCheckout`, ~1140 lines) |
 | `checkout.css` | Checkout-specific styles |
 
 ### Shared JS Modules
@@ -119,7 +119,7 @@ Wholesale cart is separate from the retail cart. Stored in `sessionStorage`. Car
 
 ## Checkout Flow
 
-Multi-step checkout implemented in `checkout.js` as an IIFE (`ShirCheckout`).
+Multi-step checkout implemented in `checkout.js` as an IIFE (`MastCheckout`).
 
 ### Steps
 

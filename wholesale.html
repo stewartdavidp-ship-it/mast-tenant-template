@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>2026 Wholesale Catalog &mdash; Shir Glassworks</title><!-- TENANT: brand -->
+<title>2026 Wholesale Catalog &mdash; My Shop</title><!-- TENANT: brand -->
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="cart.css">
 <link rel="stylesheet" href="checkout.css">
@@ -408,8 +408,8 @@
 
   <!-- Sign in prompt (shown when not logged in) -->
   <div id="wsSignIn" class="ws-denied" style="display:none;">
-    <img src="images/logo.png" data-tenant-alt="brand" alt="Shir Glassworks" style="width:140px;margin-bottom:24px;">
-    <h1 data-tenant="brand">Shir Glassworks</h1>
+    <img src="images/logo.png" data-tenant-alt="brand" alt="My Shop" style="width:140px;margin-bottom:24px;">
+    <h1 data-tenant="brand">My Shop</h1>
     <p>Sign in to access the wholesale catalog.</p>
     <button class="ws-signin-btn" onclick="wsGoogleSignIn()">
       <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google">
@@ -422,8 +422,8 @@
 
   <!-- Access denied (shown when signed in but not authorized) -->
   <div id="wsDenied" class="ws-denied" style="display:none;">
-    <img src="images/logo.png" data-tenant-alt="brand" alt="Shir Glassworks" style="width:140px;margin-bottom:24px;">
-    <h1 data-tenant="brand">Shir Glassworks</h1>
+    <img src="images/logo.png" data-tenant-alt="brand" alt="My Shop" style="width:140px;margin-bottom:24px;">
+    <h1 data-tenant="brand">My Shop</h1>
     <p>This catalog is available to authorized wholesale buyers.</p>
     <div id="wsDeniedUserInfo" style="font-size:0.8rem;color:rgba(255,255,255,0.5);margin-bottom:16px;"></div>
     <div id="wsRequestArea"></div>
@@ -436,7 +436,7 @@
   <div id="wsMain" style="display:none;">
     <nav>
       <a href="index.html" class="nav-logo">
-        <img src="favicon.svg" data-tenant-alt="brand" alt="Shir Glassworks">
+        <img src="favicon.svg" data-tenant-alt="brand" alt="My Shop">
       </a>
       <ul class="nav-links" id="navLinks">
         <li><a href="index.html">Home</a></li>
@@ -453,11 +453,10 @@
 
     <header class="ws-header">
       <div class="ws-subtitle">2026 Wholesale Catalog</div>
-      <h1 data-tenant="brand">Shir Glassworks</h1>
+      <h1 data-tenant="brand">My Shop</h1>
       <div class="ws-contact">
-        139 Conway St., Greenfield, MA 01301 &nbsp;&middot;&nbsp;
-        <a href="tel:9782012458">978-201-2458</a> &nbsp;&middot;&nbsp;
-        <a href="mailto:" data-tenant="email" data-tenant-href="email">ShirGlassworks@gmail.com</a>
+        <span data-tenant="location"></span> &nbsp;&middot;&nbsp;
+        <a href="mailto:" data-tenant="email" data-tenant-href="email">hello@example.com</a>
       </div>
     </header>
 
@@ -478,10 +477,10 @@
         <strong>Returns:</strong> Notify within one week of receipt with photos for damaged goods. Case-by-case basis.
       </div>
       <div class="ws-footer-contact">
-        Questions? <a href="mailto:" data-tenant="email" data-tenant-href="email">ShirGlassworks@gmail.com</a> &nbsp;&middot;&nbsp; <a href="tel:9782012458">978-201-2458</a>
+        Questions? <a href="mailto:" data-tenant="email" data-tenant-href="email">hello@example.com</a> &nbsp;&middot;&nbsp; 
       </div>
       <div style="margin-top:24px;font-size:0.7rem;color:rgba(255,255,255,0.3);">
-        <span data-tenant="year-brand">&copy; 2026 Shir Glassworks</span> &nbsp;&middot;&nbsp; <span data-tenant="location">Greenfield, MA</span>
+        <span data-tenant="year-brand">&copy; 2026 My Shop</span> &nbsp;&middot;&nbsp; <span data-tenant="location">Greenfield, MA</span>
       </div>
     </footer>
   </div>

@@ -16,7 +16,7 @@
  *   data-tenant="brand-location" → "{brand} • {location}"
  *
  * Also updates:
- *   document.title — replaces "Shir Glassworks" with brand name
+ *   document.title — replaces default brand placeholder with brand name
  *   [data-tenant-href]         → updates href attribute
  *   [data-tenant-alt]          → updates alt attribute
  *   [data-tenant-title]        → updates title attribute
@@ -77,7 +77,7 @@
 
 
     // Update document.title
-    document.title = document.title.replace(/Shir Glassworks/g, name);
+    document.title = document.title.replace(/My Shop/g, name);
 
     // Update data-tenant elements
     var elements = document.querySelectorAll('[data-tenant]');

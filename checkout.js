@@ -1236,8 +1236,8 @@
 
     // CSV download button
     if (action === 'download-csv') {
-      var csvData = sessionStorage.getItem('shir_csv_data');
-      var csvName = sessionStorage.getItem('shir_csv_name') || 'pirateship-order.csv';
+      var csvData = sessionStorage.getItem('mast_csv_data');
+      var csvName = sessionStorage.getItem('mast_csv_name') || 'pirateship-order.csv';
       if (csvData) downloadCSV(csvData, csvName);
     }
   }
@@ -1511,8 +1511,8 @@
 
         // Store for re-download via button
         try {
-          sessionStorage.setItem('shir_csv_data', csv);
-          sessionStorage.setItem('shir_csv_name', csvName);
+          sessionStorage.setItem('mast_csv_data', csv);
+          sessionStorage.setItem('mast_csv_name', csvName);
         } catch (e) { /* silent */ }
 
         downloadCSV(csv, csvName);
@@ -1538,7 +1538,7 @@
   }
 
   // ── Public API ──
-  window.ShirCheckout = {
+  window.MastCheckout = {
     start: function () {
       attachDelegate();
       trackCheckoutEvent('checkout_start');
