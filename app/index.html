@@ -742,6 +742,98 @@
       opacity: 0.4;
     }
 
+    /* ========== EVENTS ADMIN MODULE ========== */
+    .ev-page-header {
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;
+    }
+    .ev-section-title {
+      font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--warm-gray); margin-bottom: 12px;
+    }
+    .ev-show-grid {
+      display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    }
+    .ev-show-card {
+      cursor: pointer; background: var(--cream); border: 1px solid var(--cream-dark); border-radius: 10px; padding: 16px; transition: border-color 0.15s;
+    }
+    .ev-show-card:hover { border-color: var(--teal); }
+    .ev-card {
+      background: var(--cream); border: 1px solid var(--cream-dark); border-radius: 10px; padding: 20px; margin-bottom: 16px;
+    }
+    .ev-card h3 { font-size: 1rem; margin: 0 0 12px; }
+    .ev-badge {
+      font-size: 0.7rem; font-weight: 600; padding: 2px 8px; border-radius: 10px; text-transform: capitalize; display: inline-block;
+    }
+    .ev-tab-bar {
+      display: flex; gap: 0; border-bottom: 2px solid var(--cream-dark); margin-bottom: 20px; overflow-x: auto;
+    }
+    .ev-tab-btn {
+      padding: 10px 18px; font-size: 0.85rem; font-weight: 600; border: none; background: none; cursor: pointer;
+      border-bottom: 2px solid transparent; color: var(--warm-gray); margin-bottom: -2px; white-space: nowrap;
+    }
+    .ev-tab-btn.active { border-bottom-color: var(--teal); color: var(--teal); }
+    .ev-stats-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-bottom: 20px;
+    }
+    .ev-stat-card {
+      background: var(--cream-dark); border: 1px solid var(--cream-dark); border-radius: 8px; padding: 14px;
+    }
+    .ev-stat-label { font-size: 0.75rem; text-transform: uppercase; color: var(--warm-gray); }
+    .ev-stat-value { font-size: 1.3rem; font-weight: 700; margin-top: 4px; }
+    .ev-stat-sub { font-size: 0.7rem; color: var(--warm-gray); }
+    .ev-detail-grid {
+      display: grid; grid-template-columns: 2fr 1fr; gap: 24px;
+    }
+    @media (max-width: 768px) { .ev-detail-grid { grid-template-columns: 1fr; } }
+    .ev-floorplan-layout {
+      display: grid; grid-template-columns: 3fr 1fr; gap: 20px;
+    }
+    @media (max-width: 768px) { .ev-floorplan-layout { grid-template-columns: 1fr; } }
+    .ev-modal-overlay {
+      position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center;
+    }
+    .ev-modal-box {
+      background: var(--cream); border-radius: 12px; padding: 28px; max-width: 580px; width: 92%; max-height: 85vh; overflow-y: auto;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    }
+    .ev-modal-box h3 { margin: 0 0 20px; font-size: 1.2rem; }
+    .ev-form-group { margin-bottom: 14px; }
+    .ev-form-label { font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 4px; }
+    .ev-form-input, .ev-form-select, .ev-form-textarea {
+      width: 100%; padding: 9px 12px; border: 1px solid var(--cream-dark); border-radius: 6px;
+      font-size: 0.9rem; background: #fff; color: var(--charcoal); box-sizing: border-box;
+    }
+    .ev-form-textarea { resize: vertical; }
+    .ev-form-row { display: grid; gap: 12px; }
+    .ev-form-row-2 { grid-template-columns: 1fr 1fr; }
+    .ev-form-row-3 { grid-template-columns: 1fr 1fr 1fr; }
+    @media (max-width: 768px) { .ev-form-row-2, .ev-form-row-3 { grid-template-columns: 1fr; } }
+    .ev-form-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+    .ev-btn {
+      display: inline-flex; align-items: center; justify-content: center; padding: 8px 16px; border-radius: 6px;
+      font-size: 0.85rem; font-weight: 600; cursor: pointer; border: none; transition: opacity 0.15s;
+    }
+    .ev-btn:hover { opacity: 0.85; }
+    .ev-btn-primary { background: var(--teal); color: #fff; }
+    .ev-btn-secondary { background: var(--cream-dark); color: var(--charcoal); border: 1px solid var(--cream-dark); }
+    .ev-btn-danger { background: rgba(220,53,69,0.1); color: var(--danger); border: 1px solid rgba(220,53,69,0.3); }
+    .ev-btn-sm { padding: 5px 12px; font-size: 0.8rem; }
+    .ev-btn-link { background: none; border: none; color: var(--teal); cursor: pointer; font-size: 0.85rem; }
+    .ev-spinner {
+      width: 36px; height: 36px; border: 3px solid var(--cream-dark); border-top-color: var(--teal);
+      border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto;
+    }
+    /* Dark mode overrides for events admin */
+    body.dark-mode .ev-show-card,
+    body.dark-mode .ev-card { background: #2a2a2a; border-color: #3a3a3a; }
+    body.dark-mode .ev-stat-card { background: #333; border-color: #3a3a3a; }
+    body.dark-mode .ev-modal-box { background: #2a2a2a; }
+    body.dark-mode .ev-form-input,
+    body.dark-mode .ev-form-select,
+    body.dark-mode .ev-form-textarea { background: #1a1a1a; border-color: #3a3a3a; color: #e0e0e0; }
+    body.dark-mode .ev-btn-secondary { background: #333; color: #e0e0e0; border-color: #3a3a3a; }
+    body.dark-mode .ev-tab-bar { border-bottom-color: #3a3a3a; }
+    body.dark-mode .ev-spinner { border-color: #3a3a3a; border-top-color: var(--teal); }
+
     /* ========== GALLERY SECTION GROUPS ========== */
     .section-group-header {
       display: flex;
@@ -4370,12 +4462,16 @@
         <div class="sidebar-item muted" data-route="show-history" onclick="navigateTo('show-history')">History</div>
       </div>
     </div>
-    <!-- Events (Organizer Module — standalone app) -->
+    <!-- Events (Organizer Module) -->
     <div class="sidebar-section" data-section="events">
-      <div class="sidebar-section-header" onclick="window.open('../events/', '_blank')">
+      <div class="sidebar-section-header" onclick="toggleSection('events')">
         <span class="sidebar-section-icon">&#127915;</span>
         <span class="sidebar-section-label">Events</span>
-        <span style="font-size:0.65rem;color:var(--warm-gray);margin-left:4px;">&#8599;</span>
+        <span class="sidebar-section-arrow">&#9654;</span>
+      </div>
+      <div class="sidebar-items">
+        <div class="sidebar-item" data-route="events-shows" onclick="navigateTo('events-shows')">Shows</div>
+        <div class="sidebar-item" data-route="events-settings" onclick="navigateTo('events-settings')">Settings</div>
       </div>
     </div>
     <!-- Ship -->
@@ -4774,6 +4870,9 @@
     <div id="wholesaleTab" style="display:none;">
       <div id="wholesaleContent"></div>
     </div>
+
+    <!-- ===== EVENTS ADMIN TAB ===== -->
+    <div id="eventsAdminTab" style="display:none;"></div>
 
     <div id="placeholderTab" style="display:none;"></div>
 
@@ -7197,7 +7296,7 @@ var MODULE_REGISTRY = {
   show:   { id: 'show',   name: 'Show',   icon: '\uD83C\uDFAA', description: 'Find, apply, prep, and execute craft fairs and events.', section: 'show', navPosition: 5, purchasable: true, routes: ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'], manageSettings: [], synergies: ['sell', 'ship', 'make'], status: 'active' },
   book:   { id: 'book',   name: 'Book',   icon: '\uD83D\uDCC5', description: 'Appointments, classes, studio time.', section: 'book', navPosition: 6, purchasable: true, routes: [], manageSettings: [], synergies: ['sell', 'market'], status: 'coming-soon' },
   run:    { id: 'run',    name: 'Run',    icon: '\uD83D\uDCCB', description: 'Trips, expenses, reports, financials, contacts.', section: 'run', navPosition: 7, purchasable: true, routes: ['trips', 'expenses', 'reports', 'financials', 'contacts', 'customers'], manageSettings: [], synergies: ['sell', 'show'], status: 'active' },
-  events: { id: 'events', name: 'Events', icon: '\uD83C\uDFAB', description: 'Organize shows, manage booths, vendors, and floor plans.', section: 'events', navPosition: 8, purchasable: true, routes: ['events-shows', 'events-show-detail'], manageSettings: [], synergies: ['show', 'sell', 'market'], status: 'active' }
+  events: { id: 'events', name: 'Events', icon: '\uD83C\uDFAB', description: 'Organize shows, manage booths, vendors, and floor plans.', section: 'events', navPosition: 8, purchasable: true, routes: ['events-shows', 'events-settings'], manageSettings: [], synergies: ['show', 'sell', 'market'], status: 'active' }
 };
 
 // Synergy messaging for locked module previews.
@@ -8700,12 +8799,12 @@ var SECTION_ROUTES = {
   'show':   ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'],
   'ship':   ['pack', 'ship'],
   'run':    ['trips', 'expenses', 'reports', 'financials', 'contacts', 'customers'],
-  'events': ['events-shows', 'events-show-detail'],
+  'events': ['events-shows', 'events-settings'],
   'web':    ['website', 'images'],
   'manage': ['products', 'inventory', 'employees', 'analytics', 'auditlog', 'settings']
 };
 
-var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab'];
+var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab'];
 
 var currentRoute = 'dashboard';
 
@@ -9095,7 +9194,8 @@ var MODULE_MANIFEST = {
   contacts: { src: 'modules/contacts.js', routes: ['contacts'] },
   orders: { src: 'modules/orders.js', routes: ['orders', 'commissions'] },
   sales: { src: 'modules/sales.js', routes: ['pos', 'receipts', 'events', 'salesEvents'] },
-  fulfillment: { src: 'modules/fulfillment.js', routes: ['pack', 'ship', 'fulfillment'] }
+  fulfillment: { src: 'modules/fulfillment.js', routes: ['pack', 'ship', 'fulfillment'] },
+  eventsAdmin: { src: 'modules/events.js', routes: ['events-shows', 'events-settings'] }
 };
 
 // Reverse lookup: route → moduleId (built from MODULE_MANIFEST)
