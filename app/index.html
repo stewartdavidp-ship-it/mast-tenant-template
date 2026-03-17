@@ -4352,6 +4352,7 @@
         <div class="sidebar-item" data-route="wholesale" onclick="navigateTo('wholesale')">Wholesale</div>
         <div class="sidebar-item muted" data-route="galleries" onclick="navigateTo('galleries')">Galleries &amp; Consignment <span class="sidebar-badge new">New</span></div>
         <div class="sidebar-item" data-route="receipts" onclick="navigateTo('receipts')">Receipts &amp; Reconciliation</div>
+        <div class="sidebar-item" data-route="coupons" onclick="navigateTo('coupons')">Coupons</div>
       </div>
     </div>
     <!-- Show -->
@@ -4372,7 +4373,7 @@
     <!-- Events (Organizer Module — standalone app) -->
     <div class="sidebar-section" data-section="events">
       <div class="sidebar-section-header" onclick="window.open('../events/', '_blank')">
-        <span class="sidebar-section-icon">&#127914;</span>
+        <span class="sidebar-section-icon">&#127915;</span>
         <span class="sidebar-section-label">Events</span>
         <span style="font-size:0.65rem;color:var(--warm-gray);margin-left:4px;">&#8599;</span>
       </div>
@@ -4401,14 +4402,28 @@
         <div class="sidebar-item muted" data-route="expenses" onclick="navigateTo('expenses')">Expenses <span class="sidebar-badge new">New</span></div>
         <div class="sidebar-item muted" data-route="reports" onclick="navigateTo('reports')">Reports <span class="sidebar-badge new">New</span></div>
         <div class="sidebar-item" data-route="financials" onclick="navigateTo('financials')">Financials</div>
+        <div class="sidebar-item" data-route="contacts" onclick="navigateTo('contacts')">Contacts</div>
+        <div class="sidebar-item muted" data-route="customers" onclick="navigateTo('customers')">Customers <span class="sidebar-badge new">New</span></div>
       </div>
     </div>
-    <!-- Teach -->
+    <!-- Book -->
     <div class="sidebar-section">
-      <div class="sidebar-section-header dashboard-link muted" onclick="navigateTo('teach')" style="opacity:0.55;">
-        <span class="sidebar-section-icon">&#127891;</span>
-        <span class="sidebar-section-label">Teach</span>
+      <div class="sidebar-section-header dashboard-link muted" onclick="navigateTo('book')" style="opacity:0.55;">
+        <span class="sidebar-section-icon">&#128197;</span>
+        <span class="sidebar-section-label">Book</span>
         <span class="sidebar-badge future" style="margin-left:auto;">Future</span>
+      </div>
+    </div>
+    <!-- Web -->
+    <div class="sidebar-section" data-section="web">
+      <div class="sidebar-section-header" onclick="toggleSection('web')">
+        <span class="sidebar-section-icon">&#127760;</span>
+        <span class="sidebar-section-label">Web</span>
+        <span class="sidebar-section-arrow">&#9654;</span>
+      </div>
+      <div class="sidebar-items">
+        <div class="sidebar-item" data-route="website" onclick="navigateTo('website')">Website Content</div>
+        <div class="sidebar-item" data-route="images" onclick="navigateTo('images')">Images</div>
       </div>
     </div>
     <!-- Manage -->
@@ -4421,14 +4436,9 @@
       <div class="sidebar-items">
         <div class="sidebar-item" data-route="products" onclick="navigateTo('products')">Products</div>
         <div class="sidebar-item" data-route="inventory" onclick="navigateTo('inventory')">Inventory</div>
-        <div class="sidebar-item muted" data-route="customers" onclick="navigateTo('customers')">Customers <span class="sidebar-badge new">New</span></div>
-        <div class="sidebar-item" data-route="images" onclick="navigateTo('images')">Images</div>
-        <div class="sidebar-item" data-route="website" onclick="navigateTo('website')">Website Content</div>
         <div class="sidebar-item" data-route="employees" onclick="navigateTo('employees')">Employees &amp; Permissions</div>
-        <div class="sidebar-item" data-route="contacts" onclick="navigateTo('contacts')">Contacts</div>
         <div class="sidebar-item" data-route="analytics" onclick="navigateTo('analytics')">Analytics</div>
         <div class="sidebar-item" data-route="auditlog" onclick="navigateTo('auditlog')">Audit Log</div>
-        <div class="sidebar-item" data-route="coupons" onclick="navigateTo('coupons')">Coupons</div>
         <div class="sidebar-item" data-route="settings" onclick="navigateTo('settings')">Settings &amp; Integrations <span id="settingsSandboxBadge" style="display:none;background:#f59e0b;color:#fff;font-size:0.65rem;padding:2px 6px;border-radius:4px;margin-left:4px;font-weight:700;vertical-align:middle;">SANDBOX</span></div>
         <div class="sidebar-item" id="testingModeItem" onclick="toggleTestingMode()" style="display:none;">🧪 Testing Mode</div>
       </div>
@@ -7179,7 +7189,7 @@ MastDB.subscription = {
 // Canonical module definitions. Single source of truth for nav, gating, and locked UX.
 // Web is the base module (always included, not purchasable). All others are purchasable.
 var MODULE_REGISTRY = {
-  web:    { id: 'web',    name: 'Web',    icon: '\uD83C\uDF10', description: 'Website pages and content management.', section: 'web', navPosition: 0, purchasable: false, routes: ['website'], manageSettings: [], synergies: ['market', 'sell'], status: 'active' },
+  web:    { id: 'web',    name: 'Web',    icon: '\uD83C\uDF10', description: 'Website pages and content management.', section: 'web', navPosition: 0, purchasable: false, routes: ['website', 'images'], manageSettings: [], synergies: ['market', 'sell'], status: 'active' },
   sell:   { id: 'sell',   name: 'Sell',   icon: '\uD83D\uDCB0', description: 'Point of sale, orders, commissions, wholesale.', section: 'sell', navPosition: 1, purchasable: true, routes: ['pos', 'orders', 'commissions', 'wholesale', 'galleries', 'receipts', 'coupons'], manageSettings: ['square'], synergies: ['ship', 'make'], status: 'active' },
   make:   { id: 'make',   name: 'Make',   icon: '\uD83D\uDD25', description: 'Production jobs, build tracking, procurement.', section: 'make', navPosition: 2, purchasable: true, routes: ['jobs', 'production', 'procurement'], manageSettings: [], synergies: ['sell', 'market'], status: 'active' },
   ship:   { id: 'ship',   name: 'Ship',   icon: '\uD83D\uDCE6', description: 'Pack orders, ship deliveries, track fulfillment.', section: 'ship', navPosition: 3, purchasable: true, routes: ['pack', 'ship'], manageSettings: ['shippingRates'], synergies: ['sell', 'show'], status: 'active' },
@@ -7187,7 +7197,7 @@ var MODULE_REGISTRY = {
   show:   { id: 'show',   name: 'Show',   icon: '\uD83C\uDFAA', description: 'Find, apply, prep, and execute craft fairs and events.', section: 'show', navPosition: 5, purchasable: true, routes: ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'], manageSettings: [], synergies: ['sell', 'ship', 'make'], status: 'active' },
   book:   { id: 'book',   name: 'Book',   icon: '\uD83D\uDCC5', description: 'Appointments, classes, studio time.', section: 'book', navPosition: 6, purchasable: true, routes: [], manageSettings: [], synergies: ['sell', 'market'], status: 'coming-soon' },
   run:    { id: 'run',    name: 'Run',    icon: '\uD83D\uDCCB', description: 'Trips, expenses, reports, financials, contacts.', section: 'run', navPosition: 7, purchasable: true, routes: ['trips', 'expenses', 'reports', 'financials', 'contacts', 'customers'], manageSettings: [], synergies: ['sell', 'show'], status: 'active' },
-  events: { id: 'events', name: 'Events', icon: '\uD83C\uDFAA', description: 'Organize shows, manage booths, vendors, and floor plans.', section: 'events', navPosition: 8, purchasable: true, routes: ['events-shows', 'events-show-detail'], manageSettings: [], synergies: ['show', 'sell', 'market'], status: 'active' }
+  events: { id: 'events', name: 'Events', icon: '\uD83C\uDFAB', description: 'Organize shows, manage booths, vendors, and floor plans.', section: 'events', navPosition: 8, purchasable: true, routes: ['events-shows', 'events-show-detail'], manageSettings: [], synergies: ['show', 'sell', 'market'], status: 'active' }
 };
 
 // Synergy messaging for locked module previews.
@@ -7629,7 +7639,8 @@ var SIDEBAR_SECTION_MODULE_MAP = {
   'show': 'show',
   'events': 'events',
   'ship': 'ship',
-  'run': 'run'
+  'run': 'run',
+  'web': 'web'
 };
 
 function applySidebarGating() {
@@ -8603,7 +8614,7 @@ var ROUTE_MAP = {
   // trips route handled by trips module (lazy-loaded)
   'expenses':    { tab: null, placeholder: { name: 'Expenses', desc: 'Track business expenses, categorize for tax time.', badge: 'new' } },
   'reports':     { tab: null, placeholder: { name: 'Reports', desc: 'Tax reports, mileage summaries, expense exports.', badge: 'new' } },
-  'teach':       { tab: null, placeholder: { name: 'Teach', desc: 'Coming when Studio 2 opens \u2014 classes, workshops, scheduling.', badge: 'future' } },
+  'book':        { tab: null, placeholder: { name: 'Book', desc: 'Coming when Studio 2 opens \u2014 classes, workshops, scheduling.', badge: 'future' } },
   // show routes handled by shows module (lazy-loaded)
   // Events organizer routes
   'events-shows':       { tab: null, setup: function() { window.open('../events/', '_blank'); } },
@@ -8621,12 +8632,13 @@ var ROUTE_MAP = {
 var SECTION_ROUTES = {
   'make':   ['jobs', 'production', 'procurement'],
   'market': ['social', 'blog', 'newsletter', 'stories'],
-  'sell':   ['pos', 'orders', 'commissions', 'wholesale', 'galleries', 'receipts'],
+  'sell':   ['pos', 'orders', 'commissions', 'wholesale', 'galleries', 'receipts', 'coupons'],
   'show':   ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'],
   'ship':   ['pack', 'ship'],
-  'run':    ['trips', 'expenses', 'reports', 'financials'],
+  'run':    ['trips', 'expenses', 'reports', 'financials', 'contacts', 'customers'],
   'events': ['events-shows', 'events-show-detail'],
-  'manage': ['products', 'inventory', 'customers', 'images', 'website', 'employees', 'contacts', 'analytics', 'auditlog', 'coupons', 'settings']
+  'web':    ['website', 'images'],
+  'manage': ['products', 'inventory', 'employees', 'analytics', 'auditlog', 'settings']
 };
 
 var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab'];
