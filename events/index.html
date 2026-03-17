@@ -1796,6 +1796,48 @@ function objToList(obj) {
 }
 
 // ============================================================
+// Payment Processor Detection
+// ============================================================
+
+function detectPaymentProcessor() {
+  var el = document.getElementById('paymentProcessorStatus');
+  if (!el) return;
+
+  // Check explicit config first, then auto-detect
+  DB.ref('config/paymentProcessor').once('value').then(function(snap) {
+    var processor = snap.val();
+    if (processor) {
+      renderProcessorBadge(el, processor);
+      return;
+    }
+    // Auto-detect Square
+    return DB.ref('config/square/environment').once('value');
+  }).then(function(sqSnap) {
+    if (!sqSnap) return; // already rendered
+    if (sqSnap.val()) {
+      renderProcessorBadge(el, 'square');
+    } else {
+      renderProcessorBadge(el, null);
+    }
+  }).catch(function() {
+    renderProcessorBadge(el, null);
+  });
+}
+
+function renderProcessorBadge(el, processor) {
+  if (processor === 'square') {
+    el.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:6px;background:rgba(0,157,224,0.12);border:1px solid rgba(0,157,224,0.3);font-size:0.85rem;font-weight:600;color:#009de0;">&#9679; Square</span>';
+  } else if (processor === 'stripe') {
+    el.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:6px;background:rgba(99,91,255,0.12);border:1px solid rgba(99,91,255,0.3);font-size:0.85rem;font-weight:600;color:#635bff;">&#9679; Stripe</span>';
+  } else {
+    el.innerHTML = '<div style="padding:10px 14px;border-radius:6px;background:rgba(255,160,0,0.12);border:1px solid rgba(255,160,0,0.3);">' +
+      '<div style="font-size:0.85rem;font-weight:600;color:#ffa000;">&#9888; No payment processor configured</div>' +
+      '<div style="font-size:0.8rem;color:var(--text-secondary);margin-top:4px;">Booth fee collection and vendor coin purchases require a payment processor. Set up Square or Stripe in your admin settings.</div>' +
+    '</div>';
+  }
+}
+
+// ============================================================
 // Settings View — Events Configuration
 // ============================================================
 
@@ -1808,12 +1850,16 @@ function renderSettings() {
 
   var html = '';
 
-  // Payment Processing — points to tenant's existing payment config
+  // Payment Processing — shows detected processor + points to admin settings
   html += '<div class="card">';
   html += '<h3 style="display:flex;align-items:center;gap:8px;"><span style="font-size:1.2rem;">&#128179;</span> Payment Processing</h3>';
-  html += '<p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:16px;">Booth fees and vendor payments use your tenant\'s configured payment processor (Square, Stripe, etc.). Configure your payment processor in your main Mast admin settings.</p>';
+  html += '<div id="paymentProcessorStatus" style="margin-bottom:12px;"><span style="color:var(--text-secondary);font-size:0.85rem;">Detecting payment processor...</span></div>';
+  html += '<p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:16px;">Booth fees and vendor coin purchases route through your configured payment processor. Configure it in your main Mast admin settings.</p>';
   html += '<a href="../app/" class="btn btn-secondary btn-sm" target="_blank">Open Admin Settings</a>';
   html += '</div>';
+
+  // Detect payment processor after render
+  detectPaymentProcessor();
 
   // Events Defaults
   html += '<div class="card">';
