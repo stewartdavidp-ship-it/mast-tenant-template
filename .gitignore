@@ -29,3 +29,6 @@ __pycache__/
 
 # Claude Code
 .claude/
+
+# Storage assets (live in Firebase Storage, not git)
+wholesale-images/

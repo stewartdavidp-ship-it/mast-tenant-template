@@ -4369,6 +4369,14 @@
         <div class="sidebar-item muted" data-route="show-history" onclick="navigateTo('show-history')">History</div>
       </div>
     </div>
+    <!-- Events (Organizer Module — standalone app) -->
+    <div class="sidebar-section" data-section="events">
+      <div class="sidebar-section-header" onclick="window.open('../events/', '_blank')">
+        <span class="sidebar-section-icon">&#127914;</span>
+        <span class="sidebar-section-label">Events</span>
+        <span style="font-size:0.65rem;color:var(--warm-gray);margin-left:4px;">&#8599;</span>
+      </div>
+    </div>
     <!-- Ship -->
     <div class="sidebar-section" data-section="ship">
       <div class="sidebar-section-header" onclick="toggleSection('ship')">
@@ -4746,6 +4754,8 @@
       <div id="financialsTransactions"></div>
       <div id="financialsEmpty" style="color:var(--text-secondary, #888);font-size:0.9rem;">Select a date range and click Load Sales to view Square transactions.</div>
     </div>
+
+    <!-- Events Organizer — moved to standalone app at ../events/index.html -->
 
     <!-- ===== PLACEHOLDER CONTAINER ===== -->
     <!-- ===== WHOLESALE TAB ===== -->
@@ -6519,6 +6529,8 @@ MastDB.events = {
   unlisten: function(handle) { this.ref().off('value', handle); }
 };
 
+// Events Organizer Module entities moved to standalone app (../events/index.html)
+
 MastDB.gallery = {
   PATH: 'public/gallery',
   ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
@@ -7167,7 +7179,8 @@ var MODULE_REGISTRY = {
   market: { id: 'market', name: 'Market', icon: '\uD83D\uDCE3', description: 'Social media, blog, newsletter, stories.', section: 'market', navPosition: 4, purchasable: true, routes: ['social', 'blog', 'newsletter', 'stories'], manageSettings: ['newsletter', 'email'], synergies: ['sell', 'show'], status: 'active' },
   show:   { id: 'show',   name: 'Show',   icon: '\uD83C\uDFAA', description: 'Find, apply, prep, and execute craft fairs and events.', section: 'show', navPosition: 5, purchasable: true, routes: ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'], manageSettings: [], synergies: ['sell', 'ship', 'make'], status: 'active' },
   book:   { id: 'book',   name: 'Book',   icon: '\uD83D\uDCC5', description: 'Appointments, classes, studio time.', section: 'book', navPosition: 6, purchasable: true, routes: [], manageSettings: [], synergies: ['sell', 'market'], status: 'coming-soon' },
-  run:    { id: 'run',    name: 'Run',    icon: '\uD83D\uDCCB', description: 'Trips, expenses, reports, financials, contacts.', section: 'run', navPosition: 7, purchasable: true, routes: ['trips', 'expenses', 'reports', 'financials', 'contacts', 'customers'], manageSettings: [], synergies: ['sell', 'show'], status: 'active' }
+  run:    { id: 'run',    name: 'Run',    icon: '\uD83D\uDCCB', description: 'Trips, expenses, reports, financials, contacts.', section: 'run', navPosition: 7, purchasable: true, routes: ['trips', 'expenses', 'reports', 'financials', 'contacts', 'customers'], manageSettings: [], synergies: ['sell', 'show'], status: 'active' },
+  events: { id: 'events', name: 'Events', icon: '\uD83C\uDFAA', description: 'Organize shows, manage booths, vendors, and floor plans.', section: 'events', navPosition: 8, purchasable: true, routes: ['events-shows', 'events-show-detail'], manageSettings: [], synergies: ['show', 'sell', 'market'], status: 'active' }
 };
 
 // Synergy messaging for locked module previews.
@@ -7189,7 +7202,13 @@ var MODULE_SYNERGY_MAP = {
   'show:ship':    "You're doing shows. Ship handles what gets ordered there.",
   'show:make':    "You're doing shows. Make tracks what to bring next time.",
   'show:market':  "You're doing shows. Market turns them into content.",
-  'run:sell':     "You're tracking the business. Sell is where revenue starts."
+  'run:sell':     "You're tracking the business. Sell is where revenue starts.",
+  'events:show':  "You organize shows. Show helps your vendors prep and sell.",
+  'events:sell':  "You organize events. Sell lets you take payments too.",
+  'events:market': "You organize events. Market promotes them.",
+  'show:events':  "You attend shows. Events lets you organize your own.",
+  'sell:events':  "You're selling. Events lets you host vendor markets.",
+  'market:events': "You're promoting. Events gives you events to promote."
 };
 
 // Tier definitions. Journey stages, not feature lists.
@@ -7601,6 +7620,7 @@ var SIDEBAR_SECTION_MODULE_MAP = {
   'market': 'market',
   'sell': 'sell',
   'show': 'show',
+  'events': 'events',
   'ship': 'ship',
   'run': 'run'
 };
@@ -8614,6 +8634,9 @@ var ROUTE_MAP = {
   'show-prep':     { tab: 'showTab', setup: function() { switchShowSubView('prep'); } },
   'show-execute':  { tab: 'showTab', setup: function() { switchShowSubView('execute'); } },
   'show-history':  { tab: 'showTab', setup: function() { switchShowSubView('history'); } },
+  // Events organizer routes
+  'events-shows':       { tab: null, setup: function() { window.open('../events/', '_blank'); } },
+  'events-show-detail': { tab: null, setup: function() { window.open('../events/', '_blank'); } },
   // Legacy routes for backward compatibility
   'schedule':    { tab: 'scheduleTab' },
   'sales':       { tab: 'salesTab' },
@@ -8631,6 +8654,7 @@ var SECTION_ROUTES = {
   'show':   ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'],
   'ship':   ['pack', 'ship'],
   'run':    ['trips', 'expenses', 'reports', 'financials'],
+  'events': ['events-shows', 'events-show-detail'],
   'manage': ['products', 'inventory', 'customers', 'images', 'website', 'employees', 'contacts', 'analytics', 'auditlog', 'coupons', 'settings']
 };
 
@@ -8735,6 +8759,7 @@ function lazyLoadForRoute(route) {
   if (route === 'trips') {
     if (!tripsLoaded) loadTrips();
   }
+  // Events routes open standalone app (../events/) — no lazy loading needed
   if (route === 'pack') {
     if (!ordersLoaded) loadOrders();
   }
@@ -32689,6 +32714,8 @@ function showToast(message, isError) {
     if (toast.parentNode) toast.parentNode.removeChild(toast);
   }, 5000);
 }
+
+// Events Organizer Module moved to standalone app: ../events/index.html
 </script>
 </body>
 </html>
