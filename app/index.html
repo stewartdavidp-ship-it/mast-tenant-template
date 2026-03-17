@@ -8298,8 +8298,10 @@ function isStaff() {
  */
 async function loadUserRole(uid) {
   try {
+    console.log('[DEBUG] loadUserRole reading:', MastDB.tenantId() + '/admin/users/' + uid);
     var userSnap = await MastDB.adminUsers.ref(uid).once('value');
     var userData = userSnap.val();
+    console.log('[DEBUG] loadUserRole userData:', userData ? JSON.stringify({role: userData.role, uid: userData.uid}) : 'NULL');
 
     if (!userData) {
       // Determine initial role:
@@ -8581,7 +8583,9 @@ auth.onAuthStateChanged(async function(user) {
   // --- Tenant Resolution ---
   // Resolve tenant membership from platform registry before loading any data.
   // MastDB.init() must happen before loadUserRole() since role loading uses MastDB.
+  console.log('[DEBUG] Auth UID:', user.uid, 'Email:', user.email);
   var tenantId = await resolveTenant(user.uid);
+  console.log('[DEBUG] resolveTenant returned:', tenantId);
   if (!tenantId) {
     // Try first-login claim: check if this user's email matches a pending owner
     // from provisioning. The claimTenant cloud function handles the full flow
