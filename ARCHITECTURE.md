@@ -24,14 +24,16 @@ The Mast Tenant Template is a multi-tenant storefront deployed to Firebase Hosti
 
 There are two distinct environments. Both serve the same code from this repo but point to different Firebase projects and data.
 
-### Dev Environment — `shir-glassworks` project
+### Dev Environment — `mast-platform-prod` project (hosting site `mast-dev-env`)
 
-- **GCP/Firebase project:** `shir-glassworks`
-- **Hosting site:** `shir-glassworks` → `shir-glassworks.web.app`
-- **RTDB:** `https://shir-glassworks-default-rtdb.firebaseio.com`
-- **Purpose:** Development and testing. Contains all Shir Glassworks data (full dataset including test data). When you browse `shir-glassworks.web.app`, you see Shir Glassworks running — both public storefront and admin app (`/app`).
-- **Deploy:** `firebase deploy --only hosting --project shir-glassworks` using this repo as the public directory. Requires a `firebase.json` with `"site": "shir-glassworks"` and `"public"` pointing to this repo root.
-- **This is the dev site.** It can take on any tenant personality by pointing `storefront-tenant.js` at different tenant data. Currently configured as Shir Glassworks because the `tenantsByDomain` entry maps `shir-glassworks.web.app` → `shirglassworks`.
+- **GCP/Firebase project:** `mast-platform-prod` (same project as production — no cross-project IAM)
+- **Hosting site:** `mast-dev-env` → `mast-dev-env.web.app`
+- **RTDB:** `https://mast-platform-prod-default-rtdb.firebaseio.com` (tenant data under `dev/` prefix)
+- **Tenant ID:** `dev`
+- **Purpose:** Development and testing. Contains Shir Glassworks test data (products, gallery, config) copied to the `dev/` path in the platform RTDB. Runs the same code and tenant resolution as production tenants.
+- **Deploy:** `mast_hosting(action: "deploy", tenantId: "dev")` — same as any production tenant. No Firebase CLI required.
+- **Tenant resolution:** `tenantsByDomain/mast-dev-env_web_app` → `dev` → `mast-platform/tenants/dev/publicConfig`
+- **Legacy dev site:** `shir-glassworks.web.app` (`shir-glassworks` GCP project) — deprecated, kept live as backup until Shir Glassworks production cutover. Do not use for new development.
 
 ### Production Environment — `mast-platform-prod` project
 
@@ -45,12 +47,13 @@ There are two distinct environments. Both serve the same code from this repo but
 
 ### Deploy Flow — Code Push
 
-When code is pushed to this repo, it needs to be deployed to **both** environments:
+When code is pushed to this repo, it needs to be deployed to all environments:
 
-1. **Dev site:** `firebase deploy --only hosting --project shir-glassworks` (or equivalent)
-2. **All production tenants:** `mast_hosting(action: "deploy_all")` — deploys sequentially to all active tenants in `mast-platform-prod`
+- **Dev site:** `mast_hosting(action: "deploy", tenantId: "dev")`
+- **Specific tenant:** `mast_hosting(action: "deploy", tenantId: "{tenantId}")`
+- **All active tenants:** `mast_hosting(action: "deploy_all")` — deploys sequentially to all active tenants including dev
 
-The `mast_hosting` tool handles production. The dev site deploy is currently manual via Firebase CLI.
+All deploys use the `mast_hosting` MCP tool — no Firebase CLI required.
 
 ## Deployment Details (Production)
 
