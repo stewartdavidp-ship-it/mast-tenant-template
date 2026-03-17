@@ -11,6 +11,8 @@
 
   var tripsData = [];
   var tripsLoaded = false;
+  var showsData = window.showsData || {}; // Cross-module: loaded by shows module or fetched locally
+  var showsLoaded = !!(window.showsData && Object.keys(window.showsData).length > 0);
   var tripLocationsData = {};
   var tripLocationsLoaded = false;
   var tripSettingsData = { irsRates: { '2025': 70, '2026': 70 }, knownLocations: ['home-studio', 'new-studio'] };
