@@ -45,9 +45,13 @@ Features: public storefront (shop, commissions, blog), admin app (Studio Compani
 
 ## Technical Notes
 
+- Admin app: core shell at `app/index.html` (~17.6K lines) + 12 lazy-loaded modules in `app/modules/` (~16.9K lines combined). See ARCHITECTURE.md for module list and loading pattern.
 - Admin app uses React 18 via CDN (no JSX — `React.createElement` / htm tagged templates), Tailwind CSS via CDN, Firebase compat SDK
+- Modules are IIFEs that register via `MastAdmin.registerModule()`. CSS stays in core. Globals accessed directly from `window`.
 - Public storefront pages use vanilla JS, IIFE pattern, Firebase compat SDK
+- Events pages (`events/`, `vendor/`, `show/`) have JS extracted to separate `.js` files — HTML is a thin shell
 - `storefront-tenant.js` must be loaded before all other JS on every page
 - `tenant-brand.js` applies brand customization after tenant resolution
 - `MastDB` is the data access layer — all Firebase reads/writes go through it
+- Deploy all tenants at once: `mast_hosting(action: "deploy_all")` — deploys sequentially to all active tenants
 - Follow existing code patterns for new features: function components, hooks for state, consistent with current UI styling (dark mode, existing color palette)

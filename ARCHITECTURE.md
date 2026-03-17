@@ -217,7 +217,7 @@ These fields are editable in the admin app's product edit form (Production tab).
 
 ## Admin App
 
-Single-file React app at `/app/index.html` (~26K+ lines). Uses React 18 via CDN (no JSX — `React.createElement` / htm tagged templates), Tailwind CSS via CDN, Firebase compat SDK.
+React app with a core shell (`/app/index.html`, ~17.6K lines) and 12 lazy-loaded feature modules (`/app/modules/*.js`, ~16.9K lines combined). Uses React 18 via CDN (no JSX — `React.createElement` / htm tagged templates), Tailwind CSS via CDN, Firebase compat SDK.
 
 ### Authentication & Tenant Resolution
 
@@ -281,6 +281,71 @@ Text input, saves to `{tenantId}/public/config/googleMapsApiKey`.
 ### Settings Tab — Square Config
 
 Environment toggle (sandbox/production), Application ID, Location ID per environment. Saves to `{tenantId}/admin/config/squareEnv`. When sandbox selected, also writes `testMode: true` to public config.
+
+### Modular Architecture
+
+The admin app uses a core shell + lazy-loaded module pattern to optimize deploy size and load time.
+
+#### Core Shell (`app/index.html`, ~17.6K lines)
+
+Retains: all CSS (~4.3K lines), HTML skeleton (sidebar, tab containers, modals), and core JS:
+- Firebase init, MastDB data access layer
+- Tenant config, subscription model, module gating
+- Auth (Google Sign-In, RBAC, user management, invite flow, permission matrix)
+- Routing (`ROUTE_MAP`, `navigateTo`, `applyRoute`, lazy module loading)
+- Shared utilities (`showToast`, `esc`, `formatDate`, `formatCurrency`, `compressImage`, `auditLog`)
+- Dashboard (quick actions, new orders queue, active trip banner)
+- Settings (domains, GitHub, Square, shipping, Google Maps, SendGrid, Etsy, setup wizard)
+- Products & Inventory (catalog, product detail, variant inventory, forecast, location tracking)
+- Gallery, events, images, coupons, analytics
+- Image library and image picker (shared across modules)
+- Testing/missions mode
+
+#### Feature Modules (`app/modules/`, 12 files, ~16.9K lines combined)
+
+| Module | File | Lines | Routes |
+|--------|------|-------|--------|
+| Blog | `blog.js` | ~1,150 | `blog` |
+| Newsletter | `newsletter.js` | ~1,270 | `newsletter` |
+| Social Media | `social.js` | ~1,095 | `social` |
+| Trips & Mileage | `trips.js` | ~1,980 | `trips` |
+| Wholesale | `wholesale.js` | ~770 | `wholesale` |
+| Financials | `financials.js` | ~270 | `financials` |
+| Shows | `shows.js` | ~2,595 | `show`, `show-find`, `show-apply`, `show-prep`, `show-execute`, `show-history` |
+| Production | `production.js` | ~2,735 | `jobs`, `production`, `stories` |
+| Contacts | `contacts.js` | ~530 | `contacts` |
+| Orders | `orders.js` | ~2,005 | `orders`, `commissions` |
+| Sales (POS) | `sales.js` | ~1,470 | `pos`, `receipts`, `events`, `salesEvents` |
+| Fulfillment | `fulfillment.js` | ~1,030 | `pack`, `ship`, `fulfillment` |
+
+#### Module Loading Pattern
+
+1. Each module is an **IIFE** with `'use strict'` — all module state is private
+2. On load, the module calls `MastAdmin.registerModule(moduleId, { routes, lazyLoad, attachListeners, detachListeners })`
+3. Functions referenced in HTML templates via `onclick` must be exported to `window` at the bottom of the IIFE
+4. Core's `navigateTo()` checks `MODULE_MANIFEST` — if the route belongs to an unloaded module, `loadModule()` inserts a `<script>` tag and waits for registration
+5. On subsequent visits, the module is already loaded — no re-fetch
+
+#### Key Conventions
+
+- **CSS stays in core** — all module-specific styles remain in `index.html`'s `<style>` block to prevent FOUC
+- **HTML skeleton stays in core** — tab containers (`<div id="xxxTab">`) and sidebar items stay in `index.html`
+- **MastDB entity definitions stay in core** — entity refs are shared infrastructure
+- **Globals accessed directly** — `showToast`, `esc`, `escapeHtml`, `MastDB`, `TENANT_CONFIG`, `openModal`, `closeModal`, `openImagePicker`, `imageLibrary`, `currentUser`, `callCF`, `auth`, `firebase`, `formatDateRange`, `emitTestingEvent` are all on `window`
+- **Firebase listeners stay in core** — `attachListeners()` owns all listeners, callbacks guarded with `typeof` checks (e.g., `if (typeof renderOrders === 'function') renderOrders()`)
+- **Cross-module data** — `MastAdmin.getData(key)` / `MastAdmin.setData(key, value)` for shared state (e.g., orders data, products data)
+
+### Events Pages (Public)
+
+Three public-facing event pages with JS extracted to separate files:
+
+| Page | HTML Shell | JS File | Purpose |
+|------|-----------|---------|---------|
+| Events listing | `events/index.html` | `events/events.js` (~1,400 lines) | Browse upcoming events/shows |
+| Vendor portal | `vendor/index.html` | `vendor/vendor.js` (~400 lines) | Vendor registration and management |
+| Show detail | `show/index.html` | `show/show.js` (~400 lines) | Individual show/event detail page |
+
+HTML files are thin shells (CSS + HTML + `<script src="...">`). JS files use the same IIFE pattern as admin modules.
 
 ## Firebase RTDB — Tenant Data Model
 
