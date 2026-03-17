@@ -1,44 +1,33 @@
-# ARCHITECTURE.md — Shir Glassworks
+# ARCHITECTURE.md — Mast Tenant Template
 
 ## Mast Platform Context
 
-Shir Glassworks exists within the **Mast three-app architecture**:
+This repo is the **Mast Tenant Template** — the master source code deployed to every Mast tenant's Firebase Hosting site. It exists within the **Mast three-app architecture**:
 
-1. **Mast** (the platform) — The SaaS product customers subscribe to. The "hosting app" shown to potential customers. When a customer subscribes, a tenant is spun up for them. Think: Shopify (the platform), not a Shopify store.
-2. **Tenants** (e.g., Shir Glassworks) — Each tenant is a self-contained business app (storefront, admin, POS, inventory, orders). Shir Glassworks is tenant #1 (Madeline and Ori's instance). The architecture supports tenant 2, 3... 200, 201.
-3. **Mast Events** — Separate application for show/event organizers (organizers, attendees, vendors). Integrates back to Mast tenants — a Mast tenant (e.g., Shir Glassworks) can also be a vendor at a show managed by Mast Events.
+1. **Mast** (the platform) — The SaaS product customers subscribe to. When a customer subscribes, a tenant is spun up for them. Think: Shopify (the platform), not a Shopify store.
+2. **Tenants** (this repo) — Each tenant is a self-contained business app (storefront, admin, POS, inventory, orders). This template code is deployed to every tenant. Tenant-specific behavior comes from data (Firebase config, brand config, feature flags), not code branches.
+3. **Mast Events** — Application for show/event organizers. Integrates back to Mast tenants — a tenant can also be a vendor at a show managed by Mast Events.
 
-**Key relationship:** Mast Events vendors ARE Mast tenants. A glass artist who subscribes to Mast for their storefront is also a vendor who does craft fairs managed through Mast Events.
-
-**Current state (Mar 2026):** Shir Glassworks (tenant #1) is close to complete. The Mast MCP server was built specifically to onboard customer #2 — `mast_tenants`, `mast_hosting`, `mast_config`, `mast_users` are the tenant provisioning tools. The MastDB abstraction layer in the admin app needs generalization so it works for ANY tenant, not just Shir Glassworks.
+**Key relationship:** Mast Events vendors ARE Mast tenants.
 
 ## Overview
 
-Shir Glassworks is a multi-tenant storefront deployed to Firebase Hosting with a Firebase Realtime Database backend. The public site (product catalog, gallery, checkout) uses vanilla JS with no framework. The admin app (`/app/index.html`) is a single-file React 18 app with multi-tenant auth and RBAC.
+The Mast Tenant Template is a multi-tenant storefront deployed to Firebase Hosting with a Firebase Realtime Database backend. The public site (product catalog, gallery, checkout) uses vanilla JS with no framework. The admin app (`/app/index.html`) is a single-file React 18 app with multi-tenant auth and RBAC.
 
-**Repo:** `stewartdavidp-ship-it/shirglassworks`
-**Firebase project:** `shir-glassworks`
-**Hosting:** `https://shir-glassworks.web.app` (Firebase Hosting, deployed via `mast_hosting` MCP tool)
-**GitHub Pages:** `stewartdavidp-ship-it.github.io/shirglassworks` (legacy, still active)
-**RTDB:** `https://shir-glassworks-default-rtdb.firebaseio.com`
-**Storage:** `gs://shir-glassworks.firebasestorage.app` (product images at `shirglassworks/images/{pid}/main.jpg`)
-**Cloud Functions:** `shirglassworks-functions/functions/` (Shir-specific) + `gameshelf-functions/functions/index.js` (shared)
+**Repo:** `stewartdavidp-ship-it/mast-tenant-template`
+**GCP project (platform):** `mast-platform-prod`
+**Platform RTDB:** `https://mast-platform-prod-default-rtdb.firebaseio.com`
+**Storage:** `gs://mast-platform-prod.firebasestorage.app` (tenant assets under `{tenantId}/`)
+**Cloud Functions:** `mast-architecture/functions/` (shared platform functions)
 
 ## Deployment
 
-### Firebase Hosting (Primary)
+Deployed programmatically via the `mast_hosting` MCP tool on the Mast MCP server (`mast-platform-prod` GCP project). The tool downloads this repo's tarball from GitHub, gzips files, and uploads via the Firebase Hosting REST API.
 
-Deployed programmatically via the `mast_hosting` MCP tool on the Mast MCP server (`mast-platform-prod` GCP project). The tool downloads the repo tarball from GitHub, gzips files, and uploads via the Firebase Hosting REST API.
-
-- **Site ID:** `shir-glassworks`
-- **URL:** `https://shir-glassworks.web.app`
+- **Deploy command:** `mast_hosting(action: "deploy", tenantId: "{tenantId}")`
+- **Hosting config:** `mast-platform/tenants/{tenantId}/hosting` in `mast-platform-prod` RTDB
 - **Rewrite rule:** `/app/**` → `/app/index.html` (SPA routing for admin app)
-- **Deploy command:** `mast_hosting(action: "deploy", tenantId: "shirglassworks")`
-- **Hosting config:** `mast-platform/tenants/shirglassworks/hosting` in `mast-platform-prod` RTDB
-
-### GitHub Pages (Legacy)
-
-Still active at `stewartdavidp-ship-it.github.io/shirglassworks`. Serves directly from the repo's `main` branch.
+- Each tenant has its own Firebase Hosting site (e.g., `mast-shirglassworks.web.app`, `mast-meadowpottery.web.app`)
 
 ## Public Site
 
@@ -72,7 +61,8 @@ Static HTML pages. No build system, no bundler.
 
 Uses Firebase compat SDK (v9.22.0) loaded via CDN. All public reads are anonymous — no auth required. Pattern:
 ```js
-firebase.database().ref('shirglassworks/public/...').once('value', snap => { ... });
+// TENANT_ID is set by storefront-tenant.js (e.g., "shirglassworks", "meadowpottery")
+firebase.database().ref(TENANT_ID + '/public/...').once('value', snap => { ... });
 ```
 
 ### Auth on Public Pages
@@ -135,13 +125,13 @@ Multi-step checkout implemented in `checkout.js` as an IIFE (`ShirCheckout`).
 
 1. **Address** — Customer enters shipping address. Google Places Autocomplete provides type-ahead on the street address field. Soft validation: first attempt warns if not Places-validated, second attempt allows through.
 
-2. **Shipping** — Flat-rate calculation based on product `shippingCategory`. Fetches shipping config from `shirglassworks/public/config/shippingRates` and product shipping data (`weightOz`, `shippingCategory`) for each cart item. Single calculated shipping line displayed (no options to choose from).
+2. **Shipping** — Flat-rate calculation based on product `shippingCategory`. Fetches shipping config from `{tenantId}/public/config/shippingRates` and product shipping data (`weightOz`, `shippingCategory`) for each cart item. Single calculated shipping line displayed (no options to choose from).
 
 3. **Review** — Shows line items, address, shipping, estimated tax, total. Edit links return to prior steps.
 
 4. **Payment** — Calls `submitOrder` cloud function which creates a Square Payment Link. Customer is redirected to Square's hosted checkout. On completion, Square redirects back to the confirmation page.
 
-5. **Confirmation** — Reads `pendingOrder` from sessionStorage (survives the Square redirect). Firebase listener watches `shirglassworks/orders/{orderId}/status` for transition from `pending_payment` to `placed` (triggered by Square webhook → `squareWebhook` cloud function). On detection, auto-generates and downloads Pirate Ship CSV.
+5. **Confirmation** — Reads `pendingOrder` from sessionStorage (survives the Square redirect). Firebase listener watches `{tenantId}/orders/{orderId}/status` for transition from `pending_payment` to `placed` (triggered by Square webhook → `squareWebhook` cloud function). On detection, auto-generates and downloads Pirate Ship CSV.
 
 ### Shipping Calculation
 
@@ -151,7 +141,7 @@ Multi-step checkout implemented in `checkout.js` as an IIFE (`ShirCheckout`).
 - Categories: `small` ($6), `medium` ($10), `large` ($15), `oversized` ($22)
 - Default config hardcoded as fallback if Firebase config missing
 
-**Config path:** `shirglassworks/public/config/shippingRates`
+**Config path:** `{tenantId}/public/config/shippingRates`
 ```json
 {
   "small": { "rate": 6, "boxL": 6, "boxW": 6, "boxH": 6 },
@@ -166,11 +156,11 @@ Multi-step checkout implemented in `checkout.js` as an IIFE (`ShirCheckout`).
 
 ### Google Places Integration
 
-- API key stored at `shirglassworks/public/config/googleMapsApiKey`
+- API key stored at `{tenantId}/public/config/googleMapsApiKey`
 - Script loaded lazily at checkout start (not on page load)
 - Graceful fallback: if no key or script fails, checkout works without autocomplete
 - Restricted to US addresses: `{ types: ['address'], componentRestrictions: { country: 'us' } }`
-- `.pac-container` styled to match Shir aesthetic (gold accents, cream background)
+- `.pac-container` styled to match tenant aesthetic
 
 ### Pirate Ship CSV
 
@@ -186,16 +176,14 @@ Generated client-side from sessionStorage data after payment confirmation.
 
 ### Test Mode
 
-- Config at `shirglassworks/public/config/testMode` (boolean)
+- Config at `{tenantId}/public/config/testMode` (boolean)
 - Set automatically when Square environment = sandbox in admin Settings
 - Shows orange banner: "TEST MODE — No real charges will be made"
 - Square's own sandbox page shows test card numbers
 
 ## Cloud Functions
 
-### Shir-Specific (`shirglassworks-functions/`)
-
-Located in a dedicated Firebase Functions project for Shir Glassworks.
+Cloud Functions are deployed on `mast-platform-prod` via `mast-architecture/functions/`. Key tenant functions:
 
 ### `submitOrder`
 
@@ -206,7 +194,7 @@ HTTP callable function. Receives order data from checkout, creates Square Paymen
 3. **Calculates shipping server-side** (authoritative — same algorithm as client)
 4. Estimates tax based on state
 5. Creates Square Payment Link via API with line items
-6. Writes order to `shirglassworks/orders/{orderId}` with status `pending_payment`
+6. Writes order to `{tenantId}/orders/{orderId}` with status `pending_payment`
 7. Returns `{ success, orderId, orderNumber, checkoutUrl }`
 
 ### `squareWebhook`
@@ -219,7 +207,7 @@ HTTP endpoint receiving Square webhook notifications.
 
 ## Product Data Model
 
-Path: `shirglassworks/public/products/{pid}`
+Path: `{tenantId}/public/products/{pid}`
 
 Key shipping-related fields:
 - `weightOz: number` — actual product weight in ounces (default: 16 if unset)
@@ -233,8 +221,8 @@ Single-file React app at `/app/index.html` (~26K+ lines). Uses React 18 via CDN 
 
 ### Authentication & Tenant Resolution
 
-1. **Google Sign-In** — `firebase.auth().signInWithPopup(GoogleAuthProvider)` via `shir-glassworks` Firebase Auth
-2. **Tenant Resolution** — `resolveTenant(uid)` reads `mast-platform/userTenantMap/{uid}` from the `shir-glassworks` RTDB. Returns tenant ID (e.g., `"shirglassworks"`) or `null`
+1. **Google Sign-In** — `firebase.auth().signInWithPopup(GoogleAuthProvider)` via the tenant's Firebase Auth (resolved by `storefront-tenant.js`)
+2. **Tenant Resolution** — `resolveTenant(uid)` reads `mast-platform/userTenantMap/{uid}` from RTDB. Returns tenant ID (e.g., `"shirglassworks"`) or `null`
 3. **Bootstrap** — If no tenant mapping exists but user has an existing admin record in tenant data, `seedPlatformRegistry()` writes the full `mast-platform/` registry (tenants, userTenantMap, platformAdmins)
 4. **MastDB Init** — `MastDB.init({ tenantId, db })` configures all data accessors to read/write under `{tenantId}/` prefix
 5. **RBAC** — `loadUserRole(uid)` reads `{tenantId}/admin/users/{uid}/role`. Roles: `admin`, `user`, `guest`. Auto-provisions new users as `guest`
@@ -284,39 +272,39 @@ Bottom-center stacking toasts. Container `#toastContainer` with `.toast` element
 
 ### Settings Tab — Shipping Config
 
-Inputs for all shipping rate/dimension values, save/load to `shirglassworks/public/config/shippingRates`.
+Inputs for all shipping rate/dimension values, save/load to `{tenantId}/public/config/shippingRates`.
 
 ### Settings Tab — Google Maps API Key
 
-Text input, saves to `shirglassworks/public/config/googleMapsApiKey`.
+Text input, saves to `{tenantId}/public/config/googleMapsApiKey`.
 
 ### Settings Tab — Square Config
 
-Environment toggle (sandbox/production), Application ID, Location ID per environment. Saves to `shirglassworks/admin/config/squareEnv`. When sandbox selected, also writes `testMode: true` to public config.
+Environment toggle (sandbox/production), Application ID, Location ID per environment. Saves to `{tenantId}/admin/config/squareEnv`. When sandbox selected, also writes `testMode: true` to public config.
 
-## Firebase RTDB — Shir Glassworks
+## Firebase RTDB — Tenant Data Model
 
-Database: `shir-glassworks-default-rtdb`
+All tenant data lives under `{tenantId}/` in the tenant's RTDB (configured via `publicConfig.databaseURL`).
 
-### Tenant Data (under `shirglassworks/`)
+### Tenant Data (under `{tenantId}/`)
 
 | Path | Access | Purpose |
 |------|--------|---------|
-| `shirglassworks/public/products/` | Anonymous read | Product catalog |
-| `shirglassworks/public/gallery/` | Anonymous read | Gallery images |
-| `shirglassworks/public/config/shippingRates` | Anonymous read | Shipping calculation config |
-| `shirglassworks/public/config/googleMapsApiKey` | Anonymous read | Places API key |
-| `shirglassworks/public/config/testMode` | Anonymous read | Sandbox mode flag |
-| `shirglassworks/admin/config/squareEnv` | Admin only | Square credentials |
-| `shirglassworks/admin/inventory/` | Staff+ | Inventory records |
-| `shirglassworks/admin/users/` | Admin only | RBAC user records (role per UID) |
-| `shirglassworks/admin/roles/` | Staff+ | Role definitions |
-| `shirglassworks/admin/auditLog/` | Staff+ | Audit trail entries |
-| `shirglassworks/admin/feedbackSettings/` | Admin only | Feedback widget config |
-| `shirglassworks/admin/wholesaleAuthorized/` | Admin only | Approved wholesale buyer lookup (keyed by email) |
-| `shirglassworks/admin/wholesaleRequests/` | Authenticated write | Wholesale access requests from buyers |
-| `shirglassworks/orders/` | Mixed | Order records (write: cloud function + admin, read: status field public for confirmation listener) |
-| `shirglassworks/feedbackReports/` | Public write | Customer feedback submissions |
+| `{tenantId}/public/products/` | Anonymous read | Product catalog |
+| `{tenantId}/public/gallery/` | Anonymous read | Gallery images |
+| `{tenantId}/public/config/shippingRates` | Anonymous read | Shipping calculation config |
+| `{tenantId}/public/config/googleMapsApiKey` | Anonymous read | Places API key |
+| `{tenantId}/public/config/testMode` | Anonymous read | Sandbox mode flag |
+| `{tenantId}/admin/config/squareEnv` | Admin only | Square credentials |
+| `{tenantId}/admin/inventory/` | Staff+ | Inventory records |
+| `{tenantId}/admin/users/` | Admin only | RBAC user records (role per UID) |
+| `{tenantId}/admin/roles/` | Staff+ | Role definitions |
+| `{tenantId}/admin/auditLog/` | Staff+ | Audit trail entries |
+| `{tenantId}/admin/feedbackSettings/` | Admin only | Feedback widget config |
+| `{tenantId}/admin/wholesaleAuthorized/` | Admin only | Approved wholesale buyer lookup (keyed by email) |
+| `{tenantId}/admin/wholesaleRequests/` | Authenticated write | Wholesale access requests from buyers |
+| `{tenantId}/orders/` | Mixed | Order records (write: cloud function + admin, read: status field public for confirmation listener) |
+| `{tenantId}/feedbackReports/` | Public write | Customer feedback submissions |
 
 ### Platform Registry (under `mast-platform/`)
 
@@ -331,40 +319,19 @@ Replicated from `mast-platform-prod` RTDB for client-side auth. Rules allow user
 
 ### RTDB Security Rules
 
-Rules deployed from `shirglassworks-functions/database.rules.json` via Firebase CLI.
+Rules deployed from `mast-architecture/rules/platform.rules.json` (platform RTDB) or tenant-specific rules files.
 
 Key sections:
-- `users/$uid` — user data (own UID only)
-- `command-center/$uid` — CC data (own UID read, writes via MCP server)
 - `mast-platform/` — platform registry (per-uid reads for tenant resolution)
 - `$tenantId/` — wildcard for tenant data. Write gate: `admin/users/{uid}/role === 'admin'`. Sub-path rules for public (anonymous read), admin (RBAC-gated), orders, etc.
-
-## Mast MCP Server
-
-Platform management server deployed on `mast-platform-prod` GCP project. Provides programmatic tools for tenant operations.
-
-**Prod:** `https://mast-mcp-server-4oaag6iarq-uc.a.run.app`
-**Test:** `https://mast-mcp-server-test-4oaag6iarq-uc.a.run.app`
-
-### `mast_hosting` Tool
-
-Deploys tenant sites to Firebase Hosting. Actions: `deploy`, `status`, `list_versions`.
-
-Deploy flow:
-1. Reads hosting config from `mast-platform/tenants/{tenantId}/hosting` (siteId, repo, branch, excludePatterns)
-2. Downloads repo tarball from GitHub API
-3. Extracts via `tar-stream`, gzips each file, computes SHA256 of gzipped content
-4. Creates Firebase Hosting version with rewrite rules
-5. `populateFiles` with hash manifest — Firebase returns only hashes needing upload (unchanged files cached)
-6. Uploads new files, finalizes version, creates release
 
 ## Key Patterns
 
 - **No framework on public pages.** Vanilla JS, IIFE pattern, Firebase compat SDK.
+- **Dynamic tenant resolution.** `storefront-tenant.js` resolves tenant from hostname → platform RTDB. `tenant-brand.js` injects brand content. No hardcoded tenant references.
 - **SessionStorage for redirect persistence.** Cart and order data stored in sessionStorage before Square redirect, retrieved on return.
 - **Server-side is authoritative.** Client calculates shipping/tax for display; server recalculates from source data before creating payment.
 - **Graceful degradation.** Google Places, test mode banner, and shipping config all have fallback defaults if Firebase reads fail.
 - **Firebase listeners with safety bounds.** All `.on('value')` listeners use `limitToLast(N)` to prevent unbounded billing.
 - **Multi-tenant data isolation.** All tenant data under `{tenantId}/` prefix. MastDB enforces prefix on all reads/writes.
-- **Platform registry replication.** `mast-platform/userTenantMap` is replicated from `mast-platform-prod` RTDB to `shir-glassworks` RTDB so the admin app can resolve tenants client-side without cross-project database reads.
 - **Toast consistency.** Both public and admin apps use the same bottom-center stacking toast pattern with slide-up entrance, auto-fade, and error shake variant.
