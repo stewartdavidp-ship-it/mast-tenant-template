@@ -20,11 +20,44 @@ The Mast Tenant Template is a multi-tenant storefront deployed to Firebase Hosti
 **Storage:** `gs://mast-platform-prod.firebasestorage.app` (tenant assets under `{tenantId}/`)
 **Cloud Functions:** `mast-architecture/functions/` (shared platform functions)
 
-## Deployment
+## Environments
+
+There are two distinct environments. Both serve the same code from this repo but point to different Firebase projects and data.
+
+### Dev Environment — `shir-glassworks` project
+
+- **GCP/Firebase project:** `shir-glassworks`
+- **Hosting site:** `shir-glassworks` → `shir-glassworks.web.app`
+- **RTDB:** `https://shir-glassworks-default-rtdb.firebaseio.com`
+- **Purpose:** Development and testing. Contains all Shir Glassworks data (full dataset including test data). When you browse `shir-glassworks.web.app`, you see Shir Glassworks running — both public storefront and admin app (`/app`).
+- **Deploy:** `firebase deploy --only hosting --project shir-glassworks` using this repo as the public directory. Requires a `firebase.json` with `"site": "shir-glassworks"` and `"public"` pointing to this repo root.
+- **This is the dev site.** It can take on any tenant personality by pointing `storefront-tenant.js` at different tenant data. Currently configured as Shir Glassworks because the `tenantsByDomain` entry maps `shir-glassworks.web.app` → `shirglassworks`.
+
+### Production Environment — `mast-platform-prod` project
+
+- **GCP/Firebase project:** `mast-platform-prod`
+- **Hosting sites:** One per tenant (e.g., `mast-shirglassworks`, `mast-meadowpottery`) → `mast-{tenantId}.web.app`
+- **RTDB:** `https://mast-platform-prod-default-rtdb.firebaseio.com`
+- **Storage:** `gs://mast-platform-prod.firebasestorage.app` (tenant assets under `{tenantId}/`)
+- **Purpose:** Production tenants. Contains curated production data (subset of dev data — test data excluded).
+- **Deploy:** `mast_hosting(action: "deploy", tenantId: "{tenantId}")` via MCP tool. Downloads this repo's tarball from GitHub, uploads to the tenant's Firebase Hosting site.
+- **Custom domains:** Production tenants will get custom domains (e.g., `shirglassworks.com` → `mast-shirglassworks.web.app`). Managed via `mast_domains` MCP tool.
+
+### Deploy Flow — Code Push
+
+When code is pushed to this repo, it needs to be deployed to **both** environments:
+
+1. **Dev site:** `firebase deploy --only hosting --project shir-glassworks` (or equivalent)
+2. **All production tenants:** `mast_hosting(action: "deploy_all")` — deploys sequentially to all active tenants in `mast-platform-prod`
+
+The `mast_hosting` tool handles production. The dev site deploy is currently manual via Firebase CLI.
+
+## Deployment Details (Production)
 
 Deployed programmatically via the `mast_hosting` MCP tool on the Mast MCP server (`mast-platform-prod` GCP project). The tool downloads this repo's tarball from GitHub, gzips files, and uploads via the Firebase Hosting REST API.
 
 - **Deploy command:** `mast_hosting(action: "deploy", tenantId: "{tenantId}")`
+- **Deploy all:** `mast_hosting(action: "deploy_all")` — deploys to all active tenants
 - **Hosting config:** `mast-platform/tenants/{tenantId}/hosting` in `mast-platform-prod` RTDB
 - **Rewrite rule:** `/app/**` → `/app/index.html` (SPA routing for admin app)
 - Each tenant has its own Firebase Hosting site (e.g., `mast-shirglassworks.web.app`, `mast-meadowpottery.web.app`)
