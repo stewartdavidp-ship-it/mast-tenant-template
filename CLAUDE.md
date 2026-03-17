@@ -45,7 +45,7 @@ Features: public storefront (shop, commissions, blog), admin app (Studio Compani
 
 ## Technical Notes
 
-- Admin app: core shell at `app/index.html` (~17.6K lines) + 12 lazy-loaded modules in `app/modules/` (~16.9K lines combined). See ARCHITECTURE.md for module list and loading pattern.
+- Admin app: core shell at `app/index.html` (~17.8K lines) + 13 lazy-loaded modules in `app/modules/` (~18.1K lines combined). See ARCHITECTURE.md for module list and loading pattern.
 - Admin app uses React 18 via CDN (no JSX — `React.createElement` / htm tagged templates), Tailwind CSS via CDN, Firebase compat SDK
 - Modules are IIFEs that register via `MastAdmin.registerModule()`. CSS stays in core. Globals accessed directly from `window`.
 - Public storefront pages use vanilla JS, IIFE pattern, Firebase compat SDK

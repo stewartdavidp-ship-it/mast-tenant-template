@@ -301,7 +301,7 @@ Retains: all CSS (~4.3K lines), HTML skeleton (sidebar, tab containers, modals),
 - Image library and image picker (shared across modules)
 - Testing/missions mode
 
-#### Feature Modules (`app/modules/`, 12 files, ~16.9K lines combined)
+#### Feature Modules (`app/modules/`, 13 files, ~18.1K lines combined)
 
 | Module | File | Lines | Routes |
 |--------|------|-------|--------|
@@ -317,6 +317,7 @@ Retains: all CSS (~4.3K lines), HTML skeleton (sidebar, tab containers, modals),
 | Orders | `orders.js` | ~2,005 | `orders`, `commissions` |
 | Sales (POS) | `sales.js` | ~1,470 | `pos`, `receipts`, `events`, `salesEvents` |
 | Fulfillment | `fulfillment.js` | ~1,030 | `pack`, `ship`, `fulfillment` |
+| Events (Organizer) | `events.js` | ~1,900 | `events-shows`, `events-settings` |
 
 #### Module Loading Pattern
 

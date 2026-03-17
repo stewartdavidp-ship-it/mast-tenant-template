@@ -367,6 +367,7 @@
       case 'floorplan': renderFloorPlanTab(showId); break;
       case 'vendors': renderVendorsTab(showId); break;
       case 'submissions': renderSubmissionsTab(showId); break;
+      case 'checkin': renderCheckInTab(showId); break;
       case 'announcements': renderAnnouncementsTab(showId); break;
       case 'hunt': renderHuntTab(showId); break;
       case 'ads': renderAdsTab(showId); break;
@@ -548,6 +549,7 @@
       { key: 'vendors', label: 'Vendors (' + vendorCount + ')' },
       { key: 'floorplan', label: 'Floor Plan' },
       { key: 'submissions', label: 'Submissions (' + subCount + ')' },
+      { key: 'checkin', label: 'Check-in' },
       { key: 'announcements', label: 'Announcements' },
       { key: 'hunt', label: 'Hunt' },
       { key: 'ads', label: 'Ads' }
@@ -603,6 +605,14 @@
       html += '<option value="' + st + '"' + (st === show.status ? ' selected' : '') + '>' + st.charAt(0).toUpperCase() + st.slice(1) + '</option>';
     }
     html += '</select></div>';
+
+    html += '<div class="ev-card"><h3>Vendor Applications</h3>';
+    html += '<button class="ev-btn ev-btn-sm ev-btn-primary" style="width:100%;margin-top:8px;" onclick="evOpenSubmissionConfig(\'' + esc(showId) + '\')">' +
+      (show.submissionConfig && show.submissionConfig.enabled ? '&#9881; Submission Settings' : 'Create Submission Page') + '</button>';
+    if (show.submissionConfig && show.submissionConfig.enabled && show.slug) {
+      html += '<p style="font-size:0.75rem;color:var(--warm-gray);margin-top:8px;">Public URL: /apply/' + esc(show.slug) + '</p>';
+    }
+    html += '</div>';
 
     if (show.slug) {
       html += '<div class="ev-card"><h3>Show URL</h3><p style="font-size:0.8rem;color:var(--warm-gray);word-break:break-all;">Slug: <strong>' + esc(show.slug) + '</strong></p><p style="font-size:0.75rem;color:var(--warm-gray);margin-top:8px;">Attendee page: /show/' + esc(show.slug) + '</p></div>';
@@ -1244,6 +1254,14 @@
         if (s.instagramHandle) html += '<p style="font-size:0.8rem;margin:4px 0 0;color:var(--warm-gray);">IG: ' + esc(s.instagramHandle) + '</p>';
         if (s.additionalInfo) html += '<p style="font-size:0.8rem;margin:8px 0 0;padding:8px;background:var(--cream-dark);border-radius:6px;">' + esc(s.additionalInfo) + '</p>';
 
+        if (s.imageUrls && s.imageUrls.length > 0) {
+          html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;">';
+          for (var img = 0; img < s.imageUrls.length; img++) {
+            html += '<img src="' + esc(s.imageUrls[img]) + '" style="width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid var(--cream-dark);cursor:pointer;" onclick="evOpenImageViewer(' + JSON.stringify(s.imageUrls).replace(/"/g, '&quot;') + ', ' + img + ')" alt="Image ' + (img + 1) + '">';
+          }
+          html += '</div>';
+        }
+
         if (s.status === 'pending') {
           html += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--cream-dark);display:flex;gap:8px;align-items:center;">';
           html += '<input type="text" id="evReviewNote_' + esc(s.id) + '" class="ev-form-input" style="flex:1;padding:6px 10px;font-size:0.8rem;" placeholder="Review notes (optional)">';
@@ -1304,6 +1322,213 @@
     callEventsFunction('eventsSendNotifications', { showId: showId }).then(function(result) {
       showToast('Notifications sent to ' + (result.sentCount || 0) + ' vendors');
     }).catch(function(err) { showToast('Error: ' + err.message, true); });
+  }
+
+  // ============================================================
+  // Check-in Tab
+  // ============================================================
+
+  function renderCheckInTab(showId) {
+    var container = document.getElementById('evTabContent');
+    if (!container) return;
+    var all = objToList(vendorsData);
+    var confirmed = all.filter(function(v) { return v.status === 'confirmed' || v.status === 'no-show' || v.checkedIn; });
+    var arrivedCount = confirmed.filter(function(v) { return v.checkedIn; }).length;
+
+    var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
+    html += '<h3 style="margin:0;font-size:1rem;">Check-in</h3>';
+    html += '<div class="ev-card" style="display:inline-block;padding:8px 16px;margin:0;">' +
+      '<span style="font-weight:700;color:#10b981;">' + arrivedCount + '</span>' +
+      '<span style="color:var(--warm-gray);"> / ' + confirmed.length + ' checked in</span></div>';
+    html += '</div>';
+
+    // Filters
+    html += '<div style="display:flex;gap:8px;margin-bottom:16px;" id="evCheckinFilters">';
+    var filters = [{ key: 'all', label: 'All' }, { key: 'arrived', label: 'Arrived' }, { key: 'not-arrived', label: 'Not Arrived' }, { key: 'no-show', label: 'No-Show' }];
+    for (var fi = 0; fi < filters.length; fi++) {
+      var f = filters[fi];
+      var active = (checkinFilter || 'all') === f.key;
+      html += '<button class="ev-btn ev-btn-sm' + (active ? ' ev-btn-primary' : ' ev-btn-secondary') + '" onclick="evSetCheckinFilter(\'' + f.key + '\', \'' + esc(showId) + '\')">' + f.label + '</button>';
+    }
+    html += '</div>';
+
+    if (confirmed.length === 0) {
+      html += '<div style="text-align:center;padding:40px;color:var(--warm-gray);">' +
+        '<div style="font-size:2rem;margin-bottom:8px;">&#128203;</div>' +
+        '<p>No confirmed vendors. Confirm vendors first to use check-in.</p></div>';
+    } else {
+      var filtered = confirmed;
+      if (checkinFilter === 'arrived') filtered = confirmed.filter(function(v) { return v.checkedIn === true; });
+      else if (checkinFilter === 'not-arrived') filtered = confirmed.filter(function(v) { return !v.checkedIn && v.status !== 'no-show'; });
+      else if (checkinFilter === 'no-show') filtered = confirmed.filter(function(v) { return v.status === 'no-show'; });
+
+      for (var ci = 0; ci < filtered.length; ci++) {
+        var v = filtered[ci];
+        var booth = v.boothId && boothsData[v.boothId] ? boothsData[v.boothId] : null;
+        html += '<div class="ev-card" style="margin-bottom:8px;display:flex;align-items:center;gap:12px;">';
+        html += '<div style="flex:1;min-width:0;">';
+        html += '<div style="font-weight:600;font-size:0.95rem;">' + esc(v.businessName || '') + '</div>';
+        if (booth) html += '<div style="font-size:0.8rem;color:var(--warm-gray);">Booth: ' + esc(booth.name || '') + (booth.location ? ' — ' + esc(booth.location) : '') + '</div>';
+        html += '</div>';
+        html += '<div style="display:flex;gap:8px;">';
+        html += '<button class="ev-btn ev-btn-sm" style="' + (v.checkedIn ? 'background:#10b981;color:#fff;' : 'background:var(--cream-dark);color:var(--warm-gray);') + '" onclick="evToggleCheckin(\'' + esc(showId) + '\', \'' + esc(v.id) + '\', ' + (v.checkedIn ? 'false' : 'true') + ')">' + (v.checkedIn ? '&#10003; Arrived' : 'Not Arrived') + '</button>';
+        html += '<button class="ev-btn ev-btn-sm" style="' + (v.status === 'no-show' ? 'background:var(--danger);color:#fff;' : 'background:var(--cream-dark);color:var(--warm-gray);') + '" onclick="evMarkNoShow(\'' + esc(showId) + '\', \'' + esc(v.id) + '\')">No-Show</button>';
+        html += '</div></div>';
+      }
+    }
+    container.innerHTML = html;
+  }
+
+  var checkinFilter = 'all';
+
+  function setCheckinFilter(filter, showId) {
+    checkinFilter = filter;
+    renderCheckInTab(showId);
+  }
+
+  function toggleCheckin(showId, vendorId, arrived) {
+    DB.vendors.update(showId, vendorId, { checkedIn: arrived, status: 'confirmed', updatedAt: nowISO() }).then(function() {
+      showToast(arrived ? 'Checked in!' : 'Unmarked');
+    }).catch(function(err) { showToast('Error: ' + err.message, true); });
+  }
+
+  function markNoShow(showId, vendorId) {
+    DB.vendors.update(showId, vendorId, { checkedIn: false, status: 'no-show', updatedAt: nowISO() }).then(function() {
+      showToast('Marked as no-show');
+    }).catch(function(err) { showToast('Error: ' + err.message, true); });
+  }
+
+  // ============================================================
+  // Submission Config Modal
+  // ============================================================
+
+  function openSubmissionConfigModal(showId) {
+    var show = showsData[showId];
+    if (!show) return;
+    var existing = show.submissionConfig || {};
+    var overlay = document.createElement('div');
+    overlay.id = 'evSubConfigModal';
+    overlay.className = 'ev-modal-overlay';
+    overlay.innerHTML =
+      '<div class="ev-modal-box">' +
+        '<h3>Vendor Submission Page</h3>' +
+        '<form onsubmit="evSubmitSubConfig(event, \'' + esc(showId) + '\')">' +
+          '<div class="ev-form-group"><label class="ev-form-label">Vendor Requirements / Criteria</label>' +
+            '<textarea class="ev-form-textarea" id="evsc_criteria" rows="4" placeholder="Describe what you\'re looking for in vendors...">' + esc(existing.criteria || '') + '</textarea></div>' +
+          '<div class="ev-form-group ev-form-row ev-form-row-2">' +
+            '<div><label class="ev-form-label">Max Images</label>' +
+              '<select class="ev-form-select" id="evsc_maxImages">';
+    [1,2,3,4,5,8,10].forEach(function(n) {
+      overlay.innerHTML; // force var allocation above
+    });
+    var maxOpts = '';
+    [1,2,3,4,5,8,10].forEach(function(n) {
+      maxOpts += '<option value="' + n + '"' + (n === (existing.maxImages || 5) ? ' selected' : '') + '>' + n + '</option>';
+    });
+    overlay.innerHTML =
+      '<div class="ev-modal-box">' +
+        '<h3>Vendor Submission Page</h3>' +
+        '<form onsubmit="evSubmitSubConfig(event, \'' + esc(showId) + '\')">' +
+          '<div class="ev-form-group"><label class="ev-form-label">Vendor Requirements / Criteria</label>' +
+            '<textarea class="ev-form-textarea" id="evsc_criteria" rows="4" placeholder="Describe what you\'re looking for in vendors...">' + esc(existing.criteria || '') + '</textarea></div>' +
+          '<div class="ev-form-group ev-form-row ev-form-row-2">' +
+            '<div><label class="ev-form-label">Max Images</label>' +
+              '<select class="ev-form-select" id="evsc_maxImages">' + maxOpts + '</select></div>' +
+            '<div style="display:flex;align-items:flex-end;"><label style="display:flex;align-items:center;gap:8px;font-size:0.85rem;cursor:pointer;padding-bottom:8px;">' +
+              '<input type="checkbox" id="evsc_requireImages"' + (existing.requireImages ? ' checked' : '') + '> Require images</label></div>' +
+          '</div>' +
+          '<div class="ev-form-group"><label style="display:flex;align-items:center;gap:8px;font-size:0.85rem;cursor:pointer;">' +
+            '<input type="checkbox" id="evsc_enabled"' + (existing.enabled ? ' checked' : '') + '> Enable public submission page</label></div>' +
+          (existing.enabled && show.slug ? '<div style="background:var(--cream-dark);border-radius:8px;padding:10px;font-size:0.8rem;color:var(--warm-gray);margin-bottom:12px;">Public URL: <strong>/apply/' + esc(show.slug) + '</strong></div>' : '') +
+          '<div class="ev-form-actions">' +
+            (existing.enabled ? '<button type="button" class="ev-btn ev-btn-danger ev-btn-sm" onclick="evCloseSubmissions(\'' + esc(showId) + '\')">Close Submissions</button>' : '<span></span>') +
+            '<div style="display:flex;gap:8px;"><button type="button" class="ev-btn ev-btn-secondary" onclick="evCloseModal(\'evSubConfigModal\')">Cancel</button>' +
+            '<button type="submit" class="ev-btn ev-btn-primary">Save</button></div>' +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) evCloseModal('evSubConfigModal'); });
+    document.body.appendChild(overlay);
+  }
+
+  function submitSubConfig(e, showId) {
+    e.preventDefault();
+    var enabled = document.getElementById('evsc_enabled').checked;
+    var existing = (showsData[showId] || {}).submissionConfig || {};
+    DB.shows.update(showId, {
+      submissionConfig: {
+        enabled: enabled,
+        criteria: document.getElementById('evsc_criteria').value.trim(),
+        maxImages: parseInt(document.getElementById('evsc_maxImages').value) || 5,
+        requireImages: document.getElementById('evsc_requireImages').checked,
+        closedAt: null,
+        createdAt: existing.createdAt || nowISO(),
+        updatedAt: nowISO()
+      }
+    }).then(function() {
+      showToast(enabled ? 'Submission page enabled!' : 'Submission config saved');
+      evCloseModal('evSubConfigModal');
+    }).catch(function(err) { showToast('Error: ' + err.message, true); });
+  }
+
+  function closeSubmissions(showId) {
+    DB.shows.update(showId, { 'submissionConfig/enabled': false, 'submissionConfig/closedAt': nowISO(), 'submissionConfig/updatedAt': nowISO() }).then(function() {
+      showToast('Submissions closed');
+      evCloseModal('evSubConfigModal');
+    }).catch(function(err) { showToast('Error: ' + err.message, true); });
+  }
+
+  // ============================================================
+  // Image Viewer Modal
+  // ============================================================
+
+  function openImageViewer(images, startIdx) {
+    var idx = startIdx || 0;
+    var overlay = document.createElement('div');
+    overlay.id = 'evImageViewer';
+    overlay.className = 'ev-modal-overlay';
+    overlay.style.cssText = 'background:rgba(0,0,0,0.85);';
+
+    function renderViewer() {
+      overlay.innerHTML =
+        '<div style="position:relative;max-width:800px;width:100%;margin:0 16px;" onclick="event.stopPropagation()">' +
+          '<button style="position:absolute;top:-40px;right:0;background:none;border:none;color:#fff;font-size:24px;cursor:pointer;" onclick="evCloseModal(\'evImageViewer\')">&times;</button>' +
+          '<img src="' + esc(images[idx]) + '" style="width:100%;max-height:80vh;object-fit:contain;border-radius:8px;" alt="Image ' + (idx + 1) + '">' +
+          (images.length > 1 ?
+            '<div style="display:flex;justify-content:center;gap:16px;margin-top:12px;">' +
+              '<button class="ev-btn ev-btn-sm ev-btn-secondary"' + (idx === 0 ? ' disabled style="opacity:0.3;"' : '') + ' onclick="evImageViewerNav(-1)">&larr; Prev</button>' +
+              '<span style="color:#fff;padding:6px 0;font-size:0.85rem;">' + (idx + 1) + ' / ' + images.length + '</span>' +
+              '<button class="ev-btn ev-btn-sm ev-btn-secondary"' + (idx === images.length - 1 ? ' disabled style="opacity:0.3;"' : '') + ' onclick="evImageViewerNav(1)">Next &rarr;</button>' +
+            '</div>' : '') +
+        '</div>';
+    }
+
+    renderViewer();
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) evCloseModal('evImageViewer'); });
+    document.body.appendChild(overlay);
+
+    window._evImageViewerState = { images: images, idx: idx, render: renderViewer, overlay: overlay };
+  }
+
+  function imageViewerNav(delta) {
+    var st = window._evImageViewerState;
+    if (!st) return;
+    st.idx = Math.max(0, Math.min(st.images.length - 1, st.idx + delta));
+    var overlay = document.getElementById('evImageViewer');
+    if (!overlay) return;
+    var idx = st.idx;
+    var images = st.images;
+    overlay.innerHTML =
+      '<div style="position:relative;max-width:800px;width:100%;margin:0 16px;" onclick="event.stopPropagation()">' +
+        '<button style="position:absolute;top:-40px;right:0;background:none;border:none;color:#fff;font-size:24px;cursor:pointer;" onclick="evCloseModal(\'evImageViewer\')">&times;</button>' +
+        '<img src="' + esc(images[idx]) + '" style="width:100%;max-height:80vh;object-fit:contain;border-radius:8px;" alt="Image ' + (idx + 1) + '">' +
+        (images.length > 1 ?
+          '<div style="display:flex;justify-content:center;gap:16px;margin-top:12px;">' +
+            '<button class="ev-btn ev-btn-sm ev-btn-secondary"' + (idx === 0 ? ' disabled style="opacity:0.3;"' : '') + ' onclick="evImageViewerNav(-1)">&larr; Prev</button>' +
+            '<span style="color:#fff;padding:6px 0;font-size:0.85rem;">' + (idx + 1) + ' / ' + images.length + '</span>' +
+            '<button class="ev-btn ev-btn-sm ev-btn-secondary"' + (idx === images.length - 1 ? ' disabled style="opacity:0.3;"' : '') + ' onclick="evImageViewerNav(1)">Next &rarr;</button>' +
+          '</div>' : '') +
+      '</div>';
   }
 
   // ============================================================
@@ -1642,6 +1867,14 @@
   window.evOnHuntModeChange = onHuntModeChange;
   window.evSaveAdConfig = saveAdConfig;
   window.evCloseModal = evCloseModal;
+  window.evSetCheckinFilter = setCheckinFilter;
+  window.evToggleCheckin = toggleCheckin;
+  window.evMarkNoShow = markNoShow;
+  window.evOpenSubmissionConfig = openSubmissionConfigModal;
+  window.evSubmitSubConfig = submitSubConfig;
+  window.evCloseSubmissions = closeSubmissions;
+  window.evOpenImageViewer = openImageViewer;
+  window.evImageViewerNav = imageViewerNav;
 
   // ============================================================
   // Register with MastAdmin
