@@ -4461,6 +4461,8 @@
       </div>
       <!-- Active Trip Banner (outside card system) -->
       <div id="activeTripBanner" style="display:none;"></div>
+      <!-- Dashboard Todos (above cards, extensible nudge system) -->
+      <div id="dashboardTodos" style="display:none;"></div>
       <!-- Dashboard Cards -->
       <div id="dashboardCards">
         <div id="dashCardQuickActions"></div>
@@ -7111,6 +7113,13 @@ MastDB.tripCustomPurposes = {
   list: function() { return this.ref().once('value'); }
 };
 
+MastDB.dismissedNudges = {
+  PATH: 'admin/users',
+  ref: function(uid) { return MastDB._ref(this.PATH + '/' + uid + '/dismissedNudges'); },
+  get: function(uid) { return this.ref(uid).once('value'); },
+  dismiss: function(uid, nudgeKey) { return this.ref(uid).child(nudgeKey).set(new Date().toISOString()); }
+};
+
 MastDB.config = {
   ref: function(subpath) { return MastDB._ref('config' + (subpath ? '/' + subpath : '')); },
   square: function() { return MastDB._ref('config/square'); },
@@ -8359,6 +8368,20 @@ async function writeAudit(action, entity, entityId) {
 }
 
 // ============================================================
+// Toast Notifications
+// ============================================================
+function showToast(message, isError) {
+  var container = document.getElementById('toastContainer');
+  var toast = document.createElement('div');
+  toast.className = 'toast' + (isError ? ' error' : '');
+  toast.textContent = message;
+  container.appendChild(toast);
+  setTimeout(function() {
+    if (toast.parentNode) toast.parentNode.removeChild(toast);
+  }, 5000);
+}
+
+// ============================================================
 // Auth
 // ============================================================
 function googleSignIn() {
@@ -8663,7 +8686,9 @@ var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'productsTab', 'ordersTab', 'sal
 var currentRoute = 'dashboard';
 
 function navigateTo(route) {
-  if (!ROUTE_MAP[route]) route = 'dashboard';
+  // Check both ROUTE_MAP (core routes) and MODULE_MANIFEST (lazy-loaded module routes)
+  var isKnownRoute = !!ROUTE_MAP[route] || !!getModuleForRouteManifest(route);
+  if (!isKnownRoute) route = 'dashboard';
   // Settings tab is admin-only — block non-admin access
   if (route === 'settings' && !isAdmin()) {
     showToast('Settings is restricted to admin users.', true);
@@ -8687,7 +8712,23 @@ function navigateTo(route) {
   }
   currentRoute = route;
   location.hash = route;
-  applyRoute(route);
+
+  // Check if route belongs to a lazy-loaded module
+  var moduleId = getModuleForRouteManifest(route);
+  if (moduleId && !MastAdmin.isModuleLoaded(moduleId)) {
+    // Load module first, then apply route
+    MastAdmin.loadModule(moduleId).then(function() {
+      applyRoute(route);
+    }).catch(function(err) {
+      console.error('[MastAdmin] Module load failed:', err);
+      currentRoute = 'dashboard';
+      location.hash = 'dashboard';
+      applyRoute('dashboard');
+    });
+  } else {
+    applyRoute(route);
+  }
+
   closeMobileMenu();
   // Testing Mode event
   emitTestingEvent('navigate', { route: route });
@@ -8850,8 +8891,10 @@ window.addEventListener('hashchange', function() {
     location.hash = 'dashboard';
   }
   if (hash !== currentRoute) {
-    currentRoute = hash;
-    applyRoute(hash);
+    // Route through navigateTo for lazy module loading.
+    // navigateTo sets currentRoute before setting hash, so
+    // the re-triggered hashchange will see hash === currentRoute and stop.
+    navigateTo(hash);
   }
 });
 
@@ -8888,6 +8931,180 @@ function hideSidebar() {
   var main = document.querySelector('.main');
   if (sidebar) sidebar.classList.remove('visible');
   if (main) main.classList.remove('with-sidebar');
+}
+
+// ============================================================
+// MastAdmin — Module Registry & Lazy Loading
+// Core infrastructure for splitting the admin app into
+// separately-loadable feature modules.
+// ============================================================
+var MastAdmin = (function() {
+  var _modules = {};        // moduleId → { routes, lazyLoad, attachListeners, detachListeners, loaded }
+  var _sharedData = {};     // key → value (cross-module data: productsData, ordersData, etc.)
+  var _dashCards = {};       // cardId → renderFn
+  var _loadPromises = {};   // moduleId → Promise (in-flight script loads)
+
+  /**
+   * Register a feature module. Called by each module's IIFE on load.
+   * config: {
+   *   routes: { routeName: { tab, setup, placeholder } },
+   *   lazyLoad: function(route) {},
+   *   attachListeners: function() {},
+   *   detachListeners: function() {}
+   * }
+   */
+  function registerModule(moduleId, config) {
+    _modules[moduleId] = Object.assign({ loaded: true }, config);
+    // Merge routes into ROUTE_MAP
+    if (config.routes) {
+      Object.keys(config.routes).forEach(function(route) {
+        ROUTE_MAP[route] = config.routes[route];
+      });
+    }
+    console.log('[MastAdmin] Module registered:', moduleId);
+  }
+
+  /**
+   * Load a module by inserting its script tag. Returns a Promise
+   * that resolves when the module's IIFE has run and called registerModule.
+   */
+  function loadModule(moduleId) {
+    if (_modules[moduleId] && _modules[moduleId].loaded) {
+      return Promise.resolve();
+    }
+    if (_loadPromises[moduleId]) {
+      return _loadPromises[moduleId];
+    }
+    var manifest = MODULE_MANIFEST[moduleId];
+    if (!manifest) {
+      console.error('[MastAdmin] No manifest entry for module:', moduleId);
+      return Promise.reject(new Error('Unknown module: ' + moduleId));
+    }
+    _loadPromises[moduleId] = new Promise(function(resolve, reject) {
+      var script = document.createElement('script');
+      script.src = manifest.src;
+      script.onload = function() {
+        delete _loadPromises[moduleId];
+        resolve();
+      };
+      script.onerror = function() {
+        delete _loadPromises[moduleId];
+        showToast('Failed to load module: ' + moduleId, true);
+        reject(new Error('Script load failed: ' + manifest.src));
+      };
+      document.head.appendChild(script);
+    });
+    return _loadPromises[moduleId];
+  }
+
+  function isModuleLoaded(moduleId) {
+    return !!(_modules[moduleId] && _modules[moduleId].loaded);
+  }
+
+  function getModule(moduleId) {
+    return _modules[moduleId] || null;
+  }
+
+  function getAllModules() {
+    return _modules;
+  }
+
+  // Shared data store — replaces globals like productsData, ordersData
+  function getData(key) {
+    return _sharedData[key] !== undefined ? _sharedData[key] : null;
+  }
+
+  function setData(key, value) {
+    _sharedData[key] = value;
+  }
+
+  // Dashboard card registration
+  function registerDashCard(cardId, renderFn) {
+    _dashCards[cardId] = renderFn;
+  }
+
+  function getDashCards() {
+    return _dashCards;
+  }
+
+  // Lifecycle hooks — called by core auth on sign-in / sign-out
+  function attachAllListeners() {
+    Object.keys(_modules).forEach(function(id) {
+      if (_modules[id].attachListeners) {
+        try { _modules[id].attachListeners(); }
+        catch (e) { console.error('[MastAdmin] attachListeners failed for', id, e); }
+      }
+    });
+  }
+
+  function detachAllListeners() {
+    Object.keys(_modules).forEach(function(id) {
+      if (_modules[id].detachListeners) {
+        try { _modules[id].detachListeners(); }
+        catch (e) { console.error('[MastAdmin] detachListeners failed for', id, e); }
+      }
+    });
+  }
+
+  return {
+    registerModule: registerModule,
+    loadModule: loadModule,
+    isModuleLoaded: isModuleLoaded,
+    getModule: getModule,
+    getAllModules: getAllModules,
+    getData: getData,
+    setData: setData,
+    registerDashCard: registerDashCard,
+    getDashCards: getDashCards,
+    attachAllListeners: attachAllListeners,
+    detachAllListeners: detachAllListeners,
+    // Expose shared utilities for module access
+    get MastDB() { return MastDB; },
+    get currentUser() { return currentUser; },
+    get currentUserRole() { return currentUserRole; },
+    get TENANT_CONFIG() { return TENANT_CONFIG; },
+    showToast: function(msg, isErr) { showToast(msg, isErr); },
+    esc: function(str) { return esc(str); },
+    navigateTo: function(route) { navigateTo(route); },
+    isAdmin: function() { return isAdmin(); },
+    isStaff: function() { return isStaff(); },
+    hasPermission: function(entity, action) { return hasPermission(entity, action); },
+    writeAudit: function(action, entity, entityId) { return writeAudit(action, entity, entityId); }
+  };
+})();
+
+// Module manifest — maps moduleId to script path and owned routes.
+// Routes listed here will be lazy-loaded when first navigated to.
+// Populated as modules are extracted in future sessions.
+var MODULE_MANIFEST = {
+  // Example (uncomment when module is extracted):
+  // blog: { src: 'modules/blog.js', routes: ['blog'] },
+  // newsletter: { src: 'modules/newsletter.js', routes: ['newsletter'] },
+  // social: { src: 'modules/social.js', routes: ['social'] },
+  // trips: { src: 'modules/trips.js', routes: ['trips'] },
+  // wholesale: { src: 'modules/wholesale.js', routes: ['wholesale'] },
+  // financials: { src: 'modules/financials.js', routes: ['financials'] },
+  // shows: { src: 'modules/shows.js', routes: ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'] },
+  // production: { src: 'modules/production.js', routes: ['jobs', 'production', 'stories'] },
+  // contacts: { src: 'modules/contacts.js', routes: ['contacts'] },
+  // orders: { src: 'modules/orders.js', routes: ['orders', 'commissions'] },
+  // sales: { src: 'modules/sales.js', routes: ['pos', 'receipts', 'events', 'salesEvents'] },
+  // fulfillment: { src: 'modules/fulfillment.js', routes: ['pack', 'ship', 'fulfillment'] }
+};
+
+// Reverse lookup: route → moduleId (built from MODULE_MANIFEST)
+var _routeToModule = {};
+Object.keys(MODULE_MANIFEST).forEach(function(moduleId) {
+  (MODULE_MANIFEST[moduleId].routes || []).forEach(function(route) {
+    _routeToModule[route] = moduleId;
+  });
+});
+
+/**
+ * Get the module that owns a route, or null if the route is in core.
+ */
+function getModuleForRouteManifest(route) {
+  return _routeToModule[route] || null;
 }
 
 // ============================================================
@@ -30341,6 +30558,8 @@ async function renderAllDashboardCards() {
   renderDashCardWithGating(DASHBOARD_CARDS[1], renderDashCardNewOrders);
   renderDashCardWithGating(DASHBOARD_CARDS[2], renderDashCardReadyToShip);
   renderDashCardWithGating(DASHBOARD_CARDS[3], renderDashCardLowInventory);
+  // Dashboard todos / nudges (above cards)
+  renderDashboardTodos();
 }
 
 // ─── Dashboard Card: Quick Actions ──────────────────────────
@@ -30778,7 +30997,8 @@ function confirmStartTrip() {
     irsRateYear: year,
     irsRateCentsPerMile: rate,
     deductibleValue: 0,
-    expenses: []
+    expenses: [],
+    entryMethod: 'live'
   };
 
   tripRef.set(tripData).then(function() {
@@ -31309,7 +31529,9 @@ function switchTripsSubView(view) {
 function renderTripsHistory() {
   var headerActions = document.getElementById('tripsHeaderActions');
   if (headerActions) {
-    headerActions.innerHTML = '<button class="btn btn-primary" onclick="openStartTripModal()">🚗 Start Trip</button>';
+    headerActions.innerHTML = '<button class="btn btn-secondary btn-sm" onclick="openPreviousTripsModal()" style="margin-right:6px;">Previous Trips</button>' +
+      '<button class="btn btn-secondary btn-sm" onclick="startRetroactiveManual()" style="margin-right:6px;">Add Past Trip</button>' +
+      '<button class="btn btn-primary" onclick="openStartTripModal()">🚗 Start Trip</button>';
   }
 
   // Filters
@@ -31682,6 +31904,727 @@ function loadTripsSettings() {
     renderIrsRates();
     renderTripLocations();
   }, 500);
+}
+
+// ─── Dashboard Todos / Nudge System ─────────────────────────
+// Extensible nudge system. Each nudge provider returns an array of
+// { key, type, html, action? } objects. Dismissed nudges persist per-user.
+
+var dismissedNudgesData = {};
+var dismissedNudgesLoaded = false;
+
+async function loadDismissedNudges() {
+  if (dismissedNudgesLoaded) return;
+  var user = auth.currentUser;
+  if (!user) return;
+  try {
+    var snap = await MastDB.dismissedNudges.get(user.uid);
+    dismissedNudgesData = snap.val() || {};
+    dismissedNudgesLoaded = true;
+  } catch (e) {
+    console.error('Error loading dismissed nudges:', e);
+  }
+}
+
+function dismissNudge(nudgeKey) {
+  var user = auth.currentUser;
+  if (!user) return;
+  dismissedNudgesData[nudgeKey] = new Date().toISOString();
+  MastDB.dismissedNudges.dismiss(user.uid, nudgeKey);
+  renderDashboardTodos();
+}
+
+// Registry of nudge providers — each is an async function returning nudge items
+var NUDGE_PROVIDERS = [];
+
+function registerNudgeProvider(providerFn) {
+  NUDGE_PROVIDERS.push(providerFn);
+}
+
+async function renderDashboardTodos() {
+  var container = document.getElementById('dashboardTodos');
+  if (!container) return;
+  await loadDismissedNudges();
+
+  var allNudges = [];
+  for (var i = 0; i < NUDGE_PROVIDERS.length; i++) {
+    try {
+      var items = await NUDGE_PROVIDERS[i]();
+      if (items && items.length) allNudges = allNudges.concat(items);
+    } catch (e) {
+      console.error('Nudge provider error:', e);
+    }
+  }
+
+  // Filter out dismissed and expired (>90 days)
+  var now = Date.now();
+  var ninetyDays = 90 * 24 * 60 * 60 * 1000;
+  var visible = allNudges.filter(function(n) {
+    if (dismissedNudgesData[n.key]) return false;
+    if (n.timestamp && (now - new Date(n.timestamp).getTime()) > ninetyDays) return false;
+    return true;
+  });
+
+  if (visible.length === 0) {
+    container.style.display = 'none';
+    return;
+  }
+
+  container.style.display = '';
+  var isDark = document.body.classList.contains('dark-mode');
+  var html = '<div style="margin-bottom:16px;">' +
+    '<div style="font-weight:700;font-size:0.95rem;margin-bottom:10px;color:var(--text-primary,#1A1A1A);">To Do</div>';
+  visible.forEach(function(n) {
+    html += '<div class="dash-nudge-item" style="display:flex;align-items:flex-start;gap:12px;padding:12px 16px;' +
+      'background:' + (isDark ? '#2a2317' : '#fffbeb') + ';border:1px solid ' + (isDark ? '#4a3820' : '#fde68a') + ';' +
+      'border-radius:10px;margin-bottom:8px;font-size:0.85rem;color:var(--text-primary,#1A1A1A);">' +
+      '<div style="flex:1;">' + n.html + '</div>' +
+      '<button onclick="dismissNudge(\'' + esc(n.key) + '\')" title="Dismiss" style="background:none;border:none;cursor:pointer;' +
+        'font-size:1.1rem;color:var(--warm-gray);padding:0;line-height:1;flex-shrink:0;">✕</button>' +
+    '</div>';
+  });
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+// ─── Nudge Provider: Unrecorded Event Mileage ───────────────
+
+registerNudgeProvider(async function mileageNudgeProvider() {
+  var user = auth.currentUser;
+  if (!user) return [];
+
+  // Ensure shows data is loaded
+  if (!showsLoaded) {
+    try {
+      var snap = await MastDB.shows.list(200);
+      showsData = snap.val() || {};
+      showsLoaded = true;
+    } catch (e) { return []; }
+  }
+
+  // Load user's trips
+  var tripsSnap;
+  try {
+    tripsSnap = await MastDB.trips.ref(user.uid).limitToLast(500).once('value');
+  } catch (e) { return []; }
+  var allTrips = tripsSnap.val() || {};
+
+  // Build set of dates that have trip records (YYYY-MM-DD)
+  var tripDates = {};
+  Object.values(allTrips).forEach(function(t) {
+    if (t.startTime) {
+      var d = new Date(t.startTime);
+      tripDates[d.toISOString().slice(0, 10)] = true;
+    }
+    // Also check retroactive trips by their tripDate field
+    if (t.tripDate) {
+      tripDates[t.tripDate] = true;
+    }
+  });
+
+  var now = new Date();
+  var nudges = [];
+
+  Object.keys(showsData).forEach(function(showId) {
+    var s = showsData[showId];
+    if (!s.startDate) return;
+    var showDate = new Date(s.startDate + 'T12:00:00');
+    // Only past shows
+    if (showDate >= now) return;
+    // Only shows with location info
+    if (!s.locationCity && !s.locationState) return;
+    // Check if any trip recorded for this show date
+    var dateKey = s.startDate; // Already YYYY-MM-DD
+    if (tripDates[dateKey]) return;
+    // Multi-day: also check end date
+    if (s.endDate && tripDates[s.endDate]) return;
+
+    var location = [s.locationCity, s.locationState].filter(Boolean).join(', ');
+    var dateStr = formatShowDate(s.startDate);
+    nudges.push({
+      key: 'mileage-show-' + showId,
+      type: 'mileage',
+      timestamp: s.startDate,
+      showId: showId,
+      html: 'You attended <strong>' + esc(s.name || 'a show') + '</strong> on ' + dateStr +
+        (location ? ' in ' + esc(location) : '') + ' — mileage not recorded. ' +
+        '<a href="#" onclick="startRetroactiveFromShow(\'' + esc(showId) + '\');return false;" ' +
+        'style="color:#d97706;font-weight:600;">Record Now</a>'
+    });
+  });
+
+  // Sort by most recent first
+  nudges.sort(function(a, b) { return b.timestamp.localeCompare(a.timestamp); });
+  return nudges;
+});
+
+// ─── Retroactive Trip Entry ─────────────────────────────────
+// Flow A: Event-based (from show), Flow B: Manual destination
+// Both support multi-leg recording loop
+
+var retroModalData = null; // { showId?, showName?, showDate?, showLocation?, legs: [], currentLegOrigin? }
+
+function startRetroactiveFromShow(showId) {
+  var s = showsData[showId];
+  if (!s) { showToast('Show not found', true); return; }
+
+  var location = [s.locationCity, s.locationState].filter(Boolean).join(', ');
+  retroModalData = {
+    showId: showId,
+    showName: s.name,
+    showDate: s.startDate,
+    showLocation: location,
+    entryMethod: 'event-retroactive',
+    legs: [],
+    currentLegOrigin: null,
+    eventSessionId: null
+  };
+
+  openRetroactiveTripModal();
+}
+
+function startRetroactiveManual() {
+  retroModalData = {
+    showId: null,
+    showName: null,
+    showDate: null,
+    showLocation: null,
+    entryMethod: 'manual-retroactive',
+    legs: [],
+    currentLegOrigin: null,
+    eventSessionId: null
+  };
+  openRetroactiveTripModal();
+}
+
+function openRetroactiveTripModal() {
+  // Remove existing modal if any
+  var existing = document.getElementById('retroTripModal');
+  if (existing) existing.remove();
+
+  var isDark = document.body.classList.contains('dark-mode');
+  var bg = isDark ? '#1e1e1e' : 'white';
+  var cardBg = isDark ? '#2a2a2a' : '#f9f9f9';
+  var border = isDark ? '#444' : '#ddd';
+  var textColor = isDark ? '#e0e0e0' : '#1A1A1A';
+  var inputBg = isDark ? '#1a1a1a' : '#fff';
+
+  var isEventBased = !!retroModalData.showId;
+  var title = isEventBased ? 'Record Mileage — ' + esc(retroModalData.showName) : 'Add Past Trip';
+  var dateHint = isEventBased && retroModalData.showDate ? ' on ' + formatShowDate(retroModalData.showDate) : '';
+
+  var overlay = document.createElement('div');
+  overlay.id = 'retroTripModal';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10001;' +
+    'display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;';
+  overlay.innerHTML =
+    '<div style="background:' + bg + ';border-radius:12px;padding:24px;width:100%;max-width:420px;' +
+      'box-shadow:0 8px 32px rgba(0,0,0,0.3);margin-top:40px;color:' + textColor + ';">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">' +
+        '<div style="font-weight:700;font-size:1.05rem;">' + title + '</div>' +
+        '<button onclick="closeRetroTripModal()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:' + textColor + ';">✕</button>' +
+      '</div>' +
+      (dateHint ? '<div style="font-size:0.8rem;color:var(--warm-gray);margin-bottom:16px;">' + dateHint + '</div>' : '<div style="margin-bottom:16px;"></div>') +
+
+      // Logged legs summary
+      '<div id="retroLegsSummary" style="display:none;margin-bottom:16px;"></div>' +
+
+      // Current leg form
+      '<div id="retroLegForm">' +
+        // Trip date (manual only, event-based pre-fills)
+        (!isEventBased ? '<div style="margin-bottom:12px;">' +
+          '<label style="font-size:0.8rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Trip Date</label>' +
+          '<input type="date" id="retroTripDate" style="width:100%;padding:8px 10px;border:1px solid ' + border + ';border-radius:8px;font-size:0.9rem;' +
+            'background:' + inputBg + ';color:' + textColor + ';box-sizing:border-box;font-family:DM Sans,sans-serif;" value="' + new Date().toISOString().slice(0, 10) + '">' +
+        '</div>' : '') +
+
+        // Start location
+        '<div style="margin-bottom:12px;">' +
+          '<label style="font-size:0.8rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Start Location</label>' +
+          '<select id="retroOrigin" style="width:100%;padding:8px 10px;border:1px solid ' + border + ';border-radius:8px;font-size:0.9rem;' +
+            'background:' + inputBg + ';color:' + textColor + ';box-sizing:border-box;font-family:DM Sans,sans-serif;">' +
+            buildRetroOriginOptions() +
+          '</select>' +
+        '</div>' +
+
+        // End location
+        '<div style="margin-bottom:12px;">' +
+          '<label style="font-size:0.8rem;color:var(--warm-gray);display:block;margin-bottom:4px;">End Location</label>' +
+          (isEventBased && retroModalData.legs.length === 0
+            ? '<input type="text" id="retroDestination" value="' + esc(retroModalData.showLocation || '') + '" style="width:100%;padding:8px 10px;border:1px solid ' + border + ';border-radius:8px;font-size:0.9rem;' +
+              'background:' + inputBg + ';color:' + textColor + ';box-sizing:border-box;font-family:DM Sans,sans-serif;" list="retroDestList">'
+            : '<input type="text" id="retroDestination" placeholder="Enter destination" style="width:100%;padding:8px 10px;border:1px solid ' + border + ';border-radius:8px;font-size:0.9rem;' +
+              'background:' + inputBg + ';color:' + textColor + ';box-sizing:border-box;font-family:DM Sans,sans-serif;" list="retroDestList">') +
+          '<datalist id="retroDestList">' + buildRetroDestDatalist() + '</datalist>' +
+        '</div>' +
+
+        // Purpose
+        '<div style="margin-bottom:12px;">' +
+          '<label style="font-size:0.8rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Purpose</label>' +
+          '<input type="text" id="retroPurpose" value="' + esc(isEventBased && retroModalData.legs.length === 0 ? retroModalData.showName || '' : '') + '" ' +
+            'placeholder="e.g. Show, Supplies, Delivery" style="width:100%;padding:8px 10px;border:1px solid ' + border + ';border-radius:8px;font-size:0.9rem;' +
+            'background:' + inputBg + ';color:' + textColor + ';box-sizing:border-box;font-family:DM Sans,sans-serif;">' +
+        '</div>' +
+
+        // Round trip toggle
+        '<div style="margin-bottom:16px;display:flex;align-items:center;gap:10px;">' +
+          '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.85rem;">' +
+            '<input type="checkbox" id="retroRoundTrip" checked style="width:16px;height:16px;cursor:pointer;">' +
+            ' Round trip' +
+          '</label>' +
+        '</div>' +
+
+        // Calculated miles display
+        '<div id="retroMilesDisplay" style="display:none;margin-bottom:12px;padding:10px 12px;background:' + cardBg + ';border-radius:8px;font-size:0.85rem;">' +
+          '<span id="retroMilesValue"></span> <span id="retroMilesSource" style="color:var(--warm-gray);font-size:0.78rem;"></span>' +
+        '</div>' +
+
+        // Actions
+        '<div style="display:flex;gap:10px;">' +
+          '<button onclick="closeRetroTripModal()" style="flex:1;padding:10px;border:1px solid ' + border + ';border-radius:8px;background:transparent;color:' + textColor + ';cursor:pointer;font-family:DM Sans,sans-serif;font-size:0.85rem;">Cancel</button>' +
+          '<button id="retroSaveLegBtn" onclick="saveRetroactiveLeg()" style="flex:1;padding:10px;border:none;border-radius:8px;background:var(--amber-glow,#C4853C);color:white;cursor:pointer;font-weight:600;font-family:DM Sans,sans-serif;font-size:0.85rem;">Calculate & Save Leg</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(overlay);
+
+  // If we have legs already, update the origin to last destination
+  if (retroModalData.legs.length > 0) {
+    var lastLeg = retroModalData.legs[retroModalData.legs.length - 1];
+    var originSelect = document.getElementById('retroOrigin');
+    if (originSelect) {
+      var lastDest = lastLeg.destination.label;
+      var found = false;
+      for (var i = 0; i < originSelect.options.length; i++) {
+        if (originSelect.options[i].text === lastDest) { originSelect.selectedIndex = i; found = true; break; }
+      }
+      if (!found) {
+        var opt = document.createElement('option');
+        opt.value = 'custom_' + lastDest;
+        opt.text = lastDest;
+        opt.selected = true;
+        originSelect.appendChild(opt);
+      }
+    }
+    renderRetroLegsSummary();
+  }
+}
+
+function closeRetroTripModal() {
+  var modal = document.getElementById('retroTripModal');
+  if (modal) modal.remove();
+  retroModalData = null;
+}
+
+function buildRetroOriginOptions() {
+  var html = '';
+  // Studio locations
+  if (typeof studioLocations !== 'undefined') {
+    Object.keys(studioLocations).forEach(function(k) {
+      var sl = studioLocations[k];
+      html += '<option value="studio_' + k + '">' + esc(sl.name) + '</option>';
+    });
+  }
+  // Trip locations (sorted by use count)
+  var keys = Object.keys(tripLocationsData);
+  keys.sort(function(a, b) { return (tripLocationsData[b].useCount || 0) - (tripLocationsData[a].useCount || 0); });
+  keys.forEach(function(k) {
+    var loc = tripLocationsData[k];
+    html += '<option value="trip_' + k + '">' + esc(loc.label || k) + '</option>';
+  });
+  return html;
+}
+
+function buildRetroDestDatalist() {
+  var html = '';
+  var keys = Object.keys(tripLocationsData);
+  keys.sort(function(a, b) { return (tripLocationsData[b].useCount || 0) - (tripLocationsData[a].useCount || 0); });
+  keys.forEach(function(k) {
+    html += '<option value="' + esc(tripLocationsData[k].label || k) + '">';
+  });
+  return html;
+}
+
+function renderRetroLegsSummary() {
+  var container = document.getElementById('retroLegsSummary');
+  if (!container || !retroModalData || retroModalData.legs.length === 0) {
+    if (container) container.style.display = 'none';
+    return;
+  }
+  container.style.display = '';
+  var isDark = document.body.classList.contains('dark-mode');
+  var html = '<div style="font-size:0.8rem;font-weight:600;margin-bottom:6px;color:var(--warm-gray);">Legs recorded:</div>';
+  retroModalData.legs.forEach(function(leg) {
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;' +
+      'background:' + (isDark ? '#1a2e1a' : '#f0fdf4') + ';border-radius:6px;margin-bottom:4px;font-size:0.82rem;">' +
+      '<span>' + esc(leg.origin.label) + ' → ' + esc(leg.destination.label) +
+        (leg.roundTrip ? ' (round trip)' : '') + '</span>' +
+      '<span style="font-weight:600;">' + leg.miles.toFixed(1) + ' mi</span>' +
+    '</div>';
+  });
+  container.innerHTML = html;
+}
+
+async function saveRetroactiveLeg() {
+  var user = auth.currentUser;
+  if (!user) { showToast('Not signed in', true); return; }
+  if (!retroModalData) return;
+
+  var btn = document.getElementById('retroSaveLegBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Calculating...'; }
+
+  // Get form values
+  var originKey = document.getElementById('retroOrigin').value;
+  var destValue = document.getElementById('retroDestination').value.trim();
+  var purpose = document.getElementById('retroPurpose').value.trim();
+  var roundTrip = document.getElementById('retroRoundTrip').checked;
+  var tripDate = retroModalData.showDate || (document.getElementById('retroTripDate') ? document.getElementById('retroTripDate').value : new Date().toISOString().slice(0, 10));
+
+  if (!destValue) { showToast('Enter a destination', true); if (btn) { btn.disabled = false; btn.textContent = 'Calculate & Save Leg'; } return; }
+
+  // Resolve origin and destination
+  var origin = resolveRetroOrigin(originKey);
+  var destination = resolveRetroDestination(destValue);
+
+  // Calculate distance
+  var mileageResult = await calculateRetroactiveMileage(origin, destination);
+  var onewayMiles = mileageResult.miles;
+  var totalMiles = roundTrip ? onewayMiles * 2 : onewayMiles;
+  var milesSource = mileageResult.source;
+
+  // Get IRS rate
+  var tripYear = new Date(tripDate + 'T12:00:00').getFullYear();
+  var rate = tripSettingsData.irsRates ? (tripSettingsData.irsRates[tripYear] || tripSettingsData.irsRates[tripYear - 1] || 70) : 70;
+  var deductible = Math.round(totalMiles * (rate / 100) * 100) / 100;
+
+  // Generate session ID for grouping legs
+  if (!retroModalData.eventSessionId) {
+    retroModalData.eventSessionId = 'session-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6);
+  }
+
+  // Create trip record
+  var tripRef = MastDB.trips.push(user.uid);
+  var tripData = {
+    tripId: tripRef.key,
+    driverId: user.uid,
+    driverName: user.displayName || user.email || 'Unknown',
+    status: 'completed',
+    startTime: tripDate + 'T09:00:00.000Z',
+    endTime: tripDate + 'T10:00:00.000Z',
+    tripDate: tripDate,
+    origin: origin,
+    destination: destination,
+    miles: totalMiles,
+    milesSource: milesSource,
+    purpose: purpose || null,
+    purposeLabel: purpose || null,
+    notes: roundTrip ? 'Round trip' : '',
+    irsRateYear: tripYear,
+    irsRateCentsPerMile: rate,
+    deductibleValue: deductible,
+    expenses: [],
+    entryMethod: retroModalData.entryMethod,
+    eventSessionId: retroModalData.eventSessionId,
+    roundTrip: roundTrip
+  };
+
+  try {
+    await tripRef.set(tripData);
+
+    // Add destination to tripLocations if new
+    var destSlug = destValue.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    if (!tripLocationsData[destSlug]) {
+      await MastDB.tripLocations.ref(destSlug).set({
+        label: destValue, lat: destination.lat || 0, lng: destination.lng || 0, useCount: 0, lastUsed: new Date().toISOString()
+      });
+      tripLocationsData[destSlug] = { label: destValue, lat: 0, lng: 0, useCount: 0 };
+    }
+    incrementLocationUseCount(origin);
+    incrementLocationUseCount(destination);
+
+    // Track this leg
+    retroModalData.legs.push({
+      tripId: tripRef.key,
+      origin: origin,
+      destination: destination,
+      miles: totalMiles,
+      roundTrip: roundTrip,
+      purpose: purpose
+    });
+
+    writeAudit('create', 'trips', tripRef.key);
+    showToast('Leg recorded — ' + totalMiles.toFixed(1) + ' mi · $' + deductible.toFixed(2));
+
+    // Ask about more legs
+    askForMoreLegs();
+  } catch (err) {
+    showToast('Error saving trip: ' + err.message, true);
+    if (btn) { btn.disabled = false; btn.textContent = 'Calculate & Save Leg'; }
+  }
+}
+
+function askForMoreLegs() {
+  var formEl = document.getElementById('retroLegForm');
+  if (!formEl) return;
+
+  var isDark = document.body.classList.contains('dark-mode');
+  var border = isDark ? '#444' : '#ddd';
+  var textColor = isDark ? '#e0e0e0' : '#1A1A1A';
+
+  renderRetroLegsSummary();
+
+  formEl.innerHTML =
+    '<div style="text-align:center;padding:20px 0;">' +
+      '<div style="font-size:1.1rem;margin-bottom:16px;">Any other destinations on this trip?</div>' +
+      '<div style="display:flex;gap:10px;justify-content:center;">' +
+        '<button onclick="addAnotherLeg()" style="padding:10px 24px;border:none;border-radius:8px;background:var(--amber-glow,#C4853C);color:white;cursor:pointer;font-weight:600;font-family:DM Sans,sans-serif;font-size:0.9rem;">Yes, add another</button>' +
+        '<button onclick="finishRetroactiveTrip()" style="padding:10px 24px;border:1px solid ' + border + ';border-radius:8px;background:transparent;color:' + textColor + ';cursor:pointer;font-family:DM Sans,sans-serif;font-size:0.9rem;">No, I\'m done</button>' +
+      '</div>' +
+    '</div>';
+}
+
+function addAnotherLeg() {
+  openRetroactiveTripModal();
+}
+
+function finishRetroactiveTrip() {
+  var totalMiles = 0;
+  if (retroModalData) {
+    retroModalData.legs.forEach(function(leg) {
+      totalMiles += leg.miles;
+    });
+    var legCount = retroModalData.legs.length;
+    closeRetroTripModal();
+    showToast('Trip complete — ' + legCount + ' leg(s), ' + totalMiles.toFixed(1) + ' total miles');
+  } else {
+    closeRetroTripModal();
+  }
+
+  // Refresh trips list and dashboard
+  tripsLoaded = false;
+  if (currentRoute === 'trips') loadTrips();
+  if (currentRoute === 'dashboard') renderDashboardTodos();
+}
+
+function resolveRetroOrigin(key) {
+  if (key && key.startsWith('studio_')) {
+    var studioKey = key.replace('studio_', '');
+    if (typeof studioLocations !== 'undefined') {
+      var sl = studioLocations[studioKey];
+      if (sl) return { label: sl.name, lat: sl.lat, lng: sl.lng, geocoded: true };
+    }
+  }
+  if (key && key.startsWith('trip_')) {
+    var tripKey = key.replace('trip_', '');
+    var loc = tripLocationsData[tripKey];
+    if (loc) return { label: loc.label || tripKey, lat: loc.lat || 0, lng: loc.lng || 0, geocoded: !!loc.lat };
+  }
+  if (key && key.startsWith('custom_')) {
+    return { label: key.replace('custom_', ''), lat: 0, lng: 0, geocoded: false };
+  }
+  return { label: 'Unknown', lat: 0, lng: 0, geocoded: false };
+}
+
+function resolveRetroDestination(destValue) {
+  var matchKey = Object.keys(tripLocationsData).find(function(k) {
+    return (tripLocationsData[k].label || '').toLowerCase() === destValue.toLowerCase();
+  });
+  if (matchKey) {
+    var dl = tripLocationsData[matchKey];
+    return { label: dl.label, lat: dl.lat || 0, lng: dl.lng || 0, geocoded: !!dl.lat };
+  }
+  return { label: destValue, lat: 0, lng: 0, geocoded: false };
+}
+
+function calculateRetroactiveMileage(origin, destination) {
+  return new Promise(function(resolve) {
+    var originStr = origin.lat && origin.lng && origin.geocoded ? origin.lat + ',' + origin.lng : origin.label;
+    var destStr = destination.lat && destination.lng && destination.geocoded ? destination.lat + ',' + destination.lng : destination.label;
+
+    if (!originStr || !destStr) {
+      resolve({ miles: 0, source: 'manual-override' });
+      return;
+    }
+
+    var display = document.getElementById('retroMilesDisplay');
+    var valueEl = document.getElementById('retroMilesValue');
+    var sourceEl = document.getElementById('retroMilesSource');
+    if (display) display.style.display = '';
+    if (valueEl) valueEl.textContent = 'Calculating...';
+    if (sourceEl) sourceEl.textContent = '';
+
+    var timeout = setTimeout(function() {
+      if (origin.lat && origin.lng && destination.lat && destination.lng) {
+        var hv = haversineMeters(origin.lat, origin.lng, destination.lat, destination.lng);
+        var hvMiles = Math.round((hv / 1609.344) * 10) / 10;
+        if (valueEl) valueEl.textContent = hvMiles.toFixed(1) + ' miles (one way)';
+        if (sourceEl) sourceEl.textContent = 'Estimated (straight-line)';
+        resolve({ miles: hvMiles, source: 'haversine-fallback' });
+      } else {
+        if (valueEl) valueEl.textContent = 'Enter miles manually';
+        resolve({ miles: 0, source: 'manual-override' });
+      }
+    }, 5000);
+
+    try {
+      if (window.google && window.google.maps) {
+        var service = new google.maps.DistanceMatrixService();
+        service.getDistanceMatrix({
+          origins: [originStr],
+          destinations: [destStr],
+          travelMode: 'DRIVING',
+          unitSystem: google.maps.UnitSystem.IMPERIAL
+        }, function(response, status) {
+          clearTimeout(timeout);
+          if (status === 'OK' && response.rows[0] && response.rows[0].elements[0].status === 'OK') {
+            var meters = response.rows[0].elements[0].distance.value;
+            var miles = Math.round((meters / 1609.344) * 10) / 10;
+            if (valueEl) valueEl.textContent = miles.toFixed(1) + ' miles (one way)';
+            if (sourceEl) sourceEl.textContent = 'via Google Maps';
+            resolve({ miles: miles, source: 'maps-api' });
+          } else {
+            if (origin.lat && origin.lng && destination.lat && destination.lng) {
+              var hv = haversineMeters(origin.lat, origin.lng, destination.lat, destination.lng);
+              var hvMiles = Math.round((hv / 1609.344) * 10) / 10;
+              if (valueEl) valueEl.textContent = hvMiles.toFixed(1) + ' miles (one way)';
+              if (sourceEl) sourceEl.textContent = 'Estimated (straight-line)';
+              resolve({ miles: hvMiles, source: 'haversine-fallback' });
+            } else {
+              if (valueEl) valueEl.textContent = 'Maps unavailable';
+              resolve({ miles: 0, source: 'manual-override' });
+            }
+          }
+        });
+      } else {
+        clearTimeout(timeout);
+        if (origin.lat && origin.lng && destination.lat && destination.lng) {
+          var hv = haversineMeters(origin.lat, origin.lng, destination.lat, destination.lng);
+          var hvMiles = Math.round((hv / 1609.344) * 10) / 10;
+          if (valueEl) valueEl.textContent = hvMiles.toFixed(1) + ' miles (one way)';
+          if (sourceEl) sourceEl.textContent = 'Estimated (straight-line)';
+          resolve({ miles: hvMiles, source: 'haversine-fallback' });
+        } else {
+          if (valueEl) valueEl.textContent = 'Enter miles manually';
+          resolve({ miles: 0, source: 'manual-override' });
+        }
+      }
+    } catch (e) {
+      clearTimeout(timeout);
+      resolve({ miles: 0, source: 'manual-override' });
+    }
+  });
+}
+
+// ─── Previous Trips (unrecorded shows list) ─────────────────
+
+function openPreviousTripsModal() {
+  var user = auth.currentUser;
+  if (!user) { showToast('Not signed in', true); return; }
+
+  var isDark = document.body.classList.contains('dark-mode');
+  var bg = isDark ? '#1e1e1e' : 'white';
+  var border = isDark ? '#444' : '#ddd';
+  var textColor = isDark ? '#e0e0e0' : '#1A1A1A';
+
+  var existing = document.getElementById('prevTripsModal');
+  if (existing) existing.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'prevTripsModal';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10001;' +
+    'display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;';
+  overlay.innerHTML =
+    '<div style="background:' + bg + ';border-radius:12px;padding:24px;width:100%;max-width:420px;box-shadow:0 8px 32px rgba(0,0,0,0.3);margin-top:40px;color:' + textColor + ';">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
+        '<div style="font-weight:700;font-size:1.05rem;">Previous Trips</div>' +
+        '<button onclick="closePrevTripsModal()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:' + textColor + ';">✕</button>' +
+      '</div>' +
+      '<div style="font-size:0.82rem;color:var(--warm-gray);margin-bottom:12px;">Past shows with no mileage recorded:</div>' +
+      '<div id="prevTripsListContent" style="color:' + textColor + ';">Loading...</div>' +
+      '<div style="margin-top:16px;padding-top:12px;border-top:1px solid ' + border + ';">' +
+        '<button onclick="closePrevTripsModal(); startRetroactiveManual();" style="width:100%;padding:10px;border:1px solid ' + border + ';border-radius:8px;background:transparent;color:' + textColor + ';cursor:pointer;font-family:DM Sans,sans-serif;font-size:0.85rem;">+ Add Past Trip Manually</button>' +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(overlay);
+  loadPreviousTrips();
+}
+
+function closePrevTripsModal() {
+  var modal = document.getElementById('prevTripsModal');
+  if (modal) modal.remove();
+}
+
+async function loadPreviousTrips() {
+  var container = document.getElementById('prevTripsListContent');
+  if (!container) return;
+  var user = auth.currentUser;
+  if (!user) return;
+
+  // Ensure shows loaded
+  if (!showsLoaded) {
+    try {
+      var snap = await MastDB.shows.list(200);
+      showsData = snap.val() || {};
+      showsLoaded = true;
+    } catch (e) {
+      container.innerHTML = '<div style="color:var(--warm-gray);">Could not load shows.</div>';
+      return;
+    }
+  }
+
+  // Load trips
+  var tripsSnap;
+  try {
+    tripsSnap = await MastDB.trips.ref(user.uid).limitToLast(500).once('value');
+  } catch (e) {
+    container.innerHTML = '<div style="color:var(--warm-gray);">Could not load trips.</div>';
+    return;
+  }
+  var allTrips = tripsSnap.val() || {};
+  var tripDates = {};
+  Object.values(allTrips).forEach(function(t) {
+    if (t.startTime) tripDates[new Date(t.startTime).toISOString().slice(0, 10)] = true;
+    if (t.tripDate) tripDates[t.tripDate] = true;
+  });
+
+  var now = new Date();
+  var isDark = document.body.classList.contains('dark-mode');
+  var items = [];
+
+  Object.keys(showsData).forEach(function(showId) {
+    var s = showsData[showId];
+    if (!s.startDate) return;
+    var showDate = new Date(s.startDate + 'T12:00:00');
+    if (showDate >= now) return;
+    if (!s.locationCity && !s.locationState) return;
+    if (tripDates[s.startDate]) return;
+    if (s.endDate && tripDates[s.endDate]) return;
+    items.push({ showId: showId, show: s });
+  });
+
+  items.sort(function(a, b) { return (b.show.startDate || '').localeCompare(a.show.startDate || ''); });
+
+  if (items.length === 0) {
+    container.innerHTML = '<div style="padding:12px 0;text-align:center;color:var(--warm-gray);font-size:0.85rem;">All past shows have mileage recorded!</div>';
+    return;
+  }
+
+  var html = '';
+  items.forEach(function(item) {
+    var s = item.show;
+    var location = [s.locationCity, s.locationState].filter(Boolean).join(', ');
+    html += '<div onclick="closePrevTripsModal(); startRetroactiveFromShow(\'' + esc(item.showId) + '\');" style="' +
+      'padding:12px;border-radius:8px;margin-bottom:8px;cursor:pointer;' +
+      'background:' + (isDark ? '#2a2a2a' : '#f9f9f9') + ';border:1px solid ' + (isDark ? '#444' : '#eee') + ';">' +
+      '<div style="font-weight:600;font-size:0.9rem;">' + esc(s.name || 'Unnamed show') + '</div>' +
+      '<div style="font-size:0.8rem;color:var(--warm-gray);margin-top:2px;">' +
+        formatShowDate(s.startDate) + (location ? ' · ' + esc(location) : '') +
+      '</div>' +
+    '</div>';
+  });
+  container.innerHTML = html;
 }
 
 // ============================================================
@@ -32703,17 +33646,6 @@ function financialCard(label, value, color) {
 // ============================================================
 // END FINANCIALS
 // ============================================================
-
-function showToast(message, isError) {
-  var container = document.getElementById('toastContainer');
-  var toast = document.createElement('div');
-  toast.className = 'toast' + (isError ? ' error' : '');
-  toast.textContent = message;
-  container.appendChild(toast);
-  setTimeout(function() {
-    if (toast.parentNode) toast.parentNode.removeChild(toast);
-  }, 5000);
-}
 
 // Events Organizer Module moved to standalone app: ../events/index.html
 </script>
