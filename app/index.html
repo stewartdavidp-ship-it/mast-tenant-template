@@ -7631,7 +7631,7 @@ function openCoinPurchaseModal() {
 
   // Purchase section
   h += '<h4 style="margin:0 0 8px;font-size:0.95rem;">Buy Coins</h4>';
-  h += '<p style="font-size:0.8rem;color:var(--warm-gray);margin:0 0 12px;">1 coin = 100 tokens = $1. Coins never expire.</p>';
+  h += '<p style="font-size:0.8rem;color:var(--warm-gray);margin:0 0 12px;">1 coin = 100 tokens = $1. Minimum 10 coins ($10). Coins never expire.</p>';
   h += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">';
   h += '<input type="number" id="coinPurchaseAmount" min="10" value="25" step="5" style="width:80px;padding:8px 12px;border:1px solid var(--cream-dark);border-radius:8px;font-size:1rem;text-align:center;" />';
   h += '<span style="font-size:0.9rem;color:var(--warm-gray);">coins</span>';
@@ -7650,8 +7650,16 @@ function openCoinPurchaseModal() {
       var val = parseInt(this.value) || 0;
       var totalEl = document.getElementById('coinPurchaseTotal');
       var estEl = document.getElementById('coinPurchaseEstimate');
-      if (totalEl) totalEl.textContent = '$' + val;
-      if (estEl) estEl.textContent = (val * 100).toLocaleString() + ' tokens ≈ ' + Math.floor(val * 100 / 3.3).toLocaleString() + ' Studio Assistant calls';
+      var btn = document.getElementById('coinPurchaseBtn');
+      if (val < 10) {
+        if (totalEl) totalEl.textContent = '$' + val;
+        if (estEl) { estEl.textContent = 'Minimum purchase is 10 coins ($10)'; estEl.style.color = 'var(--danger, #dc2626)'; }
+        if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; }
+      } else {
+        if (totalEl) totalEl.textContent = '$' + val;
+        if (estEl) { estEl.textContent = (val * 100).toLocaleString() + ' tokens ≈ ' + Math.floor(val * 100 / 3.3).toLocaleString() + ' Studio Assistant calls'; estEl.style.color = 'var(--warm-gray)'; }
+        if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+      }
     });
   }
 }
