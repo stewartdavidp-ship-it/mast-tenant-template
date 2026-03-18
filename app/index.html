@@ -4431,6 +4431,7 @@
       </div>
     </div>
     <div class="header-user">
+      <div id="tokenBalanceIndicator" style="display:none;"></div>
       <img class="header-avatar" id="userAvatar" src="" alt="User">
       <button class="header-signout" onclick="signOut()">Sign Out</button>
     </div>
@@ -7439,6 +7440,19 @@ MastDB.subscription = {
   update: function(data) { return this.ref().update(data); }
 };
 
+MastDB.tokenWallet = {
+  PATH: 'tokenWallet',
+  ref: function(subpath) { return MastDB._ref(this.PATH + (subpath ? '/' + subpath : '')); },
+  get: function() { return this.ref().once('value'); },
+  set: function(data) { return this.ref().set(data); },
+  update: function(data) { return this.ref().update(data); },
+  listen: function(onValue, onError) {
+    this.ref().on('value', onValue, onError);
+    return this.ref();
+  },
+  unlisten: function(handle) { this.ref().off('value', handle); }
+};
+
 // MastDB.init() is called dynamically in the auth flow after tenant resolution.
 // Entity namespace definitions above are safe — they define functions but
 // don't call _ref() until invoked after init.
@@ -7495,14 +7509,23 @@ var MODULE_SYNERGY_MAP = {
 
 // Tier definitions. Journey stages, not feature lists.
 var TIER_CONFIG = {
-  publish: { id: 'publish', name: 'Publish', price: 0,   moduleLimit: 0, studioAssistant: false, description: 'Public site + product catalog. Your digital presence.' },
-  launch:  { id: 'launch',  name: 'Launch',  price: 49,  moduleLimit: 1, studioAssistant: true,  description: 'Choose 1 module. Start running your business.' },
-  operate: { id: 'operate', name: 'Operate', price: 99,  moduleLimit: 3, studioAssistant: true,  description: 'Up to 3 modules. Your operations, connected.' },
-  command: { id: 'command', name: 'Command', price: 149, moduleLimit: 7, studioAssistant: true,  description: 'All modules. Full command of your business.' }
+  publish: { id: 'publish', name: 'Publish', price: 0,   moduleLimit: 0, studioAssistant: false, monthlyTokens: 50,  annualTokens: 0,   description: 'Public site + product catalog. Your digital presence.' },
+  launch:  { id: 'launch',  name: 'Launch',  price: 49,  moduleLimit: 1, studioAssistant: true,  monthlyTokens: 100, annualTokens: 125, description: 'Choose 1 module. Start running your business.' },
+  operate: { id: 'operate', name: 'Operate', price: 99,  moduleLimit: 3, studioAssistant: true,  monthlyTokens: 250, annualTokens: 312, description: 'Up to 3 modules. Your operations, connected.' },
+  command: { id: 'command', name: 'Command', price: 149, moduleLimit: 7, studioAssistant: true,  monthlyTokens: 500, annualTokens: 625, description: 'All modules. Full command of your business.' }
+};
+
+// Events tier definitions (separate family)
+var EVENTS_TIER_CONFIG = {
+  free:          { id: 'free',          name: 'Free',          price: 0,   moduleLimit: 0, studioAssistant: false, monthlyTokens: 50,  annualTokens: 0,   description: 'Attendee portal + event management basics.' },
+  starter:       { id: 'starter',       name: 'Starter',       price: 49,  moduleLimit: 1, studioAssistant: true,  monthlyTokens: 100, annualTokens: 125, description: '1 Events module. Start organizing.' },
+  organizer:     { id: 'organizer',     name: 'Organizer',     price: 99,  moduleLimit: 3, studioAssistant: true,  monthlyTokens: 250, annualTokens: 312, description: '3 Events modules. Run professional events.' },
+  professional:  { id: 'professional',  name: 'Professional',  price: 149, moduleLimit: 7, studioAssistant: true,  monthlyTokens: 500, annualTokens: 625, description: 'All Events modules. Full professional toolkit.' }
 };
 
 // Tier ordering for upgrade path
 var TIER_ORDER = ['publish', 'launch', 'operate', 'command'];
+var EVENTS_TIER_ORDER = ['free', 'starter', 'organizer', 'professional'];
 
 // --- Subscription State ---
 var _tenantSubscription = null;
@@ -7542,6 +7565,123 @@ async function loadTenantSubscription() {
     console.warn('Subscription load failed, defaulting to command:', err.message);
     _tenantSubscription = null; // getTenantSubscription() returns command default
     return getTenantSubscription();
+  }
+}
+
+// --- Token Wallet State ---
+var _tokenWallet = null;
+var _tokenWalletListener = null;
+
+function getTokenWallet() {
+  return _tokenWallet || { currentBalance: 0, coinBalance: 0, monthlyAllocation: 0, borrowLimit: 0, borrowedAmount: 0, status: 'unknown' };
+}
+
+function loadTokenWallet() {
+  if (_tokenWalletListener) return; // already listening
+  _tokenWalletListener = MastDB.tokenWallet.listen(function(snap) {
+    _tokenWallet = snap.val();
+    renderTokenBalanceIndicator();
+  }, function(err) {
+    console.warn('Token wallet listener error:', err.message);
+  });
+}
+
+function renderTokenBalanceIndicator() {
+  var el = document.getElementById('tokenBalanceIndicator');
+  if (!el) return;
+  var w = getTokenWallet();
+  if (!w || w.status === 'unknown') {
+    el.style.display = 'none';
+    return;
+  }
+  el.style.display = 'flex';
+  var total = (w.currentBalance || 0) + (w.coinBalance || 0);
+  var statusColor = w.status === 'suspended' ? 'var(--danger, #dc2626)' :
+                    w.status === 'borrowing' ? 'var(--amber, #C4853C)' : 'var(--sage, #7A8B6F)';
+  var statusIcon = w.status === 'suspended' ? '⏸' : w.status === 'borrowing' ? '⚠' : '⚡';
+  el.innerHTML = '<span style="cursor:pointer;display:flex;align-items:center;gap:4px;padding:4px 10px;border-radius:8px;background:rgba(122,139,111,0.1);font-size:0.8rem;color:' + statusColor + ';" onclick="openCoinPurchaseModal()">' +
+    statusIcon + ' <strong>' + total + '</strong> tokens' +
+    (w.coinBalance > 0 ? ' <span style="opacity:0.7;font-size:0.7rem;">(' + w.coinBalance + ' coins)</span>' : '') +
+    '</span>';
+}
+
+// Coin purchase modal
+function openCoinPurchaseModal() {
+  var w = getTokenWallet();
+  var sub = getTenantSubscription();
+  var tier = TIER_CONFIG[sub.tier] || {};
+  var resetDate = w.lastResetAt ? new Date(new Date(w.lastResetAt).getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString() : 'next billing cycle';
+
+  var h = '<div style="padding:20px;">';
+  h += '<h3 style="margin:0 0 16px;font-family:\'Cormorant Garamond\',serif;font-size:1.3rem;">Token Balance</h3>';
+
+  // Status summary
+  h += '<div style="background:var(--cream-dark, #F0E8DB);border-radius:10px;padding:16px;margin-bottom:16px;">';
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
+  h += '<div><div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;">Monthly</div><div style="font-size:1.4rem;font-weight:700;">' + (w.currentBalance || 0) + '<span style="font-size:0.8rem;font-weight:400;opacity:0.7">/' + (w.monthlyAllocation || 0) + '</span></div></div>';
+  h += '<div><div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;">Coins</div><div style="font-size:1.4rem;font-weight:700;">' + (w.coinBalance || 0) + '</div></div>';
+  h += '</div>';
+  if (w.status === 'suspended') {
+    h += '<div style="margin-top:12px;padding:8px 12px;background:rgba(220,38,38,0.1);border-radius:6px;color:var(--danger);font-size:0.85rem;">AI features paused until ' + esc(resetDate) + ' or coin purchase.</div>';
+  } else if (w.status === 'borrowing') {
+    h += '<div style="margin-top:12px;padding:8px 12px;background:rgba(196,133,60,0.1);border-radius:6px;color:var(--amber);font-size:0.85rem;">Borrowing against next month. ' + (w.borrowedAmount || 0) + ' tokens borrowed.</div>';
+  }
+  h += '<div style="margin-top:8px;font-size:0.75rem;color:var(--warm-gray);">Resets: ' + esc(resetDate) + '</div>';
+  h += '</div>';
+
+  // Purchase section
+  h += '<h4 style="margin:0 0 8px;font-size:0.95rem;">Buy Coins</h4>';
+  h += '<p style="font-size:0.8rem;color:var(--warm-gray);margin:0 0 12px;">1 coin = 100 tokens = $1. Coins never expire.</p>';
+  h += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">';
+  h += '<input type="number" id="coinPurchaseAmount" min="10" value="25" step="5" style="width:80px;padding:8px 12px;border:1px solid var(--cream-dark);border-radius:8px;font-size:1rem;text-align:center;" />';
+  h += '<span style="font-size:0.9rem;color:var(--warm-gray);">coins</span>';
+  h += '<span style="margin-left:auto;font-size:1.1rem;font-weight:600;" id="coinPurchaseTotal">$25</span>';
+  h += '</div>';
+  h += '<div style="font-size:0.75rem;color:var(--warm-gray);margin-bottom:16px;" id="coinPurchaseEstimate">2,500 tokens ≈ 750 Studio Assistant calls</div>';
+  h += '<button onclick="purchaseCoins()" id="coinPurchaseBtn" style="width:100%;padding:12px;background:var(--amber, #C4853C);color:white;border:none;border-radius:8px;font-size:1rem;font-weight:600;cursor:pointer;">Purchase Coins</button>';
+  h += '</div>';
+
+  openModal(h);
+
+  // Wire up the amount input
+  var amountInput = document.getElementById('coinPurchaseAmount');
+  if (amountInput) {
+    amountInput.addEventListener('input', function() {
+      var val = parseInt(this.value) || 0;
+      var totalEl = document.getElementById('coinPurchaseTotal');
+      var estEl = document.getElementById('coinPurchaseEstimate');
+      if (totalEl) totalEl.textContent = '$' + val;
+      if (estEl) estEl.textContent = (val * 100).toLocaleString() + ' tokens ≈ ' + Math.floor(val * 100 / 3.3).toLocaleString() + ' Studio Assistant calls';
+    });
+  }
+}
+
+async function purchaseCoins() {
+  var amountInput = document.getElementById('coinPurchaseAmount');
+  var coins = parseInt(amountInput ? amountInput.value : '0');
+  if (!coins || coins < 10) {
+    showToast('Minimum purchase is 10 coins ($10)', true);
+    return;
+  }
+  var btn = document.getElementById('coinPurchaseBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Opening checkout...'; }
+  try {
+    var token = await auth.currentUser.getIdToken();
+    var resp = await callCF('/createCoinCheckout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ tenantId: MastDB.tenantId(), coins: coins })
+    });
+    var data = await resp.json();
+    if (data.sessionUrl) {
+      window.location.href = data.sessionUrl;
+    } else {
+      showToast(data.error || 'Failed to create checkout', true);
+      if (btn) { btn.disabled = false; btn.textContent = 'Purchase Coins'; }
+    }
+  } catch (err) {
+    showToast('Purchase failed: ' + err.message, true);
+    if (btn) { btn.disabled = false; btn.textContent = 'Purchase Coins'; }
   }
 }
 
@@ -8822,6 +8962,7 @@ auth.onAuthStateChanged(async function(user) {
   MastDB.init({ tenantId: tenantId, db: db });
   await loadTenantConfig(tenantId);
   await loadTenantSubscription();
+  loadTokenWallet(); // Start listening for token balance (non-blocking)
   // --- End Tenant Resolution ---
 
   // Load user role from Firebase (auto-provisions as guest if new)
@@ -8875,6 +9016,17 @@ auth.onAuthStateChanged(async function(user) {
   var initialRoute = location.hash.replace('#', '') || 'dashboard';
   navigateTo(initialRoute);
   attachListeners();
+
+  // Check for coin purchase return from Stripe
+  if (location.hash.indexOf('coinPurchase=success') >= 0) {
+    var coinMatch = location.hash.match(/coins=(\d+)/);
+    var coinCount = coinMatch ? coinMatch[1] : '';
+    showToast('Coins purchased successfully!' + (coinCount ? ' ' + coinCount + ' coins added.' : ''));
+    // Clean up URL
+    location.hash = '#settings';
+  } else if (location.hash.indexOf('coinPurchase=cancelled') >= 0) {
+    location.hash = '#settings';
+  }
 
   // Load configChecklist for progressive feature gating
   await loadConfigChecklist();
@@ -17774,7 +17926,24 @@ async function askStudioAssistant() {
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
       body: JSON.stringify(body)
     });
+    if (resp.status === 402) {
+      // Token balance exhausted
+      var errData = await resp.json();
+      testingModeState.assistantMessages.push({ role: 'assistant', text: errData.error || 'Token balance exhausted. Purchase coins to continue using AI features.', isTokenError: true });
+      testingModeState.assistantLoading = false;
+      renderTestingMode();
+      return;
+    }
     var data = await resp.json();
+    // Update token balance indicator from response
+    if (data.tokenBalance !== undefined) {
+      if (_tokenWallet) {
+        _tokenWallet.currentBalance = data.tokenBalance;
+        _tokenWallet.status = data.tokenStatus || _tokenWallet.status;
+        if (data.coinBalance !== undefined) _tokenWallet.coinBalance = data.coinBalance;
+        renderTokenBalanceIndicator();
+      }
+    }
     testingModeState.assistantMessages.push({ role: 'assistant', text: data.answer || 'Hmm, I\'m not sure about that one.' });
 
     MastDB.testingMode.questions(user.uid, missionId).push({
