@@ -206,7 +206,7 @@ a:hover { text-decoration: underline; }
 .header-chevron.expanded { transform: rotate(180deg); }
 .header-details { margin-top: 12px; }
 .header-details .show-desc { margin-bottom: 12px; }
-.see-more-deals-btn { position: absolute; top: 0; right: 0; width: 36px; height: 36px; border-radius: 50%; border: 1px solid rgba(196,133,60,0.3); background: rgba(196,133,60,0.1); color: var(--amber); font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.see-more-deals-btn { position: absolute; top: 0; right: 0; z-index: 10; width: 40px; height: 40px; border-radius: 50%; border: 1px solid rgba(196,133,60,0.3); background: rgba(196,133,60,0.1); color: var(--amber); font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; -webkit-tap-highlight-color: transparent; }
 .see-more-deals-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* Search + Sort row */
@@ -438,7 +438,7 @@ a:hover { text-decoration: underline; }
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
 <script src="../storefront-tenant.js"></script>
 <script src="../tenant-brand.js?v=2"></script>
-<script src="show.js?v=20260318j"></script>
+<script src="show.js?v=20260318k"></script>
 <script>
 function toggleMastTheme(){var h=document.documentElement;var dark=h.classList.contains('dark');if(dark){h.classList.remove('dark');h.classList.add('light');localStorage.setItem('mast-theme','light');}else{h.classList.remove('light');h.classList.add('dark');localStorage.setItem('mast-theme','dark');}updateThemeBtn();}
 function updateThemeBtn(){var b=document.getElementById('themeToggle');if(!b)return;b.textContent=document.documentElement.classList.contains('dark')?'☀':'🌙';}
