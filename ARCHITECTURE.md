@@ -253,7 +253,7 @@ These fields are editable in the admin app's product edit form (Production tab).
 
 ## Admin App
 
-React app with a core shell (`/app/index.html`, ~17.6K lines) and 12 lazy-loaded feature modules (`/app/modules/*.js`, ~16.9K lines combined). Uses React 18 via CDN (no JSX — `React.createElement` / htm tagged templates), Tailwind CSS via CDN, Firebase compat SDK.
+React app with a core shell (`/app/index.html`, ~17.6K lines) and 14 lazy-loaded feature modules (`/app/modules/*.js`, ~18.2K lines combined). Uses React 18 via CDN (no JSX — `React.createElement` / htm tagged templates), Tailwind CSS via CDN, Firebase compat SDK.
 
 ### Authentication & Tenant Resolution
 
@@ -337,7 +337,7 @@ Retains: all CSS (~4.3K lines), HTML skeleton (sidebar, tab containers, modals),
 - Image library and image picker (shared across modules)
 - Testing/missions mode
 
-#### Feature Modules (`app/modules/`, 13 files, ~18.1K lines combined)
+#### Feature Modules (`app/modules/`, 14 files, ~19.4K lines combined)
 
 | Module | File | Lines | Routes |
 |--------|------|-------|--------|
@@ -354,6 +354,7 @@ Retains: all CSS (~4.3K lines), HTML skeleton (sidebar, tab containers, modals),
 | Sales (POS) | `sales.js` | ~1,470 | `pos`, `receipts`, `events`, `salesEvents` |
 | Fulfillment | `fulfillment.js` | ~1,030 | `pack`, `ship`, `fulfillment` |
 | Events (Organizer) | `events.js` | ~1,900 | `events-shows`, `events-settings` |
+| Website | `website.js` | ~1,330 | `website` |
 
 #### Module Loading Pattern
 
@@ -407,6 +408,10 @@ All tenant data lives under `{tenantId}/` in the tenant's RTDB (configured via `
 | `{tenantId}/admin/wholesaleRequests/` | Authenticated write | Wholesale access requests from buyers |
 | `{tenantId}/orders/` | Mixed | Order records (write: cloud function + admin, read: status field public for confirmation listener) |
 | `{tenantId}/feedbackReports/` | Public write | Customer feedback submissions |
+| `{tenantId}/webPresence/config/` | Admin only | Website builder config (style, colors, fonts, sections) |
+| `{tenantId}/webPresence/importJobs/` | Admin only | Website import job queue (status, discovered, imported counts) |
+| `{tenantId}/webPresence/siteAnalysis/` | Admin only | Site analysis results + crawl manifest from `analyzeExistingSite` |
+| `{tenantId}/webPresence/imageHashes/` | Admin only | MD5 hashes of imported images for deduplication |
 
 ### Platform Registry (under `mast-platform/`)
 
@@ -437,3 +442,41 @@ Key sections:
 - **Firebase listeners with safety bounds.** All `.on('value')` listeners use `limitToLast(N)` to prevent unbounded billing.
 - **Multi-tenant data isolation.** All tenant data under `{tenantId}/` prefix. MastDB enforces prefix on all reads/writes.
 - **Toast consistency.** Both public and admin apps use the same bottom-center stacking toast pattern with slide-up entrance, auto-fade, and error shake variant.
+
+## Website Import Architecture
+
+Job-based polling model for importing products, images, and content from a tenant's existing website during onboarding.
+
+### Flow
+
+1. **Analyze** — Tenant enters URL in admin. `analyzeExistingSite` Cloud Function fetches the page, calls Claude API to extract branding (business name, colors, style, hero content, contact info, social links), and builds a **crawl manifest** (platform type, content types found, pagination style, image hosting).
+2. **Create Job** — Admin UI creates an import job at `{tenantId}/webPresence/importJobs/{jobId}` with status `pending` and the crawl manifest.
+3. **Crawl** — Scheduled task `site-import-processor` (every 30 min) picks up pending jobs, crawls the site using WebFetch guided by the manifest, discovers products/blogs/events. Updates job to `crawled` with discovered item list.
+4. **Cherry-pick** — Admin UI shows discovered items as a checklist. Tenant can toggle individual products on/off. Excluded URLs saved to `cherryPickExclude` on the job.
+5. **Extract** — Scheduled task picks up crawled/importing jobs, fetches each product page, extracts descriptions/images, creates products via MCP (`mast_products`), uploads images to Firebase Storage, writes image hashes for dedup. Updates job to `complete`.
+6. **Review** — Admin UI shows all imported products as drafts with Publish/Delete actions.
+
+### Job Status State Machine
+
+`pending` → `processing` → `crawled` → `importing` → `complete`
+Any state → `failed` (on error or 2h timeout auto-fail)
+
+### Key Components
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| Website module | `app/modules/website.js` | Admin UI: 4 tabs (Overview, Style, Sections, Import) |
+| Import MCP tool | `mast-mcp-server/src/tools/mast-import.ts` | Job CRUD: create, claim, update, complete, fail. Auto-fails stale jobs. |
+| Scheduled task | `~/.claude/scheduled-tasks/site-import-processor/SKILL.md` | Crawl + extract automation (Claude Code scheduled task) |
+| analyzeExistingSite | `mast-architecture/functions/tenant-functions.js` | Claude API analysis + crawl manifest generation |
+| notifyImportComplete | `mast-architecture/functions/tenant-functions.js` | Email notification on import completion |
+
+### Production Hardening
+
+- **robots.txt** — Checked before crawling; disallowed paths skipped
+- **User-Agent** — Identifies as `MastBot/1.0 (+https://runmast.com/bot)`
+- **Rate limiting** — 1 second between fetches, max 50 pages per crawl, max 100 products / 200 images per import
+- **Image deduplication** — MD5 hash check against `webPresence/imageHashes/` before upload
+- **JS-rendered detection** — Flags sites with minimal HTML + heavy scripts; warns admin
+- **Timeout auto-fail** — Jobs stuck in processing/importing > 2 hours are auto-failed by MCP `list_jobs`
+- **All imported content starts as draft** — Never published automatically
