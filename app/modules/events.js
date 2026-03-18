@@ -1756,7 +1756,7 @@
     html += '<div class="ev-card">';
     html += '<h4 style="font-size:0.9rem;margin:0 0 12px;">Ad Configuration</h4>';
     html += '<div class="ev-form-group ev-form-row ev-form-row-3">';
-    html += '<div><label class="ev-form-label">Tokens per Coin</label><input class="ev-form-input" type="number" id="evAd_rate" value="20" min="1"></div>';
+    html += '<div><label class="ev-form-label">Tokens per Coin</label><input class="ev-form-input" type="number" id="evAd_rate" value="100" min="1"></div>';
     html += '<div><label class="ev-form-label">Min Coin Purchase</label><input class="ev-form-input" type="number" id="evAd_min" value="10" min="1"></div>';
     html += '<div><label class="ev-form-label">Max Coin Purchase</label><input class="ev-form-input" type="number" id="evAd_max" value="100" min="1"></div>';
     html += '</div>';
@@ -1809,7 +1809,7 @@
 
   function saveAdConfig(showId) {
     DB.showAdConfig.set(showId, {
-      coinToTokenRate: parseInt(document.getElementById('evAd_rate').value) || 20,
+      coinToTokenRate: parseInt(document.getElementById('evAd_rate').value) || 100,
       minCoinPurchase: parseInt(document.getElementById('evAd_min').value) || 10,
       maxCoinPurchase: parseInt(document.getElementById('evAd_max').value) || 100,
       updatedAt: nowISO()

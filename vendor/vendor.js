@@ -568,7 +568,7 @@
 
     // ── Convert Coins ──
     if ((wallet.coins || 0) > 0) {
-      var rate = config.coinToTokenRate || config.tokenRate || 10;
+      var rate = config.coinToTokenRate || config.tokenRate || 100;
       h += '<div class="section">';
       h += '<h3>Convert Coins to Tokens</h3>';
       h += '<p class="section-subtitle">Rate: 1 coin = ' + rate + ' tokens. You have ' + (wallet.coins || 0) + ' coins available.</p>';

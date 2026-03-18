@@ -1554,7 +1554,7 @@ function renderAdsTab(showId) {
   html += '<div class="card">';
   html += '<h4 style="font-size:0.9rem;margin:0 0 12px;">Ad Configuration</h4>';
   html += '<div class="form-group form-row form-row-3">';
-  html += '<div><label class="form-label">Tokens per Coin</label><input class="form-input" type="number" id="ad_rate" value="20" min="1"></div>';
+  html += '<div><label class="form-label">Tokens per Coin</label><input class="form-input" type="number" id="ad_rate" value="100" min="1"></div>';
   html += '<div><label class="form-label">Min Coin Purchase</label><input class="form-input" type="number" id="ad_min" value="10" min="1"></div>';
   html += '<div><label class="form-label">Max Coin Purchase</label><input class="form-input" type="number" id="ad_max" value="100" min="1"></div>';
   html += '</div>';
@@ -1611,7 +1611,7 @@ function renderAdsTab(showId) {
 async function saveAdConfig(showId) {
   try {
     await DB.showAdConfig.set(showId, {
-      coinToTokenRate: parseInt(document.getElementById('ad_rate').value) || 20,
+      coinToTokenRate: parseInt(document.getElementById('ad_rate').value) || 100,
       minCoinPurchase: parseInt(document.getElementById('ad_min').value) || 10,
       maxCoinPurchase: parseInt(document.getElementById('ad_max').value) || 100,
       updatedAt: nowISO()
