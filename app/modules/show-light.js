@@ -346,50 +346,8 @@
   // Gallery merges image library + product images into one view.
   // applicationPhoto flag lives on image library records.
 
-  var _slProductsCache = null;
-
-  function getAllImages() {
-    var merged = {};
-    // Image library entries
-    var lib = imageLibrary || {};
-    Object.keys(lib).forEach(function(id) { merged['img_' + id] = lib[id]; });
-    // Product images (if not already in library)
-    var prods = _slProductsCache || MastAdmin.getData('productsData') || {};
-    Object.keys(prods).forEach(function(pid) {
-      var p = prods[pid];
-      var imgUrl = p.image || p.imageUrl || '';
-      if (imgUrl && !Object.values(lib).some(function(img) { return img.url === imgUrl; })) {
-        merged['prod_' + pid] = {
-          url: imgUrl,
-          thumbnailUrl: imgUrl,
-          description: p.name || '',
-          productName: p.name || '',
-          productDescription: p.shortDescription || p.description || '',
-          tags: p.categories || [],
-          source: 'product',
-          applicationPhoto: p.applicationPhoto || false,
-          uploadedAt: p.createdAt || ''
-        };
-      }
-    });
-    return merged;
-  }
-
-  async function ensureProductsLoaded() {
-    if (_slProductsCache) return;
-    if (MastAdmin.getData('productsData')) { _slProductsCache = MastAdmin.getData('productsData'); return; }
-    try {
-      var snap = await MastDB.products.ref().once('value');
-      _slProductsCache = snap.val() || {};
-    } catch (err) {
-      console.warn('Show Light: failed to load products for gallery:', err.message);
-      _slProductsCache = {};
-    }
-  }
-
-  async function renderGallery(el) {
-    await ensureProductsLoaded();
-    var allImages = getAllImages();
+  function renderGallery(el) {
+    var allImages = (imageLibrary || {});
     var entries = Object.entries(allImages);
     entries.sort(function(a, b) { return (b[1].uploadedAt || '').localeCompare(a[1].uploadedAt || ''); });
 
@@ -907,7 +865,7 @@
 
       // Build product description from gallery images
       var productDescFromGallery = '';
-      Object.values(getAllImages()).forEach(function(img) {
+      Object.values((imageLibrary || {})).forEach(function(img) {
         if (img.category === 'product' && img.productDescription) {
           productDescFromGallery += (img.productName ? img.productName + ': ' : '') + img.productDescription + '\n';
         }
@@ -1017,7 +975,7 @@
     });
 
     var galleryByCategory = {};
-    Object.values(getAllImages()).forEach(function(img) {
+    Object.values((imageLibrary || {})).forEach(function(img) {
       if (img.category) galleryByCategory[img.category] = (galleryByCategory[img.category] || 0) + 1;
     });
 
@@ -1105,7 +1063,7 @@
           assignedImg = { url: profile.boothPhotoUrl };
           isProfileBooth = true;
         } else if (assigned) {
-          assignedImg = getAllImages()[assigned];
+          assignedImg = (imageLibrary || {})[assigned];
         }
 
         h += '<div class="sl-slot' + (assignedImg ? ' filled' : '') + '" onclick="slPickImageForSlot(' + idx + ')">';
@@ -1134,7 +1092,7 @@
   }
 
   function slPickImageForSlot(slotIdx) {
-    var allEntries = Object.entries(getAllImages());
+    var allEntries = Object.entries((imageLibrary || {}));
     if (allEntries.length === 0) {
       showToast('No images in gallery. Upload some first.', true);
       return;
@@ -1221,7 +1179,7 @@
         if (assigned === '__profile_booth__') {
           img = { url: profile.boothPhotoUrl };
         } else if (assigned) {
-          img = getAllImages()[assigned];
+          img = (imageLibrary || {})[assigned];
         }
         h += '<div style="text-align:center;">';
         if (img) {
