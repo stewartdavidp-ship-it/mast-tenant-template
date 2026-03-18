@@ -4978,6 +4978,8 @@
           <div class="wizard-step-dot" data-step="5">5</div>
           <div class="wizard-step-line"></div>
           <div class="wizard-step-dot" data-step="6">6</div>
+          <div class="wizard-step-line"></div>
+          <div class="wizard-step-dot" data-step="7">7</div>
         </div>
 
         <!-- Step 1: Welcome -->
@@ -5098,8 +5100,85 @@
           </div>
         </div>
 
-        <!-- Step 5: First Product -->
+        <!-- Step 5: Your Website -->
         <div id="wizardStep5" class="wizard-step" style="display:none;">
+          <h2 style="font-size:1.8rem;margin-bottom:8px;">Your Website</h2>
+          <p style="color:var(--warm-gray);margin-bottom:24px;">Set up your marketing website. We'll create a beautiful landing page for your business.</p>
+
+          <!-- Path selection -->
+          <div id="wizardWebsiteChoice" style="display:flex;gap:16px;margin-bottom:24px;">
+            <button class="btn btn-secondary" onclick="wizardWebsiteShowUrl()" style="flex:1;padding:20px 16px;font-size:0.95rem;border:2px solid #ddd;border-radius:10px;background:#fff;cursor:pointer;transition:border-color 0.2s;">
+              <div style="font-size:1.5rem;margin-bottom:8px;">&#127760;</div>
+              <strong>I have a website</strong>
+              <p style="font-size:0.8rem;color:var(--warm-gray);margin-top:4px;">We'll analyze it and import your content</p>
+            </button>
+            <button class="btn btn-secondary" onclick="wizardWebsiteShowFresh()" style="flex:1;padding:20px 16px;font-size:0.95rem;border:2px solid #ddd;border-radius:10px;background:#fff;cursor:pointer;transition:border-color 0.2s;">
+              <div style="font-size:1.5rem;margin-bottom:8px;">&#10024;</div>
+              <strong>Start fresh</strong>
+              <p style="font-size:0.8rem;color:var(--warm-gray);margin-top:4px;">Choose a style template for your new site</p>
+            </button>
+          </div>
+
+          <!-- URL analysis path -->
+          <div id="wizardWebsiteUrl" style="display:none;">
+            <div class="form-group" style="margin-bottom:16px;">
+              <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Your Website URL</label>
+              <input type="url" id="wizardSiteUrl" placeholder="https://www.yourbusiness.com"
+                style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;">
+            </div>
+            <div id="wizardAnalysisStatus" style="font-size:0.85rem;margin-bottom:16px;"></div>
+            <div id="wizardAnalysisSummary" style="display:none;background:var(--cream-dark,#f0e8db);border-radius:8px;padding:16px;margin-bottom:16px;font-size:0.9rem;"></div>
+          </div>
+
+          <!-- Fresh start path: style picker -->
+          <div id="wizardWebsiteFresh" style="display:none;">
+            <p style="font-size:0.85rem;font-weight:600;margin-bottom:12px;">Choose a style:</p>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px;">
+              <div class="wizard-style-card" data-style="artisan-warm" onclick="wizardSelectStyle(this)" style="border:2px solid var(--primary);border-radius:10px;padding:16px;cursor:pointer;text-align:center;background:#faf7f2;transition:border-color 0.2s;">
+                <div style="font-size:1.3rem;margin-bottom:6px;">&#127798;</div>
+                <strong style="font-size:0.9rem;">Artisan Warm</strong>
+                <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Earthy tones, handcrafted feel</p>
+              </div>
+              <div class="wizard-style-card" data-style="studio-dark" style="border:2px solid #ddd;border-radius:10px;padding:16px;cursor:not-allowed;text-align:center;opacity:0.5;">
+                <div style="font-size:1.3rem;margin-bottom:6px;">&#127769;</div>
+                <strong style="font-size:0.9rem;">Studio Dark</strong>
+                <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Coming soon</p>
+              </div>
+              <div class="wizard-style-card" data-style="market-fresh" style="border:2px solid #ddd;border-radius:10px;padding:16px;cursor:not-allowed;text-align:center;opacity:0.5;">
+                <div style="font-size:1.3rem;margin-bottom:6px;">&#127793;</div>
+                <strong style="font-size:0.9rem;">Market Fresh</strong>
+                <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Coming soon</p>
+              </div>
+              <div class="wizard-style-card" data-style="clean-commerce" style="border:2px solid #ddd;border-radius:10px;padding:16px;cursor:not-allowed;text-align:center;opacity:0.5;">
+                <div style="font-size:1.3rem;margin-bottom:6px;">&#128722;</div>
+                <strong style="font-size:0.9rem;">Clean Commerce</strong>
+                <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Coming soon</p>
+              </div>
+              <div class="wizard-style-card" data-style="story-first" style="border:2px solid #ddd;border-radius:10px;padding:16px;cursor:not-allowed;text-align:center;opacity:0.5;">
+                <div style="font-size:1.3rem;margin-bottom:6px;">&#128214;</div>
+                <strong style="font-size:0.9rem;">Story First</strong>
+                <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Coming soon</p>
+              </div>
+              <div class="wizard-style-card" data-style="minimal-pro" style="border:2px solid #ddd;border-radius:10px;padding:16px;cursor:not-allowed;text-align:center;opacity:0.5;">
+                <div style="font-size:1.3rem;margin-bottom:6px;">&#9679;</div>
+                <strong style="font-size:0.9rem;">Minimal Pro</strong>
+                <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Coming soon</p>
+              </div>
+            </div>
+          </div>
+
+          <div id="wizardWebsiteStatus" style="font-size:0.85rem;margin-bottom:16px;"></div>
+          <div style="display:flex;justify-content:space-between;">
+            <button class="btn btn-secondary" onclick="wizardPrev(5)">Back</button>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-secondary" onclick="wizardNext(5)">Skip</button>
+              <button class="btn btn-primary" id="wizardWebsiteContinueBtn" onclick="wizardSaveWebsite()" style="display:none;">Save &amp; Continue</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 6: First Product -->
+        <div id="wizardStep6" class="wizard-step" style="display:none;">
           <h2 style="font-size:1.8rem;margin-bottom:8px;">Add Your First Product</h2>
           <p style="color:var(--warm-gray);margin-bottom:24px;">Optional — add a product now to see your shop come alive, or skip and add products later.</p>
           <div class="form-group" style="margin-bottom:16px;">
@@ -5119,21 +5198,22 @@
           </div>
           <div id="wizardProductStatus" style="font-size:0.85rem;margin-bottom:16px;"></div>
           <div style="display:flex;justify-content:space-between;">
-            <button class="btn btn-secondary" onclick="wizardPrev(5)">Back</button>
+            <button class="btn btn-secondary" onclick="wizardPrev(6)">Back</button>
             <div style="display:flex;gap:8px;">
-              <button class="btn btn-secondary" onclick="wizardNext(5)">Skip</button>
+              <button class="btn btn-secondary" onclick="wizardNext(6)">Skip</button>
               <button class="btn btn-primary" onclick="wizardSaveProduct()">Add &amp; Continue</button>
             </div>
           </div>
         </div>
 
-        <!-- Step 6: Done -->
-        <div id="wizardStep6" class="wizard-step" style="display:none;">
+        <!-- Step 7: Done -->
+        <div id="wizardStep7" class="wizard-step" style="display:none;">
           <div style="text-align:center;padding:40px 0;">
             <div style="font-size:3rem;margin-bottom:16px;">&#127881;</div>
             <h2 style="font-size:1.8rem;margin-bottom:8px;">You're All Set!</h2>
             <p style="color:var(--warm-gray);margin-bottom:8px;">Your shop is ready to go. You can always configure more in Settings.</p>
             <div id="wizardSummary" style="text-align:left;background:var(--cream-dark,#f0e8db);border-radius:8px;padding:16px;margin:24px 0;font-size:0.9rem;"></div>
+            <div id="wizardPublishStatus" style="font-size:0.85rem;margin-bottom:16px;"></div>
             <button class="btn btn-primary" style="font-size:1rem;padding:12px 32px;" onclick="wizardComplete()">Launch Dashboard</button>
           </div>
         </div>
@@ -10235,7 +10315,7 @@ function initSetupWizard() {
 
 function showWizardStep(step) {
   wizardCurrentStep = step;
-  for (var i = 1; i <= 6; i++) {
+  for (var i = 1; i <= 7; i++) {
     var el = document.getElementById('wizardStep' + i);
     if (el) el.style.display = i === step ? '' : 'none';
   }
@@ -10258,7 +10338,7 @@ function updateWizardProgress() {
 
 function wizardNext(fromStep) {
   var next = fromStep + 1;
-  if (next > 6) return;
+  if (next > 7) return;
   // Step 1: validate business name before proceeding
   if (fromStep === 1) {
     var name = document.getElementById('wizardBizName').value.trim();
@@ -10266,8 +10346,8 @@ function wizardNext(fromStep) {
   }
   showWizardStep(next);
   saveWizardProgress(next);
-  // Step 5 → 6: render summary
-  if (next === 6) renderWizardSummary();
+  // Step 6 → 7: render summary
+  if (next === 7) renderWizardSummary();
 }
 
 function wizardPrev(fromStep) {
@@ -10375,10 +10455,147 @@ async function wizardSaveBrand() {
     await updateConfigChecklist('brand', true);
     saveWizardProgress(5, { brandConfigured: true });
     showToast('Brand customization saved.');
-    showWizardStep(5);
+    showWizardStep(5); // Website step
   } catch (err) {
     showToast('Error saving brand: ' + err.message, true);
   }
+}
+
+// ── Website wizard step functions ──
+
+function wizardWebsiteShowUrl() {
+  document.getElementById('wizardWebsiteChoice').style.display = 'none';
+  document.getElementById('wizardWebsiteUrl').style.display = '';
+  document.getElementById('wizardWebsiteFresh').style.display = 'none';
+  document.getElementById('wizardWebsiteContinueBtn').style.display = '';
+  document.getElementById('wizardWebsiteContinueBtn').textContent = 'Analyze & Continue';
+  document.getElementById('wizardWebsiteContinueBtn').onclick = wizardAnalyzeSite;
+}
+
+function wizardWebsiteShowFresh() {
+  document.getElementById('wizardWebsiteChoice').style.display = 'none';
+  document.getElementById('wizardWebsiteUrl').style.display = 'none';
+  document.getElementById('wizardWebsiteFresh').style.display = '';
+  document.getElementById('wizardWebsiteContinueBtn').style.display = '';
+  document.getElementById('wizardWebsiteContinueBtn').textContent = 'Save & Continue';
+  document.getElementById('wizardWebsiteContinueBtn').onclick = wizardSaveWebsite;
+}
+
+function wizardSelectStyle(el) {
+  var style = el.dataset.style;
+  if (style !== 'artisan-warm') return; // Only artisan-warm is functional
+  document.querySelectorAll('.wizard-style-card').forEach(function(card) {
+    card.style.borderColor = '#ddd';
+  });
+  el.style.borderColor = 'var(--primary)';
+  el.dataset.selected = 'true';
+}
+
+async function wizardAnalyzeSite() {
+  var url = document.getElementById('wizardSiteUrl').value.trim();
+  if (!url) { showToast('Please enter a URL.', true); return; }
+
+  var statusEl = document.getElementById('wizardAnalysisStatus');
+  var summaryEl = document.getElementById('wizardAnalysisSummary');
+  var btn = document.getElementById('wizardWebsiteContinueBtn');
+
+  statusEl.innerHTML = '<span style="color:var(--warm-gray);">Analyzing your website... This may take 30-60 seconds.</span>';
+  btn.disabled = true;
+  btn.textContent = 'Analyzing...';
+  summaryEl.style.display = 'none';
+
+  try {
+    var result = await firebase.functions().httpsCallable('analyzeExistingSite')({
+      url: url, tenantId: MastDB.tenantId()
+    });
+    var data = result.data;
+    var analysis = data.analysis || {};
+
+    // Show summary
+    var summaryItems = [];
+    if (analysis.businessName) summaryItems.push('<strong>Business:</strong> ' + esc(analysis.businessName));
+    if (analysis.styleRecommendation) summaryItems.push('<strong>Style:</strong> ' + esc(analysis.styleRecommendation));
+    if (analysis.colors) summaryItems.push('<strong>Colors:</strong> ' + esc(analysis.colors.primary || '') + ', ' + esc(analysis.colors.accent || ''));
+    if (analysis.hero && analysis.hero.headline) summaryItems.push('<strong>Headline:</strong> ' + esc(analysis.hero.headline));
+    summaryEl.innerHTML = '<p style="margin-bottom:8px;font-weight:600;">Site Analysis Complete:</p>' + summaryItems.join('<br>');
+    summaryEl.style.display = '';
+    statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Analysis complete! Config has been saved.</span>';
+
+    // Update button to continue
+    btn.disabled = false;
+    btn.textContent = 'Continue';
+    btn.onclick = function() {
+      saveWizardProgress(6, { websiteConfigured: true });
+      wizardProgress.websiteConfigured = true;
+      showWizardStep(6);
+    };
+  } catch (err) {
+    statusEl.innerHTML = '<span style="color:var(--danger);">Error: ' + esc(err.message) + '</span>';
+    btn.disabled = false;
+    btn.textContent = 'Retry';
+  }
+}
+
+async function wizardSaveWebsite() {
+  var statusEl = document.getElementById('wizardWebsiteStatus');
+  var urlPath = document.getElementById('wizardWebsiteUrl');
+  var freshPath = document.getElementById('wizardWebsiteFresh');
+
+  // Fresh start path: seed a default config
+  if (freshPath && freshPath.style.display !== 'none') {
+    var selectedCard = document.querySelector('.wizard-style-card[data-selected="true"]');
+    var style = selectedCard ? selectedCard.dataset.style : 'artisan-warm';
+
+    // Get business info from Step 1 for defaults
+    var bizName = document.getElementById('wizardBizName').value.trim() || '';
+    var bizTagline = document.getElementById('wizardBizTagline').value.trim() || '';
+    var bizDesc = document.getElementById('wizardBizDesc').value.trim() || '';
+    var primaryColor = document.getElementById('wizardPrimaryColorHex').value.trim() || '#8B7355';
+    var accentColor = document.getElementById('wizardAccentColorHex').value.trim() || '#2D5F5D';
+
+    var config = {
+      style: style,
+      primaryColor: primaryColor,
+      accentColor: accentColor,
+      fontPair: 'playfair-lato',
+      sections: {
+        hero: {
+          headline: bizName,
+          subheadline: bizTagline,
+          ctaText: 'Shop Now',
+          ctaUrl: '',
+          backgroundType: 'color',
+          backgroundAsset: '',
+          overlayOpacity: 40
+        },
+        gallery: { enabled: true, heading: 'Our Work', layout: 'grid', columns: 3 },
+        about: { enabled: true, heading: 'About', body: bizDesc, imageUrl: '' },
+        contact: { enabled: true, heading: 'Contact', email: '', phone: '', address: '', showForm: true, socialLinks: {} },
+        newsletter: { enabled: false, heading: 'Stay in touch', subheadline: '', buttonLabel: 'Subscribe' },
+        members: { enabled: false, accessModel: 'passcode', passcode: '', allowedEmails: [], gatedContent: '' }
+      },
+      nav: { items: ['Work', 'About', 'Contact'], showShopLink: false, shopUrl: '' },
+      meta: { siteTitle: bizName, tagline: bizTagline, favicon: '' },
+      status: 'draft',
+      publishedAt: null,
+      updatedAt: new Date().toISOString()
+    };
+
+    try {
+      await MastDB._ref('webPresence/config').set(config);
+      wizardProgress.websiteConfigured = true;
+      saveWizardProgress(6, { websiteConfigured: true });
+      showToast('Website style saved.');
+      showWizardStep(6);
+    } catch (err) {
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger);">Error: ' + esc(err.message) + '</span>';
+    }
+    return;
+  }
+
+  // URL path already handled by wizardAnalyzeSite → continue button
+  // If they click Save & Continue without analyzing, just skip
+  wizardNext(5);
 }
 
 async function wizardSaveProduct() {
@@ -10410,10 +10627,10 @@ async function wizardSaveProduct() {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     });
-    saveWizardProgress(6, { firstProductAdded: true });
+    saveWizardProgress(7, { firstProductAdded: true });
     if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Product added!</span>';
     showToast('Product "' + name + '" created.');
-    setTimeout(function() { showWizardStep(6); renderWizardSummary(); }, 500);
+    setTimeout(function() { showWizardStep(7); renderWizardSummary(); }, 500);
   } catch (err) {
     if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger);">Error: ' + esc(err.message) + '</span>';
   }
@@ -10429,6 +10646,8 @@ function renderWizardSummary() {
   if (wizardProgress.emailConfigured) items.push('<strong>Email:</strong> SendGrid connected &#10003;');
   else items.push('<strong>Email:</strong> <span style="color:var(--warm-gray);">Skipped — configure in Settings > Integrations</span>');
   if (wizardProgress.brandConfigured) items.push('<strong>Brand:</strong> Customized &#10003;');
+  if (wizardProgress.websiteConfigured) items.push('<strong>Website:</strong> Configured &#10003;');
+  else items.push('<strong>Website:</strong> <span style="color:var(--warm-gray);">Skipped — set up later in Website tab</span>');
   if (wizardProgress.firstProductAdded) items.push('<strong>Products:</strong> First product added &#10003;');
   else items.push('<strong>Products:</strong> <span style="color:var(--warm-gray);">None yet — add in Products tab</span>');
   el.innerHTML = items.join('<br style="margin-bottom:8px;">');
@@ -10462,6 +10681,20 @@ async function wizardComplete() {
     // Mark setup complete
     await MastDB.config.ref('setupProgress/completed').set(true);
     await MastDB.config.ref('setupProgress/completedAt').set(new Date().toISOString());
+
+    // Auto-publish website if config exists
+    if (wizardProgress.websiteConfigured) {
+      var pubStatus = document.getElementById('wizardPublishStatus');
+      if (pubStatus) pubStatus.innerHTML = '<span style="color:var(--warm-gray);">Publishing your website...</span>';
+      try {
+        var pubResult = await firebase.functions().httpsCallable('publishWebPresence')({ tenantId: MastDB.tenantId() });
+        if (pubResult.data && pubResult.data.url) {
+          console.log('[Wizard] Website published at', pubResult.data.url);
+        }
+      } catch (pubErr) {
+        console.warn('[Wizard] Auto-publish failed:', pubErr.message);
+      }
+    }
 
     showToast('Setup complete! Welcome to your dashboard.');
 
