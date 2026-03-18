@@ -1070,6 +1070,8 @@
 
     img.onload = function() {
       mapImgLoaded = true;
+      var loadingEl = document.querySelector('.map-loading');
+      if (loadingEl) loadingEl.remove();
       if (findBoothId) {
         mapZoom = 2.5;
         drawCanvas(0, 2.5);
@@ -1088,6 +1090,8 @@
     // If image was already loaded (cached), draw immediately
     if (img.complete && img.naturalWidth > 0) {
       mapImgLoaded = true;
+      var loadingEl = document.querySelector('.map-loading');
+      if (loadingEl) loadingEl.remove();
       if (findBoothId) {
         mapZoom = 2.5;
         drawCanvas(0, 2.5);
@@ -1176,7 +1180,12 @@
     render();
   };
 
-  window.setSearch = function(val) { searchQuery = val; render(); };
+  window.setSearch = function(val) {
+    searchQuery = val;
+    render();
+    var inp = document.querySelector('.search-input');
+    if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+  };
 
   window.setSort = function(val) { sortBy = val; render(); };
 
