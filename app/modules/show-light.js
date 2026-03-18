@@ -343,12 +343,39 @@
   // Gallery View — enriched image metadata
   // ============================================================
 
-  // Gallery uses the existing imageLibrary (loaded in core from {tenantId}/images/).
-  // No separate gallery storage. applicationPhoto flag lives on image records.
+  // Gallery merges image library + product images into one view.
+  // applicationPhoto flag lives on image library records.
+
+  function getAllImages() {
+    var merged = {};
+    // Image library entries
+    var lib = imageLibrary || {};
+    Object.keys(lib).forEach(function(id) { merged['img_' + id] = lib[id]; });
+    // Product images (if not already in library)
+    var prods = MastAdmin.getData('productsData') || {};
+    Object.keys(prods).forEach(function(pid) {
+      var p = prods[pid];
+      var imgUrl = p.image || p.imageUrl || '';
+      if (imgUrl && !Object.values(lib).some(function(img) { return img.url === imgUrl; })) {
+        merged['prod_' + pid] = {
+          url: imgUrl,
+          thumbnailUrl: imgUrl,
+          description: p.name || '',
+          productName: p.name || '',
+          productDescription: p.shortDescription || p.description || '',
+          tags: p.categories || [],
+          source: 'product',
+          applicationPhoto: p.applicationPhoto || false,
+          uploadedAt: p.createdAt || ''
+        };
+      }
+    });
+    return merged;
+  }
 
   function renderGallery(el) {
-    var lib = imageLibrary || {};
-    var entries = Object.entries(lib);
+    var allImages = getAllImages();
+    var entries = Object.entries(allImages);
     entries.sort(function(a, b) { return (b[1].uploadedAt || '').localeCompare(a[1].uploadedAt || ''); });
 
     var appCount = entries.filter(function(e) { return e[1].applicationPhoto; }).length;
@@ -411,14 +438,27 @@
   }
 
   async function slToggleAppPhoto(id) {
-    var img = imageLibrary[id];
-    if (!img) return;
-    var newVal = !img.applicationPhoto;
     try {
-      await MastDB.images.ref(id + '/applicationPhoto').set(newVal || null);
-      img.applicationPhoto = newVal;
+      if (id.indexOf('img_') === 0) {
+        // Image library entry
+        var imgId = id.slice(4);
+        var img = imageLibrary[imgId];
+        if (!img) return;
+        var newVal = !img.applicationPhoto;
+        await MastDB.images.ref(imgId + '/applicationPhoto').set(newVal || null);
+        img.applicationPhoto = newVal;
+      } else if (id.indexOf('prod_') === 0) {
+        // Product image
+        var pid = id.slice(5);
+        var prods = MastAdmin.getData('productsData') || {};
+        var prod = prods[pid];
+        if (!prod) return;
+        var newVal = !prod.applicationPhoto;
+        await MastDB.products.ref(pid + '/applicationPhoto').set(newVal || null);
+        prod.applicationPhoto = newVal;
+      }
       renderGallery(document.getElementById('slContent'));
-      showToast(newVal ? 'Marked as application photo.' : 'Unmarked.');
+      showToast(id.indexOf('prod_') === 0 || (imageLibrary[id.slice(4)] || {}).applicationPhoto ? 'Marked as application photo.' : 'Unmarked.');
     } catch (err) {
       showToast('Update failed: ' + err.message, true);
     }
@@ -852,7 +892,7 @@
 
       // Build product description from gallery images
       var productDescFromGallery = '';
-      Object.values((imageLibrary || {})).forEach(function(img) {
+      Object.values(getAllImages()).forEach(function(img) {
         if (img.category === 'product' && img.productDescription) {
           productDescFromGallery += (img.productName ? img.productName + ': ' : '') + img.productDescription + '\n';
         }
@@ -962,7 +1002,7 @@
     });
 
     var galleryByCategory = {};
-    Object.values((imageLibrary || {})).forEach(function(img) {
+    Object.values(getAllImages()).forEach(function(img) {
       if (img.category) galleryByCategory[img.category] = (galleryByCategory[img.category] || 0) + 1;
     });
 
@@ -1050,7 +1090,7 @@
           assignedImg = { url: profile.boothPhotoUrl };
           isProfileBooth = true;
         } else if (assigned) {
-          assignedImg = (imageLibrary || {})[assigned];
+          assignedImg = getAllImages()[assigned];
         }
 
         h += '<div class="sl-slot' + (assignedImg ? ' filled' : '') + '" onclick="slPickImageForSlot(' + idx + ')">';
@@ -1079,7 +1119,7 @@
   }
 
   function slPickImageForSlot(slotIdx) {
-    var allEntries = Object.entries((imageLibrary || {}));
+    var allEntries = Object.entries(getAllImages());
     if (allEntries.length === 0) {
       showToast('No images in gallery. Upload some first.', true);
       return;
@@ -1166,7 +1206,7 @@
         if (assigned === '__profile_booth__') {
           img = { url: profile.boothPhotoUrl };
         } else if (assigned) {
-          img = (imageLibrary || {})[assigned];
+          img = getAllImages()[assigned];
         }
         h += '<div style="text-align:center;">';
         if (img) {
