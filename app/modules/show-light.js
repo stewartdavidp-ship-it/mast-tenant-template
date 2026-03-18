@@ -19,7 +19,7 @@
   // Apply builder state
   var slCurrentShowId = null;
   var slCurrentApplication = null;
-  var slApplyStep = 0; // 0=select, 1=fetch, 2=map, 3=gaps, 4=images, 5=preview
+  var slApplyStep = 0; // 0=select, 1=fetch, 2=images, 3=map, 4=gaps, 5=preview
   var slParsedRequirements = null;
   var slFieldMapping = null;
   var slGapAnalysis = null;
@@ -694,13 +694,14 @@
     slFieldMapping = app.fieldMapping || null;
     slGapAnalysis = app.gapAnalysis || null;
     slImageAssignments = app.imageAssignments || {};
-    slApplyStep = slParsedRequirements ? (slFieldMapping ? (slImageAssignments && Object.keys(slImageAssignments).length > 0 ? 4 : 3) : 2) : 1;
+    // New order: 1=fetch, 2=images, 3=map, 4=gaps, 5=preview
+    slApplyStep = slParsedRequirements ? (Object.keys(slImageAssignments).length > 0 ? (slFieldMapping ? 4 : 3) : 2) : 1;
     renderApply(document.getElementById('slContent'));
   }
 
   function renderApplyBuilder(el) {
     var show = slShows[slCurrentShowId] || {};
-    var steps = ['Fetch & Parse', 'Auto-Map', 'Gap Analysis', 'Images', 'Preview'];
+    var steps = ['Fetch & Parse', 'Images', 'Auto-Map', 'Gap Analysis', 'Preview'];
     var h = '';
 
     h += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">';
@@ -723,9 +724,9 @@
     var contentEl = document.getElementById('slApplyContent');
     switch (slApplyStep) {
       case 1: renderApplyFetch(contentEl, show); break;
-      case 2: renderApplyMap(contentEl, show); break;
-      case 3: renderApplyGaps(contentEl, show); break;
-      case 4: renderApplyImages(contentEl, show); break;
+      case 2: renderApplyImages(contentEl, show); break;
+      case 3: renderApplyMap(contentEl, show); break;
+      case 4: renderApplyGaps(contentEl, show); break;
       case 5: renderApplyPreview(contentEl, show); break;
     }
   }
@@ -753,7 +754,7 @@
         if (slParsedRequirements.fees) h += '<div><strong>Fees:</strong> ' + esc(slParsedRequirements.fees) + '</div>';
         if (slParsedRequirements.deadline) h += '<div><strong>Deadline:</strong> ' + esc(slParsedRequirements.deadline) + '</div>';
         h += '</div></div>';
-        h += '<button class="btn btn-primary" onclick="slGoToStep(2);">Continue to Auto-Map →</button>';
+        h += '<button class="btn btn-primary" onclick="slGoToStep(2);">Continue to Images →</button>';
       } else {
         h += '<div style="display:flex;gap:8px;align-items:center;">';
         h += '<button class="btn btn-primary" id="slFetchBtn" onclick="slFetchAndParse()">Fetch & Parse with AI</button>';
@@ -849,14 +850,34 @@
     if (!slFieldMapping) {
       slFieldMapping = {};
 
-      // Build product description from gallery images
-      var productDescFromGallery = '';
-      Object.values((imageLibrary || {})).forEach(function(img) {
-        if (img.category === 'product' && img.productDescription) {
-          productDescFromGallery += (img.productName ? img.productName + ': ' : '') + img.productDescription + '\n';
-        }
+      // Build product description from assigned images → product catalog lookup
+      var productDesc = '';
+      var lib = imageLibrary || {};
+      var prods = MastAdmin.getData('productsData') || {};
+      // Look up product descriptions for assigned images by matching tags to product names
+      Object.values(slImageAssignments).forEach(function(imgId) {
+        if (imgId === '__profile_booth__') return;
+        var img = lib[imgId];
+        if (!img) return;
+        // Match image tags to product names in catalog
+        var tags = img.tags || [];
+        tags.forEach(function(tag) {
+          Object.values(prods).forEach(function(p) {
+            if (p.name && p.name === tag && p.description && productDesc.indexOf(p.description) < 0) {
+              productDesc += (p.name ? p.name + ': ' : '') + (p.shortDescription || p.description) + '\n';
+            }
+          });
+        });
       });
-      productDescFromGallery = productDescFromGallery.trim();
+      // Fallback: use all product catalog descriptions if no matches from images
+      if (!productDesc) {
+        Object.values(prods).forEach(function(p) {
+          if (p.description && p.image) {
+            productDesc += (p.name ? p.name + ': ' : '') + (p.shortDescription || p.description) + '\n';
+          }
+        });
+      }
+      productDesc = productDesc.trim();
 
 
       fields.forEach(function(f) {
@@ -869,7 +890,7 @@
           mapped = { source: 'profile.bio', value: profile.bio || '', confidence: profile.bio ? 'high' : 'none' };
         } else if (name.indexOf('product') >= 0 || name.indexOf('description') >= 0 || name.indexOf('what you') >= 0) {
           // Product descriptions come from gallery images, not the profile
-          mapped = { source: 'gallery images', value: productDescFromGallery, confidence: productDescFromGallery ? 'medium' : 'none' };
+          mapped = { source: 'gallery images', value: productDesc, confidence: productDesc ? 'medium' : 'none' };
         } else if (name.indexOf('material') >= 0) {
           mapped = { source: 'profile.materials', value: profile.materials || '', confidence: profile.materials ? 'high' : 'none' };
         } else if (name.indexOf('process') >= 0 || name.indexOf('technique') >= 0) {
@@ -926,8 +947,8 @@
     });
 
     h += '<div style="display:flex;gap:8px;margin-top:16px;">';
-    h += '<button class="btn btn-secondary" onclick="slGoToStep(1);">← Back</button>';
-    h += '<button class="btn btn-primary" onclick="slSaveMapping(); slGoToStep(3);">Continue to Gap Analysis →</button>';
+    h += '<button class="btn btn-secondary" onclick="slGoToStep(2);">← Back</button>';
+    h += '<button class="btn btn-primary" onclick="slSaveMapping(); slGoToStep(4);">Continue to Gap Analysis →</button>';
     h += '</div>';
     h += '</div>';
 
@@ -1007,8 +1028,8 @@
     }
 
     h += '<div style="display:flex;gap:8px;margin-top:16px;">';
-    h += '<button class="btn btn-secondary" onclick="slGoToStep(2);">← Back</button>';
-    h += '<button class="btn btn-primary" onclick="slGoToStep(4);">Continue to Images →</button>';
+    h += '<button class="btn btn-secondary" onclick="slGoToStep(3);">← Back</button>';
+    h += '<button class="btn btn-primary" onclick="slGoToStep(5);">Preview Package →</button>';
     h += '</div>';
     h += '</div>';
 
@@ -1069,8 +1090,8 @@
     }
 
     h += '<div style="display:flex;gap:8px;margin-top:16px;">';
-    h += '<button class="btn btn-secondary" onclick="slGoToStep(3);">← Back</button>';
-    h += '<button class="btn btn-primary" onclick="slGoToStep(5);">Preview Package →</button>';
+    h += '<button class="btn btn-secondary" onclick="slGoToStep(1);">← Back</button>';
+    h += '<button class="btn btn-primary" onclick="slGoToStep(3);">Continue to Auto-Map →</button>';
     h += '</div>';
     h += '</div>';
 
@@ -1189,7 +1210,7 @@
     }
 
     h += '<div style="display:flex;gap:8px;margin-top:16px;">';
-    h += '<button class="btn btn-secondary" onclick="slGoToStep(4);">← Back</button>';
+    h += '<button class="btn btn-secondary" onclick="slGoToStep(4);">← Back</button>'; // back to gaps
     h += '<button class="btn btn-primary" onclick="slSaveApplication()">Save Application Package</button>';
     h += '</div>';
     h += '</div>';
