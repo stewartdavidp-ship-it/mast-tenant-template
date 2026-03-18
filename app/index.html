@@ -4414,6 +4414,67 @@
       .nl-grid-row { flex-direction:column; padding:0 20px; }
       .nl-grid-col-gap { display:none; }
     }
+
+    /* ===== Show Light Module ===== */
+    .sl-sub-nav { display:flex; gap:8px; margin-bottom:20px; flex-wrap:wrap; }
+    .sl-sub-nav .view-tab { padding:6px 16px; border-radius:20px; border:1px solid var(--cream-dark, #E8DFD1); background:transparent; color:var(--warm-gray, #6B6560); font-size:0.85rem; cursor:pointer; transition:all 0.2s; }
+    .sl-sub-nav .view-tab.active { background:var(--charcoal, #2A2A2A); color:white; border-color:var(--charcoal); }
+    .sl-sub-nav .view-tab:hover:not(.active) { border-color:var(--amber, #C4853C); color:var(--amber); }
+    body.dark-mode .sl-sub-nav .view-tab { border-color:#444; color:#aaa; }
+    body.dark-mode .sl-sub-nav .view-tab.active { background:var(--amber); color:#1a1a1a; border-color:var(--amber); }
+
+    .sl-card { background:var(--cream, #FAF6F0); border-radius:12px; padding:20px; margin-bottom:16px; border:1px solid var(--cream-dark, #E8DFD1); }
+    body.dark-mode .sl-card { background:#2a2a2a; border-color:#444; }
+    .sl-card-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+    .sl-card-title { font-family:'Cormorant Garamond', serif; font-size:1.1rem; font-weight:600; }
+
+    .sl-form-group { margin-bottom:16px; }
+    .sl-form-group label { display:block; font-size:0.8rem; color:var(--warm-gray); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px; }
+    .sl-form-group input, .sl-form-group textarea, .sl-form-group select { width:100%; padding:10px 14px; border:1px solid var(--cream-dark, #E8DFD1); border-radius:8px; font-size:0.9rem; font-family:'DM Sans', sans-serif; background:white; }
+    body.dark-mode .sl-form-group input, body.dark-mode .sl-form-group textarea, body.dark-mode .sl-form-group select { background:#1a1a1a; border-color:#444; color:#e0e0e0; }
+
+    .sl-gallery-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:12px; }
+    .sl-gallery-item { position:relative; border-radius:10px; overflow:hidden; aspect-ratio:1; cursor:pointer; border:2px solid transparent; transition:border-color 0.2s; }
+    .sl-gallery-item:hover { border-color:var(--amber, #C4853C); }
+    .sl-gallery-item img { width:100%; height:100%; object-fit:cover; }
+    .sl-gallery-item .sl-gallery-badge { position:absolute; top:6px; right:6px; background:rgba(0,0,0,0.6); color:white; font-size:0.65rem; padding:2px 6px; border-radius:4px; }
+    .sl-gallery-item .sl-gallery-delete { position:absolute; top:6px; left:6px; background:rgba(220,38,38,0.8); color:white; border:none; border-radius:50%; width:22px; height:22px; font-size:0.75rem; cursor:pointer; display:none; align-items:center; justify-content:center; }
+    .sl-gallery-item:hover .sl-gallery-delete { display:flex; }
+
+    .sl-show-card { display:flex; gap:16px; align-items:flex-start; padding:16px; background:var(--cream, #FAF6F0); border-radius:10px; margin-bottom:10px; border:1px solid var(--cream-dark, #E8DFD1); cursor:pointer; transition:border-color 0.2s; }
+    .sl-show-card:hover { border-color:var(--amber); }
+    body.dark-mode .sl-show-card { background:#2a2a2a; border-color:#444; }
+    .sl-show-status { display:inline-block; padding:2px 8px; border-radius:4px; font-size:0.7rem; font-weight:600; text-transform:uppercase; }
+    .sl-show-status.researching { background:#dbeafe; color:#1d4ed8; }
+    .sl-show-status.ready-to-apply { background:#fef3c7; color:#92400e; }
+    .sl-show-status.applied { background:#e0e7ff; color:#3730a3; }
+    .sl-show-status.accepted { background:#d1fae5; color:#065f46; }
+    .sl-show-status.rejected { background:#fee2e2; color:#991b1b; }
+    .sl-show-status.waitlisted { background:#fde68a; color:#78350f; }
+    body.dark-mode .sl-show-status.researching { background:#1e3a5f; color:#93c5fd; }
+    body.dark-mode .sl-show-status.ready-to-apply { background:#451a03; color:#fbbf24; }
+    body.dark-mode .sl-show-status.applied { background:#312e81; color:#a5b4fc; }
+    body.dark-mode .sl-show-status.accepted { background:#064e3b; color:#6ee7b7; }
+    body.dark-mode .sl-show-status.rejected { background:#450a0a; color:#fca5a5; }
+    body.dark-mode .sl-show-status.waitlisted { background:#451a03; color:#fcd34d; }
+
+    .sl-slot { border:2px dashed var(--cream-dark, #E8DFD1); border-radius:10px; padding:16px; text-align:center; min-height:120px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; cursor:pointer; transition:border-color 0.2s, background 0.2s; }
+    .sl-slot:hover { border-color:var(--amber); background:rgba(196,133,60,0.05); }
+    .sl-slot.filled { border-style:solid; border-color:var(--sage, #7A8B6F); }
+    .sl-slot.filled img { max-width:100%; max-height:200px; object-fit:contain; border-radius:6px; }
+    body.dark-mode .sl-slot { border-color:#444; }
+
+    .sl-ai-cost { display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border-radius:12px; background:rgba(196,133,60,0.1); color:var(--amber); font-size:0.75rem; font-weight:500; }
+
+    .sl-step-indicator { display:flex; gap:4px; margin-bottom:20px; }
+    .sl-step-indicator .sl-step { flex:1; height:4px; border-radius:2px; background:var(--cream-dark, #E8DFD1); transition:background 0.3s; }
+    .sl-step-indicator .sl-step.active { background:var(--amber, #C4853C); }
+    .sl-step-indicator .sl-step.done { background:var(--sage, #7A8B6F); }
+    body.dark-mode .sl-step-indicator .sl-step { background:#444; }
+
+    .sl-gap-item { display:flex; align-items:center; gap:8px; padding:8px 12px; background:rgba(245,158,11,0.08); border-radius:8px; margin-bottom:6px; font-size:0.85rem; }
+    .sl-gap-item .sl-gap-icon { color:var(--amber); font-size:1rem; }
+    .sl-gap-item a { color:var(--amber); text-decoration:underline; cursor:pointer; }
   </style>
 </head>
 <body>
@@ -4502,6 +4563,20 @@
         <div class="sidebar-item muted" data-route="show-prep" onclick="navigateTo('show-prep')">Prep</div>
         <div class="sidebar-item muted" data-route="show-execute" onclick="navigateTo('show-execute')">Execute</div>
         <div class="sidebar-item muted" data-route="show-history" onclick="navigateTo('show-history')">History</div>
+      </div>
+    </div>
+    <!-- Show Light -->
+    <div class="sidebar-section" data-section="show-light">
+      <div class="sidebar-section-header" onclick="toggleSection('show-light')">
+        <span class="sidebar-section-icon">&#10024;</span>
+        <span class="sidebar-section-label">Show Light</span>
+        <span class="sidebar-section-arrow">&#9654;</span>
+      </div>
+      <div class="sidebar-items">
+        <div class="sidebar-item" data-route="show-light-profile" onclick="navigateTo('show-light-profile')">Profile</div>
+        <div class="sidebar-item" data-route="show-light-gallery" onclick="navigateTo('show-light-gallery')">Gallery</div>
+        <div class="sidebar-item" data-route="show-light-shows" onclick="navigateTo('show-light-shows')">Shows</div>
+        <div class="sidebar-item" data-route="show-light-apply" onclick="navigateTo('show-light-apply')">Apply</div>
       </div>
     </div>
     <!-- Events (Organizer Module) -->
@@ -4917,6 +4992,9 @@
 
     <!-- ===== EVENTS ADMIN TAB ===== -->
     <div id="eventsAdminTab" style="display:none;"></div>
+
+    <!-- ===== SHOW LIGHT TAB ===== -->
+    <div id="showLightTab" style="display:none;"></div>
 
     <div id="placeholderTab" style="display:none;"></div>
 
@@ -7453,6 +7531,40 @@ MastDB.tokenWallet = {
   unlisten: function(handle) { this.ref().off('value', handle); }
 };
 
+MastDB.showLight = {
+  profile: {
+    PATH: 'showLight/profile',
+    ref: function(subpath) { return MastDB._ref(this.PATH + (subpath ? '/' + subpath : '')); },
+    get: function() { return this.ref().once('value'); },
+    set: function(data) { return this.ref().set(data); },
+    update: function(data) { return this.ref().update(data); }
+  },
+  gallery: {
+    PATH: 'showLight/gallery',
+    ref: function(subpath) { return MastDB._ref(this.PATH + (subpath ? '/' + subpath : '')); },
+    get: function() { return this.ref().once('value'); },
+    set: function(data) { return this.ref().set(data); },
+    update: function(data) { return this.ref().update(data); },
+    newKey: function() { return MastDB._ref(this.PATH).push().key; }
+  },
+  shows: {
+    PATH: 'showLight/shows',
+    ref: function(subpath) { return MastDB._ref(this.PATH + (subpath ? '/' + subpath : '')); },
+    get: function() { return this.ref().once('value'); },
+    set: function(data) { return this.ref().set(data); },
+    update: function(data) { return this.ref().update(data); },
+    newKey: function() { return MastDB._ref(this.PATH).push().key; }
+  },
+  applications: {
+    PATH: 'showLight/applications',
+    ref: function(subpath) { return MastDB._ref(this.PATH + (subpath ? '/' + subpath : '')); },
+    get: function() { return this.ref().once('value'); },
+    set: function(data) { return this.ref().set(data); },
+    update: function(data) { return this.ref().update(data); },
+    newKey: function() { return MastDB._ref(this.PATH).push().key; }
+  }
+};
+
 // MastDB.init() is called dynamically in the auth flow after tenant resolution.
 // Entity namespace definitions above are safe — they define functions but
 // don't call _ref() until invoked after init.
@@ -7476,7 +7588,8 @@ var MODULE_REGISTRY = {
   show:   { id: 'show',   name: 'Show',   icon: '\uD83C\uDFAA', description: 'Find, apply, prep, and execute craft fairs and events.', section: 'show', navPosition: 5, purchasable: true, routes: ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'], manageSettings: [], synergies: ['sell', 'ship', 'make'], status: 'active' },
   book:   { id: 'book',   name: 'Book',   icon: '\uD83D\uDCC5', description: 'Appointments, classes, studio time.', section: 'book', navPosition: 6, purchasable: true, routes: [], manageSettings: [], synergies: ['sell', 'market'], status: 'coming-soon' },
   run:    { id: 'run',    name: 'Run',    icon: '\uD83D\uDCCB', description: 'Trips, expenses, reports, financials, contacts.', section: 'run', navPosition: 7, purchasable: true, routes: ['trips', 'expenses', 'reports', 'financials', 'contacts', 'customers'], manageSettings: [], synergies: ['sell', 'show'], status: 'active' },
-  events: { id: 'events', name: 'Events', icon: '\uD83C\uDFAB', description: 'Organize shows, manage booths, vendors, and floor plans.', section: 'events', navPosition: 8, purchasable: true, routes: ['events-shows', 'events-settings'], manageSettings: [], synergies: ['show', 'sell', 'market'], status: 'active' }
+  events: { id: 'events', name: 'Events', icon: '\uD83C\uDFAB', description: 'Organize shows, manage booths, vendors, and floor plans.', section: 'events', navPosition: 8, purchasable: true, routes: ['events-shows', 'events-settings'], manageSettings: [], synergies: ['show', 'sell', 'market'], status: 'active' },
+  'show-light': { id: 'show-light', name: 'Show Light', icon: '\u2728', description: 'Vendor profile, image gallery, and AI-powered show application builder.', section: 'show-light', navPosition: 9, purchasable: true, routes: ['show-light-profile', 'show-light-gallery', 'show-light-shows', 'show-light-apply'], manageSettings: [], synergies: ['show', 'sell', 'market'], status: 'active' }
 };
 
 // Synergy messaging for locked module previews.
@@ -7504,7 +7617,13 @@ var MODULE_SYNERGY_MAP = {
   'events:market': "You organize events. Market promotes them.",
   'show:events':  "You attend shows. Events lets you organize your own.",
   'sell:events':  "You're selling. Events lets you host vendor markets.",
-  'market:events': "You're promoting. Events gives you events to promote."
+  'market:events': "You're promoting. Events gives you events to promote.",
+  'show:show-light': "You do shows. Show Light builds your vendor profile and applications.",
+  'show-light:show': "You build applications. Show manages the full show lifecycle.",
+  'sell:show-light': "You're selling. Show Light helps you get into more shows.",
+  'show-light:sell': "You're applying to shows. Sell handles the revenue.",
+  'market:show-light': "You're promoting. Show Light gets you into events to promote at.",
+  'show-light:market': "You're at shows. Market turns them into content."
 };
 
 // Tier definitions. Journey stages, not feature lists.
@@ -9135,7 +9254,7 @@ var SECTION_ROUTES = {
   'manage': ['products', 'inventory', 'employees', 'analytics', 'auditlog', 'settings']
 };
 
-var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab'];
+var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab'];
 
 var currentRoute = 'dashboard';
 
@@ -9530,7 +9649,8 @@ var MODULE_MANIFEST = {
   sales: { src: 'modules/sales.js', routes: ['pos', 'receipts', 'events', 'salesEvents'] },
   fulfillment: { src: 'modules/fulfillment.js', routes: ['pack', 'ship', 'fulfillment'] },
   eventsAdmin: { src: 'modules/events.js', routes: ['events-shows', 'events-settings'] },
-  website: { src: 'modules/website.js', routes: ['website'] }
+  website: { src: 'modules/website.js', routes: ['website'] },
+  showLight: { src: 'modules/show-light.js', routes: ['show-light-profile', 'show-light-gallery', 'show-light-shows', 'show-light-apply'] }
 };
 
 // Reverse lookup: route → moduleId (built from MODULE_MANIFEST)
