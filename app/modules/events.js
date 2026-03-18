@@ -581,7 +581,7 @@
   function copyShowUrl(showId) {
     var show = showsData[showId];
     if (!show || !show.slug) return;
-    var domain = (typeof TENANT_CONFIG !== 'undefined' && TENANT_CONFIG && TENANT_CONFIG.domain) ? TENANT_CONFIG.domain : window.location.hostname;
+    var domain = window.location.hostname;
     var url = 'https://' + domain + '/show/' + show.slug;
     if (navigator.clipboard) {
       navigator.clipboard.writeText(url).then(function() { showToast('URL copied!'); });
@@ -593,7 +593,7 @@
   function downloadShowQR(showId) {
     var show = showsData[showId];
     if (!show || !show.slug) return;
-    var domain = (typeof TENANT_CONFIG !== 'undefined' && TENANT_CONFIG && TENANT_CONFIG.domain) ? TENANT_CONFIG.domain : window.location.hostname;
+    var domain = window.location.hostname;
     var url = 'https://' + domain + '/show/' + show.slug;
     var link = document.createElement('a');
     link.download = 'qr-' + show.slug + '.png';
@@ -646,7 +646,7 @@
     html += '</div>';
 
     if (show.slug) {
-      var showDomain = (typeof TENANT_CONFIG !== 'undefined' && TENANT_CONFIG && TENANT_CONFIG.domain) ? TENANT_CONFIG.domain : window.location.hostname;
+      var showDomain = window.location.hostname;
       var attendeeUrl = 'https://' + showDomain + '/show/' + show.slug;
       html += '<div class="ev-card"><h3>Show QR Code</h3>';
       html += '<div style="display:flex;justify-content:center;margin-bottom:10px;">';

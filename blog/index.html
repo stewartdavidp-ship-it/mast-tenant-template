@@ -14,6 +14,26 @@
       --cream: #F5F0EB;
       --charcoal: #1A1A1A;
     }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --cream: #1a1d26;
+        --cream-dark: #252a35;
+        --charcoal: #e8e4df;
+        --warm-gray: #a09890;
+      }
+    }
+    html.dark {
+      --cream: #1a1d26;
+      --cream-dark: #252a35;
+      --charcoal: #e8e4df;
+      --warm-gray: #a09890;
+    }
+    html.light {
+      --cream: #F5F0EB;
+      --cream-dark: #EDE5DB;
+      --charcoal: #1A1A1A;
+      --warm-gray: #6B6560;
+    }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -588,8 +608,12 @@
       .blog-tab { padding: 10px 16px; font-size: 0.85rem; }
     }
   </style>
+<script>
+(function(){var s=localStorage.getItem('mast-theme');var d=window.matchMedia('(prefers-color-scheme:dark)').matches;if(s==='dark'||(s!=='light'&&d))document.documentElement.classList.add('dark');else document.documentElement.classList.add('light');})();
+</script>
 </head>
 <body>
+<button id="themeToggle" onclick="toggleMastTheme()" title="Toggle dark mode" style="position:fixed;top:12px;right:12px;z-index:9999;width:36px;height:36px;border-radius:50%;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:16px;box-shadow:var(--shadow);color:var(--text);display:flex;align-items:center;justify-content:center;padding:0;"></button>
 
 <div class="free-ship-banner">Free Shipping on Orders $100+</div>
 <nav id="mainNav">
@@ -985,5 +1009,10 @@ window.TENANT_READY.then(function() {
 </script>
 <script src="../feedback-widget.js"></script>
 <script src="../share-widget.js"></script>
+<script>
+function toggleMastTheme(){var h=document.documentElement;var dark=h.classList.contains('dark');if(dark){h.classList.remove('dark');h.classList.add('light');localStorage.setItem('mast-theme','light');}else{h.classList.remove('light');h.classList.add('dark');localStorage.setItem('mast-theme','dark');}updateThemeBtn();}
+function updateThemeBtn(){var b=document.getElementById('themeToggle');if(!b)return;b.textContent=document.documentElement.classList.contains('dark')?'☀':'🌙';}
+updateThemeBtn();
+</script>
 </body>
 </html>

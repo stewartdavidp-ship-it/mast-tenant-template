@@ -39,6 +39,30 @@
   .modal-overlay { background: rgba(0,0,0,0.65); }
   .search-input { color-scheme: dark; }
 }
+html.dark {
+  --bg: #0e1117;
+  --card: #1a1d26;
+  --border: #2d3140;
+  --text: #e8e4df;
+  --text-secondary: #8a8680;
+  --primary: #3fa594;
+  --primary-bg: rgba(63,165,148,0.14);
+  --shadow: 0 1px 3px rgba(0,0,0,0.3);
+  --shadow-lg: 0 4px 12px rgba(0,0,0,0.45);
+}
+html.dark .vendor-booth-badge { background: #2a2d38; }
+html.dark .modal-overlay { background: rgba(0,0,0,0.65); }
+html.light {
+  --bg: #faf8f5;
+  --card: #ffffff;
+  --border: #e5e2dd;
+  --text: #1a1a1a;
+  --text-secondary: #6b6560;
+  --primary: #2a7c6f;
+  --primary-bg: rgba(42,124,111,0.08);
+  --shadow: 0 1px 3px rgba(0,0,0,0.06);
+  --shadow-lg: 0 4px 12px rgba(0,0,0,0.08);
+}
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
 a { color: var(--primary); text-decoration: none; }
@@ -372,8 +396,12 @@ a:hover { text-decoration: underline; }
   .sort-select { width: 100%; }
 }
 </style>
+<script>
+(function(){var s=localStorage.getItem('mast-theme');var d=window.matchMedia('(prefers-color-scheme:dark)').matches;if(s==='dark'||(s!=='light'&&d))document.documentElement.classList.add('dark');else document.documentElement.classList.add('light');})();
+</script>
 </head>
 <body>
+<button id="themeToggle" onclick="toggleMastTheme()" title="Toggle dark mode" style="position:fixed;top:12px;right:12px;z-index:9999;width:36px;height:36px;border-radius:50%;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:16px;box-shadow:var(--shadow);color:var(--text);display:flex;align-items:center;justify-content:center;padding:0;"></button>
 
 <div id="app">
   <div class="loading"><div class="spinner"></div></div>
@@ -385,5 +413,10 @@ a:hover { text-decoration: underline; }
 <script src="../storefront-tenant.js"></script>
 <script src="../tenant-brand.js?v=2"></script>
 <script src="show.js"></script>
+<script>
+function toggleMastTheme(){var h=document.documentElement;var dark=h.classList.contains('dark');if(dark){h.classList.remove('dark');h.classList.add('light');localStorage.setItem('mast-theme','light');}else{h.classList.remove('light');h.classList.add('dark');localStorage.setItem('mast-theme','dark');}updateThemeBtn();}
+function updateThemeBtn(){var b=document.getElementById('themeToggle');if(!b)return;b.textContent=document.documentElement.classList.contains('dark')?'☀':'🌙';}
+updateThemeBtn();
+</script>
 </body>
 </html>
