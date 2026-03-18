@@ -567,13 +567,9 @@
   }
 
   // ── Register Module ──
-  registerModule({
-    name: 'website',
+  MastAdmin.registerModule('website', {
     routes: {
-      'website': function() {
-        document.getElementById('websiteTab').style.display = '';
-        renderWebsite();
-      }
+      'website': { tab: 'websiteTab', setup: function() { renderWebsite(); } }
     }
   });
 })();
