@@ -11,8 +11,8 @@
 
   var slLoaded = false;
   var slSubView = 'profile'; // profile | gallery | shows | apply
+  var slGalleryFilter = 'all'; // all | app
   var slProfile = null;
-  var slGalleryItems = {};
   var slShows = {};
   var slApplications = {};
 
@@ -41,9 +41,6 @@
     try {
       var profileSnap = await MastDB.showLight.profile.get();
       slProfile = profileSnap.val() || {};
-
-      var gallerySnap = await MastDB.showLight.gallery.get();
-      slGalleryItems = gallerySnap.val() || {};
 
       var showsSnap = await MastDB.showLight.shows.get();
       slShows = showsSnap.val() || {};
@@ -346,43 +343,50 @@
   // Gallery View — enriched image metadata
   // ============================================================
 
+  // Gallery uses the existing imageLibrary (loaded in core from {tenantId}/images/).
+  // No separate gallery storage. applicationPhoto flag lives on image records.
+
   function renderGallery(el) {
-    var entries = Object.entries(slGalleryItems);
+    var lib = imageLibrary || {};
+    var entries = Object.entries(lib);
     entries.sort(function(a, b) { return (b[1].uploadedAt || '').localeCompare(a[1].uploadedAt || ''); });
 
     var appCount = entries.filter(function(e) { return e[1].applicationPhoto; }).length;
 
     var h = '';
     h += '<div class="sl-card">';
-    h += '<div class="sl-card-header"><span class="sl-card-title">Image Gallery (' + entries.length + ')</span>';
-    h += '<div style="display:flex;gap:8px;">';
-    h += '<button class="btn btn-sm" onclick="slUploadFromLibrary()" style="background:var(--sage);color:white;border:none;border-radius:6px;padding:4px 12px;cursor:pointer;">From Library</button>';
-    h += '<button class="btn btn-primary btn-sm" onclick="slOpenUploadModal()">+ Upload</button>';
-    h += '</div></div>';
+    h += '<div class="sl-card-header"><span class="sl-card-title">Images (' + entries.length + ')</span>';
+    h += '<button class="btn btn-primary btn-sm" onclick="slUploadToLibrary()">+ Upload</button>';
+    h += '</div>';
 
-    if (appCount > 0) {
-      h += '<div style="font-size:0.8rem;color:var(--amber);margin-bottom:12px;">⭐ ' + appCount + ' application photo' + (appCount !== 1 ? 's' : '') + ' selected — these appear in the Apply image picker</div>';
-    } else if (entries.length > 0) {
-      h += '<div style="font-size:0.8rem;color:var(--warm-gray);margin-bottom:12px;">Click images and mark your best as "Application Photo" — those will be available when building applications</div>';
+    // Filter toggle
+    h += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">';
+    h += '<button class="view-tab' + (slGalleryFilter === 'all' ? ' active' : '') + '" onclick="slSetGalleryFilter(\'all\')" style="padding:4px 12px;border-radius:16px;border:1px solid var(--cream-dark);background:' + (slGalleryFilter === 'all' ? 'var(--charcoal)' : 'transparent') + ';color:' + (slGalleryFilter === 'all' ? 'white' : 'var(--warm-gray)') + ';font-size:0.8rem;cursor:pointer;">All (' + entries.length + ')</button>';
+    h += '<button class="view-tab' + (slGalleryFilter === 'app' ? ' active' : '') + '" onclick="slSetGalleryFilter(\'app\')" style="padding:4px 12px;border-radius:16px;border:1px solid var(--cream-dark);background:' + (slGalleryFilter === 'app' ? 'var(--amber)' : 'transparent') + ';color:' + (slGalleryFilter === 'app' ? 'white' : 'var(--warm-gray)') + ';font-size:0.8rem;cursor:pointer;">⭐ Application (' + appCount + ')</button>';
+    h += '</div>';
+
+    // Apply filter
+    var filtered = slGalleryFilter === 'app' ? entries.filter(function(e) { return e[1].applicationPhoto; }) : entries;
+
+    if (entries.length > 0 && appCount === 0) {
+      h += '<div style="font-size:0.8rem;color:var(--warm-gray);margin-bottom:12px;">Click images to mark your best as application photos</div>';
     }
 
-    if (entries.length === 0) {
+    if (filtered.length === 0) {
       h += '<div style="text-align:center;padding:40px;color:var(--warm-gray);">';
       h += '<div style="font-size:2rem;margin-bottom:8px;">🖼</div>';
-      h += '<div>No images yet. Upload photos of your work, booth setup, and process.</div>';
+      h += '<div>' + (entries.length === 0 ? 'No images yet. Upload photos or go to the <a onclick="navigateTo(\'images\')" style="color:var(--amber);cursor:pointer;">Images</a> tab.' : 'No application photos selected. Switch to "All" and click images to mark them.') + '</div>';
       h += '</div>';
     } else {
       h += '<div class="sl-gallery-grid">';
-      entries.forEach(function(entry) {
+      filtered.forEach(function(entry) {
         var id = entry[0];
         var img = entry[1];
         var isApp = img.applicationPhoto;
-        h += '<div class="sl-gallery-item" onclick="slViewGalleryImage(\'' + esc(id) + '\')" style="' + (isApp ? 'border-color:var(--amber);' : '') + '">';
-        h += '<img src="' + esc(img.url || img.thumbnailUrl || '') + '" alt="' + esc(img.productName || (img.tags ? img.tags[0] : '')) + '" loading="lazy">';
+        h += '<div class="sl-gallery-item" onclick="slToggleAppPhoto(\'' + esc(id) + '\')" style="' + (isApp ? 'border-color:var(--amber);' : '') + '">';
+        h += '<img src="' + esc(img.thumbnailUrl || img.url || '') + '" alt="' + esc((img.tags || [])[0] || '') + '" loading="lazy">';
         if (isApp) h += '<div style="position:absolute;top:6px;left:6px;background:var(--amber);color:white;font-size:0.6rem;padding:2px 5px;border-radius:3px;font-weight:600;">⭐ APP</div>';
-        if (img.category) h += '<span class="sl-gallery-badge">' + esc(img.category) + '</span>';
-        if (img.productName) h += '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.6);color:white;font-size:0.65rem;padding:3px 6px;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;">' + esc(img.productName) + '</div>';
-        h += '<button class="sl-gallery-delete" onclick="event.stopPropagation(); slDeleteGalleryImage(\'' + esc(id) + '\')">&times;</button>';
+        if (img.description) h += '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.6);color:white;font-size:0.65rem;padding:3px 6px;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;">' + esc(img.description) + '</div>';
         h += '</div>';
       });
       h += '</div>';
@@ -392,242 +396,31 @@
     el.innerHTML = h;
   }
 
-  function slOpenUploadModal() {
-    var html =
-      '<div class="modal-header">' +
-        '<h3>Upload to Show Light Gallery</h3>' +
-        '<button class="modal-close" onclick="closeModal()">&times;</button>' +
-      '</div>' +
-      '<div class="modal-body">' +
-        '<input type="file" id="slUploadFileInput" accept="image/*" onchange="slHandleUploadFile(this)" style="display:none;" multiple>' +
-        '<div id="slDropZone" onclick="document.getElementById(\'slUploadFileInput\').click()" ' +
-          'style="border:2px dashed #ccc;border-radius:8px;padding:30px 20px;text-align:center;cursor:pointer;background:var(--cream);transition:border-color 0.2s;">' +
-          '<div style="font-size:2rem;margin-bottom:8px;">📸</div>' +
-          '<div style="color:var(--warm-gray);font-size:0.9rem;">Click to select images</div>' +
-          '<div id="slUploadNames" style="color:var(--amber);font-size:0.85rem;margin-top:8px;display:none;"></div>' +
-        '</div>' +
-        '<div id="slUploadPreview" style="margin-top:12px;"></div>' +
-        '<div class="sl-form-group" style="margin-top:12px;">' +
-          '<label>Category</label>' +
-          '<select id="slUploadCategory">' +
-            '<option value="">None</option>' +
-            '<option value="product">Product</option>' +
-            '<option value="booth">Booth Setup</option>' +
-            '<option value="process">Process / At Work</option>' +
-            '<option value="detail">Close-up / Detail</option>' +
-            '<option value="lifestyle">Lifestyle</option>' +
-            '<option value="headshot">Headshot / Portrait</option>' +
-          '</select>' +
-        '</div>' +
-        '<div class="sl-form-group"><label>Product Name</label>' +
-          '<input type="text" id="slUploadProductName" placeholder="e.g. Spiral Drinking Glass"></div>' +
-        '<div class="sl-form-group"><label>Product Description</label>' +
-          '<textarea id="slUploadProductDesc" rows="2" placeholder="Brief description of the item shown..."></textarea></div>' +
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
-          '<div class="sl-form-group"><label>Price</label>' +
-            '<input type="text" id="slUploadPrice" placeholder="e.g. $45"></div>' +
-          '<div class="sl-form-group"><label>Materials</label>' +
-            '<input type="text" id="slUploadMaterials" placeholder="e.g. borosilicate glass"></div>' +
-        '</div>' +
-        '<div class="sl-form-group">' +
-          '<label>Tags (comma-separated)</label>' +
-          '<input type="text" id="slUploadTags" placeholder="e.g. cups, blue, functional">' +
-        '</div>' +
-      '</div>' +
-      '<div class="modal-footer">' +
-        '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
-        '<button class="btn btn-primary" id="slUploadBtn" onclick="slDoUpload()" disabled>Upload</button>' +
-      '</div>';
-
-    openModal(html);
+  function slSetGalleryFilter(f) {
+    slGalleryFilter = f;
+    renderGallery(document.getElementById('slContent'));
   }
 
-  var _slPendingFiles = [];
-
-  function slHandleUploadFile(input) {
-    _slPendingFiles = Array.from(input.files || []);
-    var nameEl = document.getElementById('slUploadNames');
-    if (nameEl && _slPendingFiles.length > 0) {
-      nameEl.textContent = _slPendingFiles.map(function(f) { return f.name; }).join(', ');
-      nameEl.style.display = '';
-    }
-    var btn = document.getElementById('slUploadBtn');
-    if (btn) btn.disabled = _slPendingFiles.length === 0;
-
-    if (_slPendingFiles.length > 0) {
-      var reader = new FileReader();
-      reader.onload = function(e) {
-        var prev = document.getElementById('slUploadPreview');
-        if (prev) prev.innerHTML = '<img src="' + e.target.result + '" style="max-width:100%;max-height:200px;border-radius:8px;">';
-      };
-      reader.readAsDataURL(_slPendingFiles[0]);
+  function slUploadToLibrary() {
+    // Use the existing core image library upload modal — it uploads to {tenantId}/images/
+    if (typeof openLibraryUploadModal === 'function') {
+      openLibraryUploadModal();
+    } else {
+      showToast('Go to the Images tab to upload photos.', true);
     }
   }
 
-  async function slDoUpload() {
-    if (_slPendingFiles.length === 0) return;
-    var btn = document.getElementById('slUploadBtn');
-    if (btn) { btn.disabled = true; btn.textContent = 'Uploading...'; }
-
-    var category = (document.getElementById('slUploadCategory') || {}).value || '';
-    var tags = ((document.getElementById('slUploadTags') || {}).value || '').split(',').map(function(t) { return t.trim(); }).filter(Boolean);
-    var productName = (document.getElementById('slUploadProductName') || {}).value || '';
-    var productDescription = (document.getElementById('slUploadProductDesc') || {}).value || '';
-    var price = (document.getElementById('slUploadPrice') || {}).value || '';
-    var materials = (document.getElementById('slUploadMaterials') || {}).value || '';
-
-    try {
-      var token = await auth.currentUser.getIdToken();
-      for (var i = 0; i < _slPendingFiles.length; i++) {
-        var file = _slPendingFiles[i];
-        if (file.size > 10 * 1024 * 1024) { showToast(file.name + ' too large (max 10MB).', true); continue; }
-
-        var compressed = await compressImage(file, 1600, 0.85);
-
-        var resp = await callCF('/uploadImage', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-          body: JSON.stringify({ image: compressed.base64, tags: tags, source: 'show-light-gallery' })
-        });
-        var result = await resp.json();
-        if (!result.success) { showToast('Upload failed: ' + (result.error || 'unknown'), true); continue; }
-
-        var key = MastDB.showLight.gallery.newKey();
-        await MastDB.showLight.gallery.ref(key).set({
-          url: result.url || '',
-          thumbnailUrl: result.thumbnailUrl || result.url || '',
-          category: category,
-          tags: tags,
-          productName: productName,
-          productDescription: productDescription,
-          price: price,
-          materials: materials,
-          width: compressed.width,
-          height: compressed.height,
-          aiSuggestions: null,
-          uploadedAt: new Date().toISOString()
-        });
-        slGalleryItems[key] = { url: result.url, thumbnailUrl: result.thumbnailUrl || result.url, category: category, tags: tags, productName: productName, productDescription: productDescription, price: price, materials: materials, width: compressed.width, height: compressed.height, uploadedAt: new Date().toISOString() };
-      }
-
-      showToast(_slPendingFiles.length + ' image(s) uploaded.');
-      _slPendingFiles = [];
-      closeModal();
-      renderGallery(document.getElementById('slContent'));
-    } catch (err) {
-      showToast('Upload error: ' + err.message, true);
-      if (btn) { btn.disabled = false; btn.textContent = 'Upload'; }
-    }
-  }
-
-  function slUploadFromLibrary() {
-    openImagePicker(function(selected) {
-      if (!selected || selected.length === 0) return;
-      var items = Array.isArray(selected) ? selected : [selected];
-      items.forEach(function(imgId) {
-        var libImg = imageLibrary[imgId];
-        if (!libImg) return;
-        var key = MastDB.showLight.gallery.newKey();
-        var entry = {
-          url: libImg.url || '',
-          thumbnailUrl: libImg.thumbnailUrl || libImg.url || '',
-          category: '',
-          tags: libImg.tags || [],
-          productName: '',
-          productDescription: '',
-          price: '',
-          materials: '',
-          width: libImg.width || null,
-          height: libImg.height || null,
-          aiSuggestions: null,
-          sourceImageId: imgId,
-          uploadedAt: new Date().toISOString()
-        };
-        MastDB.showLight.gallery.ref(key).set(entry);
-        slGalleryItems[key] = entry;
-      });
-      showToast(items.length + ' image(s) added from library.');
-      renderGallery(document.getElementById('slContent'));
-    }, { multi: true });
-  }
-
-  function slViewGalleryImage(id) {
-    var img = slGalleryItems[id];
+  async function slToggleAppPhoto(id) {
+    var img = imageLibrary[id];
     if (!img) return;
-
-    var html =
-      '<div class="modal-header">' +
-        '<h3>Gallery Image</h3>' +
-        '<button class="modal-close" onclick="closeModal()">&times;</button>' +
-      '</div>' +
-      '<div class="modal-body">' +
-        '<div style="text-align:center;margin-bottom:16px;"><img src="' + esc(img.url || '') + '" style="max-width:100%;max-height:300px;border-radius:8px;"></div>' +
-        '<div class="sl-form-group"><label>Category</label>' +
-          '<select id="slEditCat">' +
-            '<option value=""' + (!img.category ? ' selected' : '') + '>None</option>' +
-            '<option value="product"' + (img.category === 'product' ? ' selected' : '') + '>Product</option>' +
-            '<option value="booth"' + (img.category === 'booth' ? ' selected' : '') + '>Booth Setup</option>' +
-            '<option value="process"' + (img.category === 'process' ? ' selected' : '') + '>Process / At Work</option>' +
-            '<option value="detail"' + (img.category === 'detail' ? ' selected' : '') + '>Close-up / Detail</option>' +
-            '<option value="lifestyle"' + (img.category === 'lifestyle' ? ' selected' : '') + '>Lifestyle</option>' +
-            '<option value="headshot"' + (img.category === 'headshot' ? ' selected' : '') + '>Headshot / Portrait</option>' +
-          '</select></div>' +
-        '<div class="sl-form-group"><label>Product Name</label>' +
-          '<input type="text" id="slEditProductName" value="' + esc(img.productName || '') + '" placeholder="Name of the product shown"></div>' +
-        '<div class="sl-form-group"><label>Product Description</label>' +
-          '<textarea id="slEditProductDesc" rows="2" placeholder="Brief description...">' + esc(img.productDescription || '') + '</textarea></div>' +
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
-          '<div class="sl-form-group"><label>Price</label><input type="text" id="slEditPrice" value="' + esc(img.price || '') + '" placeholder="e.g. $45"></div>' +
-          '<div class="sl-form-group"><label>Materials</label><input type="text" id="slEditMaterials" value="' + esc(img.materials || '') + '" placeholder="e.g. glass"></div>' +
-        '</div>' +
-        '<div class="sl-form-group"><label>Tags</label>' +
-          '<input type="text" id="slEditTags" value="' + esc((img.tags || []).join(', ')) + '" placeholder="comma-separated"></div>' +
-        '<div class="sl-form-group" style="margin-top:12px;padding:12px;border-radius:8px;background:' + (img.applicationPhoto ? 'rgba(196,133,60,0.15)' : 'rgba(122,139,111,0.08)') + ';">' +
-          '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;text-transform:none;letter-spacing:0;">' +
-            '<input type="checkbox" id="slEditAppPhoto"' + (img.applicationPhoto ? ' checked' : '') + ' style="width:auto;">' +
-            '<span style="font-size:0.9rem;font-weight:600;">⭐ Application Photo</span>' +
-          '</label>' +
-          '<div style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Application photos appear in the image picker when building show applications.</div>' +
-        '</div>' +
-        (img.width ? '<div style="font-size:0.8rem;color:var(--warm-gray);margin-top:8px;">' + img.width + ' x ' + img.height + '</div>' : '') +
-      '</div>' +
-      '<div class="modal-footer">' +
-        '<button class="btn" onclick="slDeleteGalleryImage(\'' + esc(id) + '\'); closeModal();" style="background:var(--danger);color:white;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;">Delete</button>' +
-        '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
-        '<button class="btn btn-primary" onclick="slUpdateGalleryImage(\'' + esc(id) + '\'); closeModal();">Save</button>' +
-      '</div>';
-
-    openModal(html);
-  }
-
-  async function slUpdateGalleryImage(id) {
-    var updates = {
-      category: (document.getElementById('slEditCat') || {}).value || '',
-      productName: (document.getElementById('slEditProductName') || {}).value || '',
-      productDescription: (document.getElementById('slEditProductDesc') || {}).value || '',
-      price: (document.getElementById('slEditPrice') || {}).value || '',
-      materials: (document.getElementById('slEditMaterials') || {}).value || '',
-      tags: ((document.getElementById('slEditTags') || {}).value || '').split(',').map(function(t) { return t.trim(); }).filter(Boolean),
-      applicationPhoto: !!(document.getElementById('slEditAppPhoto') || {}).checked
-    };
+    var newVal = !img.applicationPhoto;
     try {
-      await MastDB.showLight.gallery.ref(id).update(updates);
-      if (slGalleryItems[id]) Object.assign(slGalleryItems[id], updates);
-      showToast('Image updated.');
+      await MastDB.images.ref(id + '/applicationPhoto').set(newVal || null);
+      img.applicationPhoto = newVal;
+      renderGallery(document.getElementById('slContent'));
+      showToast(newVal ? 'Marked as application photo.' : 'Unmarked.');
     } catch (err) {
       showToast('Update failed: ' + err.message, true);
-    }
-  }
-
-  async function slDeleteGalleryImage(id) {
-    if (!confirm('Delete this image from your Show Light gallery?')) return;
-    try {
-      await MastDB.showLight.gallery.ref(id).remove();
-      delete slGalleryItems[id];
-      showToast('Image removed.');
-      renderGallery(document.getElementById('slContent'));
-    } catch (err) {
-      showToast('Delete failed: ' + err.message, true);
     }
   }
 
@@ -1059,7 +852,7 @@
 
       // Build product description from gallery images
       var productDescFromGallery = '';
-      Object.values(slGalleryItems).forEach(function(img) {
+      Object.values((imageLibrary || {})).forEach(function(img) {
         if (img.category === 'product' && img.productDescription) {
           productDescFromGallery += (img.productName ? img.productName + ': ' : '') + img.productDescription + '\n';
         }
@@ -1169,7 +962,7 @@
     });
 
     var galleryByCategory = {};
-    Object.values(slGalleryItems).forEach(function(img) {
+    Object.values((imageLibrary || {})).forEach(function(img) {
       if (img.category) galleryByCategory[img.category] = (galleryByCategory[img.category] || 0) + 1;
     });
 
@@ -1257,7 +1050,7 @@
           assignedImg = { url: profile.boothPhotoUrl };
           isProfileBooth = true;
         } else if (assigned) {
-          assignedImg = slGalleryItems[assigned];
+          assignedImg = (imageLibrary || {})[assigned];
         }
 
         h += '<div class="sl-slot' + (assignedImg ? ' filled' : '') + '" onclick="slPickImageForSlot(' + idx + ')">';
@@ -1286,7 +1079,7 @@
   }
 
   function slPickImageForSlot(slotIdx) {
-    var allEntries = Object.entries(slGalleryItems);
+    var allEntries = Object.entries((imageLibrary || {}));
     if (allEntries.length === 0) {
       showToast('No images in gallery. Upload some first.', true);
       return;
@@ -1373,7 +1166,7 @@
         if (assigned === '__profile_booth__') {
           img = { url: profile.boothPhotoUrl };
         } else if (assigned) {
-          img = slGalleryItems[assigned];
+          img = (imageLibrary || {})[assigned];
         }
         h += '<div style="text-align:center;">';
         if (img) {
@@ -1448,13 +1241,9 @@
   window.slSaveProfile = slSaveProfile;
   window.slChangeBoothPhoto = slChangeBoothPhoto;
   window.slRemoveBoothPhoto = slRemoveBoothPhoto;
-  window.slOpenUploadModal = slOpenUploadModal;
-  window.slHandleUploadFile = slHandleUploadFile;
-  window.slDoUpload = slDoUpload;
-  window.slUploadFromLibrary = slUploadFromLibrary;
-  window.slViewGalleryImage = slViewGalleryImage;
-  window.slUpdateGalleryImage = slUpdateGalleryImage;
-  window.slDeleteGalleryImage = slDeleteGalleryImage;
+  window.slToggleAppPhoto = slToggleAppPhoto;
+  window.slSetGalleryFilter = slSetGalleryFilter;
+  window.slUploadToLibrary = slUploadToLibrary;
   window.slOpenAddShowModal = slOpenAddShowModal;
   window.slSaveNewShow = slSaveNewShow;
   window.slOpenEditShowModal = slOpenEditShowModal;

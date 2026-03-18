@@ -7539,14 +7539,6 @@ MastDB.showLight = {
     set: function(data) { return this.ref().set(data); },
     update: function(data) { return this.ref().update(data); }
   },
-  gallery: {
-    PATH: 'showLight/gallery',
-    ref: function(subpath) { return MastDB._ref(this.PATH + (subpath ? '/' + subpath : '')); },
-    get: function() { return this.ref().once('value'); },
-    set: function(data) { return this.ref().set(data); },
-    update: function(data) { return this.ref().update(data); },
-    newKey: function() { return MastDB._ref(this.PATH).push().key; }
-  },
   shows: {
     PATH: 'showLight/shows',
     ref: function(subpath) { return MastDB._ref(this.PATH + (subpath ? '/' + subpath : '')); },
