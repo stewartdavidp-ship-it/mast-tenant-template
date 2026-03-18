@@ -3,7 +3,11 @@
 
   var websiteLoaded = false;
   var websiteConfig = null;
+  var importJobs = null;
+  var importedProducts = null;
   var currentSubTab = 'overview';
+  var importReviewTab = 'products';
+  var importJobsListener = null;
 
   // ── Style definitions ──
   var STYLE_DEFS = [
@@ -80,6 +84,61 @@
     }
   }
 
+  async function loadImportJobs() {
+    try {
+      var snap = await MastDB._ref('webPresence/importJobs').orderByChild('createdAt').limitToLast(10).once('value');
+      var raw = snap.val() || {};
+      importJobs = Object.values(raw).sort(function(a, b) {
+        return (b.createdAt || '').localeCompare(a.createdAt || '');
+      });
+    } catch (err) {
+      console.warn('[Website] Failed to load import jobs:', err.message);
+      importJobs = [];
+    }
+  }
+
+  async function loadImportedProducts() {
+    try {
+      var snap = await MastDB._ref('public/products').once('value');
+      var raw = snap.val() || {};
+      importedProducts = Object.keys(raw).map(function(k) {
+        var p = raw[k]; p.id = k; return p;
+      }).filter(function(p) { return p.importedFrom; });
+    } catch (err) {
+      console.warn('[Website] Failed to load products:', err.message);
+      importedProducts = [];
+    }
+  }
+
+  function startImportJobsListener() {
+    if (importJobsListener) return;
+    try {
+      var ref = MastDB._ref('webPresence/importJobs');
+      importJobsListener = ref.on('value', function(snap) {
+        var raw = snap.val() || {};
+        importJobs = Object.values(raw).sort(function(a, b) {
+          return (b.createdAt || '').localeCompare(a.createdAt || '');
+        });
+        // Check if any active jobs → auto-refresh the UI
+        var hasActive = importJobs.some(function(j) {
+          return j.status === 'pending' || j.status === 'processing' || j.status === 'crawled' || j.status === 'importing';
+        });
+        if (currentSubTab === 'import') {
+          renderWebsite();
+        }
+      });
+    } catch (err) {
+      console.warn('[Website] Failed to start import listener:', err.message);
+    }
+  }
+
+  function stopImportJobsListener() {
+    if (importJobsListener) {
+      try { MastDB._ref('webPresence/importJobs').off('value', importJobsListener); } catch (e) {}
+      importJobsListener = null;
+    }
+  }
+
   // ── Render the full module ──
   async function renderWebsite() {
     var root = document.getElementById('websiteModuleRoot');
@@ -88,6 +147,9 @@
     if (!websiteLoaded) {
       root.innerHTML = '<div class="loading">Loading website settings...</div>';
       await loadWebsiteConfig();
+      await loadImportJobs();
+      await loadImportedProducts();
+      startImportJobsListener();
       websiteLoaded = true;
     }
 
@@ -284,6 +346,18 @@
   // ── Import Tab ──
   function renderImportTab() {
     var html = '';
+
+    // Import jobs status section
+    html += renderImportJobsSection();
+
+    // Review imported content (if any complete jobs exist)
+    var hasComplete = importJobs && importJobs.some(function(j) { return j.status === 'complete'; });
+    if (hasComplete) {
+      html += renderReviewSection();
+    }
+
+    // Analyze section
+    html += '<div style="margin-top:24px;padding-top:24px;border-top:1px solid var(--cream-dark);">';
     html += '<h3 style="font-size:1rem;margin-bottom:12px;">Analyze a Website</h3>';
     html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">Enter a URL to analyze and import content into your site configuration.</p>';
     html += '<div class="wp-field-group">';
@@ -294,8 +368,237 @@
     html += '</div></div>';
     html += '<div id="wpAnalyzeStatus" style="font-size:0.85rem;margin-bottom:16px;"></div>';
     html += '<div id="wpAnalyzeResults"></div>';
+    html += '</div>';
 
     return html;
+  }
+
+  // ── Import Jobs Status ──
+  function renderImportJobsSection() {
+    if (!importJobs || importJobs.length === 0) return '';
+
+    var html = '<h3 style="font-size:1rem;margin-bottom:12px;">Import Jobs</h3>';
+
+    importJobs.forEach(function(job) {
+      var statusInfo = getJobStatusInfo(job.status);
+      var timeAgo = formatTimeAgo(job.createdAt);
+
+      html += '<div style="background:var(--cream);border-radius:8px;padding:16px;margin-bottom:12px;border-left:4px solid ' + statusInfo.color + ';">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">';
+      html += '<div>';
+      html += '<div style="font-weight:600;font-size:0.9rem;">' + esc(job.url) + '</div>';
+      html += '<div style="font-size:0.8rem;color:var(--warm-gray);margin-top:2px;">' + timeAgo + '</div>';
+      html += '</div>';
+      html += '<span style="font-size:0.8rem;padding:3px 10px;border-radius:12px;background:' + statusInfo.bg + ';color:' + statusInfo.color + ';font-weight:600;white-space:nowrap;">';
+      html += statusInfo.icon + ' ' + statusInfo.label;
+      html += '</span>';
+      html += '</div>';
+
+      // Status-specific details
+      if (job.status === 'pending') {
+        html += '<div style="font-size:0.85rem;color:var(--warm-gray);">Queued for processing. The import runs every 30 minutes.</div>';
+      } else if (job.status === 'processing') {
+        html += '<div style="font-size:0.85rem;color:var(--warm-gray);">Scanning your website for products, images, and content...</div>';
+        html += renderProgressBar(30);
+      } else if (job.status === 'crawled') {
+        html += renderDiscoveredCounts(job.discovered);
+        html += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-top:4px;">Content discovered! Importing soon...</div>';
+      } else if (job.status === 'importing') {
+        html += renderDiscoveredCounts(job.discovered);
+        html += renderImportProgress(job.imported);
+      } else if (job.status === 'complete') {
+        html += renderImportedCounts(job.imported);
+        if (job.completedAt) {
+          html += '<div style="font-size:0.8rem;color:var(--warm-gray);margin-top:4px;">Completed ' + formatTimeAgo(job.completedAt) + '</div>';
+        }
+      } else if (job.status === 'failed') {
+        html += '<div style="font-size:0.85rem;color:var(--danger);margin-top:4px;">' + esc(job.error || 'Import encountered an error.') + '</div>';
+        html += '<button class="btn btn-secondary" onclick="wpRetryImport(\'' + esc(job.id) + '\')" style="margin-top:8px;font-size:0.8rem;">Retry Import</button>';
+      }
+
+      html += '</div>';
+    });
+
+    return html;
+  }
+
+  function getJobStatusInfo(status) {
+    var map = {
+      pending: { label: 'Queued', icon: '&#9203;', color: 'var(--warm-gray)', bg: 'var(--cream-dark)' },
+      processing: { label: 'Scanning', icon: '&#128269;', color: 'var(--amber)', bg: '#FFF3E0' },
+      crawled: { label: 'Found Content', icon: '&#10003;', color: 'var(--teal)', bg: '#E0F2F1' },
+      importing: { label: 'Importing', icon: '&#8635;', color: 'var(--amber)', bg: '#FFF3E0' },
+      complete: { label: 'Complete', icon: '&#10003;', color: 'var(--teal)', bg: '#E0F2F1' },
+      failed: { label: 'Failed', icon: '&#10007;', color: 'var(--danger)', bg: '#FFEBEE' }
+    };
+    return map[status] || map.pending;
+  }
+
+  function renderProgressBar(pct) {
+    return '<div style="margin-top:8px;background:var(--cream-dark);border-radius:4px;height:6px;overflow:hidden;">' +
+      '<div style="height:100%;width:' + pct + '%;background:var(--amber);border-radius:4px;transition:width 0.5s;"></div></div>';
+  }
+
+  function renderDiscoveredCounts(discovered) {
+    if (!discovered) return '';
+    var items = [];
+    if (discovered.products && discovered.products.count) items.push(discovered.products.count + ' products');
+    if (discovered.images && discovered.images.count) items.push(discovered.images.count + ' images');
+    if (discovered.blogs && discovered.blogs.count) items.push(discovered.blogs.count + ' blog posts');
+    if (discovered.events && discovered.events.count) items.push(discovered.events.count + ' events');
+    if (items.length === 0) return '';
+    return '<div style="font-size:0.85rem;color:var(--charcoal);margin-top:4px;">Found: ' + items.join(', ') + '</div>';
+  }
+
+  function renderImportProgress(imported) {
+    if (!imported) return renderProgressBar(50);
+    var total = 0, done = 0;
+    ['products', 'images', 'blogs', 'events'].forEach(function(t) {
+      if (imported[t]) { total += (imported[t].total || 0); done += (imported[t].done || 0); }
+    });
+    var pct = total > 0 ? Math.round((done / total) * 100) : 50;
+    var html = '<div style="font-size:0.85rem;color:var(--charcoal);margin-top:4px;">Importing: ' + done + ' of ' + total + ' items</div>';
+    html += renderProgressBar(pct);
+    return html;
+  }
+
+  function renderImportedCounts(imported) {
+    if (!imported) return '';
+    var html = '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:4px;">';
+    if (imported.products && imported.products.done) {
+      html += '<span style="font-size:0.85rem;color:var(--teal);">&#10003; ' + imported.products.done + ' products</span>';
+    }
+    if (imported.images && imported.images.done) {
+      html += '<span style="font-size:0.85rem;color:var(--teal);">&#10003; ' + imported.images.done + ' images</span>';
+    }
+    if (imported.blogs && imported.blogs.done) {
+      html += '<span style="font-size:0.85rem;color:var(--teal);">&#10003; ' + imported.blogs.done + ' blog posts</span>';
+    }
+    if (imported.events && imported.events.done) {
+      html += '<span style="font-size:0.85rem;color:var(--teal);">&#10003; ' + imported.events.done + ' events</span>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  // ── Review Imports Section ──
+  function renderReviewSection() {
+    var html = '<div style="margin-top:24px;padding-top:24px;border-top:1px solid var(--cream-dark);">';
+    html += '<h3 style="font-size:1rem;margin-bottom:4px;">Review Imported Content</h3>';
+    html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">Items imported as drafts. Publish them to make them live on your site.</p>';
+
+    // Review sub-tabs
+    html += '<div style="display:flex;gap:8px;margin-bottom:16px;">';
+    ['products', 'images', 'blog', 'events'].forEach(function(t) {
+      var active = importReviewTab === t;
+      var label = t.charAt(0).toUpperCase() + t.slice(1);
+      html += '<button class="btn ' + (active ? 'btn-primary' : 'btn-secondary') + '" onclick="wpReviewTab(\'' + t + '\')" style="font-size:0.8rem;padding:6px 14px;">' + label + '</button>';
+    });
+    html += '</div>';
+
+    html += '<div id="wpReviewContent">';
+    if (importReviewTab === 'products') html += renderReviewProducts();
+    else if (importReviewTab === 'images') html += renderReviewImages();
+    else if (importReviewTab === 'blog') html += renderReviewBlog();
+    else if (importReviewTab === 'events') html += renderReviewEvents();
+    html += '</div>';
+
+    html += '</div>';
+    return html;
+  }
+
+  function renderReviewProducts() {
+    if (!importedProducts || importedProducts.length === 0) {
+      return '<div style="font-size:0.85rem;color:var(--warm-gray);padding:16px 0;">No imported products found.</div>';
+    }
+
+    var draftProducts = importedProducts.filter(function(p) { return p.status === 'draft' && p.importedFrom; });
+    var publishedProducts = importedProducts.filter(function(p) { return p.status === 'active' && p.importedFrom; });
+
+    var html = '';
+
+    if (draftProducts.length > 0) {
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
+      html += '<span style="font-size:0.85rem;color:var(--warm-gray);">' + draftProducts.length + ' draft product' + (draftProducts.length !== 1 ? 's' : '') + '</span>';
+      html += '<button class="btn btn-primary" onclick="wpPublishAllProducts()" style="font-size:0.8rem;">Publish All Drafts</button>';
+      html += '</div>';
+    }
+
+    var allProducts = draftProducts.concat(publishedProducts);
+    allProducts.forEach(function(p) {
+      var isDraft = p.status === 'draft';
+      html += '<div style="display:flex;align-items:center;gap:12px;padding:10px;background:var(--cream);border-radius:8px;margin-bottom:8px;' + (isDraft ? 'border-left:3px solid var(--amber);' : 'border-left:3px solid var(--teal);') + '">';
+
+      // Thumbnail
+      var img = (p.images && p.images.length > 0) ? p.images[0].url || p.images[0] : '';
+      if (img) {
+        html += '<img src="' + esc(typeof img === 'string' ? img : img.url || '') + '" style="width:48px;height:48px;object-fit:cover;border-radius:6px;" alt="">';
+      } else {
+        html += '<div style="width:48px;height:48px;background:var(--cream-dark);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:var(--warm-gray);">&#128247;</div>';
+      }
+
+      // Info
+      html += '<div style="flex:1;min-width:0;">';
+      html += '<div style="font-weight:600;font-size:0.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(p.name || 'Untitled') + '</div>';
+      html += '<div style="font-size:0.8rem;color:var(--warm-gray);">';
+      if (p.price) html += '$' + (p.price / 100).toFixed(2);
+      if (isDraft) html += ' &middot; <span style="color:var(--amber);">Draft</span>';
+      else html += ' &middot; <span style="color:var(--teal);">Published</span>';
+      html += '</div>';
+      html += '</div>';
+
+      // Actions
+      html += '<div style="display:flex;gap:6px;">';
+      if (isDraft) {
+        html += '<button class="btn btn-primary" onclick="wpPublishProduct(\'' + esc(p.id) + '\')" style="font-size:0.75rem;padding:4px 10px;">Publish</button>';
+      }
+      html += '<button class="btn btn-secondary" onclick="wpDeleteProduct(\'' + esc(p.id) + '\')" style="font-size:0.75rem;padding:4px 10px;color:var(--danger);">Delete</button>';
+      html += '</div>';
+
+      html += '</div>';
+    });
+
+    return html;
+  }
+
+  function renderReviewImages() {
+    // Images are part of products — show product images from imported products
+    if (!importedProducts || importedProducts.length === 0) {
+      return '<div style="font-size:0.85rem;color:var(--warm-gray);padding:16px 0;">No imported images found.</div>';
+    }
+
+    var images = [];
+    importedProducts.forEach(function(p) {
+      if (p.importedFrom && p.images) {
+        (Array.isArray(p.images) ? p.images : Object.values(p.images)).forEach(function(img) {
+          var url = typeof img === 'string' ? img : (img.url || '');
+          if (url) images.push({ url: url, productName: p.name, productId: p.id });
+        });
+      }
+    });
+
+    if (images.length === 0) {
+      return '<div style="font-size:0.85rem;color:var(--warm-gray);padding:16px 0;">No imported images found.</div>';
+    }
+
+    var html = '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">' + images.length + ' image' + (images.length !== 1 ? 's' : '') + ' from imported products</div>';
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;">';
+    images.forEach(function(img) {
+      html += '<div style="position:relative;border-radius:8px;overflow:hidden;aspect-ratio:1;">';
+      html += '<img src="' + esc(img.url) + '" style="width:100%;height:100%;object-fit:cover;" alt="' + esc(img.productName || '') + '">';
+      html += '</div>';
+    });
+    html += '</div>';
+
+    return html;
+  }
+
+  function renderReviewBlog() {
+    return '<div style="font-size:0.85rem;color:var(--warm-gray);padding:16px 0;">Blog post import coming soon.</div>';
+  }
+
+  function renderReviewEvents() {
+    return '<div style="font-size:0.85rem;color:var(--warm-gray);padding:16px 0;">Event import coming soon.</div>';
   }
 
   // ── Event handlers (exposed to window) ──
@@ -551,7 +854,77 @@
     showToast('Social links applied!');
   };
 
+  // ── Import review handlers ──
+
+  window.wpReviewTab = function(tab) {
+    importReviewTab = tab;
+    renderWebsite();
+  };
+
+  window.wpPublishProduct = async function(pid) {
+    try {
+      await MastDB._ref('public/products/' + pid + '/status').set('active');
+      showToast('Product published!');
+      await loadImportedProducts();
+      renderWebsite();
+    } catch (err) {
+      showToast('Error: ' + err.message, true);
+    }
+  };
+
+  window.wpPublishAllProducts = async function() {
+    if (!importedProducts) return;
+    var drafts = importedProducts.filter(function(p) { return p.status === 'draft' && p.importedFrom; });
+    if (drafts.length === 0) return;
+    try {
+      var updates = {};
+      drafts.forEach(function(p) { updates['public/products/' + p.id + '/status'] = 'active'; });
+      await MastDB._ref().update(updates);
+      showToast(drafts.length + ' product' + (drafts.length !== 1 ? 's' : '') + ' published!');
+      await loadImportedProducts();
+      renderWebsite();
+    } catch (err) {
+      showToast('Error: ' + err.message, true);
+    }
+  };
+
+  window.wpDeleteProduct = async function(pid) {
+    if (!confirm('Delete this imported product?')) return;
+    try {
+      await MastDB._ref('public/products/' + pid).remove();
+      showToast('Product deleted.');
+      await loadImportedProducts();
+      renderWebsite();
+    } catch (err) {
+      showToast('Error: ' + err.message, true);
+    }
+  };
+
+  window.wpRetryImport = async function(jobId) {
+    try {
+      await MastDB._ref('webPresence/importJobs/' + jobId + '/status').set('pending');
+      await MastDB._ref('webPresence/importJobs/' + jobId + '/error').set(null);
+      showToast('Import job re-queued.');
+      await loadImportJobs();
+      renderWebsite();
+    } catch (err) {
+      showToast('Error: ' + err.message, true);
+    }
+  };
+
   // ── Helpers ──
+
+  function formatTimeAgo(isoStr) {
+    if (!isoStr) return '';
+    var diff = Date.now() - new Date(isoStr).getTime();
+    var mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return mins + 'm ago';
+    var hours = Math.floor(mins / 60);
+    if (hours < 24) return hours + 'h ago';
+    var days = Math.floor(hours / 24);
+    return days + 'd ago';
+  }
 
   function markUnpublished() {
     if (websiteConfig.status === 'published') {

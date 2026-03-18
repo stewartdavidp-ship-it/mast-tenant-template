@@ -4608,6 +4608,8 @@
       </div>
       <!-- Active Trip Banner (outside card system) -->
       <div id="activeTripBanner" style="display:none;"></div>
+      <!-- Import Status Banner -->
+      <div id="importStatusBanner" style="display:none;"></div>
       <!-- Dashboard Todos (above cards, extensible nudge system) -->
       <div id="dashboardTodos" style="display:none;"></div>
       <!-- Dashboard Cards -->
@@ -5279,6 +5281,19 @@
             <h2 style="font-size:1.8rem;margin-bottom:8px;">You're All Set!</h2>
             <p style="color:var(--warm-gray);margin-bottom:8px;">Your shop is ready to go. You can always configure more in Settings.</p>
             <div id="wizardSummary" style="text-align:left;background:var(--cream-dark);border-radius:8px;padding:16px;margin:24px 0;font-size:0.9rem;"></div>
+            <!-- Import progress timeline (shown when import job was created) -->
+            <div id="wizardImportTimeline" style="display:none;text-align:left;background:var(--cream-dark);border-radius:8px;padding:16px;margin:0 0 24px;font-size:0.9rem;">
+              <p style="font-weight:600;margin-bottom:12px;">Content Import Progress</p>
+              <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:8px;">
+                <div style="width:24px;height:24px;border-radius:50%;background:var(--teal);color:white;display:flex;align-items:center;justify-content:center;font-size:0.7rem;flex-shrink:0;">&#10003;</div>
+                <div><strong>Style & Layout</strong><br><span style="color:var(--warm-gray);font-size:0.8rem;">Colors, hero, about, and contact info applied</span></div>
+              </div>
+              <div style="width:2px;height:16px;background:var(--cream);margin-left:11px;"></div>
+              <div id="wizardImportStep2" style="display:flex;align-items:flex-start;gap:12px;">
+                <div id="wizardImportStep2Icon" style="width:24px;height:24px;border-radius:50%;background:var(--amber);color:white;display:flex;align-items:center;justify-content:center;font-size:0.7rem;flex-shrink:0;">&#9203;</div>
+                <div><strong id="wizardImportStep2Title">Content Import</strong><br><span id="wizardImportStep2Desc" style="color:var(--warm-gray);font-size:0.8rem;">Products, images, and blog posts are being imported. Usually 15-40 minutes.</span></div>
+              </div>
+            </div>
             <div id="wizardPublishStatus" style="font-size:0.85rem;margin-bottom:16px;"></div>
             <button class="btn btn-primary" style="font-size:1rem;padding:12px 32px;" onclick="wizardComplete()">Launch Dashboard</button>
           </div>
@@ -10387,11 +10402,13 @@ function initSetupWizard() {
 
 function showWizardStep(step) {
   wizardCurrentStep = step;
-  for (var i = 1; i <= 6; i++) {
+  for (var i = 1; i <= 7; i++) {
     var el = document.getElementById('wizardStep' + i);
     if (el) el.style.display = i === step ? '' : 'none';
   }
   updateWizardProgress();
+  // Show import timeline on step 7 if an import job was created
+  if (step === 7) showWizardImportTimeline();
 }
 
 function updateWizardProgress() {
@@ -10433,6 +10450,49 @@ function saveWizardProgress(step, extras) {
   if (extras) Object.assign(update, extras);
   MastDB.config.ref('setupProgress').update(update).catch(function(e) {
     console.warn('Failed to save wizard progress:', e.message);
+  });
+}
+
+function showWizardImportTimeline() {
+  var timeline = document.getElementById('wizardImportTimeline');
+  if (!timeline) return;
+
+  // Check if an import job was created this session
+  MastDB._ref('webPresence/importJobs').orderByChild('createdAt').limitToLast(1).once('value').then(function(snap) {
+    var jobs = snap.val();
+    if (!jobs) { timeline.style.display = 'none'; return; }
+
+    var job = Object.values(jobs)[0];
+    if (!job) { timeline.style.display = 'none'; return; }
+
+    timeline.style.display = '';
+
+    var icon = document.getElementById('wizardImportStep2Icon');
+    var title = document.getElementById('wizardImportStep2Title');
+    var desc = document.getElementById('wizardImportStep2Desc');
+
+    if (job.status === 'complete') {
+      if (icon) { icon.style.background = 'var(--teal)'; icon.innerHTML = '&#10003;'; }
+      if (title) title.textContent = 'Content Import — Complete!';
+      var items = [];
+      var imp = job.imported || {};
+      if (imp.products && imp.products.done) items.push(imp.products.done + ' products');
+      if (imp.images && imp.images.done) items.push(imp.images.done + ' images');
+      if (desc) desc.textContent = items.length > 0
+        ? 'Imported ' + items.join(', ') + '. Review them in Website > Import.'
+        : 'Import complete! Check Website > Import to review.';
+    } else if (job.status === 'failed') {
+      if (icon) { icon.style.background = 'var(--danger)'; icon.innerHTML = '&#10007;'; }
+      if (title) title.textContent = 'Content Import — Error';
+      if (desc) desc.textContent = job.error || 'Something went wrong. You can retry from Website > Import.';
+    } else {
+      // pending, processing, crawled, importing
+      if (icon) { icon.style.background = 'var(--amber)'; icon.innerHTML = '&#9203;'; }
+      if (title) title.textContent = 'Content Import — In Progress';
+      if (desc) desc.textContent = 'Products, images, and blog posts are being imported. Usually 15-40 minutes.';
+    }
+  }).catch(function() {
+    timeline.style.display = 'none';
   });
 }
 
@@ -18019,6 +18079,49 @@ async function renderAllDashboardCards() {
   renderDashCardWithGating(DASHBOARD_CARDS[3], renderDashCardLowInventory);
   // Dashboard todos / nudges (above cards)
   renderDashboardTodos();
+  // Import status banner
+  renderImportStatusBanner();
+}
+
+// ─── Import Status Banner ──────────────────────────
+
+function renderImportStatusBanner() {
+  var banner = document.getElementById('importStatusBanner');
+  if (!banner) return;
+  MastDB._ref('webPresence/importJobs').orderByChild('createdAt').limitToLast(3).once('value').then(function(snap) {
+    var jobs = snap.val();
+    if (!jobs) { banner.style.display = 'none'; return; }
+    var jobList = Object.values(jobs).sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
+    // Show banner for active or recently completed imports (last 24h)
+    var relevant = jobList.filter(function(j) {
+      if (j.status === 'pending' || j.status === 'processing' || j.status === 'crawled' || j.status === 'importing') return true;
+      if (j.status === 'complete' && j.completedAt) {
+        var age = Date.now() - new Date(j.completedAt).getTime();
+        return age < 24 * 60 * 60 * 1000; // within 24h
+      }
+      return false;
+    });
+    if (relevant.length === 0) { banner.style.display = 'none'; return; }
+
+    var job = relevant[0];
+    var html = '';
+    if (job.status === 'complete') {
+      var items = [];
+      var imp = job.imported || {};
+      if (imp.products && imp.products.done) items.push(imp.products.done + ' products');
+      if (imp.images && imp.images.done) items.push(imp.images.done + ' images');
+      html = '<div style="background:var(--teal);color:white;padding:12px 16px;border-radius:8px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;">';
+      html += '<div><strong>Import complete!</strong> ' + (items.length > 0 ? items.join(', ') + ' ready for review.' : 'Content ready for review.') + '</div>';
+      html += '<button class="btn" onclick="navigateTo(\'website\'); setTimeout(function(){ wpSwitchTab(\'import\'); }, 100);" style="background:white;color:var(--teal);font-size:0.8rem;padding:6px 14px;border:none;border-radius:6px;cursor:pointer;font-weight:600;">Review</button>';
+      html += '</div>';
+    } else {
+      html = '<div style="background:var(--amber);color:white;padding:12px 16px;border-radius:8px;margin-bottom:16px;">';
+      html += '<strong>Content import in progress</strong> &mdash; Your products and images are being imported from your website. Usually 15-40 minutes.';
+      html += '</div>';
+    }
+    banner.innerHTML = html;
+    banner.style.display = '';
+  }).catch(function() { banner.style.display = 'none'; });
 }
 
 // ─── Dashboard Card: Quick Actions ──────────────────────────
