@@ -8,6 +8,8 @@
   var currentSubTab = 'overview';
   var importReviewTab = 'products';
   var importJobsListener = null;
+  var cherryPickSelections = {}; // jobId -> { products: {url: bool}, images: {url: bool}, ... }
+  var expandedJobId = null; // for import history detail view
 
   // ── Style definitions ──
   var STYLE_DEFS = [
@@ -347,8 +349,14 @@
   function renderImportTab() {
     var html = '';
 
-    // Import jobs status section
-    html += renderImportJobsSection();
+    // Re-scan / New Import section
+    html += renderRescanSection();
+
+    // Active import jobs (pending, processing, crawled, importing)
+    html += renderActiveImportJobs();
+
+    // Cherry-pick section (for crawled jobs awaiting import)
+    html += renderCherryPickSection();
 
     // Review imported content (if any complete jobs exist)
     var hasComplete = importJobs && importJobs.some(function(j) { return j.status === 'complete'; });
@@ -356,10 +364,13 @@
       html += renderReviewSection();
     }
 
-    // Analyze section
+    // Import History
+    html += renderImportHistory();
+
+    // Analyze section (style/branding import — separate from product import)
     html += '<div style="margin-top:24px;padding-top:24px;border-top:1px solid var(--cream-dark);">';
     html += '<h3 style="font-size:1rem;margin-bottom:12px;">Analyze a Website</h3>';
-    html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">Enter a URL to analyze and import content into your site configuration.</p>';
+    html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">Extract branding, colors, and content from any website.</p>';
     html += '<div class="wp-field-group">';
     html += '<label>Website URL</label>';
     html += '<div style="display:flex;gap:8px;">';
@@ -373,52 +384,290 @@
     return html;
   }
 
-  // ── Import Jobs Status ──
-  function renderImportJobsSection() {
+  // ── Re-scan / New Import ──
+  function renderRescanSection() {
+    var html = '<div style="margin-bottom:24px;">';
+    html += '<h3 style="font-size:1rem;margin-bottom:4px;">Import Products &amp; Content</h3>';
+    html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">Scan a website to import products, images, blog posts, and events.</p>';
+
+    // Check for recent imports to warn about duplicates
+    var recentDupWarning = '';
+    if (importJobs && importJobs.length > 0) {
+      var sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      var recentUrls = {};
+      importJobs.forEach(function(j) {
+        if (j.createdAt > sevenDaysAgo && j.url) {
+          recentUrls[j.url] = (recentUrls[j.url] || 0) + 1;
+        }
+      });
+      // Store for duplicate check
+      window._wpRecentImportUrls = recentUrls;
+    }
+
+    // Active jobs check
+    var hasActiveJob = importJobs && importJobs.some(function(j) {
+      return j.status === 'pending' || j.status === 'processing' || j.status === 'crawled' || j.status === 'importing';
+    });
+
+    html += '<div class="wp-field-group">';
+    html += '<label>Website URL</label>';
+    html += '<div style="display:flex;gap:8px;">';
+    html += '<input type="url" id="wpRescanUrl" placeholder="https://www.yourbusiness.com" style="flex:1;">';
+    html += '<button class="btn btn-primary" onclick="wpStartImport()" id="wpRescanBtn"' + (hasActiveJob ? ' disabled' : '') + '>';
+    html += hasActiveJob ? 'Import Running...' : 'Scan &amp; Import';
+    html += '</button>';
+    html += '</div>';
+    html += '</div>';
+    html += '<div id="wpRescanStatus" style="font-size:0.85rem;margin-top:-8px;margin-bottom:8px;"></div>';
+
+    if (hasActiveJob) {
+      html += '<div style="font-size:0.8rem;color:var(--amber);margin-bottom:8px;">An import is already in progress. Wait for it to complete before starting a new one.</div>';
+    }
+
+    html += '</div>';
+    return html;
+  }
+
+  // ── Active Import Jobs (non-historical) ──
+  function renderActiveImportJobs() {
     if (!importJobs || importJobs.length === 0) return '';
 
-    var html = '<h3 style="font-size:1rem;margin-bottom:12px;">Import Jobs</h3>';
+    var activeJobs = importJobs.filter(function(j) {
+      return j.status === 'pending' || j.status === 'processing' || j.status === 'importing';
+    });
+    if (activeJobs.length === 0) return '';
 
-    importJobs.forEach(function(job) {
-      var statusInfo = getJobStatusInfo(job.status);
-      var timeAgo = formatTimeAgo(job.createdAt);
+    var html = '<div style="margin-bottom:24px;">';
+    html += '<h3 style="font-size:1rem;margin-bottom:12px;">Active Imports</h3>';
 
-      html += '<div style="background:var(--cream);border-radius:8px;padding:16px;margin-bottom:12px;border-left:4px solid ' + statusInfo.color + ';">';
-      html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">';
-      html += '<div>';
-      html += '<div style="font-weight:600;font-size:0.9rem;">' + esc(job.url) + '</div>';
-      html += '<div style="font-size:0.8rem;color:var(--warm-gray);margin-top:2px;">' + timeAgo + '</div>';
-      html += '</div>';
-      html += '<span style="font-size:0.8rem;padding:3px 10px;border-radius:12px;background:' + statusInfo.bg + ';color:' + statusInfo.color + ';font-weight:600;white-space:nowrap;">';
-      html += statusInfo.icon + ' ' + statusInfo.label;
-      html += '</span>';
-      html += '</div>';
+    activeJobs.forEach(function(job) {
+      html += renderJobCard(job, false);
+    });
 
-      // Status-specific details
-      if (job.status === 'pending') {
-        html += '<div style="font-size:0.85rem;color:var(--warm-gray);">Queued for processing. The import runs every 30 minutes.</div>';
-      } else if (job.status === 'processing') {
-        html += '<div style="font-size:0.85rem;color:var(--warm-gray);">Scanning your website for products, images, and content...</div>';
-        html += renderProgressBar(30);
-      } else if (job.status === 'crawled') {
-        html += renderDiscoveredCounts(job.discovered);
-        html += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-top:4px;">Content discovered! Importing soon...</div>';
-      } else if (job.status === 'importing') {
-        html += renderDiscoveredCounts(job.discovered);
-        html += renderImportProgress(job.imported);
-      } else if (job.status === 'complete') {
-        html += renderImportedCounts(job.imported);
-        if (job.completedAt) {
-          html += '<div style="font-size:0.8rem;color:var(--warm-gray);margin-top:4px;">Completed ' + formatTimeAgo(job.completedAt) + '</div>';
+    html += '</div>';
+    return html;
+  }
+
+  // ── Cherry-Pick Section (for crawled jobs) ──
+  function renderCherryPickSection() {
+    if (!importJobs) return '';
+
+    var crawledJobs = importJobs.filter(function(j) { return j.status === 'crawled'; });
+    if (crawledJobs.length === 0) return '';
+
+    var html = '<div style="margin-bottom:24px;padding:16px;background:var(--cream);border-radius:12px;border:2px solid var(--teal);">';
+    html += '<h3 style="font-size:1rem;margin-bottom:4px;">Content Found — Ready to Import</h3>';
+    html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">Review what was found on your website. Toggle items on/off before importing.</p>';
+
+    crawledJobs.forEach(function(job) {
+      var disc = job.discovered || {};
+
+      // Products
+      if (disc.products && disc.products.count > 0) {
+        html += '<div style="margin-bottom:12px;">';
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">';
+        html += '<strong style="font-size:0.9rem;">Products (' + disc.products.count + ')</strong>';
+        html += '<div style="display:flex;gap:8px;">';
+        html += '<button class="btn btn-secondary" onclick="wpCherryPickAll(\'' + esc(job.id) + '\', \'products\', true)" style="font-size:0.75rem;padding:3px 8px;">Select All</button>';
+        html += '<button class="btn btn-secondary" onclick="wpCherryPickAll(\'' + esc(job.id) + '\', \'products\', false)" style="font-size:0.75rem;padding:3px 8px;">Deselect All</button>';
+        html += '</div></div>';
+
+        if (disc.products.pages && disc.products.pages.length > 0) {
+          disc.products.pages.forEach(function(p, idx) {
+            var sel = getCherryPick(job.id, 'products', p.url || idx);
+            html += '<label style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--cream-dark);border-radius:6px;margin-bottom:4px;cursor:pointer;font-size:0.85rem;">';
+            html += '<input type="checkbox"' + (sel ? ' checked' : '') + ' onchange="wpToggleCherryPick(\'' + esc(job.id) + '\', \'products\', \'' + esc(p.url || String(idx)) + '\', this.checked)">';
+            html += '<span style="flex:1;">' + esc(p.title || 'Unknown Product');
+            if (p.price) html += ' &mdash; ' + esc(p.price);
+            html += '</span>';
+            html += '</label>';
+          });
         }
-      } else if (job.status === 'failed') {
-        html += '<div style="font-size:0.85rem;color:var(--danger);margin-top:4px;">' + esc(job.error || 'Import encountered an error.') + '</div>';
-        html += '<button class="btn btn-secondary" onclick="wpRetryImport(\'' + esc(job.id) + '\')" style="margin-top:8px;font-size:0.8rem;">Retry Import</button>';
+        html += '</div>';
+      }
+
+      // Summary counts for other types
+      var otherTypes = [];
+      if (disc.images && disc.images.count > 0) otherTypes.push(disc.images.count + ' images');
+      if (disc.blogs && disc.blogs.count > 0) otherTypes.push(disc.blogs.count + ' blog posts');
+      if (disc.events && disc.events.count > 0) otherTypes.push(disc.events.count + ' events');
+      if (otherTypes.length > 0) {
+        html += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">Also found: ' + otherTypes.join(', ') + '</div>';
+      }
+
+      // JS-rendered warning
+      if (job.crawlFeedback && job.crawlFeedback.jsRendered) {
+        html += '<div style="font-size:0.85rem;color:var(--amber);background:#FFF3E0;padding:8px 12px;border-radius:6px;margin-bottom:12px;">';
+        html += '&#9888; This site uses JavaScript rendering. Some content may not have been captured. ';
+        html += 'For best results, consider importing from Square, Etsy, or Shopify directly.';
+        html += '</div>';
+      }
+
+      // Import button
+      html += '<div style="display:flex;gap:8px;margin-top:12px;">';
+      html += '<button class="btn btn-primary" onclick="wpImportCherryPicked(\'' + esc(job.id) + '\')">Import Selected</button>';
+      html += '<button class="btn btn-secondary" onclick="wpImportAll(\'' + esc(job.id) + '\')">Import All</button>';
+      html += '</div>';
+    });
+
+    html += '</div>';
+    return html;
+  }
+
+  // ── Import History ──
+  function renderImportHistory() {
+    if (!importJobs || importJobs.length === 0) return '';
+
+    var historyJobs = importJobs.filter(function(j) {
+      return j.status === 'complete' || j.status === 'failed';
+    });
+    if (historyJobs.length === 0) return '';
+
+    var html = '<div style="margin-top:24px;padding-top:24px;border-top:1px solid var(--cream-dark);">';
+    html += '<h3 style="font-size:1rem;margin-bottom:12px;">Import History</h3>';
+
+    historyJobs.forEach(function(job) {
+      var statusInfo = getJobStatusInfo(job.status);
+      var isExpanded = expandedJobId === job.id;
+      var dateStr = job.createdAt ? new Date(job.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+
+      html += '<div style="background:var(--cream);border-radius:8px;padding:12px 16px;margin-bottom:8px;border-left:4px solid ' + statusInfo.color + ';cursor:pointer;" onclick="wpToggleHistoryDetail(\'' + esc(job.id) + '\')">';
+
+      // Summary row
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;">';
+      html += '<div style="display:flex;align-items:center;gap:12px;">';
+      html += '<span style="font-size:0.85rem;color:var(--warm-gray);">' + dateStr + '</span>';
+      html += '<span style="font-size:0.9rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:250px;">' + esc(job.url || 'Unknown URL') + '</span>';
+      html += '</div>';
+      html += '<div style="display:flex;align-items:center;gap:8px;">';
+      html += renderImportedCountsBadges(job.imported);
+      html += '<span style="font-size:0.8rem;padding:3px 10px;border-radius:12px;background:' + statusInfo.bg + ';color:' + statusInfo.color + ';font-weight:600;">' + statusInfo.label + '</span>';
+      html += '<span style="color:var(--warm-gray);font-size:0.8rem;">' + (isExpanded ? '&#9650;' : '&#9660;') + '</span>';
+      html += '</div></div>';
+
+      // Expanded detail
+      if (isExpanded) {
+        html += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--cream-dark);font-size:0.85rem;">';
+
+        if (job.status === 'complete' && job.imported) {
+          html += renderDetailedImportResults(job.imported);
+        }
+        if (job.status === 'failed') {
+          html += '<div style="color:var(--danger);margin-bottom:8px;">' + esc(job.error || 'Unknown error') + '</div>';
+          html += '<button class="btn btn-secondary" onclick="event.stopPropagation(); wpRetryImport(\'' + esc(job.id) + '\')" style="font-size:0.8rem;">Retry Import</button>';
+        }
+
+        // Timing
+        if (job.createdAt && job.completedAt) {
+          var dur = Math.round((new Date(job.completedAt) - new Date(job.createdAt)) / 60000);
+          html += '<div style="color:var(--warm-gray);margin-top:8px;">Duration: ' + dur + ' min</div>';
+        }
+
+        // JS warning note
+        if (job.crawlFeedback && job.crawlFeedback.jsRendered) {
+          html += '<div style="color:var(--amber);margin-top:4px;">&#9888; JS-rendered site — some content may have been missed.</div>';
+        }
+
+        html += '</div>';
       }
 
       html += '</div>';
     });
 
+    html += '</div>';
+    return html;
+  }
+
+  function renderImportedCountsBadges(imported) {
+    if (!imported) return '';
+    var html = '';
+    if (imported.products && imported.products.done) {
+      html += '<span style="font-size:0.75rem;background:var(--teal);color:white;padding:2px 6px;border-radius:4px;">' + imported.products.done + 'P</span>';
+    }
+    if (imported.images && imported.images.done) {
+      html += '<span style="font-size:0.75rem;background:var(--teal);color:white;padding:2px 6px;border-radius:4px;">' + imported.images.done + 'I</span>';
+    }
+    return html;
+  }
+
+  function renderDetailedImportResults(imported) {
+    var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin-bottom:8px;">';
+    ['products', 'images', 'blogs', 'events'].forEach(function(type) {
+      var d = imported[type];
+      if (!d) return;
+      var label = type.charAt(0).toUpperCase() + type.slice(1);
+      html += '<div style="background:var(--cream-dark);padding:8px;border-radius:6px;">';
+      html += '<div style="font-weight:600;">' + label + '</div>';
+      html += '<div style="color:var(--teal);">' + (d.done || 0) + ' imported</div>';
+      if (d.failed) html += '<div style="color:var(--danger);">' + d.failed + ' failed</div>';
+      if (d.skipped) html += '<div style="color:var(--warm-gray);">' + d.skipped + ' skipped (duplicates)</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+
+    // Show failed items if any
+    if (imported.products && imported.products.failedItems && imported.products.failedItems.length > 0) {
+      html += '<details style="margin-top:4px;"><summary style="cursor:pointer;color:var(--danger);font-size:0.8rem;">Failed items</summary>';
+      html += '<div style="font-size:0.8rem;color:var(--warm-gray);padding:4px 0;">';
+      imported.products.failedItems.forEach(function(item) {
+        html += '<div>' + esc(item) + '</div>';
+      });
+      html += '</div></details>';
+    }
+
+    return html;
+  }
+
+  // ── Job Card (reusable for active and history) ──
+  function renderJobCard(job, compact) {
+    var statusInfo = getJobStatusInfo(job.status);
+    var timeAgo = formatTimeAgo(job.createdAt);
+
+    var html = '<div style="background:var(--cream);border-radius:8px;padding:' + (compact ? '12px' : '16px') + ';margin-bottom:' + (compact ? '8px' : '12px') + ';border-left:4px solid ' + statusInfo.color + ';">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">';
+    html += '<div>';
+    html += '<div style="font-weight:600;font-size:0.9rem;">' + esc(job.url) + '</div>';
+    html += '<div style="font-size:0.8rem;color:var(--warm-gray);margin-top:2px;">' + timeAgo + '</div>';
+    html += '</div>';
+    html += '<span style="font-size:0.8rem;padding:3px 10px;border-radius:12px;background:' + statusInfo.bg + ';color:' + statusInfo.color + ';font-weight:600;white-space:nowrap;">';
+    html += statusInfo.icon + ' ' + statusInfo.label;
+    html += '</span>';
+    html += '</div>';
+
+    // Status-specific details
+    if (job.status === 'pending') {
+      // Timeout detection: if pending for > 2 hours, show warning
+      var pendingMs = Date.now() - new Date(job.createdAt).getTime();
+      if (pendingMs > 2 * 60 * 60 * 1000) {
+        html += '<div style="font-size:0.85rem;color:var(--danger);margin-bottom:4px;">&#9888; This job has been queued for over 2 hours. It may be stuck.</div>';
+        html += '<button class="btn btn-secondary" onclick="wpRetryImport(\'' + esc(job.id) + '\')" style="font-size:0.8rem;">Retry</button>';
+      } else {
+        html += '<div style="font-size:0.85rem;color:var(--warm-gray);">Queued for processing. The import runs every 30 minutes.</div>';
+      }
+    } else if (job.status === 'processing') {
+      // Timeout detection: if processing for > 2 hours, show warning
+      var processMs = Date.now() - new Date(job.claimedAt || job.createdAt).getTime();
+      if (processMs > 2 * 60 * 60 * 1000) {
+        html += '<div style="font-size:0.85rem;color:var(--danger);margin-bottom:4px;">&#9888; Scan has been running for over 2 hours. It may be stuck.</div>';
+        html += '<button class="btn btn-secondary" onclick="wpRetryImport(\'' + esc(job.id) + '\')" style="font-size:0.8rem;">Reset &amp; Retry</button>';
+      } else {
+        html += '<div style="font-size:0.85rem;color:var(--warm-gray);">Scanning your website for products, images, and content...</div>';
+        html += renderProgressBar(30);
+      }
+    } else if (job.status === 'importing') {
+      html += renderDiscoveredCounts(job.discovered);
+      html += renderImportProgress(job.imported);
+      // Timeout detection
+      var importMs = Date.now() - new Date(job.claimedAt || job.createdAt).getTime();
+      if (importMs > 2 * 60 * 60 * 1000) {
+        html += '<div style="font-size:0.85rem;color:var(--danger);margin-top:4px;">&#9888; Import has been running for over 2 hours.</div>';
+      }
+    } else if (job.status === 'failed') {
+      html += '<div style="font-size:0.85rem;color:var(--danger);margin-top:4px;">' + esc(job.error || 'Import encountered an error.') + '</div>';
+      html += '<button class="btn btn-secondary" onclick="wpRetryImport(\'' + esc(job.id) + '\')" style="margin-top:8px;font-size:0.8rem;">Retry Import</button>';
+    }
+
+    html += '</div>';
     return html;
   }
 
@@ -905,12 +1154,139 @@
     try {
       await MastDB._ref('webPresence/importJobs/' + jobId + '/status').set('pending');
       await MastDB._ref('webPresence/importJobs/' + jobId + '/error').set(null);
+      await MastDB._ref('webPresence/importJobs/' + jobId + '/claimedAt').set(null);
       showToast('Import job re-queued.');
       await loadImportJobs();
       renderWebsite();
     } catch (err) {
       showToast('Error: ' + err.message, true);
     }
+  };
+
+  // ── New Import (Re-scan) ──
+  window.wpStartImport = async function() {
+    var url = document.getElementById('wpRescanUrl').value.trim();
+    if (!url) { showToast('Please enter a URL.', true); return; }
+
+    // Ensure URL has protocol
+    if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+
+    // Check for duplicate within 7 days
+    var recentUrls = window._wpRecentImportUrls || {};
+    if (recentUrls[url]) {
+      if (!confirm('This URL was imported in the last 7 days. Import again?')) return;
+    }
+
+    var btn = document.getElementById('wpRescanBtn');
+    var statusEl = document.getElementById('wpRescanStatus');
+    if (btn) { btn.disabled = true; btn.textContent = 'Creating import...'; }
+
+    try {
+      // First, run analyzeExistingSite to get the crawl manifest
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Analyzing site to build crawl plan...</span>';
+      var result = await firebase.functions().httpsCallable('analyzeExistingSite')({
+        url: url, tenantId: MastDB.tenantId()
+      });
+
+      // Get the crawl manifest from site analysis
+      var snap = await MastDB._ref('webPresence/siteAnalysis/crawlManifest').once('value');
+      var manifest = snap.val();
+
+      // Create the import job in Firebase directly
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Queuing import job...</span>';
+      var jobRef = MastDB._ref('webPresence/importJobs').push();
+      var jobId = jobRef.key;
+      var now = new Date().toISOString();
+      await jobRef.set({
+        id: jobId,
+        url: url,
+        tenantId: MastDB.tenantId(),
+        status: 'pending',
+        createdAt: now,
+        claimedAt: null,
+        completedAt: null,
+        error: null,
+        notifyPhone: null,
+        crawlManifest: manifest || null,
+        discovered: null,
+        imported: null
+      });
+
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Import queued! It will be processed within 30 minutes.</span>';
+      showToast('Import job created successfully.');
+      await loadImportJobs();
+      renderWebsite();
+    } catch (err) {
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger);">Error: ' + esc(err.message) + '</span>';
+    }
+    if (btn) { btn.disabled = false; btn.textContent = 'Scan & Import'; }
+  };
+
+  // ── Cherry-pick helpers ──
+  function getCherryPick(jobId, type, key) {
+    if (!cherryPickSelections[jobId]) return true; // default: all selected
+    if (!cherryPickSelections[jobId][type]) return true;
+    return cherryPickSelections[jobId][type][key] !== false;
+  }
+
+  window.wpToggleCherryPick = function(jobId, type, key, checked) {
+    if (!cherryPickSelections[jobId]) cherryPickSelections[jobId] = {};
+    if (!cherryPickSelections[jobId][type]) cherryPickSelections[jobId][type] = {};
+    cherryPickSelections[jobId][type][key] = checked;
+  };
+
+  window.wpCherryPickAll = function(jobId, type, selectAll) {
+    if (!cherryPickSelections[jobId]) cherryPickSelections[jobId] = {};
+    cherryPickSelections[jobId][type] = {};
+    // Find all items and set them
+    var job = importJobs && importJobs.find(function(j) { return j.id === jobId; });
+    if (job && job.discovered && job.discovered[type] && job.discovered[type].pages) {
+      job.discovered[type].pages.forEach(function(p, idx) {
+        cherryPickSelections[jobId][type][p.url || String(idx)] = selectAll;
+      });
+    }
+    renderWebsite();
+  };
+
+  window.wpImportAll = async function(jobId) {
+    // Set status to importing — the scheduled task will pick it up
+    try {
+      await MastDB._ref('webPresence/importJobs/' + jobId + '/status').set('importing');
+      showToast('Import started for all items.');
+      await loadImportJobs();
+      renderWebsite();
+    } catch (err) {
+      showToast('Error: ' + err.message, true);
+    }
+  };
+
+  window.wpImportCherryPicked = async function(jobId) {
+    // Save cherry-pick selections to the job, then set status to importing
+    var selections = cherryPickSelections[jobId] || {};
+    try {
+      // Write the selection filter to the job
+      var excludeUrls = [];
+      if (selections.products) {
+        Object.keys(selections.products).forEach(function(key) {
+          if (selections.products[key] === false) excludeUrls.push(key);
+        });
+      }
+      if (excludeUrls.length > 0) {
+        await MastDB._ref('webPresence/importJobs/' + jobId + '/cherryPickExclude').set(excludeUrls);
+      }
+      await MastDB._ref('webPresence/importJobs/' + jobId + '/status').set('importing');
+      showToast('Importing selected items.');
+      await loadImportJobs();
+      renderWebsite();
+    } catch (err) {
+      showToast('Error: ' + err.message, true);
+    }
+  };
+
+  // ── History detail toggle ──
+  window.wpToggleHistoryDetail = function(jobId) {
+    expandedJobId = expandedJobId === jobId ? null : jobId;
+    renderWebsite();
   };
 
   // ── Helpers ──
