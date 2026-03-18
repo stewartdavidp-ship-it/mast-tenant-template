@@ -64,7 +64,7 @@ html.light {
   --shadow-lg: 0 4px 12px rgba(0,0,0,0.08);
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { overflow-x: hidden; max-width: 100%; }
+body { overflow-x: hidden; }
 body { font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
 a { color: var(--primary); text-decoration: none; }
 a:hover { text-decoration: underline; }
@@ -413,7 +413,7 @@ a:hover { text-decoration: underline; }
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
 <script src="../storefront-tenant.js"></script>
 <script src="../tenant-brand.js?v=2"></script>
-<script src="show.js?v=20260318f"></script>
+<script src="show.js?v=20260318g"></script>
 <script>
 function toggleMastTheme(){var h=document.documentElement;var dark=h.classList.contains('dark');if(dark){h.classList.remove('dark');h.classList.add('light');localStorage.setItem('mast-theme','light');}else{h.classList.remove('light');h.classList.add('dark');localStorage.setItem('mast-theme','dark');}updateThemeBtn();}
 function updateThemeBtn(){var b=document.getElementById('themeToggle');if(!b)return;b.textContent=document.documentElement.classList.contains('dark')?'☀':'🌙';}
