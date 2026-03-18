@@ -7595,7 +7595,7 @@ function renderTokenBalanceIndicator() {
     return;
   }
   el.style.display = 'flex';
-  var total = (w.currentBalance || 0) + (w.coinBalance || 0);
+  var total = (w.currentBalance || 0) + ((w.coinBalance || 0) * 100); // 1 coin = 100 tokens
   var statusColor = w.status === 'suspended' ? 'var(--danger, #dc2626)' :
                     w.status === 'borrowing' ? 'var(--amber, #C4853C)' : 'var(--sage, #7A8B6F)';
   var statusIcon = w.status === 'suspended' ? '⏸' : w.status === 'borrowing' ? '⚠' : '⚡';
