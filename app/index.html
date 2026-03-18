@@ -436,12 +436,47 @@
     body.dark-mode .wizard-step-dot.completed { background: #1a3a34; color: var(--teal-light); border-color: var(--teal); }
     body.dark-mode .wizard-step-line { background: #444; }
     body.dark-mode .wizard-step-line.completed { background: var(--teal); }
+    body.dark-mode .wizard-feature-card { background: #2a2a2a !important; border-color: #444 !important; color: #e0e0e0 !important; }
+    body.dark-mode .wizard-feature-card[data-selected="true"] { border-color: var(--teal) !important; background: #1a3a34 !important; }
     body.dark-mode #wizardWebsiteChoice button { background: #2a2a2a !important; border-color: #444 !important; color: #e0e0e0 !important; }
     body.dark-mode #wizardWebsiteChoice button:hover { border-color: var(--teal) !important; }
     body.dark-mode .wizard-style-card { background: #2a2a2a !important; border-color: #444 !important; color: #e0e0e0 !important; }
     body.dark-mode .wizard-style-card[style*="border:2px solid var(--primary)"] { border-color: var(--amber) !important; background: #332a1f !important; }
     body.dark-mode #wizardAnalysisSummary { background: #2a2a2a !important; color: #e0e0e0 !important; }
     body.dark-mode #wizardSiteUrl { background: #2a2a2a !important; border-color: #444 !important; color: #e0e0e0 !important; }
+
+    /* ========== WEBSITE MODULE ========== */
+    .wp-sub-tabs { display: flex; gap: 0; border-bottom: 2px solid var(--cream-dark); margin-bottom: 24px; }
+    .wp-sub-tab { padding: 10px 20px; cursor: pointer; font-size: 0.9rem; font-weight: 500; color: var(--warm-gray); border-bottom: 2px solid transparent; margin-bottom: -2px; transition: color 0.2s, border-color 0.2s; background: none; border-top: none; border-left: none; border-right: none; font-family: 'DM Sans', sans-serif; }
+    .wp-sub-tab.active { color: var(--text); border-bottom-color: var(--primary); }
+    .wp-sub-tab:hover { color: var(--text); }
+    .wp-style-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .wp-style-card { border: 2px solid var(--cream-dark); border-radius: 10px; padding: 20px; cursor: pointer; text-align: center; transition: border-color 0.2s, box-shadow 0.2s; }
+    .wp-style-card:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+    .wp-style-card.selected { border-color: var(--primary); background: var(--cream); }
+    .wp-section-toggle { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border: 1px solid var(--cream-dark); border-radius: 8px; margin-bottom: 8px; cursor: pointer; transition: background 0.15s; }
+    .wp-section-toggle:hover { background: var(--cream); }
+    .wp-section-fields { padding: 16px; border: 1px solid var(--cream-dark); border-top: none; border-radius: 0 0 8px 8px; margin-top: -8px; margin-bottom: 8px; }
+    .wp-field-group { margin-bottom: 14px; }
+    .wp-field-group label { display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 4px; color: var(--warm-gray); }
+    .wp-field-group input, .wp-field-group textarea, .wp-field-group select { width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 0.9rem; box-sizing: border-box; }
+    .wp-field-group textarea { min-height: 80px; resize: vertical; }
+    .wp-color-row { display: flex; gap: 16px; align-items: flex-end; }
+    .wp-color-swatch { width: 40px; height: 40px; border-radius: 6px; border: 1px solid #ddd; cursor: pointer; }
+    .wp-import-result { background: var(--cream); border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+    .wp-import-result .apply-btn { font-size: 0.8rem; padding: 4px 12px; }
+    .wp-overview-stat { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--cream); border-radius: 8px; margin-bottom: 8px; }
+    body.dark-mode .wp-sub-tabs { border-bottom-color: #444; }
+    body.dark-mode .wp-sub-tab { color: #999; }
+    body.dark-mode .wp-sub-tab.active { color: #e0e0e0; border-bottom-color: var(--teal); }
+    body.dark-mode .wp-style-card { background: #2a2a2a; border-color: #444; color: #e0e0e0; }
+    body.dark-mode .wp-style-card.selected { border-color: var(--teal); background: #1a3a34; }
+    body.dark-mode .wp-section-toggle { border-color: #444; color: #e0e0e0; }
+    body.dark-mode .wp-section-toggle:hover { background: #333; }
+    body.dark-mode .wp-section-fields { border-color: #444; background: #1e1e1e; }
+    body.dark-mode .wp-field-group input, body.dark-mode .wp-field-group textarea, body.dark-mode .wp-field-group select { background: #2a2a2a; border-color: #444; color: #e0e0e0; }
+    body.dark-mode .wp-overview-stat { background: #2a2a2a; color: #e0e0e0; }
+    body.dark-mode .wp-import-result { background: #2a2a2a; color: #e0e0e0; }
 
     /* ========== BUTTONS ========== */
     .btn {
@@ -4984,6 +5019,8 @@
           <div class="wizard-step-dot" data-step="5">5</div>
           <div class="wizard-step-line"></div>
           <div class="wizard-step-dot" data-step="6">6</div>
+          <div class="wizard-step-line"></div>
+          <div class="wizard-step-dot" data-step="7">7</div>
         </div>
 
         <!-- Step 1: Welcome -->
@@ -5104,8 +5141,52 @@
           </div>
         </div>
 
-        <!-- Step 5: Your Website -->
+        <!-- Step 5: Feature Selection -->
         <div id="wizardStep5" class="wizard-step" style="display:none;">
+          <h2 style="font-size:1.8rem;margin-bottom:8px;">What do you need?</h2>
+          <p style="color:var(--warm-gray);margin-bottom:24px;">Choose the features for your website. You can change these anytime.</p>
+
+          <div id="wizardFeatureCards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:24px;">
+            <div class="wizard-feature-card" data-feature="shop" onclick="wizardToggleFeature(this)" style="border:2px solid var(--cream-dark);border-radius:10px;padding:16px;cursor:pointer;text-align:center;background:var(--cream);transition:border-color 0.2s,background 0.2s;">
+              <div style="font-size:1.5rem;margin-bottom:6px;">&#128722;</div>
+              <strong style="font-size:0.9rem;">Shop</strong>
+              <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Online storefront with products &amp; checkout</p>
+            </div>
+            <div class="wizard-feature-card" data-feature="blog" onclick="wizardToggleFeature(this)" style="border:2px solid var(--cream-dark);border-radius:10px;padding:16px;cursor:pointer;text-align:center;background:var(--cream);transition:border-color 0.2s,background 0.2s;">
+              <div style="font-size:1.5rem;margin-bottom:6px;">&#9997;</div>
+              <strong style="font-size:0.9rem;">Blog</strong>
+              <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Share updates, stories, and news</p>
+            </div>
+            <div class="wizard-feature-card" data-feature="events" onclick="wizardToggleFeature(this)" style="border:2px solid var(--cream-dark);border-radius:10px;padding:16px;cursor:pointer;text-align:center;background:var(--cream);transition:border-color 0.2s,background 0.2s;">
+              <div style="font-size:1.5rem;margin-bottom:6px;">&#128197;</div>
+              <strong style="font-size:0.9rem;">Events</strong>
+              <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">List shows, markets, and events</p>
+            </div>
+            <div class="wizard-feature-card" data-feature="members" onclick="wizardToggleFeature(this)" style="border:2px solid var(--cream-dark);border-radius:10px;padding:16px;cursor:pointer;text-align:center;background:var(--cream);transition:border-color 0.2s,background 0.2s;">
+              <div style="font-size:1.5rem;margin-bottom:6px;">&#128274;</div>
+              <strong style="font-size:0.9rem;">Members</strong>
+              <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Gated content for VIPs or wholesale</p>
+            </div>
+            <div class="wizard-feature-card" data-feature="newsletter" onclick="wizardToggleFeature(this)" style="border:2px solid var(--cream-dark);border-radius:10px;padding:16px;cursor:pointer;text-align:center;background:var(--cream);transition:border-color 0.2s,background 0.2s;">
+              <div style="font-size:1.5rem;margin-bottom:6px;">&#9993;</div>
+              <strong style="font-size:0.9rem;">Newsletter</strong>
+              <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Email signup &amp; subscriber management</p>
+            </div>
+            <div class="wizard-feature-card" data-feature="commissions" onclick="wizardToggleFeature(this)" style="border:2px solid var(--cream-dark);border-radius:10px;padding:16px;cursor:pointer;text-align:center;background:var(--cream);transition:border-color 0.2s,background 0.2s;">
+              <div style="font-size:1.5rem;margin-bottom:6px;">&#127912;</div>
+              <strong style="font-size:0.9rem;">Commissions</strong>
+              <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Accept custom order requests</p>
+            </div>
+          </div>
+
+          <div style="display:flex;justify-content:space-between;">
+            <button class="btn btn-secondary" onclick="wizardPrev(5)">Back</button>
+            <button class="btn btn-primary" onclick="wizardSaveFeatures()">Save &amp; Continue</button>
+          </div>
+        </div>
+
+        <!-- Step 6: Your Website -->
+        <div id="wizardStep6" class="wizard-step" style="display:none;">
           <h2 style="font-size:1.8rem;margin-bottom:8px;">Your Website</h2>
           <p style="color:var(--warm-gray);margin-bottom:24px;">Set up your marketing website. We'll create a beautiful landing page for your business.</p>
 
@@ -5143,46 +5224,46 @@
                 <strong style="font-size:0.9rem;">Artisan Warm</strong>
                 <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Earthy tones, handcrafted feel</p>
               </div>
-              <div class="wizard-style-card" data-style="studio-dark" style="border:2px solid var(--cream-dark);border-radius:10px;padding:16px;cursor:not-allowed;text-align:center;opacity:0.5;">
+              <div class="wizard-style-card" data-style="studio-dark" onclick="wizardSelectStyle(this)" style="border:2px solid var(--cream-dark);border-radius:10px;padding:16px;cursor:pointer;text-align:center;background:var(--cream);transition:border-color 0.2s;">
                 <div style="font-size:1.3rem;margin-bottom:6px;">&#127769;</div>
                 <strong style="font-size:0.9rem;">Studio Dark</strong>
-                <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Coming soon</p>
+                <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Bold contrast, modern gallery</p>
               </div>
-              <div class="wizard-style-card" data-style="market-fresh" style="border:2px solid var(--cream-dark);border-radius:10px;padding:16px;cursor:not-allowed;text-align:center;opacity:0.5;">
+              <div class="wizard-style-card" data-style="market-fresh" onclick="wizardSelectStyle(this)" style="border:2px solid var(--cream-dark);border-radius:10px;padding:16px;cursor:pointer;text-align:center;background:var(--cream);transition:border-color 0.2s;">
                 <div style="font-size:1.3rem;margin-bottom:6px;">&#127793;</div>
                 <strong style="font-size:0.9rem;">Market Fresh</strong>
-                <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Coming soon</p>
+                <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Bright, colorful, energetic</p>
               </div>
-              <div class="wizard-style-card" data-style="clean-commerce" style="border:2px solid var(--cream-dark);border-radius:10px;padding:16px;cursor:not-allowed;text-align:center;opacity:0.5;">
+              <div class="wizard-style-card" data-style="clean-commerce" onclick="wizardSelectStyle(this)" style="border:2px solid var(--cream-dark);border-radius:10px;padding:16px;cursor:pointer;text-align:center;background:var(--cream);transition:border-color 0.2s;">
                 <div style="font-size:1.3rem;margin-bottom:6px;">&#128722;</div>
                 <strong style="font-size:0.9rem;">Clean Commerce</strong>
-                <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Coming soon</p>
+                <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Minimal, product-focused</p>
               </div>
-              <div class="wizard-style-card" data-style="story-first" style="border:2px solid var(--cream-dark);border-radius:10px;padding:16px;cursor:not-allowed;text-align:center;opacity:0.5;">
+              <div class="wizard-style-card" data-style="story-first" onclick="wizardSelectStyle(this)" style="border:2px solid var(--cream-dark);border-radius:10px;padding:16px;cursor:pointer;text-align:center;background:var(--cream);transition:border-color 0.2s;">
                 <div style="font-size:1.3rem;margin-bottom:6px;">&#128214;</div>
                 <strong style="font-size:0.9rem;">Story First</strong>
-                <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Coming soon</p>
+                <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Editorial, narrative flow</p>
               </div>
-              <div class="wizard-style-card" data-style="minimal-pro" style="border:2px solid var(--cream-dark);border-radius:10px;padding:16px;cursor:not-allowed;text-align:center;opacity:0.5;">
+              <div class="wizard-style-card" data-style="minimal-pro" onclick="wizardSelectStyle(this)" style="border:2px solid var(--cream-dark);border-radius:10px;padding:16px;cursor:pointer;text-align:center;background:var(--cream);transition:border-color 0.2s;">
                 <div style="font-size:1.3rem;margin-bottom:6px;">&#9679;</div>
                 <strong style="font-size:0.9rem;">Minimal Pro</strong>
-                <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Coming soon</p>
+                <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Ultra-clean, monochrome</p>
               </div>
             </div>
           </div>
 
           <div id="wizardWebsiteStatus" style="font-size:0.85rem;margin-bottom:16px;"></div>
           <div style="display:flex;justify-content:space-between;">
-            <button class="btn btn-secondary" onclick="wizardPrev(5)">Back</button>
+            <button class="btn btn-secondary" onclick="wizardPrev(6)">Back</button>
             <div style="display:flex;gap:8px;">
-              <button class="btn btn-secondary" onclick="wizardNext(5)">Skip</button>
+              <button class="btn btn-secondary" onclick="wizardNext(6)">Skip</button>
               <button class="btn btn-primary" id="wizardWebsiteContinueBtn" onclick="wizardSaveWebsite()" style="display:none;">Save &amp; Continue</button>
             </div>
           </div>
         </div>
 
-        <!-- Step 6: Done -->
-        <div id="wizardStep6" class="wizard-step" style="display:none;">
+        <!-- Step 7: Done -->
+        <div id="wizardStep7" class="wizard-step" style="display:none;">
           <div style="text-align:center;padding:40px 0;">
             <div style="font-size:3rem;margin-bottom:16px;">&#127881;</div>
             <h2 style="font-size:1.8rem;margin-bottom:8px;">You're All Set!</h2>
@@ -5241,13 +5322,18 @@
       <div id="imageLibraryGrid"></div>
     </div>
 
-    <!-- Admin: Gallery Tab (Website Content) -->
+    <!-- Admin: Gallery Tab (legacy — kept for backward compat) -->
     <div id="galleryTab" style="display:none;">
       <div class="section-header">
         <h2>Website Content</h2>
       </div>
       <div id="galleryLoading" class="loading">Loading...</div>
       <div id="gallerySections"></div>
+    </div>
+
+    <!-- Admin: Website Tab (module-rendered) -->
+    <div id="websiteTab" style="display:none;">
+      <div id="websiteModuleRoot"></div>
     </div>
 
     <!-- Admin: Analytics Tab -->
@@ -8824,7 +8910,7 @@ var ROUTE_MAP = {
   // social route handled by social module (lazy-loaded)
   // newsletter route handled by newsletter module (lazy-loaded)
   // stories route handled by production module (lazy-loaded)
-  'website':     { tab: 'galleryTab' },
+  // website route handled by website module (lazy-loaded)
   'products':    { tab: 'productsTab' },
   'inventory':   { tab: 'inventoryTab', setup: function() { renderInventoryOverview(); } },
   'customers':   { tab: null, placeholder: { name: 'Customers', desc: 'Contacts, collectors, purchase history.', badge: 'new' } },
@@ -8864,7 +8950,7 @@ var SECTION_ROUTES = {
   'manage': ['products', 'inventory', 'employees', 'analytics', 'auditlog', 'settings']
 };
 
-var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab'];
+var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab'];
 
 var currentRoute = 'dashboard';
 
@@ -9258,7 +9344,8 @@ var MODULE_MANIFEST = {
   orders: { src: 'modules/orders.js', routes: ['orders', 'commissions'] },
   sales: { src: 'modules/sales.js', routes: ['pos', 'receipts', 'events', 'salesEvents'] },
   fulfillment: { src: 'modules/fulfillment.js', routes: ['pack', 'ship', 'fulfillment'] },
-  eventsAdmin: { src: 'modules/events.js', routes: ['events-shows', 'events-settings'] }
+  eventsAdmin: { src: 'modules/events.js', routes: ['events-shows', 'events-settings'] },
+  website: { src: 'modules/website.js', routes: ['website'] }
 };
 
 // Reverse lookup: route → moduleId (built from MODULE_MANIFEST)
@@ -10313,7 +10400,7 @@ function updateWizardProgress() {
 
 function wizardNext(fromStep) {
   var next = fromStep + 1;
-  if (next > 6) return;
+  if (next > 7) return;
   // Step 1: validate business name before proceeding
   if (fromStep === 1) {
     var name = document.getElementById('wizardBizName').value.trim();
@@ -10321,8 +10408,8 @@ function wizardNext(fromStep) {
   }
   showWizardStep(next);
   saveWizardProgress(next);
-  // Step 5 → 6: render summary
-  if (next === 6) renderWizardSummary();
+  // Step 6 → 7: render summary
+  if (next === 7) renderWizardSummary();
 }
 
 function wizardPrev(fromStep) {
@@ -10430,7 +10517,7 @@ async function wizardSaveBrand() {
     await updateConfigChecklist('brand', true);
     saveWizardProgress(5, { brandConfigured: true });
     showToast('Brand customization saved.');
-    showWizardStep(5); // Website step
+    showWizardStep(5); // Features step
   } catch (err) {
     showToast('Error saving brand: ' + err.message, true);
   }
@@ -10457,13 +10544,67 @@ function wizardWebsiteShowFresh() {
 }
 
 function wizardSelectStyle(el) {
-  var style = el.dataset.style;
-  if (style !== 'artisan-warm') return; // Only artisan-warm is functional
   document.querySelectorAll('.wizard-style-card').forEach(function(card) {
-    card.style.borderColor = '#ddd';
+    card.style.borderColor = 'var(--cream-dark)';
+    delete card.dataset.selected;
   });
   el.style.borderColor = 'var(--primary)';
   el.dataset.selected = 'true';
+}
+
+function wizardToggleFeature(el) {
+  var isSelected = el.dataset.selected === 'true';
+  if (isSelected) {
+    el.dataset.selected = 'false';
+    el.style.borderColor = 'var(--cream-dark)';
+    el.style.background = 'var(--cream)';
+  } else {
+    el.dataset.selected = 'true';
+    el.style.borderColor = 'var(--primary)';
+    el.style.background = 'var(--cream-dark)';
+  }
+}
+
+function wizardPreCheckFeatures(analysis) {
+  var cards = document.querySelectorAll('#wizardFeatureCards .wizard-feature-card');
+  var ts = (analysis && analysis.toolStack) || {};
+  var cs = (analysis && analysis.contentSections) || [];
+  var headings = cs.map(function(s) { return (s.heading || '').toLowerCase(); }).join(' ');
+
+  cards.forEach(function(card) {
+    var f = card.dataset.feature;
+    var check = false;
+    if (f === 'shop' && ts.storefront && ts.storefront.length > 0) check = true;
+    if (f === 'newsletter' && ts.email && ts.email.length > 0) check = true;
+    if (f === 'blog' && /blog|news|updates/.test(headings)) check = true;
+    if (f === 'events' && /events?|shows?|schedule/.test(headings)) check = true;
+    if (f === 'commissions' && /custom|commission|bespoke/.test(headings)) check = true;
+    if (f === 'members' && /member|wholesale|vip/.test(headings)) check = true;
+    if (check) {
+      card.dataset.selected = 'true';
+      card.style.borderColor = 'var(--primary)';
+      card.style.background = 'var(--cream-dark)';
+    }
+  });
+}
+
+async function wizardSaveFeatures() {
+  var features = { shop: false, blog: false, events: false, members: false, newsletter: false, commissions: false };
+  document.querySelectorAll('#wizardFeatureCards .wizard-feature-card').forEach(function(card) {
+    if (card.dataset.selected === 'true') {
+      features[card.dataset.feature] = true;
+    }
+  });
+
+  try {
+    await MastDB._ref('webPresence/config/features').set(features);
+    wizardProgress.featuresConfigured = true;
+    saveWizardProgress(6, { featuresConfigured: true });
+    showToast('Features saved.');
+    showWizardStep(6); // Website step
+  } catch (err) {
+    showToast('Error saving features: ' + err.message, true);
+  }
 }
 
 async function wizardAnalyzeSite() {
@@ -10496,14 +10637,17 @@ async function wizardAnalyzeSite() {
     summaryEl.style.display = '';
     statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Analysis complete! Config has been saved.</span>';
 
+    // Pre-check features from analysis
+    wizardPreCheckFeatures(analysis);
+
     // Update button to continue
     btn.disabled = false;
     btn.textContent = 'Continue';
     btn.onclick = function() {
-      saveWizardProgress(6, { websiteConfigured: true });
+      saveWizardProgress(7, { websiteConfigured: true });
 
       wizardProgress.websiteConfigured = true;
-      showWizardStep(6);
+      showWizardStep(7);
     };
   } catch (err) {
     statusEl.innerHTML = '<span style="color:var(--danger);">Error: ' + esc(err.message) + '</span>';
@@ -10560,10 +10704,10 @@ async function wizardSaveWebsite() {
     try {
       await MastDB._ref('webPresence/config').set(config);
       wizardProgress.websiteConfigured = true;
-      saveWizardProgress(6, { websiteConfigured: true });
+      saveWizardProgress(7, { websiteConfigured: true });
 
       showToast('Website style saved.');
-      showWizardStep(6);
+      showWizardStep(7);
     } catch (err) {
       if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger);">Error: ' + esc(err.message) + '</span>';
     }
@@ -10572,7 +10716,7 @@ async function wizardSaveWebsite() {
 
   // URL path already handled by wizardAnalyzeSite → continue button
   // If they click Save & Continue without analyzing, just skip
-  wizardNext(5);
+  wizardNext(6);
 }
 
 async function wizardSaveProduct() {
@@ -10623,6 +10767,7 @@ function renderWizardSummary() {
   if (wizardProgress.emailConfigured) items.push('<strong>Email:</strong> SendGrid connected &#10003;');
   else items.push('<strong>Email:</strong> <span style="color:var(--warm-gray);">Skipped — configure in Settings > Integrations</span>');
   if (wizardProgress.brandConfigured) items.push('<strong>Brand:</strong> Customized &#10003;');
+  if (wizardProgress.featuresConfigured) items.push('<strong>Features:</strong> Configured &#10003;');
   if (wizardProgress.websiteConfigured) items.push('<strong>Website:</strong> Configured &#10003;');
   else items.push('<strong>Website:</strong> <span style="color:var(--warm-gray);">Skipped — set up later in Website tab</span>');
   el.innerHTML = items.join('<br style="margin-bottom:8px;">');
