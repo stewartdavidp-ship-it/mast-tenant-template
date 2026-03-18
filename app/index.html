@@ -5213,6 +5213,16 @@
             </div>
             <div id="wizardAnalysisStatus" style="font-size:0.85rem;margin-bottom:16px;"></div>
             <div id="wizardAnalysisSummary" style="display:none;background:var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;font-size:0.9rem;"></div>
+            <div id="wizardCrawlManifest" style="display:none;background:var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;font-size:0.9rem;">
+              <p style="font-weight:600;margin-bottom:8px;">Content we can import:</p>
+              <div id="wizardManifestItems"></div>
+              <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--cream);">
+                <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Get a text when your import is ready (optional)</label>
+                <input type="tel" id="wizardNotifyPhone" placeholder="(555) 123-4567"
+                  style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;">
+                <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">We'll text you when your products and content are imported. Usually 15-40 minutes.</p>
+              </div>
+            </div>
           </div>
 
           <!-- Fresh start path: style picker -->
@@ -10613,12 +10623,15 @@ async function wizardAnalyzeSite() {
 
   var statusEl = document.getElementById('wizardAnalysisStatus');
   var summaryEl = document.getElementById('wizardAnalysisSummary');
+  var manifestEl = document.getElementById('wizardCrawlManifest');
+  var manifestItemsEl = document.getElementById('wizardManifestItems');
   var btn = document.getElementById('wizardWebsiteContinueBtn');
 
   statusEl.innerHTML = '<span style="color:var(--warm-gray);">Analyzing your website... This may take 30-60 seconds.</span>';
   btn.disabled = true;
   btn.textContent = 'Analyzing...';
   summaryEl.style.display = 'none';
+  manifestEl.style.display = 'none';
 
   try {
     var result = await firebase.functions().httpsCallable('analyzeExistingSite')({
@@ -10626,6 +10639,7 @@ async function wizardAnalyzeSite() {
     });
     var data = result.data;
     var analysis = data.analysis || {};
+    var crawlManifest = data.crawlManifest || null;
 
     // Show summary
     var summaryItems = [];
@@ -10635,6 +10649,40 @@ async function wizardAnalyzeSite() {
     if (analysis.hero && analysis.hero.headline) summaryItems.push('<strong>Headline:</strong> ' + esc(analysis.hero.headline));
     summaryEl.innerHTML = '<p style="margin-bottom:8px;font-weight:600;">Site Analysis Complete:</p>' + summaryItems.join('<br>');
     summaryEl.style.display = '';
+
+    // Show crawl manifest findings
+    if (crawlManifest) {
+      var ct = crawlManifest.contentTypes || {};
+      var manifestLines = [];
+      if (crawlManifest.platform && crawlManifest.platform !== 'custom') {
+        manifestLines.push('<div style="margin-bottom:6px;"><strong>Platform detected:</strong> ' + esc(crawlManifest.platform) + '</div>');
+      }
+      if (ct.products && ct.products.found) {
+        manifestLines.push('<div style="margin-bottom:4px;">&#128722; ~' + (ct.products.estimatedCount || '?') + ' products</div>');
+      }
+      if (ct.blog && ct.blog.found) {
+        manifestLines.push('<div style="margin-bottom:4px;">&#128221; ~' + (ct.blog.estimatedCount || '?') + ' blog posts</div>');
+      }
+      if (ct.events && ct.events.found) {
+        manifestLines.push('<div style="margin-bottom:4px;">&#128197; Events page found</div>');
+      }
+      if (ct.gallery && ct.gallery.found) {
+        manifestLines.push('<div style="margin-bottom:4px;">&#127912; Gallery/portfolio page found</div>');
+      }
+      if (manifestLines.length === 0) {
+        manifestLines.push('<div style="color:var(--warm-gray);">No importable content detected. You can add products manually later.</div>');
+      }
+      if (crawlManifest.jsRendered) {
+        manifestLines.push('<div style="margin-top:6px;color:var(--amber);font-size:0.8rem;">Note: Your site uses JavaScript rendering. Some content may need manual entry.</div>');
+      }
+      manifestItemsEl.innerHTML = manifestLines.join('');
+      manifestEl.style.display = '';
+
+      // Store manifest on window for the continue handler
+      window._wizardCrawlManifest = crawlManifest;
+      window._wizardAnalyzedUrl = url;
+    }
+
     statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Analysis complete! Config has been saved.</span>';
 
     // Pre-check features from analysis
@@ -10643,9 +10691,39 @@ async function wizardAnalyzeSite() {
     // Update button to continue
     btn.disabled = false;
     btn.textContent = 'Continue';
-    btn.onclick = function() {
-      saveWizardProgress(7, { websiteConfigured: true });
+    btn.style.display = '';
+    btn.onclick = async function() {
+      // Create import job if crawlable content was found
+      if (window._wizardCrawlManifest) {
+        var ct2 = window._wizardCrawlManifest.contentTypes || {};
+        var hasContent = (ct2.products && ct2.products.found) || (ct2.blog && ct2.blog.found) || (ct2.events && ct2.events.found) || (ct2.gallery && ct2.gallery.found);
+        if (hasContent) {
+          try {
+            var phone = (document.getElementById('wizardNotifyPhone').value || '').trim() || null;
+            var jobData = {
+              id: MastDB._ref('webPresence/importJobs').push().key,
+              url: window._wizardAnalyzedUrl,
+              tenantId: MastDB.tenantId(),
+              status: 'pending',
+              createdAt: new Date().toISOString(),
+              claimedAt: null,
+              completedAt: null,
+              error: null,
+              notifyPhone: phone,
+              crawlManifest: window._wizardCrawlManifest,
+              discovered: null,
+              imported: null
+            };
+            await MastDB._ref('webPresence/importJobs/' + jobData.id).set(jobData);
+            showToast('Import job created! We\'ll import your content in 15-40 minutes.');
+          } catch (e) {
+            console.error('Failed to create import job:', e);
+            // Non-blocking — don't prevent wizard from continuing
+          }
+        }
+      }
 
+      saveWizardProgress(7, { websiteConfigured: true });
       wizardProgress.websiteConfigured = true;
       showWizardStep(7);
     };
