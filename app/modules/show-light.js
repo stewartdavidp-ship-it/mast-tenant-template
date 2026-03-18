@@ -1174,16 +1174,34 @@
       hasProductDesc = true;
 
       var appDesc = img.applicationDescription || '';
-      var productLabel = img.productName || (img.tags && img.tags[0]) || '';
+      var currentPid = img.productId || '';
+
+      // Build product options sorted by name
+      var prods = MastAdmin.getData('productsData') || {};
+      var prodOptions = Object.entries(prods)
+        .filter(function(e) { return e[1].name; })
+        .sort(function(a, b) { return (a[1].name || '').localeCompare(b[1].name || ''); });
 
       h += '<div style="margin-top:16px;padding:16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:10px;">';
       h += '<div style="display:flex;gap:16px;align-items:flex-start;">';
       h += '<img src="' + esc(img.thumbnailUrl || img.url || '') + '" style="width:100px;height:100px;object-fit:cover;border-radius:8px;flex-shrink:0;" />';
       h += '<div style="flex:1;">';
-      h += '<div style="font-size:0.9rem;font-weight:600;color:var(--cream);margin-bottom:4px;">' + esc(p.slot || 'Product Photo') + '</div>';
-      if (productLabel) h += '<div style="font-size:0.75rem;color:var(--amber);margin-bottom:8px;">Product: ' + esc(productLabel) + '</div>';
+      h += '<div style="font-size:0.9rem;font-weight:600;color:var(--cream);margin-bottom:8px;">' + esc(p.slot || 'Product Photo') + '</div>';
+
+      // Product dropdown
+      h += '<label style="font-size:0.8rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Link to Product</label>';
+      h += '<select id="slProdSelect_' + idx + '" onchange="slLinkProduct(' + idx + ', this.value)" ' +
+        'style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:var(--charcoal);color:var(--cream);font-size:0.85rem;margin-bottom:12px;cursor:pointer;">';
+      h += '<option value="">— Select a product —</option>';
+      prodOptions.forEach(function(entry) {
+        var sel = entry[0] === currentPid ? ' selected' : '';
+        h += '<option value="' + esc(entry[0]) + '"' + sel + '>' + esc(entry[1].name) + (entry[1].price ? ' (' + esc(entry[1].price) + ')' : '') + '</option>';
+      });
+      h += '</select>';
+
+      // Application description
       h += '<label style="font-size:0.8rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Application Description</label>';
-      h += '<textarea id="slAppDesc_' + idx + '" rows="4" placeholder="Describe this product for show applications. This will auto-fill the product description field..." ' +
+      h += '<textarea id="slAppDesc_' + idx + '" rows="4" placeholder="Describe this product for show applications. Select a product above to pre-fill..." ' +
         'style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:var(--charcoal);color:var(--cream);font-size:0.9rem;line-height:1.4;resize:vertical;" ' +
         'onblur="slSaveSlotDesc(' + idx + ', this.value)">' + esc(appDesc) + '</textarea>';
       h += '</div>';
@@ -1311,7 +1329,55 @@
     }
   }
 
+  async function slLinkProduct(slotIdx, pid) {
+    var imgId = slImageAssignments[slotIdx];
+    if (!imgId || imgId === '__profile_booth__') return;
+    var img = (imageLibrary || {})[imgId];
+    if (!img) return;
+
+    var prods = MastAdmin.getData('productsData') || {};
+    var product = pid ? prods[pid] : null;
+
+    try {
+      if (pid && product) {
+        // Link image to product
+        await MastDB.images.ref(imgId).update({
+          productId: pid,
+          productName: product.name || ''
+        });
+        img.productId = pid;
+        img.productName = product.name || '';
+
+        // Pre-fill description from product if textarea is empty
+        var textarea = document.getElementById('slAppDesc_' + slotIdx);
+        var currentDesc = textarea ? textarea.value.trim() : '';
+        if (!currentDesc) {
+          var desc = product.shortDescription || product.description || '';
+          if (desc) {
+            if (textarea) textarea.value = desc;
+            img.applicationDescription = desc;
+            await MastDB.images.ref(imgId + '/applicationDescription').set(desc);
+            if (!img.applicationPhoto) {
+              await MastDB.images.ref(imgId + '/applicationPhoto').set(true);
+              img.applicationPhoto = true;
+            }
+          }
+        }
+        showToast('Linked to ' + product.name);
+      } else {
+        // Unlink
+        await MastDB.images.ref(imgId + '/productId').set(null);
+        await MastDB.images.ref(imgId + '/productName').set(null);
+        delete img.productId;
+        delete img.productName;
+      }
+    } catch (err) {
+      showToast('Failed to link product: ' + err.message, true);
+    }
+  }
+
   window.slSaveSlotDesc = slSaveSlotDesc;
+  window.slLinkProduct = slLinkProduct;
 
   // --- Step 5: Preview & Save ---
 
