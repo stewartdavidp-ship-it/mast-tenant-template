@@ -8437,7 +8437,8 @@ async function resolveTenant(uid) {
     if (tenantIds.length === 0) return null;
     if (tenantIds.length === 1) return tenantIds[0];
 
-    // Multiple tenants — return first for now (picker UI is Phase 6)
+    // Multiple tenants — prefer domain-resolved tenant if available, else first alphabetically (picker UI is Phase 6)
+    if (window.TENANT_ID && tenantMap[window.TENANT_ID]) return window.TENANT_ID;
     return tenantIds[0];
   } catch (err) {
     console.error('Tenant resolution failed:', err);
