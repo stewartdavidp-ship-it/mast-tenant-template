@@ -1059,7 +1059,10 @@
     // Check booth photo from profile
     var hasBoothPhoto = !!(slProfile && slProfile.boothPhotoUrl) || !!galleryByCategory.booth;
 
-    photos.forEach(function(p) {
+    photos.forEach(function(p, idx) {
+      // Check if this slot has an image assigned from Step 4
+      if (slImageAssignments[idx]) return; // assigned — no gap
+      // Fallback: check gallery categories
       var slotLower = (p.slot || '').toLowerCase();
       var matched = false;
       if (slotLower.indexOf('booth') >= 0 && hasBoothPhoto) matched = true;
