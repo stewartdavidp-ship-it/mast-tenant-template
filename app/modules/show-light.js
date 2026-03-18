@@ -437,15 +437,12 @@
     var existing = img.applicationDescription || '';
     // Pre-fill from product description if image is linked to a product
     if (!existing && img.productId) {
-      var prods = MastAdmin.getData('productsData') || {};
-      var p = prods[img.productId];
+      var p = (window.productsData || []).find(function(x) { return x.pid === img.productId; });
       if (p) existing = (p.shortDescription || p.description || '');
     }
     if (!existing && img.productName) {
-      var prods2 = MastAdmin.getData('productsData') || {};
-      Object.values(prods2).forEach(function(p) {
-        if (!existing && p.name === img.productName) existing = (p.shortDescription || p.description || '');
-      });
+      var p2 = (window.productsData || []).find(function(x) { return x.name === img.productName; });
+      if (p2) existing = (p2.shortDescription || p2.description || '');
     }
 
     var html =
@@ -934,13 +931,13 @@
       });
       // Fallback: if no application descriptions, try product catalog
       if (!productDesc) {
-        var prods = MastAdmin.getData('productsData') || {};
+        var prodsArr = window.productsData || [];
         Object.values(slImageAssignments).forEach(function(imgId) {
           if (imgId === '__profile_booth__') return;
           var img = lib[imgId];
           if (!img) return;
           if (img.productId) {
-            var p = prods[img.productId];
+            var p = prodsArr.find(function(x) { return x.pid === img.productId; });
             if (p && p.description && productDesc.indexOf(p.description) < 0) {
               productDesc += (p.name ? p.name + ': ' : '') + (p.shortDescription || p.description) + '\n';
             }
@@ -1177,10 +1174,10 @@
       var currentPid = img.productId || '';
 
       // Build product options sorted by name
-      var prods = MastAdmin.getData('productsData') || {};
-      var prodOptions = Object.entries(prods)
-        .filter(function(e) { return e[1].name; })
-        .sort(function(a, b) { return (a[1].name || '').localeCompare(b[1].name || ''); });
+      var prodOptions = (window.productsData || [])
+        .filter(function(p) { return p.name; })
+        .slice() // don't mutate original
+        .sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
 
       h += '<div style="margin-top:16px;padding:16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:10px;">';
       h += '<div style="display:flex;gap:16px;align-items:flex-start;">';
@@ -1193,9 +1190,9 @@
       h += '<select id="slProdSelect_' + idx + '" onchange="slLinkProduct(' + idx + ', this.value)" ' +
         'style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:var(--charcoal);color:var(--cream);font-size:0.85rem;margin-bottom:12px;cursor:pointer;">';
       h += '<option value="">— Select a product —</option>';
-      prodOptions.forEach(function(entry) {
-        var sel = entry[0] === currentPid ? ' selected' : '';
-        h += '<option value="' + esc(entry[0]) + '"' + sel + '>' + esc(entry[1].name) + (entry[1].price ? ' (' + esc(entry[1].price) + ')' : '') + '</option>';
+      prodOptions.forEach(function(prod) {
+        var sel = prod.pid === currentPid ? ' selected' : '';
+        h += '<option value="' + esc(prod.pid) + '"' + sel + '>' + esc(prod.name) + (prod.price ? ' (' + esc(prod.price) + ')' : '') + '</option>';
       });
       h += '</select>';
 
@@ -1270,34 +1267,30 @@
       // Pre-fill applicationDescription from product if not already set
       var img = (imageLibrary || {})[imageId];
       if (img && !img.applicationDescription) {
-        var prods = MastAdmin.getData('productsData') || {};
-        var prodsArr = Object.entries(prods);
+        var prodsArr = window.productsData || [];
         var desc = '';
         // 1. Match by productId
-        if (img.productId && prods[img.productId]) {
-          var p = prods[img.productId];
-          desc = p.shortDescription || p.description || '';
+        if (img.productId) {
+          var p = prodsArr.find(function(x) { return x.pid === img.productId; });
+          if (p) desc = p.shortDescription || p.description || '';
         }
         // 2. Match by productName
         if (!desc && img.productName) {
-          prodsArr.forEach(function(entry) {
-            if (!desc && entry[1].name === img.productName) desc = entry[1].shortDescription || entry[1].description || '';
-          });
+          var p2 = prodsArr.find(function(x) { return x.name === img.productName; });
+          if (p2) desc = p2.shortDescription || p2.description || '';
         }
         // 3. Match by tags to product names
         if (!desc && img.tags && img.tags.length) {
           img.tags.forEach(function(tag) {
             if (desc) return;
-            prodsArr.forEach(function(entry) {
-              if (!desc && entry[1].name && entry[1].name === tag) desc = entry[1].shortDescription || entry[1].description || '';
-            });
+            var p3 = prodsArr.find(function(x) { return x.name === tag; });
+            if (p3) desc = p3.shortDescription || p3.description || '';
           });
         }
         // 4. Match by image URL to product image URL
         if (!desc && img.url) {
-          prodsArr.forEach(function(entry) {
-            if (!desc && entry[1].image === img.url) desc = entry[1].shortDescription || entry[1].description || '';
-          });
+          var p4 = prodsArr.find(function(x) { return x.image === img.url; });
+          if (p4) desc = p4.shortDescription || p4.description || '';
         }
         if (desc) {
           img.applicationDescription = desc;
@@ -1335,8 +1328,7 @@
     var img = (imageLibrary || {})[imgId];
     if (!img) return;
 
-    var prods = MastAdmin.getData('productsData') || {};
-    var product = pid ? prods[pid] : null;
+    var product = pid ? (window.productsData || []).find(function(x) { return x.pid === pid; }) : null;
 
     try {
       if (pid && product) {
