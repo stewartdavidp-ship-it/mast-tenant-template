@@ -318,16 +318,6 @@
   function renderVendorsTab(sorted, categories, allTags, promotions, booths) {
     var h = '';
 
-    // Category filter chips
-    if (categories.length > 1) {
-      h += '<div class="filters">';
-      categories.forEach(function(c) {
-        var isActive = selectedCategories.indexOf(c) >= 0;
-        h += '<button class="filter-chip' + (isActive ? ' active' : '') + '" onclick="toggleCategory(\'' + esc(c).replace(/'/g, "\\'") + '\')">' + esc(c) + '</button>';
-      });
-      h += '</div>';
-    }
-
     // Tag filter chips
     if (allTags.length > 0) {
       h += '<div class="tag-filters">';
@@ -340,7 +330,7 @@
     }
 
     // Clear filters
-    if (selectedCategories.length > 0 || selectedTags.length > 0) {
+    if (selectedTags.length > 0) {
       h += '<button class="clear-filters-btn" onclick="clearAllFilters()">Clear all filters</button>';
     }
 
