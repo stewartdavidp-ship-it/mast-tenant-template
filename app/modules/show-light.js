@@ -854,20 +854,43 @@
       var productDesc = '';
       var lib = imageLibrary || {};
       var prods = MastAdmin.getData('productsData') || {};
-      // Look up product descriptions for assigned images by matching tags to product names
+      var prodsArr = Object.entries(prods);
+      // Look up product descriptions for assigned images
       Object.values(slImageAssignments).forEach(function(imgId) {
         if (imgId === '__profile_booth__') return;
         var img = lib[imgId];
         if (!img) return;
-        // Match image tags to product names in catalog
-        var tags = img.tags || [];
-        tags.forEach(function(tag) {
-          Object.values(prods).forEach(function(p) {
-            if (p.name && p.name === tag && p.description && productDesc.indexOf(p.description) < 0) {
+        var matched = false;
+        // Primary: match by productId (direct product link)
+        if (img.productId) {
+          var p = prods[img.productId];
+          if (p && p.description && productDesc.indexOf(p.description) < 0) {
+            productDesc += (p.name ? p.name + ': ' : '') + (p.shortDescription || p.description) + '\n';
+            matched = true;
+          }
+        }
+        // Secondary: match by productName
+        if (!matched && img.productName) {
+          prodsArr.forEach(function(entry) {
+            var p = entry[1];
+            if (p.name && p.name === img.productName && p.description && productDesc.indexOf(p.description) < 0) {
               productDesc += (p.name ? p.name + ': ' : '') + (p.shortDescription || p.description) + '\n';
+              matched = true;
             }
           });
-        });
+        }
+        // Tertiary: fall back to tag matching
+        if (!matched) {
+          var tags = img.tags || [];
+          tags.forEach(function(tag) {
+            prodsArr.forEach(function(entry) {
+              var p = entry[1];
+              if (p.name && p.name === tag && p.description && productDesc.indexOf(p.description) < 0) {
+                productDesc += (p.name ? p.name + ': ' : '') + (p.shortDescription || p.description) + '\n';
+              }
+            });
+          });
+        }
       });
       // Fallback: use all product catalog descriptions if no matches from images
       if (!productDesc) {
