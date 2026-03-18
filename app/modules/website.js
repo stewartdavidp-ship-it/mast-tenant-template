@@ -193,7 +193,7 @@
 
     var html = '';
     html += '<div class="wp-overview-stat"><strong style="min-width:120px;">Status:</strong> ' + statusBadge + '</div>';
-    html += '<div class="wp-overview-stat"><strong style="min-width:120px;">Site URL:</strong> <a href="' + esc(siteUrl) + '" target="_blank" rel="noopener">' + esc(siteUrl) + '</a></div>';
+    html += '<div class="wp-overview-stat"><strong style="min-width:120px;">Site URL:</strong> <a href="' + esc(siteUrl) + '" target="_blank" rel="noopener" style="color:var(--teal);">' + esc(siteUrl) + '</a></div>';
     if (publishedAt) {
       html += '<div class="wp-overview-stat"><strong style="min-width:120px;">Last Published:</strong> ' + new Date(publishedAt).toLocaleString() + '</div>';
     }
