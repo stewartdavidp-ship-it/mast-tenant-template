@@ -350,6 +350,8 @@
     var entries = Object.entries(slGalleryItems);
     entries.sort(function(a, b) { return (b[1].uploadedAt || '').localeCompare(a[1].uploadedAt || ''); });
 
+    var appCount = entries.filter(function(e) { return e[1].applicationPhoto; }).length;
+
     var h = '';
     h += '<div class="sl-card">';
     h += '<div class="sl-card-header"><span class="sl-card-title">Image Gallery (' + entries.length + ')</span>';
@@ -357,6 +359,12 @@
     h += '<button class="btn btn-sm" onclick="slUploadFromLibrary()" style="background:var(--sage);color:white;border:none;border-radius:6px;padding:4px 12px;cursor:pointer;">From Library</button>';
     h += '<button class="btn btn-primary btn-sm" onclick="slOpenUploadModal()">+ Upload</button>';
     h += '</div></div>';
+
+    if (appCount > 0) {
+      h += '<div style="font-size:0.8rem;color:var(--amber);margin-bottom:12px;">⭐ ' + appCount + ' application photo' + (appCount !== 1 ? 's' : '') + ' selected — these appear in the Apply image picker</div>';
+    } else if (entries.length > 0) {
+      h += '<div style="font-size:0.8rem;color:var(--warm-gray);margin-bottom:12px;">Click images and mark your best as "Application Photo" — those will be available when building applications</div>';
+    }
 
     if (entries.length === 0) {
       h += '<div style="text-align:center;padding:40px;color:var(--warm-gray);">';
@@ -368,8 +376,10 @@
       entries.forEach(function(entry) {
         var id = entry[0];
         var img = entry[1];
-        h += '<div class="sl-gallery-item" onclick="slViewGalleryImage(\'' + esc(id) + '\')">';
+        var isApp = img.applicationPhoto;
+        h += '<div class="sl-gallery-item" onclick="slViewGalleryImage(\'' + esc(id) + '\')" style="' + (isApp ? 'border-color:var(--amber);' : '') + '">';
         h += '<img src="' + esc(img.url || img.thumbnailUrl || '') + '" alt="' + esc(img.productName || (img.tags ? img.tags[0] : '')) + '" loading="lazy">';
+        if (isApp) h += '<div style="position:absolute;top:6px;left:6px;background:var(--amber);color:white;font-size:0.6rem;padding:2px 5px;border-radius:3px;font-weight:600;">⭐ APP</div>';
         if (img.category) h += '<span class="sl-gallery-badge">' + esc(img.category) + '</span>';
         if (img.productName) h += '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.6);color:white;font-size:0.65rem;padding:3px 6px;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;">' + esc(img.productName) + '</div>';
         h += '<button class="sl-gallery-delete" onclick="event.stopPropagation(); slDeleteGalleryImage(\'' + esc(id) + '\')">&times;</button>';
@@ -572,7 +582,14 @@
         '</div>' +
         '<div class="sl-form-group"><label>Tags</label>' +
           '<input type="text" id="slEditTags" value="' + esc((img.tags || []).join(', ')) + '" placeholder="comma-separated"></div>' +
-        (img.width ? '<div style="font-size:0.8rem;color:var(--warm-gray);">' + img.width + ' x ' + img.height + '</div>' : '') +
+        '<div class="sl-form-group" style="margin-top:12px;padding:12px;border-radius:8px;background:' + (img.applicationPhoto ? 'rgba(196,133,60,0.15)' : 'rgba(122,139,111,0.08)') + ';">' +
+          '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;text-transform:none;letter-spacing:0;">' +
+            '<input type="checkbox" id="slEditAppPhoto"' + (img.applicationPhoto ? ' checked' : '') + ' style="width:auto;">' +
+            '<span style="font-size:0.9rem;font-weight:600;">⭐ Application Photo</span>' +
+          '</label>' +
+          '<div style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Application photos appear in the image picker when building show applications.</div>' +
+        '</div>' +
+        (img.width ? '<div style="font-size:0.8rem;color:var(--warm-gray);margin-top:8px;">' + img.width + ' x ' + img.height + '</div>' : '') +
       '</div>' +
       '<div class="modal-footer">' +
         '<button class="btn" onclick="slDeleteGalleryImage(\'' + esc(id) + '\'); closeModal();" style="background:var(--danger);color:white;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;">Delete</button>' +
@@ -590,7 +607,8 @@
       productDescription: (document.getElementById('slEditProductDesc') || {}).value || '',
       price: (document.getElementById('slEditPrice') || {}).value || '',
       materials: (document.getElementById('slEditMaterials') || {}).value || '',
-      tags: ((document.getElementById('slEditTags') || {}).value || '').split(',').map(function(t) { return t.trim(); }).filter(Boolean)
+      tags: ((document.getElementById('slEditTags') || {}).value || '').split(',').map(function(t) { return t.trim(); }).filter(Boolean),
+      applicationPhoto: !!(document.getElementById('slEditAppPhoto') || {}).checked
     };
     try {
       await MastDB.showLight.gallery.ref(id).update(updates);
@@ -1268,11 +1286,16 @@
   }
 
   function slPickImageForSlot(slotIdx) {
-    var entries = Object.entries(slGalleryItems);
-    if (entries.length === 0) {
+    var allEntries = Object.entries(slGalleryItems);
+    if (allEntries.length === 0) {
       showToast('No images in gallery. Upload some first.', true);
       return;
     }
+
+    // Show application photos first; fall back to all if none marked
+    var appEntries = allEntries.filter(function(e) { return e[1].applicationPhoto; });
+    var entries = appEntries.length > 0 ? appEntries : allEntries;
+    var showingAll = appEntries.length === 0;
 
     var html =
       '<div class="modal-header">' +
@@ -1280,6 +1303,9 @@
         '<button class="modal-close" onclick="closeModal()">&times;</button>' +
       '</div>' +
       '<div class="modal-body">' +
+        (showingAll
+          ? '<div style="font-size:0.8rem;color:var(--warm-gray);margin-bottom:8px;">No application photos marked yet — showing all gallery images. Mark your best photos as "Application Photo" in the Gallery.</div>'
+          : '<div style="font-size:0.8rem;color:var(--amber);margin-bottom:8px;">⭐ Showing ' + appEntries.length + ' application photo' + (appEntries.length !== 1 ? 's' : '') + '</div>') +
         '<div class="sl-gallery-grid">';
 
     entries.forEach(function(entry) {
