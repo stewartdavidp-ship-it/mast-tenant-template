@@ -277,7 +277,7 @@
     html += '<div class="content">';
 
     if (activeTab === 'vendors') {
-      html += renderVendorsTab(sorted, categories, allTags, promotions, booths);
+      html += renderVendorsTab(sorted, categories, allTags, promotions, booths, hasFloorPlan);
     } else if (activeTab === 'pinned') {
       html += renderPinnedTab(pinned, promotions, booths, hasFloorPlan);
     } else if (activeTab === 'coupons') {
@@ -308,7 +308,7 @@
   }
 
   // ── Vendors Tab ────────────────────────────────────────────────────
-  function renderVendorsTab(sorted, categories, allTags, promotions, booths) {
+  function renderVendorsTab(sorted, categories, allTags, promotions, booths, hasFloorPlan) {
     var h = '';
 
     // Tags — collapsed by default, expand on tap
