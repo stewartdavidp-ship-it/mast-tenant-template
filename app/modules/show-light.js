@@ -1143,6 +1143,7 @@
           assignedImg = (imageLibrary || {})[assigned];
         }
 
+        h += '<div style="display:flex;flex-direction:column;gap:8px;">';
         h += '<div class="sl-slot' + (assignedImg ? ' filled' : '') + '" onclick="slPickImageForSlot(' + idx + ')">';
         if (assignedImg) {
           h += '<img src="' + esc(assignedImg.url || assignedImg.thumbnailUrl || '') + '" alt="">';
@@ -1153,6 +1154,21 @@
           h += '<div style="font-size:0.8rem;color:var(--warm-gray);">' + esc(p.slot || 'Photo ' + (idx + 1)) + '</div>';
           if (p.description) h += '<div style="font-size:0.7rem;color:var(--warm-gray);opacity:0.7;">' + esc(p.description) + '</div>';
           if (p.dimensions) h += '<div style="font-size:0.65rem;color:var(--amber);">' + esc(p.dimensions) + '</div>';
+        }
+        h += '</div>';
+        // Show application description field for assigned product photos (not booth photos)
+        if (assignedImg && !isProfileBooth) {
+          var slotLower = (p.slot || '').toLowerCase();
+          var isBooth = slotLower.indexOf('booth') >= 0;
+          if (!isBooth) {
+            var appDesc = assignedImg.applicationDescription || '';
+            h += '<div onclick="event.stopPropagation();">';
+            h += '<textarea id="slAppDesc_' + idx + '" rows="3" placeholder="Describe this product for the application..." ' +
+              'style="width:100%;padding:6px 8px;border-radius:6px;border:1px solid rgba(255,255,255,0.15);background:var(--charcoal);color:var(--cream);font-size:0.8rem;resize:vertical;" ' +
+              'onblur="slSaveSlotDesc(' + idx + ', this.value)">' + esc(appDesc) + '</textarea>';
+            if (assignedImg.productName) h += '<div style="font-size:0.65rem;color:var(--amber);margin-top:2px;">Product: ' + esc(assignedImg.productName) + '</div>';
+            h += '</div>';
+          }
         }
         h += '</div>';
       });
@@ -1213,11 +1229,50 @@
   function slAssignImage(slotIdx, imageId) {
     if (imageId) {
       slImageAssignments[slotIdx] = imageId;
+      // Pre-fill applicationDescription from product if not already set
+      var img = (imageLibrary || {})[imageId];
+      if (img && !img.applicationDescription) {
+        var prods = MastAdmin.getData('productsData') || {};
+        var desc = '';
+        if (img.productId && prods[img.productId]) {
+          var p = prods[img.productId];
+          desc = p.shortDescription || p.description || '';
+        } else if (img.productName) {
+          Object.values(prods).forEach(function(p) {
+            if (!desc && p.name === img.productName) desc = p.shortDescription || p.description || '';
+          });
+        }
+        if (desc) {
+          img.applicationDescription = desc;
+          MastDB.images.ref(imageId + '/applicationDescription').set(desc).catch(function() {});
+        }
+      }
     } else {
       delete slImageAssignments[slotIdx];
     }
     renderApplyImages(document.getElementById('slApplyContent'), slShows[slCurrentShowId] || {});
   }
+
+  async function slSaveSlotDesc(slotIdx, value) {
+    var imgId = slImageAssignments[slotIdx];
+    if (!imgId || imgId === '__profile_booth__') return;
+    var img = (imageLibrary || {})[imgId];
+    if (!img) return;
+    value = (value || '').trim();
+    try {
+      await MastDB.images.ref(imgId + '/applicationDescription').set(value || null);
+      img.applicationDescription = value || '';
+      // Also mark as application photo if not already
+      if (value && !img.applicationPhoto) {
+        await MastDB.images.ref(imgId + '/applicationPhoto').set(true);
+        img.applicationPhoto = true;
+      }
+    } catch (err) {
+      showToast('Failed to save description: ' + err.message, true);
+    }
+  }
+
+  window.slSaveSlotDesc = slSaveSlotDesc;
 
   // --- Step 5: Preview & Save ---
 
