@@ -23,6 +23,22 @@
   --shadow: 0 1px 3px rgba(0,0,0,0.06);
   --shadow-lg: 0 4px 12px rgba(0,0,0,0.08);
 }
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e1117;
+    --card: #1a1d26;
+    --border: #2d3140;
+    --text: #e8e4df;
+    --text-secondary: #8a8680;
+    --primary: #3fa594;
+    --primary-bg: rgba(63,165,148,0.14);
+    --shadow: 0 1px 3px rgba(0,0,0,0.3);
+    --shadow-lg: 0 4px 12px rgba(0,0,0,0.45);
+  }
+  .vendor-booth-badge { background: #2a2d38; }
+  .modal-overlay { background: rgba(0,0,0,0.65); }
+  .search-input { color-scheme: dark; }
+}
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
 a { color: var(--primary); text-decoration: none; }
