@@ -201,25 +201,8 @@
 
     h += '</div>';
 
-    // ── Product Descriptions ──
-    h += '<div class="sl-card">';
-    h += '<div class="sl-card-header"><span class="sl-card-title">Product Descriptions</span>';
-    h += '<button class="btn btn-sm" onclick="slAddProductDesc()" style="background:var(--sage);color:white;border:none;border-radius:6px;padding:4px 12px;cursor:pointer;">+ Add</button>';
-    h += '</div>';
-    h += '<div id="slProductDescs">';
-    var descs = p.productDescriptions || [];
-    if (descs.length === 0) {
-      h += '<div style="color:var(--warm-gray);font-size:0.85rem;padding:8px 0;">No product descriptions yet. Add descriptions of your product lines.</div>';
-    } else {
-      descs.forEach(function(d, i) {
-        h += '<div class="sl-form-group" style="display:flex;gap:8px;align-items:flex-start;">';
-        h += '<div style="flex:1;"><input type="text" id="slPdName' + i + '" value="' + esc(d.name || '') + '" placeholder="Product line name" style="margin-bottom:6px;">';
-        h += '<textarea id="slPdDesc' + i + '" rows="2" placeholder="Description for this product line...">' + esc(d.description || '') + '</textarea></div>';
-        h += '<button onclick="slRemoveProductDesc(' + i + ')" style="background:none;border:none;color:var(--danger,#dc2626);cursor:pointer;font-size:1.2rem;padding:4px;">&times;</button>';
-        h += '</div>';
-      });
-    }
-    h += '</div></div>';
+    // Product descriptions live on gallery images, not the profile.
+    // Tip shown to guide users.
 
     // ── Booth Photo (default) ──
     h += '<div class="sl-card">';
@@ -300,16 +283,6 @@
   }
 
   async function slSaveProfile() {
-    var descs = [];
-    var i = 0;
-    while (document.getElementById('slPdName' + i)) {
-      descs.push({
-        name: document.getElementById('slPdName' + i).value.trim(),
-        description: document.getElementById('slPdDesc' + i).value.trim()
-      });
-      i++;
-    }
-
     var data = {
       name: (document.getElementById('slProfileName') || {}).value || '',
       bio: (document.getElementById('slProfileBio') || {}).value || '',
@@ -319,7 +292,6 @@
       processDescription: (document.getElementById('slProfileProcess') || {}).value || '',
       priceRange: (document.getElementById('slProfilePriceRange') || {}).value || '',
       keywords: ((document.getElementById('slProfileKeywords') || {}).value || '').split(',').map(function(k) { return k.trim(); }).filter(Boolean),
-      productDescriptions: descs.filter(function(d) { return d.name || d.description; }),
       boothPhotoUrl: (slProfile || {}).boothPhotoUrl || '',
       yearsInBusiness: (document.getElementById('slProfileYears') || {}).value || '',
       businessStructure: (document.getElementById('slProfileStructure') || {}).value || '',
@@ -348,19 +320,6 @@
     }
   }
 
-  function slAddProductDesc() {
-    var descs = slProfile.productDescriptions || [];
-    descs.push({ name: '', description: '' });
-    slProfile.productDescriptions = descs;
-    renderProfile(document.getElementById('slContent'));
-  }
-
-  function slRemoveProductDesc(idx) {
-    var descs = slProfile.productDescriptions || [];
-    descs.splice(idx, 1);
-    slProfile.productDescriptions = descs;
-    renderProfile(document.getElementById('slContent'));
-  }
 
   function slChangeBoothPhoto() {
     // Use the image library picker
@@ -1089,8 +1048,6 @@
       });
       productDescFromGallery = productDescFromGallery.trim();
 
-      // Assemble profile product descriptions as fallback
-      var profileProductDesc = (profile.productDescriptions || []).map(function(d) { return d.name + ': ' + d.description; }).join('\n');
 
       fields.forEach(function(f) {
         var name = (f.name || '').toLowerCase();
@@ -1101,10 +1058,8 @@
         } else if (name.indexOf('bio') >= 0 || name.indexOf('statement') >= 0 || name.indexOf('about') >= 0) {
           mapped = { source: 'profile.bio', value: profile.bio || '', confidence: profile.bio ? 'high' : 'none' };
         } else if (name.indexOf('product') >= 0 || name.indexOf('description') >= 0 || name.indexOf('what you') >= 0) {
-          // Prefer gallery-derived descriptions, fall back to profile
-          var val = productDescFromGallery || profileProductDesc;
-          var conf = productDescFromGallery ? 'medium' : (profileProductDesc ? 'medium' : 'none');
-          mapped = { source: productDescFromGallery ? 'gallery images' : 'profile.productDescriptions', value: val, confidence: conf };
+          // Product descriptions come from gallery images, not the profile
+          mapped = { source: 'gallery images', value: productDescFromGallery, confidence: productDescFromGallery ? 'medium' : 'none' };
         } else if (name.indexOf('material') >= 0) {
           mapped = { source: 'profile.materials', value: profile.materials || '', confidence: profile.materials ? 'high' : 'none' };
         } else if (name.indexOf('process') >= 0 || name.indexOf('technique') >= 0) {
@@ -1465,8 +1420,6 @@
 
   window.slSwitchView = slSwitchView;
   window.slSaveProfile = slSaveProfile;
-  window.slAddProductDesc = slAddProductDesc;
-  window.slRemoveProductDesc = slRemoveProductDesc;
   window.slChangeBoothPhoto = slChangeBoothPhoto;
   window.slRemoveBoothPhoto = slRemoveBoothPhoto;
   window.slOpenUploadModal = slOpenUploadModal;
