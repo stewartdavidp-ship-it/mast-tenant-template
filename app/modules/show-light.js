@@ -1179,7 +1179,8 @@
         .slice() // don't mutate original
         .sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
 
-      h += '<div style="margin-top:16px;padding:16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:10px;">';
+      h += '<div style="margin-top:16px;padding:16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:10px;position:relative;">';
+      h += '<button onclick="slAssignImage(' + idx + ', null)" style="position:absolute;top:8px;right:8px;background:none;border:none;color:var(--warm-gray);font-size:1.2rem;cursor:pointer;padding:4px 8px;line-height:1;" title="Remove image">&times;</button>';
       h += '<div style="display:flex;gap:16px;align-items:flex-start;">';
       h += '<img src="' + esc(img.thumbnailUrl || img.url || '') + '" style="width:100px;height:100px;object-fit:cover;border-radius:8px;flex-shrink:0;" />';
       h += '<div style="flex:1;">';
