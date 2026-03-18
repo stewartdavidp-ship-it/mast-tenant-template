@@ -497,7 +497,7 @@
 
       // JS-rendered warning
       if (job.crawlFeedback && job.crawlFeedback.jsRendered) {
-        html += '<div style="font-size:0.85rem;color:var(--amber);background:#FFF3E0;padding:8px 12px;border-radius:6px;margin-bottom:12px;">';
+        html += '<div style="font-size:0.85rem;color:var(--amber);background:rgba(255,152,0,0.15);padding:8px 12px;border-radius:6px;margin-bottom:12px;">';
         html += '&#9888; This site uses JavaScript rendering. Some content may not have been captured. ';
         html += 'For best results, consider importing from Square, Etsy, or Shopify directly.';
         html += '</div>';
@@ -674,11 +674,11 @@
   function getJobStatusInfo(status) {
     var map = {
       pending: { label: 'Queued', icon: '&#9203;', color: 'var(--warm-gray)', bg: 'var(--cream-dark)' },
-      processing: { label: 'Scanning', icon: '&#128269;', color: 'var(--amber)', bg: '#FFF3E0' },
-      crawled: { label: 'Found Content', icon: '&#10003;', color: 'var(--teal)', bg: '#E0F2F1' },
-      importing: { label: 'Importing', icon: '&#8635;', color: 'var(--amber)', bg: '#FFF3E0' },
-      complete: { label: 'Complete', icon: '&#10003;', color: 'var(--teal)', bg: '#E0F2F1' },
-      failed: { label: 'Failed', icon: '&#10007;', color: 'var(--danger)', bg: '#FFEBEE' }
+      processing: { label: 'Scanning', icon: '&#128269;', color: 'var(--amber)', bg: 'rgba(255,152,0,0.15)' },
+      crawled: { label: 'Found Content', icon: '&#10003;', color: 'var(--teal)', bg: 'rgba(0,150,136,0.15)' },
+      importing: { label: 'Importing', icon: '&#8635;', color: 'var(--amber)', bg: 'rgba(255,152,0,0.15)' },
+      complete: { label: 'Complete', icon: '&#10003;', color: 'var(--teal)', bg: 'rgba(0,150,136,0.15)' },
+      failed: { label: 'Failed', icon: '&#10007;', color: 'var(--danger)', bg: 'rgba(244,67,54,0.15)' }
     };
     return map[status] || map.pending;
   }
