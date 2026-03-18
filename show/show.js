@@ -115,14 +115,39 @@
   }
 
   // ── Ad System ──────────────────────────────────────────────────────
+  var AD_EXPIRY_MS = 8 * 60 * 60 * 1000; // 8 hours
+
   function initAdSystem() {
     var storageKey = 'mast-ads-' + data.show.id;
-    if (localStorage.getItem(storageKey)) {
+
+    // ?resetAds in URL clears state and reloads clean
+    if (window.location.search.indexOf('resetAds') >= 0) {
+      localStorage.removeItem(storageKey);
+      var cleanUrl = window.location.href.replace(/[?&]resetAds=?[^&]*/g, '').replace(/[?&]$/, '');
+      window.history.replaceState(null, '', cleanUrl || window.location.pathname);
+      console.log('[Ads] State cleared via ?resetAds');
+    }
+
+    // Auto-expire after 8 hours so returning attendees get a fresh cycle
+    var stored = localStorage.getItem(storageKey);
+    if (stored) {
+      var age = Date.now() - parseInt(stored, 10);
+      if (age > AD_EXPIRY_MS) {
+        localStorage.removeItem(storageKey);
+        console.log('[Ads] Stored key expired (' + Math.round(age / 3600000) + 'h old), re-running ad cycle');
+        stored = null;
+      }
+    }
+
+    if (stored) {
+      console.log('[Ads] Recent session found, showing see-more button directly');
       showSeeMore = true;
       render();
       return;
     }
+
     adTimer = setTimeout(function() {
+      console.log('[Ads] Fetching session ads for show:', data.show.id);
       fetch(FUNCTIONS_BASE + '/eventsServeAds', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -130,6 +155,7 @@
       })
         .then(function(r) { return r.json(); })
         .then(function(result) {
+          console.log('[Ads] Session fetch result:', result);
           if (result.ads && result.ads.length > 0) {
             sessionAds = result.ads;
             servedAdIds = result.ads.map(function(a) { return a.adId; });
@@ -137,11 +163,16 @@
             showAdCard = true;
             localStorage.setItem(storageKey, Date.now().toString());
           } else {
+            console.log('[Ads] No ads returned, showing see-more button');
             showSeeMore = true;
           }
           render();
         })
-        .catch(function() { showSeeMore = true; render(); });
+        .catch(function(err) {
+          console.error('[Ads] Session fetch error:', err);
+          showSeeMore = true;
+          render();
+        });
     }, 30000);
   }
 
@@ -1384,6 +1415,7 @@
     if (seeMoreCooldown || !data) return;
     seeMoreCooldown = true;
     render();
+    console.log('[Ads] Fetching see-more ads, excluding:', servedAdIds);
     fetch(FUNCTIONS_BASE + '/eventsServeAds', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1395,15 +1427,18 @@
     })
       .then(function(r) { return r.json(); })
       .then(function(result) {
+        console.log('[Ads] See-more result:', result);
         if (result.ads && result.ads.length > 0) {
           sessionAds = result.ads;
           servedAdIds = servedAdIds.concat(result.ads.map(function(a) { return a.adId; }));
           currentAdIndex = 0;
           showAdCard = true;
           render();
+        } else {
+          console.log('[Ads] No ads returned from see-more fetch');
         }
       })
-      .catch(function() {});
+      .catch(function(err) { console.error('[Ads] See-more fetch error:', err); });
     // 2-minute cooldown
     setTimeout(function() { seeMoreCooldown = false; render(); }, 120000);
   };
