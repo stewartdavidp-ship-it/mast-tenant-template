@@ -25,6 +25,14 @@
   var slGapAnalysis = null;
   var slImageAssignments = {};
 
+  // Standard craft show categories
+  var CRAFT_CATEGORIES = [
+    'Ceramics / Pottery', 'Glass', 'Jewelry', 'Fiber / Textile', 'Wood',
+    'Metal / Metalwork', 'Leather', 'Paper / Printmaking', 'Mixed Media',
+    'Bath / Body', 'Food / Beverage', 'Photography', 'Painting / Drawing',
+    'Sculpture', 'Digital Art', 'Candles / Home Fragrance', 'Other'
+  ];
+
   // ============================================================
   // Data Loading
   // ============================================================
@@ -49,6 +57,32 @@
       console.error('Show Light load error:', err);
       slLoaded = true;
       renderShowLight();
+    }
+  }
+
+  // ============================================================
+  // Token helpers — use window globals, not core-private vars
+  // ============================================================
+
+  function updateTokenFromResponse(data) {
+    if (data.tokenBalance === undefined) return;
+    // getTokenWallet() returns the core _tokenWallet or a default.
+    // We need to update core state via the wallet listener, but the
+    // response gives us the latest values. Force-update by writing
+    // directly to the object getTokenWallet returns (same reference).
+    var w = getTokenWallet();
+    if (w && w.status !== 'unknown') {
+      w.currentBalance = data.tokenBalance;
+      w.status = data.tokenStatus || w.status;
+      if (data.coinBalance !== undefined) w.coinBalance = data.coinBalance;
+    }
+    // Re-render indicators
+    if (typeof renderTokenBalanceIndicator === 'function') renderTokenBalanceIndicator();
+    // Update Show Light header badge
+    var badge = document.querySelector('#showLightTab .sl-ai-cost');
+    if (badge) {
+      var total = (w.currentBalance || 0) + ((w.coinBalance || 0) * 100);
+      badge.innerHTML = '⚡ ' + total + ' tokens';
     }
   }
 
@@ -101,7 +135,6 @@
 
   function slSwitchView(view) {
     slSubView = view;
-    // Update nav
     document.querySelectorAll('#showLightTab .sl-sub-nav .view-tab').forEach(function(btn) {
       btn.classList.remove('active');
       if (btn.textContent.toLowerCase() === view) btn.classList.add('active');
@@ -117,13 +150,14 @@
   }
 
   // ============================================================
-  // Profile View
+  // Profile View — enriched with craft show application fields
   // ============================================================
 
   function renderProfile(el) {
     var p = slProfile || {};
     var h = '';
 
+    // ── Identity & Contact ──
     h += '<div class="sl-card">';
     h += '<div class="sl-card-header"><span class="sl-card-title">Vendor Profile</span>';
     h += '<button class="btn btn-primary btn-sm" onclick="slSaveProfile()">Save Profile</button>';
@@ -135,15 +169,39 @@
     h += '<div class="sl-form-group"><label>Bio / Artist Statement</label>';
     h += '<textarea id="slProfileBio" rows="4" placeholder="Tell jurors about yourself and your work...">' + esc(p.bio || '') + '</textarea></div>';
 
-    h += '<div class="sl-form-group"><label>Primary Medium / Category</label>';
-    h += '<input type="text" id="slProfileMedium" value="' + esc(p.medium || '') + '" placeholder="e.g. Glass blowing, ceramics, jewelry"></div>';
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
+    h += '<div class="sl-form-group"><label>Primary Category</label>';
+    h += '<select id="slProfileCategory">';
+    h += '<option value="">Select...</option>';
+    CRAFT_CATEGORIES.forEach(function(cat) {
+      h += '<option value="' + esc(cat) + '"' + (p.category === cat ? ' selected' : '') + '>' + esc(cat) + '</option>';
+    });
+    h += '</select></div>';
+    h += '<div class="sl-form-group"><label>Secondary Category</label>';
+    h += '<select id="slProfileCategory2">';
+    h += '<option value="">None</option>';
+    CRAFT_CATEGORIES.forEach(function(cat) {
+      h += '<option value="' + esc(cat) + '"' + (p.category2 === cat ? ' selected' : '') + '>' + esc(cat) + '</option>';
+    });
+    h += '</select></div>';
+    h += '</div>';
 
+    h += '<div class="sl-form-group"><label>Materials Used</label>';
+    h += '<input type="text" id="slProfileMaterials" value="' + esc(p.materials || '') + '" placeholder="e.g. Borosilicate glass, silver, enamel"></div>';
+
+    h += '<div class="sl-form-group"><label>Process / Techniques Description</label>';
+    h += '<textarea id="slProfileProcess" rows="3" placeholder="Describe your making process for jurors...">' + esc(p.processDescription || '') + '</textarea></div>';
+
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
+    h += '<div class="sl-form-group"><label>Price Range</label>';
+    h += '<input type="text" id="slProfilePriceRange" value="' + esc(p.priceRange || '') + '" placeholder="e.g. $15 - $200"></div>';
     h += '<div class="sl-form-group"><label>Keywords / Tags (comma-separated)</label>';
     h += '<input type="text" id="slProfileKeywords" value="' + esc((p.keywords || []).join(', ')) + '" placeholder="e.g. handmade, glass, functional art"></div>';
+    h += '</div>';
 
     h += '</div>';
 
-    // Product Descriptions
+    // ── Product Descriptions ──
     h += '<div class="sl-card">';
     h += '<div class="sl-card-header"><span class="sl-card-title">Product Descriptions</span>';
     h += '<button class="btn btn-sm" onclick="slAddProductDesc()" style="background:var(--sage);color:white;border:none;border-radius:6px;padding:4px 12px;cursor:pointer;">+ Add</button>';
@@ -163,10 +221,71 @@
     }
     h += '</div></div>';
 
-    // Social Links
+    // ── Booth Photo (default) ──
+    h += '<div class="sl-card">';
+    h += '<div class="sl-card-header"><span class="sl-card-title">Default Booth Photo</span></div>';
+    h += '<p style="font-size:0.8rem;color:var(--warm-gray);margin:0 0 12px;">This photo auto-fills booth photo slots in every application.</p>';
+    if (p.boothPhotoUrl) {
+      h += '<div style="display:flex;gap:16px;align-items:flex-start;">';
+      h += '<img src="' + esc(p.boothPhotoUrl) + '" style="max-width:200px;max-height:150px;border-radius:8px;object-fit:cover;">';
+      h += '<div><button class="btn btn-sm" onclick="slChangeBoothPhoto()" style="background:var(--sage);color:white;border:none;border-radius:6px;padding:4px 12px;cursor:pointer;margin-bottom:8px;">Change</button>';
+      h += '<br><button class="btn btn-sm" onclick="slRemoveBoothPhoto()" style="background:none;border:1px solid var(--danger);color:var(--danger);border-radius:6px;padding:4px 12px;cursor:pointer;">Remove</button></div>';
+      h += '</div>';
+    } else {
+      h += '<div class="sl-slot" onclick="slChangeBoothPhoto()" style="max-width:300px;">';
+      h += '<div style="font-size:1.5rem;">🎪</div>';
+      h += '<div style="font-size:0.85rem;color:var(--warm-gray);">Click to set your default booth photo</div>';
+      h += '</div>';
+    }
+    h += '</div>';
+
+    // ── Business Details ──
+    h += '<div class="sl-card">';
+    h += '<div class="sl-card-header"><span class="sl-card-title">Business Details</span></div>';
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
+    h += '<div class="sl-form-group"><label>Years in Business</label><input type="number" id="slProfileYears" value="' + esc(p.yearsInBusiness || '') + '" placeholder="e.g. 5" min="0"></div>';
+    h += '<div class="sl-form-group"><label>Business Structure</label>';
+    h += '<select id="slProfileStructure">';
+    h += '<option value="">Select...</option>';
+    ['Sole Proprietor', 'LLC', 'S-Corp', 'C-Corp', 'Partnership', 'Nonprofit'].forEach(function(s) {
+      h += '<option value="' + esc(s) + '"' + (p.businessStructure === s ? ' selected' : '') + '>' + esc(s) + '</option>';
+    });
+    h += '</select></div>';
+    h += '<div class="sl-form-group"><label>Tax ID / EIN</label><input type="text" id="slProfileTaxId" value="' + esc(p.taxId || '') + '" placeholder="XX-XXXXXXX"></div>';
+    h += '<div class="sl-form-group"><label>Sales Tax Permit #</label><input type="text" id="slProfileSalesTax" value="' + esc(p.salesTaxPermit || '') + '" placeholder="If applicable"></div>';
+    h += '<div class="sl-form-group"><label>Business License #</label><input type="text" id="slProfileLicense" value="' + esc(p.businessLicense || '') + '" placeholder="If applicable"></div>';
+    h += '</div>';
+    h += '<div class="sl-form-group" style="margin-top:8px;"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;">';
+    h += '<input type="checkbox" id="slProfileHandmade"' + (p.handmadeAttestation ? ' checked' : '') + ' style="width:auto;">';
+    h += '<span style="font-size:0.85rem;text-transform:none;letter-spacing:0;">I confirm all items are original and handmade by me (not imported, mass-produced, or resold)</span>';
+    h += '</label></div>';
+    h += '</div>';
+
+    // ── Show Preferences ──
+    h += '<div class="sl-card">';
+    h += '<div class="sl-card-header"><span class="sl-card-title">Show Preferences</span></div>';
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">';
+    h += '<div class="sl-form-group"><label>Default Booth Size</label>';
+    h += '<select id="slProfileBoothSize">';
+    ['', '10x10', '10x15', '10x20', '8x10', '6x6', 'Other'].forEach(function(s) {
+      h += '<option value="' + esc(s) + '"' + (p.defaultBoothSize === s ? ' selected' : '') + '>' + (s || 'Select...') + '</option>';
+    });
+    h += '</select></div>';
+    h += '<div class="sl-form-group"><label>Electricity Needed</label>';
+    h += '<select id="slProfileElectricity">';
+    h += '<option value=""' + (!p.electricityNeeded ? ' selected' : '') + '>No</option>';
+    h += '<option value="yes"' + (p.electricityNeeded === 'yes' ? ' selected' : '') + '>Yes</option>';
+    h += '</select></div>';
+    h += '<div class="sl-form-group"><label>Own Tent/Canopy</label>';
+    h += '<select id="slProfileTent">';
+    h += '<option value=""' + (!p.ownTent ? ' selected' : '') + '>No</option>';
+    h += '<option value="yes"' + (p.ownTent === 'yes' ? ' selected' : '') + '>Yes</option>';
+    h += '</select></div>';
+    h += '</div></div>';
+
+    // ── Social & Contact ──
     h += '<div class="sl-card">';
     h += '<div class="sl-card-header"><span class="sl-card-title">Social & Contact</span></div>';
-
     h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
     h += '<div class="sl-form-group"><label>Website</label><input type="url" id="slProfileWebsite" value="' + esc(p.website || '') + '" placeholder="https://..."></div>';
     h += '<div class="sl-form-group"><label>Instagram</label><input type="text" id="slProfileInstagram" value="' + esc(p.instagram || '') + '" placeholder="@handle"></div>';
@@ -194,9 +313,23 @@
     var data = {
       name: (document.getElementById('slProfileName') || {}).value || '',
       bio: (document.getElementById('slProfileBio') || {}).value || '',
-      medium: (document.getElementById('slProfileMedium') || {}).value || '',
+      category: (document.getElementById('slProfileCategory') || {}).value || '',
+      category2: (document.getElementById('slProfileCategory2') || {}).value || '',
+      materials: (document.getElementById('slProfileMaterials') || {}).value || '',
+      processDescription: (document.getElementById('slProfileProcess') || {}).value || '',
+      priceRange: (document.getElementById('slProfilePriceRange') || {}).value || '',
       keywords: ((document.getElementById('slProfileKeywords') || {}).value || '').split(',').map(function(k) { return k.trim(); }).filter(Boolean),
       productDescriptions: descs.filter(function(d) { return d.name || d.description; }),
+      boothPhotoUrl: (slProfile || {}).boothPhotoUrl || '',
+      yearsInBusiness: (document.getElementById('slProfileYears') || {}).value || '',
+      businessStructure: (document.getElementById('slProfileStructure') || {}).value || '',
+      taxId: (document.getElementById('slProfileTaxId') || {}).value || '',
+      salesTaxPermit: (document.getElementById('slProfileSalesTax') || {}).value || '',
+      businessLicense: (document.getElementById('slProfileLicense') || {}).value || '',
+      handmadeAttestation: !!(document.getElementById('slProfileHandmade') || {}).checked,
+      defaultBoothSize: (document.getElementById('slProfileBoothSize') || {}).value || '',
+      electricityNeeded: (document.getElementById('slProfileElectricity') || {}).value || '',
+      ownTent: (document.getElementById('slProfileTent') || {}).value || '',
       website: (document.getElementById('slProfileWebsite') || {}).value || '',
       instagram: (document.getElementById('slProfileInstagram') || {}).value || '',
       etsy: (document.getElementById('slProfileEtsy') || {}).value || '',
@@ -229,8 +362,29 @@
     renderProfile(document.getElementById('slContent'));
   }
 
+  function slChangeBoothPhoto() {
+    // Use the image library picker
+    openImagePicker(function(selected) {
+      if (!selected || (Array.isArray(selected) && selected.length === 0)) return;
+      var imgId = Array.isArray(selected) ? selected[0] : selected;
+      var libImg = imageLibrary[imgId];
+      if (!libImg || !libImg.url) { showToast('Image not found.', true); return; }
+      slProfile.boothPhotoUrl = libImg.url;
+      MastDB.showLight.profile.update({ boothPhotoUrl: libImg.url });
+      renderProfile(document.getElementById('slContent'));
+      showToast('Booth photo set.');
+    });
+  }
+
+  function slRemoveBoothPhoto() {
+    slProfile.boothPhotoUrl = '';
+    MastDB.showLight.profile.update({ boothPhotoUrl: '' });
+    renderProfile(document.getElementById('slContent'));
+    showToast('Booth photo removed.');
+  }
+
   // ============================================================
-  // Gallery View
+  // Gallery View — enriched image metadata
   // ============================================================
 
   function renderGallery(el) {
@@ -256,8 +410,9 @@
         var id = entry[0];
         var img = entry[1];
         h += '<div class="sl-gallery-item" onclick="slViewGalleryImage(\'' + esc(id) + '\')">';
-        h += '<img src="' + esc(img.url || img.thumbnailUrl || '') + '" alt="' + esc(img.tags ? img.tags[0] : '') + '" loading="lazy">';
+        h += '<img src="' + esc(img.url || img.thumbnailUrl || '') + '" alt="' + esc(img.productName || (img.tags ? img.tags[0] : '')) + '" loading="lazy">';
         if (img.category) h += '<span class="sl-gallery-badge">' + esc(img.category) + '</span>';
+        if (img.productName) h += '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.6);color:white;font-size:0.65rem;padding:3px 6px;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;">' + esc(img.productName) + '</div>';
         h += '<button class="sl-gallery-delete" onclick="event.stopPropagation(); slDeleteGalleryImage(\'' + esc(id) + '\')">&times;</button>';
         h += '</div>';
       });
@@ -295,6 +450,16 @@
             '<option value="headshot">Headshot / Portrait</option>' +
           '</select>' +
         '</div>' +
+        '<div class="sl-form-group"><label>Product Name</label>' +
+          '<input type="text" id="slUploadProductName" placeholder="e.g. Spiral Drinking Glass"></div>' +
+        '<div class="sl-form-group"><label>Product Description</label>' +
+          '<textarea id="slUploadProductDesc" rows="2" placeholder="Brief description of the item shown..."></textarea></div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
+          '<div class="sl-form-group"><label>Price</label>' +
+            '<input type="text" id="slUploadPrice" placeholder="e.g. $45"></div>' +
+          '<div class="sl-form-group"><label>Materials</label>' +
+            '<input type="text" id="slUploadMaterials" placeholder="e.g. borosilicate glass"></div>' +
+        '</div>' +
         '<div class="sl-form-group">' +
           '<label>Tags (comma-separated)</label>' +
           '<input type="text" id="slUploadTags" placeholder="e.g. cups, blue, functional">' +
@@ -320,7 +485,6 @@
     var btn = document.getElementById('slUploadBtn');
     if (btn) btn.disabled = _slPendingFiles.length === 0;
 
-    // Show preview of first file
     if (_slPendingFiles.length > 0) {
       var reader = new FileReader();
       reader.onload = function(e) {
@@ -338,6 +502,10 @@
 
     var category = (document.getElementById('slUploadCategory') || {}).value || '';
     var tags = ((document.getElementById('slUploadTags') || {}).value || '').split(',').map(function(t) { return t.trim(); }).filter(Boolean);
+    var productName = (document.getElementById('slUploadProductName') || {}).value || '';
+    var productDescription = (document.getElementById('slUploadProductDesc') || {}).value || '';
+    var price = (document.getElementById('slUploadPrice') || {}).value || '';
+    var materials = (document.getElementById('slUploadMaterials') || {}).value || '';
 
     try {
       var token = await auth.currentUser.getIdToken();
@@ -355,19 +523,22 @@
         var result = await resp.json();
         if (!result.success) { showToast('Upload failed: ' + (result.error || 'unknown'), true); continue; }
 
-        // Store in show light gallery
         var key = MastDB.showLight.gallery.newKey();
         await MastDB.showLight.gallery.ref(key).set({
           url: result.url || '',
           thumbnailUrl: result.thumbnailUrl || result.url || '',
           category: category,
           tags: tags,
+          productName: productName,
+          productDescription: productDescription,
+          price: price,
+          materials: materials,
           width: compressed.width,
           height: compressed.height,
-          aiSuggestions: null, // Phase 2 placeholder
+          aiSuggestions: null,
           uploadedAt: new Date().toISOString()
         });
-        slGalleryItems[key] = { url: result.url, thumbnailUrl: result.thumbnailUrl || result.url, category: category, tags: tags, width: compressed.width, height: compressed.height, uploadedAt: new Date().toISOString() };
+        slGalleryItems[key] = { url: result.url, thumbnailUrl: result.thumbnailUrl || result.url, category: category, tags: tags, productName: productName, productDescription: productDescription, price: price, materials: materials, width: compressed.width, height: compressed.height, uploadedAt: new Date().toISOString() };
       }
 
       showToast(_slPendingFiles.length + ' image(s) uploaded.');
@@ -393,6 +564,10 @@
           thumbnailUrl: libImg.thumbnailUrl || libImg.url || '',
           category: '',
           tags: libImg.tags || [],
+          productName: '',
+          productDescription: '',
+          price: '',
+          materials: '',
           width: libImg.width || null,
           height: libImg.height || null,
           aiSuggestions: null,
@@ -417,9 +592,9 @@
         '<button class="modal-close" onclick="closeModal()">&times;</button>' +
       '</div>' +
       '<div class="modal-body">' +
-        '<div style="text-align:center;margin-bottom:16px;"><img src="' + esc(img.url || '') + '" style="max-width:100%;max-height:400px;border-radius:8px;"></div>' +
+        '<div style="text-align:center;margin-bottom:16px;"><img src="' + esc(img.url || '') + '" style="max-width:100%;max-height:300px;border-radius:8px;"></div>' +
         '<div class="sl-form-group"><label>Category</label>' +
-          '<select id="slEditCat" onchange="slUpdateGalleryImage(\'' + esc(id) + '\')">' +
+          '<select id="slEditCat">' +
             '<option value=""' + (!img.category ? ' selected' : '') + '>None</option>' +
             '<option value="product"' + (img.category === 'product' ? ' selected' : '') + '>Product</option>' +
             '<option value="booth"' + (img.category === 'booth' ? ' selected' : '') + '>Booth Setup</option>' +
@@ -428,24 +603,40 @@
             '<option value="lifestyle"' + (img.category === 'lifestyle' ? ' selected' : '') + '>Lifestyle</option>' +
             '<option value="headshot"' + (img.category === 'headshot' ? ' selected' : '') + '>Headshot / Portrait</option>' +
           '</select></div>' +
+        '<div class="sl-form-group"><label>Product Name</label>' +
+          '<input type="text" id="slEditProductName" value="' + esc(img.productName || '') + '" placeholder="Name of the product shown"></div>' +
+        '<div class="sl-form-group"><label>Product Description</label>' +
+          '<textarea id="slEditProductDesc" rows="2" placeholder="Brief description...">' + esc(img.productDescription || '') + '</textarea></div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
+          '<div class="sl-form-group"><label>Price</label><input type="text" id="slEditPrice" value="' + esc(img.price || '') + '" placeholder="e.g. $45"></div>' +
+          '<div class="sl-form-group"><label>Materials</label><input type="text" id="slEditMaterials" value="' + esc(img.materials || '') + '" placeholder="e.g. glass"></div>' +
+        '</div>' +
         '<div class="sl-form-group"><label>Tags</label>' +
-          '<input type="text" id="slEditTags" value="' + esc((img.tags || []).join(', ')) + '" onchange="slUpdateGalleryImage(\'' + esc(id) + '\')" placeholder="comma-separated"></div>' +
+          '<input type="text" id="slEditTags" value="' + esc((img.tags || []).join(', ')) + '" placeholder="comma-separated"></div>' +
         (img.width ? '<div style="font-size:0.8rem;color:var(--warm-gray);">' + img.width + ' x ' + img.height + '</div>' : '') +
       '</div>' +
       '<div class="modal-footer">' +
         '<button class="btn" onclick="slDeleteGalleryImage(\'' + esc(id) + '\'); closeModal();" style="background:var(--danger);color:white;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;">Delete</button>' +
-        '<button class="btn btn-secondary" onclick="closeModal()">Close</button>' +
+        '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+        '<button class="btn btn-primary" onclick="slUpdateGalleryImage(\'' + esc(id) + '\'); closeModal();">Save</button>' +
       '</div>';
 
     openModal(html);
   }
 
   async function slUpdateGalleryImage(id) {
-    var cat = (document.getElementById('slEditCat') || {}).value || '';
-    var tags = ((document.getElementById('slEditTags') || {}).value || '').split(',').map(function(t) { return t.trim(); }).filter(Boolean);
+    var updates = {
+      category: (document.getElementById('slEditCat') || {}).value || '',
+      productName: (document.getElementById('slEditProductName') || {}).value || '',
+      productDescription: (document.getElementById('slEditProductDesc') || {}).value || '',
+      price: (document.getElementById('slEditPrice') || {}).value || '',
+      materials: (document.getElementById('slEditMaterials') || {}).value || '',
+      tags: ((document.getElementById('slEditTags') || {}).value || '').split(',').map(function(t) { return t.trim(); }).filter(Boolean)
+    };
     try {
-      await MastDB.showLight.gallery.ref(id).update({ category: cat, tags: tags });
-      if (slGalleryItems[id]) { slGalleryItems[id].category = cat; slGalleryItems[id].tags = tags; }
+      await MastDB.showLight.gallery.ref(id).update(updates);
+      if (slGalleryItems[id]) Object.assign(slGalleryItems[id], updates);
+      showToast('Image updated.');
     } catch (err) {
       showToast('Update failed: ' + err.message, true);
     }
@@ -649,7 +840,6 @@
   // ============================================================
 
   function renderApply(el) {
-    // Step 0: Select a show to apply for
     if (slApplyStep === 0) {
       renderApplySelectShow(el);
     } else {
@@ -744,14 +934,12 @@
     var steps = ['Fetch & Parse', 'Auto-Map', 'Gap Analysis', 'Images', 'Preview'];
     var h = '';
 
-    // Header with back button
     h += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">';
     h += '<button onclick="slBackToShowSelect();" style="background:none;border:none;cursor:pointer;font-size:1.2rem;color:var(--warm-gray);">←</button>';
     h += '<div><span style="font-weight:600;font-size:1.1rem;">' + esc(show.name || 'Show') + '</span>';
     if (show.deadline) h += '<span style="font-size:0.8rem;color:var(--amber);margin-left:8px;">Deadline: ' + esc(show.deadline) + '</span>';
     h += '</div></div>';
 
-    // Step indicator
     h += '<div class="sl-step-indicator">';
     steps.forEach(function(label, i) {
       var stepNum = i + 1;
@@ -821,7 +1009,6 @@
     var url = (document.getElementById('slFetchUrl') || {}).value;
     if (!url) { showToast('Enter an application URL.', true); return; }
 
-    // Check token balance
     var w = getTokenWallet();
     if (w.status === 'suspended') {
       showToast('AI features suspended. Purchase coins to continue.', true);
@@ -837,7 +1024,6 @@
     try {
       var token = await auth.currentUser.getIdToken();
 
-      // Call the studioAssistant endpoint with a structured prompt for parsing
       var resp = await callCF('/studioAssistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
@@ -856,23 +1042,13 @@
       }
 
       var data = await resp.json();
+      updateTokenFromResponse(data);
 
-      // Update token balance
-      if (data.tokenBalance !== undefined && _tokenWallet) {
-        _tokenWallet.currentBalance = data.tokenBalance;
-        _tokenWallet.status = data.tokenStatus || _tokenWallet.status;
-        if (data.coinBalance !== undefined) _tokenWallet.coinBalance = data.coinBalance;
-        renderTokenBalanceIndicator();
-      }
-
-      // Try to parse the AI response as JSON
       var answer = data.answer || '';
       try {
-        // Strip markdown code fences if present
         var jsonStr = answer.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
         slParsedRequirements = JSON.parse(jsonStr);
       } catch (parseErr) {
-        // Fallback: create a basic structure from the text response
         slParsedRequirements = {
           fields: [{ name: 'Business Name', description: 'Your business or artist name', required: true },
                    { name: 'Artist Statement', description: 'Bio or artist statement', required: true },
@@ -894,28 +1070,51 @@
     }
   }
 
-  // --- Step 2: Auto-Map ---
+  // --- Step 2: Auto-Map (with enriched profile fields + product desc from images) ---
 
   function renderApplyMap(el, show) {
     var reqs = slParsedRequirements || {};
     var fields = reqs.fields || [];
     var profile = slProfile || {};
 
-    // Auto-map profile fields to requirements
     if (!slFieldMapping) {
       slFieldMapping = {};
+
+      // Build product description from gallery images
+      var productDescFromGallery = '';
+      Object.values(slGalleryItems).forEach(function(img) {
+        if (img.category === 'product' && img.productDescription) {
+          productDescFromGallery += (img.productName ? img.productName + ': ' : '') + img.productDescription + '\n';
+        }
+      });
+      productDescFromGallery = productDescFromGallery.trim();
+
+      // Assemble profile product descriptions as fallback
+      var profileProductDesc = (profile.productDescriptions || []).map(function(d) { return d.name + ': ' + d.description; }).join('\n');
+
       fields.forEach(function(f) {
         var name = (f.name || '').toLowerCase();
         var mapped = null;
+
         if (name.indexOf('business') >= 0 || name.indexOf('artist name') >= 0 || name.indexOf('company') >= 0) {
           mapped = { source: 'profile.name', value: profile.name || '', confidence: profile.name ? 'high' : 'none' };
         } else if (name.indexOf('bio') >= 0 || name.indexOf('statement') >= 0 || name.indexOf('about') >= 0) {
           mapped = { source: 'profile.bio', value: profile.bio || '', confidence: profile.bio ? 'high' : 'none' };
         } else if (name.indexOf('product') >= 0 || name.indexOf('description') >= 0 || name.indexOf('what you') >= 0) {
-          var descs = (profile.productDescriptions || []).map(function(d) { return d.name + ': ' + d.description; }).join('\n');
-          mapped = { source: 'profile.productDescriptions', value: descs, confidence: descs ? 'medium' : 'none' };
-        } else if (name.indexOf('medium') >= 0 || name.indexOf('category') >= 0 || name.indexOf('craft') >= 0) {
-          mapped = { source: 'profile.medium', value: profile.medium || '', confidence: profile.medium ? 'high' : 'none' };
+          // Prefer gallery-derived descriptions, fall back to profile
+          var val = productDescFromGallery || profileProductDesc;
+          var conf = productDescFromGallery ? 'medium' : (profileProductDesc ? 'medium' : 'none');
+          mapped = { source: productDescFromGallery ? 'gallery images' : 'profile.productDescriptions', value: val, confidence: conf };
+        } else if (name.indexOf('material') >= 0) {
+          mapped = { source: 'profile.materials', value: profile.materials || '', confidence: profile.materials ? 'high' : 'none' };
+        } else if (name.indexOf('process') >= 0 || name.indexOf('technique') >= 0) {
+          mapped = { source: 'profile.processDescription', value: profile.processDescription || '', confidence: profile.processDescription ? 'high' : 'none' };
+        } else if (name.indexOf('categor') >= 0 || name.indexOf('medium') >= 0 || name.indexOf('craft') >= 0) {
+          var catVal = profile.category || '';
+          if (profile.category2) catVal += ', ' + profile.category2;
+          mapped = { source: 'profile.category', value: catVal, confidence: catVal ? 'high' : 'none' };
+        } else if (name.indexOf('price') >= 0 || name.indexOf('range') >= 0) {
+          mapped = { source: 'profile.priceRange', value: profile.priceRange || '', confidence: profile.priceRange ? 'high' : 'none' };
         } else if (name.indexOf('website') >= 0 || name.indexOf('url') >= 0) {
           mapped = { source: 'profile.website', value: profile.website || '', confidence: profile.website ? 'high' : 'none' };
         } else if (name.indexOf('instagram') >= 0 || name.indexOf('social') >= 0) {
@@ -926,6 +1125,14 @@
           mapped = { source: 'profile.phone', value: profile.phone || '', confidence: profile.phone ? 'high' : 'none' };
         } else if (name.indexOf('location') >= 0 || name.indexOf('city') >= 0 || name.indexOf('address') >= 0) {
           mapped = { source: 'profile.location', value: profile.location || '', confidence: profile.location ? 'medium' : 'none' };
+        } else if (name.indexOf('year') >= 0 || name.indexOf('experience') >= 0 || name.indexOf('long') >= 0) {
+          mapped = { source: 'profile.yearsInBusiness', value: profile.yearsInBusiness ? profile.yearsInBusiness + ' years' : '', confidence: profile.yearsInBusiness ? 'high' : 'none' };
+        } else if (name.indexOf('tax') >= 0 || name.indexOf('ein') >= 0) {
+          mapped = { source: 'profile.taxId', value: profile.taxId || '', confidence: profile.taxId ? 'high' : 'none' };
+        } else if (name.indexOf('booth') >= 0 && name.indexOf('size') >= 0) {
+          mapped = { source: 'profile.defaultBoothSize', value: profile.defaultBoothSize || '', confidence: profile.defaultBoothSize ? 'high' : 'none' };
+        } else if (name.indexOf('license') >= 0) {
+          mapped = { source: 'profile.businessLicense', value: profile.businessLicense || '', confidence: profile.businessLicense ? 'high' : 'none' };
         } else {
           mapped = { source: 'manual', value: '', confidence: 'none' };
         }
@@ -941,6 +1148,7 @@
       var m = slFieldMapping[f.name] || { source: 'manual', value: '', confidence: 'none' };
       var confColor = m.confidence === 'high' ? 'var(--sage)' : m.confidence === 'medium' ? 'var(--amber)' : 'var(--danger, #dc2626)';
       var confLabel = m.confidence === 'high' ? '✓ Auto-matched' : m.confidence === 'medium' ? '~ Partial match' : '✗ Not matched';
+      if (m.source === 'gallery images') confLabel = '~ From gallery images';
 
       h += '<div class="sl-form-group">';
       h += '<div style="display:flex;justify-content:space-between;align-items:center;">';
@@ -979,7 +1187,6 @@
     var fields = reqs.fields || [];
     var photos = reqs.photos || [];
 
-    // Build gap list
     var gaps = [];
     fields.forEach(function(f) {
       var m = slFieldMapping[f.name] || {};
@@ -993,10 +1200,13 @@
       if (img.category) galleryByCategory[img.category] = (galleryByCategory[img.category] || 0) + 1;
     });
 
+    // Check booth photo from profile
+    var hasBoothPhoto = !!(slProfile && slProfile.boothPhotoUrl) || !!galleryByCategory.booth;
+
     photos.forEach(function(p) {
       var slotLower = (p.slot || '').toLowerCase();
       var matched = false;
-      if (slotLower.indexOf('booth') >= 0 && galleryByCategory.booth) matched = true;
+      if (slotLower.indexOf('booth') >= 0 && hasBoothPhoto) matched = true;
       if (slotLower.indexOf('product') >= 0 && galleryByCategory.product) matched = true;
       if (slotLower.indexOf('process') >= 0 && galleryByCategory.process) matched = true;
       if (slotLower.indexOf('headshot') >= 0 && galleryByCategory.headshot) matched = true;
@@ -1040,12 +1250,22 @@
     el.innerHTML = h;
   }
 
-  // --- Step 4: Image Assignment ---
+  // --- Step 4: Image Assignment (with booth photo auto-fill) ---
 
   function renderApplyImages(el, show) {
     var reqs = slParsedRequirements || {};
     var photos = reqs.photos || [];
-    var galleryEntries = Object.entries(slGalleryItems);
+    var profile = slProfile || {};
+
+    // Auto-assign booth photo from profile if not already assigned
+    photos.forEach(function(p, idx) {
+      if (!slImageAssignments[idx]) {
+        var slotLower = (p.slot || '').toLowerCase();
+        if (slotLower.indexOf('booth') >= 0 && profile.boothPhotoUrl) {
+          slImageAssignments[idx] = '__profile_booth__';
+        }
+      }
+    });
 
     var h = '<div class="sl-card">';
     h += '<div class="sl-card-header"><span class="sl-card-title">Step 4: Assign Images</span></div>';
@@ -1057,12 +1277,21 @@
       h += '<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(200px, 1fr));gap:16px;">';
       photos.forEach(function(p, idx) {
         var assigned = slImageAssignments[idx];
-        var assignedImg = assigned ? slGalleryItems[assigned] : null;
+        var assignedImg = null;
+        var isProfileBooth = false;
+
+        if (assigned === '__profile_booth__') {
+          assignedImg = { url: profile.boothPhotoUrl };
+          isProfileBooth = true;
+        } else if (assigned) {
+          assignedImg = slGalleryItems[assigned];
+        }
 
         h += '<div class="sl-slot' + (assignedImg ? ' filled' : '') + '" onclick="slPickImageForSlot(' + idx + ')">';
         if (assignedImg) {
           h += '<img src="' + esc(assignedImg.url || assignedImg.thumbnailUrl || '') + '" alt="">';
           h += '<div style="font-size:0.75rem;color:var(--sage);margin-top:4px;">✓ ' + esc(p.slot || 'Photo ' + (idx + 1)) + '</div>';
+          if (isProfileBooth) h += '<div style="font-size:0.65rem;color:var(--amber);">From profile default</div>';
         } else {
           h += '<div style="font-size:1.5rem;color:var(--warm-gray);">+</div>';
           h += '<div style="font-size:0.8rem;color:var(--warm-gray);">' + esc(p.slot || 'Photo ' + (idx + 1)) + '</div>';
@@ -1084,7 +1313,6 @@
   }
 
   function slPickImageForSlot(slotIdx) {
-    // Show gallery images in a picker
     var entries = Object.entries(slGalleryItems);
     if (entries.length === 0) {
       showToast('No images in gallery. Upload some first.', true);
@@ -1105,6 +1333,7 @@
       html += '<div class="sl-gallery-item" onclick="slAssignImage(' + slotIdx + ', \'' + esc(id) + '\'); closeModal();" style="cursor:pointer;">';
       html += '<img src="' + esc(img.url || img.thumbnailUrl || '') + '" alt="" loading="lazy">';
       if (img.category) html += '<span class="sl-gallery-badge">' + esc(img.category) + '</span>';
+      if (img.productName) html += '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.6);color:white;font-size:0.6rem;padding:2px 4px;">' + esc(img.productName) + '</div>';
       html += '</div>';
     });
 
@@ -1132,17 +1361,16 @@
     var reqs = slParsedRequirements || {};
     var fields = reqs.fields || [];
     var photos = reqs.photos || [];
+    var profile = slProfile || {};
 
     var h = '<div class="sl-card">';
     h += '<div class="sl-card-header"><span class="sl-card-title">Step 5: Application Package Preview</span></div>';
 
-    // Show name
     h += '<div style="background:var(--charcoal, #2A2A2A);color:white;padding:16px;border-radius:8px;margin-bottom:16px;">';
     h += '<div style="font-family:\'Cormorant Garamond\', serif;font-size:1.3rem;font-weight:600;">' + esc(show.name || 'Show') + '</div>';
     if (show.date) h += '<div style="font-size:0.85rem;opacity:0.8;">' + esc(show.date) + '</div>';
     h += '</div>';
 
-    // Field values
     h += '<div style="margin-bottom:20px;">';
     h += '<div style="font-weight:600;margin-bottom:8px;font-size:0.9rem;">Application Fields</div>';
     fields.forEach(function(f) {
@@ -1154,14 +1382,18 @@
     });
     h += '</div>';
 
-    // Image assignments
     if (photos.length > 0) {
       h += '<div style="margin-bottom:20px;">';
       h += '<div style="font-weight:600;margin-bottom:8px;font-size:0.9rem;">Images</div>';
       h += '<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(120px, 1fr));gap:8px;">';
       photos.forEach(function(p, idx) {
         var assigned = slImageAssignments[idx];
-        var img = assigned ? slGalleryItems[assigned] : null;
+        var img = null;
+        if (assigned === '__profile_booth__') {
+          img = { url: profile.boothPhotoUrl };
+        } else if (assigned) {
+          img = slGalleryItems[assigned];
+        }
         h += '<div style="text-align:center;">';
         if (img) {
           h += '<img src="' + esc(img.url || '') + '" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;">';
@@ -1174,7 +1406,6 @@
       h += '</div></div>';
     }
 
-    // Special requirements
     if (reqs.specialRequirements && reqs.specialRequirements.length > 0) {
       h += '<div style="margin-bottom:16px;">';
       h += '<div style="font-weight:600;margin-bottom:8px;font-size:0.9rem;">Special Requirements</div>';
@@ -1220,7 +1451,6 @@
       slCurrentApplication = Object.assign({ id: key }, appData);
       showToast('Application package saved.');
 
-      // Reset to show selection
       slApplyStep = 0;
       slCurrentShowId = null;
       renderApply(document.getElementById('slContent'));
@@ -1237,6 +1467,8 @@
   window.slSaveProfile = slSaveProfile;
   window.slAddProductDesc = slAddProductDesc;
   window.slRemoveProductDesc = slRemoveProductDesc;
+  window.slChangeBoothPhoto = slChangeBoothPhoto;
+  window.slRemoveBoothPhoto = slRemoveBoothPhoto;
   window.slOpenUploadModal = slOpenUploadModal;
   window.slHandleUploadFile = slHandleUploadFile;
   window.slDoUpload = slDoUpload;
