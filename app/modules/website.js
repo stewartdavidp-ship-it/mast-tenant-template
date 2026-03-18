@@ -541,7 +541,8 @@
       html += '<div style="flex:1;min-width:0;">';
       html += '<div style="font-weight:600;font-size:0.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(p.name || 'Untitled') + '</div>';
       html += '<div style="font-size:0.8rem;color:var(--warm-gray);">';
-      if (p.price) html += '$' + (p.price / 100).toFixed(2);
+      if (p.priceCents) html += '$' + (p.priceCents / 100).toFixed(2);
+      else if (p.price) html += esc(String(p.price));
       if (isDraft) html += ' &middot; <span style="color:var(--amber);">Draft</span>';
       else html += ' &middot; <span style="color:var(--teal);">Published</span>';
       html += '</div>';
