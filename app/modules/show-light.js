@@ -343,8 +343,7 @@
   // Gallery View — enriched image metadata
   // ============================================================
 
-  // Gallery merges image library + product images into one view.
-  // applicationPhoto flag lives on image library records.
+  // Gallery shows image library entries. applicationPhoto flag lives on image records.
 
   function renderGallery(el) {
     var allImages = (imageLibrary || {});
@@ -411,27 +410,14 @@
   }
 
   async function slToggleAppPhoto(id) {
+    var img = (imageLibrary || {})[id];
+    if (!img) return;
+    var newVal = !img.applicationPhoto;
     try {
-      if (id.indexOf('img_') === 0) {
-        // Image library entry
-        var imgId = id.slice(4);
-        var img = imageLibrary[imgId];
-        if (!img) return;
-        var newVal = !img.applicationPhoto;
-        await MastDB.images.ref(imgId + '/applicationPhoto').set(newVal || null);
-        img.applicationPhoto = newVal;
-      } else if (id.indexOf('prod_') === 0) {
-        // Product image
-        var pid = id.slice(5);
-        var prods = MastAdmin.getData('productsData') || {};
-        var prod = prods[pid];
-        if (!prod) return;
-        var newVal = !prod.applicationPhoto;
-        await MastDB.products.ref(pid + '/applicationPhoto').set(newVal || null);
-        prod.applicationPhoto = newVal;
-      }
+      await MastDB.images.ref(id + '/applicationPhoto').set(newVal || null);
+      img.applicationPhoto = newVal;
       renderGallery(document.getElementById('slContent'));
-      showToast(id.indexOf('prod_') === 0 || (imageLibrary[id.slice(4)] || {}).applicationPhoto ? 'Marked as application photo.' : 'Unmarked.');
+      showToast(newVal ? 'Marked as application photo.' : 'Unmarked.');
     } catch (err) {
       showToast('Update failed: ' + err.message, true);
     }
