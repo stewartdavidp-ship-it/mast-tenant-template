@@ -15,7 +15,9 @@
   var pinnedVendors = [];
   var savedCoupons = [];
   var selectedVendor = null;
+  var expandedVendorId = null;
   var vendorModalTab = 'about';
+  var tagsExpanded = false;
   var headerExpanded = false;
   var findBoothId = null;
   var mapShowPinned = false;
@@ -288,11 +290,6 @@
 
     html += '</div>';
 
-    // ── Vendor Detail Modal ──────────────────────────────────────
-    if (selectedVendor) {
-      html += renderVendorModal(selectedVendor, promotions, booths, hasFloorPlan);
-    }
-
     // ── Ad Card Overlay ──────────────────────────────────────────
     if (showAdCard && sessionAds.length > 0 && sessionAds[currentAdIndex]) {
       html += renderAdOverlay(sessionAds[currentAdIndex], vendors, booths, promotions, hasFloorPlan);
@@ -314,20 +311,24 @@
   function renderVendorsTab(sorted, categories, allTags, promotions, booths) {
     var h = '';
 
-    // Tag filter chips
+    // Tags — collapsed by default, expand on tap
     if (allTags.length > 0) {
-      h += '<div class="tag-filters">';
-      h += '<span class="tag-label">Tags</span>';
-      allTags.forEach(function(t) {
-        var isActive = selectedTags.indexOf(t) >= 0;
-        h += '<button class="tag-chip' + (isActive ? ' active' : '') + '" onclick="toggleTag(\'' + esc(t).replace(/'/g, "\\'") + '\')">' + esc(t) + '</button>';
-      });
-      h += '</div>';
-    }
-
-    // Clear filters
-    if (selectedTags.length > 0) {
-      h += '<button class="clear-filters-btn" onclick="clearAllFilters()">Clear all filters</button>';
+      var activeTagCount = selectedTags.length;
+      h += '<button class="tags-toggle" onclick="toggleTagsExpanded()">';
+      h += '<span>Tags (' + allTags.length + ')' + (activeTagCount > 0 ? ' \u2022 ' + activeTagCount + ' active' : '') + '</span>';
+      h += '<span class="tags-toggle-chevron' + (tagsExpanded ? ' open' : '') + '">\u203a</span>';
+      h += '</button>';
+      if (tagsExpanded) {
+        h += '<div class="tag-filters">';
+        allTags.forEach(function(t) {
+          var isActive = selectedTags.indexOf(t) >= 0;
+          h += '<button class="tag-chip' + (isActive ? ' active' : '') + '" onclick="toggleTag(\'' + esc(t).replace(/'/g, "\\'") + '\')">' + esc(t) + '</button>';
+        });
+        h += '</div>';
+      }
+      if (selectedTags.length > 0) {
+        h += '<button class="clear-filters-btn" onclick="clearAllFilters()">Clear tag filters</button>';
+      }
     }
 
     // Search + Sort
@@ -335,19 +336,19 @@
     h += '<div class="search-wrapper"><span class="search-icon">\ud83d\udd0d</span>';
     h += '<input class="search-input with-icon" type="text" placeholder="Search by vendor name..." value="' + esc(searchQuery) + '" oninput="setSearch(this.value)"></div>';
     h += '<select class="sort-select" value="' + sortBy + '" onchange="setSort(this.value)">';
-    h += '<option value="name"' + (sortBy === 'name' ? ' selected' : '') + '>Sort: Name</option>';
-    h += '<option value="category"' + (sortBy === 'category' ? ' selected' : '') + '>Sort: Category</option>';
-    h += '<option value="booth"' + (sortBy === 'booth' ? ' selected' : '') + '>Sort: Booth</option>';
+    h += '<option value="name"' + (sortBy === 'name' ? ' selected' : '') + '>Name</option>';
+    h += '<option value="category"' + (sortBy === 'category' ? ' selected' : '') + '>Category</option>';
+    h += '<option value="booth"' + (sortBy === 'booth' ? ' selected' : '') + '>Booth</option>';
     h += '</select>';
     h += '</div>';
     h += '<p class="vendor-count">' + sorted.length + ' vendor' + (sorted.length !== 1 ? 's' : '') + '</p>';
 
-    // Vendor grid
+    // Vendor list
     if (sorted.length === 0) {
-      h += '<div class="empty-state"><h3>No vendors found</h3><p>' + (searchQuery || selectedCategories.length > 0 || selectedTags.length > 0 ? 'Try different filters.' : 'Vendors will appear here once confirmed.') + '</p></div>';
+      h += '<div class="empty-state"><h3>No vendors found</h3><p>' + (searchQuery || selectedTags.length > 0 ? 'Try different filters.' : 'Vendors will appear here once confirmed.') + '</p></div>';
     } else {
-      h += '<div class="vendor-grid">';
-      sorted.forEach(function(v) { h += renderVendorCard(v, promotions, booths); });
+      h += '<div class="vendor-list">';
+      sorted.forEach(function(v) { h += renderVendorRow(v, promotions, booths, hasFloorPlan); });
       h += '</div>';
     }
     return h;
@@ -356,14 +357,14 @@
   // ── Pinned Tab ─────────────────────────────────────────────────────
   function renderPinnedTab(pinned, promotions, booths, hasFloorPlan) {
     if (pinned.length === 0) {
-      return '<div class="empty-state"><h3>No pinned vendors</h3><p>Tap the pin icon on any vendor card to save them here.</p></div>';
+      return '<div class="empty-state"><h3>No pinned vendors</h3><p>Tap the 📍 on any vendor to save them here.</p></div>';
     }
     var h = '';
     if (hasFloorPlan) {
       h += '<button class="view-pinned-map-btn" onclick="viewPinnedOnMap()">\ud83d\uddfa\ufe0f View Pinned on Map</button>';
     }
-    h += '<div class="vendor-grid">';
-    pinned.forEach(function(v) { h += renderVendorCard(v, promotions, booths); });
+    h += '<div class="vendor-list">';
+    pinned.forEach(function(v) { h += renderVendorRow(v, promotions, booths, hasFloorPlan); });
     h += '</div>';
     return h;
   }
@@ -583,41 +584,80 @@
     return h;
   }
 
-  // ── Vendor Card ────────────────────────────────────────────────────
-  function renderVendorCard(v, promotions, booths) {
+  // ── Vendor Row (compact list) ──────────────────────────────────────
+  function renderVendorRow(v, promotions, booths, hasFloorPlan) {
     var isPinned = pinnedVendors.indexOf(v.id) >= 0;
-    var hasPromo = promotions.some(function(p) { return p.vendorId === v.id; });
+    var vendorPromos = promotions.filter(function(p) { return p.vendorId === v.id; });
     var booth = v.boothId && booths[v.boothId] ? booths[v.boothId] : null;
-    var tags = v.tags || [];
+    var isExpanded = expandedVendorId === v.id;
 
-    var h = '<div class="vendor-card-wrap">';
-    h += '<button class="vendor-card" onclick="openVendor(\'' + esc(v.id) + '\')">';
-    // Image hero
+    var h = '<div class="vrow-wrap' + (isExpanded ? ' expanded' : '') + '">';
+    h += '<button class="vrow" onclick="setExpandedVendor(\'' + esc(v.id) + '\')">';
+    // Logo / initial
     if (v.logoUrl) {
-      h += '<div class="vendor-card-image"><img src="' + esc(v.logoUrl) + '" alt="" onerror="this.parentElement.innerHTML=\'<div class=vendor-card-image-placeholder>\ud83c\udfea</div>\'"></div>';
+      h += '<img class="vrow-logo" src="' + esc(v.logoUrl) + '" alt="" onerror="this.style.display=\'none\'">';
     } else {
-      h += '<div class="vendor-card-image"><div class="vendor-card-image-placeholder">\ud83c\udfea</div></div>';
+      h += '<div class="vrow-logo-placeholder">' + esc((v.businessName || '?').charAt(0).toUpperCase()) + '</div>';
     }
-    h += '<div class="vendor-card-body">';
-    h += '<h3 class="vendor-name">' + esc(v.businessName) + '</h3>';
-    h += '<div class="vendor-card-meta">';
+    // Info
+    h += '<div class="vrow-info">';
+    h += '<div class="vrow-name">' + esc(v.businessName) + '</div>';
+    h += '<div class="vrow-meta">';
     if (v.category) h += '<span class="vendor-category-badge">' + esc(v.category) + '</span>';
-    if (booth) h += '<span class="vendor-booth-ref">\ud83d\udccd ' + esc(booth.name) + '</span>';
+    if (booth) h += '<span class="vrow-booth">\ud83d\udccd ' + esc(booth.name) + '</span>';
+    if (vendorPromos.length > 0) h += '<span class="vrow-deal-tag">\ud83c\udff7\ufe0f Deal</span>';
+    h += '</div></div>';
+    // Right: pin + chevron
+    h += '<div class="vrow-right">';
+    h += '<button class="vrow-pin' + (isPinned ? ' pinned' : '') + '" onclick="event.stopPropagation();togglePin(\'' + esc(v.id) + '\')" title="' + (isPinned ? 'Unpin' : 'Pin') + '">' + (isPinned ? '\ud83d\udccc' : '\ud83d\udccd') + '</button>';
+    h += '<span class="vrow-chevron' + (isExpanded ? ' open' : '') + '">\u203a</span>';
     h += '</div>';
+    h += '</button>';
+    // Inline expanded panel
+    if (isExpanded) h += renderVendorExpand(v, vendorPromos, booth, hasFloorPlan);
+    h += '</div>';
+    return h;
+  }
+
+  // ── Vendor Expand Panel (inline accordion) ─────────────────────────
+  function renderVendorExpand(v, vendorPromos, booth, hasFloorPlan) {
+    var h = '<div class="vrow-expand">';
+    if (v.logoUrl) h += '<img class="vexpand-img" src="' + esc(v.logoUrl) + '" alt="" onerror="this.style.display=\'none\'">';
+    // Bio
+    var bio = v.bio || v.businessDescription;
+    if (bio) h += '<p class="vexpand-bio">' + esc(bio) + '</p>';
     // Tags
-    if (tags.length > 0) {
-      h += '<div class="vendor-tags">';
-      tags.slice(0, 3).forEach(function(t) { h += '<span class="vendor-tag">' + esc(t) + '</span>'; });
-      if (tags.length > 3) h += '<span class="vendor-tag-overflow">+' + (tags.length - 3) + '</span>';
+    if ((v.tags || []).length > 0) {
+      h += '<div class="vexpand-tags">';
+      v.tags.forEach(function(t) { h += '<span class="vendor-tag">' + esc(t) + '</span>'; });
       h += '</div>';
     }
-    if (hasPromo) h += '<div class="vendor-deal-badge">\ud83c\udff7\ufe0f Deal</div>';
-    if (v.mastStatus === 'paid') h += '<div class="vendor-shop-badge">\ud83d\udecd Shop Available</div>';
-    h += '</div></button>';
-    // Pin button overlay
-    h += '<button class="vendor-pin-overlay' + (isPinned ? ' pinned' : '') + '" onclick="togglePin(\'' + esc(v.id) + '\')">';
-    h += isPinned ? '\ud83d\udccc' : '\ud83d\udccd';
-    h += '</button>';
+    // Links
+    if (v.websiteUrl) h += '<a class="modal-link" href="' + esc(v.websiteUrl) + '" target="_blank" rel="noopener"><span>\ud83c\udf10</span><span>' + esc(v.websiteUrl.replace(/^https?:\/\//, '')) + '</span></a>';
+    if (v.instagramHandle) h += '<a class="modal-link" href="https://instagram.com/' + esc(v.instagramHandle.replace('@', '')) + '" target="_blank" rel="noopener"><span>\ud83d\udcf7</span><span>' + esc(v.instagramHandle) + '</span></a>';
+    if (v.mastStatus === 'paid' && v.mastTenantId) h += '<a class="modal-shop-btn" href="https://mast-' + esc(v.mastTenantId) + '.web.app" target="_blank" rel="noopener">Visit Shop \u2192</a>';
+    // Deals
+    if (vendorPromos.length > 0) {
+      h += '<div class="vexpand-deals">';
+      vendorPromos.forEach(function(p) {
+        var isSaved = savedCoupons.indexOf(p.id) >= 0;
+        var dealText = (p.couponType === 'Fixed Amount' || p.couponType === 'fixed')
+          ? 'Save $' + (p.couponValue / 100).toFixed(2) + ' with code'
+          : 'Save ' + p.couponValue + '% with code';
+        h += '<div class="modal-deal-card">';
+        h += '<p class="modal-deal-text">' + esc(dealText) + '</p>';
+        h += '<div class="modal-deal-code-row">';
+        h += '<code class="modal-deal-code">' + esc(p.mastCouponCode) + '</code>';
+        h += '<button class="modal-copy-btn" onclick="copyText(\'' + esc(p.mastCouponCode) + '\')">Copy</button>';
+        h += '</div>';
+        if (p.attendeeMessage) h += '<p class="modal-deal-message">' + esc(p.attendeeMessage) + '</p>';
+        h += '<button class="coupon-save-btn' + (isSaved ? ' saved' : '') + '" onclick="' + (isSaved ? 'removeSavedCoupon' : 'saveCoupon') + '(\'' + esc(p.id) + '\')">' + (isSaved ? '\u2713 Saved \u2014 View in Coupons' : 'Save Coupon') + '</button>';
+        h += '</div>';
+      });
+      h += '</div>';
+    }
+    // Find on map
+    if (hasFloorPlan && v.boothId) h += '<button class="modal-find-map-btn" onclick="findBoothFromModal(\'' + esc(v.boothId) + '\')">\ud83d\uddfa\ufe0f Find Booth on Map</button>';
     h += '</div>';
     return h;
   }
@@ -1125,6 +1165,7 @@
   window.setTab = function(tab) {
     if (tab !== 'map') mapShowPinned = false;
     activeTab = tab;
+    expandedVendorId = null;
     vendorModalTab = 'about';
     boothSearchQuery = '';
     boothDropOpen = false;
@@ -1184,6 +1225,14 @@
     render();
   };
 
+  window.saveCoupon = function(promoId) {
+    if (savedCoupons.indexOf(promoId) < 0) {
+      savedCoupons.push(promoId);
+      saveCouponsLS();
+    }
+    render();
+  };
+
   window.saveCouponFromAd = function(promoId) {
     if (savedCoupons.indexOf(promoId) < 0) {
       savedCoupons.push(promoId);
@@ -1193,14 +1242,23 @@
   };
 
   window.openVendor = function(vendorId) {
-    selectedVendor = (data.vendors || []).filter(function(v) { return v.id === vendorId; })[0] || null;
-    vendorModalTab = 'about';
+    expandedVendorId = expandedVendorId === vendorId ? null : vendorId;
+    render();
+  };
+
+  window.setExpandedVendor = function(vendorId) {
+    expandedVendorId = expandedVendorId === vendorId ? null : vendorId;
     render();
   };
 
   window.closeVendor = function() {
+    expandedVendorId = null;
     selectedVendor = null;
-    vendorModalTab = 'about';
+    render();
+  };
+
+  window.toggleTagsExpanded = function() {
+    tagsExpanded = !tagsExpanded;
     render();
   };
 
@@ -1287,6 +1345,7 @@
 
   window.findBoothFromModal = function(boothId) {
     selectedVendor = null;
+    expandedVendorId = null;
     findBoothId = boothId;
     mapShowPinned = false;
     activeTab = 'map';
