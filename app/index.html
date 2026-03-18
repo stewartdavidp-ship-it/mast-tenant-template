@@ -5084,6 +5084,23 @@
       <button class="btn btn-secondary" onclick="signOut()">Sign Out</button>
     </div>
 
+    <!-- Module Selection Modal — shown after first login when tier requires module choice -->
+    <div id="moduleSelectionOverlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);overflow-y:auto;">
+      <div style="max-width:720px;margin:60px auto 40px;padding:0 24px;">
+        <div style="background:var(--cream, #FAF6F0);border-radius:16px;padding:32px;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+          <div style="text-align:center;margin-bottom:24px;">
+            <div style="font-size:2rem;margin-bottom:8px;">&#x1F3AF;</div>
+            <h2 id="moduleSelectionTitle" style="font-family:'Cormorant Garamond', serif;font-size:1.6rem;font-weight:700;color:var(--charcoal, #1a1a1a);margin:0 0 8px;">Choose Your Modules</h2>
+            <p id="moduleSelectionSubtitle" style="font-size:0.95rem;color:var(--warm-gray, #6B6560);margin:0;"></p>
+          </div>
+          <div id="moduleSelectionModalCards"></div>
+          <div style="text-align:center;margin-top:24px;">
+            <button id="moduleSelectionConfirmBtn" onclick="confirmModuleSelection()" style="background:var(--amber, #C4853C);color:white;border:none;border-radius:8px;padding:12px 32px;font-size:1rem;font-weight:600;cursor:pointer;min-width:200px;" disabled>Select modules to continue</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Setup Wizard — shown for onboarding tenants -->
     <div id="setupWizardScreen" style="display:none;">
       <div style="max-width:600px;margin:80px auto 40px;padding:0 24px;">
@@ -7642,40 +7659,59 @@ var EVENTS_TIER_ORDER = ['free', 'starter', 'organizer', 'professional'];
 var _tenantSubscription = null;
 
 function getTenantSubscription() {
-  // Default: command with all purchasable modules (backward compat for existing tenants)
+  // Default: minimal access if subscription not yet loaded
   if (!_tenantSubscription) {
-    return {
-      tier: 'command',
-      modules: Object.keys(MODULE_REGISTRY).filter(function(id) { return MODULE_REGISTRY[id].purchasable; })
-    };
+    return { tier: 'publish', modules: ['web'], baseModules: ['web'], selectedModules: [], needsModuleSelection: false };
   }
   return _tenantSubscription;
 }
 
-// Load subscription from Firebase; seed default for existing tenants if missing.
+// Load subscription from Firebase. If missing, minimal access (no auto-seed as command).
 async function loadTenantSubscription() {
   try {
     var snap = await MastDB.subscription.get();
     var data = snap.val();
     if (!data) {
-      // Existing tenant with no subscription record — seed as command tier
-      var allPurchasable = Object.keys(MODULE_REGISTRY).filter(function(id) { return MODULE_REGISTRY[id].purchasable; });
-      data = {
-        tier: 'command',
-        modules: allPurchasable,
-        effectiveDate: new Date().toISOString(),
-        billingAnchor: new Date().getDate(),
-        updatedAt: new Date().toISOString()
-      };
-      await MastDB.subscription.set(data);
-      console.log('Subscription: seeded command tier for existing tenant');
+      // No subscription record — provisioning should have written this.
+      // For pre-existing tenants (dev, shirglassworks), seed as command with all modules.
+      // New tenants get their subscription written during provisioning.
+      var tenantId = MastDB._tenantId;
+      var isLegacyTenant = tenantId === 'dev' || tenantId === 'shirglassworks';
+      if (isLegacyTenant) {
+        var allPurchasable = Object.keys(MODULE_REGISTRY).filter(function(id) { return MODULE_REGISTRY[id].purchasable; });
+        data = {
+          tier: 'command',
+          baseModules: ['web', 'sell', 'make', 'ship', 'market', 'show', 'run', 'show-light'],
+          selectedModules: [],
+          moduleLimit: 0,
+          selectableModules: [],
+          modules: allPurchasable,
+          needsModuleSelection: false,
+          effectiveDate: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        await MastDB.subscription.set(data);
+        console.log('Subscription: seeded command tier for legacy tenant ' + tenantId);
+      } else {
+        // New tenant without subscription — minimal access until provisioning/selection completes
+        data = {
+          tier: 'publish',
+          baseModules: ['web'],
+          selectedModules: [],
+          moduleLimit: 0,
+          selectableModules: [],
+          modules: ['web'],
+          needsModuleSelection: false
+        };
+        console.log('Subscription: no record found, defaulting to minimal access');
+      }
     }
     _tenantSubscription = data;
     return data;
   } catch (err) {
-    console.warn('Subscription load failed, defaulting to command:', err.message);
-    _tenantSubscription = null; // getTenantSubscription() returns command default
-    return getTenantSubscription();
+    console.warn('Subscription load failed, defaulting to minimal access:', err.message);
+    _tenantSubscription = { tier: 'publish', modules: ['web'], baseModules: ['web'], selectedModules: [], needsModuleSelection: false };
+    return _tenantSubscription;
   }
 }
 
@@ -8164,7 +8200,8 @@ var SIDEBAR_SECTION_MODULE_MAP = {
   'events': 'events',
   'ship': 'ship',
   'run': 'run',
-  'web': 'web'
+  'web': 'web',
+  'show-light': 'show-light'
 };
 
 function applySidebarGating() {
@@ -8229,6 +8266,137 @@ function toggleLockedSidebarNudge(section) {
   if (el && el.classList.contains('locked')) {
     el.classList.toggle('nudge-open');
   }
+}
+
+// --- Module Selection Modal ---
+// Shown after first login when subscription.needsModuleSelection is true
+// and selectedModules is empty.
+
+var _moduleSelectionModalState = { selected: [], limit: 0, selectable: [] };
+
+function showModuleSelectionModal() {
+  var sub = getTenantSubscription();
+  var limit = sub.moduleLimit || 0;
+  var selectable = sub.selectableModules || [];
+  if (limit === 0 || selectable.length === 0) return;
+
+  _moduleSelectionModalState = { selected: [], limit: limit, selectable: selectable };
+
+  var titleEl = document.getElementById('moduleSelectionTitle');
+  var subtitleEl = document.getElementById('moduleSelectionSubtitle');
+  var tierName = (TIER_CONFIG[sub.tier] || {}).name || sub.tier;
+
+  if (limit === 1) {
+    titleEl.textContent = 'Choose Your Module';
+    subtitleEl.textContent = 'Your ' + tierName + ' plan includes Web and Show Light. Pick 1 additional module to activate.';
+  } else {
+    titleEl.textContent = 'Choose Your Modules';
+    subtitleEl.textContent = 'Your ' + tierName + ' plan includes Web and Show Light. Pick ' + limit + ' additional modules to activate.';
+  }
+
+  renderModuleSelectionModalCards();
+  document.getElementById('moduleSelectionOverlay').style.display = '';
+}
+
+function renderModuleSelectionModalCards() {
+  var container = document.getElementById('moduleSelectionModalCards');
+  if (!container) return;
+
+  var state = _moduleSelectionModalState;
+  var atLimit = state.selected.length >= state.limit;
+  var h = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;">';
+
+  state.selectable.forEach(function(moduleId) {
+    var mod = MODULE_REGISTRY[moduleId];
+    if (!mod || mod.status === 'coming-soon') return;
+
+    var isSelected = state.selected.indexOf(moduleId) >= 0;
+    var canClick = !atLimit || isSelected;
+    var border = isSelected ? '2px solid var(--amber, #C4853C)' : '2px solid var(--cream-dark, #F0E8DB)';
+    var bg = isSelected ? 'var(--cream, #FAF6F0)' : 'white';
+    var opacity = (atLimit && !isSelected) ? '0.45' : '1';
+    var shadow = isSelected ? '0 2px 12px rgba(196, 133, 60, 0.25)' : '0 1px 4px rgba(0,0,0,0.06)';
+    var cursor = canClick ? 'pointer' : 'default';
+    var onclick = canClick ? 'onclick="toggleModuleModalSelection(\'' + moduleId + '\')"' : '';
+
+    h += '<div ' + onclick + ' style="background:' + bg + ';border:' + border + ';border-radius:12px;padding:18px;cursor:' + cursor + ';opacity:' + opacity + ';box-shadow:' + shadow + ';transition:all 0.2s;position:relative;">';
+
+    if (isSelected) {
+      h += '<span style="position:absolute;top:10px;right:10px;background:var(--amber, #C4853C);color:white;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.8rem;font-weight:700;">&#10003;</span>';
+    }
+
+    h += '<div style="font-size:1.8rem;margin-bottom:4px;">' + mod.icon + '</div>';
+    h += '<div style="font-size:1.05rem;font-weight:700;font-family:\'Cormorant Garamond\', serif;color:var(--charcoal, #1a1a1a);margin-bottom:3px;">' + esc(mod.name) + '</div>';
+    h += '<div style="font-size:0.82rem;color:var(--warm-gray, #6B6560);line-height:1.4;">' + esc(mod.description) + '</div>';
+    h += '</div>';
+  });
+
+  h += '</div>';
+  container.innerHTML = h;
+
+  // Update confirm button state
+  var btn = document.getElementById('moduleSelectionConfirmBtn');
+  if (btn) {
+    var ready = state.selected.length === state.limit;
+    btn.disabled = !ready;
+    btn.textContent = ready
+      ? 'Activate ' + state.selected.length + ' Module' + (state.selected.length !== 1 ? 's' : '')
+      : 'Select ' + (state.limit - state.selected.length) + ' more';
+    btn.style.opacity = ready ? '1' : '0.6';
+  }
+}
+
+function toggleModuleModalSelection(moduleId) {
+  var state = _moduleSelectionModalState;
+  var idx = state.selected.indexOf(moduleId);
+  if (idx >= 0) {
+    state.selected.splice(idx, 1);
+  } else if (state.selected.length < state.limit) {
+    state.selected.push(moduleId);
+  }
+  renderModuleSelectionModalCards();
+}
+
+async function confirmModuleSelection() {
+  var state = _moduleSelectionModalState;
+  if (state.selected.length !== state.limit) return;
+
+  var btn = document.getElementById('moduleSelectionConfirmBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Activating...'; }
+
+  try {
+    var sub = getTenantSubscription();
+    var baseModules = sub.baseModules || ['web'];
+    var newModules = baseModules.concat(state.selected);
+
+    await MastDB.subscription.update({
+      selectedModules: state.selected,
+      modules: newModules,
+      needsModuleSelection: false,
+      updatedAt: new Date().toISOString()
+    });
+
+    // Update local state
+    _tenantSubscription.selectedModules = state.selected;
+    _tenantSubscription.modules = newModules;
+    _tenantSubscription.needsModuleSelection = false;
+
+    // Hide modal
+    document.getElementById('moduleSelectionOverlay').style.display = 'none';
+
+    // Refresh sidebar gating with new modules
+    applySidebarGating();
+    showToast('Modules activated! Your workspace is ready.');
+  } catch (err) {
+    console.error('Module selection failed:', err);
+    showToast('Failed to save module selection: ' + err.message, true);
+    if (btn) { btn.disabled = false; btn.textContent = 'Try Again'; }
+  }
+}
+
+function needsModuleSelection() {
+  var sub = getTenantSubscription();
+  return sub.needsModuleSelection === true && (!sub.selectedModules || sub.selectedModules.length === 0);
 }
 
 // --- Settings Sub-View Gating ---
@@ -8958,6 +9126,12 @@ function enterAuthorizedState() {
   document.getElementById('header').style.display = 'flex';
   showSidebar();
   applySidebarGating();
+
+  // Check if user needs to choose modules (launch/operate tier first login)
+  if (needsModuleSelection()) {
+    showModuleSelectionModal();
+  }
+
   // Route from hash, ?view= param, or default to dashboard
   var viewParam = new URLSearchParams(window.location.search).get('view');
   var initialRoute = viewParam || location.hash.replace('#', '') || 'dashboard';
@@ -9131,6 +9305,12 @@ auth.onAuthStateChanged(async function(user) {
   header.style.display = 'flex';
   showSidebar();
   applySidebarGating();
+
+  // Check if user needs to choose modules (launch/operate tier first login)
+  if (needsModuleSelection()) {
+    showModuleSelectionModal();
+  }
+
   document.getElementById('userAvatar').src = user.photoURL || '';
   var initialRoute = location.hash.replace('#', '') || 'dashboard';
   navigateTo(initialRoute);
