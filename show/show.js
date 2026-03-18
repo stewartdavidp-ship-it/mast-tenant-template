@@ -183,11 +183,7 @@
     var filtered = vendors.filter(function(v) {
       if (searchQuery) {
         var q = searchQuery.toLowerCase();
-        var vTags = (v.tags || []).map(function(t) { return t.toLowerCase(); });
-        if ((v.businessName || '').toLowerCase().indexOf(q) < 0 &&
-            (v.category || '').toLowerCase().indexOf(q) < 0 &&
-            (v.businessDescription || '').toLowerCase().indexOf(q) < 0 &&
-            !vTags.some(function(t) { return t.indexOf(q) >= 0; })) return false;
+        if ((v.businessName || '').toLowerCase().indexOf(q) < 0) return false;
       }
       if (selectedCategories.length > 0 && selectedCategories.indexOf(v.category) < 0) return false;
       if (selectedTags.length > 0) {
@@ -337,7 +333,7 @@
     // Search + Sort
     h += '<div class="search-sort-row">';
     h += '<div class="search-wrapper"><span class="search-icon">\ud83d\udd0d</span>';
-    h += '<input class="search-input with-icon" type="text" placeholder="Search vendors, categories, or tags..." value="' + esc(searchQuery) + '" oninput="setSearch(this.value)"></div>';
+    h += '<input class="search-input with-icon" type="text" placeholder="Search by vendor name..." value="' + esc(searchQuery) + '" oninput="setSearch(this.value)"></div>';
     h += '<select class="sort-select" value="' + sortBy + '" onchange="setSort(this.value)">';
     h += '<option value="name"' + (sortBy === 'name' ? ' selected' : '') + '>Sort: Name</option>';
     h += '<option value="category"' + (sortBy === 'category' ? ' selected' : '') + '>Sort: Category</option>';
