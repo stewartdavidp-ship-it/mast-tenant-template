@@ -346,13 +346,15 @@
   // Gallery merges image library + product images into one view.
   // applicationPhoto flag lives on image library records.
 
+  var _slProductsCache = null;
+
   function getAllImages() {
     var merged = {};
     // Image library entries
     var lib = imageLibrary || {};
     Object.keys(lib).forEach(function(id) { merged['img_' + id] = lib[id]; });
     // Product images (if not already in library)
-    var prods = MastAdmin.getData('productsData') || {};
+    var prods = _slProductsCache || MastAdmin.getData('productsData') || {};
     Object.keys(prods).forEach(function(pid) {
       var p = prods[pid];
       var imgUrl = p.image || p.imageUrl || '';
@@ -373,7 +375,20 @@
     return merged;
   }
 
-  function renderGallery(el) {
+  async function ensureProductsLoaded() {
+    if (_slProductsCache) return;
+    if (MastAdmin.getData('productsData')) { _slProductsCache = MastAdmin.getData('productsData'); return; }
+    try {
+      var snap = await MastDB.products.ref().once('value');
+      _slProductsCache = snap.val() || {};
+    } catch (err) {
+      console.warn('Show Light: failed to load products for gallery:', err.message);
+      _slProductsCache = {};
+    }
+  }
+
+  async function renderGallery(el) {
+    await ensureProductsLoaded();
     var allImages = getAllImages();
     var entries = Object.entries(allImages);
     entries.sort(function(a, b) { return (b[1].uploadedAt || '').localeCompare(a[1].uploadedAt || ''); });
