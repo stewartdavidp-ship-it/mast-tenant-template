@@ -813,14 +813,53 @@
       h += '<input type="url" id="slFetchUrl" value="' + esc(show.applicationUrl) + '"></div>';
 
       if (slParsedRequirements) {
+        var reqs = slParsedRequirements;
+
         h += '<div style="background:rgba(122,139,111,0.1);border-radius:8px;padding:16px;margin-bottom:16px;">';
-        h += '<div style="font-weight:600;margin-bottom:8px;color:var(--sage);">✓ Requirements Parsed</div>';
-        h += '<div style="font-size:0.85rem;">';
-        h += '<div><strong>Fields:</strong> ' + (slParsedRequirements.fields || []).length + ' required fields</div>';
-        h += '<div><strong>Photos:</strong> ' + (slParsedRequirements.photos || []).length + ' image requirements</div>';
-        if (slParsedRequirements.fees) h += '<div><strong>Fees:</strong> ' + esc(slParsedRequirements.fees) + '</div>';
-        if (slParsedRequirements.deadline) h += '<div><strong>Deadline:</strong> ' + esc(slParsedRequirements.deadline) + '</div>';
+        h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
+        h += '<div style="font-weight:600;color:var(--sage);">Parsed Requirements</div>';
+        h += '<div style="display:flex;gap:8px;">';
+        h += '<a href="' + esc(show.applicationUrl) + '" target="_blank" style="color:var(--amber);font-size:0.8rem;cursor:pointer;text-decoration:underline;">View Source Page</a>';
+        h += '<button onclick="slParsedRequirements=null; renderApplyFetch(document.getElementById(\'slApplyContent\'), slShows[slCurrentShowId]||{});" style="background:none;border:none;color:var(--warm-gray);font-size:0.75rem;cursor:pointer;text-decoration:underline;">Re-parse</button>';
         h += '</div></div>';
+
+        // Fields
+        h += '<div style="margin-bottom:12px;">';
+        h += '<div style="font-size:0.8rem;font-weight:600;color:var(--cream);margin-bottom:6px;">Application Fields (' + (reqs.fields || []).length + ')</div>';
+        (reqs.fields || []).forEach(function(f, idx) {
+          h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:0.85rem;border-bottom:1px solid rgba(255,255,255,0.05);">';
+          h += '<span>' + esc(f.name) + (f.required ? ' <span style="color:var(--danger);font-size:0.7rem;">required</span>' : '') + '</span>';
+          h += '<button onclick="slRemoveParsedField(' + idx + ')" style="background:none;border:none;color:var(--warm-gray);cursor:pointer;font-size:0.75rem;">&times;</button>';
+          h += '</div>';
+        });
+        h += '<button onclick="slAddParsedField()" style="background:none;border:none;color:var(--amber);cursor:pointer;font-size:0.8rem;margin-top:4px;">+ Add field</button>';
+        h += '</div>';
+
+        // Photos
+        h += '<div style="margin-bottom:12px;">';
+        h += '<div style="font-size:0.8rem;font-weight:600;color:var(--cream);margin-bottom:6px;">Photo Requirements (' + (reqs.photos || []).length + ')</div>';
+        (reqs.photos || []).forEach(function(p, idx) {
+          h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:0.85rem;border-bottom:1px solid rgba(255,255,255,0.05);">';
+          h += '<span>' + esc(p.slot) + (p.dimensions ? ' <span style="color:var(--warm-gray);font-size:0.75rem;">' + esc(p.dimensions) + '</span>' : '') + '</span>';
+          h += '<button onclick="slRemoveParsedPhoto(' + idx + ')" style="background:none;border:none;color:var(--warm-gray);cursor:pointer;font-size:0.75rem;">&times;</button>';
+          h += '</div>';
+        });
+        h += '<button onclick="slAddParsedPhoto()" style="background:none;border:none;color:var(--amber);cursor:pointer;font-size:0.8rem;margin-top:4px;">+ Add photo slot</button>';
+        h += '</div>';
+
+        // Fees, deadline, special requirements
+        if (reqs.fees) h += '<div style="font-size:0.85rem;margin-bottom:4px;"><strong>Fees:</strong> ' + esc(reqs.fees) + '</div>';
+        if (reqs.deadline) h += '<div style="font-size:0.85rem;margin-bottom:4px;"><strong>Deadline:</strong> ' + esc(reqs.deadline) + '</div>';
+        if (reqs.specialRequirements && reqs.specialRequirements.length > 0) {
+          h += '<div style="font-size:0.85rem;margin-bottom:4px;"><strong>Special:</strong> ' + reqs.specialRequirements.map(function(r) { return esc(r); }).join('; ') + '</div>';
+        }
+        if (reqs.rawNotes) {
+          h += '<details style="margin-top:8px;"><summary style="font-size:0.8rem;color:var(--warm-gray);cursor:pointer;">Raw AI notes</summary>';
+          h += '<div style="font-size:0.8rem;color:var(--warm-gray);white-space:pre-wrap;margin-top:4px;max-height:200px;overflow-y:auto;">' + esc(reqs.rawNotes) + '</div></details>';
+        }
+        h += '</div>';
+
+        h += '<div style="font-size:0.75rem;color:var(--warm-gray);font-style:italic;margin-bottom:12px;">Review the parsed requirements above. Remove or add items before continuing.</div>';
         h += '<button class="btn btn-primary" onclick="slGoToStep(2);">Continue to Images →</button>';
       } else {
         h += '<div style="display:flex;gap:8px;align-items:center;">';
@@ -906,6 +945,43 @@
       if (status) status.textContent = '';
     }
   }
+
+  function slRemoveParsedField(idx) {
+    if (slParsedRequirements && slParsedRequirements.fields) {
+      slParsedRequirements.fields.splice(idx, 1);
+    }
+    renderApplyFetch(document.getElementById('slApplyContent'), slShows[slCurrentShowId] || {});
+  }
+
+  function slAddParsedField() {
+    var name = prompt('Field name (e.g. "Product Description"):');
+    if (!name) return;
+    if (!slParsedRequirements) slParsedRequirements = { fields: [], photos: [] };
+    if (!slParsedRequirements.fields) slParsedRequirements.fields = [];
+    slParsedRequirements.fields.push({ name: name.trim(), description: '', required: true });
+    renderApplyFetch(document.getElementById('slApplyContent'), slShows[slCurrentShowId] || {});
+  }
+
+  function slRemoveParsedPhoto(idx) {
+    if (slParsedRequirements && slParsedRequirements.photos) {
+      slParsedRequirements.photos.splice(idx, 1);
+    }
+    renderApplyFetch(document.getElementById('slApplyContent'), slShows[slCurrentShowId] || {});
+  }
+
+  function slAddParsedPhoto() {
+    var slot = prompt('Photo slot name (e.g. "Process Photo 1"):');
+    if (!slot) return;
+    if (!slParsedRequirements) slParsedRequirements = { fields: [], photos: [] };
+    if (!slParsedRequirements.photos) slParsedRequirements.photos = [];
+    slParsedRequirements.photos.push({ slot: slot.trim(), description: '' });
+    renderApplyFetch(document.getElementById('slApplyContent'), slShows[slCurrentShowId] || {});
+  }
+
+  window.slRemoveParsedField = slRemoveParsedField;
+  window.slAddParsedField = slAddParsedField;
+  window.slRemoveParsedPhoto = slRemoveParsedPhoto;
+  window.slAddParsedPhoto = slAddParsedPhoto;
 
   // --- Step 2: Auto-Map (with enriched profile fields + product desc from images) ---
 
