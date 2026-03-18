@@ -9093,7 +9093,7 @@ var MastAdmin = (function() {
     }
     _loadPromises[moduleId] = new Promise(function(resolve, reject) {
       var script = document.createElement('script');
-      script.src = manifest.src;
+      script.src = manifest.src + '?v=' + MAST_MODULES_V;
       script.onload = function() {
         delete _loadPromises[moduleId];
         resolve();
@@ -9183,6 +9183,9 @@ var MastAdmin = (function() {
     writeAudit: function(action, entity, entityId) { return writeAudit(action, entity, entityId); }
   };
 })();
+
+// Module build version — bump this when deploying module changes to bust browser cache.
+var MAST_MODULES_V = '20260318c';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
