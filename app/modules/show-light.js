@@ -1451,7 +1451,7 @@
         if (img && img.url) {
           h += '<img src="' + esc(img.url) + '" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;margin-bottom:8px;">';
           h += '<div style="font-size:0.75rem;color:var(--warm-gray);margin-bottom:6px;">' + esc(p.slot || 'Photo ' + (idx + 1)) + '</div>';
-          h += '<a href="' + esc(img.url) + '" download target="_blank" style="display:inline-block;background:rgba(255,255,255,0.1);color:var(--cream);border-radius:6px;padding:4px 12px;font-size:0.75rem;text-decoration:none;cursor:pointer;">Download</a>';
+          h += '<button onclick="slDownloadPhoto(\'' + esc(img.url) + '\', \'' + esc(p.slot || 'photo') + '\')" style="background:rgba(255,255,255,0.1);color:var(--cream);border:none;border-radius:6px;padding:4px 12px;font-size:0.75rem;cursor:pointer;">Download</button>';
         } else {
           h += '<div style="width:100%;aspect-ratio:1;background:var(--cream-dark);border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--warm-gray);margin-bottom:8px;">—</div>';
           h += '<div style="font-size:0.75rem;color:var(--danger);">' + esc(p.slot || 'Photo') + ' — not assigned</div>';
@@ -1541,8 +1541,31 @@
     window.open(url, '_blank');
   }
 
+  async function slDownloadPhoto(url, slotName) {
+    try {
+      showToast('Downloading...');
+      var resp = await fetch(url);
+      var blob = await resp.blob();
+      var ext = blob.type.indexOf('png') >= 0 ? '.png' : '.jpg';
+      var filename = slotName.toLowerCase().replace(/[^a-z0-9]+/g, '-') + ext;
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(a.href);
+      showToast('Downloaded: ' + filename);
+    } catch (err) {
+      // Fallback: open in new tab for manual save
+      window.open(url, '_blank');
+      showToast('Opened in new tab — right-click to save');
+    }
+  }
+
   window.slCopyField = slCopyField;
   window.slLaunchApplication = slLaunchApplication;
+  window.slDownloadPhoto = slDownloadPhoto;
 
   async function slSaveApplication() {
     var show = slShows[slCurrentShowId] || {};
