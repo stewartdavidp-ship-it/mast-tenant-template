@@ -1143,7 +1143,6 @@
           assignedImg = (imageLibrary || {})[assigned];
         }
 
-        h += '<div style="display:flex;flex-direction:column;gap:8px;">';
         h += '<div class="sl-slot' + (assignedImg ? ' filled' : '') + '" onclick="slPickImageForSlot(' + idx + ')">';
         if (assignedImg) {
           h += '<img src="' + esc(assignedImg.url || assignedImg.thumbnailUrl || '') + '" alt="">';
@@ -1156,23 +1155,41 @@
           if (p.dimensions) h += '<div style="font-size:0.65rem;color:var(--amber);">' + esc(p.dimensions) + '</div>';
         }
         h += '</div>';
-        // Show application description field for assigned product photos (not booth photos)
-        if (assignedImg && !isProfileBooth) {
-          var slotLower = (p.slot || '').toLowerCase();
-          var isBooth = slotLower.indexOf('booth') >= 0;
-          if (!isBooth) {
-            var appDesc = assignedImg.applicationDescription || '';
-            h += '<div onclick="event.stopPropagation();">';
-            h += '<textarea id="slAppDesc_' + idx + '" rows="3" placeholder="Describe this product for the application..." ' +
-              'style="width:100%;padding:6px 8px;border-radius:6px;border:1px solid rgba(255,255,255,0.15);background:var(--charcoal);color:var(--cream);font-size:0.8rem;resize:vertical;" ' +
-              'onblur="slSaveSlotDesc(' + idx + ', this.value)">' + esc(appDesc) + '</textarea>';
-            if (assignedImg.productName) h += '<div style="font-size:0.65rem;color:var(--amber);margin-top:2px;">Product: ' + esc(assignedImg.productName) + '</div>';
-            h += '</div>';
-          }
-        }
-        h += '</div>';
       });
       h += '</div>';
+    }
+
+    // Full-width product description sections for each assigned product photo
+    var hasProductDesc = false;
+    photos.forEach(function(p, idx) {
+      var assigned = slImageAssignments[idx];
+      if (!assigned || assigned === '__profile_booth__') return;
+      var slotLower = (p.slot || '').toLowerCase();
+      if (slotLower.indexOf('booth') >= 0) return;
+      var img = (imageLibrary || {})[assigned];
+      if (!img) return;
+      hasProductDesc = true;
+
+      var appDesc = img.applicationDescription || '';
+      var productLabel = img.productName || (img.tags && img.tags[0]) || '';
+
+      h += '<div style="margin-top:16px;padding:16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:10px;">';
+      h += '<div style="display:flex;gap:16px;align-items:flex-start;">';
+      h += '<img src="' + esc(img.thumbnailUrl || img.url || '') + '" style="width:100px;height:100px;object-fit:cover;border-radius:8px;flex-shrink:0;" />';
+      h += '<div style="flex:1;">';
+      h += '<div style="font-size:0.9rem;font-weight:600;color:var(--cream);margin-bottom:4px;">' + esc(p.slot || 'Product Photo') + '</div>';
+      if (productLabel) h += '<div style="font-size:0.75rem;color:var(--amber);margin-bottom:8px;">Product: ' + esc(productLabel) + '</div>';
+      h += '<label style="font-size:0.8rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Application Description</label>';
+      h += '<textarea id="slAppDesc_' + idx + '" rows="4" placeholder="Describe this product for show applications. This will auto-fill the product description field..." ' +
+        'style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:var(--charcoal);color:var(--cream);font-size:0.9rem;line-height:1.4;resize:vertical;" ' +
+        'onblur="slSaveSlotDesc(' + idx + ', this.value)">' + esc(appDesc) + '</textarea>';
+      h += '</div>';
+      h += '</div>';
+      h += '</div>';
+    });
+
+    if (hasProductDesc) {
+      h += '<div style="margin-top:8px;font-size:0.75rem;color:var(--warm-gray);font-style:italic;">These descriptions will auto-fill the product description field in Step 3.</div>';
     }
 
     h += '<div style="display:flex;gap:8px;margin-top:16px;">';
@@ -1233,13 +1250,32 @@
       var img = (imageLibrary || {})[imageId];
       if (img && !img.applicationDescription) {
         var prods = MastAdmin.getData('productsData') || {};
+        var prodsArr = Object.entries(prods);
         var desc = '';
+        // 1. Match by productId
         if (img.productId && prods[img.productId]) {
           var p = prods[img.productId];
           desc = p.shortDescription || p.description || '';
-        } else if (img.productName) {
-          Object.values(prods).forEach(function(p) {
-            if (!desc && p.name === img.productName) desc = p.shortDescription || p.description || '';
+        }
+        // 2. Match by productName
+        if (!desc && img.productName) {
+          prodsArr.forEach(function(entry) {
+            if (!desc && entry[1].name === img.productName) desc = entry[1].shortDescription || entry[1].description || '';
+          });
+        }
+        // 3. Match by tags to product names
+        if (!desc && img.tags && img.tags.length) {
+          img.tags.forEach(function(tag) {
+            if (desc) return;
+            prodsArr.forEach(function(entry) {
+              if (!desc && entry[1].name && entry[1].name === tag) desc = entry[1].shortDescription || entry[1].description || '';
+            });
+          });
+        }
+        // 4. Match by image URL to product image URL
+        if (!desc && img.url) {
+          prodsArr.forEach(function(entry) {
+            if (!desc && entry[1].image === img.url) desc = entry[1].shortDescription || entry[1].description || '';
           });
         }
         if (desc) {
