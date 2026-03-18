@@ -6,6 +6,9 @@
 (function() {
   'use strict';
 
+  // Local alias for core price formatter (formatPriceCents is a global in app/index.html)
+  var formatCurrency = typeof formatPriceCents === 'function' ? formatPriceCents : function(c) { return '$' + ((c || 0) / 100).toFixed(2); };
+
   // ============================================================
   // Module-private DB helpers (uses core MastDB._ref)
   // ============================================================
@@ -571,12 +574,8 @@
   // Overview Tab
   // ============================================================
 
-  function evLoadShowQRLib(callback) {
-    if (window.QRCode) { callback(); return; }
-    var script = document.createElement('script');
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
-    script.onload = callback;
-    document.head.appendChild(script);
+  function evShowQRSrc(url) {
+    return 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&color=1e2d3d&data=' + encodeURIComponent(url);
   }
 
   function copyShowUrl(showId) {
@@ -593,13 +592,13 @@
 
   function downloadShowQR(showId) {
     var show = showsData[showId];
-    var qrDiv = document.getElementById('ev-show-qr-' + showId);
-    if (!qrDiv) return;
-    var canvas = qrDiv.querySelector('canvas');
-    if (!canvas) { showToast('QR code not ready', true); return; }
+    if (!show || !show.slug) return;
+    var domain = (typeof TENANT_CONFIG !== 'undefined' && TENANT_CONFIG && TENANT_CONFIG.domain) ? TENANT_CONFIG.domain : window.location.hostname;
+    var url = 'https://' + domain + '/show/' + show.slug;
     var link = document.createElement('a');
-    link.download = 'qr-' + (show ? show.slug : showId) + '.png';
-    link.href = canvas.toDataURL('image/png');
+    link.download = 'qr-' + show.slug + '.png';
+    link.href = evShowQRSrc(url);
+    link.target = '_blank';
     link.click();
   }
 
@@ -648,10 +647,12 @@
 
     if (show.slug) {
       var showDomain = (typeof TENANT_CONFIG !== 'undefined' && TENANT_CONFIG && TENANT_CONFIG.domain) ? TENANT_CONFIG.domain : window.location.hostname;
-      var attendeeUrl = 'https://' + showDomain + '/show/' + esc(show.slug);
+      var attendeeUrl = 'https://' + showDomain + '/show/' + show.slug;
       html += '<div class="ev-card"><h3>Show QR Code</h3>';
-      html += '<div style="display:flex;justify-content:center;margin-bottom:10px;"><div id="ev-show-qr-' + esc(showId) + '" style="background:#fff;padding:10px;border-radius:8px;"></div></div>';
-      html += '<p style="font-size:0.72rem;color:var(--warm-gray);text-align:center;word-break:break-all;margin:0 0 10px;">' + attendeeUrl + '</p>';
+      html += '<div style="display:flex;justify-content:center;margin-bottom:10px;">';
+      html += '<img src="' + evShowQRSrc(attendeeUrl) + '" alt="QR Code" style="width:180px;height:180px;border-radius:8px;" />';
+      html += '</div>';
+      html += '<p style="font-size:0.72rem;color:var(--warm-gray);text-align:center;word-break:break-all;margin:0 0 10px;">' + esc(attendeeUrl) + '</p>';
       html += '<div style="display:flex;gap:8px;">';
       html += '<button class="ev-btn ev-btn-sm" style="flex:1;" onclick="evDownloadShowQR(\'' + esc(showId) + '\')">&#11015; Download</button>';
       html += '<button class="ev-btn ev-btn-sm" style="flex:1;" onclick="evCopyShowUrl(\'' + esc(showId) + '\')">&#128203; Copy URL</button>';
@@ -662,17 +663,6 @@
     html += '<button class="ev-btn ev-btn-danger" style="width:100%;" onclick="evDeleteShow(\'' + esc(showId) + '\')">Delete Show</button>';
     html += '</div></div>';
     container.innerHTML = html;
-
-    // Generate QR code after DOM is ready
-    if (show.slug) {
-      var showDomain2 = (typeof TENANT_CONFIG !== 'undefined' && TENANT_CONFIG && TENANT_CONFIG.domain) ? TENANT_CONFIG.domain : window.location.hostname;
-      var attendeeUrl2 = 'https://' + showDomain2 + '/show/' + show.slug;
-      evLoadShowQRLib(function() {
-        var qrDiv = document.getElementById('ev-show-qr-' + showId);
-        if (!qrDiv) return;
-        new QRCode(qrDiv, { text: attendeeUrl2, width: 180, height: 180, colorDark: '#1e293b', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M });
-      });
-    }
   }
 
   function updateShowStatus(showId, status) {
