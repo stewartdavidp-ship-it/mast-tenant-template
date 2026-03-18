@@ -384,8 +384,12 @@
         var isApp = img.applicationPhoto;
         h += '<div class="sl-gallery-item" onclick="slToggleAppPhoto(\'' + esc(id) + '\')" style="' + (isApp ? 'border-color:var(--amber);' : '') + '">';
         h += '<img src="' + esc(img.thumbnailUrl || img.url || '') + '" alt="' + esc((img.tags || [])[0] || '') + '" loading="lazy">';
-        if (isApp) h += '<div style="position:absolute;top:6px;left:6px;background:var(--amber);color:white;font-size:0.6rem;padding:2px 5px;border-radius:3px;font-weight:600;">⭐ APP</div>';
-        if (img.description) h += '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.6);color:white;font-size:0.65rem;padding:3px 6px;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;">' + esc(img.description) + '</div>';
+        if (isApp) {
+          h += '<div style="position:absolute;top:6px;left:6px;background:var(--amber);color:white;font-size:0.6rem;padding:2px 5px;border-radius:3px;font-weight:600;">⭐ APP</div>';
+          h += '<div style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.6);color:white;font-size:0.6rem;padding:2px 5px;border-radius:3px;cursor:pointer;" onclick="event.stopPropagation(); slShowAppDescModal(\'' + esc(id) + '\', (imageLibrary || {})[\'' + esc(id) + '\'])">✏️</div>';
+        }
+        var caption = isApp ? (img.applicationDescription || img.productName || img.description || '') : (img.description || img.productName || '');
+        if (caption) h += '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.6);color:white;font-size:0.65rem;padding:3px 6px;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;">' + esc(caption) + '</div>';
         h += '</div>';
       });
       h += '</div>';
@@ -413,15 +417,81 @@
     var img = (imageLibrary || {})[id];
     if (!img) return;
     var newVal = !img.applicationPhoto;
-    try {
-      await MastDB.images.ref(id + '/applicationPhoto').set(newVal || null);
-      img.applicationPhoto = newVal;
-      renderGallery(document.getElementById('slContent'));
-      showToast(newVal ? 'Marked as application photo.' : 'Unmarked.');
-    } catch (err) {
-      showToast('Update failed: ' + err.message, true);
+    if (newVal) {
+      // Marking as app photo — show description modal
+      slShowAppDescModal(id, img);
+    } else {
+      // Unmarking — clear the flag (keep description for if they re-mark later)
+      try {
+        await MastDB.images.ref(id + '/applicationPhoto').set(null);
+        img.applicationPhoto = false;
+        renderGallery(document.getElementById('slContent'));
+        showToast('Unmarked.');
+      } catch (err) {
+        showToast('Update failed: ' + err.message, true);
+      }
     }
   }
+
+  function slShowAppDescModal(imgId, img) {
+    var existing = img.applicationDescription || '';
+    // Pre-fill from product description if image is linked to a product
+    if (!existing && img.productId) {
+      var prods = MastAdmin.getData('productsData') || {};
+      var p = prods[img.productId];
+      if (p) existing = (p.shortDescription || p.description || '');
+    }
+    if (!existing && img.productName) {
+      var prods2 = MastAdmin.getData('productsData') || {};
+      Object.values(prods2).forEach(function(p) {
+        if (!existing && p.name === img.productName) existing = (p.shortDescription || p.description || '');
+      });
+    }
+
+    var html =
+      '<div class="modal-header">' +
+        '<h3>Application Photo Description</h3>' +
+        '<button class="modal-close" onclick="closeModal()">&times;</button>' +
+      '</div>' +
+      '<div class="modal-body">' +
+        '<div style="display:flex;gap:16px;align-items:flex-start;">' +
+          '<img src="' + esc(img.thumbnailUrl || img.url || '') + '" style="width:120px;height:120px;object-fit:cover;border-radius:8px;flex-shrink:0;" />' +
+          '<div style="flex:1;">' +
+            '<p style="font-size:0.85rem;color:var(--warm-gray);margin:0 0 8px;">Describe this product for show applications. This text will auto-fill the product description field whenever this photo is used.</p>' +
+            (img.productName ? '<div style="font-size:0.75rem;color:var(--amber);margin-bottom:8px;">Linked to: ' + esc(img.productName) + '</div>' : '') +
+            '<textarea id="slAppDescInput" rows="4" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--warm-gray);background:var(--charcoal);color:var(--cream);font-size:0.85rem;resize:vertical;" placeholder="e.g. Hand-blown glass octopus figurine, 4-6 inches tall, made with borosilicate glass...">' + esc(existing) + '</textarea>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="modal-footer">' +
+        '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+        '<button class="btn btn-primary" onclick="slSaveAppDesc(\'' + esc(imgId) + '\')">Save & Mark as App Photo</button>' +
+      '</div>';
+
+    openModal(html);
+  }
+
+  async function slSaveAppDesc(imgId) {
+    var img = (imageLibrary || {})[imgId];
+    if (!img) return;
+    var desc = (document.getElementById('slAppDescInput') || {}).value || '';
+    desc = desc.trim();
+    try {
+      var updates = { applicationPhoto: true };
+      if (desc) updates.applicationDescription = desc;
+      await MastDB.images.ref(imgId).update(updates);
+      img.applicationPhoto = true;
+      if (desc) img.applicationDescription = desc;
+      closeModal();
+      renderGallery(document.getElementById('slContent'));
+      showToast('Marked as application photo.');
+    } catch (err) {
+      showToast('Save failed: ' + err.message, true);
+    }
+  }
+
+  window.slShowAppDescModal = slShowAppDescModal;
+  window.slSaveAppDesc = slSaveAppDesc;
 
   // ============================================================
   // Shows View
@@ -850,53 +920,30 @@
     if (!slFieldMapping) {
       slFieldMapping = {};
 
-      // Build product description from assigned images → product catalog lookup
+      // Build product description from assigned images' applicationDescription fields
       var productDesc = '';
       var lib = imageLibrary || {};
-      var prods = MastAdmin.getData('productsData') || {};
-      var prodsArr = Object.entries(prods);
-      // Look up product descriptions for assigned images
       Object.values(slImageAssignments).forEach(function(imgId) {
         if (imgId === '__profile_booth__') return;
         var img = lib[imgId];
         if (!img) return;
-        var matched = false;
-        // Primary: match by productId (direct product link)
-        if (img.productId) {
-          var p = prods[img.productId];
-          if (p && p.description && productDesc.indexOf(p.description) < 0) {
-            productDesc += (p.name ? p.name + ': ' : '') + (p.shortDescription || p.description) + '\n';
-            matched = true;
-          }
-        }
-        // Secondary: match by productName
-        if (!matched && img.productName) {
-          prodsArr.forEach(function(entry) {
-            var p = entry[1];
-            if (p.name && p.name === img.productName && p.description && productDesc.indexOf(p.description) < 0) {
-              productDesc += (p.name ? p.name + ': ' : '') + (p.shortDescription || p.description) + '\n';
-              matched = true;
-            }
-          });
-        }
-        // Tertiary: fall back to tag matching
-        if (!matched) {
-          var tags = img.tags || [];
-          tags.forEach(function(tag) {
-            prodsArr.forEach(function(entry) {
-              var p = entry[1];
-              if (p.name && p.name === tag && p.description && productDesc.indexOf(p.description) < 0) {
-                productDesc += (p.name ? p.name + ': ' : '') + (p.shortDescription || p.description) + '\n';
-              }
-            });
-          });
+        // Use the application description written for this photo
+        if (img.applicationDescription && productDesc.indexOf(img.applicationDescription) < 0) {
+          productDesc += img.applicationDescription + '\n';
         }
       });
-      // Fallback: use all product catalog descriptions if no matches from images
+      // Fallback: if no application descriptions, try product catalog
       if (!productDesc) {
-        Object.values(prods).forEach(function(p) {
-          if (p.description && p.image) {
-            productDesc += (p.name ? p.name + ': ' : '') + (p.shortDescription || p.description) + '\n';
+        var prods = MastAdmin.getData('productsData') || {};
+        Object.values(slImageAssignments).forEach(function(imgId) {
+          if (imgId === '__profile_booth__') return;
+          var img = lib[imgId];
+          if (!img) return;
+          if (img.productId) {
+            var p = prods[img.productId];
+            if (p && p.description && productDesc.indexOf(p.description) < 0) {
+              productDesc += (p.name ? p.name + ': ' : '') + (p.shortDescription || p.description) + '\n';
+            }
           }
         });
       }
