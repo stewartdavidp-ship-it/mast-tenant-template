@@ -4686,6 +4686,8 @@
       <div id="activeTripBanner" style="display:none;"></div>
       <!-- Import Status Banner -->
       <div id="importStatusBanner" style="display:none;"></div>
+      <!-- Guided Next Steps (shown after onboarding) -->
+      <div id="guidedNextSteps" style="display:none;"></div>
       <!-- Dashboard Todos (above cards, extensible nudge system) -->
       <div id="dashboardTodos" style="display:none;"></div>
       <!-- Dashboard Cards -->
@@ -9331,6 +9333,9 @@ auth.onAuthStateChanged(async function(user) {
   await loadConfigChecklist();
   renderSetupBanner();
 
+  // Guided next steps (module-aware onboarding)
+  loadNextStepsCache().then(function() { renderGuidedNextSteps(); });
+
   // Load GitHub token for image uploads — admin only
   if (isAdmin()) {
     MastDB.config.githubToken().once('value').then(function(snap) {
@@ -11412,7 +11417,11 @@ async function wizardComplete() {
     document.getElementById('setupWizardScreen').style.display = 'none';
     document.getElementById('header').style.display = 'flex';
     showSidebar();
+    applySidebarGating();
     navigateTo('dashboard');
+
+    // Show guided next steps immediately
+    loadNextStepsCache().then(function() { renderGuidedNextSteps(); });
     attachListeners();
     loadSettings();
   } catch (err) {
@@ -11485,6 +11494,107 @@ function renderSetupBanner() {
   }
   banner.innerHTML = incomplete.length + ' setup step' + (incomplete.length > 1 ? 's' : '') +
     ' remaining — <a href="#settings" onclick="navigateTo(\'settings\');return false;">Complete Setup</a>';
+}
+
+// --- Guided Next Steps ---
+// Module-aware onboarding card shown on dashboard after setup wizard completes.
+// Each step is tied to a module and has a route, check function, and contextual copy.
+
+var NEXT_STEP_DEFINITIONS = [
+  { id: 'add-product',    module: null,         icon: '\uD83D\uDCE6', title: 'Add your first product',        desc: 'Upload a photo and set a price to start building your catalog.',           route: 'inventory',   check: function() { return window._nextStepsCache && window._nextStepsCache.hasProducts; } },
+  { id: 'brand-setup',    module: null,         icon: '\uD83C\uDFA8', title: 'Customize your brand',          desc: 'Set your business name, colors, and tagline.',                            route: 'settings',    check: function() { return tenantConfigChecklist && tenantConfigChecklist.brand; } },
+  { id: 'setup-website',  module: 'web',        icon: '\uD83C\uDF10', title: 'Set up your website',           desc: 'Configure your homepage and publish your online storefront.',             route: 'website',     check: function() { return window._nextStepsCache && window._nextStepsCache.hasWebsite; } },
+  { id: 'setup-square',   module: 'sell',       icon: '\uD83D\uDCB3', title: 'Connect Square for payments',   desc: 'Link your Square account to accept payments and manage orders.',          route: 'settings',    check: function() { return tenantConfigChecklist && tenantConfigChecklist.square; } },
+  { id: 'first-show',     module: 'show',       icon: '\uD83C\uDFAA', title: 'Find your first show',          desc: 'Search for craft fairs and events in your area.',                         route: 'show-find',   check: function() { return false; } },
+  { id: 'show-light-profile', module: 'show-light', icon: '\u2728', title: 'Build your vendor profile',     desc: 'Add your bio, photos, and product highlights for show applications.',     route: 'show-light-profile', check: function() { return false; } },
+  { id: 'create-event',   module: 'events',     icon: '\uD83C\uDFAB', title: 'Create your first show',        desc: 'Set up a show with booths, vendors, and applications.',                   route: 'events-shows', check: function() { return false; } },
+  { id: 'add-job',        module: 'make',       icon: '\uD83D\uDD25', title: 'Start a production job',        desc: 'Track what you\'re making and when it needs to be done.',                 route: 'jobs',        check: function() { return false; } },
+  { id: 'setup-shipping',  module: 'ship',      icon: '\uD83D\uDCE6', title: 'Set up shipping rates',         desc: 'Configure shipping methods and rates for your orders.',                   route: 'settings',    check: function() { return tenantConfigChecklist && tenantConfigChecklist.shippingRates; } },
+  { id: 'social-post',    module: 'market',     icon: '\uD83D\uDCE3', title: 'Create your first post',        desc: 'Draft a social media post or blog entry to promote your work.',           route: 'social',      check: function() { return false; } }
+];
+
+function renderGuidedNextSteps() {
+  var container = document.getElementById('guidedNextSteps');
+  if (!container) return;
+
+  var sub = getTenantSubscription();
+  var activeModules = sub.modules || [];
+
+  // Filter steps to active modules (null module = always shown)
+  var steps = NEXT_STEP_DEFINITIONS.filter(function(step) {
+    if (step.module === null) return true;
+    return activeModules.indexOf(step.module) >= 0;
+  });
+
+  // Split into done and todo
+  var todo = steps.filter(function(s) { return !s.check(); });
+  var done = steps.filter(function(s) { return s.check(); });
+
+  // If all done, hide the widget
+  if (todo.length === 0) {
+    container.style.display = 'none';
+    return;
+  }
+
+  container.style.display = '';
+  var tierName = (TIER_CONFIG[sub.tier] || {}).name || sub.tier;
+  var total = steps.length;
+  var completed = done.length;
+
+  var h = '<div style="background:var(--cream, #FAF6F0);border:1px solid var(--cream-dark, #F0E8DB);border-radius:12px;padding:20px 24px;margin-bottom:20px;">';
+
+  // Header with progress
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
+  h += '<div>';
+  h += '<h3 style="font-family:\'Cormorant Garamond\', serif;font-size:1.3rem;font-weight:700;color:var(--charcoal, #1a1a1a);margin:0;">Get Started</h3>';
+  h += '<p style="font-size:0.85rem;color:var(--warm-gray, #6B6560);margin:4px 0 0;">' + completed + ' of ' + total + ' steps done</p>';
+  h += '</div>';
+  if (completed > 0) {
+    h += '<div style="font-size:0.8rem;color:var(--teal, #2A7C6F);font-weight:600;">' + Math.round(completed / total * 100) + '% complete</div>';
+  }
+  h += '</div>';
+
+  // Progress bar
+  var pct = total > 0 ? (completed / total * 100) : 0;
+  h += '<div style="background:var(--cream-dark, #F0E8DB);border-radius:6px;height:6px;margin-bottom:16px;overflow:hidden;">';
+  h += '<div style="background:var(--teal, #2A7C6F);height:100%;width:' + pct + '%;border-radius:6px;transition:width 0.3s;"></div>';
+  h += '</div>';
+
+  // Next steps (show up to 3 todos)
+  var shown = todo.slice(0, 3);
+  shown.forEach(function(step) {
+    h += '<div onclick="navigateTo(\'' + step.route + '\')" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;cursor:pointer;transition:background 0.15s;margin-bottom:4px;" onmouseover="this.style.background=\'var(--cream-dark, #F0E8DB)\'" onmouseout="this.style.background=\'transparent\'">';
+    h += '<span style="font-size:1.4rem;flex-shrink:0;">' + step.icon + '</span>';
+    h += '<div style="flex:1;min-width:0;">';
+    h += '<div style="font-size:0.95rem;font-weight:600;color:var(--charcoal, #1a1a1a);">' + esc(step.title) + '</div>';
+    h += '<div style="font-size:0.82rem;color:var(--warm-gray, #6B6560);">' + esc(step.desc) + '</div>';
+    h += '</div>';
+    h += '<span style="color:var(--amber, #C4853C);font-size:1.1rem;flex-shrink:0;">&#8594;</span>';
+    h += '</div>';
+  });
+
+  if (todo.length > 3) {
+    h += '<div style="text-align:center;padding-top:8px;font-size:0.82rem;color:var(--warm-gray, #6B6560);">+ ' + (todo.length - 3) + ' more step' + (todo.length - 3 !== 1 ? 's' : '') + '</div>';
+  }
+
+  h += '</div>';
+  container.innerHTML = h;
+}
+
+// Cache for async checks (products, website)
+window._nextStepsCache = { hasProducts: false, hasWebsite: false };
+
+async function loadNextStepsCache() {
+  try {
+    // Check if products exist
+    var prodSnap = await MastDB.products.ref().limitToFirst(1).once('value');
+    window._nextStepsCache.hasProducts = prodSnap.exists();
+  } catch (e) { /* ignore */ }
+  try {
+    // Check if website is configured
+    var webSnap = await MastDB.config.ref('websiteConfig/published').once('value');
+    window._nextStepsCache.hasWebsite = !!webSnap.val();
+  } catch (e) { /* ignore */ }
 }
 
 // Feature gating map: route → { feature, title, message, settingsRoute }
