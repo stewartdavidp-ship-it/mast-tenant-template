@@ -165,9 +165,9 @@
     var boothPins = data.boothPins || {};
     var hasFloorPlan = show.floorPlanUrl && Object.keys(boothPins).length > 0;
 
-    // Auto-switch away from pinned/coupons tab if empty
-    if (activeTab === 'pinned' && pinnedVendors.length === 0) activeTab = 'vendors';
-    if (activeTab === 'coupons' && savedCoupons.length === 0) activeTab = 'vendors';
+    // Guard: if active tab requires a feature that isn't available, fall back to vendors
+    if (activeTab === 'hunt' && !data.huntEnabled) activeTab = 'vendors';
+    if (activeTab === 'map' && !hasFloorPlan) activeTab = 'vendors';
 
     // Build categories and tags
     var catMap = {};
@@ -210,14 +210,14 @@
 
     var pinned = vendors.filter(function(v) { return pinnedVendors.indexOf(v.id) >= 0; });
 
-    // Build tabs
-    var tabs = [
-      { id: 'vendors', label: 'Vendors (' + vendors.length + ')' }
+    // Bottom nav items — order: Vendors, Map, Pinned, Hunt, Coupons
+    var navItems = [
+      { id: 'vendors', icon: '🏪', label: 'Vendors', badge: 0, badgeClass: '', dimmed: false },
+      { id: 'map',     icon: '🗺️', label: 'Map',     badge: 0, badgeClass: '', dimmed: !hasFloorPlan },
+      { id: 'pinned',  icon: '📌', label: 'Pinned',  badge: pinnedVendors.length, badgeClass: 'amber', dimmed: false },
+      { id: 'hunt',    icon: '🔍', label: 'Hunt',    badge: 0, badgeClass: '', dimmed: !data.huntEnabled },
+      { id: 'coupons', icon: '🎟️', label: 'Coupons', badge: savedCoupons.length, badgeClass: 'amber', dimmed: false }
     ];
-    if (pinnedVendors.length > 0) tabs.push({ id: 'pinned', label: '\ud83d\udccc Pinned (' + pinnedVendors.length + ')' });
-    if (savedCoupons.length > 0) tabs.push({ id: 'coupons', label: '\ud83c\udfab Coupons (' + savedCoupons.length + ')' });
-    if (data.huntEnabled) tabs.push({ id: 'hunt', label: '\ud83d\udd0d Hunt' });
-    if (hasFloorPlan) tabs.push({ id: 'map', label: 'Map' });
 
     var html = '';
 
@@ -260,12 +260,20 @@
     }
     html += '</div></div>';
 
-    // ── Tabs ─────────────────────────────────────────────────────
-    html += '<div class="tabs"><div class="tabs-inner">';
-    tabs.forEach(function(t) {
-      html += '<button class="tab-btn' + (activeTab === t.id ? ' active' : '') + '" onclick="setTab(\'' + t.id + '\')">' + esc(t.label) + '</button>';
+    // ── Bottom Nav ───────────────────────────────────────────────
+    html += '<nav class="bottom-nav">';
+    navItems.forEach(function(item) {
+      var cls = 'bnav-item' + (activeTab === item.id ? ' active' : '') + (item.dimmed ? ' dimmed' : '');
+      var clickAttr = item.dimmed ? '' : ' onclick="setTab(\'' + item.id + '\')"';
+      html += '<button class="' + cls + '"' + clickAttr + '>';
+      html += '<span class="bnav-icon">' + item.icon + '</span>';
+      if (item.badge > 0) {
+        html += '<span class="bnav-badge' + (item.badgeClass ? ' ' + item.badgeClass : '') + '">' + item.badge + '</span>';
+      }
+      html += '<span class="bnav-label">' + esc(item.label) + '</span>';
+      html += '</button>';
     });
-    html += '</div></div>';
+    html += '</nav>';
 
     // ── Content ──────────────────────────────────────────────────
     html += '<div class="content">';
