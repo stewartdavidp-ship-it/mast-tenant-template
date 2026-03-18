@@ -1164,8 +1164,6 @@
     photos.forEach(function(p, idx) {
       var assigned = slImageAssignments[idx];
       if (!assigned || assigned === '__profile_booth__') return;
-      var slotLower = (p.slot || '').toLowerCase();
-      if (slotLower.indexOf('booth') >= 0) return;
       var img = (imageLibrary || {})[assigned];
       if (!img) return;
       hasProductDesc = true;
