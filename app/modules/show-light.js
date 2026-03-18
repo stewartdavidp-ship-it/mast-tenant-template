@@ -746,7 +746,7 @@
 
     // Header with back button
     h += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">';
-    h += '<button onclick="slApplyStep = 0; slCurrentShowId = null; renderApply(document.getElementById(\'slContent\'));" style="background:none;border:none;cursor:pointer;font-size:1.2rem;color:var(--warm-gray);">←</button>';
+    h += '<button onclick="slBackToShowSelect();" style="background:none;border:none;cursor:pointer;font-size:1.2rem;color:var(--warm-gray);">←</button>';
     h += '<div><span style="font-weight:600;font-size:1.1rem;">' + esc(show.name || 'Show') + '</span>';
     if (show.deadline) h += '<span style="font-size:0.8rem;color:var(--amber);margin-left:8px;">Deadline: ' + esc(show.deadline) + '</span>';
     h += '</div></div>';
@@ -796,7 +796,7 @@
         if (slParsedRequirements.fees) h += '<div><strong>Fees:</strong> ' + esc(slParsedRequirements.fees) + '</div>';
         if (slParsedRequirements.deadline) h += '<div><strong>Deadline:</strong> ' + esc(slParsedRequirements.deadline) + '</div>';
         h += '</div></div>';
-        h += '<button class="btn btn-primary" onclick="slApplyStep = 2; renderApplyBuilder(document.getElementById(\'slContent\'));">Continue to Auto-Map →</button>';
+        h += '<button class="btn btn-primary" onclick="slGoToStep(2);">Continue to Auto-Map →</button>';
       } else {
         h += '<div style="display:flex;gap:8px;align-items:center;">';
         h += '<button class="btn btn-primary" id="slFetchBtn" onclick="slFetchAndParse()">Fetch & Parse with AI</button>';
@@ -953,8 +953,8 @@
     });
 
     h += '<div style="display:flex;gap:8px;margin-top:16px;">';
-    h += '<button class="btn btn-secondary" onclick="slApplyStep = 1; renderApplyBuilder(document.getElementById(\'slContent\'));">← Back</button>';
-    h += '<button class="btn btn-primary" onclick="slSaveMapping(); slApplyStep = 3; renderApplyBuilder(document.getElementById(\'slContent\'));">Continue to Gap Analysis →</button>';
+    h += '<button class="btn btn-secondary" onclick="slGoToStep(1);">← Back</button>';
+    h += '<button class="btn btn-primary" onclick="slSaveMapping(); slGoToStep(3);">Continue to Gap Analysis →</button>';
     h += '</div>';
     h += '</div>';
 
@@ -1032,8 +1032,8 @@
     }
 
     h += '<div style="display:flex;gap:8px;margin-top:16px;">';
-    h += '<button class="btn btn-secondary" onclick="slApplyStep = 2; renderApplyBuilder(document.getElementById(\'slContent\'));">← Back</button>';
-    h += '<button class="btn btn-primary" onclick="slApplyStep = 4; renderApplyBuilder(document.getElementById(\'slContent\'));">Continue to Images →</button>';
+    h += '<button class="btn btn-secondary" onclick="slGoToStep(2);">← Back</button>';
+    h += '<button class="btn btn-primary" onclick="slGoToStep(4);">Continue to Images →</button>';
     h += '</div>';
     h += '</div>';
 
@@ -1075,8 +1075,8 @@
     }
 
     h += '<div style="display:flex;gap:8px;margin-top:16px;">';
-    h += '<button class="btn btn-secondary" onclick="slApplyStep = 3; renderApplyBuilder(document.getElementById(\'slContent\'));">← Back</button>';
-    h += '<button class="btn btn-primary" onclick="slApplyStep = 5; renderApplyBuilder(document.getElementById(\'slContent\'));">Preview Package →</button>';
+    h += '<button class="btn btn-secondary" onclick="slGoToStep(3);">← Back</button>';
+    h += '<button class="btn btn-primary" onclick="slGoToStep(5);">Preview Package →</button>';
     h += '</div>';
     h += '</div>';
 
@@ -1185,7 +1185,7 @@
     }
 
     h += '<div style="display:flex;gap:8px;margin-top:16px;">';
-    h += '<button class="btn btn-secondary" onclick="slApplyStep = 4; renderApplyBuilder(document.getElementById(\'slContent\'));">← Back</button>';
+    h += '<button class="btn btn-secondary" onclick="slGoToStep(4);">← Back</button>';
     h += '<button class="btn btn-primary" onclick="slSaveApplication()">Save Application Package</button>';
     h += '</div>';
     h += '</div>';
@@ -1256,6 +1256,8 @@
   window.slPickImageForSlot = slPickImageForSlot;
   window.slAssignImage = slAssignImage;
   window.slSaveApplication = slSaveApplication;
+  window.slGoToStep = function(step) { slApplyStep = step; renderApplyBuilder(document.getElementById('slContent')); };
+  window.slBackToShowSelect = function() { slApplyStep = 0; slCurrentShowId = null; renderApply(document.getElementById('slContent')); };
 
   // ============================================================
   // Register with MastAdmin
