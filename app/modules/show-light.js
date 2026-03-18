@@ -1370,37 +1370,75 @@
   window.slSaveSlotDesc = slSaveSlotDesc;
   window.slLinkProduct = slLinkProduct;
 
-  // --- Step 5: Preview & Save ---
+  // --- Step 5: Application Assistant ---
+
+  var slCopyIdx = -1; // tracks which field was last copied
 
   function renderApplyPreview(el, show) {
     var reqs = slParsedRequirements || {};
     var fields = reqs.fields || [];
     var photos = reqs.photos || [];
     var profile = slProfile || {};
+    var appUrl = show.applicationUrl || '';
 
     var h = '<div class="sl-card">';
-    h += '<div class="sl-card-header"><span class="sl-card-title">Step 5: Application Package Preview</span></div>';
+    h += '<div class="sl-card-header"><span class="sl-card-title">Step 5: Application Assistant</span></div>';
 
-    h += '<div style="background:var(--charcoal, #2A2A2A);color:white;padding:16px;border-radius:8px;margin-bottom:16px;">';
+    // Show header
+    h += '<div style="background:var(--charcoal, #2A2A2A);color:white;padding:16px;border-radius:8px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;">';
+    h += '<div>';
     h += '<div style="font-family:\'Cormorant Garamond\', serif;font-size:1.3rem;font-weight:600;">' + esc(show.name || 'Show') + '</div>';
     if (show.date) h += '<div style="font-size:0.85rem;opacity:0.8;">' + esc(show.date) + '</div>';
     h += '</div>';
+    if (appUrl) {
+      h += '<button class="btn btn-primary" onclick="slLaunchApplication()" style="white-space:nowrap;">Launch Application</button>';
+    }
+    h += '</div>';
 
+    if (appUrl) {
+      h += '<p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">Copy each field value below and paste it into the application form. Fields are in application order.</p>';
+    }
+
+    // Sequential field list with copy buttons
     h += '<div style="margin-bottom:20px;">';
-    h += '<div style="font-weight:600;margin-bottom:8px;font-size:0.9rem;">Application Fields</div>';
-    fields.forEach(function(f) {
+    h += '<div style="font-weight:600;margin-bottom:12px;font-size:0.9rem;">Application Fields</div>';
+    fields.forEach(function(f, idx) {
       var m = slFieldMapping[f.name] || {};
-      h += '<div style="margin-bottom:8px;">';
-      h += '<div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;">' + esc(f.name) + '</div>';
-      h += '<div style="font-size:0.9rem;">' + (m.value ? esc(m.value) : '<span style="color:var(--danger);">Missing</span>') + '</div>';
+      var val = m.value || '';
+      var isCurrent = idx === slCopyIdx;
+      var isCopied = idx < slCopyIdx;
+      var borderColor = isCurrent ? 'var(--amber)' : (isCopied ? 'var(--sage)' : 'rgba(255,255,255,0.1)');
+      var bgColor = isCurrent ? 'rgba(196,164,105,0.08)' : 'rgba(255,255,255,0.02)';
+
+      h += '<div id="slField_' + idx + '" style="padding:12px 16px;border:1px solid ' + borderColor + ';border-radius:8px;margin-bottom:8px;background:' + bgColor + ';transition:all 0.2s;">';
+      h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">';
+      h += '<div style="display:flex;align-items:center;gap:8px;">';
+      if (isCopied) {
+        h += '<span style="color:var(--sage);font-size:0.8rem;">&#10003;</span>';
+      } else {
+        h += '<span style="color:var(--warm-gray);font-size:0.75rem;font-weight:600;">' + (idx + 1) + '</span>';
+      }
+      h += '<span style="font-size:0.8rem;color:var(--warm-gray);text-transform:uppercase;font-weight:500;">' + esc(f.name) + '</span>';
+      if (f.required) h += '<span style="color:var(--danger);font-size:0.65rem;">required</span>';
+      h += '</div>';
+      if (val) {
+        h += '<button onclick="slCopyField(' + idx + ')" style="background:' + (isCurrent ? 'var(--amber)' : 'rgba(255,255,255,0.1)') + ';color:' + (isCurrent ? 'white' : 'var(--cream)') + ';border:none;border-radius:6px;padding:4px 12px;font-size:0.75rem;cursor:pointer;font-weight:600;">' + (isCopied ? 'Copied' : 'Copy') + '</button>';
+      }
+      h += '</div>';
+      if (val) {
+        h += '<div style="font-size:0.9rem;color:var(--cream);white-space:pre-wrap;line-height:1.4;">' + esc(val) + '</div>';
+      } else {
+        h += '<div style="font-size:0.85rem;color:var(--danger);font-style:italic;">No value — fill in manually</div>';
+      }
       h += '</div>';
     });
     h += '</div>';
 
+    // Photo downloads
     if (photos.length > 0) {
       h += '<div style="margin-bottom:20px;">';
-      h += '<div style="font-weight:600;margin-bottom:8px;font-size:0.9rem;">Images</div>';
-      h += '<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(120px, 1fr));gap:8px;">';
+      h += '<div style="font-weight:600;margin-bottom:12px;font-size:0.9rem;">Photos to Upload</div>';
+      h += '<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(160px, 1fr));gap:12px;">';
       photos.forEach(function(p, idx) {
         var assigned = slImageAssignments[idx];
         var img = null;
@@ -1409,35 +1447,102 @@
         } else if (assigned) {
           img = (imageLibrary || {})[assigned];
         }
-        h += '<div style="text-align:center;">';
-        if (img) {
-          h += '<img src="' + esc(img.url || '') + '" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;">';
+        h += '<div style="text-align:center;padding:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.1);border-radius:8px;">';
+        if (img && img.url) {
+          h += '<img src="' + esc(img.url) + '" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;margin-bottom:8px;">';
+          h += '<div style="font-size:0.75rem;color:var(--warm-gray);margin-bottom:6px;">' + esc(p.slot || 'Photo ' + (idx + 1)) + '</div>';
+          h += '<a href="' + esc(img.url) + '" download target="_blank" style="display:inline-block;background:rgba(255,255,255,0.1);color:var(--cream);border-radius:6px;padding:4px 12px;font-size:0.75rem;text-decoration:none;cursor:pointer;">Download</a>';
         } else {
-          h += '<div style="width:100%;aspect-ratio:1;background:var(--cream-dark);border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--warm-gray);">—</div>';
+          h += '<div style="width:100%;aspect-ratio:1;background:var(--cream-dark);border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--warm-gray);margin-bottom:8px;">—</div>';
+          h += '<div style="font-size:0.75rem;color:var(--danger);">' + esc(p.slot || 'Photo') + ' — not assigned</div>';
         }
-        h += '<div style="font-size:0.7rem;color:var(--warm-gray);margin-top:4px;">' + esc(p.slot || 'Photo ' + (idx + 1)) + '</div>';
         h += '</div>';
       });
       h += '</div></div>';
     }
 
+    // Special requirements reminder
     if (reqs.specialRequirements && reqs.specialRequirements.length > 0) {
-      h += '<div style="margin-bottom:16px;">';
-      h += '<div style="font-weight:600;margin-bottom:8px;font-size:0.9rem;">Special Requirements</div>';
+      h += '<div style="margin-bottom:16px;padding:12px;background:rgba(196,164,105,0.08);border:1px solid rgba(196,164,105,0.2);border-radius:8px;">';
+      h += '<div style="font-weight:600;margin-bottom:8px;font-size:0.9rem;color:var(--amber);">Special Requirements</div>';
       reqs.specialRequirements.forEach(function(r) {
         h += '<div style="font-size:0.85rem;padding:4px 0;">• ' + esc(r) + '</div>';
       });
       h += '</div>';
     }
 
-    h += '<div style="display:flex;gap:8px;margin-top:16px;">';
-    h += '<button class="btn btn-secondary" onclick="slGoToStep(4);">← Back</button>'; // back to gaps
-    h += '<button class="btn btn-primary" onclick="slSaveApplication()">Save Application Package</button>';
+    // Fees & deadline reminder
+    if (reqs.fees || reqs.deadline) {
+      h += '<div style="display:flex;gap:16px;margin-bottom:16px;font-size:0.85rem;">';
+      if (reqs.fees) h += '<div><span style="color:var(--warm-gray);">Fees:</span> ' + esc(reqs.fees) + '</div>';
+      if (reqs.deadline) h += '<div><span style="color:var(--warm-gray);">Deadline:</span> ' + esc(reqs.deadline) + '</div>';
+      h += '</div>';
+    }
+
+    h += '<div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;">';
+    h += '<button class="btn btn-secondary" onclick="slGoToStep(4);">← Back</button>';
+    h += '<button class="btn btn-primary" onclick="slSaveApplication()">Save Package</button>';
+    if (appUrl) {
+      h += '<button class="btn" onclick="slLaunchApplication()" style="background:var(--sage);color:white;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;">Launch Application</button>';
+    }
     h += '</div>';
     h += '</div>';
 
     el.innerHTML = h;
+
+    // Auto-highlight first field
+    if (slCopyIdx < 0) slCopyIdx = 0;
   }
+
+  function slCopyField(idx) {
+    var reqs = slParsedRequirements || {};
+    var fields = reqs.fields || [];
+    var f = fields[idx];
+    if (!f) return;
+    var m = slFieldMapping[f.name] || {};
+    var val = m.value || '';
+    if (!val) return;
+
+    navigator.clipboard.writeText(val).then(function() {
+      slCopyIdx = idx + 1; // advance to next
+      showToast('Copied: ' + f.name);
+      // Re-render to update visual state
+      var show = slShows[slCurrentShowId] || {};
+      renderApplyPreview(document.getElementById('slApplyContent'), show);
+      // Scroll next field into view
+      var nextEl = document.getElementById('slField_' + (idx + 1));
+      if (nextEl) nextEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }).catch(function() {
+      showToast('Copy failed — use manual selection', true);
+    });
+  }
+
+  function slLaunchApplication() {
+    var show = slShows[slCurrentShowId] || {};
+    var url = show.applicationUrl || '';
+    if (!url) { showToast('No application URL set for this show.', true); return; }
+
+    // Copy first uncompleted field before launching
+    var reqs = slParsedRequirements || {};
+    var fields = reqs.fields || [];
+    var firstIdx = Math.max(0, slCopyIdx);
+    var f = fields[firstIdx];
+    if (f) {
+      var m = slFieldMapping[f.name] || {};
+      if (m.value) {
+        navigator.clipboard.writeText(m.value).then(function() {
+          slCopyIdx = firstIdx + 1;
+          showToast('Copied "' + f.name + '" — paste it in the application');
+          var show2 = slShows[slCurrentShowId] || {};
+          renderApplyPreview(document.getElementById('slApplyContent'), show2);
+        }).catch(function() {});
+      }
+    }
+    window.open(url, '_blank');
+  }
+
+  window.slCopyField = slCopyField;
+  window.slLaunchApplication = slLaunchApplication;
 
   async function slSaveApplication() {
     var show = slShows[slCurrentShowId] || {};
