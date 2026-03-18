@@ -575,7 +575,7 @@
   // ============================================================
 
   function evShowQRSrc(url) {
-    return 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&color=1e2d3d&data=' + encodeURIComponent(url);
+    return 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(url);
   }
 
   function copyShowUrl(showId) {
