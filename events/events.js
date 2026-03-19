@@ -257,6 +257,9 @@ var floorPlanState = { placingBoothId: null, imgLoaded: false };
 // ============================================================
 
 window.TENANT_READY.then(function() {
+  if (window.TENANT_FIREBASE_CONFIG && window.TENANT_FIREBASE_CONFIG.cloudFunctionsBase) {
+    FUNCTIONS_BASE = window.TENANT_FIREBASE_CONFIG.cloudFunctionsBase;
+  }
   TENANT_ID_LOCAL = TENANT_ID;
   firebaseApp = firebase.initializeApp(TENANT_FIREBASE_CONFIG, 'events-app');
   db = firebaseApp.database();

@@ -1061,5 +1061,10 @@
   // BOOT
   // ══════════════════════════════════════════════════════════════════
 
-  window.TENANT_READY ? window.TENANT_READY.then(init) : init();
+  window.TENANT_READY ? window.TENANT_READY.then(function() {
+    if (window.TENANT_FIREBASE_CONFIG && window.TENANT_FIREBASE_CONFIG.cloudFunctionsBase) {
+      FUNCTIONS_BASE = window.TENANT_FIREBASE_CONFIG.cloudFunctionsBase;
+    }
+    init();
+  }) : init();
 })();
