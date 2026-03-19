@@ -9054,10 +9054,25 @@ async function resolveTenant(uid) {
     }
     if (window.TENANT_ID && tenantMap[window.TENANT_ID]) return window.TENANT_ID;
 
-    // Fallback: extract tenantId directly from hostname patterns
+    // Fallback: extract tenantId directly from hostname patterns.
+    // The tenant may not be in userTenantMap yet (first visit after provisioning).
+    // The hostname is authoritative — if you're on mast-foo.web.app, you want tenant "foo".
     var host = window.location.hostname;
     var hostMatch = host.match(/^mast-([a-z0-9-]+)\.web\.app$/) || host.match(/^([a-z0-9-]+)\.runmast\.com$/);
-    if (hostMatch && tenantMap[hostMatch[1]]) return hostMatch[1];
+    if (hostMatch) {
+      var hostTenant = hostMatch[1];
+      // Verify this tenant exists in the platform registry before using it
+      try {
+        var pcSnap = await db.ref('mast-platform/tenants/' + hostTenant + '/publicConfig/name').once('value');
+        if (pcSnap.val()) {
+          // Tenant exists — use it. Add to userTenantMap in the background.
+          if (!tenantMap[hostTenant]) {
+            db.ref('mast-platform/userTenantMap/' + uid + '/' + hostTenant).set(true).catch(function() {});
+          }
+          return hostTenant;
+        }
+      } catch (e) { /* tenant doesn't exist or no access — fall through */ }
+    }
 
     return tenantIds[0];
   } catch (err) {
