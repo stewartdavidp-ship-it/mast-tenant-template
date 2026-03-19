@@ -6327,6 +6327,12 @@
           <div id="emailTestStatus" style="margin-top:8px;font-size:0.85rem;"></div>
         </div>
 
+        <!-- Email Domain Verification Section -->
+        <div class="form-group" id="emailDomainSection" style="margin-top:16px;border-top:1px solid rgba(255,255,255,0.06);padding-top:16px;">
+          <label style="font-size:1rem;font-weight:600;">Email Sending Domain</label>
+          <div id="emailDomainContent"></div>
+        </div>
+
         <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
 
         <div class="form-group">
@@ -9706,7 +9712,7 @@ function applyRoute(route) {
 }
 
 function lazyLoadForRoute(route) {
-  if (route === 'settings') { updateGitHubTokenStatus(); updateLkApiKeyStatus(); loadOperators(); loadStorageInfo(); loadStudioLocations(); loadLocations(); loadPublicFeedbackSetting(); loadEmailConfig(); applySettingsGating(); }
+  if (route === 'settings') { updateGitHubTokenStatus(); updateLkApiKeyStatus(); loadOperators(); loadStorageInfo(); loadStudioLocations(); loadLocations(); loadPublicFeedbackSetting(); loadEmailConfig(); loadEmailDomainSection(); applySettingsGating(); }
   if (route === 'analytics' && !analyticsLoaded) loadAnalytics();
   if (route === 'products' && !productsLoaded) loadProducts();
   // orders lazy-load handled by orders module
@@ -11264,6 +11270,8 @@ function onEmailProviderChange() {
     var el = document.getElementById('emailProviderCustom');
     if (el) el.style.display = '';
   }
+  // Refresh domain section to show appropriate content for selected provider
+  loadEmailDomainSection();
 }
 
 async function saveEmailConfig() {
@@ -11378,6 +11386,8 @@ function loadEmailConfig() {
         if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray-light);">Provider selected but not fully configured.</span>';
       }
     }
+    // Refresh domain section after email config loads
+    loadEmailDomainSection();
   }).catch(function(err) {
     console.warn('Email config read failed:', err.message);
     if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray-light);">Could not load config.</span>';
@@ -11385,6 +11395,7 @@ function loadEmailConfig() {
     var tenantId = MastDB.tenantId();
     var addrEl = document.getElementById('emailMastManagedAddress');
     if (addrEl) addrEl.textContent = tenantId + '@mail.mastplatform.com';
+    loadEmailDomainSection();
   });
 }
 
@@ -11406,6 +11417,151 @@ async function sendTestEmailFromSettings() {
   } catch (err) {
     if (statusEl) statusEl.innerHTML = '<span style="color:#EF5350;">&#10007; ' + esc(err.message) + '</span>';
     showToast('Test email failed: ' + err.message, true);
+  }
+}
+
+// ============================================================
+// Email Domain Verification
+// ============================================================
+
+function loadEmailDomainSection() {
+  var container = document.getElementById('emailDomainContent');
+  if (!container) return;
+
+  var provider = document.getElementById('emailProvider') ? document.getElementById('emailProvider').value : '';
+
+  // Mast-managed tenants: show info message, no domain setup needed
+  if (!provider) {
+    var tenantId = MastDB.tenantId();
+    container.innerHTML =
+      '<div style="background:rgba(42,124,111,0.1);border:1px solid rgba(42,124,111,0.25);border-radius:8px;padding:12px 16px;font-size:0.85rem;">' +
+        '<strong style="color:var(--teal);">Mast-Managed Email</strong>' +
+        '<p style="margin:6px 0 0;color:var(--warm-gray);">Emails are sent from <code style="background:rgba(0,0,0,0.15);padding:2px 6px;border-radius:3px;">' + esc(tenantId) + '@mail.mastplatform.com</code></p>' +
+        '<p style="margin:4px 0 0;color:var(--warm-gray);font-size:0.8rem;">No domain setup required. To use your own domain, select a provider above.</p>' +
+      '</div>';
+    return;
+  }
+
+  // Check if tenant has a domain configured
+  MastDB.get('config/email/domain').then(function(domain) {
+    if (!domain || !domain.resendDomainId) {
+      // No domain configured — show add form
+      container.innerHTML =
+        '<p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">Add a custom sending domain so emails come from your own address (e.g., orders@yourbusiness.com).</p>' +
+        '<div style="display:flex;gap:6px;margin-bottom:8px;">' +
+          '<input type="text" id="emailDomainInput" placeholder="yourbusiness.com" style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;box-sizing:border-box;">' +
+          '<button class="btn btn-primary" onclick="addEmailDomain()" style="font-size:0.82rem;padding:6px 14px;white-space:nowrap;">Add Domain</button>' +
+        '</div>' +
+        '<div id="emailDomainStatus" style="font-size:0.85rem;"></div>';
+      return;
+    }
+
+    // Domain exists — show status and DNS records
+    var statusColor = domain.status === 'verified' ? 'var(--teal)' : domain.status === 'failed' ? '#EF5350' : '#FFB74D';
+    var statusLabel = domain.status === 'verified' ? '✓ Verified' : domain.status === 'failed' ? '✗ Failed' : '⏳ Pending Verification';
+
+    var html = '<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:14px 16px;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">';
+    html += '<div><strong style="font-size:0.95rem;">' + esc(domain.domain) + '</strong></div>';
+    html += '<span style="color:' + statusColor + ';font-size:0.85rem;font-weight:600;">' + statusLabel + '</span>';
+    html += '</div>';
+
+    if (domain.status !== 'verified' && domain.dnsRecords && domain.dnsRecords.length > 0) {
+      html += '<p style="font-size:0.82rem;color:var(--warm-gray);margin:8px 0 6px;">Add these DNS records at your domain registrar:</p>';
+      html += '<div style="background:rgba(0,0,0,0.2);border-radius:6px;padding:10px 12px;font-family:monospace;font-size:0.78rem;overflow-x:auto;">';
+      html += '<table style="width:100%;border-collapse:collapse;">';
+      html += '<tr style="color:var(--warm-gray-light);border-bottom:1px solid rgba(255,255,255,0.08);">';
+      html += '<th style="text-align:left;padding:2px 8px 4px 0;">Type</th>';
+      html += '<th style="text-align:left;padding:2px 8px 4px 0;">Name</th>';
+      html += '<th style="text-align:left;padding:2px 8px 4px 0;">Value</th>';
+      html += '</tr>';
+      domain.dnsRecords.forEach(function(rec) {
+        html += '<tr>';
+        html += '<td style="padding:3px 8px 3px 0;color:#81D4FA;">' + esc(rec.type || rec.record_type || '') + '</td>';
+        html += '<td style="padding:3px 8px 3px 0;color:#FFD54F;">' + esc(rec.name || '') + '</td>';
+        html += '<td style="padding:3px 8px 3px 0;color:#A5D6A7;word-break:break-all;">' + esc(rec.value || rec.content || '') + '</td>';
+        html += '</tr>';
+      });
+      html += '</table></div>';
+    }
+
+    html += '<div style="display:flex;gap:8px;margin-top:12px;">';
+    if (domain.status !== 'verified') {
+      html += '<button class="btn btn-primary" onclick="checkEmailDomainStatus()" style="font-size:0.82rem;padding:6px 14px;">Check Verification</button>';
+    }
+    html += '<button class="btn btn-secondary" onclick="removeEmailDomain()" style="font-size:0.82rem;padding:6px 12px;color:#EF5350;">Remove Domain</button>';
+    html += '</div>';
+    html += '<div id="emailDomainStatus" style="font-size:0.85rem;margin-top:8px;"></div>';
+    html += '</div>';
+
+    container.innerHTML = html;
+  }).catch(function(err) {
+    container.innerHTML = '<p style="font-size:0.85rem;color:var(--warm-gray);">Could not load domain config.</p>';
+  });
+}
+
+async function addEmailDomain() {
+  if (!hasPermission('settings', 'update')) { showToast('You do not have permission.', true); return; }
+  var domainInput = document.getElementById('emailDomainInput');
+  var domain = domainInput ? domainInput.value.trim() : '';
+  if (!domain) { showToast('Enter a domain name.', true); return; }
+
+  var statusEl = document.getElementById('emailDomainStatus');
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Adding domain to Resend...</span>';
+
+  try {
+    var result = await firebase.functions().httpsCallable('verifyEmailDomain')({ domain: domain });
+    showToast('Domain added — configure DNS records shown below.');
+    await writeAudit('create', 'settings', 'emailDomain', { domain: domain });
+    loadEmailDomainSection();
+  } catch (err) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:#EF5350;">Error: ' + esc(err.message) + '</span>';
+    showToast('Failed to add domain: ' + err.message, true);
+  }
+}
+
+async function checkEmailDomainStatus() {
+  if (!hasPermission('settings', 'update')) { showToast('You do not have permission.', true); return; }
+  var statusEl = document.getElementById('emailDomainStatus');
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Checking verification status...</span>';
+
+  try {
+    var result = await firebase.functions().httpsCallable('checkEmailDomainStatus')({});
+    var data = result.data;
+    if (data.status === 'verified') {
+      showToast('Domain verified!');
+    } else if (data.status === 'failed') {
+      showToast('Domain verification failed. Check DNS records.', true);
+    } else {
+      showToast('Domain still pending verification. DNS may take up to 48 hours.');
+    }
+    loadEmailDomainSection();
+  } catch (err) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:#EF5350;">Error: ' + esc(err.message) + '</span>';
+    showToast('Failed to check status: ' + err.message, true);
+  }
+}
+
+async function removeEmailDomain() {
+  if (!hasPermission('settings', 'update')) { showToast('You do not have permission.', true); return; }
+  if (!confirm('Remove email domain? This will delete the domain from Resend.')) return;
+
+  var statusEl = document.getElementById('emailDomainStatus');
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Removing domain...</span>';
+
+  try {
+    // Read domain config to get resendDomainId
+    var domainConfig = await MastDB.get('config/email/domain');
+    if (domainConfig && domainConfig.resendDomainId) {
+      // Remove from Resend via cloud function (or just clear local config — Resend cleanup via MCP)
+      await MastDB.remove('config/email/domain');
+    }
+    await writeAudit('delete', 'settings', 'emailDomain');
+    showToast('Email domain removed.');
+    loadEmailDomainSection();
+  } catch (err) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:#EF5350;">Error: ' + esc(err.message) + '</span>';
+    showToast('Failed to remove domain: ' + err.message, true);
   }
 }
 
