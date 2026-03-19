@@ -8428,15 +8428,13 @@ async function confirmModuleSelection() {
       updatedAt: new Date().toISOString()
     });
 
-    // Update local state
-    _tenantSubscription.selectedModules = state.selected;
-    _tenantSubscription.modules = newModules;
-    _tenantSubscription.needsModuleSelection = false;
+    // Re-fetch subscription from Firebase to ensure local state matches persisted state
+    await loadTenantSubscription();
 
     // Hide modal
     document.getElementById('moduleSelectionOverlay').style.display = 'none';
 
-    // Refresh sidebar gating with new modules
+    // Refresh sidebar gating with fresh subscription data
     applySidebarGating();
     showToast('Modules activated! Your workspace is ready.');
   } catch (err) {
@@ -11509,7 +11507,8 @@ async function wizardComplete() {
 
     showToast('Setup complete! Welcome to your dashboard.');
 
-    // Transition to dashboard
+    // Transition to dashboard — re-fetch subscription to pick up any module changes from wizard/provisioning
+    await loadTenantSubscription();
     document.getElementById('setupWizardScreen').style.display = 'none';
     document.getElementById('header').style.display = 'flex';
     showSidebar();

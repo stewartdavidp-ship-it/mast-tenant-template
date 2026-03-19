@@ -18,9 +18,10 @@ const path = require('path');
 const yaml = require('js-yaml');
 const { GoogleAuth } = require('google-auth-library');
 
-const FIREBASE_DB_URL = 'https://shir-glassworks-default-rtdb.firebaseio.com';
+const FIREBASE_DB_URL = process.env.FIREBASE_DB_URL || 'https://mast-platform-prod-default-rtdb.firebaseio.com';
+const TENANT_ID = process.env.TENANT_ID || 'dev';
 const WORKFLOWS_PATH = path.resolve(__dirname, '..', 'docs', 'workflows.yaml');
-const FIREBASE_PATH = '/shirglassworks/workflows';
+const FIREBASE_PATH = '/' + TENANT_ID + '/workflows';
 
 const DRY_RUN = process.argv.includes('--dry-run');
 

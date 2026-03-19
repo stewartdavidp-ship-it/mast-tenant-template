@@ -1,7 +1,7 @@
 /* =========================================================
    Tenant Shopping Cart Module
    Loaded on all public pages. Provides:
-     - window.ShirCart API (localStorage + Firebase sync)
+     - window.MastCart API (localStorage + Firebase sync)
      - Cart drawer UI (injected into DOM)
      - Cart icon/badge in nav
      - Google auth for cart persistence
@@ -12,7 +12,7 @@
 
   // ── Constants ──
   // These are set lazily in init() after TENANT_READY resolves
-  var STORAGE_KEY = 'shir_cart'; // default; overwritten in init()
+  var STORAGE_KEY = 'mast_cart'; // default; overwritten in init()
   var FIREBASE_CONFIG = {};      // default; overwritten in init()
   var MAX_QTY = 10;
   var MAX_QTY_WHOLESALE = 9999;
@@ -395,7 +395,7 @@
         '<div class="cart-footer-summary" id="cartFooterSummary"></div>' +
         '<div class="cart-footer-actions">' +
           '<button class="cart-checkout-btn" id="cartCheckoutBtn" style="display:none" onclick="if(window.MastCheckout)MastCheckout.start()">Checkout</button>' +
-          '<button class="btn-primary" onclick="ShirCart.closeDrawer()" style="' +
+          '<button class="btn-primary" onclick="MastCart.closeDrawer()" style="' +
             'display:inline-block;padding:12px 28px;background:#C4853C;color:#fff;' +
             'border:none;border-radius:4px;font-family:DM Sans,sans-serif;font-size:0.85rem;' +
             'letter-spacing:0.12em;text-transform:uppercase;cursor:pointer;text-align:center;' +
@@ -629,14 +629,14 @@
       area.innerHTML =
         '<div class="cart-user-info">' +
           'Signed in as <span>' + escHtml(name) + '</span>' +
-          ' &middot; <button onclick="ShirCart.signOut()" style="' +
+          ' &middot; <button onclick="MastCart.signOut()" style="' +
           'background:none;border:none;color:#9B958E;cursor:pointer;font-size:0.78rem;' +
           'font-family:DM Sans,sans-serif;text-decoration:underline;">Sign out</button>' +
         '</div>';
     } else {
       area.innerHTML =
         '<div class="cart-auth-link">' +
-          '<button onclick="ShirCart.signIn()">Sign in to save your cart</button>' +
+          '<button onclick="MastCart.signIn()">Sign in to save your cart</button>' +
         '</div>';
     }
   }
@@ -702,7 +702,7 @@
     return false;
   }
 
-  window.ShirCart = {
+  window.MastCart = {
     getItems: getItems,
     getCount: getCount,
     addItem: addItem,
@@ -719,6 +719,9 @@
     refreshDrawer: function () { renderDrawerItems(); updateBadge(); },
     hasWholesaleItems: hasWholesaleItems
   };
+
+  // Backward-compat alias for existing Shir Glassworks site
+  window.ShirCart = window.MastCart;
 
   // Global auth functions — used by nav onclick handlers across all pages.
   // Centralised here so every page shares the same Firebase Auth instance.

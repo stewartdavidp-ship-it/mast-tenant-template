@@ -1082,10 +1082,10 @@ window.TENANT_READY.then(function() {
     // Get pending order from sessionStorage
     var pendingOrder = null;
     try {
-      var stored = sessionStorage.getItem('shir_pending_order');
+      var stored = sessionStorage.getItem('mast_pending_order');
       if (stored) {
         pendingOrder = JSON.parse(stored);
-        sessionStorage.removeItem('shir_pending_order');
+        sessionStorage.removeItem('mast_pending_order');
       }
     } catch (e) { /* silent */ }
 
@@ -1129,8 +1129,8 @@ window.TENANT_READY.then(function() {
     }
 
     // Clear the cart (in case checkout.js didn't already)
-    if (window.ShirCart && window.ShirCart.clear) {
-      window.ShirCart.clear();
+    if (window.MastCart && window.MastCart.clear) {
+      window.MastCart.clear();
     }
   }
 

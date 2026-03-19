@@ -1289,7 +1289,7 @@
     if (!p) return;
 
     var images = window._productImages || [];
-    ShirCart.addItem({
+    MastCart.addItem({
       pid: p.pid,
       name: p.name,
       price: p.price || '',
@@ -1297,7 +1297,7 @@
       options: Object.assign({}, window._selectedOptions),
       qty: window._productQty || 1
     });
-    ShirCart.showToast(p.name + ' added to cart');
+    MastCart.showToast(p.name + ' added to cart');
   });
 
   // ── Commission Form (sold sculptures) ──

@@ -2,7 +2,7 @@
    Tenant Checkout Module
    Multi-step checkout within the cart drawer.
    Steps: Cart → Address → Shipping → Review → Confirmation
-   Depends on: cart.js (ShirCart), Firebase compat SDK
+   Depends on: cart.js (MastCart), Firebase compat SDK
    ========================================================= */
 (function () {
   'use strict';
@@ -68,7 +68,7 @@
   }
 
   function calcSubtotal() {
-    var items = window.ShirCart.getItems();
+    var items = window.MastCart.getItems();
     var total = 0;
     for (var i = 0; i < items.length; i++) {
       total += parsePrice(items[i].price) * (items[i].qty || 1);
@@ -78,7 +78,7 @@
 
   // ── Firebase helpers ──
   function getDb() {
-    var app = window.ShirCart.getFirebaseApp();
+    var app = window.MastCart.getFirebaseApp();
     return app ? app.database() : null;
   }
 
@@ -118,7 +118,7 @@
   }
 
   function isWholesaleCart() {
-    return window.ShirCart && window.ShirCart.hasWholesaleItems && window.ShirCart.hasWholesaleItems();
+    return window.MastCart && window.MastCart.hasWholesaleItems && window.MastCart.hasWholesaleItems();
   }
 
   function getShippingThreshold() {
@@ -166,7 +166,7 @@
 
   // Ensure we have at least anonymous auth for secure Cloud Function calls
   function ensureAuth() {
-    var app = window.ShirCart.getFirebaseApp();
+    var app = window.MastCart.getFirebaseApp();
     if (!app) return Promise.reject(new Error('Firebase not available'));
     var auth = app.auth();
     if (auth.currentUser) return auth.currentUser.getIdToken();
@@ -176,7 +176,7 @@
   }
 
   function callFunction(name, data, callback) {
-    var app = window.ShirCart.getFirebaseApp();
+    var app = window.MastCart.getFirebaseApp();
     if (!app) { callback({ success: false, error: 'Firebase not available' }); return; }
 
     // Get auth token before calling Cloud Function
@@ -371,16 +371,16 @@
       coEmailEl.addEventListener('change', function () {
         checkoutData.email = this.value.trim();
         try {
-          var existing = JSON.parse(localStorage.getItem('shir_checkout_info') || '{}');
+          var existing = JSON.parse(localStorage.getItem('mast_checkout_info') || '{}');
           existing.email = checkoutData.email;
-          localStorage.setItem('shir_checkout_info', JSON.stringify(existing));
+          localStorage.setItem('mast_checkout_info', JSON.stringify(existing));
         } catch (e) { /* private browsing */ }
       });
     }
 
     // Pre-fill from logged-in user (Google auth)
-    if (window.ShirCart && window.ShirCart.getCurrentUser) {
-      var authUser = window.ShirCart.getCurrentUser();
+    if (window.MastCart && window.MastCart.getCurrentUser) {
+      var authUser = window.MastCart.getCurrentUser();
       if (authUser) {
         if (!checkoutData.email && authUser.email) {
           checkoutData.email = authUser.email;
@@ -399,9 +399,9 @@
           }
         }
         // Load saved address from Firebase customer record
-        if (!authUser.isAnonymous && window.ShirCart.getFirebaseApp) {
+        if (!authUser.isAnonymous && window.MastCart.getFirebaseApp) {
           try {
-            var custDb = window.ShirCart.getFirebaseApp().database();
+            var custDb = window.MastCart.getFirebaseApp().database();
             custDb.ref(TENANT_ID + '/customers/' + authUser.uid + '/address').once('value').then(function(snap) {
               var addr = snap.val();
               if (!addr || !addr.address1) return;
@@ -426,7 +426,7 @@
         // Fetch resale cert from wholesaleAuthorized record
         if (isWholesaleCart() && authUser.email) {
           try {
-            var wsDb = window.ShirCart.getFirebaseApp().database();
+            var wsDb = window.MastCart.getFirebaseApp().database();
             var emailKey = authUser.email.toLowerCase().replace(/\./g, ',');
             wsDb.ref(TENANT_ID + '/admin/wholesaleAuthorized/' + emailKey + '/resaleCertNumber').once('value').then(function(snap) {
               var cert = snap.val();
@@ -443,7 +443,7 @@
 
     // Restore saved checkout info from localStorage (fills remaining fields)
     var saved = null;
-    try { saved = JSON.parse(localStorage.getItem('shir_checkout_info')); } catch (e) { /* ignore */ }
+    try { saved = JSON.parse(localStorage.getItem('mast_checkout_info')); } catch (e) { /* ignore */ }
     if (saved) {
       if (saved.email && !checkoutData.email) {
         checkoutData.email = saved.email;
@@ -529,7 +529,7 @@
 
     // Persist to localStorage so returning users don't re-enter
     try {
-      localStorage.setItem('shir_checkout_info', JSON.stringify({
+      localStorage.setItem('mast_checkout_info', JSON.stringify({
         email: checkoutData.email,
         shipping: checkoutData.shipping,
         billing: checkoutData.billing
@@ -628,7 +628,7 @@
     body.innerHTML = stepIndicatorHtml('shipping') +
       '<div class="checkout-section"><div style="text-align:center;color:#9B958E;padding:2rem 0;">Calculating shipping...</div></div>';
 
-    var items = window.ShirCart.getItems();
+    var items = window.MastCart.getItems();
     var pids = [];
     for (var i = 0; i < items.length; i++) {
       if (pids.indexOf(items[i].pid) === -1) pids.push(items[i].pid);
@@ -789,7 +789,7 @@
     if (!body || !footer) return;
     attachDelegate(); // ensure delegation is live before rendering Place Order button
 
-    var items = window.ShirCart.getItems();
+    var items = window.MastCart.getItems();
     var subtotal = calcSubtotal();
 
     var html = stepIndicatorHtml('review');
@@ -876,7 +876,7 @@
     '</div>';
 
     // Payment method — show check option for wholesale orders
-    var hasWholesale = window.ShirCart.hasWholesaleItems && window.ShirCart.hasWholesaleItems();
+    var hasWholesale = window.MastCart.hasWholesaleItems && window.MastCart.hasWholesaleItems();
     if (hasWholesale) {
       var selectedMethod = checkoutData.paymentMethod || 'card';
       html += '<div class="review-section">' +
@@ -925,7 +925,7 @@
     if (isSubmitting) return;
 
     // Check if this is a pay-by-check wholesale order
-    var hasWholesale = window.ShirCart.hasWholesaleItems && window.ShirCart.hasWholesaleItems();
+    var hasWholesale = window.MastCart.hasWholesaleItems && window.MastCart.hasWholesaleItems();
     if (hasWholesale && checkoutData.paymentMethod === 'check') {
       placeCheckOrder();
       return;
@@ -939,8 +939,8 @@
       btn.innerHTML = '<span class="checkout-spinner"></span> Processing...';
     }
 
-    var items = window.ShirCart.getItems();
-    var user = window.ShirCart.getCurrentUser();
+    var items = window.MastCart.getItems();
+    var user = window.MastCart.getCurrentUser();
 
     // SECURITY: prices are sent for display/logging only.
     // The Cloud Function (submitOrder) MUST look up prices from its own
@@ -964,7 +964,7 @@
       if (result && result.success && result.checkoutUrl) {
         // Save order info for post-payment confirmation
         try {
-          sessionStorage.setItem('shir_pending_order', JSON.stringify({
+          sessionStorage.setItem('mast_pending_order', JSON.stringify({
             orderId: result.orderId,
             orderNumber: result.orderNumber,
             email: checkoutData.email,
@@ -976,12 +976,12 @@
         } catch (e) { /* sessionStorage not available */ }
 
         // Clear cart before redirect but keep checkout info for returning customer auto-fill
-        window.ShirCart.clear();
+        window.MastCart.clear();
 
         // Save address to Firebase customer record for logged-in users
-        if (user && !user.isAnonymous && window.ShirCart.getFirebaseApp) {
+        if (user && !user.isAnonymous && window.MastCart.getFirebaseApp) {
           try {
-            var custDb = window.ShirCart.getFirebaseApp().database();
+            var custDb = window.MastCart.getFirebaseApp().database();
             custDb.ref(TENANT_ID + '/customers/' + user.uid + '/address').update({
               address1: checkoutData.shipping.address1 || '',
               address2: checkoutData.shipping.address2 || '',
@@ -1007,7 +1007,7 @@
           btn.disabled = false;
           btn.textContent = 'Proceed to Payment';
         }
-        window.ShirCart.showToast(result && result.error ? result.error : 'Order failed. Please try again.');
+        window.MastCart.showToast(result && result.error ? result.error : 'Order failed. Please try again.');
       }
     });
   }
@@ -1022,8 +1022,8 @@
       btn.innerHTML = '<span class="checkout-spinner"></span> Placing Order...';
     }
 
-    var items = window.ShirCart.getItems();
-    var user = window.ShirCart.getCurrentUser();
+    var items = window.MastCart.getItems();
+    var user = window.MastCart.getCurrentUser();
     var subtotal = calcSubtotal();
     var shippingCost = checkoutData.shippingMethod ? checkoutData.shippingMethod.price : 0;
     var totalCents = Math.round((subtotal + shippingCost) * 100);
@@ -1073,20 +1073,20 @@
     if (!db) {
       isSubmitting = false;
       if (btn) { btn.disabled = false; btn.textContent = 'Place Order (Pay by Check)'; }
-      window.ShirCart.showToast('Database not available', true);
+      window.MastCart.showToast('Database not available', true);
       return;
     }
 
     var orderRef = db.ref(TENANT_ID + '/orders').push();
     orderRef.set(orderData).then(function() {
       isSubmitting = false;
-      window.ShirCart.clear();
+      window.MastCart.clear();
       trackCheckoutEvent('wholesale_check_order_placed');
 
       // Update wholesaler resale cert if provided
-      if (checkoutData.resaleCertNumber && user && user.email && window.ShirCart.getFirebaseApp) {
+      if (checkoutData.resaleCertNumber && user && user.email && window.MastCart.getFirebaseApp) {
         try {
-          var wsDb = window.ShirCart.getFirebaseApp().database();
+          var wsDb = window.MastCart.getFirebaseApp().database();
           var emailKey = user.email.toLowerCase().replace(/\./g, ',');
           wsDb.ref(TENANT_ID + '/admin/wholesaleAuthorized/' + emailKey + '/resaleCertNumber')
             .set(checkoutData.resaleCertNumber);
@@ -1098,7 +1098,7 @@
     }).catch(function(err) {
       isSubmitting = false;
       if (btn) { btn.disabled = false; btn.textContent = 'Place Order (Pay by Check)'; }
-      window.ShirCart.showToast('Order failed: ' + err.message, true);
+      window.MastCart.showToast('Order failed: ' + err.message, true);
     });
   }
 
@@ -1180,7 +1180,7 @@
     var titleEl = document.querySelector('.cart-drawer-title');
     var countEl = document.getElementById('cartDrawerCount');
     if (titleEl) titleEl.textContent = 'Your Cart';
-    window.ShirCart.refreshDrawer();
+    window.MastCart.refreshDrawer();
   }
 
   function resetCheckout() {
@@ -1197,7 +1197,7 @@
     };
     var titleEl = document.querySelector('.cart-drawer-title');
     if (titleEl) titleEl.textContent = 'Your Cart';
-    window.ShirCart.refreshDrawer();
+    window.MastCart.refreshDrawer();
   }
 
   // ── Delegated Click Handler ──
@@ -1218,7 +1218,7 @@
     } else if (action === 'addr-back') {
       saveAddressData(); cancelCheckout();
     } else if (action === 'ship-next') {
-      if (!checkoutData.shippingMethod) { window.ShirCart.showToast('Shipping is still loading, please wait'); return; }
+      if (!checkoutData.shippingMethod) { window.MastCart.showToast('Shipping is still loading, please wait'); return; }
       renderReview();
     } else if (action === 'ship-back') {
       renderAddress();
@@ -1227,7 +1227,7 @@
     } else if (action === 'review-back') {
       renderShipping();
     } else if (action === 'conf-done') {
-      resetCheckout(); window.ShirCart.closeDrawer();
+      resetCheckout(); window.MastCart.closeDrawer();
     } else if (action === 'edit-address') {
       renderAddress();
     } else if (action === 'edit-shipping') {
@@ -1283,10 +1283,10 @@
       // Get order details from sessionStorage
       var pendingOrder = null;
       try {
-        var stored = sessionStorage.getItem('shir_pending_order');
+        var stored = sessionStorage.getItem('mast_pending_order');
         if (stored) {
           pendingOrder = JSON.parse(stored);
-          sessionStorage.removeItem('shir_pending_order');
+          sessionStorage.removeItem('mast_pending_order');
         }
       } catch (e) { /* silent */ }
 
@@ -1294,8 +1294,8 @@
       var orderNumber = pendingOrder ? pendingOrder.orderNumber : orderId;
 
       // Open cart drawer and show payment confirmation
-      if (window.ShirCart && window.ShirCart.openDrawer) {
-        window.ShirCart.openDrawer();
+      if (window.MastCart && window.MastCart.openDrawer) {
+        window.MastCart.openDrawer();
       }
 
       setTimeout(function () {

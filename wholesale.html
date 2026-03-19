@@ -886,7 +886,7 @@
 
     var priceDisplay = '$' + (priceCents / 100).toFixed(2);
 
-    ShirCart.addItem({
+    MastCart.addItem({
       pid: pid,
       name: p.name,
       price: priceDisplay,
@@ -897,7 +897,7 @@
       isWholesale: true
     });
 
-    ShirCart.showToast(qty + 'x ' + p.name + ' added to cart');
+    MastCart.showToast(qty + 'x ' + p.name + ' added to cart');
   };
 
   // ── Helpers ──
