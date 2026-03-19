@@ -10903,6 +10903,7 @@ function updateGitHubTokenStatus() {
 function updateLkApiKeyStatus() {
   var el = document.getElementById('lkApiKeyStatus');
   if (!el) return;
+  if (typeof _getLkApiKey !== 'function') return;
   _getLkApiKey().then(function(key) {
     if (key) {
       el.innerHTML = '<span style="color:var(--teal);">&#10003; Key configured</span>';
