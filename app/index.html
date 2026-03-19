@@ -10410,8 +10410,12 @@ function loadSettings() {
     if (countInput && settings.homepageEventsCount) {
       countInput.value = settings.homepageEventsCount;
     }
-    // Dark mode
-    if (settings.adminDarkMode) {
+    // Dark mode — respect saved setting, or fall back to OS preference
+    var darkPref = settings.adminDarkMode;
+    if (darkPref === undefined || darkPref === null) {
+      darkPref = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    if (darkPref) {
       document.body.classList.add('dark-mode');
       var toggle = document.getElementById('darkModeToggle');
       if (toggle) toggle.checked = true;
