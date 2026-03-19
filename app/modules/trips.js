@@ -934,7 +934,11 @@
     }
 
     if (completed.length === 0) {
-      container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--warm-gray);"><p style="font-size:1.2rem;margin-bottom:8px;">No trips yet</p><p style="font-size:0.85rem;">Start your first business trip to begin tracking mileage.</p></div>';
+      container.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">' +
+        '<div style="font-size:2rem;margin-bottom:12px;">🚗</div>' +
+        '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No trips yet</p>' +
+        '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Start your first business trip to begin tracking mileage.</p>' +
+      '</div>';
       return;
     }
 

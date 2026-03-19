@@ -25,6 +25,11 @@ var SHOW_STATUS_COLORS = {
   withdrawn: '#9ca3af'
 };
 
+function showStatusBadgeStyle(status) {
+  var bg = SHOW_STATUS_COLORS[status] || '#9ca3af';
+  return 'background:' + bg + ';color:white;';
+}
+
 var SHOW_TYPE_LABELS = {
   juried: 'Juried',
   'pop-up': 'Pop-Up',
@@ -50,7 +55,7 @@ function updateShowTabBadges() {
     return (endDate && endDate < today) || s.applicationStatus === 'rejected' || s.applicationStatus === 'withdrawn';
   }).length;
   var badges = { apply: applyCount, prep: prepCount, history: historyCount };
-  document.querySelectorAll('.show-sub-tab').forEach(function(tab) {
+  document.querySelectorAll('#showSubNav .view-tab').forEach(function(tab) {
     var view = tab.getAttribute('data-show-view');
     var count = badges[view];
     var badge = tab.querySelector('.show-tab-badge');
@@ -71,7 +76,7 @@ function updateShowTabBadges() {
 function switchShowSubView(view) {
   showSubView = view;
   // Update sub-nav active state
-  document.querySelectorAll('.show-sub-tab').forEach(function(tab) {
+  document.querySelectorAll('#showSubNav .view-tab').forEach(function(tab) {
     tab.classList.toggle('active', tab.getAttribute('data-show-view') === view);
   });
   // Update route
@@ -184,9 +189,9 @@ function renderShowsList() {
     if (s.applicationDeadline && (statusClass === 'considering' || statusClass === 'applied')) {
       var daysUntil = Math.ceil((new Date(s.applicationDeadline + 'T00:00:00') - new Date()) / 86400000);
       if (daysUntil < 0) {
-        deadlineBadge = '<span class="show-deadline-badge overdue">Past due</span>';
+        deadlineBadge = '<span class="status-badge" style="background:#fecaca;color:#dc2626;">Past due</span>';
       } else if (daysUntil <= 14) {
-        deadlineBadge = '<span class="show-deadline-badge soon">' + daysUntil + 'd left</span>';
+        deadlineBadge = '<span class="status-badge" style="background:#fef3c7;color:#92400e;">' + daysUntil + 'd left</span>';
       }
     }
     var fees = '';
@@ -196,7 +201,7 @@ function renderShowsList() {
     cards += '<div class="order-card" onclick="viewShowDetail(\'' + s._key + '\')" style="cursor:pointer;">' +
       '<div class="order-card-header" style="display:flex;justify-content:space-between;align-items:center;">' +
         '<span class="order-card-id" style="font-weight:600;">' + esc(s.name || 'Unnamed Show') + '</span>' +
-        '<span class="show-status ' + statusClass + '">' + statusLabel + '</span>' +
+        '<span class="status-badge" style="' + showStatusBadgeStyle(statusClass) + '">' + statusLabel + '</span>' +
       '</div>' +
       '<div class="order-card-details">' +
         '<span>' + esc(typeLabel) + '</span>' +
@@ -341,13 +346,11 @@ function renderShowDetail(showId) {
     if (s.endDate && s.endDate !== s.startDate) dates += ' – ' + formatShowDate(s.endDate);
   }
 
-  var h = '<div style="margin-bottom:16px;">' +
-    '<button class="btn btn-secondary btn-sm" onclick="backToShowsList()">&larr; Back to Shows</button>' +
-  '</div>';
+  var h = '<button class="detail-back" onclick="backToShowsList()">&larr; Back to Shows</button>';
   h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:20px;">';
   h += '<div>';
   h += '<h2 style="margin:0 0 4px 0;">' + esc(s.name || 'Unnamed Show') + '</h2>';
-  h += '<span class="show-status ' + statusClass + '">' + statusLabel + '</span>';
+  h += '<span class="status-badge" style="' + showStatusBadgeStyle(statusClass) + '">' + statusLabel + '</span>';
   h += ' <span style="font-size:0.85rem;color:var(--text-secondary, #888);">' + esc(typeLabel) + '</span>';
   if (s.aiGenerated) h += ' <span style="font-size:0.75rem;background:var(--teal, #2a7c6f);color:white;padding:2px 6px;border-radius:4px;">AI Found</span>';
   h += '</div>';
@@ -438,7 +441,7 @@ function renderShowDetailInfo(showId, s, location, dates, statusClass) {
   } else {
     history.forEach(function(entry) {
       h += '<div style="padding:8px 0;border-bottom:1px solid var(--border-color, #eee);font-size:0.9rem;">';
-      h += '<span class="show-status ' + (entry.newStatus || '') + '" style="font-size:0.7rem;">' + (entry.newStatus || '').charAt(0).toUpperCase() + (entry.newStatus || '').slice(1) + '</span>';
+      h += '<span class="status-badge" style="font-size:0.7rem;' + showStatusBadgeStyle(entry.newStatus || '') + '">' + (entry.newStatus || '').charAt(0).toUpperCase() + (entry.newStatus || '').slice(1) + '</span>';
       if (entry.oldStatus) h += ' <span style="color:var(--text-secondary, #888);">from ' + entry.oldStatus + '</span>';
       h += ' <span style="color:var(--text-secondary, #888);font-size:0.8rem;">' + (entry.timestamp ? new Date(entry.timestamp).toLocaleDateString() : '') + '</span>';
       h += '</div>';
@@ -624,10 +627,10 @@ function renderShowDetailExecute(showId, s) {
       var isSelected = dt === selectedDate;
       var dayLabel = new Date(dt + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
       var isToday = dt === today;
-      h += '<button class="exec-day-btn' + (isSelected ? ' active' : '') + '" onclick="switchExecuteDate(\'' + showId + '\', \'' + dt + '\')" style="padding:6px 12px;border-radius:6px;font-size:0.85rem;font-family:inherit;cursor:pointer;' +
-        'border:1px solid ' + (isSelected ? 'var(--primary, #2a7c6f)' : 'var(--border-color, #ddd)') + ';' +
-        'background:' + (isSelected ? 'var(--primary, #2a7c6f)' : 'var(--bg-primary, #fff)') + ';' +
-        'color:' + (isSelected ? 'white' : 'var(--text-primary, #333)') + ';font-weight:' + (isSelected ? '600' : '400') + ';">' +
+      h += '<button class="btn btn-small exec-day-btn' + (isSelected ? ' active' : '') + '" onclick="switchExecuteDate(\'' + showId + '\', \'' + dt + '\')" style="' +
+        'border:1px solid ' + (isSelected ? 'var(--teal, #2a7c6f)' : '#ddd') + ';' +
+        'background:' + (isSelected ? 'var(--teal, #2a7c6f)' : 'var(--cream, #FAF6F0)') + ';' +
+        'color:' + (isSelected ? 'white' : 'var(--charcoal, #1A1A1A)') + ';font-weight:' + (isSelected ? '600' : '400') + ';">' +
         dayLabel + (isToday ? ' (Today)' : '') + '</button>';
     });
     h += '</div></div>';
@@ -1449,10 +1452,10 @@ function openShowReviewModal(showId) {
     var label = val.charAt(0).toUpperCase() + val.slice(1);
     var colors = { yes: '#16a34a', maybe: '#f59e0b', no: '#dc2626' };
     var isSelected = review.wouldAttendAgain === val;
-    h += '<button class="review-attend-btn" data-value="' + val + '" onclick="setReviewAttend(\'' + val + '\')" style="padding:6px 16px;border-radius:6px;font-size:0.85rem;font-family:inherit;cursor:pointer;' +
-      'border:1px solid ' + (isSelected ? colors[val] : 'var(--border-color, #ddd)') + ';' +
-      'background:' + (isSelected ? colors[val] : 'var(--bg-primary, #fff)') + ';' +
-      'color:' + (isSelected ? 'white' : 'var(--text-primary, #333)') + ';font-weight:' + (isSelected ? '600' : '400') + ';">' + label + '</button>';
+    h += '<button class="btn btn-small review-attend-btn" data-value="' + val + '" onclick="setReviewAttend(\'' + val + '\')" style="' +
+      'border:1px solid ' + (isSelected ? colors[val] : '#ddd') + ';' +
+      'background:' + (isSelected ? colors[val] : 'var(--cream, #FAF6F0)') + ';' +
+      'color:' + (isSelected ? 'white' : 'var(--charcoal, #1A1A1A)') + ';font-weight:' + (isSelected ? '600' : '400') + ';">' + label + '</button>';
   });
   h += '</div>';
   h += '<input type="hidden" id="reviewAttend" value="' + (review.wouldAttendAgain || '') + '">';
@@ -1493,9 +1496,9 @@ function setReviewAttend(val) {
   btns.forEach(function(btn) {
     var bv = btn.getAttribute('data-value');
     var isSelected = bv === val;
-    btn.style.background = isSelected ? colors[bv] : 'var(--bg-primary, #fff)';
-    btn.style.color = isSelected ? 'white' : 'var(--text-primary, #333)';
-    btn.style.borderColor = isSelected ? colors[bv] : 'var(--border-color, #ddd)';
+    btn.style.background = isSelected ? colors[bv] : 'var(--cream, #FAF6F0)';
+    btn.style.color = isSelected ? 'white' : 'var(--charcoal, #1A1A1A)';
+    btn.style.borderColor = isSelected ? colors[bv] : '#ddd';
     btn.style.fontWeight = isSelected ? '600' : '400';
   });
 }
@@ -2183,7 +2186,7 @@ function renderShowHistoryView() {
     cards += '<div class="order-card history-comparison-card" onclick="viewShowDetail(\'' + s._key + '\', \'history\')" style="cursor:pointer;">' +
       '<div class="order-card-header" style="display:flex;justify-content:space-between;align-items:center;">' +
         '<span class="order-card-id" style="font-weight:600;">' + esc(s.name || 'Unnamed Show') + '</span>' +
-        '<span class="show-status ' + statusClass + '">' + statusLabel + '</span>' +
+        '<span class="status-badge" style="' + showStatusBadgeStyle(statusClass) + '">' + statusLabel + '</span>' +
       '</div>' +
       '<div class="order-card-details">' +
         '<span>' + esc(typeLabel) + '</span>' +

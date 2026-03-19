@@ -12,11 +12,16 @@
 var showingSquarePayments = false;
 
 var EVENT_STATUS_COLORS = {
-  planning: '#2196F3',
-  packed: '#FF9800',
-  active: '#4CAF50',
-  closed: '#9E9E9E'
+  planning: '#2563eb',
+  packed: '#f59e0b',
+  active: '#16a34a',
+  closed: '#9ca3af'
 };
+
+function eventStatusBadgeStyle(status) {
+  var bg = EVENT_STATUS_COLORS[status] || '#9ca3af';
+  return 'background:' + bg + ';color:white;';
+}
 
 // ============================================================
 // SALES (PoS) MANAGEMENT
@@ -604,13 +609,13 @@ function renderSalesEvents() {
       '<td>' + (ev.location || '\u2014') + '</td>' +
       '<td>' + stats.totalPacked + ' (' + stats.productCount + ' products)</td>' +
       '<td>' + stats.totalSold + (stats.totalPacked > 0 ? ' (' + sellThrough + ')' : '') + '</td>' +
-      '<td><span style="background:' + statusColor + ';color:white;padding:2px 8px;border-radius:4px;font-size:0.75rem;text-transform:uppercase;">' + ev.status + '</span></td>' +
+      '<td><span class="status-badge" style="' + eventStatusBadgeStyle(ev.status) + '">' + ev.status + '</span></td>' +
       '</tr>';
 
     cards += '<div class="order-card" onclick="viewSalesEventDetail(\'' + ev._key + '\')">' +
       '<div class="order-card-header">' +
         '<span class="order-card-id" style="font-weight:600;">' + (ev.name || 'Unnamed') + '</span>' +
-        '<span style="background:' + statusColor + ';color:white;padding:2px 8px;border-radius:4px;font-size:0.75rem;text-transform:uppercase;">' + ev.status + '</span>' +
+        '<span class="status-badge" style="' + eventStatusBadgeStyle(ev.status) + '">' + ev.status + '</span>' +
       '</div>' +
       '<div class="order-card-details">' +
         '<span>\uD83D\uDCC5 ' + formatSaleDate(ev.date || ev.createdAt) + '</span>' +
@@ -740,7 +745,7 @@ function renderSalesEventDetail(eventId) {
         (ev.location ? ' \u00B7 \uD83D\uDCCD ' + ev.location : '') +
       '</div>' +
     '</div>' +
-    '<span style="background:' + statusColor + ';color:white;padding:4px 12px;border-radius:6px;font-size:0.8rem;text-transform:uppercase;font-weight:600;">' + ev.status + '</span>' +
+    '<span class="status-badge" style="' + eventStatusBadgeStyle(ev.status) + 'padding:4px 12px;">' + ev.status + '</span>' +
   '</div>';
 
   // Summary cards

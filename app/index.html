@@ -236,36 +236,9 @@
     .sidebar-badge.future { background: rgba(255,255,255,0.1); color: var(--warm-gray); }
     .sidebar-badge.alert { background: #C4853C; color: white; font-size: 0.65rem; padding: 2px 6px; border-radius: 10px; min-width: 18px; text-align: center; }
 
-    /* Show sub-nav tabs */
-    .show-sub-tab {
-      padding: 8px 16px;
-      border: none;
-      background: none;
-      font-family: 'DM Sans', sans-serif;
-      font-size: 0.9rem;
-      color: var(--text-secondary, #888);
-      cursor: pointer;
-      border-bottom: 2px solid transparent;
-      transition: color 0.2s, border-color 0.2s;
-    }
-    .show-sub-tab:hover { color: var(--text-primary, #333); }
-    .show-sub-tab.active {
-      color: var(--primary, #2a7c6f);
-      border-bottom-color: var(--primary, #2a7c6f);
-      font-weight: 600;
-    }
-    /* Show status badges */
-    .show-status { display:inline-block; padding:2px 8px; border-radius:4px; font-size:0.75rem; text-transform:uppercase; color:white; font-weight:600; }
-    .show-status.considering { background:#6366f1; }
-    .show-status.applied { background:#2563eb; }
-    .show-status.accepted { background:#16a34a; }
-    .show-status.waitlisted { background:#f59e0b; }
-    .show-status.rejected { background:#dc2626; }
-    .show-status.withdrawn { background:#9ca3af; }
-    /* Show card deadline badges */
-    .show-deadline-badge { font-size:0.75rem; padding:2px 6px; border-radius:4px; font-weight:600; }
-    .show-deadline-badge.overdue { background:#fecaca; color:#dc2626; }
-    .show-deadline-badge.soon { background:#fef3c7; color:#92400e; }
+    /* Show sub-nav tabs — REMOVED S5: migrated to .view-tab (sidebar handles navigation) */
+    /* Show status badges — REMOVED S5: migrated to .status-badge with inline colors via showStatusBadgeStyle() */
+    /* Show deadline badges — REMOVED S5: migrated to .status-badge with inline colors */
 
     /* Dashboard is a direct-click section header */
     .sidebar-section-header.dashboard-link { cursor: pointer; }
@@ -686,13 +659,7 @@
     body.dark-mode .view-tab:hover { color: #ccc; }
     body.dark-mode .view-tab.active { color: var(--amber); border-bottom-color: var(--amber); }
 
-    /* Show section dark mode */
-    body.dark-mode .show-sub-tab { color: #888; }
-    body.dark-mode .show-sub-tab:hover { color: #ccc; }
-    body.dark-mode .show-sub-tab.active { color: var(--teal-light, #5ab8a9); border-bottom-color: var(--teal-light, #5ab8a9); }
-    body.dark-mode .show-sub-nav { border-bottom-color: #444; }
-    body.dark-mode .show-deadline-badge.overdue { background: #7f1d1d; color: #fca5a5; }
-    body.dark-mode .show-deadline-badge.soon { background: #78350f; color: #fde68a; }
+    /* Show section dark mode — .show-sub-tab, .show-sub-nav, .show-deadline-badge removed S5 */
     body.dark-mode #showFindContent > div:first-child { background: #2a2a2a !important; }
     body.dark-mode #showFinderError { background: #3a1a1a !important; border-color: #7f1d1d !important; }
     body.dark-mode #showFinderErrorMsg { color: #fca5a5 !important; }
@@ -4891,7 +4858,7 @@
       </div>
       <div id="tripsSubHistory">
         <div id="tripsFilters" style="display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap;"></div>
-        <div id="tripsLoading" style="display:none;text-align:center;padding:40px;color:var(--warm-gray);">Loading trips...</div>
+        <div id="tripsLoading" class="loading" style="display:none;">Loading trips...</div>
         <div id="tripsList"></div>
       </div>
       <div id="tripsSubReport" style="display:none;">
