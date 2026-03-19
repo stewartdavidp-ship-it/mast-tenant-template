@@ -344,7 +344,7 @@ Retains: all CSS (~4.3K lines), HTML skeleton (sidebar, tab containers, modals),
 - Routing (`ROUTE_MAP`, `navigateTo`, `applyRoute`, lazy module loading)
 - Shared utilities (`showToast`, `esc`, `formatDate`, `formatCurrency`, `compressImage`, `auditLog`)
 - Dashboard (quick actions, new orders queue, active trip banner)
-- Settings (domains, GitHub, Square, shipping, Google Maps, SendGrid, Etsy, setup wizard)
+- Settings (domains, GitHub, Square, shipping, Google Maps, email provider config, email domain verification, Etsy, setup wizard)
 - Products & Inventory (catalog, product detail, variant inventory, forecast, location tracking)
 - Gallery, events, images, coupons, analytics
 - Image library and image picker (shared across modules)
