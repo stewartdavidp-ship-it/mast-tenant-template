@@ -445,6 +445,31 @@
     body.dark-mode #wizardAnalysisSummary { background: #2a2a2a !important; color: #e0e0e0 !important; }
     body.dark-mode #wizardSiteUrl { background: #2a2a2a !important; border-color: #444 !important; color: #e0e0e0 !important; }
 
+    /* Wizard — full dark mode coverage */
+    body.dark-mode #setupWizardScreen { color: #e0e0e0; }
+    body.dark-mode #setupWizardScreen h2,
+    body.dark-mode #setupWizardScreen h3,
+    body.dark-mode #setupWizardScreen strong,
+    body.dark-mode #setupWizardScreen label { color: #f0ebe0 !important; }
+    body.dark-mode #setupWizardScreen p { color: #b0a99e !important; }
+    body.dark-mode #setupWizardScreen input,
+    body.dark-mode #setupWizardScreen textarea,
+    body.dark-mode #setupWizardScreen select {
+      background: #2a2a2a !important;
+      border-color: #444 !important;
+      color: #e0e0e0 !important;
+    }
+    body.dark-mode #setupWizardScreen input::placeholder,
+    body.dark-mode #setupWizardScreen textarea::placeholder {
+      color: #777 !important;
+    }
+    body.dark-mode #setupWizardScreen input:focus,
+    body.dark-mode #setupWizardScreen textarea:focus,
+    body.dark-mode #setupWizardScreen select:focus {
+      border-color: var(--teal) !important;
+      outline-color: var(--teal) !important;
+    }
+
     /* ========== WEBSITE MODULE ========== */
     .wp-sub-tabs { display: flex; gap: 0; border-bottom: 2px solid var(--cream-dark); margin-bottom: 24px; }
     .wp-sub-tab { padding: 10px 20px; cursor: pointer; font-size: 0.9rem; font-weight: 500; color: var(--warm-gray); border-bottom: 2px solid transparent; margin-bottom: -2px; transition: color 0.2s, border-color 0.2s; background: none; border-top: none; border-left: none; border-right: none; font-family: 'DM Sans', sans-serif; }
