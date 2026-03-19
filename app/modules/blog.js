@@ -21,6 +21,12 @@
   // Blog authors — loaded from TENANT_CONFIG.brand.authors
   var BLOG_AUTHORS = {};
 
+  function blogBadgeHtml(status) {
+    var s = status || 'draft';
+    var colors = { draft: 'background:rgba(196,133,60,0.15);color:var(--amber)', complete: 'background:rgba(42,124,111,0.15);color:var(--teal)', posted: 'background:#16a34a;color:#fff', published: 'background:#16a34a;color:#fff' };
+    return '<span class="status-badge pill" style="' + (colors[s] || colors.draft) + '">' + s + '</span>';
+  }
+
   function loadBlogAuthors() {
     if (TENANT_CONFIG && TENANT_CONFIG.brand && TENANT_CONFIG.brand.authors) {
       BLOG_AUTHORS = TENANT_CONFIG.brand.authors;
@@ -66,9 +72,10 @@
       '<button class="btn btn-primary" onclick="blogCreatePost()">+ New Post</button></div>';
 
     if (blogPosts.length === 0) {
-      html += '<div class="nl-empty"><div class="nl-empty-icon">\u270d\ufe0f</div>' +
-        '<div class="nl-empty-text">No blog posts yet</div>' +
-        '<p style="font-size:0.85rem;color:var(--text-secondary);">Write your first post to share your voice as an artist in the glass community.</p></div>';
+      html += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">' +
+        '<div style="font-size:2rem;margin-bottom:12px;">\u270d\ufe0f</div>' +
+        '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No blog posts yet</p>' +
+        '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Write your first post to share your voice as an artist.</p></div>';
     } else {
       blogPosts.forEach(function(post) {
         var author = BLOG_AUTHORS[post.author] || BLOG_AUTHORS[Object.keys(BLOG_AUTHORS)[0]] || { name: post.author || 'Author', photoUrl: '', bio: '' };
@@ -77,7 +84,7 @@
           '<img class="blog-avatar" src="' + esc(author.photoUrl) + '" alt="' + esc(author.name) + '" />' +
           '<span class="blog-post-title">' + esc(post.title || 'Untitled Post') + '</span>' +
           '<span class="blog-post-author">' + esc(author.name) + '</span>' +
-          '<span class="nl-status-badge ' + (post.status || 'draft') + '">' + (post.status || 'draft') + '</span>' +
+          blogBadgeHtml(post.status) +
           (post.publishedToWebsite ? '<span style="font-size:0.75rem;" title="Published to website">\ud83c\udf10</span>' : '') +
           '<span class="blog-post-date">' + dateStr + '</span>' +
           '</div>';
@@ -202,9 +209,9 @@
     var html = '';
     // Top bar
     html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">' +
-      '<button class="btn" onclick="blogBackToList()">\u2190 Back to Posts</button>' +
+      '<button class="detail-back" onclick="blogBackToList()">\u2190 Back to Posts</button>' +
       '<button class="btn" onclick="blogTogglePreview()" style="' + (blogShowPreview ? 'background:var(--amber);color:#fff;border-color:var(--amber);' : '') + '">' + (blogShowPreview ? '\u270f\ufe0f Edit' : '\ud83d\udc41 Preview') + '</button>' +
-      '<span class="nl-status-badge ' + status + '" style="margin-left:auto;">' + status + '</span>' +
+      '<div style="margin-left:auto;display:flex;align-items:center;gap:8px;">' + blogBadgeHtml(status) + '</div>' +
       '<button class="btn" style="color:#c44;border-color:#c44;" onclick="blogDeletePost()">Delete</button>' +
       '</div>';
 
@@ -233,7 +240,7 @@
       } else if (status === 'complete') {
         html += '<button class="btn" onclick="blogBackToDraft()">\u270f\ufe0f Back to Draft</button>';
         if (post.publishedToWebsite) {
-          html += '<span class="blog-published-badge">\ud83c\udf10 Published</span>';
+          html += '<span class="status-badge pill" style="background:#16a34a;color:#fff;">\ud83c\udf10 Published</span>';
           html += '<button class="btn" onclick="blogUnpublishFromWebsite()" style="font-size:0.8rem;">Unpublish</button>';
         } else {
           html += '<button class="btn btn-primary" onclick="blogOpenPublishDialog()">\ud83d\udce4 Publish</button>';
@@ -343,7 +350,7 @@
     } else if (status === 'complete') {
       html += '<button class="btn" onclick="blogBackToDraft()">\u270f\ufe0f Back to Draft</button>';
       if (post.publishedToWebsite) {
-        html += '<span class="blog-published-badge">\ud83c\udf10 Published</span>';
+        html += '<span class="status-badge pill" style="background:#16a34a;color:#fff;">\ud83c\udf10 Published</span>';
         html += '<button class="btn" onclick="blogUnpublishFromWebsite()" style="font-size:0.8rem;">Unpublish</button>';
       } else {
         html += '<button class="btn btn-primary" onclick="blogOpenPublishDialog()">\ud83d\udce4 Publish</button>';
@@ -1005,14 +1012,14 @@
       '<span class="platform-icon">\ud83c\udf10</span>' +
       '<div class="platform-info"><div class="platform-name">Website</div>' +
       '<div class="platform-status">Publish to your public blog page</div></div>' +
-      '<span class="platform-badge ready">Ready</span>' +
+      '<span class="status-badge pill" style="background:#16a34a;color:#fff;">Ready</span>' +
       '<input type="checkbox" id="publishWebsite" class="platform-check" checked onclick="event.stopPropagation()" />' +
       '</div>' +
       '<div class="blog-publish-platform disabled">' +
       '<span class="platform-icon">\ud83d\udce7</span>' +
       '<div class="platform-info"><div class="platform-name">Substack</div>' +
       '<div class="platform-status">Send as Substack newsletter draft</div></div>' +
-      '<span class="platform-badge coming-soon">Coming Soon</span>' +
+      '<span class="status-badge pill" style="background:#9ca3af;color:#fff;">Coming Soon</span>' +
       '<input type="checkbox" class="platform-check" disabled />' +
       '</div>' +
       '</div>' +

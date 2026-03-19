@@ -40,6 +40,12 @@
     'full':   800
   };
 
+  function nlBadgeHtml(status) {
+    var s = status || 'draft';
+    var colors = { draft: 'background:rgba(196,133,60,0.15);color:var(--amber)', ready: 'background:rgba(42,124,111,0.15);color:var(--teal)', sent: 'background:rgba(139,111,94,0.15);color:#8B6F5E', published: 'background:#16a34a;color:#fff', complete: 'background:rgba(42,124,111,0.15);color:var(--teal)', posted: 'background:#16a34a;color:#fff' };
+    return '<span class="status-badge pill" style="' + (colors[s] || colors.draft) + '">' + s + '</span>';
+  }
+
   var NL_DEFAULT_SECTIONS = [
     { type: 'studio-update', title: 'What We\'ve Been Making', guidedPrompt: 'What has the studio been working on lately? Any new techniques, materials, or directions?' },
     { type: 'new-products', title: 'New Products', guidedPrompt: 'What new pieces have been added to the shop? What\'s special about them?' },
@@ -95,16 +101,17 @@
       '<button class="btn btn-primary" onclick="nlCreateIssue()">+ New Issue</button></div>';
 
     if (nlIssues.length === 0) {
-      html += '<div class="nl-empty"><div class="nl-empty-icon">📰</div>' +
-        '<div class="nl-empty-text">No newsletter issues yet</div>' +
-        '<p style="font-size:0.85rem;color:var(--text-secondary);">Create your first issue to start composing.</p></div>';
+      html += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">' +
+        '<div style="font-size:2rem;margin-bottom:12px;">📰</div>' +
+        '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No newsletter issues yet</p>' +
+        '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Create your first issue to start composing.</p></div>';
     } else {
       nlIssues.forEach(function(issue) {
         var dateStr = issue.createdAt ? new Date(issue.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
         html += '<div class="nl-issue-row" onclick="nlOpenIssue(\'' + issue.id + '\')">' +
           '<span class="nl-issue-num">#' + (issue.issueNumber || '?') + '</span>' +
           '<span class="nl-issue-title">' + (issue.title || 'Untitled Issue') + '</span>' +
-          '<span class="nl-status-badge ' + (issue.status || 'draft') + '">' + (issue.status || 'draft') + '</span>' +
+          nlBadgeHtml(issue.status) +
           '<span class="nl-issue-date">' + dateStr + '</span>' +
           '</div>';
       });
@@ -228,8 +235,8 @@
 
     var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">' +
       '<div style="display:flex;align-items:center;gap:12px;">' +
-      '<button class="btn btn-outline" onclick="nlBackToList()" style="font-size:0.85rem;">← Back to Issues</button>' +
-      '<span class="nl-status-badge ' + (issue.status || 'draft') + '">' + (issue.status || 'draft') + '</span>' +
+      '<button class="detail-back" onclick="nlBackToList()">← Back to Issues</button>' +
+      nlBadgeHtml(issue.status) +
       '</div>' +
       '<div class="nl-view-toggle">' +
       '<button class="' + (nlViewMode !== 'list' ? 'active' : '') + '" onclick="nlSetViewMode(\'grid\')">Grid</button>' +
@@ -1097,9 +1104,10 @@
       '<input type="checkbox" ' + (showAll ? 'checked' : '') + ' onchange="window.nlShowAllSubs=this.checked; renderNLSubscribers();" /> Show unsubscribed</label></div>';
 
     if (filtered.length === 0) {
-      html += '<div class="nl-empty"><div class="nl-empty-icon">📬</div>' +
-        '<div class="nl-empty-text">No subscribers yet</div>' +
-        '<p style="font-size:0.85rem;color:var(--text-secondary);">Add subscribers manually or share the sign-up form on your website.</p></div>';
+      html += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">' +
+        '<div style="font-size:2rem;margin-bottom:12px;">📬</div>' +
+        '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No subscribers yet</p>' +
+        '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Add subscribers manually or share the sign-up form on your website.</p></div>';
     } else {
       html += '<table class="nl-sub-table"><thead><tr>' +
         '<th>Name</th><th>Email</th><th>Source</th><th>Subscribed</th><th>Status</th><th>Notes</th><th></th></tr></thead><tbody>';
