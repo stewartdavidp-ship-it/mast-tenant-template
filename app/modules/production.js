@@ -573,7 +573,7 @@ function renderProductionJobDetail(jobId) {
   var activeBuildBtn = hasActiveBuild ?
     '<button class="build-touch-btn primary" onclick="openActiveBuild(\'' + esc(jobId) + '\', \'' + esc(buildKeys.find(function(k) { return builds[k].status === 'draft'; })) + '\')">&#x1F3AD; Continue Active Build</button>' : '';
 
-  el.innerHTML = '<button class="order-detail-back" onclick="backToProductionList()">&#8592; Back to Jobs</button>' +
+  el.innerHTML = '<button class="detail-back" onclick="backToProductionList()">&#8592; Back to Jobs</button>' +
     '<div style="margin-bottom:16px;">' +
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;">' +
         '<div>' +
@@ -971,7 +971,7 @@ function renderActiveBuild(jobId, buildId) {
     elapsed = mins + ' min elapsed';
   }
 
-  el.innerHTML = '<button class="order-detail-back" onclick="viewProductionJob(\'' + esc(jobId) + '\')">&#8592; Back to Job</button>' +
+  el.innerHTML = '<button class="detail-back" onclick="viewProductionJob(\'' + esc(jobId) + '\')">&#8592; Back to Job</button>' +
     '<div style="text-align:center;margin:20px 0;">' +
       '<h2 style="font-family:\'Cormorant Garamond\',serif;margin:0;">Build #' + (build.buildNumber || '?') + '</h2>' +
       '<p style="color:var(--warm-gray);font-size:0.85rem;">' + esc(job.name || '') + ' &middot; ' + (build.sessionDate || '') + '</p>' +

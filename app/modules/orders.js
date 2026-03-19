@@ -616,7 +616,7 @@
     }
 
     var backLabel = _viewOrderReturnRoute ? 'Back to ' + _viewOrderReturnRoute.charAt(0).toUpperCase() + _viewOrderReturnRoute.slice(1) : 'Back to Orders';
-    detailEl.innerHTML = '<button class="order-detail-back" onclick="backToOrders()">&#8592; ' + backLabel + '</button>' +
+    detailEl.innerHTML = '<button class="detail-back" onclick="backToOrders()">&#8592; ' + backLabel + '</button>' +
       '<div class="order-detail-header">' +
         '<div>' +
           '<div class="order-detail-title">' + num + (o.source === 'etsy' ? ' <span class="order-source-badge etsy">Etsy</span>' : '') + '</div>' +
