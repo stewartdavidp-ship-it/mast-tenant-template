@@ -6838,16 +6838,30 @@ async function loadTenantConfig(tenantId) {
     console.warn('Tenant config load failed, using defaults:', err.message);
     TENANT_CONFIG = {};
   }
-  // Read top-level tenant registry fields (not under /config)
+  // Read tenant registry fields — try publicConfig first (world-readable), fall back to full registry
   try {
-    var registrySnap = await db.ref('mast-platform/tenants/' + tenantId).once('value');
-    var registry = registrySnap.val() || {};
-    TENANT_CONFIG.secretPrefix = registry.secretPrefix || tenantId;
-    TENANT_CONFIG.tenantStatus = registry.status || 'active';
-    TENANT_CONFIG.configChecklist = registry.configChecklist || {};
-    TENANT_CONFIG.registryName = registry.name || '';
+    // publicConfig is readable by anyone — contains tenantStatus, plan, etc.
+    var pcSnap = await db.ref('mast-platform/tenants/' + tenantId + '/publicConfig').once('value');
+    var pc = pcSnap.val() || {};
+    TENANT_CONFIG.tenantStatus = pc.tenantStatus || 'active';
+    TENANT_CONFIG.plan = pc.plan || 'publish';
+    TENANT_CONFIG.registryName = pc.name || pc.brandName || '';
+
+    // Try full registry (platformAdmins only — will fail silently for tenant admins)
+    try {
+      var registrySnap = await db.ref('mast-platform/tenants/' + tenantId).once('value');
+      var registry = registrySnap.val() || {};
+      TENANT_CONFIG.secretPrefix = registry.secretPrefix || tenantId;
+      TENANT_CONFIG.configChecklist = registry.configChecklist || {};
+      if (registry.status) TENANT_CONFIG.tenantStatus = registry.status;
+      if (registry.name) TENANT_CONFIG.registryName = registry.name;
+    } catch (innerErr) {
+      // Expected for non-platformAdmin users — publicConfig values are sufficient
+      TENANT_CONFIG.secretPrefix = tenantId;
+      TENANT_CONFIG.configChecklist = {};
+    }
   } catch (err) {
-    console.warn('Tenant registry load failed, using defaults:', err.message);
+    console.warn('Tenant config load failed, using defaults:', err.message);
     TENANT_CONFIG.secretPrefix = tenantId;
     TENANT_CONFIG.tenantStatus = 'active';
     TENANT_CONFIG.configChecklist = {};
