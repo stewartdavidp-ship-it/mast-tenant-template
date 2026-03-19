@@ -1088,7 +1088,7 @@ async function sendReceipt() {
     statusEl.innerHTML = '<span style="color:var(--green);">' + results.join(' · ') + '</span>';
     showToast(results.join(', '));
   } catch (err) {
-    statusEl.innerHTML = '<span style="color:#f44336;">Error: ' + err.message + '</span>';
+    statusEl.innerHTML = '<span style="color:#f44336;">Error: ' + esc(err.message) + '</span>';
   } finally {
     btn.disabled = false;
     btn.textContent = 'Send';

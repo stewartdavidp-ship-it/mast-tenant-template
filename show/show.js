@@ -73,9 +73,9 @@
       return;
     }
 
-    pinnedVendors = JSON.parse(localStorage.getItem('mast-pins-' + slug) || '[]');
-    savedCoupons = JSON.parse(localStorage.getItem('mast-coupons-' + slug) || '[]');
-    selectedCategories = JSON.parse(localStorage.getItem('mast-filters-' + slug) || '[]');
+    try { pinnedVendors = JSON.parse(localStorage.getItem('mast-pins-' + slug) || '[]'); } catch (e) { pinnedVendors = []; }
+    try { savedCoupons = JSON.parse(localStorage.getItem('mast-coupons-' + slug) || '[]'); } catch (e) { savedCoupons = []; }
+    try { selectedCategories = JSON.parse(localStorage.getItem('mast-filters-' + slug) || '[]'); } catch (e) { selectedCategories = []; }
     huntParticipantId = localStorage.getItem('mast-hunt-' + slug) || null;
 
     loadShowData();

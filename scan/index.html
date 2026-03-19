@@ -141,6 +141,7 @@ body { font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif; ba
   var participantId = null;
   var phase = 'loading'; // loading, name, registering, progress, completed, error
   var errorMsg = '';
+  var lastRegisterAt = 0;
 
   function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
@@ -212,6 +213,11 @@ body { font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif; ba
   }
 
   function registerVisit(pid, name, contact) {
+    // Debounce: prevent rapid re-submissions (5 second cooldown)
+    var now = Date.now();
+    if (now - lastRegisterAt < 5000) return;
+    lastRegisterAt = now;
+
     phase = 'registering';
     render();
 

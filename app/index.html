@@ -16291,7 +16291,7 @@ function addStudioLocation() {
         loadStudioLocations();
         setTimeout(function() { statusEl.innerHTML = ''; }, 5000);
       }).catch(function(err) {
-        statusEl.innerHTML = '<span style="color:#E53935;">Error: ' + err.message + '</span>';
+        statusEl.innerHTML = '<span style="color:#E53935;">Error: ' + esc(err.message) + '</span>';
       });
     },
     function(err) {
