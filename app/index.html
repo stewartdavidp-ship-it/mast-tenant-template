@@ -4572,6 +4572,7 @@
         <div class="sidebar-item" data-route="financials" onclick="navigateTo('financials')">Financials</div>
         <div class="sidebar-item" data-route="contacts" onclick="navigateTo('contacts')">Contacts</div>
         <div class="sidebar-item muted" data-route="customers" onclick="navigateTo('customers')">Customers <span class="sidebar-badge new">New</span></div>
+        <div class="sidebar-item" data-route="email-log" onclick="navigateTo('email-log')">Email Log</div>
       </div>
     </div>
     <!-- Book -->
@@ -4620,6 +4621,11 @@
 
   <!-- ===== MAIN CONTENT ===== -->
   <div class="main">
+
+    <!-- ===== EMAIL LOG TAB ===== -->
+    <div id="emailLogTab" style="display:none;">
+      <div id="emailLogContent"></div>
+    </div>
 
     <!-- ===== SOCIAL MEDIA TAB ===== -->
     <div id="socialMediaTab" style="display:none;">
@@ -6136,27 +6142,106 @@
 
         <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
 
-        <div class="form-group">
-          <label style="font-size:1.1rem;font-weight:600;">Email (SendGrid)</label>
+        <!-- Provider-Agnostic Email Configuration (replaces SendGrid-only section — Session 3 Email Integration) -->
+        <div class="form-group" id="emailConfigSection">
+          <label style="font-size:1.1rem;font-weight:600;">Email Provider</label>
           <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
-            SendGrid API key for sending order receipts, commission notifications, and other emails.
+            Configure how order receipts, commission notifications, and other emails are sent.
           </p>
-          <div id="sendgridConfigStatus" style="margin-bottom:12px;font-size:0.85rem;"></div>
-          <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">API Key</label>
-          <div style="display:flex;gap:6px;margin-bottom:8px;">
-            <input type="password" id="sendgridApiKey" placeholder="SG...."
-              style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
-            <button type="button" onclick="toggleReveal('sendgridApiKey',this)" class="btn btn-small" style="font-size:0.75rem;padding:6px 10px;white-space:nowrap;">Show</button>
+          <div id="emailConfigStatus" style="margin-bottom:12px;font-size:0.85rem;"></div>
+
+          <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">Provider</label>
+          <select id="emailProvider" onchange="onEmailProviderChange()"
+            style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;margin-bottom:12px;box-sizing:border-box;">
+            <option value="">Mast-Managed (default)</option>
+            <option value="gmail">Gmail</option>
+            <option value="sendgrid">SendGrid</option>
+            <option value="resend">Resend</option>
+            <option value="custom">Custom</option>
+          </select>
+
+          <!-- Mast-Managed info -->
+          <div id="emailProviderMastManaged" style="margin-bottom:12px;">
+            <div style="background:rgba(42,124,111,0.1);border:1px solid rgba(42,124,111,0.25);border-radius:8px;padding:12px 16px;font-size:0.85rem;">
+              <strong style="color:var(--teal);">Mast-Managed Email</strong>
+              <p style="margin:6px 0 0;color:var(--warm-gray);">1 token per email, sent from <span id="emailMastManagedAddress" style="font-family:monospace;"></span></p>
+              <p style="margin:6px 0 0;color:var(--warm-gray);">Token balance: <strong id="emailTokenBalance">—</strong></p>
+            </div>
           </div>
+
+          <!-- Gmail provider fields -->
+          <div id="emailProviderGmail" style="display:none;margin-bottom:12px;">
+            <div style="background:rgba(33,150,243,0.08);border:1px solid rgba(33,150,243,0.2);border-radius:8px;padding:12px 16px;font-size:0.85rem;margin-bottom:12px;">
+              <strong style="color:#64B5F6;">Gmail Setup</strong>
+              <p style="margin:6px 0 0;color:var(--warm-gray);">Requires a Gmail App Password. In your Google Account:</p>
+              <ol style="margin:6px 0 0;padding-left:20px;color:var(--warm-gray);">
+                <li>Enable 2-Step Verification</li>
+                <li>Go to Security &gt; App Passwords</li>
+                <li>Create an app password for "Mail"</li>
+              </ol>
+              <p style="margin:6px 0 0;color:var(--warm-gray);">Set these secrets in GCP Secret Manager with your tenant prefix:</p>
+              <code style="display:block;margin-top:6px;padding:6px 10px;background:rgba(0,0,0,0.15);border-radius:4px;font-size:0.8rem;color:#FFD54F;">{prefix}-gmail-user<br>{prefix}-gmail-app-password</code>
+            </div>
+            <div id="emailGmailStatus" style="font-size:0.85rem;margin-bottom:8px;"></div>
+          </div>
+
+          <!-- SendGrid provider fields -->
+          <div id="emailProviderSendgrid" style="display:none;margin-bottom:12px;">
+            <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">SendGrid API Key</label>
+            <div style="display:flex;gap:6px;margin-bottom:8px;">
+              <input type="password" id="emailSendgridApiKey" placeholder="SG...."
+                style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
+              <button type="button" onclick="toggleReveal('emailSendgridApiKey',this)" class="btn btn-small" style="font-size:0.75rem;padding:6px 10px;white-space:nowrap;">Show</button>
+            </div>
+          </div>
+
+          <!-- Resend provider fields -->
+          <div id="emailProviderResend" style="display:none;margin-bottom:12px;">
+            <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">Resend API Key</label>
+            <div style="display:flex;gap:6px;margin-bottom:8px;">
+              <input type="password" id="emailResendApiKey" placeholder="re_..."
+                style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
+              <button type="button" onclick="toggleReveal('emailResendApiKey',this)" class="btn btn-small" style="font-size:0.75rem;padding:6px 10px;white-space:nowrap;">Show</button>
+            </div>
+          </div>
+
+          <!-- Custom provider fields -->
+          <div id="emailProviderCustom" style="display:none;margin-bottom:12px;">
+            <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">Endpoint URL</label>
+            <input type="url" id="emailCustomEndpoint" placeholder="https://api.example.com/send"
+              style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;margin-bottom:8px;box-sizing:border-box;">
+            <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">Auth Header Format</label>
+            <input type="text" id="emailCustomAuthFormat" placeholder="Bearer {key}" value="Bearer {key}"
+              style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;margin-bottom:8px;box-sizing:border-box;">
+            <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">API Key</label>
+            <div style="display:flex;gap:6px;margin-bottom:8px;">
+              <input type="password" id="emailCustomApiKey" placeholder="Your API key"
+                style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
+              <button type="button" onclick="toggleReveal('emailCustomApiKey',this)" class="btn btn-small" style="font-size:0.75rem;padding:6px 10px;white-space:nowrap;">Show</button>
+            </div>
+          </div>
+
+          <hr style="border:none;border-top:1px solid rgba(255,255,255,0.06);margin:16px 0;">
+
+          <!-- Common email fields (all providers) -->
           <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">From Email</label>
-          <input type="email" id="sendgridFromEmail" placeholder="orders@yourbusiness.com"
+          <input type="email" id="emailFromEmail" placeholder="orders@yourbusiness.com"
             style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;margin-bottom:8px;box-sizing:border-box;">
           <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">From Name</label>
-          <input type="text" id="sendgridFromName" placeholder="Your Business Name"
+          <input type="text" id="emailFromName" placeholder="Your Business Name"
+            style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;margin-bottom:8px;box-sizing:border-box;">
+          <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">No-Reply Email</label>
+          <input type="email" id="emailNoReplyEmail" placeholder="noreply@yourbusiness.com"
+            style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;margin-bottom:8px;box-sizing:border-box;">
+          <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">Owner Email (receives notifications)</label>
+          <input type="email" id="emailOwnerEmail" placeholder="you@yourbusiness.com"
             style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;margin-bottom:12px;box-sizing:border-box;">
-          <div style="display:flex;gap:8px;">
-            <button class="btn btn-primary" onclick="saveSendgridConfig()">Save</button>
+
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-primary" onclick="saveEmailConfig()">Save</button>
+            <button class="btn btn-secondary" onclick="sendTestEmailFromSettings()" style="font-size:0.82rem;padding:6px 12px;">Send Test Email</button>
           </div>
+          <div id="emailTestStatus" style="margin-top:8px;font-size:0.85rem;"></div>
         </div>
 
         <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
@@ -9433,13 +9518,13 @@ var SECTION_ROUTES = {
   'sell':   ['pos', 'orders', 'commissions', 'wholesale', 'galleries', 'receipts', 'coupons'],
   'show':   ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'],
   'ship':   ['pack', 'ship'],
-  'run':    ['trips', 'expenses', 'reports', 'financials', 'contacts', 'customers'],
+  'run':    ['trips', 'expenses', 'reports', 'financials', 'contacts', 'customers', 'email-log'],
   'events': ['events-shows', 'events-settings'],
   'web':    ['website', 'images'],
   'manage': ['products', 'inventory', 'employees', 'analytics', 'auditlog', 'settings']
 };
 
-var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab'];
+var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab'];
 
 var currentRoute = 'dashboard';
 
@@ -9524,7 +9609,7 @@ function applyRoute(route) {
 }
 
 function lazyLoadForRoute(route) {
-  if (route === 'settings') { updateGitHubTokenStatus(); updateLkApiKeyStatus(); loadOperators(); loadStorageInfo(); loadStudioLocations(); loadLocations(); loadPublicFeedbackSetting(); loadSendgridConfig(); applySettingsGating(); }
+  if (route === 'settings') { updateGitHubTokenStatus(); updateLkApiKeyStatus(); loadOperators(); loadStorageInfo(); loadStudioLocations(); loadLocations(); loadPublicFeedbackSetting(); loadEmailConfig(); applySettingsGating(); }
   if (route === 'analytics' && !analyticsLoaded) loadAnalytics();
   if (route === 'products' && !productsLoaded) loadProducts();
   // orders lazy-load handled by orders module
@@ -9818,7 +9903,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260319p2';
+var MAST_MODULES_V = '20260319p3';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -9838,7 +9923,8 @@ var MODULE_MANIFEST = {
   fulfillment: { src: 'modules/fulfillment.js', routes: ['pack', 'ship', 'fulfillment'] },
   eventsAdmin: { src: 'modules/events.js', routes: ['events-shows', 'events-settings'] },
   website: { src: 'modules/website.js', routes: ['website'] },
-  showLight: { src: 'modules/show-light.js', routes: ['show-light-profile', 'show-light-gallery', 'show-light-shows', 'show-light-apply'] }
+  showLight: { src: 'modules/show-light.js', routes: ['show-light-profile', 'show-light-gallery', 'show-light-shows', 'show-light-apply'] },
+  emailLog: { src: 'modules/email-log.js', routes: ['email-log'] }
 };
 
 // Reverse lookup: route → moduleId (built from MODULE_MANIFEST)
@@ -11053,53 +11139,176 @@ function loadGoogleConfig() {
 }
 
 // ============================================================
-// SendGrid Config Management
+// Email Config Management (Provider-Agnostic — replaces SendGrid-only)
 // ============================================================
-async function saveSendgridConfig() {
-  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
-  var apiKey = getFieldValue('sendgridApiKey');
-  var fromEmail = document.getElementById('sendgridFromEmail').value.trim();
-  var fromName = document.getElementById('sendgridFromName').value.trim();
 
-  if (!apiKey) { showToast('API key is required.', true); return; }
-
-  var sp = (TENANT_CONFIG && TENANT_CONFIG.secretPrefix) || MastDB.tenantId();
-  var secrets = {};
-  if (apiKey && !apiKey.includes('••••')) secrets[sp + '-sendgrid-api-key'] = apiKey;
-
-  var metadata = { fromEmail: fromEmail, fromName: fromName, updatedAt: new Date().toISOString() };
-
-  try {
-    await firebase.functions().httpsCallable('secretsManager')({
-      action: 'write', service: 'sendgrid', secrets: secrets, metadata: metadata
-    });
-    await updateConfigChecklist('email', true);
-    await writeAudit('update', 'settings', 'sendgridConfig');
-    loadSendgridConfig();
-    showToast('SendGrid configuration saved.');
-  } catch (err) {
-    showToast('Error saving SendGrid config: ' + err.message, true);
+function onEmailProviderChange() {
+  var provider = document.getElementById('emailProvider').value;
+  // Hide all provider-specific sections
+  ['emailProviderMastManaged', 'emailProviderGmail', 'emailProviderSendgrid', 'emailProviderResend', 'emailProviderCustom'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  // Show the relevant one
+  if (!provider) {
+    var el = document.getElementById('emailProviderMastManaged');
+    if (el) el.style.display = '';
+  } else if (provider === 'gmail') {
+    var el = document.getElementById('emailProviderGmail');
+    if (el) el.style.display = '';
+  } else if (provider === 'sendgrid') {
+    var el = document.getElementById('emailProviderSendgrid');
+    if (el) el.style.display = '';
+  } else if (provider === 'resend') {
+    var el = document.getElementById('emailProviderResend');
+    if (el) el.style.display = '';
+  } else if (provider === 'custom') {
+    var el = document.getElementById('emailProviderCustom');
+    if (el) el.style.display = '';
   }
 }
 
-function loadSendgridConfig() {
-  var statusEl = document.getElementById('sendgridConfigStatus');
+async function saveEmailConfig() {
+  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
+
+  var provider = document.getElementById('emailProvider').value || null;
+  var fromEmail = document.getElementById('emailFromEmail').value.trim();
+  var fromName = document.getElementById('emailFromName').value.trim();
+  var noReplyEmail = document.getElementById('emailNoReplyEmail').value.trim();
+  var ownerEmail = document.getElementById('emailOwnerEmail').value.trim();
+
+  var sp = (TENANT_CONFIG && TENANT_CONFIG.secretPrefix) || MastDB.tenantId();
+  var secrets = {};
+
+  // Collect provider-specific secrets
+  if (provider === 'sendgrid') {
+    var apiKey = getFieldValue('emailSendgridApiKey');
+    if (apiKey && !apiKey.includes('••••')) secrets[sp + '-sendgrid-api-key'] = apiKey;
+  } else if (provider === 'resend') {
+    var apiKey = getFieldValue('emailResendApiKey');
+    if (apiKey && !apiKey.includes('••••')) secrets[sp + '-resend-api-key'] = apiKey;
+  } else if (provider === 'custom') {
+    var apiKey = getFieldValue('emailCustomApiKey');
+    if (apiKey && !apiKey.includes('••••')) secrets[sp + '-email-api-key'] = apiKey;
+  }
+
+  // Build metadata (non-secret config written to RTDB)
+  var metadata = {
+    provider: provider,
+    fromEmail: fromEmail,
+    fromName: fromName,
+    noReplyEmail: noReplyEmail,
+    ownerEmail: ownerEmail,
+    updatedAt: new Date().toISOString()
+  };
+
+  // Add custom-specific non-secret fields
+  if (provider === 'custom') {
+    metadata.endpointUrl = document.getElementById('emailCustomEndpoint').value.trim();
+    metadata.authHeaderFormat = document.getElementById('emailCustomAuthFormat').value.trim() || 'Bearer {key}';
+  }
+
+  try {
+    await firebase.functions().httpsCallable('secretsManager')({
+      action: 'write', service: 'email', secrets: secrets, metadata: metadata
+    });
+    await updateConfigChecklist('email', true);
+    await writeAudit('update', 'settings', 'emailConfig');
+    loadEmailConfig();
+    showToast('Email configuration saved.');
+  } catch (err) {
+    showToast('Error saving email config: ' + err.message, true);
+  }
+}
+
+function loadEmailConfig() {
+  var statusEl = document.getElementById('emailConfigStatus');
   firebase.functions().httpsCallable('secretsManager')({
-    action: 'read', service: 'sendgrid'
+    action: 'read', service: 'email'
   }).then(function(result) {
     var config = result.data;
+    var provider = config.provider || '';
+
+    // Set provider dropdown
+    var providerEl = document.getElementById('emailProvider');
+    if (providerEl) providerEl.value = provider || '';
+    onEmailProviderChange();
+
+    // Populate common fields
+    if (config.fromEmail) document.getElementById('emailFromEmail').value = config.fromEmail;
+    if (config.fromName) document.getElementById('emailFromName').value = config.fromName;
+    if (config.noReplyEmail) document.getElementById('emailNoReplyEmail').value = config.noReplyEmail;
+    if (config.ownerEmail) document.getElementById('emailOwnerEmail').value = config.ownerEmail;
+
+    // Provider-specific fields
+    if (provider === 'sendgrid' && config.apiKey) {
+      setMaskedField('emailSendgridApiKey', config.apiKey);
+    } else if (provider === 'resend' && config.apiKey) {
+      setMaskedField('emailResendApiKey', config.apiKey);
+    } else if (provider === 'custom') {
+      if (config.apiKey) setMaskedField('emailCustomApiKey', config.apiKey);
+      if (config.endpointUrl) document.getElementById('emailCustomEndpoint').value = config.endpointUrl;
+      if (config.authHeaderFormat) document.getElementById('emailCustomAuthFormat').value = config.authHeaderFormat;
+    } else if (provider === 'gmail') {
+      var gmailStatusEl = document.getElementById('emailGmailStatus');
+      if (gmailStatusEl) {
+        if (config.gmailUser) {
+          gmailStatusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Gmail credentials configured</span>';
+        } else {
+          gmailStatusEl.innerHTML = '<span style="color:var(--warm-gray-light);">Gmail secrets not yet set in Secret Manager.</span>';
+        }
+      }
+    }
+
+    // Mast-managed info
+    if (!provider) {
+      var tenantId = MastDB.tenantId();
+      var addrEl = document.getElementById('emailMastManagedAddress');
+      if (addrEl) addrEl.textContent = tenantId + '@mail.mastplatform.com';
+      var balEl = document.getElementById('emailTokenBalance');
+      if (balEl) balEl.textContent = (config.tokenBalance != null ? config.tokenBalance : '—') + ' tokens';
+    }
+
+    // Status
     if (config && config.configured) {
-      setMaskedField('sendgridApiKey', config.apiKey || '');
-      if (config.fromEmail) document.getElementById('sendgridFromEmail').value = config.fromEmail;
-      if (config.fromName) document.getElementById('sendgridFromName').value = config.fromName;
-      if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; SendGrid configured</span>';
+      var providerLabel = { gmail: 'Gmail', sendgrid: 'SendGrid', resend: 'Resend', custom: 'Custom' }[provider] || provider;
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Email configured (' + esc(providerLabel) + ')</span>';
     } else {
-      if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray-light);">Not configured. Email notifications will not work.</span>';
+      if (!provider) {
+        if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Using Mast-Managed email (1 token/send)</span>';
+      } else {
+        if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray-light);">Provider selected but not fully configured.</span>';
+      }
     }
   }).catch(function(err) {
-    console.warn('SendGrid config read failed:', err.message);
+    console.warn('Email config read failed:', err.message);
     if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray-light);">Could not load config.</span>';
+    // Show mast-managed address as fallback
+    var tenantId = MastDB.tenantId();
+    var addrEl = document.getElementById('emailMastManagedAddress');
+    if (addrEl) addrEl.textContent = tenantId + '@mail.mastplatform.com';
   });
+}
+
+async function sendTestEmailFromSettings() {
+  if (!hasPermission('settings', 'update')) { showToast('You do not have permission.', true); return; }
+  var ownerEmail = document.getElementById('emailOwnerEmail').value.trim();
+  var fromEmail = document.getElementById('emailFromEmail').value.trim();
+  var toEmail = ownerEmail || fromEmail;
+  if (!toEmail) {
+    showToast('Enter an Owner Email or From Email first to receive the test.', true);
+    return;
+  }
+  var statusEl = document.getElementById('emailTestStatus');
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Sending test email...</span>';
+  try {
+    var result = await firebase.functions().httpsCallable('sendTestEmail')({ toEmail: toEmail });
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Test email sent to ' + esc(result.data.sentTo) + '</span>';
+    showToast('Test email sent to ' + result.data.sentTo);
+  } catch (err) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:#EF5350;">&#10007; ' + esc(err.message) + '</span>';
+    showToast('Test email failed: ' + err.message, true);
+  }
 }
 
 // ============================================================
