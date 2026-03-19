@@ -9046,8 +9046,19 @@ async function resolveTenant(uid) {
     if (tenantIds.length === 0) return null;
     if (tenantIds.length === 1) return tenantIds[0];
 
-    // Multiple tenants — prefer domain-resolved tenant if available, else first alphabetically (picker UI is Phase 6)
+    // Multiple tenants — prefer the tenant matching the current hostname.
+    // storefront-tenant.js sets TENANT_ID but may still be loading (race condition).
+    if (!window.TENANT_ID && window.TENANT_READY) {
+      try { await Promise.race([window.TENANT_READY, new Promise(function(_, rej) { setTimeout(rej, 2000); })]); }
+      catch (e) { /* timeout — proceed with hostname fallback */ }
+    }
     if (window.TENANT_ID && tenantMap[window.TENANT_ID]) return window.TENANT_ID;
+
+    // Fallback: extract tenantId directly from hostname patterns
+    var host = window.location.hostname;
+    var hostMatch = host.match(/^mast-([a-z0-9-]+)\.web\.app$/) || host.match(/^([a-z0-9-]+)\.runmast\.com$/);
+    if (hostMatch && tenantMap[hostMatch[1]]) return hostMatch[1];
+
     return tenantIds[0];
   } catch (err) {
     console.error('Tenant resolution failed:', err);
