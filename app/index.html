@@ -9892,7 +9892,7 @@ function renderSubscriptionSettings() {
 
     // Events tier card — same grid, same gap as artist tiers
     var eventsActive = sub.modules && sub.modules.indexOf('events') >= 0;
-    var eventsBorder = eventsActive ? 'var(--teal)' : 'var(--cream-dark)';
+    var eventsBorder = 'var(--teal)';
     var eventsBg = eventsActive ? 'var(--cream)' : 'var(--cream-dark)';
     var eventsShadow = eventsActive ? '0 2px 8px rgba(42, 124, 111, 0.2)' : 'none';
     h += '<div style="margin-left:16px;background:' + eventsBg + ';border:2px solid ' + eventsBorder + ';border-radius:12px;padding:20px;cursor:default;box-shadow:' + eventsShadow + ';transition:all 0.2s;">';
