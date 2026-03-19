@@ -2441,27 +2441,6 @@
     body.dark-mode .inv-overview-row:hover { background: rgba(255,255,255,0.04); }
 
     /* ========== ORDERS ========== */
-    .order-status {
-      /* base from .status-badge.pill */
-    }
-    .order-status.pending_payment { background: rgba(230,81,0,0.2); color: #FFB74D; border: 1px solid rgba(230,81,0,0.35); }
-    .order-status.payment_failed { background: rgba(198,40,40,0.2); color: #EF5350; border: 1px solid rgba(198,40,40,0.35); }
-    .order-source-badge {
-      display: inline-block; font-size: 0.7rem; padding: 1px 6px; border-radius: 4px;
-      font-weight: 600; vertical-align: middle; margin-left: 6px; text-transform: uppercase; letter-spacing: 0.5px;
-    }
-    .order-source-badge.etsy { background: #F1641E; color: white; }
-    .order-status.placed { background: rgba(230,81,0,0.2); color: #FFB74D; border: 1px solid rgba(230,81,0,0.35); }
-    .order-status.confirmed { background: rgba(21,101,192,0.2); color: #64B5F6; border: 1px solid rgba(21,101,192,0.35); }
-    .order-status.building { background: rgba(123,31,162,0.2); color: #CE93D8; border: 1px solid rgba(123,31,162,0.35); }
-    .order-status.ready { background: rgba(27,92,82,0.25); color: #4DB6AC; border: 1px solid rgba(27,92,82,0.4); }
-    .order-status.packing { background: rgba(249,168,37,0.2); color: #FFD54F; border: 1px solid rgba(249,168,37,0.35); }
-    .order-status.packed { background: rgba(46,125,50,0.25); color: #66BB6A; border: 1px solid rgba(46,125,50,0.4); }
-    .order-status.handed_to_carrier { background: rgba(69,39,160,0.2); color: #B39DDB; border: 1px solid rgba(69,39,160,0.35); }
-    .order-status.shipped { background: rgba(40,53,147,0.2); color: #7986CB; border: 1px solid rgba(40,53,147,0.35); }
-    .order-status.delivered { background: rgba(46,125,50,0.25); color: #66BB6A; border: 1px solid rgba(46,125,50,0.4); }
-    .order-status.cancelled { background: rgba(155,35,53,0.2); color: #EF5350; border: 1px solid rgba(155,35,53,0.35); }
-
     .order-filter-pills {
       display: flex;
       flex-wrap: wrap;
@@ -2936,21 +2915,6 @@
       font-size: 0.85rem;
     }
     .production-request-row:last-child { border-bottom: none; }
-    .production-request-status {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 0.72rem;
-      font-weight: 600;
-      text-transform: uppercase;
-    }
-    .production-request-status.pending { background: rgba(230,81,0,0.2); color: #FFB74D; border: 1px solid rgba(230,81,0,0.35); }
-    .production-request-status.in-progress { background: rgba(123,31,162,0.2); color: #CE93D8; border: 1px solid rgba(123,31,162,0.35); }
-    .production-request-status.completed { background: rgba(46,125,50,0.25); color: #66BB6A; border: 1px solid rgba(46,125,50,0.4); }
-    .production-request-status.fulfilled { background: rgba(46,125,50,0.25); color: #66BB6A; border: 1px solid rgba(46,125,50,0.4); }
-    .production-request-status.assigned { background: rgba(21,101,192,0.2); color: #64B5F6; border: 1px solid rgba(21,101,192,0.35); }
-    .production-request-status.cancelled { background: rgba(198,40,40,0.2); color: #EF5350; border: 1px solid rgba(198,40,40,0.35); }
-
     /* Production Jobs */
     .prod-job-card {
       background: var(--cream);
@@ -3175,17 +3139,6 @@
       background: #2a2a2a;
       border-color: #3a3a3a;
     }
-    body.dark-mode .order-status.pending_payment { background: #3a2a1a; color: #FFB74D; }
-    body.dark-mode .order-status.payment_failed { background: #3a1a1a; color: #EF9A9A; }
-    body.dark-mode .order-source-badge.etsy { background: #c44e15; }
-    body.dark-mode .order-status.placed { background: #3a2a1a; color: #FFB74D; }
-    body.dark-mode .order-status.confirmed { background: #1a2a3a; color: #64B5F6; }
-    body.dark-mode .order-status.building { background: #2a1a3a; color: #CE93D8; }
-    body.dark-mode .order-status.ready { background: #1a3a35; color: #6fc; }
-    body.dark-mode .order-status.packing { background: #3a3a1a; color: #FFF176; }
-    body.dark-mode .order-status.shipped { background: #1a1a3a; color: #9FA8DA; }
-    body.dark-mode .order-status.delivered { background: #1a3a1a; color: #81C784; }
-    body.dark-mode .order-status.cancelled { background: #3a1a1a; color: #f99; }
     body.dark-mode .order-filter-pill {
       background: #333;
       border-color: #555;
@@ -3859,17 +3812,7 @@
     .contacts-table th { text-align:left; padding:8px 12px; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.04em; color:var(--warm-gray); border-bottom:2px solid var(--cream-dark); }
     .contacts-table td { padding:10px 12px; border-bottom:1px solid var(--cream-dark); font-size:0.88rem; vertical-align:top; }
     .contacts-table tr:hover { background:var(--cream); cursor:pointer; }
-    .contact-cat-badge { /* base from .status-badge */ background:rgba(158,158,158,0.15); color:#BDBDBD; }
-    .contact-cat-badge.supplier { background:rgba(30,64,175,0.2); color:#64B5F6; border:1px solid rgba(30,64,175,0.35); }
-    .contact-cat-badge.facilities { background:rgba(146,64,14,0.2); color:#FFD54F; border:1px solid rgba(146,64,14,0.35); }
-    .contact-cat-badge.gallery { background:rgba(91,33,182,0.2); color:#B39DDB; border:1px solid rgba(91,33,182,0.35); }
-    .contact-cat-badge.marketplace { background:rgba(6,95,70,0.25); color:#4DB6AC; border:1px solid rgba(6,95,70,0.4); }
-    .contact-cat-badge.event-organizer { background:rgba(157,23,77,0.2); color:#F48FB1; border:1px solid rgba(157,23,77,0.35); }
-    .contact-cat-badge.partner { background:rgba(55,48,163,0.2); color:#7986CB; border:1px solid rgba(55,48,163,0.35); }
-    .contact-cat-badge.student { background:rgba(15,118,110,0.2); color:#4DB6AC; border:1px solid rgba(15,118,110,0.35); }
-    .contact-cat-badge.press { background:rgba(133,77,14,0.2); color:#FFD54F; border:1px solid rgba(133,77,14,0.35); }
     .contact-last-interaction { font-size:0.8rem; color:var(--warm-gray); }
-    .contact-last-interaction .type-badge { font-weight:600; color:var(--charcoal); }
 
     /* Contact Detail */
     .contact-detail-header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:20px; flex-wrap:wrap; }
@@ -3885,13 +3828,6 @@
     .interaction-card:hover { border-color:var(--amber-light); }
     .interaction-header { display:flex; align-items:center; gap:10px; margin-bottom:6px; flex-wrap:wrap; }
     .interaction-date { font-weight:600; font-size:0.88rem; }
-    .interaction-type-badge { /* base from .status-badge */ background:rgba(158,158,158,0.15); color:#BDBDBD; }
-    .interaction-type-badge.call { background:rgba(30,64,175,0.2); color:#64B5F6; border:1px solid rgba(30,64,175,0.35); }
-    .interaction-type-badge.email { background:rgba(6,95,70,0.25); color:#4DB6AC; border:1px solid rgba(6,95,70,0.4); }
-    .interaction-type-badge.meeting { background:rgba(91,33,182,0.2); color:#B39DDB; border:1px solid rgba(91,33,182,0.35); }
-    .interaction-type-badge.site-visit { background:rgba(146,64,14,0.2); color:#FFD54F; border:1px solid rgba(146,64,14,0.35); }
-    .interaction-type-badge.payment { background:rgba(6,95,70,0.25); color:#4DB6AC; border:1px solid rgba(6,95,70,0.4); }
-    .interaction-type-badge.signed-doc { background:rgba(157,23,77,0.2); color:#F48FB1; border:1px solid rgba(157,23,77,0.35); }
     .interaction-notes { font-size:0.88rem; color:var(--charcoal); white-space:pre-wrap; }
     .interaction-docs { margin-top:8px; display:flex; flex-direction:column; gap:4px; }
     .interaction-doc-link { display:flex; align-items:center; gap:6px; font-size:0.82rem; color:var(--teal); text-decoration:none; }

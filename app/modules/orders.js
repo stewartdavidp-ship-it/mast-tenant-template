@@ -14,6 +14,48 @@
   var _viewOrderReturnRoute = null;
 
   // ============================================================
+  // Badge Style Helpers (inline colors per style guide)
+  // ============================================================
+
+  var ORDER_STATUS_BADGE_COLORS = {
+    pending_payment: { bg: 'rgba(230,81,0,0.2)', color: '#FFB74D', border: 'rgba(230,81,0,0.35)' },
+    payment_failed:  { bg: 'rgba(198,40,40,0.2)', color: '#EF5350', border: 'rgba(198,40,40,0.35)' },
+    placed:          { bg: 'rgba(230,81,0,0.2)', color: '#FFB74D', border: 'rgba(230,81,0,0.35)' },
+    confirmed:       { bg: 'rgba(21,101,192,0.2)', color: '#64B5F6', border: 'rgba(21,101,192,0.35)' },
+    building:        { bg: 'rgba(123,31,162,0.2)', color: '#CE93D8', border: 'rgba(123,31,162,0.35)' },
+    ready:           { bg: 'rgba(27,92,82,0.25)', color: '#4DB6AC', border: 'rgba(27,92,82,0.4)' },
+    packing:         { bg: 'rgba(249,168,37,0.2)', color: '#FFD54F', border: 'rgba(249,168,37,0.35)' },
+    packed:          { bg: 'rgba(46,125,50,0.25)', color: '#66BB6A', border: 'rgba(46,125,50,0.4)' },
+    handed_to_carrier: { bg: 'rgba(69,39,160,0.2)', color: '#B39DDB', border: 'rgba(69,39,160,0.35)' },
+    shipped:         { bg: 'rgba(40,53,147,0.2)', color: '#7986CB', border: 'rgba(40,53,147,0.35)' },
+    delivered:       { bg: 'rgba(46,125,50,0.25)', color: '#66BB6A', border: 'rgba(46,125,50,0.4)' },
+    cancelled:       { bg: 'rgba(155,35,53,0.2)', color: '#EF5350', border: 'rgba(155,35,53,0.35)' }
+  };
+
+  function orderStatusBadgeStyle(status) {
+    var c = ORDER_STATUS_BADGE_COLORS[status] || { bg: 'rgba(158,158,158,0.15)', color: '#BDBDBD', border: 'rgba(158,158,158,0.25)' };
+    return 'background:' + c.bg + ';color:' + c.color + ';border:1px solid ' + c.border + ';';
+  }
+
+  var PROD_REQUEST_STATUS_COLORS = {
+    pending:     { bg: 'rgba(230,81,0,0.2)', color: '#FFB74D', border: 'rgba(230,81,0,0.35)' },
+    assigned:    { bg: 'rgba(21,101,192,0.2)', color: '#64B5F6', border: 'rgba(21,101,192,0.35)' },
+    'in-progress': { bg: 'rgba(123,31,162,0.2)', color: '#CE93D8', border: 'rgba(123,31,162,0.35)' },
+    completed:   { bg: 'rgba(46,125,50,0.25)', color: '#66BB6A', border: 'rgba(46,125,50,0.4)' },
+    fulfilled:   { bg: 'rgba(46,125,50,0.25)', color: '#66BB6A', border: 'rgba(46,125,50,0.4)' },
+    cancelled:   { bg: 'rgba(198,40,40,0.2)', color: '#EF5350', border: 'rgba(198,40,40,0.35)' }
+  };
+
+  function prodRequestBadgeStyle(status) {
+    var c = PROD_REQUEST_STATUS_COLORS[status] || { bg: 'rgba(158,158,158,0.15)', color: '#BDBDBD', border: 'rgba(158,158,158,0.25)' };
+    return 'background:' + c.bg + ';color:' + c.color + ';border:1px solid ' + c.border + ';';
+  }
+
+  function etsySourceBadgeStyle() {
+    return 'background:#F1641E;color:white;';
+  }
+
+  // ============================================================
   // Orders Management
   // ============================================================
 
@@ -192,13 +234,13 @@
       var key = o._key;
       var num = esc(getOrderDisplayNumber(o));
       var status = o.status || 'placed';
-      var sourceBadge = o.source === 'etsy' ? ' <span class="order-source-badge etsy">Etsy</span>' : '';
+      var sourceBadge = o.source === 'etsy' ? ' <span class="status-badge" style="' + etsySourceBadgeStyle() + '">Etsy</span>' : '';
       rowsHtml += '<tr onclick="viewOrder(\'' + esc(key) + '\')">' +
         '<td><span style="font-family:monospace;font-weight:600;">' + num + '</span>' + sourceBadge + '</td>' +
         '<td>' + esc(o.email || '') + '</td>' +
         '<td>' + getOrderItemsLabel(o) + '</td>' +
         '<td>$' + (o.total || 0).toFixed(2) + '</td>' +
-        '<td><span class="status-badge pill order-status ' + status + '">' + status.replace(/_/g, ' ') + '</span></td>' +
+        '<td><span class="status-badge pill" style="' + orderStatusBadgeStyle(status) + '">' + status.replace(/_/g, ' ') + '</span></td>' +
         '<td>' + formatOrderDate(o.placedAt || o.pendingPaymentAt) + '</td>' +
         '</tr>';
     });
@@ -210,11 +252,11 @@
       var key = o._key;
       var num = esc(getOrderDisplayNumber(o));
       var status = o.status || 'placed';
-      var cardSourceBadge = o.source === 'etsy' ? '<span class="order-source-badge etsy" style="margin-left:8px;">Etsy</span>' : '';
+      var cardSourceBadge = o.source === 'etsy' ? '<span class="status-badge" style="margin-left:8px;' + etsySourceBadgeStyle() + '">Etsy</span>' : '';
       cardHtml += '<div class="order-card" onclick="viewOrder(\'' + esc(key) + '\')">' +
         '<div class="order-card-header">' +
           '<span class="order-card-number">' + num + cardSourceBadge + '</span>' +
-          '<span class="status-badge pill order-status ' + status + '">' + status.replace(/_/g, ' ') + '</span>' +
+          '<span class="status-badge pill" style="' + orderStatusBadgeStyle(status) + '">' + status.replace(/_/g, ' ') + '</span>' +
         '</div>' +
         '<div class="order-card-details">' +
           '<span class="order-card-detail">' + esc(o.email || '') + '</span>' +
@@ -439,7 +481,7 @@
     var etsyHtml = '';
     if (o.source === 'etsy' && o.etsyReceiptId) {
       var etsyRows = '';
-      etsyRows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Source</span><span class="order-source-badge etsy">Etsy</span></div>';
+      etsyRows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Source</span><span class="status-badge" style="' + etsySourceBadgeStyle() + '">Etsy</span></div>';
       etsyRows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Receipt ID</span><span style="font-family:monospace;font-size:0.82rem;">' +
         (o.etsyOrderUrl ? '<a href="' + esc(o.etsyOrderUrl) + '" target="_blank" style="color:var(--teal);">' + esc(o.etsyReceiptId) + '</a>' : esc(o.etsyReceiptId)) +
         '</span></div>';
@@ -604,7 +646,7 @@
             ' x' + (pr.qty || 1) +
           '</div>' +
           '<div style="display:flex;align-items:center;gap:8px;">' +
-            '<span class="production-request-status ' + prStatus + '">' + prStatus.replace('-', ' ') + '</span>' +
+            '<span class="status-badge" style="' + prodRequestBadgeStyle(prStatus) + '">' + prStatus.replace('-', ' ') + '</span>' +
             prActions +
           '</div>' +
         '</div>';
@@ -619,9 +661,9 @@
     detailEl.innerHTML = '<button class="detail-back" onclick="backToOrders()">&#8592; ' + backLabel + '</button>' +
       '<div class="order-detail-header">' +
         '<div>' +
-          '<div class="order-detail-title">' + num + (o.source === 'etsy' ? ' <span class="order-source-badge etsy">Etsy</span>' : '') + '</div>' +
+          '<div class="order-detail-title">' + num + (o.source === 'etsy' ? ' <span class="status-badge" style="' + etsySourceBadgeStyle() + '">Etsy</span>' : '') + '</div>' +
           '<div class="order-detail-meta">' +
-            '<span class="status-badge pill order-status ' + status + '">' + status.replace(/_/g, ' ') + '</span> &middot; ' +
+            '<span class="status-badge pill" style="' + orderStatusBadgeStyle(status) + '">' + status.replace(/_/g, ' ') + '</span> &middot; ' +
             formatOrderDateTime(o.placedAt || o.pendingPaymentAt) + ' &middot; ' + esc(o.email || '') +
           '</div>' +
         '</div>' +
@@ -1856,11 +1898,11 @@
         var num = esc(getOrderDisplayNumber(o));
         var status = o.status || 'placed';
         var customer = o.customerName || o.email || '';
-        var sourceBadge = o.source === 'etsy' ? ' <span class="order-source-badge etsy" style="font-size:0.7rem;">Etsy</span>' : '';
+        var sourceBadge = o.source === 'etsy' ? ' <span class="status-badge" style="font-size:0.7rem;' + etsySourceBadgeStyle() + '">Etsy</span>' : '';
         contentHtml += '<div class="dash-queue-item" onclick="viewOrder(\'' + esc(key) + '\')">' +
           '<div class="dash-queue-row">' +
             '<span class="dash-queue-order-num">' + num + sourceBadge + '</span>' +
-            '<span class="status-badge pill order-status ' + status + '" style="font-size:0.7rem;padding:2px 8px;">' + status.replace(/_/g, ' ') + '</span>' +
+            '<span class="status-badge pill" style="font-size:0.7rem;padding:2px 8px;' + orderStatusBadgeStyle(status) + '">' + status.replace(/_/g, ' ') + '</span>' +
           '</div>' +
           (customer ? '<div class="dash-queue-customer">' + esc(customer) + '</div>' : '') +
           '<div class="dash-queue-meta">' +
@@ -1897,11 +1939,11 @@
         var key = o._key;
         var num = esc(getOrderDisplayNumber(o));
         var customer = o.customerName || o.email || '';
-        var sourceBadge = o.source === 'etsy' ? ' <span class="order-source-badge etsy" style="font-size:0.7rem;">Etsy</span>' : '';
+        var sourceBadge = o.source === 'etsy' ? ' <span class="status-badge" style="font-size:0.7rem;' + etsySourceBadgeStyle() + '">Etsy</span>' : '';
         contentHtml += '<div class="dash-queue-item" onclick="viewOrder(\'' + esc(key) + '\')">' +
           '<div class="dash-queue-row">' +
             '<span class="dash-queue-order-num">' + num + sourceBadge + '</span>' +
-            '<span class="status-badge pill order-status packed" style="font-size:0.7rem;padding:2px 8px;">packed</span>' +
+            '<span class="status-badge pill" style="font-size:0.7rem;padding:2px 8px;' + orderStatusBadgeStyle('packed') + '">packed</span>' +
           '</div>' +
           (customer ? '<div class="dash-queue-customer">' + esc(customer) + '</div>' : '') +
           '<div class="dash-queue-meta">' +
@@ -1921,6 +1963,8 @@
   // Window exports for onclick handlers
   // ============================================================
 
+  window.orderStatusBadgeStyle = orderStatusBadgeStyle;
+  window.etsySourceBadgeStyle = etsySourceBadgeStyle;
   window.loadOrders = loadOrders;
   window.getOrdersArray = getOrdersArray;
   window.getOrderDisplayNumber = getOrderDisplayNumber;

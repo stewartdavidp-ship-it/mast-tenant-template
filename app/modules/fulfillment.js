@@ -91,7 +91,7 @@
       html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;margin-bottom:8px;">' +
         '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">' +
           '<div>' +
-            '<div style="font-weight:600;font-family:monospace;">' + num + ' <span class="status-badge pill order-status ' + status + '">' + status.replace(/_/g, ' ') + '</span></div>' +
+            '<div style="font-weight:600;font-family:monospace;">' + num + ' <span class="status-badge pill" style="' + orderStatusBadgeStyle(status) + '">' + status.replace(/_/g, ' ') + '</span></div>' +
             '<div style="font-size:0.85rem;color:var(--warm-gray);">' + custName + ' &mdash; ' + esc(itemNames) + '</div>' +
           '</div>' +
           '<div style="display:flex;gap:6px;">';
@@ -336,7 +336,7 @@
       var card = '<div style="background:var(--cream);border:1px solid ' + (isOpen ? 'var(--teal)' : 'var(--cream-dark)') + ';border-radius:8px;padding:12px 16px;margin-bottom:8px;">' +
         '<div style="display:flex;justify-content:space-between;align-items:center;">' +
           '<div><strong>' + esc(b.name || 'Unnamed Bundle') + '</strong>' +
-            ' <span class="status-badge pill order-status ' + (isOpen ? 'packing' : 'delivered') + '">' + b.status + '</span></div>' +
+            ' <span class="status-badge pill" style="' + orderStatusBadgeStyle(isOpen ? 'packing' : 'delivered') + '">' + b.status + '</span></div>' +
           '<div style="font-size:0.85rem;color:var(--warm-gray);">' + total + ' package' + (total !== 1 ? 's' : '') + '</div>' +
         '</div>';
       if (b.carrier) {

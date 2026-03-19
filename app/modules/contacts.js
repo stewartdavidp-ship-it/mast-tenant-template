@@ -18,6 +18,42 @@
   var CONTACT_CATEGORIES = ['Supplier', 'Facilities', 'Gallery', 'Marketplace', 'Event Organizer', 'Partner', 'Student', 'Press', 'Other'];
   var INTERACTION_TYPES = ['Call', 'Email', 'Meeting', 'Site Visit', 'Payment', 'Signed Doc', 'Other'];
 
+  // ============================================================
+  // Badge Style Helpers (inline colors per style guide)
+  // ============================================================
+
+  var CONTACT_CAT_BADGE_COLORS = {
+    supplier:         { bg: 'rgba(30,64,175,0.2)', color: '#64B5F6', border: 'rgba(30,64,175,0.35)' },
+    facilities:       { bg: 'rgba(146,64,14,0.2)', color: '#FFD54F', border: 'rgba(146,64,14,0.35)' },
+    gallery:          { bg: 'rgba(91,33,182,0.2)', color: '#B39DDB', border: 'rgba(91,33,182,0.35)' },
+    marketplace:      { bg: 'rgba(6,95,70,0.25)', color: '#4DB6AC', border: 'rgba(6,95,70,0.4)' },
+    'event-organizer': { bg: 'rgba(157,23,77,0.2)', color: '#F48FB1', border: 'rgba(157,23,77,0.35)' },
+    partner:          { bg: 'rgba(55,48,163,0.2)', color: '#7986CB', border: 'rgba(55,48,163,0.35)' },
+    student:          { bg: 'rgba(15,118,110,0.2)', color: '#4DB6AC', border: 'rgba(15,118,110,0.35)' },
+    press:            { bg: 'rgba(133,77,14,0.2)', color: '#FFD54F', border: 'rgba(133,77,14,0.35)' }
+  };
+
+  function contactCatBadgeStyle(category) {
+    var key = (category || 'other').toLowerCase().replace(/\s+/g, '-');
+    var c = CONTACT_CAT_BADGE_COLORS[key] || { bg: 'rgba(158,158,158,0.15)', color: '#BDBDBD', border: 'rgba(158,158,158,0.25)' };
+    return 'background:' + c.bg + ';color:' + c.color + ';border:1px solid ' + c.border + ';';
+  }
+
+  var INTERACTION_TYPE_BADGE_COLORS = {
+    call:        { bg: 'rgba(30,64,175,0.2)', color: '#64B5F6', border: 'rgba(30,64,175,0.35)' },
+    email:       { bg: 'rgba(6,95,70,0.25)', color: '#4DB6AC', border: 'rgba(6,95,70,0.4)' },
+    meeting:     { bg: 'rgba(91,33,182,0.2)', color: '#B39DDB', border: 'rgba(91,33,182,0.35)' },
+    'site-visit': { bg: 'rgba(146,64,14,0.2)', color: '#FFD54F', border: 'rgba(146,64,14,0.35)' },
+    payment:     { bg: 'rgba(6,95,70,0.25)', color: '#4DB6AC', border: 'rgba(6,95,70,0.4)' },
+    'signed-doc': { bg: 'rgba(157,23,77,0.2)', color: '#F48FB1', border: 'rgba(157,23,77,0.35)' }
+  };
+
+  function interactionTypeBadgeStyle(type) {
+    var key = (type || 'other').toLowerCase().replace(/\s+/g, '-');
+    var c = INTERACTION_TYPE_BADGE_COLORS[key] || { bg: 'rgba(158,158,158,0.15)', color: '#BDBDBD', border: 'rgba(158,158,158,0.25)' };
+    return 'background:' + c.bg + ';color:' + c.color + ';border:1px solid ' + c.border + ';';
+  }
+
 async function loadContacts() {
   var loading = document.getElementById('contactsLoading');
   loading.style.display = '';
@@ -81,10 +117,9 @@ function renderContacts() {
     var tr = document.createElement('tr');
     tr.onclick = function() { viewContact(c.id); };
 
-    var catClass = (c.category || 'other').toLowerCase().replace(/\s+/g, '-');
     var lastInt = c._lastInteraction;
     var lastIntHtml = lastInt
-      ? '<span class="contact-last-interaction"><span class="type-badge">' + esc(lastInt.type || '') + '</span> &mdash; ' + esc(lastInt.date || '') + '</span>'
+      ? '<span class="contact-last-interaction"><span class="status-badge" style="' + interactionTypeBadgeStyle(lastInt.type) + '">' + esc(lastInt.type || '') + '</span> &mdash; ' + esc(lastInt.date || '') + '</span>'
       : '<span style="color:var(--warm-gray-light);font-size:0.82rem;">None</span>';
 
     var driveHtml = c.driveFolderLink
@@ -93,7 +128,7 @@ function renderContacts() {
 
     tr.innerHTML =
       '<td><strong>' + esc(c.name || '') + '</strong></td>' +
-      '<td><span class="status-badge contact-cat-badge ' + catClass + '">' + esc(c.category || 'Other') + '</span></td>' +
+      '<td><span class="status-badge" style="' + contactCatBadgeStyle(c.category) + '">' + esc(c.category || 'Other') + '</span></td>' +
       '<td>' + lastIntHtml + '</td>' +
       '<td>' + driveHtml + '</td>';
     tbody.appendChild(tr);
@@ -116,7 +151,7 @@ function openAddContactModal() {
     '</div>' +
     '<div class="modal-footer">' +
       '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
-      '<button class="btn btn-primary" onclick="saveNewContact()">Save Contact</button>' +
+      '<button class="btn btn-primary" onclick="saveNewContact()">Create Contact</button>' +
     '</div>';
   openModal(html);
 }
@@ -212,8 +247,6 @@ async function loadContactDetail(contactId) {
 
 function renderContactDetail(contact) {
   var container = document.getElementById('contactDetailContent');
-  var catClass = (contact.category || 'other').toLowerCase().replace(/\s+/g, '-');
-
   var linksHtml = '';
   if (contact.driveFolderLink) {
     linksHtml += '<a href="' + esc(contact.driveFolderLink) + '" target="_blank" rel="noopener">&#128193; Drive Folder</a>';
@@ -230,7 +263,7 @@ function renderContactDetail(contact) {
     '<div class="contact-detail-header">' +
       '<div>' +
         '<h2 class="contact-detail-name">' + esc(contact.name || '') + '</h2>' +
-        '<span class="status-badge contact-cat-badge ' + catClass + '">' + esc(contact.category || 'Other') + '</span>' +
+        '<span class="status-badge" style="' + contactCatBadgeStyle(contact.category) + '">' + esc(contact.category || 'Other') + '</span>' +
         notesHtml +
         (linksHtml ? '<div class="contact-detail-links">' + linksHtml + '</div>' : '') +
       '</div>' +
@@ -244,7 +277,7 @@ function renderContactDetail(contact) {
   } else {
     timelineHtml += '<h3 style="font-size:1rem;margin-bottom:12px;">Interaction History (' + contactInteractions.length + ')</h3>';
     contactInteractions.forEach(function(inter) {
-      var typeClass = (inter.type || 'other').toLowerCase().replace(/\s+/g, '-');
+      // typeClass no longer needed — using inline styles
       var docsHtml = '';
       if (inter.documents && inter.documents.length) {
         docsHtml = '<div class="interaction-docs">';
@@ -262,7 +295,7 @@ function renderContactDetail(contact) {
         '<div class="interaction-card">' +
           '<div class="interaction-header">' +
             '<span class="interaction-date">' + esc(inter.date || '') + '</span>' +
-            '<span class="status-badge interaction-type-badge ' + typeClass + '">' + esc(inter.type || '') + '</span>' +
+            '<span class="status-badge" style="' + interactionTypeBadgeStyle(inter.type) + '">' + esc(inter.type || '') + '</span>' +
           '</div>' +
           (inter.notes ? '<div class="interaction-notes">' + esc(inter.notes) + '</div>' : '') +
           docsHtml +
@@ -294,7 +327,7 @@ function openLogInteractionModal(contactId) {
     '</div>' +
     '<div class="modal-footer">' +
       '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
-      '<button class="btn btn-primary" onclick="saveInteraction(\'' + esc(contactId) + '\')">Save Interaction</button>' +
+      '<button class="btn btn-primary" onclick="saveInteraction(\'' + esc(contactId) + '\')">Log Interaction</button>' +
     '</div>';
   openModal(html);
 }
