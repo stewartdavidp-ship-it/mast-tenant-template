@@ -4550,7 +4550,7 @@
       </div>
     </div>
     <!-- Book -->
-    <div class="sidebar-section">
+    <div class="sidebar-section sidebar-future-section">
       <div class="sidebar-section-header dashboard-link muted" onclick="navigateTo('book')" style="opacity:0.55;">
         <span class="sidebar-section-icon">&#128197;</span>
         <span class="sidebar-section-label">Book</span>
@@ -8082,8 +8082,8 @@ function applySidebarGating() {
 function updateSidebarExpandToggle() {
   var toggle = document.getElementById('sidebarExpandToggle');
   if (!toggle) return;
-  var lockedSections = document.querySelectorAll('.sidebar-section.locked');
-  if (lockedSections.length > 0) {
+  var hideable = document.querySelectorAll('.sidebar-section.locked, .sidebar-future-section');
+  if (hideable.length > 0) {
     toggle.style.display = '';
     // Default to collapsed (hidden) on first load
     if (!toggle.dataset.initialized) {
@@ -8106,7 +8106,7 @@ function setSidebarLockedVisibility(show) {
   _sidebarShowLocked = show;
   var toggle = document.getElementById('sidebarExpandToggle');
   var label = document.getElementById('sidebarExpandLabel');
-  var lockedSections = document.querySelectorAll('.sidebar-section.locked');
+  var lockedSections = document.querySelectorAll('.sidebar-section.locked, .sidebar-future-section');
 
   lockedSections.forEach(function(el) {
     el.style.display = show ? '' : 'none';
