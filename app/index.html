@@ -9855,15 +9855,12 @@ function renderSubscriptionSettings() {
     });
     h += '</div>';
 
-    // Divider
-    h += '<div style="width:2px;background:var(--cream-dark);border-radius:1px;min-height:80px;align-self:stretch;"></div>';
-
-    // Events tier card
+    // Events tier card — extra 16px margin for visual separation (32px total with flex gap)
     var eventsActive = sub.modules && sub.modules.indexOf('events') >= 0;
     var eventsBorder = eventsActive ? 'var(--teal)' : 'var(--cream-dark)';
     var eventsBg = eventsActive ? 'var(--cream)' : 'var(--cream-dark)';
     var eventsShadow = eventsActive ? '0 2px 8px rgba(42, 124, 111, 0.2)' : 'none';
-    h += '<div style="min-width:180px;max-width:220px;">';
+    h += '<div style="min-width:180px;max-width:220px;margin-left:16px;">';
     h += '<div style="background:' + eventsBg + ';border:2px solid ' + eventsBorder + ';border-radius:12px;padding:20px;height:100%;box-sizing:border-box;box-shadow:' + eventsShadow + ';">';
     h += '<div style="font-size:0.7rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--teal);margin-bottom:6px;">Add-on</div>';
     h += '<div style="font-weight:700;font-family:\'Cormorant Garamond\', serif;font-size:1.1rem;color:var(--charcoal);">Events</div>';
