@@ -7827,6 +7827,21 @@ function renderModuleSelectionUI(containerId, options) {
     : _moduleSelectionState.selected;
   var atLimit = !isCommand && effectiveSelected.length >= limit;
 
+  // --- 48-hour module change cooldown ---
+  var moduleCooldownMs = 48 * 60 * 60 * 1000;
+  var moduleCooldownActive = false;
+  var moduleCooldownRemaining = '';
+  if (sub.moduleChangedAt) {
+    var elapsed = Date.now() - new Date(sub.moduleChangedAt).getTime();
+    if (elapsed < moduleCooldownMs) {
+      moduleCooldownActive = true;
+      var remainMs = moduleCooldownMs - elapsed;
+      var remainHrs = Math.floor(remainMs / (60 * 60 * 1000));
+      var remainMin = Math.ceil((remainMs % (60 * 60 * 1000)) / (60 * 1000));
+      moduleCooldownRemaining = remainHrs > 0 ? remainHrs + 'h ' + remainMin + 'm' : remainMin + 'm';
+    }
+  }
+
   var h = '';
 
   // --- Tier Context Bar ---
@@ -7843,6 +7858,14 @@ function renderModuleSelectionUI(containerId, options) {
   h += '<div style="font-size:0.9rem;color:var(--warm-gray, #6B6560);">' + counterText + '</div>';
   h += '</div>';
 
+  // --- Cooldown notice ---
+  if (moduleCooldownActive && !isCommand && !isPublish) {
+    h += '<div style="background:rgba(196,133,60,0.12);border:1px solid var(--amber, #C4853C);border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px;font-size:0.9rem;color:var(--charcoal, #1a1a1a);">';
+    h += '<span style="font-size:1.2rem;">&#128338;</span>';
+    h += '<span>Module changes are locked for <strong>' + moduleCooldownRemaining + '</strong>. You can switch modules once every 48 hours.</span>';
+    h += '</div>';
+  }
+
   // --- Module Cards ---
   if (isPublish) {
     h += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray, #6B6560);font-size:0.95rem;">';
@@ -7857,7 +7880,7 @@ function renderModuleSelectionUI(containerId, options) {
       var isSelected = isAlwaysIncluded || effectiveSelected.indexOf(moduleId) >= 0;
       var isComingSoon = mod.status === 'coming-soon';
       var isLocked = isAlwaysIncluded || lockedModules.indexOf(moduleId) >= 0;
-      var canClick = !isAlwaysIncluded && !isComingSoon && !isCommand && !isPublish && !isLocked && (!atLimit || isSelected);
+      var canClick = !isAlwaysIncluded && !isComingSoon && !isCommand && !isPublish && !isLocked && !moduleCooldownActive && (!atLimit || isSelected);
 
       var borderStyle = isSelected ? '2px solid var(--amber, #C4853C)' : '2px solid var(--cream-dark, #F0E8DB)';
       var bgStyle = isSelected ? 'var(--cream, #FAF6F0)' : 'var(--cream-dark, #F0E8DB)';
@@ -7901,7 +7924,7 @@ function renderModuleSelectionUI(containerId, options) {
   var confirmLabel = isPublish ? 'Confirm — Web Only'
     : isCommand ? 'Confirm — All Modules'
     : 'Confirm Selection (' + effectiveSelected.length + '/' + limit + ')';
-  var confirmDisabled = _moduleSelectionState.saving || (!isCommand && !isPublish && effectiveSelected.length === 0);
+  var confirmDisabled = _moduleSelectionState.saving || moduleCooldownActive || (!isCommand && !isPublish && effectiveSelected.length === 0);
 
   h += '<div style="display:flex;gap:12px;justify-content:flex-end;flex-wrap:wrap;">';
   if (_moduleSelectionState.onCancel) {
@@ -7970,11 +7993,18 @@ function confirmSettingsModuleSelection() {
     onConfirm: state.onConfirm, onCancel: state.onCancel
   });
 
+  // Check if modules actually changed — only set cooldown if they did
+  var prevModules = (_tenantSubscription && _tenantSubscription.modules) || [];
+  var modulesChanged = modulesToSave.length !== prevModules.length || modulesToSave.some(function(m) { return prevModules.indexOf(m) < 0; });
+
   var updateData = {
     tier: tier,
     modules: modulesToSave,
     updatedAt: new Date().toISOString()
   };
+  if (modulesChanged) {
+    updateData.moduleChangedAt = new Date().toISOString();
+  }
   if (!_tenantSubscription || !_tenantSubscription.effectiveDate) {
     updateData.effectiveDate = new Date().toISOString();
     updateData.billingAnchor = new Date().getDate();
