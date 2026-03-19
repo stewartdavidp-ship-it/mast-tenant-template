@@ -9872,10 +9872,9 @@ function renderSubscriptionSettings() {
   if (selectorEl) {
     var h = '<div style="margin-bottom:8px;">';
     h += '<label style="font-weight:600;font-size:0.95rem;color:var(--charcoal);display:block;margin-bottom:12px;">Select Your Tier</label>';
-    h += '<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:stretch;">';
+    h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px;">';
 
     // Artist tier cards
-    h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px;flex:1;min-width:0;">';
     TIER_ORDER.forEach(function(tierId) {
       var tc = TIER_CONFIG[tierId];
       var isActive = tierId === currentTier;
@@ -9890,15 +9889,13 @@ function renderSubscriptionSettings() {
       h += '<div style="font-size:0.8rem;color:var(--warm-gray);margin-top:4px;">' + esc(tc.description) + '</div>';
       h += '</div>';
     });
-    h += '</div>';
 
-    // Events tier card — extra 16px margin for visual separation (32px total with flex gap)
+    // Events tier card — same grid, same gap as artist tiers
     var eventsActive = sub.modules && sub.modules.indexOf('events') >= 0;
     var eventsBorder = eventsActive ? 'var(--teal)' : 'var(--cream-dark)';
     var eventsBg = eventsActive ? 'var(--cream)' : 'var(--cream-dark)';
     var eventsShadow = eventsActive ? '0 2px 8px rgba(42, 124, 111, 0.2)' : 'none';
-    h += '<div style="min-width:180px;max-width:220px;margin-left:16px;">';
-    h += '<div style="background:' + eventsBg + ';border:2px solid ' + eventsBorder + ';border-radius:12px;padding:20px;height:100%;box-sizing:border-box;box-shadow:' + eventsShadow + ';">';
+    h += '<div style="margin-left:16px;background:' + eventsBg + ';border:2px solid ' + eventsBorder + ';border-radius:12px;padding:20px;cursor:default;box-shadow:' + eventsShadow + ';transition:all 0.2s;">';
     h += '<div style="font-size:0.7rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--teal);margin-bottom:6px;">Add-on</div>';
     h += '<div style="font-weight:700;font-family:\'Cormorant Garamond\', serif;font-size:1.1rem;color:var(--charcoal);">Events</div>';
     h += '<div style="font-size:0.9rem;color:var(--teal);font-weight:600;">Separate plan</div>';
@@ -9906,7 +9903,7 @@ function renderSubscriptionSettings() {
     if (eventsActive) {
       h += '<span class="status-badge" style="background:var(--teal);color:white;margin-top:8px;display:inline-block;">Active</span>';
     }
-    h += '</div></div>';
+    h += '</div>';
 
     h += '</div></div>';
     selectorEl.innerHTML = h;
