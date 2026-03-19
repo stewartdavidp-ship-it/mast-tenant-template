@@ -2265,6 +2265,11 @@
     body.dark-mode #cancelSubscriptionOverlay textarea { background: #333 !important; color: #e0e0e0 !important; border-color: #555 !important; }
     body.dark-mode #cancelSubscriptionOverlay label { color: #e0e0e0 !important; }
 
+    /* ========== ABOUT SETTINGS ========== */
+    body.dark-mode #aboutContent h3[style*="color:var(--charcoal)"] { color: #e0e0e0 !important; }
+    body.dark-mode #aboutContent div[style*="background:var(--cream)"] { background: #2a2a2a !important; border-color: #444 !important; }
+    body.dark-mode #aboutContent .about-value { color: #e0e0e0 !important; }
+
     /* ========== CONFIRM DIALOG (reusable) ========== */
     body.dark-mode #confirmDialogOverlay > div { background: #2a2a2a !important; }
     body.dark-mode #confirmDialogOverlay div[style*="color:var(--charcoal)"] { color: #e0e0e0 !important; }
@@ -9887,21 +9892,26 @@ function switchSettingsSubView(view) {
 function renderAboutSettings() {
   var el = document.getElementById('aboutContent');
   if (!el) return;
-  var tenantId = window.TENANT_CONFIG ? window.TENANT_CONFIG.tenantId : '—';
+  var tenantId = (MastDB && MastDB.tenantId ? MastDB.tenantId() : null) || (window.TENANT_CONFIG ? window.TENANT_CONFIG.tenantId : null) || '—';
   var plan = window.TENANT_CONFIG ? (window.TENANT_CONFIG.plan || '—') : '—';
+  var sub = getTenantSubscription();
+  var tier = sub.tier || '—';
+  var modules = (sub.modules || []).filter(function(m) { return m !== 'web'; }).join(', ') || 'none';
   var h = '';
   h += '<div style="max-width:480px;">';
   h += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.4rem;color:var(--charcoal);margin-bottom:16px;">About Mast</h3>';
   h += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:12px;padding:20px;">';
   h += '<div style="display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:0.9rem;">';
   h += '<span style="color:var(--warm-gray);font-weight:600;">Build</span>';
-  h += '<span style="color:var(--charcoal);font-family:monospace;">' + MAST_BUILD_V + '</span>';
+  h += '<span class="about-value" style="color:var(--charcoal);font-family:monospace;">' + MAST_BUILD_V + '</span>';
   h += '<span style="color:var(--warm-gray);font-weight:600;">Modules</span>';
-  h += '<span style="color:var(--charcoal);font-family:monospace;">' + MAST_MODULES_V + '</span>';
+  h += '<span class="about-value" style="color:var(--charcoal);font-family:monospace;">' + MAST_MODULES_V + '</span>';
   h += '<span style="color:var(--warm-gray);font-weight:600;">Tenant</span>';
-  h += '<span style="color:var(--charcoal);">' + esc(tenantId) + '</span>';
-  h += '<span style="color:var(--warm-gray);font-weight:600;">Plan</span>';
-  h += '<span style="color:var(--charcoal);">' + esc(plan) + '</span>';
+  h += '<span class="about-value" style="color:var(--charcoal);">' + esc(tenantId) + '</span>';
+  h += '<span style="color:var(--warm-gray);font-weight:600;">Tier</span>';
+  h += '<span class="about-value" style="color:var(--charcoal);text-transform:capitalize;">' + esc(tier) + '</span>';
+  h += '<span style="color:var(--warm-gray);font-weight:600;">Active Modules</span>';
+  h += '<span class="about-value" style="color:var(--charcoal);text-transform:capitalize;">' + esc(modules) + '</span>';
   h += '</div>';
   h += '</div>';
   h += '<p style="margin-top:16px;font-size:0.8rem;color:var(--warm-gray);">Powered by Mast &mdash; runmast.com</p>';
