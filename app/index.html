@@ -7849,7 +7849,7 @@ function renderModuleSelectionUI(containerId, options) {
     h += 'The Publish tier includes your website and product catalog.<br>Upgrade to add business modules.';
     h += '</div>';
   } else {
-    h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px;margin-bottom:24px;">';
+    h += '<div style="display:flex;flex-wrap:wrap;gap:16px;margin-bottom:24px;">';
     gridModules.forEach(function(moduleId) {
       var mod = MODULE_REGISTRY[moduleId];
       var isAlwaysIncluded = !mod.purchasable && mod.showInGrid;
@@ -7865,7 +7865,7 @@ function renderModuleSelectionUI(containerId, options) {
       var cursorStyle = canClick ? 'pointer' : 'default';
       var onclick = canClick ? 'onclick="toggleModuleSelection(\'' + moduleId + '\')"' : '';
 
-      h += '<div ' + onclick + ' style="background:' + bgStyle + ';border:' + borderStyle + ';border-radius:12px;padding:20px;cursor:' + cursorStyle + ';opacity:' + opacityStyle + ';box-shadow:' + shadowStyle + ';transition:all 0.2s ease;position:relative;min-height:140px;display:flex;flex-direction:column;justify-content:space-between;">';
+      h += '<div ' + onclick + ' style="flex:0 0 calc((100% - 64px) / 5);box-sizing:border-box;background:' + bgStyle + ';border:' + borderStyle + ';border-radius:12px;padding:20px;cursor:' + cursorStyle + ';opacity:' + opacityStyle + ';box-shadow:' + shadowStyle + ';transition:all 0.2s ease;position:relative;min-height:140px;display:flex;flex-direction:column;justify-content:space-between;">';
 
       // Badge (top-right)
       if (isAlwaysIncluded) {
