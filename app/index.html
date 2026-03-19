@@ -8032,6 +8032,7 @@ function applySidebarGating() {
     if (canAccessModule(moduleId)) {
       // Unlock: restore normal behavior
       sectionEl.classList.remove('locked', 'nudge-open');
+      sectionEl.style.display = ''; // Clear any inline hide from sidebar toggle
       var header = sectionEl.querySelector('.sidebar-section-header');
       if (header) {
         header.setAttribute('onclick', "toggleSection('" + section + "')");
