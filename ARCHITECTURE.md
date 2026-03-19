@@ -1,5 +1,18 @@
 # ARCHITECTURE.md — Mast Tenant Template
 
+## Required Skills for UI Development
+
+Before writing or modifying any UI code in this repo, load these MCP skills:
+
+| Skill | Purpose | Load via |
+|-------|---------|----------|
+| `mast-ux-style-guide` | Design system, color palette, components, dark mode, typography | `skill(get, "mast-ux-style-guide")` |
+| `mast-security-checklist` | XSS prevention, CSP compliance, input validation, token handling | `skill(get, "mast-security-checklist")` |
+
+Both skills are mandatory for any session that creates or modifies HTML, JS, or CSS in the tenant template. The UX skill ensures visual consistency; the security skill prevents XSS, injection, and data exposure vulnerabilities.
+
+---
+
 ## Mast Platform Context
 
 This repo is the **Mast Tenant Template** — the master source code deployed to every Mast tenant's Firebase Hosting site. It exists within the **Mast three-app architecture**:
