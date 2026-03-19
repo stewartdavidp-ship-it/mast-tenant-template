@@ -440,8 +440,7 @@
     body.dark-mode .wizard-feature-card[data-selected="true"] { border-color: var(--teal) !important; background: #1a3a34 !important; }
     body.dark-mode #wizardWebsiteChoice button { background: #2a2a2a !important; border-color: #444 !important; color: #e0e0e0 !important; }
     body.dark-mode #wizardWebsiteChoice button:hover { border-color: var(--teal) !important; }
-    body.dark-mode .wizard-style-card { background: #2a2a2a !important; border-color: #444 !important; color: #e0e0e0 !important; }
-    body.dark-mode .wizard-style-card[style*="border:2px solid var(--primary)"] { border-color: var(--amber) !important; background: #332a1f !important; }
+    /* wizard-style-card styles removed — style picker replaced by discovery-first flow */
     body.dark-mode #wizardAnalysisSummary { background: #2a2a2a !important; color: #e0e0e0 !important; }
     body.dark-mode #wizardSiteUrl { background: #2a2a2a !important; border-color: #444 !important; color: #e0e0e0 !important; }
 
@@ -5139,10 +5138,10 @@
       </div>
     </div>
 
-    <!-- Setup Wizard — shown for onboarding tenants -->
+    <!-- Setup Wizard — shown for onboarding tenants (4-step discovery-first flow) -->
     <div id="setupWizardScreen" style="display:none;">
       <div style="max-width:600px;margin:80px auto 40px;padding:0 24px;">
-        <!-- Progress bar -->
+        <!-- Progress bar (4 steps) -->
         <div id="wizardProgress" style="display:flex;align-items:center;gap:4px;margin-bottom:32px;">
           <div class="wizard-step-dot active" data-step="1">1</div>
           <div class="wizard-step-line"></div>
@@ -5151,18 +5150,39 @@
           <div class="wizard-step-dot" data-step="3">3</div>
           <div class="wizard-step-line"></div>
           <div class="wizard-step-dot" data-step="4">4</div>
-          <div class="wizard-step-line"></div>
-          <div class="wizard-step-dot" data-step="5">5</div>
-          <div class="wizard-step-line"></div>
-          <div class="wizard-step-dot" data-step="6">6</div>
-          <div class="wizard-step-line"></div>
-          <div class="wizard-step-dot" data-step="7">7</div>
         </div>
 
-        <!-- Step 1: Welcome -->
+        <!-- Step 1: Your Website -->
         <div id="wizardStep1" class="wizard-step">
           <h2 style="font-size:1.8rem;margin-bottom:8px;">Welcome to Mast</h2>
-          <p style="color:var(--warm-gray);margin-bottom:24px;">Let's get your shop set up. Confirm your business details to get started.</p>
+          <p style="color:var(--warm-gray);margin-bottom:24px;">Do you have an existing website? We'll pull in your brand, products, and content automatically.</p>
+          <div class="form-group" style="margin-bottom:16px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Your Website URL</label>
+            <input type="url" id="wizardSiteUrl" placeholder="https://www.yourbusiness.com"
+              style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;">
+          </div>
+          <div id="wizardAnalysisStatus" style="font-size:0.85rem;margin-bottom:16px;"></div>
+          <div id="wizardAnalysisSummary" style="display:none;background:var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;font-size:0.9rem;"></div>
+          <div id="wizardCrawlManifest" style="display:none;background:var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;font-size:0.9rem;">
+            <p style="font-weight:600;margin-bottom:8px;">Content we can import:</p>
+            <div id="wizardManifestItems"></div>
+            <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--cream);">
+              <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Get a text when your import is ready (optional)</label>
+              <input type="tel" id="wizardNotifyPhone" placeholder="(555) 123-4567"
+                style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;">
+              <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">We'll text you when your products and content are imported. Usually 15-40 minutes.</p>
+            </div>
+          </div>
+          <div style="display:flex;justify-content:space-between;">
+            <button class="btn btn-secondary" id="wizardSkipSiteBtn" onclick="wizardSkipSite()" style="font-size:0.9rem;">I don't have a website</button>
+            <button class="btn btn-primary" id="wizardAnalyzeBtn" onclick="wizardAnalyzeSite()">Analyze My Site</button>
+          </div>
+        </div>
+
+        <!-- Step 2: Confirm Your Brand -->
+        <div id="wizardStep2" class="wizard-step" style="display:none;">
+          <h2 style="font-size:1.8rem;margin-bottom:8px;">Confirm Your Brand</h2>
+          <p id="wizardBrandSubtext" style="color:var(--warm-gray);margin-bottom:24px;">Review what we found and make any changes.</p>
           <div class="form-group" style="margin-bottom:16px;">
             <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Business Name</label>
             <input type="text" id="wizardBizName" placeholder="Your Business Name"
@@ -5173,80 +5193,11 @@
             <textarea id="wizardBizDesc" rows="3" placeholder="A short description of your business"
               style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;resize:vertical;box-sizing:border-box;"></textarea>
           </div>
-          <div class="form-group" style="margin-bottom:24px;">
+          <div class="form-group" style="margin-bottom:16px;">
             <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Tagline</label>
             <input type="text" id="wizardBizTagline" placeholder="e.g. Handcrafted glass art"
               style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;">
           </div>
-          <div style="display:flex;justify-content:flex-end;">
-            <button class="btn btn-primary" onclick="wizardNext(1)">Continue</button>
-          </div>
-        </div>
-
-        <!-- Step 2: Payment Setup -->
-        <div id="wizardStep2" class="wizard-step" style="display:none;">
-          <h2 style="font-size:1.8rem;margin-bottom:8px;">Payment Setup</h2>
-          <p style="color:var(--warm-gray);margin-bottom:24px;">Connect Square to accept payments through your storefront. You can skip this and set it up later in Settings.</p>
-          <div class="form-group" style="margin-bottom:16px;">
-            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Square Environment</label>
-            <select id="wizardSquareEnv" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;">
-              <option value="sandbox">Sandbox (Testing)</option>
-              <option value="production">Production (Live)</option>
-            </select>
-          </div>
-          <div class="form-group" style="margin-bottom:16px;">
-            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Access Token</label>
-            <input type="password" id="wizardSquareToken" placeholder="EAAAl..."
-              style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;">
-          </div>
-          <div class="form-group" style="margin-bottom:24px;">
-            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Location ID</label>
-            <input type="password" id="wizardSquareLocation" placeholder="L..."
-              style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;">
-          </div>
-          <div id="wizardSquareStatus" style="font-size:0.85rem;margin-bottom:16px;"></div>
-          <div style="display:flex;justify-content:space-between;">
-            <button class="btn btn-secondary" onclick="wizardPrev(2)">Back</button>
-            <div style="display:flex;gap:8px;">
-              <button class="btn btn-secondary" onclick="wizardNext(2)">Skip</button>
-              <button class="btn btn-primary" onclick="wizardSaveSquare()">Save &amp; Continue</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Step 3: Email Setup -->
-        <div id="wizardStep3" class="wizard-step" style="display:none;">
-          <h2 style="font-size:1.8rem;margin-bottom:8px;">Email Notifications</h2>
-          <p style="color:var(--warm-gray);margin-bottom:24px;">Set up SendGrid to send order receipts and notifications. You can skip this and configure it later.</p>
-          <div class="form-group" style="margin-bottom:16px;">
-            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">SendGrid API Key</label>
-            <input type="password" id="wizardSendgridKey" placeholder="SG...."
-              style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;">
-          </div>
-          <div class="form-group" style="margin-bottom:16px;">
-            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">From Email</label>
-            <input type="email" id="wizardSendgridFrom" placeholder="orders@yourbusiness.com"
-              style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;">
-          </div>
-          <div class="form-group" style="margin-bottom:24px;">
-            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">From Name</label>
-            <input type="text" id="wizardSendgridName" placeholder="Your Business Name"
-              style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;">
-          </div>
-          <div id="wizardEmailStatus" style="font-size:0.85rem;margin-bottom:16px;"></div>
-          <div style="display:flex;justify-content:space-between;">
-            <button class="btn btn-secondary" onclick="wizardPrev(3)">Back</button>
-            <div style="display:flex;gap:8px;">
-              <button class="btn btn-secondary" onclick="wizardNext(3)">Skip</button>
-              <button class="btn btn-primary" onclick="wizardSaveEmail()">Save &amp; Continue</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Step 4: Brand Customization -->
-        <div id="wizardStep4" class="wizard-step" style="display:none;">
-          <h2 style="font-size:1.8rem;margin-bottom:8px;">Brand Your Shop</h2>
-          <p style="color:var(--warm-gray);margin-bottom:24px;">Customize how your storefront looks to customers.</p>
           <div class="form-group" style="margin-bottom:16px;">
             <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Primary Color</label>
             <div style="display:flex;gap:8px;align-items:center;">
@@ -5269,18 +5220,18 @@
             <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Logo URL</label>
             <input type="url" id="wizardLogoUrl" placeholder="https://your-logo-url.com/logo.png"
               style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;">
-            <p style="font-size:0.8rem;color:var(--warm-gray);margin-top:4px;">Enter a URL to your logo image. You can upload one later via the Images section.</p>
+            <p style="font-size:0.8rem;color:var(--warm-gray);margin-top:4px;">You can upload a logo later via the Images section.</p>
           </div>
           <div style="display:flex;justify-content:space-between;">
-            <button class="btn btn-secondary" onclick="wizardPrev(4)">Back</button>
-            <button class="btn btn-primary" onclick="wizardSaveBrand()">Save &amp; Continue</button>
+            <button class="btn btn-secondary" onclick="wizardPrev(2)">Back</button>
+            <button class="btn btn-primary" onclick="wizardNext(2)">Continue</button>
           </div>
         </div>
 
-        <!-- Step 5: Feature Selection -->
-        <div id="wizardStep5" class="wizard-step" style="display:none;">
-          <h2 style="font-size:1.8rem;margin-bottom:8px;">What do you need?</h2>
-          <p style="color:var(--warm-gray);margin-bottom:24px;">Choose the features for your website. You can change these anytime.</p>
+        <!-- Step 3: Choose Features -->
+        <div id="wizardStep3" class="wizard-step" style="display:none;">
+          <h2 style="font-size:1.8rem;margin-bottom:8px;">Choose Your Features</h2>
+          <p style="color:var(--warm-gray);margin-bottom:24px;">Select what you need. You can change these anytime in Settings.</p>
 
           <div id="wizardFeatureCards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:24px;">
             <div class="wizard-feature-card" data-feature="shop" onclick="wizardToggleFeature(this)" style="border:2px solid var(--cream-dark);border-radius:10px;padding:16px;cursor:pointer;text-align:center;background:var(--cream);transition:border-color 0.2s,background 0.2s;">
@@ -5316,111 +5267,24 @@
           </div>
 
           <div style="display:flex;justify-content:space-between;">
-            <button class="btn btn-secondary" onclick="wizardPrev(5)">Back</button>
-            <button class="btn btn-primary" onclick="wizardSaveFeatures()">Save &amp; Continue</button>
+            <button class="btn btn-secondary" onclick="wizardPrev(3)">Back</button>
+            <button class="btn btn-primary" onclick="wizardSaveFeatures()">Continue</button>
           </div>
         </div>
 
-        <!-- Step 6: Your Website -->
-        <div id="wizardStep6" class="wizard-step" style="display:none;">
-          <h2 style="font-size:1.8rem;margin-bottom:8px;">Your Website</h2>
-          <p style="color:var(--warm-gray);margin-bottom:24px;">Set up your marketing website. We'll create a beautiful landing page for your business.</p>
-
-          <!-- Path selection -->
-          <div id="wizardWebsiteChoice" style="display:flex;gap:16px;margin-bottom:24px;">
-            <button class="btn btn-secondary" onclick="wizardWebsiteShowUrl()" style="flex:1;padding:20px 16px;font-size:0.95rem;border:2px solid var(--cream-dark);border-radius:10px;background:var(--cream);cursor:pointer;transition:border-color 0.2s;">
-              <div style="font-size:1.5rem;margin-bottom:8px;">&#127760;</div>
-              <strong>I have a website</strong>
-              <p style="font-size:0.8rem;color:var(--warm-gray);margin-top:4px;">We'll analyze it and import your content</p>
-            </button>
-            <button class="btn btn-secondary" onclick="wizardWebsiteShowFresh()" style="flex:1;padding:20px 16px;font-size:0.95rem;border:2px solid var(--cream-dark);border-radius:10px;background:var(--cream);cursor:pointer;transition:border-color 0.2s;">
-              <div style="font-size:1.5rem;margin-bottom:8px;">&#10024;</div>
-              <strong>Start fresh</strong>
-              <p style="font-size:0.8rem;color:var(--warm-gray);margin-top:4px;">Choose a style template for your new site</p>
-            </button>
-          </div>
-
-          <!-- URL analysis path -->
-          <div id="wizardWebsiteUrl" style="display:none;">
-            <div class="form-group" style="margin-bottom:16px;">
-              <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Your Website URL</label>
-              <input type="url" id="wizardSiteUrl" placeholder="https://www.yourbusiness.com"
-                style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;">
-            </div>
-            <div id="wizardAnalysisStatus" style="font-size:0.85rem;margin-bottom:16px;"></div>
-            <div id="wizardAnalysisSummary" style="display:none;background:var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;font-size:0.9rem;"></div>
-            <div id="wizardCrawlManifest" style="display:none;background:var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;font-size:0.9rem;">
-              <p style="font-weight:600;margin-bottom:8px;">Content we can import:</p>
-              <div id="wizardManifestItems"></div>
-              <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--cream);">
-                <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Get a text when your import is ready (optional)</label>
-                <input type="tel" id="wizardNotifyPhone" placeholder="(555) 123-4567"
-                  style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;">
-                <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">We'll text you when your products and content are imported. Usually 15-40 minutes.</p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Fresh start path: style picker -->
-          <div id="wizardWebsiteFresh" style="display:none;">
-            <p style="font-size:0.85rem;font-weight:600;margin-bottom:12px;">Choose a style:</p>
-            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px;">
-              <div class="wizard-style-card" data-style="artisan-warm" onclick="wizardSelectStyle(this)" style="border:2px solid var(--amber);border-radius:10px;padding:16px;cursor:pointer;text-align:center;background:var(--cream);transition:border-color 0.2s;">
-                <div style="font-size:1.3rem;margin-bottom:6px;">&#127798;</div>
-                <strong style="font-size:0.9rem;">Artisan Warm</strong>
-                <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Earthy tones, handcrafted feel</p>
-              </div>
-              <div class="wizard-style-card" data-style="studio-dark" onclick="wizardSelectStyle(this)" style="border:2px solid var(--cream-dark);border-radius:10px;padding:16px;cursor:pointer;text-align:center;background:var(--cream);transition:border-color 0.2s;">
-                <div style="font-size:1.3rem;margin-bottom:6px;">&#127769;</div>
-                <strong style="font-size:0.9rem;">Studio Dark</strong>
-                <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Bold contrast, modern gallery</p>
-              </div>
-              <div class="wizard-style-card" data-style="market-fresh" onclick="wizardSelectStyle(this)" style="border:2px solid var(--cream-dark);border-radius:10px;padding:16px;cursor:pointer;text-align:center;background:var(--cream);transition:border-color 0.2s;">
-                <div style="font-size:1.3rem;margin-bottom:6px;">&#127793;</div>
-                <strong style="font-size:0.9rem;">Market Fresh</strong>
-                <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Bright, colorful, energetic</p>
-              </div>
-              <div class="wizard-style-card" data-style="clean-commerce" onclick="wizardSelectStyle(this)" style="border:2px solid var(--cream-dark);border-radius:10px;padding:16px;cursor:pointer;text-align:center;background:var(--cream);transition:border-color 0.2s;">
-                <div style="font-size:1.3rem;margin-bottom:6px;">&#128722;</div>
-                <strong style="font-size:0.9rem;">Clean Commerce</strong>
-                <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Minimal, product-focused</p>
-              </div>
-              <div class="wizard-style-card" data-style="story-first" onclick="wizardSelectStyle(this)" style="border:2px solid var(--cream-dark);border-radius:10px;padding:16px;cursor:pointer;text-align:center;background:var(--cream);transition:border-color 0.2s;">
-                <div style="font-size:1.3rem;margin-bottom:6px;">&#128214;</div>
-                <strong style="font-size:0.9rem;">Story First</strong>
-                <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Editorial, narrative flow</p>
-              </div>
-              <div class="wizard-style-card" data-style="minimal-pro" onclick="wizardSelectStyle(this)" style="border:2px solid var(--cream-dark);border-radius:10px;padding:16px;cursor:pointer;text-align:center;background:var(--cream);transition:border-color 0.2s;">
-                <div style="font-size:1.3rem;margin-bottom:6px;">&#9679;</div>
-                <strong style="font-size:0.9rem;">Minimal Pro</strong>
-                <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Ultra-clean, monochrome</p>
-              </div>
-            </div>
-          </div>
-
-          <div id="wizardWebsiteStatus" style="font-size:0.85rem;margin-bottom:16px;"></div>
-          <div style="display:flex;justify-content:space-between;">
-            <button class="btn btn-secondary" onclick="wizardPrev(6)">Back</button>
-            <div style="display:flex;gap:8px;">
-              <button class="btn btn-secondary" onclick="wizardNext(6)">Skip</button>
-              <button class="btn btn-primary" id="wizardWebsiteContinueBtn" onclick="wizardSaveWebsite()" style="display:none;">Save &amp; Continue</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Step 7: Done -->
-        <div id="wizardStep7" class="wizard-step" style="display:none;">
+        <!-- Step 4: You're All Set -->
+        <div id="wizardStep4" class="wizard-step" style="display:none;">
           <div style="text-align:center;padding:40px 0;">
             <div style="font-size:3rem;margin-bottom:16px;">&#127881;</div>
             <h2 style="font-size:1.8rem;margin-bottom:8px;">You're All Set!</h2>
-            <p style="color:var(--warm-gray);margin-bottom:8px;">Your shop is ready to go. You can always configure more in Settings.</p>
+            <p style="color:var(--warm-gray);margin-bottom:8px;">Your shop is ready to go. You can configure payments and email in Settings.</p>
             <div id="wizardSummary" style="text-align:left;background:var(--cream-dark);border-radius:8px;padding:16px;margin:24px 0;font-size:0.9rem;"></div>
             <!-- Import progress timeline (shown when import job was created) -->
             <div id="wizardImportTimeline" style="display:none;text-align:left;background:var(--cream-dark);border-radius:8px;padding:16px;margin:0 0 24px;font-size:0.9rem;">
               <p style="font-weight:600;margin-bottom:12px;">Content Import Progress</p>
               <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:8px;">
                 <div style="width:24px;height:24px;border-radius:50%;background:var(--teal);color:white;display:flex;align-items:center;justify-content:center;font-size:0.7rem;flex-shrink:0;">&#10003;</div>
-                <div><strong>Style & Layout</strong><br><span style="color:var(--warm-gray);font-size:0.8rem;">Colors, hero, about, and contact info applied</span></div>
+                <div><strong>Style &amp; Layout</strong><br><span style="color:var(--warm-gray);font-size:0.8rem;">Colors, hero, about, and contact info applied</span></div>
               </div>
               <div style="width:2px;height:16px;background:var(--cream);margin-left:11px;"></div>
               <div id="wizardImportStep2" style="display:flex;align-items:flex-start;gap:12px;">
@@ -10908,35 +10772,29 @@ async function syncEtsyOrders() {
 // ============================================================
 // Setup Wizard — First-login flow for onboarding tenants
 // ============================================================
+// Setup Wizard — 4-step discovery-first flow
+// Step 1: Your Website (URL analysis)
+// Step 2: Confirm Your Brand (pre-filled from scan or empty)
+// Step 3: Choose Features (pre-selected from scan)
+// Step 4: You're All Set (summary + import + launch)
+// ============================================================
 var wizardCurrentStep = 1;
 var wizardProgress = {};
+var _wizardSiteAnalysis = null; // cached analysis results from step 1
 
 function initSetupWizard() {
   // Load saved progress
   MastDB.config.ref('setupProgress').once('value').then(function(snap) {
     wizardProgress = snap.val() || {};
     wizardCurrentStep = wizardProgress.currentStep || 1;
+    // Clamp to new 4-step range (handles tenants mid-old-wizard)
+    if (wizardCurrentStep > 4) wizardCurrentStep = 1;
     showWizardStep(wizardCurrentStep);
   }).catch(function() {
     showWizardStep(1);
   });
 
-  // Pre-populate Step 1 from tenant config or platform registry
-  if (TENANT_CONFIG) {
-    var nameEl = document.getElementById('wizardBizName');
-    var descEl = document.getElementById('wizardBizDesc');
-    var taglineEl = document.getElementById('wizardBizTagline');
-    // Try brand.name first, then fall back to registry top-level name
-    var brandName = (TENANT_CONFIG.brand && TENANT_CONFIG.brand.name && TENANT_CONFIG.brand.name !== 'Tenant') ? TENANT_CONFIG.brand.name : null;
-    if (!brandName && TENANT_CONFIG.registryName) brandName = TENANT_CONFIG.registryName;
-    if (nameEl && brandName) nameEl.value = brandName;
-    if (taglineEl && TENANT_CONFIG.brand && TENANT_CONFIG.brand.tagline) taglineEl.value = TENANT_CONFIG.brand.tagline;
-    // Pre-populate sendgrid from name
-    var sgNameEl = document.getElementById('wizardSendgridName');
-    if (sgNameEl && TENANT_CONFIG.brand && TENANT_CONFIG.brand.name && TENANT_CONFIG.brand.name !== 'Tenant') sgNameEl.value = TENANT_CONFIG.brand.name;
-  }
-
-  // Color picker sync
+  // Color picker sync (step 2)
   var pc = document.getElementById('wizardPrimaryColor');
   var pch = document.getElementById('wizardPrimaryColorHex');
   var ac = document.getElementById('wizardAccentColor');
@@ -10953,13 +10811,15 @@ function initSetupWizard() {
 
 function showWizardStep(step) {
   wizardCurrentStep = step;
-  for (var i = 1; i <= 7; i++) {
+  for (var i = 1; i <= 4; i++) {
     var el = document.getElementById('wizardStep' + i);
     if (el) el.style.display = i === step ? '' : 'none';
   }
   updateWizardProgress();
-  // Show import timeline on step 7 if an import job was created
-  if (step === 7) showWizardImportTimeline();
+  if (step === 4) {
+    renderWizardSummary();
+    showWizardImportTimeline();
+  }
 }
 
 function updateWizardProgress() {
@@ -10978,16 +10838,14 @@ function updateWizardProgress() {
 
 function wizardNext(fromStep) {
   var next = fromStep + 1;
-  if (next > 7) return;
-  // Step 1: validate business name before proceeding
-  if (fromStep === 1) {
+  if (next > 4) return;
+  // Step 2 → 3: validate business name
+  if (fromStep === 2) {
     var name = document.getElementById('wizardBizName').value.trim();
     if (!name) { showToast('Please enter your business name.', true); return; }
   }
   showWizardStep(next);
   saveWizardProgress(next);
-  // Step 6 → 7: render summary
-  if (next === 7) renderWizardSummary();
 }
 
 function wizardPrev(fromStep) {
@@ -11004,173 +10862,137 @@ function saveWizardProgress(step, extras) {
   });
 }
 
-function showWizardImportTimeline() {
-  var timeline = document.getElementById('wizardImportTimeline');
-  if (!timeline) return;
+// Step 1: Skip site analysis — go to step 2 with empty fields
+function wizardSkipSite() {
+  _wizardSiteAnalysis = null;
+  window._wizardCrawlManifest = null;
+  window._wizardAnalyzedUrl = null;
+  // Pre-populate step 2 from tenant config if available
+  if (TENANT_CONFIG) {
+    var brandName = (TENANT_CONFIG.brand && TENANT_CONFIG.brand.name && TENANT_CONFIG.brand.name !== 'Tenant') ? TENANT_CONFIG.brand.name : null;
+    if (!brandName && TENANT_CONFIG.registryName) brandName = TENANT_CONFIG.registryName;
+    if (brandName) document.getElementById('wizardBizName').value = brandName;
+    if (TENANT_CONFIG.brand && TENANT_CONFIG.brand.tagline) document.getElementById('wizardBizTagline').value = TENANT_CONFIG.brand.tagline;
+  }
+  document.getElementById('wizardBrandSubtext').textContent = 'Tell us about your business.';
+  showWizardStep(2);
+  saveWizardProgress(2);
+}
 
-  // Check if an import job was created this session
-  MastDB._ref('webPresence/importJobs').orderByChild('createdAt').limitToLast(1).once('value').then(function(snap) {
-    var jobs = snap.val();
-    if (!jobs) { timeline.style.display = 'none'; return; }
+// Step 1: Analyze existing site
+async function wizardAnalyzeSite() {
+  var url = document.getElementById('wizardSiteUrl').value.trim();
+  if (!url) { showToast('Please enter a URL.', true); return; }
 
-    var job = Object.values(jobs)[0];
-    if (!job) { timeline.style.display = 'none'; return; }
+  var statusEl = document.getElementById('wizardAnalysisStatus');
+  var summaryEl = document.getElementById('wizardAnalysisSummary');
+  var manifestEl = document.getElementById('wizardCrawlManifest');
+  var manifestItemsEl = document.getElementById('wizardManifestItems');
+  var btn = document.getElementById('wizardAnalyzeBtn');
 
-    timeline.style.display = '';
+  statusEl.innerHTML = '<span style="color:var(--warm-gray);">Analyzing your website... This may take 30-60 seconds.</span>';
+  btn.disabled = true;
+  btn.textContent = 'Analyzing...';
+  summaryEl.style.display = 'none';
+  manifestEl.style.display = 'none';
 
-    var icon = document.getElementById('wizardImportStep2Icon');
-    var title = document.getElementById('wizardImportStep2Title');
-    var desc = document.getElementById('wizardImportStep2Desc');
+  try {
+    var result = await firebase.functions().httpsCallable('analyzeExistingSite')({
+      url: url, tenantId: MastDB.tenantId()
+    });
+    var data = result.data;
+    var analysis = data.analysis || {};
+    var crawlManifest = data.crawlManifest || null;
+    _wizardSiteAnalysis = analysis;
 
-    if (job.status === 'complete') {
-      if (icon) { icon.style.background = 'var(--teal)'; icon.innerHTML = '&#10003;'; }
-      if (title) title.textContent = 'Content Import — Complete!';
-      var items = [];
-      var imp = job.imported || {};
-      if (imp.products && imp.products.done) items.push(imp.products.done + ' products');
-      if (imp.images && imp.images.done) items.push(imp.images.done + ' images');
-      if (desc) desc.textContent = items.length > 0
-        ? 'Imported ' + items.join(', ') + '. Review them in Website > Import.'
-        : 'Import complete! Check Website > Import to review.';
-    } else if (job.status === 'failed') {
-      if (icon) { icon.style.background = 'var(--danger)'; icon.innerHTML = '&#10007;'; }
-      if (title) title.textContent = 'Content Import — Error';
-      if (desc) desc.textContent = job.error || 'Something went wrong. You can retry from Website > Import.';
-    } else {
-      // pending, processing, crawled, importing
-      if (icon) { icon.style.background = 'var(--amber)'; icon.innerHTML = '&#9203;'; }
-      if (title) title.textContent = 'Content Import — In Progress';
-      if (desc) desc.textContent = 'Products, images, and blog posts are being imported. Usually 15-40 minutes.';
+    // Show summary
+    var summaryItems = [];
+    if (analysis.businessName) summaryItems.push('<strong>Business:</strong> ' + esc(analysis.businessName));
+    if (analysis.styleRecommendation) summaryItems.push('<strong>Style:</strong> ' + esc(analysis.styleRecommendation));
+    if (analysis.colors) summaryItems.push('<strong>Colors:</strong> ' + esc(analysis.colors.primary || '') + ', ' + esc(analysis.colors.accent || ''));
+    if (analysis.hero && analysis.hero.headline) summaryItems.push('<strong>Headline:</strong> ' + esc(analysis.hero.headline));
+    summaryEl.innerHTML = '<p style="margin-bottom:8px;font-weight:600;">Site Analysis Complete:</p>' + summaryItems.join('<br>');
+    summaryEl.style.display = '';
+
+    // Show crawl manifest findings
+    if (crawlManifest) {
+      var ct = crawlManifest.contentTypes || {};
+      var manifestLines = [];
+      if (crawlManifest.platform && crawlManifest.platform !== 'custom') {
+        manifestLines.push('<div style="margin-bottom:6px;"><strong>Platform detected:</strong> ' + esc(crawlManifest.platform) + '</div>');
+      }
+      if (ct.products && ct.products.found) {
+        manifestLines.push('<div style="margin-bottom:4px;">&#128722; ~' + (ct.products.estimatedCount || '?') + ' products</div>');
+      }
+      if (ct.blog && ct.blog.found) {
+        manifestLines.push('<div style="margin-bottom:4px;">&#128221; ~' + (ct.blog.estimatedCount || '?') + ' blog posts</div>');
+      }
+      if (ct.events && ct.events.found) {
+        manifestLines.push('<div style="margin-bottom:4px;">&#128197; Events page found</div>');
+      }
+      if (ct.gallery && ct.gallery.found) {
+        manifestLines.push('<div style="margin-bottom:4px;">&#127912; Gallery/portfolio page found</div>');
+      }
+      if (manifestLines.length === 0) {
+        manifestLines.push('<div style="color:var(--warm-gray);">No importable content detected. You can add products manually later.</div>');
+      }
+      if (crawlManifest.jsRendered) {
+        manifestLines.push('<div style="margin-top:6px;color:var(--amber);font-size:0.8rem;">Note: Your site uses JavaScript rendering. Some content may need manual entry.</div>');
+      }
+      manifestItemsEl.innerHTML = manifestLines.join('');
+      manifestEl.style.display = '';
+      window._wizardCrawlManifest = crawlManifest;
+      window._wizardAnalyzedUrl = url;
     }
-  }).catch(function() {
-    timeline.style.display = 'none';
-  });
-}
 
-async function wizardSaveSquare() {
-  var env = document.getElementById('wizardSquareEnv').value;
-  var token = document.getElementById('wizardSquareToken').value.trim();
-  var location = document.getElementById('wizardSquareLocation').value.trim();
-  var statusEl = document.getElementById('wizardSquareStatus');
+    statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Analysis complete!</span>';
 
-  if (!token || !location) {
-    if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger);">Access Token and Location ID are required.</span>';
-    return;
-  }
-
-  if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Saving...</span>';
-
-  var sp = (TENANT_CONFIG && TENANT_CONFIG.secretPrefix) || MastDB.tenantId();
-  var secrets = {};
-  secrets[sp + '-square-' + env + '-access-token'] = token;
-  var metadata = {
-    environment: env,
-    [env]: { locationId: location },
-    updatedAt: new Date().toISOString()
-  };
-
-  try {
-    await firebase.functions().httpsCallable('secretsManager')({
-      action: 'write', service: 'square', secrets: secrets, metadata: metadata
-    });
-    await MastDB.config.testMode().set(env === 'sandbox');
-    // Update configChecklist on platform registry
-    await updateConfigChecklist('square', true);
-    saveWizardProgress(3, { squareConfigured: true });
-    if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Square configured!</span>';
-    showToast('Square credentials saved.');
-    setTimeout(function() { showWizardStep(3); }, 500);
-  } catch (err) {
-    if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger);">Error: ' + esc(err.message) + '</span>';
-  }
-}
-
-async function wizardSaveEmail() {
-  var apiKey = document.getElementById('wizardSendgridKey').value.trim();
-  var fromEmail = document.getElementById('wizardSendgridFrom').value.trim();
-  var fromName = document.getElementById('wizardSendgridName').value.trim();
-  var statusEl = document.getElementById('wizardEmailStatus');
-
-  if (!apiKey) {
-    if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger);">API key is required.</span>';
-    return;
-  }
-
-  if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Saving...</span>';
-
-  var sp = (TENANT_CONFIG && TENANT_CONFIG.secretPrefix) || MastDB.tenantId();
-  var secrets = {};
-  secrets[sp + '-sendgrid-api-key'] = apiKey;
-  var metadata = { fromEmail: fromEmail, fromName: fromName, updatedAt: new Date().toISOString() };
-
-  try {
-    await firebase.functions().httpsCallable('secretsManager')({
-      action: 'write', service: 'sendgrid', secrets: secrets, metadata: metadata
-    });
-    await updateConfigChecklist('email', true);
-    saveWizardProgress(4, { emailConfigured: true });
-    if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Email configured!</span>';
-    showToast('SendGrid credentials saved.');
-    setTimeout(function() { showWizardStep(4); }, 500);
-  } catch (err) {
-    if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger);">Error: ' + esc(err.message) + '</span>';
-  }
-}
-
-async function wizardSaveBrand() {
-  var primaryColor = document.getElementById('wizardPrimaryColorHex').value.trim() || '#C4853C';
-  var accentColor = document.getElementById('wizardAccentColorHex').value.trim() || '#2A7C6F';
-  var logoUrl = document.getElementById('wizardLogoUrl').value.trim();
-
-  try {
-    var brandUpdate = {
-      primaryColor: primaryColor,
-      accentColor: accentColor,
-      updatedAt: new Date().toISOString()
+    // Update button to continue to step 2
+    btn.disabled = false;
+    btn.textContent = 'Continue';
+    btn.onclick = function() {
+      // Pre-fill step 2 from analysis
+      wizardPrefillFromAnalysis(analysis);
+      // Pre-check features in step 3 from analysis
+      wizardPreCheckFeatures(analysis);
+      showWizardStep(2);
+      saveWizardProgress(2, { siteAnalyzed: true });
     };
-    if (logoUrl) brandUpdate.logoUrl = logoUrl;
-    await MastDB.config.ref('brand').update(brandUpdate);
-    // Also update platform registry publicConfig
-    await db.ref('mast-platform/tenants/' + MastDB.tenantId() + '/publicConfig').update({
-      primaryColor: primaryColor,
-      accentColor: accentColor
-    });
-    await updateConfigChecklist('brand', true);
-    saveWizardProgress(5, { brandConfigured: true });
-    showToast('Brand customization saved.');
-    showWizardStep(5); // Features step
   } catch (err) {
-    showToast('Error saving brand: ' + err.message, true);
+    statusEl.innerHTML = '<span style="color:var(--danger);">Error: ' + esc(err.message) + '</span>';
+    btn.disabled = false;
+    btn.textContent = 'Retry';
+    btn.onclick = wizardAnalyzeSite;
   }
 }
 
-// ── Website wizard step functions ──
+// Pre-fill step 2 brand fields from site analysis
+function wizardPrefillFromAnalysis(analysis) {
+  if (!analysis) return;
+  var nameEl = document.getElementById('wizardBizName');
+  var descEl = document.getElementById('wizardBizDesc');
+  var taglineEl = document.getElementById('wizardBizTagline');
+  var pcEl = document.getElementById('wizardPrimaryColor');
+  var pchEl = document.getElementById('wizardPrimaryColorHex');
+  var acEl = document.getElementById('wizardAccentColor');
+  var achEl = document.getElementById('wizardAccentColorHex');
+  var logoEl = document.getElementById('wizardLogoUrl');
 
-function wizardWebsiteShowUrl() {
-  document.getElementById('wizardWebsiteChoice').style.display = 'none';
-  document.getElementById('wizardWebsiteUrl').style.display = '';
-  document.getElementById('wizardWebsiteFresh').style.display = 'none';
-  document.getElementById('wizardWebsiteContinueBtn').style.display = '';
-  document.getElementById('wizardWebsiteContinueBtn').textContent = 'Analyze & Continue';
-  document.getElementById('wizardWebsiteContinueBtn').onclick = wizardAnalyzeSite;
-}
-
-function wizardWebsiteShowFresh() {
-  document.getElementById('wizardWebsiteChoice').style.display = 'none';
-  document.getElementById('wizardWebsiteUrl').style.display = 'none';
-  document.getElementById('wizardWebsiteFresh').style.display = '';
-  document.getElementById('wizardWebsiteContinueBtn').style.display = '';
-  document.getElementById('wizardWebsiteContinueBtn').textContent = 'Save & Continue';
-  document.getElementById('wizardWebsiteContinueBtn').onclick = wizardSaveWebsite;
-}
-
-function wizardSelectStyle(el) {
-  document.querySelectorAll('.wizard-style-card').forEach(function(card) {
-    card.style.borderColor = 'var(--cream-dark)';
-    delete card.dataset.selected;
-  });
-  el.style.borderColor = 'var(--primary)';
-  el.dataset.selected = 'true';
+  if (analysis.businessName && nameEl) nameEl.value = analysis.businessName;
+  if (analysis.description && descEl) descEl.value = analysis.description;
+  if (analysis.hero && analysis.hero.subheadline && taglineEl && !taglineEl.value) taglineEl.value = analysis.hero.subheadline;
+  if (analysis.colors) {
+    if (analysis.colors.primary && /^#[0-9A-Fa-f]{6}$/.test(analysis.colors.primary)) {
+      if (pcEl) pcEl.value = analysis.colors.primary;
+      if (pchEl) pchEl.value = analysis.colors.primary;
+    }
+    if (analysis.colors.accent && /^#[0-9A-Fa-f]{6}$/.test(analysis.colors.accent)) {
+      if (acEl) acEl.value = analysis.colors.accent;
+      if (achEl) achEl.value = analysis.colors.accent;
+    }
+  }
+  if (analysis.logo && logoEl) logoEl.value = analysis.logo;
+  document.getElementById('wizardBrandSubtext').textContent = 'Review what we found and make any changes.';
 }
 
 function wizardToggleFeature(el) {
@@ -11209,6 +11031,7 @@ function wizardPreCheckFeatures(analysis) {
   });
 }
 
+// Step 3: Save features and advance to step 4
 async function wizardSaveFeatures() {
   var features = { shop: false, blog: false, events: false, members: false, newsletter: false, commissions: false };
   document.querySelectorAll('#wizardFeatureCards .wizard-feature-card').forEach(function(card) {
@@ -11220,165 +11043,139 @@ async function wizardSaveFeatures() {
   try {
     await MastDB._ref('webPresence/config/features').set(features);
     wizardProgress.featuresConfigured = true;
-    saveWizardProgress(6, { featuresConfigured: true });
-    showToast('Features saved.');
-    showWizardStep(6); // Website step
+
+    // Create import job if site had importable content
+    if (window._wizardCrawlManifest) {
+      var ct = window._wizardCrawlManifest.contentTypes || {};
+      var hasContent = (ct.products && ct.products.found) || (ct.blog && ct.blog.found) || (ct.events && ct.events.found) || (ct.gallery && ct.gallery.found);
+      if (hasContent) {
+        try {
+          var phone = (document.getElementById('wizardNotifyPhone') && document.getElementById('wizardNotifyPhone').value || '').trim() || null;
+          var jobData = {
+            id: MastDB._ref('webPresence/importJobs').push().key,
+            url: window._wizardAnalyzedUrl,
+            tenantId: MastDB.tenantId(),
+            status: 'pending',
+            createdAt: new Date().toISOString(),
+            claimedAt: null,
+            completedAt: null,
+            error: null,
+            notifyPhone: phone,
+            crawlManifest: window._wizardCrawlManifest,
+            discovered: null,
+            imported: null
+          };
+          await MastDB._ref('webPresence/importJobs/' + jobData.id).set(jobData);
+        } catch (e) {
+          console.error('Failed to create import job:', e);
+        }
+      }
+    }
+
+    saveWizardProgress(4, { featuresConfigured: true });
+    showWizardStep(4);
   } catch (err) {
     showToast('Error saving features: ' + err.message, true);
   }
 }
 
-async function wizardAnalyzeSite() {
-  var url = document.getElementById('wizardSiteUrl').value.trim();
-  if (!url) { showToast('Please enter a URL.', true); return; }
+function showWizardImportTimeline() {
+  var timeline = document.getElementById('wizardImportTimeline');
+  if (!timeline) return;
 
-  var statusEl = document.getElementById('wizardAnalysisStatus');
-  var summaryEl = document.getElementById('wizardAnalysisSummary');
-  var manifestEl = document.getElementById('wizardCrawlManifest');
-  var manifestItemsEl = document.getElementById('wizardManifestItems');
-  var btn = document.getElementById('wizardWebsiteContinueBtn');
+  MastDB._ref('webPresence/importJobs').orderByChild('createdAt').limitToLast(1).once('value').then(function(snap) {
+    var jobs = snap.val();
+    if (!jobs) { timeline.style.display = 'none'; return; }
 
-  statusEl.innerHTML = '<span style="color:var(--warm-gray);">Analyzing your website... This may take 30-60 seconds.</span>';
-  btn.disabled = true;
-  btn.textContent = 'Analyzing...';
-  summaryEl.style.display = 'none';
-  manifestEl.style.display = 'none';
+    var job = Object.values(jobs)[0];
+    if (!job) { timeline.style.display = 'none'; return; }
 
-  try {
-    var result = await firebase.functions().httpsCallable('analyzeExistingSite')({
-      url: url, tenantId: MastDB.tenantId()
-    });
-    var data = result.data;
-    var analysis = data.analysis || {};
-    var crawlManifest = data.crawlManifest || null;
+    timeline.style.display = '';
 
-    // Show summary
-    var summaryItems = [];
-    if (analysis.businessName) summaryItems.push('<strong>Business:</strong> ' + esc(analysis.businessName));
-    if (analysis.styleRecommendation) summaryItems.push('<strong>Style:</strong> ' + esc(analysis.styleRecommendation));
-    if (analysis.colors) summaryItems.push('<strong>Colors:</strong> ' + esc(analysis.colors.primary || '') + ', ' + esc(analysis.colors.accent || ''));
-    if (analysis.hero && analysis.hero.headline) summaryItems.push('<strong>Headline:</strong> ' + esc(analysis.hero.headline));
-    summaryEl.innerHTML = '<p style="margin-bottom:8px;font-weight:600;">Site Analysis Complete:</p>' + summaryItems.join('<br>');
-    summaryEl.style.display = '';
+    var icon = document.getElementById('wizardImportStep2Icon');
+    var title = document.getElementById('wizardImportStep2Title');
+    var desc = document.getElementById('wizardImportStep2Desc');
 
-    // Show crawl manifest findings
-    if (crawlManifest) {
-      var ct = crawlManifest.contentTypes || {};
-      var manifestLines = [];
-      if (crawlManifest.platform && crawlManifest.platform !== 'custom') {
-        manifestLines.push('<div style="margin-bottom:6px;"><strong>Platform detected:</strong> ' + esc(crawlManifest.platform) + '</div>');
-      }
-      if (ct.products && ct.products.found) {
-        manifestLines.push('<div style="margin-bottom:4px;">&#128722; ~' + (ct.products.estimatedCount || '?') + ' products</div>');
-      }
-      if (ct.blog && ct.blog.found) {
-        manifestLines.push('<div style="margin-bottom:4px;">&#128221; ~' + (ct.blog.estimatedCount || '?') + ' blog posts</div>');
-      }
-      if (ct.events && ct.events.found) {
-        manifestLines.push('<div style="margin-bottom:4px;">&#128197; Events page found</div>');
-      }
-      if (ct.gallery && ct.gallery.found) {
-        manifestLines.push('<div style="margin-bottom:4px;">&#127912; Gallery/portfolio page found</div>');
-      }
-      if (manifestLines.length === 0) {
-        manifestLines.push('<div style="color:var(--warm-gray);">No importable content detected. You can add products manually later.</div>');
-      }
-      if (crawlManifest.jsRendered) {
-        manifestLines.push('<div style="margin-top:6px;color:var(--amber);font-size:0.8rem;">Note: Your site uses JavaScript rendering. Some content may need manual entry.</div>');
-      }
-      manifestItemsEl.innerHTML = manifestLines.join('');
-      manifestEl.style.display = '';
-
-      // Store manifest on window for the continue handler
-      window._wizardCrawlManifest = crawlManifest;
-      window._wizardAnalyzedUrl = url;
+    if (job.status === 'complete') {
+      if (icon) { icon.style.background = 'var(--teal)'; icon.innerHTML = '&#10003;'; }
+      if (title) title.textContent = 'Content Import — Complete!';
+      var items = [];
+      var imp = job.imported || {};
+      if (imp.products && imp.products.done) items.push(imp.products.done + ' products');
+      if (imp.images && imp.images.done) items.push(imp.images.done + ' images');
+      if (desc) desc.textContent = items.length > 0
+        ? 'Imported ' + items.join(', ') + '. Review them in Website > Import.'
+        : 'Import complete! Check Website > Import to review.';
+    } else if (job.status === 'failed') {
+      if (icon) { icon.style.background = 'var(--danger)'; icon.innerHTML = '&#10007;'; }
+      if (title) title.textContent = 'Content Import — Error';
+      if (desc) desc.textContent = job.error || 'Something went wrong. You can retry from Website > Import.';
+    } else {
+      if (icon) { icon.style.background = 'var(--amber)'; icon.innerHTML = '&#9203;'; }
+      if (title) title.textContent = 'Content Import — In Progress';
+      if (desc) desc.textContent = 'Products, images, and blog posts are being imported. Usually 15-40 minutes.';
     }
-
-    statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Analysis complete! Config has been saved.</span>';
-
-    // Pre-check features from analysis
-    wizardPreCheckFeatures(analysis);
-
-    // Update button to continue
-    btn.disabled = false;
-    btn.textContent = 'Continue';
-    btn.style.display = '';
-    btn.onclick = async function() {
-      // Create import job if crawlable content was found
-      if (window._wizardCrawlManifest) {
-        var ct2 = window._wizardCrawlManifest.contentTypes || {};
-        var hasContent = (ct2.products && ct2.products.found) || (ct2.blog && ct2.blog.found) || (ct2.events && ct2.events.found) || (ct2.gallery && ct2.gallery.found);
-        if (hasContent) {
-          try {
-            var phone = (document.getElementById('wizardNotifyPhone').value || '').trim() || null;
-            var jobData = {
-              id: MastDB._ref('webPresence/importJobs').push().key,
-              url: window._wizardAnalyzedUrl,
-              tenantId: MastDB.tenantId(),
-              status: 'pending',
-              createdAt: new Date().toISOString(),
-              claimedAt: null,
-              completedAt: null,
-              error: null,
-              notifyPhone: phone,
-              crawlManifest: window._wizardCrawlManifest,
-              discovered: null,
-              imported: null
-            };
-            await MastDB._ref('webPresence/importJobs/' + jobData.id).set(jobData);
-            showToast('Import job created! We\'ll import your content in 15-40 minutes.');
-          } catch (e) {
-            console.error('Failed to create import job:', e);
-            // Non-blocking — don't prevent wizard from continuing
-          }
-        }
-      }
-
-      saveWizardProgress(7, { websiteConfigured: true });
-      wizardProgress.websiteConfigured = true;
-      showWizardStep(7);
-    };
-  } catch (err) {
-    statusEl.innerHTML = '<span style="color:var(--danger);">Error: ' + esc(err.message) + '</span>';
-    btn.disabled = false;
-    btn.textContent = 'Retry';
-  }
+  }).catch(function() {
+    timeline.style.display = 'none';
+  });
 }
 
-async function wizardSaveWebsite() {
-  var statusEl = document.getElementById('wizardWebsiteStatus');
-  var urlPath = document.getElementById('wizardWebsiteUrl');
-  var freshPath = document.getElementById('wizardWebsiteFresh');
+function renderWizardSummary() {
+  var el = document.getElementById('wizardSummary');
+  if (!el) return;
+  var items = [];
+  var bizName = document.getElementById('wizardBizName').value || '';
+  items.push('<strong>Business:</strong> ' + esc(bizName || 'Not set'));
+  if (_wizardSiteAnalysis) items.push('<strong>Website:</strong> Analyzed &#10003;');
+  if (wizardProgress.featuresConfigured) items.push('<strong>Features:</strong> Configured &#10003;');
+  items.push('<strong>Payments:</strong> <span style="color:var(--warm-gray);">Set up in Settings > Payments</span>');
+  items.push('<strong>Email:</strong> <span style="color:var(--warm-gray);">Set up in Settings > Integrations</span>');
+  el.innerHTML = items.join('<br style="margin-bottom:8px;">');
+}
 
-  // Fresh start path: seed a default config
-  if (freshPath && freshPath.style.display !== 'none') {
-    var selectedCard = document.querySelector('.wizard-style-card[data-selected="true"]');
-    var style = selectedCard ? selectedCard.dataset.style : 'artisan-warm';
+async function wizardComplete() {
+  try {
+    // Save brand info from step 2
+    var bizName = document.getElementById('wizardBizName').value.trim();
+    var bizDesc = document.getElementById('wizardBizDesc').value.trim();
+    var bizTagline = document.getElementById('wizardBizTagline').value.trim();
+    var primaryColor = document.getElementById('wizardPrimaryColorHex').value.trim() || '#C4853C';
+    var accentColor = document.getElementById('wizardAccentColorHex').value.trim() || '#2A7C6F';
+    var logoUrl = document.getElementById('wizardLogoUrl').value.trim();
 
-    // Get business info from Step 1 for defaults
-    var bizName = document.getElementById('wizardBizName').value.trim() || '';
-    var bizTagline = document.getElementById('wizardBizTagline').value.trim() || '';
-    var bizDesc = document.getElementById('wizardBizDesc').value.trim() || '';
-    var primaryColor = document.getElementById('wizardPrimaryColorHex').value.trim() || '#8B7355';
-    var accentColor = document.getElementById('wizardAccentColorHex').value.trim() || '#2D5F5D';
+    // Save brand config
+    var brandUpdate = {
+      name: bizName || '',
+      tagline: bizTagline || '',
+      primaryColor: primaryColor,
+      accentColor: accentColor,
+      updatedAt: new Date().toISOString()
+    };
+    if (bizDesc) brandUpdate.description = bizDesc;
+    if (logoUrl) brandUpdate.logoUrl = logoUrl;
+    await MastDB.config.ref('brand').update(brandUpdate);
 
-    var config = {
-      style: style,
+    // Update platform registry
+    if (bizName) {
+      await db.ref('mast-platform/tenants/' + MastDB.tenantId()).update({ name: bizName });
+      await db.ref('mast-platform/tenants/' + MastDB.tenantId() + '/publicConfig').update({
+        brandName: bizName,
+        brandTagline: bizTagline || '',
+        primaryColor: primaryColor,
+        accentColor: accentColor
+      });
+    }
+
+    // Seed web presence config from brand + analysis
+    var wpConfig = {
+      style: 'artisan-warm',
       primaryColor: primaryColor,
       accentColor: accentColor,
       fontPair: 'playfair-lato',
       sections: {
-        hero: {
-          headline: bizName,
-          subheadline: bizTagline,
-          ctaText: 'Shop Now',
-          ctaUrl: '',
-          backgroundType: 'color',
-          backgroundAsset: '',
-          overlayOpacity: 40
-        },
+        hero: { headline: bizName, subheadline: bizTagline, ctaText: 'Shop Now', ctaUrl: '', backgroundType: 'color', backgroundAsset: '', overlayOpacity: 40 },
         gallery: { enabled: true, heading: 'Our Work', layout: 'grid', columns: 3 },
-        about: { enabled: true, heading: 'About', body: bizDesc, imageUrl: '' },
+        about: { enabled: true, heading: 'About', body: bizDesc || '', imageUrl: '' },
         contact: { enabled: true, heading: 'Contact', email: '', phone: '', address: '', showForm: true, socialLinks: {} },
         newsletter: { enabled: false, heading: 'Stay in touch', subheadline: '', buttonLabel: 'Subscribe' },
         members: { enabled: false, accessModel: 'passcode', passcode: '', allowedEmails: [], gatedContent: '' }
@@ -11389,125 +11186,33 @@ async function wizardSaveWebsite() {
       publishedAt: null,
       updatedAt: new Date().toISOString()
     };
-
-    try {
-      await MastDB._ref('webPresence/config').set(config);
-      wizardProgress.websiteConfigured = true;
-      saveWizardProgress(7, { websiteConfigured: true });
-
-      showToast('Website style saved.');
-      showWizardStep(7);
-    } catch (err) {
-      if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger);">Error: ' + esc(err.message) + '</span>';
+    // Use analysis style if available
+    if (_wizardSiteAnalysis && _wizardSiteAnalysis.styleRecommendation) {
+      wpConfig.style = _wizardSiteAnalysis.styleRecommendation;
     }
-    return;
-  }
+    await MastDB._ref('webPresence/config').update(wpConfig);
 
-  // URL path already handled by wizardAnalyzeSite → continue button
-  // If they click Save & Continue without analyzing, just skip
-  wizardNext(6);
-}
-
-async function wizardSaveProduct() {
-  var name = document.getElementById('wizardProductName').value.trim();
-  var price = parseFloat(document.getElementById('wizardProductPrice').value);
-  var desc = document.getElementById('wizardProductDesc').value.trim();
-  var statusEl = document.getElementById('wizardProductStatus');
-
-  if (!name) {
-    if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger);">Product name is required.</span>';
-    return;
-  }
-  if (isNaN(price) || price <= 0) {
-    if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger);">Enter a valid price.</span>';
-    return;
-  }
-
-  if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Adding product...</span>';
-
-  try {
-    var pid = MastDB.products.newKey();
-    await MastDB.products.ref(pid).set({
-      id: pid,
-      name: name,
-      description: desc || '',
-      priceCents: Math.round(price * 100),
-      categories: ['general'],
-      status: 'active',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    });
-    saveWizardProgress(7, { firstProductAdded: true });
-    if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Product added!</span>';
-    showToast('Product "' + name + '" created.');
-    setTimeout(function() { showWizardStep(7); renderWizardSummary(); }, 500);
-  } catch (err) {
-    if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger);">Error: ' + esc(err.message) + '</span>';
-  }
-}
-
-function renderWizardSummary() {
-  var el = document.getElementById('wizardSummary');
-  if (!el) return;
-  var items = [];
-  items.push('<strong>Business:</strong> ' + esc(document.getElementById('wizardBizName').value || 'Configured'));
-  if (wizardProgress.squareConfigured) items.push('<strong>Payments:</strong> Square connected &#10003;');
-  else items.push('<strong>Payments:</strong> <span style="color:var(--warm-gray);">Skipped — configure in Settings > Payments</span>');
-  if (wizardProgress.emailConfigured) items.push('<strong>Email:</strong> SendGrid connected &#10003;');
-  else items.push('<strong>Email:</strong> <span style="color:var(--warm-gray);">Skipped — configure in Settings > Integrations</span>');
-  if (wizardProgress.brandConfigured) items.push('<strong>Brand:</strong> Customized &#10003;');
-  if (wizardProgress.featuresConfigured) items.push('<strong>Features:</strong> Configured &#10003;');
-  if (wizardProgress.websiteConfigured) items.push('<strong>Website:</strong> Configured &#10003;');
-  else items.push('<strong>Website:</strong> <span style="color:var(--warm-gray);">Skipped — set up later in Website tab</span>');
-  el.innerHTML = items.join('<br style="margin-bottom:8px;">');
-}
-
-async function wizardComplete() {
-  try {
-    // Save Step 1 data (business info) to tenant config
-    var bizName = document.getElementById('wizardBizName').value.trim();
-    var bizDesc = document.getElementById('wizardBizDesc').value.trim();
-    var bizTagline = document.getElementById('wizardBizTagline').value.trim();
-    if (bizName) {
-      await MastDB.config.ref('brand').update({
-        name: bizName,
-        tagline: bizTagline || ''
-      });
-      // Update platform registry
-      await db.ref('mast-platform/tenants/' + MastDB.tenantId()).update({
-        name: bizName
-      });
-      await db.ref('mast-platform/tenants/' + MastDB.tenantId() + '/publicConfig').update({
-        brandName: bizName,
-        brandTagline: bizTagline || ''
-      });
-    }
-    if (bizDesc) {
-      await MastDB.config.ref('brand/description').set(bizDesc);
-    }
     // Set tenant status to active
     await db.ref('mast-platform/tenants/' + MastDB.tenantId() + '/status').set('active');
-    // Mark setup complete
     await MastDB.config.ref('setupProgress/completed').set(true);
     await MastDB.config.ref('setupProgress/completedAt').set(new Date().toISOString());
+    await updateConfigChecklist('brand', true);
 
-    // Auto-publish website if config exists
-    if (wizardProgress.websiteConfigured) {
-      var pubStatus = document.getElementById('wizardPublishStatus');
-      if (pubStatus) pubStatus.innerHTML = '<span style="color:var(--warm-gray);">Publishing your website...</span>';
-      try {
-        var pubResult = await firebase.functions().httpsCallable('publishWebPresence')({ tenantId: MastDB.tenantId() });
-        if (pubResult.data && pubResult.data.url) {
-          console.log('[Wizard] Website published at', pubResult.data.url);
-        }
-      } catch (pubErr) {
-        console.warn('[Wizard] Auto-publish failed:', pubErr.message);
+    // Auto-publish website
+    var pubStatus = document.getElementById('wizardPublishStatus');
+    if (pubStatus) pubStatus.innerHTML = '<span style="color:var(--warm-gray);">Publishing your website...</span>';
+    try {
+      var pubResult = await firebase.functions().httpsCallable('publishWebPresence')({ tenantId: MastDB.tenantId() });
+      if (pubResult.data && pubResult.data.url) {
+        console.log('[Wizard] Website published at', pubResult.data.url);
       }
+    } catch (pubErr) {
+      console.warn('[Wizard] Auto-publish failed:', pubErr.message);
     }
 
     showToast('Setup complete! Welcome to your dashboard.');
 
-    // Transition to dashboard — re-fetch subscription to pick up any module changes from wizard/provisioning
+    // Transition to dashboard
     await loadTenantSubscription();
     document.getElementById('setupWizardScreen').style.display = 'none';
     document.getElementById('header').style.display = 'flex';
@@ -11515,7 +11220,6 @@ async function wizardComplete() {
     applySidebarGating();
     navigateTo('dashboard');
 
-    // Show guided next steps immediately
     loadNextStepsCache().then(function() { renderGuidedNextSteps(); });
     attachListeners();
     loadSettings();
