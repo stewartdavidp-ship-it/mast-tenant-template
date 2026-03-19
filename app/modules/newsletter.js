@@ -80,7 +80,7 @@
       renderNewsletter();
     } catch (err) {
       console.error('Error loading newsletter:', err);
-      document.getElementById('newsletterContent').innerHTML = '<p style="color:var(--danger);padding:20px;">Error loading newsletter data: ' + err.message + '</p>';
+      document.getElementById('newsletterContent').innerHTML = '<p style="color:var(--danger);padding:20px;">Error loading newsletter data: ' + esc(err.message) + '</p>';
     }
   }
 
@@ -110,7 +110,7 @@
         var dateStr = issue.createdAt ? new Date(issue.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
         html += '<div class="nl-issue-row" onclick="nlOpenIssue(\'' + issue.id + '\')">' +
           '<span class="nl-issue-num">#' + (issue.issueNumber || '?') + '</span>' +
-          '<span class="nl-issue-title">' + (issue.title || 'Untitled Issue') + '</span>' +
+          '<span class="nl-issue-title">' + esc(issue.title || 'Untitled Issue') + '</span>' +
           nlBadgeHtml(issue.status) +
           '<span class="nl-issue-date">' + dateStr + '</span>' +
           '</div>';
@@ -288,7 +288,7 @@
           html += '<div class="nl-section-images">';
           images.forEach(function(imgId, idx) {
             var img = imageLibrary ? imageLibrary[imgId] : null;
-            if (img) html += '<div style="position:relative;"><img class="nl-section-img-thumb" src="' + img.url + '" alt="" /><span style="position:absolute;top:-4px;right:-4px;cursor:pointer;background:var(--danger);color:#fff;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;font-size:0.6rem;" onclick="nlRemoveImage(\'' + sec.id + '\',' + idx + ')">×</span></div>';
+            if (img) html += '<div style="position:relative;"><img class="nl-section-img-thumb" src="' + esc(img.url) + '" alt="" /><span style="position:absolute;top:-4px;right:-4px;cursor:pointer;background:var(--danger);color:#fff;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;font-size:0.6rem;" onclick="nlRemoveImage(\'' + sec.id + '\',' + idx + ')">×</span></div>';
           });
           if (images.length < 3) html += '<div class="nl-section-img-add" onclick="nlOpenImagePicker(\'' + sec.id + '\')">+</div>';
           html += '</div></div>';

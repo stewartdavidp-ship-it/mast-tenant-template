@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://us-central1-mast-platform-prod.cloudfunctions.net https://*.firebaseio.com https://*.firebasestorage.app; img-src 'self' data: blob: https:; frame-ancestors 'none';">
 <title>Apply — Vendor Application</title>
 <link rel="icon" type="image/svg+xml" href="../favicon.svg">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -146,6 +147,15 @@ body { font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif; ba
       return;
     }
 
+    // Rate limit: one submission per show per session
+    try {
+      if (sessionStorage.getItem('mast-applied-' + slug)) {
+        submitted = true;
+        render();
+        return;
+      }
+    } catch (e) { /* sessionStorage unavailable — proceed normally */ }
+
     loadPageData();
   }
 
@@ -274,6 +284,8 @@ body { font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif; ba
     var maxImages = (showData.submissionConfig || {}).maxImages || 5;
     var files = Array.from(input.files);
     files.forEach(function(f) {
+      if (!f.type.startsWith('image/')) return;
+      if (f.size > 5 * 1024 * 1024) { formError = 'Image must be under 5MB'; render(); return; }
       if (imageFiles.length < maxImages) imageFiles.push(f);
     });
     render();
@@ -349,6 +361,7 @@ body { font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif; ba
     .then(function() {
       submitted = true;
       submitting = false;
+      try { sessionStorage.setItem('mast-applied-' + (showData.show.id || slug), '1'); } catch (e) {}
       render();
     })
     .catch(function(err) {

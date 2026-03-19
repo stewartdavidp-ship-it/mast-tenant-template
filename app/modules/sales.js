@@ -1228,13 +1228,13 @@ async function capturePackingPhoto() {
 
       resultEl.innerHTML = '<div style="color:white;">' +
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
-          '<span style="font-weight:700;font-size:1.1rem;">' + prodName + '</span>' +
+          '<span style="font-weight:700;font-size:1.1rem;">' + esc(prodName) + '</span>' +
           '<span style="color:' + confColor + ';font-size:0.85rem;">' + confLabel + ' (' + confidence + '%)</span>' +
         '</div>' +
         '<div style="display:flex;gap:8px;align-items:center;">' +
           '<label style="color:var(--cream);font-size:0.85rem;">Quantity:</label>' +
           '<input type="number" id="packQtyInput" value="1" min="1" style="width:60px;padding:6px;border-radius:4px;border:1px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.1);color:white;text-align:center;">' +
-          '<button class="btn btn-primary" onclick="confirmPackItem(\'' + data.productId + '\', \'' + prodName.replace(/'/g, "\\'") + '\')">Add to Pack</button>' +
+          '<button class="btn btn-primary" data-pid="' + esc(data.productId) + '" data-pname="' + esc(prodName) + '" onclick="confirmPackItem(this.dataset.pid, this.dataset.pname)">Add to Pack</button>' +
           '<button class="btn btn-secondary" onclick="openManualPackPicker()">Wrong? Pick Manually</button>' +
         '</div>' +
       '</div>';
@@ -1246,7 +1246,7 @@ async function capturePackingPhoto() {
     }
   } catch (err) {
     resultEl.innerHTML = '<div style="color:#E53935;text-align:center;">' +
-      '<p>Recognition error: ' + err.message + '</p>' +
+      '<p>Recognition error: ' + esc(err.message) + '</p>' +
       '<button class="btn btn-primary" onclick="openManualPackPicker()">Pick Manually</button>' +
     '</div>';
   }
@@ -1333,9 +1333,9 @@ function filterPackProducts() {
     var name = p.name || pid;
     if (query && name.toLowerCase().indexOf(query) === -1 && (p.category || '').toLowerCase().indexOf(query) === -1) return;
 
-    html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid rgba(255,255,255,0.1);cursor:pointer;" onclick="selectManualPackProduct(\'' + pid + '\', \'' + name.replace(/'/g, "\\'") + '\')">' +
-      '<span style="color:white;">' + name + '</span>' +
-      '<span style="color:var(--cream);font-size:0.8rem;">' + (p.category || '') + '</span>' +
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid rgba(255,255,255,0.1);cursor:pointer;" data-pid="' + esc(pid) + '" data-pname="' + esc(name) + '" onclick="selectManualPackProduct(this.dataset.pid, this.dataset.pname)">' +
+      '<span style="color:white;">' + esc(name) + '</span>' +
+      '<span style="color:var(--cream);font-size:0.8rem;">' + esc(p.category || '') + '</span>' +
     '</div>';
   });
 
@@ -1347,11 +1347,11 @@ function selectManualPackProduct(productId, productName) {
   var resultEl = document.getElementById('packingRecognitionResult');
   resultEl.style.display = '';
   resultEl.innerHTML = '<div style="color:white;">' +
-    '<div style="font-weight:700;font-size:1.1rem;margin-bottom:8px;">' + productName + '</div>' +
+    '<div style="font-weight:700;font-size:1.1rem;margin-bottom:8px;">' + esc(productName) + '</div>' +
     '<div style="display:flex;gap:8px;align-items:center;">' +
       '<label style="color:var(--cream);font-size:0.85rem;">Quantity:</label>' +
       '<input type="number" id="packQtyInput" value="1" min="1" style="width:60px;padding:6px;border-radius:4px;border:1px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.1);color:white;text-align:center;">' +
-      '<button class="btn btn-primary" onclick="confirmPackItem(\'' + productId + '\', \'' + productName.replace(/'/g, "\\'") + '\')">Add to Pack</button>' +
+      '<button class="btn btn-primary" data-pid="' + esc(productId) + '" data-pname="' + esc(productName) + '" onclick="confirmPackItem(this.dataset.pid, this.dataset.pname)">Add to Pack</button>' +
     '</div>' +
   '</div>';
 }

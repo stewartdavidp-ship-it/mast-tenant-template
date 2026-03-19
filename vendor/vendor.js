@@ -73,29 +73,25 @@
       return;
     }
 
-    // Check for Stripe purchase callback
-    if (params.get('purchase') === 'success') {
+    // Check for Stripe purchase callback (extract before cleaning URL)
+    var purchaseStatus = params.get('purchase');
+    if (purchaseStatus === 'success') {
       msg = { type: 'success', text: 'Coin purchase successful! Your balance will update shortly.' };
       activeTab = 'ads';
-      // Clean URL
-      var url = new URL(window.location);
-      url.searchParams.delete('purchase');
-      url.searchParams.delete('session_id');
-      window.history.replaceState({}, '', url.toString());
       setTimeout(function() { reloadWalletData(); }, 3000);
-    } else if (params.get('purchase') === 'cancelled') {
+    } else if (purchaseStatus === 'cancelled') {
       msg = { type: 'error', text: 'Coin purchase was cancelled.' };
       activeTab = 'ads';
-      var url2 = new URL(window.location);
-      url2.searchParams.delete('purchase');
-      window.history.replaceState({}, '', url2.toString());
     }
+
+    // Clean all params from URL — removes token from browser history/address bar
+    window.history.replaceState({}, '', window.location.pathname);
 
     loadPortalData();
   }
 
   function loadPortalData() {
-    fetch(FUNCTIONS_BASE + '/eventsGetVendorPortalData?token=' + encodeURIComponent(token))
+    fetch(FUNCTIONS_BASE + '/eventsGetVendorPortalData', { headers: { 'Authorization': 'Bearer ' + token } })
       .then(function(r) {
         if (r.status === 401) throw new Error('Invalid or expired invite link. Please contact the organizer for a new link.');
         if (!r.ok) throw new Error('Failed to load vendor data.');
@@ -112,7 +108,7 @@
   }
 
   function reloadWalletData() {
-    fetch(FUNCTIONS_BASE + '/eventsGetVendorPortalData?token=' + encodeURIComponent(token))
+    fetch(FUNCTIONS_BASE + '/eventsGetVendorPortalData', { headers: { 'Authorization': 'Bearer ' + token } })
       .then(function(r) { return r.json(); })
       .then(function(d) {
         if (d.wallet) portalData.wallet = d.wallet;
