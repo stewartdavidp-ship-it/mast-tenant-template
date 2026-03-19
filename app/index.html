@@ -5859,6 +5859,10 @@
         <button class="view-tab" onclick="switchSettingsSubView('dashboard')">Dashboard</button>
         <button class="view-tab" onclick="switchSettingsSubView('domains')">Domains</button>
         <button class="view-tab" onclick="switchSettingsSubView('subscription')">Subscription</button>
+        <button class="view-tab" onclick="switchSettingsSubView('about')">About</button>
+      </div>
+      <div id="settingsSubAbout" style="display:none;padding-top:16px;">
+        <div id="aboutContent"></div>
       </div>
       <div id="settingsSubSubscription" style="display:none;padding-top:16px;">
         <div id="subscriptionBillingInfo" style="margin-bottom:24px;"></div>
@@ -9747,6 +9751,9 @@ var MastAdmin = (function() {
   };
 })();
 
+// App build version — displayed in settings for cache verification.
+var MAST_BUILD_V = '20260319.3';
+
 // Module build version — bump this when deploying module changes to bust browser cache.
 var MAST_MODULES_V = '20260319p2';
 
@@ -9789,7 +9796,7 @@ function getModuleForRouteManifest(route) {
 // ============================================================
 // Settings Sub-Tabs
 // ============================================================
-var settingsSubViews = ['general', 'payments', 'shipping', 'integrations', 'workshop', 'trips', 'dashboard', 'domains', 'subscription'];
+var settingsSubViews = ['general', 'payments', 'shipping', 'integrations', 'workshop', 'trips', 'dashboard', 'domains', 'subscription', 'about'];
 function switchSettingsSubView(view) {
   // Hide all sub-views
   settingsSubViews.forEach(function(v) {
@@ -9812,6 +9819,36 @@ function switchSettingsSubView(view) {
   if (view === 'dashboard') renderDashCardSettings();
   if (view === 'domains') loadDomainSettings();
   if (view === 'subscription') renderSubscriptionSettings();
+  if (view === 'about') renderAboutSettings();
+}
+
+// ============================================================
+// About Settings
+// ============================================================
+
+function renderAboutSettings() {
+  var el = document.getElementById('aboutContent');
+  if (!el) return;
+  var tenantId = window.TENANT_CONFIG ? window.TENANT_CONFIG.tenantId : '—';
+  var plan = window.TENANT_CONFIG ? (window.TENANT_CONFIG.plan || '—') : '—';
+  var h = '';
+  h += '<div style="max-width:480px;">';
+  h += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.4rem;color:var(--charcoal);margin-bottom:16px;">About Mast</h3>';
+  h += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:12px;padding:20px;">';
+  h += '<div style="display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:0.9rem;">';
+  h += '<span style="color:var(--warm-gray);font-weight:600;">Build</span>';
+  h += '<span style="color:var(--charcoal);font-family:monospace;">' + MAST_BUILD_V + '</span>';
+  h += '<span style="color:var(--warm-gray);font-weight:600;">Modules</span>';
+  h += '<span style="color:var(--charcoal);font-family:monospace;">' + MAST_MODULES_V + '</span>';
+  h += '<span style="color:var(--warm-gray);font-weight:600;">Tenant</span>';
+  h += '<span style="color:var(--charcoal);">' + esc(tenantId) + '</span>';
+  h += '<span style="color:var(--warm-gray);font-weight:600;">Plan</span>';
+  h += '<span style="color:var(--charcoal);">' + esc(plan) + '</span>';
+  h += '</div>';
+  h += '</div>';
+  h += '<p style="margin-top:16px;font-size:0.8rem;color:var(--warm-gray);">Powered by Mast &mdash; runmast.com</p>';
+  h += '</div>';
+  el.innerHTML = h;
 }
 
 // ============================================================
