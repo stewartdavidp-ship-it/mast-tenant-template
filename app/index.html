@@ -8076,6 +8076,34 @@ function applySidebarGating() {
       }
     }
   }
+
+  // Show/Show Light relationship: if user has full Show, hide Show Light
+  // and replace Show's "Apply" with Show Light's apply functionality
+  var hasShow = canAccessModule('show');
+  var hasShowLight = canAccessModule('show-light');
+  var showLightSection = document.querySelector('.sidebar-section[data-section="show-light"]');
+  var showApplyItem = document.querySelector('.sidebar-item[data-route="show-apply"]');
+
+  if (hasShow && showLightSection) {
+    // Hide Show Light section entirely — Show subsumes it
+    showLightSection.style.display = 'none';
+    showLightSection.classList.add('subsumed');
+    // Replace Show's Apply with Show Light's apply (the lightweight apply flow)
+    if (showApplyItem) {
+      showApplyItem.setAttribute('onclick', "navigateTo('show-light-apply')");
+      showApplyItem.setAttribute('data-route', 'show-light-apply');
+    }
+  } else if (showLightSection) {
+    // Restore Show Light visibility (if Show was removed/downgraded)
+    showLightSection.classList.remove('subsumed');
+    if (hasShowLight) showLightSection.style.display = '';
+    // Restore Show's Apply to its own route
+    if (showApplyItem) {
+      showApplyItem.setAttribute('onclick', "navigateTo('show-apply')");
+      showApplyItem.setAttribute('data-route', 'show-apply');
+    }
+  }
+
   updateSidebarExpandToggle();
 }
 
@@ -8110,6 +8138,8 @@ function setSidebarLockedVisibility(show) {
   var lockedSections = document.querySelectorAll('.sidebar-section.locked, .sidebar-future-section');
 
   lockedSections.forEach(function(el) {
+    // Don't show subsumed sections (e.g., Show Light when Show is active)
+    if (el.classList.contains('subsumed')) return;
     el.style.display = show ? '' : 'none';
   });
 
