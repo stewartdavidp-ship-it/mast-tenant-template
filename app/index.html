@@ -31,6 +31,8 @@
       --danger-hover: #c82333;
       --gold: #C4853C;
       --dark-brown: #5C3D2E;
+      --bg-secondary: #f5f5f5;
+      --bg-tertiary: #e8e2d8;
     }
 
     * {
@@ -1750,6 +1752,22 @@
       .testing-mode-panel { width: 100%; }
     }
 
+    /* Testing mode dark mode */
+    body.dark-mode .tm-mission-card { background: #2a2a2a; border-color: #444; }
+    body.dark-mode .tm-mission-card.accomplished { border-left-color: var(--teal); }
+    body.dark-mode .tm-task-item { border-bottom-color: #444; }
+    body.dark-mode .tm-task-hint-btn { border-color: #555; color: #6fc; }
+    body.dark-mode .tm-task-hint-btn:hover { background: #333; }
+    body.dark-mode .tm-assistant-area { background: #1e1e1e; }
+    body.dark-mode .tm-assistant-response { color: #ccc; }
+    body.dark-mode .tm-prompt-area label { color: #ccc; }
+    body.dark-mode .tm-status-new { background: #333; color: #999; }
+    body.dark-mode .tm-status-active { background: rgba(230,81,0,0.2); color: #FFB74D; }
+    body.dark-mode .tm-status-done { background: rgba(46,125,50,0.2); color: #66BB6A; }
+    body.dark-mode .tm-precondition-notice { background: #3a2e1a; border-left-color: #d4a053; color: #e0c87a; }
+    body.dark-mode .tm-footer { border-top-color: #444; }
+    body.dark-mode .tm-category-header { color: #888; }
+
     /* ========== EMPTY STATE ========== */
     .empty-state {
       text-align: center;
@@ -1855,6 +1873,44 @@
     body.dark-mode #endTripSheet label {
       color: #ccc !important;
     }
+    /* Trips: inline hardcoded backgrounds */
+    body.dark-mode .trip-card[style*="background:white"] { background: #1e1e1e !important; border-color: #333 !important; }
+    body.dark-mode #tripsContent div[style*="background:#fef3c7"] { background: #3a2e1a !important; border-color: #5a4a2a !important; color: #e0c87a !important; }
+    body.dark-mode #tripsContent div[style*="background:var(--cream,#FAF6F0)"] { background: #1e1e1e !important; }
+    body.dark-mode #tripsContent button[style*="background:white"] { background: #2a2a2a !important; color: #d4a053 !important; }
+
+    /* ========== WHOLESALE DARK MODE ========== */
+    body.dark-mode #wholesaleContent div[style*="background:#fff"] { background: #2a2a2a !important; border-color: #444 !important; }
+    body.dark-mode #wholesaleContent input[style*="border:1px solid #ccc"] { border-color: #444 !important; background: #2a2a2a !important; color: #e0e0e0 !important; }
+
+    /* ========== FINANCIALS DARK MODE ========== */
+    body.dark-mode #financialsContent div[style*="background:var(--bg-secondary"] { background: #2a2a2a !important; }
+
+    /* ========== PRODUCTION DARK MODE (print iframe) ========== */
+    body.dark-mode #productionContent div[style*="background:white"] { background: #2a2a2a !important; border-color: #444 !important; }
+
+    /* ========== SHOWS DARK MODE (inline bg-secondary fallbacks) ========== */
+    body.dark-mode #showsContent div[style*="background:var(--bg-secondary"] { background: #2a2a2a !important; }
+    body.dark-mode .status-badge[style*="background:#fef3c7"] { background: #3a2e1a !important; color: #FFD54F !important; }
+
+    /* ========== SOCIAL DARK MODE (thumbnails + inline cream) ========== */
+    body.dark-mode .sm-clip-thumb { background: #333; }
+    body.dark-mode .sm-post-thumb { background: #333; }
+    body.dark-mode #socialContent div[style*="background:var(--cream);border:1px solid #e8e2d8"] { background: #1e1e1e !important; border-color: #333 !important; }
+    body.dark-mode #socialContent button[style*="background:var(--cream);color:var(--warm-gray)"] { background: #333 !important; color: #ccc !important; }
+
+    /* ========== FULFILLMENT DARK MODE ========== */
+    body.dark-mode #fulfillmentContent div[style*="background:var(--cream);border:1px solid var(--cream-dark)"] { background: #1e1e1e !important; border-color: #333 !important; }
+    body.dark-mode #fulfillmentContent div[style*="background:var(--cream);border:1px solid var(--teal)"] { background: #1e1e1e !important; }
+    body.dark-mode #fulfillmentContent input[style*="border:1px solid #ddd"] { border-color: #444 !important; background: #2a2a2a !important; color: #e0e0e0 !important; }
+
+    /* ========== EVENTS DARK MODE (inline) ========== */
+    body.dark-mode #eventsContent div[style*="background:var(--cream);border:2px dashed"] { background: #1e1e1e !important; border-color: #444 !important; }
+
+    /* ========== CONTACTS TABLE DARK MODE ========== */
+    body.dark-mode .contacts-table th { border-bottom-color: #444; }
+    body.dark-mode .contacts-table td { border-bottom-color: #333; color: #ccc; }
+    body.dark-mode .contacts-table tr:hover { background: rgba(196,133,60,0.08); }
 
     /* ========== LOADING ========== */
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -2015,6 +2071,8 @@
       --cream: #2a2a2a;
       --cream-dark: #3a3a3a;
       --warm-gray: #888;
+      --bg-secondary: #2a2a2a;
+      --bg-tertiary: #333;
       background: #1a1a1a;
       color: #e0e0e0;
     }
