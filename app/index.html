@@ -2270,6 +2270,20 @@
     body.dark-mode #aboutContent div[style*="background:var(--cream)"] { background: #2a2a2a !important; border-color: #444 !important; }
     body.dark-mode #aboutContent .about-value { color: #e0e0e0 !important; }
 
+    /* ========== DOMAINS TAB (Settings) ========== */
+    body.dark-mode #domainsList div[style*="background:var(--card-bg"] { background: #2a2a2a !important; border-color: #444 !important; }
+    body.dark-mode #domainsList span[style*="color:var(--text"] { color: #e0e0e0 !important; }
+    body.dark-mode #domainsList span[style*="background:#e0f2fe"] { background: #1a3a4a !important; color: #7dd3fc !important; }
+    body.dark-mode #domainsList span[style*="background:#f0fdf4"] { background: #1a3a2a !important; color: #86efac !important; }
+    body.dark-mode #domainsList span[style*="background:#fef3c7"] { background: #3d2e00 !important; color: #fbbf24 !important; }
+    body.dark-mode #domainsList span[style*="background:#d1fae5"] { background: #1a3a2a !important; color: #6ee7b7 !important; }
+    body.dark-mode #domainsList span[style*="background:#fee2e2"] { background: #3a1a1a !important; color: #fca5a5 !important; }
+    body.dark-mode #customDomainInput { background: #333 !important; color: #e0e0e0 !important; border-color: #555 !important; }
+    body.dark-mode #dnsInstructions > div[style*="background:var(--cream"] { background: #2a2a2a !important; border-color: #444 !important; }
+    body.dark-mode #dnsInstructions div[style*="color:var(--text"] { color: #e0e0e0 !important; }
+    body.dark-mode #dnsRecordsList a[style*="background:var(--input-bg"] { background: #333 !important; color: #e0e0e0 !important; border-color: #555 !important; }
+    body.dark-mode #dnsRecordsList button[style*="background:var(--input-bg"] { background: #333 !important; color: #e0e0e0 !important; }
+
     /* ========== CONFIRM DIALOG (reusable) ========== */
     body.dark-mode #confirmDialogOverlay > div { background: #2a2a2a !important; }
     body.dark-mode #confirmDialogOverlay div[style*="color:var(--charcoal)"] { color: #e0e0e0 !important; }
@@ -11449,7 +11463,7 @@ function loadEmailDomainSection() {
       container.innerHTML =
         '<p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">Add a custom sending domain so emails come from your own address (e.g., orders@yourbusiness.com).</p>' +
         '<div style="display:flex;gap:6px;margin-bottom:8px;">' +
-          '<input type="text" id="emailDomainInput" placeholder="yourbusiness.com" style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;box-sizing:border-box;">' +
+          '<input type="text" id="emailDomainInput" placeholder="yourbusiness.com" style="flex:1;padding:9px 12px;border:1px solid var(--border,#ddd);border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;box-sizing:border-box;background:var(--input-bg,#fff);color:var(--text,#333);">' +
           '<button class="btn btn-primary" onclick="addEmailDomain()" style="font-size:0.82rem;padding:6px 14px;white-space:nowrap;">Add Domain</button>' +
         '</div>' +
         '<div id="emailDomainStatus" style="font-size:0.85rem;"></div>';
