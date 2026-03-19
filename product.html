@@ -1095,7 +1095,7 @@
       var catsHtml = '';
       if (p.categories && p.categories.length) {
         p.categories.forEach(function(c) {
-          catsHtml += '<a href="shop.html?cat=' + c + '" class="product-detail-cat">' + c + '</a>';
+          catsHtml += '<a href="shop.html?cat=' + encodeURIComponent(c) + '" class="product-detail-cat">' + escHtml(c) + '</a>';
         });
       }
       document.getElementById('productCats').innerHTML = catsHtml;
@@ -1110,11 +1110,16 @@
         if (images.length > 1) {
           var thumbsHtml = '';
           images.forEach(function(src, idx) {
-            thumbsHtml += '<div class="product-thumb' + (idx === 0 ? ' active' : '') + '" onclick="switchImage(' + idx + ')">' +
-              '<img src="' + src + '" alt="' + p.name + ' image ' + (idx + 1) + '" loading="lazy" />' +
+            thumbsHtml += '<div class="product-thumb' + (idx === 0 ? ' active' : '') + '" data-idx="' + idx + '">' +
+              '<img src="' + escHtml(src) + '" alt="' + escHtml(p.name) + ' image ' + (idx + 1) + '" loading="lazy" />' +
               '</div>';
           });
-          document.getElementById('thumbsContainer').innerHTML = thumbsHtml;
+          var thumbsEl = document.getElementById('thumbsContainer');
+          thumbsEl.innerHTML = thumbsHtml;
+          thumbsEl.addEventListener('click', function(e) {
+            var thumb = e.target.closest('.product-thumb');
+            if (thumb) switchImage(parseInt(thumb.getAttribute('data-idx'), 10));
+          });
         }
       }
 
@@ -1128,11 +1133,11 @@
         window._requiredOptions = p.options.map(function(o) { return o.label; });
         var optHtml = '';
         p.options.forEach(function(opt) {
-          optHtml += '<div class="product-option-group" data-option-label="' + opt.label + '">' +
-            '<div class="product-option-label">' + opt.label + '</div>' +
+          optHtml += '<div class="product-option-group" data-option-label="' + escHtml(opt.label) + '">' +
+            '<div class="product-option-label">' + escHtml(opt.label) + '</div>' +
             '<div class="product-option-choices">';
           opt.choices.forEach(function(choice) {
-            optHtml += '<span class="product-option-chip" data-label="' + opt.label + '" data-value="' + choice + '">' + choice + '</span>';
+            optHtml += '<span class="product-option-chip" data-label="' + escHtml(opt.label) + '" data-value="' + escHtml(choice) + '">' + escHtml(choice) + '</span>';
           });
           optHtml += '</div></div>';
         });
@@ -1389,15 +1394,22 @@
     var html = '';
     window._allProducts.forEach(function(p) {
       var isSelected = selected.indexOf(p.pid) !== -1;
-      html += '<div class="comm-catalog-item' + (isSelected ? ' selected' : '') + '" data-pid="' + p.pid + '" onclick="toggleInspiration(\'' + p.pid + '\')" ' +
-        'style="width:72px;flex-shrink:0;cursor:pointer;border-radius:6px;border:2px solid ' + (isSelected ? '#2A7C6F' : 'transparent') + ';padding:3px;transition:border-color 0.2s;" title="' + (p.name || '') + '">' +
-        '<img src="' + p.image + '" alt="' + (p.name || '') + '" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:4px;display:block;" />' +
-        '<div style="font-size:0.65rem;color:#5C3D2E;margin-top:2px;text-align:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">' + (p.name || '') + '</div>' +
+      html += '<div class="comm-catalog-item' + (isSelected ? ' selected' : '') + '" data-pid="' + escHtml(p.pid) + '" ' +
+        'style="width:72px;flex-shrink:0;cursor:pointer;border-radius:6px;border:2px solid ' + (isSelected ? '#2A7C6F' : 'transparent') + ';padding:3px;transition:border-color 0.2s;" title="' + escHtml(p.name || '') + '">' +
+        '<img src="' + escHtml(p.image) + '" alt="' + escHtml(p.name || '') + '" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:4px;display:block;" />' +
+        '<div style="font-size:0.65rem;color:#5C3D2E;margin-top:2px;text-align:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">' + escHtml(p.name || '') + '</div>' +
         (isSelected ? '<div style="text-align:center;font-size:0.65rem;color:#2A7C6F;font-weight:600;">Selected</div>' : '') +
       '</div>';
     });
     if (!html) html = '<div style="padding:12px;color:#9B958E;font-size:0.82rem;">No products found</div>';
     grid.innerHTML = html;
+    if (!grid._clickBound) {
+      grid._clickBound = true;
+      grid.addEventListener('click', function(e) {
+        var item = e.target.closest('.comm-catalog-item');
+        if (item) toggleInspiration(item.getAttribute('data-pid'));
+      });
+    }
   }
 
   function toggleInspiration(pid) {

@@ -124,10 +124,10 @@
           } else { var ip = el.closest('.contact-info-item'); if (ip) ip.style.display = 'none'; }
           break;
         case 'year-brand':
-          el.innerHTML = '&copy; ' + year + ' ' + name;
+          el.textContent = '\u00A9 ' + year + ' ' + name;
           break;
         case 'brand-location':
-          el.innerHTML = location ? (name + ' &bull; ' + location) : name;
+          el.textContent = location ? (name + ' \u2022 ' + location) : name;
           break;
         case 'description':
           if (brand.description) el.textContent = brand.description;

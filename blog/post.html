@@ -419,6 +419,7 @@ window.addEventListener('resize', function() {
 
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
 <script src="../storefront-tenant.js"></script>
 <script src="../tenant-brand.js?v=2"></script>
 <script>
@@ -455,7 +456,7 @@ window.TENANT_READY.then(function() {
       '<div class="post-date">' + date + '</div>';
 
     if (post.bodyHtml) {
-      html += '<div class="post-body">' + post.bodyHtml + '</div>';
+      html += '<div class="post-body">' + DOMPurify.sanitize(post.bodyHtml) + '</div>';
       if (post.tags && post.tags.length > 0) {
         html += '<div class="post-tags">';
         post.tags.forEach(function(tag) {

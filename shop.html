@@ -726,6 +726,8 @@ window.TENANT_READY.then(function() {
   ];
   var SHOP_IDS = SHOP_CATS.map(function(c) { return c.id; });
 
+  function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
   (function() {
     var app = firebase.initializeApp(TENANT_FIREBASE_CONFIG, 'public-shop');
     var db = app.database();
@@ -770,7 +772,7 @@ window.TENANT_READY.then(function() {
       if (items.length === 0) return;
 
       if (filter === 'all') {
-        html += '<h2 class="category-section-title">' + cat.label + '</h2>';
+        html += '<h2 class="category-section-title">' + esc(cat.label) + '</h2>';
       }
       html += '<div class="product-grid">';
       items.forEach(function(product) {
@@ -778,18 +780,18 @@ window.TENANT_READY.then(function() {
         var price = product.price || '';
         var pid = product.pid || '';
         var img = (product.images && product.images.length > 0) ? product.images[0] : '';
-        var link = pid ? 'product.html?id=' + pid : 'shop.html';
+        var link = pid ? 'product.html?id=' + encodeURIComponent(pid) : 'shop.html';
         var isLocal = !!pid;
         var isSoldSculpture = product.businessLine === 'sculpture' && product.status === 'sold';
         html += '<div class="product-card fade-up" style="opacity:1;transform:translateY(0)">' +
-          '<div class="product-image"' + (isSoldSculpture ? ' style="position:relative;"' : '') + '><a href="' + link + '"' + (isLocal ? '' : ' target="_blank" rel="noopener"') + '>' + (img ? '<img src="' + img + '" alt="' + name + '" loading="lazy" />' : '') + '</a>' +
+          '<div class="product-image"' + (isSoldSculpture ? ' style="position:relative;"' : '') + '><a href="' + esc(link) + '"' + (isLocal ? '' : ' target="_blank" rel="noopener"') + '>' + (img ? '<img src="' + esc(img) + '" alt="' + esc(name) + '" loading="lazy" />' : '') + '</a>' +
             (isSoldSculpture ? '<span style="position:absolute;top:8px;right:8px;background:rgba(92,61,46,0.85);color:white;font-size:0.7rem;font-weight:600;padding:3px 8px;border-radius:4px;">Sold</span>' : '') +
           '</div>' +
           '<div class="product-info">' +
-            '<span class="product-category">' + cat.label + '</span>' +
-            '<h3>' + name + '</h3>' +
-            (isSoldSculpture ? '<p class="product-price" style="font-size:0.82rem;color:var(--warm-gray,#6B6560);">Commission available</p>' : (price ? '<p class="product-price">' + price + '</p>' : '')) +
-            (link ? '<a href="' + link + '" class="product-link"' + (isLocal ? '' : ' target="_blank" rel="noopener"') + '>' + (isSoldSculpture ? 'Request Commission' : 'View Details') + '</a>' : '') +
+            '<span class="product-category">' + esc(cat.label) + '</span>' +
+            '<h3>' + esc(name) + '</h3>' +
+            (isSoldSculpture ? '<p class="product-price" style="font-size:0.82rem;color:var(--warm-gray,#6B6560);">Commission available</p>' : (price ? '<p class="product-price">' + esc(price) + '</p>' : '')) +
+            (link ? '<a href="' + esc(link) + '" class="product-link"' + (isLocal ? '' : ' target="_blank" rel="noopener"') + '>' + (isSoldSculpture ? 'Request Commission' : 'View Details') + '</a>' : '') +
           '</div></div>';
       });
       html += '</div>';

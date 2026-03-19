@@ -699,6 +699,7 @@ window.addEventListener('resize', function() {
 
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
 <script src="../storefront-tenant.js"></script>
 <script src="../tenant-brand.js?v=2"></script>
 <script>
@@ -761,7 +762,7 @@ window.TENANT_READY.then(function() {
 
       // Full body content
       if (tab === 'blog' && latest.bodyHtml) {
-        html += '<div class="featured-post-body">' + latest.bodyHtml + '</div>';
+        html += '<div class="featured-post-body">' + DOMPurify.sanitize(latest.bodyHtml) + '</div>';
         if (latest.tags && latest.tags.length > 0) {
           html += '<div class="featured-post-tags">';
           latest.tags.forEach(function(tag) { html += '<span class="featured-post-tag">' + escHtml(tag) + '</span>'; });
@@ -813,7 +814,7 @@ window.TENANT_READY.then(function() {
           var excerpt = '';
           if (tab === 'blog' && post.bodyHtml) {
             var tmp = document.createElement('div');
-            tmp.innerHTML = post.bodyHtml;
+            tmp.innerHTML = DOMPurify.sanitize(post.bodyHtml);
             var text = tmp.textContent || tmp.innerText || '';
             excerpt = text.substring(0, 200);
             if (text.length > 200) excerpt += '...';
