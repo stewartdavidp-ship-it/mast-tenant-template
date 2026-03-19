@@ -7419,17 +7419,18 @@ MastDB.showLight = {
 
 // Canonical module definitions. Single source of truth for nav, gating, and locked UX.
 // Web is the base module (always included, not purchasable). All others are purchasable.
+// Grid layout: Row1: Sell, Make, Ship | Row2: Market, Run, Web | Row3: Show, Show Light, Events | Row4: Book
 var MODULE_REGISTRY = {
-  web:    { id: 'web',    name: 'Web',    icon: '\uD83C\uDF10', description: 'Website pages and content management.', section: 'web', navPosition: 0, purchasable: false, routes: ['website', 'images'], manageSettings: [], synergies: ['market', 'sell'], status: 'active' },
   sell:   { id: 'sell',   name: 'Sell',   icon: '\uD83D\uDCB0', description: 'Point of sale, orders, commissions, wholesale.', section: 'sell', navPosition: 1, purchasable: true, routes: ['pos', 'orders', 'commissions', 'wholesale', 'galleries', 'receipts', 'coupons'], manageSettings: ['square'], synergies: ['ship', 'make'], status: 'active' },
   make:   { id: 'make',   name: 'Make',   icon: '\uD83D\uDD25', description: 'Production jobs, build tracking, procurement.', section: 'make', navPosition: 2, purchasable: true, routes: ['jobs', 'production', 'procurement'], manageSettings: [], synergies: ['sell', 'market'], status: 'active' },
   ship:   { id: 'ship',   name: 'Ship',   icon: '\uD83D\uDCE6', description: 'Pack orders, ship deliveries, track fulfillment.', section: 'ship', navPosition: 3, purchasable: true, routes: ['pack', 'ship'], manageSettings: ['shippingRates'], synergies: ['sell', 'show'], status: 'active' },
   market: { id: 'market', name: 'Market', icon: '\uD83D\uDCE3', description: 'Social media, blog, newsletter, stories.', section: 'market', navPosition: 4, purchasable: true, routes: ['social', 'blog', 'newsletter', 'stories'], manageSettings: ['newsletter', 'email'], synergies: ['sell', 'show'], status: 'active' },
-  show:   { id: 'show',   name: 'Show',   icon: '\uD83C\uDFAA', description: 'Find, apply, prep, and execute craft fairs and events.', section: 'show', navPosition: 5, purchasable: true, routes: ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'], manageSettings: [], synergies: ['sell', 'ship', 'make'], status: 'active' },
-  book:   { id: 'book',   name: 'Book',   icon: '\uD83D\uDCC5', description: 'Appointments, classes, studio time.', section: 'book', navPosition: 6, purchasable: true, routes: [], manageSettings: [], synergies: ['sell', 'market'], status: 'coming-soon' },
-  run:    { id: 'run',    name: 'Run',    icon: '\uD83D\uDCCB', description: 'Trips, expenses, reports, financials, contacts.', section: 'run', navPosition: 7, purchasable: true, routes: ['trips', 'expenses', 'reports', 'financials', 'contacts', 'customers'], manageSettings: [], synergies: ['sell', 'show'], status: 'active' },
-  events: { id: 'events', name: 'Events', icon: '\uD83C\uDFAB', description: 'Organize shows, manage booths, vendors, and floor plans.', section: 'events', navPosition: 8, purchasable: true, routes: ['events-shows', 'events-settings'], manageSettings: [], synergies: ['show', 'sell', 'market'], status: 'active' },
-  'show-light': { id: 'show-light', name: 'Show Light', icon: '\u2728', description: 'Vendor profile, image gallery, and AI-powered show application builder.', section: 'show-light', navPosition: 9, purchasable: true, routes: ['show-light-profile', 'show-light-gallery', 'show-light-shows', 'show-light-apply'], manageSettings: [], synergies: ['show', 'sell', 'market'], status: 'active' }
+  run:    { id: 'run',    name: 'Run',    icon: '\uD83D\uDCCB', description: 'Trips, expenses, reports, financials, contacts.', section: 'run', navPosition: 5, purchasable: true, routes: ['trips', 'expenses', 'reports', 'financials', 'contacts', 'customers'], manageSettings: [], synergies: ['sell', 'show'], status: 'active' },
+  web:    { id: 'web',    name: 'Web',    icon: '\uD83C\uDF10', description: 'Website pages and content management.', section: 'web', navPosition: 6, purchasable: false, showInGrid: true, routes: ['website', 'images'], manageSettings: [], synergies: ['market', 'sell'], status: 'active' },
+  show:   { id: 'show',   name: 'Show',   icon: '\uD83C\uDFAA', description: 'Find, apply, prep, and execute craft fairs and events.', section: 'show', navPosition: 7, purchasable: true, routes: ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'], manageSettings: [], synergies: ['sell', 'ship', 'make'], status: 'active' },
+  'show-light': { id: 'show-light', name: 'Show Light', icon: '\u2728', description: 'Vendor profile, image gallery, and AI-powered show application builder.', section: 'show-light', navPosition: 8, purchasable: false, showInGrid: true, routes: ['show-light-profile', 'show-light-gallery', 'show-light-shows', 'show-light-apply'], manageSettings: [], synergies: ['show', 'sell', 'market'], status: 'active' },
+  events: { id: 'events', name: 'Events', icon: '\uD83C\uDFAB', description: 'Organize shows, manage booths, vendors, and floor plans.', section: 'events', navPosition: 9, purchasable: true, routes: ['events-shows', 'events-settings'], manageSettings: [], synergies: ['show', 'sell', 'market'], status: 'active' },
+  book:   { id: 'book',   name: 'Book',   icon: '\uD83D\uDCC5', description: 'Appointments, classes, studio time.', section: 'book', navPosition: 10, purchasable: true, routes: [], manageSettings: [], synergies: ['sell', 'market'], status: 'coming-soon' }
 };
 
 // Synergy messaging for locked module previews.
@@ -7811,6 +7812,10 @@ function renderModuleSelectionUI(containerId, options) {
   var purchasable = Object.keys(MODULE_REGISTRY)
     .filter(function(id) { return MODULE_REGISTRY[id].purchasable; })
     .sort(function(a, b) { return MODULE_REGISTRY[a].navPosition - MODULE_REGISTRY[b].navPosition; });
+  // Modules to show in grid: purchasable + always-included (e.g. Web)
+  var gridModules = Object.keys(MODULE_REGISTRY)
+    .filter(function(id) { return MODULE_REGISTRY[id].purchasable || MODULE_REGISTRY[id].showInGrid; })
+    .sort(function(a, b) { return MODULE_REGISTRY[a].navPosition - MODULE_REGISTRY[b].navPosition; });
 
   var effectiveSelected = isCommand
     ? purchasable.filter(function(id) { return MODULE_REGISTRY[id].status !== 'coming-soon'; })
@@ -7841,12 +7846,13 @@ function renderModuleSelectionUI(containerId, options) {
     h += '</div>';
   } else {
     h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;margin-bottom:24px;">';
-    purchasable.forEach(function(moduleId) {
+    gridModules.forEach(function(moduleId) {
       var mod = MODULE_REGISTRY[moduleId];
-      var isSelected = effectiveSelected.indexOf(moduleId) >= 0;
+      var isAlwaysIncluded = !mod.purchasable && mod.showInGrid;
+      var isSelected = isAlwaysIncluded || effectiveSelected.indexOf(moduleId) >= 0;
       var isComingSoon = mod.status === 'coming-soon';
-      var isLocked = lockedModules.indexOf(moduleId) >= 0;
-      var canClick = !isComingSoon && !isCommand && !isPublish && !isLocked && (!atLimit || isSelected);
+      var isLocked = isAlwaysIncluded || lockedModules.indexOf(moduleId) >= 0;
+      var canClick = !isAlwaysIncluded && !isComingSoon && !isCommand && !isPublish && !isLocked && (!atLimit || isSelected);
 
       var borderStyle = isSelected ? '2px solid var(--amber, #C4853C)' : '2px solid var(--cream-dark, #F0E8DB)';
       var bgStyle = isSelected ? 'var(--cream, #FAF6F0)' : 'var(--cream-dark, #F0E8DB)';
@@ -7858,7 +7864,9 @@ function renderModuleSelectionUI(containerId, options) {
       h += '<div ' + onclick + ' style="background:' + bgStyle + ';border:' + borderStyle + ';border-radius:12px;padding:20px;cursor:' + cursorStyle + ';opacity:' + opacityStyle + ';box-shadow:' + shadowStyle + ';transition:all 0.2s ease;position:relative;min-height:140px;display:flex;flex-direction:column;justify-content:space-between;">';
 
       // Badge (top-right)
-      if (isComingSoon) {
+      if (isAlwaysIncluded) {
+        h += '<span style="position:absolute;top:10px;right:10px;background:var(--teal, #2A7C6F);color:white;font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:4px;text-transform:uppercase;letter-spacing:0.5px;">Included</span>';
+      } else if (isComingSoon) {
         h += '<span style="position:absolute;top:10px;right:10px;background:var(--warm-gray, #6B6560);color:white;font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:4px;text-transform:uppercase;letter-spacing:0.5px;">Coming Soon</span>';
       } else if (isLocked && isSelected) {
         h += '<span style="position:absolute;top:10px;right:10px;background:var(--teal, #2A7C6F);color:white;font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:4px;">Current</span>';
@@ -9822,12 +9830,15 @@ function renderSubscriptionSettings() {
   // Render billing info section
   renderSubscriptionBillingInfo(sub);
 
-  // Render tier selector
+  // Render tier selector — Artist tiers + Events tier family
   var selectorEl = document.getElementById('subscriptionTierSelector');
   if (selectorEl) {
     var h = '<div style="margin-bottom:8px;">';
     h += '<label style="font-weight:600;font-size:0.95rem;color:var(--charcoal);display:block;margin-bottom:12px;">Select Your Tier</label>';
-    h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;justify-content:start;">';
+    h += '<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:stretch;">';
+
+    // Artist tier cards
+    h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px;flex:1;min-width:0;">';
     TIER_ORDER.forEach(function(tierId) {
       var tc = TIER_CONFIG[tierId];
       var isActive = tierId === currentTier;
@@ -9842,13 +9853,34 @@ function renderSubscriptionSettings() {
       h += '<div style="font-size:0.8rem;color:var(--warm-gray);margin-top:4px;">' + esc(tc.description) + '</div>';
       h += '</div>';
     });
+    h += '</div>';
+
+    // Divider
+    h += '<div style="width:2px;background:var(--cream-dark);border-radius:1px;min-height:80px;align-self:stretch;"></div>';
+
+    // Events tier card
+    var eventsActive = sub.modules && sub.modules.indexOf('events') >= 0;
+    var eventsBorder = eventsActive ? 'var(--teal)' : 'var(--cream-dark)';
+    var eventsBg = eventsActive ? 'var(--cream)' : 'var(--cream-dark)';
+    var eventsShadow = eventsActive ? '0 2px 8px rgba(42, 124, 111, 0.2)' : 'none';
+    h += '<div style="min-width:180px;max-width:220px;">';
+    h += '<div style="background:' + eventsBg + ';border:2px solid ' + eventsBorder + ';border-radius:12px;padding:20px;height:100%;box-sizing:border-box;box-shadow:' + eventsShadow + ';">';
+    h += '<div style="font-size:0.7rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--teal);margin-bottom:6px;">Add-on</div>';
+    h += '<div style="font-weight:700;font-family:\'Cormorant Garamond\', serif;font-size:1.1rem;color:var(--charcoal);">Events</div>';
+    h += '<div style="font-size:0.9rem;color:var(--teal);font-weight:600;">Separate plan</div>';
+    h += '<div style="font-size:0.8rem;color:var(--warm-gray);margin-top:4px;">Organize shows, manage vendors and booths.</div>';
+    if (eventsActive) {
+      h += '<span class="status-badge" style="background:var(--teal);color:white;margin-top:8px;display:inline-block;">Active</span>';
+    }
+    h += '</div></div>';
+
     h += '</div></div>';
     selectorEl.innerHTML = h;
   }
 
-  // Render module selection
+  // Render module selection — only count purchasable modules
   var isUpgrade = TIER_ORDER.indexOf(currentTier) > TIER_ORDER.indexOf(sub.tier);
-  var currentModules = sub.modules || [];
+  var currentModules = (sub.modules || []).filter(function(id) { return MODULE_REGISTRY[id] && MODULE_REGISTRY[id].purchasable; });
   var lockedMods = isUpgrade ? currentModules.slice() : [];
   var preSelected = isUpgrade ? currentModules.slice() : (currentTier === sub.tier ? currentModules.slice() : []);
 
