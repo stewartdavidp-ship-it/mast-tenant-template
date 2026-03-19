@@ -11140,17 +11140,9 @@ async function wizardComplete() {
     await MastDB.config.ref('setupProgress/completedAt').set(new Date().toISOString());
     await updateConfigChecklist('brand', true);
 
-    // Auto-publish website
-    var pubStatus = document.getElementById('wizardPublishStatus');
-    if (pubStatus) pubStatus.innerHTML = '<span style="color:var(--warm-gray);">Publishing your website...</span>';
-    try {
-      var pubResult = await firebase.functions().httpsCallable('publishWebPresence')({ tenantId: MastDB.tenantId() });
-      if (pubResult.data && pubResult.data.url) {
-        console.log('[Wizard] Website published at', pubResult.data.url);
-      }
-    } catch (pubErr) {
-      console.warn('[Wizard] Auto-publish failed:', pubErr.message);
-    }
+    // Note: publishWebPresence is NOT called here — it creates a hosting version
+    // with only index.html, wiping out the admin app and module files deployed
+    // by provisioning. The storefront renders dynamically from config data.
 
     showToast('Setup complete! Welcome to your dashboard.');
 
