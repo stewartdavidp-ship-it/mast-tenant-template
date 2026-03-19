@@ -7849,7 +7849,7 @@ function renderModuleSelectionUI(containerId, options) {
     h += 'The Publish tier includes your website and product catalog.<br>Upgrade to add business modules.';
     h += '</div>';
   } else {
-    h += '<div style="display:grid;grid-template-columns:repeat(3,250px);gap:16px;margin-bottom:24px;">';
+    h += '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-bottom:24px;justify-content:start;">';
     gridModules.forEach(function(moduleId) {
       var mod = MODULE_REGISTRY[moduleId];
       var isAlwaysIncluded = !mod.purchasable && mod.showInGrid;
