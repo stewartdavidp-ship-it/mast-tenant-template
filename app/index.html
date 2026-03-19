@@ -10759,7 +10759,7 @@ async function wizardAnalyzeSite() {
   var manifestItemsEl = document.getElementById('wizardManifestItems');
   var btn = document.getElementById('wizardAnalyzeBtn');
 
-  statusEl.innerHTML = '<span style="color:var(--warm-gray);">Analyzing your website... This may take 30-60 seconds.</span>';
+  statusEl.innerHTML = '<div style="display:flex;align-items:center;gap:12px;justify-content:center;padding:16px 0;"><div style="width:24px;height:24px;border:3px solid var(--cream-dark,#ddd);border-top-color:var(--teal,#2a7c6f);border-radius:50%;animation:spin 0.8s linear infinite;flex-shrink:0;"></div><span style="color:var(--warm-gray);">Analyzing your website... This may take 30-60 seconds.</span></div>';
   btn.disabled = true;
   btn.textContent = 'Analyzing...';
   summaryEl.style.display = 'none';
