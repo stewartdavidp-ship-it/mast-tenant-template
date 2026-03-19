@@ -46,6 +46,7 @@
             brand.etsy = pc.etsyUrl || '';
             brand.description = pc.brandDescription || '';
             brand.ownerNames = pc.ownerNames || '';
+            brand._tenantStatus = pc.tenantStatus || 'active';
           }
           return brand;
         })
@@ -61,7 +62,16 @@
     });
 
     Promise.all([brandReady, domReady]).then(function(results) {
-      applyBrand(results[0]);
+      var b = results[0];
+
+      // If tenant hasn't set up their storefront yet, show a clean placeholder
+      // instead of the template's default content (which is Shir-specific)
+      if (b._tenantStatus === 'onboarding' || b._tenantStatus === 'provisioning') {
+        showComingSoon(b);
+        return;
+      }
+
+      applyBrand(b);
     });
   });
 
@@ -150,6 +160,28 @@
     }
 
     // Dispatch event so page-specific JS can react
+    window.dispatchEvent(new CustomEvent('tenant-brand-ready', { detail: brand }));
+  }
+
+  function showComingSoon(brand) {
+    var name = brand.name || 'This site';
+    var adminUrl = window.location.origin + '/app/';
+    document.title = name + ' — Coming Soon';
+    document.body.innerHTML = '' +
+      '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;' +
+      'background:var(--bg,#faf7f3);font-family:\'DM Sans\',sans-serif;padding:40px;">' +
+      '<div style="text-align:center;max-width:480px;">' +
+      '<div style="font-size:48px;margin-bottom:24px;">🚀</div>' +
+      '<h1 style="font-family:\'Archivo\',sans-serif;font-weight:800;font-size:clamp(28px,4vw,40px);' +
+      'color:var(--text,#1a1a1a);letter-spacing:-0.025em;margin-bottom:16px;">' + name + '</h1>' +
+      '<p style="font-size:18px;color:var(--soft,#555);font-weight:300;line-height:1.7;margin-bottom:32px;">' +
+      'We\'re setting things up. Check back soon!</p>' +
+      '<a href="' + adminUrl + '" style="display:inline-block;padding:14px 32px;' +
+      'background:var(--amber,#e8a84c);color:#111820;border-radius:10px;text-decoration:none;' +
+      'font-weight:600;font-size:15px;">Go to Admin →</a>' +
+      '</div></div>';
+
+    // Dispatch event so downstream JS doesn't break waiting for it
     window.dispatchEvent(new CustomEvent('tenant-brand-ready', { detail: brand }));
   }
 
