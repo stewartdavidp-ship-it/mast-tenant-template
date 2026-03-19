@@ -36,6 +36,21 @@ var PURPOSE_LABELS = {
   'experimental': '🧪 Experimental'
 };
 
+var PURPOSE_COLORS = {
+  'fulfillment': { bg: 'rgba(196,133,60,0.2)', color: '#FFB74D', border: 'rgba(196,133,60,0.35)' },
+  'custom': { bg: 'rgba(42,124,111,0.2)', color: '#4DB6AC', border: 'rgba(42,124,111,0.35)' },
+  'inventory-general': { bg: 'rgba(158,158,158,0.15)', color: '#BDBDBD', border: 'rgba(158,158,158,0.25)' },
+  'inventory-event': { bg: 'rgba(123,31,162,0.2)', color: '#CE93D8', border: 'rgba(123,31,162,0.35)' },
+  'wholesale': { bg: 'rgba(21,101,192,0.2)', color: '#64B5F6', border: 'rgba(21,101,192,0.35)' },
+  'experimental': { bg: 'rgba(85,139,47,0.2)', color: '#AED581', border: 'rgba(85,139,47,0.35)' }
+};
+
+function purposeBadgeStyle(purpose) {
+  var c = PURPOSE_COLORS[purpose];
+  if (!c) return '';
+  return 'background:' + c.bg + ';color:' + c.color + ';border:1px solid ' + c.border + ';';
+}
+
 var PROD_JOB_TRANSITIONS = {
   definition: ['in-progress', 'on-hold', 'cancelled'],
   'in-progress': ['completed', 'on-hold', 'cancelled'],
@@ -370,7 +385,7 @@ function renderProductionJobs() {
             '<strong style="font-size:0.95rem;">' + esc(j.name || 'Untitled') + '</strong>' +
           '</div>' +
           '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">' +
-            '<span class="prod-purpose-badge ' + (j.purpose || '') + '">' + (PURPOSE_LABELS[j.purpose] || j.purpose || '') + '</span>' +
+            '<span class="status-badge" style="' + purposeBadgeStyle(j.purpose) + '">' + (PURPOSE_LABELS[j.purpose] || j.purpose || '') + '</span>' +
             '<span class="status-badge prod-status-pill ' + (j.status || '') + '">' + (j.status || '').replace('-', ' ') + '</span>' +
             orderBadge +
             deadlineHtml +
@@ -569,9 +584,9 @@ function renderProductionJobDetail(jobId) {
   // Check for active (draft) build
   var hasActiveBuild = buildKeys.some(function(k) { return builds[k].status === 'draft'; });
   var startBuildBtn = (status === 'definition' || status === 'in-progress') && !hasActiveBuild ?
-    '<button class="build-touch-btn primary" onclick="startBuild(\'' + esc(jobId) + '\')">&#x1F525; Start Build</button>' : '';
+    '<button class="btn btn-primary" style="padding:14px 18px;font-size:0.95rem;" onclick="startBuild(\'' + esc(jobId) + '\')">&#x1F525; Start Build</button>' : '';
   var activeBuildBtn = hasActiveBuild ?
-    '<button class="build-touch-btn primary" onclick="openActiveBuild(\'' + esc(jobId) + '\', \'' + esc(buildKeys.find(function(k) { return builds[k].status === 'draft'; })) + '\')">&#x1F3AD; Continue Active Build</button>' : '';
+    '<button class="btn btn-primary" style="padding:14px 18px;font-size:0.95rem;" onclick="openActiveBuild(\'' + esc(jobId) + '\', \'' + esc(buildKeys.find(function(k) { return builds[k].status === 'draft'; })) + '\')">&#x1F3AD; Continue Active Build</button>' : '';
 
   el.innerHTML = '<button class="detail-back" onclick="backToProductionList()">&#8592; Back to Jobs</button>' +
     '<div style="margin-bottom:16px;">' +
@@ -579,7 +594,7 @@ function renderProductionJobDetail(jobId) {
         '<div>' +
           '<h2 style="margin:0 0 8px 0;font-family:\'Cormorant Garamond\',serif;">' + esc(job.name || 'Untitled') + '</h2>' +
           '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">' +
-            '<span class="prod-purpose-badge ' + (job.purpose || '') + '">' + (PURPOSE_LABELS[job.purpose] || '') + '</span>' +
+            '<span class="status-badge" style="' + purposeBadgeStyle(job.purpose) + '">' + (PURPOSE_LABELS[job.purpose] || '') + '</span>' +
             '<span class="status-badge prod-status-pill ' + status + '">' + status.replace('-', ' ') + '</span>' +
             '<span class="prod-priority-dot ' + (job.priority || 'medium') + '"></span>' +
             '<span style="font-size:0.82rem;text-transform:capitalize;">' + (job.priority || 'medium') + '</span>' +
@@ -881,7 +896,7 @@ function startBuild(jobId) {
     '</div>' +
     '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;">' +
       '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
-      '<button class="build-touch-btn primary" onclick="doStartBuild(\'' + esc(jobId) + '\')">&#x1F525; Start</button>' +
+      '<button class="btn btn-primary" onclick="doStartBuild(\'' + esc(jobId) + '\')">&#x1F525; Start</button>' +
     '</div>' +
   '</div>';
   openModal(html);
@@ -980,7 +995,7 @@ function renderActiveBuild(jobId, buildId) {
     '</div>' +
 
     '<div style="text-align:center;margin:24px 0;">' +
-      '<button class="media-capture-btn" onclick="capturePhoto(\'' + esc(jobId) + '\', \'' + esc(buildId) + '\')">' +
+      '<button class="btn btn-primary" style="padding:16px 28px;font-size:1.1rem;border-radius:12px;" onclick="capturePhoto(\'' + esc(jobId) + '\', \'' + esc(buildId) + '\')">' +
         '&#x1F4F7; Capture Photo</button>' +
       '<input type="file" id="buildPhotoInput" accept="image/*" capture="environment" multiple style="display:none;" ' +
         'onchange="handlePhotoUpload(this, \'' + esc(jobId) + '\', \'' + esc(buildId) + '\')">' +
@@ -989,8 +1004,8 @@ function renderActiveBuild(jobId, buildId) {
     '<div id="buildMediaGallery" class="media-gallery" style="margin-bottom:24px;"></div>' +
 
     '<div style="display:flex;gap:12px;justify-content:center;margin:24px 0;flex-wrap:wrap;">' +
-      '<button class="build-touch-btn secondary" onclick="addBuildNote(\'' + esc(jobId) + '\', \'' + esc(buildId) + '\')">&#x1F4DD; Add Note</button>' +
-      '<button class="build-touch-btn secondary" onclick="addBuildMilestone(\'' + esc(jobId) + '\', \'' + esc(buildId) + '\')">&#x2B50; Add Milestone</button>' +
+      '<button class="btn btn-secondary" style="padding:14px 18px;font-size:0.95rem;" onclick="addBuildNote(\'' + esc(jobId) + '\', \'' + esc(buildId) + '\')">&#x1F4DD; Add Note</button>' +
+      '<button class="btn btn-secondary" style="padding:14px 18px;font-size:0.95rem;" onclick="addBuildMilestone(\'' + esc(jobId) + '\', \'' + esc(buildId) + '\')">&#x2B50; Add Milestone</button>' +
     '</div>' +
 
     (build.notes ? '<div class="prod-detail-section"><strong>Notes</strong><p style="margin-top:8px;font-size:0.85rem;white-space:pre-wrap;">' + esc(build.notes) + '</p></div>' : '') +
@@ -998,7 +1013,7 @@ function renderActiveBuild(jobId, buildId) {
     (milestoneKeys.length > 0 ? '<div class="prod-detail-section"><strong>Milestones</strong><div style="margin-top:8px;">' + milestonesHtml + '</div></div>' : '') +
 
     '<div style="text-align:center;margin-top:32px;">' +
-      '<button class="build-touch-btn primary" style="min-width:200px;" onclick="openCompleteBuild(\'' + esc(jobId) + '\', \'' + esc(buildId) + '\')">&#x2705; Complete Build</button>' +
+      '<button class="btn btn-primary" style="padding:14px 18px;font-size:0.95rem;min-width:200px;" onclick="openCompleteBuild(\'' + esc(jobId) + '\', \'' + esc(buildId) + '\')">&#x2705; Complete Build</button>' +
     '</div>';
   // Load and display media for this build
   loadBuildMedia(buildId);
@@ -1016,7 +1031,7 @@ function addBuildNote(jobId, buildId) {
     '<textarea id="buildNoteText" rows="4" placeholder="Kiln conditions, techniques, observations..." style="font-size:1rem;"></textarea>' +
     '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">' +
       '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
-      '<button class="build-touch-btn primary" onclick="doAddBuildNote(\'' + esc(jobId) + '\', \'' + esc(buildId) + '\')">Save</button>' +
+      '<button class="btn btn-primary" onclick="doAddBuildNote(\'' + esc(jobId) + '\', \'' + esc(buildId) + '\')">Save</button>' +
     '</div>' +
   '</div>';
   openModal(html);
@@ -1046,7 +1061,7 @@ function addBuildMilestone(jobId, buildId) {
     '<input type="text" id="milestoneText" placeholder="e.g. body formed, first anneal..." style="font-size:1rem;">' +
     '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">' +
       '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
-      '<button class="build-touch-btn primary" onclick="doAddMilestone(\'' + esc(jobId) + '\', \'' + esc(buildId) + '\')">Add</button>' +
+      '<button class="btn btn-primary" onclick="doAddMilestone(\'' + esc(jobId) + '\', \'' + esc(buildId) + '\')">Save</button>' +
     '</div>' +
   '</div>';
   openModal(html);
@@ -1098,7 +1113,7 @@ function openCompleteBuild(jobId, buildId) {
       '<p style="font-size:0.85rem;color:var(--warm-gray);">No line items to record output for.</p>') +
     '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;">' +
       '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
-      '<button class="build-touch-btn primary" onclick="doCompleteBuild(\'' + esc(jobId) + '\', \'' + esc(buildId) + '\')">&#x2705; Complete</button>' +
+      '<button class="btn btn-primary" onclick="doCompleteBuild(\'' + esc(jobId) + '\', \'' + esc(buildId) + '\')">&#x2705; Complete</button>' +
     '</div>' +
   '</div>';
   openModal(html);
@@ -1802,7 +1817,7 @@ function renderStoryDetail(storyId) {
     actions += '<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 10px;" onclick="publishStoryFromDetail(\'' + esc(storyId) + '\')">🚀 Publish</button>';
   }
 
-  var html = '<div class="detail-back" onclick="backToStoriesList()">← Back to Stories</div>' +
+  var html = '<button class="detail-back" onclick="backToStoriesList()">← Back to Stories</button>' +
     '<div class="section-header" style="margin-bottom:0;">' +
       '<h2>' + esc(story.title || 'Untitled Story') + '</h2>' +
     '</div>' +
@@ -2185,9 +2200,9 @@ function buildStoryCurationHtml(job, builds, buildKeys, allMedia, existingStory,
 
   // Back button and header
   if (existingStoryId) {
-    html += '<div class="detail-back" onclick="viewStoryDetail(\'' + esc(existingStoryId) + '\')">← Back to Story</div>';
+    html += '<button class="detail-back" onclick="viewStoryDetail(\'' + esc(existingStoryId) + '\')">← Back to Story</button>';
   } else {
-    html += '<div class="detail-back" onclick="backToStoriesList()">← Back to Stories</div>';
+    html += '<button class="detail-back" onclick="backToStoriesList()">← Back to Stories</button>';
   }
 
   html += '<div class="section-header" style="margin-bottom:4px;">' +
@@ -2303,9 +2318,9 @@ function renderStoryEntries() {
         '<textarea rows="2" placeholder="Caption..." onchange="updateStoryEntry(' + idx + ', \'caption\', this.value)">' + esc(entry.caption) + '</textarea>' +
       '</div>' +
       '<div class="story-entry-actions">' +
-        '<button class="story-move-btn" onclick="moveStoryEntry(' + idx + ', -1)" ' + (idx === 0 ? 'disabled style="opacity:0.3;"' : '') + '>↑</button>' +
-        '<button class="story-move-btn" onclick="moveStoryEntry(' + idx + ', 1)" ' + (idx === storyDraft.length - 1 ? 'disabled style="opacity:0.3;"' : '') + '>↓</button>' +
-        '<button class="story-remove-btn" onclick="removeStoryEntry(' + idx + ')">×</button>' +
+        '<button class="btn btn-small btn-secondary" style="width:30px;height:30px;padding:0;display:flex;align-items:center;justify-content:center;" onclick="moveStoryEntry(' + idx + ', -1)" ' + (idx === 0 ? 'disabled style="opacity:0.3;width:30px;height:30px;padding:0;display:flex;align-items:center;justify-content:center;"' : '') + '>↑</button>' +
+        '<button class="btn btn-small btn-secondary" style="width:30px;height:30px;padding:0;display:flex;align-items:center;justify-content:center;" onclick="moveStoryEntry(' + idx + ', 1)" ' + (idx === storyDraft.length - 1 ? 'disabled style="opacity:0.3;width:30px;height:30px;padding:0;display:flex;align-items:center;justify-content:center;"' : '') + '>↓</button>' +
+        '<button class="btn btn-small btn-danger" style="width:30px;height:30px;padding:0;display:flex;align-items:center;justify-content:center;" onclick="removeStoryEntry(' + idx + ')">×</button>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -2521,7 +2536,7 @@ function showStoryPreview(title, entries) {
     html += '</div>';
   });
   html += '<div style="text-align:center;margin-top:32px;">' +
-    '<button class="btn btn-secondary" onclick="closeModal()">Close Preview</button></div></div>';
+    '<button class="btn btn-secondary" onclick="closeModal()">Close</button></div></div>';
   openModal(html);
 }
 

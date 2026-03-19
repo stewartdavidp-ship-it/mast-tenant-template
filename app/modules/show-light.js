@@ -105,7 +105,7 @@
     h += '</div>';
 
     // Sub-nav
-    h += '<div class="sl-sub-nav">';
+    h += '<div class="view-tabs">';
     ['profile', 'gallery', 'shows', 'apply'].forEach(function(v) {
       var label = v === 'apply' ? 'Apply' : v.charAt(0).toUpperCase() + v.slice(1);
       h += '<button class="view-tab' + (slSubView === v ? ' active' : '') + '" onclick="slSwitchView(\'' + v + '\')">' + label + '</button>';
@@ -132,7 +132,7 @@
 
   function slSwitchView(view) {
     slSubView = view;
-    document.querySelectorAll('#showLightTab .sl-sub-nav .view-tab').forEach(function(btn) {
+    document.querySelectorAll('#showLightTab .view-tabs .view-tab').forEach(function(btn) {
       btn.classList.remove('active');
       if (btn.textContent.toLowerCase() === view) btn.classList.add('active');
     });
@@ -359,9 +359,9 @@
     h += '</div>';
 
     // Filter toggle
-    h += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">';
-    h += '<button class="view-tab' + (slGalleryFilter === 'all' ? ' active' : '') + '" onclick="slSetGalleryFilter(\'all\')" style="padding:4px 12px;border-radius:16px;border:1px solid var(--cream-dark);background:' + (slGalleryFilter === 'all' ? 'var(--charcoal)' : 'transparent') + ';color:' + (slGalleryFilter === 'all' ? 'white' : 'var(--warm-gray)') + ';font-size:0.8rem;cursor:pointer;">All (' + entries.length + ')</button>';
-    h += '<button class="view-tab' + (slGalleryFilter === 'app' ? ' active' : '') + '" onclick="slSetGalleryFilter(\'app\')" style="padding:4px 12px;border-radius:16px;border:1px solid var(--cream-dark);background:' + (slGalleryFilter === 'app' ? 'var(--amber)' : 'transparent') + ';color:' + (slGalleryFilter === 'app' ? 'white' : 'var(--warm-gray)') + ';font-size:0.8rem;cursor:pointer;">⭐ Application (' + appCount + ')</button>';
+    h += '<div class="view-tabs" style="margin-bottom:12px;">';
+    h += '<button class="view-tab' + (slGalleryFilter === 'all' ? ' active' : '') + '" onclick="slSetGalleryFilter(\'all\')">All (' + entries.length + ')</button>';
+    h += '<button class="view-tab' + (slGalleryFilter === 'app' ? ' active' : '') + '" onclick="slSetGalleryFilter(\'app\')">Application (' + appCount + ')</button>';
     h += '</div>';
 
     // Apply filter
@@ -462,7 +462,7 @@
       '</div>' +
       '<div class="modal-footer">' +
         '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
-        '<button class="btn btn-primary" onclick="slSaveAppDesc(\'' + esc(imgId) + '\')">Save & Mark as App Photo</button>' +
+        '<button class="btn btn-primary" onclick="slSaveAppDesc(\'' + esc(imgId) + '\')">Save</button>' +
       '</div>';
 
     openModal(html);
@@ -1322,7 +1322,7 @@
       var img = entry[1];
       html += '<div class="sl-gallery-item" onclick="slAssignImage(' + slotIdx + ', \'' + esc(id) + '\'); closeModal();" style="cursor:pointer;">';
       html += '<img src="' + esc(img.url || img.thumbnailUrl || '') + '" alt="" loading="lazy">';
-      if (img.category) html += '<span class="sl-gallery-badge">' + esc(img.category) + '</span>';
+      if (img.category) html += '<span class="status-badge" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.6);color:white;font-size:0.65rem;">' + esc(img.category) + '</span>';
       if (img.productName) html += '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.6);color:white;font-size:0.6rem;padding:2px 4px;">' + esc(img.productName) + '</div>';
       html += '</div>';
     });
