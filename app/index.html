@@ -2252,6 +2252,19 @@
     body.dark-mode #subscriptionBillingInfo span[style*="color:var(--warm-gray)"] { color: #aaa !important; }
     body.dark-mode #subscriptionBillingInfo div[style*="background:#fef3c7"] { background: #3d2e00 !important; border-color: #6b5300 !important; color: #fbbf24 !important; }
 
+    /* ========== CANCEL SUBSCRIPTION MODAL ========== */
+    body.dark-mode #cancelSubscriptionOverlay > div { background: #2a2a2a !important; }
+    body.dark-mode #cancelSubscriptionOverlay div[style*="color:var(--charcoal)"],
+    body.dark-mode #cancelSubscriptionOverlay span[style*="color:var(--charcoal)"],
+    body.dark-mode #cancelSubscriptionOverlay p[style*="color:var(--charcoal)"] { color: #e0e0e0 !important; }
+    body.dark-mode #cancelSubscriptionOverlay div[style*="color:var(--warm-gray)"],
+    body.dark-mode #cancelSubscriptionOverlay p[style*="color:var(--warm-gray)"] { color: #aaa !important; }
+    body.dark-mode #cancelSubscriptionOverlay div[style*="background:var(--cream-dark)"] { background: #333 !important; border-color: var(--amber) !important; }
+    body.dark-mode #cancelSubscriptionOverlay div[style*="background:#fef3c7"] { background: #3d2e00 !important; border-color: #6b5300 !important; color: #fbbf24 !important; }
+    body.dark-mode #cancelSubscriptionOverlay select,
+    body.dark-mode #cancelSubscriptionOverlay textarea { background: #333 !important; color: #e0e0e0 !important; border-color: #555 !important; }
+    body.dark-mode #cancelSubscriptionOverlay label { color: #e0e0e0 !important; }
+
     /* ========== MODULE SELECTION (Subscription Settings) ========== */
     body.dark-mode #moduleSelectionUI div[style*="background:var(--cream-dark"],
     body.dark-mode #subscriptionTierSelector div[style*="background:var(--cream-dark"] { background: #2a2a2a !important; border-color: #444 !important; }
@@ -9814,7 +9827,7 @@ function renderSubscriptionSettings() {
   if (selectorEl) {
     var h = '<div style="margin-bottom:8px;">';
     h += '<label style="font-weight:600;font-size:0.95rem;color:var(--charcoal);display:block;margin-bottom:12px;">Select Your Tier</label>';
-    h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;">';
+    h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;justify-content:start;">';
     TIER_ORDER.forEach(function(tierId) {
       var tc = TIER_CONFIG[tierId];
       var isActive = tierId === currentTier;
@@ -9822,7 +9835,7 @@ function renderSubscriptionSettings() {
       var bg = isActive ? 'var(--cream)' : 'var(--cream-dark)';
       var shadow = isActive ? '0 2px 8px rgba(196, 133, 60, 0.2)' : 'none';
       h += '<div onclick="selectSubscriptionTier(\'' + tierId + '\')" style="' +
-        'background:' + bg + ';border:2px solid ' + borderColor + ';border-radius:10px;padding:14px 16px;cursor:pointer;' +
+        'background:' + bg + ';border:2px solid ' + borderColor + ';border-radius:12px;padding:20px;cursor:pointer;' +
         'box-shadow:' + shadow + ';transition:all 0.2s;">';
       h += '<div style="font-weight:700;font-family:\'Cormorant Garamond\', serif;font-size:1.1rem;color:var(--charcoal);">' + esc(tc.name) + '</div>';
       h += '<div style="font-size:0.9rem;color:var(--amber);font-weight:600;">' + (tc.price === 0 ? 'Free' : '$' + tc.price + '/mo') + '</div>';
@@ -9968,7 +9981,8 @@ function renderSubscriptionBillingInfo(sub) {
   if (details && details.cancelAtPeriodEnd) {
     h += '<button class="btn btn-primary btn-small" onclick="resumeSubscription()">Resume Auto-Renewal</button>';
   } else if (details && details.status === 'active') {
-    h += '<button class="btn btn-small" style="color:var(--danger);border:1px solid var(--danger);background:transparent;" onclick="cancelSubscriptionUI()">Stop Auto-Renewal</button>';
+    h += '<button class="btn btn-secondary btn-small" onclick="stopAutoRenewalUI()">Stop Auto-Renewal</button>';
+    h += '<button class="btn btn-small" style="color:var(--danger);border:1px solid var(--danger);background:transparent;" onclick="cancelSubscriptionUI()">Cancel Subscription</button>';
   }
   h += '</div>';
 
@@ -10020,18 +10034,162 @@ async function openBillingPortal() {
   }
 }
 
-async function cancelSubscriptionUI() {
+// --- Stop Auto-Renewal (lighter touch — "I'm not sure yet") ---
+async function stopAutoRenewalUI() {
   var details = _subscriptionDetails;
   var endDate = details && details.currentPeriodEnd
     ? new Date(details.currentPeriodEnd).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
     : 'the end of your billing period';
-  if (!confirm('Stop auto-renewal? Your subscription will remain active until ' + endDate + ', then downgrade to Publish (free).')) return;
+  if (!confirm('Stop auto-renewal?\n\nYour subscription stays active until ' + endDate + '. You can resume anytime before then.')) return;
   await toggleSubscriptionCancel('cancel');
+  // Flag for nudge process — remind them to renew before period ends
+  try {
+    await MastDB.ref('admin/subscriptionNudge').set({
+      type: 'auto_renewal_stopped',
+      stoppedAt: new Date().toISOString(),
+      periodEnd: details && details.currentPeriodEnd || null,
+      tier: getTenantSubscription().tier,
+    });
+  } catch (e) { console.error('Nudge flag write failed:', e); }
+}
+
+// --- Cancel Subscription (retention flow — "I'm done") ---
+function cancelSubscriptionUI() {
+  var sub = getTenantSubscription();
+  var details = _subscriptionDetails;
+  var currentTier = sub.tier || 'command';
+  var tierConfig = TIER_CONFIG[currentTier] || {};
+  var endDate = details && details.currentPeriodEnd
+    ? new Date(details.currentPeriodEnd).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+    : 'the end of your billing period';
+
+  // Find a downgrade offer (one tier below current)
+  var currentIdx = TIER_ORDER.indexOf(currentTier);
+  var downgradeOption = currentIdx > 1 ? TIER_CONFIG[TIER_ORDER[currentIdx - 1]] : null;
+
+  var overlay = document.createElement('div');
+  overlay.id = 'cancelSubscriptionOverlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+
+  var h = '<div style="background:var(--cream);border-radius:10px;max-width:480px;width:90%;padding:24px 28px;box-shadow:0 8px 30px rgba(0,0,0,0.2);">';
+
+  // Header
+  h += '<div style="text-align:center;margin-bottom:20px;">';
+  h += '<div style="font-size:1.8rem;margin-bottom:8px;">😔</div>';
+  h += '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.3rem;font-weight:600;color:var(--charcoal);">We\'re sorry to see you go</div>';
+  h += '<p style="font-size:0.85rem;color:var(--warm-gray);margin-top:6px;">Before you cancel, we\'d love to understand how we can do better.</p>';
+  h += '</div>';
+
+  // Downgrade offer
+  if (downgradeOption) {
+    h += '<div style="background:var(--cream-dark);border:1px solid var(--amber);border-radius:8px;padding:14px 16px;margin-bottom:16px;">';
+    h += '<div style="font-size:0.85rem;font-weight:600;color:var(--amber);margin-bottom:4px;">💡 Would a different tier work better?</div>';
+    h += '<p style="font-size:0.85rem;color:var(--charcoal);margin-bottom:10px;">Switch to <strong>' + esc(downgradeOption.name) + '</strong> at $' + downgradeOption.price + '/mo — ' + esc(downgradeOption.description) + '</p>';
+    h += '<button class="btn btn-primary btn-small" onclick="acceptDowngradeOffer(\'' + esc(downgradeOption.id) + '\')">Switch to ' + esc(downgradeOption.name) + '</button>';
+    h += '</div>';
+  }
+
+  // Feedback
+  h += '<div style="margin-bottom:16px;">';
+  h += '<label style="font-size:0.85rem;font-weight:600;color:var(--charcoal);display:block;margin-bottom:8px;">What\'s the main reason you\'re leaving?</label>';
+  h += '<select id="cancelReasonSelect" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+  h += '<option value="">Select a reason...</option>';
+  h += '<option value="too_expensive">Too expensive</option>';
+  h += '<option value="not_using">Not using it enough</option>';
+  h += '<option value="missing_features">Missing features I need</option>';
+  h += '<option value="switching">Switching to another platform</option>';
+  h += '<option value="business_closed">Closing my business</option>';
+  h += '<option value="temporary">Just need a break</option>';
+  h += '<option value="other">Other</option>';
+  h += '</select>';
+  h += '</div>';
+
+  h += '<div style="margin-bottom:20px;">';
+  h += '<textarea id="cancelFeedbackText" placeholder="Anything else you\'d like us to know? (optional)" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\',sans-serif;font-size:0.85rem;min-height:60px;resize:vertical;box-sizing:border-box;"></textarea>';
+  h += '</div>';
+
+  // What happens next
+  h += '<div style="background:#fef3c7;border-radius:6px;padding:10px 14px;margin-bottom:20px;font-size:0.82rem;color:#92400e;">';
+  h += 'Your access continues until <strong>' + endDate + '</strong>. After that, you\'ll be on the free Publish tier (public site + product catalog).';
+  h += '</div>';
+
+  // Buttons
+  h += '<div style="display:flex;justify-content:flex-end;gap:8px;">';
+  h += '<button class="btn btn-secondary" onclick="closeCancelModal()">Never Mind</button>';
+  h += '<button class="btn btn-small" style="color:var(--danger);border:1px solid var(--danger);background:transparent;" onclick="confirmCancelSubscription()">Cancel Subscription</button>';
+  h += '</div>';
+
+  h += '</div>';
+  overlay.innerHTML = h;
+  document.body.appendChild(overlay);
+
+  // Close on overlay click
+  overlay.addEventListener('click', function(e) {
+    if (e.target === overlay) closeCancelModal();
+  });
+}
+
+function closeCancelModal() {
+  var overlay = document.getElementById('cancelSubscriptionOverlay');
+  if (overlay) overlay.remove();
+}
+
+async function acceptDowngradeOffer(newPlan) {
+  closeCancelModal();
+  showToast('Switching to ' + newPlan + '...');
+  try {
+    var token = await firebase.auth().currentUser.getIdToken();
+    var resp = await fetch(CLOUD_FUNCTIONS_BASE + '/updateSubscription', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token,
+        'X-Tenant-ID': MastDB.tenantId(),
+      },
+      body: JSON.stringify({ tenantId: MastDB.tenantId(), newPlan: newPlan }),
+    });
+    if (!resp.ok) {
+      var errData = await resp.json().catch(function() { return {}; });
+      throw new Error(errData.error || 'Failed to change plan');
+    }
+    showToast('Switched to ' + newPlan + '! Your new plan takes effect immediately.');
+    _subscriptionDetails = null; // Force refresh
+    renderSubscriptionSettings();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
+
+async function confirmCancelSubscription() {
+  var reason = document.getElementById('cancelReasonSelect');
+  var feedback = document.getElementById('cancelFeedbackText');
+  var reasonVal = reason ? reason.value : '';
+  var feedbackVal = feedback ? feedback.value.trim() : '';
+
+  closeCancelModal();
+  await toggleSubscriptionCancel('cancel');
+
+  // Save cancellation feedback + flag for retention outreach
+  try {
+    await MastDB.ref('admin/subscriptionCancellation').set({
+      type: 'cancel_subscription',
+      reason: reasonVal || 'not_specified',
+      feedback: feedbackVal || null,
+      cancelledAt: new Date().toISOString(),
+      periodEnd: _subscriptionDetails && _subscriptionDetails.currentPeriodEnd || null,
+      tier: getTenantSubscription().tier,
+    });
+  } catch (e) { console.error('Cancel feedback write failed:', e); }
 }
 
 async function resumeSubscription() {
   if (!confirm('Resume auto-renewal? Your subscription will continue renewing automatically.')) return;
   await toggleSubscriptionCancel('resume');
+  // Clear nudge/cancel flags
+  try {
+    await MastDB.ref('admin/subscriptionNudge').remove();
+    await MastDB.ref('admin/subscriptionCancellation').remove();
+  } catch (e) { console.error('Nudge flag clear failed:', e); }
 }
 
 async function toggleSubscriptionCancel(action) {
