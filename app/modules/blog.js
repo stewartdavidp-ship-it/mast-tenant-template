@@ -96,7 +96,7 @@
       '<h3>\ud83d\udca1 Blog Ideas</h3>' +
       '<div class="blog-idea-input">' +
       '<input type="text" id="blogIdeaInput" placeholder="Capture a blog idea..." onkeydown="if(event.key===\'Enter\')blogAddIdea()" />' +
-      '<button class="btn btn-primary" onclick="blogAddIdea()" style="white-space:nowrap;">Add Idea</button>' +
+      '<button class="btn btn-primary" onclick="blogAddIdea()" style="white-space:nowrap;">+ New Idea</button>' +
       '</div>';
 
     if (blogIdeas.length === 0) {

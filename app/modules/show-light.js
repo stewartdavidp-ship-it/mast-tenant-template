@@ -505,7 +505,7 @@
     var h = '';
     h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
     h += '<span style="color:var(--warm-gray);font-size:0.9rem;">' + entries.length + ' shows</span>';
-    h += '<button class="btn btn-primary btn-sm" onclick="slOpenAddShowModal()">+ Add Show</button>';
+    h += '<button class="btn btn-primary btn-sm" onclick="slOpenAddShowModal()">+ New Show</button>';
     h += '</div>';
 
     if (entries.length === 0) {

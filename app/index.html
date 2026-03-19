@@ -12604,7 +12604,7 @@ function renderProductDetail(pid) {
   var actionHtml = '';
   if (isEditing) {
     actionHtml = '<div style="display:flex;gap:8px;margin-top:20px;padding-top:16px;border-top:1px solid var(--cream-dark);">' +
-      '<button class="btn btn-primary" onclick="saveProduct(\'' + esc(pid || '') + '\')">' + (isCreate ? 'Create Product' : 'Save Changes') + '</button>' +
+      '<button class="btn btn-primary" onclick="saveProduct(\'' + esc(pid || '') + '\')">' + (isCreate ? 'Create Product' : 'Save') + '</button>' +
       '<button class="btn btn-secondary" onclick="' + (isCreate ? 'backToProducts()' : 'productEditMode=false;renderProductDetail(\'' + esc(pid) + '\')') + '">Cancel</button>' +
     '</div>';
   }

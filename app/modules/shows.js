@@ -227,7 +227,7 @@ function formatShowDate(dateStr) {
 function openCreateShowModal(showId) {
   editingShowId = showId || null;
   document.getElementById('showModalTitle').textContent = showId ? 'Edit Show' : 'New Show';
-  document.getElementById('saveShowBtn').textContent = showId ? 'Save Changes' : 'Create Show';
+  document.getElementById('saveShowBtn').textContent = showId ? 'Save' : 'Create Show';
 
   if (showId && showsData[showId]) {
     var s = showsData[showId];

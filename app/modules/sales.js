@@ -634,7 +634,7 @@ function renderSalesEvents() {
 function openCreateEventModal(eventId) {
   editingEventId = eventId || null;
   document.getElementById('eventModalTitle').textContent = eventId ? 'Edit Event' : 'Create Event';
-  document.getElementById('saveEventBtn').textContent = eventId ? 'Save Changes' : 'Create Event';
+  document.getElementById('saveEventBtn').textContent = eventId ? 'Save' : 'Create Event';
 
   if (eventId && salesEventsData[eventId]) {
     var ev = salesEventsData[eventId];

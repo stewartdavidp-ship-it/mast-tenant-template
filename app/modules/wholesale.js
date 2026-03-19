@@ -177,7 +177,7 @@ function renderWholesaleUsers() {
 
     var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">' +
       '<div style="font-size:0.85rem;color:var(--warm-gray);">' + users.length + ' authorized user' + (users.length !== 1 ? 's' : '') + '</div>' +
-      '<button class="btn-small" onclick="addWholesaleUser()" style="background:var(--teal);color:#fff;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-size:0.8rem;">+ Add User</button>' +
+      '<button class="btn-small" onclick="addWholesaleUser()" style="background:var(--teal);color:#fff;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-size:0.8rem;">+ New User</button>' +
     '</div>';
 
     // PDF catalog link section
