@@ -222,7 +222,7 @@
   }
 
   function evBadgeHtml(status) {
-    return '<span class="ev-badge" style="background:' + evStatusBg(status) + ';color:' + evStatusColor(status) + ';">' + esc(status) + '</span>';
+    return '<span class="status-badge" style="background:' + evStatusBg(status) + ';color:' + evStatusColor(status) + ';">' + esc(status) + '</span>';
   }
 
   function evCloseModal(id) {
@@ -355,7 +355,7 @@
 
   function evSwitchDetailTab(showId, tab) {
     activeDetailTab = tab;
-    document.querySelectorAll('#eventsAdminTab .ev-tab-btn').forEach(function(el) {
+    document.querySelectorAll('#eventsAdminTab .view-tab').forEach(function(el) {
       el.classList.toggle('active', el.dataset.tab === tab);
     });
     if (tab === 'hunt') loadHuntStats(showId);
@@ -418,8 +418,8 @@
     shows.sort(function(a, b) { return (b.startDate || '').localeCompare(a.startDate || ''); });
 
     var html = '<div class="ev-page-header"><h2 style="margin:0;font-size:1.3rem;">Shows</h2><div>';
-    html += '<button class="ev-btn ev-btn-secondary ev-btn-sm" onclick="evNavigateTo(\'settings\')" style="margin-right:8px;">&#9881; Settings</button>';
-    html += '<button class="ev-btn ev-btn-primary ev-btn-sm" onclick="evOpenCreateShowModal()">+ New Show</button>';
+    html += '<button class="btn btn-small btn-secondary" onclick="evNavigateTo(\'settings\')" style="margin-right:8px;">&#9881; Settings</button>';
+    html += '<button class="btn btn-small btn-primary" onclick="evOpenCreateShowModal()">+ New Show</button>';
     html += '</div></div>';
 
     if (shows.length === 0) {
@@ -427,7 +427,7 @@
         '<div style="font-size:2.5rem;margin-bottom:12px;">&#127914;</div>' +
         '<p style="font-size:1.1rem;font-weight:600;margin-bottom:4px;">No shows yet</p>' +
         '<p style="font-size:0.85rem;">Create your first show to get started.</p>' +
-        '<button class="ev-btn ev-btn-primary" onclick="evOpenCreateShowModal()" style="margin-top:16px;">Create Show</button>' +
+        '<button class="btn btn-primary" onclick="evOpenCreateShowModal()" style="margin-top:16px;">Create Show</button>' +
       '</div>';
       container.innerHTML = html;
       return;
@@ -494,7 +494,7 @@
             '<div><label class="ev-form-label">End Date</label><input class="ev-form-input" type="date" id="evsf_endDate"></div>' +
             '<div><label class="ev-form-label">Setup Time</label><input class="ev-form-input" type="text" id="evsf_setupTime" placeholder="7:00 AM"></div>' +
           '</div>' +
-          '<div class="ev-form-actions"><button type="button" class="ev-btn ev-btn-secondary" onclick="evCloseModal(\'evShowModal\')">Cancel</button><button type="submit" class="ev-btn ev-btn-primary">Create Show</button></div>' +
+          '<div class="ev-form-actions"><button type="button" class="btn btn-secondary" onclick="evCloseModal(\'evShowModal\')">Cancel</button><button type="submit" class="btn btn-primary">Create Show</button></div>' +
         '</form>' +
       '</div>';
     overlay.addEventListener('click', function(e) { if (e.target === overlay) evCloseModal('evShowModal'); });
@@ -558,12 +558,13 @@
       { key: 'ads', label: 'Ads' }
     ];
 
-    var html = '<div class="ev-page-header">';
-    html += '<h2 style="margin:0;font-size:1.3rem;"><span onclick="evNavigateTo(\'shows-list\')" style="cursor:pointer;color:var(--warm-gray);margin-right:8px;">&larr;</span> ' + esc(show.name) + ' ' + evBadgeHtml(show.status) + '</h2>';
+    var html = '<button class="detail-back" onclick="evNavigateTo(\'shows-list\')">← Back to Shows</button>';
+    html += '<div class="ev-page-header">';
+    html += '<h2 style="margin:0;font-size:1.3rem;">' + esc(show.name) + ' ' + evBadgeHtml(show.status) + '</h2>';
     html += '</div>';
-    html += '<div class="ev-tab-bar">';
+    html += '<div class="view-tabs">';
     for (var t = 0; t < tabs.length; t++) {
-      html += '<button class="ev-tab-btn' + (tabs[t].key === activeDetailTab ? ' active' : '') + '" data-tab="' + tabs[t].key + '" onclick="evSwitchDetailTab(\'' + esc(showId) + '\', \'' + tabs[t].key + '\')">' + tabs[t].label + '</button>';
+      html += '<button class="view-tab' + (tabs[t].key === activeDetailTab ? ' active' : '') + '" data-tab="' + tabs[t].key + '" onclick="evSwitchDetailTab(\'' + esc(showId) + '\', \'' + tabs[t].key + '\')">' + tabs[t].label + '</button>';
     }
     html += '</div><div id="evTabContent"></div>';
     container.innerHTML = html;
@@ -618,7 +619,7 @@
     html += '<div class="ev-stat-card"><div class="ev-stat-label">Slug</div><div class="ev-stat-value" style="font-size:0.85rem;word-break:break-all;">' + esc(show.slug || '—') + '</div></div>';
     html += '</div>';
 
-    html += '<div class="ev-card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;"><h3 style="margin:0;">Show Details</h3><button class="ev-btn-link" onclick="evOpenEditShowModal(\'' + esc(showId) + '\')">Edit</button></div>';
+    html += '<div class="ev-card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;"><h3 style="margin:0;">Show Details</h3><button style="background:none;border:none;color:var(--teal);cursor:pointer;font-size:0.85rem;font-family:'DM Sans';" onclick="evOpenEditShowModal(\'' + esc(showId) + '\')">Edit</button></div>';
     if (show.description) html += '<p style="font-size:0.9rem;margin:0 0 8px;">' + esc(show.description) + '</p>';
     if (show.venue) html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin:0 0 4px;">&#128205; ' + esc(show.venue) + (show.address ? ', ' + esc(show.address) : '') + (show.city ? ', ' + esc(show.city) : '') + (show.state ? ' ' + esc(show.state) : '') + '</p>';
     if (show.startDate) {
@@ -638,7 +639,7 @@
     html += '</select></div>';
 
     html += '<div class="ev-card"><h3>Vendor Applications</h3>';
-    html += '<button class="ev-btn ev-btn-sm ev-btn-primary" style="width:100%;margin-top:8px;" onclick="evOpenSubmissionConfig(\'' + esc(showId) + '\')">' +
+    html += '<button class="btn btn-small btn-primary" style="width:100%;margin-top:8px;" onclick="evOpenSubmissionConfig(\'' + esc(showId) + '\')">' +
       (show.submissionConfig && show.submissionConfig.enabled ? '&#9881; Submission Settings' : 'Create Submission Page') + '</button>';
     if (show.submissionConfig && show.submissionConfig.enabled && show.slug) {
       html += '<p style="font-size:0.75rem;color:var(--warm-gray);margin-top:8px;">Public URL: /apply/' + esc(show.slug) + '</p>';
@@ -654,13 +655,13 @@
       html += '</div>';
       html += '<p style="font-size:0.72rem;color:var(--warm-gray);text-align:center;word-break:break-all;margin:0 0 10px;">' + esc(attendeeUrl) + '</p>';
       html += '<div style="display:flex;gap:8px;">';
-      html += '<button class="ev-btn ev-btn-sm" style="flex:1;" onclick="evDownloadShowQR(\'' + esc(showId) + '\')">&#11015; Download</button>';
-      html += '<button class="ev-btn ev-btn-sm" style="flex:1;" onclick="evCopyShowUrl(\'' + esc(showId) + '\')">&#128203; Copy URL</button>';
+      html += '<button class="btn btn-small" style="flex:1;" onclick="evDownloadShowQR(\'' + esc(showId) + '\')">&#11015; Download</button>';
+      html += '<button class="btn btn-small" style="flex:1;" onclick="evCopyShowUrl(\'' + esc(showId) + '\')">&#128203; Copy URL</button>';
       html += '</div>';
       html += '<p style="font-size:0.72rem;color:var(--warm-gray);margin-top:8px;">Add this QR code to your show program or entrance signage so attendees can browse vendors on their phones.</p>';
       html += '</div>';
     }
-    html += '<button class="ev-btn ev-btn-danger" style="width:100%;" onclick="evDeleteShow(\'' + esc(showId) + '\')">Delete Show</button>';
+    html += '<button class="btn btn-danger" style="width:100%;" onclick="evDeleteShow(\'' + esc(showId) + '\')">Delete Show</button>';
     html += '</div></div>';
     container.innerHTML = html;
   }
@@ -725,7 +726,7 @@
             '<div><label class="ev-form-label">End Date</label><input class="ev-form-input" type="date" id="evsf_endDate" value="' + esc(show.endDate || '') + '"></div>' +
             '<div><label class="ev-form-label">Setup Time</label><input class="ev-form-input" type="text" id="evsf_setupTime" value="' + esc(show.setupTime || '') + '"></div>' +
           '</div>' +
-          '<div class="ev-form-actions"><button type="button" class="ev-btn ev-btn-secondary" onclick="evCloseModal(\'evShowModal\')">Cancel</button><button type="submit" class="ev-btn ev-btn-primary">Save Changes</button></div>' +
+          '<div class="ev-form-actions"><button type="button" class="btn btn-secondary" onclick="evCloseModal(\'evShowModal\')">Cancel</button><button type="submit" class="btn btn-primary">Save</button></div>' +
         '</form>' +
       '</div>';
     overlay.addEventListener('click', function(e) { if (e.target === overlay) evCloseModal('evShowModal'); });
@@ -777,7 +778,7 @@
 
     var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
     html += '<h3 style="margin:0;font-size:1rem;">Booths</h3>';
-    html += '<div style="display:flex;gap:8px;"><button class="ev-btn ev-btn-secondary ev-btn-sm" onclick="evOpenBulkAddBoothsModal(\'' + esc(showId) + '\')">Bulk Add</button><button class="ev-btn ev-btn-primary ev-btn-sm" onclick="evOpenAddBoothModal(\'' + esc(showId) + '\')">+ Add Booth</button></div></div>';
+    html += '<div style="display:flex;gap:8px;"><button class="btn btn-small btn-secondary" onclick="evOpenBulkAddBoothsModal(\'' + esc(showId) + '\')">Bulk Add</button><button class="btn btn-small btn-primary" onclick="evOpenAddBoothModal(\'' + esc(showId) + '\')">+ Add Booth</button></div></div>';
 
     if (boothsList.length === 0) {
       html += '<div style="text-align:center;padding:40px;color:var(--warm-gray);">No booths yet. Add booths to start managing your show layout.</div>';
@@ -786,7 +787,7 @@
       for (var i = 0; i < boothsList.length; i++) {
         var b = boothsList[i];
         html += '<tr><td style="font-weight:600;">' + esc(b.name || '') + '</td><td>' + esc(b.size || '') + '</td><td>' + evBadgeHtml(b.type || 'standard') + '</td><td>' + formatCurrency(b.price || 0) + '</td><td style="color:var(--warm-gray);">' + esc(b.location || '—') + '</td><td>' + evBadgeHtml(b.status || 'open') + '</td>' +
-          '<td style="text-align:right;"><button class="ev-btn-link" onclick="evOpenEditBoothModal(\'' + esc(showId) + '\', \'' + esc(b.id) + '\')">Edit</button> <button class="ev-btn-link" style="color:var(--danger);" onclick="evDeleteBooth(\'' + esc(showId) + '\', \'' + esc(b.id) + '\')">Del</button></td></tr>';
+          '<td style="text-align:right;"><button style="background:none;border:none;color:var(--teal);cursor:pointer;font-size:0.85rem;font-family:'DM Sans';" onclick="evOpenEditBoothModal(\'' + esc(showId) + '\', \'' + esc(b.id) + '\')">Edit</button> <button style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:0.85rem;font-family:'DM Sans';" onclick="evDeleteBooth(\'' + esc(showId) + '\', \'' + esc(b.id) + '\')">Del</button></td></tr>';
       }
       html += '</tbody></table></div>';
     }
@@ -822,7 +823,7 @@
           '<div class="ev-form-group"><label class="ev-form-label">Provided (comma-separated)</label><input class="ev-form-input" type="text" id="evbf_provided" value="' + esc(isEdit && booth.provided ? booth.provided.join(', ') : '') + '" placeholder="table, 2 chairs, electricity"></div>' +
           '<div class="ev-form-group"><label class="ev-form-label">Required (comma-separated)</label><input class="ev-form-input" type="text" id="evbf_required" value="' + esc(isEdit && booth.required ? booth.required.join(', ') : '') + '" placeholder="tent, insurance certificate"></div>' +
           '<div class="ev-form-group"><label class="ev-form-label">Notes</label><textarea class="ev-form-textarea" id="evbf_notes" rows="2">' + esc(isEdit ? booth.notes || '' : '') + '</textarea></div>' +
-          '<div class="ev-form-actions"><button type="button" class="ev-btn ev-btn-secondary" onclick="evCloseModal(\'evBoothModal\')">Cancel</button><button type="submit" class="ev-btn ev-btn-primary">Save</button></div>' +
+          '<div class="ev-form-actions"><button type="button" class="btn btn-secondary" onclick="evCloseModal(\'evBoothModal\')">Cancel</button><button type="submit" class="btn btn-primary">Save</button></div>' +
         '</form>' +
       '</div>';
     overlay.addEventListener('click', function(e) { if (e.target === overlay) evCloseModal('evBoothModal'); });
@@ -875,7 +876,7 @@
             '<div><label class="ev-form-label">Type</label><select class="ev-form-select" id="evbbf_type">' + BOOTH_TYPES.map(function(t) { return '<option value="' + t.value + '">' + t.label + '</option>'; }).join('') + '</select></div>' +
             '<div><label class="ev-form-label">Price ($)</label><input class="ev-form-input" type="number" step="0.01" id="evbbf_price" value="0"></div>' +
           '</div>' +
-          '<div class="ev-form-actions"><button type="button" class="ev-btn ev-btn-secondary" onclick="evCloseModal(\'evBoothModal\')">Cancel</button><button type="submit" class="ev-btn ev-btn-primary">Add Booths</button></div>' +
+          '<div class="ev-form-actions"><button type="button" class="btn btn-secondary" onclick="evCloseModal(\'evBoothModal\')">Cancel</button><button type="submit" class="btn btn-primary">Add Booths</button></div>' +
         '</form>' +
       '</div>';
     overlay.addEventListener('click', function(e) { if (e.target === overlay) evCloseModal('evBoothModal'); });
@@ -916,17 +917,17 @@
     var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;"><h3 style="margin:0;font-size:1rem;">Floor Plan</h3>';
     if (show.floorPlanUrl) {
       html += '<div style="display:flex;gap:8px;">';
-      html += '<label class="ev-btn ev-btn-secondary ev-btn-sm" style="cursor:pointer;">Replace<input type="file" accept="image/*" onchange="evUploadFloorPlan(event, \'' + esc(showId) + '\')" style="display:none;"></label>';
-      html += '<button class="ev-btn ev-btn-sm" style="background:rgba(139,92,246,0.1);color:#8b5cf6;border:1px solid rgba(139,92,246,0.3);" onclick="evDetectBooths(\'' + esc(showId) + '\')">AI Detect</button>';
-      if (Object.keys(pins).length > 0) html += '<button class="ev-btn ev-btn-sm" style="background:rgba(245,158,11,0.1);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);" onclick="evClearAllPins(\'' + esc(showId) + '\')">Clear Pins</button>';
-      html += '<button class="ev-btn ev-btn-danger ev-btn-sm" onclick="evRemoveFloorPlan(\'' + esc(showId) + '\')">Remove</button></div>';
+      html += '<label class="btn btn-small btn-secondary" style="cursor:pointer;">Replace<input type="file" accept="image/*" onchange="evUploadFloorPlan(event, \'' + esc(showId) + '\')" style="display:none;"></label>';
+      html += '<button class="btn btn-small" style="background:rgba(139,92,246,0.1);color:#8b5cf6;border:1px solid rgba(139,92,246,0.3);" onclick="evDetectBooths(\'' + esc(showId) + '\')">AI Detect</button>';
+      if (Object.keys(pins).length > 0) html += '<button class="btn btn-small" style="background:rgba(245,158,11,0.1);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);" onclick="evClearAllPins(\'' + esc(showId) + '\')">Clear Pins</button>';
+      html += '<button class="btn btn-small btn-danger" onclick="evRemoveFloorPlan(\'' + esc(showId) + '\')">Remove</button></div>';
     }
     html += '</div>';
 
     if (!show.floorPlanUrl) {
       html += '<div style="background:var(--cream);border:2px dashed var(--cream-dark);border-radius:10px;padding:60px 20px;text-align:center;">' +
         '<div style="font-size:2.5rem;margin-bottom:12px;">&#128506;</div><p style="color:var(--warm-gray);margin-bottom:16px;">Upload a floor plan image to place booth markers.</p>' +
-        '<label class="ev-btn ev-btn-primary" style="cursor:pointer;">Upload Floor Plan<input type="file" accept="image/*" onchange="evUploadFloorPlan(event, \'' + esc(showId) + '\')" style="display:none;"></label>' +
+        '<label class="btn btn-primary" style="cursor:pointer;">Upload Floor Plan<input type="file" accept="image/*" onchange="evUploadFloorPlan(event, \'' + esc(showId) + '\')" style="display:none;"></label>' +
         '<p style="font-size:0.75rem;color:var(--warm-gray);margin-top:12px;">PNG, JPG, or SVG up to 10MB</p></div>';
     } else {
       html += '<div id="evFpPlaceBanner" style="display:none;background:rgba(42,124,111,0.15);border:1px solid rgba(42,124,111,0.3);border-radius:8px;padding:10px 16px;margin-bottom:12px;font-size:0.85rem;align-items:center;justify-content:space-between;">' +
@@ -936,7 +937,7 @@
       html += '<div class="ev-floorplan-layout"><div id="evFpContainer" class="ev-card" style="overflow:hidden;">';
       html += '<img id="evFpImg" src="' + esc(show.floorPlanUrl) + '" style="display:none;" onload="evOnFloorPlanImgLoad(\'' + esc(showId) + '\')">';
       html += '<canvas id="evFpCanvas" style="width:100%;border-radius:8px;cursor:default;display:none;" onclick="evOnFloorPlanClick(event, \'' + esc(showId) + '\')"></canvas>';
-      html += '<div id="evFpLoading" style="text-align:center;padding:40px;"><div class="ev-spinner"></div></div>';
+      html += '<div id="evFpLoading" style="text-align:center;padding:40px;"><div class="loading">Loading floor plan...</div></div>';
       html += '</div><div>';
 
       var unpinned = boothsList.filter(function(b) { return !pins[b.id]; });
@@ -948,7 +949,7 @@
       }
       if (pinned.length > 0) {
         html += '<div class="ev-card"><h4 style="font-size:0.8rem;text-transform:uppercase;color:var(--warm-gray);margin:0 0 10px;">Placed</h4>';
-        for (var p2 = 0; p2 < pinned.length; p2++) html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 10px;font-size:0.85rem;"><button onclick="evStartPinPlacement(\'' + esc(showId) + '\', \'' + esc(pinned[p2].id) + '\', \'' + esc(pinned[p2].name) + '\')" style="background:none;border:none;cursor:pointer;color:var(--charcoal);font-size:0.85rem;">' + esc(pinned[p2].name) + '</button><button onclick="evRemovePin(\'' + esc(showId) + '\', \'' + esc(pinned[p2].id) + '\')" class="ev-btn-link" style="color:var(--danger);font-size:0.75rem;">Remove</button></div>';
+        for (var p2 = 0; p2 < pinned.length; p2++) html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 10px;font-size:0.85rem;"><button onclick="evStartPinPlacement(\'' + esc(showId) + '\', \'' + esc(pinned[p2].id) + '\', \'' + esc(pinned[p2].name) + '\')" style="background:none;border:none;cursor:pointer;color:var(--charcoal);font-size:0.85rem;">' + esc(pinned[p2].name) + '</button><button onclick="evRemovePin(\'' + esc(showId) + '\', \'' + esc(pinned[p2].id) + '\')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:0.75rem;font-family:'DM Sans';">Remove</button></div>';
         html += '</div>';
       }
       html += '</div></div>';
@@ -1081,7 +1082,7 @@
 
     var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
     html += '<h3 style="margin:0;font-size:1rem;">Vendors (' + list.length + ')</h3>';
-    html += '<button class="ev-btn ev-btn-primary ev-btn-sm" onclick="evOpenVendorModal(\'' + esc(showId) + '\')">+ Add Vendor</button></div>';
+    html += '<button class="btn btn-small btn-primary" onclick="evOpenVendorModal(\'' + esc(showId) + '\')">+ Add Vendor</button></div>';
 
     if (list.length === 0) {
       html += '<div style="text-align:center;padding:40px;color:var(--warm-gray);">No vendors yet. Add vendors to your show.</div>';
@@ -1102,10 +1103,10 @@
         }
         html += '</select></td>' +
           '<td style="text-align:right;white-space:nowrap;">' +
-            (v.email && !v.inviteSentAt ? '<button class="ev-btn-link" style="color:#3b82f6;" onclick="evSendVendorInvite(\'' + esc(showId) + '\', \'' + esc(v.id) + '\')">Invite</button> ' : '') +
+            (v.email && !v.inviteSentAt ? '<button style="background:none;border:none;color:#3b82f6;cursor:pointer;font-size:0.85rem;font-family:'DM Sans';" onclick="evSendVendorInvite(\'' + esc(showId) + '\', \'' + esc(v.id) + '\')">Invite</button> ' : '') +
             (v.inviteSentAt ? '<span style="font-size:0.7rem;color:var(--warm-gray);">Invited </span>' : '') +
-            '<button class="ev-btn-link" onclick="evOpenVendorModal(\'' + esc(showId) + '\', \'' + esc(v.id) + '\')">Edit</button> ' +
-            '<button class="ev-btn-link" style="color:var(--danger);" onclick="evDeleteVendor(\'' + esc(showId) + '\', \'' + esc(v.id) + '\')">Del</button>' +
+            '<button style="background:none;border:none;color:var(--teal);cursor:pointer;font-size:0.85rem;font-family:'DM Sans';" onclick="evOpenVendorModal(\'' + esc(showId) + '\', \'' + esc(v.id) + '\')">Edit</button> ' +
+            '<button style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:0.85rem;font-family:'DM Sans';" onclick="evDeleteVendor(\'' + esc(showId) + '\', \'' + esc(v.id) + '\')">Del</button>' +
           '</td></tr>';
       }
       html += '</tbody></table></div>';
@@ -1166,7 +1167,7 @@
             '<div><label class="ev-form-label">Mast Tenant ID</label><input class="ev-form-input" type="text" id="evvf_tenant" value="' + esc(isEdit ? v.mastTenantId || '' : '') + '" placeholder="Optional"></div>' +
           '</div>' +
           '<div class="ev-form-group"><label class="ev-form-label">Notes (organizer only)</label><textarea class="ev-form-textarea" id="evvf_notes" rows="2">' + esc(isEdit ? v.notes || '' : '') + '</textarea></div>' +
-          '<div class="ev-form-actions"><button type="button" class="ev-btn ev-btn-secondary" onclick="evCloseModal(\'evVendorModal\')">Cancel</button><button type="submit" class="ev-btn ev-btn-primary">Save</button></div>' +
+          '<div class="ev-form-actions"><button type="button" class="btn btn-secondary" onclick="evCloseModal(\'evVendorModal\')">Cancel</button><button type="submit" class="btn btn-primary">Save</button></div>' +
         '</form>' +
       '</div>';
     overlay.addEventListener('click', function(e) { if (e.target === overlay) evCloseModal('evVendorModal'); });
@@ -1276,7 +1277,7 @@
       '<span style="color:#f59e0b;">' + pending.length + ' pending</span>' +
       '<span style="color:#10b981;">' + accepted.length + ' accepted</span>' +
       '<span style="color:var(--danger);">' + declined.length + ' declined</span>' +
-      ((accepted.length + declined.length) > 0 ? ' <button class="ev-btn ev-btn-sm ev-btn-primary" onclick="evSendSubmissionNotifications(\'' + esc(showId) + '\')">Email Results</button>' : '') +
+      ((accepted.length + declined.length) > 0 ? ' <button class="btn btn-small btn-primary" onclick="evSendSubmissionNotifications(\'' + esc(showId) + '\')">Email Results</button>' : '') +
     '</div></div>';
 
     if (list.length === 0) {
@@ -1308,8 +1309,8 @@
         if (s.status === 'pending') {
           html += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--cream-dark);display:flex;gap:8px;align-items:center;">';
           html += '<input type="text" id="evReviewNote_' + esc(s.id) + '" class="ev-form-input" style="flex:1;padding:6px 10px;font-size:0.8rem;" placeholder="Review notes (optional)">';
-          html += '<button class="ev-btn ev-btn-sm" style="background:#10b981;color:#fff;" onclick="evReviewSubmission(\'' + esc(showId) + '\', \'' + esc(s.id) + '\', \'accepted\')">Accept</button>';
-          html += '<button class="ev-btn ev-btn-sm ev-btn-danger" onclick="evReviewSubmission(\'' + esc(showId) + '\', \'' + esc(s.id) + '\', \'declined\')">Decline</button>';
+          html += '<button class="btn btn-small" style="background:#10b981;color:#fff;" onclick="evReviewSubmission(\'' + esc(showId) + '\', \'' + esc(s.id) + '\', \'accepted\')">Accept</button>';
+          html += '<button class="btn btn-small btn-danger" onclick="evReviewSubmission(\'' + esc(showId) + '\', \'' + esc(s.id) + '\', \'declined\')">Decline</button>';
           html += '</div>';
         } else if (s.reviewNotes) {
           html += '<p style="font-size:0.8rem;margin-top:8px;color:var(--warm-gray);">Review notes: ' + esc(s.reviewNotes) + '</p>';
@@ -1391,7 +1392,7 @@
     for (var fi = 0; fi < filters.length; fi++) {
       var f = filters[fi];
       var active = (checkinFilter || 'all') === f.key;
-      html += '<button class="ev-btn ev-btn-sm' + (active ? ' ev-btn-primary' : ' ev-btn-secondary') + '" onclick="evSetCheckinFilter(\'' + f.key + '\', \'' + esc(showId) + '\')">' + f.label + '</button>';
+      html += '<button class="btn btn-small' + (active ? ' btn-primary' : ' btn-secondary') + '" onclick="evSetCheckinFilter(\'' + f.key + '\', \'' + esc(showId) + '\')">' + f.label + '</button>';
     }
     html += '</div>';
 
@@ -1414,8 +1415,8 @@
         if (booth) html += '<div style="font-size:0.8rem;color:var(--warm-gray);">Booth: ' + esc(booth.name || '') + (booth.location ? ' — ' + esc(booth.location) : '') + '</div>';
         html += '</div>';
         html += '<div style="display:flex;gap:8px;">';
-        html += '<button class="ev-btn ev-btn-sm" style="' + (v.checkedIn ? 'background:#10b981;color:#fff;' : 'background:var(--cream-dark);color:var(--warm-gray);') + '" onclick="evToggleCheckin(\'' + esc(showId) + '\', \'' + esc(v.id) + '\', ' + (v.checkedIn ? 'false' : 'true') + ')">' + (v.checkedIn ? '&#10003; Arrived' : 'Not Arrived') + '</button>';
-        html += '<button class="ev-btn ev-btn-sm" style="' + (v.status === 'no-show' ? 'background:var(--danger);color:#fff;' : 'background:var(--cream-dark);color:var(--warm-gray);') + '" onclick="evMarkNoShow(\'' + esc(showId) + '\', \'' + esc(v.id) + '\')">No-Show</button>';
+        html += '<button class="btn btn-small" style="' + (v.checkedIn ? 'background:#10b981;color:#fff;' : 'background:var(--cream-dark);color:var(--warm-gray);') + '" onclick="evToggleCheckin(\'' + esc(showId) + '\', \'' + esc(v.id) + '\', ' + (v.checkedIn ? 'false' : 'true') + ')">' + (v.checkedIn ? '&#10003; Arrived' : 'Not Arrived') + '</button>';
+        html += '<button class="btn btn-small" style="' + (v.status === 'no-show' ? 'background:var(--danger);color:#fff;' : 'background:var(--cream-dark);color:var(--warm-gray);') + '" onclick="evMarkNoShow(\'' + esc(showId) + '\', \'' + esc(v.id) + '\')">No-Show</button>';
         html += '</div></div>';
       }
     }
@@ -1484,9 +1485,9 @@
             '<input type="checkbox" id="evsc_enabled"' + (existing.enabled ? ' checked' : '') + '> Enable public submission page</label></div>' +
           (existing.enabled && show.slug ? '<div style="background:var(--cream-dark);border-radius:8px;padding:10px;font-size:0.8rem;color:var(--warm-gray);margin-bottom:12px;">Public URL: <strong>/apply/' + esc(show.slug) + '</strong></div>' : '') +
           '<div class="ev-form-actions">' +
-            (existing.enabled ? '<button type="button" class="ev-btn ev-btn-danger ev-btn-sm" onclick="evCloseSubmissions(\'' + esc(showId) + '\')">Close Submissions</button>' : '<span></span>') +
-            '<div style="display:flex;gap:8px;"><button type="button" class="ev-btn ev-btn-secondary" onclick="evCloseModal(\'evSubConfigModal\')">Cancel</button>' +
-            '<button type="submit" class="ev-btn ev-btn-primary">Save</button></div>' +
+            (existing.enabled ? '<button type="button" class="btn btn-small btn-danger" onclick="evCloseSubmissions(\'' + esc(showId) + '\')">Close Submissions</button>' : '<span></span>') +
+            '<div style="display:flex;gap:8px;"><button type="button" class="btn btn-secondary" onclick="evCloseModal(\'evSubConfigModal\')">Cancel</button>' +
+            '<button type="submit" class="btn btn-primary">Save</button></div>' +
           '</div>' +
         '</form>' +
       '</div>';
@@ -1539,9 +1540,9 @@
           '<img src="' + esc(images[idx]) + '" style="width:100%;max-height:80vh;object-fit:contain;border-radius:8px;" alt="Image ' + (idx + 1) + '">' +
           (images.length > 1 ?
             '<div style="display:flex;justify-content:center;gap:16px;margin-top:12px;">' +
-              '<button class="ev-btn ev-btn-sm ev-btn-secondary"' + (idx === 0 ? ' disabled style="opacity:0.3;"' : '') + ' onclick="evImageViewerNav(-1)">&larr; Prev</button>' +
+              '<button class="btn btn-small btn-secondary"' + (idx === 0 ? ' disabled style="opacity:0.3;"' : '') + ' onclick="evImageViewerNav(-1)">&larr; Prev</button>' +
               '<span style="color:#fff;padding:6px 0;font-size:0.85rem;">' + (idx + 1) + ' / ' + images.length + '</span>' +
-              '<button class="ev-btn ev-btn-sm ev-btn-secondary"' + (idx === images.length - 1 ? ' disabled style="opacity:0.3;"' : '') + ' onclick="evImageViewerNav(1)">Next &rarr;</button>' +
+              '<button class="btn btn-small btn-secondary"' + (idx === images.length - 1 ? ' disabled style="opacity:0.3;"' : '') + ' onclick="evImageViewerNav(1)">Next &rarr;</button>' +
             '</div>' : '') +
         '</div>';
     }
@@ -1567,9 +1568,9 @@
         '<img src="' + esc(images[idx]) + '" style="width:100%;max-height:80vh;object-fit:contain;border-radius:8px;" alt="Image ' + (idx + 1) + '">' +
         (images.length > 1 ?
           '<div style="display:flex;justify-content:center;gap:16px;margin-top:12px;">' +
-            '<button class="ev-btn ev-btn-sm ev-btn-secondary"' + (idx === 0 ? ' disabled style="opacity:0.3;"' : '') + ' onclick="evImageViewerNav(-1)">&larr; Prev</button>' +
+            '<button class="btn btn-small btn-secondary"' + (idx === 0 ? ' disabled style="opacity:0.3;"' : '') + ' onclick="evImageViewerNav(-1)">&larr; Prev</button>' +
             '<span style="color:#fff;padding:6px 0;font-size:0.85rem;">' + (idx + 1) + ' / ' + images.length + '</span>' +
-            '<button class="ev-btn ev-btn-sm ev-btn-secondary"' + (idx === images.length - 1 ? ' disabled style="opacity:0.3;"' : '') + ' onclick="evImageViewerNav(1)">Next &rarr;</button>' +
+            '<button class="btn btn-small btn-secondary"' + (idx === images.length - 1 ? ' disabled style="opacity:0.3;"' : '') + ' onclick="evImageViewerNav(1)">Next &rarr;</button>' +
           '</div>' : '') +
       '</div>';
   }
@@ -1590,7 +1591,7 @@
     html += '<h4 style="font-size:0.9rem;margin:0 0 12px;">Send Announcement</h4>';
     html += '<div class="ev-form-group"><label class="ev-form-label">Subject *</label><input class="ev-form-input" type="text" id="evAnn_subject" placeholder="Announcement subject"></div>';
     html += '<div class="ev-form-group"><label class="ev-form-label">Message *</label><textarea class="ev-form-textarea" id="evAnn_body" rows="4" placeholder="Write your announcement..."></textarea></div>';
-    html += '<div style="text-align:right;"><button class="ev-btn ev-btn-primary" onclick="evSendAnnouncement(\'' + esc(showId) + '\')">Send to Vendors</button></div>';
+    html += '<div style="text-align:right;"><button class="btn btn-primary" onclick="evSendAnnouncement(\'' + esc(showId) + '\')">Send to Vendors</button></div>';
     html += '</div>';
 
     if (list.length === 0) {
@@ -1664,7 +1665,7 @@
       html += '<label style="display:block;padding:4px 0;font-size:0.85rem;"><input type="checkbox" class="evHuntVendorCb" value="' + esc(confirmedVendors[vi].id) + '" style="margin-right:6px;">' + esc(confirmedVendors[vi].businessName || confirmedVendors[vi].id) + '</label>';
     }
     html += '</div></div>';
-    html += '<div style="margin-top:12px;"><button class="ev-btn ev-btn-primary" onclick="evSaveHuntConfig(\'' + esc(showId) + '\')">Save Hunt Configuration</button></div>';
+    html += '<div style="margin-top:12px;"><button class="btn btn-primary" onclick="evSaveHuntConfig(\'' + esc(showId) + '\')">Save</button></div>';
     html += '</div></div>';
 
     var stats = huntStatsData || {};
@@ -1760,7 +1761,7 @@
     html += '<div><label class="ev-form-label">Min Coin Purchase</label><input class="ev-form-input" type="number" id="evAd_min" value="10" min="1"></div>';
     html += '<div><label class="ev-form-label">Max Coin Purchase</label><input class="ev-form-input" type="number" id="evAd_max" value="100" min="1"></div>';
     html += '</div>';
-    html += '<div style="margin-top:8px;"><button class="ev-btn ev-btn-primary ev-btn-sm" onclick="evSaveAdConfig(\'' + esc(showId) + '\')">Save Ad Config</button></div>';
+    html += '<div style="margin-top:8px;"><button class="btn btn-small btn-primary" onclick="evSaveAdConfig(\'' + esc(showId) + '\')">Save</button></div>';
     html += '</div>';
 
     var walletList = [];
@@ -1824,15 +1825,15 @@
     var container = document.getElementById('eventsAdminTab');
     if (!container) return;
 
-    var html = '<div class="ev-page-header"><h2 style="margin:0;font-size:1.3rem;">Events Settings</h2>';
-    html += '<button class="ev-btn ev-btn-secondary ev-btn-sm" onclick="evNavigateTo(\'shows-list\')">&larr; Back to Shows</button>';
+    var html = '<button class="detail-back" onclick="evNavigateTo(\'shows-list\')">← Back to Shows</button>';
+    html += '<div class="ev-page-header"><h2 style="margin:0;font-size:1.3rem;">Events Settings</h2>';
     html += '</div>';
 
     html += '<div class="ev-card">';
     html += '<h3 style="display:flex;align-items:center;gap:8px;"><span style="font-size:1.2rem;">&#128179;</span> Payment Processing</h3>';
     html += '<div id="evPaymentProcessorStatus" style="margin-bottom:12px;"><span style="color:var(--warm-gray);font-size:0.85rem;">Detecting payment processor...</span></div>';
     html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">Booth fees and vendor coin purchases route through your configured payment processor. Configure it in your main admin settings.</p>';
-    html += '<button class="ev-btn ev-btn-secondary ev-btn-sm" onclick="navigateTo(\'settings\')">Open Admin Settings</button>';
+    html += '<button class="btn btn-small btn-secondary" onclick="navigateTo(\'settings\')">Open Admin Settings</button>';
     html += '</div>';
 
     html += '<div class="ev-card">';
