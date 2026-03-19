@@ -158,11 +158,11 @@
     var html = '<div class="section-header"><h2>Website</h2></div>';
 
     // Sub-tabs
-    html += '<div class="wp-sub-tabs">';
-    html += '<button class="wp-sub-tab' + (currentSubTab === 'overview' ? ' active' : '') + '" onclick="wpSwitchTab(\'overview\')">Overview</button>';
-    html += '<button class="wp-sub-tab' + (currentSubTab === 'style' ? ' active' : '') + '" onclick="wpSwitchTab(\'style\')">Style</button>';
-    html += '<button class="wp-sub-tab' + (currentSubTab === 'sections' ? ' active' : '') + '" onclick="wpSwitchTab(\'sections\')">Sections</button>';
-    html += '<button class="wp-sub-tab' + (currentSubTab === 'import' ? ' active' : '') + '" onclick="wpSwitchTab(\'import\')">Import</button>';
+    html += '<div class="view-tabs">';
+    html += '<button class="view-tab' + (currentSubTab === 'overview' ? ' active' : '') + '" onclick="wpSwitchTab(\'overview\')">Overview</button>';
+    html += '<button class="view-tab' + (currentSubTab === 'style' ? ' active' : '') + '" onclick="wpSwitchTab(\'style\')">Style</button>';
+    html += '<button class="view-tab' + (currentSubTab === 'sections' ? ' active' : '') + '" onclick="wpSwitchTab(\'sections\')">Sections</button>';
+    html += '<button class="view-tab' + (currentSubTab === 'import' ? ' active' : '') + '" onclick="wpSwitchTab(\'import\')">Import</button>';
     html += '</div>';
 
     // Tab content
@@ -737,11 +737,11 @@
     html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">Items imported as drafts. Publish them to make them live on your site.</p>';
 
     // Review sub-tabs
-    html += '<div style="display:flex;gap:8px;margin-bottom:16px;">';
+    html += '<div class="view-tabs">';
     ['products', 'images', 'blog', 'events'].forEach(function(t) {
       var active = importReviewTab === t;
       var label = t.charAt(0).toUpperCase() + t.slice(1);
-      html += '<button class="btn ' + (active ? 'btn-primary' : 'btn-secondary') + '" onclick="wpReviewTab(\'' + t + '\')" style="font-size:0.8rem;padding:6px 14px;">' + label + '</button>';
+      html += '<button class="view-tab' + (active ? ' active' : '') + '" onclick="wpReviewTab(\'' + t + '\')">' + label + '</button>';
     });
     html += '</div>';
 
@@ -1139,7 +1139,7 @@
   };
 
   window.wpDeleteProduct = async function(pid) {
-    if (!confirm('Delete this imported product?')) return;
+    if (!confirm('Delete this product? This cannot be undone.')) return;
     try {
       await MastDB._ref('public/products/' + pid).remove();
       showToast('Product deleted.');
