@@ -9067,6 +9067,28 @@ function showToast(message, isError) {
   }, 5000);
 }
 
+// Dark-mode-compliant confirm dialog (replaces native confirm())
+function showConfirmDialog(title, message, onConfirm, options) {
+  var confirmLabel = (options && options.confirmLabel) || 'OK';
+  var cancelLabel = (options && options.cancelLabel) || 'Cancel';
+  var overlay = document.createElement('div');
+  overlay.id = 'confirmDialogOverlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  var h = '<div style="background:var(--cream);border-radius:10px;max-width:420px;width:90%;padding:24px 28px;box-shadow:0 8px 30px rgba(0,0,0,0.2);">';
+  h += '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.2rem;font-weight:600;color:var(--charcoal);margin-bottom:12px;">' + esc(title) + '</div>';
+  h += '<p style="font-size:0.9rem;color:var(--warm-gray);line-height:1.5;margin-bottom:20px;">' + esc(message) + '</p>';
+  h += '<div style="display:flex;justify-content:flex-end;gap:8px;">';
+  h += '<button class="btn btn-secondary" id="confirmDialogCancel">' + esc(cancelLabel) + '</button>';
+  h += '<button class="btn btn-primary" id="confirmDialogOK">' + esc(confirmLabel) + '</button>';
+  h += '</div></div>';
+  overlay.innerHTML = h;
+  document.body.appendChild(overlay);
+  function close() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }
+  overlay.querySelector('#confirmDialogCancel').addEventListener('click', close);
+  overlay.querySelector('#confirmDialogOK').addEventListener('click', function() { close(); onConfirm(); });
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) close(); });
+}
+
 // ============================================================
 // Auth
 // ============================================================
@@ -10134,17 +10156,22 @@ async function stopAutoRenewalUI() {
   var endDate = details && details.currentPeriodEnd
     ? new Date(details.currentPeriodEnd).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
     : 'the end of your billing period';
-  if (!confirm('Stop auto-renewal?\n\nYour subscription stays active until ' + endDate + '. You can resume anytime before then.')) return;
-  await toggleSubscriptionCancel('cancel');
-  // Flag for nudge process — remind them to renew before period ends
-  try {
-    await MastDB.ref('admin/subscriptionNudge').set({
-      type: 'auto_renewal_stopped',
-      stoppedAt: new Date().toISOString(),
-      periodEnd: details && details.currentPeriodEnd || null,
-      tier: getTenantSubscription().tier,
-    });
-  } catch (e) { console.error('Nudge flag write failed:', e); }
+  showConfirmDialog(
+    'Stop auto-renewal?',
+    'Your subscription stays active until ' + endDate + '. You can resume anytime before then.',
+    async function() {
+      await toggleSubscriptionCancel('cancel');
+      try {
+        await MastDB.ref('admin/subscriptionNudge').set({
+          type: 'auto_renewal_stopped',
+          stoppedAt: new Date().toISOString(),
+          periodEnd: details && details.currentPeriodEnd || null,
+          tier: getTenantSubscription().tier,
+        });
+      } catch (e) { console.error('Nudge flag write failed:', e); }
+    },
+    { confirmLabel: 'Stop Renewal', cancelLabel: 'Keep Active' }
+  );
 }
 
 // --- Cancel Subscription (retention flow — "I'm done") ---
@@ -10277,13 +10304,18 @@ async function confirmCancelSubscription() {
 }
 
 async function resumeSubscription() {
-  if (!confirm('Resume auto-renewal? Your subscription will continue renewing automatically.')) return;
-  await toggleSubscriptionCancel('resume');
-  // Clear nudge/cancel flags
-  try {
-    await MastDB.ref('admin/subscriptionNudge').remove();
-    await MastDB.ref('admin/subscriptionCancellation').remove();
-  } catch (e) { console.error('Nudge flag clear failed:', e); }
+  showConfirmDialog(
+    'Resume auto-renewal?',
+    'Your subscription will continue renewing automatically.',
+    async function() {
+      await toggleSubscriptionCancel('resume');
+      try {
+        await MastDB.ref('admin/subscriptionNudge').remove();
+        await MastDB.ref('admin/subscriptionCancellation').remove();
+      } catch (e) { console.error('Nudge flag clear failed:', e); }
+    },
+    { confirmLabel: 'Resume', cancelLabel: 'Cancel' }
+  );
 }
 
 async function toggleSubscriptionCancel(action) {
