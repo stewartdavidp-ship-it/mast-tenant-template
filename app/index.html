@@ -9228,10 +9228,26 @@ auth.onAuthStateChanged(async function(user) {
   console.log('[DEBUG] Auth UID:', user.uid, 'Email:', user.email);
   var tenantId = await resolveTenant(user.uid);
   console.log('[DEBUG] resolveTenant returned:', tenantId);
-  if (!tenantId) {
-    // Try first-login claim: check if this user's email matches a pending owner
-    // from provisioning. The claimTenant cloud function handles the full flow
-    // (writes userTenantMap, admin user record, cleans up pending entries).
+
+  // Try claimTenant if: (a) no tenant found, or (b) tenant found via hostname
+  // but user has no admin role yet (first visit after provisioning).
+  var needsClaim = !tenantId;
+  if (tenantId && !needsClaim) {
+    // Quick check: does the user actually have a role in this tenant?
+    try {
+      var roleCheckSnap = await db.ref(tenantId + '/admin/users/' + user.uid + '/role').once('value');
+      if (!roleCheckSnap.val()) {
+        console.log('No role found for user in tenant ' + tenantId + ', attempting claim...');
+        needsClaim = true;
+      }
+    } catch (e) {
+      // Permission denied = no role. Need to claim.
+      console.log('Role check failed for tenant ' + tenantId + ', attempting claim...');
+      needsClaim = true;
+    }
+  }
+
+  if (needsClaim) {
     try {
       var claimToken = await user.getIdToken();
       var cfBase = '';
