@@ -3007,6 +3007,85 @@
       font-size: 0.85rem;
     }
 
+    /* Order Email History */
+    .order-email-entry {
+      padding: 10px 0;
+      border-bottom: 1px solid var(--cream-dark);
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    .order-email-entry:last-child { border-bottom: none; }
+    .order-email-entry:hover { background: rgba(0,0,0,0.02); }
+    .order-email-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    .order-email-subject {
+      font-weight: 500;
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .order-email-meta {
+      font-size: 0.72rem;
+      color: var(--warm-gray-light);
+      margin-top: 2px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .order-email-expanded {
+      margin-top: 8px;
+      padding: 10px 12px;
+      background: var(--cream-dark);
+      border-radius: 6px;
+      font-size: 0.82rem;
+    }
+    .order-email-expanded iframe {
+      width: 100%;
+      border: 1px solid var(--cream-dark);
+      border-radius: 4px;
+      background: white;
+      margin-top: 8px;
+    }
+    .order-email-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .order-email-send-section {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--cream-dark);
+    }
+    .order-email-send-btns {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .order-adhoc-form {
+      margin-top: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .order-adhoc-form input,
+    .order-adhoc-form textarea {
+      padding: 8px 12px;
+      border: 1px solid var(--cream-dark);
+      border-radius: 4px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.85rem;
+    }
+    .order-adhoc-form textarea {
+      min-height: 80px;
+      resize: vertical;
+    }
+
     /* Production Request Queue */
     .build-queue-summary {
       background: rgba(123,31,162,0.15);
@@ -3270,6 +3349,10 @@
     body.dark-mode .order-timeline-entry::before { border-color: #2a2a2a; background: #555; }
     body.dark-mode .order-timeline-entry:first-child::before { background: var(--teal); }
     body.dark-mode .build-queue-summary { background: #2a1a3a; color: #CE93D8; }
+    body.dark-mode .order-email-entry:hover { background: rgba(255,255,255,0.03); }
+    body.dark-mode .order-email-expanded { background: #333; }
+    body.dark-mode .order-adhoc-form input,
+    body.dark-mode .order-adhoc-form textarea { background: #333; border-color: #555; color: #e0e0e0; }
 
     @media (max-width: 768px) {
       .orders-table { display: none; }
@@ -6909,6 +6992,20 @@ MastDB.orders = {
   },
   unlisten: function(handle) { this.ref().off('value', handle); },
   subRef: function() { return MastDB._ref(this.PATH + '/' + Array.from(arguments).join('/')); }
+};
+
+MastDB.emails = {
+  PATH: 'emails',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  list: function(limit) { return this.ref().limitToLast(limit || 100).once('value'); },
+  get: function(id) { return this.ref(id).once('value'); },
+  listen: function(limit, cb, errCb) {
+    return this.ref().limitToLast(limit || 100).on('value', cb, errCb);
+  },
+  unlisten: function(handle) { this.ref().off('value', handle); },
+  queryByOrder: function(orderId) {
+    return this.ref().orderByChild('orderId').equalTo(orderId).once('value');
+  }
 };
 
 MastDB.sales = {

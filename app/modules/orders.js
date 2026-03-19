@@ -657,6 +657,38 @@
       '</div>';
     }
 
+    // Email History section (loaded async)
+    var emailSectionId = 'orderEmailSection_' + orderId;
+    var emailHtml = '<div class="order-detail-section" id="' + emailSectionId + '">' +
+      '<div class="order-detail-section-title">Email History</div>' +
+      '<div style="font-size:0.82rem;color:var(--warm-gray-light);padding:4px 0;">Loading...</div>' +
+    '</div>';
+
+    // Manual send buttons — contextual based on order status
+    var emailSendHtml = '<div class="order-email-send-section">';
+    var sendBtns = '';
+    if ((status === 'confirmed' || status === 'building' || status === 'ready' || status === 'packing' || status === 'packed') && o.email) {
+      sendBtns += '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 12px;" onclick="sendOrderEmailFromDetail(\'' + esc(orderId) + '\', \'confirmed\')">Send Confirmation</button>';
+    }
+    if ((status === 'shipped' || status === 'delivered') && o.email && o.tracking && o.tracking.trackingNumber) {
+      sendBtns += '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 12px;" onclick="sendOrderEmailFromDetail(\'' + esc(orderId) + '\', \'shipped\')">Send Shipping Notification</button>';
+    }
+    if (o.email) {
+      sendBtns += '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 12px;" onclick="toggleAdhocEmailForm(\'' + esc(orderId) + '\')">Send Custom Email</button>';
+    }
+    if (sendBtns) {
+      emailSendHtml += '<div class="order-email-send-btns">' + sendBtns + '</div>';
+    }
+    emailSendHtml += '<div id="adhocEmailForm_' + orderId + '" style="display:none;" class="order-adhoc-form">' +
+      '<input type="text" id="adhocSubject_' + orderId + '" placeholder="Subject">' +
+      '<textarea id="adhocBody_' + orderId + '" placeholder="Message body (plain text — will be wrapped in your branded template)"></textarea>' +
+      '<div style="display:flex;gap:8px;">' +
+        '<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 12px;" onclick="sendAdhocOrderEmail(\'' + esc(orderId) + '\')">Send</button>' +
+        '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 12px;" onclick="toggleAdhocEmailForm(\'' + esc(orderId) + '\')">Cancel</button>' +
+      '</div>' +
+    '</div>';
+    emailSendHtml += '</div>';
+
     var backLabel = _viewOrderReturnRoute ? 'Back to ' + _viewOrderReturnRoute.charAt(0).toUpperCase() + _viewOrderReturnRoute.slice(1) : 'Back to Orders';
     detailEl.innerHTML = '<button class="detail-back" onclick="backToOrders()">&#8592; ' + backLabel + '</button>' +
       '<div class="order-detail-header">' +
@@ -691,7 +723,187 @@
       trackingHtml +
       ffLogHtml +
       productionRequestsHtml +
+      emailHtml +
+      emailSendHtml +
       notesHtml;
+
+    // Load email history async
+    loadOrderEmails(orderId, emailSectionId);
+  }
+
+  // ============================================================
+  // Order Email Helpers
+  // ============================================================
+
+  function loadOrderEmails(orderId, containerId) {
+    MastDB.emails.queryByOrder(orderId).then(function(snap) {
+      var container = document.getElementById(containerId);
+      if (!container) return;
+      var emails = [];
+      snap.forEach(function(child) {
+        var e = child.val();
+        e._key = child.key;
+        emails.push(e);
+      });
+      emails.sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
+
+      if (emails.length === 0) {
+        container.innerHTML = '<div class="order-detail-section-title">Email History</div>' +
+          '<div style="font-size:0.82rem;color:var(--warm-gray-light);padding:4px 0;">No emails sent for this order yet.</div>';
+        return;
+      }
+
+      var entriesHtml = '';
+      emails.forEach(function(em) {
+        var statusColor = em.status === 'sent' ? 'var(--teal)' : '#EF5350';
+        var statusIcon = em.status === 'sent' ? '&#10003;' : '&#10007;';
+        var typeLabel = (em.emailType || 'unknown').replace(/^order_/, '').replace(/_/g, ' ');
+        typeLabel = typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1);
+
+        entriesHtml += '<div class="order-email-entry" onclick="toggleEmailDetail(\'' + esc(em._key) + '\')">' +
+          '<div class="order-email-header">' +
+            '<span class="order-email-subject">' + esc(em.subject || '(no subject)') + '</span>' +
+            '<span class="status-badge" style="font-size:0.7rem;padding:2px 8px;background:' + (em.status === 'sent' ? 'rgba(46,125,50,0.2)' : 'rgba(198,40,40,0.2)') + ';color:' + statusColor + ';border:1px solid ' + (em.status === 'sent' ? 'rgba(46,125,50,0.35)' : 'rgba(198,40,40,0.35)') + ';">' + statusIcon + ' ' + esc(em.status || '') + '</span>' +
+          '</div>' +
+          '<div class="order-email-meta">' +
+            '<span>' + esc(typeLabel) + '</span>' +
+            '<span>&middot;</span>' +
+            '<span>' + esc(em.to || '') + '</span>' +
+            '<span>&middot;</span>' +
+            '<span>' + formatOrderDateTime(em.createdAt) + '</span>' +
+            (em.provider ? '<span>&middot;</span><span>' + esc(em.provider) + '</span>' : '') +
+          '</div>' +
+          '<div id="emailDetail_' + em._key + '" class="order-email-expanded" style="display:none;">' +
+            '<div style="margin-bottom:6px;"><strong>From:</strong> ' + esc(em.from || '') + '</div>' +
+            '<div style="margin-bottom:6px;"><strong>To:</strong> ' + esc(em.to || '') + '</div>' +
+            (em.error ? '<div style="margin-bottom:6px;color:#EF5350;"><strong>Error:</strong> ' + esc(em.error) + '</div>' : '') +
+            (em.htmlSnapshot ? '<iframe id="emailPreview_' + em._key + '" sandbox="" style="height:300px;" onload="injectEmailPreview(\'' + esc(em._key) + '\')"></iframe>' : '<div style="color:var(--warm-gray-light);font-size:0.78rem;">No HTML preview available.</div>') +
+            '<div class="order-email-actions">' +
+              '<button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 10px;" onclick="event.stopPropagation();resendOrderEmail(\'' + esc(em._key) + '\', \'' + esc(orderId) + '\')">Resend</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      });
+
+      container.innerHTML = '<div class="order-detail-section-title">Email History (' + emails.length + ')</div>' + entriesHtml;
+
+      // Store email snapshots for preview injection
+      emails.forEach(function(em) {
+        if (em.htmlSnapshot) {
+          container.setAttribute('data-html-' + em._key, em.htmlSnapshot);
+        }
+      });
+    }).catch(function(err) {
+      var container = document.getElementById(containerId);
+      if (container) {
+        container.innerHTML = '<div class="order-detail-section-title">Email History</div>' +
+          '<div style="font-size:0.82rem;color:#EF5350;padding:4px 0;">Failed to load emails: ' + esc(err.message) + '</div>';
+      }
+    });
+  }
+
+  function toggleEmailDetail(emailKey) {
+    var el = document.getElementById('emailDetail_' + emailKey);
+    if (!el) return;
+    el.style.display = el.style.display === 'none' ? 'block' : 'none';
+  }
+
+  function injectEmailPreview(emailKey) {
+    var iframe = document.getElementById('emailPreview_' + emailKey);
+    if (!iframe) return;
+    // Find the stored HTML from parent container
+    var parent = iframe.closest('.order-detail-section');
+    if (!parent) return;
+    var html = parent.getAttribute('data-html-' + emailKey);
+    if (!html) return;
+    var doc = iframe.contentDocument || iframe.contentWindow.document;
+    doc.open();
+    doc.write(html);
+    doc.close();
+  }
+
+  async function sendOrderEmailFromDetail(orderId, emailType) {
+    try {
+      showToast('Sending ' + emailType + ' email...');
+      var result = await firebase.functions().httpsCallable('testOrderEmail')({
+        orderId: orderId,
+        emailType: emailType,
+        tenantId: MastDB.tenantId()
+      });
+      showToast('Email sent to ' + result.data.sentTo);
+      // Refresh email history
+      var sectionId = 'orderEmailSection_' + orderId;
+      setTimeout(function() { loadOrderEmails(orderId, sectionId); }, 2000);
+    } catch (err) {
+      showToast('Failed to send email: ' + (err.message || err), true);
+    }
+  }
+
+  async function resendOrderEmail(emailKey, orderId) {
+    try {
+      var snap = await MastDB.emails.get(emailKey);
+      var em = snap.val();
+      if (!em) { showToast('Email log entry not found', true); return; }
+
+      showToast('Resending email...');
+      if (em.emailType && em.emailType.startsWith('order_') && em.emailType !== 'order_custom') {
+        var type = em.emailType.replace('order_', '');
+        await firebase.functions().httpsCallable('testOrderEmail')({
+          orderId: orderId,
+          emailType: type,
+          tenantId: MastDB.tenantId()
+        });
+      } else {
+        // For custom or unknown types, re-trigger via sendCustomOrderEmail
+        await firebase.functions().httpsCallable('sendCustomOrderEmail')({
+          orderId: orderId,
+          subject: em.subject || 'Re-sent email',
+          body: '(This is a re-send of a previous email)',
+          tenantId: MastDB.tenantId()
+        });
+      }
+      showToast('Email re-sent successfully');
+      var sectionId = 'orderEmailSection_' + orderId;
+      setTimeout(function() { loadOrderEmails(orderId, sectionId); }, 2000);
+    } catch (err) {
+      showToast('Failed to resend: ' + (err.message || err), true);
+    }
+  }
+
+  function toggleAdhocEmailForm(orderId) {
+    var el = document.getElementById('adhocEmailForm_' + orderId);
+    if (!el) return;
+    el.style.display = el.style.display === 'none' ? 'block' : 'none';
+  }
+
+  async function sendAdhocOrderEmail(orderId) {
+    var subject = document.getElementById('adhocSubject_' + orderId);
+    var body = document.getElementById('adhocBody_' + orderId);
+    if (!subject || !body) return;
+    var subjectVal = subject.value.trim();
+    var bodyVal = body.value.trim();
+    if (!subjectVal || !bodyVal) {
+      showToast('Subject and body are required', true);
+      return;
+    }
+
+    try {
+      showToast('Sending custom email...');
+      var result = await firebase.functions().httpsCallable('sendCustomOrderEmail')({
+        orderId: orderId,
+        subject: subjectVal,
+        body: bodyVal,
+        tenantId: MastDB.tenantId()
+      });
+      showToast('Custom email sent to ' + result.data.sentTo);
+      subject.value = '';
+      body.value = '';
+      toggleAdhocEmailForm(orderId);
+      var sectionId = 'orderEmailSection_' + orderId;
+      setTimeout(function() { loadOrderEmails(orderId, sectionId); }, 2000);
+    } catch (err) {
+      showToast('Failed to send: ' + (err.message || err), true);
+    }
   }
 
   // ============================================================
@@ -1994,6 +2206,13 @@
   window.openCancelOrderModal = openCancelOrderModal;
   window.cancelOrder = cancelOrder;
   window.addOrderNote = addOrderNote;
+  window.loadOrderEmails = loadOrderEmails;
+  window.toggleEmailDetail = toggleEmailDetail;
+  window.injectEmailPreview = injectEmailPreview;
+  window.sendOrderEmailFromDetail = sendOrderEmailFromDetail;
+  window.resendOrderEmail = resendOrderEmail;
+  window.toggleAdhocEmailForm = toggleAdhocEmailForm;
+  window.sendAdhocOrderEmail = sendAdhocOrderEmail;
   window.loadCommissions = loadCommissions;
   window.renderCommissions = renderCommissions;
   window.viewCommissionDetail = viewCommissionDetail;
