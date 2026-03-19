@@ -14,6 +14,13 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-functions-compat.js"></script>
   <script src="../storefront-tenant.js?v=1773887711"></script>
   <script src="../tenant-brand.js?v=2"></script>
+  <script>
+    // Apply dark mode early (before paint) based on OS preference — prevents flash on login screen.
+    // Post-login, loadSettings() overrides this with the user's saved preference.
+    if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      document.addEventListener('DOMContentLoaded', function() { document.body.classList.add('dark-mode'); });
+    }
+  </script>
   <style>
     :root {
       --amber: #C4853C;
@@ -10148,11 +10155,9 @@ function loadSettings() {
     if (darkPref === undefined || darkPref === null) {
       darkPref = window.matchMedia('(prefers-color-scheme: dark)').matches;
     }
-    if (darkPref) {
-      document.body.classList.add('dark-mode');
-      var toggle = document.getElementById('darkModeToggle');
-      if (toggle) toggle.checked = true;
-    }
+    document.body.classList.toggle('dark-mode', !!darkPref);
+    var toggle = document.getElementById('darkModeToggle');
+    if (toggle) toggle.checked = !!darkPref;
   });
   loadSquareConfig();
   loadShippingConfig();
