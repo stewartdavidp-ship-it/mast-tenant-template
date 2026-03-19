@@ -2238,7 +2238,7 @@
   // ============================================================
 
   function ensureOrdersData() {
-    if (!ordersLoaded) loadOrders();
+    if (ordersLoaded) renderOrders();
   }
 
   MastAdmin.registerModule('orders', {
