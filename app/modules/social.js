@@ -108,9 +108,9 @@
 
     // Pending Clips
     html += '<div class="sm-section">';
-    html += '<div class="sm-section-label">Pending <span class="sm-count-badge">' + pendingActive.length + '</span></div>';
+    html += '<div class="sm-section-label">Pending <span class="status-badge pill" style="background:var(--amber);color:#fff;">' + pendingActive.length + '</span></div>';
     if (pendingActive.length === 0) {
-      html += '<div class="sm-empty"><div class="sm-empty-icon">📱</div>No pending clips yet.<div style="margin-top:12px;"><button class="btn btn-primary" onclick="smStartNewPost()">+ New Post</button></div></div>';
+      html += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);"><div style="font-size:2rem;margin-bottom:12px;">📱</div><p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No pending clips yet</p><button class="btn btn-primary" style="margin-top:16px;" onclick="smStartNewPost()">+ New Post</button></div>';
     } else {
       pendingActive.forEach(function(clip) {
         var dateStr = clip.uploadedAt ? new Date(clip.uploadedAt).toLocaleDateString() : '';
@@ -131,9 +131,9 @@
 
     // Posted History
     html += '<div class="sm-section">';
-    html += '<div class="sm-section-label">Posted <span class="sm-count-badge">' + smPosts.length + '</span></div>';
+    html += '<div class="sm-section-label">Posted <span class="status-badge pill" style="background:var(--amber);color:#fff;">' + smPosts.length + '</span></div>';
     if (smPosts.length === 0) {
-      html += '<div class="sm-empty"><div class="sm-empty-icon">📝</div>No posts yet. Complete the pipeline to see your history here.</div>';
+      html += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);"><div style="font-size:2rem;margin-bottom:12px;">📝</div><p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No posts yet</p><p style="font-size:0.85rem;color:var(--warm-gray-light);">Complete the pipeline to see your history here.</p></div>';
     } else {
       smPosts.forEach(function(post) {
         var dateStr = post.postedAt ? new Date(post.postedAt).toLocaleDateString() : '';
@@ -144,15 +144,15 @@
         var platformBadges = '';
         if (post.platforms) {
           post.platforms.forEach(function(p) {
-            if (p === 'instagram-reels') platformBadges += '<span class="sm-platform-badge ig-reels">Reels</span>';
-            else if (p === 'instagram-feed') platformBadges += '<span class="sm-platform-badge ig-feed">Feed</span>';
-            else if (p === 'facebook') platformBadges += '<span class="sm-platform-badge facebook">FB</span>';
+            if (p === 'instagram-reels') platformBadges += '<span class="status-badge" style="background:#E1306C;color:#fff;">Reels</span>';
+            else if (p === 'instagram-feed') platformBadges += '<span class="status-badge" style="background:#833AB4;color:#fff;">Feed</span>';
+            else if (p === 'facebook') platformBadges += '<span class="status-badge" style="background:#1877F2;color:#fff;">FB</span>';
           });
         }
 
         var signalHtml = '<div style="display:flex;gap:4px;">' +
-          '<button class="sm-signal-btn' + (post.signalScore === 1 ? ' active-worked' : '') + '" onclick="event.stopPropagation(); smSetSignal(\'' + esc(post.postId) + '\', 1)">👍</button>' +
-          '<button class="sm-signal-btn' + (post.signalScore === 2 ? ' active-fire' : '') + '" onclick="event.stopPropagation(); smSetSignal(\'' + esc(post.postId) + '\', 2)">🔥</button>' +
+          '<button class="btn-icon"' + (post.signalScore === 1 ? ' style="background:var(--amber-light);border-color:var(--amber);"' : '') + ' onclick="event.stopPropagation(); smSetSignal(\'' + esc(post.postId) + '\', 1)">👍</button>' +
+          '<button class="btn-icon"' + (post.signalScore === 2 ? ' style="background:#C84B31;border-color:#C84B31;color:#fff;"' : '') + ' onclick="event.stopPropagation(); smSetSignal(\'' + esc(post.postId) + '\', 2)">🔥</button>' +
         '</div>';
 
         var thumbHtml = post.thumbnailUrl
@@ -167,7 +167,7 @@
               '<div class="sm-post-date">' + esc(dateStr) + '</div>' +
             '</div>' +
             '<div class="sm-post-badges">' +
-              '<span class="sm-treatment-badge" style="background:' + treatmentColor + '">' + esc(treatmentName) + '</span>' +
+              '<span class="status-badge" style="background:' + treatmentColor + ';color:#fff;">' + esc(treatmentName) + '</span>' +
               platformBadges +
               signalHtml +
             '</div>' +
@@ -240,7 +240,7 @@
 
   function renderSMNewPost(container) {
     var html = '<div class="sm-intent-screen">';
-    html += '<div style="text-align:left;margin-bottom:16px;"><button class="sm-back-btn" onclick="smGoHome()" style="font-size:0.9rem;color:var(--warm-gray-light);">← Back to Social Media</button></div>';
+    html += '<div style="text-align:left;margin-bottom:16px;"><button class="detail-back" onclick="smGoHome()">← Back to Social Media</button></div>';
     html += '<div class="sm-intent-title">What would you like to do?</div>';
 
     html += '<div class="sm-intent-option" onclick="smPreShoot()">' +
@@ -298,9 +298,9 @@
     // Show uploading state
     smCurrentView = 'enhance';
     var container = document.getElementById('socialMediaContent');
-    container.innerHTML = '<div class="sm-ai-loading"><div class="spinner"></div><div class="label">Uploading ' + esc(file.name) + '…</div>' +
+    container.innerHTML = '<div class="loading">Uploading ' + esc(file.name) + '…</div>' +
       '<div class="sm-upload-progress"><div class="sm-progress-bar"><div class="sm-progress-fill" id="smUploadProgress" style="width:0%"></div></div>' +
-      '<div class="sm-progress-text" id="smUploadText">0%</div></div></div>';
+      '<div class="sm-progress-text" id="smUploadText">0%</div></div>';
 
     try {
       // Generate thumbnail
@@ -487,7 +487,7 @@
     var d = smEnhanceData;
     var isPreShoot = d.isPreShoot;
 
-    var html = '<button class="sm-back-btn" onclick="' + (isPreShoot ? 'smStartNewPost()' : 'smGoHome()') + '">← Back</button>';
+    var html = '<button class="detail-back" onclick="' + (isPreShoot ? 'smStartNewPost()' : 'smGoHome()') + '">← Back to ' + (isPreShoot ? 'New Post' : 'Social Media') + '</button>';
     html += '<div class="sm-header"><h2>' + (isPreShoot ? 'Pre-Shoot Setup' : 'Enhance Clip') + '</h2></div>';
 
     // File info (post-capture only)
@@ -507,10 +507,10 @@
     // Section 1: Product Association
     html += '<div class="sm-enhance-section">';
     html += '<div class="sm-enhance-section-label">Is this clip about a specific product?</div>';
-    html += '<div class="sm-toggle-group">' +
-      '<button class="sm-toggle-btn' + (d.subjectType === 'product' ? ' active' : '') + '" onclick="smSetSubjectType(\'product\')">Product</button>' +
-      '<button class="sm-toggle-btn' + (d.subjectType === 'event' ? ' active' : '') + '" onclick="smSetSubjectType(\'event\')">Event</button>' +
-      '<button class="sm-toggle-btn' + (d.subjectType === 'none' ? ' active' : '') + '" onclick="smSetSubjectType(\'none\')">No specific product</button>' +
+    html += '<div style="display:flex;gap:0;border:1px solid #ddd;border-radius:6px;overflow:hidden;">' +
+      '<button class="btn btn-small" style="flex:1;border-radius:0;border:none;border-right:1px solid #ddd;' + (d.subjectType === 'product' ? 'background:var(--amber);color:#fff;' : 'background:var(--cream);color:var(--warm-gray);') + '" onclick="smSetSubjectType(\'product\')">Product</button>' +
+      '<button class="btn btn-small" style="flex:1;border-radius:0;border:none;border-right:1px solid #ddd;' + (d.subjectType === 'event' ? 'background:var(--amber);color:#fff;' : 'background:var(--cream);color:var(--warm-gray);') + '" onclick="smSetSubjectType(\'event\')">Event</button>' +
+      '<button class="btn btn-small" style="flex:1;border-radius:0;border:none;' + (d.subjectType === 'none' ? 'background:var(--amber);color:#fff;' : 'background:var(--cream);color:var(--warm-gray);') + '" onclick="smSetSubjectType(\'none\')">No specific product</button>' +
     '</div>';
 
     if (d.subjectType === 'product') {
@@ -650,7 +650,7 @@
     var treatmentIcon = treatment ? treatment.icon : '';
     var treatmentColor = treatment ? treatment.color : '#999';
 
-    var html = '<button class="sm-back-btn" onclick="smSetView(\'enhance\')">← Back</button>';
+    var html = '<button class="detail-back" onclick="smSetView(\'enhance\')">← Back to Enhance</button>';
     html += '<div class="sm-shoot-card">';
     html += '<div class="sm-shoot-card-inner" id="smShootCardContent">';
 
@@ -663,7 +663,7 @@
       html += '</ul>';
       html += '<div class="sm-shoot-card-tip">' + esc(SM_TECH_TIPS[d.treatment] || '') + '</div>';
     } else {
-      html += '<div class="sm-ai-loading"><div class="spinner"></div><div class="label">Generating your Shoot Card…</div></div>';
+      html += '<div class="loading">Generating your Shoot Card…</div>';
     }
 
     html += '</div>';
@@ -749,8 +749,8 @@
     var container = document.getElementById('socialMediaContent');
 
     // Show loading state
-    container.innerHTML = '<button class="sm-back-btn" onclick="smSetView(\'enhance\')">← Back</button>' +
-      '<div class="sm-ai-loading"><div class="spinner"></div><div class="label">Analyzing your clip…</div></div>';
+    container.innerHTML = '<button class="detail-back" onclick="smSetView(\'enhance\')">← Back to Enhance</button>' +
+      '<div class="loading">Analyzing your clip…</div>';
 
     // Run client-side readiness checks
     var checks = [];
@@ -810,8 +810,8 @@
     }
 
     // Now generate captions
-    container.innerHTML = '<button class="sm-back-btn" onclick="smSetView(\'enhance\')">← Back</button>' +
-      '<div class="sm-ai-loading"><div class="spinner"></div><div class="label">Crafting your captions…</div></div>';
+    container.innerHTML = '<button class="detail-back" onclick="smSetView(\'enhance\')">← Back to Enhance</button>' +
+      '<div class="loading">Crafting your captions…</div>';
 
     try {
       var treatment = SM_TREATMENTS.find(function(t) { return t.id === d.treatment; });
@@ -858,7 +858,7 @@
     var d = smEnhanceData;
     var treatment = SM_TREATMENTS.find(function(t) { return t.id === d.treatment; });
 
-    var html = '<button class="sm-back-btn" onclick="smSetView(\'enhance\')">← Back</button>';
+    var html = '<button class="detail-back" onclick="smSetView(\'enhance\')">← Back to Enhance</button>';
     html += '<div class="sm-header"><h2>Platform Staging</h2></div>';
 
     // Readiness checks
