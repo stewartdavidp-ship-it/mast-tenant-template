@@ -245,6 +245,27 @@
     .sidebar-badge.future { background: rgba(255,255,255,0.1); color: var(--warm-gray); }
     .sidebar-badge.alert { background: #C4853C; color: white; font-size: 0.65rem; padding: 2px 6px; border-radius: 10px; min-width: 18px; text-align: center; }
 
+    .sidebar-expand-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 10px 16px;
+      cursor: pointer;
+      color: var(--warm-gray);
+      font-size: 0.75rem;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      transition: color 0.15s;
+    }
+    .sidebar-expand-toggle:hover { color: white; }
+    .sidebar-expand-arrow {
+      font-size: 0.6rem;
+      transition: transform 0.2s;
+    }
+    .sidebar-expand-toggle.expanded .sidebar-expand-arrow {
+      transform: rotate(180deg);
+    }
+
     /* Show sub-nav tabs — REMOVED S5: migrated to .view-tab (sidebar handles navigation) */
     /* Show status badges — REMOVED S5: migrated to .status-badge with inline colors via showStatusBadgeStyle() */
     /* Show deadline badges — REMOVED S5: migrated to .status-badge with inline colors */
@@ -4565,6 +4586,11 @@
         <div class="sidebar-item" id="testingModeItem" onclick="toggleTestingMode()" style="display:none;">🧪 Testing Mode</div>
       </div>
     </div>
+    <!-- Show/hide locked modules toggle -->
+    <div class="sidebar-expand-toggle" id="sidebarExpandToggle" style="display:none;" onclick="toggleSidebarLockedModules()">
+      <span class="sidebar-expand-arrow" id="sidebarExpandArrow">&#9660;</span>
+      <span class="sidebar-expand-label" id="sidebarExpandLabel">Show all modules</span>
+    </div>
   </nav>
 
   <!-- ===== MAIN CONTENT ===== -->
@@ -8048,6 +8074,49 @@ function applySidebarGating() {
         sectionEl.appendChild(nudgeDiv);
       }
     }
+  }
+  updateSidebarExpandToggle();
+}
+
+// Show/hide the expand toggle based on whether locked sections exist
+function updateSidebarExpandToggle() {
+  var toggle = document.getElementById('sidebarExpandToggle');
+  if (!toggle) return;
+  var lockedSections = document.querySelectorAll('.sidebar-section.locked');
+  if (lockedSections.length > 0) {
+    toggle.style.display = '';
+    // Default to collapsed (hidden) on first load
+    if (!toggle.dataset.initialized) {
+      toggle.dataset.initialized = 'true';
+      setSidebarLockedVisibility(false);
+    }
+  } else {
+    toggle.style.display = 'none';
+  }
+}
+
+var _sidebarShowLocked = false;
+
+function toggleSidebarLockedModules() {
+  _sidebarShowLocked = !_sidebarShowLocked;
+  setSidebarLockedVisibility(_sidebarShowLocked);
+}
+
+function setSidebarLockedVisibility(show) {
+  _sidebarShowLocked = show;
+  var toggle = document.getElementById('sidebarExpandToggle');
+  var label = document.getElementById('sidebarExpandLabel');
+  var lockedSections = document.querySelectorAll('.sidebar-section.locked');
+
+  lockedSections.forEach(function(el) {
+    el.style.display = show ? '' : 'none';
+  });
+
+  if (toggle) {
+    toggle.classList.toggle('expanded', show);
+  }
+  if (label) {
+    label.textContent = show ? 'Hide locked modules' : 'Show all modules';
   }
 }
 
