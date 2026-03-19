@@ -2244,6 +2244,14 @@
     body.dark-mode #moduleSelectionModalCards strong { color: #e0e0e0 !important; }
     body.dark-mode #moduleSelectionModalCards span { color: #ccc !important; }
 
+    /* ========== SUBSCRIPTION BILLING INFO ========== */
+    body.dark-mode #subscriptionBillingInfo div[style*="background:var(--cream)"] { background: #2a2a2a !important; border-color: #444 !important; }
+    body.dark-mode #subscriptionBillingInfo div[style*="color:var(--charcoal)"],
+    body.dark-mode #subscriptionBillingInfo span[style*="color:var(--charcoal)"] { color: #e0e0e0 !important; }
+    body.dark-mode #subscriptionBillingInfo div[style*="color:var(--warm-gray)"],
+    body.dark-mode #subscriptionBillingInfo span[style*="color:var(--warm-gray)"] { color: #aaa !important; }
+    body.dark-mode #subscriptionBillingInfo div[style*="background:#fef3c7"] { background: #3d2e00 !important; border-color: #6b5300 !important; color: #fbbf24 !important; }
+
     /* ========== MODULE SELECTION (Subscription Settings) ========== */
     body.dark-mode #moduleSelectionUI div[style*="background:var(--cream-dark"],
     body.dark-mode #subscriptionTierSelector div[style*="background:var(--cream-dark"] { background: #2a2a2a !important; border-color: #444 !important; }
@@ -5840,6 +5848,7 @@
         <button class="view-tab" onclick="switchSettingsSubView('subscription')">Subscription</button>
       </div>
       <div id="settingsSubSubscription" style="display:none;padding-top:16px;">
+        <div id="subscriptionBillingInfo" style="margin-bottom:24px;"></div>
         <div id="subscriptionTierSelector" style="margin-bottom:24px;"></div>
         <div id="moduleSelectionUI"></div>
       </div>
@@ -9789,30 +9798,35 @@ function switchSettingsSubView(view) {
 // ============================================================
 
 var _subscriptionSettingsTier = null;
+var _subscriptionDetails = null;
+var _subscriptionDetailsLoading = false;
 
 function renderSubscriptionSettings() {
   var sub = getTenantSubscription();
   var currentTier = _subscriptionSettingsTier || sub.tier || 'command';
   _subscriptionSettingsTier = currentTier;
 
+  // Render billing info section
+  renderSubscriptionBillingInfo(sub);
+
   // Render tier selector
   var selectorEl = document.getElementById('subscriptionTierSelector');
   if (selectorEl) {
     var h = '<div style="margin-bottom:8px;">';
-    h += '<label style="font-weight:600;font-size:0.95rem;color:var(--charcoal, #1a1a1a);display:block;margin-bottom:12px;">Select Your Tier</label>';
+    h += '<label style="font-weight:600;font-size:0.95rem;color:var(--charcoal);display:block;margin-bottom:12px;">Select Your Tier</label>';
     h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;">';
     TIER_ORDER.forEach(function(tierId) {
       var tc = TIER_CONFIG[tierId];
       var isActive = tierId === currentTier;
-      var borderColor = isActive ? 'var(--amber, #C4853C)' : 'var(--cream-dark, #F0E8DB)';
-      var bg = isActive ? 'var(--cream, #FAF6F0)' : 'var(--cream-dark, #F0E8DB)';
+      var borderColor = isActive ? 'var(--amber)' : 'var(--cream-dark)';
+      var bg = isActive ? 'var(--cream)' : 'var(--cream-dark)';
       var shadow = isActive ? '0 2px 8px rgba(196, 133, 60, 0.2)' : 'none';
       h += '<div onclick="selectSubscriptionTier(\'' + tierId + '\')" style="' +
         'background:' + bg + ';border:2px solid ' + borderColor + ';border-radius:10px;padding:14px 16px;cursor:pointer;' +
         'box-shadow:' + shadow + ';transition:all 0.2s;">';
-      h += '<div style="font-weight:700;font-family:\'Cormorant Garamond\', serif;font-size:1.1rem;color:var(--charcoal, #1a1a1a);">' + esc(tc.name) + '</div>';
-      h += '<div style="font-size:0.9rem;color:var(--amber, #C4853C);font-weight:600;">' + (tc.price === 0 ? 'Free' : '$' + tc.price + '/mo') + '</div>';
-      h += '<div style="font-size:0.8rem;color:var(--warm-gray, #6B6560);margin-top:4px;">' + esc(tc.description) + '</div>';
+      h += '<div style="font-weight:700;font-family:\'Cormorant Garamond\', serif;font-size:1.1rem;color:var(--charcoal);">' + esc(tc.name) + '</div>';
+      h += '<div style="font-size:0.9rem;color:var(--amber);font-weight:600;">' + (tc.price === 0 ? 'Free' : '$' + tc.price + '/mo') + '</div>';
+      h += '<div style="font-size:0.8rem;color:var(--warm-gray);margin-top:4px;">' + esc(tc.description) + '</div>';
       h += '</div>';
     });
     h += '</div></div>';
@@ -9822,7 +9836,6 @@ function renderSubscriptionSettings() {
   // Render module selection
   var isUpgrade = TIER_ORDER.indexOf(currentTier) > TIER_ORDER.indexOf(sub.tier);
   var currentModules = sub.modules || [];
-  // On upgrade: keep existing modules pre-selected and locked
   var lockedMods = isUpgrade ? currentModules.slice() : [];
   var preSelected = isUpgrade ? currentModules.slice() : (currentTier === sub.tier ? currentModules.slice() : []);
 
@@ -9833,7 +9846,6 @@ function renderSubscriptionSettings() {
     isUpgrade: isUpgrade,
     onConfirm: function(modules) {
       _subscriptionSettingsTier = null;
-      // Re-render to reflect saved state
       setTimeout(function() { renderSubscriptionSettings(); }, 100);
     },
     onCancel: function() {
@@ -9846,6 +9858,209 @@ function renderSubscriptionSettings() {
 function selectSubscriptionTier(tierId) {
   _subscriptionSettingsTier = tierId;
   renderSubscriptionSettings();
+}
+
+// --- Billing Info Section ---
+
+function renderSubscriptionBillingInfo(sub) {
+  var el = document.getElementById('subscriptionBillingInfo');
+  if (!el) return;
+
+  var tierConfig = TIER_CONFIG[sub.tier] || {};
+  var details = _subscriptionDetails;
+
+  // Free tier — no billing info to show
+  if (sub.tier === 'publish' && (!details || details.status === 'free')) {
+    el.innerHTML = '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px 20px;margin-bottom:8px;">' +
+      '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
+        '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--charcoal);">Publish</div>' +
+        '<span class="status-badge" style="background:#16a34a;color:white;">Active</span>' +
+        '<span style="font-size:0.85rem;color:var(--warm-gray);">Free</span>' +
+      '</div>' +
+      '<p style="font-size:0.85rem;color:var(--warm-gray);margin-top:8px;">Upgrade to unlock modules and grow your business.</p>' +
+    '</div>';
+    return;
+  }
+
+  // Loading state
+  if (_subscriptionDetailsLoading && !details) {
+    el.innerHTML = '<div class="loading">Loading subscription details...</div>';
+    return;
+  }
+
+  // Fetch details if we haven't yet
+  if (!details && !_subscriptionDetailsLoading) {
+    _subscriptionDetailsLoading = true;
+    fetchSubscriptionDetails().then(function(d) {
+      _subscriptionDetails = d;
+      _subscriptionDetailsLoading = false;
+      renderSubscriptionBillingInfo(sub);
+    }).catch(function() {
+      _subscriptionDetailsLoading = false;
+      renderSubscriptionBillingInfo(sub);
+    });
+    el.innerHTML = '<div class="loading">Loading subscription details...</div>';
+    return;
+  }
+
+  // Build billing card
+  var planName = tierConfig.name || sub.tier;
+  var priceStr = details && details.planAmount ? '$' + (details.planAmount / 100) : (tierConfig.price ? '$' + tierConfig.price : 'Free');
+  var intervalStr = details && details.planInterval === 'year' ? '/yr' : '/mo';
+  if (priceStr === 'Free' || priceStr === '$0') intervalStr = '';
+
+  var statusColor = '#16a34a';
+  var statusText = 'Active';
+  if (details) {
+    if (details.cancelAtPeriodEnd) { statusColor = '#f59e0b'; statusText = 'Canceling'; }
+    else if (details.status === 'past_due') { statusColor = '#DC3545'; statusText = 'Past Due'; }
+    else if (details.status === 'canceled') { statusColor = '#9ca3af'; statusText = 'Canceled'; }
+    else if (details.status === 'active') { statusColor = '#16a34a'; statusText = 'Active'; }
+  }
+
+  var h = '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px 20px;">';
+
+  // Row 1: Plan name + status + price
+  h += '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;">';
+  h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--charcoal);">' + esc(planName) + '</div>';
+  h += '<span class="status-badge" style="background:' + statusColor + ';color:white;">' + statusText + '</span>';
+  h += '<span style="font-size:0.95rem;color:var(--amber);font-weight:600;">' + priceStr + intervalStr + '</span>';
+  h += '</div>';
+
+  // Details grid
+  h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px 24px;font-size:0.85rem;margin-bottom:16px;">';
+
+  if (details && details.currentPeriodEnd) {
+    var renewDate = new Date(details.currentPeriodEnd);
+    var renewStr = renewDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    if (details.cancelAtPeriodEnd) {
+      h += '<div><span style="color:var(--warm-gray);">Access until:</span> <span style="color:var(--charcoal);font-weight:500;">' + renewStr + '</span></div>';
+    } else {
+      h += '<div><span style="color:var(--warm-gray);">Next renewal:</span> <span style="color:var(--charcoal);font-weight:500;">' + renewStr + '</span></div>';
+    }
+  }
+
+  if (details && details.paymentMethod) {
+    var pm = details.paymentMethod;
+    var brandName = pm.brand ? pm.brand.charAt(0).toUpperCase() + pm.brand.slice(1) : 'Card';
+    h += '<div><span style="color:var(--warm-gray);">Payment:</span> <span style="color:var(--charcoal);font-weight:500;">' + esc(brandName) + ' ending ' + esc(pm.last4) + '</span></div>';
+  }
+
+  if (sub.effectiveDate) {
+    var memberDate = new Date(sub.effectiveDate);
+    h += '<div><span style="color:var(--warm-gray);">Member since:</span> <span style="color:var(--charcoal);font-weight:500;">' + memberDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) + '</span></div>';
+  }
+
+  h += '</div>';
+
+  // Cancel warning
+  if (details && details.cancelAtPeriodEnd && details.currentPeriodEnd) {
+    var endDate = new Date(details.currentPeriodEnd).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    h += '<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:0.85rem;color:#92400e;">';
+    h += 'Your subscription will end on <strong>' + endDate + '</strong>. After that, you\'ll be downgraded to the free Publish tier.';
+    h += '</div>';
+  }
+
+  // Action buttons
+  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
+  h += '<button class="btn btn-secondary btn-small" onclick="openBillingPortal()">Manage Billing</button>';
+
+  if (details && details.cancelAtPeriodEnd) {
+    h += '<button class="btn btn-primary btn-small" onclick="resumeSubscription()">Resume Auto-Renewal</button>';
+  } else if (details && details.status === 'active') {
+    h += '<button class="btn btn-small" style="color:var(--danger);border:1px solid var(--danger);background:transparent;" onclick="cancelSubscriptionUI()">Stop Auto-Renewal</button>';
+  }
+  h += '</div>';
+
+  h += '</div>';
+  el.innerHTML = h;
+}
+
+async function fetchSubscriptionDetails() {
+  try {
+    var token = await firebase.auth().currentUser.getIdToken();
+    var resp = await fetch(CLOUD_FUNCTIONS_BASE + '/getSubscriptionDetails', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token,
+        'X-Tenant-ID': MastDB.tenantId(),
+      },
+      body: JSON.stringify({ tenantId: MastDB.tenantId() }),
+    });
+    if (!resp.ok) throw new Error('Failed to fetch subscription details');
+    return await resp.json();
+  } catch (err) {
+    console.error('fetchSubscriptionDetails error:', err);
+    return null;
+  }
+}
+
+async function openBillingPortal() {
+  try {
+    showToast('Opening billing portal...');
+    var token = await firebase.auth().currentUser.getIdToken();
+    var resp = await fetch(CLOUD_FUNCTIONS_BASE + '/createBillingPortalSession', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token,
+        'X-Tenant-ID': MastDB.tenantId(),
+      },
+      body: JSON.stringify({ tenantId: MastDB.tenantId() }),
+    });
+    if (!resp.ok) {
+      var errData = await resp.json().catch(function() { return {}; });
+      throw new Error(errData.error || 'Failed to open billing portal');
+    }
+    var data = await resp.json();
+    if (data.url) window.open(data.url, '_blank');
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
+
+async function cancelSubscriptionUI() {
+  var details = _subscriptionDetails;
+  var endDate = details && details.currentPeriodEnd
+    ? new Date(details.currentPeriodEnd).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+    : 'the end of your billing period';
+  if (!confirm('Stop auto-renewal? Your subscription will remain active until ' + endDate + ', then downgrade to Publish (free).')) return;
+  await toggleSubscriptionCancel('cancel');
+}
+
+async function resumeSubscription() {
+  if (!confirm('Resume auto-renewal? Your subscription will continue renewing automatically.')) return;
+  await toggleSubscriptionCancel('resume');
+}
+
+async function toggleSubscriptionCancel(action) {
+  try {
+    var token = await firebase.auth().currentUser.getIdToken();
+    var resp = await fetch(CLOUD_FUNCTIONS_BASE + '/cancelSubscription', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token,
+        'X-Tenant-ID': MastDB.tenantId(),
+      },
+      body: JSON.stringify({ tenantId: MastDB.tenantId(), action: action }),
+    });
+    if (!resp.ok) {
+      var errData = await resp.json().catch(function() { return {}; });
+      throw new Error(errData.error || 'Failed to ' + action + ' subscription');
+    }
+    var data = await resp.json();
+    // Update cached details
+    if (_subscriptionDetails) {
+      _subscriptionDetails.cancelAtPeriodEnd = data.cancelAtPeriodEnd;
+      if (data.currentPeriodEnd) _subscriptionDetails.currentPeriodEnd = data.currentPeriodEnd;
+    }
+    showToast(action === 'cancel' ? 'Auto-renewal stopped.' : 'Auto-renewal resumed.');
+    renderSubscriptionSettings();
+  } catch (err) {
+    showToast(err.message, true);
+  }
 }
 
 // ============================================================
