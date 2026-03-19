@@ -11073,6 +11073,7 @@ async function saveSquareConfig() {
     await firebase.functions().httpsCallable('secretsManager')({
       action: 'write',
       service: 'square',
+      tenantId: MastDB.tenantId(),
       secrets: secrets,
       metadata: metadata
     });
@@ -11091,7 +11092,8 @@ function loadSquareConfig() {
   var statusEl = document.getElementById('squareConfigStatus');
   firebase.functions().httpsCallable('secretsManager')({
     action: 'read',
-    service: 'square'
+    service: 'square',
+    tenantId: MastDB.tenantId()
   }).then(function(result) {
     var config = result.data;
     if (!config || (!config.sandbox.accessToken && !config.production.accessToken)) {
@@ -11330,7 +11332,7 @@ async function saveEmailConfig() {
 
   try {
     await firebase.functions().httpsCallable('secretsManager')({
-      action: 'write', service: 'email', secrets: secrets, metadata: metadata
+      action: 'write', service: 'email', tenantId: MastDB.tenantId(), secrets: secrets, metadata: metadata
     });
     await updateConfigChecklist('email', true);
     await writeAudit('update', 'settings', 'emailConfig');
@@ -11344,7 +11346,7 @@ async function saveEmailConfig() {
 function loadEmailConfig() {
   var statusEl = document.getElementById('emailConfigStatus');
   firebase.functions().httpsCallable('secretsManager')({
-    action: 'read', service: 'email'
+    action: 'read', service: 'email', tenantId: MastDB.tenantId()
   }).then(function(result) {
     var config = result.data;
     var provider = config.provider || '';
@@ -11594,6 +11596,7 @@ async function connectEtsy() {
     await firebase.functions().httpsCallable('secretsManager')({
       action: 'write',
       service: 'etsy',
+      tenantId: MastDB.tenantId(),
       secrets: { [((TENANT_CONFIG && TENANT_CONFIG.secretPrefix) || MastDB.tenantId()) + '-etsy-api-key']: apiKey }
     });
     await writeAudit('update', 'settings', 'etsyApiKey');
@@ -11636,7 +11639,8 @@ function loadEtsyConfig() {
 
   firebase.functions().httpsCallable('secretsManager')({
     action: 'read',
-    service: 'etsy'
+    service: 'etsy',
+    tenantId: MastDB.tenantId()
   }).then(function(result) {
     var config = result.data;
 
