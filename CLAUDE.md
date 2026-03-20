@@ -33,6 +33,7 @@ Features: public storefront (shop, commissions, blog), admin app (Studio Compani
 - After every major build job, Claude Code must create a follow-on Security Posture Review maintenance job.
 - UI Design System — all views must conform to documented standards. Dark mode compliance required.
 - docs/workflows.md is owned by Claude Code. Claude Chat must not push updates directly.
+- Provisioning review required. Any change that adds new Firebase paths, Cloud Function calls, CSP domains, API integrations, or tenant config must be reviewed against the 13-step provisioning pipeline in `mast-architecture/functions/platform-functions.js` (`runProvisioningPipeline`) and the MCP `createTenant` flow in `mast-mcp-server/src/tools/mast-tenants.ts`. Both deploy paths (Stripe-triggered and MCP manual) must produce identical results.
 
 ## CONSTRAINTs — External realities. Work within these.
 
