@@ -11002,6 +11002,9 @@ function setMaskedField(inputId, value) {
   el.value = '';
   el.placeholder = maskValue(value) + '  (saved)';
   el.dataset.saved = value;
+  // Hide Show/Hide button — no real value to reveal for saved masked fields
+  var btn = el.parentElement && el.parentElement.querySelector('button[onclick*="toggleReveal"]');
+  if (btn) btn.style.display = 'none';
 }
 
 function getFieldValue(inputId) {
