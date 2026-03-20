@@ -6052,34 +6052,36 @@
 
           <div style="background:var(--cream,#faf8f5);border:1px solid #e8e0d4;border-radius:8px;padding:16px;margin-bottom:12px;">
             <div style="font-size:0.9rem;font-weight:700;margin-bottom:12px;color:var(--warm-gray,#6b6359);">Sandbox Credentials</div>
-            <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">Access Token</label>
+            <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:6px;">Access Token <span id="sqSandboxTokenBadge"></span></label>
             <div style="display:flex;gap:6px;margin-bottom:8px;">
               <input type="password" id="sqSandboxToken" placeholder="EAAAl..."
                 style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
               <button type="button" onclick="toggleReveal('sqSandboxToken',this)" class="btn btn-small" style="font-size:0.75rem;padding:6px 10px;white-space:nowrap;">Show</button>
             </div>
-            <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">Location ID</label>
+            <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:6px;">Location ID <span id="sqSandboxLocationBadge"></span></label>
             <div style="display:flex;gap:6px;margin-bottom:8px;">
               <input type="password" id="sqSandboxLocation" placeholder="L..."
                 style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
               <button type="button" onclick="toggleReveal('sqSandboxLocation',this)" class="btn btn-small" style="font-size:0.75rem;padding:6px 10px;white-space:nowrap;">Show</button>
             </div>
+            <div id="sqSandboxWebhookBadge" style="font-size:0.8rem;margin-top:4px;"></div>
           </div>
 
           <div style="background:var(--cream,#faf8f5);border:1px solid #e8e0d4;border-radius:8px;padding:16px;margin-bottom:12px;">
             <div style="font-size:0.9rem;font-weight:700;margin-bottom:12px;color:var(--warm-gray,#6b6359);">Production Credentials</div>
-            <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">Access Token</label>
+            <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:6px;">Access Token <span id="sqProdTokenBadge"></span></label>
             <div style="display:flex;gap:6px;margin-bottom:8px;">
               <input type="password" id="sqProdToken" placeholder="EAAAl..."
                 style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
               <button type="button" onclick="toggleReveal('sqProdToken',this)" class="btn btn-small" style="font-size:0.75rem;padding:6px 10px;white-space:nowrap;">Show</button>
             </div>
-            <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">Location ID</label>
+            <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:6px;">Location ID <span id="sqProdLocationBadge"></span></label>
             <div style="display:flex;gap:6px;margin-bottom:8px;">
               <input type="password" id="sqProdLocation" placeholder="L..."
                 style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
               <button type="button" onclick="toggleReveal('sqProdLocation',this)" class="btn btn-small" style="font-size:0.75rem;padding:6px 10px;white-space:nowrap;">Show</button>
             </div>
+            <div id="sqProdWebhookBadge" style="font-size:0.8rem;margin-top:4px;"></div>
           </div>
 
           <div style="display:flex;gap:8px;">
@@ -11047,7 +11049,7 @@ async function saveSquareConfig() {
   if (prodLocation) metadata.production = { locationId: prodLocation };
 
   try {
-    await firebase.functions().httpsCallable('secretsManager')({
+    var result = await firebase.functions().httpsCallable('secretsManager')({
       action: 'write',
       service: 'square',
       tenantId: MastDB.tenantId(),
@@ -11056,132 +11058,73 @@ async function saveSquareConfig() {
     });
     await MastDB.config.testMode().set(env === 'sandbox');
     await writeAudit('update', 'settings', 'squareConfig');
-    // Re-mask all fields after save
-    loadSquareConfig();
-    document.getElementById('squareConfigStatus').innerHTML = '<span style="color:var(--teal);">&#10003; Square config saved (' + env + ')</span>';
     showToast('Square configuration saved.');
 
-    // Verify credentials and auto-provision webhook
-    var activeToken = env === 'sandbox' ? sandboxToken : prodToken;
-    var activeLocation = env === 'sandbox' ? sandboxLocation : prodLocation;
-    if (activeToken && !activeToken.includes('••••')) {
-      var verified = await verifySquareCredentials(env, activeToken, activeLocation);
-      if (verified) {
-        await provisionSquareWebhook(env, activeToken, sp);
+    // Display verification results from server
+    var prefix = env === 'sandbox' ? 'sqSandbox' : 'sqProd';
+    var v = result.data && result.data.verification;
+    if (v) {
+      clearFieldBadges(prefix);
+      if (v.token) {
+        if (v.token.valid) {
+          setFieldBadge(prefix + 'TokenBadge', 'valid', 'Verified');
+        } else {
+          setFieldBadge(prefix + 'TokenBadge', 'invalid', 'Invalid');
+          document.getElementById('squareConfigStatus').innerHTML = '<span style="color:#ef4444;">&#10007; Token verification failed: ' + (v.token.error || 'Unknown error') + '</span>';
+        }
       }
+      if (v.location) {
+        if (v.location.valid) {
+          setFieldBadge(prefix + 'LocationBadge', 'valid', 'Verified');
+          document.getElementById('squareConfigStatus').innerHTML = '<span style="color:var(--teal);">&#10003; Verified: ' + env + ' credentials valid. Location: ' + v.location.name + ' (' + v.location.id + ')</span>';
+        } else {
+          setFieldBadge(prefix + 'LocationBadge', 'invalid', 'Not Found');
+          document.getElementById('squareConfigStatus').innerHTML = '<span style="color:#ef4444;">&#10007; Location ID not found. Available: ' + (v.location.available || []).join(', ') + '</span>';
+        }
+      }
+      if (v.webhook) {
+        var whEl = document.getElementById(prefix + 'WebhookBadge');
+        if (v.webhook.provisioned) {
+          if (whEl) whEl.innerHTML = '<span style="background:#059669;color:#fff;font-size:0.7rem;padding:2px 6px;border-radius:4px;font-weight:600;">Webhook Active</span>';
+        } else {
+          if (whEl) whEl.innerHTML = '<span style="color:#f59e0b;">&#9888; Webhook: ' + (v.webhook.error || 'setup failed') + '</span>';
+        }
+      }
+      if (!v.token && !v.location) {
+        document.getElementById('squareConfigStatus').innerHTML = '<span style="color:var(--teal);">&#10003; Square config saved (' + env + ')</span>';
+      }
+    } else {
+      document.getElementById('squareConfigStatus').innerHTML = '<span style="color:var(--teal);">&#10003; Square config saved (' + env + ')</span>';
     }
+
+    // Re-mask fields
+    await new Promise(function(r) { setTimeout(r, 500); });
+    loadSquareConfig();
   } catch (err) {
     showToast('Error saving Square config: ' + err.message, true);
   }
 }
 
-async function verifySquareCredentials(env, token, locationId) {
-  var statusEl = document.getElementById('squareConfigStatus');
-  var baseUrl = env === 'sandbox' ? 'https://connect.squareupsandbox.com' : 'https://connect.squareup.com';
-  statusEl.innerHTML = '<span style="color:var(--warm-gray);">Verifying credentials with Square...</span>';
-
-  try {
-    var res = await fetch(baseUrl + '/v2/locations', {
-      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }
-    });
-    var data = await res.json();
-
-    if (!res.ok || data.errors) {
-      var errMsg = (data.errors && data.errors[0] && data.errors[0].detail) || 'Authentication failed';
-      statusEl.innerHTML = '<span style="color:#ef4444;">&#10007; Square API verification failed: ' + errMsg + '. Check your access token.</span>';
-      showToast('Square credentials verification failed!', true);
-      return false;
-    }
-
-    // Check if locationId matches one of the locations
-    var locations = data.locations || [];
-    var locationNames = locations.map(function(l) { return l.id; });
-    var locationMatch = locations.find(function(l) { return l.id === locationId; });
-
-    if (!locationMatch) {
-      statusEl.innerHTML = '<span style="color:#ef4444;">&#10007; Token is valid but Location ID "' + locationId + '" not found. Available: ' + locationNames.join(', ') + '</span>';
-      showToast('Location ID does not match this Square account!', true);
-      return false;
-    } else {
-      statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Verified: ' + env + ' credentials valid. Location: ' + locationMatch.name + ' (' + locationMatch.id + ')</span>';
-      return true;
-    }
-  } catch (err) {
-    statusEl.innerHTML = '<span style="color:#f59e0b;">&#9888; Could not verify credentials: ' + err.message + '</span>';
-    return false;
-  }
+function setFieldBadge(id, status, label) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  var styles = {
+    valid: 'background:#059669;color:#fff;',
+    invalid: 'background:#ef4444;color:#fff;',
+    pending: 'background:#6b7280;color:#fff;'
+  };
+  el.innerHTML = '<span style="' + (styles[status] || styles.pending) + 'font-size:0.7rem;padding:2px 6px;border-radius:4px;font-weight:600;">' + label + '</span>';
 }
 
-async function provisionSquareWebhook(env, token, secretPrefix) {
-  var statusEl = document.getElementById('squareConfigStatus');
-  var baseUrl = env === 'sandbox' ? 'https://connect.squareupsandbox.com' : 'https://connect.squareup.com';
-  var webhookUrl = 'https://us-central1-mast-platform-prod.cloudfunctions.net/squareWebhook';
-
-  try {
-    statusEl.innerHTML += '<br><span style="color:var(--warm-gray);">Setting up webhook...</span>';
-
-    // Check for existing webhook subscription pointing to our endpoint
-    var listRes = await fetch(baseUrl + '/v2/webhooks/subscriptions', {
-      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }
-    });
-    var listData = await listRes.json();
-    var existing = (listData.subscriptions || []).find(function(s) {
-      return s.notification_url === webhookUrl && s.enabled;
-    });
-
-    var signatureKey;
-    if (existing) {
-      // Retrieve to get signature key
-      var getRes = await fetch(baseUrl + '/v2/webhooks/subscriptions/' + existing.id, {
-        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }
-      });
-      var getData = await getRes.json();
-      signatureKey = getData.subscription && getData.subscription.signature_key;
-    } else {
-      // Create new webhook subscription
-      var createRes = await fetch(baseUrl + '/v2/webhooks/subscriptions', {
-        method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          idempotency_key: MastDB.tenantId() + '-' + env + '-' + Date.now(),
-          subscription: {
-            name: 'Mast Platform (' + MastDB.tenantId() + ')',
-            enabled: true,
-            notification_url: webhookUrl,
-            event_types: ['payment.completed', 'payment.updated', 'order.updated'],
-            api_version: '2024-01-18'
-          }
-        })
-      });
-      var createData = await createRes.json();
-
-      if (!createRes.ok || createData.errors) {
-        var errMsg = (createData.errors && createData.errors[0] && createData.errors[0].detail) || 'Webhook creation failed';
-        statusEl.innerHTML += '<br><span style="color:#f59e0b;">&#9888; Webhook auto-setup failed: ' + errMsg + '. Payments will still work but webhook notifications won\'t.</span>';
-        return;
-      }
-      signatureKey = createData.subscription && createData.subscription.signature_key;
-    }
-
-    // Store signature key in Secret Manager
-    if (signatureKey) {
-      var secretName = secretPrefix + '-square-' + env + '-webhook-signature-key';
-      var secrets = {};
-      secrets[secretName] = signatureKey;
-      await firebase.functions().httpsCallable('secretsManager')({
-        action: 'write',
-        service: 'square',
-        tenantId: MastDB.tenantId(),
-        secrets: secrets,
-        metadata: {}
-      });
-      statusEl.innerHTML += '<br><span style="color:var(--teal);">&#10003; Webhook configured automatically.</span>';
-    }
-  } catch (err) {
-    console.error('Webhook provisioning error:', err);
-    statusEl.innerHTML += '<br><span style="color:#f59e0b;">&#9888; Webhook auto-setup failed: ' + err.message + '. You can still process payments.</span>';
-  }
+function clearFieldBadges(prefix) {
+  ['TokenBadge', 'LocationBadge', 'WebhookBadge'].forEach(function(suffix) {
+    var el = document.getElementById(prefix + suffix);
+    if (el) el.innerHTML = '';
+  });
 }
+
+// verifySquareCredentials and provisionSquareWebhook are now server-side
+// in the secretsManager cloud function (avoids CORS issues with Square API)
 
 function loadSquareConfig() {
   var statusEl = document.getElementById('squareConfigStatus');
@@ -11191,7 +11134,7 @@ function loadSquareConfig() {
     tenantId: MastDB.tenantId()
   }).then(function(result) {
     var config = result.data;
-    if (!config || (!config.sandbox.accessToken && !config.production.accessToken)) {
+    if (!config || (!(config.sandbox && config.sandbox.accessToken) && !(config.production && config.production.accessToken))) {
       if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray-light);">No Square config set. Payment checkout will not work until configured.</span>';
       return;
     }
@@ -11211,7 +11154,9 @@ function loadSquareConfig() {
     // Sandbox indicators
     onSquareEnvToggle();
 
-    if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Configured (' + config.environment + ') — updated ' + (config.updatedAt ? new Date(config.updatedAt).toLocaleDateString() : 'unknown') + '</span>';
+    // Only update status if no verification badges are showing
+    var hasBadges = document.querySelector('[id$="TokenBadge"] span, [id$="LocationBadge"] span');
+    if (statusEl && !hasBadges) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Configured (' + config.environment + ') — updated ' + (config.updatedAt ? new Date(config.updatedAt).toLocaleDateString() : 'unknown') + '</span>';
   }).catch(function(err) {
     // Fallback to direct RTDB read (pre-migration)
     console.warn('secretsManager read failed, falling back to RTDB:', err.message);
