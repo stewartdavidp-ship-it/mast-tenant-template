@@ -11097,9 +11097,7 @@ async function saveSquareConfig() {
       document.getElementById('squareConfigStatus').innerHTML = '<span style="color:var(--teal);">&#10003; Square config saved (' + env + ')</span>';
     }
 
-    // Re-mask fields
-    await new Promise(function(r) { setTimeout(r, 500); });
-    loadSquareConfig();
+    // Fields stay as-entered until next page load (avoids clobbering verification badges)
   } catch (err) {
     showToast('Error saving Square config: ' + err.message, true);
   }
