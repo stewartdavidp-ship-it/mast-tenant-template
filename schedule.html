@@ -362,131 +362,17 @@
 <!-- ============ PAGE HEADER ============ -->
 <div class="page-header">
   <p class="section-label fade-up">Where to Find Us</p>
-  <h1 class="section-title fade-up">2026 Events &amp; Shows</h1>
+  <h1 class="section-title fade-up"><script>document.write(new Date().getFullYear())</script> Events &amp; Shows</h1>
 </div>
 
 <!-- ============ EVENTS ============ -->
 <section>
   <div class="events-section">
-    <div class="events-list">
-      <div class="event-card fade-up">
-        <div class="event-date">
-          <div class="event-month">Mar</div>
-          <div class="event-day">15</div>
-        </div>
-        <div class="event-info">
-          <h3>Northampton Spring Arts Festival</h3>
-          <p>Live demos, new spring collection debut, and custom commissions</p>
-        </div>
-        <div class="event-location">Northampton, MA</div>
-      </div>
-
-      <div class="event-card fade-up">
-        <div class="event-date">
-          <div class="event-month">Apr</div>
-          <div class="event-day">5</div>
-        </div>
-        <div class="event-info">
-          <h3>Greenfield Makers Market</h3>
-          <p>Monthly market featuring local artisans and handmade goods</p>
-        </div>
-        <div class="event-location">Greenfield, MA</div>
-      </div>
-
-      <div class="event-card fade-up">
-        <div class="event-date">
-          <div class="event-month">May</div>
-          <div class="event-day-range">22&ndash;24</div>
-        </div>
-        <div class="event-info">
-          <h3>Paradise City Arts Festival</h3>
-          <p>Three-day juried fine art and craft show on the fairgrounds</p>
-        </div>
-        <div class="event-location">Northampton, MA</div>
-      </div>
-
-      <div class="event-card fade-up">
-        <div class="event-date">
-          <div class="event-month">Jun</div>
-          <div class="event-day">14</div>
-        </div>
-        <div class="event-info">
-          <h3>Shelburne Falls Art Walk</h3>
-          <p>Open studios and gallery walks along the Bridge of Flowers</p>
-        </div>
-        <div class="event-location">Shelburne Falls, MA</div>
-      </div>
-
-      <div class="event-card fade-up">
-        <div class="event-date">
-          <div class="event-month">Jul</div>
-          <div class="event-day">19</div>
-        </div>
-        <div class="event-info">
-          <h3>Amherst Crafts Fair</h3>
-          <p>Summer showcase of regional artisans in downtown Amherst</p>
-        </div>
-        <div class="event-location">Amherst, MA</div>
-      </div>
-
-      <div class="event-card fade-up">
-        <div class="event-date">
-          <div class="event-month">Aug</div>
-          <div class="event-day-range">9&ndash;10</div>
-        </div>
-        <div class="event-info">
-          <h3>Berkshire Craft Fair</h3>
-          <p>Two-day event at Ski Butternut featuring 100+ artisans</p>
-        </div>
-        <div class="event-location">Great Barrington, MA</div>
-      </div>
-
-      <div class="event-card fade-up">
-        <div class="event-date">
-          <div class="event-month">Sep</div>
-          <div class="event-day">20</div>
-        </div>
-        <div class="event-info">
-          <h3>Northampton Arts Night Out</h3>
-          <p>Galleries, studios, and pop-up shops open late for an evening of art</p>
-        </div>
-        <div class="event-location">Northampton, MA</div>
-      </div>
-
-      <div class="event-card fade-up">
-        <div class="event-date">
-          <div class="event-month">Oct</div>
-          <div class="event-day-range">11&ndash;12</div>
-        </div>
-        <div class="event-info">
-          <h3>Fall Paradise City Arts Festival</h3>
-          <p>Annual fall show with fine art and contemporary crafts</p>
-        </div>
-        <div class="event-location">Northampton, MA</div>
-      </div>
-
-      <div class="event-card fade-up">
-        <div class="event-date">
-          <div class="event-month">Nov</div>
-          <div class="event-day">29</div>
-        </div>
-        <div class="event-info">
-          <h3>Small Business Saturday</h3>
-          <p>Special holiday offerings at the studio and online</p>
-        </div>
-        <div class="event-location">Online &amp; Studio</div>
-      </div>
-
-      <div class="event-card fade-up">
-        <div class="event-date">
-          <div class="event-month">Dec</div>
-          <div class="event-day-range">13&ndash;14</div>
-        </div>
-        <div class="event-info">
-          <h3>Holiday Market at Hawks &amp; Reed</h3>
-          <p>Two-day holiday market in the heart of Greenfield</p>
-        </div>
-        <div class="event-location">Greenfield, MA</div>
+    <div class="events-list" id="eventsList">
+      <div id="eventsEmpty" class="fade-up" style="text-align:center;padding:3rem 1rem;color:var(--warm-gray);">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--warm-gray-light)" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:1rem;"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <p style="font-family:'Cormorant Garamond',serif;font-size:1.3rem;font-weight:300;margin-bottom:0.5rem;">No upcoming events</p>
+        <p style="font-size:0.9rem;font-weight:300;">Check back soon for our event schedule.</p>
       </div>
     </div>
   </div>
@@ -494,13 +380,13 @@
 
 <div class="glass-divider"></div>
 
-<!-- ============ VISIT STUDIO ============ -->
-<section>
+<!-- ============ VISIT / CONTACT ============ -->
+<section id="visitSection">
   <div class="visit-section">
     <div class="visit-card fade-up">
-      <p class="section-label">Studio Visits</p>
-      <h2 class="section-title">Visit Our Studio</h2>
-      <p>Want to visit our studio? We welcome visitors by appointment. Get in touch to schedule a visit or discuss a custom commission.</p>
+      <p class="section-label">Get in Touch</p>
+      <h2 class="section-title" data-tenant="brand">Contact Us</h2>
+      <p>Interested in visiting or discussing a custom piece? We'd love to hear from you.</p>
       <a href="index.html#contact" class="btn btn-primary">Contact Us</a>
     </div>
   </div>
@@ -587,14 +473,17 @@ window.TENANT_READY.then(function() {
   // Load events
   db.ref(TENANT_ID + '/public/events').orderByChild('date').once('value').then(function(snap) {
     const data = snap.val();
-    if (!data) return;
+    const list = document.getElementById('eventsList');
+    const empty = document.getElementById('eventsEmpty');
+    if (!list) return;
+
+    if (!data) { return; } // keep empty state visible
+
     const events = Object.values(data)
       .filter(function(e) { return e.visible !== false; })
       .sort(function(a, b) { return a.date.localeCompare(b.date); });
-    if (events.length === 0) return;
 
-    const list = document.querySelector('.events-list');
-    if (!list) return;
+    if (events.length === 0) { return; } // keep empty state visible
 
     var html = '';
     events.forEach(function(ev) {
@@ -613,7 +502,7 @@ window.TENANT_READY.then(function() {
       html += '</div>';
     });
     list.innerHTML = html;
-  }).catch(function() { /* keep hardcoded fallback */ });
+  }).catch(function() {});
 }).catch(function(err) { console.error('[schedule] Tenant resolution failed:', err.message); });
 </script>
 

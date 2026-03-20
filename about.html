@@ -275,7 +275,7 @@
 
   .techniques-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     gap: 2rem;
     max-width: 1200px;
     margin: 0 auto;
@@ -394,21 +394,24 @@
 
 <!-- ============ PAGE HEADER ============ -->
 <div class="page-header">
-  <p class="section-label fade-up">Our Story</p>
-  <h1 class="section-title fade-up">Two Artists, One Vision</h1>
+  <p class="section-label fade-up" id="aboutLabel">Our Story</p>
+  <h1 class="section-title fade-up" id="aboutHeading" data-tenant="brand">About Us</h1>
 </div>
 
 <!-- ============ ABOUT ============ -->
 <section>
   <div class="about">
     <div class="about-image fade-up">
-      <img src="images/ori-glassblowing.jpg" alt="Ori glassblowing" />
+      <div id="aboutImagePlaceholder" style="width:100%;aspect-ratio:3/4;background:var(--cream-dark);border-radius:4px;display:flex;align-items:center;justify-content:center;">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--warm-gray-light)" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+      </div>
+      <img id="aboutImage" style="display:none" alt="" />
     </div>
     <div class="about-text fade-up">
-      <p class="section-label">About the Artists</p>
-      <h2 class="section-title" data-tenant="ownerNames">Ori &amp; Madeline Shir</h2>
-      <p data-tenant="description">Ori and Madeline Shir combine their individual interests and skills into a collaborative glass art practice &mdash; from furnace glassblowing and flamework to fusing and coldwork. Every piece highlights the beauty of connections within the natural world, blending organic forms with vibrant color and meticulous craftsmanship.</p>
-      <p data-tenant="location-description">Based in Western Massachusetts, their studio is where sand, soda, and lime are transformed through heat, skill, and creative vision into one-of-a-kind works of art.</p>
+      <p class="section-label" id="aboutSectionLabel">About Us</p>
+      <h2 class="section-title" data-tenant="brand">Our Story</h2>
+      <p data-tenant="description">Welcome to our shop. We create unique, handcrafted products with care and attention to detail.</p>
+      <p data-tenant="location-description" id="aboutLocationDesc"></p>
     </div>
   </div>
 </section>
@@ -416,49 +419,21 @@
 <div class="glass-divider"></div>
 
 <!-- ============ TECHNIQUES ============ -->
-<section class="techniques-section">
+<section class="techniques-section" id="techniquesSection" style="display:none">
   <div class="techniques-header">
-    <p class="section-label fade-up">Our Craft</p>
-    <h2 class="section-title fade-up">Techniques &amp; Materials</h2>
-    <p class="section-subtitle fade-up">Four distinct disciplines, one studio &mdash; each method brings unique character to the finished work.</p>
+    <p class="section-label fade-up" id="techniquesLabel">Our Craft</p>
+    <h2 class="section-title fade-up" id="techniquesTitle">Techniques &amp; Materials</h2>
+    <p class="section-subtitle fade-up" id="techniquesSubtitle"></p>
   </div>
-  <div class="techniques-grid">
-    <div class="technique-card fade-up">
-      <div class="technique-icon">
-        <svg viewBox="0 0 24 24"><path d="M12 2C12 2 8 6 8 10c0 2 1 4 4 6 3-2 4-4 4-6 0-4-4-8-4-8z" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 16v6" stroke-linecap="round"/><path d="M9 21h6" stroke-linecap="round"/></svg>
-      </div>
-      <h3>Furnace Glassblowing</h3>
-      <p>Molten glass gathered from a 2,100&#176;F furnace is shaped on the blowpipe using centuries-old techniques &mdash; gravity, breath, and hand tools.</p>
-    </div>
-    <div class="technique-card fade-up">
-      <div class="technique-icon">
-        <svg viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke-linecap="round"/></svg>
-      </div>
-      <h3>Flamework</h3>
-      <p>Delicate details and intricate forms created using a torch &mdash; from anatomical hearts to sea creatures &mdash; all crafted from glass rods and tubing.</p>
-    </div>
-    <div class="technique-card fade-up">
-      <div class="technique-icon">
-        <svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="4" rx="1" stroke-linecap="round" stroke-linejoin="round"/><rect x="3" y="10" width="18" height="4" rx="1" stroke-linecap="round" stroke-linejoin="round"/><rect x="3" y="14" width="18" height="4" rx="1" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </div>
-      <h3>Fusing</h3>
-      <p>Layers of glass combined in a kiln, then refined through cutting, grinding, and polishing &mdash; adding texture and precision to every piece.</p>
-    </div>
-    <div class="technique-card fade-up">
-      <div class="technique-icon">
-        <svg viewBox="0 0 24 24"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </div>
-      <h3>Coldwork</h3>
-      <p>Cutting, grinding, and polishing finished pieces to add detail and refine forms after the glass has cooled.</p>
-    </div>
+  <div class="techniques-grid" id="techniquesGrid">
   </div>
 </section>
 
 <!-- ============ STUDIO PHOTO ============ -->
-<section>
+<section id="studioPhotoSection" style="display:none">
   <div class="studio-photo fade-up">
-    <img src="images/madeline-glassblowing.jpg" alt="Madeline at work in the studio" />
-    <p class="caption">Madeline at work in the studio</p>
+    <img id="studioImage" src="" alt="" />
+    <p class="caption" id="studioCaption"></p>
   </div>
 </section>
 
@@ -513,41 +488,7 @@
 <script src="storefront-nav.js"></script>
 <script src="tenant-brand.js?v=2"></script>
 <script>
-  // Firebase — load about images dynamically
-  window.TENANT_READY.then(function() {
-    var app = firebase.initializeApp(TENANT_FIREBASE_CONFIG, 'public-about');
-    var db = app.database();
-
-    db.ref(TENANT_ID + '/public/gallery').orderByChild('order').once('value').then(function(snap) {
-      var data = snap.val();
-      if (!data) return;
-      var aboutImages = Object.values(data)
-        .filter(function(i) { return i.section === 'about' && i.visible !== false; })
-        .sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
-
-      if (aboutImages.length >= 1) {
-        var portraitImg = document.querySelector('.about-image img');
-        if (portraitImg) {
-          portraitImg.src = aboutImages[0].url;
-          portraitImg.alt = aboutImages[0].alt || '';
-        }
-      }
-      if (aboutImages.length >= 2) {
-        var studioImg = document.querySelector('.studio-photo img');
-        if (studioImg) {
-          studioImg.src = aboutImages[1].url;
-          studioImg.alt = aboutImages[1].alt || '';
-        }
-        var studioCaption = document.querySelector('.studio-photo .caption');
-        if (studioCaption && aboutImages[1].caption) {
-          studioCaption.textContent = aboutImages[1].caption;
-        }
-      }
-    }).catch(function() { /* keep hardcoded fallback */ });
-  }).catch(function(err) { console.error('[about] Tenant resolution failed:', err.message); });
-</script>
-<script>
-  // Intersection Observer for scroll animations
+  // Intersection Observer for scroll animations (defined early so Firebase-loaded content can use it)
   const observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
       if (entry.isIntersecting) {
@@ -557,7 +498,91 @@
   }, { threshold: 0.1, rootMargin: '0px 0px -60px 0px' });
 
   document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
+</script>
+<script>
+  // Firebase — load about page content dynamically
+  window.TENANT_READY.then(function() {
+    var app = firebase.initializeApp(TENANT_FIREBASE_CONFIG, 'public-about');
+    var db = app.database();
 
+    // Load about page config (heading, label, techniques)
+    db.ref(TENANT_ID + '/public/config/about').once('value').then(function(snap) {
+      var config = snap.val();
+      if (!config) return;
+
+      // Page header
+      if (config.label) {
+        var labelEl = document.getElementById('aboutLabel');
+        if (labelEl) labelEl.textContent = config.label;
+      }
+      if (config.heading) {
+        var headingEl = document.getElementById('aboutHeading');
+        if (headingEl) headingEl.textContent = config.heading;
+      }
+
+      // About section label
+      if (config.sectionLabel) {
+        var sl = document.getElementById('aboutSectionLabel');
+        if (sl) sl.textContent = config.sectionLabel;
+      }
+
+      // Techniques section
+      if (config.techniques && Array.isArray(config.techniques) && config.techniques.length > 0) {
+        var section = document.getElementById('techniquesSection');
+        if (config.techniquesLabel) document.getElementById('techniquesLabel').textContent = config.techniquesLabel;
+        if (config.techniquesTitle) document.getElementById('techniquesTitle').textContent = config.techniquesTitle;
+        if (config.techniquesSubtitle) document.getElementById('techniquesSubtitle').textContent = config.techniquesSubtitle;
+
+        var grid = document.getElementById('techniquesGrid');
+        var defaultIcon = '<svg viewBox="0 0 24 24"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        var html = '';
+        config.techniques.forEach(function(t) {
+          html += '<div class="technique-card fade-up">';
+          html += '<div class="technique-icon">' + (t.icon || defaultIcon) + '</div>';
+          html += '<h3>' + (t.title || '') + '</h3>';
+          html += '<p>' + (t.description || '') + '</p>';
+          html += '</div>';
+        });
+        grid.innerHTML = html;
+        section.style.display = '';
+        // Re-observe new fade-up elements
+        grid.querySelectorAll('.fade-up').forEach(function(el) { observer.observe(el); });
+      }
+    }).catch(function() {});
+
+    // Load about images from gallery
+    db.ref(TENANT_ID + '/public/gallery').orderByChild('order').once('value').then(function(snap) {
+      var data = snap.val();
+      if (!data) return;
+      var aboutImages = Object.values(data)
+        .filter(function(i) { return i.section === 'about' && i.visible !== false; })
+        .sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
+
+      if (aboutImages.length >= 1) {
+        var placeholder = document.getElementById('aboutImagePlaceholder');
+        var img = document.getElementById('aboutImage');
+        if (img) {
+          img.src = aboutImages[0].url;
+          img.alt = aboutImages[0].alt || '';
+          img.style.display = '';
+          if (placeholder) placeholder.style.display = 'none';
+        }
+      }
+      if (aboutImages.length >= 2) {
+        var studioSection = document.getElementById('studioPhotoSection');
+        var studioImg = document.getElementById('studioImage');
+        if (studioImg) {
+          studioImg.src = aboutImages[1].url;
+          studioImg.alt = aboutImages[1].alt || '';
+          if (studioSection) studioSection.style.display = '';
+        }
+        var studioCaption = document.getElementById('studioCaption');
+        if (studioCaption && aboutImages[1].caption) {
+          studioCaption.textContent = aboutImages[1].caption;
+        }
+      }
+    }).catch(function() {});
+  }).catch(function(err) { console.error('[about] Tenant resolution failed:', err.message); });
 </script>
 
 <!-- ============ ANALYTICS TRACKING ============ -->
