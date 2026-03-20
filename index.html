@@ -916,7 +916,7 @@ setTimeout(function() { document.body.style.opacity = '1'; }, 3000);
 <button id="themeToggle" onclick="toggleMastTheme()" title="Toggle dark mode" style="position:fixed;top:12px;right:12px;z-index:9999;width:36px;height:36px;border-radius:50%;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:16px;box-shadow:var(--shadow);color:var(--text);display:flex;align-items:center;justify-content:center;padding:0;"></button>
 
 <!-- ============ NAV ============ -->
-<div class="free-ship-banner">Free Shipping on Orders $100+</div>
+<div class="free-ship-banner" id="freeShipBanner" style="display:none;"></div>
 <nav id="mainNav" data-nav-transparent></nav>
 <div class="nav-mobile-menu" id="mobileMenu"></div>
 
@@ -1444,6 +1444,17 @@ window.TENANT_READY.then(function() {
       }
     }
   }).catch(function() { /* no about config — use defaults */ });
+
+  // ---- FREE SHIPPING BANNER (from config) ----
+  db.ref(TENANT_ID + '/public/config/homepage/banner').once('value').then(function(snap) {
+    var data = snap.val();
+    if (!data || !data.text) return;
+    var banner = document.getElementById('freeShipBanner');
+    if (banner) {
+      banner.textContent = data.text;
+      banner.style.display = '';
+    }
+  }).catch(function() { /* no banner config — stays hidden */ });
 
   // ---- GALLERY SECTION CONFIG (custom heading) ----
   db.ref(TENANT_ID + '/public/config/homepage/gallery').once('value').then(function(snap) {
