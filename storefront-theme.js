@@ -155,7 +155,8 @@
     window.TENANT_READY.then(function () {
       if (!TENANT_ID || !TENANT_FIREBASE_CONFIG || !TENANT_FIREBASE_CONFIG.databaseURL) return;
 
-      var url = TENANT_FIREBASE_CONFIG.databaseURL + '/' + TENANT_ID + '/webPresence/config.json';
+      // Read from public/config/theme — anonymously readable per RTDB rules
+      var url = TENANT_FIREBASE_CONFIG.databaseURL + '/' + TENANT_ID + '/public/config/theme.json';
 
       fetch(url)
         .then(function (resp) {
