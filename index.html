@@ -20,7 +20,7 @@
     align-items: center;
     justify-content: center;
     overflow: hidden;
-    background: #0a0a0a;
+    background: linear-gradient(135deg, var(--charcoal, #1a1a2e) 0%, var(--primary, #c4853c) 100%);
   }
 
   /* Video background layer */
@@ -922,16 +922,9 @@ setTimeout(function() { document.body.style.opacity = '1'; }, 3000);
 
 <!-- ============ HERO — VIDEO BACKGROUND ============ -->
 <section class="hero">
-  <!-- 
-    VIDEO BACKGROUND
-    Replace the src below with the actual glassblowing video file.
-    The current site uses: /uploads/b/37080241-.../2c3c34edcf284c89b4dc0f96ed1c1a70_238.mp4
-    For production, host the video or use their own file.
-  -->
   <div class="hero-video-wrap">
     <video autoplay muted loop playsinline id="heroVideo">
-      <!-- PLACEHOLDER VIDEO: Replace with tenant-specific footage for production -->
-      <source src="https://assets.mixkit.co/videos/20977/20977-720.mp4" type="video/mp4">
+      <!-- Video source loaded dynamically from gallery hero items -->
     </video>
   </div>
 
@@ -949,10 +942,10 @@ setTimeout(function() { document.body.style.opacity = '1'; }, 3000);
     </div>
     <p class="hero-tagline" data-tenant="tagline"></p>
     <h1 data-tenant="brand">Welcome</h1>
-    <p class="hero-sub" data-tenant="tagline"></p>
+    <p class="hero-sub" data-tenant="description"></p>
     <div class="hero-cta">
-      <a href="#gallery" class="btn btn-primary">Explore Our Work</a>
-      <a href="#events" class="btn btn-outline">Upcoming Events</a>
+      <a href="shop.html" class="btn btn-primary">Shop Now</a>
+      <a href="#about" class="btn btn-outline">Learn More</a>
     </div>
   </div>
 
@@ -969,23 +962,11 @@ setTimeout(function() { document.body.style.opacity = '1'; }, 3000);
       <img src="" alt="" data-tenant-alt="brand" style="display:none;" />
     </div>
     <div class="about-text fade-up">
-      <p class="section-label">Our Story</p>
-      <h2 class="section-title">Two Artists, One Vision</h2>
+      <p class="section-label" id="aboutLabel">Our Story</p>
+      <h2 class="section-title" id="aboutTitle" data-tenant="brand"></h2>
       <p class="section-subtitle" data-tenant="description"></p>
-      <p class="section-subtitle" style="margin-top:1rem;">Every piece highlights the beauty of connections within the natural world, blending organic forms with vibrant color and meticulous craftsmanship.</p>
-      <div class="about-stats">
-        <div>
-          <div class="stat-number">5★</div>
-          <div class="stat-label">Customer Rating</div>
-        </div>
-        <div>
-          <div class="stat-number">4</div>
-          <div class="stat-label">Glass Techniques</div>
-        </div>
-        <div>
-          <div class="stat-number">W. Mass</div>
-          <div class="stat-label">Based In</div>
-        </div>
+      <div class="about-stats" id="aboutStats" style="display:none;">
+        <!-- Stats populated dynamically from public/config/homepage/about/stats -->
       </div>
     </div>
   </div>
@@ -996,130 +977,58 @@ setTimeout(function() { document.body.style.opacity = '1'; }, 3000);
 <!-- ============ GALLERY ============ -->
 <section class="gallery-section" id="gallery">
   <div class="gallery-header fade-up">
-    <p class="section-label">Our Creations</p>
-    <h2 class="section-title">From Furnace to Finished</h2>
-    <p class="section-subtitle">Each piece is shaped by hand — no two are ever alike.</p>
+    <p class="section-label" id="galleryLabel">Our Work</p>
+    <h2 class="section-title" id="galleryTitle">Gallery</h2>
+    <p class="section-subtitle" id="gallerySubtitle">A selection of our latest creations.</p>
   </div>
-  <div class="gallery-grid">
-    <!-- These are placeholder images — replace with actual product photos -->
-    <div class="gallery-item fade-up">
-      <img src="images/octopus-figurine.jpeg" alt="Handblown Glass Octopus Figurine" />
-      <span class="caption">Featured Work</span>
-    </div>
-    <div class="gallery-item fade-up">
-      <img src="images/sea-turtle-pendant.jpeg" alt="Glass Sea Turtle Pendant" />
-      <span class="caption">Glass Jewelry</span>
-    </div>
-    <div class="gallery-item fade-up">
-      <img src="" alt="" data-tenant-alt="brand" style="display:none;" />
-      <span class="caption">In the Studio</span>
-    </div>
-    <div class="gallery-item fade-up">
-      <img src="images/handblown-cups.jpeg" alt="Handblown Glass Drinkware" />
-      <span class="caption">Drinkware Collection</span>
-    </div>
-    <div class="gallery-item fade-up">
-      <img src="images/glass-lotus.jpeg" alt="Glass Lotus Sculpture" />
-      <span class="caption">Sculptural Art</span>
-    </div>
-    <div class="gallery-item fade-up">
-      <img src="images/flower-vases.jpeg" alt="Handblown Glass Vases with Flowers" />
-      <span class="caption">Vases &amp; Flowers</span>
+  <div class="gallery-grid" id="galleryGrid">
+    <!-- Gallery loaded dynamically from Firebase. Placeholder shown until data arrives. -->
+    <div class="gallery-placeholder fade-up" style="grid-column:1/-1;min-height:300px;">
+      <div>
+        <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+        <p style="margin-top:1rem;">Gallery images will appear here</p>
+      </div>
     </div>
   </div>
 </section>
 
 <!-- ============ EVENTS ============ -->
-<section id="events">
+<section id="events" style="display:none;">
   <div class="events-section">
     <div class="events-header fade-up">
       <div>
         <p class="section-label">Where to Find Us</p>
-        <h2 class="section-title">2026 Events &amp; Shows</h2>
+        <h2 class="section-title">Upcoming Events</h2>
       </div>
       <a href="schedule.html" class="btn btn-primary" style="background:var(--charcoal);border-color:var(--charcoal);">Full Schedule</a>
     </div>
     <div class="events-list">
-      <div class="event-card fade-up">
-        <div class="event-date">
-          <div class="event-month">Mar</div>
-          <div class="event-day">15</div>
-        </div>
-        <div class="event-info">
-          <h3>Northampton Spring Arts Festival</h3>
-          <p>Live demos, new spring collection debut, and custom commissions</p>
-        </div>
-        <div class="event-location">Northampton, MA</div>
-      </div>
-      <div class="event-card fade-up">
-        <div class="event-date">
-          <div class="event-month">Apr</div>
-          <div class="event-day">05</div>
-        </div>
-        <div class="event-info">
-          <h3>Greenfield Makers Market</h3>
-          <p>Monthly market featuring local artisans and handmade goods</p>
-        </div>
-        <div class="event-location">Greenfield, MA</div>
-      </div>
-      <div class="event-card fade-up">
-        <div class="event-date">
-          <div class="event-month">May</div>
-          <div class="event-day">22</div>
-        </div>
-        <div class="event-info">
-          <h3>Paradise City Arts Festival</h3>
-          <p>Three-day juried fine art and craft show on the fairgrounds</p>
-        </div>
-        <div class="event-location">Northampton, MA</div>
-      </div>
+      <!-- Events loaded dynamically from Firebase -->
     </div>
   </div>
 </section>
 
 <!-- ============ TESTIMONIALS ============ -->
-<section class="testimonials-section" id="testimonials">
+<section class="testimonials-section" id="testimonials" style="display:none;">
   <div class="testimonials-container fade-up">
     <p class="section-label">What People Say</p>
-    <h2 class="section-title" style="color:#fff;">Loved by Collectors</h2>
-    <div class="testimonial-stars">★ ★ ★ ★ ★</div>
-    <div class="testimonial-quote">
-      You have truly perfected your craft and I am so happy to see you making a living from something you love. The work is absolutely gorgeous — perfect details and beautifully made.
-    </div>
-    <div class="testimonial-author">— Chelsea &amp; customers via Etsy</div>
+    <h2 class="section-title" style="color:#fff;">Customer Reviews</h2>
+    <div class="testimonial-stars" id="testimonialStars"></div>
+    <div class="testimonial-quote" id="testimonialQuote"></div>
+    <div class="testimonial-author" id="testimonialAuthor"></div>
   </div>
 </section>
 
 <!-- ============ PROCESS ============ -->
-<section id="process">
+<section id="process" style="display:none;">
   <div class="process-section">
     <div class="process-header fade-up">
-      <p class="section-label">How We Work</p>
-      <h2 class="section-title">From Raw Material to Art</h2>
-      <p class="section-subtitle">Every piece begins with sand, soda, and lime — transformed through heat, skill, and creative vision.</p>
+      <p class="section-label" id="processLabel">How We Work</p>
+      <h2 class="section-title" id="processTitle">Our Process</h2>
+      <p class="section-subtitle" id="processSubtitle"></p>
     </div>
-    <div class="process-grid">
-      <div class="process-card fade-up">
-        <div class="process-icon">
-          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 6v6l4 2" stroke-linecap="round"/></svg>
-        </div>
-        <h3>Furnace Glass</h3>
-        <p>Molten glass gathered from a 2,100°F furnace is shaped on the blowpipe using centuries-old techniques — gravity, breath, and hand tools.</p>
-      </div>
-      <div class="process-card fade-up">
-        <div class="process-icon">
-          <svg viewBox="0 0 24 24"><path d="M9.663 17h4.674M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </div>
-        <h3>Flamework</h3>
-        <p>Delicate details and intricate forms created using a torch — from anatomical hearts to sea creatures — all crafted from glass rods and tubing.</p>
-      </div>
-      <div class="process-card fade-up">
-        <div class="process-icon">
-          <svg viewBox="0 0 24 24"><path d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h14a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6z" stroke-linecap="round"/></svg>
-        </div>
-        <h3>Fusing &amp; Coldwork</h3>
-        <p>Layers of glass combined in a kiln, then refined through cutting, grinding, and polishing — adding texture and precision to every piece.</p>
-      </div>
+    <div class="process-grid" id="processGrid">
+      <!-- Process cards loaded dynamically from Firebase -->
     </div>
   </div>
 </section>
@@ -1446,8 +1355,108 @@ window.TENANT_READY.then(function() {
       html += '</div>';
     });
     list.innerHTML = html;
+    // Show events section now that we have data
+    var eventsSection = document.getElementById('events');
+    if (eventsSection) eventsSection.style.display = '';
     });
-  }).catch(function() { /* keep hardcoded fallback */ });
+  }).catch(function() { /* no events data — section stays hidden */ });
+
+  // ---- TESTIMONIALS (load from Firebase or keep hidden) ----
+  db.ref(TENANT_ID + '/public/testimonials').orderByChild('order').limitToLast(10).once('value').then(function(snap) {
+    var data = snap.val();
+    if (!data) return;
+    var testimonials = Object.values(data).filter(function(t) { return t.visible !== false && t.quote; });
+    if (testimonials.length === 0) return;
+    testimonials.sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
+
+    // Show first testimonial (or random)
+    var t = testimonials[Math.floor(Math.random() * testimonials.length)];
+    var starsEl = document.getElementById('testimonialStars');
+    var quoteEl = document.getElementById('testimonialQuote');
+    var authorEl = document.getElementById('testimonialAuthor');
+
+    if (starsEl && t.rating) {
+      starsEl.textContent = '★ '.repeat(Math.min(t.rating, 5)).trim();
+    }
+    if (quoteEl) quoteEl.textContent = t.quote;
+    if (authorEl) authorEl.textContent = t.author ? ('— ' + t.author) : '';
+
+    var section = document.getElementById('testimonials');
+    if (section) section.style.display = '';
+  }).catch(function() { /* no testimonials — section stays hidden */ });
+
+  // ---- PROCESS (load from Firebase or keep hidden) ----
+  db.ref(TENANT_ID + '/public/config/homepage/process').once('value').then(function(snap) {
+    var data = snap.val();
+    if (!data || !data.cards || data.cards.length === 0) return;
+
+    var titleEl = document.getElementById('processTitle');
+    var subtitleEl = document.getElementById('processSubtitle');
+    var labelEl = document.getElementById('processLabel');
+    var grid = document.getElementById('processGrid');
+
+    if (data.label && labelEl) labelEl.textContent = data.label;
+    if (data.title && titleEl) titleEl.textContent = data.title;
+    if (data.subtitle && subtitleEl) subtitleEl.textContent = data.subtitle;
+
+    if (grid) {
+      var defaultIcons = [
+        '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 6v6l4 2" stroke-linecap="round"/></svg>',
+        '<svg viewBox="0 0 24 24"><path d="M9.663 17h4.674M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+        '<svg viewBox="0 0 24 24"><path d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h14a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6z" stroke-linecap="round"/></svg>'
+      ];
+      var html = '';
+      data.cards.forEach(function(card, idx) {
+        html += '<div class="process-card fade-up" style="opacity:1;transform:translateY(0)">';
+        html += '<div class="process-icon">' + (card.icon || defaultIcons[idx % defaultIcons.length]) + '</div>';
+        html += '<h3>' + (card.title || '') + '</h3>';
+        html += '<p>' + (card.description || '') + '</p>';
+        html += '</div>';
+      });
+      grid.innerHTML = html;
+    }
+
+    var section = document.getElementById('process');
+    if (section) section.style.display = '';
+  }).catch(function() { /* no process config — section stays hidden */ });
+
+  // ---- ABOUT SECTION CONFIG (stats, custom heading) ----
+  db.ref(TENANT_ID + '/public/config/homepage/about').once('value').then(function(snap) {
+    var data = snap.val();
+    if (!data) return;
+
+    var titleEl = document.getElementById('aboutTitle');
+    var labelEl = document.getElementById('aboutLabel');
+    if (data.title && titleEl) { titleEl.textContent = data.title; titleEl.removeAttribute('data-tenant'); }
+    if (data.label && labelEl) labelEl.textContent = data.label;
+
+    // Stats
+    if (data.stats && data.stats.length > 0) {
+      var statsEl = document.getElementById('aboutStats');
+      if (statsEl) {
+        var html = '';
+        data.stats.forEach(function(stat) {
+          html += '<div><div class="stat-number">' + (stat.value || '') + '</div>';
+          html += '<div class="stat-label">' + (stat.label || '') + '</div></div>';
+        });
+        statsEl.innerHTML = html;
+        statsEl.style.display = '';
+      }
+    }
+  }).catch(function() { /* no about config — use defaults */ });
+
+  // ---- GALLERY SECTION CONFIG (custom heading) ----
+  db.ref(TENANT_ID + '/public/config/homepage/gallery').once('value').then(function(snap) {
+    var data = snap.val();
+    if (!data) return;
+    var titleEl = document.getElementById('galleryTitle');
+    var subtitleEl = document.getElementById('gallerySubtitle');
+    var labelEl = document.getElementById('galleryLabel');
+    if (data.label && labelEl) labelEl.textContent = data.label;
+    if (data.title && titleEl) titleEl.textContent = data.title;
+    if (data.subtitle && subtitleEl) subtitleEl.textContent = data.subtitle;
+  }).catch(function() { /* use defaults */ });
+
 }).catch(function(err) { console.error('[index] Tenant resolution failed:', err.message); });
 </script>
 
