@@ -1,0 +1,235 @@
+/**
+ * Storefront Nav — Dynamic Navigation Builder
+ *
+ * Loaded after storefront-theme.js, before tenant-brand.js.
+ * Reads nav config from {TENANT_ID}/public/config/nav via Firebase RTDB REST API.
+ * Builds <nav> and mobile menu dynamically, supporting section show/hide.
+ *
+ * HTML pages provide empty placeholders:
+ *   <nav id="mainNav"></nav>
+ *   <div class="nav-mobile-menu" id="mobileMenu"></div>
+ *
+ * Pages that want a transparent nav (homepage, blog hero pages) add:
+ *   <nav id="mainNav" data-nav-transparent></nav>
+ *
+ * Falls back to default nav structure if no config exists.
+ * Dispatches 'storefront-nav-ready' event when nav is built.
+ */
+
+(function () {
+  'use strict';
+
+  // Default nav sections when no config exists in Firebase
+  var DEFAULT_SECTIONS = {
+    shop:       { label: 'Shop',        href: 'shop.html',       enabled: true,  highlight: true, order: 1 },
+    blog:       { label: 'From the Studio', href: 'blog/',        enabled: true,  order: 2 },
+    about:      { label: 'About',       href: 'about.html',      enabled: true,  order: 3 },
+    commission: { label: 'Commissions', href: 'commission.html',  enabled: false, order: 4 },
+    schedule:   { label: 'Schedule',    href: 'schedule.html',    enabled: false, order: 5 },
+    orders:     { label: 'Orders',      href: 'orders.html',      enabled: false, order: 6 },
+    wholesale:  { label: 'Wholesale',   href: 'wholesale.html',   enabled: false, order: 7 }
+  };
+
+  /**
+   * Detect the base path for relative URLs.
+   * Pages in subdirectories (blog/, events/) need ../ prefix.
+   */
+  function getBasePath() {
+    var path = window.location.pathname;
+    // Remove trailing filename if present
+    var dir = path.substring(0, path.lastIndexOf('/') + 1);
+    // Count depth: root is /, one-level subdir is /blog/, etc.
+    var parts = dir.split('/').filter(Boolean);
+    if (parts.length === 0) return '';
+    // Build relative path back to root
+    var prefix = '';
+    for (var i = 0; i < parts.length; i++) prefix += '../';
+    return prefix;
+  }
+
+  /**
+   * Detect if current page is the homepage.
+   */
+  function isHomepage() {
+    var path = window.location.pathname;
+    return path === '/' || path === '/index.html';
+  }
+
+  /**
+   * Convert Firebase sections object to sorted array of enabled sections.
+   */
+  function toSortedArray(sections) {
+    var result = [];
+    if (!sections) return result;
+
+    // Handle both object and array formats
+    if (Array.isArray(sections)) {
+      for (var i = 0; i < sections.length; i++) {
+        if (sections[i] && sections[i].enabled) result.push(sections[i]);
+      }
+    } else {
+      var keys = Object.keys(sections);
+      for (var j = 0; j < keys.length; j++) {
+        var s = sections[keys[j]];
+        if (s && s.enabled) {
+          s.key = s.key || keys[j];
+          result.push(s);
+        }
+      }
+    }
+
+    result.sort(function (a, b) { return (a.order || 99) - (b.order || 99); });
+    return result;
+  }
+
+  /**
+   * Build the nav and mobile menu HTML, insert into DOM, wire up behaviors.
+   */
+  function buildNav(sections, config) {
+    var nav = document.getElementById('mainNav');
+    var mobileMenu = document.getElementById('mobileMenu');
+    if (!nav) return;
+
+    var basePath = getBasePath();
+    var homepage = isHomepage();
+    var showSignIn = (config && config.showSignIn === false) ? false : true;
+    var logoUrl = (config && config.logoUrl) || (basePath + 'favicon.svg');
+    var brandName = (window.TENANT_BRAND && window.TENANT_BRAND.name) || 'My Shop';
+
+    // Transparent nav — either data attribute on the element or homepage
+    if (nav.hasAttribute('data-nav-transparent') || homepage) {
+      nav.classList.add('nav-transparent');
+    }
+
+    var sorted = toSortedArray(sections);
+    var homeHref = homepage ? '#' : (basePath + 'index.html');
+
+    // ── Desktop nav ──
+    var html = '';
+    html += '<a href="' + homeHref + '" class="nav-logo">';
+    html += '<img src="' + logoUrl + '" data-tenant-alt="brand" alt="' + esc(brandName) + '">';
+    html += '</a>';
+    html += '<ul class="nav-links">';
+    html += '<li><a href="' + homeHref + '">Home</a></li>';
+    for (var i = 0; i < sorted.length; i++) {
+      var s = sorted[i];
+      var href = basePath + s.href;
+      var cls = s.highlight ? ' class="nav-shop"' : '';
+      html += '<li><a href="' + href + '"' + cls + '>' + esc(s.label) + '</a></li>';
+    }
+    if (showSignIn) {
+      html += '<li><a href="#" onclick="event.preventDefault(); siteSignIn();">Sign In</a></li>';
+    }
+    html += '</ul>';
+    html += '<button class="nav-toggle" aria-label="Menu"><span></span><span></span><span></span></button>';
+    nav.innerHTML = html;
+
+    // ── Mobile menu ──
+    if (mobileMenu) {
+      var mhtml = '';
+      mhtml += '<a href="' + homeHref + '" onclick="closeMobileMenu()">Home</a>';
+      if (showSignIn) {
+        mhtml += '<a href="#" onclick="event.preventDefault(); siteSignIn(); closeMobileMenu();">Sign In</a>';
+      }
+      for (var j = 0; j < sorted.length; j++) {
+        var ms = sorted[j];
+        var mhref = basePath + ms.href;
+        var mcls = ms.highlight ? ' class="btn-shop"' : '';
+        mhtml += '<a href="' + mhref + '"' + mcls + ' onclick="closeMobileMenu()">' + esc(ms.label) + '</a>';
+      }
+      mobileMenu.innerHTML = mhtml;
+    }
+
+    setupMobileToggle();
+    setupScrollBehavior(nav);
+
+    window.dispatchEvent(new CustomEvent('storefront-nav-ready'));
+  }
+
+  /**
+   * Minimal HTML escaping for user-provided label text.
+   */
+  function esc(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  /**
+   * Wire up hamburger toggle and mobile menu close behaviors.
+   */
+  function setupMobileToggle() {
+    var toggle = document.querySelector('.nav-toggle');
+    var menu = document.getElementById('mobileMenu');
+    if (!toggle || !menu) return;
+
+    window.closeMobileMenu = function () {
+      menu.classList.remove('active');
+      toggle.classList.remove('active');
+    };
+
+    toggle.addEventListener('click', function () {
+      this.classList.toggle('active');
+      menu.classList.toggle('active');
+    });
+
+    window.addEventListener('resize', function () {
+      if (window.innerWidth > 768) {
+        window.closeMobileMenu();
+      }
+    });
+  }
+
+  /**
+   * Shrink nav on scroll. Transparent navs get a dark background when scrolled.
+   */
+  function setupScrollBehavior(nav) {
+    window.addEventListener('scroll', function () {
+      nav.classList.toggle('scrolled', window.scrollY > 80);
+    });
+  }
+
+  /**
+   * Main init — wait for TENANT_READY, fetch nav config, build nav.
+   */
+  function init() {
+    // Ensure DOM elements exist
+    var domReady = new Promise(function (resolve) {
+      if (document.readyState !== 'loading') resolve();
+      else document.addEventListener('DOMContentLoaded', resolve);
+    });
+
+    if (!window.TENANT_READY) {
+      domReady.then(function () { buildNav(DEFAULT_SECTIONS, {}); });
+      return;
+    }
+
+    Promise.all([window.TENANT_READY, domReady]).then(function () {
+      if (!window.TENANT_ID || !window.TENANT_FIREBASE_CONFIG || !window.TENANT_FIREBASE_CONFIG.databaseURL) {
+        buildNav(DEFAULT_SECTIONS, {});
+        return;
+      }
+
+      var url = window.TENANT_FIREBASE_CONFIG.databaseURL + '/' + window.TENANT_ID + '/public/config/nav.json';
+
+      fetch(url)
+        .then(function (resp) {
+          if (!resp.ok) return null;
+          return resp.json();
+        })
+        .then(function (config) {
+          if (config && config.sections) {
+            buildNav(config.sections, config);
+          } else {
+            buildNav(DEFAULT_SECTIONS, config || {});
+          }
+        })
+        .catch(function (err) {
+          console.warn('[storefront-nav] Failed to load nav config:', err.message);
+          buildNav(DEFAULT_SECTIONS, {});
+        });
+    });
+  }
+
+  init();
+
+})();

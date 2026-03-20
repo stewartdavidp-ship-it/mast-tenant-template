@@ -33,6 +33,10 @@
       fireAuth = fireApp.auth();
       fireAuth.onAuthStateChanged(onAuthChanged);
     }
+    // Re-sync auth UI when dynamic nav is built (may arrive after onAuthStateChanged)
+    window.addEventListener('storefront-nav-ready', function () {
+      if (currentUser) updateNavAuth(currentUser);
+    });
   }
 
   // ── Cart State ──
