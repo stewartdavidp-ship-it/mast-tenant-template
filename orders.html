@@ -5,36 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Orders &mdash; My Shop</title><!-- TENANT: brand -->
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="storefront.css">
 <link rel="stylesheet" href="cart.css">
 <link rel="stylesheet" href="checkout.css">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <style>
-  :root {
-    --amber: #C4853C;
-    --amber-light: #E8B679;
-    --amber-glow: #F5D5A8;
-    --teal: #2A7C6F;
-    --teal-deep: #1B5C52;
-    --teal-light: #A8D5CE;
-    --cream: #FAF6F0;
-    --cream-dark: #F0E8DB;
-    --charcoal: #1A1A1A;
-    --warm-gray: #6B6560;
-    --warm-gray-light: #9B958E;
-    --glass-gradient: linear-gradient(135deg, #C4853C 0%, #E8B679 30%, #A8D5CE 70%, #2A7C6F 100%);
-  }
-
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  html { scroll-behavior: smooth; }
-
-  body {
-    font-family: 'DM Sans', sans-serif;
-    color: var(--charcoal);
-    background: var(--cream);
-    overflow-x: hidden;
-    font-weight: 300;
-  }
-
   /* ========= NAV ========= */
   nav {
     position: fixed;
@@ -973,6 +948,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="storefront-tenant.js"></script>
+<script src="storefront-theme.js"></script>
 <script src="tenant-brand.js?v=2"></script>
 <script>
 // ============ ORDERS PAGE LOGIC ============

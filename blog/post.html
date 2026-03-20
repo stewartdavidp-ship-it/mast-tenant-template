@@ -7,23 +7,8 @@
   <title>My Shop Blog</title><!-- TENANT: brand -->
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Cormorant+Garamond:wght@300;400;500;600&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link rel="icon" type="image/svg+xml" href="../favicon.svg">
+  <link rel="stylesheet" href="../storefront.css">
   <style>
-    :root {
-      --amber: #C4853C;
-      --amber-light: #E8B679;
-      --teal: #4A90A4;
-      --cream: #F5F0EB;
-      --charcoal: #1A1A1A;
-    }
-
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: 'DM Sans', sans-serif;
-      color: var(--charcoal);
-      background: var(--cream);
-      min-height: 100vh;
-    }
-
     /* ===== NAV ===== */
     nav {
       position: fixed;
@@ -422,6 +407,7 @@ window.addEventListener('resize', function() {
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
 <script src="../storefront-tenant.js"></script>
+<script src="../storefront-theme.js"></script>
 <script src="../tenant-brand.js?v=2"></script>
 <script>
 window.TENANT_READY.then(function() {
