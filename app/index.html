@@ -11909,20 +11909,51 @@ async function wizardAnalyzeSite() {
   var url = document.getElementById('wizardSiteUrl').value.trim();
   if (!url) { showToast('Please enter a URL.', true); return; }
 
-  // Normalize and validate URL
+  // Normalize and validate URL with "did you mean?" suggestions
   if (!url.match(/^https?:\/\//i)) url = 'https://' + url;
+  var corrected = url;
+  var corrections = [];
   try {
-    var parsed = new URL(url);
-    // Check for common typos: comma instead of dot in domain
-    if (parsed.hostname.indexOf(',') >= 0) {
-      url = url.replace(/,/g, '.');
-      parsed = new URL(url);
-      document.getElementById('wizardSiteUrl').value = url;
+    // Fix commas → dots
+    if (corrected.indexOf(',') >= 0) {
+      corrected = corrected.replace(/,/g, '.');
+      corrections.push('comma \u2192 dot');
     }
+    // Fix spaces in URL
+    if (corrected.indexOf(' ') >= 0) {
+      corrected = corrected.replace(/ /g, '');
+      corrections.push('removed spaces');
+    }
+    // Fix double dots (e.g., shirglassworks..com)
+    corrected = corrected.replace(/\.{2,}/g, '.');
+    // Fix missing dot before common TLDs (e.g., shirglassworkscom → shirglassworks.com)
+    var tldMatch = corrected.match(/([a-z0-9])(?:https?:\/\/)?([a-z0-9]+)(com|net|org|io|co|shop|store|art|studio)$/i);
+    if (tldMatch && corrected.indexOf('.' + tldMatch[3]) < 0) {
+      corrected = corrected.replace(new RegExp(tldMatch[3] + '$'), '.' + tldMatch[3]);
+      corrections.push('added dot before .' + tldMatch[3]);
+    }
+
+    var parsed = new URL(corrected);
+
     // Must have a valid TLD (at least one dot in hostname)
     if (parsed.hostname.indexOf('.') < 0) {
       showToast('That doesn\'t look like a valid URL. Check for typos.', true); return;
     }
+
+    // If we made corrections, show "did you mean?" instead of auto-submitting
+    if (corrections.length > 0 && corrected !== url) {
+      var statusEl = document.getElementById('wizardAnalysisStatus');
+      statusEl.innerHTML = '<div style="background:var(--cream,#FAF6F0);border:1px solid var(--amber,#C4853C);border-radius:8px;padding:16px;margin-top:12px;">' +
+        '<p style="margin:0 0 8px;font-weight:600;color:var(--charcoal,#1a1a1a);">Did you mean?</p>' +
+        '<p style="margin:0 0 12px;font-size:0.95rem;color:var(--warm-gray,#6B6560);">We noticed a typo (' + esc(corrections.join(', ')) + ')</p>' +
+        '<div style="display:flex;gap:10px;align-items:center;">' +
+        '<code style="flex:1;background:var(--cream-dark,#F0E8DB);padding:8px 12px;border-radius:6px;font-size:0.95rem;">' + esc(corrected) + '</code>' +
+        '<button class="btn btn-primary" onclick="document.getElementById(\'wizardSiteUrl\').value=\'' + corrected.replace(/'/g, "\\'") + '\';document.getElementById(\'wizardAnalysisStatus\').innerHTML=\'\';wizardAnalyzeSite();">Use this</button>' +
+        '</div></div>';
+      return;
+    }
+
+    url = corrected;
   } catch (e) {
     showToast('Please enter a valid URL (e.g., https://mysite.com).', true); return;
   }
