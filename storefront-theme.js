@@ -105,8 +105,11 @@
     var root = document.documentElement;
 
     // Apply explicit color overrides
+    // In dark mode, skip bg/text overrides — let storefront.css dark mode values win
+    var isDark = root.classList.contains('dark') || window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var DARK_MODE_SKIP = isDark ? { bgColor: 1, bgDarkColor: 1, textColor: 1, textMutedColor: 1, textLightColor: 1 } : {};
     Object.keys(COLOR_MAP).forEach(function (key) {
-      if (config[key]) {
+      if (config[key] && !DARK_MODE_SKIP[key]) {
         root.style.setProperty(COLOR_MAP[key], config[key]);
       }
     });
