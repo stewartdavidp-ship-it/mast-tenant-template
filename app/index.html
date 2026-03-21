@@ -11909,6 +11909,24 @@ async function wizardAnalyzeSite() {
   var url = document.getElementById('wizardSiteUrl').value.trim();
   if (!url) { showToast('Please enter a URL.', true); return; }
 
+  // Normalize and validate URL
+  if (!url.match(/^https?:\/\//i)) url = 'https://' + url;
+  try {
+    var parsed = new URL(url);
+    // Check for common typos: comma instead of dot in domain
+    if (parsed.hostname.indexOf(',') >= 0) {
+      url = url.replace(/,/g, '.');
+      parsed = new URL(url);
+      document.getElementById('wizardSiteUrl').value = url;
+    }
+    // Must have a valid TLD (at least one dot in hostname)
+    if (parsed.hostname.indexOf('.') < 0) {
+      showToast('That doesn\'t look like a valid URL. Check for typos.', true); return;
+    }
+  } catch (e) {
+    showToast('Please enter a valid URL (e.g., https://mysite.com).', true); return;
+  }
+
   var statusEl = document.getElementById('wizardAnalysisStatus');
   var summaryEl = document.getElementById('wizardAnalysisSummary');
   var manifestEl = document.getElementById('wizardCrawlManifest');
