@@ -2,7 +2,7 @@
  * Tenant Reusable Camera Capture Component
  *
  * Usage:
- *   var cam = new ShirCamera({
+ *   var cam = new MastCamera({  // (ShirCamera still works as alias)
  *     videoElement: document.getElementById('video'),
  *     onCapture: function(result) { ... },
  *     onError: function(err) { ... }
@@ -21,7 +21,7 @@
   var DEFAULT_JPEG_QUALITY = 0.8;
   var DEFAULT_PREVIEW_QUALITY = 0.85;
 
-  function ShirCamera(opts) {
+  function MastCamera(opts) {
     this.videoElement = opts.videoElement;
     this.onCapture = opts.onCapture || function() {};
     this.onError = opts.onError || function() {};
@@ -34,7 +34,7 @@
     this._capturing = false;
   }
 
-  ShirCamera.prototype.start = function() {
+  MastCamera.prototype.start = function() {
     var self = this;
     var constraints = {
       video: {
@@ -81,7 +81,7 @@
       });
   };
 
-  ShirCamera.prototype.capture = function() {
+  MastCamera.prototype.capture = function() {
     var self = this;
     if (self._capturing) return Promise.reject(new Error('Already capturing'));
 
@@ -129,7 +129,7 @@
     });
   };
 
-  ShirCamera.prototype._compress = function(blob) {
+  MastCamera.prototype._compress = function(blob) {
     var self = this;
     return createImageBitmap(blob).then(function(bitmap) {
       var w = bitmap.width, h = bitmap.height;
@@ -148,7 +148,7 @@
     });
   };
 
-  ShirCamera.prototype.stop = function() {
+  MastCamera.prototype.stop = function() {
     if (this._stream) {
       this._stream.getTracks().forEach(function(t) { t.stop(); });
       this._stream = null;
@@ -158,11 +158,13 @@
     }
   };
 
-  ShirCamera.prototype.isActive = function() {
+  MastCamera.prototype.isActive = function() {
     return !!this._stream;
   };
 
   // Expose globally
-  global.ShirCamera = ShirCamera;
+  global.MastCamera = MastCamera;
+  // Backward compatibility alias
+  global.ShirCamera = MastCamera;
 
 })(window);

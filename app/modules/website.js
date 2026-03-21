@@ -5,11 +5,13 @@
   var websiteConfig = null;
   var importJobs = null;
   var importedProducts = null;
+  var tenantCategories = null; // array of { id, label, wholesaleGroup? }
   var currentSubTab = 'overview';
   var importReviewTab = 'products';
   var importJobsListener = null;
   var cherryPickSelections = {}; // jobId -> { products: {url: bool}, images: {url: bool}, ... }
   var expandedJobId = null; // for import history detail view
+  var editingCategoryIdx = null; // index of category being edited inline
 
   // ── Style definitions ──
   var STYLE_DEFS = [
@@ -112,6 +114,37 @@
     }
   }
 
+  async function loadCategories() {
+    try {
+      var snap = await MastDB._ref('public/config/categories').once('value');
+      var raw = snap.val();
+      tenantCategories = (raw && Array.isArray(raw)) ? raw.filter(function(c) { return c && c.id && c.label; }) : [];
+    } catch (err) {
+      console.warn('[Website] Failed to load categories:', err.message);
+      tenantCategories = [];
+    }
+  }
+
+  async function saveCategories() {
+    try {
+      await MastDB._ref('public/config/categories').set(tenantCategories);
+      // Refresh admin CATEGORIES/SECTIONS/SHOP_SECTION_IDS if loadTenantCategories exists
+      if (typeof loadTenantCategories === 'function') await loadTenantCategories();
+      markUnpublished();
+    } catch (err) {
+      console.warn('[Website] Failed to save categories:', err.message);
+      showToast('Failed to save categories: ' + err.message, true);
+    }
+  }
+
+  function slugify(str) {
+    return String(str).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  }
+
+  function isSlugUnique(slug, excludeIdx) {
+    return !tenantCategories.some(function(c, i) { return i !== excludeIdx && c.id === slug; });
+  }
+
   function startImportJobsListener() {
     if (importJobsListener) return;
     try {
@@ -151,6 +184,7 @@
       await loadWebsiteConfig();
       await loadImportJobs();
       await loadImportedProducts();
+      await loadCategories();
       startImportJobsListener();
       websiteLoaded = true;
     }
@@ -162,6 +196,7 @@
     html += '<button class="view-tab' + (currentSubTab === 'overview' ? ' active' : '') + '" onclick="wpSwitchTab(\'overview\')">Overview</button>';
     html += '<button class="view-tab' + (currentSubTab === 'style' ? ' active' : '') + '" onclick="wpSwitchTab(\'style\')">Style</button>';
     html += '<button class="view-tab' + (currentSubTab === 'sections' ? ' active' : '') + '" onclick="wpSwitchTab(\'sections\')">Sections</button>';
+    html += '<button class="view-tab' + (currentSubTab === 'categories' ? ' active' : '') + '" onclick="wpSwitchTab(\'categories\')">Categories</button>';
     html += '<button class="view-tab' + (currentSubTab === 'import' ? ' active' : '') + '" onclick="wpSwitchTab(\'import\')">Import</button>';
     html += '</div>';
 
@@ -170,6 +205,7 @@
     if (currentSubTab === 'overview') html += renderOverviewTab();
     else if (currentSubTab === 'style') html += renderStyleTab();
     else if (currentSubTab === 'sections') html += renderSectionsTab();
+    else if (currentSubTab === 'categories') html += renderCategoriesTab();
     else if (currentSubTab === 'import') html += renderImportTab();
     html += '</div>';
 
@@ -342,6 +378,93 @@
       html += '<input type="url" value="' + esc(links[p] || '') + '" oninput="wpUpdateSocial(\'' + p + '\', this.value)" placeholder="https://">';
       html += '</div>';
     });
+    return html;
+  }
+
+  // ── Categories Tab ──
+  function renderCategoriesTab() {
+    var cats = tenantCategories || [];
+    var html = '';
+
+    html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">Product categories used for shop filter pills, wholesale grouping, and gallery sections. Drag order is display order.</p>';
+
+    if (cats.length === 0) {
+      html += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">';
+      html += '<div style="font-size:2rem;margin-bottom:12px;">&#128193;</div>';
+      html += '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No categories yet</p>';
+      html += '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Add your first product category below.</p>';
+      html += '</div>';
+    } else {
+      html += '<div id="wpCatList">';
+      cats.forEach(function(cat, idx) {
+        var isEditing = editingCategoryIdx === idx;
+        html += '<div class="wp-cat-row" data-idx="' + idx + '">';
+
+        // Reorder buttons
+        html += '<div class="wp-cat-reorder">';
+        html += '<button class="btn-icon" onclick="wpCatMove(' + idx + ', -1)" title="Move up"' + (idx === 0 ? ' disabled' : '') + '>&#9650;</button>';
+        html += '<button class="btn-icon" onclick="wpCatMove(' + idx + ', 1)" title="Move down"' + (idx === cats.length - 1 ? ' disabled' : '') + '>&#9660;</button>';
+        html += '</div>';
+
+        if (isEditing) {
+          // Edit mode
+          html += '<div class="wp-cat-fields" style="flex:1;">';
+          html += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">';
+          html += '<div class="wp-field-group" style="flex:2;min-width:140px;margin:0;">';
+          html += '<label style="font-size:0.75rem;">Label</label>';
+          html += '<input type="text" id="wpCatEditLabel" value="' + esc(cat.label) + '" style="padding:6px 8px;">';
+          html += '</div>';
+          html += '<div class="wp-field-group" style="flex:1;min-width:100px;margin:0;">';
+          html += '<label style="font-size:0.75rem;">ID (slug)</label>';
+          html += '<input type="text" id="wpCatEditId" value="' + esc(cat.id) + '" style="padding:6px 8px;color:var(--warm-gray);" readonly>';
+          html += '</div>';
+          html += '<div class="wp-field-group" style="flex:1;min-width:140px;margin:0;">';
+          html += '<label style="font-size:0.75rem;">Wholesale Group (optional)</label>';
+          html += '<input type="text" id="wpCatEditWholesale" value="' + esc(cat.wholesaleGroup || '') + '" placeholder="e.g. Decorative" style="padding:6px 8px;">';
+          html += '</div>';
+          html += '</div>';
+          html += '<div style="display:flex;gap:8px;margin-top:8px;">';
+          html += '<button class="btn btn-primary btn-small" onclick="wpCatSaveEdit(' + idx + ')">Save</button>';
+          html += '<button class="btn btn-secondary btn-small" onclick="wpCatCancelEdit()">Cancel</button>';
+          html += '</div>';
+          html += '</div>';
+        } else {
+          // Display mode
+          html += '<div style="flex:1;display:flex;align-items:center;gap:12px;min-width:0;">';
+          html += '<strong style="font-size:0.9rem;">' + esc(cat.label) + '</strong>';
+          html += '<span style="font-size:0.75rem;color:var(--warm-gray);font-family:monospace;">' + esc(cat.id) + '</span>';
+          if (cat.wholesaleGroup) {
+            html += '<span style="font-size:0.7rem;background:var(--charcoal-light, #333);padding:2px 8px;border-radius:4px;color:var(--warm-gray);">wholesale: ' + esc(cat.wholesaleGroup) + '</span>';
+          }
+          html += '</div>';
+          html += '<div style="display:flex;gap:4px;">';
+          html += '<button class="btn-icon" onclick="wpCatEdit(' + idx + ')" title="Edit">&#9998;</button>';
+          html += '<button class="btn-icon" onclick="wpCatDelete(' + idx + ')" title="Delete" style="color:var(--danger);">&#10005;</button>';
+          html += '</div>';
+        }
+
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+
+    // Add new category form
+    html += '<div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--charcoal-light, #333);">';
+    html += '<h4 style="font-size:0.9rem;margin-bottom:8px;">Add Category</h4>';
+    html += '<div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">';
+    html += '<div class="wp-field-group" style="flex:2;min-width:140px;margin:0;">';
+    html += '<label style="font-size:0.75rem;">Label</label>';
+    html += '<input type="text" id="wpCatNewLabel" placeholder="e.g. Drinkware" style="padding:6px 8px;">';
+    html += '</div>';
+    html += '<div class="wp-field-group" style="flex:1;min-width:140px;margin:0;">';
+    html += '<label style="font-size:0.75rem;">Wholesale Group (optional)</label>';
+    html += '<input type="text" id="wpCatNewWholesale" placeholder="e.g. Decorative" style="padding:6px 8px;">';
+    html += '</div>';
+    html += '<button class="btn btn-primary btn-small" onclick="wpCatAdd()" style="height:34px;">Add</button>';
+    html += '</div>';
+    html += '<p id="wpCatAddError" style="font-size:0.8rem;color:var(--danger);margin-top:4px;display:none;"></p>';
+    html += '</div>';
+
     return html;
   }
 
@@ -1302,6 +1425,96 @@
     var days = Math.floor(hours / 24);
     return days + 'd ago';
   }
+
+  // ── Category management handlers ──
+
+  window.wpCatAdd = async function() {
+    var labelEl = document.getElementById('wpCatNewLabel');
+    var wholesaleEl = document.getElementById('wpCatNewWholesale');
+    var errorEl = document.getElementById('wpCatAddError');
+    if (!labelEl) return;
+
+    var label = labelEl.value.trim();
+    if (!label) {
+      if (errorEl) { errorEl.textContent = 'Label is required.'; errorEl.style.display = 'block'; }
+      return;
+    }
+
+    var slug = slugify(label);
+    if (!slug) {
+      if (errorEl) { errorEl.textContent = 'Could not generate a valid ID from that label.'; errorEl.style.display = 'block'; }
+      return;
+    }
+
+    // Ensure uniqueness
+    var baseSlug = slug;
+    var suffix = 2;
+    while (!isSlugUnique(slug, -1)) {
+      slug = baseSlug + '-' + suffix;
+      suffix++;
+    }
+
+    var newCat = { id: slug, label: label };
+    var wholesale = wholesaleEl ? wholesaleEl.value.trim() : '';
+    if (wholesale) newCat.wholesaleGroup = wholesale;
+
+    tenantCategories.push(newCat);
+    await saveCategories();
+    showToast('Category "' + label + '" added.');
+    renderWebsite();
+  };
+
+  window.wpCatEdit = function(idx) {
+    editingCategoryIdx = idx;
+    renderWebsite();
+  };
+
+  window.wpCatCancelEdit = function() {
+    editingCategoryIdx = null;
+    renderWebsite();
+  };
+
+  window.wpCatSaveEdit = async function(idx) {
+    var labelEl = document.getElementById('wpCatEditLabel');
+    var wholesaleEl = document.getElementById('wpCatEditWholesale');
+    if (!labelEl || !tenantCategories[idx]) return;
+
+    var label = labelEl.value.trim();
+    if (!label) { showToast('Label is required.', true); return; }
+
+    tenantCategories[idx].label = label;
+    tenantCategories[idx].wholesaleGroup = wholesaleEl ? wholesaleEl.value.trim() || null : null;
+    // Clean up null wholesaleGroup
+    if (!tenantCategories[idx].wholesaleGroup) delete tenantCategories[idx].wholesaleGroup;
+
+    editingCategoryIdx = null;
+    await saveCategories();
+    showToast('Category updated.');
+    renderWebsite();
+  };
+
+  window.wpCatDelete = async function(idx) {
+    if (!tenantCategories[idx]) return;
+    var label = tenantCategories[idx].label;
+    if (!confirm('Delete category "' + label + '"? Products in this category will need to be recategorized.')) return;
+    tenantCategories.splice(idx, 1);
+    await saveCategories();
+    showToast('Category "' + label + '" deleted.');
+    renderWebsite();
+  };
+
+  window.wpCatMove = async function(idx, direction) {
+    var newIdx = idx + direction;
+    if (newIdx < 0 || newIdx >= tenantCategories.length) return;
+    var temp = tenantCategories[idx];
+    tenantCategories[idx] = tenantCategories[newIdx];
+    tenantCategories[newIdx] = temp;
+    // Update editing index if needed
+    if (editingCategoryIdx === idx) editingCategoryIdx = newIdx;
+    else if (editingCategoryIdx === newIdx) editingCategoryIdx = idx;
+    await saveCategories();
+    renderWebsite();
+  };
 
   function markUnpublished() {
     if (websiteConfig.status === 'published') {

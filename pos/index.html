@@ -640,7 +640,7 @@ function loadProducts() {
 // ============================================================
 function initCamera() {
   var video = document.getElementById('cameraVideo');
-  camera = new ShirCamera({
+  camera = new MastCamera({
     videoElement: video,
     onCapture: handleCapture,
     onError: function(err) {
