@@ -12268,6 +12268,126 @@ var STYLE_TO_TEMPLATE = {
   'minimal-pro':     { templateId: 'the-shop',   schemeId: 'warm-sand', fontPair: 'geometric' }
 };
 
+/**
+ * Client-side white-background detection and removal for logos.
+ * Uses Canvas 2D API with iterative flood-fill from corners.
+ * Returns a Blob (PNG) if white bg detected, or null if no processing needed.
+ */
+function processLogoWhiteBackground(imageUrl) {
+  return new Promise(function(resolve) {
+    if (!imageUrl || !imageUrl.startsWith('http')) { resolve(null); return; }
+    // Skip SVGs
+    if (/\.svg(\?|$)/i.test(imageUrl)) { resolve(null); return; }
+
+    var img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = function() {
+      var canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+
+      var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      var data = imageData.data;
+      var w = canvas.width, h = canvas.height;
+      var NEAR_WHITE = 240;
+
+      // Sample 8 points: 4 corners + 4 edge midpoints
+      var samples = [
+        [0, 0], [w-1, 0], [0, h-1], [w-1, h-1],
+        [Math.floor(w/2), 0], [Math.floor(w/2), h-1],
+        [0, Math.floor(h/2)], [w-1, Math.floor(h/2)]
+      ];
+      var whiteCount = 0;
+      for (var s = 0; s < samples.length; s++) {
+        var idx = (samples[s][1] * w + samples[s][0]) * 4;
+        if (data[idx] > NEAR_WHITE && data[idx+1] > NEAR_WHITE && data[idx+2] > NEAR_WHITE && data[idx+3] > 200) {
+          whiteCount++;
+        }
+      }
+      if (whiteCount < 6) { resolve(null); return; }
+
+      // Iterative flood-fill from corners
+      var visited = new Uint8Array(w * h);
+      var DIST_THRESHOLD = 30;
+
+      function floodFill(sx, sy) {
+        var si = (sy * w + sx) * 4;
+        if (data[si] <= NEAR_WHITE || data[si+1] <= NEAR_WHITE || data[si+2] <= NEAR_WHITE || data[si+3] <= 200) return;
+        var key = sy * w + sx;
+        if (visited[key]) return;
+        visited[key] = 1;
+        var queue = [[sx, sy]];
+        while (queue.length > 0) {
+          var pt = queue.shift();
+          var cx = pt[0], cy = pt[1];
+          var ci = (cy * w + cx) * 4;
+          var cr = data[ci], cg = data[ci+1], cb = data[ci+2];
+          var neighbors = [[cx-1,cy],[cx+1,cy],[cx,cy-1],[cx,cy+1]];
+          for (var n = 0; n < neighbors.length; n++) {
+            var nx = neighbors[n][0], ny = neighbors[n][1];
+            if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
+            var nk = ny * w + nx;
+            if (visited[nk]) continue;
+            var ni = nk * 4;
+            if (data[ni+3] < 10) { visited[nk] = 1; continue; }
+            var dr = cr - data[ni], dg = cg - data[ni+1], db = cb - data[ni+2];
+            if (Math.sqrt(dr*dr + dg*dg + db*db) < DIST_THRESHOLD) {
+              visited[nk] = 1;
+              queue.push([nx, ny]);
+            }
+          }
+        }
+      }
+
+      floodFill(0, 0);
+      floodFill(w-1, 0);
+      floodFill(0, h-1);
+      floodFill(w-1, h-1);
+
+      // Zero out alpha for background pixels
+      var removed = 0;
+      for (var i = 0; i < w * h; i++) {
+        if (visited[i]) { data[i*4+3] = 0; removed++; }
+      }
+      if (removed === 0) { resolve(null); return; }
+
+      ctx.putImageData(imageData, 0, 0);
+      canvas.toBlob(function(blob) { resolve(blob); }, 'image/png');
+    };
+    img.onerror = function() { resolve(null); };
+    img.src = imageUrl;
+  });
+}
+
+/**
+ * Process logo and upload to Firebase Storage if white background detected.
+ * Returns the new URL or the original if no processing needed.
+ */
+async function processAndUploadLogo(logoUrl) {
+  try {
+    var blob = await processLogoWhiteBackground(logoUrl);
+    if (!blob) return logoUrl; // No white bg detected
+
+    // Upload processed PNG to Firebase Storage
+    var tenantId = MastDB.tenantId();
+    var storageBucket = window.TENANT_FIREBASE_CONFIG && window.TENANT_FIREBASE_CONFIG.storageBucket;
+    if (!storageBucket) {
+      console.warn('[processLogo] No storage bucket configured, using original logo');
+      return logoUrl;
+    }
+    var storageRef = firebase.storage().ref(tenantId + '/brand/logo-processed.png');
+    await storageRef.put(blob, { contentType: 'image/png' });
+    var processedUrl = await storageRef.getDownloadURL();
+    console.log('[processLogo] Uploaded processed logo:', processedUrl);
+    return processedUrl;
+  } catch (err) {
+    console.warn('[processLogo] Client-side processing failed, using original:', err.message || err);
+    return logoUrl;
+  }
+}
+
 async function wizardComplete() {
   try {
     // Save brand info from step 2
@@ -12277,6 +12397,11 @@ async function wizardComplete() {
     var primaryColor = document.getElementById('wizardPrimaryColorHex').value.trim() || '#C4853C';
     var accentColor = document.getElementById('wizardAccentColorHex').value.trim() || '#2A7C6F';
     var logoUrl = document.getElementById('wizardLogoUrl').value.trim();
+
+    // Process logo to remove white background before saving
+    if (logoUrl) {
+      logoUrl = await processAndUploadLogo(logoUrl);
+    }
 
     // Save brand config
     var brandUpdate = {
@@ -12289,6 +12414,11 @@ async function wizardComplete() {
     if (bizDesc) brandUpdate.description = bizDesc;
     if (logoUrl) brandUpdate.logoUrl = logoUrl;
     await MastDB.config.ref('brand').update(brandUpdate);
+
+    // Update nav logoUrl with processed URL (may have changed from white-bg removal)
+    if (logoUrl) {
+      await MastDB._ref('public/config/nav/logoUrl').set(logoUrl);
+    }
 
     // Update platform registry
     if (bizName) {
