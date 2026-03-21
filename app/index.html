@@ -15,13 +15,20 @@
   <script src="../storefront-tenant.js?v=1773887711"></script>
   <script src="../tenant-brand.js?v=2"></script>
   <script>
-    // Apply dark mode early (before paint) based on OS preference — prevents flash on login screen.
+    // Apply dark mode SYNCHRONOUSLY before first paint to prevent white/black flash.
+    // Uses documentElement (html) which is available immediately, then also applies to body on DOMContentLoaded.
     // Post-login, loadSettings() overrides this with the user's saved preference.
-    if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      document.addEventListener('DOMContentLoaded', function() { document.body.classList.add('dark-mode'); });
-    }
+    (function() {
+      var isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (isDark) {
+        document.documentElement.classList.add('dark-mode');
+        document.addEventListener('DOMContentLoaded', function() { document.body.classList.add('dark-mode'); });
+      }
+    })();
   </script>
   <style>
+    /* Pre-paint dark mode on html element to prevent flash before body exists */
+    html.dark-mode { background: #1a1a1a; }
     :root {
       --amber: #C4853C;
       --amber-light: #E8B679;
