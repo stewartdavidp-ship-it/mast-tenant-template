@@ -3,6 +3,8 @@
 
   var websiteLoaded = false;
   var websiteConfig = null;
+  var themeConfig = null; // public/config/theme — templateId, colorSchemeId, fontPair, colors
+  var templateManifest = null; // loaded from templates/{templateId}/manifest.json
   var importJobs = null;
   var importedProducts = null;
   var tenantCategories = null; // array of { id, label, wholesaleGroup? }
@@ -12,8 +14,9 @@
   var cherryPickSelections = {}; // jobId -> { products: {url: bool}, images: {url: bool}, ... }
   var expandedJobId = null; // for import history detail view
   var editingCategoryIdx = null; // index of category being edited inline
+  var showCustomColors = false; // toggled when user picks "Custom" in color scheme
 
-  // ── Style definitions ──
+  // ── Fallback style/font/section defs (used when no manifest loaded) ──
   var STYLE_DEFS = [
     { id: 'artisan-warm', name: 'Artisan Warm', icon: '&#127798;', desc: 'Earthy tones, handcrafted feel', font: 'playfair-lato' },
     { id: 'studio-dark', name: 'Studio Dark', icon: '&#127769;', desc: 'Bold contrast, modern gallery', font: 'inter-inter' },
@@ -125,6 +128,63 @@
     }
   }
 
+  async function loadThemeConfig() {
+    try {
+      var snap = await MastDB._ref('public/config/theme').once('value');
+      themeConfig = snap.val() || {};
+    } catch (err) {
+      console.warn('[Website] Failed to load theme config:', err.message);
+      themeConfig = {};
+    }
+    // Also load nav section enabled states for section toggles
+    try {
+      var navSnap = await MastDB._ref('public/config/nav/sections').once('value');
+      themeConfig._navSections = navSnap.val() || {};
+    } catch (err) {
+      themeConfig._navSections = {};
+    }
+  }
+
+  async function loadTemplateManifest() {
+    templateManifest = null;
+    var templateId = themeConfig && themeConfig.templateId;
+    if (!templateId) return;
+
+    try {
+      // Fetch manifest from deployed template files via the public site
+      var tenantId = MastDB.tenantId();
+      var siteUrl = 'https://mast-' + tenantId + '.web.app';
+      var resp = await fetch(siteUrl + '/templates/' + templateId + '/manifest.json');
+      if (resp.ok) {
+        templateManifest = await resp.json();
+      }
+    } catch (err) {
+      console.warn('[Website] Failed to load template manifest:', err.message);
+    }
+
+    // Fallback: try relative path (works in dev/local)
+    if (!templateManifest) {
+      try {
+        var resp2 = await fetch('/templates/' + (themeConfig.templateId) + '/manifest.json');
+        if (resp2.ok) {
+          templateManifest = await resp2.json();
+        }
+      } catch (err2) {
+        console.warn('[Website] Manifest fallback also failed:', err2.message);
+      }
+    }
+
+    // Determine if custom colors are active (no colorSchemeId or colorSchemeId not in manifest)
+    if (templateManifest && themeConfig) {
+      if (!themeConfig.colorSchemeId) {
+        showCustomColors = true;
+      } else {
+        var found = templateManifest.colorSchemes.some(function(s) { return s.id === themeConfig.colorSchemeId; });
+        showCustomColors = !found;
+      }
+    }
+  }
+
   async function saveCategories() {
     try {
       await MastDB._ref('public/config/categories').set(tenantCategories);
@@ -182,6 +242,8 @@
     if (!websiteLoaded) {
       root.innerHTML = '<div class="loading">Loading website settings...</div>';
       await loadWebsiteConfig();
+      await loadThemeConfig();
+      await loadTemplateManifest();
       await loadImportJobs();
       await loadImportedProducts();
       await loadCategories();
@@ -219,9 +281,18 @@
     var status = websiteConfig.status || 'draft';
     var publishedAt = websiteConfig.publishedAt;
     var styleName = 'Not configured';
-    STYLE_DEFS.forEach(function(s) {
-      if (s.id === websiteConfig.style) styleName = s.name;
-    });
+    if (templateManifest) {
+      styleName = templateManifest.name || 'Template';
+      var tc = themeConfig || {};
+      if (tc.colorSchemeId && templateManifest.colorSchemes) {
+        var scheme = templateManifest.colorSchemes.find(function(s) { return s.id === tc.colorSchemeId; });
+        if (scheme) styleName += ' — ' + scheme.name;
+      }
+    } else {
+      STYLE_DEFS.forEach(function(s) {
+        if (s.id === websiteConfig.style) styleName = s.name;
+      });
+    }
 
     var statusBadge = status === 'published'
       ? '<span style="color:var(--teal);font-weight:600;">Published</span>'
@@ -244,6 +315,115 @@
 
   // ── Style Tab ──
   function renderStyleTab() {
+    var html = '';
+
+    // If we have a template manifest, use manifest-driven UI
+    if (templateManifest) {
+      html += renderManifestStyleTab();
+    } else {
+      html += renderFallbackStyleTab();
+    }
+
+    return html;
+  }
+
+  // ── Manifest-driven Style Tab (color schemes, font pairs from manifest) ──
+  function renderManifestStyleTab() {
+    var html = '';
+    var tc = themeConfig || {};
+    var currentSchemeId = tc.colorSchemeId || null;
+
+    // Template name
+    html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:20px;">';
+    html += '<span style="font-size:0.85rem;color:var(--warm-gray);">Template:</span>';
+    html += '<strong style="font-size:0.95rem;">' + esc(templateManifest.name || 'Unknown') + '</strong>';
+    html += '</div>';
+
+    // ── Color Schemes ──
+    html += '<h3 style="font-size:1rem;margin-bottom:12px;">Color Scheme</h3>';
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:8px;">';
+
+    templateManifest.colorSchemes.forEach(function(scheme) {
+      var isActive = !showCustomColors && currentSchemeId === scheme.id;
+      var c = scheme.colors;
+      html += '<div class="wp-scheme-card' + (isActive ? ' selected' : '') + '" onclick="wpSelectScheme(\'' + esc(scheme.id) + '\')" style="cursor:pointer;padding:12px;border-radius:10px;border:2px solid ' + (isActive ? 'var(--accent)' : 'var(--charcoal-light, #333)') + ';background:var(--charcoal, #1a1a1a);transition:border-color 0.2s;">';
+      // Color circles row
+      html += '<div style="display:flex;gap:6px;margin-bottom:8px;">';
+      html += '<div style="width:28px;height:28px;border-radius:50%;background:' + esc(c.primaryColor) + ';border:2px solid rgba(255,255,255,0.15);" title="Primary"></div>';
+      html += '<div style="width:28px;height:28px;border-radius:50%;background:' + esc(c.accentColor) + ';border:2px solid rgba(255,255,255,0.15);" title="Accent"></div>';
+      html += '<div style="width:28px;height:28px;border-radius:50%;background:' + esc(c.bgColor) + ';border:2px solid rgba(255,255,255,0.15);" title="Background"></div>';
+      html += '</div>';
+      // Name
+      html += '<strong style="font-size:0.85rem;">' + esc(scheme.name) + '</strong>';
+      if (scheme.default) {
+        html += '<span style="font-size:0.7rem;color:var(--warm-gray);margin-left:6px;">(default)</span>';
+      }
+      html += '</div>';
+    });
+
+    // Custom option card
+    html += '<div class="wp-scheme-card' + (showCustomColors ? ' selected' : '') + '" onclick="wpSelectSchemeCustom()" style="cursor:pointer;padding:12px;border-radius:10px;border:2px solid ' + (showCustomColors ? 'var(--accent)' : 'var(--charcoal-light, #333)') + ';background:var(--charcoal, #1a1a1a);transition:border-color 0.2s;">';
+    html += '<div style="display:flex;gap:6px;margin-bottom:8px;">';
+    html += '<div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg, #ff6b6b, #4ecdc4, #45b7d1);border:2px solid rgba(255,255,255,0.15);"></div>';
+    html += '</div>';
+    html += '<strong style="font-size:0.85rem;">Custom</strong>';
+    html += '<span style="font-size:0.7rem;color:var(--warm-gray);margin-left:6px;">Pick your own</span>';
+    html += '</div>';
+
+    html += '</div>';
+
+    // Custom color pickers (shown only when Custom is selected)
+    if (showCustomColors) {
+      html += renderCustomColorPickers();
+    }
+
+    // ── Font Pairs ──
+    var currentFontPair = tc.fontPair || 'classic';
+    html += '<h3 style="font-size:1rem;margin:24px 0 12px;">Font Pair</h3>';
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;">';
+
+    templateManifest.fontPairs.forEach(function(fp) {
+      var isActive = currentFontPair === fp.id;
+      html += '<div class="wp-font-card' + (isActive ? ' selected' : '') + '" onclick="wpSelectFontPair(\'' + esc(fp.id) + '\')" style="cursor:pointer;padding:14px;border-radius:10px;border:2px solid ' + (isActive ? 'var(--accent)' : 'var(--charcoal-light, #333)') + ';background:var(--charcoal, #1a1a1a);transition:border-color 0.2s;">';
+      html += '<div style="font-family:\'' + esc(fp.heading) + '\', serif;font-size:1.1rem;font-weight:600;margin-bottom:4px;line-height:1.2;">' + esc(fp.name) + '</div>';
+      html += '<div style="font-family:\'' + esc(fp.body) + '\', sans-serif;font-size:0.8rem;color:var(--warm-gray);line-height:1.4;">' + esc(fp.heading) + ' + ' + esc(fp.body) + '</div>';
+      if (fp.default) {
+        html += '<span style="font-size:0.7rem;color:var(--warm-gray);margin-top:4px;display:inline-block;">(default)</span>';
+      }
+      html += '</div>';
+    });
+
+    html += '</div>';
+
+    return html;
+  }
+
+  function renderCustomColorPickers() {
+    var tc = themeConfig || {};
+    var primaryColor = tc.primaryColor || '#8B7355';
+    var accentColor = tc.accentColor || '#2D5F5D';
+    var html = '';
+    html += '<div style="margin-top:12px;padding:16px;background:var(--charcoal, #1a1a1a);border-radius:10px;border:1px solid var(--charcoal-light, #333);">';
+    html += '<div class="wp-color-row" style="margin-bottom:0;">';
+    html += '<div class="wp-field-group" style="flex:1;">';
+    html += '<label>Primary Color</label>';
+    html += '<div style="display:flex;gap:8px;align-items:center;">';
+    html += '<input type="color" value="' + esc(primaryColor) + '" onchange="wpUpdateThemeColor(\'primaryColor\', this.value)" style="width:40px;height:40px;border:none;cursor:pointer;padding:0;">';
+    html += '<input type="text" value="' + esc(primaryColor) + '" onchange="wpUpdateThemeColor(\'primaryColor\', this.value)" style="flex:1;" maxlength="7">';
+    html += '</div></div>';
+    html += '<div class="wp-field-group" style="flex:1;">';
+    html += '<label>Accent Color</label>';
+    html += '<div style="display:flex;gap:8px;align-items:center;">';
+    html += '<input type="color" value="' + esc(accentColor) + '" onchange="wpUpdateThemeColor(\'accentColor\', this.value)" style="width:40px;height:40px;border:none;cursor:pointer;padding:0;">';
+    html += '<input type="text" value="' + esc(accentColor) + '" onchange="wpUpdateThemeColor(\'accentColor\', this.value)" style="flex:1;" maxlength="7">';
+    html += '</div></div>';
+    html += '</div>';
+    html += '</div>';
+    return html;
+  }
+
+  // ── Fallback Style Tab (no manifest — original free-form UI) ──
+  function renderFallbackStyleTab() {
     var currentStyle = websiteConfig.style || 'artisan-warm';
     var html = '';
 
@@ -294,6 +474,92 @@
 
   // ── Sections Tab ──
   function renderSectionsTab() {
+    if (templateManifest) {
+      return renderManifestSectionsTab();
+    }
+    return renderFallbackSectionsTab();
+  }
+
+  // ── Manifest-driven Sections Tab ──
+  function renderManifestSectionsTab() {
+    var html = '';
+    var navConfig = {};
+
+    // Load current nav section enabled states from public/config/nav
+    try {
+      var navSections = themeConfig && themeConfig._navSections;
+      if (navSections) navConfig = navSections;
+    } catch (e) {}
+
+    // Render each slot category
+    var categories = [
+      { key: 'universal', label: 'Core Sections', desc: 'Required sections that define the template.' },
+      { key: 'common', label: 'Common Sections', desc: 'Widely used sections that enhance your site.' },
+      { key: 'differentiators', label: 'Differentiator Sections', desc: 'Unique sections that set your brand apart.' }
+    ];
+
+    categories.forEach(function(cat) {
+      var slots = templateManifest.slots[cat.key];
+      if (!slots || slots.length === 0) return;
+
+      html += '<div style="margin-bottom:20px;">';
+      html += '<h3 style="font-size:0.95rem;margin-bottom:4px;">' + esc(cat.label) + '</h3>';
+      html += '<p style="font-size:0.8rem;color:var(--warm-gray);margin-bottom:12px;">' + esc(cat.desc) + '</p>';
+
+      slots.forEach(function(slot) {
+        var sectionData = (websiteConfig.sections && websiteConfig.sections[slot.id]) || {};
+        var navData = navConfig[slot.id] || {};
+        var isRequired = slot.required;
+        var enabled = isRequired ? true : (navData.enabled !== false && sectionData.enabled !== false);
+        var expanded = sectionData._expanded;
+
+        html += '<div class="wp-section-toggle" onclick="wpToggleSectionExpand(\'' + esc(slot.id) + '\')">';
+        html += '<div style="display:flex;align-items:center;gap:12px;">';
+        if (isRequired) {
+          html += '<span style="font-size:0.7rem;color:var(--warm-gray);padding:0 4px;min-width:60px;text-align:center;">Required</span>';
+        } else {
+          html += '<label class="toggle-switch" style="margin:0;" onclick="event.stopPropagation();">';
+          html += '<input type="checkbox"' + (enabled ? ' checked' : '') + ' onchange="wpToggleManifestSection(\'' + esc(slot.id) + '\', this.checked)">';
+          html += '<span class="toggle-slider"></span>';
+          html += '</label>';
+        }
+        html += '<div>';
+        html += '<strong>' + esc(slot.label) + '</strong>';
+        if (slot.prominent) {
+          html += '<span style="font-size:0.7rem;color:var(--accent);margin-left:6px;">Prominent</span>';
+        }
+        html += '<div style="font-size:0.75rem;color:var(--warm-gray);margin-top:2px;">' + esc(slot.description || '') + '</div>';
+        html += '</div>';
+        html += '</div>';
+        html += '<span style="font-size:0.8rem;color:var(--warm-gray);">' + (expanded ? '&#9650;' : '&#9660;') + '</span>';
+        html += '</div>';
+
+        // Expanded section fields (reuse existing SECTION_DEFS fields if they match)
+        if (expanded) {
+          html += '<div class="wp-section-fields">';
+          var matchingDef = SECTION_DEFS.find(function(d) { return d.key === slot.id; });
+          if (matchingDef && matchingDef.fields) {
+            matchingDef.fields.forEach(function(field) {
+              html += renderSectionField(slot.id, field, sectionData);
+            });
+          }
+          if (slot.id === 'contact') {
+            html += renderSocialLinks(sectionData.socialLinks || {});
+          }
+          html += '</div>';
+        }
+      });
+
+      html += '</div>';
+    });
+
+    html += '<div style="margin-top:8px;font-size:0.85rem;color:var(--warm-gray);">Section order follows the "' + esc(templateManifest.name) + '" template layout.</div>';
+
+    return html;
+  }
+
+  // ── Fallback Sections Tab (no manifest) ──
+  function renderFallbackSectionsTab() {
     var sections = websiteConfig.sections || {};
     var html = '';
 
@@ -322,7 +588,6 @@
         def.fields.forEach(function(field) {
           html += renderSectionField(def.key, field, sectionData);
         });
-        // Social links special case for contact section
         if (def.key === 'contact') {
           html += renderSocialLinks(sectionData.socialLinks || {});
         }
@@ -330,7 +595,6 @@
       }
     });
 
-    // Reorder controls
     html += '<div style="margin-top:16px;font-size:0.85rem;color:var(--warm-gray);">Section order follows the template layout.</div>';
 
     return html;
@@ -1000,9 +1264,78 @@
     if (btn) { btn.disabled = false; btn.textContent = 'Publish Changes'; }
   };
 
+  // ── Manifest-driven handlers (write to public/config/theme) ──
+
+  window.wpSelectScheme = async function(schemeId) {
+    if (!themeConfig) themeConfig = {};
+    themeConfig.colorSchemeId = schemeId;
+    // Clear custom color overrides when selecting a predefined scheme
+    delete themeConfig.primaryColor;
+    delete themeConfig.accentColor;
+    showCustomColors = false;
+    try {
+      await MastDB._ref('public/config/theme/colorSchemeId').set(schemeId);
+      // Remove custom color overrides from Firebase
+      await MastDB._ref('public/config/theme/primaryColor').set(null);
+      await MastDB._ref('public/config/theme/accentColor').set(null);
+      markUnpublished();
+      showToast('Color scheme updated.');
+    } catch (err) {
+      showToast('Error: ' + err.message, true);
+    }
+    renderWebsite();
+  };
+
+  window.wpSelectSchemeCustom = function() {
+    showCustomColors = true;
+    if (!themeConfig) themeConfig = {};
+    themeConfig.colorSchemeId = null;
+    MastDB._ref('public/config/theme/colorSchemeId').set(null);
+    markUnpublished();
+    renderWebsite();
+  };
+
+  window.wpUpdateThemeColor = function(field, value) {
+    if (!themeConfig) themeConfig = {};
+    themeConfig[field] = value;
+    debounce('theme-color-' + field, function() {
+      MastDB._ref('public/config/theme/' + field).set(value);
+      markUnpublished();
+    }, 400);
+  };
+
+  window.wpSelectFontPair = async function(fontPairId) {
+    if (!themeConfig) themeConfig = {};
+    themeConfig.fontPair = fontPairId;
+    try {
+      await MastDB._ref('public/config/theme/fontPair').set(fontPairId);
+      markUnpublished();
+      showToast('Font pair updated.');
+    } catch (err) {
+      showToast('Error: ' + err.message, true);
+    }
+    renderWebsite();
+  };
+
+  window.wpToggleManifestSection = async function(sectionId, enabled) {
+    // Write to both nav config and webPresence sections config
+    try {
+      await MastDB._ref('public/config/nav/sections/' + sectionId + '/enabled').set(enabled);
+      // Also keep webPresence sections in sync
+      if (!websiteConfig.sections) websiteConfig.sections = {};
+      if (!websiteConfig.sections[sectionId]) websiteConfig.sections[sectionId] = {};
+      websiteConfig.sections[sectionId].enabled = enabled;
+      await MastDB._ref('webPresence/config/sections/' + sectionId + '/enabled').set(enabled);
+      markUnpublished();
+    } catch (err) {
+      showToast('Error: ' + err.message, true);
+    }
+  };
+
+  // ── Fallback handlers (write to webPresence/config — original paths) ──
+
   window.wpSelectStyle = async function(styleId) {
     websiteConfig.style = styleId;
-    // Find recommended font pair for this style
     STYLE_DEFS.forEach(function(s) {
       if (s.id === styleId) websiteConfig.fontPair = s.font;
     });
