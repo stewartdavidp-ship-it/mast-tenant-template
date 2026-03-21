@@ -15,14 +15,14 @@
 }
 
 .cart-icon-wrap:hover svg {
-  fill: #E8B679;
+  fill: var(--primary-light, #E8B679);
 }
 
 .cart-badge {
   position: absolute;
   top: -4px;
   right: -6px;
-  background: #C4853C;
+  background: var(--primary, #C4853C);
   color: #fff;
   font-size: 0.65rem;
   font-weight: 700;
@@ -204,7 +204,7 @@
 .cart-item-price {
   font-size: 0.9rem;
   font-weight: 500;
-  color: #C4853C;
+  color: var(--primary, #C4853C);
 }
 
 /* Quantity Stepper (shared between drawer and product page) */
@@ -329,7 +329,7 @@
 .cart-auth-link button {
   background: none;
   border: none;
-  color: #2A7C6F;
+  color: var(--accent, #2A7C6F);
   font-size: 0.78rem;
   cursor: pointer;
   text-decoration: none;

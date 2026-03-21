@@ -35,7 +35,7 @@
     background: var(--amber-light);
     border-color: var(--amber-light);
     transform: translateY(-2px);
-    box-shadow: 0 8px 30px rgba(196,133,60,0.35);
+    box-shadow: 0 8px 30px color-mix(in srgb, var(--primary) 35%, transparent);
   }
 
   .btn-outline {
@@ -91,67 +91,6 @@
     font-weight: 300;
   }
 
-  /* ========= FOOTER ========= */
-  footer {
-    background: var(--charcoal);
-    padding: 2.5rem 3rem;
-  }
-
-  .footer-inner {
-    max-width: 1200px;
-    margin: 0 auto;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  .footer-logo {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-  }
-
-  .footer-logo img {
-    height: 30px;
-    opacity: 0.9;
-  }
-
-  .footer-logo span {
-    font-family: 'Cormorant Garamond', serif;
-    font-size: 1rem;
-    color: rgba(255,255,255,0.7);
-    letter-spacing: 0.05em;
-  }
-
-  .footer-links {
-    display: flex;
-    gap: 2rem;
-    list-style: none;
-  }
-
-  .footer-links a {
-    color: rgba(255,255,255,0.55);
-    font-size: 0.72rem;
-    text-decoration: none;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    transition: color 0.3s;
-  }
-
-  .footer-links a:hover { color: var(--amber-light); }
-
-  .footer-social {
-    display: flex;
-    gap: 1.2rem;
-  }
-
-  .footer-social a {
-    color: rgba(255,255,255,0.55);
-    transition: color 0.3s;
-  }
-
-  .footer-social a:hover { color: var(--amber-light); }
-  .footer-social svg { width: 18px; height: 18px; fill: currentColor; }
 
   /* Powered by Mast badge */
   .powered-by-mast {
@@ -378,7 +317,6 @@
 
   @media (max-width: 768px) {
     section { padding: 4rem 1.5rem; }
-    .footer-inner { flex-direction: column; gap: 1.5rem; text-align: center; }
   }
 
 </style>

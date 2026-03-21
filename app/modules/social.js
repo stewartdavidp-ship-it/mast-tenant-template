@@ -834,15 +834,15 @@
     } catch (err) {
       console.warn('Caption generation error:', err.message);
       // Fallback captions
-      var subjectText = d.productName || d.eventName || d.description || 'handmade glass art';
+      var subjectText = d.productName || d.eventName || d.description || 'handmade art';
       d.captions = [
-        { style: 'Story', text: 'Every piece tells a story. This ' + subjectText + ' came to life in our Western Mass studio — shaped by hand, one breath at a time. ✨' },
-        { style: 'Product', text: 'Meet our latest creation: ' + subjectText + '. Handblown glass, made with intention. Link in bio to bring one home. 🔗' },
+        { style: 'Story', text: 'Every piece tells a story. This ' + subjectText + ' came to life in our studio — shaped by hand, with care and intention. ✨' },
+        { style: 'Product', text: 'Meet our latest creation: ' + subjectText + '. Handmade, with intention. Link in bio to bring one home. 🔗' },
         { style: 'Urgency', text: 'This ' + subjectText + ' won\'t last long — each piece is one-of-a-kind. DM us before it\'s gone! 💨' }
       ];
       d.hashtags = {
-        niche: ['#glassart', '#handblownglass', '#studioglass', '#glassblowing'],
-        mid: ['#handmade', '#shopsmall', '#artisan', '#westernmass'],
+        niche: ['#handmade', '#artisan', '#madebyhand', '#makersgonnamake'],
+        mid: ['#shopsmall', '#supportlocal', '#handcrafted', '#smallbusiness'],
         broad: ['#oneofakind', '#shoplocal', '#makersmovement', '#homedecor']
       };
       showToast('AI unavailable — using template captions', true);

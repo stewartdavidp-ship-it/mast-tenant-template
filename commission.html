@@ -22,7 +22,7 @@
     content: '';
     position: absolute;
     inset: 0;
-    background: radial-gradient(ellipse at 50% 100%, rgba(196,133,60,0.15) 0%, transparent 70%);
+    background: radial-gradient(ellipse at 50% 100%, color-mix(in srgb, var(--primary) 15%, transparent) 0%, transparent 70%);
     pointer-events: none;
   }
 
@@ -202,7 +202,7 @@
 
   .catalog-item .item-name {
     font-size: 0.65rem;
-    color: #5C3D2E;
+    color: var(--text-muted);
     margin-top: 3px;
     text-align: center;
     overflow: hidden;
@@ -618,7 +618,7 @@ function handleCommFile(file) {
     var reader = new FileReader();
     reader.onload = function(e) {
       preview.innerHTML = '<img src="' + e.target.result + '" style="max-width:140px;max-height:140px;border-radius:8px;object-fit:cover;" />' +
-        '<div style="font-size:0.78rem;color:#5C3D2E;margin-top:6px;">' + file.name + '</div>' +
+        '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:6px;">' + file.name + '</div>' +
         '<div style="font-size:0.72rem;color:var(--teal);cursor:pointer;margin-top:3px;" onclick="event.stopPropagation();clearCommUpload();">Remove</div>';
       preview.style.display = '';
       label.textContent = 'Change image';

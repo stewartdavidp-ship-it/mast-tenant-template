@@ -882,11 +882,11 @@
       html += '<div class="review-section">' +
         '<div class="review-section-header"><span class="review-section-title">Payment Method</span></div>' +
         '<div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">' +
-          '<label style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid ' + (selectedMethod === 'card' ? 'var(--teal)' : '#ddd') + ';border-radius:6px;cursor:pointer;background:' + (selectedMethod === 'card' ? 'rgba(42,124,111,0.05)' : '#fff') + ';">' +
+          '<label style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid ' + (selectedMethod === 'card' ? 'var(--teal)' : '#ddd') + ';border-radius:6px;cursor:pointer;background:' + (selectedMethod === 'card' ? 'color-mix(in srgb, var(--accent) 5%, transparent)' : '#fff') + ';">' +
             '<input type="radio" name="payMethod" value="card" data-co="pay-method"' + (selectedMethod === 'card' ? ' checked' : '') + '>' +
             '<div><div style="font-size:0.85rem;font-weight:500;">Credit Card</div><div style="font-size:0.75rem;color:var(--warm-gray);">Pay now via Square</div></div>' +
           '</label>' +
-          '<label style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid ' + (selectedMethod === 'check' ? 'var(--teal)' : '#ddd') + ';border-radius:6px;cursor:pointer;background:' + (selectedMethod === 'check' ? 'rgba(42,124,111,0.05)' : '#fff') + ';">' +
+          '<label style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid ' + (selectedMethod === 'check' ? 'var(--teal)' : '#ddd') + ';border-radius:6px;cursor:pointer;background:' + (selectedMethod === 'check' ? 'color-mix(in srgb, var(--accent) 5%, transparent)' : '#fff') + ';">' +
             '<input type="radio" name="payMethod" value="check" data-co="pay-method"' + (selectedMethod === 'check' ? ' checked' : '') + '>' +
             '<div><div style="font-size:0.85rem;font-weight:500;">Pay by Check</div><div style="font-size:0.75rem;color:var(--warm-gray);">Mail check — order held until verification</div></div>' +
           '</label>' +
@@ -1117,8 +1117,7 @@
           'Thank you for your wholesale order! Your order is being held pending check payment.<br><br>' +
           '<strong>Please mail your check to:</strong><br>' +
           ((typeof TENANT_BRAND !== 'undefined') ? TENANT_BRAND.name : 'Shop') + '<br>' +
-          '139 Conway St.<br>' + /* TENANT: mailing address */
-          'Greenfield, MA 01301<br><br>' +
+          ((typeof TENANT_BRAND !== 'undefined' && TENANT_BRAND.address) ? TENANT_BRAND.address.replace(/\n/g, '<br>') + '<br><br>' : '') +
           'A confirmation has been sent to <strong>' + esc(checkoutData.email) + '</strong>.<br>' +
           'Your order will be processed once payment is verified.' +
         '</div>' +

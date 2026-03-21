@@ -65,7 +65,7 @@
       var b = results[0];
 
       // If tenant hasn't set up their storefront yet, show a clean placeholder
-      // instead of the template's default content (which is Shir-specific).
+      // instead of the template's default content.
       // Only on public pages — never replace the admin app (/app/).
       var isAdminApp = window.location.pathname.indexOf('/app') === 0;
       if (!isAdminApp && (b._tenantStatus === 'onboarding' || b._tenantStatus === 'provisioning')) {

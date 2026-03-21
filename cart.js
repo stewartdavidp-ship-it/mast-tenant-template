@@ -400,11 +400,11 @@
         '<div class="cart-footer-actions">' +
           '<button class="cart-checkout-btn" id="cartCheckoutBtn" style="display:none" onclick="if(window.MastCheckout)MastCheckout.start()">Checkout</button>' +
           '<button class="btn-primary" onclick="MastCart.closeDrawer()" style="' +
-            'display:inline-block;padding:12px 28px;background:#C4853C;color:#fff;' +
+            'display:inline-block;padding:12px 28px;background:var(--primary);color:#fff;' +
             'border:none;border-radius:4px;font-family:DM Sans,sans-serif;font-size:0.85rem;' +
             'letter-spacing:0.12em;text-transform:uppercase;cursor:pointer;text-align:center;' +
-            'transition:background 0.3s;width:100%;"' +
-            ' onmouseover="this.style.background=\'#B3742E\'" onmouseout="this.style.background=\'#C4853C\'">' +
+            'transition:background 0.3s,filter 0.3s;width:100%;"' +
+            ' onmouseover="this.style.filter=\'brightness(0.85)\'" onmouseout="this.style.filter=\'none\'">' +
             'Continue Shopping</button>' +
         '</div>' +
         '<div id="cartAuthArea"></div>' +
@@ -482,11 +482,11 @@
           '<h3>Your cart is empty</h3>' +
           '<p>Browse our collection and add pieces you love.</p>' +
           '<a href="shop.html" style="' +
-            'display:inline-block;padding:10px 24px;background:#C4853C;color:#fff;' +
+            'display:inline-block;padding:10px 24px;background:var(--primary);color:#fff;' +
             'border-radius:4px;font-family:DM Sans,sans-serif;font-size:0.8rem;' +
             'letter-spacing:0.12em;text-transform:uppercase;text-decoration:none;' +
-            'transition:background 0.3s;"' +
-            ' onmouseover="this.style.background=\'#B3742E\'" onmouseout="this.style.background=\'#C4853C\'">' +
+            'transition:background 0.3s,filter 0.3s;"' +
+            ' onmouseover="this.style.filter=\'brightness(0.85)\'" onmouseout="this.style.filter=\'none\'">' +
             'Browse Shop</a>' +
         '</div>';
       if (footerEl) footerEl.style.display = 'none';
@@ -672,7 +672,7 @@
   // ── Initialize ──
   function init() {
     // Re-read tenant globals now that TENANT_READY has resolved
-    STORAGE_KEY = (typeof TENANT_ID !== 'undefined' ? TENANT_ID : 'shir') + '_cart';
+    STORAGE_KEY = (typeof TENANT_ID !== 'undefined' ? TENANT_ID : 'mast') + '_cart';
     FIREBASE_CONFIG = (typeof TENANT_FIREBASE_CONFIG !== 'undefined') ? TENANT_FIREBASE_CONFIG : {};
     loadLocal();
     initFirebase();
@@ -724,7 +724,7 @@
     hasWholesaleItems: hasWholesaleItems
   };
 
-  // Backward-compat alias for existing Shir Glassworks site
+  // Backward-compat alias
   window.ShirCart = window.MastCart;
 
   // Global auth functions — used by nav onclick handlers across all pages.

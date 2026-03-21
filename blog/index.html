@@ -165,7 +165,7 @@
     }
     .featured-post-tags { margin-top: 1.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
     .featured-post-tag {
-      background: rgba(196,133,60,0.1);
+      background: color-mix(in srgb, var(--primary) 10%, transparent);
       color: var(--amber);
       padding: 4px 12px;
       border-radius: 20px;
@@ -185,7 +185,7 @@
       align-items: center;
       gap: 6px;
       background: none;
-      border: 1px solid rgba(196,133,60,0.3);
+      border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
       color: var(--amber);
       font-family: 'DM Sans', sans-serif;
       font-size: 0.8rem;
@@ -196,7 +196,7 @@
       transition: all 0.3s;
       margin-bottom: 1.5rem;
     }
-    .previous-toggle:hover { border-color: var(--amber); background: rgba(196,133,60,0.05); }
+    .previous-toggle:hover { border-color: var(--amber); background: color-mix(in srgb, var(--primary) 5%, transparent); }
     .previous-toggle .arrow { transition: transform 0.3s; }
     .previous-toggle.open .arrow { transform: rotate(90deg); }
     .previous-list { display: none; }
@@ -227,7 +227,7 @@
       border-radius: 6px;
       object-fit: cover;
       flex-shrink: 0;
-      background: rgba(196,133,60,0.08);
+      background: color-mix(in srgb, var(--primary) 8%, transparent);
     }
     .story-card-info { flex: 1; min-width: 0; }
     .story-card-title {
@@ -286,7 +286,7 @@
       color: var(--charcoal);
       margin-bottom: 0.5rem;
       padding: 0.6rem 1rem;
-      background: rgba(196,133,60,0.06);
+      background: color-mix(in srgb, var(--primary) 6%, transparent);
       border-left: 3px solid var(--amber);
       border-radius: 0 4px 4px 0;
     }
@@ -457,7 +457,7 @@
 </div>
 
 <footer>
-  <p data-tenant="brand-location">My Shop &bull; Western Massachusetts</p>
+  <p data-tenant="brand-location">My Shop</p>
   <p style="margin-top:6px;"><a href="../index.html">Home</a> &bull; <a href="../shop.html">Shop</a> &bull; <a href="./">From the Studio</a></p>
   <div class="powered-by-mast">
     <a href="https://runmast.com" target="_blank" rel="noopener">
