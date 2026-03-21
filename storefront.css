@@ -136,27 +136,18 @@ nav.nav-transparent.scrolled {
 .nav-logo img {
   height: 52px;
   transition: all 0.4s ease;
-  /* mix-blend-mode makes white logo backgrounds transparent on dark nav */
-  mix-blend-mode: multiply;
-  filter: drop-shadow(0 0 1px rgba(255,255,255,0.4));
-  border-radius: 4px;
+  border-radius: 8px;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.3);
 }
 
 nav.scrolled .nav-logo img {
   height: 40px;
 }
 
-/* Hero logo — blend away white backgrounds on dark hero */
+/* Hero logo — clean card treatment for logos with white backgrounds */
 .hero-logo img {
-  mix-blend-mode: multiply;
-  filter: drop-shadow(0 0 4px rgba(0,0,0,0.5)) drop-shadow(0 0 1px rgba(255,255,255,0.3));
-  border-radius: 6px;
-}
-
-/* On light theme, invert blend mode so logos stay visible on light backgrounds */
-html.light .nav-logo img,
-html.light .hero-logo img {
-  mix-blend-mode: normal;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
 }
 
 .nav-links {
