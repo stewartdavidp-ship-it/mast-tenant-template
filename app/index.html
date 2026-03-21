@@ -5,18 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>My Shop Admin</title><!-- TENANT: brand -->
   <script>
-    // Apply dark mode class SYNCHRONOUSLY before ANY external scripts or CSS load.
-    // The html element already has inline background:#1a1a1a as the absolute earliest defense.
-    // This script adds the class for CSS rules and removes the inline bg for light-mode users.
-    (function() {
-      var isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      if (isDark) {
-        document.documentElement.style.colorScheme = 'dark';
-        document.documentElement.classList.add('dark-mode');
-      } else {
-        document.documentElement.style.background = '';
-      }
-    })();
+    // Admin app is ALWAYS dark mode. Apply immediately before any external scripts load.
+    document.documentElement.style.colorScheme = 'dark';
+    document.documentElement.classList.add('dark-mode');
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
