@@ -136,10 +136,17 @@ nav.nav-transparent.scrolled {
 .nav-logo img {
   height: 52px;
   transition: all 0.4s ease;
+  /* Subtle glow ensures dark logos remain visible on the dark nav */
+  filter: drop-shadow(0 0 1px rgba(255,255,255,0.4));
 }
 
 nav.scrolled .nav-logo img {
   height: 40px;
+}
+
+/* Hero logo — ensure visibility over gradient/video backgrounds */
+.hero-logo img {
+  filter: drop-shadow(0 0 4px rgba(0,0,0,0.5)) drop-shadow(0 0 1px rgba(255,255,255,0.3));
 }
 
 .nav-links {

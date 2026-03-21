@@ -277,6 +277,8 @@
         } else {
           buildNav(DEFAULT_SECTIONS, config || {});
         }
+        // Populate hero logo on homepage if element exists
+        populateHeroLogo(config);
         // Inject promo banner if configured
         injectPromoBanner(bannerConfig);
       }).catch(function (err) {
@@ -284,6 +286,26 @@
         buildNav(DEFAULT_SECTIONS, {});
       });
     });
+  }
+
+  /**
+   * Populate the hero logo on the homepage when a logo URL is configured.
+   * The #heroLogo element is hidden by default in index.html.
+   */
+  function populateHeroLogo(config) {
+    var heroLogoEl = document.getElementById('heroLogo');
+    if (!heroLogoEl) return; // Not on homepage
+
+    var rawLogo = (config && config.logoUrl) || '';
+    if (!rawLogo) return; // No logo configured
+
+    var basePath = getBasePath();
+    var logoUrl = (rawLogo.indexOf('https://') === 0 || rawLogo.indexOf('/') === 0 || rawLogo.indexOf('../') === 0)
+      ? rawLogo : (basePath + 'favicon.svg');
+    var brandName = (window.TENANT_BRAND && window.TENANT_BRAND.name) || 'My Shop';
+
+    heroLogoEl.innerHTML = '<img src="' + esc(logoUrl) + '" alt="' + esc(brandName) + '">';
+    heroLogoEl.style.display = '';
   }
 
   init();
