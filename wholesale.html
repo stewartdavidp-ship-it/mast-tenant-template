@@ -424,15 +424,9 @@
   var currentCategory = 'all';
   var selectedOptions = {}; // pid -> { label: value }
 
-  // Category mapping for wholesale products
-  var CATEGORY_MAP = {
-    'drinkware': 'Drinkware',
-    'decoration': 'Decorative',
-    'jewelry': 'Jewelry',
-    'figurines': 'Figurines',
-    'vases': 'Decorative'
-  };
-  var CATEGORY_ORDER = ['Drinkware', 'Decorative', 'Jewelry', 'Figurines'];
+  // Category mapping for wholesale products — loaded from Firebase
+  var CATEGORY_MAP = {};
+  var CATEGORY_ORDER = [];
 
   // Color swatch mapping for visual chips
   var COLOR_HEX = {
@@ -576,9 +570,30 @@
     });
   };
 
-  // ── Load products ──
+  // ── Load categories then products ──
+  function loadCategories() {
+    return db.ref(TENANT_ID + '/public/config/categories').once('value').then(function(snap) {
+      var catData = snap.val();
+      if (catData && Array.isArray(catData)) {
+        CATEGORY_MAP = {};
+        CATEGORY_ORDER = [];
+        catData.forEach(function(c) {
+          if (c && c.id && c.label) {
+            var displayLabel = c.wholesaleGroup || c.label;
+            CATEGORY_MAP[c.id] = displayLabel;
+            if (CATEGORY_ORDER.indexOf(displayLabel) === -1) {
+              CATEGORY_ORDER.push(displayLabel);
+            }
+          }
+        });
+      }
+    });
+  }
+
   function loadProducts() {
-    db.ref(TENANT_ID + '/public/products').once('value').then(function(snap) {
+    loadCategories().then(function() {
+      return db.ref(TENANT_ID + '/public/products').once('value');
+    }).then(function(snap) {
       products = snap.val() || {};
       allProducts = [];
 
@@ -628,11 +643,11 @@
   };
 
   function getCategory(p) {
-    if (!p.categories || !p.categories.length) return 'Decorative';
+    if (!p.categories || !p.categories.length) return CATEGORY_ORDER[0] || 'Other';
     for (var i = 0; i < p.categories.length; i++) {
       if (CATEGORY_MAP[p.categories[i]]) return CATEGORY_MAP[p.categories[i]];
     }
-    return 'Decorative';
+    return CATEGORY_ORDER[0] || 'Other';
   }
 
   // ── Grid ──

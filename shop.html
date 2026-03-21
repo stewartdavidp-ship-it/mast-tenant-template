@@ -418,14 +418,8 @@
 
 <!-- ============ SHOP ============ -->
 <section>
-  <div class="category-filter fade-up">
+  <div class="category-filter fade-up" id="categoryFilterPills">
     <span class="filter-pill active" onclick="filterShop('all', this)">All</span>
-    <span class="filter-pill" onclick="filterShop('figurines', this)">Figurines</span>
-    <span class="filter-pill" onclick="filterShop('jewelry', this)">Jewelry</span>
-    <span class="filter-pill" onclick="filterShop('drinkware', this)">Drinkware</span>
-    <span class="filter-pill" onclick="filterShop('vases', this)">Vases</span>
-    <span class="filter-pill" onclick="filterShop('decoration', this)">Decoration</span>
-    <span class="filter-pill" onclick="filterShop('sculpture', this)">Sculpture</span>
   </div>
 
   <div id="shopContainer">
@@ -482,23 +476,35 @@
 window.TENANT_READY.then(function() {
   // Firebase — load shop products dynamically grouped by category
   var allShopItems = [];
-  var SHOP_CATS = [
-    { id: 'figurines', label: 'Figurines' },
-    { id: 'jewelry', label: 'Jewelry' },
-    { id: 'drinkware', label: 'Drinkware' },
-    { id: 'vases', label: 'Vases' },
-    { id: 'decoration', label: 'Decoration' },
-    { id: 'sculpture', label: 'Sculpture' }
-  ];
-  var SHOP_IDS = SHOP_CATS.map(function(c) { return c.id; });
+  var SHOP_CATS = [];
+  var SHOP_IDS = [];
 
   function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  function buildFilterPills() {
+    var container = document.getElementById('categoryFilterPills');
+    if (!container) return;
+    var html = '<span class="filter-pill active" onclick="filterShop(\'all\', this)">All</span>';
+    SHOP_CATS.forEach(function(cat) {
+      html += '<span class="filter-pill" onclick="filterShop(\'' + cat.id + '\', this)">' + esc(cat.label) + '</span>';
+    });
+    container.innerHTML = html;
+  }
 
   (function() {
     var app = firebase.initializeApp(TENANT_FIREBASE_CONFIG, 'public-shop');
     var db = app.database();
 
-    db.ref(TENANT_ID + '/public/products').once('value').then(function(snap) {
+    // Load categories from Firebase, then load products
+    db.ref(TENANT_ID + '/public/config/categories').once('value').then(function(catSnap) {
+      var catData = catSnap.val();
+      if (catData && Array.isArray(catData)) {
+        SHOP_CATS = catData.filter(function(c) { return c && c.id && c.label; });
+      }
+      SHOP_IDS = SHOP_CATS.map(function(c) { return c.id; });
+      buildFilterPills();
+      return db.ref(TENANT_ID + '/public/products').once('value');
+    }).then(function(snap) {
       var data = snap.val();
       if (!data) return;
       allShopItems = Object.values(data)

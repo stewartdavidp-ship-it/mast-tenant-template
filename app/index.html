@@ -8605,21 +8605,35 @@ function renderDashCardWithGating(cardConfig, renderFn) {
 // End Subscription Enforcement & Gating UI
 // ============================================================
 
-const CATEGORIES = ['figurines', 'jewelry', 'drinkware', 'sculptures', 'vases', 'decorations', 'studio', 'other'];
-const SECTIONS = [
+// Categories and gallery sections — loaded dynamically from Firebase via loadTenantCategories()
+let CATEGORIES = [];
+const CORE_SECTIONS = [
   { id: 'hero', label: 'Hero', description: 'Homepage banner video & poster image' },
   { id: 'about', label: 'About', description: 'About page images' },
   { id: 'gallery', label: 'Gallery', description: 'Homepage gallery grid' },
   { id: 'schedule', label: 'Schedule', description: 'Schedule page images' },
-  { id: 'shop', label: 'Shop', description: 'Shop page featured images' },
-  { id: 'figurines', label: 'Figurines', description: 'Glass figurines' },
-  { id: 'jewelry', label: 'Jewelry', description: 'Glass jewelry & pendants' },
-  { id: 'drinkware', label: 'Drinkware', description: 'Handblown glass cups' },
-  { id: 'vases', label: 'Vases', description: 'Glass vases & flowers' },
-  { id: 'decoration', label: 'Decoration', description: 'Ornaments & decorative pieces' },
-  { id: 'sculpture', label: 'Sculpture', description: 'Glass sculptures' }
+  { id: 'shop', label: 'Shop', description: 'Shop page featured images' }
 ];
-const SHOP_SECTION_IDS = ['shop', 'figurines', 'jewelry', 'drinkware', 'vases', 'decoration', 'sculpture'];
+let SECTIONS = [...CORE_SECTIONS];
+let SHOP_SECTION_IDS = ['shop'];
+
+// Load tenant categories from Firebase and rebuild CATEGORIES, SECTIONS, SHOP_SECTION_IDS
+async function loadTenantCategories() {
+  try {
+    var snap = await MastDB._ref('public/config/categories').once('value');
+    var catData = snap.val();
+    if (catData && Array.isArray(catData)) {
+      var cats = catData.filter(function(c) { return c && c.id && c.label; });
+      CATEGORIES = cats.map(function(c) { return c.id; });
+      SECTIONS = CORE_SECTIONS.concat(cats.map(function(c) {
+        return { id: c.id, label: c.label, description: c.label + ' products' };
+      }));
+      SHOP_SECTION_IDS = ['shop'].concat(CATEGORIES);
+    }
+  } catch (e) {
+    console.warn('[categories] Failed to load tenant categories:', e.message);
+  }
+}
 // GitHub image upload
 // GitHub config — resolved from TENANT_CONFIG after auth. No hardcoded fallbacks.
 function getGithubRepo() {
@@ -9328,6 +9342,8 @@ if (TEST_MODE && new URLSearchParams(window.location.search).get('testmode') ===
   var testTenantId = new URLSearchParams(window.location.search).get('tenant') || TENANT_ID;
   MastDB.init({ tenantId: testTenantId, db: db }); // Test mode: override with ?tenant= param
   loadTenantConfig(testTenantId).then(function() {
+    return loadTenantCategories();
+  }).then(function() {
     return loadTenantSubscription();
   }).then(function() {
     currentUser = { uid: 'test-local-preview', photoURL: '', displayName: 'Test User (Local)' };
@@ -9449,6 +9465,7 @@ auth.onAuthStateChanged(async function(user) {
   }
   MastDB.init({ tenantId: tenantId, db: db });
   await loadTenantConfig(tenantId);
+  await loadTenantCategories();
   await loadTenantSubscription();
   loadTokenWallet(); // Start listening for token balance (non-blocking)
   // --- End Tenant Resolution ---
@@ -13533,7 +13550,7 @@ function renderProductDetail(pid) {
   tabBarHtml += '</div>';
 
   // ---- Details Tab ----
-  var catOptions = ['figurines', 'jewelry', 'drinkware', 'vases', 'decoration', 'sculpture'];
+  var catOptions = CATEGORIES.length > 0 ? CATEGORIES : ['other'];
   var currentPrice = product.priceCents !== null && product.priceCents !== undefined
     ? (product.priceCents / 100).toFixed(2)
     : (product.price ? product.price.replace('$', '') : '');
