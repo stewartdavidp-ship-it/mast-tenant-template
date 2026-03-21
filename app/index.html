@@ -15,12 +15,14 @@
   <script src="../storefront-tenant.js?v=1773887711"></script>
   <script src="../tenant-brand.js?v=2"></script>
   <script>
-    // Apply dark mode SYNCHRONOUSLY before first paint to prevent white/black flash.
-    // Uses documentElement (html) which is available immediately, then also applies to body on DOMContentLoaded.
+    // Apply dark mode SYNCHRONOUSLY before first paint to prevent white flash.
+    // Sets inline style on <html> immediately — no waiting for CSS to parse.
     // Post-login, loadSettings() overrides this with the user's saved preference.
     (function() {
       var isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
       if (isDark) {
+        document.documentElement.style.background = '#1a1a1a';
+        document.documentElement.style.colorScheme = 'dark';
         document.documentElement.classList.add('dark-mode');
         document.addEventListener('DOMContentLoaded', function() { document.body.classList.add('dark-mode'); });
       }
