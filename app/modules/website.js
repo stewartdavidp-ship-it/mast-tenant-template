@@ -15,6 +15,8 @@
   var expandedJobId = null; // for import history detail view
   var editingCategoryIdx = null; // index of category being edited inline
   var showCustomColors = false; // toggled when user picks "Custom" in color scheme
+  var allTemplateManifests = null; // array of loaded manifests from registry
+  var pendingSwitchTemplateId = null; // template ID pending confirmation
 
   // ── Fallback style/font/section defs (used when no manifest loaded) ──
   var STYLE_DEFS = [
@@ -185,6 +187,44 @@
     }
   }
 
+  async function loadTemplateRegistry() {
+    allTemplateManifests = [];
+    var tenantId = MastDB.tenantId();
+    var siteUrl = 'https://mast-' + tenantId + '.web.app';
+
+    // Load registry.json
+    var registryIds = [];
+    try {
+      var resp = await fetch(siteUrl + '/templates/registry.json');
+      if (resp.ok) registryIds = await resp.json();
+    } catch (e) {}
+
+    // Fallback to relative path
+    if (!registryIds.length) {
+      try {
+        var resp2 = await fetch('/templates/registry.json');
+        if (resp2.ok) registryIds = await resp2.json();
+      } catch (e2) {}
+    }
+
+    if (!registryIds.length) return;
+
+    // Load each manifest
+    var promises = registryIds.map(function(tid) {
+      return fetch(siteUrl + '/templates/' + tid + '/manifest.json')
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .catch(function() {
+          // Fallback to relative path
+          return fetch('/templates/' + tid + '/manifest.json')
+            .then(function(r2) { return r2.ok ? r2.json() : null; })
+            .catch(function() { return null; });
+        });
+    });
+
+    var results = await Promise.all(promises);
+    allTemplateManifests = results.filter(function(m) { return m !== null; });
+  }
+
   async function saveCategories() {
     try {
       await MastDB._ref('public/config/categories').set(tenantCategories);
@@ -244,6 +284,7 @@
       await loadWebsiteConfig();
       await loadThemeConfig();
       await loadTemplateManifest();
+      await loadTemplateRegistry();
       await loadImportJobs();
       await loadImportedProducts();
       await loadCategories();
@@ -256,6 +297,7 @@
     // Sub-tabs
     html += '<div class="view-tabs">';
     html += '<button class="view-tab' + (currentSubTab === 'overview' ? ' active' : '') + '" onclick="wpSwitchTab(\'overview\')">Overview</button>';
+    html += '<button class="view-tab' + (currentSubTab === 'template' ? ' active' : '') + '" onclick="wpSwitchTab(\'template\')">Template</button>';
     html += '<button class="view-tab' + (currentSubTab === 'style' ? ' active' : '') + '" onclick="wpSwitchTab(\'style\')">Style</button>';
     html += '<button class="view-tab' + (currentSubTab === 'sections' ? ' active' : '') + '" onclick="wpSwitchTab(\'sections\')">Sections</button>';
     html += '<button class="view-tab' + (currentSubTab === 'categories' ? ' active' : '') + '" onclick="wpSwitchTab(\'categories\')">Categories</button>';
@@ -265,6 +307,7 @@
     // Tab content
     html += '<div id="wpTabContent">';
     if (currentSubTab === 'overview') html += renderOverviewTab();
+    else if (currentSubTab === 'template') html += renderTemplateTab();
     else if (currentSubTab === 'style') html += renderStyleTab();
     else if (currentSubTab === 'sections') html += renderSectionsTab();
     else if (currentSubTab === 'categories') html += renderCategoriesTab();
@@ -308,6 +351,185 @@
     html += '<div style="margin-top:24px;">';
     html += '<button class="btn btn-primary" onclick="wpPublish()" id="wpPublishBtn">Publish Changes</button>';
     html += '<span id="wpPublishStatus" style="margin-left:12px;font-size:0.85rem;"></span>';
+    html += '</div>';
+
+    return html;
+  }
+
+  // ── Template Tab ──
+  function renderTemplateTab() {
+    var html = '';
+    var currentTemplateId = (themeConfig && themeConfig.templateId) || null;
+
+    if (!allTemplateManifests || !allTemplateManifests.length) {
+      html += '<p style="color:var(--warm-gray);">No templates available. Deploy template manifests first.</p>';
+      return html;
+    }
+
+    // If we're showing a switch confirmation dialog
+    if (pendingSwitchTemplateId) {
+      html += renderTemplateSwitchDialog();
+      return html;
+    }
+
+    html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">Choose a template to define your site\'s layout and homepage flow.</p>';
+
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;">';
+
+    allTemplateManifests.forEach(function(manifest) {
+      var isActive = manifest.id === currentTemplateId;
+      html += '<div class="wp-template-card' + (isActive ? ' active' : '') + '" onclick="' + (isActive ? '' : 'wpSelectTemplate(\'' + esc(manifest.id) + '\')') + '">';
+
+      if (isActive) {
+        html += '<span class="wp-tpl-badge">Active</span>';
+      }
+
+      html += '<div class="wp-tpl-name">' + esc(manifest.name) + '</div>';
+      html += '<div class="wp-tpl-desc">' + esc(manifest.description) + '</div>';
+
+      // Meta info
+      html += '<div class="wp-tpl-meta">';
+      html += '<span>' + (manifest.colorSchemes ? manifest.colorSchemes.length : 0) + ' color schemes</span>';
+      html += '<span>' + (manifest.fontPairs ? manifest.fontPairs.length : 0) + ' font pairs</span>';
+      var slotCount = 0;
+      if (manifest.slots) {
+        ['universal', 'common', 'differentiators'].forEach(function(cat) {
+          if (manifest.slots[cat]) slotCount += manifest.slots[cat].length;
+        });
+      }
+      html += '<span>' + slotCount + ' sections</span>';
+      html += '</div>';
+
+      // Homepage flow preview
+      if (manifest.homepageFlow && manifest.homepageFlow.length) {
+        html += '<div class="wp-tpl-flow-preview">';
+        manifest.homepageFlow.forEach(function(slot) {
+          html += '<span class="wp-tpl-flow-chip">' + esc(slot) + '</span>';
+        });
+        html += '</div>';
+      }
+
+      html += '</div>';
+    });
+
+    html += '</div>';
+
+    return html;
+  }
+
+  function renderTemplateSwitchDialog() {
+    var html = '';
+    var currentTemplateId = (themeConfig && themeConfig.templateId) || null;
+    var currentManifest = templateManifest;
+    var newManifest = null;
+
+    if (allTemplateManifests) {
+      newManifest = allTemplateManifests.find(function(m) { return m.id === pendingSwitchTemplateId; });
+    }
+
+    if (!newManifest) {
+      html += '<p style="color:var(--danger);">Template not found.</p>';
+      html += '<button class="btn" onclick="wpCancelSwitch()">Back</button>';
+      return html;
+    }
+
+    // Compute section compatibility using slotMapping
+    var keepSections = [];
+    var loseSections = [];
+    var newSections = [];
+
+    // Get all slot IDs from current manifest
+    var currentSlotIds = [];
+    if (currentManifest && currentManifest.slots) {
+      ['universal', 'common', 'differentiators'].forEach(function(cat) {
+        (currentManifest.slots[cat] || []).forEach(function(s) { currentSlotIds.push(s.id); });
+      });
+    }
+
+    // Get all slot IDs from new manifest
+    var newSlotIds = [];
+    var newSlotLabels = {};
+    if (newManifest.slots) {
+      ['universal', 'common', 'differentiators'].forEach(function(cat) {
+        (newManifest.slots[cat] || []).forEach(function(s) {
+          newSlotIds.push(s.id);
+          newSlotLabels[s.id] = s.label;
+        });
+      });
+    }
+
+    // Use slotMapping from NEW manifest to see what maps from current
+    var newMapping = newManifest.slotMapping || {};
+    var currentSlotLabels = {};
+    if (currentManifest && currentManifest.slots) {
+      ['universal', 'common', 'differentiators'].forEach(function(cat) {
+        (currentManifest.slots[cat] || []).forEach(function(s) { currentSlotLabels[s.id] = s.label; });
+      });
+    }
+
+    // Sections that map from current to new
+    currentSlotIds.forEach(function(cid) {
+      // Check if the new manifest's slotMapping maps this current ID to something
+      var mappedTo = newMapping[cid];
+      if (mappedTo !== undefined && mappedTo !== null) {
+        keepSections.push({ from: currentSlotLabels[cid] || cid, to: newSlotLabels[mappedTo] || mappedTo });
+      } else if (newSlotIds.indexOf(cid) >= 0) {
+        // Same ID exists in new template
+        keepSections.push({ from: currentSlotLabels[cid] || cid, to: newSlotLabels[cid] || cid });
+      } else {
+        loseSections.push(currentSlotLabels[cid] || cid);
+      }
+    });
+
+    // Sections in new template that aren't mapped from current
+    var mappedTargets = {};
+    currentSlotIds.forEach(function(cid) {
+      var target = newMapping[cid];
+      if (target) mappedTargets[target] = true;
+      if (newSlotIds.indexOf(cid) >= 0 && !target) mappedTargets[cid] = true;
+    });
+    newSlotIds.forEach(function(nid) {
+      if (!mappedTargets[nid]) {
+        newSections.push(newSlotLabels[nid] || nid);
+      }
+    });
+
+    html += '<div class="wp-switch-dialog">';
+    html += '<h3 style="font-size:1.1rem;margin-bottom:4px;">Switch to ' + esc(newManifest.name) + '?</h3>';
+    html += '<p style="font-size:0.8rem;color:var(--warm-gray);margin-bottom:16px;">' + esc(newManifest.description) + '</p>';
+
+    if (keepSections.length) {
+      html += '<div class="wp-switch-section wp-switch-keep">';
+      html += '<h4 style="color:var(--teal, #2A7C6F);">Sections you\'ll keep</h4>';
+      html += '<ul>';
+      keepSections.forEach(function(s) {
+        var label = s.from === s.to ? s.from : s.from + ' &rarr; ' + s.to;
+        html += '<li>' + label + '</li>';
+      });
+      html += '</ul></div>';
+    }
+
+    if (loseSections.length) {
+      html += '<div class="wp-switch-section wp-switch-lose">';
+      html += '<h4 style="color:var(--danger, #e74c3c);">Sections you\'ll lose</h4>';
+      html += '<ul>';
+      loseSections.forEach(function(s) { html += '<li>' + esc(s) + '</li>'; });
+      html += '</ul></div>';
+    }
+
+    if (newSections.length) {
+      html += '<div class="wp-switch-section wp-switch-new">';
+      html += '<h4 style="color:var(--accent, var(--teal));">New sections</h4>';
+      html += '<ul>';
+      newSections.forEach(function(s) { html += '<li>' + esc(s) + '</li>'; });
+      html += '</ul></div>';
+    }
+
+    html += '<div style="display:flex;gap:10px;margin-top:20px;">';
+    html += '<button class="btn btn-primary" onclick="wpConfirmSwitch()">Switch Template</button>';
+    html += '<button class="btn" onclick="wpCancelSwitch()" style="background:var(--charcoal-light, #333);color:#e0e0e0;">Cancel</button>';
+    html += '</div>';
+
     html += '</div>';
 
     return html;
@@ -1242,6 +1464,75 @@
 
   window.wpSwitchTab = function(tab) {
     currentSubTab = tab;
+    pendingSwitchTemplateId = null;
+    renderWebsite();
+  };
+
+  // ── Template switching handlers ──
+
+  window.wpSelectTemplate = function(templateId) {
+    pendingSwitchTemplateId = templateId;
+    renderWebsite();
+  };
+
+  window.wpCancelSwitch = function() {
+    pendingSwitchTemplateId = null;
+    renderWebsite();
+  };
+
+  window.wpConfirmSwitch = async function() {
+    if (!pendingSwitchTemplateId) return;
+
+    var newManifest = null;
+    if (allTemplateManifests) {
+      newManifest = allTemplateManifests.find(function(m) { return m.id === pendingSwitchTemplateId; });
+    }
+    if (!newManifest) {
+      showToast('Template not found.', true);
+      pendingSwitchTemplateId = null;
+      renderWebsite();
+      return;
+    }
+
+    try {
+      // Write templateId
+      await MastDB._ref('public/config/theme/templateId').set(pendingSwitchTemplateId);
+
+      // Set default color scheme from new manifest
+      var defaultScheme = (newManifest.colorSchemes || []).find(function(s) { return s.default; });
+      var defaultSchemeId = defaultScheme ? defaultScheme.id : (newManifest.colorSchemes && newManifest.colorSchemes[0] ? newManifest.colorSchemes[0].id : null);
+      if (defaultSchemeId) {
+        await MastDB._ref('public/config/theme/colorSchemeId').set(defaultSchemeId);
+        // Clear custom color overrides
+        await MastDB._ref('public/config/theme/primaryColor').set(null);
+        await MastDB._ref('public/config/theme/accentColor').set(null);
+      }
+
+      // Set default font pair from new manifest
+      var defaultFont = (newManifest.fontPairs || []).find(function(f) { return f.default; });
+      var defaultFontId = defaultFont ? defaultFont.id : (newManifest.fontPairs && newManifest.fontPairs[0] ? newManifest.fontPairs[0].id : null);
+      if (defaultFontId) {
+        await MastDB._ref('public/config/theme/fontPair').set(defaultFontId);
+      }
+
+      markUnpublished();
+      showToast('Switched to ' + newManifest.name + '.');
+
+      // Reload theme config and manifest so Style tab reflects new template
+      if (!themeConfig) themeConfig = {};
+      themeConfig.templateId = pendingSwitchTemplateId;
+      themeConfig.colorSchemeId = defaultSchemeId;
+      themeConfig.fontPair = defaultFontId;
+      delete themeConfig.primaryColor;
+      delete themeConfig.accentColor;
+      showCustomColors = false;
+
+      await loadTemplateManifest();
+    } catch (err) {
+      showToast('Error switching template: ' + err.message, true);
+    }
+
+    pendingSwitchTemplateId = null;
     renderWebsite();
   };
 
