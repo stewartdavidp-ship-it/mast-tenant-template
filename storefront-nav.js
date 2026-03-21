@@ -83,6 +83,25 @@
   }
 
   /**
+   * Inject promo banner above nav if config exists.
+   * Config path: {TENANT_ID}/public/config/promoBanner
+   * Expected shape: { text: "Free Shipping on Orders $100+", enabled: true }
+   */
+  function injectPromoBanner(bannerConfig) {
+    if (!bannerConfig || !bannerConfig.enabled || !bannerConfig.text) return;
+    var nav = document.getElementById('mainNav');
+    if (!nav) return;
+    // Remove any existing hardcoded banner
+    var existing = document.querySelector('.free-ship-banner');
+    if (existing) existing.remove();
+    // Create dynamic banner
+    var banner = document.createElement('div');
+    banner.className = 'free-ship-banner';
+    banner.textContent = bannerConfig.text;
+    nav.parentNode.insertBefore(banner, nav);
+  }
+
+  /**
    * Build the nav and mobile menu HTML, insert into DOM, wire up behaviors.
    */
   function buildNav(sections, config) {
@@ -209,24 +228,36 @@
         return;
       }
 
-      var url = window.TENANT_FIREBASE_CONFIG.databaseURL + '/' + window.TENANT_ID + '/public/config/nav.json';
+      var baseUrl = window.TENANT_FIREBASE_CONFIG.databaseURL + '/' + window.TENANT_ID + '/public/config/';
+      var navUrl = baseUrl + 'nav.json';
+      var bannerUrl = baseUrl + 'promoBanner.json';
 
-      fetch(url)
-        .then(function (resp) {
-          if (!resp.ok) return null;
-          return resp.json();
-        })
-        .then(function (config) {
-          if (config && config.sections) {
-            buildNav(config.sections, config);
-          } else {
-            buildNav(DEFAULT_SECTIONS, config || {});
-          }
-        })
-        .catch(function (err) {
-          console.warn('[storefront-nav] Failed to load nav config:', err.message);
-          buildNav(DEFAULT_SECTIONS, {});
-        });
+      // Fetch nav config and promo banner in parallel
+      var navPromise = fetch(navUrl)
+        .then(function (resp) { return resp.ok ? resp.json() : null; })
+        .catch(function () { return null; });
+      var bannerPromise = fetch(bannerUrl)
+        .then(function (resp) { return resp.ok ? resp.json() : null; })
+        .catch(function () { return null; });
+
+      Promise.all([navPromise, bannerPromise]).then(function (results) {
+        var config = results[0];
+        var bannerConfig = results[1];
+        // Remove any hardcoded free-ship-banner from HTML
+        var existing = document.querySelector('.free-ship-banner');
+        if (existing) existing.remove();
+        // Build nav
+        if (config && config.sections) {
+          buildNav(config.sections, config);
+        } else {
+          buildNav(DEFAULT_SECTIONS, config || {});
+        }
+        // Inject promo banner if configured
+        injectPromoBanner(bannerConfig);
+      }).catch(function (err) {
+        console.warn('[storefront-nav] Failed to load nav config:', err.message);
+        buildNav(DEFAULT_SECTIONS, {});
+      });
     });
   }
 

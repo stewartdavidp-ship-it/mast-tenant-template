@@ -729,13 +729,12 @@
     .product-story-milestone { padding: 1rem; font-size: 1.05rem; }
   }
   
-  .free-ship-banner{background:#1a1714;text-align:center;padding:6px 0;font-family:"DM Sans",sans-serif;font-size:0.7rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--amber-light,#E8D5B5);border-bottom:1px solid rgba(196,133,60,0.15);}
+
 </style>
 </head>
 <body>
 
 <!-- ============ NAV ============ -->
-<div class="free-ship-banner">Free Shipping on Orders $100+</div>
 <nav id="mainNav"></nav>
 
 <div class="nav-mobile-menu" id="mobileMenu"></div>
@@ -975,7 +974,7 @@
         var actionsEl = document.querySelector('.product-detail-actions');
         if (actionsEl) {
           actionsEl.innerHTML =
-            '<div style="margin-bottom:8px;"><span style="display:inline-block;background:#e8e0d4;color:#5C3D2E;font-size:0.82rem;font-weight:600;padding:4px 12px;border-radius:4px;">This piece has been sold</span></div>' +
+            '<div style="margin-bottom:8px;"><span style="display:inline-block;background:var(--bg-dark);color:var(--text-muted);font-size:0.82rem;font-weight:600;padding:4px 12px;border-radius:4px;">This piece has been sold</span></div>' +
             '<button class="btn btn-primary" onclick="toggleCommissionForm()">Request a Commission</button>';
         }
         window._commPid = p.pid;
@@ -1110,21 +1109,21 @@
     var actionsEl = document.querySelector('.product-detail-actions');
     if (!actionsEl) return;
     var formHtml =
-      '<div id="commissionFormWrap" style="display:none;margin-top:16px;padding:16px;background:#FAF6F0;border-radius:8px;border:1px solid #e8e0d4;">' +
-        '<p style="font-size:0.88rem;color:#5C3D2E;margin:0 0 12px 0;">Tell us about the piece you\'d like and we\'ll be in touch.</p>' +
+      '<div id="commissionFormWrap" style="display:none;margin-top:16px;padding:16px;background:var(--bg);border-radius:8px;border:1px solid var(--bg-dark);">' +
+        '<p style="font-size:0.88rem;color:var(--text-muted);margin:0 0 12px 0;">Tell us what you\'d like and we\'ll be in touch.</p>' +
 
         // ── Inspiration picker ──
         '<div style="margin-bottom:14px;">' +
-          '<label style="display:block;font-size:0.78rem;color:#6B6560;margin-bottom:6px;font-weight:500;">Select pieces for inspiration <span style="font-weight:400;">(optional)</span></label>' +
-          '<div id="commCatalogGrid" style="display:flex;flex-wrap:wrap;gap:8px;max-height:200px;overflow-y:auto;padding:4px;border:1px solid #e8e0d4;border-radius:6px;background:white;">' +
+          '<label style="display:block;font-size:0.78rem;color:var(--text-muted);margin-bottom:6px;font-weight:500;">Select pieces for inspiration <span style="font-weight:400;">(optional)</span></label>' +
+          '<div id="commCatalogGrid" style="display:flex;flex-wrap:wrap;gap:8px;max-height:200px;overflow-y:auto;padding:4px;border:1px solid var(--bg-dark);border-radius:6px;background:white;">' +
             '<div style="padding:12px;color:#9B958E;font-size:0.82rem;">Loading catalog...</div>' +
           '</div>' +
         '</div>' +
 
         // ── Image upload ──
         '<div style="margin-bottom:14px;">' +
-          '<label style="display:block;font-size:0.78rem;color:#6B6560;margin-bottom:4px;font-weight:500;">Upload a reference image <span style="font-weight:400;">(optional)</span></label>' +
-          '<div id="commUploadArea" style="border:2px dashed #e8e0d4;border-radius:6px;padding:16px;text-align:center;cursor:pointer;background:white;transition:border-color 0.2s;" onclick="document.getElementById(\'commFileInput\').click()">' +
+          '<label style="display:block;font-size:0.78rem;color:var(--text-muted);margin-bottom:4px;font-weight:500;">Upload a reference image <span style="font-weight:400;">(optional)</span></label>' +
+          '<div id="commUploadArea" style="border:2px dashed var(--bg-dark);border-radius:6px;padding:16px;text-align:center;cursor:pointer;background:white;transition:border-color 0.2s;" onclick="document.getElementById(\'commFileInput\').click()">' +
             '<div id="commUploadPreview" style="display:none;margin-bottom:8px;"></div>' +
             '<div id="commUploadLabel" style="color:#9B958E;font-size:0.82rem;">Click or drag an image here<br><span style="font-size:0.72rem;">Max 5MB · JPG, PNG, WEBP</span></div>' +
           '</div>' +
@@ -1132,12 +1131,12 @@
         '</div>' +
 
         // ── Contact fields ──
-        '<div style="margin-bottom:10px;"><label style="display:block;font-size:0.78rem;color:#6B6560;margin-bottom:4px;">Your Name</label>' +
-          '<input type="text" id="commWebName" style="width:100%;padding:8px;border-radius:6px;border:1px solid #e8e0d4;font-size:0.88rem;box-sizing:border-box;"></div>' +
-        '<div style="margin-bottom:10px;"><label style="display:block;font-size:0.78rem;color:#6B6560;margin-bottom:4px;">Email or Phone</label>' +
-          '<input type="text" id="commWebContact" style="width:100%;padding:8px;border-radius:6px;border:1px solid #e8e0d4;font-size:0.88rem;box-sizing:border-box;"></div>' +
-        '<div style="margin-bottom:12px;"><label style="display:block;font-size:0.78rem;color:#6B6560;margin-bottom:4px;">What are you looking for?</label>' +
-          '<textarea id="commWebNotes" rows="3" style="width:100%;padding:8px;border-radius:6px;border:1px solid #e8e0d4;font-size:0.88rem;resize:vertical;box-sizing:border-box;" placeholder="Describe the size, colors, style you have in mind..."></textarea></div>' +
+        '<div style="margin-bottom:10px;"><label style="display:block;font-size:0.78rem;color:var(--text-muted);margin-bottom:4px;">Your Name</label>' +
+          '<input type="text" id="commWebName" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--bg-dark);font-size:0.88rem;box-sizing:border-box;"></div>' +
+        '<div style="margin-bottom:10px;"><label style="display:block;font-size:0.78rem;color:var(--text-muted);margin-bottom:4px;">Email or Phone</label>' +
+          '<input type="text" id="commWebContact" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--bg-dark);font-size:0.88rem;box-sizing:border-box;"></div>' +
+        '<div style="margin-bottom:12px;"><label style="display:block;font-size:0.78rem;color:var(--text-muted);margin-bottom:4px;">What are you looking for?</label>' +
+          '<textarea id="commWebNotes" rows="3" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--bg-dark);font-size:0.88rem;resize:vertical;box-sizing:border-box;" placeholder="Describe the size, colors, style you have in mind..."></textarea></div>' +
         '<button id="commWebSubmitBtn" class="btn btn-primary" style="width:100%;" onclick="submitWebCommission()">Send Inquiry</button>' +
         '<div id="commWebStatus" style="margin-top:8px;font-size:0.82rem;text-align:center;"></div>' +
       '</div>';
@@ -1147,10 +1146,10 @@
     var dropArea = document.getElementById('commUploadArea');
     if (dropArea) {
       ['dragenter', 'dragover'].forEach(function(ev) {
-        dropArea.addEventListener(ev, function(e) { e.preventDefault(); dropArea.style.borderColor = '#2A7C6F'; });
+        dropArea.addEventListener(ev, function(e) { e.preventDefault(); dropArea.style.borderColor = 'var(--accent)'; });
       });
       ['dragleave', 'drop'].forEach(function(ev) {
-        dropArea.addEventListener(ev, function(e) { e.preventDefault(); dropArea.style.borderColor = '#e8e0d4'; });
+        dropArea.addEventListener(ev, function(e) { e.preventDefault(); dropArea.style.borderColor = 'var(--bg-dark)'; });
       });
       dropArea.addEventListener('drop', function(e) {
         var files = e.dataTransfer.files;
@@ -1183,13 +1182,13 @@
     window._allProducts.forEach(function(p) {
       var isSelected = selected.indexOf(p.pid) !== -1;
       html += '<div class="comm-catalog-item' + (isSelected ? ' selected' : '') + '" data-pid="' + escHtml(p.pid) + '" ' +
-        'style="width:72px;flex-shrink:0;cursor:pointer;border-radius:6px;border:2px solid ' + (isSelected ? '#2A7C6F' : 'transparent') + ';padding:3px;transition:border-color 0.2s;" title="' + escHtml(p.name || '') + '">' +
+        'style="width:72px;flex-shrink:0;cursor:pointer;border-radius:6px;border:2px solid ' + (isSelected ? 'var(--accent)' : 'transparent') + ';padding:3px;transition:border-color 0.2s;" title="' + escHtml(p.name || '') + '">' +
         '<img src="' + escHtml(p.image) + '" alt="' + escHtml(p.name || '') + '" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:4px;display:block;" />' +
-        '<div style="font-size:0.65rem;color:#5C3D2E;margin-top:2px;text-align:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">' + escHtml(p.name || '') + '</div>' +
-        (isSelected ? '<div style="text-align:center;font-size:0.65rem;color:#2A7C6F;font-weight:600;">Selected</div>' : '') +
+        '<div style="font-size:0.65rem;color:var(--text-muted);margin-top:2px;text-align:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">' + escHtml(p.name || '') + '</div>' +
+        (isSelected ? '<div style="text-align:center;font-size:0.65rem;color:var(--accent);font-weight:600;">Selected</div>' : '') +
       '</div>';
     });
-    if (!html) html = '<div style="padding:12px;color:#9B958E;font-size:0.82rem;">No products found</div>';
+    if (!html) html = '<div style="padding:12px;color:var(--text-light);font-size:0.82rem;">No products found</div>';
     grid.innerHTML = html;
     if (!grid._clickBound) {
       grid._clickBound = true;
@@ -1230,8 +1229,8 @@
       var reader = new FileReader();
       reader.onload = function(e) {
         preview.innerHTML = '<img src="' + e.target.result + '" style="max-width:120px;max-height:120px;border-radius:6px;object-fit:cover;" />' +
-          '<div style="font-size:0.72rem;color:#5C3D2E;margin-top:4px;">' + file.name + '</div>' +
-          '<div style="font-size:0.68rem;color:#2A7C6F;cursor:pointer;margin-top:2px;" onclick="event.stopPropagation();clearCommUpload();">Remove</div>';
+          '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;">' + file.name + '</div>' +
+          '<div style="font-size:0.68rem;color:var(--accent);cursor:pointer;margin-top:2px;" onclick="event.stopPropagation();clearCommUpload();">Remove</div>';
         preview.style.display = '';
         label.textContent = 'Change image';
       };

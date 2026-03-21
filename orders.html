@@ -637,13 +637,12 @@
     .order-item-row { flex-wrap: wrap; }
   }
   
-  .free-ship-banner{background:#1a1714;text-align:center;padding:6px 0;font-family:"DM Sans",sans-serif;font-size:0.7rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--amber-light,#E8D5B5);border-bottom:1px solid rgba(196,133,60,0.15);}
+
 </style>
 </head>
 <body>
 
 <!-- ============ NAV ============ -->
-<div class="free-ship-banner">Free Shipping on Orders $100+</div>
 <nav id="mainNav"></nav>
 
 <div class="nav-mobile-menu" id="mobileMenu"></div>
@@ -653,7 +652,7 @@
 <div class="page-header">
   <p class="section-label fade-up">Your Orders</p>
   <h1 class="section-title fade-up">Order Status</h1>
-  <p class="section-subtitle fade-up">Track your handcrafted glass art from studio to doorstep.</p>
+  <p class="section-subtitle fade-up">Track your order from our studio to your doorstep.</p>
 </div>
 
 <div class="glass-divider"></div>
@@ -702,7 +701,7 @@
         </div>
         <div>
           <label for="lookupOrderNum">Order Number</label>
-          <input type="text" id="lookupOrderNum" placeholder="e.g. SG-ABC123" autocomplete="off" style="text-transform:uppercase;">
+          <input type="text" id="lookupOrderNum" placeholder="e.g. ABC123" autocomplete="off" style="text-transform:uppercase;">
         </div>
         <button class="btn btn-primary" id="lookupBtn" onclick="lookupOrder()">Find Order</button>
         <div class="lookup-error" id="lookupError"></div>
@@ -1015,8 +1014,8 @@ window.TENANT_READY.then(function() {
     var status = order.status || 'unknown';
     var date = formatDate(order.placedAt || order.pendingPaymentAt || order.createdAt);
     var total = order.total != null ? formatPrice(order.total) : '';
-    var wsBadge = order._isWholesale ? '<span style="display:inline-block;font-size:0.6rem;padding:2px 6px;background:rgba(42,124,111,0.15);color:#2A7C6F;border-radius:3px;margin-left:6px;vertical-align:middle;letter-spacing:0.06em;">WHOLESALE</span>' : '';
-    var payBadge = order.paymentMethod === 'check' ? '<span style="display:inline-block;font-size:0.6rem;padding:2px 6px;background:rgba(196,133,60,0.15);color:#C4853C;border-radius:3px;margin-left:4px;vertical-align:middle;">CHECK</span>' : '';
+    var wsBadge = order._isWholesale ? '<span style="display:inline-block;font-size:0.6rem;padding:2px 6px;background:color-mix(in srgb, var(--accent) 15%, transparent);color:var(--accent);border-radius:3px;margin-left:6px;vertical-align:middle;letter-spacing:0.06em;">WHOLESALE</span>' : '';
+    var payBadge = order.paymentMethod === 'check' ? '<span style="display:inline-block;font-size:0.6rem;padding:2px 6px;background:color-mix(in srgb, var(--primary) 15%, transparent);color:var(--primary);border-radius:3px;margin-left:4px;vertical-align:middle;">CHECK</span>' : '';
 
     return '<div class="order-card" data-order-id="' + esc(order.orderId || order.id || '') + '">' +
       '<div class="order-card-header" onclick="toggleOrderDetail(this)">' +
