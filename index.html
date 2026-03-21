@@ -1010,7 +1010,7 @@
     text-decoration: none;
     display: block;
     color: inherit;
-    border: 1px solid var(--cream-dark, #f0e8db);
+    border: 1px solid var(--bg-dark, #f0e8db);
     box-shadow: 0 1px 3px rgba(0,0,0,0.08);
   }
 
@@ -1069,33 +1069,28 @@
   }
 
   /* ========= DARK MODE — Shop sections ========= */
-  .dark .category-grid-section,
-  .dark .about-blurb-section {
-    background: var(--charcoal, #1a1a1a);
+  html.dark .featured-products-section {
+    background: var(--bg-dark);
   }
 
-  .dark .featured-products-section {
-    background: #222;
+  html.dark .featured-product-card {
+    background: var(--bg);
+    border-color: #444;
   }
 
-  .dark .featured-product-card {
-    background: var(--charcoal, #1a1a1a);
-    border: 1px solid #333;
+  html.dark .featured-product-card .fp-image {
+    background: var(--bg-dark);
   }
 
-  .dark .featured-product-card .fp-image {
-    background: #222;
+  html.dark .featured-product-card .fp-name {
+    color: var(--text);
   }
 
-  .dark .featured-product-card .fp-name {
-    color: var(--text-light, #e0e0e0);
+  html.dark .category-card {
+    background: var(--bg-dark);
   }
 
-  .dark .category-card {
-    background: #222;
-  }
-
-  .dark .category-card-placeholder svg {
+  html.dark .category-card-placeholder svg {
     stroke: #666;
   }
 
