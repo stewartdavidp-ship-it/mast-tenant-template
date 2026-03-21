@@ -4564,6 +4564,13 @@
   </style>
 </head>
 <body>
+<script>
+  // Apply dark mode from OS preference immediately (before auth/tenant resolution)
+  // so the login screen renders correctly. loadSettings() overrides with saved pref later.
+  if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    document.body.classList.add('dark-mode');
+  }
+</script>
 
   <!-- ===== TOP BAR ===== -->
   <div class="mobile-menu-overlay" id="mobileMenuOverlay"></div>
@@ -8209,6 +8216,24 @@ function confirmSettingsModuleSelection() {
     ? purchasable.filter(function(id) { return MODULE_REGISTRY[id].status !== 'coming-soon'; })
     : isPublish ? [] : state.selected.slice();
 
+  // Detect upgrade: if new tier is higher than current Stripe-backed tier, show upgrade confirmation
+  var sub = getTenantSubscription();
+  var currentTierIdx = TIER_ORDER.indexOf(sub.tier || 'publish');
+  var newTierIdx = TIER_ORDER.indexOf(tier);
+  var hasStripeSubscription = _subscriptionDetails && _subscriptionDetails.subscriptionId;
+
+  if (newTierIdx > currentTierIdx && hasStripeSubscription) {
+    // Tier upgrade — requires Stripe subscription change
+    showUpgradeConfirmation(tier, modulesToSave);
+    return;
+  }
+
+  // Free tier upgrade (publish → paid) without existing Stripe sub — handled by checkout flow
+  if (newTierIdx > currentTierIdx && !hasStripeSubscription && tierConfig.price > 0) {
+    showToast('Please subscribe first to upgrade to ' + tierConfig.name, true);
+    return;
+  }
+
   state.saving = true;
   // Re-render to show "Saving..."
   renderModuleSelectionUI(state.containerId, {
@@ -8281,7 +8306,8 @@ function renderLockedModuleCard(moduleId) {
   if (synergy) {
     h += '<div class="lmc-synergy">' + esc(synergy) + '</div>';
   }
-  h += '<button class="lmc-cta" onclick="navigateTo(\'settings\'); setTimeout(function(){ switchSettingsSubView(\'subscription\'); }, 100);">' + esc(ctaLabel) + '</button>';
+  var tierToSelect = nextTier ? nextTier.id : '';
+  h += '<button class="lmc-cta" onclick="navigateTo(\'settings\'); setTimeout(function(){ switchSettingsSubView(\'subscription\'); ' + (tierToSelect ? 'selectSubscriptionTier(\'' + esc(tierToSelect) + '\');' : '') + ' }, 100);">' + esc(ctaLabel) + '</button>';
   h += '</div>';
   return h;
 }
@@ -10522,6 +10548,165 @@ async function acceptDowngradeOffer(newPlan) {
     showToast('Switched to ' + newPlan + '! Your new plan takes effect immediately.');
     _subscriptionDetails = null; // Force refresh
     renderSubscriptionSettings();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
+
+// --- Upgrade Subscription Flow ---
+
+function showUpgradeConfirmation(newTierId, pendingModules) {
+  var sub = getTenantSubscription();
+  var currentTier = sub.tier || 'publish';
+  var currentConfig = TIER_CONFIG[currentTier] || {};
+  var newConfig = TIER_CONFIG[newTierId];
+  if (!newConfig) return;
+
+  var priceDiff = newConfig.price - (currentConfig.price || 0);
+
+  var overlay = document.createElement('div');
+  overlay.id = 'upgradeConfirmOverlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+
+  var h = '<div style="background:var(--cream);border-radius:10px;max-width:480px;width:90%;padding:24px 28px;box-shadow:0 8px 30px rgba(0,0,0,0.2);">';
+
+  // Header
+  h += '<div style="text-align:center;margin-bottom:20px;">';
+  h += '<div style="font-size:1.8rem;margin-bottom:8px;">🚀</div>';
+  h += '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.3rem;font-weight:600;color:var(--charcoal);">Upgrade Your Plan</div>';
+  h += '</div>';
+
+  // Plan comparison
+  h += '<div style="display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:20px;">';
+  h += '<div style="text-align:center;padding:12px 16px;background:var(--cream-dark);border-radius:8px;min-width:120px;">';
+  h += '<div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;">Current</div>';
+  h += '<div style="font-weight:700;color:var(--charcoal);font-size:1rem;">' + esc(currentConfig.name || 'Publish') + '</div>';
+  h += '<div style="font-size:0.85rem;color:var(--warm-gray);">' + (currentConfig.price ? '$' + currentConfig.price + '/mo' : 'Free') + '</div>';
+  h += '</div>';
+  h += '<div style="font-size:1.2rem;color:var(--amber);">→</div>';
+  h += '<div style="text-align:center;padding:12px 16px;background:var(--cream);border:2px solid var(--amber);border-radius:8px;min-width:120px;">';
+  h += '<div style="font-size:0.75rem;color:var(--amber);text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">New Plan</div>';
+  h += '<div style="font-weight:700;color:var(--charcoal);font-size:1rem;">' + esc(newConfig.name) + '</div>';
+  h += '<div style="font-size:0.85rem;color:var(--amber);font-weight:600;">$' + newConfig.price + '/mo</div>';
+  h += '</div>';
+  h += '</div>';
+
+  // What changes
+  h += '<div style="background:var(--cream-dark);border-radius:8px;padding:14px 16px;margin-bottom:16px;">';
+  h += '<div style="font-size:0.85rem;font-weight:600;color:var(--charcoal);margin-bottom:8px;">What changes:</div>';
+  h += '<ul style="margin:0;padding-left:20px;font-size:0.85rem;color:var(--charcoal);list-style:disc;">';
+  h += '<li>Module limit: ' + (currentConfig.moduleLimit || 0) + ' → <strong>' + newConfig.moduleLimit + '</strong></li>';
+  h += '<li>Monthly tokens: ' + (currentConfig.monthlyTokens || 0) + ' → <strong>' + newConfig.monthlyTokens + '</strong></li>';
+  if (!currentConfig.studioAssistant && newConfig.studioAssistant) {
+    h += '<li><strong>Studio Assistant unlocked</strong></li>';
+  }
+  h += '</ul>';
+  h += '</div>';
+
+  // Proration note — shows estimate, then updates with real Stripe preview
+  h += '<div id="upgradeProrationNote" style="background:#fef3c7;border-radius:6px;padding:10px 14px;margin-bottom:20px;font-size:0.82rem;color:#92400e;">';
+  h += 'Calculating your prorated charge... <span style="opacity:0.6">(~$' + priceDiff + ' estimate)</span>';
+  h += '</div>';
+
+  // Buttons
+  h += '<div style="display:flex;justify-content:flex-end;gap:8px;">';
+  h += '<button class="btn btn-secondary" onclick="closeUpgradeModal()">Cancel</button>';
+  h += '<button class="btn btn-primary" onclick="confirmUpgradeSubscription(\'' + esc(newTierId) + '\')">Confirm Upgrade</button>';
+  h += '</div>';
+
+  h += '</div>';
+  overlay.innerHTML = h;
+  document.body.appendChild(overlay);
+
+  // Store pending modules for after upgrade completes
+  overlay._pendingModules = pendingModules;
+
+  overlay.addEventListener('click', function(e) {
+    if (e.target === overlay) closeUpgradeModal();
+  });
+
+  // Fetch real proration preview from Stripe (non-blocking)
+  fetchUpgradePreview(newTierId, priceDiff, newConfig.price);
+}
+
+async function fetchUpgradePreview(newPlan, estimateDiff, newMonthlyPrice) {
+  var noteEl = document.getElementById('upgradeProrationNote');
+  if (!noteEl) return;
+  try {
+    var token = await firebase.auth().currentUser.getIdToken();
+    var resp = await fetch(CLOUD_FUNCTIONS_BASE + '/getUpgradePreview', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token,
+        'X-Tenant-ID': MastDB.tenantId(),
+      },
+      body: JSON.stringify({ tenantId: MastDB.tenantId(), newPlan: newPlan }),
+    });
+    if (resp.ok) {
+      var data = await resp.json();
+      noteEl.innerHTML = 'You\'ll be charged <strong>' + esc(data.proratedAmountFormatted) + '</strong> today (prorated for the rest of this billing period). Your next full charge will be <strong>$' + newMonthlyPrice + '/mo</strong>.';
+    } else {
+      // Fallback to estimate
+      noteEl.innerHTML = 'You\'ll be charged approximately <strong>~$' + estimateDiff + '</strong> for the remainder of this billing period. Your next full charge will be <strong>$' + newMonthlyPrice + '/mo</strong>.';
+    }
+  } catch (err) {
+    // Fallback to estimate on network error
+    noteEl.innerHTML = 'You\'ll be charged approximately <strong>~$' + estimateDiff + '</strong> for the remainder of this billing period. Your next full charge will be <strong>$' + newMonthlyPrice + '/mo</strong>.';
+  }
+}
+
+function closeUpgradeModal() {
+  var overlay = document.getElementById('upgradeConfirmOverlay');
+  if (overlay) overlay.remove();
+}
+
+async function confirmUpgradeSubscription(newPlan) {
+  var overlay = document.getElementById('upgradeConfirmOverlay');
+  var pendingModules = overlay ? overlay._pendingModules : null;
+  closeUpgradeModal();
+
+  var newConfig = TIER_CONFIG[newPlan];
+  showToast('Upgrading to ' + (newConfig ? newConfig.name : newPlan) + '...');
+
+  try {
+    var token = await firebase.auth().currentUser.getIdToken();
+    var resp = await fetch(CLOUD_FUNCTIONS_BASE + '/updateSubscription', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token,
+        'X-Tenant-ID': MastDB.tenantId(),
+      },
+      body: JSON.stringify({ tenantId: MastDB.tenantId(), newPlan: newPlan }),
+    });
+    if (!resp.ok) {
+      var errData = await resp.json().catch(function() { return {}; });
+      throw new Error(errData.error || 'Failed to upgrade plan');
+    }
+
+    // Update local subscription with new tier and modules
+    var updateData = {
+      tier: newPlan,
+      updatedAt: new Date().toISOString()
+    };
+
+    // If we have pending module selections, save them too
+    if (pendingModules) {
+      updateData.modules = pendingModules;
+      updateData.moduleChangedAt = new Date().toISOString();
+    }
+
+    await MastDB.subscription.update(updateData);
+    _tenantSubscription = Object.assign({}, _tenantSubscription || {}, updateData);
+    _subscriptionDetails = null; // Force refresh
+    _subscriptionSettingsTier = null;
+
+    applySidebarGating();
+    applySettingsGating();
+    renderSubscriptionSettings();
+
+    showToast('Upgraded to ' + (newConfig ? newConfig.name : newPlan) + '! Your new plan is active.');
   } catch (err) {
     showToast(err.message, true);
   }
