@@ -101,11 +101,11 @@
 
   /* Form card */
   .comm-form-card {
-    background: white;
+    background: var(--surface-card);
     border-radius: 12px;
     padding: 32px;
     box-shadow: 0 2px 20px rgba(0,0,0,0.06);
-    border: 1px solid #e8e0d4;
+    border: 1px solid var(--surface-card-border);
   }
 
   .comm-form-card h2 {
@@ -145,11 +145,12 @@
     width: 100%;
     padding: 10px 12px;
     border-radius: 8px;
-    border: 1px solid #e8e0d4;
+    border: 1px solid var(--surface-card-border);
     font-size: 0.92rem;
     font-family: 'DM Sans', sans-serif;
     transition: border-color 0.2s;
-    background: var(--cream);
+    background: var(--bg);
+    color: var(--text);
   }
 
   .form-section input:focus,
@@ -171,9 +172,9 @@
     max-height: 260px;
     overflow-y: auto;
     padding: 8px;
-    border: 1px solid #e8e0d4;
+    border: 1px solid var(--surface-card-border);
     border-radius: 8px;
-    background: var(--cream);
+    background: var(--bg);
   }
 
   .catalog-item {
@@ -222,12 +223,12 @@
 
   /* Upload area */
   .upload-area {
-    border: 2px dashed #e8e0d4;
+    border: 2px dashed var(--surface-card-border);
     border-radius: 8px;
     padding: 20px;
     text-align: center;
     cursor: pointer;
-    background: var(--cream);
+    background: var(--bg);
     transition: border-color 0.2s;
   }
 
