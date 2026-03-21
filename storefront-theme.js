@@ -237,6 +237,9 @@
       slotMap[el.getAttribute('data-slot')] = el;
     }
 
+    // Mark <body> so we can verify flow engine ran
+    document.body.setAttribute('data-flow-applied', manifest.id || 'true');
+
     // Hide sections not in the flow
     Object.keys(slotMap).forEach(function (slotId) {
       if (flow.indexOf(slotId) === -1) {
