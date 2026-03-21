@@ -12083,14 +12083,24 @@ function wizardPreCheckFeatures(analysis) {
   var cs = (analysis && analysis.contentSections) || [];
   var headings = cs.map(function(s) { return (s.heading || '').toLowerCase(); }).join(' ');
 
+  // Also use crawl manifest contentTypes (more reliable than section headings)
+  var manifest = window._wizardCrawlManifest || {};
+  var ct = manifest.contentTypes || {};
+
   cards.forEach(function(card) {
     var f = card.dataset.feature;
     var check = false;
-    if (f === 'shop' && ts.storefront && ts.storefront.length > 0) check = true;
+    // Shop: detected storefront OR products found in crawl manifest
+    if (f === 'shop' && ((ts.storefront && ts.storefront.length > 0) || (ct.products && ct.products.found))) check = true;
+    // Newsletter: detected email tools
     if (f === 'newsletter' && ts.email && ts.email.length > 0) check = true;
-    if (f === 'blog' && /blog|news|updates/.test(headings)) check = true;
-    if (f === 'events' && /events?|shows?|schedule/.test(headings)) check = true;
-    if (f === 'commissions' && /custom|commission|bespoke/.test(headings)) check = true;
+    // Blog: found in manifest OR detected in content sections
+    if (f === 'blog' && ((ct.blog && ct.blog.found) || /blog|news|journal|updates/.test(headings))) check = true;
+    // Events: found in manifest OR detected in content sections
+    if (f === 'events' && ((ct.events && ct.events.found) || /events?|shows?|schedule|market/.test(headings))) check = true;
+    // Commissions: detected in content sections
+    if (f === 'commissions' && /custom|commission|bespoke|made.to.order/.test(headings)) check = true;
+    // Members: detected in content sections
     if (f === 'members' && /member|wholesale|vip/.test(headings)) check = true;
     if (check) {
       card.dataset.selected = 'true';
