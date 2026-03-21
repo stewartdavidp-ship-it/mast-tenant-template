@@ -351,8 +351,7 @@
     }
     html += '<div class="wp-overview-stat"><strong style="min-width:120px;">Style:</strong> ' + esc(styleName) + '</div>';
     html += '<div style="margin-top:24px;">';
-    html += '<button class="btn btn-primary" onclick="wpPublish()" id="wpPublishBtn">Publish Changes</button>';
-    html += '<span id="wpPublishStatus" style="margin-left:12px;font-size:0.85rem;"></span>';
+    html += '<p style="font-size:0.85rem;color:var(--warm-gray);">Theme and content changes are saved automatically and appear on your live site immediately.</p>';
     html += '</div>';
 
     return html;
@@ -1460,7 +1459,7 @@
   function renderReviewSection() {
     var html = '<div style="margin-top:24px;padding-top:24px;border-top:1px solid var(--cream-dark);">';
     html += '<h3 style="font-size:1rem;margin-bottom:4px;">Review Imported Content</h3>';
-    html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">Items imported as drafts. Publish them to make them live on your site.</p>';
+    html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">Imported items are live on your site. Review and customize them below.</p>';
 
     // Review sub-tabs
     html += '<div class="view-tabs">';

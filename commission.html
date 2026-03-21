@@ -6,7 +6,10 @@
 <title>Custom Commission &mdash; My Shop</title><!-- TENANT: brand -->
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="storefront.css">
+<link rel="stylesheet" href="cart.css">
+<link rel="stylesheet" href="checkout.css">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
+<script>(function(){var s=localStorage.getItem('mast-theme');var d=window.matchMedia('(prefers-color-scheme:dark)').matches;if(s==='dark'||(s!=='light'&&d))document.documentElement.classList.add('dark');else document.documentElement.classList.add('light');})();</script>
 <style>
   /* ========= HERO BANNER ========= */
   .comm-hero {
@@ -517,6 +520,7 @@
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
 <script src="storefront-tenant.js"></script>
 <script src="storefront-theme.js"></script>
@@ -736,6 +740,8 @@ function siteSignIn() {
   window.location.href = 'app/index.html';
 }
 </script>
+<script src="cart.js"></script>
+<script src="checkout.js?v=2"></script>
 <script src="feedback-widget.js"></script>
 <script src="share-widget.js"></script>
 </body>

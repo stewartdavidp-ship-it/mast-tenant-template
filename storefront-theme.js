@@ -395,6 +395,41 @@
               }
             }
 
+            // Apply default theme from manifest if no user preference is stored
+            if (manifest && manifest.defaultTheme && !localStorage.getItem('mast-theme')) {
+              var h = document.documentElement;
+              if (manifest.defaultTheme === 'dark' && !h.classList.contains('dark')) {
+                h.classList.remove('light');
+                h.classList.add('dark');
+              } else if (manifest.defaultTheme === 'light' && !h.classList.contains('light')) {
+                h.classList.remove('dark');
+                h.classList.add('light');
+              }
+            }
+
+            // Inject theme toggle button (shared across all pages)
+            var injectToggle = function () {
+              if (document.getElementById('themeToggle')) return;
+              var btn = document.createElement('button');
+              btn.id = 'themeToggle';
+              btn.title = 'Toggle dark mode';
+              btn.setAttribute('style', 'position:fixed;top:12px;right:12px;z-index:9999;width:36px;height:36px;border-radius:50%;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:16px;box-shadow:var(--shadow);color:var(--text);display:flex;align-items:center;justify-content:center;padding:0;');
+              btn.textContent = document.documentElement.classList.contains('dark') ? '\u2600' : '\uD83C\uDF19';
+              btn.addEventListener('click', function () {
+                var el = document.documentElement;
+                var isDark = el.classList.contains('dark');
+                if (isDark) { el.classList.remove('dark'); el.classList.add('light'); localStorage.setItem('mast-theme', 'light'); }
+                else { el.classList.remove('light'); el.classList.add('dark'); localStorage.setItem('mast-theme', 'dark'); }
+                btn.textContent = el.classList.contains('dark') ? '\u2600' : '\uD83C\uDF19';
+              });
+              document.body.appendChild(btn);
+            };
+            if (document.readyState === 'loading') {
+              document.addEventListener('DOMContentLoaded', injectToggle);
+            } else {
+              injectToggle();
+            }
+
             // Resolve the theme-ready promise so data loaders know flow is applied
             if (window._resolveThemeReady) window._resolveThemeReady();
 
@@ -412,6 +447,28 @@
         })
         .catch(function (err) {
           console.warn('[storefront-theme] Failed to load theme config:', err.message);
+          // Inject toggle even on error
+          var injectToggleFallback = function () {
+            if (document.getElementById('themeToggle')) return;
+            var btn = document.createElement('button');
+            btn.id = 'themeToggle';
+            btn.title = 'Toggle dark mode';
+            btn.setAttribute('style', 'position:fixed;top:12px;right:12px;z-index:9999;width:36px;height:36px;border-radius:50%;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:16px;box-shadow:var(--shadow);color:var(--text);display:flex;align-items:center;justify-content:center;padding:0;');
+            btn.textContent = document.documentElement.classList.contains('dark') ? '\u2600' : '\uD83C\uDF19';
+            btn.addEventListener('click', function () {
+              var el = document.documentElement;
+              var isDark = el.classList.contains('dark');
+              if (isDark) { el.classList.remove('dark'); el.classList.add('light'); localStorage.setItem('mast-theme', 'light'); }
+              else { el.classList.remove('light'); el.classList.add('dark'); localStorage.setItem('mast-theme', 'dark'); }
+              btn.textContent = el.classList.contains('dark') ? '\u2600' : '\uD83C\uDF19';
+            });
+            document.body.appendChild(btn);
+          };
+          if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', injectToggleFallback);
+          } else {
+            injectToggleFallback();
+          }
           if (window._resolveThemeReady) window._resolveThemeReady();
           // Still dispatch event with empty config so pages don't wait forever
           window.dispatchEvent(new CustomEvent('storefront-theme-ready', { detail: {} }));
