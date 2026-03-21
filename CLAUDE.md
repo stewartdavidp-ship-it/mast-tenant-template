@@ -52,8 +52,9 @@ Features: public storefront (shop, commissions, blog), admin app (Studio Compani
 - Public storefront pages use vanilla JS, IIFE pattern, Firebase compat SDK
 - Events pages (`events/`, `vendor/`, `show/`) have JS extracted to separate `.js` files — HTML is a thin shell
 - **Script loading order:** `storefront-tenant.js` → `storefront-theme.js` → `storefront-nav.js` → `tenant-brand.js` → `cart.js`
-- `storefront.css` provides all shared CSS (`:root` vars, nav, footer, buttons, etc.) — page-specific styles remain inline
-- `storefront-theme.js` reads `public/config/theme` and injects CSS custom properties for colors/fonts
+- `storefront.css` provides all shared CSS (`:root` vars + semantic surface tokens, nav, footer, buttons, etc.) — page-specific styles remain inline
+- **CSS token architecture:** Theme tokens (`--primary`, `--bg`, `--text`) invert in dark mode. Surface tokens (`--surface-dark`, `--surface-card`, `--on-dark`) do NOT invert. Use surface tokens for elements that should stay dark/light regardless of mode.
+- `storefront-theme.js` reads `public/config/theme`, loads template manifests, applies color schemes, runs homepage flow engine. Supports `?preview_template=` for live preview
 - `storefront-nav.js` reads `public/config/nav` + `promoBanner` and builds nav/mobile menu dynamically
 - `tenant-brand.js` applies brand customization via `data-tenant` attributes after tenant resolution
 - All public pages are fully generic — no tenant-specific hardcodes. Content comes from Firebase config or shows appropriate placeholders

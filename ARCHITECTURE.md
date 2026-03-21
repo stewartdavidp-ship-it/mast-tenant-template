@@ -100,9 +100,9 @@ Static HTML pages. No build system, no bundler.
 
 | File | Purpose |
 |------|---------|
-| `storefront.css` | Shared CSS for all public pages. `:root` vars (generic tokens: `--primary`, `--accent`, `--bg`, etc.), dark mode, reset, nav, buttons, section labels, page header, forms, footer, newsletter bar, powered-by-mast, mobile menu, scroll animations, responsive base. Legacy aliases (`--amber: var(--primary)`, etc.) for backward compat |
+| `storefront.css` | Shared CSS for all public pages. `:root` vars (generic tokens: `--primary`, `--accent`, `--bg`, etc. + semantic surface tokens: `--surface-dark`, `--surface-card`, `--on-dark`, etc.), dark mode via `@media (prefers-color-scheme: dark)` + `html.dark`, reset, nav, buttons, section labels, page header, forms, footer, newsletter bar, powered-by-mast, mobile menu, scroll animations, responsive base. Legacy aliases (`--amber: var(--primary)`, etc.) for backward compat |
 | `storefront-tenant.js` | Tenant resolution from domain. Sets global `TENANT_ID`. Loaded first on all pages |
-| `storefront-theme.js` | Reads `{TENANT_ID}/public/config/theme` from RTDB (REST API). Injects CSS custom properties on `:root`. Auto-generates color variants. Supports 5 font pair presets (classic, modern, editorial, clean, artisan). Dispatches `storefront-theme-ready` event |
+| `storefront-theme.js` | Reads `{TENANT_ID}/public/config/theme` from RTDB (REST API). Injects CSS custom properties on `:root`. Auto-generates color variants. Supports 6 font pair presets (classic, modern, editorial, clean, artisan, geometric). Loads template manifests, applies color schemes and homepage flow. Supports `?preview_template=` for live preview without Firebase writes. Dispatches `storefront-theme-ready` event. Exposes `MAST_THEME_READY` promise |
 | `storefront-nav.js` | Reads `{TENANT_ID}/public/config/nav` from RTDB. Builds `<nav>` and mobile menu dynamically. Supports section show/hide via `enabled` flag. Reads `promoBanner` config for data-driven promo banner. Dispatches `storefront-nav-ready` event |
 | `tenant-brand.js` | Brand injection via `data-tenant` attributes. Reads platform registry for business name, tagline, contact info |
 | `cart.js` | Cart drawer, toast notifications, auth (Sign In/Out via Google), shared across all public pages |
@@ -133,6 +133,49 @@ Bottom-center stacking toasts matching the admin app pattern. Implemented in `ca
 - Toasts: `.cart-toast` — slide-up animation, auto-fade after 5s
 - Error variant: `.cart-toast.error` — red background with shake animation
 - API: `showToast(message, isError)` — creates a new DOM element per toast
+
+## Template System
+
+Tenants can choose from multiple design templates that control homepage layout, section visibility, color schemes, and font pairs.
+
+### Templates
+
+| Template | ID | Flow | Description |
+|----------|------|------|------------|
+| The Studio | `the-studio` | Story-first | Solo artist, founder-is-brand. Hero → About → Gallery → Contact |
+| The Shop | `the-shop` | Product-first | Broad catalog. Hero → Category Grid → Featured Products → About Blurb |
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `templates/registry.json` | Static array of available template IDs |
+| `templates/{id}/manifest.json` | Template definition: slots, colorSchemes, fontPairs, homepageFlow, navStructure, slotMapping |
+| `storefront-theme.js` | Runtime flow engine: loads manifest, applies color scheme, reorders/hides homepage sections via `data-slot` attributes |
+| `app/modules/website.js` | Admin UI: Template tab (picker + preview + switch), Style tab (manifest-driven schemes/fonts), Sections tab (manifest-driven toggles) |
+
+### How It Works
+
+1. **Template selection:** `public/config/theme/templateId` in Firebase RTDB
+2. **Manifest loading:** `storefront-theme.js` fetches `templates/{templateId}/manifest.json` at runtime
+3. **Color scheme:** `public/config/theme/colorSchemeId` maps to a manifest color scheme. Colors applied as CSS custom properties
+4. **Homepage flow:** `applyHomepageFlow()` reorders DOM sections, hides sections not in the flow via `data-flow-hidden`, shows flow sections via `data-flow-active`
+5. **Section show/hide guard:** `MAST_THEME_READY` promise prevents data loaders from showing sections before flow engine runs
+6. **Template switching:** Admin picks new template → section compatibility analysis (slotMapping) → gallery image migration (hide/restore) → write templateId to Firebase
+7. **Gallery migration:** Images in incompatible sections get `templateHidden` flag. Restored automatically on switch-back.
+8. **Live preview:** `?preview_template=` query param overrides templateId without writing to Firebase. Shows preview banner.
+9. **Deploy pipeline:** `mast_hosting` reads templateId per tenant, validates manifest, applies template page overlays if present
+
+### CSS Token Architecture
+
+```
+Theme tokens (inverted by dark mode):     Surface tokens (NOT inverted):
+  --primary, --accent, --bg, --text         --surface-dark (always dark)
+  --charcoal: var(--text)                   --surface-card (white/dark card)
+  --cream: var(--bg)                        --on-dark (white text on dark bg)
+```
+
+Use `--surface-dark` for dark backgrounds (page headers, footer, newsletter). Use `--surface-card` for card backgrounds (product cards, filter pills). Use `--on-dark` for text on dark backgrounds.
 
 ## Wholesale Catalog
 
