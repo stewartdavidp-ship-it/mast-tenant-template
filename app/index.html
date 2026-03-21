@@ -11991,16 +11991,16 @@ async function wizardAnalyzeSite() {
         manifestLines.push('<div style="margin-bottom:6px;"><strong>Platform detected:</strong> ' + esc(crawlManifest.platform) + '</div>');
       }
       if (ct.products && ct.products.found) {
-        manifestLines.push('<div style="margin-bottom:4px;">&#128722; ~' + (ct.products.estimatedCount || '?') + ' products</div>');
+        manifestLines.push('<div style="margin-bottom:4px;">&#128722; Products found — we\'ll import your full catalog</div>');
       }
       if (ct.blog && ct.blog.found) {
-        manifestLines.push('<div style="margin-bottom:4px;">&#128221; ~' + (ct.blog.estimatedCount || '?') + ' blog posts</div>');
+        manifestLines.push('<div style="margin-bottom:4px;">&#128221; Blog posts found</div>');
       }
       if (ct.events && ct.events.found) {
         manifestLines.push('<div style="margin-bottom:4px;">&#128197; Events page found</div>');
       }
       if (ct.gallery && ct.gallery.found) {
-        manifestLines.push('<div style="margin-bottom:4px;">&#127912; Gallery/portfolio page found</div>');
+        manifestLines.push('<div style="margin-bottom:4px;">&#127912; Gallery/portfolio found</div>');
       }
       if (manifestLines.length === 0) {
         manifestLines.push('<div style="color:var(--warm-gray);">No importable content detected. You can add products manually later.</div>');
