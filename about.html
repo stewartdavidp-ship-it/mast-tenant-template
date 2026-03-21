@@ -492,7 +492,7 @@
       var data = snap.val();
       if (!data) return;
       var aboutImages = Object.values(data)
-        .filter(function(i) { return i.section === 'about' && i.visible !== false; })
+        .filter(function(i) { return i.section === 'about' && i.visible !== false && !i.templateHidden; })
         .sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
 
       if (aboutImages.length >= 1) {

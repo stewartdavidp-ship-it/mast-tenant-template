@@ -361,6 +361,20 @@
     var html = '';
     var currentTemplateId = (themeConfig && themeConfig.templateId) || null;
 
+    // Load gallery data for migration preview (async, cached)
+    if (!window._wpGalleryCache && !window._wpGalleryLoading) {
+      window._wpGalleryLoading = true;
+      MastDB.gallery.list(500).then(function(snap) {
+        window._wpGalleryCache = snap.val() || {};
+        window._wpGalleryLoading = false;
+        // Re-render if we're showing the switch dialog
+        if (pendingSwitchTemplateId) renderWebsite();
+      }).catch(function() {
+        window._wpGalleryCache = {};
+        window._wpGalleryLoading = false;
+      });
+    }
+
     if (!allTemplateManifests || !allTemplateManifests.length) {
       html += '<p style="color:var(--warm-gray);">No templates available. Deploy template manifests first.</p>';
       return html;
@@ -523,6 +537,47 @@
       html += '<ul>';
       newSections.forEach(function(s) { html += '<li>' + esc(s) + '</li>'; });
       html += '</ul></div>';
+    }
+
+    // Gallery image migration preview
+    var galleryMigration = computeGalleryMigration(window._wpGalleryCache || {}, newManifest, currentTemplateId);
+    var totalImages = Object.keys(window._wpGalleryCache || {}).length;
+    var activeImages = totalImages - (galleryMigration.hide.length + galleryMigration.restore.length);
+
+    if (totalImages > 0 && (galleryMigration.hide.length > 0 || galleryMigration.restore.length > 0)) {
+      html += '<div class="wp-switch-section" style="margin-top:12px;padding:10px 14px;background:color-mix(in srgb, var(--accent, #2A7C6F) 8%, transparent);border-radius:8px;">';
+      html += '<h4 style="color:var(--accent, #2A7C6F);font-size:0.85rem;margin-bottom:6px;">Gallery Images</h4>';
+
+      if (galleryMigration.migrate.length > 0) {
+        html += '<div style="font-size:0.8rem;color:var(--warm-gray);margin-bottom:4px;">';
+        html += '<span style="color:var(--teal, #2A7C6F);">' + galleryMigration.migrate.length + '</span> image' + (galleryMigration.migrate.length !== 1 ? 's' : '') + ' will carry over';
+        html += '</div>';
+      }
+
+      if (galleryMigration.hide.length > 0) {
+        // Group hidden images by section for a cleaner display
+        var hiddenBySec = {};
+        galleryMigration.hide.forEach(function(h) {
+          var secLabel = h.section;
+          SECTIONS.forEach(function(s) { if (s.id === h.section) secLabel = s.label; });
+          hiddenBySec[secLabel] = (hiddenBySec[secLabel] || 0) + 1;
+        });
+        html += '<div style="font-size:0.8rem;color:var(--danger, #e74c3c);margin-bottom:4px;">';
+        html += '<span style="font-weight:600;">' + galleryMigration.hide.length + '</span> image' + (galleryMigration.hide.length !== 1 ? 's' : '') + ' will be hidden (not deleted)';
+        html += '<ul style="margin:4px 0 0 16px;list-style:disc;">';
+        Object.keys(hiddenBySec).forEach(function(label) {
+          html += '<li>' + esc(label) + ': ' + hiddenBySec[label] + '</li>';
+        });
+        html += '</ul></div>';
+      }
+
+      if (galleryMigration.restore.length > 0) {
+        html += '<div style="font-size:0.8rem;color:var(--teal, #2A7C6F);margin-bottom:4px;">';
+        html += '<span style="font-weight:600;">' + galleryMigration.restore.length + '</span> previously hidden image' + (galleryMigration.restore.length !== 1 ? 's' : '') + ' will be restored';
+        html += '</div>';
+      }
+
+      html += '</div>';
     }
 
     html += '<div style="display:flex;gap:10px;margin-top:20px;">';
@@ -1468,6 +1523,103 @@
     renderWebsite();
   };
 
+  // ── Gallery image migration for template switching ──
+
+  // Sections that are always compatible regardless of template (product-related)
+  var ALWAYS_COMPATIBLE_SECTIONS = ['shop', 'hero'];
+
+  function isProductCategorySection(sectionId) {
+    // Category IDs are dynamic — anything not in CORE_SECTIONS is a product category
+    var coreIds = ['hero', 'about', 'gallery', 'schedule', 'shop'];
+    return coreIds.indexOf(sectionId) === -1;
+  }
+
+  function computeGalleryMigration(galleryData, newManifest, currentTemplateId) {
+    var migrate = []; // { id, section, mappedTo }
+    var hide = []; // { id, section }
+    var restore = []; // { id, section } — previously hidden images that can be restored
+
+    if (!galleryData || !newManifest) return { migrate: migrate, hide: hide, restore: restore };
+
+    var slotMapping = newManifest.slotMapping || {};
+    // Build list of all slot IDs in the new template
+    var newSlotIds = [];
+    if (newManifest.slots) {
+      ['universal', 'common', 'differentiators'].forEach(function(cat) {
+        (newManifest.slots[cat] || []).forEach(function(s) { newSlotIds.push(s.id); });
+      });
+    }
+
+    Object.keys(galleryData).forEach(function(imageId) {
+      var img = galleryData[imageId];
+      var section = img.section || 'gallery';
+
+      // Check if this image was previously hidden by a template switch
+      if (img.templateHidden) {
+        // Can the new template support this image's section?
+        var originalSection = img.templateHiddenSection || section;
+        if (isSectionCompatible(originalSection, slotMapping, newSlotIds)) {
+          restore.push({ id: imageId, section: originalSection });
+        }
+        // If still incompatible, stays hidden — don't add to hide (already hidden)
+        return;
+      }
+
+      // Always compatible sections
+      if (ALWAYS_COMPATIBLE_SECTIONS.indexOf(section) !== -1 || isProductCategorySection(section)) {
+        migrate.push({ id: imageId, section: section, mappedTo: section });
+        return;
+      }
+
+      // Check slotMapping
+      if (isSectionCompatible(section, slotMapping, newSlotIds)) {
+        var mappedTo = slotMapping[section] !== undefined ? slotMapping[section] : section;
+        migrate.push({ id: imageId, section: section, mappedTo: mappedTo || section });
+      } else {
+        hide.push({ id: imageId, section: section });
+      }
+    });
+
+    return { migrate: migrate, hide: hide, restore: restore };
+  }
+
+  function isSectionCompatible(section, slotMapping, newSlotIds) {
+    if (ALWAYS_COMPATIBLE_SECTIONS.indexOf(section) !== -1) return true;
+    if (isProductCategorySection(section)) return true;
+    // Explicitly mapped to non-null
+    if (slotMapping.hasOwnProperty(section) && slotMapping[section] !== null) return true;
+    // Same ID exists in new template
+    if (newSlotIds.indexOf(section) >= 0) return true;
+    // Explicitly mapped to null
+    if (slotMapping.hasOwnProperty(section) && slotMapping[section] === null) return false;
+    // Not in mapping and not in new template
+    return false;
+  }
+
+  async function executeGalleryMigration(migration, currentTemplateId) {
+    var updates = {};
+
+    // Hide incompatible images
+    migration.hide.forEach(function(item) {
+      updates['public/gallery/' + item.id + '/templateHidden'] = true;
+      updates['public/gallery/' + item.id + '/templateHiddenSection'] = item.section;
+      updates['public/gallery/' + item.id + '/templateHiddenFrom'] = currentTemplateId;
+    });
+
+    // Restore previously hidden images
+    migration.restore.forEach(function(item) {
+      updates['public/gallery/' + item.id + '/templateHidden'] = null;
+      updates['public/gallery/' + item.id + '/templateHiddenSection'] = null;
+      updates['public/gallery/' + item.id + '/templateHiddenFrom'] = null;
+    });
+
+    if (Object.keys(updates).length > 0) {
+      await MastDB._ref().update(updates);
+    }
+
+    return { hidden: migration.hide.length, restored: migration.restore.length };
+  }
+
   // ── Template switching handlers ──
 
   window.wpSelectTemplate = function(templateId) {
@@ -1495,6 +1647,11 @@
     }
 
     try {
+      // Execute gallery image migration
+      var currentTemplateId = (themeConfig && themeConfig.templateId) || null;
+      var galleryMigration = computeGalleryMigration(window._wpGalleryCache || {}, newManifest, currentTemplateId);
+      var migrationResult = await executeGalleryMigration(galleryMigration, currentTemplateId);
+
       // Write templateId
       await MastDB._ref('public/config/theme/templateId').set(pendingSwitchTemplateId);
 
@@ -1515,8 +1672,14 @@
         await MastDB._ref('public/config/theme/fontPair').set(defaultFontId);
       }
 
+      // Invalidate gallery cache so it reloads with updated data
+      window._wpGalleryCache = null;
+
       markUnpublished();
-      showToast('Switched to ' + newManifest.name + '.');
+      var migrationMsg = '';
+      if (migrationResult.hidden > 0) migrationMsg += ' ' + migrationResult.hidden + ' image' + (migrationResult.hidden !== 1 ? 's' : '') + ' hidden.';
+      if (migrationResult.restored > 0) migrationMsg += ' ' + migrationResult.restored + ' image' + (migrationResult.restored !== 1 ? 's' : '') + ' restored.';
+      showToast('Switched to ' + newManifest.name + '.' + migrationMsg);
 
       // Reload theme config and manifest so Style tab reflects new template
       if (!themeConfig) themeConfig = {};

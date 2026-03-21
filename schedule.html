@@ -400,7 +400,7 @@ window.TENANT_READY.then(function() {
   db.ref(TENANT_ID + '/public/gallery').orderByChild('section').equalTo('schedule').once('value').then(function(snap) {
     var data = snap.val();
     if (!data) return;
-    var items = Object.values(data).filter(function(i) { return i.visible !== false && i.url; });
+    var items = Object.values(data).filter(function(i) { return i.visible !== false && !i.templateHidden && i.url; });
     if (items.length > 0) {
       var header = document.querySelector('.page-header');
       if (header) header.style.backgroundImage = "url('" + items[0].url + "')";

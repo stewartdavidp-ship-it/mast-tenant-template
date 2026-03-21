@@ -14825,10 +14825,14 @@ function renderGallery() {
 
   var entries = Object.entries(gallery);
 
-  // Group by section
+  // Separate template-hidden images from active images
+  var templateHiddenEntries = entries.filter(function(entry) { return entry[1].templateHidden; });
+  var activeEntries = entries.filter(function(entry) { return !entry[1].templateHidden; });
+
+  // Group active images by section
   var grouped = {};
   SECTIONS.forEach(function(s) { grouped[s.id] = []; });
-  entries.forEach(function(entry) {
+  activeEntries.forEach(function(entry) {
     var section = entry[1].section || 'gallery';
     if (!grouped[section]) grouped[section] = [];
     grouped[section].push(entry);
@@ -14927,6 +14931,27 @@ function renderGallery() {
 
     html += '</div></div>';
   });
+
+  // Show template-hidden images notice
+  if (templateHiddenEntries.length > 0) {
+    var hiddenBySection = {};
+    templateHiddenEntries.forEach(function(entry) {
+      var sec = entry[1].section || 'gallery';
+      hiddenBySection[sec] = (hiddenBySection[sec] || 0) + 1;
+    });
+    html += '<div style="margin-top:16px;padding:12px 16px;background:color-mix(in srgb, var(--amber, #C4853C) 10%, transparent);border:1px solid color-mix(in srgb, var(--amber, #C4853C) 25%, transparent);border-radius:8px;">';
+    html += '<div style="font-size:0.85rem;font-weight:600;color:var(--amber, #C4853C);margin-bottom:4px;">';
+    html += templateHiddenEntries.length + ' image' + (templateHiddenEntries.length !== 1 ? 's' : '') + ' hidden by template switch</div>';
+    html += '<div style="font-size:0.8rem;color:var(--warm-gray);">These images are from sections not supported by your current template. ';
+    html += 'They will reappear if you switch to a template that supports their sections.</div>';
+    html += '<div style="font-size:0.75rem;color:var(--warm-gray);margin-top:6px;">';
+    Object.keys(hiddenBySection).forEach(function(sec) {
+      var label = sec;
+      SECTIONS.forEach(function(s) { if (s.id === sec) label = s.label; });
+      html += '<span style="display:inline-block;margin-right:10px;">' + label + ': ' + hiddenBySection[sec] + '</span>';
+    });
+    html += '</div></div>';
+  }
 
   container.innerHTML = html;
 }
