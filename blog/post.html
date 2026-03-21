@@ -31,7 +31,7 @@
     .back-link:hover { color: var(--amber-light); }
 
     .post-meta {
-      color: rgba(44,44,44,0.45);
+      color: var(--text-light);
       font-size: 0.8rem;
       text-transform: uppercase;
       letter-spacing: 0.08em;
@@ -47,13 +47,13 @@
     }
 
     .post-author {
-      color: rgba(44,44,44,0.55);
+      color: var(--text-muted);
       font-size: 0.85rem;
       margin-bottom: 4px;
     }
 
     .post-date {
-      color: rgba(44,44,44,0.45);
+      color: var(--text-light);
       font-size: 0.85rem;
       margin-bottom: 2.5rem;
     }
@@ -62,7 +62,7 @@
     .post-body {
       line-height: 1.8;
       font-size: 0.95rem;
-      color: rgba(44,44,44,0.85);
+      color: var(--text);
     }
     .post-body p { margin-bottom: 1rem; }
     .post-body img {
@@ -82,7 +82,7 @@
     }
     .post-body .blog-img-caption {
       font-size: 0.8rem;
-      color: rgba(44,44,44,0.5);
+      color: var(--text-light);
       text-align: center;
       margin-top: -0.5rem;
       margin-bottom: 1.2rem;
@@ -95,12 +95,12 @@
       font-size: 1.5rem;
       font-weight: 500;
       margin-bottom: 0.75rem;
-      color: var(--charcoal);
+      color: var(--text);
     }
     .post-section p {
       font-size: 0.95rem;
       line-height: 1.8;
-      color: rgba(44,44,44,0.8);
+      color: var(--text-muted);
       margin-bottom: 0.8rem;
     }
     .post-section img {
@@ -112,14 +112,14 @@
 
     .post-divider {
       border: none;
-      border-top: 1px solid rgba(44,44,44,0.1);
+      border-top: 1px solid var(--surface-card-border);
       margin: 2rem 0;
     }
 
     .post-tags {
       margin-top: 2.5rem;
       padding-top: 1.5rem;
-      border-top: 1px solid rgba(44,44,44,0.1);
+      border-top: 1px solid var(--surface-card-border);
     }
     .post-tag {
       display: inline-block;
@@ -133,13 +133,13 @@
     }
 
     footer {
-      background: var(--charcoal);
-      color: rgba(245,240,235,0.7);
+      background: var(--surface-dark);
+      color: var(--on-dark-muted);
       text-align: center;
       padding: 2rem;
       font-size: 0.8rem;
     }
-    footer a { color: rgba(245,240,235,0.7); }
+    footer a { color: var(--on-dark-muted); }
 
     /* Powered by Mast badge */
     .powered-by-mast {
@@ -177,8 +177,8 @@
       line-height: 1;
     }
 
-    .loading { text-align: center; padding: 3rem; color: rgba(44,44,44,0.4); }
-    .error { text-align: center; padding: 3rem; color: rgba(44,44,44,0.4); }
+    .loading { text-align: center; padding: 3rem; color: var(--text-light); }
+    .error { text-align: center; padding: 3rem; color: var(--text-light); }
 
     @media (max-width: 600px) {
       .container { padding: 5rem 1rem 2rem; }
