@@ -1572,9 +1572,11 @@ window.TENANT_READY.then(function() {
       html += '</div>';
     });
     list.innerHTML = html;
-    // Show events section now that we have data
+    // Show events section — wait for flow engine to set data-flow-hidden first
     var eventsSection = document.getElementById('events');
-    if (eventsSection && !eventsSection.hasAttribute('data-flow-hidden')) eventsSection.style.display = '';
+    (window.MAST_THEME_READY || Promise.resolve()).then(function() {
+      if (eventsSection && !eventsSection.hasAttribute('data-flow-hidden')) eventsSection.style.display = '';
+    });
     });
   }).catch(function() { /* no events data — section stays hidden */ });
 
@@ -1599,7 +1601,9 @@ window.TENANT_READY.then(function() {
     if (authorEl) authorEl.textContent = t.author ? ('— ' + t.author) : '';
 
     var section = document.getElementById('testimonials');
-    if (section && !section.hasAttribute('data-flow-hidden')) section.style.display = '';
+    (window.MAST_THEME_READY || Promise.resolve()).then(function() {
+      if (section && !section.hasAttribute('data-flow-hidden')) section.style.display = '';
+    });
   }).catch(function() { /* no testimonials — section stays hidden */ });
 
   // ---- PROCESS (load from Firebase or keep hidden) ----
@@ -1634,7 +1638,9 @@ window.TENANT_READY.then(function() {
     }
 
     var section = document.getElementById('process');
-    if (section && !section.hasAttribute('data-flow-hidden')) section.style.display = '';
+    (window.MAST_THEME_READY || Promise.resolve()).then(function() {
+      if (section && !section.hasAttribute('data-flow-hidden')) section.style.display = '';
+    });
   }).catch(function() { /* no process config — section stays hidden */ });
 
   // ---- ABOUT SECTION CONFIG (stats, custom heading) ----
@@ -1716,10 +1722,12 @@ window.TENANT_READY.then(function() {
       });
       gridEl.innerHTML = html;
 
-      // Show section if it was activated by flow engine
-      if (section.style.display === 'none' && section.hasAttribute('data-flow-active')) {
-        section.style.display = '';
-      }
+      // Show section — wait for flow engine to set data-flow-active first
+      (window.MAST_THEME_READY || Promise.resolve()).then(function() {
+        if (section.style.display === 'none' && section.hasAttribute('data-flow-active')) {
+          section.style.display = '';
+        }
+      });
     }).catch(function() { /* no categories — section stays hidden */ });
   })();
 
@@ -1766,10 +1774,12 @@ window.TENANT_READY.then(function() {
       });
       gridEl.innerHTML = html;
 
-      // Show section if activated by flow engine
-      if (section.style.display === 'none' && section.hasAttribute('data-flow-active')) {
-        section.style.display = '';
-      }
+      // Show section — wait for flow engine to set data-flow-active first
+      (window.MAST_THEME_READY || Promise.resolve()).then(function() {
+        if (section.style.display === 'none' && section.hasAttribute('data-flow-active')) {
+          section.style.display = '';
+        }
+      });
     }).catch(function() { /* no products — section stays hidden */ });
   })();
 

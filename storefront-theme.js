@@ -297,6 +297,7 @@
         })
         .then(function (config) {
           if (!config) {
+            if (window._resolveThemeReady) window._resolveThemeReady();
             window.dispatchEvent(new CustomEvent('storefront-theme-ready', { detail: {} }));
             return;
           }
@@ -335,6 +336,9 @@
               }
             }
 
+            // Resolve the theme-ready promise so data loaders know flow is applied
+            if (window._resolveThemeReady) window._resolveThemeReady();
+
             // Dispatch event so downstream code knows theme is applied
             window.dispatchEvent(new CustomEvent('storefront-theme-ready', {
               detail: {
@@ -348,6 +352,7 @@
         })
         .catch(function (err) {
           console.warn('[storefront-theme] Failed to load theme config:', err.message);
+          if (window._resolveThemeReady) window._resolveThemeReady();
           // Still dispatch event with empty config so pages don't wait forever
           window.dispatchEvent(new CustomEvent('storefront-theme-ready', { detail: {} }));
         });
@@ -355,6 +360,12 @@
   }
 
   // Start fetching theme config
+  // Expose a promise that resolves when flow engine has run (or skipped)
+  // so downstream scripts can wait before showing sections
+  window.MAST_THEME_READY = new Promise(function (resolve) {
+    window._resolveThemeReady = resolve;
+  });
+
   fetchThemeConfig();
 
 })();
