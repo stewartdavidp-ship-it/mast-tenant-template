@@ -1097,11 +1097,11 @@ setTimeout(function() { document.body.style.opacity = '1'; }, 3000);
     <div class="hero-logo" id="heroLogo" style="display:none;">
       <!-- Logo loaded dynamically from tenant brand config -->
     </div>
-    <p class="hero-tagline" data-tenant="tagline"></p>
-    <h1 data-tenant="brand">Welcome</h1>
-    <p class="hero-sub" data-tenant="description"></p>
+    <p class="hero-tagline" data-tenant="tagline" data-content="hero-tagline"></p>
+    <h1 data-tenant="brand" data-content="hero-headline">Welcome</h1>
+    <p class="hero-sub" data-tenant="description" data-content="hero-subheadline"></p>
     <div class="hero-cta">
-      <a href="shop.html" class="btn btn-primary">Shop Now</a>
+      <a href="shop.html" class="btn btn-primary" data-content="hero-cta">Shop Now</a>
       <a href="#about" class="btn btn-outline">Learn More</a>
     </div>
   </div>
@@ -1119,9 +1119,9 @@ setTimeout(function() { document.body.style.opacity = '1'; }, 3000);
       <img src="" alt="" data-tenant-alt="brand" style="display:none;" />
     </div>
     <div class="about-text fade-up">
-      <p class="section-label" id="aboutLabel">Our Story</p>
-      <h2 class="section-title" id="aboutTitle" data-tenant="brand"></h2>
-      <p class="section-subtitle" data-tenant="description"></p>
+      <p class="section-label" id="aboutLabel" data-content="about-label">Our Story</p>
+      <h2 class="section-title" id="aboutTitle" data-tenant="brand" data-content="about-heading"></h2>
+      <p class="section-subtitle" data-tenant="description" data-content="about-body"></p>
       <div class="about-stats" id="aboutStats" style="display:none;">
         <!-- Stats populated dynamically from public/config/homepage/about/stats -->
       </div>
@@ -1134,9 +1134,9 @@ setTimeout(function() { document.body.style.opacity = '1'; }, 3000);
 <!-- ============ GALLERY ============ -->
 <section class="gallery-section" id="gallery" data-slot="gallery">
   <div class="gallery-header fade-up">
-    <p class="section-label" id="galleryLabel">Our Work</p>
-    <h2 class="section-title" id="galleryTitle">Gallery</h2>
-    <p class="section-subtitle" id="gallerySubtitle">A selection of our latest creations.</p>
+    <p class="section-label" id="galleryLabel" data-content="gallery-label">Our Work</p>
+    <h2 class="section-title" id="galleryTitle" data-content="gallery-heading">Gallery</h2>
+    <p class="section-subtitle" id="gallerySubtitle" data-content="gallery-subtitle">A selection of our latest creations.</p>
   </div>
   <div class="gallery-grid" id="galleryGrid">
     <!-- Gallery loaded dynamically from Firebase. Placeholder shown until data arrives. -->
@@ -1231,9 +1231,9 @@ setTimeout(function() { document.body.style.opacity = '1'; }, 3000);
 <section id="contact" data-slot="contact">
   <div class="contact-section">
     <div class="contact-text fade-up">
-      <p class="section-label">Get in Touch</p>
-      <h2 class="section-title">Let's Create Something Together</h2>
-      <p class="section-subtitle">Whether you're interested in a custom commission, wholesale inquiry, taking a class, or just saying hello — we'd love to hear from you.</p>
+      <p class="section-label" data-content="contact-label">Get in Touch</p>
+      <h2 class="section-title" data-content="contact-heading">Let's Create Something Together</h2>
+      <p class="section-subtitle" data-content="contact-subtitle">Whether you're interested in a custom commission, wholesale inquiry, taking a class, or just saying hello — we'd love to hear from you.</p>
       <div style="margin-top:2rem;">
         <div class="contact-info-item">
           <svg viewBox="0 0 24 24"><path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -1294,12 +1294,12 @@ setTimeout(function() { document.body.style.opacity = '1'; }, 3000);
 
 <!-- ============ NEWSLETTER ============ -->
 <div class="newsletter-bar" id="newsletterSignup" data-slot="newsletter">
-  <h3>Stay in the Loop</h3>
-  <p>Events, new collections, classes &amp; studio updates — no spam, ever.</p>
+  <h3 data-content="newsletter-heading">Stay in the Loop</h3>
+  <p data-content="newsletter-subheadline">Events, new collections, classes &amp; studio updates — no spam, ever.</p>
   <div class="newsletter-form" id="nlSignupForm">
     <input type="text" id="nlSignupName" placeholder="Your name" style="max-width:160px;" />
     <input type="email" id="nlSignupEmail" placeholder="Your email address" />
-    <button type="button" onclick="nlSubmitSignup()">Subscribe</button>
+    <button type="button" onclick="nlSubmitSignup()" data-content="newsletter-button">Subscribe</button>
   </div>
 </div>
 
@@ -1387,6 +1387,7 @@ setTimeout(function() { document.body.style.opacity = '1'; }, 3000);
 <script src="storefront-theme.js"></script>
 <script src="storefront-nav.js"></script>
 <script src="tenant-brand.js?v=2"></script>
+<script src="storefront-content.js"></script>
 <script>
 window.TENANT_READY.then(function() {
   if (!firebase.apps.length) firebase.initializeApp(TENANT_FIREBASE_CONFIG);

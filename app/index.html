@@ -12067,6 +12067,19 @@ async function wizardSaveFeatures() {
 
   try {
     await MastDB._ref('webPresence/config/features').set(features);
+
+    // WS2: Also write to public/config/nav/sections/ so storefront-nav.js picks them up
+    var navSections = {
+      shop: { enabled: features.shop, order: 1 },
+      blog: { enabled: features.blog, order: 6 },
+      about: { enabled: true, order: 2 },
+      commission: { enabled: features.commissions, order: 3 },
+      schedule: { enabled: features.events, order: 5 },
+      newsletter: { enabled: features.newsletter, order: 7 },
+      contact: { enabled: true, order: 8 }
+    };
+    await MastDB._ref('public/config/nav/sections').set(navSections);
+
     wizardProgress.featuresConfigured = true;
 
     // Create import job if site had importable content
@@ -12158,6 +12171,16 @@ function renderWizardSummary() {
   el.innerHTML = items.join('<br style="margin-bottom:8px;">');
 }
 
+// WS6: Style recommendation → template + color scheme mapping
+var STYLE_TO_TEMPLATE = {
+  'artisan-warm':    { templateId: 'the-studio', schemeId: 'amber-teal', fontPair: 'classic' },
+  'studio-dark':     { templateId: 'the-studio', schemeId: 'slate-rose', fontPair: 'editorial' },
+  'story-first':     { templateId: 'the-studio', schemeId: null, fontPair: 'artisan' },
+  'clean-commerce':  { templateId: 'the-shop',   schemeId: 'clean-white', fontPair: 'clean' },
+  'market-fresh':    { templateId: 'the-shop',   schemeId: 'moss-clay', fontPair: 'modern' },
+  'minimal-pro':     { templateId: 'the-shop',   schemeId: 'warm-sand', fontPair: 'geometric' }
+};
+
 async function wizardComplete() {
   try {
     // Save brand info from step 2
@@ -12191,12 +12214,35 @@ async function wizardComplete() {
       });
     }
 
+    // WS6: Resolve template + scheme from style recommendation
+    var styleRec = (_wizardSiteAnalysis && _wizardSiteAnalysis.styleRecommendation) || 'artisan-warm';
+    var templateMapping = STYLE_TO_TEMPLATE[styleRec] || STYLE_TO_TEMPLATE['artisan-warm'];
+    var resolvedTemplateId = templateMapping.templateId;
+    var resolvedSchemeId = templateMapping.schemeId;
+    var resolvedFontPair = templateMapping.fontPair;
+
+    // WS1: Write to public/config/theme/ — the path storefront-theme.js actually reads
+    var themeUpdate = {
+      templateId: resolvedTemplateId,
+      fontPair: resolvedFontPair
+    };
+    if (resolvedSchemeId) {
+      // Using a predefined color scheme — storefront will read scheme colors from manifest
+      themeUpdate.colorSchemeId = resolvedSchemeId;
+    } else {
+      // Custom colors from wizard — storefront reads these when no schemeId
+      themeUpdate.colorSchemeId = null;
+      themeUpdate.primaryColor = primaryColor;
+      themeUpdate.accentColor = accentColor;
+    }
+    await MastDB._ref('public/config/theme').set(themeUpdate);
+
     // Seed web presence config from brand + analysis
     var wpConfig = {
-      style: 'artisan-warm',
+      style: styleRec,
       primaryColor: primaryColor,
       accentColor: accentColor,
-      fontPair: 'playfair-lato',
+      fontPair: resolvedFontPair,
       sections: {
         hero: { headline: bizName, subheadline: bizTagline, ctaText: 'Shop Now', ctaUrl: '', backgroundType: 'color', backgroundAsset: '', overlayOpacity: 40 },
         gallery: { enabled: true, heading: 'Our Work', layout: 'grid', columns: 3 },
@@ -12211,10 +12257,6 @@ async function wizardComplete() {
       publishedAt: null,
       updatedAt: new Date().toISOString()
     };
-    // Use analysis style if available
-    if (_wizardSiteAnalysis && _wizardSiteAnalysis.styleRecommendation) {
-      wpConfig.style = _wizardSiteAnalysis.styleRecommendation;
-    }
     await MastDB._ref('webPresence/config').update(wpConfig);
 
     // Set tenant status to active
@@ -12223,9 +12265,25 @@ async function wizardComplete() {
     await MastDB.config.ref('setupProgress/completedAt').set(new Date().toISOString());
     await updateConfigChecklist('brand', true);
 
-    // Note: publishWebPresence is NOT called here — it creates a hosting version
-    // with only index.html, wiping out the admin app and module files deployed
-    // by provisioning. The storefront renders dynamically from config data.
+    // Trigger full template deploy so the public site has the latest code
+    // (including storefront-content.js) and reflects the wizard config.
+    // This is fire-and-forget — we don't block the wizard on deploy completion.
+    try {
+      var idToken = await firebase.auth().currentUser.getIdToken();
+      var cfBase = (TENANT_CONFIG && TENANT_CONFIG.cloudFunctionsBase) || 'https://us-central1-mast-platform-prod.cloudfunctions.net';
+      fetch(cfBase + '/triggerTenantDeploy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+        body: JSON.stringify({ tenantId: MastDB.tenantId() })
+      }).then(function(resp) {
+        if (resp.ok) console.log('[Wizard] Auto-deploy triggered successfully');
+        else console.warn('[Wizard] Auto-deploy failed:', resp.status);
+      }).catch(function(err) {
+        console.warn('[Wizard] Auto-deploy error (non-blocking):', err.message);
+      });
+    } catch (deployErr) {
+      console.warn('[Wizard] Could not trigger auto-deploy:', deployErr.message);
+    }
 
     showToast('Setup complete! Welcome to your dashboard.');
 
@@ -12323,9 +12381,10 @@ function renderSetupBanner() {
 // Each step is tied to a module and has a route, check function, and contextual copy.
 
 var NEXT_STEP_DEFINITIONS = [
+  { id: 'choose-template', module: null,         icon: '\uD83C\uDFA8', title: 'Choose your template',          desc: 'Pick a layout and color scheme for your site.',                           route: 'website',     check: function() { return window._nextStepsCache && window._nextStepsCache.hasTemplate; } },
+  { id: 'customize-content', module: null,       icon: '\u270F\uFE0F', title: 'Customize your content',        desc: 'Edit your hero headline, about section, and contact info.',               route: 'website',     check: function() { return window._nextStepsCache && window._nextStepsCache.hasContent; } },
   { id: 'add-product',    module: null,         icon: '\uD83D\uDCE6', title: 'Add your first product',        desc: 'Upload a photo and set a price to start building your catalog.',           route: 'inventory',   check: function() { return window._nextStepsCache && window._nextStepsCache.hasProducts; } },
-  { id: 'brand-setup',    module: null,         icon: '\uD83C\uDFA8', title: 'Customize your brand',          desc: 'Set your business name, colors, and tagline.',                            route: 'settings',    check: function() { return tenantConfigChecklist && tenantConfigChecklist.brand; } },
-  { id: 'setup-website',  module: 'web',        icon: '\uD83C\uDF10', title: 'Set up your website',           desc: 'Configure your homepage and publish your online storefront.',             route: 'website',     check: function() { return window._nextStepsCache && window._nextStepsCache.hasWebsite; } },
+  { id: 'setup-website',  module: 'web',        icon: '\uD83C\uDF10', title: 'Publish your website',          desc: 'Review your site and publish it live.',                                   route: 'website',     check: function() { return window._nextStepsCache && window._nextStepsCache.hasWebsite; } },
   { id: 'setup-square',   module: 'sell',       icon: '\uD83D\uDCB3', title: 'Connect Square for payments',   desc: 'Link your Square account to accept payments and manage orders.',          route: 'settings',    check: function() { return tenantConfigChecklist && tenantConfigChecklist.square; } },
   { id: 'first-show',     module: 'show',       icon: '\uD83C\uDFAA', title: 'Find your first show',          desc: 'Search for craft fairs and events in your area.',                         route: 'show-find',   check: function() { return false; } },
   { id: 'show-light-profile', module: 'show-light', icon: '\u2728', title: 'Build your vendor profile',     desc: 'Add your bio, photos, and product highlights for show applications.',     route: 'show-light-profile', check: function() { return false; } },
@@ -12403,8 +12462,8 @@ function renderGuidedNextSteps() {
   container.innerHTML = h;
 }
 
-// Cache for async checks (products, website)
-window._nextStepsCache = { hasProducts: false, hasWebsite: false };
+// Cache for async checks (products, website, template, content)
+window._nextStepsCache = { hasProducts: false, hasWebsite: false, hasTemplate: false, hasContent: false };
 
 async function loadNextStepsCache() {
   try {
@@ -12413,9 +12472,19 @@ async function loadNextStepsCache() {
     window._nextStepsCache.hasProducts = prodSnap.exists();
   } catch (e) { /* ignore */ }
   try {
-    // Check if website is configured
+    // Check if website is published
     var webSnap = await MastDB.config.ref('websiteConfig/published').once('value');
     window._nextStepsCache.hasWebsite = !!webSnap.val();
+  } catch (e) { /* ignore */ }
+  try {
+    // Check if template has been selected (beyond wizard default)
+    var themeSnap = await MastDB._ref('public/config/theme/templateId').once('value');
+    window._nextStepsCache.hasTemplate = !!themeSnap.val();
+  } catch (e) { /* ignore */ }
+  try {
+    // Check if hero content has been customized
+    var heroSnap = await MastDB._ref('webPresence/config/sections/hero/headline').once('value');
+    window._nextStepsCache.hasContent = !!heroSnap.val();
   } catch (e) { /* ignore */ }
 }
 
