@@ -136,17 +136,27 @@ nav.nav-transparent.scrolled {
 .nav-logo img {
   height: 52px;
   transition: all 0.4s ease;
-  /* Subtle glow ensures dark logos remain visible on the dark nav */
+  /* mix-blend-mode makes white logo backgrounds transparent on dark nav */
+  mix-blend-mode: multiply;
   filter: drop-shadow(0 0 1px rgba(255,255,255,0.4));
+  border-radius: 4px;
 }
 
 nav.scrolled .nav-logo img {
   height: 40px;
 }
 
-/* Hero logo — ensure visibility over gradient/video backgrounds */
+/* Hero logo — blend away white backgrounds on dark hero */
 .hero-logo img {
+  mix-blend-mode: multiply;
   filter: drop-shadow(0 0 4px rgba(0,0,0,0.5)) drop-shadow(0 0 1px rgba(255,255,255,0.3));
+  border-radius: 6px;
+}
+
+/* On light theme, invert blend mode so logos stay visible on light backgrounds */
+html.light .nav-logo img,
+html.light .hero-logo img {
+  mix-blend-mode: normal;
 }
 
 .nav-links {
