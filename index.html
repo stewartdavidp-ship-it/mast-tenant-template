@@ -903,6 +903,187 @@
     opacity: 0.55;
   }
 
+  /* ========= CATEGORY GRID (The Shop template) ========= */
+  .category-grid-section {
+    padding: 5rem 2rem;
+  }
+
+  .category-grid-header {
+    text-align: center;
+    margin-bottom: 3rem;
+  }
+
+  .category-grid-header .section-subtitle { margin: 0 auto; }
+
+  .category-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 1.5rem;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .category-card {
+    position: relative;
+    border-radius: 12px;
+    overflow: hidden;
+    aspect-ratio: 4/3;
+    cursor: pointer;
+    transition: transform 0.3s, box-shadow 0.3s;
+    background: var(--bg-dark, #f0e8db);
+    text-decoration: none;
+    display: block;
+  }
+
+  .category-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px color-mix(in srgb, var(--primary) 15%, transparent);
+  }
+
+  .category-card img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.4s;
+  }
+
+  .category-card:hover img { transform: scale(1.05); }
+
+  .category-card .category-card-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.1) 60%, transparent 100%);
+    display: flex;
+    align-items: flex-end;
+    padding: 1.5rem;
+  }
+
+  .category-card .category-card-label {
+    color: #fff;
+    font-family: var(--font-heading, 'Cormorant Garamond', serif);
+    font-size: 1.3rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+  }
+
+  .category-card-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .category-card-placeholder svg {
+    width: 48px;
+    height: 48px;
+    stroke: var(--text-muted, #6b6560);
+    stroke-width: 1;
+    fill: none;
+    opacity: 0.3;
+  }
+
+  /* ========= FEATURED PRODUCTS (The Shop template) ========= */
+  .featured-products-section {
+    padding: 5rem 2rem;
+    background: var(--bg-dark, #f0e8db);
+  }
+
+  .featured-products-header {
+    text-align: center;
+    margin-bottom: 3rem;
+  }
+
+  .featured-products-header .section-subtitle { margin: 0 auto; }
+
+  .featured-products-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1.5rem;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .featured-product-card {
+    background: var(--bg, #fff);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: transform 0.3s, box-shadow 0.3s;
+    text-decoration: none;
+    display: block;
+    color: inherit;
+  }
+
+  .featured-product-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 32px color-mix(in srgb, var(--primary) 10%, transparent);
+  }
+
+  .featured-product-card .fp-image {
+    aspect-ratio: 1;
+    overflow: hidden;
+    background: var(--bg-dark, #f0e8db);
+  }
+
+  .featured-product-card .fp-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.4s;
+  }
+
+  .featured-product-card:hover .fp-image img { transform: scale(1.05); }
+
+  .featured-product-card .fp-info {
+    padding: 1rem 1.25rem;
+  }
+
+  .featured-product-card .fp-name {
+    font-family: var(--font-heading, 'Cormorant Garamond', serif);
+    font-size: 1.05rem;
+    font-weight: 500;
+    margin-bottom: 0.35rem;
+    color: var(--text, #1a1a1a);
+  }
+
+  .featured-product-card .fp-price {
+    font-size: 0.9rem;
+    color: var(--primary, #c4853c);
+    font-weight: 500;
+  }
+
+  /* ========= ABOUT BLURB (The Shop template) ========= */
+  .about-blurb-section {
+    padding: 5rem 2rem;
+    text-align: center;
+  }
+
+  .about-blurb {
+    max-width: 700px;
+    margin: 0 auto;
+  }
+
+  .about-blurb .section-subtitle {
+    margin: 0 auto;
+    max-width: 600px;
+  }
+
+  /* ========= RESPONSIVE — New Shop sections ========= */
+  @media (max-width: 768px) {
+    .category-grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+    }
+    .category-card { aspect-ratio: 3/2; }
+    .featured-products-grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .category-grid { grid-template-columns: 1fr; }
+    .featured-products-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
 </style>
 <script>
 (function(){var s=localStorage.getItem('mast-theme');var d=window.matchMedia('(prefers-color-scheme:dark)').matches;if(s==='dark'||(s!=='light'&&d))document.documentElement.classList.add('dark');else document.documentElement.classList.add('light');})();
@@ -991,8 +1172,45 @@ setTimeout(function() { document.body.style.opacity = '1'; }, 3000);
   </div>
 </section>
 
+<!-- ============ CATEGORY GRID (The Shop template) ============ -->
+<section id="categoryGrid" class="category-grid-section" data-slot="category-grid" data-default-hidden style="display:none;">
+  <div class="category-grid-header fade-up">
+    <p class="section-label">Browse</p>
+    <h2 class="section-title">Shop by Category</h2>
+    <p class="section-subtitle">Find exactly what you're looking for.</p>
+  </div>
+  <div class="category-grid" id="categoryGridItems">
+    <!-- Populated dynamically from public/config/categories -->
+  </div>
+</section>
+
+<!-- ============ FEATURED PRODUCTS (The Shop template) ============ -->
+<section id="featuredProducts" class="featured-products-section" data-slot="featured-products" data-default-hidden style="display:none;">
+  <div class="featured-products-header fade-up">
+    <p class="section-label">New & Notable</p>
+    <h2 class="section-title">Featured Products</h2>
+    <p class="section-subtitle">Our latest additions and bestsellers.</p>
+  </div>
+  <div class="featured-products-grid" id="featuredProductsGrid">
+    <!-- Populated dynamically from public/products (featured or newest) -->
+  </div>
+  <div style="text-align:center;margin-top:2rem;">
+    <a href="shop.html" class="btn btn-primary">View All Products</a>
+  </div>
+</section>
+
+<!-- ============ ABOUT BLURB (The Shop template) ============ -->
+<section id="aboutBlurb" class="about-blurb-section" data-slot="about-blurb" style="display:none;">
+  <div class="about-blurb fade-up">
+    <p class="section-label">Our Story</p>
+    <h2 class="section-title" data-tenant="brand"></h2>
+    <p class="section-subtitle" data-tenant="description"></p>
+    <a href="about.html" class="btn btn-outline" style="margin-top:1.5rem;">Learn More About Us</a>
+  </div>
+</section>
+
 <!-- ============ EVENTS ============ -->
-<section id="events" data-slot="events" style="display:none;">
+<section id="events" data-slot="events" data-default-hidden style="display:none;">
   <div class="events-section">
     <div class="events-header fade-up">
       <div>
@@ -1008,7 +1226,7 @@ setTimeout(function() { document.body.style.opacity = '1'; }, 3000);
 </section>
 
 <!-- ============ TESTIMONIALS ============ -->
-<section class="testimonials-section" id="testimonials" data-slot="testimonials" style="display:none;">
+<section class="testimonials-section" id="testimonials" data-slot="testimonials" data-default-hidden style="display:none;">
   <div class="testimonials-container fade-up">
     <p class="section-label">What People Say</p>
     <h2 class="section-title" style="color:#fff;">Customer Reviews</h2>
@@ -1019,7 +1237,7 @@ setTimeout(function() { document.body.style.opacity = '1'; }, 3000);
 </section>
 
 <!-- ============ PROCESS ============ -->
-<section id="process" data-slot="process" style="display:none;">
+<section id="process" data-slot="process" data-default-hidden style="display:none;">
   <div class="process-section">
     <div class="process-header fade-up">
       <p class="section-label" id="processLabel">How We Work</p>
@@ -1356,7 +1574,7 @@ window.TENANT_READY.then(function() {
     list.innerHTML = html;
     // Show events section now that we have data
     var eventsSection = document.getElementById('events');
-    if (eventsSection) eventsSection.style.display = '';
+    if (eventsSection && !eventsSection.hasAttribute('data-flow-hidden')) eventsSection.style.display = '';
     });
   }).catch(function() { /* no events data — section stays hidden */ });
 
@@ -1381,7 +1599,7 @@ window.TENANT_READY.then(function() {
     if (authorEl) authorEl.textContent = t.author ? ('— ' + t.author) : '';
 
     var section = document.getElementById('testimonials');
-    if (section) section.style.display = '';
+    if (section && !section.hasAttribute('data-flow-hidden')) section.style.display = '';
   }).catch(function() { /* no testimonials — section stays hidden */ });
 
   // ---- PROCESS (load from Firebase or keep hidden) ----
@@ -1416,7 +1634,7 @@ window.TENANT_READY.then(function() {
     }
 
     var section = document.getElementById('process');
-    if (section) section.style.display = '';
+    if (section && !section.hasAttribute('data-flow-hidden')) section.style.display = '';
   }).catch(function() { /* no process config — section stays hidden */ });
 
   // ---- ABOUT SECTION CONFIG (stats, custom heading) ----
@@ -1455,6 +1673,105 @@ window.TENANT_READY.then(function() {
     if (data.title && titleEl) titleEl.textContent = data.title;
     if (data.subtitle && subtitleEl) subtitleEl.textContent = data.subtitle;
   }).catch(function() { /* use defaults */ });
+
+  // ---- CATEGORY GRID (The Shop template — populate from categories + gallery) ----
+  (function() {
+    var gridEl = document.getElementById('categoryGridItems');
+    if (!gridEl) return;
+    // Only populate if section is visible (flow engine showed it)
+    var section = document.getElementById('categoryGrid');
+    if (!section) return;
+
+    // Load categories and gallery images in parallel
+    var catsP = db.ref(TENANT_ID + '/public/config/categories').once('value');
+    var galleryP = db.ref(TENANT_ID + '/public/gallery').orderByChild('order').once('value');
+
+    Promise.all([catsP, galleryP]).then(function(results) {
+      var catsData = results[0].val();
+      var galleryData = results[1].val();
+      if (!catsData || !Array.isArray(catsData) || catsData.length === 0) return;
+
+      // Build a map of category → first gallery image
+      var catImages = {};
+      if (galleryData) {
+        var items = Object.values(galleryData).filter(function(i) { return i.visible !== false && i.url; });
+        items.sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
+        items.forEach(function(item) {
+          var sec = item.section || 'gallery';
+          if (!catImages[sec]) catImages[sec] = item.url;
+        });
+      }
+
+      var html = '';
+      catsData.forEach(function(cat) {
+        var imgUrl = catImages[cat.id] || '';
+        html += '<a href="shop.html?cat=' + encodeURIComponent(cat.id) + '" class="category-card fade-up" style="opacity:1;transform:translateY(0)">';
+        if (imgUrl) {
+          html += '<img src="' + imgUrl + '" alt="' + (cat.label || '') + '" />';
+        } else {
+          html += '<div class="category-card-placeholder"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></div>';
+        }
+        html += '<div class="category-card-overlay"><span class="category-card-label">' + (cat.label || cat.id) + '</span></div>';
+        html += '</a>';
+      });
+      gridEl.innerHTML = html;
+
+      // Show section if it was activated by flow engine
+      if (section.style.display === 'none' && section.hasAttribute('data-flow-active')) {
+        section.style.display = '';
+      }
+    }).catch(function() { /* no categories — section stays hidden */ });
+  })();
+
+  // ---- FEATURED PRODUCTS (The Shop template — newest or featured products) ----
+  (function() {
+    var gridEl = document.getElementById('featuredProductsGrid');
+    if (!gridEl) return;
+    var section = document.getElementById('featuredProducts');
+    if (!section) return;
+
+    db.ref(TENANT_ID + '/public/products').orderByChild('createdAt').limitToLast(8).once('value').then(function(snap) {
+      var data = snap.val();
+      if (!data) return;
+      var products = Object.entries(data).map(function(entry) {
+        var p = entry[1]; p.pid = p.pid || entry[0]; return p;
+      }).filter(function(p) {
+        return p.visible !== false && p.status !== 'draft' && p.priceCents;
+      });
+
+      // Sort by createdAt descending (newest first), then by featured flag
+      products.sort(function(a, b) {
+        if (a.featured && !b.featured) return -1;
+        if (!a.featured && b.featured) return 1;
+        return (b.createdAt || '').localeCompare(a.createdAt || '');
+      });
+      products = products.slice(0, 8);
+      if (products.length === 0) return;
+
+      var html = '';
+      products.forEach(function(p) {
+        var imgUrl = (p.images && p.images.length > 0) ? p.images[0] : '';
+        var price = '$' + (p.priceCents / 100).toFixed(2);
+        html += '<a href="product.html?id=' + encodeURIComponent(p.pid) + '" class="featured-product-card fade-up" style="opacity:1;transform:translateY(0)">';
+        html += '<div class="fp-image">';
+        if (imgUrl) {
+          html += '<img src="' + imgUrl + '" alt="' + (p.name || '') + '" />';
+        }
+        html += '</div>';
+        html += '<div class="fp-info">';
+        html += '<div class="fp-name">' + (p.name || 'Product') + '</div>';
+        html += '<div class="fp-price">' + price + '</div>';
+        html += '</div>';
+        html += '</a>';
+      });
+      gridEl.innerHTML = html;
+
+      // Show section if activated by flow engine
+      if (section.style.display === 'none' && section.hasAttribute('data-flow-active')) {
+        section.style.display = '';
+      }
+    }).catch(function() { /* no products — section stays hidden */ });
+  })();
 
 }).catch(function(err) { console.error('[index] Tenant resolution failed:', err.message); });
 </script>

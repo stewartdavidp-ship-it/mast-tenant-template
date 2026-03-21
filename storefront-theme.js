@@ -39,6 +39,11 @@
       heading: 'Libre Baskerville',
       body: 'Nunito Sans',
       weights: { heading: '400;700', body: '300;400;600' }
+    },
+    'geometric': {
+      heading: 'Space Grotesk',
+      body: 'Space Grotesk',
+      weights: { heading: '300;400;500;600;700', body: '300;400;500' }
     }
   };
 
@@ -210,6 +215,70 @@
   }
 
   /**
+   * Apply homepage flow from manifest.
+   * Shows/hides and reorders sections based on manifest.homepageFlow.
+   * Sections with data-slot NOT in the flow are hidden.
+   * Sections IN the flow are shown and reordered.
+   */
+  function applyHomepageFlow(manifest) {
+    if (!manifest || !manifest.homepageFlow) return;
+
+    // Only apply on the homepage
+    var path = window.location.pathname;
+    if (path !== '/' && path !== '/index.html') return;
+
+    var flow = manifest.homepageFlow;
+
+    // Find all slotted sections
+    var slotElements = document.querySelectorAll('[data-slot]');
+    var slotMap = {};
+    for (var i = 0; i < slotElements.length; i++) {
+      var el = slotElements[i];
+      slotMap[el.getAttribute('data-slot')] = el;
+    }
+
+    // Hide sections not in the flow
+    Object.keys(slotMap).forEach(function (slotId) {
+      if (flow.indexOf(slotId) === -1) {
+        slotMap[slotId].style.display = 'none';
+        slotMap[slotId].setAttribute('data-flow-hidden', 'true');
+      }
+    });
+
+    // Show and reorder sections in the flow
+    // Find the parent container (the main content area after nav)
+    var firstSlot = slotMap[flow[0]];
+    if (!firstSlot) return;
+    var container = firstSlot.parentNode;
+
+    // Collect non-slot elements (dividers, etc.) to preserve
+    // We'll insert flow sections in order, collecting any glass-dividers to remove
+    var dividers = container.querySelectorAll('.glass-divider');
+    for (var d = 0; d < dividers.length; d++) {
+      dividers[d].style.display = 'none';
+    }
+
+    // Reorder: append flow sections in order (moves them in DOM)
+    for (var j = 0; j < flow.length; j++) {
+      var slotEl = slotMap[flow[j]];
+      if (slotEl) {
+        // Mark as flow-active so JS data loaders know this section is wanted
+        slotEl.removeAttribute('data-flow-hidden');
+        slotEl.setAttribute('data-flow-active', 'true');
+        // Show immediately if not waiting on JS data loading
+        if (slotEl.style.display === 'none' && !slotEl.hasAttribute('data-default-hidden')) {
+          slotEl.style.display = '';
+        }
+        container.appendChild(slotEl);
+      }
+    }
+
+    // Re-append any remaining content (footer, scripts) that should stay at the end
+    var footer = container.querySelector('footer, .site-footer');
+    if (footer) container.appendChild(footer);
+  }
+
+  /**
    * Fetch tenant theme config from Firebase RTDB (REST API).
    */
   function fetchThemeConfig() {
@@ -251,6 +320,18 @@
               // Even with a scheme, apply fontPair if set in config
               if (config.fontPair) {
                 applyTheme({ fontPair: config.fontPair });
+              }
+            }
+
+            // Apply homepage section flow from manifest (show/hide + reorder)
+            if (manifest && manifest.homepageFlow) {
+              // Wait for DOM to be ready before manipulating sections
+              if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function () {
+                  applyHomepageFlow(manifest);
+                });
+              } else {
+                applyHomepageFlow(manifest);
               }
             }
 

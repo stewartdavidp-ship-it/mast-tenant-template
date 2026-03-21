@@ -24,6 +24,18 @@
     ]
   },
 
+  "slotMapping": {
+    "hero": "hero",
+    "category-grid": "gallery",
+    "featured-products": "gallery",
+    "about-blurb": "about",
+    "about": "about",
+    "testimonials": "testimonials",
+    "contact": "contact",
+    "newsletter": "newsletter",
+    "faq": null
+  },
+
   "homepageFlow": [
     "hero",
     "about",

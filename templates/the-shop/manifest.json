@@ -1,0 +1,136 @@
+{
+  "id": "the-shop",
+  "name": "The Shop",
+  "description": "Product-first, broad catalog. Category navigation drives discovery. About on sub-page, not homepage.",
+  "version": "1.0.0",
+
+  "slots": {
+    "universal": [
+      { "id": "hero", "label": "Hero", "required": true, "description": "Product-focused hero with prominent Shop CTA and featured image" },
+      { "id": "category-grid", "label": "Category Grid", "required": true, "description": "Browse-by-category cards linking to filtered shop views" },
+      { "id": "about", "label": "About", "required": true, "onHomepage": false, "description": "Business story and founder info (on About sub-page, not homepage)" },
+      { "id": "contact", "label": "Contact", "required": true, "description": "Contact information and location details" }
+    ],
+    "common": [
+      { "id": "featured-products", "label": "Featured Products", "required": false, "description": "Curated product showcase — new arrivals or bestsellers" },
+      { "id": "newsletter", "label": "Newsletter", "required": false, "description": "Email signup bar for marketing list" },
+      { "id": "blog", "label": "Blog", "required": false, "description": "News, updates, and product stories" }
+    ],
+    "differentiators": [
+      { "id": "about-blurb", "label": "About Blurb", "required": false, "description": "Brief about snippet on homepage (links to full About page)" },
+      { "id": "testimonials", "label": "Testimonials", "required": false, "description": "Customer reviews and quotes with star ratings" },
+      { "id": "faq", "label": "FAQ", "required": false, "description": "Frequently asked questions accordion" }
+    ]
+  },
+
+  "slotMapping": {
+    "hero": "hero",
+    "gallery": "category-grid",
+    "about": "about-blurb",
+    "events": null,
+    "process": null,
+    "testimonials": "testimonials",
+    "contact": "contact",
+    "newsletter": "newsletter"
+  },
+
+  "homepageFlow": [
+    "hero",
+    "category-grid",
+    "featured-products",
+    "about-blurb",
+    "testimonials",
+    "newsletter"
+  ],
+
+  "navStructure": [
+    { "id": "shop", "label": "Shop", "href": "shop.html", "highlight": true },
+    { "id": "about", "label": "About", "href": "about.html" },
+    { "id": "faq", "label": "FAQ", "href": "#faq" },
+    { "id": "contact", "label": "Contact", "href": "#contact" }
+  ],
+
+  "pages": [
+    { "file": "index.html", "label": "Home", "slots": ["hero", "category-grid", "featured-products", "about-blurb", "testimonials", "newsletter"] },
+    { "file": "shop.html", "label": "Shop", "slots": ["shop-header", "shop-grid"] },
+    { "file": "product.html", "label": "Product Detail", "slots": ["product-detail", "product-story"] },
+    { "file": "about.html", "label": "About", "slots": ["about-header", "about-story", "cta"] },
+    { "file": "orders.html", "label": "Orders", "slots": ["orders-header", "order-lookup"] },
+    { "file": "wholesale.html", "label": "Wholesale", "slots": ["wholesale-header", "wholesale-grid"] },
+    { "file": "checkout.html", "label": "Checkout", "slots": ["checkout-flow"] },
+    { "file": "blog/index.html", "label": "Blog", "slots": ["blog-header", "blog-grid"] },
+    { "file": "blog/post.html", "label": "Blog Post", "slots": ["blog-post"] }
+  ],
+
+  "colorSchemes": [
+    {
+      "id": "clean-white",
+      "name": "Clean White",
+      "default": true,
+      "colors": {
+        "primaryColor": "#2D2D2D",
+        "accentColor": "#E07A5F",
+        "bgColor": "#FFFFFF",
+        "bgDarkColor": "#F5F5F5",
+        "textColor": "#1A1A1A",
+        "textMutedColor": "#6B6B6B"
+      }
+    },
+    {
+      "id": "warm-sand",
+      "name": "Warm Sand",
+      "colors": {
+        "primaryColor": "#8B6F47",
+        "accentColor": "#C17D54",
+        "bgColor": "#FAF8F5",
+        "bgDarkColor": "#F0ECE6",
+        "textColor": "#2C2417",
+        "textMutedColor": "#7A7060"
+      }
+    },
+    {
+      "id": "ocean-blue",
+      "name": "Ocean Blue",
+      "colors": {
+        "primaryColor": "#1B4965",
+        "accentColor": "#5FA8D3",
+        "bgColor": "#F7FAFE",
+        "bgDarkColor": "#EBF2F8",
+        "textColor": "#1A1A2E",
+        "textMutedColor": "#5E6B7A"
+      }
+    },
+    {
+      "id": "moss-clay",
+      "name": "Moss & Clay",
+      "colors": {
+        "primaryColor": "#5A7247",
+        "accentColor": "#C0784A",
+        "bgColor": "#F8F7F4",
+        "bgDarkColor": "#EDEAE4",
+        "textColor": "#2A2A24",
+        "textMutedColor": "#6B6960"
+      }
+    },
+    {
+      "id": "midnight",
+      "name": "Midnight",
+      "colors": {
+        "primaryColor": "#E8E0D4",
+        "accentColor": "#D4A574",
+        "bgColor": "#1A1A2E",
+        "bgDarkColor": "#16162A",
+        "textColor": "#E8E0D4",
+        "textMutedColor": "#9A9490"
+      }
+    }
+  ],
+
+  "fontPairs": [
+    { "id": "clean", "name": "Clean", "heading": "Outfit", "body": "Outfit", "default": true },
+    { "id": "modern", "name": "Modern", "heading": "Inter", "body": "Inter" },
+    { "id": "classic", "name": "Classic", "heading": "Cormorant Garamond", "body": "DM Sans" },
+    { "id": "editorial", "name": "Editorial", "heading": "Playfair Display", "body": "Source Sans 3" },
+    { "id": "geometric", "name": "Geometric", "heading": "Space Grotesk", "body": "Space Grotesk" }
+  ]
+}
