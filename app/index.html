@@ -5275,8 +5275,14 @@
           </div>
           <div class="form-group" style="margin-bottom:24px;">
             <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Logo URL</label>
-            <input type="url" id="wizardLogoUrl" placeholder="https://your-logo-url.com/logo.png"
-              style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;">
+            <div style="display:flex;gap:12px;align-items:flex-start;">
+              <input type="url" id="wizardLogoUrl" placeholder="https://your-logo-url.com/logo.png"
+                style="flex:1;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;"
+                oninput="var p=document.getElementById('wizardLogoPreview');var v=this.value.trim();if(v){p.src=v;p.style.display='';}else{p.style.display='none';}">
+              <img id="wizardLogoPreview" src="" alt="Logo preview"
+                style="display:none;width:56px;height:56px;object-fit:contain;border-radius:6px;border:1px solid rgba(0,0,0,0.1);background:rgba(255,255,255,0.9);flex-shrink:0;"
+                onerror="this.style.display='none';">
+            </div>
             <p style="font-size:0.8rem;color:var(--warm-gray);margin-top:4px;">You can upload a logo later via the Images section.</p>
           </div>
           <div style="display:flex;justify-content:space-between;">
@@ -11984,8 +11990,14 @@ async function wizardAnalyzeSite() {
     // Show summary
     var summaryItems = [];
     if (analysis.businessName) summaryItems.push('<strong>Business:</strong> ' + esc(analysis.businessName));
-    if (analysis.styleRecommendation) summaryItems.push('<strong>Style:</strong> ' + esc(analysis.styleRecommendation));
-    if (analysis.colors) summaryItems.push('<strong>Colors:</strong> ' + esc(analysis.colors.primary || '') + ', ' + esc(analysis.colors.accent || ''));
+    if (analysis.colors) {
+      var pc = analysis.colors.primary || '';
+      var ac = analysis.colors.accent || '';
+      summaryItems.push('<strong>Colors:</strong> <span style="display:inline-flex;align-items:center;gap:6px;">' +
+        (pc ? '<span style="display:inline-block;width:20px;height:20px;border-radius:4px;background:' + esc(pc) + ';border:1px solid rgba(0,0,0,0.15);vertical-align:middle;"></span>' : '') +
+        (ac ? '<span style="display:inline-block;width:20px;height:20px;border-radius:4px;background:' + esc(ac) + ';border:1px solid rgba(0,0,0,0.15);vertical-align:middle;"></span>' : '') +
+        '</span>');
+    }
     if (analysis.hero && analysis.hero.headline) summaryItems.push('<strong>Headline:</strong> ' + esc(analysis.hero.headline));
     summaryEl.innerHTML = '<p style="margin-bottom:8px;font-weight:600;">Site Analysis Complete:</p>' + summaryItems.join('<br>');
     summaryEl.style.display = '';
@@ -12067,7 +12079,12 @@ function wizardPrefillFromAnalysis(analysis) {
       if (achEl) achEl.value = analysis.colors.accent;
     }
   }
-  if (analysis.logo && logoEl) logoEl.value = analysis.logo;
+  if (analysis.logo && logoEl) {
+    logoEl.value = analysis.logo;
+    // Show logo preview
+    var preview = document.getElementById('wizardLogoPreview');
+    if (preview) { preview.src = analysis.logo; preview.style.display = ''; }
+  }
   document.getElementById('wizardBrandSubtext').textContent = 'Review what we found and make any changes.';
 }
 
@@ -19639,10 +19656,16 @@ async function renderAllDashboardCards() {
 
 // ─── Import Status Banner ──────────────────────────
 
+var _importBannerListener = null;
 function renderImportStatusBanner() {
   var banner = document.getElementById('importStatusBanner');
   if (!banner) return;
-  MastDB._ref('webPresence/importJobs').orderByChild('createdAt').limitToLast(3).once('value').then(function(snap) {
+  // Detach previous listener to avoid duplicates
+  if (_importBannerListener) {
+    MastDB._ref('webPresence/importJobs').off('value', _importBannerListener);
+  }
+  // Use .on() for real-time updates so banner updates when import completes
+  _importBannerListener = MastDB._ref('webPresence/importJobs').orderByChild('createdAt').limitToLast(3).on('value', function(snap) {
     var jobs = snap.val();
     if (!jobs) { banner.style.display = 'none'; return; }
     var jobList = Object.values(jobs).sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
