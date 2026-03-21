@@ -51,8 +51,12 @@ Features: public storefront (shop, commissions, blog), admin app (Studio Compani
 - Modules are IIFEs that register via `MastAdmin.registerModule()`. CSS stays in core. Globals accessed directly from `window`.
 - Public storefront pages use vanilla JS, IIFE pattern, Firebase compat SDK
 - Events pages (`events/`, `vendor/`, `show/`) have JS extracted to separate `.js` files — HTML is a thin shell
-- `storefront-tenant.js` must be loaded before all other JS on every page
-- `tenant-brand.js` applies brand customization after tenant resolution
+- **Script loading order:** `storefront-tenant.js` → `storefront-theme.js` → `storefront-nav.js` → `tenant-brand.js` → `cart.js`
+- `storefront.css` provides all shared CSS (`:root` vars, nav, footer, buttons, etc.) — page-specific styles remain inline
+- `storefront-theme.js` reads `public/config/theme` and injects CSS custom properties for colors/fonts
+- `storefront-nav.js` reads `public/config/nav` + `promoBanner` and builds nav/mobile menu dynamically
+- `tenant-brand.js` applies brand customization via `data-tenant` attributes after tenant resolution
+- All public pages are fully generic — no tenant-specific hardcodes. Content comes from Firebase config or shows appropriate placeholders
 - `MastDB` is the data access layer — all Firebase reads/writes go through it
 - Deploy all tenants at once: `mast_hosting(action: "deploy_all")` — deploys sequentially to all active tenants
 - Follow existing code patterns for new features: function components, hooks for state, consistent with current UI styling (dark mode, existing color palette)

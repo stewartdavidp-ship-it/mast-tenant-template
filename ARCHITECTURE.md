@@ -100,11 +100,15 @@ Static HTML pages. No build system, no bundler.
 
 | File | Purpose |
 |------|---------|
+| `storefront.css` | Shared CSS for all public pages. `:root` vars (generic tokens: `--primary`, `--accent`, `--bg`, etc.), dark mode, reset, nav, buttons, section labels, page header, forms, footer, newsletter bar, powered-by-mast, mobile menu, scroll animations, responsive base. Legacy aliases (`--amber: var(--primary)`, etc.) for backward compat |
+| `storefront-tenant.js` | Tenant resolution from domain. Sets global `TENANT_ID`. Loaded first on all pages |
+| `storefront-theme.js` | Reads `{TENANT_ID}/public/config/theme` from RTDB (REST API). Injects CSS custom properties on `:root`. Auto-generates color variants. Supports 5 font pair presets (classic, modern, editorial, clean, artisan). Dispatches `storefront-theme-ready` event |
+| `storefront-nav.js` | Reads `{TENANT_ID}/public/config/nav` from RTDB. Builds `<nav>` and mobile menu dynamically. Supports section show/hide via `enabled` flag. Reads `promoBanner` config for data-driven promo banner. Dispatches `storefront-nav-ready` event |
+| `tenant-brand.js` | Brand injection via `data-tenant` attributes. Reads platform registry for business name, tagline, contact info |
 | `cart.js` | Cart drawer, toast notifications, auth (Sign In/Out via Google), shared across all public pages |
-| `cart.css` | Cart drawer and toast styles |
-| `storefront-tenant.js` | Tenant resolution from domain. Sets global `TENANT_ID`. Loaded before other JS on all pages |
-| `feedback-widget.js` | Floating feedback button. Reads `feedbackSettings/publicEnabled`, submits to `{TENANT_ID}/feedbackReports` |
-| `share-widget.js` | Floating share button. Uses `navigator.share()` on mobile, copy-link fallback on desktop |
+| `cart.css` | Cart drawer and toast styles (uses CSS var tokens with fallbacks) |
+| `feedback-widget.js` | Floating feedback button. Uses CSS var tokens (`--accent`, `--primary`). Reads `feedbackSettings/publicEnabled` |
+| `share-widget.js` | Floating share button. Uses CSS var tokens. `navigator.share()` on mobile, copy-link fallback on desktop |
 
 ### Firebase SDK
 
@@ -408,6 +412,15 @@ All tenant data lives under `{tenantId}/` in the tenant's RTDB (configured via `
 |------|--------|---------|
 | `{tenantId}/public/products/` | Anonymous read | Product catalog |
 | `{tenantId}/public/gallery/` | Anonymous read | Gallery images |
+| `{tenantId}/public/config/theme` | Anonymous read | Storefront theme: `primaryColor`, `accentColor`, `fontPair` (classic/modern/editorial/clean/artisan). Read by `storefront-theme.js` |
+| `{tenantId}/public/config/nav` | Anonymous read | Nav config: `sections` (object keyed by section ID, each with `label`, `href`, `enabled`, `highlight`, `order`), `showSignIn`, `logoUrl`. Read by `storefront-nav.js` |
+| `{tenantId}/public/config/promoBanner` | Anonymous read | Promo banner: `text`, `enabled`. Read by `storefront-nav.js` |
+| `{tenantId}/public/config/categories` | Anonymous read | Product categories array: `[{ id, label, wholesaleGroup? }]`. Drives shop filter pills, wholesale groups, admin gallery sections |
+| `{tenantId}/public/config/homepage/about` | Anonymous read | Homepage about section: `label`, `title`, `stats[]` |
+| `{tenantId}/public/config/homepage/gallery` | Anonymous read | Homepage gallery section: `label`, `title`, `subtitle` |
+| `{tenantId}/public/config/homepage/process` | Anonymous read | Homepage process section: `label`, `title`, `subtitle`, `cards[]` |
+| `{tenantId}/public/config/about` | Anonymous read | About page config: `label`, `heading`, `techniquesLabel`, `techniques[]` |
+| `{tenantId}/public/testimonials` | Anonymous read | Testimonials: `{ quote, author, rating, order, visible }` |
 | `{tenantId}/public/config/shippingRates` | Anonymous read | Shipping calculation config |
 | `{tenantId}/public/config/googleMapsApiKey` | Anonymous read | Places API key |
 | `{tenantId}/public/config/testMode` | Anonymous read | Sandbox mode flag |
