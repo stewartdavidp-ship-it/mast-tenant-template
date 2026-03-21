@@ -137,14 +137,14 @@
 
   /* ========= PAGE HEADER ========= */
   .page-header {
-    background: var(--charcoal);
+    background: var(--surface-dark);
     padding: 10rem 3rem 5rem;
     text-align: center;
   }
 
   .page-header .section-label { color: var(--amber-light); }
-  .page-header .section-title { color: #fff; font-size: clamp(2.5rem, 5vw, 3.8rem); }
-  .page-header .section-subtitle { color: rgba(255,255,255,0.7); margin: 0 auto; }
+  .page-header .section-title { color: var(--on-dark); font-size: clamp(2.5rem, 5vw, 3.8rem); }
+  .page-header .section-subtitle { color: var(--on-dark-muted); margin: 0 auto; }
 
   /* ========= ORDERS PAGE ========= */
   .orders-container {
@@ -157,7 +157,7 @@
   .payment-confirmation {
     text-align: center;
     padding: 3rem 2rem;
-    background: #fff;
+    background: var(--surface-card);
     border-radius: 4px;
     box-shadow: 0 2px 20px rgba(0,0,0,0.06);
     margin-bottom: 3rem;
@@ -226,7 +226,7 @@
 
   /* Order Lookup */
   .order-lookup {
-    background: #fff;
+    background: var(--surface-card);
     border-radius: 4px;
     box-shadow: 0 2px 20px rgba(0,0,0,0.06);
     padding: 2.5rem;
@@ -353,7 +353,7 @@
   }
 
   .order-card {
-    background: #fff;
+    background: var(--surface-card);
     border-radius: 4px;
     box-shadow: 0 2px 20px rgba(0,0,0,0.06);
     overflow: hidden;

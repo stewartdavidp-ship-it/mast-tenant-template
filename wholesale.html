@@ -15,8 +15,8 @@
   .ws-header {
     padding: 120px 3rem 40px;
     text-align: center;
-    background: var(--charcoal);
-    color: #fff;
+    background: var(--surface-dark);
+    color: var(--on-dark);
   }
   .ws-header h1 {
     font-family: 'Cormorant Garamond', serif;
@@ -34,7 +34,7 @@
   }
   .ws-header .ws-contact {
     font-size: 0.8rem;
-    color: rgba(255,255,255,0.6);
+    color: var(--on-dark-faint);
   }
   .ws-header .ws-contact a { color: var(--amber-light); text-decoration: none; }
 
@@ -51,7 +51,7 @@
     padding: 6px 16px;
     border: 1px solid #ccc;
     border-radius: 20px;
-    background: #fff;
+    background: var(--surface-card);
     font-family: 'DM Sans', sans-serif;
     font-size: 0.78rem;
     letter-spacing: 0.06em;
@@ -86,7 +86,7 @@
   }
 
   .ws-card {
-    background: #fff;
+    background: var(--surface-card);
     border-radius: 8px;
     overflow: hidden;
     border: 1px solid rgba(0,0,0,0.06);
@@ -217,8 +217,8 @@
 
   /* ===== FOOTER ===== */
   .ws-footer {
-    background: var(--charcoal);
-    color: rgba(255,255,255,0.7);
+    background: var(--surface-dark);
+    color: var(--on-dark-muted);
     padding: 48px 3rem;
     text-align: center;
   }
@@ -226,7 +226,7 @@
     font-family: 'Cormorant Garamond', serif;
     font-size: 1.4rem;
     font-weight: 400;
-    color: #fff;
+    color: var(--on-dark);
     margin-bottom: 20px;
   }
   .ws-footer-terms {
@@ -251,8 +251,8 @@
     justify-content: center;
     text-align: center;
     padding: 40px;
-    background: var(--charcoal);
-    color: #fff;
+    background: var(--surface-dark);
+    color: var(--on-dark);
   }
   .ws-denied h1 {
     font-family: 'Cormorant Garamond', serif;
@@ -262,7 +262,7 @@
   }
   .ws-denied p {
     font-size: 0.9rem;
-    color: rgba(255,255,255,0.6);
+    color: var(--on-dark-faint);
     max-width: 400px;
     line-height: 1.6;
     margin-bottom: 24px;
@@ -359,7 +359,7 @@
     <img src="favicon.svg" data-tenant-alt="brand" alt="My Shop" style="width:140px;margin-bottom:24px;">
     <h1 data-tenant="brand">My Shop</h1>
     <p>This catalog is available to authorized wholesale buyers.</p>
-    <div id="wsDeniedUserInfo" style="font-size:0.8rem;color:rgba(255,255,255,0.5);margin-bottom:16px;"></div>
+    <div id="wsDeniedUserInfo" style="font-size:0.8rem;color:var(--on-dark-faint);margin-bottom:16px;"></div>
     <div id="wsRequestArea"></div>
     <div style="margin-top:16px;">
       <a href="shop.html" style="color:var(--amber-light);text-decoration:none;font-size:0.8rem;">Browse retail shop instead &rarr;</a>
@@ -399,7 +399,7 @@
       <div class="ws-footer-contact">
         Questions? <a href="mailto:" data-tenant="email" data-tenant-href="email">hello@example.com</a> &nbsp;&middot;&nbsp; 
       </div>
-      <div style="margin-top:24px;font-size:0.7rem;color:rgba(255,255,255,0.3);">
+      <div style="margin-top:24px;font-size:0.7rem;color:var(--on-dark-faint);">
         <span data-tenant="year-brand">&copy; 2026 My Shop</span> &nbsp;&middot;&nbsp; <span data-tenant="location">Your City, ST</span>
       </div>
     </footer>

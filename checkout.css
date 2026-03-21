@@ -5,7 +5,7 @@
   justify-content: center;
   gap: 0;
   padding: 16px 24px 12px;
-  border-bottom: 1px solid #F0E8DB;
+  border-bottom: 1px solid var(--surface-card-border);
 }
 
 .checkout-step {
@@ -70,7 +70,7 @@
   font-family: 'Cormorant Garamond', serif;
   font-size: 1.15rem;
   font-weight: 500;
-  color: #1A1A1A;
+  color: var(--text);
   margin-bottom: 16px;
 }
 
@@ -83,7 +83,7 @@
   font-size: 0.72rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #9B958E;
+  color: var(--text-light);
   margin-bottom: 5px;
   font-weight: 500;
 }
@@ -96,8 +96,8 @@
   border-radius: 4px;
   font-family: 'DM Sans', sans-serif;
   font-size: 0.88rem;
-  color: #1A1A1A;
-  background: #fff;
+  color: var(--text);
+  background: var(--surface-card);
   transition: border-color 0.2s;
   box-sizing: border-box;
 }
@@ -138,7 +138,7 @@
   gap: 8px;
   cursor: pointer;
   font-size: 0.85rem;
-  color: #6B6560;
+  color: var(--text-muted);
   margin: 16px 0 8px;
 }
 
@@ -166,7 +166,7 @@
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s;
-  background: #fff;
+  background: var(--surface-card);
 }
 
 .shipping-option:hover {
@@ -209,12 +209,12 @@
 .shipping-option-label {
   font-size: 0.88rem;
   font-weight: 500;
-  color: #1A1A1A;
+  color: var(--text);
 }
 
 .shipping-option-desc {
   font-size: 0.75rem;
-  color: #9B958E;
+  color: var(--text-light);
   margin-top: 2px;
 }
 
@@ -239,8 +239,8 @@
 
 .coupon-apply-btn {
   padding: 10px 18px;
-  background: #1A1A1A;
-  color: #fff;
+  background: var(--surface-dark);
+  color: var(--on-dark);
   border: none;
   border-radius: 4px;
   font-family: 'DM Sans', sans-serif;
@@ -275,7 +275,7 @@
 
 /* ========= ORDER TOTALS ========= */
 .order-totals {
-  border-top: 1px solid #F0E8DB;
+  border-top: 1px solid var(--surface-card-border);
   padding-top: 16px;
 }
 
@@ -285,7 +285,7 @@
   align-items: center;
   padding: 5px 0;
   font-size: 0.85rem;
-  color: #6B6560;
+  color: var(--text-muted);
 }
 
 .order-total-row.discount {
@@ -293,12 +293,12 @@
 }
 
 .order-total-row.grand-total {
-  border-top: 1.5px solid #1A1A1A;
+  border-top: 1.5px solid var(--text);
   margin-top: 8px;
   padding-top: 10px;
   font-size: 1rem;
   font-weight: 600;
-  color: #1A1A1A;
+  color: var(--text);
 }
 
 .order-total-label {
@@ -317,7 +317,7 @@
 /* ========= REVIEW PAGE ========= */
 .review-section {
   padding: 14px 0;
-  border-bottom: 1px solid #F0E8DB;
+  border-bottom: 1px solid var(--surface-card-border);
 }
 
 .review-section:last-child {
@@ -335,7 +335,7 @@
   font-size: 0.72rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #9B958E;
+  color: var(--text-light);
   font-weight: 600;
 }
 
@@ -356,7 +356,7 @@
 
 .review-address {
   font-size: 0.85rem;
-  color: #1A1A1A;
+  color: var(--text);
   line-height: 1.5;
 }
 
@@ -372,7 +372,7 @@
   border-radius: 4px;
   object-fit: cover;
   flex-shrink: 0;
-  background: #F0E8DB;
+  background: var(--surface-card-border);
 }
 
 .review-item-info {
@@ -383,18 +383,18 @@
 .review-item-name {
   font-size: 0.85rem;
   font-weight: 500;
-  color: #1A1A1A;
+  color: var(--text);
 }
 
 .review-item-meta {
   font-size: 0.75rem;
-  color: #9B958E;
+  color: var(--text-light);
 }
 
 .review-item-price {
   font-size: 0.85rem;
   font-weight: 500;
-  color: #1A1A1A;
+  color: var(--text);
   white-space: nowrap;
 }
 
@@ -430,7 +430,7 @@
   text-align: center;
   margin-top: 12px;
   font-size: 0.78rem;
-  color: #9B958E;
+  color: var(--text-light);
   cursor: pointer;
   background: none;
   border: none;
@@ -440,7 +440,7 @@
 }
 
 .checkout-back-link:hover {
-  color: #6B6560;
+  color: var(--text-muted);
 }
 
 /* Cart checkout button */
@@ -482,20 +482,20 @@
   font-family: 'Cormorant Garamond', serif;
   font-size: 1.4rem;
   font-weight: 400;
-  color: #1A1A1A;
+  color: var(--text);
   margin-bottom: 0.5rem;
 }
 
 .confirmation-order-id {
   font-size: 0.8rem;
-  color: #9B958E;
+  color: var(--text-light);
   margin-bottom: 1.5rem;
   letter-spacing: 0.05em;
 }
 
 .confirmation-message {
   font-size: 0.88rem;
-  color: #6B6560;
+  color: var(--text-muted);
   line-height: 1.6;
   margin-bottom: 2rem;
 }
@@ -578,7 +578,7 @@
 }
 .pac-item {
   font-size: 0.85rem;
-  color: #1A1A1A;
+  color: var(--text);
   padding: 8px 12px;
   cursor: pointer;
 }
@@ -593,8 +593,8 @@
 .checkout-btn-secondary {
   display: inline-block;
   padding: 10px 20px;
-  background: #1A1A1A;
-  color: #FFF9F3;
+  background: var(--surface-dark);
+  color: var(--on-dark);
   border: none;
   border-radius: 6px;
   font-family: 'DM Sans', sans-serif;
