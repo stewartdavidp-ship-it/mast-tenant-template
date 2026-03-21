@@ -45,7 +45,7 @@
   }
 
   .btn-outline:hover {
-    background: var(--charcoal);
+    background: var(--surface-dark);
     color: #fff;
     transform: translateY(-2px);
   }
@@ -149,13 +149,13 @@
 
   /* ========= PAGE HEADER ========= */
   .page-header {
-    background: var(--charcoal);
+    background: var(--surface-dark);
     padding: 10rem 3rem 5rem;
     text-align: center;
   }
 
   .page-header .section-label { color: var(--amber-light); }
-  .page-header .section-title { color: #fff; font-size: clamp(2.5rem, 5vw, 3.8rem); }
+  .page-header .section-title { color: var(--on-dark); font-size: clamp(2.5rem, 5vw, 3.8rem); }
 
   /* ========= ABOUT SECTION ========= */
   .about {
@@ -221,7 +221,7 @@
   }
 
   .technique-card {
-    background: #fff;
+    background: var(--surface-card);
     padding: 2.5rem 2rem;
     border-radius: 4px;
     text-align: center;
@@ -437,6 +437,9 @@
   document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
 </script>
 <script>
+  // Helper: escape for safe innerHTML
+  function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
   // Firebase — load about page content dynamically
   window.TENANT_READY.then(function() {
     var app = firebase.initializeApp(TENANT_FIREBASE_CONFIG, 'public-about');
@@ -475,9 +478,9 @@
         var html = '';
         config.techniques.forEach(function(t) {
           html += '<div class="technique-card fade-up">';
-          html += '<div class="technique-icon">' + (t.icon || defaultIcon) + '</div>';
-          html += '<h3>' + (t.title || '') + '</h3>';
-          html += '<p>' + (t.description || '') + '</p>';
+          html += '<div class="technique-icon">' + esc(t.icon || defaultIcon) + '</div>';
+          html += '<h3>' + esc(t.title || '') + '</h3>';
+          html += '<p>' + esc(t.description || '') + '</p>';
           html += '</div>';
         });
         grid.innerHTML = html;

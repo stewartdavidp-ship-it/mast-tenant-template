@@ -112,7 +112,8 @@
     var basePath = getBasePath();
     var homepage = isHomepage();
     var showSignIn = (config && config.showSignIn === false) ? false : true;
-    var logoUrl = (config && config.logoUrl) || (basePath + 'favicon.svg');
+    var rawLogo = (config && config.logoUrl) || '';
+    var logoUrl = (rawLogo && (rawLogo.indexOf('https://') === 0 || rawLogo.indexOf('/') === 0 || rawLogo.indexOf('../') === 0)) ? rawLogo : (basePath + 'favicon.svg');
     var brandName = (window.TENANT_BRAND && window.TENANT_BRAND.name) || 'My Shop';
 
     // Transparent nav — either data attribute on the element or homepage
@@ -126,7 +127,7 @@
     // ── Desktop nav ──
     var html = '';
     html += '<a href="' + homeHref + '" class="nav-logo">';
-    html += '<img src="' + logoUrl + '" data-tenant-alt="brand" alt="' + esc(brandName) + '">';
+    html += '<img src="' + esc(logoUrl) + '" data-tenant-alt="brand" alt="' + esc(brandName) + '">';
     html += '</a>';
     html += '<ul class="nav-links">';
     html += '<li><a href="' + homeHref + '">Home</a></li>';

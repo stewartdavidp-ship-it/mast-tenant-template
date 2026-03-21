@@ -387,6 +387,7 @@ window.TENANT_READY.then(function() {
   if (!firebase.apps.length) firebase.initializeApp(TENANT_FIREBASE_CONFIG);
   const db = firebase.database();
 
+  function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
   function fmtMonth(dateStr) {
     const d = new Date(dateStr + 'T00:00:00');
     return d.toLocaleDateString('en-US', { month: 'short' });
@@ -433,9 +434,9 @@ window.TENANT_READY.then(function() {
       html += '<div class="event-card fade-up" style="opacity:1;transform:translateY(0)">';
       html += '<div class="event-date"><div class="event-month">' + month + '</div>';
       html += '<div class="event-day">' + day + '</div></div>';
-      html += '<div class="event-info"><h3>' + ev.name + '</h3>';
-      html += '<p>' + (ev.description || '') + '</p></div>';
-      html += '<div class="event-location">' + (ev.location || '').toUpperCase() + '</div>';
+      html += '<div class="event-info"><h3>' + esc(ev.name) + '</h3>';
+      html += '<p>' + esc(ev.description || '') + '</p></div>';
+      html += '<div class="event-location">' + esc((ev.location || '').toUpperCase()) + '</div>';
       html += '</div>';
     });
     list.innerHTML = html;

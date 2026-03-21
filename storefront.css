@@ -20,6 +20,16 @@
   --text-light: #9B958E;
   --brand-gradient: linear-gradient(135deg, #C4853C 0%, #E8B679 30%, #A8D5CE 70%, #2A7C6F 100%);
 
+  /* Semantic surface tokens — NOT inverted by dark mode.
+     Use these for elements that should stay dark/light regardless of mode. */
+  --surface-dark: #1A1A1A;
+  --surface-dark-muted: #252a35;
+  --surface-card: #fff;
+  --surface-card-border: #F0E8DB;
+  --on-dark: #fff;
+  --on-dark-muted: rgba(255,255,255,0.7);
+  --on-dark-faint: rgba(255,255,255,0.45);
+
   /* Legacy aliases — existing code references these names.
      They resolve to the generic tokens above, so overriding
      --primary also changes --amber, etc. */
@@ -45,6 +55,8 @@
     --text: #e8e4df;
     --text-muted: #a09890;
     --text-light: #706860;
+    --surface-card: #252a35;
+    --surface-card-border: #3a3f4a;
   }
 }
 
@@ -54,6 +66,8 @@ html.dark {
   --text: #e8e4df;
   --text-muted: #a09890;
   --text-light: #706860;
+  --surface-card: #252a35;
+  --surface-card-border: #3a3f4a;
 }
 
 html.light {
@@ -62,6 +76,8 @@ html.light {
   --text: #1A1A1A;
   --text-muted: #6B6560;
   --text-light: #9B958E;
+  --surface-card: #fff;
+  --surface-card-border: #F0E8DB;
 }
 
 /* ========= RESET & BASE ========= */
@@ -298,14 +314,14 @@ section { padding: 7rem 3rem; }
 
 /* ========= PAGE HEADER ========= */
 .page-header {
-  background: var(--charcoal);
+  background: var(--surface-dark);
   padding: 10rem 3rem 5rem;
   text-align: center;
 }
 
 .page-header .section-label { color: var(--amber-light); }
-.page-header .section-title { color: #fff; font-size: clamp(2.5rem, 5vw, 3.8rem); }
-.page-header .section-subtitle { color: rgba(255,255,255,0.7); margin: 0 auto; }
+.page-header .section-title { color: var(--on-dark); font-size: clamp(2.5rem, 5vw, 3.8rem); }
+.page-header .section-subtitle { color: var(--on-dark-muted); margin: 0 auto; }
 
 /* ========= FORMS ========= */
 .form-row {
@@ -352,8 +368,8 @@ section { padding: 7rem 3rem; }
 .form-submit {
   width: 100%;
   padding: 0.9rem;
-  background: var(--charcoal);
-  color: #fff;
+  background: var(--surface-dark);
+  color: var(--on-dark);
   border: none;
   font-family: 'DM Sans', sans-serif;
   font-size: 0.78rem;
@@ -369,7 +385,7 @@ section { padding: 7rem 3rem; }
 
 /* ========= NEWSLETTER BAR ========= */
 .newsletter-bar {
-  background: var(--charcoal);
+  background: var(--surface-dark);
   padding: 4rem 3rem;
   text-align: center;
 }
@@ -378,13 +394,13 @@ section { padding: 7rem 3rem; }
   font-family: 'Cormorant Garamond', serif;
   font-size: 1.75rem;
   font-weight: 300;
-  color: #fff;
+  color: var(--on-dark);
   margin-bottom: 0.5rem;
 }
 
 .newsletter-bar p {
   font-size: 0.85rem;
-  color: rgba(255,255,255,0.45);
+  color: var(--on-dark-faint);
   margin-bottom: 2rem;
   font-weight: 300;
 }
@@ -400,7 +416,7 @@ section { padding: 7rem 3rem; }
   padding: 0.85rem 1.2rem;
   border: 1px solid rgba(255,255,255,0.12);
   background: rgba(255,255,255,0.04);
-  color: #fff;
+  color: var(--on-dark);
   font-family: 'DM Sans', sans-serif;
   font-size: 0.85rem;
   font-weight: 300;
@@ -413,7 +429,7 @@ section { padding: 7rem 3rem; }
 .newsletter-form button {
   padding: 0.85rem 1.6rem;
   background: var(--amber);
-  color: #fff;
+  color: var(--on-dark);
   border: 1px solid var(--amber);
   font-family: 'DM Sans', sans-serif;
   font-size: 0.72rem;
@@ -430,7 +446,7 @@ section { padding: 7rem 3rem; }
 
 /* ========= FOOTER ========= */
 footer {
-  background: var(--charcoal);
+  background: var(--surface-dark);
   padding: 2.5rem 3rem;
 }
 

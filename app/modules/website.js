@@ -17,6 +17,8 @@
   var showCustomColors = false; // toggled when user picks "Custom" in color scheme
   var allTemplateManifests = null; // array of loaded manifests from registry
   var pendingSwitchTemplateId = null; // template ID pending confirmation
+  var previewTemplateId = null; // template ID currently being previewed in iframe
+  var previewViewport = 'desktop'; // desktop, tablet, mobile
 
   // ── Fallback style/font/section defs (used when no manifest loaded) ──
   var STYLE_DEFS = [
@@ -386,33 +388,49 @@
       return html;
     }
 
+    // If we're showing a preview iframe
+    if (previewTemplateId) {
+      html += renderTemplatePreview();
+      return html;
+    }
+
     html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">Choose a template to define your site\'s layout and homepage flow.</p>';
 
     html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;">';
 
     allTemplateManifests.forEach(function(manifest) {
       var isActive = manifest.id === currentTemplateId;
-      html += '<div class="wp-template-card' + (isActive ? ' active' : '') + '" onclick="' + (isActive ? '' : 'wpSelectTemplate(\'' + esc(manifest.id) + '\')') + '">';
+      html += '<div class="wp-template-card' + (isActive ? ' active' : '') + '">';
 
       if (isActive) {
         html += '<span class="wp-tpl-badge">Active</span>';
       }
 
+      // Feature badge
+      var featureLabel = '';
+      if (manifest.homepageFlow) {
+        var firstFlow = manifest.homepageFlow[0] || '';
+        if (firstFlow === 'hero' && manifest.homepageFlow[1] === 'about') featureLabel = 'Story-first';
+        else if (firstFlow === 'hero' && (manifest.homepageFlow[1] === 'category-grid' || manifest.homepageFlow[1] === 'featured-products')) featureLabel = 'Product-first';
+        else if (firstFlow === 'hero' && manifest.homepageFlow[1] === 'events') featureLabel = 'Experience-first';
+      }
+      if (featureLabel) {
+        html += '<span class="wp-tpl-feature">' + esc(featureLabel) + '</span>';
+      }
+
       html += '<div class="wp-tpl-name">' + esc(manifest.name) + '</div>';
       html += '<div class="wp-tpl-desc">' + esc(manifest.description) + '</div>';
 
-      // Meta info
-      html += '<div class="wp-tpl-meta">';
-      html += '<span>' + (manifest.colorSchemes ? manifest.colorSchemes.length : 0) + ' color schemes</span>';
-      html += '<span>' + (manifest.fontPairs ? manifest.fontPairs.length : 0) + ' font pairs</span>';
-      var slotCount = 0;
-      if (manifest.slots) {
-        ['universal', 'common', 'differentiators'].forEach(function(cat) {
-          if (manifest.slots[cat]) slotCount += manifest.slots[cat].length;
+      // Color scheme preview dots
+      if (manifest.colorSchemes && manifest.colorSchemes.length) {
+        html += '<div class="wp-tpl-colors">';
+        manifest.colorSchemes.forEach(function(scheme) {
+          var primary = (scheme.colors && scheme.colors.primaryColor) || '#C4853C';
+          var accent = (scheme.colors && scheme.colors.accentColor) || '#2A7C6F';
+          html += '<span class="wp-tpl-color-dot" title="' + esc(scheme.name) + '" style="background:linear-gradient(135deg, ' + esc(primary) + ' 50%, ' + esc(accent) + ' 50%);"></span>';
         });
+        html += '</div>';
       }
-      html += '<span>' + slotCount + ' sections</span>';
-      html += '</div>';
 
       // Homepage flow preview
       if (manifest.homepageFlow && manifest.homepageFlow.length) {
@@ -423,9 +441,53 @@
         html += '</div>';
       }
 
+      // Action buttons
+      html += '<div class="wp-tpl-actions">';
+      html += '<button class="btn btn-outline btn-small" onclick="event.stopPropagation();wpPreviewTemplate(\'' + esc(manifest.id) + '\')">Preview</button>';
+      if (!isActive) {
+        html += '<button class="btn btn-primary btn-small" onclick="event.stopPropagation();wpSelectTemplate(\'' + esc(manifest.id) + '\')">Switch</button>';
+      }
+      html += '</div>';
+
       html += '</div>';
     });
 
+    html += '</div>';
+
+    return html;
+  }
+
+  function renderTemplatePreview() {
+    var manifest = null;
+    if (allTemplateManifests) {
+      manifest = allTemplateManifests.find(function(m) { return m.id === previewTemplateId; });
+    }
+    var name = manifest ? manifest.name : previewTemplateId;
+
+    // Build the preview URL
+    var siteUrl = window.location.origin + '/?preview_template=' + encodeURIComponent(previewTemplateId);
+
+    var viewportWidths = { desktop: '100%', tablet: '768px', mobile: '375px' };
+    var viewportHeight = previewViewport === 'mobile' ? '812px' : '600px';
+    var iframeWidth = viewportWidths[previewViewport];
+
+    var html = '';
+    html += '<div style="margin-bottom:12px;">';
+    html += '<button class="detail-back" onclick="wpClosePreview()">← Back to Templates</button>';
+    html += '</div>';
+
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
+    html += '<h3 style="font-size:1.1rem;margin:0;">Preview: ' + esc(name) + '</h3>';
+    html += '<div style="display:flex;gap:6px;">';
+    ['desktop', 'tablet', 'mobile'].forEach(function(vp) {
+      var icon = vp === 'desktop' ? '&#128187;' : vp === 'tablet' ? '&#128241;' : '&#128241;';
+      var label = vp.charAt(0).toUpperCase() + vp.slice(1);
+      html += '<button class="btn btn-small' + (previewViewport === vp ? ' btn-primary' : ' btn-secondary') + '" onclick="wpSetPreviewViewport(\'' + vp + '\')" title="' + label + '">' + label + '</button>';
+    });
+    html += '</div></div>';
+
+    html += '<div style="background:var(--charcoal-light, #333);border-radius:8px;padding:12px;display:flex;justify-content:center;overflow:hidden;">';
+    html += '<iframe src="' + esc(siteUrl) + '" style="width:' + iframeWidth + ';max-width:100%;height:' + viewportHeight + ';border:none;border-radius:6px;background:#fff;" sandbox="allow-scripts allow-same-origin allow-popups"></iframe>';
     html += '</div>';
 
     return html;
@@ -582,7 +644,7 @@
 
     html += '<div style="display:flex;gap:10px;margin-top:20px;">';
     html += '<button class="btn btn-primary" onclick="wpConfirmSwitch()">Switch Template</button>';
-    html += '<button class="btn" onclick="wpCancelSwitch()" style="background:var(--charcoal-light, #333);color:#e0e0e0;">Cancel</button>';
+    html += '<button class="btn btn-secondary" onclick="wpCancelSwitch()">Cancel</button>';
     html += '</div>';
 
     html += '</div>';
@@ -1624,11 +1686,28 @@
 
   window.wpSelectTemplate = function(templateId) {
     pendingSwitchTemplateId = templateId;
+    previewTemplateId = null;
     renderWebsite();
   };
 
   window.wpCancelSwitch = function() {
     pendingSwitchTemplateId = null;
+    renderWebsite();
+  };
+
+  window.wpPreviewTemplate = function(templateId) {
+    previewTemplateId = templateId;
+    previewViewport = 'desktop';
+    renderWebsite();
+  };
+
+  window.wpClosePreview = function() {
+    previewTemplateId = null;
+    renderWebsite();
+  };
+
+  window.wpSetPreviewViewport = function(viewport) {
+    previewViewport = viewport;
     renderWebsite();
   };
 

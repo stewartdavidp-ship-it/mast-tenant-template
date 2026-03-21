@@ -282,10 +282,45 @@
   }
 
   /**
+   * Check for ?preview_template= query param.
+   * Returns the preview template ID or null.
+   */
+  function getPreviewTemplateId() {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      return params.get('preview_template') || null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
+   * Inject a preview banner at the top of the page.
+   * Shows template name and a close link to remove the preview param.
+   */
+  function injectPreviewBanner(templateName) {
+    if (document.getElementById('mast-preview-banner')) return;
+    var banner = document.createElement('div');
+    banner.id = 'mast-preview-banner';
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:10000;background:rgba(42,124,111,0.92);color:#fff;text-align:center;padding:10px 16px;font-family:var(--font-body,"DM Sans",sans-serif);font-size:0.85rem;backdrop-filter:blur(4px);';
+    var esc = function(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
+    var cleanUrl = window.location.pathname + window.location.hash;
+    banner.innerHTML = 'Previewing <strong>' + esc(templateName) + '</strong>. Your published site has not changed. <a href="' + cleanUrl + '" style="color:#fff;text-decoration:underline;margin-left:8px;">Close Preview</a>';
+    document.body.insertBefore(banner, document.body.firstChild);
+    // Push body content down so banner doesn't overlay
+    document.body.style.paddingTop = (banner.offsetHeight) + 'px';
+  }
+
+  /**
    * Fetch tenant theme config from Firebase RTDB (REST API).
    */
   function fetchThemeConfig() {
     if (!window.TENANT_READY) return;
+
+    var previewTemplateId = getPreviewTemplateId();
+    if (previewTemplateId) {
+      window.MAST_PREVIEW_MODE = true;
+    }
 
     window.TENANT_READY.then(function () {
       if (!TENANT_ID || !TENANT_FIREBASE_CONFIG || !TENANT_FIREBASE_CONFIG.databaseURL) return;
@@ -299,31 +334,42 @@
           return resp.json();
         })
         .then(function (config) {
-          if (!config) {
-            if (window._resolveThemeReady) window._resolveThemeReady();
-            window.dispatchEvent(new CustomEvent('storefront-theme-ready', { detail: {} }));
-            return;
-          }
+          if (!config) config = {};
+
+          // If preview mode, override templateId WITHOUT writing to Firebase
+          var effectiveTemplateId = previewTemplateId || config.templateId;
 
           // Load template manifest if templateId is set
-          var manifestPromise = loadManifest(config.templateId);
+          var manifestPromise = loadManifest(effectiveTemplateId);
 
           manifestPromise.then(function (manifest) {
+            // In preview mode, use the preview template's default color scheme
+            var effectiveSchemeId = config.colorSchemeId;
+            if (previewTemplateId && manifest) {
+              var defaultScheme = (manifest.colorSchemes || []).find(function(s) { return s.default; });
+              effectiveSchemeId = defaultScheme ? defaultScheme.id : (manifest.colorSchemes && manifest.colorSchemes[0] ? manifest.colorSchemes[0].id : null);
+            }
+
             // If a colorSchemeId is set and we have a manifest, apply the scheme
             // Otherwise fall back to direct color config
             var schemeApplied = false;
-            if (config.colorSchemeId && manifest) {
-              schemeApplied = applyColorScheme(manifest, config.colorSchemeId);
+            if (effectiveSchemeId && manifest) {
+              schemeApplied = applyColorScheme(manifest, effectiveSchemeId);
             }
 
             // Apply direct theme config (colors, fontPair) — these override scheme colors
             // if explicitly set, or provide the theme when no scheme is used
-            if (!schemeApplied) {
+            if (!schemeApplied && !previewTemplateId) {
               applyTheme(config);
-            } else {
-              // Even with a scheme, apply fontPair if set in config
-              if (config.fontPair) {
-                applyTheme({ fontPair: config.fontPair });
+            } else if (schemeApplied) {
+              // Even with a scheme, apply fontPair
+              var effectiveFontPair = config.fontPair;
+              if (previewTemplateId && manifest) {
+                var defaultFont = (manifest.fontPairs || []).find(function(f) { return f.default; });
+                effectiveFontPair = defaultFont ? defaultFont.id : (manifest.fontPairs && manifest.fontPairs[0] ? manifest.fontPairs[0].id : null);
+              }
+              if (effectiveFontPair) {
+                applyTheme({ fontPair: effectiveFontPair });
               }
             }
 
@@ -339,6 +385,16 @@
               }
             }
 
+            // Inject preview banner after DOM is ready
+            if (previewTemplateId && manifest) {
+              var showBanner = function() { injectPreviewBanner(manifest.name || previewTemplateId); };
+              if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', showBanner);
+              } else {
+                showBanner();
+              }
+            }
+
             // Resolve the theme-ready promise so data loaders know flow is applied
             if (window._resolveThemeReady) window._resolveThemeReady();
 
@@ -347,8 +403,9 @@
               detail: {
                 config: config,
                 manifest: manifest,
-                templateId: config.templateId || null,
-                colorSchemeId: config.colorSchemeId || null
+                templateId: effectiveTemplateId || null,
+                colorSchemeId: effectiveSchemeId || null,
+                previewMode: !!previewTemplateId
               }
             }));
           });

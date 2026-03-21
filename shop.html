@@ -150,14 +150,14 @@
 
   /* ========= PAGE HEADER ========= */
   .page-header {
-    background: var(--charcoal);
+    background: var(--surface-dark);
     padding: 10rem 3rem 5rem;
     text-align: center;
   }
 
   .page-header .section-label { color: var(--amber-light); }
-  .page-header .section-title { color: #fff; font-size: clamp(2.5rem, 5vw, 3.8rem); }
-  .page-header .section-subtitle { color: rgba(255,255,255,0.7); margin: 0 auto; }
+  .page-header .section-title { color: var(--on-dark); font-size: clamp(2.5rem, 5vw, 3.8rem); }
+  .page-header .section-subtitle { color: var(--on-dark-muted); margin: 0 auto; }
 
   /* ========= CATEGORY FILTER ========= */
   .category-filter {
@@ -172,14 +172,14 @@
 
   .filter-pill {
     padding: 0.55rem 1.5rem;
-    border: 1px solid var(--cream-dark);
+    border: 1px solid var(--surface-card-border);
     border-radius: 50px;
     font-family: 'DM Sans', sans-serif;
     font-size: 0.78rem;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--warm-gray);
-    background: #fff;
+    background: var(--surface-card);
     cursor: pointer;
     transition: all 0.3s;
     text-decoration: none;
@@ -187,9 +187,9 @@
 
   .filter-pill:hover,
   .filter-pill.active {
-    background: var(--charcoal);
-    color: #fff;
-    border-color: var(--charcoal);
+    background: var(--surface-dark);
+    color: var(--on-dark);
+    border-color: var(--surface-dark);
   }
 
   /* ========= PRODUCT GRID ========= */
@@ -202,7 +202,7 @@
   }
 
   .product-card {
-    background: #fff;
+    background: var(--surface-card);
     border-radius: 4px;
     overflow: hidden;
     transition: all 0.3s;
