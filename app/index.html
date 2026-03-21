@@ -12296,6 +12296,8 @@ async function wizardComplete() {
       await db.ref('mast-platform/tenants/' + MastDB.tenantId() + '/publicConfig').update({
         brandName: bizName,
         brandTagline: bizTagline || '',
+        brandDescription: bizDesc || '',
+        brandLogoUrl: logoUrl || '',
         primaryColor: primaryColor,
         accentColor: accentColor
       });
