@@ -929,7 +929,7 @@
     overflow: hidden;
     aspect-ratio: 4/3;
     cursor: pointer;
-    transition: transform 0.3s, box-shadow 0.3s;
+    transition: transform 0.15s, box-shadow 0.15s;
     background: var(--bg-dark, #f0e8db);
     text-decoration: none;
     display: block;
@@ -937,14 +937,14 @@
 
   .category-card:hover {
     transform: translateY(-4px);
-    box-shadow: 0 12px 40px color-mix(in srgb, var(--primary) 15%, transparent);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.2);
   }
 
   .category-card img {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transition: transform 0.4s;
+    transition: transform 0.15s;
   }
 
   .category-card:hover img { transform: scale(1.05); }
@@ -1016,7 +1016,7 @@
 
   .featured-product-card:hover {
     transform: translateY(-4px);
-    box-shadow: 0 8px 32px color-mix(in srgb, var(--primary) 10%, transparent);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.2);
   }
 
   .featured-product-card .fp-image {
@@ -1029,7 +1029,7 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transition: transform 0.4s;
+    transition: transform 0.15s;
   }
 
   .featured-product-card:hover .fp-image img { transform: scale(1.05); }
@@ -1069,13 +1069,25 @@
   }
 
   /* ========= DARK MODE — Shop sections ========= */
+  html.dark .category-grid-section {
+    background: var(--bg);
+  }
+
+  html.dark .category-card {
+    background: var(--bg-dark);
+  }
+
+  html.dark .category-card-placeholder svg {
+    stroke: var(--text-muted);
+  }
+
   html.dark .featured-products-section {
     background: var(--bg-dark);
   }
 
   html.dark .featured-product-card {
     background: var(--bg);
-    border-color: #444;
+    border-color: var(--text-light, #444);
   }
 
   html.dark .featured-product-card .fp-image {
@@ -1086,12 +1098,8 @@
     color: var(--text);
   }
 
-  html.dark .category-card {
-    background: var(--bg-dark);
-  }
-
-  html.dark .category-card-placeholder svg {
-    stroke: #666;
+  html.dark .about-blurb-section {
+    background: var(--bg);
   }
 
   /* ========= RESPONSIVE — New Shop sections ========= */
