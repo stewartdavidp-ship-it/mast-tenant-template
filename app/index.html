@@ -12524,10 +12524,9 @@ function processLogoWhiteBackground(imageUrl) {
         }
       }
 
-      floodFill(0, 0);
-      floodFill(w-1, 0);
-      floodFill(0, h-1);
-      floodFill(w-1, h-1);
+      // Flood-fill from all near-white edge pixels (catches white between logo elements)
+      for (var ex = 0; ex < w; ex++) { floodFill(ex, 0); floodFill(ex, h-1); }
+      for (var ey = 1; ey < h-1; ey++) { floodFill(0, ey); floodFill(w-1, ey); }
 
       // Zero out alpha for background pixels
       var removed = 0;
