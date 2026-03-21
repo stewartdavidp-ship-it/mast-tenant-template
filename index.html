@@ -925,7 +925,7 @@
 
   .category-card {
     position: relative;
-    border-radius: 12px;
+    border-radius: 8px;
     overflow: hidden;
     aspect-ratio: 4/3;
     cursor: pointer;
@@ -1004,12 +1004,14 @@
 
   .featured-product-card {
     background: var(--bg, #fff);
-    border-radius: 12px;
+    border-radius: 8px;
     overflow: hidden;
-    transition: transform 0.3s, box-shadow 0.3s;
+    transition: transform 0.15s, box-shadow 0.15s;
     text-decoration: none;
     display: block;
     color: inherit;
+    border: 1px solid var(--cream-dark, #f0e8db);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
   }
 
   .featured-product-card:hover {
@@ -1064,6 +1066,37 @@
   .about-blurb .section-subtitle {
     margin: 0 auto;
     max-width: 600px;
+  }
+
+  /* ========= DARK MODE — Shop sections ========= */
+  .dark .category-grid-section,
+  .dark .about-blurb-section {
+    background: var(--charcoal, #1a1a1a);
+  }
+
+  .dark .featured-products-section {
+    background: #222;
+  }
+
+  .dark .featured-product-card {
+    background: var(--charcoal, #1a1a1a);
+    border: 1px solid #333;
+  }
+
+  .dark .featured-product-card .fp-image {
+    background: #222;
+  }
+
+  .dark .featured-product-card .fp-name {
+    color: var(--text-light, #e0e0e0);
+  }
+
+  .dark .category-card {
+    background: #222;
+  }
+
+  .dark .category-card-placeholder svg {
+    stroke: #666;
   }
 
   /* ========= RESPONSIVE — New Shop sections ========= */
