@@ -4565,11 +4565,9 @@
 </head>
 <body>
 <script>
-  // Apply dark mode from OS preference immediately (before auth/tenant resolution)
-  // so the login screen renders correctly. loadSettings() overrides with saved pref later.
-  if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-    document.body.classList.add('dark-mode');
-  }
+  // Apply dark mode immediately (before auth/tenant resolution)
+  // so login + wizard screens render dark. loadSettings() can override with saved pref later.
+  document.body.classList.add('dark-mode');
 </script>
 
   <!-- ===== TOP BAR ===== -->
@@ -11171,10 +11169,10 @@ function loadSettings() {
     if (countInput && settings.homepageEventsCount) {
       countInput.value = settings.homepageEventsCount;
     }
-    // Dark mode — respect saved setting, or fall back to OS preference
+    // Dark mode — respect saved setting, or default to dark
     var darkPref = settings.adminDarkMode;
     if (darkPref === undefined || darkPref === null) {
-      darkPref = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      darkPref = true;
     }
     document.body.classList.toggle('dark-mode', !!darkPref);
     var toggle = document.getElementById('darkModeToggle');
