@@ -5221,12 +5221,7 @@
           <div id="wizardCrawlManifest" style="display:none;background:var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;font-size:0.9rem;">
             <p style="font-weight:600;margin-bottom:8px;">Content we can import:</p>
             <div id="wizardManifestItems"></div>
-            <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--cream);">
-              <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Get a text when your import is ready (optional)</label>
-              <input type="tel" id="wizardNotifyPhone" placeholder="(555) 123-4567"
-                style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;">
-              <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">We'll text you when your products and content are imported. Usually 15-40 minutes.</p>
-            </div>
+            <p style="margin-top:12px;padding-top:12px;border-top:1px solid var(--cream);font-size:0.8rem;color:var(--warm-gray);">We'll email you when your import is ready. Products are saved as drafts for your review.</p>
           </div>
           <div style="display:flex;justify-content:space-between;">
             <button class="btn btn-secondary" id="wizardSkipSiteBtn" onclick="wizardSkipSite()" style="font-size:0.9rem;">I don't have a website</button>
@@ -12137,7 +12132,6 @@ async function wizardSaveFeatures() {
       var hasContent = (ct.products && ct.products.found) || (ct.blog && ct.blog.found) || (ct.events && ct.events.found) || (ct.gallery && ct.gallery.found);
       if (hasContent) {
         try {
-          var phone = (document.getElementById('wizardNotifyPhone') && document.getElementById('wizardNotifyPhone').value || '').trim() || null;
           var jobData = {
             id: MastDB._ref('webPresence/importJobs').push().key,
             url: window._wizardAnalyzedUrl,
@@ -12147,7 +12141,6 @@ async function wizardSaveFeatures() {
             claimedAt: null,
             completedAt: null,
             error: null,
-            notifyPhone: phone,
             crawlManifest: window._wizardCrawlManifest,
             discovered: null,
             imported: null
