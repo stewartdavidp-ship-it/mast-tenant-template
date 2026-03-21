@@ -1,0 +1,131 @@
+{
+  "id": "the-studio",
+  "name": "The Studio",
+  "description": "Story-led, founder identity is the brand. Commission CTA prominent, editorial gallery, About on homepage.",
+  "version": "1.0.0",
+
+  "slots": {
+    "universal": [
+      { "id": "hero", "label": "Hero", "required": true, "description": "Full-width hero with video/image background and CTA buttons" },
+      { "id": "gallery", "label": "Gallery", "required": true, "description": "Product showcase grid featuring selected work" },
+      { "id": "about", "label": "About", "required": true, "onHomepage": true, "description": "Founder story with stats, image, and brand narrative" },
+      { "id": "contact", "label": "Contact", "required": true, "description": "Contact information and location details" }
+    ],
+    "common": [
+      { "id": "testimonials", "label": "Testimonials", "required": false, "description": "Customer reviews and quotes with star ratings" },
+      { "id": "newsletter", "label": "Newsletter", "required": false, "description": "Email signup bar for marketing list" },
+      { "id": "blog", "label": "Blog", "required": false, "description": "Journal entries, studio updates, and process stories" }
+    ],
+    "differentiators": [
+      { "id": "commission", "label": "Commission", "required": false, "prominent": true, "description": "Custom work request form with catalog inspiration and uploads" },
+      { "id": "process", "label": "Process", "required": false, "description": "Studio techniques and making-of cards" },
+      { "id": "events", "label": "Events", "required": false, "description": "Upcoming shows, markets, and studio events" },
+      { "id": "press", "label": "Press", "required": false, "description": "Press mentions, awards, and media features" }
+    ]
+  },
+
+  "homepageFlow": [
+    "hero",
+    "about",
+    "gallery",
+    "events",
+    "process",
+    "testimonials",
+    "contact",
+    "newsletter"
+  ],
+
+  "navStructure": [
+    { "id": "shop", "label": "Shop", "href": "shop.html", "highlight": true },
+    { "id": "about", "label": "About", "href": "about.html" },
+    { "id": "commission", "label": "Commission", "href": "commission.html" },
+    { "id": "blog", "label": "Blog", "href": "blog/" },
+    { "id": "contact", "label": "Contact", "href": "#contact" }
+  ],
+
+  "pages": [
+    { "file": "index.html", "label": "Home", "slots": ["hero", "about", "gallery", "events", "process", "testimonials", "contact", "newsletter"] },
+    { "file": "shop.html", "label": "Shop", "slots": ["shop-header", "shop-grid"] },
+    { "file": "product.html", "label": "Product Detail", "slots": ["product-detail", "product-story"] },
+    { "file": "about.html", "label": "About", "slots": ["about-header", "about-story", "techniques", "studio-photo", "cta"] },
+    { "file": "commission.html", "label": "Commission", "slots": ["commission-hero", "commission-steps", "commission-form"] },
+    { "file": "schedule.html", "label": "Events", "slots": ["events-header", "events-list", "visit"] },
+    { "file": "orders.html", "label": "Orders", "slots": ["orders-header", "order-lookup"] },
+    { "file": "wholesale.html", "label": "Wholesale", "slots": ["wholesale-header", "wholesale-grid"] },
+    { "file": "checkout.html", "label": "Checkout", "slots": ["checkout-flow"] },
+    { "file": "blog/index.html", "label": "Blog", "slots": ["blog-header", "blog-grid"] },
+    { "file": "blog/post.html", "label": "Blog Post", "slots": ["blog-post"] }
+  ],
+
+  "colorSchemes": [
+    {
+      "id": "amber-teal",
+      "name": "Amber & Teal",
+      "default": true,
+      "colors": {
+        "primaryColor": "#C4853C",
+        "accentColor": "#2A7C6F",
+        "bgColor": "#FAF6F0",
+        "bgDarkColor": "#F0E8DB",
+        "textColor": "#1A1A1A",
+        "textMutedColor": "#6B6560"
+      }
+    },
+    {
+      "id": "slate-rose",
+      "name": "Slate & Rose",
+      "colors": {
+        "primaryColor": "#C4727A",
+        "accentColor": "#4A6274",
+        "bgColor": "#F8F6F5",
+        "bgDarkColor": "#EDE8E6",
+        "textColor": "#2C2C2C",
+        "textMutedColor": "#787070"
+      }
+    },
+    {
+      "id": "forest-gold",
+      "name": "Forest & Gold",
+      "colors": {
+        "primaryColor": "#B8963E",
+        "accentColor": "#3D6B5E",
+        "bgColor": "#F5F4EF",
+        "bgDarkColor": "#E8E6DE",
+        "textColor": "#1F1F1F",
+        "textMutedColor": "#6E6B62"
+      }
+    },
+    {
+      "id": "indigo-copper",
+      "name": "Indigo & Copper",
+      "colors": {
+        "primaryColor": "#B87850",
+        "accentColor": "#4B5B8C",
+        "bgColor": "#F6F5F3",
+        "bgDarkColor": "#E9E7E3",
+        "textColor": "#1E1E2A",
+        "textMutedColor": "#6B6878"
+      }
+    },
+    {
+      "id": "charcoal-sage",
+      "name": "Charcoal & Sage",
+      "colors": {
+        "primaryColor": "#7A8C72",
+        "accentColor": "#4A4A4A",
+        "bgColor": "#F5F5F2",
+        "bgDarkColor": "#E8E8E2",
+        "textColor": "#2A2A2A",
+        "textMutedColor": "#707068"
+      }
+    }
+  ],
+
+  "fontPairs": [
+    { "id": "classic", "name": "Classic", "heading": "Cormorant Garamond", "body": "DM Sans", "default": true },
+    { "id": "modern", "name": "Modern", "heading": "Inter", "body": "Inter" },
+    { "id": "editorial", "name": "Editorial", "heading": "Playfair Display", "body": "Source Sans 3" },
+    { "id": "clean", "name": "Clean", "heading": "Outfit", "body": "Outfit" },
+    { "id": "artisan", "name": "Artisan", "heading": "Libre Baskerville", "body": "Nunito Sans" }
+  ]
+}

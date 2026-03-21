@@ -330,13 +330,13 @@
 
 
 <!-- ============ PAGE HEADER ============ -->
-<div class="page-header">
+<div class="page-header" data-slot="about-header">
   <p class="section-label fade-up" id="aboutLabel">Our Story</p>
   <h1 class="section-title fade-up" id="aboutHeading" data-tenant="brand">About Us</h1>
 </div>
 
 <!-- ============ ABOUT ============ -->
-<section>
+<section data-slot="about-story">
   <div class="about">
     <div class="about-image fade-up">
       <div id="aboutImagePlaceholder" style="width:100%;aspect-ratio:3/4;background:var(--cream-dark);border-radius:4px;display:flex;align-items:center;justify-content:center;">
@@ -356,7 +356,7 @@
 <div class="glass-divider"></div>
 
 <!-- ============ TECHNIQUES ============ -->
-<section class="techniques-section" id="techniquesSection" style="display:none">
+<section class="techniques-section" id="techniquesSection" data-slot="techniques" style="display:none">
   <div class="techniques-header">
     <p class="section-label fade-up" id="techniquesLabel">Our Craft</p>
     <h2 class="section-title fade-up" id="techniquesTitle">Techniques &amp; Materials</h2>
@@ -367,7 +367,7 @@
 </section>
 
 <!-- ============ STUDIO PHOTO ============ -->
-<section id="studioPhotoSection" style="display:none">
+<section id="studioPhotoSection" data-slot="studio-photo" style="display:none">
   <div class="studio-photo fade-up">
     <img id="studioImage" src="" alt="" />
     <p class="caption" id="studioCaption"></p>
@@ -377,7 +377,7 @@
 <div class="glass-divider"></div>
 
 <!-- ============ CTA ============ -->
-<section class="cta-section">
+<section class="cta-section" data-slot="cta">
   <h2 class="section-title fade-up">Explore Our Creations</h2>
   <p class="section-subtitle fade-up" style="margin: 0 auto 2.5rem; text-align: center;">Every piece is shaped by hand &mdash; no two are ever alike.</p>
   <div class="cta-buttons fade-up">

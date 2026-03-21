@@ -147,6 +147,69 @@
   }
 
   /**
+   * Resolve the base path for loading template manifests.
+   * Handles subdirectory pages (blog/, events/, etc.).
+   */
+  function getBasePath() {
+    var path = window.location.pathname;
+    var depth = (path.match(/\//g) || []).length - 1;
+    // If served from a subdirectory like /blog/post.html, go up
+    if (depth > 0) {
+      var prefix = '';
+      for (var i = 0; i < depth; i++) prefix += '../';
+      return prefix;
+    }
+    return '';
+  }
+
+  /**
+   * Load the template manifest and expose it globally.
+   * Returns a promise that resolves with the manifest or null.
+   */
+  function loadManifest(templateId) {
+    if (!templateId) return Promise.resolve(null);
+
+    var url = getBasePath() + 'templates/' + templateId + '/manifest.json';
+
+    return fetch(url)
+      .then(function (resp) {
+        if (!resp.ok) return null;
+        return resp.json();
+      })
+      .then(function (manifest) {
+        if (manifest) {
+          window.MAST_TEMPLATE_MANIFEST = manifest;
+        }
+        return manifest;
+      })
+      .catch(function (err) {
+        console.warn('[storefront-theme] Failed to load template manifest:', err.message);
+        return null;
+      });
+  }
+
+  /**
+   * Apply a color scheme from the manifest.
+   * Looks up colorSchemeId in manifest.colorSchemes and applies the colors.
+   */
+  function applyColorScheme(manifest, colorSchemeId) {
+    if (!manifest || !manifest.colorSchemes || !colorSchemeId) return false;
+
+    var scheme = null;
+    for (var i = 0; i < manifest.colorSchemes.length; i++) {
+      if (manifest.colorSchemes[i].id === colorSchemeId) {
+        scheme = manifest.colorSchemes[i];
+        break;
+      }
+    }
+    if (!scheme || !scheme.colors) return false;
+
+    // Apply the color scheme as if it were a theme config
+    applyTheme(scheme.colors);
+    return true;
+  }
+
+  /**
    * Fetch tenant theme config from Firebase RTDB (REST API).
    */
   function fetchThemeConfig() {
@@ -164,11 +227,43 @@
           return resp.json();
         })
         .then(function (config) {
-          if (config) {
-            applyTheme(config);
+          if (!config) {
+            window.dispatchEvent(new CustomEvent('storefront-theme-ready', { detail: {} }));
+            return;
           }
-          // Dispatch event so downstream code knows theme is applied
-          window.dispatchEvent(new CustomEvent('storefront-theme-ready', { detail: config || {} }));
+
+          // Load template manifest if templateId is set
+          var manifestPromise = loadManifest(config.templateId);
+
+          manifestPromise.then(function (manifest) {
+            // If a colorSchemeId is set and we have a manifest, apply the scheme
+            // Otherwise fall back to direct color config
+            var schemeApplied = false;
+            if (config.colorSchemeId && manifest) {
+              schemeApplied = applyColorScheme(manifest, config.colorSchemeId);
+            }
+
+            // Apply direct theme config (colors, fontPair) — these override scheme colors
+            // if explicitly set, or provide the theme when no scheme is used
+            if (!schemeApplied) {
+              applyTheme(config);
+            } else {
+              // Even with a scheme, apply fontPair if set in config
+              if (config.fontPair) {
+                applyTheme({ fontPair: config.fontPair });
+              }
+            }
+
+            // Dispatch event so downstream code knows theme is applied
+            window.dispatchEvent(new CustomEvent('storefront-theme-ready', {
+              detail: {
+                config: config,
+                manifest: manifest,
+                templateId: config.templateId || null,
+                colorSchemeId: config.colorSchemeId || null
+              }
+            }));
+          });
         })
         .catch(function (err) {
           console.warn('[storefront-theme] Failed to load theme config:', err.message);

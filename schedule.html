@@ -297,13 +297,13 @@
 
 
 <!-- ============ PAGE HEADER ============ -->
-<div class="page-header">
+<div class="page-header" data-slot="events-header">
   <p class="section-label fade-up">Where to Find Us</p>
   <h1 class="section-title fade-up"><script>document.write(new Date().getFullYear())</script> Events &amp; Shows</h1>
 </div>
 
 <!-- ============ EVENTS ============ -->
-<section>
+<section data-slot="events-list">
   <div class="events-section">
     <div class="events-list" id="eventsList">
       <div id="eventsEmpty" class="fade-up" style="text-align:center;padding:3rem 1rem;color:var(--warm-gray);">
@@ -318,7 +318,7 @@
 <div class="glass-divider"></div>
 
 <!-- ============ VISIT / CONTACT ============ -->
-<section id="visitSection">
+<section id="visitSection" data-slot="visit">
   <div class="visit-section">
     <div class="visit-card fade-up">
       <p class="section-label">Get in Touch</p>

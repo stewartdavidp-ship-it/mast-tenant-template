@@ -920,7 +920,7 @@ setTimeout(function() { document.body.style.opacity = '1'; }, 3000);
 <div class="nav-mobile-menu" id="mobileMenu"></div>
 
 <!-- ============ HERO — VIDEO BACKGROUND ============ -->
-<section class="hero">
+<section class="hero" data-slot="hero">
   <div class="hero-video-wrap">
     <video autoplay muted loop playsinline id="heroVideo">
       <!-- Video source loaded dynamically from gallery hero items -->
@@ -955,7 +955,7 @@ setTimeout(function() { document.body.style.opacity = '1'; }, 3000);
 </section>
 
 <!-- ============ ABOUT ============ -->
-<section id="about" style="padding-bottom:0;">
+<section id="about" data-slot="about" style="padding-bottom:0;">
   <div class="about">
     <div class="about-image fade-up">
       <img src="" alt="" data-tenant-alt="brand" style="display:none;" />
@@ -974,7 +974,7 @@ setTimeout(function() { document.body.style.opacity = '1'; }, 3000);
 <div class="glass-divider" style="margin-top:5rem;"></div>
 
 <!-- ============ GALLERY ============ -->
-<section class="gallery-section" id="gallery">
+<section class="gallery-section" id="gallery" data-slot="gallery">
   <div class="gallery-header fade-up">
     <p class="section-label" id="galleryLabel">Our Work</p>
     <h2 class="section-title" id="galleryTitle">Gallery</h2>
@@ -992,7 +992,7 @@ setTimeout(function() { document.body.style.opacity = '1'; }, 3000);
 </section>
 
 <!-- ============ EVENTS ============ -->
-<section id="events" style="display:none;">
+<section id="events" data-slot="events" style="display:none;">
   <div class="events-section">
     <div class="events-header fade-up">
       <div>
@@ -1008,7 +1008,7 @@ setTimeout(function() { document.body.style.opacity = '1'; }, 3000);
 </section>
 
 <!-- ============ TESTIMONIALS ============ -->
-<section class="testimonials-section" id="testimonials" style="display:none;">
+<section class="testimonials-section" id="testimonials" data-slot="testimonials" style="display:none;">
   <div class="testimonials-container fade-up">
     <p class="section-label">What People Say</p>
     <h2 class="section-title" style="color:#fff;">Customer Reviews</h2>
@@ -1019,7 +1019,7 @@ setTimeout(function() { document.body.style.opacity = '1'; }, 3000);
 </section>
 
 <!-- ============ PROCESS ============ -->
-<section id="process" style="display:none;">
+<section id="process" data-slot="process" style="display:none;">
   <div class="process-section">
     <div class="process-header fade-up">
       <p class="section-label" id="processLabel">How We Work</p>
@@ -1033,7 +1033,7 @@ setTimeout(function() { document.body.style.opacity = '1'; }, 3000);
 </section>
 
 <!-- ============ CONTACT ============ -->
-<section id="contact">
+<section id="contact" data-slot="contact">
   <div class="contact-section">
     <div class="contact-text fade-up">
       <p class="section-label">Get in Touch</p>
@@ -1098,7 +1098,7 @@ setTimeout(function() { document.body.style.opacity = '1'; }, 3000);
 </section>
 
 <!-- ============ NEWSLETTER ============ -->
-<div class="newsletter-bar" id="newsletterSignup">
+<div class="newsletter-bar" id="newsletterSignup" data-slot="newsletter">
   <h3>Stay in the Loop</h3>
   <p>Events, new collections, classes &amp; studio updates — no spam, ever.</p>
   <div class="newsletter-form" id="nlSignupForm">

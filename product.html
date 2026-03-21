@@ -679,7 +679,7 @@
 
 
 <!-- ============ PRODUCT DETAIL ============ -->
-<section style="padding-top: 8rem;">
+<section data-slot="product-detail" style="padding-top: 8rem;">
   <div id="productLoading" class="product-loading">Loading product...</div>
   <div id="productNotFound" class="product-not-found" style="display:none;">
     <h2>Product Not Found</h2>
@@ -716,7 +716,7 @@
       </div>
     </div>
     <!-- How It Was Made story section (loaded dynamically) -->
-    <div id="productStory" style="display:none;"></div>
+    <div id="productStory" data-slot="product-story" style="display:none;"></div>
   </div>
 </section>
 
