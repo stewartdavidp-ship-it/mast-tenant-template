@@ -1,9 +1,23 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" style="background:#1a1a1a">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>My Shop Admin</title><!-- TENANT: brand -->
+  <script>
+    // Apply dark mode class SYNCHRONOUSLY before ANY external scripts or CSS load.
+    // The html element already has inline background:#1a1a1a as the absolute earliest defense.
+    // This script adds the class for CSS rules and removes the inline bg for light-mode users.
+    (function() {
+      var isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (isDark) {
+        document.documentElement.style.colorScheme = 'dark';
+        document.documentElement.classList.add('dark-mode');
+      } else {
+        document.documentElement.style.background = '';
+      }
+    })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
@@ -14,20 +28,6 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-functions-compat.js"></script>
   <script src="../storefront-tenant.js?v=1773887711"></script>
   <script src="../tenant-brand.js?v=2"></script>
-  <script>
-    // Apply dark mode SYNCHRONOUSLY before first paint to prevent white flash.
-    // Sets inline style on <html> immediately — no waiting for CSS to parse.
-    // Post-login, loadSettings() overrides this with the user's saved preference.
-    (function() {
-      var isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      if (isDark) {
-        document.documentElement.style.background = '#1a1a1a';
-        document.documentElement.style.colorScheme = 'dark';
-        document.documentElement.classList.add('dark-mode');
-        document.addEventListener('DOMContentLoaded', function() { document.body.classList.add('dark-mode'); });
-      }
-    })();
-  </script>
   <style>
     /* Pre-paint dark mode on html element to prevent flash before body exists */
     html.dark-mode { background: #1a1a1a; }
@@ -11824,6 +11824,11 @@ function initSetupWizard() {
     wizardCurrentStep = wizardProgress.currentStep || 1;
     // Clamp to new 4-step range (handles tenants mid-old-wizard)
     if (wizardCurrentStep > 4) wizardCurrentStep = 1;
+    // Restore crawl manifest from Firebase if page was reloaded (auth redirect, etc.)
+    if (!window._wizardCrawlManifest && wizardProgress.crawlManifest) {
+      window._wizardCrawlManifest = wizardProgress.crawlManifest;
+      window._wizardAnalyzedUrl = wizardProgress.analyzedUrl || '';
+    }
     showWizardStep(wizardCurrentStep);
   }).catch(function() {
     showWizardStep(1);
@@ -12033,6 +12038,13 @@ async function wizardAnalyzeSite() {
       manifestEl.style.display = '';
       window._wizardCrawlManifest = crawlManifest;
       window._wizardAnalyzedUrl = url;
+      // Persist to Firebase so it survives page reloads (auth redirects, etc.)
+      MastDB.config.ref('setupProgress/crawlManifest').set(crawlManifest).catch(function(e) {
+        console.warn('Failed to persist crawl manifest:', e.message);
+      });
+      MastDB.config.ref('setupProgress/analyzedUrl').set(url).catch(function(e) {
+        console.warn('Failed to persist analyzed URL:', e.message);
+      });
     }
 
     statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Analysis complete!</span>';
@@ -12159,6 +12171,12 @@ async function wizardSaveFeatures() {
       contact: { enabled: true, order: 8 }
     };
     await MastDB._ref('public/config/nav/sections').set(navSections);
+
+    // Write logoUrl to nav config so storefront-nav.js can display it
+    var logoUrl = document.getElementById('wizardLogoUrl');
+    if (logoUrl && logoUrl.value) {
+      await MastDB._ref('public/config/nav/logoUrl').set(logoUrl.value);
+    }
 
     wizardProgress.featuresConfigured = true;
 
@@ -12337,8 +12355,9 @@ async function wizardComplete() {
     };
     await MastDB._ref('webPresence/config').update(wpConfig);
 
-    // Set tenant status to active
+    // Set tenant status to active (both registry and publicConfig for storefront)
     await db.ref('mast-platform/tenants/' + MastDB.tenantId() + '/status').set('active');
+    await db.ref('mast-platform/tenants/' + MastDB.tenantId() + '/publicConfig/tenantStatus').set('active');
     await MastDB.config.ref('setupProgress/completed').set(true);
     await MastDB.config.ref('setupProgress/completedAt').set(new Date().toISOString());
     await updateConfigChecklist('brand', true);

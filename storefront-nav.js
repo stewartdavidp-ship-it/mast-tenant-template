@@ -249,7 +249,31 @@
         if (existing) existing.remove();
         // Build nav
         if (config && config.sections) {
-          buildNav(config.sections, config);
+          // Merge Firebase sections with defaults to fill in label/href
+          var merged = {};
+          var keys = Object.keys(DEFAULT_SECTIONS);
+          for (var k = 0; k < keys.length; k++) {
+            var key = keys[k];
+            var def = DEFAULT_SECTIONS[key];
+            var fb = config.sections[key];
+            if (fb) {
+              merged[key] = {
+                label: fb.label || def.label,
+                href: fb.href || def.href,
+                enabled: fb.enabled !== undefined ? fb.enabled : def.enabled,
+                highlight: fb.highlight !== undefined ? fb.highlight : def.highlight,
+                order: fb.order !== undefined ? fb.order : def.order
+              };
+            } else {
+              merged[key] = def;
+            }
+          }
+          // Include any custom sections not in defaults
+          var fbKeys = Object.keys(config.sections);
+          for (var m = 0; m < fbKeys.length; m++) {
+            if (!merged[fbKeys[m]]) merged[fbKeys[m]] = config.sections[fbKeys[m]];
+          }
+          buildNav(merged, config);
         } else {
           buildNav(DEFAULT_SECTIONS, config || {});
         }
