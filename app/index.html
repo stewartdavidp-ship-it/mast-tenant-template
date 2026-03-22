@@ -10615,33 +10615,40 @@ function showUpgradeConfirmation(newTierId, pendingModules) {
   overlay.id = 'upgradeConfirmOverlay';
   overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
 
-  var h = '<div style="background:var(--cream);border-radius:10px;max-width:480px;width:90%;padding:24px 28px;box-shadow:0 8px 30px rgba(0,0,0,0.2);">';
+  var isDark = document.body.classList.contains('dark-mode');
+  var modalBg = isDark ? '#2a2a2a' : 'var(--cream)';
+  var cardBg = isDark ? '#333' : 'var(--cream-dark)';
+  var textColor = isDark ? '#e0e0e0' : 'var(--charcoal)';
+  var noteBg = isDark ? '#3d2e00' : '#fef3c7';
+  var noteText = isDark ? '#fbbf24' : '#92400e';
+
+  var h = '<div style="background:' + modalBg + ';border-radius:10px;max-width:480px;width:90%;padding:24px 28px;box-shadow:0 8px 30px rgba(0,0,0,0.3);">';
 
   // Header
   h += '<div style="text-align:center;margin-bottom:20px;">';
   h += '<div style="font-size:1.8rem;margin-bottom:8px;">🚀</div>';
-  h += '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.3rem;font-weight:600;color:var(--charcoal);">Upgrade Your Plan</div>';
+  h += '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.3rem;font-weight:600;color:' + textColor + ';">Upgrade Your Plan</div>';
   h += '</div>';
 
   // Plan comparison
   h += '<div style="display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:20px;">';
-  h += '<div style="text-align:center;padding:12px 16px;background:var(--cream-dark);border-radius:8px;min-width:120px;">';
+  h += '<div style="text-align:center;padding:12px 16px;background:' + cardBg + ';border-radius:8px;min-width:120px;">';
   h += '<div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;">Current</div>';
-  h += '<div style="font-weight:700;color:var(--charcoal);font-size:1rem;">' + esc(currentConfig.name || 'Publish') + '</div>';
+  h += '<div style="font-weight:700;color:' + textColor + ';font-size:1rem;">' + esc(currentConfig.name || 'Publish') + '</div>';
   h += '<div style="font-size:0.85rem;color:var(--warm-gray);">' + (currentConfig.price ? '$' + currentConfig.price + '/mo' : 'Free') + '</div>';
   h += '</div>';
   h += '<div style="font-size:1.2rem;color:var(--amber);">→</div>';
-  h += '<div style="text-align:center;padding:12px 16px;background:var(--cream);border:2px solid var(--amber);border-radius:8px;min-width:120px;">';
+  h += '<div style="text-align:center;padding:12px 16px;background:' + modalBg + ';border:2px solid var(--amber);border-radius:8px;min-width:120px;">';
   h += '<div style="font-size:0.75rem;color:var(--amber);text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">New Plan</div>';
-  h += '<div style="font-weight:700;color:var(--charcoal);font-size:1rem;">' + esc(newConfig.name) + '</div>';
+  h += '<div style="font-weight:700;color:' + textColor + ';font-size:1rem;">' + esc(newConfig.name) + '</div>';
   h += '<div style="font-size:0.85rem;color:var(--amber);font-weight:600;">$' + newConfig.price + '/mo</div>';
   h += '</div>';
   h += '</div>';
 
   // What changes
-  h += '<div style="background:var(--cream-dark);border-radius:8px;padding:14px 16px;margin-bottom:16px;">';
-  h += '<div style="font-size:0.85rem;font-weight:600;color:var(--charcoal);margin-bottom:8px;">What changes:</div>';
-  h += '<ul style="margin:0;padding-left:20px;font-size:0.85rem;color:var(--charcoal);list-style:disc;">';
+  h += '<div style="background:' + cardBg + ';border-radius:8px;padding:14px 16px;margin-bottom:16px;">';
+  h += '<div style="font-size:0.85rem;font-weight:600;color:' + textColor + ';margin-bottom:8px;">What changes:</div>';
+  h += '<ul style="margin:0;padding-left:20px;font-size:0.85rem;color:' + textColor + ';list-style:disc;">';
   h += '<li>Module limit: ' + (currentConfig.moduleLimit || 0) + ' → <strong>' + newConfig.moduleLimit + '</strong></li>';
   h += '<li>Monthly tokens: ' + (currentConfig.monthlyTokens || 0) + ' → <strong>' + newConfig.monthlyTokens + '</strong></li>';
   if (!currentConfig.studioAssistant && newConfig.studioAssistant) {
@@ -10650,8 +10657,8 @@ function showUpgradeConfirmation(newTierId, pendingModules) {
   h += '</ul>';
   h += '</div>';
 
-  // Proration note — shows estimate, then updates with real Stripe preview
-  h += '<div id="upgradeProrationNote" style="background:#fef3c7;border-radius:6px;padding:10px 14px;margin-bottom:20px;font-size:0.82rem;color:#92400e;">';
+  // Proration note
+  h += '<div id="upgradeProrationNote" style="background:' + noteBg + ';border-radius:6px;padding:10px 14px;margin-bottom:20px;font-size:0.82rem;color:' + noteText + ';">';
   h += 'Calculating your prorated charge... <span style="opacity:0.6">(~$' + priceDiff + ' estimate)</span>';
   h += '</div>';
 
