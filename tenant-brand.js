@@ -161,6 +161,27 @@
       altEls[k].alt = name;
     }
 
+    // Update footer logo and gate logos from nav config logoUrl
+    if (tenantId) {
+      var tenantDb = firebase.database();
+      tenantDb.ref(tenantId + '/public/config/nav/logoUrl').once('value').then(function(snap) {
+        var logoUrl = snap.val();
+        if (logoUrl) {
+          var logoEls = document.querySelectorAll('.footer-logo img, .ws-gate-logo');
+          for (var fi = 0; fi < logoEls.length; fi++) {
+            logoEls[fi].src = logoUrl;
+            logoEls[fi].alt = name;
+          }
+        } else {
+          // No logo — hide the placeholder images
+          var logoEls = document.querySelectorAll('.footer-logo img, .ws-gate-logo');
+          for (var fi = 0; fi < logoEls.length; fi++) {
+            logoEls[fi].style.display = 'none';
+          }
+        }
+      }).catch(function() {});
+    }
+
     // Dispatch event so page-specific JS can react
     window.dispatchEvent(new CustomEvent('tenant-brand-ready', { detail: brand }));
   }
