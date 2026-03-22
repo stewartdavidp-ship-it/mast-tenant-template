@@ -12807,7 +12807,7 @@ var NEXT_STEP_DEFINITIONS = [
   { id: 'customize-content', module: null,       icon: '\u270F\uFE0F', title: 'Customize your content',        desc: 'Edit your hero headline, about section, and contact info.',               route: 'website',     check: function() { return window._nextStepsCache && window._nextStepsCache.hasContent; } },
   { id: 'add-product',    module: null,         icon: '\uD83D\uDCE6', title: 'Add your first product',        desc: 'Upload a photo and set a price to start building your catalog.',           route: 'inventory',   check: function() { return window._nextStepsCache && window._nextStepsCache.hasProducts; } },
   { id: 'setup-website',  module: 'web',        icon: '\uD83C\uDF10', title: 'Review your public site',       desc: 'See how your storefront looks to customers.',                             route: null, action: 'open-public-site', check: function() { return window._nextStepsCache && window._nextStepsCache.hasWebsite; } },
-  { id: 'setup-square',   module: 'sell',       icon: '\uD83D\uDCB3', title: 'Connect Square for payments',   desc: 'Link your Square account to accept payments and manage orders.',          route: 'settings',    check: function() { return tenantConfigChecklist && tenantConfigChecklist.square; } },
+  { id: 'setup-square',   module: 'sell',       icon: '\uD83D\uDCB3', title: 'Connect Square for payments',   desc: 'Link your Square account to accept payments and manage orders.',          route: 'settings', subView: 'payments', check: function() { return tenantConfigChecklist && tenantConfigChecklist.square; } },
   { id: 'first-show',     module: 'show',       icon: '\uD83C\uDFAA', title: 'Find your first show',          desc: 'Search for craft fairs and events in your area.',                         route: 'show-find',   check: function() { return false; } },
   { id: 'show-light-profile', module: 'show-light', icon: '\u2728', title: 'Build your vendor profile',     desc: 'Add your bio, photos, and product highlights for show applications.',     route: 'show-light-profile', check: function() { return false; } },
   { id: 'create-event',   module: 'events',     icon: '\uD83C\uDFAB', title: 'Create your first show',        desc: 'Set up a show with booths, vendors, and applications.',                   route: 'events-shows', check: function() { return false; } },
@@ -12868,9 +12868,11 @@ function renderGuidedNextSteps() {
   shown.forEach(function(step) {
     var clickAction = '';
     if (step.action === 'open-public-site') {
-      var tenantId = window.TENANT_CONFIG && window.TENANT_CONFIG.tenantId || '';
-      var publicUrl = 'https://mast-' + tenantId + '.web.app';
+      var tenantId = (MastDB && MastDB.tenantId ? MastDB.tenantId() : '') || (window.TENANT_CONFIG && window.TENANT_CONFIG.tenantId) || '';
+      var publicUrl = tenantId ? 'https://mast-' + tenantId + '.web.app' : '#';
       clickAction = 'window.open(\'' + publicUrl + '\', \'_blank\')';
+    } else if (step.route && step.subView) {
+      clickAction = 'navigateTo(\'' + step.route + '\'); setTimeout(function(){ switchSettingsSubView(\'' + step.subView + '\'); }, 50);';
     } else if (step.route) {
       clickAction = 'navigateTo(\'' + step.route + '\')';
     }
