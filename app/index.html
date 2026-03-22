@@ -4603,6 +4603,38 @@
     body.dark-mode #galleriesTab textarea:focus,
     body.dark-mode #galleriesTab select:focus { border-color:var(--teal); }
 
+    /* ===== Lookbooks Module ===== */
+
+    .lb-doc-card { background:var(--cream); border:1px solid var(--cream-dark); border-radius:8px; padding:16px; cursor:pointer; transition:box-shadow 0.15s; }
+    .lb-doc-card:hover { box-shadow:0 2px 8px rgba(0,0,0,0.1); }
+    body.dark-mode .lb-doc-card { background:#2a2a2a; border-color:#444; }
+    body.dark-mode .lb-doc-card:hover { box-shadow:0 2px 8px rgba(0,0,0,0.3); }
+
+    .lb-type-badge { display:inline-block; padding:2px 8px; border-radius:4px; font-size:0.72rem; font-weight:600; text-transform:uppercase; letter-spacing:0.04em; }
+    .lb-type-badge.linesheet { background:rgba(42,124,111,0.15); color:var(--teal); }
+    .lb-type-badge.lookbook { background:rgba(196,133,60,0.15); color:var(--amber); }
+
+    .lb-builder-section { background:var(--cream); border:1px solid var(--cream-dark); border-radius:8px; padding:16px 20px; margin-bottom:16px; }
+    body.dark-mode .lb-builder-section { background:#2a2a2a; border-color:#444; }
+
+    .lb-product-chip { display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:16px; font-size:0.78rem; background:rgba(196,133,60,0.12); color:var(--amber); margin:2px; }
+    .lb-product-chip button { background:none; border:none; cursor:pointer; font-size:0.85rem; color:var(--warm-gray); padding:0 2px; }
+
+    .lb-category-chip { display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:16px; font-size:0.78rem; cursor:pointer; border:1px solid var(--cream-dark); margin:2px; transition:all 0.15s; }
+    .lb-category-chip.selected { background:var(--teal); color:white; border-color:var(--teal); }
+    body.dark-mode .lb-category-chip { border-color:#444; }
+    body.dark-mode .lb-category-chip.selected { background:var(--teal); border-color:var(--teal); }
+
+    .lb-generating { text-align:center; padding:30px 20px; }
+    .lb-generating::before { content:''; display:block; width:32px; height:32px; margin:0 auto 12px; border:3px solid var(--cream-dark); border-top-color:var(--amber); border-radius:50%; animation:spin 0.8s linear infinite; }
+
+    body.dark-mode #lookbooksTab input,
+    body.dark-mode #lookbooksTab textarea,
+    body.dark-mode #lookbooksTab select { background:#2a2a2a; border-color:#444; color:#e0e0e0; }
+    body.dark-mode #lookbooksTab input:focus,
+    body.dark-mode #lookbooksTab textarea:focus,
+    body.dark-mode #lookbooksTab select:focus { border-color:var(--teal); }
+
   </style>
 </head>
 <body>
@@ -4651,6 +4683,7 @@
         <div class="sidebar-item" data-route="jobs" onclick="navigateTo('jobs')">Jobs</div>
         <div class="sidebar-item" data-route="materials" onclick="navigateTo('materials')">Materials</div>
         <div class="sidebar-item" data-route="pieces" onclick="navigateTo('pieces')">Pieces</div>
+        <div class="sidebar-item" data-route="lookbooks" onclick="navigateTo('lookbooks')">Look Books</div>
         <div class="sidebar-item muted" data-route="procurement" onclick="navigateTo('procurement')">Procurement <span class="sidebar-badge new">New</span></div>
       </div>
     </div>
@@ -5144,6 +5177,9 @@
 
     <!-- ===== CONSIGNMENT MODULE TAB ===== -->
     <div id="galleriesTab" style="display:none;"></div>
+
+    <!-- ===== LOOKBOOKS MODULE TAB ===== -->
+    <div id="lookbooksTab" style="display:none;"></div>
 
     <div id="placeholderTab" style="display:none;"></div>
 
@@ -7647,6 +7683,21 @@ MastDB.recipes = {
   subRef: function() { return MastDB._ref(this.PATH + '/' + Array.from(arguments).join('/')); }
 };
 
+MastDB.lookbooks = {
+  PATH: 'admin/lookbooks',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  list: function(limit) { return this.ref().limitToLast(limit || 100).once('value'); },
+  get: function(id) { return this.ref(id).once('value'); },
+  set: function(id, data) { return this.ref(id).set(data); },
+  update: function(id, data) { return this.ref(id).update(data); },
+  remove: function(id) { return this.ref(id).remove(); },
+  newKey: function() { return this.ref().push().key; },
+  listen: function(limit, cb, errCb) {
+    return this.ref().limitToLast(limit || 100).on('value', cb, errCb);
+  },
+  unlisten: function(handle) { this.ref().off('value', handle); }
+};
+
 MastDB.consignments = {
   PATH: 'admin/consignments',
   ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
@@ -7773,7 +7824,7 @@ MastDB.showLight = {
 // Web is the base module (always included, not purchasable). All others are purchasable.
 // Grid layout: Row1: Make, Market, Sell | Row2: Ship, Run, Web | Row3: Show, Show Light, Events | Row4: Book
 var MODULE_REGISTRY = {
-  make:   { id: 'make',   name: 'Make',   icon: '\uD83D\uDD25', description: 'Production jobs, build tracking, materials, pricing.', section: 'make', navPosition: 1, purchasable: true, routes: ['jobs', 'production', 'procurement', 'materials', 'pieces'], manageSettings: [], synergies: ['sell', 'market'], status: 'active' },
+  make:   { id: 'make',   name: 'Make',   icon: '\uD83D\uDD25', description: 'Production jobs, build tracking, materials, pricing.', section: 'make', navPosition: 1, purchasable: true, routes: ['jobs', 'production', 'procurement', 'materials', 'pieces', 'lookbooks'], manageSettings: [], synergies: ['sell', 'market'], status: 'active' },
   market: { id: 'market', name: 'Market', icon: '\uD83D\uDCE3', description: 'Social media, blog, newsletter, stories.', section: 'market', navPosition: 2, purchasable: true, routes: ['social', 'blog', 'newsletter', 'stories'], manageSettings: ['newsletter', 'email'], synergies: ['sell', 'show'], status: 'active' },
   sell:   { id: 'sell',   name: 'Sell',   icon: '\uD83D\uDCB0', description: 'Point of sale, orders, commissions, wholesale.', section: 'sell', navPosition: 3, purchasable: true, routes: ['pos', 'orders', 'commissions', 'wholesale', 'galleries', 'receipts', 'coupons'], manageSettings: ['square'], synergies: ['ship', 'make'], status: 'active' },
   ship:   { id: 'ship',   name: 'Ship',   icon: '\uD83D\uDCE6', description: 'Pack orders, ship deliveries, track fulfillment.', section: 'ship', navPosition: 4, purchasable: true, routes: ['pack', 'ship'], manageSettings: ['shippingRates'], synergies: ['sell', 'show'], status: 'active' },
@@ -10230,7 +10281,8 @@ var MODULE_MANIFEST = {
   showLight: { src: 'modules/show-light.js', routes: ['show-light-profile', 'show-light-gallery', 'show-light-shows', 'show-light-apply'] },
   emailLog: { src: 'modules/email-log.js', routes: ['email-log'] },
   maker: { src: 'modules/maker.js', routes: ['materials', 'pieces'] },
-  consignment: { src: 'modules/consignment.js', routes: ['galleries'] }
+  consignment: { src: 'modules/consignment.js', routes: ['galleries'] },
+  lookbooks: { src: 'modules/lookbooks.js', routes: ['lookbooks'] }
 };
 
 // Reverse lookup: route → moduleId (built from MODULE_MANIFEST)
