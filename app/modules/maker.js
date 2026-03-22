@@ -942,11 +942,537 @@
   }
 
   // ============================================================
-  // Pieces Render Stub (Session 3)
+  // Pieces List UI
   // ============================================================
 
+  var piecesView = 'list'; // list | builder
+  var editingRecipeId = null;
+  var builderState = null; // live state for the recipe builder
+
   function renderPieces() {
-    // Session 3 will implement pieces list UI
+    if (piecesView === 'builder' && editingRecipeId) {
+      renderRecipeBuilder();
+      return;
+    }
+    renderPiecesList();
+  }
+
+  function renderPiecesList() {
+    var tab = document.getElementById('piecesTab');
+    if (!tab) return;
+    var esc = MastAdmin.esc;
+
+    // Get products from global productsData
+    var products = window.productsData || [];
+    if (!products.length && !window.productsLoaded) {
+      tab.innerHTML = '<div class="loading">Loading products...</div>';
+      // Wait for products to load, then re-render
+      if (typeof window.loadProducts === 'function') {
+        window.loadProducts().then(function() { renderPiecesList(); });
+      }
+      return;
+    }
+
+    // Build recipe lookup: productId → recipe
+    var recipeByProduct = {};
+    Object.values(recipesData).forEach(function(r) {
+      if (r.status !== 'archived' && r.productId) {
+        recipeByProduct[r.productId] = r;
+      }
+    });
+
+    var html = '';
+
+    // Header
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
+    html += '<div>';
+    html += '<h2 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">Pieces</h2>';
+    html += '<span style="font-size:0.82rem;color:var(--warm-gray);">' + products.length + ' products, ' + Object.keys(recipeByProduct).length + ' with recipes</span>';
+    html += '</div>';
+    html += '</div>';
+
+    if (products.length === 0) {
+      html += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">';
+      html += '<div style="font-size:2rem;margin-bottom:12px;">📦</div>';
+      html += '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No products yet</p>';
+      html += '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Add products first, then create recipes to calculate pricing.</p>';
+      html += '</div>';
+      tab.innerHTML = html;
+      return;
+    }
+
+    // Table
+    html += '<div class="data-table"><table><thead><tr>';
+    html += '<th>Product</th>';
+    html += '<th>Category</th>';
+    html += '<th>Recipe</th>';
+    html += '<th style="text-align:right;">Total Cost</th>';
+    html += '<th>Active Tier</th>';
+    html += '<th style="text-align:right;">Price</th>';
+    html += '<th style="text-align:right;">Actions</th>';
+    html += '</tr></thead><tbody>';
+
+    products.forEach(function(p) {
+      var pid = p.pid;
+      var recipe = recipeByProduct[pid];
+      var hasRecipe = !!recipe;
+
+      html += '<tr>';
+      html += '<td style="font-weight:500;">' + esc(p.name || '') + '</td>';
+      html += '<td>' + esc((p.categories || []).join(', ')) + '</td>';
+
+      if (hasRecipe) {
+        var dirtyIcon = recipe.costsDirty ? ' <span title="Costs changed" style="color:#f59e0b;">⚠</span>' : '';
+        html += '<td><span class="status-badge" style="' + materialStatusBadgeStyle('active') + '">has recipe</span>' + dirtyIcon + '</td>';
+        html += '<td style="text-align:right;font-family:monospace;">$' + (recipe.totalCost || 0).toFixed(2) + '</td>';
+        html += '<td><span class="status-badge pill" style="background:rgba(42,124,111,0.12);color:var(--teal);border:1px solid rgba(42,124,111,0.25);">' + esc(recipe.activePriceTier || 'none') + '</span></td>';
+        var activePrice = getTierPrice(recipe.activePriceTier, recipe);
+        html += '<td style="text-align:right;font-family:monospace;font-weight:600;">$' + activePrice.toFixed(2) + '</td>';
+        html += '<td style="text-align:right;">';
+        html += '<button style="background:none;border:none;color:var(--teal);cursor:pointer;font-size:0.85rem;font-family:\'DM Sans\';" onclick="makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\')">Edit Recipe</button>';
+        html += '</td>';
+      } else {
+        html += '<td><span style="color:var(--warm-gray-light);font-size:0.82rem;">no recipe</span></td>';
+        html += '<td style="text-align:right;">—</td>';
+        html += '<td>—</td>';
+        html += '<td style="text-align:right;font-family:monospace;">$' + (p.priceCents ? (p.priceCents / 100).toFixed(2) : (p.price || 0).toFixed(2)) + '</td>';
+        html += '<td style="text-align:right;">';
+        html += '<button class="btn btn-outline btn-small" onclick="makerCreateRecipeForProduct(\'' + esc(pid) + '\', \'' + esc(p.name || '').replace(/'/g, "\\'") + '\')">+ Add Recipe</button>';
+        html += '</td>';
+      }
+
+      html += '</tr>';
+    });
+
+    html += '</tbody></table></div>';
+    tab.innerHTML = html;
+  }
+
+  // ============================================================
+  // Recipe Builder — "The Money Screen"
+  // ============================================================
+
+  async function openRecipeBuilder(recipeId) {
+    var recipe = recipesData[recipeId];
+    if (!recipe) {
+      MastAdmin.showToast('Recipe not found', true);
+      return;
+    }
+
+    // Ensure materials are loaded
+    if (!materialsLoaded) {
+      var snap = await MastDB.materials.list(500);
+      materialsData = snap.val() || {};
+      materialsLoaded = true;
+    }
+
+    // Initialize builder state from recipe
+    builderState = JSON.parse(JSON.stringify(recipe));
+    editingRecipeId = recipeId;
+    piecesView = 'builder';
+    renderRecipeBuilder();
+  }
+
+  async function createRecipeForProduct(pid, productName) {
+    try {
+      var recipe = await createRecipe({
+        productId: pid,
+        name: productName,
+        status: 'draft'
+      });
+      editingRecipeId = recipe.recipeId;
+      builderState = JSON.parse(JSON.stringify(recipe));
+      piecesView = 'builder';
+      renderRecipeBuilder();
+      MastAdmin.showToast('Recipe created for ' + productName);
+    } catch (err) {
+      MastAdmin.showToast('Error: ' + err.message, true);
+    }
+  }
+
+  function renderRecipeBuilder() {
+    var tab = document.getElementById('piecesTab');
+    if (!tab || !builderState) return;
+    var esc = MastAdmin.esc;
+    var bs = builderState;
+
+    // Run live calculation
+    var calc = calculateRecipe({
+      lineItems: bs.lineItems || {},
+      laborRatePerHour: bs.laborRatePerHour || 0,
+      laborMinutes: bs.laborMinutes || 0,
+      otherCost: bs.otherCost || 0,
+      wholesaleMarkup: bs.wholesaleMarkup || 1,
+      directMarkup: bs.directMarkup || 1,
+      retailMarkup: bs.retailMarkup || 1
+    });
+
+    var html = '';
+
+    // Back button
+    html += '<button class="detail-back" onclick="makerCloseRecipeBuilder()">← Back to Pieces</button>';
+
+    // costsDirty banner
+    if (bs.costsDirty) {
+      html += '<div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;">';
+      html += '<span style="font-size:0.85rem;color:#b45309;">⚠ Material costs have changed since last calculation.</span>';
+      html += '<button class="btn btn-primary btn-small" onclick="makerRecalcAndRefresh()">Recalculate</button>';
+      html += '</div>';
+    }
+
+    // Header
+    html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">';
+    html += '<div>';
+    html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.4rem;font-weight:500;margin:0;">' + esc(bs.name || 'Untitled Recipe') + '</h3>';
+    html += '<span style="font-size:0.82rem;color:var(--warm-gray);">Recipe for product ' + esc(bs.productId || '') + '</span>';
+    html += '</div>';
+    html += '<div style="display:flex;gap:8px;">';
+    html += '<button class="btn btn-secondary btn-small" onclick="makerSaveRecipeBuilder()">Save</button>';
+    html += '<button class="btn btn-primary btn-small" onclick="makerSaveAndRecalcRecipe()">Save & Recalculate</button>';
+    html += '</div>';
+    html += '</div>';
+
+    // ---- PARTS SECTION ----
+    html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
+    html += '<h4 style="font-size:0.95rem;font-weight:600;margin:0;">Parts (Bill of Materials)</h4>';
+    html += '<button class="btn btn-outline btn-small" onclick="makerOpenAddPartModal()">+ Add Part</button>';
+    html += '</div>';
+
+    var lineItems = bs.lineItems || {};
+    var liKeys = Object.keys(lineItems);
+
+    if (liKeys.length === 0) {
+      html += '<p style="font-size:0.85rem;color:var(--warm-gray-light);text-align:center;padding:12px;">No parts added yet. Click "+ Add Part" to select materials.</p>';
+    } else {
+      html += '<table style="width:100%;border-collapse:collapse;">';
+      html += '<thead><tr>';
+      html += '<th style="text-align:left;padding:6px 8px;font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--warm-gray-light);border-bottom:1px solid var(--cream-dark);">Material</th>';
+      html += '<th style="text-align:right;padding:6px 8px;font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--warm-gray-light);border-bottom:1px solid var(--cream-dark);">Qty</th>';
+      html += '<th style="text-align:center;padding:6px 8px;font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--warm-gray-light);border-bottom:1px solid var(--cream-dark);">UOM</th>';
+      html += '<th style="text-align:right;padding:6px 8px;font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--warm-gray-light);border-bottom:1px solid var(--cream-dark);">Unit Cost</th>';
+      html += '<th style="text-align:right;padding:6px 8px;font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--warm-gray-light);border-bottom:1px solid var(--cream-dark);">Extended</th>';
+      html += '<th style="width:40px;border-bottom:1px solid var(--cream-dark);"></th>';
+      html += '</tr></thead><tbody>';
+
+      liKeys.forEach(function(liId) {
+        var li = lineItems[liId];
+        var ext = calc.lineItems[liId] ? calc.lineItems[liId].extendedCost : roundCents((li.quantity || 0) * (li.unitCost || 0));
+        html += '<tr>';
+        html += '<td style="padding:8px;font-size:0.85rem;border-bottom:1px solid var(--cream-dark);">' + esc(li.materialName || '') + '</td>';
+        html += '<td style="text-align:right;padding:8px;border-bottom:1px solid var(--cream-dark);"><input type="number" step="0.01" min="0" value="' + (li.quantity || 0) + '" style="width:70px;text-align:right;padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);" onchange="makerUpdateLineItemQty(\'' + esc(liId) + '\', this.value)"></td>';
+        html += '<td style="text-align:center;padding:8px;font-size:0.82rem;color:var(--warm-gray);border-bottom:1px solid var(--cream-dark);">' + esc(li.unitOfMeasure || '') + '</td>';
+        html += '<td style="text-align:right;padding:8px;font-family:monospace;font-size:0.85rem;border-bottom:1px solid var(--cream-dark);">$' + (li.unitCost || 0).toFixed(2) + '</td>';
+        html += '<td style="text-align:right;padding:8px;font-family:monospace;font-size:0.85rem;font-weight:600;border-bottom:1px solid var(--cream-dark);">$' + ext.toFixed(2) + '</td>';
+        html += '<td style="text-align:center;padding:8px;border-bottom:1px solid var(--cream-dark);"><button style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:0.9rem;" onclick="makerRemoveLineItemUI(\'' + esc(liId) + '\')" title="Remove">✕</button></td>';
+        html += '</tr>';
+      });
+
+      html += '</tbody></table>';
+    }
+
+    // Materials subtotal
+    html += '<div style="text-align:right;padding:8px;font-size:0.85rem;font-weight:600;margin-top:4px;">Total Materials: <span style="font-family:monospace;">$' + calc.totalMaterialCost.toFixed(2) + '</span></div>';
+    html += '</div>';
+
+    // ---- LABOR SECTION ----
+    html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;">';
+    html += '<h4 style="font-size:0.95rem;font-weight:600;margin:0 0 12px;">Labor</h4>';
+    html += '<div style="display:flex;gap:12px;align-items:flex-end;">';
+
+    html += '<div style="flex:1;">';
+    html += '<label style="display:block;font-size:0.82rem;font-weight:600;margin-bottom:4px;">Rate ($/hr)</label>';
+    html += '<input type="number" step="0.01" min="0" value="' + (bs.laborRatePerHour || 0) + '" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);box-sizing:border-box;" onchange="makerUpdateBuilderField(\'laborRatePerHour\', parseFloat(this.value) || 0)">';
+    html += '</div>';
+
+    html += '<div style="flex:1;">';
+    html += '<label style="display:block;font-size:0.82rem;font-weight:600;margin-bottom:4px;">Time (minutes)</label>';
+    html += '<input type="number" step="1" min="0" value="' + (bs.laborMinutes || 0) + '" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);box-sizing:border-box;" onchange="makerUpdateBuilderField(\'laborMinutes\', parseFloat(this.value) || 0)">';
+    html += '</div>';
+
+    html += '<div style="flex:1;text-align:right;">';
+    html += '<label style="display:block;font-size:0.82rem;font-weight:600;margin-bottom:4px;">Labor Cost</label>';
+    html += '<div style="padding:8px 10px;font-family:monospace;font-size:0.85rem;font-weight:600;">$' + calc.laborCost.toFixed(2) + '</div>';
+    html += '</div>';
+
+    html += '</div></div>';
+
+    // ---- OTHER COSTS SECTION ----
+    html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;">';
+    html += '<h4 style="font-size:0.95rem;font-weight:600;margin:0 0 12px;">Other Costs</h4>';
+    html += '<div style="display:flex;gap:12px;">';
+
+    html += '<div style="flex:1;">';
+    html += '<label style="display:block;font-size:0.82rem;font-weight:600;margin-bottom:4px;">Amount ($)</label>';
+    html += '<input type="number" step="0.01" min="0" value="' + (bs.otherCost || 0) + '" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);box-sizing:border-box;" onchange="makerUpdateBuilderField(\'otherCost\', parseFloat(this.value) || 0)">';
+    html += '</div>';
+
+    html += '<div style="flex:2;">';
+    html += '<label style="display:block;font-size:0.82rem;font-weight:600;margin-bottom:4px;">Note</label>';
+    html += '<input type="text" value="' + esc(bs.otherCostNote || '') + '" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';box-sizing:border-box;" onchange="makerUpdateBuilderField(\'otherCostNote\', this.value)" placeholder="e.g. packaging, shipping supplies">';
+    html += '</div>';
+
+    html += '</div></div>';
+
+    // ---- COST SUMMARY ----
+    html += '<div style="background:var(--charcoal);color:white;border-radius:8px;padding:16px;margin-bottom:16px;">';
+    html += '<div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:6px;"><span>Materials</span><span style="font-family:monospace;">$' + calc.totalMaterialCost.toFixed(2) + '</span></div>';
+    html += '<div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:6px;"><span>Labor</span><span style="font-family:monospace;">$' + calc.laborCost.toFixed(2) + '</span></div>';
+    if (bs.otherCost > 0) {
+      html += '<div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:6px;"><span>Other</span><span style="font-family:monospace;">$' + (bs.otherCost || 0).toFixed(2) + '</span></div>';
+    }
+    html += '<div style="display:flex;justify-content:space-between;font-size:1.1rem;font-weight:700;padding-top:8px;border-top:1px solid rgba(255,255,255,0.2);"><span>Total Cost</span><span style="font-family:monospace;">$' + calc.totalCost.toFixed(2) + '</span></div>';
+    html += '</div>';
+
+    // ---- PRICING TIERS (3 columns side-by-side) ----
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;">';
+
+    var tiers = [
+      { key: 'wholesale', label: 'Wholesale', markupField: 'wholesaleMarkup', price: calc.wholesalePrice, profit: calc.wholesaleGrossProfit },
+      { key: 'direct', label: 'Direct', markupField: 'directMarkup', price: calc.directPrice, profit: calc.directGrossProfit },
+      { key: 'retail', label: 'Retail', markupField: 'retailMarkup', price: calc.retailPrice, profit: calc.retailGrossProfit }
+    ];
+
+    tiers.forEach(function(tier) {
+      var isActive = bs.activePriceTier === tier.key;
+      var borderColor = isActive ? 'var(--teal)' : 'var(--cream-dark)';
+      var headerBg = isActive ? 'rgba(42,124,111,0.08)' : 'transparent';
+
+      html += '<div style="background:var(--cream);border:2px solid ' + borderColor + ';border-radius:8px;padding:14px;position:relative;">';
+
+      // Active indicator
+      if (isActive) {
+        html += '<div style="position:absolute;top:-1px;right:12px;background:var(--teal);color:white;font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:0 0 4px 4px;text-transform:uppercase;letter-spacing:0.06em;">Active</div>';
+      }
+
+      // Tier header
+      html += '<div style="text-align:center;font-size:0.82rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--warm-gray);margin-bottom:10px;background:' + headerBg + ';padding:4px;border-radius:4px;">' + tier.label + '</div>';
+
+      // Markup input
+      html += '<div style="text-align:center;margin-bottom:8px;">';
+      html += '<label style="font-size:0.72rem;color:var(--warm-gray-light);display:block;margin-bottom:2px;">Markup</label>';
+      html += '<input type="number" step="0.1" min="1" value="' + (bs[tier.markupField] || 1) + '" style="width:70px;text-align:center;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;font-family:monospace;font-weight:600;background:var(--cream);color:var(--charcoal);" onchange="makerUpdateBuilderField(\'' + tier.markupField + '\', parseFloat(this.value) || 1)">';
+      html += '<span style="font-size:0.82rem;color:var(--warm-gray);margin-left:2px;">×</span>';
+      html += '</div>';
+
+      // Price
+      html += '<div style="text-align:center;font-size:1.3rem;font-family:monospace;font-weight:700;color:var(--charcoal);margin-bottom:4px;">$' + tier.price.toFixed(2) + '</div>';
+
+      // Gross profit
+      html += '<div style="text-align:center;font-size:0.78rem;color:' + (tier.profit > 0 ? '#16a34a' : 'var(--danger)') + ';">Profit: $' + tier.profit.toFixed(2) + '</div>';
+
+      // Set active button
+      if (!isActive) {
+        html += '<button class="btn btn-outline btn-small" style="width:100%;margin-top:10px;font-size:0.78rem;" onclick="makerSetTierFromBuilder(\'' + tier.key + '\')">Set Active</button>';
+      }
+
+      html += '</div>';
+    });
+
+    html += '</div>';
+
+    // ---- NOTES ----
+    html += '<div style="margin-bottom:16px;">';
+    html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Recipe Notes</label>';
+    html += '<textarea rows="2" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.85rem;resize:vertical;box-sizing:border-box;" onchange="makerUpdateBuilderField(\'notes\', this.value)">' + esc(bs.notes || '') + '</textarea>';
+    html += '</div>';
+
+    tab.innerHTML = html;
+  }
+
+  // ============================================================
+  // Recipe Builder — Interactive Controls
+  // ============================================================
+
+  function updateBuilderField(field, value) {
+    if (!builderState) return;
+    builderState[field] = value;
+    renderRecipeBuilder(); // live reactive re-render
+  }
+
+  function updateLineItemQty(liId, value) {
+    if (!builderState || !builderState.lineItems || !builderState.lineItems[liId]) return;
+    builderState.lineItems[liId].quantity = parseFloat(value) || 0;
+    renderRecipeBuilder();
+  }
+
+  function removeLineItemUI(liId) {
+    if (!builderState || !builderState.lineItems) return;
+    delete builderState.lineItems[liId];
+    renderRecipeBuilder();
+  }
+
+  async function saveRecipeBuilder() {
+    if (!editingRecipeId || !builderState) return;
+    try {
+      var updates = {
+        lineItems: builderState.lineItems || {},
+        laborRatePerHour: builderState.laborRatePerHour || 0,
+        laborMinutes: builderState.laborMinutes || 0,
+        otherCost: builderState.otherCost || 0,
+        otherCostNote: builderState.otherCostNote || '',
+        wholesaleMarkup: builderState.wholesaleMarkup || 1,
+        directMarkup: builderState.directMarkup || 1,
+        retailMarkup: builderState.retailMarkup || 1,
+        notes: builderState.notes || ''
+      };
+      await updateRecipe(editingRecipeId, updates);
+      MastAdmin.showToast('Recipe saved');
+    } catch (err) {
+      MastAdmin.showToast('Error: ' + err.message, true);
+    }
+  }
+
+  async function saveAndRecalcRecipe() {
+    if (!editingRecipeId || !builderState) return;
+    try {
+      // Save builder state first
+      await saveRecipeBuilder();
+      // Then recalculate (refreshes material costs, clears dirty, propagates price)
+      var result = await recalculateRecipe(editingRecipeId);
+      // Update builder state with recalculated values
+      var snap = await MastDB.recipes.get(editingRecipeId);
+      var fresh = snap.val();
+      if (fresh) {
+        builderState = JSON.parse(JSON.stringify(fresh));
+      }
+      renderRecipeBuilder();
+      MastAdmin.showToast('Recipe saved and recalculated');
+    } catch (err) {
+      MastAdmin.showToast('Error: ' + err.message, true);
+    }
+  }
+
+  async function recalcAndRefresh() {
+    if (!editingRecipeId) return;
+    try {
+      await recalculateRecipe(editingRecipeId);
+      var snap = await MastDB.recipes.get(editingRecipeId);
+      var fresh = snap.val();
+      if (fresh) {
+        builderState = JSON.parse(JSON.stringify(fresh));
+      }
+      renderRecipeBuilder();
+      MastAdmin.showToast('Recipe recalculated');
+    } catch (err) {
+      MastAdmin.showToast('Error: ' + err.message, true);
+    }
+  }
+
+  async function setTierFromBuilder(tier) {
+    if (!editingRecipeId || !builderState) return;
+    try {
+      // Save first, then recalc to get fresh prices, then set tier
+      await saveRecipeBuilder();
+      await recalculateRecipe(editingRecipeId);
+      await setActivePriceTier(editingRecipeId, tier);
+      // Refresh builder state
+      var snap = await MastDB.recipes.get(editingRecipeId);
+      var fresh = snap.val();
+      if (fresh) {
+        builderState = JSON.parse(JSON.stringify(fresh));
+      }
+      renderRecipeBuilder();
+      MastAdmin.showToast(tier.charAt(0).toUpperCase() + tier.slice(1) + ' tier set as active price');
+    } catch (err) {
+      MastAdmin.showToast('Error: ' + err.message, true);
+    }
+  }
+
+  function closeRecipeBuilder() {
+    piecesView = 'list';
+    editingRecipeId = null;
+    builderState = null;
+    renderPiecesList();
+  }
+
+  // ============================================================
+  // Add Part Modal (material picker)
+  // ============================================================
+
+  function openAddPartModal() {
+    var esc = MastAdmin.esc;
+    var activeMaterials = Object.values(materialsData).filter(function(m) {
+      return m.status === 'active';
+    }).sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
+
+    var html = '';
+    html += '<div id="addPartOverlay" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;" onclick="makerCloseAddPartModal(event)">';
+    html += '<div style="background:var(--cream);border-radius:10px;max-width:480px;width:90%;max-height:70vh;overflow-y:auto;box-shadow:0 8px 30px rgba(0,0,0,0.2);padding:20px 24px;" onclick="event.stopPropagation()">';
+
+    html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.2rem;font-weight:500;margin:0 0 16px;">Add Part</h3>';
+
+    if (activeMaterials.length === 0) {
+      html += '<p style="font-size:0.85rem;color:var(--warm-gray);text-align:center;padding:20px;">No active materials. Go to Materials to add some first.</p>';
+    } else {
+      html += '<div style="margin-bottom:12px;">';
+      html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Material</label>';
+      html += '<select id="addPartMaterialId" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">';
+      html += '<option value="">Select material...</option>';
+      activeMaterials.forEach(function(m) {
+        html += '<option value="' + esc(m.materialId) + '">' + esc(m.name) + ' (' + esc(m.unitOfMeasure) + ' @ $' + (m.unitCost || 0).toFixed(2) + ')</option>';
+      });
+      html += '</select>';
+      html += '</div>';
+
+      html += '<div style="margin-bottom:16px;">';
+      html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Quantity</label>';
+      html += '<input id="addPartQty" type="number" step="0.01" min="0" value="1" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;box-sizing:border-box;">';
+      html += '</div>';
+    }
+
+    html += '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;">';
+    html += '<button class="btn btn-secondary" onclick="makerCloseAddPartModal()">Cancel</button>';
+    if (activeMaterials.length > 0) {
+      html += '<button class="btn btn-primary" onclick="makerConfirmAddPart()">Add Part</button>';
+    }
+    html += '</div>';
+
+    html += '</div></div>';
+
+    var container = document.createElement('div');
+    container.id = 'addPartContainer';
+    container.innerHTML = html;
+    document.body.appendChild(container);
+  }
+
+  function closeAddPartModal(event) {
+    if (event && event.target && event.target.id !== 'addPartOverlay') return;
+    var container = document.getElementById('addPartContainer');
+    if (container) container.remove();
+  }
+
+  function confirmAddPart() {
+    var matId = document.getElementById('addPartMaterialId').value;
+    var qty = parseFloat(document.getElementById('addPartQty').value) || 0;
+
+    if (!matId) {
+      MastAdmin.showToast('Select a material', true);
+      return;
+    }
+    if (qty <= 0) {
+      MastAdmin.showToast('Quantity must be greater than 0', true);
+      return;
+    }
+
+    var material = materialsData[matId];
+    if (!material) return;
+
+    // Add to builder state locally (not saved to Firebase yet)
+    var liId = 'li_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+    if (!builderState.lineItems) builderState.lineItems = {};
+    builderState.lineItems[liId] = {
+      lineItemId: liId,
+      materialId: matId,
+      materialName: material.name,
+      quantity: qty,
+      unitOfMeasure: material.unitOfMeasure,
+      unitCost: material.unitCost,
+      extendedCost: roundCents(qty * material.unitCost)
+    };
+
+    closeAddPartModal();
+    renderRecipeBuilder();
   }
 
   // ============================================================
@@ -983,6 +1509,21 @@
   // Pricing
   window.makerSetActivePriceTier = setActivePriceTier;
 
+  // Pieces list & Recipe Builder UI
+  window.makerOpenRecipeBuilder = openRecipeBuilder;
+  window.makerCloseRecipeBuilder = closeRecipeBuilder;
+  window.makerCreateRecipeForProduct = createRecipeForProduct;
+  window.makerSaveRecipeBuilder = saveRecipeBuilder;
+  window.makerSaveAndRecalcRecipe = saveAndRecalcRecipe;
+  window.makerRecalcAndRefresh = recalcAndRefresh;
+  window.makerSetTierFromBuilder = setTierFromBuilder;
+  window.makerUpdateBuilderField = updateBuilderField;
+  window.makerUpdateLineItemQty = updateLineItemQty;
+  window.makerRemoveLineItemUI = removeLineItemUI;
+  window.makerOpenAddPartModal = openAddPartModal;
+  window.makerCloseAddPartModal = closeAddPartModal;
+  window.makerConfirmAddPart = confirmAddPart;
+
   // Settings & Seeding
   window.makerGetSettings = getMakerSettings;
   window.makerSaveSettings = saveMakerSettings;
@@ -1007,6 +1548,10 @@
       'pieces': { tab: 'piecesTab', setup: function() {
         loadMaterials(); // needed for recipe builder
         loadRecipes();
+        // Ensure products are loaded (global from core)
+        if (!window.productsLoaded && typeof window.loadProducts === 'function') {
+          window.loadProducts();
+        }
       } }
     },
     detachListeners: function() {
