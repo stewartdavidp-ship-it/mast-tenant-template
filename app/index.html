@@ -4566,6 +4566,43 @@
     .sl-gap-item { display:flex; align-items:center; gap:8px; padding:8px 12px; background:rgba(245,158,11,0.08); border-radius:8px; margin-bottom:6px; font-size:0.85rem; }
     .sl-gap-item .sl-gap-icon { color:var(--amber); font-size:1rem; }
     .sl-gap-item a { color:var(--amber); text-decoration:underline; cursor:pointer; }
+
+    /* ===== Consignment Module ===== */
+
+    .consignment-list { display:flex; flex-direction:column; gap:12px; }
+    .consignment-card { background:var(--cream); border:1px solid var(--cream-dark); border-radius:8px; padding:16px; cursor:pointer; transition:box-shadow 0.15s; }
+    .consignment-card:hover { box-shadow:0 2px 8px rgba(0,0,0,0.1); }
+    .consignment-card.closed { opacity:0.65; }
+    body.dark-mode .consignment-card { background:#2a2a2a; border-color:#444; }
+    body.dark-mode .consignment-card:hover { box-shadow:0 2px 8px rgba(0,0,0,0.3); }
+
+    .consignment-card-stats { display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; margin-top:12px; padding-top:12px; border-top:1px solid var(--cream-dark); }
+    body.dark-mode .consignment-card-stats { border-top-color:#444; }
+
+    .consignment-stat-label { font-size:0.72rem; font-weight:600; text-transform:uppercase; letter-spacing:0.04em; color:var(--warm-gray-light); margin-bottom:2px; }
+    .consignment-stat-value { font-size:0.95rem; font-weight:500; }
+
+    .consignment-earnings-panel { background:var(--cream); border:1px solid var(--cream-dark); border-radius:8px; padding:20px; margin-bottom:20px; }
+    body.dark-mode .consignment-earnings-panel { background:#2a2a2a; border-color:#444; }
+    .consignment-earnings-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:16px; }
+    @media (max-width:640px) { .consignment-earnings-grid { grid-template-columns:repeat(2, 1fr); } }
+
+    .consignment-table-wrap { overflow-x:auto; }
+    .consignment-table { width:100%; border-collapse:collapse; font-size:0.85rem; }
+    .consignment-table th { font-size:0.72rem; font-weight:600; text-transform:uppercase; letter-spacing:0.04em; color:var(--warm-gray-light); padding:8px 12px; border-bottom:2px solid var(--cream-dark); text-align:left; }
+    .consignment-table td { padding:10px 12px; border-bottom:1px solid var(--cream-dark); }
+    body.dark-mode .consignment-table th { border-bottom-color:#444; }
+    body.dark-mode .consignment-table td { border-bottom-color:#333; }
+
+    .consignment-product-row { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
+
+    body.dark-mode #galleriesTab input,
+    body.dark-mode #galleriesTab textarea,
+    body.dark-mode #galleriesTab select { background:#2a2a2a; border-color:#444; color:#e0e0e0; }
+    body.dark-mode #galleriesTab input:focus,
+    body.dark-mode #galleriesTab textarea:focus,
+    body.dark-mode #galleriesTab select:focus { border-color:var(--teal); }
+
   </style>
 </head>
 <body>
@@ -4643,7 +4680,7 @@
         <div class="sidebar-item" data-route="orders" onclick="navigateTo('orders')">Retail Orders <span id="sidebarOrdersBadge" class="sidebar-badge alert" style="display:none;"></span></div>
         <div class="sidebar-item" data-route="commissions" onclick="navigateTo('commissions')">Commissions</div>
         <div class="sidebar-item" data-route="wholesale" onclick="navigateTo('wholesale')">Wholesale</div>
-        <div class="sidebar-item muted" data-route="galleries" onclick="navigateTo('galleries')">Galleries &amp; Consignment <span class="sidebar-badge new">New</span></div>
+        <div class="sidebar-item" data-route="galleries" onclick="navigateTo('galleries')">Galleries &amp; Consignment</div>
         <div class="sidebar-item" data-route="receipts" onclick="navigateTo('receipts')">Receipts &amp; Reconciliation</div>
         <div class="sidebar-item" data-route="coupons" onclick="navigateTo('coupons')">Coupons</div>
       </div>
@@ -5104,6 +5141,9 @@
     <!-- ===== MAKER MODULE TABS ===== -->
     <div id="materialsTab" style="display:none;"></div>
     <div id="piecesTab" style="display:none;"></div>
+
+    <!-- ===== CONSIGNMENT MODULE TAB ===== -->
+    <div id="galleriesTab" style="display:none;"></div>
 
     <div id="placeholderTab" style="display:none;"></div>
 
@@ -7607,6 +7647,23 @@ MastDB.recipes = {
   subRef: function() { return MastDB._ref(this.PATH + '/' + Array.from(arguments).join('/')); }
 };
 
+MastDB.consignments = {
+  PATH: 'admin/consignments',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  list: function(limit) { return this.ref().limitToLast(limit || 200).once('value'); },
+  get: function(id) { return this.ref(id).once('value'); },
+  set: function(id, data) { return this.ref(id).set(data); },
+  update: function(id, data) { return this.ref(id).update(data); },
+  remove: function(id) { return this.ref(id).remove(); },
+  newKey: function() { return this.ref().push().key; },
+  listen: function(limit, cb, errCb) {
+    return this.ref().limitToLast(limit || 200).on('value', cb, errCb);
+  },
+  unlisten: function(handle) { this.ref().off('value', handle); },
+  lineItemsRef: function(placementId) { return MastDB._ref(this.PATH + '/' + placementId + '/lineItems'); },
+  fieldRef: function(id, field) { return MastDB._ref(this.PATH + '/' + id + '/' + field); }
+};
+
 MastDB.dismissedNudges = {
   PATH: 'admin/users',
   ref: function(uid) { return MastDB._ref(this.PATH + '/' + uid + '/dismissedNudges'); },
@@ -9723,7 +9780,7 @@ var ROUTE_MAP = {
   // events route handled by sales module (lazy-loaded)
   // orders route handled by orders module (lazy-loaded)
   // wholesale route handled by wholesale module (lazy-loaded)
-  'galleries':   { tab: null, placeholder: { name: 'Galleries & Consignment', desc: 'Track consigned pieces at galleries.', badge: 'new' } },
+  // galleries route handled by consignment module (lazy-loaded)
   // pack route handled by fulfillment module (lazy-loaded)
   // ship route handled by fulfillment module (lazy-loaded)
   // fulfillment route handled by fulfillment module (lazy-loaded)
@@ -10172,7 +10229,8 @@ var MODULE_MANIFEST = {
   website: { src: 'modules/website.js', routes: ['website'] },
   showLight: { src: 'modules/show-light.js', routes: ['show-light-profile', 'show-light-gallery', 'show-light-shows', 'show-light-apply'] },
   emailLog: { src: 'modules/email-log.js', routes: ['email-log'] },
-  maker: { src: 'modules/maker.js', routes: ['materials', 'pieces'] }
+  maker: { src: 'modules/maker.js', routes: ['materials', 'pieces'] },
+  consignment: { src: 'modules/consignment.js', routes: ['galleries'] }
 };
 
 // Reverse lookup: route → moduleId (built from MODULE_MANIFEST)
