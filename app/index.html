@@ -9612,19 +9612,22 @@ auth.onAuthStateChanged(async function(user) {
     location.hash = '#settings';
   }
 
-  // Check for upgrade return from Stripe
-  var urlParams = new URLSearchParams(window.location.search);
-  if (urlParams.get('upgraded') === 'true') {
-    var upgradedPlan = urlParams.get('plan') || '';
+  // Check for upgrade return from Stripe (comes back as hash params: #settings?upgraded=true&plan=...)
+  var hashParts = location.hash.split('?');
+  var hashParams = hashParts.length > 1 ? new URLSearchParams(hashParts[1]) : null;
+  if (hashParams && hashParams.get('upgraded') === 'true') {
+    var upgradedPlan = hashParams.get('plan') || '';
     var tc = upgradedPlan && TIER_CONFIG[upgradedPlan] ? TIER_CONFIG[upgradedPlan] : null;
     showToast('Upgraded to ' + (tc ? tc.name : upgradedPlan) + '! Your new plan is active.');
-    // Reload subscription to reflect new tier
-    loadTenantSubscription().then(function() { applySidebarGating(); applySettingsGating(); });
-    // Clean URL
-    window.history.replaceState({}, '', window.location.pathname);
-  } else if (urlParams.get('canceled') === 'true') {
+    loadTenantSubscription().then(function() { applySidebarGating(); applySettingsGating(); renderSubscriptionSettings(); });
+    navigateTo('settings');
+    setTimeout(function() { switchSettingsSubView('subscription'); }, 100);
+    location.hash = '#settings';
+  } else if (hashParams && hashParams.get('canceled') === 'true') {
     showToast('Upgrade cancelled.', true);
-    window.history.replaceState({}, '', window.location.pathname);
+    navigateTo('settings');
+    setTimeout(function() { switchSettingsSubView('subscription'); }, 100);
+    location.hash = '#settings';
   }
 
   // Load configChecklist for progressive feature gating
