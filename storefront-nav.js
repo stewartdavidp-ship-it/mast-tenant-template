@@ -22,12 +22,12 @@
   // Default nav sections when no config exists in Firebase
   var DEFAULT_SECTIONS = {
     shop:       { label: 'Shop',        href: 'shop.html',       enabled: true,  highlight: true, order: 1 },
-    blog:       { label: 'From the Studio', href: 'blog/',        enabled: true,  order: 2 },
+    orders:     { label: 'Orders',      href: 'orders.html',      enabled: true,  order: 2 },
     about:      { label: 'About',       href: 'about.html',      enabled: true,  order: 3 },
     commission: { label: 'Commissions', href: 'commission.html',  enabled: false, order: 4 },
-    schedule:   { label: 'Schedule',    href: 'schedule.html',    enabled: false, order: 5 },
-    orders:     { label: 'Orders',      href: 'orders.html',      enabled: false, order: 6 },
-    wholesale:  { label: 'Wholesale',   href: 'wholesale.html',   enabled: false, order: 7 }
+    wholesale:  { label: 'Wholesale',   href: 'wholesale.html',   enabled: false, order: 5 },
+    schedule:   { label: 'Schedule',    href: 'schedule.html',    enabled: false, order: 6 },
+    blog:       { label: 'From the Studio', href: 'blog/',        enabled: true,  order: 7 }
   };
 
   /**
@@ -156,6 +156,16 @@
 
     var sorted = toSortedArray(sections);
     var inShopContext = isShopContext();
+
+    // In shop context, ensure orders and wholesale are present even if not in Firebase config
+    if (inShopContext) {
+      var hasOrders = sorted.some(function(s) { return s.key === 'orders'; });
+      var hasWholesale = sorted.some(function(s) { return s.key === 'wholesale'; });
+      if (!hasOrders) sorted.push({ key: 'orders', label: 'Orders', href: 'orders.html', order: 2 });
+      if (!hasWholesale) sorted.push({ key: 'wholesale', label: 'Wholesale', href: 'wholesale.html', order: 5 });
+      sorted.sort(function(a, b) { return (a.order || 99) - (b.order || 99); });
+    }
+
     // Context-aware filtering: shop pages show shop sections, content pages show content sections
     var topLevel = sorted.filter(function(s) {
       var key = s.key || '';

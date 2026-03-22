@@ -12360,13 +12360,14 @@ async function wizardSaveFeatures() {
     // WS2: Also write to public/config/nav/sections/ so storefront-nav.js picks them up
     var navSections = {
       shop: { enabled: features.shop, order: 1 },
-      blog: { enabled: features.blog, order: 6 },
-      about: { enabled: true, order: 2 },
-      commission: { enabled: features.commissions, order: 3 },
-      schedule: { enabled: features.events, order: 5 },
-      newsletter: { enabled: features.newsletter, order: 7 },
-      contact: { enabled: true, order: 8 },
-      wholesale: { enabled: features.wholesale, order: 9 }
+      orders: { enabled: features.shop, order: 2 },
+      blog: { enabled: features.blog, order: 7 },
+      about: { enabled: true, order: 3 },
+      commission: { enabled: features.commissions, order: 4 },
+      schedule: { enabled: features.events, order: 6 },
+      newsletter: { enabled: features.newsletter, order: 8 },
+      contact: { enabled: true, order: 9 },
+      wholesale: { enabled: features.wholesale, order: 5 }
     };
     await MastDB._ref('public/config/nav/sections').set(navSections);
 
