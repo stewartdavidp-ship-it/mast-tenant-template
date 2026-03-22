@@ -10288,7 +10288,6 @@ function selectSubscriptionTier(tierId) {
 }
 
 function initiateUpgrade(tierId) {
-  // Select the tier to update the module selection UI, then show upgrade confirmation
   selectSubscriptionTier(tierId);
   var sub = getTenantSubscription();
   var currentModules = (sub.modules || []).filter(function(id) { return MODULE_REGISTRY[id] && MODULE_REGISTRY[id].purchasable; });
@@ -10717,6 +10716,15 @@ async function confirmUpgradeSubscription(newPlan) {
     if (!resp.ok) {
       var errData = await resp.json().catch(function() { return {}; });
       throw new Error(errData.error || 'Failed to upgrade plan');
+    }
+
+    var result = await resp.json();
+
+    // Free → paid: server returns a Stripe checkout URL — redirect to payment
+    if (result.checkoutUrl) {
+      showToast('Redirecting to checkout...');
+      window.location.href = result.checkoutUrl;
+      return;
     }
 
     // Update local subscription with new tier and modules
