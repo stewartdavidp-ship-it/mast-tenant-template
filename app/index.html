@@ -4612,6 +4612,8 @@
       </div>
       <div class="sidebar-items">
         <div class="sidebar-item" data-route="jobs" onclick="navigateTo('jobs')">Jobs</div>
+        <div class="sidebar-item" data-route="materials" onclick="navigateTo('materials')">Materials</div>
+        <div class="sidebar-item" data-route="pieces" onclick="navigateTo('pieces')">Pieces</div>
         <div class="sidebar-item muted" data-route="procurement" onclick="navigateTo('procurement')">Procurement <span class="sidebar-badge new">New</span></div>
       </div>
     </div>
@@ -5098,6 +5100,10 @@
 
     <!-- ===== SHOW LIGHT TAB ===== -->
     <div id="showLightTab" style="display:none;"></div>
+
+    <!-- ===== MAKER MODULE TABS ===== -->
+    <div id="materialsTab" style="display:none;"></div>
+    <div id="piecesTab" style="display:none;"></div>
 
     <div id="placeholderTab" style="display:none;"></div>
 
@@ -7567,6 +7573,40 @@ MastDB.tripCustomPurposes = {
   list: function() { return this.ref().once('value'); }
 };
 
+MastDB.materials = {
+  PATH: 'admin/materials',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  list: function(limit) { return this.ref().limitToLast(limit || 500).once('value'); },
+  get: function(id) { return this.ref(id).once('value'); },
+  set: function(id, data) { return this.ref(id).set(data); },
+  update: function(id, data) { return this.ref(id).update(data); },
+  remove: function(id) { return this.ref(id).remove(); },
+  newKey: function() { return this.ref().push().key; },
+  listen: function(limit, cb, errCb) {
+    return this.ref().limitToLast(limit || 500).on('value', cb, errCb);
+  },
+  unlisten: function(handle) { this.ref().off('value', handle); },
+  fieldRef: function(id, field) { return MastDB._ref(this.PATH + '/' + id + '/' + field); }
+};
+
+MastDB.recipes = {
+  PATH: 'admin/recipes',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  list: function(limit) { return this.ref().limitToLast(limit || 200).once('value'); },
+  get: function(id) { return this.ref(id).once('value'); },
+  set: function(id, data) { return this.ref(id).set(data); },
+  update: function(id, data) { return this.ref(id).update(data); },
+  remove: function(id) { return this.ref(id).remove(); },
+  newKey: function() { return this.ref().push().key; },
+  listen: function(limit, cb, errCb) {
+    return this.ref().limitToLast(limit || 200).on('value', cb, errCb);
+  },
+  unlisten: function(handle) { this.ref().off('value', handle); },
+  lineItemsRef: function(recipeId) { return MastDB._ref(this.PATH + '/' + recipeId + '/lineItems'); },
+  fieldRef: function(id, field) { return MastDB._ref(this.PATH + '/' + id + '/' + field); },
+  subRef: function() { return MastDB._ref(this.PATH + '/' + Array.from(arguments).join('/')); }
+};
+
 MastDB.dismissedNudges = {
   PATH: 'admin/users',
   ref: function(uid) { return MastDB._ref(this.PATH + '/' + uid + '/dismissedNudges'); },
@@ -7585,7 +7625,8 @@ MastDB.config = {
   settings: function() { return MastDB._ref('public/settings'); },
   settingsField: function(field) { return MastDB._ref('public/settings/' + field); },
   migrationFlag: function() { return MastDB._ref('admin/sectionsMigrated'); },
-  analyticsHits: function() { return MastDB._ref('analytics/hits'); }
+  analyticsHits: function() { return MastDB._ref('analytics/hits'); },
+  makerSettings: function() { return MastDB._ref('admin/config/makerSettings'); }
 };
 
 MastDB.wholesaleTokens = {
@@ -7675,7 +7716,7 @@ MastDB.showLight = {
 // Web is the base module (always included, not purchasable). All others are purchasable.
 // Grid layout: Row1: Make, Market, Sell | Row2: Ship, Run, Web | Row3: Show, Show Light, Events | Row4: Book
 var MODULE_REGISTRY = {
-  make:   { id: 'make',   name: 'Make',   icon: '\uD83D\uDD25', description: 'Production jobs, build tracking, procurement.', section: 'make', navPosition: 1, purchasable: true, routes: ['jobs', 'production', 'procurement'], manageSettings: [], synergies: ['sell', 'market'], status: 'active' },
+  make:   { id: 'make',   name: 'Make',   icon: '\uD83D\uDD25', description: 'Production jobs, build tracking, materials, pricing.', section: 'make', navPosition: 1, purchasable: true, routes: ['jobs', 'production', 'procurement', 'materials', 'pieces'], manageSettings: [], synergies: ['sell', 'market'], status: 'active' },
   market: { id: 'market', name: 'Market', icon: '\uD83D\uDCE3', description: 'Social media, blog, newsletter, stories.', section: 'market', navPosition: 2, purchasable: true, routes: ['social', 'blog', 'newsletter', 'stories'], manageSettings: ['newsletter', 'email'], synergies: ['sell', 'show'], status: 'active' },
   sell:   { id: 'sell',   name: 'Sell',   icon: '\uD83D\uDCB0', description: 'Point of sale, orders, commissions, wholesale.', section: 'sell', navPosition: 3, purchasable: true, routes: ['pos', 'orders', 'commissions', 'wholesale', 'galleries', 'receipts', 'coupons'], manageSettings: ['square'], synergies: ['ship', 'make'], status: 'active' },
   ship:   { id: 'ship',   name: 'Ship',   icon: '\uD83D\uDCE6', description: 'Pack orders, ship deliveries, track fulfillment.', section: 'ship', navPosition: 4, purchasable: true, routes: ['pack', 'ship'], manageSettings: ['shippingRates'], synergies: ['sell', 'show'], status: 'active' },
@@ -10109,7 +10150,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260319p3';
+var MAST_MODULES_V = '20260322p1';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -10130,7 +10171,8 @@ var MODULE_MANIFEST = {
   eventsAdmin: { src: 'modules/events.js', routes: ['events-shows', 'events-settings'] },
   website: { src: 'modules/website.js', routes: ['website'] },
   showLight: { src: 'modules/show-light.js', routes: ['show-light-profile', 'show-light-gallery', 'show-light-shows', 'show-light-apply'] },
-  emailLog: { src: 'modules/email-log.js', routes: ['email-log'] }
+  emailLog: { src: 'modules/email-log.js', routes: ['email-log'] },
+  maker: { src: 'modules/maker.js', routes: ['materials', 'pieces'] }
 };
 
 // Reverse lookup: route → moduleId (built from MODULE_MANIFEST)
