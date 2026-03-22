@@ -1085,12 +1085,32 @@
         // Remove onboarding banner
         var banner = document.getElementById('makerOnboardingBanner');
         if (banner) banner.remove();
+        // Switch filter to draft so seeded materials are visible
+        materialsFilter = 'draft';
         MastAdmin.showToast('Materials seeded for ' + profile + ' (' + result.materialsCreated + ' samples added)');
         renderMaterials();
+      } else {
+        MastAdmin.showToast('Materials already seeded. Switch filter to Draft or All to see them.', true);
       }
     } catch (err) {
       MastAdmin.showToast('Error: ' + err.message, true);
     }
+  }
+
+  /**
+   * Reset onboarding — clears materialsSeeded flag so banner reappears.
+   * Dev/testing utility. Exposed as window.makerResetOnboarding.
+   */
+  async function resetOnboarding() {
+    await saveMakerSettings({ materialsSeeded: false, craftProfile: null });
+    // Remove all seeded materials
+    var mats = Object.values(materialsData);
+    for (var i = 0; i < mats.length; i++) {
+      if (mats[i].status === 'draft' && mats[i].craftProfile) {
+        await MastDB.materials.remove(mats[i].materialId);
+      }
+    }
+    MastAdmin.showToast('Onboarding reset — refresh the page');
   }
 
   // ============================================================
@@ -1846,6 +1866,7 @@
   window.makerGetSettings = getMakerSettings;
   window.makerSaveSettings = saveMakerSettings;
   window.makerSeedMaterials = seedMaterials;
+  window.makerResetOnboarding = resetOnboarding;
 
   // Data access (for console inspection)
   window.makerGetMaterials = function() { return materialsData; };
