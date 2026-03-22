@@ -1051,8 +1051,11 @@
     var tab = document.getElementById('materialsTab');
     if (!tab) return;
 
+    // Don't add banner if it already exists
+    if (tab.querySelector('#makerOnboardingBanner')) return;
+
     var html = '';
-    html += '<div style="background:rgba(42,124,111,0.08);border:1px solid var(--teal-light);border-radius:8px;padding:20px 24px;margin-bottom:20px;">';
+    html += '<div id="makerOnboardingBanner" style="background:rgba(42,124,111,0.08);border:1px solid var(--teal-light);border-radius:8px;padding:20px 24px;margin-bottom:20px;">';
     html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.2rem;font-weight:500;margin:0 0 8px;color:var(--teal-deep);">Welcome to Materials</h3>';
     html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin:0 0 16px;">Select your craft to pre-load categories and sample materials. You can customize everything later.</p>';
     html += '<div style="display:flex;flex-wrap:wrap;gap:8px;">';
@@ -1079,6 +1082,9 @@
     try {
       var result = await seedMaterials(profile);
       if (result.seeded) {
+        // Remove onboarding banner
+        var banner = document.getElementById('makerOnboardingBanner');
+        if (banner) banner.remove();
         MastAdmin.showToast('Materials seeded for ' + profile + ' (' + result.materialsCreated + ' samples added)');
         renderMaterials();
       }
