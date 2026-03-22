@@ -4721,6 +4721,7 @@
       </div>
       <div class="sidebar-items">
         <div class="sidebar-item" data-route="website" onclick="navigateTo('website')">Website Content</div>
+        <div class="sidebar-item" data-route="gallery" onclick="navigateTo('gallery')">Gallery</div>
         <div class="sidebar-item" data-route="images" onclick="navigateTo('images')">Images</div>
       </div>
     </div>
@@ -5406,7 +5407,7 @@
       <div id="imageLibraryGrid"></div>
     </div>
 
-    <!-- Admin: Gallery Tab (legacy — kept for backward compat) -->
+    <!-- Admin: Gallery Tab — section-based image/video management for storefront -->
     <div id="galleryTab" style="display:none;">
       <div class="section-header">
         <h2>Website Content</h2>
@@ -7659,7 +7660,7 @@ var MODULE_REGISTRY = {
   sell:   { id: 'sell',   name: 'Sell',   icon: '\uD83D\uDCB0', description: 'Point of sale, orders, commissions, wholesale.', section: 'sell', navPosition: 3, purchasable: true, routes: ['pos', 'orders', 'commissions', 'wholesale', 'galleries', 'receipts', 'coupons'], manageSettings: ['square'], synergies: ['ship', 'make'], status: 'active' },
   ship:   { id: 'ship',   name: 'Ship',   icon: '\uD83D\uDCE6', description: 'Pack orders, ship deliveries, track fulfillment.', section: 'ship', navPosition: 4, purchasable: true, routes: ['pack', 'ship'], manageSettings: ['shippingRates'], synergies: ['sell', 'show'], status: 'active' },
   run:    { id: 'run',    name: 'Run',    icon: '\uD83D\uDCCB', description: 'Trips, expenses, reports, financials, contacts.', section: 'run', navPosition: 5, purchasable: true, routes: ['trips', 'expenses', 'reports', 'financials', 'contacts', 'customers'], manageSettings: [], synergies: ['sell', 'show'], status: 'active' },
-  web:    { id: 'web',    name: 'Web',    icon: '\uD83C\uDF10', description: 'Website pages and content management.', section: 'web', navPosition: 6, purchasable: false, showInGrid: true, routes: ['website', 'images'], manageSettings: [], synergies: ['market', 'sell'], status: 'active' },
+  web:    { id: 'web',    name: 'Web',    icon: '\uD83C\uDF10', description: 'Website pages and content management.', section: 'web', navPosition: 6, purchasable: false, showInGrid: true, routes: ['website', 'gallery', 'images'], manageSettings: [], synergies: ['market', 'sell'], status: 'active' },
   show:   { id: 'show',   name: 'Show',   icon: '\uD83C\uDFAA', description: 'Find, apply, prep, and execute craft fairs and events.', section: 'show', navPosition: 7, purchasable: true, routes: ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'], manageSettings: [], synergies: ['sell', 'ship', 'make'], status: 'active' },
   'show-light': { id: 'show-light', name: 'Show Light', icon: '\u2728', description: 'Vendor profile, image gallery, and AI-powered show application builder.', section: 'show-light', navPosition: 8, purchasable: false, showInGrid: true, routes: ['show-light-profile', 'show-light-gallery', 'show-light-shows', 'show-light-apply'], manageSettings: [], synergies: ['show', 'sell', 'market'], status: 'active' },
   events: { id: 'events', name: 'Events', icon: '\uD83C\uDFAB', description: 'Organize shows, manage booths, vendors, and floor plans.', section: 'events', navPosition: 9, purchasable: true, routes: ['events-shows', 'events-settings'], manageSettings: [], synergies: ['show', 'sell', 'market'], status: 'active' },
@@ -19058,7 +19059,7 @@ function validateRequired(fields) {
 
 // Route → human-readable label
 var ROUTE_LABELS = {
-  'dashboard': 'Dashboard', 'schedule': 'Schedule', 'gallery': 'Website',
+  'dashboard': 'Dashboard', 'schedule': 'Schedule', 'gallery': 'Gallery',
   'pos': 'Point of Sale', 'orders': 'Orders', 'commissions': 'Commissions',
   'wholesale': 'Wholesale', 'galleries': 'Galleries', 'events': 'Sales Events',
   'pack': 'Pack & Ship', 'ship': 'Shipping', 'receipts': 'Receipts',
