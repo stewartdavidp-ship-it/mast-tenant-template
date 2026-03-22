@@ -438,6 +438,7 @@
     body.dark-mode #guidedNextSteps h3 { color: #e0e0e0 !important; }
     body.dark-mode #guidedNextSteps p { color: #999 !important; }
     body.dark-mode #guidedNextSteps div[style*="font-weight:600"] { color: #e0e0e0 !important; }
+    body.dark-mode #guidedNextSteps button[title="Mark as done"] { border-color: #444 !important; color: #999 !important; }
     body.dark-mode .auth-screen h2 { color: #e0e0e0; }
     body.dark-mode .auth-screen p { color: #999; }
     body.dark-mode .btn-google { background: #2a2a2a; border-color: #444; color: #e0e0e0; }
@@ -9616,7 +9617,7 @@ auth.onAuthStateChanged(async function(user) {
   await loadConfigChecklist();
 
   // Guided next steps (module-aware onboarding) — replaces old setup banner
-  loadNextStepsCache().then(function() { renderGuidedNextSteps(); });
+  Promise.all([loadNextStepsCache(), loadDismissedSteps()]).then(function() { renderGuidedNextSteps(); });
 
   // Load GitHub token for image uploads — admin only
   if (isAdmin()) {
@@ -12726,7 +12727,7 @@ async function wizardComplete() {
 
     navigateTo('dashboard');
 
-    loadNextStepsCache().then(function() { renderGuidedNextSteps(); });
+    Promise.all([loadNextStepsCache(), loadDismissedSteps()]).then(function() { renderGuidedNextSteps(); });
     attachListeners();
     loadSettings();
   } catch (err) {
@@ -12821,6 +12822,20 @@ var NEXT_STEP_DEFINITIONS = [
   { id: 'social-post',    module: 'market',     icon: '\uD83D\uDCE3', title: 'Create your first post',        desc: 'Draft a social media post or blog entry to promote your work.',           route: 'social',      check: function() { return false; } }
 ];
 
+// Dismissed steps — persisted to Firebase
+var _dismissedSteps = {};
+async function loadDismissedSteps() {
+  try {
+    var snap = await MastDB._ref('webPresence/config/dismissedSteps').once('value');
+    _dismissedSteps = snap.val() || {};
+  } catch (e) { _dismissedSteps = {}; }
+}
+function dismissNextStep(stepId) {
+  _dismissedSteps[stepId] = true;
+  MastDB._ref('webPresence/config/dismissedSteps/' + stepId).set(true);
+  renderGuidedNextSteps();
+}
+
 function renderGuidedNextSteps() {
   var container = document.getElementById('guidedNextSteps');
   if (!container) return;
@@ -12834,9 +12849,9 @@ function renderGuidedNextSteps() {
     return activeModules.indexOf(step.module) >= 0;
   });
 
-  // Split into done and todo
-  var todo = steps.filter(function(s) { return !s.check(); });
-  var done = steps.filter(function(s) { return s.check(); });
+  // Split into done and todo (auto-check OR manually dismissed)
+  var todo = steps.filter(function(s) { return !s.check() && !_dismissedSteps[s.id]; });
+  var done = steps.filter(function(s) { return s.check() || _dismissedSteps[s.id]; });
 
   // If all done, hide the widget
   if (todo.length === 0) {
@@ -12887,7 +12902,7 @@ function renderGuidedNextSteps() {
     h += '<div style="font-size:0.95rem;font-weight:600;color:var(--text, var(--charcoal, #1a1a1a));">' + esc(step.title) + '</div>';
     h += '<div style="font-size:0.82rem;color:var(--warm-gray, #6B6560);">' + esc(step.desc) + '</div>';
     h += '</div>';
-    h += '<span style="color:var(--amber, #C4853C);font-size:1.1rem;flex-shrink:0;">&#8594;</span>';
+    h += '<button onclick="event.stopPropagation();dismissNextStep(\'' + step.id + '\');" style="background:none;border:1px solid var(--cream-dark, #ddd);border-radius:50%;width:24px;height:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--warm-gray);font-size:0.7rem;transition:all 0.15s;" onmouseover="this.style.borderColor=\'var(--teal)\';this.style.color=\'var(--teal)\';" onmouseout="this.style.borderColor=\'var(--cream-dark, #ddd)\';this.style.color=\'var(--warm-gray)\';" title="Mark as done">&#10003;</button>';
     h += '</div>';
   });
 
@@ -12912,7 +12927,7 @@ function renderGuidedNextSteps() {
       h += '<div style="font-size:0.95rem;font-weight:600;color:var(--text, var(--charcoal, #1a1a1a));">' + esc(step.title) + '</div>';
       h += '<div style="font-size:0.82rem;color:var(--warm-gray, #6B6560);">' + esc(step.desc) + '</div>';
       h += '</div>';
-      h += '<span style="color:var(--amber, #C4853C);font-size:1.1rem;flex-shrink:0;">&#8594;</span>';
+      h += '<button onclick="event.stopPropagation();dismissNextStep(\'' + step.id + '\');" style="background:none;border:1px solid var(--cream-dark, #ddd);border-radius:50%;width:24px;height:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--warm-gray);font-size:0.7rem;transition:all 0.15s;" onmouseover="this.style.borderColor=\'var(--teal)\';this.style.color=\'var(--teal)\';" onmouseout="this.style.borderColor=\'var(--cream-dark, #ddd)\';this.style.color=\'var(--warm-gray)\';" title="Mark as done">&#10003;</button>';
       h += '</div>';
     });
     h += '</div>';
