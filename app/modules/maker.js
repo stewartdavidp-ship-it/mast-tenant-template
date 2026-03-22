@@ -460,15 +460,46 @@
     updates['admin/recipes/' + recipeId + '/activePriceTier'] = tier;
     updates['admin/recipes/' + recipeId + '/updatedAt'] = now;
 
+    var priceCents = null;
     if (recipe.productId) {
-      var priceCents = Math.round(tierPrice * 100);
+      priceCents = Math.round(tierPrice * 100);
       updates['public/products/' + recipe.productId + '/priceCents'] = priceCents;
       updates['public/products/' + recipe.productId + '/price'] = tierPrice;
     }
 
     await MastDB._multiUpdate(updates);
     MastAdmin.writeAudit('set-price-tier', 'recipe', recipeId);
+
+    // Etsy price sync (fire-and-forget — local update is authoritative)
+    if (recipe.productId && priceCents !== null) {
+      syncEtsyListingPrice(recipe.productId, priceCents, recipeId);
+    }
+
     return { tier: tier, price: tierPrice };
+  }
+
+  /**
+   * Sync price to Etsy listing if product has an etsyListingId.
+   * Non-blocking — failures show a toast but don't affect local data.
+   */
+  function syncEtsyListingPrice(productId, priceCents, recipeId) {
+    // Look up the product to get etsyListingId
+    var products = window.productsData || [];
+    var product = products.find(function(p) { return p.pid === productId; });
+    if (!product || !product.etsyListingId) return;
+
+    var listingId = product.etsyListingId;
+    firebase.functions().httpsCallable('etsyUpdateListingPrice')({
+      listingId: listingId,
+      priceCents: priceCents
+    }).then(function() {
+      showToast('Price updated on Etsy');
+      // Record sync timestamp on recipe
+      MastDB.recipes.fieldRef(recipeId, 'lastEtsySyncAt').set(new Date().toISOString());
+    }).catch(function(err) {
+      console.error('Etsy price sync failed:', err);
+      showToast('Local price updated — Etsy sync failed', 'error');
+    });
   }
 
   /**
@@ -1025,7 +1056,8 @@
         var dirtyIcon = recipe.costsDirty ? ' <span title="Costs changed" style="color:#f59e0b;">⚠</span>' : '';
         html += '<td><span class="status-badge" style="' + materialStatusBadgeStyle('active') + '">has recipe</span>' + dirtyIcon + '</td>';
         html += '<td style="text-align:right;font-family:monospace;">$' + (recipe.totalCost || 0).toFixed(2) + '</td>';
-        html += '<td><span class="status-badge pill" style="background:rgba(42,124,111,0.12);color:var(--teal);border:1px solid rgba(42,124,111,0.25);">' + esc(recipe.activePriceTier || 'none') + '</span></td>';
+        var etsyIcon = p.etsyListingId ? (recipe.lastEtsySyncAt ? ' <span title="Synced to Etsy" style="font-size:0.75rem;">🔗</span>' : ' <span title="Etsy listing linked" style="font-size:0.75rem;opacity:0.5;">🔗</span>') : '';
+        html += '<td><span class="status-badge pill" style="background:rgba(42,124,111,0.12);color:var(--teal);border:1px solid rgba(42,124,111,0.25);">' + esc(recipe.activePriceTier || 'none') + '</span>' + etsyIcon + '</td>';
         var activePrice = getTierPrice(recipe.activePriceTier, recipe);
         html += '<td style="text-align:right;font-family:monospace;font-weight:600;">$' + activePrice.toFixed(2) + '</td>';
         html += '<td style="text-align:right;">';
@@ -1261,8 +1293,18 @@
       // Gross profit
       html += '<div style="text-align:center;font-size:0.78rem;color:' + (tier.profit > 0 ? '#16a34a' : 'var(--danger)') + ';">Profit: $' + tier.profit.toFixed(2) + '</div>';
 
-      // Set active button
-      if (!isActive) {
+      // Etsy sync indicator + Set active button
+      if (isActive) {
+        var linkedProduct = bs.productId ? (window.productsData || []).find(function(p) { return p.pid === bs.productId; }) : null;
+        if (linkedProduct && linkedProduct.etsyListingId) {
+          html += '<div style="text-align:center;margin-top:8px;font-size:0.72rem;color:var(--teal);">Etsy listing will sync</div>';
+          if (bs.lastEtsySyncAt) {
+            html += '<div style="text-align:center;font-size:0.68rem;color:var(--warm-gray-light);">Last sync: ' + new Date(bs.lastEtsySyncAt).toLocaleDateString() + '</div>';
+          }
+        } else if (linkedProduct) {
+          html += '<div style="text-align:center;margin-top:8px;font-size:0.72rem;color:var(--warm-gray-light);">No Etsy listing</div>';
+        }
+      } else {
         html += '<button class="btn btn-outline btn-small" style="width:100%;margin-top:10px;font-size:0.78rem;" onclick="makerSetTierFromBuilder(\'' + tier.key + '\')">Set Active</button>';
       }
 
