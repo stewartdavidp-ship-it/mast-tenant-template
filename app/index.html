@@ -12787,7 +12787,7 @@ var NEXT_STEP_DEFINITIONS = [
   { id: 'choose-template', module: null,         icon: '\uD83C\uDFA8', title: 'Choose your template',          desc: 'Pick a layout and color scheme for your site.',                           route: 'website',     check: function() { return window._nextStepsCache && window._nextStepsCache.hasTemplate; } },
   { id: 'customize-content', module: null,       icon: '\u270F\uFE0F', title: 'Customize your content',        desc: 'Edit your hero headline, about section, and contact info.',               route: 'website',     check: function() { return window._nextStepsCache && window._nextStepsCache.hasContent; } },
   { id: 'add-product',    module: null,         icon: '\uD83D\uDCE6', title: 'Add your first product',        desc: 'Upload a photo and set a price to start building your catalog.',           route: 'inventory',   check: function() { return window._nextStepsCache && window._nextStepsCache.hasProducts; } },
-  { id: 'setup-website',  module: 'web',        icon: '\uD83C\uDF10', title: 'Publish your website',          desc: 'Review your site and publish it live.',                                   route: 'website',     check: function() { return window._nextStepsCache && window._nextStepsCache.hasWebsite; } },
+  { id: 'setup-website',  module: 'web',        icon: '\uD83C\uDF10', title: 'Review your public site',       desc: 'See how your storefront looks to customers.',                             route: null, action: 'open-public-site', check: function() { return window._nextStepsCache && window._nextStepsCache.hasWebsite; } },
   { id: 'setup-square',   module: 'sell',       icon: '\uD83D\uDCB3', title: 'Connect Square for payments',   desc: 'Link your Square account to accept payments and manage orders.',          route: 'settings',    check: function() { return tenantConfigChecklist && tenantConfigChecklist.square; } },
   { id: 'first-show',     module: 'show',       icon: '\uD83C\uDFAA', title: 'Find your first show',          desc: 'Search for craft fairs and events in your area.',                         route: 'show-find',   check: function() { return false; } },
   { id: 'show-light-profile', module: 'show-light', icon: '\u2728', title: 'Build your vendor profile',     desc: 'Add your bio, photos, and product highlights for show applications.',     route: 'show-light-profile', check: function() { return false; } },
@@ -12825,7 +12825,7 @@ function renderGuidedNextSteps() {
   var total = steps.length;
   var completed = done.length;
 
-  var h = '<div style="background:var(--cream, #FAF6F0);border:1px solid var(--cream-dark, #F0E8DB);border-radius:12px;padding:20px 24px;margin-bottom:20px;">';
+  var h = '<div style="background:var(--card-bg, var(--cream, #FAF6F0));border:1px solid var(--card-border, var(--cream-dark, #F0E8DB));border-radius:12px;padding:20px 24px;margin-bottom:20px;">';
 
   // Header with progress
   h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
@@ -12840,17 +12840,25 @@ function renderGuidedNextSteps() {
 
   // Progress bar
   var pct = total > 0 ? (completed / total * 100) : 0;
-  h += '<div style="background:var(--cream-dark, #F0E8DB);border-radius:6px;height:6px;margin-bottom:16px;overflow:hidden;">';
+  h += '<div style="background:var(--hover-bg, var(--cream-dark, #F0E8DB));border-radius:6px;height:6px;margin-bottom:16px;overflow:hidden;">';
   h += '<div style="background:var(--teal, #2A7C6F);height:100%;width:' + pct + '%;border-radius:6px;transition:width 0.3s;"></div>';
   h += '</div>';
 
   // Next steps (show up to 3 todos)
   var shown = todo.slice(0, 3);
   shown.forEach(function(step) {
-    h += '<div onclick="navigateTo(\'' + step.route + '\')" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;cursor:pointer;transition:background 0.15s;margin-bottom:4px;" onmouseover="this.style.background=\'var(--cream-dark, #F0E8DB)\'" onmouseout="this.style.background=\'transparent\'">';
+    var clickAction = '';
+    if (step.action === 'open-public-site') {
+      var tenantId = window.TENANT_CONFIG && window.TENANT_CONFIG.tenantId || '';
+      var publicUrl = 'https://mast-' + tenantId + '.web.app';
+      clickAction = 'window.open(\'' + publicUrl + '\', \'_blank\')';
+    } else if (step.route) {
+      clickAction = 'navigateTo(\'' + step.route + '\')';
+    }
+    h += '<div onclick="' + clickAction + '" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;cursor:pointer;transition:background 0.15s;margin-bottom:4px;" onmouseover="this.style.background=\'var(--hover-bg, var(--cream-dark, #F0E8DB))\'" onmouseout="this.style.background=\'transparent\'">';
     h += '<span style="font-size:1.4rem;flex-shrink:0;">' + step.icon + '</span>';
     h += '<div style="flex:1;min-width:0;">';
-    h += '<div style="font-size:0.95rem;font-weight:600;color:var(--charcoal, #1a1a1a);">' + esc(step.title) + '</div>';
+    h += '<div style="font-size:0.95rem;font-weight:600;color:var(--text, var(--charcoal, #1a1a1a));">' + esc(step.title) + '</div>';
     h += '<div style="font-size:0.82rem;color:var(--warm-gray, #6B6560);">' + esc(step.desc) + '</div>';
     h += '</div>';
     h += '<span style="color:var(--amber, #C4853C);font-size:1.1rem;flex-shrink:0;">&#8594;</span>';
@@ -20016,7 +20024,10 @@ function renderImportStatusBanner() {
       if (imp.images && imp.images.done) items.push(imp.images.done + ' images');
       html = '<div style="background:var(--teal);color:white;padding:12px 16px;border-radius:8px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;">';
       html += '<div><strong>Import complete!</strong> ' + (items.length > 0 ? items.join(', ') + ' ready for review.' : 'Content ready for review.') + '</div>';
+      html += '<div style="display:flex;gap:8px;align-items:center;">';
       html += '<button class="btn" onclick="navigateTo(\'website\'); setTimeout(function(){ wpSwitchTab(\'import\'); }, 100);" style="background:white;color:var(--teal);font-size:0.8rem;padding:6px 14px;border:none;border-radius:6px;cursor:pointer;font-weight:600;">Review</button>';
+      html += '<button onclick="document.getElementById(\'importStatusBanner\').style.display=\'none\';" style="background:none;border:none;color:white;font-size:1.2rem;cursor:pointer;padding:4px 8px;opacity:0.8;" title="Dismiss">&times;</button>';
+      html += '</div>';
       html += '</div>';
     } else {
       html = '<div style="background:var(--amber);color:white;padding:12px 16px;border-radius:8px;margin-bottom:16px;">';
