@@ -212,6 +212,12 @@ Wholesale cart is separate from the retail cart. Stored in `sessionStorage`. Car
 |------|---------|
 | `admin/wholesaleAuthorized/{emailKey}` | Approved buyer lookup |
 | `admin/wholesaleRequests/{requestId}` | Pending access requests |
+| `admin/materials/{materialId}` | Raw materials library (admin-only read/write) |
+| `admin/recipes/{recipeId}` | BOM recipes with pricing engine (admin-only read/write) |
+| `admin/consignments/{placementId}` | Consignment placements at galleries (admin-only read/write) |
+| `admin/lookbooks/{documentId}` | Look book / line sheet document records (admin-only read/write) |
+| `admin/config/makerSettings` | Maker module config: craft profile, default markups, labor rate (admin-only) |
+| `admin/importLog/{importId}` | CSV import history log |
 
 ## Checkout Flow
 
@@ -301,6 +307,29 @@ HTTP endpoint receiving Square webhook notifications.
 2. On `payment.completed`: updates order status to `placed`, writes payment details
 3. Triggers downstream: Firebase listener on confirmation page detects status change → CSV download
 
+### `generateLookbook`
+
+HTTP endpoint. Generates PDF catalogs (line sheets or look books) from product/recipe data.
+
+1. Verifies admin auth via Bearer token
+2. Reads document config from `admin/lookbooks/{documentId}`
+3. Loads products, filters by category/exclusions, loads recipes for tier pricing
+4. Builds styled HTML (two layouts: line sheet = compact table, look book = editorial photos)
+5. Renders PDF via Puppeteer + Chromium (server-side, consistent rendering)
+6. Uploads to Firebase Storage as `{tenantId}/lookbooks/{documentId}.pdf` (public: true for sharing)
+7. Updates document record with `generatedUrl` and `generatedAt`
+
+### `etsyUpdateListingPrice`
+
+Callable function. Updates an Etsy listing's price when `activePriceTier` changes on a recipe.
+
+1. Validates admin auth (onCall with `verifyTenantAdmin`)
+2. Receives `listingId` and `priceCents`
+3. Converts to dollars, calls Etsy PUT API via `etsyApiFetch()` helper
+4. Etsy credentials (OAuth tokens) stay server-side in GCP Secret Manager — never exposed to client
+
+Called fire-and-forget from `setActivePriceTier()` in maker.js. Etsy failure does not roll back local price.
+
 ## Product Data Model
 
 Path: `{tenantId}/public/products/{pid}`
@@ -332,7 +361,7 @@ React app with a core shell (`/app/index.html`, ~17.6K lines) and 14 lazy-loaded
 - `.unlisten(handle)` — detaches listener
 - `.newKey()` — generates a push key
 
-Entities include: events, gallery, images, products, inventory, orders, sales, squarePayments, coupons, salesEvents, bundles, productionRequests, productionJobs, operators, buildMedia, stories, contacts, commissions, locations, studioLocations, newsletter, blog, market, adminUsers, roles, invites, auditLog, auditIndex, feedback, feedbackSettings, and more.
+Entities include: events, gallery, images, products, inventory, orders, sales, squarePayments, coupons, salesEvents, bundles, productionRequests, productionJobs, operators, buildMedia, stories, contacts, commissions, locations, studioLocations, newsletter, blog, market, adminUsers, roles, invites, auditLog, auditIndex, feedback, feedbackSettings, materials, recipes, consignments, lookbooks, importLog, and more.
 
 ### Order Status Flow
 
@@ -415,6 +444,9 @@ Retains: all CSS (~4.3K lines), HTML skeleton (sidebar, tab containers, modals),
 | Fulfillment | `fulfillment.js` | ~1,030 | `pack`, `ship`, `fulfillment` |
 | Events (Organizer) | `events.js` | ~1,900 | `events-shows`, `events-settings` |
 | Website | `website.js` | ~1,330 | `website` |
+| Maker | `maker.js` | ~2,100 | `materials`, `pieces` |
+| Consignment | `consignment.js` | ~570 | `galleries` |
+| Look Books | `lookbooks.js` | ~400 | `lookbooks` |
 
 #### Module Loading Pattern
 
@@ -432,6 +464,68 @@ Retains: all CSS (~4.3K lines), HTML skeleton (sidebar, tab containers, modals),
 - **Globals accessed directly** — `showToast`, `esc`, `escapeHtml`, `MastDB`, `TENANT_CONFIG`, `openModal`, `closeModal`, `openImagePicker`, `imageLibrary`, `currentUser`, `callCF`, `auth`, `firebase`, `formatDateRange`, `emitTestingEvent` are all on `window`
 - **Firebase listeners stay in core** — `attachListeners()` owns all listeners, callbacks guarded with `typeof` checks (e.g., `if (typeof renderOrders === 'function') renderOrders()`)
 - **Cross-module data** — `MastAdmin.getData(key)` / `MastAdmin.setData(key, value)` for shared state (e.g., orders data, products data)
+
+### Maker Module Architecture
+
+The Maker Module (`maker.js`, `consignment.js`, `lookbooks.js`) provides materials management, BOM/recipe pricing, consignment tracking, and catalog generation. Three modules, two Cloud Functions.
+
+#### Data Model Relationships
+
+```
+admin/config/makerSettings
+  └── craftProfile → drives seedMaterials() + makerAttributes visibility
+
+admin/materials/{materialId}
+  └── unitCost snapshot denormalized into recipe lineItems
+  └── unitCost change triggers costsDirty on all referencing recipes
+
+admin/recipes/{recipeId}
+  ├── lineItems/{lineItemId} → materialId (keyed objects, not arrays)
+  ├── activePriceTier → propagates to product.priceCents + Etsy listing
+  ├── variants/{variantId} → independent lineItems, labor, costs (shared markups)
+  └── productId → links to public/products/{pid}
+
+public/products/{pid}
+  ├── priceCents ← set by setActivePriceTier()
+  ├── etsyListingId → triggers etsyUpdateListingPrice Cloud Function
+  └── makerAttributes → jewelry-specific metadata (conditional on craftProfile)
+
+admin/consignments/{placementId}
+  └── lineItems/{lineItemId} → productId, qtySold, qtyReturned, onHand
+
+admin/lookbooks/{documentId}
+  └── generatedUrl → Firebase Storage PDF
+```
+
+#### Key Architectural Patterns
+
+- **costsDirty flag:** Set when a material's `unitCost` changes (client-side scan of recipes referencing that material). Cleared on `recalculateRecipe()`. Lazy pattern — costs recalc when recipe is opened, not eagerly.
+- **activePriceTier propagation:** `setActivePriceTier(recipeId, tier)` does an atomic multi-path write: `recipe.activePriceTier` + `product.priceCents` + fire-and-forget Etsy sync. Etsy failure never blocks local update.
+- **Calculation engine:** `calculateRecipe()` is pure math — no Firebase calls. Takes lineItems, labor, markups → returns all costs and tier prices. `calculateAllVariants()` runs it per-variant with shared markups.
+- **Variant recipes:** `isVariantEnabled` flag (default false). Up to 3 variants with independent lineItems/labor/otherCost but shared markups at recipe level. First variant's price used for `product.priceCents` propagation.
+- **Pre-seed system:** Craft profile selection triggers `seedMaterials()` — creates draft materials with category structure and default markups. `materialsSeeded` flag prevents re-seeding.
+- **lineItems as objects:** Keyed by lineItemId, not arrays — RTDB compatibility requirement.
+- **CSV Import:** Client-side parsing (PapaParse for CSV, SheetJS for XLSX). 3-step wizard: upload → column mapping with auto-detection → preview & confirm. All imports land as `status: draft` with `importedFrom: 'csv'` tag. Import history logged to `admin/importLog`.
+- **Consignment math:** Commission rate is per-placement (flat %). `onHand = qty - qtySold - qtyReturned`. Bounds-checked on sale/return. Running totals recalculated on each transaction.
+- **Look book PDFs:** Server-side Puppeteer rendering via `generateLookbook` Cloud Function. Stored in Firebase Storage as public files for sharing. Two layouts: line sheet (compact table) and look book (editorial photos).
+
+#### Product Model Extension (makerAttributes)
+
+Optional `makerAttributes` object on products, shown only when `craftProfile === 'jewelry'`:
+```
+metalType, metalPurity, stoneType, stoneCut, finish,
+length, dimensions, weight, ringSize,
+isOneOfAKind, isCustomizable, productionTime, edition
+```
+Collapsible "Maker Details" section in product edit form. Async `MastDB.config.makerSettings()` check determines visibility.
+
+#### Firebase Rules
+
+All maker paths have explicit admin-only read/write rules in `platform.rules.json`:
+- `admin/materials/` — admin-only + validation (materialId, name, unitOfMeasure, unitCost, status required)
+- `admin/recipes/` — admin-only + validation (recipeId, productId, status required)
+- `admin/consignments/` — admin-only
+- `admin/lookbooks/` — admin-only
 
 ### Events Pages (Public)
 
