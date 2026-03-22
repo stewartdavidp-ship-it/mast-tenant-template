@@ -12078,6 +12078,10 @@ function wizardNext(fromStep) {
   if (fromStep === 2) {
     var name = document.getElementById('wizardBizName').value.trim();
     if (!name) { showToast('Please enter your business name.', true); return; }
+    // Skip step 3 (feature selection) — features are determined by module selection in admin
+    // Write minimal nav config and go straight to step 4
+    wizardSaveMinimalFeatures();
+    return;
   }
   showWizardStep(next);
   saveWizardProgress(next);
@@ -12343,6 +12347,84 @@ function wizardPreCheckFeatures(analysis) {
       card.style.background = 'var(--cream-dark)';
     }
   });
+}
+
+// Wizard: skip feature selection, write nav config based on current subscription modules
+async function wizardSaveMinimalFeatures() {
+  try {
+    var sub = getTenantSubscription();
+    var mods = sub.modules || [];
+    var hasSell = mods.indexOf('sell') >= 0;
+    var hasShip = mods.indexOf('ship') >= 0;
+    var hasMarket = mods.indexOf('market') >= 0;
+    var hasShow = mods.indexOf('show') >= 0 || mods.indexOf('show-light') >= 0;
+
+    // Features derive from active modules
+    var features = {
+      shop: hasSell,
+      blog: hasMarket,
+      events: hasShow,
+      members: false,
+      newsletter: hasMarket,
+      commissions: hasSell,
+      stories: false,
+      social: hasMarket,
+      wholesale: hasSell
+    };
+    await MastDB._ref('webPresence/config/features').set(features);
+
+    // Nav sections from features
+    var navSections = {
+      about: { enabled: true, order: 1 },
+      contact: { enabled: true, order: 9 }
+    };
+    if (features.shop) {
+      navSections.shop = { enabled: true, order: 2 };
+      navSections.orders = { enabled: true, order: 3 };
+    }
+    if (features.commissions) navSections.commission = { enabled: true, order: 4 };
+    if (features.wholesale) navSections.wholesale = { enabled: true, order: 5 };
+    if (features.events) navSections.schedule = { enabled: true, order: 6 };
+    if (features.blog) navSections.blog = { enabled: true, order: 7 };
+    if (features.newsletter) navSections.newsletter = { enabled: true, order: 8 };
+    await MastDB._ref('public/config/nav/sections').set(navSections);
+
+    // Write logoUrl
+    var logoUrl = document.getElementById('wizardLogoUrl');
+    if (logoUrl && logoUrl.value) {
+      await MastDB._ref('public/config/nav/logoUrl').set(logoUrl.value);
+    }
+
+    wizardProgress.featuresConfigured = true;
+
+    // Create import job if site had importable content
+    if (window._wizardCrawlManifest) {
+      var ct = window._wizardCrawlManifest.contentTypes || {};
+      var hasContent = (ct.products && ct.products.found) || (ct.blog && ct.blog.found) || (ct.events && ct.events.found);
+      if (hasContent) {
+        try {
+          var jobData = {
+            id: MastDB._ref('webPresence/importJobs').push().key,
+            url: window._wizardAnalyzedUrl,
+            tenantId: MastDB.tenantId(),
+            status: 'pending',
+            createdAt: new Date().toISOString(),
+            claimedAt: null, completedAt: null, error: null,
+            crawlManifest: window._wizardCrawlManifest,
+            discovered: null, imported: null
+          };
+          await MastDB._ref('webPresence/importJobs/' + jobData.id).set(jobData);
+        } catch (e) {
+          console.error('Failed to create import job:', e);
+        }
+      }
+    }
+
+    saveWizardProgress(4, { featuresConfigured: true });
+    showWizardStep(4);
+  } catch (err) {
+    showToast('Error saving: ' + err.message, true);
+  }
 }
 
 // Step 3: Save features and advance to step 4
