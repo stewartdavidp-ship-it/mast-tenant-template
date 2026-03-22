@@ -768,6 +768,7 @@
     html += '<span style="font-size:0.82rem;color:var(--warm-gray);">' + activeCount + ' active of ' + totalCount + ' total</span>';
     html += '</div>';
     html += '<div style="display:flex;gap:8px;">';
+    html += '<button class="btn btn-secondary btn-small" onclick="makerResetOnboardingUI()" title="Reset craft profile and re-seed defaults">Reset Defaults</button>';
     html += '<button class="btn btn-secondary btn-small" onclick="makerOpenImport(\'materials\')">Import CSV</button>';
     html += '<button class="btn btn-primary" onclick="makerOpenAddMaterial()">+ New Material</button>';
     html += '</div>';
@@ -1867,6 +1868,16 @@
   window.makerSaveSettings = saveMakerSettings;
   window.makerSeedMaterials = seedMaterials;
   window.makerResetOnboarding = resetOnboarding;
+  window.makerResetOnboardingUI = async function() {
+    if (!confirm('This will clear your craft profile and remove all seeded draft materials. Continue?')) return;
+    try {
+      await resetOnboarding();
+      renderMaterials();
+      checkMakerOnboarding();
+    } catch (err) {
+      MastAdmin.showToast('Error resetting: ' + err.message, true);
+    }
+  };
 
   // Data access (for console inspection)
   window.makerGetMaterials = function() { return materialsData; };
