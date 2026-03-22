@@ -126,6 +126,7 @@
    * Detect if a nav section matches the current page.
    */
   function isActivePage(sectionHref) {
+    if (!sectionHref) return false;
     var path = window.location.pathname;
     // Normalize: strip leading base path segments, compare filenames
     var hrefFile = sectionHref.replace(/^(\.\.\/)+/, '').replace(/\/$/, '/index.html');
@@ -177,6 +178,7 @@
     html += '<li><a href="' + homeHref + '" class="' + homeActive + '">Home</a></li>';
     for (var i = 0; i < topLevel.length; i++) {
       var s = topLevel[i];
+      if (!s.href || !s.label) continue; // Skip sections without href/label (e.g. newsletter, contact)
       var href = basePath + s.href;
       var classes = [];
       if (s.highlight) classes.push('nav-shop');
@@ -200,6 +202,7 @@
       }
       for (var j = 0; j < topLevel.length; j++) {
         var ms = topLevel[j];
+        if (!ms.href || !ms.label) continue;
         var mhref = basePath + ms.href;
         var mclasses = [];
         if (ms.highlight) mclasses.push('btn-shop');
