@@ -10288,9 +10288,8 @@ function selectSubscriptionTier(tierId) {
 }
 
 function initiateUpgrade(tierId) {
-  // Select the tier first so module selection UI updates
+  // Select the tier to update the module selection UI, then show upgrade confirmation
   selectSubscriptionTier(tierId);
-  // Then trigger the upgrade confirmation with current modules
   var sub = getTenantSubscription();
   var currentModules = (sub.modules || []).filter(function(id) { return MODULE_REGISTRY[id] && MODULE_REGISTRY[id].purchasable; });
   showUpgradeConfirmation(tierId, currentModules);
