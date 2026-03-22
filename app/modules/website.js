@@ -1591,7 +1591,7 @@
 
   function isProductCategorySection(sectionId) {
     // Category IDs are dynamic — anything not in CORE_SECTIONS is a product category
-    var coreIds = ['hero', 'about', 'gallery', 'schedule', 'shop'];
+    var coreIds = ['hero', 'about', 'our-story', 'gallery', 'schedule', 'shop'];
     return coreIds.indexOf(sectionId) === -1;
   }
 

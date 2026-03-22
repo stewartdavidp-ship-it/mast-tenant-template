@@ -5326,6 +5326,21 @@
               <strong style="font-size:0.9rem;">Commissions</strong>
               <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Accept custom order requests</p>
             </div>
+            <div class="wizard-feature-card" data-feature="stories" onclick="wizardToggleFeature(this)" style="border:2px solid var(--cream-dark);border-radius:10px;padding:16px;cursor:pointer;text-align:center;background:var(--cream);transition:border-color 0.2s,background 0.2s;">
+              <div style="font-size:1.5rem;margin-bottom:6px;">&#128248;</div>
+              <strong style="font-size:0.9rem;">Stories</strong>
+              <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Short-form visual content for your audience</p>
+            </div>
+            <div class="wizard-feature-card" data-feature="social" onclick="wizardToggleFeature(this)" style="border:2px solid var(--cream-dark);border-radius:10px;padding:16px;cursor:pointer;text-align:center;background:var(--cream);transition:border-color 0.2s,background 0.2s;">
+              <div style="font-size:1.5rem;margin-bottom:6px;">&#128227;</div>
+              <strong style="font-size:0.9rem;">Social Media</strong>
+              <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Create and manage social posts</p>
+            </div>
+            <div class="wizard-feature-card" data-feature="wholesale" onclick="wizardToggleFeature(this)" style="border:2px solid var(--cream-dark);border-radius:10px;padding:16px;cursor:pointer;text-align:center;background:var(--cream);transition:border-color 0.2s,background 0.2s;">
+              <div style="font-size:1.5rem;margin-bottom:6px;">&#128230;</div>
+              <strong style="font-size:0.9rem;">Wholesale</strong>
+              <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Wholesale catalog and bulk ordering</p>
+            </div>
           </div>
 
           <div style="display:flex;justify-content:space-between;">
@@ -8663,6 +8678,7 @@ let CATEGORIES = [];
 const CORE_SECTIONS = [
   { id: 'hero', label: 'Hero', description: 'Homepage banner video & poster image' },
   { id: 'about', label: 'About', description: 'About page images' },
+  { id: 'our-story', label: 'Our Story', description: 'Homepage story section image' },
   { id: 'gallery', label: 'Gallery', description: 'Homepage gallery grid' },
   { id: 'schedule', label: 'Schedule', description: 'Schedule page images' },
   { id: 'shop', label: 'Shop', description: 'Shop page featured images' }
@@ -12314,7 +12330,9 @@ function wizardPreCheckFeatures(analysis) {
     // Commissions: detected in content sections
     if (f === 'commissions' && /custom|commission|bespoke|made.to.order/.test(headings)) check = true;
     // Members: detected in content sections
-    if (f === 'members' && /member|wholesale|vip/.test(headings)) check = true;
+    if (f === 'members' && /member|vip/.test(headings)) check = true;
+    // Wholesale: detected in content sections
+    if (f === 'wholesale' && /wholesale|bulk.order|trade/.test(headings)) check = true;
     if (check) {
       card.dataset.selected = 'true';
       card.style.borderColor = 'var(--primary)';
@@ -12325,7 +12343,7 @@ function wizardPreCheckFeatures(analysis) {
 
 // Step 3: Save features and advance to step 4
 async function wizardSaveFeatures() {
-  var features = { shop: false, blog: false, events: false, members: false, newsletter: false, commissions: false };
+  var features = { shop: false, blog: false, events: false, members: false, newsletter: false, commissions: false, stories: false, social: false, wholesale: false };
   document.querySelectorAll('#wizardFeatureCards .wizard-feature-card').forEach(function(card) {
     if (card.dataset.selected === 'true') {
       features[card.dataset.feature] = true;
@@ -12343,7 +12361,8 @@ async function wizardSaveFeatures() {
       commission: { enabled: features.commissions, order: 3 },
       schedule: { enabled: features.events, order: 5 },
       newsletter: { enabled: features.newsletter, order: 7 },
-      contact: { enabled: true, order: 8 }
+      contact: { enabled: true, order: 8 },
+      wholesale: { enabled: features.wholesale, order: 9 }
     };
     await MastDB._ref('public/config/nav/sections').set(navSections);
 

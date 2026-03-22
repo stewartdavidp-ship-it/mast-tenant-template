@@ -1297,7 +1297,7 @@ setTimeout(function() { document.body.style.opacity = '1'; }, 3000);
   <h3 data-content="newsletter-heading">Stay in the Loop</h3>
   <p data-content="newsletter-subheadline">Events, new collections, classes &amp; studio updates — no spam, ever.</p>
   <div class="newsletter-form" id="nlSignupForm">
-    <input type="text" id="nlSignupName" placeholder="Your name" style="max-width:160px;" />
+    <input type="text" id="nlSignupName" placeholder="Your name" style="max-width:200px;" />
     <input type="email" id="nlSignupEmail" placeholder="Your email address" />
     <button type="button" onclick="nlSubmitSignup()" data-content="newsletter-button">Subscribe</button>
   </div>
@@ -1490,7 +1490,7 @@ window.TENANT_READY.then(function() {
     }
 
     // About preview: update image
-    var aboutItems = allItems.filter(function(i) { return i.section === 'about' && i.visible !== false; });
+    var aboutItems = allItems.filter(function(i) { return (i.section === 'our-story' || i.section === 'about') && i.visible !== false; });
     aboutItems.sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
     if (aboutItems.length > 0) {
       var aboutImg = document.querySelector('.about-image img');

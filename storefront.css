@@ -415,13 +415,13 @@ section { padding: 7rem 3rem; }
 
 .newsletter-form {
   display: flex;
-  max-width: 460px;
+  max-width: 520px;
   margin: 0 auto;
 }
 
 .newsletter-form input {
   flex: 1;
-  padding: 0.85rem 1.2rem;
+  padding: 0.9rem 1.2rem;
   border: 1px solid rgba(255,255,255,0.12);
   background: rgba(255,255,255,0.04);
   color: var(--on-dark);
@@ -435,7 +435,7 @@ section { padding: 7rem 3rem; }
 .newsletter-form input::placeholder { color: rgba(255,255,255,0.3); }
 
 .newsletter-form button {
-  padding: 0.85rem 1.6rem;
+  padding: 0.9rem 1.6rem;
   background: var(--amber);
   color: var(--on-dark);
   border: 1px solid var(--amber);
