@@ -9607,10 +9607,24 @@ auth.onAuthStateChanged(async function(user) {
     var coinMatch = location.hash.match(/coins=(\d+)/);
     var coinCount = coinMatch ? coinMatch[1] : '';
     showToast('Coins purchased successfully!' + (coinCount ? ' ' + coinCount + ' coins added.' : ''));
-    // Clean up URL
     location.hash = '#settings';
   } else if (location.hash.indexOf('coinPurchase=cancelled') >= 0) {
     location.hash = '#settings';
+  }
+
+  // Check for upgrade return from Stripe
+  var urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('upgraded') === 'true') {
+    var upgradedPlan = urlParams.get('plan') || '';
+    var tc = upgradedPlan && TIER_CONFIG[upgradedPlan] ? TIER_CONFIG[upgradedPlan] : null;
+    showToast('Upgraded to ' + (tc ? tc.name : upgradedPlan) + '! Your new plan is active.');
+    // Reload subscription to reflect new tier
+    loadTenantSubscription().then(function() { applySidebarGating(); applySettingsGating(); });
+    // Clean URL
+    window.history.replaceState({}, '', window.location.pathname);
+  } else if (urlParams.get('canceled') === 'true') {
+    showToast('Upgrade cancelled.', true);
+    window.history.replaceState({}, '', window.location.pathname);
   }
 
   // Load configChecklist for progressive feature gating
