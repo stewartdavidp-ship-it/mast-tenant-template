@@ -109,15 +109,16 @@
   // Sections that belong to content context (hidden on shop pages)
   var CONTENT_CONTEXT_SECTIONS = ['about', 'blog', 'schedule'];
   // Shop is always shown in both contexts
-  var SHOP_CONTEXT_PAGES = ['shop.html', 'orders.html', 'wholesale.html', 'commission.html'];
+  // Shop context page basenames (without .html — Firebase Hosting uses clean URLs)
+  var SHOP_CONTEXT_PAGES = ['shop', 'orders', 'wholesale', 'commission'];
 
   /**
    * Detect if current page is in shop context.
    */
   function isShopContext() {
-    var path = window.location.pathname.toLowerCase();
+    var path = window.location.pathname.toLowerCase().replace(/\.html$/, '');
     for (var i = 0; i < SHOP_CONTEXT_PAGES.length; i++) {
-      if (path.endsWith('/' + SHOP_CONTEXT_PAGES[i]) || path.endsWith(SHOP_CONTEXT_PAGES[i])) return true;
+      if (path === '/' + SHOP_CONTEXT_PAGES[i] || path.endsWith('/' + SHOP_CONTEXT_PAGES[i])) return true;
     }
     return false;
   }
@@ -128,12 +129,12 @@
   function isActivePage(sectionHref) {
     if (!sectionHref) return false;
     var path = window.location.pathname;
-    // Normalize: strip leading base path segments, compare filenames
-    var hrefFile = sectionHref.replace(/^(\.\.\/)+/, '').replace(/\/$/, '/index.html');
-    var pathFile = path.replace(/^\//, '').replace(/\/$/, '/index.html');
-    if (!pathFile) pathFile = 'index.html';
-    // Exact match or path ends with the href
-    return pathFile === hrefFile || path.endsWith('/' + hrefFile);
+    // Normalize: strip .html and base path for comparison (Firebase Hosting uses clean URLs)
+    var hrefBase = sectionHref.replace(/^(\.\.\/)+/, '').replace(/\.html$/, '').replace(/\/$/, '');
+    var pathBase = path.replace(/^\//, '').replace(/\.html$/, '').replace(/\/$/, '');
+    if (!pathBase) pathBase = 'index';
+    if (!hrefBase) hrefBase = 'index';
+    return pathBase === hrefBase || pathBase.endsWith('/' + hrefBase);
   }
 
   function buildNav(sections, config) {
