@@ -10219,18 +10219,25 @@ function renderSubscriptionSettings() {
     h += '<div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:16px;">';
 
     // Artist tier cards
+    var activeTier = sub.tier || 'publish';
     TIER_ORDER.forEach(function(tierId) {
       var tc = TIER_CONFIG[tierId];
-      var isActive = tierId === currentTier;
-      var borderColor = isActive ? 'var(--amber)' : 'var(--cream-dark)';
-      var bg = isActive ? 'var(--cream)' : 'var(--cream-dark)';
-      var shadow = isActive ? '0 2px 8px rgba(196, 133, 60, 0.2)' : 'none';
+      var isCurrent = tierId === activeTier;
+      var isSelected = tierId === currentTier;
+      var borderColor = isSelected ? 'var(--amber)' : 'var(--cream-dark)';
+      var bg = isSelected ? 'var(--cream)' : 'var(--cream-dark)';
+      var shadow = isSelected ? '0 2px 8px rgba(196, 133, 60, 0.2)' : 'none';
       h += '<div onclick="selectSubscriptionTier(\'' + tierId + '\')" style="' +
         'background:' + bg + ';border:2px solid ' + borderColor + ';border-radius:12px;padding:20px;cursor:pointer;' +
-        'box-shadow:' + shadow + ';transition:all 0.2s;">';
-      h += '<div style="font-weight:700;font-family:\'Cormorant Garamond\', serif;font-size:1.1rem;color:var(--charcoal);">' + esc(tc.name) + '</div>';
+        'box-shadow:' + shadow + ';transition:all 0.2s;display:flex;flex-direction:column;">';
+      h += '<div style="font-weight:700;font-family:\'Cormorant Garamond\', serif;font-size:1.1rem;color:var(--text, var(--charcoal));">' + esc(tc.name) + '</div>';
       h += '<div style="font-size:0.9rem;color:var(--amber);font-weight:600;">' + (tc.price === 0 ? 'Free' : '$' + tc.price + '/mo') + '</div>';
-      h += '<div style="font-size:0.8rem;color:var(--warm-gray);margin-top:4px;">' + esc(tc.description) + '</div>';
+      h += '<div style="font-size:0.8rem;color:var(--warm-gray);margin-top:4px;flex:1;">' + esc(tc.description) + '</div>';
+      if (isCurrent) {
+        h += '<span class="status-badge" style="background:var(--teal);color:white;margin-top:12px;display:inline-block;align-self:flex-start;">Current Plan</span>';
+      } else if (TIER_ORDER.indexOf(tierId) > TIER_ORDER.indexOf(activeTier)) {
+        h += '<button class="btn btn-primary btn-small" style="margin-top:12px;align-self:flex-start;" onclick="event.stopPropagation();initiateUpgrade(\'' + tierId + '\');">Upgrade</button>';
+      }
       h += '</div>';
     });
 
@@ -10278,6 +10285,15 @@ function renderSubscriptionSettings() {
 function selectSubscriptionTier(tierId) {
   _subscriptionSettingsTier = tierId;
   renderSubscriptionSettings();
+}
+
+function initiateUpgrade(tierId) {
+  // Select the tier first so module selection UI updates
+  selectSubscriptionTier(tierId);
+  // Then trigger the upgrade confirmation with current modules
+  var sub = getTenantSubscription();
+  var currentModules = (sub.modules || []).filter(function(id) { return MODULE_REGISTRY[id] && MODULE_REGISTRY[id].purchasable; });
+  showUpgradeConfirmation(tierId, currentModules);
 }
 
 // --- Billing Info Section ---
