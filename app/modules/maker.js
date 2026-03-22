@@ -784,7 +784,7 @@
       html += '<button class="order-filter-pill"' + (materialsCategoryFilter === 'all' ? ' style="background:var(--charcoal);color:white;border-color:var(--charcoal);"' : '') + ' onclick="makerFilterMaterialsCategory(\'all\')">All Categories</button>';
       categories.forEach(function(cat) {
         var active = materialsCategoryFilter === cat ? ' style="background:var(--charcoal);color:white;border-color:var(--charcoal);"' : '';
-        html += '<button class="order-filter-pill"' + active + ' onclick="makerFilterMaterialsCategory(\'' + esc(cat).replace(/'/g, "\\'") + '\')">' + esc(cat) + '</button>';
+        html += '<button class="order-filter-pill"' + active + ' data-cat="' + esc(cat) + '" onclick="makerFilterMaterialsCategory(this.dataset.cat)">' + esc(cat) + '</button>';
       });
       html += '</div>';
     }
@@ -1188,7 +1188,7 @@
         html += '<td>—</td>';
         html += '<td style="text-align:right;font-family:monospace;">$' + (p.priceCents ? (p.priceCents / 100).toFixed(2) : (p.price || 0).toFixed(2)) + '</td>';
         html += '<td style="text-align:right;">';
-        html += '<button class="btn btn-outline btn-small" onclick="makerCreateRecipeForProduct(\'' + esc(pid) + '\', \'' + esc(p.name || '').replace(/'/g, "\\'") + '\')">+ Add Recipe</button>';
+        html += '<button class="btn btn-outline btn-small" data-pid="' + esc(pid) + '" data-name="' + esc(p.name || '') + '" onclick="makerCreateRecipeForProduct(this.dataset.pid, this.dataset.name)">+ Add Recipe</button>';
         html += '</td>';
       }
 
