@@ -12887,7 +12887,31 @@ function renderGuidedNextSteps() {
   });
 
   if (todo.length > 3) {
-    h += '<div style="text-align:center;padding-top:8px;font-size:0.82rem;color:var(--warm-gray, #6B6560);">+ ' + (todo.length - 3) + ' more step' + (todo.length - 3 !== 1 ? 's' : '') + '</div>';
+    // Render remaining steps hidden, with a clickable toggle to expand
+    var remaining = todo.slice(3);
+    h += '<div id="nextStepsExpanded" style="display:none;">';
+    remaining.forEach(function(step) {
+      var clickAction = '';
+      if (step.action === 'open-public-site') {
+        var tid = (MastDB && MastDB.tenantId ? MastDB.tenantId() : '') || (window.TENANT_CONFIG && window.TENANT_CONFIG.tenantId) || '';
+        var pUrl = tid ? 'https://mast-' + tid + '.web.app' : '#';
+        clickAction = 'window.open(\'' + pUrl + '\', \'_blank\')';
+      } else if (step.route && step.subView) {
+        clickAction = 'navigateTo(\'' + step.route + '\'); setTimeout(function(){ switchSettingsSubView(\'' + step.subView + '\'); }, 50);';
+      } else if (step.route) {
+        clickAction = 'navigateTo(\'' + step.route + '\')';
+      }
+      h += '<div onclick="' + clickAction + '" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;cursor:pointer;transition:background 0.15s;margin-bottom:4px;" onmouseover="this.style.background=\'var(--hover-bg, var(--cream-dark, #F0E8DB))\'" onmouseout="this.style.background=\'transparent\'">';
+      h += '<span style="font-size:1.4rem;flex-shrink:0;">' + step.icon + '</span>';
+      h += '<div style="flex:1;min-width:0;">';
+      h += '<div style="font-size:0.95rem;font-weight:600;color:var(--text, var(--charcoal, #1a1a1a));">' + esc(step.title) + '</div>';
+      h += '<div style="font-size:0.82rem;color:var(--warm-gray, #6B6560);">' + esc(step.desc) + '</div>';
+      h += '</div>';
+      h += '<span style="color:var(--amber, #C4853C);font-size:1.1rem;flex-shrink:0;">&#8594;</span>';
+      h += '</div>';
+    });
+    h += '</div>';
+    h += '<div id="nextStepsToggle" onclick="var exp=document.getElementById(\'nextStepsExpanded\');var tog=document.getElementById(\'nextStepsToggle\');if(exp.style.display===\'none\'){exp.style.display=\'block\';tog.textContent=\'Show less\';}else{exp.style.display=\'none\';tog.textContent=\'+ ' + remaining.length + ' more step' + (remaining.length !== 1 ? 's' : '') + '\';}" style="text-align:center;padding-top:8px;font-size:0.82rem;color:var(--teal, #2A7C6F);cursor:pointer;">+ ' + remaining.length + ' more step' + (remaining.length !== 1 ? 's' : '') + '</div>';
   }
 
   h += '</div>';
