@@ -181,6 +181,8 @@ nav.scrolled .nav-logo img {
 
 .nav-links a:hover { color: var(--amber-light); }
 .nav-links a:hover::after { width: 100%; }
+.nav-links a.nav-active { color: var(--amber-light); }
+.nav-links a.nav-active::after { width: 100%; }
 
 .nav-shop {
   padding: 0.5rem 1.4rem !important;
@@ -601,6 +603,7 @@ footer {
 }
 
 .nav-mobile-menu a:hover { color: var(--amber); }
+.nav-mobile-menu a.nav-active { color: var(--amber); }
 
 .nav-mobile-menu .btn-shop {
   background: var(--amber);

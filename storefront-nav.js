@@ -104,6 +104,37 @@
   /**
    * Build the nav and mobile menu HTML, insert into DOM, wire up behaviors.
    */
+  // Sections that belong under Shop context (shown only on shop pages)
+  var SHOP_CONTEXT_SECTIONS = ['commission', 'orders', 'wholesale'];
+  // Sections that belong to content context (hidden on shop pages)
+  var CONTENT_CONTEXT_SECTIONS = ['about', 'blog', 'schedule'];
+  // Shop is always shown in both contexts
+  var SHOP_CONTEXT_PAGES = ['shop.html', 'orders.html', 'wholesale.html', 'commission.html'];
+
+  /**
+   * Detect if current page is in shop context.
+   */
+  function isShopContext() {
+    var path = window.location.pathname.toLowerCase();
+    for (var i = 0; i < SHOP_CONTEXT_PAGES.length; i++) {
+      if (path.endsWith('/' + SHOP_CONTEXT_PAGES[i]) || path.endsWith(SHOP_CONTEXT_PAGES[i])) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Detect if a nav section matches the current page.
+   */
+  function isActivePage(sectionHref) {
+    var path = window.location.pathname;
+    // Normalize: strip leading base path segments, compare filenames
+    var hrefFile = sectionHref.replace(/^(\.\.\/)+/, '').replace(/\/$/, '/index.html');
+    var pathFile = path.replace(/^\//, '').replace(/\/$/, '/index.html');
+    if (!pathFile) pathFile = 'index.html';
+    // Exact match or path ends with the href
+    return pathFile === hrefFile || path.endsWith('/' + hrefFile);
+  }
+
   function buildNav(sections, config) {
     var nav = document.getElementById('mainNav');
     var mobileMenu = document.getElementById('mobileMenu');
@@ -122,7 +153,20 @@
     }
 
     var sorted = toSortedArray(sections);
+    var inShopContext = isShopContext();
+    // Context-aware filtering: shop pages show shop sections, content pages show content sections
+    var topLevel = sorted.filter(function(s) {
+      var key = s.key || '';
+      if (inShopContext) {
+        // In shop context: hide content-only sections (about, blog, schedule)
+        return CONTENT_CONTEXT_SECTIONS.indexOf(key) === -1;
+      } else {
+        // In content context: hide shop-only sections (commission, orders, wholesale)
+        return SHOP_CONTEXT_SECTIONS.indexOf(key) === -1;
+      }
+    });
     var homeHref = homepage ? '#' : (basePath + 'index.html');
+    var homeActive = homepage ? ' nav-active' : '';
 
     // ── Desktop nav ──
     var html = '';
@@ -130,11 +174,14 @@
     html += '<img src="' + esc(logoUrl) + '" data-tenant-alt="brand" alt="' + esc(brandName) + '">';
     html += '</a>';
     html += '<ul class="nav-links">';
-    html += '<li><a href="' + homeHref + '">Home</a></li>';
-    for (var i = 0; i < sorted.length; i++) {
-      var s = sorted[i];
+    html += '<li><a href="' + homeHref + '" class="' + homeActive + '">Home</a></li>';
+    for (var i = 0; i < topLevel.length; i++) {
+      var s = topLevel[i];
       var href = basePath + s.href;
-      var cls = s.highlight ? ' class="nav-shop"' : '';
+      var classes = [];
+      if (s.highlight) classes.push('nav-shop');
+      if (isActivePage(s.href)) classes.push('nav-active');
+      var cls = classes.length > 0 ? ' class="' + classes.join(' ') + '"' : '';
       html += '<li><a href="' + href + '"' + cls + '>' + esc(s.label) + '</a></li>';
     }
     if (showSignIn) {
@@ -147,14 +194,17 @@
     // ── Mobile menu ──
     if (mobileMenu) {
       var mhtml = '';
-      mhtml += '<a href="' + homeHref + '" onclick="closeMobileMenu()">Home</a>';
+      mhtml += '<a href="' + homeHref + '"' + (homeActive ? ' class="nav-active"' : '') + ' onclick="closeMobileMenu()">Home</a>';
       if (showSignIn) {
         mhtml += '<a href="#" onclick="event.preventDefault(); siteSignIn(); closeMobileMenu();">Sign In</a>';
       }
-      for (var j = 0; j < sorted.length; j++) {
-        var ms = sorted[j];
+      for (var j = 0; j < topLevel.length; j++) {
+        var ms = topLevel[j];
         var mhref = basePath + ms.href;
-        var mcls = ms.highlight ? ' class="btn-shop"' : '';
+        var mclasses = [];
+        if (ms.highlight) mclasses.push('btn-shop');
+        if (isActivePage(ms.href)) mclasses.push('nav-active');
+        var mcls = mclasses.length > 0 ? ' class="' + mclasses.join(' ') + '"' : '';
         mhtml += '<a href="' + mhref + '"' + mcls + ' onclick="closeMobileMenu()">' + esc(ms.label) + '</a>';
       }
       mobileMenu.innerHTML = mhtml;
