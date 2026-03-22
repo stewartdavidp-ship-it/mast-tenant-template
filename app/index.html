@@ -14204,6 +14204,37 @@ function renderInventoryOverview() {
 
 var productViewOrigin = 'products'; // 'products' or 'inventory'
 
+// Maker Details helpers (jewelry product attributes)
+function toggleMakerDetails() {
+  var body = document.getElementById('pdMakerDetailsBody');
+  var toggle = document.getElementById('pdMakerToggle');
+  if (!body) return;
+  if (body.style.display === 'none') {
+    body.style.display = '';
+    if (toggle) toggle.textContent = '▼';
+  } else {
+    body.style.display = 'none';
+    if (toggle) toggle.textContent = '▶';
+  }
+}
+function toggleMetalPurity() {
+  var metalType = document.getElementById('pdMetalType');
+  var purityGroup = document.getElementById('pdPurityGroup');
+  if (!metalType || !purityGroup) return;
+  purityGroup.style.display = metalType.value ? '' : 'none';
+}
+function checkMakerAttributesVisibility() {
+  MastDB.config.makerSettings().once('value').then(function(snap) {
+    var settings = snap.val();
+    if (settings && settings.craftProfile === 'jewelry') {
+      var editSection = document.getElementById('pdMakerAttributesSection');
+      if (editSection) editSection.style.display = '';
+      var readSection = document.getElementById('pdMakerAttributesReadOnly');
+      if (readSection) readSection.style.display = '';
+    }
+  });
+}
+
 function viewProduct(pid) {
   productViewOrigin = 'products';
   selectedProductPid = pid;
@@ -14214,6 +14245,7 @@ function viewProduct(pid) {
   var detailEl = document.getElementById('productDetailView');
   detailEl.style.display = '';
   renderProductDetail(pid);
+  checkMakerAttributesVisibility();
 }
 
 function viewProductFromInventory(pid) {
@@ -14546,6 +14578,79 @@ function renderProductDetail(pid) {
       '</div>' +
     '</div>';
 
+    // Maker Attributes (jewelry-specific, shown conditionally)
+    var ma = product.makerAttributes || {};
+    prodHtml += '<div id="pdMakerAttributesSection" style="display:none;">' +
+      '<div class="product-detail-section">' +
+        '<div class="product-detail-section-title" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="toggleMakerDetails()">' +
+          '<span>Maker Details</span><span id="pdMakerToggle" style="font-size:0.8rem;color:var(--warm-gray);">▼</span>' +
+        '</div>' +
+        '<div id="pdMakerDetailsBody">' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">' +
+            '<div class="form-group"><label>Metal Type</label>' +
+              '<select id="pdMetalType" onchange="toggleMetalPurity()">' +
+                '<option value="">—</option>' +
+                '<option value="gold"' + (ma.metalType === 'gold' ? ' selected' : '') + '>Gold</option>' +
+                '<option value="silver"' + (ma.metalType === 'silver' ? ' selected' : '') + '>Silver</option>' +
+                '<option value="copper"' + (ma.metalType === 'copper' ? ' selected' : '') + '>Copper</option>' +
+                '<option value="brass"' + (ma.metalType === 'brass' ? ' selected' : '') + '>Brass</option>' +
+                '<option value="bronze"' + (ma.metalType === 'bronze' ? ' selected' : '') + '>Bronze</option>' +
+                '<option value="mixed"' + (ma.metalType === 'mixed' ? ' selected' : '') + '>Mixed</option>' +
+              '</select></div>' +
+            '<div class="form-group" id="pdPurityGroup" style="' + (!ma.metalType || ma.metalType === '' ? 'display:none;' : '') + '"><label>Metal Purity</label>' +
+              '<select id="pdMetalPurity">' +
+                '<option value="">—</option>' +
+                '<option value="24K"' + (ma.metalPurity === '24K' ? ' selected' : '') + '>24K</option>' +
+                '<option value="18K"' + (ma.metalPurity === '18K' ? ' selected' : '') + '>18K</option>' +
+                '<option value="14K"' + (ma.metalPurity === '14K' ? ' selected' : '') + '>14K</option>' +
+                '<option value="10K"' + (ma.metalPurity === '10K' ? ' selected' : '') + '>10K</option>' +
+                '<option value="sterling"' + (ma.metalPurity === 'sterling' ? ' selected' : '') + '>Sterling</option>' +
+                '<option value="gold-filled"' + (ma.metalPurity === 'gold-filled' ? ' selected' : '') + '>Gold-Filled</option>' +
+                '<option value="gold-plated"' + (ma.metalPurity === 'gold-plated' ? ' selected' : '') + '>Gold-Plated</option>' +
+              '</select></div>' +
+          '</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">' +
+            '<div class="form-group"><label>Stone Type</label><input type="text" id="pdStoneType" value="' + esc(ma.stoneType || '') + '" placeholder="e.g. amethyst, turquoise" list="stoneSuggestions">' +
+              '<datalist id="stoneSuggestions"><option value="amethyst"><option value="turquoise"><option value="labradorite"><option value="moonstone"><option value="garnet"><option value="opal"><option value="citrine"><option value="topaz"><option value="peridot"><option value="sapphire"><option value="ruby"><option value="diamond"><option value="pearl"><option value="agate"></datalist></div>' +
+            '<div class="form-group"><label>Stone Cut</label>' +
+              '<select id="pdStoneCut">' +
+                '<option value="">—</option>' +
+                '<option value="faceted"' + (ma.stoneCut === 'faceted' ? ' selected' : '') + '>Faceted</option>' +
+                '<option value="cabochon"' + (ma.stoneCut === 'cabochon' ? ' selected' : '') + '>Cabochon</option>' +
+                '<option value="raw"' + (ma.stoneCut === 'raw' ? ' selected' : '') + '>Raw</option>' +
+                '<option value="drilled"' + (ma.stoneCut === 'drilled' ? ' selected' : '') + '>Drilled</option>' +
+                '<option value="tumbled"' + (ma.stoneCut === 'tumbled' ? ' selected' : '') + '>Tumbled</option>' +
+              '</select></div>' +
+          '</div>' +
+          '<div class="form-group"><label>Finish</label>' +
+            '<select id="pdFinish">' +
+              '<option value="">—</option>' +
+              '<option value="polished"' + (ma.finish === 'polished' ? ' selected' : '') + '>Polished</option>' +
+              '<option value="oxidized"' + (ma.finish === 'oxidized' ? ' selected' : '') + '>Oxidized</option>' +
+              '<option value="brushed"' + (ma.finish === 'brushed' ? ' selected' : '') + '>Brushed</option>' +
+              '<option value="hammered"' + (ma.finish === 'hammered' ? ' selected' : '') + '>Hammered</option>' +
+              '<option value="matte"' + (ma.finish === 'matte' ? ' selected' : '') + '>Matte</option>' +
+            '</select></div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">' +
+            '<div class="form-group"><label>Length</label><input type="text" id="pdMakerLength" value="' + esc(ma.length || '') + '" placeholder="e.g. 18 inches"></div>' +
+            '<div class="form-group"><label>Dimensions</label><input type="text" id="pdMakerDimensions" value="' + esc(ma.dimensions || '') + '" placeholder="e.g. 1.5&quot; x 0.75&quot;"></div>' +
+          '</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">' +
+            '<div class="form-group"><label>Weight</label><input type="text" id="pdMakerWeight" value="' + esc(ma.weight || '') + '" placeholder="e.g. 4.2g"></div>' +
+            '<div class="form-group"><label>Ring Size</label><input type="text" id="pdMakerRingSize" value="' + esc(ma.ringSize || '') + '" placeholder="e.g. size 7 or adjustable"></div>' +
+          '</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">' +
+            '<div class="form-group"><label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="pdOneOfAKind"' + (ma.isOneOfAKind ? ' checked' : '') + '> One of a Kind</label></div>' +
+            '<div class="form-group"><label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="pdCustomizable"' + (ma.isCustomizable ? ' checked' : '') + '> Customizable</label></div>' +
+          '</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">' +
+            '<div class="form-group"><label>Production Time</label><input type="text" id="pdProductionTime" value="' + esc(ma.productionTime || '') + '" placeholder="e.g. 2–3 weeks"></div>' +
+            '<div class="form-group"><label>Edition</label><input type="text" id="pdEdition" value="' + esc(ma.edition || '') + '" placeholder="e.g. Limited Edition — 10 pieces"></div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
     // Price history (read-only display)
     var priceHistory = product.priceHistory || [];
     if (priceHistory.length > 0) {
@@ -14564,6 +14669,27 @@ function renderProductDetail(pid) {
         '<span style="color:var(--warm-gray);">Shipping Category</span><span>' + esc(product.shippingCategory || '—') + '</span>' +
         '<span style="color:var(--warm-gray);">Weight</span><span>' + (product.weightOz ? product.weightOz + ' oz' : '—') + '</span>' +
       '</div></div>';
+
+    // Maker attributes read-only (jewelry only, shown conditionally)
+    var maRo = product.makerAttributes || {};
+    var hasMakerAttrs = maRo.metalType || maRo.stoneType || maRo.finish || maRo.length || maRo.dimensions;
+    if (hasMakerAttrs) {
+      prodHtml += '<div id="pdMakerAttributesReadOnly" style="display:none;">' +
+        '<div class="product-detail-section"><div class="product-detail-section-title">Maker Details</div>' +
+        '<div style="display:grid;grid-template-columns:140px 1fr;gap:8px 16px;font-size:0.88rem;">';
+      if (maRo.metalType) prodHtml += '<span style="color:var(--warm-gray);">Metal</span><span>' + esc((maRo.metalPurity ? maRo.metalPurity + ' ' : '') + maRo.metalType) + '</span>';
+      if (maRo.stoneType) prodHtml += '<span style="color:var(--warm-gray);">Stone</span><span>' + esc(maRo.stoneType + (maRo.stoneCut ? ' (' + maRo.stoneCut + ')' : '')) + '</span>';
+      if (maRo.finish) prodHtml += '<span style="color:var(--warm-gray);">Finish</span><span>' + esc(maRo.finish) + '</span>';
+      if (maRo.length) prodHtml += '<span style="color:var(--warm-gray);">Length</span><span>' + esc(maRo.length) + '</span>';
+      if (maRo.dimensions) prodHtml += '<span style="color:var(--warm-gray);">Dimensions</span><span>' + esc(maRo.dimensions) + '</span>';
+      if (maRo.weight) prodHtml += '<span style="color:var(--warm-gray);">Weight</span><span>' + esc(maRo.weight) + '</span>';
+      if (maRo.ringSize) prodHtml += '<span style="color:var(--warm-gray);">Ring Size</span><span>' + esc(maRo.ringSize) + '</span>';
+      if (maRo.isOneOfAKind) prodHtml += '<span style="color:var(--warm-gray);">One of a Kind</span><span>Yes</span>';
+      if (maRo.isCustomizable) prodHtml += '<span style="color:var(--warm-gray);">Customizable</span><span>Yes</span>';
+      if (maRo.productionTime) prodHtml += '<span style="color:var(--warm-gray);">Production Time</span><span>' + esc(maRo.productionTime) + '</span>';
+      if (maRo.edition) prodHtml += '<span style="color:var(--warm-gray);">Edition</span><span>' + esc(maRo.edition) + '</span>';
+      prodHtml += '</div></div></div>';
+    }
   }
   prodHtml += '</div>';
 
@@ -14796,6 +14922,41 @@ async function saveProduct(pid) {
       }
     }
     productData.costToBuildHistory = costToBuildHistory;
+
+    // Maker attributes (jewelry-specific)
+    var makerSection = document.getElementById('pdMakerAttributesSection');
+    if (makerSection && makerSection.style.display !== 'none') {
+      var makerAttrs = {};
+      var metalTypeEl = document.getElementById('pdMetalType');
+      if (metalTypeEl && metalTypeEl.value) makerAttrs.metalType = metalTypeEl.value;
+      var metalPurityEl = document.getElementById('pdMetalPurity');
+      if (metalPurityEl && metalPurityEl.value) makerAttrs.metalPurity = metalPurityEl.value;
+      var stoneTypeEl = document.getElementById('pdStoneType');
+      if (stoneTypeEl && stoneTypeEl.value.trim()) makerAttrs.stoneType = stoneTypeEl.value.trim();
+      var stoneCutEl = document.getElementById('pdStoneCut');
+      if (stoneCutEl && stoneCutEl.value) makerAttrs.stoneCut = stoneCutEl.value;
+      var finishEl = document.getElementById('pdFinish');
+      if (finishEl && finishEl.value) makerAttrs.finish = finishEl.value;
+      var lengthEl = document.getElementById('pdMakerLength');
+      if (lengthEl && lengthEl.value.trim()) makerAttrs.length = lengthEl.value.trim();
+      var dimsEl = document.getElementById('pdMakerDimensions');
+      if (dimsEl && dimsEl.value.trim()) makerAttrs.dimensions = dimsEl.value.trim();
+      var weightMakerEl = document.getElementById('pdMakerWeight');
+      if (weightMakerEl && weightMakerEl.value.trim()) makerAttrs.weight = weightMakerEl.value.trim();
+      var ringSizeEl = document.getElementById('pdMakerRingSize');
+      if (ringSizeEl && ringSizeEl.value.trim()) makerAttrs.ringSize = ringSizeEl.value.trim();
+      var ookEl = document.getElementById('pdOneOfAKind');
+      if (ookEl) makerAttrs.isOneOfAKind = ookEl.checked;
+      var custEl = document.getElementById('pdCustomizable');
+      if (custEl) makerAttrs.isCustomizable = custEl.checked;
+      var ptEl = document.getElementById('pdProductionTime');
+      if (ptEl && ptEl.value.trim()) makerAttrs.productionTime = ptEl.value.trim();
+      var edEl = document.getElementById('pdEdition');
+      if (edEl && edEl.value.trim()) makerAttrs.edition = edEl.value.trim();
+      if (Object.keys(makerAttrs).length > 0) productData.makerAttributes = makerAttrs;
+    } else if (existing && existing.makerAttributes) {
+      productData.makerAttributes = existing.makerAttributes;
+    }
 
     // Save to Firebase
     await MastDB.products.ref(targetPid).set(productData);
