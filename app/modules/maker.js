@@ -767,7 +767,10 @@
     html += '<h2 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">Materials</h2>';
     html += '<span style="font-size:0.82rem;color:var(--warm-gray);">' + activeCount + ' active of ' + totalCount + ' total</span>';
     html += '</div>';
+    html += '<div style="display:flex;gap:8px;">';
+    html += '<button class="btn btn-secondary btn-small" onclick="makerOpenImport(\'materials\')">Import CSV</button>';
     html += '<button class="btn btn-primary" onclick="makerOpenAddMaterial()">+ New Material</button>';
+    html += '</div>';
     html += '</div>';
 
     // Filter pills
@@ -1133,6 +1136,7 @@
     html += '<h2 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">Pieces</h2>';
     html += '<span style="font-size:0.82rem;color:var(--warm-gray);">' + products.length + ' products, ' + Object.keys(recipeByProduct).length + ' with recipes</span>';
     html += '</div>';
+    html += '<button class="btn btn-secondary btn-small" onclick="makerOpenImport(\'products\')">Import CSV</button>';
     html += '</div>';
 
     if (products.length === 0) {
@@ -1842,6 +1846,465 @@
   window.makerGetRecipes = function() { return recipesData; };
   window.makerGetCraftProfiles = function() { return CRAFT_PROFILES; };
   window.makerGetUomOptions = function() { return UOM_OPTIONS; };
+
+  // ============================================================
+  // CSV Import Wizard
+  // ============================================================
+
+  var importState = null; // { type, step, parsedData, headers, mappings, filename }
+
+  var MATERIALS_FIELDS = [
+    { key: 'name', label: 'Name', required: true, autoMatch: ['name', 'material', 'item', 'description'] },
+    { key: 'unitCost', label: 'Unit Cost', required: true, type: 'number', autoMatch: ['cost', 'unit cost', 'price', 'unit price'] },
+    { key: 'unitOfMeasure', label: 'Unit of Measure', required: true, autoMatch: ['uom', 'unit', 'unit of measure', 'measure'] },
+    { key: 'category', label: 'Category', required: false, autoMatch: ['category', 'type', 'group'] },
+    { key: 'onHandQty', label: 'On Hand Qty', required: false, type: 'number', autoMatch: ['qty', 'quantity', 'on hand', 'stock', 'inventory'] },
+    { key: 'reorderThreshold', label: 'Reorder Threshold', required: false, type: 'number', autoMatch: ['reorder', 'threshold', 'min qty'] },
+    { key: 'notes', label: 'Notes', required: false, autoMatch: ['notes', 'note', 'comments'] }
+  ];
+
+  var PRODUCTS_FIELDS = [
+    { key: 'name', label: 'Name', required: true, autoMatch: ['name', 'product', 'title', 'item'] },
+    { key: 'price', label: 'Price ($)', required: true, type: 'number', autoMatch: ['price', 'retail', 'retail price', 'cost'] },
+    { key: 'category', label: 'Category', required: false, autoMatch: ['category', 'type', 'collection'] },
+    { key: 'description', label: 'Description', required: false, autoMatch: ['description', 'desc', 'details'] },
+    { key: 'pid', label: 'SKU / Piece ID', required: false, autoMatch: ['sku', 'id', 'pid', 'piece id', 'item id'] },
+    { key: 'status', label: 'Status', required: false, autoMatch: ['status', 'state'] }
+  ];
+
+  function openImport(type) {
+    importState = {
+      type: type,
+      step: 1,
+      parsedData: null,
+      headers: [],
+      mappings: {},
+      filename: '',
+      defaultUom: '',
+      defaultCategory: ''
+    };
+    renderImportWizard();
+  }
+
+  function closeImport() {
+    importState = null;
+    if (piecesView === 'list') renderPiecesList();
+    else renderMaterials();
+  }
+
+  function autoDetectMappings(headers, fields) {
+    var mappings = {};
+    fields.forEach(function(field) {
+      for (var i = 0; i < headers.length; i++) {
+        var h = (headers[i] || '').toLowerCase().trim();
+        if (field.autoMatch.indexOf(h) >= 0) {
+          mappings[field.key] = i;
+          break;
+        }
+      }
+    });
+    return mappings;
+  }
+
+  function sanitizeString(s) {
+    if (!s) return '';
+    return String(s).replace(/<[^>]*>/g, '').trim();
+  }
+
+  function parseFileInput(fileInput) {
+    var file = fileInput.files[0];
+    if (!file) return;
+
+    // Validate size
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('File must be under 5MB', 'error');
+      return;
+    }
+
+    importState.filename = file.name;
+
+    var ext = file.name.split('.').pop().toLowerCase();
+    if (['xlsx', 'xls'].indexOf(ext) >= 0) {
+      // SheetJS for Excel
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          var wb = XLSX.read(e.target.result, { type: 'array' });
+          var ws = wb.Sheets[wb.SheetNames[0]];
+          var data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+          if (data.length < 2) { showToast('File has no data rows', 'error'); return; }
+          importState.headers = data[0].map(function(h) { return String(h); });
+          importState.parsedData = data.slice(1).filter(function(row) {
+            return row.some(function(cell) { return cell !== ''; });
+          });
+          if (importState.parsedData.length > 1000) {
+            showToast('Max 1,000 rows allowed. File has ' + importState.parsedData.length, 'error');
+            return;
+          }
+          var fields = importState.type === 'materials' ? MATERIALS_FIELDS : PRODUCTS_FIELDS;
+          importState.mappings = autoDetectMappings(importState.headers, fields);
+          renderImportWizard();
+        } catch (err) {
+          showToast('Failed to parse file: ' + err.message, 'error');
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      // PapaParse for CSV
+      Papa.parse(file, {
+        complete: function(results) {
+          if (!results.data || results.data.length < 2) { showToast('File has no data rows', 'error'); return; }
+          importState.headers = results.data[0].map(function(h) { return String(h); });
+          importState.parsedData = results.data.slice(1).filter(function(row) {
+            return row.some(function(cell) { return cell !== ''; });
+          });
+          if (importState.parsedData.length > 1000) {
+            showToast('Max 1,000 rows allowed. File has ' + importState.parsedData.length, 'error');
+            return;
+          }
+          var fields = importState.type === 'materials' ? MATERIALS_FIELDS : PRODUCTS_FIELDS;
+          importState.mappings = autoDetectMappings(importState.headers, fields);
+          renderImportWizard();
+        },
+        error: function(err) { showToast('Failed to parse CSV: ' + err.message, 'error'); }
+      });
+    }
+  }
+
+  function renderImportWizard() {
+    var tab = importState.type === 'materials' ? document.getElementById('materialsTab') : document.getElementById('piecesTab');
+    if (!tab || !importState) return;
+    var esc = MastAdmin.esc;
+    var step = importState.step;
+    var typeLabel = importState.type === 'materials' ? 'Materials' : 'Products';
+
+    var html = '<button class="detail-back" onclick="makerCloseImport()">← Back to ' + typeLabel + '</button>';
+    html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0 0 8px;">Import ' + typeLabel + '</h3>';
+
+    // Step indicator
+    html += '<div style="display:flex;gap:4px;margin-bottom:20px;">';
+    for (var s = 1; s <= 3; s++) {
+      var bg = s === step ? 'var(--amber)' : (s < step ? 'var(--teal)' : 'var(--cream-dark)');
+      html += '<div style="flex:1;height:4px;border-radius:2px;background:' + bg + ';"></div>';
+    }
+    html += '</div>';
+
+    if (step === 1) html += renderImportStep1(esc);
+    else if (step === 2) html += renderImportStep2(esc);
+    else if (step === 3) html += renderImportStep3(esc);
+
+    tab.innerHTML = html;
+  }
+
+  function renderImportStep1(esc) {
+    var html = '<div style="max-width:640px;">';
+    html += '<div style="font-size:1rem;font-weight:500;margin-bottom:12px;">Step 1: Upload File</div>';
+    html += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">Upload a .csv or .xlsx file. Max 5MB, 1,000 rows.</div>';
+    html += '<div style="border:2px dashed var(--cream-dark);border-radius:8px;padding:30px;text-align:center;">';
+    html += '<input type="file" accept=".csv,.xlsx,.xls" onchange="makerParseFile(this)" style="font-family:\'DM Sans\';font-size:0.9rem;">';
+    html += '</div>';
+
+    if (importState.parsedData) {
+      html += '<div style="margin-top:16px;font-size:0.85rem;color:var(--teal);font-weight:500;">' +
+        esc(importState.filename) + ' — ' + importState.parsedData.length + ' rows, ' + importState.headers.length + ' columns</div>';
+
+      // Preview first 5 rows
+      html += '<div style="overflow-x:auto;margin-top:12px;">';
+      html += '<table style="width:100%;border-collapse:collapse;font-size:0.78rem;">';
+      html += '<thead><tr>';
+      importState.headers.forEach(function(h) {
+        html += '<th style="padding:4px 8px;text-align:left;border-bottom:1px solid var(--cream-dark);font-weight:600;white-space:nowrap;">' + esc(h) + '</th>';
+      });
+      html += '</tr></thead><tbody>';
+      importState.parsedData.slice(0, 5).forEach(function(row) {
+        html += '<tr>';
+        importState.headers.forEach(function(h, i) {
+          html += '<td style="padding:4px 8px;border-bottom:1px solid var(--cream-dark);white-space:nowrap;max-width:150px;overflow:hidden;text-overflow:ellipsis;">' + esc(String(row[i] || '')) + '</td>';
+        });
+        html += '</tr>';
+      });
+      html += '</tbody></table></div>';
+
+      html += '<div style="text-align:right;margin-top:16px;">';
+      html += '<button class="btn btn-primary" onclick="makerImportNextStep()">Continue</button>';
+      html += '</div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function renderImportStep2(esc) {
+    var fields = importState.type === 'materials' ? MATERIALS_FIELDS : PRODUCTS_FIELDS;
+    var html = '<div style="max-width:640px;">';
+    html += '<div style="font-size:1rem;font-weight:500;margin-bottom:12px;">Step 2: Map Columns</div>';
+    html += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">Match your file columns to Mast fields. Auto-detected matches are highlighted.</div>';
+
+    fields.forEach(function(field) {
+      var mapped = importState.mappings[field.key];
+      var isAutoMapped = mapped !== undefined;
+      html += '<div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;padding:8px 12px;border-radius:6px;background:' + (isAutoMapped ? 'rgba(42,124,111,0.06)' : 'transparent') + ';">';
+      html += '<div style="min-width:140px;font-size:0.85rem;font-weight:500;">' + field.label + (field.required ? ' *' : '') + '</div>';
+      html += '<select data-field="' + field.key + '" onchange="makerUpdateMapping(\'' + field.key + '\', this.value)" style="flex:1;padding:7px 10px;border:1px solid ' + (isAutoMapped ? 'var(--teal)' : '#ddd') + ';border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.85rem;">';
+      html += '<option value="">— Don\'t import —</option>';
+      importState.headers.forEach(function(h, i) {
+        html += '<option value="' + i + '"' + (mapped === i ? ' selected' : '') + '>' + esc(h) + '</option>';
+      });
+      html += '</select>';
+      html += '</div>';
+    });
+
+    // UOM default (materials only)
+    if (importState.type === 'materials') {
+      html += '<div style="margin-top:16px;padding:12px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;">';
+      html += '<div style="font-size:0.85rem;font-weight:500;margin-bottom:8px;">Default Unit of Measure (if not mapped)</div>';
+      html += '<select onchange="makerSetImportDefault(\'defaultUom\', this.value)" style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.85rem;">';
+      html += '<option value="">—</option>';
+      UOM_OPTIONS.forEach(function(u) {
+        html += '<option value="' + u.value + '"' + (importState.defaultUom === u.value ? ' selected' : '') + '>' + esc(u.label) + '</option>';
+      });
+      html += '</select></div>';
+    }
+
+    // Default category
+    html += '<div style="margin-top:12px;padding:12px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;">';
+    html += '<div style="font-size:0.85rem;font-weight:500;margin-bottom:8px;">Default Category (if not mapped)</div>';
+    html += '<input type="text" value="' + esc(importState.defaultCategory || '') + '" placeholder="e.g. Imported" onchange="makerSetImportDefault(\'defaultCategory\', this.value)" style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.85rem;">';
+    html += '</div>';
+
+    html += '<div style="display:flex;justify-content:space-between;margin-top:20px;">';
+    html += '<button class="btn btn-secondary" onclick="makerImportPrevStep()">← Back</button>';
+    html += '<button class="btn btn-primary" onclick="makerImportNextStep()">Continue</button>';
+    html += '</div>';
+    html += '</div>';
+    return html;
+  }
+
+  function renderImportStep3(esc) {
+    var fields = importState.type === 'materials' ? MATERIALS_FIELDS : PRODUCTS_FIELDS;
+    var rows = importState.parsedData || [];
+    var validRows = [];
+    var invalidRows = [];
+
+    rows.forEach(function(row, idx) {
+      var record = mapRow(row, fields);
+      if (record._valid) validRows.push({ row: row, record: record, idx: idx });
+      else invalidRows.push({ row: row, record: record, idx: idx });
+    });
+
+    var html = '<div style="max-width:800px;">';
+    html += '<div style="font-size:1rem;font-weight:500;margin-bottom:12px;">Step 3: Preview & Confirm</div>';
+    html += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">' +
+      validRows.length + ' valid rows ready, ' + invalidRows.length + ' will be skipped.</div>';
+
+    if (invalidRows.length > 0) {
+      html += '<div style="background:rgba(220,53,69,0.08);border:1px solid rgba(220,53,69,0.2);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:0.82rem;color:var(--danger);">' +
+        invalidRows.length + ' rows missing required fields will be skipped.</div>';
+    }
+
+    // Preview table (first 10 valid rows)
+    var previewFields = fields.filter(function(f) { return importState.mappings[f.key] !== undefined || f.required; });
+    html += '<div style="overflow-x:auto;margin-bottom:16px;">';
+    html += '<table style="width:100%;border-collapse:collapse;font-size:0.82rem;">';
+    html += '<thead><tr>';
+    previewFields.forEach(function(f) {
+      html += '<th style="padding:6px 8px;text-align:left;border-bottom:2px solid var(--cream-dark);font-weight:600;font-size:0.72rem;text-transform:uppercase;">' + f.label + '</th>';
+    });
+    html += '</tr></thead><tbody>';
+    validRows.slice(0, 10).forEach(function(item) {
+      html += '<tr>';
+      previewFields.forEach(function(f) {
+        html += '<td style="padding:6px 8px;border-bottom:1px solid var(--cream-dark);">' + esc(String(item.record[f.key] || '')) + '</td>';
+      });
+      html += '</tr>';
+    });
+    if (validRows.length > 10) {
+      html += '<tr><td colspan="' + previewFields.length + '" style="padding:8px;text-align:center;color:var(--warm-gray-light);font-style:italic;">... and ' + (validRows.length - 10) + ' more rows</td></tr>';
+    }
+    html += '</tbody></table></div>';
+
+    html += '<div id="importProgress" style="display:none;text-align:center;padding:20px;">';
+    html += '<div class="loading">Importing...</div>';
+    html += '</div>';
+
+    html += '<div id="importActions" style="display:flex;justify-content:space-between;margin-top:20px;">';
+    html += '<button class="btn btn-secondary" onclick="makerImportPrevStep()">← Back</button>';
+    html += '<button class="btn btn-primary" id="importBtn" onclick="makerRunImport()">Import ' + validRows.length + ' ' + (importState.type === 'materials' ? 'materials' : 'products') + '</button>';
+    html += '</div>';
+    html += '</div>';
+    return html;
+  }
+
+  function mapRow(row, fields) {
+    var record = { _valid: true };
+    fields.forEach(function(field) {
+      var colIdx = importState.mappings[field.key];
+      var val = colIdx !== undefined ? row[colIdx] : undefined;
+
+      if (val !== undefined && val !== null && val !== '') {
+        val = sanitizeString(String(val));
+        if (field.type === 'number') {
+          val = parseFloat(String(val).replace(/[^0-9.\-]/g, ''));
+          if (isNaN(val) || val < 0) val = undefined;
+          if (field.key === 'unitCost' && val > 99999) val = undefined;
+        }
+      } else {
+        val = undefined;
+      }
+
+      // Apply defaults
+      if (val === undefined && field.key === 'unitOfMeasure' && importState.defaultUom) {
+        val = importState.defaultUom;
+      }
+      if (val === undefined && field.key === 'category' && importState.defaultCategory) {
+        val = importState.defaultCategory;
+      }
+
+      if (val === undefined && field.required) {
+        record._valid = false;
+      }
+      record[field.key] = val;
+    });
+    return record;
+  }
+
+  async function runImport() {
+    var fields = importState.type === 'materials' ? MATERIALS_FIELDS : PRODUCTS_FIELDS;
+    var rows = importState.parsedData || [];
+    var imported = 0;
+    var skipped = 0;
+    var now = new Date().toISOString();
+
+    // Show progress
+    var progress = document.getElementById('importProgress');
+    var actions = document.getElementById('importActions');
+    if (progress) progress.style.display = '';
+    if (actions) actions.style.display = 'none';
+
+    for (var i = 0; i < rows.length; i++) {
+      var record = mapRow(rows[i], fields);
+      if (!record._valid) { skipped++; continue; }
+
+      try {
+        if (importState.type === 'materials') {
+          var matId = MastDB.materials.newKey();
+          await MastDB.materials.set(matId, {
+            materialId: matId,
+            name: record.name,
+            category: record.category || 'Imported',
+            unitOfMeasure: record.unitOfMeasure || 'each',
+            unitCost: record.unitCost || 0,
+            onHandQty: record.onHandQty || 0,
+            reorderThreshold: record.reorderThreshold || 0,
+            notes: record.notes || '',
+            status: 'draft',
+            importedFrom: 'csv',
+            createdAt: now,
+            updatedAt: now
+          });
+        } else {
+          var pid = record.pid ? sanitizeString(record.pid) : ('p' + Date.now().toString(36) + i);
+          var priceCents = record.price ? Math.round(record.price * 100) : 0;
+          await MastDB.products.ref(pid).set({
+            pid: pid,
+            name: record.name,
+            description: record.description || '',
+            categories: record.category ? [record.category] : [],
+            priceCents: priceCents,
+            price: priceCents > 0 ? '$' + (priceCents / 100).toFixed(2) : '',
+            status: record.status || 'draft',
+            availability: 'available',
+            images: [],
+            imageIds: [],
+            url: '',
+            options: [],
+            importedFrom: 'csv',
+            createdAt: now,
+            updatedAt: now
+          });
+        }
+        imported++;
+      } catch (err) {
+        console.error('Import row ' + i + ' failed:', err);
+        skipped++;
+      }
+    }
+
+    // Log the import
+    var logId = MastDB.importLog.newKey();
+    await MastDB.importLog.set(logId, {
+      importId: logId,
+      type: importState.type,
+      filename: importState.filename,
+      rowsAttempted: rows.length,
+      rowsImported: imported,
+      rowsSkipped: skipped,
+      importedAt: now,
+      importedBy: auth.currentUser ? auth.currentUser.uid : 'unknown'
+    });
+
+    // Show completion
+    var tab = importState.type === 'materials' ? document.getElementById('materialsTab') : document.getElementById('piecesTab');
+    if (tab) {
+      tab.innerHTML =
+        '<div style="text-align:center;padding:40px 20px;">' +
+          '<div style="font-size:2rem;margin-bottom:12px;">✅</div>' +
+          '<p style="font-size:1.1rem;font-weight:500;margin-bottom:8px;">Import Complete</p>' +
+          '<p style="font-size:0.9rem;color:var(--warm-gray);">' + imported + ' ' + importState.type + ' imported, ' + skipped + ' skipped.</p>' +
+          '<button class="btn btn-primary" style="margin-top:20px;" onclick="makerCloseImport()">View ' + (importState.type === 'materials' ? 'Materials' : 'Pieces') + '</button>' +
+        '</div>';
+    }
+
+    // Reload data
+    if (importState.type === 'materials') {
+      materialsLoaded = false;
+    } else {
+      window.productsLoaded = false;
+    }
+  }
+
+  // Import wizard window functions
+  window.makerOpenImport = openImport;
+  window.makerCloseImport = closeImport;
+  window.makerParseFile = parseFileInput;
+  window.makerImportNextStep = function() {
+    if (!importState) return;
+    if (importState.step === 1 && !importState.parsedData) {
+      showToast('Upload a file first', 'error');
+      return;
+    }
+    if (importState.step === 2) {
+      // Validate required mappings
+      var fields = importState.type === 'materials' ? MATERIALS_FIELDS : PRODUCTS_FIELDS;
+      var missing = fields.filter(function(f) {
+        if (!f.required) return false;
+        if (importState.mappings[f.key] !== undefined) return false;
+        // UOM can use default
+        if (f.key === 'unitOfMeasure' && importState.defaultUom) return false;
+        return true;
+      });
+      if (missing.length > 0) {
+        showToast('Map required fields: ' + missing.map(function(f) { return f.label; }).join(', '), 'error');
+        return;
+      }
+    }
+    importState.step = Math.min(3, importState.step + 1);
+    renderImportWizard();
+  };
+  window.makerImportPrevStep = function() {
+    if (!importState) return;
+    importState.step = Math.max(1, importState.step - 1);
+    renderImportWizard();
+  };
+  window.makerUpdateMapping = function(fieldKey, colIdx) {
+    if (!importState) return;
+    if (colIdx === '') delete importState.mappings[fieldKey];
+    else importState.mappings[fieldKey] = parseInt(colIdx);
+  };
+  window.makerSetImportDefault = function(key, value) {
+    if (!importState) return;
+    importState[key] = value;
+  };
+  window.makerRunImport = runImport;
 
   // ============================================================
   // Register with MastAdmin

@@ -17,6 +17,8 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-functions-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="../storefront-tenant.js?v=1773887711"></script>
   <script src="../tenant-brand.js?v=2"></script>
   <style>
@@ -7681,6 +7683,14 @@ MastDB.recipes = {
   lineItemsRef: function(recipeId) { return MastDB._ref(this.PATH + '/' + recipeId + '/lineItems'); },
   fieldRef: function(id, field) { return MastDB._ref(this.PATH + '/' + id + '/' + field); },
   subRef: function() { return MastDB._ref(this.PATH + '/' + Array.from(arguments).join('/')); }
+};
+
+MastDB.importLog = {
+  PATH: 'admin/importLog',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  list: function(limit) { return this.ref().limitToLast(limit || 20).once('value'); },
+  set: function(id, data) { return this.ref(id).set(data); },
+  newKey: function() { return this.ref().push().key; }
 };
 
 MastDB.lookbooks = {
