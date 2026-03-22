@@ -434,6 +434,10 @@
     body.dark-mode .feature-gate-callout h3 { color: #e0e0e0; }
     body.dark-mode .feature-gate-callout p { color: #999; }
     body.dark-mode .setup-banner { background: linear-gradient(135deg, #1a3a34, #2A7C6F); }
+    body.dark-mode #guidedNextSteps > div { background: #2a2a2a !important; border-color: #444 !important; }
+    body.dark-mode #guidedNextSteps h3 { color: #e0e0e0 !important; }
+    body.dark-mode #guidedNextSteps p { color: #999 !important; }
+    body.dark-mode #guidedNextSteps div[style*="font-weight:600"] { color: #e0e0e0 !important; }
     body.dark-mode .auth-screen h2 { color: #e0e0e0; }
     body.dark-mode .auth-screen p { color: #999; }
     body.dark-mode .btn-google { background: #2a2a2a; border-color: #444; color: #e0e0e0; }
@@ -9610,9 +9614,8 @@ auth.onAuthStateChanged(async function(user) {
 
   // Load configChecklist for progressive feature gating
   await loadConfigChecklist();
-  renderSetupBanner();
 
-  // Guided next steps (module-aware onboarding)
+  // Guided next steps (module-aware onboarding) — replaces old setup banner
   loadNextStepsCache().then(function() { renderGuidedNextSteps(); });
 
   // Load GitHub token for image uploads — admin only
@@ -12807,7 +12810,9 @@ var NEXT_STEP_DEFINITIONS = [
   { id: 'customize-content', module: null,       icon: '\u270F\uFE0F', title: 'Customize your content',        desc: 'Edit your hero headline, about section, and contact info.',               route: 'website',     check: function() { return window._nextStepsCache && window._nextStepsCache.hasContent; } },
   { id: 'add-product',    module: null,         icon: '\uD83D\uDCE6', title: 'Add your first product',        desc: 'Upload a photo and set a price to start building your catalog.',           route: 'inventory',   check: function() { return window._nextStepsCache && window._nextStepsCache.hasProducts; } },
   { id: 'setup-website',  module: 'web',        icon: '\uD83C\uDF10', title: 'Review your public site',       desc: 'See how your storefront looks to customers.',                             route: null, action: 'open-public-site', check: function() { return window._nextStepsCache && window._nextStepsCache.hasWebsite; } },
+  { id: 'setup-brand',    module: null,         icon: '\uD83C\uDFE0', title: 'Set up your brand details',     desc: 'Add your business name, tagline, and contact info.',                      route: 'settings', subView: 'general', check: function() { return tenantConfigChecklist && tenantConfigChecklist.brand; } },
   { id: 'setup-square',   module: 'sell',       icon: '\uD83D\uDCB3', title: 'Connect Square for payments',   desc: 'Link your Square account to accept payments and manage orders.',          route: 'settings', subView: 'payments', check: function() { return tenantConfigChecklist && tenantConfigChecklist.square; } },
+  { id: 'setup-email',    module: null,         icon: '\u2709\uFE0F', title: 'Configure email notifications', desc: 'Set up order confirmation and shipping emails for your customers.',       route: 'settings', subView: 'integrations', check: function() { return tenantConfigChecklist && tenantConfigChecklist.email; } },
   { id: 'first-show',     module: 'show',       icon: '\uD83C\uDFAA', title: 'Find your first show',          desc: 'Search for craft fairs and events in your area.',                         route: 'show-find',   check: function() { return false; } },
   { id: 'show-light-profile', module: 'show-light', icon: '\u2728', title: 'Build your vendor profile',     desc: 'Add your bio, photos, and product highlights for show applications.',     route: 'show-light-profile', check: function() { return false; } },
   { id: 'create-event',   module: 'events',     icon: '\uD83C\uDFAB', title: 'Create your first show',        desc: 'Set up a show with booths, vendors, and applications.',                   route: 'events-shows', check: function() { return false; } },
@@ -12849,8 +12854,8 @@ function renderGuidedNextSteps() {
   // Header with progress
   h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
   h += '<div>';
-  h += '<h3 style="font-family:\'Cormorant Garamond\', serif;font-size:1.3rem;font-weight:700;color:var(--charcoal, #1a1a1a);margin:0;">Get Started</h3>';
-  h += '<p style="font-size:0.85rem;color:var(--warm-gray, #6B6560);margin:4px 0 0;">' + completed + ' of ' + total + ' steps done</p>';
+  h += '<h3 style="font-family:\'Cormorant Garamond\', serif;font-size:1.3rem;font-weight:700;color:var(--text, var(--charcoal, #1a1a1a));margin:0;">Set Up Your Shop</h3>';
+  h += '<p style="font-size:0.85rem;color:var(--warm-gray, #6B6560);margin:4px 0 0;">' + completed + ' of ' + total + ' steps done — complete these to get the most out of your site</p>';
   h += '</div>';
   if (completed > 0) {
     h += '<div style="font-size:0.8rem;color:var(--teal, #2A7C6F);font-weight:600;">' + Math.round(completed / total * 100) + '% complete</div>';
