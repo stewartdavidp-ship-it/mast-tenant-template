@@ -1194,7 +1194,7 @@ setTimeout(function() { document.body.style.opacity = '1'; }, 3000);
         <p class="section-label">Where to Find Us</p>
         <h2 class="section-title">Upcoming Events</h2>
       </div>
-      <a href="schedule.html" class="btn btn-primary" style="background:var(--charcoal);border-color:var(--charcoal);">Full Schedule</a>
+      <a href="schedule.html" class="btn btn-primary">Full Schedule</a>
     </div>
     <div class="events-list">
       <!-- Events loaded dynamically from Firebase -->
@@ -1497,6 +1497,7 @@ window.TENANT_READY.then(function() {
       if (aboutImg) {
         aboutImg.src = aboutItems[0].url;
         aboutImg.alt = aboutItems[0].alt || '';
+        aboutImg.style.display = '';
       }
     }
 
