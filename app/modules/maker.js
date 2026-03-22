@@ -476,10 +476,10 @@
    */
   async function propagatePriceToProduct(productId, price) {
     var priceCents = Math.round(price * 100);
-    await MastDB._multiUpdate({
-      'public/products/' + productId + '/priceCents': priceCents,
-      'public/products/' + productId + '/price': price
-    });
+    var updates = {};
+    updates['public/products/' + productId + '/priceCents'] = priceCents;
+    updates['public/products/' + productId + '/price'] = price;
+    await MastDB._multiUpdate(updates);
   }
 
   /**
@@ -557,12 +557,393 @@
   }
 
   // ============================================================
-  // Render Stubs (Session 2 & 3 will implement)
+  // Materials UI — List, Filter, Add/Edit Modal
   // ============================================================
 
-  function renderMaterials() {
-    // Session 2 will implement materials list UI
+  var materialsFilter = 'active'; // active | draft | archived | all
+  var materialsCategoryFilter = 'all';
+  var editingMaterialId = null;
+
+  var MATERIAL_STATUS_COLORS = {
+    active:   { bg: 'rgba(22,163,74,0.15)', color: '#16a34a', border: 'rgba(22,163,74,0.3)' },
+    draft:    { bg: 'rgba(196,133,60,0.15)', color: 'var(--amber)', border: 'rgba(196,133,60,0.3)' },
+    archived: { bg: 'rgba(156,163,175,0.15)', color: '#9ca3af', border: 'rgba(156,163,175,0.3)' }
+  };
+
+  function materialStatusBadgeStyle(status) {
+    var c = MATERIAL_STATUS_COLORS[status] || MATERIAL_STATUS_COLORS.draft;
+    return 'background:' + c.bg + ';color:' + c.color + ';border:1px solid ' + c.border + ';';
   }
+
+  function getUomLabel(uom) {
+    var match = UOM_OPTIONS.find(function(o) { return o.value === uom; });
+    return match ? match.label : uom;
+  }
+
+  function getUomShort(uom) {
+    return uom || '';
+  }
+
+  function getMaterialCategories() {
+    var cats = {};
+    Object.values(materialsData).forEach(function(m) {
+      if (m.category) cats[m.category] = true;
+    });
+    return Object.keys(cats).sort();
+  }
+
+  function renderMaterials() {
+    var tab = document.getElementById('materialsTab');
+    if (!tab) return;
+
+    var esc = MastAdmin.esc;
+    var materials = Object.values(materialsData);
+
+    // Filter by status
+    if (materialsFilter !== 'all') {
+      materials = materials.filter(function(m) { return m.status === materialsFilter; });
+    }
+
+    // Filter by category
+    if (materialsCategoryFilter !== 'all') {
+      materials = materials.filter(function(m) { return m.category === materialsCategoryFilter; });
+    }
+
+    // Sort by name
+    materials.sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
+
+    var categories = getMaterialCategories();
+    var totalCount = Object.keys(materialsData).length;
+    var activeCount = Object.values(materialsData).filter(function(m) { return m.status === 'active'; }).length;
+
+    var html = '';
+
+    // Header
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
+    html += '<div>';
+    html += '<h2 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">Materials</h2>';
+    html += '<span style="font-size:0.82rem;color:var(--warm-gray);">' + activeCount + ' active of ' + totalCount + ' total</span>';
+    html += '</div>';
+    html += '<button class="btn btn-primary" onclick="makerOpenAddMaterial()">+ New Material</button>';
+    html += '</div>';
+
+    // Filter pills
+    html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">';
+    ['active', 'draft', 'archived', 'all'].forEach(function(f) {
+      var active = materialsFilter === f ? ' style="background:var(--charcoal);color:white;border-color:var(--charcoal);"' : '';
+      html += '<button class="order-filter-pill"' + active + ' onclick="makerFilterMaterials(\'' + f + '\')">' + f.charAt(0).toUpperCase() + f.slice(1) + '</button>';
+    });
+    html += '</div>';
+
+    // Category filter
+    if (categories.length > 0) {
+      html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;">';
+      html += '<button class="order-filter-pill"' + (materialsCategoryFilter === 'all' ? ' style="background:var(--charcoal);color:white;border-color:var(--charcoal);"' : '') + ' onclick="makerFilterMaterialsCategory(\'all\')">All Categories</button>';
+      categories.forEach(function(cat) {
+        var active = materialsCategoryFilter === cat ? ' style="background:var(--charcoal);color:white;border-color:var(--charcoal);"' : '';
+        html += '<button class="order-filter-pill"' + active + ' onclick="makerFilterMaterialsCategory(\'' + esc(cat).replace(/'/g, "\\'") + '\')">' + esc(cat) + '</button>';
+      });
+      html += '</div>';
+    }
+
+    // Empty state
+    if (materials.length === 0) {
+      html += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">';
+      html += '<div style="font-size:2rem;margin-bottom:12px;">🧱</div>';
+      html += '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No materials found</p>';
+      if (materialsFilter === 'active' && totalCount === 0) {
+        html += '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Add your raw materials to start building recipes and pricing.</p>';
+        html += '<button class="btn btn-primary" style="margin-top:16px;" onclick="makerOpenAddMaterial()">+ New Material</button>';
+      } else {
+        html += '<p style="font-size:0.85rem;color:var(--warm-gray-light);">No materials match the current filters.</p>';
+      }
+      html += '</div>';
+      tab.innerHTML = html;
+      return;
+    }
+
+    // Table
+    html += '<div class="data-table">';
+    html += '<table><thead><tr>';
+    html += '<th>Name</th>';
+    html += '<th>Category</th>';
+    html += '<th>UOM</th>';
+    html += '<th style="text-align:right;">Unit Cost</th>';
+    html += '<th style="text-align:right;">On Hand</th>';
+    html += '<th>Status</th>';
+    html += '<th style="text-align:right;">Actions</th>';
+    html += '</tr></thead><tbody>';
+
+    materials.forEach(function(m) {
+      var id = m.materialId;
+      html += '<tr>';
+      html += '<td style="font-weight:500;">' + esc(m.name) + '</td>';
+      html += '<td>' + esc(m.category || '') + '</td>';
+      html += '<td>' + esc(getUomShort(m.unitOfMeasure)) + '</td>';
+      html += '<td style="text-align:right;font-family:monospace;">$' + (m.unitCost || 0).toFixed(2) + '</td>';
+      html += '<td style="text-align:right;">' + (m.onHandQty || 0) + '</td>';
+      html += '<td><span class="status-badge" style="' + materialStatusBadgeStyle(m.status) + '">' + esc(m.status || 'draft') + '</span></td>';
+      html += '<td style="text-align:right;">';
+      html += '<button style="background:none;border:none;color:var(--teal);cursor:pointer;font-size:0.85rem;font-family:\'DM Sans\';" onclick="makerEditMaterial(\'' + esc(id) + '\')">Edit</button>';
+      if (m.status !== 'archived') {
+        html += ' <button style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:0.85rem;font-family:\'DM Sans\';margin-left:4px;" onclick="makerArchiveMaterialConfirm(\'' + esc(id) + '\')">Archive</button>';
+      }
+      html += '</td>';
+      html += '</tr>';
+    });
+
+    html += '</tbody></table></div>';
+
+    tab.innerHTML = html;
+  }
+
+  // ============================================================
+  // Material Add/Edit Modal
+  // ============================================================
+
+  function openMaterialModal(materialId) {
+    editingMaterialId = materialId || null;
+    var m = materialId ? materialsData[materialId] : null;
+    var isEdit = !!m;
+    var esc = MastAdmin.esc;
+    var categories = getMaterialCategories();
+
+    var html = '';
+    html += '<div id="materialModalOverlay" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;" onclick="makerCloseMaterialModal(event)">';
+    html += '<div style="background:var(--cream);border-radius:10px;max-width:560px;width:90%;max-height:85vh;overflow-y:auto;box-shadow:0 8px 30px rgba(0,0,0,0.2);padding:20px 24px;" onclick="event.stopPropagation()">';
+
+    // Header
+    html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.3rem;font-weight:500;margin:0 0 16px;">' + (isEdit ? 'Edit Material' : 'New Material') + '</h3>';
+
+    // Name
+    html += '<div style="margin-bottom:16px;">';
+    html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Name *</label>';
+    html += '<input id="matName" type="text" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;box-sizing:border-box;" value="' + esc(m ? m.name : '') + '" placeholder="e.g. 14K Gold Wire">';
+    html += '</div>';
+
+    // Category (dropdown + add new)
+    html += '<div style="margin-bottom:16px;">';
+    html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Category</label>';
+    html += '<div style="display:flex;gap:8px;">';
+    html += '<select id="matCategory" style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">';
+    html += '<option value="">Select category</option>';
+    categories.forEach(function(cat) {
+      var sel = m && m.category === cat ? ' selected' : '';
+      html += '<option value="' + esc(cat) + '"' + sel + '>' + esc(cat) + '</option>';
+    });
+    html += '</select>';
+    html += '<button class="btn btn-secondary btn-small" onclick="makerAddCategoryPrompt()">+ New</button>';
+    html += '</div>';
+    html += '</div>';
+
+    // UOM + Unit Cost (side by side)
+    html += '<div style="display:flex;gap:12px;margin-bottom:16px;">';
+
+    html += '<div style="flex:1;">';
+    html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Unit of Measure *</label>';
+    html += '<select id="matUom" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">';
+    UOM_OPTIONS.forEach(function(opt) {
+      var sel = m && m.unitOfMeasure === opt.value ? ' selected' : '';
+      html += '<option value="' + opt.value + '"' + sel + '>' + esc(opt.label) + '</option>';
+    });
+    html += '</select>';
+    html += '</div>';
+
+    html += '<div style="flex:1;">';
+    html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Unit Cost ($) *</label>';
+    html += '<input id="matCost" type="number" step="0.01" min="0" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;box-sizing:border-box;" value="' + (m ? m.unitCost || '' : '') + '" placeholder="0.00">';
+    html += '</div>';
+
+    html += '</div>';
+
+    // On Hand Qty + Reorder Threshold (side by side)
+    html += '<div style="display:flex;gap:12px;margin-bottom:16px;">';
+
+    html += '<div style="flex:1;">';
+    html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">On Hand Qty</label>';
+    html += '<input id="matOnHand" type="number" step="0.01" min="0" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;box-sizing:border-box;" value="' + (m ? m.onHandQty || '' : '') + '" placeholder="0">';
+    html += '</div>';
+
+    html += '<div style="flex:1;">';
+    html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Reorder Threshold</label>';
+    html += '<input id="matReorder" type="number" step="0.01" min="0" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;box-sizing:border-box;" value="' + (m ? m.reorderThreshold || '' : '') + '" placeholder="0">';
+    html += '</div>';
+
+    html += '</div>';
+
+    // Status (for edit only)
+    if (isEdit) {
+      html += '<div style="margin-bottom:16px;">';
+      html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Status</label>';
+      html += '<select id="matStatus" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">';
+      ['active', 'draft', 'archived'].forEach(function(s) {
+        var sel = m.status === s ? ' selected' : '';
+        html += '<option value="' + s + '"' + sel + '>' + s.charAt(0).toUpperCase() + s.slice(1) + '</option>';
+      });
+      html += '</select>';
+      html += '</div>';
+    }
+
+    // Notes
+    html += '<div style="margin-bottom:16px;">';
+    html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Notes</label>';
+    html += '<textarea id="matNotes" rows="2" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;resize:vertical;box-sizing:border-box;">' + esc(m ? m.notes : '') + '</textarea>';
+    html += '</div>';
+
+    // Footer
+    html += '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;">';
+    html += '<button class="btn btn-secondary" onclick="makerCloseMaterialModal()">Cancel</button>';
+    html += '<button class="btn btn-primary" onclick="makerSaveMaterialForm()">' + (isEdit ? 'Save' : 'Create Material') + '</button>';
+    html += '</div>';
+
+    html += '</div></div>';
+
+    // Append modal
+    var container = document.createElement('div');
+    container.id = 'materialModalContainer';
+    container.innerHTML = html;
+    document.body.appendChild(container);
+  }
+
+  function closeMaterialModal(event) {
+    if (event && event.target && event.target.id !== 'materialModalOverlay') return;
+    var container = document.getElementById('materialModalContainer');
+    if (container) container.remove();
+    editingMaterialId = null;
+  }
+
+  async function saveMaterialForm() {
+    var name = (document.getElementById('matName').value || '').trim();
+    if (!name) {
+      MastAdmin.showToast('Material name is required', true);
+      return;
+    }
+
+    var cost = parseFloat(document.getElementById('matCost').value) || 0;
+    var data = {
+      name: name,
+      category: document.getElementById('matCategory').value || '',
+      unitOfMeasure: document.getElementById('matUom').value || 'each',
+      unitCost: cost,
+      onHandQty: parseFloat(document.getElementById('matOnHand').value) || 0,
+      reorderThreshold: parseFloat(document.getElementById('matReorder').value) || 0,
+      notes: (document.getElementById('matNotes').value || '').trim()
+    };
+
+    var statusEl = document.getElementById('matStatus');
+    if (statusEl) data.status = statusEl.value;
+
+    try {
+      if (editingMaterialId) {
+        await updateMaterial(editingMaterialId, data);
+        MastAdmin.showToast('Material updated');
+      } else {
+        data.status = data.status || 'active';
+        await createMaterial(data);
+        MastAdmin.showToast('Material created');
+      }
+      closeMaterialModal();
+    } catch (err) {
+      MastAdmin.showToast('Error: ' + err.message, true);
+    }
+  }
+
+  function archiveMaterialConfirm(id) {
+    var m = materialsData[id];
+    if (!m) return;
+    if (!confirm('Archive "' + m.name + '"? This cannot be undone.')) return;
+    archiveMaterial(id).then(function() {
+      MastAdmin.showToast('Material archived');
+    }).catch(function(err) {
+      MastAdmin.showToast('Error: ' + err.message, true);
+    });
+  }
+
+  // ============================================================
+  // Category Management
+  // ============================================================
+
+  function addCategoryPrompt() {
+    var cat = prompt('Enter new category name:');
+    if (!cat || !cat.trim()) return;
+    cat = cat.trim();
+
+    // Add to dropdown
+    var select = document.getElementById('matCategory');
+    if (select) {
+      var opt = document.createElement('option');
+      opt.value = cat;
+      opt.textContent = cat;
+      opt.selected = true;
+      select.appendChild(opt);
+    }
+  }
+
+  // ============================================================
+  // Materials Filter Controls
+  // ============================================================
+
+  function filterMaterials(status) {
+    materialsFilter = status;
+    renderMaterials();
+  }
+
+  function filterMaterialsCategory(cat) {
+    materialsCategoryFilter = cat;
+    renderMaterials();
+  }
+
+  // ============================================================
+  // Craft Profile Onboarding Banner
+  // ============================================================
+
+  async function checkMakerOnboarding() {
+    var settings = await getMakerSettings();
+    if (settings.materialsSeeded) return;
+
+    // Show onboarding banner in materials tab
+    var tab = document.getElementById('materialsTab');
+    if (!tab) return;
+
+    var html = '';
+    html += '<div style="background:rgba(42,124,111,0.08);border:1px solid var(--teal-light);border-radius:8px;padding:20px 24px;margin-bottom:20px;">';
+    html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.2rem;font-weight:500;margin:0 0 8px;color:var(--teal-deep);">Welcome to Materials</h3>';
+    html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin:0 0 16px;">Select your craft to pre-load categories and sample materials. You can customize everything later.</p>';
+    html += '<div style="display:flex;flex-wrap:wrap;gap:8px;">';
+
+    var profiles = [
+      { id: 'jewelry', icon: '💎', label: 'Jewelry' },
+      { id: 'glass', icon: '🔥', label: 'Glass' },
+      { id: 'ceramics', icon: '🏺', label: 'Ceramics' },
+      { id: 'fiber', icon: '🧶', label: 'Fiber' },
+      { id: 'other', icon: '🎨', label: 'Other' }
+    ];
+
+    profiles.forEach(function(p) {
+      html += '<button class="btn btn-secondary" style="font-size:0.9rem;" onclick="makerSelectCraftProfile(\'' + p.id + '\')">' + p.icon + ' ' + p.label + '</button>';
+    });
+
+    html += '</div></div>';
+
+    // Prepend to tab
+    tab.insertAdjacentHTML('afterbegin', html);
+  }
+
+  async function selectCraftProfile(profile) {
+    try {
+      var result = await seedMaterials(profile);
+      if (result.seeded) {
+        MastAdmin.showToast('Materials seeded for ' + profile + ' (' + result.materialsCreated + ' samples added)');
+        renderMaterials();
+      }
+    } catch (err) {
+      MastAdmin.showToast('Error: ' + err.message, true);
+    }
+  }
+
+  // ============================================================
+  // Pieces Render Stub (Session 3)
+  // ============================================================
 
   function renderPieces() {
     // Session 3 will implement pieces list UI
@@ -579,6 +960,17 @@
   window.makerCreateMaterial = createMaterial;
   window.makerUpdateMaterial = updateMaterial;
   window.makerArchiveMaterial = archiveMaterial;
+
+  // Materials UI
+  window.makerOpenAddMaterial = function() { openMaterialModal(null); };
+  window.makerEditMaterial = function(id) { openMaterialModal(id); };
+  window.makerCloseMaterialModal = closeMaterialModal;
+  window.makerSaveMaterialForm = saveMaterialForm;
+  window.makerArchiveMaterialConfirm = archiveMaterialConfirm;
+  window.makerFilterMaterials = filterMaterials;
+  window.makerFilterMaterialsCategory = filterMaterialsCategory;
+  window.makerAddCategoryPrompt = addCategoryPrompt;
+  window.makerSelectCraftProfile = selectCraftProfile;
 
   // Recipes CRUD
   window.makerCreateRecipe = createRecipe;
@@ -610,6 +1002,7 @@
     routes: {
       'materials': { tab: 'materialsTab', setup: function() {
         loadMaterials();
+        checkMakerOnboarding();
       } },
       'pieces': { tab: 'piecesTab', setup: function() {
         loadMaterials(); // needed for recipe builder
