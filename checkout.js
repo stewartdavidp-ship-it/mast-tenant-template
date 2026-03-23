@@ -1454,9 +1454,10 @@
       input.parentNode.replaceChild(pac, input);
       pac.id = 'shipAddr1Pac';
 
-      pac.addEventListener('gmp-placeselect', function (e) {
-        var place = e.placePrediction ? e.placePrediction.toPlace() : null;
-        if (!place) return;
+      pac.addEventListener('gmp-select', function (e) {
+        var prediction = e.placePrediction || (e.detail && e.detail.placePrediction);
+        if (!prediction) return;
+        var place = prediction.toPlace();
         place.fetchFields({ fields: ['addressComponents'] }).then(function () {
           fillAddressFromPlace(place);
           checkoutData._addressValidated = true;
