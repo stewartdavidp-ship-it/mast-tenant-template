@@ -589,10 +589,15 @@
     transition: all 0.2s;
   }
 
-  .product-option-chip:hover,
+  .product-option-chip:hover {
+    border-color: var(--primary-light);
+    color: var(--primary-light);
+  }
+
   .product-option-chip.selected {
-    border-color: var(--amber);
-    color: var(--amber);
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
   }
 
   .product-detail-actions {
@@ -1203,8 +1208,8 @@
     var allSelected = required.every(function(label) { return selected[label]; });
     var p = window._productData;
     var hasPrice = p && (p.price || window._resolvedVariantPrice);
-    // If variants exist, require a resolved variant price
-    if (window._productVariants) {
+    // If variants exist with pricing, require a resolved variant price
+    if (window._productVariants && window._productVariants.length > 0) {
       hasPrice = !!window._resolvedVariantPrice;
     }
     var btn = document.getElementById('addToCartBtn');
