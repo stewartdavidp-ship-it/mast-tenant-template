@@ -1443,26 +1443,48 @@
     if (!window.google || !google.maps || !google.maps.places) return;
     var input = document.getElementById('shipAddr1');
     if (!input) return;
-    var autocomplete = new google.maps.places.Autocomplete(input, {
-      types: ['address'],
-      componentRestrictions: { country: 'us' }
-    });
-    autocomplete.addListener('place_changed', function () {
-      var place = autocomplete.getPlace();
-      if (place && place.address_components) {
-        fillAddressFromPlace(place);
-        checkoutData._addressValidated = true;
-      }
-    });
-    // Reset validation if user manually edits (but not if restored from previous order)
-    ['shipAddr1', 'shipCity', 'shipState', 'shipZip'].forEach(function (id) {
+
+    // Use new PlaceAutocompleteElement API if available, fall back to legacy
+    if (google.maps.places.PlaceAutocompleteElement) {
+      var pac = new google.maps.places.PlaceAutocompleteElement({
+        includedRegionCodes: ['us'],
+        includedPrimaryTypes: ['address']
+      });
+      pac.style.cssText = 'width:100%;';
+      input.parentNode.replaceChild(pac, input);
+      pac.id = 'shipAddr1Pac';
+
+      pac.addEventListener('gmp-placeselect', function (e) {
+        var place = e.placePrediction ? e.placePrediction.toPlace() : null;
+        if (!place) return;
+        place.fetchFields({ fields: ['addressComponents'] }).then(function () {
+          fillAddressFromPlace(place);
+          checkoutData._addressValidated = true;
+        });
+      });
+    } else {
+      // Legacy fallback
+      var autocomplete = new google.maps.places.Autocomplete(input, {
+        types: ['address'],
+        componentRestrictions: { country: 'us' }
+      });
+      autocomplete.addListener('place_changed', function () {
+        var place = autocomplete.getPlace();
+        if (place && place.address_components) {
+          fillAddressFromPlace(place);
+          checkoutData._addressValidated = true;
+        }
+      });
+    }
+    // Reset validation if user manually edits
+    ['shipAddr1', 'shipAddr1Pac', 'shipCity', 'shipState', 'shipZip'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) {
-        var lastKnown = el.value;
+        var lastKnown = el.value || '';
         el.addEventListener('input', function () {
-          if (el.value !== lastKnown) {
+          if ((el.value || '') !== lastKnown) {
             checkoutData._addressValidated = false;
-            lastKnown = el.value;
+            lastKnown = el.value || '';
           }
         });
       }
@@ -1470,21 +1492,26 @@
   }
 
   function fillAddressFromPlace(place) {
+    // Support both old (address_components/long_name) and new (addressComponents/longText) API
+    var raw = place.addressComponents || place.address_components || [];
     var components = {};
-    for (var i = 0; i < place.address_components.length; i++) {
-      var c = place.address_components[i];
-      for (var j = 0; j < c.types.length; j++) {
-        components[c.types[j]] = c;
+    for (var i = 0; i < raw.length; i++) {
+      var c = raw[i];
+      var types = c.types || [];
+      for (var j = 0; j < types.length; j++) {
+        components[types[j]] = { long: c.longText || c.long_name || '', short: c.shortText || c.short_name || '' };
       }
     }
-    var streetNum = components.street_number ? components.street_number.long_name : '';
-    var route = components.route ? components.route.long_name : '';
+    var streetNum = components.street_number ? components.street_number.long : '';
+    var route = components.route ? components.route.long : '';
     var setVal = function (id, val) { var el = document.getElementById(id); if (el) el.value = val; };
     setVal('shipAddr1', (streetNum + ' ' + route).trim());
-    setVal('shipCity', components.locality ? components.locality.long_name : (components.sublocality_level_1 ? components.sublocality_level_1.long_name : ''));
+    var pacEl = document.getElementById('shipAddr1Pac');
+    if (pacEl && pacEl.value !== undefined) pacEl.value = (streetNum + ' ' + route).trim();
+    setVal('shipCity', components.locality ? components.locality.long : (components.sublocality_level_1 ? components.sublocality_level_1.long : ''));
     var stateEl = document.getElementById('shipState');
-    if (stateEl && components.administrative_area_level_1) stateEl.value = components.administrative_area_level_1.short_name;
-    setVal('shipZip', components.postal_code ? components.postal_code.long_name : '');
+    if (stateEl && components.administrative_area_level_1) stateEl.value = components.administrative_area_level_1.short;
+    setVal('shipZip', components.postal_code ? components.postal_code.long : '');
   }
 
   // ── Test Mode Banner ──
