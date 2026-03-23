@@ -518,15 +518,16 @@
   </div>
 </footer>
 
-<!-- Firebase -->
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
+<!-- Storefront scripts first — use fetch() only, no Firebase SDK needed -->
 <script src="storefront-tenant.js"></script>
 <script src="storefront-theme.js"></script>
 <script src="storefront-nav.js"></script>
 <script src="tenant-brand.js?v=2"></script>
+<!-- Firebase SDK — loaded after storefront scripts so nav/theme render first -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
 <script>
 window.TENANT_READY.then(function() {
 (function() {
@@ -742,8 +743,8 @@ function siteSignIn() {
 }
 </script>
 <script src="cart.js"></script>
-<script src="checkout.js?v=2"></script>
-<script src="feedback-widget.js"></script>
-<script src="share-widget.js"></script>
+<script defer src="checkout.js?v=2"></script>
+<script defer src="feedback-widget.js"></script>
+<script defer src="share-widget.js"></script>
 </body>
 </html>

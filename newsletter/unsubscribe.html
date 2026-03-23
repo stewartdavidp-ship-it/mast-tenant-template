@@ -69,11 +69,13 @@
 
 <footer><p data-tenant="brand">My Shop</p></footer>
 
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<!-- Storefront scripts first — no Firebase SDK needed -->
 <script src="../storefront-tenant.js"></script>
 <script src="../storefront-theme.js"></script>
 <script src="../tenant-brand.js?v=2"></script>
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script>
 (function() {
   if (!firebase.apps.length) firebase.initializeApp(TENANT_FIREBASE_CONFIG);

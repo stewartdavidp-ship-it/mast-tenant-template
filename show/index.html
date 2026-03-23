@@ -434,10 +434,13 @@ a:hover { text-decoration: underline; }
   <div class="loading"><div class="spinner"></div></div>
 </div>
 
+<!-- Storefront tenant resolution first — no Firebase SDK needed -->
+<script src="../storefront-tenant.js"></script>
+
+<!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
-<script src="../storefront-tenant.js"></script>
 <script src="../tenant-brand.js?v=2"></script>
 <script src="show.js?v=20260318m"></script>
 <script>
