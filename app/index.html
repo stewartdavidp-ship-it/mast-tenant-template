@@ -6337,8 +6337,14 @@
               <input type="number" id="shipAdditionalSurcharge" min="0" step="0.01" placeholder="2.00" style="width:80px;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;">
             </div>
             <div>
-              <label style="font-size:0.78rem;font-weight:600;display:block;margin-bottom:4px;">Free Shipping Threshold ($)</label>
-              <input type="number" id="shipFreeThreshold" min="0" step="1" placeholder="100" style="width:80px;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;">
+              <label style="font-size:0.78rem;font-weight:600;display:flex;align-items:center;gap:6px;margin-bottom:4px;cursor:pointer;">
+                <input type="checkbox" id="shipFreeShippingEnabled" onchange="document.getElementById('shipFreeThresholdWrap').style.display=this.checked?'flex':'none'" style="accent-color:var(--teal,#2a9d8f);">
+                Free Shipping
+              </label>
+              <div id="shipFreeThresholdWrap" style="display:none;align-items:center;gap:6px;">
+                <span style="font-size:0.75rem;color:var(--warm-gray);">Orders over $</span>
+                <input type="number" id="shipFreeThreshold" min="1" step="1" placeholder="100" style="width:70px;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;">
+              </div>
             </div>
             <div>
               <label style="font-size:0.78rem;font-weight:600;display:block;margin-bottom:4px;">Packing Buffer (oz/item)</label>
@@ -11889,7 +11895,12 @@ async function saveShippingConfig() {
   var thresholdEl = document.getElementById('shipFreeThreshold');
   var bufferEl = document.getElementById('shipPackingBuffer');
   if (surchargeEl && surchargeEl.value !== '') config.additionalItemSurcharge = parseFloat(surchargeEl.value);
-  if (thresholdEl && thresholdEl.value !== '') config.freeThreshold = parseFloat(thresholdEl.value);
+  var freeEnabled = document.getElementById('shipFreeShippingEnabled');
+  if (freeEnabled && freeEnabled.checked && thresholdEl && thresholdEl.value !== '' && parseFloat(thresholdEl.value) > 0) {
+    config.freeThreshold = parseFloat(thresholdEl.value);
+  } else {
+    config.freeThreshold = null;
+  }
   if (bufferEl && bufferEl.value !== '') config.packingBufferOz = parseInt(bufferEl.value);
   config.updatedAt = new Date().toISOString();
 
@@ -11929,7 +11940,16 @@ function loadShippingConfig() {
     var thresholdEl = document.getElementById('shipFreeThreshold');
     var bufferEl = document.getElementById('shipPackingBuffer');
     if (surchargeEl && config.additionalItemSurcharge != null) surchargeEl.value = config.additionalItemSurcharge;
-    if (thresholdEl && config.freeThreshold != null) thresholdEl.value = config.freeThreshold;
+    var freeCheckbox = document.getElementById('shipFreeShippingEnabled');
+    var freeWrap = document.getElementById('shipFreeThresholdWrap');
+    if (config.freeThreshold != null && config.freeThreshold > 0) {
+      if (freeCheckbox) freeCheckbox.checked = true;
+      if (freeWrap) freeWrap.style.display = 'flex';
+      if (thresholdEl) thresholdEl.value = config.freeThreshold;
+    } else {
+      if (freeCheckbox) freeCheckbox.checked = false;
+      if (freeWrap) freeWrap.style.display = 'none';
+    }
     if (bufferEl && config.packingBufferOz != null) bufferEl.value = config.packingBufferOz;
     if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Configured — updated ' + new Date(config.updatedAt).toLocaleDateString() + '</span>';
   });
