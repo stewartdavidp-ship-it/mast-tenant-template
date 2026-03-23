@@ -11698,20 +11698,25 @@ function showPaymentProcessor(processor) {
 function switchPaymentProcessor(newProcessor) {
   var currentName = newProcessor === 'stripe' ? 'Square' : 'Stripe';
   var newName = newProcessor === 'stripe' ? 'Stripe' : 'Square';
-  if (!confirm('Switch payment processor from ' + currentName + ' to ' + newName + '? Your ' + currentName + ' credentials will be preserved if you switch back.')) return;
-
-  MastDB._ref('config/paymentProcessor').set(newProcessor).then(function() {
-    showPaymentProcessor(newProcessor);
-    if (newProcessor === 'stripe') {
-      loadStripeConfig();
-    } else {
-      loadSquareConfig();
-    }
-    showToast('Switched to ' + newName);
-    writeAudit('update', 'settings', 'paymentProcessor', { processor: newProcessor });
-  }).catch(function(err) {
-    showToast('Error switching processor: ' + err.message, true);
-  });
+  showConfirmDialog(
+    'Switch Payment Processor',
+    'Switch from ' + currentName + ' to ' + newName + '? Your ' + currentName + ' credentials will be preserved if you switch back.',
+    function() {
+      MastDB._ref('config/paymentProcessor').set(newProcessor).then(function() {
+        showPaymentProcessor(newProcessor);
+        if (newProcessor === 'stripe') {
+          loadStripeConfig();
+        } else {
+          loadSquareConfig();
+        }
+        showToast('Switched to ' + newName);
+        writeAudit('update', 'settings', 'paymentProcessor', { processor: newProcessor });
+      }).catch(function(err) {
+        showToast('Error switching processor: ' + err.message, true);
+      });
+    },
+    { confirmLabel: 'Switch to ' + newName }
+  );
 }
 
 function onStripeKeyInput() {
@@ -11733,6 +11738,7 @@ function loadStripeConfig() {
       return;
     }
     setMaskedField('stripeSecretKey', config.secretKey);
+    if (config.secretKey) setFieldBadge('stripeSecretKeyBadge', 'valid', 'Saved');
     var pkEl = document.getElementById('stripePublishableKey');
     if (pkEl && config.publishableKey) { pkEl.value = config.publishableKey; }
     // Show test banner if test environment
@@ -11804,7 +11810,7 @@ function loadSquareConfig() {
     var envEl = document.getElementById('squareEnvironment');
     if (envEl && config.environment) envEl.value = config.environment;
 
-    // Server returns masked secrets — display them as placeholders
+    // Server returns masked secrets — display them as placeholders + show saved badges
     var sb = config.sandbox || {};
     var pr = config.production || {};
     setMaskedField('sqSandboxToken', sb.accessToken);
@@ -11812,12 +11818,24 @@ function loadSquareConfig() {
     setMaskedField('sqProdToken', pr.accessToken);
     setMaskedField('sqProdLocation', pr.locationId);
 
+    // Show "Saved" badges for fields that have values
+    if (sb.accessToken) setFieldBadge('sqSandboxTokenBadge', 'valid', 'Saved');
+    if (sb.locationId) setFieldBadge('sqSandboxLocationBadge', 'valid', 'Saved');
+    if (sb.webhookSignatureKey) {
+      var whEl = document.getElementById('sqSandboxWebhookBadge');
+      if (whEl) whEl.innerHTML = '<span style="background:#059669;color:#fff;font-size:0.7rem;padding:2px 6px;border-radius:4px;font-weight:600;">Webhook Saved</span>';
+    }
+    if (pr.accessToken) setFieldBadge('sqProdTokenBadge', 'valid', 'Saved');
+    if (pr.locationId) setFieldBadge('sqProdLocationBadge', 'valid', 'Saved');
+    if (pr.webhookSignatureKey) {
+      var whElProd = document.getElementById('sqProdWebhookBadge');
+      if (whElProd) whElProd.innerHTML = '<span style="background:#059669;color:#fff;font-size:0.7rem;padding:2px 6px;border-radius:4px;font-weight:600;">Webhook Saved</span>';
+    }
+
     // Sandbox indicators
     onSquareEnvToggle();
 
-    // Only update status if no verification badges are showing
-    var hasBadges = document.querySelector('[id$="TokenBadge"] span, [id$="LocationBadge"] span');
-    if (statusEl && !hasBadges) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Configured (' + config.environment + ') — updated ' + (config.updatedAt ? new Date(config.updatedAt).toLocaleDateString() : 'unknown') + '</span>';
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Configured (' + config.environment + ') — updated ' + (config.updatedAt ? new Date(config.updatedAt).toLocaleDateString() : 'unknown') + '</span>';
   }).catch(function(err) {
     // Fallback to direct RTDB read (pre-migration)
     console.warn('secretsManager read failed, falling back to RTDB:', err.message);
