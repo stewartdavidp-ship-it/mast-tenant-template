@@ -1350,6 +1350,13 @@
   function loadGooglePlaces(callback) {
     if (placesLoaded) { callback(); return; }
     if (!placesApiKey) {
+      // 1. Check platform-level key (set by storefront-tenant.js from publicConfig)
+      if (window.MAST_GOOGLE_MAPS_KEY) {
+        placesApiKey = window.MAST_GOOGLE_MAPS_KEY;
+        injectPlacesScript(callback);
+        return;
+      }
+      // 2. Fallback: tenant-level key in Firebase
       var db = getDb();
       if (!db) { callback(); return; }
       db.ref(TENANT_ID + '/public/config/googleMapsApiKey').once('value').then(function (snap) {

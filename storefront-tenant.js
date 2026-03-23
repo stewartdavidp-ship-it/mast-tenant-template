@@ -78,6 +78,11 @@ window.TENANT_READY = new Promise(function(resolve, reject) {
       domain: publicConfig.domain || ''
     };
 
+    // Expose platform-level Google Maps API key for checkout address autocomplete
+    if (publicConfig.googleMapsApiKey) {
+      window.MAST_GOOGLE_MAPS_KEY = publicConfig.googleMapsApiKey;
+    }
+
     // Block search engines unless tenant has explicitly opted in
     if (!publicConfig.searchable) {
       var meta = document.createElement('meta');
