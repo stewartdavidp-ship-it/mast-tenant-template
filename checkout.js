@@ -267,7 +267,7 @@
         '<label class="checkout-label" for="' + prefix + 'City">City</label>' +
         '<input class="checkout-input" id="' + prefix + 'City" type="text" value="' + esc(data.city) + '" autocomplete="address-level2">' +
       '</div>' +
-      '<div class="checkout-form-group small">' +
+      '<div class="checkout-form-group state">' +
         '<label class="checkout-label" for="' + prefix + 'State">State</label>' +
         '<select class="checkout-select" id="' + prefix + 'State" autocomplete="address-level1">' +
           stateOptionsHtml(data.state) +

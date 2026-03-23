@@ -131,6 +131,10 @@
   flex: 0 0 100px;
 }
 
+.checkout-row .checkout-form-group.state {
+  flex: 0 0 140px;
+}
+
 /* Checkbox */
 .checkout-checkbox {
   display: flex;
@@ -548,7 +552,8 @@
     gap: 0;
   }
 
-  .checkout-row .checkout-form-group.small {
+  .checkout-row .checkout-form-group.small,
+  .checkout-row .checkout-form-group.state {
     flex: 1;
   }
 }
