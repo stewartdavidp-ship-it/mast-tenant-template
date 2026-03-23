@@ -471,7 +471,7 @@ window.TENANT_READY.then(function() {
       if (!data) return;
       allShopItems = Object.values(data)
         .filter(function(p) {
-          if (p.availability && p.availability !== 'available') return false;
+          if (p.availability === 'sold') return false;
           var cats = p.categories || [];
           return cats.some(function(c) { return SHOP_IDS.indexOf(c) !== -1; });
         })

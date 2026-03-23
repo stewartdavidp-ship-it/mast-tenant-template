@@ -763,8 +763,11 @@
 <div class="nav-mobile-menu" id="mobileMenu"></div>
 
 
+<!-- ============ SHOP CATEGORY NAV ============ -->
+<div class="category-filter" id="shopCategoryNav" style="padding-top: 6.5rem; padding-bottom: 1rem;"></div>
+
 <!-- ============ PRODUCT DETAIL ============ -->
-<section data-slot="product-detail" style="padding-top: 8rem;">
+<section data-slot="product-detail" style="padding-top: 2rem;">
   <div id="productLoading" class="product-loading">Loading product...</div>
   <div id="productNotFound" class="product-not-found" style="display:none;">
     <h2>Product Not Found</h2>
@@ -866,6 +869,19 @@
       document.getElementById('productNotFound').style.display = '';
       return;
     }
+
+    // Build shop category nav
+    db.ref(TENANT_ID + '/public/config/categories').once('value').then(function(catSnap) {
+      var catData = catSnap.val();
+      var navEl = document.getElementById('shopCategoryNav');
+      if (!navEl || !catData || !Array.isArray(catData)) return;
+      var cats = catData.filter(function(c) { return c && c.id && c.label; });
+      var html = '<a href="shop.html" class="filter-pill" style="text-decoration:none;">All</a>';
+      cats.forEach(function(c) {
+        html += '<a href="shop.html?cat=' + encodeURIComponent(c.id) + '" class="filter-pill" style="text-decoration:none;">' + (c.label || c.id) + '</a>';
+      });
+      navEl.innerHTML = html;
+    });
 
     db.ref(TENANT_ID + '/public/products/' + pid).once('value').then(function(snap) {
       var p = snap.val();
@@ -982,6 +998,18 @@
         });
       }
       document.getElementById('productCats').innerHTML = catsHtml;
+
+      // Highlight active category in shop nav
+      if (p.categories && p.categories.length) {
+        var navPills = document.querySelectorAll('#shopCategoryNav .filter-pill');
+        navPills.forEach(function(pill) {
+          var href = pill.getAttribute('href') || '';
+          var match = href.match(/cat=([^&]+)/);
+          if (match && p.categories.indexOf(decodeURIComponent(match[1])) !== -1) {
+            pill.classList.add('active');
+          }
+        });
+      }
 
       // Images
       var images = p.images || [];
