@@ -24,8 +24,10 @@
     url = url.replace(/\.{2,}/g, '.');
     // Prepend https:// if no protocol
     if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
-    // Validate
+    // Validate structure
     try { new URL(url); } catch (e) { return ''; }
+    // Must have at least one dot in the hostname (reject bare words like "asdfgh")
+    try { var host = new URL(url).hostname; if (host.indexOf('.') === -1) return ''; } catch (e) { return ''; }
     return url;
   }
 
