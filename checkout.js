@@ -123,7 +123,7 @@
 
   function getShippingThreshold() {
     if (isWholesaleCart()) return 350;
-    return shippingConfig && shippingConfig.freeThreshold != null ? shippingConfig.freeThreshold : null;
+    return shippingConfigCache && shippingConfigCache.freeThreshold != null ? shippingConfigCache.freeThreshold : null;
   }
 
   function calculateShipping(items, productMap, config) {
