@@ -1495,10 +1495,14 @@ window.TENANT_READY.then(function() {
       // If multiple images, rotate through them
       if (heroImages.length > 1) {
         var imgIndex = 0;
-        setInterval(function() {
-          imgIndex = (imgIndex + 1) % heroImages.length;
-          poster.style.backgroundImage = "url('" + heroImages[imgIndex].url + "')";
-        }, 6000);
+        // Read rotation speed from config (default 6s)
+        db.ref(TENANT_ID + '/public/config/hero/rotationSeconds').once('value').then(function(rSnap) {
+          var rotationMs = ((rSnap.val() || 6) * 1000);
+          setInterval(function() {
+            imgIndex = (imgIndex + 1) % heroImages.length;
+            poster.style.backgroundImage = "url('" + heroImages[imgIndex].url + "')";
+          }, rotationMs);
+        });
       }
     }
 

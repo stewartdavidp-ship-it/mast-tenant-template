@@ -15921,6 +15921,9 @@ function renderGallery() {
         '</div>' +
         '<div class="section-panel-actions">' +
           '<button class="btn btn-primary" onclick="event.stopPropagation();addGalleryImageFromLibrary(\'' + sec.id + '\')" style="font-size:0.8rem;padding:4px 12px;">+ Add from Library</button>' +
+          (sec.id === 'hero' ? '<select id="heroRotationSpeed" onchange="saveHeroRotationSpeed(this.value)" onclick="event.stopPropagation()" style="font-size:0.75rem;padding:3px 8px;border-radius:4px;border:1px solid var(--warm-gray);background:var(--surface-card);color:var(--text-primary);cursor:pointer;" title="Image rotation speed">' +
+            '<option value="3">3s</option><option value="4">4s</option><option value="5">5s</option><option value="6" selected>6s</option><option value="8">8s</option><option value="10">10s</option><option value="15">15s</option><option value="20">20s</option>' +
+          '</select>' : '') +
           '<span class="section-panel-toggle">\u25BC</span>' +
         '</div>' +
       '</div>' +
@@ -16005,6 +16008,7 @@ function renderGallery() {
   }
 
   container.innerHTML = html;
+  loadHeroRotationSpeed();
 }
 
 function toggleSectionPanel(sectionId) {
@@ -17840,6 +17844,24 @@ function confirmPickerSelection() {
   }
   imagePickerCallback = null;
   closeModal();
+}
+
+// ---- Hero rotation speed ----
+async function saveHeroRotationSpeed(seconds) {
+  try {
+    await MastDB._ref('public/config/hero/rotationSeconds').set(parseInt(seconds, 10));
+    showToast('Hero rotation set to ' + seconds + 's');
+  } catch (err) {
+    showToast('Error saving: ' + err.message, true);
+  }
+}
+
+function loadHeroRotationSpeed() {
+  MastDB._ref('public/config/hero/rotationSeconds').once('value', function(snap) {
+    var val = snap.val();
+    var sel = document.getElementById('heroRotationSpeed');
+    if (sel && val) sel.value = String(val);
+  });
 }
 
 // ---- Gallery: Add from Library flow ----
