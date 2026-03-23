@@ -1,6 +1,34 @@
 (function() {
   'use strict';
 
+  // Shared URL normalizer — fixes common typos so users don't have to be precise
+  function normalizeInputUrl(raw) {
+    var url = raw.trim();
+    if (!url) return '';
+    // Strip leading/trailing quotes or angle brackets
+    url = url.replace(/^["'<]+|["'>]+$/g, '');
+    // Fix semicolons instead of colons (https;// → https://)
+    url = url.replace(/^(https?);\/\//i, '$1://');
+    // Fix single slash (https:/ → https://)
+    url = url.replace(/^(https?):\/([^/])/i, '$1://$2');
+    // Fix missing slashes (https:example.com → https://example.com)
+    url = url.replace(/^(https?):(?!\/\/)/i, '$1://');
+    // Fix http;// or htp:// or htps:// common typos
+    url = url.replace(/^htp:\/\//i, 'http://');
+    url = url.replace(/^htps:\/\//i, 'https://');
+    // Remove accidental spaces
+    url = url.replace(/\s+/g, '');
+    // Fix commas used as dots
+    url = url.replace(/,/g, '.');
+    // Fix double dots
+    url = url.replace(/\.{2,}/g, '.');
+    // Prepend https:// if no protocol
+    if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+    // Validate
+    try { new URL(url); } catch (e) { return ''; }
+    return url;
+  }
+
   var websiteLoaded = false;
   var websiteConfig = null;
   var themeConfig = null; // public/config/theme — templateId, colorSchemeId, fontPair, colors
@@ -1099,7 +1127,7 @@
     html += '<div class="wp-field-group">';
     html += '<label>Website URL</label>';
     html += '<div style="display:flex;gap:8px;">';
-    html += '<input type="url" id="wpImportUrl" placeholder="https://www.yourbusiness.com" style="flex:1;">';
+    html += '<input type="text" id="wpImportUrl" placeholder="www.yourbusiness.com" style="flex:1;">';
     html += '<button class="btn btn-primary" onclick="wpAnalyze()" id="wpAnalyzeBtn">Analyze</button>';
     html += '</div></div>';
     html += '<div id="wpAnalyzeStatus" style="font-size:0.85rem;margin-bottom:16px;"></div>';
@@ -1945,6 +1973,9 @@
   window.wpAnalyze = async function() {
     var url = document.getElementById('wpImportUrl').value.trim();
     if (!url) { showToast('Please enter a URL.', true); return; }
+    // Normalize URL: fix common typos and ensure protocol
+    url = normalizeInputUrl(url);
+    if (!url) { showToast('That doesn\'t look like a valid URL.', true); return; }
 
     var btn = document.getElementById('wpAnalyzeBtn');
     var statusEl = document.getElementById('wpAnalyzeStatus');
