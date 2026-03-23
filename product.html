@@ -763,15 +763,22 @@
 <body>
 
 <!-- ============ NAV ============ -->
-<nav id="mainNav" style="display:none;"></nav>
+<nav id="mainNav"></nav>
 
-<div class="nav-mobile-menu" id="mobileMenu" style="display:none;"></div>
+<div class="nav-mobile-menu" id="mobileMenu"></div>
 
 <!-- ============ SHOP CATEGORY NAV ============ -->
-<div class="category-filter" id="shopCategoryNav" style="padding-top: 1.5rem; padding-bottom: 1rem; position:sticky; top:0; z-index:100; background:var(--bg);"></div>
+<div class="category-filter" id="shopCategoryNav" style="padding-bottom: 1rem;"></div>
+
+<!-- ============ PRODUCT DETAIL — adjusted for nav + category bar ============ -->
+<style>
+  /* Hide content nav links, keep cart/user icons */
+  #mainNav .nav-links a:not(.nav-shop):not(.nav-user):not(.nav-account) { display: none; }
+  #mainNav .nav-links .nav-shop { display: none; }
+</style>
 
 <!-- ============ PRODUCT DETAIL ============ -->
-<section data-slot="product-detail" style="padding-top: 2rem;">
+<section data-slot="product-detail" style="padding-top: 1rem;">
   <div id="productLoading" class="product-loading">Loading product...</div>
   <div id="productNotFound" class="product-not-found" style="display:none;">
     <h2>Product Not Found</h2>
