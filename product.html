@@ -473,6 +473,68 @@
     font-weight: 300;
   }
 
+  .product-detail-price .price-prefix {
+    font-size: 0.85rem;
+    font-weight: 400;
+    color: var(--warm-gray);
+    margin-right: 4px;
+    text-transform: lowercase;
+  }
+
+  .product-availability {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .product-availability-badge {
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 600;
+    padding: 4px 12px;
+    border-radius: 4px;
+  }
+
+  .product-availability-badge.made-to-order {
+    background: color-mix(in srgb, var(--amber) 15%, transparent);
+    color: var(--amber);
+  }
+
+  .product-availability-badge.back-ordered {
+    background: color-mix(in srgb, var(--warm-gray) 15%, transparent);
+    color: var(--warm-gray);
+  }
+
+  .product-availability-badge.sold {
+    background: var(--bg-dark, #2a2420);
+    color: var(--text-muted, #9e9890);
+  }
+
+  .product-lead-time {
+    font-size: 0.82rem;
+    color: var(--warm-gray);
+    font-style: italic;
+  }
+
+  .product-description {
+    margin-bottom: 1.5rem;
+    font-size: 0.92rem;
+    line-height: 1.7;
+    color: var(--charcoal);
+    display: none;
+  }
+
+  .product-description p {
+    margin: 0 0 0.75rem;
+  }
+
+  .product-description p:last-child {
+    margin-bottom: 0;
+  }
+
   .product-detail-cats {
     display: flex;
     gap: 8px;
@@ -722,7 +784,9 @@
       <div class="product-detail-info">
         <h1 class="product-detail-name" id="productName"></h1>
         <div class="product-detail-price" id="productPrice"></div>
+        <div class="product-availability" id="productAvailability" style="display:none;"></div>
         <div class="product-detail-cats" id="productCats"></div>
+        <div class="product-description" id="productDescription"></div>
         <div id="productOptions"></div>
         <div class="product-qty-wrap" id="productQtyWrap" style="display:none;">
           <div class="product-qty-label">Quantity</div>
@@ -827,18 +891,87 @@
       }
       document.getElementById('productName').textContent = p.name;
 
+      // ── Helpers for enriched product data ──
+      function formatPriceCents(cents) {
+        if (typeof cents !== 'number' || isNaN(cents)) return '';
+        return '$' + (cents / 100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+      }
+      function parsePriceToCents(priceStr) {
+        if (!priceStr) return 0;
+        if (typeof priceStr === 'number') return priceStr;
+        var num = parseFloat(String(priceStr).replace(/[^0-9.]/g, ''));
+        return isNaN(num) ? 0 : Math.round(num * 100);
+      }
+      function displayPrice(p) {
+        // Returns formatted price string from either cents number or formatted string
+        if (typeof p === 'number') return formatPriceCents(p);
+        return p || '';
+      }
+      function findVariant(variants, selected) {
+        if (!variants || !selected) return null;
+        var selectedKeys = Object.keys(selected);
+        if (selectedKeys.length === 0) return null;
+        for (var i = 0; i < variants.length; i++) {
+          var v = variants[i];
+          if (!v.options) continue;
+          var match = true;
+          for (var k = 0; k < selectedKeys.length; k++) {
+            if (v.options[selectedKeys[k]] !== selected[selectedKeys[k]]) { match = false; break; }
+          }
+          if (match) return v;
+        }
+        return null;
+      }
+
+      // Store variant state
+      window._productVariants = (p.variants && p.variants.length > 0) ? p.variants : null;
+      window._resolvedVariantPrice = null;
+
       // Price
       var priceEl = document.getElementById('productPrice');
-      if (p.price) {
-        priceEl.textContent = p.price;
+      if (p.priceType === 'request' || (!p.price && !p.variants)) {
+        priceEl.textContent = 'Price on request';
+        priceEl.classList.add('no-price');
+        var cartBtn = document.getElementById('addToCartBtn');
+        if (cartBtn) { cartBtn.style.display = 'none'; }
+      } else if (window._productVariants) {
+        // Find lowest variant price
+        var lowest = window._productVariants.reduce(function(min, v) {
+          return (v.price < min) ? v.price : min;
+        }, window._productVariants[0].price);
+        priceEl.innerHTML = '<span class="price-prefix">from</span>' + escHtml(formatPriceCents(lowest));
+      } else if (p.price) {
+        priceEl.textContent = displayPrice(p.price);
       } else {
         priceEl.textContent = 'Price on request';
         priceEl.classList.add('no-price');
-        // Hide cart controls for items without a price
-        var cartBtn = document.getElementById('addToCartBtn');
-        if (cartBtn) { cartBtn.style.display = 'none'; }
-        var qtyControls = document.querySelector('.qty-controls');
-        if (qtyControls) { qtyControls.style.display = 'none'; }
+        var cartBtn2 = document.getElementById('addToCartBtn');
+        if (cartBtn2) { cartBtn2.style.display = 'none'; }
+      }
+
+      // Availability & Lead Time
+      if (p.availability && p.availability !== 'in-stock') {
+        var availEl = document.getElementById('productAvailability');
+        var availHtml = '';
+        var labels = { 'made-to-order': 'Made to Order', 'back-ordered': 'Back Ordered', 'sold': 'Sold' };
+        var cssClass = p.availability;
+        if (labels[p.availability]) {
+          availHtml += '<span class="product-availability-badge ' + cssClass + '">' + labels[p.availability] + '</span>';
+        }
+        if (p.leadTime) {
+          availHtml += '<span class="product-lead-time">' + escHtml(p.leadTime) + '</span>';
+        }
+        if (availHtml) {
+          availEl.innerHTML = availHtml;
+          availEl.style.display = '';
+        }
+      }
+
+      // Description
+      if (p.description) {
+        var descEl = document.getElementById('productDescription');
+        descEl.innerHTML = p.description;
+        descEl.style.display = 'block';
       }
 
       // Categories
@@ -903,6 +1036,23 @@
             group.querySelectorAll('.product-option-chip').forEach(function(c) { c.classList.remove('selected'); });
             this.classList.add('selected');
             window._selectedOptions[label] = value;
+            // Resolve variant pricing when all options selected
+            if (window._productVariants && window._requiredOptions) {
+              var allPicked = window._requiredOptions.every(function(l) { return window._selectedOptions[l]; });
+              var priceEl = document.getElementById('productPrice');
+              if (allPicked) {
+                var variant = findVariant(window._productVariants, window._selectedOptions);
+                if (variant) {
+                  priceEl.innerHTML = formatPriceCents(variant.price);
+                  priceEl.classList.remove('no-price');
+                  window._resolvedVariantPrice = variant.price;
+                } else {
+                  priceEl.textContent = 'Combination not available';
+                  priceEl.classList.add('no-price');
+                  window._resolvedVariantPrice = null;
+                }
+              }
+            }
             checkAddToCartReady();
           });
         });
@@ -1024,7 +1174,12 @@
     var required = window._requiredOptions || [];
     var selected = window._selectedOptions || {};
     var allSelected = required.every(function(label) { return selected[label]; });
-    var hasPrice = window._productData && window._productData.price;
+    var p = window._productData;
+    var hasPrice = p && (p.price || window._resolvedVariantPrice);
+    // If variants exist, require a resolved variant price
+    if (window._productVariants) {
+      hasPrice = !!window._resolvedVariantPrice;
+    }
     var btn = document.getElementById('addToCartBtn');
     if (allSelected && hasPrice) {
       btn.disabled = false;
@@ -1044,10 +1199,15 @@
     if (!p) return;
 
     var images = window._productImages || [];
+    var resolvedPrice = window._resolvedVariantPrice
+      ? formatPriceCents(window._resolvedVariantPrice)
+      : displayPrice(p.price);
+    var resolvedCents = window._resolvedVariantPrice || parsePriceToCents(p.price);
     MastCart.addItem({
       pid: p.pid,
       name: p.name,
-      price: p.price || '',
+      price: resolvedPrice,
+      priceCents: resolvedCents,
       image: images[0] || '',
       options: Object.assign({}, window._selectedOptions),
       qty: window._productQty || 1

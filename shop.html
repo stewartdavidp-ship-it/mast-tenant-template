@@ -517,15 +517,33 @@ window.TENANT_READY.then(function() {
         var link = pid ? 'product.html?id=' + encodeURIComponent(pid) : 'shop.html';
         var isLocal = !!pid;
         var isSoldSculpture = product.businessLine === 'sculpture' && product.status === 'sold';
+        var isSold = product.availability === 'sold' || isSoldSculpture;
+        var isMadeToOrder = product.availability === 'made-to-order';
+        var isBackOrdered = product.availability === 'back-ordered';
+        var showBadge = isSold || isMadeToOrder || isBackOrdered;
+        var badgeLabel = isSold ? 'Sold' : isMadeToOrder ? 'Made to Order' : 'Back Ordered';
+        var badgeBg = isSold ? 'rgba(92,61,46,0.85)' : isMadeToOrder ? 'rgba(200,160,60,0.85)' : 'rgba(120,120,120,0.85)';
+        // Format price with "from" prefix for variant products
+        var priceDisplay = '';
+        if (isSold || isSoldSculpture) {
+          priceDisplay = '<p class="product-price" style="font-size:0.82rem;color:var(--warm-gray,#6B6560);">Commission available</p>';
+        } else if (product.priceType === 'request') {
+          priceDisplay = '<p class="product-price" style="font-size:0.82rem;color:var(--warm-gray,#6B6560);">Price on request</p>';
+        } else if (product.priceType === 'from' && price) {
+          var formattedPrice = typeof product.price === 'number' ? ('$' + (product.price / 100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')) : esc(price);
+          priceDisplay = '<p class="product-price"><span style="font-size:0.8rem;color:var(--warm-gray,#6B6560);font-weight:400;">from </span>' + formattedPrice + '</p>';
+        } else if (price) {
+          priceDisplay = '<p class="product-price">' + esc(price) + '</p>';
+        }
         html += '<div class="product-card fade-up" style="opacity:1;transform:translateY(0)">' +
-          '<div class="product-image"' + (isSoldSculpture ? ' style="position:relative;"' : '') + '><a href="' + esc(link) + '"' + (isLocal ? '' : ' target="_blank" rel="noopener"') + '>' + (img ? '<img src="' + esc(img) + '" alt="' + esc(name) + '" loading="lazy" />' : '') + '</a>' +
-            (isSoldSculpture ? '<span style="position:absolute;top:8px;right:8px;background:rgba(92,61,46,0.85);color:white;font-size:0.7rem;font-weight:600;padding:3px 8px;border-radius:4px;">Sold</span>' : '') +
+          '<div class="product-image" style="position:relative;"><a href="' + esc(link) + '"' + (isLocal ? '' : ' target="_blank" rel="noopener"') + '>' + (img ? '<img src="' + esc(img) + '" alt="' + esc(name) + '" loading="lazy" />' : '') + '</a>' +
+            (showBadge ? '<span style="position:absolute;top:8px;right:8px;background:' + badgeBg + ';color:white;font-size:0.7rem;font-weight:600;padding:3px 8px;border-radius:4px;">' + badgeLabel + '</span>' : '') +
           '</div>' +
           '<div class="product-info">' +
             '<span class="product-category">' + esc(cat.label) + '</span>' +
             '<h3>' + esc(name) + '</h3>' +
-            (isSoldSculpture ? '<p class="product-price" style="font-size:0.82rem;color:var(--warm-gray,#6B6560);">Commission available</p>' : (price ? '<p class="product-price">' + esc(price) + '</p>' : '')) +
-            (link ? '<a href="' + esc(link) + '" class="product-link"' + (isLocal ? '' : ' target="_blank" rel="noopener"') + '>' + (isSoldSculpture ? 'Request Commission' : 'View Details') + '</a>' : '') +
+            priceDisplay +
+            (link ? '<a href="' + esc(link) + '" class="product-link"' + (isLocal ? '' : ' target="_blank" rel="noopener"') + '>' + (isSold ? 'Request Commission' : 'View Details') + '</a>' : '') +
           '</div></div>';
       });
       html += '</div>';
