@@ -2247,6 +2247,7 @@
   window.wpPublishProduct = async function(pid) {
     try {
       await MastDB._ref('public/products/' + pid + '/status').set('active');
+      writeAudit('update', 'products', pid);
       showToast('Product published!');
       await loadImportedProducts();
       renderWebsite();
@@ -2262,7 +2263,8 @@
     try {
       var updates = {};
       drafts.forEach(function(p) { updates['public/products/' + p.id + '/status'] = 'active'; });
-      await MastDB._ref().update(updates);
+      await MastDB._multiUpdate(updates);
+      drafts.forEach(function(p) { writeAudit('update', 'products', p.id); });
       showToast(drafts.length + ' product' + (drafts.length !== 1 ? 's' : '') + ' published!');
       await loadImportedProducts();
       renderWebsite();

@@ -2259,6 +2259,7 @@
             createdAt: now,
             updatedAt: now
           });
+          writeAudit('create', 'products', pid);
         }
         imported++;
       } catch (err) {

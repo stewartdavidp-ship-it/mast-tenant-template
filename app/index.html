@@ -15823,11 +15823,13 @@ async function saveAdjustStock(pid) {
       var finalAvail = updates['stock/_default/available'] || 0;
       if (finalAvail <= 0) {
         await MastDB.products.statusRef(pid).set('sold');
+        writeAudit('update', 'products', pid);
         var localP = productsData.find(function(x) { return x.pid === pid; });
         if (localP) localP.status = 'sold';
       } else {
         // Clear sold status if restocked
         await MastDB.products.statusRef(pid).remove();
+        writeAudit('update', 'products', pid);
         var localP = productsData.find(function(x) { return x.pid === pid; });
         if (localP) delete localP.status;
       }
