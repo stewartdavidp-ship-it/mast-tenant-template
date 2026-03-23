@@ -122,21 +122,22 @@
   }
 
   function getShippingThreshold() {
-    if (isWholesaleCart()) return 350;
+    if (isWholesaleCart()) return shippingConfigCache && shippingConfigCache.wholesaleFreeThreshold != null ? shippingConfigCache.wholesaleFreeThreshold : 350;
     return shippingConfigCache && shippingConfigCache.freeThreshold != null ? shippingConfigCache.freeThreshold : null;
   }
 
   function calculateShipping(items, productMap, config) {
     var subtotal = calcSubtotal();
     var ws = isWholesaleCart();
-    var threshold = ws ? 350 : (config.freeThreshold != null ? config.freeThreshold : null);
+    var threshold = ws ? (config.wholesaleFreeThreshold != null ? config.wholesaleFreeThreshold : 350) : (config.freeThreshold != null ? config.freeThreshold : null);
     if (threshold != null && subtotal >= threshold) {
       return { price: 0, label: 'Free Shipping', description: 'Free shipping on orders over ' + formatMoney(threshold), category: 'free' };
     }
-    // Wholesale: 10% of subtotal
+    // Wholesale: percentage of subtotal (default 10%)
     if (ws) {
-      var wsPrice = Math.round(subtotal * 10) / 100;
-      return { price: wsPrice, label: 'Standard Shipping', description: '10% of order subtotal', category: 'wholesale' };
+      var wsRate = config.wholesaleShippingPercent != null ? config.wholesaleShippingPercent : 10;
+      var wsPrice = Math.round(subtotal * wsRate) / 100;
+      return { price: wsPrice, label: 'Standard Shipping', description: wsRate + '% of order subtotal', category: 'wholesale' };
     }
     var catOrder = ['small', 'medium', 'large', 'oversized'];
     var highestIdx = 0;

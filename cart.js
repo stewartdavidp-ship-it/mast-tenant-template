@@ -22,6 +22,7 @@
   // is shared with siteSignIn() and other page-level Firebase usage.
   var fireApp, fireDb, fireAuth, currentUser = null;
   var _cartFreeThreshold = null; // loaded from shipping config
+  var _cartWholesaleFreeThreshold = 350; // default, loaded from config
 
   function initFirebase() {
     try {
@@ -42,9 +43,11 @@
 
   function loadFreeShippingThreshold() {
     if (!fireDb || !TENANT_ID) return;
-    fireDb.ref(TENANT_ID + '/public/config/shippingRates/freeThreshold').once('value').then(function(snap) {
-      var val = snap.val();
+    fireDb.ref(TENANT_ID + '/public/config/shippingRates').once('value').then(function(snap) {
+      var config = snap.val() || {};
+      var val = config.freeThreshold;
       _cartFreeThreshold = (val != null && val > 0) ? val : null;
+      if (config.wholesaleFreeThreshold != null) _cartWholesaleFreeThreshold = config.wholesaleFreeThreshold;
     }).catch(function() { /* silent */ });
   }
 
@@ -586,7 +589,7 @@
         subtotal += p * (cart[s].qty || 1);
         if (cart[s].isWholesale) hasWholesale = true;
       }
-      var freeThreshold = hasWholesale ? 350 : _cartFreeThreshold;
+      var freeThreshold = hasWholesale ? _cartWholesaleFreeThreshold : _cartFreeThreshold;
       var summaryText = count + ' item' + (count !== 1 ? 's' : '') + ' in cart';
       if (subtotal > 0) summaryText += ' \u00B7 $' + subtotal.toFixed(2);
       var shippingHtml = '';
