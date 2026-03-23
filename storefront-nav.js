@@ -110,7 +110,7 @@
   var CONTENT_CONTEXT_SECTIONS = ['about', 'blog', 'schedule'];
   // Shop is always shown in both contexts
   // Shop context page basenames (without .html — Firebase Hosting uses clean URLs)
-  var SHOP_CONTEXT_PAGES = ['shop', 'orders', 'wholesale', 'commission'];
+  var SHOP_CONTEXT_PAGES = ['shop', 'product', 'orders', 'wholesale', 'commission'];
 
   /**
    * Detect if current page is in shop context.

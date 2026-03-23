@@ -107,15 +107,15 @@
     // Apply explicit color overrides
     // In dark mode, skip bg/text overrides — let storefront.css dark mode values win
     var isDark = root.classList.contains('dark') || window.matchMedia('(prefers-color-scheme: dark)').matches;
-    var DARK_MODE_SKIP = isDark ? { bgColor: 1, bgDarkColor: 1, textColor: 1, textMutedColor: 1, textLightColor: 1 } : {};
+    var DARK_MODE_SKIP = isDark ? { bgColor: 1, bgDarkColor: 1, textColor: 1, textMutedColor: 1, textLightColor: 1, primaryColor: 1, accentColor: 1 } : {};
     Object.keys(COLOR_MAP).forEach(function (key) {
       if (config[key] && !DARK_MODE_SKIP[key]) {
         root.style.setProperty(COLOR_MAP[key], config[key]);
       }
     });
 
-    // Auto-generate variants if only primary/accent provided
-    if (config.primaryColor) {
+    // Auto-generate variants if only primary/accent provided (skip in dark mode)
+    if (config.primaryColor && !isDark) {
       if (!config.primaryLightColor) {
         root.style.setProperty('--primary-light', adjustColor(config.primaryColor, 1.25));
       }
@@ -131,7 +131,7 @@
         'linear-gradient(135deg, ' + config.primaryColor + ' 0%, ' + pl + ' 30%, ' + al + ' 70%, ' + accent + ' 100%)');
     }
 
-    if (config.accentColor) {
+    if (config.accentColor && !isDark) {
       if (!config.accentDeepColor) {
         root.style.setProperty('--accent-deep', adjustColor(config.accentColor, 0.7));
       }
