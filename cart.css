@@ -359,7 +359,7 @@
 /* ========= TOAST NOTIFICATION ========= */
 .cart-toast-container {
   position: fixed;
-  bottom: 24px;
+  top: 80px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 10100;
@@ -371,28 +371,29 @@
 }
 
 .cart-toast {
-  background: var(--surface-dark);
-  color: var(--on-dark);
-  padding: 14px 28px;
-  border-radius: 10px;
+  background: var(--primary, #2a9d8f);
+  color: #fff;
+  padding: 16px 32px;
+  border-radius: 12px;
   font-family: 'DM Sans', sans-serif;
-  font-size: 1.05rem;
-  font-weight: 500;
-  box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+  font-size: 1.1rem;
+  font-weight: 600;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
   opacity: 1;
-  animation: cartToastIn 0.3s ease, cartToastOut 0.3s ease 4.7s forwards;
+  animation: cartToastIn 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275), cartToastOut 0.3s ease 4.7s forwards;
   max-width: 90vw;
   text-align: center;
+  letter-spacing: 0.02em;
 }
 
 .cart-toast.error {
   background: #dc3545;
-  animation: cartToastIn 0.3s ease, cartToastShake 0.5s ease 0.3s, cartToastOut 0.3s ease 4.7s forwards;
+  animation: cartToastIn 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275), cartToastShake 0.5s ease 0.3s, cartToastOut 0.3s ease 4.7s forwards;
 }
 
 @keyframes cartToastIn {
-  from { transform: translateY(10px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  from { transform: translateY(-20px) scale(0.95); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
 }
 
 @keyframes cartToastShake {
@@ -425,7 +426,7 @@
   }
 
   .cart-toast-container {
-    bottom: 16px;
+    top: 70px;
     left: 16px;
     right: 16px;
     transform: none;
