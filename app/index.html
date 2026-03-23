@@ -11869,7 +11869,7 @@ function loadSquareConfig() {
 async function saveShippingConfig() {
   if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
   var categories = ['small', 'medium', 'large', 'oversized'];
-  var config = { additionalItemSurcharge: 2, freeThreshold: 100, packingBufferOz: 8 };
+  var config = { additionalItemSurcharge: 2, freeThreshold: null, packingBufferOz: 8 };
 
   categories.forEach(function(cat) {
     var capCat = cat.charAt(0).toUpperCase() + cat.slice(1);

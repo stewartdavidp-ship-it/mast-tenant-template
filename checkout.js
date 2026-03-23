@@ -33,7 +33,7 @@
     large:     { rate: 15, boxL: 14, boxW: 12, boxH: 8 },
     oversized: { rate: 22, boxL: 20, boxW: 16, boxH: 12 },
     additionalItemSurcharge: 2,
-    freeThreshold: 100,
+    freeThreshold: null,
     packingBufferOz: 8
   };
 
@@ -122,14 +122,15 @@
   }
 
   function getShippingThreshold() {
-    return isWholesaleCart() ? 350 : 100;
+    if (isWholesaleCart()) return 350;
+    return shippingConfig && shippingConfig.freeThreshold != null ? shippingConfig.freeThreshold : null;
   }
 
   function calculateShipping(items, productMap, config) {
     var subtotal = calcSubtotal();
     var ws = isWholesaleCart();
-    var threshold = ws ? 350 : (config.freeThreshold != null ? config.freeThreshold : 100);
-    if (subtotal >= threshold) {
+    var threshold = ws ? 350 : (config.freeThreshold != null ? config.freeThreshold : null);
+    if (threshold != null && subtotal >= threshold) {
       return { price: 0, label: 'Free Shipping', description: 'Free shipping on orders over ' + formatMoney(threshold), category: 'free' };
     }
     // Wholesale: 10% of subtotal
@@ -333,14 +334,16 @@
       '</div>';
     }
 
-    // Free shipping reminder on address step
+    // Free shipping reminder on address step (only if threshold is configured)
     var addrSubtotal = calcSubtotal();
     var addrFreeThreshold = getShippingThreshold();
-    if (addrSubtotal >= addrFreeThreshold) {
-      html += '<div style="text-align:center;color:#2D7D46;font-size:0.75rem;margin:12px 0 4px;letter-spacing:0.08em;">&#10003; FREE SHIPPING on this order!</div>';
-    } else if (addrSubtotal > 0) {
-      var addrAway = (addrFreeThreshold - addrSubtotal).toFixed(2);
-      html += '<div style="text-align:center;color:var(--warm-gray,#9B958E);font-size:0.75rem;margin:12px 0 4px;letter-spacing:0.08em;">You\'re $' + addrAway + ' away from free shipping!</div>';
+    if (addrFreeThreshold != null) {
+      if (addrSubtotal >= addrFreeThreshold) {
+        html += '<div style="text-align:center;color:#2D7D46;font-size:0.75rem;margin:12px 0 4px;letter-spacing:0.08em;">&#10003; FREE SHIPPING on this order!</div>';
+      } else if (addrSubtotal > 0) {
+        var addrAway = (addrFreeThreshold - addrSubtotal).toFixed(2);
+        html += '<div style="text-align:center;color:var(--warm-gray,#9B958E);font-size:0.75rem;margin:12px 0 4px;letter-spacing:0.08em;">You\'re $' + addrAway + ' away from free shipping!</div>';
+      }
     }
 
     body.innerHTML = html;
@@ -763,11 +766,13 @@
 
     html += '<div class="order-total-row grand-total"><span class="order-total-label">Total</span><span class="order-total-value">' + formatMoney(total) + '</span></div>';
     var totFreeThreshold = getShippingThreshold();
-    if (subtotal >= totFreeThreshold) {
-      html += '<div style="text-align:center;color:#2D7D46;font-size:0.75rem;margin-top:8px;letter-spacing:0.08em;">&#10003; FREE SHIPPING</div>';
-    } else if (subtotal > 0) {
-      var away = (totFreeThreshold - subtotal).toFixed(2);
-      html += '<div style="text-align:center;color:var(--warm-gray,#9B958E);font-size:0.75rem;margin-top:8px;letter-spacing:0.08em;">You\'re $' + away + ' away from free shipping!</div>';
+    if (totFreeThreshold != null) {
+      if (subtotal >= totFreeThreshold) {
+        html += '<div style="text-align:center;color:#2D7D46;font-size:0.75rem;margin-top:8px;letter-spacing:0.08em;">&#10003; FREE SHIPPING</div>';
+      } else if (subtotal > 0) {
+        var away = (totFreeThreshold - subtotal).toFixed(2);
+        html += '<div style="text-align:center;color:var(--warm-gray,#9B958E);font-size:0.75rem;margin-top:8px;letter-spacing:0.08em;">You\'re $' + away + ' away from free shipping!</div>';
+      }
     }
     html += '</div>';
     return html;
