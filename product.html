@@ -911,22 +911,24 @@
       }
       document.getElementById('productName').textContent = p.name;
 
-      // ── Helpers for enriched product data ──
-      function formatPriceCents(cents) {
+      // ── Helpers for enriched product data (window-scoped for add-to-cart) ──
+      window.formatPriceCents = function(cents) {
         if (typeof cents !== 'number' || isNaN(cents)) return '';
         return '$' + (cents / 100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-      }
-      function parsePriceToCents(priceStr) {
+      };
+      window.parsePriceToCents = function(priceStr) {
         if (!priceStr) return 0;
         if (typeof priceStr === 'number') return priceStr;
         var num = parseFloat(String(priceStr).replace(/[^0-9.]/g, ''));
         return isNaN(num) ? 0 : Math.round(num * 100);
-      }
-      function displayPrice(p) {
-        // Returns formatted price string from either cents number or formatted string
+      };
+      window.displayPrice = function(p) {
         if (typeof p === 'number') return formatPriceCents(p);
         return p || '';
-      }
+      };
+      var formatPriceCents = window.formatPriceCents;
+      var parsePriceToCents = window.parsePriceToCents;
+      var displayPrice = window.displayPrice;
       function findVariant(variants, selected) {
         if (!variants || !selected) return null;
         var selectedKeys = Object.keys(selected);
