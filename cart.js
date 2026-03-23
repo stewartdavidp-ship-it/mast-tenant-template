@@ -302,6 +302,7 @@
         var name = user.displayName || user.email || 'Account';
         var first = name.split(' ')[0];
         el.textContent = first;
+        el.classList.add('nav-user');
         el.setAttribute('onclick', "event.preventDefault(); siteSignOut();" + (el.getAttribute('onclick').indexOf('closeMobileMenu') !== -1 ? ' closeMobileMenu();' : ''));
       }
     }
