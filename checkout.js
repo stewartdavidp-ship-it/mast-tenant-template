@@ -1448,7 +1448,7 @@
     if (google.maps.places.PlaceAutocompleteElement) {
       var pac = new google.maps.places.PlaceAutocompleteElement({
         includedRegionCodes: ['us'],
-        includedPrimaryTypes: ['address']
+        includedPrimaryTypes: ['street_address']
       });
       pac.style.cssText = 'width:100%;';
       input.parentNode.replaceChild(pac, input);
