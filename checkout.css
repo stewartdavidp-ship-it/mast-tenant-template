@@ -180,7 +180,7 @@
 
 .shipping-option.selected {
   border-color: var(--primary);
-  background: #FFF9F3;
+  background: var(--surface-card, #FFF9F3);
 }
 
 .shipping-option-radio {
