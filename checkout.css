@@ -16,7 +16,7 @@
   font-size: 0.7rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #C4B9A8;
+  color: var(--text-light);
   white-space: nowrap;
 }
 
@@ -38,7 +38,7 @@
   justify-content: center;
   font-size: 0.65rem;
   font-weight: 700;
-  border: 1.5px solid #C4B9A8;
+  border: 1.5px solid var(--text-light);
   flex-shrink: 0;
 }
 
@@ -55,7 +55,7 @@
 }
 
 .checkout-step-arrow {
-  color: #D5CBBD;
+  color: var(--text-light);
   font-size: 0.7rem;
   margin: 0 6px;
   flex-shrink: 0;
@@ -92,7 +92,7 @@
 .checkout-select {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid #E0D8CC;
+  border: 1px solid var(--surface-card-border);
   border-radius: 4px;
   font-family: 'DM Sans', sans-serif;
   height: 42px;
@@ -167,7 +167,7 @@
   align-items: center;
   gap: 12px;
   padding: 14px 16px;
-  border: 1.5px solid #E0D8CC;
+  border: 1.5px solid var(--surface-card-border);
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s;
@@ -180,14 +180,14 @@
 
 .shipping-option.selected {
   border-color: var(--primary);
-  background: var(--surface-card, #FFF9F3);
+  background: var(--surface-card);
 }
 
 .shipping-option-radio {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  border: 2px solid #C4B9A8;
+  border: 2px solid var(--text-light);
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -258,7 +258,7 @@
 }
 
 .coupon-apply-btn:hover {
-  background: #333;
+  filter: brightness(0.85);
 }
 
 .coupon-apply-btn:disabled {
@@ -577,7 +577,7 @@
 /* ========= GOOGLE PLACES AUTOCOMPLETE ========= */
 .pac-container {
   font-family: 'DM Sans', sans-serif;
-  border: 1px solid #E0D8CC;
+  border: 1px solid var(--surface-card-border);
   border-radius: 4px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.1);
   z-index: 10001;
@@ -589,7 +589,7 @@
   cursor: pointer;
 }
 .pac-item:hover {
-  background: #FFF9F3;
+  background: var(--surface-card);
 }
 .pac-item-query {
   color: var(--primary);
@@ -610,5 +610,5 @@
   letter-spacing: 0.02em;
 }
 .checkout-btn-secondary:hover {
-  background: #333;
+  filter: brightness(0.85);
 }

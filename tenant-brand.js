@@ -162,9 +162,10 @@
     }
 
     // Update footer logo and gate logos from nav config logoUrl
-    if (tenantId) {
+    var tid = window.TENANT_ID;
+    if (tid) {
       var tenantDb = firebase.database();
-      tenantDb.ref(tenantId + '/public/config/nav/logoUrl').once('value').then(function(snap) {
+      tenantDb.ref(tid + '/public/config/nav/logoUrl').once('value').then(function(snap) {
         var logoUrl = snap.val();
         if (logoUrl) {
           var logoEls = document.querySelectorAll('.footer-logo img, .ws-gate-logo');
