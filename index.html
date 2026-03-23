@@ -71,6 +71,17 @@
     transition: opacity 1s ease;
   }
 
+  /* Blurred fill behind the contained product image — eliminates black bars */
+  .hero-poster::before {
+    content: '';
+    position: absolute;
+    inset: -20px;
+    background: inherit;
+    background-size: cover;
+    filter: blur(30px) brightness(0.4);
+    z-index: -1;
+  }
+
   .hero-poster.loaded { opacity: 0; pointer-events: none; }
 
   /* Dark gradient overlay — ensures text is legible over any image or video */
