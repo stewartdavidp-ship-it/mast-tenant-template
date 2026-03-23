@@ -69,9 +69,21 @@
     z-index: 1;
     background-color: #0a0a0a;
     background-position: center;
-    background-size: cover;
+    background-size: contain;
     background-repeat: no-repeat;
     transition: opacity 1s ease;
+  }
+
+  /* Softly extended background fill — scales the image to cover
+     but heavily darkened, with the sharp contained image on top */
+  .hero-poster::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: inherit;
+    background-size: cover;
+    opacity: 0.3;
+    z-index: -1;
   }
 
   .hero-poster.loaded { opacity: 0; pointer-events: none; }
