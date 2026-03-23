@@ -163,7 +163,7 @@
 
     // Update footer logo and gate logos from nav config logoUrl
     var tid = window.TENANT_ID;
-    if (tid) {
+    if (tid && typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0) {
       var tenantDb = firebase.database();
       tenantDb.ref(tid + '/public/config/nav/logoUrl').once('value').then(function(snap) {
         var logoUrl = snap.val();
