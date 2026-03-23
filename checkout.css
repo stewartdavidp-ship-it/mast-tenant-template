@@ -95,6 +95,7 @@
   border: 1px solid #E0D8CC;
   border-radius: 4px;
   font-family: 'DM Sans', sans-serif;
+  height: 42px;
   font-size: 0.88rem;
   color: var(--text);
   background: var(--surface-card);
