@@ -21,6 +21,7 @@
   // Use the default Firebase app (initialized by the page) so auth state
   // is shared with siteSignIn() and other page-level Firebase usage.
   var fireApp, fireDb, fireAuth, currentUser = null;
+  var _cartFreeThreshold = null; // loaded from shipping config
 
   function initFirebase() {
     try {
@@ -37,6 +38,14 @@
     window.addEventListener('storefront-nav-ready', function () {
       if (currentUser) updateNavAuth(currentUser);
     });
+  }
+
+  function loadFreeShippingThreshold() {
+    if (!fireDb || !TENANT_ID) return;
+    fireDb.ref(TENANT_ID + '/public/config/shippingRates/freeThreshold').once('value').then(function(snap) {
+      var val = snap.val();
+      _cartFreeThreshold = (val != null && val > 0) ? val : null;
+    }).catch(function() { /* silent */ });
   }
 
   // ── Cart State ──
@@ -577,13 +586,13 @@
         subtotal += p * (cart[s].qty || 1);
         if (cart[s].isWholesale) hasWholesale = true;
       }
-      var freeThreshold = hasWholesale ? 350 : 100;
+      var freeThreshold = hasWholesale ? 350 : _cartFreeThreshold;
       var summaryText = count + ' item' + (count !== 1 ? 's' : '') + ' in cart';
       if (subtotal > 0) summaryText += ' \u00B7 $' + subtotal.toFixed(2);
       var shippingHtml = '';
-      if (subtotal >= freeThreshold) {
+      if (freeThreshold != null && subtotal >= freeThreshold) {
         shippingHtml = '<div style="color:#2D7D46;font-size:0.75rem;margin-top:6px;letter-spacing:0.08em;">&#10003; FREE SHIPPING</div>';
-      } else if (subtotal > 0) {
+      } else if (freeThreshold != null && subtotal > 0) {
         var away = (freeThreshold - subtotal).toFixed(2);
         shippingHtml = '<div style="color:var(--warm-gray);font-size:0.75rem;margin-top:6px;letter-spacing:0.08em;">You\'re $' + away + ' away from free shipping!</div>';
       }
@@ -685,6 +694,7 @@
     FIREBASE_CONFIG = (typeof TENANT_FIREBASE_CONFIG !== 'undefined') ? TENANT_FIREBASE_CONFIG : {};
     loadLocal();
     initFirebase();
+    loadFreeShippingThreshold();
     injectDrawer();
     updateBadge();
     renderDrawerItems();
