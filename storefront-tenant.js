@@ -78,10 +78,9 @@ window.TENANT_READY = new Promise(function(resolve, reject) {
       domain: publicConfig.domain || ''
     };
 
-    // Expose platform-level Google Maps API key for checkout address autocomplete
-    if (publicConfig.googleMapsApiKey) {
-      window.MAST_GOOGLE_MAPS_KEY = publicConfig.googleMapsApiKey;
-    }
+    // Platform-level Google Maps API key for checkout address autocomplete
+    // Client-side key, restricted by HTTP referrer (*.web.app, *.runmast.com)
+    window.MAST_GOOGLE_MAPS_KEY = publicConfig.googleMapsApiKey || 'AIzaSyBVvmq3xHDnSHFY8KrypURwwYC4Th69P3U';
 
     // Block search engines unless tenant has explicitly opted in
     if (!publicConfig.searchable) {
