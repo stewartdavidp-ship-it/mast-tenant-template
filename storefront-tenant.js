@@ -1,5 +1,5 @@
 /**
- * Storefront Tenant Resolution + Firebase Config
+ * Storefront Tenant Resolution + Firebase Config + Parallel Data Prefetch
  *
  * Resolves the current tenant dynamically from the Mast platform RTDB.
  * All storefront files include this script before other JS to make
@@ -10,9 +10,13 @@
  *   2. Check localStorage cache (5-minute TTL)
  *   3. On cache miss: fetch tenantsByDomain → tenantId → publicConfig
  *   4. Set globals and resolve window.TENANT_READY
+ *   5. Immediately fire parallel prefetch of theme, nav, promoBanner
+ *      → exposed as window.STOREFRONT_DATA (Promise)
  *
  * Downstream pages should await window.TENANT_READY before using
  * TENANT_ID, TENANT_FIREBASE_CONFIG, or TENANT_BRAND.
+ * storefront-theme.js and storefront-nav.js await STOREFRONT_DATA
+ * instead of making their own Firebase calls.
  */
 
 var TENANT_ID = null;
@@ -181,4 +185,92 @@ window.TENANT_READY = new Promise(function(resolve, reject) {
       showError();
       reject(err);
     });
+});
+
+/**
+ * Parallel prefetch of storefront config data.
+ * Fires theme, nav, and promoBanner reads simultaneously once tenant is resolved.
+ * Also prefetches page-specific data based on current pathname.
+ *
+ * Downstream scripts (storefront-theme.js, storefront-nav.js) consume
+ * this promise instead of making their own Firebase calls.
+ *
+ * Caches in localStorage alongside tenant data (same 5-min TTL).
+ */
+window.STOREFRONT_DATA = window.TENANT_READY.then(function() {
+  if (!TENANT_ID || !TENANT_FIREBASE_CONFIG || !TENANT_FIREBASE_CONFIG.databaseURL) {
+    return { theme: null, nav: null, promo: null, pageData: null };
+  }
+
+  var hostname = window.location.hostname;
+  var cacheKey = 'mast_storefront_' + hostname;
+
+  // Check cache
+  try {
+    var raw = localStorage.getItem(cacheKey);
+    if (raw) {
+      var cached = JSON.parse(raw);
+      if (Date.now() - cached.timestamp < CACHE_TTL_MS) {
+        return cached.data;
+      }
+      localStorage.removeItem(cacheKey);
+    }
+  } catch (e) { /* ignore */ }
+
+  var baseUrl = TENANT_FIREBASE_CONFIG.databaseURL + '/' + TENANT_ID + '/public/';
+
+  function safeFetch(url) {
+    return fetch(url)
+      .then(function(resp) { return resp.ok ? resp.json() : null; })
+      .catch(function() { return null; });
+  }
+
+  // Core config fetches — always needed
+  var fetches = [
+    safeFetch(baseUrl + 'config/theme.json'),
+    safeFetch(baseUrl + 'config/nav.json'),
+    safeFetch(baseUrl + 'config/promoBanner.json')
+  ];
+
+  // Page-specific data prefetch
+  var path = window.location.pathname.replace(/\.html$/, '').replace(/\/$/, '') || '/';
+  var pageDataKey = null;
+  if (path === '/' || path === '/index') {
+    fetches.push(safeFetch(baseUrl + 'gallery.json'));
+    pageDataKey = 'gallery';
+  } else if (path === '/shop' || path.endsWith('/shop')) {
+    fetches.push(Promise.all([
+      safeFetch(baseUrl + 'products.json'),
+      safeFetch(baseUrl + 'config/categories.json')
+    ]).then(function(r) { return { products: r[0], categories: r[1] }; }));
+    pageDataKey = 'shop';
+  } else if (path === '/about' || path.endsWith('/about')) {
+    fetches.push(safeFetch(baseUrl + 'config/about.json'));
+    pageDataKey = 'about';
+  } else if (path === '/schedule' || path.endsWith('/schedule')) {
+    fetches.push(safeFetch(baseUrl + 'events.json'));
+    pageDataKey = 'schedule';
+  }
+
+  return Promise.all(fetches).then(function(results) {
+    var data = {
+      theme: results[0],
+      nav: results[1],
+      promo: results[2],
+      pageData: pageDataKey ? { type: pageDataKey, data: results[3] } : null
+    };
+
+    // Cache the result
+    try {
+      localStorage.setItem(cacheKey, JSON.stringify({
+        timestamp: Date.now(),
+        data: data
+      }));
+    } catch (e) { /* localStorage full — non-fatal */ }
+
+    return data;
+  });
+}).catch(function() {
+  // Tenant resolution failed — return empty data so downstream doesn't hang
+  return { theme: null, nav: null, promo: null, pageData: null };
 });

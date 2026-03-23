@@ -287,25 +287,28 @@
       return;
     }
 
-    Promise.all([window.TENANT_READY, domReady]).then(function () {
-      if (!window.TENANT_ID || !window.TENANT_FIREBASE_CONFIG || !window.TENANT_FIREBASE_CONFIG.databaseURL) {
-        buildNav(DEFAULT_SECTIONS, {});
-        return;
-      }
+    // Use prefetched data from storefront-tenant.js if available
+    var dataPromise;
+    if (window.STOREFRONT_DATA) {
+      dataPromise = Promise.all([window.STOREFRONT_DATA, domReady]).then(function(results) {
+        var data = results[0];
+        return [data ? data.nav : null, data ? data.promo : null];
+      });
+    } else {
+      // Fallback: fetch directly (shouldn't happen in normal flow)
+      dataPromise = Promise.all([window.TENANT_READY, domReady]).then(function() {
+        if (!window.TENANT_ID || !window.TENANT_FIREBASE_CONFIG || !window.TENANT_FIREBASE_CONFIG.databaseURL) {
+          return [null, null];
+        }
+        var baseUrl = window.TENANT_FIREBASE_CONFIG.databaseURL + '/' + window.TENANT_ID + '/public/config/';
+        return Promise.all([
+          fetch(baseUrl + 'nav.json').then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; }),
+          fetch(baseUrl + 'promoBanner.json').then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; })
+        ]);
+      });
+    }
 
-      var baseUrl = window.TENANT_FIREBASE_CONFIG.databaseURL + '/' + window.TENANT_ID + '/public/config/';
-      var navUrl = baseUrl + 'nav.json';
-      var bannerUrl = baseUrl + 'promoBanner.json';
-
-      // Fetch nav config and promo banner in parallel
-      var navPromise = fetch(navUrl)
-        .then(function (resp) { return resp.ok ? resp.json() : null; })
-        .catch(function () { return null; });
-      var bannerPromise = fetch(bannerUrl)
-        .then(function (resp) { return resp.ok ? resp.json() : null; })
-        .catch(function () { return null; });
-
-      Promise.all([navPromise, bannerPromise]).then(function (results) {
+    dataPromise.then(function (results) {
         var config = results[0];
         var bannerConfig = results[1];
         // Remove any hardcoded free-ship-banner from HTML
@@ -349,7 +352,6 @@
         console.warn('[storefront-nav] Failed to load nav config:', err.message);
         buildNav(DEFAULT_SECTIONS, {});
       });
-    });
   }
 
   /**

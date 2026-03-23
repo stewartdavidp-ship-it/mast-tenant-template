@@ -315,7 +315,8 @@
   }
 
   /**
-   * Fetch tenant theme config from Firebase RTDB (REST API).
+   * Load tenant theme config — from prefetched STOREFRONT_DATA if available,
+   * otherwise falls back to direct Firebase RTDB fetch.
    */
   function fetchThemeConfig() {
     if (!window.TENANT_READY) return;
@@ -325,18 +326,22 @@
       window.MAST_PREVIEW_MODE = true;
     }
 
-    window.TENANT_READY.then(function () {
-      if (!TENANT_ID || !TENANT_FIREBASE_CONFIG || !TENANT_FIREBASE_CONFIG.databaseURL) return;
+    // Use prefetched data from storefront-tenant.js if available
+    var configPromise;
+    if (window.STOREFRONT_DATA) {
+      configPromise = window.STOREFRONT_DATA.then(function(data) {
+        return data ? data.theme : null;
+      });
+    } else {
+      // Fallback: fetch directly (shouldn't happen in normal flow)
+      configPromise = window.TENANT_READY.then(function() {
+        if (!TENANT_ID || !TENANT_FIREBASE_CONFIG || !TENANT_FIREBASE_CONFIG.databaseURL) return null;
+        var url = TENANT_FIREBASE_CONFIG.databaseURL + '/' + TENANT_ID + '/public/config/theme.json';
+        return fetch(url).then(function(resp) { return resp.ok ? resp.json() : null; }).catch(function() { return null; });
+      });
+    }
 
-      // Read from public/config/theme — anonymously readable per RTDB rules
-      var url = TENANT_FIREBASE_CONFIG.databaseURL + '/' + TENANT_ID + '/public/config/theme.json';
-
-      fetch(url)
-        .then(function (resp) {
-          if (!resp.ok) return null;
-          return resp.json();
-        })
-        .then(function (config) {
+    configPromise.then(function (config) {
           if (!config) config = {};
 
           // If preview mode, override templateId WITHOUT writing to Firebase
@@ -476,7 +481,6 @@
           // Still dispatch event with empty config so pages don't wait forever
           window.dispatchEvent(new CustomEvent('storefront-theme-ready', { detail: {} }));
         });
-    });
   }
 
   // Start fetching theme config
