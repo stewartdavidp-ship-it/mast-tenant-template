@@ -45,6 +45,21 @@
     if (!fireDb || !TENANT_ID) return;
     fireDb.ref(TENANT_ID + '/public/config/shippingRates').once('value').then(function(snap) {
       var config = snap.val() || {};
+      // New format: shippingRules
+      if (config.shippingRules) {
+        var retail = config.shippingRules.retail || {};
+        var wholesale = config.shippingRules.wholesale || {};
+        var retailMods = retail.modifiers || [];
+        var wsMods = wholesale.modifiers || [];
+        _cartFreeThreshold = null;
+        _cartWholesaleFreeThreshold = 350;
+        if (retail.strategy === 'free') _cartFreeThreshold = 0;
+        for (var i = 0; i < retailMods.length; i++) { if (retailMods[i].type === 'free-above') _cartFreeThreshold = retailMods[i].threshold; }
+        if (wholesale.strategy === 'free') _cartWholesaleFreeThreshold = 0;
+        for (var j = 0; j < wsMods.length; j++) { if (wsMods[j].type === 'free-above') _cartWholesaleFreeThreshold = wsMods[j].threshold; }
+        return;
+      }
+      // Legacy format
       var val = config.freeThreshold;
       _cartFreeThreshold = (val != null && val > 0) ? val : null;
       if (config.wholesaleFreeThreshold != null) _cartWholesaleFreeThreshold = config.wholesaleFreeThreshold;

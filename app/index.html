@@ -6269,107 +6269,115 @@
           <div id="stripeConfigStatus" style="margin-top:8px;font-size:0.85rem;"></div>
         </div>
       </div>
-      <div id="settingsSubShipping" style="display:none;max-width:500px;">
+      <div id="settingsSubShipping" style="display:none;max-width:560px;">
         <div class="form-group">
-          <label style="font-size:1.1rem;font-weight:600;">Shipping Configuration</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
-            Flat-rate shipping by product category. Customers see a single calculated rate at checkout.
+          <label style="font-size:1.1rem;font-weight:600;">Shipping Rules</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:20px;">
+            Configure how shipping is calculated for retail and wholesale orders. Each uses its own strategy with optional modifiers.
           </p>
 
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:16px;">
-            <div>
-              <label style="font-size:0.78rem;font-weight:600;display:block;margin-bottom:4px;">Small</label>
-              <div style="display:flex;gap:4px;flex-wrap:wrap;">
-                <input type="number" id="shipRateSmall" min="0" step="0.01" placeholder="6.00" style="width:70px;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;">
-                <span style="font-size:0.75rem;color:var(--warm-gray);align-self:center;">$/rate</span>
-              </div>
-              <div style="display:flex;gap:4px;margin-top:4px;">
-                <input type="number" id="shipBoxSmallL" min="0" placeholder="6" style="width:40px;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:0.8rem;" title="Length">
-                <input type="number" id="shipBoxSmallW" min="0" placeholder="6" style="width:40px;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:0.8rem;" title="Width">
-                <input type="number" id="shipBoxSmallH" min="0" placeholder="6" style="width:40px;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:0.8rem;" title="Height">
-              </div>
-              <span style="font-size:0.7rem;color:var(--warm-gray);">L x W x H (in)</span>
+          <!-- Retail Rules -->
+          <div style="border:1px solid #ddd;border-radius:8px;padding:16px;margin-bottom:16px;">
+            <label style="font-size:0.95rem;font-weight:600;display:block;margin-bottom:10px;">Retail Shipping</label>
+            <div style="margin-bottom:12px;">
+              <label style="font-size:0.78rem;font-weight:600;display:block;margin-bottom:4px;">Strategy</label>
+              <select id="shipRetailStrategy" onchange="onShipStrategyChange('retail')" style="padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.85rem;width:100%;box-sizing:border-box;">
+                <option value="category-flat">Category Flat Rate (by product size)</option>
+                <option value="flat">Single Flat Rate</option>
+                <option value="percent-of-subtotal">Percentage of Subtotal</option>
+                <option value="free">Free Shipping (always)</option>
+              </select>
             </div>
-            <div>
-              <label style="font-size:0.78rem;font-weight:600;display:block;margin-bottom:4px;">Medium</label>
-              <div style="display:flex;gap:4px;flex-wrap:wrap;">
-                <input type="number" id="shipRateMedium" min="0" step="0.01" placeholder="10.00" style="width:70px;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;">
-                <span style="font-size:0.75rem;color:var(--warm-gray);align-self:center;">$/rate</span>
+            <!-- category-flat params -->
+            <div id="shipRetailCategoryParams">
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:10px;">
+                <div><label style="font-size:0.75rem;font-weight:600;display:block;margin-bottom:3px;">Small ($)</label>
+                  <input type="number" id="shipRateSmall" min="0" step="0.01" placeholder="6" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.75rem;font-weight:600;display:block;margin-bottom:3px;">Medium ($)</label>
+                  <input type="number" id="shipRateMedium" min="0" step="0.01" placeholder="10" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.75rem;font-weight:600;display:block;margin-bottom:3px;">Large ($)</label>
+                  <input type="number" id="shipRateLarge" min="0" step="0.01" placeholder="15" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.75rem;font-weight:600;display:block;margin-bottom:3px;">Oversized ($)</label>
+                  <input type="number" id="shipRateOversized" min="0" step="0.01" placeholder="22" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;box-sizing:border-box;"></div>
               </div>
-              <div style="display:flex;gap:4px;margin-top:4px;">
-                <input type="number" id="shipBoxMediumL" min="0" placeholder="10" style="width:40px;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:0.8rem;">
-                <input type="number" id="shipBoxMediumW" min="0" placeholder="8" style="width:40px;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:0.8rem;">
-                <input type="number" id="shipBoxMediumH" min="0" placeholder="6" style="width:40px;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:0.8rem;">
-              </div>
-              <span style="font-size:0.7rem;color:var(--warm-gray);">L x W x H (in)</span>
+              <div><label style="font-size:0.75rem;font-weight:600;display:block;margin-bottom:3px;">Additional Item Surcharge ($)</label>
+                <input type="number" id="shipAdditionalSurcharge" min="0" step="0.01" placeholder="2" style="width:80px;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;"></div>
             </div>
-            <div>
-              <label style="font-size:0.78rem;font-weight:600;display:block;margin-bottom:4px;">Large</label>
-              <div style="display:flex;gap:4px;flex-wrap:wrap;">
-                <input type="number" id="shipRateLarge" min="0" step="0.01" placeholder="15.00" style="width:70px;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;">
-                <span style="font-size:0.75rem;color:var(--warm-gray);align-self:center;">$/rate</span>
-              </div>
-              <div style="display:flex;gap:4px;margin-top:4px;">
-                <input type="number" id="shipBoxLargeL" min="0" placeholder="14" style="width:40px;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:0.8rem;">
-                <input type="number" id="shipBoxLargeW" min="0" placeholder="12" style="width:40px;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:0.8rem;">
-                <input type="number" id="shipBoxLargeH" min="0" placeholder="8" style="width:40px;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:0.8rem;">
-              </div>
-              <span style="font-size:0.7rem;color:var(--warm-gray);">L x W x H (in)</span>
+            <!-- flat params -->
+            <div id="shipRetailFlatParams" style="display:none;">
+              <label style="font-size:0.75rem;font-weight:600;display:block;margin-bottom:3px;">Rate ($)</label>
+              <input type="number" id="shipRetailFlatRate" min="0" step="0.01" placeholder="8.00" style="width:100px;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;">
             </div>
-            <div>
-              <label style="font-size:0.78rem;font-weight:600;display:block;margin-bottom:4px;">Oversized</label>
-              <div style="display:flex;gap:4px;flex-wrap:wrap;">
-                <input type="number" id="shipRateOversized" min="0" step="0.01" placeholder="22.00" style="width:70px;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;">
-                <span style="font-size:0.75rem;color:var(--warm-gray);align-self:center;">$/rate</span>
-              </div>
-              <div style="display:flex;gap:4px;margin-top:4px;">
-                <input type="number" id="shipBoxOversizedL" min="0" placeholder="20" style="width:40px;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:0.8rem;">
-                <input type="number" id="shipBoxOversizedW" min="0" placeholder="16" style="width:40px;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:0.8rem;">
-                <input type="number" id="shipBoxOversizedH" min="0" placeholder="12" style="width:40px;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:0.8rem;">
-              </div>
-              <span style="font-size:0.7rem;color:var(--warm-gray);">L x W x H (in)</span>
+            <!-- percent params -->
+            <div id="shipRetailPercentParams" style="display:none;">
+              <label style="font-size:0.75rem;font-weight:600;display:block;margin-bottom:3px;">Rate (%)</label>
+              <input type="number" id="shipRetailPercentRate" min="0" max="100" step="0.5" placeholder="10" style="width:100px;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;">
             </div>
-          </div>
-
-          <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;">
-            <div>
-              <label style="font-size:0.78rem;font-weight:600;display:block;margin-bottom:4px;">Additional Item Surcharge ($)</label>
-              <input type="number" id="shipAdditionalSurcharge" min="0" step="0.01" placeholder="2.00" style="width:80px;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;">
-            </div>
-            <div>
+            <!-- Modifiers -->
+            <div style="margin-top:12px;padding-top:10px;border-top:1px solid #eee;">
               <label style="font-size:0.78rem;font-weight:600;display:flex;align-items:center;gap:6px;margin-bottom:4px;cursor:pointer;">
-                <input type="checkbox" id="shipFreeShippingEnabled" onchange="document.getElementById('shipFreeThresholdWrap').style.display=this.checked?'flex':'none'" style="accent-color:var(--teal,#2a9d8f);">
-                Free Shipping
+                <input type="checkbox" id="shipRetailFreeAbove" onchange="document.getElementById('shipRetailFreeAboveVal').style.display=this.checked?'flex':'none'" style="accent-color:var(--teal,#2a9d8f);">
+                Free shipping on orders over
               </label>
-              <div id="shipFreeThresholdWrap" style="display:none;align-items:center;gap:6px;">
-                <span style="font-size:0.75rem;color:var(--warm-gray);">Orders over $</span>
-                <input type="number" id="shipFreeThreshold" min="1" step="1" placeholder="100" style="width:70px;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;">
-              </div>
-            </div>
-            <div>
-              <label style="font-size:0.78rem;font-weight:600;display:block;margin-bottom:4px;">Packing Buffer (oz/item)</label>
-              <input type="number" id="shipPackingBuffer" min="0" step="1" placeholder="8" style="width:80px;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;">
-            </div>
-          </div>
-
-          <div style="margin-top:20px;padding-top:16px;border-top:1px solid #eee;">
-            <label style="font-size:0.9rem;font-weight:600;display:block;margin-bottom:8px;">Wholesale Shipping</label>
-            <div style="display:flex;gap:16px;flex-wrap:wrap;">
-              <div>
-                <label style="font-size:0.78rem;font-weight:600;display:block;margin-bottom:4px;">Free Shipping Threshold ($)</label>
-                <input type="number" id="shipWholesaleFreeThreshold" min="0" step="1" placeholder="350" style="width:90px;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;">
-                <span style="font-size:0.7rem;color:var(--warm-gray);display:block;margin-top:2px;">Orders over this amount ship free</span>
-              </div>
-              <div>
-                <label style="font-size:0.78rem;font-weight:600;display:block;margin-bottom:4px;">Shipping Rate (%)</label>
-                <input type="number" id="shipWholesalePercent" min="0" max="100" step="0.5" placeholder="10" style="width:90px;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;">
-                <span style="font-size:0.7rem;color:var(--warm-gray);display:block;margin-top:2px;">Percentage of subtotal</span>
+              <div id="shipRetailFreeAboveVal" style="display:none;align-items:center;gap:6px;">
+                <span style="font-size:0.78rem;color:var(--warm-gray);">$</span>
+                <input type="number" id="shipRetailFreeThreshold" min="1" step="1" placeholder="100" style="width:80px;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;">
               </div>
             </div>
           </div>
 
-          <div style="display:flex;gap:8px;margin-top:16px;">
-            <button class="btn btn-primary" onclick="saveShippingConfig()">Save</button>
+          <!-- Wholesale Rules -->
+          <div style="border:1px solid #ddd;border-radius:8px;padding:16px;margin-bottom:16px;">
+            <label style="font-size:0.95rem;font-weight:600;display:block;margin-bottom:10px;">Wholesale Shipping</label>
+            <div style="margin-bottom:12px;">
+              <label style="font-size:0.78rem;font-weight:600;display:block;margin-bottom:4px;">Strategy</label>
+              <select id="shipWholesaleStrategy" onchange="onShipStrategyChange('wholesale')" style="padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.85rem;width:100%;box-sizing:border-box;">
+                <option value="percent-of-subtotal">Percentage of Subtotal</option>
+                <option value="flat">Single Flat Rate</option>
+                <option value="category-flat">Category Flat Rate (by product size)</option>
+                <option value="free">Free Shipping (always)</option>
+              </select>
+            </div>
+            <!-- percent params (default for wholesale) -->
+            <div id="shipWholesalePercentParams">
+              <label style="font-size:0.75rem;font-weight:600;display:block;margin-bottom:3px;">Rate (%)</label>
+              <input type="number" id="shipWholesalePercentRate" min="0" max="100" step="0.5" placeholder="10" style="width:100px;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;">
+            </div>
+            <!-- flat params -->
+            <div id="shipWholesaleFlatParams" style="display:none;">
+              <label style="font-size:0.75rem;font-weight:600;display:block;margin-bottom:3px;">Rate ($)</label>
+              <input type="number" id="shipWholesaleFlatRate" min="0" step="0.01" placeholder="15.00" style="width:100px;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;">
+            </div>
+            <!-- category-flat params -->
+            <div id="shipWholesaleCategoryParams" style="display:none;">
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:10px;">
+                <div><label style="font-size:0.75rem;font-weight:600;display:block;margin-bottom:3px;">Small ($)</label>
+                  <input type="number" id="shipWsRateSmall" min="0" step="0.01" placeholder="6" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.75rem;font-weight:600;display:block;margin-bottom:3px;">Medium ($)</label>
+                  <input type="number" id="shipWsRateMedium" min="0" step="0.01" placeholder="10" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.75rem;font-weight:600;display:block;margin-bottom:3px;">Large ($)</label>
+                  <input type="number" id="shipWsRateLarge" min="0" step="0.01" placeholder="15" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.75rem;font-weight:600;display:block;margin-bottom:3px;">Oversized ($)</label>
+                  <input type="number" id="shipWsRateOversized" min="0" step="0.01" placeholder="22" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;box-sizing:border-box;"></div>
+              </div>
+              <div><label style="font-size:0.75rem;font-weight:600;display:block;margin-bottom:3px;">Additional Item Surcharge ($)</label>
+                <input type="number" id="shipWsSurcharge" min="0" step="0.01" placeholder="2" style="width:80px;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;"></div>
+            </div>
+            <!-- Modifiers -->
+            <div style="margin-top:12px;padding-top:10px;border-top:1px solid #eee;">
+              <label style="font-size:0.78rem;font-weight:600;display:flex;align-items:center;gap:6px;margin-bottom:4px;cursor:pointer;">
+                <input type="checkbox" id="shipWholesaleFreeAbove" onchange="document.getElementById('shipWholesaleFreeAboveVal').style.display=this.checked?'flex':'none'" style="accent-color:var(--teal,#2a9d8f);">
+                Free shipping on orders over
+              </label>
+              <div id="shipWholesaleFreeAboveVal" style="display:none;align-items:center;gap:6px;">
+                <span style="font-size:0.78rem;color:var(--warm-gray);">$</span>
+                <input type="number" id="shipWholesaleFreeThreshold" min="1" step="1" placeholder="350" style="width:80px;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;">
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-primary" onclick="saveShippingConfig()">Save Shipping Rules</button>
           </div>
           <div id="shippingConfigStatus" style="margin-top:8px;font-size:0.85rem;"></div>
         </div>
@@ -11925,55 +11933,120 @@ function loadSquareConfig() {
 }
 
 // ============================================================
-// Shipping Config Management
+// Shipping Rules Engine — Admin UI
 // ============================================================
+
+function onShipStrategyChange(type) {
+  var strategy = document.getElementById('ship' + (type === 'wholesale' ? 'Wholesale' : 'Retail') + 'Strategy').value;
+  var prefix = type === 'wholesale' ? 'shipWholesale' : 'shipRetail';
+  var cats = document.getElementById(prefix + 'CategoryParams') || document.getElementById('shipRetailCategoryParams');
+  // Show/hide param sections based on strategy
+  ['CategoryParams', 'FlatParams', 'PercentParams'].forEach(function(suffix) {
+    var el = document.getElementById(prefix + suffix);
+    // For retail, category params are at shipRetailCategoryParams
+    if (!el && type === 'retail' && suffix === 'CategoryParams') el = document.getElementById('shipRetailCategoryParams');
+    if (el) el.style.display = 'none';
+  });
+  if (strategy === 'category-flat') {
+    var catEl = document.getElementById(prefix + 'CategoryParams') || document.getElementById('shipRetailCategoryParams');
+    if (catEl) catEl.style.display = '';
+  } else if (strategy === 'flat') {
+    var flatEl = document.getElementById(prefix + 'FlatParams');
+    if (flatEl) flatEl.style.display = '';
+  } else if (strategy === 'percent-of-subtotal') {
+    var pctEl = document.getElementById(prefix + 'PercentParams');
+    if (pctEl) pctEl.style.display = '';
+  }
+}
+
+function buildRuleSetFromUI(type) {
+  var prefix = type === 'wholesale' ? 'Wholesale' : 'Retail';
+  var strategy = getFieldValue('ship' + prefix + 'Strategy') || (type === 'wholesale' ? 'percent-of-subtotal' : 'category-flat');
+  var ruleSet = { strategy: strategy };
+
+  if (strategy === 'category-flat') {
+    var idPrefix = type === 'wholesale' ? 'shipWsRate' : 'shipRate';
+    var surchargeId = type === 'wholesale' ? 'shipWsSurcharge' : 'shipAdditionalSurcharge';
+    ruleSet.rates = {
+      small: parseFloat(getFieldValue(idPrefix + 'Small')) || 6,
+      medium: parseFloat(getFieldValue(idPrefix + 'Medium')) || 10,
+      large: parseFloat(getFieldValue(idPrefix + 'Large')) || 15,
+      oversized: parseFloat(getFieldValue(idPrefix + 'Oversized')) || 22
+    };
+    ruleSet.additionalItemSurcharge = parseFloat(getFieldValue(surchargeId)) || 2;
+  } else if (strategy === 'flat') {
+    ruleSet.rate = parseFloat(getFieldValue('ship' + prefix + 'FlatRate')) || 0;
+  } else if (strategy === 'percent-of-subtotal') {
+    ruleSet.rate = parseFloat(getFieldValue('ship' + prefix + 'PercentRate')) || 10;
+  }
+
+  // Modifiers
+  ruleSet.modifiers = [];
+  var freeAbove = document.getElementById('ship' + prefix + 'FreeAbove');
+  if (freeAbove && freeAbove.checked) {
+    var threshold = parseFloat(getFieldValue('ship' + prefix + 'FreeThreshold')) || 100;
+    ruleSet.modifiers.push({ type: 'free-above', threshold: threshold });
+  }
+  return ruleSet;
+}
 
 async function saveShippingConfig() {
   if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
-  var categories = ['small', 'medium', 'large', 'oversized'];
-  var config = { additionalItemSurcharge: 2, freeThreshold: null, packingBufferOz: 8 };
 
-  categories.forEach(function(cat) {
-    var capCat = cat.charAt(0).toUpperCase() + cat.slice(1);
-    var rateEl = document.getElementById('shipRate' + capCat);
-    var lEl = document.getElementById('shipBox' + capCat + 'L');
-    var wEl = document.getElementById('shipBox' + capCat + 'W');
-    var hEl = document.getElementById('shipBox' + capCat + 'H');
-    config[cat] = {
-      rate: rateEl && rateEl.value !== '' ? parseFloat(rateEl.value) : null,
-      boxL: lEl && lEl.value !== '' ? parseInt(lEl.value) : null,
-      boxW: wEl && wEl.value !== '' ? parseInt(wEl.value) : null,
-      boxH: hEl && hEl.value !== '' ? parseInt(hEl.value) : null
-    };
-  });
-
-  var surchargeEl = document.getElementById('shipAdditionalSurcharge');
-  var thresholdEl = document.getElementById('shipFreeThreshold');
-  var bufferEl = document.getElementById('shipPackingBuffer');
-  if (surchargeEl && surchargeEl.value !== '') config.additionalItemSurcharge = parseFloat(surchargeEl.value);
-  var freeEnabled = document.getElementById('shipFreeShippingEnabled');
-  if (freeEnabled && freeEnabled.checked && thresholdEl && thresholdEl.value !== '' && parseFloat(thresholdEl.value) > 0) {
-    config.freeThreshold = parseFloat(thresholdEl.value);
-  } else {
-    config.freeThreshold = null;
-  }
-  if (bufferEl && bufferEl.value !== '') config.packingBufferOz = parseInt(bufferEl.value);
-
-  // Wholesale shipping
-  var wsThresholdEl = document.getElementById('shipWholesaleFreeThreshold');
-  var wsPercentEl = document.getElementById('shipWholesalePercent');
-  config.wholesaleFreeThreshold = wsThresholdEl && wsThresholdEl.value !== '' ? parseFloat(wsThresholdEl.value) : 350;
-  config.wholesaleShippingPercent = wsPercentEl && wsPercentEl.value !== '' ? parseFloat(wsPercentEl.value) : 10;
-
-  config.updatedAt = new Date().toISOString();
+  var config = {
+    shippingRules: {
+      retail: buildRuleSetFromUI('retail'),
+      wholesale: buildRuleSetFromUI('wholesale')
+    },
+    updatedAt: new Date().toISOString()
+  };
 
   try {
     await MastDB.config.shipping().set(config);
-    await writeAudit('update', 'settings', 'shippingConfig');
-    document.getElementById('shippingConfigStatus').innerHTML = '<span style="color:var(--teal);">&#10003; Shipping config saved</span>';
-    showToast('Shipping configuration saved.');
+    await writeAudit('update', 'settings', 'shippingRules');
+    document.getElementById('shippingConfigStatus').innerHTML = '<span style="color:var(--teal);">&#10003; Shipping rules saved</span>';
+    showToast('Shipping rules saved.');
   } catch (err) {
-    showToast('Error saving shipping config: ' + err.message, true);
+    showToast('Error saving shipping rules: ' + err.message, true);
+  }
+}
+
+function loadRuleSetToUI(type, ruleSet) {
+  var prefix = type === 'wholesale' ? 'Wholesale' : 'Retail';
+  var stratEl = document.getElementById('ship' + prefix + 'Strategy');
+  if (stratEl) stratEl.value = ruleSet.strategy || (type === 'wholesale' ? 'percent-of-subtotal' : 'category-flat');
+  onShipStrategyChange(type);
+
+  if (ruleSet.strategy === 'category-flat' && ruleSet.rates) {
+    var idPrefix = type === 'wholesale' ? 'shipWsRate' : 'shipRate';
+    var surchargeId = type === 'wholesale' ? 'shipWsSurcharge' : 'shipAdditionalSurcharge';
+    ['Small', 'Medium', 'Large', 'Oversized'].forEach(function(cat) {
+      var el = document.getElementById(idPrefix + cat);
+      if (el && ruleSet.rates[cat.toLowerCase()] != null) el.value = ruleSet.rates[cat.toLowerCase()];
+    });
+    var surEl = document.getElementById(surchargeId);
+    if (surEl && ruleSet.additionalItemSurcharge != null) surEl.value = ruleSet.additionalItemSurcharge;
+  } else if (ruleSet.strategy === 'flat') {
+    var flatEl = document.getElementById('ship' + prefix + 'FlatRate');
+    if (flatEl && ruleSet.rate != null) flatEl.value = ruleSet.rate;
+  } else if (ruleSet.strategy === 'percent-of-subtotal') {
+    var pctEl = document.getElementById('ship' + prefix + 'PercentRate');
+    if (pctEl && ruleSet.rate != null) pctEl.value = ruleSet.rate;
+  }
+
+  // Modifiers
+  var modifiers = ruleSet.modifiers || [];
+  var freeAboveMod = modifiers.find(function(m) { return m.type === 'free-above'; });
+  var freeCheckbox = document.getElementById('ship' + prefix + 'FreeAbove');
+  var freeValWrap = document.getElementById('ship' + prefix + 'FreeAboveVal');
+  var freeInput = document.getElementById('ship' + prefix + 'FreeThreshold');
+  if (freeAboveMod) {
+    if (freeCheckbox) freeCheckbox.checked = true;
+    if (freeValWrap) freeValWrap.style.display = 'flex';
+    if (freeInput) freeInput.value = freeAboveMod.threshold;
+  } else {
+    if (freeCheckbox) freeCheckbox.checked = false;
+    if (freeValWrap) freeValWrap.style.display = 'none';
   }
 }
 
@@ -11982,44 +12055,35 @@ function loadShippingConfig() {
     var config = snap.val();
     var statusEl = document.getElementById('shippingConfigStatus');
     if (!config) {
-      if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray-light);">Using defaults (Small $6, Medium $10, Large $15, Oversized $22).</span>';
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray-light);">Using defaults. Configure and save to customize.</span>';
       return;
     }
-    var categories = ['small', 'medium', 'large', 'oversized'];
-    categories.forEach(function(cat) {
-      var capCat = cat.charAt(0).toUpperCase() + cat.slice(1);
-      var catData = config[cat];
-      if (!catData) return;
-      var rateEl = document.getElementById('shipRate' + capCat);
-      var lEl = document.getElementById('shipBox' + capCat + 'L');
-      var wEl = document.getElementById('shipBox' + capCat + 'W');
-      var hEl = document.getElementById('shipBox' + capCat + 'H');
-      if (rateEl && catData.rate != null) rateEl.value = catData.rate;
-      if (lEl && catData.boxL != null) lEl.value = catData.boxL;
-      if (wEl && catData.boxW != null) wEl.value = catData.boxW;
-      if (hEl && catData.boxH != null) hEl.value = catData.boxH;
-    });
-    var surchargeEl = document.getElementById('shipAdditionalSurcharge');
-    var thresholdEl = document.getElementById('shipFreeThreshold');
-    var bufferEl = document.getElementById('shipPackingBuffer');
-    if (surchargeEl && config.additionalItemSurcharge != null) surchargeEl.value = config.additionalItemSurcharge;
-    var freeCheckbox = document.getElementById('shipFreeShippingEnabled');
-    var freeWrap = document.getElementById('shipFreeThresholdWrap');
-    if (config.freeThreshold != null && config.freeThreshold > 0) {
-      if (freeCheckbox) freeCheckbox.checked = true;
-      if (freeWrap) freeWrap.style.display = 'flex';
-      if (thresholdEl) thresholdEl.value = config.freeThreshold;
-    } else {
-      if (freeCheckbox) freeCheckbox.checked = false;
-      if (freeWrap) freeWrap.style.display = 'none';
+
+    // New format: shippingRules
+    if (config.shippingRules) {
+      if (config.shippingRules.retail) loadRuleSetToUI('retail', config.shippingRules.retail);
+      if (config.shippingRules.wholesale) loadRuleSetToUI('wholesale', config.shippingRules.wholesale);
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Rules configured — updated ' + new Date(config.updatedAt).toLocaleDateString() + '</span>';
+      return;
     }
-    if (bufferEl && config.packingBufferOz != null) bufferEl.value = config.packingBufferOz;
-    // Wholesale shipping
-    var wsThresholdEl = document.getElementById('shipWholesaleFreeThreshold');
-    var wsPercentEl = document.getElementById('shipWholesalePercent');
-    if (wsThresholdEl && config.wholesaleFreeThreshold != null) wsThresholdEl.value = config.wholesaleFreeThreshold;
-    if (wsPercentEl && config.wholesaleShippingPercent != null) wsPercentEl.value = config.wholesaleShippingPercent;
-    if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Configured — updated ' + new Date(config.updatedAt).toLocaleDateString() + '</span>';
+
+    // Legacy format: convert to UI
+    var retailRule = {
+      strategy: 'category-flat',
+      rates: { small: (config.small || {}).rate || 6, medium: (config.medium || {}).rate || 10, large: (config.large || {}).rate || 15, oversized: (config.oversized || {}).rate || 22 },
+      additionalItemSurcharge: config.additionalItemSurcharge || 2,
+      modifiers: config.freeThreshold ? [{ type: 'free-above', threshold: config.freeThreshold }] : []
+    };
+    loadRuleSetToUI('retail', retailRule);
+
+    var wholesaleRule = {
+      strategy: 'percent-of-subtotal',
+      rate: config.wholesaleShippingPercent || 10,
+      modifiers: [{ type: 'free-above', threshold: config.wholesaleFreeThreshold || 350 }]
+    };
+    loadRuleSetToUI('wholesale', wholesaleRule);
+
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--amber,#C4853C);">Legacy config loaded. Save to upgrade to rules format.</span>';
   });
 }
 

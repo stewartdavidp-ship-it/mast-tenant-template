@@ -121,41 +121,99 @@
     return window.MastCart && window.MastCart.hasWholesaleItems && window.MastCart.hasWholesaleItems();
   }
 
+  // ── Shipping Rules Engine ──
+  // Evaluates a strategy + modifiers rule set to calculate shipping.
+  // Config can be new format (shippingRules.retail/wholesale) or legacy flat format.
+
+  function resolveRuleSet(config, isWholesale) {
+    // New format: shippingRules.retail / shippingRules.wholesale
+    if (config.shippingRules) {
+      var rules = config.shippingRules;
+      return isWholesale && rules.wholesale ? rules.wholesale : (rules.retail || rules);
+    }
+    // Legacy format: convert to rule set on the fly
+    if (isWholesale) {
+      return {
+        strategy: 'percent-of-subtotal',
+        rate: config.wholesaleShippingPercent != null ? config.wholesaleShippingPercent : 10,
+        modifiers: config.wholesaleFreeThreshold != null ? [{ type: 'free-above', threshold: config.wholesaleFreeThreshold }] : [{ type: 'free-above', threshold: 350 }]
+      };
+    }
+    return {
+      strategy: 'category-flat',
+      rates: { small: (config.small || {}).rate || 6, medium: (config.medium || {}).rate || 10, large: (config.large || {}).rate || 15, oversized: (config.oversized || {}).rate || 22 },
+      additionalItemSurcharge: config.additionalItemSurcharge || 2,
+      modifiers: config.freeThreshold != null ? [{ type: 'free-above', threshold: config.freeThreshold }] : []
+    };
+  }
+
+  function evaluateStrategy(ruleSet, subtotal, items, productMap) {
+    var strategy = ruleSet.strategy || 'category-flat';
+    switch (strategy) {
+      case 'free':
+        return { price: 0, label: 'Free Shipping', description: 'Free shipping on all orders', category: 'free' };
+      case 'flat':
+        var rate = ruleSet.rate || 0;
+        return { price: Math.round(rate * 100) / 100, label: 'Flat Rate Shipping', description: formatMoney(rate) + ' flat rate', category: 'flat' };
+      case 'percent-of-subtotal':
+        var pct = ruleSet.rate != null ? ruleSet.rate : 10;
+        var pctPrice = Math.round(subtotal * pct) / 100;
+        return { price: pctPrice, label: 'Standard Shipping', description: pct + '% of order subtotal', category: 'percent' };
+      case 'category-flat':
+      default:
+        var catOrder = ['small', 'medium', 'large', 'oversized'];
+        var rates = ruleSet.rates || { small: 6, medium: 10, large: 15, oversized: 22 };
+        var highestIdx = 0;
+        var totalItems = 0;
+        for (var i = 0; i < items.length; i++) {
+          var ps = productMap[items[i].pid] || { shippingCategory: 'small' };
+          var idx = catOrder.indexOf(ps.shippingCategory || 'small');
+          if (idx > highestIdx) highestIdx = idx;
+          totalItems += (items[i].qty || 1);
+        }
+        var cat = catOrder[highestIdx];
+        var baseRate = rates[cat] != null ? rates[cat] : 6;
+        var surcharge = ruleSet.additionalItemSurcharge || 2;
+        var additional = Math.max(totalItems - 1, 0) * surcharge;
+        var price = Math.round((baseRate + additional) * 100) / 100;
+        var desc = cat.charAt(0).toUpperCase() + cat.slice(1) + ' package';
+        if (totalItems > 1) desc += ' + ' + (totalItems - 1) + ' additional item' + (totalItems > 2 ? 's' : '');
+        return { price: price, label: 'Standard Shipping', description: desc, category: cat };
+    }
+  }
+
+  function applyModifiers(result, modifiers, subtotal) {
+    if (!modifiers || !modifiers.length) return result;
+    for (var i = 0; i < modifiers.length; i++) {
+      var mod = modifiers[i];
+      if (mod.type === 'free-above' && mod.threshold != null && subtotal >= mod.threshold) {
+        return { price: 0, label: 'Free Shipping', description: 'Free shipping on orders over ' + formatMoney(mod.threshold), category: 'free' };
+      }
+      if (mod.type === 'cap' && mod.maxRate != null && result.price > mod.maxRate) {
+        result.price = Math.round(mod.maxRate * 100) / 100;
+        result.description += ' (capped at ' + formatMoney(mod.maxRate) + ')';
+      }
+    }
+    return result;
+  }
+
   function getShippingThreshold() {
-    if (isWholesaleCart()) return shippingConfigCache && shippingConfigCache.wholesaleFreeThreshold != null ? shippingConfigCache.wholesaleFreeThreshold : 350;
-    return shippingConfigCache && shippingConfigCache.freeThreshold != null ? shippingConfigCache.freeThreshold : null;
+    if (!shippingConfigCache) return null;
+    var ruleSet = resolveRuleSet(shippingConfigCache, isWholesaleCart());
+    var modifiers = ruleSet.modifiers || [];
+    for (var i = 0; i < modifiers.length; i++) {
+      if (modifiers[i].type === 'free-above') return modifiers[i].threshold;
+    }
+    if (ruleSet.strategy === 'free') return 0;
+    return null;
   }
 
   function calculateShipping(items, productMap, config) {
     var subtotal = calcSubtotal();
     var ws = isWholesaleCart();
-    var threshold = ws ? (config.wholesaleFreeThreshold != null ? config.wholesaleFreeThreshold : 350) : (config.freeThreshold != null ? config.freeThreshold : null);
-    if (threshold != null && subtotal >= threshold) {
-      return { price: 0, label: 'Free Shipping', description: 'Free shipping on orders over ' + formatMoney(threshold), category: 'free' };
-    }
-    // Wholesale: percentage of subtotal (default 10%)
-    if (ws) {
-      var wsRate = config.wholesaleShippingPercent != null ? config.wholesaleShippingPercent : 10;
-      var wsPrice = Math.round(subtotal * wsRate) / 100;
-      return { price: wsPrice, label: 'Standard Shipping', description: wsRate + '% of order subtotal', category: 'wholesale' };
-    }
-    var catOrder = ['small', 'medium', 'large', 'oversized'];
-    var highestIdx = 0;
-    var totalItems = 0;
-    for (var i = 0; i < items.length; i++) {
-      var ps = productMap[items[i].pid] || { shippingCategory: 'small' };
-      var idx = catOrder.indexOf(ps.shippingCategory || 'small');
-      if (idx > highestIdx) highestIdx = idx;
-      totalItems += (items[i].qty || 1);
-    }
-    var cat = catOrder[highestIdx];
-    var catConfig = config[cat] || DEFAULT_SHIPPING_CONFIG[cat];
-    var baseRate = catConfig ? catConfig.rate : 6;
-    var additional = Math.max(totalItems - 1, 0) * (config.additionalItemSurcharge || 2);
-    var price = Math.round((baseRate + additional) * 100) / 100;
-    var desc = cat.charAt(0).toUpperCase() + cat.slice(1) + ' package';
-    if (totalItems > 1) desc += ' + ' + (totalItems - 1) + ' additional item' + (totalItems > 2 ? 's' : '');
-    return { price: price, label: 'Standard Shipping', description: desc, category: cat };
+    var ruleSet = resolveRuleSet(config, ws);
+    var result = evaluateStrategy(ruleSet, subtotal, items, productMap);
+    return applyModifiers(result, ruleSet.modifiers, subtotal);
   }
 
   function fetchTaxRate(state, callback) {
