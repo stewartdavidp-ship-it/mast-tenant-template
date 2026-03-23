@@ -9,6 +9,23 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<!-- Early tenant prefetch — starts RTDB fetch immediately during HTML parsing,
+     before any external scripts download. storefront-tenant.js consumes the result. -->
+<script>
+(function(){
+  var P='https://mast-platform-prod-default-rtdb.firebaseio.com/mast-platform';
+  var h=location.hostname,C=5*60*1000;
+  if(h==='localhost'||h==='127.0.0.1')return;
+  try{var r=localStorage.getItem('mast_tenant_'+h);if(r){var c=JSON.parse(r);if(Date.now()-c.timestamp<C){window.__earlyTenant=Promise.resolve(c.data);return;}}}catch(e){}
+  var ek=h.replace(/\./g,'_');
+  window.__earlyTenant=fetch(P+'/tenantsByDomain/'+ek+'.json').then(function(r){return r.ok?r.json():null}).then(function(tid){
+    if(!tid)return null;
+    return fetch(P+'/tenants/'+tid+'/publicConfig.json').then(function(r){return r.ok?r.json():null}).then(function(pc){
+      return pc?{tenantId:tid,publicConfig:pc}:null;
+    });
+  }).catch(function(){return null;});
+})();
+</script>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="storefront.css">
 <link rel="stylesheet" href="cart.css" media="print" onload="this.media='all'">

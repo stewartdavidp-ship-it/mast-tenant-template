@@ -154,31 +154,41 @@ window.TENANT_READY = new Promise(function(resolve, reject) {
     return;
   }
 
-  // Fetch from platform RTDB
-  var escapedHost = escapeHostname(hostname);
-  var domainUrl = PLATFORM_RTDB_BASE + '/tenantsByDomain/' + escapedHost + '.json';
-
-  fetch(domainUrl)
-    .then(function(resp) {
-      if (!resp.ok) throw new Error('Domain lookup failed: ' + resp.status);
-      return resp.json();
-    })
-    .then(function(tenantId) {
-      if (!tenantId) throw new Error('No tenant found for hostname: ' + hostname);
-
-      var configUrl = PLATFORM_RTDB_BASE + '/tenants/' + tenantId + '/publicConfig.json';
-      return fetch(configUrl).then(function(resp) {
-        if (!resp.ok) throw new Error('Config lookup failed: ' + resp.status);
+  // Use early prefetch from inline <head> script if available.
+  // This fetch started during HTML parsing — before this script downloaded.
+  var tenantPromise;
+  if (window.__earlyTenant) {
+    tenantPromise = window.__earlyTenant.then(function(result) {
+      if (!result) throw new Error('No tenant found for hostname: ' + hostname);
+      return result;
+    });
+  } else {
+    // Fallback: fetch directly (pages without the inline prefetch)
+    var escapedHost = escapeHostname(hostname);
+    var domainUrl = PLATFORM_RTDB_BASE + '/tenantsByDomain/' + escapedHost + '.json';
+    tenantPromise = fetch(domainUrl)
+      .then(function(resp) {
+        if (!resp.ok) throw new Error('Domain lookup failed: ' + resp.status);
         return resp.json();
-      }).then(function(publicConfig) {
-        if (!publicConfig) throw new Error('No publicConfig for tenant: ' + tenantId);
-        return { tenantId: tenantId, publicConfig: publicConfig };
+      })
+      .then(function(tenantId) {
+        if (!tenantId) throw new Error('No tenant found for hostname: ' + hostname);
+        var configUrl = PLATFORM_RTDB_BASE + '/tenants/' + tenantId + '/publicConfig.json';
+        return fetch(configUrl).then(function(resp) {
+          if (!resp.ok) throw new Error('Config lookup failed: ' + resp.status);
+          return resp.json();
+        }).then(function(publicConfig) {
+          if (!publicConfig) throw new Error('No publicConfig for tenant: ' + tenantId);
+          return { tenantId: tenantId, publicConfig: publicConfig };
+        });
       });
-    })
+  }
+
+  tenantPromise
     .then(function(result) {
       setCachedTenant(hostname, result);
       setGlobals(result.tenantId, result.publicConfig);
-      resolve({ tenantId: result.tenantId, source: 'network' });
+      resolve({ tenantId: result.tenantId, source: window.__earlyTenant ? 'early-prefetch' : 'network' });
     })
     .catch(function(err) {
       console.error('[storefront-tenant] Resolution failed:', err.message);
