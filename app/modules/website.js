@@ -1129,7 +1129,8 @@
     html += '<div class="wp-field-group">';
     html += '<label>Website URL</label>';
     html += '<div style="display:flex;gap:8px;">';
-    html += '<input type="text" id="wpImportUrl" placeholder="www.yourbusiness.com" style="flex:1;">';
+    var lastUrl = (websiteConfig && websiteConfig.siteAnalysis && websiteConfig.siteAnalysis.url) || '';
+    html += '<input type="text" id="wpImportUrl" placeholder="www.yourbusiness.com" value="' + esc(lastUrl) + '" style="flex:1;">';
     html += '<button class="btn btn-primary" onclick="wpAnalyze()" id="wpAnalyzeBtn">Analyze</button>';
     html += '</div></div>';
     html += '<div id="wpAnalyzeStatus" style="font-size:0.85rem;margin-bottom:16px;"></div>';
@@ -1167,7 +1168,10 @@
     html += '<div class="wp-field-group">';
     html += '<label>Website URL</label>';
     html += '<div style="display:flex;gap:8px;">';
-    html += '<input type="url" id="wpRescanUrl" placeholder="https://www.yourbusiness.com" style="flex:1;">';
+    var lastImportUrl = '';
+    if (importJobs && importJobs.length > 0) { lastImportUrl = importJobs[0].url || ''; }
+    if (!lastImportUrl && websiteConfig && websiteConfig.siteAnalysis) { lastImportUrl = websiteConfig.siteAnalysis.url || ''; }
+    html += '<input type="text" id="wpRescanUrl" placeholder="www.yourbusiness.com" value="' + esc(lastImportUrl) + '" style="flex:1;">';
     html += '<button class="btn btn-primary" onclick="wpStartImport()" id="wpRescanBtn"' + (hasActiveJob ? ' disabled' : '') + '>';
     html += hasActiveJob ? 'Import Running...' : 'Scan &amp; Import';
     html += '</button>';
