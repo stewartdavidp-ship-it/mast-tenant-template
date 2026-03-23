@@ -6190,7 +6190,28 @@
 
       </div>
       <div id="settingsSubPayments" style="display:none;max-width:500px;">
-        <div class="form-group">
+        <!-- Payment Processor Selector -->
+        <div class="form-group" style="margin-bottom:20px;">
+          <label style="font-size:1.1rem;font-weight:600;">Payment Processor</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">
+            Choose your payment processor. Only one can be active at a time. Your credentials are preserved if you switch.
+          </p>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div id="paymentProcessorDisplay" style="display:flex;align-items:center;gap:8px;">
+              <span id="paymentProcessorBadge" style="display:inline-flex;align-items:center;gap:6px;background:var(--cream,#faf8f5);border:1px solid #e8e0d4;border-radius:8px;padding:8px 16px;font-weight:600;font-size:0.95rem;">
+                <span id="ppBadgeDot" style="width:8px;height:8px;border-radius:50%;background:var(--teal,#2a9d8f);"></span>
+                <span id="ppBadgeName">Square</span>
+              </span>
+            </div>
+            <button id="ppSwitchBtn" class="btn btn-secondary" onclick="switchPaymentProcessor()" style="font-size:0.8rem;padding:6px 12px;">
+              Switch to Stripe
+            </button>
+          </div>
+          <div id="paymentProcessorStatus" style="margin-top:8px;font-size:0.85rem;"></div>
+        </div>
+
+        <!-- Square Config Section -->
+        <div id="squareConfigSection" class="form-group">
           <label style="font-size:1.1rem;font-weight:600;">Square Payments</label>
           <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
             Configure Square payment integration. Save credentials for both environments, then toggle the active one.
@@ -6243,6 +6264,38 @@
             <button class="btn btn-primary" onclick="saveSquareConfig()">Save</button>
           </div>
           <div id="squareConfigStatus" style="margin-top:8px;font-size:0.85rem;"></div>
+        </div>
+
+        <!-- Stripe Config Section (hidden by default) -->
+        <div id="stripeConfigSection" class="form-group" style="display:none;">
+          <label style="font-size:1.1rem;font-weight:600;">Stripe Payments</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
+            Configure Stripe payment integration. The environment is auto-detected from your key prefix (sk_test_ or sk_live_).
+          </p>
+
+          <div id="stripeTestBanner" style="display:none;background:#f59e0b;color:#fff;padding:8px 12px;border-radius:6px;margin-bottom:12px;font-size:0.85rem;font-weight:600;text-align:center;">
+            TEST MODE — Using test keys, no real charges
+          </div>
+
+          <div style="background:var(--cream,#faf8f5);border:1px solid #e8e0d4;border-radius:8px;padding:16px;margin-bottom:12px;">
+            <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:6px;">Secret Key <span id="stripeSecretKeyBadge"></span></label>
+            <div style="display:flex;gap:6px;margin-bottom:8px;">
+              <input type="password" id="stripeSecretKey" placeholder="sk_live_... or sk_test_..."
+                style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;"
+                oninput="onStripeKeyInput()">
+              <button type="button" onclick="toggleReveal('stripeSecretKey',this)" class="btn btn-small" style="font-size:0.75rem;padding:6px 10px;white-space:nowrap;">Show</button>
+            </div>
+            <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">Publishable Key</label>
+            <div style="display:flex;gap:6px;margin-bottom:8px;">
+              <input type="text" id="stripePublishableKey" placeholder="pk_live_... or pk_test_..."
+                style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
+            </div>
+          </div>
+
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-primary" onclick="saveStripeConfig()">Save</button>
+          </div>
+          <div id="stripeConfigStatus" style="margin-top:8px;font-size:0.85rem;"></div>
         </div>
       </div>
       <div id="settingsSubShipping" style="display:none;max-width:500px;">
@@ -11456,7 +11509,7 @@ function loadSettings() {
     var toggle = document.getElementById('darkModeToggle');
     if (toggle) toggle.checked = !!darkPref;
   });
-  loadSquareConfig();
+  loadPaymentProcessor();
   loadShippingConfig();
   loadGoogleConfig();
   loadEtsyConfig();
@@ -11632,6 +11685,136 @@ function clearFieldBadges(prefix) {
 
 // verifySquareCredentials and provisionSquareWebhook are now server-side
 // in the secretsManager cloud function (avoids CORS issues with Square API)
+
+// ============================================================
+// Payment Processor Management
+// ============================================================
+
+function loadPaymentProcessor() {
+  MastDB._ref('config/paymentProcessor').once('value').then(function(snap) {
+    var processor = snap.val() || 'square';
+    showPaymentProcessor(processor);
+    if (processor === 'stripe') {
+      loadStripeConfig();
+    } else {
+      loadSquareConfig();
+    }
+  });
+}
+
+function showPaymentProcessor(processor) {
+  var badgeName = document.getElementById('ppBadgeName');
+  var badgeDot = document.getElementById('ppBadgeDot');
+  var switchBtn = document.getElementById('ppSwitchBtn');
+  var squareSection = document.getElementById('squareConfigSection');
+  var stripeSection = document.getElementById('stripeConfigSection');
+
+  if (processor === 'stripe') {
+    if (badgeName) badgeName.textContent = 'Stripe';
+    if (badgeDot) badgeDot.style.background = '#635bff'; // Stripe purple
+    if (switchBtn) { switchBtn.textContent = 'Switch to Square'; switchBtn.setAttribute('onclick', 'switchPaymentProcessor("square")'); }
+    if (squareSection) squareSection.style.display = 'none';
+    if (stripeSection) stripeSection.style.display = 'block';
+  } else {
+    if (badgeName) badgeName.textContent = 'Square';
+    if (badgeDot) badgeDot.style.background = 'var(--teal,#2a9d8f)';
+    if (switchBtn) { switchBtn.textContent = 'Switch to Stripe'; switchBtn.setAttribute('onclick', 'switchPaymentProcessor("stripe")'); }
+    if (squareSection) squareSection.style.display = 'block';
+    if (stripeSection) stripeSection.style.display = 'none';
+  }
+}
+
+function switchPaymentProcessor(newProcessor) {
+  var currentName = newProcessor === 'stripe' ? 'Square' : 'Stripe';
+  var newName = newProcessor === 'stripe' ? 'Stripe' : 'Square';
+  if (!confirm('Switch payment processor from ' + currentName + ' to ' + newName + '? Your ' + currentName + ' credentials will be preserved if you switch back.')) return;
+
+  MastDB._ref('config/paymentProcessor').set(newProcessor).then(function() {
+    showPaymentProcessor(newProcessor);
+    if (newProcessor === 'stripe') {
+      loadStripeConfig();
+    } else {
+      loadSquareConfig();
+    }
+    showToast('Switched to ' + newName);
+    writeAudit('update', 'settings', 'paymentProcessor', { processor: newProcessor });
+  }).catch(function(err) {
+    showToast('Error switching processor: ' + err.message, true);
+  });
+}
+
+function onStripeKeyInput() {
+  var val = document.getElementById('stripeSecretKey').value || '';
+  var banner = document.getElementById('stripeTestBanner');
+  if (banner) banner.style.display = val.startsWith('sk_test_') ? 'block' : 'none';
+}
+
+function loadStripeConfig() {
+  var statusEl = document.getElementById('stripeConfigStatus');
+  firebase.functions().httpsCallable('secretsManager')({
+    action: 'read',
+    service: 'stripe',
+    tenantId: MastDB.tenantId()
+  }).then(function(result) {
+    var config = result.data;
+    if (!config || !config.configured) {
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray-light);">No Stripe config set. Payment checkout will not work until configured.</span>';
+      return;
+    }
+    setMaskedField('stripeSecretKey', config.secretKey);
+    var pkEl = document.getElementById('stripePublishableKey');
+    if (pkEl && config.publishableKey) { pkEl.value = config.publishableKey; }
+    // Show test banner if test environment
+    var banner = document.getElementById('stripeTestBanner');
+    if (banner) banner.style.display = config.environment === 'test' ? 'block' : 'none';
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Configured (' + config.environment + ') — updated ' + (config.updatedAt ? new Date(config.updatedAt).toLocaleDateString() : 'unknown') + '</span>';
+  }).catch(function(err) {
+    console.warn('Stripe config read failed:', err.message);
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray-light);">Could not load Stripe config.</span>';
+  });
+}
+
+async function saveStripeConfig() {
+  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
+
+  var secretKey = getFieldValue('stripeSecretKey');
+  var publishableKey = (document.getElementById('stripePublishableKey') || {}).value || '';
+
+  if (!secretKey) {
+    showToast('Secret Key is required.', true);
+    return;
+  }
+
+  // Auto-detect environment from key prefix
+  var env = secretKey.startsWith('sk_test_') ? 'test' : 'production';
+
+  var secrets = {};
+  var sp = MastDB.tenantId();
+  if (secretKey && !secretKey.includes('••••')) secrets[sp + '-stripe-secret-key'] = secretKey;
+
+  var metadata = {
+    publishableKey: publishableKey,
+    environment: env,
+    updatedAt: new Date().toISOString()
+  };
+
+  try {
+    await firebase.functions().httpsCallable('secretsManager')({
+      action: 'write',
+      service: 'stripe',
+      tenantId: MastDB.tenantId(),
+      secrets: secrets,
+      metadata: metadata
+    });
+    // Ensure paymentProcessor is set to stripe
+    await MastDB._ref('config/paymentProcessor').set('stripe');
+    await writeAudit('update', 'settings', 'stripeConfig');
+    showToast('Stripe config saved!');
+    loadStripeConfig();
+  } catch (err) {
+    showToast('Error saving Stripe config: ' + err.message, true);
+  }
+}
 
 function loadSquareConfig() {
   var statusEl = document.getElementById('squareConfigStatus');
