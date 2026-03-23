@@ -5379,62 +5379,33 @@
           </div>
         </div>
 
-        <!-- Step 3: Choose Features -->
+        <!-- Step 3: Payment Processor (shown when shop is enabled) -->
         <div id="wizardStep3" class="wizard-step" style="display:none;">
-          <h2 style="font-size:1.8rem;margin-bottom:8px;">Choose Your Features</h2>
-          <p style="color:var(--warm-gray);margin-bottom:24px;">Select what you need. You can change these anytime in Settings.</p>
+          <h2 style="font-size:1.8rem;margin-bottom:8px;">Payment Processing</h2>
+          <p id="wizardPaymentSubtext" style="color:var(--warm-gray);margin-bottom:24px;">How do you accept payments? You can set up credentials later in Settings.</p>
 
-          <div id="wizardFeatureCards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:24px;">
-            <div class="wizard-feature-card" data-feature="shop" onclick="wizardToggleFeature(this)" style="border:2px solid var(--cream-dark);border-radius:10px;padding:16px;cursor:pointer;text-align:center;background:var(--cream);transition:border-color 0.2s,background 0.2s;">
-              <div style="font-size:1.5rem;margin-bottom:6px;">&#128722;</div>
-              <strong style="font-size:0.9rem;">Shop</strong>
-              <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Online storefront with products &amp; checkout</p>
+          <div id="wizardPaymentDetected" style="display:none;background:var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:20px;font-size:0.9rem;">
+            <span style="color:var(--teal);">&#10003;</span> We detected <strong id="wizardDetectedProcessor"></strong> on your website.
+          </div>
+
+          <div id="wizardPaymentCards" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+            <div class="wizard-feature-card" data-processor="square" onclick="wizardSelectProcessor(this)" style="border:2px solid var(--cream-dark);border-radius:10px;padding:20px;cursor:pointer;text-align:center;background:var(--cream);transition:border-color 0.2s,background 0.2s;">
+              <div style="font-size:2rem;margin-bottom:8px;">&#9632;</div>
+              <strong style="font-size:1rem;">Square</strong>
+              <p style="font-size:0.8rem;color:var(--warm-gray);margin-top:6px;">Best for in-person &amp; online sales. POS, invoices, and payment links.</p>
             </div>
-            <div class="wizard-feature-card" data-feature="blog" onclick="wizardToggleFeature(this)" style="border:2px solid var(--cream-dark);border-radius:10px;padding:16px;cursor:pointer;text-align:center;background:var(--cream);transition:border-color 0.2s,background 0.2s;">
-              <div style="font-size:1.5rem;margin-bottom:6px;">&#9997;</div>
-              <strong style="font-size:0.9rem;">Blog</strong>
-              <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Share updates, stories, and news</p>
-            </div>
-            <div class="wizard-feature-card" data-feature="events" onclick="wizardToggleFeature(this)" style="border:2px solid var(--cream-dark);border-radius:10px;padding:16px;cursor:pointer;text-align:center;background:var(--cream);transition:border-color 0.2s,background 0.2s;">
-              <div style="font-size:1.5rem;margin-bottom:6px;">&#128197;</div>
-              <strong style="font-size:0.9rem;">Events</strong>
-              <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">List shows, markets, and events</p>
-            </div>
-            <div class="wizard-feature-card" data-feature="members" onclick="wizardToggleFeature(this)" style="border:2px solid var(--cream-dark);border-radius:10px;padding:16px;cursor:pointer;text-align:center;background:var(--cream);transition:border-color 0.2s,background 0.2s;">
-              <div style="font-size:1.5rem;margin-bottom:6px;">&#128274;</div>
-              <strong style="font-size:0.9rem;">Members</strong>
-              <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Gated content for VIPs or wholesale</p>
-            </div>
-            <div class="wizard-feature-card" data-feature="newsletter" onclick="wizardToggleFeature(this)" style="border:2px solid var(--cream-dark);border-radius:10px;padding:16px;cursor:pointer;text-align:center;background:var(--cream);transition:border-color 0.2s,background 0.2s;">
-              <div style="font-size:1.5rem;margin-bottom:6px;">&#9993;</div>
-              <strong style="font-size:0.9rem;">Newsletter</strong>
-              <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Email signup &amp; subscriber management</p>
-            </div>
-            <div class="wizard-feature-card" data-feature="commissions" onclick="wizardToggleFeature(this)" style="border:2px solid var(--cream-dark);border-radius:10px;padding:16px;cursor:pointer;text-align:center;background:var(--cream);transition:border-color 0.2s,background 0.2s;">
-              <div style="font-size:1.5rem;margin-bottom:6px;">&#127912;</div>
-              <strong style="font-size:0.9rem;">Commissions</strong>
-              <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Accept custom order requests</p>
-            </div>
-            <div class="wizard-feature-card" data-feature="stories" onclick="wizardToggleFeature(this)" style="border:2px solid var(--cream-dark);border-radius:10px;padding:16px;cursor:pointer;text-align:center;background:var(--cream);transition:border-color 0.2s,background 0.2s;">
-              <div style="font-size:1.5rem;margin-bottom:6px;">&#128248;</div>
-              <strong style="font-size:0.9rem;">Stories</strong>
-              <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Short-form visual content for your audience</p>
-            </div>
-            <div class="wizard-feature-card" data-feature="social" onclick="wizardToggleFeature(this)" style="border:2px solid var(--cream-dark);border-radius:10px;padding:16px;cursor:pointer;text-align:center;background:var(--cream);transition:border-color 0.2s,background 0.2s;">
-              <div style="font-size:1.5rem;margin-bottom:6px;">&#128227;</div>
-              <strong style="font-size:0.9rem;">Social Media</strong>
-              <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Create and manage social posts</p>
-            </div>
-            <div class="wizard-feature-card" data-feature="wholesale" onclick="wizardToggleFeature(this)" style="border:2px solid var(--cream-dark);border-radius:10px;padding:16px;cursor:pointer;text-align:center;background:var(--cream);transition:border-color 0.2s,background 0.2s;">
-              <div style="font-size:1.5rem;margin-bottom:6px;">&#128230;</div>
-              <strong style="font-size:0.9rem;">Wholesale</strong>
-              <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Wholesale catalog and bulk ordering</p>
+            <div class="wizard-feature-card" data-processor="stripe" onclick="wizardSelectProcessor(this)" style="border:2px solid var(--cream-dark);border-radius:10px;padding:20px;cursor:pointer;text-align:center;background:var(--cream);transition:border-color 0.2s,background 0.2s;">
+              <div style="font-size:2rem;margin-bottom:8px;">&#9135;</div>
+              <strong style="font-size:1rem;">Stripe</strong>
+              <p style="font-size:0.8rem;color:var(--warm-gray);margin-top:6px;">Best for online-first businesses. Subscriptions, embeddable checkout.</p>
             </div>
           </div>
 
-          <div style="display:flex;justify-content:space-between;">
+          <button class="btn" id="wizardSkipPaymentBtn" onclick="wizardSkipPayment()" style="font-size:0.8rem;color:var(--warm-gray);background:none;border:none;padding:4px 0;cursor:pointer;text-decoration:underline;">I'll set this up later</button>
+
+          <div style="display:flex;justify-content:space-between;margin-top:20px;">
             <button class="btn btn-secondary" onclick="wizardPrev(3)">Back</button>
-            <button class="btn btn-primary" onclick="wizardSaveFeatures()">Continue</button>
+            <button class="btn btn-primary" id="wizardPaymentContinueBtn" onclick="wizardSavePaymentProcessor()" disabled style="opacity:0.5;">Continue</button>
           </div>
         </div>
 
@@ -12463,6 +12434,7 @@ function initSetupWizard() {
     if (!window._wizardCrawlManifest && wizardProgress.crawlManifest) {
       window._wizardCrawlManifest = wizardProgress.crawlManifest;
       window._wizardAnalyzedUrl = wizardProgress.analyzedUrl || '';
+      window._wizardSiteFingerprint = wizardProgress.siteFingerprint || null;
     }
     showWizardStep(wizardCurrentStep);
   }).catch(function() {
@@ -12678,6 +12650,7 @@ async function wizardAnalyzeSite() {
       manifestEl.style.display = '';
       window._wizardCrawlManifest = crawlManifest;
       window._wizardAnalyzedUrl = url;
+      window._wizardSiteFingerprint = data.siteFingerprint || null;
       // Persist to Firebase so it survives page reloads (auth redirects, etc.)
       MastDB.config.ref('setupProgress/crawlManifest').set(crawlManifest).catch(function(e) {
         console.warn('Failed to persist crawl manifest:', e.message);
@@ -12685,6 +12658,11 @@ async function wizardAnalyzeSite() {
       MastDB.config.ref('setupProgress/analyzedUrl').set(url).catch(function(e) {
         console.warn('Failed to persist analyzed URL:', e.message);
       });
+      if (data.siteFingerprint) {
+        MastDB.config.ref('setupProgress/siteFingerprint').set(data.siteFingerprint).catch(function(e) {
+          console.warn('Failed to persist site fingerprint:', e.message);
+        });
+      }
     }
 
     statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Analysis complete!</span>';
@@ -12838,29 +12816,23 @@ async function wizardSaveMinimalFeatures() {
 
     wizardProgress.featuresConfigured = true;
 
-    // Create import job if site had importable content
-    if (window._wizardCrawlManifest) {
-      var ct = window._wizardCrawlManifest.contentTypes || {};
-      var hasContent = (ct.products && ct.products.found) || (ct.blog && ct.blog.found) || (ct.events && ct.events.found);
-      if (hasContent) {
-        try {
-          var jobData = {
-            id: MastDB._ref('webPresence/importJobs').push().key,
-            url: window._wizardAnalyzedUrl,
-            tenantId: MastDB.tenantId(),
-            status: 'pending',
-            createdAt: new Date().toISOString(),
-            claimedAt: null, completedAt: null, error: null,
-            crawlManifest: window._wizardCrawlManifest,
-            discovered: null, imported: null
-          };
-          await MastDB._ref('webPresence/importJobs/' + jobData.id).set(jobData);
-        } catch (e) {
-          console.error('Failed to create import job:', e);
-        }
+    // If shop is enabled, show payment processor step (Step 3) before Step 4
+    if (hasSell) {
+      // Pre-select detected payment provider from site analysis
+      var detectedProcessor = null;
+      if (window._wizardSiteFingerprint && window._wizardSiteFingerprint.paymentProvider) {
+        detectedProcessor = window._wizardSiteFingerprint.paymentProvider;
       }
+      // Create import job now so it starts processing while user picks payment
+      await wizardCreateImportJob();
+      wizardPreSelectProcessor(detectedProcessor);
+      saveWizardProgress(3, { featuresConfigured: true });
+      showWizardStep(3);
+      return;
     }
 
+    // No shop — skip payment step, create import job and go to Step 4
+    await wizardCreateImportJob();
     saveWizardProgress(4, { featuresConfigured: true });
     showWizardStep(4);
   } catch (err) {
@@ -12868,7 +12840,83 @@ async function wizardSaveMinimalFeatures() {
   }
 }
 
-// Step 3: Save features and advance to step 4
+async function wizardCreateImportJob() {
+  if (window._wizardCrawlManifest) {
+    var ct = window._wizardCrawlManifest.contentTypes || {};
+    var hasContent = (ct.products && ct.products.found) || (ct.blog && ct.blog.found) || (ct.events && ct.events.found);
+    if (hasContent) {
+      try {
+        var jobData = {
+          id: MastDB._ref('webPresence/importJobs').push().key,
+          url: window._wizardAnalyzedUrl,
+          tenantId: MastDB.tenantId(),
+          status: 'pending',
+          createdAt: new Date().toISOString(),
+          claimedAt: null, completedAt: null, error: null,
+          crawlManifest: window._wizardCrawlManifest,
+          discovered: null, imported: null
+        };
+        await MastDB._ref('webPresence/importJobs/' + jobData.id).set(jobData);
+      } catch (e) {
+        console.error('Failed to create import job:', e);
+      }
+    }
+  }
+}
+
+// Step 3: Payment processor selection
+function wizardSelectProcessor(card) {
+  // Deselect all, select this one
+  document.querySelectorAll('#wizardPaymentCards .wizard-feature-card').forEach(function(c) {
+    c.dataset.selected = 'false';
+    c.style.borderColor = 'var(--cream-dark)';
+    c.style.background = 'var(--cream)';
+  });
+  card.dataset.selected = 'true';
+  card.style.borderColor = 'var(--teal)';
+  card.style.background = '#edf7f5';
+  // Enable continue button
+  var btn = document.getElementById('wizardPaymentContinueBtn');
+  if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+}
+
+function wizardPreSelectProcessor(processor) {
+  if (!processor) return;
+  var cards = document.querySelectorAll('#wizardPaymentCards .wizard-feature-card');
+  cards.forEach(function(card) {
+    if (card.dataset.processor === processor) {
+      wizardSelectProcessor(card);
+    }
+  });
+  // Show detected banner
+  var detected = document.getElementById('wizardPaymentDetected');
+  var detectedName = document.getElementById('wizardDetectedProcessor');
+  if (detected && detectedName) {
+    detectedName.textContent = processor.charAt(0).toUpperCase() + processor.slice(1);
+    detected.style.display = 'block';
+  }
+}
+
+async function wizardSavePaymentProcessor() {
+  var selected = document.querySelector('#wizardPaymentCards .wizard-feature-card[data-selected="true"]');
+  var processor = selected ? selected.dataset.processor : null;
+  if (processor) {
+    try {
+      await MastDB._ref('config/paymentProcessor').set(processor);
+    } catch (e) {
+      console.warn('Failed to save payment processor:', e.message);
+    }
+  }
+  saveWizardProgress(4, { paymentProcessor: processor });
+  showWizardStep(4);
+}
+
+function wizardSkipPayment() {
+  saveWizardProgress(4);
+  showWizardStep(4);
+}
+
+// Step 3 (legacy): Save features and advance to step 4
 async function wizardSaveFeatures() {
   var features = { shop: false, blog: false, events: false, members: false, newsletter: false, commissions: false, stories: false, social: false, wholesale: false };
   document.querySelectorAll('#wizardFeatureCards .wizard-feature-card').forEach(function(card) {

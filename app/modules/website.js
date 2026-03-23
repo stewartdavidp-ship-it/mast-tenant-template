@@ -2046,6 +2046,93 @@
         }
       }
 
+      // ── Site Fingerprint Card ──
+      var fp = data.siteFingerprint;
+      if (fp) {
+        var pill = function(text) {
+          return '<span style="display:inline-block;background:var(--cream-dark,#e8e0d4);border-radius:12px;padding:2px 10px;font-size:0.8rem;margin:2px 4px 2px 0;color:var(--charcoal,#333);">' + esc(String(text)) + '</span>';
+        };
+        var fpLabel = function(label) {
+          return '<span style="color:var(--warm-gray,#888);font-size:0.8rem;min-width:90px;display:inline-block;">' + label + '</span>';
+        };
+
+        rhtml += '<div class="wp-import-result" style="margin-top:12px;">';
+        rhtml += '<strong style="display:block;margin-bottom:8px;">Site Profile</strong>';
+        rhtml += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;">';
+
+        if (fp.archetype) rhtml += '<div>' + fpLabel('Archetype') + pill(fp.archetype) + '</div>';
+        if (fp.productCount) rhtml += '<div>' + fpLabel('Products') + pill(fp.productCount) + '</div>';
+        if (fp.productPlacement) rhtml += '<div>' + fpLabel('Placement') + pill(fp.productPlacement) + '</div>';
+        if (fp.productDensity) rhtml += '<div>' + fpLabel('Density') + pill(fp.productDensity) + '</div>';
+        if (fp.categoryCount) rhtml += '<div>' + fpLabel('Categories') + pill(fp.categoryCount) + '</div>';
+        if (fp.pageCount) rhtml += '<div>' + fpLabel('Pages') + pill(fp.pageCount) + '</div>';
+        if (fp.heroStyle) rhtml += '<div>' + fpLabel('Hero') + pill(fp.heroStyle) + '</div>';
+        if (typeof fp.aboutOnHomepage === 'boolean') rhtml += '<div>' + fpLabel('About') + pill(fp.aboutOnHomepage ? 'on homepage' : 'subpage') + '</div>';
+        if (fp.platform) rhtml += '<div>' + fpLabel('Platform') + pill(fp.platform) + '</div>';
+        if (fp.paymentProvider) rhtml += '<div>' + fpLabel('Payments') + pill(fp.paymentProvider) + '</div>';
+
+        rhtml += '</div>';
+
+        if (fp.homepageSections && fp.homepageSections.length > 0) {
+          rhtml += '<div style="margin-top:8px;">' + fpLabel('Homepage') + fp.homepageSections.map(function(s) { return pill(s); }).join('') + '</div>';
+        }
+        if (fp.contentTypes && fp.contentTypes.length > 0) {
+          rhtml += '<div style="margin-top:4px;">' + fpLabel('Content') + fp.contentTypes.map(function(s) { return pill(s); }).join('') + '</div>';
+        }
+
+        rhtml += '</div>';
+      }
+
+      // ── Template Match Card ──
+      var tm = data.templateMatch;
+      if (tm && tm.scores && tm.scores.length > 0) {
+        var confColor = tm.confidence === 'high' ? 'var(--teal,#2a9d8f)' : tm.confidence === 'medium' ? 'var(--amber,#e9c46a)' : 'var(--warm-gray,#888)';
+
+        rhtml += '<div class="wp-import-result" style="margin-top:12px;">';
+        rhtml += '<strong style="display:block;margin-bottom:8px;">Template Match</strong>';
+
+        if (tm.bestMatch) {
+          rhtml += '<div style="margin-bottom:10px;font-size:0.9rem;">';
+          rhtml += 'Best Match: <strong>' + esc(tm.bestMatch.templateId) + '</strong>';
+          rhtml += ' &middot; Score: <strong>' + Math.round(tm.bestMatch.score * 100) + '%</strong>';
+          rhtml += ' &middot; <span style="background:' + confColor + ';color:#fff;border-radius:12px;padding:2px 10px;font-size:0.75rem;">' + esc(tm.confidence) + '</span>';
+          rhtml += '</div>';
+        }
+
+        tm.scores.forEach(function(entry) {
+          var isBest = tm.bestMatch && entry.templateId === tm.bestMatch.templateId;
+          var barColor = isBest ? 'var(--teal,#2a9d8f)' : 'var(--warm-gray,#ccc)';
+          var borderStyle = isBest ? 'border-left:3px solid var(--teal,#2a9d8f);padding-left:10px;' : 'padding-left:13px;';
+          var pct = Math.round(entry.score * 100);
+
+          rhtml += '<div style="margin-bottom:8px;' + borderStyle + '">';
+          rhtml += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">';
+          rhtml += '<span style="font-size:0.85rem;font-weight:600;min-width:80px;">' + esc(entry.templateId) + '</span>';
+          rhtml += '<div style="flex:1;background:var(--cream-dark,#e8e0d4);border-radius:4px;height:8px;overflow:hidden;">';
+          rhtml += '<div style="width:' + pct + '%;height:100%;background:' + barColor + ';border-radius:4px;transition:width 0.3s;"></div>';
+          rhtml += '</div>';
+          rhtml += '<span style="font-size:0.8rem;color:var(--warm-gray,#888);min-width:35px;text-align:right;">' + pct + '%</span>';
+          rhtml += '</div>';
+
+          // Signal breakdown
+          if (entry.signals) {
+            rhtml += '<div style="font-size:0.75rem;color:var(--warm-gray,#888);">';
+            var signalNames = { archetype: 'archetype', productCount: 'products', aboutOnHomepage: 'about', homepageSections: 'sections', productPlacement: 'placement', contentTypes: 'content', heroStyle: 'hero' };
+            Object.keys(signalNames).forEach(function(key) {
+              if (entry.signals[key] !== undefined) {
+                var matched = entry.signals[key] > 0;
+                rhtml += '<span style="margin-right:8px;">' + (matched ? '&#10003;' : '&#10007;') + ' ' + signalNames[key] + '</span>';
+              }
+            });
+            rhtml += '</div>';
+          }
+
+          rhtml += '</div>';
+        });
+
+        rhtml += '</div>';
+      }
+
       if (resultsEl) resultsEl.innerHTML = rhtml;
       // Reload config since analysis also seeds it
       await loadWebsiteConfig();
