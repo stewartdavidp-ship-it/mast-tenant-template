@@ -140,5 +140,18 @@
     { "id": "editorial", "name": "Editorial", "heading": "Playfair Display", "body": "Source Sans 3" },
     { "id": "clean", "name": "Clean", "heading": "Outfit", "body": "Outfit" },
     { "id": "artisan", "name": "Artisan", "heading": "Libre Baskerville", "body": "Nunito Sans" }
-  ]
+  ],
+
+  "fingerprint": {
+    "archetype": ["brand-forward", "portfolio", "content-forward"],
+    "productCount": ["none", "low", "medium"],
+    "productPlacement": ["subpage", "both"],
+    "productDensity": ["large-few", "medium-grid"],
+    "categoryCount": ["none", "few"],
+    "pageCount": ["single", "few", "many"],
+    "contentTypes": ["gallery", "events", "blog"],
+    "homepageSections": ["about", "gallery", "process", "events"],
+    "heroStyle": ["image-bg", "video-bg", "text-only"],
+    "aboutOnHomepage": true
+  }
 }

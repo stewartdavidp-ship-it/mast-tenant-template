@@ -132,5 +132,18 @@
     { "id": "classic", "name": "Classic", "heading": "Cormorant Garamond", "body": "DM Sans" },
     { "id": "editorial", "name": "Editorial", "heading": "Playfair Display", "body": "Source Sans 3" },
     { "id": "geometric", "name": "Geometric", "heading": "Space Grotesk", "body": "Space Grotesk" }
-  ]
+  ],
+
+  "fingerprint": {
+    "archetype": ["shop-forward"],
+    "productCount": ["medium", "high"],
+    "productPlacement": ["homepage", "both"],
+    "productDensity": ["medium-grid", "small-dense"],
+    "categoryCount": ["few", "many"],
+    "pageCount": ["few", "many"],
+    "contentTypes": ["products"],
+    "homepageSections": ["product-grid", "category-grid", "featured-products"],
+    "heroStyle": ["image-bg", "split-image"],
+    "aboutOnHomepage": false
+  }
 }
