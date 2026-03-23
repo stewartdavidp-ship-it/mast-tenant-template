@@ -1417,13 +1417,17 @@ window.TENANT_READY.then(function() {
     const allItems = Object.values(data).filter(function(i) { return i.visible !== false; });
 
     // Hero: build video playlist from all hero items with videoUrl
-    var heroItems = allItems.filter(function(i) { return i.section === 'hero' && i.visible !== false && i.videoUrl; });
-    heroItems.sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
+    var allHeroItems = allItems.filter(function(i) { return i.section === 'hero' && i.visible !== false; });
+    allHeroItems.sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
+    var heroVideos = allHeroItems.filter(function(i) { return !!i.videoUrl; });
+    var heroImages = allHeroItems.filter(function(i) { return !i.videoUrl && !!i.url; });
     var video = document.getElementById('heroVideo');
     var poster = document.getElementById('heroPoster');
-    if (video && heroItems.length > 0) {
-      var heroPlaylist = heroItems.map(function(h) {
-        return { url: h.videoUrl, speed: h.playbackSpeed || 1, start: h.videoStart || 0, end: h.videoEnd || 0 };
+
+    if (video && heroVideos.length > 0) {
+      // Video hero mode
+      var heroPlaylist = heroVideos.map(function(h) {
+        return { url: h.videoUrl, speed: h.playbackSpeed || 1, start: h.videoStart || 0, end: h.videoEnd || 0, poster: h.url };
       });
       var heroIndex = 0;
       var endCheckTimer = null;
@@ -1431,14 +1435,13 @@ window.TENANT_READY.then(function() {
       function loadHeroVideo(idx) {
         var item = heroPlaylist[idx];
         video.src = item.url;
-        if (heroItems[idx] && heroItems[idx].url) video.poster = heroItems[idx].url;
+        if (item.poster) video.poster = item.poster;
         video.load();
         video.addEventListener('loadedmetadata', function onMeta() {
           video.removeEventListener('loadedmetadata', onMeta);
           if (item.start > 0) video.currentTime = item.start;
         });
         video.play().catch(function() {});
-        // If end time is set, check periodically and advance when reached
         if (endCheckTimer) clearInterval(endCheckTimer);
         if (item.end > 0) {
           endCheckTimer = setInterval(function() {
@@ -1456,7 +1459,6 @@ window.TENANT_READY.then(function() {
           heroIndex = (heroIndex + 1) % heroPlaylist.length;
           loadHeroVideo(heroIndex);
         } else {
-          // Single video: loop back to start
           var item = heroPlaylist[0];
           video.currentTime = item.start || 0;
           video.play().catch(function() {});
@@ -1471,21 +1473,32 @@ window.TENANT_READY.then(function() {
         }
       }
 
-      // Apply playback speed after video loads (load() resets playbackRate)
       video.addEventListener('playing', function() {
         if (video.playbackRate !== heroPlaylist[heroIndex].speed) {
           video.playbackRate = heroPlaylist[heroIndex].speed;
         }
       });
-      // When video ends naturally, advance to next
       video.addEventListener('ended', function() { advanceHero(); });
-      // Disable loop so 'ended' event fires
       video.loop = false;
       video.removeAttribute('loop');
-      // Load first video
       loadHeroVideo(0);
-      if (poster && heroItems[0].url) {
-        poster.style.backgroundImage = "url('" + heroItems[0].url + "')";
+      if (poster && heroPlaylist[0].poster) {
+        poster.style.backgroundImage = "url('" + heroPlaylist[0].poster + "')";
+      }
+    } else if (poster && heroImages.length > 0) {
+      // Image-only hero mode — hide video element, show image as background
+      if (video) video.style.display = 'none';
+      poster.style.backgroundImage = "url('" + heroImages[0].url + "')";
+      poster.style.opacity = '1';
+      poster.classList.remove('loaded');
+
+      // If multiple images, rotate through them
+      if (heroImages.length > 1) {
+        var imgIndex = 0;
+        setInterval(function() {
+          imgIndex = (imgIndex + 1) % heroImages.length;
+          poster.style.backgroundImage = "url('" + heroImages[imgIndex].url + "')";
+        }, 6000);
       }
     }
 
