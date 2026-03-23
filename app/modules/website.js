@@ -2310,15 +2310,22 @@
     if (count === 0) return;
     showConfirmDialog('Delete ' + count + ' Product' + (count !== 1 ? 's' : ''), 'Delete ' + count + ' selected product' + (count !== 1 ? 's' : '') + '? This cannot be undone.', async function() {
       try {
-        var updates = {};
-        selectedProductIds.forEach(function(pid) { updates['public/products/' + pid] = null; });
-        await MastDB._multiUpdate(updates);
-        selectedProductIds.forEach(function(pid) { writeAudit('delete', 'products', pid); });
+        var pids = Array.from(selectedProductIds);
+        console.log('[wpDeleteSelectedProducts] Deleting', pids.length, 'products:', pids);
+        // Delete each product individually to ensure Firebase processes all
+        for (var i = 0; i < pids.length; i++) {
+          await MastDB._ref('public/products/' + pids[i]).remove();
+          writeAudit('delete', 'products', pids[i]);
+        }
+        console.log('[wpDeleteSelectedProducts] All deletes complete');
         showToast(count + ' product' + (count !== 1 ? 's' : '') + ' deleted.');
         selectedProductIds.clear();
+        // Force fresh read
+        importedProducts = [];
         await loadImportedProducts();
         renderWebsite();
       } catch (err) {
+        console.error('[wpDeleteSelectedProducts] Error:', err);
         showToast('Error: ' + err.message, true);
       }
     }, { confirmLabel: 'Delete', cancelLabel: 'Cancel' });
