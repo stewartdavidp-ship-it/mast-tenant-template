@@ -6136,6 +6136,23 @@
           <div id="githubTokenStatus" style="margin-top:8px;font-size:0.85rem;"></div>
         </div>
         <div class="form-group" style="margin-top:24px;">
+          <label>Site Visibility</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">
+            When set to <strong>Private</strong>, search engines will not index your Mast-hosted site. Set to <strong>Public</strong> when you're ready to be found in search results.
+          </p>
+          <div style="display:flex;gap:12px;align-items:center;">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+              <input type="radio" name="siteVisibility" value="private" id="visibilityPrivate" onchange="saveSiteVisibility(false)" checked>
+              <span>Private <span style="font-size:0.8rem;color:var(--warm-gray);">(not indexed)</span></span>
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+              <input type="radio" name="siteVisibility" value="public" id="visibilityPublic" onchange="saveSiteVisibility(true)">
+              <span>Public <span style="font-size:0.8rem;color:var(--warm-gray);">(search engines can find you)</span></span>
+            </label>
+          </div>
+          <div id="visibilityStatus" style="margin-top:8px;font-size:0.85rem;"></div>
+        </div>
+        <div class="form-group" style="margin-top:24px;">
           <label>Events to Show on Homepage</label>
           <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">
             Number of upcoming events displayed in the homepage schedule section.
@@ -9974,7 +9991,7 @@ function applyRoute(route) {
 }
 
 function lazyLoadForRoute(route) {
-  if (route === 'settings') { updateGitHubTokenStatus(); updateLkApiKeyStatus(); loadOperators(); loadStorageInfo(); loadStudioLocations(); loadLocations(); loadPublicFeedbackSetting(); loadEmailConfig(); loadEmailDomainSection(); applySettingsGating(); }
+  if (route === 'settings') { updateGitHubTokenStatus(); updateLkApiKeyStatus(); loadOperators(); loadStorageInfo(); loadStudioLocations(); loadLocations(); loadPublicFeedbackSetting(); loadEmailConfig(); loadEmailDomainSection(); applySettingsGating(); loadSiteVisibility(); }
   if (route === 'analytics' && !analyticsLoaded) loadAnalytics();
   if (route === 'products' && !productsLoaded) loadProducts();
   // orders lazy-load handled by orders module
@@ -11374,6 +11391,38 @@ function updateLkApiKeyStatus() {
 }
 
 // Events count setting
+async function saveSiteVisibility(isPublic) {
+  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
+  try {
+    // Write to publicConfig in platform RTDB
+    var tenantId = MastDB.tenantId();
+    var platformDb = firebase.app('platform').database();
+    await platformDb.ref('mast-platform/tenants/' + tenantId + '/publicConfig/searchable').set(isPublic);
+    await writeAudit('update', 'settings', 'siteVisibility');
+    var statusEl = document.getElementById('visibilityStatus');
+    if (isPublic) {
+      statusEl.innerHTML = '<span style="color:var(--amber);">&#9888; Site is now public — search engines can index your pages.</span>';
+    } else {
+      statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Site is private — search engines will not index your pages.</span>';
+    }
+    showToast(isPublic ? 'Site set to public' : 'Site set to private');
+  } catch (err) {
+    showToast('Error saving visibility: ' + err.message, true);
+  }
+}
+
+function loadSiteVisibility() {
+  try {
+    var tenantId = MastDB.tenantId();
+    var platformDb = firebase.app('platform').database();
+    platformDb.ref('mast-platform/tenants/' + tenantId + '/publicConfig/searchable').once('value', function(snap) {
+      var searchable = snap.val() === true;
+      document.getElementById('visibilityPublic').checked = searchable;
+      document.getElementById('visibilityPrivate').checked = !searchable;
+    });
+  } catch (e) { /* non-fatal */ }
+}
+
 async function saveEventsCount() {
   if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
   var count = parseInt(document.getElementById('eventsCountInput').value, 10);
@@ -12331,7 +12380,8 @@ async function wizardAnalyzeSite() {
   var url = document.getElementById('wizardSiteUrl').value.trim();
   if (!url) { showToast('Please enter a URL.', true); return; }
 
-  // Normalize and validate URL with "did you mean?" suggestions
+  // Normalize URL: fix common typos
+  url = url.replace(/^["'<]+|["'>]+$/g, '').replace(/^(https?);\/\//i, '$1://').replace(/^(https?):\/([^/])/i, '$1://$2').replace(/^(https?):(?!\/\/)/i, '$1://').replace(/^htp:\/\//i, 'http://').replace(/^htps:\/\//i, 'https://').replace(/\s+/g, '').replace(/,/g, '.').replace(/\.{2,}/g, '.');
   if (!url.match(/^https?:\/\//i)) url = 'https://' + url;
   var corrected = url;
   var corrections = [];
