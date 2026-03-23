@@ -2157,16 +2157,17 @@
     }
   };
 
-  window.wpDeleteProduct = async function(pid) {
-    if (!confirm('Delete this product? This cannot be undone.')) return;
-    try {
-      await MastDB._ref('public/products/' + pid).remove();
-      showToast('Product deleted.');
-      await loadImportedProducts();
-      renderWebsite();
-    } catch (err) {
-      showToast('Error: ' + err.message, true);
-    }
+  window.wpDeleteProduct = function(pid) {
+    showConfirmDialog('Delete Product', 'Delete this product? This cannot be undone.', async function() {
+      try {
+        await MastDB._ref('public/products/' + pid).remove();
+        showToast('Product deleted.');
+        await loadImportedProducts();
+        renderWebsite();
+      } catch (err) {
+        showToast('Error: ' + err.message, true);
+      }
+    }, { confirmLabel: 'Delete', cancelLabel: 'Cancel' });
   };
 
   window.wpRetryImport = async function(jobId) {
@@ -2183,19 +2184,7 @@
   };
 
   // ── New Import (Re-scan) ──
-  window.wpStartImport = async function() {
-    var url = document.getElementById('wpRescanUrl').value.trim();
-    if (!url) { showToast('Please enter a URL.', true); return; }
-
-    // Ensure URL has protocol
-    if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
-
-    // Check for duplicate within 7 days
-    var recentUrls = window._wpRecentImportUrls || {};
-    if (recentUrls[url]) {
-      if (!confirm('This URL was imported in the last 7 days. Import again?')) return;
-    }
-
+  async function doStartImport(url) {
     var btn = document.getElementById('wpRescanBtn');
     var statusEl = document.getElementById('wpRescanStatus');
     if (btn) { btn.disabled = true; btn.textContent = 'Creating import...'; }
@@ -2239,6 +2228,24 @@
       if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger);">Error: ' + esc(err.message) + '</span>';
     }
     if (btn) { btn.disabled = false; btn.textContent = 'Scan & Import'; }
+  }
+
+  window.wpStartImport = function() {
+    var url = document.getElementById('wpRescanUrl').value.trim();
+    if (!url) { showToast('Please enter a URL.', true); return; }
+    // Normalize URL
+    url = normalizeInputUrl(url);
+    if (!url) { showToast('That doesn\'t look like a valid URL.', true); return; }
+
+    // Check for duplicate within 7 days
+    var recentUrls = window._wpRecentImportUrls || {};
+    if (recentUrls[url]) {
+      showConfirmDialog('Re-import URL', 'This URL was imported in the last 7 days. Import again?', function() {
+        doStartImport(url);
+      }, { confirmLabel: 'Import Again', cancelLabel: 'Cancel' });
+    } else {
+      doStartImport(url);
+    }
   };
 
   // ── Cherry-pick helpers ──
@@ -2389,14 +2396,15 @@
     renderWebsite();
   };
 
-  window.wpCatDelete = async function(idx) {
+  window.wpCatDelete = function(idx) {
     if (!tenantCategories[idx]) return;
     var label = tenantCategories[idx].label;
-    if (!confirm('Delete category "' + label + '"? Products in this category will need to be recategorized.')) return;
-    tenantCategories.splice(idx, 1);
-    await saveCategories();
-    showToast('Category "' + label + '" deleted.');
-    renderWebsite();
+    showConfirmDialog('Delete Category', 'Delete category "' + label + '"? Products in this category will need to be recategorized.', async function() {
+      tenantCategories.splice(idx, 1);
+      await saveCategories();
+      showToast('Category "' + label + '" deleted.');
+      renderWebsite();
+    }, { confirmLabel: 'Delete', cancelLabel: 'Cancel' });
   };
 
   window.wpCatMove = async function(idx, direction) {
