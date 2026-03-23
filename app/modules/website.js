@@ -2275,6 +2275,7 @@
     showConfirmDialog('Delete Product', 'Delete this product? This cannot be undone.', async function() {
       try {
         await MastDB._ref('public/products/' + pid).remove();
+        writeAudit('delete', 'products', pid);
         showToast('Product deleted.');
         selectedProductIds.delete(pid);
         await loadImportedProducts();
@@ -2309,7 +2310,8 @@
       try {
         var updates = {};
         selectedProductIds.forEach(function(pid) { updates['public/products/' + pid] = null; });
-        await MastDB._ref().update(updates);
+        await MastDB._multiUpdate(updates);
+        selectedProductIds.forEach(function(pid) { writeAudit('delete', 'products', pid); });
         showToast(count + ' product' + (count !== 1 ? 's' : '') + ' deleted.');
         selectedProductIds.clear();
         await loadImportedProducts();
