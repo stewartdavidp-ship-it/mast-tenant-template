@@ -1518,6 +1518,8 @@
     return html;
   }
 
+  var selectedProductIds = new Set();
+
   function renderReviewProducts() {
     if (!importedProducts || importedProducts.length === 0) {
       return '<div style="font-size:0.85rem;color:var(--warm-gray);padding:16px 0;">No imported products found.</div>';
@@ -1525,20 +1527,39 @@
 
     var draftProducts = importedProducts.filter(function(p) { return p.status === 'draft' && p.importedFrom; });
     var publishedProducts = importedProducts.filter(function(p) { return p.status === 'active' && p.importedFrom; });
+    var allProducts = draftProducts.concat(publishedProducts);
 
     var html = '';
 
-    if (draftProducts.length > 0) {
-      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
-      html += '<span style="font-size:0.85rem;color:var(--warm-gray);">' + draftProducts.length + ' draft product' + (draftProducts.length !== 1 ? 's' : '') + '</span>';
-      html += '<button class="btn btn-primary" onclick="wpPublishAllProducts()" style="font-size:0.8rem;">Publish All Drafts</button>';
-      html += '</div>';
+    // Bulk action bar
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:8px;">';
+    html += '<div style="display:flex;align-items:center;gap:8px;">';
+    html += '<input type="checkbox" id="wp-select-all-products" onchange="wpToggleSelectAll(this.checked)" style="width:18px;height:18px;cursor:pointer;"' + (selectedProductIds.size === allProducts.length && allProducts.length > 0 ? ' checked' : '') + '>';
+    html += '<label for="wp-select-all-products" style="font-size:0.85rem;color:var(--warm-gray);cursor:pointer;">';
+    if (selectedProductIds.size > 0) {
+      html += selectedProductIds.size + ' selected';
+    } else {
+      html += allProducts.length + ' product' + (allProducts.length !== 1 ? 's' : '');
     }
+    html += '</label>';
+    html += '</div>';
+    html += '<div style="display:flex;gap:6px;">';
+    if (draftProducts.length > 0) {
+      html += '<button class="btn btn-primary" onclick="wpPublishAllProducts()" style="font-size:0.8rem;">Publish All Drafts</button>';
+    }
+    if (selectedProductIds.size > 0) {
+      html += '<button class="btn btn-secondary" onclick="wpDeleteSelectedProducts()" style="font-size:0.8rem;color:var(--danger);">Delete Selected (' + selectedProductIds.size + ')</button>';
+    }
+    html += '</div>';
+    html += '</div>';
 
-    var allProducts = draftProducts.concat(publishedProducts);
     allProducts.forEach(function(p) {
       var isDraft = p.status === 'draft';
-      html += '<div style="display:flex;align-items:center;gap:12px;padding:10px;background:var(--cream);border-radius:8px;margin-bottom:8px;' + (isDraft ? 'border-left:3px solid var(--amber);' : 'border-left:3px solid var(--teal);') + '">';
+      var isSelected = selectedProductIds.has(p.id);
+      html += '<div style="display:flex;align-items:center;gap:12px;padding:10px;background:var(--cream);border-radius:8px;margin-bottom:8px;' + (isDraft ? 'border-left:3px solid var(--amber);' : 'border-left:3px solid var(--teal);') + (isSelected ? 'outline:2px solid var(--danger);' : '') + '">';
+
+      // Checkbox
+      html += '<input type="checkbox" onchange="wpToggleProductSelect(\'' + esc(p.id) + '\', this.checked)" style="width:18px;height:18px;cursor:pointer;flex-shrink:0;"' + (isSelected ? ' checked' : '') + '>';
 
       // Thumbnail
       var img = (p.images && p.images.length > 0) ? p.images[0].url || p.images[0] : '';
@@ -1559,13 +1580,10 @@
       html += '</div>';
       html += '</div>';
 
-      // Actions
-      html += '<div style="display:flex;gap:6px;">';
+      // Actions (publish only — delete is now bulk)
       if (isDraft) {
         html += '<button class="btn btn-primary" onclick="wpPublishProduct(\'' + esc(p.id) + '\')" style="font-size:0.75rem;padding:4px 10px;">Publish</button>';
       }
-      html += '<button class="btn btn-secondary" onclick="wpDeleteProduct(\'' + esc(p.id) + '\')" style="font-size:0.75rem;padding:4px 10px;color:var(--danger);">Delete</button>';
-      html += '</div>';
 
       html += '</div>';
     });
@@ -2258,6 +2276,42 @@
       try {
         await MastDB._ref('public/products/' + pid).remove();
         showToast('Product deleted.');
+        selectedProductIds.delete(pid);
+        await loadImportedProducts();
+        renderWebsite();
+      } catch (err) {
+        showToast('Error: ' + err.message, true);
+      }
+    }, { confirmLabel: 'Delete', cancelLabel: 'Cancel' });
+  };
+
+  window.wpToggleSelectAll = function(checked) {
+    if (!importedProducts) return;
+    selectedProductIds.clear();
+    if (checked) {
+      var draftProducts = importedProducts.filter(function(p) { return p.status === 'draft' && p.importedFrom; });
+      var publishedProducts = importedProducts.filter(function(p) { return p.status === 'active' && p.importedFrom; });
+      draftProducts.concat(publishedProducts).forEach(function(p) { selectedProductIds.add(p.id); });
+    }
+    renderWebsite();
+  };
+
+  window.wpToggleProductSelect = function(pid, checked) {
+    if (checked) selectedProductIds.add(pid);
+    else selectedProductIds.delete(pid);
+    renderWebsite();
+  };
+
+  window.wpDeleteSelectedProducts = function() {
+    var count = selectedProductIds.size;
+    if (count === 0) return;
+    showConfirmDialog('Delete ' + count + ' Product' + (count !== 1 ? 's' : ''), 'Delete ' + count + ' selected product' + (count !== 1 ? 's' : '') + '? This cannot be undone.', async function() {
+      try {
+        var updates = {};
+        selectedProductIds.forEach(function(pid) { updates['public/products/' + pid] = null; });
+        await MastDB._ref().update(updates);
+        showToast(count + ' product' + (count !== 1 ? 's' : '') + ' deleted.');
+        selectedProductIds.clear();
         await loadImportedProducts();
         renderWebsite();
       } catch (err) {
