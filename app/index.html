@@ -6357,6 +6357,44 @@
           </div>
           <div id="shippingConfigStatus" style="margin-top:8px;font-size:0.85rem;"></div>
         </div>
+
+        <hr style="border:none;border-top:1px solid #eee;margin:28px 0;">
+
+        <div class="form-group">
+          <label style="font-size:1.1rem;font-weight:600;">Sales Tax</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">
+            Tax rates by US state. Rates are applied at checkout based on the customer's shipping state.
+            Set your nexus state (where you collect tax) and configure rates for applicable states.
+          </p>
+
+          <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:16px;flex-wrap:wrap;">
+            <div>
+              <label style="font-size:0.78rem;font-weight:600;display:block;margin-bottom:4px;">Nexus State</label>
+              <select id="taxNexusState" style="padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.85rem;">
+                <option value="">Select...</option>
+              </select>
+            </div>
+            <button class="btn btn-secondary" onclick="loadDefaultTaxRates()" style="font-size:0.8rem;padding:8px 14px;">Load US State Defaults</button>
+          </div>
+
+          <div id="taxRatesTableWrap" style="max-height:320px;overflow-y:auto;border:1px solid #ddd;border-radius:6px;margin-bottom:12px;display:none;">
+            <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
+              <thead>
+                <tr style="background:var(--cream-dark,#f5f0e8);position:sticky;top:0;">
+                  <th style="text-align:left;padding:8px 10px;font-weight:600;font-size:0.78rem;">State</th>
+                  <th style="text-align:right;padding:8px 10px;font-weight:600;font-size:0.78rem;">Rate (%)</th>
+                </tr>
+              </thead>
+              <tbody id="taxRatesTableBody"></tbody>
+            </table>
+          </div>
+
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-primary" onclick="saveTaxRates()">Save Tax Rates</button>
+            <button class="btn btn-secondary" onclick="clearTaxRates()" style="font-size:0.8rem;padding:8px 14px;">Clear All</button>
+          </div>
+          <div id="taxRatesStatus" style="margin-top:8px;font-size:0.85rem;"></div>
+        </div>
       </div>
       <div id="settingsSubIntegrations" style="display:none;max-width:500px;">
         <div class="form-group">
@@ -7784,6 +7822,7 @@ MastDB.config = {
   square: function() { return MastDB._ref('config/square'); },
   etsy: function() { return MastDB._ref('config/etsy'); },
   shipping: function() { return MastDB._ref('public/config/shippingRates'); },
+  taxRates: function() { return MastDB._ref('public/taxRates'); },
   googleMaps: function() { return MastDB._ref('public/config/googleMapsApiKey'); },
   testMode: function() { return MastDB._ref('public/config/testMode'); },
   githubToken: function() { return MastDB._ref('admin/githubToken'); },
@@ -11488,6 +11527,7 @@ function loadSettings() {
   });
   loadPaymentProcessor();
   loadShippingConfig();
+  loadTaxRates();
   loadGoogleConfig();
   loadEtsyConfig();
 }
@@ -11953,6 +11993,109 @@ function loadShippingConfig() {
     if (bufferEl && config.packingBufferOz != null) bufferEl.value = config.packingBufferOz;
     if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Configured — updated ' + new Date(config.updatedAt).toLocaleDateString() + '</span>';
   });
+}
+
+// ============================================================
+// Sales Tax Rate Management
+// ============================================================
+
+var US_STATE_TAX_DEFAULTS = {"AK":0,"AL":0.04,"AR":0.065,"AZ":0.056,"CA":0.0725,"CO":0.029,"CT":0.0635,"DC":0.06,"DE":0,"FL":0.06,"GA":0.04,"HI":0.04,"IA":0.06,"ID":0.06,"IL":0.0625,"IN":0.07,"KS":0.065,"KY":0.06,"LA":0.0445,"MA":0.0625,"MD":0.06,"ME":0.055,"MI":0.06,"MN":0.06875,"MO":0.04225,"MS":0.07,"MT":0,"NC":0.0475,"ND":0.05,"NE":0.055,"NH":0,"NJ":0.06625,"NM":0.05125,"NV":0.0685,"NY":0.04,"OH":0.0575,"OK":0.045,"OR":0,"PA":0.06,"RI":0.07,"SC":0.06,"SD":0.042,"TN":0.07,"TX":0.0625,"UT":0.061,"VA":0.053,"VT":0.06,"WA":0.065,"WI":0.05,"WV":0.06,"WY":0.04};
+
+var US_STATE_NAMES = {"AL":"Alabama","AK":"Alaska","AZ":"Arizona","AR":"Arkansas","CA":"California","CO":"Colorado","CT":"Connecticut","DE":"Delaware","DC":"District of Columbia","FL":"Florida","GA":"Georgia","HI":"Hawaii","ID":"Idaho","IL":"Illinois","IN":"Indiana","IA":"Iowa","KS":"Kansas","KY":"Kentucky","LA":"Louisiana","ME":"Maine","MD":"Maryland","MA":"Massachusetts","MI":"Michigan","MN":"Minnesota","MS":"Mississippi","MO":"Missouri","MT":"Montana","NE":"Nebraska","NV":"Nevada","NH":"New Hampshire","NJ":"New Jersey","NM":"New Mexico","NY":"New York","NC":"North Carolina","ND":"North Dakota","OH":"Ohio","OK":"Oklahoma","OR":"Oregon","PA":"Pennsylvania","RI":"Rhode Island","SC":"South Carolina","SD":"South Dakota","TN":"Tennessee","TX":"Texas","UT":"Utah","VT":"Vermont","VA":"Virginia","WA":"Washington","WV":"West Virginia","WI":"Wisconsin","WY":"Wyoming"};
+
+function populateNexusStateDropdown() {
+  var sel = document.getElementById('taxNexusState');
+  if (!sel || sel.options.length > 1) return;
+  Object.keys(US_STATE_NAMES).sort().forEach(function(code) {
+    var opt = document.createElement('option');
+    opt.value = code;
+    opt.textContent = code + ' — ' + US_STATE_NAMES[code];
+    sel.appendChild(opt);
+  });
+}
+
+function renderTaxRatesTable(rates) {
+  var tbody = document.getElementById('taxRatesTableBody');
+  var wrap = document.getElementById('taxRatesTableWrap');
+  if (!tbody || !wrap) return;
+  var codes = Object.keys(rates).sort();
+  if (codes.length === 0) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  var h = '';
+  codes.forEach(function(code) {
+    var pct = (rates[code] * 100).toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
+    var name = US_STATE_NAMES[code] || code;
+    h += '<tr><td style="padding:6px 10px;">' + esc(code) + ' — ' + esc(name) + '</td>';
+    h += '<td style="text-align:right;padding:6px 10px;"><input type="number" data-state="' + esc(code) + '" min="0" max="20" step="0.001" value="' + pct + '" style="width:70px;padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;text-align:right;"></td></tr>';
+  });
+  tbody.innerHTML = h;
+}
+
+function loadTaxRates() {
+  populateNexusStateDropdown();
+  MastDB.config.taxRates().once('value').then(function(snap) {
+    var rates = snap.val();
+    var statusEl = document.getElementById('taxRatesStatus');
+    if (!rates || Object.keys(rates).length === 0) {
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray-light);">No tax rates configured. Click "Load US State Defaults" to populate.</span>';
+      renderTaxRatesTable({});
+      return;
+    }
+    renderTaxRatesTable(rates);
+    var count = Object.keys(rates).filter(function(k) { return rates[k] > 0; }).length;
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; ' + count + ' states with non-zero tax rates configured.</span>';
+  });
+  // Load nexus state setting
+  MastDB.config.settings().child('nexusState').once('value').then(function(snap) {
+    var nexus = snap.val();
+    var sel = document.getElementById('taxNexusState');
+    if (sel && nexus) sel.value = nexus;
+  });
+}
+
+function loadDefaultTaxRates() {
+  renderTaxRatesTable(US_STATE_TAX_DEFAULTS);
+  var statusEl = document.getElementById('taxRatesStatus');
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--amber,#C4853C);">Default US state rates loaded. Click "Save Tax Rates" to apply.</span>';
+}
+
+async function saveTaxRates() {
+  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
+  var inputs = document.querySelectorAll('#taxRatesTableBody input[data-state]');
+  if (inputs.length === 0) { showToast('No tax rates to save. Load defaults first.', true); return; }
+  var rates = {};
+  inputs.forEach(function(inp) {
+    var state = inp.getAttribute('data-state');
+    var pct = parseFloat(inp.value) || 0;
+    rates[state] = Math.round(pct * 100000) / 10000000; // Convert % to decimal, e.g. 7.25 → 0.0725
+  });
+  // Save nexus state
+  var nexusSel = document.getElementById('taxNexusState');
+  var nexus = nexusSel ? nexusSel.value : '';
+  try {
+    await MastDB.config.taxRates().set(rates);
+    if (nexus) await MastDB.config.settings().child('nexusState').set(nexus);
+    await writeAudit('update', 'settings', 'taxRates');
+    var count = Object.keys(rates).filter(function(k) { return rates[k] > 0; }).length;
+    document.getElementById('taxRatesStatus').innerHTML = '<span style="color:var(--teal);">&#10003; ' + count + ' state tax rates saved.</span>';
+    showToast('Tax rates saved.');
+  } catch (err) {
+    showToast('Error saving tax rates: ' + err.message, true);
+  }
+}
+
+async function clearTaxRates() {
+  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
+  if (!confirm('Clear all tax rates? Customers will not be charged tax until rates are re-configured.')) return;
+  try {
+    await MastDB.config.taxRates().remove();
+    await writeAudit('update', 'settings', 'taxRates-cleared');
+    renderTaxRatesTable({});
+    document.getElementById('taxRatesStatus').innerHTML = '<span style="color:var(--warm-gray-light);">Tax rates cleared.</span>';
+    showToast('Tax rates cleared.');
+  } catch (err) {
+    showToast('Error clearing tax rates: ' + err.message, true);
+  }
 }
 
 // ============================================================
