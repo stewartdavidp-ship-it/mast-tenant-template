@@ -119,6 +119,9 @@
     try {
       var snap = await MastDB._ref('webPresence/config').once('value');
       websiteConfig = snap.val() || {};
+      // Also load last analyzed URL
+      var analysisSnap = await MastDB._ref('webPresence/siteAnalysis/url').once('value');
+      websiteConfig._lastAnalyzedUrl = analysisSnap.val() || '';
     } catch (err) {
       console.warn('[Website] Failed to load config:', err.message);
       websiteConfig = {};
@@ -1129,7 +1132,7 @@
     html += '<div class="wp-field-group">';
     html += '<label>Website URL</label>';
     html += '<div style="display:flex;gap:8px;">';
-    var lastUrl = (websiteConfig && websiteConfig.siteAnalysis && websiteConfig.siteAnalysis.url) || '';
+    var lastUrl = (websiteConfig && websiteConfig._lastAnalyzedUrl) || '';
     html += '<input type="text" id="wpImportUrl" placeholder="www.yourbusiness.com" value="' + esc(lastUrl) + '" style="flex:1;">';
     html += '<button class="btn btn-primary" onclick="wpAnalyze()" id="wpAnalyzeBtn">Analyze</button>';
     html += '</div></div>';
