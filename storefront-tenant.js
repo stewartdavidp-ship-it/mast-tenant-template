@@ -73,6 +73,14 @@ window.TENANT_READY = new Promise(function(resolve, reject) {
       tagline: publicConfig.brandTagline || '',
       domain: publicConfig.domain || ''
     };
+
+    // Block search engines unless tenant has explicitly opted in
+    if (!publicConfig.searchable) {
+      var meta = document.createElement('meta');
+      meta.name = 'robots';
+      meta.content = 'noindex, nofollow';
+      document.head.appendChild(meta);
+    }
   }
 
   function showError() {

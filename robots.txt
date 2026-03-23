@@ -1,0 +1,4 @@
+# Mast tenant sites are not indexed by default.
+# Tenants with custom domains manage their own robots.txt.
+User-agent: *
+Disallow: /
