@@ -1000,7 +1000,7 @@
         }
         trackCheckoutEvent('checkout_redirect_to_payment');
 
-        // Redirect to Square hosted checkout
+        // Redirect to payment processor's hosted checkout (Square or Stripe)
         window.location.href = result.checkoutUrl;
       } else {
         if (btn) {
@@ -1266,7 +1266,7 @@
   }
 
   // ── Payment Return Handler ──
-  // Detects ?payment=success&order={orderId} after Square checkout redirect
+  // Detects ?payment=success&order={orderId} after payment checkout redirect (Square or Stripe)
   function checkPaymentReturn() {
     // Skip on orders.html — that page handles payment return itself
     if (window.location.pathname.indexOf('orders.html') !== -1) return;
