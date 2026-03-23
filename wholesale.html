@@ -338,6 +338,10 @@
 </head>
 <body>
 
+  <!-- Shared nav (visible on gate pages too) -->
+  <nav id="mainNav"></nav>
+  <div class="nav-mobile-menu" id="mobileMenu"></div>
+
   <!-- Loading state -->
   <div id="wsLoading" class="ws-loading">Loading catalog...</div>
 
@@ -369,9 +373,6 @@
 
   <!-- Main catalog (hidden until token validated) -->
   <div id="wsMain" style="display:none;">
-    <nav id="mainNav"></nav>
-    <div class="nav-mobile-menu" id="mobileMenu"></div>
-
     <header class="ws-header" data-slot="wholesale-header">
       <div class="ws-subtitle">2026 Wholesale Catalog</div>
       <h1 data-tenant="brand">My Shop</h1>
