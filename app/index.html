@@ -12924,6 +12924,8 @@ async function wizardAnalyzeSite() {
       window._wizardCrawlManifest = crawlManifest;
       window._wizardAnalyzedUrl = url;
       window._wizardSiteFingerprint = data.siteFingerprint || null;
+      window._wizardDraftTemplateId = data.draftTemplateId || null;
+      window._wizardTemplateConfidence = (data.templateMatch && data.templateMatch.confidenceLevel) || 'low';
       // Persist to Firebase so it survives page reloads (auth redirects, etc.)
       MastDB.config.ref('setupProgress/crawlManifest').set(crawlManifest).catch(function(e) {
         console.warn('Failed to persist crawl manifest:', e.message);
@@ -12936,9 +12938,26 @@ async function wizardAnalyzeSite() {
           console.warn('Failed to persist site fingerprint:', e.message);
         });
       }
+      if (data.draftTemplateId) {
+        MastDB.config.ref('setupProgress/draftTemplateId').set(data.draftTemplateId).catch(function(e) {
+          console.warn('Failed to persist draft template ID:', e.message);
+        });
+      }
     }
 
-    statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Analysis complete!</span>';
+    // Template match status
+    var tmInfo = '';
+    var tm = data.templateMatch || {};
+    if (tm.confidenceLevel === 'high' && tm.bestMatch) {
+      tmInfo = '<div style="margin-top:8px;"><span style="color:var(--teal);">&#10003;</span> <strong>Template:</strong> ' + esc(tm.bestMatch.templateId) + ' (auto-applied)</div>';
+    } else if (data.draftTemplateId) {
+      tmInfo = '<div style="margin-top:8px;padding:10px 14px;background:linear-gradient(135deg, rgba(42,124,111,0.08), rgba(196,133,60,0.08));border:1px solid var(--teal);border-radius:8px;">' +
+        '<div style="font-weight:600;margin-bottom:4px;">&#127912; Custom template generated</div>' +
+        '<div style="font-size:0.85rem;color:var(--warm-gray);">Your site doesn\'t fit our standard templates perfectly, so we built a custom layout. Review it in <strong>Website &gt; Import</strong> after setup.</div>' +
+        '</div>';
+    }
+
+    statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Analysis complete!</span>' + tmInfo;
 
     // Update button to continue to step 2
     btn.disabled = false;
