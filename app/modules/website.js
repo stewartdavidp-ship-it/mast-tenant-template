@@ -1170,6 +1170,9 @@
     // Cherry-pick section (for crawled jobs awaiting import)
     html += renderCherryPickSection();
 
+    // Collection report (gap analysis with actionable next steps)
+    html += renderCollectionReportSection();
+
     // Review imported content (if any complete jobs exist)
     var hasComplete = importJobs && importJobs.some(function(j) { return j.status === 'complete'; });
     if (hasComplete) {
@@ -1547,6 +1550,120 @@
   }
 
   // ── Review Imports Section ──
+  // ── Collection Report — Gap analysis with actionable next steps ──
+  function renderCollectionReportSection() {
+    // Find the most recent completed job with a collection report
+    var report = null;
+    var jobId = null;
+    if (importJobs) {
+      for (var i = 0; i < importJobs.length; i++) {
+        if (importJobs[i].status === 'complete' && importJobs[i].collectionReport) {
+          report = importJobs[i].collectionReport;
+          jobId = importJobs[i].id;
+          break;
+        }
+      }
+    }
+    if (!report) return '';
+
+    var s = report.summary || {};
+    var g = report.gathered || {};
+    var gaps = report.gaps || [];
+    var cost = report.costSummary || {};
+    var total = g.total || 1;
+
+    var html = '<div style="margin-top:24px;padding-top:24px;border-top:1px solid var(--cream-dark);">';
+
+    // Header with quality score
+    var scoreColor = s.qualityScore >= 80 ? 'var(--teal)' : s.qualityScore >= 60 ? 'var(--amber)' : 'var(--danger)';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
+    html += '<div>';
+    html += '<h3 style="font-size:1rem;margin-bottom:4px;">Import Report</h3>';
+    html += '<p style="font-size:0.85rem;color:var(--warm-gray);">' + esc(String(s.productsFound || 0)) + ' products imported from ' + esc(s.platform || 'your site') + '</p>';
+    html += '</div>';
+    html += '<span class="status-badge" style="background:' + scoreColor + ';color:white;font-size:0.78rem;">' + esc(String(s.qualityScore || 0)) + '% ' + esc(s.qualityLabel || '') + '</span>';
+    html += '</div>';
+
+    // What we gathered
+    var fieldLabels = { name: 'Names', price: 'Prices', description: 'Descriptions', images: 'Images', category: 'Categories', variants: 'Variants/Options', sku: 'SKUs', weight: 'Weight', tags: 'Search Tags' };
+    html += '<div style="background:var(--cream);border-radius:8px;padding:16px;margin-bottom:16px;">';
+    html += '<p style="font-weight:600;font-size:0.85rem;margin-bottom:8px;">What we gathered</p>';
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;">';
+    Object.keys(fieldLabels).forEach(function(field) {
+      var count = g[field] || 0;
+      var icon = count >= total ? '<span style="color:var(--teal);">&#10003;</span>' : count > 0 ? '<span style="color:var(--amber);">&#9679;</span>' : '<span style="color:var(--warm-gray);">&#9675;</span>';
+      html += '<div style="font-size:0.82rem;">' + icon + ' ' + esc(fieldLabels[field]) + ' <span style="color:var(--warm-gray);">(' + count + '/' + total + ')</span></div>';
+    });
+    html += '</div></div>';
+
+    // Gaps with actionable next steps
+    if (gaps.length > 0) {
+      html += '<div style="background:var(--cream);border-radius:8px;padding:16px;margin-bottom:16px;">';
+      html += '<p style="font-weight:600;font-size:0.85rem;margin-bottom:12px;">What\'s missing &mdash; your options</p>';
+
+      var freeGaps = gaps.filter(function(g) { return g.cost === 'free'; });
+      var paidGaps = gaps.filter(function(g) { return g.cost === 'paid'; });
+      var manualGaps = gaps.filter(function(g) { return g.cost === 'manual'; });
+
+      if (freeGaps.length > 0) {
+        html += '<div style="margin-bottom:12px;">';
+        html += '<div style="font-size:0.82rem;font-weight:600;color:var(--teal);margin-bottom:6px;">&#10003; Can be filled automatically (free)</div>';
+        freeGaps.forEach(function(gap) {
+          html += '<div style="font-size:0.82rem;color:var(--warm-gray);margin-bottom:4px;padding-left:16px;">' + esc(gap.description) + '</div>';
+        });
+        html += '</div>';
+      }
+
+      if (paidGaps.length > 0) {
+        html += '<div style="margin-bottom:12px;">';
+        html += '<div style="font-size:0.82rem;font-weight:600;color:var(--amber);margin-bottom:6px;">&#10024; AI enrichment available (' + esc(cost.estimatedCost || 'varies') + ')</div>';
+        paidGaps.forEach(function(gap) {
+          html += '<div style="font-size:0.82rem;color:var(--warm-gray);margin-bottom:4px;padding-left:16px;">' + esc(gap.description) + '</div>';
+        });
+        html += '<button class="btn btn-primary btn-small" style="margin-top:8px;margin-left:16px;" onclick="wpRunEnrichment(\'' + esc(jobId) + '\')">Enrich with AI</button>';
+        html += '</div>';
+      }
+
+      if (manualGaps.length > 0) {
+        html += '<div style="margin-bottom:4px;">';
+        html += '<div style="font-size:0.82rem;font-weight:600;color:var(--warm-gray);margin-bottom:6px;">&#9998; Best added manually</div>';
+        manualGaps.forEach(function(gap) {
+          html += '<div style="font-size:0.82rem;color:var(--warm-gray);margin-bottom:4px;padding-left:16px;">' + esc(gap.description) + '</div>';
+        });
+        html += '</div>';
+      }
+
+      html += '</div>';
+    }
+
+    html += '</div>';
+    return html;
+  }
+
+  // Enrichment action from collection report
+  window.wpRunEnrichment = async function(importJobId) {
+    if (!importJobId) { showToast('No import job found.', true); return; }
+    var btn = event.target;
+    btn.disabled = true;
+    btn.textContent = 'Enriching...';
+    try {
+      var result = await firebase.functions().httpsCallable('runEnrichment')({
+        tenantId: MastDB.tenantId(),
+        importJobId: importJobId,
+        fields: ['tags', 'description']
+      });
+      var data = result.data || {};
+      showToast(data.enriched + ' products enriched with AI.');
+      btn.textContent = 'Done!';
+      // Refresh the import tab to show updated report
+      setTimeout(function() { wpSwitchTab('import'); }, 1500);
+    } catch (err) {
+      showToast('Enrichment failed: ' + esc(err.message), true);
+      btn.disabled = false;
+      btn.textContent = 'Retry';
+    }
+  };
+
   function renderReviewSection() {
     var html = '<div style="margin-top:24px;padding-top:24px;border-top:1px solid var(--cream-dark);">';
     html += '<h3 style="font-size:1rem;margin-bottom:4px;">Review Imported Content</h3>';

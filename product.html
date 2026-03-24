@@ -1049,9 +1049,13 @@
       window._productQty = 1;
 
       if (p.options && p.options.length) {
-        window._requiredOptions = p.options.map(function(o) { return o.label; });
+        // Normalize option format: accept both {label,choices} and {name,values}
+        var normalizedOptions = p.options.map(function(o) {
+          return { label: o.label || o.name || 'Option', choices: o.choices || o.values || [] };
+        });
+        window._requiredOptions = normalizedOptions.map(function(o) { return o.label; });
         var optHtml = '';
-        p.options.forEach(function(opt) {
+        normalizedOptions.forEach(function(opt) {
           optHtml += '<div class="product-option-group" data-option-label="' + escHtml(opt.label) + '">' +
             '<div class="product-option-label">' + escHtml(opt.label) + '</div>' +
             '<div class="product-option-choices">';
