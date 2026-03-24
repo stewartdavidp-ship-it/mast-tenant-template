@@ -13043,21 +13043,21 @@ function wizardRenderModuleCards() {
     var isSelected = _wizardSelectedModules.indexOf(moduleId) >= 0;
     var isDetected = !!detectedMap[moduleId];
     var canClick = !atLimit || isSelected;
-    var border = isSelected ? '2px solid var(--amber)' : '2px solid var(--cream-dark)';
-    var bg = isSelected ? 'var(--cream)' : 'white';
+    var border = isSelected ? '2px solid var(--amber)' : '1px solid var(--cream-dark)';
+    var bg = isSelected ? 'var(--cream-dark)' : 'var(--cream)';
     var opacity = (atLimit && !isSelected) ? '0.45' : '1';
-    var shadow = isSelected ? '0 2px 12px rgba(196, 133, 60, 0.25)' : '0 1px 4px rgba(0,0,0,0.06)';
+    var shadow = isSelected ? '0 2px 12px rgba(196, 133, 60, 0.25)' : '0 1px 3px rgba(0,0,0,0.08)';
     var cursor = canClick ? 'pointer' : 'default';
     var onclick = canClick ? 'onclick="wizardToggleModule(\'' + esc(moduleId) + '\')"' : '';
 
-    h += '<div data-module="' + esc(moduleId) + '" ' + onclick + ' style="background:' + bg + ';border:' + border + ';border-radius:12px;padding:18px;cursor:' + cursor + ';opacity:' + opacity + ';box-shadow:' + shadow + ';transition:all 0.2s;position:relative;">';
+    h += '<div data-module="' + esc(moduleId) + '" ' + onclick + ' style="background:' + bg + ';border:' + border + ';border-radius:8px;padding:18px;cursor:' + cursor + ';opacity:' + opacity + ';box-shadow:' + shadow + ';transition:all 0.2s;position:relative;">';
 
     if (isSelected) {
       h += '<span style="position:absolute;top:10px;right:10px;background:var(--amber);color:white;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.8rem;font-weight:700;">&#10003;</span>';
     }
 
     h += '<div style="font-size:1.8rem;margin-bottom:4px;">' + mod.icon + '</div>';
-    h += '<div style="font-size:1.05rem;font-weight:700;font-family:\'Cormorant Garamond\', serif;color:var(--charcoal);margin-bottom:3px;">' + esc(mod.name) + '</div>';
+    h += '<div style="font-size:1.05rem;font-weight:700;font-family:\'Cormorant Garamond\', serif;margin-bottom:3px;">' + esc(mod.name) + '</div>';
     h += '<div style="font-size:0.82rem;color:var(--warm-gray);line-height:1.4;">' + esc(mod.description) + '</div>';
 
     if (isDetected) {
