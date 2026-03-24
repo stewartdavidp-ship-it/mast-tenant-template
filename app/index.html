@@ -13179,7 +13179,8 @@ function showWizardImportTimeline() {
   var progressBar = document.getElementById('wizardImportProgressBar');
   if (!timeline || !feed) return;
 
-  // Find the most recent import job
+  // Find the most recent import job (guard against missing Firebase context)
+  try { MastDB._ref('webPresence/importJobs'); } catch (e) { timeline.style.display = 'none'; return; }
   MastDB._ref('webPresence/importJobs').orderByChild('createdAt').limitToLast(1).once('value').then(function(snap) {
     var jobs = snap.val();
     if (!jobs) { timeline.style.display = 'none'; return; }
