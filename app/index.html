@@ -13352,27 +13352,86 @@ function wizardRenderCollectionReport(report) {
   container.style.display = '';
 }
 
+var _wizardEnrichmentFields = [];
+var _wizardImportJobId = null;
+
 function wizardShowEnrichmentOffer(paidGaps, cost) {
   var offer = document.getElementById('wizardEnrichmentOffer');
   var desc = document.getElementById('wizardEnrichmentDesc');
   var costEl = document.getElementById('wizardEnrichCost');
   if (!offer || !desc) return;
 
-  var fields = paidGaps.map(function(g) { return g.field; }).join(', ');
+  _wizardEnrichmentFields = paidGaps.map(function(g) { return g.field; });
+  var fields = _wizardEnrichmentFields.join(', ');
   var tokens = cost.estimatedTokens || 0;
   var coins = Math.ceil(tokens / 100);
 
   desc.textContent = 'AI can fill in ' + fields + ' for your products. This uses your token balance.';
   if (costEl) costEl.textContent = '~' + coins + ' coins';
+
+  // Load token balance to show alongside
+  try {
+    var tid = MastDB.tenantId();
+    db.ref('mast-platform/tenants/' + tid + '/tokenWallet').once('value').then(function(snap) {
+      var wallet = snap.val() || {};
+      var balance = (wallet.currentBalance || 0) + (wallet.coinTokenSurplus || 0);
+      var balanceCoins = wallet.coinBalance || 0;
+      if (costEl) costEl.textContent = '~' + coins + ' coins (balance: ' + balance + ' tokens, ' + balanceCoins + ' coins)';
+    }).catch(function() {});
+  } catch (e) { /* no Firebase context */ }
+
+  // Find the import job ID for the enrichment call
+  try {
+    MastDB._ref('webPresence/importJobs').orderByChild('createdAt').limitToLast(1).once('value').then(function(snap) {
+      var jobs = snap.val();
+      if (jobs) _wizardImportJobId = Object.keys(jobs)[0];
+    }).catch(function() {});
+  } catch (e) { /* no Firebase context */ }
+
   offer.style.display = '';
 }
 
-// Enrichment request (placeholder — Phase C implements the actual Cloud Function call)
+// Call runEnrichment Cloud Function
 async function wizardRequestEnrichment() {
   var btn = document.getElementById('wizardEnrichBtn');
   if (btn) { btn.disabled = true; btn.textContent = 'Enriching...'; }
-  showToast('Enrichment will be available soon. For now, you can enrich products from the dashboard.');
-  if (btn) { btn.disabled = false; btn.textContent = 'Enrich Now'; }
+
+  if (!_wizardImportJobId) {
+    showToast('No import job found. Enrich products from the dashboard.', true);
+    if (btn) { btn.disabled = false; btn.textContent = 'Enrich Now'; }
+    return;
+  }
+
+  try {
+    var result = await firebase.functions().httpsCallable('runEnrichment')({
+      tenantId: MastDB.tenantId(),
+      importJobId: _wizardImportJobId,
+      fields: _wizardEnrichmentFields
+    });
+
+    var data = result.data || {};
+    showToast(data.enriched + ' products enriched! ' + data.claudeCalls + ' AI calls used.');
+
+    // Update the collection report display if we got an updated score
+    if (data.updatedReport) {
+      // Re-fetch and re-render the report
+      try {
+        MastDB._ref('webPresence/importJobs/' + _wizardImportJobId + '/collectionReport').once('value').then(function(snap) {
+          var report = snap.val();
+          if (report) wizardRenderCollectionReport(report);
+        });
+      } catch (e) { /* non-critical */ }
+    }
+
+    // Hide the enrichment offer
+    var offer = document.getElementById('wizardEnrichmentOffer');
+    if (offer) offer.style.display = 'none';
+
+    if (btn) { btn.disabled = false; btn.textContent = 'Done!'; }
+  } catch (err) {
+    showToast('Enrichment failed: ' + esc(err.message), true);
+    if (btn) { btn.disabled = false; btn.textContent = 'Retry'; }
+  }
 }
 
 function renderWizardSummary() {
