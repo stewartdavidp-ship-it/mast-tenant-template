@@ -6018,6 +6018,7 @@
         <button class="view-tab active" onclick="switchSettingsSubView('general')">General</button>
         <button class="view-tab" onclick="switchSettingsSubView('payments')">Payments</button>
         <button class="view-tab" onclick="switchSettingsSubView('shipping')">Shipping</button>
+        <button class="view-tab" onclick="switchSettingsSubView('email')">Email</button>
         <button class="view-tab" onclick="switchSettingsSubView('integrations')">Integrations</button>
         <button class="view-tab" onclick="switchSettingsSubView('workshop')">Workshop</button>
         <button class="view-tab" onclick="switchSettingsSubView('trips')">Trips</button>
@@ -6362,56 +6363,8 @@
           <div id="taxRatesStatus" style="margin-top:8px;font-size:0.85rem;"></div>
         </div>
       </div>
-      <div id="settingsSubIntegrations" style="display:none;max-width:500px;">
-        <div class="form-group">
-          <label style="font-size:1.1rem;font-weight:600;">Google Maps API Key</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
-            Used for address autocomplete at checkout. Restrict by HTTP referrer in Google Cloud Console.
-          </p>
-          <div style="display:flex;gap:6px;margin-bottom:12px;">
-            <input type="password" id="googleMapsApiKey" placeholder="AIza..."
-              style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
-            <button type="button" onclick="toggleReveal('googleMapsApiKey',this)" class="btn btn-small" style="font-size:0.75rem;padding:6px 10px;white-space:nowrap;">Show</button>
-          </div>
-          <div style="display:flex;gap:8px;">
-            <button class="btn btn-primary" onclick="saveGoogleConfig()">Save</button>
-          </div>
-          <div id="googleConfigStatus" style="margin-top:8px;font-size:0.85rem;"></div>
-        </div>
-
-        <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
-
-        <div class="form-group">
-          <label style="font-size:1.1rem;font-weight:600;">Etsy Integration</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
-            Connect your Etsy shop to sync orders automatically. Etsy orders appear in the Orders tab with an "Etsy" badge.
-          </p>
-
-          <div id="etsyConfigStatus" style="margin-bottom:16px;font-size:0.85rem;"></div>
-
-          <div id="etsyDisconnected" style="display:none;">
-            <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">API Key (Keystring)</label>
-            <p style="font-size:0.8rem;color:var(--warm-gray);margin-bottom:4px;">
-              From your Etsy Developer app dashboard
-            </p>
-            <input type="text" id="etsyApiKey" placeholder="abc123def456..."
-              style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;margin-bottom:16px;box-sizing:border-box;">
-
-            <div style="display:flex;gap:8px;">
-              <button class="btn btn-primary" onclick="connectEtsy()">Connect Etsy Shop</button>
-            </div>
-          </div>
-
-          <div id="etsyConnected" style="display:none;">
-            <div style="display:flex;gap:8px;">
-              <button class="btn btn-danger" onclick="disconnectEtsy()">Disconnect Etsy</button>
-            </div>
-          </div>
-        </div>
-
-        <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
-
-        <!-- Provider-Agnostic Email Configuration (replaces SendGrid-only section — Session 3 Email Integration) -->
+      <div id="settingsSubEmail" style="display:none;max-width:500px;">
+        <!-- Provider-Agnostic Email Configuration (moved from Integrations tab) -->
         <div class="form-group" id="emailConfigSection">
           <label style="font-size:1.1rem;font-weight:600;">Email Provider</label>
           <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
@@ -6517,6 +6470,54 @@
         <div class="form-group" id="emailDomainSection" style="margin-top:16px;border-top:1px solid rgba(255,255,255,0.06);padding-top:16px;">
           <label style="font-size:1rem;font-weight:600;">Email Sending Domain</label>
           <div id="emailDomainContent"></div>
+        </div>
+      </div>
+
+      <div id="settingsSubIntegrations" style="display:none;max-width:500px;">
+        <div class="form-group">
+          <label style="font-size:1.1rem;font-weight:600;">Google Maps API Key</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
+            Used for address autocomplete at checkout. Restrict by HTTP referrer in Google Cloud Console.
+          </p>
+          <div style="display:flex;gap:6px;margin-bottom:12px;">
+            <input type="password" id="googleMapsApiKey" placeholder="AIza..."
+              style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
+            <button type="button" onclick="toggleReveal('googleMapsApiKey',this)" class="btn btn-small" style="font-size:0.75rem;padding:6px 10px;white-space:nowrap;">Show</button>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-primary" onclick="saveGoogleConfig()">Save</button>
+          </div>
+          <div id="googleConfigStatus" style="margin-top:8px;font-size:0.85rem;"></div>
+        </div>
+
+        <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
+
+        <div class="form-group">
+          <label style="font-size:1.1rem;font-weight:600;">Etsy Integration</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
+            Connect your Etsy shop to sync orders automatically. Etsy orders appear in the Orders tab with an "Etsy" badge.
+          </p>
+
+          <div id="etsyConfigStatus" style="margin-bottom:16px;font-size:0.85rem;"></div>
+
+          <div id="etsyDisconnected" style="display:none;">
+            <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">API Key (Keystring)</label>
+            <p style="font-size:0.8rem;color:var(--warm-gray);margin-bottom:4px;">
+              From your Etsy Developer app dashboard
+            </p>
+            <input type="text" id="etsyApiKey" placeholder="abc123def456..."
+              style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;margin-bottom:16px;box-sizing:border-box;">
+
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-primary" onclick="connectEtsy()">Connect Etsy Shop</button>
+            </div>
+          </div>
+
+          <div id="etsyConnected" style="display:none;">
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-danger" onclick="disconnectEtsy()">Disconnect Etsy</button>
+            </div>
+          </div>
         </div>
 
         <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
@@ -10365,7 +10366,7 @@ function getModuleForRouteManifest(route) {
 // ============================================================
 // Settings Sub-Tabs
 // ============================================================
-var settingsSubViews = ['general', 'payments', 'shipping', 'integrations', 'workshop', 'trips', 'dashboard', 'domains', 'subscription', 'about'];
+var settingsSubViews = ['general', 'payments', 'shipping', 'email', 'integrations', 'workshop', 'trips', 'dashboard', 'domains', 'subscription', 'about'];
 function switchSettingsSubView(view) {
   // Hide all sub-views
   settingsSubViews.forEach(function(v) {
@@ -10384,6 +10385,7 @@ function switchSettingsSubView(view) {
     if (btn.textContent.toLowerCase().trim() === view) btn.classList.add('active');
   });
   // Lazy loads
+  if (view === 'email') { loadEmailConfig(); loadEmailDomainSection(); }
   if (view === 'trips') { MastAdmin.loadModule('trips').then(function() { if (typeof loadTripsSettings === 'function') loadTripsSettings(); }); }
   if (view === 'dashboard') renderDashCardSettings();
   if (view === 'domains') loadDomainSettings();
@@ -13727,7 +13729,7 @@ var NEXT_STEP_DEFINITIONS = [
   { id: 'setup-website',  module: 'web',        icon: '\uD83C\uDF10', title: 'Review your public site',       desc: 'See how your storefront looks to customers.',                             route: null, action: 'open-public-site', check: function() { return window._nextStepsCache && window._nextStepsCache.hasWebsite; } },
   { id: 'setup-brand',    module: null,         icon: '\uD83C\uDFE0', title: 'Set up your brand details',     desc: 'Add your business name, tagline, and contact info.',                      route: 'settings', subView: 'general', check: function() { return tenantConfigChecklist && tenantConfigChecklist.brand; } },
   { id: 'setup-square',   module: 'sell',       icon: '\uD83D\uDCB3', title: 'Connect Square for payments',   desc: 'Link your Square account to accept payments and manage orders.',          route: 'settings', subView: 'payments', check: function() { return tenantConfigChecklist && tenantConfigChecklist.square; } },
-  { id: 'setup-email',    module: null,         icon: '\u2709\uFE0F', title: 'Configure email notifications', desc: 'Set up order confirmation and shipping emails for your customers.',       route: 'settings', subView: 'integrations', check: function() { return tenantConfigChecklist && tenantConfigChecklist.email; } },
+  { id: 'setup-email',    module: null,         icon: '\u2709\uFE0F', title: 'Configure email notifications', desc: 'Set up order confirmation and shipping emails for your customers.',       route: 'settings', subView: 'email', check: function() { return tenantConfigChecklist && tenantConfigChecklist.email; } },
   { id: 'first-show',     module: 'show',       icon: '\uD83C\uDFAA', title: 'Find your first show',          desc: 'Search for craft fairs and events in your area.',                         route: 'show-find',   check: function() { return false; } },
   { id: 'show-light-profile', module: 'show-light', icon: '\u2728', title: 'Build your vendor profile',     desc: 'Add your bio, photos, and product highlights for show applications.',     route: 'show-light-profile', check: function() { return false; } },
   { id: 'create-event',   module: 'events',     icon: '\uD83C\uDFAB', title: 'Create your first show',        desc: 'Set up a show with booths, vendors, and applications.',                   route: 'events-shows', check: function() { return false; } },
