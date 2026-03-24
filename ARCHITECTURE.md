@@ -164,7 +164,7 @@ Tenants can choose from multiple design templates that control homepage layout, 
 6. **Template switching:** Admin picks new template → section compatibility analysis (slotMapping) → gallery image migration (hide/restore) → write templateId to Firebase
 7. **Gallery migration:** Images in incompatible sections get `templateHidden` flag. Restored automatically on switch-back.
 8. **Live preview:** `?preview_template=` query param overrides templateId without writing to Firebase. Shows preview banner.
-9. **Deploy pipeline:** `mast_hosting` reads templateId per tenant, validates manifest, applies template page overlays if present
+9. **Deploy pipeline:** `mast_hosting` reads templateId per tenant, validates manifest, applies template page overlays if present, then runs the template compiler if `compile: true` in the manifest
 
 ### CSS Token Architecture
 
@@ -179,7 +179,7 @@ Use `--surface-dark` for dark backgrounds (page headers, footer, newsletter). Us
 
 ## Section Catalog
 
-The `sections/` directory contains a structured extraction of all homepage sections. This is the foundation for the Dynamic Template Creation system (Phase 2+) where a compiler will assemble pages from this catalog at deploy time. The existing `index.html` remains the runtime source of truth — the catalog is a specification, not yet consumed at runtime.
+The `sections/` directory contains a structured extraction of all homepage sections. The template compiler in the `mast_hosting` deploy pipeline reads this catalog to assemble `index.html` at deploy time, replacing the runtime flow engine's DOM reordering with build-time HTML assembly.
 
 ### Directory Structure
 
@@ -225,11 +225,34 @@ sections/
 
 ### How Sections Relate to Templates
 
-Template manifests (`templates/{id}/manifest.json`) reference section IDs in their `homepageFlow` arrays and `slots` objects. The flow engine in `storefront-theme.js` shows/hides/reorders sections based on the manifest. Every slot ID in a manifest must correspond to a section in the catalog.
+Template manifests (`templates/{id}/manifest.json`) reference section IDs in their `homepageFlow` arrays and `slots` objects. Every slot ID in a manifest must correspond to a section in the catalog.
 
-### Future: Template Compiler (Phase 2)
+### Template Compiler
 
-The compiler will be integrated into the `mast_hosting` deploy pipeline. It will read a manifest + the section catalog and assemble a compiled `index.html` per tenant. This eliminates the need for all sections to exist in a single hand-built HTML file.
+The template compiler runs in the `mast_hosting` deploy pipeline on Cloud Run (`mast-mcp-server`). It is activated per-template via the `"compile": true` flag in the manifest. Both the-studio and the-shop manifests have this flag enabled.
+
+**Implementation:** `mast-mcp-server/src/tools/template-compiler.ts`
+
+**How it works:**
+1. After tarball download, reads the manifest's `homepageFlow` from the file set
+2. Splits `index.html` at section markers (`<!-- ============ HERO` / `<!-- ============ FOOTER`)
+3. Assembles sections from `sections/{id}/template.html` — flow sections visible (in order), non-flow sections hidden (`data-default-hidden` + `display:none`)
+4. Inserts glass dividers after sections with `dividerAfter: true` in their definition.json
+5. Replaces the sections zone in index.html, preserving head/CSS/footer/scripts
+6. Re-gzips and replaces the FileEntry before Firebase Hosting upload
+
+**Compile step in deploy pipeline:**
+```
+downloadAndExtract → getTemplateId → validateManifest → applyOverlay → compileHomepage → createVersion → upload
+```
+
+**Deploy response includes:** `compiled: true/false`, `sectionsCompiled: N`
+
+**Cost implications:** Essentially zero. The compile step adds ~100-200ms of CPU per deploy (decompressing ~13 gzipped files, string manipulation, re-gzipping one file). No additional Firebase reads — everything comes from the tarball. No additional GitHub API calls. No runtime cost change on tenant sites.
+
+**Runtime note:** `storefront-theme.js` still runs the flow engine at page load, but it is effectively a no-op on compiled pages (sections are already in the correct order and visibility state). A future optimization could skip `applyHomepageFlow()` when the page was pre-compiled, but the flow engine is ~5ms of DOM reordering — negligible.
+
+**Backward compatibility:** Templates without `"compile": true` skip compilation entirely and use the hand-built index.html with the runtime flow engine, same as before.
 
 ## Wholesale Catalog
 
