@@ -693,7 +693,7 @@ Job-based polling model for importing products, images, and content from a tenan
 
 1. **Analyze** — Tenant enters URL in admin. `analyzeExistingSite` Cloud Function fetches the page, calls Claude API to extract branding (business name, colors, style, hero content, contact info, social links), classifies observed homepage sections against the 11-section catalog, and builds a **crawl manifest** (platform type, content types found, pagination style, image hosting). Also generates a **draft template manifest** from section classification, extracted colors, and font suggestions — stored at `{tenantId}/webPresence/draftTemplates/{draftId}` for admin review.
 2. **Create Job** — Admin UI creates an import job at `{tenantId}/webPresence/importJobs/{jobId}` with status `pending` and the crawl manifest.
-3. **Crawl** — Scheduled task `site-import-processor` (every 30 min) picks up pending jobs, crawls the site using WebFetch guided by the manifest, discovers products/blogs/events. Updates job to `crawled` with discovered item list.
+3. **Crawl & Extract** — `processImportJob` Cloud Function (Firebase RTDB `onCreate` trigger on `{tenantId}/webPresence/importJobs/{jobId}`) fires instantly when the job is written. Crawls product listing and category pages, discovers products, extracts data, creates products in Firebase, uploads images to Storage. Runs within a single 540-second function execution — no scheduled task needed.
 4. **Cherry-pick** — Admin UI shows discovered items as a checklist. Tenant can toggle individual products on/off. Excluded URLs saved to `cherryPickExclude` on the job.
 5. **Extract** — Scheduled task picks up crawled/importing jobs, fetches each product page, extracts descriptions/images, creates products via MCP (`mast_products`), uploads images to Firebase Storage, writes image hashes for dedup. Updates job to `complete`.
 6. **Review** — Admin UI shows all imported products as drafts with Publish/Delete actions.
@@ -709,7 +709,7 @@ Any state → `failed` (on error or 2h timeout auto-fail)
 |-----------|----------|---------|
 | Website module | `app/modules/website.js` | Admin UI: 6 tabs (Overview, Template, Style, Sections, Categories, Import). Import tab shows draft template banner + review modal |
 | Import MCP tool | `mast-mcp-server/src/tools/mast-import.ts` | Job CRUD: create, claim, update, complete, fail. Auto-fails stale jobs. |
-| Scheduled task | `~/.claude/scheduled-tasks/site-import-processor/SKILL.md` | Crawl + extract automation (Claude Code scheduled task) |
+| processImportJob | `mast-architecture/functions/tenant-functions.js` | RTDB onCreate trigger — crawls site and imports products/images instantly when job is created |
 | analyzeExistingSite | `mast-architecture/functions/tenant-functions.js` | Claude API analysis + crawl manifest generation |
 | notifyImportComplete | `mast-architecture/functions/tenant-functions.js` | Email notification on import completion |
 
