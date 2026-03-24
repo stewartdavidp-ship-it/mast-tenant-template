@@ -935,10 +935,11 @@
         if (selectedKeys.length === 0) return null;
         for (var i = 0; i < variants.length; i++) {
           var v = variants[i];
-          if (!v.options) continue;
+          var vOpts = v.combo || v.options;
+          if (!vOpts) continue;
           var match = true;
           for (var k = 0; k < selectedKeys.length; k++) {
-            if (v.options[selectedKeys[k]] !== selected[selectedKeys[k]]) { match = false; break; }
+            if (vOpts[selectedKeys[k]] !== selected[selectedKeys[k]]) { match = false; break; }
           }
           if (match) return v;
         }
@@ -959,8 +960,9 @@
       } else if (window._productVariants) {
         // Find lowest variant price
         var lowest = window._productVariants.reduce(function(min, v) {
-          return (v.price < min) ? v.price : min;
-        }, window._productVariants[0].price);
+          var vp = v.priceCents || v.price;
+          return (vp < min) ? vp : min;
+        }, window._productVariants[0].priceCents || window._productVariants[0].price);
         priceEl.innerHTML = '<span class="price-prefix">from</span>' + escHtml(formatPriceCents(lowest));
       } else if (p.price) {
         priceEl.textContent = displayPrice(p.price);
@@ -1077,9 +1079,10 @@
               if (allPicked) {
                 var variant = findVariant(window._productVariants, window._selectedOptions);
                 if (variant) {
-                  priceEl.innerHTML = formatPriceCents(variant.price);
+                  var vPrice = variant.priceCents || variant.price;
+                  priceEl.innerHTML = formatPriceCents(vPrice);
                   priceEl.classList.remove('no-price');
-                  window._resolvedVariantPrice = variant.price;
+                  window._resolvedVariantPrice = vPrice;
                 } else {
                   priceEl.textContent = 'Combination not available';
                   priceEl.classList.add('no-price');
