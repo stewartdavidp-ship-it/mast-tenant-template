@@ -2703,9 +2703,15 @@
     html += '</div>';
 
     // Base Template
-    html += '<div style="margin-bottom:20px;">';
+    html += '<div style="margin-bottom:16px;">';
     html += '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Based On</label>';
     html += '<span style="font-size:0.85rem;">' + esc(draft.baseTemplateId || 'the-studio') + '</span>';
+    html += '</div>';
+
+    // Section Variants (placeholder — deferred to future phase)
+    html += '<div style="margin-bottom:16px;opacity:0.5;">';
+    html += '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Section Variants</label>';
+    html += '<span style="font-size:0.82rem;color:var(--warm-gray);">Variant selection coming soon — each section will support layout variants (e.g., gallery grid, masonry, carousel).</span>';
     html += '</div>';
 
     // Section classification details (if available)
@@ -2724,14 +2730,38 @@
       html += '</div></div>';
     }
 
+    // Live preview button
+    var baseTemplate = draft.baseTemplateId || 'the-studio';
+    html += '<div style="margin-bottom:16px;">';
+    html += '<button class="btn btn-outline btn-small" onclick="wpPreviewDraft(\'' + esc(draftId) + '\')">Preview on Storefront</button>';
+    html += '<span style="font-size:0.78rem;color:var(--warm-gray);margin-left:8px;">Opens base template preview (custom flow applied after deploy)</span>';
+    html += '</div>';
+
     // Actions
     html += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--cream-dark);">';
     html += '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>';
+    html += '<button class="btn btn-secondary" disabled title="Coming soon — promote saved templates to the shared library for other tenants" style="cursor:not-allowed;opacity:0.5;">Promote to Library</button>';
     html += '<button class="btn btn-primary" onclick="wpSaveDraftAsTemplate(\'' + esc(draftId) + '\')">Save as My Template</button>';
     html += '</div>';
 
     html += '</div>';
     openModal(html, { width: '600px' });
+  };
+
+  window.wpPreviewDraft = function(draftId) {
+    var draft = draftTemplates && draftTemplates.find(function(d) { return d.id === draftId; });
+    if (!draft) return;
+    var baseTemplate = draft.baseTemplateId || 'the-studio';
+    // Open the storefront in a new tab with the base template preview param
+    var tenantDomain = window.TENANT_CONFIG && window.TENANT_CONFIG.domain;
+    var previewUrl;
+    if (tenantDomain) {
+      previewUrl = 'https://' + tenantDomain + '/?preview_template=' + encodeURIComponent(baseTemplate);
+    } else {
+      // Fallback to current site
+      previewUrl = window.location.origin + '/?preview_template=' + encodeURIComponent(baseTemplate);
+    }
+    window.open(previewUrl, '_blank');
   };
 
   window.wpDismissDraft = async function(draftId) {
