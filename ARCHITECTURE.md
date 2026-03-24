@@ -707,7 +707,7 @@ Any state → `failed` (on error or 2h timeout auto-fail)
 
 | Component | Location | Purpose |
 |-----------|----------|---------|
-| Website module | `app/modules/website.js` | Admin UI: 4 tabs (Overview, Style, Sections, Import) |
+| Website module | `app/modules/website.js` | Admin UI: 6 tabs (Overview, Template, Style, Sections, Categories, Import). Import tab shows draft template banner + review modal |
 | Import MCP tool | `mast-mcp-server/src/tools/mast-import.ts` | Job CRUD: create, claim, update, complete, fail. Auto-fails stale jobs. |
 | Scheduled task | `~/.claude/scheduled-tasks/site-import-processor/SKILL.md` | Crawl + extract automation (Claude Code scheduled task) |
 | analyzeExistingSite | `mast-architecture/functions/tenant-functions.js` | Claude API analysis + crawl manifest generation |
@@ -720,7 +720,8 @@ When `analyzeExistingSite` runs, it now also generates a draft template manifest
 1. **Section classification** — Claude API classifies observed homepage sections against the 11-section catalog (hero, about, gallery, etc.) with confidence scores (high/medium/low)
 2. **Draft manifest** — `buildDraftManifest()` assembles: `homepageFlow` from classified sections, `colorSchemes` from extracted colors, `fontPairId` from font suggestion, `baseTemplateId` from template match
 3. **Storage** — Draft stored at `{tenantId}/webPresence/draftTemplates/{draftId}` with `status: draft`
-4. **Admin notification** — Website module Import tab shows a banner when a draft exists. Admin can review section order (reorder/remove), view color scheme and classification details, then "Save as My Template" to apply
+4. **Admin review UI** — Website module Import tab shows a banner when a draft exists. Admin can review section order (reorder/remove), view color scheme and classification details, preview on storefront (opens base template with `?preview_template=`), then "Save as My Template" to apply. Review modal includes disabled "Promote to Library" button (future) and section variant placeholder (future)
+5. **Compiler integration** — `compileHomepage()` in the template compiler accepts an optional `homepageFlowOverride` parameter. When a tenant has a saved draft template at `public/config/draftTemplate`, the deploy pipeline reads the custom `homepageFlow` and passes it to the compiler, overriding the manifest's default flow. Both single-tenant and deploy_all paths support this
 
 Draft manifest schema:
 ```
