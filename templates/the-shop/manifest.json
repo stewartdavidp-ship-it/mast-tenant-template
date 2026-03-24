@@ -3,6 +3,7 @@
   "name": "The Shop",
   "description": "Product-first, broad catalog. Category navigation drives discovery. About on sub-page, not homepage.",
   "version": "1.0.0",
+  "compile": true,
 
   "slots": {
     "universal": [
