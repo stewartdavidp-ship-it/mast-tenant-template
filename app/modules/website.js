@@ -49,6 +49,7 @@
   var pendingSwitchTemplateId = null; // template ID pending confirmation
   var previewTemplateId = null; // template ID currently being previewed in iframe
   var previewViewport = 'desktop'; // desktop, tablet, mobile
+  var draftTemplates = null; // draft templates generated from import analysis
 
   // ── Fallback style/font/section defs (used when no manifest loaded) ──
   var STYLE_DEFS = [
@@ -162,6 +163,20 @@
     } catch (err) {
       console.warn('[Website] Failed to load categories:', err.message);
       tenantCategories = [];
+    }
+  }
+
+  async function loadDraftTemplates() {
+    try {
+      var snap = await MastDB._ref('webPresence/draftTemplates').orderByChild('createdAt').limitToLast(5).once('value');
+      var raw = snap.val() || {};
+      draftTemplates = Object.keys(raw).map(function(k) {
+        var d = raw[k]; d.id = k; return d;
+      }).filter(function(d) { return d.status === 'draft'; })
+        .sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
+    } catch (err) {
+      console.warn('[Website] Failed to load draft templates:', err.message);
+      draftTemplates = [];
     }
   }
 
@@ -323,6 +338,7 @@
       await loadImportJobs();
       await loadImportedProducts();
       await loadCategories();
+      await loadDraftTemplates();
       startImportJobsListener();
       websiteLoaded = true;
     }
@@ -1103,9 +1119,47 @@
     return html;
   }
 
+  // ── Draft Template Banner ──
+  function renderDraftTemplateBanner() {
+    if (!draftTemplates || draftTemplates.length === 0) return '';
+    var draft = draftTemplates[0]; // most recent draft
+    var sectionCount = (draft.homepageFlow || []).length;
+    var html = '';
+    html += '<div style="background:linear-gradient(135deg, rgba(42,124,111,0.08), rgba(196,133,60,0.08));border:1px solid var(--teal);border-radius:8px;padding:16px;margin-bottom:20px;">';
+    html += '<div style="display:flex;align-items:flex-start;gap:12px;">';
+    html += '<div style="font-size:1.5rem;line-height:1;">&#127912;</div>';
+    html += '<div style="flex:1;">';
+    html += '<div style="font-weight:600;font-size:0.95rem;margin-bottom:4px;">Template Generated from Your Site</div>';
+    html += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:10px;">';
+    html += 'We analyzed your site and created a draft template with ' + sectionCount + ' sections';
+    if (draft.businessName) html += ' for <strong>' + esc(draft.businessName) + '</strong>';
+    html += '. Review the layout, colors, and fonts, then save it as your template.</div>';
+    html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
+    html += '<button class="btn btn-primary btn-small" onclick="wpReviewDraft(\'' + esc(draft.id) + '\')">Review Template</button>';
+    html += '<button class="btn btn-secondary btn-small" onclick="wpDismissDraft(\'' + esc(draft.id) + '\')">Dismiss</button>';
+    html += '</div>';
+
+    // Section flow preview
+    if (draft.homepageFlow && draft.homepageFlow.length > 0) {
+      html += '<div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:4px;">';
+      for (var i = 0; i < draft.homepageFlow.length; i++) {
+        var s = draft.homepageFlow[i];
+        html += '<span style="display:inline-block;background:var(--cream-dark,#e8e0d4);border-radius:12px;padding:2px 10px;font-size:0.78rem;color:var(--charcoal,#333);">' + esc(s) + '</span>';
+        if (i < draft.homepageFlow.length - 1) html += '<span style="color:var(--warm-gray-light);font-size:0.78rem;">&#8594;</span>';
+      }
+      html += '</div>';
+    }
+
+    html += '</div></div></div>';
+    return html;
+  }
+
   // ── Import Tab ──
   function renderImportTab() {
     var html = '';
+
+    // Draft template notification
+    html += renderDraftTemplateBanner();
 
     // Re-scan / New Import section
     html += renderRescanSection();
@@ -2151,9 +2205,19 @@
         rhtml += '</div>';
       }
 
+      // ── Draft Template Generated Card ──
+      if (data.draftTemplateId) {
+        rhtml += '<div class="wp-import-result" style="margin-top:12px;background:linear-gradient(135deg, rgba(42,124,111,0.08), rgba(196,133,60,0.08));border:1px solid var(--teal);border-radius:8px;padding:14px;">';
+        rhtml += '<strong style="display:block;margin-bottom:6px;">&#127912; Draft Template Created</strong>';
+        rhtml += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:10px;">A template has been generated from your site\'s layout. Review and customize the section order, colors, and fonts.</div>';
+        rhtml += '<button class="btn btn-primary btn-small" onclick="wpReviewDraft(\'' + esc(data.draftTemplateId) + '\')">Review Template</button>';
+        rhtml += '</div>';
+      }
+
       if (resultsEl) resultsEl.innerHTML = rhtml;
-      // Reload config since analysis also seeds it
+      // Reload config and drafts since analysis also seeds them
       await loadWebsiteConfig();
+      await loadDraftTemplates();
     } catch (err) {
       if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger);">Error: ' + esc(err.message) + '</span>';
     }
@@ -2588,6 +2652,166 @@
     }
     MastDB._ref('webPresence/config/updatedAt').set(new Date().toISOString());
   }
+
+  // ── Draft Template Actions ──
+  window.wpReviewDraft = async function(draftId) {
+    if (!draftTemplates) return;
+    var draft = draftTemplates.find(function(d) { return d.id === draftId; });
+    if (!draft) { showToast('Draft template not found.', true); return; }
+
+    // Switch to template tab and show the draft info
+    // For now, show details in a modal-style view
+    var flow = (draft.homepageFlow || []).join(' → ');
+    var scheme = draft.colorSchemes && draft.colorSchemes[0];
+    var colors = scheme ? scheme.colors : {};
+
+    var html = '<div style="padding:20px;">';
+    html += '<h3 style="font-size:1.1rem;margin-bottom:16px;">Draft Template Review</h3>';
+
+    // Section Flow
+    html += '<div style="margin-bottom:16px;">';
+    html += '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Homepage Section Flow</label>';
+    html += '<div id="wpDraftFlow" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">';
+    var sections = draft.homepageFlow || [];
+    for (var i = 0; i < sections.length; i++) {
+      html += '<div draggable="true" data-idx="' + i + '" style="display:inline-flex;align-items:center;gap:6px;background:var(--cream-dark,#e8e0d4);border-radius:8px;padding:6px 12px;font-size:0.85rem;cursor:grab;">';
+      html += '<span>' + esc(sections[i]) + '</span>';
+      html += '<button class="btn-icon" style="width:20px;height:20px;font-size:0.7rem;border:none;" onclick="wpDraftMoveSection(\'' + esc(draftId) + '\',' + i + ',-1)" title="Move up">&#9650;</button>';
+      html += '<button class="btn-icon" style="width:20px;height:20px;font-size:0.7rem;border:none;" onclick="wpDraftMoveSection(\'' + esc(draftId) + '\',' + i + ',1)" title="Move down">&#9660;</button>';
+      html += '<button class="btn-icon" style="width:20px;height:20px;font-size:0.7rem;border:none;color:var(--danger);" onclick="wpDraftRemoveSection(\'' + esc(draftId) + '\',' + i + ')" title="Remove">&#10005;</button>';
+      html += '</div>';
+      if (i < sections.length - 1) html += '<span style="color:var(--warm-gray-light);">&#8594;</span>';
+    }
+    html += '</div></div>';
+
+    // Color Scheme
+    html += '<div style="margin-bottom:16px;">';
+    html += '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Color Scheme</label>';
+    html += '<div style="display:flex;gap:12px;align-items:center;">';
+    if (colors.primaryColor) {
+      html += '<div style="display:flex;align-items:center;gap:4px;"><span style="display:inline-block;width:24px;height:24px;border-radius:4px;background:' + esc(colors.primaryColor) + ';border:1px solid #ddd;"></span><span style="font-size:0.85rem;">Primary: ' + esc(colors.primaryColor) + '</span></div>';
+    }
+    if (colors.accentColor) {
+      html += '<div style="display:flex;align-items:center;gap:4px;"><span style="display:inline-block;width:24px;height:24px;border-radius:4px;background:' + esc(colors.accentColor) + ';border:1px solid #ddd;"></span><span style="font-size:0.85rem;">Accent: ' + esc(colors.accentColor) + '</span></div>';
+    }
+    html += '</div></div>';
+
+    // Font Pair
+    html += '<div style="margin-bottom:16px;">';
+    html += '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Font Pair</label>';
+    html += '<span style="font-size:0.85rem;">' + esc(draft.fontPairId || 'classic') + '</span>';
+    html += '</div>';
+
+    // Base Template
+    html += '<div style="margin-bottom:20px;">';
+    html += '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Based On</label>';
+    html += '<span style="font-size:0.85rem;">' + esc(draft.baseTemplateId || 'the-studio') + '</span>';
+    html += '</div>';
+
+    // Section classification details (if available)
+    if (draft.classifiedSections && draft.classifiedSections.length > 0) {
+      html += '<div style="margin-bottom:16px;">';
+      html += '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Classification Details</label>';
+      html += '<div style="font-size:0.82rem;color:var(--warm-gray);">';
+      for (var j = 0; j < draft.classifiedSections.length; j++) {
+        var cs = draft.classifiedSections[j];
+        var confColor = cs.confidence === 'high' ? 'var(--teal)' : cs.confidence === 'medium' ? 'var(--amber)' : 'var(--warm-gray-light)';
+        html += '<div style="margin-bottom:4px;"><strong>' + esc(cs.observedLabel) + '</strong> → ' + esc(cs.catalogId);
+        html += ' <span style="color:' + confColor + ';">(' + esc(cs.confidence) + ')</span>';
+        if (cs.reason) html += ' — ' + esc(cs.reason);
+        html += '</div>';
+      }
+      html += '</div></div>';
+    }
+
+    // Actions
+    html += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--cream-dark);">';
+    html += '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>';
+    html += '<button class="btn btn-primary" onclick="wpSaveDraftAsTemplate(\'' + esc(draftId) + '\')">Save as My Template</button>';
+    html += '</div>';
+
+    html += '</div>';
+    openModal(html, { width: '600px' });
+  };
+
+  window.wpDismissDraft = async function(draftId) {
+    if (!confirm('Dismiss this draft template? You can re-generate it by analyzing your site again.')) return;
+    try {
+      await MastDB._ref('webPresence/draftTemplates/' + draftId + '/status').set('dismissed');
+      draftTemplates = draftTemplates.filter(function(d) { return d.id !== draftId; });
+      renderWebsite();
+      showToast('Draft dismissed.');
+    } catch (err) {
+      showToast('Failed to dismiss: ' + err.message, true);
+    }
+  };
+
+  window.wpDraftMoveSection = async function(draftId, idx, direction) {
+    var draft = draftTemplates && draftTemplates.find(function(d) { return d.id === draftId; });
+    if (!draft || !draft.homepageFlow) return;
+    var flow = draft.homepageFlow.slice();
+    var newIdx = idx + direction;
+    if (newIdx < 0 || newIdx >= flow.length) return;
+    var temp = flow[idx];
+    flow[idx] = flow[newIdx];
+    flow[newIdx] = temp;
+    draft.homepageFlow = flow;
+    await MastDB._ref('webPresence/draftTemplates/' + draftId + '/homepageFlow').set(flow);
+    window.wpReviewDraft(draftId);
+  };
+
+  window.wpDraftRemoveSection = async function(draftId, idx) {
+    var draft = draftTemplates && draftTemplates.find(function(d) { return d.id === draftId; });
+    if (!draft || !draft.homepageFlow) return;
+    var flow = draft.homepageFlow.slice();
+    flow.splice(idx, 1);
+    draft.homepageFlow = flow;
+    await MastDB._ref('webPresence/draftTemplates/' + draftId + '/homepageFlow').set(flow);
+    window.wpReviewDraft(draftId);
+  };
+
+  window.wpSaveDraftAsTemplate = async function(draftId) {
+    var draft = draftTemplates && draftTemplates.find(function(d) { return d.id === draftId; });
+    if (!draft) { showToast('Draft not found.', true); return; }
+
+    try {
+      // Write the finalized template config to tenant theme
+      var themeUpdate = {
+        templateId: draft.baseTemplateId || 'the-studio',
+        fontPair: draft.fontPairId || 'classic'
+      };
+      // Apply custom colors if present
+      var scheme = draft.colorSchemes && draft.colorSchemes[0];
+      if (scheme && scheme.colors) {
+        if (scheme.colors.primaryColor) themeUpdate.primaryColor = scheme.colors.primaryColor;
+        if (scheme.colors.accentColor) themeUpdate.accentColor = scheme.colors.accentColor;
+        themeUpdate.colorSchemeId = null; // custom colors, no preset
+      }
+
+      await MastDB._ref('public/config/theme').update(themeUpdate);
+
+      // Store the custom homepage flow as a draft template override
+      await MastDB._ref('webPresence/draftTemplates/' + draftId + '/status').set('saved');
+      await MastDB._ref('public/config/draftTemplate').set({
+        homepageFlow: draft.homepageFlow,
+        baseTemplateId: draft.baseTemplateId,
+        savedAt: new Date().toISOString(),
+        draftId: draftId
+      });
+
+      // Remove from active drafts
+      draftTemplates = draftTemplates.filter(function(d) { return d.id !== draftId; });
+
+      closeModal();
+      showToast('Template saved! Deploy your site to apply changes.');
+
+      // Reload theme config and re-render
+      await loadThemeConfig();
+      renderWebsite();
+    } catch (err) {
+      showToast('Failed to save template: ' + err.message, true);
+    }
+  };
 
   function esc(str) {
     if (!str) return '';
