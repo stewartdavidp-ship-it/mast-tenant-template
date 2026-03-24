@@ -1,0 +1,16 @@
+{
+  "id": "about-blurb",
+  "name": "About Blurb",
+  "description": "Centered brief about section with label, heading, description, and 'Learn More' CTA linking to about page. Shop template differentiator.",
+  "category": "differentiator",
+  "version": "1.0.0",
+  "defaultHidden": true,
+  "outerTag": "section",
+  "outerClasses": ["about-blurb-section"],
+  "outerId": "aboutBlurb",
+  "dataContentKeys": [],
+  "dataTenantKeys": ["brand", "description"],
+  "dynamicContent": false,
+  "dynamicContentDescription": "",
+  "variants": []
+}

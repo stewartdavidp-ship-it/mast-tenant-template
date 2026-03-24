@@ -1,0 +1,16 @@
+{
+  "id": "featured-products",
+  "name": "Featured Products",
+  "description": "Auto-fill grid of product cards with image, name, and price. Includes 'View All Products' CTA. Shop template differentiator.",
+  "category": "differentiator",
+  "version": "1.0.0",
+  "defaultHidden": true,
+  "outerTag": "section",
+  "outerClasses": ["featured-products-section"],
+  "outerId": "featuredProducts",
+  "dataContentKeys": [],
+  "dataTenantKeys": [],
+  "dynamicContent": true,
+  "dynamicContentDescription": "Product cards populated from public/products (featured or newest).",
+  "variants": []
+}

@@ -1,0 +1,19 @@
+.about-blurb-section {
+  padding: 5rem 2rem;
+  text-align: center;
+}
+
+.about-blurb {
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.about-blurb .section-subtitle {
+  margin: 0 auto;
+  max-width: 600px;
+}
+
+/* Dark mode */
+html.dark .about-blurb-section {
+  background: var(--bg);
+}

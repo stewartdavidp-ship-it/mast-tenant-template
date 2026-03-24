@@ -1,0 +1,33 @@
+<section class="hero" data-slot="hero">
+  <div class="hero-video-wrap">
+    <video autoplay muted loop playsinline id="heroVideo">
+      <!-- Video source loaded dynamically from gallery hero items -->
+    </video>
+  </div>
+
+  <!-- Fallback poster if video fails -->
+  <div class="hero-poster" id="heroPoster"></div>
+
+  <!-- Overlays for text readability -->
+  <div class="hero-overlay"></div>
+  <div class="hero-vignette"></div>
+
+  <!-- Content -->
+  <div class="hero-content">
+    <div class="hero-logo" id="heroLogo" style="display:none;">
+      <!-- Logo loaded dynamically from tenant brand config -->
+    </div>
+    <p class="hero-tagline" data-tenant="tagline" data-content="hero-tagline"></p>
+    <h1 data-tenant="brand" data-content="hero-headline">Welcome</h1>
+    <p class="hero-sub" data-tenant="description" data-content="hero-subheadline"></p>
+    <div class="hero-cta">
+      <a href="shop.html" class="btn btn-primary" data-content="hero-cta">Shop Now</a>
+      <a href="#about" class="btn btn-outline">Learn More</a>
+    </div>
+  </div>
+
+  <div class="scroll-indicator">
+    <span class="label">Scroll</span>
+    <div class="scroll-line"></div>
+  </div>
+</section>

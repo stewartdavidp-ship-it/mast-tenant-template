@@ -1,0 +1,16 @@
+{
+  "id": "gallery",
+  "name": "Gallery",
+  "description": "Dark-background image grid (4 columns) with header. First item spans 2x2. Hover reveals captions.",
+  "category": "universal",
+  "version": "1.0.0",
+  "defaultHidden": false,
+  "outerTag": "section",
+  "outerClasses": ["gallery-section"],
+  "outerId": "gallery",
+  "dataContentKeys": ["gallery-label", "gallery-heading", "gallery-subtitle"],
+  "dataTenantKeys": [],
+  "dynamicContent": true,
+  "dynamicContentDescription": "Gallery grid items loaded from Firebase gallery collection.",
+  "variants": []
+}

@@ -1,0 +1,16 @@
+{
+  "id": "events",
+  "name": "Events",
+  "description": "Upcoming events list with date badges, event info, and location. Header includes 'Full Schedule' CTA.",
+  "category": "differentiator",
+  "version": "1.0.0",
+  "defaultHidden": true,
+  "outerTag": "section",
+  "outerClasses": [],
+  "outerId": "events",
+  "dataContentKeys": [],
+  "dataTenantKeys": [],
+  "dynamicContent": true,
+  "dynamicContentDescription": "Event cards loaded from Firebase events/shows collection.",
+  "variants": []
+}

@@ -1,0 +1,16 @@
+{
+  "id": "contact",
+  "name": "Contact",
+  "description": "Two-column layout with contact info (email, location, social) and a contact form with name, email, inquiry type, and message fields.",
+  "category": "universal",
+  "version": "1.0.0",
+  "defaultHidden": false,
+  "outerTag": "section",
+  "outerClasses": [],
+  "outerId": "contact",
+  "dataContentKeys": ["contact-label", "contact-heading", "contact-subtitle"],
+  "dataTenantKeys": ["email", "location", "instagram"],
+  "dynamicContent": false,
+  "dynamicContentDescription": "",
+  "variants": []
+}

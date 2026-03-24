@@ -177,6 +177,60 @@ Theme tokens (inverted by dark mode):     Surface tokens (NOT inverted):
 
 Use `--surface-dark` for dark backgrounds (page headers, footer, newsletter). Use `--surface-card` for card backgrounds (product cards, filter pills). Use `--on-dark` for text on dark backgrounds.
 
+## Section Catalog
+
+The `sections/` directory contains a structured extraction of all homepage sections. This is the foundation for the Dynamic Template Creation system (Phase 2+) where a compiler will assemble pages from this catalog at deploy time. The existing `index.html` remains the runtime source of truth — the catalog is a specification, not yet consumed at runtime.
+
+### Directory Structure
+
+```
+sections/
+  registry.json                     # Lists all available section IDs
+  {sectionId}/
+    definition.json                 # Metadata: id, name, category, data attributes, variants
+    template.html                   # Raw HTML with data-slot, data-content, data-tenant attributes
+    styles.css                      # Section-specific CSS (excludes shared styles)
+```
+
+### Sections (11 total)
+
+| ID | Name | Category | Default Hidden | Dynamic Content |
+|----|------|----------|----------------|-----------------|
+| hero | Hero | universal | no | Video/poster from gallery |
+| about | About | universal | no | Image, stats from config |
+| gallery | Gallery | universal | no | Grid items from gallery collection |
+| category-grid | Category Grid | differentiator | yes | Categories from config |
+| featured-products | Featured Products | differentiator | yes | Products from catalog |
+| about-blurb | About Blurb | differentiator | yes | No (uses data-tenant) |
+| events | Events | differentiator | yes | Events from Firebase |
+| testimonials | Testimonials | common | yes | Testimonials from Firebase |
+| process | Process | differentiator | yes | Cards from config |
+| contact | Contact | universal | no | No (uses data-content + data-tenant) |
+| newsletter | Newsletter | common | no | No (form with data-content) |
+
+### definition.json Schema
+
+- **id** — Matches `data-slot` value and directory name
+- **name** — Human-readable label
+- **description** — What the section does
+- **category** — `universal` (required across templates), `common` (optional, shared), or `differentiator` (template-specific)
+- **version** — SemVer (currently all `1.0.0`)
+- **defaultHidden** — Whether the section starts hidden (`data-default-hidden` + `display:none`)
+- **outerTag** — HTML tag (`section` or `div`)
+- **outerClasses** / **outerId** — CSS classes and id on the outer element
+- **dataContentKeys** — All `data-content` attribute values (for storefront-content.js injection)
+- **dataTenantKeys** — All `data-tenant` attribute values (for tenant-brand.js injection)
+- **dynamicContent** — Whether JS populates content beyond static injection
+- **variants** — Reserved for future section variants (empty arrays for now)
+
+### How Sections Relate to Templates
+
+Template manifests (`templates/{id}/manifest.json`) reference section IDs in their `homepageFlow` arrays and `slots` objects. The flow engine in `storefront-theme.js` shows/hides/reorders sections based on the manifest. Every slot ID in a manifest must correspond to a section in the catalog.
+
+### Future: Template Compiler (Phase 2)
+
+The compiler will be integrated into the `mast_hosting` deploy pipeline. It will read a manifest + the section catalog and assemble a compiled `index.html` per tenant. This eliminates the need for all sections to exist in a single hand-built HTML file.
+
 ## Wholesale Catalog
 
 Auth-gated wholesale page at `wholesale.html`. Requires Google Sign-In + admin approval.

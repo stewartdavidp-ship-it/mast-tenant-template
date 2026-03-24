@@ -1,0 +1,16 @@
+{
+  "id": "process",
+  "name": "Process",
+  "description": "Three-column grid of process step cards with circular gradient icons, headings, and descriptions.",
+  "category": "differentiator",
+  "version": "1.0.0",
+  "defaultHidden": true,
+  "outerTag": "section",
+  "outerClasses": [],
+  "outerId": "process",
+  "dataContentKeys": [],
+  "dataTenantKeys": [],
+  "dynamicContent": true,
+  "dynamicContentDescription": "Process label, title, subtitle, and cards populated from public/config/homepage/process.",
+  "variants": []
+}

@@ -1,0 +1,16 @@
+{
+  "id": "testimonials",
+  "name": "Testimonials",
+  "description": "Teal-background section with decorative circle, rotating single testimonial with star rating, quote, and author attribution.",
+  "category": "common",
+  "version": "1.0.0",
+  "defaultHidden": true,
+  "outerTag": "section",
+  "outerClasses": ["testimonials-section"],
+  "outerId": "testimonials",
+  "dataContentKeys": [],
+  "dataTenantKeys": [],
+  "dynamicContent": true,
+  "dynamicContentDescription": "Testimonial content (stars, quote, author) populated from Firebase public/testimonials.",
+  "variants": []
+}

@@ -1,0 +1,16 @@
+{
+  "id": "hero",
+  "name": "Hero",
+  "description": "Full-width hero with video/image background, overlay, tagline, headline, subheadline, and CTA buttons. Includes scroll indicator.",
+  "category": "universal",
+  "version": "1.0.0",
+  "defaultHidden": false,
+  "outerTag": "section",
+  "outerClasses": ["hero"],
+  "outerId": null,
+  "dataContentKeys": ["hero-tagline", "hero-headline", "hero-subheadline", "hero-cta"],
+  "dataTenantKeys": ["tagline", "brand", "description"],
+  "dynamicContent": true,
+  "dynamicContentDescription": "Video source and poster loaded from gallery hero items via JS. Logo loaded from tenant brand config.",
+  "variants": []
+}

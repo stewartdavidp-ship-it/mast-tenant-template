@@ -1,0 +1,16 @@
+{
+  "id": "newsletter",
+  "name": "Newsletter",
+  "description": "Dark-background email signup bar with heading, subheadline, and inline form (name, email, subscribe button).",
+  "category": "common",
+  "version": "1.0.0",
+  "defaultHidden": false,
+  "outerTag": "div",
+  "outerClasses": ["newsletter-bar"],
+  "outerId": "newsletterSignup",
+  "dataContentKeys": ["newsletter-heading", "newsletter-subheadline", "newsletter-button"],
+  "dataTenantKeys": [],
+  "dynamicContent": false,
+  "dynamicContentDescription": "",
+  "variants": []
+}

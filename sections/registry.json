@@ -1,0 +1,16 @@
+{
+  "version": "1.0.0",
+  "sections": [
+    "hero",
+    "about",
+    "gallery",
+    "category-grid",
+    "featured-products",
+    "about-blurb",
+    "events",
+    "testimonials",
+    "process",
+    "contact",
+    "newsletter"
+  ]
+}

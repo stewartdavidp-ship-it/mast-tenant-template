@@ -1,0 +1,16 @@
+{
+  "id": "category-grid",
+  "name": "Category Grid",
+  "description": "Auto-fill grid of category cards with image backgrounds and overlay labels. Shop template differentiator.",
+  "category": "differentiator",
+  "version": "1.0.0",
+  "defaultHidden": true,
+  "outerTag": "section",
+  "outerClasses": ["category-grid-section"],
+  "outerId": "categoryGrid",
+  "dataContentKeys": [],
+  "dataTenantKeys": [],
+  "dynamicContent": true,
+  "dynamicContentDescription": "Category cards populated from public/config/categories.",
+  "variants": []
+}

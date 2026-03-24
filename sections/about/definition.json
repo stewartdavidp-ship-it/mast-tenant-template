@@ -1,0 +1,16 @@
+{
+  "id": "about",
+  "name": "About",
+  "description": "Two-column layout with image (decorative border) and text block with label, heading, body, and optional stats row.",
+  "category": "universal",
+  "version": "1.0.0",
+  "defaultHidden": false,
+  "outerTag": "section",
+  "outerClasses": [],
+  "outerId": "about",
+  "dataContentKeys": ["about-label", "about-heading", "about-body"],
+  "dataTenantKeys": ["brand", "description"],
+  "dynamicContent": true,
+  "dynamicContentDescription": "About image loaded from webPresence config. Stats populated from public/config/homepage/about/stats.",
+  "variants": []
+}
