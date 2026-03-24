@@ -12951,14 +12951,21 @@ async function wizardAutoApplyAll(analysis, data) {
   };
   await MastDB._ref('webPresence/config/features').set(features);
 
-  // Nav order: About first, Shop last (before Contact). Matches storefront-nav.js context filtering.
-  var navSections = { about: { enabled: true, order: 1 }, contact: { enabled: true, order: 10 } };
-  if (features.blog) navSections.blog = { enabled: true, order: 2 };
-  if (features.events) navSections.schedule = { enabled: true, order: 3 };
-  if (features.newsletter) navSections.newsletter = { enabled: true, order: 4 };
-  if (features.shop) { navSections.shop = { enabled: true, highlight: true, order: 7 }; navSections.orders = { enabled: true, order: 8 }; }
-  if (features.commissions) navSections.commission = { enabled: true, order: 8 };
-  if (features.wholesale) navSections.wholesale = { enabled: true, order: 9 };
+  // Nav order: Shop always last in both contexts.
+  // Content context renders: About(1), Schedule(2), Blog/FromTheStudio(3), Shop(50)
+  // Shop context renders: Orders(10), Wholesale(11), Commission(12), Shop(50)
+  // Newsletter/Contact are non-nav (no href in storefront-nav defaults)
+  var navSections = { about: { enabled: true, order: 1 } };
+  if (features.events) navSections.schedule = { enabled: true, order: 2 };
+  if (features.blog) navSections.blog = { enabled: true, order: 3 };
+  if (features.shop) {
+    navSections.orders = { enabled: true, order: 10 };
+    navSections.wholesale = { enabled: features.wholesale, order: 11 };
+    navSections.commission = { enabled: features.commissions, order: 12 };
+    navSections.shop = { enabled: true, highlight: true, order: 50 };
+  }
+  if (features.newsletter) navSections.newsletter = { enabled: true, order: 60 };
+  navSections.contact = { enabled: true, order: 99 };
   await MastDB._ref('public/config/nav/sections').set(navSections);
   if (logoUrl) await MastDB._ref('public/config/nav/logoUrl').set(logoUrl);
   autoApplied.nav = true;
@@ -13127,14 +13134,18 @@ async function wizardConfirmModules() {
     };
     await MastDB._ref('webPresence/config/features').set(features);
 
-    // Nav order: About first, Shop last (before Contact)
-    var navSections = { about: { enabled: true, order: 1 }, contact: { enabled: true, order: 10 } };
-    if (features.blog) navSections.blog = { enabled: true, order: 2 };
-    if (features.events) navSections.schedule = { enabled: true, order: 3 };
-    if (features.newsletter) navSections.newsletter = { enabled: true, order: 4 };
-    if (features.shop) { navSections.shop = { enabled: true, highlight: true, order: 7 }; navSections.orders = { enabled: true, order: 8 }; }
-    if (features.commissions) navSections.commission = { enabled: true, order: 8 };
-    if (features.wholesale) navSections.wholesale = { enabled: true, order: 9 };
+    // Nav order: Shop always last in both contexts (matches wizardAutoApplyAll)
+    var navSections = { about: { enabled: true, order: 1 } };
+    if (features.events) navSections.schedule = { enabled: true, order: 2 };
+    if (features.blog) navSections.blog = { enabled: true, order: 3 };
+    if (features.shop) {
+      navSections.orders = { enabled: true, order: 10 };
+      navSections.wholesale = { enabled: features.wholesale, order: 11 };
+      navSections.commission = { enabled: features.commissions, order: 12 };
+      navSections.shop = { enabled: true, highlight: true, order: 50 };
+    }
+    if (features.newsletter) navSections.newsletter = { enabled: true, order: 60 };
+    navSections.contact = { enabled: true, order: 99 };
     await MastDB._ref('public/config/nav/sections').set(navSections);
 
     showWizardStep(3);
