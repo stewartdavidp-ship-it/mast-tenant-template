@@ -1125,11 +1125,11 @@
     var draft = draftTemplates[0]; // most recent draft
     var sectionCount = (draft.homepageFlow || []).length;
     var html = '';
-    html += '<div style="background:linear-gradient(135deg, rgba(42,124,111,0.08), rgba(196,133,60,0.08));border:1px solid var(--teal);border-radius:8px;padding:16px;margin-bottom:20px;">';
+    html += '<div style="background:var(--cream-dark);border:1px solid var(--teal);border-radius:8px;padding:16px;margin-bottom:20px;">';
     html += '<div style="display:flex;align-items:flex-start;gap:12px;">';
     html += '<div style="font-size:1.5rem;line-height:1;">&#127912;</div>';
     html += '<div style="flex:1;">';
-    html += '<div style="font-weight:600;font-size:0.95rem;margin-bottom:4px;">Template Generated from Your Site</div>';
+    html += '<div style="font-weight:600;font-size:0.95rem;margin-bottom:4px;color:var(--charcoal);">Template Generated from Your Site</div>';
     html += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:10px;">';
     html += 'We analyzed your site and created a draft template with ' + sectionCount + ' sections';
     if (draft.businessName) html += ' for <strong>' + esc(draft.businessName) + '</strong>';
@@ -2764,16 +2764,17 @@
     window.open(previewUrl, '_blank');
   };
 
-  window.wpDismissDraft = async function(draftId) {
-    if (!confirm('Dismiss this draft template? You can re-generate it by analyzing your site again.')) return;
-    try {
-      await MastDB._ref('webPresence/draftTemplates/' + draftId + '/status').set('dismissed');
-      draftTemplates = draftTemplates.filter(function(d) { return d.id !== draftId; });
-      renderWebsite();
-      showToast('Draft dismissed.');
-    } catch (err) {
-      showToast('Failed to dismiss: ' + err.message, true);
-    }
+  window.wpDismissDraft = function(draftId) {
+    showConfirmDialog('Dismiss Draft', 'Dismiss this draft template? You can re-generate it by analyzing your site again.', async function() {
+      try {
+        await MastDB._ref('webPresence/draftTemplates/' + draftId + '/status').set('dismissed');
+        draftTemplates = draftTemplates.filter(function(d) { return d.id !== draftId; });
+        renderWebsite();
+        showToast('Draft dismissed.');
+      } catch (err) {
+        showToast('Failed to dismiss: ' + err.message, true);
+      }
+    }, { confirmLabel: 'Dismiss', cancelLabel: 'Cancel' });
   };
 
   window.wpDraftMoveSection = async function(draftId, idx, direction) {
