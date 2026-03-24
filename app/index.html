@@ -12951,13 +12951,14 @@ async function wizardAutoApplyAll(analysis, data) {
   };
   await MastDB._ref('webPresence/config/features').set(features);
 
-  var navSections = { about: { enabled: true, order: 1 }, contact: { enabled: true, order: 9 } };
-  if (features.shop) { navSections.shop = { enabled: true, order: 2 }; navSections.orders = { enabled: true, order: 3 }; }
-  if (features.commissions) navSections.commission = { enabled: true, order: 4 };
-  if (features.wholesale) navSections.wholesale = { enabled: true, order: 5 };
-  if (features.events) navSections.schedule = { enabled: true, order: 6 };
-  if (features.blog) navSections.blog = { enabled: true, order: 7 };
-  if (features.newsletter) navSections.newsletter = { enabled: true, order: 8 };
+  // Nav order: About first, Shop last (before Contact). Matches storefront-nav.js context filtering.
+  var navSections = { about: { enabled: true, order: 1 }, contact: { enabled: true, order: 10 } };
+  if (features.blog) navSections.blog = { enabled: true, order: 2 };
+  if (features.events) navSections.schedule = { enabled: true, order: 3 };
+  if (features.newsletter) navSections.newsletter = { enabled: true, order: 4 };
+  if (features.shop) { navSections.shop = { enabled: true, highlight: true, order: 7 }; navSections.orders = { enabled: true, order: 8 }; }
+  if (features.commissions) navSections.commission = { enabled: true, order: 8 };
+  if (features.wholesale) navSections.wholesale = { enabled: true, order: 9 };
   await MastDB._ref('public/config/nav/sections').set(navSections);
   if (logoUrl) await MastDB._ref('public/config/nav/logoUrl').set(logoUrl);
   autoApplied.nav = true;
@@ -13126,13 +13127,14 @@ async function wizardConfirmModules() {
     };
     await MastDB._ref('webPresence/config/features').set(features);
 
-    var navSections = { about: { enabled: true, order: 1 }, contact: { enabled: true, order: 9 } };
-    if (features.shop) { navSections.shop = { enabled: true, order: 2 }; navSections.orders = { enabled: true, order: 3 }; }
-    if (features.commissions) navSections.commission = { enabled: true, order: 4 };
-    if (features.wholesale) navSections.wholesale = { enabled: true, order: 5 };
-    if (features.events) navSections.schedule = { enabled: true, order: 6 };
-    if (features.blog) navSections.blog = { enabled: true, order: 7 };
-    if (features.newsletter) navSections.newsletter = { enabled: true, order: 8 };
+    // Nav order: About first, Shop last (before Contact)
+    var navSections = { about: { enabled: true, order: 1 }, contact: { enabled: true, order: 10 } };
+    if (features.blog) navSections.blog = { enabled: true, order: 2 };
+    if (features.events) navSections.schedule = { enabled: true, order: 3 };
+    if (features.newsletter) navSections.newsletter = { enabled: true, order: 4 };
+    if (features.shop) { navSections.shop = { enabled: true, highlight: true, order: 7 }; navSections.orders = { enabled: true, order: 8 }; }
+    if (features.commissions) navSections.commission = { enabled: true, order: 8 };
+    if (features.wholesale) navSections.wholesale = { enabled: true, order: 9 };
     await MastDB._ref('public/config/nav/sections').set(navSections);
 
     showWizardStep(3);
