@@ -5334,7 +5334,7 @@
         <!-- Step 3: Watch Your Store Come to Life -->
         <div id="wizardStep3" class="wizard-step" style="display:none;">
           <h2 style="font-size:1.8rem;margin-bottom:8px;">Watch Your Store Come to Life</h2>
-          <p style="color:var(--warm-gray);margin-bottom:20px;">We're building your store in real time. Sit back and watch.</p>
+          <p id="wizardStep3Subtitle" style="color:var(--warm-gray);margin-bottom:20px;">We're building your store in real time. Learn what you can do while you wait.</p>
 
           <!-- Progress bar -->
           <div id="wizardImportProgressBar" style="display:none;margin-bottom:20px;">
@@ -5350,19 +5350,38 @@
           <!-- Auto-applied summary (always shown) -->
           <div id="wizardSummary" style="text-align:left;background:var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;font-size:0.9rem;"></div>
 
-          <!-- Live import feed -->
-          <div id="wizardImportTimeline" style="display:none;text-align:left;background:var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;font-size:0.9rem;">
-            <p style="font-weight:600;margin-bottom:12px;">Import Progress</p>
-            <div id="wizardImportFeed" style="font-size:0.85rem;max-height:300px;overflow-y:auto;"></div>
+          <!-- Video carousel (shown while import runs) -->
+          <div id="wizardVideoCarousel" style="display:none;text-align:left;margin-bottom:16px;">
+            <div id="wizardVideoContent" style="background:var(--cream-dark);border-radius:12px;overflow:hidden;margin-bottom:12px;"></div>
+            <div id="wizardVideoDots" style="display:flex;justify-content:center;gap:8px;margin-bottom:8px;"></div>
           </div>
 
-          <!-- Collection report (shown when import completes) -->
+          <!-- Live import feed (compact, below videos) -->
+          <div id="wizardImportTimeline" style="display:none;text-align:left;background:var(--cream-dark);border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:0.85rem;">
+            <details open>
+              <summary style="font-weight:600;font-size:0.85rem;cursor:pointer;margin-bottom:8px;">Import Progress</summary>
+              <div id="wizardImportFeed" style="font-size:0.82rem;max-height:160px;overflow-y:auto;"></div>
+            </details>
+          </div>
+
+          <!-- Gap analysis walkthrough (shown when import completes, replaces videos) -->
+          <div id="wizardGapWalkthrough" style="display:none;text-align:left;">
+            <div id="wizardGapSummary" style="background:var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;font-size:0.9rem;"></div>
+            <div id="wizardGapRows" style="margin-bottom:16px;"></div>
+            <div id="wizardGapCostBar" style="display:none;background:var(--cream-dark);border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:0.85rem;"></div>
+            <div id="wizardGapProgress" style="display:none;text-align:left;background:var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;font-size:0.85rem;">
+              <p style="font-weight:600;margin-bottom:8px;">Enriching your products...</p>
+              <div id="wizardGapProgressFeed" style="max-height:120px;overflow-y:auto;"></div>
+            </div>
+          </div>
+
+          <!-- Legacy collection report (hidden, kept for backward compat) -->
           <div id="wizardCollectionReport" style="display:none;text-align:left;background:var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;font-size:0.9rem;">
             <p style="font-weight:600;margin-bottom:12px;">Import Report</p>
             <div id="wizardCollectionReportBody"></div>
           </div>
 
-          <!-- Enrichment offer (shown when paid gaps exist) -->
+          <!-- Legacy enrichment offer (hidden, kept for backward compat) -->
           <div id="wizardEnrichmentOffer" style="display:none;text-align:left;background:linear-gradient(135deg, rgba(42,124,111,0.06), rgba(196,133,60,0.06));border:1px solid var(--amber);border-radius:8px;padding:16px;margin-bottom:16px;font-size:0.9rem;">
             <p style="font-weight:600;margin-bottom:8px;">&#10024; Enrich with AI</p>
             <p id="wizardEnrichmentDesc" style="color:var(--warm-gray);margin-bottom:12px;font-size:0.85rem;"></p>
@@ -5373,7 +5392,9 @@
           </div>
 
           <div id="wizardPublishStatus" style="font-size:0.85rem;margin-bottom:16px;"></div>
-          <button class="btn btn-primary" style="font-size:1rem;padding:12px 32px;" onclick="wizardComplete()">Launch Dashboard</button>
+          <div id="wizardStep3Actions">
+            <button class="btn btn-primary" style="font-size:1rem;padding:12px 32px;" onclick="wizardComplete()">Launch Dashboard</button>
+          </div>
         </div>
       </div>
     </div>
@@ -13216,9 +13237,13 @@ function showWizardImportTimeline() {
 
     // If already complete, render final state immediately
     if (job.status === 'complete' || job.status === 'failed') {
+      job.id = jobId;
       wizardRenderImportFinalState(job, feed, progressBar);
       return;
     }
+
+    // Import is still running — show tutorial videos while they wait
+    wizardShowVideoCarousel();
 
     // --- Real-time listener on the job ---
     if (_wizardImportListener) { _wizardImportListener(); _wizardImportListener = null; }
@@ -13244,6 +13269,7 @@ function showWizardImportTimeline() {
         // Stop listener, render final
         if (_wizardImportListener) { MastDB._ref('webPresence/importJobs/' + jobId).off('value', _wizardImportListener); _wizardImportListener = null; }
         if (_wizardProgressFeedListener) { MastDB._ref('webPresence/importJobs/' + jobId + '/progressFeed').off('child_added', _wizardProgressFeedListener); _wizardProgressFeedListener = null; }
+        liveJob.id = jobId;
         wizardRenderImportFinalState(liveJob, feed, progressBar);
       }
     });
@@ -13307,8 +13333,11 @@ function wizardRenderImportFinalState(job, feed, progressBar) {
     feed.innerHTML += wizardFeedLine('error', 'Import error: ' + (job.error || 'Something went wrong. You can retry from Website > Import.'));
   }
 
-  // Show collection report if available
-  if (job.collectionReport) {
+  // Show gap analysis walkthrough if available, otherwise fall back to legacy report
+  if (job.collectionReport && job.collectionReport.gapAnalysis && job.collectionReport.gapAnalysis.length > 0) {
+    // Give the feed a moment to render before transitioning
+    setTimeout(function() { wizardTransitionToWalkthrough(job); }, 800);
+  } else if (job.collectionReport) {
     wizardRenderCollectionReport(job.collectionReport);
   }
 }
@@ -13323,6 +13352,7 @@ function wizardRenderCollectionReport(report) {
   var g = report.gathered || {};
   var gaps = report.gaps || [];
   var cost = report.costSummary || {};
+  var gapRows = report.gapAnalysis || [];
 
   var h = '';
 
@@ -13333,33 +13363,66 @@ function wizardRenderCollectionReport(report) {
   h += '<span style="background:' + scoreColor + ';color:white;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;text-transform:uppercase;">' + esc(String(s.qualityScore || 0)) + '% ' + esc(s.qualityLabel || '') + '</span>';
   h += '</div>';
 
-  // Gathered fields
-  var fieldLabels = { name: 'Names', price: 'Prices', description: 'Descriptions', images: 'Images', category: 'Categories', variants: 'Variants', sku: 'SKUs', weight: 'Weight', tags: 'Tags' };
-  var total = g.total || 1;
-  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;margin-bottom:12px;">';
-  Object.keys(fieldLabels).forEach(function(field) {
-    var count = g[field] || 0;
-    var icon = count >= total ? '<span style="color:var(--teal);">&#10003;</span>' : count > 0 ? '<span style="color:var(--amber);">&#9679;</span>' : '<span style="color:var(--warm-gray);">&#9675;</span>';
-    h += '<div style="font-size:0.82rem;">' + icon + ' ' + esc(fieldLabels[field]) + ' <span style="color:var(--warm-gray);">(' + count + '/' + total + ')</span></div>';
-  });
-  h += '</div>';
+  // Gap analysis rows (if available from enhanced backend)
+  if (gapRows.length > 0) {
+    var statusIcons = {
+      'complete': '<span style="color:var(--teal);">&#10003;</span>',
+      'partial': '<span style="color:var(--amber);">&#9679;</span>',
+      'action-needed': '<span style="color:var(--amber);">&#9888;</span>',
+      'missing': '<span style="color:var(--danger);">&#10007;</span>',
+      'info': '<span style="color:var(--warm-gray);">&#8505;</span>'
+    };
 
-  // Gaps summary
-  if (gaps.length > 0) {
-    var freeGaps = gaps.filter(function(g) { return g.cost === 'free'; });
+    gapRows.forEach(function(row) {
+      var icon = statusIcons[row.status] || statusIcons['info'];
+      h += '<div style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px solid var(--cream-dark,#e8e0d4);">';
+      h += '<div style="flex-shrink:0;margin-top:1px;">' + icon + '</div>';
+      h += '<div style="flex:1;min-width:0;">';
+      h += '<div style="font-size:0.82rem;font-weight:600;">' + esc(row.capability) + '</div>';
+      h += '<div style="font-size:0.75rem;color:var(--warm-gray);">' + esc(row.detectedLabel);
+      if (row.matchedLabel) h += ' &rarr; ' + esc(row.matchedLabel);
+      h += '</div>';
+      if (row.gap) {
+        h += '<div style="font-size:0.75rem;color:var(--amber);margin-top:2px;">' + esc(row.gap);
+        if (row.plan && row.plan !== 'Complete') h += ' &mdash; ' + esc(row.plan);
+        h += '</div>';
+      }
+      h += '</div></div>';
+    });
+
+    // Show enrichment offer if paid gaps exist
     var paidGaps = gaps.filter(function(g) { return g.cost === 'paid'; });
-    var manualGaps = gaps.filter(function(g) { return g.cost === 'manual'; });
-
-    if (freeGaps.length > 0) {
-      h += '<div style="font-size:0.82rem;color:var(--teal);margin-bottom:4px;">&#10003; ' + freeGaps.length + ' field' + (freeGaps.length !== 1 ? 's' : '') + ' can be enriched for free (' + freeGaps.map(function(g) { return g.field; }).join(', ') + ')</div>';
-    }
     if (paidGaps.length > 0) {
-      h += '<div style="font-size:0.82rem;color:var(--amber);margin-bottom:4px;">&#10024; ' + paidGaps.length + ' field' + (paidGaps.length !== 1 ? 's' : '') + ' available with AI enrichment (' + paidGaps.map(function(g) { return g.field; }).join(', ') + ')</div>';
-      // Show enrichment offer
       wizardShowEnrichmentOffer(paidGaps, cost);
     }
-    if (manualGaps.length > 0) {
-      h += '<div style="font-size:0.82rem;color:var(--warm-gray);margin-bottom:4px;">&#9675; ' + manualGaps.length + ' field' + (manualGaps.length !== 1 ? 's' : '') + ' best added manually (' + manualGaps.map(function(g) { return g.field; }).join(', ') + ')</div>';
+  } else {
+    // Fallback: legacy field-level view
+    var fieldLabels = { name: 'Names', price: 'Prices', description: 'Descriptions', images: 'Images', category: 'Categories', variants: 'Variants', sku: 'SKUs', weight: 'Weight', tags: 'Tags' };
+    var total = g.total || 1;
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;margin-bottom:12px;">';
+    Object.keys(fieldLabels).forEach(function(field) {
+      var count = g[field] || 0;
+      var icon = count >= total ? '<span style="color:var(--teal);">&#10003;</span>' : count > 0 ? '<span style="color:var(--amber);">&#9679;</span>' : '<span style="color:var(--warm-gray);">&#9675;</span>';
+      h += '<div style="font-size:0.82rem;">' + icon + ' ' + esc(fieldLabels[field]) + ' <span style="color:var(--warm-gray);">(' + count + '/' + total + ')</span></div>';
+    });
+    h += '</div>';
+
+    // Gaps summary
+    if (gaps.length > 0) {
+      var freeGaps = gaps.filter(function(g) { return g.cost === 'free'; });
+      var paidGaps = gaps.filter(function(g) { return g.cost === 'paid'; });
+      var manualGaps = gaps.filter(function(g) { return g.cost === 'manual'; });
+
+      if (freeGaps.length > 0) {
+        h += '<div style="font-size:0.82rem;color:var(--teal);margin-bottom:4px;">&#10003; ' + freeGaps.length + ' field' + (freeGaps.length !== 1 ? 's' : '') + ' can be enriched for free (' + freeGaps.map(function(g) { return g.field; }).join(', ') + ')</div>';
+      }
+      if (paidGaps.length > 0) {
+        h += '<div style="font-size:0.82rem;color:var(--amber);margin-bottom:4px;">&#10024; ' + paidGaps.length + ' field' + (paidGaps.length !== 1 ? 's' : '') + ' available with AI enrichment (' + paidGaps.map(function(g) { return g.field; }).join(', ') + ')</div>';
+        wizardShowEnrichmentOffer(paidGaps, cost);
+      }
+      if (manualGaps.length > 0) {
+        h += '<div style="font-size:0.82rem;color:var(--warm-gray);margin-bottom:4px;">&#9675; ' + manualGaps.length + ' field' + (manualGaps.length !== 1 ? 's' : '') + ' best added manually (' + manualGaps.map(function(g) { return g.field; }).join(', ') + ')</div>';
+      }
     }
   }
 
@@ -13447,6 +13510,414 @@ async function wizardRequestEnrichment() {
     showToast('Enrichment failed: ' + esc(err.message), true);
     if (btn) { btn.disabled = false; btn.textContent = 'Retry'; }
   }
+}
+
+// ─── Post-Import Guided Walkthrough ──────────────────────────
+// Video carousel while import runs, then interactive gap analysis when done.
+
+var _wizardVideoTimer = null;
+var _wizardCurrentVideo = 0;
+var _wizardGapSelections = {};  // capability -> { selected: bool, field: string, tokens: number }
+var _wizardGapJobId = null;
+var _wizardGapEnriching = false;
+var _wizardGapProgressListener = null;
+
+var WIZARD_VIDEOS = [
+  {
+    title: 'Managing Your Products',
+    description: 'Learn how to edit products, set prices, manage inventory, and publish items to your shop.',
+    icon: '&#128722;',
+    duration: '1:30',
+    placeholder: true  // Will be replaced with real video embed
+  },
+  {
+    title: 'Setting Up Payments',
+    description: 'Connect Square or Stripe so you can accept payments online and in person.',
+    icon: '&#128179;',
+    duration: '1:30',
+    placeholder: true
+  },
+  {
+    title: 'Customizing Your Look',
+    description: 'Choose templates, adjust colors, rearrange sections, and make your site your own.',
+    icon: '&#127912;',
+    duration: '1:30',
+    placeholder: true
+  }
+];
+
+function wizardShowVideoCarousel() {
+  var carousel = document.getElementById('wizardVideoCarousel');
+  if (!carousel) return;
+  carousel.style.display = '';
+  _wizardCurrentVideo = 0;
+  wizardRenderVideoCard(_wizardCurrentVideo);
+  wizardRenderVideoDots();
+  // Auto-advance every 30 seconds (placeholder — will be video duration when real)
+  clearInterval(_wizardVideoTimer);
+  _wizardVideoTimer = setInterval(function() {
+    _wizardCurrentVideo = (_wizardCurrentVideo + 1) % WIZARD_VIDEOS.length;
+    wizardRenderVideoCard(_wizardCurrentVideo);
+    wizardRenderVideoDots();
+  }, 30000);
+}
+
+function wizardRenderVideoCard(index) {
+  var container = document.getElementById('wizardVideoContent');
+  if (!container) return;
+  var v = WIZARD_VIDEOS[index];
+  if (!v) return;
+
+  var h = '';
+  if (v.placeholder) {
+    // Placeholder card until real videos are added
+    h += '<div style="padding:32px 24px;text-align:center;">';
+    h += '<div style="font-size:3rem;margin-bottom:12px;">' + v.icon + '</div>';
+    h += '<h3 style="font-size:1.1rem;margin-bottom:8px;">' + esc(v.title) + '</h3>';
+    h += '<p style="font-size:0.88rem;color:var(--warm-gray);margin-bottom:16px;max-width:400px;margin-left:auto;margin-right:auto;">' + esc(v.description) + '</p>';
+    h += '<div style="display:inline-flex;align-items:center;gap:6px;font-size:0.8rem;color:var(--warm-gray-light);">';
+    h += '<span>&#9654;</span> <span>' + esc(v.duration) + '</span>';
+    h += '</div>';
+    h += '</div>';
+  } else {
+    // Real video embed (YouTube/Vimeo iframe)
+    h += '<div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;">';
+    h += '<iframe src="' + esc(v.embedUrl) + '" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;" allowfullscreen></iframe>';
+    h += '</div>';
+  }
+  container.innerHTML = h;
+}
+
+function wizardRenderVideoDots() {
+  var dots = document.getElementById('wizardVideoDots');
+  if (!dots) return;
+  var h = '';
+  for (var i = 0; i < WIZARD_VIDEOS.length; i++) {
+    var active = i === _wizardCurrentVideo;
+    h += '<button onclick="wizardGoToVideo(' + i + ')" style="width:8px;height:8px;border-radius:50%;border:none;cursor:pointer;padding:0;';
+    h += active ? 'background:var(--teal);' : 'background:var(--cream-dark);';
+    h += '"></button>';
+  }
+  // Next button
+  h += '<button onclick="wizardNextVideo()" style="background:none;border:none;cursor:pointer;font-size:0.8rem;color:var(--teal);padding:0 4px;margin-left:8px;">Next &rarr;</button>';
+  dots.innerHTML = h;
+}
+
+function wizardGoToVideo(index) {
+  _wizardCurrentVideo = index;
+  wizardRenderVideoCard(index);
+  wizardRenderVideoDots();
+  // Reset auto-advance timer
+  clearInterval(_wizardVideoTimer);
+  _wizardVideoTimer = setInterval(function() {
+    _wizardCurrentVideo = (_wizardCurrentVideo + 1) % WIZARD_VIDEOS.length;
+    wizardRenderVideoCard(_wizardCurrentVideo);
+    wizardRenderVideoDots();
+  }, 30000);
+}
+
+function wizardNextVideo() {
+  wizardGoToVideo((_wizardCurrentVideo + 1) % WIZARD_VIDEOS.length);
+}
+
+// ── Transition: Videos → Gap Walkthrough ──
+
+function wizardTransitionToWalkthrough(job) {
+  // Stop video carousel
+  clearInterval(_wizardVideoTimer);
+  var carousel = document.getElementById('wizardVideoCarousel');
+  if (carousel) carousel.style.display = 'none';
+
+  // Update header
+  var subtitle = document.getElementById('wizardStep3Subtitle');
+  if (subtitle) subtitle.textContent = 'Here\'s what we imported and what you can do next.';
+
+  // Hide legacy report/enrichment (we replace them with the walkthrough)
+  var legacyReport = document.getElementById('wizardCollectionReport');
+  var legacyEnrich = document.getElementById('wizardEnrichmentOffer');
+  if (legacyReport) legacyReport.style.display = 'none';
+  if (legacyEnrich) legacyEnrich.style.display = 'none';
+
+  // Show walkthrough
+  var walkthrough = document.getElementById('wizardGapWalkthrough');
+  if (walkthrough) { walkthrough.style.display = ''; walkthrough.style.animation = 'wizardFadeIn 0.4s ease'; }
+
+  _wizardGapJobId = job.id || (job._id);
+  _wizardGapSelections = {};
+
+  var report = job.collectionReport || {};
+  var gapRows = report.gapAnalysis || [];
+  var gaps = report.gaps || [];
+
+  // Render summary
+  wizardRenderGapSummary(job, report);
+
+  // Render interactive gap rows
+  wizardRenderGapRows(gapRows, gaps);
+
+  // Load token wallet for cost bar
+  loadTokenWallet();
+
+  // Update action buttons
+  var actions = document.getElementById('wizardStep3Actions');
+  if (actions) {
+    var h = '<div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;">';
+    h += '<button class="btn btn-primary" style="font-size:1rem;padding:12px 32px;" onclick="wizardComplete()">Continue to Dashboard</button>';
+    h += '</div>';
+    h += '<div style="text-align:center;margin-top:8px;">';
+    h += '<a href="#" onclick="event.preventDefault(); wizardComplete();" style="font-size:0.82rem;color:var(--warm-gray);">Skip for now &mdash; I\'ll do this later</a>';
+    h += '</div>';
+    actions.innerHTML = h;
+  }
+}
+
+function wizardRenderGapSummary(job, report) {
+  var el = document.getElementById('wizardGapSummary');
+  if (!el) return;
+  var s = report.summary || {};
+  var imp = job.imported || {};
+  var items = [];
+  if (imp.products && imp.products.done) items.push(imp.products.done + ' product' + (imp.products.done !== 1 ? 's' : ''));
+  if (imp.images && imp.images.done) items.push(imp.images.done + ' image' + (imp.images.done !== 1 ? 's' : ''));
+  if (imp.events && imp.events.done) items.push(imp.events.done + ' event' + (imp.events.done !== 1 ? 's' : ''));
+
+  var scoreColor = s.qualityScore >= 80 ? 'var(--teal)' : s.qualityScore >= 60 ? 'var(--amber)' : 'var(--danger)';
+
+  var h = '<div style="display:flex;justify-content:space-between;align-items:center;">';
+  h += '<div>';
+  h += '<p style="font-weight:700;font-size:1rem;margin-bottom:4px;">&#10003; Import Complete!</p>';
+  h += '<p style="font-size:0.88rem;color:var(--warm-gray);">Imported ' + (items.length > 0 ? items.join(', ') : 'your content') + ' from ' + esc(s.platform || 'your site') + '</p>';
+  h += '</div>';
+  h += '<span style="background:' + scoreColor + ';color:white;padding:4px 10px;border-radius:6px;font-size:0.78rem;font-weight:600;">' + esc(String(s.qualityScore || 0)) + '%</span>';
+  h += '</div>';
+  el.innerHTML = h;
+}
+
+function wizardRenderGapRows(gapRows, gaps) {
+  var el = document.getElementById('wizardGapRows');
+  if (!el) return;
+  if (!gapRows || gapRows.length === 0) {
+    el.innerHTML = '<p style="color:var(--warm-gray);font-size:0.88rem;text-align:center;padding:16px;">Everything looks great! No gaps found.</p>';
+    return;
+  }
+
+  var statusIcons = {
+    'complete': '<span style="color:var(--teal);">&#10003;</span>',
+    'partial': '<span style="color:var(--amber);">&#9679;</span>',
+    'action-needed': '<span style="color:var(--amber);">&#9888;</span>',
+    'missing': '<span style="color:var(--danger);">&#10007;</span>',
+    'info': '<span style="color:var(--warm-gray);">&#8505;</span>'
+  };
+
+  var h = '';
+  gapRows.forEach(function(row) {
+    var icon = statusIcons[row.status] || statusIcons['info'];
+    var gapEntry = null;
+    // Map capability to gaps entry for cost data
+    var fieldMap = { 'Search Tags': 'tags', 'Descriptions': 'description', 'Options & Variants': 'variants', 'Products': 'category' };
+    var mappedField = fieldMap[row.capability];
+    if (mappedField) {
+      gapEntry = gaps.find(function(g) { return g.field === mappedField; });
+    }
+
+    var isPaid = row.plan && row.plan.indexOf('Paid:') === 0 && gapEntry && gapEntry.cost === 'paid';
+    var isFree = row.plan && row.plan.indexOf('Free:') === 0;
+    var isManual = row.plan && row.plan.indexOf('Manual:') === 0;
+
+    h += '<div style="display:flex;align-items:flex-start;gap:12px;padding:12px 16px;background:var(--cream-dark);border-radius:8px;margin-bottom:8px;">';
+
+    // Checkbox or status icon
+    if (isPaid) {
+      var capKey = row.capability.replace(/[^a-zA-Z]/g, '');
+      var tokens = gapEntry ? gapEntry.estimatedTokens : 0;
+      var coins = Math.ceil(tokens / 100);
+      _wizardGapSelections[capKey] = { selected: false, field: gapEntry.field, tokens: tokens, coins: coins, capability: row.capability };
+      h += '<div style="flex-shrink:0;margin-top:2px;">';
+      h += '<input type="checkbox" id="wtCheck_' + capKey + '" onchange="wizardToggleGapAction(\'' + capKey + '\')" style="width:18px;height:18px;cursor:pointer;accent-color:var(--teal);">';
+      h += '</div>';
+    } else {
+      h += '<div style="flex-shrink:0;font-size:1rem;margin-top:2px;">' + icon + '</div>';
+    }
+
+    // Content
+    h += '<div style="flex:1;min-width:0;">';
+    h += '<div style="font-size:0.9rem;font-weight:600;margin-bottom:2px;">' + esc(row.capability) + '</div>';
+    h += '<div style="font-size:0.82rem;color:var(--warm-gray);">' + esc(row.detectedLabel);
+    if (row.matchedLabel) h += ' &rarr; ' + esc(row.matchedLabel);
+    h += '</div>';
+
+    if (row.gap) {
+      h += '<div style="font-size:0.82rem;margin-top:4px;color:var(--amber);">' + esc(row.gap) + '</div>';
+    }
+
+    // Action area
+    if (isPaid) {
+      var tokens2 = gapEntry ? gapEntry.estimatedTokens : 0;
+      var coins2 = Math.ceil(tokens2 / 100);
+      h += '<div style="font-size:0.8rem;margin-top:4px;color:var(--warm-gray-dark,#666);">';
+      h += '&#10024; AI enrichment &mdash; ~' + coins2 + ' coin' + (coins2 !== 1 ? 's' : '');
+      h += '</div>';
+    } else if (isManual) {
+      var linkTarget = row.actionLink || '';
+      var linkLabel = row.plan.replace('Manual: ', '');
+      if (linkTarget === 'settings-payments') {
+        h += '<div style="margin-top:6px;"><a href="#" onclick="event.preventDefault(); wizardComplete(); setTimeout(function(){ navigateTo(\'settings\'); }, 300);" style="font-size:0.82rem;color:var(--teal);text-decoration:none;">' + esc(linkLabel) + ' &rarr;</a></div>';
+      } else if (linkLabel) {
+        h += '<div style="margin-top:6px;"><a href="#" onclick="event.preventDefault(); wizardComplete(); setTimeout(function(){ navigateTo(\'website\'); setTimeout(function(){ wpSwitchTab(\'import\'); }, 100); }, 300);" style="font-size:0.82rem;color:var(--teal);text-decoration:none;">' + esc(linkLabel) + ' &rarr;</a></div>';
+      }
+    } else if (isFree && row.status !== 'complete') {
+      h += '<div style="font-size:0.8rem;margin-top:4px;color:var(--teal);">&#10003; ' + esc(row.plan.replace('Free: ', '')) + '</div>';
+    }
+
+    h += '</div></div>';
+  });
+
+  el.innerHTML = h;
+
+  // Show cost bar if any paid options exist
+  if (Object.keys(_wizardGapSelections).length > 0) {
+    wizardUpdateCostBar();
+  }
+}
+
+function wizardToggleGapAction(capKey) {
+  var sel = _wizardGapSelections[capKey];
+  if (!sel) return;
+  var checkbox = document.getElementById('wtCheck_' + capKey);
+  sel.selected = checkbox ? checkbox.checked : !sel.selected;
+  wizardUpdateCostBar();
+}
+
+function wizardUpdateCostBar() {
+  var costBar = document.getElementById('wizardGapCostBar');
+  if (!costBar) return;
+
+  var selectedCount = 0;
+  var totalTokens = 0;
+  var fields = [];
+  Object.keys(_wizardGapSelections).forEach(function(key) {
+    var sel = _wizardGapSelections[key];
+    if (sel.selected) {
+      selectedCount++;
+      totalTokens += sel.tokens;
+      fields.push(sel.field);
+    }
+  });
+
+  var totalCoins = Math.ceil(totalTokens / 100);
+  var wallet = getTokenWallet();
+  var availableTokens = (wallet.currentBalance || 0) + (wallet.coinTokenSurplus || 0) + ((wallet.coinBalance || 0) * 100);
+  var availableCoins = wallet.coinBalance || 0;
+  var sufficient = totalTokens <= availableTokens;
+
+  var h = '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">';
+  h += '<div>';
+  if (selectedCount > 0) {
+    h += '<span style="font-weight:600;">' + selectedCount + ' selected</span>';
+    h += ' &mdash; <span style="color:var(--amber);font-weight:600;">~' + totalCoins + ' coin' + (totalCoins !== 1 ? 's' : '') + '</span>';
+    h += '<span style="color:var(--warm-gray);"> (balance: ' + availableCoins + ' coins, ' + (wallet.currentBalance || 0) + ' tokens)</span>';
+    if (!sufficient) {
+      h += '<div style="color:var(--danger);font-size:0.8rem;margin-top:4px;">Insufficient balance. You need ~' + totalCoins + ' coins.</div>';
+    }
+  } else {
+    h += '<span style="color:var(--warm-gray);">Select items above to enrich with AI</span>';
+  }
+  h += '</div>';
+
+  if (selectedCount > 0) {
+    h += '<button class="btn btn-primary btn-small" id="wizardGapEnrichBtn" onclick="wizardExecuteEnrichment()"';
+    if (!sufficient || _wizardGapEnriching) h += ' disabled';
+    h += '>';
+    h += _wizardGapEnriching ? 'Enriching...' : 'Enrich Selected (~' + totalCoins + ' coins)';
+    h += '</button>';
+  }
+
+  h += '</div>';
+  costBar.innerHTML = h;
+  costBar.style.display = '';
+}
+
+function wizardExecuteEnrichment() {
+  if (_wizardGapEnriching) return;
+
+  var fields = [];
+  Object.keys(_wizardGapSelections).forEach(function(key) {
+    var sel = _wizardGapSelections[key];
+    if (sel.selected && sel.field) fields.push(sel.field);
+  });
+
+  if (fields.length === 0) { showToast('Select at least one item to enrich.', true); return; }
+  if (!_wizardGapJobId) { showToast('No import job found.', true); return; }
+
+  _wizardGapEnriching = true;
+  wizardUpdateCostBar();
+
+  // Show progress feed
+  var progressDiv = document.getElementById('wizardGapProgress');
+  var progressFeed = document.getElementById('wizardGapProgressFeed');
+  if (progressDiv) progressDiv.style.display = '';
+  if (progressFeed) progressFeed.innerHTML = wizardFeedLine('progress', 'Starting AI enrichment for ' + fields.join(', ') + '...');
+
+  // Listen for progress events
+  if (_wizardGapProgressListener) {
+    try { MastDB._ref('webPresence/importJobs/' + _wizardGapJobId + '/progressFeed').off('child_added', _wizardGapProgressListener); } catch (e) {}
+  }
+  _wizardGapProgressListener = MastDB._ref('webPresence/importJobs/' + _wizardGapJobId + '/progressFeed').on('child_added', function(snap) {
+    var evt = snap.val();
+    if (!evt || !evt.message) return;
+    if (progressFeed) {
+      progressFeed.innerHTML += wizardFeedLine('progress', evt.message);
+      progressFeed.scrollTop = progressFeed.scrollHeight;
+    }
+  });
+
+  // Call enrichment
+  firebase.functions().httpsCallable('runEnrichment')({
+    tenantId: MastDB.tenantId(),
+    importJobId: _wizardGapJobId,
+    fields: fields
+  }).then(function(result) {
+    var data = result.data || {};
+    _wizardGapEnriching = false;
+
+    // Detach progress listener
+    if (_wizardGapProgressListener) {
+      try { MastDB._ref('webPresence/importJobs/' + _wizardGapJobId + '/progressFeed').off('child_added', _wizardGapProgressListener); } catch (e) {}
+      _wizardGapProgressListener = null;
+    }
+
+    // Show success
+    if (progressFeed) {
+      progressFeed.innerHTML += wizardFeedLine('done', 'Enriched ' + data.enriched + ' products! ' + data.claudeCalls + ' AI calls, ' + (data.tokensUsed || 0) + ' tokens used.');
+    }
+    showToast(data.enriched + ' products enriched!');
+
+    // Update wallet display
+    if (data.newTokenBalance !== undefined && _tokenWallet) {
+      _tokenWallet.currentBalance = data.newTokenBalance;
+      if (data.coinBalance !== undefined) _tokenWallet.coinBalance = data.coinBalance;
+    }
+
+    // Re-fetch updated collection report and re-render gap rows
+    MastDB._ref('webPresence/importJobs/' + _wizardGapJobId + '/collectionReport').once('value').then(function(snap) {
+      var report = snap.val();
+      if (report && report.gapAnalysis) {
+        _wizardGapSelections = {};
+        wizardRenderGapRows(report.gapAnalysis, report.gaps || []);
+      }
+    }).catch(function() {});
+
+    // Update cost bar to reflect completion
+    wizardUpdateCostBar();
+
+  }).catch(function(err) {
+    _wizardGapEnriching = false;
+    showToast('Enrichment failed: ' + esc(err.message), true);
+    if (progressFeed) {
+      progressFeed.innerHTML += wizardFeedLine('error', 'Failed: ' + esc(err.message));
+    }
+    wizardUpdateCostBar();
+  });
 }
 
 function renderWizardSummary() {
@@ -21266,10 +21737,22 @@ function renderImportStatusBanner() {
       var imp = job.imported || {};
       if (imp.products && imp.products.done) items.push(imp.products.done + ' products');
       if (imp.images && imp.images.done) items.push(imp.images.done + ' images');
+      if (imp.events && imp.events.done) items.push(imp.events.done + ' events');
+      // Only show complete banner if something was actually imported
+      if (items.length === 0) { banner.style.display = 'none'; return; }
+      // Check if gap analysis report is available
+      var cr = job.collectionReport || {};
+      var gaRows = cr.gapAnalysis || [];
+      var actionNeeded = gaRows.filter(function(r) { return r.status === 'action-needed' || r.status === 'partial'; }).length;
+      var summaryText = items.length > 0 ? items.join(', ') + ' ready for review.' : 'Content ready for review.';
+      if (actionNeeded > 0) {
+        summaryText += ' ' + actionNeeded + ' item' + (actionNeeded !== 1 ? 's' : '') + ' need attention.';
+      }
+
       html = '<div style="background:var(--teal);color:white;padding:12px 16px;border-radius:8px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;">';
-      html += '<div><strong>Import complete!</strong> ' + (items.length > 0 ? items.join(', ') + ' ready for review.' : 'Content ready for review.') + '</div>';
+      html += '<div><strong>Import complete!</strong> ' + summaryText + '</div>';
       html += '<div style="display:flex;gap:8px;align-items:center;">';
-      html += '<button class="btn btn-secondary" onclick="navigateTo(\'website\'); setTimeout(function(){ wpSwitchTab(\'import\'); }, 100);" style="font-size:0.8rem;padding:6px 14px;font-weight:600;">Review</button>';
+      html += '<button class="btn btn-secondary" onclick="navigateTo(\'website\'); setTimeout(function(){ wpSwitchTab(\'import\'); }, 100);" style="font-size:0.8rem;padding:6px 14px;font-weight:600;">View Report</button>';
       html += '<button onclick="_importBannerDismissed[\'' + job._id + '\']=true;document.getElementById(\'importStatusBanner\').style.display=\'none\';" style="background:none;border:none;color:white;font-size:1.2rem;cursor:pointer;padding:4px 8px;opacity:0.8;" title="Dismiss">&times;</button>';
       html += '</div>';
       html += '</div>';

@@ -1571,8 +1571,9 @@
     var gaps = report.gaps || [];
     var cost = report.costSummary || {};
     var total = g.total || 1;
+    var gapRows = report.gapAnalysis || [];
 
-    var html = '<div style="margin-top:24px;padding-top:24px;border-top:1px solid var(--cream-dark);">';
+    var html = '<div id="importGapReport" style="margin-top:24px;padding-top:24px;border-top:1px solid var(--cream-dark);">';
 
     // Header with quality score
     var scoreColor = s.qualityScore >= 80 ? 'var(--teal)' : s.qualityScore >= 60 ? 'var(--amber)' : 'var(--danger)';
@@ -1584,7 +1585,16 @@
     html += '<span class="status-badge" style="background:' + scoreColor + ';color:white;font-size:0.78rem;">' + esc(String(s.qualityScore || 0)) + '% ' + esc(s.qualityLabel || '') + '</span>';
     html += '</div>';
 
-    // What we gathered
+    // Gap analysis table — "Your site has → We matched → Gap → Plan"
+    if (gapRows.length > 0) {
+      html += renderGapAnalysisTable(gapRows, jobId, cost);
+    }
+
+    // Collapsible field-level detail
+    html += '<details style="margin-top:16px;">';
+    html += '<summary style="font-size:0.85rem;font-weight:600;cursor:pointer;color:var(--warm-gray);margin-bottom:8px;">Field-level detail</summary>';
+
+    // What we gathered (existing grid)
     var fieldLabels = { name: 'Names', price: 'Prices', description: 'Descriptions', images: 'Images', category: 'Categories', variants: 'Variants/Options', sku: 'SKUs', weight: 'Weight', tags: 'Search Tags' };
     html += '<div style="background:var(--cream);border-radius:8px;padding:16px;margin-bottom:16px;">';
     html += '<p style="font-weight:600;font-size:0.85rem;margin-bottom:8px;">What we gathered</p>';
@@ -1596,7 +1606,7 @@
     });
     html += '</div></div>';
 
-    // Gaps with actionable next steps
+    // Legacy gaps detail
     if (gaps.length > 0) {
       html += '<div style="background:var(--cream);border-radius:8px;padding:16px;margin-bottom:16px;">';
       html += '<p style="font-weight:600;font-size:0.85rem;margin-bottom:12px;">What\'s missing &mdash; your options</p>';
@@ -1636,7 +1646,78 @@
       html += '</div>';
     }
 
+    html += '</details>';
     html += '</div>';
+    return html;
+  }
+
+  // ── Gap Analysis Table — "Your site → We matched → Gap → Plan" ──
+  function renderGapAnalysisTable(rows, jobId, costSummary) {
+    var statusIcons = {
+      'complete': '<span style="color:var(--teal);">&#10003;</span>',
+      'partial': '<span style="color:var(--amber);">&#9679;</span>',
+      'action-needed': '<span style="color:var(--amber);">&#9888;</span>',
+      'missing': '<span style="color:var(--danger);">&#10007;</span>',
+      'info': '<span style="color:var(--warm-gray);">&#8505;</span>'
+    };
+
+    var hasPaidGaps = rows.some(function(r) { return r.plan && r.plan.indexOf('Paid:') === 0; });
+
+    var html = '<div style="background:var(--cream);border-radius:8px;padding:16px;margin-bottom:16px;">';
+
+    // Table rows
+    rows.forEach(function(row) {
+      var icon = statusIcons[row.status] || statusIcons['info'];
+      var borderColor = row.status === 'complete' ? 'var(--teal)' : row.status === 'action-needed' ? 'var(--amber)' : row.status === 'partial' ? 'var(--amber)' : row.status === 'missing' ? 'var(--danger)' : 'var(--cream-dark)';
+
+      html += '<div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--cream-dark);">';
+
+      // Status icon
+      html += '<div style="flex-shrink:0;font-size:1rem;margin-top:2px;">' + icon + '</div>';
+
+      // Content
+      html += '<div style="flex:1;min-width:0;">';
+      html += '<div style="font-size:0.88rem;font-weight:600;margin-bottom:2px;">' + esc(row.capability) + '</div>';
+
+      // Detected → Matched
+      html += '<div style="font-size:0.8rem;color:var(--warm-gray);">';
+      html += esc(row.detectedLabel);
+      if (row.matchedLabel) html += ' &rarr; ' + esc(row.matchedLabel);
+      html += '</div>';
+
+      // Gap + Plan
+      if (row.gap) {
+        html += '<div style="font-size:0.8rem;margin-top:4px;">';
+        html += '<span style="color:var(--amber);">' + esc(row.gap) + '</span>';
+        if (row.plan && row.plan !== 'Complete') {
+          html += ' &mdash; <span style="color:var(--warm-gray-dark,#666);">' + esc(row.plan) + '</span>';
+        }
+        html += '</div>';
+      }
+      html += '</div>';
+      html += '</div>';
+    });
+
+    html += '</div>';
+
+    // Summary action bar
+    var completeCount = rows.filter(function(r) { return r.status === 'complete'; }).length;
+    var actionCount = rows.filter(function(r) { return r.status === 'action-needed' || r.status === 'partial'; }).length;
+
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">';
+    html += '<div style="font-size:0.82rem;color:var(--warm-gray);">';
+    html += '<span style="color:var(--teal);">' + completeCount + '</span> complete';
+    if (actionCount > 0) html += ' &middot; <span style="color:var(--amber);">' + actionCount + '</span> need attention';
+    html += '</div>';
+
+    if (hasPaidGaps && jobId) {
+      html += '<button class="btn btn-primary btn-small" onclick="wpRunEnrichment(\'' + esc(jobId) + '\')">';
+      html += 'Enrich with AI';
+      if (costSummary && costSummary.estimatedCost) html += ' (' + esc(costSummary.estimatedCost) + ')';
+      html += '</button>';
+    }
+    html += '</div>';
+
     return html;
   }
 
@@ -2275,7 +2356,8 @@
       // ── Template Match Card ──
       var tm = data.templateMatch;
       if (tm && tm.scores && tm.scores.length > 0) {
-        var confColor = tm.confidence === 'high' ? 'var(--teal,#2a9d8f)' : tm.confidence === 'medium' ? 'var(--amber,#e9c46a)' : 'var(--warm-gray,#888)';
+        var confLevel = tm.confidenceLevel || (tm.confidence >= 0.6 ? 'high' : 'low');
+        var confColor = confLevel === 'high' ? 'var(--teal,#2a9d8f)' : confLevel === 'medium' ? 'var(--amber,#e9c46a)' : 'var(--warm-gray,#888)';
 
         rhtml += '<div class="wp-import-result" style="margin-top:12px;">';
         rhtml += '<strong style="display:block;margin-bottom:8px;">Template Match</strong>';
@@ -2284,7 +2366,7 @@
           rhtml += '<div style="margin-bottom:10px;font-size:0.9rem;">';
           rhtml += 'Best Match: <strong>' + esc(tm.bestMatch.templateId) + '</strong>';
           rhtml += ' &middot; Score: <strong>' + Math.round(tm.bestMatch.score * 100) + '%</strong>';
-          rhtml += ' &middot; <span style="background:' + confColor + ';color:#fff;border-radius:12px;padding:2px 10px;font-size:0.75rem;">' + esc(tm.confidence) + '</span>';
+          rhtml += ' &middot; <span style="background:' + confColor + ';color:#fff;border-radius:12px;padding:2px 10px;font-size:0.75rem;">' + esc(confLevel) + '</span>';
           rhtml += '</div>';
         }
 
