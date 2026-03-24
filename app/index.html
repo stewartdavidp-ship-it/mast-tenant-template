@@ -15076,6 +15076,35 @@ function renderProductDetail(pid) {
     variantsHtml += '</div>' +
       '<button class="btn btn-secondary" style="font-size:0.8rem;" onclick="addVariantOption()">+ Add Attribute</button>' +
     '</div>';
+    // Variant Pricing grid (edit mode) — show when options already exist
+    var vcEdit = getProductVariantCombos(product);
+    if (vcEdit.combos.length > 0) {
+      var existingVariantsEdit = product.variants || [];
+      variantsHtml += '<div class="product-detail-section" style="margin-top:16px;"><div class="product-detail-section-title">Variant Pricing</div>' +
+        '<p style="font-size:0.82rem;color:var(--warm-gray);margin:0 0 12px 0;">Enter prices for each variant combination. Leave blank for variants that use the base price.</p>' +
+        '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;">' +
+        '<thead><tr style="border-bottom:2px solid var(--cream-dark);">';
+      vcEdit.labels.forEach(function(l) { variantsHtml += '<th style="text-align:left;padding:8px 12px;color:var(--warm-gray);font-weight:600;">' + esc(l) + '</th>'; });
+      variantsHtml += '<th style="text-align:right;padding:8px 12px;color:var(--warm-gray);font-weight:600;">Price ($)</th></tr></thead><tbody>';
+      vcEdit.combos.forEach(function(combo, idx) {
+        var comboObj = {};
+        vcEdit.labels.forEach(function(l, i) { comboObj[l] = combo[i]; });
+        var match = existingVariantsEdit.find(function(v) {
+          return v.combo && vcEdit.labels.every(function(l) { return v.combo[l] === comboObj[l]; });
+        });
+        var existingPrice = match && match.priceCents ? (match.priceCents / 100).toFixed(2) : '';
+        variantsHtml += '<tr style="border-bottom:1px solid var(--cream-dark);">';
+        combo.forEach(function(val, ci) {
+          variantsHtml += '<td style="padding:8px 12px;">' + esc(val) + '</td>';
+        });
+        variantsHtml += '<td style="text-align:right;padding:4px 12px;">' +
+          '<input type="text" class="pd-variant-price" data-combo=\'' + esc(JSON.stringify(comboObj)) + '\' ' +
+          'value="' + existingPrice + '" placeholder="0.00" ' +
+          'style="width:100px;text-align:right;padding:4px 8px;font-size:0.85rem;float:right;">' +
+        '</td></tr>';
+      });
+      variantsHtml += '</tbody></table></div></div>';
+    }
   } else {
     if (options.length) {
       variantsHtml += '<div class="product-detail-section"><div class="product-detail-section-title">Variant Attributes</div>';
@@ -15084,6 +15113,28 @@ function renderProductDetail(pid) {
           '<span style="font-size:0.85rem;">' + (opt.choices || []).map(function(c) { return esc(c); }).join(', ') + '</span></div>';
       });
       variantsHtml += '</div>';
+      // Variant Pricing grid (view mode)
+      var vcView = getProductVariantCombos(product);
+      if (vcView.combos.length > 0) {
+        var existingVariants = product.variants || [];
+        variantsHtml += '<div class="product-detail-section" style="margin-top:16px;"><div class="product-detail-section-title">Variant Pricing</div>' +
+          '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;">' +
+          '<thead><tr style="border-bottom:2px solid var(--cream-dark);">';
+        vcView.labels.forEach(function(l) { variantsHtml += '<th style="text-align:left;padding:8px 12px;color:var(--warm-gray);font-weight:600;">' + esc(l) + '</th>'; });
+        variantsHtml += '<th style="text-align:right;padding:8px 12px;color:var(--warm-gray);font-weight:600;">Price</th></tr></thead><tbody>';
+        vcView.combos.forEach(function(combo) {
+          var comboObj = {};
+          vcView.labels.forEach(function(l, i) { comboObj[l] = combo[i]; });
+          var match = existingVariants.find(function(v) {
+            return v.combo && vcView.labels.every(function(l) { return v.combo[l] === comboObj[l]; });
+          });
+          variantsHtml += '<tr style="border-bottom:1px solid var(--cream-dark);">';
+          combo.forEach(function(val) { variantsHtml += '<td style="padding:8px 12px;">' + esc(val) + '</td>'; });
+          variantsHtml += '<td style="text-align:right;padding:8px 12px;">' + (match && match.priceCents ? formatPriceCents(match.priceCents) : '<span style="color:var(--warm-gray);font-style:italic;">Not set</span>') + '</td>';
+          variantsHtml += '</tr>';
+        });
+        variantsHtml += '</tbody></table></div></div>';
+      }
     } else {
       variantsHtml += '<div style="text-align:center;padding:40px;color:var(--warm-gray);">No variant attributes defined.</div>';
     }
@@ -15412,6 +15463,29 @@ async function saveProduct(pid) {
       }
     });
 
+    // Collect variant prices from DOM
+    var variants = [];
+    document.querySelectorAll('.pd-variant-price').forEach(function(input) {
+      var priceVal = parsePriceToCents(input.value);
+      if (priceVal !== null && priceVal > 0) {
+        try {
+          var combo = JSON.parse(input.getAttribute('data-combo'));
+          variants.push({ combo: combo, priceCents: priceVal });
+        } catch(e) { /* skip invalid */ }
+      }
+    });
+
+    // Auto-set priceType and base price from variant prices
+    var priceType = null;
+    if (variants.length > 0) {
+      priceType = 'from';
+      var lowestVariantPrice = Math.min.apply(null, variants.map(function(v) { return v.priceCents; }));
+      // Only override base price if user didn't manually enter one, or if lowest variant is lower
+      if (priceCents === null || lowestVariantPrice < priceCents) {
+        priceCents = lowestVariantPrice;
+      }
+    }
+
     var isCreate = productCreateMode && !pid;
     var targetPid = pid;
 
@@ -15434,6 +15508,8 @@ async function saveProduct(pid) {
       availability: availability,
       sortOrder: sortOrder,
       options: options,
+      variants: variants.length > 0 ? variants : null,
+      priceType: priceType,
       priceCents: priceCents,
       price: priceCents !== null ? '$' + (priceCents / 100).toFixed(2) : '',
       etsyListingId: etsyId,
