@@ -652,6 +652,8 @@ All tenant data lives under `{tenantId}/` in the tenant's RTDB (configured via `
 | `{tenantId}/webPresence/importJobs/` | Admin only | Website import job queue (status, discovered, imported counts) |
 | `{tenantId}/webPresence/siteAnalysis/` | Admin only | Site analysis results + crawl manifest from `analyzeExistingSite` |
 | `{tenantId}/webPresence/imageHashes/` | Admin only | MD5 hashes of imported images for deduplication |
+| `{tenantId}/webPresence/draftTemplates/` | Admin only | Draft template manifests generated from site analysis |
+| `{tenantId}/public/config/draftTemplate` | Anonymous read | Saved draft template override (custom homepageFlow) |
 
 ### Platform Registry (under `mast-platform/`)
 
@@ -689,7 +691,7 @@ Job-based polling model for importing products, images, and content from a tenan
 
 ### Flow
 
-1. **Analyze** — Tenant enters URL in admin. `analyzeExistingSite` Cloud Function fetches the page, calls Claude API to extract branding (business name, colors, style, hero content, contact info, social links), and builds a **crawl manifest** (platform type, content types found, pagination style, image hosting).
+1. **Analyze** — Tenant enters URL in admin. `analyzeExistingSite` Cloud Function fetches the page, calls Claude API to extract branding (business name, colors, style, hero content, contact info, social links), classifies observed homepage sections against the 11-section catalog, and builds a **crawl manifest** (platform type, content types found, pagination style, image hosting). Also generates a **draft template manifest** from section classification, extracted colors, and font suggestions — stored at `{tenantId}/webPresence/draftTemplates/{draftId}` for admin review.
 2. **Create Job** — Admin UI creates an import job at `{tenantId}/webPresence/importJobs/{jobId}` with status `pending` and the crawl manifest.
 3. **Crawl** — Scheduled task `site-import-processor` (every 30 min) picks up pending jobs, crawls the site using WebFetch guided by the manifest, discovers products/blogs/events. Updates job to `crawled` with discovered item list.
 4. **Cherry-pick** — Admin UI shows discovered items as a checklist. Tenant can toggle individual products on/off. Excluded URLs saved to `cherryPickExclude` on the job.
@@ -710,6 +712,29 @@ Any state → `failed` (on error or 2h timeout auto-fail)
 | Scheduled task | `~/.claude/scheduled-tasks/site-import-processor/SKILL.md` | Crawl + extract automation (Claude Code scheduled task) |
 | analyzeExistingSite | `mast-architecture/functions/tenant-functions.js` | Claude API analysis + crawl manifest generation |
 | notifyImportComplete | `mast-architecture/functions/tenant-functions.js` | Email notification on import completion |
+
+### Draft Template Generation
+
+When `analyzeExistingSite` runs, it now also generates a draft template manifest:
+
+1. **Section classification** — Claude API classifies observed homepage sections against the 11-section catalog (hero, about, gallery, etc.) with confidence scores (high/medium/low)
+2. **Draft manifest** — `buildDraftManifest()` assembles: `homepageFlow` from classified sections, `colorSchemes` from extracted colors, `fontPairId` from font suggestion, `baseTemplateId` from template match
+3. **Storage** — Draft stored at `{tenantId}/webPresence/draftTemplates/{draftId}` with `status: draft`
+4. **Admin notification** — Website module Import tab shows a banner when a draft exists. Admin can review section order (reorder/remove), view color scheme and classification details, then "Save as My Template" to apply
+
+Draft manifest schema:
+```
+webPresence/draftTemplates/{draftId}/
+├── status: "draft" | "saved" | "dismissed"
+├── baseTemplateId: string (matched template ID)
+├── homepageFlow: string[] (ordered section IDs)
+├── classifiedSections: [{ catalogId, observedLabel, confidence, reason }]
+├── colorSchemes: [{ id, name, default, colors: { primaryColor, accentColor, ... } }]
+├── fontPairId: string (classic, modern, editorial, clean, artisan)
+├── sourceUrl: string
+├── businessName: string
+├── createdAt / updatedAt: ISO timestamps
+```
 
 ### Production Hardening
 
