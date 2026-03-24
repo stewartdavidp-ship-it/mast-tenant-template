@@ -3,6 +3,7 @@
   "name": "The Studio",
   "description": "Story-led, founder identity is the brand. Commission CTA prominent, editorial gallery, About on homepage.",
   "version": "1.0.0",
+  "compile": true,
   "defaultTheme": "dark",
 
   "slots": {

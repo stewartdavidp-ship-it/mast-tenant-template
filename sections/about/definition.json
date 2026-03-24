@@ -12,5 +12,6 @@
   "dataTenantKeys": ["brand", "description"],
   "dynamicContent": true,
   "dynamicContentDescription": "About image loaded from webPresence config. Stats populated from public/config/homepage/about/stats.",
+  "dividerAfter": true,
   "variants": []
 }
