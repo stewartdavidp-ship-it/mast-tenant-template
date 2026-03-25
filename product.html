@@ -1258,7 +1258,7 @@
       name: p.name,
       price: resolvedPrice,
       priceCents: resolvedCents,
-      image: images[0] || '',
+      image: (document.getElementById('mainImage') || {}).src || images[0] || '',
       options: Object.assign({}, window._selectedOptions),
       qty: window._productQty || 1
     });
