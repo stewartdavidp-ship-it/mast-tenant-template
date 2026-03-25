@@ -1599,7 +1599,8 @@ window.TENANT_READY.then(function() {
       html += '<div class="event-card fade-up" style="opacity:1;transform:translateY(0)">';
       html += '<div class="event-date"><div class="event-month">' + month + '</div>';
       html += '<div class="event-day">' + day + '</div></div>';
-      html += '<div class="event-info"><h3>' + esc(ev.name) + '</h3>';
+      var nameHtml = ev.url ? '<a href="' + esc(ev.url) + '" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;">' + esc(ev.name) + ' <span style="font-size:0.7em;opacity:0.5;">&#8599;</span></a>' : esc(ev.name);
+      html += '<div class="event-info"><h3>' + nameHtml + '</h3>';
       html += '<p>' + esc(ev.description || '') + '</p></div>';
       html += '<div class="event-location">' + esc((ev.location || '').toUpperCase()) + '</div>';
       html += '</div>';
