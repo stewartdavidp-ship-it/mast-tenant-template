@@ -5351,6 +5351,9 @@
           <!-- Auto-applied summary (always shown) -->
           <div id="wizardSummary" style="text-align:left;background:var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;font-size:0.9rem;"></div>
 
+          <!-- Capability preview (what we can import from your platform) -->
+          <div id="wizardCapabilityPreview" style="display:none;text-align:left;background:var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;font-size:0.9rem;"></div>
+
           <!-- Video carousel (shown while import runs) -->
           <div id="wizardVideoCarousel" style="display:none;text-align:left;margin-bottom:16px;">
             <div id="wizardVideoContent" style="background:var(--cream-dark);border-radius:12px;overflow:hidden;margin-bottom:12px;"></div>
@@ -12703,6 +12706,7 @@ function showWizardStep(step) {
   }
   if (step === 3) {
     renderWizardSummary();
+    renderCapabilityPreview();
     showWizardImportTimeline();
   }
 }
@@ -12839,6 +12843,7 @@ async function wizardAnalyzeSite() {
     window._wizardSiteFingerprint = data.siteFingerprint || null;
     window._wizardDraftTemplateId = data.draftTemplateId || null;
     window._wizardTemplateConfidence = (data.templateMatch && data.templateMatch.confidenceLevel) || 'low';
+    window._wizardCapabilityMatrix = data.capabilityMatrix || null;
 
     // Show "applying..." status
     statusEl.innerHTML = '<div style="display:flex;align-items:center;gap:12px;justify-content:center;padding:16px 0;">' +
@@ -14027,6 +14032,64 @@ function renderWizardSummary() {
     items.push('<div style="margin-top:8px;color:var(--warm-gray);font-size:0.85rem;"><strong>Next steps:</strong> Connect payments and email in Settings.</div>');
   }
   el.innerHTML = items.join('');
+}
+
+function renderCapabilityPreview() {
+  var el = document.getElementById('wizardCapabilityPreview');
+  if (!el) return;
+  var matrix = window._wizardCapabilityMatrix;
+  if (!matrix || !matrix.capabilities) { el.style.display = 'none'; return; }
+
+  var caps = matrix.capabilities;
+  var capIds = Object.keys(caps).filter(function(k) { return k.charAt(0) !== '_'; });
+  // Sort by priority
+  capIds.sort(function(a, b) { return (caps[a].priority || 99) - (caps[b].priority || 99); });
+
+  // Icon map (feather-style → emoji fallback for no-build env)
+  var icons = { 'shopping-bag': '\ud83d\udecd\ufe0f', 'edit': '\u270d\ufe0f', 'calendar': '\ud83d\udcc5', 'link': '\ud83d\udd17', 'layers': '\ud83c\udf9b\ufe0f', 'folder': '\ud83d\udcc2', 'tag': '\ud83c\udff7\ufe0f', 'image': '\ud83d\uddbc\ufe0f', 'file-text': '\ud83d\udcdd', 'hash': '#\ufe0f\u20e3', 'dollar-sign': '\ud83d\udcb2' };
+
+  var html = '<div style="margin-bottom:8px;"><strong>What we can import from ' + esc(matrix.platformName || 'your site') + '</strong></div>';
+  html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">';
+
+  var freeCount = 0;
+  var paidCount = 0;
+
+  for (var i = 0; i < capIds.length; i++) {
+    var capId = capIds[i];
+    var cap = caps[capId];
+    if (!cap.supported) continue;
+
+    var method = (cap.methods && cap.methods[0]) || {};
+    // Check for runtime override (probe found free method on a paid-default platform)
+    var override = cap._runtimeOverride;
+    var isFree = override ? override.cost === 'free' : method.cost === 'free';
+    var icon = icons[cap.icon] || '\u2022';
+
+    if (isFree) freeCount++; else paidCount++;
+
+    var bgColor = isFree ? 'rgba(42,124,111,0.08)' : 'rgba(196,133,60,0.08)';
+    var borderColor = isFree ? 'rgba(42,124,111,0.2)' : 'rgba(196,133,60,0.2)';
+    var badge = isFree
+      ? '<span style="font-size:0.7rem;color:var(--teal);font-weight:600;">INCLUDED</span>'
+      : '<span style="font-size:0.7rem;color:var(--amber);font-weight:600;">AI</span>';
+
+    html += '<div style="background:' + bgColor + ';border:1px solid ' + borderColor + ';border-radius:6px;padding:6px 10px;display:flex;align-items:center;gap:6px;font-size:0.82rem;">';
+    html += '<span>' + icon + '</span>';
+    html += '<span>' + esc(cap.label) + '</span>';
+    html += badge;
+    html += '</div>';
+  }
+  html += '</div>';
+
+  // Summary line
+  html += '<div style="font-size:0.8rem;color:var(--warm-gray);">';
+  if (freeCount > 0) html += '<span style="color:var(--teal);font-weight:600;">' + freeCount + ' included free</span>';
+  if (freeCount > 0 && paidCount > 0) html += ' &middot; ';
+  if (paidCount > 0) html += '<span style="color:var(--amber);">' + paidCount + ' available with AI enrichment</span>';
+  html += '</div>';
+
+  el.innerHTML = html;
+  el.style.display = '';
 }
 
 // WS6: Style recommendation → template + color scheme mapping
