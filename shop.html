@@ -457,11 +457,22 @@ window.TENANT_READY.then(function() {
     var app = firebase.initializeApp(TENANT_FIREBASE_CONFIG, 'public-shop');
     var db = app.database();
 
+    // Load shop header background image from gallery
+    db.ref(TENANT_ID + '/public/gallery').orderByChild('section').equalTo('shop').once('value').then(function(snap) {
+      var data = snap.val();
+      if (!data) return;
+      var items = Object.values(data).filter(function(i) { return i.visible !== false && !i.templateHidden && i.url; });
+      if (items.length > 0) {
+        var header = document.querySelector('.page-header');
+        if (header) header.style.backgroundImage = "url('" + items[0].url + "')";
+      }
+    }).catch(function() {});
+
     // Load categories from Firebase, then load products
     db.ref(TENANT_ID + '/public/config/categories').once('value').then(function(catSnap) {
       var catData = catSnap.val();
       if (catData && Array.isArray(catData)) {
-        SHOP_CATS = catData.filter(function(c) { return c && c.id && c.label; });
+        SHOP_CATS = catData.filter(function(c) { return c && c.id && c.id !== 'shop' && c.label; });
       }
       SHOP_IDS = SHOP_CATS.map(function(c) { return c.id; });
       buildFilterPills();

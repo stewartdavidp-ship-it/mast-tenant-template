@@ -8931,12 +8931,18 @@ async function loadTenantCategories() {
     var snap = await MastDB._ref('public/config/categories').once('value');
     var catData = snap.val();
     if (catData && Array.isArray(catData)) {
-      var cats = catData.filter(function(c) { return c && c.id && c.label; });
-      CATEGORIES = cats.map(function(c) { return c.id; });
-      SECTIONS = CORE_SECTIONS.concat(cats.map(function(c) {
-        return { id: c.id, label: c.label, description: c.label + ' products' };
-      }));
-      SHOP_SECTION_IDS = ['shop'].concat(CATEGORIES);
+      var cats = catData.filter(function(c) { return c && c.id && c.id !== 'shop' && c.label; });
+      if (cats.length > 0) {
+        CATEGORIES = cats.map(function(c) { return c.id; });
+        // Replace generic "Shop" section with real category sections
+        SECTIONS = CORE_SECTIONS.filter(function(s) { return s.id !== 'shop'; }).concat(cats.map(function(c) {
+          return { id: c.id, label: c.label, description: c.label + ' products' };
+        }));
+        SHOP_SECTION_IDS = CATEGORIES.slice();
+      } else {
+        // Only generic "Shop" or no categories — keep default
+        CATEGORIES = catData.filter(function(c) { return c && c.id && c.label; }).map(function(c) { return c.id; });
+      }
     }
   } catch (e) {
     console.warn('[categories] Failed to load tenant categories:', e.message);
