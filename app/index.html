@@ -18099,16 +18099,19 @@ function loadPendingInvites() {
   });
 }
 
-async function cancelInvite(emailKey) {
-  if (!confirm('Cancel this invite?')) return;
-  try {
-    await MastDB.invites.ref(emailKey).remove();
-    delete pendingInvites[emailKey];
-    renderUsersList();
-    showToast('Invite cancelled.');
-  } catch (err) {
-    showToast('Failed to cancel invite.', true);
-  }
+function cancelInvite(emailKey) {
+  var inv = pendingInvites[emailKey];
+  var email = inv ? inv.email : emailKey.replace(/,/g, '.');
+  showConfirmDialog('Cancel Invite', 'Cancel the pending invite for ' + email + '?', async function() {
+    try {
+      await MastDB.invites.ref(emailKey).remove();
+      delete pendingInvites[emailKey];
+      renderUsersList();
+      showToast('Invite cancelled.');
+    } catch (err) {
+      showToast('Failed to cancel invite.', true);
+    }
+  }, { confirmLabel: 'Cancel Invite', cancelLabel: 'Keep' });
 }
 
 // ============================================================
