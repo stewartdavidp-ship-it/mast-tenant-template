@@ -8920,7 +8920,7 @@ const CORE_SECTIONS = [
   { id: 'our-story', label: 'Our Story', description: 'Homepage story section image' },
   { id: 'gallery', label: 'Gallery', description: 'Homepage gallery grid' },
   { id: 'schedule', label: 'Schedule', description: 'Schedule page images' },
-  { id: 'shop', label: 'Shop', description: 'Shop page featured images' }
+  { id: 'shop', label: 'Shop Header', description: 'Shop page banner image' }
 ];
 let SECTIONS = [...CORE_SECTIONS];
 let SHOP_SECTION_IDS = ['shop'];
@@ -8934,11 +8934,11 @@ async function loadTenantCategories() {
       var cats = catData.filter(function(c) { return c && c.id && c.id !== 'shop' && c.label; });
       if (cats.length > 0) {
         CATEGORIES = cats.map(function(c) { return c.id; });
-        // Replace generic "Shop" section with real category sections
-        SECTIONS = CORE_SECTIONS.filter(function(s) { return s.id !== 'shop'; }).concat(cats.map(function(c) {
+        // Keep "Shop" section for header banner image, add real categories after it
+        SECTIONS = CORE_SECTIONS.concat(cats.map(function(c) {
           return { id: c.id, label: c.label, description: c.label + ' products' };
         }));
-        SHOP_SECTION_IDS = CATEGORIES.slice();
+        SHOP_SECTION_IDS = ['shop'].concat(CATEGORIES);
       } else {
         // Only generic "Shop" or no categories — keep default
         CATEGORIES = catData.filter(function(c) { return c && c.id && c.label; }).map(function(c) { return c.id; });
