@@ -23,6 +23,7 @@
   aspect-ratio: 1;
   overflow: hidden;
   cursor: pointer;
+  background: var(--bg, #fff);
 }
 
 .gallery-item img {
