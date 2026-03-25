@@ -933,15 +933,24 @@
         if (!variants || !selected) return null;
         var selectedKeys = Object.keys(selected);
         if (selectedKeys.length === 0) return null;
+        var selectedValues = selectedKeys.map(function(k) { return selected[k]; });
         for (var i = 0; i < variants.length; i++) {
           var v = variants[i];
           var vOpts = v.combo || v.options;
-          if (!vOpts) continue;
-          var match = true;
-          for (var k = 0; k < selectedKeys.length; k++) {
-            if (vOpts[selectedKeys[k]] !== selected[selectedKeys[k]]) { match = false; break; }
+          if (vOpts) {
+            // Structured variant with combo/options map — match all keys
+            var match = true;
+            for (var k = 0; k < selectedKeys.length; k++) {
+              if (vOpts[selectedKeys[k]] !== selected[selectedKeys[k]]) { match = false; break; }
+            }
+            if (match) return v;
+          } else if (v.name) {
+            // Simple variant with just a name — match against any selected value
+            var vName = v.name.toLowerCase().trim();
+            for (var s = 0; s < selectedValues.length; s++) {
+              if (selectedValues[s].toLowerCase().trim() === vName) return v;
+            }
           }
-          if (match) return v;
         }
         return null;
       }
