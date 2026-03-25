@@ -11698,7 +11698,7 @@ async function generateAiApiKey() {
   if (statusEl) statusEl.innerHTML = '';
 
   try {
-    var result = await firebase.functions().httpsCallable('generateTenantApiKey')({});
+    var result = await firebase.functions().httpsCallable('generateTenantApiKey')({ tenantId: MastDB.tenantId() });
     var data = result.data;
     if (!data || !data.apiKey) throw new Error('No key returned');
 
@@ -11732,7 +11732,7 @@ async function revokeAiApiKey(keyId) {
   }
 
   try {
-    await firebase.functions().httpsCallable('revokeTenantApiKey')({ keyId: keyId });
+    await firebase.functions().httpsCallable('revokeTenantApiKey')({ tenantId: MastDB.tenantId(), keyId: keyId });
     await loadAiIntegrations();
     showToast('API key revoked.');
     await writeAudit('delete', 'aiApiKey', keyId);
