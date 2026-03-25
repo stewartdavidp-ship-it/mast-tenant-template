@@ -18074,6 +18074,7 @@ async function sendUserInvite() {
     try {
       var inviterName = currentUser.displayName || currentUser.email || '';
       await firebase.functions().httpsCallable('sendInviteEmail')({
+        tenantId: MastDB.tenantId(),
         toEmail: email,
         role: role,
         inviterName: inviterName
