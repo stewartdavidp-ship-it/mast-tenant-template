@@ -13321,10 +13321,21 @@ function showWizardImportTimeline() {
       }
 
       if (liveJob.status === 'complete' || liveJob.status === 'failed') {
-        // Stop countdown and listeners, render final
+        // Stop countdown and job status listener
         stopCountdown();
         if (_wizardImportListener) { MastDB._ref('webPresence/importJobs/' + jobId).off('value', _wizardImportListener); _wizardImportListener = null; }
-        if (_wizardProgressFeedListener) { MastDB._ref('webPresence/importJobs/' + jobId + '/progressFeed').off('child_added', _wizardProgressFeedListener); _wizardProgressFeedListener = null; }
+        // Delay detaching progressFeed listener — Firebase may deliver status=complete
+        // before all progressFeed children have arrived at the client
+        setTimeout(function() {
+          if (_wizardProgressFeedListener) { MastDB._ref('webPresence/importJobs/' + jobId + '/progressFeed').off('child_added', _wizardProgressFeedListener); _wizardProgressFeedListener = null; }
+          // Mark any remaining in-progress lines as done
+          var remaining = feed.querySelectorAll('.wiz-feed-line[data-status="progress"]');
+          for (var r = 0; r < remaining.length; r++) {
+            remaining[r].setAttribute('data-status', 'done');
+            var ic = remaining[r].querySelector('.wiz-feed-icon');
+            if (ic) { ic.style.color = 'var(--teal)'; ic.innerHTML = '&#10003;'; }
+          }
+        }, 2000);
         var fillDone = document.getElementById('wizardImportProgressFill');
         var labelDone = document.getElementById('wizardImportProgressLabel');
         var pctDone = document.getElementById('wizardImportProgressPct');
