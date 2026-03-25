@@ -10060,7 +10060,7 @@ function applyRoute(route) {
 function lazyLoadForRoute(route) {
   if (route === 'settings') { updateGitHubTokenStatus(); updateLkApiKeyStatus(); loadOperators(); loadStorageInfo(); loadStudioLocations(); loadLocations(); loadPublicFeedbackSetting(); loadEmailConfig(); loadEmailDomainSection(); applySettingsGating(); loadSiteVisibility(); }
   if (route === 'analytics' && !analyticsLoaded) loadAnalytics();
-  if (route === 'products' && !productsLoaded) loadProducts();
+  if (route === 'products') loadProducts();
   // orders lazy-load handled by orders module
   // pos/receipts/sales lazy-load handled by sales module
   // events/salesEvents lazy-load handled by sales module
@@ -14278,6 +14278,10 @@ async function wizardComplete() {
     document.getElementById('header').style.display = 'flex';
     showSidebar();
     applySidebarGating();
+
+    // Reset cached data so dashboard/products load fresh post-import
+    productsLoaded = false;
+    productsData = [];
 
     // Module selection already handled in wizard Step 2 — no post-wizard modal needed
     navigateTo('dashboard');
