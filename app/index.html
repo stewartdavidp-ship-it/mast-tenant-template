@@ -14073,10 +14073,17 @@ function renderCapabilityPreview() {
       ? '<span style="font-size:0.7rem;color:var(--teal);font-weight:600;">INCLUDED</span>'
       : '<span style="font-size:0.7rem;color:var(--amber);font-weight:600;">AI</span>';
 
+    // Confidence indicator from import stats
+    var confidence = '';
+    if (cap.stats && cap.stats.successRate > 80 && cap.stats.totalAttempts >= 2) {
+      confidence = '<span style="font-size:0.65rem;color:var(--warm-gray);margin-left:2px;" title="Based on ' + cap.stats.totalAttempts + ' imports">' + cap.stats.successRate + '%</span>';
+    }
+
     html += '<div style="background:' + bgColor + ';border:1px solid ' + borderColor + ';border-radius:6px;padding:6px 10px;display:flex;align-items:center;gap:6px;font-size:0.82rem;">';
     html += '<span>' + icon + '</span>';
     html += '<span>' + esc(cap.label) + '</span>';
     html += badge;
+    html += confidence;
     html += '</div>';
   }
   html += '</div>';
