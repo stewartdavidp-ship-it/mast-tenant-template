@@ -13978,7 +13978,16 @@ function renderWizardSummary() {
   if (!aa.brand && !aa.template) {
     items.push('<div style="margin-bottom:6px;">No website analyzed &mdash; set up your brand in Settings.</div>');
   }
-  items.push('<div style="margin-top:8px;color:var(--warm-gray);font-size:0.85rem;"><strong>Next steps:</strong> Connect payments and email in Settings.</div>');
+  // Show context-appropriate next step based on import state
+  var importRunning = document.getElementById('wizardImportTimeline') && document.getElementById('wizardImportTimeline').style.display !== 'none';
+  var gapVisible = document.getElementById('wizardGapWalkthrough') && document.getElementById('wizardGapWalkthrough').style.display !== 'none';
+  if (gapVisible) {
+    items.push('<div style="margin-top:8px;color:var(--warm-gray);font-size:0.85rem;"><strong>Next steps:</strong> Review your import results below.</div>');
+  } else if (importRunning) {
+    items.push('<div style="margin-top:8px;color:var(--warm-gray);font-size:0.85rem;"><strong>Importing:</strong> Loading your products, images, and events...</div>');
+  } else {
+    items.push('<div style="margin-top:8px;color:var(--warm-gray);font-size:0.85rem;"><strong>Next steps:</strong> Connect payments and email in Settings.</div>');
+  }
   el.innerHTML = items.join('');
 }
 
