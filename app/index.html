@@ -406,6 +406,7 @@
     .wizard-step-line.completed { background: var(--teal); }
     .wizard-step { animation: wizardFadeIn 0.3s ease; }
     @keyframes wizardFadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes wizardPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
     /* Feature gating callout */
     .feature-gate-callout {
@@ -13245,31 +13246,51 @@ function showWizardImportTimeline() {
     // Import is still running — show tutorial videos while they wait
     wizardShowVideoCarousel();
 
+    // Disable Launch Dashboard while import runs
+    wizardSetLaunchEnabled(false);
+
+    // Show indeterminate progress since imported counts aren't available during extraction
+    var fill0 = document.getElementById('wizardImportProgressFill');
+    var label0 = document.getElementById('wizardImportProgressLabel');
+    var pctEl0 = document.getElementById('wizardImportProgressPct');
+    if (fill0) { fill0.style.width = '15%'; fill0.style.animation = 'wizardPulse 2s ease-in-out infinite'; }
+    if (label0) label0.textContent = 'Scanning and extracting...';
+    if (pctEl0) pctEl0.textContent = '';
+
     // --- Real-time listener on the job ---
     if (_wizardImportListener) { _wizardImportListener(); _wizardImportListener = null; }
     _wizardImportListener = MastDB._ref('webPresence/importJobs/' + jobId).on('value', function(snap) {
       var liveJob = snap.val();
       if (!liveJob) return;
 
-      // Update progress bar from imported counts
+      var fill = document.getElementById('wizardImportProgressFill');
+      var label = document.getElementById('wizardImportProgressLabel');
+      var pctEl = document.getElementById('wizardImportProgressPct');
+
+      // Update progress bar from imported counts (available once import phase starts)
       var imp = liveJob.imported || {};
       var done = (imp.products ? imp.products.done : 0) + (imp.events ? imp.events.done : 0);
       var total = (imp.products ? imp.products.total : 0) + (imp.events ? imp.events.total : 0);
       if (total > 0 && progressBar) {
         var pct = Math.min(Math.round((done / total) * 100), 100);
-        var fill = document.getElementById('wizardImportProgressFill');
-        var label = document.getElementById('wizardImportProgressLabel');
-        var pctEl = document.getElementById('wizardImportProgressPct');
-        if (fill) fill.style.width = pct + '%';
+        if (fill) { fill.style.width = pct + '%'; fill.style.animation = 'none'; }
         if (pctEl) pctEl.textContent = pct + '%';
         if (label) label.textContent = 'Importing ' + done + ' of ' + total + ' items...';
+      } else if (liveJob.status === 'importing') {
+        // In import phase but no counts yet — show phase label
+        var disc = liveJob.discovered || {};
+        var discCount = (disc.products ? disc.products.count : 0) || (disc.products || 0);
+        if (fill) { fill.style.width = '30%'; }
+        if (label) label.textContent = 'Extracting ' + discCount + ' products...';
       }
 
       if (liveJob.status === 'complete' || liveJob.status === 'failed') {
         // Stop listener, render final
         if (_wizardImportListener) { MastDB._ref('webPresence/importJobs/' + jobId).off('value', _wizardImportListener); _wizardImportListener = null; }
         if (_wizardProgressFeedListener) { MastDB._ref('webPresence/importJobs/' + jobId + '/progressFeed').off('child_added', _wizardProgressFeedListener); _wizardProgressFeedListener = null; }
+        if (fill) fill.style.animation = 'none';
         liveJob.id = jobId;
+        wizardSetLaunchEnabled(true);
         wizardRenderImportFinalState(liveJob, feed, progressBar);
       }
     });
@@ -13509,6 +13530,19 @@ async function wizardRequestEnrichment() {
   } catch (err) {
     showToast('Enrichment failed: ' + esc(err.message), true);
     if (btn) { btn.disabled = false; btn.textContent = 'Retry'; }
+  }
+}
+
+// ─── Wizard Launch Button Control ────────────────────────────
+
+function wizardSetLaunchEnabled(enabled) {
+  var actions = document.getElementById('wizardStep3Actions');
+  if (!actions) return;
+  var btn = actions.querySelector('.btn-primary');
+  if (btn) {
+    btn.disabled = !enabled;
+    btn.style.opacity = enabled ? '1' : '0.5';
+    btn.style.pointerEvents = enabled ? '' : 'none';
   }
 }
 
