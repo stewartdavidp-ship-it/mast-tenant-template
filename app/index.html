@@ -18203,6 +18203,13 @@ function openImageModal(imageId, defaultSection) {
         '</div>' +
       '</div>' +
       '<div class="form-group">' +
+        '<label for="imgFit">Image Display</label>' +
+        '<select id="imgFit">' +
+          '<option value="cover"' + (img.imageFit !== 'contain' ? ' selected' : '') + '>Fill frame (may crop edges)</option>' +
+          '<option value="contain"' + (img.imageFit === 'contain' ? ' selected' : '') + '>Fit inside frame (no cropping)</option>' +
+        '</select>' +
+      '</div>' +
+      '<div class="form-group">' +
         '<div class="form-check">' +
           '<input type="checkbox" id="imgVisible"' + (img.visible !== false ? ' checked' : '') + '>' +
           '<label for="imgVisible">Visible on public site</label>' +
@@ -18418,6 +18425,8 @@ async function saveImage(imageId) {
     }
   }
 
+  var imageFit = (document.getElementById('imgFit') || {}).value || 'cover';
+
   var data = {
     url: url,
     alt: alt,
@@ -18425,6 +18434,7 @@ async function saveImage(imageId) {
     section: section,
     category: (section === 'gallery' || section === 'shop') ? category : '',
     visible: visible,
+    imageFit: imageFit,
     updatedAt: firebase.database.ServerValue.TIMESTAMP
   };
 

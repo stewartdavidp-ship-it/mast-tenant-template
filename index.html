@@ -1563,7 +1563,8 @@ window.TENANT_READY.then(function() {
       var cls = 'gallery-item fade-up';
       if (idx === 0) cls += ' featured';
       html += '<div class="' + cls + '" style="opacity:1;transform:translateY(0)">';
-      html += '<img src="' + esc(item.url) + '" alt="' + esc(item.alt || '') + '" />';
+      var fitStyle = item.imageFit === 'contain' ? ' style="object-fit:contain;"' : '';
+      html += '<img src="' + esc(item.url) + '" alt="' + esc(item.alt || '') + '"' + fitStyle + ' />';
       if (item.caption) html += '<span class="caption">' + esc(item.caption) + '</span>';
       html += '</div>';
     });
