@@ -18205,8 +18205,8 @@ function openImageModal(imageId, defaultSection) {
       '<div class="form-group">' +
         '<label for="imgFit">Image Display</label>' +
         '<select id="imgFit">' +
-          '<option value="cover"' + (img.imageFit !== 'contain' ? ' selected' : '') + '>Fill frame (may crop edges)</option>' +
-          '<option value="contain"' + (img.imageFit === 'contain' ? ' selected' : '') + '>Fit inside frame (no cropping)</option>' +
+          '<option value="contain"' + (img.imageFit !== 'cover' ? ' selected' : '') + '>Fit inside frame (no cropping)</option>' +
+          '<option value="cover"' + (img.imageFit === 'cover' ? ' selected' : '') + '>Fill frame (may crop edges)</option>' +
         '</select>' +
       '</div>' +
       '<div class="form-group">' +
