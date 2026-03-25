@@ -1048,7 +1048,7 @@
     .gallery-card-img {
       width: 100%;
       height: 200px;
-      object-fit: cover;
+      object-fit: contain;
       display: block;
       background: var(--cream-dark);
     }
@@ -17102,7 +17102,8 @@ function renderGallery() {
         if (isVidEntry) {
           html += '<div class="gallery-card-img" style="display:flex;align-items:center;justify-content:center;background:var(--charcoal);color:var(--amber);font-size:2rem;min-height:120px;">&#9654;</div>';
         } else if (img.url) {
-          html += '<img class="gallery-card-img" src="' + esc(img.url) + '" alt="' + esc(img.alt || '') + '" onerror="this.classList.add(\'broken\')">';
+          var fitOverride = img.imageFit === 'cover' ? ' style="object-fit:cover;"' : '';
+          html += '<img class="gallery-card-img" src="' + esc(img.url) + '" alt="' + esc(img.alt || '') + '"' + fitOverride + ' onerror="this.classList.add(\'broken\')">';
         }
         html +=
           '<div class="gallery-card-body">' +
