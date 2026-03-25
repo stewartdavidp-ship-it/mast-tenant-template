@@ -13307,8 +13307,15 @@ function showWizardImportTimeline() {
       var evt = snap.val();
       if (!evt || !evt.message) return;
       var icon = evt.level === 'error' ? 'error' : (evt.level === 'warn' ? 'warn' : 'progress');
+      // Mark previous progress line as done (swap gear → check)
+      var prevLines = feed.querySelectorAll('.wiz-feed-line[data-status="progress"]');
+      if (prevLines.length > 0) {
+        var last = prevLines[prevLines.length - 1];
+        last.setAttribute('data-status', 'done');
+        var iconEl = last.querySelector('.wiz-feed-icon');
+        if (iconEl) { iconEl.style.color = 'var(--teal)'; iconEl.innerHTML = '&#10003;'; }
+      }
       feed.innerHTML += wizardFeedLine(icon, evt.message);
-      // Auto-scroll to bottom
       feed.scrollTop = feed.scrollHeight;
     });
 
@@ -13320,11 +13327,11 @@ function showWizardImportTimeline() {
 
 function wizardFeedLine(icon, text) {
   var iconHtml = '';
-  if (icon === 'done') iconHtml = '<span style="color:var(--teal);flex-shrink:0;">&#10003;</span>';
-  else if (icon === 'progress') iconHtml = '<span style="color:var(--amber);flex-shrink:0;">&#9881;</span>';
-  else if (icon === 'error') iconHtml = '<span style="color:var(--danger);flex-shrink:0;">&#10007;</span>';
+  if (icon === 'done') iconHtml = '<span class="wiz-feed-icon" style="color:var(--teal);flex-shrink:0;">&#10003;</span>';
+  else if (icon === 'progress') iconHtml = '<span class="wiz-feed-icon" style="color:var(--amber);flex-shrink:0;">&#9898;</span>';
+  else if (icon === 'error') iconHtml = '<span class="wiz-feed-icon" style="color:var(--danger);flex-shrink:0;">&#10007;</span>';
   else if (icon === 'warn') iconHtml = '<span style="color:var(--amber);flex-shrink:0;">&#9888;</span>';
-  return '<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;">' + iconHtml + ' ' + esc(text) + '</div>';
+  return '<div class="wiz-feed-line" data-status="' + icon + '" style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;">' + iconHtml + ' ' + esc(text) + '</div>';
 }
 
 function wizardRenderImportFinalState(job, feed, progressBar) {
