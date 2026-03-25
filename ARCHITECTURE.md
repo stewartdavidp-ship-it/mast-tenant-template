@@ -746,3 +746,40 @@ webPresence/draftTemplates/{draftId}/
 - **JS-rendered detection** — Flags sites with minimal HTML + heavy scripts; warns admin
 - **Timeout auto-fail** — Jobs stuck in processing/importing > 2 hours are auto-failed by MCP `list_jobs`
 - **All imported content starts as draft** — Never published automatically
+
+### Platform Capability Matrix
+
+A data-driven system that tracks what can be extracted from each e-commerce platform and how well it works in practice.
+
+**Firebase path:** `mast-platform/importCapabilities/{platformId}/`
+
+**Structure per platform:**
+```
+{platformId}/
+├── platformName: string
+├── status: "active"
+├── lastUpdated: ISO timestamp
+├── capabilities/
+│   ├── products/
+│   │   ├── label, icon, priority, supported: boolean
+│   │   ├── methods/
+│   │   │   └── [{ method, cost: "free"|"paid", tier: "primary"|"fallback", fields: {...}, estimatedTokensPerItem }]
+│   │   └── stats/
+│   │       └── { totalAttempts, totalSuccesses, successRate, lastImportAt, avgFieldCoverage }
+│   ├── blog/, events/, variants/, categories/, tags/, images/, descriptions/, sku/, pricing/
+```
+
+**11 capabilities tracked:** products, blog, events, eventUrls, variants, categories, tags, images, descriptions, sku, pricing
+
+**10 platforms seeded:** squarespace, shopify, wix, wordpress, etsy, magento, bigcartel, godaddy, weebly, unknown
+
+**How it's used:**
+
+1. **Customer preview** — `analyzeExistingSite` reads the matrix after platform detection. `renderCapabilityPreview()` in the admin wizard shows capability cards with "INCLUDED" (free) or "AI" (paid) badges. If `stats.successRate > 80%` with 2+ imports, shows confidence percentage.
+2. **Extraction routing** — `probeExtractionReadiness()` reads the matrix to determine the recommended extraction method instead of hardcoded if/else blocks. Runtime probe can override: if matrix says `claude-api` but the probe finds JSON-LD on the page, it uses the free method.
+3. **Feedback loop** — `recordImportFeedback()` runs after every completed import, writing actual results back to the matrix stats using Firebase transactions. This closes the loop: real import data improves customer preview accuracy over time.
+
+**Key files:**
+- `mast-architecture/functions/adaptive-import.js` — `CAPABILITY_DEFINITIONS`, `PLATFORM_CAPABILITIES`, `seedCapabilityMatrix()`, `getCapabilityMatrix()`, `recordImportFeedback()`, matrix-driven `probeExtractionReadiness()`
+- `mast-mcp-server/src/tools/mast-import.ts` — MCP actions: `get_matrix`, `seed_matrix`, `update_capability`
+- `app/index.html` — `renderCapabilityPreview()` in onboarding wizard step 3
