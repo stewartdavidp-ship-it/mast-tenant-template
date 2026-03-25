@@ -18068,9 +18068,22 @@ async function sendUserInvite() {
     await writeAudit('create', 'users', emailKey);
     closeModal();
     var roleName = ROLE_DISPLAY_NAMES[role] || role;
-    showToast('Invite recorded — ask them to sign in with their Google account. They\'ll be assigned the ' + roleName + ' role automatically.');
-    emitTestingEvent('inviteUser', {});
     loadPendingInvites();
+
+    // Send invite email via cloud function
+    try {
+      var inviterName = currentUser.displayName || currentUser.email || '';
+      await firebase.functions().httpsCallable('sendInviteEmail')({
+        toEmail: email,
+        role: role,
+        inviterName: inviterName
+      });
+      showToast('Invite sent to ' + email + '. They\'ll be assigned the ' + roleName + ' role when they sign in.');
+    } catch (emailErr) {
+      console.error('Invite email failed:', emailErr);
+      showToast('Invite recorded but email failed to send. Ask them to sign in with their Google account.', true);
+    }
+    emitTestingEvent('inviteUser', {});
   } catch (err) {
     console.error('Invite failed:', err);
     showToast('Failed to record invite.', true);
