@@ -13255,13 +13255,54 @@ function showWizardImportTimeline() {
     // Disable Launch Dashboard while import runs
     wizardSetLaunchEnabled(false);
 
-    // Show indeterminate progress since imported counts aren't available during extraction
+    // Show indeterminate progress until estimate arrives
     var fill0 = document.getElementById('wizardImportProgressFill');
     var label0 = document.getElementById('wizardImportProgressLabel');
     var pctEl0 = document.getElementById('wizardImportProgressPct');
-    if (fill0) { fill0.style.width = '15%'; fill0.style.animation = 'wizardPulse 2s ease-in-out infinite'; }
-    if (label0) label0.textContent = 'Scanning and extracting...';
+    if (fill0) { fill0.style.width = '5%'; fill0.style.animation = 'wizardPulse 2s ease-in-out infinite'; }
+    if (label0) label0.textContent = 'Starting import...';
     if (pctEl0) pctEl0.textContent = '';
+
+    // Countdown timer state
+    var _countdownEstimate = 0;
+    var _countdownStart = 0;
+    var _countdownTimer = null;
+    var _countdownDone = false;
+
+    function startCountdown(estimatedSeconds, estimatedAt) {
+      if (_countdownTimer || _countdownDone) return;
+      _countdownEstimate = estimatedSeconds;
+      _countdownStart = estimatedAt ? new Date(estimatedAt).getTime() : Date.now();
+      var fill = document.getElementById('wizardImportProgressFill');
+      if (fill) fill.style.animation = 'none';
+
+      _countdownTimer = setInterval(function() {
+        var elapsed = (Date.now() - _countdownStart) / 1000;
+        var remaining = Math.max(0, _countdownEstimate - elapsed);
+        var pct = Math.min(Math.round((elapsed / _countdownEstimate) * 100), 95); // cap at 95% until done
+
+        var fillEl = document.getElementById('wizardImportProgressFill');
+        var labelEl = document.getElementById('wizardImportProgressLabel');
+        var pctElC = document.getElementById('wizardImportProgressPct');
+
+        if (fillEl) fillEl.style.width = pct + '%';
+        if (pctElC) pctElC.textContent = pct + '%';
+
+        if (remaining > 60) {
+          var mins = Math.ceil(remaining / 60);
+          if (labelEl) labelEl.textContent = '~' + mins + ' minute' + (mins !== 1 ? 's' : '') + ' remaining...';
+        } else if (remaining > 0) {
+          if (labelEl) labelEl.textContent = '~' + Math.ceil(remaining) + 's remaining...';
+        } else {
+          if (labelEl) labelEl.textContent = 'Finishing up...';
+        }
+      }, 1000);
+    }
+
+    function stopCountdown() {
+      if (_countdownTimer) { clearInterval(_countdownTimer); _countdownTimer = null; }
+      _countdownDone = true;
+    }
 
     // --- Real-time listener on the job ---
     if (_wizardImportListener) { _wizardImportListener(); _wizardImportListener = null; }
@@ -13269,32 +13310,22 @@ function showWizardImportTimeline() {
       var liveJob = snap.val();
       if (!liveJob) return;
 
-      var fill = document.getElementById('wizardImportProgressFill');
-      var label = document.getElementById('wizardImportProgressLabel');
-      var pctEl = document.getElementById('wizardImportProgressPct');
-
-      // Update progress bar from imported counts (available once import phase starts)
-      var imp = liveJob.imported || {};
-      var done = (imp.products ? imp.products.done : 0) + (imp.events ? imp.events.done : 0);
-      var total = (imp.products ? imp.products.total : 0) + (imp.events ? imp.events.total : 0);
-      if (total > 0 && progressBar) {
-        var pct = Math.min(Math.round((done / total) * 100), 100);
-        if (fill) { fill.style.width = pct + '%'; fill.style.animation = 'none'; }
-        if (pctEl) pctEl.textContent = pct + '%';
-        if (label) label.textContent = 'Importing ' + done + ' of ' + total + ' items...';
-      } else if (liveJob.status === 'importing') {
-        // In import phase but no counts yet — show phase label
-        var disc = liveJob.discovered || {};
-        var discCount = (disc.products ? disc.products.count : 0) || (disc.products || 0);
-        if (fill) { fill.style.width = '30%'; }
-        if (label) label.textContent = 'Extracting ' + discCount + ' products...';
+      // Start countdown when estimate arrives
+      if (liveJob.estimatedSeconds && !_countdownTimer && !_countdownDone) {
+        startCountdown(liveJob.estimatedSeconds, liveJob.estimatedAt);
       }
 
       if (liveJob.status === 'complete' || liveJob.status === 'failed') {
-        // Stop listener, render final
+        // Stop countdown and listeners, render final
+        stopCountdown();
         if (_wizardImportListener) { MastDB._ref('webPresence/importJobs/' + jobId).off('value', _wizardImportListener); _wizardImportListener = null; }
         if (_wizardProgressFeedListener) { MastDB._ref('webPresence/importJobs/' + jobId + '/progressFeed').off('child_added', _wizardProgressFeedListener); _wizardProgressFeedListener = null; }
-        if (fill) fill.style.animation = 'none';
+        var fillDone = document.getElementById('wizardImportProgressFill');
+        var labelDone = document.getElementById('wizardImportProgressLabel');
+        var pctDone = document.getElementById('wizardImportProgressPct');
+        if (fillDone) { fillDone.style.width = '100%'; fillDone.style.animation = 'none'; }
+        if (labelDone) labelDone.textContent = liveJob.status === 'complete' ? 'Import complete!' : 'Import failed';
+        if (pctDone) pctDone.textContent = '100%';
         liveJob.id = jobId;
         wizardSetLaunchEnabled(true);
         wizardRenderImportFinalState(liveJob, feed, progressBar);
