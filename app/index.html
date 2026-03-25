@@ -6049,6 +6049,7 @@
         <button class="view-tab" onclick="switchSettingsSubView('trips')">Trips</button>
         <button class="view-tab" onclick="switchSettingsSubView('dashboard')">Dashboard</button>
         <button class="view-tab" onclick="switchSettingsSubView('domains')">Domains</button>
+        <button class="view-tab" onclick="switchSettingsSubView('ai')">AI</button>
         <button class="view-tab" onclick="switchSettingsSubView('subscription')">Subscription</button>
         <button class="view-tab" onclick="switchSettingsSubView('about')">About</button>
       </div>
@@ -6721,6 +6722,66 @@
             <p style="font-size:0.8rem;color:var(--warm-gray);margin-bottom:12px;" id="dnsNote"></p>
             <button class="btn btn-secondary" style="margin-top:4px;" onclick="verifyCustomDomain()">Verify DNS</button>
           </div>
+        </div>
+      </div>
+      <!-- AI Integrations Settings -->
+      <div id="settingsSubAi" style="display:none;max-width:600px;">
+        <div class="form-group">
+          <label style="font-size:1.1rem;font-weight:600;">AI Integrations</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
+            Connect AI tools (Claude, ChatGPT, Cursor) to manage your store through natural language. Generate an API key and add it to your AI tool's configuration.
+          </p>
+        </div>
+        <div id="aiKeysList" style="margin-bottom:24px;">
+          <div class="loading">Loading API keys...</div>
+        </div>
+        <div id="aiGenerateSection">
+          <button class="btn btn-primary" onclick="generateAiApiKey()" id="generateAiKeyBtn">+ New API Key</button>
+          <div id="aiGenerateStatus" style="margin-top:12px;font-size:0.85rem;"></div>
+        </div>
+        <!-- New key reveal (shown once after generation) -->
+        <div id="aiNewKeyReveal" style="display:none;margin-top:16px;">
+          <div style="background:var(--cream,#faf8f5);border:2px solid var(--amber);border-radius:8px;padding:16px;">
+            <div style="font-weight:600;margin-bottom:8px;color:var(--charcoal);">Your API Key</div>
+            <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">
+              Copy this key now — it won't be shown again.
+            </p>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <input type="text" id="aiNewKeyValue" readonly
+                style="flex:1;padding:9px 12px;border:1px solid var(--border,#ddd);border-radius:6px;font-family:monospace;font-size:0.85rem;background:var(--input-bg,#fff);color:var(--text,#333);">
+              <button class="btn btn-secondary btn-small" onclick="copyAiKey()">Copy</button>
+            </div>
+          </div>
+        </div>
+        <!-- Setup Instructions (collapsible) -->
+        <div style="margin-top:24px;">
+          <hr style="border:none;border-top:1px solid var(--border,#eee);margin:24px 0;">
+          <div style="font-weight:600;margin-bottom:12px;color:var(--charcoal);">Setup Instructions</div>
+          <details style="margin-bottom:12px;">
+            <summary style="cursor:pointer;font-size:0.9rem;font-weight:500;color:var(--charcoal);padding:8px 0;">Claude Code</summary>
+            <div style="padding:12px;background:var(--cream,#faf8f5);border-radius:6px;margin-top:4px;">
+              <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">Add to your <code>.mcp.json</code> or Claude Code settings:</p>
+              <pre id="aiSetupClaudeCode" style="background:#1a1a1a;color:#e0e0e0;padding:12px;border-radius:6px;font-size:0.8rem;overflow-x:auto;white-space:pre-wrap;"></pre>
+            </div>
+          </details>
+          <details style="margin-bottom:12px;">
+            <summary style="cursor:pointer;font-size:0.9rem;font-weight:500;color:var(--charcoal);padding:8px 0;">Claude.ai</summary>
+            <div style="padding:12px;background:var(--cream,#faf8f5);border-radius:6px;margin-top:4px;">
+              <p style="font-size:0.85rem;color:var(--warm-gray);">
+                Go to <strong>Settings &gt; Connectors &gt; Add MCP</strong> in Claude.ai. Enter the server URL and your API key when prompted.
+              </p>
+              <div style="margin-top:8px;font-size:0.85rem;">
+                <strong>Server URL:</strong> <code id="aiSetupServerUrl" style="user-select:all;"></code>
+              </div>
+            </div>
+          </details>
+          <details style="margin-bottom:12px;">
+            <summary style="cursor:pointer;font-size:0.9rem;font-weight:500;color:var(--charcoal);padding:8px 0;">Cursor / VS Code</summary>
+            <div style="padding:12px;background:var(--cream,#faf8f5);border-radius:6px;margin-top:4px;">
+              <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">Add to your Cursor <code>settings.json</code> under MCP servers:</p>
+              <pre id="aiSetupCursor" style="background:#1a1a1a;color:#e0e0e0;padding:12px;border-radius:6px;font-size:0.8rem;overflow-x:auto;white-space:pre-wrap;"></pre>
+            </div>
+          </details>
         </div>
       </div>
     </div>
@@ -10397,7 +10458,7 @@ function getModuleForRouteManifest(route) {
 // ============================================================
 // Settings Sub-Tabs
 // ============================================================
-var settingsSubViews = ['general', 'payments', 'shipping', 'email', 'integrations', 'workshop', 'trips', 'dashboard', 'domains', 'subscription', 'about'];
+var settingsSubViews = ['general', 'payments', 'shipping', 'email', 'integrations', 'workshop', 'trips', 'dashboard', 'domains', 'ai', 'subscription', 'about'];
 function switchSettingsSubView(view) {
   // Hide all sub-views
   settingsSubViews.forEach(function(v) {
@@ -10420,6 +10481,7 @@ function switchSettingsSubView(view) {
   if (view === 'trips') { MastAdmin.loadModule('trips').then(function() { if (typeof loadTripsSettings === 'function') loadTripsSettings(); }); }
   if (view === 'dashboard') renderDashCardSettings();
   if (view === 'domains') loadDomainSettings();
+  if (view === 'ai') loadAiIntegrations();
   if (view === 'subscription') renderSubscriptionSettings();
   if (view === 'about') renderAboutSettings();
 }
@@ -11541,6 +11603,157 @@ async function toggleDarkMode() {
   } catch (err) {
     showToast('Error saving dark mode: ' + err.message, true);
   }
+}
+
+// ============================================================
+// AI Integrations Settings
+// ============================================================
+var AI_MCP_SERVER_URL = 'https://mast-tenant-mcp-server-536075659586.us-central1.run.app';
+var _aiKeysLoaded = false;
+
+async function loadAiIntegrations() {
+  // Populate setup instruction snippets
+  var serverUrl = AI_MCP_SERVER_URL;
+  var codeEl = document.getElementById('aiSetupClaudeCode');
+  var urlEl = document.getElementById('aiSetupServerUrl');
+  var cursorEl = document.getElementById('aiSetupCursor');
+  if (codeEl) {
+    codeEl.textContent = JSON.stringify({
+      mcpServers: {
+        "my-store": {
+          type: "streamableHttp",
+          url: serverUrl + "/mcp",
+          headers: { Authorization: "Bearer YOUR_API_KEY" }
+        }
+      }
+    }, null, 2);
+  }
+  if (urlEl) urlEl.textContent = serverUrl;
+  if (cursorEl) {
+    cursorEl.textContent = JSON.stringify({
+      "my-store": {
+        type: "streamableHttp",
+        url: serverUrl + "/mcp",
+        headers: { Authorization: "Bearer YOUR_API_KEY" }
+      }
+    }, null, 2);
+  }
+
+  // Load existing keys
+  if (!hasPermission('settings', 'update')) {
+    var listEl = document.getElementById('aiKeysList');
+    if (listEl) listEl.innerHTML = '<p style="font-size:0.85rem;color:var(--warm-gray);">You need admin permissions to manage API keys.</p>';
+    var genSection = document.getElementById('aiGenerateSection');
+    if (genSection) genSection.style.display = 'none';
+    return;
+  }
+
+  try {
+    var snap = await MastDB._ref('admin/config/aiIntegrations/keys').orderByChild('status').equalTo('active').once('value');
+    var keys = snap.val() || {};
+    renderAiKeys(keys);
+    _aiKeysLoaded = true;
+  } catch (err) {
+    var listEl = document.getElementById('aiKeysList');
+    if (listEl) listEl.innerHTML = '<p style="font-size:0.85rem;color:var(--danger);">Error loading keys: ' + esc(err.message) + '</p>';
+  }
+}
+
+function renderAiKeys(keys) {
+  var listEl = document.getElementById('aiKeysList');
+  if (!listEl) return;
+  var entries = Object.keys(keys).map(function(k) { return Object.assign({ _id: k }, keys[k]); });
+  if (entries.length === 0) {
+    listEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--warm-gray);">' +
+      '<div style="font-size:1.5rem;margin-bottom:8px;">&#128273;</div>' +
+      '<p style="font-size:0.9rem;font-weight:500;">No API keys yet</p>' +
+      '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Generate one to connect your AI tools.</p>' +
+      '</div>';
+    return;
+  }
+  var h = '';
+  entries.sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
+  entries.forEach(function(key) {
+    var created = key.createdAt ? new Date(key.createdAt).toLocaleDateString() : '—';
+    var lastUsed = key.lastUsedAt ? new Date(key.lastUsedAt).toLocaleDateString() : 'Never';
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:var(--cream,#faf8f5);border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;margin-bottom:8px;">';
+    h += '<div>';
+    h += '<div style="font-family:monospace;font-size:0.9rem;color:var(--charcoal);">' + esc(key.keyPreview || 'mast_...') + '</div>';
+    h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">Created ' + esc(created) + ' &middot; Last used: ' + esc(lastUsed) + '</div>';
+    h += '</div>';
+    h += '<button class="btn btn-danger btn-small" onclick="revokeAiApiKey(\'' + esc(key._id) + '\')">Revoke</button>';
+    h += '</div>';
+  });
+  listEl.innerHTML = h;
+}
+
+async function generateAiApiKey() {
+  if (!hasPermission('settings', 'update')) {
+    showToast('You need admin permissions to generate API keys.', true);
+    return;
+  }
+  var btn = document.getElementById('generateAiKeyBtn');
+  var statusEl = document.getElementById('aiGenerateStatus');
+  if (btn) { btn.disabled = true; btn.textContent = 'Generating...'; }
+  if (statusEl) statusEl.innerHTML = '';
+
+  try {
+    var result = await firebase.functions().httpsCallable('generateTenantApiKey')({});
+    var data = result.data;
+    if (!data || !data.apiKey) throw new Error('No key returned');
+
+    // Show the key once
+    var revealEl = document.getElementById('aiNewKeyReveal');
+    var keyInput = document.getElementById('aiNewKeyValue');
+    if (revealEl) revealEl.style.display = '';
+    if (keyInput) keyInput.value = data.apiKey;
+
+    // Reload keys list
+    await loadAiIntegrations();
+    showToast('API key generated. Copy it now — it won\'t be shown again.');
+    await writeAudit('create', 'aiApiKey', data.keyId || 'new');
+  } catch (err) {
+    var msg = err.message || 'Unknown error';
+    if (msg.indexOf('not-found') !== -1 || msg.indexOf('INTERNAL') !== -1) {
+      msg = 'Key generation is not available yet. This feature requires a Cloud Function that hasn\'t been deployed.';
+    }
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger);">' + esc(msg) + '</span>';
+    showToast('Failed to generate key: ' + msg, true);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '+ New API Key'; }
+  }
+}
+
+async function revokeAiApiKey(keyId) {
+  if (!confirm('Revoke this API key? Any AI tools using it will immediately lose access.')) return;
+  if (!hasPermission('settings', 'update')) {
+    showToast('You need admin permissions to revoke API keys.', true);
+    return;
+  }
+
+  try {
+    await firebase.functions().httpsCallable('revokeTenantApiKey')({ keyId: keyId });
+    await loadAiIntegrations();
+    showToast('API key revoked.');
+    await writeAudit('delete', 'aiApiKey', keyId);
+  } catch (err) {
+    var msg = err.message || 'Unknown error';
+    if (msg.indexOf('not-found') !== -1 || msg.indexOf('INTERNAL') !== -1) {
+      msg = 'Key revocation is not available yet. This feature requires a Cloud Function that hasn\'t been deployed.';
+    }
+    showToast('Failed to revoke key: ' + msg, true);
+  }
+}
+
+function copyAiKey() {
+  var input = document.getElementById('aiNewKeyValue');
+  if (!input) return;
+  navigator.clipboard.writeText(input.value).then(function() {
+    showToast('API key copied to clipboard.');
+  }).catch(function() {
+    input.select();
+    showToast('Select and copy the key manually.');
+  });
 }
 
 // ============================================================
