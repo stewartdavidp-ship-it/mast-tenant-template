@@ -102,18 +102,17 @@
           '</div>' +
           '<div style="display:flex;gap:6px;">';
       if (status === 'ready') {
-        html += '<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 12px;" onclick="transitionOrder(\'' + esc(key) + '\', \'packing\')">Packing</button>';
+        html += '<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 12px;" onclick="event.stopPropagation();packQueueTransition(\'' + esc(key) + '\', \'packing\')">Packing</button>';
       }
       if (status === 'packing') {
-        html += '<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 12px;" onclick="transitionOrder(\'' + esc(key) + '\', \'packed\')">Packed</button>';
+        html += '<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 12px;" onclick="event.stopPropagation();packQueueTransition(\'' + esc(key) + '\', \'packed\')">Packed</button>';
       }
       if (status === 'packed') {
-        html += '<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 12px;" onclick="transitionOrder(\'' + esc(key) + '\', \'handed_to_carrier\')">Handed to Carrier</button>';
+        html += '<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 12px;" onclick="event.stopPropagation();packQueueTransition(\'' + esc(key) + '\', \'handed_to_carrier\')">Handed to Carrier</button>';
       }
-      html += (_fulfillmentShipProvider === 'manual' ?
-        '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 12px;" onclick="openPirateShip(\'' + esc(key) + '\')">Pirate Ship &rarr;</button>' :
-        '<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 12px;" onclick="openShippingModal(\'' + esc(key) + '\')">Ship</button>') +
-        '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 12px;" onclick="viewOrder(\'' + esc(key) + '\')">View</button>' +
+      var shipDisabled = (status !== 'packed' && status !== 'handed_to_carrier') ? ' disabled style="font-size:0.78rem;padding:4px 12px;opacity:0.4;cursor:not-allowed;"' : ' style="font-size:0.78rem;padding:4px 12px;"';
+      html += '<button class="btn btn-primary"' + shipDisabled + ' onclick="event.stopPropagation();openShippingModal(\'' + esc(key) + '\')">Ship</button>' +
+        '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 12px;" onclick="event.stopPropagation();viewOrder(\'' + esc(key) + '\')">View</button>' +
         '</div></div>' +
         renderOrderProgress(status) +
         '</div>';
@@ -984,6 +983,10 @@
   window.switchPackSubView = switchPackSubView;
   window.switchShipSubView = switchShipSubView;
   window.renderPackQueue = renderPackQueue;
+  window.packQueueTransition = async function(orderId, newStatus) {
+    await transitionOrder(orderId, newStatus);
+    renderPackQueue();
+  };
   window.downloadOrderCSV = downloadOrderCSV;
   window.openPirateShip = openPirateShip;
   window.generateAdminPirateShipCSV = generateAdminPirateShipCSV;
