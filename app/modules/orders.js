@@ -604,7 +604,7 @@
       timelineEntries.sort(function(a, b) { return (a.at || '').localeCompare(b.at || ''); });
       var entries = '';
       timelineEntries.slice().reverse().forEach(function(h) {
-        var statusLabel = h.status.replace(/_/g, ' ');
+        var statusLabel = (h.status || h.to || 'unknown').replace(/_/g, ' ');
         statusLabel = statusLabel.charAt(0).toUpperCase() + statusLabel.slice(1);
         entries += '<div class="order-timeline-entry">' +
           '<div class="order-timeline-time">' + formatOrderDateTime(h.at) + '</div>' +
