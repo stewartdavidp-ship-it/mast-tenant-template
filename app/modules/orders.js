@@ -1632,7 +1632,7 @@
             state: fromLoc.state,
             zip: fromLoc.zip,
             phone: fromLoc.phone || '0000000000',
-            email: (auth.currentUser && auth.currentUser.email) || ''
+            email: (auth.currentUser && auth.currentUser.email) || (order.email) || 'noreply@runmast.com'
           },
           to: {
             name: toAddr.name || (order.customerName || ''),
