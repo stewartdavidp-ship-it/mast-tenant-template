@@ -1820,20 +1820,29 @@
     }
 
     /* Testing mode dark mode */
-    body.dark-mode .tm-mission-card { background: #2a2a2a; border-color: #444; }
+    body.dark-mode .testing-mode-panel { background: #1a1a1a; color: #e0e0e0; }
+    body.dark-mode .tm-mission-card { background: #2a2a2a; border-color: #444; color: #e0e0e0; }
     body.dark-mode .tm-mission-card.accomplished { border-left-color: var(--teal); }
-    body.dark-mode .tm-task-item { border-bottom-color: #444; }
+    body.dark-mode .tm-mission-title { color: #f0f0f0; }
+    body.dark-mode .tm-scenario { color: #aaa; }
+    body.dark-mode .tm-task-item { border-bottom-color: #444; color: #ddd; }
+    body.dark-mode .tm-task-text { color: #ddd; }
+    body.dark-mode .tm-task-item.checked .tm-task-text { color: #888; }
     body.dark-mode .tm-task-hint-btn { border-color: #555; color: #6fc; }
     body.dark-mode .tm-task-hint-btn:hover { background: #333; }
     body.dark-mode .tm-assistant-area { background: #1e1e1e; }
     body.dark-mode .tm-assistant-response { color: #ccc; }
     body.dark-mode .tm-prompt-area label { color: #ccc; }
+    body.dark-mode .tm-prompt-area textarea { background: #333; color: #e0e0e0; border-color: #555; }
+    body.dark-mode .tm-prompt-area button { background: var(--teal); color: #fff; }
     body.dark-mode .tm-status-new { background: #333; color: #999; }
     body.dark-mode .tm-status-active { background: rgba(230,81,0,0.2); color: #FFB74D; }
     body.dark-mode .tm-status-done { background: rgba(46,125,50,0.2); color: #66BB6A; }
     body.dark-mode .tm-precondition-notice { background: #3a2e1a; border-left-color: #d4a053; color: #e0c87a; }
-    body.dark-mode .tm-footer { border-top-color: #444; }
-    body.dark-mode .tm-category-header { color: #888; }
+    body.dark-mode .tm-footer { border-top-color: #444; color: #ccc; }
+    body.dark-mode .tm-category-header { color: #aaa; }
+    body.dark-mode .tm-mission-header:hover { background: #333; }
+    body.dark-mode .tm-close:hover { color: #e0e0e0; }
 
     /* ========== EMPTY STATE ========== */
     .empty-state {
