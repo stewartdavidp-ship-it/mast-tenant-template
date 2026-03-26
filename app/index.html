@@ -20605,31 +20605,19 @@ function addStudioLocation() {
       var ref = MastDB.studioLocations.ref().push();
       var locData = { name: name, lat: lat, lng: lng, radius: STUDIO_RADIUS_METERS, createdAt: new Date().toISOString() };
 
-      // Reverse-geocode GPS to get structured address
-      _reverseGeocode(lat, lng).then(function(addr) {
-        if (addr) {
-          locData.address1 = addr.address1 || '';
-          locData.city = addr.city || '';
-          locData.state = addr.state || '';
-          locData.zip = addr.zip || '';
-        }
-        return ref.set(locData);
-      }).then(function() {
+      // Save location with GPS first (no address yet)
+      ref.set(locData).then(function() {
         writeAudit('create', 'locations', ref.key);
         document.getElementById('newStudioLocationName').value = '';
         studioLocations[ref.key] = locData;
         renderStudioLocations();
-        if (locData.address1) {
-          statusEl.innerHTML = '<span style="color:#4CAF50;">Location saved with address: ' + esc(locData.address1) + ', ' + esc(locData.city || '') + '</span>';
-          // Auto-set as default if it's the first location with an address
-          var hasDefault = Object.keys(studioLocations).some(function(k) { return studioLocations[k].isDefaultShipFrom; });
-          if (!hasDefault) setDefaultShipFrom(ref.key);
-        } else {
-          statusEl.innerHTML = '<span style="color:var(--warm-gray);">Location saved — add shipping address below.</span>';
-          // Open address form if geocoding didn't fill it
-          setTimeout(function() { editStudioLocationAddress(ref.key); }, 300);
-        }
-        setTimeout(function() { statusEl.innerHTML = ''; }, 8000);
+        statusEl.innerHTML = '<span style="color:var(--warm-gray);">Looking up address...</span>';
+
+        // Reverse-geocode, then open address form pre-filled for user to confirm
+        _reverseGeocode(lat, lng).then(function(addr) {
+          statusEl.innerHTML = '';
+          _openAddressConfirmation(ref.key, addr);
+        });
       }).catch(function(err) {
         statusEl.innerHTML = '<span style="color:var(--danger);">Error: ' + esc(err.message) + '</span>';
       });
@@ -20656,6 +20644,28 @@ async function removeStudioLocation(locId) {
   } catch (err) {
     showToast('Error: ' + err.message, true);
   }
+}
+
+function _openAddressConfirmation(locId, geocodedAddr) {
+  var loc = studioLocations[locId] || {};
+  var addr = geocodedAddr || {};
+  var html = '<div style="max-width:400px;">' +
+    '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.2rem;font-weight:500;margin:0 0 4px;">Confirm Ship-From Address</h3>' +
+    '<p style="font-size:0.82rem;color:var(--warm-gray);margin:0 0 16px;">' + esc(loc.name || 'Location') + ' — review and correct if needed, then save.</p>' +
+    '<div class="form-group"><label>Address Line 1</label><input type="text" id="slAddr1" value="' + esc(addr.address1 || '') + '" placeholder="123 Main St"></div>' +
+    '<div class="form-group"><label>Address Line 2</label><input type="text" id="slAddr2" value="" placeholder="Suite 100"></div>' +
+    '<div style="display:flex;gap:12px;flex-wrap:wrap;">' +
+      '<div class="form-group" style="flex:2;min-width:140px;"><label>City</label><input type="text" id="slCity" value="' + esc(addr.city || '') + '"></div>' +
+      '<div class="form-group" style="flex:1;min-width:60px;"><label>State</label><input type="text" id="slState" value="' + esc(addr.state || '') + '" maxlength="2" placeholder="CA"></div>' +
+      '<div class="form-group" style="flex:1;min-width:80px;"><label>ZIP</label><input type="text" id="slZip" value="' + esc(addr.zip || '') + '" maxlength="10"></div>' +
+    '</div>' +
+    '<div class="form-group"><label>Phone</label><input type="text" id="slPhone" value="" placeholder="(555) 123-4567"></div>' +
+    '<div style="display:flex;gap:8px;margin-top:16px;">' +
+      '<button class="btn btn-primary" onclick="saveStudioLocationAddress(\'' + locId + '\')">Save Address</button>' +
+      '<button class="btn btn-secondary" onclick="closeModal()">Skip for Now</button>' +
+    '</div>' +
+  '</div>';
+  openModal(html);
 }
 
 function editStudioLocationAddress(locId) {
@@ -20693,6 +20703,11 @@ async function saveStudioLocationAddress(locId) {
     closeModal();
     renderStudioLocations();
     showToast('Address saved');
+    // Auto-set as default ship-from if first location with an address
+    if (updates.address1) {
+      var hasDefault = Object.keys(studioLocations).some(function(k) { return studioLocations[k].isDefaultShipFrom; });
+      if (!hasDefault) setDefaultShipFrom(locId);
+    }
   } catch (err) {
     showToast('Error: ' + err.message, true);
   }
