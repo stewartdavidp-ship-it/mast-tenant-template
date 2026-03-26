@@ -378,30 +378,27 @@
     var status = o.status || 'placed';
     var num = esc(getOrderDisplayNumber(o));
 
-    // Action buttons
+    // Action buttons — single next-action button per status + cancel
     var actionsHtml = '';
-    var transitions = ORDER_VALID_TRANSITIONS[status] || [];
-    transitions.forEach(function(t) {
-      if (t === 'cancelled') {
-        actionsHtml += '<button class="btn btn-danger" onclick="openCancelOrderModal(\'' + esc(orderId) + '\')">Cancel Order</button>';
-      } else if (t === 'confirmed') {
-        actionsHtml += '<button class="btn btn-primary" onclick="openTriageDialog(\'' + esc(orderId) + '\')">Confirm Order</button>';
-      } else if (t === 'pack') {
-        actionsHtml += '<button class="btn btn-primary" onclick="packAndNavigate(\'' + esc(orderId) + '\')">Pack</button>';
-      } else if (t === 'building') {
-        actionsHtml += '<button class="btn btn-secondary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'building\')">Build</button>';
-      } else if (t === 'packing') {
-        actionsHtml += '<button class="btn btn-primary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'packing\')">Packing</button>';
-      } else if (t === 'packed') {
-        actionsHtml += '<button class="btn btn-primary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'packed\')">Packed</button>';
-      } else if (t === 'handed_to_carrier') {
-        actionsHtml += '<button class="btn btn-primary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'handed_to_carrier\')">Handed to Carrier</button>';
-      } else if (t === 'shipped') {
-        actionsHtml += '<button class="btn btn-primary" onclick="openSimpleShipDialog(\'' + esc(orderId) + '\')">Ship</button>';
-      } else if (t === 'delivered') {
-        actionsHtml += '<button class="btn btn-primary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'delivered\')">Delivered</button>';
-      }
-    });
+    if (status === 'placed') {
+      actionsHtml += '<button class="btn btn-primary" onclick="openTriageDialog(\'' + esc(orderId) + '\')">Confirm Order</button>';
+    } else if (status === 'confirmed') {
+      actionsHtml += '<button class="btn btn-secondary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'building\')">Build</button>';
+      actionsHtml += '<button class="btn btn-primary" onclick="packAndNavigate(\'' + esc(orderId) + '\')">Pack</button>';
+    } else if (status === 'building') {
+      actionsHtml += '<button class="btn btn-primary" onclick="packAndNavigate(\'' + esc(orderId) + '\')">Pack</button>';
+    } else if (status === 'pack' || status === 'packing') {
+      actionsHtml += '<button class="btn btn-primary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'packed\')">Packed</button>';
+    } else if (status === 'packed') {
+      actionsHtml += '<button class="btn btn-primary" onclick="openSimpleShipDialog(\'' + esc(orderId) + '\')">Shipped</button>';
+    } else if (status === 'shipped') {
+      actionsHtml += '<button class="btn btn-primary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'delivered\')">Delivered</button>';
+    }
+    // Cancel available for non-terminal statuses
+    var canCancel = (ORDER_VALID_TRANSITIONS[status] || []).indexOf('cancelled') !== -1;
+    if (canCancel) {
+      actionsHtml += '<button class="btn btn-danger" onclick="openCancelOrderModal(\'' + esc(orderId) + '\')">Cancel Order</button>';
+    }
 
     // Items section
     var itemsHtml = '';
