@@ -10629,6 +10629,7 @@ function switchSettingsSubView(view) {
     if (btn.textContent.toLowerCase().trim() === view) btn.classList.add('active');
   });
   // Lazy loads
+  if (view === 'shipping') { loadShipProviderConfig(); }
   if (view === 'email') { loadEmailConfig(); loadEmailDomainSection(); }
   if (view === 'trips') { MastAdmin.loadModule('trips').then(function() { if (typeof loadTripsSettings === 'function') loadTripsSettings(); }); }
   if (view === 'dashboard') renderDashCardSettings();
