@@ -6248,6 +6248,80 @@
         </div>
       </div>
       <div id="settingsSubShipping" style="display:none;max-width:560px;">
+
+        <!-- Label Provider Config -->
+        <div class="form-group">
+          <label style="font-size:1.1rem;font-weight:600;">Shipping Label Provider</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
+            Choose how shipping labels are generated. API-based providers let you buy labels and get tracking directly in Mast.
+          </p>
+
+          <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
+            <label style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:6px;cursor:pointer;font-size:0.88rem;" id="shipProviderManualLabel">
+              <input type="radio" name="shipLabelProvider" value="manual" id="shipProviderManual" onchange="onShipProviderChange()" style="accent-color:var(--teal);">
+              <div>
+                <div style="font-weight:600;">Manual (Pirate Ship / CSV)</div>
+                <div style="font-size:0.78rem;color:var(--warm-gray);">Enter tracking numbers manually. Use with Pirate Ship or any external service.</div>
+              </div>
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:6px;cursor:pointer;font-size:0.88rem;" id="shipProviderShippoLabel">
+              <input type="radio" name="shipLabelProvider" value="shippo" id="shipProviderShippo" onchange="onShipProviderChange()" style="accent-color:var(--teal);">
+              <div>
+                <div style="font-weight:600;">Shippo (API)</div>
+                <div style="font-size:0.78rem;color:var(--warm-gray);">Compare rates from USPS, UPS, FedEx. Buy labels and print from Mast.</div>
+              </div>
+            </label>
+          </div>
+
+          <!-- Shippo API Key -->
+          <div id="shippoApiKeySection" style="display:none;margin-bottom:16px;">
+            <div style="border:1px solid var(--cream-dark);border-radius:8px;padding:16px;">
+              <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:8px;">Shippo API Key</label>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <input type="password" id="shippoApiKeyInput" placeholder="shippo_live_..." style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.85rem;font-family:monospace;">
+                <button class="btn btn-secondary" style="font-size:0.78rem;padding:6px 12px;" onclick="toggleShippoKeyVisibility()">Show</button>
+              </div>
+              <div id="shippoKeyStatus" style="margin-top:8px;font-size:0.82rem;"></div>
+              <p style="font-size:0.78rem;color:var(--warm-gray);margin-top:8px;">
+                Get your API key from <a href="https://apps.goshippo.com/settings/api" target="_blank" style="color:var(--teal);">goshippo.com/settings/api</a>.
+                Use a test key (shippo_test_...) for testing, live key for production.
+              </p>
+            </div>
+          </div>
+
+          <!-- Default Ship-From -->
+          <div id="shipDefaultFromSection" style="display:none;margin-bottom:16px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:8px;">Default Ship-From Location</label>
+            <select id="shipDefaultFromSelect" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.85rem;">
+              <option value="">Select a studio location...</option>
+            </select>
+            <p style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">
+              Only studios with a physical address are shown. <a href="#" onclick="event.preventDefault();switchSettingsSub('settingsSubLocations');" style="color:var(--teal);">Manage studio locations</a>
+            </p>
+          </div>
+
+          <!-- Package Presets -->
+          <div id="shipPresetsSection" style="display:none;margin-bottom:16px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:8px;">Package Presets</label>
+            <p style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">Common box sizes for quick selection when shipping orders.</p>
+            <div id="shipPresetsList"></div>
+            <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
+              <input type="text" id="newPresetName" placeholder="Name (e.g. Small Box)" style="flex:2;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.82rem;">
+              <input type="number" id="newPresetL" placeholder="L" min="0" step="0.1" style="width:55px;padding:7px 6px;border:1px solid #ddd;border-radius:6px;font-size:0.82rem;text-align:center;">
+              <input type="number" id="newPresetW" placeholder="W" min="0" step="0.1" style="width:55px;padding:7px 6px;border:1px solid #ddd;border-radius:6px;font-size:0.82rem;text-align:center;">
+              <input type="number" id="newPresetH" placeholder="H" min="0" step="0.1" style="width:55px;padding:7px 6px;border:1px solid #ddd;border-radius:6px;font-size:0.82rem;text-align:center;">
+              <button class="btn btn-secondary" style="font-size:0.78rem;padding:6px 10px;" onclick="addPackagePreset()">+ Add</button>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-primary" onclick="saveShipProviderConfig()">Save Label Provider</button>
+          </div>
+          <div id="shipProviderConfigStatus" style="margin-top:8px;font-size:0.85rem;"></div>
+        </div>
+
+        <hr style="border:none;border-top:1px solid #eee;margin:28px 0;">
+
         <div class="form-group">
           <label style="font-size:1.1rem;font-weight:600;">Shipping Rules</label>
           <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:20px;">
@@ -11658,6 +11732,7 @@ function loadSettings() {
   });
   loadPaymentProcessor();
   loadShippingConfig();
+  loadShipProviderConfig();
   loadTaxRates();
   loadGoogleConfig();
   loadEtsyConfig();
@@ -12233,6 +12308,177 @@ function loadSquareConfig() {
       if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Configured (' + config.environment + ')</span>';
     });
   });
+}
+
+// ============================================================
+// Shipping Label Provider — Admin UI
+// ============================================================
+
+function onShipProviderChange() {
+  var provider = document.querySelector('input[name="shipLabelProvider"]:checked');
+  var val = provider ? provider.value : 'manual';
+  var isApi = val !== 'manual';
+  document.getElementById('shippoApiKeySection').style.display = isApi ? 'block' : 'none';
+  document.getElementById('shipDefaultFromSection').style.display = isApi ? 'block' : 'none';
+  document.getElementById('shipPresetsSection').style.display = isApi ? 'block' : 'none';
+
+  // Highlight selected radio card
+  document.getElementById('shipProviderManualLabel').style.borderColor = val === 'manual' ? 'var(--teal)' : 'var(--cream-dark)';
+  document.getElementById('shipProviderShippoLabel').style.borderColor = val === 'shippo' ? 'var(--teal)' : 'var(--cream-dark)';
+}
+
+function toggleShippoKeyVisibility() {
+  var el = document.getElementById('shippoApiKeyInput');
+  if (el.type === 'password') { el.type = 'text'; } else { el.type = 'password'; }
+}
+
+function loadShipProviderConfig() {
+  // Load provider setting
+  MastDB.config.shippingProvider().once('value').then(function(snap) {
+    var config = snap.val() || {};
+    var provider = config.provider || 'manual';
+
+    // Set radio
+    var radio = document.getElementById(provider === 'shippo' ? 'shipProviderShippo' : 'shipProviderManual');
+    if (radio) radio.checked = true;
+    onShipProviderChange();
+
+    // Load package presets
+    renderPackagePresets(config.packagePresets || []);
+
+    // Load default ship-from
+    loadShipFromLocations(config.defaultFromLocationKey || '');
+  });
+
+  // Load Shippo API key status
+  loadShippoKeyStatus();
+}
+
+function loadShippoKeyStatus() {
+  var statusEl = document.getElementById('shippoKeyStatus');
+  firebase.functions().httpsCallable('secretsManager')({
+    tenantId: MastDB.tenantId(),
+    action: 'read',
+    secretName: 'shippo-api-token'
+  }).then(function(result) {
+    var data = result.data;
+    if (data && data.value) {
+      // Show masked version
+      var masked = data.value.substring(0, 12) + '...' + data.value.slice(-4);
+      document.getElementById('shippoApiKeyInput').placeholder = masked;
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Key configured</span>';
+    } else {
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray-light);">No API key set.</span>';
+    }
+  }).catch(function() {
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray-light);">No API key set.</span>';
+  });
+}
+
+function loadShipFromLocations(selectedKey) {
+  var select = document.getElementById('shipDefaultFromSelect');
+  if (!select) return;
+  MastDB.studioLocations.ref().once('value').then(function(snap) {
+    var locs = snap.val() || {};
+    var html = '<option value="">Select a studio location...</option>';
+    Object.keys(locs).forEach(function(k) {
+      var loc = locs[k];
+      if (!loc.address1) return; // Only show locations with addresses
+      var label = (loc.name || k) + ' — ' + [loc.city, loc.state].filter(Boolean).join(', ');
+      html += '<option value="' + esc(k) + '"' + (selectedKey === k ? ' selected' : '') + '>' + esc(label) + '</option>';
+    });
+    select.innerHTML = html;
+  });
+}
+
+function renderPackagePresets(presets) {
+  var el = document.getElementById('shipPresetsList');
+  if (!el) return;
+  if (!presets || presets.length === 0) {
+    el.innerHTML = '<div style="padding:8px;color:var(--warm-gray-light);font-size:0.82rem;font-style:italic;">No presets yet.</div>';
+    return;
+  }
+  var html = '';
+  presets.forEach(function(p, i) {
+    html += '<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--cream-dark);">' +
+      '<span style="flex:2;font-size:0.85rem;font-weight:500;">' + esc(p.name || 'Unnamed') + '</span>' +
+      '<span style="font-size:0.82rem;color:var(--warm-gray);font-family:monospace;">' + (p.lengthIn || 0) + '×' + (p.widthIn || 0) + '×' + (p.heightIn || 0) + '"</span>' +
+      '<button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 8px;color:var(--danger);" onclick="removePackagePreset(' + i + ')">Remove</button>' +
+    '</div>';
+  });
+  el.innerHTML = html;
+  // Store in memory for save
+  window._shipPackagePresets = presets;
+}
+
+function addPackagePreset() {
+  var name = document.getElementById('newPresetName').value.trim();
+  var l = parseFloat(document.getElementById('newPresetL').value) || 0;
+  var w = parseFloat(document.getElementById('newPresetW').value) || 0;
+  var h = parseFloat(document.getElementById('newPresetH').value) || 0;
+  if (!name) { showToast('Enter a preset name', true); return; }
+  if (!l || !w || !h) { showToast('Enter all dimensions', true); return; }
+  var presets = window._shipPackagePresets || [];
+  presets.push({ name: name, lengthIn: l, widthIn: w, heightIn: h });
+  renderPackagePresets(presets);
+  document.getElementById('newPresetName').value = '';
+  document.getElementById('newPresetL').value = '';
+  document.getElementById('newPresetW').value = '';
+  document.getElementById('newPresetH').value = '';
+}
+
+function removePackagePreset(idx) {
+  var presets = window._shipPackagePresets || [];
+  presets.splice(idx, 1);
+  renderPackagePresets(presets);
+}
+
+async function saveShipProviderConfig() {
+  var statusEl = document.getElementById('shipProviderConfigStatus');
+  try {
+    var provider = document.querySelector('input[name="shipLabelProvider"]:checked');
+    var providerVal = provider ? provider.value : 'manual';
+    var defaultFrom = document.getElementById('shipDefaultFromSelect').value || '';
+    var presets = window._shipPackagePresets || [];
+
+    // Save provider config
+    await MastDB.config.shippingProvider().set({
+      provider: providerVal,
+      defaultFromLocationKey: defaultFrom,
+      packagePresets: presets,
+      updatedAt: new Date().toISOString()
+    });
+
+    // Save Shippo API key if entered
+    if (providerVal === 'shippo') {
+      var keyInput = document.getElementById('shippoApiKeyInput');
+      var keyVal = keyInput ? keyInput.value.trim() : '';
+      if (keyVal && !keyVal.startsWith('shippo_test_') && !keyVal.startsWith('shippo_live_')) {
+        // Only save if it looks like a real key change (not the masked placeholder)
+        if (keyVal.indexOf('...') === -1) {
+          showToast('Shippo keys start with shippo_test_ or shippo_live_', true);
+          return;
+        }
+      }
+      if (keyVal && keyVal.indexOf('...') === -1) {
+        await firebase.functions().httpsCallable('secretsManager')({
+          tenantId: MastDB.tenantId(),
+          action: 'write',
+          secretName: 'shippo-api-token',
+          secretValue: keyVal
+        });
+        keyInput.value = '';
+        loadShippoKeyStatus();
+      }
+    }
+
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Label provider saved</span>';
+    setTimeout(function() { if (statusEl) statusEl.innerHTML = ''; }, 5000);
+    showToast('Label provider configuration saved');
+  } catch (err) {
+    showToast('Error saving: ' + esc(err.message), true);
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger);">Error: ' + esc(err.message) + '</span>';
+  }
 }
 
 // ============================================================
