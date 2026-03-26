@@ -6756,32 +6756,70 @@
         <!-- Setup Instructions (collapsible) -->
         <div style="margin-top:24px;">
           <hr style="border:none;border-top:1px solid var(--border,#eee);margin:24px 0;">
-          <div style="font-weight:600;margin-bottom:12px;color:var(--charcoal);">Setup Instructions</div>
-          <details style="margin-bottom:12px;">
-            <summary style="cursor:pointer;font-size:0.9rem;font-weight:500;color:var(--charcoal);padding:8px 0;">Claude Code</summary>
-            <div style="padding:12px;background:var(--cream,#faf8f5);border-radius:6px;margin-top:4px;">
-              <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">Add to your <code>.mcp.json</code> or Claude Code settings:</p>
-              <pre id="aiSetupClaudeCode" style="background:#1a1a1a;color:#e0e0e0;padding:12px;border-radius:6px;font-size:0.8rem;overflow-x:auto;white-space:pre-wrap;"></pre>
-            </div>
-          </details>
+          <div style="font-weight:600;margin-bottom:4px;color:var(--charcoal);">Setup Instructions</div>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">
+            Create a new MCP connector called <strong>"Mast Tenant MCP"</strong> in your AI tool and add the server URL below.
+          </p>
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;">
+            <div style="font-size:0.85rem;font-weight:500;color:var(--charcoal);">Server URL:</div>
+            <code id="aiSetupServerUrl" style="user-select:all;font-size:0.85rem;background:var(--cream,#faf8f5);padding:4px 8px;border-radius:4px;border:1px solid var(--cream-dark,#e8e0d4);"></code>
+            <button class="btn btn-secondary btn-small" onclick="copyMcpUrl()" id="copyMcpUrlBtn" style="font-size:0.75rem;padding:4px 10px;">Copy</button>
+          </div>
           <details style="margin-bottom:12px;">
             <summary style="cursor:pointer;font-size:0.9rem;font-weight:500;color:var(--charcoal);padding:8px 0;">Claude.ai</summary>
             <div style="padding:12px;background:var(--cream,#faf8f5);border-radius:6px;margin-top:4px;">
-              <p style="font-size:0.85rem;color:var(--warm-gray);">
-                Go to <strong>Settings &gt; Connectors &gt; Add MCP</strong> in Claude.ai. Enter the server URL and your API key when prompted.
-              </p>
-              <div style="margin-top:8px;font-size:0.85rem;">
-                <strong>Server URL:</strong> <code id="aiSetupServerUrl" style="user-select:all;"></code>
+              <ol style="font-size:0.85rem;color:var(--warm-gray);margin:0;padding-left:20px;">
+                <li>Go to <strong>Settings &gt; Connectors &gt; Add MCP</strong></li>
+                <li>Name it <strong>"Mast Tenant MCP"</strong> <button class="btn btn-secondary btn-small" onclick="copyText('Mast Tenant MCP',this)" style="font-size:0.7rem;padding:2px 8px;margin-left:4px;">Copy</button></li>
+                <li>Paste the server URL above</li>
+                <li>Claude.ai supports OAuth — just sign in with your Google account when prompted. No API key needed.</li>
+              </ol>
+            </div>
+          </details>
+          <details style="margin-bottom:12px;">
+            <summary style="cursor:pointer;font-size:0.9rem;font-weight:500;color:var(--charcoal);padding:8px 0;">Claude Code</summary>
+            <div style="padding:12px;background:var(--cream,#faf8f5);border-radius:6px;margin-top:4px;">
+              <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">Add to your <code>.mcp.json</code> or Claude Code settings. Uses API key auth:</p>
+              <div style="position:relative;">
+                <pre id="aiSetupClaudeCode" style="background:#1a1a1a;color:#e0e0e0;padding:12px;padding-right:60px;border-radius:6px;font-size:0.8rem;overflow-x:auto;white-space:pre-wrap;"></pre>
+                <button class="btn btn-secondary btn-small" onclick="copyAiSnippet('aiSetupClaudeCode',this)" style="position:absolute;top:8px;right:8px;font-size:0.75rem;padding:4px 10px;">Copy</button>
               </div>
             </div>
           </details>
           <details style="margin-bottom:12px;">
             <summary style="cursor:pointer;font-size:0.9rem;font-weight:500;color:var(--charcoal);padding:8px 0;">Cursor / VS Code</summary>
             <div style="padding:12px;background:var(--cream,#faf8f5);border-radius:6px;margin-top:4px;">
-              <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">Add to your Cursor <code>settings.json</code> under MCP servers:</p>
-              <pre id="aiSetupCursor" style="background:#1a1a1a;color:#e0e0e0;padding:12px;border-radius:6px;font-size:0.8rem;overflow-x:auto;white-space:pre-wrap;"></pre>
+              <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">Add to your <code>settings.json</code> under MCP servers. Uses API key auth:</p>
+              <div style="position:relative;">
+                <pre id="aiSetupCursor" style="background:#1a1a1a;color:#e0e0e0;padding:12px;padding-right:60px;border-radius:6px;font-size:0.8rem;overflow-x:auto;white-space:pre-wrap;"></pre>
+                <button class="btn btn-secondary btn-small" onclick="copyAiSnippet('aiSetupCursor',this)" style="position:absolute;top:8px;right:8px;font-size:0.75rem;padding:4px 10px;">Copy</button>
+              </div>
             </div>
           </details>
+          <details style="margin-bottom:12px;">
+            <summary style="cursor:pointer;font-size:0.9rem;font-weight:500;color:var(--charcoal);padding:8px 0;">Other AI Tools</summary>
+            <div style="padding:12px;background:var(--cream,#faf8f5);border-radius:6px;margin-top:4px;">
+              <p style="font-size:0.85rem;color:var(--warm-gray);">
+                If your AI tool supports MCP connectors, add the server URL above. If it supports OAuth, just sign in — no API key needed. Otherwise, generate an API key above and add it as a <code>Bearer</code> token in the <code>Authorization</code> header.
+              </p>
+            </div>
+          </details>
+        </div>
+        <!-- Startup Prompt -->
+        <div style="margin-top:0;">
+          <hr style="border:none;border-top:1px solid var(--border,#eee);margin:24px 0;">
+          <div style="font-weight:600;margin-bottom:4px;color:var(--charcoal);">Startup Prompt</div>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">
+            After connecting your AI tool, paste this prompt into your <strong>project instructions</strong> (Claude.ai) or <strong>custom instructions</strong> (other tools). This teaches your AI assistant how to work with your store.
+          </p>
+          <div style="position:relative;">
+            <pre id="aiStartupPrompt" style="background:#1a1a1a;color:#e0e0e0;padding:12px;padding-right:60px;border-radius:6px;font-size:0.8rem;overflow-x:auto;white-space:pre-wrap;"></pre>
+            <button class="btn btn-secondary btn-small" onclick="copyStartupPrompt()" id="copyStartupPromptBtn"
+              style="position:absolute;top:8px;right:8px;font-size:0.75rem;padding:4px 10px;">Copy</button>
+          </div>
+          <p style="font-size:0.8rem;color:var(--warm-gray-light);margin-top:8px;">
+            Once pasted, just say <strong>"Startup Mast"</strong> in any conversation to get started.
+          </p>
         </div>
       </div>
     </div>
@@ -11620,7 +11658,7 @@ async function loadAiIntegrations() {
   if (codeEl) {
     codeEl.textContent = JSON.stringify({
       mcpServers: {
-        "my-store": {
+        "mast-tenant-mcp": {
           type: "streamableHttp",
           url: serverUrl + "/mcp",
           headers: { Authorization: "Bearer YOUR_API_KEY" }
@@ -11629,9 +11667,18 @@ async function loadAiIntegrations() {
     }, null, 2);
   }
   if (urlEl) urlEl.textContent = serverUrl;
+  var promptEl = document.getElementById('aiStartupPrompt');
+  if (promptEl) {
+    var storeName = (window.TENANT_CONFIG && window.TENANT_CONFIG.name) || 'my store';
+    promptEl.textContent = 'You are connected to Mast, a business management platform for ' + storeName + '. ' +
+      'When I say "Startup Mast", "open Mast", "check my business", or make any request about orders, ' +
+      'products, inventory, customers, scheduling, or store operations, call the get_router tool to load ' +
+      'available workflows. Follow the router\'s instructions from there. ' +
+      'Only load what you need — keep context minimal.';
+  }
   if (cursorEl) {
     cursorEl.textContent = JSON.stringify({
-      "my-store": {
+      "mast-tenant-mcp": {
         type: "streamableHttp",
         url: serverUrl + "/mcp",
         headers: { Authorization: "Bearer YOUR_API_KEY" }
@@ -11753,6 +11800,42 @@ function copyAiKey() {
   }).catch(function() {
     input.select();
     showToast('Select and copy the key manually.');
+  });
+}
+
+function copyMcpUrl() {
+  navigator.clipboard.writeText(AI_MCP_SERVER_URL).then(function() {
+    showToast('Server URL copied to clipboard.');
+    var btn = document.getElementById('copyMcpUrlBtn');
+    if (btn) { btn.textContent = 'Copied!'; setTimeout(function() { btn.textContent = 'Copy'; }, 2000); }
+  }).catch(function() { showToast('Select and copy the URL manually.'); });
+}
+
+function copyAiSnippet(elId, btn) {
+  var el = document.getElementById(elId);
+  if (!el) return;
+  navigator.clipboard.writeText(el.textContent).then(function() {
+    showToast('Copied to clipboard.');
+    if (btn) { btn.textContent = 'Copied!'; setTimeout(function() { btn.textContent = 'Copy'; }, 2000); }
+  }).catch(function() { showToast('Select and copy manually.'); });
+}
+
+function copyText(text, btn) {
+  navigator.clipboard.writeText(text).then(function() {
+    showToast('Copied to clipboard.');
+    if (btn) { btn.textContent = 'Copied!'; setTimeout(function() { btn.textContent = 'Copy'; }, 2000); }
+  }).catch(function() { showToast('Select and copy manually.'); });
+}
+
+function copyStartupPrompt() {
+  var el = document.getElementById('aiStartupPrompt');
+  if (!el) return;
+  navigator.clipboard.writeText(el.textContent).then(function() {
+    showToast('Startup prompt copied to clipboard.');
+    var btn = document.getElementById('copyStartupPromptBtn');
+    if (btn) { btn.textContent = 'Copied!'; setTimeout(function() { btn.textContent = 'Copy'; }, 2000); }
+  }).catch(function() {
+    showToast('Select and copy the prompt manually.');
   });
 }
 
