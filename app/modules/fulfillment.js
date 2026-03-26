@@ -102,10 +102,10 @@
           '</div>' +
           '<div style="display:flex;gap:6px;">';
       if (status === 'ready') {
-        html += '<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 12px;" onclick="transitionOrder(\'' + esc(key) + '\', \'packing\')">Start Packing</button>';
+        html += '<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 12px;" onclick="transitionOrder(\'' + esc(key) + '\', \'packing\')">Packing</button>';
       }
       if (status === 'packing') {
-        html += '<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 12px;" onclick="transitionOrder(\'' + esc(key) + '\', \'packed\')">Mark Packed</button>';
+        html += '<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 12px;" onclick="transitionOrder(\'' + esc(key) + '\', \'packed\')">Packed</button>';
       }
       if (status === 'packed') {
         html += '<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 12px;" onclick="transitionOrder(\'' + esc(key) + '\', \'handed_to_carrier\')">Handed to Carrier</button>';

@@ -290,8 +290,8 @@
     // Simplified: define all possible steps, determine which are in the flow
     var allSteps = ['placed', 'confirmed', 'building', 'ready', 'packing', 'packed', 'shipped', 'delivered'];
     var stepLabels = {
-      placed: 'Placed', confirmed: 'Confirmed', building: 'Building',
-      ready: 'Ready', packing: 'Packing', packed: 'Packed',
+      placed: 'Placed', confirmed: 'Confirmed', building: 'Build',
+      ready: 'Pack', packing: 'Packing', packed: 'Packed',
       handed_to_carrier: 'With Carrier', shipped: 'Shipped', delivered: 'Delivered'
     };
 
@@ -369,10 +369,6 @@
 
     // Action buttons
     var actionsHtml = '';
-    var shippableStatuses = ['confirmed', 'building', 'ready', 'packing', 'packed', 'handed_to_carrier'];
-    if (shippableStatuses.indexOf(status) !== -1) {
-      actionsHtml += '<button class="btn btn-primary" onclick="openShippingModal(\'' + esc(orderId) + '\')">Ship</button>';
-    }
     var transitions = ORDER_VALID_TRANSITIONS[status] || [];
     transitions.forEach(function(t) {
       if (t === 'cancelled') {
@@ -380,19 +376,19 @@
       } else if (t === 'confirmed') {
         actionsHtml += '<button class="btn btn-primary" onclick="openTriageDialog(\'' + esc(orderId) + '\')">Confirm Order</button>';
       } else if (t === 'ready') {
-        actionsHtml += '<button class="btn btn-primary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'ready\')">Mark Ready</button>';
+        actionsHtml += '<button class="btn btn-primary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'ready\')">Pack</button>';
       } else if (t === 'building') {
-        actionsHtml += '<button class="btn btn-secondary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'building\')">Needs Building</button>';
+        actionsHtml += '<button class="btn btn-secondary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'building\')">Build</button>';
       } else if (t === 'packing') {
-        actionsHtml += '<button class="btn btn-primary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'packing\')">Start Packing</button>';
+        actionsHtml += '<button class="btn btn-primary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'packing\')">Packing</button>';
       } else if (t === 'packed') {
-        actionsHtml += '<button class="btn btn-primary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'packed\')">Mark Packed</button>';
+        actionsHtml += '<button class="btn btn-primary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'packed\')">Packed</button>';
       } else if (t === 'handed_to_carrier') {
         actionsHtml += '<button class="btn btn-primary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'handed_to_carrier\')">Handed to Carrier</button>';
       } else if (t === 'shipped') {
-        // Handled by the Ship button above
+        actionsHtml += '<button class="btn btn-primary" onclick="openShippingModal(\'' + esc(orderId) + '\')">Ship</button>';
       } else if (t === 'delivered') {
-        actionsHtml += '<button class="btn btn-primary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'delivered\')">Mark Delivered</button>';
+        actionsHtml += '<button class="btn btn-primary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'delivered\')">Delivered</button>';
       }
     });
 
@@ -1178,6 +1174,8 @@
       }
 
       await MastDB.orders.ref(orderId).update(updates);
+      // Update local state so re-render shows new status
+      Object.keys(updates).forEach(function(k) { o[k] = updates[k]; });
       await writeAudit('update', 'orders', orderId);
 
       // Testing Mode event
@@ -1208,6 +1206,7 @@
       }
 
       showToast('Order updated to ' + updates['status']);
+      renderOrderDetail(orderId);
     } catch (err) {
       showToast('Error updating order: ' + err.message, true);
     }
