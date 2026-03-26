@@ -2946,11 +2946,13 @@
     .order-progress-step.current { color: var(--amber); }
     .order-progress-step.upcoming { color: var(--warm-gray); opacity: 0.5; }
     .order-progress-step.cancelled { color: #EF5350; }
+    .order-progress-step.skipped { color: var(--warm-gray); opacity: 0.35; text-decoration: line-through; }
     .order-progress-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
     .order-progress-step.completed .order-progress-dot { background: #66BB6A; }
     .order-progress-step.current .order-progress-dot { background: var(--amber); box-shadow: 0 0 6px rgba(196,133,60,0.5); }
     .order-progress-step.upcoming .order-progress-dot { background: var(--warm-gray); opacity: 0.4; }
     .order-progress-step.cancelled .order-progress-dot { background: #EF5350; }
+    .order-progress-step.skipped .order-progress-dot { background: var(--warm-gray); opacity: 0.3; }
     .order-progress-connector { flex: 0 0 24px; height: 2px; margin: 0 4px; background: var(--warm-gray); opacity: 0.2; }
     .order-progress-connector.done { background: #66BB6A; opacity: 1; }
     .order-progress-connector.active { background: var(--amber); opacity: 0.4; }

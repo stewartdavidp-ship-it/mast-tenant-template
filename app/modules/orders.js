@@ -302,24 +302,34 @@
     } else if (status === 'pending_payment' || status === 'payment_failed') {
       var plabel = status === 'pending_payment' ? 'Pending Payment' : 'Payment Failed';
       return '<div class="order-progress"><div class="order-progress-step current"><span class="order-progress-dot"></span>' + plabel + '</div></div>';
-    } else if (status === 'building') {
-      flow = ['placed', 'confirmed', 'building', 'ready', 'packing', 'packed', 'shipped', 'delivered'];
     } else if (status === 'handed_to_carrier') {
-      flow = ['placed', 'confirmed', 'ready', 'packing', 'packed', 'handed_to_carrier', 'shipped', 'delivered'];
+      flow = ['placed', 'confirmed', 'building', 'ready', 'packing', 'packed', 'handed_to_carrier', 'shipped', 'delivered'];
     } else {
-      flow = ['placed', 'confirmed', 'ready', 'packing', 'packed', 'shipped', 'delivered'];
+      flow = ['placed', 'confirmed', 'building', 'ready', 'packing', 'packed', 'shipped', 'delivered'];
     }
 
     var currentIdx = flow.indexOf(status);
+    // If order skipped building (went straight to ready+), show Build as skipped
+    var skippedBuild = status !== 'building' && currentIdx > flow.indexOf('building');
     var html = '<div class="order-progress">';
     flow.forEach(function(step, idx) {
-      var cls = idx < currentIdx ? 'completed' : idx === currentIdx ? 'current' : 'upcoming';
+      var cls;
+      if (step === 'building' && skippedBuild) {
+        cls = 'skipped';
+      } else if (idx < currentIdx) {
+        cls = 'completed';
+      } else if (idx === currentIdx) {
+        cls = 'current';
+      } else {
+        cls = 'upcoming';
+      }
       html += '<div class="order-progress-step ' + cls + '">' +
         '<span class="order-progress-dot"></span>' +
         stepLabels[step] +
       '</div>';
       if (idx < flow.length - 1) {
         var connCls = idx < currentIdx ? 'done' : idx === currentIdx ? 'active' : '';
+        if (step === 'building' && skippedBuild) connCls = 'done';
         html += '<div class="order-progress-connector ' + connCls + '"></div>';
       }
     });
