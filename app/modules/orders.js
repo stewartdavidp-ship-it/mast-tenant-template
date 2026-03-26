@@ -253,17 +253,22 @@
       var num = esc(getOrderDisplayNumber(o));
       var status = o.status || 'placed';
       var cardSourceBadge = o.source === 'etsy' ? '<span class="status-badge" style="margin-left:8px;' + etsySourceBadgeStyle() + '">Etsy</span>' : '';
+      var cardShippable = ['confirmed', 'building', 'ready', 'packing', 'packed', 'handed_to_carrier'].indexOf(status) !== -1;
+      var cardBtns = '<div style="display:flex;gap:6px;flex-shrink:0;">';
+      if (cardShippable) {
+        cardBtns += '<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 12px;" onclick="event.stopPropagation();openShippingModal(\'' + esc(key) + '\')">Ship</button>';
+      }
+      cardBtns += '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 12px;" onclick="event.stopPropagation();viewOrder(\'' + esc(key) + '\')">View</button></div>';
+
       cardHtml += '<div class="order-card" onclick="viewOrder(\'' + esc(key) + '\')">' +
-        '<div class="order-card-header">' +
-          '<span class="order-card-number">' + num + cardSourceBadge + '</span>' +
-          '<span class="status-badge pill" style="' + orderStatusBadgeStyle(status) + '">' + status.replace(/_/g, ' ') + '</span>' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">' +
+          '<div>' +
+            '<div style="font-weight:600;font-family:monospace;">' + num + ' <span class="status-badge pill" style="' + orderStatusBadgeStyle(status) + '">' + status.replace(/_/g, ' ') + '</span>' + cardSourceBadge + '</div>' +
+            '<div style="font-size:0.85rem;color:var(--warm-gray);">' + esc(o.email || '') + ' &mdash; ' + getOrderItemsLabel(o) + '</div>' +
+          '</div>' +
+          cardBtns +
         '</div>' +
-        '<div class="order-card-details">' +
-          '<span class="order-card-detail">' + esc(o.email || '') + '</span>' +
-          '<span class="order-card-detail">' + getOrderItemsLabel(o) + '</span>' +
-          '<span class="order-card-detail">$' + (o.total || 0).toFixed(2) + '</span>' +
-          '<span class="order-card-detail">' + formatOrderDate(o.placedAt) + '</span>' +
-        '</div>' +
+        renderOrderProgress(status) +
       '</div>';
     });
     if (cardsEl) cardsEl.innerHTML = cardHtml;
