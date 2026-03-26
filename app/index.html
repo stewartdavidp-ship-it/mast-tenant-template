@@ -6052,6 +6052,7 @@
         <button class="view-tab active" onclick="switchSettingsSubView('general')">General</button>
         <button class="view-tab" onclick="switchSettingsSubView('payments')">Payments</button>
         <button class="view-tab" onclick="switchSettingsSubView('shipping')">Shipping</button>
+        <button class="view-tab" onclick="switchSettingsSubView('tax')">Tax</button>
         <button class="view-tab" onclick="switchSettingsSubView('email')">Email</button>
         <button class="view-tab" onclick="switchSettingsSubView('integrations')">Integrations</button>
         <button class="view-tab" onclick="switchSettingsSubView('workshop')">Workshop</button>
@@ -6438,8 +6439,8 @@
           <div id="shippingConfigStatus" style="margin-top:8px;font-size:0.85rem;"></div>
         </div>
 
-        <hr style="border:none;border-top:1px solid #eee;margin:28px 0;">
-
+      </div>
+      <div id="settingsSubTax" style="display:none;max-width:560px;">
         <div class="form-group">
           <label style="font-size:1.1rem;font-weight:600;">Sales Tax</label>
           <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">
@@ -10606,7 +10607,7 @@ function getModuleForRouteManifest(route) {
 // ============================================================
 // Settings Sub-Tabs
 // ============================================================
-var settingsSubViews = ['general', 'payments', 'shipping', 'email', 'integrations', 'workshop', 'trips', 'dashboard', 'domains', 'ai', 'subscription', 'about'];
+var settingsSubViews = ['general', 'payments', 'shipping', 'tax', 'email', 'integrations', 'workshop', 'trips', 'dashboard', 'domains', 'ai', 'subscription', 'about'];
 function switchSettingsSubView(view) {
   // Hide all sub-views
   settingsSubViews.forEach(function(v) {
