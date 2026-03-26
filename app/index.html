@@ -7922,6 +7922,7 @@ MastDB.config = {
   square: function() { return MastDB._ref('config/square'); },
   etsy: function() { return MastDB._ref('config/etsy'); },
   shipping: function() { return MastDB._ref('public/config/shippingRates'); },
+  shippingProvider: function(subpath) { return MastDB._ref('config/shipping' + (subpath ? '/' + subpath : '')); },
   taxRates: function() { return MastDB._ref('public/taxRates'); },
   googleMaps: function() { return MastDB._ref('public/config/googleMapsApiKey'); },
   testMode: function() { return MastDB._ref('public/config/testMode'); },
@@ -16240,6 +16241,11 @@ function renderProductDetail(pid) {
           '</select></div>' +
         '<div class="form-group" style="min-width:150px;"><label>Weight (oz)</label><input type="number" id="pdWeightOz" min="0" step="0.1" value="' + (product.weightOz != null ? product.weightOz : '') + '" placeholder="e.g. 12"></div>' +
       '</div>' +
+      '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;">' +
+        '<div class="form-group" style="min-width:120px;"><label>Length (in)</label><input type="number" id="pdLengthIn" min="0" step="0.1" value="' + (product.lengthIn != null ? product.lengthIn : '') + '" placeholder="e.g. 6"></div>' +
+        '<div class="form-group" style="min-width:120px;"><label>Width (in)</label><input type="number" id="pdWidthIn" min="0" step="0.1" value="' + (product.widthIn != null ? product.widthIn : '') + '" placeholder="e.g. 4"></div>' +
+        '<div class="form-group" style="min-width:120px;"><label>Height (in)</label><input type="number" id="pdHeightIn" min="0" step="0.1" value="' + (product.heightIn != null ? product.heightIn : '') + '" placeholder="e.g. 3"></div>' +
+      '</div>' +
     '</div>';
 
     // Maker Attributes (jewelry-specific, shown conditionally)
@@ -16332,6 +16338,7 @@ function renderProductDetail(pid) {
         '<span style="color:var(--warm-gray);">Materials</span><span>' + esc(product.materials || '—') + '</span>' +
         '<span style="color:var(--warm-gray);">Shipping Category</span><span>' + esc(product.shippingCategory || '—') + '</span>' +
         '<span style="color:var(--warm-gray);">Weight</span><span>' + (product.weightOz ? product.weightOz + ' oz' : '—') + '</span>' +
+        '<span style="color:var(--warm-gray);">Dimensions (in)</span><span>' + (product.lengthIn ? product.lengthIn + ' × ' + (product.widthIn || '—') + ' × ' + (product.heightIn || '—') : '—') + '</span>' +
       '</div></div>';
 
     // Maker attributes read-only (jewelry only, shown conditionally)
@@ -16500,6 +16507,12 @@ async function saveProduct(pid) {
     var shippingCategory = shippingCatEl && shippingCatEl.value ? shippingCatEl.value : null;
     var weightOzEl = document.getElementById('pdWeightOz');
     var weightOz = weightOzEl && weightOzEl.value !== '' ? parseFloat(weightOzEl.value) : null;
+    var lengthInEl = document.getElementById('pdLengthIn');
+    var lengthIn = lengthInEl && lengthInEl.value !== '' ? parseFloat(lengthInEl.value) : null;
+    var widthInEl = document.getElementById('pdWidthIn');
+    var widthIn = widthInEl && widthInEl.value !== '' ? parseFloat(widthInEl.value) : null;
+    var heightInEl = document.getElementById('pdHeightIn');
+    var heightIn = heightInEl && heightInEl.value !== '' ? parseFloat(heightInEl.value) : null;
 
     // Collect variant options from DOM
     var options = [];
@@ -16567,6 +16580,9 @@ async function saveProduct(pid) {
       materials: materials,
       shippingCategory: shippingCategory,
       weightOz: weightOz,
+      lengthIn: lengthIn,
+      widthIn: widthIn,
+      heightIn: heightIn,
       businessLine: businessLine,
       introducedAt: introducedAt,
       discontinuedAt: availability === 'discontinued' ? (existing && existing.discontinuedAt ? existing.discontinuedAt : new Date().toISOString().split('T')[0]) : null
@@ -20165,12 +20181,22 @@ function renderStudioLocations() {
   var html = '';
   keys.forEach(function(k) {
     var loc = studioLocations[k];
-    html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--cream);border-radius:6px;margin-bottom:6px;">' +
-      '<div>' +
-        '<div style="font-weight:600;font-size:0.9rem;">' + (loc.name || 'Unnamed') + '</div>' +
-        '<div style="font-size:0.8rem;color:var(--warm-gray);">📍 ' + loc.lat.toFixed(5) + ', ' + loc.lng.toFixed(5) + '</div>' +
+    var addrLine = loc.address1 ? [loc.address1, loc.city, loc.state, loc.zip].filter(Boolean).join(', ') : '';
+    var isDefault = loc.isDefaultShipFrom;
+    html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:10px 12px;background:var(--cream);border-radius:6px;margin-bottom:6px;">' +
+      '<div style="flex:1;">' +
+        '<div style="display:flex;align-items:center;gap:8px;">' +
+          '<span style="font-weight:600;font-size:0.9rem;">' + esc(loc.name || 'Unnamed') + '</span>' +
+          (isDefault ? '<span style="font-size:0.65rem;background:var(--teal);color:white;padding:2px 6px;border-radius:4px;font-weight:600;">Default Ship-From</span>' : '') +
+        '</div>' +
+        '<div style="font-size:0.8rem;color:var(--warm-gray);">📍 ' + (loc.lat ? loc.lat.toFixed(5) + ', ' + loc.lng.toFixed(5) : 'No GPS') + '</div>' +
+        (addrLine ? '<div style="font-size:0.8rem;color:var(--warm-gray);margin-top:2px;">📦 ' + esc(addrLine) + '</div>' : '<div style="font-size:0.78rem;color:var(--warm-gray-light);margin-top:2px;font-style:italic;">No shipping address set</div>') +
       '</div>' +
-      '<button class="btn btn-secondary" style="font-size:0.75rem;padding:4px 10px;color:#E53935;" onclick="removeStudioLocation(\'' + k + '\')">Remove</button>' +
+      '<div style="display:flex;gap:6px;flex-shrink:0;">' +
+        '<button class="btn btn-secondary" style="font-size:0.75rem;padding:4px 10px;" onclick="editStudioLocationAddress(\'' + k + '\')">Edit Address</button>' +
+        (!isDefault ? '<button class="btn btn-secondary" style="font-size:0.75rem;padding:4px 10px;" onclick="setDefaultShipFrom(\'' + k + '\')">Set Default</button>' : '') +
+        '<button class="btn btn-secondary" style="font-size:0.75rem;padding:4px 10px;color:#E53935;" onclick="removeStudioLocation(\'' + k + '\')">Remove</button>' +
+      '</div>' +
     '</div>';
   });
   el.innerHTML = html;
@@ -20224,6 +20250,67 @@ async function removeStudioLocation(locId) {
     await MastDB.studioLocations.ref(locId).remove();
     showToast('Location removed.');
     loadStudioLocations();
+  } catch (err) {
+    showToast('Error: ' + err.message, true);
+  }
+}
+
+function editStudioLocationAddress(locId) {
+  var loc = studioLocations[locId] || {};
+  var html = '<div style="max-width:400px;">' +
+    '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.2rem;font-weight:500;margin:0 0 16px;">Ship-From Address: ' + esc(loc.name || 'Location') + '</h3>' +
+    '<div class="form-group"><label>Address Line 1</label><input type="text" id="slAddr1" value="' + esc(loc.address1 || '') + '" placeholder="123 Main St"></div>' +
+    '<div class="form-group"><label>Address Line 2</label><input type="text" id="slAddr2" value="' + esc(loc.address2 || '') + '" placeholder="Suite 100"></div>' +
+    '<div style="display:flex;gap:12px;flex-wrap:wrap;">' +
+      '<div class="form-group" style="flex:2;min-width:140px;"><label>City</label><input type="text" id="slCity" value="' + esc(loc.city || '') + '"></div>' +
+      '<div class="form-group" style="flex:1;min-width:60px;"><label>State</label><input type="text" id="slState" value="' + esc(loc.state || '') + '" maxlength="2" placeholder="CA"></div>' +
+      '<div class="form-group" style="flex:1;min-width:80px;"><label>ZIP</label><input type="text" id="slZip" value="' + esc(loc.zip || '') + '" maxlength="10"></div>' +
+    '</div>' +
+    '<div class="form-group"><label>Phone</label><input type="text" id="slPhone" value="' + esc(loc.phone || '') + '" placeholder="(555) 123-4567"></div>' +
+    '<div style="display:flex;gap:8px;margin-top:16px;">' +
+      '<button class="btn btn-primary" onclick="saveStudioLocationAddress(\'' + locId + '\')">Save Address</button>' +
+      '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+    '</div>' +
+  '</div>';
+  showModal(html);
+}
+
+async function saveStudioLocationAddress(locId) {
+  var updates = {
+    address1: document.getElementById('slAddr1').value.trim(),
+    address2: document.getElementById('slAddr2').value.trim(),
+    city: document.getElementById('slCity').value.trim(),
+    state: document.getElementById('slState').value.trim().toUpperCase(),
+    zip: document.getElementById('slZip').value.trim(),
+    phone: document.getElementById('slPhone').value.trim()
+  };
+  try {
+    await MastDB.studioLocations.ref(locId).update(updates);
+    Object.assign(studioLocations[locId], updates);
+    closeModal();
+    renderStudioLocations();
+    showToast('Address saved');
+  } catch (err) {
+    showToast('Error: ' + err.message, true);
+  }
+}
+
+async function setDefaultShipFrom(locId) {
+  try {
+    // Clear existing default
+    var keys = Object.keys(studioLocations);
+    var updates = {};
+    keys.forEach(function(k) {
+      if (studioLocations[k].isDefaultShipFrom) {
+        updates[k + '/isDefaultShipFrom'] = null;
+        studioLocations[k].isDefaultShipFrom = false;
+      }
+    });
+    updates[locId + '/isDefaultShipFrom'] = true;
+    await MastDB.studioLocations.ref().update(updates);
+    studioLocations[locId].isDefaultShipFrom = true;
+    renderStudioLocations();
+    showToast('Default ship-from set: ' + esc(studioLocations[locId].name || locId));
   } catch (err) {
     showToast('Error: ' + err.message, true);
   }
