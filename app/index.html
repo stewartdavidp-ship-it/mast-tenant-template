@@ -6300,7 +6300,7 @@
               <option value="">Select a studio location...</option>
             </select>
             <p style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">
-              Only studios with a physical address are shown. <a href="#" onclick="event.preventDefault();switchSettingsSub('settingsSubLocations');" style="color:var(--teal);">Manage studio locations</a>
+              Only studios with a physical address are shown. <a href="#" onclick="event.preventDefault();switchSettingsSubView('general');setTimeout(function(){var el=document.getElementById('studioLocationsList');if(el)el.scrollIntoView({behavior:'smooth'});},200);" style="color:var(--teal);">Manage studio locations</a>
             </p>
           </div>
 
