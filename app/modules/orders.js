@@ -374,6 +374,16 @@
         actionsHtml += '<button class="btn btn-danger" onclick="openCancelOrderModal(\'' + esc(orderId) + '\')">Cancel Order</button>';
       } else if (t === 'confirmed') {
         actionsHtml += '<button class="btn btn-primary" onclick="openTriageDialog(\'' + esc(orderId) + '\')">Confirm Order</button>';
+      } else if (t === 'ready') {
+        actionsHtml += '<button class="btn btn-primary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'ready\')">Mark Ready</button>';
+      } else if (t === 'building') {
+        actionsHtml += '<button class="btn btn-secondary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'building\')">Needs Building</button>';
+      } else if (t === 'packing') {
+        actionsHtml += '<button class="btn btn-primary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'packing\')">Start Packing</button>';
+      } else if (t === 'packed') {
+        actionsHtml += '<button class="btn btn-primary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'packed\')">Mark Packed</button>';
+      } else if (t === 'handed_to_carrier') {
+        actionsHtml += '<button class="btn btn-primary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'handed_to_carrier\')">Handed to Carrier</button>';
       } else if (t === 'shipped') {
         // Handled by the Ship button above
       } else if (t === 'delivered') {
