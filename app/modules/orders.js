@@ -24,6 +24,7 @@
     confirmed:       { bg: 'rgba(21,101,192,0.2)', color: '#64B5F6', border: 'rgba(21,101,192,0.35)' },
     building:        { bg: 'rgba(123,31,162,0.2)', color: '#CE93D8', border: 'rgba(123,31,162,0.35)' },
     ready:           { bg: 'rgba(27,92,82,0.25)', color: '#4DB6AC', border: 'rgba(27,92,82,0.4)' },
+    pack:            { bg: 'rgba(27,92,82,0.25)', color: '#4DB6AC', border: 'rgba(27,92,82,0.4)' },
     packing:         { bg: 'rgba(249,168,37,0.2)', color: '#FFD54F', border: 'rgba(249,168,37,0.35)' },
     packed:          { bg: 'rgba(46,125,50,0.25)', color: '#66BB6A', border: 'rgba(46,125,50,0.4)' },
     handed_to_carrier: { bg: 'rgba(69,39,160,0.2)', color: '#B39DDB', border: 'rgba(69,39,160,0.35)' },
@@ -169,7 +170,7 @@
       { key: 'placed', label: 'Placed', count: counts.placed || 0 },
       { key: 'confirmed', label: 'Confirmed', count: counts.confirmed || 0 },
       { key: 'building', label: 'Building', count: counts.building || 0 },
-      { key: 'ready', label: 'Ready', count: counts.ready || 0 },
+      { key: 'pack', label: 'Pack', count: counts.pack || 0 },
       { key: 'packing', label: 'Packing', count: counts.packing || 0 },
       { key: 'packed', label: 'Packed', count: counts.packed || 0 },
       { key: 'handed_to_carrier', label: 'Handed to Carrier', count: counts.handed_to_carrier || 0 },
@@ -253,7 +254,7 @@
       var num = esc(getOrderDisplayNumber(o));
       var status = o.status || 'placed';
       var cardSourceBadge = o.source === 'etsy' ? '<span class="status-badge" style="margin-left:8px;' + etsySourceBadgeStyle() + '">Etsy</span>' : '';
-      var cardShippable = ['confirmed', 'building', 'ready', 'packing', 'packed', 'handed_to_carrier'].indexOf(status) !== -1;
+      var cardShippable = ['confirmed', 'building', 'pack', 'packing', 'packed', 'handed_to_carrier'].indexOf(status) !== -1;
       var cardBtns = '<div style="display:flex;gap:6px;flex-shrink:0;">';
       if (cardShippable) {
         cardBtns += '<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 12px;" onclick="event.stopPropagation();openShippingModal(\'' + esc(key) + '\')">Ship</button>';
@@ -280,7 +281,7 @@
 
   function renderOrderProgress(status) {
     // Define the happy-path steps
-    var steps = ['placed', 'confirmed', 'ready', 'packing', 'packed', 'shipped', 'delivered'];
+    var steps = ['placed', 'confirmed', 'pack', 'packing', 'packed', 'shipped', 'delivered'];
     // Insert building after confirmed if order went through building
     if (status === 'building' || (status !== 'placed' && status !== 'confirmed')) {
       // Check if building should be shown — include it if current or past
@@ -288,11 +289,11 @@
     }
 
     // Simplified: define all possible steps, determine which are in the flow
-    var allSteps = ['placed', 'confirmed', 'building', 'ready', 'packing', 'packed', 'shipped', 'delivered'];
+    var allSteps = ['placed', 'confirmed', 'building', 'pack', 'packing', 'packed', 'shipped', 'delivered'];
     var stepLabels = {
       placed: 'Placed', confirmed: 'Confirmed', building: 'Build',
-      ready: 'Pack', packing: 'Packing', packed: 'Packed',
-      handed_to_carrier: 'With Carrier', shipped: 'Shipped', delivered: 'Delivered'
+      pack: 'Pack', packing: 'Packing', packed: 'Packed',
+      shipped: 'Shipped', delivered: 'Delivered'
     };
 
     // Determine which steps to show
@@ -303,9 +304,9 @@
       var plabel = status === 'pending_payment' ? 'Pending Payment' : 'Payment Failed';
       return '<div class="order-progress"><div class="order-progress-step current"><span class="order-progress-dot"></span>' + plabel + '</div></div>';
     } else if (status === 'handed_to_carrier') {
-      flow = ['placed', 'confirmed', 'building', 'ready', 'packing', 'packed', 'handed_to_carrier', 'shipped', 'delivered'];
+      flow = ['placed', 'confirmed', 'building', 'pack', 'packing', 'packed', 'shipped', 'delivered'];
     } else {
-      flow = ['placed', 'confirmed', 'building', 'ready', 'packing', 'packed', 'shipped', 'delivered'];
+      flow = ['placed', 'confirmed', 'building', 'pack', 'packing', 'packed', 'shipped', 'delivered'];
     }
 
     var currentIdx = flow.indexOf(status);
@@ -385,8 +386,8 @@
         actionsHtml += '<button class="btn btn-danger" onclick="openCancelOrderModal(\'' + esc(orderId) + '\')">Cancel Order</button>';
       } else if (t === 'confirmed') {
         actionsHtml += '<button class="btn btn-primary" onclick="openTriageDialog(\'' + esc(orderId) + '\')">Confirm Order</button>';
-      } else if (t === 'ready') {
-        actionsHtml += '<button class="btn btn-primary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'ready\')">Pack</button>';
+      } else if (t === 'pack') {
+        actionsHtml += '<button class="btn btn-primary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'pack\')">Pack</button>';
       } else if (t === 'building') {
         actionsHtml += '<button class="btn btn-secondary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'building\')">Build</button>';
       } else if (t === 'packing') {
@@ -579,7 +580,7 @@
         { key: 'placed', field: 'placedAt' },
         { key: 'confirmed', field: 'confirmedAt' },
         { key: 'building', field: 'buildingAt' },
-        { key: 'ready', field: 'readyAt' },
+        { key: 'pack', field: 'packAt' },
         { key: 'packing', field: 'packingAt' },
         { key: 'packed', field: 'packedAt' },
         { key: 'handed_to_carrier', field: 'handedToCarrierAt' },
@@ -691,7 +692,7 @@
     // Manual send buttons — contextual based on order status
     var emailSendHtml = '<div class="order-email-send-section">';
     var sendBtns = '';
-    if ((status === 'confirmed' || status === 'building' || status === 'ready' || status === 'packing' || status === 'packed') && o.email) {
+    if ((status === 'confirmed' || status === 'building' || status === 'pack' || status === 'packing' || status === 'packed') && o.email) {
       sendBtns += '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 12px;" onclick="sendOrderEmailFromDetail(\'' + esc(orderId) + '\', \'confirmed\')">Send Confirmation</button>';
     }
     if ((status === 'shipped' || status === 'delivered') && o.email && o.tracking && o.tracking.trackingNumber) {
@@ -1122,9 +1123,9 @@
     history.push({ status: 'confirmed', at: now, by: 'admin' });
 
     if (!needsBuilding) {
-      updates['status'] = 'ready';
-      updates['readyAt'] = now;
-      history.push({ status: 'ready', at: now, by: 'system', note: 'All items in stock' });
+      updates['status'] = 'pack';
+      updates['packAt'] = now;
+      history.push({ status: 'pack', at: now, by: 'system', note: 'All items in stock' });
     } else {
       updates['status'] = 'building';
       updates['buildingAt'] = now;

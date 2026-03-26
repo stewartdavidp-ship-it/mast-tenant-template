@@ -9065,7 +9065,7 @@ function applySettingsGating() {
 // Maps dashboard card IDs to the module they depend on.
 var DASHBOARD_CARD_MODULE_MAP = {
   'newOrders': 'sell',
-  'readyToShip': 'ship',
+  'packToShip': 'ship',
   'lowInventory': null // accessible if make OR sell
 };
 
@@ -9341,15 +9341,17 @@ var ORDER_VALID_TRANSITIONS = {
   pending_payment: ['cancelled'],
   payment_failed: ['cancelled'],
   placed: ['confirmed', 'cancelled'],
-  confirmed: ['building', 'ready', 'cancelled'],
-  building: ['ready', 'cancelled'],
-  ready: ['packing', 'cancelled'],
-  packing: ['packed', 'shipped', 'cancelled'],
-  packed: ['handed_to_carrier', 'shipped'],
-  handed_to_carrier: ['shipped'],
+  confirmed: ['building', 'pack', 'cancelled'],
+  building: ['pack', 'cancelled'],
+  pack: ['packing', 'cancelled'],
+  packing: ['packed', 'cancelled'],
+  packed: ['shipped', 'cancelled'],
   shipped: ['delivered'],
   delivered: [],
-  cancelled: []
+  cancelled: [],
+  // Legacy compat
+  ready: ['packing', 'cancelled'],
+  handed_to_carrier: ['shipped']
 };
 
 var TRACKING_URLS = {

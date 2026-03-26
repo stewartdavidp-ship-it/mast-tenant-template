@@ -79,7 +79,7 @@
   function renderPackQueue() {
     var el = document.getElementById('fulfPackView');
     var packable = getOrdersArray().filter(function(o) {
-      return o.status === 'packing' || o.status === 'ready' || o.status === 'packed';
+      return o.status === 'packing' || o.status === 'pack' || o.status === 'packed';
     });
 
     if (packable.length === 0) {
@@ -101,7 +101,7 @@
             '<div style="font-size:0.85rem;color:var(--warm-gray);">' + custName + ' &mdash; ' + esc(itemNames) + '</div>' +
           '</div>' +
           '<div style="display:flex;gap:6px;">';
-      if (status === 'ready') {
+      if (status === 'pack') {
         html += '<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 12px;" onclick="event.stopPropagation();packQueueTransition(\'' + esc(key) + '\', \'packing\')">Packing</button>';
       }
       if (status === 'packing') {
@@ -536,7 +536,7 @@
     var status = o.status || 'placed';
 
     // Check if order is in a packable state
-    if (status !== 'packing' && status !== 'ready') {
+    if (status !== 'packing' && status !== 'pack') {
       if (resultEl) {
         resultEl.innerHTML = '<div style="text-align:center;padding:12px;background:#FFF3E0;border-radius:8px;">' +
           '<div style="font-weight:600;">' + esc(getOrderDisplayNumber(o)) + '</div>' +
@@ -549,7 +549,7 @@
     }
 
     // Transition to packed
-    if (status === 'ready') {
+    if (status === 'pack') {
       await transitionOrder(matchedKey, 'packing');
     }
     await transitionOrder(matchedKey, 'packed');
@@ -944,9 +944,9 @@
         // If all items ready, auto-transition order to ready
         if (allReady) {
           var history = o.statusHistory ? o.statusHistory.slice() : [];
-          history.push({ status: 'ready', at: now, by: 'system', note: 'All production requests fulfilled' });
+          history.push({ status: 'pack', at: now, by: 'system', note: 'All production requests fulfilled' });
           await MastDB.orders.ref(orderId).update({
-            status: 'ready',
+            status: 'pack',
             readyAt: now,
             statusHistory: history
           });
