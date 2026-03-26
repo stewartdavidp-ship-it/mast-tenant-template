@@ -397,7 +397,7 @@
       } else if (t === 'handed_to_carrier') {
         actionsHtml += '<button class="btn btn-primary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'handed_to_carrier\')">Handed to Carrier</button>';
       } else if (t === 'shipped') {
-        actionsHtml += '<button class="btn btn-primary" onclick="openShippingModal(\'' + esc(orderId) + '\')">Ship</button>';
+        actionsHtml += '<button class="btn btn-primary" onclick="openSimpleShipDialog(\'' + esc(orderId) + '\')">Ship</button>';
       } else if (t === 'delivered') {
         actionsHtml += '<button class="btn btn-primary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'delivered\')">Delivered</button>';
       }
@@ -1934,6 +1934,129 @@
   }
 
   // ============================================================
+  // Simple Ship Dialog (Order Detail — no Shippo integration)
+  // ============================================================
+
+  function openSimpleShipDialog(orderId) {
+    var order = orders[orderId];
+    var num = order ? getOrderDisplayNumber(order) : orderId;
+    var html = '<div style="max-width:420px;">' +
+      '<h3 style="margin:0 0 16px;">Ship Order ' + esc(num) + '</h3>' +
+      '<div style="display:flex;gap:12px;flex-wrap:wrap;">' +
+        '<div class="form-group" style="flex:1;min-width:140px;">' +
+          '<label>Carrier</label>' +
+          '<select id="simpleShipCarrier" style="width:100%;">' +
+            '<option value="USPS">USPS</option>' +
+            '<option value="UPS">UPS</option>' +
+            '<option value="FedEx">FedEx</option>' +
+            '<option value="DHL">DHL</option>' +
+            '<option value="Other">Other</option>' +
+          '</select>' +
+        '</div>' +
+        '<div class="form-group" style="flex:1;min-width:140px;">' +
+          '<label>Method</label>' +
+          '<select id="simpleShipMethod" style="width:100%;">' +
+            '<option value="Ground">Ground</option>' +
+            '<option value="Priority">Priority</option>' +
+            '<option value="2-Day">2-Day</option>' +
+            '<option value="Overnight">Overnight</option>' +
+            '<option value="Other">Other</option>' +
+          '</select>' +
+        '</div>' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<label>Tracking / Confirmation Number</label>' +
+        '<input type="text" id="simpleShipTracking" placeholder="Enter tracking number">' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<label>Attach Label <span style="color:var(--warm-gray);font-weight:400;">(optional)</span></label>' +
+        '<input type="file" id="simpleShipLabel" accept=".pdf,.png,.jpg,.jpeg" style="font-size:0.85rem;">' +
+        '<p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">PDF or image of shipping label. Stored with order for reprinting.</p>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">' +
+        '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+        '<button class="btn btn-primary" id="simpleShipBtn" onclick="submitSimpleShip(\'' + esc(orderId) + '\')">Ship</button>' +
+      '</div>' +
+    '</div>';
+    openModal(html);
+  }
+
+  async function submitSimpleShip(orderId) {
+    var carrier = document.getElementById('simpleShipCarrier').value;
+    var method = document.getElementById('simpleShipMethod').value;
+    var trackingNum = document.getElementById('simpleShipTracking').value.trim();
+    var labelFile = document.getElementById('simpleShipLabel').files[0];
+
+    if (!trackingNum) {
+      showToast('Enter a tracking number', true);
+      return;
+    }
+
+    var btn = document.getElementById('simpleShipBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Shipping...'; }
+
+    try {
+      var now = new Date().toISOString();
+      var trackingUrl = '';
+      if (TRACKING_URLS[carrier]) {
+        trackingUrl = TRACKING_URLS[carrier](trackingNum);
+      }
+
+      // Upload label file if provided
+      var labelUrl = '';
+      if (labelFile) {
+        try {
+          var storageRef = firebase.storage().ref();
+          var labelPath = MastDB.tenantId() + '/shipping-labels/' + orderId + '/' + labelFile.name;
+          var uploadResult = await storageRef.child(labelPath).put(labelFile);
+          labelUrl = await uploadResult.ref.getDownloadURL();
+        } catch (uploadErr) {
+          console.warn('Label upload failed:', uploadErr.message);
+          // Continue without label — not a blocking error
+        }
+      }
+
+      var o = orders[orderId];
+      var history = Array.isArray(o.statusHistory) ? o.statusHistory.slice() : (o.statusHistory ? Object.values(o.statusHistory) : []);
+      history.push({ status: 'shipped', at: now, by: 'admin', note: carrier + ' ' + method + ' ' + trackingNum });
+
+      // Pull reserved items from stock
+      if (o && o.fulfillment) {
+        (o.items || []).forEach(function(item) {
+          var ffKey = getItemFulfillmentKey(item);
+          var ff = o.fulfillment[ffKey];
+          if (ff && ff.source === 'stock') {
+            pullFromStock(item.pid, item.qty || 1, getItemComboKey(item.pid, item.options));
+          }
+        });
+      }
+
+      var trackingData = {
+        carrier: carrier,
+        method: method,
+        trackingNumber: trackingNum,
+        trackingUrl: trackingUrl
+      };
+      if (labelUrl) trackingData.labelUrl = labelUrl;
+
+      await MastDB.orders.ref(orderId).update({
+        status: 'shipped',
+        shippedAt: now,
+        tracking: trackingData,
+        statusHistory: history
+      });
+      await writeAudit('update', 'orders', orderId);
+
+      closeModal();
+      showToast('Order shipped — ' + carrier + ' ' + method);
+      renderOrderDetail(orderId);
+    } catch (err) {
+      showToast('Error: ' + err.message, true);
+      if (btn) { btn.disabled = false; btn.textContent = 'Ship'; }
+    }
+  }
+
+  // ============================================================
   // Cancel Order Modal
   // ============================================================
 
@@ -2766,6 +2889,8 @@
   window.pullFromStock = pullFromStock;
   window.createProductionRequests = createProductionRequests;
   window.openShippingModal = openShippingModal;
+  window.openSimpleShipDialog = openSimpleShipDialog;
+  window.submitSimpleShip = submitSimpleShip;
   window.submitManualShipping = submitManualShipping;
   window.shippingGetRates = shippingGetRates;
   window.shippingBuyLabel = shippingBuyLabel;
