@@ -1467,7 +1467,7 @@
         '<label style="font-weight:600;">Ship From</label>' +
         '<select id="shipFromSelect" onchange="_shippingState.selectedFromKey=this.value">' + fromOptions + '</select>' +
       '</div>' +
-      '<input type="hidden" id="shipFromPhone" value="' + esc(fromLoc.phone || '6170000000') + '">' +
+      '<input type="hidden" id="shipFromPhone" value="' + esc(fromLoc.phone || '+1 617 555 0100') + '">' +
 
       // Ship-to (read-only)
       '<div class="form-group">' +
