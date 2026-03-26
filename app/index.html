@@ -20554,11 +20554,13 @@ function addStudioLocation() {
       }).then(function() {
         writeAudit('create', 'locations', ref.key);
         document.getElementById('newStudioLocationName').value = '';
-        statusEl.innerHTML = '<span style="color:#4CAF50;">✅ ' + name + ' saved at ' + lat.toFixed(5) + ', ' + lng.toFixed(5) + '</span>';
-        loadStudioLocations();
-        setTimeout(function() { statusEl.innerHTML = ''; }, 5000);
+        statusEl.innerHTML = '<span style="color:#4CAF50;">Location saved — now add the shipping address.</span>';
+        studioLocations[ref.key] = { name: name, lat: lat, lng: lng, radius: STUDIO_RADIUS_METERS };
+        renderStudioLocations();
+        // Immediately open address form so user fills it in
+        setTimeout(function() { editStudioLocationAddress(ref.key); }, 300);
       }).catch(function(err) {
-        statusEl.innerHTML = '<span style="color:#E53935;">Error: ' + esc(err.message) + '</span>';
+        statusEl.innerHTML = '<span style="color:var(--danger);">Error: ' + esc(err.message) + '</span>';
       });
     },
     function(err) {
