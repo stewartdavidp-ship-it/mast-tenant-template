@@ -312,7 +312,7 @@ Multi-step checkout implemented in `checkout.js` as an IIFE (`MastCheckout`).
 
 5. **Confirmation** — Reads `pendingOrder` from sessionStorage (survives the Square redirect). Firebase listener watches `{tenantId}/orders/{orderId}/status` for transition from `pending_payment` to `placed` (triggered by Square webhook → `squareWebhook` cloud function). On detection, auto-generates and downloads Pirate Ship CSV.
 
-### Shipping Calculation
+### Shipping Calculation (Storefront)
 
 **Algorithm** (identical on client and server):
 - Subtotal ≥ `freeThreshold` → free shipping
@@ -332,6 +332,44 @@ Multi-step checkout implemented in `checkout.js` as an IIFE (`MastCheckout`).
   "packingBufferOz": 8
 }
 ```
+
+### Shipping Label Provider (Admin)
+
+**Generic abstraction layer** mirroring payment-abstraction.js. Shippo is the first adapter; Pirate Ship/CSV is the manual fallback.
+
+**Provider config path:** `{tenantId}/config/shipping/`
+```json
+{
+  "provider": "shippo | manual",
+  "defaultFromLocationKey": "studio-key",
+  "packagePresets": [
+    { "name": "Small Box", "lengthIn": 6, "widthIn": 6, "heightIn": 6 }
+  ],
+  "updatedAt": "ISO timestamp"
+}
+```
+
+**API key:** Stored in GCP Secret Manager as `{secretPrefix}-shippo-api-token`. Managed via `secretsManager` Cloud Function from Settings UI.
+
+**Cloud Functions (mast-platform-prod):**
+- `shippingValidateAddress` — validate a shipping address
+- `shippingGetRates` — get carrier rates for a parcel (from/to/dims)
+- `shippingBuyLabel` — purchase a shipping label, writes tracking to order
+- `shippingVoidLabel` — void a label, clears tracking on order
+
+**Backend:** `mast-architecture/functions/shipping-abstraction.js` — provider detection chain: explicit config → auto-detect secret → platform fallback. Caching: provider type 30s, client instances 5min.
+
+**Admin UI flow (orders.js):**
+1. `openShippingModal()` detects provider from `config/shipping/provider`
+2. API mode: ship-from picker → package config → get rates → buy label → print
+3. Manual mode: carrier + tracking number form (backward compat)
+4. Void: button in tracking section, reverts order to confirmed
+
+**Ship-from addresses:** Stored on `studioLocations` (`config/studioLocations/{id}/`). Fields: `address1, address2, city, state, zip, phone, isDefaultShipFrom`.
+
+**Product dimensions:** `lengthIn, widthIn, heightIn` on product record (alongside `weightOz, shippingCategory`).
+
+**Label printing:** LabelKeeper integration via API sessions. `printShippingLabel()` POSTs `{ type: 'shipping-label', labelImageUrl, orderId, carrier }` to LK API → LK opens 4×6 full-bleed print. Mobile falls back to direct label URL open.
 
 ### Google Places Integration
 
