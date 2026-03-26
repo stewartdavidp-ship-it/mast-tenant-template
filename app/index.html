@@ -6322,6 +6322,9 @@
               <input type="number" id="newPresetH" placeholder="H" min="0" step="0.1" style="width:55px;padding:7px 6px;border:1px solid #ddd;border-radius:6px;font-size:0.82rem;text-align:center;">
               <button class="btn btn-secondary" style="font-size:0.78rem;padding:6px 10px;" onclick="addPackagePreset()">+ Add</button>
             </div>
+            <div style="margin-top:8px;">
+              <button class="btn btn-secondary" style="font-size:0.75rem;padding:4px 10px;" onclick="resetPackagePresets()">Reset to Defaults</button>
+            </div>
           </div>
         </div>
 
@@ -12400,8 +12403,12 @@ function loadShipProviderConfig() {
     if (radio) radio.checked = true;
     onShipProviderChange();
 
-    // Load package presets
-    renderPackagePresets(config.packagePresets || []);
+    // Load package presets (seed defaults if none saved)
+    var presets = config.packagePresets;
+    if (!presets || presets.length === 0) {
+      presets = DEFAULT_PACKAGE_PRESETS.map(function(p) { return Object.assign({}, p); });
+    }
+    renderPackagePresets(presets);
 
     // Load default ship-from
     loadShipFromLocations(config.defaultFromLocationKey || '');
@@ -12446,24 +12453,51 @@ function loadShipFromLocations(selectedKey) {
   });
 }
 
+var DEFAULT_PACKAGE_PRESETS = [
+  { name: 'Small Box', lengthIn: 8, widthIn: 6, heightIn: 4 },
+  { name: 'Medium Box', lengthIn: 12, widthIn: 10, heightIn: 6 },
+  { name: 'Large Box', lengthIn: 16, widthIn: 12, heightIn: 8 },
+  { name: 'Flat Rate Envelope', lengthIn: 12.5, widthIn: 9.5, heightIn: 0.75 },
+  { name: 'Padded Mailer', lengthIn: 10, widthIn: 7, heightIn: 2 }
+];
+
 function renderPackagePresets(presets) {
   var el = document.getElementById('shipPresetsList');
   if (!el) return;
   if (!presets || presets.length === 0) {
-    el.innerHTML = '<div style="padding:8px;color:var(--warm-gray-light);font-size:0.82rem;font-style:italic;">No presets yet.</div>';
+    el.innerHTML = '<div style="padding:8px;color:var(--warm-gray-light);font-size:0.82rem;font-style:italic;">No presets. Click "Reset to Defaults" to add standard sizes.</div>';
+    window._shipPackagePresets = [];
     return;
   }
-  var html = '';
+  var html = '<div style="display:flex;gap:8px;padding:4px 0;border-bottom:2px solid var(--cream-dark);margin-bottom:4px;">' +
+    '<span style="flex:2;font-size:0.72rem;font-weight:600;text-transform:uppercase;color:var(--warm-gray-light);">Name</span>' +
+    '<span style="width:55px;font-size:0.72rem;font-weight:600;text-transform:uppercase;color:var(--warm-gray-light);text-align:center;">L</span>' +
+    '<span style="width:55px;font-size:0.72rem;font-weight:600;text-transform:uppercase;color:var(--warm-gray-light);text-align:center;">W</span>' +
+    '<span style="width:55px;font-size:0.72rem;font-weight:600;text-transform:uppercase;color:var(--warm-gray-light);text-align:center;">H</span>' +
+    '<span style="width:60px;"></span>' +
+  '</div>';
   presets.forEach(function(p, i) {
-    html += '<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--cream-dark);">' +
-      '<span style="flex:2;font-size:0.85rem;font-weight:500;">' + esc(p.name || 'Unnamed') + '</span>' +
-      '<span style="font-size:0.82rem;color:var(--warm-gray);font-family:monospace;">' + (p.lengthIn || 0) + '×' + (p.widthIn || 0) + '×' + (p.heightIn || 0) + '"</span>' +
-      '<button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 8px;color:var(--danger);" onclick="removePackagePreset(' + i + ')">Remove</button>' +
+    html += '<div style="display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid var(--cream-dark);">' +
+      '<input type="text" value="' + esc(p.name || '') + '" style="flex:2;padding:5px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.82rem;font-family:\'DM Sans\',sans-serif;" onchange="updatePackagePreset(' + i + ',\'name\',this.value)">' +
+      '<input type="number" value="' + (p.lengthIn || '') + '" min="0" step="0.1" style="width:55px;padding:5px 4px;border:1px solid #ddd;border-radius:4px;font-size:0.82rem;text-align:center;" onchange="updatePackagePreset(' + i + ',\'lengthIn\',this.value)">' +
+      '<input type="number" value="' + (p.widthIn || '') + '" min="0" step="0.1" style="width:55px;padding:5px 4px;border:1px solid #ddd;border-radius:4px;font-size:0.82rem;text-align:center;" onchange="updatePackagePreset(' + i + ',\'widthIn\',this.value)">' +
+      '<input type="number" value="' + (p.heightIn || '') + '" min="0" step="0.1" style="width:55px;padding:5px 4px;border:1px solid #ddd;border-radius:4px;font-size:0.82rem;text-align:center;" onchange="updatePackagePreset(' + i + ',\'heightIn\',this.value)">' +
+      '<button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 8px;color:var(--danger);width:60px;" onclick="removePackagePreset(' + i + ')">Remove</button>' +
     '</div>';
   });
   el.innerHTML = html;
-  // Store in memory for save
   window._shipPackagePresets = presets;
+}
+
+function updatePackagePreset(idx, field, value) {
+  var presets = window._shipPackagePresets || [];
+  if (!presets[idx]) return;
+  if (field === 'name') {
+    presets[idx].name = value.trim();
+  } else {
+    presets[idx][field] = parseFloat(value) || 0;
+  }
+  _savePackagePresets(presets);
 }
 
 function addPackagePreset() {
@@ -12486,6 +12520,12 @@ function addPackagePreset() {
 function removePackagePreset(idx) {
   var presets = window._shipPackagePresets || [];
   presets.splice(idx, 1);
+  renderPackagePresets(presets);
+  _savePackagePresets(presets);
+}
+
+function resetPackagePresets() {
+  var presets = DEFAULT_PACKAGE_PRESETS.map(function(p) { return Object.assign({}, p); });
   renderPackagePresets(presets);
   _savePackagePresets(presets);
 }
