@@ -12475,6 +12475,7 @@ function addPackagePreset() {
   var presets = window._shipPackagePresets || [];
   presets.push({ name: name, lengthIn: l, widthIn: w, heightIn: h });
   renderPackagePresets(presets);
+  _savePackagePresets(presets);
   document.getElementById('newPresetName').value = '';
   document.getElementById('newPresetL').value = '';
   document.getElementById('newPresetW').value = '';
@@ -12485,6 +12486,15 @@ function removePackagePreset(idx) {
   var presets = window._shipPackagePresets || [];
   presets.splice(idx, 1);
   renderPackagePresets(presets);
+  _savePackagePresets(presets);
+}
+
+function _savePackagePresets(presets) {
+  MastDB.config.shippingProvider('packagePresets').set(presets).then(function() {
+    showToast('Package presets saved');
+  }).catch(function(err) {
+    showToast('Error saving presets: ' + err.message, true);
+  });
 }
 
 async function saveShipProviderConfig() {
