@@ -9494,6 +9494,12 @@ async function loadUserRole(uid) {
         lastLoginAt: firebase.database.ServerValue.TIMESTAMP
       };
       await MastDB.adminUsers.ref(uid).set(userData);
+      // Register in platform userTenantMap so future logins resolve instantly
+      if (initialRole !== 'guest') {
+        db.ref('mast-platform/userTenantMap/' + uid + '/' + MastDB.tenantId()).set(true).catch(function(e) {
+          console.warn('userTenantMap write failed (non-blocking):', e);
+        });
+      }
     } else {
       // Update lastLoginAt only — don't overwrite role (may have been elevated)
       await MastDB.adminUsers.subRef(uid, 'lastLoginAt')
@@ -9857,6 +9863,22 @@ auth.onAuthStateChanged(async function(user) {
           console.log('Bootstrap: verified existing ' + existingUser.role + ' role for UID ' + user.uid + ' in tenant "' + domainTenant + '"');
           tenantId = domainTenant;
 
+        } else if (user.email) {
+          // No existing role — check for pending invite before rejecting
+          var inviteKey = user.email.toLowerCase().replace(/\./g, ',');
+          try {
+            var inviteSnap = await MastDB.invites.ref(inviteKey).once('value');
+            var invite = inviteSnap.val();
+            if (invite && invite.status === 'pending' && invite.role) {
+              console.log('Bootstrap: found pending invite for ' + user.email + ' with role "' + invite.role + '" in tenant "' + domainTenant + '"');
+              tenantId = domainTenant;
+              // loadUserRole() will handle accepting the invite and creating the user record
+            } else {
+              console.warn('User ' + user.uid + ' has no admin/user role and no pending invite in tenant "' + domainTenant + '"');
+            }
+          } catch (invCheckErr) {
+            console.warn('Invite check failed during bootstrap:', invCheckErr);
+          }
         } else {
           console.warn('User ' + user.uid + ' has no admin/user role in tenant "' + domainTenant + '"');
         }
