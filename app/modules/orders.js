@@ -1426,15 +1426,24 @@
       '</div>' : '';
 
     // Ship-to (from order)
-    var addr = order.shippingAddress || order.address || {};
+    var addr = order.shippingAddress || order.shipping || order.address || {};
     var toLine = [addr.name, addr.address1, addr.city, addr.state, addr.zip].filter(Boolean).join(', ');
 
-    // Package
+    // Package — auto-select first preset if available
+    if (s.selectedPreset === undefined && s.presets && s.presets.length > 0) {
+      s.selectedPreset = 0;
+    }
     var presetOptions = '<option value="custom">Custom dimensions</option>';
     (s.presets || []).forEach(function(p, i) {
       presetOptions += '<option value="' + i + '"' + (s.selectedPreset === i ? ' selected' : '') + '>' +
         esc(p.name) + ' (' + p.lengthIn + '×' + p.widthIn + '×' + p.heightIn + '")</option>';
     });
+
+    // Pre-fill dims from selected preset
+    var selectedPresetObj = (s.selectedPreset !== undefined && s.presets) ? s.presets[s.selectedPreset] : null;
+    var presetL = selectedPresetObj ? selectedPresetObj.lengthIn : (s.parcelLength || '');
+    var presetW = selectedPresetObj ? selectedPresetObj.widthIn : (s.parcelWidth || '');
+    var presetH = selectedPresetObj ? selectedPresetObj.heightIn : (s.parcelHeight || '');
 
     var autoWeightNote = s.autoWeight > 0 ? ' (auto-calculated from products: ' + s.autoWeight + ' oz)' : '';
     var currentWeight = s.manualWeight || s.autoWeight || '';
@@ -1462,9 +1471,9 @@
       '</div>' +
       '<div id="shipCustomDims" style="display:' + (s.selectedPreset !== undefined ? 'none' : 'block') + ';">' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
-          '<div class="form-group" style="min-width:80px;flex:1;"><label>Length (in)</label><input type="number" id="shipLength" min="0" step="0.1" value="' + (s.parcelLength || '') + '"></div>' +
-          '<div class="form-group" style="min-width:80px;flex:1;"><label>Width (in)</label><input type="number" id="shipWidth" min="0" step="0.1" value="' + (s.parcelWidth || '') + '"></div>' +
-          '<div class="form-group" style="min-width:80px;flex:1;"><label>Height (in)</label><input type="number" id="shipHeight" min="0" step="0.1" value="' + (s.parcelHeight || '') + '"></div>' +
+          '<div class="form-group" style="min-width:80px;flex:1;"><label>Length (in)</label><input type="number" id="shipLength" min="0" step="0.1" value="' + presetL + '"></div>' +
+          '<div class="form-group" style="min-width:80px;flex:1;"><label>Width (in)</label><input type="number" id="shipWidth" min="0" step="0.1" value="' + presetW + '"></div>' +
+          '<div class="form-group" style="min-width:80px;flex:1;"><label>Height (in)</label><input type="number" id="shipHeight" min="0" step="0.1" value="' + presetH + '"></div>' +
         '</div>' +
       '</div>' +
       '<div class="form-group" style="max-width:200px;">' +
@@ -1587,7 +1596,7 @@
       }
 
       var order = orders[s.orderId];
-      var toAddr = order.shippingAddress || order.address || {};
+      var toAddr = order.shippingAddress || order.shipping || order.address || {};
 
       var lengthIn = parseFloat(document.getElementById('shipLength').value) || 0;
       var widthIn = parseFloat(document.getElementById('shipWidth').value) || 0;
