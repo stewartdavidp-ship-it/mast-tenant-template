@@ -10472,13 +10472,27 @@ var MastAdmin = (function() {
       return Promise.reject(new Error('Unknown module: ' + moduleId));
     }
     _loadPromises[moduleId] = new Promise(function(resolve, reject) {
+      // Temporarily catch script parse/runtime errors
+      var errorHandler = function(event) {
+        if (event.filename && event.filename.indexOf(manifest.src) !== -1) {
+          window.removeEventListener('error', errorHandler);
+          delete _loadPromises[moduleId];
+          var msg = 'Failed to load module: ' + moduleId + ' — ' + (event.message || 'unknown error') + ' (line ' + (event.lineno || '?') + ')';
+          showToast(msg, true);
+          reject(new Error(msg));
+        }
+      };
+      window.addEventListener('error', errorHandler);
       var script = document.createElement('script');
       script.src = manifest.src + '?v=' + MAST_MODULES_V;
       script.onload = function() {
+        // Remove error handler after a short delay (parse errors fire synchronously)
+        setTimeout(function() { window.removeEventListener('error', errorHandler); }, 100);
         delete _loadPromises[moduleId];
         resolve();
       };
       script.onerror = function() {
+        window.removeEventListener('error', errorHandler);
         delete _loadPromises[moduleId];
         showToast('Failed to load module: ' + moduleId, true);
         reject(new Error('Script load failed: ' + manifest.src));
