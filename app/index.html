@@ -7742,8 +7742,8 @@ MastDB.feedbackSettings = {
 };
 
 MastDB.testingMissions = {
-  PATH: 'admin/testingMissions',
-  ref: function() { return MastDB._ref(this.PATH); },
+  PATH: 'mast-platform/testingMissions',
+  ref: function() { return db.ref(this.PATH); },
   list: function() { return this.ref().once('value'); }
 };
 
