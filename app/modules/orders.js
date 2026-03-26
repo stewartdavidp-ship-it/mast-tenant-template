@@ -1813,7 +1813,7 @@
       if (lkKey) {
         var resp = await fetch(lkUrl + '/sessions', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-API-Key': lkKey },
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + lkKey },
           body: JSON.stringify({
             type: 'shipping-label',
             labelImageUrl: labelUrl,
