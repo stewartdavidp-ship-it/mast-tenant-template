@@ -20533,17 +20533,38 @@ function renderStudioLocations() {
 }
 
 async function _reverseGeocode(lat, lng) {
+  // Try OpenStreetMap Nominatim (free, no API key needed)
   try {
-    // Try Google Maps Geocoding API if key is available
+    var resp = await fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat=' + lat + '&lon=' + lng + '&addressdetails=1&zoom=18', {
+      headers: { 'Accept': 'application/json', 'User-Agent': 'MastPlatform/1.0' }
+    });
+    var data = await resp.json();
+    if (data && data.address) {
+      var a = data.address;
+      var streetNum = a.house_number || '';
+      var street = a.road || '';
+      return {
+        address1: (streetNum + ' ' + street).trim(),
+        city: a.city || a.town || a.village || a.hamlet || '',
+        state: a.state || '',
+        zip: a.postcode || ''
+      };
+    }
+  } catch (e) {
+    console.warn('Nominatim reverse geocode failed:', e.message);
+  }
+
+  // Fallback: try Google Maps Geocoding API if key is available
+  try {
     var keySnap = await MastDB.config.googleMaps().once('value');
     var apiKey = keySnap.val();
     if (!apiKey) return null;
 
-    var resp = await fetch('https://maps.googleapis.com/maps/api/geocode/json?latlng=' + lat + ',' + lng + '&key=' + apiKey);
-    var data = await resp.json();
-    if (data.status !== 'OK' || !data.results || !data.results.length) return null;
+    var resp2 = await fetch('https://maps.googleapis.com/maps/api/geocode/json?latlng=' + lat + ',' + lng + '&key=' + apiKey);
+    var data2 = await resp2.json();
+    if (data2.status !== 'OK' || !data2.results || !data2.results.length) return null;
 
-    var components = data.results[0].address_components || [];
+    var components = data2.results[0].address_components || [];
     var get = function(type) {
       var c = components.find(function(c) { return c.types.indexOf(type) !== -1; });
       return c ? c.short_name : '';
@@ -20559,8 +20580,8 @@ async function _reverseGeocode(lat, lng) {
       state: get('administrative_area_level_1') || '',
       zip: get('postal_code') || ''
     };
-  } catch (e) {
-    console.warn('Reverse geocode failed:', e.message);
+  } catch (e2) {
+    console.warn('Google reverse geocode failed:', e2.message);
     return null;
   }
 }
