@@ -6304,10 +6304,15 @@
             </p>
           </div>
 
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-primary" onclick="saveShipProviderConfig()">Save Label Provider</button>
+          </div>
+          <div id="shipProviderConfigStatus" style="margin-top:8px;font-size:0.85rem;"></div>
+
           <!-- Package Presets -->
-          <div id="shipPresetsSection" style="display:none;margin-bottom:16px;">
+          <div id="shipPresetsSection" style="display:none;margin-bottom:16px;margin-top:20px;">
             <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:8px;">Package Presets</label>
-            <p style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">Common box sizes for quick selection when shipping orders.</p>
+            <p style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">Common box sizes for quick selection when shipping orders. Presets save automatically.</p>
             <div id="shipPresetsList"></div>
             <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
               <input type="text" id="newPresetName" placeholder="Name (e.g. Small Box)" style="flex:2;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.82rem;">
@@ -6317,11 +6322,6 @@
               <button class="btn btn-secondary" style="font-size:0.78rem;padding:6px 10px;" onclick="addPackagePreset()">+ Add</button>
             </div>
           </div>
-
-          <div style="display:flex;gap:8px;">
-            <button class="btn btn-primary" onclick="saveShipProviderConfig()">Save Label Provider</button>
-          </div>
-          <div id="shipProviderConfigStatus" style="margin-top:8px;font-size:0.85rem;"></div>
         </div>
 
         <hr style="border:none;border-top:1px solid #eee;margin:28px 0;">
