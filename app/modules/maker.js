@@ -112,10 +112,12 @@
     Object.keys(lineItems).forEach(function(liId) {
       var li = lineItems[liId];
       var qty = li.quantity || 0;
+      var scrapPct = li.scrapPercent || 0;
+      var effectiveQty = roundCents(qty * (1 + scrapPct / 100));
       var cost = li.unitCost || 0;
-      var extendedCost = roundCents(qty * cost);
+      var extendedCost = roundCents(effectiveQty * cost);
       totalMaterialCost += extendedCost;
-      calculatedLineItems[liId] = Object.assign({}, li, { extendedCost: extendedCost });
+      calculatedLineItems[liId] = Object.assign({}, li, { effectiveQty: effectiveQty, extendedCost: extendedCost });
     });
 
     totalMaterialCost = roundCents(totalMaterialCost);
@@ -429,6 +431,7 @@
       materialId: materialId,
       materialName: material.name,
       quantity: quantity || 0,
+      scrapPercent: 0,
       unitOfMeasure: material.unitOfMeasure,
       unitCost: material.unitCost,
       extendedCost: roundCents((quantity || 0) * material.unitCost)
@@ -903,6 +906,35 @@
 
     html += '</div>';
 
+    // Cost history note (edit only, when previousUnitCost exists)
+    if (isEdit && m && m.previousUnitCost != null) {
+      html += '<div style="background:rgba(42,124,111,0.06);border:1px solid rgba(42,124,111,0.15);border-radius:6px;padding:8px 12px;margin-bottom:16px;font-size:0.82rem;color:var(--warm-gray);">';
+      html += 'Previous cost: <strong style="font-family:monospace;">$' + (m.previousUnitCost || 0).toFixed(2) + '</strong>';
+      if (m.costChangedAt) html += ' (changed ' + new Date(m.costChangedAt).toLocaleDateString() + ')';
+      html += '</div>';
+    }
+
+    // Purchase UOM + Conversion Factor (optional — for buy vs use unit)
+    html += '<div style="display:flex;gap:12px;margin-bottom:16px;">';
+
+    html += '<div style="flex:1;">';
+    html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Purchase UOM <span style="font-weight:400;color:var(--warm-gray);">(optional)</span></label>';
+    html += '<select id="matPurchaseUOM" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">';
+    html += '<option value="">Same as above</option>';
+    UOM_OPTIONS.forEach(function(opt) {
+      var sel = m && m.purchaseUOM === opt.value ? ' selected' : '';
+      html += '<option value="' + opt.value + '"' + sel + '>' + esc(opt.label) + '</option>';
+    });
+    html += '</select>';
+    html += '</div>';
+
+    html += '<div style="flex:1;">';
+    html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Conversion Factor</label>';
+    html += '<input id="matConvFactor" type="number" step="0.0001" min="0" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;box-sizing:border-box;" value="' + (m && m.conversionFactor ? m.conversionFactor : '') + '" placeholder="e.g. 20 (1 oz = 20 dwt)">';
+    html += '</div>';
+
+    html += '</div>';
+
     // On Hand Qty + Reorder Threshold (side by side)
     html += '<div style="display:flex;gap:12px;margin-bottom:16px;">';
 
@@ -967,6 +999,9 @@
     }
 
     var cost = parseFloat(document.getElementById('matCost').value) || 0;
+    var purchaseUOM = (document.getElementById('matPurchaseUOM') || {}).value || '';
+    var convFactor = parseFloat((document.getElementById('matConvFactor') || {}).value) || 0;
+
     var data = {
       name: name,
       category: document.getElementById('matCategory').value || '',
@@ -976,6 +1011,8 @@
       reorderThreshold: parseFloat(document.getElementById('matReorder').value) || 0,
       notes: (document.getElementById('matNotes').value || '').trim()
     };
+    if (purchaseUOM) data.purchaseUOM = purchaseUOM;
+    if (convFactor > 0) data.conversionFactor = convFactor;
 
     var statusEl = document.getElementById('matStatus');
     if (statusEl) data.status = statusEl.value;
@@ -1380,6 +1417,7 @@
       html += '<thead><tr>';
       html += '<th style="text-align:left;padding:6px 8px;font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--warm-gray-light);border-bottom:1px solid var(--cream-dark);">Material</th>';
       html += '<th style="text-align:right;padding:6px 8px;font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--warm-gray-light);border-bottom:1px solid var(--cream-dark);">Qty</th>';
+      html += '<th style="text-align:right;padding:6px 8px;font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--warm-gray-light);border-bottom:1px solid var(--cream-dark);">Waste%</th>';
       html += '<th style="text-align:center;padding:6px 8px;font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--warm-gray-light);border-bottom:1px solid var(--cream-dark);">UOM</th>';
       html += '<th style="text-align:right;padding:6px 8px;font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--warm-gray-light);border-bottom:1px solid var(--cream-dark);">Unit Cost</th>';
       html += '<th style="text-align:right;padding:6px 8px;font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--warm-gray-light);border-bottom:1px solid var(--cream-dark);">Extended</th>';
@@ -1388,10 +1426,14 @@
 
       liKeys.forEach(function(liId) {
         var li = lineItems[liId];
-        var ext = calc.lineItems[liId] ? calc.lineItems[liId].extendedCost : roundCents((li.quantity || 0) * (li.unitCost || 0));
+        var calcLi = calc.lineItems[liId] || {};
+        var ext = calcLi.extendedCost || roundCents((li.quantity || 0) * (li.unitCost || 0));
+        var effQty = calcLi.effectiveQty || li.quantity || 0;
+        var scrapPct = li.scrapPercent || 0;
         html += '<tr>';
         html += '<td style="padding:8px;font-size:0.85rem;border-bottom:1px solid var(--cream-dark);">' + esc(li.materialName || '') + '</td>';
-        html += '<td style="text-align:right;padding:8px;border-bottom:1px solid var(--cream-dark);"><input type="number" step="0.01" min="0" value="' + (li.quantity || 0) + '" style="width:70px;text-align:right;padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);" onchange="makerUpdateLineItemQty(\'' + esc(liId) + '\', this.value)"></td>';
+        html += '<td style="text-align:right;padding:8px;border-bottom:1px solid var(--cream-dark);"><input type="number" step="0.01" min="0" value="' + (li.quantity || 0) + '" style="width:70px;text-align:right;padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);" onchange="makerUpdateLineItemQty(\'' + esc(liId) + '\', this.value)">' + (scrapPct > 0 ? '<div style="font-size:0.7rem;color:var(--warm-gray);text-align:right;margin-top:2px;">eff: ' + effQty.toFixed(2) + '</div>' : '') + '</td>';
+        html += '<td style="text-align:right;padding:8px;border-bottom:1px solid var(--cream-dark);"><input type="number" step="1" min="0" max="50" value="' + scrapPct + '" style="width:55px;text-align:right;padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);" onchange="makerUpdateLineItemScrap(\'' + esc(liId) + '\', this.value)"></td>';
         html += '<td style="text-align:center;padding:8px;font-size:0.82rem;color:var(--warm-gray);border-bottom:1px solid var(--cream-dark);">' + esc(li.unitOfMeasure || '') + '</td>';
         html += '<td style="text-align:right;padding:8px;font-family:monospace;font-size:0.85rem;border-bottom:1px solid var(--cream-dark);">$' + (li.unitCost || 0).toFixed(2) + '</td>';
         html += '<td style="text-align:right;padding:8px;font-family:monospace;font-size:0.85rem;font-weight:600;border-bottom:1px solid var(--cream-dark);">$' + ext.toFixed(2) + '</td>';
@@ -1569,6 +1611,14 @@
     var target = getActiveVariantData(builderState);
     if (!target.lineItems || !target.lineItems[liId]) return;
     target.lineItems[liId].quantity = parseFloat(value) || 0;
+    renderRecipeBuilder();
+  }
+
+  function updateLineItemScrap(liId, value) {
+    if (!builderState) return;
+    var target = getActiveVariantData(builderState);
+    if (!target.lineItems || !target.lineItems[liId]) return;
+    target.lineItems[liId].scrapPercent = Math.min(50, Math.max(0, parseFloat(value) || 0));
     renderRecipeBuilder();
   }
 
@@ -1806,6 +1856,7 @@
   window.makerSetTierFromBuilder = setTierFromBuilder;
   window.makerUpdateBuilderField = updateBuilderField;
   window.makerUpdateLineItemQty = updateLineItemQty;
+  window.makerUpdateLineItemScrap = updateLineItemScrap;
   window.makerRemoveLineItemUI = removeLineItemUI;
   window.makerOpenAddPartModal = openAddPartModal;
   window.makerCloseAddPartModal = closeAddPartModal;
