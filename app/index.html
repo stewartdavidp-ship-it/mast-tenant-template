@@ -6281,6 +6281,10 @@
                 <input type="password" id="shippoApiKeyInput" placeholder="shippo_live_..." style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.85rem;font-family:monospace;">
                 <button class="btn btn-secondary" style="font-size:0.78rem;padding:6px 12px;" onclick="toggleShippoKeyVisibility()">Show</button>
               </div>
+              <div style="display:flex;gap:8px;margin-top:8px;">
+                <button class="btn btn-primary" style="font-size:0.78rem;padding:6px 14px;" onclick="saveShippoApiKey()">Save Key</button>
+                <button class="btn btn-secondary" style="font-size:0.78rem;padding:6px 14px;" onclick="testShippoApiKey()">Test Key</button>
+              </div>
               <div id="shippoKeyStatus" style="margin-top:8px;font-size:0.82rem;"></div>
               <p style="font-size:0.78rem;color:var(--warm-gray);margin-top:8px;">
                 Get your API key from <a href="https://apps.goshippo.com/settings/api" target="_blank" style="color:var(--teal);">goshippo.com/settings/api</a>.
@@ -12332,6 +12336,57 @@ function toggleShippoKeyVisibility() {
   if (el.type === 'password') { el.type = 'text'; } else { el.type = 'password'; }
 }
 
+async function saveShippoApiKey() {
+  var keyInput = document.getElementById('shippoApiKeyInput');
+  var keyVal = keyInput ? keyInput.value.trim() : '';
+  var statusEl = document.getElementById('shippoKeyStatus');
+  if (!keyVal) { showToast('Enter an API key first', true); return; }
+  if (!keyVal.startsWith('shippo_test_') && !keyVal.startsWith('shippo_live_')) {
+    showToast('Shippo keys start with shippo_test_ or shippo_live_', true);
+    return;
+  }
+  try {
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Saving...</span>';
+    await firebase.functions().httpsCallable('secretsManager')({
+      tenantId: MastDB.tenantId(),
+      action: 'write',
+      secretName: 'shippo-api-token',
+      secretValue: keyVal
+    });
+    keyInput.value = '';
+    loadShippoKeyStatus();
+    showToast('Shippo API key saved');
+  } catch (err) {
+    showToast('Error saving key: ' + err.message, true);
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger);">Error: ' + esc(err.message) + '</span>';
+  }
+}
+
+async function testShippoApiKey() {
+  var statusEl = document.getElementById('shippoKeyStatus');
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Testing connection...</span>';
+  try {
+    var token = await auth.currentUser.getIdToken();
+    var resp = await callCF('/shippingValidateAddress', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({
+        tenantId: MastDB.tenantId(),
+        address: { address1: '123 Main St', city: 'San Francisco', state: 'CA', zip: '94105' }
+      })
+    });
+    var data = await resp.json();
+    if (resp.ok) {
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Connection verified — Shippo API is working</span>';
+      showToast('Shippo API key is valid');
+    } else {
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger);">&#10007; ' + esc(data.error || 'Connection failed') + '</span>';
+    }
+  } catch (err) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger);">&#10007; ' + esc(err.message) + '</span>';
+  }
+}
+
 function loadShipProviderConfig() {
   // Load provider setting
   MastDB.config.shippingProvider().once('value').then(function(snap) {
@@ -12449,28 +12504,7 @@ async function saveShipProviderConfig() {
       updatedAt: new Date().toISOString()
     });
 
-    // Save Shippo API key if entered
-    if (providerVal === 'shippo') {
-      var keyInput = document.getElementById('shippoApiKeyInput');
-      var keyVal = keyInput ? keyInput.value.trim() : '';
-      if (keyVal && !keyVal.startsWith('shippo_test_') && !keyVal.startsWith('shippo_live_')) {
-        // Only save if it looks like a real key change (not the masked placeholder)
-        if (keyVal.indexOf('...') === -1) {
-          showToast('Shippo keys start with shippo_test_ or shippo_live_', true);
-          return;
-        }
-      }
-      if (keyVal && keyVal.indexOf('...') === -1) {
-        await firebase.functions().httpsCallable('secretsManager')({
-          tenantId: MastDB.tenantId(),
-          action: 'write',
-          secretName: 'shippo-api-token',
-          secretValue: keyVal
-        });
-        keyInput.value = '';
-        loadShippoKeyStatus();
-      }
-    }
+    // API key is saved separately via the dedicated "Save Key" button
 
     if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Label provider saved</span>';
     setTimeout(function() { if (statusEl) statusEl.innerHTML = ''; }, 5000);
