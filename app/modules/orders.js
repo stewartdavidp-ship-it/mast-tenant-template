@@ -1467,10 +1467,7 @@
         '<label style="font-weight:600;">Ship From</label>' +
         '<select id="shipFromSelect" onchange="_shippingState.selectedFromKey=this.value">' + fromOptions + '</select>' +
       '</div>' +
-      '<div style="display:flex;gap:12px;flex-wrap:wrap;">' +
-        '<div class="form-group" style="flex:1;min-width:160px;"><label>Sender Email</label><input type="email" id="shipFromEmail" value="' + esc((auth.currentUser && auth.currentUser.email) || (order.email) || 'info@runmast.com') + '" style="font-size:0.85rem;"></div>' +
-        '<div class="form-group" style="flex:1;min-width:120px;"><label>Sender Phone</label><input type="tel" id="shipFromPhone" value="' + esc(fromLoc ? (fromLoc.phone || '') : '') + '" placeholder="(555) 123-4567" style="font-size:0.85rem;"></div>' +
-      '</div>' +
+      '<div class="form-group" style="max-width:200px;"><label>Sender Phone</label><input type="tel" id="shipFromPhone" value="' + esc(fromLoc.phone || '') + '" placeholder="(555) 123-4567" style="font-size:0.85rem;"></div>' +
 
       // Ship-to (read-only)
       '<div class="form-group">' +
@@ -1637,7 +1634,7 @@
             state: fromLoc.state,
             zip: fromLoc.zip,
             phone: (document.getElementById('shipFromPhone') && document.getElementById('shipFromPhone').value.trim()) || fromLoc.phone || '0000000000',
-            email: (document.getElementById('shipFromEmail') && document.getElementById('shipFromEmail').value.trim()) || 'info@runmast.com'
+            email: 'info@runmast.com'
           },
           to: {
             name: toAddr.name || (order.customerName || ''),
