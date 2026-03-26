@@ -18,6 +18,12 @@
   var scanCamera = null;
   var scanInterval = null;
   var scanProcessing = false;
+  var _fulfillmentShipProvider = 'manual';
+
+  // Load shipping provider setting
+  MastDB.config.shippingProvider('provider').once('value').then(function(snap) {
+    _fulfillmentShipProvider = snap.val() || 'manual';
+  });
   var tesseractLoaded = false;
   var _pirateShipCSVDownloaded = {};
 
@@ -104,7 +110,9 @@
       if (status === 'packed') {
         html += '<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 12px;" onclick="transitionOrder(\'' + esc(key) + '\', \'handed_to_carrier\')">Handed to Carrier</button>';
       }
-      html += '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 12px;" onclick="openPirateShip(\'' + esc(key) + '\')">Pirate Ship &rarr;</button>' +
+      html += (_fulfillmentShipProvider === 'manual' ?
+        '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 12px;" onclick="openPirateShip(\'' + esc(key) + '\')">Pirate Ship &rarr;</button>' :
+        '<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 12px;" onclick="openShippingModal(\'' + esc(key) + '\')">Ship</button>') +
         '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 12px;" onclick="viewOrder(\'' + esc(key) + '\')">View</button>' +
         '</div></div>' +
         renderOrderProgress(status) +
