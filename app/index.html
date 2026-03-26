@@ -20604,7 +20604,9 @@ function addStudioLocation() {
           var hasDefault = Object.keys(studioLocations).some(function(k) { return studioLocations[k].isDefaultShipFrom; });
           if (!hasDefault) setDefaultShipFrom(ref.key);
         } else {
-          statusEl.innerHTML = '<span style="color:var(--warm-gray);">Location saved — edit to add shipping address manually.</span>';
+          statusEl.innerHTML = '<span style="color:var(--warm-gray);">Location saved — add shipping address below.</span>';
+          // Open address form if geocoding didn't fill it
+          setTimeout(function() { editStudioLocationAddress(ref.key); }, 300);
         }
         setTimeout(function() { statusEl.innerHTML = ''; }, 8000);
       }).catch(function(err) {
@@ -20652,7 +20654,7 @@ function editStudioLocationAddress(locId) {
       '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
     '</div>' +
   '</div>';
-  showModal(html);
+  openModal(html);
 }
 
 async function saveStudioLocationAddress(locId) {
