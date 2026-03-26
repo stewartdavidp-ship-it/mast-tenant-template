@@ -1736,16 +1736,66 @@
   }
 
   function _offerLabelPrint(orderId, labelUrl) {
+    var order = orders[orderId];
+    var carrier = (order && order.tracking && order.tracking.carrier) || '';
+    var isMobile = window.innerWidth < 600;
     var html = '<div style="max-width:400px;text-align:center;">' +
       '<div style="font-size:2rem;margin-bottom:8px;">&#x2705;</div>' +
       '<h3 style="margin:0 0 8px;">Label Ready</h3>' +
       '<p style="color:var(--warm-gray);font-size:0.88rem;margin:0 0 16px;">Your shipping label has been purchased and tracking is set.</p>' +
       '<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">' +
-        '<a href="' + esc(labelUrl) + '" target="_blank" class="btn btn-primary" style="text-decoration:none;">View / Print Label</a>' +
+        (isMobile ?
+          '<a href="' + esc(labelUrl) + '" target="_blank" class="btn btn-primary" style="text-decoration:none;">View Label</a>' :
+          '<button class="btn btn-primary" onclick="printShippingLabel(\'' + esc(orderId) + '\')">Print Label (4×6)</button>') +
+        '<a href="' + esc(labelUrl) + '" target="_blank" class="btn btn-secondary" style="text-decoration:none;">Download PDF</a>' +
         '<button class="btn btn-secondary" onclick="closeModal()">Done</button>' +
       '</div>' +
     '</div>';
     openModal(html);
+  }
+
+  async function printShippingLabel(orderId) {
+    var order = orders[orderId];
+    if (!order || !order.tracking || !order.tracking.labelUrl) {
+      showToast('No label URL found on this order', true);
+      return;
+    }
+    var labelUrl = order.tracking.labelUrl;
+    var carrier = order.tracking.carrier || '';
+    var num = getOrderDisplayNumber(order);
+
+    // Try LabelKeeper API if key is configured
+    try {
+      if (typeof _getLkApiKey === 'function' && typeof LK_API_URL !== 'undefined') {
+        var apiKey = await _getLkApiKey();
+        if (apiKey) {
+          var resp = await fetch(LK_API_URL + '/sessions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
+            body: JSON.stringify({
+              type: 'shipping-label',
+              labelImageUrl: labelUrl,
+              orderId: num,
+              carrier: carrier
+            })
+          });
+          if (resp.ok) {
+            var data = await resp.json();
+            if (data.url) {
+              window.open(data.url, '_blank');
+              showToast('Label opened in LabelKeeper');
+              return;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('LabelKeeper session failed, falling back to direct open:', e.message);
+    }
+
+    // Fallback: open label URL directly
+    window.open(labelUrl, '_blank');
+    showToast('Label opened — use browser print at 4×6');
   }
 
   async function shippingVoidLabel(orderId) {
@@ -2671,6 +2721,7 @@
   window.shippingBackToConfigure = shippingBackToConfigure;
   window.shippingSwitchToManual = shippingSwitchToManual;
   window.shippingVoidLabel = shippingVoidLabel;
+  window.printShippingLabel = printShippingLabel;
   window.openCancelOrderModal = openCancelOrderModal;
   window.cancelOrder = cancelOrder;
   window.addOrderNote = addOrderNote;
