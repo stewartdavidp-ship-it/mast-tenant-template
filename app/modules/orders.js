@@ -1631,7 +1631,8 @@
             city: fromLoc.city,
             state: fromLoc.state,
             zip: fromLoc.zip,
-            phone: fromLoc.phone || ''
+            phone: fromLoc.phone || '0000000000',
+            email: (auth.currentUser && auth.currentUser.email) || ''
           },
           to: {
             name: toAddr.name || (order.customerName || ''),
