@@ -387,7 +387,7 @@
       } else if (t === 'confirmed') {
         actionsHtml += '<button class="btn btn-primary" onclick="openTriageDialog(\'' + esc(orderId) + '\')">Confirm Order</button>';
       } else if (t === 'pack') {
-        actionsHtml += '<button class="btn btn-primary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'pack\')">Pack</button>';
+        actionsHtml += '<button class="btn btn-primary" onclick="packAndNavigate(\'' + esc(orderId) + '\')">Pack</button>';
       } else if (t === 'building') {
         actionsHtml += '<button class="btn btn-secondary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'building\')">Build</button>';
       } else if (t === 'packing') {
@@ -2752,6 +2752,15 @@
   window.executeTriageConfirm = executeTriageConfirm;
   window.triageAndConfirmOrder = triageAndConfirmOrder;
   window.transitionOrder = transitionOrder;
+  window.packAndNavigate = async function(orderId) {
+    await transitionOrder(orderId, 'packing');
+    // Navigate to Pack Queue if Ship module is active
+    var sub = getTenantSubscription ? getTenantSubscription() : {};
+    var hasShip = (sub.modules || []).indexOf('ship') !== -1;
+    if (hasShip && typeof navigateTo === 'function') {
+      navigateTo('pack');
+    }
+  };
   window.reserveInventory = reserveInventory;
   window.releaseInventory = releaseInventory;
   window.pullFromStock = pullFromStock;
