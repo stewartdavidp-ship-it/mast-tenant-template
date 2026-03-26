@@ -1913,8 +1913,13 @@ var _lkApiKeyCache = null;
 
 async function _getLkApiKey() {
   if (_lkApiKeyCache) return _lkApiKeyCache;
+  // Check admin path first (UI-saved), then config path (MCP/provisioning)
   var snap = await MastDB._ref('admin/config/labelkeeper/apiKey').once('value');
   _lkApiKeyCache = snap.val();
+  if (!_lkApiKeyCache) {
+    snap = await MastDB._ref('config/labelkeeper/apiKey').once('value');
+    _lkApiKeyCache = snap.val();
+  }
   return _lkApiKeyCache;
 }
 
