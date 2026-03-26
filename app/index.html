@@ -20532,6 +20532,39 @@ function renderStudioLocations() {
   el.innerHTML = html;
 }
 
+async function _reverseGeocode(lat, lng) {
+  try {
+    // Try Google Maps Geocoding API if key is available
+    var keySnap = await MastDB.config.googleMaps().once('value');
+    var apiKey = keySnap.val();
+    if (!apiKey) return null;
+
+    var resp = await fetch('https://maps.googleapis.com/maps/api/geocode/json?latlng=' + lat + ',' + lng + '&key=' + apiKey);
+    var data = await resp.json();
+    if (data.status !== 'OK' || !data.results || !data.results.length) return null;
+
+    var components = data.results[0].address_components || [];
+    var get = function(type) {
+      var c = components.find(function(c) { return c.types.indexOf(type) !== -1; });
+      return c ? c.short_name : '';
+    };
+    var getLong = function(type) {
+      var c = components.find(function(c) { return c.types.indexOf(type) !== -1; });
+      return c ? c.long_name : '';
+    };
+
+    return {
+      address1: (get('street_number') + ' ' + getLong('route')).trim(),
+      city: getLong('locality') || getLong('sublocality') || '',
+      state: get('administrative_area_level_1') || '',
+      zip: get('postal_code') || ''
+    };
+  } catch (e) {
+    console.warn('Reverse geocode failed:', e.message);
+    return null;
+  }
+}
+
 function addStudioLocation() {
   var name = document.getElementById('newStudioLocationName').value.trim();
   if (!name) { showToast('Enter a location name first', true); return; }
@@ -20549,16 +20582,31 @@ function addStudioLocation() {
       var lat = pos.coords.latitude;
       var lng = pos.coords.longitude;
       var ref = MastDB.studioLocations.ref().push();
-      ref.set({
-        name: name, lat: lat, lng: lng, radius: STUDIO_RADIUS_METERS, createdAt: new Date().toISOString()
+      var locData = { name: name, lat: lat, lng: lng, radius: STUDIO_RADIUS_METERS, createdAt: new Date().toISOString() };
+
+      // Reverse-geocode GPS to get structured address
+      _reverseGeocode(lat, lng).then(function(addr) {
+        if (addr) {
+          locData.address1 = addr.address1 || '';
+          locData.city = addr.city || '';
+          locData.state = addr.state || '';
+          locData.zip = addr.zip || '';
+        }
+        return ref.set(locData);
       }).then(function() {
         writeAudit('create', 'locations', ref.key);
         document.getElementById('newStudioLocationName').value = '';
-        statusEl.innerHTML = '<span style="color:#4CAF50;">Location saved — now add the shipping address.</span>';
-        studioLocations[ref.key] = { name: name, lat: lat, lng: lng, radius: STUDIO_RADIUS_METERS };
+        studioLocations[ref.key] = locData;
         renderStudioLocations();
-        // Immediately open address form so user fills it in
-        setTimeout(function() { editStudioLocationAddress(ref.key); }, 300);
+        if (locData.address1) {
+          statusEl.innerHTML = '<span style="color:#4CAF50;">Location saved with address: ' + esc(locData.address1) + ', ' + esc(locData.city || '') + '</span>';
+          // Auto-set as default if it's the first location with an address
+          var hasDefault = Object.keys(studioLocations).some(function(k) { return studioLocations[k].isDefaultShipFrom; });
+          if (!hasDefault) setDefaultShipFrom(ref.key);
+        } else {
+          statusEl.innerHTML = '<span style="color:var(--warm-gray);">Location saved — edit to add shipping address manually.</span>';
+        }
+        setTimeout(function() { statusEl.innerHTML = ''; }, 8000);
       }).catch(function(err) {
         statusEl.innerHTML = '<span style="color:var(--danger);">Error: ' + esc(err.message) + '</span>';
       });
