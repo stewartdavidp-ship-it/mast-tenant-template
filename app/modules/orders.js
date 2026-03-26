@@ -1797,26 +1797,39 @@
 
     // Try LabelKeeper API if key is configured
     try {
-      if (typeof _getLkApiKey === 'function' && typeof LK_API_URL !== 'undefined') {
-        var apiKey = await _getLkApiKey();
-        if (apiKey) {
-          var resp = await fetch(LK_API_URL + '/sessions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
-            body: JSON.stringify({
-              type: 'shipping-label',
-              labelImageUrl: labelUrl,
-              orderId: num,
-              carrier: carrier
-            })
-          });
-          if (resp.ok) {
-            var data = await resp.json();
-            if (data.url) {
-              window.open(data.url, '_blank');
-              showToast('Label opened in LabelKeeper');
-              return;
-            }
+      var lkUrl = (typeof LK_API_URL !== 'undefined') ? LK_API_URL : 'https://labelkeeper-api-1075204398975.us-central1.run.app';
+      // Try to get LK API key — check production module first, then read directly
+      var lkKey = null;
+      if (typeof _getLkApiKey === 'function') {
+        lkKey = await _getLkApiKey();
+      }
+      if (!lkKey) {
+        try {
+          var snap = await MastDB._ref('config/labelkeeper/apiKey').once('value');
+          lkKey = snap.val();
+          if (!lkKey) {
+            snap = await MastDB._ref('admin/config/labelkeeper/apiKey').once('value');
+            lkKey = snap.val();
+          }
+        } catch(e) {}
+      }
+      if (lkKey) {
+        var resp = await fetch(lkUrl + '/sessions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-API-Key': lkKey },
+          body: JSON.stringify({
+            type: 'shipping-label',
+            labelImageUrl: labelUrl,
+            orderId: num,
+            carrier: carrier
+          })
+        });
+        if (resp.ok) {
+          var data = await resp.json();
+          if (data.url) {
+            window.open(data.url, '_blank');
+            showToast('Label opened in LabelKeeper');
+            return;
           }
         }
       }
