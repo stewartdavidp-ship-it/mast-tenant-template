@@ -1145,14 +1145,14 @@
       updates['status'] = newStatus;
       updates[newStatus + 'At'] = now;
 
-      // Append to statusHistory
-      var history = o.statusHistory ? o.statusHistory.slice() : [];
+      // Append to statusHistory (handle both array and object formats)
+      var history = Array.isArray(o.statusHistory) ? o.statusHistory.slice() : (o.statusHistory ? Object.values(o.statusHistory) : []);
       history.push({ status: newStatus, at: now, by: 'admin' });
       updates['statusHistory'] = history;
 
       // Append to fulfillmentLog for packing/shipping milestones
       if (newStatus === 'packed' || newStatus === 'handed_to_carrier') {
-        var ffLog = o.fulfillmentLog ? o.fulfillmentLog.slice() : [];
+        var ffLog = Array.isArray(o.fulfillmentLog) ? o.fulfillmentLog.slice() : (o.fulfillmentLog ? Object.values(o.fulfillmentLog) : []);
         ffLog.push({ event: newStatus, timestamp: now, userId: 'admin', method: 'manual' });
         updates['fulfillmentLog'] = ffLog;
       }
