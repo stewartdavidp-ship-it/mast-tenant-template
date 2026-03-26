@@ -6300,7 +6300,7 @@
               <option value="">Select a studio location...</option>
             </select>
             <p style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">
-              Only studios with a physical address are shown. <a href="#" onclick="event.preventDefault();switchSettingsSubView('general');setTimeout(function(){var el=document.getElementById('studioLocationsList');if(el)el.scrollIntoView({behavior:'smooth'});},200);" style="color:var(--teal);">Manage studio locations</a>
+              Only studios with a physical address are shown. <a href="#" onclick="event.preventDefault();switchSettingsSubView('workshop');setTimeout(function(){var el=document.getElementById('studioLocationsList');if(el)el.scrollIntoView({behavior:'smooth'});},200);" style="color:var(--teal);">Manage studio locations</a>
             </p>
           </div>
 
@@ -12347,11 +12347,12 @@ async function saveShippoApiKey() {
   }
   try {
     if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Saving...</span>';
+    var sp = MastDB.tenantId();
     await firebase.functions().httpsCallable('secretsManager')({
-      tenantId: MastDB.tenantId(),
       action: 'write',
-      secretName: 'shippo-api-token',
-      secretValue: keyVal
+      service: 'shippo',
+      tenantId: sp,
+      secrets: { [sp + '-shippo-api-token']: keyVal }
     });
     keyInput.value = '';
     loadShippoKeyStatus();
@@ -12412,15 +12413,13 @@ function loadShipProviderConfig() {
 function loadShippoKeyStatus() {
   var statusEl = document.getElementById('shippoKeyStatus');
   firebase.functions().httpsCallable('secretsManager')({
-    tenantId: MastDB.tenantId(),
     action: 'read',
-    secretName: 'shippo-api-token'
+    service: 'shippo',
+    tenantId: MastDB.tenantId()
   }).then(function(result) {
     var data = result.data;
-    if (data && data.value) {
-      // Show masked version
-      var masked = data.value.substring(0, 12) + '...' + data.value.slice(-4);
-      document.getElementById('shippoApiKeyInput').placeholder = masked;
+    if (data && data.apiKey && data.apiKey !== '') {
+      document.getElementById('shippoApiKeyInput').placeholder = data.apiKey;
       if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Key configured</span>';
     } else {
       if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray-light);">No API key set.</span>';
