@@ -454,9 +454,11 @@
         html += '<span class="wp-tpl-badge">Active</span>';
       }
 
-      // Feature badge
+      // Feature badge — derived from responsivePriority or homepageFlow
       var featureLabel = '';
-      if (manifest.homepageFlow) {
+      if (manifest.responsivePriority === 'desktop') featureLabel = 'Desktop-forward';
+      else if (manifest.responsivePriority === 'mobile') featureLabel = 'Mobile-forward';
+      else if (manifest.homepageFlow) {
         var firstFlow = manifest.homepageFlow[0] || '';
         if (firstFlow === 'hero' && manifest.homepageFlow[1] === 'about') featureLabel = 'Story-first';
         else if (firstFlow === 'hero' && (manifest.homepageFlow[1] === 'category-grid' || manifest.homepageFlow[1] === 'featured-products')) featureLabel = 'Product-first';
