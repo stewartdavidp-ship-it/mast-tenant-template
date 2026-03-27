@@ -16395,7 +16395,7 @@ function renderProductDetail(pid) {
     '<div style="flex:1;">' +
       '<h2 class="product-detail-name">' + esc(product.name || 'New Product') + '</h2>' +
       (product.priceCents ? '<div class="product-detail-price">' + formatPriceCents(product.priceCents) + '</div>' :
-       product.price ? '<div class="product-detail-price">' + esc(product.price) + '</div>' :
+       product.price ? '<div class="product-detail-price">' + (typeof product.price === 'number' ? formatPriceCents(product.price) : esc(product.price)) + '</div>' :
        '<div style="color:var(--warm-gray);font-style:italic;margin-bottom:8px;">Price on request</div>') +
       (product.availability === 'discontinued' ? '<span class="status-badge stock-badge out-of-stock">Discontinued</span>' : '') +
     '</div>' +
