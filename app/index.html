@@ -3,13 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <base href="/app/">
   <title>My Shop Admin</title><!-- TENANT: brand -->
   <script>
-    // Catch ALL script errors and show as alert for mobile debugging
-    window.onerror = function(msg, src, line, col, err) {
-      var file = src ? src.split('/').pop().split('?')[0] : '?';
-      alert('JS Error in ' + file + ' line ' + line + ':\n' + msg);
-    };
     // Admin app is ALWAYS dark mode. Apply immediately before any external scripts load.
     document.documentElement.style.colorScheme = 'dark';
     document.documentElement.classList.add('dark-mode');
@@ -10606,7 +10602,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260326p4';
+var MAST_MODULES_V = '20260326p5';
 setTimeout(function() { var vl = document.getElementById('dashVersionLabel'); if (vl) vl.textContent = 'v' + MAST_MODULES_V; }, 500);
 
 // Module manifest — maps moduleId to script path and owned routes.
