@@ -4868,7 +4868,6 @@
     <div id="dashboardTab" style="display:none;">
       <div class="section-header" style="display:flex;justify-content:space-between;align-items:center;">
         <h2>Dashboard</h2>
-        <span style="font-size:0.65rem;color:var(--warm-gray-light);font-family:monospace;opacity:0.6;" id="dashVersionLabel"></span>
         <span class="dash-settings-gear" onclick="navigateTo('settings'); setTimeout(function(){ switchSettingsSubView('dashboard'); }, 50);" title="Dashboard settings">&#9881;&#65039;</span>
       </div>
       <!-- Active Trip Banner (outside card system) -->
@@ -10603,7 +10602,6 @@ var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
 var MAST_MODULES_V = '20260326p5';
-setTimeout(function() { var vl = document.getElementById('dashVersionLabel'); if (vl) vl.textContent = 'v' + MAST_MODULES_V; }, 500);
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
