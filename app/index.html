@@ -16422,7 +16422,7 @@ function renderProductDetail(pid) {
   var catOptions = CATEGORIES.length > 0 ? CATEGORIES : ['other'];
   var currentPrice = product.priceCents !== null && product.priceCents !== undefined
     ? (product.priceCents / 100).toFixed(2)
-    : (product.price ? product.price.replace('$', '') : '');
+    : (product.price ? (typeof product.price === 'number' ? (product.price / 100).toFixed(2) : String(product.price).replace('$', '')) : '');
 
   var detailsHtml = '<div class="pd-tab-content" data-tab="details" style="' + (tab !== 'details' ? 'display:none;' : '') + 'padding:16px 0;">';
   if (isEditing) {
