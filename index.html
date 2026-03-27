@@ -352,8 +352,18 @@
 
   .gallery-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(var(--gallery-columns, 4), 1fr);
     gap: 4px;
+  }
+  .gallery-grid.masonry {
+    display: block;
+    columns: var(--gallery-columns, 4);
+    column-gap: 4px;
+  }
+  .gallery-grid.masonry .gallery-item {
+    break-inside: avoid;
+    margin-bottom: 4px;
+    aspect-ratio: auto;
   }
 
   .gallery-item {
@@ -832,7 +842,8 @@
   @media (max-width: 1024px) {
     .about { grid-template-columns: 1fr; gap: 3rem; }
     .about-image img { height: 400px; }
-    .gallery-grid { grid-template-columns: repeat(2, 1fr); }
+    .gallery-grid { grid-template-columns: repeat(min(var(--gallery-columns, 4), 2), 1fr); }
+    .gallery-grid.masonry { columns: min(var(--gallery-columns, 4), 2); }
     .gallery-item:nth-child(1) { grid-column: span 2; grid-row: span 1; }
     .contact-section { grid-template-columns: 1fr; gap: 3rem; }
   }
@@ -847,6 +858,7 @@
     .hero-logo img { height: 80px; }
     .about-stats { gap: 1.5rem; flex-wrap: wrap; }
     .gallery-grid { grid-template-columns: 1fr 1fr; }
+    .gallery-grid.masonry { columns: 2; }
     .gallery-item:nth-child(1) { grid-column: span 1; }
     .process-grid { grid-template-columns: 1fr; }
     .event-card { grid-template-columns: 80px 1fr; gap: 1.5rem; padding: 1.5rem; }
@@ -1713,6 +1725,27 @@ window.TENANT_READY.then(function() {
     if (data.title && titleEl) titleEl.textContent = data.title;
     if (data.subtitle && subtitleEl) subtitleEl.textContent = data.subtitle;
   }).catch(function() { /* use defaults */ });
+
+  // ---- GALLERY LAYOUT CONFIG (columns, layout mode) ----
+  db.ref(TENANT_ID + '/webPresence/config/sections/gallery').once('value').then(function(snap) {
+    var cfg = snap.val();
+    if (!cfg) return;
+    var gridEl = document.getElementById('galleryGrid');
+    if (!gridEl) return;
+    // Apply column count
+    if (cfg.columns) {
+      var cols = parseInt(cfg.columns);
+      if (cols >= 1 && cols <= 6) {
+        gridEl.style.setProperty('--gallery-columns', cols);
+      }
+    }
+    // Apply layout mode (grid or masonry)
+    if (cfg.layout === 'masonry') {
+      gridEl.classList.add('masonry');
+    } else {
+      gridEl.classList.remove('masonry');
+    }
+  }).catch(function() { /* use default grid layout */ });
 
   // ---- CATEGORY GRID (The Shop template — populate from categories + gallery) ----
   (function() {
