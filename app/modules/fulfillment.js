@@ -2,7 +2,7 @@
  * Fulfillment Module — Pack Queue, Scan-to-Ship, Bundles, Ship/Deliver, Production Request fulfillment
  * Lazy-loaded via MastAdmin module registry.
  */
-(function() {
+(function() { try {
   'use strict';
 
   // ============================================================
@@ -1035,4 +1035,4 @@
     }
   });
 
-})();
+} catch(e) { if (typeof showToast === 'function') showToast('fulfillment.js error: ' + e.message + ' (line ' + (e.line || e.lineNumber || '?') + ')', true); else alert('fulfillment.js: ' + e.message); } })();

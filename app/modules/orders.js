@@ -2,7 +2,7 @@
  * Orders + Commissions + Dashboard Cards Module
  * Lazy-loaded via MastAdmin module registry.
  */
-(function() {
+(function() { try {
   'use strict';
 
   // ============================================================
@@ -2958,4 +2958,4 @@
     }
   });
 
-})();
+} catch(e) { if (typeof showToast === 'function') showToast('orders.js error: ' + e.message + ' (line ' + (e.line || e.lineNumber || '?') + ')', true); else alert('orders.js: ' + e.message); } })();
