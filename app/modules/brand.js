@@ -133,8 +133,9 @@
     if (!primary) {
       html += '<div style="text-align:center;padding:40px 20px;border:2px dashed var(--warm-gray);border-radius:8px;color:var(--warm-gray);">' +
         '<div style="font-size:2rem;margin-bottom:8px;">&#128247;</div>' +
-        '<div style="font-size:0.95rem;margin-bottom:4px;">No logo configured</div>' +
-        '<div style="font-size:0.8rem;">Use your AI assistant to upload a logo: <code>upload_logo</code></div>' +
+        '<div style="font-size:0.95rem;margin-bottom:8px;">No logo configured</div>' +
+        '<button class="btn btn-primary" onclick="brandUploadLogoPrompt()" style="margin-bottom:8px;">Upload Logo</button>' +
+        '<div style="font-size:0.75rem;">Or use your AI assistant: <code>upload_logo</code></div>' +
       '</div>';
     } else {
       html += '<div style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap;">' +
@@ -149,7 +150,9 @@
             (primary.dimensions ? '<div><span style="color:var(--warm-gray);">Dimensions:</span> ' + primary.dimensions.width + ' x ' + primary.dimensions.height + 'px</div>' : '') +
             '<div><span style="color:var(--warm-gray);">Uploaded:</span> ' + formatDate(primary.uploadedAt) + '</div>' +
           '</div>' +
-          '<div style="margin-top:12px;font-size:0.8rem;color:var(--warm-gray);">To replace, use your AI assistant: <code>upload_logo</code></div>' +
+          '<div style="margin-top:12px;display:flex;gap:8px;align-items:center;">' +
+            '<button class="btn btn-secondary" onclick="brandUploadLogoPrompt()" style="font-size:0.8rem;padding:4px 12px;">Replace Logo</button>' +
+          '</div>' +
         '</div>' +
       '</div>';
     }
@@ -368,6 +371,166 @@
     if (Object.keys(updates).length > 0) {
       await MastDB._ref().update(updates);
     }
+  }
+
+  // ============================================================
+  // Upload Actions (from Admin UI)
+  // ============================================================
+
+  /**
+   * Open a modal to upload a logo by URL or from the image library.
+   */
+  window.brandUploadLogoPrompt = function() {
+    var html = '<div class="modal-header"><h3 style="margin:0;">Upload Logo</h3></div>' +
+      '<div class="modal-body" style="display:grid;gap:16px;">' +
+        '<div>' +
+          '<label style="font-size:0.85rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Image URL</label>' +
+          '<input type="text" id="brandLogoUrlInput" placeholder="https://example.com/logo.png" style="width:100%;padding:8px 12px;border-radius:4px;border:1px solid var(--warm-gray);background:var(--surface-card);color:var(--text-primary);font-size:0.9rem;">' +
+        '</div>' +
+        '<div style="text-align:center;color:var(--warm-gray);font-size:0.8rem;">— or —</div>' +
+        '<div style="text-align:center;">' +
+          '<button class="btn btn-secondary" onclick="brandPickFromLibrary()" style="font-size:0.85rem;">Choose from Image Library</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="modal-footer">' +
+        '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+        '<button class="btn btn-primary" onclick="brandUploadLogoFromUrl()">Upload</button>' +
+      '</div>';
+    openModal(html);
+    setTimeout(function() { var el = document.getElementById('brandLogoUrlInput'); if (el) el.focus(); }, 100);
+  };
+
+  /**
+   * Upload logo from the URL entered in the modal.
+   * Uses the image library upload_image pattern to download and host in Storage,
+   * then writes to the brand logo config.
+   */
+  window.brandUploadLogoFromUrl = async function() {
+    var input = document.getElementById('brandLogoUrlInput');
+    var url = input ? input.value.trim() : '';
+    if (!url) { showToast('Please enter an image URL', true); return; }
+
+    closeModal();
+    showToast('Uploading logo...');
+
+    try {
+      // Use the existing image library upload to get a Storage-hosted URL
+      var uploadResult = await uploadImageToStorage(url, 'logo');
+      if (!uploadResult || !uploadResult.url) throw new Error('Upload failed');
+
+      // Write primary logo config
+      var primaryConfig = {
+        url: uploadResult.url,
+        storagePath: uploadResult.storagePath || '',
+        format: uploadResult.format || 'png',
+        hasTransparency: false,
+        dimensions: uploadResult.dimensions || null,
+        uploadedAt: new Date().toISOString()
+      };
+
+      await MastDB._ref('config/brand/logo/primary').set(primaryConfig);
+
+      // Update legacy path
+      await MastDB._ref('public/config/nav/logoUrl').set(uploadResult.url);
+
+      // Re-resolve placements
+      await resolvePublicPlacements();
+
+      showToast('Logo uploaded successfully');
+      brandLoaded = false;
+      await loadBrandData();
+    } catch (err) {
+      showToast('Upload failed: ' + err.message, true);
+    }
+  };
+
+  /**
+   * Pick a logo from the existing image library.
+   */
+  window.brandPickFromLibrary = function() {
+    closeModal();
+    // Use the shared image picker if available
+    if (typeof openImagePicker === 'function') {
+      openImagePicker(async function(imgId, url, thumbUrl) {
+        showToast('Setting logo from library...');
+        try {
+          var primaryConfig = {
+            url: url,
+            storagePath: '',
+            format: url.match(/\.(\w+)(?:\?|$)/i) ? RegExp.$1 : 'png',
+            hasTransparency: false,
+            dimensions: null,
+            uploadedAt: new Date().toISOString()
+          };
+
+          await MastDB._ref('config/brand/logo/primary').set(primaryConfig);
+          await MastDB._ref('public/config/nav/logoUrl').set(url);
+          await resolvePublicPlacements();
+
+          showToast('Logo set from library');
+          brandLoaded = false;
+          await loadBrandData();
+        } catch (err) {
+          showToast('Failed: ' + err.message, true);
+        }
+      });
+    } else {
+      showToast('Image library not available. Enter a URL instead.', true);
+      brandUploadLogoPrompt();
+    }
+  };
+
+  /**
+   * Upload an image URL to Firebase Storage via the Cloud Function.
+   * Returns { url, storagePath, format, dimensions }.
+   */
+  async function uploadImageToStorage(url, prefix) {
+    // Call the uploadImage Cloud Function
+    var user = firebase.auth().currentUser;
+    if (!user) throw new Error('Not authenticated');
+    var idToken = await user.getIdToken();
+
+    var cfBase = 'https://us-central1-' + (TENANT_CONFIG && TENANT_CONFIG.gcpProject || 'mast-platform-prod') + '.cloudfunctions.net';
+    var resp = await fetch(cfBase + '/uploadImage', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + idToken
+      },
+      body: JSON.stringify({
+        image: await fetchImageAsBase64(url),
+        tags: ['logo'],
+        source: 'brand-upload'
+      })
+    });
+
+    if (!resp.ok) throw new Error('Upload returned ' + resp.status);
+    var result = await resp.json();
+    return {
+      url: result.url,
+      storagePath: result.storagePath || '',
+      format: 'jpg',
+      dimensions: result.dimensions || null
+    };
+  }
+
+  /**
+   * Fetch an image URL and return as base64 string.
+   */
+  async function fetchImageAsBase64(url) {
+    var resp = await fetch(url);
+    if (!resp.ok) throw new Error('Failed to fetch image');
+    var blob = await resp.blob();
+    return new Promise(function(resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function() {
+        // Remove data:image/...;base64, prefix
+        var base64 = reader.result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
   }
 
   // ============================================================
