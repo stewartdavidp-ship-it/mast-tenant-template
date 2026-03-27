@@ -164,23 +164,67 @@
       altEls[k].alt = name;
     }
 
-    // Update footer logo and gate logos from nav config logoUrl
+    // Update footer logo and gate logos — try brand system first, fall back to legacy nav logoUrl
     var tid = window.TENANT_ID;
     if (tid && typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0) {
       var tenantDb = firebase.database();
-      tenantDb.ref(tid + '/public/config/nav/logoUrl').once('value').then(function(snap) {
-        var logoUrl = snap.val();
-        if (logoUrl) {
+
+      // Try brand logo system first (write-time resolved URLs)
+      tenantDb.ref(tid + '/public/config/brand/logo/footer').once('value').then(function(brandSnap) {
+        var brandFooter = brandSnap.val();
+        if (brandFooter && brandFooter.url) {
           var logoEls = document.querySelectorAll('.footer-logo img, .ws-gate-logo');
           for (var fi = 0; fi < logoEls.length; fi++) {
-            logoEls[fi].src = logoUrl;
+            logoEls[fi].src = brandFooter.url;
             logoEls[fi].alt = name;
+            if (brandFooter.maxHeight) {
+              logoEls[fi].style.maxHeight = brandFooter.maxHeight + 'px';
+            }
           }
         } else {
-          // No logo — hide the placeholder images
-          var logoEls = document.querySelectorAll('.footer-logo img, .ws-gate-logo');
-          for (var fi = 0; fi < logoEls.length; fi++) {
-            logoEls[fi].style.display = 'none';
+          // Fall back to legacy nav logoUrl
+          tenantDb.ref(tid + '/public/config/nav/logoUrl').once('value').then(function(snap) {
+            var logoUrl = snap.val();
+            if (logoUrl) {
+              var logoEls = document.querySelectorAll('.footer-logo img, .ws-gate-logo');
+              for (var fi = 0; fi < logoEls.length; fi++) {
+                logoEls[fi].src = logoUrl;
+                logoEls[fi].alt = name;
+              }
+            } else {
+              var logoEls = document.querySelectorAll('.footer-logo img, .ws-gate-logo');
+              for (var fi = 0; fi < logoEls.length; fi++) {
+                logoEls[fi].style.display = 'none';
+              }
+            }
+          }).catch(function() {});
+        }
+      }).catch(function() {
+        // Brand system read failed — fall back to legacy
+        tenantDb.ref(tid + '/public/config/nav/logoUrl').once('value').then(function(snap) {
+          var logoUrl = snap.val();
+          if (logoUrl) {
+            var logoEls = document.querySelectorAll('.footer-logo img, .ws-gate-logo');
+            for (var fi = 0; fi < logoEls.length; fi++) {
+              logoEls[fi].src = logoUrl;
+              logoEls[fi].alt = name;
+            }
+          }
+        }).catch(function() {});
+      });
+
+      // Favicon — read from brand system if configured
+      tenantDb.ref(tid + '/public/config/brand/logo/favicon/url').once('value').then(function(favSnap) {
+        var faviconUrl = favSnap.val();
+        if (faviconUrl) {
+          var link = document.querySelector('link[rel="icon"]') || document.querySelector('link[rel="shortcut icon"]');
+          if (link) {
+            link.href = faviconUrl;
+          } else {
+            var newLink = document.createElement('link');
+            newLink.rel = 'icon';
+            newLink.href = faviconUrl;
+            document.head.appendChild(newLink);
           }
         }
       }).catch(function() {});

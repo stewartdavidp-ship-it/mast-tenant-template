@@ -4813,6 +4813,7 @@
       </div>
       <div class="sidebar-items">
         <div class="sidebar-item" data-route="website" onclick="navigateTo('website')">Website Content</div>
+        <div class="sidebar-item" data-route="brand" onclick="navigateTo('brand')">Brand &amp; Logo</div>
         <div class="sidebar-item" data-route="gallery" onclick="navigateTo('gallery')">Gallery</div>
         <div class="sidebar-item" data-route="images" onclick="navigateTo('images')">Images</div>
       </div>
@@ -5446,6 +5447,11 @@
 
       <!-- Mobile Cards -->
       <div class="event-cards" id="eventCards"></div>
+    </div>
+
+    <!-- Admin: Brand & Logo Tab -->
+    <div id="brandTab" style="display:none;">
+      <div id="brandContent"></div>
     </div>
 
     <!-- Admin: Image Library Tab -->
@@ -10625,7 +10631,8 @@ var MODULE_MANIFEST = {
   emailLog: { src: 'modules/email-log.js', routes: ['email-log'] },
   maker: { src: 'modules/maker.js', routes: ['materials', 'pieces'] },
   consignment: { src: 'modules/consignment.js', routes: ['galleries'] },
-  lookbooks: { src: 'modules/lookbooks.js', routes: ['lookbooks'] }
+  lookbooks: { src: 'modules/lookbooks.js', routes: ['lookbooks'] },
+  brand: { src: 'modules/brand.js', routes: ['brand'] }
 };
 
 // Reverse lookup: route → moduleId (built from MODULE_MANIFEST)
@@ -21877,7 +21884,8 @@ var ROUTE_LABELS = {
   'images': 'Images', 'website': 'Website', 'employees': 'Employees',
   'contacts': 'Contacts', 'analytics': 'Analytics', 'auditlog': 'Audit Log',
   'financials': 'Financials', 'settings': 'Settings', 'production': 'Production',
-  'jobs': 'Jobs'
+  'jobs': 'Jobs',
+  'brand': 'Brand & Logo'
 };
 
 function getScreenLabel() {

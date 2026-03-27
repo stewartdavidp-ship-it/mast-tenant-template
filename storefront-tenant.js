@@ -243,7 +243,8 @@ window.STOREFRONT_DATA = window.TENANT_READY.then(function() {
   var fetches = [
     safeFetch(baseUrl + 'config/theme.json'),
     safeFetch(baseUrl + 'config/nav.json'),
-    safeFetch(baseUrl + 'config/promoBanner.json')
+    safeFetch(baseUrl + 'config/promoBanner.json'),
+    safeFetch(baseUrl + 'config/brand/logo.json')
   ];
 
   // Page-specific data prefetch
@@ -267,11 +268,13 @@ window.STOREFRONT_DATA = window.TENANT_READY.then(function() {
   }
 
   return Promise.all(fetches).then(function(results) {
+    var brandLogo = results[3];
     var data = {
       theme: results[0],
       nav: results[1],
       promo: results[2],
-      pageData: pageDataKey ? { type: pageDataKey, data: results[3] } : null
+      brandLogo: brandLogo || null,
+      pageData: pageDataKey ? { type: pageDataKey, data: results[4] } : null
     };
 
     // Cache the result

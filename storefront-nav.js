@@ -292,7 +292,7 @@
     if (window.STOREFRONT_DATA) {
       dataPromise = Promise.all([window.STOREFRONT_DATA, domReady]).then(function(results) {
         var data = results[0];
-        return [data ? data.nav : null, data ? data.promo : null];
+        return [data ? data.nav : null, data ? data.promo : null, data ? data.brandLogo : null];
       });
     } else {
       // Fallback: fetch directly (shouldn't happen in normal flow)
@@ -311,6 +311,7 @@
     dataPromise.then(function (results) {
         var config = results[0];
         var bannerConfig = results[1];
+        var brandLogo = results[2];
         // Remove any hardcoded free-ship-banner from HTML
         var existing = document.querySelector('.free-ship-banner');
         if (existing) existing.remove();
@@ -344,8 +345,13 @@
         } else {
           buildNav(DEFAULT_SECTIONS, config || {});
         }
+        // Apply brand logo maxHeight to nav logo if configured
+        if (brandLogo && brandLogo.navBar && brandLogo.navBar.maxHeight) {
+          var navLogoImg = document.querySelector('.nav-logo img');
+          if (navLogoImg) navLogoImg.style.maxHeight = brandLogo.navBar.maxHeight + 'px';
+        }
         // Populate hero logo on homepage if element exists
-        populateHeroLogo(config);
+        populateHeroLogo(config, brandLogo);
         // Inject promo banner if configured
         injectPromoBanner(bannerConfig);
       }).catch(function (err) {
@@ -358,11 +364,15 @@
    * Populate the hero logo on the homepage when a logo URL is configured.
    * The #heroLogo element is hidden by default in index.html.
    */
-  function populateHeroLogo(config) {
+  function populateHeroLogo(config, brandLogo) {
     var heroLogoEl = document.getElementById('heroLogo');
     if (!heroLogoEl) return; // Not on homepage
 
-    var rawLogo = (config && config.logoUrl) || '';
+    // Try brand logo system for hero placement first
+    var heroUrl = (brandLogo && brandLogo.hero && brandLogo.hero.url) || null;
+    var heroMaxHeight = (brandLogo && brandLogo.hero && brandLogo.hero.maxHeight) || null;
+
+    var rawLogo = heroUrl || (config && config.logoUrl) || '';
     if (!rawLogo) return; // No logo configured
 
     var basePath = getBasePath();
@@ -370,7 +380,8 @@
       ? rawLogo : (basePath + 'favicon.svg');
     var brandName = (window.TENANT_BRAND && window.TENANT_BRAND.name) || 'My Shop';
 
-    heroLogoEl.innerHTML = '<img src="' + esc(logoUrl) + '" alt="' + esc(brandName) + '">';
+    var heightStyle = heroMaxHeight ? ' style="max-height:' + heroMaxHeight + 'px"' : '';
+    heroLogoEl.innerHTML = '<img src="' + esc(logoUrl) + '" alt="' + esc(brandName) + '"' + heightStyle + '>';
     heroLogoEl.style.display = '';
   }
 
