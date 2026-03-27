@@ -381,16 +381,53 @@
               }
             }
 
-            // Apply homepage section flow from manifest (show/hide + reorder)
-            if (manifest && manifest.homepageFlow) {
-              // Wait for DOM to be ready before manipulating sections
-              if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', function () {
-                  applyHomepageFlow(manifest);
-                });
-              } else {
-                applyHomepageFlow(manifest);
+            // Apply homepage section flow: custom order overrides manifest
+            var applyFlow = function() {
+              if (!window.TENANT_ID) {
+                // No tenant — fall back to manifest
+                if (manifest && manifest.homepageFlow) applyHomepageFlow(manifest);
+                return;
               }
+              var db = window.TENANT_DB || (window.firebase && window.firebase.database());
+              if (!db) {
+                if (manifest && manifest.homepageFlow) applyHomepageFlow(manifest);
+                return;
+              }
+              // Check for custom section order
+              db.ref(window.TENANT_ID + '/public/config/sectionOrder').once('value').then(function(snap) {
+                var customOrder = snap.val();
+                if (customOrder && Array.isArray(customOrder) && customOrder.length > 0) {
+                  applyHomepageFlow({ homepageFlow: customOrder, id: 'custom' });
+                } else if (manifest && manifest.homepageFlow) {
+                  applyHomepageFlow(manifest);
+                }
+              }).catch(function() {
+                if (manifest && manifest.homepageFlow) applyHomepageFlow(manifest);
+              });
+              // Apply per-section styling (background, spacing)
+              db.ref(window.TENANT_ID + '/webPresence/config/sections').once('value').then(function(snap) {
+                var configs = snap.val();
+                if (!configs) return;
+                var spacingPresets = { compact: '3rem', normal: '5rem', spacious: '9rem' };
+                Object.keys(configs).forEach(function(sectionId) {
+                  var cfg = configs[sectionId];
+                  if (!cfg) return;
+                  var el = document.querySelector('[data-slot="' + sectionId + '"]') || document.getElementById(sectionId);
+                  if (!el) return;
+                  if (cfg.background) {
+                    el.style.backgroundColor = cfg.background;
+                  }
+                  if (cfg.spacing && spacingPresets[cfg.spacing]) {
+                    el.style.paddingTop = spacingPresets[cfg.spacing];
+                    el.style.paddingBottom = spacingPresets[cfg.spacing];
+                  }
+                });
+              }).catch(function() { /* ignore styling errors */ });
+            };
+            if (document.readyState === 'loading') {
+              document.addEventListener('DOMContentLoaded', applyFlow);
+            } else {
+              applyFlow();
             }
 
             // Inject preview banner after DOM is ready
