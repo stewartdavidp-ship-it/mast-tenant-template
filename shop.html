@@ -544,7 +544,8 @@ window.TENANT_READY.then(function() {
           var formattedPrice = typeof product.price === 'number' ? ('$' + (product.price / 100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')) : esc(price);
           priceDisplay = '<p class="product-price"><span style="font-size:0.8rem;color:var(--warm-gray,#6B6560);font-weight:400;">from </span>' + formattedPrice + '</p>';
         } else if (price) {
-          priceDisplay = '<p class="product-price">' + esc(price) + '</p>';
+          var regularPrice = typeof product.price === 'number' ? ('$' + (product.price / 100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')) : esc(price);
+          priceDisplay = '<p class="product-price">' + regularPrice + '</p>';
         }
         html += '<div class="product-card fade-up" style="opacity:1;transform:translateY(0)">' +
           '<div class="product-image" style="position:relative;"><a href="' + esc(link) + '"' + (isLocal ? '' : ' target="_blank" rel="noopener"') + '>' + (img ? '<img src="' + esc(img) + '" alt="' + esc(name) + '" loading="lazy" />' : '') + '</a>' +

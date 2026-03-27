@@ -15292,9 +15292,11 @@ function renderProducts() {
   var html = '';
   filtered.forEach(function(p) {
     var imgSrc = firstProductImage(p);
-    var priceHtml = p.price
-      ? '<div class="product-card-price">' + esc(p.price) + '</div>'
-      : '<div class="product-card-price no-price">Price on request</div>';
+    var priceHtml = p.priceCents
+      ? '<div class="product-card-price">' + formatPriceCents(p.priceCents) + '</div>'
+      : p.price
+        ? '<div class="product-card-price">' + (typeof p.price === 'number' ? formatPriceCents(p.price) : esc(p.price)) + '</div>'
+        : '<div class="product-card-price no-price">Price on request</div>';
 
     var catsHtml = '';
     if (p.categories && p.categories.length) {
@@ -16078,7 +16080,7 @@ function renderInventoryOverview() {
     return {
       pid: p.pid,
       name: p.name,
-      price: p.price || '',
+      price: p.priceCents ? formatPriceCents(p.priceCents) : (typeof p.price === 'number' ? formatPriceCents(p.price) : (p.price || '')),
       imgSrc: firstProductImage(p),
       categories: p.categories || [],
       stockType: stockType,
