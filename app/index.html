@@ -9825,10 +9825,21 @@ function showConfirmDialog(title, message, onConfirm, options) {
 // Auth
 // ============================================================
 function googleSignIn() {
-  const provider = new firebase.auth.GoogleAuthProvider();
-  auth.signInWithPopup(provider).catch(function(err) {
-    showToast('Sign-in failed: ' + err.message, true);
-  });
+  var provider = new firebase.auth.GoogleAuthProvider();
+  // Mobile Safari blocks popups — use redirect instead
+  var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  if (isMobile) {
+    auth.signInWithRedirect(provider);
+  } else {
+    auth.signInWithPopup(provider).catch(function(err) {
+      if (err.code === 'auth/popup-blocked' || err.code === 'auth/cancelled-popup-request') {
+        // Fallback to redirect if popup is blocked
+        auth.signInWithRedirect(provider);
+      } else {
+        showToast('Sign-in failed: ' + err.message, true);
+      }
+    });
+  }
 }
 
 function signOut() {
@@ -9876,6 +9887,13 @@ if (TEST_MODE && new URLSearchParams(window.location.search).get('testmode') ===
     setTimeout(enterAuthorizedState, 0);
   });
 }
+
+// Handle redirect result from mobile sign-in
+auth.getRedirectResult().catch(function(err) {
+  if (err.code && err.code !== 'auth/credential-already-in-use') {
+    showToast('Sign-in redirect failed: ' + err.message, true);
+  }
+});
 
 auth.onAuthStateChanged(async function(user) {
   if (TEST_MODE && new URLSearchParams(window.location.search).get('testmode') === '1') return; // Already handled above
@@ -10588,7 +10606,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260326p3';
+var MAST_MODULES_V = '20260326p4';
 setTimeout(function() { var vl = document.getElementById('dashVersionLabel'); if (vl) vl.textContent = 'v' + MAST_MODULES_V; }, 500);
 
 // Module manifest — maps moduleId to script path and owned routes.
