@@ -6,6 +6,13 @@
   "compile": true,
   "defaultTheme": "dark",
 
+  "responsivePriority": "balanced",
+  "designScale": "standard",
+  "navStyle": "top-bar",
+  "heroVariant": "full-bleed",
+  "galleryVariant": "grid",
+  "productGridVariant": "card",
+
   "slots": {
     "universal": [
       { "id": "hero", "label": "Hero", "required": true, "description": "Full-width hero with video/image background and CTA buttons" },

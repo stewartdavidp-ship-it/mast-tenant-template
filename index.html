@@ -248,6 +248,142 @@
     100% { top: 40px; }
   }
 
+  /* ========= HERO VARIANT: SPLIT-IMAGE ========= */
+  .hero-split {
+    display: grid;
+    grid-template-columns: 60% 40%;
+    min-height: 100vh;
+  }
+  .hero-split-image {
+    background-size: cover;
+    background-position: center;
+    background-color: var(--surface-dark);
+  }
+  .hero-split-content {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 4rem 3rem;
+    background: var(--bg);
+    color: var(--text);
+  }
+  .hero-split-content .hero-tagline {
+    color: var(--primary);
+    text-shadow: none;
+    animation: heroFadeIn 1s ease-out 0.2s both;
+  }
+  .hero-split-content h1 {
+    color: var(--text);
+    text-shadow: none;
+    animation: heroFadeIn 1s ease-out 0.4s both;
+  }
+  .hero-split-content .hero-sub {
+    color: var(--text-muted);
+    text-shadow: none;
+    animation: heroFadeIn 1s ease-out 0.6s both;
+  }
+  .hero-split-content .hero-cta {
+    animation: heroFadeIn 1s ease-out 0.8s both;
+  }
+  @media (max-width: 768px) {
+    .hero-split {
+      grid-template-columns: 1fr;
+    }
+    .hero-split-image {
+      min-height: 50vh;
+    }
+    .hero-split-content {
+      padding: 3rem 1.5rem;
+    }
+  }
+
+  /* ========= HERO VARIANT: MINIMAL-TEXT ========= */
+  .hero-minimal {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg);
+    padding: 4rem 2rem;
+    text-align: center;
+  }
+  .hero-minimal .hero-tagline {
+    color: var(--primary);
+    text-shadow: none;
+    animation: heroFadeIn 1s ease-out 0.2s both;
+  }
+  .hero-minimal-headline {
+    font-family: var(--font-heading, 'Cormorant Garamond'), serif;
+    font-size: clamp(4rem, 12vw, 10rem);
+    font-weight: 300;
+    line-height: 0.95;
+    letter-spacing: -0.03em;
+    color: var(--text);
+    margin-bottom: 1.5rem;
+    animation: heroFadeIn 1s ease-out 0.4s both;
+  }
+  .hero-minimal .hero-sub {
+    color: var(--text-muted);
+    text-shadow: none;
+    max-width: 520px;
+    animation: heroFadeIn 1s ease-out 0.6s both;
+  }
+  .hero-minimal .hero-cta {
+    margin-top: 2rem;
+    animation: heroFadeIn 1s ease-out 0.8s both;
+  }
+
+  /* ========= GALLERY VARIANT: CAROUSEL ========= */
+  .gallery-grid[data-variant="carousel"] {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    gap: var(--scale-grid-gap, 4px);
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .gallery-grid[data-variant="carousel"]::-webkit-scrollbar { display: none; }
+  .gallery-grid[data-variant="carousel"] .gallery-item {
+    flex: 0 0 85vw;
+    max-width: 600px;
+    scroll-snap-align: center;
+    aspect-ratio: auto;
+  }
+  .gallery-grid[data-variant="carousel"] .gallery-item:first-child {
+    grid-column: auto;
+    grid-row: auto;
+  }
+  @media (min-width: 769px) {
+    .gallery-grid[data-variant="carousel"] .gallery-item {
+      flex: 0 0 40vw;
+      max-width: 500px;
+    }
+  }
+
+  /* ========= PRODUCT GRID VARIANT: COMPACT ========= */
+  .product-grid[data-variant="compact"] {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+  .product-grid[data-variant="compact"] .product-card {
+    display: flex;
+    flex-direction: row;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.5rem;
+  }
+  .product-grid[data-variant="compact"] .product-card img {
+    width: 80px;
+    height: 80px;
+    object-fit: cover;
+    border-radius: var(--scale-border-radius, 2px);
+    flex-shrink: 0;
+  }
+  .product-grid[data-variant="compact"] .product-card .product-info {
+    flex: 1;
+    min-width: 0;
+  }
+
   /* ========= SECTIONS SHARED ========= */
   section { padding: 7rem 3rem; }
 
@@ -1119,39 +1255,65 @@
 <nav id="mainNav" data-nav-transparent></nav>
 <div class="nav-mobile-menu" id="mobileMenu"></div>
 
-<!-- ============ HERO — VIDEO BACKGROUND ============ -->
+<!-- ============ HERO ============ -->
 <section class="hero" data-slot="hero">
-  <div class="hero-video-wrap">
-    <video autoplay muted loop playsinline id="heroVideo">
-      <!-- Video source loaded dynamically from gallery hero items -->
-    </video>
-  </div>
 
-  <!-- Fallback poster if video fails -->
-  <div class="hero-poster" id="heroPoster"></div>
-
-  <!-- Overlays for text readability -->
-  <div class="hero-overlay"></div>
-  <div class="hero-vignette"></div>
-
-  <!-- Content -->
-  <div class="hero-content">
-    <div class="hero-logo" id="heroLogo" style="display:none;">
-      <!-- Logo loaded dynamically from tenant brand config -->
+  <!-- Variant: full-bleed (default — video/image background with centered text) -->
+  <div data-variant="full-bleed" class="active">
+    <div class="hero-video-wrap">
+      <video autoplay muted loop playsinline id="heroVideo">
+        <!-- Video source loaded dynamically from gallery hero items -->
+      </video>
     </div>
-    <p class="hero-tagline" data-tenant="tagline" data-content="hero-tagline"></p>
-    <h1 data-tenant="brand" data-content="hero-headline">Welcome</h1>
-    <p class="hero-sub" data-tenant="description" data-content="hero-subheadline"></p>
-    <div class="hero-cta">
-      <a href="shop.html" class="btn btn-primary" data-content="hero-cta">Shop Now</a>
-      <a href="#about" class="btn btn-outline">Learn More</a>
+    <div class="hero-poster" id="heroPoster"></div>
+    <div class="hero-overlay"></div>
+    <div class="hero-vignette"></div>
+    <div class="hero-content">
+      <div class="hero-logo" id="heroLogo" style="display:none;"></div>
+      <p class="hero-tagline" data-tenant="tagline" data-content="hero-tagline"></p>
+      <h1 data-tenant="brand" data-content="hero-headline">Welcome</h1>
+      <p class="hero-sub" data-tenant="description" data-content="hero-subheadline"></p>
+      <div class="hero-cta">
+        <a href="shop.html" class="btn btn-primary" data-content="hero-cta">Shop Now</a>
+        <a href="#about" class="btn btn-outline">Learn More</a>
+      </div>
+    </div>
+    <div class="scroll-indicator">
+      <span class="label">Scroll</span>
+      <div class="scroll-line"></div>
     </div>
   </div>
 
-  <div class="scroll-indicator">
-    <span class="label">Scroll</span>
-    <div class="scroll-line"></div>
+  <!-- Variant: split-image (image left 60%, text right 40%) -->
+  <div data-variant="split-image" style="display:none;">
+    <div class="hero-split">
+      <div class="hero-split-image" id="heroSplitImage"></div>
+      <div class="hero-split-content">
+        <div class="hero-logo" id="heroLogoSplit" style="display:none;"></div>
+        <p class="hero-tagline" data-tenant="tagline" data-content="hero-tagline"></p>
+        <h1 data-tenant="brand" data-content="hero-headline">Welcome</h1>
+        <p class="hero-sub" data-tenant="description" data-content="hero-subheadline"></p>
+        <div class="hero-cta">
+          <a href="shop.html" class="btn btn-primary" data-content="hero-cta">Shop Now</a>
+          <a href="#about" class="btn btn-outline">Learn More</a>
+        </div>
+      </div>
+    </div>
   </div>
+
+  <!-- Variant: minimal-text (oversized typography, no image) -->
+  <div data-variant="minimal-text" style="display:none;">
+    <div class="hero-minimal">
+      <div class="hero-logo" id="heroLogoMinimal" style="display:none;"></div>
+      <p class="hero-tagline" data-tenant="tagline" data-content="hero-tagline"></p>
+      <h1 class="hero-minimal-headline" data-tenant="brand" data-content="hero-headline">Welcome</h1>
+      <p class="hero-sub" data-tenant="description" data-content="hero-subheadline"></p>
+      <div class="hero-cta">
+        <a href="shop.html" class="btn btn-primary" data-content="hero-cta">Shop Now</a>
+      </div>
+    </div>
+  </div>
+
 </section>
 
 <!-- ============ ABOUT ============ -->

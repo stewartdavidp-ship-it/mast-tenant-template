@@ -1,0 +1,158 @@
+{
+  "id": "the-market",
+  "name": "The Market",
+  "description": "Mobile-forward marketplace. Quick browsing, compact product grid, bottom navigation, split-image hero. For makers with 20+ products, farmers market vendors, food makers.",
+  "version": "1.0.0",
+  "compile": true,
+
+  "responsivePriority": "mobile",
+  "designScale": "compact",
+  "navStyle": "bottom-bar",
+  "heroVariant": "split-image",
+  "galleryVariant": "carousel",
+  "productGridVariant": "compact",
+
+  "slots": {
+    "universal": [
+      { "id": "hero", "label": "Hero", "required": true, "description": "Split-image hero with product photo and CTA" },
+      { "id": "category-grid", "label": "Categories", "required": true, "description": "Browse-by-category cards" },
+      { "id": "featured-products", "label": "Featured", "required": true, "description": "Product carousel — new arrivals or bestsellers" },
+      { "id": "contact", "label": "Contact", "required": true, "description": "Quick contact info" }
+    ],
+    "common": [
+      { "id": "newsletter", "label": "Newsletter", "required": false, "description": "SMS/email signup" },
+      { "id": "testimonials", "label": "Reviews", "required": false, "description": "Customer reviews" }
+    ],
+    "differentiators": [
+      { "id": "about-blurb", "label": "About Blurb", "required": false, "description": "Brief maker story" },
+      { "id": "events", "label": "Events", "required": false, "description": "Market schedule and upcoming shows" }
+    ]
+  },
+
+  "slotMapping": {
+    "hero": "hero",
+    "gallery": null,
+    "category-grid": "category-grid",
+    "featured-products": "featured-products",
+    "about-blurb": "about-blurb",
+    "about": null,
+    "events": "events",
+    "process": null,
+    "testimonials": "testimonials",
+    "contact": "contact",
+    "newsletter": "newsletter"
+  },
+
+  "homepageFlow": [
+    "hero",
+    "category-grid",
+    "featured-products",
+    "about-blurb",
+    "testimonials",
+    "events",
+    "newsletter"
+  ],
+
+  "navStructure": [
+    { "id": "shop", "label": "Shop", "href": "shop.html", "highlight": true },
+    { "id": "about", "label": "About", "href": "about.html" },
+    { "id": "contact", "label": "Contact", "href": "#contact" }
+  ],
+
+  "pages": [
+    { "file": "index.html", "label": "Home", "slots": ["hero", "category-grid", "featured-products", "about-blurb", "testimonials", "events", "newsletter"] },
+    { "file": "shop.html", "label": "Shop", "slots": ["shop-header", "shop-grid"] },
+    { "file": "product.html", "label": "Product Detail", "slots": ["product-detail", "product-story"] },
+    { "file": "about.html", "label": "About", "slots": ["about-header", "about-story", "cta"] },
+    { "file": "schedule.html", "label": "Events", "slots": ["events-header", "events-list"] },
+    { "file": "orders.html", "label": "Orders", "slots": ["orders-header", "order-lookup"] },
+    { "file": "checkout.html", "label": "Checkout", "slots": ["checkout-flow"] },
+    { "file": "blog/index.html", "label": "Blog", "slots": ["blog-header", "blog-grid"] },
+    { "file": "blog/post.html", "label": "Blog Post", "slots": ["blog-post"] }
+  ],
+
+  "colorSchemes": [
+    {
+      "id": "market-fresh",
+      "name": "Fresh",
+      "default": true,
+      "colors": {
+        "primaryColor": "#2D8B5E",
+        "accentColor": "#E8853C",
+        "bgColor": "#FFFFFF",
+        "bgDarkColor": "#F5F5F5",
+        "textColor": "#1A1A1A",
+        "textMutedColor": "#6B6B6B"
+      }
+    },
+    {
+      "id": "market-warm",
+      "name": "Warm",
+      "colors": {
+        "primaryColor": "#C4853C",
+        "accentColor": "#6B8E23",
+        "bgColor": "#FFF8F0",
+        "bgDarkColor": "#F5ECE0",
+        "textColor": "#2C2417",
+        "textMutedColor": "#7A7060"
+      }
+    },
+    {
+      "id": "market-bold",
+      "name": "Bold",
+      "colors": {
+        "primaryColor": "#E05050",
+        "accentColor": "#2D2D2D",
+        "bgColor": "#FFFFFF",
+        "bgDarkColor": "#F5F5F5",
+        "textColor": "#1A1A1A",
+        "textMutedColor": "#6B6B6B"
+      }
+    },
+    {
+      "id": "market-earth",
+      "name": "Earth",
+      "colors": {
+        "primaryColor": "#8B6F47",
+        "accentColor": "#5A7247",
+        "bgColor": "#FAF8F5",
+        "bgDarkColor": "#F0ECE6",
+        "textColor": "#2C2417",
+        "textMutedColor": "#7A7060"
+      }
+    },
+    {
+      "id": "market-midnight",
+      "name": "Midnight",
+      "colors": {
+        "primaryColor": "#E8E0D4",
+        "accentColor": "#5FA8D3",
+        "bgColor": "#1A1A2E",
+        "bgDarkColor": "#16162A",
+        "textColor": "#E8E0D4",
+        "textMutedColor": "#9A9490"
+      }
+    }
+  ],
+
+  "fontPairs": [
+    { "id": "modern", "name": "Modern", "heading": "Inter", "body": "Inter", "default": true },
+    { "id": "clean", "name": "Clean", "heading": "Outfit", "body": "Outfit" },
+    { "id": "geometric", "name": "Geometric", "heading": "Space Grotesk", "body": "Space Grotesk" },
+    { "id": "classic", "name": "Classic", "heading": "Cormorant Garamond", "body": "DM Sans" },
+    { "id": "artisan", "name": "Artisan", "heading": "Libre Baskerville", "body": "Nunito Sans" }
+  ],
+
+  "fingerprint": {
+    "archetype": ["shop-forward"],
+    "productCount": ["medium", "high"],
+    "productPlacement": ["homepage", "both"],
+    "productDensity": ["small-dense", "medium-grid"],
+    "categoryCount": ["few", "many"],
+    "pageCount": ["few"],
+    "contentTypes": ["products"],
+    "homepageSections": ["category-grid", "featured-products"],
+    "heroStyle": ["split-image", "image-bg"],
+    "aboutOnHomepage": false
+  }
+}

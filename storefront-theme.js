@@ -381,6 +381,53 @@
               }
             }
 
+            // Apply design scale, responsive priority, and section variants
+            var applyTemplateAttributes = function() {
+              var html = document.documentElement;
+
+              // Design scale: tenant override > manifest default > "standard"
+              var designScale = config.designScale || (manifest && manifest.designScale) || 'standard';
+              html.setAttribute('data-design-scale', designScale);
+
+              // Responsive priority: manifest only (not tenant-overridable per decision, but reading config for freedom principle)
+              var responsivePriority = config.responsivePriority || (manifest && manifest.responsivePriority) || 'balanced';
+              html.setAttribute('data-responsive-priority', responsivePriority);
+
+              // Nav style: tenant override > manifest default > "top-bar"
+              var navStyle = config.navStyle || (manifest && manifest.navStyle) || 'top-bar';
+              document.body.setAttribute('data-nav-style', navStyle);
+
+              // Section variants: tenant overrides > manifest defaults
+              var variants = config.variants || {};
+              var heroVariant = variants.hero || config.heroVariant || (manifest && manifest.heroVariant) || 'full-bleed';
+              var galleryVariant = variants.gallery || config.galleryVariant || (manifest && manifest.galleryVariant) || 'grid';
+              var productGridVariant = variants.productGrid || config.productGridVariant || (manifest && manifest.productGridVariant) || 'card';
+
+              // Activate hero variant
+              var heroSlot = document.querySelector('[data-slot="hero"]');
+              if (heroSlot) {
+                var heroVariants = heroSlot.querySelectorAll('[data-variant]');
+                heroVariants.forEach(function(v) { v.classList.remove('active'); v.style.display = 'none'; });
+                var activeHero = heroSlot.querySelector('[data-variant="' + heroVariant + '"]');
+                if (activeHero) { activeHero.classList.add('active'); activeHero.style.display = ''; }
+                else if (heroVariants.length > 0) { heroVariants[0].classList.add('active'); heroVariants[0].style.display = ''; }
+              }
+
+              // Activate gallery variant
+              var galleryGrid = document.querySelector('.gallery-grid');
+              if (galleryGrid) galleryGrid.setAttribute('data-variant', galleryVariant);
+
+              // Activate product grid variant
+              var productGrid = document.querySelector('.product-grid');
+              if (productGrid) productGrid.setAttribute('data-variant', productGridVariant);
+            };
+
+            if (document.readyState === 'loading') {
+              document.addEventListener('DOMContentLoaded', applyTemplateAttributes);
+            } else {
+              applyTemplateAttributes();
+            }
+
             // Apply homepage section flow: custom order overrides manifest
             var applyFlow = function() {
               if (!window.TENANT_ID) {

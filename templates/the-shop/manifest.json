@@ -5,6 +5,13 @@
   "version": "1.0.0",
   "compile": true,
 
+  "responsivePriority": "balanced",
+  "designScale": "standard",
+  "navStyle": "top-bar",
+  "heroVariant": "full-bleed",
+  "galleryVariant": "grid",
+  "productGridVariant": "card",
+
   "slots": {
     "universal": [
       { "id": "hero", "label": "Hero", "required": true, "description": "Product-focused hero with prominent Shop CTA and featured image" },

@@ -224,10 +224,55 @@
       mobileMenu.innerHTML = mhtml;
     }
 
+    // Build bottom bar for bottom-bar nav style
+    var navStyle = document.body.getAttribute('data-nav-style');
+    if (navStyle === 'bottom-bar') {
+      buildBottomBar(basePath);
+    }
+
     setupMobileToggle();
     setupScrollBehavior(nav);
 
     window.dispatchEvent(new CustomEvent('storefront-nav-ready'));
+  }
+
+  /**
+   * Build bottom navigation bar for mobile-forward templates.
+   * Fixed to bottom of screen on mobile, hidden on desktop.
+   */
+  function buildBottomBar(basePath) {
+    var existing = document.getElementById('bottomBar');
+    if (existing) return; // already built
+
+    var bar = document.createElement('div');
+    bar.className = 'nav-bottom-bar';
+    bar.id = 'bottomBar';
+
+    var homeSvg = '<svg viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0h4"/></svg>';
+    var shopSvg = '<svg viewBox="0 0 24 24"><path d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>';
+    var cartSvg = '<svg viewBox="0 0 24 24"><path d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.3 2.3c-.4.4-.1 1 .4 1H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z"/></svg>';
+    var menuSvg = '<svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>';
+
+    var inner = document.createElement('div');
+    inner.className = 'nav-bottom-bar-inner';
+    inner.innerHTML =
+      '<a href="' + basePath + 'index.html">' + homeSvg + '<span>Home</span></a>' +
+      '<a href="' + basePath + 'shop.html">' + shopSvg + '<span>Shop</span></a>' +
+      '<a href="' + basePath + 'shop.html#cart" onclick="if(window.toggleCart){event.preventDefault();window.toggleCart();}">' + cartSvg + '<span>Cart</span></a>' +
+      '<button onclick="var t=document.querySelector(\'.nav-toggle\');if(t)t.click();">' + menuSvg + '<span>Menu</span></button>';
+
+    // Set stroke style on SVGs
+    var svgs = inner.querySelectorAll('svg');
+    for (var i = 0; i < svgs.length; i++) {
+      svgs[i].setAttribute('fill', 'none');
+      svgs[i].setAttribute('stroke', 'currentColor');
+      svgs[i].setAttribute('stroke-width', '1.5');
+      svgs[i].setAttribute('stroke-linecap', 'round');
+      svgs[i].setAttribute('stroke-linejoin', 'round');
+    }
+
+    bar.appendChild(inner);
+    document.body.appendChild(bar);
   }
 
   /**
