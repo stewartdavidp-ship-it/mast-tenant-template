@@ -1,53 +1,47 @@
 /**
- * Brand & Logo Module
+ * Brand & Logo Module — Master-Detail Layout
  * Lazy-loaded via MastAdmin module registry.
  *
- * Manages brand logo across all placements: nav, hero, footer, email, favicon.
- * Reads from: {tenantId}/config/brand/logo/
- * Writes to:  {tenantId}/config/brand/logo/placements/ (placement assignments only)
- *             {tenantId}/public/config/brand/logo/ (resolved public URLs)
- *             {tenantId}/public/config/nav/logoUrl (legacy compat)
+ * Layout: Detail panel (top) + Logo type grid (middle) + Placements (bottom)
+ * Click a logo type in the grid to focus it in the detail panel.
  */
 (function() {
   'use strict';
 
-  // ============================================================
-  // Module-private state
-  // ============================================================
-
   var brandLoaded = false;
-  var logoConfig = null; // { primary, variants, placements }
+  var logoConfig = null;
   var legacyLogoUrl = null;
+  var selectedType = 'primary'; // which logo type is focused in detail panel
+  var activeTab = 'logos'; // 'logos' or 'placements'
 
-  var VARIANT_TYPES = [
-    { key: 'transparent', label: 'Transparent', desc: 'White background removed', bg: 'var(--surface-dark)', autoGen: true },
-    { key: 'light', label: 'Light', desc: 'For dark backgrounds (nav, dark hero)', bg: '#1a1a2e', autoGen: false },
-    { key: 'dark', label: 'Dark', desc: 'For light backgrounds (email, receipts)', bg: '#f5f5f5', autoGen: false },
-    { key: 'icon', label: 'Icon', desc: 'Square crop for favicon & social (180x180)', bg: 'var(--surface-card)', autoGen: true },
-    { key: 'email', label: 'Email', desc: 'Sized for email headers (max 600px wide)', bg: '#ffffff', autoGen: true }
+  // All logo types — primary + variants, treated equally in the grid
+  var LOGO_TYPES = [
+    { key: 'primary', label: 'Primary', desc: 'Original uploaded logo', bg: 'var(--surface-dark)', autoGen: false, isUpload: true },
+    { key: 'transparent', label: 'Transparent', desc: 'White background removed', bg: 'var(--surface-dark)', autoGen: true, isUpload: false },
+    { key: 'light', label: 'Light', desc: 'For dark backgrounds', bg: '#1a1a2e', autoGen: false, isUpload: true },
+    { key: 'dark', label: 'Dark', desc: 'For light backgrounds', bg: '#f5f5f5', autoGen: false, isUpload: true },
+    { key: 'icon', label: 'Icon', desc: 'Square 180x180 (favicon, social)', bg: 'var(--surface-card)', autoGen: true, isUpload: false },
+    { key: 'email', label: 'Email', desc: 'Max 600px wide (email headers)', bg: '#ffffff', autoGen: true, isUpload: false }
   ];
 
   var PLACEMENTS = [
-    { key: 'navBar', label: 'Navigation Bar', defaultHeight: 48, defaultVariant: 'primary' },
-    { key: 'hero', label: 'Hero Banner', defaultHeight: 120, defaultVariant: 'primary' },
-    { key: 'footer', label: 'Footer', defaultHeight: 60, defaultVariant: 'primary' },
-    { key: 'email', label: 'Email Header', defaultHeight: 60, defaultVariant: 'email' },
-    { key: 'favicon', label: 'Favicon', defaultHeight: 32, defaultVariant: 'icon' }
+    { key: 'navBar', label: 'Navigation Bar', defaultHeight: 48 },
+    { key: 'hero', label: 'Hero Banner', defaultHeight: 120 },
+    { key: 'footer', label: 'Footer', defaultHeight: 60 },
+    { key: 'email', label: 'Email Header', defaultHeight: 60 },
+    { key: 'favicon', label: 'Favicon', defaultHeight: 32 }
   ];
 
-  // ============================================================
-  // Data Loading
-  // ============================================================
+  // ─── Data Loading ───
 
   async function loadBrandData() {
     try {
       var logoSnap = await MastDB._ref('config/brand/logo').once('value');
       logoConfig = logoSnap.val() || null;
-
       var legacySnap = await MastDB._ref('public/config/nav/logoUrl').once('value');
       legacyLogoUrl = legacySnap.val() || null;
     } catch (err) {
-      console.warn('[Brand] Failed to load logo config:', err.message);
+      console.warn('[Brand] Failed to load:', err.message);
       logoConfig = null;
       legacyLogoUrl = null;
     }
@@ -55,9 +49,7 @@
     renderBrand();
   }
 
-  // ============================================================
-  // Helpers
-  // ============================================================
+  // ─── Helpers ───
 
   function esc(str) {
     if (!str) return '';
@@ -66,15 +58,18 @@
 
   function formatDate(iso) {
     if (!iso) return '--';
-    try {
-      return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    } catch (_) { return iso; }
+    try { return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
+    catch (_) { return iso; }
   }
 
-  function getVariantUrl(variantKey) {
-    if (!logoConfig) return null;
-    if (variantKey === 'primary') return logoConfig.primary ? logoConfig.primary.url : null;
-    return logoConfig.variants && logoConfig.variants[variantKey] ? logoConfig.variants[variantKey].url : null;
+  function getTypeData(key) {
+    if (key === 'primary') return (logoConfig && logoConfig.primary) || null;
+    return (logoConfig && logoConfig.variants && logoConfig.variants[key]) || null;
+  }
+
+  function getTypeUrl(key) {
+    var data = getTypeData(key);
+    return data ? data.url : null;
   }
 
   function getAvailableVariantKeys() {
@@ -86,9 +81,7 @@
     return keys;
   }
 
-  // ============================================================
-  // Rendering
-  // ============================================================
+  // ─── Main Render ───
 
   function renderBrand() {
     var el = document.getElementById('brandContent');
@@ -100,111 +93,136 @@
     }
 
     var html = '<div style="max-width:900px;margin:0 auto;padding:16px 0;">';
+    html += '<div class="section-header" style="margin-bottom:16px;"><h2>Brand</h2></div>';
 
-    // Header
-    html += '<div class="section-header" style="margin-bottom:24px;">' +
-      '<h2>Brand & Logo</h2>' +
+    // Sub-tabs
+    var logosActive = activeTab === 'logos';
+    var placementsActive = activeTab === 'placements';
+    var tabStyle = 'padding:8px 20px;border:none;border-bottom:2px solid transparent;background:none;cursor:pointer;font-size:0.9rem;';
+    var activeStyle = tabStyle + 'color:var(--teal);border-bottom-color:var(--teal);font-weight:600;';
+    var inactiveStyle = tabStyle + 'color:var(--warm-gray);';
+
+    html += '<div style="display:flex;gap:4px;border-bottom:1px solid var(--warm-gray-dark);margin-bottom:20px;">' +
+      '<button onclick="brandSwitchTab(\'logos\')" style="' + (logosActive ? activeStyle : inactiveStyle) + '">Logos</button>' +
+      '<button onclick="brandSwitchTab(\'placements\')" style="' + (placementsActive ? activeStyle : inactiveStyle) + '">Placements</button>' +
     '</div>';
 
-    // Section 1: Primary Logo
-    html += renderPrimarySection();
-
-    // Section 2: Variant Grid
-    html += renderVariantGrid();
-
-    // Section 3: Placement Assignments
-    html += renderPlacementTable();
-
-    // Section 4: Legacy Status
-    html += renderLegacyStatus();
+    if (logosActive) {
+      html += renderDetailPanel();
+      html += renderTypeGrid();
+    } else {
+      html += renderPlacementTable();
+    }
 
     html += '</div>';
     el.innerHTML = html;
   }
 
-  // ─── Primary Logo Section ───
+  // ─── Detail Panel (top — shows selected type) ───
 
-  function renderPrimarySection() {
-    var primary = logoConfig && logoConfig.primary;
+  function renderDetailPanel() {
+    var typeDef = LOGO_TYPES.find(function(t) { return t.key === selectedType; }) || LOGO_TYPES[0];
+    var data = getTypeData(selectedType);
+    var hasData = !!data;
 
-    var html = '<div style="background:var(--surface-card);border-radius:8px;padding:20px;margin-bottom:20px;">' +
-      '<h3 style="margin:0 0 16px;font-size:1.1rem;color:var(--text-primary);">Primary Logo</h3>';
+    var html = '<div style="background:var(--surface-card);border-radius:8px;padding:20px;margin-bottom:20px;">';
 
-    if (!primary) {
-      html += '<div style="text-align:center;padding:40px 20px;border:2px dashed var(--warm-gray);border-radius:8px;color:var(--warm-gray);">' +
-        '<div style="font-size:2rem;margin-bottom:8px;">&#128247;</div>' +
-        '<div style="font-size:0.95rem;margin-bottom:8px;">No logo configured</div>' +
-        '<button class="btn btn-primary" onclick="brandUploadLogoPrompt()" style="margin-bottom:8px;">Upload Logo</button>' +
-        '<div style="font-size:0.75rem;">Or use your AI assistant: <code>upload_logo</code></div>' +
-      '</div>';
+    // Header row with type name + badge
+    html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">' +
+      '<h3 style="margin:0;font-size:1.1rem;color:var(--text-primary);">' + esc(typeDef.label) + '</h3>' +
+      '<span style="font-size:0.75rem;color:var(--warm-gray);">' + esc(typeDef.desc) + '</span>';
+    if (hasData) {
+      var source = selectedType === 'primary' ? 'Uploaded' : (data.generatedFrom === 'primary' ? 'Auto-generated' : 'Manual');
+      html += '<span class="status-badge pill" style="background:rgba(42,124,111,0.15);color:var(--teal);font-size:0.7rem;">' + source + '</span>';
     } else {
+      html += '<span class="status-badge pill" style="background:rgba(196,133,60,0.15);color:var(--amber);font-size:0.7rem;">Not configured</span>';
+    }
+    html += '</div>';
+
+    if (!hasData) {
+      // Empty state with actions
+      html += '<div style="display:flex;gap:16px;align-items:center;padding:32px 0;flex-wrap:wrap;">' +
+        '<div style="background:' + typeDef.bg + ';border-radius:8px;width:200px;height:120px;display:flex;align-items:center;justify-content:center;">' +
+          '<span style="font-size:0.8rem;color:var(--warm-gray);">No image</span>' +
+        '</div>' +
+        '<div>';
+
+      if (selectedType === 'primary') {
+        html += '<button class="btn btn-primary" onclick="brandUploadLogoPrompt(\'primary\')">Upload Logo</button>';
+      } else if (typeDef.autoGen) {
+        var hasPrimary = !!(logoConfig && logoConfig.primary);
+        if (hasPrimary) {
+          html += '<button class="btn btn-primary" onclick="brandGenerateVariant(\'' + selectedType + '\')">Generate from Primary</button>';
+          html += '<div style="margin-top:8px;"><button class="btn btn-secondary" onclick="brandUploadLogoPrompt(\'' + selectedType + '\')" style="font-size:0.8rem;">Or upload manually</button></div>';
+        } else {
+          html += '<div style="color:var(--warm-gray);font-size:0.85rem;">Upload a primary logo first</div>';
+        }
+      } else {
+        html += '<button class="btn btn-primary" onclick="brandUploadLogoPrompt(\'' + selectedType + '\')">Upload ' + esc(typeDef.label) + ' Variant</button>';
+      }
+
+      html += '</div></div>';
+    } else {
+      // Show image + metadata + actions
       html += '<div style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap;">' +
-        // Logo preview
-        '<div style="background:var(--surface-dark);border-radius:8px;padding:16px;display:flex;align-items:center;justify-content:center;min-width:200px;min-height:120px;">' +
-          '<img src="' + esc(primary.url) + '" alt="Primary logo" style="max-width:300px;max-height:150px;object-fit:contain;" onerror="this.style.display=\'none\'">' +
+        '<div style="background:' + typeDef.bg + ';border-radius:8px;padding:16px;display:flex;align-items:center;justify-content:center;min-width:200px;min-height:120px;">' +
+          '<img src="' + esc(data.url) + '" alt="' + esc(typeDef.label) + '" style="max-width:300px;max-height:150px;object-fit:contain;" onerror="this.style.display=\'none\'">' +
         '</div>' +
-        // Metadata
         '<div style="flex:1;min-width:200px;">' +
-          '<div style="display:grid;gap:8px;font-size:0.85rem;">' +
-            '<div><span style="color:var(--warm-gray);">Format:</span> ' + esc(primary.format || 'unknown') + (primary.hasTransparency ? ' <span style="color:var(--teal);">(transparent)</span>' : '') + '</div>' +
-            (primary.dimensions ? '<div><span style="color:var(--warm-gray);">Dimensions:</span> ' + primary.dimensions.width + ' x ' + primary.dimensions.height + 'px</div>' : '') +
-            '<div><span style="color:var(--warm-gray);">Uploaded:</span> ' + formatDate(primary.uploadedAt) + '</div>' +
-          '</div>' +
-          '<div style="margin-top:12px;display:flex;gap:8px;align-items:center;">' +
-            '<button class="btn btn-secondary" onclick="brandUploadLogoPrompt()" style="font-size:0.8rem;padding:4px 12px;">Replace Logo</button>' +
-          '</div>' +
-        '</div>' +
-      '</div>';
+          '<div style="display:grid;gap:6px;font-size:0.85rem;">';
+
+      if (data.format) html += '<div><span style="color:var(--warm-gray);">Format:</span> ' + esc(data.format) + (data.hasTransparency ? ' <span style="color:var(--teal);">(transparent)</span>' : '') + '</div>';
+      if (data.dimensions) html += '<div><span style="color:var(--warm-gray);">Dimensions:</span> ' + data.dimensions.width + ' x ' + data.dimensions.height + 'px</div>';
+      if (data.uploadedAt || data.createdAt) html += '<div><span style="color:var(--warm-gray);">Created:</span> ' + formatDate(data.uploadedAt || data.createdAt) + '</div>';
+
+      html += '</div>' +
+        '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">' +
+          '<button class="btn btn-secondary" onclick="brandUploadLogoPrompt(\'' + selectedType + '\')" style="font-size:0.8rem;padding:4px 12px;">Replace</button>';
+
+      // Generate button for auto-gen types
+      if (selectedType !== 'primary' && typeDef.autoGen && logoConfig && logoConfig.primary) {
+        html += '<button class="btn btn-secondary" onclick="brandGenerateVariant(\'' + selectedType + '\')" style="font-size:0.8rem;padding:4px 12px;">Regenerate</button>';
+      }
+
+      // Delete button for variants (not primary)
+      if (selectedType !== 'primary') {
+        html += '<button class="btn btn-secondary" onclick="brandDeleteVariant(\'' + selectedType + '\')" style="font-size:0.8rem;padding:4px 12px;color:var(--red,#ef4444);">Delete</button>';
+      }
+
+      html += '</div></div></div>';
     }
 
     html += '</div>';
     return html;
   }
 
-  // ─── Variant Grid ───
+  // ─── Logo Type Grid (all 6 types as clickable cards) ───
 
-  function renderVariantGrid() {
-    var variants = (logoConfig && logoConfig.variants) || {};
+  function renderTypeGrid() {
+    var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(130px, 1fr));gap:10px;margin-bottom:20px;">';
 
-    var html = '<div style="background:var(--surface-card);border-radius:8px;padding:20px;margin-bottom:20px;">' +
-      '<h3 style="margin:0 0 16px;font-size:1.1rem;color:var(--text-primary);">Variants</h3>' +
-      '<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(160px, 1fr));gap:12px;">';
+    LOGO_TYPES.forEach(function(lt) {
+      var data = getTypeData(lt.key);
+      var isSelected = lt.key === selectedType;
+      var borderColor = isSelected ? 'var(--teal)' : 'var(--warm-gray-dark)';
+      var borderWidth = isSelected ? '2px' : '1px';
 
-    VARIANT_TYPES.forEach(function(vt) {
-      var variant = variants[vt.key];
-      var hasVariant = !!variant;
+      html += '<div onclick="brandSelectType(\'' + lt.key + '\')" style="cursor:pointer;border:' + borderWidth + ' solid ' + borderColor + ';border-radius:8px;overflow:hidden;transition:border-color 0.15s;">' +
+        '<div style="background:' + lt.bg + ';height:70px;display:flex;align-items:center;justify-content:center;padding:6px;">';
 
-      html += '<div style="border:1px solid var(--warm-gray-dark);border-radius:8px;overflow:hidden;">' +
-        // Preview area with contextual background
-        '<div style="background:' + vt.bg + ';height:100px;display:flex;align-items:center;justify-content:center;padding:8px;">';
-
-      if (hasVariant) {
-        html += '<img src="' + esc(variant.url) + '" alt="' + esc(vt.label) + ' variant" style="max-width:100%;max-height:84px;object-fit:contain;" onerror="this.parentElement.innerHTML=\'&#10060;\'">';
+      if (data) {
+        html += '<img src="' + esc(data.url) + '" alt="" style="max-width:100%;max-height:58px;object-fit:contain;" onerror="this.parentElement.innerHTML=\'&#10060;\'">';
       } else {
-        html += '<span style="font-size:0.75rem;color:var(--warm-gray);text-align:center;">Not configured</span>';
+        html += '<span style="font-size:0.65rem;color:var(--warm-gray);">Empty</span>';
       }
 
       html += '</div>' +
-        // Info area
-        '<div style="padding:8px 10px;">' +
-          '<div style="font-size:0.85rem;font-weight:600;color:var(--text-primary);">' + esc(vt.label) + '</div>' +
-          '<div style="font-size:0.7rem;color:var(--warm-gray);margin-top:2px;">' + esc(vt.desc) + '</div>';
-
-      if (hasVariant) {
-        var source = variant.generatedFrom === 'primary' ? 'Auto-generated' : 'Manual upload';
-        html += '<div style="font-size:0.7rem;color:var(--teal);margin-top:4px;">' + source + '</div>';
-        if (variant.dimensions) {
-          html += '<div style="font-size:0.7rem;color:var(--warm-gray);">' + variant.dimensions.width + 'x' + variant.dimensions.height + '</div>';
-        }
-      } else {
-        var hint = vt.autoGen ? 'generate_logo_variant' : 'upload_logo_variant';
-        html += '<div style="font-size:0.65rem;color:var(--warm-gray);margin-top:4px;">Use AI: <code>' + hint + '</code></div>';
-      }
-
-      html += '</div></div>';
+        '<div style="padding:6px 8px;text-align:center;">' +
+          '<div style="font-size:0.8rem;font-weight:600;color:' + (isSelected ? 'var(--teal)' : 'var(--text-primary)') + ';">' + esc(lt.label) + '</div>' +
+        '</div></div>';
     });
 
-    html += '</div></div>';
+    html += '</div>';
     return html;
   }
 
@@ -214,7 +232,7 @@
     var placements = (logoConfig && logoConfig.placements) || {};
     var availableKeys = getAvailableVariantKeys();
 
-    var html = '<div style="background:var(--surface-card);border-radius:8px;padding:20px;margin-bottom:20px;">' +
+    var html = '<div style="background:var(--surface-card);border-radius:8px;padding:20px;">' +
       '<h3 style="margin:0 0 16px;font-size:1.1rem;color:var(--text-primary);">Placement Assignments</h3>';
 
     if (!logoConfig || !logoConfig.primary) {
@@ -222,33 +240,26 @@
       return html;
     }
 
-    html += '<div style="display:grid;gap:12px;">';
+    html += '<div style="display:grid;gap:10px;">';
 
     PLACEMENTS.forEach(function(p) {
       var config = placements[p.key] || {};
       var currentKey = config.variantKey || '';
       var currentHeight = config.maxHeight || p.defaultHeight;
-      var resolvedUrl = getVariantUrl(currentKey || 'primary');
+      var resolvedUrl = currentKey ? getTypeUrl(currentKey) : getTypeUrl('primary');
 
-      html += '<div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--surface-dark);border-radius:6px;flex-wrap:wrap;">' +
-        // Logo thumbnail
-        '<div style="width:60px;height:40px;background:var(--surface-card);border-radius:4px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">';
+      html += '<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--surface-dark);border-radius:6px;flex-wrap:wrap;">' +
+        '<div style="width:50px;height:34px;background:var(--surface-card);border-radius:4px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">';
       if (resolvedUrl) {
-        html += '<img src="' + esc(resolvedUrl) + '" alt="" style="max-width:56px;max-height:36px;object-fit:contain;" onerror="this.style.display=\'none\'">';
+        html += '<img src="' + esc(resolvedUrl) + '" alt="" style="max-width:46px;max-height:30px;object-fit:contain;" onerror="this.style.display=\'none\'">';
       } else {
-        html += '<span style="font-size:0.6rem;color:var(--warm-gray);">--</span>';
+        html += '<span style="font-size:0.55rem;color:var(--warm-gray);">--</span>';
       }
       html += '</div>' +
-        // Label
-        '<div style="min-width:120px;flex-shrink:0;">' +
-          '<div style="font-size:0.85rem;font-weight:600;color:var(--text-primary);">' + esc(p.label) + '</div>' +
-        '</div>' +
-        // Variant dropdown
-        '<div style="display:flex;align-items:center;gap:8px;flex:1;min-width:200px;">' +
-          '<label style="font-size:0.75rem;color:var(--warm-gray);white-space:nowrap;">Variant:</label>' +
+        '<div style="min-width:110px;flex-shrink:0;font-size:0.85rem;font-weight:600;color:var(--text-primary);">' + esc(p.label) + '</div>' +
+        '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:200px;">' +
           '<select id="brandPlacement_' + p.key + '_variant" style="flex:1;padding:4px 8px;border-radius:4px;border:1px solid var(--warm-gray);background:var(--surface-card);color:var(--text-primary);font-size:0.8rem;">';
 
-      // Populate dropdown
       availableKeys.forEach(function(k) {
         var selected = (k === currentKey) ? ' selected' : '';
         var label = k === 'primary' ? 'Primary' : k.charAt(0).toUpperCase() + k.slice(1);
@@ -256,140 +267,94 @@
       });
 
       html += '</select>' +
-          '<label style="font-size:0.75rem;color:var(--warm-gray);white-space:nowrap;">Height:</label>' +
-          '<input type="number" id="brandPlacement_' + p.key + '_height" value="' + currentHeight + '" min="16" max="200" style="width:60px;padding:4px 8px;border-radius:4px;border:1px solid var(--warm-gray);background:var(--surface-card);color:var(--text-primary);font-size:0.8rem;">' +
-          '<span style="font-size:0.7rem;color:var(--warm-gray);">px</span>' +
-          '<button class="btn btn-primary" onclick="brandSavePlacement(\'' + p.key + '\')" style="font-size:0.75rem;padding:4px 12px;">Save</button>' +
-        '</div>' +
-      '</div>';
+          '<input type="number" id="brandPlacement_' + p.key + '_height" value="' + currentHeight + '" min="16" max="200" style="width:55px;padding:4px 6px;border-radius:4px;border:1px solid var(--warm-gray);background:var(--surface-card);color:var(--text-primary);font-size:0.8rem;" title="Max height (px)">' +
+          '<span style="font-size:0.65rem;color:var(--warm-gray);">px</span>' +
+          '<button class="btn btn-primary" onclick="brandSavePlacement(\'' + p.key + '\')" style="font-size:0.75rem;padding:4px 10px;">Save</button>' +
+        '</div></div>';
     });
 
     html += '</div></div>';
     return html;
   }
 
-  // ─── Legacy Status ───
+  // ─── Actions ───
 
-  function renderLegacyStatus() {
-    var hasBrandSystem = logoConfig && logoConfig.primary;
+  window.brandSwitchTab = function(tab) {
+    activeTab = tab;
+    renderBrand();
+  };
 
-    var html = '<div style="background:var(--surface-card);border-radius:8px;padding:16px;">' +
-      '<div style="display:flex;align-items:center;gap:8px;">' +
-        '<span style="font-size:0.85rem;color:var(--warm-gray);">System Status:</span>';
+  window.brandSelectType = function(typeKey) {
+    selectedType = typeKey;
+    renderBrand();
+  };
 
-    if (hasBrandSystem) {
-      html += '<span style="color:var(--teal);font-size:0.85rem;">&#10003; Brand system active</span>';
-    } else if (legacyLogoUrl) {
-      html += '<span style="color:var(--amber);font-size:0.85rem;">&#9888; Legacy only</span>' +
-        '<span style="font-size:0.75rem;color:var(--warm-gray);margin-left:8px;">Logo URL: ' + esc(legacyLogoUrl) + '</span>';
-    } else {
-      html += '<span style="color:var(--warm-gray);font-size:0.85rem;">No logo configured</span>';
-    }
-
-    html += '</div></div>';
-    return html;
-  }
-
-  // ============================================================
-  // Actions
-  // ============================================================
-
-  /**
-   * Save a placement assignment from the admin UI.
-   * Writes to config/brand/logo/placements/{placement} and resolves public URLs.
-   */
   window.brandSavePlacement = async function(placementKey) {
     var variantEl = document.getElementById('brandPlacement_' + placementKey + '_variant');
     var heightEl = document.getElementById('brandPlacement_' + placementKey + '_height');
     if (!variantEl) return;
-
-    var variantKey = variantEl.value;
-    var maxHeight = parseInt(heightEl ? heightEl.value : '48', 10) || 48;
-
     try {
-      // Write placement config
       await MastDB._ref('config/brand/logo/placements/' + placementKey).set({
-        variantKey: variantKey,
-        maxHeight: maxHeight
+        variantKey: variantEl.value,
+        maxHeight: parseInt(heightEl ? heightEl.value : '48', 10) || 48
       });
-
-      // Resolve and write public URLs
       await resolvePublicPlacements();
-
       showToast('Placement saved: ' + placementKey);
-
-      // Reload data to refresh UI
       await loadBrandData();
     } catch (err) {
       showToast('Failed to save placement: ' + err.message, true);
     }
   };
 
-  /**
-   * Resolve all placements to public URLs (mirrors the MCP server's resolveAndWritePublicPlacements).
-   * Called from admin UI when placements are saved directly.
-   */
-  async function resolvePublicPlacements() {
-    if (!logoConfig) return;
+  window.brandGenerateVariant = async function(type) {
+    showToast('Generating ' + type + ' variant...');
+    // This is a placeholder — the actual generation goes through the MCP tool
+    // which calls the Cloud Function. From the admin UI we just show guidance.
+    showToast('Use your AI assistant to generate variants: generate_logo_variant type="' + type + '"', false);
+  };
 
-    var primary = logoConfig.primary || {};
-    var variants = logoConfig.variants || {};
-
-    // Re-read placements (may have just been updated)
-    var placementsSnap = await MastDB._ref('config/brand/logo/placements').once('value');
-    var placements = placementsSnap.val() || {};
-
-    var updates = {};
-
-    Object.keys(placements).forEach(function(placement) {
-      var config = placements[placement];
-      var variantKey = config && config.variantKey;
-      if (!variantKey) return;
-
-      var resolvedUrl = null;
-      if (variantKey === 'primary') {
-        resolvedUrl = primary.url || null;
-      } else if (variants[variantKey]) {
-        resolvedUrl = variants[variantKey].url || null;
+  window.brandDeleteVariant = async function(type) {
+    if (!confirm('Delete the ' + type + ' variant?')) return;
+    try {
+      // Delete from Storage if we have a path
+      var data = getTypeData(type);
+      // Remove config
+      await MastDB._ref('config/brand/logo/variants/' + type).remove();
+      // Clear placements referencing this variant
+      var placementsSnap = await MastDB._ref('config/brand/logo/placements').once('value');
+      var placements = placementsSnap.val() || {};
+      for (var key in placements) {
+        if (placements[key] && placements[key].variantKey === type) {
+          await MastDB._ref('config/brand/logo/placements/' + key + '/variantKey').set('primary');
+        }
       }
-
-      if (resolvedUrl) {
-        updates['public/config/brand/logo/' + placement + '/url'] = resolvedUrl;
-        updates['public/config/brand/logo/' + placement + '/maxHeight'] = config.maxHeight || null;
-      }
-    });
-
-    // Legacy compat: navBar → public/config/nav/logoUrl
-    if (placements.navBar && placements.navBar.variantKey) {
-      var navKey = placements.navBar.variantKey;
-      var navUrl = navKey === 'primary' ? primary.url : (variants[navKey] ? variants[navKey].url : null);
-      if (navUrl) {
-        updates['public/config/nav/logoUrl'] = navUrl;
-      }
+      await resolvePublicPlacements();
+      showToast(type + ' variant deleted');
+      selectedType = 'primary';
+      brandLoaded = false;
+      await loadBrandData();
+    } catch (err) {
+      showToast('Delete failed: ' + err.message, true);
     }
+  };
 
-    if (Object.keys(updates).length > 0) {
-      await MastDB._ref().update(updates);
-    }
-  }
+  // ─── Upload Actions ───
 
-  // ============================================================
-  // Upload Actions (from Admin UI)
-  // ============================================================
+  window.brandUploadLogoPrompt = function(targetType) {
+    targetType = targetType || 'primary';
+    var typeDef = LOGO_TYPES.find(function(t) { return t.key === targetType; }) || LOGO_TYPES[0];
+    var title = targetType === 'primary' ? 'Upload Logo' : 'Upload ' + typeDef.label + ' Variant';
 
-  /**
-   * Open a modal to upload a logo by URL or from the image library.
-   */
-  window.brandUploadLogoPrompt = function() {
-    var html = '<div class="modal-header"><h3 style="margin:0;">Upload Logo</h3></div>' +
+    var html = '<div class="modal-header"><h3 style="margin:0;">' + esc(title) + '</h3></div>' +
       '<div class="modal-body" style="display:grid;gap:16px;">' +
         '<div>' +
           '<label style="font-size:0.85rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Image URL</label>' +
           '<input type="text" id="brandLogoUrlInput" placeholder="https://example.com/logo.png" style="width:100%;padding:8px 12px;border-radius:4px;border:1px solid var(--warm-gray);background:var(--surface-card);color:var(--text-primary);font-size:0.9rem;">' +
+          '<input type="hidden" id="brandLogoTargetType" value="' + esc(targetType) + '">' +
         '</div>' +
         '<div style="text-align:center;color:var(--warm-gray);font-size:0.8rem;">— or —</div>' +
         '<div style="text-align:center;">' +
-          '<button class="btn btn-secondary" onclick="brandPickFromLibrary()" style="font-size:0.85rem;">Choose from Image Library</button>' +
+          '<button class="btn btn-secondary" onclick="brandPickFromLibrary(\'' + esc(targetType) + '\')" style="font-size:0.85rem;">Choose from Image Library</button>' +
         '</div>' +
       '</div>' +
       '<div class="modal-footer">' +
@@ -400,43 +365,41 @@
     setTimeout(function() { var el = document.getElementById('brandLogoUrlInput'); if (el) el.focus(); }, 100);
   };
 
-  /**
-   * Upload logo from the URL entered in the modal.
-   * Uses the image library upload_image pattern to download and host in Storage,
-   * then writes to the brand logo config.
-   */
   window.brandUploadLogoFromUrl = async function() {
     var input = document.getElementById('brandLogoUrlInput');
+    var targetInput = document.getElementById('brandLogoTargetType');
     var url = input ? input.value.trim() : '';
+    var targetType = targetInput ? targetInput.value : 'primary';
     if (!url) { showToast('Please enter an image URL', true); return; }
 
     closeModal();
-    showToast('Uploading logo...');
+    showToast('Uploading...');
 
     try {
-      // Use the existing image library upload to get a Storage-hosted URL
-      var uploadResult = await uploadImageToStorage(url, 'logo');
+      var uploadResult = await uploadImageToStorage(url);
       if (!uploadResult || !uploadResult.url) throw new Error('Upload failed');
 
-      // Write primary logo config
-      var primaryConfig = {
+      var config = {
         url: uploadResult.url,
         storagePath: uploadResult.storagePath || '',
         format: uploadResult.format || 'png',
         hasTransparency: false,
-        dimensions: uploadResult.dimensions || null,
-        uploadedAt: new Date().toISOString()
+        dimensions: uploadResult.dimensions || null
       };
 
-      await MastDB._ref('config/brand/logo/primary').set(primaryConfig);
+      if (targetType === 'primary') {
+        config.uploadedAt = new Date().toISOString();
+        await MastDB._ref('config/brand/logo/primary').set(config);
+        await MastDB._ref('public/config/nav/logoUrl').set(uploadResult.url);
+      } else {
+        config.generatedFrom = 'manual';
+        config.createdAt = new Date().toISOString();
+        await MastDB._ref('config/brand/logo/variants/' + targetType).set(config);
+      }
 
-      // Update legacy path
-      await MastDB._ref('public/config/nav/logoUrl').set(uploadResult.url);
-
-      // Re-resolve placements
       await resolvePublicPlacements();
-
-      showToast('Logo uploaded successfully');
+      showToast('Uploaded successfully');
+      selectedType = targetType;
       brandLoaded = false;
       await loadBrandData();
     } catch (err) {
@@ -444,30 +407,33 @@
     }
   };
 
-  /**
-   * Pick a logo from the existing image library.
-   */
-  window.brandPickFromLibrary = function() {
+  window.brandPickFromLibrary = function(targetType) {
     closeModal();
-    // Use the shared image picker if available
     if (typeof openImagePicker === 'function') {
-      openImagePicker(async function(imgId, url, thumbUrl) {
-        showToast('Setting logo from library...');
+      openImagePicker(async function(imgId, url) {
+        showToast('Setting from library...');
         try {
-          var primaryConfig = {
+          var config = {
             url: url,
             storagePath: '',
             format: url.match(/\.(\w+)(?:\?|$)/i) ? RegExp.$1 : 'png',
             hasTransparency: false,
-            dimensions: null,
-            uploadedAt: new Date().toISOString()
+            dimensions: null
           };
 
-          await MastDB._ref('config/brand/logo/primary').set(primaryConfig);
-          await MastDB._ref('public/config/nav/logoUrl').set(url);
-          await resolvePublicPlacements();
+          if (targetType === 'primary') {
+            config.uploadedAt = new Date().toISOString();
+            await MastDB._ref('config/brand/logo/primary').set(config);
+            await MastDB._ref('public/config/nav/logoUrl').set(url);
+          } else {
+            config.generatedFrom = 'manual';
+            config.createdAt = new Date().toISOString();
+            await MastDB._ref('config/brand/logo/variants/' + targetType).set(config);
+          }
 
-          showToast('Logo set from library');
+          await resolvePublicPlacements();
+          showToast('Set from library');
+          selectedType = targetType;
           brandLoaded = false;
           await loadBrandData();
         } catch (err) {
@@ -475,78 +441,79 @@
         }
       });
     } else {
-      showToast('Image library not available. Enter a URL instead.', true);
-      brandUploadLogoPrompt();
+      showToast('Image library not available', true);
+      brandUploadLogoPrompt(targetType);
     }
   };
 
-  /**
-   * Upload an image URL to Firebase Storage via the Cloud Function.
-   * Returns { url, storagePath, format, dimensions }.
-   */
-  async function uploadImageToStorage(url, prefix) {
-    // Call the uploadImage Cloud Function
+  // ─── Storage Upload Helper ───
+
+  async function uploadImageToStorage(url) {
     var user = firebase.auth().currentUser;
     if (!user) throw new Error('Not authenticated');
     var idToken = await user.getIdToken();
-
     var cfBase = 'https://us-central1-' + (TENANT_CONFIG && TENANT_CONFIG.gcpProject || 'mast-platform-prod') + '.cloudfunctions.net';
     var resp = await fetch(cfBase + '/uploadImage', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + idToken
-      },
-      body: JSON.stringify({
-        image: await fetchImageAsBase64(url),
-        tags: ['logo'],
-        source: 'brand-upload'
-      })
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+      body: JSON.stringify({ image: await fetchImageAsBase64(url), tags: ['logo'], source: 'brand-upload' })
     });
-
     if (!resp.ok) throw new Error('Upload returned ' + resp.status);
     var result = await resp.json();
-    return {
-      url: result.url,
-      storagePath: result.storagePath || '',
-      format: 'jpg',
-      dimensions: result.dimensions || null
-    };
+    return { url: result.url, storagePath: result.storagePath || '', format: 'jpg', dimensions: result.dimensions || null };
   }
 
-  /**
-   * Fetch an image URL and return as base64 string.
-   */
   async function fetchImageAsBase64(url) {
     var resp = await fetch(url);
     if (!resp.ok) throw new Error('Failed to fetch image');
     var blob = await resp.blob();
     return new Promise(function(resolve, reject) {
       var reader = new FileReader();
-      reader.onload = function() {
-        // Remove data:image/...;base64, prefix
-        var base64 = reader.result.split(',')[1];
-        resolve(base64);
-      };
+      reader.onload = function() { resolve(reader.result.split(',')[1]); };
       reader.onerror = reject;
       reader.readAsDataURL(blob);
     });
   }
 
-  // ============================================================
-  // Module Registration
-  // ============================================================
+  // ─── Placement Resolution ───
+
+  async function resolvePublicPlacements() {
+    if (!logoConfig) return;
+    var primary = logoConfig.primary || {};
+    var variants = logoConfig.variants || {};
+    var placementsSnap = await MastDB._ref('config/brand/logo/placements').once('value');
+    var placements = placementsSnap.val() || {};
+    var updates = {};
+
+    Object.keys(placements).forEach(function(placement) {
+      var config = placements[placement];
+      var vk = config && config.variantKey;
+      if (!vk) return;
+      var resolvedUrl = vk === 'primary' ? primary.url : (variants[vk] ? variants[vk].url : null);
+      if (resolvedUrl) {
+        updates['public/config/brand/logo/' + placement + '/url'] = resolvedUrl;
+        updates['public/config/brand/logo/' + placement + '/maxHeight'] = config.maxHeight || null;
+      }
+    });
+
+    if (placements.navBar && placements.navBar.variantKey) {
+      var navKey = placements.navBar.variantKey;
+      var navUrl = navKey === 'primary' ? primary.url : (variants[navKey] ? variants[navKey].url : null);
+      if (navUrl) updates['public/config/nav/logoUrl'] = navUrl;
+    }
+
+    if (Object.keys(updates).length > 0) await MastDB._ref().update(updates);
+  }
+
+  // ─── Module Registration ───
 
   MastAdmin.registerModule('brand', {
     routes: {
       'brand': {
         tab: 'brandTab',
         setup: function() {
-          if (!brandLoaded) {
-            loadBrandData();
-          } else {
-            renderBrand();
-          }
+          if (!brandLoaded) loadBrandData();
+          else renderBrand();
         }
       }
     }
