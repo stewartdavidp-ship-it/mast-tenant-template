@@ -97,6 +97,7 @@
       var key = el.getAttribute('data-content');
       if (contentMap[key]) {
         el.textContent = contentMap[key];
+        el.setAttribute('data-content-applied', '1');
       }
     }
 

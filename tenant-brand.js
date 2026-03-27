@@ -99,6 +99,8 @@
 
       switch (type) {
         case 'brand':
+          // Don't overwrite if storefront-content.js already set section-specific content
+          if (el.hasAttribute('data-content') && el.getAttribute('data-content-applied')) break;
           el.textContent = name;
           break;
         case 'tagline':
@@ -130,6 +132,7 @@
           el.textContent = location ? (name + ' \u2022 ' + location) : name;
           break;
         case 'description':
+          if (el.hasAttribute('data-content') && el.getAttribute('data-content-applied')) break;
           if (brand.description) el.textContent = brand.description;
           else el.style.display = 'none';
           break;
