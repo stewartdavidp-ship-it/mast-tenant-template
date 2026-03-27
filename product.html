@@ -1061,8 +1061,8 @@
         });
       }
 
-      // Images
-      var images = p.images || [];
+      // Images — normalize to URL strings (supports both legacy string arrays and new object format)
+      var images = (p.images || []).map(function(img) { return typeof img === 'string' ? img : (img.url || ''); });
       if (images.length > 0) {
         var mainImg = document.getElementById('mainImage');
         mainImg.src = images[0];
@@ -1374,7 +1374,8 @@
       snap.forEach(function(child) {
         var p = child.val();
         if (p && p.name && p.images && p.images.length) {
-          products.push({ pid: p.pid || child.key, name: p.name, image: p.images[0], businessLine: p.businessLine || 'production' });
+          var firstImg = typeof p.images[0] === 'string' ? p.images[0] : (p.images[0].url || '');
+          products.push({ pid: p.pid || child.key, name: p.name, image: firstImg, businessLine: p.businessLine || 'production' });
         }
       });
       window._allProducts = products;

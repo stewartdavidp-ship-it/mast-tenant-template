@@ -1792,7 +1792,7 @@ window.TENANT_READY.then(function() {
 
       var html = '';
       products.forEach(function(p) {
-        var imgUrl = (p.images && p.images.length > 0) ? p.images[0] : '';
+        var imgUrl = (p.images && p.images.length > 0) ? (typeof p.images[0] === 'string' ? p.images[0] : (p.images[0].url || '')) : '';
         var price = '$' + (p.priceCents / 100).toFixed(2);
         html += '<a href="product.html?id=' + encodeURIComponent(p.pid) + '" class="featured-product-card fade-up" style="opacity:1;transform:translateY(0)">';
         html += '<div class="fp-image">';

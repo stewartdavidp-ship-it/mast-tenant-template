@@ -696,7 +696,7 @@ function handleCapture(result) {
         confidence: item.confidence || 0,
         price: prod ? prod.price : '',
         priceCents: prod ? (prod.priceCents || 0) : 0,
-        imageUrl: prod && prod.images && prod.images.length > 0 ? prod.images[0] : ''
+        imageUrl: prod && prod.images && prod.images.length > 0 ? (typeof prod.images[0] === 'string' ? prod.images[0] : (prod.images[0].url || '')) : ''
       };
     }).filter(function(item) { return item.productId; });
 
@@ -975,7 +975,7 @@ function renderPicker(filter) {
 
   var html = '';
   filtered.forEach(function(p) {
-    var img = p.images && p.images.length > 0 ? p.images[0] : '';
+    var img = p.images && p.images.length > 0 ? (typeof p.images[0] === 'string' ? p.images[0] : (p.images[0].url || '')) : '';
     html += '<div class="picker-card" onclick="pickProduct(\'' + p.pid + '\')">' +
       (img ? '<img src="' + img + '" alt="" loading="lazy">' : '<div style="width:100%;aspect-ratio:1;background:var(--border);"></div>') +
       '<div class="picker-card-info">' +
@@ -1005,7 +1005,7 @@ function pickProduct(pid) {
       confidence: 100, // manual pick
       price: prod.price || '',
       priceCents: prod.priceCents || 0,
-      imageUrl: prod.images && prod.images.length > 0 ? prod.images[0] : ''
+      imageUrl: prod.images && prod.images.length > 0 ? (typeof prod.images[0] === 'string' ? prod.images[0] : (prod.images[0].url || '')) : ''
     });
   }
 

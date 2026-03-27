@@ -524,7 +524,7 @@ window.TENANT_READY.then(function() {
         var name = product.name || '';
         var price = product.price || '';
         var pid = product.pid || '';
-        var img = (product.images && product.images.length > 0) ? product.images[0] : '';
+        var img = (product.images && product.images.length > 0) ? (typeof product.images[0] === 'string' ? product.images[0] : (product.images[0].url || '')) : '';
         var link = pid ? 'product.html?id=' + encodeURIComponent(pid) : 'shop.html';
         var isLocal = !!pid;
         var isSoldSculpture = product.businessLine === 'sculpture' && product.status === 'sold';

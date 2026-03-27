@@ -713,7 +713,7 @@
   function renderCard(p) {
     var pid = p._pid;
     var imgHtml = (p.images && p.images.length > 0)
-      ? '<img class="ws-card-img" src="' + esc(p.images[0]) + '" alt="' + esc(p.name) + '" loading="lazy">'
+      ? '<img class="ws-card-img" src="' + esc(typeof p.images[0] === 'string' ? p.images[0] : (p.images[0].url || '')) + '" alt="' + esc(p.name) + '" loading="lazy">'
       : '<div class="ws-card-img-placeholder">&#9670;</div>';
 
     // Price display
@@ -853,7 +853,7 @@
       name: p.name,
       price: priceDisplay,
       priceCents: priceCents,
-      image: (p.images && p.images.length > 0) ? p.images[0] : '',
+      image: (p.images && p.images.length > 0) ? (typeof p.images[0] === 'string' ? p.images[0] : (p.images[0].url || '')) : '',
       options: Object.assign({}, opts),
       qty: qty,
       isWholesale: true

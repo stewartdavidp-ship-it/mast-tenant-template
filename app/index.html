@@ -15284,7 +15284,7 @@ function renderProducts() {
 
   var html = '';
   filtered.forEach(function(p) {
-    var imgSrc = (p.images && p.images.length) ? p.images[0] : '';
+    var imgSrc = firstProductImage(p);
     var priceHtml = p.price
       ? '<div class="product-card-price">' + esc(p.price) + '</div>'
       : '<div class="product-card-price no-price">Price on request</div>';
@@ -15731,7 +15731,7 @@ function renderForecastSuggestedBuilds() {
   html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;">';
 
   stocked.forEach(function(f) {
-    var imgUrl = (f.images && f.images.length) ? f.images[0] : '';
+    var imgUrl = firstProductImage(f);
     var catBadge = (f.categories && f.categories.length) ? f.categories[0] : '';
     var reasons = [];
     if (f.stock < f.recentSold) reasons.push('Low Stock');
@@ -15767,7 +15767,7 @@ function renderForecastSuggestedBuilds() {
     html += '<h4 style="margin:24px 0 8px 0;font-size:0.95rem;color:var(--warm-gray);">Consider Stocking</h4>';
     html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;">';
     mtoConsider.forEach(function(f) {
-      var imgUrl = (f.images && f.images.length) ? f.images[0] : '';
+      var imgUrl = firstProductImage(f);
       html += '<div style="background:var(--cream,#f5f0e8);border:1px solid var(--cream-dark,#e8e0d4);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:8px;">' +
         '<div style="display:flex;gap:12px;align-items:flex-start;">' +
           (imgUrl ? '<img src="' + esc(imgUrl) + '" style="width:56px;height:56px;border-radius:8px;object-fit:cover;" loading="lazy">' : '<div style="width:56px;height:56px;border-radius:8px;background:var(--cream-dark,#e8e0d4);display:flex;align-items:center;justify-content:center;font-size:1.4rem;">&#x1F3A8;</div>') +
@@ -15922,7 +15922,7 @@ function renderForecastDemandTable() {
 
   rows.forEach(function(f) {
     var soldVal = forecastTimeHorizon === '30d' ? f.last30 : forecastTimeHorizon === '90d' ? f.last90 : forecastTimeHorizon === 'all' ? f.allTimeSold : f.recentSold;
-    var imgUrl = (f.images && f.images.length) ? f.images[0] : '';
+    var imgUrl = firstProductImage(f);
     var trendBadge = f.trending
       ? '<span style="background:rgba(46,125,50,0.15);color:#4caf50;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;">&#x2191;</span>'
       : f.declining
@@ -16072,7 +16072,7 @@ function renderInventoryOverview() {
       pid: p.pid,
       name: p.name,
       price: p.price || '',
-      imgSrc: (p.images && p.images.length) ? p.images[0] : '',
+      imgSrc: firstProductImage(p),
       categories: p.categories || [],
       stockType: stockType,
       threshold: threshold,
@@ -16382,7 +16382,7 @@ function renderProductDetail(pid) {
   var tab = productEditTab;
 
   // Header with name and edit toggle
-  var imgSrc = (product.images && product.images.length) ? product.images[0] : '';
+  var imgSrc = firstProductImage(product);
   var headerHtml = '<div class="product-detail-header">' +
     (imgSrc ? '<img class="product-detail-img" src="' + esc(imgSrc) + '" alt="' + esc(product.name || 'New Product') + '">' : '') +
     '<div style="flex:1;">' +
@@ -17790,6 +17790,17 @@ function esc(str) {
   var div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
+}
+
+/** Resolve a product image entry to a URL string. Handles both legacy strings and {url, libraryImageId} objects. */
+function resolveImageUrl(img) {
+  if (!img) return '';
+  return typeof img === 'string' ? img : (img.url || '');
+}
+
+/** Get the first product image URL from a product's images array, or '' if none. */
+function firstProductImage(p) {
+  return (p && p.images && p.images.length) ? resolveImageUrl(p.images[0]) : '';
 }
 
 // ============================================================
@@ -20200,7 +20211,7 @@ function showIntakeResult(result) {
 
   content.innerHTML = '<div style="color:white;">' +
     '<div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:12px;">' +
-      (product.images && product.images.length ? '<img src="' + esc(product.images[0]) + '" style="width:48px;height:48px;object-fit:cover;border-radius:6px;">' : '') +
+      (product.images && product.images.length ? '<img src="' + esc(firstProductImage(product)) + '" style="width:48px;height:48px;object-fit:cover;border-radius:6px;">' : '') +
       '<div>' +
         '<div style="font-weight:600;font-size:1rem;">' + esc(product.name) + '</div>' +
         '<div style="font-size:0.78rem;color:' + confColor + ';">' + conf + '% confidence</div>' +
@@ -22907,7 +22918,7 @@ function renderDashCardLowInventory() {
         lowItems.push({
           pid: p.pid,
           name: p.name || p.pid,
-          image: (p.images && p.images.length) ? p.images[0].url : '',
+          image: firstProductImage(p),
           available: totals.available,
           threshold: threshold,
           isOut: totals.available === 0
