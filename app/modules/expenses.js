@@ -49,9 +49,9 @@ function expConfirm(title, message, confirmLabel, onConfirm, cancelLabel) {
 }
 
 function getPlaidBankLimit() {
-  // Explicit override takes priority
-  // Otherwise tier-based: free=0, publish=1, operate=2, command=5
-  var plan = (window.TENANT_CONFIG && window.TENANT_CONFIG.plan) || 'publish';
+  // Read plan from subscription (same source as server reads from platform registry)
+  var sub = typeof getTenantSubscription === 'function' ? getTenantSubscription() : {};
+  var plan = sub.plan || sub.tier || (window.TENANT_CONFIG && window.TENANT_CONFIG.plan) || 'publish';
   return PLAID_BANK_LIMITS[plan] !== undefined ? PLAID_BANK_LIMITS[plan] : 1;
 }
 var lastConnectAt = 0;
@@ -185,7 +185,7 @@ async function connectPlaidAccount() {
           'Not enough tokens',
           'You\'ve used your ' + includedLimit + ' included banks.\n\nAdding another costs ' + EXTRA_COST + ' tokens/month but you only have ' + availableTokens + ' tokens available (need ' + shortfall + ' more).',
           'Purchase Tokens',
-          function() { if (typeof purchaseCoins === 'function') purchaseCoins(); }
+          function() { if (typeof openCoinPurchaseModal === 'function') openCoinPurchaseModal(); }
         );
         return;
       }
