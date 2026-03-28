@@ -75,10 +75,7 @@
       { id: 'headline', label: 'Headline', type: 'text' },
       { id: 'subheadline', label: 'Subheadline', type: 'text' },
       { id: 'ctaText', label: 'Button Text', type: 'text' },
-      { id: 'ctaUrl', label: 'Button URL', type: 'text' },
-      { id: 'backgroundType', label: 'Background', type: 'select', options: [{ v: 'color', l: 'Color' }, { v: 'image', l: 'Image' }] },
-      { id: 'backgroundAsset', label: 'Background Image URL', type: 'image' },
-      { id: 'overlayOpacity', label: 'Overlay Opacity (%)', type: 'number' }
+      { id: 'ctaUrl', label: 'Button URL', type: 'text' }
     ]},
     { key: 'gallery', name: 'Products / Gallery', fields: [
       { id: 'heading', label: 'Heading', type: 'text' },
