@@ -146,14 +146,34 @@ async function connectPlaidAccount() {
     return;
   }
 
-  // Check extra account limit
+  // Check extra account limit + token balance
   try {
     var itemsSnap = await MastDB.plaidItems.list();
     var allItems = itemsSnap.val() || {};
     var activeCount = Object.values(allItems).filter(function(i) { return i.status === 'active'; }).length;
     var includedLimit = getPlaidBankLimit();
+
+    if (includedLimit === 0) {
+      showToast('Bank connections are not available on the free plan. Upgrade to connect a bank.', true);
+      return;
+    }
+
     if (activeCount >= includedLimit) {
-      if (!confirm('You\'ve used your ' + includedLimit + ' included banks.\n\nAdding another will cost 200 tokens/month. If you don\'t have enough tokens next month, this bank will be automatically disconnected.\n\nContinue?')) {
+      var EXTRA_COST = 200;
+      var w = getTokenWallet();
+      var availableTokens = (w.currentBalance || 0) + (w.coinTokenSurplus || 0) + ((w.coinBalance || 0) * 100);
+
+      if (availableTokens < EXTRA_COST) {
+        var shortfall = EXTRA_COST - availableTokens;
+        if (!confirm('You\'ve used your ' + includedLimit + ' included banks.\n\nAdding another costs ' + EXTRA_COST + ' tokens/month but you only have ' + availableTokens + ' tokens available (need ' + shortfall + ' more).\n\nWould you like to purchase more tokens?')) {
+          return;
+        }
+        // Navigate to settings for token purchase
+        if (typeof purchaseCoins === 'function') purchaseCoins();
+        return;
+      }
+
+      if (!confirm('You\'ve used your ' + includedLimit + ' included banks.\n\nAdding another will cost ' + EXTRA_COST + ' tokens/month (' + availableTokens + ' tokens available). If you don\'t have enough tokens next month, this bank will be automatically disconnected.\n\nContinue?')) {
         return;
       }
     }
