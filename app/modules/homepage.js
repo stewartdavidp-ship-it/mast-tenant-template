@@ -424,8 +424,7 @@
       if (isVidEntry) {
         html += '<div class="gallery-card-img" style="display:flex;align-items:center;justify-content:center;background:var(--charcoal);color:var(--amber);font-size:2rem;min-height:120px;">&#9654;</div>';
       } else if (img.url) {
-        var effectiveFit = img.imageFit || (sectionId === 'hero' ? 'cover' : 'contain');
-        var fitStyle = effectiveFit === 'cover' ? ' style="object-fit:cover;"' : '';
+        var fitStyle = img.imageFit ? ' style="object-fit:' + img.imageFit + ';"' : '';
         html += '<img class="gallery-card-img" src="' + esc(img.url) + '" alt="' + esc(img.alt || '') + '"' + fitStyle + ' onerror="this.classList.add(\'broken\')">';
       }
       html += '<div class="gallery-card-body">';
