@@ -424,8 +424,9 @@
       if (isVidEntry) {
         html += '<div class="gallery-card-img" style="display:flex;align-items:center;justify-content:center;background:var(--charcoal);color:var(--amber);font-size:2rem;min-height:120px;">&#9654;</div>';
       } else if (img.url) {
-        var fitOverride = img.imageFit === 'cover' ? ' style="object-fit:cover;"' : '';
-        html += '<img class="gallery-card-img" src="' + esc(img.url) + '" alt="' + esc(img.alt || '') + '"' + fitOverride + ' onerror="this.classList.add(\'broken\')">';
+        var effectiveFit = img.imageFit || (sectionId === 'hero' ? 'cover' : 'contain');
+        var fitStyle = effectiveFit === 'cover' ? ' style="object-fit:cover;"' : '';
+        html += '<img class="gallery-card-img" src="' + esc(img.url) + '" alt="' + esc(img.alt || '') + '"' + fitStyle + ' onerror="this.classList.add(\'broken\')">';
       }
       html += '<div class="gallery-card-body">';
       html += '<div class="gallery-card-caption">' + esc(img.caption || img.alt || img.productName || '') + '</div>';
