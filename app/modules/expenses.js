@@ -143,7 +143,7 @@ async function connectPlaidAccount() {
 
     // Get link token from Cloud Function
     var createLinkToken = firebase.functions().httpsCallable('createPlaidLinkToken');
-    var result = await createLinkToken({ tenantId: TENANT_CONFIG.tenantId });
+    var result = await createLinkToken({ tenantId: MastDB.tenantId() });
     var linkToken = result.data.link_token;
 
     // Open Plaid Link
@@ -154,7 +154,7 @@ async function connectPlaidAccount() {
         try {
           var exchangeToken = firebase.functions().httpsCallable('exchangePlaidToken');
           var exchangeResult = await exchangeToken({
-            tenantId: TENANT_CONFIG.tenantId,
+            tenantId: MastDB.tenantId(),
             public_token: publicToken
           });
           showToast('Connected ' + (exchangeResult.data.institutionName || 'bank account') + ' (' + exchangeResult.data.accountCount + ' accounts)');
@@ -183,7 +183,7 @@ async function syncPlaidItem(itemId) {
   showToast('Syncing transactions...');
   try {
     var syncFn = firebase.functions().httpsCallable('syncPlaidTransactions');
-    var result = await syncFn({ tenantId: TENANT_CONFIG.tenantId, itemId: itemId });
+    var result = await syncFn({ tenantId: MastDB.tenantId(), itemId: itemId });
     var d = result.data;
     showToast('Synced: ' + d.imported + ' new, ' + d.updated + ' updated, ' + d.removed + ' removed');
     loadPlaidAccounts();
@@ -198,7 +198,7 @@ async function disconnectPlaidItem(itemId) {
   if (!confirm('Disconnect this bank account? Existing imported transactions will remain.')) return;
   try {
     var disconnectFn = firebase.functions().httpsCallable('disconnectPlaidItem');
-    await disconnectFn({ tenantId: TENANT_CONFIG.tenantId, itemId: itemId });
+    await disconnectFn({ tenantId: MastDB.tenantId(), itemId: itemId });
     showToast('Account disconnected');
     loadPlaidAccounts();
   } catch (err) {
