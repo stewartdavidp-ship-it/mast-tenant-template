@@ -194,6 +194,8 @@
     } catch (err) {
       themeConfig._navSections = {};
     }
+    // Share with other modules (e.g., homepage)
+    MastAdmin.setData('themeConfig', themeConfig);
   }
 
   async function loadTemplateManifest() {
@@ -234,6 +236,9 @@
         showCustomColors = !found;
       }
     }
+
+    // Share manifest with other modules (e.g., homepage)
+    MastAdmin.setData('templateManifest', templateManifest);
   }
 
   async function loadTemplateRegistry() {
@@ -349,7 +354,6 @@
     html += '<button class="view-tab' + (currentSubTab === 'overview' ? ' active' : '') + '" onclick="wpSwitchTab(\'overview\')">Overview</button>';
     html += '<button class="view-tab' + (currentSubTab === 'template' ? ' active' : '') + '" onclick="wpSwitchTab(\'template\')">Template</button>';
     html += '<button class="view-tab' + (currentSubTab === 'style' ? ' active' : '') + '" onclick="wpSwitchTab(\'style\')">Style</button>';
-    html += '<button class="view-tab' + (currentSubTab === 'sections' ? ' active' : '') + '" onclick="wpSwitchTab(\'sections\')">Sections</button>';
     html += '<button class="view-tab' + (currentSubTab === 'categories' ? ' active' : '') + '" onclick="wpSwitchTab(\'categories\')">Categories</button>';
     html += '<button class="view-tab' + (currentSubTab === 'import' ? ' active' : '') + '" onclick="wpSwitchTab(\'import\')">Import</button>';
     html += '</div>';
@@ -359,7 +363,6 @@
     if (currentSubTab === 'overview') html += renderOverviewTab();
     else if (currentSubTab === 'template') html += renderTemplateTab();
     else if (currentSubTab === 'style') html += renderStyleTab();
-    else if (currentSubTab === 'sections') html += renderSectionsTab();
     else if (currentSubTab === 'categories') html += renderCategoriesTab();
     else if (currentSubTab === 'import') html += renderImportTab();
     html += '</div>';
@@ -834,48 +837,7 @@
     return warnings;
   }
 
-  // ── Section Variant Picker (for hero, gallery, product-grid) ──
-  function renderSectionVariantPicker(sectionId) {
-    var VARIANT_OPTIONS = {
-      hero: [
-        { id: 'full-bleed', label: 'Full Bleed', desc: 'Full-width background' },
-        { id: 'split-image', label: 'Split Image', desc: 'Image + text side by side' },
-        { id: 'minimal-text', label: 'Minimal Text', desc: 'Large text, subtle background' }
-      ],
-      gallery: [
-        { id: 'grid', label: 'Grid', desc: 'Even columns' },
-        { id: 'masonry', label: 'Masonry', desc: 'Pinterest-style' },
-        { id: 'carousel', label: 'Carousel', desc: 'Swipeable row' }
-      ],
-      'product-grid': [
-        { id: 'card', label: 'Card', desc: 'Standard product cards' },
-        { id: 'compact', label: 'Compact', desc: 'Dense, small images' }
-      ]
-    };
-
-    var options = VARIANT_OPTIONS[sectionId];
-    if (!options) return '';
-
-    var tc = themeConfig || {};
-    var m = templateManifest || {};
-    var variantKey = sectionId === 'product-grid' ? 'productGridVariant' : sectionId + 'Variant';
-    var currentVariant = tc[variantKey] || m[variantKey] || options[0].id;
-    var defaultVariant = m[variantKey] || options[0].id;
-
-    var html = '<select onclick="event.stopPropagation();" onchange="wpUpdateThemeField(\'' + variantKey + '\', this.value)" style="font-size:0.75rem;padding:3px 6px;border-radius:6px;background:var(--charcoal-light, #333);color:var(--text-primary, #e0e0e0);border:1px solid var(--charcoal-light, #444);cursor:pointer;min-width:100px;">';
-    options.forEach(function(opt) {
-      var selected = currentVariant === opt.id ? ' selected' : '';
-      html += '<option value="' + opt.id + '"' + selected + ' title="' + esc(opt.desc) + '">' + esc(opt.label) + '</option>';
-    });
-    html += '</select>';
-
-    // Show "Default" hint if overridden
-    if (currentVariant !== defaultVariant) {
-      html += '<span style="font-size:0.65rem;color:var(--warm-gray);margin-left:4px;" title="Template default: ' + esc(defaultVariant) + '">&#8226; customized</span>';
-    }
-
-    return html;
-  }
+  // Section variant picker moved to homepage module (app/modules/homepage.js)
 
   // ── Manifest-driven Style Tab (color schemes, font pairs from manifest) ──
   function renderManifestStyleTab() {
@@ -1025,183 +987,7 @@
     return html;
   }
 
-  // ── Sections Tab ──
-  function renderSectionsTab() {
-    if (templateManifest) {
-      return renderManifestSectionsTab();
-    }
-    return renderFallbackSectionsTab();
-  }
-
-  // ── Manifest-driven Sections Tab ──
-  function renderManifestSectionsTab() {
-    var html = '';
-    var navConfig = {};
-
-    // Load current nav section enabled states from public/config/nav
-    try {
-      var navSections = themeConfig && themeConfig._navSections;
-      if (navSections) navConfig = navSections;
-    } catch (e) {}
-
-    // Render each slot category
-    var categories = [
-      { key: 'universal', label: 'Core Sections', desc: 'Required sections that define the template.' },
-      { key: 'common', label: 'Common Sections', desc: 'Widely used sections that enhance your site.' },
-      { key: 'differentiators', label: 'Differentiator Sections', desc: 'Unique sections that set your brand apart.' }
-    ];
-
-    categories.forEach(function(cat) {
-      var slots = templateManifest.slots[cat.key];
-      if (!slots || slots.length === 0) return;
-
-      html += '<div style="margin-bottom:20px;">';
-      html += '<h3 style="font-size:0.95rem;margin-bottom:4px;">' + esc(cat.label) + '</h3>';
-      html += '<p style="font-size:0.8rem;color:var(--warm-gray);margin-bottom:12px;">' + esc(cat.desc) + '</p>';
-
-      slots.forEach(function(slot) {
-        var sectionData = (websiteConfig.sections && websiteConfig.sections[slot.id]) || {};
-        var navData = navConfig[slot.id] || {};
-        var isRequired = slot.required;
-        var enabled = isRequired ? true : (navData.enabled !== false && sectionData.enabled !== false);
-        var expanded = sectionData._expanded;
-
-        html += '<div class="wp-section-toggle" onclick="wpToggleSectionExpand(\'' + esc(slot.id) + '\')">';
-        html += '<div style="display:flex;align-items:center;gap:12px;">';
-        if (isRequired) {
-          html += '<span style="font-size:0.7rem;color:var(--warm-gray);padding:0 4px;min-width:60px;text-align:center;">Required</span>';
-        } else {
-          html += '<label class="toggle-switch" style="margin:0;" onclick="event.stopPropagation();">';
-          html += '<input type="checkbox"' + (enabled ? ' checked' : '') + ' onchange="wpToggleManifestSection(\'' + esc(slot.id) + '\', this.checked)">';
-          html += '<span class="toggle-slider"></span>';
-          html += '</label>';
-        }
-        html += '<div style="flex:1;">';
-        html += '<strong>' + esc(slot.label) + '</strong>';
-        if (slot.prominent) {
-          html += '<span style="font-size:0.7rem;color:var(--accent);margin-left:6px;">Prominent</span>';
-        }
-        html += '<div style="font-size:0.75rem;color:var(--warm-gray);margin-top:2px;">' + esc(slot.description || '') + '</div>';
-        html += '</div>';
-        // Variant picker (hero, gallery, product-grid)
-        var variantHtml = renderSectionVariantPicker(slot.id);
-        if (variantHtml) {
-          html += '<div style="display:flex;align-items:center;gap:4px;" onclick="event.stopPropagation();">' + variantHtml + '</div>';
-        }
-        html += '</div>';
-        html += '<span style="font-size:0.8rem;color:var(--warm-gray);">' + (expanded ? '&#9650;' : '&#9660;') + '</span>';
-        html += '</div>';
-
-        // Expanded section fields (reuse existing SECTION_DEFS fields if they match)
-        if (expanded) {
-          html += '<div class="wp-section-fields">';
-          var matchingDef = SECTION_DEFS.find(function(d) { return d.key === slot.id; });
-          if (matchingDef && matchingDef.fields) {
-            matchingDef.fields.forEach(function(field) {
-              html += renderSectionField(slot.id, field, sectionData);
-            });
-          }
-          if (slot.id === 'contact') {
-            html += renderSocialLinks(sectionData.socialLinks || {});
-          }
-          html += '</div>';
-        }
-      });
-
-      html += '</div>';
-    });
-
-    html += '<div style="margin-top:8px;font-size:0.85rem;color:var(--warm-gray);">Section order follows the "' + esc(templateManifest.name) + '" template layout.</div>';
-
-    return html;
-  }
-
-  // ── Fallback Sections Tab (no manifest) ──
-  function renderFallbackSectionsTab() {
-    var sections = websiteConfig.sections || {};
-    var html = '';
-
-    SECTION_DEFS.forEach(function(def) {
-      var sectionData = sections[def.key] || {};
-      var enabled = def.locked ? true : (sectionData.enabled !== false);
-      var expanded = sectionData._expanded;
-
-      html += '<div class="wp-section-toggle" onclick="wpToggleSectionExpand(\'' + def.key + '\')">';
-      html += '<div style="display:flex;align-items:center;gap:12px;">';
-      if (!def.locked) {
-        html += '<label class="toggle-switch" style="margin:0;" onclick="event.stopPropagation();">';
-        html += '<input type="checkbox"' + (enabled ? ' checked' : '') + ' onchange="wpToggleSection(\'' + def.key + '\', this.checked)">';
-        html += '<span class="toggle-slider"></span>';
-        html += '</label>';
-      } else {
-        html += '<span style="font-size:0.75rem;color:var(--warm-gray);padding:0 8px;">Always on</span>';
-      }
-      html += '<strong>' + esc(def.name) + '</strong>';
-      html += '</div>';
-      html += '<span style="font-size:0.8rem;color:var(--warm-gray);">' + (expanded ? '&#9650;' : '&#9660;') + '</span>';
-      html += '</div>';
-
-      if (expanded) {
-        html += '<div class="wp-section-fields">';
-        def.fields.forEach(function(field) {
-          html += renderSectionField(def.key, field, sectionData);
-        });
-        if (def.key === 'contact') {
-          html += renderSocialLinks(sectionData.socialLinks || {});
-        }
-        html += '</div>';
-      }
-    });
-
-    html += '<div style="margin-top:16px;font-size:0.85rem;color:var(--warm-gray);">Section order follows the template layout.</div>';
-
-    return html;
-  }
-
-  function renderSectionField(sectionKey, field, data) {
-    var val = data[field.id] !== undefined ? data[field.id] : '';
-    var inputId = 'wp-' + sectionKey + '-' + field.id;
-    var html = '<div class="wp-field-group">';
-    html += '<label for="' + inputId + '">' + esc(field.label) + '</label>';
-
-    if (field.type === 'text') {
-      html += '<input type="text" id="' + inputId + '" value="' + esc(String(val)) + '" oninput="wpUpdateField(\'' + sectionKey + '\', \'' + field.id + '\', this.value)">';
-    } else if (field.type === 'textarea') {
-      html += '<textarea id="' + inputId + '" oninput="wpUpdateField(\'' + sectionKey + '\', \'' + field.id + '\', this.value)">' + esc(String(val)) + '</textarea>';
-    } else if (field.type === 'number') {
-      html += '<input type="number" id="' + inputId + '" value="' + esc(String(val)) + '" oninput="wpUpdateField(\'' + sectionKey + '\', \'' + field.id + '\', parseInt(this.value) || 0)">';
-    } else if (field.type === 'select') {
-      html += '<select id="' + inputId + '" onchange="wpUpdateField(\'' + sectionKey + '\', \'' + field.id + '\', this.value)">';
-      (field.options || []).forEach(function(opt) {
-        html += '<option value="' + opt.v + '"' + (String(val) === opt.v ? ' selected' : '') + '>' + esc(opt.l) + '</option>';
-      });
-      html += '</select>';
-    } else if (field.type === 'toggle') {
-      html += '<label class="toggle-switch"><input type="checkbox"' + (val ? ' checked' : '') + ' onchange="wpUpdateField(\'' + sectionKey + '\', \'' + field.id + '\', this.checked)"><span class="toggle-slider"></span></label>';
-    } else if (field.type === 'image') {
-      html += '<div style="display:flex;gap:8px;align-items:center;">';
-      html += '<input type="text" id="' + inputId + '" value="' + esc(String(val)) + '" oninput="wpUpdateField(\'' + sectionKey + '\', \'' + field.id + '\', this.value)" style="flex:1;">';
-      html += '<button class="btn btn-secondary" onclick="wpPickImage(\'' + sectionKey + '\', \'' + field.id + '\')">Browse</button>';
-      html += '</div>';
-      if (val) {
-        html += '<img src="' + esc(String(val)) + '" style="max-width:200px;max-height:120px;border-radius:6px;margin-top:8px;" alt="">';
-      }
-    }
-    html += '</div>';
-    return html;
-  }
-
-  function renderSocialLinks(links) {
-    var platforms = ['instagram', 'facebook', 'etsy', 'pinterest', 'tiktok', 'twitter', 'youtube'];
-    var html = '<h4 style="font-size:0.9rem;margin:16px 0 8px;">Social Links</h4>';
-    platforms.forEach(function(p) {
-      html += '<div class="wp-field-group">';
-      html += '<label>' + p.charAt(0).toUpperCase() + p.slice(1) + '</label>';
-      html += '<input type="url" value="' + esc(links[p] || '') + '" oninput="wpUpdateSocial(\'' + p + '\', this.value)" placeholder="https://">';
-      html += '</div>';
-    });
-    return html;
-  }
+  // Sections tab moved to homepage module (app/modules/homepage.js)
 
   // ── Categories Tab ──
   function renderCategoriesTab() {
@@ -2359,22 +2145,7 @@
     renderWebsite();
   };
 
-  window.wpToggleManifestSection = async function(sectionId, enabled) {
-    // Write to both nav config and webPresence sections config
-    try {
-      await MastDB._ref('public/config/nav/sections/' + sectionId + '/enabled').set(enabled);
-      // Also keep webPresence sections in sync
-      if (!websiteConfig.sections) websiteConfig.sections = {};
-      if (!websiteConfig.sections[sectionId]) websiteConfig.sections[sectionId] = {};
-      websiteConfig.sections[sectionId].enabled = enabled;
-      await MastDB._ref('webPresence/config/sections/' + sectionId + '/enabled').set(enabled);
-      markUnpublished();
-    } catch (err) {
-      showToast('Error: ' + err.message, true);
-    }
-  };
-
-  // ── Fallback handlers (write to webPresence/config — original paths) ──
+  // Section handlers moved to homepage module (wpToggleManifestSection, wpToggleSection, etc.)
 
   window.wpSelectStyle = async function(styleId) {
     websiteConfig.style = styleId;
@@ -2399,57 +2170,6 @@
     websiteConfig.fontPair = value;
     MastDB._ref('webPresence/config/fontPair').set(value);
     markUnpublished();
-  };
-
-  window.wpToggleSection = function(key, enabled) {
-    if (!websiteConfig.sections) websiteConfig.sections = {};
-    if (!websiteConfig.sections[key]) websiteConfig.sections[key] = {};
-    websiteConfig.sections[key].enabled = enabled;
-    MastDB._ref('webPresence/config/sections/' + key + '/enabled').set(enabled);
-    markUnpublished();
-  };
-
-  window.wpToggleSectionExpand = function(key) {
-    if (!websiteConfig.sections) websiteConfig.sections = {};
-    if (!websiteConfig.sections[key]) websiteConfig.sections[key] = {};
-    websiteConfig.sections[key]._expanded = !websiteConfig.sections[key]._expanded;
-    renderWebsite();
-  };
-
-  window.wpUpdateField = function(sectionKey, fieldId, value) {
-    if (!websiteConfig.sections) websiteConfig.sections = {};
-    if (!websiteConfig.sections[sectionKey]) websiteConfig.sections[sectionKey] = {};
-    websiteConfig.sections[sectionKey][fieldId] = value;
-    debounce('field-' + sectionKey + '-' + fieldId, function() {
-      MastDB._ref('webPresence/config/sections/' + sectionKey + '/' + fieldId).set(value);
-      markUnpublished();
-    });
-  };
-
-  window.wpUpdateSocial = function(platform, value) {
-    if (!websiteConfig.sections) websiteConfig.sections = {};
-    if (!websiteConfig.sections.contact) websiteConfig.sections.contact = {};
-    if (!websiteConfig.sections.contact.socialLinks) websiteConfig.sections.contact.socialLinks = {};
-    websiteConfig.sections.contact.socialLinks[platform] = value;
-    debounce('social-' + platform, function() {
-      MastDB._ref('webPresence/config/sections/contact/socialLinks/' + platform).set(value);
-      markUnpublished();
-    });
-  };
-
-  window.wpPickImage = function(sectionKey, fieldId) {
-    if (typeof openImagePicker === 'function') {
-      openImagePicker(function(imgId, url) {
-        if (!websiteConfig.sections) websiteConfig.sections = {};
-        if (!websiteConfig.sections[sectionKey]) websiteConfig.sections[sectionKey] = {};
-        websiteConfig.sections[sectionKey][fieldId] = url;
-        MastDB._ref('webPresence/config/sections/' + sectionKey + '/' + fieldId).set(url);
-        markUnpublished();
-        renderWebsite();
-      });
-    } else {
-      showToast('Image picker not available.', true);
-    }
   };
 
   window.wpAnalyze = async function() {

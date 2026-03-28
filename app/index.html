@@ -1100,6 +1100,94 @@
       flex-wrap: wrap;
     }
 
+    /* ========== HOMEPAGE MODULE ========== */
+    .hp-edit-view {
+      background: var(--surface-card, #fff);
+      border: 1px solid var(--cream-dark);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      min-height: 200px;
+    }
+    .hp-edit-empty {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 180px;
+      color: var(--warm-gray);
+      font-size: 0.95rem;
+    }
+    .hp-edit-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--cream-dark);
+    }
+    .hp-edit-header h3 { font-size: 1.1rem; margin: 0; }
+    .hp-edit-fields { margin-bottom: 20px; }
+    .hp-edit-gallery {
+      border-top: 1px solid var(--cream-dark);
+      padding-top: 16px;
+    }
+    .hp-gallery-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .hp-gallery-header h4 { font-size: 0.95rem; margin: 0; }
+    .hp-cards-row {
+      display: flex;
+      gap: 12px;
+      overflow-x: auto;
+      padding: 4px 0 12px 0;
+      -webkit-overflow-scrolling: touch;
+    }
+    .hp-card {
+      flex: 0 0 auto;
+      min-width: 120px;
+      max-width: 160px;
+      padding: 12px;
+      border: 2px solid var(--cream-dark);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      text-align: center;
+    }
+    .hp-card:hover {
+      border-color: var(--amber);
+      background: var(--cream);
+    }
+    .hp-card.selected {
+      border-color: var(--amber);
+      background: color-mix(in srgb, var(--amber) 8%, transparent);
+    }
+    .hp-card.disabled { opacity: 0.5; }
+    .hp-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .hp-card-name { font-size: 0.85rem; font-weight: 600; }
+    .hp-card-badge {
+      font-size: 0.7rem;
+      background: var(--teal);
+      color: white;
+      padding: 1px 6px;
+      border-radius: 10px;
+    }
+    .hp-card-toggle { margin: 0 auto; }
+    body.dark-mode .hp-edit-view { background: #1e1e1e; border-color: #444; }
+    body.dark-mode .hp-edit-header { border-bottom-color: #444; }
+    body.dark-mode .hp-edit-gallery { border-top-color: #444; }
+    body.dark-mode .hp-card { border-color: #444; color: #e0e0e0; }
+    body.dark-mode .hp-card:hover { border-color: var(--amber); background: #2a2a2a; }
+    body.dark-mode .hp-card.selected { border-color: var(--amber); background: #2a2520; }
+
     /* ========== IMAGE LIBRARY ========== */
     .img-lib-grid {
       display: grid;
@@ -4814,7 +4902,7 @@
       <div class="sidebar-items">
         <div class="sidebar-item" data-route="website" onclick="navigateTo('website')">Website Content</div>
         <div class="sidebar-item" data-route="brand" onclick="navigateTo('brand')">Brand</div>
-        <div class="sidebar-item" data-route="gallery" onclick="navigateTo('gallery')">Gallery</div>
+        <div class="sidebar-item" data-route="homepage" onclick="navigateTo('homepage')">Homepage</div>
         <div class="sidebar-item" data-route="images" onclick="navigateTo('images')">Images</div>
       </div>
     </div>
@@ -5467,13 +5555,12 @@
       <div id="imageLibraryGrid"></div>
     </div>
 
-    <!-- Admin: Gallery Tab — section-based image/video management for storefront -->
-    <div id="galleryTab" style="display:none;">
-      <div class="section-header">
-        <h2>Website Content</h2>
-      </div>
-      <div id="galleryLoading" class="loading">Loading...</div>
-      <div id="gallerySections"></div>
+    <!-- Admin: Gallery Tab (legacy — replaced by Homepage module) -->
+    <div id="galleryTab" style="display:none;"></div>
+
+    <!-- Admin: Homepage Tab (module-rendered) -->
+    <div id="homepageTab" style="display:none;">
+      <div id="homepageModuleRoot"></div>
     </div>
 
     <!-- Admin: Website Tab (module-rendered) -->
@@ -10210,11 +10297,11 @@ var SECTION_ROUTES = {
   'ship':   ['pack', 'ship'],
   'run':    ['trips', 'expenses', 'reports', 'financials', 'contacts', 'customers', 'email-log'],
   'events': ['events-shows', 'events-settings'],
-  'web':    ['website', 'images'],
+  'web':    ['website', 'homepage', 'images'],
   'manage': ['products', 'inventory', 'employees', 'analytics', 'auditlog', 'settings']
 };
 
-var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab'];
+var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab'];
 
 var currentRoute = 'dashboard';
 
@@ -10627,6 +10714,7 @@ var MODULE_MANIFEST = {
   fulfillment: { src: 'modules/fulfillment.js', routes: ['pack', 'ship', 'fulfillment'] },
   eventsAdmin: { src: 'modules/events.js', routes: ['events-shows', 'events-settings'] },
   website: { src: 'modules/website.js', routes: ['website'] },
+homepage: { src: 'modules/homepage.js', routes: ['homepage'] },
   showLight: { src: 'modules/show-light.js', routes: ['show-light-profile', 'show-light-gallery', 'show-light-shows', 'show-light-apply'] },
   emailLog: { src: 'modules/email-log.js', routes: ['email-log'] },
   maker: { src: 'modules/maker.js', routes: ['materials', 'pieces'] },
@@ -17608,15 +17696,7 @@ function attachListeners() {
       showToast('Error loading events: ' + err.message, true);
     });
   }
-  if (!galleryListener) {
-    galleryListener = MastDB.gallery.listen(500, function(snap) {
-      gallery = snap.val() || {};
-      autoReindexIfNeeded();
-      renderGallery();
-    }, function(err) {
-      showToast('Error loading gallery: ' + err.message, true);
-    });
-  }
+  // Gallery listener moved to homepage module (app/modules/homepage.js)
   if (!imageLibraryListener) {
     imageLibraryListener = MastDB.images.listen(500, function(snap) {
       imageLibrary = snap.val() || {};
@@ -17905,8 +17985,9 @@ function renderEvents() {
 function renderGallery() {
   var loading = document.getElementById('galleryLoading');
   var container = document.getElementById('gallerySections');
+  if (!container) return; // Gallery tab replaced by Homepage module
 
-  loading.style.display = 'none';
+  if (loading) loading.style.display = 'none';
 
   var entries = Object.entries(gallery);
 
