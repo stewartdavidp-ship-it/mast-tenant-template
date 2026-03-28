@@ -82,7 +82,6 @@
     ]},
     { key: 'gallery', name: 'Products / Gallery', fields: [
       { id: 'heading', label: 'Heading', type: 'text' },
-      { id: 'layout', label: 'Layout', type: 'select', options: [{ v: 'grid', l: 'Grid' }, { v: 'masonry', l: 'Masonry' }] },
       { id: 'columns', label: 'Columns', type: 'number' }
     ]},
     { key: 'about', name: 'About', fields: [

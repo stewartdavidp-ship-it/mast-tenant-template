@@ -1909,26 +1909,20 @@ window.TENANT_READY.then(function() {
     if (data.subtitle && subtitleEl) subtitleEl.textContent = data.subtitle;
   }).catch(function() { /* use defaults */ });
 
-  // ---- GALLERY LAYOUT CONFIG (columns, layout mode) ----
+  // ---- GALLERY COLUMN COUNT (content setting, not layout variant) ----
   db.ref(TENANT_ID + '/webPresence/config/sections/gallery').once('value').then(function(snap) {
     var cfg = snap.val();
     if (!cfg) return;
     var gridEl = document.getElementById('galleryGrid');
     if (!gridEl) return;
-    // Apply column count
+    // Apply column count (layout mode is handled by data-variant from theme config)
     if (cfg.columns) {
       var cols = parseInt(cfg.columns);
       if (cols >= 1 && cols <= 6) {
         gridEl.style.setProperty('--gallery-columns', cols);
       }
     }
-    // Apply layout mode (grid or masonry)
-    if (cfg.layout === 'masonry') {
-      gridEl.classList.add('masonry');
-    } else {
-      gridEl.classList.remove('masonry');
-    }
-  }).catch(function() { /* use default grid layout */ });
+  }).catch(function() { /* use defaults */ });
 
   // ---- CATEGORY GRID (The Shop template — populate from categories + gallery) ----
   (function() {
