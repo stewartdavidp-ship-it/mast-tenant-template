@@ -67,14 +67,23 @@ async function loadPlaidAccounts() {
     var items = snap.val() || {};
     var keys = Object.keys(items);
 
+    // Read account limit config
+    var limitSnap = await MastDB._ref('admin/config/expenseSettings/plaidAccountLimit').once('value');
+    var includedLimit = limitSnap.val() || 2;
+
     if (keys.length === 0) {
       container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-secondary, #888);">' +
         '<p style="font-size:1.1rem;margin-bottom:8px;">No bank accounts connected</p>' +
-        '<p style="font-size:0.85rem;">Connect a bank or credit card account to automatically import transactions.</p></div>';
+        '<p style="font-size:0.85rem;">Connect a bank or credit card account to automatically import transactions.</p>' +
+        '<p style="font-size:0.8rem;margin-top:8px;">' + includedLimit + ' accounts included in your plan. Additional accounts cost 200 tokens/month.</p></div>';
       return;
     }
 
-    var h = '';
+    var activeCount = keys.filter(function(k) { return items[k].status === 'active'; }).length;
+    var h = '<div style="font-size:0.8rem;color:var(--text-secondary, #888);margin-bottom:12px;">' +
+      activeCount + ' of ' + includedLimit + ' included accounts used' +
+      (activeCount > includedLimit ? ' · <span style="color:#f59e0b;">' + (activeCount - includedLimit) + ' extra (' + ((activeCount - includedLimit) * 200) + ' tokens/month)</span>' : '') +
+      '</div>';
     keys.forEach(function(itemId) {
       var item = items[itemId];
       var statusColor = item.status === 'active' ? '#16a34a' : item.status === 'error' ? '#dc2626' : '#6b7280';
@@ -126,6 +135,21 @@ async function loadPlaidAccounts() {
 
 async function connectPlaidAccount() {
   var btn = document.getElementById('connectPlaidBtn');
+
+  // Check if this will be an extra account (over included limit)
+  try {
+    var itemsSnap = await MastDB.plaidItems.list();
+    var allItems = itemsSnap.val() || {};
+    var activeCount = Object.values(allItems).filter(function(i) { return i.status === 'active'; }).length;
+    var limitSnap = await MastDB._ref('admin/config/expenseSettings/plaidAccountLimit').once('value');
+    var includedLimit = limitSnap.val() || 2;
+    if (activeCount >= includedLimit) {
+      if (!confirm('You\'ve used your ' + includedLimit + ' included accounts.\n\nAdding another will cost 200 tokens/month. If you don\'t have enough tokens next month, this account will be automatically disconnected.\n\nContinue?')) {
+        return;
+      }
+    }
+  } catch (e) { /* proceed anyway, server will enforce */ }
+
   btn.disabled = true;
   btn.textContent = 'Connecting...';
 
