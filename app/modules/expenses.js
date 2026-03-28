@@ -398,16 +398,31 @@ function renderExpensesList(expenses) {
 
 function updateApproveButton() {
   var btn = document.getElementById('bulkApproveBtn');
+  var personalBtn = document.getElementById('markPersonalBtn');
   if (!btn) return;
   var checked = document.querySelectorAll('.exp-checkbox:checked');
-  var unchecked = document.querySelectorAll('.exp-checkbox');
+  var allBoxes = document.querySelectorAll('.exp-checkbox');
   if (checked.length > 0) {
     btn.textContent = 'Approve (' + checked.length + ')';
-  } else if (unchecked.length > 0) {
-    btn.textContent = 'Approve All (' + unchecked.length + ')';
+    btn.disabled = false;
+    if (personalBtn) personalBtn.disabled = false;
   } else {
     btn.textContent = 'Approve';
+    btn.disabled = true;
+    if (personalBtn) personalBtn.disabled = true;
   }
+  // Keep Select All in sync
+  var selectAll = document.getElementById('expSelectAll');
+  if (selectAll && allBoxes.length > 0) {
+    selectAll.checked = checked.length === allBoxes.length;
+    selectAll.indeterminate = checked.length > 0 && checked.length < allBoxes.length;
+  }
+}
+
+function toggleSelectAll(checked) {
+  var boxes = document.querySelectorAll('.exp-checkbox');
+  boxes.forEach(function(cb) { cb.checked = checked; });
+  updateApproveButton();
 }
 
 // ── Transaction Detail View ──
@@ -558,16 +573,14 @@ async function updateExpenseField(expenseId, field, value) {
 }
 
 async function bulkApproveExpenses() {
-  // Use checked items if any, otherwise all unapproved
   var checked = document.querySelectorAll('.exp-checkbox:checked');
-  var toApprove;
-  if (checked.length > 0) {
-    var checkedKeys = new Set();
-    checked.forEach(function(cb) { checkedKeys.add(cb.dataset.key); });
-    toApprove = expensesCache.filter(function(e) { return checkedKeys.has(e._key); });
-  } else {
-    toApprove = expensesCache.filter(function(e) { return !e.reviewed; });
+  if (checked.length === 0) {
+    showToast('Select expenses to approve', true);
+    return;
   }
+  var checkedKeys = new Set();
+  checked.forEach(function(cb) { checkedKeys.add(cb.dataset.key); });
+  var toApprove = expensesCache.filter(function(e) { return checkedKeys.has(e._key); });
 
   if (toApprove.length === 0) {
     showToast('No expenses to approve');
@@ -689,6 +702,7 @@ window.bulkApproveExpenses = bulkApproveExpenses;
 window.markPersonal = markPersonal;
 window.downloadExpensesCsv = downloadExpensesCsv;
 window.updateApproveButton = updateApproveButton;
+window.toggleSelectAll = toggleSelectAll;
 
 // ── Module registration ──
 MastAdmin.registerModule('expenses', {
