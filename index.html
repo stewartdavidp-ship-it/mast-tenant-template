@@ -1730,10 +1730,15 @@ window.TENANT_READY.then(function() {
         // Read rotation speed from config (default 6s)
         db.ref(TENANT_ID + '/public/config/hero/rotationSeconds').once('value').then(function(rSnap) {
           var rotationMs = ((rSnap.val() || 6) * 1000);
+          var splitImgEl = document.getElementById('heroSplitImage');
           setInterval(function() {
             imgIndex = (imgIndex + 1) % heroImages.length;
             poster.style.backgroundImage = "url('" + heroImages[imgIndex].url + "')";
             poster.style.backgroundSize = heroImages[imgIndex].imageFit || 'cover';
+            if (splitImgEl) {
+              splitImgEl.style.backgroundImage = "url('" + heroImages[imgIndex].url + "')";
+              splitImgEl.style.backgroundSize = heroImages[imgIndex].imageFit || 'cover';
+            }
           }, rotationMs);
         });
       }
