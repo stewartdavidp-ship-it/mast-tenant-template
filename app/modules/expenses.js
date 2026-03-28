@@ -29,6 +29,15 @@ var currentView = 'transactions';
 var expensesCache = [];
 var accountLookup = {}; // plaidAccountId → { name, mask, institution }
 var plaidLinkLoaded = false;
+
+var PLAID_BANK_LIMITS = { 'free': 0, 'publish': 1, 'launch': 1, 'operate': 2, 'command': 5 };
+
+function getPlaidBankLimit() {
+  // Explicit override takes priority
+  // Otherwise tier-based: free=0, publish=1, operate=2, command=5
+  var plan = (window.TENANT_CONFIG && window.TENANT_CONFIG.plan) || 'publish';
+  return PLAID_BANK_LIMITS[plan] !== undefined ? PLAID_BANK_LIMITS[plan] : 1;
+}
 var lastConnectAt = 0;
 
 // ── View Switching (UX: .view-tab amber underline) ──
@@ -64,8 +73,7 @@ async function loadPlaidAccounts() {
     var items = snap.val() || {};
     var keys = Object.keys(items);
 
-    var limitSnap = await MastDB._ref('admin/config/expenseSettings/plaidAccountLimit').once('value');
-    var includedLimit = limitSnap.val() || 2;
+    var includedLimit = getPlaidBankLimit();
 
     if (keys.length === 0) {
       container.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray, #6B6560);">' +
@@ -143,8 +151,7 @@ async function connectPlaidAccount() {
     var itemsSnap = await MastDB.plaidItems.list();
     var allItems = itemsSnap.val() || {};
     var activeCount = Object.values(allItems).filter(function(i) { return i.status === 'active'; }).length;
-    var limitSnap = await MastDB._ref('admin/config/expenseSettings/plaidAccountLimit').once('value');
-    var includedLimit = limitSnap.val() || 2;
+    var includedLimit = getPlaidBankLimit();
     if (activeCount >= includedLimit) {
       if (!confirm('You\'ve used your ' + includedLimit + ' included banks.\n\nAdding another will cost 200 tokens/month. If you don\'t have enough tokens next month, this bank will be automatically disconnected.\n\nContinue?')) {
         return;
