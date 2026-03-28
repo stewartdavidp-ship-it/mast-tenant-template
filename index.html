@@ -1713,12 +1713,16 @@ window.TENANT_READY.then(function() {
       // Image-only hero mode — hide video element, show image as background
       if (video) video.style.display = 'none';
       poster.style.backgroundImage = "url('" + heroImages[0].url + "')";
+      poster.style.backgroundSize = heroImages[0].imageFit || 'cover';
       poster.style.opacity = '1';
       poster.classList.remove('loaded');
 
       // Also set split-image hero background
       var splitImg = document.getElementById('heroSplitImage');
-      if (splitImg) splitImg.style.backgroundImage = "url('" + heroImages[0].url + "')";
+      if (splitImg) {
+        splitImg.style.backgroundImage = "url('" + heroImages[0].url + "')";
+        splitImg.style.backgroundSize = heroImages[0].imageFit || 'cover';
+      }
 
       // If multiple images, rotate through them
       if (heroImages.length > 1) {
@@ -1729,6 +1733,7 @@ window.TENANT_READY.then(function() {
           setInterval(function() {
             imgIndex = (imgIndex + 1) % heroImages.length;
             poster.style.backgroundImage = "url('" + heroImages[imgIndex].url + "')";
+            poster.style.backgroundSize = heroImages[imgIndex].imageFit || 'cover';
           }, rotationMs);
         });
       }
