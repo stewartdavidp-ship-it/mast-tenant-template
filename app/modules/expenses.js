@@ -32,6 +32,22 @@ var plaidLinkLoaded = false;
 
 var PLAID_BANK_LIMITS = { 'free': 0, 'publish': 1, 'launch': 1, 'operate': 2, 'command': 5 };
 
+// Custom confirm dialog (dark mode compliant, replaces native confirm())
+function expConfirm(title, message, confirmLabel, onConfirm, cancelLabel) {
+  var h = '<div style="max-width:420px;">';
+  h += '<h3 style="margin:0 0 12px 0;font-size:1.1rem;">' + esc(title) + '</h3>';
+  h += '<p style="font-size:0.9rem;color:var(--warm-gray, #6B6560);line-height:1.5;margin:0 0 20px 0;white-space:pre-line;">' + esc(message) + '</p>';
+  h += '<div style="display:flex;justify-content:flex-end;gap:8px;">';
+  h += '<button class="btn btn-secondary" onclick="closeModal()">' + esc(cancelLabel || 'Cancel') + '</button>';
+  h += '<button class="btn btn-primary" id="expConfirmBtn">' + esc(confirmLabel || 'Continue') + '</button>';
+  h += '</div></div>';
+  openModal(h);
+  document.getElementById('expConfirmBtn').onclick = function() {
+    closeModal();
+    onConfirm();
+  };
+}
+
 function getPlaidBankLimit() {
   // Explicit override takes priority
   // Otherwise tier-based: free=0, publish=1, operate=2, command=5
@@ -165,20 +181,30 @@ async function connectPlaidAccount() {
 
       if (availableTokens < EXTRA_COST) {
         var shortfall = EXTRA_COST - availableTokens;
-        if (!confirm('You\'ve used your ' + includedLimit + ' included banks.\n\nAdding another costs ' + EXTRA_COST + ' tokens/month but you only have ' + availableTokens + ' tokens available (need ' + shortfall + ' more).\n\nWould you like to purchase more tokens?')) {
-          return;
-        }
-        // Navigate to settings for token purchase
-        if (typeof purchaseCoins === 'function') purchaseCoins();
+        expConfirm(
+          'Not enough tokens',
+          'You\'ve used your ' + includedLimit + ' included banks.\n\nAdding another costs ' + EXTRA_COST + ' tokens/month but you only have ' + availableTokens + ' tokens available (need ' + shortfall + ' more).',
+          'Purchase Tokens',
+          function() { if (typeof purchaseCoins === 'function') purchaseCoins(); }
+        );
         return;
       }
 
-      if (!confirm('You\'ve used your ' + includedLimit + ' included banks.\n\nAdding another will cost ' + EXTRA_COST + ' tokens/month (' + availableTokens + ' tokens available). If you don\'t have enough tokens next month, this bank will be automatically disconnected.\n\nContinue?')) {
-        return;
-      }
+      expConfirm(
+        'Extra bank connection',
+        'You\'ve used your ' + includedLimit + ' included banks.\n\nAdding another will cost ' + EXTRA_COST + ' tokens/month (' + availableTokens + ' tokens available). If you don\'t have enough tokens next month, this bank will be automatically disconnected.',
+        'Continue',
+        function() { startPlaidLink(); }
+      );
+      return;
     }
   } catch (e) { /* proceed, server enforces */ }
 
+  startPlaidLink();
+}
+
+async function startPlaidLink() {
+  var btn = document.getElementById('connectPlaidBtn');
   lastConnectAt = Date.now();
   btn.disabled = true;
   btn.textContent = 'Connecting\u2026';
@@ -245,7 +271,10 @@ async function syncPlaidItem(itemId) {
 }
 
 async function disconnectPlaidItem(itemId) {
-  if (!confirm('Disconnect this bank? Existing imported transactions will remain.')) return;
+  expConfirm('Disconnect bank', 'Disconnect this bank? Existing imported transactions will remain.', 'Disconnect', function() { doDisconnectPlaidItem(itemId); });
+}
+
+async function doDisconnectPlaidItem(itemId) {
   try {
     var disconnectFn = firebase.functions().httpsCallable('disconnectPlaidItem');
     await disconnectFn({ tenantId: MastDB.tenantId(), itemId: itemId });
@@ -590,15 +619,16 @@ async function markPersonalAndBack(expenseId) {
   }
 }
 
-async function deleteExpense(expenseId) {
-  if (!confirm('Delete this expense? This cannot be undone.')) return;
-  try {
-    await MastDB.expenses.remove(expenseId);
-    showToast('Expense deleted');
-    showExpensesView('transactions');
-  } catch (err) {
-    showToast('Delete failed: ' + esc(err.message), true);
-  }
+function deleteExpense(expenseId) {
+  expConfirm('Delete expense', 'Delete this expense? This cannot be undone.', 'Delete', async function() {
+    try {
+      await MastDB.expenses.remove(expenseId);
+      showToast('Expense deleted');
+      showExpensesView('transactions');
+    } catch (err) {
+      showToast('Delete failed: ' + esc(err.message), true);
+    }
+  });
 }
 
 // ── Inline Updates ──
@@ -629,27 +659,27 @@ async function bulkApproveExpenses() {
     showToast('No expenses to approve');
     return;
   }
-  if (!confirm('Approve ' + toApprove.length + ' expense' + (toApprove.length !== 1 ? 's' : '') + '?')) return;
-
-  var btn = document.getElementById('bulkApproveBtn');
-  btn.disabled = true;
-  btn.textContent = 'Approving\u2026';
-
-  try {
-    var updates = {};
-    toApprove.forEach(function(e) {
-      updates['admin/expenses/' + e._key + '/reviewed'] = true;
-      updates['admin/expenses/' + e._key + '/updatedAt'] = new Date().toISOString();
-    });
-    await MastDB._ref('').update(updates);
-    showToast('Approved ' + toApprove.length + ' expense' + (toApprove.length !== 1 ? 's' : ''));
-    loadExpenses();
-  } catch (err) {
-    showToast('Approve failed: ' + esc(err.message), true);
-  } finally {
-    btn.disabled = false;
-    updateApproveButton();
-  }
+  var count = toApprove.length;
+  expConfirm('Approve expenses', 'Approve ' + count + ' expense' + (count !== 1 ? 's' : '') + '?', 'Approve', async function() {
+    var btn = document.getElementById('bulkApproveBtn');
+    btn.disabled = true;
+    btn.textContent = 'Approving\u2026';
+    try {
+      var updates = {};
+      toApprove.forEach(function(e) {
+        updates['admin/expenses/' + e._key + '/reviewed'] = true;
+        updates['admin/expenses/' + e._key + '/updatedAt'] = new Date().toISOString();
+      });
+      await MastDB._ref('').update(updates);
+      showToast('Approved ' + count + ' expense' + (count !== 1 ? 's' : ''));
+      loadExpenses();
+    } catch (err) {
+      showToast('Approve failed: ' + esc(err.message), true);
+    } finally {
+      btn.disabled = false;
+      updateApproveButton();
+    }
+  });
 }
 
 async function markPersonal() {
@@ -660,29 +690,29 @@ async function markPersonal() {
   }
 
   var count = checked.length;
-  if (!confirm('Mark ' + count + ' expense' + (count !== 1 ? 's' : '') + ' as personal? They will be excluded from business reports.')) return;
-
-  var btn = document.getElementById('markPersonalBtn');
-  btn.disabled = true;
-  btn.textContent = 'Marking\u2026';
-
-  try {
-    var updates = {};
-    checked.forEach(function(cb) {
-      updates['admin/expenses/' + cb.dataset.key + '/category'] = 'personal';
-      updates['admin/expenses/' + cb.dataset.key + '/categorySource'] = 'user';
-      updates['admin/expenses/' + cb.dataset.key + '/reviewed'] = true;
-      updates['admin/expenses/' + cb.dataset.key + '/updatedAt'] = new Date().toISOString();
-    });
-    await MastDB._ref('').update(updates);
-    showToast(count + ' expense' + (count !== 1 ? 's' : '') + ' marked as personal');
-    loadExpenses();
-  } catch (err) {
-    showToast('Failed: ' + esc(err.message), true);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Personal';
-  }
+  expConfirm('Mark as personal', 'Mark ' + count + ' expense' + (count !== 1 ? 's' : '') + ' as personal? They will be excluded from business reports.', 'Mark Personal', async function() {
+    var btn = document.getElementById('markPersonalBtn');
+    btn.disabled = true;
+    btn.textContent = 'Marking\u2026';
+    try {
+      var cbs = document.querySelectorAll('.exp-checkbox:checked');
+      var updates = {};
+      cbs.forEach(function(cb) {
+        updates['admin/expenses/' + cb.dataset.key + '/category'] = 'personal';
+        updates['admin/expenses/' + cb.dataset.key + '/categorySource'] = 'user';
+        updates['admin/expenses/' + cb.dataset.key + '/reviewed'] = true;
+        updates['admin/expenses/' + cb.dataset.key + '/updatedAt'] = new Date().toISOString();
+      });
+      await MastDB._ref('').update(updates);
+      showToast(count + ' expense' + (count !== 1 ? 's' : '') + ' marked as personal');
+      loadExpenses();
+    } catch (err) {
+      showToast('Failed: ' + esc(err.message), true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Personal';
+    }
+  });
 }
 
 function downloadExpensesCsv() {
