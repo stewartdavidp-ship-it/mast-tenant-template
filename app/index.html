@@ -10264,9 +10264,12 @@ auth.onAuthStateChanged(async function(user) {
     var coinMatch = location.hash.match(/coins=(\d+)/);
     var coinCount = coinMatch ? coinMatch[1] : '';
     showToast('Coins purchased successfully!' + (coinCount ? ' ' + coinCount + ' coins added.' : ''));
-    location.hash = '#settings';
+    // Return to the route that initiated the purchase (strip query params)
+    var returnHash = location.hash.split('?')[0].replace('#', '') || 'settings';
+    location.hash = '#' + returnHash;
   } else if (location.hash.indexOf('coinPurchase=cancelled') >= 0) {
-    location.hash = '#settings';
+    var cancelHash = location.hash.split('?')[0].replace('#', '') || 'settings';
+    location.hash = '#' + cancelHash;
   }
 
   // Check for upgrade return from Stripe (query params: ?upgraded=true&plan=...)
