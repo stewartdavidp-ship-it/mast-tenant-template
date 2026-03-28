@@ -19480,6 +19480,7 @@ async function toggleImageVisibility(imageId) {
       updatedAt: firebase.database.ServerValue.TIMESTAMP
     });
     await writeAudit('update', 'gallery', imageId);
+    if (window.currentRoute === 'homepage' && window.renderHomepage) setTimeout(window.renderHomepage, 100);
   } catch (err) {
     showToast('Error toggling visibility: ' + err.message, true);
   }
@@ -19585,6 +19586,7 @@ async function moveImage(imageId, direction) {
 
   try {
     await MastDB._multiUpdate(updates);
+    if (window.currentRoute === 'homepage' && window.renderHomepage) setTimeout(window.renderHomepage, 100);
   } catch (err) {
     showToast('Error reordering: ' + err.message, true);
   }
@@ -19612,6 +19614,7 @@ async function deleteImage(imageId) {
     await MastDB.gallery.ref(imageId).remove();
     showToast('Image deleted.');
     closeModal();
+    if (window.currentRoute === 'homepage' && window.renderHomepage) setTimeout(window.renderHomepage, 100);
   } catch (err) {
     showToast('Error deleting image: ' + err.message, true);
   }
