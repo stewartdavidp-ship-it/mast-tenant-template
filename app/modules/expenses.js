@@ -195,7 +195,7 @@ async function connectPlaidAccount() {
           'Not enough tokens',
           'You\'ve used your ' + includedLimit + ' included banks.\n\nAdding another costs ' + EXTRA_COST + ' tokens/month but you only have ' + availableTokens + ' tokens available (need ' + shortfall + ' more).',
           'Purchase Tokens',
-          function() { if (typeof openCoinPurchaseModal === 'function') openCoinPurchaseModal('expenses'); }
+          function() { if (typeof openCoinPurchaseModal === 'function') openCoinPurchaseModal('expenses', 'connectBank'); }
         );
         return;
       }

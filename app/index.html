@@ -8447,9 +8447,11 @@ function renderTokenBalanceIndicator() {
 
 // Coin purchase modal
 var _coinPurchaseReturnRoute = null;
+var _coinPurchaseReturnAction = null;
 
-function openCoinPurchaseModal(returnRoute) {
+function openCoinPurchaseModal(returnRoute, returnAction) {
   _coinPurchaseReturnRoute = returnRoute || null;
+  _coinPurchaseReturnAction = returnAction || null;
   var w = getTokenWallet();
   var sub = getTenantSubscription();
   var tier = TIER_CONFIG[sub.tier] || {};
@@ -8521,7 +8523,7 @@ async function purchaseCoins() {
     var resp = await callCF('/createCoinCheckout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ tenantId: MastDB.tenantId(), coins: coins, returnRoute: _coinPurchaseReturnRoute || undefined })
+      body: JSON.stringify({ tenantId: MastDB.tenantId(), coins: coins, returnRoute: _coinPurchaseReturnRoute || undefined, returnAction: _coinPurchaseReturnAction || undefined })
     });
     var data = await resp.json();
     if (data.sessionUrl) {
@@ -10255,21 +10257,33 @@ auth.onAuthStateChanged(async function(user) {
   }
 
   document.getElementById('userAvatar').src = user.photoURL || '';
-  var initialRoute = location.hash.replace('#', '') || 'dashboard';
+
+  // Handle coin purchase return from Stripe BEFORE initial navigation
+  var _coinPurchaseReturn = false;
+  var _coinPurchaseAction = null;
+  if (location.hash.indexOf('coinPurchase=success') >= 0) {
+    _coinPurchaseReturn = true;
+    var coinMatch = location.hash.match(/coins=(\d+)/);
+    var coinCount = coinMatch ? coinMatch[1] : '';
+    // Check if there's an action to resume (e.g., connectBank)
+    var actionMatch = location.hash.match(/action=([a-zA-Z]+)/);
+    _coinPurchaseAction = actionMatch ? actionMatch[1] : null;
+    showToast('Coins purchased successfully!' + (coinCount ? ' ' + coinCount + ' coins added.' : ''));
+  } else if (location.hash.indexOf('coinPurchase=cancelled') >= 0) {
+    _coinPurchaseReturn = true;
+  }
+
+  // Strip query params from hash for clean route navigation
+  var initialRoute = (location.hash.split('?')[0]).replace('#', '') || 'dashboard';
   navigateTo(initialRoute);
   attachListeners();
 
-  // Check for coin purchase return from Stripe
-  if (location.hash.indexOf('coinPurchase=success') >= 0) {
-    var coinMatch = location.hash.match(/coins=(\d+)/);
-    var coinCount = coinMatch ? coinMatch[1] : '';
-    showToast('Coins purchased successfully!' + (coinCount ? ' ' + coinCount + ' coins added.' : ''));
-    // Return to the route that initiated the purchase (strip query params)
-    var returnHash = location.hash.split('?')[0].replace('#', '') || 'settings';
-    location.hash = '#' + returnHash;
-  } else if (location.hash.indexOf('coinPurchase=cancelled') >= 0) {
-    var cancelHash = location.hash.split('?')[0].replace('#', '') || 'settings';
-    location.hash = '#' + cancelHash;
+  // After navigation, resume action if returning from coin purchase
+  if (_coinPurchaseReturn && _coinPurchaseAction === 'connectBank') {
+    // Small delay to let the module load, then auto-trigger connect
+    setTimeout(function() {
+      if (typeof connectPlaidAccount === 'function') connectPlaidAccount();
+    }, 500);
   }
 
   // Check for upgrade return from Stripe (query params: ?upgraded=true&plan=...)
