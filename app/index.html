@@ -10280,9 +10280,12 @@ auth.onAuthStateChanged(async function(user) {
 
   // After navigation, resume action if returning from coin purchase
   if (_coinPurchaseReturn && _coinPurchaseAction === 'connectBank') {
-    // Small delay to let the module load, then auto-trigger connect
+    // Small delay to let the module load, then switch to banks tab and auto-trigger connect
     setTimeout(function() {
-      if (typeof connectPlaidAccount === 'function') connectPlaidAccount();
+      if (typeof showExpensesView === 'function') showExpensesView('accounts');
+      setTimeout(function() {
+        if (typeof connectPlaidAccount === 'function') connectPlaidAccount();
+      }, 300);
     }, 500);
   }
 
