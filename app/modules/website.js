@@ -75,7 +75,9 @@
       { id: 'headline', label: 'Headline', type: 'text' },
       { id: 'subheadline', label: 'Subheadline', type: 'text' },
       { id: 'ctaText', label: 'Button Text', type: 'text' },
-      { id: 'ctaUrl', label: 'Button URL', type: 'text' }
+      { id: 'ctaUrl', label: 'Button URL', type: 'text' },
+      { id: 'headlineSize', label: 'Headline Size', type: 'select', options: [{ v: 'small', l: 'Small' }, { v: 'medium', l: 'Medium (Default)' }, { v: 'large', l: 'Large' }, { v: 'xl', l: 'Extra Large' }] },
+      { id: 'textAlign', label: 'Text Position', type: 'select', options: [{ v: 'left', l: 'Left' }, { v: 'center', l: 'Center (Default)' }, { v: 'right', l: 'Right' }] }
     ]},
     { key: 'gallery', name: 'Products / Gallery', fields: [
       { id: 'heading', label: 'Heading', type: 'text' },

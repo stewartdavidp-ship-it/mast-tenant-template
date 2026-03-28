@@ -101,6 +101,33 @@
       }
     }
 
+    // Hero styling controls (headline size, text position)
+    if (sections.hero) {
+      var heroSize = sections.hero.headlineSize || 'medium';
+      var heroAlign = sections.hero.textAlign || 'center';
+
+      var sizeMap = {
+        small: 'clamp(1.8rem, 4vw, 3rem)',
+        medium: '',
+        large: 'clamp(3.5rem, 8vw, 6rem)',
+        xl: 'clamp(4.5rem, 12vw, 9rem)'
+      };
+
+      if (sizeMap[heroSize]) {
+        document.querySelectorAll('.hero h1, .hero-minimal-headline').forEach(function(el) {
+          el.style.fontSize = sizeMap[heroSize];
+        });
+      }
+
+      if (heroAlign !== 'center') {
+        var alignItems = heroAlign === 'left' ? 'flex-start' : 'flex-end';
+        document.querySelectorAll('.hero-content, .hero-split-content, .hero-minimal').forEach(function(el) {
+          el.style.textAlign = heroAlign;
+          el.style.alignItems = alignItems;
+        });
+      }
+    }
+
     // Handle about image separately (it's an img src, not textContent)
     if (sections.about && sections.about.imageUrl) {
       var aboutImg = document.querySelector('[data-slot="about"] .about-image img');
