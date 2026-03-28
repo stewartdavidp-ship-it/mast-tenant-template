@@ -19400,7 +19400,7 @@ async function saveImage(imageId) {
     }
   }
 
-  var imageFit = (document.getElementById('imgFit') || {}).value || 'cover';
+  var imageFit = (document.getElementById('imgFit') || {}).value || 'contain';
 
   var data = {
     url: url,
