@@ -405,10 +405,12 @@
 
               // Activate hero variant
               var heroSlot = document.querySelector('[data-slot="hero"]');
+              console.log('[theme] hero variant:', heroVariant, 'heroSlot:', !!heroSlot);
               if (heroSlot) {
                 var heroVariants = heroSlot.querySelectorAll('[data-variant]');
                 heroVariants.forEach(function(v) { v.classList.remove('active'); v.style.display = 'none'; });
                 var activeHero = heroSlot.querySelector('[data-variant="' + heroVariant + '"]');
+                console.log('[theme] found hero variant element:', !!activeHero, 'total variants:', heroVariants.length);
                 if (activeHero) { activeHero.classList.add('active'); activeHero.style.display = ''; }
                 else if (heroVariants.length > 0) { heroVariants[0].classList.add('active'); heroVariants[0].style.display = ''; }
               }
