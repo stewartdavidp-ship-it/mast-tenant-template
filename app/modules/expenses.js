@@ -14,7 +14,8 @@ var CATEGORIES = [
   { value: 'software', label: 'Software' },
   { value: 'payroll', label: 'Payroll' },
   { value: 'taxes', label: 'Taxes' },
-  { value: 'other', label: 'Other' }
+  { value: 'other', label: 'Other' },
+  { value: 'personal', label: 'Personal' }
 ];
 
 var BUSINESS_LINES = [
@@ -335,8 +336,18 @@ function renderExpensesList(expenses) {
     var reviewedBorder = exp.reviewed ? '3px solid transparent' : '3px solid #f59e0b';
     var sourceIcon = exp.source === 'plaid' ? '\uD83C\uDFE6' : exp.source === 'csv_import' ? '\uD83D\uDCC4' : '\u270D\uFE0F';
 
-    h += '<div style="background:var(--cream, #FAF6F0);border:1px solid var(--cream-dark, #F0E8DB);border-left:' + reviewedBorder + ';border-radius:8px;padding:10px 14px;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,0.08);transition:background 0.15s;" ';
-    h += 'data-expense-id="' + esc(exp._key) + '" onclick="showExpenseDetail(this.dataset.expenseId)">';
+    h += '<div style="background:var(--cream, #FAF6F0);border:1px solid var(--cream-dark, #F0E8DB);border-left:' + reviewedBorder + ';border-radius:8px;padding:10px 14px;box-shadow:0 1px 3px rgba(0,0,0,0.08);transition:background 0.15s;display:flex;align-items:center;gap:10px;" ';
+    h += 'data-expense-id="' + esc(exp._key) + '">';
+
+    // Checkbox (only for unapproved)
+    if (!exp.reviewed) {
+      h += '<input type="checkbox" class="exp-checkbox" data-key="' + esc(exp._key) + '" onclick="event.stopPropagation();updateApproveButton()" style="width:18px;height:18px;flex-shrink:0;cursor:pointer;accent-color:var(--amber, #C4853C);">';
+    } else {
+      h += '<div style="width:18px;height:18px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#16a34a;font-size:0.9rem;">\u2713</div>';
+    }
+
+    // Clickable content area
+    h += '<div style="flex:1;min-width:0;cursor:pointer;" onclick="showExpenseDetail(\'' + esc(exp._key) + '\')">';
     h += '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">';
 
     // Left: info
@@ -362,7 +373,7 @@ function renderExpensesList(expenses) {
     if (!exp.reviewed) {
       h += ' <span style="font-size:0.75rem;color:#f59e0b;">Needs review</span>';
     } else {
-      h += ' <span style="font-size:0.75rem;color:#16a34a;">\u2713 Reviewed</span>';
+      h += ' <span style="font-size:0.75rem;color:#16a34a;">\u2713 Approved</span>';
     }
     h += '</div>';
     h += '</div>';
@@ -376,10 +387,27 @@ function renderExpensesList(expenses) {
     h += '</div>';
 
     h += '</div></div>';
+
+    h += '</div>';
   });
 
   h += '</div>';
   listEl.innerHTML = h;
+  updateApproveButton();
+}
+
+function updateApproveButton() {
+  var btn = document.getElementById('bulkApproveBtn');
+  if (!btn) return;
+  var checked = document.querySelectorAll('.exp-checkbox:checked');
+  var unchecked = document.querySelectorAll('.exp-checkbox');
+  if (checked.length > 0) {
+    btn.textContent = 'Approve (' + checked.length + ')';
+  } else if (unchecked.length > 0) {
+    btn.textContent = 'Approve All (' + unchecked.length + ')';
+  } else {
+    btn.textContent = 'Approve';
+  }
 }
 
 // ── Transaction Detail View ──
@@ -483,7 +511,7 @@ async function showExpenseDetail(expenseId) {
     if (!exp.reviewed) {
       h += '<button class="btn btn-primary" data-expense-id="' + esc(expenseId) + '" onclick="approveAndBack(this.dataset.expenseId)">Approve</button>';
     } else {
-      h += '<span class="status-badge" style="background:#16a34a;color:white;padding:6px 12px;font-size:0.85rem;">\u2713 Reviewed</span>';
+      h += '<span class="status-badge" style="background:#16a34a;color:white;padding:6px 12px;font-size:0.85rem;">\u2713 Approved</span>';
     }
     h += '<button class="btn btn-danger btn-small" data-expense-id="' + esc(expenseId) + '" onclick="deleteExpense(this.dataset.expenseId)">Delete</button>';
     h += '</div>';
@@ -530,12 +558,22 @@ async function updateExpenseField(expenseId, field, value) {
 }
 
 async function bulkApproveExpenses() {
-  var unreviewed = expensesCache.filter(function(e) { return !e.reviewed; });
-  if (unreviewed.length === 0) {
-    showToast('No unreviewed expenses to approve');
+  // Use checked items if any, otherwise all unapproved
+  var checked = document.querySelectorAll('.exp-checkbox:checked');
+  var toApprove;
+  if (checked.length > 0) {
+    var checkedKeys = new Set();
+    checked.forEach(function(cb) { checkedKeys.add(cb.dataset.key); });
+    toApprove = expensesCache.filter(function(e) { return checkedKeys.has(e._key); });
+  } else {
+    toApprove = expensesCache.filter(function(e) { return !e.reviewed; });
+  }
+
+  if (toApprove.length === 0) {
+    showToast('No expenses to approve');
     return;
   }
-  if (!confirm('Approve all ' + unreviewed.length + ' visible unreviewed expenses?')) return;
+  if (!confirm('Approve ' + toApprove.length + ' expense' + (toApprove.length !== 1 ? 's' : '') + '?')) return;
 
   var btn = document.getElementById('bulkApproveBtn');
   btn.disabled = true;
@@ -543,19 +581,94 @@ async function bulkApproveExpenses() {
 
   try {
     var updates = {};
-    unreviewed.forEach(function(e) {
+    toApprove.forEach(function(e) {
       updates['admin/expenses/' + e._key + '/reviewed'] = true;
       updates['admin/expenses/' + e._key + '/updatedAt'] = new Date().toISOString();
     });
     await MastDB._ref('').update(updates);
-    showToast('Approved ' + unreviewed.length + ' expenses');
+    showToast('Approved ' + toApprove.length + ' expense' + (toApprove.length !== 1 ? 's' : ''));
     loadExpenses();
   } catch (err) {
-    showToast('Bulk approve failed: ' + esc(err.message), true);
+    showToast('Approve failed: ' + esc(err.message), true);
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Approve All Visible';
+    updateApproveButton();
   }
+}
+
+async function markPersonal() {
+  var checked = document.querySelectorAll('.exp-checkbox:checked');
+  if (checked.length === 0) {
+    showToast('Select expenses to mark as personal', true);
+    return;
+  }
+
+  var count = checked.length;
+  if (!confirm('Mark ' + count + ' expense' + (count !== 1 ? 's' : '') + ' as personal? They will be excluded from business reports.')) return;
+
+  var btn = document.getElementById('markPersonalBtn');
+  btn.disabled = true;
+  btn.textContent = 'Marking\u2026';
+
+  try {
+    var updates = {};
+    checked.forEach(function(cb) {
+      updates['admin/expenses/' + cb.dataset.key + '/category'] = 'personal';
+      updates['admin/expenses/' + cb.dataset.key + '/categorySource'] = 'user';
+      updates['admin/expenses/' + cb.dataset.key + '/reviewed'] = true;
+      updates['admin/expenses/' + cb.dataset.key + '/updatedAt'] = new Date().toISOString();
+    });
+    await MastDB._ref('').update(updates);
+    showToast(count + ' expense' + (count !== 1 ? 's' : '') + ' marked as personal');
+    loadExpenses();
+  } catch (err) {
+    showToast('Failed: ' + esc(err.message), true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Personal';
+  }
+}
+
+function downloadExpensesCsv() {
+  if (expensesCache.length === 0) {
+    showToast('No expenses to download', true);
+    return;
+  }
+  var headers = ['Date', 'Merchant', 'Description', 'Amount', 'Category', 'Business Line', 'Source', 'Approved', 'Account', 'Notes'];
+  var rows = expensesCache.map(function(e) {
+    var acct = e.plaidAccountId && accountLookup[e.plaidAccountId]
+      ? accountLookup[e.plaidAccountId].institution + ' \u2022\u2022' + accountLookup[e.plaidAccountId].mask
+      : '';
+    return [
+      e.date || '',
+      csvEscape(e.merchantName || ''),
+      csvEscape(e.description || ''),
+      (e.amount / 100).toFixed(2),
+      e.category || '',
+      e.businessLine || '',
+      e.source || '',
+      e.reviewed ? 'Yes' : 'No',
+      csvEscape(acct),
+      csvEscape(e.notes || '')
+    ].join(',');
+  });
+  var csv = headers.join(',') + '\n' + rows.join('\n');
+  var blob = new Blob([csv], { type: 'text/csv' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'expenses-' + new Date().toISOString().split('T')[0] + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Downloaded ' + expensesCache.length + ' expenses');
+}
+
+function csvEscape(str) {
+  if (!str) return '';
+  if (str.indexOf(',') !== -1 || str.indexOf('"') !== -1 || str.indexOf('\n') !== -1) {
+    return '"' + str.replace(/"/g, '""') + '"';
+  }
+  return str;
 }
 
 function initExpenses() {
@@ -573,6 +686,9 @@ window.approveAndBack = approveAndBack;
 window.deleteExpense = deleteExpense;
 window.updateExpenseField = updateExpenseField;
 window.bulkApproveExpenses = bulkApproveExpenses;
+window.markPersonal = markPersonal;
+window.downloadExpensesCsv = downloadExpensesCsv;
+window.updateApproveButton = updateApproveButton;
 
 // ── Module registration ──
 MastAdmin.registerModule('expenses', {
