@@ -525,6 +525,7 @@ async function showExpenseDetail(expenseId) {
     h += '<div style="display:flex;gap:8px;margin-top:16px;">';
     if (!exp.reviewed) {
       h += '<button class="btn btn-primary" data-expense-id="' + esc(expenseId) + '" onclick="approveAndBack(this.dataset.expenseId)">Approve</button>';
+      h += '<button class="btn btn-secondary" data-expense-id="' + esc(expenseId) + '" onclick="markPersonalAndBack(this.dataset.expenseId)">Personal</button>';
     } else {
       h += '<span class="status-badge" style="background:#16a34a;color:white;padding:6px 12px;font-size:0.85rem;">\u2713 Approved</span>';
     }
@@ -544,6 +545,21 @@ async function approveAndBack(expenseId) {
     showExpensesView('transactions');
   } catch (err) {
     showToast('Approve failed: ' + esc(err.message), true);
+  }
+}
+
+async function markPersonalAndBack(expenseId) {
+  try {
+    await MastDB.expenses.update(expenseId, {
+      category: 'personal',
+      categorySource: 'user',
+      reviewed: true,
+      updatedAt: new Date().toISOString()
+    });
+    showToast('Marked as personal');
+    showExpensesView('transactions');
+  } catch (err) {
+    showToast('Failed: ' + esc(err.message), true);
   }
 }
 
@@ -700,6 +716,7 @@ window.deleteExpense = deleteExpense;
 window.updateExpenseField = updateExpenseField;
 window.bulkApproveExpenses = bulkApproveExpenses;
 window.markPersonal = markPersonal;
+window.markPersonalAndBack = markPersonalAndBack;
 window.downloadExpensesCsv = downloadExpensesCsv;
 window.updateApproveButton = updateApproveButton;
 window.toggleSelectAll = toggleSelectAll;
