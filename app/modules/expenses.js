@@ -103,18 +103,37 @@ async function loadPlaidAccounts() {
     var activeCount = keys.filter(function(k) { return items[k].status === 'active'; }).length;
     var h = '<div style="font-size:0.85rem;color:var(--warm-gray, #6B6560);margin-bottom:12px;">' +
       activeCount + ' of ' + includedLimit + ' included banks used' +
-      (activeCount > includedLimit ? ' \u00B7 <span style="color:#f59e0b;">' + (activeCount - includedLimit) + ' extra (' + ((activeCount - includedLimit) * 200) + ' tokens/month)</span>' : '') +
+      (activeCount > includedLimit ? ' \u00B7 <span style="color:#f59e0b;">' + (activeCount - includedLimit) + ' extra (' + ((activeCount - includedLimit) * 100) + ' tokens/month)</span>' : '') +
       '</div>';
 
     keys.forEach(function(itemId) {
       var item = items[itemId];
-      var statusClass = item.status === 'active' ? 'status-badge' : item.status === 'error' ? 'status-badge' : 'status-badge';
       var statusBg = item.status === 'active' ? '#16a34a' : item.status === 'error' ? '#dc2626' : '#9ca3af';
+      var acctCount = (item.accounts && item.accounts.length) || 0;
 
       h += '<div style="background:var(--cream, #FAF6F0);border:1px solid var(--cream-dark, #F0E8DB);border-radius:8px;padding:12px 16px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
-      h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;">';
-      h += '<div>';
-      h += '<div style="font-weight:600;font-size:1rem;">' + esc(item.institutionName || 'Unknown Bank') + '</div>';
+
+      // Header row — always visible, clickable to expand
+      h += '<div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;" onclick="toggleBankCard(\'' + esc(itemId) + '\')">';
+      h += '<div style="display:flex;align-items:center;gap:8px;">';
+      h += '<span id="expBankArrow_' + esc(itemId) + '" style="font-size:0.7rem;transition:transform 0.2s;">\u25B6</span>';
+      h += '<span style="font-weight:600;font-size:1rem;">' + esc(item.institutionName || 'Unknown Bank') + '</span>';
+      h += '<span style="font-size:0.8rem;color:var(--warm-gray, #6B6560);">' + acctCount + ' account' + (acctCount !== 1 ? 's' : '') + '</span>';
+      h += '<span class="status-badge" style="background:' + statusBg + ';color:white;">' + esc(item.status || 'unknown') + '</span>';
+      if (item.lastSyncAt) h += '<span style="font-size:0.75rem;color:var(--warm-gray-light, #9B958E);">Synced ' + new Date(item.lastSyncAt).toLocaleDateString() + '</span>';
+      h += '</div>';
+
+      // Action buttons (always visible)
+      h += '<div style="display:flex;gap:6px;" onclick="event.stopPropagation()">';
+      if (item.status === 'active') {
+        h += '<button class="btn btn-primary btn-small" data-item-id="' + esc(itemId) + '" onclick="syncPlaidItem(this.dataset.itemId)">Sync Now</button>';
+      }
+      h += '<button class="btn btn-danger btn-small" data-item-id="' + esc(itemId) + '" onclick="disconnectPlaidItem(this.dataset.itemId)">Disconnect</button>';
+      h += '</div>';
+      h += '</div>';
+
+      // Collapsible detail section
+      h += '<div id="expBankDetail_' + esc(itemId) + '" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--cream-dark, #F0E8DB);">';
 
       if (item.accounts && item.accounts.length) {
         item.accounts.forEach(function(acct) {
@@ -125,26 +144,17 @@ async function loadPlaidAccounts() {
         });
       }
 
-      h += '<div style="margin-top:6px;">';
-      h += '<span class="status-badge" style="background:' + statusBg + ';color:white;">' + esc(item.status || 'unknown') + '</span>';
-      if (item.lastSyncAt) h += ' <span style="font-size:0.75rem;color:var(--warm-gray-light, #9B958E);">Last synced ' + new Date(item.lastSyncAt).toLocaleString() + '</span>';
-      h += '</div>';
+      if (item.lastSyncAt) {
+        h += '<div style="font-size:0.75rem;color:var(--warm-gray-light, #9B958E);margin-top:6px;">Last synced ' + new Date(item.lastSyncAt).toLocaleString() + '</div>';
+      }
 
       if (item.lastError) {
         h += '<div style="font-size:0.75rem;color:var(--danger, #DC3545);margin-top:4px;">' + esc(item.lastError) + '</div>';
       }
 
-      h += '</div>';
+      h += '</div>'; // close collapsible detail
 
-      // Action buttons (UX: .btn system, security: data-* attributes)
-      h += '<div style="display:flex;gap:6px;">';
-      if (item.status === 'active') {
-        h += '<button class="btn btn-primary btn-small" data-item-id="' + esc(itemId) + '" onclick="syncPlaidItem(this.dataset.itemId)">Sync Now</button>';
-      }
-      h += '<button class="btn btn-danger btn-small" data-item-id="' + esc(itemId) + '" onclick="disconnectPlaidItem(this.dataset.itemId)">Disconnect</button>';
-      h += '</div>';
-
-      h += '</div></div>';
+      h += '</div>'; // close card
     });
 
     container.innerHTML = h;
@@ -764,6 +774,14 @@ function initExpenses() {
 // ── Window exports ──
 window.showExpensesView = showExpensesView;
 window.connectPlaidAccount = connectPlaidAccount;
+window.toggleBankCard = function(itemId) {
+  var detail = document.getElementById('expBankDetail_' + itemId);
+  var arrow = document.getElementById('expBankArrow_' + itemId);
+  if (!detail) return;
+  var isOpen = detail.style.display !== 'none';
+  detail.style.display = isOpen ? 'none' : '';
+  if (arrow) arrow.style.transform = isOpen ? '' : 'rotate(90deg)';
+};
 window.syncPlaidItem = syncPlaidItem;
 window.disconnectPlaidItem = disconnectPlaidItem;
 window.loadExpenses = loadExpenses;
