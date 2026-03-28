@@ -4879,7 +4879,7 @@
         <div class="sidebar-item" data-route="trips" onclick="navigateTo('trips')">Trips</div>
         <div class="sidebar-item muted" data-route="expenses" onclick="navigateTo('expenses')">Expenses <span class="sidebar-badge new">New</span></div>
         <div class="sidebar-item muted" data-route="reports" onclick="navigateTo('reports')">Reports <span class="sidebar-badge new">New</span></div>
-        <div class="sidebar-item" data-route="financials" onclick="navigateTo('financials')">Financials</div>
+        <div class="sidebar-item" data-route="financials" onclick="navigateTo('financials')">Revenue</div>
         <div class="sidebar-item" data-route="contacts" onclick="navigateTo('contacts')">Contacts</div>
         <div class="sidebar-item muted" data-route="customers" onclick="navigateTo('customers')">Customers <span class="sidebar-badge new">New</span></div>
         <div class="sidebar-item" data-route="email-log" onclick="navigateTo('email-log')">Email Log</div>
@@ -5238,7 +5238,7 @@
     <!-- ===== FINANCIALS TAB ===== -->
     <div id="financialsTab" style="display:none;">
       <div class="section-header" style="display:flex;justify-content:space-between;align-items:center;">
-        <h2>Financials</h2>
+        <h2>Revenue</h2>
       </div>
       <div style="display:flex;gap:12px;align-items:center;margin-bottom:20px;flex-wrap:wrap;">
         <div>
@@ -8284,7 +8284,7 @@ var MODULE_REGISTRY = {
   market: { id: 'market', name: 'Market', icon: '\uD83D\uDCE3', description: 'Social media, blog, newsletter, stories.', section: 'market', navPosition: 2, purchasable: true, routes: ['social', 'blog', 'newsletter', 'stories'], manageSettings: ['newsletter', 'email'], synergies: ['sell', 'show'], status: 'active' },
   sell:   { id: 'sell',   name: 'Sell',   icon: '\uD83D\uDCB0', description: 'Point of sale, orders, commissions, wholesale.', section: 'sell', navPosition: 3, purchasable: true, routes: ['pos', 'orders', 'commissions', 'wholesale', 'galleries', 'receipts', 'coupons'], manageSettings: ['square'], synergies: ['ship', 'make'], status: 'active' },
   ship:   { id: 'ship',   name: 'Ship',   icon: '\uD83D\uDCE6', description: 'Pack orders, ship deliveries, track fulfillment.', section: 'ship', navPosition: 4, purchasable: true, routes: ['pack', 'ship'], manageSettings: ['shippingRates'], synergies: ['sell', 'show'], status: 'active' },
-  run:    { id: 'run',    name: 'Run',    icon: '\uD83D\uDCCB', description: 'Trips, expenses, reports, financials, contacts.', section: 'run', navPosition: 5, purchasable: true, routes: ['trips', 'expenses', 'reports', 'financials', 'contacts', 'customers'], manageSettings: [], synergies: ['sell', 'show'], status: 'active' },
+  run:    { id: 'run',    name: 'Run',    icon: '\uD83D\uDCCB', description: 'Trips, expenses, revenue, reports, contacts.', section: 'run', navPosition: 5, purchasable: true, routes: ['trips', 'expenses', 'reports', 'financials', 'contacts', 'customers'], manageSettings: [], synergies: ['sell', 'show'], status: 'active' },
   web:    { id: 'web',    name: 'Web',    icon: '\uD83C\uDF10', description: 'Website pages and content management.', section: 'web', navPosition: 6, purchasable: false, showInGrid: true, routes: ['website', 'gallery', 'images'], manageSettings: [], synergies: ['market', 'sell'], status: 'active' },
   show:   { id: 'show',   name: 'Show',   icon: '\uD83C\uDFAA', description: 'Find, apply, prep, and execute craft fairs and events.', section: 'show', navPosition: 7, purchasable: true, routes: ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'], manageSettings: [], synergies: ['sell', 'ship', 'make'], status: 'active' },
   'show-light': { id: 'show-light', name: 'Show Light', icon: '\u2728', description: 'Vendor profile, image gallery, and AI-powered show application builder.', section: 'show-light', navPosition: 8, purchasable: false, showInGrid: true, routes: ['show-light-profile', 'show-light-gallery', 'show-light-shows', 'show-light-apply'], manageSettings: [], synergies: ['show', 'sell', 'market'], status: 'active' },
