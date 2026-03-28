@@ -742,8 +742,9 @@ body[data-nav-style="minimal"] .nav-toggle { display: flex !important; }
 .nav-bottom-bar svg { width: 22px; height: 22px; fill: currentColor; }
 
 /* ========= SECTION VARIANT VISIBILITY ========= */
-[data-slot] > [data-variant] { display: none; }
-[data-slot] > [data-variant].active { display: block; }
+/* Only hide variant children inside hero — gallery-grid also has data-variant but isn't a toggle */
+[data-slot="hero"] > [data-variant] { display: none; }
+[data-slot="hero"] > [data-variant].active { display: block; }
 
 /* ========= RESPONSIVE ========= */
 @media (max-width: 768px) {
