@@ -5262,6 +5262,51 @@
       <div id="financialsEmpty" style="color:var(--text-secondary, #888);font-size:0.9rem;">Select a date range and click Load Sales to view Square transactions.</div>
     </div>
 
+    <!-- ===== EXPENSES TAB ===== -->
+    <div id="expensesTab" style="display:none;">
+      <div class="section-header" style="display:flex;justify-content:space-between;align-items:center;">
+        <h2>Expenses</h2>
+        <div style="display:flex;gap:8px;">
+          <button class="btn" onclick="showExpensesView('accounts')" id="expViewAccountsBtn" style="background:transparent;border:1px solid var(--primary, #2a7c6f);color:var(--primary, #2a7c6f);padding:6px 14px;border-radius:6px;font-family:'DM Sans',sans-serif;cursor:pointer;font-size:0.85rem;">Bank Accounts</button>
+          <button class="btn btn-primary" onclick="showExpensesView('transactions')" id="expViewTxnBtn" style="background:var(--primary, #2a7c6f);color:white;border:none;padding:6px 14px;border-radius:6px;font-family:'DM Sans',sans-serif;cursor:pointer;font-size:0.85rem;">Transactions</button>
+        </div>
+      </div>
+      <!-- Connected Accounts View -->
+      <div id="expAccountsView" style="display:none;">
+        <div id="plaidAccountsList"></div>
+        <div style="margin-top:16px;">
+          <button class="btn btn-primary" onclick="connectPlaidAccount()" id="connectPlaidBtn" style="background:var(--primary, #2a7c6f);color:white;border:none;padding:10px 20px;border-radius:6px;font-family:'DM Sans',sans-serif;cursor:pointer;">Connect Bank Account</button>
+        </div>
+      </div>
+      <!-- Transaction Review View -->
+      <div id="expTransactionsView">
+        <div style="display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">
+          <select id="expFilterStatus" onchange="loadExpenses()" style="padding:8px 10px;border:1px solid var(--border-color, #ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.85rem;background:var(--bg-primary, #fff);color:var(--text-primary, #333);">
+            <option value="unreviewed">Unreviewed</option>
+            <option value="all">All</option>
+            <option value="reviewed">Reviewed</option>
+          </select>
+          <select id="expFilterCategory" onchange="loadExpenses()" style="padding:8px 10px;border:1px solid var(--border-color, #ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.85rem;background:var(--bg-primary, #fff);color:var(--text-primary, #333);">
+            <option value="">All Categories</option>
+            <option value="materials">Materials</option>
+            <option value="booth_fee">Booth Fee</option>
+            <option value="shipping_supplies">Shipping Supplies</option>
+            <option value="travel">Travel</option>
+            <option value="marketing">Marketing</option>
+            <option value="equipment">Equipment</option>
+            <option value="software">Software</option>
+            <option value="payroll">Payroll</option>
+            <option value="taxes">Taxes</option>
+            <option value="other">Other</option>
+          </select>
+          <button class="btn" onclick="bulkApproveExpenses()" id="bulkApproveBtn" style="background:transparent;border:1px solid #16a34a;color:#16a34a;padding:6px 14px;border-radius:6px;font-family:'DM Sans',sans-serif;cursor:pointer;font-size:0.85rem;">Approve All Visible</button>
+        </div>
+        <div id="expSummaryBar" style="margin-bottom:16px;"></div>
+        <div id="expTransactionsList"></div>
+        <div id="expEmpty" style="color:var(--text-secondary, #888);font-size:0.9rem;display:none;">No expenses found. Connect a bank account or add expenses manually.</div>
+      </div>
+    </div>
+
     <!-- Events Organizer — moved to standalone app at ../events/index.html -->
 
     <!-- ===== PLACEHOLDER CONTAINER ===== -->
@@ -7717,6 +7762,30 @@ MastDB.contacts = {
   },
   googleContactId: function(id) { return MastDB._ref(this.PATH + '/' + id + '/googleContactId'); },
   subRef: function() { return MastDB._ref(this.PATH + '/' + Array.from(arguments).join('/')); }
+};
+
+MastDB.expenses = {
+  PATH: 'admin/expenses',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  list: function(opts) {
+    var ref = this.ref();
+    if (opts && opts.orderBy) ref = ref.orderByChild(opts.orderBy);
+    if (opts && opts.limit) ref = ref.limitToLast(opts.limit);
+    return ref.once('value');
+  },
+  get: function(id) { return this.ref(id).once('value'); },
+  set: function(id, data) { return this.ref(id).set(data); },
+  update: function(id, data) { return this.ref(id).update(data); },
+  remove: function(id) { return this.ref(id).remove(); },
+  summary: function(month) { return MastDB._ref('admin/expenseSummary/byMonth/' + month).once('value'); }
+};
+
+MastDB.plaidItems = {
+  PATH: 'admin/plaidItems',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  list: function() { return this.ref().once('value'); },
+  get: function(id) { return this.ref(id).once('value'); },
+  update: function(id, data) { return this.ref(id).update(data); }
 };
 
 MastDB.commissions = {
@@ -10273,7 +10342,7 @@ var ROUTE_MAP = {
   // financials route handled by financials module (lazy-loaded)
   'settings':    { tab: 'settingsTab' },
   // trips route handled by trips module (lazy-loaded)
-  'expenses':    { tab: null, placeholder: { name: 'Expenses', desc: 'Track business expenses, categorize for tax time.', badge: 'new' } },
+  // expenses route handled by expenses module (lazy-loaded)
   'reports':     { tab: null, placeholder: { name: 'Reports', desc: 'Tax reports, mileage summaries, expense exports.', badge: 'new' } },
   'book':        { tab: null, placeholder: { name: 'Book', desc: 'Coming when Studio 2 opens \u2014 classes, workshops, scheduling.', badge: 'future' } },
   // show routes handled by shows module (lazy-loaded)
@@ -10707,6 +10776,7 @@ var MODULE_MANIFEST = {
   trips: { src: 'modules/trips.js', routes: ['trips'] },
   wholesale: { src: 'modules/wholesale.js', routes: ['wholesale'] },
   financials: { src: 'modules/financials.js', routes: ['financials'] },
+  expenses: { src: 'modules/expenses.js', routes: ['expenses'] },
   shows: { src: 'modules/shows.js', routes: ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'] },
   production: { src: 'modules/production.js', routes: ['jobs', 'production', 'stories'] },
   contacts: { src: 'modules/contacts.js', routes: ['contacts'] },
