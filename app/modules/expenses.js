@@ -331,7 +331,7 @@ function renderExpensesList(expenses) {
 
   expenses.forEach(function(exp) {
     var amountStr = (exp.amount >= 0 ? '' : '-') + '$' + (Math.abs(exp.amount) / 100).toFixed(2);
-    var amountColor = exp.amount >= 0 ? 'var(--charcoal, #1A1A1A)' : '#16a34a';
+    var amountColor = exp.amount >= 0 ? 'inherit' : '#16a34a';
     var reviewedBorder = exp.reviewed ? '3px solid transparent' : '3px solid #f59e0b';
     var sourceIcon = exp.source === 'plaid' ? '\uD83C\uDFE6' : exp.source === 'csv_import' ? '\uD83D\uDCC4' : '\u270D\uFE0F';
 
@@ -408,7 +408,7 @@ async function showExpenseDetail(expenseId) {
 
     var exp = snap.val();
     var amountStr = (exp.amount >= 0 ? '' : '-') + '$' + (Math.abs(exp.amount) / 100).toFixed(2);
-    var amountColor = exp.amount >= 0 ? 'var(--charcoal, #1A1A1A)' : '#16a34a';
+    var amountColor = exp.amount >= 0 ? 'inherit' : '#16a34a';
     var sourceLabel = exp.source === 'plaid' ? 'Plaid' : exp.source === 'csv_import' ? 'CSV Import' : 'Manual';
     var sourceIcon = exp.source === 'plaid' ? '\uD83C\uDFE6' : exp.source === 'csv_import' ? '\uD83D\uDCC4' : '\u270D\uFE0F';
 
@@ -432,14 +432,14 @@ async function showExpenseDetail(expenseId) {
     if (exp.description) {
       h += '<div style="margin-bottom:16px;">';
       h += '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Description</label>';
-      h += '<div style="font-size:0.9rem;color:var(--charcoal, #1A1A1A);">' + esc(exp.description) + '</div>';
+      h += '<div style="font-size:0.9rem;color:inherit;">' + esc(exp.description) + '</div>';
       h += '</div>';
     }
 
     // Category
     h += '<div style="margin-bottom:16px;">';
     h += '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Category</label>';
-    h += '<select data-expense-id="' + esc(expenseId) + '" onchange="updateExpenseField(this.dataset.expenseId, \'category\', this.value)" style="padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;background:var(--cream, #FAF6F0);color:var(--charcoal, #1A1A1A);">';
+    h += '<select data-expense-id="' + esc(expenseId) + '" onchange="updateExpenseField(this.dataset.expenseId, \'category\', this.value)" style="padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;background:var(--cream, #FAF6F0);color:inherit;">';
     CATEGORIES.forEach(function(cat) {
       h += '<option value="' + cat.value + '"' + (exp.category === cat.value ? ' selected' : '') + '>' + cat.label + '</option>';
     });
@@ -449,7 +449,7 @@ async function showExpenseDetail(expenseId) {
     // Business Line
     h += '<div style="margin-bottom:16px;">';
     h += '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Business Line</label>';
-    h += '<select data-expense-id="' + esc(expenseId) + '" onchange="updateExpenseField(this.dataset.expenseId, \'businessLine\', this.value)" style="padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;background:var(--cream, #FAF6F0);color:var(--charcoal, #1A1A1A);">';
+    h += '<select data-expense-id="' + esc(expenseId) + '" onchange="updateExpenseField(this.dataset.expenseId, \'businessLine\', this.value)" style="padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;background:var(--cream, #FAF6F0);color:inherit;">';
     BUSINESS_LINES.forEach(function(bl) {
       h += '<option value="' + bl.value + '"' + ((exp.businessLine || '') === bl.value ? ' selected' : '') + '>' + bl.label + '</option>';
     });
@@ -459,7 +459,7 @@ async function showExpenseDetail(expenseId) {
     // Notes
     h += '<div style="margin-bottom:16px;">';
     h += '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Notes</label>';
-    h += '<textarea data-expense-id="' + esc(expenseId) + '" onblur="updateExpenseField(this.dataset.expenseId, \'notes\', this.value)" rows="3" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;background:var(--cream, #FAF6F0);color:var(--charcoal, #1A1A1A);resize:vertical;box-sizing:border-box;">' + esc(exp.notes || '') + '</textarea>';
+    h += '<textarea data-expense-id="' + esc(expenseId) + '" onblur="updateExpenseField(this.dataset.expenseId, \'notes\', this.value)" rows="3" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;background:var(--cream, #FAF6F0);color:inherit;resize:vertical;box-sizing:border-box;">' + esc(exp.notes || '') + '</textarea>';
     h += '</div>';
 
     h += '</div>'; // end details card
