@@ -8600,10 +8600,18 @@ function openCoinPurchaseModal(returnRoute, returnAction) {
   h += '<h3 style="margin:0 0 16px;font-family:\'Cormorant Garamond\',serif;font-size:1.3rem;">Token Wallet</h3>';
 
   // Status summary
+  var totalTokens = (w.currentBalance || 0) + (w.coinTokenSurplus || 0) + ((w.coinBalance || 0) * 100);
   h += '<div style="background:var(--cream-dark, #F0E8DB);border-radius:10px;padding:16px;margin-bottom:16px;">';
-  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
-  h += '<div><div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;">Monthly</div><div style="font-size:1.4rem;font-weight:700;">' + (w.currentBalance || 0) + '<span style="font-size:0.8rem;font-weight:400;opacity:0.7">/' + (w.monthlyAllocation || 0) + '</span></div></div>';
-  h += '<div><div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;">Coins</div><div style="font-size:1.4rem;font-weight:700;">' + (w.coinBalance || 0) + '</div></div>';
+  h += '<div style="display:flex;align-items:baseline;gap:6px;margin-bottom:12px;">';
+  h += '<div style="font-size:1.6rem;font-weight:700;">' + totalTokens.toLocaleString() + '</div>';
+  h += '<div style="font-size:0.85rem;color:var(--warm-gray);">tokens available</div>';
+  h += '</div>';
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr' + (w.coinTokenSurplus ? ' 1fr' : '') + ';gap:12px;">';
+  h += '<div><div style="font-size:0.7rem;color:var(--warm-gray);text-transform:uppercase;">Monthly</div><div style="font-size:1rem;font-weight:600;">' + (w.currentBalance || 0) + '<span style="font-size:0.75rem;font-weight:400;opacity:0.7">/' + (w.monthlyAllocation || 0) + '</span></div></div>';
+  h += '<div><div style="font-size:0.7rem;color:var(--warm-gray);text-transform:uppercase;">Coins</div><div style="font-size:1rem;font-weight:600;">' + (w.coinBalance || 0) + '</div></div>';
+  if (w.coinTokenSurplus) {
+    h += '<div><div style="font-size:0.7rem;color:var(--warm-gray);text-transform:uppercase;">Surplus</div><div style="font-size:1rem;font-weight:600;">' + w.coinTokenSurplus + '</div></div>';
+  }
   h += '</div>';
   if (w.status === 'suspended') {
     h += '<div style="margin-top:12px;padding:8px 12px;background:rgba(220,38,38,0.1);border-radius:6px;color:var(--danger);font-size:0.85rem;">AI features paused until ' + esc(resetDate) + ' or coin purchase.</div>';
