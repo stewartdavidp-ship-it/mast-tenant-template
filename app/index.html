@@ -8244,7 +8244,7 @@ MastDB.tokenLog = {
   PATH: 'tokenLog',
   ref: function(subpath) { return MastDB._ref(this.PATH + (subpath ? '/' + subpath : '')); },
   recent: function(limit) {
-    return this.ref().orderByChild('at').limitToLast(limit || 50).once('value');
+    return this.ref().limitToLast(limit || 50).once('value');
   }
 };
 
@@ -8488,8 +8488,8 @@ async function loadWalletHistory() {
     snap.forEach(function(child) { entries.push(child.val()); });
     // Filter to last 30 days
     var cutoff = Date.now() - (30 * 24 * 60 * 60 * 1000);
-    entries = entries.filter(function(e) { return e.at && new Date(e.at).getTime() > cutoff; });
-    entries.reverse(); // newest first
+    entries = entries.filter(function(e) { var ts = e.at || e.timestamp; return ts && new Date(ts).getTime() > cutoff; });
+    entries.sort(function(a, b) { return new Date(b.at || b.timestamp).getTime() - new Date(a.at || a.timestamp).getTime(); });
 
     if (entries.length === 0) {
       container.innerHTML = '<div style="padding:8px;font-size:0.8rem;color:var(--warm-gray);">No transactions in the last 30 days.</div>';
@@ -8498,12 +8498,13 @@ async function loadWalletHistory() {
 
     var h = '<div style="max-height:200px;overflow-y:auto;">';
     entries.forEach(function(e, i) {
-      var d = new Date(e.at);
+      var ts = e.at || e.timestamp;
+      var d = new Date(ts);
       var dateStr = (d.getMonth() + 1) + '/' + d.getDate();
       var isCredit = (e.type || '').indexOf('credit') >= 0 || (e.type || '').indexOf('reset') >= 0;
       var amtColor = isCredit ? 'var(--sage, #7A8B6F)' : 'var(--danger, #dc2626)';
       var amtPrefix = isCredit ? '+' : '\u2212';
-      var label = e.reason || e.type || 'Transaction';
+      var label = e.reason || e.description || e.type || 'Transaction';
       var bg = i % 2 === 0 ? 'transparent' : 'rgba(122,139,111,0.04)';
       h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;font-size:0.8rem;background:' + bg + ';border-radius:4px;">';
       h += '<span style="color:var(--warm-gray);min-width:36px;">' + dateStr + '</span>';
