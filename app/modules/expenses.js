@@ -56,7 +56,7 @@ function showExpensesView(view) {
 
 async function loadPlaidAccounts() {
   var container = document.getElementById('plaidAccountsList');
-  container.innerHTML = '<div class="loading">Loading connected accounts\u2026</div>';
+  container.innerHTML = '<div class="loading">Loading connected banks\u2026</div>';
 
   try {
     var snap = await MastDB.plaidItems.list();
@@ -69,15 +69,15 @@ async function loadPlaidAccounts() {
     if (keys.length === 0) {
       container.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray, #6B6560);">' +
         '<div style="font-size:2rem;margin-bottom:12px;">\uD83C\uDFE6</div>' +
-        '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No bank accounts connected</p>' +
+        '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No banks connected</p>' +
         '<p style="font-size:0.85rem;color:var(--warm-gray-light, #9B958E);">Connect a bank or credit card to automatically import transactions.</p>' +
-        '<p style="font-size:0.8rem;color:var(--warm-gray-light, #9B958E);margin-top:8px;">' + includedLimit + ' accounts included in your plan. Additional accounts cost 200 tokens/month.</p></div>';
+        '<p style="font-size:0.8rem;color:var(--warm-gray-light, #9B958E);margin-top:8px;">' + includedLimit + ' banks included in your plan. Additional banks cost 200 tokens/month.</p></div>';
       return;
     }
 
     var activeCount = keys.filter(function(k) { return items[k].status === 'active'; }).length;
     var h = '<div style="font-size:0.85rem;color:var(--warm-gray, #6B6560);margin-bottom:12px;">' +
-      activeCount + ' of ' + includedLimit + ' included accounts used' +
+      activeCount + ' of ' + includedLimit + ' included banks used' +
       (activeCount > includedLimit ? ' \u00B7 <span style="color:#f59e0b;">' + (activeCount - includedLimit) + ' extra (' + ((activeCount - includedLimit) * 200) + ' tokens/month)</span>' : '') +
       '</div>';
 
@@ -133,7 +133,7 @@ async function connectPlaidAccount() {
 
   // Rate limit (security: 10s cooldown)
   if (Date.now() - lastConnectAt < 10000) {
-    showToast('Please wait before connecting another account', true);
+    showToast('Please wait before connecting another bank', true);
     return;
   }
 
@@ -145,7 +145,7 @@ async function connectPlaidAccount() {
     var limitSnap = await MastDB._ref('admin/config/expenseSettings/plaidAccountLimit').once('value');
     var includedLimit = limitSnap.val() || 2;
     if (activeCount >= includedLimit) {
-      if (!confirm('You\'ve used your ' + includedLimit + ' included accounts.\n\nAdding another will cost 200 tokens/month. If you don\'t have enough tokens next month, this account will be automatically disconnected.\n\nContinue?')) {
+      if (!confirm('You\'ve used your ' + includedLimit + ' included banks.\n\nAdding another will cost 200 tokens/month. If you don\'t have enough tokens next month, this bank will be automatically disconnected.\n\nContinue?')) {
         return;
       }
     }
@@ -186,19 +186,19 @@ async function connectPlaidAccount() {
           showToast('Failed to connect: ' + esc(err.message), true);
         }
         btn.disabled = false;
-        btn.textContent = '+ Connect Bank Account';
+        btn.textContent = '+ Connect Bank';
       },
       onExit: function(err) {
         if (err) showToast('Plaid connection cancelled', true);
         btn.disabled = false;
-        btn.textContent = '+ Connect Bank Account';
+        btn.textContent = '+ Connect Bank';
       }
     });
     handler.open();
   } catch (err) {
     showToast('Failed to start Plaid connection: ' + esc(err.message), true);
     btn.disabled = false;
-    btn.textContent = '+ Connect Bank Account';
+    btn.textContent = '+ Connect Bank';
   }
 }
 
@@ -217,11 +217,11 @@ async function syncPlaidItem(itemId) {
 }
 
 async function disconnectPlaidItem(itemId) {
-  if (!confirm('Disconnect this bank account? Existing imported transactions will remain.')) return;
+  if (!confirm('Disconnect this bank? Existing imported transactions will remain.')) return;
   try {
     var disconnectFn = firebase.functions().httpsCallable('disconnectPlaidItem');
     await disconnectFn({ tenantId: MastDB.tenantId(), itemId: itemId });
-    showToast('Account disconnected');
+    showToast('Bank disconnected');
     loadPlaidAccounts();
   } catch (err) {
     showToast('Disconnect failed: ' + esc(err.message), true);
