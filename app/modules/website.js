@@ -2764,7 +2764,7 @@
     renderWebsite();
   };
 
-  function markUnpublished() {
+  window.markUnpublished = function markUnpublished() {
     if (websiteConfig.status === 'published') {
       websiteConfig.status = 'draft';
       MastDB._ref('webPresence/config/status').set('draft');

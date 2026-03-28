@@ -15,6 +15,13 @@
   var templateManifest = null;
   var navSections = null;
 
+  // --- Mark unpublished (shared with website module) ---
+  function markUnpublished() {
+    if (window.markUnpublished) return window.markUnpublished();
+    // Fallback if website module not loaded yet
+    MastDB._ref('webPresence/config/updatedAt').set(new Date().toISOString());
+  }
+
   // --- Debounce helper ---
   var debounceTimers = {};
   function debounce(key, fn, delay) {
