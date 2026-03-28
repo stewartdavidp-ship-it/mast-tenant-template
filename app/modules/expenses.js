@@ -30,7 +30,7 @@ var expensesCache = [];
 var accountLookup = {}; // plaidAccountId → { name, mask, institution }
 var plaidLinkLoaded = false;
 
-var PLAID_BANK_LIMITS = { 'free': 0, 'publish': 1, 'launch': 1, 'operate': 2, 'command': 5 };
+var PLAID_BANK_LIMITS = { 'free': 0, 'publish': 2, 'launch': 2, 'operate': 3, 'command': 5 };
 
 // Custom confirm dialog (dark mode compliant, replaces native confirm())
 function expConfirm(title, message, confirmLabel, onConfirm, cancelLabel) {
@@ -96,7 +96,7 @@ async function loadPlaidAccounts() {
         '<div style="font-size:2rem;margin-bottom:12px;">\uD83C\uDFE6</div>' +
         '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No banks connected</p>' +
         '<p style="font-size:0.85rem;color:var(--warm-gray-light, #9B958E);">Connect a bank or credit card to automatically import transactions.</p>' +
-        '<p style="font-size:0.8rem;color:var(--warm-gray-light, #9B958E);margin-top:8px;">' + includedLimit + ' banks included in your plan. Additional banks cost 200 tokens/month.</p></div>';
+        '<p style="font-size:0.8rem;color:var(--warm-gray-light, #9B958E);margin-top:8px;">' + includedLimit + ' banks included in your plan. Additional banks cost 100 tokens/month.</p></div>';
       return;
     }
 
@@ -175,7 +175,7 @@ async function connectPlaidAccount() {
     }
 
     if (activeCount >= includedLimit) {
-      var EXTRA_COST = 200;
+      var EXTRA_COST = 100;
       var w = getTokenWallet();
       var availableTokens = (w.currentBalance || 0) + (w.coinTokenSurplus || 0) + ((w.coinBalance || 0) * 100);
 
