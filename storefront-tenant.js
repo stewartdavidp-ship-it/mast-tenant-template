@@ -24,7 +24,7 @@ var TENANT_FIREBASE_CONFIG = null;
 var TENANT_BRAND = null;
 
 var PLATFORM_RTDB_BASE = 'https://mast-platform-prod-default-rtdb.firebaseio.com/mast-platform';
-var CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+var CACHE_TTL_MS = 60 * 1000; // 1 minute
 
 window.TENANT_READY = new Promise(function(resolve, reject) {
   // --- helpers ---
