@@ -8594,7 +8594,7 @@ function openCoinPurchaseModal(returnRoute, returnAction) {
   var tier = TIER_CONFIG[sub.tier] || {};
   var resetDate = w.lastResetAt ? new Date(new Date(w.lastResetAt).getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString() : 'next billing cycle';
 
-  var h = '<div style="padding:20px;max-width:480px;position:relative;">';
+  var h = '<div style="padding:20px;position:relative;">';
   h += '<button class="modal-close" onclick="closeModal()" style="position:absolute;top:12px;right:12px;">&times;</button>';
   h += '<h3 style="margin:0 0 16px;font-family:\'Cormorant Garamond\',serif;font-size:1.3rem;">Token Wallet</h3>';
 
