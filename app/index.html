@@ -8446,7 +8446,10 @@ function renderTokenBalanceIndicator() {
 }
 
 // Coin purchase modal
-function openCoinPurchaseModal() {
+var _coinPurchaseReturnRoute = null;
+
+function openCoinPurchaseModal(returnRoute) {
+  _coinPurchaseReturnRoute = returnRoute || null;
   var w = getTokenWallet();
   var sub = getTenantSubscription();
   var tier = TIER_CONFIG[sub.tier] || {};
@@ -8518,7 +8521,7 @@ async function purchaseCoins() {
     var resp = await callCF('/createCoinCheckout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ tenantId: MastDB.tenantId(), coins: coins })
+      body: JSON.stringify({ tenantId: MastDB.tenantId(), coins: coins, returnRoute: _coinPurchaseReturnRoute || undefined })
     });
     var data = await resp.json();
     if (data.sessionUrl) {
