@@ -186,8 +186,8 @@ async function syncPlaidItem(itemId) {
     var result = await syncFn({ tenantId: MastDB.tenantId(), itemId: itemId });
     var d = result.data;
     showToast('Synced: ' + d.imported + ' new, ' + d.updated + ' updated, ' + d.removed + ' removed');
-    loadPlaidAccounts();
-    if (currentView === 'transactions') loadExpenses();
+    // Auto-switch to transactions view to show imported expenses
+    showExpensesView('transactions');
   } catch (err) {
     showToast('Sync failed: ' + err.message, true);
     loadPlaidAccounts();
