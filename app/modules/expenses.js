@@ -26,6 +26,7 @@ var BUSINESS_LINES = [
 
 var currentView = 'transactions';
 var expensesCache = [];
+var accountLookup = {}; // plaidAccountId → { name, mask, institution }
 var plaidLinkLoaded = false;
 var lastConnectAt = 0;
 
@@ -237,8 +238,38 @@ async function loadExpenses() {
   emptyEl.style.display = 'none';
 
   try {
+    // Build account lookup for display names
+    try {
+      var itemsSnap = await MastDB.plaidItems.list();
+      var plaidItems = itemsSnap.val() || {};
+      accountLookup = {};
+      Object.values(plaidItems).forEach(function(item) {
+        if (item.accounts) {
+          item.accounts.forEach(function(acct) {
+            accountLookup[acct.accountId] = {
+              name: acct.name || acct.type,
+              mask: acct.mask || '????',
+              institution: item.institutionName || 'Unknown'
+            };
+          });
+        }
+      });
+      // Populate account filter dropdown
+      var acctFilter = document.getElementById('expFilterAccount');
+      if (acctFilter) {
+        var currentVal = acctFilter.value;
+        var opts = '<option value="">All Accounts</option>';
+        Object.keys(accountLookup).forEach(function(acctId) {
+          var a = accountLookup[acctId];
+          opts += '<option value="' + esc(acctId) + '"' + (currentVal === acctId ? ' selected' : '') + '>' + esc(a.institution) + ' \u2022\u2022' + esc(a.mask) + '</option>';
+        });
+        acctFilter.innerHTML = opts;
+      }
+    } catch (e) { /* non-critical */ }
+
     var statusFilter = document.getElementById('expFilterStatus').value;
     var categoryFilter = document.getElementById('expFilterCategory').value;
+    var accountFilter = document.getElementById('expFilterAccount') ? document.getElementById('expFilterAccount').value : '';
 
     var ref = MastDB.expenses.ref();
     var snap;
@@ -257,6 +288,9 @@ async function loadExpenses() {
 
     if (categoryFilter) {
       expenses = expenses.filter(function(e) { return e.category === categoryFilter; });
+    }
+    if (accountFilter) {
+      expenses = expenses.filter(function(e) { return e.plaidAccountId === accountFilter; });
     }
 
     expenses.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
@@ -312,8 +346,12 @@ function renderExpensesList(expenses) {
     if (exp.pending) h += ' <span class="status-badge" style="background:#f59e0b;color:white;">pending</span>';
     h += '</div>';
     h += '<div style="font-size:0.8rem;color:var(--warm-gray, #6B6560);margin-top:2px;">' + esc(exp.date || '');
+    if (exp.plaidAccountId && accountLookup[exp.plaidAccountId]) {
+      var acctInfo = accountLookup[exp.plaidAccountId];
+      h += ' \u00B7 ' + esc(acctInfo.institution) + ' \u2022\u2022' + esc(acctInfo.mask);
+    }
     if (exp.description && exp.merchantName && exp.description !== exp.merchantName) {
-      h += ' \u00B7 ' + esc(exp.description.substring(0, 50));
+      h += ' \u00B7 ' + esc(exp.description.substring(0, 40));
     }
     h += '</div>';
 
