@@ -217,21 +217,18 @@
     if (!root) return;
 
     if (!loaded) {
-      root.innerHTML = '<div class="loading">Loading homepage editor...</div>';
+      root.innerHTML = '<div class="loading">Loading page builder...</div>';
       await loadData();
     }
 
-    var html = '<div class="section-header"><h2>Homepage</h2></div>';
+    var html = '<div class="section-header"><h2>Page Builder</h2></div>';
 
-    // Top: Edit View (selected section details)
-    html += '<div class="hp-edit-view">';
-    html += renderEditView();
-    html += '</div>';
-
-    // Bottom: Section Cards
-    html += '<div style="margin-top:8px;">';
-    html += '<h3 style="font-size:0.95rem;margin-bottom:8px;color:var(--warm-gray);">Sections</h3>';
+    // Top: Section Cards
     html += renderSectionCards();
+
+    // Bottom: Edit View (selected section details)
+    html += '<div class="hp-edit-view" style="margin-top:12px;">';
+    html += renderEditView();
     html += '</div>';
 
     root.innerHTML = html;
