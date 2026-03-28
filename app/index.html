@@ -19462,6 +19462,10 @@ async function saveImage(imageId) {
     pendingFilename = null;
 
     closeModal();
+    // Re-render homepage after modal closes so changes appear immediately
+    if (window.currentRoute === 'homepage' && typeof window.renderHomepage === 'function') {
+      setTimeout(function() { window.renderHomepage(); }, 100);
+    }
   } catch (err) {
     showToast('Error saving image: ' + err.message, true);
   }
@@ -20121,6 +20125,10 @@ async function saveGalleryFromLibrary(sectionId, imageUrl, libraryImageId) {
     await writeAudit('create', 'gallery', galRef.key);
     showToast('Image added to ' + sectionId + '.');
     closeModal();
+    // Re-render homepage after modal closes so new image appears immediately
+    if (window.currentRoute === 'homepage' && typeof renderHomepage === 'function') {
+      setTimeout(function() { renderHomepage(); }, 100);
+    }
   } catch (err) {
     showToast('Error: ' + err.message, true);
   }

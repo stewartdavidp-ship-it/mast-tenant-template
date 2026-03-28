@@ -212,7 +212,7 @@
   }
 
   // --- Main render ---
-  async function renderHomepage() {
+  window.renderHomepage = async function renderHomepage() {
     var root = document.getElementById('homepageModuleRoot');
     if (!root) return;
 
