@@ -208,9 +208,15 @@
       .sort(function(a, b) { return (a[1].order || 0) - (b[1].order || 0); });
   }
 
+  // Sections whose gallery images are rendered on the storefront
+  var IMAGE_CAPABLE_SECTIONS = ['hero', 'gallery', 'about', 'our-story', 'shop', 'schedule'];
+
   function hasImageCapability(sectionId) {
-    // All sections can have gallery images
-    return true;
+    // Only show image controls for sections the storefront actually renders gallery images for
+    if (IMAGE_CAPABLE_SECTIONS.indexOf(sectionId) !== -1) return true;
+    // Also include any product category sections (dynamic)
+    if (typeof SHOP_SECTION_IDS !== 'undefined' && SHOP_SECTION_IDS.indexOf(sectionId) !== -1) return true;
+    return false;
   }
 
   // --- Main render ---
