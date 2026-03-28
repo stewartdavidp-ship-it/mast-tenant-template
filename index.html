@@ -503,12 +503,14 @@
     grid-template-columns: repeat(var(--gallery-columns, 4), 1fr);
     gap: 4px;
   }
-  .gallery-grid.masonry {
+  .gallery-grid.masonry,
+  .gallery-grid[data-variant="masonry"] {
     display: block;
     columns: var(--gallery-columns, 4);
     column-gap: 4px;
   }
-  .gallery-grid.masonry .gallery-item {
+  .gallery-grid.masonry .gallery-item,
+  .gallery-grid[data-variant="masonry"] .gallery-item {
     break-inside: avoid;
     margin-bottom: 4px;
     aspect-ratio: auto;
