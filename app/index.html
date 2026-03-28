@@ -8536,7 +8536,11 @@ async function renderWalletUpcoming() {
       var itemsSnap = await MastDB.plaidItems.list();
       var allItems = itemsSnap.val() || {};
       var activeCount = Object.values(allItems).filter(function(i) { return i.status === 'active'; }).length;
-      var includedLimit = typeof getPlaidBankLimit === 'function' ? getPlaidBankLimit() : 1;
+      // Bank limits per plan (mirrors PLAID_BANK_LIMITS in expenses module)
+      var bankLimits = { 'free': 0, 'publish': 2, 'launch': 2, 'operate': 3, 'command': 5 };
+      var sub = getTenantSubscription();
+      var plan = sub.plan || sub.tier || 'publish';
+      var includedLimit = bankLimits[plan] !== undefined ? bankLimits[plan] : 1;
       var extraBanks = Math.max(0, activeCount - includedLimit);
       extraBankCost = extraBanks * 100;
     }
@@ -8590,7 +8594,8 @@ function openCoinPurchaseModal(returnRoute, returnAction) {
   var tier = TIER_CONFIG[sub.tier] || {};
   var resetDate = w.lastResetAt ? new Date(new Date(w.lastResetAt).getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString() : 'next billing cycle';
 
-  var h = '<div style="padding:20px;max-width:480px;">';
+  var h = '<div style="padding:20px;max-width:480px;position:relative;">';
+  h += '<button class="modal-close" onclick="closeModal()" style="position:absolute;top:12px;right:12px;">&times;</button>';
   h += '<h3 style="margin:0 0 16px;font-family:\'Cormorant Garamond\',serif;font-size:1.3rem;">Token Wallet</h3>';
 
   // Status summary
