@@ -8240,6 +8240,14 @@ MastDB.tokenWallet = {
   unlisten: function(handle) { this.ref().off('value', handle); }
 };
 
+MastDB.tokenLog = {
+  PATH: 'tokenLog',
+  ref: function(subpath) { return MastDB._ref(this.PATH + (subpath ? '/' + subpath : '')); },
+  recent: function(limit) {
+    return this.ref().orderByChild('at').limitToLast(limit || 50).once('value');
+  }
+};
+
 MastDB.showLight = {
   profile: {
     PATH: 'showLight/profile',
@@ -8445,20 +8453,145 @@ function renderTokenBalanceIndicator() {
     '</span>';
 }
 
-// Coin purchase modal
+// Wallet modal
 var _coinPurchaseReturnRoute = null;
 var _coinPurchaseReturnAction = null;
+var _walletHistoryCache = null;
+
+function toggleWalletSection(sectionId) {
+  var el = document.getElementById(sectionId);
+  var arrow = document.getElementById(sectionId + 'Arrow');
+  if (!el) return;
+  if (el.style.display === 'none') {
+    el.style.display = 'block';
+    if (arrow) arrow.textContent = '\u25be';
+    if (sectionId === 'walletHistory' && !el.dataset.loaded) {
+      loadWalletHistory();
+    }
+    if (sectionId === 'walletUpcoming' && !el.dataset.loaded) {
+      renderWalletUpcoming();
+    }
+  } else {
+    el.style.display = 'none';
+    if (arrow) arrow.textContent = '\u25b8';
+  }
+}
+
+async function loadWalletHistory() {
+  var container = document.getElementById('walletHistory');
+  if (!container) return;
+  container.dataset.loaded = '1';
+  container.innerHTML = '<div style="padding:8px;font-size:0.8rem;color:var(--warm-gray);">Loading...</div>';
+  try {
+    var snap = await MastDB.tokenLog.recent(50);
+    var entries = [];
+    snap.forEach(function(child) { entries.push(child.val()); });
+    // Filter to last 30 days
+    var cutoff = Date.now() - (30 * 24 * 60 * 60 * 1000);
+    entries = entries.filter(function(e) { return e.at && new Date(e.at).getTime() > cutoff; });
+    entries.reverse(); // newest first
+
+    if (entries.length === 0) {
+      container.innerHTML = '<div style="padding:8px;font-size:0.8rem;color:var(--warm-gray);">No transactions in the last 30 days.</div>';
+      return;
+    }
+
+    var h = '<div style="max-height:200px;overflow-y:auto;">';
+    entries.forEach(function(e, i) {
+      var d = new Date(e.at);
+      var dateStr = (d.getMonth() + 1) + '/' + d.getDate();
+      var isCredit = (e.type || '').indexOf('credit') >= 0 || (e.type || '').indexOf('reset') >= 0;
+      var amtColor = isCredit ? 'var(--sage, #7A8B6F)' : 'var(--danger, #dc2626)';
+      var amtPrefix = isCredit ? '+' : '\u2212';
+      var label = e.reason || e.type || 'Transaction';
+      var bg = i % 2 === 0 ? 'transparent' : 'rgba(122,139,111,0.04)';
+      h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;font-size:0.8rem;background:' + bg + ';border-radius:4px;">';
+      h += '<span style="color:var(--warm-gray);min-width:36px;">' + dateStr + '</span>';
+      h += '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(label) + '</span>';
+      h += '<span style="color:' + amtColor + ';font-weight:600;min-width:48px;text-align:right;">' + amtPrefix + Math.abs(e.amount || 0) + '</span>';
+      if (e.balanceAfter !== undefined) {
+        h += '<span style="color:var(--warm-gray);font-size:0.7rem;min-width:36px;text-align:right;">' + e.balanceAfter + '</span>';
+      }
+      h += '</div>';
+    });
+    h += '</div>';
+    container.innerHTML = h;
+  } catch (err) {
+    container.innerHTML = '<div style="padding:8px;font-size:0.8rem;color:var(--danger);">Failed to load history.</div>';
+  }
+}
+
+async function renderWalletUpcoming() {
+  var container = document.getElementById('walletUpcoming');
+  if (!container) return;
+  container.dataset.loaded = '1';
+  var w = getTokenWallet();
+  var allocation = w.monthlyAllocation || 0;
+  var borrowed = w.borrowedAmount || 0;
+
+  // Count extra bank connections
+  var extraBankCost = 0;
+  try {
+    if (typeof MastDB !== 'undefined' && MastDB.plaidItems) {
+      var itemsSnap = await MastDB.plaidItems.list();
+      var allItems = itemsSnap.val() || {};
+      var activeCount = Object.values(allItems).filter(function(i) { return i.status === 'active'; }).length;
+      var includedLimit = typeof getPlaidBankLimit === 'function' ? getPlaidBankLimit() : 1;
+      var extraBanks = Math.max(0, activeCount - includedLimit);
+      extraBankCost = extraBanks * 100;
+    }
+  } catch (e) { /* ignore — expenses module may not be loaded */ }
+
+  var net = allocation - borrowed - extraBankCost;
+
+  var h = '<div style="padding:4px 0;">';
+  // Line items
+  h += '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:0.85rem;">';
+  h += '<span>Monthly allocation</span>';
+  h += '<span style="color:var(--sage, #7A8B6F);font-weight:600;">+' + allocation + '</span>';
+  h += '</div>';
+
+  if (borrowed > 0) {
+    h += '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:0.85rem;">';
+    h += '<span>Borrowed payback</span>';
+    h += '<span style="color:var(--danger, #dc2626);font-weight:600;">\u2212' + borrowed + '</span>';
+    h += '</div>';
+  }
+
+  if (extraBankCost > 0) {
+    var extraCount = extraBankCost / 100;
+    h += '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:0.85rem;">';
+    h += '<span>Extra bank' + (extraCount > 1 ? 's' : '') + ' (' + extraCount + ' over limit)</span>';
+    h += '<span style="color:var(--danger, #dc2626);font-weight:600;">\u2212' + extraBankCost + '</span>';
+    h += '</div>';
+  }
+
+  if (borrowed > 0 || extraBankCost > 0) {
+    h += '<div style="border-top:1px solid var(--cream-dark, #F0E8DB);margin:6px 0;"></div>';
+    var netColor = net >= 0 ? 'var(--sage, #7A8B6F)' : 'var(--danger, #dc2626)';
+    h += '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:0.85rem;font-weight:600;">';
+    h += '<span>Est. available after reset</span>';
+    h += '<span style="color:' + netColor + ';">' + net + '</span>';
+    h += '</div>';
+  } else {
+    h += '<div style="padding:4px 0;font-size:0.8rem;color:var(--warm-gray);">No recurring charges. Full allocation available at reset.</div>';
+  }
+
+  h += '</div>';
+  container.innerHTML = h;
+}
 
 function openCoinPurchaseModal(returnRoute, returnAction) {
   _coinPurchaseReturnRoute = returnRoute || null;
   _coinPurchaseReturnAction = returnAction || null;
+  _walletHistoryCache = null;
   var w = getTokenWallet();
   var sub = getTenantSubscription();
   var tier = TIER_CONFIG[sub.tier] || {};
   var resetDate = w.lastResetAt ? new Date(new Date(w.lastResetAt).getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString() : 'next billing cycle';
 
-  var h = '<div style="padding:20px;">';
-  h += '<h3 style="margin:0 0 16px;font-family:\'Cormorant Garamond\',serif;font-size:1.3rem;">Token Balance</h3>';
+  var h = '<div style="padding:20px;max-width:480px;">';
+  h += '<h3 style="margin:0 0 16px;font-family:\'Cormorant Garamond\',serif;font-size:1.3rem;">Token Wallet</h3>';
 
   // Status summary
   h += '<div style="background:var(--cream-dark, #F0E8DB);border-radius:10px;padding:16px;margin-bottom:16px;">';
@@ -8474,16 +8607,37 @@ function openCoinPurchaseModal(returnRoute, returnAction) {
   h += '<div style="margin-top:8px;font-size:0.75rem;color:var(--warm-gray);">Resets: ' + esc(resetDate) + '</div>';
   h += '</div>';
 
+  // Expandable: Upcoming Charges
+  h += '<div style="border-top:1px solid var(--cream-dark, #F0E8DB);padding:0;">';
+  h += '<div onclick="toggleWalletSection(\'walletUpcoming\')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:10px 0;font-size:0.9rem;font-weight:600;">';
+  h += '<span>Upcoming Charges</span>';
+  h += '<span id="walletUpcomingArrow" style="font-size:0.75rem;color:var(--warm-gray);">\u25b8</span>';
+  h += '</div>';
+  h += '<div id="walletUpcoming" style="display:none;padding-bottom:8px;"></div>';
+  h += '</div>';
+
+  // Expandable: Transaction History
+  h += '<div style="border-top:1px solid var(--cream-dark, #F0E8DB);padding:0;">';
+  h += '<div onclick="toggleWalletSection(\'walletHistory\')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:10px 0;font-size:0.9rem;font-weight:600;">';
+  h += '<span>Transaction History</span>';
+  h += '<span id="walletHistoryArrow" style="font-size:0.75rem;color:var(--warm-gray);">\u25b8</span>';
+  h += '</div>';
+  h += '<div id="walletHistory" style="display:none;padding-bottom:8px;"></div>';
+  h += '</div>';
+
   // Purchase section
+  h += '<div style="border-top:1px solid var(--cream-dark, #F0E8DB);padding-top:16px;margin-top:4px;">';
   h += '<h4 style="margin:0 0 8px;font-size:0.95rem;">Buy Coins</h4>';
   h += '<p style="font-size:0.8rem;color:var(--warm-gray);margin:0 0 12px;">1 coin = 100 tokens = $1. Minimum 10 coins ($10). Coins never expire.</p>';
   h += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">';
-  h += '<input type="number" id="coinPurchaseAmount" min="10" value="25" step="5" style="width:80px;padding:8px 12px;border:1px solid var(--cream-dark);border-radius:8px;font-size:1rem;text-align:center;" />';
+  h += '<input type="number" id="coinPurchaseAmount" min="10" value="10" step="5" style="width:80px;padding:8px 12px;border:1px solid var(--cream-dark);border-radius:8px;font-size:1rem;text-align:center;" />';
   h += '<span style="font-size:0.9rem;color:var(--warm-gray);">coins</span>';
-  h += '<span style="margin-left:auto;font-size:1.1rem;font-weight:600;" id="coinPurchaseTotal">$25</span>';
+  h += '<span style="margin-left:auto;font-size:1.1rem;font-weight:600;" id="coinPurchaseTotal">$10</span>';
   h += '</div>';
-  h += '<div style="font-size:0.75rem;color:var(--warm-gray);margin-bottom:16px;" id="coinPurchaseEstimate">2,500 tokens ≈ 750 Studio Assistant calls</div>';
+  h += '<div style="font-size:0.75rem;color:var(--warm-gray);margin-bottom:16px;" id="coinPurchaseEstimate">1,000 tokens \u2248 303 Studio Assistant calls</div>';
   h += '<button onclick="purchaseCoins()" id="coinPurchaseBtn" style="width:100%;padding:12px;background:var(--amber, #C4853C);color:white;border:none;border-radius:8px;font-size:1rem;font-weight:600;cursor:pointer;">Purchase Coins</button>';
+  h += '</div>';
+
   h += '</div>';
 
   openModal(h);
@@ -8502,7 +8656,7 @@ function openCoinPurchaseModal(returnRoute, returnAction) {
         if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; }
       } else {
         if (totalEl) totalEl.textContent = '$' + val;
-        if (estEl) { estEl.textContent = (val * 100).toLocaleString() + ' tokens ≈ ' + Math.floor(val * 100 / 3.3).toLocaleString() + ' Studio Assistant calls'; estEl.style.color = 'var(--warm-gray)'; }
+        if (estEl) { estEl.textContent = (val * 100).toLocaleString() + ' tokens \u2248 ' + Math.floor(val * 100 / 3.3).toLocaleString() + ' Studio Assistant calls'; estEl.style.color = 'var(--warm-gray)'; }
         if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
       }
     });
