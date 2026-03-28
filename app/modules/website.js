@@ -716,6 +716,168 @@
     return html;
   }
 
+  // ── Layout & Scale Controls (design scale, nav style, responsive priority) ──
+  function renderLayoutScaleControls() {
+    var html = '';
+    var tc = themeConfig || {};
+    var m = templateManifest || {};
+
+    // Current values — override > manifest default
+    var currentScale = tc.designScale || m.designScale || 'standard';
+    var currentNav = tc.navStyle || m.navStyle || 'top-bar';
+    var currentResPri = tc.responsivePriority || m.responsivePriority || 'balanced';
+
+    // Manifest defaults for warning comparison
+    var defaultScale = m.designScale || 'standard';
+    var defaultNav = m.navStyle || 'top-bar';
+    var defaultResPri = m.responsivePriority || 'balanced';
+
+    html += '<h3 style="font-size:1rem;margin-bottom:12px;">Layout & Scale</h3>';
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:24px;">';
+
+    // Design Scale dropdown
+    html += '<div class="wp-field-group">';
+    html += '<label style="font-size:0.8rem;">Design Scale</label>';
+    html += '<select onchange="wpUpdateThemeField(\'designScale\', this.value)" style="width:100%;">';
+    [['standard', 'Standard', 'Balanced spacing & type sizes'],
+     ['editorial', 'Editorial', 'Generous whitespace, large type'],
+     ['compact', 'Compact', 'Dense, mobile-friendly']].forEach(function(opt) {
+      html += '<option value="' + opt[0] + '"' + (currentScale === opt[0] ? ' selected' : '') + '>' + opt[1] + '</option>';
+    });
+    html += '</select>';
+    html += '<div style="font-size:0.7rem;color:var(--warm-gray);margin-top:2px;">';
+    if (currentScale !== defaultScale) {
+      html += 'Default: ' + defaultScale;
+    } else {
+      html += '&nbsp;';
+    }
+    html += '</div>';
+    html += '</div>';
+
+    // Nav Style dropdown
+    html += '<div class="wp-field-group">';
+    html += '<label style="font-size:0.8rem;">Navigation</label>';
+    html += '<select onchange="wpUpdateThemeField(\'navStyle\', this.value)" style="width:100%;">';
+    [['top-bar', 'Top Bar', 'Full links across top'],
+     ['minimal', 'Minimal', 'Hamburger menu only'],
+     ['bottom-bar', 'Bottom Bar', 'App-style bottom nav']].forEach(function(opt) {
+      html += '<option value="' + opt[0] + '"' + (currentNav === opt[0] ? ' selected' : '') + '>' + opt[1] + '</option>';
+    });
+    html += '</select>';
+    html += '<div style="font-size:0.7rem;color:var(--warm-gray);margin-top:2px;">';
+    if (currentNav !== defaultNav) {
+      html += 'Default: ' + defaultNav;
+    } else {
+      html += '&nbsp;';
+    }
+    html += '</div>';
+    html += '</div>';
+
+    // Responsive Priority dropdown
+    html += '<div class="wp-field-group">';
+    html += '<label style="font-size:0.8rem;">Optimized For</label>';
+    html += '<select onchange="wpUpdateThemeField(\'responsivePriority\', this.value)" style="width:100%;">';
+    [['balanced', 'Balanced', 'Works equally on all devices'],
+     ['desktop', 'Desktop', 'Large screens, visual impact'],
+     ['mobile', 'Mobile', 'Phone-first, quick browsing']].forEach(function(opt) {
+      html += '<option value="' + opt[0] + '"' + (currentResPri === opt[0] ? ' selected' : '') + '>' + opt[1] + '</option>';
+    });
+    html += '</select>';
+    html += '<div style="font-size:0.7rem;color:var(--warm-gray);margin-top:2px;">';
+    if (currentResPri !== defaultResPri) {
+      html += 'Default: ' + defaultResPri;
+    } else {
+      html += '&nbsp;';
+    }
+    html += '</div>';
+    html += '</div>';
+
+    html += '</div>'; // close grid
+
+    // Conflict warnings
+    var warnings = getLayoutConflictWarnings(currentScale, currentNav, currentResPri, m);
+    if (warnings.length > 0) {
+      html += '<div style="margin-bottom:20px;padding:10px 14px;border-radius:8px;background:rgba(255,180,0,0.1);border:1px solid rgba(255,180,0,0.25);">';
+      warnings.forEach(function(w) {
+        html += '<div style="font-size:0.8rem;color:#e8a735;margin-bottom:4px;">&#9888; ' + esc(w) + '</div>';
+      });
+      html += '</div>';
+    }
+
+    return html;
+  }
+
+  function getLayoutConflictWarnings(scale, nav, resPri, manifest) {
+    var warnings = [];
+    var defaultResPri = manifest.responsivePriority || 'balanced';
+
+    // Scale vs responsive priority
+    if (resPri === 'mobile' && scale === 'editorial') {
+      warnings.push('Editorial spacing means more scrolling on mobile. Your site is optimized for phone users.');
+    }
+    if (resPri === 'desktop' && scale === 'compact') {
+      warnings.push('Compact spacing reduces visual impact on large screens. Your site is designed for desktop viewing.');
+    }
+
+    // Nav vs responsive priority
+    if (resPri === 'mobile' && nav === 'top-bar') {
+      warnings.push('Top bar navigation takes more space on phone screens. Consider Minimal or Bottom Bar for mobile-first sites.');
+    }
+    if (resPri === 'desktop' && nav === 'bottom-bar') {
+      warnings.push('Bottom bar navigation is uncommon on desktop sites. Consider Top Bar for desktop-forward experiences.');
+    }
+
+    // Responsive priority changed from template default
+    if (resPri !== defaultResPri && defaultResPri !== 'balanced') {
+      warnings.push('This template was designed as ' + defaultResPri + '-forward. Changing this may affect how sections look on your primary audience\'s devices.');
+    }
+
+    return warnings;
+  }
+
+  // ── Section Variant Picker (for hero, gallery, product-grid) ──
+  function renderSectionVariantPicker(sectionId) {
+    var VARIANT_OPTIONS = {
+      hero: [
+        { id: 'full-bleed', label: 'Full Bleed', desc: 'Full-width background' },
+        { id: 'split-image', label: 'Split Image', desc: 'Image + text side by side' },
+        { id: 'minimal-text', label: 'Minimal Text', desc: 'Large text, subtle background' }
+      ],
+      gallery: [
+        { id: 'grid', label: 'Grid', desc: 'Even columns' },
+        { id: 'masonry', label: 'Masonry', desc: 'Pinterest-style' },
+        { id: 'carousel', label: 'Carousel', desc: 'Swipeable row' }
+      ],
+      'product-grid': [
+        { id: 'card', label: 'Card', desc: 'Standard product cards' },
+        { id: 'compact', label: 'Compact', desc: 'Dense, small images' }
+      ]
+    };
+
+    var options = VARIANT_OPTIONS[sectionId];
+    if (!options) return '';
+
+    var tc = themeConfig || {};
+    var m = templateManifest || {};
+    var variantKey = sectionId === 'product-grid' ? 'productGridVariant' : sectionId + 'Variant';
+    var currentVariant = tc[variantKey] || m[variantKey] || options[0].id;
+    var defaultVariant = m[variantKey] || options[0].id;
+
+    var html = '<select onclick="event.stopPropagation();" onchange="wpUpdateThemeField(\'' + variantKey + '\', this.value)" style="font-size:0.75rem;padding:3px 6px;border-radius:6px;background:var(--charcoal-light, #333);color:var(--text-primary, #e0e0e0);border:1px solid var(--charcoal-light, #444);cursor:pointer;min-width:100px;">';
+    options.forEach(function(opt) {
+      var selected = currentVariant === opt.id ? ' selected' : '';
+      html += '<option value="' + opt.id + '"' + selected + ' title="' + esc(opt.desc) + '">' + esc(opt.label) + '</option>';
+    });
+    html += '</select>';
+
+    // Show "Default" hint if overridden
+    if (currentVariant !== defaultVariant) {
+      html += '<span style="font-size:0.65rem;color:var(--warm-gray);margin-left:4px;" title="Template default: ' + esc(defaultVariant) + '">&#8226; customized</span>';
+    }
+
+    return html;
+  }
+
   // ── Manifest-driven Style Tab (color schemes, font pairs from manifest) ──
   function renderManifestStyleTab() {
     var html = '';
@@ -727,6 +889,9 @@
     html += '<span style="font-size:0.85rem;color:var(--warm-gray);">Template:</span>';
     html += '<strong style="font-size:0.95rem;">' + esc(templateManifest.name || 'Unknown') + '</strong>';
     html += '</div>';
+
+    // ── Layout & Scale ──
+    html += renderLayoutScaleControls();
 
     // ── Color Schemes ──
     html += '<h3 style="font-size:1rem;margin-bottom:12px;">Color Scheme</h3>';
@@ -912,13 +1077,18 @@
           html += '<span class="toggle-slider"></span>';
           html += '</label>';
         }
-        html += '<div>';
+        html += '<div style="flex:1;">';
         html += '<strong>' + esc(slot.label) + '</strong>';
         if (slot.prominent) {
           html += '<span style="font-size:0.7rem;color:var(--accent);margin-left:6px;">Prominent</span>';
         }
         html += '<div style="font-size:0.75rem;color:var(--warm-gray);margin-top:2px;">' + esc(slot.description || '') + '</div>';
         html += '</div>';
+        // Variant picker (hero, gallery, product-grid)
+        var variantHtml = renderSectionVariantPicker(slot.id);
+        if (variantHtml) {
+          html += '<div style="display:flex;align-items:center;gap:4px;" onclick="event.stopPropagation();">' + variantHtml + '</div>';
+        }
         html += '</div>';
         html += '<span style="font-size:0.8rem;color:var(--warm-gray);">' + (expanded ? '&#9650;' : '&#9660;') + '</span>';
         html += '</div>';
@@ -2059,6 +2229,14 @@
         await MastDB._ref('public/config/theme/fontPair').set(defaultFontId);
       }
 
+      // Clear layout/variant overrides so new template defaults apply
+      await MastDB._ref('public/config/theme/designScale').set(null);
+      await MastDB._ref('public/config/theme/navStyle').set(null);
+      await MastDB._ref('public/config/theme/responsivePriority').set(null);
+      await MastDB._ref('public/config/theme/heroVariant').set(null);
+      await MastDB._ref('public/config/theme/galleryVariant').set(null);
+      await MastDB._ref('public/config/theme/productGridVariant').set(null);
+
       // Invalidate gallery cache so it reloads with updated data
       window._wpGalleryCache = null;
 
@@ -2152,6 +2330,30 @@
       await MastDB._ref('public/config/theme/fontPair').set(fontPairId);
       markUnpublished();
       showToast('Font pair updated.');
+    } catch (err) {
+      showToast('Error: ' + err.message, true);
+    }
+    renderWebsite();
+  };
+
+  // Generic theme field update (design scale, nav style, responsive priority, variants)
+  window.wpUpdateThemeField = async function(field, value) {
+    if (!themeConfig) themeConfig = {};
+    themeConfig[field] = value;
+    try {
+      await MastDB._ref('public/config/theme/' + field).set(value);
+      markUnpublished();
+
+      // Friendly field labels
+      var labels = {
+        designScale: 'Design scale',
+        navStyle: 'Navigation style',
+        responsivePriority: 'Device optimization',
+        heroVariant: 'Hero layout',
+        galleryVariant: 'Gallery layout',
+        productGridVariant: 'Product grid layout'
+      };
+      showToast((labels[field] || field) + ' updated.');
     } catch (err) {
       showToast('Error: ' + err.message, true);
     }
