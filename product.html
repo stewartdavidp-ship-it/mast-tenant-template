@@ -881,6 +881,7 @@
 <script src="storefront-nav.js"></script>
 <script src="tenant-brand.js?v=2"></script>
 <!-- Firebase SDK — loaded after storefront scripts so nav/theme render first -->
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
@@ -1136,7 +1137,7 @@
       // Description
       if (p.description) {
         var descEl = document.getElementById('productDescription');
-        descEl.innerHTML = p.description;
+        descEl.innerHTML = typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(p.description) : escHtml(p.description);
         descEl.style.display = 'block';
       }
 
@@ -1508,6 +1509,23 @@
     }
     var resolvedPrice = onSale && saleCents != null ? formatPriceCents(saleCents) : formatPriceCents(baseCents);
     var resolvedCents = onSale && saleCents != null ? saleCents : baseCents;
+    // Compute available stock for strict-mode products
+    var cartAvailableStock = null;
+    var cartSi = p.stockInfo;
+    if (cartSi) {
+      var cartStockType = cartSi.stockType;
+      var cartIsStrict = cartStockType === 'strict' || cartStockType === 'in-stock' || cartStockType === 'limited';
+      if (cartIsStrict) {
+        var cartRequired = window._requiredOptions || [];
+        if (cartRequired.length > 0 && cartSi.variants) {
+          var cartCk = cartRequired.map(function(l) { return (window._selectedOptions || {})[l]; }).join('|');
+          var cartV = cartSi.variants[cartCk];
+          if (cartV) cartAvailableStock = Math.max(0, (cartV.available || 0) - (cartV.reserved || 0));
+        } else {
+          cartAvailableStock = Math.max(0, (cartSi.totalAvailable || 0) - (cartSi.totalReserved || 0));
+        }
+      }
+    }
     MastCart.addItem({
       pid: p.pid,
       name: p.name,
@@ -1519,7 +1537,8 @@
       originalPrice: onSale ? formatPriceCents(baseCents) : null,
       salePriceCents: onSale ? saleCents : null,
       leadTimeText: window._productLeadTimeText || null,
-      stockType: (p.stockInfo && p.stockInfo.stockType) || null
+      stockType: (p.stockInfo && p.stockInfo.stockType) || null,
+      availableStock: cartAvailableStock
     });
     MastCart.showToast(p.name + ' added to cart');
   });

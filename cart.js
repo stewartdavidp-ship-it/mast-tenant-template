@@ -116,10 +116,17 @@
     if (!item || !item.pid || !item.name) return cart;
 
     var maxQty = item.isWholesale ? MAX_QTY_WHOLESALE : MAX_QTY;
+    // For strict-mode products, cap at available stock
+    if (typeof item.availableStock === 'number' && item.availableStock > 0) {
+      maxQty = Math.min(maxQty, item.availableStock);
+    }
     var key = optionKey(item.pid, item.options);
     for (var i = 0; i < cart.length; i++) {
       if (optionKey(cart[i].pid, cart[i].options) === key) {
         var itemMax = cart[i].isWholesale ? MAX_QTY_WHOLESALE : MAX_QTY;
+        if (typeof cart[i].availableStock === 'number' && cart[i].availableStock > 0) {
+          itemMax = Math.min(itemMax, cart[i].availableStock);
+        }
         cart[i].qty = Math.min((cart[i].qty || 1) + (item.qty || 1), itemMax);
         persist();
         trackEvent('cart_add', item.pid);
@@ -143,6 +150,7 @@
       salePriceCents: item.salePriceCents || null,
       leadTimeText: item.leadTimeText || null,
       stockType: item.stockType || null,
+      availableStock: typeof item.availableStock === 'number' ? item.availableStock : null,
       addedAt: Date.now()
     };
     cart.push(newItem);
@@ -175,6 +183,9 @@
     for (var i = 0; i < cart.length; i++) {
       if (cart[i].cartItemId === cartItemId) {
         var itemMaxQty = cart[i].isWholesale ? MAX_QTY_WHOLESALE : MAX_QTY;
+        if (typeof cart[i].availableStock === 'number' && cart[i].availableStock > 0) {
+          itemMaxQty = Math.min(itemMaxQty, cart[i].availableStock);
+        }
         qty = Math.min(qty, itemMaxQty);
         cart[i].qty = qty;
         persist();
@@ -562,6 +573,9 @@
         : '<div class="cart-item-img" style="display:flex;align-items:center;justify-content:center;color:#9B958E;font-size:1.5rem;">&#9670;</div>';
 
       var itemMaxQty = item.isWholesale ? MAX_QTY_WHOLESALE : MAX_QTY;
+      if (typeof item.availableStock === 'number' && item.availableStock > 0) {
+        itemMaxQty = Math.min(itemMaxQty, item.availableStock);
+      }
       var qtyHtml;
       if (item.isWholesale) {
         // Wholesale: editable input for qty
@@ -577,7 +591,7 @@
             (item.qty <= 1 ? ' disabled' : '') + '>&minus;</button>' +
           '<span class="qty-value">' + item.qty + '</span>' +
           '<button class="qty-btn" data-action="inc" data-id="' + escAttr(item.cartItemId) + '"' +
-            (item.qty >= MAX_QTY ? ' disabled' : '') + '>+</button>' +
+            (item.qty >= itemMaxQty ? ' disabled' : '') + '>+</button>' +
         '</div>';
       }
 
