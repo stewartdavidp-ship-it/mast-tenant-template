@@ -16812,9 +16812,9 @@ function renderInventoryOverview() {
     var rowOpacity = r.availability === 'discontinued' ? 'opacity:0.6;' : '';
     var leadTimeStr = '';
     if (isBTORow || isSTBRow) {
-      leadTimeStr = r.productionLeadTimeDays ? r.productionLeadTimeDays + 'd' : '<span style="color:var(--warm-gray-light);">—</span>';
+      leadTimeStr = typeof r.productionLeadTimeDays === 'number' ? r.productionLeadTimeDays + 'd' : '<span style="color:var(--warm-gray-light);">—</span>';
     } else {
-      leadTimeStr = r.stockFulfillmentDays ? r.stockFulfillmentDays + 'd' : '<span style="color:var(--warm-gray-light);">—</span>';
+      leadTimeStr = typeof r.stockFulfillmentDays === 'number' ? r.stockFulfillmentDays + 'd' : '<span style="color:var(--warm-gray-light);">—</span>';
     }
 
     var isExpanded = expandedInventoryPid === r.pid;
@@ -16858,6 +16858,11 @@ function toggleInventoryExpand(pid) {
   renderInventoryOverview();
 }
 
+function safeElId(str) {
+  // Encode a variant key into a safe element ID (alphanumeric + dashes)
+  return str.replace(/[^a-zA-Z0-9_-]/g, function(ch) { return '_' + ch.charCodeAt(0).toString(16); });
+}
+
 function renderVariantDrillDown(pid) {
   var product = productsData.find(function(p) { return p.pid === pid; });
   if (!product) return '';
@@ -16893,20 +16898,21 @@ function renderVariantDrillDown(pid) {
     if (editingVariantKey === key) {
       var leadOverride = entry.productionLeadTimeDaysOverride || '';
       var fulfillOverride = entry.stockFulfillmentDaysOverride || '';
+      var safeKey = safeElId(key);
       html += '<tr><td colspan="5">' +
         '<div style="font-weight:500;font-size:0.82rem;margin-bottom:6px;">' + esc(comboLabel) + '</div>' +
         '<div class="inv-variant-edit">' +
           '<div><label style="font-size:0.7rem;display:block;margin-bottom:2px;">Mode Override</label>' +
-            '<select id="varOverrideMode_' + esc(key) + '">' +
+            '<select id="varOverrideMode_' + safeKey + '">' +
               '<option value="">Inherit (' + esc(modeLabel) + ')</option>' +
               '<option value="strict"' + (modeOverride === 'strict' ? ' selected' : '') + '>Strict</option>' +
               '<option value="stock-to-build"' + (modeOverride === 'stock-to-build' ? ' selected' : '') + '>Stock to Build</option>' +
               '<option value="build-to-order"' + (modeOverride === 'build-to-order' ? ' selected' : '') + '>Build to Order</option>' +
             '</select></div>' +
           '<div><label style="font-size:0.7rem;display:block;margin-bottom:2px;">Prod Lead (days)</label>' +
-            '<input type="number" id="varOverrideLead_' + esc(key) + '" min="0" value="' + leadOverride + '" placeholder="' + (inv.productionLeadTimeDays || '—') + '" style="width:70px;"></div>' +
+            '<input type="number" id="varOverrideLead_' + safeKey + '" min="0" value="' + leadOverride + '" placeholder="' + (typeof inv.productionLeadTimeDays === 'number' ? inv.productionLeadTimeDays : '—') + '" style="width:70px;"></div>' +
           '<div><label style="font-size:0.7rem;display:block;margin-bottom:2px;">Fulfill (days)</label>' +
-            '<input type="number" id="varOverrideFulfill_' + esc(key) + '" min="0" value="' + fulfillOverride + '" placeholder="' + (inv.stockFulfillmentDays || 2) + '" style="width:70px;"></div>' +
+            '<input type="number" id="varOverrideFulfill_' + safeKey + '" min="0" value="' + fulfillOverride + '" placeholder="' + (typeof inv.stockFulfillmentDays === 'number' ? inv.stockFulfillmentDays : 2) + '" style="width:70px;"></div>' +
           '<button class="btn btn-primary btn-small" data-pid="' + esc(pid) + '" data-key="' + esc(key) + '" onclick="saveVariantOverrides(this.dataset.pid, this.dataset.key)">Save</button>' +
           '<button class="btn btn-secondary btn-small" onclick="editingVariantKey=null;renderInventoryOverview();">Cancel</button>' +
         '</div>' +
@@ -16926,9 +16932,10 @@ function renderVariantDrillDown(pid) {
 }
 
 async function saveVariantOverrides(pid, key) {
-  var modeEl = document.getElementById('varOverrideMode_' + key);
-  var leadEl = document.getElementById('varOverrideLead_' + key);
-  var fulfillEl = document.getElementById('varOverrideFulfill_' + key);
+  var safeKey = safeElId(key);
+  var modeEl = document.getElementById('varOverrideMode_' + safeKey);
+  var leadEl = document.getElementById('varOverrideLead_' + safeKey);
+  var fulfillEl = document.getElementById('varOverrideFulfill_' + safeKey);
   if (!modeEl) return;
 
   var updates = {};
