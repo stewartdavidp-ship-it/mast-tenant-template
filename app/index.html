@@ -15983,7 +15983,9 @@ async function syncStockInfoToPublic(pid) {
     var product = productsData.find(function(p) { return p.pid === pid; });
     if (!product) return;
     var stockType = inv.stockType || 'build-to-order';
-    var stock = inv.stock || {};
+    var rawStock = inv.stock;
+    // Handle flat stock number (e.g., stock: 4 from MCP update_inventory)
+    var stock = (typeof rawStock === 'number') ? { _default: { available: rawStock, reserved: 0 } } : (rawStock || {});
     var totalAvailable = 0, totalReserved = 0;
     var variants = {};
     Object.keys(stock).forEach(function(key) {
@@ -16008,8 +16010,8 @@ async function syncStockInfoToPublic(pid) {
       totalAvailable: totalAvailable,
       totalReserved: totalReserved,
       lowStockThreshold: inv.lowStockThreshold || 2,
-      productionLeadTimeDays: inv.productionLeadTimeDays || null,
-      stockFulfillmentDays: inv.stockFulfillmentDays || 2,
+      productionLeadTimeDays: typeof inv.productionLeadTimeDays === 'number' ? inv.productionLeadTimeDays : null,
+      stockFulfillmentDays: typeof inv.stockFulfillmentDays === 'number' ? inv.stockFulfillmentDays : 2,
       updatedAt: new Date().toISOString()
     };
     if (product.options && product.options.length > 0 && Object.keys(variants).length > 0) {
@@ -16023,6 +16025,8 @@ async function syncStockInfoToPublic(pid) {
 
 function getInventoryTotals(inv) {
   if (!inv || !inv.stock) return { available: 0, reserved: 0 };
+  // Handle flat stock number (e.g., stock: 4 from MCP update_inventory)
+  if (typeof inv.stock === 'number') return { available: inv.stock, reserved: 0 };
   // If _default summary exists (has available property), use it as the source of truth
   if (inv.stock._default && typeof inv.stock._default.available === 'number') {
     return {
@@ -16867,7 +16871,8 @@ function renderVariantDrillDown(pid) {
   var product = productsData.find(function(p) { return p.pid === pid; });
   if (!product) return '';
   var inv = inventory[pid] || {};
-  var stock = inv.stock || {};
+  var rawStock = inv.stock;
+  var stock = (typeof rawStock === 'number') ? { _default: { available: rawStock, reserved: 0 } } : (rawStock || {});
   var stockType = inv.stockType || 'build-to-order';
   var variantInfo = getProductVariantCombos(product);
   if (!variantInfo.combos.length) return '<div style="color:var(--warm-gray-light);font-size:0.8rem;">No variants</div>';
