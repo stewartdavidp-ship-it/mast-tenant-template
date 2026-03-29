@@ -396,8 +396,7 @@
     routes: {
       promotions: {
         tab: 'promotionsTab',
-        setup: function() { loadPromotions(); },
-        placeholder: 'promotionsLoading'
+        setup: function() { loadPromotions(); }
       }
     },
     lazyLoad: function() { loadPromotions(); },

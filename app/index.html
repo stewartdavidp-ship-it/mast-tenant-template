@@ -10707,7 +10707,7 @@ var ROUTE_MAP = {
 var SECTION_ROUTES = {
   'make':   ['jobs', 'production', 'procurement'],
   'market': ['social', 'blog', 'newsletter', 'stories'],
-  'sell':   ['pos', 'orders', 'commissions', 'wholesale', 'galleries', 'receipts', 'coupons'],
+  'sell':   ['pos', 'orders', 'commissions', 'wholesale', 'galleries', 'receipts', 'coupons', 'promotions'],
   'show':   ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'],
   'ship':   ['pack', 'ship'],
   'run':    ['trips', 'expenses', 'reports', 'financials', 'contacts', 'customers', 'email-log'],
@@ -10716,7 +10716,7 @@ var SECTION_ROUTES = {
   'manage': ['products', 'inventory', 'employees', 'analytics', 'auditlog', 'settings']
 };
 
-var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab'];
+var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab'];
 
 var currentRoute = 'dashboard';
 
@@ -22373,7 +22373,7 @@ async function executeClone(sourcePid) {
 // Add Product to Sale Dialog
 // ============================================================
 function openAddToSaleDialog(pid) {
-  var product = products[pid];
+  var product = productsData.find(function(p) { return p.pid === pid; });
   if (!product) { showToast('Product not found', true); return; }
 
   // Read active promotions
