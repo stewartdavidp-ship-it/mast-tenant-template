@@ -482,7 +482,7 @@ window.TENANT_READY.then(function() {
       var d = si.stockFulfillmentDays || 2;
       return 'Ships in ' + d + ' day' + (d !== 1 ? 's' : '');
     }
-    if (si.productionLeadTimeDays) {
+    if (typeof si.productionLeadTimeDays === 'number' && si.productionLeadTimeDays > 0) {
       var ld = si.productionLeadTimeDays;
       return ld >= 7 ? 'Made to order \u2014 ' + Math.round(ld / 7) + 'wk' : 'Made to order \u2014 ' + ld + 'd';
     }

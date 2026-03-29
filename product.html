@@ -1265,11 +1265,19 @@
         if (p.stockInfo && p.stockInfo.variants) {
           var siType = p.stockInfo.stockType;
           var isStrictMode = (siType === 'strict' || siType === 'in-stock' || siType === 'limited');
-          if (isStrictMode && normalizedOptions.length === 1) {
+          if (normalizedOptions.length === 1) {
             // Single option dimension — can check each chip directly
             normalizedOptions[0].choices.forEach(function(choice) {
               var vStock = p.stockInfo.variants[choice];
-              if (vStock && (vStock.available - (vStock.reserved || 0)) <= 0) {
+              if (vStock) {
+                var variantMode = vStock.inventoryModeOverride || siType;
+                var variantStrict = (variantMode === 'strict' || variantMode === 'in-stock' || variantMode === 'limited');
+                if (variantStrict && (vStock.available - (vStock.reserved || 0)) <= 0) {
+                  var chip = document.querySelector('.product-option-chip[data-value="' + choice + '"]');
+                  if (chip) chip.classList.add('unavailable');
+                }
+              } else if (isStrictMode) {
+                // No variant data for this choice — if product is strict, mark unavailable
                 var chip = document.querySelector('.product-option-chip[data-value="' + choice + '"]');
                 if (chip) chip.classList.add('unavailable');
               }
@@ -1413,11 +1421,19 @@
     if (si) {
       var stockType = si.stockType;
       var isStrict = stockType === 'strict' || stockType === 'in-stock' || stockType === 'limited';
-      if (allSelected && required.length > 0 && isStrict && si.variants) {
-        // Check per-variant stock
+      if (allSelected && required.length > 0 && si.variants) {
+        // Check per-variant stock, respecting variant-level mode overrides
         var comboKey = required.map(function(l) { return selected[l]; }).join('|');
         var vStock = si.variants[comboKey];
-        if (vStock && (vStock.available - (vStock.reserved || 0)) <= 0) {
+        if (vStock) {
+          var variantMode = vStock.inventoryModeOverride || stockType;
+          var variantStrict = variantMode === 'strict' || variantMode === 'in-stock' || variantMode === 'limited';
+          if (variantStrict && (vStock.available - (vStock.reserved || 0)) <= 0) {
+            stockBlocked = true;
+            btnText = 'Unavailable';
+          }
+        } else if (isStrict) {
+          // No variant stock data — fall back to product-level check
           stockBlocked = true;
           btnText = 'Unavailable';
         }
@@ -1453,9 +1469,9 @@
       if (ltEl && si.variants && si.variants[ck]) {
         var vEff = (si.variants[ck].available || 0) - (si.variants[ck].reserved || 0);
         var ltText = '';
-        if (vEff > 0 && si.stockFulfillmentDays) {
+        if (vEff > 0 && typeof si.stockFulfillmentDays === 'number' && si.stockFulfillmentDays > 0) {
           ltText = 'Ships in ' + si.stockFulfillmentDays + ' business day' + (si.stockFulfillmentDays !== 1 ? 's' : '');
-        } else if (si.productionLeadTimeDays) {
+        } else if (typeof si.productionLeadTimeDays === 'number' && si.productionLeadTimeDays > 0) {
           var ld = si.productionLeadTimeDays;
           ltText = ld >= 7 ? 'Made to order \u2014 ' + Math.round(ld / 7) + ' week' + (Math.round(ld / 7) !== 1 ? 's' : '') : 'Made to order \u2014 ' + ld + ' day' + (ld !== 1 ? 's' : '');
         }
@@ -1862,7 +1878,7 @@
     var v = si.variants[comboKey];
     var effective = (v.available || 0) - (v.reserved || 0);
     var badges = (config && config.badges) || {};
-    var stockType = si.stockType;
+    var stockType = v.inventoryModeOverride || si.stockType;
     if (stockType === 'strict' || stockType === 'in-stock' || stockType === 'limited') {
       if (effective <= 0) return { text: 'Sold Out', cssClass: 'sold-out' };
       var threshold = (si.lowStockThreshold) || 2;
@@ -1870,7 +1886,10 @@
         return { text: (badges.lowStock || 'Only {n} Left').replace('{n}', effective), cssClass: 'low-stock' };
       }
     }
-    if (stockType === 'stock-to-build' && effective <= 0) {
+    if ((stockType === 'stock-to-build') && effective <= 0) {
+      return { text: badges.madeToOrder || 'Made to Order', cssClass: 'made-to-order' };
+    }
+    if (stockType === 'build-to-order' || stockType === 'made-to-order') {
       return { text: badges.madeToOrder || 'Made to Order', cssClass: 'made-to-order' };
     }
     return null;
@@ -1893,7 +1912,7 @@
       var days2 = si.stockFulfillmentDays || 2;
       return 'Ships in ' + days2 + ' business day' + (days2 !== 1 ? 's' : '');
     }
-    if (si.productionLeadTimeDays) {
+    if (typeof si.productionLeadTimeDays === 'number' && si.productionLeadTimeDays > 0) {
       var ld = si.productionLeadTimeDays;
       if (ld >= 7) {
         var weeks = Math.round(ld / 7);
