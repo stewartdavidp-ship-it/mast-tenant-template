@@ -188,7 +188,7 @@
     h += '</div>';
 
     // Footer
-    h += '<div class="portal-footer">Powered by <strong>Mast</strong></div>';
+    h += '<div class="portal-footer">Powered by <strong>Mast</strong> &middot; <a href="https://runmast.com/privacy" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;">Privacy</a></div>';
 
     app.innerHTML = h;
   }

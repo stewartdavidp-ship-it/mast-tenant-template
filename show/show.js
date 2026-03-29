@@ -327,7 +327,7 @@
     }
 
     // ── Footer ───────────────────────────────────────────────────
-    html += '<div class="show-footer">Powered by Mast</div>';
+    html += '<div class="show-footer">Powered by Mast &middot; <a href="https://runmast.com/privacy" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;">Privacy</a></div>';
 
     app.innerHTML = html;
 
