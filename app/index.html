@@ -11255,8 +11255,8 @@ function loadNotificationsSettings() {
   if (!listEl) return;
   if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Loading alert preferences...</span>';
 
-  // Read platform alert definitions
-  var platformRef = firebase.app().database('https://mast-platform-prod-default-rtdb.firebaseio.com').ref('mast-platform/alertDefinitions');
+  // Read platform alert definitions (same RTDB as tenant data)
+  var platformRef = firebase.database().ref('mast-platform/alertDefinitions');
   var tenantId = MastDB.tenantId();
   var overridesRef = MastDB._ref('config/alerts');
 
