@@ -4941,7 +4941,7 @@
         <div class="sidebar-item" data-route="employees" onclick="navigateTo('employees')">Employees &amp; Permissions</div>
         <div class="sidebar-item" data-route="analytics" onclick="navigateTo('analytics')">Analytics</div>
         <div class="sidebar-item" data-route="auditlog" onclick="navigateTo('auditlog')">Audit Log</div>
-        <div class="sidebar-item" data-route="settings" onclick="navigateTo('settings')">Settings &amp; Integrations <span id="settingsSandboxBadge" style="display:none;background:#f59e0b;color:#fff;font-size:0.65rem;padding:2px 6px;border-radius:4px;margin-left:4px;font-weight:700;vertical-align:middle;">SANDBOX</span></div>
+        <div class="sidebar-item" data-route="settings" onclick="navigateTo('settings')">Settings &amp; Integrations <span id="sidebarAlertBadge" class="sidebar-badge alert" style="display:none;"></span> <span id="settingsSandboxBadge" style="display:none;background:#f59e0b;color:#fff;font-size:0.65rem;padding:2px 6px;border-radius:4px;margin-left:4px;font-weight:700;vertical-align:middle;">SANDBOX</span></div>
         <div class="sidebar-item" id="testingModeItem" onclick="toggleTestingMode()" style="display:none;">🧪 Testing Mode</div>
       </div>
     </div>
@@ -6274,6 +6274,7 @@
         <button class="view-tab" onclick="switchSettingsSubView('ai')">AI</button>
         <button class="view-tab" onclick="switchSettingsSubView('subscription')">Subscription</button>
         <button class="view-tab" onclick="switchSettingsSubView('about')">About</button>
+        <button class="view-tab" onclick="switchSettingsSubView('notifications')">Notifications <span id="settingsNotifBadge" class="sidebar-badge alert" style="display:none;margin-left:4px;"></span></button>
       </div>
       <div id="settingsSubAbout" style="display:none;padding-top:16px;">
         <div id="aboutContent"></div>
@@ -6799,6 +6800,22 @@
         <div class="form-group" id="emailDomainSection" style="margin-top:16px;border-top:1px solid rgba(255,255,255,0.06);padding-top:16px;">
           <label style="font-size:1rem;font-weight:600;">Email Sending Domain</label>
           <div id="emailDomainContent"></div>
+        </div>
+      </div>
+
+      <!-- Notifications Settings Sub-Tab -->
+      <div id="settingsSubNotifications" style="display:none;max-width:700px;">
+        <div class="form-group">
+          <label style="font-size:1.1rem;font-weight:600;">Alert Notifications</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
+            Configure which business alerts you receive and how they're delivered. Alerts are evaluated automatically every 4 hours.
+          </p>
+          <div id="notificationsConfigStatus" style="margin-bottom:12px;font-size:0.85rem;"></div>
+          <div id="notificationsAlertList"></div>
+        </div>
+        <div class="form-group" style="margin-top:24px;border-top:1px solid rgba(255,255,255,0.06);padding-top:16px;">
+          <label style="font-size:1rem;font-weight:600;">Recent Alert History</label>
+          <div id="notificationsHistoryList" style="margin-top:12px;"></div>
         </div>
       </div>
 
@@ -10510,6 +10527,7 @@ auth.onAuthStateChanged(async function(user) {
   await loadTenantCategories();
   await loadTenantSubscription();
   loadTokenWallet(); // Start listening for token balance (non-blocking)
+  initAlertBadgeListener(); // Start listening for unread alerts (non-blocking)
   // --- End Tenant Resolution ---
 
   // Load user role from Firebase (auto-provisions as guest if new)
@@ -11158,7 +11176,7 @@ function getModuleForRouteManifest(route) {
 // ============================================================
 // Settings Sub-Tabs
 // ============================================================
-var settingsSubViews = ['general', 'payments', 'shipping', 'tax', 'email', 'integrations', 'workshop', 'trips', 'storefront', 'dashboard', 'domains', 'ai', 'subscription', 'about'];
+var settingsSubViews = ['general', 'payments', 'shipping', 'tax', 'email', 'integrations', 'workshop', 'trips', 'storefront', 'dashboard', 'domains', 'ai', 'subscription', 'about', 'notifications'];
 function switchSettingsSubView(view) {
   // Hide all sub-views
   settingsSubViews.forEach(function(v) {
@@ -11186,6 +11204,7 @@ function switchSettingsSubView(view) {
   if (view === 'ai') loadAiIntegrations();
   if (view === 'subscription') renderSubscriptionSettings();
   if (view === 'about') renderAboutSettings();
+  if (view === 'notifications') loadNotificationsSettings();
 }
 
 // ============================================================
@@ -11220,6 +11239,249 @@ function renderAboutSettings() {
   h += '<p style="margin-top:16px;font-size:0.8rem;color:var(--warm-gray);">Powered by Mast &mdash; runmast.com</p>';
   h += '</div>';
   el.innerHTML = h;
+}
+
+// ============================================================
+// Notifications Settings
+// ============================================================
+
+var _notificationsLoaded = false;
+var _alertHistoryListener = null;
+var _unreadAlertCount = 0;
+
+function loadNotificationsSettings() {
+  var statusEl = document.getElementById('notificationsConfigStatus');
+  var listEl = document.getElementById('notificationsAlertList');
+  if (!listEl) return;
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Loading alert preferences...</span>';
+
+  // Read platform alert definitions
+  var platformRef = firebase.app().database('https://mast-platform-prod-default-rtdb.firebaseio.com').ref('mast-platform/alertDefinitions');
+  var tenantId = MastDB.tenantId();
+  var overridesRef = MastDB._ref('config/alerts');
+
+  Promise.all([
+    platformRef.once('value'),
+    overridesRef.once('value')
+  ]).then(function(results) {
+    var definitions = results[0].val() || {};
+    var overrides = results[1].val() || {};
+    if (statusEl) statusEl.innerHTML = '';
+
+    var defList = Object.values(definitions).sort(function(a, b) { return (a.category || '').localeCompare(b.category || ''); });
+    if (defList.length === 0) {
+      listEl.innerHTML = '<p style="color:var(--warm-gray);">No alert definitions configured.</p>';
+      return;
+    }
+
+    // Group by category
+    var categories = {};
+    defList.forEach(function(def) {
+      var cat = def.category || 'other';
+      if (!categories[cat]) categories[cat] = [];
+      categories[cat].push(def);
+    });
+
+    var h = '';
+    var catLabels = { inventory: 'Inventory', orders: 'Orders', integrations: 'Integrations', tokens: 'AI Tokens' };
+    Object.keys(categories).forEach(function(cat) {
+      h += '<div style="margin-bottom:20px;">';
+      h += '<h4 style="font-family:\'Cormorant Garamond\',serif;font-size:1.1rem;color:var(--charcoal);margin:0 0 8px;text-transform:capitalize;">' + (catLabels[cat] || cat) + '</h4>';
+      h += '<div style="border:1px solid var(--cream-dark);border-radius:8px;overflow:hidden;">';
+
+      categories[cat].forEach(function(def, idx) {
+        var override = overrides[def.id] || {};
+        var enabled = override.enabled != null ? override.enabled : def.defaultEnabled;
+        var threshold = override.threshold != null ? override.threshold : def.defaultThreshold;
+        var delivery = override.delivery || def.defaultDelivery || ['in-app'];
+        var hasEmail = delivery.indexOf('email') >= 0;
+        var hasInApp = delivery.indexOf('in-app') >= 0;
+
+        var severityColor = def.severity === 'critical' ? '#ef4444' : def.severity === 'warning' ? '#f59e0b' : '#3b82f6';
+        var borderTop = idx > 0 ? 'border-top:1px solid var(--cream-dark);' : '';
+
+        h += '<div style="padding:12px 16px;background:var(--cream);' + borderTop + 'display:flex;align-items:center;gap:12px;flex-wrap:wrap;">';
+
+        // Toggle
+        h += '<label style="display:flex;align-items:center;cursor:pointer;flex-shrink:0;">';
+        h += '<input type="checkbox" ' + (enabled ? 'checked' : '') + ' onchange="toggleAlertEnabled(\'' + def.id + '\', this.checked)" style="width:16px;height:16px;cursor:pointer;">';
+        h += '</label>';
+
+        // Name + severity badge
+        h += '<div style="flex:1;min-width:150px;">';
+        h += '<div style="display:flex;align-items:center;gap:6px;">';
+        h += '<span style="font-weight:600;font-size:0.9rem;color:var(--charcoal);">' + def.name + '</span>';
+        h += '<span style="font-size:0.65rem;padding:1px 6px;border-radius:3px;background:' + severityColor + ';color:white;font-weight:600;text-transform:uppercase;">' + def.severity + '</span>';
+        h += '</div>';
+        h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">' + def.description + '</div>';
+        h += '</div>';
+
+        // Threshold input (if applicable)
+        if (def.defaultThreshold != null && def.thresholdUnit) {
+          h += '<div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">';
+          h += '<input type="number" value="' + (threshold || '') + '" min="0" style="width:60px;padding:4px 8px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.85rem;background:white;color:var(--charcoal);" ';
+          h += 'onchange="updateAlertThreshold(\'' + def.id + '\', this.value)">';
+          h += '<span style="font-size:0.78rem;color:var(--warm-gray);">' + (def.thresholdUnit || '') + '</span>';
+          h += '</div>';
+        }
+
+        // Delivery checkboxes
+        h += '<div style="display:flex;gap:8px;flex-shrink:0;">';
+        h += '<label style="font-size:0.78rem;color:var(--warm-gray);display:flex;align-items:center;gap:3px;cursor:pointer;">';
+        h += '<input type="checkbox" ' + (hasEmail ? 'checked' : '') + ' onchange="updateAlertDelivery(\'' + def.id + '\', \'email\', this.checked)" style="width:13px;height:13px;"> Email';
+        h += '</label>';
+        h += '<label style="font-size:0.78rem;color:var(--warm-gray);display:flex;align-items:center;gap:3px;cursor:pointer;">';
+        h += '<input type="checkbox" ' + (hasInApp ? 'checked' : '') + ' onchange="updateAlertDelivery(\'' + def.id + '\', \'in-app\', this.checked)" style="width:13px;height:13px;"> In-App';
+        h += '</label>';
+        h += '</div>';
+
+        h += '</div>';
+      });
+
+      h += '</div></div>';
+    });
+
+    listEl.innerHTML = h;
+    _notificationsLoaded = true;
+  }).catch(function(err) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">Error loading alerts: ' + err.message + '</span>';
+  });
+
+  // Load alert history
+  loadAlertHistory();
+}
+
+function toggleAlertEnabled(alertId, enabled) {
+  MastDB._ref('config/alerts/' + alertId).update({ enabled: enabled }).then(function() {
+    showToast(enabled ? 'Alert enabled' : 'Alert disabled');
+  }).catch(function(err) { showToast('Error: ' + err.message, true); });
+}
+
+function updateAlertThreshold(alertId, value) {
+  var num = parseInt(value, 10);
+  if (isNaN(num) || num < 0) return;
+  MastDB._ref('config/alerts/' + alertId).update({ threshold: num }).then(function() {
+    showToast('Threshold updated');
+  }).catch(function(err) { showToast('Error: ' + err.message, true); });
+}
+
+function updateAlertDelivery(alertId, method, checked) {
+  MastDB._ref('config/alerts/' + alertId).once('value').then(function(snap) {
+    var current = (snap.val() || {}).delivery || ['email'];
+    var updated;
+    if (checked) {
+      updated = current.indexOf(method) < 0 ? current.concat(method) : current;
+    } else {
+      updated = current.filter(function(m) { return m !== method; });
+    }
+    if (updated.length === 0) updated = ['in-app'];
+    return MastDB._ref('config/alerts/' + alertId).update({ delivery: updated });
+  }).then(function() {
+    showToast('Delivery updated');
+  }).catch(function(err) { showToast('Error: ' + err.message, true); });
+}
+
+function loadAlertHistory() {
+  var el = document.getElementById('notificationsHistoryList');
+  if (!el) return;
+
+  MastDB._ref('alertHistory').orderByChild('createdAt').limitToLast(20).once('value').then(function(snap) {
+    var raw = snap.val() || {};
+    var history = Object.entries(raw).map(function(e) { return Object.assign({ id: e[0] }, e[1]); })
+      .sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
+
+    if (history.length === 0) {
+      el.innerHTML = '<p style="color:var(--warm-gray);font-size:0.85rem;">No alerts triggered yet.</p>';
+      return;
+    }
+
+    var h = '<div style="border:1px solid var(--cream-dark);border-radius:8px;overflow:hidden;">';
+    history.forEach(function(alert, idx) {
+      var severityColor = alert.severity === 'critical' ? '#ef4444' : alert.severity === 'warning' ? '#f59e0b' : '#3b82f6';
+      var isRead = !!alert.readAt;
+      var borderTop = idx > 0 ? 'border-top:1px solid var(--cream-dark);' : '';
+      var bg = isRead ? 'var(--cream)' : 'rgba(59,130,246,0.04)';
+      var date = alert.createdAt ? new Date(alert.createdAt).toLocaleString() : '—';
+
+      h += '<div style="padding:10px 16px;background:' + bg + ';' + borderTop + 'display:flex;align-items:center;gap:10px;">';
+      h += '<span style="width:8px;height:8px;border-radius:50%;background:' + (isRead ? 'transparent' : severityColor) + ';flex-shrink:0;border:1px solid ' + severityColor + ';"></span>';
+      h += '<div style="flex:1;min-width:0;">';
+      h += '<div style="font-weight:' + (isRead ? '400' : '600') + ';font-size:0.85rem;color:var(--charcoal);">' + (alert.name || alert.alertId) + '</div>';
+      h += '<div style="font-size:0.78rem;color:var(--warm-gray);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (alert.message || '') + '</div>';
+      h += '</div>';
+      h += '<div style="font-size:0.72rem;color:var(--warm-gray);flex-shrink:0;text-align:right;">' + date + '</div>';
+      if (!isRead) {
+        h += '<button onclick="acknowledgeAlertFromUI(\'' + alert.id + '\', this)" style="font-size:0.72rem;padding:2px 8px;border:1px solid var(--cream-dark);border-radius:4px;background:white;color:var(--charcoal);cursor:pointer;">Dismiss</button>';
+      }
+      h += '</div>';
+    });
+    h += '</div>';
+    el.innerHTML = h;
+  }).catch(function(err) {
+    el.innerHTML = '<p style="color:#ef4444;font-size:0.85rem;">Error loading history: ' + err.message + '</p>';
+  });
+}
+
+function acknowledgeAlertFromUI(alertHistoryId, btn) {
+  if (btn) btn.disabled = true;
+  MastDB._ref('alertHistory/' + alertHistoryId).update({ readAt: new Date().toISOString() }).then(function() {
+    showToast('Alert dismissed');
+    loadAlertHistory();
+    updateAlertBadge();
+  }).catch(function(err) { showToast('Error: ' + err.message, true); });
+}
+
+// ============================================================
+// Alert Badge & Toast (Step 6)
+// ============================================================
+
+function initAlertBadgeListener() {
+  if (_alertHistoryListener) return;
+  var ref = MastDB._ref('alertHistory');
+  _alertHistoryListener = ref.orderByChild('readAt').equalTo(null).on('value', function(snap) {
+    var data = snap.val() || {};
+    var newCount = Object.keys(data).length;
+    var hadAlerts = _unreadAlertCount;
+    _unreadAlertCount = newCount;
+    updateAlertBadge();
+
+    // Toast for newly arrived alerts (skip initial load)
+    if (hadAlerts > 0 || _notificationsLoaded) {
+      if (newCount > hadAlerts) {
+        var entries = Object.values(data).sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
+        var latest = entries[0];
+        if (latest) {
+          var emoji = latest.severity === 'critical' ? '\u{1F6A8}' : latest.severity === 'warning' ? '\u26A0\uFE0F' : '\u2139\uFE0F';
+          showToast(emoji + ' ' + (latest.name || 'Alert') + ': ' + (latest.message || ''));
+        }
+      }
+    }
+  }, function(err) {
+    console.warn('Alert badge listener error:', err.message);
+  });
+}
+
+function updateAlertBadge() {
+  // Settings sub-nav badge
+  var settingsBadge = document.getElementById('settingsNotifBadge');
+  if (settingsBadge) {
+    if (_unreadAlertCount > 0) {
+      settingsBadge.textContent = _unreadAlertCount;
+      settingsBadge.style.display = 'inline';
+    } else {
+      settingsBadge.style.display = 'none';
+    }
+  }
+  // Sidebar badge
+  var sidebarBadge = document.getElementById('sidebarAlertBadge');
+  if (sidebarBadge) {
+    if (_unreadAlertCount > 0) {
+      sidebarBadge.textContent = _unreadAlertCount;
+      sidebarBadge.style.display = 'inline';
+    } else {
+      sidebarBadge.style.display = 'none';
+    }
+  }
 }
 
 // ============================================================
