@@ -33,11 +33,13 @@
     }
   }
 
+  function blogGetUid() { return currentUser ? currentUser.uid : null; }
+
   // ===== DATA LOADING =====
 
   async function loadBlog() {
     loadBlogAuthors();
-    var uid = nlGetUid();
+    var uid = blogGetUid();
     if (!uid) { blogLoaded = true; renderBlog(); return; }
     try {
       var postSnap = await MastDB.blog.posts.ref().orderByChild('createdAt').limitToLast(100).once('value');
