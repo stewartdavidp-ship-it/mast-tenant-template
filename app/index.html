@@ -4941,8 +4941,10 @@
         <div class="sidebar-item" data-route="employees" onclick="navigateTo('employees')">Employees &amp; Permissions</div>
         <div class="sidebar-item" data-route="analytics" onclick="navigateTo('analytics')">Analytics</div>
         <div class="sidebar-item" data-route="auditlog" onclick="navigateTo('auditlog')">Audit Log</div>
-        <div class="sidebar-item" data-route="settings" onclick="navigateTo('settings')">Settings &amp; Integrations <span id="sidebarAlertBadge" class="sidebar-badge alert" style="display:none;"></span> <span id="settingsSandboxBadge" style="display:none;background:#f59e0b;color:#fff;font-size:0.65rem;padding:2px 6px;border-radius:4px;margin-left:4px;font-weight:700;vertical-align:middle;">SANDBOX</span></div>
+        <div class="sidebar-item" data-route="settings" onclick="navigateTo('settings')">Settings <span id="sidebarAlertBadge" class="sidebar-badge alert" style="display:none;"></span> <span id="settingsSandboxBadge" style="display:none;background:#f59e0b;color:#fff;font-size:0.65rem;padding:2px 6px;border-radius:4px;margin-left:4px;font-weight:700;vertical-align:middle;">SANDBOX</span></div>
         <div class="sidebar-item" id="testingModeItem" onclick="toggleTestingMode()" style="display:none;">🧪 Testing Mode</div>
+        <div class="sidebar-item" data-route="subscription" onclick="navigateTo('subscription')">Subscription</div>
+        <div class="sidebar-item" data-route="about" onclick="navigateTo('about')">About</div>
       </div>
     </div>
     <!-- Show/hide locked modules toggle -->
@@ -6272,9 +6274,7 @@
         <button class="view-tab" onclick="switchSettingsSubView('dashboard')">Dashboard</button>
         <button class="view-tab" onclick="switchSettingsSubView('domains')">Domains</button>
         <button class="view-tab" onclick="switchSettingsSubView('ai')">AI</button>
-        <button class="view-tab" onclick="switchSettingsSubView('subscription')">Subscription</button>
         <button class="view-tab" onclick="switchSettingsSubView('notifications')">Notifications <span id="settingsNotifBadge" class="sidebar-badge alert" style="display:none;margin-left:4px;"></span></button>
-        <button class="view-tab" onclick="switchSettingsSubView('about')">About</button>
       </div>
       <div id="settingsSubAbout" style="display:none;padding-top:16px;">
         <div id="aboutContent"></div>
@@ -10704,6 +10704,8 @@ var ROUTE_MAP = {
   'auditlog':    { tab: 'auditLogTab' },
   // financials route handled by financials module (lazy-loaded)
   'settings':    { tab: 'settingsTab' },
+  'subscription': { tab: 'settingsTab', setup: function() { switchSettingsSubView('subscription'); } },
+  'about':        { tab: 'settingsTab', setup: function() { switchSettingsSubView('about'); } },
   // trips route handled by trips module (lazy-loaded)
   // expenses route handled by expenses module (lazy-loaded)
   'reports':     { tab: null, placeholder: { name: 'Reports', desc: 'Tax reports, mileage summaries, expense exports.', badge: 'new' } },
