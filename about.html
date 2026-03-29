@@ -571,7 +571,7 @@ window.TENANT_READY.then(function() {
   }
 
   fetch('https://api.ipify.org?format=json').then(function(r) { return r.json(); }).then(function(data) {
-    visitorIp = data.ip || '';
+    visitorIp = data.ip ? data.ip.replace(/\.\d+$/, '.0') : '';
   }).catch(function() {}).finally(function() {
     track('pv');
   });
