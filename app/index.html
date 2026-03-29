@@ -16661,7 +16661,7 @@ function renderInventoryOverview() {
     totalOnHand += totals.available;
     totalReserved += totals.reserved;
     if (stockType === 'build-to-order' || stockType === 'made-to-order') buildToOrderCount++;
-    else if (stockType === 'stock-to-build') { stockToBuildCount++; if (totals.available <= 0) outOfStockCount++; else if (totals.available <= threshold) lowStockCount++; }
+    else if (stockType === 'stock-to-build') { stockToBuildCount++; if (totals.available > 0 && totals.available <= threshold) lowStockCount++; }
     else if (stockType === 'strict' || stockType === 'in-stock' || stockType === 'limited') { strictCount++; if (totals.available <= 0) outOfStockCount++; else if (totals.available <= threshold) lowStockCount++; }
     else if (totals.available <= 0) outOfStockCount++;
     else if (totals.available <= threshold) lowStockCount++;
@@ -16798,9 +16798,12 @@ function renderInventoryOverview() {
       : '<div style="width:36px;height:36px;border-radius:6px;background:var(--cream-dark);"></div>';
 
     var qtyStyle = '';
-    if (!isBTORow) {
+    if (!isBTORow && !isSTBRow) {
+      // Only strict/in-stock/limited show danger/warning — STB falls back to made-to-order
       if (r.available <= 0) qtyStyle = 'color:var(--danger);font-weight:600;';
       else if (r.available <= r.threshold) qtyStyle = 'color:#E65100;font-weight:600;';
+    } else if (isSTBRow && r.available > 0 && r.available <= r.threshold) {
+      qtyStyle = 'color:#E65100;font-weight:600;';
     }
 
     var discontinuedBadge = r.availability === 'discontinued'
@@ -16843,6 +16846,13 @@ var expandedInventoryPid = null;
 var editingVariantKey = null;
 
 function toggleInventoryExpand(pid) {
+  // If product has no variants, navigate to detail instead
+  var product = productsData.find(function(p) { return p.pid === pid; });
+  var variantInfo = product ? getProductVariantCombos(product) : { combos: [] };
+  if (!variantInfo.combos.length) {
+    viewProductFromInventory(pid);
+    return;
+  }
   expandedInventoryPid = (expandedInventoryPid === pid) ? null : pid;
   editingVariantKey = null;
   renderInventoryOverview();
@@ -17097,8 +17107,8 @@ function renderInventoryHistory() {
 
   var entries = invHistoryEntries.filter(function(e) {
     if (actionFilter !== 'all' && e.action !== actionFilter) return false;
-    if (dateStart && e.timestamp && e.timestamp < dateStart) return false;
-    if (dateEnd && e.timestamp && e.timestamp.slice(0, 10) > dateEnd) return false;
+    if (dateStart) { if (!e.timestamp || e.timestamp < dateStart) return false; }
+    if (dateEnd) { if (!e.timestamp || e.timestamp.slice(0, 10) > dateEnd) return false; }
     return true;
   });
 
@@ -17127,15 +17137,19 @@ function renderInventoryHistory() {
     var date = e.timestamp ? new Date(e.timestamp).toLocaleDateString() + ' ' + new Date(e.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '—';
     var actionLabel = actionLabels[e.action] || esc(e.action || '—');
     var qtyStr = '';
-    if (typeof e.qty === 'number') {
-      var arrow = e.qty > 0 ? '↑' : e.qty < 0 ? '↓' : '';
+    if (typeof e.qty === 'number' && e.qty !== 0) {
+      var arrow = e.qty > 0 ? '↑' : '↓';
       qtyStr = arrow + (e.qty > 0 ? '+' : '') + e.qty;
+    } else if (typeof e.qty === 'number' && e.qty === 0) {
+      qtyStr = '0';
     }
     var actorBadge = '';
     if (e.actorType === 'system') {
       actorBadge = '<span class="status-badge" style="background:#6366f1;color:white;font-size:0.68rem;">System</span>';
+    } else if (e.actorType === 'maker' || e.actorType === 'staff') {
+      actorBadge = '<span class="status-badge" style="background:rgba(42,124,111,0.15);color:var(--teal);font-size:0.68rem;">' + (e.actorType === 'staff' ? 'Staff' : 'Maker') + '</span>';
     } else {
-      actorBadge = '<span class="status-badge" style="background:rgba(42,124,111,0.15);color:var(--teal);font-size:0.68rem;">Maker</span>';
+      actorBadge = '<span style="font-size:0.72rem;color:var(--warm-gray-light);">—</span>';
     }
     var detail = e.detail || '';
     if (e.comboKey && e.comboKey !== '_default') detail += (detail ? ' · ' : '') + e.comboKey;
