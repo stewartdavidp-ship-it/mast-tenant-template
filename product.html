@@ -508,9 +508,39 @@
     color: var(--warm-gray);
   }
 
-  .product-availability-badge.sold {
+  .product-availability-badge.sold,
+  .product-availability-badge.sold-out {
     background: var(--bg-dark, #2a2420);
     color: var(--text-muted, #9e9890);
+  }
+
+  .product-availability-badge.low-stock {
+    background: color-mix(in srgb, #E65100 15%, transparent);
+    color: #E65100;
+  }
+
+  .product-availability-badge.final-stock {
+    background: color-mix(in srgb, var(--accent, #c05621) 15%, transparent);
+    color: var(--accent, #c05621);
+  }
+
+  .product-availability-badge.retired {
+    background: var(--bg-dark, #2a2420);
+    color: var(--text-muted, #9e9890);
+  }
+
+  .product-option-chip.unavailable {
+    opacity: 0.4;
+    pointer-events: none;
+    text-decoration: line-through;
+    cursor: not-allowed;
+  }
+
+  .product-discontinued-note {
+    font-size: 0.82rem;
+    color: var(--text-muted, #9e9890);
+    margin-top: 6px;
+    font-style: italic;
   }
 
   .product-lead-time {
@@ -1061,22 +1091,46 @@
         if (cartBtn2) { cartBtn2.style.display = 'none'; }
       }
 
-      // Availability & Lead Time
-      if (p.availability && p.availability !== 'in-stock') {
-        var availEl = document.getElementById('productAvailability');
-        var availHtml = '';
-        var labels = { 'made-to-order': 'Made to Order', 'back-ordered': 'Back Ordered', 'sold': 'Sold' };
-        var cssClass = p.availability;
-        if (labels[p.availability]) {
-          availHtml += '<span class="product-availability-badge ' + cssClass + '">' + labels[p.availability] + '</span>';
+      // Availability badge & lead time — driven by stockInfo + shopDisplay config
+      var _sdConfig = window._shopDisplayConfig || {};
+      var badge = resolveBadge(p, _sdConfig);
+      var leadTimeText = resolveLeadTime(p, _sdConfig);
+      window._productLeadTimeText = leadTimeText; // store for cart
+      var availEl = document.getElementById('productAvailability');
+      var availHtml = '';
+      if (badge) {
+        availHtml += '<span class="product-availability-badge ' + badge.cssClass + '">' + escHtml(badge.text) + '</span>';
+      }
+      if (leadTimeText) {
+        availHtml += '<span class="product-lead-time">' + escHtml(leadTimeText) + '</span>';
+      }
+      // Discontinued notes
+      var isDiscontinued = p.availability === 'discontinued';
+      var si = p.stockInfo || {};
+      var effectiveStock = (si.totalAvailable || 0) - (si.totalReserved || 0);
+      if (isDiscontinued && effectiveStock > 0) {
+        availHtml += '<div class="product-discontinued-note">This item will not be restocked once sold out.</div>';
+      }
+      if (isDiscontinued && effectiveStock <= 0) {
+        // Commission CTA for retired products
+        if (_sdConfig.showCommissionCTA) {
+          var ctaText = _sdConfig.commissionCTAText || 'Love this piece? Commission a custom version';
+          var ctaLink = _sdConfig.commissionCTALink || '/contact';
+          availHtml += '<div style="margin-top:12px;"><a href="' + escHtml(ctaLink) + '" class="btn btn-primary" style="font-size:0.85rem;padding:8px 18px;text-decoration:none;">' + escHtml(ctaText) + '</a></div>';
         }
-        if (p.leadTime) {
-          availHtml += '<span class="product-lead-time">' + escHtml(p.leadTime) + '</span>';
+        // See similar items
+        if (p.categories && p.categories.length) {
+          availHtml += '<div style="margin-top:8px;"><a href="shop.html?cat=' + encodeURIComponent(p.categories[0]) + '" style="font-size:0.82rem;color:var(--primary-light);">See similar items &rarr;</a></div>';
         }
-        if (availHtml) {
-          availEl.innerHTML = availHtml;
-          availEl.style.display = '';
-        }
+      }
+      if (availHtml) {
+        availEl.innerHTML = availHtml;
+        availEl.style.display = '';
+      }
+      // Legacy leadTime fallback (when no stockInfo exists yet)
+      if (!badge && !leadTimeText && p.leadTime) {
+        availEl.innerHTML = '<span class="product-lead-time">' + escHtml(p.leadTime) + '</span>';
+        availEl.style.display = '';
       }
 
       // Description
@@ -1207,6 +1261,24 @@
           });
         });
 
+        // Mark unavailable variant chips for strict-mode products
+        if (p.stockInfo && p.stockInfo.variants) {
+          var siType = p.stockInfo.stockType;
+          var isStrictMode = (siType === 'strict' || siType === 'in-stock' || siType === 'limited');
+          if (isStrictMode && normalizedOptions.length === 1) {
+            // Single option dimension — can check each chip directly
+            normalizedOptions[0].choices.forEach(function(choice) {
+              var vStock = p.stockInfo.variants[choice];
+              if (vStock && (vStock.available - (vStock.reserved || 0)) <= 0) {
+                var chip = document.querySelector('.product-option-chip[data-value="' + choice + '"]');
+                if (chip) chip.classList.add('unavailable');
+              }
+            });
+          }
+          // Multi-dimension: chips can't be marked individually without knowing the full combo.
+          // The checkAddToCartReady function handles this after all options are selected.
+        }
+
         // Auto-select options that have only one choice
         document.querySelectorAll('.product-option-group').forEach(function(group) {
           var chips = group.querySelectorAll('.product-option-chip');
@@ -1231,18 +1303,20 @@
       // Store images array for gallery switching
       window._productImages = images;
 
-      // ── Sold Sculpture: replace cart actions with commission CTA ──
-      if (p.businessLine === 'sculpture' && p.status === 'sold') {
+      // ── Sold/Retired/Discontinued: replace cart actions with commission CTA ──
+      var isSoldSculpture = p.businessLine === 'sculpture' && p.status === 'sold';
+      var isRetired = p.availability === 'discontinued' && effectiveStock <= 0;
+      if (isSoldSculpture || isRetired) {
         document.getElementById('productQtyWrap').style.display = 'none';
         var actionsEl = document.querySelector('.product-detail-actions');
         if (actionsEl) {
+          var retiredBadgeText = isSoldSculpture ? 'This piece has been sold' : (badge ? badge.text : 'No Longer Available');
           actionsEl.innerHTML =
-            '<div style="margin-bottom:8px;"><span style="display:inline-block;background:var(--bg-dark);color:var(--text-muted);font-size:0.82rem;font-weight:600;padding:4px 12px;border-radius:4px;">This piece has been sold</span></div>' +
+            '<div style="margin-bottom:8px;"><span style="display:inline-block;background:var(--bg-dark);color:var(--text-muted);font-size:0.82rem;font-weight:600;padding:4px 12px;border-radius:4px;">' + escHtml(retiredBadgeText) + '</span></div>' +
             '<button class="btn btn-primary" onclick="toggleCommissionForm()">Request a Commission</button>';
         }
         window._commPid = p.pid;
         window._commPieceName = p.name;
-        // Pre-select this product as inspiration
         window._commInspirationPids = [p.pid];
         buildCommissionForm();
       }
@@ -1331,14 +1405,63 @@
       hasPrice = !!window._resolvedVariantPrice;
     }
     var btn = document.getElementById('addToCartBtn');
-    if (allSelected && hasPrice) {
+    var btnText = 'Add to Cart';
+
+    // Stock check — disable cart for sold-out strict-mode products
+    var si = p && p.stockInfo;
+    var stockBlocked = false;
+    if (si) {
+      var stockType = si.stockType;
+      var isStrict = stockType === 'strict' || stockType === 'in-stock' || stockType === 'limited';
+      if (allSelected && required.length > 0 && isStrict && si.variants) {
+        // Check per-variant stock
+        var comboKey = required.map(function(l) { return selected[l]; }).join('|');
+        var vStock = si.variants[comboKey];
+        if (vStock && (vStock.available - (vStock.reserved || 0)) <= 0) {
+          stockBlocked = true;
+          btnText = 'Unavailable';
+        }
+      } else if (isStrict && (si.totalAvailable - si.totalReserved) <= 0) {
+        stockBlocked = true;
+        btnText = 'Sold Out';
+      }
+    }
+    // Discontinued + no stock
+    if (p && p.availability === 'discontinued' && si && (si.totalAvailable - si.totalReserved) <= 0) {
+      stockBlocked = true;
+      btnText = 'No Longer Available';
+    }
+
+    if (!stockBlocked && allSelected && hasPrice) {
       btn.disabled = false;
       btn.style.opacity = '1';
       btn.style.cursor = 'pointer';
+      btn.textContent = 'Add to Cart';
     } else {
       btn.disabled = true;
       btn.style.opacity = '0.5';
       btn.style.cursor = 'not-allowed';
+      if (stockBlocked) btn.textContent = btnText;
+    }
+
+    // Update lead time when variant changes
+    if (allSelected && required.length > 0 && si && window._shopDisplayConfig && window._shopDisplayConfig.showLeadTime) {
+      var ck = required.map(function(l) { return selected[l]; }).join('|');
+      var vBadge = resolveVariantBadge(p, ck, window._shopDisplayConfig);
+      // Update lead time display for selected variant
+      var ltEl = document.querySelector('.product-lead-time');
+      if (ltEl && si.variants && si.variants[ck]) {
+        var vEff = (si.variants[ck].available || 0) - (si.variants[ck].reserved || 0);
+        var ltText = '';
+        if (vEff > 0 && si.stockFulfillmentDays) {
+          ltText = 'Ships in ' + si.stockFulfillmentDays + ' business day' + (si.stockFulfillmentDays !== 1 ? 's' : '');
+        } else if (si.productionLeadTimeDays) {
+          var ld = si.productionLeadTimeDays;
+          ltText = ld >= 7 ? 'Made to order \u2014 ' + Math.round(ld / 7) + ' week' + (Math.round(ld / 7) !== 1 ? 's' : '') : 'Made to order \u2014 ' + ld + ' day' + (ld !== 1 ? 's' : '');
+        }
+        if (ltText) ltEl.textContent = ltText;
+        window._productLeadTimeText = ltText;
+      }
     }
   }
 
@@ -1378,7 +1501,9 @@
       options: Object.assign({}, window._selectedOptions),
       qty: window._productQty || 1,
       originalPrice: onSale ? formatPriceCents(baseCents) : null,
-      salePriceCents: onSale ? saleCents : null
+      salePriceCents: onSale ? saleCents : null,
+      leadTimeText: window._productLeadTimeText || null,
+      stockType: (p.stockInfo && p.stockInfo.stockType) || null
     });
     MastCart.showToast(p.name + ' added to cart');
   });
@@ -1686,6 +1811,97 @@
     }).catch(function(err) {
       console.error('Error loading story:', err);
     });
+  }
+
+  /**
+   * Resolve the display badge for a product based on its stockInfo and shopDisplay config.
+   * Returns { text, cssClass } or null (no badge needed).
+   */
+  function resolveBadge(product, config) {
+    var si = product.stockInfo;
+    var badges = (config && config.badges) || {};
+    var isDiscontinued = product.availability === 'discontinued';
+    var effective = si ? (si.totalAvailable - si.totalReserved) : 0;
+    var stockType = si ? si.stockType : null;
+
+    if (isDiscontinued && effective <= 0) {
+      return { text: badges.discontinuedSold || 'Retired', cssClass: 'retired' };
+    }
+    if (isDiscontinued && effective > 0) {
+      return { text: badges.discontinuedInStock || 'Final Stock', cssClass: 'final-stock' };
+    }
+    if (stockType === 'strict' || stockType === 'in-stock' || stockType === 'limited') {
+      if (effective <= 0) return { text: 'Sold Out', cssClass: 'sold-out' };
+      var threshold = (si && si.lowStockThreshold) || 2;
+      if (effective <= threshold) {
+        var lowText = (badges.lowStock || 'Only {n} Left').replace('{n}', effective);
+        return { text: lowText, cssClass: 'low-stock' };
+      }
+      return null; // in stock, no badge
+    }
+    if (stockType === 'stock-to-build') {
+      if (effective <= 0) return { text: badges.madeToOrder || 'Made to Order', cssClass: 'made-to-order' };
+      return null; // in stock from stock-to-build
+    }
+    if (stockType === 'build-to-order' || stockType === 'made-to-order') {
+      return { text: badges.madeToOrder || 'Made to Order', cssClass: 'made-to-order' };
+    }
+    // Legacy: fall back to availability field
+    if (product.availability === 'made-to-order') return { text: badges.madeToOrder || 'Made to Order', cssClass: 'made-to-order' };
+    if (product.availability === 'back-ordered') return { text: 'Back Ordered', cssClass: 'back-ordered' };
+    if (product.availability === 'sold') return { text: 'Sold', cssClass: 'sold' };
+    return null;
+  }
+
+  /**
+   * Resolve variant-specific badge (checks per-variant stock for strict/stock-to-build).
+   */
+  function resolveVariantBadge(product, comboKey, config) {
+    var si = product.stockInfo;
+    if (!si || !si.variants || !si.variants[comboKey]) return resolveBadge(product, config);
+    var v = si.variants[comboKey];
+    var effective = (v.available || 0) - (v.reserved || 0);
+    var badges = (config && config.badges) || {};
+    var stockType = si.stockType;
+    if (stockType === 'strict' || stockType === 'in-stock' || stockType === 'limited') {
+      if (effective <= 0) return { text: 'Sold Out', cssClass: 'sold-out' };
+      var threshold = (si.lowStockThreshold) || 2;
+      if (effective <= threshold) {
+        return { text: (badges.lowStock || 'Only {n} Left').replace('{n}', effective), cssClass: 'low-stock' };
+      }
+    }
+    if (stockType === 'stock-to-build' && effective <= 0) {
+      return { text: badges.madeToOrder || 'Made to Order', cssClass: 'made-to-order' };
+    }
+    return null;
+  }
+
+  /**
+   * Resolve lead time text for display.
+   */
+  function resolveLeadTime(product, config) {
+    if (!config || !config.showLeadTime) return null;
+    var si = product.stockInfo;
+    if (!si) return null;
+    var effective = si.totalAvailable - si.totalReserved;
+    var stockType = si.stockType;
+    if ((stockType === 'strict' || stockType === 'in-stock' || stockType === 'limited') && effective > 0) {
+      var days = si.stockFulfillmentDays || 2;
+      return 'Ships in ' + days + ' business day' + (days !== 1 ? 's' : '');
+    }
+    if (stockType === 'stock-to-build' && effective > 0) {
+      var days2 = si.stockFulfillmentDays || 2;
+      return 'Ships in ' + days2 + ' business day' + (days2 !== 1 ? 's' : '');
+    }
+    if (si.productionLeadTimeDays) {
+      var ld = si.productionLeadTimeDays;
+      if (ld >= 7) {
+        var weeks = Math.round(ld / 7);
+        return 'Made to order \u2014 ' + weeks + ' week' + (weeks !== 1 ? 's' : '');
+      }
+      return 'Made to order \u2014 ' + ld + ' day' + (ld !== 1 ? 's' : '');
+    }
+    return null;
   }
 
   function escHtml(str) {

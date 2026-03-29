@@ -330,6 +330,8 @@
     var configPromise;
     if (window.STOREFRONT_DATA) {
       configPromise = window.STOREFRONT_DATA.then(function(data) {
+        // Extract shopDisplay config for badge/lead time rendering
+        window._shopDisplayConfig = (data && data.shopDisplay) || {};
         return data ? data.theme : null;
       });
     } else {

@@ -15956,6 +15956,47 @@ function renderProducts() {
 // Product Detail View & Variant Inventory
 // ============================================================
 
+// Sync inventory display data to public product for storefront access
+async function syncStockInfoToPublic(pid) {
+  try {
+    var inv = inventory[pid] || {};
+    var product = productsData.find(function(p) { return p.pid === pid; });
+    if (!product) return;
+    var stockType = inv.stockType || 'build-to-order';
+    var stock = inv.stock || {};
+    var totalAvailable = 0, totalReserved = 0;
+    var variants = {};
+    Object.keys(stock).forEach(function(key) {
+      if (key === '_default') return;
+      var entry = stock[key] || {};
+      var avail = entry.available || 0;
+      var reserved = entry.reserved || 0;
+      totalAvailable += avail;
+      totalReserved += reserved;
+      variants[key] = { available: avail, reserved: reserved };
+    });
+    if (Object.keys(variants).length === 0 && stock._default) {
+      totalAvailable = (stock._default && stock._default.available) || 0;
+      totalReserved = (stock._default && stock._default.reserved) || 0;
+    }
+    var stockInfo = {
+      stockType: stockType,
+      totalAvailable: totalAvailable,
+      totalReserved: totalReserved,
+      lowStockThreshold: inv.lowStockThreshold || 2,
+      productionLeadTimeDays: inv.productionLeadTimeDays || null,
+      stockFulfillmentDays: inv.stockFulfillmentDays || 2,
+      updatedAt: new Date().toISOString()
+    };
+    if (product.options && product.options.length > 0 && Object.keys(variants).length > 0) {
+      stockInfo.variants = variants;
+    }
+    await MastDB.products.fieldRef(pid, 'stockInfo').set(stockInfo);
+  } catch (err) {
+    console.error('syncStockInfoToPublic error:', err);
+  }
+}
+
 function getInventoryTotals(inv) {
   if (!inv || !inv.stock) return { available: 0, reserved: 0 };
   // If _default summary exists (has available property), use it as the source of truth
@@ -17813,6 +17854,8 @@ async function saveProductSettings(pid) {
     showToast('Settings saved');
     if (!inventory[pid]) inventory[pid] = {};
     Object.assign(inventory[pid], updates);
+    // Sync stockInfo to public product for storefront
+    await syncStockInfoToPublic(pid);
     renderProductDetail(pid);
   } catch (err) {
     showToast('Error saving settings: ' + err.message, true);
@@ -17928,6 +17971,8 @@ async function saveAdjustStock(pid) {
       timestamp: new Date().toISOString()
     });
     emitTestingEvent('adjustStock', {});
+    // Sync stockInfo to public product for storefront
+    await syncStockInfoToPublic(pid);
 
     // Auto-set sold status when sculpture stock reaches 0
     if (isSculptureAdj) {

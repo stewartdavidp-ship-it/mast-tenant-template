@@ -453,6 +453,50 @@ window.TENANT_READY.then(function() {
     return Math.max(0, originalCents - discountValue); // fixed in cents
   }
 
+  // Badge resolver — mirrors product.html resolveBadge
+  function resolveBadge(product, config) {
+    var si = product.stockInfo;
+    var badges = (config && config.badges) || {};
+    var isDiscontinued = product.availability === 'discontinued';
+    var effective = si ? ((si.totalAvailable || 0) - (si.totalReserved || 0)) : 0;
+    var stockType = si ? si.stockType : null;
+    if (isDiscontinued && effective <= 0) return { text: badges.discontinuedSold || 'Retired', cssClass: 'retired' };
+    if (isDiscontinued && effective > 0) return { text: badges.discontinuedInStock || 'Final Stock', cssClass: 'final-stock' };
+    if ((stockType === 'strict' || stockType === 'in-stock' || stockType === 'limited') && effective <= 0) return { text: 'Sold Out', cssClass: 'sold-out' };
+    if ((stockType === 'strict' || stockType === 'in-stock' || stockType === 'limited') && effective <= ((si && si.lowStockThreshold) || 2)) return { text: (badges.lowStock || 'Only {n} Left').replace('{n}', effective), cssClass: 'low-stock' };
+    if (stockType === 'stock-to-build' && effective <= 0) return { text: badges.madeToOrder || 'Made to Order', cssClass: 'made-to-order' };
+    if (stockType === 'build-to-order' || stockType === 'made-to-order') return { text: badges.madeToOrder || 'Made to Order', cssClass: 'made-to-order' };
+    // Legacy fallback
+    if (product.availability === 'made-to-order') return { text: badges.madeToOrder || 'Made to Order', cssClass: 'made-to-order' };
+    if (product.availability === 'back-ordered') return { text: 'Back Ordered', cssClass: 'back-ordered' };
+    if (product.availability === 'sold') return { text: 'Sold', cssClass: 'sold' };
+    return null;
+  }
+
+  function resolveLeadTime(product, config) {
+    if (!config || !config.showLeadTime) return null;
+    var si = product.stockInfo;
+    if (!si) return null;
+    var effective = (si.totalAvailable || 0) - (si.totalReserved || 0);
+    if ((si.stockType === 'strict' || si.stockType === 'in-stock' || si.stockType === 'stock-to-build') && effective > 0) {
+      var d = si.stockFulfillmentDays || 2;
+      return 'Ships in ' + d + ' day' + (d !== 1 ? 's' : '');
+    }
+    if (si.productionLeadTimeDays) {
+      var ld = si.productionLeadTimeDays;
+      return ld >= 7 ? 'Made to order \u2014 ' + Math.round(ld / 7) + 'wk' : 'Made to order \u2014 ' + ld + 'd';
+    }
+    return null;
+  }
+
+  // Badge CSS class to background color map (used for positioned badge overlay)
+  var badgeBgMap = {
+    'sold-out': 'rgba(92,61,46,0.85)', 'sold': 'rgba(92,61,46,0.85)',
+    'made-to-order': 'rgba(200,160,60,0.85)', 'back-ordered': 'rgba(120,120,120,0.85)',
+    'low-stock': 'rgba(230,81,0,0.85)', 'final-stock': 'rgba(192,86,33,0.85)',
+    'retired': 'rgba(92,61,46,0.85)'
+  };
+
   function buildSaleLookup(salesData) {
     saleLookup = {};
     if (!salesData) return;
@@ -521,7 +565,8 @@ window.TENANT_READY.then(function() {
       if (!data) return;
       allShopItems = Object.values(data)
         .filter(function(p) {
-          if (p.availability === 'sold') return false;
+          // Keep discontinued products (portfolio visibility), hide non-discontinued sold items
+          if (p.availability === 'sold' && p.availability !== 'discontinued') return false;
           var cats = p.categories || [];
           return cats.some(function(c) { return SHOP_IDS.indexOf(c) !== -1; });
         })
@@ -568,11 +613,11 @@ window.TENANT_READY.then(function() {
         var isLocal = !!pid;
         var isSoldSculpture = product.businessLine === 'sculpture' && product.status === 'sold';
         var isSold = product.availability === 'sold' || isSoldSculpture;
-        var isMadeToOrder = product.availability === 'made-to-order';
-        var isBackOrdered = product.availability === 'back-ordered';
-        var showBadge = isSold || isMadeToOrder || isBackOrdered;
-        var badgeLabel = isSold ? 'Sold' : isMadeToOrder ? 'Made to Order' : 'Back Ordered';
-        var badgeBg = isSold ? 'rgba(92,61,46,0.85)' : isMadeToOrder ? 'rgba(200,160,60,0.85)' : 'rgba(120,120,120,0.85)';
+        var _sdCfg = window._shopDisplayConfig || {};
+        var stockBadge = resolveBadge(product, _sdCfg);
+        var showBadge = !!stockBadge;
+        var badgeLabel = stockBadge ? stockBadge.text : '';
+        var badgeBg = stockBadge ? (badgeBgMap[stockBadge.cssClass] || 'rgba(120,120,120,0.85)') : '';
         // Format price with "from" prefix for variant products, sale strikethrough
         var priceDisplay = '';
         var saleInfo = saleLookup[pid];
@@ -603,6 +648,10 @@ window.TENANT_READY.then(function() {
         }
         var saleBadge = isOnSale && !isSold;
         var badgeToShow = showBadge ? { label: badgeLabel, bg: badgeBg } : saleBadge ? { label: 'Sale', bg: 'rgba(192,86,33,0.85)' } : null;
+        var isRetired = product.availability === 'discontinued' && stockBadge && stockBadge.cssClass === 'retired';
+        var leadTime = resolveLeadTime(product, _sdCfg);
+        var leadTimeHtml = leadTime ? '<p style="font-size:0.75rem;color:var(--text-muted,#9e9890);margin:2px 0 0 0;">' + esc(leadTime) + '</p>' : '';
+        var linkText = isSold || isRetired ? 'Request Commission' : 'View Details';
         html += '<div class="product-card fade-up" style="opacity:1;transform:translateY(0)">' +
           '<div class="product-image" style="position:relative;"><a href="' + esc(link) + '"' + (isLocal ? '' : ' target="_blank" rel="noopener"') + '>' + (img ? '<img src="' + esc(img) + '" alt="' + esc(name) + '" loading="lazy" />' : '') + '</a>' +
             (badgeToShow ? '<span style="position:absolute;top:8px;right:8px;background:' + badgeToShow.bg + ';color:white;font-size:0.7rem;font-weight:600;padding:3px 8px;border-radius:4px;">' + badgeToShow.label + '</span>' : '') +
@@ -611,7 +660,8 @@ window.TENANT_READY.then(function() {
             '<span class="product-category">' + esc(cat.label) + '</span>' +
             '<h3>' + esc(name) + '</h3>' +
             priceDisplay +
-            (link ? '<a href="' + esc(link) + '" class="product-link"' + (isLocal ? '' : ' target="_blank" rel="noopener"') + '>' + (isSold ? 'Request Commission' : 'View Details') + '</a>' : '') +
+            leadTimeHtml +
+            (link ? '<a href="' + esc(link) + '" class="product-link"' + (isLocal ? '' : ' target="_blank" rel="noopener"') + '>' + linkText + '</a>' : '') +
           '</div></div>';
       });
       html += '</div>';

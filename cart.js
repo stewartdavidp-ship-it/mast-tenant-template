@@ -141,6 +141,8 @@
       isWholesale: item.isWholesale || false,
       originalPrice: item.originalPrice || null,
       salePriceCents: item.salePriceCents || null,
+      leadTimeText: item.leadTimeText || null,
+      stockType: item.stockType || null,
       addedAt: Date.now()
     };
     cart.push(newItem);
@@ -580,6 +582,7 @@
       }
 
       var wholesaleBadge = item.isWholesale ? '<span style="font-size:0.65rem;background:rgba(21,101,192,0.15);color:#1565C0;padding:2px 6px;border-radius:3px;margin-left:6px;">WHOLESALE</span>' : '';
+      var leadTimeHtml = item.leadTimeText ? '<div style="font-size:0.75rem;color:var(--text-muted,#9e9890);font-style:italic;margin-top:2px;">' + escHtml(item.leadTimeText) + '</div>' : '';
 
       html +=
         '<div class="cart-item" data-cart-id="' + escAttr(item.cartItemId) + '">' +
@@ -587,6 +590,7 @@
           '<div class="cart-item-details">' +
             '<div class="cart-item-name">' + escHtml(item.name) + wholesaleBadge + '</div>' +
             optionsHtml +
+            leadTimeHtml +
             '<div class="cart-item-row">' +
               '<span class="cart-item-price">' +
                 (item.originalPrice && item.salePriceCents
