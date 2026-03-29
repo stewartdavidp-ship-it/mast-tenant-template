@@ -2704,6 +2704,26 @@
     body.dark-mode .inv-overview-table th { border-color: #3a3a3a; }
     body.dark-mode .inv-overview-table td { border-color: #3a3a3a; }
     body.dark-mode .inv-overview-row:hover { background: rgba(255,255,255,0.04); }
+    .inv-overview-row.expanded { background: rgba(196,133,60,0.06); }
+    body.dark-mode .inv-overview-row.expanded { background: rgba(255,255,255,0.06); }
+    .inv-expand-row td { padding: 0 12px 12px 12px; }
+    .inv-variant-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; margin-top: 4px; }
+    .inv-variant-table th {
+      text-align: left; padding: 6px 10px; font-size: 0.7rem; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.06em; color: var(--warm-gray-light);
+      border-bottom: 1px solid var(--cream-dark);
+    }
+    .inv-variant-table td { padding: 6px 10px; border-bottom: 1px solid var(--cream); vertical-align: middle; }
+    body.dark-mode .inv-variant-table th { border-color: #3a3a3a; }
+    body.dark-mode .inv-variant-table td { border-color: #3a3a3a; }
+    .inv-variant-edit { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; margin-top: 6px; }
+    .inv-variant-edit select, .inv-variant-edit input {
+      font-size: 0.78rem; padding: 4px 6px; border: 1px solid #ddd; border-radius: 4px;
+      background: var(--cream); color: var(--charcoal); font-family: 'DM Sans';
+    }
+    body.dark-mode .inv-variant-edit select, body.dark-mode .inv-variant-edit input {
+      background: #2a2a2a; border-color: #444; color: #e0e0e0;
+    }
 
     /* ========== ORDERS ========== */
     .order-filter-pills {
@@ -15973,7 +15993,11 @@ async function syncStockInfoToPublic(pid) {
       var reserved = entry.reserved || 0;
       totalAvailable += avail;
       totalReserved += reserved;
-      variants[key] = { available: avail, reserved: reserved };
+      var variantData = { available: avail, reserved: reserved };
+      if (entry.inventoryModeOverride) variantData.inventoryModeOverride = entry.inventoryModeOverride;
+      if (entry.productionLeadTimeDaysOverride) variantData.productionLeadTimeDaysOverride = entry.productionLeadTimeDaysOverride;
+      if (entry.stockFulfillmentDaysOverride) variantData.stockFulfillmentDaysOverride = entry.stockFulfillmentDaysOverride;
+      variants[key] = variantData;
     });
     if (Object.keys(variants).length === 0 && stock._default) {
       totalAvailable = (stock._default && stock._default.available) || 0;
@@ -16621,7 +16645,9 @@ function renderInventoryOverview() {
   var totalReserved = 0;
   var outOfStockCount = 0;
   var lowStockCount = 0;
-  var madeToOrderCount = 0;
+  var strictCount = 0;
+  var stockToBuildCount = 0;
+  var buildToOrderCount = 0;
 
   // Build rows data
   var rows = productsData.map(function(p) {
@@ -16634,7 +16660,9 @@ function renderInventoryOverview() {
 
     totalOnHand += totals.available;
     totalReserved += totals.reserved;
-    if (stockType === 'build-to-order' || stockType === 'made-to-order') madeToOrderCount++;
+    if (stockType === 'build-to-order' || stockType === 'made-to-order') buildToOrderCount++;
+    else if (stockType === 'stock-to-build') { stockToBuildCount++; if (totals.available <= 0) outOfStockCount++; else if (totals.available <= threshold) lowStockCount++; }
+    else if (stockType === 'strict' || stockType === 'in-stock' || stockType === 'limited') { strictCount++; if (totals.available <= 0) outOfStockCount++; else if (totals.available <= threshold) lowStockCount++; }
     else if (totals.available <= 0) outOfStockCount++;
     else if (totals.available <= threshold) lowStockCount++;
 
@@ -16676,7 +16704,10 @@ function renderInventoryOverview() {
       available: totals.available,
       reserved: totals.reserved,
       hasVariants: variantInfo.combos.length > 0,
-      attrSummary: attrSummary
+      attrSummary: attrSummary,
+      productionLeadTimeDays: inv.productionLeadTimeDays || null,
+      stockFulfillmentDays: inv.stockFulfillmentDays || null,
+      availability: p.availability || ''
     };
   });
 
@@ -16720,10 +16751,18 @@ function renderInventoryOverview() {
       '<div class="inv-overview-stat-value">' + lowStockCount + '</div>' +
       '<div class="inv-overview-stat-label">Low Stock</div>' +
     '</div>' : '') +
-    '<div class="inv-overview-stat">' +
-      '<div class="inv-overview-stat-value" style="opacity:0.5;">' + madeToOrderCount + '</div>' +
-      '<div class="inv-overview-stat-label">Made to Order</div>' +
-    '</div>' +
+    (strictCount > 0 ? '<div class="inv-overview-stat">' +
+      '<div class="inv-overview-stat-value" style="opacity:0.5;">' + strictCount + '</div>' +
+      '<div class="inv-overview-stat-label">Strict</div>' +
+    '</div>' : '') +
+    (stockToBuildCount > 0 ? '<div class="inv-overview-stat">' +
+      '<div class="inv-overview-stat-value" style="opacity:0.5;">' + stockToBuildCount + '</div>' +
+      '<div class="inv-overview-stat-label">Stock to Build</div>' +
+    '</div>' : '') +
+    (buildToOrderCount > 0 ? '<div class="inv-overview-stat">' +
+      '<div class="inv-overview-stat-value" style="opacity:0.5;">' + buildToOrderCount + '</div>' +
+      '<div class="inv-overview-stat-label">Build to Order</div>' +
+    '</div>' : '') +
   '</div>';
 
   // Table
@@ -16734,6 +16773,7 @@ function renderInventoryOverview() {
       '<th style="text-align:center;">Type</th>' +
       '<th style="text-align:center;">On Hand</th>' +
       '<th style="text-align:center;">Reserved</th>' +
+      '<th style="text-align:center;">Lead Time</th>' +
       '<th>Attributes</th>' +
     '</tr></thead><tbody>';
 
@@ -16763,22 +16803,151 @@ function renderInventoryOverview() {
       else if (r.available <= r.threshold) qtyStyle = 'color:#E65100;font-weight:600;';
     }
 
-    tableHtml += '<tr class="inv-overview-row" onclick="viewProductFromInventory(\'' + esc(r.pid) + '\');" style="cursor:pointer;">' +
+    var discontinuedBadge = r.availability === 'discontinued'
+      ? ' <span class="status-badge stock-badge out-of-stock" style="font-size:0.65rem;padding:1px 6px;vertical-align:middle;">Discontinued</span>'
+      : '';
+    var rowOpacity = r.availability === 'discontinued' ? 'opacity:0.6;' : '';
+    var leadTimeStr = '';
+    if (isBTORow || isSTBRow) {
+      leadTimeStr = r.productionLeadTimeDays ? r.productionLeadTimeDays + 'd' : '<span style="color:var(--warm-gray-light);">—</span>';
+    } else {
+      leadTimeStr = r.stockFulfillmentDays ? r.stockFulfillmentDays + 'd' : '<span style="color:var(--warm-gray-light);">—</span>';
+    }
+
+    var isExpanded = expandedInventoryPid === r.pid;
+    var expandIcon = r.hasVariants ? '<span style="font-size:0.7rem;color:var(--warm-gray-light);margin-right:4px;">' + (isExpanded ? '▼' : '▶') + '</span>' : '';
+    tableHtml += '<tr class="inv-overview-row' + (isExpanded ? ' expanded' : '') + '" data-pid="' + esc(r.pid) + '" onclick="toggleInventoryExpand(this.dataset.pid)" style="cursor:pointer;' + rowOpacity + '">' +
       '<td>' + imgHtml + '</td>' +
       '<td>' +
-        '<div style="font-weight:500;font-size:0.85rem;">' + esc(r.name) + '</div>' +
+        '<div style="font-weight:500;font-size:0.85rem;">' + expandIcon + esc(r.name) + discontinuedBadge + '</div>' +
         (r.price ? '<div style="font-size:0.75rem;color:var(--warm-gray);">' + esc(r.price) + '</div>' : '') +
+        '<a href="#" data-pid="' + esc(r.pid) + '" onclick="event.stopPropagation();viewProductFromInventory(this.dataset.pid);return false;" style="font-size:0.7rem;color:var(--teal);">View Detail →</a>' +
       '</td>' +
       '<td style="text-align:center;">' + statusBadge + '</td>' +
       '<td style="text-align:center;' + qtyStyle + '">' + (isBTORow ? '<span style="color:var(--warm-gray-light);">—</span>' : r.available) + '</td>' +
       '<td style="text-align:center;color:var(--warm-gray);">' + (r.reserved > 0 ? r.reserved : (isBTORow ? '<span style="color:var(--warm-gray-light);">—</span>' : '0')) + '</td>' +
+      '<td style="text-align:center;color:var(--warm-gray);font-size:0.82rem;">' + leadTimeStr + '</td>' +
       '<td>' + (r.attrSummary || '<span style="color:var(--warm-gray-light);font-size:0.78rem;">No variants</span>') + '</td>' +
     '</tr>';
+    if (isExpanded && r.hasVariants) {
+      tableHtml += '<tr class="inv-expand-row"><td colspan="7">' + renderVariantDrillDown(r.pid) + '</td></tr>';
+    }
   });
 
   tableHtml += '</tbody></table></div>';
 
   el.innerHTML = summaryHtml + tableHtml;
+}
+
+var expandedInventoryPid = null;
+var editingVariantKey = null;
+
+function toggleInventoryExpand(pid) {
+  expandedInventoryPid = (expandedInventoryPid === pid) ? null : pid;
+  editingVariantKey = null;
+  renderInventoryOverview();
+}
+
+function renderVariantDrillDown(pid) {
+  var product = productsData.find(function(p) { return p.pid === pid; });
+  if (!product) return '';
+  var inv = inventory[pid] || {};
+  var stock = inv.stock || {};
+  var stockType = inv.stockType || 'build-to-order';
+  var variantInfo = getProductVariantCombos(product);
+  if (!variantInfo.combos.length) return '<div style="color:var(--warm-gray-light);font-size:0.8rem;">No variants</div>';
+
+  var html = '<table class="inv-variant-table"><thead><tr>' +
+    '<th>Variant</th><th style="text-align:center;">On Hand</th><th style="text-align:center;">Reserved</th>' +
+    '<th>Effective Mode</th><th></th>' +
+  '</tr></thead><tbody>';
+
+  variantInfo.combos.forEach(function(combo) {
+    var key = comboKey(combo);
+    var entry = stock[key] || {};
+    var avail = entry.available || 0;
+    var reserved = entry.reserved || 0;
+    var modeOverride = entry.inventoryModeOverride || null;
+    var effectiveMode = modeOverride || stockType;
+    var modeLabel = effectiveMode === 'strict' ? 'Strict' : effectiveMode === 'stock-to-build' ? 'Stock to Build' : 'Build to Order';
+    var overrideTag = modeOverride ? ' <span style="font-size:0.65rem;color:var(--amber);font-weight:600;">OVERRIDE</span>' : '';
+    var comboLabel = combo.join(' / ');
+
+    var availStyle = '';
+    if (effectiveMode !== 'build-to-order' && effectiveMode !== 'made-to-order') {
+      if (avail <= 0) availStyle = 'color:var(--danger);font-weight:600;';
+      else if (avail <= (inv.lowStockThreshold || 2)) availStyle = 'color:#E65100;font-weight:600;';
+    }
+    var isBTO = effectiveMode === 'build-to-order' || effectiveMode === 'made-to-order';
+
+    if (editingVariantKey === key) {
+      var leadOverride = entry.productionLeadTimeDaysOverride || '';
+      var fulfillOverride = entry.stockFulfillmentDaysOverride || '';
+      html += '<tr><td colspan="5">' +
+        '<div style="font-weight:500;font-size:0.82rem;margin-bottom:6px;">' + esc(comboLabel) + '</div>' +
+        '<div class="inv-variant-edit">' +
+          '<div><label style="font-size:0.7rem;display:block;margin-bottom:2px;">Mode Override</label>' +
+            '<select id="varOverrideMode_' + esc(key) + '">' +
+              '<option value="">Inherit (' + esc(modeLabel) + ')</option>' +
+              '<option value="strict"' + (modeOverride === 'strict' ? ' selected' : '') + '>Strict</option>' +
+              '<option value="stock-to-build"' + (modeOverride === 'stock-to-build' ? ' selected' : '') + '>Stock to Build</option>' +
+              '<option value="build-to-order"' + (modeOverride === 'build-to-order' ? ' selected' : '') + '>Build to Order</option>' +
+            '</select></div>' +
+          '<div><label style="font-size:0.7rem;display:block;margin-bottom:2px;">Prod Lead (days)</label>' +
+            '<input type="number" id="varOverrideLead_' + esc(key) + '" min="0" value="' + leadOverride + '" placeholder="' + (inv.productionLeadTimeDays || '—') + '" style="width:70px;"></div>' +
+          '<div><label style="font-size:0.7rem;display:block;margin-bottom:2px;">Fulfill (days)</label>' +
+            '<input type="number" id="varOverrideFulfill_' + esc(key) + '" min="0" value="' + fulfillOverride + '" placeholder="' + (inv.stockFulfillmentDays || 2) + '" style="width:70px;"></div>' +
+          '<button class="btn btn-primary btn-small" data-pid="' + esc(pid) + '" data-key="' + esc(key) + '" onclick="saveVariantOverrides(this.dataset.pid, this.dataset.key)">Save</button>' +
+          '<button class="btn btn-secondary btn-small" onclick="editingVariantKey=null;renderInventoryOverview();">Cancel</button>' +
+        '</div>' +
+      '</td></tr>';
+    } else {
+      html += '<tr>' +
+        '<td style="font-weight:500;">' + esc(comboLabel) + '</td>' +
+        '<td style="text-align:center;' + availStyle + '">' + (isBTO ? '—' : avail) + '</td>' +
+        '<td style="text-align:center;color:var(--warm-gray);">' + (reserved > 0 ? reserved : (isBTO ? '—' : '0')) + '</td>' +
+        '<td>' + esc(modeLabel) + overrideTag + '</td>' +
+        '<td><button class="btn btn-secondary btn-small" style="font-size:0.72rem;padding:3px 8px;" data-key="' + esc(key) + '" onclick="event.stopPropagation();editingVariantKey=this.dataset.key;renderInventoryOverview();">Edit</button></td>' +
+      '</tr>';
+    }
+  });
+  html += '</tbody></table>';
+  return html;
+}
+
+async function saveVariantOverrides(pid, key) {
+  var modeEl = document.getElementById('varOverrideMode_' + key);
+  var leadEl = document.getElementById('varOverrideLead_' + key);
+  var fulfillEl = document.getElementById('varOverrideFulfill_' + key);
+  if (!modeEl) return;
+
+  var updates = {};
+  var modeVal = modeEl.value;
+  var leadVal = leadEl ? parseInt(leadEl.value) : NaN;
+  var fulfillVal = fulfillEl ? parseInt(fulfillEl.value) : NaN;
+
+  if (modeVal) {
+    updates.inventoryModeOverride = modeVal;
+  } else {
+    updates.inventoryModeOverride = null;
+  }
+  updates.productionLeadTimeDaysOverride = isNaN(leadVal) || leadVal <= 0 ? null : leadVal;
+  updates.stockFulfillmentDaysOverride = isNaN(fulfillVal) || fulfillVal <= 0 ? null : fulfillVal;
+
+  try {
+    await MastDB.inventory.ref(pid + '/stock/' + key).update(updates);
+    // Update local cache
+    if (!inventory[pid]) inventory[pid] = {};
+    if (!inventory[pid].stock) inventory[pid].stock = {};
+    if (!inventory[pid].stock[key]) inventory[pid].stock[key] = { available: 0, reserved: 0 };
+    Object.assign(inventory[pid].stock[key], updates);
+    await syncStockInfoToPublic(pid);
+    editingVariantKey = null;
+    showToast('Variant overrides saved');
+    renderInventoryOverview();
+  } catch (err) {
+    showToast('Error saving overrides: ' + esc(err.message), true);
+  }
 }
 
 var productViewOrigin = 'products'; // 'products' or 'inventory'
@@ -16891,9 +17060,13 @@ function switchProductTab(tab) {
   }
 }
 
+var invHistoryEntries = [];
+var invHistoryPid = null;
+
 function loadProductInventoryHistory(pid) {
   var el = document.getElementById('pdInventoryHistory');
   if (!el) return;
+  invHistoryPid = pid;
   // Read from inventory audit trail (new granular history)
   MastDB.inventory.ref(pid + '/history').orderByChild('timestamp').limitToLast(25).once('value', function(snap) {
     var entries = [];
@@ -16908,45 +17081,86 @@ function loadProductInventoryHistory(pid) {
           entries.push({ timestamp: e.timestamp, action: e.action || 'update', detail: e.detail || 'Legacy audit entry', actorType: 'maker' });
         }
       });
-      // Sort by timestamp descending
       entries.sort(function(a, b) { return (b.timestamp || '').localeCompare(a.timestamp || ''); });
-      if (entries.length === 0) {
-        el.innerHTML = '<div style="color:var(--warm-gray-light);font-size:0.82rem;">No inventory changes recorded yet.</div>';
-        return;
-      }
-      var actionLabels = {
-        reserved: 'Reserved', shipped: 'Shipped', released: 'Released',
-        adjusted: 'Adjusted', restocked: 'Restocked', recount: 'Recount',
-        update: 'Updated', create: 'Added', sale: 'Sold'
-      };
-      var html = '<table style="width:100%;font-size:0.82rem;border-collapse:collapse;"><thead><tr style="border-bottom:1px solid var(--cream-dark);">' +
-        '<th style="text-align:left;padding:6px 8px;color:var(--warm-gray);">Date</th>' +
-        '<th style="text-align:left;padding:6px 8px;color:var(--warm-gray);">Action</th>' +
-        '<th style="text-align:left;padding:6px 8px;color:var(--warm-gray);">Qty</th>' +
-        '<th style="text-align:left;padding:6px 8px;color:var(--warm-gray);">Detail</th>' +
-      '</tr></thead><tbody>';
-      entries.slice(0, 20).forEach(function(e) {
-        var date = e.timestamp ? new Date(e.timestamp).toLocaleDateString() + ' ' + new Date(e.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '—';
-        var actionLabel = actionLabels[e.action] || esc(e.action || '—');
-        var qtyStr = '';
-        if (typeof e.qty === 'number') {
-          qtyStr = (e.qty > 0 ? '+' : '') + e.qty;
-        }
-        var detail = e.detail || '';
-        if (e.comboKey && e.comboKey !== '_default') detail += (detail ? ' · ' : '') + e.comboKey;
-        if (e.orderId) detail += (detail ? ' · ' : '') + 'Order: ' + e.orderId.slice(0, 8);
-        if (e.actorType === 'system') detail += (detail ? ' · ' : '') + 'auto';
-        html += '<tr style="border-bottom:1px solid var(--cream);">' +
-          '<td style="padding:6px 8px;white-space:nowrap;">' + date + '</td>' +
-          '<td style="padding:6px 8px;">' + actionLabel + '</td>' +
-          '<td style="padding:6px 8px;font-weight:600;' + (typeof e.qty === 'number' && e.qty < 0 ? 'color:var(--danger);' : typeof e.qty === 'number' && e.qty > 0 ? 'color:var(--teal);' : '') + '">' + qtyStr + '</td>' +
-          '<td style="padding:6px 8px;color:var(--warm-gray);">' + esc(detail) + '</td>' +
-        '</tr>';
-      });
-      html += '</tbody></table>';
-      el.innerHTML = html;
+      invHistoryEntries = entries;
+      renderInventoryHistory();
     });
   });
+}
+
+function renderInventoryHistory() {
+  var el = document.getElementById('pdInventoryHistory');
+  if (!el) return;
+  var actionFilter = (document.getElementById('invHistActionFilter') || {}).value || 'all';
+  var dateStart = (document.getElementById('invHistDateStart') || {}).value || '';
+  var dateEnd = (document.getElementById('invHistDateEnd') || {}).value || '';
+
+  var entries = invHistoryEntries.filter(function(e) {
+    if (actionFilter !== 'all' && e.action !== actionFilter) return false;
+    if (dateStart && e.timestamp && e.timestamp < dateStart) return false;
+    if (dateEnd && e.timestamp && e.timestamp.slice(0, 10) > dateEnd) return false;
+    return true;
+  });
+
+  if (entries.length === 0 && invHistoryEntries.length === 0) {
+    el.innerHTML = '<div style="color:var(--warm-gray-light);font-size:0.82rem;">No inventory changes recorded yet.</div>';
+    return;
+  }
+  if (entries.length === 0) {
+    el.innerHTML = '<div style="color:var(--warm-gray-light);font-size:0.82rem;">No entries match the current filters.</div>';
+    return;
+  }
+
+  var actionLabels = {
+    reserved: 'Reserved', shipped: 'Shipped', released: 'Released',
+    adjusted: 'Adjusted', restocked: 'Restocked', recount: 'Recount',
+    update: 'Updated', create: 'Added', sale: 'Sold'
+  };
+  var html = '<table style="width:100%;font-size:0.82rem;border-collapse:collapse;"><thead><tr style="border-bottom:1px solid var(--cream-dark);">' +
+    '<th style="text-align:left;padding:6px 8px;color:var(--warm-gray);">Date</th>' +
+    '<th style="text-align:left;padding:6px 8px;color:var(--warm-gray);">Action</th>' +
+    '<th style="text-align:left;padding:6px 8px;color:var(--warm-gray);">Actor</th>' +
+    '<th style="text-align:left;padding:6px 8px;color:var(--warm-gray);">Qty</th>' +
+    '<th style="text-align:left;padding:6px 8px;color:var(--warm-gray);">Detail</th>' +
+  '</tr></thead><tbody>';
+  entries.slice(0, 25).forEach(function(e) {
+    var date = e.timestamp ? new Date(e.timestamp).toLocaleDateString() + ' ' + new Date(e.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '—';
+    var actionLabel = actionLabels[e.action] || esc(e.action || '—');
+    var qtyStr = '';
+    if (typeof e.qty === 'number') {
+      var arrow = e.qty > 0 ? '↑' : e.qty < 0 ? '↓' : '';
+      qtyStr = arrow + (e.qty > 0 ? '+' : '') + e.qty;
+    }
+    var actorBadge = '';
+    if (e.actorType === 'system') {
+      actorBadge = '<span class="status-badge" style="background:#6366f1;color:white;font-size:0.68rem;">System</span>';
+    } else {
+      actorBadge = '<span class="status-badge" style="background:rgba(42,124,111,0.15);color:var(--teal);font-size:0.68rem;">Maker</span>';
+    }
+    var detail = e.detail || '';
+    if (e.comboKey && e.comboKey !== '_default') detail += (detail ? ' · ' : '') + e.comboKey;
+    var orderLink = '';
+    if (e.orderId) {
+      orderLink = ' · <a href="#" data-order-id="' + esc(e.orderId) + '" onclick="navigateToOrderFromHistory(this.dataset.orderId);return false;" style="color:var(--teal);text-decoration:underline;cursor:pointer;">Order ' + esc(e.orderId.slice(0, 8)) + '</a>';
+    }
+    html += '<tr style="border-bottom:1px solid var(--cream);">' +
+      '<td style="padding:6px 8px;white-space:nowrap;">' + date + '</td>' +
+      '<td style="padding:6px 8px;">' + actionLabel + '</td>' +
+      '<td style="padding:6px 8px;">' + actorBadge + '</td>' +
+      '<td style="padding:6px 8px;font-weight:600;' + (typeof e.qty === 'number' && e.qty < 0 ? 'color:var(--danger);' : typeof e.qty === 'number' && e.qty > 0 ? 'color:var(--teal);' : '') + '">' + qtyStr + '</td>' +
+      '<td style="padding:6px 8px;color:var(--warm-gray);">' + esc(detail) + orderLink + '</td>' +
+    '</tr>';
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+function navigateToOrderFromHistory(orderId) {
+  selectedOrderId = orderId;
+  switchTab('orders');
+  setTimeout(function() {
+    if (typeof renderOrderDetail === 'function') renderOrderDetail(orderId);
+  }, 150);
 }
 
 function generateSlug(name) {
@@ -17395,6 +17609,23 @@ function renderProductDetail(pid) {
     // Inventory History
     invTabHtml += '<div class="product-detail-section">' +
       '<div class="product-detail-section-title">Inventory History</div>' +
+      '<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:10px;">' +
+        '<div class="form-group" style="margin:0;min-width:120px;"><label style="font-size:0.72rem;">Action</label>' +
+          '<select id="invHistActionFilter" onchange="renderInventoryHistory()" style="font-size:0.8rem;padding:5px 8px;">' +
+            '<option value="all">All</option>' +
+            '<option value="reserved">Reserved</option>' +
+            '<option value="shipped">Shipped</option>' +
+            '<option value="released">Released</option>' +
+            '<option value="adjusted">Adjusted</option>' +
+            '<option value="restocked">Restocked</option>' +
+            '<option value="recount">Recount</option>' +
+            '<option value="sale">Sold</option>' +
+          '</select></div>' +
+        '<div class="form-group" style="margin:0;"><label style="font-size:0.72rem;">From</label>' +
+          '<input type="date" id="invHistDateStart" onchange="renderInventoryHistory()" style="font-size:0.8rem;padding:5px 8px;"></div>' +
+        '<div class="form-group" style="margin:0;"><label style="font-size:0.72rem;">To</label>' +
+          '<input type="date" id="invHistDateEnd" onchange="renderInventoryHistory()" style="font-size:0.8rem;padding:5px 8px;"></div>' +
+      '</div>' +
       '<div id="pdInventoryHistory" style="font-size:0.82rem;color:var(--warm-gray);">Loading...</div>' +
     '</div>';
 
