@@ -936,8 +936,14 @@
     var inv = inventory[item.pid];
     var qty = item.qty || 1;
     if (!inv) return { status: 'unknown', label: 'No inventory data', available: 0 };
-    if (inv.stockType === 'made-to-order' || inv.stockType === 'made-to-order-only') {
-      return { status: 'build', label: 'Made to Order', available: 0 };
+    if (inv.stockType === 'made-to-order' || inv.stockType === 'made-to-order-only' || inv.stockType === 'build-to-order') {
+      return { status: 'build', label: 'Build to Order', available: 0 };
+    }
+    if (inv.stockType === 'stock-to-build') {
+      var ck2 = getItemComboKey(item.pid, item.options);
+      var se2 = (ck2 !== '_default' && inv.stock && inv.stock[ck2]) ? inv.stock[ck2] : (inv.stock && inv.stock._default) || null;
+      var avail2 = se2 ? (se2.available || 0) : 0;
+      if (avail2 <= 0) return { status: 'build', label: 'Made to Order (stock depleted)', available: 0 };
     }
     var ck = getItemComboKey(item.pid, item.options);
     var stockEntry = (ck !== '_default' && inv.stock && inv.stock[ck])
@@ -1220,7 +1226,7 @@
     }
   }
 
-  async function reserveInventory(pid, qty, ck) {
+  async function reserveInventory(pid, qty, ck, orderId) {
     var inv = inventory[pid];
     if (!inv || !inv.stock || !inv.stock._default) return;
     try {
@@ -1235,12 +1241,18 @@
       }
       await stockRef.update(updates);
       await writeAudit('update', 'inventory', pid);
+      // Write inventory audit trail
+      await MastDB.inventory.ref(pid + '/history').push({
+        action: 'reserved', qty: qty, comboKey: ck || '_default',
+        orderId: orderId || null, actor: 'maker', actorType: 'maker',
+        timestamp: new Date().toISOString()
+      });
     } catch (err) {
       console.error('Error reserving inventory:', err);
     }
   }
 
-  async function releaseInventory(pid, qty, ck) {
+  async function releaseInventory(pid, qty, ck, orderId) {
     var inv = inventory[pid];
     if (!inv || !inv.stock || !inv.stock._default) return;
     try {
@@ -1254,12 +1266,18 @@
       }
       await stockRef.update(updates);
       await writeAudit('update', 'inventory', pid);
+      // Write inventory audit trail
+      await MastDB.inventory.ref(pid + '/history').push({
+        action: 'released', qty: qty, comboKey: ck || '_default',
+        orderId: orderId || null, actor: 'maker', actorType: 'maker',
+        timestamp: new Date().toISOString()
+      });
     } catch (err) {
       console.error('Error releasing inventory:', err);
     }
   }
 
-  async function pullFromStock(pid, qty, ck) {
+  async function pullFromStock(pid, qty, ck, orderId) {
     var inv = inventory[pid];
     if (!inv || !inv.stock || !inv.stock._default) return;
     try {
@@ -1271,6 +1289,12 @@
       }
       await stockRef.update(updates);
       await writeAudit('update', 'inventory', pid);
+      // Write inventory audit trail
+      await MastDB.inventory.ref(pid + '/history').push({
+        action: 'shipped', qty: -qty, comboKey: ck || '_default',
+        orderId: orderId || null, actor: 'maker', actorType: 'maker',
+        timestamp: new Date().toISOString()
+      });
     } catch (err) {
       console.error('Error pulling from stock:', err);
     }

@@ -6248,6 +6248,7 @@
         <button class="view-tab" onclick="switchSettingsSubView('integrations')">Integrations</button>
         <button class="view-tab" onclick="switchSettingsSubView('workshop')">Workshop</button>
         <button class="view-tab" onclick="switchSettingsSubView('trips')">Trips</button>
+        <button class="view-tab" onclick="switchSettingsSubView('storefront')">Storefront</button>
         <button class="view-tab" onclick="switchSettingsSubView('dashboard')">Dashboard</button>
         <button class="view-tab" onclick="switchSettingsSubView('domains')">Domains</button>
         <button class="view-tab" onclick="switchSettingsSubView('ai')">AI</button>
@@ -6946,6 +6947,75 @@
           </div>
         </div>
       </div>
+      <!-- Storefront Display Settings -->
+      <div id="settingsSubStorefront" style="display:none;max-width:600px;padding-top:16px;">
+        <div class="form-group">
+          <label style="font-size:1.1rem;font-weight:600;">Storefront Display</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
+            Configure how inventory status, lead times, and badges appear on your public storefront.
+          </p>
+        </div>
+
+        <!-- Lead Time Display -->
+        <div style="background:var(--cream);border-radius:8px;padding:16px;margin-bottom:16px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <label style="font-weight:600;font-size:0.9rem;">Show Lead Time on Products</label>
+            <label class="toggle-switch" style="margin:0;">
+              <input type="checkbox" id="sdShowLeadTime">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <p style="font-size:0.82rem;color:var(--warm-gray);margin:0;">Display estimated fulfillment time on product pages and cart based on inventory mode.</p>
+        </div>
+
+        <!-- Commission CTA -->
+        <div style="background:var(--cream);border-radius:8px;padding:16px;margin-bottom:16px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <label style="font-weight:600;font-size:0.9rem;">Commission CTA on Retired Products</label>
+            <label class="toggle-switch" style="margin:0;">
+              <input type="checkbox" id="sdShowCommissionCTA">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <p style="font-size:0.82rem;color:var(--warm-gray);margin:0 0 12px 0;">Show a call-to-action on discontinued + sold products inviting custom commissions.</p>
+          <div class="form-group" style="margin:0 0 8px 0;">
+            <label style="font-size:0.78rem;">CTA Text</label>
+            <input type="text" id="sdCommissionCTAText" placeholder="Love this piece? Commission a custom version" style="font-size:0.85rem;">
+          </div>
+          <div class="form-group" style="margin:0;">
+            <label style="font-size:0.78rem;">CTA Link</label>
+            <input type="text" id="sdCommissionCTALink" placeholder="/contact" style="font-size:0.85rem;">
+          </div>
+        </div>
+
+        <!-- Badge Text Customization -->
+        <div style="background:var(--cream);border-radius:8px;padding:16px;margin-bottom:16px;">
+          <label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:12px;">Badge Labels</label>
+          <p style="font-size:0.82rem;color:var(--warm-gray);margin:0 0 12px 0;">Customize the text shown on product badges. Use <code>{n}</code> for stock count where applicable.</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div class="form-group" style="margin:0;">
+              <label style="font-size:0.75rem;">Discontinued + In Stock</label>
+              <input type="text" id="sdBadgeDiscontinuedInStock" placeholder="Final Stock" style="font-size:0.85rem;">
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label style="font-size:0.75rem;">Discontinued + Sold</label>
+              <input type="text" id="sdBadgeDiscontinuedSold" placeholder="Retired" style="font-size:0.85rem;">
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label style="font-size:0.75rem;">Made to Order</label>
+              <input type="text" id="sdBadgeMadeToOrder" placeholder="Made to Order" style="font-size:0.85rem;">
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label style="font-size:0.75rem;">Low Stock</label>
+              <input type="text" id="sdBadgeLowStock" placeholder="Only {n} Left" style="font-size:0.85rem;">
+            </div>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" onclick="saveShopDisplaySettings()">Save Storefront Settings</button>
+        <div id="sdSaveStatus" style="margin-top:8px;font-size:0.85rem;"></div>
+      </div>
+
       <!-- Dashboard Card Settings -->
       <div id="settingsSubDashboard" style="display:none;max-width:500px;">
         <div class="form-group">
@@ -8242,7 +8312,8 @@ MastDB.config = {
   settingsField: function(field) { return MastDB._ref('public/settings/' + field); },
   migrationFlag: function() { return MastDB._ref('admin/sectionsMigrated'); },
   analyticsHits: function() { return MastDB._ref('analytics/hits'); },
-  makerSettings: function() { return MastDB._ref('admin/config/makerSettings'); }
+  makerSettings: function() { return MastDB._ref('admin/config/makerSettings'); },
+  shopDisplay: function() { return MastDB._ref('public/config/shopDisplay'); }
 };
 
 MastDB.wholesaleTokens = {
@@ -11067,7 +11138,7 @@ function getModuleForRouteManifest(route) {
 // ============================================================
 // Settings Sub-Tabs
 // ============================================================
-var settingsSubViews = ['general', 'payments', 'shipping', 'tax', 'email', 'integrations', 'workshop', 'trips', 'dashboard', 'domains', 'ai', 'subscription', 'about'];
+var settingsSubViews = ['general', 'payments', 'shipping', 'tax', 'email', 'integrations', 'workshop', 'trips', 'storefront', 'dashboard', 'domains', 'ai', 'subscription', 'about'];
 function switchSettingsSubView(view) {
   // Hide all sub-views
   settingsSubViews.forEach(function(v) {
@@ -11089,6 +11160,7 @@ function switchSettingsSubView(view) {
   if (view === 'shipping') { loadShipProviderConfig(); }
   if (view === 'email') { loadEmailConfig(); loadEmailDomainSection(); }
   if (view === 'trips') { MastAdmin.loadModule('trips').then(function() { if (typeof loadTripsSettings === 'function') loadTripsSettings(); }); }
+  if (view === 'storefront') loadShopDisplaySettings();
   if (view === 'dashboard') renderDashCardSettings();
   if (view === 'domains') loadDomainSettings();
   if (view === 'ai') loadAiIntegrations();
@@ -12128,6 +12200,63 @@ function updateLkApiKeyStatus() {
       el.innerHTML = '<span style="color:var(--warm-gray-light);">No key configured. Print card feature requires a LabelKeeper API key.</span>';
     }
   });
+}
+
+// ============================================================
+// Shop Display Settings (badges, lead time, commission CTA)
+// ============================================================
+
+async function loadShopDisplaySettings() {
+  try {
+    var snap = await MastDB.config.shopDisplay().once('value');
+    var cfg = snap.val() || {};
+    var el;
+    el = document.getElementById('sdShowLeadTime');
+    if (el) el.checked = !!cfg.showLeadTime;
+    el = document.getElementById('sdShowCommissionCTA');
+    if (el) el.checked = !!cfg.showCommissionCTA;
+    el = document.getElementById('sdCommissionCTAText');
+    if (el) el.value = cfg.commissionCTAText || '';
+    el = document.getElementById('sdCommissionCTALink');
+    if (el) el.value = cfg.commissionCTALink || '';
+    el = document.getElementById('sdBadgeDiscontinuedInStock');
+    if (el) el.value = (cfg.badges && cfg.badges.discontinuedInStock) || '';
+    el = document.getElementById('sdBadgeDiscontinuedSold');
+    if (el) el.value = (cfg.badges && cfg.badges.discontinuedSold) || '';
+    el = document.getElementById('sdBadgeMadeToOrder');
+    if (el) el.value = (cfg.badges && cfg.badges.madeToOrder) || '';
+    el = document.getElementById('sdBadgeLowStock');
+    if (el) el.value = (cfg.badges && cfg.badges.lowStock) || '';
+  } catch (err) {
+    console.error('Error loading shop display settings:', err);
+  }
+}
+
+async function saveShopDisplaySettings() {
+  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
+  try {
+    var cfg = {
+      showLeadTime: !!document.getElementById('sdShowLeadTime').checked,
+      showCommissionCTA: !!document.getElementById('sdShowCommissionCTA').checked,
+      commissionCTAText: document.getElementById('sdCommissionCTAText').value.trim() || 'Love this piece? Commission a custom version',
+      commissionCTALink: document.getElementById('sdCommissionCTALink').value.trim() || '/contact',
+      badges: {
+        discontinuedInStock: document.getElementById('sdBadgeDiscontinuedInStock').value.trim() || 'Final Stock',
+        discontinuedSold: document.getElementById('sdBadgeDiscontinuedSold').value.trim() || 'Retired',
+        madeToOrder: document.getElementById('sdBadgeMadeToOrder').value.trim() || 'Made to Order',
+        lowStock: document.getElementById('sdBadgeLowStock').value.trim() || 'Only {n} Left'
+      },
+      updatedAt: new Date().toISOString()
+    };
+    await MastDB.config.shopDisplay().set(cfg);
+    await writeAudit('update', 'settings', 'shopDisplay');
+    var statusEl = document.getElementById('sdSaveStatus');
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Storefront settings saved</span>';
+    setTimeout(function() { if (statusEl) statusEl.innerHTML = ''; }, 3000);
+    showToast('Storefront settings saved');
+  } catch (err) {
+    showToast('Error saving storefront settings: ' + err.message, true);
+  }
 }
 
 // Events count setting
@@ -15754,9 +15883,12 @@ function renderProducts() {
     var stockType = (inv && inv.stockType) ? inv.stockType : 'made-to-order';
     var threshold = (inv && inv.lowStockThreshold) ? inv.lowStockThreshold : 2;
 
-    // Stock type badge
+    // Stock type badge — supports both new modes (strict/stock-to-build/build-to-order) and legacy (made-to-order/in-stock/limited)
     var stockBadgeClass = 'status-badge stock-badge ';
-    if (stockType === 'made-to-order') {
+    if (stockType === 'build-to-order' || stockType === 'made-to-order') {
+      stockBadgeClass += 'made-to-order';
+      invHtml = '<span class="' + stockBadgeClass + '">Build to Order</span>';
+    } else if (stockType === 'stock-to-build' && avail <= 0) {
       stockBadgeClass += 'made-to-order';
       invHtml = '<span class="' + stockBadgeClass + '">Made to Order</span>';
     } else if (avail <= 0) {
@@ -15801,7 +15933,8 @@ function renderProducts() {
     var outCount = 0;
     productsData.forEach(function(p) {
       var inv = inventory[p.pid];
-      if (inv && inv.stockType !== 'made-to-order') {
+      var st = inv && inv.stockType;
+      if (inv && st !== 'made-to-order' && st !== 'build-to-order') {
         var totals = getInventoryTotals(inv);
         var threshold = inv.lowStockThreshold || 2;
         if (totals.available <= 0) outCount++;
@@ -16460,7 +16593,7 @@ function renderInventoryOverview() {
 
     totalOnHand += totals.available;
     totalReserved += totals.reserved;
-    if (stockType === 'made-to-order') madeToOrderCount++;
+    if (stockType === 'build-to-order' || stockType === 'made-to-order') madeToOrderCount++;
     else if (totals.available <= 0) outOfStockCount++;
     else if (totals.available <= threshold) lowStockCount++;
 
@@ -16507,17 +16640,18 @@ function renderInventoryOverview() {
   });
 
   // Sort: out of stock first, then low stock, then by available desc
+  var isBTO = function(t) { return t === 'build-to-order' || t === 'made-to-order'; };
   rows.sort(function(a, b) {
-    // Made to order goes last
-    if (a.stockType === 'made-to-order' && b.stockType !== 'made-to-order') return 1;
-    if (b.stockType === 'made-to-order' && a.stockType !== 'made-to-order') return -1;
+    // Build-to-order goes last
+    if (isBTO(a.stockType) && !isBTO(b.stockType)) return 1;
+    if (isBTO(b.stockType) && !isBTO(a.stockType)) return -1;
     // Out of stock first (urgent)
-    var aOOS = (a.stockType !== 'made-to-order' && a.available <= 0) ? 1 : 0;
-    var bOOS = (b.stockType !== 'made-to-order' && b.available <= 0) ? 1 : 0;
+    var aOOS = (!isBTO(a.stockType) && a.available <= 0) ? 1 : 0;
+    var bOOS = (!isBTO(b.stockType) && b.available <= 0) ? 1 : 0;
     if (aOOS !== bOOS) return bOOS - aOOS;
     // Low stock next
-    var aLow = (a.stockType !== 'made-to-order' && a.available > 0 && a.available <= a.threshold) ? 1 : 0;
-    var bLow = (b.stockType !== 'made-to-order' && b.available > 0 && b.available <= b.threshold) ? 1 : 0;
+    var aLow = (!isBTO(a.stockType) && a.available > 0 && a.available <= a.threshold) ? 1 : 0;
+    var bLow = (!isBTO(b.stockType) && b.available > 0 && b.available <= b.threshold) ? 1 : 0;
     if (aLow !== bLow) return bLow - aLow;
     // Then by available descending
     return b.available - a.available;
@@ -16564,7 +16698,11 @@ function renderInventoryOverview() {
 
   rows.forEach(function(r) {
     var statusBadge = '';
-    if (r.stockType === 'made-to-order') {
+    var isBTORow = (r.stockType === 'build-to-order' || r.stockType === 'made-to-order');
+    var isSTBRow = (r.stockType === 'stock-to-build');
+    if (isBTORow) {
+      statusBadge = '<span class="status-badge stock-badge made-to-order" style="font-size:0.72rem;">Build to Order</span>';
+    } else if (isSTBRow && r.available <= 0) {
       statusBadge = '<span class="status-badge stock-badge made-to-order" style="font-size:0.72rem;">Made to Order</span>';
     } else if (r.available <= 0) {
       statusBadge = '<span class="status-badge stock-badge out-of-stock" style="font-size:0.72rem;">Out of Stock</span>';
@@ -16579,7 +16717,7 @@ function renderInventoryOverview() {
       : '<div style="width:36px;height:36px;border-radius:6px;background:var(--cream-dark);"></div>';
 
     var qtyStyle = '';
-    if (r.stockType !== 'made-to-order') {
+    if (!isBTORow) {
       if (r.available <= 0) qtyStyle = 'color:var(--danger);font-weight:600;';
       else if (r.available <= r.threshold) qtyStyle = 'color:#E65100;font-weight:600;';
     }
@@ -16591,8 +16729,8 @@ function renderInventoryOverview() {
         (r.price ? '<div style="font-size:0.75rem;color:var(--warm-gray);">' + esc(r.price) + '</div>' : '') +
       '</td>' +
       '<td style="text-align:center;">' + statusBadge + '</td>' +
-      '<td style="text-align:center;' + qtyStyle + '">' + (r.stockType === 'made-to-order' ? '<span style="color:var(--warm-gray-light);">—</span>' : r.available) + '</td>' +
-      '<td style="text-align:center;color:var(--warm-gray);">' + (r.reserved > 0 ? r.reserved : (r.stockType === 'made-to-order' ? '<span style="color:var(--warm-gray-light);">—</span>' : '0')) + '</td>' +
+      '<td style="text-align:center;' + qtyStyle + '">' + (isBTORow ? '<span style="color:var(--warm-gray-light);">—</span>' : r.available) + '</td>' +
+      '<td style="text-align:center;color:var(--warm-gray);">' + (r.reserved > 0 ? r.reserved : (isBTORow ? '<span style="color:var(--warm-gray-light);">—</span>' : '0')) + '</td>' +
       '<td>' + (r.attrSummary || '<span style="color:var(--warm-gray-light);font-size:0.78rem;">No variants</span>') + '</td>' +
     '</tr>';
   });
@@ -16715,27 +16853,18 @@ function switchProductTab(tab) {
 function loadProductInventoryHistory(pid) {
   var el = document.getElementById('pdInventoryHistory');
   if (!el) return;
-  // Query audit log for inventory changes for this product
-  MastDB.auditLog.ref().orderByChild('objectId').equalTo(pid).limitToLast(20).once('value', function(snap) {
+  // Read from inventory audit trail (new granular history)
+  MastDB.inventory.ref(pid + '/history').orderByChild('timestamp').limitToLast(25).once('value', function(snap) {
     var entries = [];
     snap.forEach(function(child) {
-      var e = child.val();
-      if (e.objectType === 'inventory' || e.objectType === 'stock') entries.push(e);
+      entries.push(child.val());
     });
-    // Also check sales that include this product
-    MastDB.sales.ref().orderByKey().limitToLast(100).once('value', function(salesSnap) {
-      var salesVal = salesSnap.val() || {};
-      Object.keys(salesVal).forEach(function(k) {
-        var s = salesVal[k];
-        if (s.items && s.items.some(function(i) { return i.productId === pid; })) {
-          var item = s.items.find(function(i) { return i.productId === pid; });
-          entries.push({
-            timestamp: s.timestamp || s.createdAt,
-            action: 'sale',
-            objectType: 'sale',
-            detail: 'Sold ' + (item.quantity || 1) + 'x',
-            qty: -(item.quantity || 1)
-          });
+    // Also check legacy audit log for older entries
+    MastDB.auditLog.ref().orderByChild('objectId').equalTo(pid).limitToLast(10).once('value', function(auditSnap) {
+      auditSnap.forEach(function(child) {
+        var e = child.val();
+        if (e.objectType === 'inventory' || e.objectType === 'stock') {
+          entries.push({ timestamp: e.timestamp, action: e.action || 'update', detail: e.detail || 'Legacy audit entry', actorType: 'maker' });
         }
       });
       // Sort by timestamp descending
@@ -16744,19 +16873,33 @@ function loadProductInventoryHistory(pid) {
         el.innerHTML = '<div style="color:var(--warm-gray-light);font-size:0.82rem;">No inventory changes recorded yet.</div>';
         return;
       }
+      var actionLabels = {
+        reserved: 'Reserved', shipped: 'Shipped', released: 'Released',
+        adjusted: 'Adjusted', restocked: 'Restocked', recount: 'Recount',
+        update: 'Updated', create: 'Added', sale: 'Sold'
+      };
       var html = '<table style="width:100%;font-size:0.82rem;border-collapse:collapse;"><thead><tr style="border-bottom:1px solid var(--cream-dark);">' +
         '<th style="text-align:left;padding:6px 8px;color:var(--warm-gray);">Date</th>' +
-        '<th style="text-align:left;padding:6px 8px;color:var(--warm-gray);">Type</th>' +
+        '<th style="text-align:left;padding:6px 8px;color:var(--warm-gray);">Action</th>' +
+        '<th style="text-align:left;padding:6px 8px;color:var(--warm-gray);">Qty</th>' +
         '<th style="text-align:left;padding:6px 8px;color:var(--warm-gray);">Detail</th>' +
       '</tr></thead><tbody>';
-      entries.slice(0, 15).forEach(function(e) {
-        var date = e.timestamp ? new Date(e.timestamp).toLocaleDateString() : '—';
-        var type = e.action === 'sale' ? '📦 Sold' : e.action === 'update' ? '✏️ Updated' : e.action === 'create' ? '➕ Added' : esc(e.action || '—');
-        var detail = e.detail || e.action || '';
+      entries.slice(0, 20).forEach(function(e) {
+        var date = e.timestamp ? new Date(e.timestamp).toLocaleDateString() + ' ' + new Date(e.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '—';
+        var actionLabel = actionLabels[e.action] || esc(e.action || '—');
+        var qtyStr = '';
+        if (typeof e.qty === 'number') {
+          qtyStr = (e.qty > 0 ? '+' : '') + e.qty;
+        }
+        var detail = e.detail || '';
+        if (e.comboKey && e.comboKey !== '_default') detail += (detail ? ' · ' : '') + e.comboKey;
+        if (e.orderId) detail += (detail ? ' · ' : '') + 'Order: ' + e.orderId.slice(0, 8);
+        if (e.actorType === 'system') detail += (detail ? ' · ' : '') + 'auto';
         html += '<tr style="border-bottom:1px solid var(--cream);">' +
-          '<td style="padding:6px 8px;">' + date + '</td>' +
-          '<td style="padding:6px 8px;">' + type + '</td>' +
-          '<td style="padding:6px 8px;">' + esc(detail) + '</td>' +
+          '<td style="padding:6px 8px;white-space:nowrap;">' + date + '</td>' +
+          '<td style="padding:6px 8px;">' + actionLabel + '</td>' +
+          '<td style="padding:6px 8px;font-weight:600;' + (typeof e.qty === 'number' && e.qty < 0 ? 'color:var(--danger);' : typeof e.qty === 'number' && e.qty > 0 ? 'color:var(--teal);' : '') + '">' + qtyStr + '</td>' +
+          '<td style="padding:6px 8px;color:var(--warm-gray);">' + esc(detail) + '</td>' +
         '</tr>';
       });
       html += '</tbody></table>';
@@ -17215,19 +17358,30 @@ function renderProductDetail(pid) {
     '</div>';
 
     // Stock settings (AFTER inventory)
+    var productionLead = inv.productionLeadTimeDays || '';
+    var fulfillmentDays = inv.stockFulfillmentDays || 2;
+    var isStockTracked = (stockType === 'strict' || stockType === 'stock-to-build' || stockType === 'in-stock' || stockType === 'limited');
     invTabHtml += '<div class="product-detail-section">' +
       '<div class="product-detail-section-title">Stock Settings</div>' +
       '<div style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;">' +
-        '<div class="form-group" style="margin:0;min-width:150px;"><label style="font-size:0.78rem;">Stock Type</label>' +
+        '<div class="form-group" style="margin:0;min-width:170px;"><label style="font-size:0.78rem;">Inventory Mode</label>' +
           '<select id="pdStockType" onchange="pdStockTypeChanged(\'' + esc(pid) + '\')">' +
-            '<option value="made-to-order"' + (stockType === 'made-to-order' ? ' selected' : '') + '>Made to Order</option>' +
-            '<option value="in-stock"' + (stockType === 'in-stock' ? ' selected' : '') + '>In Stock</option>' +
-            '<option value="limited"' + (stockType === 'limited' ? ' selected' : '') + '>Limited Edition</option>' +
+            '<option value="build-to-order"' + (stockType === 'build-to-order' || stockType === 'made-to-order' ? ' selected' : '') + '>Build to Order</option>' +
+            '<option value="strict"' + (stockType === 'strict' || stockType === 'in-stock' || stockType === 'limited' ? ' selected' : '') + '>Strict (stock only)</option>' +
+            '<option value="stock-to-build"' + (stockType === 'stock-to-build' ? ' selected' : '') + '>Stock to Build</option>' +
           '</select></div>' +
-        '<div class="form-group" style="margin:0;" id="pdThresholdGroup"' + (stockType === 'made-to-order' ? ' hidden' : '') + '>' +
+        '<div class="form-group" style="margin:0;" id="pdThresholdGroup"' + (!isStockTracked ? ' hidden' : '') + '>' +
           '<label style="font-size:0.78rem;">Low Stock Alert At</label>' +
           '<input type="number" id="pdThreshold" min="0" value="' + threshold + '" style="width:80px;"></div>' +
-        '<div class="form-group" style="margin:0;"><label style="font-size:0.78rem;">Lead Time (days)</label>' +
+        '<div class="form-group" style="margin:0;" id="pdFulfillmentGroup"' + (!isStockTracked ? ' hidden' : '') + '>' +
+          '<label style="font-size:0.78rem;">Fulfillment Days</label>' +
+          '<input type="number" id="pdFulfillmentDays" min="0" value="' + fulfillmentDays + '" style="width:80px;" title="Days to ship in-stock items"></div>' +
+      '</div>' +
+      '<div style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;margin-top:12px;">' +
+        '<div class="form-group" style="margin:0;" id="pdProductionLeadGroup"' + (stockType === 'strict' || stockType === 'in-stock' || stockType === 'limited' ? ' hidden' : '') + '>' +
+          '<label style="font-size:0.78rem;">Production Lead Time (days)</label>' +
+          '<input type="number" id="pdProductionLeadTime" min="0" value="' + productionLead + '" style="width:100px;" placeholder="e.g. 14" title="Days to produce when built to order"></div>' +
+        '<div class="form-group" style="margin:0;"><label style="font-size:0.78rem;">Lead Time (days, legacy)</label>' +
           '<input type="number" id="pdLeadTime" min="0" value="' + leadTime + '" style="width:80px;"></div>' +
       '</div>' +
       '<div class="form-group" style="margin-top:12px;"><label style="font-size:0.78rem;">Notes</label>' +
@@ -17598,8 +17752,14 @@ function buildVariantTable(pid, labels, combos, inv) {
 
 function pdStockTypeChanged(pid) {
   var type = document.getElementById('pdStockType').value;
+  var isStockTracked = (type === 'strict' || type === 'stock-to-build');
+  var needsProductionLead = (type === 'build-to-order' || type === 'stock-to-build');
   var thresholdGroup = document.getElementById('pdThresholdGroup');
-  if (thresholdGroup) thresholdGroup.hidden = (type === 'made-to-order');
+  if (thresholdGroup) thresholdGroup.hidden = !isStockTracked;
+  var fulfillmentGroup = document.getElementById('pdFulfillmentGroup');
+  if (fulfillmentGroup) fulfillmentGroup.hidden = !isStockTracked;
+  var productionLeadGroup = document.getElementById('pdProductionLeadGroup');
+  if (productionLeadGroup) productionLeadGroup.hidden = !needsProductionLead;
 }
 
 function pdAdjustVariant(comboKey, delta) {
@@ -17628,6 +17788,10 @@ async function saveProductSettings(pid) {
     var notes = document.getElementById('pdNotes').value.trim();
     var thresholdEl = document.getElementById('pdThreshold');
     var threshold = thresholdEl ? (parseInt(thresholdEl.value) || 2) : 2;
+    var productionLeadEl = document.getElementById('pdProductionLeadTime');
+    var productionLeadTimeDays = productionLeadEl ? (parseInt(productionLeadEl.value) || null) : null;
+    var fulfillmentEl = document.getElementById('pdFulfillmentDays');
+    var stockFulfillmentDays = fulfillmentEl ? (parseInt(fulfillmentEl.value) || 2) : 2;
 
     // Only save settings — stock counts are managed by production and orders
     var updates = {
@@ -17635,9 +17799,14 @@ async function saveProductSettings(pid) {
       stockType: stockType,
       leadTimeDays: leadTime,
       lowStockThreshold: threshold,
+      stockFulfillmentDays: stockFulfillmentDays,
       notes: notes,
       updatedAt: new Date().toISOString()
     };
+    // Only write productionLeadTimeDays for modes that use it
+    if (stockType === 'build-to-order' || stockType === 'stock-to-build') {
+      updates.productionLeadTimeDays = productionLeadTimeDays;
+    }
 
     await MastDB.inventory.ref(pid).update(updates);
     await writeAudit('update', 'inventory', pid);
@@ -17741,16 +17910,23 @@ async function saveAdjustStock(pid) {
       }
     }
 
-    // Auto-set stockType to 'in-stock' when stock is added (Bug #5 fix)
-    if (!inv.stockType || inv.stockType === 'made-to-order') {
+    // Auto-set stockType to 'strict' when stock is added to a build-to-order product
+    if (!inv.stockType || inv.stockType === 'made-to-order' || inv.stockType === 'build-to-order') {
       var totalSet = updates['stock/_default/available'] || 0;
       if (totalSet > 0) {
-        updates['stockType'] = 'in-stock';
+        updates['stockType'] = 'strict';
       }
     }
 
     await MastDB.inventory.ref(pid).update(updates);
     await writeAudit('update', 'inventory', pid);
+    // Write inventory audit trail for stock adjustments
+    var adjAction = adjMode === 'add' ? 'restocked' : 'recount';
+    await MastDB.inventory.ref(pid + '/history').push({
+      action: adjAction, actor: 'maker', actorType: 'maker',
+      detail: adjMode === 'add' ? 'Added stock via admin' : 'Stock count adjusted via admin',
+      timestamp: new Date().toISOString()
+    });
     emitTestingEvent('adjustStock', {});
 
     // Auto-set sold status when sculpture stock reaches 0
@@ -23545,8 +23721,8 @@ function renderDashCardLowInventory() {
       if (!p || !p.pid) return;
       var inv = inventory[p.pid];
       if (!inv) return;
-      // Skip made-to-order and sculpture products
-      if (inv.stockType === 'made-to-order') return;
+      // Skip build-to-order and sculpture products
+      if (inv.stockType === 'made-to-order' || inv.stockType === 'build-to-order') return;
       if (p.categories && p.categories.indexOf('Sculptures') !== -1) return;
 
       var totals = getInventoryTotals(inv);
