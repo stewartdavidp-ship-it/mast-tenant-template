@@ -355,6 +355,7 @@
     html += '<button class="view-tab' + (currentSubTab === 'style' ? ' active' : '') + '" onclick="wpSwitchTab(\'style\')">Style</button>';
     html += '<button class="view-tab' + (currentSubTab === 'categories' ? ' active' : '') + '" onclick="wpSwitchTab(\'categories\')">Categories</button>';
     html += '<button class="view-tab' + (currentSubTab === 'import' ? ' active' : '') + '" onclick="wpSwitchTab(\'import\')">Import</button>';
+    html += '<button class="view-tab' + (currentSubTab === 'storefront' ? ' active' : '') + '" onclick="wpSwitchTab(\'storefront\')">Storefront</button>';
     html += '</div>';
 
     // Tab content
@@ -364,6 +365,7 @@
     else if (currentSubTab === 'style') html += renderStyleTab();
     else if (currentSubTab === 'categories') html += renderCategoriesTab();
     else if (currentSubTab === 'import') html += renderImportTab();
+    else if (currentSubTab === 'storefront') html += '<p>Redirecting to Storefront settings...</p>';
     html += '</div>';
 
     root.innerHTML = html;
@@ -1842,6 +1844,12 @@
   // ── Event handlers (exposed to window) ──
 
   window.wpSwitchTab = function(tab) {
+    if (tab === 'storefront') {
+      // Storefront settings live in core — navigate there
+      navigateTo('settings');
+      setTimeout(function() { switchSettingsSubView('storefront'); }, 100);
+      return;
+    }
     currentSubTab = tab;
     pendingSwitchTemplateId = null;
     renderWebsite();

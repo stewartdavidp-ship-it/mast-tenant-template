@@ -4942,9 +4942,9 @@
         <div class="sidebar-item" data-route="analytics" onclick="navigateTo('analytics')">Analytics</div>
         <div class="sidebar-item" data-route="auditlog" onclick="navigateTo('auditlog')">Audit Log</div>
         <div class="sidebar-item" data-route="settings" onclick="navigateTo('settings')">Settings <span id="sidebarAlertBadge" class="sidebar-badge alert" style="display:none;"></span> <span id="settingsSandboxBadge" style="display:none;background:#f59e0b;color:#fff;font-size:0.65rem;padding:2px 6px;border-radius:4px;margin-left:4px;font-weight:700;vertical-align:middle;">SANDBOX</span></div>
-        <div class="sidebar-item" id="testingModeItem" onclick="toggleTestingMode()" style="display:none;">🧪 Testing Mode</div>
         <div class="sidebar-item" data-route="subscription" onclick="navigateTo('subscription')">Subscription</div>
         <div class="sidebar-item" data-route="about" onclick="navigateTo('about')">About</div>
+        <div class="sidebar-item" id="testingModeItem" onclick="toggleTestingMode()" style="display:none;">🧪 Testing Mode</div>
       </div>
     </div>
     <!-- Show/hide locked modules toggle -->
@@ -6276,14 +6276,6 @@
         <button class="view-tab" onclick="switchSettingsSubView('ai')">AI</button>
         <button class="view-tab" onclick="switchSettingsSubView('notifications')">Notifications <span id="settingsNotifBadge" class="sidebar-badge alert" style="display:none;margin-left:4px;"></span></button>
       </div>
-      <div id="settingsSubAbout" style="display:none;padding-top:16px;">
-        <div id="aboutContent"></div>
-      </div>
-      <div id="settingsSubSubscription" style="display:none;padding-top:16px;">
-        <div id="subscriptionBillingInfo" style="margin-bottom:24px;"></div>
-        <div id="subscriptionTierSelector" style="margin-bottom:24px;"></div>
-        <div id="moduleSelectionUI"></div>
-      </div>
       <div id="settingsSubGeneral" style="max-width:500px;">
         <div id="githubPatSection" class="form-group" style="display:none;">
           <label>GitHub Personal Access Token</label>
@@ -6349,6 +6341,17 @@
             <span>Enable public feedback button</span>
           </label>
           <div id="publicFeedbackStatus" style="margin-top:8px;font-size:0.85rem;"></div>
+        </div>
+        <div class="form-group" style="margin-top:24px;">
+          <label>Testing Mode</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">
+            Show the Testing Mode panel in the sidebar. Useful for QA testing with guided missions.
+          </p>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+            <input type="checkbox" id="testingModeVisibleToggle" onchange="toggleTestingModeVisibility()"
+              style="width:18px;height:18px;cursor:pointer;">
+            <span>Show Testing Mode in sidebar</span>
+          </label>
         </div>
 
       </div>
@@ -6805,17 +6808,19 @@
 
       <!-- Notifications Settings Sub-Tab -->
       <div id="settingsSubNotifications" style="display:none;max-width:700px;">
-        <div class="form-group">
-          <label style="font-size:1.1rem;font-weight:600;">Alert Notifications</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
+        <div style="display:flex;gap:0;border-bottom:1px solid rgba(255,255,255,0.1);margin-bottom:16px;" id="notifInnerTabs">
+          <button class="view-tab active" onclick="switchNotifInnerTab('alerts')" style="padding:8px 16px;font-size:0.82rem;">Alerts</button>
+          <button class="view-tab" onclick="switchNotifInnerTab('history')" style="padding:8px 16px;font-size:0.82rem;">History</button>
+        </div>
+        <div id="notifInnerAlerts">
+          <p style="font-size:0.85rem;color:rgba(255,255,255,0.5);margin-bottom:16px;">
             Configure which business alerts you receive and how they're delivered. Alerts are evaluated automatically every 4 hours.
           </p>
           <div id="notificationsConfigStatus" style="margin-bottom:12px;font-size:0.85rem;"></div>
           <div id="notificationsAlertList"></div>
         </div>
-        <div class="form-group" style="margin-top:24px;border-top:1px solid rgba(255,255,255,0.06);padding-top:16px;">
-          <label style="font-size:1rem;font-weight:600;">Recent Alert History</label>
-          <div id="notificationsHistoryList" style="margin-top:12px;"></div>
+        <div id="notifInnerHistory" style="display:none;">
+          <div id="notificationsHistoryList"></div>
         </div>
       </div>
 
@@ -7213,6 +7218,24 @@
       </div>
     </div>
 
+    <!-- Admin: Subscription Tab (standalone) -->
+    <div id="subscriptionTab" style="display:none;">
+      <div class="section-header">
+        <h2>Subscription</h2>
+      </div>
+      <div id="subscriptionBillingInfo" style="margin-bottom:24px;"></div>
+      <div id="subscriptionTierSelector" style="margin-bottom:24px;"></div>
+      <div id="moduleSelectionUI"></div>
+    </div>
+
+    <!-- Admin: About Tab (standalone) -->
+    <div id="aboutTab" style="display:none;">
+      <div class="section-header">
+        <h2>About</h2>
+      </div>
+      <div id="aboutContent"></div>
+    </div>
+
     <!-- Admin: Audit Log Tab -->
     <div id="auditLogTab" style="display:none;">
       <div class="section-header">
@@ -7296,7 +7319,7 @@
     <!-- Admin: Employees & Permissions Tab -->
     <div id="employeesTab" style="display:none;">
       <div class="section-header">
-        <h2>Employees &amp; Permissions</h2>
+        <h2>Permissions</h2>
         <button class="btn btn-primary" onclick="showInviteUserModal()" style="font-size:0.82rem;padding:6px 14px;">+ Add User</button>
       </div>
       <div class="view-tabs" id="empSubNav">
@@ -10704,8 +10727,8 @@ var ROUTE_MAP = {
   'auditlog':    { tab: 'auditLogTab' },
   // financials route handled by financials module (lazy-loaded)
   'settings':    { tab: 'settingsTab' },
-  'subscription': { tab: 'settingsTab', setup: function() { switchSettingsSubView('subscription'); } },
-  'about':        { tab: 'settingsTab', setup: function() { switchSettingsSubView('about'); } },
+  'subscription': { tab: 'subscriptionTab', setup: function() { renderSubscriptionSettings(); } },
+  'about':        { tab: 'aboutTab', setup: function() { renderAboutSettings(); } },
   // trips route handled by trips module (lazy-loaded)
   // expenses route handled by expenses module (lazy-loaded)
   'reports':     { tab: null, placeholder: { name: 'Reports', desc: 'Tax reports, mileage summaries, expense exports.', badge: 'new' } },
@@ -10957,11 +10980,8 @@ function showSidebar() {
   // Hide Settings sidebar item for non-admin users
   var settingsItem = sidebar && sidebar.querySelector('[data-route="settings"]');
   if (settingsItem) settingsItem.style.display = isAdmin() ? '' : 'none';
-  // Show Testing Mode for Owner + Manager (isStaff), hide for Staff (guest)
-  var tmItem = document.getElementById('testingModeItem');
-  if (tmItem) tmItem.style.display = isStaff() ? '' : 'none';
-  var tmHandle = document.getElementById('testingModeHandle');
-  if (tmHandle) tmHandle.style.display = isStaff() ? '' : 'none';
+  // Show Testing Mode only if enabled in settings AND user is staff
+  loadTestingModeVisibility();
 }
 
 function hideSidebar() {
@@ -11178,7 +11198,7 @@ function getModuleForRouteManifest(route) {
 // ============================================================
 // Settings Sub-Tabs
 // ============================================================
-var settingsSubViews = ['general', 'payments', 'shipping', 'tax', 'email', 'integrations', 'workshop', 'trips', 'storefront', 'dashboard', 'domains', 'ai', 'subscription', 'about', 'notifications'];
+var settingsSubViews = ['general', 'payments', 'shipping', 'tax', 'email', 'integrations', 'workshop', 'trips', 'storefront', 'dashboard', 'domains', 'ai', 'notifications'];
 function switchSettingsSubView(view) {
   // Hide all sub-views
   settingsSubViews.forEach(function(v) {
@@ -11250,6 +11270,17 @@ function renderAboutSettings() {
 var _notificationsLoaded = false;
 var _alertHistoryListener = null;
 var _unreadAlertCount = 0;
+
+function switchNotifInnerTab(tab) {
+  var alertsEl = document.getElementById('notifInnerAlerts');
+  var historyEl = document.getElementById('notifInnerHistory');
+  if (alertsEl) alertsEl.style.display = tab === 'alerts' ? '' : 'none';
+  if (historyEl) historyEl.style.display = tab === 'history' ? '' : 'none';
+  document.querySelectorAll('#notifInnerTabs .view-tab').forEach(function(btn) {
+    btn.classList.toggle('active', btn.textContent.trim().toLowerCase() === tab);
+  });
+  if (tab === 'history') loadAlertHistory();
+}
 
 function loadNotificationsSettings() {
   var statusEl = document.getElementById('notificationsConfigStatus');
@@ -23385,6 +23416,42 @@ function loadPublicFeedbackSetting() {
     var toggle = document.getElementById('publicFeedbackToggle');
     if (toggle) toggle.checked = snap.val() === true;
   });
+}
+
+// ============================================================
+// Testing Mode Visibility Setting
+// ============================================================
+
+var _testingModeVisible = false;
+
+function loadTestingModeVisibility() {
+  MastDB._ref('config/testingModeVisible').once('value').then(function(snap) {
+    _testingModeVisible = snap.val() === true;
+    applyTestingModeVisibility();
+    // Sync the toggle in Settings if it exists
+    var toggle = document.getElementById('testingModeVisibleToggle');
+    if (toggle) toggle.checked = _testingModeVisible;
+  }).catch(function() {
+    applyTestingModeVisibility();
+  });
+}
+
+function applyTestingModeVisibility() {
+  var show = _testingModeVisible && isStaff();
+  var tmItem = document.getElementById('testingModeItem');
+  if (tmItem) tmItem.style.display = show ? '' : 'none';
+  var tmHandle = document.getElementById('testingModeHandle');
+  if (tmHandle) tmHandle.style.display = show ? '' : 'none';
+}
+
+function toggleTestingModeVisibility() {
+  var toggle = document.getElementById('testingModeVisibleToggle');
+  var val = toggle ? toggle.checked : false;
+  MastDB._ref('config').update({ testingModeVisible: val }).then(function() {
+    _testingModeVisible = val;
+    applyTestingModeVisibility();
+    showToast(val ? 'Testing Mode visible in sidebar' : 'Testing Mode hidden');
+  }).catch(function(err) { showToast('Error: ' + err.message, true); });
 }
 
 // ============================================================
