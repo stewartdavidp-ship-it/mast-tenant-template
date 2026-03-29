@@ -887,7 +887,13 @@
       navEl.innerHTML = html;
     });
 
-    db.ref(TENANT_ID + '/public/products/' + pid).once('value').then(function(snap) {
+    // Load product and active sales in parallel
+    Promise.all([
+      db.ref(TENANT_ID + '/public/products/' + pid).once('value'),
+      db.ref(TENANT_ID + '/public/sales-promotions').once('value')
+    ]).then(function(results) {
+      var snap = results[0];
+      var salesSnap = results[1];
       var p = snap.val();
       document.getElementById('productLoading').style.display = 'none';
 
@@ -895,6 +901,35 @@
         document.getElementById('productNotFound').style.display = '';
         return;
       }
+
+      // Build sale lookup for this product
+      var _productSaleInfo = null;
+      var salesData = salesSnap.val() || {};
+      var now = new Date().toISOString();
+      Object.keys(salesData).forEach(function(saleId) {
+        var sale = salesData[saleId];
+        if (sale.archived || (sale.startDate && sale.startDate > now) || (sale.endDate && sale.endDate < now)) return;
+        var products = sale.products || [];
+        products.forEach(function(entry) {
+          var entryPid = typeof entry === 'string' ? entry : entry.pid;
+          if (entryPid === pid) {
+            _productSaleInfo = {
+              saleName: sale.name,
+              discountType: sale.discountType,
+              discountValue: sale.discountValue,
+              variants: typeof entry === 'object' && entry.variants ? entry.variants : null
+            };
+          }
+        });
+      });
+      window._productSaleInfo = _productSaleInfo;
+
+      function _calcSalePrice(cents) {
+        if (!_productSaleInfo || !cents) return null;
+        if (_productSaleInfo.discountType === 'percent') return Math.round(cents * (1 - _productSaleInfo.discountValue / 100));
+        return Math.max(0, cents - _productSaleInfo.discountValue);
+      }
+      window._calcSalePrice = _calcSalePrice;
 
       // Update page title
       document.title = (isStoryView ? 'How It Was Made: ' : '') + p.name + ' — ' + TENANT_TITLE_SUFFIX();
@@ -1005,7 +1040,18 @@
           var vp = v.priceCents || v.price;
           return (vp < min) ? vp : min;
         }, window._productVariants[0].priceCents || window._productVariants[0].price);
-        priceEl.innerHTML = '<span class="price-prefix">from</span>' + escHtml(formatPriceCents(lowest));
+        if (_productSaleInfo) {
+          var saleLowest = _calcSalePrice(lowest);
+          priceEl.innerHTML = '<span class="price-prefix">from</span>' +
+            '<span style="text-decoration:line-through;color:var(--warm-gray,#6B6560);font-weight:400;">' + formatPriceCents(lowest) + '</span> ' +
+            '<span style="font-weight:700;color:var(--accent,var(--primary,#c05621));">' + formatPriceCents(saleLowest) + '</span>';
+        } else {
+          priceEl.innerHTML = '<span class="price-prefix">from</span>' + escHtml(formatPriceCents(lowest));
+        }
+      } else if (p.price && _productSaleInfo) {
+        var saleP = _calcSalePrice(p.price);
+        priceEl.innerHTML = '<span style="text-decoration:line-through;color:var(--warm-gray,#6B6560);font-weight:400;">' + formatPriceCents(p.price) + '</span> ' +
+          '<span style="font-weight:700;color:var(--accent,var(--primary,#c05621));">' + formatPriceCents(saleP) + '</span>';
       } else if (p.price) {
         priceEl.textContent = displayPrice(p.price);
       } else {
@@ -1126,9 +1172,28 @@
                 var variant = findVariant(window._productVariants, window._selectedOptions);
                 if (variant) {
                   var vPrice = variant.priceCents || variant.price;
-                  priceEl.innerHTML = formatPriceCents(vPrice);
+                  // Check variant-level sale eligibility
+                  var variantOnSale = false;
+                  if (window._productSaleInfo && vPrice) {
+                    var si = window._productSaleInfo;
+                    if (!si.variants) {
+                      variantOnSale = true; // all variants on sale
+                    } else {
+                      // Check if this specific combo is in the sale's variants list
+                      var comboKey = window._requiredOptions.map(function(l) { return window._selectedOptions[l]; }).join('|');
+                      variantOnSale = si.variants.indexOf(comboKey) !== -1;
+                    }
+                  }
+                  if (variantOnSale) {
+                    var vSalePrice = window._calcSalePrice(vPrice);
+                    priceEl.innerHTML = '<span style="text-decoration:line-through;color:var(--warm-gray,#6B6560);font-weight:400;">' + formatPriceCents(vPrice) + '</span> ' +
+                      '<span style="font-weight:700;color:var(--accent,var(--primary,#c05621));">' + formatPriceCents(vSalePrice) + '</span>';
+                    window._resolvedVariantPrice = vSalePrice;
+                  } else {
+                    priceEl.innerHTML = formatPriceCents(vPrice);
+                    window._resolvedVariantPrice = vPrice;
+                  }
                   priceEl.classList.remove('no-price');
-                  window._resolvedVariantPrice = vPrice;
                 } else {
                   priceEl.textContent = 'Combination not available';
                   priceEl.classList.add('no-price');
@@ -1284,10 +1349,26 @@
     if (!p) return;
 
     var images = window._productImages || [];
-    var resolvedPrice = window._resolvedVariantPrice
-      ? formatPriceCents(window._resolvedVariantPrice)
-      : displayPrice(p.price);
-    var resolvedCents = window._resolvedVariantPrice || parsePriceToCents(p.price);
+    var baseCents = window._resolvedVariantPrice || parsePriceToCents(p.price);
+    var saleInfo = window._productSaleInfo;
+    var onSale = false;
+    var saleCents = null;
+    if (saleInfo && baseCents) {
+      // For variant products, check if this combo is included
+      if (window._resolvedVariantPrice && saleInfo.variants) {
+        var comboKey = (window._requiredOptions || []).map(function(l) { return (window._selectedOptions || {})[l]; }).join('|');
+        onSale = saleInfo.variants.indexOf(comboKey) !== -1;
+      } else if (window._resolvedVariantPrice && !saleInfo.variants) {
+        onSale = true; // all variants on sale
+      } else if (!window._resolvedVariantPrice) {
+        onSale = true; // non-variant product
+      }
+      if (onSale) {
+        saleCents = window._calcSalePrice(baseCents);
+      }
+    }
+    var resolvedPrice = onSale && saleCents != null ? formatPriceCents(saleCents) : formatPriceCents(baseCents);
+    var resolvedCents = onSale && saleCents != null ? saleCents : baseCents;
     MastCart.addItem({
       pid: p.pid,
       name: p.name,
@@ -1295,7 +1376,9 @@
       priceCents: resolvedCents,
       image: (document.getElementById('mainImage') || {}).src || images[0] || '',
       options: Object.assign({}, window._selectedOptions),
-      qty: window._productQty || 1
+      qty: window._productQty || 1,
+      originalPrice: onSale ? formatPriceCents(baseCents) : null,
+      salePriceCents: onSale ? saleCents : null
     });
     MastCart.showToast(p.name + ' added to cart');
   });

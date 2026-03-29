@@ -4820,6 +4820,7 @@
         <div class="sidebar-item" data-route="galleries" onclick="navigateTo('galleries')">Galleries &amp; Consignment</div>
         <div class="sidebar-item" data-route="receipts" onclick="navigateTo('receipts')">Receipts &amp; Reconciliation</div>
         <div class="sidebar-item" data-route="coupons" onclick="navigateTo('coupons')">Coupons</div>
+        <div class="sidebar-item" data-route="promotions" onclick="navigateTo('promotions')">Sale Promotions</div>
       </div>
     </div>
     <!-- Show -->
@@ -5839,6 +5840,41 @@
 
       <!-- Mobile Cards -->
       <div class="coupon-cards" id="couponCards"></div>
+    </div>
+
+    <!-- Admin: Sale Promotions Tab -->
+    <div id="promotionsTab" style="display:none;">
+      <div class="section-header">
+        <h2>Sale Promotions</h2>
+        <button class="btn btn-primary" onclick="openPromotionModal()">+ Create Sale</button>
+      </div>
+      <div id="promotionsLoading" class="loading">Loading...</div>
+      <div id="promotionsEmpty" class="empty-state" style="display:none;">
+        <div class="empty-icon">&#127991;</div>
+        <p>No sale promotions yet. Click "Create Sale" to run your first promotion.</p>
+      </div>
+      <div id="promotionsFilterBar" style="display:none;margin-bottom:12px;">
+        <span class="filter-pill active" onclick="filterPromotions('active', this)">Active</span>
+        <span class="filter-pill" onclick="filterPromotions('scheduled', this)">Scheduled</span>
+        <span class="filter-pill" onclick="filterPromotions('ended', this)">Ended</span>
+        <span class="filter-pill" onclick="filterPromotions('all', this)">All</span>
+      </div>
+      <div class="events-table data-table" id="promotionsTable" style="display:none;">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Discount</th>
+              <th>Products</th>
+              <th>Status</th>
+              <th>Dates</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="promotionsTableBody"></tbody>
+        </table>
+      </div>
+      <div id="promotionCards" class="coupon-cards"></div>
     </div>
 
     <!-- ===== SALES TAB (PoS) ===== -->
@@ -7607,6 +7643,20 @@ MastDB.coupons = {
   unlisten: function(handle) { this.ref().off('value', handle); }
 };
 
+MastDB.promotions = {
+  PATH: 'public/sales-promotions',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  list: function(limit) { return this.ref().limitToLast(limit || 200).once('value'); },
+  get: function(id) { return this.ref(id).once('value'); },
+  set: function(id, data) { return this.ref(id).set(data); },
+  update: function(id, data) { return this.ref(id).update(data); },
+  remove: function(id) { return this.ref(id).remove(); },
+  listen: function(limit, cb, errCb) {
+    return this.ref().limitToLast(limit || 200).on('value', cb, errCb);
+  },
+  unlisten: function(handle) { this.ref().off('value', handle); }
+};
+
 MastDB.salesEvents = {
   PATH: 'admin/salesEvents',
   ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
@@ -8292,7 +8342,7 @@ MastDB.showLight = {
 var MODULE_REGISTRY = {
   make:   { id: 'make',   name: 'Make',   icon: '\uD83D\uDD25', description: 'Production jobs, build tracking, materials, pricing.', section: 'make', navPosition: 1, purchasable: true, routes: ['jobs', 'production', 'procurement', 'materials', 'pieces', 'lookbooks'], manageSettings: [], synergies: ['sell', 'market'], status: 'active' },
   market: { id: 'market', name: 'Market', icon: '\uD83D\uDCE3', description: 'Social media, blog, newsletter, stories.', section: 'market', navPosition: 2, purchasable: true, routes: ['social', 'blog', 'newsletter', 'stories'], manageSettings: ['newsletter', 'email'], synergies: ['sell', 'show'], status: 'active' },
-  sell:   { id: 'sell',   name: 'Sell',   icon: '\uD83D\uDCB0', description: 'Point of sale, orders, commissions, wholesale.', section: 'sell', navPosition: 3, purchasable: true, routes: ['pos', 'orders', 'commissions', 'wholesale', 'galleries', 'receipts', 'coupons'], manageSettings: ['square'], synergies: ['ship', 'make'], status: 'active' },
+  sell:   { id: 'sell',   name: 'Sell',   icon: '\uD83D\uDCB0', description: 'Point of sale, orders, commissions, wholesale.', section: 'sell', navPosition: 3, purchasable: true, routes: ['pos', 'orders', 'commissions', 'wholesale', 'galleries', 'receipts', 'coupons', 'promotions'], manageSettings: ['square'], synergies: ['ship', 'make'], status: 'active' },
   ship:   { id: 'ship',   name: 'Ship',   icon: '\uD83D\uDCE6', description: 'Pack orders, ship deliveries, track fulfillment.', section: 'ship', navPosition: 4, purchasable: true, routes: ['pack', 'ship'], manageSettings: ['shippingRates'], synergies: ['sell', 'show'], status: 'active' },
   run:    { id: 'run',    name: 'Run',    icon: '\uD83D\uDCCB', description: 'Trips, expenses, revenue, reports, contacts.', section: 'run', navPosition: 5, purchasable: true, routes: ['trips', 'expenses', 'reports', 'financials', 'contacts', 'customers'], manageSettings: [], synergies: ['sell', 'show'], status: 'active' },
   web:    { id: 'web',    name: 'Web',    icon: '\uD83C\uDF10', description: 'Website pages and content management.', section: 'web', navPosition: 6, purchasable: false, showInGrid: true, routes: ['website', 'gallery', 'images'], manageSettings: [], synergies: ['market', 'sell'], status: 'active' },
@@ -10968,7 +11018,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260328p1';
+var MAST_MODULES_V = '20260329p1';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -10995,7 +11045,8 @@ homepage: { src: 'modules/homepage.js', routes: ['homepage'] },
   maker: { src: 'modules/maker.js', routes: ['materials', 'pieces'] },
   consignment: { src: 'modules/consignment.js', routes: ['galleries'] },
   lookbooks: { src: 'modules/lookbooks.js', routes: ['lookbooks'] },
-  brand: { src: 'modules/brand.js', routes: ['brand'] }
+  brand: { src: 'modules/brand.js', routes: ['brand'] },
+  promotions: { src: 'modules/promotions.js', routes: ['promotions'] }
 };
 
 // Reverse lookup: route → moduleId (built from MODULE_MANIFEST)
@@ -16764,7 +16815,11 @@ function renderProductDetail(pid) {
        '<div style="color:var(--warm-gray);font-style:italic;margin-bottom:8px;">Price on request</div>') +
       (product.availability === 'discontinued' ? '<span class="status-badge stock-badge out-of-stock">Discontinued</span>' : '') +
     '</div>' +
-    (!isCreate && !isEditing ? '<button class="btn btn-secondary" style="font-size:0.8rem;" onclick="editProduct(\'' + esc(pid) + '\')">Edit Product</button>' : '') +
+    (!isCreate && !isEditing ? '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
+      '<button class="btn btn-secondary" style="font-size:0.8rem;" onclick="editProduct(\'' + esc(pid) + '\')">Edit</button>' +
+      '<button class="btn btn-secondary" style="font-size:0.8rem;" onclick="openCloneDialog(\'' + esc(pid) + '\')">Clone</button>' +
+      '<button class="btn btn-secondary" style="font-size:0.8rem;" onclick="openAddToSaleDialog(\'' + esc(pid) + '\')">Add to Sale</button>' +
+    '</div>' : '') +
   '</div>';
 
   // Tab bar
@@ -18449,7 +18504,7 @@ var ENTITY_LABELS = {
   orders: 'Orders', products: 'Products', inventory: 'Inventory',
   jobs: 'Jobs', buildJobs: 'Build Jobs', salesEvents: 'Sales Events',
   gallery: 'Gallery', schedule: 'Schedule', locations: 'Locations',
-  coupons: 'Coupons', settings: 'Settings', operators: 'Operators',
+  coupons: 'Coupons', promotions: 'Sale Promotions', settings: 'Settings', operators: 'Operators',
   pos: 'PoS', stories: 'Stories', receipts: 'Receipts',
   users: 'Users', roles: 'Roles'
 };
@@ -21750,6 +21805,203 @@ async function executeMoveItems() {
 }
 
 // ---- Shipping Modal, Cancel Order, Order Notes — Extracted to modules/orders.js (lazy-loaded) ----
+
+// ============================================================
+// Clone Product Dialog
+// ============================================================
+function openCloneDialog(sourcePid) {
+  var product = products[sourcePid];
+  if (!product) { showToast('Product not found', true); return; }
+  var defaultName = (product.name || '') + ' (copy)';
+
+  var html = '<div class="modal-header"><h3>Clone Product</h3>' +
+    '<button class="modal-close" onclick="closeModal()">\u2716</button></div>' +
+    '<div class="modal-body">' +
+      '<div class="form-group"><label>New Product Name</label>' +
+        '<input type="text" id="cloneName" value="' + esc(defaultName) + '" class="form-input" /></div>' +
+      '<div class="form-group"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;">' +
+        '<input type="checkbox" id="cloneMarkAsSecond" onchange="cloneSecondToggle(\'' + esc(sourcePid) + '\')" /> Mark as Second</label>' +
+        '<div style="font-size:0.8rem;color:var(--warm-gray);margin-top:4px;">Sets name to "— Second", assigns Seconds category</div></div>' +
+      '<p style="font-size:0.85rem;color:var(--warm-gray);">New PID: <code>' + esc(sourcePid) + '-copy</code><br>Inventory starts at 0. Images are shared with original.</p>' +
+    '</div>' +
+    '<div class="modal-footer">' +
+      '<button class="btn" onclick="closeModal()">Cancel</button>' +
+      '<button class="btn btn-primary" onclick="executeClone(\'' + esc(sourcePid) + '\')">Clone</button>' +
+    '</div>';
+  openModal(html);
+}
+
+function cloneSecondToggle(sourcePid) {
+  var cb = document.getElementById('cloneMarkAsSecond');
+  var nameInput = document.getElementById('cloneName');
+  var product = products[sourcePid];
+  if (!product) return;
+  if (cb && cb.checked) {
+    nameInput.value = (product.name || '') + ' \u2014 Second';
+  } else {
+    nameInput.value = (product.name || '') + ' (copy)';
+  }
+}
+
+async function executeClone(sourcePid) {
+  var product = products[sourcePid];
+  if (!product) return;
+  var name = (document.getElementById('cloneName').value || '').trim();
+  var isSecond = document.getElementById('cloneMarkAsSecond').checked;
+  if (!name) { showToast('Name is required', true); return; }
+
+  var newPid = sourcePid + '-copy';
+
+  // Check if target already exists
+  var existSnap = await MastDB.products.ref(newPid).once('value');
+  if (existSnap.exists()) {
+    showToast('Product ' + newPid + ' already exists', true);
+    return;
+  }
+
+  // Clone all fields
+  var now = new Date().toISOString();
+  var cloned = Object.assign({}, product);
+  cloned.pid = newPid;
+  cloned.name = name;
+  cloned.createdAt = now;
+  cloned.updatedAt = now;
+  delete cloned.originalBasePriceCents;
+
+  if (isSecond) {
+    cloned.categories = ['seconds'];
+  }
+
+  try {
+    await MastDB.products.ref(newPid).set(cloned);
+    // Initialize inventory at 0
+    await MastDB._ref('admin/inventory/' + newPid).set({
+      stock: { _default: { available: 0 } },
+      lowStockThreshold: 5,
+      updatedAt: now
+    });
+    writeAudit('create', 'products', newPid);
+    showToast('Product cloned as ' + newPid);
+    closeModal();
+    // Reload products view
+    if (typeof loadProducts === 'function') loadProducts();
+  } catch (err) {
+    console.error('Clone error:', err);
+    showToast('Failed to clone product', true);
+  }
+}
+
+// ============================================================
+// Add Product to Sale Dialog
+// ============================================================
+function openAddToSaleDialog(pid) {
+  var product = products[pid];
+  if (!product) { showToast('Product not found', true); return; }
+
+  // Read active promotions
+  MastDB.promotions.list(100).then(function(snap) {
+    var data = snap.val() || {};
+    var now = new Date().toISOString();
+    var activeSales = [];
+    var currentSaleId = null;
+    var currentSaleName = null;
+
+    Object.keys(data).forEach(function(saleId) {
+      var s = data[saleId];
+      if (s.archived) return;
+      if (s.startDate && s.startDate > now) return; // scheduled — include for adding
+      if (s.endDate && s.endDate < now) return;
+
+      var pids = (s.products || []).map(function(p) { return typeof p === 'string' ? p : p.pid; });
+      if (pids.indexOf(pid) !== -1) {
+        currentSaleId = saleId;
+        currentSaleName = s.name;
+      }
+      activeSales.push({ id: saleId, name: s.name, discountType: s.discountType, discountValue: s.discountValue, productCount: pids.length });
+    });
+
+    var html = '<div class="modal-header"><h3>Add to Sale</h3>' +
+      '<button class="modal-close" onclick="closeModal()">\u2716</button></div>' +
+      '<div class="modal-body">' +
+        '<p><strong>' + esc(product.name) + '</strong></p>';
+
+    if (currentSaleId) {
+      html += '<div style="background:rgba(22,163,106,0.1);border-radius:8px;padding:12px;margin-bottom:12px;">' +
+        '<span style="color:#16a34a;font-weight:600;">Currently in:</span> ' + esc(currentSaleName) +
+        ' <button class="btn btn-sm" style="margin-left:8px;" onclick="removeFromSale(\'' + esc(currentSaleId) + '\',\'' + esc(pid) + '\')">Remove</button>' +
+      '</div>';
+    }
+
+    if (activeSales.length === 0) {
+      html += '<p style="color:var(--warm-gray);">No active sales. Create one from the Sale Promotions tab.</p>';
+    } else {
+      html += '<div style="max-height:200px;overflow-y:auto;">';
+      activeSales.forEach(function(sale) {
+        var isCurrent = sale.id === currentSaleId;
+        html += '<label style="display:flex;align-items:center;gap:8px;padding:8px 4px;cursor:pointer;border-bottom:1px solid var(--border-light,#eee);">' +
+          '<input type="radio" name="addToSaleId" value="' + esc(sale.id) + '"' + (isCurrent ? ' checked disabled' : '') + ' />' +
+          '<span style="flex:1;">' + esc(sale.name) + ' <span style="color:var(--warm-gray);font-size:0.85em;">(' +
+            (sale.discountType === 'percent' ? sale.discountValue + '% off' : '$' + (sale.discountValue/100).toFixed(2) + ' off') +
+            ', ' + sale.productCount + ' products)</span></span>' +
+        '</label>';
+      });
+      html += '</div>';
+    }
+
+    html += '</div>' +
+      '<div class="modal-footer">' +
+        '<button class="btn" onclick="closeModal()">Cancel</button>' +
+        (activeSales.length > 0 ? '<button class="btn btn-primary" onclick="executeAddToSale(\'' + esc(pid) + '\')">Add to Sale</button>' : '') +
+      '</div>';
+
+    openModal(html);
+  });
+}
+
+async function executeAddToSale(pid) {
+  var selected = document.querySelector('input[name="addToSaleId"]:checked');
+  if (!selected) { showToast('Select a sale', true); return; }
+  var saleId = selected.value;
+
+  try {
+    var snap = await MastDB.promotions.get(saleId);
+    var sale = snap.val();
+    if (!sale) { showToast('Sale not found', true); return; }
+
+    var prods = sale.products || [];
+    var existingPids = prods.map(function(p) { return typeof p === 'string' ? p : p.pid; });
+    if (existingPids.indexOf(pid) !== -1) {
+      showToast('Product is already in this sale', true);
+      return;
+    }
+
+    prods.push(pid);
+    await MastDB.promotions.update(saleId, { products: prods, updatedAt: new Date().toISOString() });
+    writeAudit('update', 'sale-promotion', saleId);
+    showToast('Added to ' + sale.name);
+    closeModal();
+  } catch (err) {
+    showToast('Failed to add to sale', true);
+  }
+}
+
+async function removeFromSale(saleId, pid) {
+  try {
+    var snap = await MastDB.promotions.get(saleId);
+    var sale = snap.val();
+    if (!sale) return;
+    var prods = (sale.products || []).filter(function(p) {
+      return (typeof p === 'string' ? p : p.pid) !== pid;
+    });
+    await MastDB.promotions.update(saleId, { products: prods, updatedAt: new Date().toISOString() });
+    writeAudit('update', 'sale-promotion', saleId);
+    showToast('Removed from sale');
+    closeModal();
+  } catch (err) {
+    showToast('Failed to remove from sale', true);
+  }
+}
+
 // ============================================================
 // Coupons Management
 // ============================================================
@@ -21957,6 +22209,12 @@ function openCouponModal(code) {
         '<label for="cpDesc">Description <span style="color:var(--warm-gray-light);font-weight:300;">(admin note)</span></label>' +
         '<input type="text" id="cpDesc" value="' + esc(c.description || '') + '" placeholder="e.g. Summer promo for returning customers">' +
       '</div>' +
+      '<div class="form-group">' +
+        '<div class="form-check">' +
+          '<input type="checkbox" id="cpExcludeSaleItems"' + (c.excludeSaleItems ? ' checked' : '') + '>' +
+          '<label for="cpExcludeSaleItems">Exclude sale items (coupon won\'t apply to products already on sale)</label>' +
+        '</div>' +
+      '</div>' +
       (isEdit ? '<div class="coupon-meta" style="margin-top:8px;">Claimed: ' + (c.claimedCount || 0) + ' time' + ((c.claimedCount || 0) !== 1 ? 's' : '') + '</div>' : '') +
     '</div>' +
     '<div class="modal-footer">' +
@@ -22027,6 +22285,7 @@ async function saveCoupon(existingCode) {
   var maxUsesVal = document.getElementById('cpMaxUses').value.trim();
   var maxUses = isOneOff ? 1 : (maxUsesVal ? parseInt(maxUsesVal) : null);
   var description = document.getElementById('cpDesc').value.trim();
+  var excludeSaleItems = document.getElementById('cpExcludeSaleItems').checked;
 
   if (startDate && endDate && endDate < startDate) {
     showToast('End date must be after start date.', true);
@@ -22044,6 +22303,7 @@ async function saveCoupon(existingCode) {
     maxUses: maxUses,
     description: description || null,
     minOrder: minOrder,
+    excludeSaleItems: excludeSaleItems,
     updatedAt: firebase.database.ServerValue.TIMESTAMP
   };
 

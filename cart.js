@@ -139,6 +139,8 @@
       options: item.options || {},
       qty: Math.min(Math.max(item.qty || 1, 1), maxQty),
       isWholesale: item.isWholesale || false,
+      originalPrice: item.originalPrice || null,
+      salePriceCents: item.salePriceCents || null,
       addedAt: Date.now()
     };
     cart.push(newItem);
@@ -586,7 +588,11 @@
             '<div class="cart-item-name">' + escHtml(item.name) + wholesaleBadge + '</div>' +
             optionsHtml +
             '<div class="cart-item-row">' +
-              '<span class="cart-item-price">' + escHtml(item.price || 'Price on request') + '</span>' +
+              '<span class="cart-item-price">' +
+                (item.originalPrice && item.salePriceCents
+                  ? '<span style="text-decoration:line-through;color:var(--warm-gray,#6B6560);font-weight:400;font-size:0.85em;">' + escHtml(item.originalPrice) + '</span> <span style="font-weight:700;color:var(--accent,var(--primary,#c05621));">' + escHtml(item.price) + '</span>'
+                  : escHtml(item.price || 'Price on request')) +
+              '</span>' +
               qtyHtml +
             '</div>' +
             '<button class="cart-item-remove" data-action="remove" data-id="' + escAttr(item.cartItemId) + '">Remove</button>' +
@@ -600,6 +606,7 @@
       var subtotal = 0;
       var hasWholesale = false;
       for (var s = 0; s < cart.length; s++) {
+        // Use sale price (already in display price) for subtotal
         var p = parseFloat(String(cart[s].price || '0').replace(/[^0-9.]/g, '')) || 0;
         subtotal += p * (cart[s].qty || 1);
         if (cart[s].isWholesale) hasWholesale = true;

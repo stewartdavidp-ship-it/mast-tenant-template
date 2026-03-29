@@ -440,8 +440,41 @@ window.TENANT_READY.then(function() {
   var allShopItems = [];
   var SHOP_CATS = [];
   var SHOP_IDS = [];
+  var saleLookup = {}; // pid → {discountType, discountValue, saleName, variants?}
 
   function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  function formatCents(cents) {
+    return '$' + (cents / 100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+
+  function calcSalePrice(originalCents, discountType, discountValue) {
+    if (discountType === 'percent') return Math.round(originalCents * (1 - discountValue / 100));
+    return Math.max(0, originalCents - discountValue); // fixed in cents
+  }
+
+  function buildSaleLookup(salesData) {
+    saleLookup = {};
+    if (!salesData) return;
+    var now = new Date().toISOString();
+    Object.keys(salesData).forEach(function(saleId) {
+      var sale = salesData[saleId];
+      if (sale.archived) return;
+      if (sale.startDate && sale.startDate > now) return;
+      if (sale.endDate && sale.endDate < now) return;
+      var products = sale.products || [];
+      products.forEach(function(entry) {
+        var pid = typeof entry === 'string' ? entry : entry.pid;
+        if (!pid) return;
+        saleLookup[pid] = {
+          saleName: sale.name,
+          discountType: sale.discountType,
+          discountValue: sale.discountValue,
+          variants: typeof entry === 'object' && entry.variants ? entry.variants : null
+        };
+      });
+    });
+  }
 
   function buildFilterPills() {
     var container = document.getElementById('categoryFilterPills');
@@ -476,9 +509,15 @@ window.TENANT_READY.then(function() {
       }
       SHOP_IDS = SHOP_CATS.map(function(c) { return c.id; });
       buildFilterPills();
-      return db.ref(TENANT_ID + '/public/products').once('value');
-    }).then(function(snap) {
-      var data = snap.val();
+      // Load products and active sales in parallel
+      return Promise.all([
+        db.ref(TENANT_ID + '/public/products').once('value'),
+        db.ref(TENANT_ID + '/public/sales-promotions').once('value')
+      ]);
+    }).then(function(results) {
+      var data = results[0].val();
+      var salesData = results[1].val();
+      buildSaleLookup(salesData);
       if (!data) return;
       allShopItems = Object.values(data)
         .filter(function(p) {
@@ -534,22 +573,39 @@ window.TENANT_READY.then(function() {
         var showBadge = isSold || isMadeToOrder || isBackOrdered;
         var badgeLabel = isSold ? 'Sold' : isMadeToOrder ? 'Made to Order' : 'Back Ordered';
         var badgeBg = isSold ? 'rgba(92,61,46,0.85)' : isMadeToOrder ? 'rgba(200,160,60,0.85)' : 'rgba(120,120,120,0.85)';
-        // Format price with "from" prefix for variant products
+        // Format price with "from" prefix for variant products, sale strikethrough
         var priceDisplay = '';
+        var saleInfo = saleLookup[pid];
+        var isOnSale = saleInfo && typeof product.price === 'number' && product.price > 0;
         if (isSold || isSoldSculpture) {
           priceDisplay = '<p class="product-price" style="font-size:0.82rem;color:var(--warm-gray,#6B6560);">Commission available</p>';
         } else if (product.priceType === 'request') {
           priceDisplay = '<p class="product-price" style="font-size:0.82rem;color:var(--warm-gray,#6B6560);">Price on request</p>';
+        } else if (isOnSale && product.priceType !== 'from') {
+          var origFormatted = formatCents(product.price);
+          var salePrice = calcSalePrice(product.price, saleInfo.discountType, saleInfo.discountValue);
+          priceDisplay = '<p class="product-price">' +
+            '<span style="text-decoration:line-through;color:var(--warm-gray,#6B6560);font-weight:400;">' + origFormatted + '</span> ' +
+            '<span style="font-weight:700;color:var(--accent,var(--primary,#c05621));">' + formatCents(salePrice) + '</span></p>';
         } else if (product.priceType === 'from' && price) {
-          var formattedPrice = typeof product.price === 'number' ? ('$' + (product.price / 100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')) : esc(price);
-          priceDisplay = '<p class="product-price"><span style="font-size:0.8rem;color:var(--warm-gray,#6B6560);font-weight:400;">from </span>' + formattedPrice + '</p>';
+          var formattedPrice = typeof product.price === 'number' ? formatCents(product.price) : esc(price);
+          if (isOnSale) {
+            var fromSalePrice = calcSalePrice(product.price, saleInfo.discountType, saleInfo.discountValue);
+            priceDisplay = '<p class="product-price"><span style="font-size:0.8rem;color:var(--warm-gray,#6B6560);font-weight:400;">from </span>' +
+              '<span style="text-decoration:line-through;color:var(--warm-gray,#6B6560);font-weight:400;">' + formattedPrice + '</span> ' +
+              '<span style="font-weight:700;color:var(--accent,var(--primary,#c05621));">' + formatCents(fromSalePrice) + '</span></p>';
+          } else {
+            priceDisplay = '<p class="product-price"><span style="font-size:0.8rem;color:var(--warm-gray,#6B6560);font-weight:400;">from </span>' + formattedPrice + '</p>';
+          }
         } else if (price) {
-          var regularPrice = typeof product.price === 'number' ? ('$' + (product.price / 100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')) : esc(price);
+          var regularPrice = typeof product.price === 'number' ? formatCents(product.price) : esc(price);
           priceDisplay = '<p class="product-price">' + regularPrice + '</p>';
         }
+        var saleBadge = isOnSale && !isSold;
+        var badgeToShow = showBadge ? { label: badgeLabel, bg: badgeBg } : saleBadge ? { label: 'Sale', bg: 'rgba(192,86,33,0.85)' } : null;
         html += '<div class="product-card fade-up" style="opacity:1;transform:translateY(0)">' +
           '<div class="product-image" style="position:relative;"><a href="' + esc(link) + '"' + (isLocal ? '' : ' target="_blank" rel="noopener"') + '>' + (img ? '<img src="' + esc(img) + '" alt="' + esc(name) + '" loading="lazy" />' : '') + '</a>' +
-            (showBadge ? '<span style="position:absolute;top:8px;right:8px;background:' + badgeBg + ';color:white;font-size:0.7rem;font-weight:600;padding:3px 8px;border-radius:4px;">' + badgeLabel + '</span>' : '') +
+            (badgeToShow ? '<span style="position:absolute;top:8px;right:8px;background:' + badgeToShow.bg + ';color:white;font-size:0.7rem;font-weight:600;padding:3px 8px;border-radius:4px;">' + badgeToShow.label + '</span>' : '') +
           '</div>' +
           '<div class="product-info">' +
             '<span class="product-category">' + esc(cat.label) + '</span>' +
