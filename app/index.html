@@ -11286,8 +11286,8 @@ function loadNotificationsSettings() {
     var catLabels = { inventory: 'Inventory', orders: 'Orders', integrations: 'Integrations', tokens: 'AI Tokens' };
     Object.keys(categories).forEach(function(cat) {
       h += '<div style="margin-bottom:20px;">';
-      h += '<h4 style="font-family:\'Cormorant Garamond\',serif;font-size:1.1rem;color:var(--charcoal);margin:0 0 8px;text-transform:capitalize;">' + (catLabels[cat] || cat) + '</h4>';
-      h += '<div style="border:1px solid var(--cream-dark);border-radius:8px;overflow:hidden;">';
+      h += '<h4 style="font-family:\'Cormorant Garamond\',serif;font-size:1.1rem;color:var(--text);margin:0 0 8px;text-transform:capitalize;">' + (catLabels[cat] || cat) + '</h4>';
+      h += '<div style="border:1px solid rgba(255,255,255,0.08);border-radius:8px;overflow:hidden;">';
 
       categories[cat].forEach(function(def, idx) {
         var override = overrides[def.id] || {};
@@ -11298,44 +11298,44 @@ function loadNotificationsSettings() {
         var hasInApp = delivery.indexOf('in-app') >= 0;
 
         var severityColor = def.severity === 'critical' ? '#ef4444' : def.severity === 'warning' ? '#f59e0b' : '#3b82f6';
-        var borderTop = idx > 0 ? 'border-top:1px solid var(--cream-dark);' : '';
+        var borderTop = idx > 0 ? 'border-top:1px solid rgba(255,255,255,0.06);' : '';
 
-        h += '<div style="padding:12px 16px;background:var(--cream);' + borderTop + 'display:flex;align-items:center;gap:12px;flex-wrap:wrap;">';
+        h += '<div style="padding:14px 16px;' + borderTop + '">';
 
-        // Toggle
-        h += '<label style="display:flex;align-items:center;cursor:pointer;flex-shrink:0;">';
-        h += '<input type="checkbox" ' + (enabled ? 'checked' : '') + ' onchange="toggleAlertEnabled(\'' + def.id + '\', this.checked)" style="width:16px;height:16px;cursor:pointer;">';
-        h += '</label>';
-
-        // Name + severity badge
-        h += '<div style="flex:1;min-width:150px;">';
-        h += '<div style="display:flex;align-items:center;gap:6px;">';
-        h += '<span style="font-weight:600;font-size:0.9rem;color:var(--charcoal);">' + def.name + '</span>';
-        h += '<span style="font-size:0.65rem;padding:1px 6px;border-radius:3px;background:' + severityColor + ';color:white;font-weight:600;text-transform:uppercase;">' + def.severity + '</span>';
+        // Top row: toggle + name + badge (fixed layout)
+        h += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">';
+        h += '<input type="checkbox" ' + (enabled ? 'checked' : '') + ' onchange="toggleAlertEnabled(\'' + def.id + '\', this.checked)" style="width:16px;height:16px;cursor:pointer;flex-shrink:0;accent-color:var(--amber);">';
+        h += '<span style="font-weight:600;font-size:0.9rem;color:var(--text);flex:1;">' + def.name + '</span>';
+        h += '<span style="font-size:0.65rem;padding:2px 8px;border-radius:3px;background:' + severityColor + ';color:white;font-weight:600;text-transform:uppercase;flex-shrink:0;">' + def.severity + '</span>';
         h += '</div>';
-        h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">' + def.description + '</div>';
-        h += '</div>';
+
+        // Description
+        h += '<div style="font-size:0.78rem;color:rgba(255,255,255,0.5);margin-left:26px;margin-bottom:8px;">' + def.description + '</div>';
+
+        // Controls row: threshold + delivery
+        h += '<div style="display:flex;align-items:center;gap:16px;margin-left:26px;flex-wrap:wrap;">';
 
         // Threshold input (if applicable)
         if (def.defaultThreshold != null && def.thresholdUnit) {
-          h += '<div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">';
-          h += '<input type="number" value="' + (threshold || '') + '" min="0" style="width:60px;padding:4px 8px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.85rem;background:white;color:var(--charcoal);" ';
+          h += '<div style="display:flex;align-items:center;gap:4px;">';
+          h += '<input type="number" value="' + (threshold || '') + '" min="0" style="width:56px;padding:4px 8px;border:1px solid rgba(255,255,255,0.15);border-radius:4px;font-size:0.82rem;background:rgba(255,255,255,0.06);color:var(--text);" ';
           h += 'onchange="updateAlertThreshold(\'' + def.id + '\', this.value)">';
-          h += '<span style="font-size:0.78rem;color:var(--warm-gray);">' + (def.thresholdUnit || '') + '</span>';
+          h += '<span style="font-size:0.78rem;color:rgba(255,255,255,0.4);">' + (def.thresholdUnit || '') + '</span>';
           h += '</div>';
         }
 
         // Delivery checkboxes
-        h += '<div style="display:flex;gap:8px;flex-shrink:0;">';
-        h += '<label style="font-size:0.78rem;color:var(--warm-gray);display:flex;align-items:center;gap:3px;cursor:pointer;">';
-        h += '<input type="checkbox" ' + (hasEmail ? 'checked' : '') + ' onchange="updateAlertDelivery(\'' + def.id + '\', \'email\', this.checked)" style="width:13px;height:13px;"> Email';
+        h += '<div style="display:flex;gap:10px;">';
+        h += '<label style="font-size:0.78rem;color:rgba(255,255,255,0.5);display:flex;align-items:center;gap:4px;cursor:pointer;">';
+        h += '<input type="checkbox" ' + (hasEmail ? 'checked' : '') + ' onchange="updateAlertDelivery(\'' + def.id + '\', \'email\', this.checked)" style="width:13px;height:13px;accent-color:var(--amber);"> Email';
         h += '</label>';
-        h += '<label style="font-size:0.78rem;color:var(--warm-gray);display:flex;align-items:center;gap:3px;cursor:pointer;">';
-        h += '<input type="checkbox" ' + (hasInApp ? 'checked' : '') + ' onchange="updateAlertDelivery(\'' + def.id + '\', \'in-app\', this.checked)" style="width:13px;height:13px;"> In-App';
+        h += '<label style="font-size:0.78rem;color:rgba(255,255,255,0.5);display:flex;align-items:center;gap:4px;cursor:pointer;">';
+        h += '<input type="checkbox" ' + (hasInApp ? 'checked' : '') + ' onchange="updateAlertDelivery(\'' + def.id + '\', \'in-app\', this.checked)" style="width:13px;height:13px;accent-color:var(--amber);"> In-App';
         h += '</label>';
-        h += '</div>';
+        h += '</div>'; // close delivery div
 
-        h += '</div>';
+        h += '</div>'; // close controls row
+        h += '</div>'; // close card
       });
 
       h += '</div></div>';
@@ -11395,23 +11395,23 @@ function loadAlertHistory() {
       return;
     }
 
-    var h = '<div style="border:1px solid var(--cream-dark);border-radius:8px;overflow:hidden;">';
+    var h = '<div style="border:1px solid rgba(255,255,255,0.08);border-radius:8px;overflow:hidden;">';
     history.forEach(function(alert, idx) {
       var severityColor = alert.severity === 'critical' ? '#ef4444' : alert.severity === 'warning' ? '#f59e0b' : '#3b82f6';
       var isRead = !!alert.readAt;
-      var borderTop = idx > 0 ? 'border-top:1px solid var(--cream-dark);' : '';
-      var bg = isRead ? 'var(--cream)' : 'rgba(59,130,246,0.04)';
+      var borderTop = idx > 0 ? 'border-top:1px solid rgba(255,255,255,0.06);' : '';
+      var bg = isRead ? 'transparent' : 'rgba(59,130,246,0.06)';
       var date = alert.createdAt ? new Date(alert.createdAt).toLocaleString() : '—';
 
       h += '<div style="padding:10px 16px;background:' + bg + ';' + borderTop + 'display:flex;align-items:center;gap:10px;">';
       h += '<span style="width:8px;height:8px;border-radius:50%;background:' + (isRead ? 'transparent' : severityColor) + ';flex-shrink:0;border:1px solid ' + severityColor + ';"></span>';
       h += '<div style="flex:1;min-width:0;">';
-      h += '<div style="font-weight:' + (isRead ? '400' : '600') + ';font-size:0.85rem;color:var(--charcoal);">' + (alert.name || alert.alertId) + '</div>';
-      h += '<div style="font-size:0.78rem;color:var(--warm-gray);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (alert.message || '') + '</div>';
+      h += '<div style="font-weight:' + (isRead ? '400' : '600') + ';font-size:0.85rem;color:var(--text);">' + (alert.name || alert.alertId) + '</div>';
+      h += '<div style="font-size:0.78rem;color:rgba(255,255,255,0.4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (alert.message || '') + '</div>';
       h += '</div>';
-      h += '<div style="font-size:0.72rem;color:var(--warm-gray);flex-shrink:0;text-align:right;">' + date + '</div>';
+      h += '<div style="font-size:0.72rem;color:rgba(255,255,255,0.35);flex-shrink:0;text-align:right;">' + date + '</div>';
       if (!isRead) {
-        h += '<button onclick="acknowledgeAlertFromUI(\'' + alert.id + '\', this)" style="font-size:0.72rem;padding:2px 8px;border:1px solid var(--cream-dark);border-radius:4px;background:white;color:var(--charcoal);cursor:pointer;">Dismiss</button>';
+        h += '<button onclick="acknowledgeAlertFromUI(\'' + alert.id + '\', this)" style="font-size:0.72rem;padding:3px 10px;border:1px solid rgba(255,255,255,0.15);border-radius:4px;background:rgba(255,255,255,0.08);color:var(--text);cursor:pointer;">Dismiss</button>';
       }
       h += '</div>';
     });
