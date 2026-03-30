@@ -921,7 +921,7 @@
     // Update tab bar active state
     var tabs = document.querySelectorAll('#bookSubNav .view-tab');
     tabs.forEach(function(t) { t.classList.remove('active'); });
-    var tabMap = { classes: 0, instructors: 1, resources: 2, passes: 3, enrollments: 4, calendar: 5, reports: 6 };
+    var tabMap = { classes: 0, instructors: 1, resources: 2, passes: 3, enrollments: 4, calendar: 5, 'book-reports': 6 };
     if (tabs[tabMap[tab]]) tabs[tabMap[tab]].classList.add('active');
 
     hideAllViews();
@@ -931,7 +931,7 @@
     else if (tab === 'passes') { document.getElementById('bookPassesView').style.display = ''; loadPassDefinitions(); }
     else if (tab === 'enrollments') { document.getElementById('bookEnrollmentsView').style.display = ''; loadEnrollments(); }
     else if (tab === 'calendar') { document.getElementById('bookCalendarView').style.display = ''; loadCalendar(); }
-    else if (tab === 'reports') { document.getElementById('bookReportsView').style.display = ''; loadReports(); }
+    else if (tab === 'book-reports') { document.getElementById('bookReportsView').style.display = ''; loadReports(); }
   }
 
   // ============================================================
@@ -2861,7 +2861,7 @@
       'passes': { tab: 'bookTab', setup: function() { switchSubTab('passes'); } },
       'pass-detail': { tab: 'bookTab', setup: function(id) { if (id) { showPassDefForm(id); } else { switchSubTab('passes'); } } },
       'calendar': { tab: 'bookTab', setup: function() { switchSubTab('calendar'); } },
-      'reports': { tab: 'bookTab', setup: function() { switchSubTab('reports'); } }
+      'book-reports': { tab: 'bookTab', setup: function() { switchSubTab('book-reports'); } }
     },
     detachListeners: function() {
       classesData = [];
