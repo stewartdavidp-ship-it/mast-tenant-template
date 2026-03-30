@@ -2144,21 +2144,33 @@ window.submitContactForm = function() {
 
   // 1. Save inquiry record
   var inqRef = db.ref(TENANT_ID + '/inquiries').push();
+  var contactId = 'contact_' + Date.now().toString(36);
   var inquiryData = {
     id: inqRef.key, name: name, email: email, phone: phone || null,
     type: type, message: message, status: 'new',
+    contactId: contactId,
     source: 'website-contact-form', createdAt: now
   };
 
-  // 2. Auto-create a Contact record (business relationship from web)
-  var contactId = 'contact_' + Date.now().toString(36);
+  // 2. Auto-create a Contact record with first interaction (atomic write)
+  var interactionId = 'int_' + Date.now().toString(36);
   var contactData = {
     id: contactId, name: name, email: email, phone: phone || null,
     company: null, category: 'Other', website: null, address: null,
-    notes: type + ': ' + message.substring(0, 200),
+    notes: null,
     googleContactId: null, driveFolderLink: null,
     tags: ['website-inquiry', type.toLowerCase().replace(/\s+/g, '-')],
-    createdAt: now, createdBy: 'website-form', updatedAt: now
+    createdAt: now, createdBy: 'website-form', updatedAt: now,
+    interactions: {}
+  };
+  contactData.interactions[interactionId] = {
+    id: interactionId,
+    date: now.slice(0, 10),
+    type: 'Email',
+    notes: type + ': ' + message,
+    documents: [],
+    loggedBy: 'website-form',
+    createdAt: now
   };
 
   Promise.all([
