@@ -569,7 +569,19 @@ window.TENANT_READY.then(function() {
           // Keep discontinued products (portfolio visibility), hide non-discontinued sold items
           if (p.availability === 'sold' && p.availability !== 'discontinued') return false;
           var cats = p.categories || [];
-          return cats.some(function(c) { return SHOP_IDS.indexOf(c) !== -1; });
+          if (!cats.some(function(c) { return SHOP_IDS.indexOf(c) !== -1; })) return false;
+          // Seconds products: hide if no price or no stock (they can't be built, only sold from inventory)
+          if (cats.indexOf('seconds') !== -1) {
+            var hasPriceCents = typeof p.priceCents === 'number' && p.priceCents > 0;
+            var hasPriceNum = typeof p.price === 'number' && p.price > 0;
+            if (!hasPriceCents && !hasPriceNum) return false;
+            var si = p.stockInfo;
+            if (si) {
+              var eff = (si.totalAvailable || 0) - (si.totalReserved || 0);
+              if (eff <= 0) return false;
+            }
+          }
+          return true;
         })
         .sort(function(a, b) {
           var sa = a.sortOrder != null ? a.sortOrder : 9999;
@@ -577,7 +589,22 @@ window.TENANT_READY.then(function() {
           if (sa !== sb) return sa - sb;
           return (a.name || '').localeCompare(b.name || '');
         });
-      renderShop('all');
+      // Check URL hash for category auto-filter (e.g., /shop#drinkware)
+      var hash = window.location.hash.replace('#', '').toLowerCase();
+      var matchedCat = hash ? SHOP_CATS.find(function(c) { return c.id.toLowerCase() === hash || c.label.toLowerCase() === hash; }) : null;
+      if (matchedCat) {
+        renderShop(matchedCat.id);
+        // Update pill active state
+        setTimeout(function() {
+          var pills = document.querySelectorAll('.filter-pill');
+          pills.forEach(function(p) {
+            p.classList.remove('active');
+            if (p.textContent.toLowerCase() === matchedCat.label.toLowerCase()) p.classList.add('active');
+          });
+        }, 0);
+      } else {
+        renderShop('all');
+      }
     }).catch(function() {
       document.getElementById('shopContainer').innerHTML = '<p style="text-align:center;color:var(--warm-gray);padding:3rem;">Unable to load products.</p>';
     });
@@ -634,13 +661,35 @@ window.TENANT_READY.then(function() {
             '<span style="text-decoration:line-through;color:var(--warm-gray,#6B6560);font-weight:400;">' + origFormatted + '</span> ' +
             '<span style="font-weight:700;color:var(--accent,var(--primary,#c05621));">' + formatCents(salePrice) + '</span></p>';
         } else if (product.priceType === 'from' && price) {
-          var formattedPrice = typeof product.price === 'number' ? formatCents(product.price) : esc(price);
-          if (isOnSale) {
+          if (isOnSale && product.variants && product.variants.length > 0) {
+            // Calculate true "from" price accounting for variant-specific sale targeting
+            var minEffective = Infinity;
+            var minOriginal = Infinity;
+            for (var vi = 0; vi < product.variants.length; vi++) {
+              var v = product.variants[vi];
+              var vp = v.priceCents || v.price || product.price;
+              if (typeof vp !== 'number') continue;
+              if (vp < minOriginal) minOriginal = vp;
+              var vKey = v.combo ? Object.values(v.combo).join('|') : (v.name || '');
+              var variantInSale = !saleInfo.variants || (vKey && saleInfo.variants.indexOf(vKey) !== -1);
+              var effectivePrice = variantInSale ? calcSalePrice(vp, saleInfo.discountType, saleInfo.discountValue) : vp;
+              if (effectivePrice < minEffective) minEffective = effectivePrice;
+            }
+            if (minEffective < minOriginal) {
+              priceDisplay = '<p class="product-price"><span style="font-size:0.8rem;color:var(--warm-gray,#6B6560);font-weight:400;">from </span>' +
+                '<span style="text-decoration:line-through;color:var(--warm-gray,#6B6560);font-weight:400;">' + formatCents(minOriginal) + '</span> ' +
+                '<span style="font-weight:700;color:var(--accent,var(--primary,#c05621));">' + formatCents(minEffective) + '</span></p>';
+            } else {
+              priceDisplay = '<p class="product-price"><span style="font-size:0.8rem;color:var(--warm-gray,#6B6560);font-weight:400;">from </span>' + formatCents(minOriginal) + '</p>';
+            }
+          } else if (isOnSale) {
+            var formattedPrice = typeof product.price === 'number' ? formatCents(product.price) : esc(price);
             var fromSalePrice = calcSalePrice(product.price, saleInfo.discountType, saleInfo.discountValue);
             priceDisplay = '<p class="product-price"><span style="font-size:0.8rem;color:var(--warm-gray,#6B6560);font-weight:400;">from </span>' +
               '<span style="text-decoration:line-through;color:var(--warm-gray,#6B6560);font-weight:400;">' + formattedPrice + '</span> ' +
               '<span style="font-weight:700;color:var(--accent,var(--primary,#c05621));">' + formatCents(fromSalePrice) + '</span></p>';
           } else {
+            var formattedPrice = typeof product.price === 'number' ? formatCents(product.price) : esc(price);
             priceDisplay = '<p class="product-price"><span style="font-size:0.8rem;color:var(--warm-gray,#6B6560);font-weight:400;">from </span>' + formattedPrice + '</p>';
           }
         } else if (price) {
@@ -677,6 +726,20 @@ window.TENANT_READY.then(function() {
     el.classList.add('active');
     renderShop(cat);
   };
+
+  // Support back/forward navigation with hash-based category filtering
+  window.addEventListener('hashchange', function() {
+    var hash = window.location.hash.replace('#', '').toLowerCase();
+    var matchedCat = hash ? SHOP_CATS.find(function(c) { return c.id.toLowerCase() === hash || c.label.toLowerCase() === hash; }) : null;
+    var catId = matchedCat ? matchedCat.id : 'all';
+    var catLabel = matchedCat ? matchedCat.label.toLowerCase() : 'all';
+    var pills = document.querySelectorAll('.filter-pill');
+    pills.forEach(function(p) {
+      p.classList.remove('active');
+      if (p.textContent.toLowerCase() === catLabel) p.classList.add('active');
+    });
+    renderShop(catId);
+  });
 }).catch(function(err) { console.error('[shop] Tenant resolution failed:', err.message); });
 </script>
 <script>

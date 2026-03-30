@@ -1067,16 +1067,29 @@
         var cartBtn = document.getElementById('addToCartBtn');
         if (cartBtn) { cartBtn.style.display = 'none'; }
       } else if (window._productVariants) {
-        // Find lowest variant price
-        var lowest = window._productVariants.reduce(function(min, v) {
+        // Find lowest variant price, accounting for variant-specific sale targeting
+        var lowest = Infinity;
+        var lowestEffective = Infinity;
+        var anySaleApplied = false;
+        for (var vi = 0; vi < window._productVariants.length; vi++) {
+          var v = window._productVariants[vi];
           var vp = v.priceCents || v.price;
-          return (vp < min) ? vp : min;
-        }, window._productVariants[0].priceCents || window._productVariants[0].price);
-        if (_productSaleInfo) {
-          var saleLowest = _calcSalePrice(lowest);
+          if (typeof vp !== 'number') continue;
+          if (vp < lowest) lowest = vp;
+          if (_productSaleInfo) {
+            var vKey = v.combo ? (window._requiredOptions || []).map(function(l) { return v.combo[l]; }).join('|') : (v.name || '');
+            var variantInSale = !_productSaleInfo.variants || (_productSaleInfo.variants.indexOf(vKey) !== -1);
+            var effPrice = variantInSale ? _calcSalePrice(vp) : vp;
+            if (variantInSale) anySaleApplied = true;
+          } else {
+            var effPrice = vp;
+          }
+          if (effPrice < lowestEffective) lowestEffective = effPrice;
+        }
+        if (anySaleApplied && lowestEffective < lowest) {
           priceEl.innerHTML = '<span class="price-prefix">from</span>' +
             '<span style="text-decoration:line-through;color:var(--warm-gray,#6B6560);font-weight:400;">' + formatPriceCents(lowest) + '</span> ' +
-            '<span style="font-weight:700;color:var(--accent,var(--primary,#c05621));">' + formatPriceCents(saleLowest) + '</span>';
+            '<span style="font-weight:700;color:var(--accent,var(--primary,#c05621));">' + formatPriceCents(lowestEffective) + '</span>';
         } else {
           priceEl.innerHTML = '<span class="price-prefix">from</span>' + escHtml(formatPriceCents(lowest));
         }
