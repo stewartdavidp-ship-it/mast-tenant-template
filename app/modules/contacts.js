@@ -438,9 +438,12 @@ function renderContactDetail(contact) {
       }
 
       var respondBtnHtml = '';
-      if (inter.type === 'Web Inquiry' && contact.email) {
+      if (contact.email || (contact.tags && contact.tags.indexOf('website-inquiry') >= 0)) {
+        // Store interaction data for modal reference
+        var interIdx = '_respInt_' + (inter.id || inter.date);
+        window[interIdx] = inter;
         respondBtnHtml = '<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 12px;margin-top:8px;" ' +
-          'onclick="openInquiryResponseModal(\'' + esc(contact.id) + '\')">Respond</button>';
+          'onclick="openInquiryResponseModal(\'' + esc(contact.id) + '\', \'' + esc(interIdx) + '\')">Respond</button>';
       }
 
       timelineHtml += '' +
@@ -534,12 +537,15 @@ async function saveInteraction(contactId) {
 // Inquiry Response — Reply to web inquiries from admin
 // ============================================================
 
-async function openInquiryResponseModal(contactId) {
+async function openInquiryResponseModal(contactId, interactionKey) {
   try {
-    // Load contact and inquiry in parallel
+    // Load contact
     var cSnap = await MastDB.contacts.ref(contactId).once('value');
     var contact = cSnap.val();
     if (!contact) { showToast('Contact not found.', true); return; }
+
+    // Get the specific interaction if provided
+    var specificInteraction = interactionKey ? window[interactionKey] : null;
 
     // Find the inquiry record for this contact
     var iqSnap = await MastDB._ref('inquiries').orderByChild('contactId').equalTo(contactId).limitToLast(1).once('value');
@@ -563,11 +569,22 @@ async function openInquiryResponseModal(contactId) {
     } catch (e) { /* no phone */ }
 
     var firstName = (contact.name || '').split(' ')[0] || 'there';
-    var inquiryType = inquiry ? (inquiry.type || 'your inquiry') : 'your inquiry';
-    var originalMessage = inquiry ? (inquiry.message || '') : '';
-    var originalDate = inquiry ? (inquiry.createdAt || '').slice(0, 10) : '';
+
+    // Build subject and quoted content from the specific interaction or inquiry
+    var replyContext = '';
+    var subjectRef = '';
+    if (specificInteraction) {
+      subjectRef = specificInteraction.type || 'your message';
+      replyContext = specificInteraction.notes || '';
+    } else if (inquiry) {
+      subjectRef = inquiry.type || 'your inquiry';
+      replyContext = inquiry.message || '';
+    } else {
+      subjectRef = 'your message';
+    }
+    var originalDate = specificInteraction ? (specificInteraction.date || '') : (inquiry ? (inquiry.createdAt || '').slice(0, 10) : '');
     var inquiryId = inquiry ? (inquiry.id || '') : '';
-    var subject = 'Re: ' + inquiryType + ' — ' + brandName;
+    var subject = 'Re: ' + subjectRef + ' — ' + brandName;
 
     // Build signature
     var sigParts = [brandName];
@@ -581,8 +598,8 @@ async function openInquiryResponseModal(contactId) {
       '\n\n' +
       'Best regards,\n' + signature;
 
-    if (originalMessage) {
-      bodyTemplate += '\n\n---\nOriginal message' + (originalDate ? ' (' + originalDate + ')' : '') + ':\n' + originalMessage;
+    if (replyContext) {
+      bodyTemplate += '\n\n---\nOriginal message' + (originalDate ? ' (' + originalDate + ')' : '') + ':\n' + replyContext;
     }
 
     var html = '' +
