@@ -1253,6 +1253,29 @@
     window._passToggleFields();
   }
 
+  // Sync pass definition to public path for storefront access.
+  // Only active + onlinePurchasable defs are published; others are removed.
+  async function syncPassDefToPublic(passDefId, data) {
+    var pubRef = MastDB._ref('public/passDefinitions/' + passDefId);
+    if (data.status === 'active' && data.onlinePurchasable) {
+      await pubRef.set({
+        name: data.name,
+        description: data.description || null,
+        type: data.type,
+        priceCents: data.priceCents,
+        visitCount: data.visitCount || null,
+        validityDays: data.validityDays || null,
+        allowedClassIds: data.allowedClassIds || null,
+        allowedCategories: data.allowedCategories || null,
+        introOnly: data.introOnly || false,
+        sortOrder: data.sortOrder || 0,
+        updatedAt: data.updatedAt
+      });
+    } else {
+      await pubRef.remove();
+    }
+  }
+
   async function savePassDefinition(passDefId) {
     var name = document.getElementById('pdfName').value.trim();
     if (!name) { MastAdmin.showToast('Name is required', true); return; }
@@ -1298,6 +1321,8 @@
         data.createdAt = data.updatedAt;
       }
       await MastDB.passDefinitions.set(passDefId, data);
+      // Dual-write to public path for storefront access
+      await syncPassDefToPublic(passDefId, data);
       MastAdmin.showToast(isNew ? 'Pass definition created!' : 'Pass definition updated!');
       passDefsLoaded = false;
       await loadPassDefinitions();

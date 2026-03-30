@@ -268,6 +268,44 @@
 }
 .cd-auth-cancel-btn:hover { color: var(--text); }
 
+/* Pass prompt buttons */
+.cd-pass-use-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 24px;
+  border-radius: 6px;
+  border: 1px solid var(--primary, #6C63FF);
+  background: var(--primary, #6C63FF);
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  width: 100%;
+  justify-content: center;
+  transition: opacity 0.2s;
+}
+.cd-pass-use-btn:hover { opacity: 0.85; }
+.cd-pass-use-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.cd-pass-pay-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 24px;
+  border-radius: 6px;
+  border: 1px solid var(--border, #444);
+  background: #fff;
+  color: #333;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  width: 100%;
+  justify-content: center;
+  margin-top: 8px;
+  transition: background 0.2s;
+}
+.cd-pass-pay-btn:hover { background: #f5f5f5; }
+
 @media (max-width: 768px) {
   .cd-container { padding: 6rem 1.5rem 3rem; }
   .cd-header { grid-template-columns: 1fr; gap: 1.5rem; }
@@ -488,10 +526,204 @@
       window.MastCart.showToast('Class added to cart!');
     }
 
+    // Check for applicable pass and offer to use it
+    function checkPassAndBook() {
+      var user = window.MastCart.getCurrentUser();
+      if (!user) { addToCart(); return; }
+
+      var fbApp = window.MastCart.getFirebaseApp();
+      if (!fbApp) { addToCart(); return; }
+      var db = fbApp.database();
+
+      db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/passes').once('value')
+        .then(function(snap) {
+          var passesObj = snap.val() || {};
+          var now = new Date().toISOString();
+          var PRIORITY_ORDER = { high: 0, medium: 1, low: 2 };
+
+          // Find applicable passes: active, has remaining credits, not expired, covers this class
+          var applicable = Object.keys(passesObj).map(function(pid) {
+            var p = passesObj[pid];
+            p._id = pid;
+            return p;
+          }).filter(function(p) {
+            if (p.status !== 'active') return false;
+            if (p.expiresAt && p.expiresAt < now) return false;
+            if (p.visitsRemaining !== null && p.visitsRemaining <= 0) return false;
+            return true;
+          });
+
+          // Check class scope from pass definitions (need to look up allowedClassIds)
+          if (applicable.length === 0) {
+            addToCart();
+            return;
+          }
+
+          // Load pass definitions to check scope
+          var defIds = applicable.map(function(p) { return p.passDefinitionId; }).filter(Boolean);
+          var defPromises = defIds.map(function(did) {
+            return db.ref(TENANT_ID + '/public/passDefinitions/' + did).once('value');
+          });
+
+          Promise.all(defPromises).then(function(defSnaps) {
+            var defMap = {};
+            defSnaps.forEach(function(s, i) { if (s.val()) defMap[defIds[i]] = s.val(); });
+
+            var validPasses = applicable.filter(function(p) {
+              var def = defMap[p.passDefinitionId];
+              if (!def) return true; // no def found = allow (backward compat)
+              if (!def.allowedClassIds) return true; // null = all classes
+              return def.allowedClassIds.indexOf(classId) !== -1;
+            }).sort(function(a, b) {
+              var pa = PRIORITY_ORDER[a.priority] || 1;
+              var pb = PRIORITY_ORDER[b.priority] || 1;
+              if (pa !== pb) return pa - pb;
+              // Earlier expiration first (use pass before it expires)
+              if (a.expiresAt && b.expiresAt) return a.expiresAt.localeCompare(b.expiresAt);
+              if (a.expiresAt) return -1;
+              return 1;
+            });
+
+            if (validPasses.length === 0) {
+              addToCart();
+              return;
+            }
+
+            // Show pass prompt modal
+            showPassPrompt(validPasses[0], sessionId, classId, className, date, time, spotsLeft);
+          }).catch(function() { addToCart(); });
+        })
+        .catch(function() { addToCart(); });
+    }
+
+    function showPassPrompt(pass, sessionId, classId, className, date, time, spotsLeft) {
+      var triggerBtn = document.activeElement;
+      var overlay = document.createElement('div');
+      overlay.className = 'cd-auth-overlay';
+      overlay.setAttribute('role', 'dialog');
+      overlay.setAttribute('aria-modal', 'true');
+      overlay.setAttribute('aria-labelledby', 'passPromptTitle');
+
+      var remainLabel = pass.visitsRemaining !== null ? pass.visitsRemaining + ' visit' + (pass.visitsRemaining !== 1 ? 's' : '') + ' remaining' : 'Unlimited';
+      var expLabel = pass.expiresAt ? 'Expires ' + new Date(pass.expiresAt).toLocaleDateString() : 'No expiration';
+
+      overlay.innerHTML =
+        '<div class="cd-auth-modal">' +
+          '<h3 id="passPromptTitle">Use your pass?</h3>' +
+          '<p style="margin-bottom:0.75rem;"><strong>' + esc(pass.passDefinitionName) + '</strong></p>' +
+          '<p style="font-size:0.85rem;margin-bottom:1.5rem;">' + esc(remainLabel) + ' &middot; ' + esc(expLabel) + '</p>' +
+          '<button class="cd-pass-use-btn" id="passUseBtn">Use Pass &mdash; Free</button>' +
+          '<button class="cd-pass-pay-btn" id="passPayBtn">' + formatPrice(priceCents) + ' &mdash; Pay Instead</button>' +
+          '<button class="cd-auth-cancel-btn" id="passPromptCancel">Cancel</button>' +
+        '</div>';
+      document.body.appendChild(overlay);
+      document.getElementById('passUseBtn').focus();
+
+      function closeModal() {
+        overlay.remove();
+        if (triggerBtn) triggerBtn.focus();
+      }
+
+      document.getElementById('passPromptCancel').onclick = closeModal;
+      overlay.onclick = function(e) { if (e.target === overlay) closeModal(); };
+      overlay.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closeModal();
+        if (e.key === 'Tab') {
+          var focusable = overlay.querySelectorAll('button');
+          var first = focusable[0], last = focusable[focusable.length - 1];
+          if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+          else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+        }
+      });
+
+      // Use pass: deduct credit and create enrollment
+      document.getElementById('passUseBtn').onclick = function() {
+        var btn = document.getElementById('passUseBtn');
+        btn.disabled = true;
+        btn.textContent = 'Booking...';
+
+        var user = window.MastCart.getCurrentUser();
+        var fbApp = window.MastCart.getFirebaseApp();
+        if (!user || !fbApp) { closeModal(); addToCart(); return; }
+        var db = fbApp.database();
+        var passRef = db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/passes/' + pass._id);
+
+        // Atomic deduct via transaction to prevent double-spend
+        passRef.transaction(function(current) {
+          if (!current) return current;
+          current.visitsUsed = (current.visitsUsed || 0) + 1;
+          if (current.visitsRemaining !== null && current.visitsRemaining !== undefined) {
+            current.visitsRemaining = Math.max(0, current.visitsRemaining - 1);
+            if (current.visitsRemaining <= 0) current.status = 'expired';
+          }
+          // Activate on first use
+          if (!current.activatedAt) {
+            current.activatedAt = new Date().toISOString();
+          }
+          return current;
+        }).then(function(result) {
+          if (!result.committed) {
+            console.warn('[class-detail] Pass transaction not committed');
+            closeModal();
+            addToCart();
+            return;
+          }
+          var updatedPass = result.snapshot.val();
+          // Set expiration on first-use activation if validity window defined
+          if (updatedPass && updatedPass.activatedAt && !updatedPass.expiresAt) {
+            db.ref(TENANT_ID + '/public/passDefinitions/' + pass.passDefinitionId).once('value').then(function(defSnap) {
+              var def = defSnap.val();
+              if (def && def.validityDays) {
+                var exp = new Date(updatedPass.activatedAt);
+                exp.setDate(exp.getDate() + def.validityDays);
+                passRef.update({ expiresAt: exp.toISOString() });
+              }
+            }).catch(function() { /* non-critical */ });
+          }
+          createPassEnrollment(db, user, sessionId, classId, className, date, time, pass._id);
+          closeModal();
+          window.MastCart.showToast('Booked with your pass!');
+        }).catch(function(err) {
+          console.error('[class-detail] Pass deduction failed:', err);
+          closeModal();
+          addToCart();
+        });
+      };
+
+      // Pay instead: normal cart flow
+      document.getElementById('passPayBtn').onclick = function() {
+        closeModal();
+        addToCart();
+      };
+    }
+
+    // Create enrollment record for pass-based booking
+    function createPassEnrollment(db, user, sessionId, classId, className, date, time, customerPassId) {
+      var enrollmentRef = db.ref(TENANT_ID + '/public/enrollments').push();
+      enrollmentRef.set({
+        classId: classId,
+        sessionId: sessionId,
+        studentUid: user.uid,
+        studentName: user.displayName || '',
+        studentEmail: user.email || '',
+        status: 'confirmed',
+        paymentMethod: 'pass',
+        customerPassId: customerPassId,
+        pricePaid: 0,
+        enrolledAt: new Date().toISOString()
+      }).then(function() {
+        // Increment session enrolled count
+        db.ref(TENANT_ID + '/public/classSessions/' + sessionId + '/enrolled')
+          .transaction(function(current) { return (current || 0) + 1; });
+      }).catch(function(err) {
+        console.error('[class-detail] Enrollment creation failed:', err);
+      });
+    }
+
     // Auth gate: require signed-in (non-anonymous) user for class bookings
     var user = window.MastCart.getCurrentUser();
     if (user && !user.isAnonymous) {
-      addToCart();
+      checkPassAndBook();
       return;
     }
 
@@ -549,7 +781,7 @@
       var unsubscribe = fbApp.auth().onAuthStateChanged(function(u) {
         if (u && !u.isAnonymous) {
           unsubscribe();
-          addToCart();
+          checkPassAndBook();
         }
       });
     };

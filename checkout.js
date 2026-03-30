@@ -1033,6 +1033,7 @@
             orderNumber: result.orderNumber,
             email: checkoutData.email,
             items: payload.items,
+            cartItems: items.map(function(ci) { return { bookingType: ci.bookingType, passDefinitionId: ci.passDefinitionId, name: ci.name }; }),
             shipping: checkoutData.shipping,
             itemShippingData: checkoutData.itemShippingData || {},
             shippingConfig: checkoutData.shippingConfig || DEFAULT_SHIPPING_CONFIG
@@ -1156,6 +1157,9 @@
             .set(checkoutData.resaleCertNumber);
         } catch (e) { /* silent — order already placed successfully */ }
       }
+
+      // Provision CustomerPass records for any pass items
+      provisionCustomerPasses(items, orderRef.key);
 
       // Show confirmation
       renderCheckOrderConfirmation(orderNumber);
@@ -1343,6 +1347,69 @@
     }
   }
 
+  // ── CustomerPass Provisioning ──
+  // After checkout completes, create CustomerPass records for any pass items.
+  // Reads the pass definition from public/passDefinitions to get activation rules.
+  function provisionCustomerPasses(items, orderId) {
+    var user = window.MastCart && window.MastCart.getCurrentUser();
+    if (!user || user.isAnonymous) return;
+    var db = getDb();
+    if (!db) return;
+
+    var passItems = (items || []).filter(function(it) {
+      return it.bookingType === 'pass' && it.passDefinitionId;
+    });
+    if (passItems.length === 0) return;
+
+    passItems.forEach(function(item) {
+      db.ref(TENANT_ID + '/public/passDefinitions/' + item.passDefinitionId).once('value')
+        .then(function(snap) {
+          var def = snap.val();
+          if (!def) {
+            console.warn('[checkout] Pass definition not found:', item.passDefinitionId);
+            return;
+          }
+
+          var now = new Date().toISOString();
+          var activatedAt = null;
+          var expiresAt = null;
+
+          // Purchase-triggered activation: compute dates now
+          if (def.activationTrigger === 'purchase' || !def.activationTrigger) {
+            activatedAt = now;
+            if (def.validityDays) {
+              var exp = new Date();
+              exp.setDate(exp.getDate() + def.validityDays);
+              expiresAt = exp.toISOString();
+            }
+          }
+          // first_use: activatedAt and expiresAt stay null until first deduction
+
+          var passData = {
+            passDefinitionId: item.passDefinitionId,
+            passDefinitionName: def.name || item.name || '',
+            status: 'active',
+            visitsUsed: 0,
+            visitsRemaining: def.visitCount || null,
+            purchasedAt: now,
+            activatedAt: activatedAt,
+            expiresAt: expiresAt,
+            autoRenewEnabled: def.autoRenew || false,
+            priority: def.priority || 'medium',
+            orderId: orderId || null
+          };
+
+          var passId = db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/passes').push().key;
+          db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/passes/' + passId).set(passData)
+            .then(function() { console.log('[checkout] CustomerPass created:', passId); })
+            .catch(function(err) { console.error('[checkout] CustomerPass creation failed:', err); });
+        })
+        .catch(function(err) {
+          console.error('[checkout] Failed to read pass definition:', err);
+        });
+    });
+  }
+
   // ── Payment Return Handler ──
   // Detects ?payment=success&order={orderId} after payment checkout redirect (Square or Stripe)
   function checkPaymentReturn() {
@@ -1409,6 +1476,11 @@
       footer.style.display = '';
       footer.innerHTML =
         '<button class="checkout-btn-primary" data-co="conf-done">Continue Shopping</button>';
+    }
+
+    // Provision CustomerPass records for any pass items
+    if (pendingOrder && pendingOrder.cartItems) {
+      provisionCustomerPasses(pendingOrder.cartItems, orderId);
     }
 
     // Watch for order status to become 'placed' and generate CSV
