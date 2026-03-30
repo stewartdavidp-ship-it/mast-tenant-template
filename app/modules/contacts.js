@@ -537,7 +537,7 @@ async function saveInteraction(contactId) {
 // Inquiry Response — Reply to web inquiries from admin
 // ============================================================
 
-async function openInquiryResponseModal(contactId, interactionKey) {
+async function openInquiryResponseModal(contactId, interactionKey, directInquiryId) {
   try {
     // Load contact
     var cSnap = await MastDB.contacts.ref(contactId).once('value');
@@ -547,13 +547,19 @@ async function openInquiryResponseModal(contactId, interactionKey) {
     // Get the specific interaction if provided
     var specificInteraction = interactionKey ? window[interactionKey] : null;
 
-    // Find the inquiry record for this contact
-    var iqSnap = await MastDB._ref('inquiries').orderByChild('contactId').equalTo(contactId).limitToLast(1).once('value');
-    var iqVal = iqSnap.val();
+    // Find the inquiry record — use direct ID if provided, else query by contactId
     var inquiry = null;
-    if (iqVal) {
-      var keys = Object.keys(iqVal);
-      inquiry = iqVal[keys[keys.length - 1]];
+    if (directInquiryId) {
+      var dirSnap = await MastDB._ref('inquiries/' + directInquiryId).once('value');
+      inquiry = dirSnap.val();
+    }
+    if (!inquiry) {
+      var iqSnap = await MastDB._ref('inquiries').orderByChild('contactId').equalTo(contactId).limitToLast(1).once('value');
+      var iqVal = iqSnap.val();
+      if (iqVal) {
+        var keys = Object.keys(iqVal);
+        inquiry = iqVal[keys[keys.length - 1]];
+      }
     }
 
     // Use contact email, fall back to inquiry email
