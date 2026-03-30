@@ -585,7 +585,7 @@ async function openInquiryResponseModal(contactId) {
     var html = '' +
       '<div class="modal-header"><h3>Respond to Inquiry</h3></div>' +
       '<div class="modal-body">' +
-        '<div class="form-group"><label>To</label><div style="padding:8px 12px;background:var(--hover-bg, #f5f5f5);border-radius:6px;font-size:0.9rem;color:var(--text-primary);">' + esc(contact.email) + '</div></div>' +
+        '<div class="form-group"><label>To</label><div style="padding:8px 12px;background:var(--surface-card, var(--hover-bg, #f5f5f5));border-radius:6px;font-size:0.9rem;color:var(--text, var(--charcoal, #1a1a1a));">' + esc(contact.email) + '</div></div>' +
         '<div class="form-group"><label>Subject</label><input type="text" id="inquiryResponseSubject" value="' + esc(subject) + '"></div>' +
         '<div class="form-group"><label>Message</label><textarea id="inquiryResponseBody" rows="12" style="font-family:monospace;font-size:0.85rem;white-space:pre-wrap;">' + esc(bodyTemplate) + '</textarea></div>' +
         '<input type="hidden" id="inquiryResponseContactId" value="' + esc(contactId) + '">' +
