@@ -292,7 +292,7 @@
 
     Promise.all([
       db.ref(TENANT_ID + '/public/classes/' + classId).once('value'),
-      db.ref(TENANT_ID + '/admin/classSessions').orderByChild('classId').equalTo(classId).once('value')
+      db.ref(TENANT_ID + '/public/classSessions').orderByChild('classId').equalTo(classId).once('value')
     ]).then(function(results) {
       var cls = results[0].val();
       if (!cls) {

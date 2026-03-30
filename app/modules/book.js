@@ -547,7 +547,7 @@
       };
     });
 
-    // Write all sessions under admin/classSessions
+    // Write all sessions under public/classSessions
     var multiUpdates = {};
     Object.keys(updates).forEach(function(id) {
       multiUpdates[MastDB.classSessions.PATH + '/' + id] = updates[id];

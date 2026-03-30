@@ -8540,7 +8540,7 @@ MastDB.showLight = {
     newKey: function() { return MastDB._ref(this.PATH).push().key; }
   },
   classSessions: {
-    PATH: 'admin/classSessions',
+    PATH: 'public/classSessions',
     ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
     list: function(limit) { return this.ref().limitToLast(limit || 500).once('value'); },
     get: function(id) { return this.ref(id).once('value'); },
