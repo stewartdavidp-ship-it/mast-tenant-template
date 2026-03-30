@@ -177,10 +177,22 @@
   function removeItem(cartItemId) {
     for (var i = 0; i < cart.length; i++) {
       if (cart[i].cartItemId === cartItemId) {
-        var pid = cart[i].pid;
+        var removed = cart[i];
         cart.splice(i, 1);
+
+        // If removing a class booking, also remove linked materials item
+        if (removed.bookingType === 'class') {
+          for (var j = cart.length - 1; j >= 0; j--) {
+            if (cart[j].bookingType === 'class-materials' &&
+                ((removed.sessionId && cart[j].sessionId === removed.sessionId) ||
+                 (!removed.sessionId && cart[j].classId === removed.classId))) {
+              cart.splice(j, 1);
+            }
+          }
+        }
+
         persist();
-        trackEvent('cart_remove', pid);
+        trackEvent('cart_remove', removed.pid);
         renderDrawerItems();
         updateBadge();
         return cart;
@@ -822,7 +834,7 @@
     hasWholesaleItems: hasWholesaleItems,
     hasClassItems: function() { return cart.some(function(i) { return i.bookingType === 'class'; }); },
     hasPassItems: function() { return cart.some(function(i) { return i.bookingType === 'pass'; }); },
-    isNonShippableCart: function() { return cart.length > 0 && cart.every(function(i) { return i.bookingType === 'class' || i.bookingType === 'pass'; }); },
+    isNonShippableCart: function() { return cart.length > 0 && cart.every(function(i) { return i.bookingType === 'class' || i.bookingType === 'pass' || i.bookingType === 'class-materials'; }); },
     isClassOnlyCart: function() { return cart.length > 0 && cart.every(function(i) { return i.bookingType === 'class'; }); },
     hasProductItems: function() { return cart.some(function(i) { return !i.bookingType; }); }
   };

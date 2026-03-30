@@ -354,7 +354,7 @@
       html += _infoCard('Drop-in OK', cls.seriesInfo.allowDropIn ? 'Yes' : 'No');
     }
     html += _infoCard('Schedule', schedDesc || '—');
-    html += _infoCard('Materials', cls.materialsIncluded ? (cls.materialsNote || 'Included') : 'Not included');
+    html += _infoCard('Materials', cls.materialsIncluded ? (cls.materialsNote || 'Included') : (cls.materialsCostCents ? formatPrice(cls.materialsCostCents) + ' fee' + (cls.materialsNote ? ' — ' + cls.materialsNote : '') : 'Not included'));
     html += _infoCard('Instructor', cls.instructorName || '—');
     html += _infoCard('Resource', cls.resourceName || '—');
     html += '</div>';
@@ -509,8 +509,10 @@
       '<div class="book-form-section">' +
       '<div class="book-form-section-title">Materials</div>' +
       '<div class="book-responsive-grid">' +
-      '<div class="book-field"><label class="form-label">Materials Included</label><select id="bcfMaterials" class="form-input"><option value="false"' + (cls && cls.materialsIncluded ? '' : ' selected') + '>No</option><option value="true"' + (cls && cls.materialsIncluded ? ' selected' : '') + '>Yes</option></select></div>' +
-      '<div class="book-field" style="grid-column:span 2;"><label class="form-label">Materials Note</label><input type="text" id="bcfMaterialsNote" class="form-input" value="' + esc(cls ? cls.materialsNote : '') + '" placeholder="e.g. 25lbs of clay + glazes included"></div>' +
+      '<div class="book-field"><label class="form-label">Materials Included</label><select id="bcfMaterials" class="form-input" onchange="window._bookToggleMaterialsCost()"><option value="false"' + (cls && cls.materialsIncluded ? '' : ' selected') + '>No</option><option value="true"' + (cls && cls.materialsIncluded ? ' selected' : '') + '>Yes</option></select></div>' +
+      '<div class="book-field" id="bcfMaterialsCostWrap" style="' + (cls && cls.materialsIncluded ? 'display:none;' : '') + '"><label class="form-label">Materials Cost ($)</label><input type="number" id="bcfMaterialsCost" class="form-input" min="0" step="0.01" value="' + (cls && cls.materialsCostCents ? (cls.materialsCostCents / 100).toFixed(2) : '') + '" placeholder="0.00">' +
+      '<div class="book-field-hint">Added as separate line item at checkout</div></div>' +
+      '<div class="book-field"><label class="form-label">Materials Note</label><input type="text" id="bcfMaterialsNote" class="form-input" value="' + esc(cls ? cls.materialsNote : '') + '" placeholder="e.g. 25lbs of clay + glazes"></div>' +
       '</div></div>' +
 
       // ── Assignment ──
@@ -584,6 +586,7 @@
       duration: parseInt(document.getElementById('bcfDuration').value, 10) || 60,
       schedule: schedule,
       materialsIncluded: document.getElementById('bcfMaterials').value === 'true',
+      materialsCostCents: document.getElementById('bcfMaterials').value === 'true' ? null : (function() { var v = parseFloat(document.getElementById('bcfMaterialsCost').value); return isNaN(v) || v <= 0 ? null : Math.round(v * 100); })(),
       materialsNote: document.getElementById('bcfMaterialsNote').value.trim() || null,
       imageIds: [],
       updatedAt: new Date().toISOString()
@@ -713,6 +716,9 @@
         instructorName: cls.instructorName || null,
         resourceId: cls.resourceId || null,
         resourceName: cls.resourceName || null,
+        materialsCostCents: cls.materialsCostCents || null,
+        materialsIncluded: cls.materialsIncluded || false,
+        materialsNote: cls.materialsNote || null,
         cancelReason: null,
         notes: null,
         createdAt: new Date().toISOString()
@@ -1770,6 +1776,12 @@
     var once = document.getElementById('bcfSchedOnce');
     if (recurring) recurring.style.display = schedType.value === 'recurring' ? '' : 'none';
     if (once) once.style.display = schedType.value === 'once' ? '' : 'none';
+  };
+
+  window._bookToggleMaterialsCost = function() {
+    var included = (document.getElementById('bcfMaterials') || {}).value === 'true';
+    var wrap = document.getElementById('bcfMaterialsCostWrap');
+    if (wrap) wrap.style.display = included ? 'none' : '';
   };
 
   // Sub-tab navigation

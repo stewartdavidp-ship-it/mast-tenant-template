@@ -567,11 +567,12 @@
       '<h1>' + esc(cls.name) + '</h1>' +
       '<div class="cd-price-main">' + price + '</div>' +
       '<div class="cd-price-note">' + priceNote + '</div>' +
+      (!cls.materialsIncluded && cls.materialsCostCents ? '<div class="cd-price-note" style="color:var(--primary,#C4853C);">+ ' + formatPrice(cls.materialsCostCents) + ' materials fee' + (cls.materialsNote ? ' (' + esc(cls.materialsNote) + ')' : '') + '</div>' : '') +
       '<div class="cd-meta-grid">' +
       '<div class="cd-meta-item"><div class="cd-meta-label">Schedule</div><div class="cd-meta-value">' + esc(schedDesc || 'See dates below') + '</div></div>' +
       '<div class="cd-meta-item"><div class="cd-meta-label">Duration</div><div class="cd-meta-value">' + (cls.duration || '—') + ' min</div></div>' +
       '<div class="cd-meta-item"><div class="cd-meta-label">Capacity</div><div class="cd-meta-value">' + (cls.capacity || '—') + ' students</div></div>' +
-      '<div class="cd-meta-item"><div class="cd-meta-label">Materials</div><div class="cd-meta-value">' + (cls.materialsIncluded ? (cls.materialsNote || 'Included') : 'Not included') + '</div></div>' +
+      '<div class="cd-meta-item"><div class="cd-meta-label">Materials</div><div class="cd-meta-value">' + (cls.materialsIncluded ? (cls.materialsNote || 'Included') : (cls.materialsCostCents ? formatPrice(cls.materialsCostCents) + ' fee' : 'Not included')) + '</div></div>' +
       '</div>' +
       '</div></div>';
 
@@ -606,7 +607,7 @@
           '</div>';
       } else {
         html += '<div class="cd-series-cta">' +
-          '<button class="cd-series-btn" onclick="window._bookSeries(\'' + esc(cls.id) + '\', \'' + esc(cls.name) + '\', ' + seriesPrice + ', ' + totalSessions + ')">' +
+          '<button class="cd-series-btn" onclick="window._bookSeries(\'' + esc(cls.id) + '\', \'' + esc(cls.name) + '\', ' + seriesPrice + ', ' + totalSessions + ', ' + (cls.materialsIncluded ? 0 : (cls.materialsCostCents || 0)) + ')">' +
           'Enroll in Full Series &mdash; ' + formatPrice(seriesPrice) + ' (' + totalSessions + ' sessions)' +
           '</button>' +
           '<div class="cd-series-spots">' + seriesSpotsLeft + ' series spot' + (seriesSpotsLeft !== 1 ? 's' : '') + ' available</div>' +
@@ -639,7 +640,7 @@
           (showBookBtn ?
             (isFull ?
               '<button class="cd-waitlist-btn" onclick="window._joinWaitlist(\'' + esc(s.id) + '\', \'' + esc(cls.id) + '\', \'' + esc(cls.name) + '\', \'dropin\')">Waitlist</button>' :
-              '<button class="cd-book-btn" onclick="window._bookSession(\'' + esc(s.id) + '\', \'' + esc(cls.id) + '\', \'' + esc(cls.name) + '\', ' + (cls.priceCents || 0) + ', ' + dropInSpotsLeft + ', \'' + esc(s.date) + '\', \'' + esc(s.startTime) + '\')">' +
+              '<button class="cd-book-btn" onclick="window._bookSession(\'' + esc(s.id) + '\', \'' + esc(cls.id) + '\', \'' + esc(cls.name) + '\', ' + (cls.priceCents || 0) + ', ' + dropInSpotsLeft + ', \'' + esc(s.date) + '\', \'' + esc(s.startTime) + '\', ' + (cls.materialsIncluded ? 0 : (cls.materialsCostCents || 0)) + ')">' +
               (isSeries ? 'Drop-in' : 'Book') + '</button>')
             : '') +
           '</div>';
@@ -652,7 +653,7 @@
   }
 
   // Book full series — adds as a single cart item
-  window._bookSeries = function(classId, className, seriesPriceCents, totalSessions) {
+  window._bookSeries = function(classId, className, seriesPriceCents, totalSessions, materialsCostCents) {
     if (!window.MastCart) { alert('Cart not loaded yet. Please wait.'); return; }
 
     function addSeriesToCart() {
@@ -667,6 +668,22 @@
         classId: classId,
         image: ''
       });
+
+      // Auto-add materials fee for series (one fee covers all sessions)
+      if (materialsCostCents && materialsCostCents > 0) {
+        window.MastCart.addItem({
+          pid: classId + '-series-materials',
+          name: className + ' — Materials (Series)',
+          price: '$' + (materialsCostCents / 100).toFixed(2),
+          priceCents: materialsCostCents,
+          options: {},
+          qty: 1,
+          bookingType: 'class-materials',
+          classId: classId,
+          image: ''
+        });
+      }
+
       // Use the same confirmation banner
       var banner = document.createElement('div');
       banner.className = 'cd-booking-confirm';
@@ -774,7 +791,7 @@
     });
   };
 
-  window._bookSession = function(sessionId, classId, className, priceCents, spotsLeft, date, time) {
+  window._bookSession = function(sessionId, classId, className, priceCents, spotsLeft, date, time, materialsCostCents) {
     if (!window.MastCart) { alert('Cart not loaded yet. Please wait.'); return; }
 
     function showBookingConfirmation(message, isPass) {
@@ -811,6 +828,22 @@
         availableStock: spotsLeft,
         image: ''
       });
+
+      // Auto-add materials fee as separate line item
+      if (materialsCostCents && materialsCostCents > 0) {
+        window.MastCart.addItem({
+          pid: classId + '-materials',
+          name: className + ' — Materials',
+          price: '$' + (materialsCostCents / 100).toFixed(2),
+          priceCents: materialsCostCents,
+          options: { date: date, time: time },
+          qty: 1,
+          bookingType: 'class-materials',
+          sessionId: sessionId,
+          classId: classId,
+          image: ''
+        });
+      }
 
       showBookingConfirmation('Added to cart — ' + className, false);
     }
