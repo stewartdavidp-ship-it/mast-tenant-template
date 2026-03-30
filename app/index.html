@@ -24151,17 +24151,21 @@ function getDashCardsInOrder() {
     return pa.localeCompare(pb);
   });
 
-  // Sort unpinned by lastActivity descending, fallback to default order
+  // Sort unpinned: cards with new activity bubble up, everything else stays in default order
   // Only consider ISO-like timestamps (start with digit, contain '-')
   function validActivity(v) { return v && v.length > 10 && v.charAt(4) === '-'; }
   unpinned.sort(function(a, b) {
-    var la = (dashboardCardPrefs[a.id] || {}).lastActivity || '';
-    var lb = (dashboardCardPrefs[b.id] || {}).lastActivity || '';
-    if (!validActivity(la)) la = '';
-    if (!validActivity(lb)) lb = '';
-    if (la && lb) return lb.localeCompare(la);
-    if (la) return -1;
-    if (lb) return 1;
+    var pa = dashboardCardPrefs[a.id] || {};
+    var pb = dashboardCardPrefs[b.id] || {};
+    var la = validActivity(pa.lastActivity) ? pa.lastActivity : '';
+    var lb = validActivity(pb.lastActivity) ? pb.lastActivity : '';
+    var aNew = pa.hasNewActivity && la;
+    var bNew = pb.hasNewActivity && lb;
+    // Cards with active new-activity flag sort to top
+    if (aNew && !bNew) return -1;
+    if (!aNew && bNew) return 1;
+    if (aNew && bNew) return lb.localeCompare(la);
+    // Otherwise maintain default order
     return DASHBOARD_CARDS.indexOf(a) - DASHBOARD_CARDS.indexOf(b);
   });
 
