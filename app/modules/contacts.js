@@ -144,10 +144,19 @@ function openAddContactModal() {
     '<div class="modal-header"><h3>Add Contact</h3></div>' +
     '<div class="modal-body">' +
       '<div class="form-group"><label>Name *</label><input type="text" id="contactNameInput" placeholder="Company or person name"></div>' +
-      '<div class="form-group"><label>Category *</label><select id="contactCategoryInput">' + catOptions + '</select></div>' +
-      '<div class="form-group"><label>Notes</label><textarea id="contactNotesInput" rows="3" placeholder="Optional notes about this contact"></textarea></div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
+        '<div class="form-group"><label>Email</label><input type="email" id="contactEmailInput" placeholder="email@example.com"></div>' +
+        '<div class="form-group"><label>Phone</label><input type="tel" id="contactPhoneInput" placeholder="(555) 123-4567"></div>' +
+      '</div>' +
+      '<div class="form-group"><label>Company / Organization</label><input type="text" id="contactCompanyInput" placeholder="Company name"></div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
+        '<div class="form-group"><label>Category *</label><select id="contactCategoryInput">' + catOptions + '</select></div>' +
+        '<div class="form-group"><label>Website</label><input type="url" id="contactWebsiteInput" placeholder="https://..."></div>' +
+      '</div>' +
+      '<div class="form-group"><label>Address</label><input type="text" id="contactAddressInput" placeholder="Street, City, State ZIP"></div>' +
+      '<div class="form-group"><label>Notes</label><textarea id="contactNotesInput" rows="2" placeholder="Optional notes about this contact"></textarea></div>' +
       '<div class="form-group"><label>Drive Folder Link</label><input type="text" id="contactDriveFolderInput" placeholder="https://drive.google.com/drive/folders/...">' +
-        '<p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Paste an existing Google Drive folder link. Studio won\'t create a folder automatically.</p></div>' +
+        '<p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Paste an existing Google Drive folder link.</p></div>' +
     '</div>' +
     '<div class="modal-footer">' +
       '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
@@ -158,7 +167,12 @@ function openAddContactModal() {
 
 async function saveNewContact() {
   var name = document.getElementById('contactNameInput').value.trim();
+  var email = document.getElementById('contactEmailInput').value.trim();
+  var phone = document.getElementById('contactPhoneInput').value.trim();
+  var company = document.getElementById('contactCompanyInput').value.trim();
   var category = document.getElementById('contactCategoryInput').value;
+  var website = document.getElementById('contactWebsiteInput').value.trim();
+  var address = document.getElementById('contactAddressInput').value.trim();
   var notes = document.getElementById('contactNotesInput').value.trim();
   var driveFolderLink = document.getElementById('contactDriveFolderInput').value.trim();
 
@@ -169,7 +183,12 @@ async function saveNewContact() {
   var contactData = {
     id: id,
     name: name,
+    email: email || null,
+    phone: phone || null,
+    company: company || null,
     category: category,
+    website: website || null,
+    address: address || null,
     notes: notes || null,
     googleContactId: null,
     driveFolderLink: driveFolderLink || null,
@@ -259,11 +278,25 @@ function renderContactDetail(contact) {
     ? '<div class="contact-detail-notes">' + esc(contact.notes) + '</div>'
     : '';
 
+  var detailFieldsHtml = '';
+  var fields = [];
+  if (contact.email) fields.push('<a href="mailto:' + esc(contact.email) + '" style="color:var(--accent);">' + esc(contact.email) + '</a>');
+  if (contact.phone) fields.push('<a href="tel:' + esc(contact.phone) + '" style="color:var(--accent);">' + esc(contact.phone) + '</a>');
+  if (contact.company) fields.push(esc(contact.company));
+  if (contact.website) fields.push('<a href="' + esc(contact.website) + '" target="_blank" rel="noopener" style="color:var(--accent);">' + esc(contact.website) + '</a>');
+  if (contact.address) fields.push(esc(contact.address));
+  if (fields.length) {
+    detailFieldsHtml = '<div style="display:flex;flex-wrap:wrap;gap:8px 16px;margin:8px 0;font-size:0.88rem;color:var(--warm-gray-light);">' +
+      fields.map(function(f) { return '<span>' + f + '</span>'; }).join('<span style="color:var(--warm-gray);">|</span>') +
+    '</div>';
+  }
+
   var headerHtml = '' +
     '<div class="contact-detail-header">' +
       '<div>' +
         '<h2 class="contact-detail-name">' + esc(contact.name || '') + '</h2>' +
         '<span class="status-badge" style="' + contactCatBadgeStyle(contact.category) + '">' + esc(contact.category || 'Other') + '</span>' +
+        detailFieldsHtml +
         notesHtml +
         (linksHtml ? '<div class="contact-detail-links">' + linksHtml + '</div>' : '') +
       '</div>' +
@@ -471,7 +504,38 @@ async function createGoogleContact(contactData) {
   }
 }
 
-async function syncGoogleContacts() {
+function openSyncGoogleContactsModal() {
+  var connected = isGoogleContactsConnected();
+  if (!connected) {
+    showToast('Please connect Google Contacts first.', true);
+    return;
+  }
+
+  var groupName = (TENANT_BRAND && TENANT_BRAND.name) || 'My Business';
+  var html = '' +
+    '<div class="modal-header"><h3>Sync Google Contacts</h3></div>' +
+    '<div class="modal-body">' +
+      '<p style="margin-bottom:16px;color:var(--warm-gray);">Choose which Google contacts to import:</p>' +
+      '<div class="form-group">' +
+        '<label><input type="radio" name="syncMode" value="group" checked style="margin-right:8px;">Only contacts in my "' + esc(groupName) + '" group</label>' +
+        '<p style="font-size:0.75rem;color:var(--warm-gray);margin:4px 0 12px 24px;">Imports only contacts you\'ve organized into your business group in Google Contacts.</p>' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<label><input type="radio" name="syncMode" value="all" style="margin-right:8px;">All my Google contacts</label>' +
+        '<p style="font-size:0.75rem;color:var(--warm-gray);margin:4px 0 0 24px;">Imports all contacts from your Google account.</p>' +
+      '</div>' +
+    '</div>' +
+    '<div class="modal-footer">' +
+      '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+      '<button class="btn btn-primary" onclick="doSyncGoogleContacts()">Sync</button>' +
+    '</div>';
+  openModal(html);
+}
+
+async function doSyncGoogleContacts() {
+  var syncAll = document.querySelector('input[name="syncMode"]:checked').value === 'all';
+  closeModal();
+
   try {
     var connected = await isGoogleContactsConnected();
     if (!connected) {
@@ -485,6 +549,10 @@ async function syncGoogleContacts() {
     var tenantId = window.TENANT_ID || 'dev';
     var groupName = (TENANT_BRAND && TENANT_BRAND.name) || 'My Business';
 
+    var body = syncAll
+      ? { allContacts: true }
+      : { groupName: groupName };
+
     var response = await fetch(GOOGLE_CONTACTS_FUNCTIONS_BASE + '/googleContactsSync', {
       method: 'POST',
       headers: {
@@ -492,7 +560,7 @@ async function syncGoogleContacts() {
         'Content-Type': 'application/json',
         'X-Tenant-ID': tenantId
       },
-      body: JSON.stringify({ groupName: groupName })
+      body: JSON.stringify(body)
     });
 
     if (!response.ok) {
@@ -560,7 +628,8 @@ async function syncGoogleContacts() {
   window.openLogInteractionModal = openLogInteractionModal;
   window.saveInteraction = saveInteraction;
   window.createGoogleContact = createGoogleContact;
-  window.syncGoogleContacts = syncGoogleContacts;
+  window.syncGoogleContacts = openSyncGoogleContactsModal;
+  window.doSyncGoogleContacts = doSyncGoogleContacts;
   window.connectGoogleContacts = connectGoogleContacts;
   window.isGoogleContactsConnected = isGoogleContactsConnected;
 
