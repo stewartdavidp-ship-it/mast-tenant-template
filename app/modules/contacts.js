@@ -215,6 +215,113 @@ async function saveNewContact() {
 }
 
 // ============================================================
+// Edit Contact
+// ============================================================
+
+async function openEditContactModal(contactId) {
+  var snap = await MastDB.contacts.ref(contactId).once('value');
+  var c = snap.val();
+  if (!c) { showToast('Contact not found.', true); return; }
+
+  var catOptions = CONTACT_CATEGORIES.map(function(cat) {
+    var sel = (cat === c.category) ? ' selected' : '';
+    return '<option value="' + esc(cat) + '"' + sel + '>' + esc(cat) + '</option>';
+  }).join('');
+
+  var html = '' +
+    '<div class="modal-header"><h3>Edit Contact</h3></div>' +
+    '<div class="modal-body">' +
+      '<div class="form-group"><label>Name *</label><input type="text" id="editContactName" value="' + esc(c.name || '') + '"></div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
+        '<div class="form-group"><label>Email</label><input type="email" id="editContactEmail" value="' + esc(c.email || '') + '"></div>' +
+        '<div class="form-group"><label>Phone</label><input type="tel" id="editContactPhone" value="' + esc(c.phone || '') + '"></div>' +
+      '</div>' +
+      '<div class="form-group"><label>Company / Organization</label><input type="text" id="editContactCompany" value="' + esc(c.company || '') + '"></div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
+        '<div class="form-group"><label>Category *</label><select id="editContactCategory">' + catOptions + '</select></div>' +
+        '<div class="form-group"><label>Website</label><input type="url" id="editContactWebsite" value="' + esc(c.website || '') + '"></div>' +
+      '</div>' +
+      '<div class="form-group"><label>Address</label><input type="text" id="editContactAddress" value="' + esc(c.address || '') + '"></div>' +
+      '<div class="form-group"><label>Notes</label><textarea id="editContactNotes" rows="2">' + esc(c.notes || '') + '</textarea></div>' +
+      '<div class="form-group"><label>Drive Folder Link</label><input type="text" id="editContactDrive" value="' + esc(c.driveFolderLink || '') + '"></div>' +
+    '</div>' +
+    '<div class="modal-footer">' +
+      '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+      '<button class="btn btn-primary" onclick="saveEditContact(\'' + esc(contactId) + '\')">Save Changes</button>' +
+    '</div>';
+  openModal(html);
+}
+
+async function saveEditContact(contactId) {
+  var name = document.getElementById('editContactName').value.trim();
+  if (!name) { showToast('Name is required.', true); return; }
+
+  var updates = {
+    name: name,
+    email: document.getElementById('editContactEmail').value.trim() || null,
+    phone: document.getElementById('editContactPhone').value.trim() || null,
+    company: document.getElementById('editContactCompany').value.trim() || null,
+    category: document.getElementById('editContactCategory').value,
+    website: document.getElementById('editContactWebsite').value.trim() || null,
+    address: document.getElementById('editContactAddress').value.trim() || null,
+    notes: document.getElementById('editContactNotes').value.trim() || null,
+    driveFolderLink: document.getElementById('editContactDrive').value.trim() || null,
+    updatedAt: new Date().toISOString()
+  };
+
+  try {
+    await MastDB.contacts.update(contactId, updates);
+    await writeAudit('update', 'contacts', contactId);
+    showToast('Contact updated.');
+    closeModal();
+    loadContactDetail(contactId);
+    contactsLoaded = false; // refresh list on back
+
+    // Push changes to Google Contact in background
+    var snap = await MastDB.contacts.ref(contactId).once('value');
+    var contact = snap.val();
+    if (contact && contact.googleContactId) {
+      pushContactToGoogle(contact);
+    }
+  } catch (err) {
+    showToast('Error updating contact: ' + err.message, true);
+  }
+}
+
+async function pushContactToGoogle(contact) {
+  try {
+    var connected = await isGoogleContactsConnected();
+    if (!connected || !contact.googleContactId) return;
+
+    var idToken = await currentUser.getIdToken();
+    var tenantId = window.TENANT_ID || 'dev';
+
+    var response = await fetch(GOOGLE_CONTACTS_FUNCTIONS_BASE + '/googleContactsUpdate', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + idToken,
+        'Content-Type': 'application/json',
+        'X-Tenant-ID': tenantId
+      },
+      body: JSON.stringify({
+        resourceName: contact.googleContactId,
+        name: contact.name,
+        email: contact.email,
+        phone: contact.phone,
+        company: contact.company,
+        category: contact.category
+      })
+    });
+
+    if (!response.ok) {
+      console.error('Google contact update failed:', await response.text());
+    }
+  } catch (err) {
+    console.error('Push to Google failed:', err);
+  }
+}
+
+// ============================================================
 // Contact Detail View
 // ============================================================
 
@@ -301,7 +408,10 @@ function renderContactDetail(contact) {
         notesHtml +
         (linksHtml ? '<div class="contact-detail-links">' + linksHtml + '</div>' : '') +
       '</div>' +
-      '<button class="btn btn-primary" style="font-size:0.82rem;padding:6px 16px;white-space:nowrap;" onclick="openLogInteractionModal(\'' + esc(contact.id) + '\')">+ Log Interaction</button>' +
+      '<div style="display:flex;gap:8px;">' +
+        '<button class="btn btn-secondary" style="font-size:0.82rem;padding:6px 16px;white-space:nowrap;" onclick="openEditContactModal(\'' + esc(contact.id) + '\')">Edit</button>' +
+        '<button class="btn btn-primary" style="font-size:0.82rem;padding:6px 16px;white-space:nowrap;" onclick="openLogInteractionModal(\'' + esc(contact.id) + '\')">+ Log Interaction</button>' +
+      '</div>' +
     '</div>';
 
   // Interaction timeline
@@ -638,6 +748,8 @@ async function doSyncGoogleContacts() {
   window.doSyncGoogleContacts = doSyncGoogleContacts;
   window.connectGoogleContacts = connectGoogleContacts;
   window.isGoogleContactsConnected = isGoogleContactsConnected;
+  window.openEditContactModal = openEditContactModal;
+  window.saveEditContact = saveEditContact;
 
   // ============================================================
   // Register with MastAdmin
