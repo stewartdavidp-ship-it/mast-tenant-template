@@ -438,11 +438,8 @@
     body.dark-mode .feature-gate-callout h3 { color: #e0e0e0; }
     body.dark-mode .feature-gate-callout p { color: #999; }
     body.dark-mode .setup-banner { background: linear-gradient(135deg, #1a3a34, #2A7C6F); }
-    body.dark-mode #guidedNextSteps > div { background: #2a2a2a !important; border-color: #444 !important; }
-    body.dark-mode #guidedNextSteps h3 { color: #e0e0e0 !important; }
-    body.dark-mode #guidedNextSteps p { color: #999 !important; }
-    body.dark-mode #guidedNextSteps div[style*="font-weight:600"] { color: #e0e0e0 !important; }
-    body.dark-mode #guidedNextSteps button[title="Mark as done"] { border-color: #444 !important; color: #999 !important; }
+    body.dark-mode #dashCardSetupShop div[style*="font-weight:600"] { color: #e0e0e0 !important; }
+    body.dark-mode #dashCardSetupShop button[title="Mark as done"] { border-color: #444 !important; color: #999 !important; }
     body.dark-mode .auth-screen h2 { color: #e0e0e0; }
     body.dark-mode .auth-screen p { color: #999; }
     body.dark-mode .btn-google { background: #2a2a2a; border-color: #444; color: #e0e0e0; }
@@ -5001,12 +4998,11 @@
       <div id="activeTripBanner" style="display:none;"></div>
       <!-- Import Status Banner -->
       <div id="importStatusBanner" style="display:none;"></div>
-      <!-- Guided Next Steps (shown after onboarding) -->
-      <div id="guidedNextSteps" style="display:none;"></div>
       <!-- Dashboard Todos (above cards, extensible nudge system) -->
       <div id="dashboardTodos" style="display:none;"></div>
       <!-- Dashboard Cards -->
       <div id="dashboardCards">
+        <div id="dashCardSetupShop"></div>
         <div id="dashCardNewInquiries"></div>
         <div id="dashCardQuickActions"></div>
         <div id="dashCardNewOrders"></div>
@@ -10678,7 +10674,7 @@ auth.onAuthStateChanged(async function(user) {
   await loadConfigChecklist();
 
   // Guided next steps (module-aware onboarding) — replaces old setup banner
-  Promise.all([loadNextStepsCache(), loadDismissedSteps()]).then(function() { renderGuidedNextSteps(); });
+  Promise.all([loadNextStepsCache(), loadDismissedSteps()]).then(function() { renderDashCardSetupShop(); });
 
   // Load GitHub token for image uploads — admin only
   if (isAdmin()) {
@@ -15864,7 +15860,7 @@ async function wizardComplete() {
     // Module selection already handled in wizard Step 2 — no post-wizard modal needed
     navigateTo('dashboard');
 
-    Promise.all([loadNextStepsCache(), loadDismissedSteps()]).then(function() { renderGuidedNextSteps(); });
+    Promise.all([loadNextStepsCache(), loadDismissedSteps()]).then(function() { renderDashCardSetupShop(); });
     attachListeners();
     loadSettings();
   } catch (err) {
@@ -15961,88 +15957,61 @@ var NEXT_STEP_DEFINITIONS = [
 
 // Dismissed steps — persisted to Firebase
 var _dismissedSteps = {};
-var _setupCardCollapsed = false;
 async function loadDismissedSteps() {
   try {
     var snap = await MastDB._ref('webPresence/config/dismissedSteps').once('value');
     _dismissedSteps = snap.val() || {};
-    var collSnap = await MastDB._ref('webPresence/config/setupCollapsed').once('value');
-    _setupCardCollapsed = collSnap.val() === true;
   } catch (e) { _dismissedSteps = {}; }
-}
-function toggleSetupCard() {
-  _setupCardCollapsed = !_setupCardCollapsed;
-  MastDB._ref('webPresence/config/setupCollapsed').set(_setupCardCollapsed);
-  renderGuidedNextSteps();
 }
 function dismissNextStep(stepId) {
   _dismissedSteps[stepId] = true;
   MastDB._ref('webPresence/config/dismissedSteps/' + stepId).set(true);
-  renderGuidedNextSteps();
+  renderDashCardSetupShop();
 }
 
-function renderGuidedNextSteps() {
-  var container = document.getElementById('guidedNextSteps');
+function renderDashCardSetupShop() {
+  var container = document.getElementById('dashCardSetupShop');
   if (!container) return;
+  var cardConfig = DASHBOARD_CARDS.find(function(c) { return c.id === 'setupShop'; });
 
   var sub = getTenantSubscription();
   var activeModules = sub.modules || [];
 
-  // Filter steps to active modules (null module = always shown)
   var steps = NEXT_STEP_DEFINITIONS.filter(function(step) {
     if (step.module === null) return true;
     return activeModules.indexOf(step.module) >= 0;
   });
 
-  // Split into done and todo (auto-check OR manually dismissed)
   var todo = steps.filter(function(s) { return !s.check() && !_dismissedSteps[s.id]; });
   var done = steps.filter(function(s) { return s.check() || _dismissedSteps[s.id]; });
 
-  // If all done, hide the widget
+  // If all done, hide the card
   if (todo.length === 0) {
-    container.style.display = 'none';
+    container.innerHTML = '';
     return;
   }
 
-  container.style.display = '';
-  var tierName = (TIER_CONFIG[sub.tier] || {}).name || sub.tier;
   var total = steps.length;
   var completed = done.length;
+  var pct = total > 0 ? Math.round(completed / total * 100) : 0;
 
-  var h = '<div style="background:var(--card-bg, var(--cream, #FAF6F0));border:1px solid var(--card-border, var(--cream-dark, #F0E8DB));border-radius:12px;padding:20px 24px;margin-bottom:20px;">';
-
-  // Header with progress + collapse toggle
-  var colIcon = _setupCardCollapsed ? '\u25B6' : '\u25BC';
-  h += '<div onclick="toggleSetupCard()" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;' + (_setupCardCollapsed ? '' : 'margin-bottom:16px;') + '">';
-  h += '<div style="flex:1;min-width:0;">';
-  h += '<h3 style="font-family:\'Cormorant Garamond\', serif;font-size:1.3rem;font-weight:700;color:var(--text, var(--charcoal, #1a1a1a));margin:0;">Set Up Your Shop</h3>';
-  if (!_setupCardCollapsed) {
-    h += '<p style="font-size:0.85rem;color:var(--warm-gray, #6B6560);margin:4px 0 0;">' + completed + ' of ' + total + ' steps done — complete these to get the most out of your site</p>';
-  }
-  h += '</div>';
-  h += '<div style="display:flex;align-items:center;gap:12px;">';
+  // Build card body content
+  var h = '';
+  // Progress info
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
+  h += '<p style="font-size:0.85rem;color:var(--warm-gray, #6B6560);margin:0;">' + completed + ' of ' + total + ' steps done</p>';
   if (completed > 0) {
-    h += '<div style="font-size:0.8rem;color:var(--teal, #2A7C6F);font-weight:600;">' + Math.round(completed / total * 100) + '% complete</div>';
+    h += '<div style="font-size:0.8rem;color:var(--teal, #2A7C6F);font-weight:600;">' + pct + '% complete</div>';
   }
-  h += '<span style="font-size:0.85rem;color:var(--warm-gray-light, #9B958E);transition:transform 0.2s;">' + colIcon + '</span>';
   h += '</div>';
-  h += '</div>';
-
-  if (_setupCardCollapsed) {
-    h += '</div>';
-    container.innerHTML = h;
-    return;
-  }
 
   // Progress bar
-  var pct = total > 0 ? (completed / total * 100) : 0;
   h += '<div style="background:var(--hover-bg, var(--cream-dark, #F0E8DB));border-radius:6px;height:6px;margin-bottom:16px;overflow:hidden;">';
   h += '<div style="background:var(--teal, #2A7C6F);height:100%;width:' + pct + '%;border-radius:6px;transition:width 0.3s;"></div>';
   h += '</div>';
 
-  // Next steps (show up to 3 todos)
-  var shown = todo.slice(0, 3);
-  shown.forEach(function(step) {
+  // Steps (show up to 3)
+  function renderStep(step) {
     var clickAction = '';
     if (step.action === 'open-public-site') {
       var tenantId = (MastDB && MastDB.tenantId ? MastDB.tenantId() : '') || (window.TENANT_CONFIG && window.TENANT_CONFIG.tenantId) || '';
@@ -16053,46 +16022,30 @@ function renderGuidedNextSteps() {
     } else if (step.route) {
       clickAction = 'navigateTo(\'' + step.route + '\')';
     }
-    h += '<div onclick="' + clickAction + '" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;cursor:pointer;transition:background 0.15s;margin-bottom:4px;" onmouseover="this.style.background=\'var(--hover-bg, var(--cream-dark, #F0E8DB))\'" onmouseout="this.style.background=\'transparent\'">';
-    h += '<span style="font-size:1.4rem;flex-shrink:0;">' + step.icon + '</span>';
-    h += '<div style="flex:1;min-width:0;">';
-    h += '<div style="font-size:0.95rem;font-weight:600;color:var(--text, var(--charcoal, #1a1a1a));">' + esc(step.title) + '</div>';
-    h += '<div style="font-size:0.82rem;color:var(--warm-gray, #6B6560);">' + esc(step.desc) + '</div>';
-    h += '</div>';
-    h += '<button onclick="event.stopPropagation();dismissNextStep(\'' + step.id + '\');" style="background:none;border:1px solid var(--cream-dark, #ddd);border-radius:50%;width:24px;height:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--warm-gray);font-size:0.7rem;transition:all 0.15s;" onmouseover="this.style.borderColor=\'var(--teal)\';this.style.color=\'var(--teal)\';" onmouseout="this.style.borderColor=\'var(--cream-dark, #ddd)\';this.style.color=\'var(--warm-gray)\';" title="Mark as done">&#10003;</button>';
-    h += '</div>';
-  });
+    return '<div onclick="' + clickAction + '" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;cursor:pointer;transition:background 0.15s;margin-bottom:4px;" onmouseover="this.style.background=\'var(--hover-bg, var(--cream-dark, #F0E8DB))\'" onmouseout="this.style.background=\'transparent\'">' +
+      '<span style="font-size:1.4rem;flex-shrink:0;">' + step.icon + '</span>' +
+      '<div style="flex:1;min-width:0;">' +
+        '<div style="font-size:0.95rem;font-weight:600;color:var(--text, var(--charcoal, #1a1a1a));">' + esc(step.title) + '</div>' +
+        '<div style="font-size:0.82rem;color:var(--warm-gray, #6B6560);">' + esc(step.desc) + '</div>' +
+      '</div>' +
+      '<button onclick="event.stopPropagation();dismissNextStep(\'' + step.id + '\');" style="background:none;border:1px solid var(--cream-dark, #ddd);border-radius:50%;width:24px;height:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--warm-gray);font-size:0.7rem;transition:all 0.15s;" onmouseover="this.style.borderColor=\'var(--teal)\';this.style.color=\'var(--teal)\';" onmouseout="this.style.borderColor=\'var(--cream-dark, #ddd)\';this.style.color=\'var(--warm-gray)\';" title="Mark as done">&#10003;</button>' +
+    '</div>';
+  }
+
+  todo.slice(0, 3).forEach(function(step) { h += renderStep(step); });
 
   if (todo.length > 3) {
-    // Render remaining steps hidden, with a clickable toggle to expand
     var remaining = todo.slice(3);
     h += '<div id="nextStepsExpanded" style="display:none;">';
-    remaining.forEach(function(step) {
-      var clickAction = '';
-      if (step.action === 'open-public-site') {
-        var tid = (MastDB && MastDB.tenantId ? MastDB.tenantId() : '') || (window.TENANT_CONFIG && window.TENANT_CONFIG.tenantId) || '';
-        var pUrl = tid ? 'https://mast-' + tid + '.web.app' : '#';
-        clickAction = 'window.open(\'' + pUrl + '\', \'_blank\')';
-      } else if (step.route && step.subView) {
-        clickAction = 'navigateTo(\'' + step.route + '\'); setTimeout(function(){ switchSettingsSubView(\'' + step.subView + '\'); }, 50);';
-      } else if (step.route) {
-        clickAction = 'navigateTo(\'' + step.route + '\')';
-      }
-      h += '<div onclick="' + clickAction + '" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;cursor:pointer;transition:background 0.15s;margin-bottom:4px;" onmouseover="this.style.background=\'var(--hover-bg, var(--cream-dark, #F0E8DB))\'" onmouseout="this.style.background=\'transparent\'">';
-      h += '<span style="font-size:1.4rem;flex-shrink:0;">' + step.icon + '</span>';
-      h += '<div style="flex:1;min-width:0;">';
-      h += '<div style="font-size:0.95rem;font-weight:600;color:var(--text, var(--charcoal, #1a1a1a));">' + esc(step.title) + '</div>';
-      h += '<div style="font-size:0.82rem;color:var(--warm-gray, #6B6560);">' + esc(step.desc) + '</div>';
-      h += '</div>';
-      h += '<button onclick="event.stopPropagation();dismissNextStep(\'' + step.id + '\');" style="background:none;border:1px solid var(--cream-dark, #ddd);border-radius:50%;width:24px;height:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--warm-gray);font-size:0.7rem;transition:all 0.15s;" onmouseover="this.style.borderColor=\'var(--teal)\';this.style.color=\'var(--teal)\';" onmouseout="this.style.borderColor=\'var(--cream-dark, #ddd)\';this.style.color=\'var(--warm-gray)\';" title="Mark as done">&#10003;</button>';
-      h += '</div>';
-    });
+    remaining.forEach(function(step) { h += renderStep(step); });
     h += '</div>';
     h += '<div id="nextStepsToggle" onclick="var exp=document.getElementById(\'nextStepsExpanded\');var tog=document.getElementById(\'nextStepsToggle\');if(exp.style.display===\'none\'){exp.style.display=\'block\';tog.textContent=\'Show less\';}else{exp.style.display=\'none\';tog.textContent=\'+ ' + remaining.length + ' more step' + (remaining.length !== 1 ? 's' : '') + '\';}" style="text-align:center;padding-top:8px;font-size:0.82rem;color:var(--teal, #2A7C6F);cursor:pointer;">+ ' + remaining.length + ' more step' + (remaining.length !== 1 ? 's' : '') + '</div>';
   }
 
-  h += '</div>';
-  container.innerHTML = h;
+  container.innerHTML = renderDashboardCard(cardConfig, todo.length, h);
+
+  // Activity tracking — track when steps get completed (done count changes)
+  updateCardActivity('setupShop', completed.toString());
 }
 
 // Cache for async checks (products, website, template, content)
@@ -24045,6 +23998,7 @@ var ROUTE_ACTION_MAP = {
 // ─── Dashboard Collapsible Card System ──────────────────────
 
 var DASHBOARD_CARDS = [
+  { id: 'setupShop',    title: 'Set Up Your Shop', containerId: 'dashCardSetupShop' },
   { id: 'newInquiries', title: 'New Inquiries', containerId: 'dashCardNewInquiries', viewAllRoute: 'contacts' },
   { id: 'quickActions', title: 'Quick Actions', containerId: 'dashCardQuickActions' },
   { id: 'newOrders',    title: 'New Orders',    containerId: 'dashCardNewOrders',    viewAllRoute: 'orders' },
@@ -24138,12 +24092,14 @@ function updateCardActivity(cardId, latestTimestamp) {
   if (latestTimestamp !== prevActivity) {
     dashboardCardPrefs[cardId] = dashboardCardPrefs[cardId] || {};
     dashboardCardPrefs[cardId].lastActivity = latestTimestamp;
-    dashboardCardPrefs[cardId].hasNewActivity = true;
+    // Only flag as new activity if there was a previous value (not first load)
+    if (prevActivity) {
+      dashboardCardPrefs[cardId].hasNewActivity = true;
+      var el = document.getElementById('dashCard_' + cardId);
+      if (el) el.classList.add('has-activity');
+    }
     var user = auth.currentUser;
     if (user) MastDB.dashboardPrefs.setCardActivity(user.uid, cardId, latestTimestamp);
-    // Add activity class to existing DOM element if rendered
-    var el = document.getElementById('dashCard_' + cardId);
-    if (el) el.classList.add('has-activity');
     reorderDashboardCards();
   }
 }
@@ -24352,14 +24308,15 @@ async function renderAllDashboardCards() {
       if (el) parent.appendChild(el); // appendChild moves existing elements
     });
   }
+  renderDashCardSetupShop();
   renderDashCardNewInquiries();
   renderDashCardQuickActions();
   // Dashboard cards with module gating — orders module provides New Orders + Ready to Ship cards
   MastAdmin.loadModule('orders').then(function() {
-    renderDashCardWithGating(DASHBOARD_CARDS[2], renderDashCardNewOrders);
-    renderDashCardWithGating(DASHBOARD_CARDS[3], renderDashCardReadyToShip);
+    renderDashCardWithGating(DASHBOARD_CARDS.find(function(c) { return c.id === 'newOrders'; }), renderDashCardNewOrders);
+    renderDashCardWithGating(DASHBOARD_CARDS.find(function(c) { return c.id === 'readyToShip'; }), renderDashCardReadyToShip);
   });
-  renderDashCardWithGating(DASHBOARD_CARDS[4], renderDashCardLowInventory);
+  renderDashCardWithGating(DASHBOARD_CARDS.find(function(c) { return c.id === 'lowInventory'; }), renderDashCardLowInventory);
   // Dashboard todos / nudges (above cards)
   renderDashboardTodos();
   // Import status banner
