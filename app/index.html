@@ -4928,6 +4928,7 @@
         <div class="sidebar-item" data-route="book" onclick="navigateTo('book')">Classes</div>
         <div class="sidebar-item" data-route="instructors" onclick="navigateTo('instructors')">Instructors</div>
         <div class="sidebar-item" data-route="resources" onclick="navigateTo('resources')">Resources</div>
+        <div class="sidebar-item" data-route="passes" onclick="navigateTo('passes')">Passes</div>
         <div class="sidebar-item" data-route="enrollments" onclick="navigateTo('enrollments')">Enrollments</div>
       </div>
     </div>
@@ -7462,6 +7463,7 @@
         <button class="view-tab active" onclick="window._bookSubTab('classes')">Classes</button>
         <button class="view-tab" onclick="window._bookSubTab('instructors')">Instructors</button>
         <button class="view-tab" onclick="window._bookSubTab('resources')">Resources</button>
+        <button class="view-tab" onclick="window._bookSubTab('passes')">Passes</button>
         <button class="view-tab" onclick="window._bookSubTab('enrollments')">Enrollments</button>
       </div>
 
@@ -7563,6 +7565,38 @@
       <div id="bookResourceDetailView" style="display:none;">
         <button class="detail-back" onclick="window._resBackToList()">&#8592; Back to Resources</button>
         <div id="bookResourceDetailContent"></div>
+      </div>
+
+      <!-- Passes List View -->
+      <div id="bookPassesView" style="display:none;">
+        <div class="section-header">
+          <h2>Pass Definitions</h2>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <select id="passFilterType" onchange="window._passFilterType()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;">
+              <option value="all">All Types</option>
+              <option value="drop-in">Drop-in</option>
+              <option value="pack">Pack</option>
+              <option value="unlimited">Unlimited</option>
+              <option value="limited">Limited</option>
+              <option value="series">Series</option>
+              <option value="intro">Intro</option>
+            </select>
+            <select id="passFilterStatus" onchange="window._passFilterStatus()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;">
+              <option value="active">Active</option>
+              <option value="draft">Draft</option>
+              <option value="archived">Archived</option>
+              <option value="all">All</option>
+            </select>
+            <button class="btn btn-primary" onclick="window._passCreate()">+ New Pass</button>
+          </div>
+        </div>
+        <div id="bookPassesTable"></div>
+      </div>
+
+      <!-- Pass Detail/Edit View -->
+      <div id="bookPassDetailView" style="display:none;">
+        <button class="detail-back" onclick="window._passBackToList()">&#8592; Back to Passes</button>
+        <div id="bookPassDetailContent"></div>
       </div>
     </div>
 
@@ -8662,6 +8696,34 @@ MastDB.showLight = {
     byType: function(type) {
       return this.ref().orderByChild('type').equalTo(type).once('value');
     }
+  },
+  accounts: {
+    PATH: 'public/accounts',
+    ref: function(uid) { return MastDB._ref(this.PATH + (uid ? '/' + uid : '')); },
+    get: function(uid) { return this.ref(uid).once('value'); },
+    set: function(uid, data) { return this.ref(uid).set(data); },
+    update: function(uid, data) { return this.ref(uid).update(data); },
+    passes: function(uid, passId) {
+      var p = this.PATH + '/' + uid + '/passes';
+      if (passId) p += '/' + passId;
+      return MastDB._ref(p);
+    },
+    listPasses: function(uid, limit) {
+      return this.passes(uid).limitToLast(limit || 50).once('value');
+    },
+    newPassKey: function(uid) { return this.passes(uid).push().key; }
+  },
+  passDefinitions: {
+    PATH: 'admin/passDefinitions',
+    ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+    list: function(limit) { return this.ref().limitToLast(limit || 100).once('value'); },
+    get: function(id) { return this.ref(id).once('value'); },
+    set: function(id, data) { return this.ref(id).set(data); },
+    update: function(id, data) { return this.ref(id).update(data); },
+    remove: function(id) { return this.ref(id).remove(); },
+    listen: function(limit, cb, errCb) { return this.ref().limitToLast(limit || 100).on('value', cb, errCb); },
+    unlisten: function(handle) { this.ref().off('value', handle); },
+    newKey: function() { return MastDB._ref(this.PATH).push().key; }
   }
 };
 
@@ -8690,7 +8752,7 @@ var MODULE_REGISTRY = {
   show:   { id: 'show',   name: 'Show',   icon: '\uD83C\uDFAA', description: 'Find, apply, prep, and execute craft fairs and events.', section: 'show', navPosition: 7, purchasable: true, routes: ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'], manageSettings: [], synergies: ['sell', 'ship', 'make'], status: 'active' },
   'show-light': { id: 'show-light', name: 'Show Light', icon: '\u2728', description: 'Vendor profile, image gallery, and AI-powered show application builder.', section: 'show-light', navPosition: 8, purchasable: false, showInGrid: true, routes: ['show-light-profile', 'show-light-gallery', 'show-light-shows', 'show-light-apply'], manageSettings: [], synergies: ['show', 'sell', 'market'], status: 'active' },
   events: { id: 'events', name: 'Events', icon: '\uD83C\uDFAB', description: 'Organize shows, manage booths, vendors, and floor plans.', section: 'events', navPosition: 9, purchasable: true, routes: ['events-shows', 'events-settings'], manageSettings: [], synergies: ['show', 'sell', 'market'], status: 'active' },
-  book:   { id: 'book',   name: 'Book',   icon: '\uD83D\uDCC5', description: 'Classes, workshops, studio time, and student enrollment.', section: 'book', navPosition: 10, purchasable: true, routes: ['book', 'book-detail', 'enrollments', 'instructors', 'instructor-detail', 'resources', 'resource-detail'], manageSettings: [], synergies: ['sell', 'market'], status: 'active' }
+  book:   { id: 'book',   name: 'Book',   icon: '\uD83D\uDCC5', description: 'Classes, workshops, studio time, and student enrollment.', section: 'book', navPosition: 10, purchasable: true, routes: ['book', 'book-detail', 'enrollments', 'instructors', 'instructor-detail', 'resources', 'resource-detail', 'passes', 'pass-detail'], manageSettings: [], synergies: ['sell', 'market'], status: 'active' }
 };
 
 // Synergy messaging for locked module previews.
@@ -11399,7 +11461,7 @@ homepage: { src: 'modules/homepage.js', routes: ['homepage'] },
   lookbooks: { src: 'modules/lookbooks.js', routes: ['lookbooks'] },
   brand: { src: 'modules/brand.js', routes: ['brand'] },
   promotions: { src: 'modules/promotions.js', routes: ['promotions'] },
-  book: { src: 'modules/book.js', routes: ['book', 'book-detail', 'enrollments', 'instructors', 'instructor-detail', 'resources', 'resource-detail'] }
+  book: { src: 'modules/book.js', routes: ['book', 'book-detail', 'enrollments', 'instructors', 'instructor-detail', 'resources', 'resource-detail', 'passes', 'pass-detail'] }
 };
 
 // Reverse lookup: route → moduleId (built from MODULE_MANIFEST)

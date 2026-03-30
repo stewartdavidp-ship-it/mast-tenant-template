@@ -90,11 +90,15 @@
   }
 
   // Build a key that uniquely identifies a product + option combo
-  function optionKey(pid, options, bookingType, sessionId) {
+  function optionKey(pid, options, bookingType, sessionId, passDefinitionId) {
     var parts = [pid];
     // Class bookings dedup by sessionId so same class on different dates stays separate
     if (bookingType === 'class' && sessionId) {
       parts.push('session=' + sessionId);
+    }
+    // Pass purchases dedup by passDefinitionId
+    if (bookingType === 'pass' && passDefinitionId) {
+      parts.push('pass=' + passDefinitionId);
     }
     if (options && typeof options === 'object') {
       var keys = Object.keys(options).sort();
@@ -124,9 +128,9 @@
     if (typeof item.availableStock === 'number' && item.availableStock > 0) {
       maxQty = Math.min(maxQty, item.availableStock);
     }
-    var key = optionKey(item.pid, item.options, item.bookingType, item.sessionId);
+    var key = optionKey(item.pid, item.options, item.bookingType, item.sessionId, item.passDefinitionId);
     for (var i = 0; i < cart.length; i++) {
-      if (optionKey(cart[i].pid, cart[i].options, cart[i].bookingType, cart[i].sessionId) === key) {
+      if (optionKey(cart[i].pid, cart[i].options, cart[i].bookingType, cart[i].sessionId, cart[i].passDefinitionId) === key) {
         var itemMax = cart[i].isWholesale ? MAX_QTY_WHOLESALE : MAX_QTY;
         if (typeof cart[i].availableStock === 'number' && cart[i].availableStock > 0) {
           itemMax = Math.min(itemMax, cart[i].availableStock);
@@ -158,6 +162,8 @@
       bookingType: item.bookingType || null,
       sessionId: item.sessionId || null,
       classId: item.classId || null,
+      passDefinitionId: item.passDefinitionId || null,
+      passId: item.passId || null,
       addedAt: Date.now()
     };
     cart.push(newItem);
@@ -329,15 +335,38 @@
     updateNavAuth(null);
   }
 
-  // Create or update customer record in Firebase on sign-in
+  // Create or update account record in Firebase on sign-in
+  // Migrated from customers/{uid} to public/accounts/{uid} (Phase 3)
   function ensureCustomerAccount(user) {
     if (!fireDb || !user) return;
-    var ref = fireDb.ref(TENANT_ID + '/customers/' + user.uid);
-    ref.once('value').then(function(snap) {
+    var accountRef = fireDb.ref(TENANT_ID + '/public/accounts/' + user.uid);
+    accountRef.once('value').then(function(snap) {
       var existing = snap.val();
-      var updates = { email: user.email || '', displayName: user.displayName || '', photoURL: user.photoURL || '', lastSignIn: new Date().toISOString() };
-      if (!existing) { updates.createdAt = new Date().toISOString(); updates.phone = user.phoneNumber || ''; updates.address = { address1: '', address2: '', city: '', state: '', zip: '', country: 'US' }; }
-      ref.update(updates);
+      var now = new Date().toISOString();
+      var updates = {
+        name: user.displayName || '',
+        email: user.email || '',
+        photoUrl: user.photoURL || '',
+        lastSignIn: now
+      };
+      if (!existing) {
+        updates.createdAt = now;
+        updates.phone = user.phoneNumber || '';
+        updates.roles = ['student'];
+        updates.address = { address1: '', address2: '', city: '', state: '', zip: '', country: 'US' };
+        updates.emergencyContact = null;
+        updates.studentProfile = {};
+        updates.wholesaleProfile = {};
+      }
+      accountRef.update(updates);
+
+      // Write redirect marker to legacy path for backward compat
+      if (!existing) {
+        fireDb.ref(TENANT_ID + '/customers/' + user.uid).update({
+          migratedTo: 'public/accounts',
+          migratedAt: now
+        }).catch(function() {});
+      }
     }).catch(function() { /* silent — RTDB may be unavailable */ });
   }
 
@@ -792,6 +821,8 @@
     refreshDrawer: function () { renderDrawerItems(); updateBadge(); },
     hasWholesaleItems: hasWholesaleItems,
     hasClassItems: function() { return cart.some(function(i) { return i.bookingType === 'class'; }); },
+    hasPassItems: function() { return cart.some(function(i) { return i.bookingType === 'pass'; }); },
+    isNonShippableCart: function() { return cart.length > 0 && cart.every(function(i) { return i.bookingType === 'class' || i.bookingType === 'pass'; }); },
     isClassOnlyCart: function() { return cart.length > 0 && cart.every(function(i) { return i.bookingType === 'class'; }); },
     hasProductItems: function() { return cart.some(function(i) { return !i.bookingType; }); }
   };

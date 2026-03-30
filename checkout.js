@@ -418,7 +418,7 @@
     // Footer
     footer.style.display = '';
     footer.innerHTML =
-      '<button class="checkout-btn-primary" data-co="addr-next">' + (window.MastCart && window.MastCart.isClassOnlyCart() ? 'Continue to Review' : 'Continue to Shipping') + '</button>' +
+      '<button class="checkout-btn-primary" data-co="addr-next">' + (window.MastCart && window.MastCart.isNonShippableCart() ? 'Continue to Review' : 'Continue to Shipping') + '</button>' +
       '<button class="checkout-back-link" data-co="addr-back">Back to Cart</button>';
 
     // Billing same checkbox (only element needing change listener)
@@ -1279,8 +1279,8 @@
     } else if (action === 'addr-next') {
       if (validateAddress()) {
         saveAddressData();
-        // Skip shipping for class-only carts
-        if (window.MastCart && window.MastCart.isClassOnlyCart()) {
+        // Skip shipping for non-shippable carts (classes + passes)
+        if (window.MastCart && window.MastCart.isNonShippableCart()) {
           checkoutData.shippingMethod = { key: 'none', label: 'No shipping required', price: 0 };
           renderReview();
         } else {
@@ -1297,8 +1297,8 @@
     } else if (action === 'place-order') {
       placeOrder();
     } else if (action === 'review-back') {
-      // If class-only cart, go back to address (skipping shipping)
-      if (window.MastCart && window.MastCart.isClassOnlyCart()) {
+      // If non-shippable cart, go back to address (skipping shipping)
+      if (window.MastCart && window.MastCart.isNonShippableCart()) {
         renderAddress();
       } else {
         renderShipping();

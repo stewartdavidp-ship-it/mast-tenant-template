@@ -30,6 +30,10 @@
   var DAYS_OF_WEEK = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
   var DAY_LABELS = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
   var RESOURCE_TYPES = ['room', 'equipment'];
+  var PASS_TYPES = ['drop-in', 'pack', 'unlimited', 'limited', 'series', 'intro'];
+  var PASS_PRIORITIES = ['high', 'medium', 'low'];
+  var passDefsData = [];
+  var passDefsLoaded = false;
 
   // ============================================================
   // Badge Styles
@@ -774,7 +778,7 @@
   // Sub-Tab Navigation
   // ============================================================
 
-  var BOOK_VIEWS = ['bookListView', 'bookDetailView', 'bookEnrollmentsView', 'bookInstructorsView', 'bookInstructorDetailView', 'bookResourcesView', 'bookResourceDetailView'];
+  var BOOK_VIEWS = ['bookListView', 'bookDetailView', 'bookEnrollmentsView', 'bookInstructorsView', 'bookInstructorDetailView', 'bookResourcesView', 'bookResourceDetailView', 'bookPassesView', 'bookPassDetailView'];
 
   function hideAllViews() {
     BOOK_VIEWS.forEach(function(id) {
@@ -788,13 +792,14 @@
     // Update tab bar active state
     var tabs = document.querySelectorAll('#bookSubNav .view-tab');
     tabs.forEach(function(t) { t.classList.remove('active'); });
-    var tabMap = { classes: 0, instructors: 1, resources: 2, enrollments: 3 };
+    var tabMap = { classes: 0, instructors: 1, resources: 2, passes: 3, enrollments: 4 };
     if (tabs[tabMap[tab]]) tabs[tabMap[tab]].classList.add('active');
 
     hideAllViews();
     if (tab === 'classes') { document.getElementById('bookListView').style.display = ''; renderClassList(); }
     else if (tab === 'instructors') { document.getElementById('bookInstructorsView').style.display = ''; loadInstructors(); }
     else if (tab === 'resources') { document.getElementById('bookResourcesView').style.display = ''; loadResources(); }
+    else if (tab === 'passes') { document.getElementById('bookPassesView').style.display = ''; loadPassDefinitions(); }
     else if (tab === 'enrollments') { document.getElementById('bookEnrollmentsView').style.display = ''; loadEnrollments(); }
   }
 
@@ -1091,6 +1096,219 @@
   }
 
   // ============================================================
+  // Pass Definitions — Load & Render
+  // ============================================================
+
+  async function loadPassDefinitions() {
+    try {
+      var snap = await MastDB.passDefinitions.list(100);
+      var data = snap.val() || {};
+      passDefsData = Object.keys(data).map(function(id) {
+        var p = data[id];
+        p.id = id;
+        return p;
+      });
+      passDefsLoaded = true;
+      renderPassDefList();
+    } catch (err) {
+      console.error('[Book] Failed to load pass definitions:', err);
+      document.getElementById('bookPassesTable').innerHTML = '<p style="color:var(--warm-gray);padding:2rem;">Failed to load pass definitions.</p>';
+    }
+  }
+
+  function renderPassDefList() {
+    var container = document.getElementById('bookPassesTable');
+    if (!container) return;
+
+    var typeFilter = (document.getElementById('passFilterType') || {}).value || 'all';
+    var statusFilter = (document.getElementById('passFilterStatus') || {}).value || 'active';
+
+    var filtered = passDefsData.filter(function(p) {
+      if (typeFilter !== 'all' && p.type !== typeFilter) return false;
+      if (statusFilter !== 'all' && p.status !== statusFilter) return false;
+      return true;
+    });
+
+    filtered.sort(function(a, b) { return (a.sortOrder || 0) - (b.sortOrder || 0) || (a.name || '').localeCompare(b.name || ''); });
+
+    if (filtered.length === 0) {
+      container.innerHTML = '<p style="color:var(--warm-gray);padding:2rem;">No pass definitions found. Click <strong>+ New Pass</strong> to create one.</p>';
+      return;
+    }
+
+    var html = '<table class="data-table"><thead><tr>' +
+      '<th>Name</th><th>Type</th><th>Price</th><th>Visits</th><th>Validity</th><th>Priority</th><th>Status</th><th>Actions</th>' +
+      '</tr></thead><tbody>';
+
+    filtered.forEach(function(p) {
+      var visits = p.visitCount ? p.visitCount + ' visits' : 'Unlimited';
+      var validity = p.validityDays ? p.validityDays + ' days' : 'No limit';
+      html += '<tr>' +
+        '<td><strong>' + esc(p.name) + '</strong>' + (p.introOnly ? '<br><span style="font-size:0.75rem;color:var(--amber);">Intro only</span>' : '') + '</td>' +
+        '<td><span style="' + badgeStyle(TYPE_BADGE_COLORS, p.type === 'drop-in' ? 'single' : p.type === 'pack' ? 'series' : p.type === 'unlimited' ? 'dropin' : 'private') + '">' + esc(p.type) + '</span></td>' +
+        '<td>' + formatPrice(p.priceCents) + (p.autoRenew ? '<br><span style="font-size:0.75rem;color:var(--warm-gray);">/' + (p.renewFrequency || 'month') + '</span>' : '') + '</td>' +
+        '<td>' + esc(visits) + '</td>' +
+        '<td>' + esc(validity) + '</td>' +
+        '<td><span style="font-size:0.8rem;">' + esc(p.priority || 'medium') + '</span></td>' +
+        '<td><span style="' + badgeStyle(STATUS_BADGE_COLORS, p.status) + '">' + esc(p.status) + '</span></td>' +
+        '<td><button class="btn btn-sm" onclick="window._passEdit(\'' + esc(p.id) + '\')">Edit</button></td>' +
+        '</tr>';
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+  }
+
+  // ============================================================
+  // Pass Definition Create / Edit
+  // ============================================================
+
+  async function showPassDefForm(passDefId) {
+    var pd = passDefId ? passDefsData.find(function(p) { return p.id === passDefId; }) : null;
+    var isNew = !pd;
+
+    // Load classes for scope selector
+    if (!classesLoaded) await loadClasses();
+
+    hideAllViews();
+    document.getElementById('bookPassDetailView').style.display = '';
+
+    var content = document.getElementById('bookPassDetailContent');
+
+    var typeOpts = PASS_TYPES.map(function(t) {
+      return '<option value="' + t + '"' + (pd && pd.type === t ? ' selected' : '') + '>' + t.charAt(0).toUpperCase() + t.slice(1) + '</option>';
+    }).join('');
+
+    var statusOpts = CLASS_STATUSES.map(function(s) {
+      return '<option value="' + s + '"' + (pd && pd.status === s ? ' selected' : '') + '>' + s.charAt(0).toUpperCase() + s.slice(1) + '</option>';
+    }).join('');
+
+    var priorityOpts = PASS_PRIORITIES.map(function(p) {
+      return '<option value="' + p + '"' + (pd && pd.priority === p ? ' selected' : '') + '>' + p.charAt(0).toUpperCase() + p.slice(1) + '</option>';
+    }).join('');
+
+    var activationOpts = ['purchase', 'first_use'].map(function(a) {
+      return '<option value="' + a + '"' + (pd && pd.activationTrigger === a ? ' selected' : '') + '>' + (a === 'purchase' ? 'On Purchase' : 'On First Use') + '</option>';
+    }).join('');
+
+    var renewOpts = ['monthly', 'quarterly', 'yearly'].map(function(r) {
+      return '<option value="' + r + '"' + (pd && pd.renewFrequency === r ? ' selected' : '') + '>' + r.charAt(0).toUpperCase() + r.slice(1) + '</option>';
+    }).join('');
+
+    // Class scope checkboxes
+    var allowedIds = (pd && pd.allowedClassIds) || [];
+    var classScopeHtml = classesData.filter(function(c) { return c.status === 'active'; }).map(function(c) {
+      var checked = allowedIds.indexOf(c.id) !== -1 ? ' checked' : '';
+      return '<label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;cursor:pointer;">' +
+        '<input type="checkbox" name="passClassScope" value="' + esc(c.id) + '"' + checked + '> ' + esc(c.name) + '</label>';
+    }).join('');
+
+    var html = '<h2 style="margin:0 0 1.5rem;">' + (isNew ? 'New Pass Definition' : 'Edit: ' + esc(pd.name)) + '</h2>' +
+      '<form id="passDefForm" onsubmit="return false;" style="max-width:700px;">' +
+
+      '<div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:1rem;margin-bottom:1rem;">' +
+      '<div><label class="form-label">Name *</label><input type="text" id="pdfName" class="form-input" value="' + esc(pd ? pd.name : '') + '" required></div>' +
+      '<div><label class="form-label">Type *</label><select id="pdfType" class="form-input" onchange="window._passToggleFields()">' + typeOpts + '</select></div>' +
+      '<div><label class="form-label">Status</label><select id="pdfStatus" class="form-input">' + statusOpts + '</select></div>' +
+      '</div>' +
+
+      '<div style="margin-bottom:1rem;"><label class="form-label">Description</label>' +
+      '<textarea id="pdfDesc" class="form-input" rows="2">' + esc(pd ? pd.description : '') + '</textarea></div>' +
+
+      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:1rem;margin-bottom:1rem;">' +
+      '<div><label class="form-label">Price ($) *</label><input type="number" id="pdfPrice" class="form-input" min="0" step="0.01" value="' + (pd ? (pd.priceCents / 100).toFixed(2) : '') + '" required></div>' +
+      '<div id="pdfVisitCountWrap"><label class="form-label">Visit Count</label><input type="number" id="pdfVisitCount" class="form-input" min="1" value="' + (pd && pd.visitCount ? pd.visitCount : '') + '" placeholder="Unlimited if blank"></div>' +
+      '<div><label class="form-label">Validity (days)</label><input type="number" id="pdfValidityDays" class="form-input" min="1" value="' + (pd && pd.validityDays ? pd.validityDays : '') + '" placeholder="No limit if blank"></div>' +
+      '<div><label class="form-label">Activation</label><select id="pdfActivation" class="form-input">' + activationOpts + '</select></div>' +
+      '</div>' +
+
+      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:1rem;margin-bottom:1rem;">' +
+      '<div><label class="form-label">Priority</label><select id="pdfPriority" class="form-input">' + priorityOpts + '</select></div>' +
+      '<div><label class="form-label">Sort Order</label><input type="number" id="pdfSortOrder" class="form-input" min="0" value="' + (pd ? pd.sortOrder || 0 : 0) + '"></div>' +
+      '<div><label class="form-label">Online Purchase</label><select id="pdfOnline" class="form-input"><option value="true"' + (pd && pd.onlinePurchasable === false ? '' : ' selected') + '>Yes</option><option value="false"' + (pd && pd.onlinePurchasable === false ? ' selected' : '') + '>No</option></select></div>' +
+      '<div><label class="form-label">Intro Only</label><select id="pdfIntroOnly" class="form-input"><option value="false"' + (pd && pd.introOnly ? '' : ' selected') + '>No</option><option value="true"' + (pd && pd.introOnly ? ' selected' : '') + '>Yes</option></select></div>' +
+      '</div>' +
+
+      // Auto-renew
+      '<fieldset id="pdfRenewFields" style="border:1px solid var(--border);border-radius:8px;padding:1rem;margin-bottom:1rem;">' +
+      '<legend style="font-weight:600;padding:0 8px;">Auto-Renew</legend>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">' +
+      '<div><label class="form-label">Auto-Renew</label><select id="pdfAutoRenew" class="form-input" onchange="window._passToggleFields()"><option value="false"' + (pd && pd.autoRenew ? '' : ' selected') + '>No</option><option value="true"' + (pd && pd.autoRenew ? ' selected' : '') + '>Yes</option></select></div>' +
+      '<div id="pdfRenewFreqWrap"' + (pd && pd.autoRenew ? '' : ' style="display:none;"') + '><label class="form-label">Frequency</label><select id="pdfRenewFreq" class="form-input">' + renewOpts + '</select></div>' +
+      '</div></fieldset>' +
+
+      // Class scope
+      '<fieldset style="border:1px solid var(--border);border-radius:8px;padding:1rem;margin-bottom:1.5rem;">' +
+      '<legend style="font-weight:600;padding:0 8px;">Class Scope (leave unchecked for all classes)</legend>' +
+      '<div style="max-height:200px;overflow-y:auto;">' +
+      (classScopeHtml || '<p style="color:var(--warm-gray);">No active classes.</p>') +
+      '</div></fieldset>' +
+
+      '<div style="display:flex;gap:8px;">' +
+      '<button class="btn btn-primary" onclick="window._passSave(\'' + (passDefId || '') + '\')">Save Pass Definition</button>' +
+      '<button class="btn" onclick="window._passBackToList()">Cancel</button>' +
+      '</div></form>';
+
+    content.innerHTML = html;
+    window._passToggleFields();
+  }
+
+  async function savePassDefinition(passDefId) {
+    var name = document.getElementById('pdfName').value.trim();
+    if (!name) { MastAdmin.showToast('Name is required', true); return; }
+
+    var priceDollars = parseFloat(document.getElementById('pdfPrice').value);
+    if (isNaN(priceDollars) || priceDollars < 0) { MastAdmin.showToast('Valid price is required', true); return; }
+
+    var type = document.getElementById('pdfType').value;
+    var visitCount = parseInt(document.getElementById('pdfVisitCount').value, 10) || null;
+    var validityDays = parseInt(document.getElementById('pdfValidityDays').value, 10) || null;
+
+    // For unlimited type, visitCount must be null
+    if (type === 'unlimited') visitCount = null;
+
+    // Collect class scope
+    var scopeCheckboxes = document.querySelectorAll('input[name="passClassScope"]:checked');
+    var allowedClassIds = scopeCheckboxes.length > 0 ? Array.from(scopeCheckboxes).map(function(cb) { return cb.value; }) : null;
+
+    var data = {
+      name: name,
+      description: document.getElementById('pdfDesc').value.trim() || null,
+      type: type,
+      priceCents: Math.round(priceDollars * 100),
+      visitCount: visitCount,
+      validityDays: validityDays,
+      activationTrigger: document.getElementById('pdfActivation').value,
+      allowedClassIds: allowedClassIds,
+      allowedCategories: null,
+      autoRenew: document.getElementById('pdfAutoRenew').value === 'true',
+      renewFrequency: document.getElementById('pdfAutoRenew').value === 'true' ? document.getElementById('pdfRenewFreq').value : null,
+      onlinePurchasable: document.getElementById('pdfOnline').value === 'true',
+      introOnly: document.getElementById('pdfIntroOnly').value === 'true',
+      priority: document.getElementById('pdfPriority').value,
+      sortOrder: parseInt(document.getElementById('pdfSortOrder').value, 10) || 0,
+      status: document.getElementById('pdfStatus').value,
+      updatedAt: new Date().toISOString()
+    };
+
+    try {
+      var isNew = !passDefId;
+      if (isNew) {
+        passDefId = MastDB.passDefinitions.newKey();
+        data.createdAt = data.updatedAt;
+      }
+      await MastDB.passDefinitions.set(passDefId, data);
+      MastAdmin.showToast(isNew ? 'Pass definition created!' : 'Pass definition updated!');
+      passDefsLoaded = false;
+      await loadPassDefinitions();
+      switchSubTab('passes');
+    } catch (err) {
+      console.error('[Book] Pass definition save failed:', err);
+      MastAdmin.showToast('Save failed: ' + err.message, true);
+    }
+  }
+
+  // ============================================================
   // Conflict Detection
   // ============================================================
 
@@ -1269,6 +1487,22 @@
   window._resSave = function(id) { saveResource(id || null); };
   window._resBackToList = function() { switchSubTab('resources'); };
 
+  // Pass definition callbacks
+  window._passFilterType = function() { renderPassDefList(); };
+  window._passFilterStatus = function() { renderPassDefList(); };
+  window._passCreate = function() { showPassDefForm(null); };
+  window._passEdit = function(id) { showPassDefForm(id); };
+  window._passSave = function(id) { savePassDefinition(id || null); };
+  window._passBackToList = function() { switchSubTab('passes'); };
+  window._passToggleFields = function() {
+    var type = document.getElementById('pdfType');
+    var visitWrap = document.getElementById('pdfVisitCountWrap');
+    var renewFreqWrap = document.getElementById('pdfRenewFreqWrap');
+    var autoRenew = document.getElementById('pdfAutoRenew');
+    if (type && visitWrap) visitWrap.style.display = type.value === 'unlimited' ? 'none' : '';
+    if (autoRenew && renewFreqWrap) renewFreqWrap.style.display = autoRenew.value === 'true' ? '' : 'none';
+  };
+
   // Session assignment
   window._bookAssignSession = function(sessionId, classId) { assignToSession(sessionId, classId); };
   window._assignSave = function(sessionId, classId) { saveSessionAssignment(sessionId, classId); };
@@ -1285,7 +1519,9 @@
       'instructors': { tab: 'bookTab', setup: function() { switchSubTab('instructors'); } },
       'instructor-detail': { tab: 'bookTab', setup: function(id) { if (id) { showInstructorForm(id); } else { switchSubTab('instructors'); } } },
       'resources': { tab: 'bookTab', setup: function() { switchSubTab('resources'); } },
-      'resource-detail': { tab: 'bookTab', setup: function(id) { if (id) { showResourceForm(id); } else { switchSubTab('resources'); } } }
+      'resource-detail': { tab: 'bookTab', setup: function(id) { if (id) { showResourceForm(id); } else { switchSubTab('resources'); } } },
+      'passes': { tab: 'bookTab', setup: function() { switchSubTab('passes'); } },
+      'pass-detail': { tab: 'bookTab', setup: function(id) { if (id) { showPassDefForm(id); } else { switchSubTab('passes'); } } }
     },
     detachListeners: function() {
       classesData = [];
@@ -1301,6 +1537,8 @@
       resourcesData = [];
       resourcesLoaded = false;
       resourcesMap = {};
+      passDefsData = [];
+      passDefsLoaded = false;
       currentSubTab = 'classes';
     }
   });
