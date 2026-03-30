@@ -109,14 +109,74 @@
     return 'display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;background:' + c.bg + ';color:' + c.color + ';border:1px solid ' + c.border + ';';
   }
 
-  // Inject book-specific CSS animation
+  // Inject book-specific CSS
   (function() {
     if (!document.getElementById('bookModuleStyles')) {
       var style = document.createElement('style');
       style.id = 'bookModuleStyles';
-      style.textContent = '@keyframes bookSpin{to{transform:rotate(360deg)}}' +
+      style.textContent =
+        '@keyframes bookSpin{to{transform:rotate(360deg)}}' +
+
+        /* Responsive utilities */
         '@media(max-width:600px){.book-hide-narrow{display:none!important;}}' +
-        '.book-responsive-grid{display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));}';
+        '.book-responsive-grid{display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));}' +
+
+        /* Form labels — modern uppercase micro-label */
+        '.form-label{display:block;font-size:0.75rem;font-weight:600;margin-bottom:6px;' +
+          'color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.05em;}' +
+
+        /* Form inputs — rounded, proper sizing, focus glow */
+        '.form-input{width:100%;padding:10px 14px;border:1px solid var(--border,#444);border-radius:8px;' +
+          'font-family:inherit;font-size:0.9rem;background:var(--surface,#1e1e1e);color:var(--text,#e0e0e0);' +
+          'transition:border-color 0.2s,box-shadow 0.2s;box-sizing:border-box;}' +
+        '.form-input:focus{outline:none;border-color:var(--primary,#C4853C);' +
+          'box-shadow:0 0 0 3px rgba(196,133,60,0.2);}' +
+        '.form-input::placeholder{color:var(--warm-gray,#888);opacity:0.6;}' +
+        'textarea.form-input{min-height:80px;resize:vertical;}' +
+        'select.form-input{cursor:pointer;}' +
+
+        /* Form section cards */
+        '.book-form-section{background:var(--surface-card,#2a2a2a);border:1px solid var(--border,#444);' +
+          'border-radius:12px;padding:1.25rem 1.5rem;margin-bottom:1.25rem;}' +
+        '.book-form-section-title{font-size:0.8rem;font-weight:700;text-transform:uppercase;' +
+          'letter-spacing:0.06em;color:var(--primary,#C4853C);margin:0 0 1rem;padding-bottom:0.6rem;' +
+          'border-bottom:1px solid var(--border,#444);display:flex;align-items:center;gap:8px;}' +
+
+        /* Field hint text */
+        '.book-field-hint{font-size:0.72rem;color:var(--warm-gray,#888);margin-top:4px;line-height:1.4;}' +
+
+        /* Required marker */
+        '.book-required{color:' + DANGER_COLOR + ';margin-left:2px;}' +
+
+        /* Form field group — consistent spacing */
+        '.book-field{margin-bottom:1rem;}' +
+        '.book-field:last-child{margin-bottom:0;}' +
+
+        /* Checkbox / radio styling */
+        '.book-check{display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:0.9rem;color:var(--text,#e0e0e0);}' +
+        '.book-check input[type="checkbox"],.book-check input[type="radio"]{' +
+          'width:18px;height:18px;accent-color:var(--primary,#C4853C);cursor:pointer;}' +
+
+        /* Form action buttons area */
+        '.book-form-actions{display:flex;gap:10px;margin-top:1.5rem;padding-top:1.25rem;border-top:1px solid var(--border,#444);}' +
+
+        /* Day-of-week pill selector */
+        '.book-day-pills{display:flex;flex-wrap:wrap;gap:6px;}' +
+        '.book-day-pill{display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border-radius:20px;' +
+          'border:1px solid var(--border,#444);background:transparent;color:var(--text,#e0e0e0);' +
+          'font-size:0.8rem;cursor:pointer;transition:all 0.2s;}' +
+        '.book-day-pill:has(input:checked){background:var(--primary,#C4853C);color:#fff;border-color:var(--primary,#C4853C);}' +
+        '.book-day-pill input{display:none;}' +
+
+        /* Override for schedule radio */
+        '.book-sched-toggle{display:flex;gap:0;border:1px solid var(--border,#444);border-radius:8px;overflow:hidden;}' +
+        '.book-sched-toggle label{padding:8px 20px;cursor:pointer;font-size:0.85rem;color:var(--text,#e0e0e0);' +
+          'transition:all 0.2s;border-right:1px solid var(--border,#444);}' +
+        '.book-sched-toggle label:last-child{border-right:none;}' +
+        '.book-sched-toggle label:has(input:checked){background:var(--primary,#C4853C);color:#fff;}' +
+        '.book-sched-toggle input{display:none;}' +
+
+        '';
       document.head.appendChild(style);
     }
   })();
@@ -377,11 +437,10 @@
     var sched = (cls && cls.schedule) || {};
     var series = (cls && cls.seriesInfo) || {};
 
-    var daysHtml = DAYS_OF_WEEK.map(function(d) {
+    var daysHtml = '<div class="book-day-pills">' + DAYS_OF_WEEK.map(function(d) {
       var checked = sched.days && sched.days.indexOf(d) !== -1 ? ' checked' : '';
-      return '<label style="display:inline-flex;align-items:center;gap:4px;margin-right:8px;cursor:pointer;">' +
-        '<input type="checkbox" name="schedDays" value="' + d + '"' + checked + '> ' + DAY_LABELS[d] + '</label>';
-    }).join('');
+      return '<label class="book-day-pill"><input type="checkbox" name="schedDays" value="' + d + '"' + checked + '>' + DAY_LABELS[d] + '</label>';
+    }).join('') + '</div>';
 
     var typeOptions = CLASS_TYPES.map(function(t) {
       return '<option value="' + t + '"' + (cls && cls.type === t ? ' selected' : '') + '>' + t.charAt(0).toUpperCase() + t.slice(1) + '</option>';
@@ -394,87 +453,98 @@
     var schedTypeOnce = sched.type === 'once' ? ' checked' : '';
     var schedTypeRecurring = sched.type === 'recurring' || !sched.type ? ' checked' : '';
 
-    var html = '<h2 style="margin:0 0 1.5rem;">' + (isNew ? 'New Class' : 'Edit: ' + esc(cls.name)) + '</h2>' +
-      '<form id="bookClassForm" onsubmit="return false;" style="max-width:700px;">' +
+    var html = '<h2 style="margin:0 0 1.5rem;font-size:1.4rem;">' + (isNew ? 'New Class' : 'Edit: ' + esc(cls.name)) + '</h2>' +
+      '<form id="bookClassForm" onsubmit="return false;" style="max-width:720px;">' +
 
-      '<div style="margin-bottom:1rem;"><label class="form-label">Name *</label>' +
-      '<input type="text" id="bcfName" class="form-input" value="' + esc(cls ? cls.name : '') + '" required></div>' +
+      // ── Basic Info ──
+      '<div class="book-form-section">' +
+      '<div class="book-form-section-title">Basic Info</div>' +
+      '<div class="book-field"><label class="form-label">Name <span class="book-required">*</span></label>' +
+      '<input type="text" id="bcfName" class="form-input" value="' + esc(cls ? cls.name : '') + '" required placeholder="e.g. Wheel Throwing Basics"></div>' +
+      '<div class="book-field"><label class="form-label">Description</label>' +
+      '<textarea id="bcfDesc" class="form-input" rows="3" placeholder="Class description for students...">' + esc(cls ? cls.description : '') + '</textarea></div>' +
+      '<div class="book-responsive-grid">' +
+      '<div class="book-field"><label class="form-label">Type <span class="book-required">*</span></label><select id="bcfType" class="form-input" onchange="window._bookToggleSeriesFields()">' + typeOptions + '</select></div>' +
+      '<div class="book-field"><label class="form-label">Category</label><input type="text" id="bcfCategory" class="form-input" value="' + esc(cls ? cls.category : '') + '" placeholder="e.g. Pottery, Glass"></div>' +
+      '<div class="book-field"><label class="form-label">Status</label><select id="bcfStatus" class="form-input">' + statusOptions + '</select></div>' +
+      '</div></div>' +
 
-      '<div style="margin-bottom:1rem;"><label class="form-label">Description</label>' +
-      '<textarea id="bcfDesc" class="form-input" rows="3">' + esc(cls ? cls.description : '') + '</textarea></div>' +
-
-      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-bottom:1rem;">' +
-      '<div><label class="form-label">Type *</label><select id="bcfType" class="form-input" onchange="window._bookToggleSeriesFields()">' + typeOptions + '</select></div>' +
-      '<div><label class="form-label">Category</label><input type="text" id="bcfCategory" class="form-input" value="' + esc(cls ? cls.category : '') + '" placeholder="e.g. Pottery, Glass"></div>' +
-      '<div><label class="form-label">Status</label><select id="bcfStatus" class="form-input">' + statusOptions + '</select></div>' +
+      // ── Pricing & Capacity ──
+      '<div class="book-form-section">' +
+      '<div class="book-form-section-title">Pricing &amp; Capacity</div>' +
+      '<div class="book-responsive-grid">' +
+      '<div class="book-field"><label class="form-label">Capacity <span class="book-required">*</span></label><input type="number" id="bcfCapacity" class="form-input" min="1" value="' + (cls ? cls.capacity || '' : '') + '" required></div>' +
+      '<div class="book-field"><label class="form-label">Drop-in Price ($) <span class="book-required">*</span></label><input type="number" id="bcfPrice" class="form-input" min="0" step="0.01" value="' + (cls ? (cls.priceCents / 100).toFixed(2) : '') + '" required></div>' +
+      '<div class="book-field"><label class="form-label">Duration (min) <span class="book-required">*</span></label><input type="number" id="bcfDuration" class="form-input" min="1" value="' + (cls ? cls.duration || '' : '') + '" required></div>' +
       '</div>' +
+      '<div class="book-responsive-grid">' +
+      '<div class="book-field"><label class="form-label">Min Enrollment</label><input type="number" id="bcfMinEnroll" class="form-input" min="0" value="' + (cls && cls.minEnrollment ? cls.minEnrollment : '') + '" placeholder="Optional">' +
+      '<div class="book-field-hint">Minimum students needed to run the session</div></div>' +
+      '<div class="book-field"><label class="form-label">Cancel Lead Days</label><input type="number" id="bcfCancelLead" class="form-input" min="0" max="30" value="' + (cls && cls.cancellationLeadDays ? cls.cancellationLeadDays : '2') + '">' +
+      '<div class="book-field-hint">Days before session to check minimum enrollment</div></div>' +
+      '</div></div>' +
 
-      '<div class="book-responsive-grid" style="margin-bottom:1rem;">' +
-      '<div><label class="form-label">Capacity *</label><input type="number" id="bcfCapacity" class="form-input" min="1" value="' + (cls ? cls.capacity || '' : '') + '" required></div>' +
-      '<div><label class="form-label">Drop-in Price ($) *</label><input type="number" id="bcfPrice" class="form-input" min="0" step="0.01" value="' + (cls ? (cls.priceCents / 100).toFixed(2) : '') + '" required></div>' +
-      '<div><label class="form-label">Duration (min) *</label><input type="number" id="bcfDuration" class="form-input" min="1" value="' + (cls ? cls.duration || '' : '') + '" required></div>' +
-      '</div>' +
-      '<div class="book-responsive-grid" style="margin-bottom:1rem;">' +
-      '<div><label class="form-label">Min Enrollment</label><input type="number" id="bcfMinEnroll" class="form-input" min="0" value="' + (cls && cls.minEnrollment ? cls.minEnrollment : '') + '"></div>' +
-      '<div><label class="form-label">Cancel Lead Days</label><input type="number" id="bcfCancelLead" class="form-input" min="0" max="30" value="' + (cls && cls.cancellationLeadDays ? cls.cancellationLeadDays : '2') + '" title="Days before session to check minimum enrollment"></div>' +
-      '</div>' +
-
-      // Schedule section
-      '<fieldset style="border:1px solid var(--border);border-radius:8px;padding:1rem;margin-bottom:1rem;">' +
-      '<legend style="font-weight:600;padding:0 8px;">Schedule</legend>' +
-      '<div style="margin-bottom:0.75rem;">' +
-      '<label style="margin-right:1rem;cursor:pointer;"><input type="radio" name="schedType" value="recurring"' + schedTypeRecurring + ' onchange="window._bookToggleSchedType()"> Recurring</label>' +
-      '<label style="cursor:pointer;"><input type="radio" name="schedType" value="once"' + schedTypeOnce + ' onchange="window._bookToggleSchedType()"> One-time</label>' +
-      '</div>' +
+      // ── Schedule ──
+      '<div class="book-form-section">' +
+      '<div class="book-form-section-title">Schedule</div>' +
+      '<div class="book-field" style="margin-bottom:1.25rem;">' +
+      '<div class="book-sched-toggle">' +
+      '<label><input type="radio" name="schedType" value="recurring"' + schedTypeRecurring + ' onchange="window._bookToggleSchedType()">Recurring</label>' +
+      '<label><input type="radio" name="schedType" value="once"' + schedTypeOnce + ' onchange="window._bookToggleSchedType()">One-time</label>' +
+      '</div></div>' +
       '<div id="bcfSchedRecurring">' +
-      '<div style="margin-bottom:0.75rem;"><label class="form-label">Days</label><div>' + daysHtml + '</div></div>' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;">' +
-      '<div><label class="form-label">Start Time</label><input type="time" id="bcfStartTime" class="form-input" value="' + esc(sched.startTime || '') + '"></div>' +
-      '<div><label class="form-label">Start Date</label><input type="date" id="bcfStartDate" class="form-input" value="' + esc(sched.startDate || '') + '"></div>' +
-      '<div><label class="form-label">End Date</label><input type="date" id="bcfEndDate" class="form-input" value="' + esc(sched.endDate || '') + '"></div>' +
+      '<div class="book-field"><label class="form-label">Days of Week</label>' + daysHtml + '</div>' +
+      '<div class="book-responsive-grid">' +
+      '<div class="book-field"><label class="form-label">Start Time</label><input type="time" id="bcfStartTime" class="form-input" value="' + esc(sched.startTime || '') + '"></div>' +
+      '<div class="book-field"><label class="form-label">Start Date</label><input type="date" id="bcfStartDate" class="form-input" value="' + esc(sched.startDate || '') + '"></div>' +
+      '<div class="book-field"><label class="form-label">End Date</label><input type="date" id="bcfEndDate" class="form-input" value="' + esc(sched.endDate || '') + '">' +
+      '<div class="book-field-hint">Leave blank to auto-generate 8 weeks</div></div>' +
       '</div></div>' +
       '<div id="bcfSchedOnce" style="display:none;">' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">' +
-      '<div><label class="form-label">Date</label><input type="date" id="bcfOnceDate" class="form-input" value="' + esc(sched.date || sched.startDate || '') + '"></div>' +
-      '<div><label class="form-label">Time</label><input type="time" id="bcfOnceTime" class="form-input" value="' + esc(sched.startTime || '') + '"></div>' +
-      '</div></div>' +
-      '</fieldset>' +
-
-      // Series fields
-      '<fieldset id="bcfSeriesFields" style="border:1px solid var(--border);border-radius:8px;padding:1rem;margin-bottom:1.5rem;' + (cls && cls.type === 'series' ? '' : 'display:none;') + '">' +
-      '<legend style="font-weight:600;padding:0 8px;">Series Details</legend>' +
       '<div class="book-responsive-grid">' +
-      '<div><label class="form-label">Total Sessions</label><input type="number" id="bcfSeriesTotal" class="form-input" min="1" value="' + (series.totalSessions || '') + '"></div>' +
-      '<div><label class="form-label">Series Price ($)</label><input type="number" id="bcfSeriesPrice" class="form-input" min="0" step="0.01" value="' + (series.seriesPriceCents ? (series.seriesPriceCents / 100).toFixed(2) : '') + '"></div>' +
-      '<div><label class="form-label">Allow Drop-in</label><select id="bcfSeriesDropin" class="form-input"><option value="true"' + (series.allowDropIn !== false ? ' selected' : '') + '>Yes</option><option value="false"' + (series.allowDropIn === false ? ' selected' : '') + '>No</option></select></div>' +
-      '<div><label class="form-label">Allow Late Enroll</label><select id="bcfSeriesLateEnroll" class="form-input"><option value="false"' + (series.allowLateEnroll !== true ? ' selected' : '') + '>No</option><option value="true"' + (series.allowLateEnroll === true ? ' selected' : '') + '>Yes</option></select></div>' +
-      '</div></fieldset>' +
-
-      // Materials
-      '<div style="display:grid;grid-template-columns:1fr 2fr;gap:1rem;margin-bottom:1rem;">' +
-      '<div><label class="form-label">Materials Included</label><select id="bcfMaterials" class="form-input"><option value="false"' + (cls && cls.materialsIncluded ? '' : ' selected') + '>No</option><option value="true"' + (cls && cls.materialsIncluded ? ' selected' : '') + '>Yes</option></select></div>' +
-      '<div><label class="form-label">Materials Note</label><input type="text" id="bcfMaterialsNote" class="form-input" value="' + esc(cls ? cls.materialsNote : '') + '" placeholder="e.g. 25lbs of clay + glazes included"></div>' +
+      '<div class="book-field"><label class="form-label">Date</label><input type="date" id="bcfOnceDate" class="form-input" value="' + esc(sched.date || sched.startDate || '') + '"></div>' +
+      '<div class="book-field"><label class="form-label">Time</label><input type="time" id="bcfOnceTime" class="form-input" value="' + esc(sched.startTime || '') + '"></div>' +
+      '</div></div>' +
       '</div>' +
 
-      // Assignment
-      '<fieldset style="border:1px solid var(--border);border-radius:8px;padding:1rem;margin-bottom:1.5rem;">' +
-      '<legend style="font-weight:600;padding:0 8px;">Assignment</legend>' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">' +
-      '<div><label class="form-label">Instructor</label><select id="bcfInstructor" class="form-input">' +
+      // ── Series Details (conditional) ──
+      '<div id="bcfSeriesFields" class="book-form-section" style="' + (cls && cls.type === 'series' ? '' : 'display:none;') + '">' +
+      '<div class="book-form-section-title">Series Details</div>' +
+      '<div class="book-responsive-grid">' +
+      '<div class="book-field"><label class="form-label">Total Sessions</label><input type="number" id="bcfSeriesTotal" class="form-input" min="1" value="' + (series.totalSessions || '') + '"></div>' +
+      '<div class="book-field"><label class="form-label">Series Price ($)</label><input type="number" id="bcfSeriesPrice" class="form-input" min="0" step="0.01" value="' + (series.seriesPriceCents ? (series.seriesPriceCents / 100).toFixed(2) : '') + '"></div>' +
+      '<div class="book-field"><label class="form-label">Allow Drop-in</label><select id="bcfSeriesDropin" class="form-input"><option value="true"' + (series.allowDropIn !== false ? ' selected' : '') + '>Yes</option><option value="false"' + (series.allowDropIn === false ? ' selected' : '') + '>No</option></select></div>' +
+      '<div class="book-field"><label class="form-label">Allow Late Enroll</label><select id="bcfSeriesLateEnroll" class="form-input"><option value="false"' + (series.allowLateEnroll !== true ? ' selected' : '') + '>No</option><option value="true"' + (series.allowLateEnroll === true ? ' selected' : '') + '>Yes</option></select></div>' +
+      '</div></div>' +
+
+      // ── Materials ──
+      '<div class="book-form-section">' +
+      '<div class="book-form-section-title">Materials</div>' +
+      '<div class="book-responsive-grid">' +
+      '<div class="book-field"><label class="form-label">Materials Included</label><select id="bcfMaterials" class="form-input"><option value="false"' + (cls && cls.materialsIncluded ? '' : ' selected') + '>No</option><option value="true"' + (cls && cls.materialsIncluded ? ' selected' : '') + '>Yes</option></select></div>' +
+      '<div class="book-field" style="grid-column:span 2;"><label class="form-label">Materials Note</label><input type="text" id="bcfMaterialsNote" class="form-input" value="' + esc(cls ? cls.materialsNote : '') + '" placeholder="e.g. 25lbs of clay + glazes included"></div>' +
+      '</div></div>' +
+
+      // ── Assignment ──
+      '<div class="book-form-section">' +
+      '<div class="book-form-section-title">Assignment</div>' +
+      '<div class="book-responsive-grid">' +
+      '<div class="book-field"><label class="form-label">Instructor</label><select id="bcfInstructor" class="form-input">' +
       '<option value="">None</option>' +
       instructorsData.filter(function(i) { return i.status === 'active'; }).map(function(i) {
         return '<option value="' + esc(i.id) + '"' + (cls && cls.instructorId === i.id ? ' selected' : '') + '>' + esc(i.name) + '</option>';
       }).join('') +
       '</select></div>' +
-      '<div><label class="form-label">Resource</label><select id="bcfResource" class="form-input">' +
+      '<div class="book-field"><label class="form-label">Resource</label><select id="bcfResource" class="form-input">' +
       '<option value="">None</option>' +
       resourcesData.filter(function(r) { return r.status === 'active'; }).map(function(r) {
         return '<option value="' + esc(r.id) + '"' + (cls && cls.resourceId === r.id ? ' selected' : '') + '>' + esc(r.name) + ' (' + esc(r.type) + ')</option>';
       }).join('') +
       '</select></div>' +
-      '</div></fieldset>' +
+      '</div></div>' +
 
-      '<div style="display:flex;gap:8px;">' +
+      // ── Actions ──
+      '<div class="book-form-actions">' +
       '<button class="btn btn-primary" onclick="window._bookSaveClass(\'' + (classId || '') + '\')">Save Class</button>' +
       '<button class="btn" onclick="window._bookBackToList()">Cancel</button>' +
       '</div>' +
@@ -952,33 +1022,47 @@
       return '<option value="' + s + '"' + (instr && instr.status === s ? ' selected' : '') + '>' + s.charAt(0).toUpperCase() + s.slice(1) + '</option>';
     }).join('');
 
-    var html = '<h2 style="margin:0 0 1.5rem;">' + (isNew ? 'New Instructor' : 'Edit: ' + esc(instr.name)) + '</h2>' +
-      '<form id="instrForm" onsubmit="return false;" style="max-width:700px;">' +
+    var html = '<h2 style="margin:0 0 1.5rem;font-size:1.4rem;">' + (isNew ? 'New Instructor' : 'Edit: ' + esc(instr.name)) + '</h2>' +
+      '<form id="instrForm" onsubmit="return false;" style="max-width:720px;">' +
 
-      '<div style="display:grid;grid-template-columns:2fr 1fr;gap:1rem;margin-bottom:1rem;">' +
-      '<div><label class="form-label">Name *</label><input type="text" id="ifName" class="form-input" value="' + esc(instr ? instr.name : '') + '" required></div>' +
-      '<div><label class="form-label">Status</label><select id="ifStatus" class="form-input">' + statusOpts + '</select></div>' +
+      // ── Basic Info ──
+      '<div class="book-form-section">' +
+      '<div class="book-form-section-title">Basic Info</div>' +
+      '<div class="book-responsive-grid">' +
+      '<div class="book-field" style="grid-column:span 2;"><label class="form-label">Name <span class="book-required">*</span></label><input type="text" id="ifName" class="form-input" value="' + esc(instr ? instr.name : '') + '" required placeholder="Full name"></div>' +
+      '<div class="book-field"><label class="form-label">Status</label><select id="ifStatus" class="form-input">' + statusOpts + '</select></div>' +
+      '</div></div>' +
+
+      // ── Details ──
+      '<div class="book-form-section">' +
+      '<div class="book-form-section-title">Details</div>' +
+      '<div class="book-field"><label class="form-label">Bio</label>' +
+      '<textarea id="ifBio" class="form-input" rows="3" placeholder="Teaching background and experience...">' + esc(instr ? instr.bio : '') + '</textarea></div>' +
+      '<div class="book-field"><label class="form-label">Specialties</label>' +
+      '<input type="text" id="ifSpecialties" class="form-input" value="' + esc(instr && instr.specialties ? instr.specialties.join(', ') : '') + '" placeholder="e.g. Wheel Throwing, Glazing, Hand Building">' +
+      '<div class="book-field-hint">Separate multiple specialties with commas</div></div>' +
       '</div>' +
 
-      '<div style="margin-bottom:1rem;"><label class="form-label">Bio</label>' +
-      '<textarea id="ifBio" class="form-input" rows="3">' + esc(instr ? instr.bio : '') + '</textarea></div>' +
+      // ── Contact ──
+      '<div class="book-form-section">' +
+      '<div class="book-form-section-title">Contact &amp; Pay</div>' +
+      '<div class="book-responsive-grid">' +
+      '<div class="book-field"><label class="form-label">Email</label><input type="email" id="ifEmail" class="form-input" value="' + esc(instr ? instr.email : '') + '" placeholder="instructor@email.com"></div>' +
+      '<div class="book-field"><label class="form-label">Phone</label><input type="text" id="ifPhone" class="form-input" value="' + esc(instr ? instr.phone : '') + '" placeholder="(555) 123-4567"></div>' +
+      '<div class="book-field"><label class="form-label">Pay Rate ($/hr)</label><input type="number" id="ifPayRate" class="form-input" min="0" step="0.01" value="' + (instr && instr.payRateCents ? (instr.payRateCents / 100).toFixed(2) : '') + '"></div>' +
+      '</div></div>' +
 
-      '<div style="margin-bottom:1rem;"><label class="form-label">Specialties (comma-separated)</label>' +
-      '<input type="text" id="ifSpecialties" class="form-input" value="' + esc(instr && instr.specialties ? instr.specialties.join(', ') : '') + '" placeholder="e.g. Wheel Throwing, Glazing, Hand Building"></div>' +
-
-      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-bottom:1rem;">' +
-      '<div><label class="form-label">Email</label><input type="email" id="ifEmail" class="form-input" value="' + esc(instr ? instr.email : '') + '"></div>' +
-      '<div><label class="form-label">Phone</label><input type="text" id="ifPhone" class="form-input" value="' + esc(instr ? instr.phone : '') + '"></div>' +
-      '<div><label class="form-label">Pay Rate ($/hr)</label><input type="number" id="ifPayRate" class="form-input" min="0" step="0.01" value="' + (instr && instr.payRateCents ? (instr.payRateCents / 100).toFixed(2) : '') + '"></div>' +
-      '</div>' +
-
-      '<div style="margin-bottom:1rem;"><label class="form-label">Photo URL</label>' +
+      // ── Media & Notes ──
+      '<div class="book-form-section">' +
+      '<div class="book-form-section-title">Media &amp; Notes</div>' +
+      '<div class="book-field"><label class="form-label">Photo URL</label>' +
       '<input type="text" id="ifPhoto" class="form-input" value="' + esc(instr ? instr.photoUrl : '') + '" placeholder="https://..."></div>' +
+      '<div class="book-field"><label class="form-label">Internal Notes</label>' +
+      '<textarea id="ifNotes" class="form-input" rows="2" placeholder="Notes visible to admin only...">' + esc(instr ? instr.notes : '') + '</textarea></div>' +
+      '</div>' +
 
-      '<div style="margin-bottom:1.5rem;"><label class="form-label">Notes (internal)</label>' +
-      '<textarea id="ifNotes" class="form-input" rows="2">' + esc(instr ? instr.notes : '') + '</textarea></div>' +
-
-      '<div style="display:flex;gap:8px;">' +
+      // ── Actions ──
+      '<div class="book-form-actions">' +
       '<button class="btn btn-primary" onclick="window._instrSave(\'' + (instrId || '') + '\')">Save Instructor</button>' +
       '<button class="btn" onclick="window._instrBackToList()">Cancel</button>' +
       '</div></form>';
@@ -1108,27 +1192,38 @@
       return '<option value="' + s + '"' + (res && res.status === s ? ' selected' : '') + '>' + s.charAt(0).toUpperCase() + s.slice(1) + '</option>';
     }).join('');
 
-    var html = '<h2 style="margin:0 0 1.5rem;">' + (isNew ? 'New Resource' : 'Edit: ' + esc(res.name)) + '</h2>' +
-      '<form id="resForm" onsubmit="return false;" style="max-width:700px;">' +
+    var html = '<h2 style="margin:0 0 1.5rem;font-size:1.4rem;">' + (isNew ? 'New Resource' : 'Edit: ' + esc(res.name)) + '</h2>' +
+      '<form id="resForm" onsubmit="return false;" style="max-width:720px;">' +
 
-      '<div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:1rem;margin-bottom:1rem;">' +
-      '<div><label class="form-label">Name *</label><input type="text" id="rfName" class="form-input" value="' + esc(res ? res.name : '') + '" required></div>' +
-      '<div><label class="form-label">Type *</label><select id="rfType" class="form-input">' + typeOpts + '</select></div>' +
-      '<div><label class="form-label">Status</label><select id="rfStatus" class="form-input">' + statusOpts + '</select></div>' +
+      // ── Basic Info ──
+      '<div class="book-form-section">' +
+      '<div class="book-form-section-title">Basic Info</div>' +
+      '<div class="book-responsive-grid">' +
+      '<div class="book-field" style="grid-column:span 2;"><label class="form-label">Name <span class="book-required">*</span></label><input type="text" id="rfName" class="form-input" value="' + esc(res ? res.name : '') + '" required placeholder="e.g. Main Studio, Kiln #1"></div>' +
+      '<div class="book-field"><label class="form-label">Type <span class="book-required">*</span></label><select id="rfType" class="form-input">' + typeOpts + '</select></div>' +
+      '<div class="book-field"><label class="form-label">Status</label><select id="rfStatus" class="form-input">' + statusOpts + '</select></div>' +
+      '</div></div>' +
+
+      // ── Details ──
+      '<div class="book-form-section">' +
+      '<div class="book-form-section-title">Details</div>' +
+      '<div class="book-responsive-grid">' +
+      '<div class="book-field"><label class="form-label">Sub-type</label><input type="text" id="rfSubType" class="form-input" value="' + esc(res ? res.subType : '') + '" placeholder="e.g. Kiln, Pottery Wheel"></div>' +
+      '<div class="book-field"><label class="form-label">Capacity</label><input type="number" id="rfCapacity" class="form-input" min="0" value="' + (res ? res.capacity || '' : '') + '" placeholder="Max students"></div>' +
+      '</div>' +
+      '<div class="book-field"><label class="form-label">Description</label>' +
+      '<textarea id="rfDesc" class="form-input" rows="2" placeholder="What is this resource used for?">' + esc(res ? res.description : '') + '</textarea></div>' +
       '</div>' +
 
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">' +
-      '<div><label class="form-label">Sub-type</label><input type="text" id="rfSubType" class="form-input" value="' + esc(res ? res.subType : '') + '" placeholder="e.g. Kiln, Pottery Wheel, Main Studio"></div>' +
-      '<div><label class="form-label">Capacity</label><input type="number" id="rfCapacity" class="form-input" min="0" value="' + (res ? res.capacity || '' : '') + '"></div>' +
+      // ── Internal ──
+      '<div class="book-form-section">' +
+      '<div class="book-form-section-title">Internal Notes</div>' +
+      '<div class="book-field"><label class="form-label">Notes</label>' +
+      '<textarea id="rfNotes" class="form-input" rows="2" placeholder="Admin-only notes...">' + esc(res ? res.notes : '') + '</textarea></div>' +
       '</div>' +
 
-      '<div style="margin-bottom:1rem;"><label class="form-label">Description</label>' +
-      '<textarea id="rfDesc" class="form-input" rows="2">' + esc(res ? res.description : '') + '</textarea></div>' +
-
-      '<div style="margin-bottom:1.5rem;"><label class="form-label">Notes (internal)</label>' +
-      '<textarea id="rfNotes" class="form-input" rows="2">' + esc(res ? res.notes : '') + '</textarea></div>' +
-
-      '<div style="display:flex;gap:8px;">' +
+      // ── Actions ──
+      '<div class="book-form-actions">' +
       '<button class="btn btn-primary" onclick="window._resSave(\'' + (resId || '') + '\')">Save Resource</button>' +
       '<button class="btn" onclick="window._resBackToList()">Cancel</button>' +
       '</div></form>';
@@ -1272,52 +1367,66 @@
     var allowedIds = (pd && pd.allowedClassIds) || [];
     var classScopeHtml = classesData.filter(function(c) { return c.status === 'active'; }).map(function(c) {
       var checked = allowedIds.indexOf(c.id) !== -1 ? ' checked' : '';
-      return '<label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;cursor:pointer;">' +
+      return '<label class="book-check" style="margin-bottom:6px;">' +
         '<input type="checkbox" name="passClassScope" value="' + esc(c.id) + '"' + checked + '> ' + esc(c.name) + '</label>';
-    }).join('');
+    }).join('<br>');
 
-    var html = '<h2 style="margin:0 0 1.5rem;">' + (isNew ? 'New Pass Definition' : 'Edit: ' + esc(pd.name)) + '</h2>' +
-      '<form id="passDefForm" onsubmit="return false;" style="max-width:700px;">' +
+    var html = '<h2 style="margin:0 0 1.5rem;font-size:1.4rem;">' + (isNew ? 'New Pass Definition' : 'Edit: ' + esc(pd.name)) + '</h2>' +
+      '<form id="passDefForm" onsubmit="return false;" style="max-width:720px;">' +
 
-      '<div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:1rem;margin-bottom:1rem;">' +
-      '<div><label class="form-label">Name *</label><input type="text" id="pdfName" class="form-input" value="' + esc(pd ? pd.name : '') + '" required></div>' +
-      '<div><label class="form-label">Type *</label><select id="pdfType" class="form-input" onchange="window._passToggleFields()">' + typeOpts + '</select></div>' +
-      '<div><label class="form-label">Status</label><select id="pdfStatus" class="form-input">' + statusOpts + '</select></div>' +
+      // ── Basic Info ──
+      '<div class="book-form-section">' +
+      '<div class="book-form-section-title">Basic Info</div>' +
+      '<div class="book-responsive-grid">' +
+      '<div class="book-field" style="grid-column:span 2;"><label class="form-label">Name <span class="book-required">*</span></label><input type="text" id="pdfName" class="form-input" value="' + esc(pd ? pd.name : '') + '" required placeholder="e.g. 10-Class Pack"></div>' +
+      '<div class="book-field"><label class="form-label">Type <span class="book-required">*</span></label><select id="pdfType" class="form-input" onchange="window._passToggleFields()">' + typeOpts + '</select></div>' +
+      '<div class="book-field"><label class="form-label">Status</label><select id="pdfStatus" class="form-input">' + statusOpts + '</select></div>' +
+      '</div>' +
+      '<div class="book-field"><label class="form-label">Description</label>' +
+      '<textarea id="pdfDesc" class="form-input" rows="2" placeholder="What does this pass include?">' + esc(pd ? pd.description : '') + '</textarea></div>' +
       '</div>' +
 
-      '<div style="margin-bottom:1rem;"><label class="form-label">Description</label>' +
-      '<textarea id="pdfDesc" class="form-input" rows="2">' + esc(pd ? pd.description : '') + '</textarea></div>' +
+      // ── Pricing & Terms ──
+      '<div class="book-form-section">' +
+      '<div class="book-form-section-title">Pricing &amp; Terms</div>' +
+      '<div class="book-responsive-grid">' +
+      '<div class="book-field"><label class="form-label">Price ($) <span class="book-required">*</span></label><input type="number" id="pdfPrice" class="form-input" min="0" step="0.01" value="' + (pd ? (pd.priceCents / 100).toFixed(2) : '') + '" required></div>' +
+      '<div class="book-field" id="pdfVisitCountWrap"><label class="form-label">Visit Count</label><input type="number" id="pdfVisitCount" class="form-input" min="1" value="' + (pd && pd.visitCount ? pd.visitCount : '') + '" placeholder="Unlimited">' +
+      '<div class="book-field-hint">Leave blank for unlimited visits</div></div>' +
+      '<div class="book-field"><label class="form-label">Validity (days)</label><input type="number" id="pdfValidityDays" class="form-input" min="1" value="' + (pd && pd.validityDays ? pd.validityDays : '') + '" placeholder="No limit">' +
+      '<div class="book-field-hint">Days from activation until expiry</div></div>' +
+      '<div class="book-field"><label class="form-label">Activation</label><select id="pdfActivation" class="form-input">' + activationOpts + '</select></div>' +
+      '</div></div>' +
 
-      '<div class="book-responsive-grid" style="margin-bottom:1rem;">' +
-      '<div><label class="form-label">Price ($) *</label><input type="number" id="pdfPrice" class="form-input" min="0" step="0.01" value="' + (pd ? (pd.priceCents / 100).toFixed(2) : '') + '" required></div>' +
-      '<div id="pdfVisitCountWrap"><label class="form-label">Visit Count</label><input type="number" id="pdfVisitCount" class="form-input" min="1" value="' + (pd && pd.visitCount ? pd.visitCount : '') + '" placeholder="Unlimited if blank"></div>' +
-      '<div><label class="form-label">Validity (days)</label><input type="number" id="pdfValidityDays" class="form-input" min="1" value="' + (pd && pd.validityDays ? pd.validityDays : '') + '" placeholder="No limit if blank"></div>' +
-      '<div><label class="form-label">Activation</label><select id="pdfActivation" class="form-input">' + activationOpts + '</select></div>' +
-      '</div>' +
+      // ── Options ──
+      '<div class="book-form-section">' +
+      '<div class="book-form-section-title">Options</div>' +
+      '<div class="book-responsive-grid">' +
+      '<div class="book-field"><label class="form-label">Priority</label><select id="pdfPriority" class="form-input">' + priorityOpts + '</select>' +
+      '<div class="book-field-hint">Higher priority passes are auto-applied first</div></div>' +
+      '<div class="book-field"><label class="form-label">Sort Order</label><input type="number" id="pdfSortOrder" class="form-input" min="0" value="' + (pd ? pd.sortOrder || 0 : 0) + '"></div>' +
+      '<div class="book-field"><label class="form-label">Online Purchase</label><select id="pdfOnline" class="form-input"><option value="true"' + (pd && pd.onlinePurchasable === false ? '' : ' selected') + '>Yes</option><option value="false"' + (pd && pd.onlinePurchasable === false ? ' selected' : '') + '>No</option></select></div>' +
+      '<div class="book-field"><label class="form-label">Intro Only</label><select id="pdfIntroOnly" class="form-input"><option value="false"' + (pd && pd.introOnly ? '' : ' selected') + '>No</option><option value="true"' + (pd && pd.introOnly ? ' selected' : '') + '>Yes</option></select></div>' +
+      '</div></div>' +
 
-      '<div class="book-responsive-grid" style="margin-bottom:1rem;">' +
-      '<div><label class="form-label">Priority</label><select id="pdfPriority" class="form-input">' + priorityOpts + '</select></div>' +
-      '<div><label class="form-label">Sort Order</label><input type="number" id="pdfSortOrder" class="form-input" min="0" value="' + (pd ? pd.sortOrder || 0 : 0) + '"></div>' +
-      '<div><label class="form-label">Online Purchase</label><select id="pdfOnline" class="form-input"><option value="true"' + (pd && pd.onlinePurchasable === false ? '' : ' selected') + '>Yes</option><option value="false"' + (pd && pd.onlinePurchasable === false ? ' selected' : '') + '>No</option></select></div>' +
-      '<div><label class="form-label">Intro Only</label><select id="pdfIntroOnly" class="form-input"><option value="false"' + (pd && pd.introOnly ? '' : ' selected') + '>No</option><option value="true"' + (pd && pd.introOnly ? ' selected' : '') + '>Yes</option></select></div>' +
-      '</div>' +
+      // ── Auto-Renew ──
+      '<div class="book-form-section" id="pdfRenewFields">' +
+      '<div class="book-form-section-title">Auto-Renew</div>' +
+      '<div class="book-responsive-grid">' +
+      '<div class="book-field"><label class="form-label">Auto-Renew</label><select id="pdfAutoRenew" class="form-input" onchange="window._passToggleFields()"><option value="false"' + (pd && pd.autoRenew ? '' : ' selected') + '>No</option><option value="true"' + (pd && pd.autoRenew ? ' selected' : '') + '>Yes</option></select></div>' +
+      '<div class="book-field" id="pdfRenewFreqWrap"' + (pd && pd.autoRenew ? '' : ' style="display:none;"') + '><label class="form-label">Frequency</label><select id="pdfRenewFreq" class="form-input">' + renewOpts + '</select></div>' +
+      '</div></div>' +
 
-      // Auto-renew
-      '<fieldset id="pdfRenewFields" style="border:1px solid var(--border);border-radius:8px;padding:1rem;margin-bottom:1rem;">' +
-      '<legend style="font-weight:600;padding:0 8px;">Auto-Renew</legend>' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">' +
-      '<div><label class="form-label">Auto-Renew</label><select id="pdfAutoRenew" class="form-input" onchange="window._passToggleFields()"><option value="false"' + (pd && pd.autoRenew ? '' : ' selected') + '>No</option><option value="true"' + (pd && pd.autoRenew ? ' selected' : '') + '>Yes</option></select></div>' +
-      '<div id="pdfRenewFreqWrap"' + (pd && pd.autoRenew ? '' : ' style="display:none;"') + '><label class="form-label">Frequency</label><select id="pdfRenewFreq" class="form-input">' + renewOpts + '</select></div>' +
-      '</div></fieldset>' +
+      // ── Class Scope ──
+      '<div class="book-form-section">' +
+      '<div class="book-form-section-title">Class Scope</div>' +
+      '<div class="book-field-hint" style="margin-bottom:0.75rem;">Leave all unchecked to allow this pass for any class.</div>' +
+      '<div style="max-height:200px;overflow-y:auto;padding:4px 0;">' +
+      (classScopeHtml || '<p style="color:var(--warm-gray);text-align:center;">No active classes.</p>') +
+      '</div></div>' +
 
-      // Class scope
-      '<fieldset style="border:1px solid var(--border);border-radius:8px;padding:1rem;margin-bottom:1.5rem;">' +
-      '<legend style="font-weight:600;padding:0 8px;">Class Scope (leave unchecked for all classes)</legend>' +
-      '<div style="max-height:200px;overflow-y:auto;">' +
-      (classScopeHtml || '<p style="color:var(--warm-gray);">No active classes.</p>') +
-      '</div></fieldset>' +
-
-      '<div style="display:flex;gap:8px;">' +
+      // ── Actions ──
+      '<div class="book-form-actions">' +
       '<button class="btn btn-primary" onclick="window._passSave(\'' + (passDefId || '') + '\')">Save Pass Definition</button>' +
       '<button class="btn" onclick="window._passBackToList()">Cancel</button>' +
       '</div></form>';
@@ -1661,7 +1770,7 @@
   };
 
   window._bookToggleSeriesFields = function() {
-    var type = document.getElementById('bcfType').value;
+    var type = (document.getElementById('bcfType') || {}).value;
     var fields = document.getElementById('bcfSeriesFields');
     if (fields) fields.style.display = type === 'series' ? '' : 'none';
   };
@@ -1940,10 +2049,11 @@
 
       var html = '<form id="startupChecklistForm">';
 
-      // Student Roster
-      html += '<h3 style="margin:0 0 0.75rem;">Student Roster (' + students.length + ')</h3>';
+      // ── Student Roster ──
+      html += '<div class="book-form-section">';
+      html += '<div class="book-form-section-title">Student Roster <span style="font-weight:400;color:var(--warm-gray);text-transform:none;letter-spacing:0;">(' + students.length + ')</span></div>';
       if (students.length === 0) {
-        html += '<p style="color:var(--warm-gray);">No confirmed enrollments.</p>';
+        html += '<p style="color:var(--warm-gray);text-align:center;">No confirmed enrollments.</p>';
       } else {
         html += '<table class="data-table"><thead><tr><th>Student</th><th>Check-in</th><th>Waiver</th></tr></thead><tbody>';
         students.forEach(function(s) {
@@ -1951,12 +2061,12 @@
           var checkedIn = savedStudent.checkedIn || false;
           var waiverStatus = savedStudent.waiverStatus || 'na';
           var waiverWarning = (waiverStatus === 'missing' || waiverStatus === 'expired')
-            ? ' <span style="color:#FFD54F;font-size:0.75rem;">&#9888; ' + waiverStatus + '</span>' : '';
+            ? ' <span style="color:' + WARNING_COLOR + ';font-size:0.75rem;">&#9888; ' + waiverStatus + '</span>' : '';
 
           html += '<tr>' +
-            '<td>' + esc(s.studentName || s.customerName || '—') + '</td>' +
-            '<td><label style="cursor:pointer;"><input type="checkbox" name="checkin_' + esc(s._id) + '" ' + (checkedIn ? 'checked' : '') + '> Checked in</label></td>' +
-            '<td><select name="waiver_' + esc(s._id) + '" style="' + FORM_SELECT_STYLE + '">' +
+            '<td><strong>' + esc(s.studentName || s.customerName || '—') + '</strong></td>' +
+            '<td><label class="book-check"><input type="checkbox" name="checkin_' + esc(s._id) + '" ' + (checkedIn ? 'checked' : '') + '> Checked in</label></td>' +
+            '<td><select name="waiver_' + esc(s._id) + '" class="form-input" style="width:auto;padding:6px 10px;">' +
             '<option value="na"' + (waiverStatus === 'na' ? ' selected' : '') + '>N/A</option>' +
             '<option value="signed"' + (waiverStatus === 'signed' ? ' selected' : '') + '>Signed</option>' +
             '<option value="missing"' + (waiverStatus === 'missing' ? ' selected' : '') + '>Missing</option>' +
@@ -1965,44 +2075,50 @@
         });
         html += '</tbody></table>';
       }
+      html += '</div>';
 
-      // Equipment
-      html += '<h3 style="margin:1.5rem 0 0.75rem;">Equipment & Resources</h3>';
+      // ── Equipment ──
+      html += '<div class="book-form-section">';
+      html += '<div class="book-form-section-title">Equipment &amp; Resources</div>';
       if (resources.length === 0) {
-        html += '<p style="color:var(--warm-gray);">No resources assigned to this session.</p>';
+        html += '<p style="color:var(--warm-gray);text-align:center;">No resources assigned.</p>';
       } else {
         resources.forEach(function(r) {
           var savedEquip = (saved.equipment && saved.equipment[r._id]) || {};
-          html += '<div style="background:var(--surface-dark);border-radius:8px;padding:12px 16px;margin-bottom:8px;">' +
-            '<strong>' + esc(r.name) + '</strong> (' + esc(r.type) + ')' +
+          html += '<div style="' + CARD_STYLE + 'margin-bottom:8px;">' +
+            '<strong>' + esc(r.name) + '</strong> <span style="color:var(--warm-gray);font-size:0.8rem;">(' + esc(r.type) + ')</span>' +
             '<div style="display:flex;gap:12px;margin-top:8px;align-items:center;">' +
-            '<select name="equip_' + esc(r._id) + '" style="' + FORM_SELECT_STYLE + '">' +
+            '<select name="equip_' + esc(r._id) + '" class="form-input" style="width:auto;padding:6px 10px;">' +
             '<option value="good"' + (savedEquip.condition === 'good' ? ' selected' : '') + '>Good</option>' +
             '<option value="needs_attention"' + ((savedEquip.condition === 'needs_attention') ? ' selected' : '') + '>Needs Attention</option>' +
             '<option value="out_of_service"' + ((savedEquip.condition === 'out_of_service') ? ' selected' : '') + '>Out of Service</option>' +
             '</select>' +
-            '<input type="text" name="equip_notes_' + esc(r._id) + '" placeholder="Notes..." value="' + esc(savedEquip.notes || '') + '" style="flex:1;padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;">' +
+            '<input type="text" name="equip_notes_' + esc(r._id) + '" class="form-input" placeholder="Notes..." value="' + esc(savedEquip.notes || '') + '" style="flex:1;">' +
             '</div></div>';
         });
       }
+      html += '</div>';
 
-      // Room confirmation
-      html += '<h3 style="margin:1.5rem 0 0.75rem;">Room / Space</h3>';
-      html += '<label style="cursor:pointer;display:flex;align-items:center;gap:8px;">' +
-        '<input type="checkbox" name="roomConfirmed" ' + (saved.roomConfirmed ? 'checked' : '') + '> Room / space confirmed ready</label>';
+      // ── Room / Space ──
+      html += '<div class="book-form-section">';
+      html += '<div class="book-form-section-title">Room / Space</div>';
+      html += '<label class="book-check"><input type="checkbox" name="roomConfirmed" ' + (saved.roomConfirmed ? 'checked' : '') + '> Room / space confirmed ready</label>';
+      html += '</div>';
 
-      // Notes
-      html += '<h3 style="margin:1.5rem 0 0.75rem;">Instructor Notes</h3>';
-      html += '<textarea name="instructorNotes" rows="3" style="width:100%;padding:8px 12px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.9rem;resize:vertical;">' + esc(saved.instructorNotes || '') + '</textarea>';
+      // ── Instructor Notes ──
+      html += '<div class="book-form-section">';
+      html += '<div class="book-form-section-title">Instructor Notes</div>';
+      html += '<textarea name="instructorNotes" class="form-input" rows="3" placeholder="Any notes for this session...">' + esc(saved.instructorNotes || '') + '</textarea>';
+      html += '</div>';
 
       // Buttons
-      html += '<div style="display:flex;gap:8px;margin-top:1.5rem;">' +
+      html += '<div class="book-form-actions">' +
         '<button type="button" class="btn btn-primary" onclick="window._bookSaveChecklist(\'' + esc(sessionId) + '\', false)">Save Draft</button>' +
         '<button type="button" class="btn btn-primary" style="background:' + SUCCESS_COLOR + ';" onclick="window._bookSaveChecklist(\'' + esc(sessionId) + '\', true)">Complete Checklist</button>' +
         '</div>';
 
       if (saved.completedAt) {
-        html += '<p style="color:' + SUCCESS_COLOR + ';margin-top:12px;font-size:0.85rem;">Checklist completed ' + new Date(saved.completedAt).toLocaleString() + '</p>';
+        html += '<p style="color:' + SUCCESS_COLOR + ';margin-top:12px;font-size:0.85rem;">&#10003; Checklist completed ' + new Date(saved.completedAt).toLocaleString() + '</p>';
       }
 
       html += '</form>';
@@ -2113,10 +2229,11 @@
 
       var html = '<form id="completionReportForm">';
 
-      // Attendance
-      html += '<h3 style="margin:0 0 12px;">Attendance</h3>';
+      // ── Attendance ──
+      html += '<div class="book-form-section">';
+      html += '<div class="book-form-section-title">Attendance</div>';
       if (students.length === 0) {
-        html += '<p style="color:var(--warm-gray);">No enrollments to finalize.</p>';
+        html += '<p style="color:var(--warm-gray);text-align:center;">No enrollments to finalize.</p>';
       } else {
         html += '<table class="data-table"><thead><tr><th>Student</th><th>Check-in</th><th>Attendance</th></tr></thead><tbody>';
         students.forEach(function(s) {
@@ -2125,9 +2242,9 @@
           var checkedIn = startup.students && startup.students[s._id] && startup.students[s._id].checkedIn;
           var checkInLabel = checkedIn ? '<span style="color:' + SUCCESS_COLOR + ';">&#10003; Checked in</span>' : '<span style="color:var(--warm-gray);">—</span>';
 
-          html += '<tr><td>' + esc(s.studentName || s.customerName || '—') + '</td>' +
+          html += '<tr><td><strong>' + esc(s.studentName || s.customerName || '—') + '</strong></td>' +
             '<td>' + checkInLabel + '</td>' +
-            '<td><select name="att_' + esc(s._id) + '" style="' + FORM_SELECT_STYLE + '">' +
+            '<td><select name="att_' + esc(s._id) + '" class="form-input" style="width:auto;padding:6px 10px;">' +
             '<option value="completed"' + (attStatus === 'completed' ? ' selected' : '') + '>Completed</option>' +
             '<option value="absent"' + (attStatus === 'absent' ? ' selected' : '') + '>Absent</option>' +
             '<option value="no-show"' + (attStatus === 'no-show' ? ' selected' : '') + '>No-Show</option>' +
@@ -2135,74 +2252,84 @@
         });
         html += '</tbody></table>';
       }
+      html += '</div>';
 
-      // Equipment post-check
-      html += '<h3 style="margin:1.5rem 0 0.75rem;">Equipment Post-Check</h3>';
+      // ── Equipment Post-Check ──
+      html += '<div class="book-form-section">';
+      html += '<div class="book-form-section-title">Equipment Post-Check</div>';
       if (resources.length === 0) {
-        html += '<p style="color:var(--warm-gray);">No resources assigned.</p>';
+        html += '<p style="color:var(--warm-gray);text-align:center;">No resources assigned.</p>';
       } else {
         resources.forEach(function(r) {
           var savedEquip = (saved.equipment && saved.equipment[r._id]) || {};
-          html += '<div style="background:var(--surface-dark);border-radius:8px;padding:12px 16px;margin-bottom:8px;">' +
+          html += '<div style="' + CARD_STYLE + 'margin-bottom:8px;">' +
             '<strong>' + esc(r.name) + '</strong>' +
             '<div style="display:flex;gap:12px;margin-top:8px;align-items:center;">' +
-            '<select name="postequip_' + esc(r._id) + '" style="' + FORM_SELECT_STYLE + '">' +
+            '<select name="postequip_' + esc(r._id) + '" class="form-input" style="width:auto;padding:6px 10px;">' +
             '<option value="good"' + (savedEquip.postCondition === 'good' ? ' selected' : '') + '>Good</option>' +
             '<option value="needs_attention"' + ((savedEquip.postCondition === 'needs_attention') ? ' selected' : '') + '>Needs Attention</option>' +
             '<option value="out_of_service"' + ((savedEquip.postCondition === 'out_of_service') ? ' selected' : '') + '>Out of Service</option>' +
             '</select>' +
-            '<input type="text" name="postequip_notes_' + esc(r._id) + '" placeholder="Notes..." value="' + esc(savedEquip.notes || '') + '" style="flex:1;padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;">' +
+            '<input type="text" name="postequip_notes_' + esc(r._id) + '" class="form-input" placeholder="Notes..." value="' + esc(savedEquip.notes || '') + '" style="flex:1;">' +
             '</div></div>';
-        });
-      }
-
-      // Incidents
-      html += '<h3 style="margin:1.5rem 0 0.75rem;">Incidents</h3>';
-      html += '<div id="incidentsList">';
-      if (existingIncidents.length > 0) {
-        existingIncidents.forEach(function(inc) {
-          var sevColor = SEVERITY_COLORS[inc.severity] || '#BDBDBD';
-          html += '<div style="background:var(--surface-dark);border-radius:8px;padding:12px 16px;margin-bottom:8px;border-left:3px solid ' + sevColor + ';">' +
-            '<div style="display:flex;gap:8px;align-items:center;">' +
-            '<span style="' + badgeStyle(SEVERITY_BADGE_COLORS, inc.severity) + '">' + esc(inc.severity) + '</span>' +
-            '<span style="font-weight:500;">' + esc(INCIDENT_TYPE_LABELS[inc.type] || inc.type) + '</span>' +
-            '<span style="color:var(--warm-gray);font-size:0.8rem;margin-left:auto;">' + esc(inc.followUpStatus || 'open') + '</span>' +
-            '</div>' +
-            '<p style="margin:8px 0 0;color:var(--warm-gray);font-size:0.9rem;">' + esc(inc.description) + '</p>' +
-            '</div>';
         });
       }
       html += '</div>';
 
-      html += '<div id="newIncidentForm" style="display:none;background:var(--surface-dark);border-radius:8px;padding:16px;margin-bottom:12px;">' +
-        '<h4 style="margin:0 0 12px;">New Incident</h4>' +
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">' +
-        '<select id="incType" style="' + FORM_SELECT_STYLE + '">' +
+      // ── Incidents ──
+      html += '<div class="book-form-section">';
+      html += '<div class="book-form-section-title">Incidents</div>';
+      html += '<div id="incidentsList">';
+      if (existingIncidents.length > 0) {
+        existingIncidents.forEach(function(inc) {
+          var sevColor = SEVERITY_COLORS[inc.severity] || '#BDBDBD';
+          html += '<div style="' + CARD_STYLE + 'margin-bottom:8px;border-left:3px solid ' + sevColor + ';">' +
+            '<div style="display:flex;gap:8px;align-items:center;">' +
+            '<span style="' + badgeStyle(SEVERITY_BADGE_COLORS, inc.severity) + '">' + esc(inc.severity) + '</span>' +
+            '<span style="font-weight:500;font-size:0.9rem;">' + esc(INCIDENT_TYPE_LABELS[inc.type] || inc.type) + '</span>' +
+            '<span style="color:var(--warm-gray);font-size:0.8rem;margin-left:auto;">' + esc(inc.followUpStatus || 'open') + '</span>' +
+            '</div>' +
+            '<p style="margin:6px 0 0;color:var(--warm-gray);font-size:0.85rem;">' + esc(inc.description) + '</p>' +
+            '</div>';
+        });
+      } else {
+        html += '<p style="color:var(--warm-gray);font-size:0.85rem;">No incidents reported.</p>';
+      }
+      html += '</div>';
+
+      html += '<div id="newIncidentForm" class="book-form-section" style="display:none;margin-top:8px;">' +
+        '<div class="book-form-section-title">New Incident</div>' +
+        '<div class="book-responsive-grid" style="margin-bottom:0.75rem;">' +
+        '<div class="book-field"><label class="form-label">Type</label><select id="incType" class="form-input">' +
         INCIDENT_TYPES.map(function(t) { return '<option value="' + t + '">' + esc(INCIDENT_TYPE_LABELS[t] || t) + '</option>'; }).join('') +
-        '</select>' +
-        '<select id="incSeverity" style="' + FORM_SELECT_STYLE + '">' +
+        '</select></div>' +
+        '<div class="book-field"><label class="form-label">Severity</label><select id="incSeverity" class="form-input">' +
         INCIDENT_SEVERITIES.map(function(s) { return '<option value="' + s + '">' + s.charAt(0).toUpperCase() + s.slice(1) + '</option>'; }).join('') +
-        '</select>' +
+        '</select></div>' +
         '</div>' +
-        '<textarea id="incDescription" rows="2" placeholder="Describe the incident..." style="width:100%;padding:8px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;resize:vertical;margin-bottom:8px;"></textarea>' +
-        '<div style="display:flex;gap:8px;">' +
-        '<button type="button" class="btn btn-sm btn-primary" onclick="window._bookSaveIncident(\'' + esc(sessionId) + '\')">Save Incident</button>' +
+        '<div class="book-field"><label class="form-label">Description</label>' +
+        '<textarea id="incDescription" class="form-input" rows="2" placeholder="Describe what happened..."></textarea></div>' +
+        '<div style="display:flex;gap:8px;margin-top:0.75rem;">' +
+        '<button type="button" class="btn btn-primary btn-sm" onclick="window._bookSaveIncident(\'' + esc(sessionId) + '\')">Save Incident</button>' +
         '<button type="button" class="btn btn-sm" onclick="document.getElementById(\'newIncidentForm\').style.display=\'none\'">Cancel</button>' +
         '</div></div>';
-      html += '<button type="button" class="btn btn-sm" onclick="document.getElementById(\'newIncidentForm\').style.display=\'\'" style="margin-bottom:1rem;">+ Add Incident</button>';
+      html += '<button type="button" class="btn btn-sm" onclick="document.getElementById(\'newIncidentForm\').style.display=\'\'" style="margin-top:8px;">+ Add Incident</button>';
+      html += '</div>';
 
-      // Notes
-      html += '<h3 style="margin:1.5rem 0 0.75rem;">Session Notes</h3>';
-      html += '<textarea name="completionNotes" rows="3" style="width:100%;padding:8px 12px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.9rem;resize:vertical;">' + esc(saved.notes || '') + '</textarea>';
+      // ── Session Notes ──
+      html += '<div class="book-form-section">';
+      html += '<div class="book-form-section-title">Session Notes</div>';
+      html += '<textarea name="completionNotes" class="form-input" rows="3" placeholder="Overall session notes...">' + esc(saved.notes || '') + '</textarea>';
+      html += '</div>';
 
       // Submit
-      html += '<div style="display:flex;gap:8px;margin-top:1.5rem;">' +
+      html += '<div class="book-form-actions">' +
         '<button type="button" class="btn btn-primary" onclick="window._bookSaveReport(\'' + esc(sessionId) + '\', false)">Save Draft</button>' +
         '<button type="button" class="btn btn-primary" style="background:' + SUCCESS_COLOR + ';" onclick="window._bookSaveReport(\'' + esc(sessionId) + '\', true)">Submit Report</button>' +
         '</div>';
 
       if (saved.completedAt) {
-        html += '<p style="color:' + SUCCESS_COLOR + ';margin-top:12px;font-size:0.85rem;">Report submitted ' + new Date(saved.completedAt).toLocaleString() + '</p>';
+        html += '<p style="color:' + SUCCESS_COLOR + ';margin-top:12px;font-size:0.85rem;">&#10003; Report submitted ' + new Date(saved.completedAt).toLocaleString() + '</p>';
       }
 
       html += '</form>';
