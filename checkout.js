@@ -1033,7 +1033,7 @@
             orderNumber: result.orderNumber,
             email: checkoutData.email,
             items: payload.items,
-            cartItems: items.map(function(ci) { return { bookingType: ci.bookingType, passDefinitionId: ci.passDefinitionId, name: ci.name }; }),
+            cartItems: items.map(function(ci) { return { bookingType: ci.bookingType, passDefinitionId: ci.passDefinitionId, classId: ci.classId, sessionId: ci.sessionId, name: ci.name }; }),
             shipping: checkoutData.shipping,
             itemShippingData: checkoutData.itemShippingData || {},
             shippingConfig: checkoutData.shippingConfig || DEFAULT_SHIPPING_CONFIG
@@ -1160,6 +1160,7 @@
 
       // Provision CustomerPass records for any pass items
       provisionCustomerPasses(items, orderRef.key);
+      provisionSeriesEnrollments(items, orderRef.key);
 
       // Show confirmation
       renderCheckOrderConfirmation(orderNumber);
@@ -1410,6 +1411,64 @@
     });
   }
 
+  // ── Series Auto-Enrollment ──
+  // After checkout for a series item, enroll the student in all future sessions.
+  function provisionSeriesEnrollments(items, orderId) {
+    var user = window.MastCart && window.MastCart.getCurrentUser();
+    if (!user || user.isAnonymous) return;
+    var db = getDb();
+    if (!db) return;
+
+    var seriesItems = (items || []).filter(function(it) {
+      return it.bookingType === 'class' && it.classId && !it.sessionId;
+    });
+    if (seriesItems.length === 0) return;
+
+    var today = new Date().toISOString().slice(0, 10);
+
+    seriesItems.forEach(function(item) {
+      var classId = item.classId.replace('-series', '');
+
+      // Increment seriesEnrolled on the class (atomic)
+      db.ref(TENANT_ID + '/public/classes/' + classId + '/seriesEnrolled')
+        .transaction(function(current) { return (current || 0) + 1; });
+
+      // Find all future sessions for this class and create enrollments
+      db.ref(TENANT_ID + '/public/classSessions').orderByChild('classId').equalTo(classId).once('value')
+        .then(function(snap) {
+          var sessData = snap.val() || {};
+          var futureSessions = Object.keys(sessData).filter(function(sid) {
+            var s = sessData[sid];
+            return s.status === 'scheduled' && s.date >= today;
+          });
+
+          futureSessions.forEach(function(sid) {
+            var enrollRef = db.ref(TENANT_ID + '/public/enrollments').push();
+            enrollRef.set({
+              classId: classId,
+              sessionId: sid,
+              studentUid: user.uid,
+              studentName: user.displayName || '',
+              studentEmail: user.email || '',
+              status: 'confirmed',
+              enrollmentType: 'series',
+              paymentMethod: 'checkout',
+              orderId: orderId || null,
+              pricePaid: 0,
+              enrolledAt: new Date().toISOString()
+            }).catch(function(err) {
+              console.error('[checkout] Series enrollment failed for session:', sid, err);
+            });
+          });
+
+          console.log('[checkout] Series enrolled in', futureSessions.length, 'sessions for class:', classId);
+        })
+        .catch(function(err) {
+          console.error('[checkout] Failed to load sessions for series enrollment:', err);
+        });
+    });
+  }
+
   // ── Payment Return Handler ──
   // Detects ?payment=success&order={orderId} after payment checkout redirect (Square or Stripe)
   function checkPaymentReturn() {
@@ -1481,6 +1540,7 @@
     // Provision CustomerPass records for any pass items
     if (pendingOrder && pendingOrder.cartItems) {
       provisionCustomerPasses(pendingOrder.cartItems, orderId);
+      provisionSeriesEnrollments(pendingOrder.cartItems, orderId);
     }
 
     // Watch for order status to become 'placed' and generate CSV

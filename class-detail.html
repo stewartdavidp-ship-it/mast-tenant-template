@@ -327,10 +327,24 @@
   transition: opacity 0.2s;
 }
 .cd-series-btn:hover { opacity: 0.85; }
-.cd-series-or {
-  margin-top: 10px;
+.cd-series-spots {
+  margin-top: 8px;
   font-size: 0.85rem;
   color: var(--warm-gray, #888);
+}
+.cd-series-or {
+  margin-top: 6px;
+  font-size: 0.85rem;
+  color: var(--warm-gray, #888);
+}
+.cd-series-started {
+  padding: 12px 20px;
+  background: rgba(200,150,50,0.15);
+  border: 1px solid rgba(200,150,50,0.3);
+  border-radius: 8px;
+  color: #FFD54F;
+  font-size: 0.95rem;
+  text-align: center;
 }
 
 /* Booking confirmation banner */
@@ -538,14 +552,31 @@
     var seriesPrice = isSeries && cls.seriesInfo.seriesPriceCents ? cls.seriesInfo.seriesPriceCents : 0;
     var allowDropIn = isSeries && cls.seriesInfo.allowDropIn;
     var totalSessions = isSeries && cls.seriesInfo.totalSessions ? cls.seriesInfo.totalSessions : sessions.length;
+    var seriesEnrolled = cls.seriesEnrolled || 0;
+    var seriesSpotsLeft = Math.max(0, (cls.capacity || 0) - seriesEnrolled);
+    var firstSessionDate = sessions.length > 0 ? sessions[0].date : null;
+    var seriesStarted = firstSessionDate && firstSessionDate < todayStr();
 
     if (isSeries && sessions.length > 0) {
-      html += '<div class="cd-series-cta">' +
-        '<button class="cd-series-btn" onclick="window._bookSeries(\'' + esc(cls.id) + '\', \'' + esc(cls.name) + '\', ' + seriesPrice + ', ' + totalSessions + ')">' +
-        'Enroll in Full Series &mdash; ' + formatPrice(seriesPrice) + ' (' + totalSessions + ' sessions)' +
-        '</button>' +
-        (allowDropIn ? '<div class="cd-series-or">or book individual sessions below as drop-ins at ' + formatPrice(cls.priceCents) + ' each</div>' : '') +
-        '</div>';
+      if (seriesStarted) {
+        html += '<div class="cd-series-cta">' +
+          '<div class="cd-series-started">This series has already started' +
+          (allowDropIn ? ' &mdash; drop-in sessions available below' : '') +
+          '</div></div>';
+      } else if (seriesSpotsLeft <= 0) {
+        html += '<div class="cd-series-cta">' +
+          '<div class="cd-series-started">Series is full' +
+          (allowDropIn ? ' &mdash; drop-in spots may be available below' : '') +
+          '</div></div>';
+      } else {
+        html += '<div class="cd-series-cta">' +
+          '<button class="cd-series-btn" onclick="window._bookSeries(\'' + esc(cls.id) + '\', \'' + esc(cls.name) + '\', ' + seriesPrice + ', ' + totalSessions + ')">' +
+          'Enroll in Full Series &mdash; ' + formatPrice(seriesPrice) + ' (' + totalSessions + ' sessions)' +
+          '</button>' +
+          '<div class="cd-series-spots">' + seriesSpotsLeft + ' series spot' + (seriesSpotsLeft !== 1 ? 's' : '') + ' available</div>' +
+          (allowDropIn ? '<div class="cd-series-or">or book individual sessions below as drop-ins at ' + formatPrice(cls.priceCents) + ' each</div>' : '') +
+          '</div>';
+      }
     }
 
     // Sessions
@@ -555,20 +586,23 @@
     } else {
       html += '<div class="cd-session-list">';
       sessions.forEach(function(s) {
-        var spotsLeft = Math.max(0, (s.capacity || cls.capacity || 0) - (s.enrolled || 0));
-        var isFull = spotsLeft <= 0;
+        // Drop-in spots = capacity - seriesEnrolled - session dropIns
+        var dropInEnrolled = s.enrolled || 0;
+        var dropInSpotsLeft = Math.max(0, (s.capacity || cls.capacity || 0) - seriesEnrolled - dropInEnrolled);
+        var isFull = dropInSpotsLeft <= 0;
 
         // For series without drop-in, don't show per-session Book buttons
-        var showBookBtn = !isSeries || allowDropIn;
+        // Also only show drop-in for future sessions (not past)
+        var showBookBtn = (!isSeries || allowDropIn) && s.date >= todayStr();
 
         html += '<div class="cd-session-row">' +
           '<span class="cd-session-date">' + formatSessionDate(s.date) + '</span>' +
           '<span class="cd-session-time">' + formatTime(s.startTime) + ' - ' + formatTime(s.endTime) + '</span>' +
-          '<span class="cd-session-spots' + (isFull ? ' full' : '') + '">' + (isFull ? 'Full' : spotsLeft + ' spot' + (spotsLeft !== 1 ? 's' : '') + ' left') + '</span>' +
+          '<span class="cd-session-spots' + (isFull ? ' full' : '') + '">' + (isFull ? 'Full' : dropInSpotsLeft + ' spot' + (dropInSpotsLeft !== 1 ? 's' : '') + ' left') + '</span>' +
           (showBookBtn ?
             '<button class="cd-book-btn" ' + (isFull ? 'disabled' : '') +
-            ' onclick="window._bookSession(\'' + esc(s.id) + '\', \'' + esc(cls.id) + '\', \'' + esc(cls.name) + '\', ' + (cls.priceCents || 0) + ', ' + spotsLeft + ', \'' + esc(s.date) + '\', \'' + esc(s.startTime) + '\')">' +
-            (isFull ? 'Full' : 'Drop-in') +
+            ' onclick="window._bookSession(\'' + esc(s.id) + '\', \'' + esc(cls.id) + '\', \'' + esc(cls.name) + '\', ' + (cls.priceCents || 0) + ', ' + dropInSpotsLeft + ', \'' + esc(s.date) + '\', \'' + esc(s.startTime) + '\')">' +
+            (isFull ? 'Full' : (isSeries ? 'Drop-in' : 'Book')) +
             '</button>' : '') +
           '</div>';
       });
@@ -841,12 +875,13 @@
         studentName: user.displayName || '',
         studentEmail: user.email || '',
         status: 'confirmed',
+        enrollmentType: 'dropin',
         paymentMethod: 'pass',
         customerPassId: customerPassId,
         pricePaid: 0,
         enrolledAt: new Date().toISOString()
       }).then(function() {
-        // Increment session enrolled count
+        // Increment session drop-in enrolled count
         db.ref(TENANT_ID + '/public/classSessions/' + sessionId + '/enrolled')
           .transaction(function(current) { return (current || 0) + 1; });
       }).catch(function(err) {
