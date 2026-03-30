@@ -26,7 +26,7 @@
     about:      { label: 'About',       href: 'about.html',      enabled: true,  order: 3 },
     commission: { label: 'Commissions', href: 'commission.html',  enabled: false, order: 4 },
     wholesale:  { label: 'Wholesale',   href: 'wholesale.html',   enabled: false, order: 5 },
-    classes:    { label: 'Classes',     href: 'classes.html',     enabled: false, order: 2.5 },
+    classes:    { label: 'Classes',     href: 'classes.html',     enabled: true,  order: 2.5 },
     schedule:   { label: 'Schedule',    href: 'schedule.html',    enabled: false, order: 6 },
     blog:       { label: 'From the Studio', href: 'blog/',        enabled: true,  order: 7 }
   };
