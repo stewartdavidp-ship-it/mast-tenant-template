@@ -906,6 +906,8 @@ async function doSyncGoogleContacts() {
   window.isGoogleContactsConnected = isGoogleContactsConnected;
   window.openEditContactModal = openEditContactModal;
   window.saveEditContact = saveEditContact;
+  window.openInquiryResponseModal = openInquiryResponseModal;
+  window.sendInquiryResponse = sendInquiryResponse;
 
   // ============================================================
   // Register with MastAdmin
