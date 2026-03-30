@@ -7465,6 +7465,8 @@
         <button class="view-tab" onclick="window._bookSubTab('resources')">Resources</button>
         <button class="view-tab" onclick="window._bookSubTab('passes')">Passes</button>
         <button class="view-tab" onclick="window._bookSubTab('enrollments')">Enrollments</button>
+        <button class="view-tab" onclick="window._bookSubTab('calendar')">Calendar</button>
+        <button class="view-tab" onclick="window._bookSubTab('reports')">Reports</button>
       </div>
 
       <!-- Classes List View -->
@@ -7609,6 +7611,36 @@
       <div id="bookPassDetailView" style="display:none;">
         <button class="detail-back" onclick="window._passBackToList()">&#8592; Back to Passes</button>
         <div id="bookPassDetailContent"></div>
+      </div>
+
+      <!-- Calendar View -->
+      <div id="bookCalendarView" style="display:none;">
+        <div class="section-header">
+          <h2 id="calendarTitle">Calendar</h2>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="btn btn-sm" onclick="window._calPrev()" aria-label="Previous month">&larr; Prev</button>
+            <button class="btn btn-sm" onclick="window._calToday()">Today</button>
+            <button class="btn btn-sm" onclick="window._calNext()" aria-label="Next month">Next &rarr;</button>
+          </div>
+        </div>
+        <div id="bookCalendarGrid"></div>
+        <div id="bookCalendarDayDetail" style="display:none;margin-top:1rem;"></div>
+      </div>
+
+      <!-- Reports View -->
+      <div id="bookReportsView" style="display:none;">
+        <div class="section-header">
+          <h2>Reports</h2>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <select id="reportDateRange" onchange="window._reportRangeChange()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;">
+              <option value="7">Last 7 Days</option>
+              <option value="30" selected>Last 30 Days</option>
+              <option value="90">Last 90 Days</option>
+              <option value="all">All Time</option>
+            </select>
+          </div>
+        </div>
+        <div id="bookReportsContent"></div>
       </div>
     </div>
 

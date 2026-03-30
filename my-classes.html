@@ -311,11 +311,42 @@
   color: var(--warm-gray, #888);
 }
 
+/* Mini calendar */
+.mc-mini-cal { margin-bottom: 1.5rem; }
+.mc-mini-cal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+.mc-mini-cal-header h3 { margin:0; font-size:1rem; font-weight:500; color:var(--text); }
+.mc-mini-cal-nav { background:transparent; border:1px solid var(--border); color:var(--text); padding:4px 10px; border-radius:4px; cursor:pointer; font-size:0.85rem; min-width:44px; min-height:36px; }
+.mc-mini-cal-nav:hover { border-color: var(--primary); color: var(--primary); }
+.mc-mini-cal-nav:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.mc-mini-cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:2px; text-align:center; }
+.mc-mini-cal-dow { font-size:0.7rem; color:var(--warm-gray,#888); padding:4px; text-transform:uppercase; }
+.mc-mini-cal-day { padding:6px 4px; font-size:0.8rem; color:var(--text); border-radius:6px; cursor:pointer; position:relative; min-height:32px; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+.mc-mini-cal-day:hover { background:rgba(196,133,60,0.1); }
+.mc-mini-cal-day:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.mc-mini-cal-day.empty { cursor:default; }
+.mc-mini-cal-day.today { border:1px solid var(--primary); font-weight:700; }
+.mc-mini-cal-day.has-session::after { content:''; display:block; width:6px; height:6px; background:var(--primary); border-radius:50%; margin:2px auto 0; }
+.mc-mini-cal-day.selected { background:rgba(196,133,60,0.15); }
+
+/* Stats dashboard */
+.mc-stats { display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); gap:12px; margin-bottom:1.5rem; }
+.mc-stat { background:var(--surface-card); border:1px solid var(--surface-card-border); border-radius:10px; padding:1rem; text-align:center; }
+.mc-stat-value { display:block; font-size:1.8rem; font-weight:700; color:var(--primary); line-height:1.2; }
+.mc-stat-label { font-size:0.7rem; color:var(--warm-gray,#888); text-transform:uppercase; letter-spacing:0.05em; margin-top:4px; }
+
+/* Better empty state */
+.mc-empty { text-align:center; padding:3rem 2rem; }
+.mc-empty-icon { display:inline-block; width:64px; height:64px; margin-bottom:1rem; color:var(--warm-gray,#888); }
+.mc-empty p { color:var(--warm-gray,#888); margin-bottom:1rem; }
+.mc-browse-btn { display:inline-block; padding:10px 24px; background:var(--primary); color:#fff; border-radius:6px; text-decoration:none; font-weight:500; }
+.mc-browse-btn:hover { opacity:0.85; }
+
 @media (max-width: 768px) {
   .mc-container { padding: 6rem 1.5rem 3rem; }
   .mc-header h1 { font-size: 1.8rem; }
   .mc-card { grid-template-columns: 1fr; }
   .mc-card-right { text-align: left; flex-direction: row; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .mc-stats { grid-template-columns: repeat(2, 1fr); }
 }
 </style>
 </head>
@@ -328,6 +359,8 @@
     <h1>My Classes</h1>
     <p>View your class enrollments and upcoming sessions</p>
   </div>
+  <div id="mcMiniCalendar"></div>
+  <div id="mcStatsDashboard"></div>
   <div id="mcContent">
     <div class="mc-loading">Loading...</div>
   </div>
@@ -353,12 +386,19 @@
   var allEnrollments = [];
   var classesMap = {};
   var sessionsMap = {};
+  var allPasses = [];
   var currentFilter = 'upcoming';
   var currentUser = null;
   var db = null;
 
+  // Mini calendar state
+  var miniCalYear = new Date().getFullYear();
+  var miniCalMonth = new Date().getMonth();
+  var selectedMiniCalDay = null;
+
   var DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var MONTH_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
   function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
@@ -399,6 +439,97 @@
     t.textContent = msg;
     document.body.appendChild(t);
     setTimeout(function() { t.style.opacity = '0'; setTimeout(function() { t.remove(); }, 300); }, 3000);
+  }
+
+  // ── Mini Calendar ──
+  function renderMiniCalendar() {
+    var container = document.getElementById('mcMiniCalendar');
+    if (!container || allEnrollments.length === 0) { if (container) container.innerHTML = ''; return; }
+
+    var firstDay = new Date(miniCalYear, miniCalMonth, 1).getDay();
+    var daysInMonth = new Date(miniCalYear, miniCalMonth + 1, 0).getDate();
+    var today = todayStr();
+
+    // Build set of dates that have sessions
+    var sessionDates = {};
+    allEnrollments.forEach(function(e) {
+      if (e.status === 'cancelled' || e.status === 'cancelled_insufficient_enrollment') return;
+      var session = sessionsMap[e.sessionId];
+      if (session && session.date) sessionDates[session.date] = true;
+    });
+
+    var html = '<div class="mc-mini-cal">';
+    html += '<div class="mc-mini-cal-header">';
+    html += '<button class="mc-mini-cal-nav" onclick="window._mcCalPrev()" aria-label="Previous month">&larr;</button>';
+    html += '<h3>' + MONTH_FULL[miniCalMonth] + ' ' + miniCalYear + '</h3>';
+    html += '<button class="mc-mini-cal-nav" onclick="window._mcCalNext()" aria-label="Next month">&rarr;</button>';
+    html += '</div>';
+
+    html += '<div class="mc-mini-cal-grid">';
+    DAYS.forEach(function(d) { html += '<div class="mc-mini-cal-dow">' + d + '</div>'; });
+
+    for (var b = 0; b < firstDay; b++) {
+      html += '<div class="mc-mini-cal-day empty"></div>';
+    }
+
+    for (var d = 1; d <= daysInMonth; d++) {
+      var dateStr = miniCalYear + '-' + String(miniCalMonth + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+      var classes = 'mc-mini-cal-day';
+      if (dateStr === today) classes += ' today';
+      if (sessionDates[dateStr]) classes += ' has-session';
+      if (dateStr === selectedMiniCalDay) classes += ' selected';
+      html += '<div class="' + classes + '" onclick="window._mcCalSelect(\'' + dateStr + '\')" role="button" tabindex="0" onkeydown="if(event.key===\'Enter\')window._mcCalSelect(\'' + dateStr + '\')">' + d + '</div>';
+    }
+
+    html += '</div></div>';
+    container.innerHTML = html;
+  }
+
+  window._mcCalPrev = function() { miniCalMonth--; if (miniCalMonth < 0) { miniCalMonth = 11; miniCalYear--; } selectedMiniCalDay = null; renderMiniCalendar(); };
+  window._mcCalNext = function() { miniCalMonth++; if (miniCalMonth > 11) { miniCalMonth = 0; miniCalYear++; } selectedMiniCalDay = null; renderMiniCalendar(); };
+  window._mcCalSelect = function(dateStr) {
+    selectedMiniCalDay = dateStr;
+    renderMiniCalendar();
+    // Scroll to matching enrollment card
+    var cards = document.querySelectorAll('.mc-card');
+    for (var i = 0; i < cards.length; i++) {
+      var card = cards[i];
+      var meta = card.querySelector('.mc-card-meta');
+      if (meta && meta.textContent.indexOf(formatSessionDate(dateStr, null).replace(/ at.*/, '')) !== -1) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        card.style.boxShadow = '0 0 0 2px var(--primary)';
+        setTimeout(function(c) { return function() { c.style.boxShadow = ''; }; }(card), 2000);
+        break;
+      }
+    }
+  };
+
+  // ── Stats Dashboard ──
+  function renderStatsDashboard() {
+    var container = document.getElementById('mcStatsDashboard');
+    if (!container) return;
+    if (allEnrollments.length === 0 && allPasses.length === 0) { container.innerHTML = ''; return; }
+
+    var today = todayStr();
+    var activePasses = allPasses.filter(function(p) { return p.status === 'active'; });
+    var visitsRemaining = 0;
+    activePasses.forEach(function(p) {
+      if (p.visitsRemaining != null) visitsRemaining += p.visitsRemaining;
+    });
+
+    var classesTaken = allEnrollments.filter(function(e) { return e.status === 'completed'; }).length;
+    var upcoming = allEnrollments.filter(function(e) {
+      var session = sessionsMap[e.sessionId] || {};
+      return session.date >= today && e.status === 'confirmed';
+    }).length;
+
+    var html = '<div class="mc-stats">';
+    html += '<div class="mc-stat"><span class="mc-stat-value">' + activePasses.length + '</span><span class="mc-stat-label">Active Passes</span></div>';
+    html += '<div class="mc-stat"><span class="mc-stat-value">' + (visitsRemaining || '&infin;') + '</span><span class="mc-stat-label">Visits Left</span></div>';
+    html += '<div class="mc-stat"><span class="mc-stat-value">' + classesTaken + '</span><span class="mc-stat-label">Classes Taken</span></div>';
+    html += '<div class="mc-stat"><span class="mc-stat-value">' + upcoming + '</span><span class="mc-stat-label">Upcoming</span></div>';
+    html += '</div>';
+    container.innerHTML = html;
   }
 
   // ── Sign-in prompt ──
@@ -457,8 +588,12 @@
 
     if (filtered.length === 0) {
       if (enrollments.length === 0) {
+        var emptyMsg = allPasses.length > 0
+          ? 'You have active passes! Browse classes to use them.'
+          : 'Browse our upcoming classes to get started.';
         html += '<div class="mc-empty">' +
-          '<p>You haven\'t enrolled in any classes yet.</p>' +
+          '<svg class="mc-empty-icon" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="8" y="12" width="48" height="44" rx="4"/><path d="M8 24h48"/><circle cx="24" cy="36" r="4"/><circle cx="40" cy="36" r="4"/><circle cx="24" cy="48" r="4"/><path d="M20 8v8M44 8v8"/></svg>' +
+          '<p>' + emptyMsg + '</p>' +
           '<a href="classes.html" class="mc-browse-btn">Browse Classes</a>' +
           '</div>';
       } else {
@@ -715,13 +850,22 @@
           });
         });
 
-        return Promise.all([Promise.all(classPromises), Promise.all(sessionPromises)])
+        // Also fetch passes
+        var passesPromise = db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/passes').once('value').then(function(s) {
+          var pd = s.val() || {};
+          return Object.keys(pd).map(function(id) { var p = pd[id]; p._id = id; return p; });
+        }).catch(function() { return []; });
+
+        return Promise.all([Promise.all(classPromises), Promise.all(sessionPromises), passesPromise])
           .then(function(results) {
             classesMap = {};
             results[0].forEach(function(r) { if (r.data) classesMap[r.id] = r.data; });
             sessionsMap = {};
             results[1].forEach(function(r) { if (r.data) sessionsMap[r.id] = r.data; });
+            allPasses = results[2] || [];
             allEnrollments = enrollments;
+            renderMiniCalendar();
+            renderStatsDashboard();
             renderEnrollments();
           });
       })
@@ -747,6 +891,10 @@
         loadEnrollments(user);
       } else {
         currentUser = null;
+        allPasses = [];
+        allEnrollments = [];
+        document.getElementById('mcMiniCalendar').innerHTML = '';
+        document.getElementById('mcStatsDashboard').innerHTML = '';
         renderSignIn();
       }
     });

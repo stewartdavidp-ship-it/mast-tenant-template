@@ -35,6 +35,31 @@
   var passDefsData = [];
   var passDefsLoaded = false;
 
+  // Calendar state
+  var calendarYear = new Date().getFullYear();
+  var calendarMonth = new Date().getMonth();
+  var calendarSessions = [];
+  var calendarClassesMap = {};
+  var calendarLoaded = false;
+  var selectedCalendarDay = null;
+
+  // Reports state
+  var reportsLoaded = false;
+
+  // ============================================================
+  // Shared Style Constants
+  // ============================================================
+
+  var SUCCESS_COLOR = '#4DB6AC';
+  var DANGER_COLOR = '#EF9A9A';
+  var WARNING_COLOR = '#FFD54F';
+  var CARD_STYLE = 'background:var(--surface-dark);border-radius:8px;padding:12px 16px;';
+  var FORM_SELECT_STYLE = 'padding:6px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;';
+  var FILTER_SELECT_STYLE = 'padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;';
+  var SECTION_H3 = 'margin:1.5rem 0 0.75rem;';
+  var EMPTY_STATE_STYLE = 'color:var(--warm-gray);padding:2rem;text-align:center;';
+  var LOADING_HTML = '<div style="padding:2rem;text-align:center;"><div style="display:inline-block;width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--text);border-radius:50%;animation:bookSpin 0.8s linear infinite;"></div><p style="color:var(--warm-gray);margin-top:8px;font-size:0.85rem;">Loading...</p></div>';
+
   // ============================================================
   // Badge Styles
   // ============================================================
@@ -58,10 +83,43 @@
     'no-show':  { bg: 'rgba(183,28,28,0.2)', color: '#EF9A9A', border: 'rgba(183,28,28,0.35)' }
   };
 
+  var SEVERITY_BADGE_COLORS = {
+    low:      { bg: 'rgba(6,95,70,0.25)',   color: '#4DB6AC', border: 'rgba(6,95,70,0.4)' },
+    medium:   { bg: 'rgba(146,64,14,0.2)',  color: '#FFD54F', border: 'rgba(146,64,14,0.35)' },
+    high:     { bg: 'rgba(230,81,0,0.2)',   color: '#FF8A65', border: 'rgba(230,81,0,0.35)' },
+    critical: { bg: 'rgba(183,28,28,0.2)',  color: '#EF9A9A', border: 'rgba(183,28,28,0.35)' }
+  };
+
+  var PASS_TYPE_BADGE_COLORS = {
+    'drop-in':  TYPE_BADGE_COLORS.single,
+    'pack':     TYPE_BADGE_COLORS.series,
+    'unlimited': TYPE_BADGE_COLORS.dropin,
+    'limited':  TYPE_BADGE_COLORS['private'],
+    'series':   TYPE_BADGE_COLORS.series,
+    'intro':    { bg: 'rgba(146,64,14,0.2)', color: '#FFD54F', border: 'rgba(146,64,14,0.35)' }
+  };
+
+  var RESOURCE_TYPE_BADGE_COLORS = {
+    'room':      TYPE_BADGE_COLORS.series,
+    'equipment': TYPE_BADGE_COLORS.single
+  };
+
   function badgeStyle(map, key) {
     var c = map[(key || '').toLowerCase()] || { bg: 'rgba(158,158,158,0.15)', color: '#BDBDBD', border: 'rgba(158,158,158,0.25)' };
     return 'display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;background:' + c.bg + ';color:' + c.color + ';border:1px solid ' + c.border + ';';
   }
+
+  // Inject book-specific CSS animation
+  (function() {
+    if (!document.getElementById('bookModuleStyles')) {
+      var style = document.createElement('style');
+      style.id = 'bookModuleStyles';
+      style.textContent = '@keyframes bookSpin{to{transform:rotate(360deg)}}' +
+        '@media(max-width:600px){.book-hide-narrow{display:none!important;}}' +
+        '.book-responsive-grid{display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));}';
+      document.head.appendChild(style);
+    }
+  })();
 
   function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
@@ -183,7 +241,7 @@
     document.getElementById('bookDetailView').style.display = '';
 
     var content = document.getElementById('bookDetailContent');
-    content.innerHTML = '<p style="color:var(--warm-gray);">Loading...</p>';
+    content.innerHTML = LOADING_HTML;
 
     try {
       var snap = await MastDB.classes.get(classId);
@@ -203,7 +261,7 @@
       renderClassDetail(cls);
     } catch (err) {
       console.error('[Book] Failed to load class detail:', err);
-      content.innerHTML = '<p style="color:#EF9A9A;">Failed to load class details.</p>';
+      content.innerHTML = '<p style="color:' + DANGER_COLOR + ';padding:2rem;">Failed to load class details.</p>';
     }
   }
 
@@ -263,15 +321,15 @@
       html += '<p style="color:var(--warm-gray);">No sessions generated yet. Click <strong>Generate Sessions</strong> above.</p>';
     } else {
       var today = todayStr();
-      html += '<table class="data-table"><thead><tr><th>Date</th><th>Time</th><th>Instructor</th><th>Resource</th><th>Enrolled</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
+      html += '<table class="data-table"><thead><tr><th>Date</th><th>Time</th><th class="book-hide-narrow">Instructor</th><th class="book-hide-narrow">Resource</th><th>Enrolled</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
       sessionsData.forEach(function(s) {
         var isPast = s.date < today;
         var rowStyle = isPast ? 'opacity:0.5;' : '';
         html += '<tr style="' + rowStyle + '">' +
           '<td>' + formatDate(s.date) + '</td>' +
           '<td>' + formatTime(s.startTime) + ' - ' + formatTime(s.endTime) + '</td>' +
-          '<td>' + esc(s.instructorName || '—') + '</td>' +
-          '<td>' + esc(s.resourceName || '—') + '</td>' +
+          '<td class="book-hide-narrow">' + esc(s.instructorName || '—') + '</td>' +
+          '<td class="book-hide-narrow">' + esc(s.resourceName || '—') + '</td>' +
           '<td>' + (s.enrolled || 0) + ' / ' + (s.capacity || cls.capacity || '—') + (s.waitlisted ? ' (+' + s.waitlisted + ' waitlisted)' : '') + '</td>' +
           '<td><span style="' + badgeStyle(STATUS_BADGE_COLORS, s.status) + '">' + esc(s.status) + '</span></td>' +
           '<td style="display:flex;gap:4px;">' +
@@ -284,7 +342,7 @@
           html += '<button class="btn btn-sm" onclick="window._bookSessionReport(\'' + esc(s.id) + '\',\'' + esc(cls.id) + '\')">Report</button>';
         }
         if (s.status === 'scheduled' && !isPast) {
-          html += '<button class="btn btn-sm" style="color:#EF9A9A;" onclick="window._bookCancelSession(\'' + esc(s.id) + '\')">Cancel</button>';
+          html += '<button class="btn btn-sm" style="color:' + DANGER_COLOR + ';" onclick="window._bookCancelSession(\'' + esc(s.id) + '\')">Cancel</button>';
         }
         html += '</td></tr>';
       });
@@ -351,12 +409,14 @@
       '<div><label class="form-label">Status</label><select id="bcfStatus" class="form-input">' + statusOptions + '</select></div>' +
       '</div>' +
 
-      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:1rem;margin-bottom:1rem;">' +
+      '<div class="book-responsive-grid" style="margin-bottom:1rem;">' +
       '<div><label class="form-label">Capacity *</label><input type="number" id="bcfCapacity" class="form-input" min="1" value="' + (cls ? cls.capacity || '' : '') + '" required></div>' +
-      '<div><label class="form-label">Min Enrollment</label><input type="number" id="bcfMinEnroll" class="form-input" min="0" value="' + (cls && cls.minEnrollment ? cls.minEnrollment : '') + '"></div>' +
-      '<div><label class="form-label">Cancel Lead Days</label><input type="number" id="bcfCancelLead" class="form-input" min="0" max="30" value="' + (cls && cls.cancellationLeadDays ? cls.cancellationLeadDays : '2') + '" title="Days before session to check minimum enrollment"></div>' +
       '<div><label class="form-label">Drop-in Price ($) *</label><input type="number" id="bcfPrice" class="form-input" min="0" step="0.01" value="' + (cls ? (cls.priceCents / 100).toFixed(2) : '') + '" required></div>' +
       '<div><label class="form-label">Duration (min) *</label><input type="number" id="bcfDuration" class="form-input" min="1" value="' + (cls ? cls.duration || '' : '') + '" required></div>' +
+      '</div>' +
+      '<div class="book-responsive-grid" style="margin-bottom:1rem;">' +
+      '<div><label class="form-label">Min Enrollment</label><input type="number" id="bcfMinEnroll" class="form-input" min="0" value="' + (cls && cls.minEnrollment ? cls.minEnrollment : '') + '"></div>' +
+      '<div><label class="form-label">Cancel Lead Days</label><input type="number" id="bcfCancelLead" class="form-input" min="0" max="30" value="' + (cls && cls.cancellationLeadDays ? cls.cancellationLeadDays : '2') + '" title="Days before session to check minimum enrollment"></div>' +
       '</div>' +
 
       // Schedule section
@@ -381,9 +441,9 @@
       '</fieldset>' +
 
       // Series fields
-      '<fieldset id="bcfSeriesFields" style="border:1px solid var(--border);border-radius:8px;padding:1rem;margin-bottom:1rem;' + (cls && cls.type === 'series' ? '' : 'display:none;') + '">' +
+      '<fieldset id="bcfSeriesFields" style="border:1px solid var(--border);border-radius:8px;padding:1rem;margin-bottom:1.5rem;' + (cls && cls.type === 'series' ? '' : 'display:none;') + '">' +
       '<legend style="font-weight:600;padding:0 8px;">Series Details</legend>' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:1rem;">' +
+      '<div class="book-responsive-grid">' +
       '<div><label class="form-label">Total Sessions</label><input type="number" id="bcfSeriesTotal" class="form-input" min="1" value="' + (series.totalSessions || '') + '"></div>' +
       '<div><label class="form-label">Series Price ($)</label><input type="number" id="bcfSeriesPrice" class="form-input" min="0" step="0.01" value="' + (series.seriesPriceCents ? (series.seriesPriceCents / 100).toFixed(2) : '') + '"></div>' +
       '<div><label class="form-label">Allow Drop-in</label><select id="bcfSeriesDropin" class="form-input"><option value="true"' + (series.allowDropIn !== false ? ' selected' : '') + '>Yes</option><option value="false"' + (series.allowDropIn === false ? ' selected' : '') + '>No</option></select></div>' +
@@ -645,7 +705,7 @@
     document.getElementById('bookEnrollmentsView').style.display = '';
 
     var table = document.getElementById('bookEnrollmentsTable');
-    table.innerHTML = '<p style="color:var(--warm-gray);">Loading enrollments...</p>';
+    table.innerHTML = LOADING_HTML;
 
     // Populate class filter dropdown
     if (!classesLoaded) await loadClasses();
@@ -679,7 +739,7 @@
       renderEnrollmentList();
     } catch (err) {
       console.error('[Book] Failed to load enrollments:', err);
-      table.innerHTML = '<p style="color:#EF9A9A;">Failed to load enrollments.</p>';
+      table.innerHTML = '<p style="color:' + DANGER_COLOR + ';">Failed to load enrollments.</p>';
     }
   }
 
@@ -705,7 +765,7 @@
     });
 
     if (filtered.length === 0) {
-      table.innerHTML = '<p style="color:var(--warm-gray);padding:1rem;">No enrollments found.</p>';
+      table.innerHTML = '<p style="' + EMPTY_STATE_STYLE + '">No enrollments found.</p>';
       return;
     }
 
@@ -729,11 +789,11 @@
       if (e.status === 'confirmed') {
         html += '<button class="btn btn-sm" onclick="window._bookMarkAttended(\'' + esc(e.id) + '\')">Attended</button>';
         html += '<button class="btn btn-sm" onclick="window._bookMarkNoShow(\'' + esc(e.id) + '\')">No-Show</button>';
-        html += '<button class="btn btn-sm" style="color:#EF9A9A;" onclick="window._bookCancelEnrollment(\'' + esc(e.id) + '\')">Cancel</button>';
+        html += '<button class="btn btn-sm" style="color:' + DANGER_COLOR + ';" onclick="window._bookCancelEnrollment(\'' + esc(e.id) + '\')">Cancel</button>';
       }
       if (e.status === 'waitlisted') {
-        html += '<button class="btn btn-sm" style="color:#4DB6AC;" onclick="window._bookPromoteWaitlist(\'' + esc(e.id) + '\')">Promote</button>';
-        html += '<button class="btn btn-sm" style="color:#EF9A9A;" onclick="window._bookCancelEnrollment(\'' + esc(e.id) + '\')">Cancel</button>';
+        html += '<button class="btn btn-sm" style="color:' + SUCCESS_COLOR + ';" onclick="window._bookPromoteWaitlist(\'' + esc(e.id) + '\')">Promote</button>';
+        html += '<button class="btn btn-sm" style="color:' + DANGER_COLOR + ';" onclick="window._bookCancelEnrollment(\'' + esc(e.id) + '\')">Cancel</button>';
       }
 
       html += '</td></tr>';
@@ -789,7 +849,7 @@
   // Sub-Tab Navigation
   // ============================================================
 
-  var BOOK_VIEWS = ['bookListView', 'bookDetailView', 'bookEnrollmentsView', 'bookInstructorsView', 'bookInstructorDetailView', 'bookResourcesView', 'bookResourceDetailView', 'bookPassesView', 'bookPassDetailView', 'bookSessionOpsView'];
+  var BOOK_VIEWS = ['bookListView', 'bookDetailView', 'bookEnrollmentsView', 'bookInstructorsView', 'bookInstructorDetailView', 'bookResourcesView', 'bookResourceDetailView', 'bookPassesView', 'bookPassDetailView', 'bookSessionOpsView', 'bookCalendarView', 'bookReportsView'];
 
   function hideAllViews() {
     BOOK_VIEWS.forEach(function(id) {
@@ -803,7 +863,7 @@
     // Update tab bar active state
     var tabs = document.querySelectorAll('#bookSubNav .view-tab');
     tabs.forEach(function(t) { t.classList.remove('active'); });
-    var tabMap = { classes: 0, instructors: 1, resources: 2, passes: 3, enrollments: 4 };
+    var tabMap = { classes: 0, instructors: 1, resources: 2, passes: 3, enrollments: 4, calendar: 5, reports: 6 };
     if (tabs[tabMap[tab]]) tabs[tabMap[tab]].classList.add('active');
 
     hideAllViews();
@@ -812,6 +872,8 @@
     else if (tab === 'resources') { document.getElementById('bookResourcesView').style.display = ''; loadResources(); }
     else if (tab === 'passes') { document.getElementById('bookPassesView').style.display = ''; loadPassDefinitions(); }
     else if (tab === 'enrollments') { document.getElementById('bookEnrollmentsView').style.display = ''; loadEnrollments(); }
+    else if (tab === 'calendar') { document.getElementById('bookCalendarView').style.display = ''; loadCalendar(); }
+    else if (tab === 'reports') { document.getElementById('bookReportsView').style.display = ''; loadReports(); }
   }
 
   // ============================================================
@@ -1014,7 +1076,7 @@
     filtered.forEach(function(r) {
       html += '<tr>' +
         '<td><strong>' + esc(r.name) + '</strong>' + (r.subType ? '<br><span style="font-size:0.8rem;color:var(--warm-gray);">' + esc(r.subType) + '</span>' : '') + '</td>' +
-        '<td><span style="' + badgeStyle(TYPE_BADGE_COLORS, r.type === 'room' ? 'series' : 'single') + '">' + esc(r.type) + '</span></td>' +
+        '<td><span style="' + badgeStyle(RESOURCE_TYPE_BADGE_COLORS, r.type) + '">' + esc(r.type) + '</span></td>' +
         '<td>' + (r.capacity || '—') + '</td>' +
         '<td><span style="' + badgeStyle(STATUS_BADGE_COLORS, r.status) + '">' + esc(r.status) + '</span></td>' +
         '<td><button class="btn btn-sm" onclick="window._resEdit(\'' + esc(r.id) + '\')">Edit</button></td>' +
@@ -1156,7 +1218,7 @@
       var validity = p.validityDays ? p.validityDays + ' days' : 'No limit';
       html += '<tr>' +
         '<td><strong>' + esc(p.name) + '</strong>' + (p.introOnly ? '<br><span style="font-size:0.75rem;color:var(--amber);">Intro only</span>' : '') + '</td>' +
-        '<td><span style="' + badgeStyle(TYPE_BADGE_COLORS, p.type === 'drop-in' ? 'single' : p.type === 'pack' ? 'series' : p.type === 'unlimited' ? 'dropin' : 'private') + '">' + esc(p.type) + '</span></td>' +
+        '<td><span style="' + badgeStyle(PASS_TYPE_BADGE_COLORS, p.type) + '">' + esc(p.type) + '</span></td>' +
         '<td>' + formatPrice(p.priceCents) + (p.autoRenew ? '<br><span style="font-size:0.75rem;color:var(--warm-gray);">/' + (p.renewFrequency || 'month') + '</span>' : '') + '</td>' +
         '<td>' + esc(visits) + '</td>' +
         '<td>' + esc(validity) + '</td>' +
@@ -1226,14 +1288,14 @@
       '<div style="margin-bottom:1rem;"><label class="form-label">Description</label>' +
       '<textarea id="pdfDesc" class="form-input" rows="2">' + esc(pd ? pd.description : '') + '</textarea></div>' +
 
-      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:1rem;margin-bottom:1rem;">' +
+      '<div class="book-responsive-grid" style="margin-bottom:1rem;">' +
       '<div><label class="form-label">Price ($) *</label><input type="number" id="pdfPrice" class="form-input" min="0" step="0.01" value="' + (pd ? (pd.priceCents / 100).toFixed(2) : '') + '" required></div>' +
       '<div id="pdfVisitCountWrap"><label class="form-label">Visit Count</label><input type="number" id="pdfVisitCount" class="form-input" min="1" value="' + (pd && pd.visitCount ? pd.visitCount : '') + '" placeholder="Unlimited if blank"></div>' +
       '<div><label class="form-label">Validity (days)</label><input type="number" id="pdfValidityDays" class="form-input" min="1" value="' + (pd && pd.validityDays ? pd.validityDays : '') + '" placeholder="No limit if blank"></div>' +
       '<div><label class="form-label">Activation</label><select id="pdfActivation" class="form-input">' + activationOpts + '</select></div>' +
       '</div>' +
 
-      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:1rem;margin-bottom:1rem;">' +
+      '<div class="book-responsive-grid" style="margin-bottom:1rem;">' +
       '<div><label class="form-label">Priority</label><select id="pdfPriority" class="form-input">' + priorityOpts + '</select></div>' +
       '<div><label class="form-label">Sort Order</label><input type="number" id="pdfSortOrder" class="form-input" min="0" value="' + (pd ? pd.sortOrder || 0 : 0) + '"></div>' +
       '<div><label class="form-label">Online Purchase</label><select id="pdfOnline" class="form-input"><option value="true"' + (pd && pd.onlinePurchasable === false ? '' : ' selected') + '>Yes</option><option value="false"' + (pd && pd.onlinePurchasable === false ? ' selected' : '') + '>No</option></select></div>' +
@@ -1845,7 +1907,7 @@
     document.getElementById('bookSessionOpsView').style.display = '';
 
     var content = document.getElementById('sessionOpsContent');
-    content.innerHTML = '<p style="color:var(--warm-gray);">Loading checklist...</p>';
+    content.innerHTML = LOADING_HTML;
 
     try {
       var [sessSnap, clsSnap, enrollSnap, logSnap] = await Promise.all([
@@ -1879,7 +1941,7 @@
       var html = '<form id="startupChecklistForm">';
 
       // Student Roster
-      html += '<h3 style="margin:0 0 12px;">Student Roster (' + students.length + ')</h3>';
+      html += '<h3 style="margin:0 0 0.75rem;">Student Roster (' + students.length + ')</h3>';
       if (students.length === 0) {
         html += '<p style="color:var(--warm-gray);">No confirmed enrollments.</p>';
       } else {
@@ -1894,7 +1956,7 @@
           html += '<tr>' +
             '<td>' + esc(s.studentName || s.customerName || '—') + '</td>' +
             '<td><label style="cursor:pointer;"><input type="checkbox" name="checkin_' + esc(s._id) + '" ' + (checkedIn ? 'checked' : '') + '> Checked in</label></td>' +
-            '<td><select name="waiver_' + esc(s._id) + '" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;">' +
+            '<td><select name="waiver_' + esc(s._id) + '" style="' + FORM_SELECT_STYLE + '">' +
             '<option value="na"' + (waiverStatus === 'na' ? ' selected' : '') + '>N/A</option>' +
             '<option value="signed"' + (waiverStatus === 'signed' ? ' selected' : '') + '>Signed</option>' +
             '<option value="missing"' + (waiverStatus === 'missing' ? ' selected' : '') + '>Missing</option>' +
@@ -1905,7 +1967,7 @@
       }
 
       // Equipment
-      html += '<h3 style="margin:1.5rem 0 12px;">Equipment & Resources</h3>';
+      html += '<h3 style="margin:1.5rem 0 0.75rem;">Equipment & Resources</h3>';
       if (resources.length === 0) {
         html += '<p style="color:var(--warm-gray);">No resources assigned to this session.</p>';
       } else {
@@ -1914,7 +1976,7 @@
           html += '<div style="background:var(--surface-dark);border-radius:8px;padding:12px 16px;margin-bottom:8px;">' +
             '<strong>' + esc(r.name) + '</strong> (' + esc(r.type) + ')' +
             '<div style="display:flex;gap:12px;margin-top:8px;align-items:center;">' +
-            '<select name="equip_' + esc(r._id) + '" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;">' +
+            '<select name="equip_' + esc(r._id) + '" style="' + FORM_SELECT_STYLE + '">' +
             '<option value="good"' + (savedEquip.condition === 'good' ? ' selected' : '') + '>Good</option>' +
             '<option value="needs_attention"' + ((savedEquip.condition === 'needs_attention') ? ' selected' : '') + '>Needs Attention</option>' +
             '<option value="out_of_service"' + ((savedEquip.condition === 'out_of_service') ? ' selected' : '') + '>Out of Service</option>' +
@@ -1925,29 +1987,29 @@
       }
 
       // Room confirmation
-      html += '<h3 style="margin:1.5rem 0 12px;">Room / Space</h3>';
+      html += '<h3 style="margin:1.5rem 0 0.75rem;">Room / Space</h3>';
       html += '<label style="cursor:pointer;display:flex;align-items:center;gap:8px;">' +
         '<input type="checkbox" name="roomConfirmed" ' + (saved.roomConfirmed ? 'checked' : '') + '> Room / space confirmed ready</label>';
 
       // Notes
-      html += '<h3 style="margin:1.5rem 0 12px;">Instructor Notes</h3>';
+      html += '<h3 style="margin:1.5rem 0 0.75rem;">Instructor Notes</h3>';
       html += '<textarea name="instructorNotes" rows="3" style="width:100%;padding:8px 12px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.9rem;resize:vertical;">' + esc(saved.instructorNotes || '') + '</textarea>';
 
       // Buttons
       html += '<div style="display:flex;gap:8px;margin-top:1.5rem;">' +
         '<button type="button" class="btn btn-primary" onclick="window._bookSaveChecklist(\'' + esc(sessionId) + '\', false)">Save Draft</button>' +
-        '<button type="button" class="btn btn-primary" style="background:#4DB6AC;" onclick="window._bookSaveChecklist(\'' + esc(sessionId) + '\', true)">Complete Checklist</button>' +
+        '<button type="button" class="btn btn-primary" style="background:' + SUCCESS_COLOR + ';" onclick="window._bookSaveChecklist(\'' + esc(sessionId) + '\', true)">Complete Checklist</button>' +
         '</div>';
 
       if (saved.completedAt) {
-        html += '<p style="color:#4DB6AC;margin-top:12px;font-size:0.85rem;">Checklist completed ' + new Date(saved.completedAt).toLocaleString() + '</p>';
+        html += '<p style="color:' + SUCCESS_COLOR + ';margin-top:12px;font-size:0.85rem;">Checklist completed ' + new Date(saved.completedAt).toLocaleString() + '</p>';
       }
 
       html += '</form>';
       content.innerHTML = html;
     } catch (err) {
       console.error('[book] Failed to load checklist:', err);
-      content.innerHTML = '<p style="color:#EF9A9A;">Failed to load checklist: ' + esc(err.message) + '</p>';
+      content.innerHTML = '<p style="color:' + DANGER_COLOR + ';">Failed to load checklist: ' + esc(err.message) + '</p>';
     }
   };
 
@@ -2008,7 +2070,7 @@
     document.getElementById('bookSessionOpsView').style.display = '';
 
     var content = document.getElementById('sessionOpsContent');
-    content.innerHTML = '<p style="color:var(--warm-gray);">Loading report...</p>';
+    content.innerHTML = LOADING_HTML;
 
     try {
       var [sessSnap, clsSnap, enrollSnap, logSnap, startupSnap] = await Promise.all([
@@ -2061,11 +2123,11 @@
           var savedAtt = (saved.attendance && saved.attendance[s._id]) || {};
           var attStatus = savedAtt.status || (s.status === 'no-show' ? 'no-show' : 'completed');
           var checkedIn = startup.students && startup.students[s._id] && startup.students[s._id].checkedIn;
-          var checkInLabel = checkedIn ? '<span style="color:#4DB6AC;">&#10003; Checked in</span>' : '<span style="color:var(--warm-gray);">—</span>';
+          var checkInLabel = checkedIn ? '<span style="color:' + SUCCESS_COLOR + ';">&#10003; Checked in</span>' : '<span style="color:var(--warm-gray);">—</span>';
 
           html += '<tr><td>' + esc(s.studentName || s.customerName || '—') + '</td>' +
             '<td>' + checkInLabel + '</td>' +
-            '<td><select name="att_' + esc(s._id) + '" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;">' +
+            '<td><select name="att_' + esc(s._id) + '" style="' + FORM_SELECT_STYLE + '">' +
             '<option value="completed"' + (attStatus === 'completed' ? ' selected' : '') + '>Completed</option>' +
             '<option value="absent"' + (attStatus === 'absent' ? ' selected' : '') + '>Absent</option>' +
             '<option value="no-show"' + (attStatus === 'no-show' ? ' selected' : '') + '>No-Show</option>' +
@@ -2075,7 +2137,7 @@
       }
 
       // Equipment post-check
-      html += '<h3 style="margin:1.5rem 0 12px;">Equipment Post-Check</h3>';
+      html += '<h3 style="margin:1.5rem 0 0.75rem;">Equipment Post-Check</h3>';
       if (resources.length === 0) {
         html += '<p style="color:var(--warm-gray);">No resources assigned.</p>';
       } else {
@@ -2084,7 +2146,7 @@
           html += '<div style="background:var(--surface-dark);border-radius:8px;padding:12px 16px;margin-bottom:8px;">' +
             '<strong>' + esc(r.name) + '</strong>' +
             '<div style="display:flex;gap:12px;margin-top:8px;align-items:center;">' +
-            '<select name="postequip_' + esc(r._id) + '" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;">' +
+            '<select name="postequip_' + esc(r._id) + '" style="' + FORM_SELECT_STYLE + '">' +
             '<option value="good"' + (savedEquip.postCondition === 'good' ? ' selected' : '') + '>Good</option>' +
             '<option value="needs_attention"' + ((savedEquip.postCondition === 'needs_attention') ? ' selected' : '') + '>Needs Attention</option>' +
             '<option value="out_of_service"' + ((savedEquip.postCondition === 'out_of_service') ? ' selected' : '') + '>Out of Service</option>' +
@@ -2095,14 +2157,14 @@
       }
 
       // Incidents
-      html += '<h3 style="margin:1.5rem 0 12px;">Incidents</h3>';
+      html += '<h3 style="margin:1.5rem 0 0.75rem;">Incidents</h3>';
       html += '<div id="incidentsList">';
       if (existingIncidents.length > 0) {
         existingIncidents.forEach(function(inc) {
           var sevColor = SEVERITY_COLORS[inc.severity] || '#BDBDBD';
           html += '<div style="background:var(--surface-dark);border-radius:8px;padding:12px 16px;margin-bottom:8px;border-left:3px solid ' + sevColor + ';">' +
             '<div style="display:flex;gap:8px;align-items:center;">' +
-            '<span style="' + badgeStyle(STATUS_BADGE_COLORS, inc.severity === 'critical' ? 'cancelled' : inc.severity === 'high' ? 'no-show' : 'waitlisted') + '">' + esc(inc.severity) + '</span>' +
+            '<span style="' + badgeStyle(SEVERITY_BADGE_COLORS, inc.severity) + '">' + esc(inc.severity) + '</span>' +
             '<span style="font-weight:500;">' + esc(INCIDENT_TYPE_LABELS[inc.type] || inc.type) + '</span>' +
             '<span style="color:var(--warm-gray);font-size:0.8rem;margin-left:auto;">' + esc(inc.followUpStatus || 'open') + '</span>' +
             '</div>' +
@@ -2115,10 +2177,10 @@
       html += '<div id="newIncidentForm" style="display:none;background:var(--surface-dark);border-radius:8px;padding:16px;margin-bottom:12px;">' +
         '<h4 style="margin:0 0 12px;">New Incident</h4>' +
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">' +
-        '<select id="incType" style="padding:6px 8px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;">' +
+        '<select id="incType" style="' + FORM_SELECT_STYLE + '">' +
         INCIDENT_TYPES.map(function(t) { return '<option value="' + t + '">' + esc(INCIDENT_TYPE_LABELS[t] || t) + '</option>'; }).join('') +
         '</select>' +
-        '<select id="incSeverity" style="padding:6px 8px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;">' +
+        '<select id="incSeverity" style="' + FORM_SELECT_STYLE + '">' +
         INCIDENT_SEVERITIES.map(function(s) { return '<option value="' + s + '">' + s.charAt(0).toUpperCase() + s.slice(1) + '</option>'; }).join('') +
         '</select>' +
         '</div>' +
@@ -2130,24 +2192,24 @@
       html += '<button type="button" class="btn btn-sm" onclick="document.getElementById(\'newIncidentForm\').style.display=\'\'" style="margin-bottom:1rem;">+ Add Incident</button>';
 
       // Notes
-      html += '<h3 style="margin:1.5rem 0 12px;">Session Notes</h3>';
+      html += '<h3 style="margin:1.5rem 0 0.75rem;">Session Notes</h3>';
       html += '<textarea name="completionNotes" rows="3" style="width:100%;padding:8px 12px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.9rem;resize:vertical;">' + esc(saved.notes || '') + '</textarea>';
 
       // Submit
       html += '<div style="display:flex;gap:8px;margin-top:1.5rem;">' +
         '<button type="button" class="btn btn-primary" onclick="window._bookSaveReport(\'' + esc(sessionId) + '\', false)">Save Draft</button>' +
-        '<button type="button" class="btn btn-primary" style="background:#4DB6AC;" onclick="window._bookSaveReport(\'' + esc(sessionId) + '\', true)">Submit Report</button>' +
+        '<button type="button" class="btn btn-primary" style="background:' + SUCCESS_COLOR + ';" onclick="window._bookSaveReport(\'' + esc(sessionId) + '\', true)">Submit Report</button>' +
         '</div>';
 
       if (saved.completedAt) {
-        html += '<p style="color:#4DB6AC;margin-top:12px;font-size:0.85rem;">Report submitted ' + new Date(saved.completedAt).toLocaleString() + '</p>';
+        html += '<p style="color:' + SUCCESS_COLOR + ';margin-top:12px;font-size:0.85rem;">Report submitted ' + new Date(saved.completedAt).toLocaleString() + '</p>';
       }
 
       html += '</form>';
       content.innerHTML = html;
     } catch (err) {
       console.error('[book] Failed to load report:', err);
-      content.innerHTML = '<p style="color:#EF9A9A;">Failed to load report: ' + esc(err.message) + '</p>';
+      content.innerHTML = '<p style="color:' + DANGER_COLOR + ';">Failed to load report: ' + esc(err.message) + '</p>';
     }
   };
 
@@ -2244,6 +2306,431 @@
   };
 
   // ============================================================
+  // Calendar View
+  // ============================================================
+
+  var MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var DOW_HEADERS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+  async function loadCalendar() {
+    var grid = document.getElementById('bookCalendarGrid');
+    if (!grid) return;
+    if (!calendarLoaded) {
+      grid.innerHTML = LOADING_HTML;
+      try {
+        var [sessSnap, clsSnap] = await Promise.all([
+          MastDB.classSessions.list(2000),
+          MastDB.classes.list(200)
+        ]);
+        var sessData = sessSnap.val() || {};
+        calendarSessions = Object.keys(sessData).map(function(id) { var s = sessData[id]; s.id = id; return s; });
+        var clsData = clsSnap.val() || {};
+        calendarClassesMap = {};
+        Object.keys(clsData).forEach(function(id) { calendarClassesMap[id] = clsData[id]; });
+        calendarLoaded = true;
+      } catch (err) {
+        grid.innerHTML = '<p style="color:' + DANGER_COLOR + ';padding:2rem;">Failed to load calendar data.</p>';
+        return;
+      }
+    }
+    renderCalendar();
+  }
+
+  function renderCalendar() {
+    var grid = document.getElementById('bookCalendarGrid');
+    var title = document.getElementById('calendarTitle');
+    if (!grid) return;
+    title.textContent = MONTH_NAMES[calendarMonth] + ' ' + calendarYear;
+
+    var firstDay = new Date(calendarYear, calendarMonth, 1).getDay();
+    var daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+    var today = todayStr();
+
+    // Group sessions by date
+    var sessionsByDate = {};
+    calendarSessions.forEach(function(s) {
+      if (!s.date) return;
+      var parts = s.date.split('-');
+      if (parseInt(parts[0]) === calendarYear && parseInt(parts[1]) - 1 === calendarMonth) {
+        if (!sessionsByDate[s.date]) sessionsByDate[s.date] = [];
+        sessionsByDate[s.date].push(s);
+      }
+    });
+
+    var STATUS_DOT = { scheduled: '#64B5F6', completed: SUCCESS_COLOR, cancelled: DANGER_COLOR };
+
+    var html = '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--border);border-radius:8px;overflow:hidden;">';
+
+    // Day-of-week headers
+    DOW_HEADERS.forEach(function(d) {
+      html += '<div style="background:var(--surface-dark);padding:8px 4px;text-align:center;font-size:0.75rem;font-weight:600;color:var(--warm-gray);text-transform:uppercase;">' + d + '</div>';
+    });
+
+    // Leading blank cells
+    for (var b = 0; b < firstDay; b++) {
+      html += '<div style="background:var(--surface-card);min-height:80px;padding:6px;"></div>';
+    }
+
+    // Day cells
+    for (var d = 1; d <= daysInMonth; d++) {
+      var dateStr = calendarYear + '-' + String(calendarMonth + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+      var isToday = dateStr === today;
+      var isSelected = dateStr === selectedCalendarDay;
+      var daySessions = sessionsByDate[dateStr] || [];
+
+      var cellBg = isSelected ? 'rgba(196,133,60,0.15)' : 'var(--surface-card)';
+      var borderStyle = isToday ? 'box-shadow:inset 0 0 0 2px var(--primary);' : '';
+
+      html += '<div style="background:' + cellBg + ';min-height:80px;padding:6px;cursor:pointer;' + borderStyle + '" ' +
+        'onclick="window._calSelectDay(\'' + dateStr + '\')" role="button" tabindex="0" ' +
+        'onkeydown="if(event.key===\'Enter\')window._calSelectDay(\'' + dateStr + '\')">';
+
+      html += '<div style="font-size:0.8rem;font-weight:' + (isToday ? '700' : '400') + ';color:' + (isToday ? 'var(--primary)' : 'var(--text)') + ';margin-bottom:4px;">' + d + '</div>';
+
+      // Session dots (max 3 + overflow)
+      var maxShow = 3;
+      daySessions.sort(function(a, b) { return (a.startTime || '').localeCompare(b.startTime || ''); });
+      for (var si = 0; si < Math.min(daySessions.length, maxShow); si++) {
+        var sess = daySessions[si];
+        var clsName = calendarClassesMap[sess.classId] ? calendarClassesMap[sess.classId].name : '';
+        var abbr = clsName.length > 10 ? clsName.substring(0, 10) + '…' : clsName;
+        var dotColor = STATUS_DOT[sess.status] || '#BDBDBD';
+        html += '<div style="font-size:0.65rem;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:1px;">' +
+          '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:' + dotColor + ';margin-right:3px;vertical-align:middle;"></span>' +
+          '<span style="color:var(--warm-gray);">' + formatTime(sess.startTime) + '</span> ' +
+          '<span style="color:var(--text);">' + esc(abbr) + '</span></div>';
+      }
+      if (daySessions.length > maxShow) {
+        html += '<div style="font-size:0.65rem;color:var(--primary);">+' + (daySessions.length - maxShow) + ' more</div>';
+      }
+
+      html += '</div>';
+    }
+
+    // Trailing blank cells to fill last row
+    var totalCells = firstDay + daysInMonth;
+    var remaining = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
+    for (var t = 0; t < remaining; t++) {
+      html += '<div style="background:var(--surface-card);min-height:80px;padding:6px;"></div>';
+    }
+
+    html += '</div>';
+    grid.innerHTML = html;
+
+    // Render day detail if selected
+    if (selectedCalendarDay) {
+      renderCalendarDayDetail(selectedCalendarDay);
+    } else {
+      document.getElementById('bookCalendarDayDetail').style.display = 'none';
+    }
+  }
+
+  function renderCalendarDayDetail(dateStr) {
+    var panel = document.getElementById('bookCalendarDayDetail');
+    if (!panel) return;
+
+    var daySessions = calendarSessions.filter(function(s) { return s.date === dateStr; })
+      .sort(function(a, b) { return (a.startTime || '').localeCompare(b.startTime || ''); });
+
+    if (daySessions.length === 0) {
+      panel.innerHTML = '<p style="' + EMPTY_STATE_STYLE + '">No sessions on ' + formatDate(dateStr) + '.</p>';
+      panel.style.display = '';
+      return;
+    }
+
+    var html = '<h3 style="margin:0 0 0.75rem;">Sessions — ' + formatDate(dateStr) + ' (' + daySessions.length + ')</h3>';
+    html += '<table class="data-table"><thead><tr><th>Time</th><th>Class</th><th class="book-hide-narrow">Instructor</th><th>Status</th><th>Enrolled</th></tr></thead><tbody>';
+
+    daySessions.forEach(function(s) {
+      var clsName = calendarClassesMap[s.classId] ? calendarClassesMap[s.classId].name : s.classId;
+      var cls = calendarClassesMap[s.classId] || {};
+      html += '<tr style="cursor:pointer;" onclick="window._bookViewClass(\'' + esc(s.classId) + '\')">' +
+        '<td>' + formatTime(s.startTime) + ' - ' + formatTime(s.endTime) + '</td>' +
+        '<td><strong>' + esc(clsName) + '</strong></td>' +
+        '<td class="book-hide-narrow">' + esc(s.instructorName || '—') + '</td>' +
+        '<td><span style="' + badgeStyle(STATUS_BADGE_COLORS, s.status) + '">' + esc(s.status) + '</span></td>' +
+        '<td>' + (s.enrolled || 0) + ' / ' + (s.capacity || cls.capacity || '—') + '</td>' +
+        '</tr>';
+    });
+
+    html += '</tbody></table>';
+    panel.innerHTML = html;
+    panel.style.display = '';
+  }
+
+  window._calPrev = function() { calendarMonth--; if (calendarMonth < 0) { calendarMonth = 11; calendarYear--; } selectedCalendarDay = null; renderCalendar(); };
+  window._calNext = function() { calendarMonth++; if (calendarMonth > 11) { calendarMonth = 0; calendarYear++; } selectedCalendarDay = null; renderCalendar(); };
+  window._calToday = function() { var d = new Date(); calendarYear = d.getFullYear(); calendarMonth = d.getMonth(); selectedCalendarDay = todayStr(); renderCalendar(); };
+  window._calSelectDay = function(dateStr) { selectedCalendarDay = dateStr; renderCalendar(); };
+
+  // ============================================================
+  // Reports Dashboard
+  // ============================================================
+
+  async function loadReports() {
+    var content = document.getElementById('bookReportsContent');
+    if (!content) return;
+    content.innerHTML = LOADING_HTML;
+
+    try {
+      var [sessSnap, clsSnap, enrollSnap, ordersSnap] = await Promise.all([
+        MastDB.classSessions.list(2000),
+        MastDB.classes.list(200),
+        MastDB.enrollments.list(2000),
+        MastDB.orders.list(500)
+      ]);
+
+      var sessions = [];
+      var sessData = sessSnap.val() || {};
+      Object.keys(sessData).forEach(function(id) { var s = sessData[id]; s.id = id; sessions.push(s); });
+
+      var classes = {};
+      var clsData = clsSnap.val() || {};
+      Object.keys(clsData).forEach(function(id) { classes[id] = clsData[id]; classes[id].id = id; });
+
+      var enrollments = [];
+      var enrollData = enrollSnap.val() || {};
+      Object.keys(enrollData).forEach(function(id) { var e = enrollData[id]; e.id = id; enrollments.push(e); });
+
+      var orders = [];
+      var ordData = ordersSnap.val() || {};
+      Object.keys(ordData).forEach(function(id) { var o = ordData[id]; o.id = id; orders.push(o); });
+
+      // Load session logs for completed sessions (attendance data)
+      var completedSessionIds = sessions.filter(function(s) { return s.status === 'completed'; }).map(function(s) { return s.id; });
+      var sessionLogs = {};
+      // Load up to 50 most recent logs to avoid huge reads
+      var logIds = completedSessionIds.slice(0, 50);
+      for (var li = 0; li < logIds.length; li++) {
+        try {
+          var logSnap = await MastDB.sessionLogs.completion(logIds[li]).once('value');
+          if (logSnap.val()) sessionLogs[logIds[li]] = logSnap.val();
+        } catch (e) { /* skip */ }
+      }
+
+      // Load incidents
+      var allIncidents = [];
+      for (var ii = 0; ii < logIds.length; ii++) {
+        try {
+          var incSnap = await MastDB.sessionLogs.incidents(logIds[ii]).once('value');
+          var incData = incSnap.val() || {};
+          Object.keys(incData).forEach(function(incId) {
+            var inc = incData[incId];
+            inc._sessionId = logIds[ii];
+            allIncidents.push(inc);
+          });
+        } catch (e) { /* skip */ }
+      }
+
+      renderReports(sessions, classes, enrollments, orders, sessionLogs, allIncidents);
+      reportsLoaded = true;
+    } catch (err) {
+      console.error('[Book] Failed to load reports:', err);
+      content.innerHTML = '<p style="color:' + DANGER_COLOR + ';padding:2rem;">Failed to load report data.</p>';
+    }
+  }
+
+  function renderReports(sessions, classes, enrollments, orders, sessionLogs, allIncidents) {
+    var content = document.getElementById('bookReportsContent');
+    if (!content) return;
+
+    // Date range filter
+    var rangeVal = (document.getElementById('reportDateRange') || {}).value || '30';
+    var cutoffDate = null;
+    if (rangeVal !== 'all') {
+      var d = new Date();
+      d.setDate(d.getDate() - parseInt(rangeVal, 10));
+      cutoffDate = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+
+    var filteredSessions = cutoffDate ? sessions.filter(function(s) { return s.date >= cutoffDate; }) : sessions;
+    var completedSessions = filteredSessions.filter(function(s) { return s.status === 'completed'; });
+    var scheduledSessions = filteredSessions.filter(function(s) { return s.status === 'scheduled'; });
+
+    // Attendance stats from session logs
+    var attCompleted = 0, attAbsent = 0, attNoShow = 0;
+    Object.keys(sessionLogs).forEach(function(sid) {
+      var log = sessionLogs[sid];
+      if (!log.attendance) return;
+      // Check if session is in filtered range
+      var sess = sessions.find(function(s) { return s.id === sid; });
+      if (cutoffDate && sess && sess.date < cutoffDate) return;
+      Object.keys(log.attendance).forEach(function(eid) {
+        var st = log.attendance[eid].status;
+        if (st === 'completed') attCompleted++;
+        else if (st === 'absent') attAbsent++;
+        else if (st === 'no-show') attNoShow++;
+      });
+    });
+    var attTotal = attCompleted + attAbsent + attNoShow;
+    var attRate = attTotal > 0 ? Math.round((attCompleted / attTotal) * 100) : 0;
+
+    // Active enrollments
+    var activeEnrollments = enrollments.filter(function(e) { return e.status === 'confirmed'; }).length;
+
+    // Revenue from orders with class/pass items
+    var revenue = 0;
+    var filteredOrders = orders.filter(function(o) {
+      if (!o.completedAt && !o.createdAt) return false;
+      if (cutoffDate) {
+        var orderDate = (o.completedAt || o.createdAt || '').substring(0, 10);
+        return orderDate >= cutoffDate;
+      }
+      return true;
+    });
+    filteredOrders.forEach(function(o) {
+      if (!o.items) return;
+      (Array.isArray(o.items) ? o.items : Object.values(o.items)).forEach(function(item) {
+        if (item.bookingType === 'class' || item.bookingType === 'pass') {
+          revenue += (item.total || item.price || 0);
+        }
+      });
+    });
+
+    var html = '';
+
+    // Summary cards
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:2rem;">';
+    html += _reportCard('Sessions Completed', completedSessions.length, SUCCESS_COLOR);
+    html += _reportCard('Attendance Rate', attRate + '%', attRate >= 80 ? SUCCESS_COLOR : attRate >= 60 ? WARNING_COLOR : DANGER_COLOR);
+    html += _reportCard('Active Enrollments', activeEnrollments, '#64B5F6');
+    html += _reportCard('Class Revenue', formatPrice(revenue), 'var(--primary)');
+    html += '</div>';
+
+    // Attendance breakdown bar
+    if (attTotal > 0) {
+      html += '<h3 style="' + SECTION_H3 + '">Attendance Breakdown</h3>';
+      var pctCompleted = Math.round((attCompleted / attTotal) * 100);
+      var pctAbsent = Math.round((attAbsent / attTotal) * 100);
+      var pctNoShow = 100 - pctCompleted - pctAbsent;
+      html += '<div style="display:flex;height:24px;border-radius:6px;overflow:hidden;margin-bottom:8px;">';
+      if (pctCompleted > 0) html += '<div style="width:' + pctCompleted + '%;background:' + SUCCESS_COLOR + ';"></div>';
+      if (pctAbsent > 0) html += '<div style="width:' + pctAbsent + '%;background:' + WARNING_COLOR + ';"></div>';
+      if (pctNoShow > 0) html += '<div style="width:' + pctNoShow + '%;background:' + DANGER_COLOR + ';"></div>';
+      html += '</div>';
+      html += '<div style="display:flex;gap:1.5rem;font-size:0.8rem;color:var(--warm-gray);margin-bottom:2rem;">';
+      html += '<span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:' + SUCCESS_COLOR + ';margin-right:4px;vertical-align:middle;"></span>Completed (' + attCompleted + ')</span>';
+      html += '<span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:' + WARNING_COLOR + ';margin-right:4px;vertical-align:middle;"></span>Absent (' + attAbsent + ')</span>';
+      html += '<span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:' + DANGER_COLOR + ';margin-right:4px;vertical-align:middle;"></span>No-Show (' + attNoShow + ')</span>';
+      html += '</div>';
+    }
+
+    // Incident summary
+    var filteredIncidents = allIncidents;
+    if (cutoffDate) {
+      filteredIncidents = allIncidents.filter(function(inc) {
+        return (inc.createdAt || '').substring(0, 10) >= cutoffDate;
+      });
+    }
+    if (filteredIncidents.length > 0) {
+      html += '<h3 style="' + SECTION_H3 + '">Incidents (' + filteredIncidents.length + ')</h3>';
+      // Severity counts
+      var sevCounts = { low: 0, medium: 0, high: 0, critical: 0 };
+      filteredIncidents.forEach(function(inc) { sevCounts[inc.severity] = (sevCounts[inc.severity] || 0) + 1; });
+      html += '<div style="display:flex;gap:8px;margin-bottom:12px;">';
+      ['critical', 'high', 'medium', 'low'].forEach(function(sev) {
+        if (sevCounts[sev] > 0) {
+          html += '<span style="' + badgeStyle(SEVERITY_BADGE_COLORS, sev) + '">' + sev + ': ' + sevCounts[sev] + '</span>';
+        }
+      });
+      html += '</div>';
+
+      // Recent incidents list (max 5)
+      var recentInc = filteredIncidents.sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); }).slice(0, 5);
+      recentInc.forEach(function(inc) {
+        var sevColor = SEVERITY_COLORS[inc.severity] || '#BDBDBD';
+        html += '<div style="' + CARD_STYLE + 'margin-bottom:8px;border-left:3px solid ' + sevColor + ';">' +
+          '<div style="display:flex;gap:8px;align-items:center;">' +
+          '<span style="' + badgeStyle(SEVERITY_BADGE_COLORS, inc.severity) + '">' + esc(inc.severity) + '</span>' +
+          '<span style="font-weight:500;font-size:0.9rem;">' + esc(INCIDENT_TYPE_LABELS[inc.type] || inc.type) + '</span>' +
+          '<span style="color:var(--warm-gray);font-size:0.75rem;margin-left:auto;">' + esc(inc.followUpStatus || 'open') + '</span>' +
+          '</div>' +
+          '<p style="margin:6px 0 0;color:var(--warm-gray);font-size:0.85rem;">' + esc(inc.description) + '</p>' +
+          '</div>';
+      });
+    }
+
+    // Class performance table
+    var classIds = Object.keys(classes);
+    if (classIds.length > 0) {
+      html += '<h3 style="' + SECTION_H3 + '">Class Performance</h3>';
+      html += '<div style="overflow-x:auto;"><table class="data-table"><thead><tr><th>Class</th><th>Sessions</th><th>Attendance</th><th>Avg Enrolled</th><th>Revenue</th></tr></thead><tbody>';
+
+      var classPerf = classIds.map(function(cid) {
+        var cls = classes[cid];
+        var clsSessions = filteredSessions.filter(function(s) { return s.classId === cid; });
+        var clsCompleted = clsSessions.filter(function(s) { return s.status === 'completed'; });
+
+        // Attendance for this class
+        var clsAttTotal = 0, clsAttPresent = 0;
+        clsCompleted.forEach(function(s) {
+          var log = sessionLogs[s.id];
+          if (!log || !log.attendance) return;
+          Object.keys(log.attendance).forEach(function(eid) {
+            clsAttTotal++;
+            if (log.attendance[eid].status === 'completed') clsAttPresent++;
+          });
+        });
+        var clsAttRate = clsAttTotal > 0 ? Math.round((clsAttPresent / clsAttTotal) * 100) : 0;
+
+        // Avg enrollment
+        var totalEnrolled = 0;
+        clsSessions.forEach(function(s) { totalEnrolled += (s.enrolled || 0); });
+        var avgEnrolled = clsSessions.length > 0 ? (totalEnrolled / clsSessions.length).toFixed(1) : '0';
+
+        // Revenue for this class
+        var clsRevenue = 0;
+        filteredOrders.forEach(function(o) {
+          if (!o.items) return;
+          (Array.isArray(o.items) ? o.items : Object.values(o.items)).forEach(function(item) {
+            if (item.bookingType === 'class' && item.classId === cid) {
+              clsRevenue += (item.total || item.price || 0);
+            }
+          });
+        });
+
+        return {
+          name: cls.name || cid,
+          sessions: clsCompleted.length + ' / ' + clsSessions.length,
+          attRate: clsAttRate,
+          avgEnrolled: avgEnrolled,
+          revenue: clsRevenue,
+          totalSessions: clsSessions.length
+        };
+      }).filter(function(p) { return p.totalSessions > 0; })
+        .sort(function(a, b) { return b.totalSessions - a.totalSessions; });
+
+      classPerf.forEach(function(p) {
+        html += '<tr>' +
+          '<td><strong>' + esc(p.name) + '</strong></td>' +
+          '<td>' + p.sessions + '</td>' +
+          '<td>' + p.attRate + '%</td>' +
+          '<td>' + p.avgEnrolled + '</td>' +
+          '<td>' + formatPrice(p.revenue) + '</td>' +
+          '</tr>';
+      });
+
+      html += '</tbody></table></div>';
+    }
+
+    // Empty state
+    if (filteredSessions.length === 0) {
+      html = '<p style="' + EMPTY_STATE_STYLE + '">No session data for the selected time period.</p>';
+    }
+
+    content.innerHTML = html;
+  }
+
+  function _reportCard(label, value, color) {
+    return '<div style="' + CARD_STYLE + 'text-align:center;">' +
+      '<div style="font-size:2rem;font-weight:700;color:' + color + ';line-height:1.2;">' + value + '</div>' +
+      '<div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;margin-top:4px;">' + esc(label) + '</div>' +
+      '</div>';
+  }
+
+  window._reportRangeChange = function() { loadReports(); };
+
+  // ============================================================
   // Module Registration
   // ============================================================
 
@@ -2257,7 +2744,9 @@
       'resources': { tab: 'bookTab', setup: function() { switchSubTab('resources'); } },
       'resource-detail': { tab: 'bookTab', setup: function(id) { if (id) { showResourceForm(id); } else { switchSubTab('resources'); } } },
       'passes': { tab: 'bookTab', setup: function() { switchSubTab('passes'); } },
-      'pass-detail': { tab: 'bookTab', setup: function(id) { if (id) { showPassDefForm(id); } else { switchSubTab('passes'); } } }
+      'pass-detail': { tab: 'bookTab', setup: function(id) { if (id) { showPassDefForm(id); } else { switchSubTab('passes'); } } },
+      'calendar': { tab: 'bookTab', setup: function() { switchSubTab('calendar'); } },
+      'reports': { tab: 'bookTab', setup: function() { switchSubTab('reports'); } }
     },
     detachListeners: function() {
       classesData = [];
@@ -2275,6 +2764,13 @@
       resourcesMap = {};
       passDefsData = [];
       passDefsLoaded = false;
+      calendarYear = new Date().getFullYear();
+      calendarMonth = new Date().getMonth();
+      calendarSessions = [];
+      calendarClassesMap = {};
+      calendarLoaded = false;
+      selectedCalendarDay = null;
+      reportsLoaded = false;
       currentSubTab = 'classes';
     }
   });
