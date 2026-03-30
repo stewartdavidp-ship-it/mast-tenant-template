@@ -27,6 +27,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="storefront.css">
 <link rel="stylesheet" href="cart.css">
+<link rel="stylesheet" href="checkout.css" media="print" onload="this.media='all'">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <style>
 .cd-container {
@@ -307,6 +308,31 @@
 }
 .cd-pass-pay-btn:hover { background: #f5f5f5; }
 
+/* Series enrollment CTA */
+.cd-series-cta {
+  margin-bottom: 2rem;
+  text-align: center;
+}
+.cd-series-btn {
+  display: block;
+  width: 100%;
+  padding: 14px 24px;
+  border-radius: 8px;
+  border: none;
+  background: var(--primary);
+  color: #fff;
+  font-size: 1.05rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.cd-series-btn:hover { opacity: 0.85; }
+.cd-series-or {
+  margin-top: 10px;
+  font-size: 0.85rem;
+  color: var(--warm-gray, #888);
+}
+
 /* Booking confirmation banner */
 .cd-booking-confirm {
   position: fixed;
@@ -507,6 +533,21 @@
       html += '<div class="cd-description"><h2>About This Class</h2><p>' + esc(cls.description) + '</p></div>';
     }
 
+    // Series enrollment CTA
+    var isSeries = cls.type === 'series' && cls.seriesInfo;
+    var seriesPrice = isSeries && cls.seriesInfo.seriesPriceCents ? cls.seriesInfo.seriesPriceCents : 0;
+    var allowDropIn = isSeries && cls.seriesInfo.allowDropIn;
+    var totalSessions = isSeries && cls.seriesInfo.totalSessions ? cls.seriesInfo.totalSessions : sessions.length;
+
+    if (isSeries && sessions.length > 0) {
+      html += '<div class="cd-series-cta">' +
+        '<button class="cd-series-btn" onclick="window._bookSeries(\'' + esc(cls.id) + '\', \'' + esc(cls.name) + '\', ' + seriesPrice + ', ' + totalSessions + ')">' +
+        'Enroll in Full Series &mdash; ' + formatPrice(seriesPrice) + ' (' + totalSessions + ' sessions)' +
+        '</button>' +
+        (allowDropIn ? '<div class="cd-series-or">or book individual sessions below as drop-ins at ' + formatPrice(cls.priceCents) + ' each</div>' : '') +
+        '</div>';
+    }
+
     // Sessions
     html += '<div class="cd-sessions"><h2>Upcoming Sessions (' + sessions.length + ')</h2>';
     if (sessions.length === 0) {
@@ -517,14 +558,19 @@
         var spotsLeft = Math.max(0, (s.capacity || cls.capacity || 0) - (s.enrolled || 0));
         var isFull = spotsLeft <= 0;
 
+        // For series without drop-in, don't show per-session Book buttons
+        var showBookBtn = !isSeries || allowDropIn;
+
         html += '<div class="cd-session-row">' +
           '<span class="cd-session-date">' + formatSessionDate(s.date) + '</span>' +
           '<span class="cd-session-time">' + formatTime(s.startTime) + ' - ' + formatTime(s.endTime) + '</span>' +
           '<span class="cd-session-spots' + (isFull ? ' full' : '') + '">' + (isFull ? 'Full' : spotsLeft + ' spot' + (spotsLeft !== 1 ? 's' : '') + ' left') + '</span>' +
-          '<button class="cd-book-btn" ' + (isFull ? 'disabled' : '') +
-          ' onclick="window._bookSession(\'' + esc(s.id) + '\', \'' + esc(cls.id) + '\', \'' + esc(cls.name) + '\', ' + (cls.priceCents || 0) + ', ' + spotsLeft + ', \'' + esc(s.date) + '\', \'' + esc(s.startTime) + '\')">' +
-          (isFull ? 'Full' : 'Book') +
-          '</button></div>';
+          (showBookBtn ?
+            '<button class="cd-book-btn" ' + (isFull ? 'disabled' : '') +
+            ' onclick="window._bookSession(\'' + esc(s.id) + '\', \'' + esc(cls.id) + '\', \'' + esc(cls.name) + '\', ' + (cls.priceCents || 0) + ', ' + spotsLeft + ', \'' + esc(s.date) + '\', \'' + esc(s.startTime) + '\')">' +
+            (isFull ? 'Full' : 'Drop-in') +
+            '</button>' : '') +
+          '</div>';
       });
       html += '</div>';
     }
@@ -532,6 +578,46 @@
 
     container.innerHTML = html;
   }
+
+  // Book full series — adds as a single cart item
+  window._bookSeries = function(classId, className, seriesPriceCents, totalSessions) {
+    if (!window.MastCart) { alert('Cart not loaded yet. Please wait.'); return; }
+
+    function addSeriesToCart() {
+      window.MastCart.addItem({
+        pid: classId + '-series',
+        name: className + ' (Full Series — ' + totalSessions + ' sessions)',
+        price: '$' + (seriesPriceCents / 100).toFixed(2),
+        priceCents: seriesPriceCents,
+        options: {},
+        qty: 1,
+        bookingType: 'class',
+        classId: classId,
+        image: ''
+      });
+      // Use the same confirmation banner
+      var banner = document.createElement('div');
+      banner.className = 'cd-booking-confirm';
+      banner.innerHTML = '<div class="cd-booking-confirm-inner"><div class="cd-booking-confirm-icon">&#10003;</div><div class="cd-booking-confirm-text">Series enrolled — ' + className + '</div></div>';
+      document.body.appendChild(banner);
+      requestAnimationFrame(function() { banner.classList.add('visible'); });
+      setTimeout(function() { banner.classList.remove('visible'); setTimeout(function() { banner.remove(); }, 300); }, 2500);
+    }
+
+    var user = window.MastCart.getCurrentUser();
+    if (user && !user.isAnonymous) {
+      addSeriesToCart();
+      return;
+    }
+
+    // Auth gate — same pattern
+    if (window.siteSignIn) window.siteSignIn();
+    var fbApp = window.MastCart.getFirebaseApp();
+    if (!fbApp) return;
+    var unsubscribe = fbApp.auth().onAuthStateChanged(function(u) {
+      if (u && !u.isAnonymous) { unsubscribe(); addSeriesToCart(); }
+    });
+  };
 
   window._bookSession = function(sessionId, classId, className, priceCents, spotsLeft, date, time) {
     if (!window.MastCart) { alert('Cart not loaded yet. Please wait.'); return; }
