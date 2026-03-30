@@ -121,19 +121,7 @@
         '@media(max-width:600px){.book-hide-narrow{display:none!important;}}' +
         '.book-responsive-grid{display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));}' +
 
-        /* Form labels — modern uppercase micro-label */
-        '.form-label{display:block;font-size:0.75rem;font-weight:600;margin-bottom:6px;' +
-          'color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.05em;}' +
-
-        /* Form inputs — rounded, proper sizing, focus glow */
-        '.form-input{width:100%;padding:10px 14px;border:1px solid var(--border,#444);border-radius:8px;' +
-          'font-family:inherit;font-size:0.9rem;background:var(--surface,#1e1e1e);color:var(--text,#e0e0e0);' +
-          'transition:border-color 0.2s,box-shadow 0.2s;box-sizing:border-box;}' +
-        '.form-input:focus{outline:none;border-color:var(--primary,#C4853C);' +
-          'box-shadow:0 0 0 3px rgba(196,133,60,0.2);}' +
-        '.form-input::placeholder{color:var(--warm-gray,#888);opacity:0.6;}' +
-        'textarea.form-input{min-height:80px;resize:vertical;}' +
-        'select.form-input{cursor:pointer;}' +
+        /* .form-label and .form-input are now defined globally in index.html */
 
         /* Form section cards */
         '.book-form-section{background:var(--surface-card,#2a2a2a);border:1px solid var(--border,#444);' +
@@ -283,7 +271,7 @@
         '<td>' + (c.capacity || '—') + '</td>' +
         '<td>' + priceStr + '</td>' +
         '<td><span style="' + badgeStyle(STATUS_BADGE_COLORS, c.status) + '">' + esc(c.status) + '</span></td>' +
-        '<td><button class="btn btn-sm" onclick="event.stopPropagation();window._bookEditClass(\'' + esc(c.id) + '\')">Edit</button></td>' +
+        '<td><div class="event-actions"><button class="btn-icon" onclick="event.stopPropagation();window._bookEditClass(\'' + esc(c.id) + '\')" title="Edit">&#9998;</button></div></td>' +
         '</tr>';
     });
 
@@ -392,19 +380,19 @@
           '<td class="book-hide-narrow">' + esc(s.resourceName || '—') + '</td>' +
           '<td>' + (s.enrolled || 0) + ' / ' + (s.capacity || cls.capacity || '—') + (s.waitlisted ? ' (+' + s.waitlisted + ' waitlisted)' : '') + '</td>' +
           '<td><span style="' + badgeStyle(STATUS_BADGE_COLORS, s.status) + '">' + esc(s.status) + '</span></td>' +
-          '<td style="display:flex;gap:4px;">' +
-          '<button class="btn btn-sm" onclick="window._bookAssignSession(\'' + esc(s.id) + '\',\'' + esc(cls.id) + '\')">Assign</button>' +
-          '<button class="btn btn-sm" onclick="window._bookViewSessionEnrollments(\'' + esc(s.id) + '\',\'' + esc(cls.id) + '\')">Enrollments</button>';
+          '<td><div class="event-actions">' +
+          '<button class="btn-icon" onclick="window._bookAssignSession(\'' + esc(s.id) + '\',\'' + esc(cls.id) + '\')" title="Assign Instructor/Resource">&#128100;</button>' +
+          '<button class="btn-icon" onclick="window._bookViewSessionEnrollments(\'' + esc(s.id) + '\',\'' + esc(cls.id) + '\')" title="View Enrollments">&#128203;</button>';
         if (s.status === 'scheduled') {
-          html += '<button class="btn btn-sm" onclick="window._bookSessionChecklist(\'' + esc(s.id) + '\',\'' + esc(cls.id) + '\')">Checklist</button>';
+          html += '<button class="btn-icon" onclick="window._bookSessionChecklist(\'' + esc(s.id) + '\',\'' + esc(cls.id) + '\')" title="Startup Checklist">&#9745;</button>';
         }
         if (s.status === 'scheduled' && isPast) {
-          html += '<button class="btn btn-sm" onclick="window._bookSessionReport(\'' + esc(s.id) + '\',\'' + esc(cls.id) + '\')">Report</button>';
+          html += '<button class="btn-icon" onclick="window._bookSessionReport(\'' + esc(s.id) + '\',\'' + esc(cls.id) + '\')" title="Completion Report">&#128221;</button>';
         }
         if (s.status === 'scheduled' && !isPast) {
-          html += '<button class="btn btn-sm" style="color:' + DANGER_COLOR + ';" onclick="window._bookCancelSession(\'' + esc(s.id) + '\')">Cancel</button>';
+          html += '<button class="btn-icon danger" onclick="window._bookCancelSession(\'' + esc(s.id) + '\')" title="Cancel Session">&#10006;</button>';
         }
-        html += '</td></tr>';
+        html += '</div></td></tr>';
       });
       html += '</tbody></table>';
     }
@@ -854,19 +842,19 @@
         '<td>' + esc(e.sessionId || '—') + '</td>' +
         '<td>' + formatPrice(e.pricePaidCents || e.pricePaid) + '</td>' +
         '<td><span style="' + badgeStyle(STATUS_BADGE_COLORS, e.status) + '">' + esc(statusLabel) + '</span></td>' +
-        '<td style="display:flex;gap:4px;flex-wrap:wrap;">';
+        '<td><div class="event-actions">';
 
       if (e.status === 'confirmed') {
-        html += '<button class="btn btn-sm" onclick="window._bookMarkAttended(\'' + esc(e.id) + '\')">Attended</button>';
-        html += '<button class="btn btn-sm" onclick="window._bookMarkNoShow(\'' + esc(e.id) + '\')">No-Show</button>';
-        html += '<button class="btn btn-sm" style="color:' + DANGER_COLOR + ';" onclick="window._bookCancelEnrollment(\'' + esc(e.id) + '\')">Cancel</button>';
+        html += '<button class="btn-icon" onclick="window._bookMarkAttended(\'' + esc(e.id) + '\')" title="Mark Attended">&#10003;</button>';
+        html += '<button class="btn-icon" onclick="window._bookMarkNoShow(\'' + esc(e.id) + '\')" title="Mark No-Show">&#128683;</button>';
+        html += '<button class="btn-icon danger" onclick="window._bookCancelEnrollment(\'' + esc(e.id) + '\')" title="Cancel Enrollment">&#10006;</button>';
       }
       if (e.status === 'waitlisted') {
-        html += '<button class="btn btn-sm" style="color:' + SUCCESS_COLOR + ';" onclick="window._bookPromoteWaitlist(\'' + esc(e.id) + '\')">Promote</button>';
-        html += '<button class="btn btn-sm" style="color:' + DANGER_COLOR + ';" onclick="window._bookCancelEnrollment(\'' + esc(e.id) + '\')">Cancel</button>';
+        html += '<button class="btn-icon" onclick="window._bookPromoteWaitlist(\'' + esc(e.id) + '\')" title="Promote to Confirmed">&#9650;</button>';
+        html += '<button class="btn-icon danger" onclick="window._bookCancelEnrollment(\'' + esc(e.id) + '\')" title="Cancel Enrollment">&#10006;</button>';
       }
 
-      html += '</td></tr>';
+      html += '</div></td></tr>';
     });
 
     html += '</tbody></table>';
@@ -997,7 +985,7 @@
         '<td>' + esc(specs) + '</td>' +
         '<td>' + esc(i.email || '—') + '</td>' +
         '<td><span style="' + badgeStyle(STATUS_BADGE_COLORS, i.status) + '">' + esc(i.status) + '</span></td>' +
-        '<td><button class="btn btn-sm" onclick="window._instrEdit(\'' + esc(i.id) + '\')">Edit</button></td>' +
+        '<td><div class="event-actions"><button class="btn-icon" onclick="window._instrEdit(\'' + esc(i.id) + '\')" title="Edit">&#9998;</button></div></td>' +
         '</tr>';
     });
 
@@ -1163,7 +1151,7 @@
         '<td><span style="' + badgeStyle(RESOURCE_TYPE_BADGE_COLORS, r.type) + '">' + esc(r.type) + '</span></td>' +
         '<td>' + (r.capacity || '—') + '</td>' +
         '<td><span style="' + badgeStyle(STATUS_BADGE_COLORS, r.status) + '">' + esc(r.status) + '</span></td>' +
-        '<td><button class="btn btn-sm" onclick="window._resEdit(\'' + esc(r.id) + '\')">Edit</button></td>' +
+        '<td><div class="event-actions"><button class="btn-icon" onclick="window._resEdit(\'' + esc(r.id) + '\')" title="Edit">&#9998;</button></div></td>' +
         '</tr>';
     });
 
@@ -1319,7 +1307,7 @@
         '<td>' + esc(validity) + '</td>' +
         '<td><span style="font-size:0.8rem;">' + esc(p.priority || 'medium') + '</span></td>' +
         '<td><span style="' + badgeStyle(STATUS_BADGE_COLORS, p.status) + '">' + esc(p.status) + '</span></td>' +
-        '<td><button class="btn btn-sm" onclick="window._passEdit(\'' + esc(p.id) + '\')">Edit</button></td>' +
+        '<td><div class="event-actions"><button class="btn-icon" onclick="window._passEdit(\'' + esc(p.id) + '\')" title="Edit">&#9998;</button></div></td>' +
         '</tr>';
     });
 

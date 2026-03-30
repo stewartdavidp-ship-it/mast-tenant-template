@@ -1375,6 +1375,71 @@
       cursor: pointer;
     }
 
+    /* ========== MODULE FORM CLASSES ========== */
+    /* Used by Book, Events, Promotions modules */
+
+    .form-label {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: var(--warm-gray);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.9rem;
+      background: var(--cream);
+      color: var(--charcoal);
+      transition: border-color 0.2s, box-shadow 0.2s;
+      box-sizing: border-box;
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: var(--amber);
+      box-shadow: 0 0 0 3px var(--amber-glow);
+    }
+
+    .form-input::placeholder {
+      color: var(--warm-gray-light);
+      opacity: 0.7;
+    }
+
+    textarea.form-input {
+      min-height: 80px;
+      resize: vertical;
+    }
+
+    select.form-input {
+      cursor: pointer;
+    }
+
+    body.dark-mode .form-label {
+      color: #999;
+    }
+
+    body.dark-mode .form-input {
+      background: #2a2a2a;
+      border-color: #444;
+      color: #e0e0e0;
+    }
+
+    body.dark-mode .form-input:focus {
+      border-color: var(--amber);
+      box-shadow: 0 0 0 3px rgba(196, 133, 60, 0.2);
+    }
+
+    body.dark-mode .form-input::placeholder {
+      color: #777;
+    }
+
     /* ========== IMAGE PREVIEW ========== */
     .img-preview-container {
       margin-top: 8px;
