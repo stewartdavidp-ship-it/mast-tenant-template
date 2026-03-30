@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdn.jsdelivr.net https://*.firebaseio.com https://apis.google.com https://maps.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://us-central1-mast-platform-prod.cloudfunctions.net https://*.firebaseio.com wss://*.firebaseio.com https://*.firebasestorage.app https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://maps.googleapis.com https://places.googleapis.com https://api.ipify.org; img-src 'self' data: blob: https:; frame-src 'self' https://*.firebaseapp.com https://*.firebaseio.com; frame-ancestors 'none';">
+<title>My Wallet &mdash; My Shop</title>
+<link rel="preconnect" href="https://mast-platform-prod-default-rtdb.firebaseio.com" crossorigin>
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<script>
+(function(){
+  var P='https://mast-platform-prod-default-rtdb.firebaseio.com/mast-platform';
+  var h=location.hostname,C=5*60*1000;
+  if(h==='localhost'||h==='127.0.0.1')return;
+  try{var r=localStorage.getItem('mast_tenant_'+h);if(r){var c=JSON.parse(r);if(Date.now()-c.timestamp<C){window.__earlyTenant=Promise.resolve(c.data);return;}}}catch(e){}
+  var ek=h.replace(/\./g,'_');
+  window.__earlyTenant=fetch(P+'/tenantsByDomain/'+ek+'.json').then(function(r){return r.ok?r.json():null}).then(function(tid){
+    if(!tid)return null;
+    return fetch(P+'/tenants/'+tid+'/publicConfig.json').then(function(r){return r.ok?r.json():null}).then(function(pc){
+      return pc?{tenantId:tid,publicConfig:pc}:null;
+    });
+  }).catch(function(){return null;});
+})();
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="storefront.css">
+<link rel="stylesheet" href="cart.css">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<style>
+.mw-container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 7rem 2rem 4rem;
+}
+.mw-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+.mw-header h1 {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 2.4rem;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  margin: 0 0 0.5rem;
+  color: var(--text);
+}
+.mw-header p {
+  font-size: 0.95rem;
+  color: var(--warm-gray, #888);
+}
+
+/* Total balance */
+.mw-balance {
+  text-align: center;
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background: var(--surface-card);
+  border: 1px solid var(--surface-card-border);
+  border-radius: 10px;
+}
+.mw-balance-amount {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 2.2rem;
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.mw-balance-label {
+  font-size: 0.85rem;
+  color: var(--warm-gray, #888);
+}
+
+/* Sign-in prompt */
+.mw-signin {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: var(--warm-gray, #888);
+}
+.mw-signin-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 24px;
+  border-radius: 6px;
+  border: 1px solid var(--border, #444);
+  background: #fff;
+  color: #333;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  margin-top: 1rem;
+  transition: background 0.2s;
+}
+.mw-signin-btn:hover { background: #f5f5f5; }
+
+/* Tabs */
+.mw-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--surface-card-border, #e0e0e0);
+  margin-bottom: 1.5rem;
+  overflow-x: auto;
+}
+.mw-tab {
+  padding: 10px 20px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  background: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  color: var(--warm-gray, #888);
+  transition: all 0.15s;
+  white-space: nowrap;
+  font-family: 'DM Sans', sans-serif;
+}
+.mw-tab:hover { color: var(--text); }
+.mw-tab.active { color: var(--primary); font-weight: 600; border-bottom-color: var(--primary); }
+
+/* Instrument cards */
+.mw-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.mw-card {
+  background: var(--surface-card);
+  border: 1px solid var(--surface-card-border);
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+.mw-card-info {
+  flex: 1;
+  min-width: 0;
+}
+.mw-card-info h3 {
+  margin: 0 0 4px;
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--text);
+}
+.mw-card-meta {
+  font-size: 0.82rem;
+  color: var(--warm-gray, #888);
+  line-height: 1.5;
+}
+.mw-card-amount {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+.mw-card-status {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.mw-status-active { background: rgba(6,95,70,0.25); color: #4DB6AC; }
+.mw-status-depleted { background: rgba(200,60,60,0.2); color: #EF9A9A; }
+.mw-status-expired { background: rgba(200,60,60,0.2); color: #EF9A9A; }
+
+.mw-empty {
+  text-align: center;
+  padding: 3rem 2rem;
+  color: var(--warm-gray, #888);
+}
+.mw-empty-icon { font-size: 2rem; margin-bottom: 12px; }
+.mw-empty p { font-size: 0.95rem; margin-bottom: 4px; }
+.mw-empty-hint { font-size: 0.85rem; color: var(--warm-gray-light, #aaa); }
+
+.mw-loading {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: var(--warm-gray, #888);
+}
+
+@media (max-width: 768px) {
+  .mw-container { padding: 6rem 1.5rem 3rem; }
+  .mw-header h1 { font-size: 1.8rem; }
+  .mw-card { flex-direction: column; align-items: flex-start; }
+  .mw-card-amount { margin-top: 4px; }
+  .mw-tabs { gap: 0; }
+  .mw-tab { padding: 8px 14px; font-size: 0.8rem; }
+}
+</style>
+</head>
+<body>
+<nav id="mainNav"></nav>
+<div class="nav-mobile-menu" id="mobileMenu"></div>
+
+<div class="mw-container">
+  <div class="mw-header">
+    <h1>My Wallet</h1>
+    <p>Your credits, gift cards, loyalty points, and passes</p>
+  </div>
+  <div id="mwContent">
+    <div class="mw-loading">Loading...</div>
+  </div>
+</div>
+
+<footer id="siteFooter"></footer>
+
+<script src="storefront-tenant.js"></script>
+<script src="storefront-theme.js"></script>
+<script src="storefront-nav.js"></script>
+<script src="tenant-brand.js?v=2"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+
+<script>
+(function() {
+  'use strict';
+
+  var walletData = { credits: [], giftCards: [], loyalty: null, passes: [], coupons: [] };
+  var currentTab = 'overview';
+
+  function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  function formatDate(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    return (d.getMonth() + 1) + '/' + d.getDate() + '/' + d.getFullYear();
+  }
+
+  function formatMoney(cents) {
+    return '$' + (Math.abs(cents) / 100).toFixed(2);
+  }
+
+  function renderSignIn() {
+    var content = document.getElementById('mwContent');
+    content.innerHTML =
+      '<div class="mw-signin">' +
+        '<p>Sign in to view your wallet.</p>' +
+        '<button class="mw-signin-btn" onclick="if(window.siteSignIn)window.siteSignIn();">' +
+          '<svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59a14.5 14.5 0 0 1 0-9.18l-7.98-6.19a24.04 24.04 0 0 0 0 21.56l7.98-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>' +
+          'Sign in with Google' +
+        '</button>' +
+      '</div>';
+  }
+
+  // ---- Rendering ----
+
+  function render() {
+    var content = document.getElementById('mwContent');
+    var html = '';
+
+    // Balance summary
+    var creditTotal = walletData.credits.reduce(function(sum, c) {
+      return sum + (c.status === 'active' ? (c.remainingCents || c.amountCents || 0) : 0);
+    }, 0);
+    var giftCardTotal = walletData.giftCards.reduce(function(sum, g) {
+      return sum + (g.status === 'active' ? (g.remainingCents || 0) : 0);
+    }, 0);
+    var monetaryTotal = creditTotal + giftCardTotal;
+
+    html += '<div class="mw-balance">' +
+      '<div class="mw-balance-amount">' + formatMoney(monetaryTotal) + '</div>' +
+      '<div class="mw-balance-label">Available balance (credits + gift cards)</div>' +
+      '</div>';
+
+    // Tabs
+    var tabs = [
+      { id: 'overview', label: 'Overview' },
+      { id: 'credits', label: 'Credits', count: walletData.credits.filter(function(c) { return c.status === 'active'; }).length },
+      { id: 'giftCards', label: 'Gift Cards', count: walletData.giftCards.filter(function(g) { return g.status === 'active'; }).length },
+      { id: 'loyalty', label: 'Loyalty', count: walletData.loyalty ? walletData.loyalty.totalPoints : 0 },
+      { id: 'passes', label: 'Passes', count: walletData.passes.filter(function(p) { return p.status === 'active'; }).length },
+      { id: 'coupons', label: 'Coupons', count: walletData.coupons.length }
+    ];
+
+    html += '<div class="mw-tabs">';
+    tabs.forEach(function(t) {
+      var countStr = t.count !== undefined && t.id !== 'overview' ? ' (' + t.count + ')' : '';
+      html += '<button class="mw-tab' + (currentTab === t.id ? ' active' : '') + '" onclick="window._mwTab(\'' + t.id + '\')">' + esc(t.label + countStr) + '</button>';
+    });
+    html += '</div>';
+
+    // Tab content
+    if (currentTab === 'overview') {
+      html += renderOverview(creditTotal, giftCardTotal);
+    } else if (currentTab === 'credits') {
+      html += renderCredits();
+    } else if (currentTab === 'giftCards') {
+      html += renderGiftCards();
+    } else if (currentTab === 'loyalty') {
+      html += renderLoyalty();
+    } else if (currentTab === 'passes') {
+      html += renderPassesTab();
+    } else if (currentTab === 'coupons') {
+      html += renderCoupons();
+    }
+
+    content.innerHTML = html;
+  }
+
+  function renderOverview(creditTotal, giftCardTotal) {
+    var html = '<div class="mw-list">';
+    var hasAnything = false;
+
+    // Active credits summary
+    var activeCredits = walletData.credits.filter(function(c) { return c.status === 'active'; });
+    if (activeCredits.length > 0) {
+      hasAnything = true;
+      html += '<div class="mw-card">' +
+        '<div class="mw-card-info">' +
+          '<h3>&#128179; Store Credits</h3>' +
+          '<div class="mw-card-meta">' + activeCredits.length + ' active credit' + (activeCredits.length !== 1 ? 's' : '') + '</div>' +
+        '</div>' +
+        '<div class="mw-card-amount">' + formatMoney(creditTotal) + '</div>' +
+        '</div>';
+    }
+
+    // Active gift cards summary
+    var activeGiftCards = walletData.giftCards.filter(function(g) { return g.status === 'active'; });
+    if (activeGiftCards.length > 0) {
+      hasAnything = true;
+      html += '<div class="mw-card">' +
+        '<div class="mw-card-info">' +
+          '<h3>&#127873; Gift Cards</h3>' +
+          '<div class="mw-card-meta">' + activeGiftCards.length + ' active card' + (activeGiftCards.length !== 1 ? 's' : '') + '</div>' +
+        '</div>' +
+        '<div class="mw-card-amount">' + formatMoney(giftCardTotal) + '</div>' +
+        '</div>';
+    }
+
+    // Loyalty summary
+    if (walletData.loyalty && walletData.loyalty.totalPoints > 0) {
+      hasAnything = true;
+      html += '<div class="mw-card">' +
+        '<div class="mw-card-info">' +
+          '<h3>&#11088; Loyalty Points</h3>' +
+          '<div class="mw-card-meta">Earn points with every purchase</div>' +
+        '</div>' +
+        '<div class="mw-card-amount">' + esc(String(walletData.loyalty.totalPoints)) + ' pts</div>' +
+        '</div>';
+    }
+
+    // Active passes summary
+    var activePasses = walletData.passes.filter(function(p) { return p.status === 'active'; });
+    if (activePasses.length > 0) {
+      hasAnything = true;
+      html += '<div class="mw-card">' +
+        '<div class="mw-card-info">' +
+          '<h3>&#127915; Passes</h3>' +
+          '<div class="mw-card-meta">' + activePasses.length + ' active pass' + (activePasses.length !== 1 ? 'es' : '') + '</div>' +
+        '</div>' +
+        '<div><a href="my-passes.html" style="font-size:0.85rem;color:var(--primary);text-decoration:none;">View details &#8594;</a></div>' +
+        '</div>';
+    }
+
+    // Saved coupons
+    if (walletData.coupons.length > 0) {
+      hasAnything = true;
+      html += '<div class="mw-card">' +
+        '<div class="mw-card-info">' +
+          '<h3>&#127903; Saved Coupons</h3>' +
+          '<div class="mw-card-meta">' + walletData.coupons.length + ' coupon' + (walletData.coupons.length !== 1 ? 's' : '') + ' saved</div>' +
+        '</div>' +
+        '</div>';
+    }
+
+    if (!hasAnything) {
+      html += '<div class="mw-empty">' +
+        '<div class="mw-empty-icon">&#128091;</div>' +
+        '<p>Your wallet is empty</p>' +
+        '<div class="mw-empty-hint">Earn loyalty points, save coupons, buy gift cards, and purchase passes to see them here.</div>' +
+        '</div>';
+    }
+
+    html += '</div>';
+    return html;
+  }
+
+  function renderCredits() {
+    var active = walletData.credits.filter(function(c) { return c.status === 'active'; });
+    var used = walletData.credits.filter(function(c) { return c.status !== 'active'; });
+
+    if (walletData.credits.length === 0) {
+      return '<div class="mw-empty">' +
+        '<div class="mw-empty-icon">&#128179;</div>' +
+        '<p>No store credits</p>' +
+        '<div class="mw-empty-hint">Credits are issued from returns, admin grants, or promotions.</div>' +
+        '</div>';
+    }
+
+    var html = '<div class="mw-list">';
+    active.forEach(function(c) {
+      var remaining = c.remainingCents || c.amountCents || 0;
+      var sourceLabel = c.source || 'Store credit';
+      if (c.source === 'return') sourceLabel = 'Return credit';
+      else if (c.source === 'admin-grant') sourceLabel = 'Admin grant';
+      else if (c.source === 'promotion') sourceLabel = 'Promotional credit';
+
+      html += '<div class="mw-card">' +
+        '<div class="mw-card-info">' +
+          '<h3>' + esc(sourceLabel) + '</h3>' +
+          '<div class="mw-card-meta">' +
+            'Issued: ' + formatDate(c.createdAt) +
+            (c.note ? '<br>' + esc(c.note) : '') +
+          '</div>' +
+        '</div>' +
+        '<div style="text-align:right;">' +
+          '<span class="mw-card-status mw-status-active">Active</span><br>' +
+          '<span class="mw-card-amount">' + formatMoney(remaining) + '</span>' +
+        '</div>' +
+        '</div>';
+    });
+
+    if (used.length > 0) {
+      html += '<div style="margin-top:16px;font-size:0.85rem;color:var(--warm-gray);font-weight:500;">Used Credits</div>';
+      used.forEach(function(c) {
+        html += '<div class="mw-card" style="opacity:0.5;">' +
+          '<div class="mw-card-info">' +
+            '<h3>' + esc(c.source || 'Credit') + '</h3>' +
+            '<div class="mw-card-meta">Used: ' + formatDate(c.usedAt) + '</div>' +
+          '</div>' +
+          '<div style="text-align:right;">' +
+            '<span class="mw-card-status mw-status-depleted">Used</span><br>' +
+            '<span class="mw-card-amount" style="text-decoration:line-through;">' + formatMoney(c.amountCents || 0) + '</span>' +
+          '</div>' +
+          '</div>';
+      });
+    }
+
+    html += '</div>';
+    return html;
+  }
+
+  function renderGiftCards() {
+    if (walletData.giftCards.length === 0) {
+      return '<div class="mw-empty">' +
+        '<div class="mw-empty-icon">&#127873;</div>' +
+        '<p>No gift cards</p>' +
+        '<div class="mw-empty-hint">Gift cards you purchase or receive will appear here.</div>' +
+        '</div>';
+    }
+
+    var html = '<div class="mw-list">';
+    walletData.giftCards.forEach(function(g) {
+      var isActive = g.status === 'active' && (g.remainingCents || 0) > 0;
+      html += '<div class="mw-card"' + (!isActive ? ' style="opacity:0.5;"' : '') + '>' +
+        '<div class="mw-card-info">' +
+          '<h3>Gift Card' + (g.code ? ' (...' + esc(g.code.slice(-4)) + ')' : '') + '</h3>' +
+          '<div class="mw-card-meta">' +
+            'Redeemed: ' + formatDate(g.claimedAt || g.createdAt) +
+            (g.expiresAt ? '<br>Expires: ' + formatDate(g.expiresAt) : '') +
+          '</div>' +
+        '</div>' +
+        '<div style="text-align:right;">' +
+          '<span class="mw-card-status ' + (isActive ? 'mw-status-active' : 'mw-status-depleted') + '">' + (isActive ? 'Active' : 'Used') + '</span><br>' +
+          '<span class="mw-card-amount">' + formatMoney(g.remainingCents || 0) + '</span>' +
+        '</div>' +
+        '</div>';
+    });
+    html += '</div>';
+    return html;
+  }
+
+  function renderLoyalty() {
+    var loyalty = walletData.loyalty;
+    if (!loyalty || !loyalty.totalPoints) {
+      return '<div class="mw-empty">' +
+        '<div class="mw-empty-icon">&#11088;</div>' +
+        '<p>No loyalty points yet</p>' +
+        '<div class="mw-empty-hint">Make a purchase to start earning points.</div>' +
+        '</div>';
+    }
+
+    var html = '<div style="text-align:center;margin-bottom:24px;">' +
+      '<div style="font-size:2.5rem;font-weight:600;color:var(--text);">' + loyalty.totalPoints + '</div>' +
+      '<div style="font-size:0.9rem;color:var(--warm-gray);">Total Points</div>' +
+      (loyalty.expiresAt ? '<div style="font-size:0.82rem;color:var(--warm-gray-light);margin-top:4px;">Points expire: ' + formatDate(loyalty.expiresAt) + '</div>' : '') +
+      '</div>';
+
+    // Transaction history
+    if (loyalty.transactions && loyalty.transactions.length > 0) {
+      html += '<div style="font-size:0.85rem;font-weight:500;color:var(--warm-gray);margin-bottom:8px;">Recent Activity</div>';
+      html += '<div class="mw-list">';
+      var recent = loyalty.transactions.slice(-10).reverse();
+      recent.forEach(function(t) {
+        var isPositive = t.type === 'earned' || t.type === 'restored';
+        html += '<div class="mw-card">' +
+          '<div class="mw-card-info">' +
+            '<h3>' + esc(t.type.charAt(0).toUpperCase() + t.type.slice(1)) + '</h3>' +
+            '<div class="mw-card-meta">' + formatDate(t.timestamp) + (t.note ? ' &mdash; ' + esc(t.note) : '') + '</div>' +
+          '</div>' +
+          '<div class="mw-card-amount" style="color:' + (isPositive ? '#16a34a' : 'var(--danger)') + ';">' +
+            (isPositive ? '+' : '-') + Math.abs(t.points) + ' pts' +
+          '</div>' +
+          '</div>';
+      });
+      html += '</div>';
+    }
+
+    return html;
+  }
+
+  function renderPassesTab() {
+    if (walletData.passes.length === 0) {
+      return '<div class="mw-empty">' +
+        '<div class="mw-empty-icon">&#127915;</div>' +
+        '<p>No passes</p>' +
+        '<div class="mw-empty-hint">Purchase a class pass to get started.</div>' +
+        '<a href="classes.html" style="display:inline-block;margin-top:12px;padding:8px 20px;border-radius:6px;background:var(--primary);color:#fff;text-decoration:none;font-size:0.9rem;">Browse Passes</a>' +
+        '</div>';
+    }
+
+    var html = '<div class="mw-list">';
+    walletData.passes.forEach(function(p) {
+      var isActive = p.status === 'active';
+      var visitsText = '';
+      if (p.visitsRemaining !== null && p.visitsRemaining !== undefined) {
+        visitsText = p.visitsRemaining + ' of ' + ((p.visitsUsed || 0) + (p.visitsRemaining || 0)) + ' visits left';
+      } else {
+        visitsText = 'Unlimited';
+      }
+
+      html += '<div class="mw-card"' + (!isActive ? ' style="opacity:0.5;"' : '') + '>' +
+        '<div class="mw-card-info">' +
+          '<h3>' + esc(p.passDefinitionName || 'Pass') + '</h3>' +
+          '<div class="mw-card-meta">' +
+            visitsText +
+            (p.expiresAt ? '<br>Expires: ' + formatDate(p.expiresAt) : '') +
+          '</div>' +
+        '</div>' +
+        '<div style="text-align:right;">' +
+          '<span class="mw-card-status ' + (isActive ? 'mw-status-active' : 'mw-status-expired') + '">' + esc(p.status || 'active') + '</span>' +
+        '</div>' +
+        '</div>';
+    });
+    html += '</div>';
+    html += '<div style="text-align:center;margin-top:16px;"><a href="my-passes.html" style="font-size:0.85rem;color:var(--primary);text-decoration:none;">View detailed pass info &#8594;</a></div>';
+    return html;
+  }
+
+  function renderCoupons() {
+    if (walletData.coupons.length === 0) {
+      return '<div class="mw-empty">' +
+        '<div class="mw-empty-icon">&#127903;</div>' +
+        '<p>No saved coupons</p>' +
+        '<div class="mw-empty-hint">Saved coupons will appear here when available.</div>' +
+        '</div>';
+    }
+
+    var html = '<div class="mw-list">';
+    walletData.coupons.forEach(function(c) {
+      html += '<div class="mw-card">' +
+        '<div class="mw-card-info">' +
+          '<h3>' + esc(c.code || 'Coupon') + '</h3>' +
+          '<div class="mw-card-meta">' +
+            (c.description ? esc(c.description) : '') +
+            (c.expiresAt ? '<br>Expires: ' + formatDate(c.expiresAt) : '') +
+          '</div>' +
+        '</div>' +
+        '</div>';
+    });
+    html += '</div>';
+    return html;
+  }
+
+  window._mwTab = function(tab) {
+    currentTab = tab;
+    render();
+  };
+
+  // ---- Data Loading ----
+
+  function loadWallet(user, db) {
+    var basePath = TENANT_ID + '/public/accounts/' + user.uid;
+    var now = new Date().toISOString();
+
+    Promise.all([
+      // Credits
+      db.ref(basePath + '/wallet/credits').orderByChild('status').equalTo('active').once('value'),
+      // Gift cards
+      db.ref(basePath + '/wallet/giftCards').once('value'),
+      // Loyalty
+      db.ref(basePath + '/wallet/loyalty').once('value'),
+      // Passes (still at old path until Phase 6 migration)
+      db.ref(basePath + '/passes').once('value'),
+      // Saved coupons
+      db.ref(basePath + '/wallet/coupons').once('value')
+    ]).then(function(results) {
+      // Credits
+      var creditsSnap = results[0].val() || {};
+      walletData.credits = Object.keys(creditsSnap).map(function(id) {
+        var c = creditsSnap[id]; c._id = id; return c;
+      }).sort(function(a, b) {
+        return (a.createdAt || '').localeCompare(b.createdAt || '');
+      });
+
+      // Gift cards
+      var gcSnap = results[1].val() || {};
+      walletData.giftCards = Object.keys(gcSnap).map(function(id) {
+        var g = gcSnap[id]; g._id = id; return g;
+      }).sort(function(a, b) {
+        return (b.createdAt || '').localeCompare(a.createdAt || '');
+      });
+
+      // Loyalty
+      walletData.loyalty = results[2].val() || null;
+
+      // Passes
+      var passSnap = results[3].val() || {};
+      walletData.passes = Object.keys(passSnap).map(function(id) {
+        var p = passSnap[id]; p._id = id;
+        // Auto-expire
+        if (p.status === 'active' && p.expiresAt && p.expiresAt < now) p.status = 'expired';
+        return p;
+      }).sort(function(a, b) {
+        if (a.status === 'active' && b.status !== 'active') return -1;
+        if (a.status !== 'active' && b.status === 'active') return 1;
+        return (b.purchasedAt || '').localeCompare(a.purchasedAt || '');
+      });
+
+      // Coupons
+      var couponSnap = results[4].val() || {};
+      walletData.coupons = Object.keys(couponSnap).map(function(id) {
+        var c = couponSnap[id]; c._id = id; return c;
+      });
+
+      render();
+    }).catch(function(err) {
+      console.error('[my-wallet] Load failed:', err);
+      document.getElementById('mwContent').innerHTML =
+        '<div class="mw-empty"><p>Unable to load wallet. Please try again.</p></div>';
+    });
+  }
+
+  // ---- Init ----
+
+  window.TENANT_READY.then(function() {
+    document.title = 'My Wallet \u2014 ' + (window.TENANT_TITLE_SUFFIX ? TENANT_TITLE_SUFFIX() : 'Shop');
+
+    var app;
+    try { app = firebase.app(); } catch (e) { app = firebase.initializeApp(TENANT_FIREBASE_CONFIG, 'public-my-wallet'); }
+    var db = app.database();
+    var auth = app.auth();
+
+    auth.onAuthStateChanged(function(user) {
+      if (user && !user.isAnonymous) {
+        loadWallet(user, db);
+      } else {
+        renderSignIn();
+      }
+    });
+  }).catch(function(err) {
+    console.error('[my-wallet] Tenant failed:', err);
+  });
+})();
+</script>
+<script src="cart.js"></script>
+<script defer src="feedback-widget.js"></script>
+<script defer src="share-widget.js"></script>
+
+</body>
+</html>

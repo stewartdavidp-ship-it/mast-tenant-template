@@ -747,7 +747,7 @@
 
           // Wallet credits
           if (checkoutData.walletCredits.length > 0) {
-            var totalCreditCents = checkoutData.walletCredits.reduce(function(sum, c) { return sum + (c.amountCents || 0); }, 0);
+            var totalCreditCents = checkoutData.walletCredits.reduce(function(sum, c) { return sum + (c.remainingCents != null ? c.remainingCents : (c.amountCents || 0)); }, 0);
             html += '<div class="checkout-section">' +
               '<div class="checkout-section-title">Wallet Credits</div>' +
               '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;color:var(--text);">' +
@@ -824,7 +824,7 @@
     var couponDiscount = checkoutData.coupon ? checkoutData.coupon.discount : 0;
     var walletCreditDollars = 0;
     if (checkoutData.walletCreditApplied && checkoutData.walletCredits.length > 0) {
-      var totalCreditCents = checkoutData.walletCredits.reduce(function(sum, c) { return sum + (c.amountCents || 0); }, 0);
+      var totalCreditCents = checkoutData.walletCredits.reduce(function(sum, c) { return sum + (c.remainingCents != null ? c.remainingCents : (c.amountCents || 0)); }, 0);
       var afterCoupon = Math.round((subtotal + tax + shipCost - couponDiscount) * 100) / 100;
       walletCreditDollars = Math.min(totalCreditCents / 100, Math.max(0, afterCoupon));
     }
@@ -918,28 +918,32 @@
     var updates = {};
     var credits = checkoutData.walletCredits;
 
+    // FIFO: process credits oldest first (already sorted by createdAt)
     for (var i = 0; i < credits.length && remainingCents > 0; i++) {
       var c = credits[i];
-      var useCents = Math.min(c.amountCents, remainingCents);
-      updates[TENANT_ID + '/public/accounts/' + user.uid + '/wallet/credits/' + c._id + '/status'] = 'used';
-      updates[TENANT_ID + '/public/accounts/' + user.uid + '/wallet/credits/' + c._id + '/usedAt'] = now;
-      updates[TENANT_ID + '/public/accounts/' + user.uid + '/wallet/credits/' + c._id + '/usedOrderId'] = orderId;
+      var available = c.remainingCents != null ? c.remainingCents : (c.amountCents || 0);
+      var useCents = Math.min(available, remainingCents);
+      var creditPath = TENANT_ID + '/public/accounts/' + user.uid + '/wallet/credits/' + c._id;
+      var newRemaining = available - useCents;
 
-      // If credit is larger than needed, create a remainder credit
-      if (c.amountCents > remainingCents) {
-        var remainderRef = db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/wallet/credits').push();
-        updates[remainderRef.path.toString().replace(/^\//, '')] = {
-          amountCents: c.amountCents - remainingCents,
-          source: c.source,
-          sourceId: c.sourceId,
-          sourceDetail: 'Remainder from credit ' + c._id,
-          status: 'active',
-          createdAt: now,
-          usedAt: null,
-          usedOrderId: null,
-          expiresAt: c.expiresAt || null
-        };
+      // Update remaining balance
+      updates[creditPath + '/remainingCents'] = newRemaining;
+      updates[creditPath + '/updatedAt'] = now;
+
+      // Mark depleted if fully consumed
+      if (newRemaining <= 0) {
+        updates[creditPath + '/status'] = 'depleted';
       }
+
+      // Append transaction record
+      var txnRef = db.ref(creditPath + '/transactions').push();
+      updates[txnRef.path.toString().replace(/^\//, '')] = {
+        type: 'applied',
+        amountCents: useCents,
+        orderId: orderId,
+        timestamp: now
+      };
+
       remainingCents -= useCents;
     }
 

@@ -443,10 +443,25 @@
         '<path d="M7 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM7.16 14.26l.04-.12.96-1.74h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49A1 1 0 0 0 20.07 4H5.21l-.94-2H1v2h2l3.6 7.59-1.35 2.44C4.52 15.37 5.48 17 7 17h12v-2H7.42c-.14 0-.25-.11-.25-.25z"/>' +
       '</svg>';
 
-    // Desktop + mobile cart icons — inject into nav once it's built
+    // Wallet icon SVG template
+    var walletSvg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">' +
+        '<path d="M21 7H3c-1.1 0-2 .9-2 2v6c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2zm0 8H3V9h18v6zm-3-3.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM21 4H3c-1.1 0-2 .45-2 1v1h22V5c0-.55-.9-1-2-1z"/>' +
+      '</svg>';
+
+    // Desktop + mobile cart & wallet icons — inject into nav once it's built
     function injectCartIcons() {
       var navLinks = document.querySelector('.nav-links');
       if (navLinks && !document.getElementById('cartIconWrap')) {
+        // Wallet icon (before cart)
+        var walletLi = document.createElement('li');
+        walletLi.innerHTML =
+          '<a href="my-wallet.html" class="cart-icon-wrap" id="walletIconWrap" title="My Wallet">' +
+            walletSvg +
+          '</a>';
+        navLinks.appendChild(walletLi);
+
+        // Cart icon
         var li = document.createElement('li');
         li.innerHTML =
           '<div class="cart-icon-wrap" id="cartIconWrap" title="Shopping Cart">' +
@@ -459,6 +474,18 @@
 
       var navToggle = document.querySelector('.nav-toggle');
       if (navToggle && !document.getElementById('cartIconMobile')) {
+        // Wallet icon mobile (before cart)
+        if (!document.getElementById('walletIconMobile')) {
+          var walletMobile = document.createElement('a');
+          walletMobile.href = 'my-wallet.html';
+          walletMobile.className = 'cart-icon-wrap cart-icon-mobile';
+          walletMobile.id = 'walletIconMobile';
+          walletMobile.title = 'My Wallet';
+          walletMobile.innerHTML = walletSvg;
+          navToggle.parentNode.insertBefore(walletMobile, navToggle);
+        }
+
+        // Cart icon mobile
         var mobileIcon = document.createElement('div');
         mobileIcon.className = 'cart-icon-wrap cart-icon-mobile';
         mobileIcon.id = 'cartIconMobile';

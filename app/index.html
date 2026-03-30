@@ -4915,7 +4915,20 @@
         <div class="sidebar-item" data-route="wholesale" onclick="navigateTo('wholesale')">Wholesale</div>
         <div class="sidebar-item" data-route="galleries" onclick="navigateTo('galleries')">Galleries &amp; Consignment</div>
         <div class="sidebar-item" data-route="receipts" onclick="navigateTo('receipts')">Receipts &amp; Reconciliation</div>
+      </div>
+    </div>
+    <!-- Cart (Wallet & Discounts) -->
+    <div class="sidebar-section" data-section="cart">
+      <div class="sidebar-section-header" onclick="toggleSection('cart')">
+        <span class="sidebar-section-icon">&#128091;</span>
+        <span class="sidebar-section-label">Cart</span>
+        <span class="sidebar-section-arrow">&#9654;</span>
+      </div>
+      <div class="sidebar-items">
+        <div class="sidebar-item" data-route="wallet" onclick="navigateTo('wallet')">Wallet</div>
+        <div class="sidebar-item" data-route="gift-cards" onclick="navigateTo('gift-cards')">Gift Cards</div>
         <div class="sidebar-item" data-route="coupons" onclick="navigateTo('coupons')">Coupons</div>
+        <div class="sidebar-item" data-route="loyalty" onclick="navigateTo('loyalty')">Loyalty</div>
         <div class="sidebar-item" data-route="promotions" onclick="navigateTo('promotions')">Sale Promotions</div>
       </div>
     </div>
@@ -5983,6 +5996,40 @@
         </table>
       </div>
       <div id="promotionCards" class="coupon-cards"></div>
+    </div>
+
+    <!-- ===== CART MODULE TABS ===== -->
+
+    <!-- Admin: Wallet Dashboard Tab -->
+    <div id="walletTab" style="display:none;">
+      <div class="section-header">
+        <h2>Wallet</h2>
+      </div>
+      <div id="walletDashboard"></div>
+    </div>
+
+    <!-- Admin: Gift Cards Tab -->
+    <div id="giftCardsTab" style="display:none;">
+      <div class="section-header">
+        <h2>Gift Cards</h2>
+      </div>
+      <div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">
+        <div style="font-size:2rem;margin-bottom:12px;">&#127873;</div>
+        <p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">Gift Cards coming soon</p>
+        <p style="font-size:0.85rem;color:var(--warm-gray-light);">Configure denominations, track issuance, and manage gift card balances.</p>
+      </div>
+    </div>
+
+    <!-- Admin: Loyalty Tab -->
+    <div id="loyaltyTab" style="display:none;">
+      <div class="section-header">
+        <h2>Loyalty Program</h2>
+      </div>
+      <div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">
+        <div style="font-size:2rem;margin-bottom:12px;">&#11088;</div>
+        <p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">Loyalty Program coming soon</p>
+        <p style="font-size:0.85rem;color:var(--warm-gray-light);">Set earn rates, redemption values, and reward your loyal customers.</p>
+      </div>
     </div>
 
     <!-- ===== SALES TAB (PoS) ===== -->
@@ -11170,7 +11217,8 @@ var ROUTE_MAP = {
 var SECTION_ROUTES = {
   'make':   ['jobs', 'production', 'procurement'],
   'market': ['social', 'blog', 'newsletter', 'stories'],
-  'sell':   ['pos', 'orders', 'commissions', 'wholesale', 'galleries', 'receipts', 'coupons', 'promotions'],
+  'sell':   ['pos', 'orders', 'commissions', 'wholesale', 'galleries', 'receipts'],
+  'cart':   ['wallet', 'gift-cards', 'coupons', 'loyalty', 'promotions'],
   'show':   ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'],
   'ship':   ['pack', 'ship'],
   'run':    ['trips', 'expenses', 'reports', 'financials', 'contacts', 'customers', 'email-log'],
@@ -11179,7 +11227,7 @@ var SECTION_ROUTES = {
   'manage': ['products', 'inventory', 'employees', 'analytics', 'auditlog', 'settings']
 };
 
-var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'expensesTab', 'bookTab', 'subscriptionTab', 'aboutTab'];
+var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'expensesTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab'];
 
 var currentRoute = 'dashboard';
 
@@ -11569,7 +11617,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260329p1';
+var MAST_MODULES_V = '20260330p1';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -11598,7 +11646,8 @@ homepage: { src: 'modules/homepage.js', routes: ['homepage'] },
   lookbooks: { src: 'modules/lookbooks.js', routes: ['lookbooks'] },
   brand: { src: 'modules/brand.js', routes: ['brand'] },
   promotions: { src: 'modules/promotions.js', routes: ['promotions'] },
-  book: { src: 'modules/book.js', routes: ['book', 'book-detail', 'enrollments', 'instructors', 'instructor-detail', 'resources', 'resource-detail', 'passes', 'pass-detail', 'calendar', 'book-reports'] }
+  book: { src: 'modules/book.js', routes: ['book', 'book-detail', 'enrollments', 'instructors', 'instructor-detail', 'resources', 'resource-detail', 'passes', 'pass-detail', 'calendar', 'book-reports'] },
+  cart: { src: 'modules/cart.js', routes: ['wallet', 'gift-cards', 'loyalty'] }
 };
 
 // Reverse lookup: route → moduleId (built from MODULE_MANIFEST)
