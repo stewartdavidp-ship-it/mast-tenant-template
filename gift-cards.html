@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdn.jsdelivr.net https://*.firebaseio.com https://apis.google.com https://maps.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://us-central1-mast-platform-prod.cloudfunctions.net https://*.firebaseio.com wss://*.firebaseio.com https://*.firebasestorage.app https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://maps.googleapis.com https://places.googleapis.com https://api.ipify.org; img-src 'self' data: blob: https:; frame-src 'self' https://*.firebaseapp.com https://*.firebaseio.com; frame-ancestors 'none';">
+<title>Gift Cards &mdash; My Shop</title>
+<link rel="preconnect" href="https://mast-platform-prod-default-rtdb.firebaseio.com" crossorigin>
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<script>
+(function(){
+  var P='https://mast-platform-prod-default-rtdb.firebaseio.com/mast-platform';
+  var h=location.hostname,C=5*60*1000;
+  if(h==='localhost'||h==='127.0.0.1')return;
+  try{var r=localStorage.getItem('mast_tenant_'+h);if(r){var c=JSON.parse(r);if(Date.now()-c.timestamp<C){window.__earlyTenant=Promise.resolve(c.data);return;}}}catch(e){}
+  var ek=h.replace(/\./g,'_');
+  window.__earlyTenant=fetch(P+'/tenantsByDomain/'+ek+'.json').then(function(r){return r.ok?r.json():null}).then(function(tid){
+    if(!tid)return null;
+    return fetch(P+'/tenants/'+tid+'/publicConfig.json').then(function(r){return r.ok?r.json():null}).then(function(pc){
+      return pc?{tenantId:tid,publicConfig:pc}:null;
+    });
+  }).catch(function(){return null;});
+})();
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="storefront.css">
+<link rel="stylesheet" href="cart.css">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<style>
+.gc-container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 7rem 2rem 4rem;
+}
+.gc-header {
+  text-align: center;
+  margin-bottom: 2.5rem;
+}
+.gc-header h1 {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 2.4rem;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  margin: 0 0 0.5rem;
+  color: var(--text);
+}
+.gc-header p {
+  font-size: 0.95rem;
+  color: var(--warm-gray, #888);
+}
+
+/* Denomination grid */
+.gc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1.25rem;
+  margin-bottom: 2rem;
+}
+.gc-denom-card {
+  background: var(--surface-card);
+  border: 1px solid var(--surface-card-border);
+  border-radius: 10px;
+  padding: 1.5rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.gc-denom-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+}
+.gc-denom-card.selected {
+  border-color: var(--amber, #D4A853);
+  box-shadow: 0 0 0 2px var(--amber, #D4A853);
+}
+.gc-denom-icon {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+.gc-denom-amount {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 1.6rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 0.75rem;
+}
+.gc-denom-btn {
+  display: inline-block;
+  padding: 6px 20px;
+  border-radius: 6px;
+  border: 1px solid var(--primary, #D4A853);
+  background: transparent;
+  color: var(--primary, #D4A853);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: 'DM Sans', sans-serif;
+}
+.gc-denom-btn:hover {
+  background: var(--primary, #D4A853);
+  color: #fff;
+}
+
+/* Custom amount card */
+.gc-custom-input-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  margin-bottom: 0.75rem;
+}
+.gc-custom-prefix {
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.gc-custom-input {
+  width: 90px;
+  font-size: 1.4rem;
+  font-weight: 600;
+  font-family: 'DM Sans', sans-serif;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid var(--surface-card-border, #444);
+  text-align: center;
+  padding: 2px 4px;
+  outline: none;
+}
+.gc-custom-input:focus {
+  border-bottom-color: var(--primary, #D4A853);
+}
+.gc-custom-range {
+  font-size: 0.75rem;
+  color: var(--warm-gray, #888);
+  margin-bottom: 0.5rem;
+}
+
+/* Gift options panel */
+.gc-options {
+  background: var(--surface-card);
+  border: 1px solid var(--surface-card-border);
+  border-radius: 10px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  display: none;
+}
+.gc-options.visible { display: block; }
+.gc-options-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.3rem;
+  font-weight: 400;
+  color: var(--text);
+  margin: 0 0 1rem;
+  text-align: center;
+}
+.gc-selected-amount {
+  text-align: center;
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: var(--primary, #D4A853);
+  margin-bottom: 1rem;
+}
+
+/* Radio toggle */
+.gc-toggle {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--surface-card-border, #444);
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 0 auto 1.25rem;
+  max-width: 340px;
+}
+.gc-toggle-btn {
+  flex: 1;
+  padding: 10px 16px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  font-family: 'DM Sans', sans-serif;
+  border: none;
+  background: transparent;
+  color: var(--warm-gray, #888);
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+}
+.gc-toggle-btn.active {
+  background: var(--primary, #D4A853);
+  color: #fff;
+}
+
+/* Gift fields */
+.gc-gift-fields {
+  display: none;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+.gc-gift-fields.visible { display: flex; }
+.gc-field label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--warm-gray, #888);
+  margin-bottom: 4px;
+}
+.gc-field input,
+.gc-field textarea {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+  font-family: 'DM Sans', sans-serif;
+  color: var(--text);
+  background: var(--bg, #1a1a1a);
+  border: 1px solid var(--surface-card-border, #444);
+  border-radius: 6px;
+  outline: none;
+  box-sizing: border-box;
+}
+.gc-field input:focus,
+.gc-field textarea:focus {
+  border-color: var(--primary, #D4A853);
+}
+.gc-field textarea {
+  resize: vertical;
+  min-height: 70px;
+}
+
+/* Quantity stepper */
+.gc-qty-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 1rem 0;
+}
+.gc-qty-label {
+  font-size: 0.85rem;
+  color: var(--warm-gray, #888);
+}
+.gc-qty-stepper {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border: 1px solid var(--surface-card-border, #444);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.gc-qty-btn {
+  width: 34px;
+  height: 34px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 1.1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+.gc-qty-btn:hover { background: rgba(255,255,255,0.05); }
+.gc-qty-btn:disabled { opacity: 0.3; cursor: default; }
+.gc-qty-val {
+  width: 40px;
+  text-align: center;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+}
+
+/* Add to cart button */
+.gc-add-btn {
+  display: block;
+  width: 100%;
+  max-width: 340px;
+  margin: 0 auto;
+  padding: 12px 24px;
+  border-radius: 6px;
+  border: none;
+  background: var(--primary, #D4A853);
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.gc-add-btn:hover { opacity: 0.9; }
+
+/* Empty state */
+.gc-empty {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: var(--warm-gray, #888);
+}
+.gc-empty-icon { font-size: 2.5rem; margin-bottom: 12px; }
+.gc-empty p { font-size: 1rem; margin-bottom: 4px; }
+.gc-empty-hint { font-size: 0.85rem; color: var(--warm-gray-light, #aaa); }
+
+.gc-loading {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: var(--warm-gray, #888);
+}
+
+/* Validation error */
+.gc-field-error {
+  color: var(--danger, #EF5350);
+  font-size: 0.75rem;
+  margin-top: 2px;
+}
+
+@media (max-width: 768px) {
+  .gc-container { padding: 6rem 1.5rem 3rem; }
+  .gc-header h1 { font-size: 1.8rem; }
+  .gc-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 1rem; }
+  .gc-denom-amount { font-size: 1.3rem; }
+  .gc-options { padding: 1.25rem; }
+}
+</style>
+</head>
+<body>
+<nav id="mainNav"></nav>
+<div class="nav-mobile-menu" id="mobileMenu"></div>
+
+<div class="gc-container">
+  <div class="gc-header">
+    <h1>Gift Cards</h1>
+    <p>Give the gift of choice &mdash; delivered instantly via email</p>
+  </div>
+  <div id="gcContent">
+    <div class="gc-loading">Loading...</div>
+  </div>
+</div>
+
+<footer id="siteFooter"></footer>
+
+<script src="storefront-tenant.js"></script>
+<script src="storefront-theme.js"></script>
+<script src="storefront-nav.js"></script>
+<script src="tenant-brand.js?v=2"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+
+<script>
+(function() {
+  'use strict';
+
+  var selectedAmountCents = 0;
+  var giftType = 'self';
+  var qty = 1;
+
+  function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  function formatMoney(cents) {
+    return '$' + (cents / 100).toFixed(2);
+  }
+
+  function renderEmpty() {
+    document.getElementById('gcContent').innerHTML =
+      '<div class="gc-empty">' +
+        '<div class="gc-empty-icon">&#127873;</div>' +
+        '<p>Gift cards are not available yet.</p>' +
+        '<div class="gc-empty-hint">Check back soon!</div>' +
+      '</div>';
+  }
+
+  function renderPage(config) {
+    var denoms = config.giftCardDenominations || [];
+    var customEnabled = config.giftCardCustomEnabled || false;
+    var customMin = config.giftCardCustomMin || 500;
+    var customMax = config.giftCardCustomMax || 50000;
+
+    if (denoms.length === 0 && !customEnabled) {
+      renderEmpty();
+      return;
+    }
+
+    var html = '';
+
+    // Denomination grid
+    html += '<div class="gc-grid" id="gcGrid">';
+    denoms.forEach(function(cents) {
+      html += '<div class="gc-denom-card" data-cents="' + cents + '" onclick="window._gcSelect(' + cents + ', this)">' +
+        '<div class="gc-denom-icon">&#127873;</div>' +
+        '<div class="gc-denom-amount">' + esc(formatMoney(cents)) + '</div>' +
+        '<button class="gc-denom-btn" type="button">Select</button>' +
+      '</div>';
+    });
+
+    // Custom amount card
+    if (customEnabled) {
+      html += '<div class="gc-denom-card" id="gcCustomCard" data-cents="custom">' +
+        '<div class="gc-denom-icon">&#9997;&#65039;</div>' +
+        '<div class="gc-custom-input-wrap">' +
+          '<span class="gc-custom-prefix">$</span>' +
+          '<input type="number" class="gc-custom-input" id="gcCustomInput" placeholder="0.00" min="' + (customMin / 100).toFixed(2) + '" max="' + (customMax / 100).toFixed(2) + '" step="0.01">' +
+        '</div>' +
+        '<div class="gc-custom-range">' + esc(formatMoney(customMin)) + ' &ndash; ' + esc(formatMoney(customMax)) + '</div>' +
+        '<button class="gc-denom-btn" type="button" onclick="window._gcSelectCustom()">Select</button>' +
+      '</div>';
+    }
+    html += '</div>';
+
+    // Gift options panel
+    html += '<div class="gc-options" id="gcOptions">' +
+      '<div class="gc-options-title">Gift Card Options</div>' +
+      '<div class="gc-selected-amount" id="gcSelectedLabel"></div>' +
+
+      // Toggle: self vs gift
+      '<div class="gc-toggle">' +
+        '<button class="gc-toggle-btn active" id="gcToggleSelf" type="button" onclick="window._gcToggleType(\'self\')">Buy for myself</button>' +
+        '<button class="gc-toggle-btn" id="gcToggleGift" type="button" onclick="window._gcToggleType(\'gift\')">Send as gift</button>' +
+      '</div>' +
+
+      // Gift fields (hidden by default)
+      '<div class="gc-gift-fields" id="gcGiftFields">' +
+        '<div class="gc-field">' +
+          '<label for="gcRecipientEmail">Recipient email</label>' +
+          '<input type="email" id="gcRecipientEmail" placeholder="friend@example.com">' +
+        '</div>' +
+        '<div class="gc-field">' +
+          '<label for="gcSenderName">Your name</label>' +
+          '<input type="text" id="gcSenderName" placeholder="Your name">' +
+        '</div>' +
+        '<div class="gc-field">' +
+          '<label for="gcSenderMessage">Personal message (optional)</label>' +
+          '<textarea id="gcSenderMessage" placeholder="Enjoy this gift!"></textarea>' +
+        '</div>' +
+      '</div>' +
+
+      // Quantity
+      '<div class="gc-qty-row">' +
+        '<span class="gc-qty-label">Quantity:</span>' +
+        '<div class="gc-qty-stepper">' +
+          '<button class="gc-qty-btn" type="button" id="gcQtyMinus" onclick="window._gcQty(-1)">&minus;</button>' +
+          '<span class="gc-qty-val" id="gcQtyVal">1</span>' +
+          '<button class="gc-qty-btn" type="button" id="gcQtyPlus" onclick="window._gcQty(1)">+</button>' +
+        '</div>' +
+      '</div>' +
+
+      // Add to cart
+      '<button class="gc-add-btn" type="button" id="gcAddBtn" onclick="window._gcAddToCart()">Add to Cart</button>' +
+    '</div>';
+
+    document.getElementById('gcContent').innerHTML = html;
+  }
+
+  // --- Interactions ---
+
+  window._gcSelect = function(cents, el) {
+    selectedAmountCents = cents;
+    qty = 1;
+    giftType = 'self';
+
+    // Update card selection
+    var cards = document.querySelectorAll('.gc-denom-card');
+    for (var i = 0; i < cards.length; i++) cards[i].classList.remove('selected');
+    el.classList.add('selected');
+
+    showOptions();
+  };
+
+  window._gcSelectCustom = function() {
+    var input = document.getElementById('gcCustomInput');
+    if (!input) return;
+    var val = parseFloat(input.value);
+    if (isNaN(val) || val <= 0) {
+      input.focus();
+      return;
+    }
+    var cents = Math.round(val * 100);
+    // Read bounds from config stored on the element
+    var card = document.getElementById('gcCustomCard');
+    var minAttr = parseFloat(input.getAttribute('min'));
+    var maxAttr = parseFloat(input.getAttribute('max'));
+    var minCents = Math.round(minAttr * 100);
+    var maxCents = Math.round(maxAttr * 100);
+
+    if (cents < minCents || cents > maxCents) {
+      input.focus();
+      return;
+    }
+
+    selectedAmountCents = cents;
+    qty = 1;
+    giftType = 'self';
+
+    var cards = document.querySelectorAll('.gc-denom-card');
+    for (var i = 0; i < cards.length; i++) cards[i].classList.remove('selected');
+    card.classList.add('selected');
+
+    showOptions();
+  };
+
+  function showOptions() {
+    var panel = document.getElementById('gcOptions');
+    if (!panel) return;
+    panel.classList.add('visible');
+    document.getElementById('gcSelectedLabel').textContent = formatMoney(selectedAmountCents) + ' Gift Card';
+    document.getElementById('gcQtyVal').textContent = '1';
+    document.getElementById('gcQtyMinus').disabled = true;
+    document.getElementById('gcQtyPlus').disabled = false;
+
+    // Reset toggle
+    document.getElementById('gcToggleSelf').classList.add('active');
+    document.getElementById('gcToggleGift').classList.remove('active');
+    document.getElementById('gcGiftFields').classList.remove('visible');
+
+    // Clear gift fields
+    var emailEl = document.getElementById('gcRecipientEmail');
+    var nameEl = document.getElementById('gcSenderName');
+    var msgEl = document.getElementById('gcSenderMessage');
+    if (emailEl) emailEl.value = '';
+    if (nameEl) nameEl.value = '';
+    if (msgEl) msgEl.value = '';
+
+    // Scroll into view
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  window._gcToggleType = function(type) {
+    giftType = type;
+    var selfBtn = document.getElementById('gcToggleSelf');
+    var giftBtn = document.getElementById('gcToggleGift');
+    var fields = document.getElementById('gcGiftFields');
+    if (type === 'self') {
+      selfBtn.classList.add('active');
+      giftBtn.classList.remove('active');
+      fields.classList.remove('visible');
+    } else {
+      selfBtn.classList.remove('active');
+      giftBtn.classList.add('active');
+      fields.classList.add('visible');
+    }
+  };
+
+  window._gcQty = function(delta) {
+    qty = Math.max(1, Math.min(10, qty + delta));
+    document.getElementById('gcQtyVal').textContent = String(qty);
+    document.getElementById('gcQtyMinus').disabled = qty <= 1;
+    document.getElementById('gcQtyPlus').disabled = qty >= 10;
+  };
+
+  window._gcAddToCart = function() {
+    if (!selectedAmountCents || selectedAmountCents <= 0) return;
+
+    var recipientEmail = '';
+    var senderName = '';
+    var senderMessage = '';
+
+    if (giftType === 'gift') {
+      var emailEl = document.getElementById('gcRecipientEmail');
+      var nameEl = document.getElementById('gcSenderName');
+      var msgEl = document.getElementById('gcSenderMessage');
+
+      recipientEmail = (emailEl ? emailEl.value : '').trim();
+      senderName = (nameEl ? nameEl.value : '').trim();
+      senderMessage = (msgEl ? msgEl.value : '').trim();
+
+      // Validate required gift fields
+      if (!recipientEmail) {
+        emailEl.focus();
+        return;
+      }
+      // Basic email check
+      if (recipientEmail.indexOf('@') === -1 || recipientEmail.indexOf('.') === -1) {
+        emailEl.focus();
+        return;
+      }
+      if (!senderName) {
+        nameEl.focus();
+        return;
+      }
+    }
+
+    if (typeof MastCart === 'undefined' || !MastCart.addItem) {
+      console.error('[gift-cards] MastCart not available');
+      return;
+    }
+
+    MastCart.addItem({
+      pid: 'gift-card-' + selectedAmountCents,
+      name: 'Gift Card - ' + formatMoney(selectedAmountCents),
+      price: formatMoney(selectedAmountCents),
+      priceCents: selectedAmountCents,
+      image: '',
+      options: {
+        bookingType: 'gift-card',
+        giftType: giftType,
+        recipientEmail: recipientEmail,
+        senderName: senderName,
+        senderMessage: senderMessage
+      },
+      qty: qty,
+      isGiftCard: true
+    });
+    MastCart.showToast('Gift card added to cart');
+
+    // Reset selection
+    selectedAmountCents = 0;
+    qty = 1;
+    giftType = 'self';
+    var cards = document.querySelectorAll('.gc-denom-card');
+    for (var i = 0; i < cards.length; i++) cards[i].classList.remove('selected');
+    var panel = document.getElementById('gcOptions');
+    if (panel) panel.classList.remove('visible');
+  };
+
+  // --- Init ---
+
+  window.TENANT_READY.then(function() {
+    document.title = 'Gift Cards \u2014 ' + (window.TENANT_TITLE_SUFFIX ? TENANT_TITLE_SUFFIX() : 'Shop');
+
+    // Load wallet config via REST
+    var dbUrl = 'https://mast-platform-prod-default-rtdb.firebaseio.com';
+    var configPath = TENANT_ID + '/admin/walletConfig.json';
+
+    fetch(dbUrl + '/' + configPath)
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(config) {
+        if (!config || !config.giftCardsEnabled) {
+          renderEmpty();
+          return;
+        }
+        renderPage(config);
+      })
+      .catch(function(err) {
+        console.error('[gift-cards] Config load failed:', err);
+        renderEmpty();
+      });
+  }).catch(function(err) {
+    console.error('[gift-cards] Tenant failed:', err);
+  });
+})();
+</script>
+<script src="cart.js"></script>
+<script defer src="feedback-widget.js"></script>
+<script defer src="share-widget.js"></script>
+
+</body>
+</html>
