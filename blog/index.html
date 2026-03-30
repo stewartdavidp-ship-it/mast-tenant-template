@@ -475,6 +475,16 @@
     <button class="blog-tab" id="tabStories" onclick="switchTab('stories')">Stories</button>
     <button class="blog-tab" id="tabSocial" onclick="switchTab('social')">Social Media</button>
   </div>
+  <div id="newsletterSignupBar" style="display:none;background:var(--surface-card);border:1px solid var(--border);border-radius:8px;padding:24px;margin-bottom:24px;text-align:center;">
+    <h3 style="font-family:'Cormorant Garamond',serif;font-size:1.4rem;font-weight:400;margin:0 0 6px;">Stay in the loop</h3>
+    <p style="font-size:0.85rem;color:var(--text-muted);margin:0 0 16px;">Get notified when we publish new issues — no spam, ever.</p>
+    <div id="nlSignupFormBlog" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;max-width:500px;margin:0 auto;">
+      <input type="text" id="nlSignupNameBlog" placeholder="Your name" style="padding:8px 12px;border:1px solid var(--border);border-radius:4px;font-size:0.88rem;flex:1;min-width:140px;background:var(--bg);color:var(--text);">
+      <input type="email" id="nlSignupEmailBlog" placeholder="Your email" style="padding:8px 12px;border:1px solid var(--border);border-radius:4px;font-size:0.88rem;flex:1;min-width:180px;background:var(--bg);color:var(--text);">
+      <button onclick="nlSubmitSignupBlog()" style="padding:8px 20px;background:var(--primary);color:white;border:none;border-radius:4px;font-size:0.85rem;cursor:pointer;white-space:nowrap;">Subscribe</button>
+    </div>
+    <p style="font-size:0.72rem;color:var(--text-muted);opacity:0.7;margin:10px 0 0;max-width:400px;margin-left:auto;margin-right:auto;">By subscribing, you agree to receive email newsletters. You can unsubscribe at any time.</p>
+  </div>
   <div id="postList">
     <div class="loading">Loading posts...</div>
   </div>
@@ -512,12 +522,36 @@ window.TENANT_READY.then(function() {
   var currentTab = 'blog';
 
   // Make switchTab available globally
+  window.nlSubmitSignupBlog = function() {
+    var name = document.getElementById('nlSignupNameBlog').value.trim();
+    var email = document.getElementById('nlSignupEmailBlog').value.trim();
+    if (!name) { alert('Please enter your name.'); return; }
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { alert('Please enter a valid email address.'); return; }
+    var btn = document.querySelector('#nlSignupFormBlog button');
+    btn.disabled = true; btn.textContent = 'Subscribing...';
+    var subRef = db.ref(TENANT_ID + '/newsletter/subscribers').push();
+    var token = subRef.key + '-' + Date.now().toString(36);
+    subRef.set({
+      id: subRef.key, name: name, email: email, notes: null,
+      subscribedAt: new Date().toISOString(), source: 'website-form',
+      status: 'active', unsubscribeToken: token, unsubscribedAt: null
+    }).then(function() {
+      document.getElementById('nlSignupFormBlog').innerHTML =
+        '<p style="color:var(--primary);font-size:0.95rem;">You\'re subscribed! Thanks for joining.</p>';
+    }).catch(function(err) {
+      console.error('Signup error:', err);
+      btn.disabled = false; btn.textContent = 'Subscribe';
+      alert('Something went wrong. Please try again.');
+    });
+  };
+
   window.switchTab = function(tab) {
     currentTab = tab;
     document.getElementById('tabBlog').classList.toggle('active', tab === 'blog');
     document.getElementById('tabNewsletter').classList.toggle('active', tab === 'newsletter');
     document.getElementById('tabStories').classList.toggle('active', tab === 'stories');
     document.getElementById('tabSocial').classList.toggle('active', tab === 'social');
+    document.getElementById('newsletterSignupBar').style.display = (tab === 'newsletter') ? '' : 'none';
 
     if (tab === 'social') {
       renderSocialPage();
