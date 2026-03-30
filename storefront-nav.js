@@ -28,6 +28,8 @@
     wholesale:  { label: 'Wholesale',   href: 'wholesale.html',   enabled: false, order: 5 },
     classes:    { label: 'Classes',     href: 'classes.html',     enabled: true,  order: 2.5 },
     myclasses:  { label: 'My Classes',  href: 'my-classes.html',  enabled: true,  order: 2.6 },
+    giftcards:  { label: 'Gift Cards',  href: 'gift-cards.html',  enabled: false, order: 3.5 },
+    wallet:     { label: 'My Wallet',  href: 'my-wallet.html',   enabled: false, order: 3.6 },
     schedule:   { label: 'Schedule',    href: 'schedule.html',    enabled: false, order: 6 },
     blog:       { label: 'From the Studio', href: 'blog/',        enabled: true,  order: 7 }
   };

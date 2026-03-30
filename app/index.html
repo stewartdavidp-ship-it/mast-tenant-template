@@ -8110,6 +8110,29 @@ MastDB.promotions = {
   unlisten: function(handle) { this.ref().off('value', handle); }
 };
 
+MastDB.giftCards = {
+  PATH: 'admin/giftCards',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  list: function(limit) { return this.ref().limitToLast(limit || 100).once('value'); },
+  get: function(id) { return this.ref(id).once('value'); },
+  set: function(id, data) { return this.ref(id).set(data); },
+  update: function(id, data) { return this.ref(id).update(data); },
+  remove: function(id) { return this.ref(id).remove(); },
+  newKey: function() { return this.ref().push().key; },
+  listen: function(limit, cb, errCb) {
+    return this.ref().limitToLast(limit || 100).on('value', cb, errCb);
+  },
+  unlisten: function(handle) { this.ref().off('value', handle); }
+};
+
+MastDB.walletConfig = {
+  PATH: 'admin/walletConfig',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  get: function() { return this.ref().once('value'); },
+  set: function(data) { return this.ref().set(data); },
+  update: function(data) { return this.ref().update(data); }
+};
+
 MastDB.salesEvents = {
   PATH: 'admin/salesEvents',
   ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
