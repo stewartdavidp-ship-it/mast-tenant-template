@@ -32,20 +32,24 @@
       <div class="form-row">
         <div class="form-group">
           <label>First Name</label>
-          <input type="text" placeholder="First" />
+          <input type="text" id="contactFormFirst" placeholder="First" />
         </div>
         <div class="form-group">
           <label>Last Name</label>
-          <input type="text" placeholder="Last" />
+          <input type="text" id="contactFormLast" placeholder="Last" />
         </div>
       </div>
       <div class="form-group">
         <label>Email</label>
-        <input type="email" placeholder="you@example.com" />
+        <input type="email" id="contactFormEmail" placeholder="you@example.com" />
+      </div>
+      <div class="form-group">
+        <label>Phone <span style="font-size:0.75rem;opacity:0.6;">(optional)</span></label>
+        <input type="tel" id="contactFormPhone" placeholder="(555) 123-4567" />
       </div>
       <div class="form-group">
         <label>Inquiry Type</label>
-        <select>
+        <select id="contactFormType">
           <option>General Question</option>
           <option>Custom Commission</option>
           <option>Wholesale Inquiry</option>
@@ -55,9 +59,9 @@
       </div>
       <div class="form-group">
         <label>Message</label>
-        <textarea placeholder="Tell us about your vision..."></textarea>
+        <textarea id="contactFormMessage" placeholder="Tell us about your vision..."></textarea>
       </div>
-      <button class="form-submit">Send Message</button>
+      <button class="form-submit" onclick="submitContactForm()">Send Message</button>
     </div>
   </div>
 </section>
