@@ -436,6 +436,12 @@ function renderContactDetail(contact) {
         docsHtml += '</div>';
       }
 
+      var respondBtnHtml = '';
+      if (inter.type === 'Web Inquiry' && contact.email) {
+        respondBtnHtml = '<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 12px;margin-top:8px;" ' +
+          'onclick="openInquiryResponseModal(\'' + esc(contact.id) + '\')">Respond</button>';
+      }
+
       timelineHtml += '' +
         '<div class="interaction-card">' +
           '<div class="interaction-header">' +
@@ -444,6 +450,7 @@ function renderContactDetail(contact) {
           '</div>' +
           (inter.notes ? '<div class="interaction-notes">' + esc(inter.notes) + '</div>' : '') +
           docsHtml +
+          respondBtnHtml +
         '</div>';
     });
   }
@@ -519,6 +526,153 @@ async function saveInteraction(contactId) {
     loadContactDetail(contactId);
   } catch (err) {
     showToast('Error saving interaction: ' + err.message, true);
+  }
+}
+
+// ============================================================
+// Inquiry Response — Reply to web inquiries from admin
+// ============================================================
+
+async function openInquiryResponseModal(contactId) {
+  try {
+    // Load contact
+    var cSnap = await MastDB.contacts.ref(contactId).once('value');
+    var contact = cSnap.val();
+    if (!contact) { showToast('Contact not found.', true); return; }
+    if (!contact.email) { showToast('Contact has no email address.', true); return; }
+
+    // Find the inquiry record for this contact
+    var iqSnap = await MastDB._ref('inquiries').orderByChild('contactId').equalTo(contactId).limitToLast(1).once('value');
+    var iqVal = iqSnap.val();
+    var inquiry = null;
+    if (iqVal) {
+      var keys = Object.keys(iqVal);
+      inquiry = iqVal[keys[keys.length - 1]];
+    }
+
+    var brandName = (TENANT_CONFIG && TENANT_CONFIG.brand && TENANT_CONFIG.brand.name) || 'Our Shop';
+    var brandEmail = (TENANT_CONFIG && TENANT_CONFIG.email && TENANT_CONFIG.email.from) || '';
+    var brandPhone = '';
+    try {
+      var phoneSnap = await MastDB._ref('config/brand/phone').once('value');
+      brandPhone = phoneSnap.val() || '';
+    } catch (e) { /* no phone */ }
+
+    var firstName = (contact.name || '').split(' ')[0] || 'there';
+    var inquiryType = inquiry ? (inquiry.type || 'your inquiry') : 'your inquiry';
+    var originalMessage = inquiry ? (inquiry.message || '') : '';
+    var originalDate = inquiry ? (inquiry.createdAt || '').slice(0, 10) : '';
+    var inquiryId = inquiry ? (inquiry.id || '') : '';
+    var subject = 'Re: ' + inquiryType + ' — ' + brandName;
+
+    // Build signature
+    var sigParts = [brandName];
+    if (brandEmail) sigParts.push(brandEmail);
+    if (brandPhone) sigParts.push(brandPhone);
+    var signature = sigParts.join('\n');
+
+    // Build default body template
+    var bodyTemplate = 'Hi ' + firstName + ',\n\n' +
+      'Thank you for reaching out to ' + brandName + '!\n\n' +
+      '\n\n' +
+      'Best regards,\n' + signature;
+
+    if (originalMessage) {
+      bodyTemplate += '\n\n---\nOriginal message' + (originalDate ? ' (' + originalDate + ')' : '') + ':\n' + originalMessage;
+    }
+
+    var html = '' +
+      '<div class="modal-header"><h3>Respond to Inquiry</h3></div>' +
+      '<div class="modal-body">' +
+        '<div class="form-group"><label>To</label><div style="padding:8px 12px;background:var(--hover-bg, #f5f5f5);border-radius:6px;font-size:0.9rem;color:var(--text-primary);">' + esc(contact.email) + '</div></div>' +
+        '<div class="form-group"><label>Subject</label><input type="text" id="inquiryResponseSubject" value="' + esc(subject) + '"></div>' +
+        '<div class="form-group"><label>Message</label><textarea id="inquiryResponseBody" rows="12" style="font-family:monospace;font-size:0.85rem;white-space:pre-wrap;">' + esc(bodyTemplate) + '</textarea></div>' +
+        '<input type="hidden" id="inquiryResponseContactId" value="' + esc(contactId) + '">' +
+        '<input type="hidden" id="inquiryResponseInquiryId" value="' + esc(inquiryId) + '">' +
+        '<input type="hidden" id="inquiryResponseToEmail" value="' + esc(contact.email) + '">' +
+      '</div>' +
+      '<div class="modal-footer">' +
+        '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+        '<button class="btn btn-primary" id="inquiryResponseSendBtn" onclick="sendInquiryResponse()">Send Response</button>' +
+      '</div>';
+    openModal(html);
+
+    // Place cursor at the blank line (after "Thank you..." and before "Best regards")
+    setTimeout(function() {
+      var ta = document.getElementById('inquiryResponseBody');
+      if (ta) {
+        var pos = ta.value.indexOf('\n\n\n\n');
+        if (pos > -1) { ta.selectionStart = ta.selectionEnd = pos + 2; }
+        ta.focus();
+      }
+    }, 100);
+  } catch (err) {
+    console.error('Error opening inquiry response modal:', err);
+    showToast('Error loading inquiry details: ' + err.message, true);
+  }
+}
+
+async function sendInquiryResponse() {
+  var subjectEl = document.getElementById('inquiryResponseSubject');
+  var bodyEl = document.getElementById('inquiryResponseBody');
+  var contactId = document.getElementById('inquiryResponseContactId').value;
+  var inquiryId = document.getElementById('inquiryResponseInquiryId').value;
+  var toEmail = document.getElementById('inquiryResponseToEmail').value;
+  var sendBtn = document.getElementById('inquiryResponseSendBtn');
+
+  var subject = subjectEl.value.trim();
+  var body = bodyEl.value.trim();
+
+  if (!subject) { showToast('Subject is required.', true); return; }
+  if (!body) { showToast('Message body is required.', true); return; }
+
+  sendBtn.disabled = true;
+  sendBtn.textContent = 'Sending...';
+
+  try {
+    // Convert plain text body to HTML (preserve line breaks)
+    var bodyHtml = body.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+
+    // Call Cloud Function to send email
+    var result = await firebase.functions().httpsCallable('sendInquiryResponse')({
+      tenantId: MastDB.tenantId(),
+      contactId: contactId,
+      inquiryId: inquiryId,
+      subject: subject,
+      body: bodyHtml,
+      toEmail: toEmail
+    });
+
+    // Record as interaction on the contact
+    var interactionId = 'int_' + Date.now().toString(36);
+    var now = new Date().toISOString();
+    await MastDB.contacts.interactions(contactId, interactionId).set({
+      id: interactionId,
+      date: now.slice(0, 10),
+      type: 'Email',
+      notes: subject + ': ' + body.substring(0, 500),
+      documents: [],
+      loggedBy: currentUser ? currentUser.uid : 'unknown',
+      createdAt: now
+    });
+
+    // Update inquiry status to 'responded'
+    if (inquiryId) {
+      await MastDB._ref('inquiries/' + inquiryId + '/status').set('responded');
+      await MastDB._ref('inquiries/' + inquiryId + '/respondedAt').set(now);
+    }
+
+    showToast('Response sent to ' + toEmail);
+    closeModal();
+
+    // Refresh views
+    if (contactId) loadContactDetail(contactId);
+    if (typeof renderDashCardNewInquiries === 'function') renderDashCardNewInquiries();
+  } catch (err) {
+    console.error('Error sending inquiry response:', err);
+    showToast('Failed to send: ' + (err.message || err), true);
+    sendBtn.disabled = false;
+    sendBtn.textContent = 'Send Response';
   }
 }
 
