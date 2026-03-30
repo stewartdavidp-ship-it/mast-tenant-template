@@ -1651,7 +1651,7 @@
   window._bookFilterStatus = function() { renderClassList(); };
   window._bookCreateClass = function() { showClassForm(null); };
   window._bookEditClass = function(id) { showClassForm(id); };
-  window._bookViewClass = function(id) { navigateTo('book-detail', id); };
+  window._bookViewClass = function(id) { loadClassDetail(id); };
   window._bookBackToList = function() { backToList(); };
   window._bookSaveClass = function(id) { saveClass(id || null); };
   window._bookGenerateSessions = function(id) {
