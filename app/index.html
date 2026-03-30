@@ -24357,7 +24357,7 @@ function renderDashCardNewInquiries() {
             '<div style="font-size:0.78rem;color:var(--warm-gray);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(inq.type || '') + ' &mdash; ' + esc((inq.message || '').substring(0, 60)) + '</div>' +
           '</div>' +
           '<div style="display:flex;align-items:center;gap:8px;margin-left:8px;flex-shrink:0;">' +
-            '<button class="btn btn-primary" style="font-size:0.72rem;padding:3px 10px;white-space:nowrap;" onclick="event.stopPropagation();openInquiryResponseModal(\'' + esc(inq.contactId || '') + '\')">Respond</button>' +
+            '<button class="btn btn-primary" style="font-size:0.72rem;padding:3px 10px;white-space:nowrap;" onclick="event.stopPropagation();MastAdmin.loadModule(\'contacts\').then(function(){openInquiryResponseModal(\'' + esc(inq.contactId || '') + '\')})">Respond</button>' +
             '<div style="font-size:0.75rem;color:var(--warm-gray-light);white-space:nowrap;">' + timeAgo + '</div>' +
           '</div>' +
         '</div>';
