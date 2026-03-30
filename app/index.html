@@ -8710,6 +8710,16 @@ async function loadTenantSubscription() {
         console.log('Subscription: no record found, defaulting to minimal access');
       }
     }
+    // Auto-sync command tier modules — ensures newly added modules are included
+    if (data.tier === 'command' && data.modules) {
+      var allPurchasable = Object.keys(MODULE_REGISTRY).filter(function(id) { return MODULE_REGISTRY[id].purchasable && MODULE_REGISTRY[id].status === 'active'; });
+      var missing = allPurchasable.filter(function(id) { return data.modules.indexOf(id) === -1; });
+      if (missing.length > 0) {
+        data.modules = data.modules.concat(missing);
+        MastDB.subscription.update({ modules: data.modules });
+        console.log('Subscription: synced command tier modules, added:', missing.join(', '));
+      }
+    }
     _tenantSubscription = data;
     return data;
   } catch (err) {
