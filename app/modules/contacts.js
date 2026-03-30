@@ -536,11 +536,10 @@ async function saveInteraction(contactId) {
 
 async function openInquiryResponseModal(contactId) {
   try {
-    // Load contact
+    // Load contact and inquiry in parallel
     var cSnap = await MastDB.contacts.ref(contactId).once('value');
     var contact = cSnap.val();
     if (!contact) { showToast('Contact not found.', true); return; }
-    if (!contact.email) { showToast('Contact has no email address.', true); return; }
 
     // Find the inquiry record for this contact
     var iqSnap = await MastDB._ref('inquiries').orderByChild('contactId').equalTo(contactId).limitToLast(1).once('value');
@@ -550,6 +549,10 @@ async function openInquiryResponseModal(contactId) {
       var keys = Object.keys(iqVal);
       inquiry = iqVal[keys[keys.length - 1]];
     }
+
+    // Use contact email, fall back to inquiry email
+    var toEmail = contact.email || (inquiry && inquiry.email) || '';
+    if (!toEmail) { showToast('No email address found for this contact.', true); return; }
 
     var brandName = (TENANT_CONFIG && TENANT_CONFIG.brand && TENANT_CONFIG.brand.name) || 'Our Shop';
     var brandEmail = (TENANT_CONFIG && TENANT_CONFIG.email && TENANT_CONFIG.email.from) || '';
@@ -585,12 +588,12 @@ async function openInquiryResponseModal(contactId) {
     var html = '' +
       '<div class="modal-header"><h3>Respond to Inquiry</h3></div>' +
       '<div class="modal-body">' +
-        '<div class="form-group"><label>To</label><div style="padding:8px 12px;background:var(--surface-card, var(--hover-bg, #f5f5f5));border-radius:6px;font-size:0.9rem;color:var(--text, var(--charcoal, #1a1a1a));">' + esc(contact.email) + '</div></div>' +
+        '<div class="form-group"><label>To</label><input type="text" value="' + esc(toEmail) + '" readonly style="opacity:0.7;cursor:default;"></div>' +
         '<div class="form-group"><label>Subject</label><input type="text" id="inquiryResponseSubject" value="' + esc(subject) + '"></div>' +
         '<div class="form-group"><label>Message</label><textarea id="inquiryResponseBody" rows="12" style="font-family:monospace;font-size:0.85rem;white-space:pre-wrap;">' + esc(bodyTemplate) + '</textarea></div>' +
         '<input type="hidden" id="inquiryResponseContactId" value="' + esc(contactId) + '">' +
         '<input type="hidden" id="inquiryResponseInquiryId" value="' + esc(inquiryId) + '">' +
-        '<input type="hidden" id="inquiryResponseToEmail" value="' + esc(contact.email) + '">' +
+        '<input type="hidden" id="inquiryResponseToEmail" value="' + esc(toEmail) + '">' +
       '</div>' +
       '<div class="modal-footer">' +
         '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
