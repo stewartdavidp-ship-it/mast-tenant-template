@@ -45,7 +45,8 @@
     meeting:     { bg: 'rgba(91,33,182,0.2)', color: '#B39DDB', border: 'rgba(91,33,182,0.35)' },
     'site-visit': { bg: 'rgba(146,64,14,0.2)', color: '#FFD54F', border: 'rgba(146,64,14,0.35)' },
     payment:     { bg: 'rgba(6,95,70,0.25)', color: '#4DB6AC', border: 'rgba(6,95,70,0.4)' },
-    'signed-doc': { bg: 'rgba(157,23,77,0.2)', color: '#F48FB1', border: 'rgba(157,23,77,0.35)' }
+    'signed-doc': { bg: 'rgba(157,23,77,0.2)', color: '#F48FB1', border: 'rgba(157,23,77,0.35)' },
+    'web-inquiry': { bg: 'rgba(0,150,136,0.2)', color: '#80CBC4', border: 'rgba(0,150,136,0.35)' }
   };
 
   function interactionTypeBadgeStyle(type) {
