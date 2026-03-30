@@ -560,6 +560,7 @@
       window.MastCart.addItem({
         pid: classId,
         name: className + ' - ' + dateLabel,
+        price: priceCents ? '$' + (priceCents / 100).toFixed(2) : 'Free',
         priceCents: priceCents,
         options: { date: date, time: time },
         qty: 1,
