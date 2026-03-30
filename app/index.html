@@ -4993,6 +4993,7 @@
       <div id="dashboardTodos" style="display:none;"></div>
       <!-- Dashboard Cards -->
       <div id="dashboardCards">
+        <div id="dashCardNewInquiries"></div>
         <div id="dashCardQuickActions"></div>
         <div id="dashCardNewOrders"></div>
         <div id="dashCardReadyToShip"></div>
@@ -24008,6 +24009,7 @@ var ROUTE_ACTION_MAP = {
 // ─── Dashboard Collapsible Card System ──────────────────────
 
 var DASHBOARD_CARDS = [
+  { id: 'newInquiries', title: 'New Inquiries', containerId: 'dashCardNewInquiries', viewAllRoute: 'contacts' },
   { id: 'quickActions', title: 'Quick Actions', containerId: 'dashCardQuickActions' },
   { id: 'newOrders',    title: 'New Orders',    containerId: 'dashCardNewOrders',    viewAllRoute: 'orders' },
   { id: 'readyToShip',  title: 'Ready to Ship', containerId: 'dashCardReadyToShip',  viewAllRoute: 'ship' },
@@ -24227,13 +24229,14 @@ async function renderAllDashboardCards() {
       if (el) parent.appendChild(el); // appendChild moves existing elements
     });
   }
+  renderDashCardNewInquiries();
   renderDashCardQuickActions();
   // Dashboard cards with module gating — orders module provides New Orders + Ready to Ship cards
   MastAdmin.loadModule('orders').then(function() {
-    renderDashCardWithGating(DASHBOARD_CARDS[1], renderDashCardNewOrders);
-    renderDashCardWithGating(DASHBOARD_CARDS[2], renderDashCardReadyToShip);
+    renderDashCardWithGating(DASHBOARD_CARDS[2], renderDashCardNewOrders);
+    renderDashCardWithGating(DASHBOARD_CARDS[3], renderDashCardReadyToShip);
   });
-  renderDashCardWithGating(DASHBOARD_CARDS[3], renderDashCardLowInventory);
+  renderDashCardWithGating(DASHBOARD_CARDS[4], renderDashCardLowInventory);
   // Dashboard todos / nudges (above cards)
   renderDashboardTodos();
   // Import status banner
@@ -24302,6 +24305,46 @@ function renderImportStatusBanner() {
     banner.innerHTML = html;
     banner.style.display = '';
   }).catch(function() { banner.style.display = 'none'; });
+}
+
+// ─── Dashboard Card: New Inquiries ──────────────────────────
+
+function renderDashCardNewInquiries() {
+  var container = document.getElementById('dashCardNewInquiries');
+  if (!container) return;
+  var cardConfig = DASHBOARD_CARDS[0]; // newInquiries
+
+  MastDB._ref('inquiries').orderByChild('status').equalTo('new').limitToLast(10).once('value').then(function(snap) {
+    var val = snap.val();
+    var items = val ? Object.values(val).sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); }) : [];
+
+    var contentHtml = '';
+    if (items.length === 0) {
+      contentHtml = '<div class="dash-queue-empty">No new inquiries.</div>';
+    } else {
+      items.forEach(function(inq) {
+        var timeAgo = '';
+        if (inq.createdAt) {
+          var mins = Math.floor((Date.now() - new Date(inq.createdAt).getTime()) / 60000);
+          if (mins < 60) timeAgo = mins + 'm ago';
+          else if (mins < 1440) timeAgo = Math.floor(mins / 60) + 'h ago';
+          else timeAgo = Math.floor(mins / 1440) + 'd ago';
+        }
+        contentHtml += '<div class="dash-order-row" onclick="navigateTo(\'contacts\')" style="cursor:pointer;">' +
+          '<div style="flex:1;min-width:0;">' +
+            '<div style="font-weight:500;font-size:0.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(inq.name || 'Unknown') + '</div>' +
+            '<div style="font-size:0.78rem;color:var(--warm-gray);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(inq.type || '') + ' &mdash; ' + esc((inq.message || '').substring(0, 60)) + '</div>' +
+          '</div>' +
+          '<div style="font-size:0.75rem;color:var(--warm-gray-light);white-space:nowrap;margin-left:8px;">' + timeAgo + '</div>' +
+        '</div>';
+      });
+    }
+
+    container.innerHTML = renderDashboardCard(cardConfig, items.length, contentHtml);
+  }).catch(function(err) {
+    console.error('Error loading inquiries:', err);
+    container.innerHTML = '';
+  });
 }
 
 // ─── Dashboard Card: Quick Actions ──────────────────────────
