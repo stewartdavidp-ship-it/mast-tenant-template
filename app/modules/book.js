@@ -16,12 +16,20 @@
   var enrollmentsData = [];
   var enrollmentsLoaded = false;
   var allClassesMap = {}; // id → class for enrollment lookups
+  var instructorsData = [];
+  var instructorsLoaded = false;
+  var instructorsMap = {}; // id → instructor
+  var resourcesData = [];
+  var resourcesLoaded = false;
+  var resourcesMap = {}; // id → resource
+  var currentSubTab = 'classes';
 
   var CLASS_TYPES = ['series', 'single', 'dropin', 'private'];
   var CLASS_STATUSES = ['active', 'draft', 'archived'];
   var ENROLLMENT_STATUSES = ['confirmed', 'waitlisted', 'cancelled', 'no-show', 'completed'];
   var DAYS_OF_WEEK = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
   var DAY_LABELS = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
+  var RESOURCE_TYPES = ['room', 'equipment'];
 
   // ============================================================
   // Badge Styles
@@ -167,8 +175,7 @@
 
   async function loadClassDetail(classId) {
     selectedClassId = classId;
-    document.getElementById('bookListView').style.display = 'none';
-    document.getElementById('bookEnrollmentsView').style.display = 'none';
+    hideAllViews();
     document.getElementById('bookDetailView').style.display = '';
 
     var content = document.getElementById('bookDetailContent');
@@ -238,6 +245,8 @@
     }
     html += _infoCard('Schedule', schedDesc || '—');
     html += _infoCard('Materials', cls.materialsIncluded ? (cls.materialsNote || 'Included') : 'Not included');
+    html += _infoCard('Instructor', cls.instructorName || '—');
+    html += _infoCard('Resource', cls.resourceName || '—');
     html += '</div>';
 
     if (cls.description) {
@@ -250,16 +259,19 @@
       html += '<p style="color:var(--warm-gray);">No sessions generated yet. Click <strong>Generate Sessions</strong> above.</p>';
     } else {
       var today = todayStr();
-      html += '<table class="data-table"><thead><tr><th>Date</th><th>Time</th><th>Enrolled</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
+      html += '<table class="data-table"><thead><tr><th>Date</th><th>Time</th><th>Instructor</th><th>Resource</th><th>Enrolled</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
       sessionsData.forEach(function(s) {
         var isPast = s.date < today;
         var rowStyle = isPast ? 'opacity:0.5;' : '';
         html += '<tr style="' + rowStyle + '">' +
           '<td>' + formatDate(s.date) + '</td>' +
           '<td>' + formatTime(s.startTime) + ' - ' + formatTime(s.endTime) + '</td>' +
+          '<td>' + esc(s.instructorName || '—') + '</td>' +
+          '<td>' + esc(s.resourceName || '—') + '</td>' +
           '<td>' + (s.enrolled || 0) + ' / ' + (s.capacity || cls.capacity || '—') + (s.waitlisted ? ' (+' + s.waitlisted + ' waitlisted)' : '') + '</td>' +
           '<td><span style="' + badgeStyle(STATUS_BADGE_COLORS, s.status) + '">' + esc(s.status) + '</span></td>' +
           '<td style="display:flex;gap:4px;">' +
+          '<button class="btn btn-sm" onclick="window._bookAssignSession(\'' + esc(s.id) + '\',\'' + esc(cls.id) + '\')">Assign</button>' +
           '<button class="btn btn-sm" onclick="window._bookViewSessionEnrollments(\'' + esc(s.id) + '\',\'' + esc(cls.id) + '\')">Enrollments</button>';
         if (s.status === 'scheduled' && !isPast) {
           html += '<button class="btn btn-sm" style="color:#EF9A9A;" onclick="window._bookCancelSession(\'' + esc(s.id) + '\')">Cancel</button>';
@@ -285,12 +297,15 @@
   // Class Create / Edit
   // ============================================================
 
-  function showClassForm(classId) {
+  async function showClassForm(classId) {
     var cls = classId ? classesData.find(function(c) { return c.id === classId; }) : null;
     var isNew = !cls;
 
-    document.getElementById('bookListView').style.display = 'none';
-    document.getElementById('bookEnrollmentsView').style.display = 'none';
+    // Ensure instructors/resources loaded for dropdowns
+    if (!instructorsLoaded) await loadInstructors();
+    if (!resourcesLoaded) await loadResources();
+
+    hideAllViews();
     document.getElementById('bookDetailView').style.display = '';
 
     var content = document.getElementById('bookDetailContent');
@@ -368,10 +383,28 @@
       '</div></fieldset>' +
 
       // Materials
-      '<div style="display:grid;grid-template-columns:1fr 2fr;gap:1rem;margin-bottom:1.5rem;">' +
+      '<div style="display:grid;grid-template-columns:1fr 2fr;gap:1rem;margin-bottom:1rem;">' +
       '<div><label class="form-label">Materials Included</label><select id="bcfMaterials" class="form-input"><option value="false"' + (cls && cls.materialsIncluded ? '' : ' selected') + '>No</option><option value="true"' + (cls && cls.materialsIncluded ? ' selected' : '') + '>Yes</option></select></div>' +
       '<div><label class="form-label">Materials Note</label><input type="text" id="bcfMaterialsNote" class="form-input" value="' + esc(cls ? cls.materialsNote : '') + '" placeholder="e.g. 25lbs of clay + glazes included"></div>' +
       '</div>' +
+
+      // Assignment
+      '<fieldset style="border:1px solid var(--border);border-radius:8px;padding:1rem;margin-bottom:1.5rem;">' +
+      '<legend style="font-weight:600;padding:0 8px;">Assignment</legend>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">' +
+      '<div><label class="form-label">Instructor</label><select id="bcfInstructor" class="form-input">' +
+      '<option value="">None</option>' +
+      instructorsData.filter(function(i) { return i.status === 'active'; }).map(function(i) {
+        return '<option value="' + esc(i.id) + '"' + (cls && cls.instructorId === i.id ? ' selected' : '') + '>' + esc(i.name) + '</option>';
+      }).join('') +
+      '</select></div>' +
+      '<div><label class="form-label">Resource</label><select id="bcfResource" class="form-input">' +
+      '<option value="">None</option>' +
+      resourcesData.filter(function(r) { return r.status === 'active'; }).map(function(r) {
+        return '<option value="' + esc(r.id) + '"' + (cls && cls.resourceId === r.id ? ' selected' : '') + '>' + esc(r.name) + ' (' + esc(r.type) + ')</option>';
+      }).join('') +
+      '</select></div>' +
+      '</div></fieldset>' +
 
       '<div style="display:flex;gap:8px;">' +
       '<button class="btn btn-primary" onclick="window._bookSaveClass(\'' + (classId || '') + '\')">Save Class</button>' +
@@ -428,6 +461,14 @@
       imageIds: [],
       updatedAt: new Date().toISOString()
     };
+
+    // Assignment fields
+    var instrId = document.getElementById('bcfInstructor').value || null;
+    var resId = document.getElementById('bcfResource').value || null;
+    data.instructorId = instrId;
+    data.instructorName = instrId && instructorsMap[instrId] ? instructorsMap[instrId].name : null;
+    data.resourceId = resId;
+    data.resourceName = resId && resourcesMap[resId] ? resourcesMap[resId].name : null;
 
     // Series info
     if (type === 'series') {
@@ -541,6 +582,10 @@
         enrolled: 0,
         waitlisted: 0,
         status: 'scheduled',
+        instructorId: cls.instructorId || null,
+        instructorName: cls.instructorName || null,
+        resourceId: cls.resourceId || null,
+        resourceName: cls.resourceName || null,
         cancelReason: null,
         notes: null,
         createdAt: new Date().toISOString()
@@ -587,8 +632,7 @@
   // ============================================================
 
   async function loadEnrollments(sessionFilter, classFilter) {
-    document.getElementById('bookListView').style.display = 'none';
-    document.getElementById('bookDetailView').style.display = 'none';
+    hideAllViews();
     document.getElementById('bookEnrollmentsView').style.display = '';
 
     var table = document.getElementById('bookEnrollmentsTable');
@@ -727,15 +771,438 @@
   }
 
   // ============================================================
+  // Sub-Tab Navigation
+  // ============================================================
+
+  var BOOK_VIEWS = ['bookListView', 'bookDetailView', 'bookEnrollmentsView', 'bookInstructorsView', 'bookInstructorDetailView', 'bookResourcesView', 'bookResourceDetailView'];
+
+  function hideAllViews() {
+    BOOK_VIEWS.forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+  }
+
+  function switchSubTab(tab) {
+    currentSubTab = tab;
+    // Update tab bar active state
+    var tabs = document.querySelectorAll('#bookSubNav .view-tab');
+    tabs.forEach(function(t) { t.classList.remove('active'); });
+    var tabMap = { classes: 0, instructors: 1, resources: 2, enrollments: 3 };
+    if (tabs[tabMap[tab]]) tabs[tabMap[tab]].classList.add('active');
+
+    hideAllViews();
+    if (tab === 'classes') { document.getElementById('bookListView').style.display = ''; renderClassList(); }
+    else if (tab === 'instructors') { document.getElementById('bookInstructorsView').style.display = ''; loadInstructors(); }
+    else if (tab === 'resources') { document.getElementById('bookResourcesView').style.display = ''; loadResources(); }
+    else if (tab === 'enrollments') { document.getElementById('bookEnrollmentsView').style.display = ''; loadEnrollments(); }
+  }
+
+  // ============================================================
+  // Instructors — Load & Render
+  // ============================================================
+
+  async function loadInstructors() {
+    try {
+      var snap = await MastDB.instructors.list(100);
+      var data = snap.val() || {};
+      instructorsData = Object.keys(data).map(function(id) {
+        var i = data[id];
+        i.id = id;
+        return i;
+      });
+      instructorsMap = {};
+      instructorsData.forEach(function(i) { instructorsMap[i.id] = i; });
+      instructorsLoaded = true;
+      renderInstructorList();
+    } catch (err) {
+      console.error('[Book] Failed to load instructors:', err);
+      document.getElementById('bookInstructorsTable').innerHTML = '<p style="color:var(--warm-gray);padding:2rem;">Failed to load instructors.</p>';
+    }
+  }
+
+  function renderInstructorList() {
+    var container = document.getElementById('bookInstructorsTable');
+    if (!container) return;
+
+    var statusFilter = (document.getElementById('instrFilterStatus') || {}).value || 'active';
+    var filtered = instructorsData.filter(function(i) {
+      if (statusFilter !== 'all' && i.status !== statusFilter) return false;
+      return true;
+    });
+
+    filtered.sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
+
+    if (filtered.length === 0) {
+      container.innerHTML = '<p style="color:var(--warm-gray);padding:2rem;">No instructors found. Click <strong>+ New Instructor</strong> to add one.</p>';
+      return;
+    }
+
+    var html = '<table class="data-table"><thead><tr>' +
+      '<th>Name</th><th>Specialties</th><th>Email</th><th>Status</th><th>Actions</th>' +
+      '</tr></thead><tbody>';
+
+    filtered.forEach(function(i) {
+      var specs = (i.specialties || []).join(', ') || '—';
+      html += '<tr>' +
+        '<td><strong>' + esc(i.name) + '</strong></td>' +
+        '<td>' + esc(specs) + '</td>' +
+        '<td>' + esc(i.email || '—') + '</td>' +
+        '<td><span style="' + badgeStyle(STATUS_BADGE_COLORS, i.status) + '">' + esc(i.status) + '</span></td>' +
+        '<td><button class="btn btn-sm" onclick="window._instrEdit(\'' + esc(i.id) + '\')">Edit</button></td>' +
+        '</tr>';
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+  }
+
+  // ============================================================
+  // Instructor Create / Edit
+  // ============================================================
+
+  function showInstructorForm(instrId) {
+    var instr = instrId ? instructorsData.find(function(i) { return i.id === instrId; }) : null;
+    var isNew = !instr;
+
+    hideAllViews();
+    document.getElementById('bookInstructorDetailView').style.display = '';
+
+    var content = document.getElementById('bookInstructorDetailContent');
+
+    var statusOpts = ['active', 'inactive'].map(function(s) {
+      return '<option value="' + s + '"' + (instr && instr.status === s ? ' selected' : '') + '>' + s.charAt(0).toUpperCase() + s.slice(1) + '</option>';
+    }).join('');
+
+    var html = '<h2 style="margin:0 0 1.5rem;">' + (isNew ? 'New Instructor' : 'Edit: ' + esc(instr.name)) + '</h2>' +
+      '<form id="instrForm" onsubmit="return false;" style="max-width:700px;">' +
+
+      '<div style="display:grid;grid-template-columns:2fr 1fr;gap:1rem;margin-bottom:1rem;">' +
+      '<div><label class="form-label">Name *</label><input type="text" id="ifName" class="form-input" value="' + esc(instr ? instr.name : '') + '" required></div>' +
+      '<div><label class="form-label">Status</label><select id="ifStatus" class="form-input">' + statusOpts + '</select></div>' +
+      '</div>' +
+
+      '<div style="margin-bottom:1rem;"><label class="form-label">Bio</label>' +
+      '<textarea id="ifBio" class="form-input" rows="3">' + esc(instr ? instr.bio : '') + '</textarea></div>' +
+
+      '<div style="margin-bottom:1rem;"><label class="form-label">Specialties (comma-separated)</label>' +
+      '<input type="text" id="ifSpecialties" class="form-input" value="' + esc(instr && instr.specialties ? instr.specialties.join(', ') : '') + '" placeholder="e.g. Wheel Throwing, Glazing, Hand Building"></div>' +
+
+      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-bottom:1rem;">' +
+      '<div><label class="form-label">Email</label><input type="email" id="ifEmail" class="form-input" value="' + esc(instr ? instr.email : '') + '"></div>' +
+      '<div><label class="form-label">Phone</label><input type="text" id="ifPhone" class="form-input" value="' + esc(instr ? instr.phone : '') + '"></div>' +
+      '<div><label class="form-label">Pay Rate ($/hr)</label><input type="number" id="ifPayRate" class="form-input" min="0" step="0.01" value="' + (instr && instr.payRateCents ? (instr.payRateCents / 100).toFixed(2) : '') + '"></div>' +
+      '</div>' +
+
+      '<div style="margin-bottom:1rem;"><label class="form-label">Photo URL</label>' +
+      '<input type="text" id="ifPhoto" class="form-input" value="' + esc(instr ? instr.photoUrl : '') + '" placeholder="https://..."></div>' +
+
+      '<div style="margin-bottom:1.5rem;"><label class="form-label">Notes (internal)</label>' +
+      '<textarea id="ifNotes" class="form-input" rows="2">' + esc(instr ? instr.notes : '') + '</textarea></div>' +
+
+      '<div style="display:flex;gap:8px;">' +
+      '<button class="btn btn-primary" onclick="window._instrSave(\'' + (instrId || '') + '\')">Save Instructor</button>' +
+      '<button class="btn" onclick="window._instrBackToList()">Cancel</button>' +
+      '</div></form>';
+
+    content.innerHTML = html;
+  }
+
+  async function saveInstructor(instrId) {
+    var name = document.getElementById('ifName').value.trim();
+    if (!name) { MastAdmin.showToast('Name is required', true); return; }
+
+    var specialtiesStr = document.getElementById('ifSpecialties').value.trim();
+    var specialties = specialtiesStr ? specialtiesStr.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
+
+    var payRate = parseFloat(document.getElementById('ifPayRate').value);
+
+    var data = {
+      name: name,
+      slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
+      bio: document.getElementById('ifBio').value.trim() || null,
+      specialties: specialties,
+      email: document.getElementById('ifEmail').value.trim() || null,
+      phone: document.getElementById('ifPhone').value.trim() || null,
+      payRateCents: isNaN(payRate) ? null : Math.round(payRate * 100),
+      photoUrl: document.getElementById('ifPhoto').value.trim() || null,
+      notes: document.getElementById('ifNotes').value.trim() || null,
+      status: document.getElementById('ifStatus').value,
+      updatedAt: new Date().toISOString()
+    };
+
+    try {
+      var isNew = !instrId;
+      if (isNew) {
+        instrId = MastDB.instructors.newKey();
+        data.createdAt = data.updatedAt;
+      }
+      await MastDB.instructors.set(instrId, data);
+      MastAdmin.showToast(isNew ? 'Instructor created!' : 'Instructor updated!');
+      instructorsLoaded = false;
+      await loadInstructors();
+      switchSubTab('instructors');
+    } catch (err) {
+      console.error('[Book] Instructor save failed:', err);
+      MastAdmin.showToast('Save failed: ' + err.message, true);
+    }
+  }
+
+  // ============================================================
+  // Resources — Load & Render
+  // ============================================================
+
+  async function loadResources() {
+    try {
+      var snap = await MastDB.resources.list(100);
+      var data = snap.val() || {};
+      resourcesData = Object.keys(data).map(function(id) {
+        var r = data[id];
+        r.id = id;
+        return r;
+      });
+      resourcesMap = {};
+      resourcesData.forEach(function(r) { resourcesMap[r.id] = r; });
+      resourcesLoaded = true;
+      renderResourceList();
+    } catch (err) {
+      console.error('[Book] Failed to load resources:', err);
+      document.getElementById('bookResourcesTable').innerHTML = '<p style="color:var(--warm-gray);padding:2rem;">Failed to load resources.</p>';
+    }
+  }
+
+  function renderResourceList() {
+    var container = document.getElementById('bookResourcesTable');
+    if (!container) return;
+
+    var typeFilter = (document.getElementById('resFilterType') || {}).value || 'all';
+    var statusFilter = (document.getElementById('resFilterStatus') || {}).value || 'active';
+
+    var filtered = resourcesData.filter(function(r) {
+      if (typeFilter !== 'all' && r.type !== typeFilter) return false;
+      if (statusFilter !== 'all' && r.status !== statusFilter) return false;
+      return true;
+    });
+
+    filtered.sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
+
+    if (filtered.length === 0) {
+      container.innerHTML = '<p style="color:var(--warm-gray);padding:2rem;">No resources found. Click <strong>+ New Resource</strong> to add one.</p>';
+      return;
+    }
+
+    var html = '<table class="data-table"><thead><tr>' +
+      '<th>Name</th><th>Type</th><th>Capacity</th><th>Status</th><th>Actions</th>' +
+      '</tr></thead><tbody>';
+
+    filtered.forEach(function(r) {
+      html += '<tr>' +
+        '<td><strong>' + esc(r.name) + '</strong>' + (r.subType ? '<br><span style="font-size:0.8rem;color:var(--warm-gray);">' + esc(r.subType) + '</span>' : '') + '</td>' +
+        '<td><span style="' + badgeStyle(TYPE_BADGE_COLORS, r.type === 'room' ? 'series' : 'single') + '">' + esc(r.type) + '</span></td>' +
+        '<td>' + (r.capacity || '—') + '</td>' +
+        '<td><span style="' + badgeStyle(STATUS_BADGE_COLORS, r.status) + '">' + esc(r.status) + '</span></td>' +
+        '<td><button class="btn btn-sm" onclick="window._resEdit(\'' + esc(r.id) + '\')">Edit</button></td>' +
+        '</tr>';
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+  }
+
+  // ============================================================
+  // Resource Create / Edit
+  // ============================================================
+
+  function showResourceForm(resId) {
+    var res = resId ? resourcesData.find(function(r) { return r.id === resId; }) : null;
+    var isNew = !res;
+
+    hideAllViews();
+    document.getElementById('bookResourceDetailView').style.display = '';
+
+    var content = document.getElementById('bookResourceDetailContent');
+
+    var typeOpts = RESOURCE_TYPES.map(function(t) {
+      return '<option value="' + t + '"' + (res && res.type === t ? ' selected' : '') + '>' + t.charAt(0).toUpperCase() + t.slice(1) + '</option>';
+    }).join('');
+
+    var statusOpts = ['active', 'inactive'].map(function(s) {
+      return '<option value="' + s + '"' + (res && res.status === s ? ' selected' : '') + '>' + s.charAt(0).toUpperCase() + s.slice(1) + '</option>';
+    }).join('');
+
+    var html = '<h2 style="margin:0 0 1.5rem;">' + (isNew ? 'New Resource' : 'Edit: ' + esc(res.name)) + '</h2>' +
+      '<form id="resForm" onsubmit="return false;" style="max-width:700px;">' +
+
+      '<div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:1rem;margin-bottom:1rem;">' +
+      '<div><label class="form-label">Name *</label><input type="text" id="rfName" class="form-input" value="' + esc(res ? res.name : '') + '" required></div>' +
+      '<div><label class="form-label">Type *</label><select id="rfType" class="form-input">' + typeOpts + '</select></div>' +
+      '<div><label class="form-label">Status</label><select id="rfStatus" class="form-input">' + statusOpts + '</select></div>' +
+      '</div>' +
+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">' +
+      '<div><label class="form-label">Sub-type</label><input type="text" id="rfSubType" class="form-input" value="' + esc(res ? res.subType : '') + '" placeholder="e.g. Kiln, Pottery Wheel, Main Studio"></div>' +
+      '<div><label class="form-label">Capacity</label><input type="number" id="rfCapacity" class="form-input" min="0" value="' + (res ? res.capacity || '' : '') + '"></div>' +
+      '</div>' +
+
+      '<div style="margin-bottom:1rem;"><label class="form-label">Description</label>' +
+      '<textarea id="rfDesc" class="form-input" rows="2">' + esc(res ? res.description : '') + '</textarea></div>' +
+
+      '<div style="margin-bottom:1.5rem;"><label class="form-label">Notes (internal)</label>' +
+      '<textarea id="rfNotes" class="form-input" rows="2">' + esc(res ? res.notes : '') + '</textarea></div>' +
+
+      '<div style="display:flex;gap:8px;">' +
+      '<button class="btn btn-primary" onclick="window._resSave(\'' + (resId || '') + '\')">Save Resource</button>' +
+      '<button class="btn" onclick="window._resBackToList()">Cancel</button>' +
+      '</div></form>';
+
+    content.innerHTML = html;
+  }
+
+  async function saveResource(resId) {
+    var name = document.getElementById('rfName').value.trim();
+    if (!name) { MastAdmin.showToast('Name is required', true); return; }
+
+    var data = {
+      name: name,
+      type: document.getElementById('rfType').value,
+      subType: document.getElementById('rfSubType').value.trim() || null,
+      capacity: parseInt(document.getElementById('rfCapacity').value, 10) || null,
+      description: document.getElementById('rfDesc').value.trim() || null,
+      notes: document.getElementById('rfNotes').value.trim() || null,
+      status: document.getElementById('rfStatus').value,
+      updatedAt: new Date().toISOString()
+    };
+
+    try {
+      var isNew = !resId;
+      if (isNew) {
+        resId = MastDB.resources.newKey();
+        data.createdAt = data.updatedAt;
+      }
+      await MastDB.resources.set(resId, data);
+      MastAdmin.showToast(isNew ? 'Resource created!' : 'Resource updated!');
+      resourcesLoaded = false;
+      await loadResources();
+      switchSubTab('resources');
+    } catch (err) {
+      console.error('[Book] Resource save failed:', err);
+      MastAdmin.showToast('Save failed: ' + err.message, true);
+    }
+  }
+
+  // ============================================================
+  // Conflict Detection
+  // ============================================================
+
+  async function checkConflicts(date, startTime, endTime, instructorId, resourceId, excludeSessionId) {
+    if (!instructorId && !resourceId) return [];
+    var conflicts = [];
+
+    try {
+      // Query all sessions on the same date
+      var snap = await MastDB.classSessions.ref().orderByChild('date').equalTo(date).once('value');
+      var sessions = snap.val() || {};
+
+      Object.keys(sessions).forEach(function(id) {
+        if (id === excludeSessionId) return;
+        var s = sessions[id];
+        if (s.status !== 'scheduled') return;
+
+        // Check time overlap
+        if (s.startTime >= endTime || s.endTime <= startTime) return;
+
+        if (instructorId && s.instructorId === instructorId) {
+          var instrName = instructorsMap[instructorId] ? instructorsMap[instructorId].name : 'Instructor';
+          conflicts.push(instrName + ' is already assigned to a session at ' + formatTime(s.startTime) + ' on ' + formatDate(date));
+        }
+        if (resourceId && s.resourceId === resourceId) {
+          var resName = resourcesMap[resourceId] ? resourcesMap[resourceId].name : 'Resource';
+          conflicts.push(resName + ' is already booked at ' + formatTime(s.startTime) + ' on ' + formatDate(date));
+        }
+      });
+    } catch (err) {
+      console.warn('[Book] Conflict check failed:', err);
+    }
+
+    return conflicts;
+  }
+
+  // ============================================================
+  // Session Assignment Override
+  // ============================================================
+
+  async function assignToSession(sessionId, classId) {
+    // Load instructors/resources if not loaded
+    if (!instructorsLoaded) await loadInstructors();
+    if (!resourcesLoaded) await loadResources();
+
+    var session = sessionsData.find(function(s) { return s.id === sessionId; });
+    if (!session) return;
+
+    var instrOpts = '<option value="">None</option>' +
+      instructorsData.filter(function(i) { return i.status === 'active'; }).map(function(i) {
+        return '<option value="' + esc(i.id) + '"' + (session.instructorId === i.id ? ' selected' : '') + '>' + esc(i.name) + '</option>';
+      }).join('');
+
+    var resOpts = '<option value="">None</option>' +
+      resourcesData.filter(function(r) { return r.status === 'active'; }).map(function(r) {
+        return '<option value="' + esc(r.id) + '"' + (session.resourceId === r.id ? ' selected' : '') + '>' + esc(r.name) + ' (' + esc(r.type) + ')</option>';
+      }).join('');
+
+    var html = '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;" id="assignOverlay">' +
+      '<div style="background:var(--surface-dark);border:1px solid var(--border);border-radius:12px;padding:1.5rem;max-width:400px;width:90%;">' +
+      '<h3 style="margin:0 0 1rem;">Assign Session — ' + formatDate(session.date) + '</h3>' +
+      '<div style="margin-bottom:1rem;"><label class="form-label">Instructor</label><select id="assignInstr" class="form-input">' + instrOpts + '</select></div>' +
+      '<div style="margin-bottom:1.5rem;"><label class="form-label">Resource</label><select id="assignRes" class="form-input">' + resOpts + '</select></div>' +
+      '<div style="display:flex;gap:8px;">' +
+      '<button class="btn btn-primary" onclick="window._assignSave(\'' + esc(sessionId) + '\',\'' + esc(classId) + '\')">Save</button>' +
+      '<button class="btn" onclick="document.getElementById(\'assignOverlay\').remove()">Cancel</button>' +
+      '</div></div></div>';
+
+    document.body.insertAdjacentHTML('beforeend', html);
+  }
+
+  async function saveSessionAssignment(sessionId, classId) {
+    var instrId = document.getElementById('assignInstr').value || null;
+    var resId = document.getElementById('assignRes').value || null;
+
+    var session = sessionsData.find(function(s) { return s.id === sessionId; });
+    if (!session) return;
+
+    // Conflict check
+    var conflicts = await checkConflicts(session.date, session.startTime, session.endTime, instrId, resId, sessionId);
+    if (conflicts.length > 0) {
+      MastAdmin.showToast('Warning: ' + conflicts[0], true);
+      // Non-blocking — proceed anyway
+    }
+
+    var update = {
+      instructorId: instrId,
+      instructorName: instrId && instructorsMap[instrId] ? instructorsMap[instrId].name : null,
+      resourceId: resId,
+      resourceName: resId && resourcesMap[resId] ? resourcesMap[resId].name : null
+    };
+
+    try {
+      await MastDB.classSessions.update(sessionId, update);
+      MastAdmin.showToast('Session assignment updated');
+      var overlay = document.getElementById('assignOverlay');
+      if (overlay) overlay.remove();
+      if (classId) loadClassDetail(classId);
+    } catch (err) {
+      MastAdmin.showToast('Failed: ' + err.message, true);
+    }
+  }
+
+  // ============================================================
   // Navigation helpers
   // ============================================================
 
   function backToList() {
     selectedClassId = null;
-    document.getElementById('bookDetailView').style.display = 'none';
-    document.getElementById('bookEnrollmentsView').style.display = 'none';
+    hideAllViews();
     document.getElementById('bookListView').style.display = '';
-    renderClassList();
+    switchSubTab('classes');
   }
 
   // ============================================================
@@ -784,15 +1251,41 @@
     if (once) once.style.display = schedType.value === 'once' ? '' : 'none';
   };
 
+  // Sub-tab navigation
+  window._bookSubTab = function(tab) { switchSubTab(tab); };
+
+  // Instructor callbacks
+  window._instrFilterStatus = function() { renderInstructorList(); };
+  window._instrCreate = function() { showInstructorForm(null); };
+  window._instrEdit = function(id) { showInstructorForm(id); };
+  window._instrSave = function(id) { saveInstructor(id || null); };
+  window._instrBackToList = function() { switchSubTab('instructors'); };
+
+  // Resource callbacks
+  window._resFilterType = function() { renderResourceList(); };
+  window._resFilterStatus = function() { renderResourceList(); };
+  window._resCreate = function() { showResourceForm(null); };
+  window._resEdit = function(id) { showResourceForm(id); };
+  window._resSave = function(id) { saveResource(id || null); };
+  window._resBackToList = function() { switchSubTab('resources'); };
+
+  // Session assignment
+  window._bookAssignSession = function(sessionId, classId) { assignToSession(sessionId, classId); };
+  window._assignSave = function(sessionId, classId) { saveSessionAssignment(sessionId, classId); };
+
   // ============================================================
   // Module Registration
   // ============================================================
 
   MastAdmin.registerModule('book', {
     routes: {
-      'book': { tab: 'bookTab', setup: function() { loadClasses(); backToList(); } },
-      'book-detail': { tab: 'bookTab', setup: function(id) { if (id) { loadClassDetail(id); } else { loadClasses(); backToList(); } } },
-      'enrollments': { tab: 'bookTab', setup: function() { loadEnrollments(); } }
+      'book': { tab: 'bookTab', setup: function() { loadClasses(); switchSubTab('classes'); } },
+      'book-detail': { tab: 'bookTab', setup: function(id) { if (id) { loadClassDetail(id); } else { loadClasses(); switchSubTab('classes'); } } },
+      'enrollments': { tab: 'bookTab', setup: function() { switchSubTab('enrollments'); } },
+      'instructors': { tab: 'bookTab', setup: function() { switchSubTab('instructors'); } },
+      'instructor-detail': { tab: 'bookTab', setup: function(id) { if (id) { showInstructorForm(id); } else { switchSubTab('instructors'); } } },
+      'resources': { tab: 'bookTab', setup: function() { switchSubTab('resources'); } },
+      'resource-detail': { tab: 'bookTab', setup: function(id) { if (id) { showResourceForm(id); } else { switchSubTab('resources'); } } }
     },
     detachListeners: function() {
       classesData = [];
@@ -802,6 +1295,13 @@
       enrollmentsData = [];
       enrollmentsLoaded = false;
       allClassesMap = {};
+      instructorsData = [];
+      instructorsLoaded = false;
+      instructorsMap = {};
+      resourcesData = [];
+      resourcesLoaded = false;
+      resourcesMap = {};
+      currentSubTab = 'classes';
     }
   });
 
