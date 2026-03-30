@@ -277,11 +277,14 @@
           '<td style="display:flex;gap:4px;">' +
           '<button class="btn btn-sm" onclick="window._bookAssignSession(\'' + esc(s.id) + '\',\'' + esc(cls.id) + '\')">Assign</button>' +
           '<button class="btn btn-sm" onclick="window._bookViewSessionEnrollments(\'' + esc(s.id) + '\',\'' + esc(cls.id) + '\')">Enrollments</button>';
-        if (s.status === 'scheduled' && !isPast) {
-          html += '<button class="btn btn-sm" style="color:#EF9A9A;" onclick="window._bookCancelSession(\'' + esc(s.id) + '\')">Cancel</button>';
+        if (s.status === 'scheduled') {
+          html += '<button class="btn btn-sm" onclick="window._bookSessionChecklist(\'' + esc(s.id) + '\',\'' + esc(cls.id) + '\')">Checklist</button>';
         }
         if (s.status === 'scheduled' && isPast) {
-          html += '<button class="btn btn-sm" onclick="window._bookCompleteSession(\'' + esc(s.id) + '\')">Complete</button>';
+          html += '<button class="btn btn-sm" onclick="window._bookSessionReport(\'' + esc(s.id) + '\',\'' + esc(cls.id) + '\')">Report</button>';
+        }
+        if (s.status === 'scheduled' && !isPast) {
+          html += '<button class="btn btn-sm" style="color:#EF9A9A;" onclick="window._bookCancelSession(\'' + esc(s.id) + '\')">Cancel</button>';
         }
         html += '</td></tr>';
       });
@@ -694,6 +697,10 @@
     });
 
     filtered.sort(function(a, b) {
+      // Waitlisted sort by position, everything else by date descending
+      if (a.status === 'waitlisted' && b.status === 'waitlisted') {
+        return (a.waitlistPosition || 999) - (b.waitlistPosition || 999);
+      }
       return (b.enrolledAt || '').localeCompare(a.enrolledAt || '');
     });
 
@@ -708,13 +715,15 @@
 
     filtered.forEach(function(e) {
       var className = allClassesMap[e.classId] ? allClassesMap[e.classId].name : e.classId;
+      var statusLabel = e.status === 'waitlisted' && e.waitlistPosition
+        ? e.status + ' #' + e.waitlistPosition : e.status;
 
       html += '<tr>' +
-        '<td><strong>' + esc(e.customerName || '—') + '</strong><br><span style="font-size:0.8rem;color:var(--warm-gray);">' + esc(e.customerEmail || '') + '</span></td>' +
+        '<td><strong>' + esc(e.studentName || e.customerName || '—') + '</strong><br><span style="font-size:0.8rem;color:var(--warm-gray);">' + esc(e.studentEmail || e.customerEmail || '') + '</span></td>' +
         '<td>' + esc(className) + '</td>' +
         '<td>' + esc(e.sessionId || '—') + '</td>' +
-        '<td>' + formatPrice(e.pricePaidCents) + '</td>' +
-        '<td><span style="' + badgeStyle(STATUS_BADGE_COLORS, e.status) + '">' + esc(e.status) + '</span></td>' +
+        '<td>' + formatPrice(e.pricePaidCents || e.pricePaid) + '</td>' +
+        '<td><span style="' + badgeStyle(STATUS_BADGE_COLORS, e.status) + '">' + esc(statusLabel) + '</span></td>' +
         '<td style="display:flex;gap:4px;flex-wrap:wrap;">';
 
       if (e.status === 'confirmed') {
@@ -723,7 +732,7 @@
         html += '<button class="btn btn-sm" style="color:#EF9A9A;" onclick="window._bookCancelEnrollment(\'' + esc(e.id) + '\')">Cancel</button>';
       }
       if (e.status === 'waitlisted') {
-        html += '<button class="btn btn-sm" onclick="window._bookConfirmEnrollment(\'' + esc(e.id) + '\')">Confirm</button>';
+        html += '<button class="btn btn-sm" style="color:#4DB6AC;" onclick="window._bookPromoteWaitlist(\'' + esc(e.id) + '\')">Promote</button>';
         html += '<button class="btn btn-sm" style="color:#EF9A9A;" onclick="window._bookCancelEnrollment(\'' + esc(e.id) + '\')">Cancel</button>';
       }
 
@@ -780,7 +789,7 @@
   // Sub-Tab Navigation
   // ============================================================
 
-  var BOOK_VIEWS = ['bookListView', 'bookDetailView', 'bookEnrollmentsView', 'bookInstructorsView', 'bookInstructorDetailView', 'bookResourcesView', 'bookResourceDetailView', 'bookPassesView', 'bookPassDetailView'];
+  var BOOK_VIEWS = ['bookListView', 'bookDetailView', 'bookEnrollmentsView', 'bookInstructorsView', 'bookInstructorDetailView', 'bookResourcesView', 'bookResourceDetailView', 'bookPassesView', 'bookPassDetailView', 'bookSessionOpsView'];
 
   function hideAllViews() {
     BOOK_VIEWS.forEach(function(id) {
@@ -1470,10 +1479,118 @@
   window._bookViewSessionEnrollments = function(sessionId, classId) { loadEnrollments(sessionId, classId); };
   window._bookMarkAttended = function(id) { updateEnrollmentStatus(id, 'completed'); };
   window._bookMarkNoShow = function(id) { updateEnrollmentStatus(id, 'no-show'); };
-  window._bookCancelEnrollment = function(id) {
-    if (confirm('Cancel this enrollment?')) updateEnrollmentStatus(id, 'cancelled');
+  window._bookCancelEnrollment = async function(id) {
+    if (!confirm('Cancel this enrollment?')) return;
+    // Get enrollment to check if waitlisted (for renumbering)
+    try {
+      var snap = await MastDB.enrollments.get(id);
+      var enrollment = snap.val();
+      await updateEnrollmentStatus(id, 'cancelled');
+      if (enrollment && enrollment.status === 'waitlisted') {
+        // Decrement waitlist counter
+        var isSeries = enrollment.enrollmentType === 'series';
+        if (isSeries) {
+          await MastDB.classes.ref(enrollment.classId + '/seriesWaitlisted').transaction(function(c) { return Math.max(0, (c || 0) - 1); });
+        } else if (enrollment.sessionId) {
+          await adjustSessionCount(enrollment.sessionId, 'waitlisted', -1);
+        }
+        await renumberWaitlist(enrollment.classId, enrollment.sessionId, isSeries);
+      }
+    } catch (err) {
+      MastAdmin.showToast('Failed: ' + err.message, true);
+    }
   };
   window._bookConfirmEnrollment = function(id) { updateEnrollmentStatus(id, 'confirmed'); };
+
+  window._bookPromoteWaitlist = async function(enrollmentId) {
+    try {
+      var snap = await MastDB.enrollments.get(enrollmentId);
+      var enrollment = snap.val();
+      if (!enrollment || enrollment.status !== 'waitlisted') {
+        MastAdmin.showToast('Enrollment not found or not waitlisted', true);
+        return;
+      }
+
+      // Check capacity
+      var sessionId = enrollment.sessionId;
+      var classId = enrollment.classId;
+      var isSeries = enrollment.enrollmentType === 'series';
+
+      if (isSeries) {
+        var clsSnap = await MastDB.classes.get(classId);
+        var cls = clsSnap.val();
+        if (cls && (cls.seriesEnrolled || 0) >= (cls.capacity || 0)) {
+          MastAdmin.showToast('No series spots available. Increase capacity first.', true);
+          return;
+        }
+        // Increment series enrolled, decrement series waitlisted
+        await MastDB.classes.ref(classId + '/seriesEnrolled').transaction(function(c) { return (c || 0) + 1; });
+        await MastDB.classes.ref(classId + '/seriesWaitlisted').transaction(function(c) { return Math.max(0, (c || 0) - 1); });
+      } else {
+        if (sessionId) {
+          var sessSnap = await MastDB.classSessions.get(sessionId);
+          var sess = sessSnap.val();
+          if (sess && (sess.enrolled || 0) >= (sess.capacity || 0)) {
+            MastAdmin.showToast('No spots available in this session. Increase capacity first.', true);
+            return;
+          }
+          await adjustSessionCount(sessionId, 'enrolled', 1);
+          await adjustSessionCount(sessionId, 'waitlisted', -1);
+        }
+      }
+
+      // Update enrollment to confirmed
+      await MastDB.enrollments.update(enrollmentId, {
+        status: 'confirmed',
+        waitlistPosition: null,
+        promotedAt: new Date().toISOString()
+      });
+
+      // Renumber remaining waitlisted enrollments
+      await renumberWaitlist(classId, sessionId, isSeries);
+
+      MastAdmin.showToast('Promoted to confirmed');
+      var classFilter = (document.getElementById('enrollFilterClass') || {}).value;
+      loadEnrollments(null, classFilter);
+    } catch (err) {
+      MastAdmin.showToast('Failed: ' + err.message, true);
+    }
+  };
+
+  async function renumberWaitlist(classId, sessionId, isSeries) {
+    try {
+      var snap;
+      if (isSeries) {
+        snap = await MastDB.enrollments.byClass(classId);
+      } else if (sessionId) {
+        snap = await MastDB.enrollments.bySession(sessionId);
+      } else {
+        return;
+      }
+      var data = snap.val() || {};
+      var waitlisted = Object.keys(data).map(function(id) {
+        var e = data[id]; e._id = id; return e;
+      }).filter(function(e) {
+        if (e.status !== 'waitlisted') return false;
+        if (isSeries) return e.enrollmentType === 'series' && e.classId === classId;
+        return true;
+      }).sort(function(a, b) {
+        return (a.waitlistPosition || 999) - (b.waitlistPosition || 999);
+      });
+
+      var updates = {};
+      waitlisted.forEach(function(e, i) {
+        if (e.waitlistPosition !== i + 1) {
+          updates[e._id + '/waitlistPosition'] = i + 1;
+        }
+      });
+      if (Object.keys(updates).length > 0) {
+        await MastDB.enrollments.ref().update(updates);
+      }
+    } catch (err) {
+      console.warn('[Book] Waitlist renumbering failed:', err);
+    }
+  }
 
   window._enrollFilterStatus = function() { renderEnrollmentList(); };
   window._enrollFilterClass = function() {
@@ -1702,6 +1819,429 @@
   }
 
   window._bookCheckCancellations = function() { checkAutoCancellation(); };
+
+  // ============================================================
+  // Session Operations — Startup Checklist & Completion Report
+  // ============================================================
+
+  var INCIDENT_TYPES = ['equipment_damage', 'safety', 'conduct', 'medical'];
+  var INCIDENT_SEVERITIES = ['low', 'medium', 'high', 'critical'];
+  var INCIDENT_TYPE_LABELS = { equipment_damage: 'Equipment Damage', safety: 'Safety', conduct: 'Conduct', medical: 'Medical' };
+  var SEVERITY_COLORS = { low: '#4DB6AC', medium: '#FFD54F', high: '#FF8A65', critical: '#EF9A9A' };
+  var opsSessionId = null;
+  var opsClassId = null;
+
+  window._bookBackFromOps = function() {
+    if (opsClassId) loadClassDetail(opsClassId);
+    else { loadClasses(); switchSubTab('classes'); }
+  };
+
+  // --- Startup Checklist ---
+
+  window._bookSessionChecklist = async function(sessionId, classId) {
+    opsSessionId = sessionId;
+    opsClassId = classId;
+    hideAllViews();
+    document.getElementById('bookSessionOpsView').style.display = '';
+
+    var content = document.getElementById('sessionOpsContent');
+    content.innerHTML = '<p style="color:var(--warm-gray);">Loading checklist...</p>';
+
+    try {
+      var [sessSnap, clsSnap, enrollSnap, logSnap] = await Promise.all([
+        MastDB.classSessions.get(sessionId),
+        MastDB.classes.get(classId),
+        MastDB.enrollments.bySession(sessionId),
+        MastDB.sessionLogs.startup(sessionId).once('value')
+      ]);
+
+      var session = sessSnap.val() || {};
+      var cls = clsSnap.val() || {};
+      var enrollments = enrollSnap.val() || {};
+      var saved = logSnap.val() || {};
+
+      document.getElementById('sessionOpsTitle').textContent =
+        'Startup Checklist — ' + (cls.name || 'Class') + ' (' + formatDate(session.date) + ')';
+
+      // Get confirmed enrollments
+      var students = Object.keys(enrollments).map(function(id) {
+        var e = enrollments[id]; e._id = id; return e;
+      }).filter(function(e) { return e.status === 'confirmed'; });
+
+      // Get assigned resources
+      var resources = [];
+      if (session.resourceId) {
+        var resSnap = await MastDB.resources.get(session.resourceId);
+        var res = resSnap.val();
+        if (res) { res._id = session.resourceId; resources.push(res); }
+      }
+
+      var html = '<form id="startupChecklistForm">';
+
+      // Student Roster
+      html += '<h3 style="margin:0 0 12px;">Student Roster (' + students.length + ')</h3>';
+      if (students.length === 0) {
+        html += '<p style="color:var(--warm-gray);">No confirmed enrollments.</p>';
+      } else {
+        html += '<table class="data-table"><thead><tr><th>Student</th><th>Check-in</th><th>Waiver</th></tr></thead><tbody>';
+        students.forEach(function(s) {
+          var savedStudent = (saved.students && saved.students[s._id]) || {};
+          var checkedIn = savedStudent.checkedIn || false;
+          var waiverStatus = savedStudent.waiverStatus || 'na';
+          var waiverWarning = (waiverStatus === 'missing' || waiverStatus === 'expired')
+            ? ' <span style="color:#FFD54F;font-size:0.75rem;">&#9888; ' + waiverStatus + '</span>' : '';
+
+          html += '<tr>' +
+            '<td>' + esc(s.studentName || s.customerName || '—') + '</td>' +
+            '<td><label style="cursor:pointer;"><input type="checkbox" name="checkin_' + esc(s._id) + '" ' + (checkedIn ? 'checked' : '') + '> Checked in</label></td>' +
+            '<td><select name="waiver_' + esc(s._id) + '" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;">' +
+            '<option value="na"' + (waiverStatus === 'na' ? ' selected' : '') + '>N/A</option>' +
+            '<option value="signed"' + (waiverStatus === 'signed' ? ' selected' : '') + '>Signed</option>' +
+            '<option value="missing"' + (waiverStatus === 'missing' ? ' selected' : '') + '>Missing</option>' +
+            '<option value="expired"' + (waiverStatus === 'expired' ? ' selected' : '') + '>Expired</option>' +
+            '</select>' + waiverWarning + '</td></tr>';
+        });
+        html += '</tbody></table>';
+      }
+
+      // Equipment
+      html += '<h3 style="margin:1.5rem 0 12px;">Equipment & Resources</h3>';
+      if (resources.length === 0) {
+        html += '<p style="color:var(--warm-gray);">No resources assigned to this session.</p>';
+      } else {
+        resources.forEach(function(r) {
+          var savedEquip = (saved.equipment && saved.equipment[r._id]) || {};
+          html += '<div style="background:var(--surface-dark);border-radius:8px;padding:12px 16px;margin-bottom:8px;">' +
+            '<strong>' + esc(r.name) + '</strong> (' + esc(r.type) + ')' +
+            '<div style="display:flex;gap:12px;margin-top:8px;align-items:center;">' +
+            '<select name="equip_' + esc(r._id) + '" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;">' +
+            '<option value="good"' + (savedEquip.condition === 'good' ? ' selected' : '') + '>Good</option>' +
+            '<option value="needs_attention"' + ((savedEquip.condition === 'needs_attention') ? ' selected' : '') + '>Needs Attention</option>' +
+            '<option value="out_of_service"' + ((savedEquip.condition === 'out_of_service') ? ' selected' : '') + '>Out of Service</option>' +
+            '</select>' +
+            '<input type="text" name="equip_notes_' + esc(r._id) + '" placeholder="Notes..." value="' + esc(savedEquip.notes || '') + '" style="flex:1;padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;">' +
+            '</div></div>';
+        });
+      }
+
+      // Room confirmation
+      html += '<h3 style="margin:1.5rem 0 12px;">Room / Space</h3>';
+      html += '<label style="cursor:pointer;display:flex;align-items:center;gap:8px;">' +
+        '<input type="checkbox" name="roomConfirmed" ' + (saved.roomConfirmed ? 'checked' : '') + '> Room / space confirmed ready</label>';
+
+      // Notes
+      html += '<h3 style="margin:1.5rem 0 12px;">Instructor Notes</h3>';
+      html += '<textarea name="instructorNotes" rows="3" style="width:100%;padding:8px 12px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.9rem;resize:vertical;">' + esc(saved.instructorNotes || '') + '</textarea>';
+
+      // Buttons
+      html += '<div style="display:flex;gap:8px;margin-top:1.5rem;">' +
+        '<button type="button" class="btn btn-primary" onclick="window._bookSaveChecklist(\'' + esc(sessionId) + '\', false)">Save Draft</button>' +
+        '<button type="button" class="btn btn-primary" style="background:#4DB6AC;" onclick="window._bookSaveChecklist(\'' + esc(sessionId) + '\', true)">Complete Checklist</button>' +
+        '</div>';
+
+      if (saved.completedAt) {
+        html += '<p style="color:#4DB6AC;margin-top:12px;font-size:0.85rem;">Checklist completed ' + new Date(saved.completedAt).toLocaleString() + '</p>';
+      }
+
+      html += '</form>';
+      content.innerHTML = html;
+    } catch (err) {
+      console.error('[book] Failed to load checklist:', err);
+      content.innerHTML = '<p style="color:#EF9A9A;">Failed to load checklist: ' + esc(err.message) + '</p>';
+    }
+  };
+
+  window._bookSaveChecklist = async function(sessionId, markComplete) {
+    var form = document.getElementById('startupChecklistForm');
+    if (!form) return;
+
+    var data = { students: {}, equipment: {} };
+
+    // Collect student check-ins and waivers
+    form.querySelectorAll('input[name^="checkin_"]').forEach(function(el) {
+      var enrollId = el.name.replace('checkin_', '');
+      if (!data.students[enrollId]) data.students[enrollId] = {};
+      data.students[enrollId].checkedIn = el.checked;
+    });
+    form.querySelectorAll('select[name^="waiver_"]').forEach(function(el) {
+      var enrollId = el.name.replace('waiver_', '');
+      if (!data.students[enrollId]) data.students[enrollId] = {};
+      data.students[enrollId].waiverStatus = el.value;
+    });
+
+    // Collect equipment
+    form.querySelectorAll('select[name^="equip_"]').forEach(function(el) {
+      if (el.name.indexOf('equip_notes_') === 0) return;
+      var resId = el.name.replace('equip_', '');
+      if (!data.equipment[resId]) data.equipment[resId] = {};
+      data.equipment[resId].condition = el.value;
+    });
+    form.querySelectorAll('input[name^="equip_notes_"]').forEach(function(el) {
+      var resId = el.name.replace('equip_notes_', '');
+      if (!data.equipment[resId]) data.equipment[resId] = {};
+      data.equipment[resId].notes = el.value;
+    });
+
+    data.roomConfirmed = form.querySelector('input[name="roomConfirmed"]').checked;
+    data.instructorNotes = form.querySelector('textarea[name="instructorNotes"]').value;
+
+    if (markComplete) {
+      data.completedAt = new Date().toISOString();
+      data.completedBy = firebase.auth().currentUser ? firebase.auth().currentUser.uid : null;
+    }
+
+    try {
+      await MastDB.sessionLogs.startup(sessionId).set(data);
+      MastAdmin.showToast(markComplete ? 'Checklist completed' : 'Checklist saved');
+      if (markComplete) window._bookSessionChecklist(sessionId, opsClassId);
+    } catch (err) {
+      MastAdmin.showToast('Failed to save: ' + err.message, true);
+    }
+  };
+
+  // --- Completion Report ---
+
+  window._bookSessionReport = async function(sessionId, classId) {
+    opsSessionId = sessionId;
+    opsClassId = classId;
+    hideAllViews();
+    document.getElementById('bookSessionOpsView').style.display = '';
+
+    var content = document.getElementById('sessionOpsContent');
+    content.innerHTML = '<p style="color:var(--warm-gray);">Loading report...</p>';
+
+    try {
+      var [sessSnap, clsSnap, enrollSnap, logSnap, startupSnap] = await Promise.all([
+        MastDB.classSessions.get(sessionId),
+        MastDB.classes.get(classId),
+        MastDB.enrollments.bySession(sessionId),
+        MastDB.sessionLogs.completion(sessionId).once('value'),
+        MastDB.sessionLogs.startup(sessionId).once('value')
+      ]);
+
+      var session = sessSnap.val() || {};
+      var cls = clsSnap.val() || {};
+      var enrollments = enrollSnap.val() || {};
+      var saved = logSnap.val() || {};
+      var startup = startupSnap.val() || {};
+
+      document.getElementById('sessionOpsTitle').textContent =
+        'Completion Report — ' + (cls.name || 'Class') + ' (' + formatDate(session.date) + ')';
+
+      var students = Object.keys(enrollments).map(function(id) {
+        var e = enrollments[id]; e._id = id; return e;
+      }).filter(function(e) { return e.status === 'confirmed' || e.status === 'completed' || e.status === 'no-show'; });
+
+      // Get resources
+      var resources = [];
+      if (session.resourceId) {
+        var resSnap = await MastDB.resources.get(session.resourceId);
+        var res = resSnap.val();
+        if (res) { res._id = session.resourceId; resources.push(res); }
+      }
+
+      // Load existing incidents
+      var incSnap = await MastDB.sessionLogs.incidents(sessionId).once('value');
+      var existingIncidents = [];
+      var incData = incSnap.val() || {};
+      Object.keys(incData).forEach(function(incId) {
+        var inc = incData[incId]; inc._id = incId;
+        existingIncidents.push(inc);
+      });
+
+      var html = '<form id="completionReportForm">';
+
+      // Attendance
+      html += '<h3 style="margin:0 0 12px;">Attendance</h3>';
+      if (students.length === 0) {
+        html += '<p style="color:var(--warm-gray);">No enrollments to finalize.</p>';
+      } else {
+        html += '<table class="data-table"><thead><tr><th>Student</th><th>Check-in</th><th>Attendance</th></tr></thead><tbody>';
+        students.forEach(function(s) {
+          var savedAtt = (saved.attendance && saved.attendance[s._id]) || {};
+          var attStatus = savedAtt.status || (s.status === 'no-show' ? 'no-show' : 'completed');
+          var checkedIn = startup.students && startup.students[s._id] && startup.students[s._id].checkedIn;
+          var checkInLabel = checkedIn ? '<span style="color:#4DB6AC;">&#10003; Checked in</span>' : '<span style="color:var(--warm-gray);">—</span>';
+
+          html += '<tr><td>' + esc(s.studentName || s.customerName || '—') + '</td>' +
+            '<td>' + checkInLabel + '</td>' +
+            '<td><select name="att_' + esc(s._id) + '" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;">' +
+            '<option value="completed"' + (attStatus === 'completed' ? ' selected' : '') + '>Completed</option>' +
+            '<option value="absent"' + (attStatus === 'absent' ? ' selected' : '') + '>Absent</option>' +
+            '<option value="no-show"' + (attStatus === 'no-show' ? ' selected' : '') + '>No-Show</option>' +
+            '</select></td></tr>';
+        });
+        html += '</tbody></table>';
+      }
+
+      // Equipment post-check
+      html += '<h3 style="margin:1.5rem 0 12px;">Equipment Post-Check</h3>';
+      if (resources.length === 0) {
+        html += '<p style="color:var(--warm-gray);">No resources assigned.</p>';
+      } else {
+        resources.forEach(function(r) {
+          var savedEquip = (saved.equipment && saved.equipment[r._id]) || {};
+          html += '<div style="background:var(--surface-dark);border-radius:8px;padding:12px 16px;margin-bottom:8px;">' +
+            '<strong>' + esc(r.name) + '</strong>' +
+            '<div style="display:flex;gap:12px;margin-top:8px;align-items:center;">' +
+            '<select name="postequip_' + esc(r._id) + '" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;">' +
+            '<option value="good"' + (savedEquip.postCondition === 'good' ? ' selected' : '') + '>Good</option>' +
+            '<option value="needs_attention"' + ((savedEquip.postCondition === 'needs_attention') ? ' selected' : '') + '>Needs Attention</option>' +
+            '<option value="out_of_service"' + ((savedEquip.postCondition === 'out_of_service') ? ' selected' : '') + '>Out of Service</option>' +
+            '</select>' +
+            '<input type="text" name="postequip_notes_' + esc(r._id) + '" placeholder="Notes..." value="' + esc(savedEquip.notes || '') + '" style="flex:1;padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;">' +
+            '</div></div>';
+        });
+      }
+
+      // Incidents
+      html += '<h3 style="margin:1.5rem 0 12px;">Incidents</h3>';
+      html += '<div id="incidentsList">';
+      if (existingIncidents.length > 0) {
+        existingIncidents.forEach(function(inc) {
+          var sevColor = SEVERITY_COLORS[inc.severity] || '#BDBDBD';
+          html += '<div style="background:var(--surface-dark);border-radius:8px;padding:12px 16px;margin-bottom:8px;border-left:3px solid ' + sevColor + ';">' +
+            '<div style="display:flex;gap:8px;align-items:center;">' +
+            '<span style="' + badgeStyle(STATUS_BADGE_COLORS, inc.severity === 'critical' ? 'cancelled' : inc.severity === 'high' ? 'no-show' : 'waitlisted') + '">' + esc(inc.severity) + '</span>' +
+            '<span style="font-weight:500;">' + esc(INCIDENT_TYPE_LABELS[inc.type] || inc.type) + '</span>' +
+            '<span style="color:var(--warm-gray);font-size:0.8rem;margin-left:auto;">' + esc(inc.followUpStatus || 'open') + '</span>' +
+            '</div>' +
+            '<p style="margin:8px 0 0;color:var(--warm-gray);font-size:0.9rem;">' + esc(inc.description) + '</p>' +
+            '</div>';
+        });
+      }
+      html += '</div>';
+
+      html += '<div id="newIncidentForm" style="display:none;background:var(--surface-dark);border-radius:8px;padding:16px;margin-bottom:12px;">' +
+        '<h4 style="margin:0 0 12px;">New Incident</h4>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">' +
+        '<select id="incType" style="padding:6px 8px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;">' +
+        INCIDENT_TYPES.map(function(t) { return '<option value="' + t + '">' + esc(INCIDENT_TYPE_LABELS[t] || t) + '</option>'; }).join('') +
+        '</select>' +
+        '<select id="incSeverity" style="padding:6px 8px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;">' +
+        INCIDENT_SEVERITIES.map(function(s) { return '<option value="' + s + '">' + s.charAt(0).toUpperCase() + s.slice(1) + '</option>'; }).join('') +
+        '</select>' +
+        '</div>' +
+        '<textarea id="incDescription" rows="2" placeholder="Describe the incident..." style="width:100%;padding:8px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;resize:vertical;margin-bottom:8px;"></textarea>' +
+        '<div style="display:flex;gap:8px;">' +
+        '<button type="button" class="btn btn-sm btn-primary" onclick="window._bookSaveIncident(\'' + esc(sessionId) + '\')">Save Incident</button>' +
+        '<button type="button" class="btn btn-sm" onclick="document.getElementById(\'newIncidentForm\').style.display=\'none\'">Cancel</button>' +
+        '</div></div>';
+      html += '<button type="button" class="btn btn-sm" onclick="document.getElementById(\'newIncidentForm\').style.display=\'\'" style="margin-bottom:1rem;">+ Add Incident</button>';
+
+      // Notes
+      html += '<h3 style="margin:1.5rem 0 12px;">Session Notes</h3>';
+      html += '<textarea name="completionNotes" rows="3" style="width:100%;padding:8px 12px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.9rem;resize:vertical;">' + esc(saved.notes || '') + '</textarea>';
+
+      // Submit
+      html += '<div style="display:flex;gap:8px;margin-top:1.5rem;">' +
+        '<button type="button" class="btn btn-primary" onclick="window._bookSaveReport(\'' + esc(sessionId) + '\', false)">Save Draft</button>' +
+        '<button type="button" class="btn btn-primary" style="background:#4DB6AC;" onclick="window._bookSaveReport(\'' + esc(sessionId) + '\', true)">Submit Report</button>' +
+        '</div>';
+
+      if (saved.completedAt) {
+        html += '<p style="color:#4DB6AC;margin-top:12px;font-size:0.85rem;">Report submitted ' + new Date(saved.completedAt).toLocaleString() + '</p>';
+      }
+
+      html += '</form>';
+      content.innerHTML = html;
+    } catch (err) {
+      console.error('[book] Failed to load report:', err);
+      content.innerHTML = '<p style="color:#EF9A9A;">Failed to load report: ' + esc(err.message) + '</p>';
+    }
+  };
+
+  window._bookSaveIncident = async function(sessionId) {
+    var type = document.getElementById('incType').value;
+    var severity = document.getElementById('incSeverity').value;
+    var description = document.getElementById('incDescription').value.trim();
+    if (!description) { MastAdmin.showToast('Incident description required', true); return; }
+
+    try {
+      var incId = MastDB.sessionLogs.newIncidentKey(sessionId);
+      await MastDB.sessionLogs.incidents(sessionId, incId).set({
+        type: type,
+        severity: severity,
+        description: description,
+        studentUid: null,
+        followUpStatus: 'open',
+        createdAt: new Date().toISOString()
+      });
+      MastAdmin.showToast('Incident saved');
+      // Reload the report to show new incident
+      window._bookSessionReport(sessionId, opsClassId);
+    } catch (err) {
+      MastAdmin.showToast('Failed: ' + err.message, true);
+    }
+  };
+
+  window._bookSaveReport = async function(sessionId, submit) {
+    var form = document.getElementById('completionReportForm');
+    if (!form) return;
+
+    var data = { attendance: {}, equipment: {} };
+
+    // Collect attendance
+    form.querySelectorAll('select[name^="att_"]').forEach(function(el) {
+      var enrollId = el.name.replace('att_', '');
+      data.attendance[enrollId] = { status: el.value };
+    });
+
+    // Check all attendance filled (RULE: session can't complete without attendance)
+    if (submit) {
+      var hasAllAttendance = Object.keys(data.attendance).length > 0;
+      if (!hasAllAttendance) {
+        MastAdmin.showToast('No enrollments to finalize attendance', true);
+        return;
+      }
+    }
+
+    // Collect equipment post-check
+    form.querySelectorAll('select[name^="postequip_"]').forEach(function(el) {
+      if (el.name.indexOf('postequip_notes_') === 0) return;
+      var resId = el.name.replace('postequip_', '');
+      if (!data.equipment[resId]) data.equipment[resId] = {};
+      data.equipment[resId].postCondition = el.value;
+    });
+    form.querySelectorAll('input[name^="postequip_notes_"]').forEach(function(el) {
+      var resId = el.name.replace('postequip_notes_', '');
+      if (!data.equipment[resId]) data.equipment[resId] = {};
+      data.equipment[resId].notes = el.value;
+    });
+
+    data.notes = form.querySelector('textarea[name="completionNotes"]').value;
+
+    if (submit) {
+      data.completedAt = new Date().toISOString();
+      data.completedBy = firebase.auth().currentUser ? firebase.auth().currentUser.uid : null;
+    }
+
+    try {
+      await MastDB.sessionLogs.completion(sessionId).set(data);
+
+      if (submit) {
+        // Update enrollment statuses based on attendance
+        for (var enrollId in data.attendance) {
+          var attStatus = data.attendance[enrollId].status;
+          if (attStatus === 'completed' || attStatus === 'no-show' || attStatus === 'absent') {
+            await MastDB.enrollments.update(enrollId, { status: attStatus });
+          }
+        }
+        // Mark session as completed
+        await MastDB.classSessions.update(sessionId, {
+          status: 'completed',
+          completedAt: new Date().toISOString()
+        });
+        MastAdmin.showToast('Session completed — attendance finalized');
+      } else {
+        MastAdmin.showToast('Report saved');
+      }
+
+      window._bookSessionReport(sessionId, opsClassId);
+    } catch (err) {
+      MastAdmin.showToast('Failed to save: ' + err.message, true);
+    }
+  };
 
   // ============================================================
   // Module Registration

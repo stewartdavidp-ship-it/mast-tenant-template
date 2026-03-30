@@ -347,6 +347,39 @@
   text-align: center;
 }
 
+/* Waitlist buttons */
+.cd-waitlist-btn {
+  padding: 8px 24px;
+  border-radius: 6px;
+  border: 1px solid var(--primary);
+  background: transparent;
+  color: var(--primary);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.cd-waitlist-btn:hover { background: var(--primary); color: #fff; }
+.cd-series-waitlist-btn {
+  display: block;
+  width: 100%;
+  padding: 14px 24px;
+  border-radius: 8px;
+  border: 1px solid var(--primary);
+  background: transparent;
+  color: var(--primary);
+  font-size: 1.05rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.cd-series-waitlist-btn:hover { background: var(--primary); color: #fff; }
+.cd-waitlist-note {
+  margin-top: 6px;
+  font-size: 0.8rem;
+  color: var(--warm-gray, #888);
+}
+
 /* Booking confirmation banner */
 .cd-booking-confirm {
   position: fixed;
@@ -564,10 +597,13 @@
           (allowDropIn ? ' &mdash; drop-in sessions available below' : '') +
           '</div></div>';
       } else if (seriesSpotsLeft <= 0) {
+        var seriesWaitlisted = cls.seriesWaitlisted || 0;
         html += '<div class="cd-series-cta">' +
-          '<div class="cd-series-started">Series is full' +
-          (allowDropIn ? ' &mdash; drop-in spots may be available below' : '') +
-          '</div></div>';
+          '<button class="cd-series-waitlist-btn" onclick="window._joinWaitlist(null, \'' + esc(cls.id) + '\', \'' + esc(cls.name) + '\', \'series\')">' +
+          'Join Series Waitlist</button>' +
+          '<div class="cd-waitlist-note">' + (seriesWaitlisted > 0 ? seriesWaitlisted + ' on waitlist' : 'Be the first on the waitlist') + '</div>' +
+          (allowDropIn ? '<div class="cd-series-or">or check for drop-in availability below</div>' : '') +
+          '</div>';
       } else {
         html += '<div class="cd-series-cta">' +
           '<button class="cd-series-btn" onclick="window._bookSeries(\'' + esc(cls.id) + '\', \'' + esc(cls.name) + '\', ' + seriesPrice + ', ' + totalSessions + ')">' +
@@ -595,15 +631,17 @@
         // Also only show drop-in for future sessions (not past)
         var showBookBtn = (!isSeries || allowDropIn) && s.date >= todayStr();
 
+        var sessionWaitlisted = s.waitlisted || 0;
         html += '<div class="cd-session-row">' +
           '<span class="cd-session-date">' + formatSessionDate(s.date) + '</span>' +
           '<span class="cd-session-time">' + formatTime(s.startTime) + ' - ' + formatTime(s.endTime) + '</span>' +
-          '<span class="cd-session-spots' + (isFull ? ' full' : '') + '">' + (isFull ? 'Full' : dropInSpotsLeft + ' spot' + (dropInSpotsLeft !== 1 ? 's' : '') + ' left') + '</span>' +
+          '<span class="cd-session-spots' + (isFull ? ' full' : '') + '">' + (isFull ? 'Full' + (sessionWaitlisted > 0 ? ' (' + sessionWaitlisted + ' waiting)' : '') : dropInSpotsLeft + ' spot' + (dropInSpotsLeft !== 1 ? 's' : '') + ' left') + '</span>' +
           (showBookBtn ?
-            '<button class="cd-book-btn" ' + (isFull ? 'disabled' : '') +
-            ' onclick="window._bookSession(\'' + esc(s.id) + '\', \'' + esc(cls.id) + '\', \'' + esc(cls.name) + '\', ' + (cls.priceCents || 0) + ', ' + dropInSpotsLeft + ', \'' + esc(s.date) + '\', \'' + esc(s.startTime) + '\')">' +
-            (isFull ? 'Full' : (isSeries ? 'Drop-in' : 'Book')) +
-            '</button>' : '') +
+            (isFull ?
+              '<button class="cd-waitlist-btn" onclick="window._joinWaitlist(\'' + esc(s.id) + '\', \'' + esc(cls.id) + '\', \'' + esc(cls.name) + '\', \'dropin\')">Waitlist</button>' :
+              '<button class="cd-book-btn" onclick="window._bookSession(\'' + esc(s.id) + '\', \'' + esc(cls.id) + '\', \'' + esc(cls.name) + '\', ' + (cls.priceCents || 0) + ', ' + dropInSpotsLeft + ', \'' + esc(s.date) + '\', \'' + esc(s.startTime) + '\')">' +
+              (isSeries ? 'Drop-in' : 'Book') + '</button>')
+            : '') +
           '</div>';
       });
       html += '</div>';
@@ -650,6 +688,89 @@
     if (!fbApp) return;
     var unsubscribe = fbApp.auth().onAuthStateChanged(function(u) {
       if (u && !u.isAnonymous) { unsubscribe(); addSeriesToCart(); }
+    });
+  };
+
+  // Join waitlist for a full session or series
+  window._joinWaitlist = function(sessionId, classId, className, enrollmentType) {
+    if (!window.MastCart) { alert('Cart not loaded yet. Please wait.'); return; }
+
+    function doJoinWaitlist() {
+      var user = window.MastCart.getCurrentUser();
+      var fbApp = window.MastCart.getFirebaseApp();
+      if (!user || !fbApp) return;
+      var db = fbApp.database();
+
+      // Check not already enrolled/waitlisted
+      var checkPath = TENANT_ID + '/public/enrollments';
+      db.ref(checkPath).orderByChild('studentUid').equalTo(user.uid).once('value').then(function(snap) {
+        var existing = snap.val() || {};
+        var isDuplicate = Object.values(existing).some(function(e) {
+          if (e.status === 'cancelled' || e.status === 'cancelled_insufficient_enrollment') return false;
+          if (enrollmentType === 'series') return e.classId === classId && e.enrollmentType === 'series';
+          return e.sessionId === sessionId;
+        });
+        if (isDuplicate) {
+          alert('You are already enrolled or on the waitlist for this class.');
+          return;
+        }
+
+        // Get current waitlist count and assign position
+        var counterPath;
+        if (enrollmentType === 'series') {
+          counterPath = TENANT_ID + '/public/classes/' + classId + '/seriesWaitlisted';
+        } else {
+          counterPath = TENANT_ID + '/public/classSessions/' + sessionId + '/waitlisted';
+        }
+
+        db.ref(counterPath).transaction(function(current) {
+          return (current || 0) + 1;
+        }).then(function(result) {
+          var position = result.snapshot.val();
+
+          // Create waitlist enrollment
+          var enrollmentRef = db.ref(TENANT_ID + '/public/enrollments').push();
+          var enrollmentData = {
+            classId: classId,
+            studentUid: user.uid,
+            studentName: user.displayName || '',
+            studentEmail: user.email || '',
+            status: 'waitlisted',
+            enrollmentType: enrollmentType,
+            waitlistPosition: position,
+            paymentMethod: 'pending',
+            pricePaid: 0,
+            enrolledAt: new Date().toISOString()
+          };
+          if (sessionId) enrollmentData.sessionId = sessionId;
+          return enrollmentRef.set(enrollmentData).then(function() { return position; });
+        }).then(function(position) {
+          // Show confirmation banner
+          var banner = document.createElement('div');
+          banner.className = 'cd-booking-confirm';
+          banner.innerHTML = '<div class="cd-booking-confirm-inner"><div class="cd-booking-confirm-icon">&#128276;</div><div class="cd-booking-confirm-text">Waitlisted #' + position + ' — ' + className + '</div></div>';
+          document.body.appendChild(banner);
+          requestAnimationFrame(function() { banner.classList.add('visible'); });
+          setTimeout(function() { banner.classList.remove('visible'); setTimeout(function() { banner.remove(); }, 300); }, 3000);
+        }).catch(function(err) {
+          console.error('[class-detail] Waitlist join failed:', err);
+          alert('Failed to join waitlist. Please try again.');
+        });
+      });
+    }
+
+    // Auth gate
+    var user = window.MastCart.getCurrentUser();
+    if (user && !user.isAnonymous) {
+      doJoinWaitlist();
+      return;
+    }
+
+    if (window.siteSignIn) window.siteSignIn();
+    var fbApp = window.MastCart.getFirebaseApp();
+    if (!fbApp) return;
+    var unsubscribe = fbApp.auth().onAuthStateChanged(function(u) {
+      if (u && !u.isAnonymous) { unsubscribe(); doJoinWaitlist(); }
     });
   };
 

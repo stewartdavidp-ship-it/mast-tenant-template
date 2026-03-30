@@ -7519,6 +7519,17 @@
         <div id="bookEnrollmentsTable"></div>
       </div>
 
+      <!-- Session Operations View (Startup Checklist + Completion Report) -->
+      <div id="bookSessionOpsView" style="display:none;">
+        <div class="section-header">
+          <h2 id="sessionOpsTitle">Session Operations</h2>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-sm" onclick="window._bookBackFromOps()">Back to Class</button>
+          </div>
+        </div>
+        <div id="sessionOpsContent"></div>
+      </div>
+
       <!-- Instructors List View -->
       <div id="bookInstructorsView" style="display:none;">
         <div class="section-header">
@@ -8724,6 +8735,21 @@ MastDB.accounts = {
       return this.walletCredits(uid).limitToLast(limit || 50).once('value');
     },
     newWalletCreditKey: function(uid) { return this.walletCredits(uid).push().key; }
+};
+MastDB.sessionLogs = {
+    PATH: 'admin/sessionLogs',
+    ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+    get: function(id) { return this.ref(id).once('value'); },
+    set: function(id, data) { return this.ref(id).set(data); },
+    update: function(id, data) { return this.ref(id).update(data); },
+    startup: function(sessionId) { return this.ref(sessionId + '/startup'); },
+    completion: function(sessionId) { return this.ref(sessionId + '/completion'); },
+    incidents: function(sessionId, incidentId) {
+      var p = this.PATH + '/' + sessionId + '/incidents';
+      if (incidentId) p += '/' + incidentId;
+      return MastDB._ref(p);
+    },
+    newIncidentKey: function(sessionId) { return this.incidents(sessionId).push().key; }
 };
 MastDB.passDefinitions = {
     PATH: 'admin/passDefinitions',

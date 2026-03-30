@@ -479,6 +479,7 @@
         // Status badge
         var statusKey = (e.status || 'confirmed').replace(/-/g, '_');
         var statusLabel = e.status === 'cancelled_insufficient_enrollment' ? 'Cancelled' :
+          e.status === 'waitlisted' ? 'Waitlist #' + (e.waitlistPosition || '?') :
           (e.status || 'confirmed').replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
         var statusBadge = '<span class="mc-badge mc-status-' + esc(statusKey) + '">' + esc(statusLabel) + '</span>';
 
