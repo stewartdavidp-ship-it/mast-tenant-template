@@ -24553,6 +24553,18 @@ function renderDashCardLowInventory() {
     }
 
     container.innerHTML = renderDashboardCard(cardConfig, lowItems.length, contentHtml);
+
+    // Activity tracking — fingerprint the low-stock PIDs, trigger only when set changes
+    var fingerprint = lowItems.map(function(i) { return i.pid; }).sort().join(',');
+    var prevFingerprint = (dashboardCardPrefs.lowInventory || {})._fingerprint || '';
+    if (fingerprint && fingerprint !== prevFingerprint) {
+      dashboardCardPrefs.lowInventory = dashboardCardPrefs.lowInventory || {};
+      dashboardCardPrefs.lowInventory._fingerprint = fingerprint;
+      if (prevFingerprint) {
+        // Only flag activity if there was a previous fingerprint (not first load)
+        updateCardActivity('lowInventory', new Date().toISOString());
+      }
+    }
   });
 }
 
