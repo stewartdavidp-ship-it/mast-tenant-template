@@ -24331,10 +24331,7 @@ function renderDashCardNewInquiries() {
           else if (mins < 1440) timeAgo = Math.floor(mins / 60) + 'h ago';
           else timeAgo = Math.floor(mins / 1440) + 'd ago';
         }
-        var clickAction = inq.contactId
-          ? 'navigateTo(\\\'contacts\\\'); setTimeout(function(){ if(typeof viewContact===\\\'function\\\') viewContact(\\\'' + esc(inq.contactId) + '\\\'); }, 200);'
-          : 'navigateTo(\\\'contacts\\\')';
-        contentHtml += '<div class="dash-order-row" onclick="' + clickAction + '" style="cursor:pointer;">' +
+        contentHtml += '<div class="dash-order-row" data-contact-id="' + esc(inq.contactId || '') + '" onclick="openInquiryContact(this)" style="cursor:pointer;">' +
           '<div style="flex:1;min-width:0;">' +
             '<div style="font-weight:500;font-size:0.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(inq.name || 'Unknown') + '</div>' +
             '<div style="font-size:0.78rem;color:var(--warm-gray);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(inq.type || '') + ' &mdash; ' + esc((inq.message || '').substring(0, 60)) + '</div>' +
@@ -24349,6 +24346,16 @@ function renderDashCardNewInquiries() {
     console.error('Error loading inquiries:', err);
     container.innerHTML = '';
   });
+}
+
+function openInquiryContact(el) {
+  var contactId = el.getAttribute('data-contact-id');
+  if (contactId) {
+    navigateTo('contacts');
+    setTimeout(function() { if (typeof viewContact === 'function') viewContact(contactId); }, 300);
+  } else {
+    navigateTo('contacts');
+  }
 }
 
 // ─── Dashboard Card: Quick Actions ──────────────────────────
