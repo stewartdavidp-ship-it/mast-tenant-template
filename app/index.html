@@ -24004,6 +24004,7 @@ var DASHBOARD_CARDS = [
   { id: 'readyToShip',  title: 'Ready to Ship', containerId: 'dashCardReadyToShip',  viewAllRoute: 'ship' },
   { id: 'lowInventory', title: 'Low Inventory', containerId: 'dashCardLowInventory', viewAllRoute: 'inventory' }
 ];
+var customDashboardCards = []; // Custom cards loaded from Firebase admin/dashboardCards
 var dashboardCardPrefs = {};
 var dashboardPrefsLoaded = false;
 
@@ -24320,6 +24321,8 @@ async function ensureProductsLoaded() {
 
 async function renderAllDashboardCards() {
   await loadDashboardPrefs();
+  // Discover custom dashboard cards from Firebase
+  await loadCustomDashboardCards();
   // Reorder DOM containers to match user preferences
   var ordered = getDashCardsInOrder();
   var parent = document.getElementById('dashboardCards');
@@ -24338,6 +24341,10 @@ async function renderAllDashboardCards() {
     renderDashCardWithGating(DASHBOARD_CARDS.find(function(c) { return c.id === 'readyToShip'; }), renderDashCardReadyToShip);
   });
   renderDashCardWithGating(DASHBOARD_CARDS.find(function(c) { return c.id === 'lowInventory'; }), renderDashCardLowInventory);
+  // Render custom cards
+  customDashboardCards.forEach(function(cardDef) {
+    if (cardDef.type === 'status-queue') renderStatusQueueCard(cardDef);
+  });
   // Dashboard todos / nudges (above cards)
   renderDashboardTodos();
   // Import status banner
@@ -24406,6 +24413,109 @@ function renderImportStatusBanner() {
     banner.innerHTML = html;
     banner.style.display = '';
   }).catch(function() { banner.style.display = 'none'; });
+}
+
+// ─── Custom Dashboard Cards (loaded from Firebase) ──────────
+
+async function loadCustomDashboardCards() {
+  try {
+    var snap = await MastDB._ref('admin/dashboardCards').once('value');
+    var val = snap.val();
+    if (!val) { customDashboardCards = []; return; }
+    var parent = document.getElementById('dashboardCards');
+    customDashboardCards = [];
+    Object.entries(val).forEach(function(entry) {
+      var id = entry[0];
+      var card = entry[1];
+      if (card.enabled === false) return;
+      var containerId = 'dashCardCustom_' + id;
+      // Add to DASHBOARD_CARDS if not already present
+      var existing = DASHBOARD_CARDS.find(function(c) { return c.id === 'custom_' + id; });
+      if (!existing) {
+        var cardEntry = {
+          id: 'custom_' + id,
+          title: card.title || 'Custom Card',
+          containerId: containerId,
+          viewAllRoute: card.viewAllRoute || null
+        };
+        DASHBOARD_CARDS.push(cardEntry);
+      }
+      // Create DOM container if needed
+      if (parent && !document.getElementById(containerId)) {
+        var div = document.createElement('div');
+        div.id = containerId;
+        parent.appendChild(div);
+      }
+      customDashboardCards.push(Object.assign({ _id: id, _cardId: 'custom_' + id, _containerId: containerId }, card));
+    });
+  } catch (err) {
+    console.error('Error loading custom dashboard cards:', err);
+    customDashboardCards = [];
+  }
+}
+
+// ─── Status Queue Card Renderer ─────────────────────────────
+
+function renderStatusQueueCard(cardDef) {
+  var container = document.getElementById(cardDef._containerId);
+  if (!container) return;
+  var cardConfig = DASHBOARD_CARDS.find(function(c) { return c.id === cardDef._cardId; });
+  if (!cardConfig) return;
+
+  var q = cardDef.query || {};
+  var path = q.path || '';
+  var filterField = q.filterField || 'status';
+  var filterValue = q.filterValue || '';
+  var orderBy = q.orderBy || 'createdAt';
+  var limit = q.limit || 10;
+  var d = cardDef.display || {};
+  var primaryField = d.primaryField || 'name';
+  var secondaryField = d.secondaryField || null;
+  var timestampField = d.timestampField || 'createdAt';
+
+  MastDB._ref(path).orderByChild(filterField).equalTo(filterValue).limitToLast(limit).once('value').then(function(snap) {
+    var val = snap.val();
+    var items = val ? Object.values(val).sort(function(a, b) {
+      return ((b[orderBy] || '') + '').localeCompare((a[orderBy] || '') + '');
+    }) : [];
+
+    var contentHtml = '';
+    if (items.length === 0) {
+      contentHtml = '<div class="dash-queue-empty">None right now.</div>';
+    } else {
+      items.forEach(function(item) {
+        var timeAgo = '';
+        var ts = item[timestampField];
+        if (ts) {
+          var mins = Math.floor((Date.now() - new Date(ts).getTime()) / 60000);
+          if (mins < 60) timeAgo = mins + 'm ago';
+          else if (mins < 1440) timeAgo = Math.floor(mins / 60) + 'h ago';
+          else timeAgo = Math.floor(mins / 1440) + 'd ago';
+        }
+        var primaryText = item[primaryField] || '';
+        var secondaryText = secondaryField ? (item[secondaryField] || '') : '';
+        var rowRoute = cardDef.viewAllRoute || '';
+        var clickAttr = rowRoute ? ' onclick="navigateTo(\'' + esc(rowRoute) + '\')" style="cursor:pointer;"' : '';
+        contentHtml += '<div class="dash-order-row"' + clickAttr + '>' +
+          '<div style="flex:1;min-width:0;">' +
+            '<div style="font-weight:500;font-size:0.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(primaryText) + '</div>' +
+            (secondaryText ? '<div style="font-size:0.78rem;color:var(--warm-gray);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(secondaryText) + '</div>' : '') +
+          '</div>' +
+          '<div style="font-size:0.75rem;color:var(--warm-gray-light);white-space:nowrap;margin-left:8px;">' + timeAgo + '</div>' +
+        '</div>';
+      });
+    }
+
+    container.innerHTML = renderDashboardCard(cardConfig, items.length, contentHtml);
+    // Activity tracking
+    if (items.length > 0) {
+      var newest = items[0][timestampField] || '';
+      updateCardActivity(cardDef._cardId, newest);
+    }
+  }).catch(function(err) {
+    console.error('Error loading custom card ' + cardDef.title + ':', err);
+    container.innerHTML = '';
+  });
 }
 
 // ─── Dashboard Card: New Inquiries ──────────────────────────
