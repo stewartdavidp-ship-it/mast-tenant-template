@@ -1,158 +1,315 @@
 {
-  "id": "the-gallery",
-  "name": "The Gallery",
-  "description": "Desktop-forward portfolio showcase. Oversized typography, generous whitespace, masonry gallery as the centerpiece. For fine artists, photographers, and jewelers.",
-  "version": "1.0.0",
-  "compile": true,
-  "defaultTheme": "light",
-
-  "responsivePriority": "desktop",
-  "designScale": "editorial",
-  "navStyle": "minimal",
-  "heroVariant": "minimal-text",
-  "galleryVariant": "masonry",
-  "productGridVariant": "card",
-
-  "slots": {
-    "universal": [
-      { "id": "hero", "label": "Hero", "required": true, "description": "Oversized typography hero — brand name as statement" },
-      { "id": "gallery", "label": "Gallery", "required": true, "description": "Masonry portfolio showcase — the centerpiece" },
-      { "id": "about", "label": "About", "required": true, "onHomepage": true, "description": "Artist statement and biography" },
-      { "id": "contact", "label": "Contact", "required": true, "description": "Contact and representation info" }
+    "id": "the-gallery",
+    "name": "The Gallery",
+    "description": "Desktop-forward portfolio showcase. Oversized typography, generous whitespace, masonry gallery as the centerpiece. For fine artists, photographers, and jewelers.",
+    "version": "1.0.0",
+    "compile": true,
+    "defaultTheme": "light",
+    "responsivePriority": "desktop",
+    "designScale": "editorial",
+    "navStyle": "minimal",
+    "heroVariant": "minimal-text",
+    "galleryVariant": "masonry",
+    "productGridVariant": "card",
+    "slots": {
+        "universal": [
+            {
+                "id": "hero",
+                "label": "Hero",
+                "required": true,
+                "description": "Oversized typography hero \u2014 brand name as statement"
+            },
+            {
+                "id": "gallery",
+                "label": "Gallery",
+                "required": true,
+                "description": "Masonry portfolio showcase \u2014 the centerpiece"
+            },
+            {
+                "id": "about",
+                "label": "About",
+                "required": true,
+                "onHomepage": true,
+                "description": "Artist statement and biography"
+            },
+            {
+                "id": "contact",
+                "label": "Contact",
+                "required": true,
+                "description": "Contact and representation info"
+            }
+        ],
+        "common": [
+            {
+                "id": "newsletter",
+                "label": "Newsletter",
+                "required": false,
+                "description": "Collector mailing list signup"
+            }
+        ],
+        "differentiators": [
+            {
+                "id": "press",
+                "label": "Press",
+                "required": false,
+                "description": "Press mentions, exhibitions, awards"
+            },
+            {
+                "id": "events",
+                "label": "Events",
+                "required": false,
+                "description": "Shows and exhibition schedule"
+            }
+        ]
+    },
+    "slotMapping": {
+        "hero": "hero",
+        "gallery": "gallery",
+        "category-grid": null,
+        "featured-products": null,
+        "about-blurb": null,
+        "about": "about",
+        "events": "events",
+        "process": null,
+        "testimonials": null,
+        "contact": "contact",
+        "newsletter": "newsletter"
+    },
+    "homepageFlow": [
+        "hero",
+        "gallery",
+        "about",
+        "events",
+        "contact"
     ],
-    "common": [
-      { "id": "newsletter", "label": "Newsletter", "required": false, "description": "Collector mailing list signup" }
+    "navStructure": [
+        {
+            "id": "gallery",
+            "label": "Work",
+            "href": "#gallery"
+        },
+        {
+            "id": "about",
+            "label": "About",
+            "href": "about.html"
+        },
+        {
+            "id": "shop",
+            "label": "Shop",
+            "href": "shop.html"
+        },
+        {
+            "id": "contact",
+            "label": "Contact",
+            "href": "#contact"
+        }
     ],
-    "differentiators": [
-      { "id": "press", "label": "Press", "required": false, "description": "Press mentions, exhibitions, awards" },
-      { "id": "events", "label": "Events", "required": false, "description": "Shows and exhibition schedule" }
-    ]
-  },
-
-  "slotMapping": {
-    "hero": "hero",
-    "gallery": "gallery",
-    "category-grid": null,
-    "featured-products": null,
-    "about-blurb": null,
-    "about": "about",
-    "events": "events",
-    "process": null,
-    "testimonials": null,
-    "contact": "contact",
-    "newsletter": "newsletter"
-  },
-
-  "homepageFlow": [
-    "hero",
-    "gallery",
-    "about",
-    "events",
-    "contact",
-    "newsletter"
-  ],
-
-  "navStructure": [
-    { "id": "gallery", "label": "Work", "href": "#gallery" },
-    { "id": "about", "label": "About", "href": "about.html" },
-    { "id": "shop", "label": "Shop", "href": "shop.html" },
-    { "id": "contact", "label": "Contact", "href": "#contact" }
-  ],
-
-  "pages": [
-    { "file": "index.html", "label": "Home", "slots": ["hero", "gallery", "about", "events", "contact", "newsletter"] },
-    { "file": "shop.html", "label": "Shop", "slots": ["shop-header", "shop-grid"] },
-    { "file": "product.html", "label": "Product Detail", "slots": ["product-detail", "product-story"] },
-    { "file": "about.html", "label": "About", "slots": ["about-header", "about-story", "cta"] },
-    { "file": "schedule.html", "label": "Events", "slots": ["events-header", "events-list"] },
-    { "file": "orders.html", "label": "Orders", "slots": ["orders-header", "order-lookup"] },
-    { "file": "checkout.html", "label": "Checkout", "slots": ["checkout-flow"] },
-    { "file": "blog/index.html", "label": "Blog", "slots": ["blog-header", "blog-grid"] },
-    { "file": "blog/post.html", "label": "Blog Post", "slots": ["blog-post"] }
-  ],
-
-  "colorSchemes": [
-    {
-      "id": "gallery-white",
-      "name": "Gallery White",
-      "default": true,
-      "colors": {
-        "primaryColor": "#1A1A1A",
-        "accentColor": "#8B7355",
-        "bgColor": "#FFFFFF",
-        "bgDarkColor": "#F8F8F8",
-        "textColor": "#1A1A1A",
-        "textMutedColor": "#808080"
-      }
-    },
-    {
-      "id": "gallery-charcoal",
-      "name": "Charcoal",
-      "colors": {
-        "primaryColor": "#D4C5A9",
-        "accentColor": "#A89070",
-        "bgColor": "#1A1A1A",
-        "bgDarkColor": "#111111",
-        "textColor": "#E8E0D4",
-        "textMutedColor": "#9A9490"
-      }
-    },
-    {
-      "id": "gallery-cream",
-      "name": "Warm Cream",
-      "colors": {
-        "primaryColor": "#2C2C2C",
-        "accentColor": "#8B6F47",
-        "bgColor": "#F5F0E8",
-        "bgDarkColor": "#EBE4D8",
-        "textColor": "#2C2C2C",
-        "textMutedColor": "#6B6560"
-      }
-    },
-    {
-      "id": "gallery-slate",
-      "name": "Cool Slate",
-      "colors": {
-        "primaryColor": "#C0B8A8",
-        "accentColor": "#6B7B8D",
-        "bgColor": "#2A2D32",
-        "bgDarkColor": "#22252A",
-        "textColor": "#E0DCD6",
-        "textMutedColor": "#8A8680"
-      }
-    },
-    {
-      "id": "gallery-ivory",
-      "name": "Ivory",
-      "colors": {
-        "primaryColor": "#3A3A3A",
-        "accentColor": "#7A6B5A",
-        "bgColor": "#FFFFF0",
-        "bgDarkColor": "#F5F5E8",
-        "textColor": "#2A2A2A",
-        "textMutedColor": "#7A7A6A"
-      }
+    "pages": [
+        {
+            "file": "index.html",
+            "label": "Home",
+            "slots": [
+                "hero",
+                "gallery",
+                "about",
+                "events",
+                "contact",
+                "newsletter"
+            ]
+        },
+        {
+            "file": "shop.html",
+            "label": "Shop",
+            "slots": [
+                "shop-header",
+                "shop-grid"
+            ]
+        },
+        {
+            "file": "product.html",
+            "label": "Product Detail",
+            "slots": [
+                "product-detail",
+                "product-story"
+            ]
+        },
+        {
+            "file": "about.html",
+            "label": "About",
+            "slots": [
+                "about-header",
+                "about-story",
+                "cta"
+            ]
+        },
+        {
+            "file": "schedule.html",
+            "label": "Events",
+            "slots": [
+                "events-header",
+                "events-list"
+            ]
+        },
+        {
+            "file": "orders.html",
+            "label": "Orders",
+            "slots": [
+                "orders-header",
+                "order-lookup"
+            ]
+        },
+        {
+            "file": "checkout.html",
+            "label": "Checkout",
+            "slots": [
+                "checkout-flow"
+            ]
+        },
+        {
+            "file": "blog/index.html",
+            "label": "Blog",
+            "slots": [
+                "blog-header",
+                "blog-grid"
+            ]
+        },
+        {
+            "file": "blog/post.html",
+            "label": "Blog Post",
+            "slots": [
+                "blog-post"
+            ]
+        }
+    ],
+    "colorSchemes": [
+        {
+            "id": "gallery-white",
+            "name": "Gallery White",
+            "default": true,
+            "colors": {
+                "primaryColor": "#1A1A1A",
+                "accentColor": "#8B7355",
+                "bgColor": "#FFFFFF",
+                "bgDarkColor": "#F8F8F8",
+                "textColor": "#1A1A1A",
+                "textMutedColor": "#808080"
+            }
+        },
+        {
+            "id": "gallery-charcoal",
+            "name": "Charcoal",
+            "colors": {
+                "primaryColor": "#D4C5A9",
+                "accentColor": "#A89070",
+                "bgColor": "#1A1A1A",
+                "bgDarkColor": "#111111",
+                "textColor": "#E8E0D4",
+                "textMutedColor": "#9A9490"
+            }
+        },
+        {
+            "id": "gallery-cream",
+            "name": "Warm Cream",
+            "colors": {
+                "primaryColor": "#2C2C2C",
+                "accentColor": "#8B6F47",
+                "bgColor": "#F5F0E8",
+                "bgDarkColor": "#EBE4D8",
+                "textColor": "#2C2C2C",
+                "textMutedColor": "#6B6560"
+            }
+        },
+        {
+            "id": "gallery-slate",
+            "name": "Cool Slate",
+            "colors": {
+                "primaryColor": "#C0B8A8",
+                "accentColor": "#6B7B8D",
+                "bgColor": "#2A2D32",
+                "bgDarkColor": "#22252A",
+                "textColor": "#E0DCD6",
+                "textMutedColor": "#8A8680"
+            }
+        },
+        {
+            "id": "gallery-ivory",
+            "name": "Ivory",
+            "colors": {
+                "primaryColor": "#3A3A3A",
+                "accentColor": "#7A6B5A",
+                "bgColor": "#FFFFF0",
+                "bgDarkColor": "#F5F5E8",
+                "textColor": "#2A2A2A",
+                "textMutedColor": "#7A7A6A"
+            }
+        }
+    ],
+    "fontPairs": [
+        {
+            "id": "editorial",
+            "name": "Editorial",
+            "heading": "Playfair Display",
+            "body": "Source Sans 3",
+            "default": true
+        },
+        {
+            "id": "classic",
+            "name": "Classic",
+            "heading": "Cormorant Garamond",
+            "body": "DM Sans"
+        },
+        {
+            "id": "geometric",
+            "name": "Geometric",
+            "heading": "Space Grotesk",
+            "body": "Space Grotesk"
+        },
+        {
+            "id": "clean",
+            "name": "Clean",
+            "heading": "Outfit",
+            "body": "Outfit"
+        },
+        {
+            "id": "artisan",
+            "name": "Artisan",
+            "heading": "Libre Baskerville",
+            "body": "Nunito Sans"
+        }
+    ],
+    "fingerprint": {
+        "archetype": [
+            "portfolio",
+            "brand-forward"
+        ],
+        "productCount": [
+            "none",
+            "low"
+        ],
+        "productPlacement": [
+            "subpage"
+        ],
+        "productDensity": [
+            "large-few"
+        ],
+        "categoryCount": [
+            "none"
+        ],
+        "pageCount": [
+            "single",
+            "few"
+        ],
+        "contentTypes": [
+            "gallery"
+        ],
+        "homepageSections": [
+            "gallery",
+            "about"
+        ],
+        "heroStyle": [
+            "text-only",
+            "minimal"
+        ],
+        "aboutOnHomepage": true
     }
-  ],
-
-  "fontPairs": [
-    { "id": "editorial", "name": "Editorial", "heading": "Playfair Display", "body": "Source Sans 3", "default": true },
-    { "id": "classic", "name": "Classic", "heading": "Cormorant Garamond", "body": "DM Sans" },
-    { "id": "geometric", "name": "Geometric", "heading": "Space Grotesk", "body": "Space Grotesk" },
-    { "id": "clean", "name": "Clean", "heading": "Outfit", "body": "Outfit" },
-    { "id": "artisan", "name": "Artisan", "heading": "Libre Baskerville", "body": "Nunito Sans" }
-  ],
-
-  "fingerprint": {
-    "archetype": ["portfolio", "brand-forward"],
-    "productCount": ["none", "low"],
-    "productPlacement": ["subpage"],
-    "productDensity": ["large-few"],
-    "categoryCount": ["none"],
-    "pageCount": ["single", "few"],
-    "contentTypes": ["gallery"],
-    "homepageSections": ["gallery", "about"],
-    "heroStyle": ["text-only", "minimal"],
-    "aboutOnHomepage": true
-  }
 }
