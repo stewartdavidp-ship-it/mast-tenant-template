@@ -478,7 +478,7 @@
         '<div class="class-card-body">' +
         '<h3>' + esc(cls.name) + '</h3>' +
         '<div class="class-card-schedule">' + esc(schedSummary(cls)) + '</div>' +
-        (cls.duration ? '<div class="class-card-schedule">' + cls.duration + ' min' + (cls.materialsIncluded ? ' &middot; Materials included' : '') + '</div>' : '') +
+        (cls.duration ? '<div class="class-card-schedule">' + cls.duration + ' min' + (cls.materialsIncluded ? ' &middot; Materials included' : (cls.materialsCostCents ? ' &middot; + $' + (cls.materialsCostCents / 100).toFixed(2) + ' materials' : '')) + '</div>' : '') +
         '<div class="class-card-meta">' +
         '<span class="class-card-price">' + price + '</span>' +
         '<span class="class-card-spots">' + (cls.capacity || '') + ' spots</span>' +
