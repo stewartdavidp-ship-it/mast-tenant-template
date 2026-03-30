@@ -24152,9 +24152,13 @@ function getDashCardsInOrder() {
   });
 
   // Sort unpinned by lastActivity descending, fallback to default order
+  // Only consider ISO-like timestamps (start with digit, contain '-')
+  function validActivity(v) { return v && v.length > 10 && v.charAt(4) === '-'; }
   unpinned.sort(function(a, b) {
     var la = (dashboardCardPrefs[a.id] || {}).lastActivity || '';
     var lb = (dashboardCardPrefs[b.id] || {}).lastActivity || '';
+    if (!validActivity(la)) la = '';
+    if (!validActivity(lb)) lb = '';
     if (la && lb) return lb.localeCompare(la);
     if (la) return -1;
     if (lb) return 1;
