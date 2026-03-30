@@ -127,10 +127,11 @@ function renderContacts() {
       : '';
 
     tr.innerHTML =
-      '<td><strong>' + esc(c.name || '') + '</strong></td>' +
+      '<td><strong>' + esc(c.name || '') + '</strong>' + (c.company ? '<div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(c.company) + '</div>' : '') + '</td>' +
+      '<td style="font-size:0.85rem;">' + (c.email ? '<a href="mailto:' + esc(c.email) + '" onclick="event.stopPropagation();" style="color:var(--accent);">' + esc(c.email) + '</a>' : '<span style="color:var(--warm-gray-light);">—</span>') + '</td>' +
+      '<td style="font-size:0.85rem;">' + (c.phone ? esc(c.phone) : '<span style="color:var(--warm-gray-light);">—</span>') + '</td>' +
       '<td><span class="status-badge" style="' + contactCatBadgeStyle(c.category) + '">' + esc(c.category || 'Other') + '</span></td>' +
-      '<td>' + lastIntHtml + '</td>' +
-      '<td>' + driveHtml + '</td>';
+      '<td>' + lastIntHtml + '</td>';
     tbody.appendChild(tr);
   });
 }
