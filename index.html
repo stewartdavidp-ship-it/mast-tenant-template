@@ -1480,20 +1480,24 @@
       <div class="form-row">
         <div class="form-group">
           <label>First Name</label>
-          <input type="text" placeholder="First" />
+          <input type="text" id="contactFormFirst" placeholder="First" />
         </div>
         <div class="form-group">
           <label>Last Name</label>
-          <input type="text" placeholder="Last" />
+          <input type="text" id="contactFormLast" placeholder="Last" />
         </div>
       </div>
       <div class="form-group">
         <label>Email</label>
-        <input type="email" placeholder="you@example.com" />
+        <input type="email" id="contactFormEmail" placeholder="you@example.com" />
+      </div>
+      <div class="form-group">
+        <label>Phone <span style="font-size:0.75rem;opacity:0.6;">(optional)</span></label>
+        <input type="tel" id="contactFormPhone" placeholder="(555) 123-4567" />
       </div>
       <div class="form-group">
         <label>Inquiry Type</label>
-        <select>
+        <select id="contactFormType">
           <option>General Question</option>
           <option>Custom Commission</option>
           <option>Wholesale Inquiry</option>
@@ -1503,24 +1507,12 @@
       </div>
       <div class="form-group">
         <label>Message</label>
-        <textarea placeholder="Tell us about your vision..."></textarea>
+        <textarea id="contactFormMessage" placeholder="Tell us about your vision..."></textarea>
       </div>
-      <button class="form-submit">Send Message</button>
+      <button class="form-submit" onclick="submitContactForm()">Send Message</button>
     </div>
   </div>
 </section>
-
-<!-- ============ NEWSLETTER ============ -->
-<div class="newsletter-bar" id="newsletterSignup" data-slot="newsletter">
-  <h3 data-content="newsletter-heading">Stay in the Loop</h3>
-  <p data-content="newsletter-subheadline">Events, new collections, classes &amp; studio updates — no spam, ever.</p>
-  <div class="newsletter-form" id="nlSignupForm">
-    <input type="text" id="nlSignupName" placeholder="Your name" style="max-width:200px;" />
-    <input type="email" id="nlSignupEmail" placeholder="Your email address" />
-    <button type="button" onclick="nlSubmitSignup()" data-content="newsletter-button">Subscribe</button>
-    <p style="font-size:0.75rem;opacity:0.7;margin:0.5rem 0 0;max-width:400px;">By subscribing, you agree to receive email newsletters from this business. You can unsubscribe at any time.</p>
-  </div>
-</div>
 
 <!-- ============ FOOTER ============ -->
 <footer>
@@ -2126,6 +2118,67 @@ window.nlSubmitSignup = function() {
   });
 };
 }).catch(function(err) { console.error('[index] Newsletter init failed:', err.message); });
+</script>
+<script>
+// Contact form submission (public — no auth required)
+window.TENANT_READY.then(function() {
+window.submitContactForm = function() {
+  var first = document.getElementById('contactFormFirst').value.trim();
+  var last = document.getElementById('contactFormLast').value.trim();
+  var email = document.getElementById('contactFormEmail').value.trim();
+  var phone = document.getElementById('contactFormPhone').value.trim();
+  var type = document.getElementById('contactFormType').value;
+  var message = document.getElementById('contactFormMessage').value.trim();
+
+  if (!first) { alert('Please enter your first name.'); return; }
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { alert('Please enter a valid email address.'); return; }
+  if (!message) { alert('Please enter a message.'); return; }
+
+  var btn = document.querySelector('.form-submit');
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+
+  var db = firebase.database();
+  var name = first + (last ? ' ' + last : '');
+  var now = new Date().toISOString();
+
+  // 1. Save inquiry record
+  var inqRef = db.ref(TENANT_ID + '/inquiries').push();
+  var inquiryData = {
+    id: inqRef.key, name: name, email: email, phone: phone || null,
+    type: type, message: message, status: 'new',
+    source: 'website-contact-form', createdAt: now
+  };
+
+  // 2. Auto-create a Contact record (business relationship from web)
+  var contactId = 'contact_' + Date.now().toString(36);
+  var contactData = {
+    id: contactId, name: name, email: email, phone: phone || null,
+    company: null, category: 'Other', website: null, address: null,
+    notes: type + ': ' + message.substring(0, 200),
+    googleContactId: null, driveFolderLink: null,
+    tags: ['website-inquiry', type.toLowerCase().replace(/\s+/g, '-')],
+    createdAt: now, createdBy: 'website-form', updatedAt: now
+  };
+
+  Promise.all([
+    inqRef.set(inquiryData),
+    db.ref(TENANT_ID + '/admin/contacts/' + contactId).set(contactData)
+  ]).then(function() {
+    var formSection = document.querySelector('#contact .contact-form');
+    formSection.innerHTML =
+      '<div style="text-align:center;padding:40px 20px;">' +
+        '<p style="font-size:1.2rem;color:var(--amber);">Message sent!</p>' +
+        '<p style="margin-top:8px;opacity:0.7;">Thank you for reaching out. We\'ll get back to you soon.</p>' +
+      '</div>';
+  }).catch(function(err) {
+    console.error('Contact form error:', err);
+    btn.disabled = false;
+    btn.textContent = 'Send Message';
+    alert('Something went wrong. Please try again.');
+  });
+};
+}).catch(function(err) { console.error('[index] Contact form init failed:', err.message); });
 </script>
 <script src="cart.js"></script>
 <script defer src="checkout.js?v=2"></script>
