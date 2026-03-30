@@ -23997,9 +23997,9 @@ var ROUTE_ACTION_MAP = {
 // ─── Dashboard Collapsible Card System ──────────────────────
 
 var DASHBOARD_CARDS = [
+  { id: 'quickActions', title: 'Quick Actions', containerId: 'dashCardQuickActions' },
   { id: 'setupShop',    title: 'Set Up Your Shop', containerId: 'dashCardSetupShop' },
   { id: 'newInquiries', title: 'New Inquiries', containerId: 'dashCardNewInquiries', viewAllRoute: 'contacts' },
-  { id: 'quickActions', title: 'Quick Actions', containerId: 'dashCardQuickActions' },
   { id: 'newOrders',    title: 'New Orders',    containerId: 'dashCardNewOrders',    viewAllRoute: 'orders' },
   { id: 'readyToShip',  title: 'Ready to Ship', containerId: 'dashCardReadyToShip',  viewAllRoute: 'ship' },
   { id: 'lowInventory', title: 'Low Inventory', containerId: 'dashCardLowInventory', viewAllRoute: 'inventory' }
@@ -24069,6 +24069,20 @@ function togglePinDashCard(cardId) {
     dashboardCardPrefs[cardId].pinned = true;
     dashboardCardPrefs[cardId].pinnedAt = now;
     MastDB.dashboardPrefs.setCard(user.uid, cardId, { pinned: true, pinnedAt: now });
+  }
+  // Update pin icon in DOM
+  var cardEl = document.getElementById('dashCard_' + cardId);
+  if (cardEl) {
+    var pinEl = cardEl.querySelector('.dash-card-pin');
+    if (pinEl) {
+      if (dashboardCardPrefs[cardId].pinned) {
+        pinEl.classList.add('pinned');
+        pinEl.title = 'Unpin from top';
+      } else {
+        pinEl.classList.remove('pinned');
+        pinEl.title = 'Pin to top';
+      }
+    }
   }
   reorderDashboardCards();
 }
