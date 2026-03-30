@@ -589,7 +589,12 @@ async function doSyncGoogleContacts() {
       await MastDB.contacts.ref(id).set({
         id: id,
         name: person.name || 'Unknown',
+        email: person.email || null,
+        phone: person.phone || null,
+        company: person.company || null,
         category: person.category || 'Other',
+        website: null,
+        address: null,
         notes: null,
         googleContactId: person.resourceName,
         driveFolderLink: null,
