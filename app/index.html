@@ -15966,6 +15966,7 @@ async function loadDismissedSteps() {
 function dismissNextStep(stepId) {
   _dismissedSteps[stepId] = true;
   MastDB._ref('webPresence/config/dismissedSteps/' + stepId).set(true);
+  updateCardActivity('setupShop', new Date().toISOString());
   renderDashCardSetupShop();
 }
 
@@ -16044,8 +16045,6 @@ function renderDashCardSetupShop() {
 
   container.innerHTML = renderDashboardCard(cardConfig, todo.length, h);
 
-  // Activity tracking — track when steps get completed (done count changes)
-  updateCardActivity('setupShop', completed.toString());
 }
 
 // Cache for async checks (products, website, template, content)
@@ -24550,9 +24549,12 @@ function renderDashCardLowInventory() {
     }
 
     container.innerHTML = renderDashboardCard(cardConfig, lowItems.length, contentHtml);
-    // Activity tracking — use current timestamp when low items exist (inventory changes aren't timestamped)
-    if (lowItems.length > 0) {
-      updateCardActivity('lowInventory', new Date().toISOString().slice(0, 10));
+    // Activity tracking — stamp ISO timestamp only when count changes
+    var prevCount = (dashboardCardPrefs.lowInventory || {})._lastCount || 0;
+    if (lowItems.length > 0 && lowItems.length !== prevCount) {
+      dashboardCardPrefs.lowInventory = dashboardCardPrefs.lowInventory || {};
+      dashboardCardPrefs.lowInventory._lastCount = lowItems.length;
+      updateCardActivity('lowInventory', new Date().toISOString());
     }
   });
 }
