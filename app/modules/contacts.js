@@ -411,6 +411,7 @@ function renderContactDetail(contact) {
       '</div>' +
       '<div style="display:flex;gap:8px;">' +
         '<button class="btn btn-secondary" style="font-size:0.82rem;padding:6px 16px;white-space:nowrap;" onclick="openEditContactModal(\'' + esc(contact.id) + '\')">Edit</button>' +
+        (contact.email ? '<button class="btn btn-primary" style="font-size:0.82rem;padding:6px 16px;white-space:nowrap;" onclick="openInquiryResponseModal(\'' + esc(contact.id) + '\')">Respond</button>' : '') +
         '<button class="btn btn-primary" style="font-size:0.82rem;padding:6px 16px;white-space:nowrap;" onclick="openLogInteractionModal(\'' + esc(contact.id) + '\')">+ Log Interaction</button>' +
       '</div>' +
     '</div>';
