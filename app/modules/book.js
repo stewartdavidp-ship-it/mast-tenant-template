@@ -330,7 +330,7 @@
 
     var html = '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.5rem;">' +
       '<div>' +
-      '<h2 style="margin:0 0 4px;">' + esc(cls.name) + '</h2>' +
+      '<h2 style="margin:0 0 6px;font-size:1.4rem;">' + esc(cls.name) + '</h2>' +
       '<div style="display:flex;gap:8px;align-items:center;">' +
       '<span style="' + badgeStyle(TYPE_BADGE_COLORS, cls.type) + '">' + esc(cls.type) + '</span>' +
       '<span style="' + badgeStyle(STATUS_BADGE_COLORS, cls.status) + '">' + esc(cls.status) + '</span>' +
@@ -342,29 +342,41 @@
       '</div>' +
       '</div>';
 
-    // Info grid
-    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1rem;margin-bottom:2rem;">';
-    html += _infoCard('Category', cls.category || '—');
-    html += _infoCard('Duration', (cls.duration || 0) + ' min');
-    html += _infoCard('Capacity', (cls.capacity || '—') + (cls.minEnrollment ? ' (min ' + cls.minEnrollment + ')' : ''));
-    html += _infoCard('Price', formatPrice(cls.priceCents));
+    // ── Class Details card ──
+    html += '<div class="book-form-section">' +
+      '<div class="book-form-section-title">Class Details</div>' +
+      '<div class="book-responsive-grid">' +
+      _detailField('Category', cls.category || '—') +
+      _detailField('Duration', (cls.duration || 0) + ' min') +
+      _detailField('Capacity', (cls.capacity || '—') + (cls.minEnrollment ? ' (min ' + cls.minEnrollment + ')' : '')) +
+      _detailField('Price', formatPrice(cls.priceCents));
     if (cls.type === 'series' && cls.seriesInfo) {
-      html += _infoCard('Series Price', formatPrice(cls.seriesInfo.seriesPriceCents));
-      html += _infoCard('Sessions', cls.seriesInfo.totalSessions || '—');
-      html += _infoCard('Drop-in OK', cls.seriesInfo.allowDropIn ? 'Yes' : 'No');
+      html += _detailField('Series Price', formatPrice(cls.seriesInfo.seriesPriceCents)) +
+      _detailField('Sessions', cls.seriesInfo.totalSessions || '—') +
+      _detailField('Drop-in OK', cls.seriesInfo.allowDropIn ? 'Yes' : 'No');
     }
-    html += _infoCard('Schedule', schedDesc || '—');
-    html += _infoCard('Materials', cls.materialsIncluded ? (cls.materialsNote || 'Included') : (cls.materialsCostCents ? formatPrice(cls.materialsCostCents) + ' fee' + (cls.materialsNote ? ' — ' + cls.materialsNote : '') : 'Not included'));
-    html += _infoCard('Instructor', cls.instructorName || '—');
-    html += _infoCard('Resource', cls.resourceName || '—');
-    html += '</div>';
+    html += '</div></div>';
+
+    // ── Schedule & Assignment card ──
+    html += '<div class="book-form-section">' +
+      '<div class="book-form-section-title">Schedule &amp; Assignment</div>' +
+      '<div class="book-responsive-grid">' +
+      _detailField('Schedule', schedDesc || '—') +
+      _detailField('Materials', cls.materialsIncluded ? (cls.materialsNote || 'Included') : (cls.materialsCostCents ? formatPrice(cls.materialsCostCents) + ' fee' + (cls.materialsNote ? ' — ' + esc(cls.materialsNote) : '') : 'Not included')) +
+      _detailField('Instructor', cls.instructorName || '—') +
+      _detailField('Resource', cls.resourceName || '—') +
+      '</div></div>';
 
     if (cls.description) {
-      html += '<div style="margin-bottom:2rem;"><h3 style="margin:0 0 8px;">Description</h3><p style="color:var(--warm-gray);line-height:1.6;">' + esc(cls.description) + '</p></div>';
+      html += '<div class="book-form-section">' +
+        '<div class="book-form-section-title">Description</div>' +
+        '<p style="color:var(--warm-gray);line-height:1.6;margin:0;">' + esc(cls.description) + '</p>' +
+        '</div>';
     }
 
-    // Sessions table
-    html += '<h3 style="margin:0 0 12px;">Sessions (' + sessionsData.length + ')</h3>';
+    // ── Sessions table ──
+    html += '<div class="book-form-section">' +
+      '<div class="book-form-section-title">Sessions <span style="font-weight:400;color:var(--warm-gray);text-transform:none;letter-spacing:0;">(' + sessionsData.length + ')</span></div>';
     if (sessionsData.length === 0) {
       html += '<p style="color:var(--warm-gray);">No sessions generated yet. Click <strong>Generate Sessions</strong> above.</p>';
     } else {
@@ -396,8 +408,15 @@
       });
       html += '</tbody></table>';
     }
+    html += '</div>'; // close sessions book-form-section
 
     content.innerHTML = html;
+  }
+
+  function _detailField(label, value) {
+    return '<div style="margin-bottom:0.75rem;">' +
+      '<div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--warm-gray);margin-bottom:4px;">' + esc(label) + '</div>' +
+      '<div style="font-size:0.95rem;color:var(--text);">' + esc(String(value)) + '</div></div>';
   }
 
   function _infoCard(label, value) {
@@ -627,7 +646,7 @@
 
       classesLoaded = false;
       await loadClasses();
-      loadClassDetail(classId);
+      switchSubTab('classes');
     } catch (err) {
       console.error('[Book] Save failed:', err);
       MastAdmin.showToast('Save failed: ' + err.message, true);
