@@ -377,31 +377,82 @@ async function saveInteraction(contactId) {
   }
 }
 
+// ============================================================
+// Google Contacts Integration (via Cloud Function proxy)
+// ============================================================
+
+var GOOGLE_CONTACTS_FUNCTIONS_BASE = 'https://us-central1-mast-platform-prod.cloudfunctions.net';
+
+/**
+ * Check if the current user has connected Google Contacts.
+ * Reads {tenantId}/config/googleContacts/{uid} from RTDB.
+ */
+async function isGoogleContactsConnected() {
+  if (!currentUser) return false;
+  try {
+    var snap = await MastDB._ref('config/googleContacts/' + currentUser.uid).once('value');
+    return snap.exists();
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * Open a popup to connect Google Contacts via the Cloud Function OAuth proxy.
+ * Listens for postMessage from the callback page.
+ */
+async function connectGoogleContacts() {
+  if (!currentUser) { showToast('Please sign in first.', true); return; }
+
+  try {
+    var idToken = await currentUser.getIdToken();
+    var tenantId = window.TENANT_ID || 'dev';
+    var url = GOOGLE_CONTACTS_FUNCTIONS_BASE + '/googleContactsAuthStart?idToken=' + encodeURIComponent(idToken) + '&tenantId=' + encodeURIComponent(tenantId);
+
+    var popup = window.open(url, 'googleContactsAuth', 'width=500,height=700');
+    if (!popup) {
+      showToast('Popup blocked. Please allow popups and try again.', true);
+      return;
+    }
+
+    // Listen for the postMessage from the callback
+    var messageHandler = function(event) {
+      if (event.data && event.data.type === 'google-contacts-connected') {
+        window.removeEventListener('message', messageHandler);
+        showToast('Google Contacts connected!');
+        updateGoogleContactsButtons();
+      } else if (event.data && event.data.type === 'google-contacts-error') {
+        window.removeEventListener('message', messageHandler);
+        showToast('Google Contacts authorization failed.', true);
+      }
+    };
+    window.addEventListener('message', messageHandler);
+  } catch (err) {
+    showToast('Failed to start Google authorization: ' + err.message, true);
+  }
+}
+
 async function createGoogleContact(contactData) {
   try {
-    var token = await requestGoogleOAuthToken('https://www.googleapis.com/auth/contacts');
-    if (!token) return; // User cancelled or error
+    var connected = await isGoogleContactsConnected();
+    if (!connected) return; // Not connected — skip silently
 
-    // Ensure contact group exists
-    var groupId = await getOrCreateContactGroup(token, (TENANT_BRAND && TENANT_BRAND.name) || 'My Business');
-    if (!groupId) return;
+    var idToken = await currentUser.getIdToken();
+    var tenantId = window.TENANT_ID || 'dev';
+    var groupName = (TENANT_BRAND && TENANT_BRAND.name) || 'My Business';
 
-    // Create the contact
-    var body = {
-      names: [{ givenName: contactData.name }],
-      organizations: [{ department: contactData.category }],
-      memberships: [
-        { contactGroupMembership: { contactGroupResourceName: groupId } }
-      ]
-    };
-
-    var response = await fetch('https://people.googleapis.com/v1/people:createContact?personFields=names,organizations,memberships', {
+    var response = await fetch(GOOGLE_CONTACTS_FUNCTIONS_BASE + '/googleContactsCreate', {
       method: 'POST',
       headers: {
-        'Authorization': 'Bearer ' + token,
-        'Content-Type': 'application/json'
+        'Authorization': 'Bearer ' + idToken,
+        'Content-Type': 'application/json',
+        'X-Tenant-ID': tenantId
       },
-      body: JSON.stringify(body)
+      body: JSON.stringify({
+        name: contactData.name,
+        category: contactData.category,
+        groupName: groupName
+      })
     });
 
     if (!response.ok) {
@@ -412,79 +463,47 @@ async function createGoogleContact(contactData) {
 
     var result = await response.json();
     if (result.resourceName) {
-      // Update Firebase with the Google Contact ID
       await MastDB.contacts.googleContactId(contactData.id).set(result.resourceName);
     }
   } catch (err) {
-    // Silently fail — Google Contact creation is best-effort
+    // Best-effort — don't block contact creation
     console.error('Google Contact creation failed:', err);
-  }
-}
-
-async function getOrCreateContactGroup(token, groupName) {
-  try {
-    // List existing groups
-    var response = await fetch('https://people.googleapis.com/v1/contactGroups?pageSize=100', {
-      headers: { 'Authorization': 'Bearer ' + token }
-    });
-    if (!response.ok) return null;
-
-    var data = await response.json();
-    var groups = data.contactGroups || [];
-    var existing = groups.find(function(g) { return g.name === groupName; });
-    if (existing) return existing.resourceName;
-
-    // Create group
-    var createResponse = await fetch('https://people.googleapis.com/v1/contactGroups', {
-      method: 'POST',
-      headers: {
-        'Authorization': 'Bearer ' + token,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ contactGroup: { name: groupName } })
-    });
-    if (!createResponse.ok) return null;
-
-    var created = await createResponse.json();
-    return created.resourceName || null;
-  } catch (err) {
-    console.error('Contact group error:', err);
-    return null;
   }
 }
 
 async function syncGoogleContacts() {
   try {
-    var token = await requestGoogleOAuthToken('https://www.googleapis.com/auth/contacts');
-    if (!token) return;
-
-    showToast('Syncing Google Contacts...');
-
-    var groupId = await getOrCreateContactGroup(token, (TENANT_BRAND && TENANT_BRAND.name) || 'My Business');
-    if (!groupId) {
-      showToast('Could not find or create contact group.', true);
+    var connected = await isGoogleContactsConnected();
+    if (!connected) {
+      showToast('Please connect Google Contacts first.', true);
       return;
     }
 
-    // Fetch contacts in this group
-    var response = await fetch(
-      'https://people.googleapis.com/v1/people/me/connections?personFields=names,organizations,emailAddresses,phoneNumbers,memberships&pageSize=500',
-      { headers: { 'Authorization': 'Bearer ' + token } }
-    );
+    showToast('Syncing Google Contacts...');
+
+    var idToken = await currentUser.getIdToken();
+    var tenantId = window.TENANT_ID || 'dev';
+    var groupName = (TENANT_BRAND && TENANT_BRAND.name) || 'My Business';
+
+    var response = await fetch(GOOGLE_CONTACTS_FUNCTIONS_BASE + '/googleContactsSync', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + idToken,
+        'Content-Type': 'application/json',
+        'X-Tenant-ID': tenantId
+      },
+      body: JSON.stringify({ groupName: groupName })
+    });
+
     if (!response.ok) {
-      showToast('Failed to fetch Google Contacts.', true);
+      var errText = await response.text();
+      console.error('Google contacts sync failed:', errText);
+      showToast('Failed to sync Google Contacts.', true);
       return;
     }
 
     var data = await response.json();
-    var connections = data.connections || [];
-
-    // Filter to the tenant's contact group
-    var filtered = connections.filter(function(person) {
-      return (person.memberships || []).some(function(m) {
-        return m.contactGroupMembership && m.contactGroupMembership.contactGroupResourceName === groupId;
-      });
-    });
+    var contacts = data.contacts || [];
 
     // Check existing contacts for googleContactId matches
     var existingIds = {};
@@ -493,17 +512,16 @@ async function syncGoogleContacts() {
     });
 
     var created = 0;
-    for (var i = 0; i < filtered.length; i++) {
-      var person = filtered[i];
+    for (var i = 0; i < contacts.length; i++) {
+      var person = contacts[i];
       if (existingIds[person.resourceName]) continue;
 
-      var personName = (person.names && person.names[0]) ? person.names[0].displayName : 'Unknown';
       var id = 'contact_' + Date.now().toString(36) + '_' + i;
       var now = new Date().toISOString();
       await MastDB.contacts.ref(id).set({
         id: id,
-        name: personName,
-        category: 'Other',
+        name: person.name || 'Unknown',
+        category: person.category || 'Other',
         notes: null,
         googleContactId: person.resourceName,
         driveFolderLink: null,
@@ -542,16 +560,26 @@ async function syncGoogleContacts() {
   window.openLogInteractionModal = openLogInteractionModal;
   window.saveInteraction = saveInteraction;
   window.createGoogleContact = createGoogleContact;
-  window.getOrCreateContactGroup = getOrCreateContactGroup;
   window.syncGoogleContacts = syncGoogleContacts;
+  window.connectGoogleContacts = connectGoogleContacts;
+  window.isGoogleContactsConnected = isGoogleContactsConnected;
 
   // ============================================================
   // Register with MastAdmin
   // ============================================================
 
+  async function updateGoogleContactsButtons() {
+    var connectBtn = document.getElementById('googleContactsConnectBtn');
+    var syncBtn = document.getElementById('googleContactsSyncBtn');
+    if (!connectBtn || !syncBtn) return;
+    var connected = await isGoogleContactsConnected();
+    connectBtn.style.display = connected ? 'none' : '';
+    syncBtn.style.display = connected ? '' : 'none';
+  }
+
   MastAdmin.registerModule('contacts', {
     routes: {
-      'contacts': { tab: 'contactsTab', setup: function() { if (!contactsLoaded) loadContacts(); } }
+      'contacts': { tab: 'contactsTab', setup: function() { if (!contactsLoaded) loadContacts(); updateGoogleContactsButtons(); } }
     },
     detachListeners: function() {
       contactsData = [];

@@ -7392,7 +7392,8 @@
           <h2>Contacts</h2>
           <div style="display:flex;gap:8px;align-items:center;">
             <span class="products-stat" id="contactsCount"></span>
-            <button class="btn btn-secondary" style="font-size:0.82rem;padding:6px 12px;" onclick="syncGoogleContacts()" title="Sync from Google Contacts">&#x21bb; Sync Google</button>
+            <button class="btn btn-secondary" id="googleContactsConnectBtn" style="font-size:0.82rem;padding:6px 12px;display:none;" onclick="connectGoogleContacts()" title="Connect Google Contacts">&#x1F517; Connect Google</button>
+            <button class="btn btn-secondary" id="googleContactsSyncBtn" style="font-size:0.82rem;padding:6px 12px;display:none;" onclick="syncGoogleContacts()" title="Sync from Google Contacts">&#x21bb; Sync Google</button>
             <button class="btn btn-primary" style="font-size:0.82rem;padding:6px 16px;" onclick="openAddContactModal()">+ Add Contact</button>
           </div>
         </div>
