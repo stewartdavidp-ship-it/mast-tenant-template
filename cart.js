@@ -180,10 +180,11 @@
         var removed = cart[i];
         cart.splice(i, 1);
 
-        // If removing a class booking, also remove linked materials item
-        if (removed.bookingType === 'class') {
+        // If removing a class booking, also remove linked materials item (and vice versa)
+        if (removed.bookingType === 'class' || removed.bookingType === 'class-materials') {
+          var linkedType = removed.bookingType === 'class' ? 'class-materials' : 'class';
           for (var j = cart.length - 1; j >= 0; j--) {
-            if (cart[j].bookingType === 'class-materials' &&
+            if (cart[j].bookingType === linkedType &&
                 ((removed.sessionId && cart[j].sessionId === removed.sessionId) ||
                  (!removed.sessionId && cart[j].classId === removed.classId))) {
               cart.splice(j, 1);
