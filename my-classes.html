@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdn.jsdelivr.net https://*.firebaseio.com https://apis.google.com https://maps.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://us-central1-mast-platform-prod.cloudfunctions.net https://*.firebaseio.com wss://*.firebaseio.com https://*.firebasestorage.app https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://maps.googleapis.com https://places.googleapis.com https://api.ipify.org; img-src 'self' data: blob: https:; frame-src 'self' https://*.firebaseapp.com https://*.firebaseio.com; frame-ancestors 'none';">
+<title>My Classes &mdash; My Shop</title>
+<link rel="preconnect" href="https://mast-platform-prod-default-rtdb.firebaseio.com" crossorigin>
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<script>
+(function(){
+  var P='https://mast-platform-prod-default-rtdb.firebaseio.com/mast-platform';
+  var h=location.hostname,C=5*60*1000;
+  if(h==='localhost'||h==='127.0.0.1')return;
+  try{var r=localStorage.getItem('mast_tenant_'+h);if(r){var c=JSON.parse(r);if(Date.now()-c.timestamp<C){window.__earlyTenant=Promise.resolve(c.data);return;}}}catch(e){}
+  var ek=h.replace(/\./g,'_');
+  window.__earlyTenant=fetch(P+'/tenantsByDomain/'+ek+'.json').then(function(r){return r.ok?r.json():null}).then(function(tid){
+    if(!tid)return null;
+    return fetch(P+'/tenants/'+tid+'/publicConfig.json').then(function(r){return r.ok?r.json():null}).then(function(pc){
+      return pc?{tenantId:tid,publicConfig:pc}:null;
+    });
+  }).catch(function(){return null;});
+})();
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="storefront.css">
+<link rel="stylesheet" href="cart.css">
+<link rel="stylesheet" href="checkout.css" media="print" onload="this.media='all'">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<style>
+.mc-container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 7rem 2rem 4rem;
+}
+.mc-header {
+  text-align: center;
+  margin-bottom: 2.5rem;
+}
+.mc-header h1 {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 2.4rem;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  margin: 0 0 0.5rem;
+  color: var(--text);
+}
+.mc-header p {
+  font-size: 0.95rem;
+  color: var(--warm-gray, #888);
+}
+
+/* Credit banner */
+.mc-credit-banner {
+  text-align: center;
+  padding: 12px 20px;
+  margin-bottom: 1.5rem;
+  border-radius: 8px;
+  background: rgba(6,95,70,0.15);
+  border: 1px solid rgba(6,95,70,0.3);
+  color: #4DB6AC;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+/* Sign-in prompt */
+.mc-signin {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: var(--warm-gray, #888);
+}
+.mc-signin-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 24px;
+  border-radius: 6px;
+  border: 1px solid var(--border, #444);
+  background: #fff;
+  color: #333;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  margin-top: 1rem;
+  transition: background 0.2s;
+}
+.mc-signin-btn:hover { background: #f5f5f5; }
+
+/* Filter tabs */
+.mc-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 1.5rem;
+  justify-content: center;
+}
+.mc-tab {
+  padding: 6px 16px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.mc-tab:hover { border-color: var(--primary); color: var(--primary); }
+.mc-tab:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.mc-tab.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+/* Enrollment cards */
+.mc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.mc-card {
+  background: var(--surface-card);
+  border: 1px solid var(--surface-card-border);
+  border-radius: 10px;
+  padding: 1.5rem;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 1rem;
+  align-items: center;
+}
+.mc-card.past { opacity: 0.55; }
+.mc-card-info h3 {
+  margin: 0 0 4px;
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: var(--text);
+}
+.mc-card-info h3 a {
+  color: inherit;
+  text-decoration: none;
+}
+.mc-card-info h3 a:hover { color: var(--primary); }
+.mc-card-meta {
+  font-size: 0.85rem;
+  color: var(--warm-gray, #888);
+  line-height: 1.6;
+}
+.mc-card-right {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+/* Status badges */
+.mc-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.mc-badge-series { background: rgba(6,95,70,0.25); color: #4DB6AC; }
+.mc-badge-dropin { background: rgba(33,150,243,0.2); color: #90CAF9; }
+.mc-status-confirmed { background: rgba(6,95,70,0.25); color: #4DB6AC; }
+.mc-status-waitlisted { background: rgba(200,150,50,0.2); color: #FFD54F; }
+.mc-status-cancelled, .mc-status-cancelled_insufficient_enrollment { background: rgba(200,60,60,0.2); color: #EF9A9A; }
+.mc-status-completed { background: rgba(33,150,243,0.2); color: #90CAF9; }
+.mc-status-no-show { background: rgba(200,60,60,0.2); color: #EF9A9A; }
+
+/* Swap button */
+.mc-swap-btn {
+  padding: 5px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-height: 44px;
+  min-width: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.mc-swap-btn:hover { border-color: var(--primary); color: var(--primary); }
+.mc-swap-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* Swap modal */
+.mc-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.mc-modal {
+  background: var(--surface-card, #1a1a2e);
+  border: 1px solid var(--surface-card-border, #333);
+  border-radius: 12px;
+  max-width: 500px;
+  width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 2rem;
+}
+.mc-modal h2 {
+  margin: 0 0 4px;
+  font-size: 1.3rem;
+  font-weight: 500;
+  color: var(--text);
+}
+.mc-modal-subtitle {
+  font-size: 0.9rem;
+  color: var(--warm-gray, #888);
+  margin-bottom: 1.5rem;
+}
+.mc-modal-sessions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 1.5rem;
+}
+.mc-modal-session {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border: 1px solid var(--border, #444);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.mc-modal-session:hover { border-color: var(--primary); }
+.mc-modal-session:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.mc-modal-session-info {
+  font-size: 0.9rem;
+  color: var(--text);
+}
+.mc-modal-session-spots {
+  font-size: 0.8rem;
+  color: var(--warm-gray, #888);
+}
+.mc-modal-close {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.mc-modal-close:hover { border-color: var(--primary); }
+.mc-modal-loading {
+  text-align: center;
+  padding: 2rem;
+  color: var(--warm-gray, #888);
+}
+.mc-modal-empty {
+  text-align: center;
+  padding: 1.5rem;
+  color: var(--warm-gray, #888);
+  font-size: 0.9rem;
+}
+
+/* Toast */
+.mc-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 24px;
+  border-radius: 8px;
+  background: rgba(6,95,70,0.9);
+  color: #fff;
+  font-size: 0.9rem;
+  z-index: 10000;
+  transition: opacity 0.3s;
+}
+.mc-toast.error { background: rgba(183,28,28,0.9); }
+
+.mc-empty {
+  text-align: center;
+  padding: 3rem 2rem;
+  color: var(--warm-gray, #888);
+}
+.mc-browse-btn {
+  display: inline-block;
+  margin-top: 1rem;
+  padding: 10px 24px;
+  border-radius: 6px;
+  background: var(--primary);
+  color: #fff;
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: opacity 0.2s;
+}
+.mc-browse-btn:hover { opacity: 0.85; }
+
+.mc-loading {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: var(--warm-gray, #888);
+}
+
+@media (max-width: 768px) {
+  .mc-container { padding: 6rem 1.5rem 3rem; }
+  .mc-header h1 { font-size: 1.8rem; }
+  .mc-card { grid-template-columns: 1fr; }
+  .mc-card-right { text-align: left; flex-direction: row; align-items: center; gap: 8px; flex-wrap: wrap; }
+}
+</style>
+</head>
+<body>
+<nav id="mainNav"></nav>
+<div class="nav-mobile-menu" id="mobileMenu"></div>
+
+<div class="mc-container">
+  <div class="mc-header">
+    <h1>My Classes</h1>
+    <p>View your class enrollments and upcoming sessions</p>
+  </div>
+  <div id="mcContent">
+    <div class="mc-loading">Loading...</div>
+  </div>
+</div>
+<div id="mcModalRoot"></div>
+
+<footer id="siteFooter"></footer>
+
+<script src="storefront-tenant.js"></script>
+<script src="storefront-theme.js"></script>
+<script src="storefront-nav.js"></script>
+<script src="tenant-brand.js?v=2"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+
+<script>
+(function() {
+  'use strict';
+
+  var allEnrollments = [];
+  var classesMap = {};
+  var sessionsMap = {};
+  var currentFilter = 'upcoming';
+  var currentUser = null;
+  var db = null;
+
+  var DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  function formatSessionDate(dateStr, timeStr) {
+    if (!dateStr) return '—';
+    var parts = dateStr.split('-');
+    var d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    var day = DAYS[d.getDay()];
+    var month = MONTHS[d.getMonth()];
+    var dom = d.getDate();
+    var time = '';
+    if (timeStr) {
+      var tp = timeStr.split(':');
+      var h = parseInt(tp[0]);
+      var m = tp[1] || '00';
+      var ampm = h >= 12 ? 'PM' : 'AM';
+      h = h % 12 || 12;
+      time = ' at ' + h + ':' + m + ' ' + ampm;
+    }
+    return day + ', ' + month + ' ' + dom + time;
+  }
+
+  function formatPrice(cents) {
+    if (!cents && cents !== 0) return '';
+    return '$' + (cents / 100).toFixed(2);
+  }
+
+  function todayStr() {
+    var d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+
+  function showToast(msg, isError) {
+    var existing = document.querySelector('.mc-toast');
+    if (existing) existing.remove();
+    var t = document.createElement('div');
+    t.className = 'mc-toast' + (isError ? ' error' : '');
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(function() { t.style.opacity = '0'; setTimeout(function() { t.remove(); }, 300); }, 3000);
+  }
+
+  // ── Sign-in prompt ──
+  function renderSignIn() {
+    var content = document.getElementById('mcContent');
+    content.innerHTML =
+      '<div class="mc-signin">' +
+        '<p>Sign in to view your class enrollments.</p>' +
+        '<button class="mc-signin-btn" onclick="if(window.siteSignIn)window.siteSignIn();">' +
+          '<svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59a14.5 14.5 0 0 1 0-9.18l-7.98-6.19a24.04 24.04 0 0 0 0 21.56l7.98-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>' +
+          'Sign in with Google' +
+        '</button>' +
+      '</div>';
+  }
+
+  // ── Render enrollments ──
+  function renderEnrollments() {
+    var content = document.getElementById('mcContent');
+    var today = todayStr();
+
+    var enrollments = allEnrollments.map(function(e) {
+      var session = sessionsMap[e.sessionId] || {};
+      e._sessionDate = session.date || '';
+      e._isPast = e._sessionDate < today ||
+        e.status === 'completed' || e.status === 'cancelled' ||
+        e.status === 'no-show' || e.status === 'cancelled_insufficient_enrollment';
+      return e;
+    });
+
+    var filtered = enrollments.filter(function(e) {
+      if (currentFilter === 'upcoming') return !e._isPast;
+      if (currentFilter === 'past') return e._isPast;
+      return true;
+    });
+
+    // Sort: upcoming ascending by date, past descending by date
+    filtered.sort(function(a, b) {
+      if (currentFilter === 'past') return (b._sessionDate || '').localeCompare(a._sessionDate || '');
+      return (a._sessionDate || '').localeCompare(b._sessionDate || '');
+    });
+
+    var upcomingCount = enrollments.filter(function(e) { return !e._isPast; }).length;
+    var pastCount = enrollments.filter(function(e) { return e._isPast; }).length;
+
+    var html = '';
+
+    // Wallet credit banner (loaded separately)
+    html += '<div id="mcCreditBanner"></div>';
+
+    // Tabs
+    html += '<div class="mc-tabs" role="tablist">' +
+      '<button class="mc-tab' + (currentFilter === 'upcoming' ? ' active' : '') + '" role="tab" aria-selected="' + (currentFilter === 'upcoming') + '" onclick="window._mcFilter(\'upcoming\')">Upcoming (' + upcomingCount + ')</button>' +
+      '<button class="mc-tab' + (currentFilter === 'past' ? ' active' : '') + '" role="tab" aria-selected="' + (currentFilter === 'past') + '" onclick="window._mcFilter(\'past\')">Past (' + pastCount + ')</button>' +
+      '<button class="mc-tab' + (currentFilter === 'all' ? ' active' : '') + '" role="tab" aria-selected="' + (currentFilter === 'all') + '" onclick="window._mcFilter(\'all\')">All (' + enrollments.length + ')</button>' +
+      '</div>';
+
+    if (filtered.length === 0) {
+      if (enrollments.length === 0) {
+        html += '<div class="mc-empty">' +
+          '<p>You haven\'t enrolled in any classes yet.</p>' +
+          '<a href="classes.html" class="mc-browse-btn">Browse Classes</a>' +
+          '</div>';
+      } else {
+        html += '<div class="mc-empty"><p>No classes match this filter.</p></div>';
+      }
+    } else {
+      html += '<div class="mc-list">';
+      filtered.forEach(function(e) {
+        var cls = classesMap[e.classId] || {};
+        var session = sessionsMap[e.sessionId] || {};
+        var isPast = e._isPast;
+
+        // Enrollment type badge
+        var typeBadge = e.enrollmentType === 'series'
+          ? '<span class="mc-badge mc-badge-series">Series</span>'
+          : '<span class="mc-badge mc-badge-dropin">Drop-in</span>';
+
+        // Status badge
+        var statusKey = (e.status || 'confirmed').replace(/-/g, '_');
+        var statusLabel = e.status === 'cancelled_insufficient_enrollment' ? 'Cancelled' :
+          (e.status || 'confirmed').replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+        var statusBadge = '<span class="mc-badge mc-status-' + esc(statusKey) + '">' + esc(statusLabel) + '</span>';
+
+        // Swap button: series + allowDropIn + future + confirmed
+        var showSwap = e.enrollmentType === 'series' &&
+          cls.seriesInfo && cls.seriesInfo.allowDropIn === true &&
+          session.date >= today &&
+          e.status === 'confirmed';
+
+        var swapBtn = showSwap
+          ? ' <button class="mc-swap-btn" onclick="window._mcSwap(\'' + esc(e._id) + '\')" aria-label="Swap session for ' + esc(cls.name || 'class') + '">&#8644; Swap</button>'
+          : '';
+
+        // Meta info
+        var meta = formatSessionDate(session.date, session.startTime);
+        if (cls.instructorName) meta += '<br>Instructor: ' + esc(cls.instructorName);
+        if (e.paymentMethod === 'pass') meta += '<br>Paid with pass';
+        else if (e.pricePaid) meta += '<br>Paid: ' + formatPrice(e.pricePaid);
+
+        html += '<article class="mc-card' + (isPast ? ' past' : '') + '">' +
+          '<div class="mc-card-info">' +
+            '<h3><a href="class-detail.html?id=' + esc(e.classId) + '">' + esc(cls.name || 'Class') + '</a></h3>' +
+            '<div class="mc-card-meta">' + meta + '</div>' +
+          '</div>' +
+          '<div class="mc-card-right">' +
+            typeBadge + ' ' + statusBadge + swapBtn +
+          '</div>' +
+          '</article>';
+      });
+      html += '</div>';
+    }
+
+    content.innerHTML = html;
+
+    // Load wallet credits
+    loadWalletCredits();
+  }
+
+  // ── Wallet credit banner ──
+  function loadWalletCredits() {
+    if (!currentUser || !db) return;
+    var banner = document.getElementById('mcCreditBanner');
+    if (!banner) return;
+
+    db.ref(TENANT_ID + '/public/accounts/' + currentUser.uid + '/wallet/credits')
+      .orderByChild('status').equalTo('active').once('value')
+      .then(function(snap) {
+        var data = snap.val() || {};
+        var now = new Date().toISOString();
+        var totalCents = 0;
+        Object.keys(data).forEach(function(id) {
+          var c = data[id];
+          if (c.expiresAt && c.expiresAt < now) return; // skip expired
+          totalCents += (c.amountCents || 0);
+        });
+        if (totalCents > 0) {
+          banner.innerHTML = '<div class="mc-credit-banner">You have ' + formatPrice(totalCents) + ' in wallet credits available at checkout.</div>';
+        }
+      })
+      .catch(function() { /* silent */ });
+  }
+
+  // ── Session swap ──
+  window._mcSwap = function(enrollmentId) {
+    var enrollment = allEnrollments.find(function(e) { return e._id === enrollmentId; });
+    if (!enrollment) return;
+
+    var cls = classesMap[enrollment.classId] || {};
+    var modalRoot = document.getElementById('mcModalRoot');
+
+    modalRoot.innerHTML =
+      '<div class="mc-modal-overlay" onclick="if(event.target===this)window._mcCloseSwap()">' +
+        '<div class="mc-modal" role="dialog" aria-label="Swap Session">' +
+          '<h2>Swap Session</h2>' +
+          '<div class="mc-modal-subtitle">' + esc(cls.name || 'Class') + '</div>' +
+          '<div id="mcSwapSessions"><div class="mc-modal-loading">Loading available sessions...</div></div>' +
+          '<button class="mc-modal-close" onclick="window._mcCloseSwap()">Cancel</button>' +
+        '</div>' +
+      '</div>';
+
+    // Focus trap — focus the modal
+    var modal = modalRoot.querySelector('.mc-modal');
+    if (modal) modal.focus();
+
+    // Escape key closes modal
+    modalRoot._escHandler = function(ev) { if (ev.key === 'Escape') window._mcCloseSwap(); };
+    document.addEventListener('keydown', modalRoot._escHandler);
+
+    // Load available sessions
+    var today = todayStr();
+    db.ref(TENANT_ID + '/public/classSessions').orderByChild('classId').equalTo(enrollment.classId).once('value')
+      .then(function(snap) {
+        var sessData = snap.val() || {};
+        var seriesEnrolled = cls.seriesEnrolled || 0;
+
+        // Also check which sessions this student already has enrollments for
+        var studentSessionIds = {};
+        allEnrollments.forEach(function(e) {
+          if (e.classId === enrollment.classId && e.status === 'confirmed') {
+            studentSessionIds[e.sessionId] = true;
+          }
+        });
+
+        var available = Object.keys(sessData).filter(function(sid) {
+          var s = sessData[sid];
+          if (sid === enrollment.sessionId) return false; // exclude current
+          if (s.status !== 'scheduled') return false;
+          if (s.date < today) return false;
+          if (studentSessionIds[sid]) return false; // already enrolled
+          var spotsLeft = (s.capacity || cls.capacity || 0) - seriesEnrolled - (s.enrolled || 0);
+          return spotsLeft > 0;
+        }).map(function(sid) {
+          var s = sessData[sid];
+          var spotsLeft = (s.capacity || cls.capacity || 0) - seriesEnrolled - (s.enrolled || 0);
+          return { id: sid, date: s.date, startTime: s.startTime, spotsLeft: spotsLeft };
+        }).sort(function(a, b) {
+          return (a.date + (a.startTime || '')).localeCompare(b.date + (b.startTime || ''));
+        });
+
+        var container = document.getElementById('mcSwapSessions');
+        if (!container) return;
+
+        if (available.length === 0) {
+          container.innerHTML = '<div class="mc-modal-empty">No other sessions available for swap.</div>';
+          return;
+        }
+
+        var html = '<div class="mc-modal-sessions">';
+        available.forEach(function(s) {
+          html += '<div class="mc-modal-session" tabindex="0" role="button" onclick="window._mcExecSwap(\'' + esc(enrollmentId) + '\',\'' + esc(s.id) + '\')" onkeydown="if(event.key===\'Enter\')this.click()">' +
+            '<div class="mc-modal-session-info">' + formatSessionDate(s.date, s.startTime) + '</div>' +
+            '<div class="mc-modal-session-spots">' + s.spotsLeft + ' spot' + (s.spotsLeft !== 1 ? 's' : '') + ' left</div>' +
+            '</div>';
+        });
+        html += '</div>';
+        container.innerHTML = html;
+      })
+      .catch(function(err) {
+        console.error('[my-classes] Swap load failed:', err);
+        var container = document.getElementById('mcSwapSessions');
+        if (container) container.innerHTML = '<div class="mc-modal-empty">Failed to load sessions. Please try again.</div>';
+      });
+  };
+
+  window._mcExecSwap = function(enrollmentId, newSessionId) {
+    var enrollment = allEnrollments.find(function(e) { return e._id === enrollmentId; });
+    if (!enrollment || !currentUser) return;
+
+    // Verify ownership
+    if (enrollment.studentUid !== currentUser.uid) {
+      showToast('Cannot swap: enrollment does not belong to you.', true);
+      return;
+    }
+
+    var oldSessionId = enrollment.sessionId;
+    var updates = {};
+
+    // Update enrollment record
+    updates[TENANT_ID + '/public/enrollments/' + enrollmentId + '/sessionId'] = newSessionId;
+    updates[TENANT_ID + '/public/enrollments/' + enrollmentId + '/swappedAt'] = new Date().toISOString();
+    updates[TENANT_ID + '/public/enrollments/' + enrollmentId + '/previousSessionId'] = oldSessionId;
+
+    db.ref().update(updates).then(function() {
+      // Decrement old session enrolled counter
+      return db.ref(TENANT_ID + '/public/classSessions/' + oldSessionId + '/enrolled')
+        .transaction(function(current) { return Math.max(0, (current || 0) - 1); });
+    }).then(function() {
+      // Increment new session enrolled counter
+      return db.ref(TENANT_ID + '/public/classSessions/' + newSessionId + '/enrolled')
+        .transaction(function(current) { return (current || 0) + 1; });
+    }).then(function() {
+      window._mcCloseSwap();
+      showToast('Session swapped successfully!');
+      // Reload data
+      loadEnrollments(currentUser);
+    }).catch(function(err) {
+      console.error('[my-classes] Swap failed:', err);
+      showToast('Swap failed: ' + err.message, true);
+    });
+  };
+
+  window._mcCloseSwap = function() {
+    var modalRoot = document.getElementById('mcModalRoot');
+    if (modalRoot._escHandler) {
+      document.removeEventListener('keydown', modalRoot._escHandler);
+      delete modalRoot._escHandler;
+    }
+    modalRoot.innerHTML = '';
+  };
+
+  // ── Filter ──
+  window._mcFilter = function(filter) {
+    currentFilter = filter;
+    renderEnrollments();
+  };
+
+  // ── Data loading ──
+  function loadEnrollments(user) {
+    db.ref(TENANT_ID + '/public/enrollments').orderByChild('studentUid').equalTo(user.uid).once('value')
+      .then(function(snap) {
+        var data = snap.val() || {};
+        var enrollments = Object.keys(data).map(function(id) {
+          var e = data[id];
+          e._id = id;
+          return e;
+        });
+
+        if (enrollments.length === 0) {
+          allEnrollments = [];
+          classesMap = {};
+          sessionsMap = {};
+          renderEnrollments();
+          return;
+        }
+
+        // Collect unique classIds and sessionIds
+        var classIds = {};
+        var sessionIds = {};
+        enrollments.forEach(function(e) {
+          if (e.classId) classIds[e.classId] = true;
+          if (e.sessionId) sessionIds[e.sessionId] = true;
+        });
+
+        // Fetch class and session data in parallel
+        var classPromises = Object.keys(classIds).map(function(cid) {
+          return db.ref(TENANT_ID + '/public/classes/' + cid).once('value').then(function(s) {
+            return { id: cid, data: s.val() };
+          });
+        });
+        var sessionPromises = Object.keys(sessionIds).map(function(sid) {
+          return db.ref(TENANT_ID + '/public/classSessions/' + sid).once('value').then(function(s) {
+            return { id: sid, data: s.val() };
+          });
+        });
+
+        return Promise.all([Promise.all(classPromises), Promise.all(sessionPromises)])
+          .then(function(results) {
+            classesMap = {};
+            results[0].forEach(function(r) { if (r.data) classesMap[r.id] = r.data; });
+            sessionsMap = {};
+            results[1].forEach(function(r) { if (r.data) sessionsMap[r.id] = r.data; });
+            allEnrollments = enrollments;
+            renderEnrollments();
+          });
+      })
+      .catch(function(err) {
+        console.error('[my-classes] Load failed:', err);
+        document.getElementById('mcContent').innerHTML =
+          '<div class="mc-empty"><p>Unable to load your classes. Please try again.</p></div>';
+      });
+  }
+
+  // ── Init ──
+  window.TENANT_READY.then(function() {
+    document.title = 'My Classes \u2014 ' + (window.TENANT_TITLE_SUFFIX ? TENANT_TITLE_SUFFIX() : 'Studio');
+
+    var app;
+    try { app = firebase.app(); } catch (e) { app = firebase.initializeApp(TENANT_FIREBASE_CONFIG, 'public-my-classes'); }
+    db = app.database();
+    var auth = app.auth();
+
+    auth.onAuthStateChanged(function(user) {
+      if (user && !user.isAnonymous) {
+        currentUser = user;
+        loadEnrollments(user);
+      } else {
+        currentUser = null;
+        renderSignIn();
+      }
+    });
+  }).catch(function(err) {
+    console.error('[my-classes] Tenant failed:', err);
+  });
+})();
+</script>
+<script src="cart.js"></script>
+<script defer src="feedback-widget.js"></script>
+<script defer src="share-widget.js"></script>
+
+</body>
+</html>

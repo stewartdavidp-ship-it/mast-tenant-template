@@ -18,7 +18,9 @@
     coupon: null,              // { code, type, value, discount } or null
     taxRate: 0,
     taxState: '',
-    resaleCertNumber: ''       // wholesale: state tax resale certificate number
+    resaleCertNumber: '',      // wholesale: state tax resale certificate number
+    walletCredits: [],         // [{ id, amountCents, ... }] active credits for this user
+    walletCreditApplied: false // whether to apply wallet credits to this order
   };
 
   var shippingConfigCache = null; // cached flat-rate config
@@ -743,6 +745,18 @@
             '<div id="coCouponMsg"></div>' +
           '</div>';
 
+          // Wallet credits
+          if (checkoutData.walletCredits.length > 0) {
+            var totalCreditCents = checkoutData.walletCredits.reduce(function(sum, c) { return sum + (c.amountCents || 0); }, 0);
+            html += '<div class="checkout-section">' +
+              '<div class="checkout-section-title">Wallet Credits</div>' +
+              '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;color:var(--text);">' +
+                '<input type="checkbox" id="coWalletToggle" ' + (checkoutData.walletCreditApplied ? 'checked' : '') + ' data-co="toggle-wallet">' +
+                'Apply ' + formatMoney(totalCreditCents / 100) + ' in wallet credits' +
+              '</label>' +
+              '</div>';
+          }
+
           // Totals
           html += '<div class="checkout-section">' + buildTotalsHtml(subtotal) + '</div>';
 
@@ -808,7 +822,13 @@
     var shipCost = checkoutData.shippingMethod ? checkoutData.shippingMethod.price : 0;
     var tax = Math.round(subtotal * checkoutData.taxRate * 100) / 100;
     var couponDiscount = checkoutData.coupon ? checkoutData.coupon.discount : 0;
-    var total = Math.round((subtotal + tax + shipCost - couponDiscount) * 100) / 100;
+    var walletCreditDollars = 0;
+    if (checkoutData.walletCreditApplied && checkoutData.walletCredits.length > 0) {
+      var totalCreditCents = checkoutData.walletCredits.reduce(function(sum, c) { return sum + (c.amountCents || 0); }, 0);
+      var afterCoupon = Math.round((subtotal + tax + shipCost - couponDiscount) * 100) / 100;
+      walletCreditDollars = Math.min(totalCreditCents / 100, Math.max(0, afterCoupon));
+    }
+    var total = Math.round((subtotal + tax + shipCost - couponDiscount - walletCreditDollars) * 100) / 100;
     if (total < 0) total = 0;
 
     var html = '<div class="order-totals">';
@@ -821,6 +841,10 @@
 
     if (couponDiscount > 0) {
       html += '<div class="order-total-row discount"><span class="order-total-label">Coupon (' + esc(checkoutData.coupon.code) + ')</span><span class="order-total-value">-' + formatMoney(couponDiscount) + '</span></div>';
+    }
+
+    if (walletCreditDollars > 0) {
+      html += '<div class="order-total-row discount"><span class="order-total-label">Wallet Credit</span><span class="order-total-value">-' + formatMoney(walletCreditDollars) + '</span></div>';
     }
 
     html += '<div class="order-total-row grand-total"><span class="order-total-label">Total</span><span class="order-total-value">' + formatMoney(total) + '</span></div>';
@@ -843,6 +867,84 @@
     var parent = container.parentNode;
     var subtotal = calcSubtotal();
     parent.innerHTML = buildTotalsHtml(subtotal);
+  }
+
+  // ── Wallet Credits ──
+  function loadWalletCredits() {
+    checkoutData.walletCredits = [];
+    checkoutData.walletCreditApplied = false;
+    var user = window.MastCart && window.MastCart.getCurrentUser();
+    if (!user || user.isAnonymous) return;
+    var db = getDb();
+    if (!db) return;
+
+    db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/wallet/credits')
+      .orderByChild('status').equalTo('active').once('value')
+      .then(function(snap) {
+        var data = snap.val() || {};
+        var now = new Date().toISOString();
+        checkoutData.walletCredits = Object.keys(data).map(function(id) {
+          var c = data[id];
+          c._id = id;
+          return c;
+        }).filter(function(c) {
+          // Lazy expiration check
+          return !c.expiresAt || c.expiresAt >= now;
+        }).sort(function(a, b) {
+          // FIFO: oldest first
+          return (a.createdAt || '').localeCompare(b.createdAt || '');
+        });
+      })
+      .catch(function(err) {
+        console.warn('[checkout] Failed to load wallet credits:', err);
+      });
+  }
+
+  function consumeWalletCredits(orderId) {
+    if (!checkoutData.walletCreditApplied || checkoutData.walletCredits.length === 0) return Promise.resolve();
+    var user = window.MastCart && window.MastCart.getCurrentUser();
+    if (!user || user.isAnonymous) return Promise.resolve();
+    var db = getDb();
+    if (!db) return Promise.resolve();
+
+    var subtotal = calcSubtotal();
+    var shipCost = checkoutData.shippingMethod ? checkoutData.shippingMethod.price : 0;
+    var tax = Math.round(subtotal * checkoutData.taxRate * 100) / 100;
+    var couponDiscount = checkoutData.coupon ? checkoutData.coupon.discount : 0;
+    var remainingCents = Math.round((subtotal + tax + shipCost - couponDiscount) * 100);
+    if (remainingCents <= 0) return Promise.resolve();
+
+    var now = new Date().toISOString();
+    var updates = {};
+    var credits = checkoutData.walletCredits;
+
+    for (var i = 0; i < credits.length && remainingCents > 0; i++) {
+      var c = credits[i];
+      var useCents = Math.min(c.amountCents, remainingCents);
+      updates[TENANT_ID + '/public/accounts/' + user.uid + '/wallet/credits/' + c._id + '/status'] = 'used';
+      updates[TENANT_ID + '/public/accounts/' + user.uid + '/wallet/credits/' + c._id + '/usedAt'] = now;
+      updates[TENANT_ID + '/public/accounts/' + user.uid + '/wallet/credits/' + c._id + '/usedOrderId'] = orderId;
+
+      // If credit is larger than needed, create a remainder credit
+      if (c.amountCents > remainingCents) {
+        var remainderRef = db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/wallet/credits').push();
+        updates[remainderRef.path.toString().replace(/^\//, '')] = {
+          amountCents: c.amountCents - remainingCents,
+          source: c.source,
+          sourceId: c.sourceId,
+          sourceDetail: 'Remainder from credit ' + c._id,
+          status: 'active',
+          createdAt: now,
+          usedAt: null,
+          usedOrderId: null,
+          expiresAt: c.expiresAt || null
+        };
+      }
+      remainingCents -= useCents;
+    }
+
+    if (Object.keys(updates).length === 0) return Promise.resolve();
+    return db.ref().update(updates);
   }
 
   // ── Render: Review Step ──
@@ -1161,6 +1263,7 @@
       // Provision CustomerPass records for any pass items
       provisionCustomerPasses(items, orderRef.key);
       provisionSeriesEnrollments(items, orderRef.key);
+      consumeWalletCredits(orderRef.key);
 
       // Show confirmation
       renderCheckOrderConfirmation(orderNumber);
@@ -1261,7 +1364,9 @@
       paymentMethod: 'card',
       coupon: null,
       taxRate: 0,
-      taxState: ''
+      taxState: '',
+      walletCredits: [],
+      walletCreditApplied: false
     };
     var titleEl = document.querySelector('.cart-drawer-title');
     if (titleEl) titleEl.textContent = 'Your Cart';
@@ -1279,7 +1384,11 @@
     if (!btn) return;
     var action = btn.getAttribute('data-co');
 
-    if (action === 'apply-coupon') {
+    if (action === 'toggle-wallet') {
+      checkoutData.walletCreditApplied = !!btn.checked;
+      updateTotals();
+      return;
+    } else if (action === 'apply-coupon') {
       applyCoupon();
     } else if (action === 'addr-next') {
       if (validateAddress()) {
@@ -1543,6 +1652,9 @@
       provisionSeriesEnrollments(pendingOrder.cartItems, orderId);
     }
 
+    // Consume wallet credits if applied
+    consumeWalletCredits(orderId);
+
     // Watch for order status to become 'placed' and generate CSV
     if (orderId && pendingOrder && pendingOrder.items) {
       watchOrderAndDownloadCSV(orderId, pendingOrder);
@@ -1786,6 +1898,8 @@
     start: function () {
       attachDelegate();
       trackCheckoutEvent('checkout_start');
+      // Load wallet credits for authenticated user
+      loadWalletCredits();
       // Load Google Places lazily, then render address
       loadGooglePlaces(function () {
         renderAddress();

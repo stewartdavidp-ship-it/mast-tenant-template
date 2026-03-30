@@ -7486,6 +7486,7 @@
               <option value="all">All</option>
             </select>
             <button class="btn btn-primary" onclick="window._bookCreateClass()">+ New Class</button>
+            <button class="btn" onclick="window._bookCheckCancellations()" title="Check classes for auto-cancellation">Check Cancellations</button>
           </div>
         </div>
         <div id="bookClassesTable"></div>
@@ -8713,7 +8714,16 @@ MastDB.accounts = {
     listPasses: function(uid, limit) {
       return this.passes(uid).limitToLast(limit || 50).once('value');
     },
-    newPassKey: function(uid) { return this.passes(uid).push().key; }
+    newPassKey: function(uid) { return this.passes(uid).push().key; },
+    walletCredits: function(uid, creditId) {
+      var p = this.PATH + '/' + uid + '/wallet/credits';
+      if (creditId) p += '/' + creditId;
+      return MastDB._ref(p);
+    },
+    listWalletCredits: function(uid, limit) {
+      return this.walletCredits(uid).limitToLast(limit || 50).once('value');
+    },
+    newWalletCreditKey: function(uid) { return this.walletCredits(uid).push().key; }
 };
 MastDB.passDefinitions = {
     PATH: 'admin/passDefinitions',

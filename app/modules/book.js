@@ -348,9 +348,10 @@
       '<div><label class="form-label">Status</label><select id="bcfStatus" class="form-input">' + statusOptions + '</select></div>' +
       '</div>' +
 
-      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:1rem;margin-bottom:1rem;">' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:1rem;margin-bottom:1rem;">' +
       '<div><label class="form-label">Capacity *</label><input type="number" id="bcfCapacity" class="form-input" min="1" value="' + (cls ? cls.capacity || '' : '') + '" required></div>' +
       '<div><label class="form-label">Min Enrollment</label><input type="number" id="bcfMinEnroll" class="form-input" min="0" value="' + (cls && cls.minEnrollment ? cls.minEnrollment : '') + '"></div>' +
+      '<div><label class="form-label">Cancel Lead Days</label><input type="number" id="bcfCancelLead" class="form-input" min="0" max="30" value="' + (cls && cls.cancellationLeadDays ? cls.cancellationLeadDays : '2') + '" title="Days before session to check minimum enrollment"></div>' +
       '<div><label class="form-label">Drop-in Price ($) *</label><input type="number" id="bcfPrice" class="form-input" min="0" step="0.01" value="' + (cls ? (cls.priceCents / 100).toFixed(2) : '') + '" required></div>' +
       '<div><label class="form-label">Duration (min) *</label><input type="number" id="bcfDuration" class="form-input" min="1" value="' + (cls ? cls.duration || '' : '') + '" required></div>' +
       '</div>' +
@@ -457,6 +458,7 @@
       status: document.getElementById('bcfStatus').value,
       capacity: parseInt(document.getElementById('bcfCapacity').value, 10) || 8,
       minEnrollment: parseInt(document.getElementById('bcfMinEnroll').value, 10) || null,
+      cancellationLeadDays: parseInt(document.getElementById('bcfCancelLead').value, 10) || 2,
       priceCents: Math.round(priceDollars * 100),
       duration: parseInt(document.getElementById('bcfDuration').value, 10) || 60,
       schedule: schedule,
@@ -1531,6 +1533,175 @@
   // Session assignment
   window._bookAssignSession = function(sessionId, classId) { assignToSession(sessionId, classId); };
   window._assignSave = function(sessionId, classId) { saveSessionAssignment(sessionId, classId); };
+
+  // ============================================================
+  // Auto-Cancellation Logic
+  // ============================================================
+
+  async function checkAutoCancellation() {
+    MastAdmin.showToast('Checking for under-enrolled classes...');
+    var today = new Date();
+    var flagged = [];
+
+    // Filter classes with minEnrollment set
+    var eligibleClasses = classesData.filter(function(c) {
+      return c.status === 'active' && c.minEnrollment && c.minEnrollment > 0;
+    });
+
+    if (eligibleClasses.length === 0) {
+      MastAdmin.showToast('No classes with minimum enrollment requirements found.');
+      return;
+    }
+
+    for (var i = 0; i < eligibleClasses.length; i++) {
+      var cls = eligibleClasses[i];
+      var leadDays = cls.cancellationLeadDays || 2;
+
+      try {
+        var sessSnap = await MastDB.classSessions.byClass(cls.id);
+        var sessData = sessSnap.val() || {};
+        var sessionIds = Object.keys(sessData);
+
+        for (var j = 0; j < sessionIds.length; j++) {
+          var sid = sessionIds[j];
+          var session = sessData[sid];
+          if (session.status !== 'scheduled') continue;
+
+          // Parse session date
+          var parts = session.date.split('-');
+          var sessionDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+          var diffMs = sessionDate.getTime() - today.getTime();
+          var daysUntil = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+          // Check if within cancellation lead window
+          if (daysUntil >= 0 && daysUntil <= leadDays) {
+            var totalEnrolled = (cls.seriesEnrolled || 0) + (session.enrolled || 0);
+            if (totalEnrolled < cls.minEnrollment) {
+              flagged.push({
+                classId: cls.id,
+                className: cls.name,
+                sessionId: sid,
+                sessionDate: session.date,
+                sessionTime: session.startTime,
+                enrolled: totalEnrolled,
+                minRequired: cls.minEnrollment,
+                daysUntil: daysUntil
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[book] Error checking class ' + cls.id + ':', err);
+      }
+    }
+
+    if (flagged.length === 0) {
+      MastAdmin.showToast('All classes meet minimum enrollment requirements.');
+      return;
+    }
+
+    // Show confirmation dialog
+    var msg = 'The following sessions are under-enrolled and within the cancellation window:\n\n';
+    flagged.forEach(function(f) {
+      msg += '- ' + f.className + ' (' + f.sessionDate + '): ' + f.enrolled + '/' + f.minRequired + ' enrolled, ' + f.daysUntil + ' day(s) away\n';
+    });
+    msg += '\nCancel these sessions and notify enrolled students?';
+
+    if (!confirm(msg)) return;
+
+    // Execute cancellation for each flagged session
+    var totalAffected = 0;
+    for (var k = 0; k < flagged.length; k++) {
+      var f = flagged[k];
+      try {
+        var affected = await executeCancellation(f.sessionId, f.classId);
+        totalAffected += affected.length;
+      } catch (err) {
+        console.error('[book] Failed to cancel session ' + f.sessionId + ':', err);
+        MastAdmin.showToast('Failed to cancel ' + f.className + ' session: ' + err.message, true);
+      }
+    }
+
+    MastAdmin.showToast('Cancelled ' + flagged.length + ' session(s), ' + totalAffected + ' enrollment(s) affected.');
+    // Refresh class list
+    loadClasses();
+  }
+
+  async function executeCancellation(sessionId, classId) {
+    var cls = classesData.find(function(c) { return c.id === classId; }) || {};
+    var affected = [];
+
+    // 1. Cancel the session
+    await MastDB.classSessions.update(sessionId, {
+      status: 'cancelled',
+      cancelReason: 'Insufficient enrollment (auto-check)',
+      cancelledAt: new Date().toISOString()
+    });
+
+    // 2. Fetch all enrollments for this session from public/enrollments
+    var db = firebase.app().database();
+    var enrollSnap = await db.ref(TENANT_ID + '/public/enrollments')
+      .orderByChild('sessionId').equalTo(sessionId).once('value');
+    var enrollData = enrollSnap.val() || {};
+    var enrollIds = Object.keys(enrollData);
+
+    // 3. Bulk-cancel confirmed/waitlisted enrollments
+    var updates = {};
+    var now = new Date().toISOString();
+    enrollIds.forEach(function(eid) {
+      var e = enrollData[eid];
+      if (e.status === 'confirmed' || e.status === 'waitlisted') {
+        updates[TENANT_ID + '/public/enrollments/' + eid + '/status'] = 'cancelled_insufficient_enrollment';
+        updates[TENANT_ID + '/public/enrollments/' + eid + '/cancelledAt'] = now;
+        updates[TENANT_ID + '/public/enrollments/' + eid + '/cancelReason'] = 'Class cancelled: minimum enrollment not met';
+        affected.push({
+          enrollmentId: eid,
+          studentUid: e.studentUid,
+          studentEmail: e.studentEmail,
+          studentName: e.studentName,
+          pricePaid: e.pricePaid || 0,
+          enrollmentType: e.enrollmentType,
+          orderId: e.orderId || null
+        });
+      }
+    });
+
+    if (Object.keys(updates).length > 0) {
+      await db.ref().update(updates);
+    }
+
+    // 4. Create wallet credits for affected students
+    for (var i = 0; i < affected.length; i++) {
+      var student = affected[i];
+      if (!student.studentUid) continue;
+
+      var creditAmount = 0;
+      if (student.enrollmentType === 'series' && cls.seriesInfo && cls.seriesInfo.seriesPriceCents && cls.seriesInfo.totalSessions) {
+        creditAmount = Math.round(cls.seriesInfo.seriesPriceCents / cls.seriesInfo.totalSessions);
+      } else {
+        creditAmount = student.pricePaid || 0;
+      }
+
+      if (creditAmount > 0) {
+        var creditRef = db.ref(TENANT_ID + '/public/accounts/' + student.studentUid + '/wallet/credits').push();
+        await creditRef.set({
+          amountCents: creditAmount,
+          source: 'cancellation',
+          sourceId: student.enrollmentId,
+          sourceDetail: 'Class cancelled: ' + (cls.name || 'Unknown') + ' (' + sessionId + ')',
+          status: 'active',
+          createdAt: now,
+          usedAt: null,
+          usedOrderId: null,
+          expiresAt: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString() // 6 months
+        });
+      }
+    }
+
+    return affected;
+  }
+
+  window._bookCheckCancellations = function() { checkAutoCancellation(); };
 
   // ============================================================
   // Module Registration
