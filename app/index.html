@@ -24553,13 +24553,6 @@ function renderDashCardLowInventory() {
     }
 
     container.innerHTML = renderDashboardCard(cardConfig, lowItems.length, contentHtml);
-    // Activity tracking — stamp ISO timestamp only when count changes
-    var prevCount = (dashboardCardPrefs.lowInventory || {})._lastCount || 0;
-    if (lowItems.length > 0 && lowItems.length !== prevCount) {
-      dashboardCardPrefs.lowInventory = dashboardCardPrefs.lowInventory || {};
-      dashboardCardPrefs.lowInventory._lastCount = lowItems.length;
-      updateCardActivity('lowInventory', new Date().toISOString());
-    }
   });
 }
 
