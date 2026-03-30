@@ -2793,7 +2793,7 @@
     var container = document.getElementById('dashCardNewOrders');
     if (!container) return;
     if (!ordersLoaded) { container.innerHTML = ''; return; }
-    var cardConfig = DASHBOARD_CARDS[1]; // newOrders
+    var cardConfig = DASHBOARD_CARDS.find(function(c) { return c.id === 'newOrders'; });
 
     var newOrders = getOrdersArray().filter(function(o) {
       return (o.status || 'placed') === 'placed';
@@ -2827,6 +2827,10 @@
     }
 
     container.innerHTML = renderDashboardCard(cardConfig, newOrders.length, contentHtml);
+    if (newOrders.length > 0 && typeof updateCardActivity === 'function') {
+      var latestTs = newOrders.reduce(function(max, o) { var t = o.placedAt || o.createdAt || ''; return t > max ? t : max; }, '');
+      updateCardActivity('newOrders', latestTs);
+    }
   }
 
   // Dashboard Card: Ready to Ship
@@ -2835,7 +2839,7 @@
     var container = document.getElementById('dashCardReadyToShip');
     if (!container) return;
     if (!ordersLoaded) { container.innerHTML = ''; return; }
-    var cardConfig = DASHBOARD_CARDS[2]; // readyToShip
+    var cardConfig = DASHBOARD_CARDS.find(function(c) { return c.id === 'readyToShip'; });
 
     var packedOrders = getOrdersArray().filter(function(o) {
       return o.status === 'packed';
@@ -2868,6 +2872,10 @@
     }
 
     container.innerHTML = renderDashboardCard(cardConfig, packedOrders.length, contentHtml);
+    if (packedOrders.length > 0 && typeof updateCardActivity === 'function') {
+      var latestTs = packedOrders.reduce(function(max, o) { var t = o.placedAt || o.createdAt || ''; return t > max ? t : max; }, '');
+      updateCardActivity('readyToShip', latestTs);
+    }
   }
 
   // ============================================================

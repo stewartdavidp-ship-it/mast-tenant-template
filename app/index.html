@@ -2943,6 +2943,19 @@
     }
     .dash-card.collapsed .dash-card-body { display: none; }
     .dash-card.hidden-card { display: none; }
+    .dash-card.has-activity {
+      border-color: var(--amber, #C4853C);
+      box-shadow: 0 0 0 1px var(--amber, #C4853C);
+    }
+    .dash-card-pin {
+      font-size: 0.9rem;
+      cursor: pointer;
+      opacity: 0.35;
+      transition: opacity 0.2s;
+      line-height: 1;
+    }
+    .dash-card-pin:hover { opacity: 0.8; }
+    .dash-card-pin.pinned { opacity: 1; }
 
     /* Low Inventory card items */
     .dash-inv-item {
@@ -3478,6 +3491,7 @@
       border-color: #3a3a3a;
     }
     body.dark-mode .dash-card { background: #2a2a2a; border-color: #3a3a3a; }
+    body.dark-mode .dash-card.has-activity { border-color: var(--amber-glow, #E8B679); box-shadow: 0 0 0 1px var(--amber-glow, #E8B679); }
     body.dark-mode .dash-card-header:hover { background: #333; }
     body.dark-mode .dash-card-count { color: #E8B679; background: rgba(196,133,60,0.2); }
     body.dark-mode .dash-card-count.zero { color: #666; background: #333; }
@@ -8271,7 +8285,8 @@ MastDB.dashboardPrefs = {
   ref: function(uid) { return MastDB._ref(this.PATH + '/' + uid + '/dashboardPrefs'); },
   cardRef: function(uid, cardId) { return MastDB._ref(this.PATH + '/' + uid + '/dashboardPrefs/cards/' + cardId); },
   get: function(uid) { return this.ref(uid).once('value'); },
-  setCard: function(uid, cardId, data) { return this.cardRef(uid, cardId).update(data); }
+  setCard: function(uid, cardId, data) { return this.cardRef(uid, cardId).update(data); },
+  setCardActivity: function(uid, cardId, timestamp) { return this.cardRef(uid, cardId).update({ lastActivity: timestamp }); }
 };
 
 MastDB.tripCustomPurposes = {
@@ -24043,6 +24058,7 @@ function renderDashboardCard(cardConfig, count, contentHtml) {
   var prefs = dashboardCardPrefs[cardConfig.id] || {};
   var collapsed = prefs.collapsed ? ' collapsed' : '';
   var hidden = prefs.hidden ? ' hidden-card' : '';
+  var activity = prefs.hasNewActivity ? ' has-activity' : '';
   var countClass = (count === 0) ? 'dash-card-count zero' : 'dash-card-count';
   var viewAllHtml = cardConfig.viewAllRoute
     ? '<span class="dash-card-viewall" onclick="event.stopPropagation(); navigateTo(\'' + cardConfig.viewAllRoute + '\')">View all</span>'
@@ -24050,8 +24066,12 @@ function renderDashboardCard(cardConfig, count, contentHtml) {
   var countHtml = (typeof count === 'number')
     ? '<span class="' + countClass + '">' + count + '</span>'
     : '';
+  var isPinned = prefs.pinned;
+  var pinClass = 'dash-card-pin' + (isPinned ? ' pinned' : '');
+  var pinIcon = isPinned ? '\uD83D\uDCCC' : '\uD83D\uDCCC';
+  var pinHtml = '<span class="' + pinClass + '" onclick="event.stopPropagation(); togglePinDashCard(\'' + cardConfig.id + '\')" title="' + (isPinned ? 'Unpin from top' : 'Pin to top') + '">' + pinIcon + '</span>';
 
-  return '<div class="dash-card' + collapsed + hidden + '" id="dashCard_' + cardConfig.id + '">' +
+  return '<div class="dash-card' + collapsed + hidden + activity + '" id="dashCard_' + cardConfig.id + '">' +
     '<div class="dash-card-header" onclick="toggleDashCard(\'' + cardConfig.id + '\')">' +
       '<div class="dash-card-title">' +
         '<h3>' + esc(cardConfig.title) + '</h3>' +
@@ -24059,6 +24079,7 @@ function renderDashboardCard(cardConfig, count, contentHtml) {
       '</div>' +
       '<div class="dash-card-actions">' +
         viewAllHtml +
+        pinHtml +
         '<span class="dash-card-toggle">▼</span>' +
       '</div>' +
     '</div>' +
@@ -24070,12 +24091,60 @@ function toggleDashCard(cardId) {
   var el = document.getElementById('dashCard_' + cardId);
   if (!el) return;
   var isCollapsed = el.classList.toggle('collapsed');
-  // Persist to Firebase
+  // Clear activity indicator on interaction
+  el.classList.remove('has-activity');
   dashboardCardPrefs[cardId] = dashboardCardPrefs[cardId] || {};
   dashboardCardPrefs[cardId].collapsed = isCollapsed;
+  dashboardCardPrefs[cardId].hasNewActivity = false;
   var user = auth.currentUser;
   if (user) {
     MastDB.dashboardPrefs.setCard(user.uid, cardId, { collapsed: isCollapsed });
+  }
+}
+
+function togglePinDashCard(cardId) {
+  var user = auth.currentUser;
+  if (!user) return;
+  dashboardCardPrefs[cardId] = dashboardCardPrefs[cardId] || {};
+  var wasPinned = dashboardCardPrefs[cardId].pinned;
+  if (wasPinned) {
+    dashboardCardPrefs[cardId].pinned = false;
+    dashboardCardPrefs[cardId].pinnedAt = null;
+    MastDB.dashboardPrefs.setCard(user.uid, cardId, { pinned: false, pinnedAt: null });
+  } else {
+    var now = new Date().toISOString();
+    dashboardCardPrefs[cardId].pinned = true;
+    dashboardCardPrefs[cardId].pinnedAt = now;
+    MastDB.dashboardPrefs.setCard(user.uid, cardId, { pinned: true, pinnedAt: now });
+  }
+  reorderDashboardCards();
+}
+
+function reorderDashboardCards() {
+  var ordered = getDashCardsInOrder();
+  var parent = document.getElementById('dashboardCards');
+  if (parent) {
+    ordered.forEach(function(card) {
+      var el = document.getElementById(card.containerId);
+      if (el) parent.appendChild(el);
+    });
+  }
+}
+
+function updateCardActivity(cardId, latestTimestamp) {
+  if (!latestTimestamp) return;
+  var prefs = dashboardCardPrefs[cardId] || {};
+  var prevActivity = prefs.lastActivity || '';
+  if (latestTimestamp !== prevActivity) {
+    dashboardCardPrefs[cardId] = dashboardCardPrefs[cardId] || {};
+    dashboardCardPrefs[cardId].lastActivity = latestTimestamp;
+    dashboardCardPrefs[cardId].hasNewActivity = true;
+    var user = auth.currentUser;
+    if (user) MastDB.dashboardPrefs.setCardActivity(user.uid, cardId, latestTimestamp);
+    // Add activity class to existing DOM element if rendered
+    var el = document.getElementById('dashCard_' + cardId);
+    if (el) el.classList.add('has-activity');
+    reorderDashboardCards();
   }
 }
 
@@ -24093,6 +24162,13 @@ async function loadDashboardPrefs() {
       dashboardCardPrefs.quickActionCount = val.quickActionCount;
     }
     dashboardPrefsLoaded = true;
+    // Default pin: Quick Actions pinned to top on first load
+    if (!dashboardCardPrefs.quickActions || dashboardCardPrefs.quickActions.pinned === undefined) {
+      dashboardCardPrefs.quickActions = dashboardCardPrefs.quickActions || {};
+      dashboardCardPrefs.quickActions.pinned = true;
+      dashboardCardPrefs.quickActions.pinnedAt = '2000-01-01T00:00:00.000Z';
+      if (user) MastDB.dashboardPrefs.setCard(user.uid, 'quickActions', { pinned: true, pinnedAt: '2000-01-01T00:00:00.000Z' });
+    }
   } catch (err) {
     console.error('Error loading dashboard prefs:', err);
   }
@@ -24101,13 +24177,36 @@ async function loadDashboardPrefs() {
 // ─── Dashboard Card Settings (Settings > Dashboard tab) ─────
 
 function getDashCardsInOrder() {
-  return DASHBOARD_CARDS.slice().sort(function(a, b) {
-    var pa = dashboardCardPrefs[a.id];
-    var pb = dashboardCardPrefs[b.id];
-    var oa = (pa && typeof pa.order === 'number') ? pa.order : DASHBOARD_CARDS.indexOf(a);
-    var ob = (pb && typeof pb.order === 'number') ? pb.order : DASHBOARD_CARDS.indexOf(b);
-    return oa - ob;
+  var cards = DASHBOARD_CARDS.slice();
+
+  // Split into pinned and unpinned
+  var pinned = cards.filter(function(c) {
+    var p = dashboardCardPrefs[c.id];
+    return p && p.pinned;
   });
+  var unpinned = cards.filter(function(c) {
+    var p = dashboardCardPrefs[c.id];
+    return !p || !p.pinned;
+  });
+
+  // Sort pinned by pinnedAt (first pinned = first position)
+  pinned.sort(function(a, b) {
+    var pa = (dashboardCardPrefs[a.id] || {}).pinnedAt || '';
+    var pb = (dashboardCardPrefs[b.id] || {}).pinnedAt || '';
+    return pa.localeCompare(pb);
+  });
+
+  // Sort unpinned by lastActivity descending, fallback to default order
+  unpinned.sort(function(a, b) {
+    var la = (dashboardCardPrefs[a.id] || {}).lastActivity || '';
+    var lb = (dashboardCardPrefs[b.id] || {}).lastActivity || '';
+    if (la && lb) return lb.localeCompare(la);
+    if (la) return -1;
+    if (lb) return 1;
+    return DASHBOARD_CARDS.indexOf(a) - DASHBOARD_CARDS.indexOf(b);
+  });
+
+  return pinned.concat(unpinned);
 }
 
 async function renderDashCardSettings() {
@@ -24120,13 +24219,16 @@ async function renderDashCardSettings() {
   ordered.forEach(function(card) {
     var prefs = dashboardCardPrefs[card.id] || {};
     var isVisible = !prefs.hidden;
+    var isPinned = prefs.pinned;
+    var pinBtnStyle = 'background:none;border:none;cursor:pointer;font-size:1rem;padding:0;opacity:' + (isPinned ? '1' : '0.35') + ';';
     html += '<div class="dash-card-setting" draggable="true" data-card-id="' + card.id + '"' +
       ' ondragstart="dashSettingDragStart(event, \'' + card.id + '\')"' +
       ' ondragend="dashSettingDragEnd(event)"' +
       ' ondragover="dashSettingDragOver(event)"' +
       ' ondrop="dashSettingDrop(event, \'' + card.id + '\')">' +
       '<span class="dash-card-setting-drag" title="Drag to reorder">⠿</span>' +
-      '<span class="dash-card-setting-label">' + esc(card.title) + '</span>' +
+      '<span class="dash-card-setting-label">' + esc(card.title) + (isPinned ? ' <span style="font-size:0.7rem;color:var(--teal);font-weight:600;">PINNED</span>' : '') + '</span>' +
+      '<button style="' + pinBtnStyle + '" onclick="togglePinDashCard(\'' + card.id + '\'); renderDashCardSettings();" title="' + (isPinned ? 'Unpin' : 'Pin to top') + '">\uD83D\uDCCC</button>' +
       '<input type="checkbox" ' + (isVisible ? 'checked' : '') +
         ' onchange="toggleDashCardVisibility(\'' + card.id + '\')"' +
         ' style="width:18px;height:18px;cursor:pointer;" title="' + (isVisible ? 'Visible' : 'Hidden') + '">' +
@@ -24365,6 +24467,10 @@ function renderDashCardNewInquiries() {
     }
 
     container.innerHTML = renderDashboardCard(cardConfig, items.length, contentHtml);
+    // Activity tracking
+    if (items.length > 0) {
+      updateCardActivity('newInquiries', items[0].createdAt || '');
+    }
   }).catch(function(err) {
     console.error('Error loading inquiries:', err);
     container.innerHTML = '';
@@ -24423,7 +24529,7 @@ function renderDashCardQuickActions() {
 function renderDashCardLowInventory() {
   var container = document.getElementById('dashCardLowInventory');
   if (!container) return;
-  var cardConfig = DASHBOARD_CARDS[3]; // lowInventory
+  var cardConfig = DASHBOARD_CARDS.find(function(c) { return c.id === 'lowInventory'; });
 
   ensureProductsLoaded().then(function() {
     var lowItems = [];
@@ -24487,6 +24593,10 @@ function renderDashCardLowInventory() {
     }
 
     container.innerHTML = renderDashboardCard(cardConfig, lowItems.length, contentHtml);
+    // Activity tracking — use current timestamp when low items exist (inventory changes aren't timestamped)
+    if (lowItems.length > 0) {
+      updateCardActivity('lowInventory', new Date().toISOString().slice(0, 10));
+    }
   });
 }
 
