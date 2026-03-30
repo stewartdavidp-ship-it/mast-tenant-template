@@ -11152,7 +11152,7 @@ var ROUTE_MAP = {
   // trips route handled by trips module (lazy-loaded)
   // expenses route handled by expenses module (lazy-loaded)
   'reports':     { tab: null, placeholder: { name: 'Reports', desc: 'Tax reports, mileage summaries, expense exports.', badge: 'new' } },
-  'book':        { tab: null, placeholder: { name: 'Book', desc: 'Coming when Studio 2 opens \u2014 classes, workshops, scheduling.', badge: 'future' } },
+  // book routes handled by book module (lazy-loaded)
   // show routes handled by shows module (lazy-loaded)
   // Events organizer routes
   'events-shows':       { tab: null, setup: function() { window.open('../events/', '_blank'); } },
@@ -11179,7 +11179,7 @@ var SECTION_ROUTES = {
   'manage': ['products', 'inventory', 'employees', 'analytics', 'auditlog', 'settings']
 };
 
-var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab'];
+var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'expensesTab', 'bookTab', 'subscriptionTab', 'aboutTab'];
 
 var currentRoute = 'dashboard';
 
