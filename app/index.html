@@ -4995,6 +4995,8 @@
         <div class="sidebar-item" data-route="resources" onclick="navigateTo('resources')">Resources</div>
         <div class="sidebar-item" data-route="passes" onclick="navigateTo('passes')">Passes</div>
         <div class="sidebar-item" data-route="enrollments" onclick="navigateTo('enrollments')">Enrollments</div>
+        <div class="sidebar-item" data-route="calendar" onclick="navigateTo('calendar')">Calendar</div>
+        <div class="sidebar-item" data-route="reports" onclick="navigateTo('reports')">Reports</div>
       </div>
     </div>
     <!-- Web -->
@@ -7524,7 +7526,8 @@
 
     <!-- Admin: Book Tab -->
     <div id="bookTab" style="display:none;">
-      <div class="view-tabs" id="bookSubNav">
+      <!-- Sub-nav hidden — sidebar handles navigation. Kept for switchSubTab JS compatibility. -->
+      <div class="view-tabs" id="bookSubNav" style="display:none;">
         <button class="view-tab active" onclick="window._bookSubTab('classes')">Classes</button>
         <button class="view-tab" onclick="window._bookSubTab('instructors')">Instructors</button>
         <button class="view-tab" onclick="window._bookSubTab('resources')">Resources</button>
@@ -8886,7 +8889,7 @@ var MODULE_REGISTRY = {
   show:   { id: 'show',   name: 'Show',   icon: '\uD83C\uDFAA', description: 'Find, apply, prep, and execute craft fairs and events.', section: 'show', navPosition: 7, purchasable: true, routes: ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'], manageSettings: [], synergies: ['sell', 'ship', 'make'], status: 'active' },
   'show-light': { id: 'show-light', name: 'Show Light', icon: '\u2728', description: 'Vendor profile, image gallery, and AI-powered show application builder.', section: 'show-light', navPosition: 8, purchasable: false, showInGrid: true, routes: ['show-light-profile', 'show-light-gallery', 'show-light-shows', 'show-light-apply'], manageSettings: [], synergies: ['show', 'sell', 'market'], status: 'active' },
   events: { id: 'events', name: 'Events', icon: '\uD83C\uDFAB', description: 'Organize shows, manage booths, vendors, and floor plans.', section: 'events', navPosition: 9, purchasable: true, routes: ['events-shows', 'events-settings'], manageSettings: [], synergies: ['show', 'sell', 'market'], status: 'active' },
-  book:   { id: 'book',   name: 'Book',   icon: '\uD83D\uDCC5', description: 'Classes, workshops, studio time, and student enrollment.', section: 'book', navPosition: 10, purchasable: true, routes: ['book', 'book-detail', 'enrollments', 'instructors', 'instructor-detail', 'resources', 'resource-detail', 'passes', 'pass-detail'], manageSettings: [], synergies: ['sell', 'market'], status: 'active' }
+  book:   { id: 'book',   name: 'Book',   icon: '\uD83D\uDCC5', description: 'Classes, workshops, studio time, and student enrollment.', section: 'book', navPosition: 10, purchasable: true, routes: ['book', 'book-detail', 'enrollments', 'instructors', 'instructor-detail', 'resources', 'resource-detail', 'passes', 'pass-detail', 'calendar', 'reports'], manageSettings: [], synergies: ['sell', 'market'], status: 'active' }
 };
 
 // Synergy messaging for locked module previews.
@@ -11595,7 +11598,7 @@ homepage: { src: 'modules/homepage.js', routes: ['homepage'] },
   lookbooks: { src: 'modules/lookbooks.js', routes: ['lookbooks'] },
   brand: { src: 'modules/brand.js', routes: ['brand'] },
   promotions: { src: 'modules/promotions.js', routes: ['promotions'] },
-  book: { src: 'modules/book.js', routes: ['book', 'book-detail', 'enrollments', 'instructors', 'instructor-detail', 'resources', 'resource-detail', 'passes', 'pass-detail'] }
+  book: { src: 'modules/book.js', routes: ['book', 'book-detail', 'enrollments', 'instructors', 'instructor-detail', 'resources', 'resource-detail', 'passes', 'pass-detail', 'calendar', 'reports'] }
 };
 
 // Reverse lookup: route → moduleId (built from MODULE_MANIFEST)
