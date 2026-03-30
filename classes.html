@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdn.jsdelivr.net https://*.firebaseio.com https://apis.google.com https://maps.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://us-central1-mast-platform-prod.cloudfunctions.net https://*.firebaseio.com wss://*.firebaseio.com https://*.firebasestorage.app https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://maps.googleapis.com https://places.googleapis.com https://api.ipify.org; img-src 'self' data: blob: https:; frame-src 'self' https://*.firebaseapp.com https://*.firebaseio.com; frame-ancestors 'none';">
+<title>Classes &mdash; My Shop</title><!-- TENANT: brand -->
+<link rel="preconnect" href="https://mast-platform-prod-default-rtdb.firebaseio.com" crossorigin>
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<script>
+(function(){
+  var P='https://mast-platform-prod-default-rtdb.firebaseio.com/mast-platform';
+  var h=location.hostname,C=5*60*1000;
+  if(h==='localhost'||h==='127.0.0.1')return;
+  try{var r=localStorage.getItem('mast_tenant_'+h);if(r){var c=JSON.parse(r);if(Date.now()-c.timestamp<C){window.__earlyTenant=Promise.resolve(c.data);return;}}}catch(e){}
+  var ek=h.replace(/\./g,'_');
+  window.__earlyTenant=fetch(P+'/tenantsByDomain/'+ek+'.json').then(function(r){return r.ok?r.json():null}).then(function(tid){
+    if(!tid)return null;
+    return fetch(P+'/tenants/'+tid+'/publicConfig.json').then(function(r){return r.ok?r.json():null}).then(function(pc){
+      return pc?{tenantId:tid,publicConfig:pc}:null;
+    });
+  }).catch(function(){return null;});
+})();
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="storefront.css">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<style>
+/* ── Classes page styles ── */
+.classes-hero {
+  position: relative;
+  padding: 8rem 2rem 4rem;
+  text-align: center;
+  background: var(--surface-dark);
+  color: var(--on-dark);
+}
+.classes-hero h1 {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 2.8rem;
+  font-weight: 300;
+  letter-spacing: 0.04em;
+  margin: 0 0 0.5rem;
+}
+.classes-hero p {
+  font-size: 1rem;
+  opacity: 0.7;
+  max-width: 500px;
+  margin: 0 auto;
+}
+.classes-filter-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin: 2rem auto 0;
+  max-width: 800px;
+}
+.classes-filter-pill {
+  padding: 6px 16px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.classes-filter-pill:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.classes-filter-pill.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+.classes-section {
+  padding: 3rem 2rem 4rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.classes-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2rem;
+}
+
+.class-card {
+  background: var(--surface-card);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: transform 0.3s, box-shadow 0.3s;
+  border: 1px solid var(--surface-card-border);
+}
+.class-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.1);
+}
+.class-card a {
+  text-decoration: none;
+  color: inherit;
+}
+.class-card-image {
+  position: relative;
+  aspect-ratio: 4/3;
+  overflow: hidden;
+  background: var(--bg);
+}
+.class-card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.6s ease;
+}
+.class-card:hover .class-card-image img {
+  transform: scale(1.06);
+}
+.class-card-image .class-type-badge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+}
+.class-card-body {
+  padding: 1.25rem;
+}
+.class-card-body h3 {
+  margin: 0 0 4px;
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: var(--text);
+}
+.class-card-schedule {
+  font-size: 0.85rem;
+  color: var(--warm-gray, #888);
+  margin-bottom: 8px;
+}
+.class-card-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.9rem;
+}
+.class-card-price {
+  font-weight: 600;
+  color: var(--primary);
+}
+.class-card-spots {
+  font-size: 0.8rem;
+  color: var(--warm-gray, #888);
+}
+
+.classes-empty {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: var(--warm-gray, #888);
+}
+
+@media (max-width: 1024px) {
+  .classes-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 768px) {
+  .classes-hero { padding: 7rem 1.5rem 3rem; }
+  .classes-hero h1 { font-size: 2rem; }
+  .classes-section { padding: 2rem 1.5rem; }
+  .classes-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<nav id="mainNav"></nav>
+<div class="nav-mobile-menu" id="mobileMenu"></div>
+
+<header class="classes-hero">
+  <h1 data-tenant="brand-name-possessive">Classes</h1>
+  <p>Learn, create, and explore in our studio</p>
+  <div class="classes-filter-pills" id="classFilterPills"></div>
+</header>
+
+<section class="classes-section">
+  <div class="classes-grid" id="classesGrid">
+    <div class="classes-empty">Loading classes...</div>
+  </div>
+</section>
+
+<footer id="siteFooter"></footer>
+
+<script src="storefront-tenant.js"></script>
+<script src="storefront-theme.js"></script>
+<script src="storefront-nav.js"></script>
+<script src="tenant-brand.js?v=2"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+
+<script>
+(function() {
+  'use strict';
+
+  var DAY_LABELS = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
+  var allClasses = [];
+  var currentFilter = 'all';
+
+  function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  function formatPrice(cents) {
+    if (typeof cents !== 'number') return '';
+    return '$' + (cents / 100).toFixed(2);
+  }
+
+  function formatTime(t) {
+    if (!t) return '';
+    var parts = t.split(':');
+    var h = parseInt(parts[0], 10);
+    var m = parts[1];
+    var ampm = h >= 12 ? 'PM' : 'AM';
+    if (h > 12) h -= 12;
+    if (h === 0) h = 12;
+    return h + ':' + m + ' ' + ampm;
+  }
+
+  function schedSummary(cls) {
+    if (!cls.schedule) return '';
+    if (cls.schedule.type === 'recurring' && cls.schedule.days) {
+      var days = cls.schedule.days.map(function(d) { return DAY_LABELS[d] || d; }).join(', ');
+      var time = cls.schedule.startTime ? ' at ' + formatTime(cls.schedule.startTime) : '';
+      return days + time;
+    }
+    if (cls.schedule.type === 'once') {
+      var date = cls.schedule.date || cls.schedule.startDate || '';
+      if (date) {
+        var parts = date.split('-');
+        date = parts[1] + '/' + parts[2] + '/' + parts[0];
+      }
+      return date + (cls.schedule.startTime ? ' at ' + formatTime(cls.schedule.startTime) : '');
+    }
+    return '';
+  }
+
+  function buildFilterPills(categories) {
+    var container = document.getElementById('classFilterPills');
+    if (!container) return;
+    var html = '<span class="classes-filter-pill active" onclick="window._classFilter(\'all\', this)">All</span>';
+    categories.forEach(function(cat) {
+      html += '<span class="classes-filter-pill" onclick="window._classFilter(\'' + esc(cat) + '\', this)">' + esc(cat.charAt(0).toUpperCase() + cat.slice(1)) + '</span>';
+    });
+    container.innerHTML = html;
+  }
+
+  window._classFilter = function(cat, el) {
+    currentFilter = cat;
+    var pills = document.querySelectorAll('.classes-filter-pill');
+    pills.forEach(function(p) { p.classList.remove('active'); });
+    if (el) el.classList.add('active');
+    renderClasses();
+  };
+
+  function renderClasses() {
+    var grid = document.getElementById('classesGrid');
+    if (!grid) return;
+
+    var filtered = allClasses.filter(function(c) {
+      if (c.status !== 'active') return false;
+      if (currentFilter !== 'all' && (c.category || '').toLowerCase() !== currentFilter.toLowerCase()) return false;
+      return true;
+    });
+
+    if (filtered.length === 0) {
+      grid.innerHTML = '<div class="classes-empty"><p>No classes available right now. Check back soon!</p></div>';
+      return;
+    }
+
+    var html = '';
+    filtered.forEach(function(cls) {
+      var image = '';
+      if (cls.imageIds && cls.imageIds.length > 0) {
+        image = cls.imageIds[0]; // URL or image ref
+      }
+
+      var price = formatPrice(cls.priceCents);
+      if (cls.type === 'series' && cls.seriesInfo && cls.seriesInfo.seriesPriceCents) {
+        price = formatPrice(cls.seriesInfo.seriesPriceCents);
+      }
+
+      var typeLabel = cls.type === 'dropin' ? 'Open Studio' : cls.type;
+
+      html += '<div class="class-card">' +
+        '<a href="class-detail.html?id=' + esc(cls.id) + '">' +
+        '<div class="class-card-image">' +
+        (image ? '<img src="' + esc(image) + '" alt="' + esc(cls.name) + '" loading="lazy">' : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--warm-gray);font-size:3rem;">&#128197;</div>') +
+        '<span class="class-type-badge">' + esc(typeLabel) + '</span>' +
+        '</div>' +
+        '<div class="class-card-body">' +
+        '<h3>' + esc(cls.name) + '</h3>' +
+        '<div class="class-card-schedule">' + esc(schedSummary(cls)) + '</div>' +
+        (cls.duration ? '<div class="class-card-schedule">' + cls.duration + ' min' + (cls.materialsIncluded ? ' &middot; Materials included' : '') + '</div>' : '') +
+        '<div class="class-card-meta">' +
+        '<span class="class-card-price">' + price + '</span>' +
+        '<span class="class-card-spots">' + (cls.capacity || '') + ' spots</span>' +
+        '</div>' +
+        '</div></a></div>';
+    });
+
+    grid.innerHTML = html;
+  }
+
+  // Init
+  window.TENANT_READY.then(function() {
+    document.title = 'Classes \u2014 ' + (window.TENANT_TITLE_SUFFIX ? TENANT_TITLE_SUFFIX() : 'Studio');
+
+    var app = firebase.initializeApp(TENANT_FIREBASE_CONFIG, 'public-classes');
+    var db = app.database();
+
+    db.ref(TENANT_ID + '/public/classes').once('value').then(function(snap) {
+      var data = snap.val() || {};
+      allClasses = Object.keys(data).map(function(id) {
+        var c = data[id];
+        c.id = id;
+        return c;
+      });
+
+      // Build category pills from actual class data
+      var cats = {};
+      allClasses.forEach(function(c) {
+        if (c.status === 'active' && c.category) cats[c.category.toLowerCase()] = true;
+      });
+      buildFilterPills(Object.keys(cats).sort());
+      renderClasses();
+    }).catch(function(err) {
+      console.error('[classes] Failed to load:', err);
+      document.getElementById('classesGrid').innerHTML = '<div class="classes-empty"><p>Unable to load classes.</p></div>';
+    });
+  }).catch(function(err) {
+    console.error('[classes] Tenant resolution failed:', err);
+  });
+})();
+</script>
+<script src="cart.js"></script>
+<script defer src="checkout.js?v=2"></script>
+<script defer src="feedback-widget.js"></script>
+<script defer src="share-widget.js"></script>
+
+</body>
+</html>

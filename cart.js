@@ -90,8 +90,12 @@
   }
 
   // Build a key that uniquely identifies a product + option combo
-  function optionKey(pid, options) {
+  function optionKey(pid, options, bookingType, sessionId) {
     var parts = [pid];
+    // Class bookings dedup by sessionId so same class on different dates stays separate
+    if (bookingType === 'class' && sessionId) {
+      parts.push('session=' + sessionId);
+    }
     if (options && typeof options === 'object') {
       var keys = Object.keys(options).sort();
       for (var i = 0; i < keys.length; i++) {
@@ -120,9 +124,9 @@
     if (typeof item.availableStock === 'number' && item.availableStock > 0) {
       maxQty = Math.min(maxQty, item.availableStock);
     }
-    var key = optionKey(item.pid, item.options);
+    var key = optionKey(item.pid, item.options, item.bookingType, item.sessionId);
     for (var i = 0; i < cart.length; i++) {
-      if (optionKey(cart[i].pid, cart[i].options) === key) {
+      if (optionKey(cart[i].pid, cart[i].options, cart[i].bookingType, cart[i].sessionId) === key) {
         var itemMax = cart[i].isWholesale ? MAX_QTY_WHOLESALE : MAX_QTY;
         if (typeof cart[i].availableStock === 'number' && cart[i].availableStock > 0) {
           itemMax = Math.min(itemMax, cart[i].availableStock);
@@ -151,6 +155,9 @@
       leadTimeText: item.leadTimeText || null,
       stockType: item.stockType || null,
       availableStock: typeof item.availableStock === 'number' ? item.availableStock : null,
+      bookingType: item.bookingType || null,
+      sessionId: item.sessionId || null,
+      classId: item.classId || null,
       addedAt: Date.now()
     };
     cart.push(newItem);
@@ -783,7 +790,10 @@
     getCurrentUser: function () { return currentUser; },
     getFirebaseApp: function () { return fireApp; },
     refreshDrawer: function () { renderDrawerItems(); updateBadge(); },
-    hasWholesaleItems: hasWholesaleItems
+    hasWholesaleItems: hasWholesaleItems,
+    hasClassItems: function() { return cart.some(function(i) { return i.bookingType === 'class'; }); },
+    isClassOnlyCart: function() { return cart.length > 0 && cart.every(function(i) { return i.bookingType === 'class'; }); },
+    hasProductItems: function() { return cart.some(function(i) { return !i.bookingType; }); }
   };
 
   // Backward-compat alias

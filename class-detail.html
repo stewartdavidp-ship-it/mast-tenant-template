@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdn.jsdelivr.net https://*.firebaseio.com https://apis.google.com https://maps.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://us-central1-mast-platform-prod.cloudfunctions.net https://*.firebaseio.com wss://*.firebaseio.com https://*.firebasestorage.app https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://maps.googleapis.com https://places.googleapis.com https://api.ipify.org; img-src 'self' data: blob: https:; frame-src 'self' https://*.firebaseapp.com https://*.firebaseio.com; frame-ancestors 'none';">
+<title>Class Details &mdash; My Shop</title>
+<link rel="preconnect" href="https://mast-platform-prod-default-rtdb.firebaseio.com" crossorigin>
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<script>
+(function(){
+  var P='https://mast-platform-prod-default-rtdb.firebaseio.com/mast-platform';
+  var h=location.hostname,C=5*60*1000;
+  if(h==='localhost'||h==='127.0.0.1')return;
+  try{var r=localStorage.getItem('mast_tenant_'+h);if(r){var c=JSON.parse(r);if(Date.now()-c.timestamp<C){window.__earlyTenant=Promise.resolve(c.data);return;}}}catch(e){}
+  var ek=h.replace(/\./g,'_');
+  window.__earlyTenant=fetch(P+'/tenantsByDomain/'+ek+'.json').then(function(r){return r.ok?r.json():null}).then(function(tid){
+    if(!tid)return null;
+    return fetch(P+'/tenants/'+tid+'/publicConfig.json').then(function(r){return r.ok?r.json():null}).then(function(pc){
+      return pc?{tenantId:tid,publicConfig:pc}:null;
+    });
+  }).catch(function(){return null;});
+})();
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="storefront.css">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<style>
+.cd-container {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 7rem 2rem 4rem;
+}
+.cd-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--primary);
+  text-decoration: none;
+  font-size: 0.9rem;
+  margin-bottom: 1.5rem;
+}
+.cd-back:hover { text-decoration: underline; }
+
+.cd-header {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3rem;
+  margin-bottom: 3rem;
+}
+.cd-image {
+  aspect-ratio: 4/3;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg);
+}
+.cd-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.cd-image-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 4rem;
+  color: var(--warm-gray, #888);
+}
+
+.cd-info h1 {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 2.2rem;
+  font-weight: 400;
+  margin: 0 0 0.5rem;
+  color: var(--text);
+}
+.cd-type-badge {
+  display: inline-block;
+  padding: 3px 12px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: var(--primary);
+  color: #fff;
+  margin-bottom: 1rem;
+}
+.cd-meta-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 1.5rem;
+}
+.cd-meta-item {
+  background: var(--surface-card);
+  border: 1px solid var(--surface-card-border);
+  border-radius: 6px;
+  padding: 10px 14px;
+}
+.cd-meta-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--warm-gray, #888);
+  margin-bottom: 2px;
+}
+.cd-meta-value {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--text);
+}
+.cd-price-main {
+  font-size: 1.8rem;
+  font-weight: 600;
+  color: var(--primary);
+  margin-bottom: 0.5rem;
+}
+.cd-price-note {
+  font-size: 0.85rem;
+  color: var(--warm-gray, #888);
+}
+
+.cd-description {
+  margin-bottom: 3rem;
+  line-height: 1.7;
+  color: var(--text);
+}
+.cd-description h2 {
+  font-size: 1.3rem;
+  font-weight: 500;
+  margin: 0 0 0.75rem;
+}
+
+/* Sessions */
+.cd-sessions h2 {
+  font-size: 1.3rem;
+  font-weight: 500;
+  margin: 0 0 1rem;
+}
+.cd-session-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cd-session-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  background: var(--surface-card);
+  border: 1px solid var(--surface-card-border);
+  border-radius: 8px;
+  transition: border-color 0.2s;
+}
+.cd-session-row:hover { border-color: var(--primary); }
+.cd-session-date {
+  font-weight: 500;
+  color: var(--text);
+  min-width: 140px;
+}
+.cd-session-time {
+  color: var(--warm-gray, #888);
+  font-size: 0.9rem;
+  min-width: 120px;
+}
+.cd-session-spots {
+  font-size: 0.85rem;
+  color: var(--warm-gray, #888);
+  min-width: 80px;
+  text-align: center;
+}
+.cd-session-spots.full { color: #EF9A9A; font-weight: 600; }
+
+.cd-book-btn {
+  padding: 8px 24px;
+  border-radius: 6px;
+  border: none;
+  background: var(--primary);
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.cd-book-btn:hover { opacity: 0.85; }
+.cd-book-btn:disabled {
+  background: var(--border);
+  color: var(--warm-gray, #888);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.cd-no-sessions {
+  padding: 2rem;
+  text-align: center;
+  color: var(--warm-gray, #888);
+  background: var(--surface-card);
+  border-radius: 8px;
+}
+
+.cd-loading {
+  text-align: center;
+  padding: 8rem 2rem;
+  color: var(--warm-gray, #888);
+}
+
+@media (max-width: 768px) {
+  .cd-container { padding: 6rem 1.5rem 3rem; }
+  .cd-header { grid-template-columns: 1fr; gap: 1.5rem; }
+  .cd-info h1 { font-size: 1.6rem; }
+  .cd-session-row { flex-wrap: wrap; gap: 8px; }
+  .cd-session-date, .cd-session-time, .cd-session-spots { min-width: auto; }
+}
+</style>
+</head>
+<body>
+<nav id="mainNav"></nav>
+<div class="nav-mobile-menu" id="mobileMenu"></div>
+
+<div class="cd-container" id="classDetailContainer">
+  <div class="cd-loading">Loading class details...</div>
+</div>
+
+<footer id="siteFooter"></footer>
+
+<script src="storefront-tenant.js"></script>
+<script src="storefront-theme.js"></script>
+<script src="storefront-nav.js"></script>
+<script src="tenant-brand.js?v=2"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+
+<script>
+(function() {
+  'use strict';
+
+  var DAY_LABELS = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
+  var MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  function formatPrice(cents) {
+    if (typeof cents !== 'number') return '';
+    return '$' + (cents / 100).toFixed(2);
+  }
+
+  function formatTime(t) {
+    if (!t) return '';
+    var parts = t.split(':');
+    var h = parseInt(parts[0], 10);
+    var m = parts[1];
+    var ampm = h >= 12 ? 'PM' : 'AM';
+    if (h > 12) h -= 12;
+    if (h === 0) h = 12;
+    return h + ':' + m + ' ' + ampm;
+  }
+
+  function formatSessionDate(dateStr) {
+    if (!dateStr) return '';
+    var parts = dateStr.split('-');
+    var d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    var dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    return dayNames[d.getDay()] + ', ' + MONTH_NAMES[d.getMonth()] + ' ' + d.getDate();
+  }
+
+  function todayStr() {
+    var d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+
+  // Get class ID from URL
+  var params = new URLSearchParams(window.location.search);
+  var classId = params.get('id');
+  if (!classId) {
+    document.getElementById('classDetailContainer').innerHTML = '<div class="cd-loading">Class not found. <a href="classes.html">Browse all classes</a></div>';
+    // still run scripts below so nav builds
+  }
+
+  window.TENANT_READY.then(function() {
+    if (!classId) return;
+
+    var app = firebase.initializeApp(TENANT_FIREBASE_CONFIG, 'public-class-detail');
+    var db = app.database();
+
+    Promise.all([
+      db.ref(TENANT_ID + '/public/classes/' + classId).once('value'),
+      db.ref(TENANT_ID + '/admin/classSessions').orderByChild('classId').equalTo(classId).once('value')
+    ]).then(function(results) {
+      var cls = results[0].val();
+      if (!cls) {
+        document.getElementById('classDetailContainer').innerHTML =
+          '<div class="cd-loading">Class not found. <a href="classes.html">Browse all classes</a></div>';
+        return;
+      }
+      cls.id = classId;
+
+      var sessData = results[1].val() || {};
+      var today = todayStr();
+      var sessions = Object.keys(sessData).map(function(id) {
+        var s = sessData[id];
+        s.id = id;
+        return s;
+      }).filter(function(s) {
+        return s.status === 'scheduled' && s.date >= today;
+      }).sort(function(a, b) {
+        return (a.date + a.startTime).localeCompare(b.date + b.startTime);
+      });
+
+      document.title = cls.name + ' \u2014 ' + (window.TENANT_TITLE_SUFFIX ? TENANT_TITLE_SUFFIX() : 'Studio');
+      renderDetail(cls, sessions);
+    }).catch(function(err) {
+      console.error('[class-detail] Load failed:', err);
+      document.getElementById('classDetailContainer').innerHTML =
+        '<div class="cd-loading">Unable to load class details. <a href="classes.html">Browse all classes</a></div>';
+    });
+  }).catch(function(err) {
+    console.error('[class-detail] Tenant failed:', err);
+  });
+
+  function renderDetail(cls, sessions) {
+    var container = document.getElementById('classDetailContainer');
+
+    var image = '';
+    if (cls.imageIds && cls.imageIds.length > 0) image = cls.imageIds[0];
+
+    var typeLabel = cls.type === 'dropin' ? 'Open Studio' : cls.type.charAt(0).toUpperCase() + cls.type.slice(1);
+
+    var price = formatPrice(cls.priceCents);
+    var priceNote = 'per session';
+    if (cls.type === 'series' && cls.seriesInfo && cls.seriesInfo.seriesPriceCents) {
+      price = formatPrice(cls.seriesInfo.seriesPriceCents);
+      priceNote = cls.seriesInfo.totalSessions ? cls.seriesInfo.totalSessions + '-session series' : 'full series';
+      if (cls.seriesInfo.allowDropIn && cls.priceCents) {
+        priceNote += ' &middot; Drop-in: ' + formatPrice(cls.priceCents);
+      }
+    }
+
+    var schedDesc = '';
+    if (cls.schedule) {
+      if (cls.schedule.type === 'recurring' && cls.schedule.days) {
+        schedDesc = cls.schedule.days.map(function(d) { return DAY_LABELS[d] || d; }).join(', ');
+        if (cls.schedule.startTime) schedDesc += ' at ' + formatTime(cls.schedule.startTime);
+      } else if (cls.schedule.type === 'once') {
+        schedDesc = formatSessionDate(cls.schedule.date || cls.schedule.startDate);
+        if (cls.schedule.startTime) schedDesc += ' at ' + formatTime(cls.schedule.startTime);
+      }
+    }
+
+    var html = '<a href="classes.html" class="cd-back">&#8592; All Classes</a>';
+
+    // Header: image + info
+    html += '<div class="cd-header">' +
+      '<div class="cd-image">' +
+      (image ? '<img src="' + esc(image) + '" alt="' + esc(cls.name) + '">' : '<div class="cd-image-placeholder">&#128197;</div>') +
+      '</div>' +
+      '<div class="cd-info">' +
+      '<span class="cd-type-badge">' + esc(typeLabel) + '</span>' +
+      '<h1>' + esc(cls.name) + '</h1>' +
+      '<div class="cd-price-main">' + price + '</div>' +
+      '<div class="cd-price-note">' + priceNote + '</div>' +
+      '<div class="cd-meta-grid">' +
+      '<div class="cd-meta-item"><div class="cd-meta-label">Schedule</div><div class="cd-meta-value">' + esc(schedDesc || 'See dates below') + '</div></div>' +
+      '<div class="cd-meta-item"><div class="cd-meta-label">Duration</div><div class="cd-meta-value">' + (cls.duration || '—') + ' min</div></div>' +
+      '<div class="cd-meta-item"><div class="cd-meta-label">Capacity</div><div class="cd-meta-value">' + (cls.capacity || '—') + ' students</div></div>' +
+      '<div class="cd-meta-item"><div class="cd-meta-label">Materials</div><div class="cd-meta-value">' + (cls.materialsIncluded ? (cls.materialsNote || 'Included') : 'Not included') + '</div></div>' +
+      '</div>' +
+      '</div></div>';
+
+    // Description
+    if (cls.description) {
+      html += '<div class="cd-description"><h2>About This Class</h2><p>' + esc(cls.description) + '</p></div>';
+    }
+
+    // Sessions
+    html += '<div class="cd-sessions"><h2>Upcoming Sessions (' + sessions.length + ')</h2>';
+    if (sessions.length === 0) {
+      html += '<div class="cd-no-sessions">No upcoming sessions scheduled. Check back soon!</div>';
+    } else {
+      html += '<div class="cd-session-list">';
+      sessions.forEach(function(s) {
+        var spotsLeft = Math.max(0, (s.capacity || cls.capacity || 0) - (s.enrolled || 0));
+        var isFull = spotsLeft <= 0;
+
+        html += '<div class="cd-session-row">' +
+          '<span class="cd-session-date">' + formatSessionDate(s.date) + '</span>' +
+          '<span class="cd-session-time">' + formatTime(s.startTime) + ' - ' + formatTime(s.endTime) + '</span>' +
+          '<span class="cd-session-spots' + (isFull ? ' full' : '') + '">' + (isFull ? 'Full' : spotsLeft + ' spot' + (spotsLeft !== 1 ? 's' : '') + ' left') + '</span>' +
+          '<button class="cd-book-btn" ' + (isFull ? 'disabled' : '') +
+          ' onclick="window._bookSession(\'' + esc(s.id) + '\', \'' + esc(cls.id) + '\', \'' + esc(cls.name) + '\', ' + (cls.priceCents || 0) + ', ' + spotsLeft + ', \'' + esc(s.date) + '\', \'' + esc(s.startTime) + '\')">' +
+          (isFull ? 'Full' : 'Book') +
+          '</button></div>';
+      });
+      html += '</div>';
+    }
+    html += '</div>';
+
+    container.innerHTML = html;
+  }
+
+  window._bookSession = function(sessionId, classId, className, priceCents, spotsLeft, date, time) {
+    if (!window.MastCart) { alert('Cart not loaded yet. Please wait.'); return; }
+
+    var dateParts = date.split('-');
+    var dateLabel = dateParts[1] + '/' + dateParts[2] + '/' + dateParts[0];
+
+    window.MastCart.addItem({
+      pid: classId,
+      name: className + ' - ' + dateLabel,
+      priceCents: priceCents,
+      options: { date: date, time: time },
+      qty: 1,
+      bookingType: 'class',
+      sessionId: sessionId,
+      classId: classId,
+      availableStock: spotsLeft,
+      image: ''
+    });
+
+    window.MastCart.openDrawer();
+    window.MastCart.showToast('Class added to cart!');
+  };
+})();
+</script>
+<script src="cart.js"></script>
+<script defer src="checkout.js?v=2"></script>
+<script defer src="feedback-widget.js"></script>
+<script defer src="share-widget.js"></script>
+
+</body>
+</html>

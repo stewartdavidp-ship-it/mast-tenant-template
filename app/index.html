@@ -4918,11 +4918,15 @@
       </div>
     </div>
     <!-- Book -->
-    <div class="sidebar-section sidebar-future-section">
-      <div class="sidebar-section-header dashboard-link muted" onclick="navigateTo('book')" style="opacity:0.55;">
+    <div class="sidebar-section" data-section="book">
+      <div class="sidebar-section-header" onclick="toggleSection('book')">
         <span class="sidebar-section-icon">&#128197;</span>
         <span class="sidebar-section-label">Book</span>
-        <span class="sidebar-badge future" style="margin-left:auto;">Future</span>
+        <span class="sidebar-section-arrow">&#9654;</span>
+      </div>
+      <div class="sidebar-items">
+        <div class="sidebar-item" data-route="book" onclick="navigateTo('book')">Classes</div>
+        <div class="sidebar-item" data-route="enrollments" onclick="navigateTo('enrollments')">Enrollments</div>
       </div>
     </div>
     <!-- Web -->
@@ -7450,6 +7454,60 @@
       </div>
     </div>
 
+    <!-- Admin: Book Tab -->
+    <div id="bookTab" style="display:none;">
+      <!-- Classes List View -->
+      <div id="bookListView">
+        <div class="section-header">
+          <h2>Classes</h2>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <select id="bookFilterType" onchange="window._bookFilterType()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;">
+              <option value="all">All Types</option>
+              <option value="series">Series</option>
+              <option value="single">Single</option>
+              <option value="dropin">Drop-in</option>
+              <option value="private">Private</option>
+            </select>
+            <select id="bookFilterStatus" onchange="window._bookFilterStatus()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;">
+              <option value="active">Active</option>
+              <option value="draft">Draft</option>
+              <option value="archived">Archived</option>
+              <option value="all">All</option>
+            </select>
+            <button class="btn btn-primary" onclick="window._bookCreateClass()">+ New Class</button>
+          </div>
+        </div>
+        <div id="bookClassesTable"></div>
+      </div>
+
+      <!-- Class Detail/Edit View -->
+      <div id="bookDetailView" style="display:none;">
+        <button class="detail-back" onclick="window._bookBackToList()">&#8592; Back to Classes</button>
+        <div id="bookDetailContent"></div>
+      </div>
+
+      <!-- Enrollments View -->
+      <div id="bookEnrollmentsView" style="display:none;">
+        <div class="section-header">
+          <h2>Enrollments</h2>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <select id="enrollFilterStatus" onchange="window._enrollFilterStatus()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;">
+              <option value="all">All Status</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="waitlisted">Waitlisted</option>
+              <option value="cancelled">Cancelled</option>
+              <option value="completed">Completed</option>
+              <option value="no-show">No-Show</option>
+            </select>
+            <select id="enrollFilterClass" onchange="window._enrollFilterClass()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;">
+              <option value="all">All Classes</option>
+            </select>
+          </div>
+        </div>
+        <div id="bookEnrollmentsTable"></div>
+      </div>
+    </div>
+
   </div>
 
   <!-- ===== MODAL ===== -->
@@ -8467,6 +8525,55 @@ MastDB.showLight = {
     set: function(data) { return this.ref().set(data); },
     update: function(data) { return this.ref().update(data); },
     newKey: function() { return MastDB._ref(this.PATH).push().key; }
+  },
+  // ── Book Module Entities ──
+  classes: {
+    PATH: 'public/classes',
+    ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+    list: function(limit) { return this.ref().limitToLast(limit || 200).once('value'); },
+    get: function(id) { return this.ref(id).once('value'); },
+    set: function(id, data) { return this.ref(id).set(data); },
+    update: function(id, data) { return this.ref(id).update(data); },
+    remove: function(id) { return this.ref(id).remove(); },
+    listen: function(limit, cb, errCb) { return this.ref().limitToLast(limit || 200).on('value', cb, errCb); },
+    unlisten: function(handle) { this.ref().off('value', handle); },
+    newKey: function() { return MastDB._ref(this.PATH).push().key; }
+  },
+  classSessions: {
+    PATH: 'admin/classSessions',
+    ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+    list: function(limit) { return this.ref().limitToLast(limit || 500).once('value'); },
+    get: function(id) { return this.ref(id).once('value'); },
+    set: function(id, data) { return this.ref(id).set(data); },
+    update: function(id, data) { return this.ref(id).update(data); },
+    remove: function(id) { return this.ref(id).remove(); },
+    listen: function(limit, cb, errCb) { return this.ref().limitToLast(limit || 500).on('value', cb, errCb); },
+    unlisten: function(handle) { this.ref().off('value', handle); },
+    newKey: function() { return MastDB._ref(this.PATH).push().key; },
+    byClass: function(classId) {
+      return this.ref().orderByChild('classId').equalTo(classId).once('value');
+    }
+  },
+  enrollments: {
+    PATH: 'admin/enrollments',
+    ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+    list: function(limit) { return this.ref().limitToLast(limit || 500).once('value'); },
+    get: function(id) { return this.ref(id).once('value'); },
+    set: function(id, data) { return this.ref(id).set(data); },
+    update: function(id, data) { return this.ref(id).update(data); },
+    remove: function(id) { return this.ref(id).remove(); },
+    listen: function(limit, cb, errCb) { return this.ref().limitToLast(limit || 500).on('value', cb, errCb); },
+    unlisten: function(handle) { this.ref().off('value', handle); },
+    newKey: function() { return MastDB._ref(this.PATH).push().key; },
+    bySession: function(sessionId) {
+      return this.ref().orderByChild('sessionId').equalTo(sessionId).once('value');
+    },
+    byClass: function(classId) {
+      return this.ref().orderByChild('classId').equalTo(classId).once('value');
+    },
+    byContact: function(contactId) {
+      return this.ref().orderByChild('contactId').equalTo(contactId).once('value');
+    }
   }
 };
 
@@ -8495,7 +8602,7 @@ var MODULE_REGISTRY = {
   show:   { id: 'show',   name: 'Show',   icon: '\uD83C\uDFAA', description: 'Find, apply, prep, and execute craft fairs and events.', section: 'show', navPosition: 7, purchasable: true, routes: ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'], manageSettings: [], synergies: ['sell', 'ship', 'make'], status: 'active' },
   'show-light': { id: 'show-light', name: 'Show Light', icon: '\u2728', description: 'Vendor profile, image gallery, and AI-powered show application builder.', section: 'show-light', navPosition: 8, purchasable: false, showInGrid: true, routes: ['show-light-profile', 'show-light-gallery', 'show-light-shows', 'show-light-apply'], manageSettings: [], synergies: ['show', 'sell', 'market'], status: 'active' },
   events: { id: 'events', name: 'Events', icon: '\uD83C\uDFAB', description: 'Organize shows, manage booths, vendors, and floor plans.', section: 'events', navPosition: 9, purchasable: true, routes: ['events-shows', 'events-settings'], manageSettings: [], synergies: ['show', 'sell', 'market'], status: 'active' },
-  book:   { id: 'book',   name: 'Book',   icon: '\uD83D\uDCC5', description: 'Appointments, classes, studio time.', section: 'book', navPosition: 10, purchasable: true, routes: [], manageSettings: [], synergies: ['sell', 'market'], status: 'coming-soon' }
+  book:   { id: 'book',   name: 'Book',   icon: '\uD83D\uDCC5', description: 'Classes, workshops, studio time, and student enrollment.', section: 'book', navPosition: 10, purchasable: true, routes: ['book', 'book-detail', 'enrollments'], manageSettings: [], synergies: ['sell', 'market'], status: 'active' }
 };
 
 // Synergy messaging for locked module previews.
@@ -11193,7 +11300,8 @@ homepage: { src: 'modules/homepage.js', routes: ['homepage'] },
   consignment: { src: 'modules/consignment.js', routes: ['galleries'] },
   lookbooks: { src: 'modules/lookbooks.js', routes: ['lookbooks'] },
   brand: { src: 'modules/brand.js', routes: ['brand'] },
-  promotions: { src: 'modules/promotions.js', routes: ['promotions'] }
+  promotions: { src: 'modules/promotions.js', routes: ['promotions'] },
+  book: { src: 'modules/book.js', routes: ['book', 'book-detail', 'enrollments'] }
 };
 
 // Reverse lookup: route → moduleId (built from MODULE_MANIFEST)

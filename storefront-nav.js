@@ -26,6 +26,7 @@
     about:      { label: 'About',       href: 'about.html',      enabled: true,  order: 3 },
     commission: { label: 'Commissions', href: 'commission.html',  enabled: false, order: 4 },
     wholesale:  { label: 'Wholesale',   href: 'wholesale.html',   enabled: false, order: 5 },
+    classes:    { label: 'Classes',     href: 'classes.html',     enabled: false, order: 2.5 },
     schedule:   { label: 'Schedule',    href: 'schedule.html',    enabled: false, order: 6 },
     blog:       { label: 'From the Studio', href: 'blog/',        enabled: true,  order: 7 }
   };
@@ -107,7 +108,7 @@
   // Sections that belong under Shop context (shown only on shop pages)
   var SHOP_CONTEXT_SECTIONS = ['commission', 'orders', 'wholesale'];
   // Sections that belong to content context (hidden on shop pages)
-  var CONTENT_CONTEXT_SECTIONS = ['about', 'blog', 'schedule'];
+  var CONTENT_CONTEXT_SECTIONS = ['about', 'blog', 'schedule', 'classes'];
   // Shop is always shown in both contexts
   // Shop context page basenames (without .html — Firebase Hosting uses clean URLs)
   var SHOP_CONTEXT_PAGES = ['shop', 'product', 'orders', 'wholesale', 'commission'];

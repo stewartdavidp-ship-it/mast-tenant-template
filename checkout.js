@@ -418,7 +418,7 @@
     // Footer
     footer.style.display = '';
     footer.innerHTML =
-      '<button class="checkout-btn-primary" data-co="addr-next">Continue to Shipping</button>' +
+      '<button class="checkout-btn-primary" data-co="addr-next">' + (window.MastCart && window.MastCart.isClassOnlyCart() ? 'Continue to Review' : 'Continue to Shipping') + '</button>' +
       '<button class="checkout-back-link" data-co="addr-back">Back to Cart</button>';
 
     // Billing same checkbox (only element needing change listener)
@@ -1277,7 +1277,16 @@
     if (action === 'apply-coupon') {
       applyCoupon();
     } else if (action === 'addr-next') {
-      if (validateAddress()) { saveAddressData(); renderShipping(); }
+      if (validateAddress()) {
+        saveAddressData();
+        // Skip shipping for class-only carts
+        if (window.MastCart && window.MastCart.isClassOnlyCart()) {
+          checkoutData.shippingMethod = { key: 'none', label: 'No shipping required', price: 0 };
+          renderReview();
+        } else {
+          renderShipping();
+        }
+      }
     } else if (action === 'addr-back') {
       saveAddressData(); cancelCheckout();
     } else if (action === 'ship-next') {
@@ -1288,7 +1297,12 @@
     } else if (action === 'place-order') {
       placeOrder();
     } else if (action === 'review-back') {
-      renderShipping();
+      // If class-only cart, go back to address (skipping shipping)
+      if (window.MastCart && window.MastCart.isClassOnlyCart()) {
+        renderAddress();
+      } else {
+        renderShipping();
+      }
     } else if (action === 'conf-done') {
       resetCheckout(); window.MastCart.closeDrawer();
     } else if (action === 'edit-address') {
