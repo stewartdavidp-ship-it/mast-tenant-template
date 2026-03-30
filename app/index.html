@@ -8617,9 +8617,11 @@ MastDB.showLight = {
     set: function(data) { return this.ref().set(data); },
     update: function(data) { return this.ref().update(data); },
     newKey: function() { return MastDB._ref(this.PATH).push().key; }
-  },
-  // ── Book Module Entities ──
-  classes: {
+  }
+};
+
+// ── Book Module Entities ──
+MastDB.classes = {
     PATH: 'public/classes',
     ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
     list: function(limit) { return this.ref().limitToLast(limit || 200).once('value'); },
@@ -8630,8 +8632,8 @@ MastDB.showLight = {
     listen: function(limit, cb, errCb) { return this.ref().limitToLast(limit || 200).on('value', cb, errCb); },
     unlisten: function(handle) { this.ref().off('value', handle); },
     newKey: function() { return MastDB._ref(this.PATH).push().key; }
-  },
-  classSessions: {
+};
+MastDB.classSessions = {
     PATH: 'public/classSessions',
     ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
     list: function(limit) { return this.ref().limitToLast(limit || 500).once('value'); },
@@ -8645,8 +8647,8 @@ MastDB.showLight = {
     byClass: function(classId) {
       return this.ref().orderByChild('classId').equalTo(classId).once('value');
     }
-  },
-  enrollments: {
+};
+MastDB.enrollments = {
     PATH: 'admin/enrollments',
     ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
     list: function(limit) { return this.ref().limitToLast(limit || 500).once('value'); },
@@ -8666,8 +8668,8 @@ MastDB.showLight = {
     byContact: function(contactId) {
       return this.ref().orderByChild('contactId').equalTo(contactId).once('value');
     }
-  },
-  instructors: {
+};
+MastDB.instructors = {
     PATH: 'public/instructors',
     ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
     list: function(limit) { return this.ref().limitToLast(limit || 100).once('value'); },
@@ -8681,8 +8683,8 @@ MastDB.showLight = {
     byStatus: function(status) {
       return this.ref().orderByChild('status').equalTo(status).once('value');
     }
-  },
-  resources: {
+};
+MastDB.resources = {
     PATH: 'admin/resources',
     ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
     list: function(limit) { return this.ref().limitToLast(limit || 100).once('value'); },
@@ -8696,8 +8698,8 @@ MastDB.showLight = {
     byType: function(type) {
       return this.ref().orderByChild('type').equalTo(type).once('value');
     }
-  },
-  accounts: {
+};
+MastDB.accounts = {
     PATH: 'public/accounts',
     ref: function(uid) { return MastDB._ref(this.PATH + (uid ? '/' + uid : '')); },
     get: function(uid) { return this.ref(uid).once('value'); },
@@ -8712,8 +8714,8 @@ MastDB.showLight = {
       return this.passes(uid).limitToLast(limit || 50).once('value');
     },
     newPassKey: function(uid) { return this.passes(uid).push().key; }
-  },
-  passDefinitions: {
+};
+MastDB.passDefinitions = {
     PATH: 'admin/passDefinitions',
     ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
     list: function(limit) { return this.ref().limitToLast(limit || 100).once('value'); },
@@ -8724,7 +8726,6 @@ MastDB.showLight = {
     listen: function(limit, cb, errCb) { return this.ref().limitToLast(limit || 100).on('value', cb, errCb); },
     unlisten: function(handle) { this.ref().off('value', handle); },
     newKey: function() { return MastDB._ref(this.PATH).push().key; }
-  }
 };
 
 // MastDB.init() is called dynamically in the auth flow after tenant resolution.
