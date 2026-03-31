@@ -3178,6 +3178,42 @@
         '<a href="#" onclick="backToRmaList();viewOrder(\'' + esc(r.orderId) + '\');return false;" style="color:var(--teal);font-size:0.88rem;">' +
         'View Order ' + esc(r.orderNumber || r.orderId) + ' &rarr;</a>' +
       '</div>';
+
+      // Load original order payment details into a placeholder
+      orderLinkHtml += '<div id="rmaOrderPaymentSummary"></div>';
+      MastDB.orders.child(r.orderId).once('value').then(function(snap) {
+        var order = snap.val();
+        if (!order) return;
+        var el = document.getElementById('rmaOrderPaymentSummary');
+        if (!el) return;
+        var fp = function(v) { return '$' + (v || 0).toFixed(2); };
+        var html = '<div class="order-detail-section" style="background:rgba(0,0,0,0.15);border-radius:8px;padding:1rem;">' +
+          '<div class="order-detail-section-title">Original Order Payment</div>' +
+          '<div style="display:flex;flex-direction:column;gap:4px;font-size:0.85rem;">';
+        html += '<div style="display:flex;justify-content:space-between;"><span>Subtotal</span><span>' + fp(order.subtotal) + '</span></div>';
+        if (order.coupon && order.coupon.discount) {
+          html += '<div style="display:flex;justify-content:space-between;color:var(--teal);"><span>Coupon (' + esc(order.coupon.code) + ')</span><span>-' + fp(order.coupon.discount) + '</span></div>';
+        }
+        html += '<div style="display:flex;justify-content:space-between;"><span>Tax</span><span>' + fp(order.tax) + '</span></div>';
+        html += '<div style="display:flex;justify-content:space-between;"><span>Shipping</span><span>' + fp(order.shippingCost) + '</span></div>';
+        var wd = order.walletDeductions || {};
+        if (wd.totalDeductionCents > 0) {
+          if (wd.loyalty && wd.loyalty.amountCents > 0) {
+            html += '<div style="display:flex;justify-content:space-between;color:var(--amber-light);"><span>Loyalty (' + (wd.loyalty.pointsUsed || 0) + ' ' + esc(wd.loyalty.pointName || 'pts') + ')</span><span>-' + fp(wd.loyalty.amountCents / 100) + '</span></div>';
+          }
+          if (wd.giftCards && wd.giftCards.length > 0) {
+            var gcAmt = wd.giftCards.reduce(function(s, g) { return s + (g.amountCents || 0); }, 0);
+            if (gcAmt > 0) html += '<div style="display:flex;justify-content:space-between;color:var(--amber-light);"><span>Gift Card</span><span>-' + fp(gcAmt / 100) + '</span></div>';
+          }
+          if (wd.credits && wd.credits.length > 0) {
+            var crAmt = wd.credits.reduce(function(s, c) { return s + (c.amountCents || 0); }, 0);
+            if (crAmt > 0) html += '<div style="display:flex;justify-content:space-between;color:var(--amber-light);"><span>Store Credit</span><span>-' + fp(crAmt / 100) + '</span></div>';
+          }
+        }
+        html += '<div style="display:flex;justify-content:space-between;font-weight:600;border-top:1px solid var(--cream-dark);padding-top:6px;margin-top:4px;"><span>Total Charged</span><span>' + fp(order.total) + '</span></div>';
+        html += '</div></div>';
+        el.innerHTML = html;
+      });
     }
 
     detailEl.innerHTML = '<button class="detail-back" onclick="backToRmaList()">&#8592; Back to Returns</button>' +
