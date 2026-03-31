@@ -532,8 +532,9 @@
       window.addEventListener('storefront-nav-ready', injectCartIcons);
     }
 
-    // Check walletConfig to show/hide gift card icon
-    if (TENANT_ID && FIREBASE_CONFIG.databaseURL) {
+    // Gift card icon visibility check — deferred until init() when TENANT_ID is available
+    function checkGiftCardEnabled() {
+      if (!TENANT_ID || !FIREBASE_CONFIG.databaseURL) return;
       fetch(FIREBASE_CONFIG.databaseURL + '/' + TENANT_ID + '/public/config/walletConfig/giftCardsEnabled.json')
         .then(function(r) { return r.ok ? r.json() : false; })
         .then(function(enabled) {
@@ -856,6 +857,7 @@
     loadLocal();
     initFirebase();
     loadFreeShippingThreshold();
+    checkGiftCardEnabled();
     injectDrawer();
     updateBadge();
     renderDrawerItems();
