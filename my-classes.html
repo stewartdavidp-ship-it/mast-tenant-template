@@ -881,7 +881,7 @@
     document.title = 'My Classes \u2014 ' + (window.TENANT_TITLE_SUFFIX ? TENANT_TITLE_SUFFIX() : 'Studio');
 
     var app;
-    try { app = firebase.app(); } catch (e) { app = firebase.initializeApp(TENANT_FIREBASE_CONFIG, 'public-my-classes'); }
+    try { app = firebase.app(); } catch (e) { app = firebase.initializeApp(TENANT_FIREBASE_CONFIG); }
     db = app.database();
     var auth = app.auth();
 

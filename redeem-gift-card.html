@@ -582,7 +582,7 @@
     document.title = 'Redeem Gift Card \u2014 ' + (window.TENANT_TITLE_SUFFIX ? TENANT_TITLE_SUFFIX() : 'Shop');
 
     var app;
-    try { app = firebase.app(); } catch (e) { app = firebase.initializeApp(TENANT_FIREBASE_CONFIG, 'public-redeem-gc'); }
+    try { app = firebase.app(); } catch (e) { app = firebase.initializeApp(TENANT_FIREBASE_CONFIG); }
     _db = app.database();
     var auth = app.auth();
 
