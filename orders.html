@@ -1222,7 +1222,23 @@ window.TENANT_READY.then(function() {
     if (order.shippingCost != null) html += '<div class="order-total-row"><span>Shipping</span><span>' + (order.shippingCost === 0 ? 'Free' : formatPrice(order.shippingCost)) + '</span></div>';
     if (order.tax != null && order.tax > 0) html += '<div class="order-total-row"><span>Tax</span><span>' + formatPrice(order.tax) + '</span></div>';
     if (order.couponDiscount != null && order.couponDiscount > 0) html += '<div class="order-total-row"><span>Coupon Discount</span><span>-' + formatPrice(order.couponDiscount) + '</span></div>';
-    if (order.total != null) html += '<div class="order-total-row grand-total"><span>Total</span><span>' + formatPrice(order.total) + '</span></div>';
+    // Wallet deductions
+    if (order.walletDeductions && order.walletDeductions.totalDeductionCents > 0) {
+      var wd = order.walletDeductions;
+      if (wd.loyalty && wd.loyalty.amountCents > 0) {
+        html += '<div class="order-total-row" style="color:var(--accent,#C6A96C)"><span>Loyalty Points</span><span>-' + formatPrice(wd.loyalty.amountCents / 100) + '</span></div>';
+      }
+      if (wd.giftCards && wd.giftCards.length > 0) {
+        var gcTotal = wd.giftCards.reduce(function(s, g) { return s + (g.amountCents || 0); }, 0);
+        html += '<div class="order-total-row" style="color:var(--accent,#C6A96C)"><span>Gift Card</span><span>-' + formatPrice(gcTotal / 100) + '</span></div>';
+      }
+      if (wd.credits && wd.credits.length > 0) {
+        var crTotal = wd.credits.reduce(function(s, c) { return s + (c.amountCents || 0); }, 0);
+        html += '<div class="order-total-row" style="color:var(--accent,#C6A96C)"><span>Store Credit</span><span>-' + formatPrice(crTotal / 100) + '</span></div>';
+      }
+    }
+    var displayTotal = (order.walletDeductions && order.walletDeductions.totalDeductionCents > 0 && order.chargeAmount != null) ? order.chargeAmount : order.total;
+    if (displayTotal != null) html += '<div class="order-total-row grand-total"><span>Total</span><span>' + formatPrice(displayTotal) + '</span></div>';
     html += '</div></div>';
 
     // Shipping address
@@ -1285,7 +1301,7 @@ window.TENANT_READY.then(function() {
     var orderNum = order.orderNumber || order.id || '—';
     var status = order.status || 'unknown';
     var date = formatDate(order.placedAt || order.pendingPaymentAt || order.createdAt);
-    var total = order.total != null ? formatPrice(order.total) : '';
+    var total = (order.walletDeductions && order.walletDeductions.totalDeductionCents > 0 && order.chargeAmount != null) ? formatPrice(order.chargeAmount) : (order.total != null ? formatPrice(order.total) : '');
     var wsBadge = order._isWholesale ? '<span style="display:inline-block;font-size:0.6rem;padding:2px 6px;background:color-mix(in srgb, var(--accent) 15%, transparent);color:var(--accent);border-radius:3px;margin-left:6px;vertical-align:middle;letter-spacing:0.06em;">WHOLESALE</span>' : '';
     var payBadge = order.paymentMethod === 'check' ? '<span style="display:inline-block;font-size:0.6rem;padding:2px 6px;background:color-mix(in srgb, var(--primary) 15%, transparent);color:var(--primary);border-radius:3px;margin-left:4px;vertical-align:middle;">CHECK</span>' : '';
 
