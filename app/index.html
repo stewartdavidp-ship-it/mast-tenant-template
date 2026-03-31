@@ -16479,7 +16479,10 @@ async function loadConfigChecklist() {
 
 function isFeatureConfigured(feature) {
   if (!tenantConfigChecklist) return true; // Default: assume configured (for existing tenants)
-  return !!tenantConfigChecklist[feature];
+  if (tenantConfigChecklist[feature]) return true;
+  // Fallback: check if the feature is actually configured in tenant config
+  if (feature === 'square' && TENANT_CONFIG && TENANT_CONFIG.square && (TENANT_CONFIG.square.locationId || (TENANT_CONFIG.square.sandbox && TENANT_CONFIG.square.sandbox.locationId))) return true;
+  return false;
 }
 
 function renderFeatureGate(containerId, feature, title, message, settingsRoute) {
