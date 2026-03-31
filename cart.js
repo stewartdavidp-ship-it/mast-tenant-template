@@ -436,18 +436,24 @@
   }
 
   // ── Gift Card Icon Visibility ──
+  var _giftCardsEnabled = false;
+
+  function showGiftCardIcons() {
+    if (!_giftCardsEnabled) return;
+    var li = document.getElementById('giftCardIconLi');
+    var mob = document.getElementById('giftCardIconMobile');
+    if (li) li.style.display = '';
+    if (mob) mob.style.display = '';
+  }
+
   // Called from init() after TENANT_READY so TENANT_ID and FIREBASE_CONFIG are set
   function checkGiftCardEnabled() {
     if (!TENANT_ID || !FIREBASE_CONFIG.databaseURL) return;
     fetch(FIREBASE_CONFIG.databaseURL + '/' + TENANT_ID + '/public/config/walletConfig/giftCardsEnabled.json')
       .then(function(r) { return r.ok ? r.json() : false; })
       .then(function(enabled) {
-        if (enabled) {
-          var li = document.getElementById('giftCardIconLi');
-          var mob = document.getElementById('giftCardIconMobile');
-          if (li) li.style.display = '';
-          if (mob) mob.style.display = '';
-        }
+        _giftCardsEnabled = !!enabled;
+        showGiftCardIcons();
       }).catch(function() {});
   }
 
@@ -540,6 +546,7 @@
         mobileIcon.addEventListener('click', openDrawer);
       }
       updateBadge();
+      showGiftCardIcons();
     }
 
     // Try immediately; if nav not built yet, wait for the event
