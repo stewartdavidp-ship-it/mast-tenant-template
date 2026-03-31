@@ -909,7 +909,7 @@
     hasWholesaleItems: hasWholesaleItems,
     hasClassItems: function() { return cart.some(function(i) { return i.bookingType === 'class'; }); },
     hasPassItems: function() { return cart.some(function(i) { return i.bookingType === 'pass'; }); },
-    isNonShippableCart: function() { return cart.length > 0 && cart.every(function(i) { return i.bookingType === 'class' || i.bookingType === 'pass' || i.bookingType === 'class-materials'; }); },
+    isNonShippableCart: function() { return cart.length > 0 && cart.every(function(i) { return i.bookingType === 'class' || i.bookingType === 'pass' || i.bookingType === 'class-materials' || i.bookingType === 'gift-card'; }); },
     isClassOnlyCart: function() { return cart.length > 0 && cart.every(function(i) { return i.bookingType === 'class'; }); },
     hasProductItems: function() { return cart.some(function(i) { return !i.bookingType; }); }
   };
