@@ -163,13 +163,13 @@
 <footer id="siteFooter"></footer>
 
 <script src="storefront-tenant.js"></script>
-<script src="storefront-theme.js"></script>
-<script src="storefront-nav.js"></script>
-<script src="tenant-brand.js?v=2"></script>
-
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="storefront-theme.js"></script>
+<script src="storefront-nav.js"></script>
+<script src="tenant-brand.js?v=2"></script>
+<script src="cart.js"></script>
 
 <script>
 (function() {
@@ -194,35 +194,29 @@
       return;
     }
 
-    // Wait for tenant resolution
-    var checkInterval = setInterval(function() {
-      if (window.TENANT_FIREBASE_CONFIG && window.TENANT_ID) {
-        clearInterval(checkInterval);
-        TENANT_ID = window.TENANT_ID;
-
-        var app = firebase.initializeApp(window.TENANT_FIREBASE_CONFIG, 'return-shipped');
-        db = firebase.database(app);
-        auth = firebase.auth(app);
-
-        auth.onAuthStateChanged(function(user) {
-          if (user) {
-            renderForm(rmaId, user);
-          } else {
-            renderSignIn(rmaId);
-          }
-        });
+    // Wait for tenant resolution and cart.js auth setup
+    window.TENANT_READY.then(function() {
+      TENANT_ID = window.TENANT_ID;
+      try { db = firebase.database(firebase.app()); } catch (e) {
+        db = firebase.database(firebase.initializeApp(window.TENANT_FIREBASE_CONFIG));
       }
-    }, 100);
+      auth = firebase.auth();
 
-    // Timeout after 10 seconds
-    setTimeout(function() { clearInterval(checkInterval); }, 10000);
+      auth.onAuthStateChanged(function(user) {
+        if (user) {
+          renderForm(rmaId, user);
+        } else {
+          renderSignIn(rmaId);
+        }
+      });
+    });
   }
 
   function renderSignIn(rmaId) {
     var el = document.getElementById('rsContent');
     el.innerHTML = '<div class="rs-signin">' +
       '<p>Please sign in to confirm your return shipment.</p>' +
-      '<a href="/orders.html" class="rs-signin-btn">Sign In &amp; View Orders</a>' +
+      '<button class="rs-signin-btn" onclick="if(window.siteSignIn)window.siteSignIn();else location.href=\'/orders.html\';">Sign In</button>' +
     '</div>';
   }
 

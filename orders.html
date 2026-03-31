@@ -1869,7 +1869,8 @@ window.TENANT_READY.then(function() {
     var estimateEl = document.getElementById('rmaEstimate');
     if (!estimateEl || !_returnModalOrder) return;
 
-    var items = _returnModalOrder.items || [];
+    var order = _returnModalOrder;
+    var items = order.items || [];
     var selectedTotal = 0;
     var selectedCount = 0;
 
@@ -1881,13 +1882,46 @@ window.TENANT_READY.then(function() {
       }
     }
 
-    // Apply tax to returned items (proportional to order tax rate)
-    var taxRate = _returnModalOrder.taxRate || 0;
-    var taxOnReturned = !_returnModalOrder.taxExempt ? Math.round(selectedTotal * taxRate * 100) / 100 : 0;
+    // Proportional coupon discount on returned items
+    var orderSubtotal = order.subtotal || 0;
+    var couponDiscount = 0;
+    if (order.coupon && order.coupon.discount && orderSubtotal > 0) {
+      couponDiscount = Math.round(order.coupon.discount * selectedTotal / orderSubtotal * 100) / 100;
+    }
+
+    // Proportional wallet deductions on returned items
+    var walletDeduction = 0;
+    var loyaltyReissue = 0;
+    var loyaltyPointName = 'Points';
+    var wd = order.walletDeductions || {};
+    if (wd.totalDeductionCents > 0 && orderSubtotal > 0) {
+      var proportion = selectedTotal / orderSubtotal;
+      if (wd.loyalty && wd.loyalty.amountCents > 0) {
+        walletDeduction += Math.round(wd.loyalty.amountCents * proportion) / 100;
+        loyaltyReissue = wd.loyalty.pointsUsed ? Math.round(wd.loyalty.pointsUsed * proportion) : 0;
+        loyaltyPointName = wd.loyalty.pointName || 'Points';
+      }
+      if (wd.giftCards) {
+        var gcTotal = 0;
+        for (var g = 0; g < wd.giftCards.length; g++) gcTotal += (wd.giftCards[g].amountCents || 0);
+        walletDeduction += Math.round(gcTotal * proportion) / 100;
+      }
+      if (wd.credits) {
+        var crTotal = 0;
+        for (var c = 0; c < wd.credits.length; c++) crTotal += (wd.credits[c].amountCents || 0);
+        walletDeduction += Math.round(crTotal * proportion) / 100;
+      }
+    }
+
+    var effectiveValue = selectedTotal - couponDiscount - walletDeduction;
+
+    // Apply tax to post-discount amount
+    var taxRate = order.taxRate || 0;
+    var taxOnReturned = !order.taxExempt ? Math.round(effectiveValue * taxRate * 100) / 100 : 0;
 
     var restockingFeePct = (_termsConfig && _termsConfig.restockingFeePercent) || 0;
-    var restockingFee = Math.round(selectedTotal * restockingFeePct / 100 * 100) / 100;
-    var refundAmount = selectedTotal + taxOnReturned - restockingFee;
+    var restockingFee = Math.round(effectiveValue * restockingFeePct / 100 * 100) / 100;
+    var refundAmount = effectiveValue + taxOnReturned - restockingFee;
 
     var refundMethod = 'Original payment method';
     if (_termsConfig && (_termsConfig.refundMethod === 'store_credit' || _termsConfig.refundMethod === 'store-credit')) {
@@ -1896,6 +1930,12 @@ window.TENANT_READY.then(function() {
 
     var html = '<div class="rma-estimate-row"><span>Items selected</span><span>' + selectedCount + '</span></div>';
     html += '<div class="rma-estimate-row"><span>Items subtotal</span><span>' + formatPrice(selectedTotal) + '</span></div>';
+    if (couponDiscount > 0) {
+      html += '<div class="rma-estimate-row" style="color:var(--accent-green);"><span>Coupon (' + esc(order.coupon.code) + ')</span><span>-' + formatPrice(couponDiscount) + '</span></div>';
+    }
+    if (walletDeduction > 0) {
+      html += '<div class="rma-estimate-row" style="color:var(--amber-light);"><span>Wallet applied</span><span>-' + formatPrice(walletDeduction) + '</span></div>';
+    }
     if (taxOnReturned > 0) {
       html += '<div class="rma-estimate-row"><span>Tax</span><span>' + formatPrice(taxOnReturned) + '</span></div>';
     }
@@ -1904,6 +1944,9 @@ window.TENANT_READY.then(function() {
     }
     html += '<div class="rma-estimate-row total"><span>Estimated refund</span><span>' + formatPrice(refundAmount) + '</span></div>';
     html += '<div style="margin-top:0.5rem;font-size:0.78rem;color:var(--warm-gray-light);">Refund via: ' + esc(refundMethod) + '</div>';
+    if (loyaltyReissue > 0) {
+      html += '<div style="margin-top:0.25rem;font-size:0.78rem;color:var(--amber-light);">+' + loyaltyReissue + ' ' + esc(loyaltyPointName) + ' returned to wallet</div>';
+    }
 
     estimateEl.innerHTML = html;
 
