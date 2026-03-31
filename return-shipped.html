@@ -220,26 +220,69 @@
     '</div>';
   }
 
+  function formatPrice(v) { return '$' + (v || 0).toFixed(2); }
+
   function renderForm(rmaId, user) {
     var el = document.getElementById('rsContent');
-    el.innerHTML = '<div class="rs-card">' +
-      '<p style="font-size:0.88rem;color:var(--warm-gray);margin:0 0 1.5rem;">Enter your tracking number so we can watch for your return package.</p>' +
-      '<div class="rs-field">' +
-        '<label>Tracking Number</label>' +
-        '<input type="text" id="rsTracking" placeholder="e.g., 9400111899223100012345">' +
-      '</div>' +
-      '<div class="rs-field">' +
-        '<label>Carrier (optional)</label>' +
-        '<select id="rsCarrier" style="width:100%;padding:10px 14px;border:1px solid var(--border-subtle,#E8E0D4);border-radius:6px;font-size:0.95rem;background:var(--bg,#fff);color:var(--text,#1A1A1A);">' +
-          '<option value="">Select carrier</option>' +
-          '<option value="USPS">USPS</option>' +
-          '<option value="UPS">UPS</option>' +
-          '<option value="FedEx">FedEx</option>' +
-          '<option value="Other">Other</option>' +
-        '</select>' +
-      '</div>' +
-      '<button class="rs-btn" id="rsSubmitBtn" onclick="submitShipped()">Confirm Return Shipped</button>' +
-    '</div>';
+
+    // Load RMA record to show refund details
+    db.ref(TENANT_ID + '/admin/rma/' + rmaId).once('value').then(function(snap) {
+      var rma = snap.val();
+      var refundInfo = '';
+      if (rma) {
+        var items = (rma.items || []).map(function(i) { return esc(i.name); }).join(', ');
+        var refundAmt = rma.refundAmountCents ? formatPrice(rma.refundAmountCents / 100) : '';
+        var method = rma.refundMethod === 'store_credit' ? 'store credit' : 'original payment method';
+
+        refundInfo = '<div style="margin:0 0 1.5rem;padding:16px;background:var(--surface-card,#1e1e1e);border-radius:6px;font-size:0.88rem;">' +
+          '<p style="margin:0 0 8px;font-size:0.78rem;color:var(--warm-gray-light,#999);text-transform:uppercase;letter-spacing:1px;">Return Summary</p>' +
+          '<p style="margin:0 0 4px;color:var(--text);">' + esc(items) + '</p>' +
+          (refundAmt ? '<p style="margin:0 0 4px;color:var(--text);"><strong>Estimated refund:</strong> ' + refundAmt + ' via ' + method + '</p>' : '') +
+          (rma.couponDiscountCents ? '<p style="margin:0;font-size:0.82rem;color:var(--warm-gray-light,#999);">Coupon discount of ' + formatPrice(rma.couponDiscountCents / 100) + ' applied to original order</p>' : '') +
+          (rma.loyaltyPointsReissued ? '<p style="margin:4px 0 0;font-size:0.82rem;color:var(--amber-light,#C4853C);">+' + rma.loyaltyPointsReissued + ' ' + esc(rma.loyaltyPointName || 'Points') + ' will be returned to your wallet</p>' : '') +
+        '</div>';
+      }
+
+      el.innerHTML = '<div class="rs-card">' +
+        refundInfo +
+        '<p style="font-size:0.88rem;color:var(--warm-gray);margin:0 0 1.5rem;">Enter your tracking number so we can watch for your return package.</p>' +
+        '<div class="rs-field">' +
+          '<label>Tracking Number</label>' +
+          '<input type="text" id="rsTracking" placeholder="e.g., 9400111899223100012345">' +
+        '</div>' +
+        '<div class="rs-field">' +
+          '<label>Carrier (optional)</label>' +
+          '<select id="rsCarrier" style="width:100%;padding:10px 14px;border:1px solid var(--border-subtle,#E8E0D4);border-radius:6px;font-size:0.95rem;background:var(--bg,#fff);color:var(--text,#1A1A1A);">' +
+            '<option value="">Select carrier</option>' +
+            '<option value="USPS">USPS</option>' +
+            '<option value="UPS">UPS</option>' +
+            '<option value="FedEx">FedEx</option>' +
+            '<option value="Other">Other</option>' +
+          '</select>' +
+        '</div>' +
+        '<button class="rs-btn" id="rsSubmitBtn" onclick="submitShipped()">Confirm Return Shipped</button>' +
+      '</div>';
+    }).catch(function() {
+      // Fallback if RMA can't be loaded — show form without summary
+      el.innerHTML = '<div class="rs-card">' +
+        '<p style="font-size:0.88rem;color:var(--warm-gray);margin:0 0 1.5rem;">Enter your tracking number so we can watch for your return package.</p>' +
+        '<div class="rs-field">' +
+          '<label>Tracking Number</label>' +
+          '<input type="text" id="rsTracking" placeholder="e.g., 9400111899223100012345">' +
+        '</div>' +
+        '<div class="rs-field">' +
+          '<label>Carrier (optional)</label>' +
+          '<select id="rsCarrier" style="width:100%;padding:10px 14px;border:1px solid var(--border-subtle,#E8E0D4);border-radius:6px;font-size:0.95rem;background:var(--bg,#fff);color:var(--text,#1A1A1A);">' +
+            '<option value="">Select carrier</option>' +
+            '<option value="USPS">USPS</option>' +
+            '<option value="UPS">UPS</option>' +
+            '<option value="FedEx">FedEx</option>' +
+            '<option value="Other">Other</option>' +
+          '</select>' +
+        '</div>' +
+        '<button class="rs-btn" id="rsSubmitBtn" onclick="submitShipped()">Confirm Return Shipped</button>' +
+      '</div>';
+    });
   }
 
   window.submitShipped = function() {
@@ -279,13 +322,29 @@
       var result = data.result || data;
       if (result.success) {
         var el = document.getElementById('rsContent');
-        el.innerHTML = '<div class="rs-success">' +
-          '<div class="rs-success-icon">&#10003;</div>' +
-          '<h2>Return Shipment Confirmed</h2>' +
-          '<p>Thank you! We\'ve recorded your tracking number' + (tracking ? ' <strong>' + esc(tracking) + '</strong>' : '') + '.</p>' +
-          '<p style="margin-top:0.75rem;">We\'ll inspect the item when it arrives and process your refund.</p>' +
-          '<a href="/orders.html" style="display:inline-block;margin-top:1.5rem;padding:10px 24px;border-radius:6px;background:var(--primary,#C4853C);color:#fff;text-decoration:none;font-size:0.88rem;">View My Orders</a>' +
-        '</div>';
+        // Load RMA for refund details in confirmation
+        var refundLine = '';
+        db.ref(TENANT_ID + '/admin/rma/' + rmaId).once('value').then(function(snap) {
+          var rma = snap.val();
+          if (rma && rma.refundAmountCents) {
+            var method = rma.refundMethod === 'store_credit' ? 'store credit' : 'original payment method';
+            refundLine = '<p style="margin-top:0.75rem;font-size:0.95rem;"><strong>Estimated refund:</strong> ' + formatPrice(rma.refundAmountCents / 100) + ' via ' + method + '</p>';
+            if (rma.loyaltyPointsReissued) {
+              refundLine += '<p style="margin-top:0.25rem;font-size:0.85rem;color:var(--amber-light,#C4853C);">+' + rma.loyaltyPointsReissued + ' ' + esc(rma.loyaltyPointName || 'Points') + ' will be returned to your wallet</p>';
+            }
+          }
+          showSuccess();
+        }).catch(function() { showSuccess(); });
+        function showSuccess() {
+          el.innerHTML = '<div class="rs-success">' +
+            '<div class="rs-success-icon">&#10003;</div>' +
+            '<h2>Return Shipment Confirmed</h2>' +
+            '<p>Thank you! We\'ve recorded your tracking number' + (tracking ? ' <strong>' + esc(tracking) + '</strong>' : '') + '.</p>' +
+            '<p style="margin-top:0.75rem;">We\'ll inspect the item when it arrives and process your refund.</p>' +
+            refundLine +
+            '<a href="/orders.html" style="display:inline-block;margin-top:1.5rem;padding:10px 24px;border-radius:6px;background:var(--primary,#C4853C);color:#fff;text-decoration:none;font-size:0.88rem;">View My Orders</a>' +
+          '</div>';
+        }
       } else {
         alert(result.error || 'Failed to confirm shipment.');
         if (btn) { btn.disabled = false; btn.textContent = 'Confirm Return Shipped'; }
