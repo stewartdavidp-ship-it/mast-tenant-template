@@ -3181,7 +3181,7 @@
 
       // Load original order payment details into a placeholder
       orderLinkHtml += '<div id="rmaOrderPaymentSummary"></div>';
-      MastDB.orders.child(r.orderId).once('value').then(function(snap) {
+      MastDB.orders.get(r.orderId).then(function(snap) {
         var order = snap.val();
         if (!order) return;
         var el = document.getElementById('rmaOrderPaymentSummary');
