@@ -435,6 +435,22 @@
     } catch (e) { /* silent */ }
   }
 
+  // ── Gift Card Icon Visibility ──
+  // Called from init() after TENANT_READY so TENANT_ID and FIREBASE_CONFIG are set
+  function checkGiftCardEnabled() {
+    if (!TENANT_ID || !FIREBASE_CONFIG.databaseURL) return;
+    fetch(FIREBASE_CONFIG.databaseURL + '/' + TENANT_ID + '/public/config/walletConfig/giftCardsEnabled.json')
+      .then(function(r) { return r.ok ? r.json() : false; })
+      .then(function(enabled) {
+        if (enabled) {
+          var li = document.getElementById('giftCardIconLi');
+          var mob = document.getElementById('giftCardIconMobile');
+          if (li) li.style.display = '';
+          if (mob) mob.style.display = '';
+        }
+      }).catch(function() {});
+  }
+
   // ── Drawer HTML Injection ──
   function injectDrawer() {
     // Cart icon SVG template
@@ -532,20 +548,7 @@
       window.addEventListener('storefront-nav-ready', injectCartIcons);
     }
 
-    // Gift card icon visibility check — deferred until init() when TENANT_ID is available
-    function checkGiftCardEnabled() {
-      if (!TENANT_ID || !FIREBASE_CONFIG.databaseURL) return;
-      fetch(FIREBASE_CONFIG.databaseURL + '/' + TENANT_ID + '/public/config/walletConfig/giftCardsEnabled.json')
-        .then(function(r) { return r.ok ? r.json() : false; })
-        .then(function(enabled) {
-          if (enabled) {
-            var li = document.getElementById('giftCardIconLi');
-            var mob = document.getElementById('giftCardIconMobile');
-            if (li) li.style.display = '';
-            if (mob) mob.style.display = '';
-          }
-        }).catch(function() {});
-    }
+    // Gift card icon config check is in checkGiftCardEnabled() at IIFE scope
 
     // Overlay
     var overlay = document.createElement('div');
