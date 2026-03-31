@@ -533,7 +533,7 @@ window.TENANT_READY.then(function() {
   }
 
   (function() {
-    var app = firebase.initializeApp(TENANT_FIREBASE_CONFIG, 'public-shop');
+    var app; try { app = firebase.app(); } catch (e) { app = firebase.initializeApp(TENANT_FIREBASE_CONFIG); }
     var db = app.database();
 
     // Load shop header background image from gallery

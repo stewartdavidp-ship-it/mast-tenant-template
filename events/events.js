@@ -261,7 +261,7 @@ window.TENANT_READY.then(function() {
     FUNCTIONS_BASE = window.TENANT_FIREBASE_CONFIG.cloudFunctionsBase;
   }
   TENANT_ID_LOCAL = TENANT_ID;
-  firebaseApp = firebase.initializeApp(TENANT_FIREBASE_CONFIG, 'events-app');
+  try { firebaseApp = firebase.app(); } catch (e) { firebaseApp = firebase.initializeApp(TENANT_FIREBASE_CONFIG); }
   db = firebaseApp.database();
   auth = firebaseApp.auth();
   try { storage = firebaseApp.storage(); } catch(e) { storage = null; }

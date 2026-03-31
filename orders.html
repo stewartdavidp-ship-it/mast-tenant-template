@@ -1036,7 +1036,7 @@ window.TENANT_READY.then(function() {
   // Firebase init — named app for data, default app for auth (shared with cart.js)
   var firebaseApp;
   try { firebaseApp = firebase.app('public-orders'); } catch (e) {
-    firebaseApp = firebase.initializeApp(TENANT_FIREBASE_CONFIG, 'public-orders');
+    try { firebaseApp = firebase.app(); } catch (e) { firebaseApp = firebase.initializeApp(TENANT_FIREBASE_CONFIG); }
   }
   // Ensure default app exists for shared auth
   var defaultApp;

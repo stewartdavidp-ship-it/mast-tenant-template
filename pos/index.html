@@ -556,7 +556,7 @@ function closeEventSettings() {
 // Auth — init Firebase and attach listener after tenant resolves
 // ============================================================
 window.TENANT_READY.then(function() {
-  firebaseApp = firebase.initializeApp(TENANT_FIREBASE_CONFIG, 'pos-app');
+  try { firebaseApp = firebase.app(); } catch (e) { firebaseApp = firebase.initializeApp(TENANT_FIREBASE_CONFIG); }
   db = firebaseApp.database();
   auth = firebaseApp.auth();
 

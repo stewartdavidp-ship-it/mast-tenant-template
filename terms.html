@@ -171,7 +171,7 @@
     document.title = 'Terms & Conditions \u2014 ' + (window.TENANT_TITLE_SUFFIX ? TENANT_TITLE_SUFFIX() : 'Shop');
 
     var app;
-    try { app = firebase.app(); } catch (e) { app = firebase.initializeApp(TENANT_FIREBASE_CONFIG, 'public-terms'); }
+    try { app = firebase.app(); } catch (e) { app = firebase.initializeApp(TENANT_FIREBASE_CONFIG); }
     var db = app.database();
     var tid = window.TENANT_ID;
     if (!tid) {

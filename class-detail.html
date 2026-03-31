@@ -488,7 +488,7 @@
   window.TENANT_READY.then(function() {
     if (!classId) return;
 
-    var app = firebase.initializeApp(TENANT_FIREBASE_CONFIG, 'public-class-detail');
+    var app; try { app = firebase.app(); } catch (e) { app = firebase.initializeApp(TENANT_FIREBASE_CONFIG); }
     var db = app.database();
 
     Promise.all([
