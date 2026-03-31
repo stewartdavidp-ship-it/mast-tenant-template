@@ -2901,6 +2901,11 @@
     approved:      { bg: 'rgba(21,101,192,0.2)', color: '#64B5F6', border: 'rgba(21,101,192,0.35)' },
     'shipped-back':{ bg: 'rgba(123,31,162,0.2)', color: '#CE93D8', border: 'rgba(123,31,162,0.35)' },
     received:      { bg: 'rgba(27,92,82,0.25)',  color: '#4DB6AC', border: 'rgba(27,92,82,0.4)' },
+    inspected:     { bg: 'rgba(0,121,107,0.2)',  color: '#4DB6AC', border: 'rgba(0,121,107,0.35)' },
+    restocked:     { bg: 'rgba(46,125,50,0.25)', color: '#66BB6A', border: 'rgba(46,125,50,0.4)' },
+    seconds:       { bg: 'rgba(255,152,0,0.2)',  color: '#FFB74D', border: 'rgba(255,152,0,0.35)' },
+    'repair-queued':{ bg: 'rgba(33,150,243,0.2)', color: '#64B5F6', border: 'rgba(33,150,243,0.35)' },
+    'written-off': { bg: 'rgba(158,158,158,0.2)', color: '#BDBDBD', border: 'rgba(158,158,158,0.35)' },
     'refund-issued':{ bg: 'rgba(46,125,50,0.25)', color: '#66BB6A', border: 'rgba(46,125,50,0.4)' },
     declined:      { bg: 'rgba(198,40,40,0.2)',  color: '#EF5350', border: 'rgba(198,40,40,0.35)' }
   };
@@ -2914,7 +2919,12 @@
     requested:     ['approved', 'declined'],
     approved:      ['shipped-back'],
     'shipped-back':['received'],
-    received:      ['refund-issued'],
+    received:      ['inspected'],
+    inspected:     ['restocked', 'seconds', 'repair-queued', 'written-off'],
+    restocked:     [],
+    seconds:       [],
+    'repair-queued':[],
+    'written-off': [],
     'refund-issued':[],
     declined:      []
   };
@@ -2982,13 +2992,15 @@
     });
 
     // Render filter pills
+    var activeCount = (counts.requested || 0) + (counts.approved || 0) + (counts['shipped-back'] || 0) + (counts.received || 0) + (counts.inspected || 0);
+    var completedCount = (counts.restocked || 0) + (counts.seconds || 0) + (counts['repair-queued'] || 0) + (counts['written-off'] || 0) + (counts['refund-issued'] || 0);
     var pillStatuses = [
       { key: 'all', label: 'All', count: all.length },
+      { key: 'active', label: 'Active', count: activeCount },
       { key: 'requested', label: 'Requested', count: counts.requested || 0 },
       { key: 'approved', label: 'Approved', count: counts.approved || 0 },
-      { key: 'shipped-back', label: 'Shipped Back', count: counts['shipped-back'] || 0 },
-      { key: 'received', label: 'Received', count: counts.received || 0 },
-      { key: 'refund-issued', label: 'Refund Issued', count: counts['refund-issued'] || 0 },
+      { key: 'received', label: 'Received', count: (counts.received || 0) + (counts.inspected || 0) },
+      { key: 'completed', label: 'Completed', count: completedCount },
       { key: 'declined', label: 'Declined', count: counts.declined || 0 }
     ];
     var pillHtml = '';
@@ -3001,8 +3013,16 @@
 
     // Filter
     var filtered;
+    var ACTIVE_STATUSES = ['requested', 'approved', 'shipped-back', 'received', 'inspected'];
+    var COMPLETED_STATUSES = ['restocked', 'seconds', 'repair-queued', 'written-off', 'refund-issued'];
     if (rmaFilter === 'all') {
       filtered = all;
+    } else if (rmaFilter === 'active') {
+      filtered = all.filter(function(r) { return ACTIVE_STATUSES.indexOf(r.status) >= 0; });
+    } else if (rmaFilter === 'completed') {
+      filtered = all.filter(function(r) { return COMPLETED_STATUSES.indexOf(r.status) >= 0; });
+    } else if (rmaFilter === 'received') {
+      filtered = all.filter(function(r) { return r.status === 'received' || r.status === 'inspected'; });
     } else {
       filtered = all.filter(function(r) { return r.status === rmaFilter; });
     }
@@ -3059,12 +3079,12 @@
     var detailEl = document.getElementById('rmaDetailView');
     var status = r.status || 'requested';
 
-    // Action buttons
+    // Action buttons (simple transitions only — inspection/disposition have their own panels)
     var actionsHtml = '';
-    var nextStates = RMA_VALID_TRANSITIONS[status] || [];
-    nextStates.forEach(function(ns) {
-      var label = ns.replace(/-/g, ' ');
-      label = label.charAt(0).toUpperCase() + label.slice(1);
+    var simpleActions = { 'requested': ['approved', 'declined'], 'approved': ['shipped-back'], 'shipped-back': ['received'] };
+    var simpleNext = simpleActions[status] || [];
+    simpleNext.forEach(function(ns) {
+      var label = { 'approved': 'Approve', 'declined': 'Decline', 'shipped-back': 'Mark Shipped Back', 'received': 'Mark Received' }[ns] || ns.replace(/-/g, ' ');
       var btnClass = ns === 'declined' ? 'btn btn-danger' : 'btn btn-primary';
       actionsHtml += '<button class="' + btnClass + '" style="font-size:0.78rem;padding:6px 14px;" onclick="transitionRma(\'' + esc(rmaId) + '\', \'' + esc(ns) + '\')">' + label + '</button>';
     });
@@ -3079,13 +3099,19 @@
     });
 
     // Status timeline
+    var isTerminal = ['restocked', 'seconds', 'repair-queued', 'written-off', 'refund-issued', 'declined'].indexOf(status) >= 0;
     var RMA_STEPS = [
       { key: 'requested', label: 'Requested', field: 'requestedAt' },
       { key: 'approved', label: 'Approved', field: 'approvedAt' },
       { key: 'shipped-back', label: 'Shipped Back', field: 'shippedBackAt' },
       { key: 'received', label: 'Received', field: 'receivedAt' },
-      { key: 'refund-issued', label: 'Refund Issued', field: 'refundIssuedAt' }
+      { key: 'inspected', label: 'Inspected', field: 'inspectedAt' }
     ];
+    // Add terminal step based on what actually happened
+    if (isTerminal && status !== 'declined') {
+      var terminalLabels = { restocked: 'Restocked', seconds: 'Seconds', 'repair-queued': 'Repair Queued', 'written-off': 'Written Off', 'refund-issued': 'Refund Issued' };
+      RMA_STEPS.push({ key: status, label: terminalLabels[status] || status, field: 'refundIssuedAt' });
+    }
 
     var timelineHtml = '';
     var reachedCurrent = false;
@@ -3171,39 +3197,161 @@
         '<div class="order-detail-section-title">Return Tracking</div>' +
         '<div style="font-family:monospace;font-size:0.88rem;">' + esc(r.returnTrackingNumber) + '</div>' +
       '</div>' : '') +
+      // Inspection panel (when status is 'received')
+      (status === 'received' ? '<div class="order-detail-section" style="border:1px solid var(--teal);border-radius:8px;padding:1rem;">' +
+        '<div class="order-detail-section-title" style="color:var(--teal);">Inspection</div>' +
+        '<div style="margin-bottom:0.75rem;">' +
+          '<label style="font-size:0.72rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--warm-gray-light);display:block;margin-bottom:4px;">Result</label>' +
+          '<select id="rmaInspectResult" style="padding:6px 10px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.85rem;background:var(--cream);color:var(--charcoal);">' +
+            '<option value="pass">Pass</option>' +
+            '<option value="fail">Fail</option>' +
+          '</select>' +
+        '</div>' +
+        '<div style="margin-bottom:0.75rem;">' +
+          '<label style="font-size:0.72rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--warm-gray-light);display:block;margin-bottom:4px;">Notes</label>' +
+          '<textarea id="rmaInspectNotes" placeholder="Inspection notes..." style="width:100%;padding:6px 10px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.85rem;background:var(--cream);color:var(--charcoal);min-height:60px;"></textarea>' +
+        '</div>' +
+        '<button class="btn btn-primary" style="font-size:0.78rem;padding:6px 14px;" onclick="submitInspection(\'' + esc(rmaId) + '\')">Complete Inspection</button>' +
+      '</div>' : '') +
+      // Inspection result display (when already inspected)
+      (r.inspection ? '<div class="order-detail-section">' +
+        '<div class="order-detail-section-title">Inspection Result</div>' +
+        '<div><span class="status-badge" style="' + (r.inspection.result === 'pass' ? 'background:rgba(46,125,50,0.25);color:#66BB6A;border:1px solid rgba(46,125,50,0.4);' : 'background:rgba(198,40,40,0.2);color:#EF5350;border:1px solid rgba(198,40,40,0.35);') + '">' + esc(r.inspection.result) + '</span></div>' +
+        (r.inspection.notes ? '<div style="margin-top:0.5rem;font-size:0.85rem;color:var(--warm-gray);">' + esc(r.inspection.notes) + '</div>' : '') +
+      '</div>' : '') +
+      // Disposition panel (when status is 'inspected')
+      (status === 'inspected' ? '<div class="order-detail-section" style="border:1px solid var(--teal);border-radius:8px;padding:1rem;">' +
+        '<div class="order-detail-section-title" style="color:var(--teal);">Disposition &amp; Refund</div>' +
+        '<div style="margin-bottom:0.75rem;">' +
+          '<label style="font-size:0.72rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--warm-gray-light);display:block;margin-bottom:4px;">What happens to the item?</label>' +
+          '<select id="rmaDisposition" style="padding:6px 10px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.85rem;background:var(--cream);color:var(--charcoal);width:100%;">' +
+            '<option value="restock">Restock — Return to full inventory</option>' +
+            '<option value="seconds">Seconds — Move to clearance</option>' +
+            '<option value="repair">Repair — Queue for repair</option>' +
+            '<option value="write-off">Write Off — Record as loss</option>' +
+          '</select>' +
+        '</div>' +
+        '<div style="margin-bottom:0.75rem;">' +
+          '<label style="font-size:0.72rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--warm-gray-light);display:block;margin-bottom:4px;">Refund Method</label>' +
+          '<select id="rmaDisposRefundMethod" style="padding:6px 10px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.85rem;background:var(--cream);color:var(--charcoal);">' +
+            '<option value="store-credit"' + (r.refundMethod === 'store_credit' ? ' selected' : '') + '>Store Credit</option>' +
+            '<option value="credit-card"' + (r.refundMethod === 'original_payment' ? ' selected' : '') + '>Original Payment</option>' +
+          '</select>' +
+          '<input type="number" id="rmaDisposRefundAmount" value="' + ((r.refundAmountCents || 0) / 100).toFixed(2) + '" step="0.01" min="0" style="margin-left:8px;width:100px;padding:6px 10px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.85rem;background:var(--cream);color:var(--charcoal);">' +
+        '</div>' +
+        '<div style="margin-bottom:0.75rem;">' +
+          '<label style="font-size:0.72rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--warm-gray-light);display:block;margin-bottom:4px;">Notes</label>' +
+          '<textarea id="rmaDisposNotes" placeholder="Disposition notes..." style="width:100%;padding:6px 10px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.85rem;background:var(--cream);color:var(--charcoal);min-height:40px;"></textarea>' +
+        '</div>' +
+        '<button class="btn btn-primary" style="font-size:0.78rem;padding:6px 14px;" onclick="completeRma(\'' + esc(rmaId) + '\')">Complete RMA &amp; Issue Refund</button>' +
+      '</div>' : '') +
+      // Disposition result display (when terminal)
+      (r.disposition ? '<div class="order-detail-section">' +
+        '<div class="order-detail-section-title">Disposition</div>' +
+        '<div style="font-size:0.88rem;"><strong>' + esc({ restock: 'Restocked', seconds: 'Seconds/Clearance', repair: 'Repair Queued', 'write-off': 'Written Off' }[r.disposition.action] || r.disposition.action) + '</strong></div>' +
+        (r.disposition.notes ? '<div style="margin-top:0.5rem;font-size:0.85rem;color:var(--warm-gray);">' + esc(r.disposition.notes) + '</div>' : '') +
+      '</div>' : '') +
       refundHtml +
       orderLinkHtml;
   }
 
-  async function transitionRma(rmaId, newStatus) {
+  async function transitionRma(rmaId, actionOrStatus) {
     var r = rmaData[rmaId];
     if (!r) return;
 
-    var updates = {
-      status: newStatus,
-      updatedAt: new Date().toISOString()
+    // Map old status-based transitions to cloud function actions
+    var actionMap = {
+      'approved': 'approve',
+      'declined': 'decline',
+      'shipped-back': 'mark-shipped-back',
+      'received': 'mark-received'
     };
+    var action = actionMap[actionOrStatus] || actionOrStatus;
 
-    // Set timestamp for the new status
-    var tsFields = {
-      'approved': 'approvedAt',
-      'shipped-back': 'shippedBackAt',
-      'received': 'receivedAt',
-      'refund-issued': 'refundIssuedAt'
-    };
-    if (tsFields[newStatus]) {
-      updates[tsFields[newStatus]] = new Date().toISOString();
+    try {
+      showToast('Processing...');
+      var result = await firebase.functions().httpsCallable('transitionRma')({
+        tenantId: MastDB.tenantId(),
+        rmaId: rmaId,
+        action: action
+      });
+      if (result.data && result.data.success) {
+        // Refresh RMA data from server
+        var snap = await MastDB.ref('admin/rma/' + rmaId).once('value');
+        rmaData[rmaId] = snap.val() || rmaData[rmaId];
+        renderRmaDetail(rmaId);
+        updateRmaSidebarBadge();
+        showToast('RMA ' + (result.data.newStatus || action).replace(/-/g, ' '));
+      } else {
+        showToast('Failed: ' + ((result.data || {}).error || 'Unknown error'), true);
+      }
+    } catch (err) {
+      showToast('Failed to update RMA: ' + (err.message || err), true);
+    }
+  }
+
+  async function submitInspection(rmaId) {
+    var resultEl = document.getElementById('rmaInspectResult');
+    var notesEl = document.getElementById('rmaInspectNotes');
+    var result = resultEl ? resultEl.value : 'pass';
+    var notes = notesEl ? notesEl.value.trim() : '';
+
+    try {
+      showToast('Submitting inspection...');
+      var resp = await firebase.functions().httpsCallable('transitionRma')({
+        tenantId: MastDB.tenantId(),
+        rmaId: rmaId,
+        action: 'inspect',
+        payload: { result: result, notes: notes }
+      });
+      if (resp.data && resp.data.success) {
+        var snap = await MastDB.ref('admin/rma/' + rmaId).once('value');
+        rmaData[rmaId] = snap.val() || rmaData[rmaId];
+        renderRmaDetail(rmaId);
+        showToast('Inspection recorded');
+      }
+    } catch (err) {
+      showToast('Inspection failed: ' + (err.message || err), true);
+    }
+  }
+
+  async function completeRma(rmaId) {
+    var disposEl = document.getElementById('rmaDisposition');
+    var methodEl = document.getElementById('rmaDisposRefundMethod');
+    var amountEl = document.getElementById('rmaDisposRefundAmount');
+    var notesEl = document.getElementById('rmaDisposNotes');
+
+    var disposition = disposEl ? disposEl.value : 'write-off';
+    var refundMethod = methodEl ? methodEl.value : 'store-credit';
+    var amountCents = amountEl ? Math.round(parseFloat(amountEl.value) * 100) : 0;
+    var notes = notesEl ? notesEl.value.trim() : '';
+
+    if (isNaN(amountCents) || amountCents < 0) {
+      showToast('Invalid refund amount', true);
+      return;
     }
 
     try {
-      await MastDB.ref('admin/rma/' + rmaId).update(updates);
-      // Update local data
-      Object.assign(rmaData[rmaId], updates);
-      renderRmaDetail(rmaId);
-      updateRmaSidebarBadge();
-      showToast('RMA updated to ' + newStatus.replace(/-/g, ' '));
+      showToast('Completing RMA...');
+      var resp = await firebase.functions().httpsCallable('transitionRma')({
+        tenantId: MastDB.tenantId(),
+        rmaId: rmaId,
+        action: 'complete',
+        payload: {
+          disposition: disposition,
+          notes: notes,
+          refundAllocation: [{ method: refundMethod, amountCents: amountCents }]
+        }
+      });
+      if (resp.data && resp.data.success) {
+        var snap = await MastDB.ref('admin/rma/' + rmaId).once('value');
+        rmaData[rmaId] = snap.val() || rmaData[rmaId];
+        renderRmaDetail(rmaId);
+        updateRmaSidebarBadge();
+        showToast('RMA completed — refund issued');
+      }
     } catch (err) {
-      showToast('Failed to update RMA: ' + err.message, 'error');
+      showToast('Complete failed: ' + (err.message || err), true);
     }
   }
 
@@ -3351,6 +3499,8 @@
   window.backToRmaList = backToRmaList;
   window.renderRmaDetail = renderRmaDetail;
   window.transitionRma = transitionRma;
+  window.submitInspection = submitInspection;
+  window.completeRma = completeRma;
   window.overrideRmaRefund = overrideRmaRefund;
   window.rmaBadgeStyle = rmaBadgeStyle;
 
