@@ -1837,6 +1837,8 @@ window.TENANT_READY.then(function() {
     html += '<div style="font-size:0.72rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--warm-gray-light);margin-bottom:0.5rem;">Select items to return</div>';
     for (var i = 0; i < items.length; i++) {
       var item = items[i];
+      var isGiftCard = item.bookingType === 'gift-card' || item.isGiftCard;
+      if (isGiftCard) continue; // Gift cards are non-returnable
       var name = item.name || item.productName || 'Item';
       var price = (item.price || 0) * (item.qty || 1);
       html += '<div class="rma-modal-item">' +
