@@ -3543,6 +3543,13 @@
       commissionsLoaded = false;
       rmaData = {};
       rmaLoaded = false;
+      // Hide detail views to prevent bleed into other routes
+      var rmaDetail = document.getElementById('rmaDetailView');
+      if (rmaDetail) { rmaDetail.style.display = 'none'; rmaDetail.innerHTML = ''; }
+      var commDetail = document.getElementById('commissionDetailView');
+      if (commDetail) { commDetail.style.display = 'none'; commDetail.innerHTML = ''; }
+      var orderDetail = document.getElementById('orderDetailView');
+      if (orderDetail) { orderDetail.style.display = 'none'; orderDetail.innerHTML = ''; }
     }
   });
 
