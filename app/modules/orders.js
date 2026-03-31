@@ -346,6 +346,9 @@
     _viewOrderReturnRoute = currentRoute !== 'orders' ? currentRoute : null;
     selectedOrderId = orderId;
     navigateTo('orders');
+    // Hide feature gate callout on detail view
+    var gateEls = document.querySelectorAll('.feature-gate-callout');
+    gateEls.forEach(function(el) { el.remove(); });
     document.getElementById('ordersListView').style.display = 'none';
     var detailEl = document.getElementById('orderDetailView');
     detailEl.style.display = 'block';
