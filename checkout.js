@@ -1512,29 +1512,8 @@
       return;
     }
 
-    // Check if wallet deductions cover the entire order ($0 payment)
-    var subtotal = calcSubtotal();
-    var shipCost = checkoutData.shippingMethod ? checkoutData.shippingMethod.price : 0;
-    var tax = Math.round(calcTaxableSubtotal() * checkoutData.taxRate * 100) / 100;
-    var couponDiscount = checkoutData.coupon ? checkoutData.coupon.discount : 0;
-    var orderTotalCents = Math.round((subtotal + tax + shipCost - couponDiscount) * 100);
-
-    // Apply deduction cascade to check if total reaches $0
-    var deductionTotal = 0;
-    if (checkoutData.loyaltyApplied && checkoutData.loyaltyBalance && checkoutData.loyaltyConfig) {
-      deductionTotal += calcLoyaltyRedemptionCents();
-    }
-    if (checkoutData.walletGiftCardApplied && checkoutData.walletGiftCards.length > 0) {
-      deductionTotal += checkoutData.walletGiftCards.reduce(function(s, g) { return s + (g.remainingCents || 0); }, 0);
-    }
-    if (checkoutData.walletCreditApplied && checkoutData.walletCredits.length > 0) {
-      deductionTotal += checkoutData.walletCredits.reduce(function(s, c) { return s + (c.remainingCents != null ? c.remainingCents : (c.amountCents || 0)); }, 0);
-    }
-
-    if (deductionTotal >= orderTotalCents && orderTotalCents > 0) {
-      placeZeroDollarOrder();
-      return;
-    }
+    // All orders (including $0 wallet-covered) go through submitOrder server-side.
+    // Server verifies wallet balances, applies deductions, and handles $0 path.
 
     isSubmitting = true;
 
@@ -1570,8 +1549,42 @@
       resaleCertNumber: checkoutData.resaleCertNumber || ''
     };
 
+    // Wallet deductions — server verifies actual balances
+    if (checkoutData.loyaltyApplied || checkoutData.walletGiftCardApplied || checkoutData.walletCreditApplied) {
+      payload.walletDeductions = {};
+      if (checkoutData.loyaltyApplied && checkoutData.loyaltyBalance && checkoutData.loyaltyConfig) {
+        payload.walletDeductions.loyalty = {
+          pointsToRedeem: checkoutData.loyaltyBalance.totalPoints || 0,
+          amountCents: calcLoyaltyRedemptionCents()
+        };
+      }
+      if (checkoutData.walletGiftCardApplied && checkoutData.walletGiftCards.length > 0) {
+        payload.walletDeductions.giftCards = checkoutData.walletGiftCards.map(function(g) {
+          return { id: g.id, code: g.code || '', amountCents: g.remainingCents || 0 };
+        });
+      }
+      if (checkoutData.walletCreditApplied && checkoutData.walletCredits.length > 0) {
+        payload.walletDeductions.credits = checkoutData.walletCredits.map(function(c) {
+          return { id: c.id, amountCents: c.remainingCents != null ? c.remainingCents : (c.amountCents || 0) };
+        });
+      }
+    }
+
     callFunction('submitOrder', payload, function (result) {
       isSubmitting = false;
+
+      // $0 wallet-covered order: server handled everything
+      if (result && result.success && result.zeroDollar) {
+        window.MastCart.clear();
+        // Provision passes/enrollments for booking items
+        if (items) {
+          provisionCustomerPasses(items, result.orderId);
+          provisionSeriesEnrollments(items, result.orderId);
+        }
+        renderWalletOrderConfirmation(result);
+        return;
+      }
+
       if (result && result.success && result.checkoutUrl) {
         // Save order info for post-payment confirmation
         try {
@@ -1587,26 +1600,8 @@
           }));
         } catch (e) { /* sessionStorage not available */ }
 
-        // Save wallet state before clearing cart (needed for post-payment consumption)
-        try {
-          sessionStorage.setItem('mast_checkout_wallet', JSON.stringify({
-            walletGiftCardApplied: checkoutData.walletGiftCardApplied,
-            walletGiftCards: checkoutData.walletGiftCards,
-            walletCreditApplied: checkoutData.walletCreditApplied,
-            walletCredits: checkoutData.walletCredits,
-            loyaltyApplied: checkoutData.loyaltyApplied,
-            loyaltyConfig: checkoutData.loyaltyConfig,
-            loyaltyBalance: checkoutData.loyaltyBalance,
-            subtotal: subtotal,
-            taxRate: checkoutData.taxRate,
-            taxableSubtotal: calcTaxableSubtotal(),
-            shippingCost: checkoutData.shippingMethod ? checkoutData.shippingMethod.price : 0,
-            couponDiscount: checkoutData.coupon ? checkoutData.coupon.discount : 0,
-            cartItems: items.map(function(ci) {
-              return { pid: ci.pid, price: ci.price, priceCents: ci.priceCents, qty: ci.qty, bookingType: ci.bookingType, isGiftCard: ci.isGiftCard, category: ci.category };
-            })
-          }));
-        } catch (e) { /* silent */ }
+        // Wallet consumption is now handled server-side in submitOrder.
+        // No need to save wallet state to sessionStorage.
 
         // Clear cart before redirect but keep checkout info for returning customer auto-fill
         window.MastCart.clear();
@@ -1764,6 +1759,37 @@
     }
   }
 
+  // Server-side $0 wallet order confirmation (submitOrder returned zeroDollar: true)
+  function renderWalletOrderConfirmation(result) {
+    isSubmitting = false;
+    var body = document.getElementById('cartDrawerBody');
+    var footer = document.getElementById('cartDrawerFooter');
+    if (!body) return;
+
+    var titleEl = document.querySelector('.cart-drawer-title');
+    var countEl = document.getElementById('cartDrawerCount');
+    if (titleEl) titleEl.textContent = 'Order Confirmed';
+    if (countEl) countEl.textContent = '';
+
+    body.innerHTML =
+      '<div style="text-align:center;padding:40px 20px;">' +
+        '<div style="font-size:2.5rem;margin-bottom:16px;">&#10003;</div>' +
+        '<h3 style="margin:0 0 8px;font-size:1.2rem;">Order Confirmed!</h3>' +
+        '<p style="font-size:0.9rem;color:var(--warm-gray);">Order #' + esc(result.orderNumber || '') + '</p>' +
+        '<p style="font-size:0.85rem;color:var(--warm-gray);margin-top:12px;">Paid in full with wallet balance. No card charge.</p>' +
+        '<div style="margin-top:24px;padding:16px;background:rgba(22,163,74,0.1);border-radius:8px;">' +
+          '<div style="font-size:0.85rem;color:var(--charcoal);">A confirmation email will be sent to ' + esc(checkoutData.email || '') + '</div>' +
+        '</div>' +
+      '</div>';
+
+    if (footer) {
+      footer.style.display = '';
+      footer.innerHTML = '<button class="checkout-btn-primary" onclick="window.location.reload()">Done</button>';
+    }
+
+    trackCheckoutEvent('wallet_order_placed');
+  }
+
   function placeCheckOrder() {
     isSubmitting = true;
     var btn = document.querySelector('[data-co="place-order"]');
@@ -1846,9 +1872,8 @@
       // Provision CustomerPass records for any pass items
       provisionCustomerPasses(items, orderRef.key);
       provisionSeriesEnrollments(items, orderRef.key);
-      consumeWalletGiftCards(orderRef.key);
-      consumeWalletCredits(orderRef.key);
-      processLoyaltyForOrder(orderRef.key);
+      // Wallet consumption handled server-side for pay-by-card orders.
+      // Check orders bypass submitOrder, so wallet isn't typically used here.
 
       // Show confirmation
       renderCheckOrderConfirmation(orderNumber);
@@ -2301,13 +2326,8 @@
       provisionSeriesEnrollments(pendingOrder.cartItems, orderId);
     }
 
-    // Consume wallet instruments and process loyalty if applied
-    consumeWalletGiftCards(orderId);
-    consumeWalletCredits(orderId);
-    processLoyaltyForOrder(orderId);
-
-    // Clean up wallet state so it doesn't re-apply on reload
-    try { sessionStorage.removeItem('mast_checkout_wallet'); } catch (e) {}
+    // Wallet consumption and loyalty are now handled server-side in submitOrder.
+    // No client-side consumption needed after payment redirect.
 
     // Watch for order status to become 'placed' and generate CSV
     if (orderId && pendingOrder && pendingOrder.items) {
