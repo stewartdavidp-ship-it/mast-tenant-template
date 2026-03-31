@@ -990,12 +990,19 @@
           c._id = id;
           return c;
         }).filter(function(c) {
+          if (c.depleted) return false;
+          var remaining = c.remainingCents != null ? c.remainingCents : (c.amountCents || 0);
+          if (remaining <= 0) return false;
           // Lazy expiration check
           return !c.expiresAt || c.expiresAt >= now;
         }).sort(function(a, b) {
           // FIFO: oldest first
           return (a.createdAt || '').localeCompare(b.createdAt || '');
         });
+        // Auto-apply if any credits available
+        if (checkoutData.walletCredits.length > 0) {
+          checkoutData.walletCreditApplied = true;
+        }
       })
       .catch(function(err) {
         console.warn('[checkout] Failed to load wallet credits:', err);
