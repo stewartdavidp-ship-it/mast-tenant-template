@@ -16468,8 +16468,14 @@ var tenantConfigChecklist = null;
 
 async function loadConfigChecklist() {
   try {
-    var snap = await db.ref('mast-platform/tenants/' + MastDB.tenantId() + '/configChecklist').once('value');
+    // Read from tenant config path (canonical location)
+    var snap = await MastDB._ref('config/_configChecklist').once('value');
     tenantConfigChecklist = snap.val() || {};
+    if (!tenantConfigChecklist.square) {
+      // Fallback: check platform registry path (legacy)
+      var platSnap = await db.ref('mast-platform/tenants/' + MastDB.tenantId() + '/configChecklist').once('value');
+      if (platSnap.val()) tenantConfigChecklist = platSnap.val();
+    }
   } catch (err) {
     console.warn('Failed to load configChecklist:', err.message);
     tenantConfigChecklist = {};
