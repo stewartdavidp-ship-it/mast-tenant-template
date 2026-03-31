@@ -481,6 +481,8 @@
                 if (addr[aKey] && !checkoutData.shipping[aKey]) {
                   checkoutData.shipping[aKey] = addr[aKey];
                   var aEl = document.getElementById(addrMap[aKey]);
+                  // PAC element replaces shipAddr1
+                  if (!aEl && aKey === 'address1') aEl = document.getElementById('shipAddr1Pac');
                   if (aEl) {
                     aEl.value = addr[aKey];
                     aEl.dispatchEvent(new Event('input', { bubbles: true }));
@@ -531,6 +533,8 @@
           if (saved.shipping[sKey] && !checkoutData.shipping[sKey]) {
             checkoutData.shipping[sKey] = saved.shipping[sKey];
             var sEl = document.getElementById(shipMap[sKey]);
+            // PAC element replaces shipAddr1
+            if (!sEl && sKey === 'address1') sEl = document.getElementById('shipAddr1Pac');
             if (sEl) {
               sEl.value = saved.shipping[sKey];
               sEl.dispatchEvent(new Event('input', { bubbles: true }));
