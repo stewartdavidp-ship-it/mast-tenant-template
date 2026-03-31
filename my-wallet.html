@@ -227,6 +227,7 @@
 
   var walletData = { credits: [], giftCards: [], loyalty: null, passes: [], coupons: [] };
   var currentTab = 'overview';
+  var historyFilter = { type: 'all', direction: 'all', range: 'all' };
 
   function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
@@ -485,12 +486,64 @@
     // Sort by date descending
     allTxns.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
 
-    if (allTxns.length === 0) {
-      return '<div class="mw-list"><div class="mw-empty">No transaction history yet.</div></div>';
+    // Filter bar
+    var fType = historyFilter.type || 'all';
+    var fDir = historyFilter.direction || 'all';
+    var fRange = historyFilter.range || 'all';
+
+    function filterPill(key, val, label) {
+      var active = historyFilter[key] === val;
+      return '<button style="padding:4px 12px;border-radius:16px;border:1px solid ' + (active ? 'var(--accent,#C6A96C)' : 'var(--border-subtle,#444)') + ';background:' + (active ? 'rgba(196,133,60,0.15)' : 'transparent') + ';color:' + (active ? 'var(--accent,#C6A96C)' : 'var(--warm-gray,#888)') + ';font-size:0.75rem;cursor:pointer;" onclick="window._mwHistoryFilter(\'' + key + '\',\'' + val + '\')">' + esc(label) + '</button>';
     }
 
-    var html = '<div class="mw-list">';
-    allTxns.forEach(function(txn) {
+    var html = '<div style="margin-bottom:1rem;">';
+    // Type filter
+    html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">';
+    html += filterPill('type', 'all', 'All Types');
+    html += filterPill('type', 'Loyalty', 'Loyalty');
+    html += filterPill('type', 'Store Credit', 'Credits');
+    html += filterPill('type', 'Gift Card', 'Gift Cards');
+    html += '</div>';
+    // Direction + Time range
+    html += '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
+    html += filterPill('direction', 'all', 'All');
+    html += filterPill('direction', 'credit', 'Credits In');
+    html += filterPill('direction', 'debit', 'Debits Out');
+    html += '<span style="width:8px;"></span>';
+    html += filterPill('range', 'all', 'All Time');
+    html += filterPill('range', 'week', 'This Week');
+    html += filterPill('range', 'month', 'This Month');
+    html += filterPill('range', 'year', 'This Year');
+    html += '</div>';
+    html += '</div>';
+
+    // Apply filters
+    var now = new Date();
+    var filtered = allTxns.filter(function(txn) {
+      if (fType !== 'all' && txn.category !== fType) return false;
+      if (fDir === 'credit' && !txn.positive) return false;
+      if (fDir === 'debit' && txn.positive) return false;
+      if (fRange !== 'all' && txn.date) {
+        var txDate = new Date(txn.date);
+        if (fRange === 'week') {
+          var weekAgo = new Date(now); weekAgo.setDate(weekAgo.getDate() - 7);
+          if (txDate < weekAgo) return false;
+        } else if (fRange === 'month') {
+          if (txDate.getMonth() !== now.getMonth() || txDate.getFullYear() !== now.getFullYear()) return false;
+        } else if (fRange === 'year') {
+          if (txDate.getFullYear() !== now.getFullYear()) return false;
+        }
+      }
+      return true;
+    });
+
+    if (filtered.length === 0) {
+      html += '<div class="mw-list"><div class="mw-empty">No transactions match your filters.</div></div>';
+      return html;
+    }
+
+    html += '<div class="mw-list">';
+    filtered.forEach(function(txn) {
       html += '<div class="mw-card" style="display:flex;justify-content:space-between;align-items:flex-start;">' +
         '<div>' +
           '<div style="font-size:0.78rem;color:var(--warm-gray-light,#888);text-transform:uppercase;letter-spacing:0.05em;">' + esc(txn.category) + '</div>' +
@@ -693,6 +746,12 @@
 
   window._mwTab = function(tab) {
     currentTab = tab;
+    if (tab !== 'history') historyFilter = { type: 'all', direction: 'all', range: 'all' };
+    render();
+  };
+
+  window._mwHistoryFilter = function(key, value) {
+    historyFilter[key] = value;
     render();
   };
 
