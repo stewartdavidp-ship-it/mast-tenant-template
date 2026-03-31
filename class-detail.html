@@ -857,7 +857,7 @@
       if (!fbApp) { addToCart(); return; }
       var db = fbApp.database();
 
-      db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/passes').once('value')
+      db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/wallet/passes').once('value')
         .then(function(snap) {
           var passesObj = snap.val() || {};
           var now = new Date().toISOString();

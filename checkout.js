@@ -2008,7 +2008,7 @@
             orderId: orderId || null
           };
 
-          var passId = db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/passes').push().key;
+          var passId = db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/wallet/passes').push().key;
           db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/passes/' + passId).set(passData)
             .then(function() { console.log('[checkout] CustomerPass created:', passId); })
             .catch(function(err) { console.error('[checkout] CustomerPass creation failed:', err); });

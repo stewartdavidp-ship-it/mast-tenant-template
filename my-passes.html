@@ -352,7 +352,7 @@
     var auth = app.auth();
 
     function loadPasses(user) {
-      db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/passes').once('value')
+      db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/wallet/passes').once('value')
         .then(function(snap) {
           var data = snap.val() || {};
           allPasses = Object.keys(data).map(function(id) {

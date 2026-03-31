@@ -851,7 +851,7 @@
         });
 
         // Also fetch passes
-        var passesPromise = db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/passes').once('value').then(function(s) {
+        var passesPromise = db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/wallet/passes').once('value').then(function(s) {
           var pd = s.val() || {};
           return Object.keys(pd).map(function(id) { var p = pd[id]; p._id = id; return p; });
         }).catch(function() { return []; });

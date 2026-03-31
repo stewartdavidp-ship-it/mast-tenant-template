@@ -590,8 +590,8 @@
       db.ref(basePath + '/wallet/giftCards').once('value'),
       // Loyalty
       db.ref(basePath + '/wallet/loyalty').once('value'),
-      // Passes (still at old path until Phase 6 migration)
-      db.ref(basePath + '/passes').once('value'),
+      // Passes (migrated to wallet/passes in Phase 6)
+      db.ref(basePath + '/wallet/passes').once('value'),
       // Saved coupons
       db.ref(basePath + '/wallet/coupons').once('value')
     ]).then(function(results) {
