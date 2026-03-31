@@ -23,7 +23,10 @@
     walletCreditApplied: false, // whether to apply wallet credits to this order
     loyaltyConfig: null,       // { enabled, pointName, earnRate, redemptionRate, expiryDays, exclusions }
     loyaltyBalance: null,      // { totalPoints, lastEarningPurchaseAt, expiresAt }
-    loyaltyApplied: false      // whether to apply loyalty points to this order
+    loyaltyApplied: false,     // whether to apply loyalty points to this order
+    walletGiftCards: [],       // [{ id, code, remainingCents, ... }] active gift cards
+    walletGiftCardApplied: false, // whether to apply gift cards to this order
+    savedCoupons: []           // [{ code, ... }] saved coupons from wallet
   };
 
   var shippingConfigCache = null; // cached flat-rate config
@@ -748,30 +751,50 @@
             '<div id="coCouponMsg"></div>' +
           '</div>';
 
-          // Wallet credits
-          if (checkoutData.walletCredits.length > 0) {
-            var totalCreditCents = checkoutData.walletCredits.reduce(function(sum, c) { return sum + (c.remainingCents != null ? c.remainingCents : (c.amountCents || 0)); }, 0);
-            html += '<div class="checkout-section">' +
-              '<div class="checkout-section-title">Wallet Credits</div>' +
-              '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;color:var(--text);">' +
-                '<input type="checkbox" id="coWalletToggle" ' + (checkoutData.walletCreditApplied ? 'checked' : '') + ' data-co="toggle-wallet">' +
-                'Apply ' + formatMoney(totalCreditCents / 100) + ' in wallet credits' +
-              '</label>' +
-              '</div>';
-          }
+          // ── Wallet Deductions (order: Coupons → Loyalty → Gift Cards → Credits) ──
+          var hasAnyWalletInstrument = checkoutData.walletCredits.length > 0 ||
+            checkoutData.walletGiftCards.length > 0 ||
+            (checkoutData.loyaltyConfig && checkoutData.loyaltyConfig.enabled && checkoutData.loyaltyBalance && checkoutData.loyaltyBalance.totalPoints > 0);
 
-          // Loyalty points redemption
-          if (checkoutData.loyaltyConfig && checkoutData.loyaltyConfig.enabled && checkoutData.loyaltyBalance && checkoutData.loyaltyBalance.totalPoints > 0) {
-            var lc = checkoutData.loyaltyConfig;
-            var lb = checkoutData.loyaltyBalance;
-            var loyaltyValueCents = Math.round((lb.totalPoints / lc.redemptionRate) * 100);
+          if (hasAnyWalletInstrument) {
             html += '<div class="checkout-section">' +
-              '<div class="checkout-section-title">' + esc(lc.pointName) + '</div>' +
-              '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;color:var(--text);">' +
+              '<div class="checkout-section-title">Wallet Deductions</div>';
+
+            // Saved coupons hint
+            if (checkoutData.savedCoupons.length > 0 && !checkoutData.coupon) {
+              html += '<div style="font-size:0.82rem;color:var(--teal);margin-bottom:8px;">&#127903; You have ' + checkoutData.savedCoupons.length + ' saved coupon' + (checkoutData.savedCoupons.length > 1 ? 's' : '') + ' \u2014 enter the code above to apply.</div>';
+            }
+
+            // Loyalty (2nd in priority after coupons)
+            if (checkoutData.loyaltyConfig && checkoutData.loyaltyConfig.enabled && checkoutData.loyaltyBalance && checkoutData.loyaltyBalance.totalPoints > 0) {
+              var lc = checkoutData.loyaltyConfig;
+              var lb = checkoutData.loyaltyBalance;
+              var loyaltyValueCents = Math.round((lb.totalPoints / lc.redemptionRate) * 100);
+              html += '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;color:var(--text);margin-bottom:8px;">' +
                 '<input type="checkbox" id="coLoyaltyToggle" ' + (checkoutData.loyaltyApplied ? 'checked' : '') + ' data-co="toggle-loyalty">' +
-                'Apply ' + lb.totalPoints + ' ' + esc(lc.pointName) + ' (' + formatMoney(loyaltyValueCents / 100) + ' off)' +
-              '</label>' +
-              '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">All-or-nothing \u2014 your full balance is applied.</div>' +
+                '&#11088; Apply ' + lb.totalPoints + ' ' + esc(lc.pointName) + ' (' + formatMoney(loyaltyValueCents / 100) + ' off)' +
+              '</label>';
+            }
+
+            // Gift Cards (3rd in priority)
+            if (checkoutData.walletGiftCards.length > 0) {
+              var totalGcCents = checkoutData.walletGiftCards.reduce(function(sum, g) { return sum + (g.remainingCents || 0); }, 0);
+              html += '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;color:var(--text);margin-bottom:8px;">' +
+                '<input type="checkbox" id="coGiftCardToggle" ' + (checkoutData.walletGiftCardApplied ? 'checked' : '') + ' data-co="toggle-giftcard">' +
+                '&#127873; Apply gift cards (' + formatMoney(totalGcCents / 100) + ' available)' +
+              '</label>';
+            }
+
+            // Credits (4th, last priority)
+            if (checkoutData.walletCredits.length > 0) {
+              var totalCreditCents = checkoutData.walletCredits.reduce(function(sum, c) { return sum + (c.remainingCents != null ? c.remainingCents : (c.amountCents || 0)); }, 0);
+              html += '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;color:var(--text);margin-bottom:4px;">' +
+                '<input type="checkbox" id="coWalletToggle" ' + (checkoutData.walletCreditApplied ? 'checked' : '') + ' data-co="toggle-wallet">' +
+                '&#128179; Apply store credits (' + formatMoney(totalCreditCents / 100) + ' available)' +
+              '</label>';
+            }
+
+            html += '<div style="font-size:0.75rem;color:var(--warm-gray-light);margin-top:6px;">Deductions applied in order: coupons \u2192 loyalty \u2192 gift cards \u2192 credits</div>' +
               '</div>';
           }
 
@@ -840,20 +863,36 @@
     var shipCost = checkoutData.shippingMethod ? checkoutData.shippingMethod.price : 0;
     var tax = Math.round(subtotal * checkoutData.taxRate * 100) / 100;
     var couponDiscount = checkoutData.coupon ? checkoutData.coupon.discount : 0;
-    // Loyalty redemption (applied before wallet credits per deduction order: Coupons → Loyalty → Gift Cards → Credits)
+    // ── Deduction cascade: Coupons → Loyalty → Gift Cards → Credits ──
+    var runningCents = Math.round((subtotal + tax + shipCost - couponDiscount) * 100);
+
+    // 2. Loyalty
     var loyaltyDollars = 0;
     if (checkoutData.loyaltyApplied && checkoutData.loyaltyBalance && checkoutData.loyaltyConfig) {
       var loyaltyCents = calcLoyaltyRedemptionCents();
-      var afterCouponForLoyalty = Math.round((subtotal + tax + shipCost - couponDiscount) * 100);
-      loyaltyDollars = Math.min(loyaltyCents, Math.max(0, afterCouponForLoyalty)) / 100;
+      loyaltyDollars = Math.min(loyaltyCents, Math.max(0, runningCents)) / 100;
+      runningCents -= Math.round(loyaltyDollars * 100);
     }
+
+    // 3. Gift Cards (expiring soonest first)
+    var giftCardDollars = 0;
+    if (checkoutData.walletGiftCardApplied && checkoutData.walletGiftCards.length > 0) {
+      var totalGcCents = checkoutData.walletGiftCards.reduce(function(sum, g) { return sum + (g.remainingCents || 0); }, 0);
+      var gcUseCents = Math.min(totalGcCents, Math.max(0, runningCents));
+      giftCardDollars = gcUseCents / 100;
+      runningCents -= gcUseCents;
+    }
+
+    // 4. Credits (FIFO, oldest first)
     var walletCreditDollars = 0;
     if (checkoutData.walletCreditApplied && checkoutData.walletCredits.length > 0) {
       var totalCreditCents = checkoutData.walletCredits.reduce(function(sum, c) { return sum + (c.remainingCents != null ? c.remainingCents : (c.amountCents || 0)); }, 0);
-      var afterCouponAndLoyalty = Math.round((subtotal + tax + shipCost - couponDiscount - loyaltyDollars) * 100) / 100;
-      walletCreditDollars = Math.min(totalCreditCents / 100, Math.max(0, afterCouponAndLoyalty));
+      var creditUseCents = Math.min(totalCreditCents, Math.max(0, runningCents));
+      walletCreditDollars = creditUseCents / 100;
+      runningCents -= creditUseCents;
     }
-    var total = Math.round((subtotal + tax + shipCost - couponDiscount - loyaltyDollars - walletCreditDollars) * 100) / 100;
+
+    var total = Math.max(0, runningCents) / 100;
     if (total < 0) total = 0;
 
     var html = '<div class="order-totals">';
@@ -873,8 +912,12 @@
       html += '<div class="order-total-row discount"><span class="order-total-label">' + esc(loyaltyLabel) + '</span><span class="order-total-value">-' + formatMoney(loyaltyDollars) + '</span></div>';
     }
 
+    if (giftCardDollars > 0) {
+      html += '<div class="order-total-row discount"><span class="order-total-label">Gift Card</span><span class="order-total-value">-' + formatMoney(giftCardDollars) + '</span></div>';
+    }
+
     if (walletCreditDollars > 0) {
-      html += '<div class="order-total-row discount"><span class="order-total-label">Wallet Credit</span><span class="order-total-value">-' + formatMoney(walletCreditDollars) + '</span></div>';
+      html += '<div class="order-total-row discount"><span class="order-total-label">Store Credit</span><span class="order-total-value">-' + formatMoney(walletCreditDollars) + '</span></div>';
     }
 
     html += '<div class="order-total-row grand-total"><span class="order-total-label">Total</span><span class="order-total-value">' + formatMoney(total) + '</span></div>';
@@ -927,6 +970,75 @@
       })
       .catch(function(err) {
         console.warn('[checkout] Failed to load wallet credits:', err);
+      });
+  }
+
+  // ── Gift Cards: Load wallet gift cards ──
+  function loadWalletGiftCards() {
+    checkoutData.walletGiftCards = [];
+    checkoutData.walletGiftCardApplied = false;
+    var user = window.MastCart && window.MastCart.getCurrentUser();
+    if (!user || user.isAnonymous) return;
+    var db = getDb();
+    if (!db) return;
+
+    db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/wallet/giftCards')
+      .once('value')
+      .then(function(snap) {
+        var data = snap.val() || {};
+        var now = new Date().toISOString();
+        checkoutData.walletGiftCards = Object.keys(data).map(function(id) {
+          var g = data[id];
+          g._id = id;
+          return g;
+        }).filter(function(g) {
+          // Only active cards with balance
+          if (g.status !== 'active') return false;
+          if ((g.remainingCents || 0) <= 0) return false;
+          // Lazy expiration check
+          if (g.expiresAt && g.expiresAt < now) return false;
+          return true;
+        }).sort(function(a, b) {
+          // Expiring soonest first (per deduction rule)
+          if (a.expiresAt && b.expiresAt) return a.expiresAt.localeCompare(b.expiresAt);
+          if (a.expiresAt) return -1;
+          if (b.expiresAt) return 1;
+          return (a.claimedAt || '').localeCompare(b.claimedAt || '');
+        });
+        // Auto-apply if any cards available
+        if (checkoutData.walletGiftCards.length > 0) {
+          checkoutData.walletGiftCardApplied = true;
+        }
+      })
+      .catch(function(err) {
+        console.warn('[checkout] Failed to load wallet gift cards:', err);
+      });
+  }
+
+  // ── Saved Coupons: Load from wallet ──
+  function loadSavedCoupons() {
+    checkoutData.savedCoupons = [];
+    var user = window.MastCart && window.MastCart.getCurrentUser();
+    if (!user || user.isAnonymous) return;
+    var db = getDb();
+    if (!db) return;
+
+    db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/wallet/coupons')
+      .once('value')
+      .then(function(snap) {
+        var data = snap.val() || {};
+        checkoutData.savedCoupons = Object.keys(data).map(function(id) {
+          var c = data[id];
+          c._id = id;
+          return c;
+        }).filter(function(c) {
+          // Only unexpired coupons
+          if (c.expiresAt && c.expiresAt < new Date().toISOString()) return false;
+          return true;
+        });
+      })
+      .catch(function(err) {
+        console.warn('[checkout] Failed to load saved coupons:', err);
       });
   }
 
@@ -1069,6 +1181,71 @@
       updates[basePath + '/totalPoints'] = currentPoints;
       updates[basePath + '/lastEarningPurchaseAt'] = now;
       updates[basePath + '/expiresAt'] = expiresAt.toISOString();
+    }
+
+    if (Object.keys(updates).length === 0) return Promise.resolve();
+    return db.ref().update(updates);
+  }
+
+  // ── Gift Cards: Consume at checkout ──
+  function consumeWalletGiftCards(orderId) {
+    if (!checkoutData.walletGiftCardApplied || checkoutData.walletGiftCards.length === 0) return Promise.resolve();
+    var user = window.MastCart && window.MastCart.getCurrentUser();
+    if (!user || user.isAnonymous) return Promise.resolve();
+    var db = getDb();
+    if (!db) return Promise.resolve();
+
+    // Calculate how much gift card to apply (same cascade as buildTotalsHtml)
+    var subtotal = calcSubtotal();
+    var shipCost = checkoutData.shippingMethod ? checkoutData.shippingMethod.price : 0;
+    var tax = Math.round(subtotal * checkoutData.taxRate * 100) / 100;
+    var couponDiscount = checkoutData.coupon ? checkoutData.coupon.discount : 0;
+    var runningCents = Math.round((subtotal + tax + shipCost - couponDiscount) * 100);
+
+    // Subtract loyalty first
+    if (checkoutData.loyaltyApplied && checkoutData.loyaltyBalance && checkoutData.loyaltyConfig) {
+      var loyaltyCents = calcLoyaltyRedemptionCents();
+      runningCents -= Math.min(loyaltyCents, Math.max(0, runningCents));
+    }
+
+    if (runningCents <= 0) return Promise.resolve();
+
+    var now = new Date().toISOString();
+    var updates = {};
+    var gcCards = checkoutData.walletGiftCards;
+    var remaining = runningCents;
+
+    // Consume cards expiring soonest first (already sorted)
+    for (var i = 0; i < gcCards.length && remaining > 0; i++) {
+      var g = gcCards[i];
+      var available = g.remainingCents || 0;
+      var useCents = Math.min(available, remaining);
+      var gcPath = TENANT_ID + '/public/accounts/' + user.uid + '/wallet/giftCards/' + g._id;
+
+      updates[gcPath + '/remainingCents'] = available - useCents;
+      updates[gcPath + '/updatedAt'] = now;
+      if (available - useCents <= 0) {
+        updates[gcPath + '/status'] = 'depleted';
+      }
+
+      // Transaction log
+      var txnRef = db.ref(gcPath + '/transactions').push();
+      updates[txnRef.path.toString().replace(/^\//, '')] = {
+        type: 'applied',
+        amountCents: useCents,
+        orderId: orderId,
+        timestamp: now
+      };
+
+      // Update admin record balance too
+      if (g.code) {
+        updates[TENANT_ID + '/admin/giftCards/' + g.code + '/balanceCents'] = available - useCents;
+        if (available - useCents <= 0) {
+          updates[TENANT_ID + '/admin/giftCards/' + g.code + '/status'] = 'expired';
+        }
+      }
+
+      remaining -= useCents;
     }
 
     if (Object.keys(updates).length === 0) return Promise.resolve();
@@ -1276,6 +1453,30 @@
       return;
     }
 
+    // Check if wallet deductions cover the entire order ($0 payment)
+    var subtotal = calcSubtotal();
+    var shipCost = checkoutData.shippingMethod ? checkoutData.shippingMethod.price : 0;
+    var tax = Math.round(subtotal * checkoutData.taxRate * 100) / 100;
+    var couponDiscount = checkoutData.coupon ? checkoutData.coupon.discount : 0;
+    var orderTotalCents = Math.round((subtotal + tax + shipCost - couponDiscount) * 100);
+
+    // Apply deduction cascade to check if total reaches $0
+    var deductionTotal = 0;
+    if (checkoutData.loyaltyApplied && checkoutData.loyaltyBalance && checkoutData.loyaltyConfig) {
+      deductionTotal += calcLoyaltyRedemptionCents();
+    }
+    if (checkoutData.walletGiftCardApplied && checkoutData.walletGiftCards.length > 0) {
+      deductionTotal += checkoutData.walletGiftCards.reduce(function(s, g) { return s + (g.remainingCents || 0); }, 0);
+    }
+    if (checkoutData.walletCreditApplied && checkoutData.walletCredits.length > 0) {
+      deductionTotal += checkoutData.walletCredits.reduce(function(s, c) { return s + (c.remainingCents != null ? c.remainingCents : (c.amountCents || 0)); }, 0);
+    }
+
+    if (deductionTotal >= orderTotalCents && orderTotalCents > 0) {
+      placeZeroDollarOrder();
+      return;
+    }
+
     isSubmitting = true;
 
     var btn = document.querySelector('[data-co="place-order"]');
@@ -1360,6 +1561,115 @@
 
   // ── Place Order: Pay by Check (wholesale) ──
   // Bypasses Square — creates order in Firebase wholesale orders queue
+  // ── $0 Payment Orders (Step 4.2) ──
+  // When wallet deductions fully cover the order, skip payment processor.
+  function placeZeroDollarOrder() {
+    isSubmitting = true;
+    var btn = document.querySelector('[data-co="place-order"]');
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="checkout-spinner"></span> Processing...';
+    }
+
+    var items = window.MastCart.getItems();
+    var user = window.MastCart.getCurrentUser();
+    var db = getDb();
+    if (!db) { isSubmitting = false; return; }
+
+    var subtotal = calcSubtotal();
+    var shipCost = checkoutData.shippingMethod ? checkoutData.shippingMethod.price : 0;
+    var tax = Math.round(subtotal * checkoutData.taxRate * 100) / 100;
+    var couponDiscount = checkoutData.coupon ? checkoutData.coupon.discount : 0;
+    var now = new Date().toISOString();
+
+    // Generate order number
+    var orderNumber = 'WL-' + Date.now().toString(36).toUpperCase();
+
+    // Build payment references for audit trail
+    var paymentRefs = [];
+    if (checkoutData.loyaltyApplied) paymentRefs.push('loyalty:applied');
+    if (checkoutData.walletGiftCardApplied) {
+      checkoutData.walletGiftCards.forEach(function(g) { paymentRefs.push('gift-card:' + (g.code || g._id)); });
+    }
+    if (checkoutData.walletCreditApplied) paymentRefs.push('credit:applied');
+
+    var orderData = {
+      orderNumber: orderNumber,
+      status: 'placed',
+      paymentMethod: 'wallet',
+      type: 'retail',
+      source: 'online',
+      buyerName: checkoutData.shipping.name || '',
+      buyerEmail: checkoutData.email || '',
+      email: checkoutData.email || '',
+      shipping: checkoutData.shipping,
+      billing: checkoutData.billing.same ? checkoutData.shipping : checkoutData.billing,
+      items: items.map(function(it) {
+        return { pid: it.pid, name: it.name, options: it.options, price: it.price, qty: it.qty, priceCents: it.priceCents || 0 };
+      }),
+      subtotalCents: Math.round(subtotal * 100),
+      shippingCents: Math.round(shipCost * 100),
+      taxCents: Math.round(tax * 100),
+      couponDiscount: couponDiscount,
+      coupon: checkoutData.coupon || null,
+      totalCents: 0,
+      total: 0,
+      paidAmount: 0,
+      shippingMethod: checkoutData.shippingMethod || null,
+      uid: user ? user.uid : 'anonymous',
+      placedAt: now,
+      createdAt: now,
+      walletPayment: true,
+      walletPaymentRefs: paymentRefs,
+      statusHistory: [{ status: 'placed', at: now, by: 'wallet-checkout' }]
+    };
+
+    var orderRef = db.ref(TENANT_ID + '/orders').push();
+    orderRef.set(orderData).then(function() {
+      window.MastCart.clear();
+      trackCheckoutEvent('wallet_order_placed');
+
+      // Provision passes, enrollments
+      provisionCustomerPasses(items, orderRef.key);
+      provisionSeriesEnrollments(items, orderRef.key);
+
+      // Consume all wallet instruments
+      consumeWalletGiftCards(orderRef.key);
+      consumeWalletCredits(orderRef.key);
+      processLoyaltyForOrder(orderRef.key);
+
+      // Render confirmation
+      isSubmitting = false;
+      renderZeroDollarConfirmation(orderNumber, orderData);
+    }).catch(function(err) {
+      isSubmitting = false;
+      if (btn) { btn.disabled = false; btn.textContent = 'Place Order'; }
+      showToast('Order failed: ' + (err.message || 'Unknown error'), true);
+    });
+  }
+
+  function renderZeroDollarConfirmation(orderNumber, orderData) {
+    var body = document.getElementById('cartDrawerBody');
+    var footer = document.getElementById('cartDrawerFooter');
+    if (!body) return;
+
+    body.innerHTML =
+      '<div style="text-align:center;padding:40px 20px;">' +
+        '<div style="font-size:2.5rem;margin-bottom:16px;">&#10003;</div>' +
+        '<h3 style="margin:0 0 8px;font-size:1.2rem;">Order Confirmed!</h3>' +
+        '<p style="font-size:0.9rem;color:var(--warm-gray);">Order #' + esc(orderNumber) + '</p>' +
+        '<p style="font-size:0.85rem;color:var(--warm-gray);margin-top:12px;">Paid in full with wallet balance. No card charge.</p>' +
+        '<div style="margin-top:24px;padding:16px;background:rgba(22,163,74,0.1);border-radius:8px;">' +
+          '<div style="font-size:0.85rem;color:var(--charcoal);">A confirmation email will be sent to ' + esc(orderData.email || '') + '</div>' +
+        '</div>' +
+      '</div>';
+
+    if (footer) {
+      footer.style.display = '';
+      footer.innerHTML = '<button class="checkout-btn-primary" onclick="window.location.reload()">Done</button>';
+    }
+  }
+
   function placeCheckOrder() {
     isSubmitting = true;
     var btn = document.querySelector('[data-co="place-order"]');
@@ -1442,6 +1752,7 @@
       // Provision CustomerPass records for any pass items
       provisionCustomerPasses(items, orderRef.key);
       provisionSeriesEnrollments(items, orderRef.key);
+      consumeWalletGiftCards(orderRef.key);
       consumeWalletCredits(orderRef.key);
       processLoyaltyForOrder(orderRef.key);
 
@@ -1570,6 +1881,10 @@
       return;
     } else if (action === 'toggle-loyalty') {
       checkoutData.loyaltyApplied = !!btn.checked;
+      updateTotals();
+      return;
+    } else if (action === 'toggle-giftcard') {
+      checkoutData.walletGiftCardApplied = !!btn.checked;
       updateTotals();
       return;
     } else if (action === 'apply-coupon') {
@@ -1836,7 +2151,8 @@
       provisionSeriesEnrollments(pendingOrder.cartItems, orderId);
     }
 
-    // Consume wallet credits and process loyalty if applied
+    // Consume wallet instruments and process loyalty if applied
+    consumeWalletGiftCards(orderId);
     consumeWalletCredits(orderId);
     processLoyaltyForOrder(orderId);
 
@@ -2083,9 +2399,11 @@
     start: function () {
       attachDelegate();
       trackCheckoutEvent('checkout_start');
-      // Load wallet credits and loyalty data for authenticated user
+      // Load wallet instruments for authenticated user
       loadWalletCredits();
+      loadWalletGiftCards();
       loadLoyaltyData();
+      loadSavedCoupons();
       // Load Google Places lazily, then render address
       loadGooglePlaces(function () {
         renderAddress();
