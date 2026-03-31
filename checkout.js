@@ -2145,7 +2145,8 @@
             recipientEmail: recipientEmail,
             senderName: (item.options && item.options.senderName) || checkoutData.shipping.name || '',
             senderMessage: (item.options && item.options.senderMessage) || '',
-            orderId: orderId
+            orderId: orderId,
+            uid: user.uid
           }, function() { /* fire and forget */ });
         }
       }
