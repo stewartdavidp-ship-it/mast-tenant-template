@@ -443,6 +443,12 @@
         '<path d="M7 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM7.16 14.26l.04-.12.96-1.74h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49A1 1 0 0 0 20.07 4H5.21l-.94-2H1v2h2l3.6 7.59-1.35 2.44C4.52 15.37 5.48 17 7 17h12v-2H7.42c-.14 0-.25-.11-.25-.25z"/>' +
       '</svg>';
 
+    // Gift card icon SVG template
+    var giftCardSvg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">' +
+        '<path d="M20 6h-2.18c.11-.31.18-.65.18-1 0-1.66-1.34-3-3-3-1.05 0-1.96.54-2.5 1.35l-.5.67-.5-.68C10.96 2.54 10.05 2 9 2 7.34 2 6 3.34 6 5c0 .35.07.69.18 1H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-5-2c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zM9 4c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm11 15H4v-2h16v2zm0-5H4V8h5.08L7 10.83 8.62 12 12 7.4 15.38 12 17 10.83 14.92 8H20v6z"/>' +
+      '</svg>';
+
     // Wallet icon SVG template
     var walletSvg =
       '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">' +
@@ -453,6 +459,14 @@
     function injectCartIcons() {
       var navLinks = document.querySelector('.nav-links');
       if (navLinks && !document.getElementById('cartIconWrap')) {
+        // Gift card icon (before wallet)
+        var giftLi = document.createElement('li');
+        giftLi.innerHTML =
+          '<a href="gift-cards.html" class="cart-icon-wrap" id="giftCardIconWrap" title="Gift Cards">' +
+            giftCardSvg +
+          '</a>';
+        navLinks.appendChild(giftLi);
+
         // Wallet icon (before cart)
         var walletLi = document.createElement('li');
         walletLi.innerHTML =
@@ -474,6 +488,17 @@
 
       var navToggle = document.querySelector('.nav-toggle');
       if (navToggle && !document.getElementById('cartIconMobile')) {
+        // Gift card icon mobile (before wallet)
+        if (!document.getElementById('giftCardIconMobile')) {
+          var giftMobile = document.createElement('a');
+          giftMobile.href = 'gift-cards.html';
+          giftMobile.className = 'cart-icon-wrap cart-icon-mobile';
+          giftMobile.id = 'giftCardIconMobile';
+          giftMobile.title = 'Gift Cards';
+          giftMobile.innerHTML = giftCardSvg;
+          navToggle.parentNode.insertBefore(giftMobile, navToggle);
+        }
+
         // Wallet icon mobile (before cart)
         if (!document.getElementById('walletIconMobile')) {
           var walletMobile = document.createElement('a');
