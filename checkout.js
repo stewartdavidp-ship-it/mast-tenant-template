@@ -20,7 +20,10 @@
     taxState: '',
     resaleCertNumber: '',      // wholesale: state tax resale certificate number
     walletCredits: [],         // [{ id, amountCents, ... }] active credits for this user
-    walletCreditApplied: false // whether to apply wallet credits to this order
+    walletCreditApplied: false, // whether to apply wallet credits to this order
+    loyaltyConfig: null,       // { enabled, pointName, earnRate, redemptionRate, expiryDays, exclusions }
+    loyaltyBalance: null,      // { totalPoints, lastEarningPurchaseAt, expiresAt }
+    loyaltyApplied: false      // whether to apply loyalty points to this order
   };
 
   var shippingConfigCache = null; // cached flat-rate config
@@ -757,6 +760,21 @@
               '</div>';
           }
 
+          // Loyalty points redemption
+          if (checkoutData.loyaltyConfig && checkoutData.loyaltyConfig.enabled && checkoutData.loyaltyBalance && checkoutData.loyaltyBalance.totalPoints > 0) {
+            var lc = checkoutData.loyaltyConfig;
+            var lb = checkoutData.loyaltyBalance;
+            var loyaltyValueCents = Math.round((lb.totalPoints / lc.redemptionRate) * 100);
+            html += '<div class="checkout-section">' +
+              '<div class="checkout-section-title">' + esc(lc.pointName) + '</div>' +
+              '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;color:var(--text);">' +
+                '<input type="checkbox" id="coLoyaltyToggle" ' + (checkoutData.loyaltyApplied ? 'checked' : '') + ' data-co="toggle-loyalty">' +
+                'Apply ' + lb.totalPoints + ' ' + esc(lc.pointName) + ' (' + formatMoney(loyaltyValueCents / 100) + ' off)' +
+              '</label>' +
+              '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">All-or-nothing \u2014 your full balance is applied.</div>' +
+              '</div>';
+          }
+
           // Totals
           html += '<div class="checkout-section">' + buildTotalsHtml(subtotal) + '</div>';
 
@@ -822,13 +840,20 @@
     var shipCost = checkoutData.shippingMethod ? checkoutData.shippingMethod.price : 0;
     var tax = Math.round(subtotal * checkoutData.taxRate * 100) / 100;
     var couponDiscount = checkoutData.coupon ? checkoutData.coupon.discount : 0;
+    // Loyalty redemption (applied before wallet credits per deduction order: Coupons → Loyalty → Gift Cards → Credits)
+    var loyaltyDollars = 0;
+    if (checkoutData.loyaltyApplied && checkoutData.loyaltyBalance && checkoutData.loyaltyConfig) {
+      var loyaltyCents = calcLoyaltyRedemptionCents();
+      var afterCouponForLoyalty = Math.round((subtotal + tax + shipCost - couponDiscount) * 100);
+      loyaltyDollars = Math.min(loyaltyCents, Math.max(0, afterCouponForLoyalty)) / 100;
+    }
     var walletCreditDollars = 0;
     if (checkoutData.walletCreditApplied && checkoutData.walletCredits.length > 0) {
       var totalCreditCents = checkoutData.walletCredits.reduce(function(sum, c) { return sum + (c.remainingCents != null ? c.remainingCents : (c.amountCents || 0)); }, 0);
-      var afterCoupon = Math.round((subtotal + tax + shipCost - couponDiscount) * 100) / 100;
-      walletCreditDollars = Math.min(totalCreditCents / 100, Math.max(0, afterCoupon));
+      var afterCouponAndLoyalty = Math.round((subtotal + tax + shipCost - couponDiscount - loyaltyDollars) * 100) / 100;
+      walletCreditDollars = Math.min(totalCreditCents / 100, Math.max(0, afterCouponAndLoyalty));
     }
-    var total = Math.round((subtotal + tax + shipCost - couponDiscount - walletCreditDollars) * 100) / 100;
+    var total = Math.round((subtotal + tax + shipCost - couponDiscount - loyaltyDollars - walletCreditDollars) * 100) / 100;
     if (total < 0) total = 0;
 
     var html = '<div class="order-totals">';
@@ -841,6 +866,11 @@
 
     if (couponDiscount > 0) {
       html += '<div class="order-total-row discount"><span class="order-total-label">Coupon (' + esc(checkoutData.coupon.code) + ')</span><span class="order-total-value">-' + formatMoney(couponDiscount) + '</span></div>';
+    }
+
+    if (loyaltyDollars > 0) {
+      var loyaltyLabel = checkoutData.loyaltyConfig ? checkoutData.loyaltyConfig.pointName : 'Loyalty';
+      html += '<div class="order-total-row discount"><span class="order-total-label">' + esc(loyaltyLabel) + '</span><span class="order-total-value">-' + formatMoney(loyaltyDollars) + '</span></div>';
     }
 
     if (walletCreditDollars > 0) {
@@ -898,6 +928,151 @@
       .catch(function(err) {
         console.warn('[checkout] Failed to load wallet credits:', err);
       });
+  }
+
+  // ── Loyalty: Load config + balance ──
+  function loadLoyaltyData() {
+    checkoutData.loyaltyConfig = null;
+    checkoutData.loyaltyBalance = null;
+    checkoutData.loyaltyApplied = false;
+    var user = window.MastCart && window.MastCart.getCurrentUser();
+    if (!user || user.isAnonymous) return;
+    var db = getDb();
+    if (!db) return;
+
+    // Load config
+    db.ref(TENANT_ID + '/admin/walletConfig').once('value')
+      .then(function(snap) {
+        var config = snap.val() || {};
+        if (!config.loyaltyEnabled) return;
+        checkoutData.loyaltyConfig = {
+          enabled: true,
+          pointName: config.loyaltyPointName || 'Points',
+          earnRate: config.loyaltyEarnRate || 1,
+          redemptionRate: config.loyaltyRedemptionRate || 50,
+          expiryDays: config.loyaltyExpiryDays || 365,
+          exclusions: config.loyaltyExclusions || []
+        };
+
+        // Load balance
+        return db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/wallet/loyalty').once('value');
+      })
+      .then(function(loyaltySnap) {
+        if (!loyaltySnap) return;
+        var data = loyaltySnap.val();
+        if (data && data.totalPoints > 0) {
+          // Check expiry
+          var now = new Date();
+          if (data.expiresAt && new Date(data.expiresAt) < now) {
+            // Points expired — don't show
+            return;
+          }
+          checkoutData.loyaltyBalance = data;
+        }
+      })
+      .catch(function(err) {
+        console.warn('[checkout] Failed to load loyalty data:', err);
+      });
+  }
+
+  // ── Loyalty: Calculate earning ──
+  function calcLoyaltyEarning() {
+    var config = checkoutData.loyaltyConfig;
+    if (!config || !config.enabled) return 0;
+
+    var items = window.MastCart ? window.MastCart.getItems() : [];
+    var couponDiscount = checkoutData.coupon ? checkoutData.coupon.discount : 0;
+    var exclusions = config.exclusions || [];
+
+    // Eligible subtotal: product subtotal minus excluded categories
+    var eligibleCents = 0;
+    items.forEach(function(item) {
+      // Skip gift cards and excluded categories
+      if (item.isGiftCard) return;
+      if (item.options && item.options.bookingType === 'gift-card') return;
+      if (exclusions.length > 0 && item.category && exclusions.indexOf(item.category) !== -1) return;
+      eligibleCents += (item.priceCents || Math.round((parseFloat(item.price) || 0) * 100)) * (item.qty || 1);
+    });
+
+    // Subtract coupon discount
+    var eligibleDollars = (eligibleCents / 100) - couponDiscount;
+
+    // Subtract loyalty redeemed (if applied)
+    if (checkoutData.loyaltyApplied && checkoutData.loyaltyBalance) {
+      var redeemValue = checkoutData.loyaltyBalance.totalPoints / config.redemptionRate;
+      eligibleDollars -= redeemValue;
+    }
+
+    // Gift card and credit redemptions do NOT reduce earning base (per RULE)
+    if (eligibleDollars <= 0) return 0;
+
+    return Math.floor(eligibleDollars * config.earnRate);
+  }
+
+  // ── Loyalty: Calculate redemption value ──
+  function calcLoyaltyRedemptionCents() {
+    var config = checkoutData.loyaltyConfig;
+    if (!config || !config.enabled || !checkoutData.loyaltyApplied || !checkoutData.loyaltyBalance) return 0;
+    var points = checkoutData.loyaltyBalance.totalPoints || 0;
+    if (points <= 0) return 0;
+    var valueCents = Math.round((points / config.redemptionRate) * 100);
+    return valueCents;
+  }
+
+  // ── Loyalty: Award + consume on order completion ──
+  function processLoyaltyForOrder(orderId) {
+    var config = checkoutData.loyaltyConfig;
+    if (!config || !config.enabled) return Promise.resolve();
+    var user = window.MastCart && window.MastCart.getCurrentUser();
+    if (!user || user.isAnonymous) return Promise.resolve();
+    var db = getDb();
+    if (!db) return Promise.resolve();
+
+    var now = new Date().toISOString();
+    var basePath = TENANT_ID + '/public/accounts/' + user.uid + '/wallet/loyalty';
+    var updates = {};
+    var currentPoints = (checkoutData.loyaltyBalance && checkoutData.loyaltyBalance.totalPoints) || 0;
+
+    // Consume redeemed points
+    if (checkoutData.loyaltyApplied && currentPoints > 0) {
+      var redeemPoints = currentPoints; // all-or-nothing
+      var redeemTxn = db.ref(basePath + '/transactions').push();
+      updates[redeemTxn.path.toString().replace(/^\//, '')] = {
+        type: 'redeemed',
+        points: -redeemPoints,
+        orderId: orderId,
+        timestamp: now,
+        note: 'Applied at checkout'
+      };
+      currentPoints -= redeemPoints;
+      if (currentPoints < 0) currentPoints = 0;
+    }
+
+    // Award earned points
+    var earned = calcLoyaltyEarning();
+    if (earned > 0) {
+      var earnTxn = db.ref(basePath + '/transactions').push();
+      updates[earnTxn.path.toString().replace(/^\//, '')] = {
+        type: 'earned',
+        points: earned,
+        orderId: orderId,
+        timestamp: now,
+        note: 'Purchase earning'
+      };
+      currentPoints += earned;
+    }
+
+    // Update balance + reset expiry clock
+    if (Object.keys(updates).length > 0 || earned > 0) {
+      var expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + (config.expiryDays || 365));
+      updates[basePath + '/totalPoints'] = currentPoints;
+      updates[basePath + '/lastEarningPurchaseAt'] = now;
+      updates[basePath + '/expiresAt'] = expiresAt.toISOString();
+    }
+
+    if (Object.keys(updates).length === 0) return Promise.resolve();
+    return db.ref().update(updates);
   }
 
   function consumeWalletCredits(orderId) {
@@ -1268,6 +1443,7 @@
       provisionCustomerPasses(items, orderRef.key);
       provisionSeriesEnrollments(items, orderRef.key);
       consumeWalletCredits(orderRef.key);
+      processLoyaltyForOrder(orderRef.key);
 
       // Show confirmation
       renderCheckOrderConfirmation(orderNumber);
@@ -1390,6 +1566,10 @@
 
     if (action === 'toggle-wallet') {
       checkoutData.walletCreditApplied = !!btn.checked;
+      updateTotals();
+      return;
+    } else if (action === 'toggle-loyalty') {
+      checkoutData.loyaltyApplied = !!btn.checked;
       updateTotals();
       return;
     } else if (action === 'apply-coupon') {
@@ -1656,8 +1836,9 @@
       provisionSeriesEnrollments(pendingOrder.cartItems, orderId);
     }
 
-    // Consume wallet credits if applied
+    // Consume wallet credits and process loyalty if applied
     consumeWalletCredits(orderId);
+    processLoyaltyForOrder(orderId);
 
     // Watch for order status to become 'placed' and generate CSV
     if (orderId && pendingOrder && pendingOrder.items) {
@@ -1902,8 +2083,9 @@
     start: function () {
       attachDelegate();
       trackCheckoutEvent('checkout_start');
-      // Load wallet credits for authenticated user
+      // Load wallet credits and loyalty data for authenticated user
       loadWalletCredits();
+      loadLoyaltyData();
       // Load Google Places lazily, then render address
       loadGooglePlaces(function () {
         renderAddress();

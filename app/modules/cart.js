@@ -535,6 +535,187 @@
   };
 
   // ============================================================
+  // LOYALTY ADMIN (Steps 3.1, 3.2)
+  // ============================================================
+
+  var loyaltyConfig = null;
+
+  function loadLoyaltyAdmin() {
+    var container = document.getElementById('loyaltyTab');
+    if (!container) return;
+
+    var db = MastAdmin.getData('db');
+    var tenantId = MastAdmin.getData('tenantId');
+    if (!db || !tenantId) return;
+
+    container.innerHTML = '<div class="section-header"><h2>Loyalty Program</h2></div><div class="loading">Loading...</div>';
+
+    db.ref(tenantId + '/admin/walletConfig').once('value').then(function(snap) {
+      var config = snap.val() || {};
+      loyaltyConfig = config;
+      renderLoyaltyAdmin(container, config);
+    }).catch(function(err) {
+      container.innerHTML = '<div class="section-header"><h2>Loyalty Program</h2></div>' +
+        '<div style="text-align:center;padding:40px;color:var(--danger);">Error: ' + esc(err.message) + '</div>';
+    });
+  }
+
+  function renderLoyaltyAdmin(container, config) {
+    var enabled = config.loyaltyEnabled || false;
+    var pointName = config.loyaltyPointName || 'Points';
+    var earnRate = config.loyaltyEarnRate || 1;
+    var redeemRate = config.loyaltyRedemptionRate || 50;
+    var expiryDays = config.loyaltyExpiryDays || 365;
+    var exclusions = config.loyaltyExclusions || [];
+
+    var html = '<div class="section-header">' +
+      '<h2>Loyalty Program</h2>' +
+      '<button class="btn btn-primary btn-small" onclick="window._loyaltyOpenConfig()">&#9881; Settings</button>' +
+    '</div>';
+
+    if (!enabled) {
+      html += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">' +
+        '<div style="font-size:2rem;margin-bottom:12px;">&#11088;</div>' +
+        '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">Loyalty program is disabled</p>' +
+        '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Enable it in Settings to start rewarding your customers.</p>' +
+      '</div>';
+    } else {
+      // Config summary
+      html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;margin-bottom:24px;">' +
+        // Earn rate card
+        '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">' +
+          '<div style="font-size:0.8rem;color:var(--warm-gray);margin-bottom:4px;">Earn Rate</div>' +
+          '<div style="font-size:1.4rem;font-weight:500;color:var(--charcoal);">' + earnRate + ' ' + esc(pointName) + '</div>' +
+          '<div style="font-size:0.78rem;color:var(--warm-gray);">per $1 spent</div>' +
+        '</div>' +
+        // Redemption rate card
+        '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">' +
+          '<div style="font-size:0.8rem;color:var(--warm-gray);margin-bottom:4px;">Redemption</div>' +
+          '<div style="font-size:1.4rem;font-weight:500;color:var(--charcoal);">' + redeemRate + ' ' + esc(pointName) + '</div>' +
+          '<div style="font-size:0.78rem;color:var(--warm-gray);">= $1.00 off</div>' +
+        '</div>' +
+        // Expiry card
+        '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">' +
+          '<div style="font-size:0.8rem;color:var(--warm-gray);margin-bottom:4px;">Expiry Window</div>' +
+          '<div style="font-size:1.4rem;font-weight:500;color:var(--charcoal);">' + expiryDays + ' days</div>' +
+          '<div style="font-size:0.78rem;color:var(--warm-gray);">of inactivity</div>' +
+        '</div>' +
+        // Point name card
+        '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">' +
+          '<div style="font-size:0.8rem;color:var(--warm-gray);margin-bottom:4px;">Point Name</div>' +
+          '<div style="font-size:1.4rem;font-weight:500;color:var(--charcoal);">' + esc(pointName) + '</div>' +
+          '<div style="font-size:0.78rem;color:var(--warm-gray);">Customer-facing label</div>' +
+        '</div>' +
+      '</div>';
+
+      // Exclusions
+      if (exclusions.length > 0) {
+        html += '<div style="margin-bottom:16px;">' +
+          '<div style="font-size:0.85rem;font-weight:500;color:var(--warm-gray);margin-bottom:8px;">Excluded Categories (earn zero points)</div>' +
+          '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
+        exclusions.forEach(function(cat) {
+          html += '<span style="display:inline-block;padding:3px 10px;border-radius:12px;background:rgba(196,133,60,0.15);color:var(--amber);font-size:0.78rem;font-weight:500;">' + esc(cat) + '</span>';
+        });
+        html += '</div></div>';
+      }
+
+      // How it works summary
+      html += '<div style="padding:16px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;">' +
+        '<div style="font-size:0.85rem;font-weight:500;margin-bottom:8px;color:var(--charcoal);">How it works for customers</div>' +
+        '<div style="font-size:0.82rem;color:var(--warm-gray);line-height:1.6;">' +
+          '1. Customers earn <strong>' + earnRate + ' ' + esc(pointName) + '</strong> per $1 of eligible spend at checkout.<br>' +
+          '2. At checkout, they can redeem all their points: <strong>' + redeemRate + ' ' + esc(pointName) + ' = $1.00 off</strong> (all-or-nothing).<br>' +
+          '3. Points expire after <strong>' + expiryDays + ' days</strong> of inactivity. Any purchase resets the clock.<br>' +
+          '4. Gift card and credit redemptions do NOT reduce earning base.' +
+        '</div>' +
+      '</div>';
+    }
+
+    container.innerHTML = html;
+  }
+
+  // ---- Loyalty Config Modal ----
+
+  window._loyaltyOpenConfig = function() {
+    var config = loyaltyConfig || {};
+    var exclusions = (config.loyaltyExclusions || []).join(', ');
+
+    var html = '<h3 style="margin-top:0;">Loyalty Program Settings</h3>' +
+      '<div style="margin-bottom:16px;">' +
+        '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;">' +
+          '<input type="checkbox" id="loyaltyConfigEnabled" ' + (config.loyaltyEnabled ? 'checked' : '') + '>' +
+          'Enable loyalty program' +
+        '</label>' +
+      '</div>' +
+      '<div style="margin-bottom:16px;">' +
+        '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Point Name</label>' +
+        '<input type="text" id="loyaltyConfigName" value="' + esc(config.loyaltyPointName || 'Points') + '" placeholder="Points" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);font-family:\'DM Sans\';font-size:0.9rem;">' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">e.g., Stars, Gems, Rewards Points</div>' +
+      '</div>' +
+      '<div style="display:flex;gap:12px;margin-bottom:16px;">' +
+        '<div style="flex:1;">' +
+          '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Earn Rate (points per $1)</label>' +
+          '<input type="number" id="loyaltyConfigEarn" value="' + (config.loyaltyEarnRate || 1) + '" min="0.1" step="0.1" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);font-family:\'DM Sans\';font-size:0.9rem;">' +
+        '</div>' +
+        '<div style="flex:1;">' +
+          '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Redemption Rate (points per $1)</label>' +
+          '<input type="number" id="loyaltyConfigRedeem" value="' + (config.loyaltyRedemptionRate || 50) + '" min="1" step="1" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);font-family:\'DM Sans\';font-size:0.9rem;">' +
+        '</div>' +
+      '</div>' +
+      '<div style="margin-bottom:16px;">' +
+        '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Expiry Window (days of inactivity)</label>' +
+        '<input type="number" id="loyaltyConfigExpiry" value="' + (config.loyaltyExpiryDays || 365) + '" min="30" step="1" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);font-family:\'DM Sans\';font-size:0.9rem;">' +
+      '</div>' +
+      '<div style="margin-bottom:16px;">' +
+        '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Excluded Categories (comma-separated)</label>' +
+        '<input type="text" id="loyaltyConfigExclude" value="' + esc(exclusions) + '" placeholder="Gift Cards, Classes" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);font-family:\'DM Sans\';font-size:0.9rem;">' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">Products in these categories earn zero points.</div>' +
+      '</div>' +
+      '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;">' +
+        '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+        '<button class="btn btn-primary" onclick="window._loyaltySaveConfig()">Save</button>' +
+      '</div>';
+
+    openModal(html);
+  };
+
+  window._loyaltySaveConfig = async function() {
+    var enabled = document.getElementById('loyaltyConfigEnabled').checked;
+    var pointName = (document.getElementById('loyaltyConfigName').value || '').trim() || 'Points';
+    var earnRate = parseFloat(document.getElementById('loyaltyConfigEarn').value) || 1;
+    var redeemRate = parseInt(document.getElementById('loyaltyConfigRedeem').value) || 50;
+    var expiryDays = parseInt(document.getElementById('loyaltyConfigExpiry').value) || 365;
+    var excludeRaw = document.getElementById('loyaltyConfigExclude').value || '';
+    var exclusions = excludeRaw.split(',').map(function(s) { return s.trim(); }).filter(function(s) { return s; });
+
+    if (redeemRate < 1) {
+      showToast('Redemption rate must be at least 1 point per $1.', true);
+      return;
+    }
+
+    var data = {
+      loyaltyEnabled: enabled,
+      loyaltyPointName: pointName,
+      loyaltyEarnRate: earnRate,
+      loyaltyRedemptionRate: redeemRate,
+      loyaltyExpiryDays: expiryDays,
+      loyaltyExclusions: exclusions,
+      updatedAt: new Date().toISOString()
+    };
+
+    try {
+      await MastDB.walletConfig.update(data);
+      writeAudit('update', 'wallet-config', 'loyalty');
+      loyaltyConfig = Object.assign(loyaltyConfig || {}, data);
+      closeModal();
+      showToast('Loyalty settings saved');
+      loadLoyaltyAdmin();
+    } catch (err) {
+      showToast('Failed to save: ' + err.message, true);
+    }
+  };
+
+  // ============================================================
   // MODULE REGISTRATION
   // ============================================================
 
@@ -550,7 +731,7 @@
       },
       'loyalty': {
         tab: 'loyaltyTab',
-        setup: function() { /* Phase 3 */ }
+        setup: function() { loadLoyaltyAdmin(); }
       }
     },
     lazyLoad: function() { loadWalletDashboard(); },
@@ -575,6 +756,7 @@
       giftCardsLoaded = false;
       giftCardsData = {};
       giftCardConfig = null;
+      loyaltyConfig = null;
     }
   });
 
