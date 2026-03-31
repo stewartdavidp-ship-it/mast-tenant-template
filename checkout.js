@@ -1668,7 +1668,7 @@
     }).catch(function(err) {
       isSubmitting = false;
       if (btn) { btn.disabled = false; btn.textContent = 'Place Order'; }
-      showToast('Order failed: ' + (err.message || 'Unknown error'), true);
+      window.MastCart.showToast('Order failed: ' + (err.message || 'Unknown error'), true);
     });
   }
 
@@ -2072,16 +2072,6 @@
         code = code.slice(0,4) + '-' + code.slice(4,8) + '-' + code.slice(8,12) + '-' + code.slice(12,16);
 
         var isSelf = giftType === 'self';
-
-        // Write admin gift card record
-        db.ref(TENANT_ID + '/admin/giftCards/' + code).set({
-          code: code, amountCents: amountCents, balanceCents: amountCents,
-          purchasedBy: user.uid, recipientEmail: isSelf ? '' : recipientEmail,
-          orderId: orderId, orderNumber: orderNumber,
-          status: isSelf ? 'claimed' : 'issued',
-          issuedAt: now, expiresAt: expiresIso,
-          claimedBy: isSelf ? user.uid : null, claimedAt: isSelf ? now : null
-        });
 
         if (isSelf) {
           // Add to buyer's wallet
