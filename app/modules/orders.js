@@ -3136,10 +3136,13 @@
     }
 
     // Refund allocation section
+    var itemsTotalCents = (r.items || []).reduce(function(s, i) { return s + (i.priceCents || 0) * (i.qty || 1); }, 0);
+    var taxOnReturnCents = r.taxOnReturnedCents || 0;
     var refundHtml = '<div class="order-detail-section">' +
       '<div class="order-detail-section-title">Refund</div>' +
-      '<div class="order-summary-row"><span>Items Total</span><span>$' + ((r.items || []).reduce(function(s, i) { return s + (i.priceCents || 0) * (i.qty || 1); }, 0) / 100).toFixed(2) + '</span></div>' +
-      '<div class="order-summary-row total"><span>Refund Amount</span><span>$' + ((r.refundAmountCents || 0) / 100).toFixed(2) + '</span></div>' +
+      '<div class="order-summary-row"><span>Items Total</span><span>$' + (itemsTotalCents / 100).toFixed(2) + '</span></div>' +
+      (taxOnReturnCents > 0 ? '<div class="order-summary-row"><span>Tax</span><span>$' + (taxOnReturnCents / 100).toFixed(2) + '</span></div>' : '') +
+      '<div class="order-summary-row total" style="color:var(--text,#e0e0e0);"><span>Refund Amount</span><span>$' + ((r.refundAmountCents || 0) / 100).toFixed(2) + '</span></div>' +
       '<div style="margin-top:0.5rem;font-size:0.82rem;color:var(--warm-gray-light);">Method: ' + esc((r.refundMethod || 'original_payment').replace(/_/g, ' ')) + '</div>';
 
     // Admin override for refund method
