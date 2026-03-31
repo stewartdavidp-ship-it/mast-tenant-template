@@ -1166,8 +1166,8 @@
     // Consume redeemed points
     if (checkoutData.loyaltyApplied && currentPoints > 0) {
       var redeemPoints = currentPoints; // all-or-nothing
-      var redeemTxn = db.ref(basePath + '/transactions').push();
-      updates[redeemTxn.path.toString().replace(/^\//, '')] = {
+      var redeemKey = Date.now().toString(36) + Math.random().toString(36).substr(2, 4);
+      updates[basePath + '/transactions/' + redeemKey] = {
         type: 'redeemed',
         points: -redeemPoints,
         orderId: orderId,
@@ -1181,8 +1181,8 @@
     // Award earned points
     var earned = calcLoyaltyEarning();
     if (earned > 0) {
-      var earnTxn = db.ref(basePath + '/transactions').push();
-      updates[earnTxn.path.toString().replace(/^\//, '')] = {
+      var earnKey = Date.now().toString(36) + 'e' + Math.random().toString(36).substr(2, 4);
+      updates[basePath + '/transactions/' + earnKey] = {
         type: 'earned',
         points: earned,
         orderId: orderId,
@@ -1298,8 +1298,8 @@
       }
 
       // Append transaction record
-      var txnRef = db.ref(creditPath + '/transactions').push();
-      updates[txnRef.path.toString().replace(/^\//, '')] = {
+      var creditTxnKey = Date.now().toString(36) + Math.random().toString(36).substr(2, 4);
+      updates[creditPath + '/transactions/' + creditTxnKey] = {
         type: 'applied',
         amountCents: useCents,
         orderId: orderId,
