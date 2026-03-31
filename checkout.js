@@ -1255,14 +1255,6 @@
         timestamp: now
       };
 
-      // Update admin record balance too
-      if (g.code) {
-        updates[TENANT_ID + '/admin/giftCards/' + g.code + '/balanceCents'] = available - useCents;
-        if (available - useCents <= 0) {
-          updates[TENANT_ID + '/admin/giftCards/' + g.code + '/status'] = 'expired';
-        }
-      }
-
       remaining -= useCents;
     }
 
@@ -1653,9 +1645,10 @@
       window.MastCart.clear();
       trackCheckoutEvent('wallet_order_placed');
 
-      // Provision passes, enrollments
+      // Provision passes, enrollments, gift cards
       provisionCustomerPasses(items, orderRef.key);
       provisionSeriesEnrollments(items, orderRef.key);
+      issueGiftCardsClientSide(items, orderRef.key, orderNumber);
 
       // Consume all wallet instruments
       consumeWalletGiftCards(orderRef.key);
@@ -2040,6 +2033,71 @@
         .catch(function(err) {
           console.error('[checkout] Failed to read pass definition:', err);
         });
+    });
+  }
+
+  // ── Gift Card Issuance (client-side for $0 orders) ──
+  // For wallet-paid orders, Square webhook doesn't fire so we issue gift cards here.
+  // Self-purchase: add to buyer's wallet. Gift: call cloud function for email delivery.
+  function issueGiftCardsClientSide(items, orderId, orderNumber) {
+    var gcItems = items.filter(function(i) { return i.bookingType === 'gift-card' || i.isGiftCard; });
+    if (gcItems.length === 0) return;
+    var user = window.MastCart && window.MastCart.getCurrentUser();
+    if (!user) return;
+    var db = getDb();
+    if (!db) return;
+    var now = new Date().toISOString();
+    var expiresAt = new Date();
+    expiresAt.setFullYear(expiresAt.getFullYear() + 2);
+    var expiresIso = expiresAt.toISOString();
+
+    gcItems.forEach(function(item) {
+      var qty = item.qty || 1;
+      var amountCents = item.priceCents || Math.round(parseFloat((item.price || '0').toString().replace(/[^0-9.]/g, '')) * 100);
+      var giftType = (item.options && item.options.giftType) || 'self';
+      var recipientEmail = (item.options && item.options.recipientEmail) || '';
+
+      for (var i = 0; i < qty; i++) {
+        // Generate a simple code (server generates better ones, but this works for $0 orders)
+        var chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+        var code = '';
+        for (var c = 0; c < 16; c++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+        code = code.slice(0,4) + '-' + code.slice(4,8) + '-' + code.slice(8,12) + '-' + code.slice(12,16);
+
+        var isSelf = giftType === 'self';
+
+        // Write admin gift card record
+        db.ref(TENANT_ID + '/admin/giftCards/' + code).set({
+          code: code, amountCents: amountCents, balanceCents: amountCents,
+          purchasedBy: user.uid, recipientEmail: isSelf ? '' : recipientEmail,
+          orderId: orderId, orderNumber: orderNumber,
+          status: isSelf ? 'claimed' : 'issued',
+          issuedAt: now, expiresAt: expiresIso,
+          claimedBy: isSelf ? user.uid : null, claimedAt: isSelf ? now : null
+        });
+
+        if (isSelf) {
+          // Add to buyer's wallet
+          db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/wallet/giftCards').push().set({
+            code: code, amountCents: amountCents, remainingCents: amountCents,
+            sourceOrderId: orderId, issuedAt: now, expiresAt: expiresIso,
+            status: 'active', claimedAt: now
+          });
+        } else if (recipientEmail) {
+          // For gift-type on $0 orders, write tracking and trigger email via cloud function
+          db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/giftCardsSent/' + code).set({
+            recipientEmail: recipientEmail, amountCents: amountCents,
+            status: 'sent', issuedAt: now
+          });
+          callFunction('issueGiftCardEmail', {
+            tenantId: TENANT_ID, code: code, amountCents: amountCents,
+            recipientEmail: recipientEmail,
+            senderName: (item.options && item.options.senderName) || checkoutData.shipping.name || '',
+            senderMessage: (item.options && item.options.senderMessage) || '',
+            orderId: orderId
+          }, function() { /* fire and forget */ });
+        }
+      }
     });
   }
 
