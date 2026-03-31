@@ -863,8 +863,8 @@
       db.ref(basePath + '/wallet/passes').once('value'),
       // Saved coupons
       db.ref(basePath + '/wallet/coupons').once('value'),
-      // Gift cards sent (purchased for others)
-      db.ref(basePath + '/wallet/giftCardsSent').once('value')
+      // Gift cards sent (purchased for others) — stored at account level, not wallet
+      db.ref(basePath + '/giftCardsSent').once('value')
     ]).then(function(results) {
       // Credits
       var creditsSnap = results[0].val() || {};
