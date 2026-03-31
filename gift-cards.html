@@ -621,9 +621,9 @@
   window.TENANT_READY.then(function() {
     document.title = 'Gift Cards \u2014 ' + (window.TENANT_TITLE_SUFFIX ? TENANT_TITLE_SUFFIX() : 'Shop');
 
-    // Load wallet config via REST
-    var dbUrl = 'https://mast-platform-prod-default-rtdb.firebaseio.com';
-    var configPath = TENANT_ID + '/admin/walletConfig.json';
+    // Load wallet config via REST — try public path first, fall back to admin
+    var dbUrl = TENANT_FIREBASE_CONFIG.databaseURL || 'https://mast-platform-prod-default-rtdb.firebaseio.com';
+    var configPath = TENANT_ID + '/public/config/walletConfig.json';
 
     fetch(dbUrl + '/' + configPath)
       .then(function(r) { return r.ok ? r.json() : null; })

@@ -459,8 +459,10 @@
     function injectCartIcons() {
       var navLinks = document.querySelector('.nav-links');
       if (navLinks && !document.getElementById('cartIconWrap')) {
-        // Gift card icon (before wallet)
+        // Gift card icon (before wallet) — hidden until config check
         var giftLi = document.createElement('li');
+        giftLi.id = 'giftCardIconLi';
+        giftLi.style.display = 'none';
         giftLi.innerHTML =
           '<a href="gift-cards.html" class="cart-icon-wrap" id="giftCardIconWrap" title="Gift Cards">' +
             giftCardSvg +
@@ -488,13 +490,14 @@
 
       var navToggle = document.querySelector('.nav-toggle');
       if (navToggle && !document.getElementById('cartIconMobile')) {
-        // Gift card icon mobile (before wallet)
+        // Gift card icon mobile (before wallet) — hidden until config check
         if (!document.getElementById('giftCardIconMobile')) {
           var giftMobile = document.createElement('a');
           giftMobile.href = 'gift-cards.html';
           giftMobile.className = 'cart-icon-wrap cart-icon-mobile';
           giftMobile.id = 'giftCardIconMobile';
           giftMobile.title = 'Gift Cards';
+          giftMobile.style.display = 'none';
           giftMobile.innerHTML = giftCardSvg;
           navToggle.parentNode.insertBefore(giftMobile, navToggle);
         }
@@ -527,6 +530,20 @@
     injectCartIcons();
     if (!document.querySelector('.nav-links')) {
       window.addEventListener('storefront-nav-ready', injectCartIcons);
+    }
+
+    // Check walletConfig to show/hide gift card icon
+    if (TENANT_ID && FIREBASE_CONFIG.databaseURL) {
+      fetch(FIREBASE_CONFIG.databaseURL + '/' + TENANT_ID + '/public/config/walletConfig/giftCardsEnabled.json')
+        .then(function(r) { return r.ok ? r.json() : false; })
+        .then(function(enabled) {
+          if (enabled) {
+            var li = document.getElementById('giftCardIconLi');
+            var mob = document.getElementById('giftCardIconMobile');
+            if (li) li.style.display = '';
+            if (mob) mob.style.display = '';
+          }
+        }).catch(function() {});
     }
 
     // Overlay
