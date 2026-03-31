@@ -260,7 +260,7 @@
 
     // Balance summary
     var creditTotal = walletData.credits.reduce(function(sum, c) {
-      return sum + (c.status === 'active' ? (c.remainingCents || c.amountCents || 0) : 0);
+      return sum + (c.status === 'active' ? (c.remainingCents != null ? c.remainingCents : (c.amountCents || 0)) : 0);
     }, 0);
     var giftCardTotal = walletData.giftCards.reduce(function(sum, g) {
       return sum + (g.status === 'active' ? (g.remainingCents || 0) : 0);
@@ -399,7 +399,7 @@
 
     var html = '<div class="mw-list">';
     active.forEach(function(c) {
-      var remaining = c.remainingCents || c.amountCents || 0;
+      var remaining = c.remainingCents != null ? c.remainingCents : (c.amountCents || 0);
       var sourceLabel = c.source || 'Store credit';
       if (c.source === 'return') sourceLabel = 'Return credit';
       else if (c.source === 'admin-grant') sourceLabel = 'Admin grant';
