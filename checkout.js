@@ -1514,7 +1514,13 @@
       shipping: checkoutData.shipping,
       billing: checkoutData.billing,
       items: items.map(function (it) {
-        return { pid: it.pid, name: it.name, options: it.options, price: it.price, qty: it.qty, isWholesale: it.isWholesale || false };
+        var mapped = { pid: it.pid, name: it.name, options: it.options, price: it.price, qty: it.qty, isWholesale: it.isWholesale || false };
+        // Pass booking fields so server can verify prices from class data instead of products
+        if (it.bookingType) mapped.bookingType = it.bookingType;
+        if (it.classId) mapped.classId = it.classId;
+        if (it.sessionId) mapped.sessionId = it.sessionId;
+        if (it.priceCents != null) mapped.priceCents = it.priceCents;
+        return mapped;
       }),
       shippingMethodKey: 'calculated',
       couponCode: checkoutData.coupon ? checkoutData.coupon.code : null,
