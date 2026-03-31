@@ -1122,7 +1122,20 @@
     if (!config || !config.enabled) return 0;
 
     var items = window.MastCart ? window.MastCart.getItems() : [];
+    // Restore items from sessionStorage if cart was cleared (Square redirect)
+    if (items.length === 0) {
+      try {
+        var ws = JSON.parse(sessionStorage.getItem('mast_checkout_wallet'));
+        if (ws && ws.cartItems) items = ws.cartItems;
+      } catch (e) {}
+    }
     var couponDiscount = checkoutData.coupon ? checkoutData.coupon.discount : 0;
+    if (couponDiscount === 0) {
+      try {
+        var ws2 = JSON.parse(sessionStorage.getItem('mast_checkout_wallet'));
+        if (ws2) couponDiscount = ws2.couponDiscount || 0;
+      } catch (e) {}
+    }
     var exclusions = config.exclusions || [];
 
     // Eligible subtotal: product subtotal minus excluded categories
@@ -1588,7 +1601,10 @@
             taxRate: checkoutData.taxRate,
             taxableSubtotal: calcTaxableSubtotal(),
             shippingCost: checkoutData.shippingMethod ? checkoutData.shippingMethod.price : 0,
-            couponDiscount: checkoutData.coupon ? checkoutData.coupon.discount : 0
+            couponDiscount: checkoutData.coupon ? checkoutData.coupon.discount : 0,
+            cartItems: items.map(function(ci) {
+              return { pid: ci.pid, price: ci.price, priceCents: ci.priceCents, qty: ci.qty, bookingType: ci.bookingType, isGiftCard: ci.isGiftCard, category: ci.category };
+            })
           }));
         } catch (e) { /* silent */ }
 
