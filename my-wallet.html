@@ -267,10 +267,28 @@
     }, 0);
     var monetaryTotal = creditTotal + giftCardTotal;
 
-    html += '<div class="mw-balance">' +
-      '<div class="mw-balance-amount">' + formatMoney(monetaryTotal) + '</div>' +
-      '<div class="mw-balance-label">Available balance (credits + gift cards)</div>' +
+    var loyaltyEnabled = walletData.loyalty && walletData.loyalty.totalPoints != null;
+    var loyaltyPoints = loyaltyEnabled ? (walletData.loyalty.totalPoints || 0) : 0;
+    var pointName = (walletData.loyalty && walletData.loyalty.pointName) || 'pts';
+
+    if (loyaltyEnabled) {
+      html += '<div class="mw-balance" style="display:flex;justify-content:center;gap:2rem;align-items:center;">' +
+        '<div style="text-align:center;">' +
+          '<div class="mw-balance-amount">' + formatMoney(monetaryTotal) + '</div>' +
+          '<div class="mw-balance-label">Credits + Gift Cards</div>' +
+        '</div>' +
+        '<div style="width:1px;height:48px;background:var(--border-subtle,#444);"></div>' +
+        '<div style="text-align:center;">' +
+          '<div class="mw-balance-amount" style="color:var(--accent,#C6A96C);">' + loyaltyPoints + ' <span style="font-size:0.6em;">' + esc(pointName) + '</span></div>' +
+          '<div class="mw-balance-label">Loyalty</div>' +
+        '</div>' +
       '</div>';
+    } else {
+      html += '<div class="mw-balance">' +
+        '<div class="mw-balance-amount">' + formatMoney(monetaryTotal) + '</div>' +
+        '<div class="mw-balance-label">Available balance (credits + gift cards)</div>' +
+      '</div>';
+    }
 
     // Tabs
     var tabs = [
