@@ -3060,6 +3060,11 @@
     document.getElementById('rmaListView').style.display = 'none';
     var detailEl = document.getElementById('rmaDetailView');
     detailEl.style.display = 'block';
+    // Hide other tabs that may be visible (e.g., packTab when navigating from order detail)
+    var packTab = document.getElementById('packTab');
+    if (packTab) packTab.style.display = 'none';
+    var shipTab = document.getElementById('shipTab');
+    if (shipTab) shipTab.style.display = 'none';
     renderRmaDetail(rmaId);
   }
 
