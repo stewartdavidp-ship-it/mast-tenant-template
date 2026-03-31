@@ -84,6 +84,17 @@
     return Math.round(total * 100) / 100;
   }
 
+  // Taxable subtotal excludes gift cards (stored value, not taxable)
+  function calcTaxableSubtotal() {
+    var items = window.MastCart.getItems();
+    var total = 0;
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].bookingType === 'gift-card') continue;
+      total += parsePrice(items[i].price) * (items[i].qty || 1);
+    }
+    return Math.round(total * 100) / 100;
+  }
+
   // ── Firebase helpers ──
   function getDb() {
     var app = window.MastCart.getFirebaseApp();
@@ -879,7 +890,7 @@
 
   function buildTotalsHtml(subtotal) {
     var shipCost = checkoutData.shippingMethod ? checkoutData.shippingMethod.price : 0;
-    var tax = Math.round(subtotal * checkoutData.taxRate * 100) / 100;
+    var tax = Math.round(calcTaxableSubtotal() * checkoutData.taxRate * 100) / 100;
     var couponDiscount = checkoutData.coupon ? checkoutData.coupon.discount : 0;
     // ── Deduction cascade: Coupons → Loyalty → Gift Cards → Credits ──
     var runningCents = Math.round((subtotal + tax + shipCost - couponDiscount) * 100);
@@ -1216,7 +1227,7 @@
     // Calculate how much gift card to apply (same cascade as buildTotalsHtml)
     var subtotal = calcSubtotal();
     var shipCost = checkoutData.shippingMethod ? checkoutData.shippingMethod.price : 0;
-    var tax = Math.round(subtotal * checkoutData.taxRate * 100) / 100;
+    var tax = Math.round(calcTaxableSubtotal() * checkoutData.taxRate * 100) / 100;
     var couponDiscount = checkoutData.coupon ? checkoutData.coupon.discount : 0;
     var runningCents = Math.round((subtotal + tax + shipCost - couponDiscount) * 100);
 
@@ -1271,7 +1282,7 @@
 
     var subtotal = calcSubtotal();
     var shipCost = checkoutData.shippingMethod ? checkoutData.shippingMethod.price : 0;
-    var tax = Math.round(subtotal * checkoutData.taxRate * 100) / 100;
+    var tax = Math.round(calcTaxableSubtotal() * checkoutData.taxRate * 100) / 100;
     var couponDiscount = checkoutData.coupon ? checkoutData.coupon.discount : 0;
     var remainingCents = Math.round((subtotal + tax + shipCost - couponDiscount) * 100);
     if (remainingCents <= 0) return Promise.resolve();
@@ -1466,7 +1477,7 @@
     // Check if wallet deductions cover the entire order ($0 payment)
     var subtotal = calcSubtotal();
     var shipCost = checkoutData.shippingMethod ? checkoutData.shippingMethod.price : 0;
-    var tax = Math.round(subtotal * checkoutData.taxRate * 100) / 100;
+    var tax = Math.round(calcTaxableSubtotal() * checkoutData.taxRate * 100) / 100;
     var couponDiscount = checkoutData.coupon ? checkoutData.coupon.discount : 0;
     var orderTotalCents = Math.round((subtotal + tax + shipCost - couponDiscount) * 100);
 
@@ -1594,7 +1605,7 @@
 
     var subtotal = calcSubtotal();
     var shipCost = checkoutData.shippingMethod ? checkoutData.shippingMethod.price : 0;
-    var tax = Math.round(subtotal * checkoutData.taxRate * 100) / 100;
+    var tax = Math.round(calcTaxableSubtotal() * checkoutData.taxRate * 100) / 100;
     var couponDiscount = checkoutData.coupon ? checkoutData.coupon.discount : 0;
     var now = new Date().toISOString();
 
