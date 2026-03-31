@@ -10466,7 +10466,7 @@ var ORDER_VALID_TRANSITIONS = {
   placed: ['confirmed', 'cancelled'],
   confirmed: ['building', 'pack', 'packing', 'cancelled'],
   building: ['pack', 'packing', 'cancelled'],
-  pack: ['packing', 'cancelled'],
+  pack: ['packing', 'packed', 'cancelled'],
   packing: ['packed', 'cancelled'],
   packed: ['shipped', 'cancelled'],
   shipped: ['delivered'],
