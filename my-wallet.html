@@ -168,6 +168,7 @@
 }
 .mw-status-active { background: rgba(6,95,70,0.25); color: #4DB6AC; }
 .mw-status-depleted { background: rgba(200,60,60,0.2); color: #EF9A9A; }
+.mw-status-pending { background: rgba(255,183,77,0.2); color: #FFB74D; }
 .mw-status-expired { background: rgba(200,60,60,0.2); color: #EF9A9A; }
 
 .mw-empty {
@@ -225,7 +226,7 @@
 (function() {
   'use strict';
 
-  var walletData = { credits: [], giftCards: [], loyalty: null, passes: [], coupons: [] };
+  var walletData = { credits: [], giftCards: [], giftCardsSent: [], loyalty: null, passes: [], coupons: [] };
   var currentTab = 'overview';
   var historyFilter = { type: 'all', direction: 'all', range: 'all' };
 
@@ -615,19 +616,34 @@
     return html;
   }
 
+  var gcSubTab = 'received';
+
   function renderGiftCards() {
+    // Sub-tab toggle
+    var html = '<div style="display:flex;gap:8px;margin-bottom:16px;">';
+    html += '<button style="padding:6px 16px;border-radius:6px;border:1px solid ' + (gcSubTab === 'received' ? 'var(--accent,#C6A96C)' : 'var(--border-subtle,#444)') + ';background:' + (gcSubTab === 'received' ? 'rgba(196,133,60,0.15)' : 'transparent') + ';color:' + (gcSubTab === 'received' ? 'var(--accent,#C6A96C)' : 'var(--warm-gray,#888)') + ';font-size:0.82rem;cursor:pointer;" onclick="window._gcSubTab(\'received\')">Received</button>';
+    html += '<button style="padding:6px 16px;border-radius:6px;border:1px solid ' + (gcSubTab === 'gifted' ? 'var(--accent,#C6A96C)' : 'var(--border-subtle,#444)') + ';background:' + (gcSubTab === 'gifted' ? 'rgba(196,133,60,0.15)' : 'transparent') + ';color:' + (gcSubTab === 'gifted' ? 'var(--accent,#C6A96C)' : 'var(--warm-gray,#888)') + ';font-size:0.82rem;cursor:pointer;" onclick="window._gcSubTab(\'gifted\')">Gifted</button>';
+    html += '</div>';
+
+    if (gcSubTab === 'gifted') {
+      return html + renderGiftedCards();
+    }
+
+    // Received cards
     if (walletData.giftCards.length === 0) {
-      return '<div class="mw-empty">' +
+      return html + '<div class="mw-empty">' +
         '<div class="mw-empty-icon">&#127873;</div>' +
-        '<p>No gift cards</p>' +
-        '<div class="mw-empty-hint">Gift cards you purchase or receive will appear here.</div>' +
+        '<p>No gift cards received</p>' +
+        '<div class="mw-empty-hint">Gift cards you redeem will appear here.</div>' +
         '</div>';
     }
 
-    var html = '<div class="mw-list">';
-    walletData.giftCards.forEach(function(g) {
-      var isActive = g.status === 'active' && (g.remainingCents || 0) > 0;
-      html += '<div class="mw-card"' + (!isActive ? ' style="opacity:0.5;"' : '') + '>' +
+    var withBalance = walletData.giftCards.filter(function(g) { return (g.remainingCents || 0) > 0; });
+    var depleted = walletData.giftCards.filter(function(g) { return (g.remainingCents || 0) === 0; });
+
+    html += '<div class="mw-list">';
+    withBalance.forEach(function(g) {
+      html += '<div class="mw-card">' +
         '<div class="mw-card-info">' +
           '<h3>Gift Card' + (g.code ? ' (...' + esc(g.code.slice(-4)) + ')' : '') + '</h3>' +
           '<div class="mw-card-meta">' +
@@ -636,8 +652,63 @@
           '</div>' +
         '</div>' +
         '<div style="text-align:right;">' +
-          '<span class="mw-card-status ' + (isActive ? 'mw-status-active' : 'mw-status-depleted') + '">' + (isActive ? 'Active' : 'Used') + '</span><br>' +
+          '<span class="mw-card-status mw-status-active">Active</span><br>' +
           '<span class="mw-card-amount">' + formatMoney(g.remainingCents || 0) + '</span>' +
+        '</div>' +
+        '</div>';
+    });
+
+    if (depleted.length > 0) {
+      html += '<div style="margin-top:16px;font-size:0.85rem;color:var(--warm-gray);font-weight:500;">Used Cards</div>';
+      depleted.forEach(function(g) {
+        html += '<div class="mw-card" style="opacity:0.5;">' +
+          '<div class="mw-card-info">' +
+            '<h3>Gift Card' + (g.code ? ' (...' + esc(g.code.slice(-4)) + ')' : '') + '</h3>' +
+            '<div class="mw-card-meta">Redeemed: ' + formatDate(g.claimedAt || g.createdAt) + '</div>' +
+          '</div>' +
+          '<div style="text-align:right;">' +
+            '<span class="mw-card-status mw-status-depleted">Used</span><br>' +
+            '<span class="mw-card-amount">' + formatMoney(0) + '</span>' +
+          '</div>' +
+          '</div>';
+      });
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function renderGiftedCards() {
+    var gifted = walletData.giftCardsSent || [];
+    if (gifted.length === 0) {
+      return '<div class="mw-empty">' +
+        '<div class="mw-empty-icon">&#127381;</div>' +
+        '<p>No gift cards sent</p>' +
+        '<div class="mw-empty-hint">Gift cards you purchase for others will appear here.</div>' +
+        '</div>';
+    }
+
+    var html = '<div class="mw-list">';
+    gifted.forEach(function(g) {
+      var gcStatus = 'Pending';
+      var statusClass = 'mw-status-pending';
+      if (g.claimedAt && g.remainingCents != null && g.remainingCents === 0) {
+        gcStatus = 'Used'; statusClass = 'mw-status-depleted';
+      } else if (g.claimedAt) {
+        gcStatus = 'Redeemed'; statusClass = 'mw-status-active';
+      }
+
+      html += '<div class="mw-card">' +
+        '<div class="mw-card-info">' +
+          '<h3>To: ' + esc(g.recipientEmail || g.recipientName || 'Recipient') + '</h3>' +
+          '<div class="mw-card-meta">' +
+            'Sent: ' + formatDate(g.createdAt || g.issuedAt) +
+            (g.senderMessage ? '<br><em>"' + esc(g.senderMessage) + '"</em>' : '') +
+            (g.claimedAt ? '<br>Claimed: ' + formatDate(g.claimedAt) : '') +
+          '</div>' +
+        '</div>' +
+        '<div style="text-align:right;">' +
+          '<span class="mw-card-status ' + statusClass + '">' + gcStatus + '</span><br>' +
+          '<span class="mw-card-amount">' + formatMoney(g.amountCents || 0) + '</span>' +
         '</div>' +
         '</div>';
     });
@@ -758,6 +829,11 @@
     render();
   };
 
+  window._gcSubTab = function(tab) {
+    gcSubTab = tab;
+    render();
+  };
+
   // ---- Data Loading ----
 
   function loadWallet(user, db) {
@@ -774,7 +850,9 @@
       // Passes (migrated to wallet/passes in Phase 6)
       db.ref(basePath + '/wallet/passes').once('value'),
       // Saved coupons
-      db.ref(basePath + '/wallet/coupons').once('value')
+      db.ref(basePath + '/wallet/coupons').once('value'),
+      // Gift cards sent (purchased for others)
+      db.ref(basePath + '/wallet/giftCardsSent').once('value')
     ]).then(function(results) {
       // Credits
       var creditsSnap = results[0].val() || {};
@@ -812,6 +890,14 @@
       var couponSnap = results[4].val() || {};
       walletData.coupons = Object.keys(couponSnap).map(function(id) {
         var c = couponSnap[id]; c._id = id; return c;
+      });
+
+      // Gift cards sent
+      var sentSnap = results[5].val() || {};
+      walletData.giftCardsSent = Object.keys(sentSnap).map(function(id) {
+        var g = sentSnap[id]; g._id = id; return g;
+      }).sort(function(a, b) {
+        return (b.createdAt || b.issuedAt || '').localeCompare(a.createdAt || a.issuedAt || '');
       });
 
       render();
