@@ -1905,7 +1905,7 @@ window.TENANT_READY.then(function() {
     if (wd.totalDeductionCents > 0 && orderSubtotal > 0) {
       var proportion = selectedTotal / orderSubtotal;
       if (wd.loyalty && wd.loyalty.amountCents > 0) {
-        loyaltyReissue = wd.loyalty.pointsUsed ? Math.round(wd.loyalty.pointsUsed * proportion) : 0;
+        loyaltyReissue = (wd.loyalty.pointsRedeemed || wd.loyalty.pointsUsed) ? Math.round((wd.loyalty.pointsRedeemed || wd.loyalty.pointsUsed) * proportion) : 0;
         loyaltyPointName = wd.loyalty.pointName || 'Points';
         walletReturn += Math.round(wd.loyalty.amountCents * proportion) / 100;
       }
