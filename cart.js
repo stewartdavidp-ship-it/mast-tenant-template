@@ -570,12 +570,12 @@
         '<div class="cart-footer-summary" id="cartFooterSummary"></div>' +
         '<div class="cart-footer-actions">' +
           '<button class="cart-checkout-btn" id="cartCheckoutBtn" style="display:none" onclick="if(window.MastCheckout)MastCheckout.start()">Checkout</button>' +
-          '<button class="btn-primary" onclick="MastCart.closeDrawer()" style="' +
-            'display:inline-block;padding:12px 28px;background:var(--primary);color:#fff;' +
-            'border:none;border-radius:4px;font-family:DM Sans,sans-serif;font-size:0.85rem;' +
+          '<button onclick="MastCart.closeDrawer()" style="' +
+            'display:block;padding:10px 28px;background:transparent;color:var(--primary);' +
+            'border:1px solid var(--primary);border-radius:4px;font-family:DM Sans,sans-serif;font-size:0.8rem;' +
             'letter-spacing:0.12em;text-transform:uppercase;cursor:pointer;text-align:center;' +
-            'transition:background 0.3s,filter 0.3s;width:100%;"' +
-            ' onmouseover="this.style.filter=\'brightness(0.85)\'" onmouseout="this.style.filter=\'none\'">' +
+            'transition:background 0.3s;width:100%;"' +
+            ' onmouseover="this.style.background=\'rgba(200,150,60,0.1)\'" onmouseout="this.style.background=\'transparent\'">' +
             'Continue Shopping</button>' +
         '</div>' +
         '<div id="cartAuthArea"></div>' +

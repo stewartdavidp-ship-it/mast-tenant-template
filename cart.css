@@ -318,6 +318,24 @@
   gap: 8px;
 }
 
+.cart-checkout-btn {
+  display: block;
+  width: 100%;
+  padding: 12px 28px;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.85rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.3s, filter 0.3s;
+}
+.cart-checkout-btn:hover { filter: brightness(0.85); }
+
 .cart-auth-link {
   text-align: center;
   margin-top: 12px;
