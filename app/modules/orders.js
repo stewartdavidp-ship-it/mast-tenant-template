@@ -2931,7 +2931,7 @@
 
   function loadRmaData() {
     if (rmaLoaded) { renderRma(); return; }
-    MastDB.ref('admin/rma').limitToLast(200).once('value').then(function(snap) {
+    MastDB._ref('admin/rma').limitToLast(200).once('value').then(function(snap) {
       rmaData = snap.val() || {};
       rmaLoaded = true;
       renderRma();
@@ -3277,7 +3277,7 @@
       });
       if (result.data && result.data.success) {
         // Refresh RMA data from server
-        var snap = await MastDB.ref('admin/rma/' + rmaId).once('value');
+        var snap = await MastDB._ref('admin/rma/' + rmaId).once('value');
         rmaData[rmaId] = snap.val() || rmaData[rmaId];
         renderRmaDetail(rmaId);
         updateRmaSidebarBadge();
@@ -3305,7 +3305,7 @@
         payload: { result: result, notes: notes }
       });
       if (resp.data && resp.data.success) {
-        var snap = await MastDB.ref('admin/rma/' + rmaId).once('value');
+        var snap = await MastDB._ref('admin/rma/' + rmaId).once('value');
         rmaData[rmaId] = snap.val() || rmaData[rmaId];
         renderRmaDetail(rmaId);
         showToast('Inspection recorded');
@@ -3344,7 +3344,7 @@
         }
       });
       if (resp.data && resp.data.success) {
-        var snap = await MastDB.ref('admin/rma/' + rmaId).once('value');
+        var snap = await MastDB._ref('admin/rma/' + rmaId).once('value');
         rmaData[rmaId] = snap.val() || rmaData[rmaId];
         renderRmaDetail(rmaId);
         updateRmaSidebarBadge();
@@ -3368,7 +3368,7 @@
     }
 
     try {
-      await MastDB.ref('admin/rma/' + rmaId).update({
+      await MastDB._ref('admin/rma/' + rmaId).update({
         refundMethod: method,
         refundAmountCents: amountCents,
         updatedAt: new Date().toISOString()
