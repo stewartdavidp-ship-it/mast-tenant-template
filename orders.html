@@ -1595,10 +1595,20 @@ window.TENANT_READY.then(function() {
 
   function loadTermsConfig() {
     if (_termsConfigLoaded) return Promise.resolve(_termsConfig);
-    return db.ref(TENANT_ID + '/config/termsConfig').once('value').then(function(snap) {
-      _termsConfig = snap.val() || {};
-      _termsConfigLoaded = true;
-      return _termsConfig;
+    // Try config/rma first (new canonical path), fall back to config/termsConfig
+    return db.ref(TENANT_ID + '/config/rma').once('value').then(function(snap) {
+      var val = snap.val();
+      if (val && val.returnWindowDays) {
+        _termsConfig = val;
+        _termsConfigLoaded = true;
+        return _termsConfig;
+      }
+      // Fallback to legacy path
+      return db.ref(TENANT_ID + '/config/termsConfig').once('value').then(function(snap2) {
+        _termsConfig = snap2.val() || {};
+        _termsConfigLoaded = true;
+        return _termsConfig;
+      });
     }).catch(function() {
       _termsConfigLoaded = true;
       _termsConfig = {};
@@ -1907,8 +1917,8 @@ window.TENANT_READY.then(function() {
         selectedItems.push({
           pid: items[i].productId || items[i].pid || '',
           name: items[i].name || items[i].productName || 'Item',
-          priceCents: Math.round((items[i].price || 0) * 100),
-          qty: items[i].qty || 1
+          qty: items[i].qty || 1,
+          reason: document.getElementById('rmaReason') ? document.getElementById('rmaReason').value : ''
         });
       }
     }
@@ -1921,64 +1931,34 @@ window.TENANT_READY.then(function() {
     var additionalNotes = notes ? notes.value.trim() : '';
     if (additionalNotes) returnReason += ' - ' + additionalNotes;
 
-    var restockingFeePct = (_termsConfig && _termsConfig.restockingFeePercent) || 0;
-    var selectedTotal = 0;
-    selectedItems.forEach(function(item) { selectedTotal += item.priceCents * item.qty; });
-    var restockingFee = Math.round(selectedTotal * restockingFeePct / 100);
-    var refundAmount = selectedTotal - restockingFee;
-
-    var refundMethod = 'original_payment';
-    if (_termsConfig && (_termsConfig.refundMethod === 'store_credit' || _termsConfig.refundMethod === 'store-credit')) refundMethod = 'store_credit';
-
     var user = auth.currentUser;
-    var customerUid = user ? user.uid : null;
     var orderId = order.orderId || order.id || '';
 
-    var rmaData = {
+    callFunction('submitReturnRequest', {
       orderId: orderId,
-      orderNumber: order.orderNumber || '',
-      status: 'requested',
-      customerUid: customerUid || '',
-      customerEmail: order.email || '',
       items: selectedItems,
-      returnReason: returnReason,
-      refundMethod: refundMethod,
-      refundAmountCents: refundAmount,
-      refundAllocation: [],
-      returnTrackingNumber: null,
-      requestedAt: new Date().toISOString(),
-      approvedAt: null,
-      shippedBackAt: null,
-      receivedAt: null,
-      refundIssuedAt: null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-
-    var rmaRef = db.ref(TENANT_ID + '/public/returnRequests').push();
-    var rmaId = rmaRef.key;
-    rmaData.rmaId = rmaId;
-
-    // Write RMA record, then update order
-    rmaRef.set(rmaData).then(function() {
-      return db.ref(TENANT_ID + '/orders/' + orderId + '/rmaId').set(rmaId);
-    }).then(function() {
-      // Show confirmation
-      var modal = document.querySelector('.rma-modal');
-      if (modal) {
-        modal.innerHTML = '<div class="rma-confirm-msg">' +
-          '<div class="rma-confirm-icon">&#10003;</div>' +
-          '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.5rem;font-weight:300;margin-bottom:0.75rem;">Return Request Submitted</h3>' +
-          '<p>Your return request for order ' + esc(order.orderNumber || orderId) + ' has been submitted. ' +
-          'We will review your request and notify you once approved.</p>' +
-          '<div style="margin-top:1.5rem;">' +
-            '<button class="btn btn-primary" onclick="closeReturnModal();location.reload();">Done</button>' +
-          '</div>' +
-        '</div>';
+      uid: user ? user.uid : '',
+      returnReason: returnReason
+    }, function(result) {
+      if (result && result.success) {
+        var modal = document.querySelector('.rma-modal');
+        if (modal) {
+          var autoMsg = result.autoApproved
+            ? 'Your return has been automatically approved! Check your email for return instructions.'
+            : 'We will review your request and notify you once approved.';
+          modal.innerHTML = '<div class="rma-confirm-msg">' +
+            '<div class="rma-confirm-icon">&#10003;</div>' +
+            '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.5rem;font-weight:300;margin-bottom:0.75rem;">Return Request Submitted</h3>' +
+            '<p>Your return request for order ' + esc(order.orderNumber || orderId) + ' has been submitted. ' + autoMsg + '</p>' +
+            '<div style="margin-top:1.5rem;">' +
+              '<button class="btn btn-primary" onclick="closeReturnModal();location.reload();">Done</button>' +
+            '</div>' +
+          '</div>';
+        }
+      } else {
+        alert('Failed to submit return request: ' + (result.error || 'Unknown error'));
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Submit Return Request'; }
       }
-    }).catch(function(err) {
-      alert('Failed to submit return request: ' + err.message);
-      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Submit Return Request'; }
     });
   };
 
