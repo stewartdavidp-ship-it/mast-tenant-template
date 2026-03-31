@@ -1880,17 +1880,24 @@ window.TENANT_READY.then(function() {
       }
     }
 
+    // Apply tax to returned items (proportional to order tax rate)
+    var taxRate = _returnModalOrder.taxRate || 0;
+    var taxOnReturned = !_returnModalOrder.taxExempt ? Math.round(selectedTotal * taxRate * 100) / 100 : 0;
+
     var restockingFeePct = (_termsConfig && _termsConfig.restockingFeePercent) || 0;
     var restockingFee = Math.round(selectedTotal * restockingFeePct / 100 * 100) / 100;
-    var refundAmount = selectedTotal - restockingFee;
+    var refundAmount = selectedTotal + taxOnReturned - restockingFee;
 
     var refundMethod = 'Original payment method';
-    if (_termsConfig && _termsConfig.refundMethod === 'store_credit') {
+    if (_termsConfig && (_termsConfig.refundMethod === 'store_credit' || _termsConfig.refundMethod === 'store-credit')) {
       refundMethod = 'Store credit';
     }
 
     var html = '<div class="rma-estimate-row"><span>Items selected</span><span>' + selectedCount + '</span></div>';
     html += '<div class="rma-estimate-row"><span>Items subtotal</span><span>' + formatPrice(selectedTotal) + '</span></div>';
+    if (taxOnReturned > 0) {
+      html += '<div class="rma-estimate-row"><span>Tax</span><span>' + formatPrice(taxOnReturned) + '</span></div>';
+    }
     if (restockingFee > 0) {
       html += '<div class="rma-estimate-row"><span>Restocking fee (' + restockingFeePct + '%)</span><span>-' + formatPrice(restockingFee) + '</span></div>';
     }
