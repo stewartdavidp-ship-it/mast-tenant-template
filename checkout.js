@@ -1129,7 +1129,7 @@
     var eligibleCents = 0;
     items.forEach(function(item) {
       // Skip gift cards and excluded categories
-      if (item.isGiftCard) return;
+      if (item.isGiftCard || item.bookingType === 'gift-card') return;
       if (item.options && item.options.bookingType === 'gift-card') return;
       if (exclusions.length > 0 && item.category && exclusions.indexOf(item.category) !== -1) return;
       eligibleCents += (item.priceCents || Math.round((parseFloat(item.price) || 0) * 100)) * (item.qty || 1);
@@ -1162,8 +1162,16 @@
 
   // ── Loyalty: Award + consume on order completion ──
   function processLoyaltyForOrder(orderId) {
-    var config = checkoutData.loyaltyConfig;
+    var walletState = null;
+    try { walletState = JSON.parse(sessionStorage.getItem('mast_checkout_wallet')); } catch (e) {}
+    var config = checkoutData.loyaltyConfig || (walletState ? walletState.loyaltyConfig : null);
     if (!config || !config.enabled) return Promise.resolve();
+    // Restore loyalty state if cart was cleared
+    if (!checkoutData.loyaltyConfig && walletState) {
+      checkoutData.loyaltyConfig = walletState.loyaltyConfig;
+      checkoutData.loyaltyBalance = walletState.loyaltyBalance;
+      checkoutData.loyaltyApplied = walletState.loyaltyApplied;
+    }
     var user = window.MastCart && window.MastCart.getCurrentUser();
     if (!user || user.isAnonymous) return Promise.resolve();
     var db = getDb();
@@ -1218,17 +1226,27 @@
 
   // ── Gift Cards: Consume at checkout ──
   function consumeWalletGiftCards(orderId) {
-    if (!checkoutData.walletGiftCardApplied || checkoutData.walletGiftCards.length === 0) return Promise.resolve();
+    // Restore wallet state from sessionStorage if cart was cleared (Square redirect)
+    var walletState = null;
+    try { walletState = JSON.parse(sessionStorage.getItem('mast_checkout_wallet')); } catch (e) {}
+    var gcApplied = checkoutData.walletGiftCardApplied || (walletState && walletState.walletGiftCardApplied);
+    var gcCards = checkoutData.walletGiftCards.length > 0 ? checkoutData.walletGiftCards : (walletState ? walletState.walletGiftCards || [] : []);
+    if (!gcApplied || gcCards.length === 0) return Promise.resolve();
+
     var user = window.MastCart && window.MastCart.getCurrentUser();
     if (!user || user.isAnonymous) return Promise.resolve();
     var db = getDb();
     if (!db) return Promise.resolve();
 
-    // Calculate how much gift card to apply (same cascade as buildTotalsHtml)
+    // Calculate how much gift card to apply — use saved state if cart is empty
     var subtotal = calcSubtotal();
-    var shipCost = checkoutData.shippingMethod ? checkoutData.shippingMethod.price : 0;
-    var tax = Math.round(calcTaxableSubtotal() * checkoutData.taxRate * 100) / 100;
-    var couponDiscount = checkoutData.coupon ? checkoutData.coupon.discount : 0;
+    if (subtotal === 0 && walletState) subtotal = walletState.subtotal || 0;
+    var shipCost = checkoutData.shippingMethod ? checkoutData.shippingMethod.price : (walletState ? walletState.shippingCost || 0 : 0);
+    var taxableAmt = calcTaxableSubtotal();
+    if (taxableAmt === 0 && walletState) taxableAmt = walletState.taxableSubtotal || 0;
+    var taxRate = checkoutData.taxRate || (walletState ? walletState.taxRate || 0 : 0);
+    var tax = Math.round(taxableAmt * taxRate * 100) / 100;
+    var couponDiscount = checkoutData.coupon ? checkoutData.coupon.discount : (walletState ? walletState.couponDiscount || 0 : 0);
     var runningCents = Math.round((subtotal + tax + shipCost - couponDiscount) * 100);
 
     // Subtract loyalty first
@@ -1241,7 +1259,6 @@
 
     var now = new Date().toISOString();
     var updates = {};
-    var gcCards = checkoutData.walletGiftCards;
     var remaining = runningCents;
 
     // Consume cards expiring soonest first (already sorted)
@@ -1274,22 +1291,30 @@
   }
 
   function consumeWalletCredits(orderId) {
-    if (!checkoutData.walletCreditApplied || checkoutData.walletCredits.length === 0) return Promise.resolve();
+    var walletState = null;
+    try { walletState = JSON.parse(sessionStorage.getItem('mast_checkout_wallet')); } catch (e) {}
+    var crApplied = checkoutData.walletCreditApplied || (walletState && walletState.walletCreditApplied);
+    var credits = checkoutData.walletCredits.length > 0 ? checkoutData.walletCredits : (walletState ? walletState.walletCredits || [] : []);
+    if (!crApplied || credits.length === 0) return Promise.resolve();
+
     var user = window.MastCart && window.MastCart.getCurrentUser();
     if (!user || user.isAnonymous) return Promise.resolve();
     var db = getDb();
     if (!db) return Promise.resolve();
 
     var subtotal = calcSubtotal();
-    var shipCost = checkoutData.shippingMethod ? checkoutData.shippingMethod.price : 0;
-    var tax = Math.round(calcTaxableSubtotal() * checkoutData.taxRate * 100) / 100;
-    var couponDiscount = checkoutData.coupon ? checkoutData.coupon.discount : 0;
+    if (subtotal === 0 && walletState) subtotal = walletState.subtotal || 0;
+    var shipCost = checkoutData.shippingMethod ? checkoutData.shippingMethod.price : (walletState ? walletState.shippingCost || 0 : 0);
+    var taxableAmt = calcTaxableSubtotal();
+    if (taxableAmt === 0 && walletState) taxableAmt = walletState.taxableSubtotal || 0;
+    var taxRate = checkoutData.taxRate || (walletState ? walletState.taxRate || 0 : 0);
+    var tax = Math.round(taxableAmt * taxRate * 100) / 100;
+    var couponDiscount = checkoutData.coupon ? checkoutData.coupon.discount : (walletState ? walletState.couponDiscount || 0 : 0);
     var remainingCents = Math.round((subtotal + tax + shipCost - couponDiscount) * 100);
     if (remainingCents <= 0) return Promise.resolve();
 
     var now = new Date().toISOString();
     var updates = {};
-    var credits = checkoutData.walletCredits;
 
     // FIFO: process credits oldest first (already sorted by createdAt)
     for (var i = 0; i < credits.length && remainingCents > 0; i++) {
@@ -1548,6 +1573,24 @@
             shippingConfig: checkoutData.shippingConfig || DEFAULT_SHIPPING_CONFIG
           }));
         } catch (e) { /* sessionStorage not available */ }
+
+        // Save wallet state before clearing cart (needed for post-payment consumption)
+        try {
+          sessionStorage.setItem('mast_checkout_wallet', JSON.stringify({
+            walletGiftCardApplied: checkoutData.walletGiftCardApplied,
+            walletGiftCards: checkoutData.walletGiftCards,
+            walletCreditApplied: checkoutData.walletCreditApplied,
+            walletCredits: checkoutData.walletCredits,
+            loyaltyApplied: checkoutData.loyaltyApplied,
+            loyaltyConfig: checkoutData.loyaltyConfig,
+            loyaltyBalance: checkoutData.loyaltyBalance,
+            subtotal: subtotal,
+            taxRate: checkoutData.taxRate,
+            taxableSubtotal: calcTaxableSubtotal(),
+            shippingCost: checkoutData.shippingMethod ? checkoutData.shippingMethod.price : 0,
+            couponDiscount: checkoutData.coupon ? checkoutData.coupon.discount : 0
+          }));
+        } catch (e) { /* silent */ }
 
         // Clear cart before redirect but keep checkout info for returning customer auto-fill
         window.MastCart.clear();
@@ -2245,6 +2288,9 @@
     consumeWalletGiftCards(orderId);
     consumeWalletCredits(orderId);
     processLoyaltyForOrder(orderId);
+
+    // Clean up wallet state so it doesn't re-apply on reload
+    try { sessionStorage.removeItem('mast_checkout_wallet'); } catch (e) {}
 
     // Watch for order status to become 'placed' and generate CSV
     if (orderId && pendingOrder && pendingOrder.items) {
