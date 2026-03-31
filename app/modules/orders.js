@@ -986,7 +986,6 @@
     var rowsHtml = '';
     items.forEach(function(item, idx) {
       var qty = item.qty || 1;
-      var invStatus = getItemInventoryStatus(item);
       var optStr = '';
       if (item.options && typeof item.options === 'object') {
         var parts = [];
@@ -994,6 +993,22 @@
         optStr = parts.join(', ');
       }
 
+      // Gift cards are digital — auto-fulfilled via email, skip physical triage
+      var isGiftCard = item.bookingType === 'gift-card' || item.isGiftCard;
+      if (isGiftCard) {
+        rowsHtml += '<tr>' +
+          '<td style="padding:8px 10px;">' +
+            '<div style="font-weight:500;">' + esc(item.name) + ' x' + qty + '</div>' +
+            (optStr ? '<div style="font-size:0.8rem;color:var(--warm-gray);">' + esc(optStr) + '</div>' : '') +
+          '</td>' +
+          '<td style="padding:8px 10px;text-align:center;">&mdash;</td>' +
+          '<td style="padding:8px 10px;"><span class="order-item-inv inv-stock" style="background:rgba(46,125,50,0.2);color:#66BB6A;">Digital</span></td>' +
+          '<td style="padding:8px 10px;font-size:0.85rem;color:var(--teal);">Emailed to recipient</td>' +
+        '</tr>';
+        return;
+      }
+
+      var invStatus = getItemInventoryStatus(item);
       var invCls = invStatus.status === 'stock' ? 'inv-stock' : invStatus.status === 'partial' ? 'inv-partial' : invStatus.status === 'build' ? 'inv-build' : invStatus.status === 'out' ? 'inv-out' : 'inv-unknown';
       var autoAction = (invStatus.status === 'stock') ? 'stock' : 'build';
 
