@@ -1560,12 +1560,12 @@
       }
       if (checkoutData.walletGiftCardApplied && checkoutData.walletGiftCards.length > 0) {
         payload.walletDeductions.giftCards = checkoutData.walletGiftCards.map(function(g) {
-          return { id: g.id, code: g.code || '', amountCents: g.remainingCents || 0 };
+          return { id: g._id || g.id, code: g.code || '', amountCents: g.remainingCents || 0 };
         });
       }
       if (checkoutData.walletCreditApplied && checkoutData.walletCredits.length > 0) {
         payload.walletDeductions.credits = checkoutData.walletCredits.map(function(c) {
-          return { id: c.id, amountCents: c.remainingCents != null ? c.remainingCents : (c.amountCents || 0) };
+          return { id: c._id || c.id, amountCents: c.remainingCents != null ? c.remainingCents : (c.amountCents || 0) };
         });
       }
     }
