@@ -128,6 +128,7 @@
       '<h2>Gift Cards</h2>' +
       '<div style="display:flex;gap:8px;">' +
         '<button class="btn btn-secondary btn-small" onclick="window._gcOpenConfig()">&#9881; Settings</button>' +
+        '<button class="btn btn-secondary btn-small" onclick="window._gcOpenPromoCredit()">&#127873; Promo Credit</button>' +
         '<button class="btn btn-primary btn-small" onclick="window._gcOpenManualIssue()">+ Issue Gift Card</button>' +
       '</div>' +
     '</div>';
@@ -377,6 +378,119 @@
       loadGiftCards();
     } catch (err) {
       showToast('Failed to issue: ' + err.message, true);
+    }
+  };
+
+  // ---- Promotional Credit Modal (Step 2.8) ----
+  // Promotional credits are gift cards with type 'promotion' and short expiration.
+
+  window._gcOpenPromoCredit = function() {
+    var html = '<h3 style="margin-top:0;">Create Promotional Credit</h3>' +
+      '<p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">Issue a promotional gift card (e.g., sign-up bonus, birthday credit, compensation).</p>' +
+      '<div style="margin-bottom:16px;">' +
+        '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Amount ($)</label>' +
+        '<input type="number" id="gcPromoAmount" min="1" step="0.01" placeholder="10.00" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);font-family:\'DM Sans\';font-size:0.9rem;">' +
+      '</div>' +
+      '<div style="margin-bottom:16px;">' +
+        '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Expires in (days)</label>' +
+        '<input type="number" id="gcPromoDays" min="1" max="365" value="30" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);font-family:\'DM Sans\';font-size:0.9rem;">' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">Short expiration encourages quick redemption.</div>' +
+      '</div>' +
+      '<div style="margin-bottom:16px;">' +
+        '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Promo Code (optional)</label>' +
+        '<input type="text" id="gcPromoCode" placeholder="Auto-generated if blank" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);font-family:\'DM Sans\';font-size:0.9rem;">' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">Custom promo code for marketing (e.g., WELCOME10). Leave blank for random.</div>' +
+      '</div>' +
+      '<div style="margin-bottom:16px;">' +
+        '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Recipient Email</label>' +
+        '<input type="email" id="gcPromoEmail" placeholder="customer@example.com" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);font-family:\'DM Sans\';font-size:0.9rem;">' +
+      '</div>' +
+      '<div style="margin-bottom:16px;">' +
+        '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Note (internal)</label>' +
+        '<input type="text" id="gcPromoNote" placeholder="e.g., Welcome bonus for new subscriber" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);font-family:\'DM Sans\';font-size:0.9rem;">' +
+      '</div>' +
+      '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;">' +
+        '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+        '<button class="btn btn-primary" onclick="window._gcIssuePromo()">Create Promo Credit</button>' +
+      '</div>';
+
+    openModal(html);
+  };
+
+  window._gcIssuePromo = async function() {
+    var amountVal = parseFloat(document.getElementById('gcPromoAmount').value);
+    if (!amountVal || amountVal <= 0) {
+      showToast('Enter a valid amount.', true);
+      return;
+    }
+    var amountCents = Math.round(amountVal * 100);
+    var days = parseInt(document.getElementById('gcPromoDays').value) || 30;
+    var customCode = (document.getElementById('gcPromoCode').value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    var email = (document.getElementById('gcPromoEmail').value || '').trim();
+    var note = (document.getElementById('gcPromoNote').value || '').trim();
+    var currentUser = MastAdmin.getData('currentUser');
+    var adminUid = currentUser ? currentUser.uid : 'admin';
+
+    // Generate code or use custom
+    var code;
+    if (customCode && customCode.length >= 4) {
+      // Format custom code as XXXX-XXXX... pattern if long enough
+      if (customCode.length <= 8) {
+        code = customCode;
+      } else {
+        code = customCode.match(/.{1,4}/g).join('-');
+      }
+      // Check if code already exists
+      try {
+        var existing = await MastDB.giftCards.get(code);
+        if (existing.val()) {
+          showToast('Code "' + code + '" already exists. Choose a different one.', true);
+          return;
+        }
+      } catch (e) { /* ok */ }
+    } else {
+      var CHARSET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+      var raw = '';
+      for (var i = 0; i < 16; i++) {
+        raw += CHARSET[Math.floor(Math.random() * CHARSET.length)];
+      }
+      code = raw.slice(0, 4) + '-' + raw.slice(4, 8) + '-' + raw.slice(8, 12) + '-' + raw.slice(12, 16);
+    }
+
+    var now = new Date().toISOString();
+    var expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + days);
+
+    var gcData = {
+      code: code,
+      amountCents: amountCents,
+      balanceCents: amountCents,
+      purchasedBy: adminUid,
+      recipientEmail: email,
+      senderMessage: '',
+      senderName: '',
+      orderId: null,
+      orderNumber: null,
+      productId: null,
+      status: 'issued',
+      issuedAt: now,
+      expiresAt: expiresAt.toISOString(),
+      claimedBy: null,
+      claimedAt: null,
+      adminNote: note,
+      isManualIssue: true,
+      isPromotion: true,
+      promotionExpiryDays: days
+    };
+
+    try {
+      await MastDB.giftCards.set(code, gcData);
+      writeAudit('create', 'gift-card-promo', code);
+      closeModal();
+      showToast('Promo credit ' + code + ' created for ' + formatMoney(amountCents) + ' (expires in ' + days + ' days)');
+      loadGiftCards();
+    } catch (err) {
+      showToast('Failed to create: ' + err.message, true);
     }
   };
 

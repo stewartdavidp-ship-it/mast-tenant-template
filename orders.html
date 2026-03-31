@@ -323,6 +323,99 @@
     display: none;
   }
 
+  /* ========= VIEW TABS ========= */
+  .view-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid var(--cream-dark);
+    margin-bottom: 20px;
+    overflow-x: auto;
+  }
+  .view-tab {
+    padding: 10px 20px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    background: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    color: var(--warm-gray);
+    transition: all 0.15s;
+    white-space: nowrap;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .view-tab:hover { color: var(--charcoal); }
+  .view-tab.active {
+    color: var(--amber);
+    font-weight: 600;
+    border-bottom-color: var(--amber);
+  }
+  html.dark .view-tabs { border-bottom-color: #444; }
+  html.dark .view-tab { color: #888; }
+  html.dark .view-tab:hover { color: #ccc; }
+  html.dark .view-tab.active { color: var(--amber); border-bottom-color: var(--amber); }
+
+  /* ========= GIFT CARDS ========= */
+  .gc-card {
+    background: var(--surface-card);
+    border-radius: 4px;
+    box-shadow: 0 2px 20px rgba(0,0,0,0.06);
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1rem;
+    transition: box-shadow 0.3s;
+  }
+  .gc-card:hover { box-shadow: 0 4px 30px rgba(0,0,0,0.1); }
+  .gc-card.gc-dimmed { opacity: 0.5; }
+  .gc-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+  }
+  .gc-code {
+    font-family: monospace;
+    font-size: 0.95rem;
+    letter-spacing: 0.08em;
+  }
+  .gc-balance {
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: var(--teal);
+  }
+  .gc-balance.gc-depleted { color: var(--warm-gray-light); }
+  .gc-meta {
+    font-size: 0.78rem;
+    color: var(--warm-gray-light);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.5rem;
+    margin-top: 0.35rem;
+  }
+  .gc-badge {
+    display: inline-block;
+    font-size: 0.65rem;
+    padding: 2px 8px;
+    border-radius: 50px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+  .gc-badge-active { background: rgba(42,124,111,0.1); color: var(--teal); }
+  .gc-badge-sent { background: rgba(196,133,60,0.1); color: var(--amber); }
+  .gc-badge-claimed { background: rgba(42,124,111,0.1); color: var(--teal); }
+  .gc-badge-expired { background: rgba(196,78,21,0.1); color: #c44e15; }
+  .gc-badge-depleted { background: rgba(0,0,0,0.05); color: var(--warm-gray-light); }
+  .gc-section-label {
+    font-size: 0.68rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--warm-gray-light);
+    margin: 1.5rem 0 0.75rem;
+    font-weight: 500;
+  }
+  .gc-section-label:first-child { margin-top: 0; }
+
   .signed-in-header {
     display: flex;
     justify-content: space-between;
@@ -644,9 +737,14 @@
         <h2>Your Orders</h2>
         <span class="sign-out-link" id="signOutLink">Sign Out</span>
       </div>
+      <div class="view-tabs" id="ordersViewTabs" style="display:none;">
+        <button class="view-tab active" id="ordersTabBtn" onclick="window._switchOrdersView('orders')">Orders</button>
+        <button class="view-tab" id="giftCardsTabBtn" onclick="window._switchOrdersView('giftCards')">Gift Cards</button>
+      </div>
       <div id="signedInOrders">
         <div class="lookup-loading" style="display:block;">Loading your orders...</div>
       </div>
+      <div id="signedInGiftCards" style="display:none;"></div>
     </div>
   </div>
 
@@ -1076,18 +1174,205 @@ window.TENANT_READY.then(function() {
     });
   }
 
+  // ── Gift Cards View ──
+  var _giftCardsLoaded = false;
+  var _currentOrdersView = 'orders';
+
+  window._switchOrdersView = function(view) {
+    _currentOrdersView = view;
+    var ordersEl = document.getElementById('signedInOrders');
+    var gcEl = document.getElementById('signedInGiftCards');
+    var ordersBtn = document.getElementById('ordersTabBtn');
+    var gcBtn = document.getElementById('giftCardsTabBtn');
+
+    if (view === 'giftCards') {
+      ordersEl.style.display = 'none';
+      gcEl.style.display = 'block';
+      ordersBtn.classList.remove('active');
+      gcBtn.classList.add('active');
+      if (!_giftCardsLoaded) {
+        _giftCardsLoaded = true;
+        loadGiftCards();
+      }
+    } else {
+      ordersEl.style.display = 'block';
+      gcEl.style.display = 'none';
+      ordersBtn.classList.add('active');
+      gcBtn.classList.remove('active');
+    }
+  };
+
+  function loadGiftCards() {
+    var container = document.getElementById('signedInGiftCards');
+    var user = auth.currentUser;
+    if (!user) {
+      container.innerHTML = '<div class="no-orders">Please sign in to view gift cards.</div>';
+      return;
+    }
+    container.innerHTML = '<div class="lookup-loading" style="display:block;">Loading gift cards...</div>';
+
+    var uid = user.uid;
+    var walletRef = db.ref(TENANT_ID + '/public/accounts/' + uid + '/wallet/giftCards');
+    var sentRef = db.ref(TENANT_ID + '/public/accounts/' + uid + '/giftCardsSent');
+
+    var walletCards = null;
+    var sentCards = null;
+    var done = 0;
+
+    function tryRender() {
+      done++;
+      if (done < 2) return;
+      renderGiftCards(walletCards, sentCards, container);
+    }
+
+    walletRef.once('value', function(snap) {
+      walletCards = snap.val();
+      tryRender();
+    }, function() { walletCards = null; tryRender(); });
+
+    sentRef.once('value', function(snap) {
+      sentCards = snap.val();
+      tryRender();
+    }, function() { sentCards = null; tryRender(); });
+  }
+
+  function renderGiftCards(walletData, sentData, container) {
+    var activeCards = [];
+    var expiredCards = [];
+    var sentList = [];
+
+    // Parse wallet gift cards
+    if (walletData) {
+      var keys = Object.keys(walletData);
+      for (var i = 0; i < keys.length; i++) {
+        var gc = walletData[keys[i]];
+        gc._id = keys[i];
+        var balance = parseFloat(gc.balance || 0);
+        var isExpired = gc.expiresAt && new Date(gc.expiresAt) < new Date();
+        var isDepleted = balance <= 0;
+        if (isExpired || isDepleted) {
+          gc._reason = isExpired ? 'expired' : 'depleted';
+          expiredCards.push(gc);
+        } else {
+          activeCards.push(gc);
+        }
+      }
+    }
+
+    // Parse sent gift cards
+    if (sentData) {
+      var sKeys = Object.keys(sentData);
+      for (var j = 0; j < sKeys.length; j++) {
+        var sg = sentData[sKeys[j]];
+        sg._id = sKeys[j];
+        sentList.push(sg);
+      }
+    }
+
+    if (activeCards.length === 0 && sentList.length === 0 && expiredCards.length === 0) {
+      container.innerHTML = '<div class="no-orders">You have no gift cards yet. <a href="shop.html">Browse our collection</a> to purchase one.</div>';
+      return;
+    }
+
+    var html = '';
+
+    // Active gift cards
+    if (activeCards.length > 0) {
+      html += '<div class="gc-section-label">Active Gift Cards</div>';
+      for (var a = 0; a < activeCards.length; a++) {
+        html += renderGiftCard(activeCards[a], 'active');
+      }
+    }
+
+    // Sent gift cards
+    if (sentList.length > 0) {
+      html += '<div class="gc-section-label">Gift Cards Sent</div>';
+      for (var s = 0; s < sentList.length; s++) {
+        html += renderGiftCard(sentList[s], 'sent');
+      }
+    }
+
+    // Expired / depleted
+    if (expiredCards.length > 0) {
+      html += '<div class="gc-section-label">Expired / Used</div>';
+      for (var e = 0; e < expiredCards.length; e++) {
+        html += renderGiftCard(expiredCards[e], expiredCards[e]._reason);
+      }
+    }
+
+    container.innerHTML = html;
+  }
+
+  function renderGiftCard(gc, type) {
+    var code = gc.code || gc.giftCardCode || gc._id || '';
+    var balance = parseFloat(gc.balance || 0);
+    var originalAmount = parseFloat(gc.originalAmount || gc.amount || balance);
+    var isDimmed = type === 'expired' || type === 'depleted';
+    var recipientEmail = gc.recipientEmail || gc.recipient || '';
+    var claimedAt = gc.claimedAt || gc.redeemedAt || '';
+    var expiresAt = gc.expiresAt || '';
+    var purchasedAt = gc.purchasedAt || gc.createdAt || '';
+
+    var badgeClass = 'gc-badge-active';
+    var badgeText = 'Active';
+    if (type === 'sent') {
+      badgeClass = claimedAt ? 'gc-badge-claimed' : 'gc-badge-sent';
+      badgeText = claimedAt ? 'Claimed' : 'Pending';
+    } else if (type === 'expired') {
+      badgeClass = 'gc-badge-expired';
+      badgeText = 'Expired';
+    } else if (type === 'depleted') {
+      badgeClass = 'gc-badge-depleted';
+      badgeText = 'Used';
+    }
+
+    var html = '<div class="gc-card' + (isDimmed ? ' gc-dimmed' : '') + '">';
+    html += '<div class="gc-card-header">';
+    html += '<div><span class="gc-code">' + esc(code) + '</span> <span class="gc-badge ' + badgeClass + '">' + badgeText + '</span></div>';
+    html += '<div class="gc-balance' + (isDimmed ? ' gc-depleted' : '') + '">' + formatPrice(balance) + '</div>';
+    html += '</div>';
+
+    html += '<div class="gc-meta">';
+    if (originalAmount > balance && type !== 'depleted') {
+      html += '<span>Original: ' + formatPrice(originalAmount) + '</span>';
+    }
+    if (type === 'sent' && recipientEmail) {
+      html += '<span>To: ' + esc(recipientEmail) + '</span>';
+    }
+    if (purchasedAt) {
+      html += '<span>Purchased: ' + formatDate(purchasedAt) + '</span>';
+    }
+    if (expiresAt) {
+      html += '<span>Expires: ' + formatDate(expiresAt) + '</span>';
+    }
+    if (claimedAt && type === 'sent') {
+      html += '<span>Claimed: ' + formatDate(claimedAt) + '</span>';
+    }
+    html += '</div>';
+    html += '</div>';
+    return html;
+  }
+
   // ── Auth State (ensureCustomerAccount handled by cart.js) ──
   function handleAuthState(user) {
     var signedInSection = document.getElementById('signedInSection');
     var anonymousSection = document.getElementById('anonymousSection');
+    var viewTabs = document.getElementById('ordersViewTabs');
 
     if (user && !user.isAnonymous) {
       signedInSection.style.display = 'block';
       anonymousSection.style.display = 'none';
+      viewTabs.style.display = 'flex';
       fetchSignedInOrders();
+      // Reset to orders view on sign-in
+      _giftCardsLoaded = false;
+      _currentOrdersView = 'orders';
+      window._switchOrdersView('orders');
     } else {
       signedInSection.style.display = 'none';
       anonymousSection.style.display = 'block';
+      viewTabs.style.display = 'none';
+      _giftCardsLoaded = false;
     }
   }
 
