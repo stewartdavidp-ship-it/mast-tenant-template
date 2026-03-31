@@ -275,6 +275,7 @@
     // Tabs
     var tabs = [
       { id: 'overview', label: 'Overview' },
+      { id: 'history', label: 'History' },
       { id: 'credits', label: 'Credits', count: walletData.credits.filter(function(c) { return c.status === 'active'; }).length },
       { id: 'giftCards', label: 'Gift Cards', count: walletData.giftCards.filter(function(g) { return g.status === 'active'; }).length },
       { id: 'loyalty', label: 'Loyalty', count: walletData.loyalty ? walletData.loyalty.totalPoints : 0 },
@@ -292,6 +293,8 @@
     // Tab content
     if (currentTab === 'overview') {
       html += renderOverview(creditTotal, giftCardTotal);
+    } else if (currentTab === 'history') {
+      html += renderHistory();
     } else if (currentTab === 'credits') {
       html += renderCredits();
     } else if (currentTab === 'giftCards') {
@@ -381,6 +384,104 @@
         '</div>';
     }
 
+    html += '</div>';
+    return html;
+  }
+
+  function renderHistory() {
+    // Collect all transactions from all wallet sources into one timeline
+    var allTxns = [];
+
+    // Loyalty transactions
+    if (walletData.loyalty && walletData.loyalty.transactions) {
+      var txns = walletData.loyalty.transactions;
+      var txArr = Array.isArray(txns) ? txns : Object.values(txns);
+      txArr.forEach(function(t) {
+        if (!t) return;
+        var isPositive = t.type === 'earned' || t.type === 'restored';
+        var pointName = walletData.loyalty.pointName || 'pts';
+        allTxns.push({
+          date: t.timestamp || t.createdAt || '',
+          category: 'Loyalty',
+          description: (t.type || '').charAt(0).toUpperCase() + (t.type || '').slice(1) + (t.note ? ' — ' + t.note : ''),
+          amount: (isPositive ? '+' : '') + (t.points || 0) + ' ' + pointName,
+          positive: isPositive,
+          orderId: t.orderId || null
+        });
+      });
+    }
+
+    // Store credits
+    walletData.credits.forEach(function(c) {
+      allTxns.push({
+        date: c.createdAt || '',
+        category: 'Store Credit',
+        description: (c.source === 'return' ? 'Return refund' : c.source === 'return-gift-card-fallback' ? 'Return refund' : 'Credit issued') + (c.note ? ' — ' + c.note : ''),
+        amount: '+' + formatMoney(c.amountCents || 0),
+        positive: true,
+        orderId: c.orderId || null
+      });
+      // If credit was used (status depleted or has applied transactions)
+      if (c.status === 'depleted' || (c.remainingCents != null && c.remainingCents === 0)) {
+        allTxns.push({
+          date: c.updatedAt || c.createdAt || '',
+          category: 'Store Credit',
+          description: 'Credit applied to order',
+          amount: '-' + formatMoney(c.amountCents || 0),
+          positive: false,
+          orderId: c.orderId || null
+        });
+      }
+    });
+
+    // Gift card transactions
+    walletData.giftCards.forEach(function(gc) {
+      // Claimed/redeemed
+      if (gc.claimedAt) {
+        allTxns.push({
+          date: gc.claimedAt || gc.createdAt || '',
+          category: 'Gift Card',
+          description: 'Gift card redeemed (' + esc(gc.code || '').slice(-4) + ')',
+          amount: '+' + formatMoney(gc.amountCents || 0),
+          positive: true
+        });
+      }
+      // Individual transactions if available
+      if (gc.transactions) {
+        var gcTxArr = Array.isArray(gc.transactions) ? gc.transactions : Object.values(gc.transactions);
+        gcTxArr.forEach(function(t) {
+          if (!t || t.type === 'claimed') return;
+          var isPos = t.type === 'refund' || t.type === 'credit';
+          allTxns.push({
+            date: t.timestamp || t.createdAt || '',
+            category: 'Gift Card',
+            description: (t.type || '').charAt(0).toUpperCase() + (t.type || '').slice(1) + ' (' + esc(gc.code || '').slice(-4) + ')',
+            amount: (isPos ? '+' : '-') + formatMoney(t.amountCents || 0),
+            positive: isPos,
+            orderId: t.orderId || null
+          });
+        });
+      }
+    });
+
+    // Sort by date descending
+    allTxns.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
+
+    if (allTxns.length === 0) {
+      return '<div class="mw-list"><div class="mw-empty">No transaction history yet.</div></div>';
+    }
+
+    var html = '<div class="mw-list">';
+    allTxns.forEach(function(txn) {
+      html += '<div class="mw-card" style="display:flex;justify-content:space-between;align-items:flex-start;">' +
+        '<div>' +
+          '<div style="font-size:0.78rem;color:var(--warm-gray-light,#888);text-transform:uppercase;letter-spacing:0.05em;">' + esc(txn.category) + '</div>' +
+          '<div style="font-size:0.88rem;margin-top:2px;">' + esc(txn.description) + '</div>' +
+          '<div style="font-size:0.75rem;color:var(--warm-gray,#888);margin-top:4px;">' + formatDate(txn.date) + '</div>' +
+        '</div>' +
+        '<div style="font-size:0.95rem;font-weight:600;color:' + (txn.positive ? 'var(--teal,#2A7C6F)' : 'var(--warm-gray,#888)') + ';white-space:nowrap;">' + esc(txn.amount) + '</div>' +
+      '</div>';
+    });
     html += '</div>';
     return html;
   }
