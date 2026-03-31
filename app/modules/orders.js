@@ -30,7 +30,13 @@
     handed_to_carrier: { bg: 'rgba(69,39,160,0.2)', color: '#B39DDB', border: 'rgba(69,39,160,0.35)' },
     shipped:         { bg: 'rgba(40,53,147,0.2)', color: '#7986CB', border: 'rgba(40,53,147,0.35)' },
     delivered:       { bg: 'rgba(46,125,50,0.25)', color: '#66BB6A', border: 'rgba(46,125,50,0.4)' },
-    cancelled:       { bg: 'rgba(155,35,53,0.2)', color: '#EF5350', border: 'rgba(155,35,53,0.35)' }
+    cancelled:       { bg: 'rgba(155,35,53,0.2)', color: '#EF5350', border: 'rgba(155,35,53,0.35)' },
+    return_requested:    { bg: 'rgba(230,81,0,0.2)', color: '#FFB74D', border: 'rgba(230,81,0,0.35)' },
+    return_approved:     { bg: 'rgba(230,81,0,0.2)', color: '#FFB74D', border: 'rgba(230,81,0,0.35)' },
+    return_shipped:      { bg: 'rgba(69,39,160,0.2)', color: '#B39DDB', border: 'rgba(69,39,160,0.35)' },
+    return_received:     { bg: 'rgba(21,101,192,0.2)', color: '#64B5F6', border: 'rgba(21,101,192,0.35)' },
+    partially_returned:  { bg: 'rgba(230,81,0,0.2)', color: '#FFB74D', border: 'rgba(230,81,0,0.35)' },
+    refunded:            { bg: 'rgba(155,35,53,0.2)', color: '#EF5350', border: 'rgba(155,35,53,0.35)' }
   };
 
   function orderStatusBadgeStyle(status) {
@@ -3449,32 +3455,45 @@
     }
   }
 
-  // Also add RMA indicator to order detail view in admin
+  // Also add RMA indicator(s) to order detail view in admin
   var _origRenderOrderDetail = renderOrderDetail;
   renderOrderDetail = function(orderId) {
     _origRenderOrderDetail(orderId);
-    // After rendering, check if the order has an rmaId and inject an indicator
     var o = orders[orderId];
-    if (o && o.rmaId) {
-      var detailEl = document.getElementById('orderDetailView');
-      if (detailEl) {
-        var rma = rmaData[o.rmaId];
-        var rmaStatus = rma ? rma.status : 'unknown';
-        var rmaBanner = '<div class="order-detail-section" style="background:rgba(230,81,0,0.08);border-radius:6px;padding:12px 16px;margin-top:8px;">' +
-          '<div style="display:flex;align-items:center;gap:8px;">' +
-            '<span style="font-size:1.1rem;">&#x21A9;</span>' +
-            '<span style="font-size:0.85rem;font-weight:500;">Return Request</span>' +
-            '<span class="status-badge" style="' + rmaBadgeStyle(rmaStatus) + '">' + esc(rmaStatus.replace(/-/g, ' ')) + '</span>' +
-            '<a href="#" onclick="navigateTo(\'rma\');setTimeout(function(){viewRma(\'' + esc(o.rmaId) + '\');},100);return false;" style="font-size:0.78rem;color:var(--teal);margin-left:auto;">View RMA &rarr;</a>' +
-          '</div>' +
-        '</div>';
-        // Insert after the header
-        var header = detailEl.querySelector('.order-detail-header');
-        if (header && header.nextSibling) {
-          var div = document.createElement('div');
-          div.innerHTML = rmaBanner;
-          header.parentNode.insertBefore(div.firstChild, header.nextSibling);
-        }
+    if (!o) return;
+    // Collect all RMA IDs (prefer rmaIds object, fall back to single rmaId)
+    var rmaIdList = [];
+    if (o.rmaIds) {
+      rmaIdList = Object.keys(o.rmaIds);
+    } else if (o.rmaId) {
+      rmaIdList = [o.rmaId];
+    }
+    if (rmaIdList.length === 0) return;
+
+    var detailEl = document.getElementById('orderDetailView');
+    if (!detailEl) return;
+
+    var bannersHtml = '';
+    for (var i = 0; i < rmaIdList.length; i++) {
+      var rid = rmaIdList[i];
+      var rma = rmaData[rid];
+      var rmaStatus = rma ? rma.status : 'unknown';
+      var label = rmaIdList.length > 1 ? 'Return #' + (i + 1) : 'Return Request';
+      bannersHtml += '<div class="order-detail-section" style="background:rgba(230,81,0,0.08);border-radius:6px;padding:12px 16px;margin-top:8px;">' +
+        '<div style="display:flex;align-items:center;gap:8px;">' +
+          '<span style="font-size:1.1rem;">&#x21A9;</span>' +
+          '<span style="font-size:0.85rem;font-weight:500;">' + esc(label) + '</span>' +
+          '<span class="status-badge" style="' + rmaBadgeStyle(rmaStatus) + '">' + esc(rmaStatus.replace(/-/g, ' ')) + '</span>' +
+          '<a href="#" onclick="navigateTo(\'rma\');setTimeout(function(){viewRma(\'' + esc(rid) + '\');},100);return false;" style="font-size:0.78rem;color:var(--teal);margin-left:auto;">View RMA &rarr;</a>' +
+        '</div>' +
+      '</div>';
+    }
+    var header = detailEl.querySelector('.order-detail-header');
+    if (header && header.nextSibling) {
+      var div = document.createElement('div');
+      div.innerHTML = bannersHtml;
+      while (div.firstChild) {
+        header.parentNode.insertBefore(div.firstChild, header.nextSibling);
       }
     }
   };

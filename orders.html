@@ -549,6 +549,11 @@
     color: #c44e15;
   }
 
+  .status-partially_returned {
+    background: rgba(230, 81, 0, 0.1);
+    color: #E65100;
+  }
+
   .order-expand-icon {
     font-size: 0.8rem;
     color: var(--warm-gray-light);
@@ -1085,6 +1090,7 @@ window.TENANT_READY.then(function() {
       'return_approved': 'Return Approved',
       'return_shipped': 'Return Shipped',
       'return_received': 'Return Received',
+      'partially_returned': 'Partially Returned',
       'refunded': 'Refunded',
       'pending_check_verification': 'Pending Check',
       'paid': 'Paid',
@@ -1637,19 +1643,40 @@ window.TENANT_READY.then(function() {
     return (Date.now() - orderDate.getTime()) <= windowMs;
   }
 
+  function hasReturnableItems(order) {
+    var items = order.items || [];
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+      if (item.bookingType === 'gift-card' || item.isGiftCard) continue;
+      var available = (item.qty || 1) - (item.returnedQty || 0);
+      if (available > 0) return true;
+    }
+    return false;
+  }
+
   function canRequestReturn(order) {
     var status = order.status || '';
-    return (status === 'shipped' || status === 'delivered') && !order.rmaId;
+    var returnableStatuses = ['shipped', 'delivered', 'partially_returned', 'return_requested', 'return_approved', 'return_shipped', 'return_received'];
+    return returnableStatuses.indexOf(status) >= 0 && hasReturnableItems(order);
   }
 
   function renderReturnSection(order) {
-    if (!canRequestReturn(order) && !order.rmaId) return '';
+    var hasRmas = order.rmaIds || order.rmaId;
+    if (!canRequestReturn(order) && !hasRmas) return '';
     var html = '<div class="rma-section">';
 
-    if (order.rmaId) {
-      // Show RMA status tracking
-      html += renderRmaStatusTracking(order);
-    } else if (canRequestReturn(order)) {
+    // Show existing RMA tracking (one or more)
+    if (order.rmaIds) {
+      var rmaIdList = Object.keys(order.rmaIds);
+      for (var r = 0; r < rmaIdList.length; r++) {
+        html += renderRmaStatusTracking({ rmaId: rmaIdList[r] }, rmaIdList.length > 1 ? (r + 1) : 0);
+      }
+    } else if (order.rmaId) {
+      html += renderRmaStatusTracking({ rmaId: order.rmaId }, 0);
+    }
+
+    // Show return button if there are still returnable items
+    if (canRequestReturn(order)) {
       html += '<div class="order-detail-label">Returns</div>';
       if (!_termsConfigLoaded) {
         // Config still loading — show placeholder and re-render when ready
@@ -1693,15 +1720,16 @@ window.TENANT_READY.then(function() {
     { key: 'refund-issued', label: 'Refund Issued', field: 'refundIssuedAt' }
   ];
 
-  function renderRmaStatusTracking(order) {
-    var rmaId = order.rmaId;
-    var html = '<div class="order-detail-label">Return Status</div>';
+  function renderRmaStatusTracking(rmaObj, returnNum) {
+    var rmaId = rmaObj.rmaId;
+    var label = returnNum > 0 ? 'Return #' + returnNum : 'Return Status';
+    var html = '<div class="order-detail-label">' + esc(label) + '</div>';
     html += '<div id="rmaTracking_' + esc(rmaId) + '">';
     html += '<div style="font-size:0.82rem;color:var(--warm-gray-light);">Loading return status...</div>';
     html += '</div>';
 
     // Load RMA data asynchronously
-    setTimeout(function() { loadRmaTracking(rmaId, order); }, 0);
+    setTimeout(function() { loadRmaTracking(rmaId, {}); }, 0);
     return html;
   }
 
@@ -1832,18 +1860,23 @@ window.TENANT_READY.then(function() {
     html += '<div style="font-size:0.82rem;color:var(--warm-gray);margin-bottom:1rem;">Order ' +
       esc(order.orderNumber || order.orderId || '') + '</div>';
 
-    // Items checkboxes
+    // Items checkboxes — only show items with available qty
     html += '<div class="rma-modal-items">';
     html += '<div style="font-size:0.72rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--warm-gray-light);margin-bottom:0.5rem;">Select items to return</div>';
     for (var i = 0; i < items.length; i++) {
       var item = items[i];
       var isGiftCard = item.bookingType === 'gift-card' || item.isGiftCard;
       if (isGiftCard) continue; // Gift cards are non-returnable
+      var availableQty = (item.qty || 1) - (item.returnedQty || 0);
+      if (availableQty <= 0) continue; // Already fully returned
       var name = item.name || item.productName || 'Item';
-      var price = (item.price || 0) * (item.qty || 1);
+      var price = (item.price || 0) * availableQty;
+      var qtyLabel = availableQty < (item.qty || 1)
+        ? availableQty + ' of ' + (item.qty || 1) + ' remaining'
+        : 'x' + availableQty;
       html += '<div class="rma-modal-item">' +
-        '<input type="checkbox" id="rmaItem_' + i + '" data-index="' + i + '" onchange="updateReturnEstimate()" checked>' +
-        '<div class="rma-modal-item-info">' + esc(name) + ' x' + (item.qty || 1) + '</div>' +
+        '<input type="checkbox" id="rmaItem_' + i + '" data-index="' + i + '" data-available-qty="' + availableQty + '" onchange="updateReturnEstimate()" checked>' +
+        '<div class="rma-modal-item-info">' + esc(name) + ' ' + qtyLabel + '</div>' +
         '<div class="rma-modal-item-price">' + formatPrice(price) + '</div>' +
       '</div>';
     }
@@ -1894,7 +1927,8 @@ window.TENANT_READY.then(function() {
     for (var i = 0; i < items.length; i++) {
       var cb = document.getElementById('rmaItem_' + i);
       if (cb && cb.checked) {
-        selectedTotal += (items[i].price || 0) * (items[i].qty || 1);
+        var availQty = parseInt(cb.getAttribute('data-available-qty') || '0', 10) || (items[i].qty || 1);
+        selectedTotal += (items[i].price || 0) * availQty;
         selectedCount++;
       }
     }
@@ -1993,10 +2027,11 @@ window.TENANT_READY.then(function() {
     for (var i = 0; i < items.length; i++) {
       var cb = document.getElementById('rmaItem_' + i);
       if (cb && cb.checked) {
+        var availQty = parseInt(cb.getAttribute('data-available-qty') || '0', 10) || (items[i].qty || 1);
         selectedItems.push({
           pid: items[i].productId || items[i].pid || '',
           name: items[i].name || items[i].productName || 'Item',
-          qty: items[i].qty || 1,
+          qty: availQty,
           reason: document.getElementById('rmaReason') ? document.getElementById('rmaReason').value : ''
         });
       }
