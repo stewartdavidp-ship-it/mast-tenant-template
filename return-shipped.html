@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdn.jsdelivr.net https://*.firebaseio.com https://apis.google.com https://maps.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://us-central1-mast-platform-prod.cloudfunctions.net https://*.firebaseio.com wss://*.firebaseio.com https://*.firebasestorage.app https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://api.ipify.org; img-src 'self' data: blob: https:; frame-src 'self' https://*.firebaseapp.com https://*.firebaseio.com; frame-ancestors 'none';">
+<title>Return Shipment Confirmation</title>
+<link rel="preconnect" href="https://mast-platform-prod-default-rtdb.firebaseio.com" crossorigin>
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<script>
+(function(){
+  var P='https://mast-platform-prod-default-rtdb.firebaseio.com/mast-platform';
+  var h=location.hostname,C=5*60*1000;
+  if(h==='localhost'||h==='127.0.0.1')return;
+  try{var r=localStorage.getItem('mast_tenant_'+h);if(r){var c=JSON.parse(r);if(Date.now()-c.timestamp<C){window.__earlyTenant=Promise.resolve(c.data);return;}}}catch(e){}
+  var ek=h.replace(/\./g,'_');
+  window.__earlyTenant=fetch(P+'/tenantsByDomain/'+ek+'.json').then(function(r){return r.ok?r.json():null}).then(function(tid){
+    if(!tid)return null;
+    return fetch(P+'/tenants/'+tid+'/publicConfig.json').then(function(r){return r.ok?r.json():null}).then(function(pc){
+      return pc?{tenantId:tid,publicConfig:pc}:null;
+    });
+  }).catch(function(){return null;});
+})();
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="storefront.css">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<style>
+.rs-container {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 7rem 2rem 4rem;
+}
+.rs-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+.rs-header h1 {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 2rem;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  margin: 0 0 0.5rem;
+  color: var(--text);
+}
+.rs-header p {
+  font-size: 0.95rem;
+  color: var(--warm-gray, #888);
+}
+.rs-card {
+  background: var(--surface-card, #FAF6F0);
+  border-radius: 12px;
+  padding: 2rem;
+  border: 1px solid var(--border-subtle, #E8E0D4);
+}
+.rs-field {
+  margin-bottom: 1.25rem;
+}
+.rs-field label {
+  display: block;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--warm-gray, #888);
+  margin-bottom: 6px;
+}
+.rs-field input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border-subtle, #E8E0D4);
+  border-radius: 6px;
+  font-size: 0.95rem;
+  background: var(--bg, #fff);
+  color: var(--text, #1A1A1A);
+  box-sizing: border-box;
+}
+.rs-field input:focus {
+  outline: none;
+  border-color: var(--primary, #C4853C);
+  box-shadow: 0 0 0 2px rgba(196,133,60,0.15);
+}
+.rs-btn {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  background: var(--primary, #C4853C);
+  color: #fff;
+  transition: background 0.2s;
+}
+.rs-btn:hover { background: var(--primary-light, #D4A06C); }
+.rs-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.rs-msg {
+  text-align: center;
+  padding: 2rem;
+  font-size: 0.95rem;
+  color: var(--warm-gray, #888);
+}
+.rs-success {
+  text-align: center;
+  padding: 2rem 0;
+}
+.rs-success-icon {
+  font-size: 3rem;
+  color: var(--teal, #2A7C6F);
+  margin-bottom: 1rem;
+}
+.rs-success h2 {
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 400;
+  font-size: 1.5rem;
+  margin: 0 0 0.75rem;
+  color: var(--text);
+}
+.rs-success p {
+  font-size: 0.88rem;
+  color: var(--warm-gray, #888);
+  line-height: 1.6;
+}
+.rs-signin {
+  text-align: center;
+  padding: 3rem 2rem;
+  color: var(--warm-gray, #888);
+}
+.rs-signin-btn {
+  display: inline-block;
+  padding: 10px 24px;
+  border-radius: 6px;
+  background: var(--primary, #C4853C);
+  color: #fff;
+  text-decoration: none;
+  font-size: 0.88rem;
+  cursor: pointer;
+  border: none;
+  margin-top: 1rem;
+}
+@media (max-width: 768px) {
+  .rs-container { padding: 6rem 1.25rem 3rem; }
+  .rs-header h1 { font-size: 1.6rem; }
+}
+</style>
+</head>
+<body>
+<nav id="mainNav"></nav>
+<div class="nav-mobile-menu" id="mobileMenu"></div>
+
+<div class="rs-container">
+  <div class="rs-header">
+    <h1>Confirm Return Shipment</h1>
+    <p>Let us know you've mailed your return</p>
+  </div>
+  <div id="rsContent">
+    <div class="rs-msg">Loading...</div>
+  </div>
+</div>
+
+<footer id="siteFooter"></footer>
+
+<script src="storefront-tenant.js"></script>
+<script src="storefront-theme.js"></script>
+<script src="storefront-nav.js"></script>
+<script src="tenant-brand.js?v=2"></script>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+
+<script>
+(function() {
+  'use strict';
+
+  var TENANT_ID = null;
+  var FUNCTION_BASE = 'https://us-central1-mast-platform-prod.cloudfunctions.net/';
+  var auth = null;
+  var db = null;
+
+  function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  function getRmaId() {
+    var params = new URLSearchParams(window.location.search);
+    return params.get('rma') || '';
+  }
+
+  function init() {
+    var rmaId = getRmaId();
+    if (!rmaId) {
+      showMessage('Invalid link. No return request ID found.');
+      return;
+    }
+
+    // Wait for tenant resolution
+    var checkInterval = setInterval(function() {
+      if (window.TENANT_FIREBASE_CONFIG && window.TENANT_ID) {
+        clearInterval(checkInterval);
+        TENANT_ID = window.TENANT_ID;
+
+        var app = firebase.initializeApp(window.TENANT_FIREBASE_CONFIG, 'return-shipped');
+        db = firebase.database(app);
+        auth = firebase.auth(app);
+
+        auth.onAuthStateChanged(function(user) {
+          if (user) {
+            renderForm(rmaId, user);
+          } else {
+            renderSignIn(rmaId);
+          }
+        });
+      }
+    }, 100);
+
+    // Timeout after 10 seconds
+    setTimeout(function() { clearInterval(checkInterval); }, 10000);
+  }
+
+  function renderSignIn(rmaId) {
+    var el = document.getElementById('rsContent');
+    el.innerHTML = '<div class="rs-signin">' +
+      '<p>Please sign in to confirm your return shipment.</p>' +
+      '<a href="/orders.html" class="rs-signin-btn">Sign In &amp; View Orders</a>' +
+    '</div>';
+  }
+
+  function renderForm(rmaId, user) {
+    var el = document.getElementById('rsContent');
+    el.innerHTML = '<div class="rs-card">' +
+      '<p style="font-size:0.88rem;color:var(--warm-gray);margin:0 0 1.5rem;">Enter your tracking number so we can watch for your return package.</p>' +
+      '<div class="rs-field">' +
+        '<label>Tracking Number</label>' +
+        '<input type="text" id="rsTracking" placeholder="e.g., 9400111899223100012345">' +
+      '</div>' +
+      '<div class="rs-field">' +
+        '<label>Carrier (optional)</label>' +
+        '<select id="rsCarrier" style="width:100%;padding:10px 14px;border:1px solid var(--border-subtle,#E8E0D4);border-radius:6px;font-size:0.95rem;background:var(--bg,#fff);color:var(--text,#1A1A1A);">' +
+          '<option value="">Select carrier</option>' +
+          '<option value="USPS">USPS</option>' +
+          '<option value="UPS">UPS</option>' +
+          '<option value="FedEx">FedEx</option>' +
+          '<option value="Other">Other</option>' +
+        '</select>' +
+      '</div>' +
+      '<button class="rs-btn" id="rsSubmitBtn" onclick="submitShipped()">Confirm Return Shipped</button>' +
+    '</div>';
+  }
+
+  window.submitShipped = function() {
+    var rmaId = getRmaId();
+    var trackingEl = document.getElementById('rsTracking');
+    var carrierEl = document.getElementById('rsCarrier');
+    var btn = document.getElementById('rsSubmitBtn');
+    var tracking = trackingEl ? trackingEl.value.trim() : '';
+    var carrier = carrierEl ? carrierEl.value : '';
+
+    if (!tracking) {
+      alert('Please enter a tracking number.');
+      return;
+    }
+
+    if (btn) { btn.disabled = true; btn.textContent = 'Submitting...'; }
+
+    var user = auth.currentUser;
+    if (!user) {
+      alert('Please sign in first.');
+      if (btn) { btn.disabled = false; btn.textContent = 'Confirm Return Shipped'; }
+      return;
+    }
+
+    user.getIdToken().then(function(token) {
+      return fetch(FUNCTION_BASE + 'markReturnShipped', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({ data: { tenantId: TENANT_ID, rmaId: rmaId, trackingNumber: tracking, carrier: carrier, uid: user.uid } })
+      });
+    }).then(function(resp) {
+      return resp.json();
+    }).then(function(data) {
+      var result = data.result || data;
+      if (result.success) {
+        var el = document.getElementById('rsContent');
+        el.innerHTML = '<div class="rs-success">' +
+          '<div class="rs-success-icon">&#10003;</div>' +
+          '<h2>Return Shipment Confirmed</h2>' +
+          '<p>Thank you! We\'ve recorded your tracking number' + (tracking ? ' <strong>' + esc(tracking) + '</strong>' : '') + '.</p>' +
+          '<p style="margin-top:0.75rem;">We\'ll inspect the item when it arrives and process your refund.</p>' +
+          '<a href="/orders.html" style="display:inline-block;margin-top:1.5rem;padding:10px 24px;border-radius:6px;background:var(--primary,#C4853C);color:#fff;text-decoration:none;font-size:0.88rem;">View My Orders</a>' +
+        '</div>';
+      } else {
+        alert(result.error || 'Failed to confirm shipment.');
+        if (btn) { btn.disabled = false; btn.textContent = 'Confirm Return Shipped'; }
+      }
+    }).catch(function(err) {
+      alert('Error: ' + err.message);
+      if (btn) { btn.disabled = false; btn.textContent = 'Confirm Return Shipped'; }
+    });
+  };
+
+  // Auto-init
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+</body>
+</html>
