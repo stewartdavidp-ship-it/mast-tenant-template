@@ -679,6 +679,209 @@
     text-decoration: underline;
   }
 
+  /* ========= RMA / RETURNS ========= */
+  .rma-section {
+    padding: 1rem 0;
+    border-top: 1px solid var(--cream-dark);
+  }
+  .rma-section .order-detail-label { margin-bottom: 0.75rem; }
+
+  .rma-return-btn {
+    display: inline-block;
+    padding: 0.6rem 1.5rem;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.78rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-weight: 400;
+    background: transparent;
+    color: var(--amber);
+    border: 1px solid var(--amber);
+  }
+  .rma-return-btn:hover {
+    background: var(--amber);
+    color: #fff;
+    transform: translateY(-2px);
+  }
+  .rma-return-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+    background: transparent;
+    color: var(--warm-gray-light);
+    border-color: var(--warm-gray-light);
+  }
+
+  .rma-status-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+  }
+  .rma-step {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.85rem;
+  }
+  .rma-step-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid var(--warm-gray-light);
+    flex-shrink: 0;
+  }
+  .rma-step.completed .rma-step-dot {
+    background: var(--teal);
+    border-color: var(--teal);
+  }
+  .rma-step.current .rma-step-dot {
+    background: var(--amber);
+    border-color: var(--amber);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--amber) 25%, transparent);
+  }
+  .rma-step-label { flex: 1; }
+  .rma-step.completed .rma-step-label { color: var(--teal); }
+  .rma-step.current .rma-step-label { color: var(--amber); font-weight: 500; }
+  .rma-step-date { font-size: 0.75rem; color: var(--warm-gray-light); }
+
+  .rma-tracking-input {
+    margin-top: 0.75rem;
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .rma-tracking-input input {
+    flex: 1;
+    min-width: 180px;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--cream-dark);
+    border-radius: 2px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.85rem;
+    background: var(--cream);
+    color: var(--charcoal);
+    outline: none;
+  }
+  .rma-tracking-input input:focus { border-color: var(--amber); }
+  .rma-tracking-input button {
+    padding: 0.5rem 1rem;
+    font-size: 0.75rem;
+  }
+
+  /* Return Request Modal */
+  .rma-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+  }
+  .rma-modal {
+    background: var(--surface-card, #fff);
+    border-radius: 6px;
+    max-width: 520px;
+    width: 100%;
+    max-height: 85vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    padding: 2rem;
+  }
+  .rma-modal h3 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.5rem;
+    font-weight: 300;
+    margin-bottom: 1.25rem;
+  }
+  .rma-modal-items { margin-bottom: 1.25rem; }
+  .rma-modal-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+    font-size: 0.9rem;
+    border-bottom: 1px solid var(--cream-dark, #eee);
+  }
+  .rma-modal-item:last-child { border-bottom: none; }
+  .rma-modal-item input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--amber);
+  }
+  .rma-modal-item-info { flex: 1; }
+  .rma-modal-item-price { font-weight: 400; white-space: nowrap; }
+  .rma-modal-field { margin-bottom: 1rem; }
+  .rma-modal-field label {
+    display: block;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--warm-gray);
+    margin-bottom: 0.35rem;
+    font-weight: 400;
+  }
+  .rma-modal-field select,
+  .rma-modal-field textarea {
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--cream-dark);
+    border-radius: 2px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem;
+    background: var(--cream);
+    color: var(--charcoal);
+    outline: none;
+  }
+  .rma-modal-field select:focus,
+  .rma-modal-field textarea:focus { border-color: var(--amber); }
+  .rma-modal-field textarea { min-height: 60px; resize: vertical; }
+
+  .rma-estimate {
+    background: var(--cream, #f8f5f0);
+    border-radius: 4px;
+    padding: 1rem;
+    margin-bottom: 1.25rem;
+    font-size: 0.85rem;
+  }
+  .rma-estimate-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.2rem 0;
+  }
+  .rma-estimate-row.total {
+    font-weight: 500;
+    border-top: 1px solid var(--cream-dark);
+    padding-top: 0.5rem;
+    margin-top: 0.3rem;
+  }
+  .rma-modal-actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+    margin-top: 1.5rem;
+  }
+  .rma-modal-actions .btn { padding: 0.6rem 1.5rem; font-size: 0.78rem; }
+
+  .rma-confirm-msg {
+    text-align: center;
+    padding: 1.5rem 0;
+  }
+  .rma-confirm-msg .rma-confirm-icon {
+    width: 48px; height: 48px; border-radius: 50%;
+    background: var(--teal); color: #fff; font-size: 1.5rem;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 1rem;
+  }
+  .rma-confirm-msg p { font-size: 0.9rem; color: var(--warm-gray); line-height: 1.6; }
+
   /* ========= RESPONSIVE ========= */
   @media (max-width: 768px) {
     section { padding: 4rem 1.5rem; }
@@ -689,6 +892,9 @@
     .order-card-header { flex-direction: column; align-items: flex-start; gap: 0.75rem; }
     .order-card-right { align-self: flex-end; }
     .order-item-row { flex-wrap: wrap; }
+    .rma-modal { padding: 1.25rem; }
+    .rma-modal-actions { flex-direction: column; }
+    .rma-modal-actions .btn { width: 100%; text-align: center; }
   }
   
 
@@ -1068,6 +1274,9 @@ window.TENANT_READY.then(function() {
       html += '</div></div>';
     }
 
+    // Return / RMA section
+    html += renderReturnSection(order);
+
     return html;
   }
 
@@ -1352,6 +1561,405 @@ window.TENANT_READY.then(function() {
     html += '</div>';
     return html;
   }
+
+  // ── RMA / Returns ──
+  var _termsConfig = null;
+  var _termsConfigLoaded = false;
+
+  function loadTermsConfig() {
+    if (_termsConfigLoaded) return Promise.resolve(_termsConfig);
+    return db.ref(TENANT_ID + '/admin/termsConfig').once('value').then(function(snap) {
+      _termsConfig = snap.val() || {};
+      _termsConfigLoaded = true;
+      return _termsConfig;
+    }).catch(function() {
+      _termsConfigLoaded = true;
+      _termsConfig = {};
+      return _termsConfig;
+    });
+  }
+
+  // Pre-load T&C config
+  loadTermsConfig();
+
+  function isWithinReturnWindow(order) {
+    if (!_termsConfig || !_termsConfig.returnWindowDays) return false;
+    var placedAt = order.placedAt || order.createdAt;
+    if (!placedAt) return false;
+    var orderDate = new Date(placedAt);
+    var windowMs = _termsConfig.returnWindowDays * 24 * 60 * 60 * 1000;
+    return (Date.now() - orderDate.getTime()) <= windowMs;
+  }
+
+  function canRequestReturn(order) {
+    var status = order.status || '';
+    return (status === 'shipped' || status === 'delivered') && !order.rmaId;
+  }
+
+  function renderReturnSection(order) {
+    if (!canRequestReturn(order) && !order.rmaId) return '';
+    var html = '<div class="rma-section">';
+
+    if (order.rmaId) {
+      // Show RMA status tracking
+      html += renderRmaStatusTracking(order);
+    } else if (canRequestReturn(order)) {
+      html += '<div class="order-detail-label">Returns</div>';
+      if (!_termsConfig || !_termsConfig.returnWindowDays) {
+        html += '<div style="font-size:0.85rem;color:var(--warm-gray);">Returns are not currently available.</div>';
+      } else if (!isWithinReturnWindow(order)) {
+        html += '<button class="rma-return-btn" disabled>Return Window Expired</button>' +
+          '<div style="font-size:0.78rem;color:var(--warm-gray-light);margin-top:0.35rem;">' +
+          'Returns must be requested within ' + _termsConfig.returnWindowDays + ' days of order placement.</div>';
+      } else {
+        var orderId = order.orderId || order.id || '';
+        html += '<button class="rma-return-btn" onclick="openReturnModal(\'' + esc(orderId) + '\')">Request Return</button>' +
+          '<div style="font-size:0.78rem;color:var(--warm-gray-light);margin-top:0.35rem;">' +
+          'You have ' + getRemainingReturnDays(order) + ' days remaining to request a return.</div>';
+      }
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function getRemainingReturnDays(order) {
+    if (!_termsConfig || !_termsConfig.returnWindowDays) return 0;
+    var placedAt = order.placedAt || order.createdAt;
+    if (!placedAt) return 0;
+    var orderDate = new Date(placedAt);
+    var windowMs = _termsConfig.returnWindowDays * 24 * 60 * 60 * 1000;
+    var remaining = Math.ceil((orderDate.getTime() + windowMs - Date.now()) / (24 * 60 * 60 * 1000));
+    return Math.max(0, remaining);
+  }
+
+  var RMA_STEPS = [
+    { key: 'requested', label: 'Return Requested', field: 'requestedAt' },
+    { key: 'approved', label: 'Approved', field: 'approvedAt' },
+    { key: 'shipped-back', label: 'Shipped Back', field: 'shippedBackAt' },
+    { key: 'received', label: 'Received', field: 'receivedAt' },
+    { key: 'refund-issued', label: 'Refund Issued', field: 'refundIssuedAt' }
+  ];
+
+  function renderRmaStatusTracking(order) {
+    var rmaId = order.rmaId;
+    var html = '<div class="order-detail-label">Return Status</div>';
+    html += '<div id="rmaTracking_' + esc(rmaId) + '">';
+    html += '<div style="font-size:0.82rem;color:var(--warm-gray-light);">Loading return status...</div>';
+    html += '</div>';
+
+    // Load RMA data asynchronously
+    setTimeout(function() { loadRmaTracking(rmaId, order); }, 0);
+    return html;
+  }
+
+  function loadRmaTracking(rmaId, order) {
+    db.ref(TENANT_ID + '/admin/rma/' + rmaId).once('value').then(function(snap) {
+      var rma = snap.val();
+      var container = document.getElementById('rmaTracking_' + rmaId);
+      if (!container) return;
+
+      if (!rma) {
+        container.innerHTML = '<div style="font-size:0.82rem;color:var(--warm-gray-light);">Return details not available.</div>';
+        return;
+      }
+
+      var html = '<div class="rma-status-timeline">';
+      var reachedCurrent = false;
+      for (var i = 0; i < RMA_STEPS.length; i++) {
+        var step = RMA_STEPS[i];
+        var ts = rma[step.field];
+        var isCurrent = rma.status === step.key;
+        var isCompleted = false;
+
+        if (ts && !reachedCurrent) {
+          isCompleted = !isCurrent;
+        }
+        if (isCurrent) reachedCurrent = true;
+
+        var cls = isCurrent ? 'current' : (ts && !reachedCurrent ? 'completed' : '');
+        // Mark all steps before current as completed
+        if (!reachedCurrent && ts) cls = 'completed';
+
+        html += '<div class="rma-step ' + cls + '">' +
+          '<div class="rma-step-dot"></div>' +
+          '<div class="rma-step-label">' + esc(step.label) + '</div>' +
+          (ts ? '<div class="rma-step-date">' + formatDate(ts) + '</div>' : '') +
+        '</div>';
+      }
+      html += '</div>';
+
+      // Show items being returned
+      if (rma.items && rma.items.length) {
+        html += '<div style="margin-top:0.75rem;font-size:0.82rem;color:var(--warm-gray);">';
+        html += '<strong style="font-size:0.68rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--warm-gray-light);">Returning:</strong>';
+        for (var j = 0; j < rma.items.length; j++) {
+          var item = rma.items[j];
+          html += '<div style="padding:0.2rem 0;">' + esc(item.name) + ' x' + (item.qty || 1) +
+            ' &mdash; ' + formatPrice(item.priceCents / 100) + '</div>';
+        }
+        html += '</div>';
+      }
+
+      // Refund estimate
+      if (rma.refundAmountCents != null) {
+        html += '<div style="margin-top:0.5rem;font-size:0.85rem;">' +
+          '<strong>Estimated Refund:</strong> ' + formatPrice(rma.refundAmountCents / 100) +
+          (rma.refundMethod ? ' (' + esc(rma.refundMethod) + ')' : '') + '</div>';
+      }
+
+      // If approved, show tracking entry
+      if (rma.status === 'approved' && !rma.returnTrackingNumber) {
+        html += '<div class="rma-tracking-input">' +
+          '<input type="text" id="rmaTrackingInput_' + esc(rmaId) + '" placeholder="Enter return tracking number">' +
+          '<button class="btn btn-primary" onclick="submitReturnTracking(\'' + esc(rmaId) + '\')">Submit</button>' +
+        '</div>';
+      } else if (rma.returnTrackingNumber) {
+        html += '<div style="margin-top:0.5rem;font-size:0.85rem;">' +
+          '<strong>Return Tracking:</strong> <span style="font-family:monospace;">' +
+          esc(rma.returnTrackingNumber) + '</span></div>';
+      }
+
+      container.innerHTML = html;
+    }).catch(function() {
+      var container = document.getElementById('rmaTracking_' + rmaId);
+      if (container) container.innerHTML = '<div style="font-size:0.82rem;color:var(--warm-gray-light);">Unable to load return status.</div>';
+    });
+  }
+
+  window.submitReturnTracking = function(rmaId) {
+    var input = document.getElementById('rmaTrackingInput_' + rmaId);
+    if (!input) return;
+    var trackingNum = input.value.trim();
+    if (!trackingNum) { alert('Please enter a tracking number.'); return; }
+
+    var user = auth.currentUser;
+    if (!user) { alert('Please sign in to submit tracking.'); return; }
+
+    var updates = {};
+    updates['returnTrackingNumber'] = trackingNum;
+    updates['shippedBackAt'] = new Date().toISOString();
+    updates['status'] = 'shipped-back';
+    updates['updatedAt'] = new Date().toISOString();
+
+    db.ref(TENANT_ID + '/admin/rma/' + rmaId).update(updates).then(function() {
+      loadRmaTracking(rmaId, {});
+    }).catch(function(err) {
+      alert('Failed to submit tracking: ' + err.message);
+    });
+  };
+
+  // ── Return Request Modal ──
+  var _returnModalOrder = null;
+
+  window.openReturnModal = function(orderId) {
+    // Find the order from the rendered list
+    loadTermsConfig().then(function() {
+      // Fetch the order data
+      callFunction('getMyOrders', {}, function(result) {
+        if (!result.success) { alert('Unable to load order details.'); return; }
+        var order = null;
+        (result.orders || []).forEach(function(o) {
+          if ((o.orderId || o.id) === orderId) order = o;
+        });
+        if (!order) { alert('Order not found.'); return; }
+        _returnModalOrder = order;
+        showReturnModal(order);
+      });
+    });
+  };
+
+  function showReturnModal(order) {
+    var items = order.items || [];
+    var reasons = (_termsConfig && _termsConfig.allowedReasons) || ['Defective', 'Wrong item', 'Changed my mind', 'Other'];
+    var restockingFeePct = (_termsConfig && _termsConfig.restockingFeePercent) || 0;
+
+    var html = '<div class="rma-modal-overlay" id="rmaModalOverlay" onclick="if(event.target===this)closeReturnModal()">';
+    html += '<div class="rma-modal">';
+    html += '<h3>Request Return</h3>';
+    html += '<div style="font-size:0.82rem;color:var(--warm-gray);margin-bottom:1rem;">Order ' +
+      esc(order.orderNumber || order.orderId || '') + '</div>';
+
+    // Items checkboxes
+    html += '<div class="rma-modal-items">';
+    html += '<div style="font-size:0.72rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--warm-gray-light);margin-bottom:0.5rem;">Select items to return</div>';
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+      var name = item.name || item.productName || 'Item';
+      var price = (item.price || 0) * (item.qty || 1);
+      html += '<div class="rma-modal-item">' +
+        '<input type="checkbox" id="rmaItem_' + i + '" data-index="' + i + '" onchange="updateReturnEstimate()" checked>' +
+        '<div class="rma-modal-item-info">' + esc(name) + ' x' + (item.qty || 1) + '</div>' +
+        '<div class="rma-modal-item-price">' + formatPrice(price) + '</div>' +
+      '</div>';
+    }
+    html += '</div>';
+
+    // Reason
+    html += '<div class="rma-modal-field"><label>Return Reason</label>';
+    html += '<select id="rmaReason" onchange="updateReturnEstimate()">';
+    for (var r = 0; r < reasons.length; r++) {
+      html += '<option value="' + esc(reasons[r]) + '">' + esc(reasons[r]) + '</option>';
+    }
+    html += '</select></div>';
+
+    // Additional notes
+    html += '<div class="rma-modal-field"><label>Additional Details (optional)</label>';
+    html += '<textarea id="rmaNotes" placeholder="Any additional details about your return..."></textarea></div>';
+
+    // Refund estimate
+    html += '<div class="rma-estimate" id="rmaEstimate"></div>';
+
+    // Actions
+    html += '<div class="rma-modal-actions">' +
+      '<button class="btn btn-outline" onclick="closeReturnModal()">Cancel</button>' +
+      '<button class="btn btn-primary" id="rmaSubmitBtn" onclick="submitReturnRequest()">Submit Return Request</button>' +
+    '</div>';
+
+    html += '</div></div>';
+
+    // Append to body
+    var div = document.createElement('div');
+    div.id = 'rmaModalContainer';
+    div.innerHTML = html;
+    document.body.appendChild(div);
+
+    // Calculate initial estimate
+    updateReturnEstimate();
+  }
+
+  window.updateReturnEstimate = function() {
+    var estimateEl = document.getElementById('rmaEstimate');
+    if (!estimateEl || !_returnModalOrder) return;
+
+    var items = _returnModalOrder.items || [];
+    var selectedTotal = 0;
+    var selectedCount = 0;
+
+    for (var i = 0; i < items.length; i++) {
+      var cb = document.getElementById('rmaItem_' + i);
+      if (cb && cb.checked) {
+        selectedTotal += (items[i].price || 0) * (items[i].qty || 1);
+        selectedCount++;
+      }
+    }
+
+    var restockingFeePct = (_termsConfig && _termsConfig.restockingFeePercent) || 0;
+    var restockingFee = Math.round(selectedTotal * restockingFeePct / 100 * 100) / 100;
+    var refundAmount = selectedTotal - restockingFee;
+
+    var refundMethod = 'Original payment method';
+    if (_termsConfig && _termsConfig.refundMethod === 'store_credit') {
+      refundMethod = 'Store credit';
+    }
+
+    var html = '<div class="rma-estimate-row"><span>Items selected</span><span>' + selectedCount + '</span></div>';
+    html += '<div class="rma-estimate-row"><span>Items subtotal</span><span>' + formatPrice(selectedTotal) + '</span></div>';
+    if (restockingFee > 0) {
+      html += '<div class="rma-estimate-row"><span>Restocking fee (' + restockingFeePct + '%)</span><span>-' + formatPrice(restockingFee) + '</span></div>';
+    }
+    html += '<div class="rma-estimate-row total"><span>Estimated refund</span><span>' + formatPrice(refundAmount) + '</span></div>';
+    html += '<div style="margin-top:0.5rem;font-size:0.78rem;color:var(--warm-gray-light);">Refund via: ' + esc(refundMethod) + '</div>';
+
+    estimateEl.innerHTML = html;
+
+    var submitBtn = document.getElementById('rmaSubmitBtn');
+    if (submitBtn) submitBtn.disabled = selectedCount === 0;
+  };
+
+  window.submitReturnRequest = function() {
+    if (!_returnModalOrder) return;
+    var order = _returnModalOrder;
+    var items = order.items || [];
+    var submitBtn = document.getElementById('rmaSubmitBtn');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Submitting...'; }
+
+    var selectedItems = [];
+    for (var i = 0; i < items.length; i++) {
+      var cb = document.getElementById('rmaItem_' + i);
+      if (cb && cb.checked) {
+        selectedItems.push({
+          pid: items[i].productId || items[i].pid || '',
+          name: items[i].name || items[i].productName || 'Item',
+          priceCents: Math.round((items[i].price || 0) * 100),
+          qty: items[i].qty || 1
+        });
+      }
+    }
+
+    if (selectedItems.length === 0) { alert('Please select at least one item.'); if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Submit Return Request'; } return; }
+
+    var reason = document.getElementById('rmaReason');
+    var notes = document.getElementById('rmaNotes');
+    var returnReason = reason ? reason.value : '';
+    var additionalNotes = notes ? notes.value.trim() : '';
+    if (additionalNotes) returnReason += ' - ' + additionalNotes;
+
+    var restockingFeePct = (_termsConfig && _termsConfig.restockingFeePercent) || 0;
+    var selectedTotal = 0;
+    selectedItems.forEach(function(item) { selectedTotal += item.priceCents * item.qty; });
+    var restockingFee = Math.round(selectedTotal * restockingFeePct / 100);
+    var refundAmount = selectedTotal - restockingFee;
+
+    var refundMethod = 'original_payment';
+    if (_termsConfig && _termsConfig.refundMethod === 'store_credit') refundMethod = 'store_credit';
+
+    var user = auth.currentUser;
+    var customerUid = user ? user.uid : null;
+    var orderId = order.orderId || order.id || '';
+
+    var rmaData = {
+      orderId: orderId,
+      orderNumber: order.orderNumber || '',
+      status: 'requested',
+      customerUid: customerUid || '',
+      customerEmail: order.email || '',
+      items: selectedItems,
+      returnReason: returnReason,
+      refundMethod: refundMethod,
+      refundAmountCents: refundAmount,
+      refundAllocation: [],
+      returnTrackingNumber: null,
+      requestedAt: new Date().toISOString(),
+      approvedAt: null,
+      shippedBackAt: null,
+      receivedAt: null,
+      refundIssuedAt: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    var rmaRef = db.ref(TENANT_ID + '/admin/rma').push();
+    var rmaId = rmaRef.key;
+    rmaData.rmaId = rmaId;
+
+    // Write RMA record, then update order
+    rmaRef.set(rmaData).then(function() {
+      return db.ref(TENANT_ID + '/admin/orders/' + orderId + '/rmaId').set(rmaId);
+    }).then(function() {
+      // Show confirmation
+      var modal = document.querySelector('.rma-modal');
+      if (modal) {
+        modal.innerHTML = '<div class="rma-confirm-msg">' +
+          '<div class="rma-confirm-icon">&#10003;</div>' +
+          '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.5rem;font-weight:300;margin-bottom:0.75rem;">Return Request Submitted</h3>' +
+          '<p>Your return request for order ' + esc(order.orderNumber || orderId) + ' has been submitted. ' +
+          'We will review your request and notify you once approved.</p>' +
+          '<div style="margin-top:1.5rem;">' +
+            '<button class="btn btn-primary" onclick="closeReturnModal();location.reload();">Done</button>' +
+          '</div>' +
+        '</div>';
+      }
+    }).catch(function(err) {
+      alert('Failed to submit return request: ' + err.message);
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Submit Return Request'; }
+    });
+  };
+
+  window.closeReturnModal = function() {
+    var container = document.getElementById('rmaModalContainer');
+    if (container) container.remove();
+    _returnModalOrder = null;
+  };
 
   // ── Auth State (ensureCustomerAccount handled by cart.js) ──
   function handleAuthState(user) {

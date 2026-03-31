@@ -1439,6 +1439,391 @@ async function exitPackingMode() {
   window.exitPackingMode = exitPackingMode;
 
   // ============================================================
+  // TERMS & CONDITIONS MANAGEMENT
+  // ============================================================
+
+  var termsConfig = null;
+  var termsLoaded = false;
+
+  var SHIPPING_RETURN_OPTIONS = [
+    { value: 'customer_pays', label: 'Customer pays return shipping' },
+    { value: 'store_pays', label: 'Store pays return shipping' },
+    { value: 'label_provided', label: 'Prepaid return label provided' }
+  ];
+
+  var CATEGORY_RULE_OPTIONS = [
+    { value: 'full_refund', label: 'Full refund' },
+    { value: 'store_credit_only', label: 'Store credit only' },
+    { value: 'final_sale', label: 'Final sale (no returns)' }
+  ];
+
+  function loadTermsConfig() {
+    MastDB.termsConfig.get().then(function(snap) {
+      termsConfig = snap.val() || null;
+      termsLoaded = true;
+      renderTermsAdmin();
+    }).catch(function(err) {
+      console.error('[terms] Load failed:', err);
+      termsLoaded = true;
+      renderTermsAdmin();
+    });
+  }
+
+  function renderTermsAdmin() {
+    var loading = document.getElementById('termsLoading');
+    var empty = document.getElementById('termsEmpty');
+    var content = document.getElementById('termsContent');
+    var editBtn = document.getElementById('termsEditBtn');
+    var publishBtn = document.getElementById('termsPublishBtn');
+
+    if (!loading) return;
+    loading.style.display = 'none';
+
+    if (editBtn) editBtn.style.display = '';
+
+    if (!termsConfig) {
+      empty.style.display = '';
+      content.style.display = 'none';
+      if (publishBtn) publishBtn.style.display = 'none';
+      return;
+    }
+
+    empty.style.display = 'none';
+    content.style.display = '';
+    if (publishBtn) publishBtn.style.display = '';
+
+    var tc = termsConfig;
+    var html = '<div style="display:grid;gap:20px;max-width:720px;">';
+
+    // Return Policy
+    html += '<div style="background:var(--cream);border-radius:10px;padding:20px;">' +
+      '<h3 style="margin:0 0 12px;font-size:1rem;font-weight:600;">Return Policy</h3>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:0.9rem;">' +
+      '<div><span style="color:var(--warm-gray);">Return Window:</span> <strong>' + esc(String(tc.returnWindowDays || 30)) + ' days</strong></div>' +
+      '<div><span style="color:var(--warm-gray);">Restocking Fee:</span> <strong>' + esc(String(tc.restockingFeePercent || 0)) + '%</strong></div>' +
+      '<div><span style="color:var(--warm-gray);">Shipping:</span> <strong>' + esc(getShippingLabel(tc.shippingReturnPolicy)) + '</strong></div>' +
+      '<div><span style="color:var(--warm-gray);">Reasons:</span> <strong>' + (tc.anyReason ? 'Any reason' : esc((tc.allowedReturnReasons || []).length + ' specified')) + '</strong></div>' +
+      '</div>';
+    if (!tc.anyReason && tc.allowedReturnReasons && tc.allowedReturnReasons.length > 0) {
+      html += '<div style="margin-top:8px;font-size:0.85rem;color:var(--warm-gray);">' +
+        tc.allowedReturnReasons.map(function(r) { return esc(r); }).join(', ') + '</div>';
+    }
+    html += '</div>';
+
+    // Category Rules
+    if (tc.categoryRules && tc.categoryRules.length > 0) {
+      html += '<div style="background:var(--cream);border-radius:10px;padding:20px;">' +
+        '<h3 style="margin:0 0 12px;font-size:1rem;font-weight:600;">Category-Specific Rules</h3>' +
+        '<div style="display:flex;flex-direction:column;gap:6px;">';
+      tc.categoryRules.forEach(function(cr) {
+        html += '<div style="display:flex;justify-content:space-between;font-size:0.9rem;">' +
+          '<span>' + esc(cr.category) + '</span>' +
+          '<span style="color:var(--warm-gray);">' + esc(getCategoryRuleLabel(cr.rule)) + '</span></div>';
+      });
+      html += '</div></div>';
+    }
+
+    // Gift Card Terms
+    if (tc.giftCardTerms) {
+      html += '<div style="background:var(--cream);border-radius:10px;padding:20px;">' +
+        '<h3 style="margin:0 0 8px;font-size:1rem;font-weight:600;">Gift Card Terms</h3>' +
+        '<div style="font-size:0.9rem;white-space:pre-wrap;">' + esc(tc.giftCardTerms) + '</div></div>';
+    }
+
+    // Loyalty Terms
+    if (tc.loyaltyTerms) {
+      html += '<div style="background:var(--cream);border-radius:10px;padding:20px;">' +
+        '<h3 style="margin:0 0 8px;font-size:1rem;font-weight:600;">Loyalty Program Terms</h3>' +
+        '<div style="font-size:0.9rem;white-space:pre-wrap;">' + esc(tc.loyaltyTerms) + '</div></div>';
+    }
+
+    // Last published
+    if (tc.lastPublishedAt) {
+      html += '<div style="font-size:0.8rem;color:var(--warm-gray);text-align:right;">Last published: ' + esc(new Date(tc.lastPublishedAt).toLocaleString()) + '</div>';
+    }
+
+    html += '</div>';
+    content.innerHTML = html;
+  }
+
+  function getShippingLabel(val) {
+    for (var i = 0; i < SHIPPING_RETURN_OPTIONS.length; i++) {
+      if (SHIPPING_RETURN_OPTIONS[i].value === val) return SHIPPING_RETURN_OPTIONS[i].label;
+    }
+    return val || 'Not set';
+  }
+
+  function getCategoryRuleLabel(val) {
+    for (var i = 0; i < CATEGORY_RULE_OPTIONS.length; i++) {
+      if (CATEGORY_RULE_OPTIONS[i].value === val) return CATEGORY_RULE_OPTIONS[i].label;
+    }
+    return val || 'Not set';
+  }
+
+  window._openTermsEditor = function() {
+    var tc = termsConfig || {};
+    var reasons = (tc.allowedReturnReasons || []).join('\n');
+
+    // Load categories for the category rules dropdown
+    var catOptions = '<option value="">Select category...</option>';
+    if (window.CATEGORIES && CATEGORIES.length > 0) {
+      CATEGORIES.forEach(function(c) {
+        catOptions += '<option value="' + esc(c) + '">' + esc(c) + '</option>';
+      });
+    } else {
+      catOptions += '<option value="ceramics">ceramics</option><option value="glass">glass</option><option value="jewelry">jewelry</option><option value="textiles">textiles</option><option value="other">other</option>';
+    }
+
+    // Build category rules rows
+    var catRulesHtml = '';
+    if (tc.categoryRules && tc.categoryRules.length > 0) {
+      tc.categoryRules.forEach(function(cr, idx) {
+        catRulesHtml += buildCategoryRuleRow(idx, cr.category, cr.rule, catOptions);
+      });
+    }
+
+    var ruleOptionsHtml = CATEGORY_RULE_OPTIONS.map(function(o) {
+      return '<option value="' + esc(o.value) + '">' + esc(o.label) + '</option>';
+    }).join('');
+
+    var shippingOptionsHtml = SHIPPING_RETURN_OPTIONS.map(function(o) {
+      return '<option value="' + esc(o.value) + '"' + (tc.shippingReturnPolicy === o.value ? ' selected' : '') + '>' + esc(o.label) + '</option>';
+    }).join('');
+
+    var modal = document.createElement('div');
+    modal.id = 'termsEditorModal';
+    modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;';
+    modal.innerHTML =
+      '<div style="background:var(--cream);border-radius:12px;padding:24px;max-width:600px;width:90%;max-height:85vh;overflow-y:auto;">' +
+        '<h3 style="margin:0 0 20px;">Edit Terms &amp; Conditions</h3>' +
+        '<div style="display:flex;flex-direction:column;gap:16px;">' +
+
+          // Return window
+          '<div>' +
+            '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Return Window (days)</label>' +
+            '<input type="number" id="tcReturnDays" min="0" max="365" value="' + (tc.returnWindowDays || 30) + '" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;">' +
+          '</div>' +
+
+          // Allowed return reasons
+          '<div>' +
+            '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Allowed Return Reasons</label>' +
+            '<div style="margin-bottom:6px;">' +
+              '<label style="font-size:0.85rem;cursor:pointer;"><input type="checkbox" id="tcAnyReason"' + (tc.anyReason ? ' checked' : '') + ' onchange="document.getElementById(\'tcReasonsWrap\').style.display=this.checked?\'none\':\'\';"> Any reason</label>' +
+            '</div>' +
+            '<div id="tcReasonsWrap" style="' + (tc.anyReason ? 'display:none;' : '') + '">' +
+              '<textarea id="tcReasons" rows="3" placeholder="One reason per line, e.g.:\\nDefective item\\nWrong size\\nChanged mind" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;resize:vertical;">' + esc(reasons) + '</textarea>' +
+            '</div>' +
+          '</div>' +
+
+          // Restocking fee
+          '<div>' +
+            '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Restocking Fee (%)</label>' +
+            '<input type="number" id="tcRestockingFee" min="0" max="100" value="' + (tc.restockingFeePercent || 0) + '" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;">' +
+          '</div>' +
+
+          // Shipping return policy
+          '<div>' +
+            '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Shipping Return Policy</label>' +
+            '<select id="tcShippingPolicy" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;">' +
+              shippingOptionsHtml +
+            '</select>' +
+          '</div>' +
+
+          // Per-category rules
+          '<div>' +
+            '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Category-Specific Rules</label>' +
+            '<div id="tcCategoryRules">' + catRulesHtml + '</div>' +
+            '<button class="btn btn-secondary" style="margin-top:6px;padding:6px 12px;font-size:0.8rem;" onclick="window._addCategoryRule()">+ Add Rule</button>' +
+          '</div>' +
+
+          // Gift card terms
+          '<div>' +
+            '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Gift Card Terms</label>' +
+            '<textarea id="tcGiftCard" rows="3" placeholder="e.g. Gift cards never expire. Non-refundable." style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;resize:vertical;">' + esc(tc.giftCardTerms || '') + '</textarea>' +
+          '</div>' +
+
+          // Loyalty terms
+          '<div>' +
+            '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Loyalty Program Terms</label>' +
+            '<textarea id="tcLoyalty" rows="3" placeholder="e.g. Points expire after 12 months of inactivity." style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;resize:vertical;">' + esc(tc.loyaltyTerms || '') + '</textarea>' +
+          '</div>' +
+
+        '</div>' +
+        '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;">' +
+          '<button class="btn btn-secondary" onclick="document.getElementById(\'termsEditorModal\').remove()">Cancel</button>' +
+          '<button class="btn btn-primary" onclick="window._saveTermsConfig()">Save</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(modal);
+  };
+
+  function buildCategoryRuleRow(idx, category, rule, catOptions) {
+    var ruleOptionsHtml = CATEGORY_RULE_OPTIONS.map(function(o) {
+      return '<option value="' + esc(o.value) + '"' + (rule === o.value ? ' selected' : '') + '>' + esc(o.label) + '</option>';
+    }).join('');
+
+    // Set selected on catOptions for this row
+    var catOpts = catOptions.replace('value="' + esc(category || '') + '"', 'value="' + esc(category || '') + '" selected');
+
+    return '<div class="tc-cat-rule-row" style="display:flex;gap:8px;margin-bottom:6px;align-items:center;">' +
+      '<select class="tc-cat-select" style="flex:1;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.85rem;">' + catOpts + '</select>' +
+      '<select class="tc-rule-select" style="flex:1;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.85rem;">' + ruleOptionsHtml + '</select>' +
+      '<button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--warm-gray);cursor:pointer;font-size:1.1rem;padding:4px;" title="Remove">&times;</button>' +
+    '</div>';
+  }
+
+  window._addCategoryRule = function() {
+    var container = document.getElementById('tcCategoryRules');
+    if (!container) return;
+    var catOptions = '<option value="">Select category...</option>';
+    if (window.CATEGORIES && CATEGORIES.length > 0) {
+      CATEGORIES.forEach(function(c) {
+        catOptions += '<option value="' + esc(c) + '">' + esc(c) + '</option>';
+      });
+    } else {
+      catOptions += '<option value="ceramics">ceramics</option><option value="glass">glass</option><option value="jewelry">jewelry</option><option value="textiles">textiles</option><option value="other">other</option>';
+    }
+    var idx = container.querySelectorAll('.tc-cat-rule-row').length;
+    var div = document.createElement('div');
+    div.innerHTML = buildCategoryRuleRow(idx, '', 'full_refund', catOptions);
+    container.appendChild(div.firstChild);
+  };
+
+  window._saveTermsConfig = function() {
+    var returnDays = parseInt(document.getElementById('tcReturnDays').value, 10);
+    var anyReason = document.getElementById('tcAnyReason').checked;
+    var reasonsText = document.getElementById('tcReasons').value.trim();
+    var restockingFee = parseInt(document.getElementById('tcRestockingFee').value, 10);
+    var shippingPolicy = document.getElementById('tcShippingPolicy').value;
+    var giftCardTerms = document.getElementById('tcGiftCard').value.trim();
+    var loyaltyTerms = document.getElementById('tcLoyalty').value.trim();
+
+    // Validate
+    if (isNaN(returnDays) || returnDays < 0 || returnDays > 365) {
+      showToast('Return window must be 0-365 days.', true);
+      return;
+    }
+    if (isNaN(restockingFee) || restockingFee < 0 || restockingFee > 100) {
+      showToast('Restocking fee must be 0-100%.', true);
+      return;
+    }
+
+    // Parse reasons
+    var reasons = [];
+    if (!anyReason && reasonsText) {
+      reasons = reasonsText.split('\n').map(function(r) { return r.trim(); }).filter(Boolean);
+    }
+
+    // Parse category rules
+    var catRules = [];
+    var rows = document.querySelectorAll('.tc-cat-rule-row');
+    rows.forEach(function(row) {
+      var catSel = row.querySelector('.tc-cat-select');
+      var ruleSel = row.querySelector('.tc-rule-select');
+      if (catSel && ruleSel && catSel.value) {
+        catRules.push({ category: catSel.value, rule: ruleSel.value });
+      }
+    });
+
+    var config = {
+      returnWindowDays: returnDays,
+      anyReason: anyReason,
+      allowedReturnReasons: reasons,
+      restockingFeePercent: restockingFee,
+      shippingReturnPolicy: shippingPolicy,
+      categoryRules: catRules,
+      giftCardTerms: giftCardTerms || null,
+      loyaltyTerms: loyaltyTerms || null,
+      updatedAt: new Date().toISOString()
+    };
+
+    MastDB.termsConfig.set(config).then(function() {
+      termsConfig = config;
+      showToast('Terms & conditions saved.');
+      var modal = document.getElementById('termsEditorModal');
+      if (modal) modal.remove();
+      renderTermsAdmin();
+    }).catch(function(err) {
+      showToast('Error saving: ' + err.message, true);
+    });
+  };
+
+  window._generatePublicTerms = function() {
+    if (!termsConfig) {
+      showToast('No terms configured. Click Edit first.', true);
+      return;
+    }
+
+    var tc = termsConfig;
+    var html = '';
+
+    // Return Policy
+    html += '<h2>Return Policy</h2>';
+    html += '<p>Items may be returned within <strong>' + esc(String(tc.returnWindowDays || 30)) + ' days</strong> of purchase.</p>';
+    if (tc.anyReason) {
+      html += '<p>Returns are accepted for any reason.</p>';
+    } else if (tc.allowedReturnReasons && tc.allowedReturnReasons.length > 0) {
+      html += '<p>Returns are accepted for the following reasons:</p><ul>';
+      tc.allowedReturnReasons.forEach(function(r) {
+        html += '<li>' + esc(r) + '</li>';
+      });
+      html += '</ul>';
+    }
+
+    // Restocking Fee
+    if (tc.restockingFeePercent && tc.restockingFeePercent > 0) {
+      html += '<h2>Restocking Fee</h2>';
+      html += '<p>A restocking fee of <strong>' + esc(String(tc.restockingFeePercent)) + '%</strong> applies to all returns.</p>';
+    }
+
+    // Shipping Returns
+    html += '<h2>Return Shipping</h2>';
+    if (tc.shippingReturnPolicy === 'customer_pays') {
+      html += '<p>Customers are responsible for return shipping costs.</p>';
+    } else if (tc.shippingReturnPolicy === 'store_pays') {
+      html += '<p>We cover return shipping costs.</p>';
+    } else if (tc.shippingReturnPolicy === 'label_provided') {
+      html += '<p>A prepaid return shipping label will be provided.</p>';
+    }
+
+    // Category-specific rules
+    if (tc.categoryRules && tc.categoryRules.length > 0) {
+      html += '<h2>Category-Specific Rules</h2><ul>';
+      tc.categoryRules.forEach(function(cr) {
+        var label = getCategoryRuleLabel(cr.rule);
+        html += '<li><strong>' + esc(cr.category) + ':</strong> ' + esc(label) + '</li>';
+      });
+      html += '</ul>';
+    }
+
+    // Gift Card Terms
+    if (tc.giftCardTerms) {
+      html += '<h2>Gift Card Terms</h2>';
+      html += '<p>' + esc(tc.giftCardTerms).replace(/\n/g, '<br>') + '</p>';
+    }
+
+    // Loyalty Terms
+    if (tc.loyaltyTerms) {
+      html += '<h2>Loyalty Program Terms</h2>';
+      html += '<p>' + esc(tc.loyaltyTerms).replace(/\n/g, '<br>') + '</p>';
+    }
+
+    // Write to public/content/terms
+    MastDB._ref('public/content/terms').set({
+      html: html,
+      updatedAt: new Date().toISOString()
+    }).then(function() {
+      // Update last published timestamp on config
+      termsConfig.lastPublishedAt = new Date().toISOString();
+      MastDB.termsConfig.update({ lastPublishedAt: termsConfig.lastPublishedAt });
+      showToast('Terms published to storefront.');
+      renderTermsAdmin();
+    }).catch(function(err) {
+      showToast('Error publishing: ' + err.message, true);
+    });
+  };
+
+  // ============================================================
   // Register with MastAdmin
   // ============================================================
 
@@ -1459,6 +1844,9 @@ async function exitPackingMode() {
         if (!salesEventsLoaded) loadSalesEvents();
         if (!productsLoaded) loadProducts();
         if (!salesLoaded) loadSales();
+      } },
+      'terms': { tab: 'termsTab', setup: function() {
+        if (!termsLoaded) loadTermsConfig();
       } }
     },
     detachListeners: function() {

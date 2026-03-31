@@ -3149,6 +3149,32 @@
     .order-item-inv.inv-build { background: rgba(123,31,162,0.2); color: #CE93D8; border: 1px solid rgba(123,31,162,0.35); }
     .order-item-inv.inv-unknown { background: rgba(158,158,158,0.15); color: #BDBDBD; border: 1px solid rgba(158,158,158,0.25); }
 
+    /* RMA / Returns Admin */
+    .rma-status-timeline {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .rma-step {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 0.85rem;
+    }
+    .rma-step-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      border: 2px solid var(--warm-gray-light);
+      flex-shrink: 0;
+    }
+    .rma-step.completed .rma-step-dot { background: var(--teal); border-color: var(--teal); }
+    .rma-step.current .rma-step-dot { background: var(--amber); border-color: var(--amber); box-shadow: 0 0 0 3px color-mix(in srgb, var(--amber) 25%, transparent); }
+    .rma-step-label { flex: 1; }
+    .rma-step.completed .rma-step-label { color: var(--teal); }
+    .rma-step.current .rma-step-label { color: var(--amber); font-weight: 500; }
+    .rma-step-date { font-size: 0.75rem; color: var(--warm-gray-light); }
+
     .order-summary-row {
       display: flex;
       justify-content: space-between;
@@ -4912,9 +4938,11 @@
         <div class="sidebar-item" data-route="pos" onclick="navigateTo('pos')">Point of Sale</div>
         <div class="sidebar-item" data-route="orders" onclick="navigateTo('orders')">Retail Orders <span id="sidebarOrdersBadge" class="sidebar-badge alert" style="display:none;"></span></div>
         <div class="sidebar-item" data-route="commissions" onclick="navigateTo('commissions')">Commissions</div>
+        <div class="sidebar-item" data-route="rma" onclick="navigateTo('rma')">Returns (RMA) <span id="sidebarRmaBadge" class="sidebar-badge alert" style="display:none;"></span></div>
         <div class="sidebar-item" data-route="wholesale" onclick="navigateTo('wholesale')">Wholesale</div>
         <div class="sidebar-item" data-route="galleries" onclick="navigateTo('galleries')">Galleries &amp; Consignment</div>
         <div class="sidebar-item" data-route="receipts" onclick="navigateTo('receipts')">Receipts &amp; Reconciliation</div>
+        <div class="sidebar-item" data-route="terms" onclick="navigateTo('terms')">Terms &amp; Conditions</div>
       </div>
     </div>
     <!-- Cart (Wallet & Discounts) -->
@@ -5863,6 +5891,41 @@
       <div id="orderDetailView" class="order-detail"></div>
     </div>
 
+    <!-- Admin: RMA / Returns Tab -->
+    <div id="rmaTab" style="display:none;">
+      <div id="rmaListView">
+        <div class="section-header">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <h2>Returns (RMA)</h2>
+            <span class="products-stat" id="rmaCount"></span>
+          </div>
+        </div>
+        <div id="rmaFilterPills" class="order-filter-pills"></div>
+        <div id="rmaLoading" class="loading">Loading...</div>
+        <div id="rmaEmpty" class="empty-state" style="display:none;">
+          <div class="empty-icon">&#128230;</div>
+          <p>No return requests yet.</p>
+        </div>
+        <div id="rmaTable" class="orders-table data-table" style="display:none;">
+          <table>
+            <thead>
+              <tr>
+                <th>RMA</th>
+                <th>Order</th>
+                <th>Customer</th>
+                <th>Items</th>
+                <th>Refund</th>
+                <th>Status</th>
+                <th>Requested</th>
+              </tr>
+            </thead>
+            <tbody id="rmaTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="rmaDetailView" class="order-detail" style="display:none;"></div>
+    </div>
+
     <!-- Admin: Commissions Tab -->
     <div id="commissionsTab" style="display:none;">
       <div class="section-header">
@@ -6242,6 +6305,25 @@
           <div id="packingAllocations" style="margin-top:16px;"></div>
         </div>
       </div>
+    </div>
+
+    <!-- ===== TERMS & CONDITIONS TAB ===== -->
+    <div id="termsTab" style="display:none;">
+      <div class="section-header">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <h2>Terms &amp; Conditions</h2>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button class="btn btn-secondary" onclick="window._generatePublicTerms()" id="termsPublishBtn" style="display:none;">Publish to Storefront</button>
+          <button class="btn btn-primary" onclick="window._openTermsEditor()" id="termsEditBtn" style="display:none;">Edit</button>
+        </div>
+      </div>
+      <div id="termsLoading" class="loading">Loading...</div>
+      <div id="termsEmpty" class="empty-state" style="display:none;">
+        <div class="empty-icon">&#128220;</div>
+        <p>No terms configured yet. Click "Edit" to set up your return policy and terms.</p>
+      </div>
+      <div id="termsContent" style="display:none;"></div>
     </div>
 
     <!-- ===== INVENTORY INTAKE OVERLAY ===== -->
@@ -8133,6 +8215,26 @@ MastDB.walletConfig = {
   update: function(data) { return this.ref().update(data); }
 };
 
+MastDB.termsConfig = {
+  PATH: 'admin/termsConfig',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  get: function() { return this.ref().once('value'); },
+  set: function(data) { return this.ref().set(data); },
+  update: function(data) { return this.ref().update(data); }
+};
+
+MastDB.rma = {
+  PATH: 'admin/rma',
+  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+  list: function(limit) { return this.ref().limitToLast(limit || 100).once('value'); },
+  get: function(id) { return this.ref(id).once('value'); },
+  set: function(id, data) { return this.ref(id).set(data); },
+  update: function(id, data) { return this.ref(id).update(data); },
+  newKey: function() { return this.ref().push().key; },
+  listen: function(limit, cb, errCb) { return this.ref().limitToLast(limit || 100).on('value', cb, errCb); },
+  unlisten: function(handle) { this.ref().off('value', handle); }
+};
+
 MastDB.salesEvents = {
   PATH: 'admin/salesEvents',
   ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
@@ -8952,7 +9054,7 @@ MastDB.passDefinitions = {
 var MODULE_REGISTRY = {
   make:   { id: 'make',   name: 'Make',   icon: '\uD83D\uDD25', description: 'Production jobs, build tracking, materials, pricing.', section: 'make', navPosition: 1, purchasable: true, routes: ['jobs', 'production', 'procurement', 'materials', 'pieces', 'lookbooks'], manageSettings: [], synergies: ['sell', 'market'], status: 'active' },
   market: { id: 'market', name: 'Market', icon: '\uD83D\uDCE3', description: 'Social media, blog, newsletter, stories.', section: 'market', navPosition: 2, purchasable: true, routes: ['social', 'blog', 'newsletter', 'stories'], manageSettings: ['newsletter', 'email'], synergies: ['sell', 'show'], status: 'active' },
-  sell:   { id: 'sell',   name: 'Sell',   icon: '\uD83D\uDCB0', description: 'Point of sale, orders, commissions, wholesale.', section: 'sell', navPosition: 3, purchasable: true, routes: ['pos', 'orders', 'commissions', 'wholesale', 'galleries', 'receipts', 'coupons', 'promotions'], manageSettings: ['square'], synergies: ['ship', 'make'], status: 'active' },
+  sell:   { id: 'sell',   name: 'Sell',   icon: '\uD83D\uDCB0', description: 'Point of sale, orders, commissions, wholesale.', section: 'sell', navPosition: 3, purchasable: true, routes: ['pos', 'orders', 'commissions', 'rma', 'wholesale', 'galleries', 'receipts', 'coupons', 'promotions'], manageSettings: ['square'], synergies: ['ship', 'make'], status: 'active' },
   ship:   { id: 'ship',   name: 'Ship',   icon: '\uD83D\uDCE6', description: 'Pack orders, ship deliveries, track fulfillment.', section: 'ship', navPosition: 4, purchasable: true, routes: ['pack', 'ship'], manageSettings: ['shippingRates'], synergies: ['sell', 'show'], status: 'active' },
   run:    { id: 'run',    name: 'Run',    icon: '\uD83D\uDCCB', description: 'Trips, expenses, revenue, reports, contacts.', section: 'run', navPosition: 5, purchasable: true, routes: ['trips', 'expenses', 'reports', 'financials', 'contacts', 'customers'], manageSettings: [], synergies: ['sell', 'show'], status: 'active' },
   web:    { id: 'web',    name: 'Web',    icon: '\uD83C\uDF10', description: 'Website pages and content management.', section: 'web', navPosition: 6, purchasable: false, showInGrid: true, routes: ['website', 'gallery', 'images'], manageSettings: [], synergies: ['market', 'sell'], status: 'active' },
@@ -11240,7 +11342,7 @@ var ROUTE_MAP = {
 var SECTION_ROUTES = {
   'make':   ['jobs', 'production', 'procurement'],
   'market': ['social', 'blog', 'newsletter', 'stories'],
-  'sell':   ['pos', 'orders', 'commissions', 'wholesale', 'galleries', 'receipts'],
+  'sell':   ['pos', 'orders', 'commissions', 'wholesale', 'galleries', 'receipts', 'terms'],
   'cart':   ['wallet', 'gift-cards', 'coupons', 'loyalty', 'promotions'],
   'show':   ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'],
   'ship':   ['pack', 'ship'],
@@ -11250,7 +11352,7 @@ var SECTION_ROUTES = {
   'manage': ['products', 'inventory', 'employees', 'analytics', 'auditlog', 'settings']
 };
 
-var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'expensesTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab'];
+var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'expensesTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'termsTab'];
 
 var currentRoute = 'dashboard';
 
@@ -11657,7 +11759,7 @@ var MODULE_MANIFEST = {
   production: { src: 'modules/production.js', routes: ['jobs', 'production', 'stories'] },
   contacts: { src: 'modules/contacts.js', routes: ['contacts'] },
   orders: { src: 'modules/orders.js', routes: ['orders', 'commissions'] },
-  sales: { src: 'modules/sales.js', routes: ['pos', 'receipts', 'events', 'salesEvents'] },
+  sales: { src: 'modules/sales.js', routes: ['pos', 'receipts', 'events', 'salesEvents', 'terms'] },
   fulfillment: { src: 'modules/fulfillment.js', routes: ['pack', 'ship', 'fulfillment'] },
   eventsAdmin: { src: 'modules/events.js', routes: ['events-shows', 'events-settings'] },
   website: { src: 'modules/website.js', routes: ['website'] },

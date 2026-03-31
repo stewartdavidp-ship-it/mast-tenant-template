@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdn.jsdelivr.net https://*.firebaseio.com https://apis.google.com https://maps.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://us-central1-mast-platform-prod.cloudfunctions.net https://*.firebaseio.com wss://*.firebaseio.com https://*.firebasestorage.app https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://maps.googleapis.com https://places.googleapis.com https://api.ipify.org; img-src 'self' data: blob: https:; frame-src 'self' https://*.firebaseapp.com https://*.firebaseio.com; frame-ancestors 'none';">
+<title>Terms &amp; Conditions &mdash; My Shop</title>
+<link rel="preconnect" href="https://mast-platform-prod-default-rtdb.firebaseio.com" crossorigin>
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<script>
+(function(){
+  var P='https://mast-platform-prod-default-rtdb.firebaseio.com/mast-platform';
+  var h=location.hostname,C=5*60*1000;
+  if(h==='localhost'||h==='127.0.0.1')return;
+  try{var r=localStorage.getItem('mast_tenant_'+h);if(r){var c=JSON.parse(r);if(Date.now()-c.timestamp<C){window.__earlyTenant=Promise.resolve(c.data);return;}}}catch(e){}
+  var ek=h.replace(/\./g,'_');
+  window.__earlyTenant=fetch(P+'/tenantsByDomain/'+ek+'.json').then(function(r){return r.ok?r.json():null}).then(function(tid){
+    if(!tid)return null;
+    return fetch(P+'/tenants/'+tid+'/publicConfig.json').then(function(r){return r.ok?r.json():null}).then(function(pc){
+      return pc?{tenantId:tid,publicConfig:pc}:null;
+    });
+  }).catch(function(){return null;});
+})();
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="storefront.css">
+<link rel="stylesheet" href="cart.css" media="print" onload="this.media='all'">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<script>(function(){var s=localStorage.getItem('mast-theme');var d=window.matchMedia('(prefers-color-scheme:dark)').matches;if(s==='dark'||(s!=='light'&&d))document.documentElement.classList.add('dark');else document.documentElement.classList.add('light');})();</script>
+<style>
+.tc-container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 7rem 2rem 4rem;
+}
+.tc-header {
+  text-align: center;
+  margin-bottom: 2.5rem;
+}
+.tc-header h1 {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 2.4rem;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  margin: 0 0 0.5rem;
+  color: var(--text);
+}
+.tc-header p {
+  font-size: 0.95rem;
+  color: var(--warm-gray, #888);
+}
+.tc-content {
+  background: var(--surface-card, #fff);
+  border: 1px solid var(--surface-card-border, #eee);
+  border-radius: 10px;
+  padding: 2rem;
+  line-height: 1.7;
+  color: var(--text);
+}
+.tc-content h2 {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.5rem;
+  font-weight: 400;
+  margin: 1.5rem 0 0.75rem;
+  color: var(--text);
+}
+.tc-content h2:first-child {
+  margin-top: 0;
+}
+.tc-content p {
+  margin: 0 0 1rem;
+  font-size: 0.95rem;
+}
+.tc-content ul {
+  margin: 0 0 1rem;
+  padding-left: 1.5rem;
+}
+.tc-content li {
+  font-size: 0.95rem;
+  margin-bottom: 0.4rem;
+}
+.tc-content strong {
+  font-weight: 500;
+}
+.tc-placeholder {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: var(--warm-gray, #888);
+}
+.tc-placeholder p {
+  font-size: 1rem;
+}
+.tc-updated {
+  text-align: right;
+  font-size: 0.8rem;
+  color: var(--warm-gray, #888);
+  margin-top: 1rem;
+}
+</style>
+</head>
+<body>
+
+<!-- ============ NAV ============ -->
+<nav id="mainNav"></nav>
+<div class="nav-mobile-menu" id="mobileMenu"></div>
+
+<!-- ============ CONTENT ============ -->
+<div class="tc-container">
+  <div class="tc-header">
+    <h1>Terms &amp; Conditions</h1>
+    <p data-tenant="brand">Our policies and terms of service</p>
+  </div>
+  <div id="tcBody">
+    <div class="tc-placeholder">
+      <p>Loading...</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============ FOOTER ============ -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-logo">
+      <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-tenant-alt="brand" alt="My Shop" />
+      <span data-tenant="year-brand">&copy; 2026 My Shop</span>
+    </div>
+    <ul class="footer-links">
+      <li><a href="index.html">Home</a></li>
+      <li><a href="about.html">About</a></li>
+      <li><a href="shop.html">Shop</a></li>
+      <li><a href="terms.html">Terms</a></li>
+      <li><a href="https://runmast.com/privacy" target="_blank" rel="noopener">Privacy</a></li>
+    </ul>
+    <div class="footer-social">
+      <a href="#" target="_blank" aria-label="Instagram" data-tenant-href="instagram">
+        <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
+      </a>
+    </div>
+    <div class="powered-by-mast">
+      <a href="https://runmast.com" target="_blank" rel="noopener" title="Powered by Mast">
+        <svg viewBox="0 0 12 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect y="0" width="12" height="7" rx="1.5" fill="#D4A853"/><rect y="9" width="12" height="7" rx="1.5" fill="#8B7355"/><rect y="18" width="12" height="6" rx="1.5" fill="#5C4A32"/></svg>
+        <div class="pbm-stack"><span class="pbm-wm">Powered by</span><span class="pbm-name">MAST</span></div>
+      </a>
+    </div>
+  </div>
+</footer>
+
+<!-- Storefront scripts -->
+<script src="storefront-tenant.js"></script>
+<script src="storefront-theme.js"></script>
+<script src="storefront-nav.js"></script>
+<script src="tenant-brand.js?v=2"></script>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+<!-- DOMPurify for HTML sanitization -->
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+
+<script>
+(function() {
+  'use strict';
+
+  function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  window.TENANT_READY.then(function() {
+    document.title = 'Terms & Conditions \u2014 ' + (window.TENANT_TITLE_SUFFIX ? TENANT_TITLE_SUFFIX() : 'Shop');
+
+    var app;
+    try { app = firebase.app(); } catch (e) { app = firebase.initializeApp(TENANT_FIREBASE_CONFIG, 'public-terms'); }
+    var db = app.database();
+    var tid = window.TENANT_ID;
+    if (!tid) {
+      document.getElementById('tcBody').innerHTML = '<div class="tc-placeholder"><p>Unable to load terms.</p></div>';
+      return;
+    }
+
+    db.ref(tid + '/public/content/terms').once('value').then(function(snap) {
+      var data = snap.val();
+      var body = document.getElementById('tcBody');
+
+      if (!data || !data.html) {
+        body.innerHTML = '<div class="tc-placeholder"><p>Terms &amp; conditions are being prepared. Please check back soon.</p></div>';
+        return;
+      }
+
+      // Sanitize HTML with DOMPurify
+      var clean = window.DOMPurify ? DOMPurify.sanitize(data.html, {
+        ALLOWED_TAGS: ['h1','h2','h3','h4','p','ul','ol','li','strong','em','br','a','span'],
+        ALLOWED_ATTR: ['href','target','rel','class']
+      }) : esc(data.html);
+
+      var html = '<div class="tc-content">' + clean + '</div>';
+      if (data.updatedAt) {
+        html += '<div class="tc-updated">Last updated: ' + esc(new Date(data.updatedAt).toLocaleDateString()) + '</div>';
+      }
+      body.innerHTML = html;
+    }).catch(function(err) {
+      console.error('[terms] Load failed:', err);
+      document.getElementById('tcBody').innerHTML = '<div class="tc-placeholder"><p>Unable to load terms. Please try again later.</p></div>';
+    });
+  }).catch(function(err) {
+    console.error('[terms] Tenant failed:', err);
+  });
+})();
+</script>
+<script src="cart.js"></script>
+<script defer src="feedback-widget.js"></script>
+<script defer src="share-widget.js"></script>
+
+</body>
+</html>

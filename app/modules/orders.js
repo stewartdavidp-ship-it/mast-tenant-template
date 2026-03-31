@@ -2879,6 +2879,383 @@
   }
 
   // ============================================================
+  // RMA / Returns Admin Management
+  // ============================================================
+
+  var rmaData = {};
+  var rmaLoaded = false;
+  var rmaFilter = 'all';
+  var selectedRmaId = null;
+
+  var RMA_STATUS_BADGE_COLORS = {
+    requested:     { bg: 'rgba(230,81,0,0.2)',  color: '#FFB74D', border: 'rgba(230,81,0,0.35)' },
+    approved:      { bg: 'rgba(21,101,192,0.2)', color: '#64B5F6', border: 'rgba(21,101,192,0.35)' },
+    'shipped-back':{ bg: 'rgba(123,31,162,0.2)', color: '#CE93D8', border: 'rgba(123,31,162,0.35)' },
+    received:      { bg: 'rgba(27,92,82,0.25)',  color: '#4DB6AC', border: 'rgba(27,92,82,0.4)' },
+    'refund-issued':{ bg: 'rgba(46,125,50,0.25)', color: '#66BB6A', border: 'rgba(46,125,50,0.4)' },
+    declined:      { bg: 'rgba(198,40,40,0.2)',  color: '#EF5350', border: 'rgba(198,40,40,0.35)' }
+  };
+
+  function rmaBadgeStyle(status) {
+    var c = RMA_STATUS_BADGE_COLORS[status] || { bg: 'rgba(158,158,158,0.15)', color: '#BDBDBD', border: 'rgba(158,158,158,0.25)' };
+    return 'background:' + c.bg + ';color:' + c.color + ';border:1px solid ' + c.border + ';';
+  }
+
+  var RMA_VALID_TRANSITIONS = {
+    requested:     ['approved', 'declined'],
+    approved:      ['shipped-back'],
+    'shipped-back':['received'],
+    received:      ['refund-issued'],
+    'refund-issued':[],
+    declined:      []
+  };
+
+  function loadRmaData() {
+    if (rmaLoaded) { renderRma(); return; }
+    MastDB.ref('admin/rma').limitToLast(200).once('value').then(function(snap) {
+      rmaData = snap.val() || {};
+      rmaLoaded = true;
+      renderRma();
+      updateRmaSidebarBadge();
+    });
+  }
+
+  function updateRmaSidebarBadge() {
+    var requestedCount = Object.keys(rmaData).filter(function(k) {
+      return rmaData[k].status === 'requested';
+    }).length;
+    var badge = document.getElementById('sidebarRmaBadge');
+    if (badge) {
+      if (requestedCount > 0) {
+        badge.textContent = requestedCount;
+        badge.style.display = '';
+      } else {
+        badge.style.display = 'none';
+      }
+    }
+  }
+
+  function getRmaArray() {
+    var arr = [];
+    Object.keys(rmaData).forEach(function(key) {
+      var r = rmaData[key];
+      r._key = key;
+      arr.push(r);
+    });
+    arr.sort(function(a, b) {
+      return (b.requestedAt || b.createdAt || '').localeCompare(a.requestedAt || a.createdAt || '');
+    });
+    return arr;
+  }
+
+  function setRmaFilter(filter) {
+    rmaFilter = filter;
+    renderRma();
+  }
+
+  function renderRma() {
+    var loadingEl = document.getElementById('rmaLoading');
+    var emptyEl = document.getElementById('rmaEmpty');
+    var tableEl = document.getElementById('rmaTable');
+    var tbodyEl = document.getElementById('rmaTableBody');
+    var countEl = document.getElementById('rmaCount');
+    var pillsEl = document.getElementById('rmaFilterPills');
+
+    if (loadingEl) loadingEl.style.display = 'none';
+
+    var all = getRmaArray();
+
+    // Count by status
+    var counts = {};
+    all.forEach(function(r) {
+      var s = r.status || 'requested';
+      counts[s] = (counts[s] || 0) + 1;
+    });
+
+    // Render filter pills
+    var pillStatuses = [
+      { key: 'all', label: 'All', count: all.length },
+      { key: 'requested', label: 'Requested', count: counts.requested || 0 },
+      { key: 'approved', label: 'Approved', count: counts.approved || 0 },
+      { key: 'shipped-back', label: 'Shipped Back', count: counts['shipped-back'] || 0 },
+      { key: 'received', label: 'Received', count: counts.received || 0 },
+      { key: 'refund-issued', label: 'Refund Issued', count: counts['refund-issued'] || 0 },
+      { key: 'declined', label: 'Declined', count: counts.declined || 0 }
+    ];
+    var pillHtml = '';
+    pillStatuses.forEach(function(p) {
+      pillHtml += '<button class="order-filter-pill' + (rmaFilter === p.key ? ' active' : '') +
+        '" onclick="setRmaFilter(\'' + p.key + '\')">' + p.label +
+        '<span class="pill-count">(' + p.count + ')</span></button>';
+    });
+    if (pillsEl) pillsEl.innerHTML = pillHtml;
+
+    // Filter
+    var filtered;
+    if (rmaFilter === 'all') {
+      filtered = all;
+    } else {
+      filtered = all.filter(function(r) { return r.status === rmaFilter; });
+    }
+
+    if (countEl) countEl.textContent = filtered.length + ' return' + (filtered.length !== 1 ? 's' : '');
+
+    if (filtered.length === 0) {
+      if (emptyEl) emptyEl.style.display = '';
+      if (tableEl) tableEl.style.display = 'none';
+      return;
+    }
+    if (emptyEl) emptyEl.style.display = 'none';
+    if (tableEl) tableEl.style.display = '';
+
+    var rowsHtml = '';
+    filtered.forEach(function(r) {
+      var key = r._key;
+      var status = r.status || 'requested';
+      var itemCount = (r.items || []).reduce(function(sum, item) { return sum + (item.qty || 1); }, 0);
+      rowsHtml += '<tr onclick="viewRma(\'' + esc(key) + '\')" style="cursor:pointer;">' +
+        '<td style="font-weight:500;">' + esc((key || '').substring(0, 8)) + '</td>' +
+        '<td>' + esc(r.orderNumber || (r.orderId || '').substring(0, 8)) + '</td>' +
+        '<td>' + esc(r.customerEmail || '') + '</td>' +
+        '<td>' + itemCount + ' item' + (itemCount !== 1 ? 's' : '') + '</td>' +
+        '<td>$' + ((r.refundAmountCents || 0) / 100).toFixed(2) + '</td>' +
+        '<td><span class="status-badge" style="' + rmaBadgeStyle(status) + '">' + esc(status.replace(/-/g, ' ')) + '</span></td>' +
+        '<td>' + formatOrderDate(r.requestedAt) + '</td>' +
+      '</tr>';
+    });
+    if (tbodyEl) tbodyEl.innerHTML = rowsHtml;
+  }
+
+  function viewRma(rmaId) {
+    selectedRmaId = rmaId;
+    document.getElementById('rmaListView').style.display = 'none';
+    var detailEl = document.getElementById('rmaDetailView');
+    detailEl.style.display = 'block';
+    renderRmaDetail(rmaId);
+  }
+
+  function backToRmaList() {
+    selectedRmaId = null;
+    document.getElementById('rmaListView').style.display = 'block';
+    document.getElementById('rmaDetailView').style.display = 'none';
+    document.getElementById('rmaDetailView').innerHTML = '';
+  }
+
+  function renderRmaDetail(rmaId) {
+    var r = rmaData[rmaId];
+    if (!r) {
+      document.getElementById('rmaDetailView').innerHTML = '<p>RMA not found.</p>';
+      return;
+    }
+    var detailEl = document.getElementById('rmaDetailView');
+    var status = r.status || 'requested';
+
+    // Action buttons
+    var actionsHtml = '';
+    var nextStates = RMA_VALID_TRANSITIONS[status] || [];
+    nextStates.forEach(function(ns) {
+      var label = ns.replace(/-/g, ' ');
+      label = label.charAt(0).toUpperCase() + label.slice(1);
+      var btnClass = ns === 'declined' ? 'btn btn-danger' : 'btn btn-primary';
+      actionsHtml += '<button class="' + btnClass + '" style="font-size:0.78rem;padding:6px 14px;" onclick="transitionRma(\'' + esc(rmaId) + '\', \'' + esc(ns) + '\')">' + label + '</button>';
+    });
+
+    // Items
+    var itemsHtml = '';
+    (r.items || []).forEach(function(item) {
+      itemsHtml += '<div class="order-item-row">' +
+        '<div class="order-item-name">' + esc(item.name) + ' x' + (item.qty || 1) + '</div>' +
+        '<div class="order-item-price">$' + ((item.priceCents || 0) * (item.qty || 1) / 100).toFixed(2) + '</div>' +
+      '</div>';
+    });
+
+    // Status timeline
+    var RMA_STEPS = [
+      { key: 'requested', label: 'Requested', field: 'requestedAt' },
+      { key: 'approved', label: 'Approved', field: 'approvedAt' },
+      { key: 'shipped-back', label: 'Shipped Back', field: 'shippedBackAt' },
+      { key: 'received', label: 'Received', field: 'receivedAt' },
+      { key: 'refund-issued', label: 'Refund Issued', field: 'refundIssuedAt' }
+    ];
+
+    var timelineHtml = '';
+    var reachedCurrent = false;
+    RMA_STEPS.forEach(function(step) {
+      var ts = r[step.field];
+      var isCurrent = status === step.key;
+      var cls = '';
+      if (isCurrent) { cls = 'current'; reachedCurrent = true; }
+      else if (ts && !reachedCurrent) { cls = 'completed'; }
+
+      timelineHtml += '<div class="rma-step ' + cls + '">' +
+        '<div class="rma-step-dot"></div>' +
+        '<div class="rma-step-label">' + esc(step.label) + '</div>' +
+        (ts ? '<div class="rma-step-date">' + formatOrderDateTime(ts) + '</div>' : '') +
+      '</div>';
+    });
+    if (status === 'declined') {
+      timelineHtml += '<div class="rma-step current" style="color:#EF5350;">' +
+        '<div class="rma-step-dot" style="background:#EF5350;border-color:#EF5350;"></div>' +
+        '<div class="rma-step-label" style="color:#EF5350;">Declined</div>' +
+      '</div>';
+    }
+
+    // Refund allocation section
+    var refundHtml = '<div class="order-detail-section">' +
+      '<div class="order-detail-section-title">Refund</div>' +
+      '<div class="order-summary-row"><span>Items Total</span><span>$' + ((r.items || []).reduce(function(s, i) { return s + (i.priceCents || 0) * (i.qty || 1); }, 0) / 100).toFixed(2) + '</span></div>' +
+      '<div class="order-summary-row total"><span>Refund Amount</span><span>$' + ((r.refundAmountCents || 0) / 100).toFixed(2) + '</span></div>' +
+      '<div style="margin-top:0.5rem;font-size:0.82rem;color:var(--warm-gray-light);">Method: ' + esc((r.refundMethod || 'original_payment').replace(/_/g, ' ')) + '</div>';
+
+    // Admin override for refund method
+    if (status !== 'refund-issued' && status !== 'declined') {
+      refundHtml += '<div style="margin-top:0.75rem;">' +
+        '<label style="font-size:0.72rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--warm-gray-light);">Override Refund Method</label>' +
+        '<div style="display:flex;gap:8px;margin-top:4px;">' +
+          '<select id="rmaRefundMethodOverride" style="padding:4px 8px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.82rem;background:var(--cream);color:var(--charcoal);">' +
+            '<option value="original_payment"' + (r.refundMethod === 'original_payment' ? ' selected' : '') + '>Original Payment</option>' +
+            '<option value="store_credit"' + (r.refundMethod === 'store_credit' ? ' selected' : '') + '>Store Credit</option>' +
+          '</select>' +
+          '<input type="number" id="rmaRefundAmountOverride" value="' + ((r.refundAmountCents || 0) / 100).toFixed(2) + '" step="0.01" min="0" style="width:100px;padding:4px 8px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.82rem;background:var(--cream);color:var(--charcoal);">' +
+          '<button class="btn btn-secondary" style="font-size:0.75rem;padding:4px 10px;" onclick="overrideRmaRefund(\'' + esc(rmaId) + '\')">Update</button>' +
+        '</div>' +
+      '</div>';
+    }
+    refundHtml += '</div>';
+
+    // Link to order
+    var orderLinkHtml = '';
+    if (r.orderId) {
+      orderLinkHtml = '<div class="order-detail-section">' +
+        '<div class="order-detail-section-title">Linked Order</div>' +
+        '<a href="#" onclick="backToRmaList();viewOrder(\'' + esc(r.orderId) + '\');return false;" style="color:var(--teal);font-size:0.88rem;">' +
+        'View Order ' + esc(r.orderNumber || r.orderId) + ' &rarr;</a>' +
+      '</div>';
+    }
+
+    detailEl.innerHTML = '<button class="detail-back" onclick="backToRmaList()">&#8592; Back to Returns</button>' +
+      '<div class="order-detail-header">' +
+        '<div>' +
+          '<div class="order-detail-title">RMA ' + esc((rmaId || '').substring(0, 8)) + '</div>' +
+          '<div class="order-detail-meta">' +
+            '<span class="status-badge pill" style="' + rmaBadgeStyle(status) + '">' + esc(status.replace(/-/g, ' ')) + '</span>' +
+            ' &middot; Order ' + esc(r.orderNumber || '') +
+            ' &middot; ' + esc(r.customerEmail || '') +
+            ' &middot; ' + formatOrderDateTime(r.requestedAt) +
+          '</div>' +
+        '</div>' +
+        '<div class="order-actions">' + actionsHtml + '</div>' +
+      '</div>' +
+      '<div class="order-detail-section">' +
+        '<div class="order-detail-section-title">Status</div>' +
+        '<div class="rma-status-timeline">' + timelineHtml + '</div>' +
+      '</div>' +
+      '<div class="order-detail-section">' +
+        '<div class="order-detail-section-title">Return Reason</div>' +
+        '<div style="font-size:0.88rem;">' + esc(r.returnReason || 'No reason provided') + '</div>' +
+      '</div>' +
+      '<div class="order-detail-section">' +
+        '<div class="order-detail-section-title">Items Being Returned</div>' +
+        itemsHtml +
+      '</div>' +
+      (r.returnTrackingNumber ? '<div class="order-detail-section">' +
+        '<div class="order-detail-section-title">Return Tracking</div>' +
+        '<div style="font-family:monospace;font-size:0.88rem;">' + esc(r.returnTrackingNumber) + '</div>' +
+      '</div>' : '') +
+      refundHtml +
+      orderLinkHtml;
+  }
+
+  async function transitionRma(rmaId, newStatus) {
+    var r = rmaData[rmaId];
+    if (!r) return;
+
+    var updates = {
+      status: newStatus,
+      updatedAt: new Date().toISOString()
+    };
+
+    // Set timestamp for the new status
+    var tsFields = {
+      'approved': 'approvedAt',
+      'shipped-back': 'shippedBackAt',
+      'received': 'receivedAt',
+      'refund-issued': 'refundIssuedAt'
+    };
+    if (tsFields[newStatus]) {
+      updates[tsFields[newStatus]] = new Date().toISOString();
+    }
+
+    try {
+      await MastDB.ref('admin/rma/' + rmaId).update(updates);
+      // Update local data
+      Object.assign(rmaData[rmaId], updates);
+      renderRmaDetail(rmaId);
+      updateRmaSidebarBadge();
+      showToast('RMA updated to ' + newStatus.replace(/-/g, ' '));
+    } catch (err) {
+      showToast('Failed to update RMA: ' + err.message, 'error');
+    }
+  }
+
+  async function overrideRmaRefund(rmaId) {
+    var methodEl = document.getElementById('rmaRefundMethodOverride');
+    var amountEl = document.getElementById('rmaRefundAmountOverride');
+    if (!methodEl || !amountEl) return;
+
+    var method = methodEl.value;
+    var amountCents = Math.round(parseFloat(amountEl.value) * 100);
+    if (isNaN(amountCents) || amountCents < 0) {
+      showToast('Invalid refund amount', 'error');
+      return;
+    }
+
+    try {
+      await MastDB.ref('admin/rma/' + rmaId).update({
+        refundMethod: method,
+        refundAmountCents: amountCents,
+        updatedAt: new Date().toISOString()
+      });
+      rmaData[rmaId].refundMethod = method;
+      rmaData[rmaId].refundAmountCents = amountCents;
+      renderRmaDetail(rmaId);
+      showToast('Refund updated');
+    } catch (err) {
+      showToast('Failed to update refund: ' + err.message, 'error');
+    }
+  }
+
+  // Also add RMA indicator to order detail view in admin
+  var _origRenderOrderDetail = renderOrderDetail;
+  renderOrderDetail = function(orderId) {
+    _origRenderOrderDetail(orderId);
+    // After rendering, check if the order has an rmaId and inject an indicator
+    var o = orders[orderId];
+    if (o && o.rmaId) {
+      var detailEl = document.getElementById('orderDetailView');
+      if (detailEl) {
+        var rma = rmaData[o.rmaId];
+        var rmaStatus = rma ? rma.status : 'unknown';
+        var rmaBanner = '<div class="order-detail-section" style="background:rgba(230,81,0,0.08);border-radius:6px;padding:12px 16px;margin-top:8px;">' +
+          '<div style="display:flex;align-items:center;gap:8px;">' +
+            '<span style="font-size:1.1rem;">&#x21A9;</span>' +
+            '<span style="font-size:0.85rem;font-weight:500;">Return Request</span>' +
+            '<span class="status-badge" style="' + rmaBadgeStyle(rmaStatus) + '">' + esc(rmaStatus.replace(/-/g, ' ')) + '</span>' +
+            '<a href="#" onclick="navigateTo(\'rma\');setTimeout(function(){viewRma(\'' + esc(o.rmaId) + '\');},100);return false;" style="font-size:0.78rem;color:var(--teal);margin-left:auto;">View RMA &rarr;</a>' +
+          '</div>' +
+        '</div>';
+        // Insert after the header
+        var header = detailEl.querySelector('.order-detail-header');
+        if (header && header.nextSibling) {
+          var div = document.createElement('div');
+          div.innerHTML = rmaBanner;
+          header.parentNode.insertBefore(div.firstChild, header.nextSibling);
+        }
+      }
+    }
+  };
+
+  // ============================================================
   // Window exports for onclick handlers
   // ============================================================
 
@@ -2958,6 +3335,15 @@
   window.updateCommissionStatus = updateCommissionStatus;
   window.renderDashCardNewOrders = renderDashCardNewOrders;
   window.renderDashCardReadyToShip = renderDashCardReadyToShip;
+  window.loadRmaData = loadRmaData;
+  window.setRmaFilter = setRmaFilter;
+  window.renderRma = renderRma;
+  window.viewRma = viewRma;
+  window.backToRmaList = backToRmaList;
+  window.renderRmaDetail = renderRmaDetail;
+  window.transitionRma = transitionRma;
+  window.overrideRmaRefund = overrideRmaRefund;
+  window.rmaBadgeStyle = rmaBadgeStyle;
 
   // ============================================================
   // Register with MastAdmin
@@ -2970,6 +3356,7 @@
   MastAdmin.registerModule('orders', {
     routes: {
       'orders': { tab: 'ordersTab', setup: function() { ensureOrdersData(); } },
+      'rma': { tab: 'rmaTab', setup: function() { loadRmaData(); } },
       'commissions': { tab: 'commissionsTab', setup: function() {
         if (!commissionsLoaded) loadCommissions();
         // Deep link: ?view=commissions&id=xxx
@@ -2987,6 +3374,8 @@
     detachListeners: function() {
       commissionsData = {};
       commissionsLoaded = false;
+      rmaData = {};
+      rmaLoaded = false;
     }
   });
 

@@ -31,7 +31,8 @@
     giftcards:  { label: 'Gift Cards',  href: 'gift-cards.html',  enabled: false, order: 3.5 },
     wallet:     { label: 'My Wallet',  href: 'my-wallet.html',   enabled: false, order: 3.6 },
     schedule:   { label: 'Schedule',    href: 'schedule.html',    enabled: false, order: 6 },
-    blog:       { label: 'From the Studio', href: 'blog/',        enabled: true,  order: 7 }
+    blog:       { label: 'From the Studio', href: 'blog/',        enabled: true,  order: 7 },
+    terms:      { label: 'Terms',         href: 'terms.html',    enabled: false, order: 8 }
   };
 
   /**
