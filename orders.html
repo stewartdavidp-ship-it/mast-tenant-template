@@ -1962,8 +1962,8 @@ window.TENANT_READY.then(function() {
       if (walletCreditReturn > 0) {
         html += '<div style="display:flex;justify-content:space-between;color:var(--amber-light);"><span>Original store credit returned</span><span>' + formatPrice(walletCreditReturn) + '</span></div>';
       }
-      if (loyaltyDollars > 0 && loyaltyReissue > 0) {
-        html += '<div style="display:flex;justify-content:space-between;color:var(--amber-light);"><span>' + loyaltyReissue + ' ' + esc(loyaltyPointName) + ' returned to wallet</span><span>' + formatPrice(loyaltyDollars) + '</span></div>';
+      if (loyaltyReissue > 0) {
+        html += '<div style="display:flex;justify-content:space-between;color:var(--amber-light);"><span>' + loyaltyReissue + ' ' + esc(loyaltyPointName) + ' returned to wallet</span><span>' + loyaltyReissue + ' pts</span></div>';
       }
       if (newCreditAmount > 0) {
         html += '<div style="display:flex;justify-content:space-between;color:var(--text);"><span>New ' + esc(refundMethod).toLowerCase() + '</span><span>' + formatPrice(newCreditAmount) + '</span></div>';
