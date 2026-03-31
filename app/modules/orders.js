@@ -653,6 +653,8 @@
       var prRows = '';
       orderRequests.forEach(function(k) {
         var pr = productionRequests[k];
+        // Skip gift card production requests (shouldn't exist, but filter just in case)
+        if (pr.productId && pr.productId.startsWith('gift-card')) return;
         var prStatus = pr.status || 'pending';
         var prActions = '';
         if (prStatus === 'pending') {
@@ -1336,6 +1338,8 @@
     var items = order.items || [];
     for (var i = 0; i < items.length; i++) {
       var item = items[i];
+      // Skip digital items (gift cards) — no production needed
+      if (item.bookingType === 'gift-card' || item.isGiftCard) continue;
       var ffKey = getItemFulfillmentKey(item);
       var ff = fulfillment[ffKey];
       if (ff && ff.source === 'build') {
