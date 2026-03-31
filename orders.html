@@ -1973,6 +1973,17 @@ window.TENANT_READY.then(function() {
       html += '<div style="margin-top:0.5rem;font-size:0.78rem;color:var(--warm-gray-light);">Refund via: ' + esc(refundMethod) + '</div>';
     }
 
+    // Loyalty points earned on this order will be clawed back proportionally
+    var le = order.loyaltyEarned || {};
+    if (le.points > 0 && orderSubtotal > 0) {
+      var earnedClawback = Math.round(le.points * selectedTotal / orderSubtotal);
+      var earnedName = le.pointName || 'Points';
+      if (earnedClawback > 0) {
+        html += '<div style="margin-top:0.5rem;font-size:0.78rem;color:var(--warm-gray-light);">' +
+          earnedClawback + ' ' + esc(earnedName) + ' earned on this order will be deducted from your wallet</div>';
+      }
+    }
+
     estimateEl.innerHTML = html;
 
     var submitBtn = document.getElementById('rmaSubmitBtn');
