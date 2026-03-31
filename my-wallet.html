@@ -296,7 +296,7 @@
       { id: 'overview', label: 'Overview' },
       { id: 'history', label: 'History' },
       { id: 'credits', label: 'Credits', count: walletData.credits.filter(function(c) { return c.status === 'active'; }).length },
-      { id: 'giftCards', label: 'Gift Cards', count: walletData.giftCards.filter(function(g) { return g.status === 'active'; }).length },
+      { id: 'giftCards', label: 'Gift Cards', count: walletData.giftCards.filter(function(g) { return g.status === 'active' && (g.remainingCents || 0) > 0; }).length },
       { id: 'loyalty', label: 'Loyalty', count: walletData.loyalty ? walletData.loyalty.totalPoints : 0 },
       { id: 'passes', label: 'Passes', count: walletData.passes.filter(function(p) { return p.status === 'active'; }).length },
       { id: 'coupons', label: 'Coupons', count: walletData.coupons.length }
@@ -347,13 +347,16 @@
     }
 
     // Active gift cards summary
-    var activeGiftCards = walletData.giftCards.filter(function(g) { return g.status === 'active'; });
-    if (activeGiftCards.length > 0) {
+    var activeGiftCards = walletData.giftCards.filter(function(g) { return g.status === 'active' && (g.remainingCents || 0) > 0; });
+    if (activeGiftCards.length > 0 || giftCardTotal > 0) {
       hasAnything = true;
+      var gcLabel = activeGiftCards.length > 0
+        ? activeGiftCards.length + ' card' + (activeGiftCards.length !== 1 ? 's' : '') + ' with balance'
+        : 'No cards with balance';
       html += '<div class="mw-card">' +
         '<div class="mw-card-info">' +
           '<h3>&#127873; Gift Cards</h3>' +
-          '<div class="mw-card-meta">' + activeGiftCards.length + ' active card' + (activeGiftCards.length !== 1 ? 's' : '') + '</div>' +
+          '<div class="mw-card-meta">' + gcLabel + '</div>' +
         '</div>' +
         '<div class="mw-card-amount">' + formatMoney(giftCardTotal) + '</div>' +
         '</div>';
