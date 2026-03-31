@@ -3153,8 +3153,9 @@
       '<div class="order-summary-row total" style="color:var(--text,#e0e0e0);"><span>Refund Amount</span><span>$' + ((r.refundAmountCents || 0) / 100).toFixed(2) + '</span></div>' +
       '<div style="margin-top:0.5rem;font-size:0.82rem;color:var(--warm-gray-light);">Method: ' + esc((r.refundMethod || 'original_payment').replace(/_/g, ' ')) + '</div>';
 
-    // Admin override for refund method
-    if (status !== 'refund-issued' && status !== 'declined') {
+    // Admin override for refund method (hide on terminal statuses)
+    var terminalStatuses = ['refund-issued', 'declined', 'restocked', 'seconds', 'repair-queued', 'written-off'];
+    if (terminalStatuses.indexOf(status) === -1) {
       refundHtml += '<div style="margin-top:0.75rem;">' +
         '<label style="font-size:0.72rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--warm-gray-light);">Override Refund Method</label>' +
         '<div style="display:flex;gap:8px;margin-top:4px;">' +
