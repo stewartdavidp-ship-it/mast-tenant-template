@@ -1271,6 +1271,16 @@ window.TENANT_READY.then(function() {
       html += '</div></div>';
     }
 
+    // Loyalty earned
+    if (order.loyaltyEarned && order.loyaltyEarned.points > 0) {
+      var pts = order.loyaltyEarned.points;
+      var pName = order.loyaltyEarned.pointName || 'Points';
+      html += '<div class="order-detail-section" style="text-align:center;padding:1rem;background:var(--surface-card,#FAF6F0);border-radius:0.5rem;">' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.25rem;">Rewards Earned</div>' +
+        '<div style="font-size:1.25rem;font-weight:600;color:var(--accent,#C6A96C);">+' + pts + ' ' + esc(pName) + '</div>' +
+        '</div>';
+    }
+
     // Order timeline
     var timeline = [];
     if (order.placedAt) timeline.push({ label: 'Placed', date: order.placedAt });
@@ -1585,7 +1595,7 @@ window.TENANT_READY.then(function() {
 
   function loadTermsConfig() {
     if (_termsConfigLoaded) return Promise.resolve(_termsConfig);
-    return db.ref(TENANT_ID + '/admin/termsConfig').once('value').then(function(snap) {
+    return db.ref(TENANT_ID + '/config/termsConfig').once('value').then(function(snap) {
       _termsConfig = snap.val() || {};
       _termsConfigLoaded = true;
       return _termsConfig;

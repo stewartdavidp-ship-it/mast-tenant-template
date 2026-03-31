@@ -1778,13 +1778,22 @@
     if (titleEl) titleEl.textContent = 'Order Confirmed';
     if (countEl) countEl.textContent = '';
 
+    var loyaltyHtml = '';
+    if (result.loyaltyEarned && result.loyaltyEarned.points > 0) {
+      loyaltyHtml = '<div style="margin-top:16px;padding:14px;background:var(--surface-card,#FAF6F0);border-radius:8px;border:1px solid var(--border-subtle,#E8E0D4);">' +
+        '<div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;">Rewards Earned</div>' +
+        '<div style="font-size:1.2rem;font-weight:600;color:var(--accent,#C6A96C);margin-top:4px;">+' + result.loyaltyEarned.points + ' ' + esc(result.loyaltyEarned.pointName || 'Points') + '</div>' +
+      '</div>';
+    }
+
     body.innerHTML =
       '<div style="text-align:center;padding:40px 20px;">' +
         '<div style="font-size:2.5rem;margin-bottom:16px;">&#10003;</div>' +
         '<h3 style="margin:0 0 8px;font-size:1.2rem;">Order Confirmed!</h3>' +
         '<p style="font-size:0.9rem;color:var(--warm-gray);">Order #' + esc(result.orderNumber || '') + '</p>' +
         '<p style="font-size:0.85rem;color:var(--warm-gray);margin-top:12px;">Paid in full with wallet balance. No card charge.</p>' +
-        '<div style="margin-top:24px;padding:16px;background:rgba(22,163,74,0.1);border-radius:8px;">' +
+        loyaltyHtml +
+        '<div style="margin-top:16px;padding:16px;background:rgba(22,163,74,0.1);border-radius:8px;">' +
           '<div style="font-size:0.85rem;color:var(--charcoal);">A confirmation email will be sent to ' + esc(checkoutData.email || '') + '</div>' +
         '</div>' +
       '</div>';
@@ -2318,8 +2327,25 @@
           'Thank you for your order!' +
           (email ? ' A confirmation will be sent to <strong>' + esc(email) + '</strong>.' : '') +
         '</div>' +
+        '<div id="loyaltyEarnedBadge"></div>' +
         '<div id="csvStatus" style="font-size:0.8rem;color:#9B958E;margin-top:12px;">Preparing shipping label data...</div>' +
       '</div>';
+
+    // Load loyalty earned from order record
+    if (orderId) {
+      db.ref(TENANT_ID + '/orders/' + orderId + '/loyaltyEarned').once('value').then(function(snap) {
+        var earned = snap.val();
+        if (earned && earned.points > 0) {
+          var el = document.getElementById('loyaltyEarnedBadge');
+          if (el) {
+            el.innerHTML = '<div style="margin-top:16px;padding:14px;background:var(--surface-card,#FAF6F0);border-radius:8px;border:1px solid var(--border-subtle,#E8E0D4);">' +
+              '<div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;">Rewards Earned</div>' +
+              '<div style="font-size:1.2rem;font-weight:600;color:var(--accent,#C6A96C);margin-top:4px;">+' + earned.points + ' ' + esc(earned.pointName || 'Points') + '</div>' +
+            '</div>';
+          }
+        }
+      });
+    }
 
     if (footer) {
       footer.style.display = '';
