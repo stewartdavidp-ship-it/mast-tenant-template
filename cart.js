@@ -589,6 +589,7 @@
             'Continue Shopping</button>' +
         '</div>' +
         '<div id="cartAuthArea"></div>' +
+        '<div style="text-align:center;margin-top:8px;"><a href="terms.html" style="font-size:0.7rem;color:var(--warm-gray,#9B958E);text-decoration:underline;">Terms &amp; Conditions</a></div>' +
       '</div>';
     document.body.appendChild(drawer);
 
