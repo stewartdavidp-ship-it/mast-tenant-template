@@ -1948,23 +1948,29 @@ window.TENANT_READY.then(function() {
     if (restockingFee > 0) {
       html += '<div class="rma-estimate-row"><span>Restocking fee (' + restockingFeePct + '%)</span><span>-' + formatPrice(restockingFee) + '</span></div>';
     }
-    html += '<div class="rma-estimate-row total"><span>Estimated refund</span><span>' + formatPrice(refundAmount) + '</span></div>';
-    html += '<div style="margin-top:0.5rem;font-size:0.78rem;color:var(--warm-gray-light);">Refund via: ' + esc(refundMethod) + '</div>';
+    html += '<div class="rma-estimate-row total"><span>Total refund</span><span>' + formatPrice(refundAmount) + '</span></div>';
+
+    // Break down how the refund is allocated
     if (walletReturn > 0 || loyaltyReissue > 0) {
-      html += '<div style="margin-top:0.5rem;padding:8px 10px;background:rgba(196,133,60,0.1);border-radius:4px;font-size:0.78rem;color:var(--amber-light);">';
-      html += '<strong>Also returned to wallet:</strong>';
-      if (loyaltyReissue > 0) {
-        html += '<br>+' + loyaltyReissue + ' ' + esc(loyaltyPointName);
+      var loyaltyDollars = 0;
+      if (wd.loyalty && wd.loyalty.amountCents > 0) loyaltyDollars = Math.round(wd.loyalty.amountCents * proportion) / 100;
+      var walletCreditReturn = walletReturn - loyaltyDollars; // store credit + gift cards portion
+      var newCreditAmount = refundAmount - walletCreditReturn - loyaltyDollars; // remaining goes as new credit
+
+      html += '<div style="margin-top:0.5rem;padding:8px 10px;background:rgba(196,133,60,0.1);border-radius:4px;font-size:0.78rem;">';
+      html += '<div style="color:var(--warm-gray-light);margin-bottom:4px;">Refund breakdown:</div>';
+      if (walletCreditReturn > 0) {
+        html += '<div style="display:flex;justify-content:space-between;color:var(--amber-light);"><span>Original store credit returned</span><span>' + formatPrice(walletCreditReturn) + '</span></div>';
       }
-      if (walletReturn > 0) {
-        var loyaltyDollars = 0;
-        if (wd.loyalty && wd.loyalty.amountCents > 0) loyaltyDollars = Math.round(wd.loyalty.amountCents * proportion) / 100;
-        var nonLoyaltyReturn = walletReturn - loyaltyDollars;
-        if (nonLoyaltyReturn > 0) {
-          html += '<br>+' + formatPrice(nonLoyaltyReturn) + ' store credit';
-        }
+      if (loyaltyDollars > 0 && loyaltyReissue > 0) {
+        html += '<div style="display:flex;justify-content:space-between;color:var(--amber-light);"><span>' + loyaltyReissue + ' ' + esc(loyaltyPointName) + ' returned to wallet</span><span>' + formatPrice(loyaltyDollars) + '</span></div>';
+      }
+      if (newCreditAmount > 0) {
+        html += '<div style="display:flex;justify-content:space-between;color:var(--text);"><span>New ' + esc(refundMethod).toLowerCase() + '</span><span>' + formatPrice(newCreditAmount) + '</span></div>';
       }
       html += '</div>';
+    } else {
+      html += '<div style="margin-top:0.5rem;font-size:0.78rem;color:var(--warm-gray-light);">Refund via: ' + esc(refundMethod) + '</div>';
     }
 
     estimateEl.innerHTML = html;
