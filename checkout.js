@@ -580,11 +580,18 @@
     var fields = ['Name', 'Addr1', 'Addr2', 'City', 'State', 'Zip'];
     for (var i = 0; i < fields.length; i++) {
       var shipEl = document.getElementById('ship' + fields[i]);
+      var isPac = false;
       // PlaceAutocompleteElement replaces shipAddr1 with shipAddr1Pac
-      if (!shipEl && fields[i] === 'Addr1') shipEl = document.getElementById('shipAddr1Pac');
+      if (!shipEl && fields[i] === 'Addr1') { shipEl = document.getElementById('shipAddr1Pac'); isPac = true; }
       if (shipEl) {
         var key = fields[i] === 'Addr1' ? 'address1' : fields[i] === 'Addr2' ? 'address2' : fields[i].toLowerCase();
-        checkoutData.shipping[key] = shipEl.value.trim();
+        // PAC element .value is the full formatted place string, not the street address.
+        // fillAddressFromPlace already wrote the parsed street to checkoutData — don't overwrite.
+        if (isPac) {
+          if (!checkoutData.shipping[key]) checkoutData.shipping[key] = (shipEl.value || '').trim();
+        } else {
+          checkoutData.shipping[key] = shipEl.value.trim();
+        }
       }
     }
 
