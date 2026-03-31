@@ -1680,7 +1680,7 @@ window.TENANT_READY.then(function() {
   }
 
   function loadRmaTracking(rmaId, order) {
-    db.ref(TENANT_ID + '/admin/rma/' + rmaId).once('value').then(function(snap) {
+    db.ref(TENANT_ID + '/public/returnRequests/' + rmaId).once('value').then(function(snap) {
       var rma = snap.val();
       var container = document.getElementById('rmaTracking_' + rmaId);
       if (!container) return;
@@ -1768,7 +1768,7 @@ window.TENANT_READY.then(function() {
     updates['status'] = 'shipped-back';
     updates['updatedAt'] = new Date().toISOString();
 
-    db.ref(TENANT_ID + '/admin/rma/' + rmaId).update(updates).then(function() {
+    db.ref(TENANT_ID + '/public/returnRequests/' + rmaId).update(updates).then(function() {
       loadRmaTracking(rmaId, {});
     }).catch(function(err) {
       alert('Failed to submit tracking: ' + err.message);
@@ -1928,7 +1928,7 @@ window.TENANT_READY.then(function() {
     var refundAmount = selectedTotal - restockingFee;
 
     var refundMethod = 'original_payment';
-    if (_termsConfig && _termsConfig.refundMethod === 'store_credit') refundMethod = 'store_credit';
+    if (_termsConfig && (_termsConfig.refundMethod === 'store_credit' || _termsConfig.refundMethod === 'store-credit')) refundMethod = 'store_credit';
 
     var user = auth.currentUser;
     var customerUid = user ? user.uid : null;
@@ -1955,13 +1955,13 @@ window.TENANT_READY.then(function() {
       updatedAt: new Date().toISOString()
     };
 
-    var rmaRef = db.ref(TENANT_ID + '/admin/rma').push();
+    var rmaRef = db.ref(TENANT_ID + '/public/returnRequests').push();
     var rmaId = rmaRef.key;
     rmaData.rmaId = rmaId;
 
     // Write RMA record, then update order
     rmaRef.set(rmaData).then(function() {
-      return db.ref(TENANT_ID + '/admin/orders/' + orderId + '/rmaId').set(rmaId);
+      return db.ref(TENANT_ID + '/orders/' + orderId + '/rmaId').set(rmaId);
     }).then(function() {
       // Show confirmation
       var modal = document.querySelector('.rma-modal');
