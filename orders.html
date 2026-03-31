@@ -1651,7 +1651,14 @@ window.TENANT_READY.then(function() {
       html += renderRmaStatusTracking(order);
     } else if (canRequestReturn(order)) {
       html += '<div class="order-detail-label">Returns</div>';
-      if (!_termsConfig || !_termsConfig.returnWindowDays) {
+      if (!_termsConfigLoaded) {
+        // Config still loading — show placeholder and re-render when ready
+        html += '<div style="font-size:0.85rem;color:var(--warm-gray);">Loading return policy...</div>';
+        loadTermsConfig().then(function() {
+          var section = document.querySelector('.rma-section');
+          if (section) section.outerHTML = renderReturnSection(order);
+        });
+      } else if (!_termsConfig || !_termsConfig.returnWindowDays) {
         html += '<div style="font-size:0.85rem;color:var(--warm-gray);">Returns are not currently available.</div>';
       } else if (!isWithinReturnWindow(order)) {
         html += '<button class="rma-return-btn" disabled>Return Window Expired</button>' +
