@@ -1195,7 +1195,7 @@
       // Testing Mode event
       emitTestingEvent('transitionOrder', { newStatus: newStatus });
 
-      // Auto-progress handed_to_carrier -> shipped (triggers email notification via Cloud Function)
+      // Auto-progress handed_to_carrier -> shipped
       if (newStatus === 'handed_to_carrier') {
         var shippedAt = new Date().toISOString();
         var shippedUpdates = {
@@ -1209,14 +1209,23 @@
         ffLog2.push({ event: 'shipped', timestamp: shippedAt, userId: 'system', method: 'auto' });
         shippedUpdates['fulfillmentLog'] = ffLog2;
         await MastDB.orders.ref(orderId).update(shippedUpdates);
+        Object.keys(shippedUpdates).forEach(function(k) { o[k] = shippedUpdates[k]; });
 
-        var hasContact = !!(o.email);
-        if (hasContact) {
-          showToast('Order handed to carrier — customer notified');
-        } else {
-          showToast('Order handed to carrier — no customer contact on file');
-        }
+        // Trigger inventory deduction + shipped email via cloud function
+        try {
+          await firebase.functions().httpsCallable('onOrderShipped')({ orderId: orderId, tenantId: MastDB.tenantId() });
+        } catch (shipErr) { console.error('onOrderShipped call failed:', shipErr); }
+
+        showToast(o.email ? 'Order shipped — customer notified' : 'Order shipped — no customer email on file');
+        renderOrderDetail(orderId);
         return;
+      }
+
+      // Direct transition to shipped (e.g., from packed with tracking)
+      if (newStatus === 'shipped') {
+        try {
+          await firebase.functions().httpsCallable('onOrderShipped')({ orderId: orderId, tenantId: MastDB.tenantId() });
+        } catch (shipErr) { console.error('onOrderShipped call failed:', shipErr); }
       }
 
       showToast('Order updated to ' + updates['status']);
