@@ -576,6 +576,8 @@
     var fields = ['Name', 'Addr1', 'Addr2', 'City', 'State', 'Zip'];
     for (var i = 0; i < fields.length; i++) {
       var shipEl = document.getElementById('ship' + fields[i]);
+      // PlaceAutocompleteElement replaces shipAddr1 with shipAddr1Pac
+      if (!shipEl && fields[i] === 'Addr1') shipEl = document.getElementById('shipAddr1Pac');
       if (shipEl) {
         var key = fields[i] === 'Addr1' ? 'address1' : fields[i] === 'Addr2' ? 'address2' : fields[i].toLowerCase();
         checkoutData.shipping[key] = shipEl.value.trim();
@@ -649,7 +651,12 @@
     }
 
     check('shipName', 'Name required');
-    check('shipAddr1', 'Address required');
+    // PlaceAutocompleteElement replaces shipAddr1 with shipAddr1Pac
+    if (!document.getElementById('shipAddr1')) {
+      check('shipAddr1Pac', 'Address required');
+    } else {
+      check('shipAddr1', 'Address required');
+    }
     check('shipCity', 'City required');
     check('shipState', 'State required');
     check('shipZip', 'ZIP code required');
@@ -2265,13 +2272,23 @@
     var streetNum = components.street_number ? components.street_number.long : '';
     var route = components.route ? components.route.long : '';
     var setVal = function (id, val) { var el = document.getElementById(id); if (el) el.value = val; };
-    setVal('shipAddr1', (streetNum + ' ' + route).trim());
+    var addr1 = (streetNum + ' ' + route).trim();
+    var city = components.locality ? components.locality.long : (components.sublocality_level_1 ? components.sublocality_level_1.long : '');
+    var state = components.administrative_area_level_1 ? components.administrative_area_level_1.short : '';
+    var zip = components.postal_code ? components.postal_code.long : '';
+    setVal('shipAddr1', addr1);
     var pacEl = document.getElementById('shipAddr1Pac');
-    if (pacEl && pacEl.value !== undefined) pacEl.value = (streetNum + ' ' + route).trim();
-    setVal('shipCity', components.locality ? components.locality.long : (components.sublocality_level_1 ? components.sublocality_level_1.long : ''));
+    if (pacEl && pacEl.value !== undefined) pacEl.value = addr1;
+    setVal('shipCity', city);
     var stateEl = document.getElementById('shipState');
-    if (stateEl && components.administrative_area_level_1) stateEl.value = components.administrative_area_level_1.short;
-    setVal('shipZip', components.postal_code ? components.postal_code.long : '');
+    if (stateEl && state) stateEl.value = state;
+    setVal('shipZip', zip);
+    // Write directly to checkoutData — the PAC element replaces shipAddr1,
+    // so saveAddressData may not find it in the DOM
+    checkoutData.shipping.address1 = addr1;
+    checkoutData.shipping.city = city;
+    checkoutData.shipping.state = state;
+    checkoutData.shipping.zip = zip;
   }
 
   // ── Test Mode Banner ──
