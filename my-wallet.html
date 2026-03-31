@@ -272,24 +272,36 @@
     var loyaltyEnabled = walletData.loyalty && walletData.loyalty.totalPoints != null;
     var loyaltyPoints = loyaltyEnabled ? (walletData.loyalty.totalPoints || 0) : 0;
     var pointName = (walletData.loyalty && walletData.loyalty.pointName) || 'pts';
+    var activePasses = walletData.passes.filter(function(p) { return p.status === 'active'; }).length;
+
+    // Build balance sections — always show dollars, conditionally show loyalty + passes
+    var sections = [];
+    sections.push('<div style="text-align:center;">' +
+      '<div class="mw-balance-amount">' + formatMoney(monetaryTotal) + '</div>' +
+      '<div class="mw-balance-label">Credits + Gift Cards</div>' +
+    '</div>');
 
     if (loyaltyEnabled) {
+      sections.push('<div style="text-align:center;">' +
+        '<div class="mw-balance-amount" style="color:var(--accent,#C6A96C);">' + loyaltyPoints + ' <span style="font-size:0.6em;">' + esc(pointName) + '</span></div>' +
+        '<div class="mw-balance-label">Loyalty</div>' +
+      '</div>');
+    }
+
+    if (activePasses > 0) {
+      sections.push('<div style="text-align:center;">' +
+        '<div class="mw-balance-amount" style="color:var(--teal,#2A7C6F);">' + activePasses + ' <span style="font-size:0.6em;">pass' + (activePasses !== 1 ? 'es' : '') + '</span></div>' +
+        '<div class="mw-balance-label">Passes</div>' +
+      '</div>');
+    }
+
+    if (sections.length > 1) {
+      var divider = '<div style="width:1px;height:48px;background:var(--border-subtle,#444);"></div>';
       html += '<div class="mw-balance" style="display:flex;justify-content:center;gap:2rem;align-items:center;">' +
-        '<div style="text-align:center;">' +
-          '<div class="mw-balance-amount">' + formatMoney(monetaryTotal) + '</div>' +
-          '<div class="mw-balance-label">Credits + Gift Cards</div>' +
-        '</div>' +
-        '<div style="width:1px;height:48px;background:var(--border-subtle,#444);"></div>' +
-        '<div style="text-align:center;">' +
-          '<div class="mw-balance-amount" style="color:var(--accent,#C6A96C);">' + loyaltyPoints + ' <span style="font-size:0.6em;">' + esc(pointName) + '</span></div>' +
-          '<div class="mw-balance-label">Loyalty</div>' +
-        '</div>' +
+        sections.join(divider) +
       '</div>';
     } else {
-      html += '<div class="mw-balance">' +
-        '<div class="mw-balance-amount">' + formatMoney(monetaryTotal) + '</div>' +
-        '<div class="mw-balance-label">Available balance (credits + gift cards)</div>' +
-      '</div>';
+      html += '<div class="mw-balance">' + sections[0] + '</div>';
     }
 
     // Tabs
