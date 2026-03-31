@@ -1897,33 +1897,34 @@ window.TENANT_READY.then(function() {
       couponDiscount = Math.round(order.coupon.discount * selectedTotal / orderSubtotal * 100) / 100;
     }
 
-    // Proportional wallet deductions on returned items
-    var walletDeduction = 0;
+    // Wallet amounts are PAYMENT METHODS, not discounts — they get returned to wallet
+    var walletReturn = 0;
     var loyaltyReissue = 0;
     var loyaltyPointName = 'Points';
     var wd = order.walletDeductions || {};
     if (wd.totalDeductionCents > 0 && orderSubtotal > 0) {
       var proportion = selectedTotal / orderSubtotal;
       if (wd.loyalty && wd.loyalty.amountCents > 0) {
-        walletDeduction += Math.round(wd.loyalty.amountCents * proportion) / 100;
         loyaltyReissue = wd.loyalty.pointsUsed ? Math.round(wd.loyalty.pointsUsed * proportion) : 0;
         loyaltyPointName = wd.loyalty.pointName || 'Points';
+        walletReturn += Math.round(wd.loyalty.amountCents * proportion) / 100;
       }
       if (wd.giftCards) {
         var gcTotal = 0;
         for (var g = 0; g < wd.giftCards.length; g++) gcTotal += (wd.giftCards[g].amountCents || 0);
-        walletDeduction += Math.round(gcTotal * proportion) / 100;
+        walletReturn += Math.round(gcTotal * proportion) / 100;
       }
       if (wd.credits) {
         var crTotal = 0;
         for (var c = 0; c < wd.credits.length; c++) crTotal += (wd.credits[c].amountCents || 0);
-        walletDeduction += Math.round(crTotal * proportion) / 100;
+        walletReturn += Math.round(crTotal * proportion) / 100;
       }
     }
 
-    var effectiveValue = selectedTotal - couponDiscount - walletDeduction;
+    // Only coupons reduce the refundable amount — wallet is a payment method
+    var effectiveValue = selectedTotal - couponDiscount;
 
-    // Apply tax to post-discount amount
+    // Tax on post-coupon amount (wallet doesn't reduce taxable amount)
     var taxRate = order.taxRate || 0;
     var taxOnReturned = !order.taxExempt ? Math.round(effectiveValue * taxRate * 100) / 100 : 0;
 
@@ -1941,9 +1942,6 @@ window.TENANT_READY.then(function() {
     if (couponDiscount > 0) {
       html += '<div class="rma-estimate-row" style="color:var(--accent-green);"><span>Coupon (' + esc(order.coupon.code) + ')</span><span>-' + formatPrice(couponDiscount) + '</span></div>';
     }
-    if (walletDeduction > 0) {
-      html += '<div class="rma-estimate-row" style="color:var(--amber-light);"><span>Wallet applied</span><span>-' + formatPrice(walletDeduction) + '</span></div>';
-    }
     if (taxOnReturned > 0) {
       html += '<div class="rma-estimate-row"><span>Tax</span><span>' + formatPrice(taxOnReturned) + '</span></div>';
     }
@@ -1952,8 +1950,21 @@ window.TENANT_READY.then(function() {
     }
     html += '<div class="rma-estimate-row total"><span>Estimated refund</span><span>' + formatPrice(refundAmount) + '</span></div>';
     html += '<div style="margin-top:0.5rem;font-size:0.78rem;color:var(--warm-gray-light);">Refund via: ' + esc(refundMethod) + '</div>';
-    if (loyaltyReissue > 0) {
-      html += '<div style="margin-top:0.25rem;font-size:0.78rem;color:var(--amber-light);">+' + loyaltyReissue + ' ' + esc(loyaltyPointName) + ' returned to wallet</div>';
+    if (walletReturn > 0 || loyaltyReissue > 0) {
+      html += '<div style="margin-top:0.5rem;padding:8px 10px;background:rgba(196,133,60,0.1);border-radius:4px;font-size:0.78rem;color:var(--amber-light);">';
+      html += '<strong>Also returned to wallet:</strong>';
+      if (loyaltyReissue > 0) {
+        html += '<br>+' + loyaltyReissue + ' ' + esc(loyaltyPointName);
+      }
+      if (walletReturn > 0) {
+        var loyaltyDollars = 0;
+        if (wd.loyalty && wd.loyalty.amountCents > 0) loyaltyDollars = Math.round(wd.loyalty.amountCents * proportion) / 100;
+        var nonLoyaltyReturn = walletReturn - loyaltyDollars;
+        if (nonLoyaltyReturn > 0) {
+          html += '<br>+' + formatPrice(nonLoyaltyReturn) + ' store credit';
+        }
+      }
+      html += '</div>';
     }
 
     estimateEl.innerHTML = html;
