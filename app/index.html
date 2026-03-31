@@ -16480,8 +16480,13 @@ async function loadConfigChecklist() {
 function isFeatureConfigured(feature) {
   if (!tenantConfigChecklist) return true; // Default: assume configured (for existing tenants)
   if (tenantConfigChecklist[feature]) return true;
-  // Fallback: check if the feature is actually configured in tenant config
-  if (feature === 'square' && TENANT_CONFIG && TENANT_CONFIG.square && (TENANT_CONFIG.square.locationId || (TENANT_CONFIG.square.sandbox && TENANT_CONFIG.square.sandbox.locationId))) return true;
+  // Fallback: check if payment processor is actually configured in tenant config
+  if (feature === 'square' && TENANT_CONFIG) {
+    // Square configured?
+    if (TENANT_CONFIG.square && (TENANT_CONFIG.square.locationId || (TENANT_CONFIG.square.sandbox && TENANT_CONFIG.square.sandbox.locationId))) return true;
+    // Stripe configured? (same gate — "square" means "payment processor")
+    if (TENANT_CONFIG.stripe && (TENANT_CONFIG.stripe.publishableKey || TENANT_CONFIG.stripe.testPublishableKey)) return true;
+  }
   return false;
 }
 
