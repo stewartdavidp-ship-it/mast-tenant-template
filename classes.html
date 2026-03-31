@@ -51,6 +51,22 @@
   max-width: 500px;
   margin: 0 auto;
 }
+.classes-my-btn {
+  display: inline-block;
+  margin-top: 1rem;
+  padding: 8px 20px;
+  border: 1px solid var(--primary, #C8963C);
+  border-radius: 6px;
+  color: var(--primary, #C8963C);
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background 0.2s, color 0.2s;
+}
+.classes-my-btn:hover {
+  background: var(--primary, #C8963C);
+  color: #fff;
+}
 .classes-filter-pills {
   display: flex;
   flex-wrap: wrap;
@@ -351,6 +367,7 @@
 <header class="classes-hero">
   <h1 data-tenant="brand-name-possessive">Classes</h1>
   <p>Learn, create, and explore in our studio</p>
+  <a href="my-classes.html" class="classes-my-btn" id="myClassesBtn" style="display:none;">My Classes</a>
   <div class="classes-filter-pills" id="classFilterPills"></div>
 </header>
 
@@ -493,8 +510,17 @@
   window.TENANT_READY.then(function() {
     document.title = 'Classes \u2014 ' + (window.TENANT_TITLE_SUFFIX ? TENANT_TITLE_SUFFIX() : 'Studio');
 
-    var app = firebase.initializeApp(TENANT_FIREBASE_CONFIG, 'public-classes');
+    var app;
+    try { app = firebase.app(); } catch (e) { app = firebase.initializeApp(TENANT_FIREBASE_CONFIG); }
     var db = app.database();
+
+    // Show "My Classes" button for logged-in users
+    if (firebase.auth) {
+      app.auth().onAuthStateChanged(function(user) {
+        var btn = document.getElementById('myClassesBtn');
+        if (btn) btn.style.display = (user && !user.isAnonymous) ? '' : 'none';
+      });
+    }
 
     // Load classes and pass definitions in parallel
     Promise.all([

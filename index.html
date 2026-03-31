@@ -265,6 +265,9 @@
     background-size: cover;
     background-position: center;
     background-color: var(--surface-dark);
+    /* Dark gradient at top so fixed nav links remain legible over the image */
+    -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,0.3) 0, rgba(0,0,0,1) 80px);
+    mask-image: linear-gradient(to bottom, rgba(0,0,0,0.3) 0, rgba(0,0,0,1) 80px);
   }
   .hero-split-content {
     display: flex;
