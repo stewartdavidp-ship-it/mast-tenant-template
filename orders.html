@@ -1221,7 +1221,8 @@ window.TENANT_READY.then(function() {
     if (order.subtotal != null) html += '<div class="order-total-row"><span>Subtotal</span><span>' + formatPrice(order.subtotal) + '</span></div>';
     if (order.shippingCost != null) html += '<div class="order-total-row"><span>Shipping</span><span>' + (order.shippingCost === 0 ? 'Free' : formatPrice(order.shippingCost)) + '</span></div>';
     if (order.tax != null && order.tax > 0) html += '<div class="order-total-row"><span>Tax</span><span>' + formatPrice(order.tax) + '</span></div>';
-    if (order.couponDiscount != null && order.couponDiscount > 0) html += '<div class="order-total-row"><span>Coupon Discount</span><span>-' + formatPrice(order.couponDiscount) + '</span></div>';
+    var couponAmt = (order.coupon && order.coupon.discount) || order.couponDiscount || 0;
+    if (couponAmt > 0) html += '<div class="order-total-row" style="color:var(--teal,#2A7C6F)"><span>Coupon (' + esc((order.coupon && order.coupon.code) || '') + ')</span><span>-' + formatPrice(couponAmt) + '</span></div>';
     // Wallet deductions
     if (order.walletDeductions && order.walletDeductions.totalDeductionCents > 0) {
       var wd = order.walletDeductions;
