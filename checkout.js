@@ -1621,7 +1621,12 @@
       shipping: checkoutData.shipping,
       billing: checkoutData.billing.same ? checkoutData.shipping : checkoutData.billing,
       items: items.map(function(it) {
-        return { pid: it.pid, name: it.name, options: it.options, price: it.price, qty: it.qty, priceCents: it.priceCents || 0 };
+        var mapped = { pid: it.pid, name: it.name, options: it.options, price: it.price, qty: it.qty, priceCents: it.priceCents || 0 };
+        if (it.bookingType) mapped.bookingType = it.bookingType;
+        if (it.classId) mapped.classId = it.classId;
+        if (it.sessionId) mapped.sessionId = it.sessionId;
+        if (it.isGiftCard) mapped.isGiftCard = true;
+        return mapped;
       }),
       subtotalCents: Math.round(subtotal * 100),
       shippingCents: Math.round(shipCost * 100),
@@ -1642,18 +1647,20 @@
 
     var orderRef = db.ref(TENANT_ID + '/orders').push();
     orderRef.set(orderData).then(function() {
-      window.MastCart.clear();
       trackCheckoutEvent('wallet_order_placed');
+
+      // Consume wallet instruments BEFORE clearing cart (calcSubtotal needs cart items)
+      consumeWalletGiftCards(orderRef.key);
+      consumeWalletCredits(orderRef.key);
+      processLoyaltyForOrder(orderRef.key);
 
       // Provision passes, enrollments, gift cards
       provisionCustomerPasses(items, orderRef.key);
       provisionSeriesEnrollments(items, orderRef.key);
       issueGiftCardsClientSide(items, orderRef.key, orderNumber);
 
-      // Consume all wallet instruments
-      consumeWalletGiftCards(orderRef.key);
-      consumeWalletCredits(orderRef.key);
-      processLoyaltyForOrder(orderRef.key);
+      // Clear cart after all processing
+      window.MastCart.clear();
 
       // Render confirmation
       isSubmitting = false;
