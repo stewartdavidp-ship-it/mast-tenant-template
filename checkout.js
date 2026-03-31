@@ -890,8 +890,10 @@
 
   function buildTotalsHtml(subtotal) {
     var shipCost = checkoutData.shippingMethod ? checkoutData.shippingMethod.price : 0;
-    var tax = Math.round(calcTaxableSubtotal() * checkoutData.taxRate * 100) / 100;
     var couponDiscount = checkoutData.coupon ? checkoutData.coupon.discount : 0;
+    // Tax on post-coupon amount (most jurisdictions tax the discounted price)
+    var taxableAmount = Math.max(0, calcTaxableSubtotal() - couponDiscount);
+    var tax = Math.round(taxableAmount * checkoutData.taxRate * 100) / 100;
     // ── Deduction cascade: Coupons → Loyalty → Gift Cards → Credits ──
     var runningCents = Math.round((subtotal + tax + shipCost - couponDiscount) * 100);
 
