@@ -1246,9 +1246,9 @@
         updates[gcPath + '/status'] = 'depleted';
       }
 
-      // Transaction log
-      var txnRef = db.ref(gcPath + '/transactions').push();
-      updates[txnRef.path.toString().replace(/^\//, '')] = {
+      // Transaction log — use timestamp key to avoid push() compatibility issues
+      var txnKey = Date.now().toString(36) + Math.random().toString(36).substr(2, 4);
+      updates[gcPath + '/transactions/' + txnKey] = {
         type: 'applied',
         amountCents: useCents,
         orderId: orderId,
