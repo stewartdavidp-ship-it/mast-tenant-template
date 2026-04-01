@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdn.jsdelivr.net https://*.firebaseio.com https://apis.google.com https://maps.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://us-central1-mast-platform-prod.cloudfunctions.net https://*.firebaseio.com wss://*.firebaseio.com https://*.firebasestorage.app https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://maps.googleapis.com https://places.googleapis.com https://api.ipify.org; img-src 'self' data: blob: https:; frame-src 'self' https://*.firebaseapp.com https://*.firebaseio.com; frame-ancestors 'none';">
+<title>Claim Coupon &mdash; My Shop</title>
+<meta property="og:type" content="website">
+<meta property="og:title" content="You've got a coupon!">
+<meta property="og:description" content="Claim this coupon and save on your next order.">
+<link rel="preconnect" href="https://mast-platform-prod-default-rtdb.firebaseio.com" crossorigin>
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<script>
+(function(){
+  var P='https://mast-platform-prod-default-rtdb.firebaseio.com/mast-platform';
+  var h=location.hostname,C=5*60*1000;
+  if(h==='localhost'||h==='127.0.0.1')return;
+  try{var r=localStorage.getItem('mast_tenant_'+h);if(r){var c=JSON.parse(r);if(Date.now()-c.timestamp<C){window.__earlyTenant=Promise.resolve(c.data);return;}}}catch(e){}
+  var ek=h.replace(/\./g,'_');
+  window.__earlyTenant=fetch(P+'/tenantsByDomain/'+ek+'.json').then(function(r){return r.ok?r.json():null}).then(function(tid){
+    if(!tid)return null;
+    return fetch(P+'/tenants/'+tid+'/publicConfig.json').then(function(r){return r.ok?r.json():null}).then(function(pc){
+      return pc?{tenantId:tid,publicConfig:pc}:null;
+    });
+  }).catch(function(){return null;});
+})();
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="storefront.css">
+<link rel="stylesheet" href="cart.css">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<style>
+.cc-container {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 7rem 2rem 4rem;
+}
+.cc-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+.cc-header h1 {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 2.4rem;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  margin: 0 0 0.5rem;
+  color: var(--text);
+}
+.cc-header p {
+  font-size: 0.95rem;
+  color: var(--warm-gray, #888);
+}
+
+/* Coupon card */
+.cc-coupon-card {
+  background: var(--surface-card);
+  border: 1px solid var(--surface-card-border);
+  border-radius: 12px;
+  padding: 2rem;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.cc-coupon-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--primary), var(--primary-light, var(--primary)));
+}
+.cc-coupon-icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.75rem;
+}
+.cc-coupon-value {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 2.4rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 0.25rem;
+}
+.cc-coupon-desc {
+  font-size: 1rem;
+  color: var(--text);
+  margin-bottom: 0.5rem;
+}
+.cc-coupon-code-display {
+  display: inline-block;
+  font-family: 'DM Sans', monospace;
+  font-size: 1.1rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  padding: 6px 16px;
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  border: 1px dashed var(--primary);
+  border-radius: 6px;
+  color: var(--text);
+  margin: 0.75rem 0;
+}
+.cc-coupon-details {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--warm-gray, #888);
+}
+.cc-coupon-detail {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Actions */
+.cc-actions {
+  text-align: center;
+  margin-top: 1.5rem;
+}
+.cc-claim-btn {
+  display: inline-block;
+  padding: 0.9rem 3rem;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.82rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  border: 1px solid var(--primary);
+  border-radius: var(--scale-border-radius, 2px);
+  background: var(--primary);
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-weight: 400;
+}
+.cc-claim-btn:hover:not(:disabled) {
+  background: var(--primary-light);
+  border-color: var(--primary-light);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px color-mix(in srgb, var(--primary) 35%, transparent);
+}
+.cc-claim-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Sign-in prompt */
+.cc-signin {
+  text-align: center;
+  margin-top: 1.5rem;
+}
+.cc-signin p {
+  font-size: 0.9rem;
+  color: var(--warm-gray, #888);
+  margin-bottom: 0.75rem;
+}
+.cc-signin-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 24px;
+  border-radius: 6px;
+  border: 1px solid var(--border, #444);
+  background: #fff;
+  color: #333;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.cc-signin-btn:hover { background: #f5f5f5; }
+
+/* Status messages */
+.cc-status {
+  text-align: center;
+  font-size: 0.9rem;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  margin-top: 1rem;
+  display: none;
+}
+.cc-status.visible { display: block; }
+.cc-status.success {
+  background: rgba(6,95,70,0.15);
+  color: #4DB6AC;
+  border: 1px solid rgba(6,95,70,0.25);
+}
+.cc-status.error {
+  background: rgba(200,60,60,0.12);
+  color: #EF9A9A;
+  border: 1px solid rgba(200,60,60,0.2);
+}
+
+/* Success state */
+.cc-success-actions {
+  display: flex;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+  flex-wrap: wrap;
+}
+.cc-success-link {
+  display: inline-block;
+  padding: 8px 20px;
+  border-radius: 6px;
+  background: var(--primary);
+  color: #fff;
+  text-decoration: none;
+  font-size: 0.85rem;
+  transition: background 0.2s;
+}
+.cc-success-link:hover { background: var(--primary-light); }
+.cc-success-link.secondary {
+  background: transparent;
+  border: 1px solid var(--border, #444);
+  color: var(--text);
+}
+.cc-success-link.secondary:hover {
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+}
+
+/* Loading */
+.cc-loading {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: var(--warm-gray, #888);
+}
+
+/* No code */
+.cc-no-code {
+  text-align: center;
+  padding: 3rem 2rem;
+}
+.cc-no-code h2 {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.6rem;
+  font-weight: 400;
+  color: var(--text);
+  margin: 0 0 0.5rem;
+}
+.cc-no-code p {
+  font-size: 0.9rem;
+  color: var(--warm-gray, #888);
+  margin-bottom: 1.5rem;
+}
+
+@media (max-width: 768px) {
+  .cc-container { padding: 6rem 1.25rem 3rem; }
+  .cc-header h1 { font-size: 1.8rem; }
+  .cc-coupon-value { font-size: 2rem; }
+  .cc-coupon-card { padding: 1.5rem 1.25rem; }
+}
+</style>
+</head>
+<body>
+<nav id="mainNav"></nav>
+<div class="nav-mobile-menu" id="mobileMenu"></div>
+
+<div class="cc-container">
+  <div class="cc-header">
+    <h1>Claim Your Coupon</h1>
+    <p>Save on your next order</p>
+  </div>
+  <div id="ccContent">
+    <div class="cc-loading">Loading...</div>
+  </div>
+</div>
+
+<footer id="siteFooter"></footer>
+
+<script src="storefront-tenant.js"></script>
+<script src="storefront-theme.js"></script>
+<script src="storefront-nav.js"></script>
+<script src="tenant-brand.js?v=2"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+
+<script>
+(function() {
+  'use strict';
+
+  function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  /* ---- Rate Limiting ---- */
+  var RATE_KEY = 'cc_claim_attempts';
+  var RATE_MAX = 10;
+  var RATE_WINDOW = 10 * 60 * 1000;
+
+  function checkRateLimit() {
+    try {
+      var raw = sessionStorage.getItem(RATE_KEY);
+      if (!raw) return true;
+      var attempts = JSON.parse(raw);
+      var now = Date.now();
+      attempts = attempts.filter(function(t) { return now - t < RATE_WINDOW; });
+      sessionStorage.setItem(RATE_KEY, JSON.stringify(attempts));
+      return attempts.length < RATE_MAX;
+    } catch (e) { return true; }
+  }
+
+  function recordAttempt() {
+    try {
+      var raw = sessionStorage.getItem(RATE_KEY);
+      var attempts = raw ? JSON.parse(raw) : [];
+      var now = Date.now();
+      attempts = attempts.filter(function(t) { return now - t < RATE_WINDOW; });
+      attempts.push(now);
+      sessionStorage.setItem(RATE_KEY, JSON.stringify(attempts));
+    } catch (e) { /* ignore */ }
+  }
+
+  /* ---- Extract code and source from URL ---- */
+  function getCodeFromUrl() {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      return (params.get('code') || '').trim().toUpperCase() || null;
+    } catch (e) { return null; }
+  }
+
+  function getSourceFromUrl() {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var src = (params.get('src') || '').trim().toLowerCase();
+      var valid = ['blog', 'newsletter', 'social', 'share'];
+      return valid.indexOf(src) !== -1 ? src : 'direct';
+    } catch (e) { return 'direct'; }
+  }
+
+  var couponCode = getCodeFromUrl();
+  var claimSource = getSourceFromUrl();
+  var couponInfo = null;
+  var claimed = false;
+
+  /* ---- Cloud function call ---- */
+  function callClaimFunction(data, token) {
+    var cfBase = (typeof TENANT_FIREBASE_CONFIG !== 'undefined' && TENANT_FIREBASE_CONFIG.cloudFunctionsBase)
+      ? TENANT_FIREBASE_CONFIG.cloudFunctionsBase
+      : 'https://us-central1-mast-platform-prod.cloudfunctions.net';
+    var url = cfBase + '/claimCoupon';
+
+    var headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+
+    return fetch(url, {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify({ data: data })
+    }).then(function(r) { return r.json(); })
+      .then(function(resp) { return resp.result || resp; });
+  }
+
+  /* ---- Format coupon value ---- */
+  function formatValue(info) {
+    if (info.type === 'percent') return info.value + '% Off';
+    return '$' + (info.value || 0).toFixed(2) + ' Off';
+  }
+
+  /* ---- Render states ---- */
+  function showStatus(msg, isError) {
+    var el = document.getElementById('ccStatus');
+    if (!el) return;
+    el.textContent = msg;
+    el.className = 'cc-status visible ' + (isError ? 'error' : 'success');
+  }
+
+  function renderNoCode() {
+    var content = document.getElementById('ccContent');
+    content.innerHTML =
+      '<div class="cc-no-code">' +
+        '<div style="font-size:3rem;margin-bottom:1rem;">\uD83C\uDFF7\uFE0F</div>' +
+        '<h2>No Coupon Code</h2>' +
+        '<p>This link doesn\'t contain a coupon code. Check the link and try again.</p>' +
+        '<a href="shop.html" class="cc-success-link">Browse Shop</a>' +
+      '</div>';
+  }
+
+  function renderCouponCard(info, showClaimAction) {
+    var content = document.getElementById('ccContent');
+    var detailsHtml = '';
+    if (info.endDate) {
+      detailsHtml += '<span class="cc-coupon-detail">\uD83D\uDCC5 Expires ' + esc(info.endDate) + '</span>';
+    }
+    if (info.minOrder) {
+      detailsHtml += '<span class="cc-coupon-detail">\uD83D\uDED2 Min order $' + info.minOrder.toFixed(2) + '</span>';
+    }
+    if (info.excludeSaleItems) {
+      detailsHtml += '<span class="cc-coupon-detail">\u26A0\uFE0F Excludes sale items</span>';
+    }
+
+    var cardHtml =
+      '<div class="cc-coupon-card">' +
+        '<div class="cc-coupon-icon">\uD83C\uDFF7\uFE0F</div>' +
+        '<div class="cc-coupon-value">' + esc(formatValue(info)) + '</div>' +
+        (info.description ? '<div class="cc-coupon-desc">' + esc(info.description) + '</div>' : '') +
+        '<div class="cc-coupon-code-display">' + esc(info.code) + '</div>' +
+        (detailsHtml ? '<div class="cc-coupon-details">' + detailsHtml + '</div>' : '') +
+      '</div>';
+
+    var actionsHtml = '<div id="ccActions"></div>';
+    var statusHtml = '<div id="ccStatus" class="cc-status"></div>';
+
+    content.innerHTML = cardHtml + actionsHtml + statusHtml;
+
+    if (showClaimAction) {
+      renderClaimAction();
+    }
+  }
+
+  function renderClaimAction() {
+    var actionsEl = document.getElementById('ccActions');
+    if (!actionsEl) return;
+
+    var app = window.MastCart ? window.MastCart.getFirebaseApp() : null;
+    var user = app ? firebase.auth(app).currentUser : null;
+
+    if (user) {
+      // User is signed in — show claim button
+      actionsEl.innerHTML =
+        '<div class="cc-actions">' +
+          '<button class="cc-claim-btn" id="ccClaimBtn" onclick="window._claimCoupon()">Save to My Wallet</button>' +
+        '</div>';
+    } else {
+      // Not signed in — show sign-in prompt
+      actionsEl.innerHTML =
+        '<div class="cc-signin">' +
+          '<p>Sign in to save this coupon to your wallet</p>' +
+          '<button class="cc-signin-btn" id="ccSignInBtn">' +
+            '<svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59a14.5 14.5 0 0 1 0-9.18l-7.98-6.19a24.04 24.04 0 0 0 0 21.56l7.98-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>' +
+            'Sign in with Google' +
+          '</button>' +
+        '</div>';
+
+      document.getElementById('ccSignInBtn').addEventListener('click', function() {
+        if (window.siteSignIn) {
+          window.siteSignIn();
+        }
+      });
+    }
+  }
+
+  function renderSuccess() {
+    var actionsEl = document.getElementById('ccActions');
+    if (!actionsEl) return;
+    actionsEl.innerHTML =
+      '<div class="cc-success-actions">' +
+        '<a href="shop.html" class="cc-success-link">Browse the Shop</a>' +
+        '<a href="index.html" class="cc-success-link secondary">Visit Homepage</a>' +
+        '<a href="my-wallet.html" class="cc-success-link secondary">View Wallet</a>' +
+      '</div>';
+  }
+
+  /* ---- Claim action ---- */
+  window._claimCoupon = function() {
+    if (claimed) return;
+    if (!checkRateLimit()) {
+      showStatus('Too many attempts. Please try again later.', true);
+      return;
+    }
+    recordAttempt();
+
+    var btn = document.getElementById('ccClaimBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+
+    var app = window.MastCart ? window.MastCart.getFirebaseApp() : null;
+    if (!app) { showStatus('Unable to connect. Please refresh.', true); return; }
+
+    var user = firebase.auth(app).currentUser;
+    if (!user) { showStatus('Please sign in first.', true); renderClaimAction(); return; }
+
+    user.getIdToken().then(function(token) {
+      return callClaimFunction({ code: couponCode, mode: 'claim', source: claimSource }, token);
+    }).then(function(result) {
+      if (result.success) {
+        claimed = true;
+        showStatus('Coupon saved to your wallet!', false);
+        renderSuccess();
+      } else if (result.alreadyClaimed) {
+        showStatus('This coupon is already in your wallet.', true);
+        renderSuccess();
+      } else {
+        showStatus(result.reason || 'Unable to claim coupon.', true);
+        if (btn) { btn.disabled = false; btn.textContent = 'Save to My Wallet'; }
+      }
+    }).catch(function(err) {
+      console.error('Claim error:', err);
+      showStatus('Something went wrong. Please try again.', true);
+      if (btn) { btn.disabled = false; btn.textContent = 'Save to My Wallet'; }
+    });
+  };
+
+  /* ---- Auth state listener ---- */
+  function listenForAuth() {
+    var app = window.MastCart ? window.MastCart.getFirebaseApp() : null;
+    if (!app) return;
+    firebase.auth(app).onAuthStateChanged(function() {
+      if (couponInfo && !claimed) {
+        renderClaimAction();
+      }
+    });
+  }
+
+  /* ---- Init ---- */
+  function init() {
+    if (!couponCode) {
+      renderNoCode();
+      return;
+    }
+
+    // Update OG meta with code
+    var ogTitle = document.querySelector('meta[property="og:title"]');
+    if (ogTitle) ogTitle.setAttribute('content', 'You\'ve got a coupon: ' + couponCode);
+
+    // Fetch coupon info (no auth needed)
+    callClaimFunction({ code: couponCode, mode: 'info' }, null).then(function(result) {
+      if (result.valid) {
+        couponInfo = result;
+        // Update page title
+        document.title = formatValue(result) + ' Coupon \u2014 ' + (document.title.split('\u2014')[1] || 'My Shop').trim();
+        // Update OG meta
+        var ogDesc = document.querySelector('meta[property="og:description"]');
+        if (ogDesc) ogDesc.setAttribute('content', formatValue(result) + (result.description ? ' \u2014 ' + result.description : '') + '. Claim this coupon now!');
+        renderCouponCard(result, true);
+        listenForAuth();
+      } else {
+        var content = document.getElementById('ccContent');
+        content.innerHTML =
+          '<div class="cc-no-code">' +
+            '<div style="font-size:3rem;margin-bottom:1rem;">\u274C</div>' +
+            '<h2>Coupon Unavailable</h2>' +
+            '<p>' + esc(result.reason || 'This coupon is no longer available.') + '</p>' +
+            '<a href="shop.html" class="cc-success-link">Browse Shop</a>' +
+          '</div>';
+      }
+    }).catch(function(err) {
+      console.error('Coupon info error:', err);
+      var content = document.getElementById('ccContent');
+      content.innerHTML =
+        '<div class="cc-no-code">' +
+          '<div style="font-size:3rem;margin-bottom:1rem;">\u26A0\uFE0F</div>' +
+          '<h2>Something Went Wrong</h2>' +
+          '<p>Unable to load coupon details. Please try again.</p>' +
+          '<a href="' + esc(window.location.href) + '" class="cc-success-link">Retry</a>' +
+        '</div>';
+    });
+  }
+
+  // Wait for tenant resolution
+  if (window.TENANT_READY) {
+    window.TENANT_READY.then(init);
+  } else {
+    document.addEventListener('DOMContentLoaded', function() {
+      setTimeout(init, 500);
+    });
+  }
+})();
+</script>
+</body>
+</html>

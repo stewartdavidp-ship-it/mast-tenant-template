@@ -23418,6 +23418,224 @@ async function removeFromSale(saleId, pid) {
 }
 
 // ============================================================
+// Shared Coupon Card Renderer (used by share modal, blog, newsletter, social)
+// ============================================================
+window.MastCouponCard = (function() {
+  'use strict';
+
+  function getClaimUrl(code, source) {
+    var domain = (window.TENANT_CONFIG && TENANT_CONFIG.domain) || window.location.hostname;
+    var url = 'https://' + domain + '/claim-coupon.html?code=' + encodeURIComponent(code);
+    if (source) url += '&src=' + encodeURIComponent(source);
+    return url;
+  }
+
+  function formatVal(coupon) {
+    if (coupon.type === 'percent') return coupon.value + '% Off';
+    return '$' + (coupon.value || 0).toFixed(2) + ' Off';
+  }
+
+  function formatDate(d) {
+    if (!d) return '';
+    var parts = d.split('-');
+    if (parts.length === 3) return parts[1] + '/' + parts[2] + '/' + parts[0];
+    return d;
+  }
+
+  /**
+   * renderHtml — self-contained inline-styled HTML card
+   * Options: { emailSafe, showCta, ctaUrl, source, compact }
+   * emailSafe uses <table> layout for email clients
+   */
+  function renderHtml(coupon, options) {
+    var o = options || {};
+    var code = coupon.code || coupon._code || '';
+    var val = formatVal(coupon);
+    var desc = coupon.description || '';
+    var url = o.ctaUrl || getClaimUrl(code, o.source || 'share');
+
+    // Detail items
+    var details = [];
+    if (coupon.endDate) details.push('Expires ' + formatDate(coupon.endDate));
+    if (coupon.minOrder) details.push('Min order $' + coupon.minOrder.toFixed(2));
+    if (coupon.excludeSaleItems) details.push('Excludes sale items');
+
+    if (o.emailSafe) {
+      // Email-safe table layout with inline styles
+      var detailRows = '';
+      if (details.length) {
+        detailRows = '<tr><td style="padding:8px 0 0;text-align:center;font-family:\'DM Sans\',Arial,sans-serif;font-size:12px;color:#6B6560;">' + esc(details.join(' · ')) + '</td></tr>';
+      }
+      var ctaRow = '';
+      if (o.showCta) {
+        ctaRow = '<tr><td style="padding:16px 0 0;text-align:center;">' +
+          '<a href="' + esc(url) + '" style="display:inline-block;padding:10px 28px;background:#C4853C;color:#ffffff;text-decoration:none;border-radius:6px;font-family:\'DM Sans\',Arial,sans-serif;font-size:14px;font-weight:500;">Claim This Coupon</a>' +
+          '</td></tr>';
+      }
+      return '<table cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:400px;margin:16px auto;font-family:\'DM Sans\',Arial,sans-serif;">' +
+        '<tr><td style="background:#C4853C;height:4px;border-radius:8px 8px 0 0;"></td></tr>' +
+        '<tr><td style="background:#FAF6F0;border:1px solid #F0E8DB;border-top:none;border-radius:0 0 8px 8px;padding:24px 20px;text-align:center;">' +
+          '<table cellpadding="0" cellspacing="0" border="0" width="100%">' +
+            '<tr><td style="font-size:28px;font-weight:700;color:#2A7C6F;text-align:center;padding-bottom:4px;">' + esc(val) + '</td></tr>' +
+            (desc ? '<tr><td style="font-size:14px;color:#1A1A1A;text-align:center;padding-bottom:8px;">' + esc(desc) + '</td></tr>' : '') +
+            '<tr><td style="text-align:center;padding:8px 0;"><span style="display:inline-block;font-family:monospace;font-size:16px;font-weight:600;letter-spacing:2px;padding:6px 16px;border:1px dashed #2A7C6F;border-radius:6px;background:rgba(42,124,111,0.08);color:#1A1A1A;">' + esc(code) + '</span></td></tr>' +
+            detailRows +
+            ctaRow +
+          '</table>' +
+        '</td></tr>' +
+      '</table>';
+    }
+
+    // Standard HTML card (for blog embed, public display)
+    var detailsHtml = '';
+    if (details.length) {
+      detailsHtml = '<div style="display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:8px;font-size:0.8rem;color:var(--warm-gray,#6B6560);">';
+      details.forEach(function(d) { detailsHtml += '<span>' + esc(d) + '</span>'; });
+      detailsHtml += '</div>';
+    }
+    var ctaHtml = '';
+    if (o.showCta) {
+      ctaHtml = '<div style="margin-top:12px;"><a href="' + esc(url) + '" style="display:inline-block;padding:8px 24px;background:var(--amber,#C4853C);color:#fff;text-decoration:none;border-radius:6px;font-size:0.85rem;font-weight:500;">Claim This Coupon</a></div>';
+    }
+    return '<div class="mast-coupon-embed" style="max-width:400px;margin:16px auto;text-align:center;border-radius:8px;overflow:hidden;border:1px solid var(--cream-dark,#F0E8DB);background:var(--cream,#FAF6F0);">' +
+      '<div style="height:4px;background:var(--amber,#C4853C);"></div>' +
+      '<div style="padding:24px 20px;">' +
+        '<div style="font-size:1.6rem;font-weight:700;color:var(--teal,#2A7C6F);">' + esc(val) + '</div>' +
+        (desc ? '<div style="font-size:0.9rem;color:var(--charcoal,#1A1A1A);margin:4px 0;">' + esc(desc) + '</div>' : '') +
+        '<div style="display:inline-block;font-family:monospace;font-size:1rem;font-weight:600;letter-spacing:2px;padding:6px 16px;border:1px dashed var(--teal,#2A7C6F);border-radius:6px;background:rgba(42,124,111,0.08);color:var(--charcoal,#1A1A1A);margin:8px 0;">' + esc(code) + '</div>' +
+        detailsHtml +
+        ctaHtml +
+      '</div>' +
+    '</div>';
+  }
+
+  /**
+   * renderToCanvas — draws coupon card to canvas for PNG download
+   * Returns a Promise that resolves to a canvas element
+   * Options: { showQr, source, width }
+   */
+  function renderToCanvas(coupon, options) {
+    var o = options || {};
+    var code = coupon.code || coupon._code || '';
+    var val = formatVal(coupon);
+    var desc = coupon.description || '';
+    var url = getClaimUrl(code, o.source || 'share');
+    var W = o.width || 600;
+    var H = 400;
+    var brandName = (window.TENANT_CONFIG && TENANT_CONFIG.brand && TENANT_CONFIG.brand.name) || '';
+
+    var details = [];
+    if (coupon.endDate) details.push('Expires ' + formatDate(coupon.endDate));
+    if (coupon.minOrder) details.push('Min $' + coupon.minOrder.toFixed(2));
+
+    return new Promise(function(resolve) {
+      var canvas = document.createElement('canvas');
+      canvas.width = W * 2; // 2x for retina
+      canvas.height = H * 2;
+      canvas.style.width = W + 'px';
+      canvas.style.height = H + 'px';
+      var ctx = canvas.getContext('2d');
+      ctx.scale(2, 2);
+
+      // Background
+      ctx.fillStyle = '#FAF6F0';
+      ctx.beginPath();
+      ctx.roundRect(0, 0, W, H, 12);
+      ctx.fill();
+
+      // Top accent bar
+      ctx.fillStyle = '#C4853C';
+      ctx.beginPath();
+      ctx.roundRect(0, 0, W, 6, [12, 12, 0, 0]);
+      ctx.fill();
+
+      // Value text
+      ctx.fillStyle = '#2A7C6F';
+      ctx.font = 'bold 40px "DM Sans", Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(val, o.showQr ? (W - 80) / 2 : W / 2, 70);
+
+      // Description
+      var y = 90;
+      if (desc) {
+        ctx.fillStyle = '#1A1A1A';
+        ctx.font = '16px "DM Sans", Arial, sans-serif';
+        ctx.fillText(desc.length > 50 ? desc.substring(0, 47) + '...' : desc, o.showQr ? (W - 80) / 2 : W / 2, y);
+        y += 28;
+      }
+
+      // Code box
+      var codeW = Math.max(ctx.measureText(code).width + 40, 160);
+      var codeX = (o.showQr ? (W - 80) / 2 : W / 2) - codeW / 2;
+      ctx.strokeStyle = '#2A7C6F';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.fillStyle = 'rgba(42,124,111,0.08)';
+      ctx.beginPath();
+      ctx.roundRect(codeX, y, codeW, 36, 6);
+      ctx.fill();
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.fillStyle = '#1A1A1A';
+      ctx.font = 'bold 18px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(code, o.showQr ? (W - 80) / 2 : W / 2, y + 24);
+
+      // Details
+      y += 52;
+      if (details.length) {
+        ctx.fillStyle = '#6B6560';
+        ctx.font = '13px "DM Sans", Arial, sans-serif';
+        ctx.fillText(details.join('  ·  '), o.showQr ? (W - 80) / 2 : W / 2, y);
+        y += 24;
+      }
+
+      // Brand name
+      if (brandName) {
+        ctx.fillStyle = '#9B958E';
+        ctx.font = '13px "DM Sans", Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(brandName, W / 2, H - 40);
+      }
+
+      // Claim URL
+      ctx.fillStyle = '#9B958E';
+      ctx.font = '11px "DM Sans", Arial, sans-serif';
+      ctx.textAlign = 'center';
+      var displayUrl = url.length > 60 ? url.substring(0, 57) + '...' : url;
+      ctx.fillText(displayUrl, W / 2, H - 20);
+
+      if (o.showQr) {
+        // Load QR code image and draw it
+        var qrSize = 120;
+        var qrImg = new Image();
+        qrImg.crossOrigin = 'anonymous';
+        qrImg.onload = function() {
+          ctx.drawImage(qrImg, W - qrSize - 24, 40, qrSize, qrSize);
+          ctx.fillStyle = '#6B6560';
+          ctx.font = '11px "DM Sans", Arial, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('Scan to claim', W - qrSize / 2 - 24, 40 + qrSize + 16);
+          resolve(canvas);
+        };
+        qrImg.onerror = function() { resolve(canvas); };
+        qrImg.src = 'https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=' + encodeURIComponent(url);
+      } else {
+        resolve(canvas);
+      }
+    });
+  }
+
+  return {
+    getClaimUrl: getClaimUrl,
+    renderHtml: renderHtml,
+    renderToCanvas: renderToCanvas,
+    formatValue: formatVal
+  };
+})();
+
+// ============================================================
 // Coupons Management
 // ============================================================
 function loadCoupons() {
@@ -23514,8 +23732,9 @@ function renderCoupons() {
       '<td><span class="coupon-meta">' + dateStr + '</span></td>' +
       '<td>' + claimed + ' / ' + maxStr + '</td>' +
       '<td><div class="event-actions">' +
-        '<button class="btn-icon" onclick="openCouponModal(\'' + esc(code) + '\')" title="Edit">\u270E</button>' +
-        '<button class="btn-icon danger" onclick="confirmDeleteCoupon(\'' + esc(code) + '\')" title="Delete">\u2716</button>' +
+        '<button class="btn-icon" data-share-code="' + esc(code) + '" onclick="openCouponShareModal(this.dataset.shareCode)" title="Share">\uD83D\uDD17</button>' +
+        '<button class="btn-icon" data-edit-code="' + esc(code) + '" onclick="openCouponModal(this.dataset.editCode)" title="Edit">\u270E</button>' +
+        '<button class="btn-icon danger" data-del-code="' + esc(code) + '" onclick="confirmDeleteCoupon(this.dataset.delCode)" title="Delete">\u2716</button>' +
       '</div></td>' +
     '</tr>';
   }
@@ -23551,12 +23770,117 @@ function renderCoupons() {
         (c2.minOrder ? '<span class="coupon-card-detail">Min: $' + c2.minOrder.toFixed(2) + '</span>' : '') +
       '</div>' +
       '<div class="coupon-card-actions">' +
-        '<button class="btn btn-secondary" onclick="openCouponModal(\'' + esc(code2) + '\')" style="flex:1;">Edit</button>' +
-        '<button class="btn btn-danger" onclick="confirmDeleteCoupon(\'' + esc(code2) + '\')" style="flex:1;">Delete</button>' +
+        '<button class="btn btn-outline" data-share-code="' + esc(code2) + '" onclick="openCouponShareModal(this.dataset.shareCode)" style="flex:1;">Share</button>' +
+        '<button class="btn btn-secondary" data-edit-code="' + esc(code2) + '" onclick="openCouponModal(this.dataset.editCode)" style="flex:1;">Edit</button>' +
+        '<button class="btn btn-danger" data-del-code="' + esc(code2) + '" onclick="confirmDeleteCoupon(this.dataset.delCode)" style="flex:1;">Delete</button>' +
       '</div>' +
     '</div>';
   }
   if (cardsEl) cardsEl.innerHTML = cardHtml;
+}
+
+function openCouponShareModal(code) {
+  var c = coupons[code];
+  if (!c) { showToast('Coupon not found', true); return; }
+  var couponObj = Object.assign({}, c, { code: code, _code: code });
+  var claimUrl = window.MastCouponCard.getClaimUrl(code, 'share');
+
+  var html = '' +
+    '<div class="modal-header">' +
+      '<h3>Share Coupon: ' + esc(code) + '</h3>' +
+      '<button class="modal-close" onclick="closeModal()">&times;</button>' +
+    '</div>' +
+    '<div class="modal-body">' +
+      // Preview card
+      '<div style="margin-bottom:20px;">' +
+        window.MastCouponCard.renderHtml(couponObj, { showCta: false }) +
+      '</div>' +
+      // Export options
+      '<div style="display:flex;flex-direction:column;gap:10px;">' +
+        '<button class="btn btn-primary" id="csm-copy-link" style="display:flex;align-items:center;gap:8px;justify-content:center;">' +
+          '\uD83D\uDD17 Copy Claim Link' +
+        '</button>' +
+        '<button class="btn btn-outline" id="csm-copy-html" style="display:flex;align-items:center;gap:8px;justify-content:center;">' +
+          '\uD83D\uDCCB Copy HTML Embed' +
+        '</button>' +
+        '<button class="btn btn-secondary" id="csm-download-img" style="display:flex;align-items:center;gap:8px;justify-content:center;">' +
+          '\uD83D\uDDBC\uFE0F Download Coupon Image (with QR)' +
+        '</button>' +
+        '<button class="btn btn-secondary" id="csm-download-qr" style="display:flex;align-items:center;gap:8px;justify-content:center;">' +
+          '\uD83D\uDCF1 Download QR Code' +
+        '</button>' +
+      '</div>' +
+      '<div id="csm-status" style="margin-top:12px;text-align:center;font-size:0.85rem;color:var(--teal);display:none;"></div>' +
+    '</div>';
+
+  openModal(html);
+
+  function showCsmStatus(msg) {
+    var el = document.getElementById('csm-status');
+    if (el) { el.textContent = msg; el.style.display = ''; setTimeout(function() { el.style.display = 'none'; }, 3000); }
+  }
+
+  // Copy Claim Link
+  document.getElementById('csm-copy-link').addEventListener('click', function() {
+    navigator.clipboard.writeText(claimUrl).then(function() {
+      showCsmStatus('Link copied to clipboard!');
+    }).catch(function() {
+      // Fallback
+      var ta = document.createElement('textarea');
+      ta.value = claimUrl; document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta);
+      showCsmStatus('Link copied to clipboard!');
+    });
+  });
+
+  // Copy HTML Embed
+  document.getElementById('csm-copy-html').addEventListener('click', function() {
+    var embedHtml = window.MastCouponCard.renderHtml(couponObj, { emailSafe: true, showCta: true, source: 'share' });
+    navigator.clipboard.writeText(embedHtml).then(function() {
+      showCsmStatus('HTML embed copied! Paste into any email builder or CMS.');
+    }).catch(function() {
+      var ta = document.createElement('textarea');
+      ta.value = embedHtml; document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta);
+      showCsmStatus('HTML embed copied!');
+    });
+  });
+
+  // Download Coupon Image (with QR)
+  document.getElementById('csm-download-img').addEventListener('click', function() {
+    var btn = this;
+    btn.disabled = true; btn.textContent = 'Generating...';
+    window.MastCouponCard.renderToCanvas(couponObj, { showQr: true, source: 'share' }).then(function(canvas) {
+      canvas.toBlob(function(blob) {
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'coupon-' + code + '.png';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
+        btn.disabled = false; btn.textContent = '\uD83D\uDDBC\uFE0F Download Coupon Image (with QR)';
+        showCsmStatus('Image downloaded!');
+      }, 'image/png');
+    });
+  });
+
+  // Download QR Code
+  document.getElementById('csm-download-qr').addEventListener('click', function() {
+    var btn = this;
+    btn.disabled = true; btn.textContent = 'Downloading...';
+    var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=' + encodeURIComponent(claimUrl);
+    fetch(qrUrl).then(function(r) { return r.blob(); }).then(function(blob) {
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'coupon-qr-' + code + '.png';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(a.href);
+      btn.disabled = false; btn.textContent = '\uD83D\uDCF1 Download QR Code';
+      showCsmStatus('QR code downloaded!');
+    }).catch(function() {
+      btn.disabled = false; btn.textContent = '\uD83D\uDCF1 Download QR Code';
+      showToast('Failed to download QR code', true);
+    });
+  });
 }
 
 function openCouponModal(code) {

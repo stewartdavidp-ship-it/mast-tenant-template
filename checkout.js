@@ -777,8 +777,26 @@
                 (checkoutData.coupon ? esc(checkoutData.coupon.code) : '') + '">' +
               '<button class="coupon-apply-btn" data-co="apply-coupon">Apply</button>' +
             '</div>' +
-            '<div id="coCouponMsg"></div>' +
-          '</div>';
+            '<div id="coCouponMsg"></div>';
+
+          // Saved wallet coupons as clickable chips
+          if (checkoutData.savedCoupons.length > 0 && !checkoutData.coupon) {
+            html += '<div id="coSavedCoupons" style="margin-top:8px;">' +
+              '<div style="font-size:0.78rem;color:var(--warm-gray,#6B6560);margin-bottom:6px;">\uD83D\uDCB3 Saved coupons:</div>' +
+              '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
+            for (var sci = 0; sci < checkoutData.savedCoupons.length; sci++) {
+              var sc = checkoutData.savedCoupons[sci];
+              var scLabel = esc(sc.code) + ' \u2014 ' + (sc.type === 'percent' ? sc.value + '% off' : '$' + (sc.value || 0).toFixed(2) + ' off');
+              html += '<button data-coupon-code="' + esc(sc.code) + '" data-co="apply-wallet-coupon" ' +
+                'style="display:inline-flex;align-items:center;gap:4px;padding:6px 12px;font-size:0.8rem;font-family:\'DM Sans\',sans-serif;' +
+                'background:rgba(42,124,111,0.06);color:var(--teal,#2A7C6F);border:1px dashed rgba(42,124,111,0.3);border-radius:6px;cursor:pointer;transition:all 0.15s;">' +
+                '\uD83C\uDFF7\uFE0F ' + scLabel +
+              '</button>';
+            }
+            html += '</div></div>';
+          }
+
+          html += '</div>';
 
           // ── Wallet Deductions (order: Coupons → Loyalty → Gift Cards → Credits) ──
           var hasAnyWalletInstrument = checkoutData.walletCredits.length > 0 ||
@@ -788,11 +806,6 @@
           if (hasAnyWalletInstrument) {
             html += '<div class="checkout-section">' +
               '<div class="checkout-section-title">Wallet Deductions</div>';
-
-            // Saved coupons hint
-            if (checkoutData.savedCoupons.length > 0 && !checkoutData.coupon) {
-              html += '<div style="font-size:0.82rem;color:var(--teal);margin-bottom:8px;">&#127903; You have ' + checkoutData.savedCoupons.length + ' saved coupon' + (checkoutData.savedCoupons.length > 1 ? 's' : '') + ' \u2014 enter the code above to apply.</div>';
-            }
 
             // Loyalty (2nd in priority after coupons)
             if (checkoutData.loyaltyConfig && checkoutData.loyaltyConfig.enabled && checkoutData.loyaltyBalance && checkoutData.loyaltyBalance.totalPoints > 0) {
@@ -1553,6 +1566,7 @@
       }),
       shippingMethodKey: 'calculated',
       couponCode: checkoutData.coupon ? checkoutData.coupon.code : null,
+      couponSource: checkoutData.couponSource || null,
       uid: user ? user.uid : 'anonymous',
       isWholesale: isWholesaleCart(),
       resaleCertNumber: checkoutData.resaleCertNumber || ''
@@ -2026,6 +2040,19 @@
       return;
     } else if (action === 'apply-coupon') {
       applyCoupon();
+    } else if (action === 'apply-wallet-coupon') {
+      var walletCode = btn.getAttribute('data-coupon-code');
+      if (walletCode) {
+        // Find the saved coupon to get its source for tracking
+        var matchedCoupon = checkoutData.savedCoupons.find(function(sc) { return sc.code === walletCode; });
+        checkoutData.couponSource = matchedCoupon ? (matchedCoupon.source || 'direct') : 'direct';
+        var input = document.getElementById('coCouponInput');
+        if (input) input.value = walletCode;
+        applyCoupon();
+        // Hide saved coupons after applying
+        var savedEl = document.getElementById('coSavedCoupons');
+        if (savedEl) savedEl.style.display = 'none';
+      }
     } else if (action === 'addr-next') {
       if (validateAddress()) {
         saveAddressData();
