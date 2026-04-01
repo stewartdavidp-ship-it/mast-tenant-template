@@ -837,6 +837,7 @@
     h += '<div id="teamDocFormInner"></div>';
     h += '</div>';
 
+    h += '<div id="teamDocCards">';
     if (tenantDocs.length === 0) {
       h += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">';
       h += '<div style="font-size:2rem;margin-bottom:12px;">\ud83d\udcc4</div>';
@@ -846,6 +847,7 @@
     } else {
       tenantDocs.forEach(function(doc) { h += renderDocCard(doc, true, null); });
     }
+    h += '</div>';
     return h;
   }
 
@@ -959,6 +961,9 @@
       formEl.innerHTML = h;
     }
     formEl.style.display = '';
+    // Hide doc cards while form is open
+    var docCards = document.getElementById('teamDocCards');
+    if (docCards) docCards.style.display = 'none';
     setTimeout(function() {
       var el = document.getElementById('docTitle');
       if (el) el.focus();
@@ -1276,6 +1281,8 @@
   window.teamCancelDocForm = function() {
     var el = document.getElementById('teamDocForm');
     if (el) el.style.display = 'none';
+    var docCards = document.getElementById('teamDocCards');
+    if (docCards) docCards.style.display = '';
     editingDocId = null;
   };
   window.teamAddEmpDoc = function(empId) { openDocForm(null, false, empId); };
