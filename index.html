@@ -252,7 +252,10 @@
   /* Variant wrapper must fill the hero section fully */
   .hero [data-variant="split-image"] {
     position: absolute;
-    inset: 0;
+    top: 85px; /* Below the nav — overlay/vignette darken the nav area above */
+    left: 0;
+    right: 0;
+    bottom: 0;
     z-index: 5;
   }
   .hero-split {
