@@ -453,7 +453,7 @@
       var statusLabel = status === 'completed' ? 'Complete' : status === 'not-applicable' ? 'N/A' : 'Missing';
       if (status !== 'completed' && status !== 'not-applicable') compGaps++;
 
-      compHtml += '<div style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:10px 14px;margin-bottom:6px;">';
+      compHtml += '<div data-emp="' + esc(emp._key) + '" data-key="' + esc(f.key) + '" onclick="teamEditCompliance(this.dataset.emp, this.dataset.key)" style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:10px 14px;margin-bottom:6px;cursor:pointer;transition:border-color 0.15s;" onmouseover="this.style.borderColor=\'var(--amber)\'" onmouseout="this.style.borderColor=\'var(--cream-dark,#F0E8DB)\'">';
       compHtml += '<div style="display:flex;justify-content:space-between;align-items:center;">';
       compHtml += '<div>';
       compHtml += '<span style="font-weight:500;font-size:0.9rem;">' + esc(f.label) + '</span>';
@@ -464,10 +464,7 @@
         else if (daysToExpiry <= 0) compHtml += ' <span style="font-size:0.75rem;color:var(--danger);">Expired</span>';
       }
       compHtml += '</div>';
-      compHtml += '<div style="display:flex;align-items:center;gap:8px;">';
       compHtml += '<span style="color:' + statusColor + ';font-weight:600;font-size:0.82rem;">' + statusIcon + ' ' + statusLabel + '</span>';
-      compHtml += '<button class="btn btn-secondary btn-small" data-emp="' + esc(emp._key) + '" data-key="' + esc(f.key) + '" onclick="teamEditCompliance(this.dataset.emp, this.dataset.key)">Edit</button>';
-      compHtml += '</div>';
       compHtml += '</div>';
       if (f.key === 'workersComp' && status !== 'completed') {
         compHtml += '<div style="font-size:0.72rem;color:#d97706;margin-top:4px;">Required in most states from your first employee. Check with your insurance agent if unsure.</div>';
@@ -719,16 +716,13 @@
     } else {
       refList.forEach(function(ref) {
         var outcomeColor = ref.outcome === 'concerning' ? '#d97706' : ref.outcome === 'positive' ? '#16a34a' : 'var(--warm-gray)';
-        h += '<div style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:10px 14px;margin-bottom:6px;">';
-        h += '<div style="display:flex;justify-content:space-between;align-items:center;">';
+        h += '<div data-emp="' + esc(emp._key) + '" data-ref="' + esc(ref._key) + '" onclick="teamEditReference(this.dataset.emp, this.dataset.ref)" style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:10px 14px;margin-bottom:6px;cursor:pointer;transition:border-color 0.15s;" onmouseover="this.style.borderColor=\'var(--amber)\'" onmouseout="this.style.borderColor=\'var(--cream-dark,#F0E8DB)\'">';
         h += '<div>';
         h += '<span style="font-weight:500;">' + esc(ref.name || '') + '</span>';
         if (ref.phone) h += ' <span style="font-size:0.82rem;color:var(--warm-gray);">' + esc(ref.phone) + '</span>';
         if (ref.relationship) h += ' <span style="font-size:0.82rem;color:var(--warm-gray);">(' + esc(ref.relationship) + ')</span>';
         h += ' <span class="status-badge" style="background:' + outcomeColor + '22;color:' + outcomeColor + ';">' + esc(capitalize((ref.outcome || 'not-checked').replace('-', ' '))) + '</span>';
         if (ref.checkedDate) h += ' <span style="font-size:0.75rem;color:var(--warm-gray-light);">' + esc(ref.checkedDate) + '</span>';
-        h += '</div>';
-        h += '<button class="btn btn-secondary btn-small" data-emp="' + esc(emp._key) + '" data-ref="' + esc(ref._key) + '" onclick="teamEditReference(this.dataset.emp, this.dataset.ref)">Edit</button>';
         h += '</div>';
         if (ref.notes) h += '<div style="font-size:0.82rem;color:var(--warm-gray);margin-top:4px;">' + esc(ref.notes) + '</div>';
         h += '</div>';
