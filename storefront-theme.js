@@ -422,6 +422,11 @@
                   var el = heroSlot.querySelector('.' + cls);
                   if (el) el.style.display = isFullBleed ? '' : 'none';
                 });
+                // Force solid dark hero background for non-full-bleed variants.
+                // The default gradient (charcoal→amber) shows through the transparent nav.
+                if (!isFullBleed) {
+                  heroSlot.style.setProperty('background', '#1a1a2e', 'important');
+                }
               }
 
               // Activate gallery variant

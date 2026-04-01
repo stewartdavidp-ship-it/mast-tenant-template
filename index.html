@@ -250,10 +250,9 @@
 
   /* ========= HERO VARIANT: SPLIT-IMAGE ========= */
   /* Variant wrapper must fill the hero section fully */
-  .hero:has([data-variant="split-image"].active),
-  .hero:has([data-variant="minimal-text"].active) {
-    background: var(--charcoal, #1a1a2e) !important;
-  }
+  /* ---- REMOVED: :has() approach was unreliable across browsers.
+     Hero background override for non-full-bleed variants is now handled
+     in storefront-theme.js via style.setProperty with !important. ---- */
   .hero [data-variant="split-image"] {
     position: absolute;
     top: 85px; /* Below the nav — overlay/vignette darken the nav area above */
