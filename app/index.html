@@ -5050,6 +5050,7 @@
         <div class="sidebar-item" data-route="passes" onclick="navigateTo('passes')">Passes</div>
         <div class="sidebar-item" data-route="enrollments" onclick="navigateTo('enrollments')">Enrollments</div>
         <div class="sidebar-item" data-route="calendar" onclick="navigateTo('calendar')">Calendar</div>
+        <div class="sidebar-item" data-route="students" onclick="navigateTo('students')">Students</div>
         <div class="sidebar-item" data-route="book-reports" onclick="navigateTo('book-reports')">Class Reports</div>
       </div>
     </div>
@@ -5102,6 +5103,7 @@
     </div>
 
     <!-- ===== TEAM TAB ===== -->
+    <div id="studentsTab" style="display:none;"></div>
     <div id="teamTab" style="display:none;">
     </div>
 
@@ -9104,7 +9106,7 @@ var MODULE_REGISTRY = {
   show:   { id: 'show',   name: 'Show',   icon: '\uD83C\uDFAA', description: 'Find, apply, prep, and execute craft fairs and events.', section: 'show', navPosition: 7, purchasable: true, routes: ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'], manageSettings: [], synergies: ['sell', 'ship', 'make'], status: 'active' },
   'show-light': { id: 'show-light', name: 'Show Light', icon: '\u2728', description: 'Vendor profile, image gallery, and AI-powered show application builder.', section: 'show-light', navPosition: 8, purchasable: false, showInGrid: true, routes: ['show-light-profile', 'show-light-gallery', 'show-light-shows', 'show-light-apply'], manageSettings: [], synergies: ['show', 'sell', 'market'], status: 'active' },
   events: { id: 'events', name: 'Events', icon: '\uD83C\uDFAB', description: 'Organize shows, manage booths, vendors, and floor plans.', section: 'events', navPosition: 9, purchasable: true, routes: ['events-shows', 'events-settings'], manageSettings: [], synergies: ['show', 'sell', 'market'], status: 'active' },
-  book:   { id: 'book',   name: 'Book',   icon: '\uD83D\uDCC5', description: 'Classes, workshops, studio time, and student enrollment.', section: 'book', navPosition: 10, purchasable: true, routes: ['book', 'book-detail', 'enrollments', 'instructors', 'instructor-detail', 'resources', 'resource-detail', 'passes', 'pass-detail', 'calendar', 'book-reports'], manageSettings: [], synergies: ['sell', 'market'], status: 'active' }
+  book:   { id: 'book',   name: 'Book',   icon: '\uD83D\uDCC5', description: 'Classes, workshops, studio time, and student enrollment.', section: 'book', navPosition: 10, purchasable: true, routes: ['book', 'book-detail', 'enrollments', 'instructors', 'instructor-detail', 'resources', 'resource-detail', 'passes', 'pass-detail', 'calendar', 'book-reports', 'students'], manageSettings: [], synergies: ['sell', 'market'], status: 'active' }
 };
 
 // Synergy messaging for locked module previews.
@@ -11819,7 +11821,8 @@ homepage: { src: 'modules/homepage.js', routes: ['homepage'] },
   cart: { src: 'modules/cart.js', routes: ['wallet', 'gift-cards', 'loyalty'] },
   advisor: { src: 'modules/advisor.js', routes: ['advisor'] },
   studio: { src: 'modules/studio.js', routes: ['studio'] },
-  team: { src: 'modules/team.js', routes: ['team'] }
+  team: { src: 'modules/team.js', routes: ['team'] },
+  students: { src: 'modules/students.js', routes: ['students'] }
 };
 
 // Reverse lookup: route → moduleId (built from MODULE_MANIFEST)
