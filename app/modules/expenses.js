@@ -436,6 +436,9 @@ function renderExpensesList(expenses) {
     var catLabel = CATEGORIES.find(function(c) { return c.value === exp.category; });
     h += '<div style="margin-top:4px;">';
     h += '<span class="status-badge" style="background:rgba(196,133,60,0.15);color:var(--amber, #C4853C);">' + esc(catLabel ? catLabel.label : exp.category) + '</span>';
+    if (exp.isStudioOverhead) {
+      h += ' <span class="status-badge" style="background:rgba(42,124,111,0.15);color:var(--teal, #2A7C6F);font-size:0.7rem;">Studio overhead</span>';
+    }
     if (!exp.reviewed) {
       h += ' <span style="font-size:0.75rem;color:#f59e0b;">Needs review</span>';
     } else {
@@ -563,6 +566,17 @@ async function showExpenseDetail(expenseId) {
       h += '<option value="' + bl.value + '"' + ((exp.businessLine || '') === bl.value ? ' selected' : '') + '>' + bl.label + '</option>';
     });
     h += '</select>';
+    h += '</div>';
+
+    // Studio Overhead Toggle
+    h += '<div style="margin-bottom:16px;">';
+    h += '<label style="display:flex;align-items:center;gap:10px;cursor:pointer;">';
+    h += '<input type="checkbox" data-expense-id="' + esc(expenseId) + '" ' + (exp.isStudioOverhead ? 'checked' : '') + ' onchange="updateExpenseField(this.dataset.expenseId, \'isStudioOverhead\', this.checked)" style="width:18px;height:18px;cursor:pointer;">';
+    h += '<div>';
+    h += '<div style="font-size:0.85rem;font-weight:600;">Fixed studio overhead</div>';
+    h += '<div style="font-size:0.78rem;color:var(--warm-gray, #6B6560);">Recurring costs to keep your studio running (rent, insurance, subscriptions, utilities not tied to specific equipment)</div>';
+    h += '</div>';
+    h += '</label>';
     h += '</div>';
 
     // Notes

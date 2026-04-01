@@ -5021,6 +5021,7 @@
         <div class="sidebar-item" data-route="contacts" onclick="navigateTo('contacts')">Contacts</div>
         <div class="sidebar-item muted" data-route="customers" onclick="navigateTo('customers')">Customers <span class="sidebar-badge new">New</span></div>
         <div class="sidebar-item" data-route="email-log" onclick="navigateTo('email-log')">Email Log</div>
+        <div class="sidebar-item" data-route="studio" onclick="navigateTo('studio')">Studio</div>
       </div>
     </div>
     <!-- Advise -->
@@ -5097,6 +5098,10 @@
     <!-- ===== EMAIL LOG TAB ===== -->
     <div id="emailLogTab" style="display:none;">
       <div id="emailLogContent"></div>
+    </div>
+
+    <!-- ===== STUDIO TAB ===== -->
+    <div id="studioTab" style="display:none;">
     </div>
 
     <!-- ===== ADVISOR TAB ===== -->
@@ -8444,6 +8449,24 @@ MastDB.plaidItems = {
   update: function(id, data) { return this.ref(id).update(data); }
 };
 
+MastDB.lpe = {
+  equipment: {
+    PATH: 'admin/lpe/equipment',
+    ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
+    list: function() { return this.ref().once('value'); },
+    get: function(id) { return this.ref(id).once('value'); },
+    set: function(id, data) { return this.ref(id).set(data); },
+    update: function(id, data) { return this.ref(id).update(data); },
+    remove: function(id) { return this.ref(id).remove(); }
+  },
+  laborProfile: {
+    PATH: 'admin/lpe/laborProfile',
+    ref: function() { return MastDB._ref(this.PATH); },
+    get: function() { return this.ref().once('value'); },
+    update: function(data) { return this.ref().update(data); }
+  }
+};
+
 MastDB.commissions = {
   PATH: 'admin/commissions',
   ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
@@ -11361,14 +11384,14 @@ var SECTION_ROUTES = {
   'cart':   ['wallet', 'gift-cards', 'coupons', 'loyalty', 'promotions'],
   'show':   ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'],
   'ship':   ['pack', 'ship'],
-  'run':    ['trips', 'expenses', 'reports', 'financials', 'contacts', 'customers', 'email-log'],
+  'run':    ['trips', 'expenses', 'reports', 'financials', 'contacts', 'customers', 'email-log', 'studio'],
   'events': ['events-shows', 'events-settings'],
   'web':    ['website', 'homepage', 'images'],
   'manage': ['products', 'inventory', 'employees', 'analytics', 'auditlog', 'settings'],
   'advise': ['advisor']
 };
 
-var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'expensesTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'termsTab', 'advisorTab'];
+var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'expensesTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'termsTab', 'advisorTab', 'studioTab'];
 
 var currentRoute = 'dashboard';
 
@@ -11789,7 +11812,8 @@ homepage: { src: 'modules/homepage.js', routes: ['homepage'] },
   promotions: { src: 'modules/promotions.js', routes: ['promotions'] },
   book: { src: 'modules/book.js', routes: ['book', 'book-detail', 'enrollments', 'instructors', 'instructor-detail', 'resources', 'resource-detail', 'passes', 'pass-detail', 'calendar', 'book-reports'] },
   cart: { src: 'modules/cart.js', routes: ['wallet', 'gift-cards', 'loyalty'] },
-  advisor: { src: 'modules/advisor.js', routes: ['advisor'] }
+  advisor: { src: 'modules/advisor.js', routes: ['advisor'] },
+  studio: { src: 'modules/studio.js', routes: ['studio'] }
 };
 
 // Reverse lookup: route → moduleId (built from MODULE_MANIFEST)
