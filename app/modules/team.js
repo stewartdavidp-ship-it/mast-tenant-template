@@ -403,6 +403,9 @@
     h += '<div id="teamAddFormInner"></div>';
     h += '</div>';
 
+    // Detail body — hidden when edit form is open
+    h += '<div id="teamDetailBody">';
+
     // --- Pay & Employment (always visible, no collapse) ---
     h += '<div style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:14px 18px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
     h += '<div style="display:flex;gap:24px;flex-wrap:wrap;font-size:0.9rem;">';
@@ -498,11 +501,16 @@
     h += collapsibleSection('secDocs', 'Documents', docsHtml, { open: docs.length > 0, badge: '<span style="font-size:0.78rem;color:var(--warm-gray);">' + docs.length + '</span>', rightHtml: docsRight });
 
     // --- Hours Log (collapsible, closed by default) ---
-    h += collapsibleSection('secHours', 'Hours Log', renderHoursSection(emp), { open: false });
+    var hoursLog = emp.hoursLog || {};
+    var hoursCount = typeof hoursLog === 'object' ? Object.keys(hoursLog).length : 0;
+    h += collapsibleSection('secHours', 'Hours Log', renderHoursSection(emp), { open: false, badge: hoursCount > 0 ? '<span style="font-size:0.78rem;color:var(--warm-gray);">' + hoursCount + ' entries</span>' : '' });
 
     // --- References (collapsible, closed by default) ---
-    h += collapsibleSection('secRefs', 'References', renderReferencesSection(emp), { open: false });
+    var refsData = emp.references || {};
+    var refsCount = Array.isArray(refsData) ? refsData.length : Object.keys(refsData).length;
+    h += collapsibleSection('secRefs', 'References', renderReferencesSection(emp), { open: false, badge: refsCount > 0 ? '<span style="font-size:0.78rem;color:var(--warm-gray);">' + refsCount + '</span>' : '' });
 
+    h += '</div>'; // close teamDetailBody
     return h;
   }
 
@@ -1128,9 +1136,11 @@
     innerEl.innerHTML = h;
     formEl.style.display = '';
 
-    // Hide roster cards while form is open
+    // Hide roster cards and detail body while form is open
     var cards = document.getElementById('teamRosterCards');
     if (cards) cards.style.display = 'none';
+    var detailBody = document.getElementById('teamDetailBody');
+    if (detailBody) detailBody.style.display = 'none';
 
     // Toggle termination date visibility
     var statusSel = document.getElementById('teamEmpStatus');
@@ -1241,6 +1251,8 @@
     if (el) el.style.display = 'none';
     var cards = document.getElementById('teamRosterCards');
     if (cards) cards.style.display = '';
+    var detailBody = document.getElementById('teamDetailBody');
+    if (detailBody) detailBody.style.display = '';
     editingEmployeeId = null;
   };
   window.teamLogHours = function(empId) { openLogHoursForm(empId); };
