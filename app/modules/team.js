@@ -497,18 +497,20 @@
     } else {
       docs.forEach(function(doc) { docsHtml += renderDocCard(doc, false, emp._key); });
     }
-    var docsRight = '<button class="btn btn-primary btn-small" data-emp="' + esc(emp._key) + '" onclick="event.stopPropagation();teamAddEmpDoc(this.dataset.emp)">+ New Document</button>';
+    var docsRight = '<button class="btn btn-primary btn-small" data-emp="' + esc(emp._key) + '" onclick="event.stopPropagation();teamExpandAndAdd(\'secDocs\');teamAddEmpDoc(this.dataset.emp)">+ New Document</button>';
     h += collapsibleSection('secDocs', 'Documents', docsHtml, { open: docs.length > 0, badge: '<span style="font-size:0.78rem;color:var(--warm-gray);">' + docs.length + '</span>', rightHtml: docsRight });
 
     // --- Hours Log (collapsible, closed by default) ---
     var hoursLog = emp.hoursLog || {};
     var hoursCount = typeof hoursLog === 'object' ? Object.keys(hoursLog).length : 0;
-    h += collapsibleSection('secHours', 'Hours Log', renderHoursSection(emp), { open: false, badge: hoursCount > 0 ? '<span style="font-size:0.78rem;color:var(--warm-gray);">' + hoursCount + ' entries</span>' : '' });
+    var hoursRight = '<button class="btn btn-primary btn-small" data-id="' + esc(emp._key) + '" onclick="event.stopPropagation();teamExpandAndAdd(\'secHours\');teamLogHours(this.dataset.id)">+ Log Hours</button>';
+    h += collapsibleSection('secHours', 'Hours Log', renderHoursSection(emp), { open: false, badge: hoursCount > 0 ? '<span style="font-size:0.78rem;color:var(--warm-gray);">' + hoursCount + ' entries</span>' : '', rightHtml: hoursRight });
 
     // --- References (collapsible, closed by default) ---
     var refsData = emp.references || {};
     var refsCount = Array.isArray(refsData) ? refsData.length : Object.keys(refsData).length;
-    h += collapsibleSection('secRefs', 'References', renderReferencesSection(emp), { open: false, badge: refsCount > 0 ? '<span style="font-size:0.78rem;color:var(--warm-gray);">' + refsCount + '</span>' : '' });
+    var refsRight = '<button class="btn btn-primary btn-small" data-emp="' + esc(emp._key) + '" onclick="event.stopPropagation();teamExpandAndAdd(\'secRefs\');teamAddReference(this.dataset.emp)">+ New Reference</button>';
+    h += collapsibleSection('secRefs', 'References', renderReferencesSection(emp), { open: false, badge: refsCount > 0 ? '<span style="font-size:0.78rem;color:var(--warm-gray);">' + refsCount + '</span>' : '', rightHtml: refsRight });
 
     h += '</div>'; // close teamDetailBody
     return h;
@@ -586,17 +588,12 @@
   // Hours Section
   // ========================================
   function renderHoursSection(emp) {
-    var h = '<div style="margin-bottom:16px;">';
-    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">';
-    h += '<div style="font-size:1rem;font-weight:600;">Hours Log</div>';
-    h += '<button class="btn btn-primary btn-small" data-id="' + esc(emp._key) + '" onclick="teamLogHours(this.dataset.id)">+ Log Hours</button>';
-    h += '</div>';
+    var h = '';
 
     h += '<div id="teamHoursForm" style="display:none;background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:14px 18px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
     h += '<div id="teamHoursFormInner"></div>';
     h += '</div>';
     h += '<div id="teamHoursTable" style="font-size:0.85rem;color:var(--warm-gray);">Loading hours\u2026</div>';
-    h += '</div>';
 
     setTimeout(function() { loadHoursForEmployee(emp._key); }, 0);
     return h;
@@ -714,11 +711,7 @@
       refList = Object.entries(refs).map(function(e) { var r = e[1]; r._key = e[0]; return r; });
     }
 
-    var h = '<div style="margin-bottom:16px;">';
-    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">';
-    h += '<div style="font-size:1rem;font-weight:600;">References</div>';
-    h += '<button class="btn btn-primary btn-small" data-emp="' + esc(emp._key) + '" onclick="teamAddReference(this.dataset.emp)">+ New Reference</button>';
-    h += '</div>';
+    var h = '';
     h += '<div id="teamRefForm" style="display:none;"></div>';
 
     if (refList.length === 0) {
@@ -741,7 +734,6 @@
         h += '</div>';
       });
     }
-    h += '</div>';
     return h;
   }
 
@@ -1267,6 +1259,14 @@
       var show = el.style.display === 'none';
       el.style.display = show ? '' : 'none';
       if (arrow) arrow.textContent = show ? '\u25bc' : '\u25b6';
+    }
+  };
+  window.teamExpandAndAdd = function(id) {
+    var el = document.getElementById(id);
+    var arrow = document.getElementById(id + 'Arrow');
+    if (el && el.style.display === 'none') {
+      el.style.display = '';
+      if (arrow) arrow.textContent = '\u25bc';
     }
   };
   window.teamAddTenantDoc = function() { openDocForm(null, true, null); };
