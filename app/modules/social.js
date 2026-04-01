@@ -572,6 +572,23 @@
     html += '<div class="sm-dest-chip disabled" onclick="showToast(\'Facebook posting coming soon!\')">📘 Facebook Post <small>(Coming soon)</small></div>';
     html += '</div></div>';
 
+    // Section 5: Attach Coupon (optional)
+    html += '<div class="sm-enhance-section">';
+    html += '<div class="sm-enhance-section-label">Attach Coupon <span style="font-weight:400;color:var(--warm-gray);">(optional)</span></div>';
+    if (d.attachedCoupon) {
+      var smCoupons = window.coupons || {};
+      var smC = smCoupons[d.attachedCoupon];
+      var smValStr = smC ? (smC.type === 'percent' ? smC.value + '% off' : '$' + (smC.value || 0).toFixed(2) + ' off') : '';
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:rgba(42,124,111,0.06);border:1px dashed rgba(42,124,111,0.3);border-radius:6px;">' +
+        '<span>\uD83C\uDFF7\uFE0F <span style="font-family:monospace;font-weight:600;">' + esc(d.attachedCoupon) + '</span> \u2014 ' + esc(smValStr) + '</span>' +
+        '<button class="btn btn-small" style="font-size:0.75rem;" onclick="smEnhanceData.attachedCoupon=null;renderSocialMedia()">Remove</button>' +
+      '</div>';
+      html += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:6px;">Claim URL will be added to caption</div>';
+    } else {
+      html += '<button class="btn btn-outline" onclick="smPickCoupon()" style="font-size:0.85rem;">\uD83C\uDFF7\uFE0F Attach Coupon</button>';
+    }
+    html += '</div>';
+
     // CTA
     var ctaLabel = isPreShoot ? 'Generate Shoot Card' : 'Generate';
     var ctaDisabled = !d.treatment ? ' disabled' : '';
@@ -849,6 +866,17 @@
     }
 
     d.selectedCaptionIdx = 0;
+
+    // Append coupon claim URL to captions if a coupon is attached
+    if (d.attachedCoupon && window.MastCouponCard) {
+      var couponUrl = window.MastCouponCard.getClaimUrl(d.attachedCoupon, 'social');
+      (d.captions || []).forEach(function(cap) {
+        if (cap.text && cap.text.indexOf(couponUrl) === -1) {
+          cap.text += '\n\n\uD83C\uDFF7\uFE0F Claim your coupon: ' + couponUrl;
+        }
+      });
+    }
+
     smCurrentView = 'staging';
     renderSocialMedia();
   }
@@ -1066,6 +1094,30 @@
   window.smOpenInstagramWithCaption = smOpenInstagramWithCaption;
   window.smMarkPosted = smMarkPosted;
   window.smFinishPreShoot = smFinishPreShoot;
+
+  function smPickCoupon() {
+    var allCoupons = window.coupons || {};
+    var codes = Object.keys(allCoupons).filter(function(code) {
+      return getCouponEffectiveStatus(allCoupons[code]) === 'active';
+    });
+    if (codes.length === 0) { showToast('No active coupons. Create coupons in the Coupons tab first.', true); return; }
+    var listHtml = '';
+    codes.forEach(function(code) {
+      var c = allCoupons[code];
+      var valStr = c.type === 'percent' ? c.value + '% off' : '$' + (c.value || 0).toFixed(2) + ' off';
+      listHtml += '<div data-coupon-code="' + esc(code) + '" ' +
+        'style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid var(--cream-dark);border-radius:6px;cursor:pointer;transition:background 0.15s;" ' +
+        'onmouseover="this.style.background=\'rgba(42,124,111,0.06)\'" onmouseout="this.style.background=\'transparent\'" ' +
+        'onclick="smEnhanceData.attachedCoupon=this.dataset.couponCode;closeModal();renderSocialMedia()">' +
+        '<span style="font-family:monospace;font-weight:600;">' + esc(code) + '</span>' +
+        '<span style="color:var(--teal);font-weight:600;">' + esc(valStr) + '</span></div>';
+    });
+    var html = '<div class="modal-header"><h3>Attach Coupon</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>' +
+      '<div class="modal-body"><p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">The coupon claim link will be added to your caption:</p>' +
+      '<div style="display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;">' + listHtml + '</div></div>';
+    openModal(html);
+  }
+  window.smPickCoupon = smPickCoupon;
   // smSetView — setter for smCurrentView (primitives can't be shared by reference)
   function smSetView(view) {
     smCurrentView = view;

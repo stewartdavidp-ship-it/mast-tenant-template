@@ -312,6 +312,7 @@
         '<div id="blogEmojiPicker" class="blog-emoji-picker" style="display:none;"></div>' +
         '</div>' +
         '<button class="blog-format-btn" onmousedown="event.preventDefault();blogInsertImage()" title="Insert Image" style="font-size:1rem;width:auto;padding:0 8px;">\ud83d\udcf7</button>' +
+        '<button class="blog-format-btn" onmousedown="event.preventDefault();blogInsertCoupon()" title="Insert Coupon" style="font-size:1rem;width:auto;padding:0 8px;">\uD83C\uDFF7\uFE0F</button>' +
         '</div>';
 
       // ContentEditable body
@@ -421,6 +422,15 @@
       var span = '<span class="blog-img-marker" contenteditable="false" data-image="' + (idx + 1) + '">\ud83d\udcf7 Image ' + (idx + 1) + '</span>';
       html = html.replace(marker, span);
     });
+    // Restore coupon markers
+    html = html.replace(/\[Coupon:([^\]]+)\]/g, function(match, code) {
+      var allCoupons = window.coupons || {};
+      var c = allCoupons[code];
+      var valStr = c ? (c.type === 'percent' ? c.value + '% off' : '$' + (c.value || 0).toFixed(2) + ' off') : 'coupon';
+      return '<div class="blog-coupon-marker" data-coupon-code="' + esc(code) + '" contenteditable="false" ' +
+        'style="display:inline-block;padding:8px 14px;margin:4px 0;background:rgba(42,124,111,0.08);border:1px dashed var(--teal,#2A7C6F);border-radius:6px;font-size:0.9rem;color:var(--charcoal,#1A1A1A);cursor:default;">' +
+        '\uD83C\uDFF7\uFE0F ' + esc(code) + ' \u2014 ' + esc(valStr) + '</div>';
+    });
     return html;
   }
 
@@ -430,6 +440,10 @@
     var html = editable.innerHTML || '';
     html = html.replace(/<span[^>]*class="blog-img-marker"[^>]*data-image="(\d+)"[^>]*>[^<]*<\/span>/gi, function(match, num) {
       return '[Image ' + num + ']';
+    });
+    // Convert coupon markers to placeholder
+    html = html.replace(/<div[^>]*class="blog-coupon-marker"[^>]*data-coupon-code="([^"]+)"[^>]*>[^<]*<\/div>/gi, function(match, code) {
+      return '[Coupon:' + code + ']';
     });
     html = html.replace(/<(div|p)><br\s*\/?><\/(div|p)>/gi, '<p><br></p>');
     if (html === '<br>' || html === '<div><br></div>') html = '';
@@ -726,6 +740,73 @@
     }).catch(function(err) { showToast('Error inserting image: ' + err.message, true); });
   }
 
+  // ===== COUPON INSERT =====
+
+  function blogInsertCoupon() {
+    var allCoupons = window.coupons || {};
+    var codes = Object.keys(allCoupons);
+    if (codes.length === 0) {
+      showToast('No coupons found. Create coupons in the Coupons tab first.', true);
+      return;
+    }
+    // Filter to active coupons only
+    var activeCodes = codes.filter(function(code) {
+      return getCouponEffectiveStatus(allCoupons[code]) === 'active';
+    });
+    if (activeCodes.length === 0) {
+      showToast('No active coupons available.', true);
+      return;
+    }
+    var listHtml = '';
+    for (var i = 0; i < activeCodes.length; i++) {
+      var code = activeCodes[i];
+      var c = allCoupons[code];
+      var valStr = c.type === 'percent' ? c.value + '% off' : '$' + (c.value || 0).toFixed(2) + ' off';
+      listHtml += '<div data-coupon-code="' + esc(code) + '" style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid var(--cream-dark,#F0E8DB);border-radius:6px;cursor:pointer;transition:background 0.15s;" ' +
+        'onmouseover="this.style.background=\'rgba(42,124,111,0.06)\'" onmouseout="this.style.background=\'transparent\'" ' +
+        'onclick="blogFinishInsertCoupon(this.dataset.couponCode)">' +
+        '<div><span style="font-family:monospace;font-weight:600;">' + esc(code) + '</span>' +
+        (c.description ? '<div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(c.description) + '</div>' : '') +
+        '</div>' +
+        '<span style="color:var(--teal);font-weight:600;">' + esc(valStr) + '</span>' +
+        '</div>';
+    }
+    var html = '<div class="modal-header"><h3>Insert Coupon</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>' +
+      '<div class="modal-body"><p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">Select a coupon to embed in your blog post:</p>' +
+      '<div style="display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;">' + listHtml + '</div></div>';
+    openModal(html);
+  }
+
+  function blogFinishInsertCoupon(code) {
+    closeModal();
+    if (!blogCurrentPost || !code) return;
+    var allCoupons = window.coupons || {};
+    var c = allCoupons[code];
+    if (!c) return;
+    var valStr = c.type === 'percent' ? c.value + '% off' : '$' + (c.value || 0).toFixed(2) + ' off';
+    var editable = document.getElementById('blogBodyEditable');
+    if (editable) {
+      editable.focus();
+      var markerHtml = '<br><div class="blog-coupon-marker" data-coupon-code="' + esc(code) + '" contenteditable="false" ' +
+        'style="display:inline-block;padding:8px 14px;margin:4px 0;background:rgba(42,124,111,0.08);border:1px dashed var(--teal,#2A7C6F);border-radius:6px;font-size:0.9rem;color:var(--charcoal,#1A1A1A);cursor:default;">' +
+        '\uD83C\uDFF7\uFE0F ' + esc(code) + ' \u2014 ' + esc(valStr) +
+        '</div><br>';
+      document.execCommand('insertHTML', false, markerHtml);
+    }
+    // Save
+    var body = blogSaveBodyFromEditor();
+    blogCurrentPost.body = body;
+    blogCurrentPost.updatedAt = new Date().toISOString();
+    MastDB.blog.posts.ref(blogCurrentPostId).update({
+      body: body,
+      updatedAt: blogCurrentPost.updatedAt
+    }).catch(function(err) { showToast('Error inserting coupon: ' + err.message, true); });
+  }
+
+  // Make functions accessible from modal onclick
+  window.blogInsertCoupon = blogInsertCoupon;
+  window.blogFinishInsertCoupon = blogFinishInsertCoupon;
+
   function blogEditCaption(idx) {
     if (!blogCurrentPost) return;
     var inlineImages = blogCurrentPost.inlineImages || [];
@@ -865,6 +946,21 @@
         html = html.replace('[IMG:' + img.markerId + ']', imgTag);
       }
     });
+
+    // Render coupon embeds using shared renderer
+    if (window.MastCouponCard) {
+      html = html.replace(/\[Coupon:([^\]]+)\]/g, function(match, code) {
+        var allCoupons = window.coupons || {};
+        var c = allCoupons[code];
+        if (c) {
+          return window.MastCouponCard.renderHtml(
+            Object.assign({}, c, { code: code, _code: code }),
+            { showCta: true, source: 'blog' }
+          );
+        }
+        return match; // leave placeholder if coupon not found
+      });
+    }
     return html;
   }
 

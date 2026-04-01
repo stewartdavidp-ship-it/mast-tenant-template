@@ -30,7 +30,8 @@
     'behind-process':  { cardSize: 'large',  gridWidth: 2 },
     'featured-piece':  { cardSize: 'large',  gridWidth: 2 },
     'from-studio':     { cardSize: 'large',  gridWidth: 2 },
-    'custom':          { cardSize: 'medium', gridWidth: 1 }
+    'custom':          { cardSize: 'medium', gridWidth: 1 },
+    'coupon':          { cardSize: 'medium', gridWidth: 1 }
   };
 
   var NL_CHAR_LIMITS = {
@@ -266,6 +267,24 @@
           '</div>';
         if (isExpanded) {
           html += '<div class="nl-section-body">';
+          // Coupon section — show picker/preview instead of textarea
+          if (sec.type === 'coupon') {
+            if (sec.couponCode && window.MastCouponCard) {
+              var allCouponsNl = window.coupons || {};
+              var couponDataNl = allCouponsNl[sec.couponCode];
+              if (couponDataNl) {
+                html += window.MastCouponCard.renderHtml(Object.assign({}, couponDataNl, { code: sec.couponCode, _code: sec.couponCode }), { showCta: false });
+              } else {
+                html += '<div style="padding:16px;text-align:center;color:var(--warm-gray);">Coupon "' + esc(sec.couponCode) + '" not found</div>';
+              }
+            } else {
+              html += '<div style="padding:16px;text-align:center;color:var(--warm-gray);">No coupon selected</div>';
+            }
+            html += '<div style="margin-top:8px;"><button class="btn btn-outline" style="font-size:0.8rem;" onclick="nlPickCouponForSection(\'' + sec.id + '\')">' +
+              (sec.couponCode ? 'Change Coupon' : 'Select Coupon') + '</button></div>';
+            html += '</div></div>';
+            return; // skip rest of section rendering in forEach
+          }
           if (sec.guidedPrompt) html += '<div class="nl-section-prompt">' + sec.guidedPrompt + '</div>';
           if (aiResult && !sec.finalContent) {
             html += '<div class="nl-ai-compare">' +
@@ -392,7 +411,7 @@
 
     // Add section button
     html += '<div style="text-align:center;margin:16px 0;">' +
-      '<button class="btn btn-outline" onclick="nlAddSection()">+ Add Section</button></div>';
+      '<button class="btn btn-outline" onclick="nlShowAddSectionMenu()">+ Add Section</button></div>';
 
     // Actions bar
     html += '<div class="nl-compose-actions">' +
@@ -832,17 +851,19 @@
   }
 
   // Add custom section
-  async function nlAddSection() {
+  async function nlAddSection(sectionType) {
     if (!nlCurrentIssue) return;
+    var type = sectionType || 'custom';
     var secId = MastDB._newRootKey();
     var sections = nlCurrentIssue.sections ? Object.values(nlCurrentIssue.sections) : [];
     var maxOrder = sections.reduce(function(m, s) { return Math.max(m, s.order || 0); }, -1);
-    var sizeInfo = NL_CARD_SIZE_MAP['custom'];
+    var sizeInfo = NL_CARD_SIZE_MAP[type] || NL_CARD_SIZE_MAP['custom'];
     var newSec = {
-      id: secId, type: 'custom', title: 'New Section', guidedPrompt: '',
+      id: secId, type: type, title: type === 'coupon' ? 'Special Offer' : 'New Section', guidedPrompt: '',
       rawInput: '', aiVersion: null, finalContent: '', usedAI: false,
       images: [], order: maxOrder + 1, included: true,
-      cardSize: sizeInfo.cardSize, gridWidth: sizeInfo.gridWidth, gridCol: 0, gridRow: 0
+      cardSize: sizeInfo.cardSize, gridWidth: sizeInfo.gridWidth, gridCol: 0, gridRow: 0,
+      couponCode: null
     };
     if (!nlCurrentIssue.sections) nlCurrentIssue.sections = {};
     nlCurrentIssue.sections[secId] = newSec;
@@ -854,6 +875,58 @@
       renderNLCompose();
     } catch (err) { showToast('Error adding section: ' + err.message, true); }
   }
+
+  function nlShowAddSectionMenu() {
+    var html = '<div class="modal-header"><h3>Add Section</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>' +
+      '<div class="modal-body"><div style="display:flex;flex-direction:column;gap:8px;">' +
+      '<button class="btn btn-secondary" onclick="closeModal();nlAddSection(\'custom\')" style="text-align:left;padding:12px 16px;">\u270D\uFE0F Custom Section</button>' +
+      '<button class="btn btn-secondary" onclick="closeModal();nlAddSection(\'coupon\')" style="text-align:left;padding:12px 16px;">\uD83C\uDFF7\uFE0F Coupon Embed</button>' +
+      '</div></div>';
+    openModal(html);
+  }
+
+  async function nlPickCouponForSection(secId) {
+    var allCoupons = window.coupons || {};
+    var codes = Object.keys(allCoupons).filter(function(code) {
+      return getCouponEffectiveStatus(allCoupons[code]) === 'active';
+    });
+    if (codes.length === 0) { showToast('No active coupons. Create coupons in the Coupons tab first.', true); return; }
+    var listHtml = '';
+    codes.forEach(function(code) {
+      var c = allCoupons[code];
+      var valStr = c.type === 'percent' ? c.value + '% off' : '$' + (c.value || 0).toFixed(2) + ' off';
+      listHtml += '<div data-coupon-code="' + esc(code) + '" data-sec-id="' + esc(secId) + '" ' +
+        'style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid var(--cream-dark);border-radius:6px;cursor:pointer;transition:background 0.15s;" ' +
+        'onmouseover="this.style.background=\'rgba(42,124,111,0.06)\'" onmouseout="this.style.background=\'transparent\'" ' +
+        'onclick="nlSetSectionCoupon(this.dataset.secId,this.dataset.couponCode)">' +
+        '<span style="font-family:monospace;font-weight:600;">' + esc(code) + '</span>' +
+        '<span style="color:var(--teal);font-weight:600;">' + esc(valStr) + '</span></div>';
+    });
+    var html = '<div class="modal-header"><h3>Select Coupon</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>' +
+      '<div class="modal-body"><div style="display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;">' + listHtml + '</div></div>';
+    openModal(html);
+  }
+
+  async function nlSetSectionCoupon(secId, code) {
+    closeModal();
+    if (!nlCurrentIssue || !nlCurrentIssue.sections || !nlCurrentIssue.sections[secId]) return;
+    var sec = nlCurrentIssue.sections[secId];
+    sec.couponCode = code;
+    sec.finalContent = '[Coupon:' + code + ']';
+    sec.updatedAt = new Date().toISOString();
+    try {
+      await MastDB.newsletter.issues.section(nlCurrentIssueId, secId).update({
+        couponCode: code,
+        finalContent: '[Coupon:' + code + ']',
+        updatedAt: sec.updatedAt
+      });
+      renderNLCompose();
+    } catch (err) { showToast('Error setting coupon: ' + err.message, true); }
+  }
+
+  window.nlShowAddSectionMenu = nlShowAddSectionMenu;
+  window.nlPickCouponForSection = nlPickCouponForSection;
+  window.nlSetSectionCoupon = nlSetSectionCoupon;
 
   // Image picker
   function nlOpenImagePicker(secId) {
@@ -917,6 +990,22 @@
   }
 
   // ===== HTML EXPORT =====
+  function nlRenderSectionContentForExport(sec) {
+    // For coupon sections, render the email-safe coupon card
+    if (sec.type === 'coupon' && sec.couponCode && window.MastCouponCard) {
+      var allCoupons = window.coupons || {};
+      var c = allCoupons[sec.couponCode];
+      if (c) {
+        return window.MastCouponCard.renderHtml(
+          Object.assign({}, c, { code: sec.couponCode, _code: sec.couponCode }),
+          { emailSafe: true, showCta: true, source: 'newsletter' }
+        );
+      }
+    }
+    var content = sec.finalContent || sec.rawInput || '';
+    return '<p style="font-size:15px;line-height:1.7;color:#444;margin:0;">' + content.replace(/\n/g, '<br>') + '</p>';
+  }
+
   function nlExportHTML() {
     if (!nlCurrentIssue) return;
     if (!nlCurrentIssue.title || !nlCurrentIssue.title.trim()) { showToast('Add an issue title before exporting', true); return; }
@@ -929,7 +1018,8 @@
     var rows = [], currentRow = [], currentRowCols = 0;
     sections.forEach(function(sec) {
       var content = sec.finalContent || sec.rawInput || '';
-      if (!content.trim()) return;
+      if (sec.type !== 'coupon' && !content.trim()) return;
+      if (sec.type === 'coupon' && !sec.couponCode) return;
       var width = sec.gridWidth || 1;
       if (currentRowCols + width > 2) {
         if (currentRow.length > 0) rows.push(currentRow);
@@ -946,7 +1036,7 @@
         var content = sec.finalContent || sec.rawInput || '';
         sectionsHtml += '<tr><td style="padding:0 30px 30px;">' +
           '<h2 style="font-family:\'Cormorant Garamond\',Georgia,serif;font-size:22px;color:#2C2C2C;margin:0 0 12px;font-weight:600;">' + nlEscHtml(sec.title) + '</h2>' +
-          '<p style="font-size:15px;line-height:1.7;color:#444;margin:0;">' + content.replace(/\n/g, '<br>') + '</p>';
+          nlRenderSectionContentForExport(sec);
         (sec.images || []).forEach(function(imgId) {
           var img = imageLibrary ? imageLibrary[imgId] : null;
           if (img) sectionsHtml += '<img src="' + img.url + '" alt="' + (img.alt || '') + '" style="max-width:100%;height:auto;border-radius:4px;margin-top:16px;" />';
@@ -957,7 +1047,7 @@
         var content = sec.finalContent || sec.rawInput || '';
         sectionsHtml += '<tr><td style="padding:0 30px 30px;">' +
           '<h2 style="font-family:\'Cormorant Garamond\',Georgia,serif;font-size:22px;color:#2C2C2C;margin:0 0 12px;font-weight:600;">' + nlEscHtml(sec.title) + '</h2>' +
-          '<p style="font-size:15px;line-height:1.7;color:#444;margin:0;">' + content.replace(/\n/g, '<br>') + '</p>';
+          nlRenderSectionContentForExport(sec);
         (sec.images || []).forEach(function(imgId) {
           var img = imageLibrary ? imageLibrary[imgId] : null;
           if (img) sectionsHtml += '<img src="' + img.url + '" alt="' + (img.alt || '') + '" style="max-width:100%;height:auto;border-radius:4px;margin-top:16px;" />';
@@ -969,7 +1059,7 @@
           var content = sec.finalContent || sec.rawInput || '';
           sectionsHtml += '<td style="width:50%;vertical-align:top;' + (idx > 0 ? 'padding-left:15px;' : 'padding-right:15px;') + '">' +
             '<h2 style="font-family:\'Cormorant Garamond\',Georgia,serif;font-size:18px;color:#2C2C2C;margin:0 0 8px;font-weight:600;">' + nlEscHtml(sec.title) + '</h2>' +
-            '<p style="font-size:14px;line-height:1.6;color:#444;margin:0;">' + content.replace(/\n/g, '<br>') + '</p>';
+            nlRenderSectionContentForExport(sec);
           (sec.images || []).forEach(function(imgId) {
             var img = imageLibrary ? imageLibrary[imgId] : null;
             if (img) sectionsHtml += '<img src="' + img.url + '" alt="' + (img.alt || '') + '" style="max-width:100%;height:auto;border-radius:4px;margin-top:12px;" />';
