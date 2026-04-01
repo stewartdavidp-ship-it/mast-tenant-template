@@ -2568,8 +2568,12 @@
     link.style.display = 'none';
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(link.href);
+    // Delay cleanup — Safari can open a new tab if the element is removed
+    // before the browser finishes processing the programmatic click.
+    setTimeout(function() {
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
+    }, 100);
   }
 
   function watchOrderAndDownloadCSV(orderId, pendingOrder) {
