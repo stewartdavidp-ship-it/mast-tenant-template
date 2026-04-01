@@ -517,6 +517,11 @@
 
       document.title = cls.name + ' \u2014 ' + (window.TENANT_TITLE_SUFFIX ? TENANT_TITLE_SUFFIX() : 'Studio');
       renderDetail(cls, sessions);
+
+      // Schema.org structured data
+      if (window.MastSchema) {
+        MastSchema.inject(MastSchema.courseWithSessions(cls, sessions));
+      }
     }).catch(function(err) {
       console.error('[class-detail] Load failed:', err);
       document.getElementById('classDetailContainer').innerHTML =
@@ -1112,6 +1117,7 @@
 })();
 </script>
 <script src="cart.js"></script>
+<script src="schema-org.js"></script>
 <script defer src="checkout.js?v=2"></script>
 <script defer src="feedback-widget.js"></script>
 <script defer src="share-widget.js"></script>

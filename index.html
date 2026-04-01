@@ -1634,6 +1634,9 @@ window.TENANT_READY.then(function() {
     return d.getDate().toString();
   }
 
+  // Schema.org structured data (Organization)
+  if (window.MastSchema) MastSchema.inject(MastSchema.organization());
+
   // ---- IMAGES (all sections from one query) ----
   db.ref(TENANT_ID + '/public/gallery').orderByChild('order').once('value').then(function(snap) {
     const data = snap.val();
@@ -2202,6 +2205,7 @@ window.submitContactForm = function() {
 }).catch(function(err) { console.error('[index] Contact form init failed:', err.message); });
 </script>
 <script src="cart.js"></script>
+<script src="schema-org.js"></script>
 <script defer src="checkout.js?v=2"></script>
 
 <!-- Auth handled by cart.js (siteSignIn / siteSignOut / ensureCustomerAccount / nav UI) -->

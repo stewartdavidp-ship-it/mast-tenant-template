@@ -551,6 +551,11 @@
       }).sort(function(a, b) { return (a.sortOrder || 0) - (b.sortOrder || 0); });
 
       if (passes.length > 0) renderPasses(passes);
+      // Schema.org structured data
+      if (window.MastSchema) {
+        MastSchema.inject(MastSchema.organization());
+        MastSchema.injectAll(MastSchema.courseList(allClasses));
+      }
     }).catch(function(err) {
       console.error('[classes] Failed to load:', err);
       document.getElementById('classesGrid').innerHTML = '<div class="classes-empty"><p>Unable to load classes.</p></div>';
@@ -683,6 +688,7 @@
 })();
 </script>
 <script src="cart.js"></script>
+<script src="schema-org.js"></script>
 <script defer src="checkout.js?v=2"></script>
 <script defer src="feedback-widget.js"></script>
 <script defer src="share-widget.js"></script>

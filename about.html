@@ -517,6 +517,9 @@
       }
     }).catch(function() {});
 
+    // Schema.org structured data
+    if (window.MastSchema) MastSchema.inject(MastSchema.organization());
+
     // Load about images from gallery
     db.ref(TENANT_ID + '/public/gallery').orderByChild('order').once('value').then(function(snap) {
       var data = snap.val();
@@ -595,6 +598,7 @@ window.TENANT_READY.then(function() {
 }).catch(function(err) { console.error('[about] Analytics failed:', err.message); });
 </script>
 <script src="cart.js"></script>
+<script src="schema-org.js"></script>
 <script defer src="checkout.js?v=2"></script>
 
 <!-- Auth handled by cart.js (siteSignIn / siteSignOut / ensureCustomerAccount / nav UI) -->

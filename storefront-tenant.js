@@ -75,7 +75,12 @@ window.TENANT_READY = new Promise(function(resolve, reject) {
     TENANT_BRAND = {
       name: publicConfig.brandName || publicConfig.name,
       tagline: publicConfig.brandTagline || '',
-      domain: publicConfig.domain || ''
+      domain: publicConfig.domain || '',
+      description: publicConfig.brandDescription || '',
+      location: publicConfig.brandLocation || '',
+      contactEmail: publicConfig.contactEmail || publicConfig.ownerEmail || '',
+      instagramUrl: publicConfig.instagramUrl || '',
+      etsyUrl: publicConfig.etsyUrl || ''
     };
 
     // Platform-level Google Maps API key for checkout address autocomplete
