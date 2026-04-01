@@ -284,6 +284,7 @@
     h += '<div id="teamAddFormInner"></div>';
     h += '</div>';
 
+    h += '<div id="teamRosterCards">';
     if (active.length === 0) {
       h += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">';
       h += '<div style="font-size:2rem;margin-bottom:12px;">\ud83d\udc65</div>';
@@ -293,6 +294,7 @@
     } else {
       active.forEach(function(emp) { h += renderEmployeeCard(emp); });
     }
+    h += '</div>';
     return h;
   }
 
@@ -1112,6 +1114,10 @@
     innerEl.innerHTML = h;
     formEl.style.display = '';
 
+    // Hide roster cards while form is open
+    var cards = document.getElementById('teamRosterCards');
+    if (cards) cards.style.display = 'none';
+
     // Toggle termination date visibility
     var statusSel = document.getElementById('teamEmpStatus');
     if (statusSel) {
@@ -1219,6 +1225,8 @@
   window.teamCancelAddForm = function() {
     var el = document.getElementById('teamAddForm');
     if (el) el.style.display = 'none';
+    var cards = document.getElementById('teamRosterCards');
+    if (cards) cards.style.display = '';
     editingEmployeeId = null;
   };
   window.teamLogHours = function(empId) { openLogHoursForm(empId); };
