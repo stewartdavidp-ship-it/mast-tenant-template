@@ -81,7 +81,10 @@
     completed: { bg: 'rgba(6,95,70,0.25)',   color: '#4DB6AC', border: 'rgba(6,95,70,0.4)' },
     confirmed: { bg: 'rgba(6,95,70,0.25)',   color: '#4DB6AC', border: 'rgba(6,95,70,0.4)' },
     waitlisted: { bg: 'rgba(146,64,14,0.2)', color: '#FFD54F', border: 'rgba(146,64,14,0.35)' },
-    'no-show':  { bg: 'rgba(183,28,28,0.2)', color: '#EF9A9A', border: 'rgba(183,28,28,0.35)' }
+    'no-show':  { bg: 'rgba(183,28,28,0.2)', color: '#EF9A9A', border: 'rgba(183,28,28,0.35)' },
+    'checked-in': { bg: 'rgba(6,95,70,0.25)',   color: '#4DB6AC', border: 'rgba(6,95,70,0.4)' },
+    'attended-pending-waiver': { bg: 'rgba(146,64,14,0.2)', color: '#FFD54F', border: 'rgba(146,64,14,0.35)' },
+    'incomplete': { bg: 'rgba(230,81,0,0.2)',   color: '#FF8A65', border: 'rgba(230,81,0,0.35)' }
   };
 
   var SEVERITY_BADGE_COLORS = {
@@ -450,13 +453,7 @@
           '<td><span style="' + badgeStyle(STATUS_BADGE_COLORS, s.status) + '">' + esc(s.status) + '</span></td>' +
           '<td><div class="event-actions">' +
           '<button class="btn-icon" onclick="window._bookAssignSession(\'' + esc(s.id) + '\',\'' + esc(cls.id) + '\')" title="Assign Instructor/Resource">&#128100;</button>' +
-          '<button class="btn-icon" onclick="window._bookViewSessionEnrollments(\'' + esc(s.id) + '\',\'' + esc(cls.id) + '\')" title="View Enrollments">&#128203;</button>';
-        if (s.status === 'scheduled') {
-          sessHtml += '<button class="btn-icon" onclick="window._bookSessionChecklist(\'' + esc(s.id) + '\',\'' + esc(cls.id) + '\')" title="Startup Checklist">&#9745;</button>';
-        }
-        if (s.status === 'scheduled' && isPast) {
-          sessHtml += '<button class="btn-icon" onclick="window._bookSessionReport(\'' + esc(s.id) + '\',\'' + esc(cls.id) + '\')" title="Completion Report">&#128221;</button>';
-        }
+          '<button class="btn-icon" onclick="window._bookManageSession(\'' + esc(s.id) + '\',\'' + esc(cls.id) + '\')" title="Manage Session">&#128203;</button>';
         if (s.status === 'scheduled' && !isPast) {
           sessHtml += '<button class="btn-icon danger" onclick="window._bookCancelSession(\'' + esc(s.id) + '\')" title="Cancel Session">&#10006;</button>';
         }
@@ -2083,13 +2080,15 @@
   window._bookCheckCancellations = function() { checkAutoCancellation(); };
 
   // ============================================================
-  // Session Operations — Startup Checklist & Completion Report
+  // Session Lifecycle — Check-In, Start, Close-Out
   // ============================================================
 
   var INCIDENT_TYPES = ['equipment_damage', 'safety', 'conduct', 'medical'];
   var INCIDENT_SEVERITIES = ['low', 'medium', 'high', 'critical'];
   var INCIDENT_TYPE_LABELS = { equipment_damage: 'Equipment Damage', safety: 'Safety', conduct: 'Conduct', medical: 'Medical' };
   var SEVERITY_COLORS = { low: '#4DB6AC', medium: '#FFD54F', high: '#FF8A65', critical: '#EF9A9A' };
+  var WAIVER_STATUSES = ['na', 'signed', 'missing', 'expired'];
+  var CLOSEOUT_STATUSES = ['completed', 'incomplete', 'no-show'];
   var opsSessionId = null;
   var opsClassId = null;
 
@@ -2098,9 +2097,9 @@
     else { loadClasses(); switchSubTab('classes'); }
   };
 
-  // --- Startup Checklist ---
+  // --- Manage Session (Enrollment Lifecycle) ---
 
-  window._bookSessionChecklist = async function(sessionId, classId) {
+  window._bookManageSession = async function(sessionId, classId) {
     opsSessionId = sessionId;
     opsClassId = classId;
     hideAllViews();
@@ -2110,416 +2109,304 @@
     content.innerHTML = LOADING_HTML;
 
     try {
-      var [sessSnap, clsSnap, enrollSnap, logSnap] = await Promise.all([
+      var [sessSnap, clsSnap, enrollSnap] = await Promise.all([
         MastDB.classSessions.get(sessionId),
         MastDB.classes.get(classId),
-        MastDB.enrollments.bySession(sessionId),
-        MastDB.sessionLogs.startup(sessionId).once('value')
+        MastDB.enrollments.bySession(sessionId)
       ]);
 
       var session = sessSnap.val() || {};
       var cls = clsSnap.val() || {};
       var enrollments = enrollSnap.val() || {};
-      var saved = logSnap.val() || {};
-
-      document.getElementById('sessionOpsTitle').textContent =
-        'Startup Checklist — ' + (cls.name || 'Class') + ' (' + formatDate(session.date) + ')';
-
-      // Get confirmed enrollments
-      var students = Object.keys(enrollments).map(function(id) {
-        var e = enrollments[id]; e._id = id; return e;
-      }).filter(function(e) { return e.status === 'confirmed'; });
-
-      // Get assigned resources
-      var resources = [];
-      if (session.resourceId) {
-        var resSnap = await MastDB.resources.get(session.resourceId);
-        var res = resSnap.val();
-        if (res) { res._id = session.resourceId; resources.push(res); }
-      }
-
-      var html = '<form id="startupChecklistForm">';
-
-      // ── Student Roster ──
-      html += '<div class="book-form-section">';
-      html += '<div class="book-form-section-title">Student Roster <span style="font-weight:400;color:var(--warm-gray);text-transform:none;letter-spacing:0;">(' + students.length + ')</span></div>';
-      if (students.length === 0) {
-        html += '<p style="color:var(--warm-gray);text-align:center;">No confirmed enrollments.</p>';
-      } else {
-        html += '<table class="data-table"><thead><tr><th>Student</th><th>Check-in</th><th>Waiver</th></tr></thead><tbody>';
-        students.forEach(function(s) {
-          var savedStudent = (saved.students && saved.students[s._id]) || {};
-          var checkedIn = savedStudent.checkedIn || false;
-          var waiverStatus = savedStudent.waiverStatus || 'na';
-          var waiverWarning = (waiverStatus === 'missing' || waiverStatus === 'expired')
-            ? ' <span style="color:' + WARNING_COLOR + ';font-size:0.75rem;">&#9888; ' + waiverStatus + '</span>' : '';
-
-          html += '<tr>' +
-            '<td><strong>' + esc(s.studentName || s.customerName || '—') + '</strong></td>' +
-            '<td><label class="book-check"><input type="checkbox" name="checkin_' + esc(s._id) + '" ' + (checkedIn ? 'checked' : '') + '> Checked in</label></td>' +
-            '<td><select name="waiver_' + esc(s._id) + '" class="form-input" style="width:auto;padding:6px 10px;">' +
-            '<option value="na"' + (waiverStatus === 'na' ? ' selected' : '') + '>N/A</option>' +
-            '<option value="signed"' + (waiverStatus === 'signed' ? ' selected' : '') + '>Signed</option>' +
-            '<option value="missing"' + (waiverStatus === 'missing' ? ' selected' : '') + '>Missing</option>' +
-            '<option value="expired"' + (waiverStatus === 'expired' ? ' selected' : '') + '>Expired</option>' +
-            '</select>' + waiverWarning + '</td></tr>';
-        });
-        html += '</tbody></table>';
-      }
-      html += '</div>';
-
-      // ── Equipment ──
-      html += '<div class="book-form-section">';
-      html += '<div class="book-form-section-title">Equipment &amp; Resources</div>';
-      if (resources.length === 0) {
-        html += '<p style="color:var(--warm-gray);text-align:center;">No resources assigned.</p>';
-      } else {
-        resources.forEach(function(r) {
-          var savedEquip = (saved.equipment && saved.equipment[r._id]) || {};
-          html += '<div style="' + CARD_STYLE + 'margin-bottom:8px;">' +
-            '<strong>' + esc(r.name) + '</strong> <span style="color:var(--warm-gray);font-size:0.8rem;">(' + esc(r.type) + ')</span>' +
-            '<div style="display:flex;gap:12px;margin-top:8px;align-items:center;">' +
-            '<select name="equip_' + esc(r._id) + '" class="form-input" style="width:auto;padding:6px 10px;">' +
-            '<option value="good"' + (savedEquip.condition === 'good' ? ' selected' : '') + '>Good</option>' +
-            '<option value="needs_attention"' + ((savedEquip.condition === 'needs_attention') ? ' selected' : '') + '>Needs Attention</option>' +
-            '<option value="out_of_service"' + ((savedEquip.condition === 'out_of_service') ? ' selected' : '') + '>Out of Service</option>' +
-            '</select>' +
-            '<input type="text" name="equip_notes_' + esc(r._id) + '" class="form-input" placeholder="Notes..." value="' + esc(savedEquip.notes || '') + '" style="flex:1;">' +
-            '</div></div>';
-        });
-      }
-      html += '</div>';
-
-      // ── Room / Space ──
-      html += '<div class="book-form-section">';
-      html += '<div class="book-form-section-title">Room / Space</div>';
-      html += '<label class="book-check"><input type="checkbox" name="roomConfirmed" ' + (saved.roomConfirmed ? 'checked' : '') + '> Room / space confirmed ready</label>';
-      html += '</div>';
-
-      // ── Instructor Notes ──
-      html += '<div class="book-form-section">';
-      html += '<div class="book-form-section-title">Instructor Notes</div>';
-      html += '<textarea name="instructorNotes" class="form-input" rows="3" placeholder="Any notes for this session...">' + esc(saved.instructorNotes || '') + '</textarea>';
-      html += '</div>';
-
-      // Buttons
-      html += '<div class="book-form-actions">' +
-        '<button type="button" class="btn btn-primary" onclick="window._bookSaveChecklist(\'' + esc(sessionId) + '\', false)">Save Draft</button>' +
-        '<button type="button" class="btn btn-primary" style="background:' + SUCCESS_COLOR + ';" onclick="window._bookSaveChecklist(\'' + esc(sessionId) + '\', true)">Complete Checklist</button>' +
-        '</div>';
-
-      if (saved.completedAt) {
-        html += '<p style="color:' + SUCCESS_COLOR + ';margin-top:12px;font-size:0.85rem;">&#10003; Checklist completed ' + new Date(saved.completedAt).toLocaleString() + '</p>';
-      }
-
-      html += '</form>';
-      content.innerHTML = html;
-    } catch (err) {
-      console.error('[book] Failed to load checklist:', err);
-      content.innerHTML = '<p style="color:' + DANGER_COLOR + ';">Failed to load checklist: ' + esc(err.message) + '</p>';
-    }
-  };
-
-  window._bookSaveChecklist = async function(sessionId, markComplete) {
-    var form = document.getElementById('startupChecklistForm');
-    if (!form) return;
-
-    var data = { students: {}, equipment: {} };
-
-    // Collect student check-ins and waivers
-    form.querySelectorAll('input[name^="checkin_"]').forEach(function(el) {
-      var enrollId = el.name.replace('checkin_', '');
-      if (!data.students[enrollId]) data.students[enrollId] = {};
-      data.students[enrollId].checkedIn = el.checked;
-    });
-    form.querySelectorAll('select[name^="waiver_"]').forEach(function(el) {
-      var enrollId = el.name.replace('waiver_', '');
-      if (!data.students[enrollId]) data.students[enrollId] = {};
-      data.students[enrollId].waiverStatus = el.value;
-    });
-
-    // Collect equipment
-    form.querySelectorAll('select[name^="equip_"]').forEach(function(el) {
-      if (el.name.indexOf('equip_notes_') === 0) return;
-      var resId = el.name.replace('equip_', '');
-      if (!data.equipment[resId]) data.equipment[resId] = {};
-      data.equipment[resId].condition = el.value;
-    });
-    form.querySelectorAll('input[name^="equip_notes_"]').forEach(function(el) {
-      var resId = el.name.replace('equip_notes_', '');
-      if (!data.equipment[resId]) data.equipment[resId] = {};
-      data.equipment[resId].notes = el.value;
-    });
-
-    data.roomConfirmed = form.querySelector('input[name="roomConfirmed"]').checked;
-    data.instructorNotes = form.querySelector('textarea[name="instructorNotes"]').value;
-
-    if (markComplete) {
-      data.completedAt = new Date().toISOString();
-      data.completedBy = firebase.auth().currentUser ? firebase.auth().currentUser.uid : null;
-    }
-
-    try {
-      await MastDB.sessionLogs.startup(sessionId).set(data);
-      MastAdmin.showToast(markComplete ? 'Checklist completed' : 'Checklist saved');
-      if (markComplete) window._bookSessionChecklist(sessionId, opsClassId);
-    } catch (err) {
-      MastAdmin.showToast('Failed to save: ' + err.message, true);
-    }
-  };
-
-  // --- Completion Report ---
-
-  window._bookSessionReport = async function(sessionId, classId) {
-    opsSessionId = sessionId;
-    opsClassId = classId;
-    hideAllViews();
-    document.getElementById('bookSessionOpsView').style.display = '';
-
-    var content = document.getElementById('sessionOpsContent');
-    content.innerHTML = LOADING_HTML;
-
-    try {
-      var [sessSnap, clsSnap, enrollSnap, logSnap, startupSnap] = await Promise.all([
-        MastDB.classSessions.get(sessionId),
-        MastDB.classes.get(classId),
-        MastDB.enrollments.bySession(sessionId),
-        MastDB.sessionLogs.completion(sessionId).once('value'),
-        MastDB.sessionLogs.startup(sessionId).once('value')
-      ]);
-
-      var session = sessSnap.val() || {};
-      var cls = clsSnap.val() || {};
-      var enrollments = enrollSnap.val() || {};
-      var saved = logSnap.val() || {};
-      var startup = startupSnap.val() || {};
-
-      document.getElementById('sessionOpsTitle').textContent =
-        'Completion Report — ' + (cls.name || 'Class') + ' (' + formatDate(session.date) + ')';
 
       var students = Object.keys(enrollments).map(function(id) {
         var e = enrollments[id]; e._id = id; return e;
-      }).filter(function(e) { return e.status === 'confirmed' || e.status === 'completed' || e.status === 'no-show'; });
+      }).filter(function(e) { return e.status !== 'cancelled'; });
 
-      // Get resources
-      var resources = [];
-      if (session.resourceId) {
-        var resSnap = await MastDB.resources.get(session.resourceId);
-        var res = resSnap.val();
-        if (res) { res._id = session.resourceId; resources.push(res); }
-      }
+      students.sort(function(a, b) { return (a.customerName || '').localeCompare(b.customerName || ''); });
 
-      // Load existing incidents
-      var incSnap = await MastDB.sessionLogs.incidents(sessionId).once('value');
-      var existingIncidents = [];
-      var incData = incSnap.val() || {};
-      Object.keys(incData).forEach(function(incId) {
-        var inc = incData[incId]; inc._id = incId;
-        existingIncidents.push(inc);
-      });
+      // Determine session phase
+      var isStarted = !!session.classStartedAt;
+      var isClosed = session.status === 'completed';
+      var checkedInCount = students.filter(function(s) { return s.status === 'checked-in'; }).length;
+      var closedOutCount = students.filter(function(s) { return ['completed', 'incomplete', 'no-show', 'attended-pending-waiver'].indexOf(s.status) !== -1; }).length;
+      var confirmedCount = students.filter(function(s) { return s.status === 'confirmed'; }).length;
 
-      var html = '<form id="completionReportForm">';
+      var phaseLabel = isClosed ? 'Completed' : isStarted ? 'In Progress' : 'Check-In';
 
-      // ── Attendance ──
-      html += '<div class="book-form-section">';
-      html += '<div class="book-form-section-title">Attendance</div>';
+      document.getElementById('sessionOpsTitle').textContent =
+        esc(cls.name || 'Class') + ' \u2014 ' + formatDate(session.date) + ' ' + formatTime(session.startTime);
+
+      var html = '';
+
+      // ── Phase indicator ──
+      html += '<div style="display:flex;gap:12px;align-items:center;margin-bottom:1.5rem;">';
+      html += '<span style="' + badgeStyle(STATUS_BADGE_COLORS, isClosed ? 'completed' : isStarted ? 'active' : 'scheduled') + 'font-size:0.85rem;padding:4px 12px;">' + phaseLabel + '</span>';
+      if (session.instructorName) html += '<span style="font-size:0.85rem;color:var(--warm-gray);">Instructor: ' + esc(session.instructorName) + '</span>';
+      if (session.resourceName) html += '<span style="font-size:0.85rem;color:var(--warm-gray);">Room: ' + esc(session.resourceName) + '</span>';
+      html += '<span style="font-size:0.85rem;color:var(--warm-gray);margin-left:auto;">' + students.length + ' student' + (students.length !== 1 ? 's' : '') + '</span>';
+      html += '</div>';
+
+      // ── Enrollment cards ──
       if (students.length === 0) {
-        html += '<p style="color:var(--warm-gray);text-align:center;">No enrollments to finalize.</p>';
+        html += bookEmptyState('\ud83d\udccb', 'No enrollments', 'No students are enrolled in this session.');
       } else {
-        html += '<table class="data-table"><thead><tr><th>Student</th><th>Check-in</th><th>Attendance</th></tr></thead><tbody>';
         students.forEach(function(s) {
-          var savedAtt = (saved.attendance && saved.attendance[s._id]) || {};
-          var attStatus = savedAtt.status || (s.status === 'no-show' ? 'no-show' : 'completed');
-          var checkedIn = startup.students && startup.students[s._id] && startup.students[s._id].checkedIn;
-          var checkInLabel = checkedIn ? '<span style="color:' + SUCCESS_COLOR + ';">&#10003; Checked in</span>' : '<span style="color:var(--warm-gray);">—</span>';
+          var statusColor = { 'confirmed': '#64B5F6', 'checked-in': '#4DB6AC', 'completed': '#4DB6AC', 'incomplete': '#FFD54F', 'no-show': '#EF9A9A', 'attended-pending-waiver': '#FFD54F' };
+          var waiverWarning = s.waiverStatus && (s.waiverStatus === 'missing' || s.waiverStatus === 'expired');
 
-          html += '<tr><td><strong>' + esc(s.studentName || s.customerName || '—') + '</strong></td>' +
-            '<td>' + checkInLabel + '</td>' +
-            '<td><select name="att_' + esc(s._id) + '" class="form-input" style="width:auto;padding:6px 10px;">' +
-            '<option value="completed"' + (attStatus === 'completed' ? ' selected' : '') + '>Completed</option>' +
-            '<option value="absent"' + (attStatus === 'absent' ? ' selected' : '') + '>Absent</option>' +
-            '<option value="no-show"' + (attStatus === 'no-show' ? ' selected' : '') + '>No-Show</option>' +
-            '</select></td></tr>';
+          html += '<div class="book-card" style="cursor:default;">';
+          html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;">';
+
+          // Left: student info
+          html += '<div>';
+          html += '<div style="font-weight:600;">' + esc(s.customerName || s.studentName || '—') + '</div>';
+          html += '<div style="font-size:0.8rem;color:var(--warm-gray);">' + esc(s.customerEmail || s.studentEmail || '') + '</div>';
+          if (waiverWarning) {
+            html += '<div style="font-size:0.78rem;color:#d97706;margin-top:4px;">&#9888; Waiver ' + esc(s.waiverStatus) + '</div>';
+          }
+          if (s.checkInNotes) {
+            html += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;font-style:italic;">' + esc(s.checkInNotes) + '</div>';
+          }
+          if (s.closeOutNotes) {
+            html += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;font-style:italic;">Close-out: ' + esc(s.closeOutNotes) + '</div>';
+          }
+          if (s.incidents && s.incidents.length > 0) {
+            s.incidents.forEach(function(inc) {
+              html += '<div style="font-size:0.75rem;margin-top:4px;padding:2px 6px;border-left:3px solid ' + (SEVERITY_COLORS[inc.severity] || '#BDBDBD') + ';">' +
+                '<span style="' + badgeStyle(SEVERITY_BADGE_COLORS, inc.severity) + '">' + esc(inc.severity) + '</span> ' +
+                esc(INCIDENT_TYPE_LABELS[inc.type] || inc.type) + ': ' + esc(inc.description) + '</div>';
+            });
+          }
+          html += '</div>';
+
+          // Right: status + actions
+          html += '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">';
+          html += '<span style="' + badgeStyle(STATUS_BADGE_COLORS, s.status === 'checked-in' ? 'active' : s.status === 'attended-pending-waiver' ? 'waitlisted' : s.status) + '">' + esc(s.status) + '</span>';
+
+          // Phase-appropriate actions
+          if (!isClosed) {
+            if (s.status === 'confirmed' && !isStarted) {
+              // Check-in phase: show check-in controls
+              html += '<div style="display:flex;gap:4px;align-items:center;">';
+              html += '<select id="waiver_' + esc(s._id) + '" class="form-input" style="width:auto;padding:4px 8px;font-size:0.78rem;" title="Waiver status">';
+              WAIVER_STATUSES.forEach(function(ws) {
+                html += '<option value="' + ws + '"' + (ws === (s.waiverStatus || 'na') ? ' selected' : '') + '>' + (ws === 'na' ? 'N/A' : ws.charAt(0).toUpperCase() + ws.slice(1)) + '</option>';
+              });
+              html += '</select>';
+              html += '<label class="book-check" style="font-size:0.78rem;" title="Materials confirmed"><input type="checkbox" id="mat_' + esc(s._id) + '"> Mat</label>';
+              html += '<button class="btn btn-primary btn-small" onclick="window._bookCheckIn(\'' + esc(s._id) + '\')">Check In</button>';
+              html += '</div>';
+            } else if (s.status === 'confirmed' && isStarted) {
+              // Session started but student not checked in — late arrival or no-show
+              html += '<button class="btn btn-small" onclick="window._bookCheckIn(\'' + esc(s._id) + '\')">Late Check-In</button>';
+              html += '<button class="btn-icon danger" onclick="window._bookCloseOut(\'' + esc(s._id) + '\', \'no-show\')" title="No-Show">&#10006;</button>';
+            } else if (s.status === 'checked-in') {
+              // Close-out phase: show close-out controls
+              html += '<select id="closeout_' + esc(s._id) + '" class="form-input" style="width:auto;padding:4px 8px;font-size:0.78rem;">';
+              CLOSEOUT_STATUSES.forEach(function(cs) {
+                html += '<option value="' + cs + '">' + cs.charAt(0).toUpperCase() + cs.slice(1) + '</option>';
+              });
+              html += '</select>';
+              html += '<button class="btn btn-primary btn-small" onclick="window._bookCloseOut(\'' + esc(s._id) + '\')">Close Out</button>';
+              html += '<button class="btn-icon" onclick="window._bookAddIncident(\'' + esc(s._id) + '\')" title="Add Incident">&#9888;</button>';
+            }
+          }
+
+          html += '</div>';
+          html += '</div></div>';
         });
-        html += '</tbody></table>';
       }
-      html += '</div>';
 
-      // ── Equipment Post-Check ──
+      // ── Incident form (hidden by default) ──
+      html += '<div id="incidentFormWrap" style="display:none;margin-top:12px;">';
       html += '<div class="book-form-section">';
-      html += '<div class="book-form-section-title">Equipment Post-Check</div>';
-      if (resources.length === 0) {
-        html += '<p style="color:var(--warm-gray);text-align:center;">No resources assigned.</p>';
-      } else {
-        resources.forEach(function(r) {
-          var savedEquip = (saved.equipment && saved.equipment[r._id]) || {};
-          html += '<div style="' + CARD_STYLE + 'margin-bottom:8px;">' +
-            '<strong>' + esc(r.name) + '</strong>' +
-            '<div style="display:flex;gap:12px;margin-top:8px;align-items:center;">' +
-            '<select name="postequip_' + esc(r._id) + '" class="form-input" style="width:auto;padding:6px 10px;">' +
-            '<option value="good"' + (savedEquip.postCondition === 'good' ? ' selected' : '') + '>Good</option>' +
-            '<option value="needs_attention"' + ((savedEquip.postCondition === 'needs_attention') ? ' selected' : '') + '>Needs Attention</option>' +
-            '<option value="out_of_service"' + ((savedEquip.postCondition === 'out_of_service') ? ' selected' : '') + '>Out of Service</option>' +
-            '</select>' +
-            '<input type="text" name="postequip_notes_' + esc(r._id) + '" class="form-input" placeholder="Notes..." value="' + esc(savedEquip.notes || '') + '" style="flex:1;">' +
-            '</div></div>';
-        });
+      html += '<div class="book-form-section-title">Add Incident</div>';
+      html += '<input type="hidden" id="incEnrollId">';
+      html += '<div class="book-responsive-grid" style="margin-bottom:0.75rem;">';
+      html += '<div class="book-field"><label class="form-label">Type</label><select id="incType" class="form-input">';
+      INCIDENT_TYPES.forEach(function(t) { html += '<option value="' + t + '">' + esc(INCIDENT_TYPE_LABELS[t] || t) + '</option>'; });
+      html += '</select></div>';
+      html += '<div class="book-field"><label class="form-label">Severity</label><select id="incSeverity" class="form-input">';
+      INCIDENT_SEVERITIES.forEach(function(s) { html += '<option value="' + s + '">' + s.charAt(0).toUpperCase() + s.slice(1) + '</option>'; });
+      html += '</select></div>';
+      html += '</div>';
+      html += '<div class="book-field"><label class="form-label">Description</label>';
+      html += '<textarea id="incDescription" class="form-input" rows="2" placeholder="Describe what happened..."></textarea></div>';
+      html += '<div style="display:flex;gap:8px;margin-top:0.75rem;">';
+      html += '<button class="btn btn-primary btn-small" onclick="window._bookSaveIncident()">Save Incident</button>';
+      html += '<button class="btn btn-small" onclick="document.getElementById(\'incidentFormWrap\').style.display=\'none\'">Cancel</button>';
+      html += '</div></div></div>';
+
+      // ── Session notes (for close session) ──
+      if (isStarted && !isClosed) {
+        html += '<div class="book-form-section" style="margin-top:1rem;">';
+        html += '<div class="book-form-section-title">Session Notes</div>';
+        html += '<textarea id="sessionCloseNotes" class="form-input" rows="2" placeholder="Overall session notes...">' + esc(session.sessionNotes || '') + '</textarea>';
+        html += '</div>';
+      }
+
+      // ── Action buttons ──
+      html += '<div class="book-form-actions">';
+      if (!isStarted && !isClosed) {
+        html += '<button class="btn btn-primary" onclick="window._bookCheckInAll(\'' + esc(sessionId) + '\')"' + (confirmedCount === 0 ? ' disabled' : '') + '>Check In All (' + confirmedCount + ')</button>';
+        html += '<button class="btn btn-primary" style="background:' + SUCCESS_COLOR + ';" onclick="window._bookStartSession(\'' + esc(sessionId) + '\')"' + (checkedInCount === 0 ? ' disabled' : '') + '>Start Class (' + checkedInCount + ' checked in)</button>';
+      } else if (isStarted && !isClosed) {
+        var unclosedCount = checkedInCount + confirmedCount;
+        html += '<button class="btn btn-primary" style="background:' + SUCCESS_COLOR + ';" onclick="window._bookCloseSession(\'' + esc(sessionId) + '\')"' + (unclosedCount > 0 ? ' disabled title="' + unclosedCount + ' enrollment(s) not yet closed out"' : '') + '>Close Session</button>';
+      }
+      if (isClosed && session.classClosedAt) {
+        html += '<span style="color:' + SUCCESS_COLOR + ';font-size:0.85rem;">&#10003; Session completed ' + new Date(session.classClosedAt).toLocaleString() + '</span>';
       }
       html += '</div>';
 
-      // ── Incidents ──
-      html += '<div class="book-form-section">';
-      html += '<div class="book-form-section-title">Incidents</div>';
-      html += '<div id="incidentsList">';
-      if (existingIncidents.length > 0) {
-        existingIncidents.forEach(function(inc) {
-          var sevColor = SEVERITY_COLORS[inc.severity] || '#BDBDBD';
-          html += '<div style="' + CARD_STYLE + 'margin-bottom:8px;border-left:3px solid ' + sevColor + ';">' +
-            '<div style="display:flex;gap:8px;align-items:center;">' +
-            '<span style="' + badgeStyle(SEVERITY_BADGE_COLORS, inc.severity) + '">' + esc(inc.severity) + '</span>' +
-            '<span style="font-weight:500;font-size:0.9rem;">' + esc(INCIDENT_TYPE_LABELS[inc.type] || inc.type) + '</span>' +
-            '<span style="color:var(--warm-gray);font-size:0.8rem;margin-left:auto;">' + esc(inc.followUpStatus || 'open') + '</span>' +
-            '</div>' +
-            '<p style="margin:6px 0 0;color:var(--warm-gray);font-size:0.85rem;">' + esc(inc.description) + '</p>' +
-            '</div>';
-        });
-      } else {
-        html += '<p style="color:var(--warm-gray);font-size:0.85rem;">No incidents reported.</p>';
-      }
-      html += '</div>';
-
-      html += '<div id="newIncidentForm" class="book-form-section" style="display:none;margin-top:8px;">' +
-        '<div class="book-form-section-title">New Incident</div>' +
-        '<div class="book-responsive-grid" style="margin-bottom:0.75rem;">' +
-        '<div class="book-field"><label class="form-label">Type</label><select id="incType" class="form-input">' +
-        INCIDENT_TYPES.map(function(t) { return '<option value="' + t + '">' + esc(INCIDENT_TYPE_LABELS[t] || t) + '</option>'; }).join('') +
-        '</select></div>' +
-        '<div class="book-field"><label class="form-label">Severity</label><select id="incSeverity" class="form-input">' +
-        INCIDENT_SEVERITIES.map(function(s) { return '<option value="' + s + '">' + s.charAt(0).toUpperCase() + s.slice(1) + '</option>'; }).join('') +
-        '</select></div>' +
-        '</div>' +
-        '<div class="book-field"><label class="form-label">Description</label>' +
-        '<textarea id="incDescription" class="form-input" rows="2" placeholder="Describe what happened..."></textarea></div>' +
-        '<div style="display:flex;gap:8px;margin-top:0.75rem;">' +
-        '<button type="button" class="btn btn-primary btn-sm" onclick="window._bookSaveIncident(\'' + esc(sessionId) + '\')">Save Incident</button>' +
-        '<button type="button" class="btn btn-sm" onclick="document.getElementById(\'newIncidentForm\').style.display=\'none\'">Cancel</button>' +
-        '</div></div>';
-      html += '<button type="button" class="btn btn-sm" onclick="document.getElementById(\'newIncidentForm\').style.display=\'\'" style="margin-top:8px;">+ Add Incident</button>';
-      html += '</div>';
-
-      // ── Session Notes ──
-      html += '<div class="book-form-section">';
-      html += '<div class="book-form-section-title">Session Notes</div>';
-      html += '<textarea name="completionNotes" class="form-input" rows="3" placeholder="Overall session notes...">' + esc(saved.notes || '') + '</textarea>';
-      html += '</div>';
-
-      // Submit
-      html += '<div class="book-form-actions">' +
-        '<button type="button" class="btn btn-primary" onclick="window._bookSaveReport(\'' + esc(sessionId) + '\', false)">Save Draft</button>' +
-        '<button type="button" class="btn btn-primary" style="background:' + SUCCESS_COLOR + ';" onclick="window._bookSaveReport(\'' + esc(sessionId) + '\', true)">Submit Report</button>' +
-        '</div>';
-
-      if (saved.completedAt) {
-        html += '<p style="color:' + SUCCESS_COLOR + ';margin-top:12px;font-size:0.85rem;">&#10003; Report submitted ' + new Date(saved.completedAt).toLocaleString() + '</p>';
-      }
-
-      html += '</form>';
       content.innerHTML = html;
     } catch (err) {
-      console.error('[book] Failed to load report:', err);
-      content.innerHTML = '<p style="color:' + DANGER_COLOR + ';">Failed to load report: ' + esc(err.message) + '</p>';
+      console.error('[book] Failed to load session lifecycle:', err);
+      content.innerHTML = '<p style="color:' + DANGER_COLOR + ';">Failed to load: ' + esc(err.message) + '</p>';
     }
   };
 
-  window._bookSaveIncident = async function(sessionId) {
-    var type = document.getElementById('incType').value;
-    var severity = document.getElementById('incSeverity').value;
-    var description = document.getElementById('incDescription').value.trim();
-    if (!description) { MastAdmin.showToast('Incident description required', true); return; }
+  // ── Check in a single student ──
+  window._bookCheckIn = async function(enrollId) {
+    var waiverEl = document.getElementById('waiver_' + enrollId);
+    var matEl = document.getElementById('mat_' + enrollId);
+    var waiver = waiverEl ? waiverEl.value : 'na';
+    var materials = matEl ? matEl.checked : false;
+    var uid = firebase.auth().currentUser ? firebase.auth().currentUser.uid : null;
 
     try {
-      var incId = MastDB.sessionLogs.newIncidentKey(sessionId);
-      await MastDB.sessionLogs.incidents(sessionId, incId).set({
-        type: type,
-        severity: severity,
-        description: description,
-        studentUid: null,
-        followUpStatus: 'open',
-        createdAt: new Date().toISOString()
+      await MastDB.enrollments.update(enrollId, {
+        status: 'checked-in',
+        checkedInAt: new Date().toISOString(),
+        checkedInBy: uid,
+        waiverStatus: waiver,
+        materialsConfirmed: materials
       });
-      MastAdmin.showToast('Incident saved');
-      // Reload the report to show new incident
-      window._bookSessionReport(sessionId, opsClassId);
+      MastAdmin.showToast('Checked in');
+      window._bookManageSession(opsSessionId, opsClassId);
     } catch (err) {
       MastAdmin.showToast('Failed: ' + err.message, true);
     }
   };
 
-  window._bookSaveReport = async function(sessionId, submit) {
-    var form = document.getElementById('completionReportForm');
-    if (!form) return;
+  // ── Check in all confirmed students ──
+  window._bookCheckInAll = async function(sessionId) {
+    try {
+      var snap = await MastDB.enrollments.bySession(sessionId);
+      var enrollments = snap.val() || {};
+      var uid = firebase.auth().currentUser ? firebase.auth().currentUser.uid : null;
+      var now = new Date().toISOString();
+      var count = 0;
 
-    var data = { attendance: {}, equipment: {} };
-
-    // Collect attendance
-    form.querySelectorAll('select[name^="att_"]').forEach(function(el) {
-      var enrollId = el.name.replace('att_', '');
-      data.attendance[enrollId] = { status: el.value };
-    });
-
-    // Check all attendance filled (RULE: session can't complete without attendance)
-    if (submit) {
-      var hasAllAttendance = Object.keys(data.attendance).length > 0;
-      if (!hasAllAttendance) {
-        MastAdmin.showToast('No enrollments to finalize attendance', true);
-        return;
+      for (var id in enrollments) {
+        if (enrollments[id].status === 'confirmed') {
+          await MastDB.enrollments.update(id, {
+            status: 'checked-in',
+            checkedInAt: now,
+            checkedInBy: uid,
+            waiverStatus: 'na',
+            materialsConfirmed: false
+          });
+          count++;
+        }
       }
+      MastAdmin.showToast(count + ' student' + (count !== 1 ? 's' : '') + ' checked in');
+      window._bookManageSession(sessionId, opsClassId);
+    } catch (err) {
+      MastAdmin.showToast('Failed: ' + err.message, true);
     }
+  };
 
-    // Collect equipment post-check
-    form.querySelectorAll('select[name^="postequip_"]').forEach(function(el) {
-      if (el.name.indexOf('postequip_notes_') === 0) return;
-      var resId = el.name.replace('postequip_', '');
-      if (!data.equipment[resId]) data.equipment[resId] = {};
-      data.equipment[resId].postCondition = el.value;
-    });
-    form.querySelectorAll('input[name^="postequip_notes_"]').forEach(function(el) {
-      var resId = el.name.replace('postequip_notes_', '');
-      if (!data.equipment[resId]) data.equipment[resId] = {};
-      data.equipment[resId].notes = el.value;
-    });
-
-    data.notes = form.querySelector('textarea[name="completionNotes"]').value;
-
-    if (submit) {
-      data.completedAt = new Date().toISOString();
-      data.completedBy = firebase.auth().currentUser ? firebase.auth().currentUser.uid : null;
+  // ── Start the session ──
+  window._bookStartSession = async function(sessionId) {
+    try {
+      var uid = firebase.auth().currentUser ? firebase.auth().currentUser.uid : null;
+      await MastDB.classSessions.update(sessionId, {
+        classStartedAt: new Date().toISOString(),
+        classStartedBy: uid
+      });
+      MastAdmin.showToast('Class started');
+      window._bookManageSession(sessionId, opsClassId);
+    } catch (err) {
+      MastAdmin.showToast('Failed: ' + err.message, true);
     }
+  };
+
+  // ── Close out a single enrollment ──
+  window._bookCloseOut = async function(enrollId, forceStatus) {
+    var statusEl = document.getElementById('closeout_' + enrollId);
+    var status = forceStatus || (statusEl ? statusEl.value : 'completed');
 
     try {
-      await MastDB.sessionLogs.completion(sessionId).set(data);
-
-      if (submit) {
-        // Update enrollment statuses based on attendance
-        for (var enrollId in data.attendance) {
-          var attStatus = data.attendance[enrollId].status;
-          if (attStatus === 'completed' || attStatus === 'no-show' || attStatus === 'absent') {
-            await MastDB.enrollments.update(enrollId, { status: attStatus });
-          }
-        }
-        // Mark session as completed
-        await MastDB.classSessions.update(sessionId, {
-          status: 'completed',
-          completedAt: new Date().toISOString()
-        });
-        MastAdmin.showToast('Session completed — attendance finalized');
-      } else {
-        MastAdmin.showToast('Report saved');
+      // Check waiver enforcement
+      var snap = await MastDB.enrollments.get(enrollId);
+      var enrollment = snap.val() || {};
+      var finalStatus = status;
+      if (status === 'completed' && enrollment.waiverStatus && enrollment.waiverStatus !== 'signed' && enrollment.waiverStatus !== 'na') {
+        finalStatus = 'attended-pending-waiver';
       }
 
-      window._bookSessionReport(sessionId, opsClassId);
+      await MastDB.enrollments.update(enrollId, {
+        status: finalStatus,
+        completedAt: new Date().toISOString()
+      });
+      MastAdmin.showToast(finalStatus === 'attended-pending-waiver' ? 'Closed out (pending waiver)' : 'Closed out');
+      window._bookManageSession(opsSessionId, opsClassId);
     } catch (err) {
-      MastAdmin.showToast('Failed to save: ' + err.message, true);
+      MastAdmin.showToast('Failed: ' + err.message, true);
+    }
+  };
+
+  // ── Close the session ──
+  window._bookCloseSession = async function(sessionId) {
+    var notesEl = document.getElementById('sessionCloseNotes');
+    var notes = notesEl ? notesEl.value.trim() : '';
+
+    try {
+      await MastDB.classSessions.update(sessionId, {
+        status: 'completed',
+        classClosedAt: new Date().toISOString(),
+        sessionNotes: notes || null,
+        completedAt: new Date().toISOString()
+      });
+      MastAdmin.showToast('Session completed');
+      window._bookManageSession(sessionId, opsClassId);
+    } catch (err) {
+      MastAdmin.showToast('Failed: ' + err.message, true);
+    }
+  };
+
+  // ── Add incident to an enrollment ──
+  window._bookAddIncident = function(enrollId) {
+    document.getElementById('incEnrollId').value = enrollId;
+    document.getElementById('incidentFormWrap').style.display = '';
+    document.getElementById('incDescription').value = '';
+  };
+
+  window._bookSaveIncident = async function() {
+    var enrollId = document.getElementById('incEnrollId').value;
+    var type = document.getElementById('incType').value;
+    var severity = document.getElementById('incSeverity').value;
+    var description = document.getElementById('incDescription').value.trim();
+    if (!description) { MastAdmin.showToast('Description required', true); return; }
+
+    try {
+      var snap = await MastDB.enrollments.get(enrollId);
+      var enrollment = snap.val() || {};
+      var incidents = enrollment.incidents || [];
+      incidents.push({
+        type: type,
+        severity: severity,
+        description: description,
+        createdAt: new Date().toISOString()
+      });
+      await MastDB.enrollments.update(enrollId, { incidents: incidents });
+      MastAdmin.showToast('Incident saved');
+      document.getElementById('incidentFormWrap').style.display = 'none';
+      window._bookManageSession(opsSessionId, opsClassId);
+    } catch (err) {
+      MastAdmin.showToast('Failed: ' + err.message, true);
     }
   };
 
