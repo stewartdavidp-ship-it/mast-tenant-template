@@ -68,6 +68,28 @@
   }
   function fullWidthDiv(content) { return '<div style="grid-column:1/-1;">' + content + '</div>'; }
 
+  // Collapsible section: header with toggle, content hidden by default (or open)
+  function collapsibleSection(id, title, contentHtml, opts) {
+    opts = opts || {};
+    var open = opts.open !== false; // open by default unless opts.open === false
+    var badge = opts.badge || '';
+    var rightHtml = opts.rightHtml || '';
+    var h = '<div style="margin-bottom:16px;">';
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;padding:6px 0;" onclick="teamToggleSection(\'' + id + '\')">';
+    h += '<div style="display:flex;align-items:center;gap:8px;">';
+    h += '<span style="font-size:0.7rem;color:var(--warm-gray);transition:transform 0.15s;" id="' + id + 'Arrow">' + (open ? '\u25bc' : '\u25b6') + '</span>';
+    h += '<span style="font-size:1rem;font-weight:600;">' + esc(title) + '</span>';
+    if (badge) h += ' ' + badge;
+    h += '</div>';
+    h += rightHtml;
+    h += '</div>';
+    h += '<div id="' + id + '" style="' + (open ? '' : 'display:none;') + '">';
+    h += contentHtml;
+    h += '</div>';
+    h += '</div>';
+    return h;
+  }
+
   function calcMonthlyCost(emp) {
     if (!emp.payRate) return 0;
     if (emp.payType === 'salary') return emp.payRate;
@@ -299,10 +321,10 @@
   }
 
   function renderEmployeeCard(emp) {
-    var h = '<div style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:14px 18px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
+    var h = '<div data-id="' + esc(emp._key) + '" onclick="teamViewEmployee(this.dataset.id)" style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:14px 18px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);cursor:pointer;transition:border-color 0.15s;" onmouseover="this.style.borderColor=\'var(--amber)\'" onmouseout="this.style.borderColor=\'var(--cream-dark,#F0E8DB)\'">';
     h += '<div style="display:flex;justify-content:space-between;align-items:center;">';
     h += '<div>';
-    h += '<span style="font-weight:600;font-size:0.95rem;">' + esc(emp.fullName || '') + '</span>';
+    h += '<span style="font-weight:600;font-size:0.95rem;">\ud83d\udc64 ' + esc(emp.fullName || '') + '</span>';
     if (emp.preferredName) h += ' <span style="font-size:0.82rem;color:var(--warm-gray);">(' + esc(emp.preferredName) + ')</span>';
     if (emp.jobTitle) h += ' <span style="font-size:0.82rem;color:var(--warm-gray);">\u2014 ' + esc(emp.jobTitle) + '</span>';
     h += '<div style="font-size:0.82rem;color:var(--warm-gray,#6B6560);margin-top:2px;">';
@@ -311,10 +333,7 @@
     if (emp.scheduledHoursPerWeek) h += ' \u00b7 ' + emp.scheduledHoursPerWeek + ' hrs/week';
     h += '</div>';
     h += '</div>';
-    h += '<div style="display:flex;gap:6px;">';
-    h += '<button class="btn btn-secondary btn-small" data-id="' + esc(emp._key) + '" onclick="teamViewEmployee(this.dataset.id)">View</button>';
-    h += '<button class="btn btn-secondary btn-small" data-id="' + esc(emp._key) + '" onclick="teamEditEmployee(this.dataset.id)">Edit</button>';
-    h += '</div>';
+    h += '<button class="btn btn-secondary btn-small" data-id="' + esc(emp._key) + '" onclick="event.stopPropagation();teamEditEmployee(this.dataset.id)">Edit</button>';
     h += '</div>';
 
     // Compliance summary
@@ -384,85 +403,84 @@
     h += '<div id="teamAddFormInner"></div>';
     h += '</div>';
 
-    // Pay summary card
+    // --- Pay & Employment (always visible, no collapse) ---
     h += '<div style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:14px 18px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
     h += '<div style="display:flex;gap:24px;flex-wrap:wrap;font-size:0.9rem;">';
-    h += '<div><span style="color:var(--warm-gray);font-size:0.78rem;">Pay</span><br><strong>' + fmtRate(emp.payRate, emp.payType) + '</strong></div>';
+    h += '<div><span style="color:var(--warm-gray);font-size:0.78rem;">\ud83d\udcb0 Pay</span><br><strong>' + fmtRate(emp.payRate, emp.payType) + '</strong></div>';
     h += '<div><span style="color:var(--warm-gray);font-size:0.78rem;">Type</span><br><strong>' + esc(capitalize((emp.payType || 'not set').replace('-', ' '))) + '</strong></div>';
-    h += '<div><span style="color:var(--warm-gray);font-size:0.78rem;">Schedule</span><br><strong>' + (emp.scheduledHoursPerWeek ? emp.scheduledHoursPerWeek + ' hrs/week' : 'not set') + '</strong></div>';
+    h += '<div><span style="color:var(--warm-gray);font-size:0.78rem;">\ud83d\udcc5 Schedule</span><br><strong>' + (emp.scheduledHoursPerWeek ? emp.scheduledHoursPerWeek + ' hrs/week' : 'not set') + '</strong></div>';
     h += '<div><span style="color:var(--warm-gray);font-size:0.78rem;">Frequency</span><br><strong>' + esc(capitalize((emp.payFrequency || 'not set').replace('-', ' '))) + '</strong></div>';
     var monthly = calcMonthlyCost(emp);
     if (monthly > 0) h += '<div><span style="color:var(--warm-gray);font-size:0.78rem;">Monthly</span><br><strong>' + fmtDollars(monthly) + '</strong></div>';
     h += '</div></div>';
 
-    // Contact info card
-    h += '<div style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:14px 18px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
-    h += '<div style="font-size:0.85rem;font-weight:600;margin-bottom:8px;">Contact</div>';
-    if (emp.phone) h += '<div style="font-size:0.85rem;margin-bottom:4px;">\ud83d\udcde ' + esc(emp.phone) + '</div>';
+    // --- Contact & Personal (collapsible, open by default) ---
+    var contactHtml = '';
+    if (emp.phone) contactHtml += '<div style="font-size:0.85rem;margin-bottom:4px;">\ud83d\udcde ' + esc(emp.phone) + '</div>';
     if (emp.address && emp.address.street) {
-      h += '<div style="font-size:0.85rem;margin-bottom:4px;">' + esc(emp.address.street);
-      if (emp.address.city) h += ', ' + esc(emp.address.city);
-      if (emp.address.state) h += ', ' + esc(emp.address.state);
-      if (emp.address.zip) h += ' ' + esc(emp.address.zip);
-      h += '</div>';
+      contactHtml += '<div style="font-size:0.85rem;margin-bottom:4px;">\ud83c\udfe0 ' + esc(emp.address.street);
+      if (emp.address.city) contactHtml += ', ' + esc(emp.address.city);
+      if (emp.address.state) contactHtml += ', ' + esc(emp.address.state);
+      if (emp.address.zip) contactHtml += ' ' + esc(emp.address.zip);
+      contactHtml += '</div>';
     }
     if (emp.ssnLast4) {
-      h += '<div style="font-size:0.85rem;margin-bottom:4px;">SSN: \u2022\u2022\u2022-\u2022\u2022-' + esc(emp.ssnLast4) + '</div>';
+      contactHtml += '<div style="font-size:0.85rem;margin-bottom:4px;">\ud83d\udd12 SSN: \u2022\u2022\u2022-\u2022\u2022-' + esc(emp.ssnLast4) + '</div>';
     }
     if (emp.emergencyContact && emp.emergencyContact.name) {
-      h += '<div style="font-size:0.85rem;margin-top:8px;"><strong>Emergency:</strong> ' + esc(emp.emergencyContact.name);
-      if (emp.emergencyContact.phone) h += ' \u00b7 ' + esc(emp.emergencyContact.phone);
-      if (emp.emergencyContact.relationship) h += ' (' + esc(emp.emergencyContact.relationship) + ')';
-      h += '</div>';
+      contactHtml += '<div style="font-size:0.85rem;margin-top:8px;">\ud83d\udea8 <strong>Emergency:</strong> ' + esc(emp.emergencyContact.name);
+      if (emp.emergencyContact.phone) contactHtml += ' \u00b7 ' + esc(emp.emergencyContact.phone);
+      if (emp.emergencyContact.relationship) contactHtml += ' (' + esc(emp.emergencyContact.relationship) + ')';
+      contactHtml += '</div>';
     }
-    if (!emp.phone && !(emp.address && emp.address.street) && !(emp.emergencyContact && emp.emergencyContact.name)) {
-      h += '<div style="font-size:0.85rem;color:var(--warm-gray-light);">No contact info on file. Edit to add.</div>';
+    if (!contactHtml) {
+      contactHtml = '<div style="font-size:0.85rem;color:var(--warm-gray-light);">No contact info on file. Edit to add.</div>';
     }
-    h += '</div>';
+    h += collapsibleSection('secContact', 'Contact & Personal', contactHtml);
 
-    // Compliance checklist
-    h += '<div style="margin-bottom:16px;">';
-    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">';
-    h += '<div style="font-size:1rem;font-weight:600;">Compliance Checklist</div>';
-    h += '</div>';
+    // --- Compliance Checklist (collapsible, open by default) ---
     var cl = emp.complianceChecklist || {};
+    var compGaps = 0;
+    var compHtml = '';
     COMPLIANCE_FIELDS.forEach(function(f) {
       var item = cl[f.key] || {};
       var status = item.status || 'missing';
       var statusColor = status === 'completed' ? '#16a34a' : status === 'not-applicable' ? 'var(--warm-gray-light)' : '#d97706';
       var statusIcon = status === 'completed' ? '\u2713' : status === 'not-applicable' ? '\u2014' : '\u26a0';
       var statusLabel = status === 'completed' ? 'Complete' : status === 'not-applicable' ? 'N/A' : 'Missing';
+      if (status !== 'completed' && status !== 'not-applicable') compGaps++;
 
-      h += '<div style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:10px 14px;margin-bottom:6px;">';
-      h += '<div style="display:flex;justify-content:space-between;align-items:center;">';
-      h += '<div>';
-      h += '<span style="font-weight:500;font-size:0.9rem;">' + esc(f.label) + '</span>';
-      if (item.storageLocation) h += ' <span style="font-size:0.75rem;color:var(--warm-gray);">\u00b7 ' + esc(capitalize(item.storageLocation.replace('-', ' '))) + '</span>';
+      compHtml += '<div style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:10px 14px;margin-bottom:6px;">';
+      compHtml += '<div style="display:flex;justify-content:space-between;align-items:center;">';
+      compHtml += '<div>';
+      compHtml += '<span style="font-weight:500;font-size:0.9rem;">' + esc(f.label) + '</span>';
+      if (item.storageLocation) compHtml += ' <span style="font-size:0.75rem;color:var(--warm-gray);">\u00b7 ' + esc(capitalize(item.storageLocation.replace('-', ' '))) + '</span>';
       if (item.expiryDate) {
         var daysToExpiry = Math.floor((new Date(item.expiryDate).getTime() - Date.now()) / 86400000);
-        if (daysToExpiry <= 90 && daysToExpiry > 0) h += ' <span style="font-size:0.75rem;color:#d97706;">\u26a0 expires in ' + daysToExpiry + 'd</span>';
-        else if (daysToExpiry <= 0) h += ' <span style="font-size:0.75rem;color:var(--danger);">Expired</span>';
+        if (daysToExpiry <= 90 && daysToExpiry > 0) compHtml += ' <span style="font-size:0.75rem;color:#d97706;">\u26a0 expires in ' + daysToExpiry + 'd</span>';
+        else if (daysToExpiry <= 0) compHtml += ' <span style="font-size:0.75rem;color:var(--danger);">Expired</span>';
       }
-      h += '</div>';
-      h += '<div style="display:flex;align-items:center;gap:8px;">';
-      h += '<span style="color:' + statusColor + ';font-weight:600;font-size:0.82rem;">' + statusIcon + ' ' + statusLabel + '</span>';
-      h += '<button class="btn btn-secondary btn-small" data-emp="' + esc(emp._key) + '" data-key="' + esc(f.key) + '" onclick="teamEditCompliance(this.dataset.emp, this.dataset.key)">Edit</button>';
-      h += '</div>';
-      h += '</div>';
+      compHtml += '</div>';
+      compHtml += '<div style="display:flex;align-items:center;gap:8px;">';
+      compHtml += '<span style="color:' + statusColor + ';font-weight:600;font-size:0.82rem;">' + statusIcon + ' ' + statusLabel + '</span>';
+      compHtml += '<button class="btn btn-secondary btn-small" data-emp="' + esc(emp._key) + '" data-key="' + esc(f.key) + '" onclick="teamEditCompliance(this.dataset.emp, this.dataset.key)">Edit</button>';
+      compHtml += '</div>';
+      compHtml += '</div>';
       if (f.key === 'workersComp' && status !== 'completed') {
-        h += '<div style="font-size:0.72rem;color:#d97706;margin-top:4px;">Required in most states from your first employee. Check with your insurance agent if unsure.</div>';
+        compHtml += '<div style="font-size:0.72rem;color:#d97706;margin-top:4px;">Required in most states from your first employee. Check with your insurance agent if unsure.</div>';
       }
       if (item.driveFileName) {
-        h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">\ud83d\udcc4 ' + esc(item.driveFileName);
-        if (item.driveLastModified) h += ' \u00b7 Modified ' + item.driveLastModified.split('T')[0];
-        h += '</div>';
+        compHtml += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">\ud83d\udcc4 ' + esc(item.driveFileName);
+        if (item.driveLastModified) compHtml += ' \u00b7 Modified ' + item.driveLastModified.split('T')[0];
+        compHtml += '</div>';
       }
-      h += '</div>';
+      compHtml += '</div>';
     });
-    h += '<div id="teamComplianceForm" style="display:none;"></div>';
-    h += '</div>';
+    compHtml += '<div id="teamComplianceForm" style="display:none;"></div>';
+    var compBadge = compGaps > 0 ? '<span style="color:#d97706;font-size:0.78rem;">\u26a0 ' + compGaps + ' gap' + (compGaps !== 1 ? 's' : '') + '</span>' : '<span style="color:#16a34a;font-size:0.78rem;">\u2713 Complete</span>';
+    h += collapsibleSection('secCompliance', 'Compliance Checklist', compHtml, { badge: compBadge });
 
-    // Employee documents
+    // --- Employee Documents (collapsible, closed by default) ---
     var docs = [];
     var empDocs = emp.documents || {};
     if (Array.isArray(empDocs)) {
@@ -470,24 +488,20 @@
     } else {
       docs = Object.entries(empDocs).map(function(e) { var d = e[1]; d._key = e[0]; return d; });
     }
-    h += '<div style="margin-bottom:16px;">';
-    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">';
-    h += '<div style="font-size:1rem;font-weight:600;">Employee Documents</div>';
-    h += '<button class="btn btn-primary btn-small" data-emp="' + esc(emp._key) + '" onclick="teamAddEmpDoc(this.dataset.emp)">+ New Document</button>';
-    h += '</div>';
-    h += '<div id="teamEmpDocForm" style="display:none;"></div>';
+    var docsHtml = '<div id="teamEmpDocForm" style="display:none;"></div>';
     if (docs.length === 0) {
-      h += '<div style="font-size:0.85rem;color:var(--warm-gray);">No documents on file.</div>';
+      docsHtml += '<div style="font-size:0.85rem;color:var(--warm-gray);">No documents on file.</div>';
     } else {
-      docs.forEach(function(doc) { h += renderDocCard(doc, false, emp._key); });
+      docs.forEach(function(doc) { docsHtml += renderDocCard(doc, false, emp._key); });
     }
-    h += '</div>';
+    var docsRight = '<button class="btn btn-primary btn-small" data-emp="' + esc(emp._key) + '" onclick="event.stopPropagation();teamAddEmpDoc(this.dataset.emp)">+ New Document</button>';
+    h += collapsibleSection('secDocs', 'Documents', docsHtml, { open: docs.length > 0, badge: '<span style="font-size:0.78rem;color:var(--warm-gray);">' + docs.length + '</span>', rightHtml: docsRight });
 
-    // Hours log
-    h += renderHoursSection(emp);
+    // --- Hours Log (collapsible, closed by default) ---
+    h += collapsibleSection('secHours', 'Hours Log', renderHoursSection(emp), { open: false });
 
-    // References
-    h += renderReferencesSection(emp);
+    // --- References (collapsible, closed by default) ---
+    h += collapsibleSection('secRefs', 'References', renderReferencesSection(emp), { open: false });
 
     return h;
   }
@@ -1234,6 +1248,15 @@
   window.teamEditCompliance = function(empId, fieldKey) { openComplianceForm(empId, fieldKey); };
   window.teamSaveCompliance = saveCompliance;
   window.teamUnlinkDrive = unlinkDrive;
+  window.teamToggleSection = function(id) {
+    var el = document.getElementById(id);
+    var arrow = document.getElementById(id + 'Arrow');
+    if (el) {
+      var show = el.style.display === 'none';
+      el.style.display = show ? '' : 'none';
+      if (arrow) arrow.textContent = show ? '\u25bc' : '\u25b6';
+    }
+  };
   window.teamAddTenantDoc = function() { openDocForm(null, true, null); };
   window.teamEditTenantDoc = function(id) { openDocForm(id, true, null); };
   window.teamSaveDoc = saveDoc;
