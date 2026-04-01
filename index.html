@@ -250,6 +250,9 @@
 
   /* ========= HERO VARIANT: SPLIT-IMAGE ========= */
   /* Variant wrapper must fill the hero section fully */
+  .hero:has([data-variant="split-image"].active) {
+    background: var(--charcoal, #1a1a2e);
+  }
   .hero [data-variant="split-image"] {
     position: absolute;
     top: 85px; /* Below the nav — overlay/vignette darken the nav area above */
