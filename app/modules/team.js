@@ -852,14 +852,16 @@
   }
 
   function renderDocCard(doc, isTenantLevel, empId) {
-    var h = '<div style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:12px 16px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
-    h += '<div style="display:flex;justify-content:space-between;align-items:center;">';
-    h += '<div style="font-weight:600;font-size:0.9rem;">' + esc(doc.title || 'Untitled') + '</div>';
+    var docKey = esc(doc._key || doc.documentId || '');
+    var clickAction = '';
     if (isTenantLevel) {
-      h += '<button class="btn btn-secondary btn-small" data-id="' + esc(doc._key || doc.documentId || '') + '" onclick="teamEditTenantDoc(this.dataset.id)">Edit</button>';
+      clickAction = 'teamEditTenantDoc(\'' + docKey + '\')';
     } else if (empId) {
-      h += '<button class="btn btn-secondary btn-small" data-emp="' + esc(empId) + '" data-id="' + esc(doc._key || doc.documentId || '') + '" onclick="teamEditEmpDoc(this.dataset.emp, this.dataset.id)">Edit</button>';
+      clickAction = 'teamEditEmpDoc(\'' + esc(empId) + '\', \'' + docKey + '\')';
     }
+    var h = '<div' + (clickAction ? ' onclick="' + clickAction + '"' : '') + ' style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:12px 16px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);' + (clickAction ? 'cursor:pointer;transition:border-color 0.15s;" onmouseover="this.style.borderColor=\'var(--amber)\'" onmouseout="this.style.borderColor=\'var(--cream-dark,#F0E8DB)\'"' : '"') + '>';
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;">';
+    h += '<div style="font-weight:600;font-size:0.9rem;">\ud83d\udcc4 ' + esc(doc.title || 'Untitled') + '</div>';
     h += '</div>';
     h += '<div style="font-size:0.82rem;color:var(--warm-gray);margin-top:4px;">';
     var parts = [];
