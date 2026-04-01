@@ -422,6 +422,11 @@
                   var el = heroSlot.querySelector('.' + cls);
                   if (el) el.style.display = isFullBleed ? '' : 'none';
                 });
+                // For non-full-bleed variants, the hero gradient (charcoal→amber) is
+                // too light on the right side for the transparent nav. Override to solid dark.
+                if (!isFullBleed) {
+                  heroSlot.style.background = 'var(--charcoal, #1a1a2e)';
+                }
               }
 
               // Activate gallery variant
