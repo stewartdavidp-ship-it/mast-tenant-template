@@ -5022,6 +5022,7 @@
         <div class="sidebar-item muted" data-route="customers" onclick="navigateTo('customers')">Customers <span class="sidebar-badge new">New</span></div>
         <div class="sidebar-item" data-route="email-log" onclick="navigateTo('email-log')">Email Log</div>
         <div class="sidebar-item" data-route="studio" onclick="navigateTo('studio')">Studio</div>
+        <div class="sidebar-item" data-route="team" onclick="navigateTo('team')">Team</div>
       </div>
     </div>
     <!-- Advise -->
@@ -5098,6 +5099,10 @@
     <!-- ===== EMAIL LOG TAB ===== -->
     <div id="emailLogTab" style="display:none;">
       <div id="emailLogContent"></div>
+    </div>
+
+    <!-- ===== TEAM TAB ===== -->
+    <div id="teamTab" style="display:none;">
     </div>
 
     <!-- ===== STUDIO TAB ===== -->
@@ -11384,14 +11389,14 @@ var SECTION_ROUTES = {
   'cart':   ['wallet', 'gift-cards', 'coupons', 'loyalty', 'promotions'],
   'show':   ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'],
   'ship':   ['pack', 'ship'],
-  'run':    ['trips', 'expenses', 'reports', 'financials', 'contacts', 'customers', 'email-log', 'studio'],
+  'run':    ['trips', 'expenses', 'reports', 'financials', 'contacts', 'customers', 'email-log', 'studio', 'team'],
   'events': ['events-shows', 'events-settings'],
   'web':    ['website', 'homepage', 'images'],
   'manage': ['products', 'inventory', 'employees', 'analytics', 'auditlog', 'settings'],
   'advise': ['advisor']
 };
 
-var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'expensesTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'termsTab', 'advisorTab', 'studioTab'];
+var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'expensesTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab'];
 
 var currentRoute = 'dashboard';
 
@@ -11813,7 +11818,8 @@ homepage: { src: 'modules/homepage.js', routes: ['homepage'] },
   book: { src: 'modules/book.js', routes: ['book', 'book-detail', 'enrollments', 'instructors', 'instructor-detail', 'resources', 'resource-detail', 'passes', 'pass-detail', 'calendar', 'book-reports'] },
   cart: { src: 'modules/cart.js', routes: ['wallet', 'gift-cards', 'loyalty'] },
   advisor: { src: 'modules/advisor.js', routes: ['advisor'] },
-  studio: { src: 'modules/studio.js', routes: ['studio'] }
+  studio: { src: 'modules/studio.js', routes: ['studio'] },
+  team: { src: 'modules/team.js', routes: ['team'] }
 };
 
 // Reverse lookup: route → moduleId (built from MODULE_MANIFEST)

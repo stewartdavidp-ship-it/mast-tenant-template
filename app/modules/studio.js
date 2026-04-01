@@ -45,7 +45,7 @@
       var [equipSnap, foundersSnap, employeesSnap, overheadItemsSnap, expSnap] = await Promise.all([
         MastDB.lpe.equipment.list(),
         MastDB._ref('admin/lpe/founders').once('value'),
-        MastDB._ref('admin/lpe/employees').once('value'),
+        MastDB._ref('admin/employees').once('value'),
         MastDB._ref('admin/lpe/overheadItems').once('value'),
         MastDB._ref('admin/expenses').orderByChild('isStudioOverhead').equalTo(true).limitToLast(200).once('value'),
       ]);
@@ -154,10 +154,10 @@
 
       // Team labor (if employees exist)
       if (hasTeam) {
-        var teamMonthly = employeesData.reduce(function(s, e) { return s + ((e.hourlyRate || 0) * (e.hoursPerWeek || 0) * 4.33); }, 0);
+        var teamMonthlyCents = employeesData.reduce(function(s, e) { return s + ((e.payRate || 0) * (e.scheduledHoursPerWeek || 0) * 4.33); }, 0);
         h += '<div style="display:flex;justify-content:space-between;">';
         h += '<span>Team labor</span>';
-        h += '<span style="font-weight:600;">' + fmtDollarsWhole(teamMonthly) + '/mo</span>';
+        h += '<span style="font-weight:600;">' + fmtDollars(Math.round(teamMonthlyCents)) + '/mo</span>';
         h += '</div>';
       }
 
@@ -503,18 +503,21 @@
       h += '</div>';
     } else {
       employeesData.forEach(function(emp) {
-        var monthlyCost = ((emp.hourlyRate || 0) * (emp.hoursPerWeek || 0) * 4.33);
+        // Employee module: payRate in cents, scheduledHoursPerWeek
+        var rate = emp.payRate || 0; // cents
+        var hours = emp.scheduledHoursPerWeek || 0;
+        var monthlyCost = rate * hours * 4.33; // cents/month
         h += '<div style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:14px 18px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
         h += '<div style="display:flex;justify-content:space-between;align-items:center;">';
-        h += '<div><span style="font-weight:600;">' + esc(emp.name) + '</span>';
-        if (emp.role) h += ' <span style="font-size:0.82rem;color:var(--warm-gray);">\u2014 ' + esc(emp.role) + '</span>';
+        h += '<div><span style="font-weight:600;">' + esc(emp.fullName || emp.name || '') + '</span>';
+        if (emp.jobTitle || emp.role) h += ' <span style="font-size:0.82rem;color:var(--warm-gray);">\u2014 ' + esc(emp.jobTitle || emp.role) + '</span>';
         h += '</div>';
         h += '<button class="btn btn-secondary btn-small" data-id="' + esc(emp._key) + '" onclick="studioEditEmployee(this.dataset.id)">Edit</button>';
         h += '</div>';
         h += '<div style="font-size:0.82rem;color:var(--warm-gray,#6B6560);margin-top:4px;">';
-        h += (emp.hourlyRate != null ? '$' + emp.hourlyRate + '/hr' : 'rate not set');
-        h += ' \u00B7 ' + (emp.hoursPerWeek != null ? emp.hoursPerWeek + ' hrs/week' : 'hours not set');
-        h += ' \u00B7 ~' + fmtDollarsWhole(monthlyCost) + '/mo';
+        h += (rate > 0 ? fmtDollars(rate) + '/hr' : 'rate not set');
+        h += ' \u00B7 ' + (hours > 0 ? hours + ' hrs/week' : 'hours not set');
+        h += ' \u00B7 ~' + fmtDollars(Math.round(monthlyCost)) + '/mo';
         h += '</div>';
         h += '</div>';
       });
@@ -537,13 +540,13 @@
     var h = '<div style="font-weight:600;font-size:0.95rem;margin-bottom:12px;">' + (isNew ? 'New Team Member' : 'Edit Team Member') + '</div>';
     h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
     h += '<div><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Name</label>';
-    h += '<input id="empName" type="text" value="' + esc(emp.name || '') + '" placeholder="e.g. Ori" style="' + INPUT_STYLE + '"></div>';
-    h += '<div><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Role</label>';
-    h += '<input id="empRole" type="text" value="' + esc(emp.role || '') + '" placeholder="e.g. Studio assistant" style="' + INPUT_STYLE + '"></div>';
+    h += '<input id="empName" type="text" value="' + esc(emp.fullName || emp.name || '') + '" placeholder="e.g. Sarah Chen" style="' + INPUT_STYLE + '"></div>';
+    h += '<div><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Job title</label>';
+    h += '<input id="empRole" type="text" value="' + esc(emp.jobTitle || emp.role || '') + '" placeholder="e.g. Studio assistant" style="' + INPUT_STYLE + '"></div>';
     h += '<div><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Hourly rate</label>';
-    h += '<input id="empRate" type="number" step="0.01" value="' + (emp.hourlyRate != null ? emp.hourlyRate : '') + '" placeholder="$/hr" style="' + INPUT_STYLE + '"></div>';
+    h += '<input id="empRate" type="number" step="0.01" value="' + (emp.payRate != null ? (emp.payRate / 100).toFixed(2) : '') + '" placeholder="$/hr" style="' + INPUT_STYLE + '"></div>';
     h += '<div><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Hours per week</label>';
-    h += '<input id="empHours" type="number" value="' + (emp.hoursPerWeek != null ? emp.hoursPerWeek : '') + '" placeholder="hrs/week" style="' + INPUT_STYLE + '"></div>';
+    h += '<input id="empHours" type="number" value="' + (emp.scheduledHoursPerWeek != null ? emp.scheduledHoursPerWeek : '') + '" placeholder="hrs/week" style="' + INPUT_STYLE + '"></div>';
     h += '</div>';
     h += '<div style="display:flex;gap:8px;margin-top:14px;align-items:center;">';
     h += '<button class="btn btn-primary" onclick="studioSaveEmployee()">' + (isNew ? 'Create Team Member' : 'Save') + '</button>';
@@ -560,21 +563,23 @@
   async function saveEmployee() {
     var name = document.getElementById('empName').value.trim();
     if (!name) { showToast('Name is required', true); return; }
+    var rateDollars = parseFloat(document.getElementById('empRate').value);
     var fields = {
-      name: name,
-      role: document.getElementById('empRole').value.trim() || null,
-      hourlyRate: parseFloat(document.getElementById('empRate').value) || null,
-      hoursPerWeek: parseInt(document.getElementById('empHours').value) || null,
+      fullName: name,
+      jobTitle: document.getElementById('empRole').value.trim() || null,
+      payRate: rateDollars ? Math.round(rateDollars * 100) : null, // store in cents
+      payType: 'hourly',
+      scheduledHoursPerWeek: parseInt(document.getElementById('empHours').value) || null,
       updatedAt: new Date().toISOString(),
     };
     try {
       if (editingEmployeeId) {
-        await MastDB._ref('admin/lpe/employees/' + editingEmployeeId).update(fields);
+        await MastDB._ref('admin/employees/' + editingEmployeeId).update(fields);
         showToast('Team member saved');
       } else {
         fields.createdAt = new Date().toISOString();
         var newId = 'emp_' + Date.now();
-        await MastDB._ref('admin/lpe/employees/' + newId).set(fields);
+        await MastDB._ref('admin/employees/' + newId).set(fields);
         showToast('Team member added');
       }
       editingEmployeeId = null;
@@ -588,7 +593,7 @@
   async function deleteEmployee(empId) {
     if (!confirm('Delete this team member? This cannot be undone.')) return;
     try {
-      await MastDB._ref('admin/lpe/employees/' + empId).remove();
+      await MastDB._ref('admin/employees/' + empId).remove();
       showToast('Team member deleted');
       studioLoaded = false;
       loadStudio();
