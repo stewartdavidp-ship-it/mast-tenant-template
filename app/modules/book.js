@@ -2293,10 +2293,7 @@
         html += '<button class="btn btn-primary" style="background:' + SUCCESS_COLOR + ';" onclick="window._bookStartSession(\'' + esc(sessionId) + '\')"' + (checkedInCount === 0 ? ' disabled' : '') + '>Start Class (' + checkedInCount + ' checked in)</button>';
       } else if (isStarted && !isClosed) {
         var unclosedCount = checkedInCount + confirmedCount;
-        if (unclosedCount > 0) {
-          html += '<button class="btn btn-primary" onclick="window._bookCloseOutAll(\'' + esc(sessionId) + '\')">Close Out All as Completed (' + unclosedCount + ')</button>';
-        }
-        html += '<button class="btn btn-primary" style="background:' + SUCCESS_COLOR + ';" onclick="window._bookCloseSession(\'' + esc(sessionId) + '\')"' + (unclosedCount > 0 ? ' disabled title="Close out all students first"' : '') + '>Close Session</button>';
+        html += '<button class="btn btn-primary" style="background:' + SUCCESS_COLOR + ';" onclick="window._bookCloseSession(\'' + esc(sessionId) + '\')">Close Session' + (unclosedCount > 0 ? ' (' + unclosedCount + ' auto-completed)' : '') + '</button>';
       }
       if (isClosed && session.classClosedAt) {
         html += '<span style="color:' + SUCCESS_COLOR + ';font-size:0.85rem;">&#10003; Session completed ' + new Date(session.classClosedAt).toLocaleString() + '</span>';
@@ -2437,13 +2434,32 @@
     var notes = notesEl ? notesEl.value.trim() : '';
 
     try {
+      // Auto-complete any unclosed students
+      var snap = await MastDB.enrollments.bySession(sessionId);
+      var enrollments = snap.val() || {};
+      var now = new Date().toISOString();
+      var autoCount = 0;
+
+      for (var id in enrollments) {
+        var e = enrollments[id];
+        if (e.status === 'checked-in' || e.status === 'confirmed') {
+          var finalStatus = 'completed';
+          if (e.waiverStatus && e.waiverStatus !== 'signed' && e.waiverStatus !== 'na') {
+            finalStatus = 'attended-pending-waiver';
+          }
+          await MastDB.enrollments.update(id, { status: finalStatus, completedAt: now });
+          autoCount++;
+        }
+      }
+
+      // Close the session
       await MastDB.classSessions.update(sessionId, {
         status: 'completed',
-        classClosedAt: new Date().toISOString(),
+        classClosedAt: now,
         sessionNotes: notes || null,
-        completedAt: new Date().toISOString()
+        completedAt: now
       });
-      MastAdmin.showToast('Session completed');
+      MastAdmin.showToast('Session completed' + (autoCount > 0 ? ' (' + autoCount + ' auto-completed)' : ''));
       window._bookManageSession(sessionId, opsClassId);
     } catch (err) {
       MastAdmin.showToast('Failed: ' + err.message, true);
