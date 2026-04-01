@@ -413,6 +413,15 @@
                 var activeHero = heroSlot.querySelector('[data-variant="' + heroVariant + '"]');
                 if (activeHero) { activeHero.classList.add('active'); activeHero.style.display = ''; }
                 else if (heroVariants.length > 0) { heroVariants[0].classList.add('active'); heroVariants[0].style.display = ''; }
+
+                // When a non-full-bleed variant is active, hide the bare full-bleed
+                // elements (poster, overlay, hero-content) that sit outside data-variant wrappers.
+                // Otherwise they bleed through behind the active variant (duplicate text, ghost images).
+                var isFullBleed = heroVariant === 'full-bleed';
+                ['hero-poster', 'hero-overlay', 'hero-vignette', 'hero-content', 'scroll-indicator'].forEach(function(cls) {
+                  var el = heroSlot.querySelector('.' + cls);
+                  if (el) el.style.display = isFullBleed ? '' : 'none';
+                });
               }
 
               // Activate gallery variant

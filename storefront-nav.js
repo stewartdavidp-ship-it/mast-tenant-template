@@ -431,8 +431,15 @@
     var brandName = (window.TENANT_BRAND && window.TENANT_BRAND.name) || 'My Shop';
 
     var heightStyle = heroMaxHeight ? ' style="max-height:' + heroMaxHeight + 'px"' : '';
-    heroLogoEl.innerHTML = '<img src="' + esc(logoUrl) + '" alt="' + esc(brandName) + '"' + heightStyle + '>';
+    var logoHtml = '<img src="' + esc(logoUrl) + '" alt="' + esc(brandName) + '"' + heightStyle + '>';
+    heroLogoEl.innerHTML = logoHtml;
     heroLogoEl.style.display = '';
+
+    // Also populate variant-specific hero logos (split-image, minimal-text)
+    ['heroLogoSplit', 'heroLogoMinimal'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) { el.innerHTML = logoHtml; el.style.display = ''; }
+    });
   }
 
   init();
