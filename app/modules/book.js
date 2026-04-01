@@ -158,6 +158,19 @@
         '.book-collapse.collapsed .book-collapse-body{display:none;}' +
         '.book-collapse.collapsed .book-collapse-arrow{transform:rotate(-90deg);}' +
 
+        /* Session lifecycle stepper */
+        '.book-stepper{display:flex;align-items:center;gap:0;margin-bottom:1.5rem;overflow-x:auto;}' +
+        '.book-step{display:flex;align-items:center;gap:8px;padding:8px 16px;font-size:0.8rem;font-weight:600;' +
+          'color:var(--warm-gray,#888);cursor:default;white-space:nowrap;position:relative;}' +
+        '.book-step.active{color:var(--primary,#C4853C);}' +
+        '.book-step.done{color:var(--teal,#2A7C6F);}' +
+        '.book-step-dot{width:24px;height:24px;border-radius:50%;border:2px solid var(--warm-gray,#888);' +
+          'display:flex;align-items:center;justify-content:center;font-size:0.7rem;flex-shrink:0;}' +
+        '.book-step.active .book-step-dot{border-color:var(--primary,#C4853C);background:var(--primary,#C4853C);color:#fff;}' +
+        '.book-step.done .book-step-dot{border-color:var(--teal,#2A7C6F);background:var(--teal,#2A7C6F);color:#fff;}' +
+        '.book-step-line{width:32px;height:2px;background:var(--warm-gray,#888);flex-shrink:0;}' +
+        '.book-step-line.done{background:var(--teal,#2A7C6F);}' +
+
         /* Field hint text */
         '.book-field-hint{font-size:0.72rem;color:var(--warm-gray,#888);margin-top:4px;line-height:1.4;}' +
 
@@ -2139,12 +2152,39 @@
 
       var html = '';
 
-      // ── Phase indicator ──
-      html += '<div style="display:flex;gap:12px;align-items:center;margin-bottom:1.5rem;">';
-      html += '<span style="' + badgeStyle(STATUS_BADGE_COLORS, isClosed ? 'completed' : isStarted ? 'active' : 'scheduled') + 'font-size:0.85rem;padding:4px 12px;">' + phaseLabel + '</span>';
-      if (session.instructorName) html += '<span style="font-size:0.85rem;color:var(--warm-gray);">Instructor: ' + esc(session.instructorName) + '</span>';
-      if (session.resourceName) html += '<span style="font-size:0.85rem;color:var(--warm-gray);">Room: ' + esc(session.resourceName) + '</span>';
-      html += '<span style="font-size:0.85rem;color:var(--warm-gray);margin-left:auto;">' + students.length + ' student' + (students.length !== 1 ? 's' : '') + '</span>';
+      // ── Step indicator ──
+      var steps = [
+        { key: 'checkin', label: 'Check-In', num: '1' },
+        { key: 'start', label: 'Start Class', num: '2' },
+        { key: 'inprogress', label: 'In Progress', num: '3' },
+        { key: 'closeout', label: 'Close Out', num: '4' },
+        { key: 'completed', label: 'Completed', num: '\u2713' }
+      ];
+      // Determine current step index
+      var currentStep = 0; // check-in
+      if (isStarted && !isClosed && closedOutCount < students.length) currentStep = 2; // in progress
+      else if (isStarted && !isClosed && closedOutCount >= students.length && students.length > 0) currentStep = 3; // close out ready
+      else if (isStarted && !isClosed) currentStep = 2; // in progress
+      else if (isClosed) currentStep = 4; // completed
+      if (!isStarted && checkedInCount > 0) currentStep = 1; // ready to start
+
+      html += '<div class="book-stepper">';
+      steps.forEach(function(step, i) {
+        var cls = i < currentStep ? 'done' : i === currentStep ? 'active' : '';
+        var dot = i < currentStep ? '\u2713' : step.num;
+        if (i > 0) html += '<div class="book-step-line' + (i <= currentStep ? ' done' : '') + '"></div>';
+        html += '<div class="book-step ' + cls + '">';
+        html += '<div class="book-step-dot">' + dot + '</div>';
+        html += '<span>' + step.label + '</span>';
+        html += '</div>';
+      });
+      html += '</div>';
+
+      // ── Session info bar ──
+      html += '<div style="display:flex;gap:12px;align-items:center;margin-bottom:1rem;font-size:0.85rem;color:var(--warm-gray);">';
+      if (session.instructorName) html += '<span>Instructor: ' + esc(session.instructorName) + '</span>';
+      if (session.resourceName) html += '<span>Room: ' + esc(session.resourceName) + '</span>';
+      html += '<span style="margin-left:auto;">' + students.length + ' student' + (students.length !== 1 ? 's' : '') + '</span>';
       html += '</div>';
 
       // ── Enrollment cards ──
