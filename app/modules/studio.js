@@ -154,7 +154,10 @@
 
       // Team labor (if employees exist)
       if (hasTeam) {
-        var teamMonthlyCents = employeesData.reduce(function(s, e) { return s + ((e.payRate || 0) * (e.scheduledHoursPerWeek || 0) * 4.33); }, 0);
+        var teamMonthlyCents = employeesData.reduce(function(s, e) {
+          if (e.payType === 'salary') return s + (e.payRate || 0);
+          return s + Math.round((e.payRate || 0) * (e.scheduledHoursPerWeek || 0) * 4.33);
+        }, 0);
         h += '<div style="display:flex;justify-content:space-between;">';
         h += '<span>Team labor</span>';
         h += '<span style="font-weight:600;">' + fmtDollars(Math.round(teamMonthlyCents)) + '/mo</span>';
@@ -506,7 +509,7 @@
         // Employee module: payRate in cents, scheduledHoursPerWeek
         var rate = emp.payRate || 0; // cents
         var hours = emp.scheduledHoursPerWeek || 0;
-        var monthlyCost = rate * hours * 4.33; // cents/month
+        var monthlyCost = emp.payType === 'salary' ? rate : Math.round(rate * hours * 4.33); // cents/month
         h += '<div style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:14px 18px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
         h += '<div style="display:flex;justify-content:space-between;align-items:center;">';
         h += '<div><span style="font-weight:600;">' + esc(emp.fullName || emp.name || '') + '</span>';
@@ -515,7 +518,8 @@
         h += '<button class="btn btn-secondary btn-small" data-id="' + esc(emp._key) + '" onclick="studioEditEmployee(this.dataset.id)">Edit</button>';
         h += '</div>';
         h += '<div style="font-size:0.82rem;color:var(--warm-gray,#6B6560);margin-top:4px;">';
-        h += (rate > 0 ? fmtDollars(rate) + '/hr' : 'rate not set');
+        var rateLabel = emp.payType === 'salary' ? '/mo' : '/hr';
+        h += (rate > 0 ? fmtDollars(rate) + rateLabel : 'rate not set');
         h += ' \u00B7 ' + (hours > 0 ? hours + ' hrs/week' : 'hours not set');
         h += ' \u00B7 ~' + fmtDollars(Math.round(monthlyCost)) + '/mo';
         h += '</div>';
@@ -568,16 +572,18 @@
       fullName: name,
       jobTitle: document.getElementById('empRole').value.trim() || null,
       payRate: rateDollars ? Math.round(rateDollars * 100) : null, // store in cents
-      payType: 'hourly',
       scheduledHoursPerWeek: parseInt(document.getElementById('empHours').value) || null,
       updatedAt: new Date().toISOString(),
     };
     try {
       if (editingEmployeeId) {
+        // Don't overwrite payType on edit — Team module manages it
         await MastDB._ref('admin/employees/' + editingEmployeeId).update(fields);
         showToast('Team member saved');
       } else {
         fields.createdAt = new Date().toISOString();
+        fields.payType = 'hourly'; // default for new employees created from studio
+        fields.status = 'active';
         var newId = 'emp_' + Date.now();
         await MastDB._ref('admin/employees/' + newId).set(fields);
         showToast('Team member added');
