@@ -467,11 +467,6 @@ window.TENANT_READY.then(function() {
       html += '</div>';
     });
     list.innerHTML = html;
-    // Schema.org structured data
-    if (window.MastSchema) {
-      MastSchema.inject(MastSchema.organization());
-      MastSchema.injectAll(MastSchema.eventList(events));
-    }
   }).catch(function() {});
 }).catch(function(err) { console.error('[schedule] Tenant resolution failed:', err.message); });
 </script>
@@ -520,6 +515,20 @@ window.TENANT_READY.then(function() {
 </script>
 <script src="cart.js"></script>
 <script src="schema-org.js"></script>
+<script>
+// Schema.org: inject Organization + Events after tenant resolves
+window.TENANT_READY.then(function() {
+  if (!window.MastSchema) return;
+  MastSchema.inject(MastSchema.organization());
+  var app; try { app = firebase.app(); } catch (e) { return; }
+  app.database().ref(TENANT_ID + '/public/events').orderByChild('date').once('value').then(function(snap) {
+    var data = snap.val();
+    if (!data) return;
+    var events = Object.values(data).filter(function(e) { return e.visible !== false; });
+    if (events.length) MastSchema.injectAll(MastSchema.eventList(events));
+  });
+});
+</script>
 <script defer src="checkout.js?v=2"></script>
 
 <!-- Auth handled by cart.js (siteSignIn / siteSignOut / ensureCustomerAccount / nav UI) -->
