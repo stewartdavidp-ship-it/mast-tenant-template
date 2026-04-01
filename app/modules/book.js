@@ -123,12 +123,36 @@
 
         /* .form-label and .form-input are now defined globally in index.html */
 
-        /* Form section cards */
-        '.book-form-section{background:var(--surface-card,#2a2a2a);border:1px solid var(--border,#444);' +
+        /* Form section cards — theme-adaptive */
+        '.book-form-section{background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#ddd);' +
           'border-radius:12px;padding:1.25rem 1.5rem;margin-bottom:1.25rem;}' +
+        'body.dark-mode .book-form-section{background:var(--surface-card,#2a2a2a);border-color:var(--border,#444);}' +
         '.book-form-section-title{font-size:0.8rem;font-weight:700;text-transform:uppercase;' +
           'letter-spacing:0.06em;color:var(--primary,#C4853C);margin:0 0 1rem;padding-bottom:0.6rem;' +
-          'border-bottom:1px solid var(--border,#444);display:flex;align-items:center;gap:8px;}' +
+          'border-bottom:1px solid var(--cream-dark,#ddd);display:flex;align-items:center;gap:8px;}' +
+        'body.dark-mode .book-form-section-title{border-bottom-color:var(--border,#444);}' +
+
+        /* Card list items — theme-adaptive */
+        '.book-card{background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#ddd);' +
+          'border-radius:8px;padding:12px 16px;margin-bottom:8px;cursor:pointer;transition:border-color 0.15s;}' +
+        '.book-card:hover{border-color:var(--amber,#C4853C);}' +
+        'body.dark-mode .book-card{background:var(--surface-card,#2a2a2a);border-color:var(--border,#444);}' +
+        'body.dark-mode .book-card:hover{border-color:var(--amber,#C4853C);}' +
+
+        /* Collapsible sections — detail views */
+        '.book-collapse{background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#ddd);' +
+          'border-radius:12px;margin-bottom:1.25rem;overflow:hidden;}' +
+        'body.dark-mode .book-collapse{background:var(--surface-card,#2a2a2a);border-color:var(--border,#444);}' +
+        '.book-collapse-header{display:flex;justify-content:space-between;align-items:center;' +
+          'padding:1rem 1.5rem;cursor:pointer;user-select:none;}' +
+        '.book-collapse-header:hover{opacity:0.85;}' +
+        '.book-collapse-title{display:flex;align-items:center;gap:8px;font-size:0.8rem;font-weight:700;' +
+          'text-transform:uppercase;letter-spacing:0.06em;color:var(--primary,#C4853C);margin:0;}' +
+        '.book-collapse-arrow{font-size:0.65rem;color:var(--warm-gray,#888);transition:transform 0.15s;}' +
+        '.book-collapse-right{display:flex;align-items:center;gap:8px;}' +
+        '.book-collapse-body{padding:0 1.5rem 1.25rem;}' +
+        '.book-collapse.collapsed .book-collapse-body{display:none;}' +
+        '.book-collapse.collapsed .book-collapse-arrow{transform:rotate(-90deg);}' +
 
         /* Field hint text */
         '.book-field-hint{font-size:0.72rem;color:var(--warm-gray,#888);margin-top:4px;line-height:1.4;}' +
@@ -146,7 +170,8 @@
           'width:18px;height:18px;accent-color:var(--primary,#C4853C);cursor:pointer;}' +
 
         /* Form action buttons area */
-        '.book-form-actions{display:flex;gap:10px;margin-top:1.5rem;padding-top:1.25rem;border-top:1px solid var(--border,#444);}' +
+        '.book-form-actions{display:flex;gap:10px;margin-top:1.5rem;padding-top:1.25rem;border-top:1px solid var(--cream-dark,#ddd);}' +
+        'body.dark-mode .book-form-actions{border-top-color:var(--border,#444);}' +
 
         /* Day-of-week pill selector */
         '.book-day-pills{display:flex;flex-wrap:wrap;gap:6px;}' +
@@ -198,6 +223,40 @@
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
 
+  // ── Collapsible section builder (detail views) ──
+  function bookCollapsibleSection(id, title, contentHtml, opts) {
+    opts = opts || {};
+    var open = opts.open !== false;
+    var badge = opts.badge || '';
+    var rightHtml = opts.rightHtml || '';
+    var cls = 'book-collapse' + (open ? '' : ' collapsed');
+    var h = '<div class="' + cls + '" id="bookSec_' + id + '">';
+    h += '<div class="book-collapse-header" onclick="window._bookToggleSection(\'' + id + '\')">';
+    h += '<div class="book-collapse-title">';
+    h += '<span class="book-collapse-arrow">\u25bc</span>';
+    h += '<span>' + esc(title) + '</span>';
+    if (badge) h += ' ' + badge;
+    h += '</div>';
+    if (rightHtml) h += '<div class="book-collapse-right" onclick="event.stopPropagation();">' + rightHtml + '</div>';
+    h += '</div>';
+    h += '<div class="book-collapse-body">' + contentHtml + '</div>';
+    h += '</div>';
+    return h;
+  }
+
+  function bookEmptyState(emoji, title, subtitle) {
+    return '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">' +
+      '<div style="font-size:2rem;margin-bottom:12px;">' + emoji + '</div>' +
+      '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">' + esc(title) + '</p>' +
+      '<p style="font-size:0.85rem;color:var(--warm-gray-light,#9B958E);">' + esc(subtitle) + '</p>' +
+      '</div>';
+  }
+
+  window._bookToggleSection = function(id) {
+    var el = document.getElementById('bookSec_' + id);
+    if (el) el.classList.toggle('collapsed');
+  };
+
   // ============================================================
   // Classes — Load & Render
   // ============================================================
@@ -239,7 +298,7 @@
     });
 
     if (filtered.length === 0) {
-      container.innerHTML = '<p style="color:var(--warm-gray);padding:2rem;">No classes found. Click <strong>+ New Class</strong> to create one.</p>';
+      container.innerHTML = bookEmptyState('\ud83d\udcda', 'No classes yet', 'Click + New Class to create one.');
       return;
     }
 
@@ -342,50 +401,46 @@
       '</div>' +
       '</div>';
 
-    // ── Class Details card ──
-    html += '<div class="book-form-section">' +
-      '<div class="book-form-section-title">Class Details</div>' +
-      '<div class="book-responsive-grid">' +
+    // ── Class Details ──
+    var detailsHtml = '<div class="book-responsive-grid">' +
       _detailField('Category', cls.category || '—') +
       _detailField('Duration', (cls.duration || 0) + ' min') +
       _detailField('Capacity', (cls.capacity || '—') + (cls.minEnrollment ? ' (min ' + cls.minEnrollment + ')' : '')) +
       _detailField('Price', formatPrice(cls.priceCents));
     if (cls.type === 'series' && cls.seriesInfo) {
-      html += _detailField('Series Price', formatPrice(cls.seriesInfo.seriesPriceCents)) +
+      detailsHtml += _detailField('Series Price', formatPrice(cls.seriesInfo.seriesPriceCents)) +
       _detailField('Sessions', cls.seriesInfo.totalSessions || '—') +
       _detailField('Drop-in OK', cls.seriesInfo.allowDropIn ? 'Yes' : 'No');
     }
-    html += '</div></div>';
+    detailsHtml += '</div>';
+    html += bookCollapsibleSection('classDetails', 'Class Details', detailsHtml);
 
-    // ── Schedule & Assignment card ──
-    html += '<div class="book-form-section">' +
-      '<div class="book-form-section-title">Schedule &amp; Assignment</div>' +
-      '<div class="book-responsive-grid">' +
+    // ── Schedule & Assignment ──
+    var schedHtml = '<div class="book-responsive-grid">' +
       _detailField('Schedule', schedDesc || '—') +
-      _detailField('Materials', cls.materialsIncluded ? (cls.materialsNote || 'Included') : (cls.materialsCostCents ? formatPrice(cls.materialsCostCents) + ' fee' + (cls.materialsNote ? ' — ' + esc(cls.materialsNote) : '') : 'Not included')) +
+      _detailField('Materials', cls.materialsIncluded ? (cls.materialsNote || 'Included') : (cls.materialsCostCents ? formatPrice(cls.materialsCostCents) + ' fee' + (cls.materialsNote ? ' \u2014 ' + esc(cls.materialsNote) : '') : 'Not included')) +
       _detailField('Instructor', cls.instructorName || '—') +
       _detailField('Resource', cls.resourceName || '—') +
-      '</div></div>';
+      '</div>';
+    html += bookCollapsibleSection('classSchedule', 'Schedule & Assignment', schedHtml);
 
+    // ── Description ──
     if (cls.description) {
-      html += '<div class="book-form-section">' +
-        '<div class="book-form-section-title">Description</div>' +
-        '<p style="color:var(--warm-gray);line-height:1.6;margin:0;">' + esc(cls.description) + '</p>' +
-        '</div>';
+      var descHtml = '<p style="color:var(--warm-gray);line-height:1.6;margin:0;">' + esc(cls.description) + '</p>';
+      html += bookCollapsibleSection('classDesc', 'Description', descHtml);
     }
 
     // ── Sessions table ──
-    html += '<div class="book-form-section">' +
-      '<div class="book-form-section-title">Sessions <span style="font-weight:400;color:var(--warm-gray);text-transform:none;letter-spacing:0;">(' + sessionsData.length + ')</span></div>';
+    var sessHtml = '';
     if (sessionsData.length === 0) {
-      html += '<p style="color:var(--warm-gray);">No sessions generated yet. Click <strong>Generate Sessions</strong> above.</p>';
+      sessHtml = '<p style="color:var(--warm-gray);">No sessions generated yet. Click <strong>Generate Sessions</strong> above.</p>';
     } else {
       var today = todayStr();
-      html += '<table class="data-table"><thead><tr><th>Date</th><th>Time</th><th class="book-hide-narrow">Instructor</th><th class="book-hide-narrow">Resource</th><th>Enrolled</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
+      sessHtml += '<table class="data-table"><thead><tr><th>Date</th><th>Time</th><th class="book-hide-narrow">Instructor</th><th class="book-hide-narrow">Resource</th><th>Enrolled</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
       sessionsData.forEach(function(s) {
         var isPast = s.date < today;
         var rowStyle = isPast ? 'opacity:0.5;' : '';
-        html += '<tr style="' + rowStyle + '">' +
+        sessHtml += '<tr style="' + rowStyle + '">' +
           '<td>' + formatDate(s.date) + '</td>' +
           '<td>' + formatTime(s.startTime) + ' - ' + formatTime(s.endTime) + '</td>' +
           '<td class="book-hide-narrow">' + esc(s.instructorName || '—') + '</td>' +
@@ -396,19 +451,20 @@
           '<button class="btn-icon" onclick="window._bookAssignSession(\'' + esc(s.id) + '\',\'' + esc(cls.id) + '\')" title="Assign Instructor/Resource">&#128100;</button>' +
           '<button class="btn-icon" onclick="window._bookViewSessionEnrollments(\'' + esc(s.id) + '\',\'' + esc(cls.id) + '\')" title="View Enrollments">&#128203;</button>';
         if (s.status === 'scheduled') {
-          html += '<button class="btn-icon" onclick="window._bookSessionChecklist(\'' + esc(s.id) + '\',\'' + esc(cls.id) + '\')" title="Startup Checklist">&#9745;</button>';
+          sessHtml += '<button class="btn-icon" onclick="window._bookSessionChecklist(\'' + esc(s.id) + '\',\'' + esc(cls.id) + '\')" title="Startup Checklist">&#9745;</button>';
         }
         if (s.status === 'scheduled' && isPast) {
-          html += '<button class="btn-icon" onclick="window._bookSessionReport(\'' + esc(s.id) + '\',\'' + esc(cls.id) + '\')" title="Completion Report">&#128221;</button>';
+          sessHtml += '<button class="btn-icon" onclick="window._bookSessionReport(\'' + esc(s.id) + '\',\'' + esc(cls.id) + '\')" title="Completion Report">&#128221;</button>';
         }
         if (s.status === 'scheduled' && !isPast) {
-          html += '<button class="btn-icon danger" onclick="window._bookCancelSession(\'' + esc(s.id) + '\')" title="Cancel Session">&#10006;</button>';
+          sessHtml += '<button class="btn-icon danger" onclick="window._bookCancelSession(\'' + esc(s.id) + '\')" title="Cancel Session">&#10006;</button>';
         }
-        html += '</div></td></tr>';
+        sessHtml += '</div></td></tr>';
       });
-      html += '</tbody></table>';
+      sessHtml += '</tbody></table>';
     }
-    html += '</div>'; // close sessions book-form-section
+    var sessBadge = '<span style="font-size:0.72rem;padding:1px 6px;border-radius:4px;background:rgba(196,133,60,0.15);color:var(--amber);">' + sessionsData.length + '</span>';
+    html += bookCollapsibleSection('classSessions', 'Sessions', sessHtml, { badge: sessBadge });
 
     content.innerHTML = html;
   }
@@ -848,7 +904,7 @@
     });
 
     if (filtered.length === 0) {
-      table.innerHTML = '<p style="' + EMPTY_STATE_STYLE + '">No enrollments found.</p>';
+      table.innerHTML = bookEmptyState('\ud83d\udccb', 'No enrollments yet', 'Enrollments appear here when students book classes.');
       return;
     }
 
@@ -995,26 +1051,27 @@
     filtered.sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
 
     if (filtered.length === 0) {
-      container.innerHTML = '<p style="color:var(--warm-gray);padding:2rem;">No instructors found. Click <strong>+ New Instructor</strong> to add one.</p>';
+      container.innerHTML = bookEmptyState('\ud83d\udc69\u200d\ud83c\udfeb', 'No instructors yet', 'Click + New Instructor to add one.');
       return;
     }
 
-    var html = '<table class="data-table"><thead><tr>' +
-      '<th>Name</th><th>Specialties</th><th>Email</th><th>Status</th><th>Actions</th>' +
-      '</tr></thead><tbody>';
-
+    var html = '';
     filtered.forEach(function(i) {
-      var specs = (i.specialties || []).join(', ') || '—';
-      html += '<tr>' +
-        '<td><strong>' + esc(i.name) + '</strong></td>' +
-        '<td>' + esc(specs) + '</td>' +
-        '<td>' + esc(i.email || '—') + '</td>' +
-        '<td><span style="' + badgeStyle(STATUS_BADGE_COLORS, i.status) + '">' + esc(i.status) + '</span></td>' +
-        '<td><div class="event-actions"><button class="btn-icon" onclick="window._instrEdit(\'' + esc(i.id) + '\')" title="Edit">&#9998;</button></div></td>' +
-        '</tr>';
+      var specs = (i.specialties || []).join(', ') || '';
+      html += '<div class="book-card" onclick="window._instrEdit(\'' + esc(i.id) + '\')">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+        '<div>' +
+        '<div style="font-weight:600;">' + esc(i.name) + '</div>' +
+        (specs ? '<div style="font-size:0.82rem;color:var(--warm-gray);margin-top:2px;">' + esc(specs) + '</div>' : '') +
+        (i.email ? '<div style="font-size:0.8rem;color:var(--warm-gray-light,#9B958E);margin-top:2px;">' + esc(i.email) + '</div>' : '') +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:8px;">' +
+        '<span style="' + badgeStyle(STATUS_BADGE_COLORS, i.status) + '">' + esc(i.status) + '</span>' +
+        '<button class="btn-icon" onclick="event.stopPropagation();window._instrEdit(\'' + esc(i.id) + '\')" title="Edit">&#9998;</button>' +
+        '</div>' +
+        '</div></div>';
     });
 
-    html += '</tbody></table>';
     container.innerHTML = html;
   }
 
@@ -1162,25 +1219,27 @@
     filtered.sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
 
     if (filtered.length === 0) {
-      container.innerHTML = '<p style="color:var(--warm-gray);padding:2rem;">No resources found. Click <strong>+ New Resource</strong> to add one.</p>';
+      container.innerHTML = bookEmptyState('\ud83c\udfe0', 'No resources yet', 'Click + New Resource to add one.');
       return;
     }
 
-    var html = '<table class="data-table"><thead><tr>' +
-      '<th>Name</th><th>Type</th><th>Capacity</th><th>Status</th><th>Actions</th>' +
-      '</tr></thead><tbody>';
-
+    var html = '';
     filtered.forEach(function(r) {
-      html += '<tr>' +
-        '<td><strong>' + esc(r.name) + '</strong>' + (r.subType ? '<br><span style="font-size:0.8rem;color:var(--warm-gray);">' + esc(r.subType) + '</span>' : '') + '</td>' +
-        '<td><span style="' + badgeStyle(RESOURCE_TYPE_BADGE_COLORS, r.type) + '">' + esc(r.type) + '</span></td>' +
-        '<td>' + (r.capacity || '—') + '</td>' +
-        '<td><span style="' + badgeStyle(STATUS_BADGE_COLORS, r.status) + '">' + esc(r.status) + '</span></td>' +
-        '<td><div class="event-actions"><button class="btn-icon" onclick="window._resEdit(\'' + esc(r.id) + '\')" title="Edit">&#9998;</button></div></td>' +
-        '</tr>';
+      html += '<div class="book-card" onclick="window._resEdit(\'' + esc(r.id) + '\')">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+        '<div>' +
+        '<div style="font-weight:600;">' + esc(r.name) +
+        ' <span style="' + badgeStyle(RESOURCE_TYPE_BADGE_COLORS, r.type) + '">' + esc(r.type) + '</span></div>' +
+        (r.subType ? '<div style="font-size:0.82rem;color:var(--warm-gray);margin-top:2px;">' + esc(r.subType) + '</div>' : '') +
+        (r.capacity ? '<div style="font-size:0.8rem;color:var(--warm-gray-light,#9B958E);margin-top:2px;">Capacity: ' + r.capacity + '</div>' : '') +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:8px;">' +
+        '<span style="' + badgeStyle(STATUS_BADGE_COLORS, r.status) + '">' + esc(r.status) + '</span>' +
+        '<button class="btn-icon" onclick="event.stopPropagation();window._resEdit(\'' + esc(r.id) + '\')" title="Edit">&#9998;</button>' +
+        '</div>' +
+        '</div></div>';
     });
 
-    html += '</tbody></table>';
     container.innerHTML = html;
   }
 
@@ -1313,7 +1372,7 @@
     filtered.sort(function(a, b) { return (a.sortOrder || 0) - (b.sortOrder || 0) || (a.name || '').localeCompare(b.name || ''); });
 
     if (filtered.length === 0) {
-      container.innerHTML = '<p style="color:var(--warm-gray);padding:2rem;">No pass definitions found. Click <strong>+ New Pass</strong> to create one.</p>';
+      container.innerHTML = bookEmptyState('\ud83c\udf9f\ufe0f', 'No passes yet', 'Click + New Pass to create one.');
       return;
     }
 

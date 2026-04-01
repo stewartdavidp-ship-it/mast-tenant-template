@@ -306,7 +306,7 @@
     if (activeClearances.length > 0) h += ' \u00b7 ' + activeClearances.length + ' clearance' + (activeClearances.length !== 1 ? 's' : '');
     h += '</div>';
     h += '</div>';
-    h += '<button class="btn btn-secondary btn-small" onclick="event.stopPropagation();studentsEdit(\'' + esc(id) + '\')">Edit</button>';
+    h += '<button class="btn-icon" onclick="event.stopPropagation();studentsEdit(\'' + esc(id) + '\')" title="Edit">&#9998;</button>';
     h += '</div>';
     h += '</div>';
     return h;
@@ -333,7 +333,7 @@
     if (stu.createdAt) h += ' \u00b7 Added ' + stu.createdAt.split('T')[0];
     h += '</div>';
     h += '</div>';
-    h += '<button class="btn btn-secondary btn-small" onclick="studentsEdit(\'' + esc(stu._key) + '\')">Edit</button>';
+    h += '<button class="btn-icon" onclick="studentsEdit(\'' + esc(stu._key) + '\')" title="Edit">&#9998;</button>';
     h += '</div>';
 
     // Onboarding Status Card
