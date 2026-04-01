@@ -2,7 +2,7 @@
   'use strict';
 
   var equipmentData = [];
-  var laborData = null;
+  var foundersData = [];
   var employeesData = [];
   var overheadExpenseTotal = 0;
   var overheadExpenseCount = 0;
@@ -42,9 +42,9 @@
     container.innerHTML = '<div class="loading">Loading studio costs\u2026</div>';
 
     try {
-      var [equipSnap, laborSnap, employeesSnap, overheadItemsSnap, expSnap] = await Promise.all([
+      var [equipSnap, foundersSnap, employeesSnap, overheadItemsSnap, expSnap] = await Promise.all([
         MastDB.lpe.equipment.list(),
-        MastDB.lpe.laborProfile.get(),
+        MastDB._ref('admin/lpe/founders').once('value'),
         MastDB._ref('admin/lpe/employees').once('value'),
         MastDB._ref('admin/lpe/overheadItems').once('value'),
         MastDB._ref('admin/expenses').orderByChild('isStudioOverhead').equalTo(true).limitToLast(200).once('value'),
@@ -57,7 +57,12 @@
         return item;
       });
 
-      laborData = laborSnap.val() || {};
+      var fVal = foundersSnap.val() || {};
+      foundersData = Object.entries(fVal).map(function(entry) {
+        var f = entry[1];
+        f._key = entry[0];
+        return f;
+      });
 
       var empVal = employeesSnap.val() || {};
       employeesData = Object.entries(empVal).map(function(entry) {
@@ -92,7 +97,7 @@
     h += '<div class="section-header"><h2>Studio Cost Setup</h2></div>';
     h += renderSummaryCard();
     h += renderEquipmentSection();
-    h += renderLaborSection();
+    h += renderFoundersSection();
     h += renderTeamSection();
     h += renderOverheadSection();
     container.innerHTML = h;
@@ -115,9 +120,9 @@
     var directOverheadTotal = overheadItemsData.reduce(function(s, i) { return s + (i.monthlyAmount || 0); }, 0);
     var combinedOverhead = overheadExpenseTotal + directOverheadTotal;
     var hasOverhead = overheadExpenseCount > 0 || overheadItemsData.length > 0;
-    var hasLabor = laborData && laborData.ownerHourlyRate != null;
+    var hasFounders = foundersData.length > 0;
     var hasTeam = employeesData.length > 0;
-    var isEmpty = !hasEquip && !hasOverhead && !hasLabor;
+    var isEmpty = !hasEquip && !hasOverhead && !hasFounders;
 
     var h = '<div style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:20px 24px;margin-bottom:24px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
     h += '<div style="font-size:1.15rem;font-weight:500;font-family:\'DM Sans\',sans-serif;margin-bottom:12px;">Your studio costs to run</div>';
@@ -359,108 +364,120 @@
     return Object.keys(gaps).length > 0 ? gaps : null;
   }
 
-  // --- Surface 3: Labor Profile ---
-  function renderLaborSection() {
+  // --- Surface 3: Founders ---
+  function renderFoundersSection() {
     var h = '<div style="margin-bottom:28px;">';
     h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
-    h += '<h3 style="margin:0;font-size:1.15rem;font-weight:500;">Your time & pay</h3>';
-    h += '<button class="btn btn-secondary btn-small" onclick="studioEditLabor()">Edit</button>';
+    h += '<h3 style="margin:0;font-size:1.15rem;font-weight:500;">Founder time & pay</h3>';
+    h += '<button class="btn btn-primary btn-small" onclick="studioAddFounder()">+ New Founder</button>';
     h += '</div>';
 
-    h += '<div id="studioLaborForm" style="display:none;background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:16px 20px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
-    h += '<div id="studioLaborFormInner"></div>';
+    h += '<div id="studioFounderForm" style="display:none;background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:16px 20px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
+    h += '<div id="studioFounderFormInner"></div>';
     h += '</div>';
 
-    h += '<div id="studioLaborDisplay" style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:14px 18px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
-    var hasData = laborData && (laborData.ownerHourlyRate != null || laborData.productionHoursPerWeek != null);
-    if (!hasData) {
-      h += '<div style="color:var(--warm-gray,#6B6560);font-size:0.9rem;">Not set yet. Click Edit to add your time and target pay.</div>';
-    } else {
-      var rate = laborData.ownerHourlyRate;
-      var prod = laborData.productionHoursPerWeek;
-      var admin = laborData.adminHoursPerWeek;
-      var total = (prod != null && admin != null) ? prod + admin : (prod || admin || null);
-
-      h += '<div style="display:flex;flex-direction:column;gap:4px;font-size:0.9rem;">';
-      h += '<div style="display:flex;justify-content:space-between;"><span>Target pay</span><span style="font-weight:600;">' + (rate != null ? '$' + rate + '/hr' : '<span style="color:var(--warm-gray-light);">not set</span>') + '</span></div>';
-      h += '<div style="display:flex;justify-content:space-between;"><span>Making (weekly)</span><span style="font-weight:600;">' + (prod != null ? prod + ' hrs' : '<span style="color:var(--warm-gray-light);">not set</span>') + '</span></div>';
-      h += '<div style="display:flex;justify-content:space-between;"><span>Business tasks</span><span style="font-weight:600;">' + (admin != null ? admin + ' hrs' : '<span style="color:var(--warm-gray-light);">not set</span>') + '</span></div>';
-      if (total != null) {
-        h += '<hr style="border:none;border-top:1px solid var(--cream-dark,#F0E8DB);margin:2px 0;">';
-        h += '<div style="display:flex;justify-content:space-between;font-weight:700;"><span>Total weekly</span><span>' + total + ' hrs</span></div>';
-      }
+    if (foundersData.length === 0) {
+      h += '<div style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:14px 18px;box-shadow:0 1px 3px rgba(0,0,0,0.08);color:var(--warm-gray,#6B6560);font-size:0.9rem;">';
+      h += 'No founders added yet. Add yourself (and any co-owners) to track time and target pay.';
       h += '</div>';
+    } else {
+      foundersData.forEach(function(f) {
+        var rate = f.hourlyRate || f.ownerHourlyRate;
+        var prod = f.productionHoursPerWeek;
+        var admin = f.adminHoursPerWeek;
+        var total = (prod != null && admin != null) ? prod + admin : (prod || admin || null);
+        var monthlyCost = ((rate || 0) * (total || 0) * 4.33);
 
-      if (laborData.lastReviewedAt) {
-        h += '<div style="font-size:0.75rem;color:var(--warm-gray-light,#9B958E);margin-top:6px;">Last updated ' + laborData.lastReviewedAt.split('T')[0] + '</div>';
-      }
+        h += '<div style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:14px 18px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
+        h += '<div style="display:flex;justify-content:space-between;align-items:center;">';
+        h += '<span style="font-weight:600;">' + esc(f.name || 'Founder') + '</span>';
+        h += '<button class="btn btn-secondary btn-small" data-id="' + esc(f._key) + '" onclick="studioEditFounder(this.dataset.id)">Edit</button>';
+        h += '</div>';
+        h += '<div style="font-size:0.82rem;color:var(--warm-gray,#6B6560);margin-top:4px;">';
+        h += (rate != null ? '$' + rate + '/hr' : 'rate not set');
+        h += ' \u00B7 ' + (prod != null ? prod + ' hrs making' : 'making hrs not set');
+        h += ' \u00B7 ' + (admin != null ? admin + ' hrs business' : 'business hrs not set');
+        if (total != null) h += ' \u00B7 ' + total + ' hrs/week total';
+        h += ' \u00B7 ~' + fmtDollarsWhole(monthlyCost) + '/mo';
+        h += '</div>';
+        h += '</div>';
+      });
     }
-    h += '</div>';
     h += '</div>';
     return h;
   }
 
-  function openLaborForm() {
-    var formEl = document.getElementById('studioLaborForm');
-    var innerEl = document.getElementById('studioLaborFormInner');
-    var displayEl = document.getElementById('studioLaborDisplay');
+  // --- Founder Add/Edit Form ---
+  var editingFounderId = null;
+  function openFounderForm(founderId) {
+    editingFounderId = founderId;
+    var f = founderId ? foundersData.find(function(x) { return x._key === founderId; }) : {};
+    if (!f) f = {};
+    var isNew = !founderId;
+    var formEl = document.getElementById('studioFounderForm');
+    var innerEl = document.getElementById('studioFounderFormInner');
     if (!formEl || !innerEl) return;
-    if (displayEl) displayEl.style.display = 'none';
 
-    var d = laborData || {};
-    var h = '';
-    h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">';
-
-    h += '<div>';
-    h += '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Target hourly pay</label>';
-    h += '<div style="font-size:0.72rem;color:var(--warm-gray,#6B6560);margin-bottom:2px;">What you\'d pay a skilled person to do your job</div>';
-    h += '<input id="laborRate" type="number" step="0.01" value="' + (d.ownerHourlyRate != null ? d.ownerHourlyRate : '') + '" placeholder="$/hr" style="' + INPUT_STYLE + '">';
-    h += '</div>';
-
-    h += '<div>';
-    h += '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Making hours/week</label>';
+    var rate = f.hourlyRate || f.ownerHourlyRate;
+    var h = '<div style="font-weight:600;font-size:0.95rem;margin-bottom:12px;">' + (isNew ? 'New Founder' : 'Edit Founder') + '</div>';
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
+    h += '<div style="grid-column:1/-1;"><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Name</label>';
+    h += '<input id="founderName" type="text" value="' + esc(f.name || '') + '" placeholder="e.g. Madeline" style="' + INPUT_STYLE + '"></div>';
+    h += '<div><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Target hourly pay</label>';
+    h += '<div style="font-size:0.72rem;color:var(--warm-gray,#6B6560);margin-bottom:2px;">What you\'d pay a skilled person to do this job</div>';
+    h += '<input id="founderRate" type="number" step="0.01" value="' + (rate != null ? rate : '') + '" placeholder="$/hr" style="' + INPUT_STYLE + '"></div>';
+    h += '<div><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Making hours/week</label>';
     h += '<div style="font-size:0.72rem;color:var(--warm-gray,#6B6560);margin-bottom:2px;">At the bench, kiln, or torch</div>';
-    h += '<input id="laborProd" type="number" value="' + (d.productionHoursPerWeek != null ? d.productionHoursPerWeek : '') + '" placeholder="hrs" style="' + INPUT_STYLE + '">';
-    h += '</div>';
-
-    h += '<div>';
-    h += '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Business tasks/week</label>';
+    h += '<input id="founderProd" type="number" value="' + (f.productionHoursPerWeek != null ? f.productionHoursPerWeek : '') + '" placeholder="hrs" style="' + INPUT_STYLE + '"></div>';
+    h += '<div><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Business tasks/week</label>';
     h += '<div style="font-size:0.72rem;color:var(--warm-gray,#6B6560);margin-bottom:2px;">Packing, photos, emails, markets</div>';
-    h += '<input id="laborAdmin" type="number" value="' + (d.adminHoursPerWeek != null ? d.adminHoursPerWeek : '') + '" placeholder="hrs" style="' + INPUT_STYLE + '">';
+    h += '<input id="founderAdmin" type="number" value="' + (f.adminHoursPerWeek != null ? f.adminHoursPerWeek : '') + '" placeholder="hrs" style="' + INPUT_STYLE + '"></div>';
     h += '</div>';
-
+    h += '<div style="display:flex;gap:8px;margin-top:14px;align-items:center;">';
+    h += '<button class="btn btn-primary" onclick="studioSaveFounder()">' + (isNew ? 'Create Founder' : 'Save') + '</button>';
+    h += '<button class="btn btn-secondary" onclick="studioCancelFounderForm()">Cancel</button>';
+    if (!isNew) {
+      h += '<span style="margin-left:auto;"><button class="btn btn-danger btn-small" data-id="' + esc(founderId) + '" onclick="studioDeleteFounder(this.dataset.id)">Delete</button></span>';
+    }
     h += '</div>';
-
-    h += '<div style="display:flex;gap:8px;margin-top:14px;">';
-    h += '<button class="btn btn-primary" onclick="studioSaveLabor()">Save</button>';
-    h += '<button class="btn btn-secondary" onclick="studioCancelLaborForm()">Cancel</button>';
-    h += '</div>';
-
     innerEl.innerHTML = h;
     formEl.style.display = '';
+    document.getElementById('founderName').focus();
   }
 
-  async function saveLabor() {
+  async function saveFounder() {
+    var name = document.getElementById('founderName').value.trim();
+    if (!name) { showToast('Name is required', true); return; }
     var fields = {
-      ownerHourlyRate: parseFloat(document.getElementById('laborRate').value) || null,
-      productionHoursPerWeek: parseInt(document.getElementById('laborProd').value) || null,
-      adminHoursPerWeek: parseInt(document.getElementById('laborAdmin').value) || null,
-      lastReviewedAt: new Date().toISOString(),
+      name: name,
+      hourlyRate: parseFloat(document.getElementById('founderRate').value) || null,
+      productionHoursPerWeek: parseInt(document.getElementById('founderProd').value) || null,
+      adminHoursPerWeek: parseInt(document.getElementById('founderAdmin').value) || null,
       updatedAt: new Date().toISOString(),
     };
     try {
-      await MastDB.lpe.laborProfile.update(fields);
-      var LABOR_GAPS = {
-        ownerHourlyRate: { priority: 'high', hint: 'Used to check whether your recipe prices are paying you fairly' },
-        productionHoursPerWeek: { priority: 'high', hint: 'Needed to calculate your effective hourly rate from actual revenue' },
-        adminHoursPerWeek: { priority: 'medium', hint: 'Most artists only count bench time \u2014 admin hours are the hidden labor cost' },
-      };
-      var gaps = {};
-      for (var f in LABOR_GAPS) {
-        if (fields[f] == null) gaps[f] = LABOR_GAPS[f];
+      if (editingFounderId) {
+        await MastDB._ref('admin/lpe/founders/' + editingFounderId).update(fields);
+        showToast('Founder saved');
+      } else {
+        fields.createdAt = new Date().toISOString();
+        var newId = 'founder_' + Date.now();
+        await MastDB._ref('admin/lpe/founders/' + newId).set(fields);
+        showToast('Founder added');
       }
-      await MastDB.lpe.laborProfile.ref().child('gaps').set(Object.keys(gaps).length > 0 ? gaps : null);
-      showToast('Labor profile saved');
+      editingFounderId = null;
+      studioLoaded = false;
+      loadStudio();
+    } catch (err) {
+      showToast('Error: ' + esc(err.message), true);
+    }
+  }
+
+  async function deleteFounder(founderId) {
+    if (!confirm('Delete this founder? This cannot be undone.')) return;
+    try {
+      await MastDB._ref('admin/lpe/founders/' + founderId).remove();
+      showToast('Founder deleted');
       studioLoaded = false;
       loadStudio();
     } catch (err) {
@@ -711,13 +728,14 @@
     if (formEl) formEl.style.display = 'none';
     editingEquipmentId = null;
   };
-  window.studioEditLabor = openLaborForm;
-  window.studioSaveLabor = saveLabor;
-  window.studioCancelLaborForm = function() {
-    var formEl = document.getElementById('studioLaborForm');
-    var displayEl = document.getElementById('studioLaborDisplay');
-    if (formEl) formEl.style.display = 'none';
-    if (displayEl) displayEl.style.display = '';
+  window.studioAddFounder = function() { openFounderForm(null); };
+  window.studioEditFounder = function(id) { openFounderForm(id); };
+  window.studioSaveFounder = saveFounder;
+  window.studioDeleteFounder = deleteFounder;
+  window.studioCancelFounderForm = function() {
+    var el = document.getElementById('studioFounderForm');
+    if (el) el.style.display = 'none';
+    editingFounderId = null;
   };
   window.studioAddEmployee = function() { openEmployeeForm(null); };
   window.studioEditEmployee = function(id) { openEmployeeForm(id); };
@@ -747,7 +765,7 @@
     },
     detachListeners: function() {
       equipmentData = [];
-      laborData = null;
+      foundersData = [];
       employeesData = [];
       overheadExpenseTotal = 0;
       overheadExpenseCount = 0;
