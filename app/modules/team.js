@@ -377,6 +377,11 @@
     h += '<button class="btn btn-secondary btn-small" data-id="' + esc(emp._key) + '" onclick="teamEditEmployee(this.dataset.id)">Edit</button>';
     h += '</div>';
 
+    // Edit form container (form renders here when Edit is clicked)
+    h += '<div id="teamAddForm" style="display:none;background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
+    h += '<div id="teamAddFormInner"></div>';
+    h += '</div>';
+
     // Pay summary card
     h += '<div style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:14px 18px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
     h += '<div style="display:flex;gap:24px;flex-wrap:wrap;font-size:0.9rem;">';
