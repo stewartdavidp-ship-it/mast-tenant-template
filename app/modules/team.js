@@ -8,6 +8,7 @@
   var selectedEmployeeId = null;
   var editingEmployeeId = null;
   var editingDocId = null;
+  var driveExplainerShown = false;
 
   // --- Constants ---
   var COMPLIANCE_FIELDS = [
@@ -71,6 +72,128 @@
     if (!emp.payRate) return 0;
     if (emp.payType === 'salary') return emp.payRate;
     return Math.round((emp.payRate || 0) * (emp.scheduledHoursPerWeek || 0) * 4.33);
+  }
+
+  function isDriveUrl(url) {
+    return url && /drive\.google\.com|docs\.google\.com/.test(url);
+  }
+
+  // Renders the Drive URL + preview section used in compliance and document forms
+  function renderDriveUrlField(prefix, existingUrl, existingDrive) {
+    var drive = existingDrive || {};
+    var h = '';
+    h += fullWidthDiv(labelField(prefix + 'Url', 'URL or Google Drive link', textInput(prefix + 'Url', existingUrl || '', 'https://drive.google.com/file/d/...')));
+
+    // Drive metadata preview (hidden until populated)
+    h += '<div id="' + prefix + 'DrivePreview" style="grid-column:1/-1;display:' + (drive.driveFileName ? '' : 'none') + ';">';
+    if (drive.driveFileName) {
+      h += renderDrivePreview(prefix, drive);
+    }
+    h += '</div>';
+
+    // Drive explainer (shown once per session when google-drive storage selected)
+    h += '<div id="' + prefix + 'DriveExplainer" style="grid-column:1/-1;display:none;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px 14px;font-size:0.78rem;color:#166534;">';
+    h += '\ud83d\udd17 Paste a Google Drive share link above to auto-link the file. Make sure linked files are set to <strong>restricted access</strong> in Drive (not "anyone with the link").';
+    h += '</div>';
+
+    return h;
+  }
+
+  function renderDrivePreview(prefix, drive) {
+    var h = '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;">';
+    h += '<div style="font-size:0.82rem;">\ud83d\udcc4 <strong>' + esc(drive.driveFileName || '') + '</strong>';
+    if (drive.driveLastModified) h += ' \u00b7 Modified ' + (drive.driveLastModified || '').split('T')[0];
+    h += '</div>';
+    h += '<button type="button" class="btn btn-secondary btn-small" onclick="teamUnlinkDrive(\'' + esc(prefix) + '\')">Unlink</button>';
+    h += '</div>';
+    return h;
+  }
+
+  function attachDriveUrlListener(prefix, storageSelectId) {
+    var urlEl = document.getElementById(prefix + 'Url');
+    var storageEl = storageSelectId ? document.getElementById(storageSelectId) : null;
+
+    if (urlEl) {
+      urlEl.addEventListener('blur', function() {
+        var url = this.value.trim();
+        if (isDriveUrl(url)) {
+          // Auto-switch storage to google-drive if not already
+          if (storageEl && storageEl.value !== 'google-drive') {
+            storageEl.value = 'google-drive';
+          }
+          fetchAndShowDrivePreview(prefix, url);
+        }
+      });
+    }
+
+    if (storageEl) {
+      storageEl.addEventListener('change', function() {
+        var explainer = document.getElementById(prefix + 'DriveExplainer');
+        if (this.value === 'google-drive' && explainer && !driveExplainerShown) {
+          explainer.style.display = '';
+          driveExplainerShown = true;
+        } else if (explainer && this.value !== 'google-drive') {
+          explainer.style.display = 'none';
+        }
+      });
+      // Trigger on load if already google-drive
+      if (storageEl.value === 'google-drive' && !driveExplainerShown) {
+        var explainer = document.getElementById(prefix + 'DriveExplainer');
+        if (explainer) { explainer.style.display = ''; driveExplainerShown = true; }
+      }
+    }
+  }
+
+  async function fetchAndShowDrivePreview(prefix, url) {
+    var preview = document.getElementById(prefix + 'DrivePreview');
+    if (!preview) return;
+    preview.innerHTML = '<div style="font-size:0.78rem;color:var(--warm-gray);">Fetching file info\u2026</div>';
+    preview.style.display = '';
+
+    var meta = await fetchDriveFileMetadata(url);
+    if (!meta) {
+      preview.innerHTML = '<div style="font-size:0.78rem;color:var(--danger);">Could not fetch file metadata. Check the URL and try again.</div>';
+      return;
+    }
+
+    // Store metadata in hidden fields
+    preview.dataset.driveFileId = url.match(/\/d\/([a-zA-Z0-9_-]+)/)?.[1] || '';
+    preview.dataset.driveFileName = meta.name || '';
+    preview.dataset.driveLastModified = meta.modifiedTime || '';
+
+    preview.innerHTML = renderDrivePreview(prefix, {
+      driveFileName: meta.name,
+      driveLastModified: meta.modifiedTime,
+    });
+
+    // Hide explainer once linked
+    var explainer = document.getElementById(prefix + 'DriveExplainer');
+    if (explainer) explainer.style.display = 'none';
+  }
+
+  function unlinkDrive(prefix) {
+    var preview = document.getElementById(prefix + 'DrivePreview');
+    if (preview) {
+      preview.innerHTML = '';
+      preview.style.display = 'none';
+      delete preview.dataset.driveFileId;
+      delete preview.dataset.driveFileName;
+      delete preview.dataset.driveLastModified;
+    }
+    var urlEl = document.getElementById(prefix + 'Url');
+    if (urlEl) urlEl.value = '';
+  }
+
+  function collectDriveFields(prefix) {
+    var preview = document.getElementById(prefix + 'DrivePreview');
+    if (preview && preview.dataset.driveFileName) {
+      return {
+        driveFileId: preview.dataset.driveFileId || null,
+        driveFileName: preview.dataset.driveFileName || null,
+        driveLastModified: preview.dataset.driveLastModified || null,
+      };
+    }
+    return { driveFileId: null, driveFileName: null, driveLastModified: null };
   }
 
   // --- Load ---
@@ -390,7 +513,7 @@
     h += labelField('compDate', 'Completed date', dateInput('compDate', item.completedDate || ''));
     h += labelField('compExpiry', 'Expiry date', dateInput('compExpiry', item.expiryDate || ''));
 
-    h += fullWidthDiv(labelField('compUrl', 'URL (if stored online)', textInput('compUrl', item.url || '', 'https://...')));
+    h += renderDriveUrlField('comp', item.url || '', item);
     h += fullWidthDiv(labelField('compNotes', 'Notes', textInput('compNotes', item.notes || '', 'Optional')));
 
     h += '</div>';
@@ -402,9 +525,11 @@
 
     formEl.innerHTML = h;
     formEl.style.display = '';
+    attachDriveUrlListener('comp', 'compStorage');
   }
 
   async function saveCompliance(empId, fieldKey) {
+    var driveFields = collectDriveFields('comp');
     var fields = {
       status: document.getElementById('compStatus').value,
       storageLocation: document.getElementById('compStorage').value || null,
@@ -412,6 +537,9 @@
       expiryDate: document.getElementById('compExpiry').value || null,
       url: document.getElementById('compUrl').value.trim() || null,
       notes: document.getElementById('compNotes').value.trim() || null,
+      driveFileId: driveFields.driveFileId,
+      driveFileName: driveFields.driveFileName,
+      driveLastModified: driveFields.driveLastModified,
       updatedAt: new Date().toISOString(),
     };
     try {
@@ -784,7 +912,7 @@
       { value: 'not-applicable', label: 'Not Applicable' },
     ], doc.status || 'current'));
     h += labelField('docOnFile', 'On file date', dateInput('docOnFile', doc.onFileDate || ''));
-    h += fullWidthDiv(labelField('docUrl', 'URL', textInput('docUrl', doc.url || '', 'https://drive.google.com/...')));
+    h += renderDriveUrlField('doc', doc.url || '', doc);
     h += fullWidthDiv(labelField('docDesc', 'Description', textInput('docDesc', doc.description || '', 'Optional')));
     h += fullWidthDiv(labelField('docNotes', 'Notes', textInput('docNotes', doc.notes || '', 'Optional')));
 
@@ -810,10 +938,15 @@
       formEl.innerHTML = h;
     }
     formEl.style.display = '';
-    setTimeout(function() { var el = document.getElementById('docTitle'); if (el) el.focus(); }, 0);
+    setTimeout(function() {
+      var el = document.getElementById('docTitle');
+      if (el) el.focus();
+      attachDriveUrlListener('doc', 'docStorage');
+    }, 0);
   }
 
   function collectDocFields() {
+    var driveFields = collectDriveFields('doc');
     return {
       title: document.getElementById('docTitle').value.trim(),
       type: document.getElementById('docType').value,
@@ -824,6 +957,9 @@
       url: document.getElementById('docUrl').value.trim() || null,
       description: document.getElementById('docDesc').value.trim() || null,
       notes: document.getElementById('docNotes').value.trim() || null,
+      driveFileId: driveFields.driveFileId,
+      driveFileName: driveFields.driveFileName,
+      driveLastModified: driveFields.driveLastModified,
       updatedAt: new Date().toISOString(),
     };
   }
@@ -1084,6 +1220,7 @@
   window.teamSaveHours = saveHours;
   window.teamEditCompliance = function(empId, fieldKey) { openComplianceForm(empId, fieldKey); };
   window.teamSaveCompliance = saveCompliance;
+  window.teamUnlinkDrive = unlinkDrive;
   window.teamAddTenantDoc = function() { openDocForm(null, true, null); };
   window.teamEditTenantDoc = function(id) { openDocForm(id, true, null); };
   window.teamSaveDoc = saveDoc;
