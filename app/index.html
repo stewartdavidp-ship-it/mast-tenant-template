@@ -25092,7 +25092,9 @@ function renderStatusQueueCard(cardDef) {
         var primaryText = item[primaryField] || '';
         var secondaryText = secondaryField ? (item[secondaryField] || '') : '';
         var rowRoute = cardDef.viewAllRoute || '';
-        var clickAttr = rowRoute ? ' onclick="navigateTo(\'' + esc(rowRoute) + '\')" style="cursor:pointer;"' : '';
+        var itemId = item.rmaId || item.id || item._key || '';
+        var deepLinkFn = (rowRoute === 'rma' && itemId) ? 'navigateTo(\'rma\');setTimeout(function(){viewRma(\'' + esc(itemId) + '\');},100);' : (rowRoute ? 'navigateTo(\'' + esc(rowRoute) + '\')' : '');
+        var clickAttr = deepLinkFn ? ' onclick="' + deepLinkFn + '" style="cursor:pointer;"' : '';
         contentHtml += '<div class="dash-order-row"' + clickAttr + '>' +
           '<div style="flex:1;min-width:0;">' +
             '<div style="font-weight:500;font-size:0.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(primaryText) + '</div>' +

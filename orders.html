@@ -1645,9 +1645,10 @@ window.TENANT_READY.then(function() {
 
   function hasReturnableItems(order) {
     var items = order.items || [];
+    var gcReturnable = _termsConfig && _termsConfig.giftCardsReturnable;
     for (var i = 0; i < items.length; i++) {
       var item = items[i];
-      if (item.bookingType === 'gift-card' || item.isGiftCard) continue;
+      if (!gcReturnable && (item.bookingType === 'gift-card' || item.isGiftCard)) continue;
       var available = (item.qty || 1) - (item.returnedQty || 0);
       if (available > 0) return true;
     }
@@ -1866,7 +1867,8 @@ window.TENANT_READY.then(function() {
     for (var i = 0; i < items.length; i++) {
       var item = items[i];
       var isGiftCard = item.bookingType === 'gift-card' || item.isGiftCard;
-      if (isGiftCard) continue; // Gift cards are non-returnable
+      var gcReturnable = _termsConfig && _termsConfig.giftCardsReturnable;
+      if (isGiftCard && !gcReturnable) continue; // Gift cards non-returnable unless configured
       var availableQty = (item.qty || 1) - (item.returnedQty || 0);
       if (availableQty <= 0) continue; // Already fully returned
       var name = item.name || item.productName || 'Item';

@@ -3238,6 +3238,9 @@
         html += '<div style="display:flex;justify-content:space-between;font-weight:600;border-top:1px solid var(--cream-dark);padding-top:6px;margin-top:4px;"><span>Total Charged</span><span>' + fp(order.total) + '</span></div>';
         html += '</div></div>';
         el.innerHTML = html;
+        // Also populate the disposition panel summary if visible
+        var disposEl = document.getElementById('rmaDispositionPaymentSummary');
+        if (disposEl) disposEl.innerHTML = html;
       });
     }
 
@@ -3295,6 +3298,7 @@
       // Disposition panel (when status is 'inspected')
       (status === 'inspected' ? '<div class="order-detail-section" style="border:1px solid var(--teal);border-radius:8px;padding:1rem;">' +
         '<div class="order-detail-section-title" style="color:var(--teal);">Disposition &amp; Refund</div>' +
+        '<div id="rmaDispositionPaymentSummary" style="margin-bottom:0.75rem;"></div>' +
         '<div style="margin-bottom:0.75rem;">' +
           '<label style="font-size:0.72rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--warm-gray-light);display:block;margin-bottom:4px;">What happens to the item?</label>' +
           '<select id="rmaDisposition" style="padding:6px 10px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.85rem;background:var(--cream);color:var(--charcoal);width:100%;">' +
