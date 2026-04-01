@@ -16,6 +16,7 @@
   var enrollmentsData = [];
   var enrollmentsLoaded = false;
   var allClassesMap = {}; // id → class for enrollment lookups
+  var allSessionsMap = {}; // id → session for enrollment display
   var instructorsData = [];
   var instructorsLoaded = false;
   var instructorsMap = {}; // id → instructor
@@ -846,8 +847,15 @@
     var table = document.getElementById('bookEnrollmentsTable');
     table.innerHTML = LOADING_HTML;
 
-    // Populate class filter dropdown
+    // Populate class filter dropdown and sessions map
     if (!classesLoaded) await loadClasses();
+    if (!Object.keys(allSessionsMap).length) {
+      try {
+        var sessSnap = await MastDB.classSessions.list(1000);
+        var sessObj = sessSnap.val() || {};
+        Object.keys(sessObj).forEach(function(id) { allSessionsMap[id] = sessObj[id]; });
+      } catch (e) { console.warn('[Book] Could not load sessions map:', e); }
+    }
     var classSelect = document.getElementById('enrollFilterClass');
     if (classSelect) {
       var opts = '<option value="all">All Classes</option>';
@@ -920,7 +928,12 @@
       html += '<tr>' +
         '<td><strong>' + esc(e.studentName || e.customerName || '—') + '</strong><br><span style="font-size:0.8rem;color:var(--warm-gray);">' + esc(e.studentEmail || e.customerEmail || '') + '</span></td>' +
         '<td>' + esc(className) + '</td>' +
-        '<td>' + esc(e.sessionId || '—') + '</td>' +
+        '<td>' + (function() {
+          if (!e.sessionId) return '—';
+          var sess = allSessionsMap[e.sessionId];
+          if (!sess) return esc(e.sessionId);
+          return formatDate(sess.date) + (sess.startTime ? ' ' + formatTime(sess.startTime) : '');
+        })() + '</td>' +
         '<td>' + formatPrice(e.pricePaidCents || e.pricePaid) + '</td>' +
         '<td><span style="' + badgeStyle(STATUS_BADGE_COLORS, e.status) + '">' + esc(statusLabel) + '</span></td>' +
         '<td><div class="event-actions">';
