@@ -502,7 +502,7 @@
       if (navUrl) updates['public/config/nav/logoUrl'] = navUrl;
     }
 
-    if (Object.keys(updates).length > 0) await MastDB._ref().update(updates);
+    if (Object.keys(updates).length > 0) await MastDB._multiUpdate(updates);
   }
 
   // ─── Module Registration ───
