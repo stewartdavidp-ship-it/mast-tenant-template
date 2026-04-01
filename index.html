@@ -250,8 +250,9 @@
 
   /* ========= HERO VARIANT: SPLIT-IMAGE ========= */
   /* Variant wrapper must fill the hero section fully */
-  .hero:has([data-variant="split-image"].active) {
-    background: var(--charcoal, #1a1a2e);
+  .hero:has([data-variant="split-image"].active),
+  .hero:has([data-variant="minimal-text"].active) {
+    background: var(--charcoal, #1a1a2e) !important;
   }
   .hero [data-variant="split-image"] {
     position: absolute;
