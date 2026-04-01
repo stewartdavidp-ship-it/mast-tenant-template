@@ -348,6 +348,10 @@
     var headers = { 'Content-Type': 'application/json' };
     if (token) headers['Authorization'] = 'Bearer ' + token;
 
+    // Include tenantId for cloud function routing
+    data = data || {};
+    if (typeof TENANT_ID !== 'undefined') data.tenantId = TENANT_ID;
+
     return fetch(url, {
       method: 'POST',
       headers: headers,
