@@ -14920,8 +14920,23 @@ function wizardSkipSite() {
   saveWizardProgress(3, { skippedSiteAnalysis: true });
 }
 
+// Wizard event logging — writes to {tenantId}/admin/setupLog for diagnostics
+function logWizardEvent(step, event, detail) {
+  try {
+    if (typeof MastDB !== 'undefined' && MastDB.admin) {
+      MastDB.admin.ref('setupLog').push().set({
+        step: step, event: event, detail: detail || null,
+        at: new Date().toISOString()
+      });
+    }
+  } catch (e) { /* best-effort logging */ }
+}
+
+var _wizardAnalyzing = false;
+
 // Step 1: Analyze existing site and AUTO-APPLY everything
 async function wizardAnalyzeSite() {
+  if (_wizardAnalyzing) return;
   var url = document.getElementById('wizardSiteUrl').value.trim();
   if (!url) { showToast('Please enter a URL.', true); return; }
 
@@ -14982,9 +14997,11 @@ async function wizardAnalyzeSite() {
 
   btn.disabled = true;
   btn.textContent = 'Migrating...';
+  _wizardAnalyzing = true;
+  logWizardEvent(1, 'analyze_start', { url: url });
 
   try {
-    var result = await firebase.functions().httpsCallable('analyzeExistingSite')({
+    var result = await firebase.functions().httpsCallable('analyzeExistingSite', { timeout: 120000 })({
       url: url, tenantId: MastDB.tenantId()
     });
     clearInterval(progressTimer);
@@ -15027,6 +15044,13 @@ async function wizardAnalyzeSite() {
     var tierConfig = TIER_CONFIG[sub.tier] || {};
     var needsModuleChoice = tierConfig.moduleLimit > 0 && tierConfig.moduleLimit < 7 && (sub.selectableModules || []).length > 0;
 
+    logWizardEvent(1, 'analyze_complete', {
+      crawlTier: data.crawlTier,
+      platform: (data.crawlManifest && data.crawlManifest.platform) || 'unknown',
+      templateId: data.draftTemplateId || null,
+      templateConfidence: window._wizardTemplateConfidence
+    });
+
     if (needsModuleChoice) {
       // Step 2: module choice
       showWizardStep(2);
@@ -15036,9 +15060,28 @@ async function wizardAnalyzeSite() {
       showWizardStep(3);
       saveWizardProgress(3, { siteAnalyzed: true, autoApplied: _wizardAutoApplied });
     }
+    _wizardAnalyzing = false;
   } catch (err) {
     clearInterval(progressTimer);
-    statusEl.innerHTML = '<span style="color:var(--danger);">Error: ' + esc(err.message) + '</span>';
+    _wizardAnalyzing = false;
+    logWizardEvent(1, 'analyze_error', { code: err.code || '', message: err.message || '' });
+
+    var userMsg = 'We hit a snag analyzing your site.';
+    var code = err.code || '';
+    var msg = err.message || '';
+    if (code === 'deadline-exceeded' || msg.includes('timeout') || msg.includes('DEADLINE')) {
+      userMsg = 'Your site took too long to analyze. This can happen with complex sites.';
+    } else if (msg.includes('Could not fetch') || msg.includes('ECONNREFUSED') || msg.includes('ENOTFOUND')) {
+      userMsg = 'We couldn\'t reach your site. Make sure the URL is correct and publicly accessible.';
+    } else if (msg.includes('not configured')) {
+      userMsg = 'There was a configuration issue on our end. Please try again.';
+    } else if (msg.includes('No HTML') || msg.includes('does not return HTML')) {
+      userMsg = 'That URL doesn\'t appear to be a website. Check the address and try again.';
+    }
+
+    statusEl.innerHTML = '<div style="background:rgba(220,38,38,0.08);border:1px solid var(--danger);border-radius:8px;padding:16px;text-align:center;">' +
+      '<p style="color:var(--danger);font-weight:600;margin:0 0 4px;">' + esc(userMsg) + '</p>' +
+      '<p style="color:var(--warm-gray);font-size:0.85rem;margin:0;">Click Retry to try again, or skip this step.</p></div>';
     btn.disabled = false;
     btn.textContent = 'Retry';
     btn.onclick = wizardAnalyzeSite;
@@ -15048,6 +15091,7 @@ async function wizardAnalyzeSite() {
 // Auto-apply brand config, template, modules, nav sections from analysis
 async function wizardAutoApplyAll(analysis, data) {
   var autoApplied = {};
+  var writeErrors = [];
 
   // 1. Brand config (name, colors, logo, description, tagline)
   var bizName = analysis.businessName || '';
@@ -15071,12 +15115,12 @@ async function wizardAutoApplyAll(analysis, data) {
   };
   if (bizDesc) brandUpdate.description = bizDesc;
   if (logoUrl) brandUpdate.logoUrl = logoUrl;
-  await MastDB.config.ref('brand').update(brandUpdate);
+  await MastDB.config.ref('brand').update(brandUpdate).catch(function(e) { writeErrors.push('brand: ' + e.message); });
   autoApplied.brand = true;
 
   // Update platform registry
   if (bizName) {
-    await db.ref('mast-platform/tenants/' + MastDB.tenantId()).update({ name: bizName });
+    await db.ref('mast-platform/tenants/' + MastDB.tenantId()).update({ name: bizName }).catch(function(e) { writeErrors.push('registry name: ' + e.message); });
     await db.ref('mast-platform/tenants/' + MastDB.tenantId() + '/publicConfig').update({
       brandName: bizName,
       brandTagline: bizTagline,
@@ -15084,7 +15128,7 @@ async function wizardAutoApplyAll(analysis, data) {
       brandLogoUrl: logoUrl,
       primaryColor: primaryColor,
       accentColor: accentColor
-    });
+    }).catch(function(e) { writeErrors.push('registry publicConfig: ' + e.message); });
   }
 
   // 2. Template match + color scheme
@@ -15101,7 +15145,7 @@ async function wizardAutoApplyAll(analysis, data) {
     themeUpdate.primaryColor = primaryColor;
     themeUpdate.accentColor = accentColor;
   }
-  await MastDB._ref('public/config/theme').set(themeUpdate);
+  await MastDB._ref('public/config/theme').set(themeUpdate).catch(function(e) { writeErrors.push('theme: ' + e.message); });
   autoApplied.template = templateMapping.templateId;
 
   // 3. Auto-select modules from detected content types
@@ -15139,7 +15183,7 @@ async function wizardAutoApplyAll(analysis, data) {
     shop: hasSell, blog: hasMarket, events: hasShow, members: false,
     newsletter: hasMarket, commissions: hasSell, stories: false, social: hasMarket, wholesale: hasSell
   };
-  await MastDB._ref('webPresence/config/features').set(features);
+  await MastDB._ref('webPresence/config/features').set(features).catch(function(e) { writeErrors.push('features: ' + e.message); });
 
   // Nav order: Shop always last in both contexts.
   // Content context renders: About(1), Schedule(2), Blog/FromTheStudio(3), Shop(50)
@@ -15156,8 +15200,8 @@ async function wizardAutoApplyAll(analysis, data) {
   }
   if (features.newsletter) navSections.newsletter = { enabled: true, order: 60 };
   navSections.contact = { enabled: true, order: 99 };
-  await MastDB._ref('public/config/nav/sections').set(navSections);
-  if (logoUrl) await MastDB._ref('public/config/nav/logoUrl').set(logoUrl);
+  await MastDB._ref('public/config/nav/sections').set(navSections).catch(function(e) { writeErrors.push('nav: ' + e.message); });
+  if (logoUrl) await MastDB._ref('public/config/nav/logoUrl').set(logoUrl).catch(function(e) { writeErrors.push('nav logo: ' + e.message); });
   autoApplied.nav = true;
 
   // 5. Seed web presence config
@@ -15180,12 +15224,20 @@ async function wizardAutoApplyAll(analysis, data) {
     publishedAt: null,
     updatedAt: new Date().toISOString()
   };
-  await MastDB._ref('webPresence/config').update(wpConfig);
+  await MastDB._ref('webPresence/config').update(wpConfig).catch(function(e) { writeErrors.push('webPresence: ' + e.message); });
   autoApplied.webPresence = true;
 
   // Record auto-applied state
   _wizardAutoApplied = autoApplied;
   await MastDB.config.ref('setupProgress/autoApplied').set(autoApplied).catch(function() {});
+
+  // Surface write failures
+  if (writeErrors.length > 0) {
+    logWizardEvent(1, 'auto_apply_partial', { errors: writeErrors });
+    showToast('Some settings could not be saved. You can update them in Settings.', true);
+  } else {
+    logWizardEvent(1, 'auto_apply_complete', autoApplied);
+  }
 }
 
 // Step 2: Render inline module cards (reuses MODULE_REGISTRY pattern)
@@ -15338,9 +15390,11 @@ async function wizardConfirmModules() {
     navSections.contact = { enabled: true, order: 99 };
     await MastDB._ref('public/config/nav/sections').set(navSections);
 
+    logWizardEvent(2, 'modules_confirmed', { modules: _wizardSelectedModules });
     showWizardStep(3);
     saveWizardProgress(3, { modulesSelected: _wizardSelectedModules });
   } catch (err) {
+    logWizardEvent(2, 'modules_error', { message: err.message });
     showToast('Failed to save module selection: ' + esc(err.message), true);
     if (btn) { btn.disabled = false; btn.textContent = 'Try Again'; }
   }
@@ -16425,6 +16479,7 @@ async function wizardComplete() {
       console.warn('[Wizard] Could not trigger auto-deploy:', deployErr.message);
     }
 
+    logWizardEvent(3, 'setup_complete');
     showToast('Setup complete! Welcome to your dashboard.');
 
     // Transition to dashboard
@@ -20865,13 +20920,15 @@ function openImageModal(imageId, defaultSection) {
           '<input type="text" id="imgPrice" value="' + esc(img.price || '') + '" placeholder="e.g. $45">' +
         '</div>' +
       '</div>' +
+      // imageFit only affects gallery/shop sections — hero uses background-size:cover always
+      (section !== 'hero' ?
       '<div class="form-group">' +
         '<label for="imgFit">Image Display</label>' +
         '<select id="imgFit">' +
           '<option value="contain"' + (img.imageFit !== 'cover' ? ' selected' : '') + '>Fit inside frame (no cropping)</option>' +
           '<option value="cover"' + (img.imageFit === 'cover' ? ' selected' : '') + '>Fill frame (may crop edges)</option>' +
         '</select>' +
-      '</div>' +
+      '</div>' : '') +
       '<div class="form-group">' +
         '<div class="form-check">' +
           '<input type="checkbox" id="imgVisible"' + (img.visible !== false ? ' checked' : '') + '>' +

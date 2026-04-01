@@ -15,6 +15,15 @@
   var templateManifest = null;
   var navSections = null;
 
+  // --- Sync gallery data into the core shell's object without replacing the reference ---
+  function syncToGlobal(data) {
+    var g = window.gallery;
+    // Clear existing keys
+    Object.keys(g).forEach(function(k) { delete g[k]; });
+    // Copy new data in
+    Object.keys(data).forEach(function(k) { g[k] = data[k]; });
+  }
+
   // --- Mark unpublished (shared with website module) ---
   function markUnpublished() {
     if (window.markUnpublished) return window.markUnpublished();
@@ -125,8 +134,10 @@
       }
     }
 
-    // Sync gallery to global so existing functions (moveImage, openImageModal, etc.) work
-    window.gallery = galleryData;
+    // Sync gallery data into the core shell's gallery object (not replace it).
+    // Core shell declares `var gallery = {}` which is also window.gallery.
+    // Replacing window.gallery would break the local var reference.
+    syncToGlobal(galleryData);
 
     loaded = true;
   }
@@ -136,7 +147,7 @@
     if (!galleryListener) {
       galleryListener = MastDB.gallery.listen(500, function(snap) {
         galleryData = snap.val() || {};
-        window.gallery = galleryData;
+        syncToGlobal(galleryData);
         autoReindexIfNeeded();
         if (window.currentRoute === 'homepage') renderHomepage();
       }, function(err) {

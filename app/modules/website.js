@@ -2195,7 +2195,7 @@
     if (resultsEl) resultsEl.innerHTML = '';
 
     try {
-      var result = await firebase.functions().httpsCallable('analyzeExistingSite')({
+      var result = await firebase.functions().httpsCallable('analyzeExistingSite', { timeout: 120000 })({
         url: url, tenantId: MastDB.tenantId()
       });
       var data = result.data;
@@ -2546,7 +2546,7 @@
     try {
       // First, run analyzeExistingSite to get the crawl manifest
       if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Analyzing site to build crawl plan...</span>';
-      var result = await firebase.functions().httpsCallable('analyzeExistingSite')({
+      var result = await firebase.functions().httpsCallable('analyzeExistingSite', { timeout: 120000 })({
         url: url, tenantId: MastDB.tenantId()
       });
 
