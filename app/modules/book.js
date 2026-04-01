@@ -2293,7 +2293,10 @@
         html += '<button class="btn btn-primary" style="background:' + SUCCESS_COLOR + ';" onclick="window._bookStartSession(\'' + esc(sessionId) + '\')"' + (checkedInCount === 0 ? ' disabled' : '') + '>Start Class (' + checkedInCount + ' checked in)</button>';
       } else if (isStarted && !isClosed) {
         var unclosedCount = checkedInCount + confirmedCount;
-        html += '<button class="btn btn-primary" style="background:' + SUCCESS_COLOR + ';" onclick="window._bookCloseSession(\'' + esc(sessionId) + '\')"' + (unclosedCount > 0 ? ' disabled title="' + unclosedCount + ' enrollment(s) not yet closed out"' : '') + '>Close Session</button>';
+        if (unclosedCount > 0) {
+          html += '<button class="btn btn-primary" onclick="window._bookCloseOutAll(\'' + esc(sessionId) + '\')">Close Out All as Completed (' + unclosedCount + ')</button>';
+        }
+        html += '<button class="btn btn-primary" style="background:' + SUCCESS_COLOR + ';" onclick="window._bookCloseSession(\'' + esc(sessionId) + '\')"' + (unclosedCount > 0 ? ' disabled title="Close out all students first"' : '') + '>Close Session</button>';
       }
       if (isClosed && session.classClosedAt) {
         html += '<span style="color:' + SUCCESS_COLOR + ';font-size:0.85rem;">&#10003; Session completed ' + new Date(session.classClosedAt).toLocaleString() + '</span>';
@@ -2399,6 +2402,36 @@
   };
 
   // ── Close the session ──
+  // ── Close out all students as completed ──
+  window._bookCloseOutAll = async function(sessionId) {
+    try {
+      var snap = await MastDB.enrollments.bySession(sessionId);
+      var enrollments = snap.val() || {};
+      var now = new Date().toISOString();
+      var count = 0;
+
+      for (var id in enrollments) {
+        var e = enrollments[id];
+        if (e.status === 'checked-in' || e.status === 'confirmed') {
+          var finalStatus = 'completed';
+          // Soft waiver enforcement
+          if (e.waiverStatus && e.waiverStatus !== 'signed' && e.waiverStatus !== 'na') {
+            finalStatus = 'attended-pending-waiver';
+          }
+          await MastDB.enrollments.update(id, {
+            status: finalStatus,
+            completedAt: now
+          });
+          count++;
+        }
+      }
+      MastAdmin.showToast(count + ' student' + (count !== 1 ? 's' : '') + ' closed out');
+      window._bookManageSession(sessionId, opsClassId);
+    } catch (err) {
+      MastAdmin.showToast('Failed: ' + err.message, true);
+    }
+  };
+
   window._bookCloseSession = async function(sessionId) {
     var notesEl = document.getElementById('sessionCloseNotes');
     var notes = notesEl ? notesEl.value.trim() : '';
