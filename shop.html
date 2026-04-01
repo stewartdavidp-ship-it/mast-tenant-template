@@ -569,6 +569,8 @@ window.TENANT_READY.then(function() {
         .filter(function(p) {
           // Keep discontinued products (portfolio visibility), hide non-discontinued sold items
           if (p.availability === 'sold' && p.availability !== 'discontinued') return false;
+          // When no categories configured, show all active products
+          if (SHOP_IDS.length === 0) return p.status === 'active' || !p.status;
           var cats = p.categories || [];
           if (!cats.some(function(c) { return SHOP_IDS.indexOf(c) !== -1; })) return false;
           // Seconds products: hide if no price or no stock (they can't be built, only sold from inventory)
