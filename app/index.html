@@ -5023,6 +5023,17 @@
         <div class="sidebar-item" data-route="email-log" onclick="navigateTo('email-log')">Email Log</div>
       </div>
     </div>
+    <!-- Advise -->
+    <div class="sidebar-section" data-section="advise">
+      <div class="sidebar-section-header" onclick="toggleSection('advise')">
+        <span class="sidebar-section-icon">&#128202;</span>
+        <span class="sidebar-section-label">Advise</span>
+        <span class="sidebar-section-arrow">&#9654;</span>
+      </div>
+      <div class="sidebar-items">
+        <div class="sidebar-item" data-route="advisor" onclick="navigateTo('advisor')">Business Plan</div>
+      </div>
+    </div>
     <!-- Book -->
     <div class="sidebar-section" data-section="book">
       <div class="sidebar-section-header" onclick="toggleSection('book')">
@@ -5086,6 +5097,10 @@
     <!-- ===== EMAIL LOG TAB ===== -->
     <div id="emailLogTab" style="display:none;">
       <div id="emailLogContent"></div>
+    </div>
+
+    <!-- ===== ADVISOR TAB ===== -->
+    <div id="advisorTab" style="display:none;">
     </div>
 
     <!-- ===== SOCIAL MEDIA TAB ===== -->
@@ -11349,10 +11364,11 @@ var SECTION_ROUTES = {
   'run':    ['trips', 'expenses', 'reports', 'financials', 'contacts', 'customers', 'email-log'],
   'events': ['events-shows', 'events-settings'],
   'web':    ['website', 'homepage', 'images'],
-  'manage': ['products', 'inventory', 'employees', 'analytics', 'auditlog', 'settings']
+  'manage': ['products', 'inventory', 'employees', 'analytics', 'auditlog', 'settings'],
+  'advise': ['advisor']
 };
 
-var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'expensesTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'termsTab'];
+var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'expensesTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'termsTab', 'advisorTab'];
 
 var currentRoute = 'dashboard';
 
@@ -11772,7 +11788,8 @@ homepage: { src: 'modules/homepage.js', routes: ['homepage'] },
   brand: { src: 'modules/brand.js', routes: ['brand'] },
   promotions: { src: 'modules/promotions.js', routes: ['promotions'] },
   book: { src: 'modules/book.js', routes: ['book', 'book-detail', 'enrollments', 'instructors', 'instructor-detail', 'resources', 'resource-detail', 'passes', 'pass-detail', 'calendar', 'book-reports'] },
-  cart: { src: 'modules/cart.js', routes: ['wallet', 'gift-cards', 'loyalty'] }
+  cart: { src: 'modules/cart.js', routes: ['wallet', 'gift-cards', 'loyalty'] },
+  advisor: { src: 'modules/advisor.js', routes: ['advisor'] }
 };
 
 // Reverse lookup: route → moduleId (built from MODULE_MANIFEST)
