@@ -25545,11 +25545,14 @@ function renderStatusQueueCard(cardDef) {
     // Deep link config
     var dl = cardDef.deepLink || null;
 
-    var contentHtml = '';
+    // Hide card if no items match
     if (items.length === 0) {
-      contentHtml = '<div class="dash-queue-empty">None right now.</div>';
-    } else {
-      items.forEach(function(item) {
+      container.innerHTML = '';
+      return;
+    }
+
+    var contentHtml = '';
+    items.forEach(function(item) {
         var timeAgo = '';
         var ts = item[timestampField];
         if (ts) {
@@ -25583,14 +25586,10 @@ function renderStatusQueueCard(cardDef) {
           '<div style="font-size:0.75rem;color:var(--warm-gray-light);white-space:nowrap;margin-left:8px;">' + timeAgo + '</div>' +
         '</div>';
       });
-    }
 
     container.innerHTML = renderDashboardCard(cardConfig, items.length, contentHtml);
-    // Activity tracking
-    if (items.length > 0) {
-      var newest = items[0][timestampField] || '';
-      updateCardActivity(cardDef._cardId, newest);
-    }
+    var newest = items[0][timestampField] || '';
+    updateCardActivity(cardDef._cardId, newest);
   }).catch(function(err) {
     console.error('Error loading custom card ' + cardDef.title + ':', err);
     container.innerHTML = '';
