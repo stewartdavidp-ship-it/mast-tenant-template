@@ -293,6 +293,8 @@
     '</div>';
   }
 
+  function formatPrice(cents) { return '$' + (cents / 100).toFixed(2); }
+
   function renderCancelForm(enrollmentId, info) {
     var el = document.getElementById('cbContent');
 
@@ -313,9 +315,23 @@
     }
     infoHtml += '</div>';
 
+    // Payment-specific messaging
+    var paymentNote = '';
+    if (info.paymentType === 'pass') {
+      var pn = info.passName ? esc(info.passName) : 'your pass';
+      paymentNote = '<div style="margin:0 0 1.25rem;padding:12px 16px;background:#E8F5E9;border-left:4px solid #4CAF50;border-radius:4px;">' +
+        '<p style="margin:0;font-size:0.85rem;color:#333;">Your <strong>' + pn + '</strong> visit will be restored to your account when you cancel.</p>' +
+      '</div>';
+    } else if (info.paymentType === 'paid' && info.pricePaidCents > 0) {
+      paymentNote = '<div style="margin:0 0 1.25rem;padding:12px 16px;background:#FFF8E1;border-left:4px solid #FFD54F;border-radius:4px;">' +
+        '<p style="margin:0;font-size:0.85rem;color:#333;">You paid <strong>' + formatPrice(info.pricePaidCents) + '</strong> for this class. The studio will review your cancellation and process a refund or store credit.</p>' +
+      '</div>';
+    }
+
     el.innerHTML = '<div class="cb-card">' +
       '<p style="font-size:0.88rem;color:var(--warm-gray);margin:0 0 1.25rem;">Hi ' + esc(info.customerName || 'there') + ', you can cancel your enrollment below.</p>' +
       infoHtml +
+      paymentNote +
       '<div class="cb-field">' +
         '<label>Reason for cancellation (optional)</label>' +
         '<select id="cbReason">' +
@@ -328,7 +344,6 @@
         '</select>' +
       '</div>' +
       '<button class="cb-btn" id="cbSubmitBtn" onclick="window._submitCancel()">Cancel My Enrollment</button>' +
-      '<p style="text-align:center;margin:1rem 0 0;font-size:0.78rem;color:var(--warm-gray,#888);">If you paid for this class, a refund or credit will be issued.</p>' +
     '</div>';
   }
 
@@ -350,11 +365,20 @@
       var result = data.result || data;
       if (result.success) {
         var el = document.getElementById('cbContent');
+        var refundMsg = '';
+        if (result.paymentType === 'pass' && result.passRestored) {
+          var pn = result.passName ? esc(result.passName) : 'Your pass';
+          refundMsg = '<div style="margin:1rem 0;padding:12px 16px;background:#E8F5E9;border-left:4px solid #4CAF50;border-radius:4px;text-align:left;">' +
+            '<p style="margin:0;font-size:0.88rem;color:#333;"><strong>Pass visit restored.</strong> ' + pn + ' visit has been returned to your account.</p></div>';
+        } else if (result.paymentType === 'paid' && result.pricePaidCents > 0) {
+          refundMsg = '<div style="margin:1rem 0;padding:12px 16px;background:#FFF8E1;border-left:4px solid #FFD54F;border-radius:4px;text-align:left;">' +
+            '<p style="margin:0;font-size:0.88rem;color:#333;"><strong>Refund pending.</strong> Your payment of ' + formatPrice(result.pricePaidCents) + ' is being reviewed. The studio will contact you about your refund or store credit.</p></div>';
+        }
         el.innerHTML = '<div class="cb-success">' +
           '<div class="cb-success-icon">&#10003;</div>' +
           '<h2>Enrollment Cancelled</h2>' +
           '<p>Your enrollment has been cancelled successfully.</p>' +
-          '<p style="margin-top:0.75rem;">If you paid for this class, a refund or credit will be issued.</p>' +
+          refundMsg +
           '<a href="/classes.html" class="cb-link">Browse Classes</a>' +
         '</div>';
       } else {
