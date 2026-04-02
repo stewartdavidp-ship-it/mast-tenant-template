@@ -1688,6 +1688,61 @@
       '</div>';
     }
 
+    // ── Wallet Deductions (for non-shippable carts that skipped the shipping step) ──
+    var isNonShippable = window.MastCart && window.MastCart.isNonShippableCart && window.MastCart.isNonShippableCart();
+    var hasAnyWallet = checkoutData.walletCredits.length > 0 ||
+      checkoutData.walletGiftCards.length > 0 ||
+      (checkoutData.loyaltyConfig && checkoutData.loyaltyConfig.enabled && checkoutData.loyaltyBalance && checkoutData.loyaltyBalance.totalPoints > 0) ||
+      (checkoutData.customerPasses.length > 0 && Object.keys(checkoutData.passAssignments).length > 0);
+
+    if (isNonShippable && hasAnyWallet) {
+      html += '<div class="review-section">' +
+        '<div class="review-section-header"><span class="review-section-title">Wallet Deductions</span></div>';
+
+      // Class passes
+      if (checkoutData.customerPasses.length > 0 && Object.keys(checkoutData.passAssignments).length > 0) {
+        var pCoversCents = 0;
+        var pVisits = Object.keys(checkoutData.passAssignments).length;
+        Object.keys(checkoutData.passAssignments).forEach(function(idx) { pCoversCents += checkoutData.passAssignments[idx].coversAmountCents || 0; });
+        html += '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;color:var(--text);margin-bottom:8px;">' +
+          '<input type="checkbox" id="coPassToggle" ' + (checkoutData.passApplied ? 'checked' : '') + ' data-co="toggle-pass">' +
+          '&#127915; Use class pass (' + pVisits + ' visit' + (pVisits !== 1 ? 's' : '') + ', ' + formatMoney(pCoversCents / 100) + ' off)' +
+        '</label>';
+      }
+
+      // Loyalty
+      if (checkoutData.loyaltyConfig && checkoutData.loyaltyConfig.enabled && checkoutData.loyaltyBalance && checkoutData.loyaltyBalance.totalPoints > 0) {
+        var rlc = checkoutData.loyaltyConfig;
+        var rlb = checkoutData.loyaltyBalance;
+        var rLoyaltyVal = Math.round((rlb.totalPoints / rlc.redemptionRate) * 100);
+        html += '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;color:var(--text);margin-bottom:8px;">' +
+          '<input type="checkbox" id="coLoyaltyToggle" ' + (checkoutData.loyaltyApplied ? 'checked' : '') + ' data-co="toggle-loyalty">' +
+          '&#11088; Apply ' + rlb.totalPoints + ' ' + esc(rlc.pointName) + ' (' + formatMoney(rLoyaltyVal / 100) + ' off)' +
+        '</label>';
+      }
+
+      // Gift Cards
+      if (checkoutData.walletGiftCards.length > 0) {
+        var rTotalGc = checkoutData.walletGiftCards.reduce(function(sum, g) { return sum + (g.remainingCents || 0); }, 0);
+        html += '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;color:var(--text);margin-bottom:8px;">' +
+          '<input type="checkbox" id="coGiftCardToggle" ' + (checkoutData.walletGiftCardApplied ? 'checked' : '') + ' data-co="toggle-giftcard">' +
+          '&#127873; Apply gift cards (' + formatMoney(rTotalGc / 100) + ' available)' +
+        '</label>';
+      }
+
+      // Credits
+      if (checkoutData.walletCredits.length > 0) {
+        var rTotalCr = checkoutData.walletCredits.reduce(function(sum, c) { return sum + (c.remainingCents != null ? c.remainingCents : (c.amountCents || 0)); }, 0);
+        html += '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;color:var(--text);margin-bottom:8px;">' +
+          '<input type="checkbox" id="coWalletToggle" ' + (checkoutData.walletCreditApplied ? 'checked' : '') + ' data-co="toggle-wallet">' +
+          '&#128179; Apply store credits (' + formatMoney(rTotalCr / 100) + ' available)' +
+        '</label>';
+      }
+
+      html += '<div style="font-size:0.75rem;color:var(--warm-gray-light);margin-top:6px;">Deductions applied in order: passes \u2192 coupons \u2192 loyalty \u2192 gift cards \u2192 credits</div>' +
+        '</div>';
+    }
+
     // Totals
     html += '<div class="review-section">' + buildTotalsHtml(subtotal) + '</div>';
 
