@@ -7694,6 +7694,7 @@
         <button class="view-tab" onclick="window._bookSubTab('enrollments')">Enrollments</button>
         <button class="view-tab" onclick="window._bookSubTab('calendar')">Calendar</button>
         <button class="view-tab" onclick="window._bookSubTab('book-reports')">Class Reports</button>
+        <button class="view-tab" onclick="window._bookSubTab('book-settings')">Settings</button>
       </div>
 
       <!-- Classes List View -->
@@ -7868,6 +7869,14 @@
           </div>
         </div>
         <div id="bookReportsContent"></div>
+      </div>
+
+      <!-- Book Settings View -->
+      <div id="bookSettingsView" style="display:none;">
+        <div class="section-header">
+          <h2>Booking Settings</h2>
+        </div>
+        <div id="bookSettingsContent"></div>
       </div>
     </div>
 
@@ -25956,7 +25965,31 @@ function approveRefund(enrollmentId, paymentType) {
         }
       });
     }
-    // TODO: For paid bookings, issue wallet store credit when wallet credit system is built
+    if (paymentType !== 'pass') {
+      // Issue wallet store credit for paid bookings
+      MastDB._ref('admin/enrollments/' + enrollmentId).once('value').then(function(snap) {
+        var enr = snap.val();
+        if (enr && enr.studentUid && enr.pricePaidCents && enr.pricePaidCents > 0) {
+          var creditRef = MastDB._ref('public/accounts/' + enr.studentUid + '/wallet/credits').push();
+          creditRef.set({
+            id: creditRef.key,
+            type: 'store_credit',
+            source: 'cancellation',
+            amountCents: enr.pricePaidCents,
+            remainingCents: enr.pricePaidCents,
+            status: 'active',
+            sourceEnrollmentId: enrollmentId,
+            sourceOrderId: enr.orderId || null,
+            createdAt: new Date().toISOString(),
+            expiresAt: null
+          }).then(function() {
+            if (typeof MastAdmin !== 'undefined' && MastAdmin.showToast) {
+              MastAdmin.showToast('Store credit of $' + (enr.pricePaidCents / 100).toFixed(2) + ' issued');
+            }
+          });
+        }
+      });
+    }
     renderDashCardPendingRefunds();
     if (typeof MastAdmin !== 'undefined' && MastAdmin.showToast) MastAdmin.showToast('Refund approved');
   });

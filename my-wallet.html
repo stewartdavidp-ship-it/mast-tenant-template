@@ -777,7 +777,38 @@
         '</div>';
     }
 
-    var html = '<div class="mw-list">';
+    // Aggregate summary for active passes
+    var now = new Date().toISOString();
+    var activePasses = walletData.passes.filter(function(p) {
+      return p.status === 'active' && (!p.expiresAt || p.expiresAt >= now);
+    });
+    var hasUnlimited = false;
+    var totalVisits = 0;
+    activePasses.forEach(function(p) {
+      if (p.visitsRemaining === null || p.visitsRemaining === undefined) {
+        hasUnlimited = true;
+      } else {
+        totalVisits += (p.visitsRemaining || 0);
+      }
+    });
+
+    var html = '';
+    if (activePasses.length > 0) {
+      var aggText = hasUnlimited ? 'Unlimited visits available' : totalVisits + ' visit' + (totalVisits !== 1 ? 's' : '') + ' available';
+      var nextExpiry = null;
+      activePasses.forEach(function(p) {
+        if (p.expiresAt && (!nextExpiry || p.expiresAt < nextExpiry)) nextExpiry = p.expiresAt;
+      });
+      html += '<div style="padding:16px;margin-bottom:16px;border-radius:10px;background:var(--surface-dark,#1a1a2e);border:1px solid color-mix(in srgb, var(--accent,#2D7D46) 30%, transparent);">' +
+        '<div style="font-size:1.4rem;font-weight:600;color:var(--accent,#2D7D46);">' + aggText + '</div>' +
+        '<div style="font-size:0.8rem;color:var(--warm-gray,#9B958E);margin-top:4px;">' +
+          activePasses.length + ' active pass' + (activePasses.length !== 1 ? 'es' : '') +
+          (nextExpiry ? ' &middot; Next expiry: ' + formatDate(nextExpiry) : '') +
+        '</div>' +
+      '</div>';
+    }
+
+    html += '<div class="mw-list">';
     walletData.passes.forEach(function(p) {
       var isActive = p.status === 'active';
       var visitsText = '';

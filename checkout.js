@@ -26,7 +26,9 @@
     loyaltyApplied: false,     // whether to apply loyalty points to this order
     walletGiftCards: [],       // [{ id, code, remainingCents, ... }] active gift cards
     walletGiftCardApplied: false, // whether to apply gift cards to this order
-    savedCoupons: []           // [{ code, ... }] saved coupons from wallet
+    savedCoupons: [],          // [{ code, ... }] saved coupons from wallet
+    customerPasses: [],        // [{ _id, passDefinitionId, visitsRemaining, expiresAt, status, priority, _def }] active passes with definitions
+    passAssignments: {}        // { cartItemIndex: { passId, passName, coversAmountCents, surchargeAmountCents } } — pass applied to each cart item
   };
 
   var shippingConfigCache = null; // cached flat-rate config
@@ -79,7 +81,13 @@
     var items = window.MastCart.getItems();
     var total = 0;
     for (var i = 0; i < items.length; i++) {
-      total += parsePrice(items[i].price) * (items[i].qty || 1);
+      var passAssignment = checkoutData.passAssignments[i];
+      if (passAssignment) {
+        // Pass covers part or all — only charge the surcharge
+        total += (passAssignment.surchargeAmountCents || 0) / 100;
+      } else {
+        total += parsePrice(items[i].price) * (items[i].qty || 1);
+      }
     }
     return Math.round(total * 100) / 100;
   }
@@ -90,7 +98,12 @@
     var total = 0;
     for (var i = 0; i < items.length; i++) {
       if (items[i].bookingType === 'gift-card') continue;
-      total += parsePrice(items[i].price) * (items[i].qty || 1);
+      var passAssignment = checkoutData.passAssignments[i];
+      if (passAssignment) {
+        total += (passAssignment.surchargeAmountCents || 0) / 100;
+      } else {
+        total += parsePrice(items[i].price) * (items[i].qty || 1);
+      }
     }
     return Math.round(total * 100) / 100;
   }
@@ -941,6 +954,15 @@
 
     var html = '<div class="order-totals">';
     html += '<div class="order-total-row"><span class="order-total-label">Subtotal</span><span class="order-total-value">' + formatMoney(subtotal) + '</span></div>';
+
+    // Show pass savings note if any passes applied
+    var passSavingsCents = 0;
+    var assignments = checkoutData.passAssignments || {};
+    Object.keys(assignments).forEach(function(idx) { passSavingsCents += assignments[idx].coversAmountCents || 0; });
+    if (passSavingsCents > 0) {
+      html += '<div style="text-align:right;font-size:0.72rem;color:var(--accent,#2D7D46);margin-top:-4px;margin-bottom:4px;">Includes ' + formatMoney(passSavingsCents / 100) + ' covered by pass</div>';
+    }
+
     html += '<div class="order-total-row"><span class="order-total-label">Shipping</span><span class="order-total-value">' + (shipCost ? formatMoney(shipCost) : '--') + '</span></div>';
 
     var taxLabel = 'Tax';
@@ -1091,6 +1113,173 @@
       .catch(function(err) {
         console.warn('[checkout] Failed to load saved coupons:', err);
       });
+  }
+
+  // ── Customer Passes: Load active passes with definitions for auto-apply ──
+  function loadCustomerPasses() {
+    checkoutData.customerPasses = [];
+    checkoutData.passAssignments = {};
+    var user = window.MastCart && window.MastCart.getCurrentUser();
+    if (!user || user.isAnonymous) return;
+    var db = getDb();
+    if (!db) return;
+
+    db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/passes')
+      .once('value')
+      .then(function(snap) {
+        var data = snap.val() || {};
+        var now = new Date().toISOString();
+        var activePasses = Object.keys(data).map(function(id) {
+          var p = data[id];
+          p._id = id;
+          return p;
+        }).filter(function(p) {
+          if (p.status !== 'active') return false;
+          if (p.expiresAt && p.expiresAt < now) return false;
+          if (p.visitsRemaining !== null && p.visitsRemaining !== undefined && p.visitsRemaining <= 0) return false;
+          return true;
+        });
+
+        if (activePasses.length === 0) return;
+
+        // Load pass definitions for scope checking
+        var defIds = {};
+        activePasses.forEach(function(p) { if (p.passDefinitionId) defIds[p.passDefinitionId] = true; });
+        var defKeys = Object.keys(defIds);
+        var defPromises = defKeys.map(function(defId) {
+          return db.ref(TENANT_ID + '/public/passDefinitions/' + defId).once('value')
+            .then(function(s) { return { id: defId, val: s.val() }; });
+        });
+
+        // Also fetch class data for class items in cart (for category matching)
+        var cartItems = window.MastCart.getItems();
+        var classIds = {};
+        cartItems.forEach(function(it) { if (it.bookingType === 'class' && it.classId) classIds[it.classId] = true; });
+        var classPromises = Object.keys(classIds).map(function(cid) {
+          // Strip -series suffix if present
+          var baseId = cid.replace(/-series$/, '');
+          return db.ref(TENANT_ID + '/public/classes/' + baseId).once('value')
+            .then(function(s) { return { id: cid, val: s.val() }; })
+            .catch(function() { return { id: cid, val: null }; });
+        });
+
+        return Promise.all([Promise.all(defPromises), Promise.all(classPromises)]).then(function(results) {
+          var defs = results[0];
+          var classes = results[1];
+
+          var defMap = {};
+          defs.forEach(function(d) { if (d.val) defMap[d.id] = d.val; });
+
+          // Store class category info for pass matching
+          var classMap = {};
+          classes.forEach(function(c) { if (c.val) classMap[c.id] = c.val; });
+          // Attach category to cart items
+          cartItems.forEach(function(it) {
+            if (it.classId && classMap[it.classId]) {
+              it._classCategory = classMap[it.classId].category || null;
+            }
+          });
+
+          // Attach definition to each pass and sort: priority desc, soonest expiry first
+          var priorityMap = { high: 3, medium: 2, low: 1 };
+          checkoutData.customerPasses = activePasses.map(function(p) {
+            p._def = defMap[p.passDefinitionId] || null;
+            return p;
+          }).filter(function(p) {
+            return p._def != null; // skip passes with missing definitions
+          }).sort(function(a, b) {
+            var pa = priorityMap[a.priority] || 1;
+            var pb = priorityMap[b.priority] || 1;
+            if (pb !== pa) return pb - pa;
+            var ea = a.expiresAt || '9999';
+            var eb = b.expiresAt || '9999';
+            return ea.localeCompare(eb);
+          });
+
+          // Auto-apply passes to class items
+          autoApplyPasses();
+        });
+      })
+      .catch(function(err) {
+        console.warn('[checkout] Failed to load customer passes:', err);
+      });
+  }
+
+  // Check if a pass covers a given class item
+  function passCoversClass(pass, classId, classCategory) {
+    var def = pass._def;
+    if (!def) return false;
+    // allowedClassIds: if set, class must be in the list
+    if (def.allowedClassIds && def.allowedClassIds.length > 0) {
+      if (def.allowedClassIds.indexOf(classId) === -1) return false;
+    }
+    // allowedCategories: if set, class category must be in the list
+    if (def.allowedCategories && def.allowedCategories.length > 0) {
+      if (!classCategory || def.allowedCategories.indexOf(classCategory) === -1) return false;
+    }
+    return true;
+  }
+
+  // Auto-apply passes to class items in cart (greedy: soonest-expiring first)
+  function autoApplyPasses() {
+    checkoutData.passAssignments = {};
+    var passes = checkoutData.customerPasses;
+    if (!passes || passes.length === 0) return;
+
+    var items = window.MastCart.getItems();
+    // Track remaining visits per pass (don't mutate originals)
+    var visitBudget = {};
+    passes.forEach(function(p) {
+      visitBudget[p._id] = (p.visitsRemaining !== null && p.visitsRemaining !== undefined)
+        ? p.visitsRemaining : 999; // unlimited
+    });
+
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+      if (item.bookingType !== 'class') continue;
+      var classId = item.classId;
+      if (!classId) continue;
+
+      // Find best pass for this item
+      for (var j = 0; j < passes.length; j++) {
+        var pass = passes[j];
+        if (visitBudget[pass._id] <= 0) continue;
+        if (!passCoversClass(pass, classId, item._classCategory)) continue;
+
+        var classPriceCents = item.priceCents || Math.round(parsePrice(item.price) * 100);
+        var def = pass._def;
+        var coversAmountCents = classPriceCents;
+        var surchargeAmountCents = 0;
+
+        // Check maxClassPriceCents limit
+        if (def.maxClassPriceCents && classPriceCents > def.maxClassPriceCents) {
+          coversAmountCents = def.maxClassPriceCents;
+          surchargeAmountCents = classPriceCents - def.maxClassPriceCents;
+        }
+
+        checkoutData.passAssignments[i] = {
+          passId: pass._id,
+          passName: def.name || pass.passDefinitionName || 'Class Pass',
+          coversAmountCents: coversAmountCents,
+          surchargeAmountCents: surchargeAmountCents
+        };
+        visitBudget[pass._id]--;
+        break; // assigned, move to next item
+      }
+    }
+  }
+
+  // Remove pass assignment for a cart item (user opted out)
+  function removePassAssignment(itemIndex) {
+    delete checkoutData.passAssignments[itemIndex];
+    // Recalculate remaining assignments (a freed pass may now cover a later item)
+    // Simple approach: just remove this one — re-apply would be complex and the user is opting out intentionally
+  }
+
+  // Re-apply pass for a cart item (user opted back in)
+  function reapplyPassAssignment(itemIndex) {
+    // Run full auto-apply and restore
+    autoApplyPasses();
   }
 
   // ── Loyalty: Load config + balance ──
@@ -1416,14 +1605,51 @@
       }
 
       var lineTotal = parsePrice(item.price) * (item.qty || 1);
+      var passAssignment = checkoutData.passAssignments[i];
+      var priceHtml = '';
+      var passHtml = '';
+
+      if (passAssignment) {
+        if (passAssignment.surchargeAmountCents > 0) {
+          // Partial coverage: pass covers some, customer pays surcharge
+          priceHtml = '<div class="review-item-price">' +
+            '<span style="text-decoration:line-through;color:var(--warm-gray,#9B958E);font-size:0.8em;">' + formatMoney(lineTotal) + '</span> ' +
+            formatMoney(passAssignment.surchargeAmountCents / 100) +
+          '</div>';
+          passHtml = '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px;padding:4px 8px;background:color-mix(in srgb, var(--accent,#2D7D46) 10%, transparent);border-radius:4px;font-size:0.75rem;">' +
+            '<span style="color:var(--accent,#2D7D46);">&#10003; ' + esc(passAssignment.passName) + ' covers ' + formatMoney(passAssignment.coversAmountCents / 100) + '</span>' +
+            '<button data-co="remove-pass" data-pass-idx="' + i + '" style="background:none;border:none;color:var(--warm-gray,#9B958E);font-size:0.7rem;cursor:pointer;text-decoration:underline;">Pay instead</button>' +
+          '</div>';
+        } else {
+          // Full coverage
+          priceHtml = '<div class="review-item-price">' +
+            '<span style="text-decoration:line-through;color:var(--warm-gray,#9B958E);font-size:0.8em;">' + formatMoney(lineTotal) + '</span> ' +
+            '<span style="color:var(--accent,#2D7D46);">$0.00</span>' +
+          '</div>';
+          passHtml = '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px;padding:4px 8px;background:color-mix(in srgb, var(--accent,#2D7D46) 10%, transparent);border-radius:4px;font-size:0.75rem;">' +
+            '<span style="color:var(--accent,#2D7D46);">&#10003; ' + esc(passAssignment.passName) + ' applied</span>' +
+            '<button data-co="remove-pass" data-pass-idx="' + i + '" style="background:none;border:none;color:var(--warm-gray,#9B958E);font-size:0.7rem;cursor:pointer;text-decoration:underline;">Pay instead</button>' +
+          '</div>';
+        }
+      } else if (item.bookingType === 'class' && checkoutData.customerPasses.length > 0 && item._passOptedOut) {
+        // User opted out of pass — show re-apply option
+        priceHtml = '<div class="review-item-price">' + formatMoney(lineTotal) + '</div>';
+        passHtml = '<div style="margin-top:4px;font-size:0.75rem;">' +
+          '<button data-co="reapply-pass" data-pass-idx="' + i + '" style="background:none;border:none;color:var(--accent,#2D7D46);font-size:0.75rem;cursor:pointer;text-decoration:underline;">Use pass instead</button>' +
+        '</div>';
+      } else {
+        priceHtml = '<div class="review-item-price">' + formatMoney(lineTotal) + '</div>';
+      }
+
       html += '<div class="review-item">' +
         imgHtml +
         '<div class="review-item-info">' +
           '<div class="review-item-name">' + esc(item.name) + '</div>' +
           (optStr ? '<div class="review-item-meta">' + optStr + '</div>' : '') +
           '<div class="review-item-meta">Qty: ' + item.qty + '</div>' +
+          passHtml +
         '</div>' +
-        '<div class="review-item-price">' + formatMoney(lineTotal) + '</div>' +
+        priceHtml +
       '</div>';
     }
     html += '</div>';
@@ -1555,13 +1781,20 @@
       email: checkoutData.email,
       shipping: checkoutData.shipping,
       billing: checkoutData.billing,
-      items: items.map(function (it) {
+      items: items.map(function (it, idx) {
         var mapped = { pid: it.pid, name: it.name, options: it.options, price: it.price, qty: it.qty, isWholesale: it.isWholesale || false };
         // Pass booking fields so server can verify prices from class data instead of products
         if (it.bookingType) mapped.bookingType = it.bookingType;
         if (it.classId) mapped.classId = it.classId;
         if (it.sessionId) mapped.sessionId = it.sessionId;
         if (it.priceCents != null) mapped.priceCents = it.priceCents;
+        // Attach pass assignment for server-side deduction
+        var passAssignment = checkoutData.passAssignments[idx];
+        if (passAssignment) {
+          mapped.passId = passAssignment.passId;
+          mapped.passCoversAmountCents = passAssignment.coversAmountCents;
+          mapped.surchargeAmountCents = passAssignment.surchargeAmountCents;
+        }
         return mapped;
       }),
       shippingMethodKey: 'calculated',
@@ -2037,6 +2270,24 @@
     } else if (action === 'toggle-giftcard') {
       checkoutData.walletGiftCardApplied = !!btn.checked;
       updateTotals();
+      return;
+    } else if (action === 'remove-pass') {
+      var removeIdx = parseInt(btn.getAttribute('data-pass-idx'), 10);
+      if (!isNaN(removeIdx)) {
+        var items = window.MastCart.getItems();
+        if (items[removeIdx]) items[removeIdx]._passOptedOut = true;
+        removePassAssignment(removeIdx);
+        renderReview();
+      }
+      return;
+    } else if (action === 'reapply-pass') {
+      var reapplyIdx = parseInt(btn.getAttribute('data-pass-idx'), 10);
+      if (!isNaN(reapplyIdx)) {
+        var ritems = window.MastCart.getItems();
+        if (ritems[reapplyIdx]) ritems[reapplyIdx]._passOptedOut = false;
+        reapplyPassAssignment(reapplyIdx);
+        renderReview();
+      }
       return;
     } else if (action === 'apply-coupon') {
       applyCoupon();
@@ -2721,6 +2972,7 @@
       loadWalletGiftCards();
       loadLoyaltyData();
       loadSavedCoupons();
+      loadCustomerPasses();
       // Load Google Places lazily, then render address
       loadGooglePlaces(function () {
         renderAddress();

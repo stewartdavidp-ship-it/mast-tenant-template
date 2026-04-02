@@ -1052,7 +1052,7 @@
   // Sub-Tab Navigation
   // ============================================================
 
-  var BOOK_VIEWS = ['bookListView', 'bookDetailView', 'bookEnrollmentsView', 'bookInstructorsView', 'bookInstructorDetailView', 'bookResourcesView', 'bookResourceDetailView', 'bookPassesView', 'bookPassDetailView', 'bookSessionOpsView', 'bookCalendarView', 'bookReportsView'];
+  var BOOK_VIEWS = ['bookListView', 'bookDetailView', 'bookEnrollmentsView', 'bookInstructorsView', 'bookInstructorDetailView', 'bookResourcesView', 'bookResourceDetailView', 'bookPassesView', 'bookPassDetailView', 'bookSessionOpsView', 'bookCalendarView', 'bookReportsView', 'bookSettingsView'];
 
   function hideAllViews() {
     BOOK_VIEWS.forEach(function(id) {
@@ -1066,7 +1066,7 @@
     // Update tab bar active state
     var tabs = document.querySelectorAll('#bookSubNav .view-tab');
     tabs.forEach(function(t) { t.classList.remove('active'); });
-    var tabMap = { classes: 0, instructors: 1, resources: 2, passes: 3, enrollments: 4, calendar: 5, 'book-reports': 6 };
+    var tabMap = { classes: 0, instructors: 1, resources: 2, passes: 3, enrollments: 4, calendar: 5, 'book-reports': 6, 'book-settings': 7 };
     if (tabs[tabMap[tab]]) tabs[tabMap[tab]].classList.add('active');
 
     hideAllViews();
@@ -1077,6 +1077,7 @@
     else if (tab === 'enrollments') { document.getElementById('bookEnrollmentsView').style.display = ''; loadEnrollments(); }
     else if (tab === 'calendar') { document.getElementById('bookCalendarView').style.display = ''; loadCalendar(); }
     else if (tab === 'book-reports') { document.getElementById('bookReportsView').style.display = ''; loadReports(); }
+    else if (tab === 'book-settings') { document.getElementById('bookSettingsView').style.display = ''; loadBookSettings(); }
   }
 
   // ============================================================
@@ -3201,6 +3202,62 @@
   window._reportRangeChange = function() { loadReports(); };
 
   // ============================================================
+  // Booking Settings
+  // ============================================================
+
+  async function loadBookSettings() {
+    var container = document.getElementById('bookSettingsContent');
+    if (!container) return;
+
+    container.innerHTML = '<p style="color:var(--warm-gray);padding:1rem;">Loading settings...</p>';
+
+    try {
+      var snap = await MastDB._ref('admin/config/booking').once('value');
+      var config = snap.val() || {};
+      var cancelHours = config.cancellationWindowHours != null ? config.cancellationWindowHours : 48;
+
+      container.innerHTML =
+        '<div style="max-width:600px;">' +
+          '<div class="book-form-section">' +
+            '<h3 style="margin:0 0 16px;font-size:1rem;">Cancellation Policy</h3>' +
+            '<div class="book-field">' +
+              '<label class="form-label">Cancellation Review Window (hours)</label>' +
+              '<input type="number" id="bsCancelWindow" class="form-input" min="0" max="720" step="1" value="' + cancelHours + '" style="max-width:120px;">' +
+              '<div class="book-field-hint">Cancellations within this window before class start require admin review. Outside this window, refunds are issued automatically (store credit for paid bookings, pass restore for pass bookings).</div>' +
+            '</div>' +
+          '</div>' +
+          '<div style="margin-top:24px;">' +
+            '<button class="btn btn-primary" onclick="window._saveBookSettings()">Save Settings</button>' +
+          '</div>' +
+        '</div>';
+    } catch (err) {
+      console.error('[Book] Failed to load settings:', err);
+      container.innerHTML = '<p style="color:var(--warm-gray);padding:1rem;">Failed to load settings.</p>';
+    }
+  }
+
+  window._saveBookSettings = async function() {
+    var cancelInput = document.getElementById('bsCancelWindow');
+    if (!cancelInput) return;
+
+    var hours = parseInt(cancelInput.value, 10);
+    if (isNaN(hours) || hours < 0 || hours > 720) {
+      if (typeof MastAdmin !== 'undefined' && MastAdmin.showToast) MastAdmin.showToast('Please enter a valid number of hours (0-720)');
+      return;
+    }
+
+    try {
+      await MastDB._ref('admin/config/booking').update({
+        cancellationWindowHours: hours
+      });
+      if (typeof MastAdmin !== 'undefined' && MastAdmin.showToast) MastAdmin.showToast('Settings saved');
+    } catch (err) {
+      console.error('[Book] Failed to save settings:', err);
+      if (typeof MastAdmin !== 'undefined' && MastAdmin.showToast) MastAdmin.showToast('Failed to save settings');
+    }
+  };
+
+  // ============================================================
   // Module Registration
   // ============================================================
 
@@ -3216,7 +3273,8 @@
       'passes': { tab: 'bookTab', setup: function() { switchSubTab('passes'); } },
       'pass-detail': { tab: 'bookTab', setup: function(id) { if (id) { showPassDefForm(id); } else { switchSubTab('passes'); } } },
       'calendar': { tab: 'bookTab', setup: function() { switchSubTab('calendar'); } },
-      'book-reports': { tab: 'bookTab', setup: function() { switchSubTab('book-reports'); } }
+      'book-reports': { tab: 'bookTab', setup: function() { switchSubTab('book-reports'); } },
+      'book-settings': { tab: 'bookTab', setup: function() { switchSubTab('book-settings'); } }
     },
     detachListeners: function() {
       classesData = [];
