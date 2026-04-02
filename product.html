@@ -1565,7 +1565,9 @@
       salePriceCents: onSale ? saleCents : null,
       leadTimeText: window._productLeadTimeText || null,
       stockType: (p.stockInfo && p.stockInfo.stockType) || null,
-      availableStock: cartAvailableStock
+      availableStock: cartAvailableStock,
+      itemType: 'product',
+      shippingCategory: p.shippingCategory || ((p.stockInfo && p.stockInfo.shippingCategory) ? p.stockInfo.shippingCategory : 'small')
     });
     MastCart.showToast(p.name + ' added to cart');
   });

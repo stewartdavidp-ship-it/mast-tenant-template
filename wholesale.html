@@ -856,7 +856,9 @@
       image: (p.images && p.images.length > 0) ? (typeof p.images[0] === 'string' ? p.images[0] : (p.images[0].url || '')) : '',
       options: Object.assign({}, opts),
       qty: qty,
-      isWholesale: true
+      isWholesale: true,
+      itemType: 'product',
+      shippingCategory: p.shippingCategory || 'small'
     });
 
     MastCart.showToast(qty + 'x ' + p.name + ' added to cart');

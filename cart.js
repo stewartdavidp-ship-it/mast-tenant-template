@@ -89,6 +89,58 @@
     return 'ci_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
   }
 
+  // ── Item Metadata ──
+  // Every cart item carries explicit attributes so the order engine doesn't
+  // have to infer behaviour from bookingType. These defaults can be overridden
+  // at add-to-cart time or by tenant config in the future.
+  var ITEM_TYPE_DEFAULTS = {
+    product:          { taxable: true,  requiresShipping: true,  loyaltyEligible: true,  discountEligible: true,  passEligible: false, fulfillmentType: 'ship' },
+    'class':          { taxable: true,  requiresShipping: false, loyaltyEligible: true,  discountEligible: false, passEligible: true,  fulfillmentType: 'enrollment' },
+    'pass':           { taxable: true,  requiresShipping: false, loyaltyEligible: false, discountEligible: false, passEligible: false, fulfillmentType: 'wallet-credit' },
+    'gift-card':      { taxable: false, requiresShipping: false, loyaltyEligible: false, discountEligible: false, passEligible: false, fulfillmentType: 'wallet-credit' },
+    'class-materials': { taxable: true, requiresShipping: false, loyaltyEligible: false, discountEligible: false, passEligible: false, fulfillmentType: 'enrollment' },
+    'service':        { taxable: true,  requiresShipping: false, loyaltyEligible: true,  discountEligible: true,  passEligible: false, fulfillmentType: 'service' }
+  };
+
+  /**
+   * Returns the canonical itemType for a cart item.
+   * If an explicit itemType is provided, use it. Otherwise infer from bookingType.
+   * Products have no bookingType → default to 'product'.
+   */
+  function resolveItemType(item) {
+    if (item.itemType) return item.itemType;
+    if (item.bookingType) return item.bookingType; // class, pass, gift-card, class-materials
+    return 'product';
+  }
+
+  /**
+   * Get metadata defaults for a given itemType, optionally overlaying
+   * catalog-level data (e.g. shippingCategory from product record).
+   */
+  function getItemMetadata(itemType, catalogOverrides) {
+    var defaults = ITEM_TYPE_DEFAULTS[itemType] || ITEM_TYPE_DEFAULTS.product;
+    var meta = {
+      itemType: itemType,
+      taxable: defaults.taxable,
+      requiresShipping: defaults.requiresShipping,
+      shippingCategory: null,
+      loyaltyEligible: defaults.loyaltyEligible,
+      discountEligible: defaults.discountEligible,
+      passEligible: defaults.passEligible,
+      fulfillmentType: defaults.fulfillmentType
+    };
+    // Apply catalog-level overrides (e.g. shippingCategory from product record)
+    if (catalogOverrides && typeof catalogOverrides === 'object') {
+      var keys = Object.keys(catalogOverrides);
+      for (var i = 0; i < keys.length; i++) {
+        if (catalogOverrides[keys[i]] != null && meta.hasOwnProperty(keys[i])) {
+          meta[keys[i]] = catalogOverrides[keys[i]];
+        }
+      }
+    }
+    return meta;
+  }
+
   // Build a key that uniquely identifies a product + option combo
   function optionKey(pid, options, bookingType, sessionId, passDefinitionId) {
     var parts = [pid];
@@ -144,6 +196,10 @@
       }
     }
 
+    // Resolve item type and merge metadata
+    var itemType = resolveItemType(item);
+    var meta = getItemMetadata(itemType, item._metaOverrides || null);
+
     var newItem = {
       cartItemId: generateId(),
       pid: item.pid,
@@ -164,7 +220,16 @@
       classId: item.classId || null,
       passDefinitionId: item.passDefinitionId || null,
       passId: item.passId || null,
-      addedAt: Date.now()
+      addedAt: Date.now(),
+      // ── Order engine metadata ──
+      itemType: meta.itemType,
+      taxable: meta.taxable,
+      requiresShipping: meta.requiresShipping,
+      shippingCategory: item.shippingCategory || meta.shippingCategory,
+      loyaltyEligible: meta.loyaltyEligible,
+      discountEligible: meta.discountEligible,
+      passEligible: meta.passEligible,
+      fulfillmentType: meta.fulfillmentType
     };
     cart.push(newItem);
     persist();
@@ -917,9 +982,11 @@
     hasWholesaleItems: hasWholesaleItems,
     hasClassItems: function() { return cart.some(function(i) { return i.bookingType === 'class'; }); },
     hasPassItems: function() { return cart.some(function(i) { return i.bookingType === 'pass'; }); },
-    isNonShippableCart: function() { return cart.length > 0 && cart.every(function(i) { return i.bookingType === 'class' || i.bookingType === 'pass' || i.bookingType === 'class-materials' || i.bookingType === 'gift-card'; }); },
+    isNonShippableCart: function() { return cart.length > 0 && cart.every(function(i) { return i.requiresShipping === false || i.bookingType === 'class' || i.bookingType === 'pass' || i.bookingType === 'class-materials' || i.bookingType === 'gift-card'; }); },
     isClassOnlyCart: function() { return cart.length > 0 && cart.every(function(i) { return i.bookingType === 'class'; }); },
-    hasProductItems: function() { return cart.some(function(i) { return !i.bookingType; }); }
+    hasProductItems: function() { return cart.some(function(i) { return !i.bookingType; }); },
+    getItemMetadata: getItemMetadata,
+    resolveItemType: resolveItemType
   };
 
   // Backward-compat alias
