@@ -905,9 +905,10 @@
             // Class passes (1st in priority)
             if (checkoutData.customerPasses.length > 0 && Object.keys(checkoutData.passAssignments).length > 0) {
               var passCoversCents = 0;
-              var passVisitsUsed = Object.keys(checkoutData.passAssignments).length;
+              var passVisitsUsed = 0;
               Object.keys(checkoutData.passAssignments).forEach(function(idx) {
                 passCoversCents += checkoutData.passAssignments[idx].coversAmountCents || 0;
+                passVisitsUsed += checkoutData.passAssignments[idx].visitsUsed || 1;
               });
               html += '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;color:var(--text);margin-bottom:8px;">' +
                 '<input type="checkbox" id="coPassToggle" ' + (checkoutData.passApplied ? 'checked' : '') + ' data-co="toggle-pass">' +
@@ -1916,8 +1917,11 @@
       // Class passes (1st priority)
       if (checkoutData.customerPasses.length > 0 && Object.keys(checkoutData.passAssignments).length > 0) {
         var pCoversCents = 0;
-        var pVisits = Object.keys(checkoutData.passAssignments).length;
-        Object.keys(checkoutData.passAssignments).forEach(function(idx) { pCoversCents += checkoutData.passAssignments[idx].coversAmountCents || 0; });
+        var pVisits = 0;
+        Object.keys(checkoutData.passAssignments).forEach(function(idx) {
+          pCoversCents += checkoutData.passAssignments[idx].coversAmountCents || 0;
+          pVisits += checkoutData.passAssignments[idx].visitsUsed || 1;
+        });
         html += '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;color:var(--text);margin-bottom:8px;">' +
           '<input type="checkbox" id="coPassToggle" ' + (checkoutData.passApplied ? 'checked' : '') + ' data-co="toggle-pass">' +
           '&#127915; Use class pass (' + pVisits + ' visit' + (pVisits !== 1 ? 's' : '') + ', ' + formatMoney(pCoversCents / 100) + ' off)' +
