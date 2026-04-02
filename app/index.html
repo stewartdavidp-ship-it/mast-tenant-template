@@ -25033,8 +25033,8 @@ var DASHBOARD_CARDS = [
   { id: 'readyToShip',  title: 'Ready to Ship', containerId: 'dashCardReadyToShip',  viewAllRoute: 'ship' },
   { id: 'lowInventory', title: 'Low Inventory', containerId: 'dashCardLowInventory', viewAllRoute: 'inventory' },
   { id: 'activeSales',  title: 'Active Sales',  containerId: 'dashCardActiveSales',  viewAllRoute: 'promotions' },
-  { id: 'pendingRefunds', title: 'Pending Refund Reviews', containerId: 'dashCardPendingRefunds', viewAllRoute: 'schedule' },
-  { id: 'recentCancellations', title: 'Recent Cancellations', containerId: 'dashCardRecentCancellations', viewAllRoute: 'schedule' }
+  { id: 'pendingRefunds', title: 'Pending Refund Reviews', containerId: 'dashCardPendingRefunds', viewAllRoute: 'enrollments' },
+  { id: 'recentCancellations', title: 'Recent Cancellations', containerId: 'dashCardRecentCancellations', viewAllRoute: 'enrollments' }
 ];
 var customDashboardCards = []; // Platform dashboard cards loaded from mast-platform/dashboardCards
 var dashboardCardPrefs = {};
@@ -26033,7 +26033,7 @@ function renderDashCardRecentCancellations() {
 
         var belowMin = minEnrollment > 0 && enrolled < minEnrollment;
 
-        contentHtml += '<div class="dash-queue-item" onclick="navigateTo(\'schedule\')" style="cursor:pointer;">' +
+        contentHtml += '<div class="dash-queue-item" onclick="navigateTo(\'book-detail\', \'' + esc(group.classId || '') + '\')" style="cursor:pointer;">' +
           '<div class="dash-queue-row">' +
             '<span style="font-weight:500;font-size:0.88rem;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(className) + '</span>' +
             '<span style="font-size:0.78rem;color:var(--warm-gray);">' + esc(dateDisplay) + '</span>' +
