@@ -1237,12 +1237,14 @@ window.TENANT_READY.then(function() {
     if (order.tax != null && order.tax > 0) html += '<div class="order-total-row"><span>Tax</span><span>' + formatPrice(order.tax) + '</span></div>';
     var couponAmt = (order.coupon && order.coupon.discount) || order.couponDiscount || 0;
     if (couponAmt > 0) html += '<div class="order-total-row" style="color:var(--teal,#2A7C6F)"><span>Coupon (' + esc((order.coupon && order.coupon.code) || '') + ')</span><span>-' + formatPrice(couponAmt) + '</span></div>';
-    // Wallet deductions
+    // Pass deduction (top-level field from engine, or from walletDeductions)
+    var passDeductCents = order.passDeductionCents || (order.walletDeductions && order.walletDeductions.passDeductionCents) || 0;
+    if (passDeductCents > 0) {
+      html += '<div class="order-total-row" style="color:var(--accent,#C6A96C)"><span>Class Pass</span><span>-' + formatPrice(passDeductCents / 100) + '</span></div>';
+    }
+    // Wallet deductions (loyalty, gift cards, credits)
     if (order.walletDeductions && order.walletDeductions.totalDeductionCents > 0) {
       var wd = order.walletDeductions;
-      if (wd.passDeductionCents > 0) {
-        html += '<div class="order-total-row" style="color:var(--accent,#C6A96C)"><span>Class Pass</span><span>-' + formatPrice(wd.passDeductionCents / 100) + '</span></div>';
-      }
       if (wd.loyalty && wd.loyalty.amountCents > 0) {
         html += '<div class="order-total-row" style="color:var(--accent,#C6A96C)"><span>Loyalty Points</span><span>-' + formatPrice(wd.loyalty.amountCents / 100) + '</span></div>';
       }

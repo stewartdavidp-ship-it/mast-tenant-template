@@ -29,10 +29,12 @@
     savedCoupons: [],          // [{ code, ... }] saved coupons from wallet
     customerPasses: [],        // [{ _id, passDefinitionId, visitsRemaining, expiresAt, status, priority, _def }] active passes with definitions
     passApplied: false,        // whether to apply class passes to this order
-    passAssignments: {}        // { cartItemIndex: { passId, passName, coversAmountCents, surchargeAmountCents } } — computed from customerPasses when passApplied=true
+    passAssignments: {},        // { cartItemIndex: { passId, passName, coversAmountCents, surchargeAmountCents } } — computed from customerPasses when passApplied=true
+    serverBreakdown: null       // cached response from computeOrderBreakdown engine
   };
 
   var shippingConfigCache = null; // cached flat-rate config
+  var breakdownTimer = null;      // debounce timer for engine calls
   var isSubmitting = false;
   var placesLoaded = false;
   var placesApiKey = null;
@@ -292,6 +294,92 @@
     }).catch(function(err) {
       callback({ success: false, error: 'Authentication failed: ' + err.message });
     });
+  }
+
+  // ── Wallet Deductions Payload (shared by engine call + submitOrder) ──
+  function buildWalletDeductionsPayload() {
+    if (!checkoutData.passApplied && !checkoutData.loyaltyApplied && !checkoutData.walletGiftCardApplied && !checkoutData.walletCreditApplied) {
+      return null;
+    }
+    var wd = {};
+    if (checkoutData.passApplied && Object.keys(checkoutData.passAssignments).length > 0) {
+      wd.passes = Object.keys(checkoutData.passAssignments).map(function(idx) {
+        var a = checkoutData.passAssignments[idx];
+        return { itemIndex: parseInt(idx, 10), passId: a.passId, coversAmountCents: a.coversAmountCents, surchargeAmountCents: a.surchargeAmountCents, visitsUsed: a.visitsUsed || 1 };
+      });
+    }
+    if (checkoutData.loyaltyApplied && checkoutData.loyaltyBalance && checkoutData.loyaltyConfig) {
+      wd.loyalty = {
+        pointsToRedeem: checkoutData.loyaltyBalance.totalPoints || 0,
+        amountCents: calcLoyaltyRedemptionCents()
+      };
+    }
+    if (checkoutData.walletGiftCardApplied && checkoutData.walletGiftCards.length > 0) {
+      wd.giftCards = checkoutData.walletGiftCards.map(function(g) {
+        return { id: g._id || g.id, code: g.code || '', amountCents: g.remainingCents || 0 };
+      });
+    }
+    if (checkoutData.walletCreditApplied && checkoutData.walletCredits.length > 0) {
+      wd.credits = checkoutData.walletCredits.map(function(c) {
+        return { id: c._id || c.id, amountCents: c.remainingCents != null ? c.remainingCents : (c.amountCents || 0) };
+      });
+    }
+    return Object.keys(wd).length > 0 ? wd : null;
+  }
+
+  // ── Order Breakdown Engine Call ──
+  function callBreakdownEngine(callback) {
+    var items = window.MastCart.getItems();
+    var user = window.MastCart.getCurrentUser();
+    var payload = {
+      items: items.map(function(it) {
+        var mapped = { pid: it.pid, name: it.name, options: it.options, price: it.price, qty: it.qty, isWholesale: it.isWholesale || false };
+        if (it.bookingType) mapped.bookingType = it.bookingType;
+        if (it.classId) mapped.classId = it.classId;
+        if (it.sessionId) mapped.sessionId = it.sessionId;
+        if (it.priceCents != null) mapped.priceCents = it.priceCents;
+        if (it.shippingCategory) mapped.shippingCategory = it.shippingCategory;
+        return mapped;
+      }),
+      shipping: checkoutData.shipping,
+      uid: user ? user.uid : 'anonymous',
+      isWholesale: isWholesaleCart(),
+      couponCode: checkoutData.coupon ? checkoutData.coupon.code : null,
+      walletDeductions: buildWalletDeductionsPayload()
+    };
+    callFunction('computeOrderBreakdown', payload, function(result) {
+      if (result && result.success && result.breakdown) {
+        checkoutData.serverBreakdown = result.breakdown;
+        callback(result.breakdown);
+      } else {
+        // Fallback: render client-side totals if engine fails
+        console.warn('Order engine error:', result && result.error ? result.error : 'Unknown error');
+        callback(null);
+      }
+    });
+  }
+
+  // ── Debounced engine call for wallet toggles ──
+  function debouncedBreakdownRefresh() {
+    if (breakdownTimer) clearTimeout(breakdownTimer);
+    // Show loading indicator immediately
+    var container = document.querySelector('.order-totals');
+    if (container) {
+      container.style.opacity = '0.5';
+      container.style.pointerEvents = 'none';
+    }
+    breakdownTimer = setTimeout(function() {
+      callBreakdownEngine(function(breakdown) {
+        var totalsContainer = document.querySelector('.engine-totals-container');
+        if (totalsContainer) {
+          if (breakdown) {
+            totalsContainer.innerHTML = buildTotalsFromBreakdown(breakdown);
+          } else {
+            totalsContainer.innerHTML = buildTotalsHtml(calcSubtotal());
+          }
+        }
+      });
+    }, 300);
   }
 
   // ── Step Indicator HTML ──
@@ -871,8 +959,8 @@
               '</div>';
           }
 
-          // Totals
-          html += '<div class="checkout-section">' + buildTotalsHtml(subtotal) + '</div>';
+          // Totals — loading placeholder, then engine call
+          html += '<div class="checkout-section engine-totals-container">' + buildTotalsLoadingHtml() + '</div>';
 
           body.innerHTML = html;
 
@@ -884,6 +972,14 @@
                 ' applied: -' + formatMoney(checkoutData.coupon.discount) + '</div>';
             }
           }
+
+          // Call engine for server-computed totals
+          callBreakdownEngine(function(breakdown) {
+            var tc = document.querySelector('.engine-totals-container');
+            if (tc) {
+              tc.innerHTML = breakdown ? buildTotalsFromBreakdown(breakdown) : buildTotalsHtml(subtotal);
+            }
+          });
         });
       });
     });
@@ -906,7 +1002,7 @@
       // Clear coupon
       checkoutData.coupon = null;
       msgEl.innerHTML = '';
-      updateTotals();
+      debouncedBreakdownRefresh();
       return;
     }
 
@@ -928,7 +1024,7 @@
         checkoutData.coupon = null;
         msgEl.innerHTML = '<div class="coupon-error">' + esc(result && result.reason ? result.reason : 'Invalid coupon') + '</div>';
       }
-      updateTotals();
+      debouncedBreakdownRefresh();
     });
   }
 
@@ -1031,6 +1127,88 @@
     var parent = container.parentNode;
     var subtotal = calcSubtotal();
     parent.innerHTML = buildTotalsHtml(subtotal);
+  }
+
+  // ── Build Totals from Server Breakdown (pure renderer, no math) ──
+  function buildTotalsFromBreakdown(b) {
+    var html = '<div class="order-totals">';
+    html += '<div class="order-total-row"><span class="order-total-label">Subtotal</span><span class="order-total-value">' + formatMoney(b.subtotalCents / 100) + '</span></div>';
+
+    // Sale discounts
+    if (b.saleDiscounts && b.saleDiscounts.length > 0) {
+      for (var si = 0; si < b.saleDiscounts.length; si++) {
+        var sd = b.saleDiscounts[si];
+        html += '<div class="order-total-row discount"><span class="order-total-label">Sale' + (sd.saleName ? ' (' + esc(sd.saleName) + ')' : '') + '</span><span class="order-total-value">-' + formatMoney(sd.discountCents / 100) + '</span></div>';
+      }
+    }
+
+    // Pass deduction
+    if (b.passDeductionCents > 0) {
+      html += '<div class="order-total-row discount"><span class="order-total-label">Class Pass</span><span class="order-total-value">-' + formatMoney(b.passDeductionCents / 100) + '</span></div>';
+    }
+
+    // Shipping
+    var shipLabel = b.shippingLabel || 'Shipping';
+    html += '<div class="order-total-row"><span class="order-total-label">' + esc(shipLabel) + '</span><span class="order-total-value">' + (b.shippingCents > 0 ? formatMoney(b.shippingCents / 100) : '--') + '</span></div>';
+
+    // Tax
+    var taxLabel = 'Tax';
+    if (b.taxState) taxLabel += ' (' + b.taxState + ')';
+    if (b.taxExempt) taxLabel += ' (exempt)';
+    html += '<div class="order-total-row"><span class="order-total-label">' + esc(taxLabel) + '</span><span class="order-total-value">' + formatMoney(b.taxCents / 100) + '</span></div>';
+
+    // Coupon
+    if (b.couponDiscountCents > 0) {
+      var couponLabel = 'Coupon';
+      if (b.couponData && b.couponData.code) couponLabel += ' (' + esc(b.couponData.code) + ')';
+      html += '<div class="order-total-row discount"><span class="order-total-label">' + couponLabel + '</span><span class="order-total-value">-' + formatMoney(b.couponDiscountCents / 100) + '</span></div>';
+    }
+
+    // Loyalty
+    if (b.loyaltyDeductionCents > 0) {
+      var loyaltyLabel = (b.loyaltyConfig && b.loyaltyConfig.pointName) ? b.loyaltyConfig.pointName : 'Loyalty';
+      html += '<div class="order-total-row discount"><span class="order-total-label">' + esc(loyaltyLabel) + '</span><span class="order-total-value">-' + formatMoney(b.loyaltyDeductionCents / 100) + '</span></div>';
+    }
+
+    // Gift Cards
+    if (b.giftCardDeductionCents > 0) {
+      html += '<div class="order-total-row discount"><span class="order-total-label">Gift Card</span><span class="order-total-value">-' + formatMoney(b.giftCardDeductionCents / 100) + '</span></div>';
+    }
+
+    // Store Credits
+    if (b.creditDeductionCents > 0) {
+      html += '<div class="order-total-row discount"><span class="order-total-label">Store Credit</span><span class="order-total-value">-' + formatMoney(b.creditDeductionCents / 100) + '</span></div>';
+    }
+
+    // Total
+    html += '<div class="order-total-row grand-total"><span class="order-total-label">Total</span><span class="order-total-value">' + formatMoney(b.chargeAmountCents / 100) + '</span></div>';
+
+    // Loyalty earning message
+    if (b.loyaltyPointsEarned > 0 && b.loyaltyConfig) {
+      html += '<div style="text-align:center;color:#2D7D46;font-size:0.75rem;margin-top:8px;letter-spacing:0.08em;">&#11088; You\'ll earn ' + b.loyaltyPointsEarned + ' ' + esc(b.loyaltyConfig.pointName || 'points') + '</div>';
+    }
+
+    // Free shipping threshold
+    var totFreeThreshold = getShippingThreshold();
+    if (totFreeThreshold != null) {
+      var subtotalDollars = b.subtotalCents / 100;
+      if (subtotalDollars >= totFreeThreshold) {
+        html += '<div style="text-align:center;color:#2D7D46;font-size:0.75rem;margin-top:8px;letter-spacing:0.08em;">&#10003; FREE SHIPPING</div>';
+      } else if (subtotalDollars > 0) {
+        var away = (totFreeThreshold - subtotalDollars).toFixed(2);
+        html += '<div style="text-align:center;color:var(--warm-gray,#9B958E);font-size:0.75rem;margin-top:8px;letter-spacing:0.08em;">You\'re $' + away + ' away from free shipping!</div>';
+      }
+    }
+
+    html += '</div>';
+    return html;
+  }
+
+  // ── Loading placeholder for totals ──
+  function buildTotalsLoadingHtml() {
+    return '<div class="order-totals" style="text-align:center;padding:20px 0;color:var(--warm-gray,#9B958E);font-size:0.85rem;">' +
+      '<span class="checkout-spinner" style="display:inline-block;margin-right:8px;"></span> Calculating totals...' +
+    '</div>';
   }
 
   // ── Wallet Credits ──
@@ -1790,8 +1968,8 @@
         '</div>';
     }
 
-    // Totals
-    html += '<div class="review-section">' + buildTotalsHtml(subtotal) + '</div>';
+    // Totals — loading placeholder, then engine call
+    html += '<div class="review-section engine-totals-container">' + buildTotalsLoadingHtml() + '</div>';
 
     html += '</div>'; // close checkout-section
 
@@ -1807,6 +1985,14 @@
         });
       }
     }
+
+    // Call engine for server-computed totals
+    callBreakdownEngine(function(breakdown) {
+      var tc = document.querySelector('.engine-totals-container');
+      if (tc) {
+        tc.innerHTML = breakdown ? buildTotalsFromBreakdown(breakdown) : buildTotalsHtml(subtotal);
+      }
+    });
 
     // Footer
     var btnLabel = (hasWholesale && checkoutData.paymentMethod === 'check') ? 'Place Order (Pay by Check)' : 'Proceed to Payment';
@@ -1874,32 +2060,8 @@
     };
 
     // Wallet deductions — server verifies actual balances
-    if (checkoutData.passApplied || checkoutData.loyaltyApplied || checkoutData.walletGiftCardApplied || checkoutData.walletCreditApplied) {
-      payload.walletDeductions = {};
-      // Pass deductions (server deducts visits and adjusts pricing)
-      if (checkoutData.passApplied && Object.keys(checkoutData.passAssignments).length > 0) {
-        payload.walletDeductions.passes = Object.keys(checkoutData.passAssignments).map(function(idx) {
-          var a = checkoutData.passAssignments[idx];
-          return { itemIndex: parseInt(idx, 10), passId: a.passId, coversAmountCents: a.coversAmountCents, surchargeAmountCents: a.surchargeAmountCents, visitsUsed: a.visitsUsed || 1 };
-        });
-      }
-      if (checkoutData.loyaltyApplied && checkoutData.loyaltyBalance && checkoutData.loyaltyConfig) {
-        payload.walletDeductions.loyalty = {
-          pointsToRedeem: checkoutData.loyaltyBalance.totalPoints || 0,
-          amountCents: calcLoyaltyRedemptionCents()
-        };
-      }
-      if (checkoutData.walletGiftCardApplied && checkoutData.walletGiftCards.length > 0) {
-        payload.walletDeductions.giftCards = checkoutData.walletGiftCards.map(function(g) {
-          return { id: g._id || g.id, code: g.code || '', amountCents: g.remainingCents || 0 };
-        });
-      }
-      if (checkoutData.walletCreditApplied && checkoutData.walletCredits.length > 0) {
-        payload.walletDeductions.credits = checkoutData.walletCredits.map(function(c) {
-          return { id: c._id || c.id, amountCents: c.remainingCents != null ? c.remainingCents : (c.amountCents || 0) };
-        });
-      }
-    }
+    var wd = buildWalletDeductionsPayload();
+    if (wd) payload.walletDeductions = wd;
 
     callFunction('submitOrder', payload, function (result) {
       isSubmitting = false;
@@ -2336,19 +2498,19 @@
 
     if (action === 'toggle-wallet') {
       checkoutData.walletCreditApplied = !!btn.checked;
-      if (currentStep === 'review') { renderReview(); } else { updateTotals(); }
+      debouncedBreakdownRefresh();
       return;
     } else if (action === 'toggle-loyalty') {
       checkoutData.loyaltyApplied = !!btn.checked;
-      if (currentStep === 'review') { renderReview(); } else { updateTotals(); }
+      debouncedBreakdownRefresh();
       return;
     } else if (action === 'toggle-giftcard') {
       checkoutData.walletGiftCardApplied = !!btn.checked;
-      if (currentStep === 'review') { renderReview(); } else { updateTotals(); }
+      debouncedBreakdownRefresh();
       return;
     } else if (action === 'toggle-pass') {
       checkoutData.passApplied = !!btn.checked;
-      if (currentStep === 'review') { renderReview(); } else { updateTotals(); }
+      debouncedBreakdownRefresh();
       return;
     } else if (action === 'apply-coupon') {
       applyCoupon();
