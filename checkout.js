@@ -2135,50 +2135,65 @@
     if (passItems.length === 0) return;
 
     passItems.forEach(function(item) {
-      db.ref(TENANT_ID + '/public/passDefinitions/' + item.passDefinitionId).once('value')
-        .then(function(snap) {
-          var def = snap.val();
-          if (!def) {
-            console.warn('[checkout] Pass definition not found:', item.passDefinitionId);
+      // Idempotency: check if server already provisioned a pass for this order+definition
+      db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/passes')
+        .orderByChild('orderId').equalTo(orderId || '__none__').limitToLast(10).once('value')
+        .then(function(existSnap) {
+          var alreadyProvisioned = false;
+          if (existSnap.exists()) {
+            existSnap.forEach(function(child) {
+              if (child.val().passDefinitionId === item.passDefinitionId) alreadyProvisioned = true;
+            });
+          }
+          if (alreadyProvisioned) {
+            console.log('[checkout] Pass already provisioned for', item.passDefinitionId, '— skipping');
             return;
           }
 
-          var now = new Date().toISOString();
-          var activatedAt = null;
-          var expiresAt = null;
+          return db.ref(TENANT_ID + '/public/passDefinitions/' + item.passDefinitionId).once('value')
+            .then(function(snap) {
+              var def = snap.val();
+              if (!def) {
+                console.warn('[checkout] Pass definition not found:', item.passDefinitionId);
+                return;
+              }
 
-          // Purchase-triggered activation: compute dates now
-          if (def.activationTrigger === 'purchase' || !def.activationTrigger) {
-            activatedAt = now;
-            if (def.validityDays) {
-              var exp = new Date();
-              exp.setDate(exp.getDate() + def.validityDays);
-              expiresAt = exp.toISOString();
-            }
-          }
-          // first_use: activatedAt and expiresAt stay null until first deduction
+              var now = new Date().toISOString();
+              var activatedAt = null;
+              var expiresAt = null;
 
-          var passData = {
-            passDefinitionId: item.passDefinitionId,
-            passDefinitionName: def.name || item.name || '',
-            status: 'active',
-            visitsUsed: 0,
-            visitsRemaining: def.visitCount || null,
-            purchasedAt: now,
-            activatedAt: activatedAt,
-            expiresAt: expiresAt,
-            autoRenewEnabled: def.autoRenew || false,
-            priority: def.priority || 'medium',
-            orderId: orderId || null
-          };
+              // Purchase-triggered activation: compute dates now
+              if (def.activationTrigger === 'purchase' || !def.activationTrigger) {
+                activatedAt = now;
+                if (def.validityDays) {
+                  var exp = new Date();
+                  exp.setDate(exp.getDate() + def.validityDays);
+                  expiresAt = exp.toISOString();
+                }
+              }
+              // first_use: activatedAt and expiresAt stay null until first deduction
 
-          var passId = db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/wallet/passes').push().key;
-          db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/passes/' + passId).set(passData)
-            .then(function() { console.log('[checkout] CustomerPass created:', passId); })
-            .catch(function(err) { console.error('[checkout] CustomerPass creation failed:', err); });
+              var passData = {
+                passDefinitionId: item.passDefinitionId,
+                passDefinitionName: def.name || item.name || '',
+                status: 'active',
+                visitsUsed: 0,
+                visitsRemaining: def.visitCount || null,
+                purchasedAt: now,
+                activatedAt: activatedAt,
+                expiresAt: expiresAt,
+                autoRenewEnabled: def.autoRenew || false,
+                priority: def.priority || 'medium',
+                orderId: orderId || null
+              };
+
+              var passId = db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/wallet/passes').push().key;
+              return db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/passes/' + passId).set(passData)
+                .then(function() { console.log('[checkout] CustomerPass created:', passId); });
+            });
         })
         .catch(function(err) {
-          console.error('[checkout] Failed to read pass definition:', err);
+          console.error('[checkout] Pass provisioning failed:', err);
         });
     });
   }
@@ -2309,22 +2324,37 @@
           });
 
           futureSessions.forEach(function(sid) {
-            var enrollRef = db.ref(TENANT_ID + '/public/enrollments').push();
-            enrollRef.set({
-              classId: classId,
-              sessionId: sid,
-              studentUid: user.uid,
-              studentName: user.displayName || '',
-              studentEmail: user.email || '',
-              status: 'confirmed',
-              enrollmentType: 'series',
-              paymentMethod: 'checkout',
-              orderId: orderId || null,
-              pricePaid: 0,
-              enrolledAt: new Date().toISOString()
-            }).catch(function(err) {
-              console.error('[checkout] Series enrollment failed for session:', sid, err);
-            });
+            // Idempotency: check if server already created this enrollment
+            db.ref(TENANT_ID + '/public/enrollments')
+              .orderByChild('sessionId').equalTo(sid).limitToLast(10).once('value')
+              .then(function(enrSnap) {
+                var exists = false;
+                if (enrSnap.exists()) {
+                  enrSnap.forEach(function(child) {
+                    if (child.val().studentUid === user.uid && child.val().status === 'confirmed') exists = true;
+                  });
+                }
+                if (exists) {
+                  console.log('[checkout] Enrollment already exists for session:', sid, '— skipping');
+                  return;
+                }
+                var enrollRef = db.ref(TENANT_ID + '/public/enrollments').push();
+                return enrollRef.set({
+                  classId: classId,
+                  sessionId: sid,
+                  studentUid: user.uid,
+                  studentName: user.displayName || '',
+                  studentEmail: user.email || '',
+                  status: 'confirmed',
+                  enrollmentType: 'series',
+                  paymentMethod: 'checkout',
+                  orderId: orderId || null,
+                  pricePaid: 0,
+                  enrolledAt: new Date().toISOString()
+                });
+              }).catch(function(err) {
+                console.error('[checkout] Series enrollment failed for session:', sid, err);
+              });
           });
 
           console.log('[checkout] Series enrolled in', futureSessions.length, 'sessions for class:', classId);
