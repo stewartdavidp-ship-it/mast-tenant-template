@@ -25876,10 +25876,8 @@ function renderDashCardPendingRefunds() {
   var container = document.getElementById('dashCardPendingRefunds');
   if (!container) return;
   var cardConfig = DASHBOARD_CARDS.find(function(c) { return c.id === 'pendingRefunds'; });
-  var db = MastDB._db();
-  if (!db) { container.innerHTML = ''; return; }
 
-  db.ref(MastDB._tid() + '/admin/enrollments').orderByChild('refundStatus').equalTo('pending_review').limitToLast(50).once('value').then(function(snap) {
+  MastDB._ref('admin/enrollments').orderByChild('refundStatus').equalTo('pending_review').limitToLast(50).once('value').then(function(snap) {
     var items = [];
     if (snap.exists()) {
       snap.forEach(function(child) {
@@ -25933,16 +25931,14 @@ function renderDashCardPendingRefunds() {
 }
 
 function approveRefund(enrollmentId, paymentType) {
-  var db = MastDB._db();
-  if (!db) return;
   var update = { refundStatus: 'store_credit', refundApprovedAt: new Date().toISOString() };
-  db.ref(MastDB._tid() + '/admin/enrollments/' + enrollmentId).update(update).then(function() {
+  MastDB._ref('admin/enrollments/' + enrollmentId).update(update).then(function() {
     if (paymentType === 'pass') {
       // Restore pass visit
-      db.ref(MastDB._tid() + '/admin/enrollments/' + enrollmentId).once('value').then(function(snap) {
+      MastDB._ref('admin/enrollments/' + enrollmentId).once('value').then(function(snap) {
         var enr = snap.val();
         if (enr && enr.passId && enr.studentUid) {
-          var passRef = db.ref(MastDB._tid() + '/public/accounts/' + enr.studentUid + '/passes/' + enr.passId);
+          var passRef = MastDB._ref('public/accounts/' + enr.studentUid + '/passes/' + enr.passId);
           passRef.once('value').then(function(passSnap) {
             if (passSnap.exists()) {
               var pass = passSnap.val();
@@ -25964,9 +25960,7 @@ function approveRefund(enrollmentId, paymentType) {
 }
 
 function denyRefund(enrollmentId) {
-  var db = MastDB._db();
-  if (!db) return;
-  db.ref(MastDB._tid() + '/admin/enrollments/' + enrollmentId).update({
+  MastDB._ref('admin/enrollments/' + enrollmentId).update({
     refundStatus: 'denied',
     refundDeniedAt: new Date().toISOString()
   }).then(function() {
@@ -25980,12 +25974,9 @@ function renderDashCardRecentCancellations() {
   var container = document.getElementById('dashCardRecentCancellations');
   if (!container) return;
   var cardConfig = DASHBOARD_CARDS.find(function(c) { return c.id === 'recentCancellations'; });
-  var db = MastDB._db();
-  if (!db) { container.innerHTML = ''; return; }
-
   var sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString();
 
-  db.ref(MastDB._tid() + '/admin/enrollments').orderByChild('cancelledAt').startAt(sevenDaysAgo).limitToLast(100).once('value').then(function(snap) {
+  MastDB._ref('admin/enrollments').orderByChild('cancelledAt').startAt(sevenDaysAgo).limitToLast(100).once('value').then(function(snap) {
     var cancelled = [];
     if (snap.exists()) {
       snap.forEach(function(child) {
@@ -26013,8 +26004,8 @@ function renderDashCardRecentCancellations() {
     // Load class and session data for each group
     var promises = sessionKeys.map(function(key) {
       var group = bySession[key];
-      var p1 = group.classId ? db.ref(MastDB._tid() + '/public/classes/' + group.classId).once('value') : Promise.resolve(null);
-      var p2 = group.sessionId ? db.ref(MastDB._tid() + '/public/classSessions/' + group.sessionId).once('value') : Promise.resolve(null);
+      var p1 = group.classId ? MastDB._ref('public/classes/' + group.classId).once('value') : Promise.resolve(null);
+      var p2 = group.sessionId ? MastDB._ref('public/classSessions/' + group.sessionId).once('value') : Promise.resolve(null);
       return Promise.all([p1, p2]).then(function(results) {
         group.classData = results[0] && results[0].exists() ? results[0].val() : {};
         group.sessionData = results[1] && results[1].exists() ? results[1].val() : {};
