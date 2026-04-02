@@ -10,6 +10,10 @@
   var editingStudentId = null;
   var editingDocId = null;
   var driveExplainerShown = false;
+  var waiverTemplatesData = [];
+  var waiverTemplatesLoaded = false;
+  var editingWaiverTemplateId = null;
+  var viewingSignaturesTemplateId = null;
 
   // --- Constants ---
   var ONBOARDING_FIELDS = [
@@ -183,6 +187,7 @@
         MastDB._ref('students').once('value'),
         MastDB._ref('settings/clearanceTypes').once('value'),
         MastDB._ref('admin/documents').once('value'),
+        MastDB._ref('settings/waiverTemplates').once('value'),
       ]);
 
       var stuVal = results[0].val() || {};
@@ -206,6 +211,12 @@
         return doc;
       });
 
+      var wtVal = results[3].val() || {};
+      waiverTemplatesData = Object.entries(wtVal).map(function(entry) {
+        var wt = entry[1]; wt._key = entry[0]; return wt;
+      });
+      waiverTemplatesLoaded = true;
+
       studentsLoaded = true;
       renderStudents(container);
     } catch (err) {
@@ -221,6 +232,7 @@
     h += '<button class="view-tab' + (currentView === 'roster' || currentView === 'detail' ? ' active' : '') + '" onclick="studentsSwitchView(\'roster\')">Students</button>';
     h += '<button class="view-tab' + (currentView === 'clearanceTypes' ? ' active' : '') + '" onclick="studentsSwitchView(\'clearanceTypes\')">Clearance Types</button>';
     h += '<button class="view-tab' + (currentView === 'docs' ? ' active' : '') + '" onclick="studentsSwitchView(\'docs\')">Documents</button>';
+    h += '<button class="view-tab' + (currentView === 'waivers' || currentView === 'waiverEditor' || currentView === 'waiverSignatures' ? ' active' : '') + '" onclick="studentsSwitchView(\'waivers\')">Waivers</button>';
     h += '</div>';
 
     if (currentView === 'roster') {
@@ -231,6 +243,12 @@
       h += renderClearanceTypes();
     } else if (currentView === 'docs') {
       h += renderTenantDocs();
+    } else if (currentView === 'waivers') {
+      h += renderWaiverTemplates();
+    } else if (currentView === 'waiverEditor') {
+      h += renderWaiverEditor(editingWaiverTemplateId);
+    } else if (currentView === 'waiverSignatures') {
+      h += renderWaiverSignatures(viewingSignaturesTemplateId);
     }
 
     container.innerHTML = h;
@@ -1018,6 +1036,257 @@
   }
 
   // ========================================
+  // Surface 5: Waiver Templates
+  // ========================================
+  function renderWaiverTemplates() {
+    var h = '';
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
+    h += '<div><h2 style="margin:0;">Waiver Templates</h2>';
+    h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-top:4px;">Create and manage waiver forms for student sign-off.</div></div>';
+    h += '<button class="btn btn-primary" onclick="studentsAddWaiverTemplate()">+ New Waiver Template</button>';
+    h += '</div>';
+
+    if (waiverTemplatesData.length === 0) {
+      h += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">';
+      h += '<div style="font-size:2rem;margin-bottom:12px;">\ud83d\udcdd</div>';
+      h += '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No waiver templates</p>';
+      h += '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Create a waiver template to start collecting signed waivers from students.</p>';
+      h += '</div>';
+      return h;
+    }
+
+    var sorted = waiverTemplatesData.slice().sort(function(a, b) {
+      if (a.isDefault && !b.isDefault) return -1;
+      if (!a.isDefault && b.isDefault) return 1;
+      return (a.title || '').localeCompare(b.title || '');
+    });
+
+    sorted.forEach(function(wt) {
+      var statusColor = wt.status === 'active' ? 'var(--teal,#2A9D8F)' : wt.status === 'archived' ? 'var(--warm-gray,#8B8680)' : 'var(--amber,#C4853C)';
+      var statusBg = wt.status === 'active' ? 'rgba(42,157,143,0.15)' : wt.status === 'archived' ? 'rgba(139,134,128,0.15)' : 'rgba(196,133,60,0.15)';
+
+      h += '<div style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#ddd);border-radius:8px;padding:12px 16px;margin-bottom:8px;cursor:pointer;" onclick="studentsEditWaiverTemplate(\'' + esc(wt._key) + '\')" onmouseover="this.style.borderColor=\'var(--amber)\'" onmouseout="this.style.borderColor=\'var(--cream-dark,#ddd)\'">';
+      h += '<div style="display:flex;justify-content:space-between;align-items:center;">';
+      h += '<div style="flex:1;min-width:0;">';
+      h += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">';
+      h += '<span style="font-weight:600;">' + esc(wt.title || 'Untitled') + '</span>';
+      h += '<span style="font-size:0.72rem;padding:1px 6px;border-radius:4px;background:' + statusBg + ';color:' + statusColor + ';">' + capitalize(wt.status || 'draft') + '</span>';
+      if (wt.isDefault) h += '<span style="font-size:0.72rem;padding:1px 6px;border-radius:4px;background:rgba(42,157,143,0.15);color:var(--teal,#2A9D8F);">Default</span>';
+      h += '<span style="font-size:0.72rem;color:var(--warm-gray);">v' + (wt.version || 1) + '</span>';
+      h += '</div>';
+      if (wt.expiryDays) h += '<div style="font-size:0.82rem;color:var(--warm-gray);margin-top:2px;">Expires after ' + wt.expiryDays + ' days</div>';
+      h += '</div>';
+      h += '<div style="display:flex;gap:6px;align-items:center;margin-left:12px;" onclick="event.stopPropagation()">';
+      if (wt.status === 'active') h += '<button class="btn" onclick="studentsCopyWaiverLink(\'' + esc(wt._key) + '\')" style="font-size:0.78rem;padding:4px 8px;">Copy Link</button>';
+      h += '<button class="btn" onclick="studentsViewSignatures(\'' + esc(wt._key) + '\')" style="font-size:0.78rem;padding:4px 8px;">Signatures</button>';
+      h += '</div>';
+      h += '</div>';
+      h += '</div>';
+    });
+
+    return h;
+  }
+
+  // ========================================
+  // Surface 6: Waiver Editor
+  // ========================================
+  function renderWaiverEditor(templateId) {
+    var wt = templateId ? waiverTemplatesData.find(function(w) { return w._key === templateId; }) : null;
+    wt = wt || {};
+
+    var h = '';
+    h += '<button class="detail-back" onclick="studentsSwitchView(\'waivers\')">\u2190 Back to Waivers</button>';
+    h += '<h3>' + (templateId ? 'Edit Waiver Template' : 'New Waiver Template') + '</h3>';
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;max-width:720px;">';
+    h += labelField('wtTitle', 'Title *', textInput('wtTitle', wt.title, 'e.g., Studio Liability Waiver'));
+    h += labelField('wtStatus', 'Status', selectInput('wtStatus', ['draft', 'active', 'archived'], wt.status || 'draft'));
+    h += labelField('wtExpiryDays', 'Expiry Days', '<input id="wtExpiryDays" type="number" min="0" value="' + (wt.expiryDays || '') + '" placeholder="Empty = never expires" style="' + INPUT_STYLE + '">');
+    h += '<div></div>';
+    h += '<div style="display:flex;align-items:center;gap:8px;">';
+    h += '<input id="wtIsDefault" type="checkbox"' + (wt.isDefault ? ' checked' : '') + '>';
+    h += '<label for="wtIsDefault" style="font-size:0.85rem;font-weight:600;">Default waiver</label>';
+    h += '</div>';
+    h += '<div style="display:flex;align-items:center;gap:8px;">';
+    h += '<input id="wtRequireGuardian" type="checkbox"' + (wt.requireMinorGuardian ? ' checked' : '') + '>';
+    h += '<label for="wtRequireGuardian" style="font-size:0.85rem;font-weight:600;">Require guardian for minors</label>';
+    h += '</div>';
+    h += '</div>';
+
+    // Rich text editor
+    h += '<div style="margin-top:16px;max-width:720px;">';
+    h += '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Waiver Body</label>';
+    h += '<div id="wtToolbar" style="display:flex;gap:4px;padding:8px;background:var(--cream-dark,#E8E0D4);border-radius:6px 6px 0 0;">';
+    h += '<button type="button" onclick="studentsWaiverExec(\'bold\')" style="padding:4px 8px;border:1px solid var(--cream-dark,#ddd);border-radius:4px;background:var(--cream,#FAF6F0);cursor:pointer;font-weight:bold;" title="Bold">B</button>';
+    h += '<button type="button" onclick="studentsWaiverExec(\'italic\')" style="padding:4px 8px;border:1px solid var(--cream-dark,#ddd);border-radius:4px;background:var(--cream,#FAF6F0);cursor:pointer;font-style:italic;" title="Italic">I</button>';
+    h += '<button type="button" onclick="studentsWaiverExec(\'underline\')" style="padding:4px 8px;border:1px solid var(--cream-dark,#ddd);border-radius:4px;background:var(--cream,#FAF6F0);cursor:pointer;text-decoration:underline;" title="Underline">U</button>';
+    h += '<span style="width:1px;background:var(--warm-gray);margin:0 4px;opacity:0.3;"></span>';
+    h += '<button type="button" onclick="studentsWaiverExec(\'formatBlock\',\'H2\')" style="padding:4px 8px;border:1px solid var(--cream-dark,#ddd);border-radius:4px;background:var(--cream,#FAF6F0);cursor:pointer;font-size:0.78rem;font-weight:600;" title="Heading 2">H2</button>';
+    h += '<button type="button" onclick="studentsWaiverExec(\'formatBlock\',\'H3\')" style="padding:4px 8px;border:1px solid var(--cream-dark,#ddd);border-radius:4px;background:var(--cream,#FAF6F0);cursor:pointer;font-size:0.78rem;font-weight:600;" title="Heading 3">H3</button>';
+    h += '<span style="width:1px;background:var(--warm-gray);margin:0 4px;opacity:0.3;"></span>';
+    h += '<button type="button" onclick="studentsWaiverExec(\'insertUnorderedList\')" style="padding:4px 8px;border:1px solid var(--cream-dark,#ddd);border-radius:4px;background:var(--cream,#FAF6F0);cursor:pointer;font-size:0.78rem;" title="Bullet List">UL</button>';
+    h += '<button type="button" onclick="studentsWaiverExec(\'insertOrderedList\')" style="padding:4px 8px;border:1px solid var(--cream-dark,#ddd);border-radius:4px;background:var(--cream,#FAF6F0);cursor:pointer;font-size:0.78rem;" title="Numbered List">OL</button>';
+    h += '<span style="flex:1;"></span>';
+    h += '<button type="button" onclick="studentsToggleWaiverPreview()" id="wtPreviewBtn" style="padding:4px 10px;border:1px solid var(--cream-dark,#ddd);border-radius:4px;background:var(--cream,#FAF6F0);cursor:pointer;font-size:0.78rem;">Preview</button>';
+    h += '</div>';
+    h += '<div id="wtEditor" contenteditable="true" style="min-height:200px;max-height:400px;overflow-y:auto;padding:12px;border:1px solid var(--cream-dark,#ddd);border-top:none;border-radius:0 0 6px 6px;background:#fff;font-size:0.9rem;line-height:1.6;outline:none;font-family:DM Sans,sans-serif;color:var(--charcoal,#1A1A1A);">' + (wt.bodyHtml || '') + '</div>';
+    h += '<div id="wtPreview" style="display:none;min-height:200px;max-height:400px;overflow-y:auto;padding:12px;border:1px solid var(--cream-dark,#ddd);border-top:none;border-radius:0 0 6px 6px;background:var(--cream,#FAF6F0);font-size:0.9rem;line-height:1.6;"></div>';
+    h += '</div>';
+
+    // Actions
+    h += '<div style="display:flex;gap:8px;margin-top:20px;max-width:720px;">';
+    h += '<button class="btn btn-primary" onclick="studentsSaveWaiverTemplate(\'' + (templateId || '') + '\')">Save</button>';
+    h += '<button class="btn" onclick="studentsSwitchView(\'waivers\')">Cancel</button>';
+    if (templateId) {
+      h += '<span style="flex:1;"></span>';
+      h += '<button class="btn" style="color:var(--danger);" onclick="studentsDeleteWaiverTemplate(\'' + esc(templateId) + '\')">Delete</button>';
+    }
+    h += '</div>';
+    return h;
+  }
+
+  // ========================================
+  // Surface 7: Waiver Signatures
+  // ========================================
+  function renderWaiverSignatures(templateId) {
+    var wt = waiverTemplatesData.find(function(w) { return w._key === templateId; });
+    var h = '';
+    h += '<button class="detail-back" onclick="studentsSwitchView(\'waivers\')">\u2190 Back to Waivers</button>';
+    h += '<h3>Signatures' + (wt ? ' \u2014 ' + esc(wt.title || 'Untitled') : '') + '</h3>';
+    h += '<div id="waiverSignaturesContainer"><div class="loading">Loading signatures\u2026</div></div>';
+    setTimeout(function() { loadWaiverSignatures(templateId); }, 0);
+    return h;
+  }
+
+  async function loadWaiverSignatures(templateId) {
+    var container = document.getElementById('waiverSignaturesContainer');
+    if (!container) return;
+    try {
+      var snap = await MastDB._ref('admin/waiverSignatures').orderByChild('templateId').equalTo(templateId).once('value');
+      var val = snap.val() || {};
+      var sigs = Object.entries(val).map(function(e) { var s = e[1]; s._key = e[0]; return s; });
+      if (sigs.length === 0) {
+        container.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);"><div style="font-size:2rem;margin-bottom:12px;">\u270d\ufe0f</div><p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No signatures yet</p><p style="font-size:0.85rem;color:var(--warm-gray-light);">Signatures will appear here once students sign this waiver.</p></div>';
+        return;
+      }
+      sigs.sort(function(a, b) { return (b.signedAt || '').localeCompare(a.signedAt || ''); });
+      var h = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.88rem;"><thead><tr style="background:var(--cream-dark,#E8E0D4);text-align:left;">';
+      h += '<th style="padding:8px 12px;">Name</th><th style="padding:8px 12px;">Email</th><th style="padding:8px 12px;">Signed</th><th style="padding:8px 12px;">Expires</th><th style="padding:8px 12px;"></th></tr></thead><tbody>';
+      sigs.forEach(function(sig) {
+        var signedDate = sig.signedAt ? sig.signedAt.split('T')[0] : '\u2014';
+        var expiryDate = sig.expiresAt ? sig.expiresAt.split('T')[0] : 'Never';
+        var isExpired = sig.expiresAt && new Date(sig.expiresAt) < new Date();
+        h += '<tr style="border-bottom:1px solid var(--cream-dark,#ddd);cursor:pointer;" onclick="studentsViewSignatureDetail(\'' + esc(sig._key) + '\')" onmouseover="this.style.background=\'var(--cream,#FAF6F0)\'" onmouseout="this.style.background=\'\'">';
+        h += '<td style="padding:8px 12px;">' + esc(sig.signerName || '\u2014') + '</td>';
+        h += '<td style="padding:8px 12px;">' + esc(sig.signerEmail || '\u2014') + '</td>';
+        h += '<td style="padding:8px 12px;">' + esc(signedDate) + '</td>';
+        h += '<td style="padding:8px 12px;">' + (isExpired ? '<span style="color:var(--danger);">' + esc(expiryDate) + ' (expired)</span>' : esc(expiryDate)) + '</td>';
+        h += '<td style="padding:8px 12px;text-align:right;"><span style="font-size:0.75rem;color:var(--warm-gray);">View \u203a</span></td>';
+        h += '</tr>';
+      });
+      h += '</tbody></table></div>';
+      container.innerHTML = h;
+    } catch (err) {
+      container.innerHTML = '<div style="color:var(--danger);padding:20px;">Error loading signatures.</div>';
+    }
+  }
+
+  function showSignatureDetailModal(sigId) {
+    MastDB._ref('admin/waiverSignatures/' + sigId).once('value').then(function(snap) {
+      var sig = snap.val();
+      if (!sig) { showToast('Signature not found', true); return; }
+      var h = '<div id="sigDetailOverlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this)this.remove()">';
+      h += '<div style="background:var(--cream,#FAF6F0);border-radius:12px;padding:24px;max-width:600px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.2);">';
+      h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;"><h3 style="margin:0;">Signature Detail</h3>';
+      h += '<button onclick="document.getElementById(\'sigDetailOverlay\').remove()" style="border:none;background:none;font-size:1.2rem;cursor:pointer;color:var(--warm-gray);">\u2715</button></div>';
+      h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;font-size:0.88rem;margin-bottom:16px;">';
+      h += '<div><span style="font-weight:600;color:var(--warm-gray);font-size:0.78rem;">NAME</span><br>' + esc(sig.signerName || '\u2014') + '</div>';
+      h += '<div><span style="font-weight:600;color:var(--warm-gray);font-size:0.78rem;">EMAIL</span><br>' + esc(sig.signerEmail || '\u2014') + '</div>';
+      h += '<div><span style="font-weight:600;color:var(--warm-gray);font-size:0.78rem;">SIGNED AT</span><br>' + esc(sig.signedAt || '\u2014') + '</div>';
+      h += '<div><span style="font-weight:600;color:var(--warm-gray);font-size:0.78rem;">EXPIRES</span><br>' + esc(sig.expiresAt || 'Never') + '</div>';
+      h += '<div><span style="font-weight:600;color:var(--warm-gray);font-size:0.78rem;">IP ADDRESS</span><br>' + esc(sig.signerIp || '\u2014') + '</div>';
+      h += '<div><span style="font-weight:600;color:var(--warm-gray);font-size:0.78rem;">WAIVER VERSION</span><br>v' + (sig.templateVersion || '\u2014') + '</div>';
+      h += '<div style="grid-column:1/-1;"><span style="font-weight:600;color:var(--warm-gray);font-size:0.78rem;">USER AGENT</span><br><span style="font-size:0.8rem;word-break:break-all;">' + esc(sig.signerUserAgent || '\u2014') + '</span></div>';
+      if (sig.guardianName) {
+        h += '<div><span style="font-weight:600;color:var(--warm-gray);font-size:0.78rem;">GUARDIAN</span><br>' + esc(sig.guardianName) + '</div>';
+        h += '<div><span style="font-weight:600;color:var(--warm-gray);font-size:0.78rem;">RELATIONSHIP</span><br>' + esc(sig.guardianRelationship || '\u2014') + '</div>';
+      }
+      h += '</div>';
+      if (sig.waiverTextSnapshot) {
+        h += '<details style="margin-top:8px;"><summary style="cursor:pointer;font-weight:600;font-size:0.88rem;color:var(--teal,#2A9D8F);padding:6px 0;">View Waiver Text</summary>';
+        h += '<div style="margin-top:8px;padding:12px;background:#fff;border:1px solid var(--cream-dark,#ddd);border-radius:6px;font-size:0.85rem;line-height:1.6;max-height:300px;overflow-y:auto;">' + sig.waiverTextSnapshot + '</div></details>';
+      }
+      h += '</div></div>';
+      document.body.insertAdjacentHTML('beforeend', h);
+    });
+  }
+
+  // --- Waiver Save ---
+  async function saveWaiverTemplate(templateId) {
+    var title = (document.getElementById('wtTitle') || {}).value;
+    if (!title || !title.trim()) { showToast('Title is required', true); return; }
+    var editorEl = document.getElementById('wtEditor');
+    var bodyHtml = editorEl ? editorEl.innerHTML : '';
+    var status = (document.getElementById('wtStatus') || {}).value || 'draft';
+    var expiryRaw = (document.getElementById('wtExpiryDays') || {}).value;
+    var expiryDays = expiryRaw ? parseInt(expiryRaw, 10) : null;
+    if (expiryDays !== null && (isNaN(expiryDays) || expiryDays < 0)) { showToast('Expiry days must be a positive number', true); return; }
+    var isDefault = (document.getElementById('wtIsDefault') || {}).checked || false;
+    var requireMinorGuardian = (document.getElementById('wtRequireGuardian') || {}).checked || false;
+
+    var existingWt = templateId ? waiverTemplatesData.find(function(w) { return w._key === templateId; }) : null;
+    var version = existingWt ? (existingWt.version || 1) + 1 : 1;
+
+    var fields = {
+      title: title.trim(), status: status, bodyHtml: bodyHtml,
+      expiryDays: expiryDays, isDefault: isDefault, requireMinorGuardian: requireMinorGuardian,
+      version: version, updatedAt: new Date().toISOString()
+    };
+
+    try {
+      if (isDefault) {
+        var unsetPromises = waiverTemplatesData
+          .filter(function(w) { return w.isDefault && w._key !== templateId; })
+          .map(function(w) { return MastDB._ref('settings/waiverTemplates/' + w._key + '/isDefault').set(false); });
+        if (unsetPromises.length > 0) await Promise.all(unsetPromises);
+      }
+      var refKey;
+      if (templateId) {
+        await MastDB._ref('settings/waiverTemplates/' + templateId).update(fields);
+        refKey = templateId;
+      } else {
+        var ref = MastDB._ref('settings/waiverTemplates').push();
+        fields.createdAt = new Date().toISOString();
+        await ref.set(fields);
+        refKey = ref.key;
+      }
+      await MastDB._ref('public/waivers/' + refKey).set({
+        title: fields.title, bodyHtml: fields.bodyHtml, version: fields.version,
+        requireMinorGuardian: fields.requireMinorGuardian, expiryDays: fields.expiryDays, status: fields.status
+      });
+      showToast(templateId ? 'Waiver template saved' : 'Waiver template created');
+      editingWaiverTemplateId = null;
+      currentView = 'waivers';
+      await loadStudents();
+    } catch (err) {
+      showToast('Error: ' + esc(err.message), true);
+    }
+  }
+
+  async function deleteWaiverTemplate(templateId) {
+    if (!confirm('Delete this waiver template? This cannot be undone.')) return;
+    try {
+      await MastDB._ref('settings/waiverTemplates/' + templateId).remove();
+      await MastDB._ref('public/waivers/' + templateId).remove();
+      showToast('Waiver template deleted');
+      editingWaiverTemplateId = null;
+      currentView = 'waivers';
+      await loadStudents();
+    } catch (err) {
+      showToast('Error: ' + esc(err.message), true);
+    }
+  }
+
+  // ========================================
   // Window Exports
   // ========================================
   window.loadStudents = loadStudents;
@@ -1069,6 +1338,53 @@
   window.studentsSaveDoc = saveDoc;
   window.studentsDeleteDoc = deleteDoc;
   window.studentsUnlinkDrive = unlinkDrive;
+  window.studentsAddWaiverTemplate = function() {
+    editingWaiverTemplateId = null; currentView = 'waiverEditor';
+    var container = document.getElementById('studentsTab');
+    if (container) renderStudents(container);
+  };
+  window.studentsEditWaiverTemplate = function(id) {
+    editingWaiverTemplateId = id; currentView = 'waiverEditor';
+    var container = document.getElementById('studentsTab');
+    if (container) renderStudents(container);
+  };
+  window.studentsSaveWaiverTemplate = function(id) { saveWaiverTemplate(id || null); };
+  window.studentsDeleteWaiverTemplate = function(id) { deleteWaiverTemplate(id); };
+  window.studentsCopyWaiverLink = function(id) {
+    var domain = (window.TENANT_CONFIG && window.TENANT_CONFIG.domain) ? window.TENANT_CONFIG.domain : window.location.hostname;
+    var url = 'https://' + domain + '/waiver.html?t=' + encodeURIComponent(id);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(function() { showToast('Waiver link copied'); });
+    } else { prompt('Copy this link:', url); }
+  };
+  window.studentsViewSignatures = function(templateId) {
+    viewingSignaturesTemplateId = templateId; currentView = 'waiverSignatures';
+    var container = document.getElementById('studentsTab');
+    if (container) renderStudents(container);
+  };
+  window.studentsViewSignatureDetail = function(sigId) { showSignatureDetailModal(sigId); };
+  window.studentsWaiverExec = function(cmd, value) {
+    document.execCommand(cmd, false, value || null);
+    var editor = document.getElementById('wtEditor');
+    if (editor) editor.focus();
+  };
+  window.studentsToggleWaiverPreview = function() {
+    var editor = document.getElementById('wtEditor');
+    var preview = document.getElementById('wtPreview');
+    var toolbar = document.getElementById('wtToolbar');
+    var btn = document.getElementById('wtPreviewBtn');
+    if (!editor || !preview) return;
+    if (preview.style.display === 'none') {
+      preview.innerHTML = editor.innerHTML;
+      preview.style.display = ''; editor.style.display = 'none';
+      toolbar.querySelectorAll('button:not(#wtPreviewBtn)').forEach(function(b) { b.disabled = true; b.style.opacity = '0.4'; });
+      if (btn) btn.textContent = 'Edit';
+    } else {
+      preview.style.display = 'none'; editor.style.display = '';
+      toolbar.querySelectorAll('button:not(#wtPreviewBtn)').forEach(function(b) { b.disabled = false; b.style.opacity = '1'; });
+      if (btn) btn.textContent = 'Preview';
+    }
+  };
 
   // --- Module Registration ---
   MastAdmin.registerModule('students', {
@@ -1082,11 +1398,15 @@
       studentsData = [];
       clearanceTypes = [];
       tenantDocs = [];
+      waiverTemplatesData = [];
+      waiverTemplatesLoaded = false;
       studentsLoaded = false;
       currentView = 'roster';
       selectedStudentId = null;
       editingStudentId = null;
       editingDocId = null;
+      editingWaiverTemplateId = null;
+      viewingSignaturesTemplateId = null;
     }
   });
 

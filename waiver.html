@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdn.jsdelivr.net https://*.firebaseio.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://us-central1-mast-platform-prod.cloudfunctions.net https://*.firebaseio.com wss://*.firebaseio.com https://*.firebasestorage.app https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://api.ipify.org; img-src 'self' data: blob: https:; frame-src 'self' https://*.firebaseapp.com https://*.firebaseio.com; frame-ancestors 'none';">
+<title>Waiver &mdash; Sign Online</title>
+<link rel="preconnect" href="https://mast-platform-prod-default-rtdb.firebaseio.com" crossorigin>
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<script>
+(function(){
+  var P='https://mast-platform-prod-default-rtdb.firebaseio.com/mast-platform';
+  var h=location.hostname,C=5*60*1000;
+  if(h==='localhost'||h==='127.0.0.1')return;
+  try{var r=localStorage.getItem('mast_tenant_'+h);if(r){var c=JSON.parse(r);if(Date.now()-c.timestamp<C){window.__earlyTenant=Promise.resolve(c.data);return;}}}catch(e){}
+  var ek=h.replace(/\./g,'_');
+  window.__earlyTenant=fetch(P+'/tenantsByDomain/'+ek+'.json').then(function(r){return r.ok?r.json():null}).then(function(tid){
+    if(!tid)return null;
+    return fetch(P+'/tenants/'+tid+'/publicConfig.json').then(function(r){return r.ok?r.json():null}).then(function(pc){
+      return pc?{tenantId:tid,publicConfig:pc}:null;
+    });
+  }).catch(function(){return null;});
+})();
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="storefront.css">
+<link rel="stylesheet" href="cart.css">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<style>
+.wv-container { max-width: 800px; margin: 0 auto; padding: 100px 24px 60px; }
+.wv-loading { text-align: center; padding: 60px 20px; color: var(--warm-gray, #8B8680); }
+.wv-title { font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 400; font-size: clamp(1.8rem, 4vw, 2.4rem); margin: 0 0 8px; color: var(--text, #1A1A1A); }
+.wv-version { font-size: 0.8rem; color: var(--warm-gray-light, #A9A49E); margin-bottom: 24px; }
+.wv-body { padding: 24px; border: 1px solid var(--cream-dark, #E8E0D4); border-radius: 8px; background: #fff; font-size: 1rem; line-height: 1.7; color: var(--text, #1A1A1A); margin-bottom: 32px; }
+.wv-body h2 { font-size: 1.3rem; font-weight: 600; margin: 1.5rem 0 0.5rem; text-transform: uppercase; letter-spacing: 0.5px; }
+.wv-body h3 { font-size: 1.1rem; font-weight: 600; margin: 1.2rem 0 0.4rem; }
+.wv-body p { margin: 0 0 0.8rem; }
+.wv-body ul, .wv-body ol { margin: 0 0 0.8rem; padding-left: 24px; }
+
+.wv-form { max-width: 560px; }
+.wv-form-title { font-size: 1.1rem; font-weight: 600; margin: 0 0 16px; color: var(--text, #1A1A1A); }
+.wv-field { margin-bottom: 16px; }
+.wv-label { display: block; font-size: 0.85rem; font-weight: 500; margin-bottom: 4px; color: var(--text, #1A1A1A); }
+.wv-input { width: 100%; padding: 10px 14px; border: 1px solid var(--cream-dark, #E8E0D4); border-radius: 6px; font-size: 0.95rem; font-family: 'DM Sans', sans-serif; box-sizing: border-box; background: #fff; color: var(--text, #1A1A1A); }
+.wv-input:focus { outline: none; border-color: var(--primary, #2A7C6F); box-shadow: 0 0 0 2px rgba(42, 124, 111, 0.15); }
+
+.wv-consent { margin: 24px 0; padding: 20px; background: var(--cream, #FAF6F0); border: 1px solid var(--cream-dark, #E8E0D4); border-radius: 8px; }
+.wv-consent-item { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px; }
+.wv-consent-item:last-child { margin-bottom: 0; }
+.wv-consent-item input[type="checkbox"] { margin-top: 3px; width: 18px; height: 18px; flex-shrink: 0; cursor: pointer; }
+.wv-consent-item label { font-size: 0.9rem; line-height: 1.4; cursor: pointer; }
+
+.wv-guardian { margin: 16px 0; padding: 16px; background: var(--cream, #FAF6F0); border: 1px solid var(--cream-dark, #E8E0D4); border-radius: 8px; display: none; }
+
+.wv-submit { display: inline-block; padding: 12px 32px; background: var(--primary, #2A7C6F); color: #fff; border: none; border-radius: 6px; font-size: 1rem; font-weight: 600; font-family: 'DM Sans', sans-serif; cursor: pointer; transition: opacity 0.2s; }
+.wv-submit:hover { opacity: 0.9; }
+.wv-submit:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.wv-success { text-align: center; padding: 48px 20px; }
+.wv-success-icon { font-size: 3rem; margin-bottom: 12px; }
+.wv-success h2 { font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 400; font-size: 1.6rem; margin: 0 0 8px; }
+.wv-success p { color: var(--warm-gray, #8B8680); font-size: 0.95rem; }
+
+.wv-error { color: var(--danger, #c0392b); background: rgba(192, 57, 43, 0.08); padding: 10px 14px; border-radius: 6px; font-size: 0.88rem; margin-bottom: 16px; display: none; }
+
+@media (max-width: 768px) {
+  .wv-container { padding: 80px 16px 40px; }
+  .wv-body { padding: 16px; font-size: 0.95rem; }
+}
+</style>
+</head>
+<body>
+<nav id="mainNav"></nav>
+<div class="nav-mobile-menu" id="mobileMenu"></div>
+
+<div class="wv-container" id="waiverContainer">
+  <div class="wv-loading">Loading waiver...</div>
+</div>
+
+<footer id="siteFooter"></footer>
+
+<script src="storefront-tenant.js"></script>
+<script src="storefront-theme.js"></script>
+<script src="storefront-nav.js"></script>
+<script src="tenant-brand.js?v=2"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+
+<script>
+(function() {
+  'use strict';
+
+  function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  var container = document.getElementById('waiverContainer');
+  var templateId = null;
+  var classId = null;
+  var waiverData = null;
+
+  window.TENANT_READY.then(function() {
+    var params = new URLSearchParams(window.location.search);
+    templateId = params.get('t') || params.get('id');
+    classId = params.get('c') || null;
+
+    var dbUrl = TENANT_FIREBASE_CONFIG.databaseURL;
+    if (!dbUrl) { container.innerHTML = '<div class="wv-loading">Configuration error.</div>'; return; }
+
+    if (templateId) {
+      loadWaiver(dbUrl, templateId);
+    } else {
+      // Find default waiver
+      fetch(dbUrl + '/' + TENANT_ID + '/public/waivers.json')
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(waivers) {
+          if (!waivers) { container.innerHTML = '<div class="wv-loading">No waivers available.</div>'; return; }
+          var defaultId = null;
+          for (var id in waivers) {
+            if (waivers[id].status === 'active') {
+              if (!defaultId) defaultId = id; // first active as fallback
+            }
+          }
+          // Look through settings for isDefault (not in public mirror, so just use first active)
+          if (defaultId) {
+            templateId = defaultId;
+            loadWaiver(dbUrl, defaultId);
+          } else {
+            container.innerHTML = '<div class="wv-loading">No active waivers available.</div>';
+          }
+        })
+        .catch(function() { container.innerHTML = '<div class="wv-loading">Unable to load waiver.</div>'; });
+    }
+  });
+
+  function loadWaiver(dbUrl, id) {
+    fetch(dbUrl + '/' + TENANT_ID + '/public/waivers/' + encodeURIComponent(id) + '.json')
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(waiver) {
+        if (!waiver || waiver.status !== 'active') {
+          container.innerHTML = '<div class="wv-loading">This waiver is not currently available.</div>';
+          return;
+        }
+        waiverData = waiver;
+        renderWaiver(waiver);
+      })
+      .catch(function() {
+        container.innerHTML = '<div class="wv-loading">Unable to load waiver.</div>';
+      });
+  }
+
+  function renderWaiver(waiver) {
+    var sanitizedBody = window.DOMPurify ? DOMPurify.sanitize(waiver.bodyHtml, {
+      ALLOWED_TAGS: ['h1','h2','h3','h4','h5','h6','p','strong','em','u','ul','ol','li','a','br','hr','div','span','table','tr','td','th','blockquote','sub','sup'],
+      ALLOWED_ATTR: ['href','target','style']
+    }) : waiver.bodyHtml;
+
+    var html = '';
+
+    // Waiver content
+    html += '<h1 class="wv-title">' + esc(waiver.title) + '</h1>';
+    html += '<div class="wv-version">Version ' + (waiver.version || 1) + '</div>';
+    html += '<div class="wv-body" id="waiverBodyContent">' + sanitizedBody + '</div>';
+
+    // Signer form
+    html += '<div class="wv-form" id="waiverForm">';
+    html += '<div class="wv-form-title">Sign This Waiver</div>';
+    html += '<div class="wv-error" id="waiverError"></div>';
+
+    html += '<div class="wv-field"><label class="wv-label" for="wvName">Full Legal Name *</label>';
+    html += '<input type="text" id="wvName" class="wv-input" required placeholder="Enter your full legal name" oninput="wvValidate()"></div>';
+
+    html += '<div class="wv-field"><label class="wv-label" for="wvEmail">Email Address *</label>';
+    html += '<input type="email" id="wvEmail" class="wv-input" required placeholder="your@email.com" oninput="wvValidate()"></div>';
+
+    html += '<div class="wv-field"><label class="wv-label" for="wvPhone">Phone (optional)</label>';
+    html += '<input type="tel" id="wvPhone" class="wv-input" placeholder="(555) 123-4567"></div>';
+
+    // Guardian section
+    if (waiver.requireMinorGuardian) {
+      html += '<div class="wv-field" style="margin-top:8px;">';
+      html += '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;">';
+      html += '<input type="checkbox" id="wvIsMinor" onchange="wvToggleGuardian()">';
+      html += 'I am signing on behalf of a minor</label></div>';
+
+      html += '<div class="wv-guardian" id="wvGuardianSection">';
+      html += '<div class="wv-field"><label class="wv-label" for="wvGuardianName">Guardian Name *</label>';
+      html += '<input type="text" id="wvGuardianName" class="wv-input" placeholder="Parent/guardian full name" oninput="wvValidate()"></div>';
+      html += '<div class="wv-field"><label class="wv-label" for="wvGuardianEmail">Guardian Email *</label>';
+      html += '<input type="email" id="wvGuardianEmail" class="wv-input" placeholder="guardian@email.com" oninput="wvValidate()"></div>';
+      html += '<div class="wv-field"><label class="wv-label" for="wvGuardianRelation">Relationship</label>';
+      html += '<input type="text" id="wvGuardianRelation" class="wv-input" placeholder="e.g., Parent, Legal Guardian"></div>';
+      html += '</div>';
+    }
+
+    // Consent checkboxes
+    html += '<div class="wv-consent">';
+    html += '<div class="wv-consent-item">';
+    html += '<input type="checkbox" id="wvConsentElectronic" onchange="wvValidate()">';
+    html += '<label for="wvConsentElectronic">I consent to sign this document electronically pursuant to the federal Electronic Signatures in Global and National Commerce Act (ESIGN Act).</label>';
+    html += '</div>';
+    html += '<div class="wv-consent-item">';
+    html += '<input type="checkbox" id="wvConsentAgree" onchange="wvValidate()">';
+    html += '<label for="wvConsentAgree"><strong>I have read, understand, and agree to the terms of this waiver.</strong></label>';
+    html += '</div>';
+    html += '</div>';
+
+    // Submit
+    html += '<div style="margin-top:16px;">';
+    html += '<button class="wv-submit" id="wvSubmitBtn" disabled onclick="wvSubmit()">I Agree and Sign</button>';
+    html += '<p style="font-size:0.78rem;color:var(--warm-gray);margin-top:8px;">A confirmation copy will be sent to your email.</p>';
+    html += '</div>';
+
+    html += '</div>'; // close form
+
+    // Success state (hidden)
+    html += '<div class="wv-success" id="waiverSuccess" style="display:none;">';
+    html += '<div class="wv-success-icon">\u2705</div>';
+    html += '<h2>Waiver Signed Successfully</h2>';
+    html += '<p>A confirmation copy has been sent to your email. You can close this page.</p>';
+    html += '</div>';
+
+    container.innerHTML = html;
+  }
+
+  // --- Validation ---
+  window.wvValidate = function() {
+    var name = (document.getElementById('wvName') || {}).value || '';
+    var email = (document.getElementById('wvEmail') || {}).value || '';
+    var consent1 = (document.getElementById('wvConsentElectronic') || {}).checked;
+    var consent2 = (document.getElementById('wvConsentAgree') || {}).checked;
+    var btn = document.getElementById('wvSubmitBtn');
+
+    var valid = name.trim().length > 0 && email.trim().length > 0 && email.indexOf('@') > 0 && consent1 && consent2;
+
+    // Guardian validation if applicable
+    var isMinorEl = document.getElementById('wvIsMinor');
+    if (isMinorEl && isMinorEl.checked) {
+      var gName = (document.getElementById('wvGuardianName') || {}).value || '';
+      var gEmail = (document.getElementById('wvGuardianEmail') || {}).value || '';
+      if (!gName.trim() || !gEmail.trim() || gEmail.indexOf('@') < 0) valid = false;
+    }
+
+    if (btn) btn.disabled = !valid;
+  };
+
+  window.wvToggleGuardian = function() {
+    var section = document.getElementById('wvGuardianSection');
+    var checkbox = document.getElementById('wvIsMinor');
+    if (section) section.style.display = checkbox && checkbox.checked ? 'block' : 'none';
+    wvValidate();
+  };
+
+  // --- Submit ---
+  window.wvSubmit = async function() {
+    var btn = document.getElementById('wvSubmitBtn');
+    var errEl = document.getElementById('waiverError');
+    if (btn) { btn.disabled = true; btn.textContent = 'Submitting...'; }
+    if (errEl) errEl.style.display = 'none';
+
+    try {
+      // Get IP address
+      var ipAddress = '';
+      try {
+        var ipResp = await fetch('https://api.ipify.org?format=json');
+        var ipData = await ipResp.json();
+        ipAddress = ipData.ip || '';
+      } catch (e) { /* IP fetch is best-effort */ }
+
+      // Build payload
+      var payload = {
+        tenantId: TENANT_ID,
+        templateId: templateId,
+        signerName: document.getElementById('wvName').value.trim(),
+        signerEmail: document.getElementById('wvEmail').value.trim(),
+        signerPhone: (document.getElementById('wvPhone') || {}).value || '',
+        consentToElectronic: true,
+        intentToSign: true,
+        ipAddress: ipAddress,
+        userAgent: navigator.userAgent,
+        classId: classId
+      };
+
+      // Guardian fields
+      var isMinorEl = document.getElementById('wvIsMinor');
+      if (isMinorEl && isMinorEl.checked) {
+        payload.guardianName = (document.getElementById('wvGuardianName') || {}).value || '';
+        payload.guardianEmail = (document.getElementById('wvGuardianEmail') || {}).value || '';
+        payload.guardianRelationship = (document.getElementById('wvGuardianRelation') || {}).value || '';
+      }
+
+      // Call Cloud Function
+      var cfBase = TENANT_FIREBASE_CONFIG.cloudFunctionsBase || 'https://us-central1-mast-platform-prod.cloudfunctions.net';
+
+      // Get auth token (anonymous is fine)
+      var app;
+      try { app = firebase.app(); } catch (e) { app = firebase.initializeApp(TENANT_FIREBASE_CONFIG); }
+      var auth = app.auth();
+      if (!auth.currentUser) await auth.signInAnonymously();
+      var token = await auth.currentUser.getIdToken();
+
+      var resp = await fetch(cfBase + '/submitWaiverSignature', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ data: payload })
+      });
+
+      var result = await resp.json();
+      if (result.error || (result.result && result.result.error)) {
+        throw new Error((result.result && result.result.error) || result.error || 'Submission failed');
+      }
+
+      // Success
+      document.getElementById('waiverForm').style.display = 'none';
+      document.getElementById('waiverSuccess').style.display = '';
+
+    } catch (err) {
+      if (errEl) {
+        errEl.textContent = 'Error: ' + (err.message || 'Something went wrong. Please try again.');
+        errEl.style.display = '';
+      }
+      if (btn) { btn.disabled = false; btn.textContent = 'I Agree and Sign'; }
+    }
+  };
+})();
+</script>
+<script src="cart.js"></script>
+<script src="schema-org.js"></script>
+<script defer src="feedback-widget.js"></script>
+<script defer src="share-widget.js"></script>
+
+</body>
+</html>
