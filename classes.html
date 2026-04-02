@@ -463,6 +463,7 @@
 
     var filtered = allClasses.filter(function(c) {
       if (c.status !== 'active' && c.status !== 'published') return false;
+      if (!c._hasFutureSessions) return false;
       if (currentFilter !== 'all' && (c.category || '').toLowerCase() !== currentFilter.toLowerCase()) return false;
       return true;
     });
@@ -522,22 +523,36 @@
       });
     }
 
-    // Load classes and pass definitions in parallel
+    // Load classes, pass definitions, and sessions in parallel
     Promise.all([
       db.ref(TENANT_ID + '/public/classes').once('value'),
-      db.ref(TENANT_ID + '/public/passDefinitions').once('value')
+      db.ref(TENANT_ID + '/public/passDefinitions').once('value'),
+      db.ref(TENANT_ID + '/public/classSessions').once('value')
     ]).then(function(results) {
       var data = results[0].val() || {};
+      var sessionData = results[2].val() || {};
+      var today = new Date().toISOString().slice(0, 10);
+
+      // Build set of classIds that have at least one future scheduled session
+      var classesWithFutureSessions = {};
+      Object.keys(sessionData).forEach(function(sid) {
+        var s = sessionData[sid];
+        if (s.status === 'scheduled' && s.date >= today && s.classId) {
+          classesWithFutureSessions[s.classId] = true;
+        }
+      });
+
       allClasses = Object.keys(data).map(function(id) {
         var c = data[id];
         c.id = id;
+        c._hasFutureSessions = !!classesWithFutureSessions[id];
         return c;
       });
 
       // Build category pills from actual class data
       var cats = {};
       allClasses.forEach(function(c) {
-        if ((c.status === 'active' || c.status === 'published') && c.category) cats[c.category.toLowerCase()] = true;
+        if ((c.status === 'active' || c.status === 'published') && c._hasFutureSessions && c.category) cats[c.category.toLowerCase()] = true;
       });
       buildFilterPills(Object.keys(cats).sort());
       renderClasses();
