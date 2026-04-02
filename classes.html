@@ -617,6 +617,7 @@
       window.MastCart.addItem({
         pid: 'pass-' + passDefId,
         name: passName,
+        price: priceCents ? '$' + (priceCents / 100).toFixed(2) : 'Free',
         priceCents: priceCents,
         options: {},
         qty: 1,
