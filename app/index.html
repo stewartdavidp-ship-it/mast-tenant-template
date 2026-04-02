@@ -25901,10 +25901,13 @@ function renderDashCardPendingRefunds() {
         var isPass = enr.passId ? true : false;
         var typeLabel = isPass ? 'Pass' : (amt || 'Free');
         var cancelDate = enr.cancelledAt ? new Date(enr.cancelledAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+        var windowBadge = enr.withinWindow
+          ? '<span style="font-size:0.68rem;padding:1px 6px;background:rgba(229,115,115,0.2);color:var(--red,#E57373);border-radius:3px;margin-left:4px;">Within window</span>'
+          : '';
 
         contentHtml += '<div class="dash-queue-item">' +
           '<div class="dash-queue-row">' +
-            '<span style="font-weight:500;font-size:0.88rem;">' + esc(name) + '</span>' +
+            '<span style="font-weight:500;font-size:0.88rem;">' + esc(name) + windowBadge + '</span>' +
             '<span class="status-badge pill" style="font-size:0.7rem;padding:2px 8px;background:rgba(255,213,79,0.2);color:var(--amber,#FFD54F);">Pending</span>' +
           '</div>' +
           '<div style="font-size:0.78rem;color:var(--warm-gray);display:flex;gap:10px;">' +
