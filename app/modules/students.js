@@ -440,6 +440,7 @@
       h += '<div>';
       h += '<span style="color:' + statusColor + ';font-weight:600;font-size:0.82rem;">' + statusIcon + ' ' + esc(f.label) + '</span>';
       if (item.storageLocation) h += ' <span style="font-size:0.72rem;color:var(--warm-gray);margin-left:6px;">' + capitalize(item.storageLocation) + '</span>';
+      if (item.signatureId) h += ' <span onclick="event.stopPropagation();studentsViewSignatureDetail(\'' + esc(item.signatureId) + '\')" style="font-size:0.72rem;color:var(--teal,#2A9D8F);cursor:pointer;margin-left:6px;text-decoration:underline;">View Signature</span>';
       h += '</div>';
       // Expiry warning
       if (item.expiryDate && item.expiryDate <= ninetyDaysOut && status === 'completed') {

@@ -618,8 +618,10 @@
       '<div class="book-form-section">' +
       '<div class="book-form-section-title">Policies</div>' +
       '<div class="book-responsive-grid">' +
-      '<div class="book-field"><label class="form-label">Requires Waiver</label><select id="bcfRequiresWaiver" class="form-input"><option value="false"' + (cls && cls.requiresWaiver ? '' : ' selected') + '>No</option><option value="true"' + (cls && cls.requiresWaiver ? ' selected' : '') + '>Yes</option></select>' +
+      '<div class="book-field"><label class="form-label">Requires Waiver</label><select id="bcfRequiresWaiver" class="form-input" onchange="window._bookToggleWaiverTemplate()"><option value="false"' + (cls && cls.requiresWaiver ? '' : ' selected') + '>No</option><option value="true"' + (cls && cls.requiresWaiver ? ' selected' : '') + '>Yes</option></select>' +
       '<div class="book-field-hint">Students must sign a waiver before class</div></div>' +
+      '<div class="book-field" id="bcfWaiverTemplateWrap" style="' + (cls && cls.requiresWaiver ? '' : 'display:none;') + '"><label class="form-label">Waiver Template</label><select id="bcfWaiverTemplate" class="form-input" data-current="' + esc(cls && cls.waiverTemplateId ? cls.waiverTemplateId : '') + '"><option value="">Loading...</option></select>' +
+      '<div class="book-field-hint">Which waiver students must sign</div></div>' +
       '<div class="book-field"><label class="form-label">Enrollment Opens</label><input type="date" id="bcfEnrollOpen" class="form-input" value="' + esc(cls && cls.enrollmentOpenDate ? cls.enrollmentOpenDate : '') + '">' +
       '<div class="book-field-hint">Leave blank for immediately open</div></div>' +
       '<div class="book-field"><label class="form-label">Enrollment Closes</label><input type="date" id="bcfEnrollClose" class="form-input" value="' + esc(cls && cls.enrollmentCloseDate ? cls.enrollmentCloseDate : '') + '">' +
@@ -655,6 +657,8 @@
 
     // Toggle schedule type visibility
     window._bookToggleSchedType();
+    // Load waiver templates if waiver is required
+    if (cls && cls.requiresWaiver) _bookLoadWaiverTemplateOptions();
   }
 
   // ============================================================
@@ -707,6 +711,7 @@
       materialsCostCents: document.getElementById('bcfMaterials').value === 'true' ? null : (function() { var v = parseFloat(document.getElementById('bcfMaterialsCost').value); return isNaN(v) || v <= 0 ? null : Math.round(v * 100); })(),
       materialsNote: document.getElementById('bcfMaterialsNote').value.trim() || null,
       requiresWaiver: document.getElementById('bcfRequiresWaiver').value === 'true',
+      waiverTemplateId: document.getElementById('bcfRequiresWaiver').value === 'true' ? (document.getElementById('bcfWaiverTemplate') || {}).value || null : null,
       enrollmentOpenDate: document.getElementById('bcfEnrollOpen').value || null,
       enrollmentCloseDate: document.getElementById('bcfEnrollClose').value || null,
       imageIds: [],
@@ -1968,6 +1973,42 @@
     var wrap = document.getElementById('bcfMaterialsCostWrap');
     if (wrap) wrap.style.display = included ? 'none' : '';
   };
+
+  window._bookToggleWaiverTemplate = function() {
+    var requiresWaiver = (document.getElementById('bcfRequiresWaiver') || {}).value === 'true';
+    var wrap = document.getElementById('bcfWaiverTemplateWrap');
+    if (wrap) wrap.style.display = requiresWaiver ? '' : 'none';
+    if (requiresWaiver) _bookLoadWaiverTemplateOptions();
+  };
+
+  var _waiverTemplatesCache = null;
+  async function _bookLoadWaiverTemplateOptions() {
+    var select = document.getElementById('bcfWaiverTemplate');
+    if (!select) return;
+    if (_waiverTemplatesCache) {
+      _bookPopulateWaiverSelect(select, _waiverTemplatesCache);
+      return;
+    }
+    try {
+      var snap = await MastDB._ref('settings/waiverTemplates').once('value');
+      var val = snap.val() || {};
+      _waiverTemplatesCache = Object.entries(val).map(function(e) { return { id: e[0], title: e[1].title || 'Untitled', status: e[1].status }; })
+        .filter(function(w) { return w.status === 'active'; });
+      _bookPopulateWaiverSelect(select, _waiverTemplatesCache);
+    } catch (err) {
+      select.innerHTML = '<option value="">Error loading templates</option>';
+    }
+  }
+
+  function _bookPopulateWaiverSelect(select, templates) {
+    // Get current class waiverTemplateId to pre-select
+    var currentId = select.getAttribute('data-current') || '';
+    var html = '<option value="">(Use default waiver)</option>';
+    templates.forEach(function(w) {
+      html += '<option value="' + esc(w.id) + '"' + (w.id === currentId ? ' selected' : '') + '>' + esc(w.title) + '</option>';
+    });
+    select.innerHTML = html;
+  }
 
   // Sub-tab navigation
   window._bookSubTab = function(tab) { switchSubTab(tab); };

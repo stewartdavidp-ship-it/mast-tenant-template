@@ -586,6 +586,18 @@
       html += '<div class="cd-description"><h2>About This Class</h2><p>' + esc(cls.description) + '</p></div>';
     }
 
+    // Waiver requirement banner
+    if (cls.requiresWaiver) {
+      var waiverLink = '/waiver.html' + (cls.waiverTemplateId ? '?t=' + encodeURIComponent(cls.waiverTemplateId) + '&c=' + encodeURIComponent(cls.id) : '?c=' + encodeURIComponent(cls.id));
+      html += '<div style="margin:20px 0;padding:16px 20px;background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#E8E0D4);border-left:4px solid var(--primary,#C4853C);border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">';
+      html += '<div>';
+      html += '<div style="font-weight:600;font-size:0.95rem;color:var(--text,#1A1A1A);">Waiver Required</div>';
+      html += '<div style="font-size:0.85rem;color:var(--warm-gray,#8B8680);margin-top:2px;">Please sign the waiver before your first session.</div>';
+      html += '</div>';
+      html += '<a href="' + esc(waiverLink) + '" style="display:inline-block;padding:10px 20px;background:var(--primary,#2A7C6F);color:#fff;text-decoration:none;border-radius:6px;font-size:0.9rem;font-weight:600;white-space:nowrap;">Sign Waiver</a>';
+      html += '</div>';
+    }
+
     // Series enrollment CTA
     var isSeries = cls.type === 'series' && cls.seriesInfo;
     var seriesPrice = isSeries && cls.seriesInfo.seriesPriceCents ? cls.seriesInfo.seriesPriceCents : 0;
