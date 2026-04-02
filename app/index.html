@@ -25485,6 +25485,18 @@ async function loadCustomDashboardCards() {
 
 // ─── Status Queue Card Renderer ─────────────────────────────
 
+// Resolve dynamic filter values: $today → YYYY-MM-DD, $uid → current user UID
+function resolveDynamicValue(val) {
+  if (val === '$today') {
+    var d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  if (val === '$uid') {
+    return firebase.auth().currentUser ? firebase.auth().currentUser.uid : '';
+  }
+  return val;
+}
+
 function renderStatusQueueCard(cardDef) {
   var container = document.getElementById(cardDef._containerId);
   if (!container) return;
@@ -25493,8 +25505,6 @@ function renderStatusQueueCard(cardDef) {
 
   var q = cardDef.query || {};
   var path = q.path || '';
-  var filterField = q.filterField || 'status';
-  var filterValue = q.filterValue || '';
   var orderBy = q.orderBy || 'createdAt';
   var limit = q.limit || 10;
   var d = cardDef.display || {};
@@ -25502,11 +25512,38 @@ function renderStatusQueueCard(cardDef) {
   var secondaryField = d.secondaryField || null;
   var timestampField = d.timestampField || 'createdAt';
 
-  MastDB._ref(path).orderByChild(filterField).equalTo(filterValue).limitToLast(limit).once('value').then(function(snap) {
+  // Build filters: support both legacy (filterField/filterValue) and new (filters array)
+  var filters = [];
+  if (q.filters && q.filters.length > 0) {
+    q.filters.forEach(function(f) {
+      filters.push({ field: f.field, value: resolveDynamicValue(f.value) });
+    });
+  } else if (q.filterField) {
+    filters.push({ field: q.filterField, value: resolveDynamicValue(q.filterValue || '') });
+  }
+
+  // Use first filter for Firebase query, rest applied client-side
+  var fbQuery = MastDB._ref(path);
+  if (filters.length > 0) {
+    fbQuery = fbQuery.orderByChild(filters[0].field).equalTo(filters[0].value);
+  }
+  fbQuery.limitToLast(limit).once('value').then(function(snap) {
     var val = snap.val();
-    var items = val ? Object.values(val).sort(function(a, b) {
+    var items = val ? Object.entries(val).map(function(e) { var it = e[1]; it._key = e[0]; return it; }) : [];
+
+    // Apply remaining filters client-side
+    for (var fi = 1; fi < filters.length; fi++) {
+      var ff = filters[fi];
+      items = items.filter(function(item) { return (item[ff.field] || '') === ff.value; });
+    }
+
+    // Sort
+    items.sort(function(a, b) {
       return ((b[orderBy] || '') + '').localeCompare((a[orderBy] || '') + '');
-    }) : [];
+    });
+
+    // Deep link config
+    var dl = cardDef.deepLink || null;
 
     var contentHtml = '';
     if (items.length === 0) {
@@ -25524,9 +25561,20 @@ function renderStatusQueueCard(cardDef) {
         var primaryText = item[primaryField] || '';
         var secondaryText = secondaryField ? (item[secondaryField] || '') : '';
         var rowRoute = cardDef.viewAllRoute || '';
-        var itemId = item.rmaId || item.id || item._key || '';
-        var deepLinkFn = (rowRoute === 'rma' && itemId) ? 'navigateTo(\'rma\');setTimeout(function(){viewRma(\'' + esc(itemId) + '\');},100);' : (rowRoute ? 'navigateTo(\'' + esc(rowRoute) + '\')' : '');
-        var clickAttr = deepLinkFn ? ' onclick="' + deepLinkFn + '" style="cursor:pointer;"' : '';
+        var itemId = item._key || item.rmaId || item.id || '';
+
+        // Build click handler
+        var clickFn = '';
+        if (dl && dl.fn && dl.route) {
+          // Configurable deep link: navigateTo(route), then call fn(param1, param2, ...)
+          var params = (dl.params || []).map(function(p) { return "'" + esc(item[p] || '') + "'"; }).join(',');
+          clickFn = "navigateTo('" + esc(dl.route) + "');setTimeout(function(){if(window['" + esc(dl.fn) + "'])window['" + esc(dl.fn) + "'](" + params + ");},300);";
+        } else if (rowRoute === 'rma' && itemId) {
+          clickFn = "navigateTo('rma');setTimeout(function(){viewRma('" + esc(itemId) + "');},100);";
+        } else if (rowRoute) {
+          clickFn = "navigateTo('" + esc(rowRoute) + "')";
+        }
+        var clickAttr = clickFn ? ' onclick="' + clickFn + '" style="cursor:pointer;"' : '';
         contentHtml += '<div class="dash-order-row"' + clickAttr + '>' +
           '<div style="flex:1;min-width:0;">' +
             '<div style="font-weight:500;font-size:0.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(primaryText) + '</div>' +
