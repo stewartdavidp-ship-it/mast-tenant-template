@@ -180,6 +180,42 @@
   text-decoration: none;
   font-size: 0.88rem;
 }
+.cb-note {
+  margin: 0 0 1.25rem;
+  padding: 12px 16px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.cb-note p { margin: 0; }
+.cb-note--pass {
+  background: #E8F5E9;
+  border-left: 4px solid #4CAF50;
+  color: #1B5E20;
+}
+.cb-note--paid {
+  background: #FFF8E1;
+  border-left: 4px solid #FFD54F;
+  color: #5D4037;
+}
+@media (prefers-color-scheme: dark) {
+  .cb-note--pass {
+    background: rgba(46, 125, 50, 0.15);
+    color: #A5D6A7;
+  }
+  .cb-note--paid {
+    background: rgba(255, 213, 79, 0.12);
+    color: #FFE082;
+  }
+}
+[data-theme="dark"] .cb-note--pass {
+  background: rgba(46, 125, 50, 0.15);
+  color: #A5D6A7;
+}
+[data-theme="dark"] .cb-note--paid {
+  background: rgba(255, 213, 79, 0.12);
+  color: #FFE082;
+}
 @media (max-width: 768px) {
   .cb-container { padding: 6rem 1.25rem 3rem; }
   .cb-header h1 { font-size: 1.6rem; }
@@ -319,12 +355,12 @@
     var paymentNote = '';
     if (info.paymentType === 'pass') {
       var pn = info.passName ? esc(info.passName) : 'your pass';
-      paymentNote = '<div style="margin:0 0 1.25rem;padding:12px 16px;background:#E8F5E9;border-left:4px solid #4CAF50;border-radius:4px;">' +
-        '<p style="margin:0;font-size:0.85rem;color:#333;">Your <strong>' + pn + '</strong> visit will be restored to your account when you cancel.</p>' +
+      paymentNote = '<div class="cb-note cb-note--pass">' +
+        '<p>Your <strong>' + pn + '</strong> visit will be restored to your account when you cancel.</p>' +
       '</div>';
     } else if (info.paymentType === 'paid' && info.pricePaidCents > 0) {
-      paymentNote = '<div style="margin:0 0 1.25rem;padding:12px 16px;background:#FFF8E1;border-left:4px solid #FFD54F;border-radius:4px;">' +
-        '<p style="margin:0;font-size:0.85rem;color:#333;">You paid <strong>' + formatPrice(info.pricePaidCents) + '</strong> for this class. The studio will review your cancellation and process a refund or store credit.</p>' +
+      paymentNote = '<div class="cb-note cb-note--paid">' +
+        '<p>You paid <strong>' + formatPrice(info.pricePaidCents) + '</strong> for this booking. The studio will review your cancellation and process a refund or store credit.</p>' +
       '</div>';
     }
 
@@ -368,11 +404,11 @@
         var refundMsg = '';
         if (result.paymentType === 'pass' && result.passRestored) {
           var pn = result.passName ? esc(result.passName) : 'Your pass';
-          refundMsg = '<div style="margin:1rem 0;padding:12px 16px;background:#E8F5E9;border-left:4px solid #4CAF50;border-radius:4px;text-align:left;">' +
-            '<p style="margin:0;font-size:0.88rem;color:#333;"><strong>Pass visit restored.</strong> ' + pn + ' visit has been returned to your account.</p></div>';
+          refundMsg = '<div class="cb-note cb-note--pass" style="margin:1rem 0;text-align:left;">' +
+            '<p><strong>Pass visit restored.</strong> ' + pn + ' visit has been returned to your account.</p></div>';
         } else if (result.paymentType === 'paid' && result.pricePaidCents > 0) {
-          refundMsg = '<div style="margin:1rem 0;padding:12px 16px;background:#FFF8E1;border-left:4px solid #FFD54F;border-radius:4px;text-align:left;">' +
-            '<p style="margin:0;font-size:0.88rem;color:#333;"><strong>Refund pending.</strong> Your payment of ' + formatPrice(result.pricePaidCents) + ' is being reviewed. The studio will contact you about your refund or store credit.</p></div>';
+          refundMsg = '<div class="cb-note cb-note--paid" style="margin:1rem 0;text-align:left;">' +
+            '<p><strong>Refund pending.</strong> Your payment of ' + formatPrice(result.pricePaidCents) + ' is being reviewed. The studio will contact you about your refund or store credit.</p></div>';
         }
         el.innerHTML = '<div class="cb-success">' +
           '<div class="cb-success-icon">&#10003;</div>' +
