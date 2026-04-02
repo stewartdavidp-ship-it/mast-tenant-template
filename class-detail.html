@@ -447,6 +447,8 @@
   var MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
   function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+  // Escape for use inside JS string literals within onclick attributes
+  function jesc(s) { return (s || '').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'\\"'); }
 
   function formatPrice(cents) {
     if (typeof cents !== 'number') return '';
@@ -624,7 +626,7 @@
           '</div>';
       } else {
         html += '<div class="cd-series-cta">' +
-          '<button class="cd-series-btn" onclick="window._bookSeries(\'' + esc(cls.id) + '\', \'' + esc(cls.name) + '\', ' + seriesPrice + ', ' + totalSessions + ', ' + (cls.materialsIncluded ? 0 : (cls.materialsCostCents || 0)) + ')">' +
+          '<button class="cd-series-btn" onclick="window._bookSeries(\'' + esc(cls.id) + '\', \'' + jesc(cls.name) + '\', ' + seriesPrice + ', ' + totalSessions + ', ' + (cls.materialsIncluded ? 0 : (cls.materialsCostCents || 0)) + ')">' +
           'Enroll in Full Series &mdash; ' + formatPrice(seriesPrice) + ' (' + totalSessions + ' sessions)' +
           '</button>' +
           '<div class="cd-series-spots">' + seriesSpotsLeft + ' series spot' + (seriesSpotsLeft !== 1 ? 's' : '') + ' available</div>' +
@@ -656,8 +658,8 @@
           '<span class="cd-session-spots' + (isFull ? ' full' : '') + '">' + (isFull ? 'Full' + (sessionWaitlisted > 0 ? ' (' + sessionWaitlisted + ' waiting)' : '') : dropInSpotsLeft + ' spot' + (dropInSpotsLeft !== 1 ? 's' : '') + ' left') + '</span>' +
           (showBookBtn ?
             (isFull ?
-              '<button class="cd-waitlist-btn" onclick="window._joinWaitlist(\'' + esc(s.id) + '\', \'' + esc(cls.id) + '\', \'' + esc(cls.name) + '\', \'dropin\')">Waitlist</button>' :
-              '<button class="cd-book-btn" onclick="window._bookSession(\'' + esc(s.id) + '\', \'' + esc(cls.id) + '\', \'' + esc(cls.name) + '\', ' + (cls.priceCents || 0) + ', ' + dropInSpotsLeft + ', \'' + esc(s.date) + '\', \'' + esc(s.startTime) + '\', ' + (cls.materialsIncluded ? 0 : (cls.materialsCostCents || 0)) + ')">' +
+              '<button class="cd-waitlist-btn" onclick="window._joinWaitlist(\'' + esc(s.id) + '\', \'' + esc(cls.id) + '\', \'' + jesc(cls.name) + '\', \'dropin\')">Waitlist</button>' :
+              '<button class="cd-book-btn" onclick="window._bookSession(\'' + esc(s.id) + '\', \'' + esc(cls.id) + '\', \'' + jesc(cls.name) + '\', ' + (cls.priceCents || 0) + ', ' + dropInSpotsLeft + ', \'' + esc(s.date) + '\', \'' + esc(s.startTime) + '\', ' + (cls.materialsIncluded ? 0 : (cls.materialsCostCents || 0)) + ')">' +
               (isSeries ? 'Drop-in' : 'Book') + '</button>')
             : '') +
           '</div>';
