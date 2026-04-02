@@ -1268,31 +1268,49 @@
       var classId = item.classId;
       if (!classId) continue;
 
-      // Find best pass for this item
-      for (var j = 0; j < passes.length; j++) {
-        var pass = passes[j];
-        if (visitBudget[pass._id] <= 0) continue;
-        if (!passCoversClass(pass, classId, item._classCategory)) continue;
+      // Find best pass for this item — each qty unit needs a visit
+      var qty = item.qty || 1;
+      var unitPriceCents = item.priceCents || Math.round(parsePrice(item.price) * 100);
+      var totalCoveredCents = 0;
+      var totalSurchargeCents = 0;
+      var visitsUsed = 0;
+      var assignedPassId = null;
+      var assignedPassName = '';
 
-        var classPriceCents = item.priceCents || Math.round(parsePrice(item.price) * 100);
-        var def = pass._def;
-        var coversAmountCents = classPriceCents;
-        var surchargeAmountCents = 0;
+      for (var q = 0; q < qty; q++) {
+        // Find a pass with remaining budget for this unit
+        for (var j = 0; j < passes.length; j++) {
+          var pass = passes[j];
+          if (visitBudget[pass._id] <= 0) continue;
+          if (!passCoversClass(pass, classId, item._classCategory)) continue;
 
-        // Check maxClassPriceCents limit
-        if (def.maxClassPriceCents && classPriceCents > def.maxClassPriceCents) {
-          coversAmountCents = def.maxClassPriceCents;
-          surchargeAmountCents = classPriceCents - def.maxClassPriceCents;
+          var def = pass._def;
+          var unitCoversCents = unitPriceCents;
+          var unitSurchargeCents = 0;
+
+          if (def.maxClassPriceCents && unitPriceCents > def.maxClassPriceCents) {
+            unitCoversCents = def.maxClassPriceCents;
+            unitSurchargeCents = unitPriceCents - def.maxClassPriceCents;
+          }
+
+          totalCoveredCents += unitCoversCents;
+          totalSurchargeCents += unitSurchargeCents;
+          visitsUsed++;
+          assignedPassId = pass._id;
+          assignedPassName = def.name || pass.passDefinitionName || 'Class Pass';
+          visitBudget[pass._id]--;
+          break;
         }
+      }
 
+      if (visitsUsed > 0) {
         checkoutData.passAssignments[i] = {
-          passId: pass._id,
-          passName: def.name || pass.passDefinitionName || 'Class Pass',
-          coversAmountCents: coversAmountCents,
-          surchargeAmountCents: surchargeAmountCents
+          passId: assignedPassId,
+          passName: assignedPassName,
+          coversAmountCents: totalCoveredCents,
+          surchargeAmountCents: totalSurchargeCents,
+          visitsUsed: visitsUsed
         };
-        visitBudget[pass._id]--;
-        break; // assigned, move to next item
       }
     }
   }
@@ -1843,6 +1861,7 @@
           mapped.passId = passAssignment.passId;
           mapped.passCoversAmountCents = passAssignment.coversAmountCents;
           mapped.surchargeAmountCents = passAssignment.surchargeAmountCents;
+          mapped.passVisitsUsed = passAssignment.visitsUsed || 1;
         }
         return mapped;
       }),
@@ -1861,7 +1880,7 @@
       if (checkoutData.passApplied && Object.keys(checkoutData.passAssignments).length > 0) {
         payload.walletDeductions.passes = Object.keys(checkoutData.passAssignments).map(function(idx) {
           var a = checkoutData.passAssignments[idx];
-          return { itemIndex: parseInt(idx, 10), passId: a.passId, coversAmountCents: a.coversAmountCents, surchargeAmountCents: a.surchargeAmountCents };
+          return { itemIndex: parseInt(idx, 10), passId: a.passId, coversAmountCents: a.coversAmountCents, surchargeAmountCents: a.surchargeAmountCents, visitsUsed: a.visitsUsed || 1 };
         });
       }
       if (checkoutData.loyaltyApplied && checkoutData.loyaltyBalance && checkoutData.loyaltyConfig) {
