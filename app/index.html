@@ -5151,6 +5151,7 @@
         <div id="dashCardReadyToShip"></div>
         <div id="dashCardLowInventory"></div>
         <div id="dashCardActiveSales"></div>
+        <div id="dashCardTodaySessions"></div>
       </div>
       <div id="dashboardContent" style="color:var(--warm-gray);font-size:0.9rem;"></div>
     </div>
@@ -25029,7 +25030,8 @@ var DASHBOARD_CARDS = [
   { id: 'newOrders',    title: 'New Orders',    containerId: 'dashCardNewOrders',    viewAllRoute: 'orders' },
   { id: 'readyToShip',  title: 'Ready to Ship', containerId: 'dashCardReadyToShip',  viewAllRoute: 'ship' },
   { id: 'lowInventory', title: 'Low Inventory', containerId: 'dashCardLowInventory', viewAllRoute: 'inventory' },
-  { id: 'activeSales',  title: 'Active Sales',  containerId: 'dashCardActiveSales',  viewAllRoute: 'promotions' }
+  { id: 'activeSales',  title: 'Active Sales',  containerId: 'dashCardActiveSales',  viewAllRoute: 'promotions' },
+  { id: 'todaySessions', title: "Today's Sessions", containerId: 'dashCardTodaySessions', viewAllRoute: 'book' }
 ];
 var customDashboardCards = []; // Custom cards loaded from Firebase admin/dashboardCards
 var dashboardCardPrefs = {};
@@ -25371,10 +25373,11 @@ async function renderAllDashboardCards() {
   });
   renderDashCardWithGating(DASHBOARD_CARDS.find(function(c) { return c.id === 'lowInventory'; }), renderDashCardLowInventory);
   renderDashCardWithGating(DASHBOARD_CARDS.find(function(c) { return c.id === 'activeSales'; }), renderDashCardActiveSales);
+  // Today's Sessions card — gated behind book module
+  renderDashCardWithGating(DASHBOARD_CARDS.find(function(c) { return c.id === 'todaySessions'; }), renderDashCardTodaySessions);
   // Render custom cards
   customDashboardCards.forEach(function(cardDef) {
     if (cardDef.type === 'status-queue') renderStatusQueueCard(cardDef);
-    else if (cardDef.type === 'today-sessions') renderTodaySessionsCard(cardDef);
   });
   // Dashboard todos / nudges (above cards)
   renderDashboardTodos();
@@ -25551,13 +25554,12 @@ function renderStatusQueueCard(cardDef) {
   });
 }
 
-// ─── Today's Sessions Card Renderer ─────────────────────────
+// ─── Dashboard Card: Today's Sessions ───────────────────────
 
-function renderTodaySessionsCard(cardDef) {
-  var container = document.getElementById(cardDef._containerId);
+function renderDashCardTodaySessions() {
+  var container = document.getElementById('dashCardTodaySessions');
   if (!container) return;
-  var cardConfig = DASHBOARD_CARDS.find(function(c) { return c.id === cardDef._cardId; });
-  if (!cardConfig) return;
+  var cardConfig = DASHBOARD_CARDS.find(function(c) { return c.id === 'todaySessions'; });
 
   var today = new Date();
   var todayStr = today.getFullYear() + '-' +
@@ -25573,78 +25575,51 @@ function renderTodaySessionsCard(cardDef) {
     // Filter out cancelled/completed sessions
     sessions = sessions.filter(function(s) { return s.status === 'scheduled'; });
 
-    // Filter by instructor if card has instructorUid config and current user matches
+    // Filter by instructor if current user has a linked instructor record
     var currentUid = firebase.auth().currentUser ? firebase.auth().currentUser.uid : null;
-    if (cardDef.filterByInstructor && currentUid) {
-      // Find instructor record matching current user's uid
-      var matchedInstructorId = null;
-      if (window._instructorsByUid && window._instructorsByUid[currentUid]) {
-        matchedInstructorId = window._instructorsByUid[currentUid];
-      }
+    if (currentUid && window._instructorsByUid) {
+      var matchedInstructorId = window._instructorsByUid[currentUid];
       if (matchedInstructorId) {
         sessions = sessions.filter(function(s) { return s.instructorId === matchedInstructorId; });
-      } else {
-        // Current user is not an instructor — hide card
-        sessions = [];
       }
     }
 
     // Sort by start time
     sessions.sort(function(a, b) { return (a.startTime || '').localeCompare(b.startTime || ''); });
 
-    var contentHtml = '';
     if (sessions.length === 0) {
-      contentHtml = '<div class="dash-queue-empty">No sessions today.</div>';
-    } else {
+      container.innerHTML = renderDashboardCard(cardConfig, 0, '<div class="dash-queue-empty">No sessions today.</div>');
+      return;
+    }
+
+    // Fetch class names for all sessions
+    var classIds = [];
+    sessions.forEach(function(s) { if (s.classId && classIds.indexOf(s.classId) === -1) classIds.push(s.classId); });
+    var promises = classIds.map(function(cid) {
+      return MastDB._ref('public/booking/classes/' + cid + '/name').once('value').then(function(csnap) {
+        return { id: cid, name: csnap.val() || 'Class' };
+      });
+    });
+    Promise.all(promises).then(function(classes) {
+      var classMap = {};
+      classes.forEach(function(c) { classMap[c.id] = c.name; });
+      var contentHtml = '';
       sessions.forEach(function(s) {
+        var cName = classMap[s.classId] || 'Session';
         var timeStr = formatTime(s.startTime) || '';
-        var label = esc(s.instructorName ? s.instructorName + ' \u2014 ' : '') + esc(timeStr);
-        var className = '';
-        // Fetch class name from classId
-        if (s._className) className = s._className;
+        var label = s.instructorName ? esc(s.instructorName) + ' \u2014 ' + esc(timeStr) : esc(timeStr);
         var clickFn = "navigateTo('book');setTimeout(function(){if(window._bookManageSession)window._bookManageSession('" + esc(s.id) + "','" + esc(s.classId) + "');},300);";
         contentHtml += '<div class="dash-order-row" onclick="' + clickFn + '" style="cursor:pointer;">' +
           '<div style="flex:1;min-width:0;">' +
-            '<div style="font-weight:500;font-size:0.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(s._className || 'Session') + '</div>' +
+            '<div style="font-weight:500;font-size:0.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(cName) + '</div>' +
             '<div style="font-size:0.78rem;color:var(--warm-gray);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + label + '</div>' +
           '</div>' +
           '<div style="font-size:0.75rem;color:var(--warm-gray-light);white-space:nowrap;margin-left:8px;">' + esc(timeStr) + '</div>' +
         '</div>';
       });
-    }
-
-    // Enrich sessions with class names, then re-render
-    if (sessions.length > 0) {
-      var classIds = [];
-      sessions.forEach(function(s) { if (s.classId && classIds.indexOf(s.classId) === -1) classIds.push(s.classId); });
-      var promises = classIds.map(function(cid) {
-        return MastDB._ref('public/booking/classes/' + cid + '/name').once('value').then(function(csnap) {
-          return { id: cid, name: csnap.val() || 'Class' };
-        });
-      });
-      Promise.all(promises).then(function(classes) {
-        var classMap = {};
-        classes.forEach(function(c) { classMap[c.id] = c.name; });
-        var enrichedHtml = '';
-        sessions.forEach(function(s) {
-          var cName = classMap[s.classId] || 'Session';
-          var timeStr = formatTime(s.startTime) || '';
-          var label = s.instructorName ? esc(s.instructorName) + ' \u2014 ' + esc(timeStr) : esc(timeStr);
-          var clickFn = "navigateTo('book');setTimeout(function(){if(window._bookManageSession)window._bookManageSession('" + esc(s.id) + "','" + esc(s.classId) + "');},300);";
-          enrichedHtml += '<div class="dash-order-row" onclick="' + clickFn + '" style="cursor:pointer;">' +
-            '<div style="flex:1;min-width:0;">' +
-              '<div style="font-weight:500;font-size:0.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(cName) + '</div>' +
-              '<div style="font-size:0.78rem;color:var(--warm-gray);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + label + '</div>' +
-            '</div>' +
-            '<div style="font-size:0.75rem;color:var(--warm-gray-light);white-space:nowrap;margin-left:8px;">' + esc(timeStr) + '</div>' +
-          '</div>';
-        });
-        container.innerHTML = renderDashboardCard(cardConfig, sessions.length, enrichedHtml);
-        updateCardActivity(cardDef._cardId, todayStr);
-      });
-    } else {
-      container.innerHTML = renderDashboardCard(cardConfig, 0, contentHtml);
-    }
+      container.innerHTML = renderDashboardCard(cardConfig, sessions.length, contentHtml);
+      updateCardActivity('todaySessions', todayStr);
+    });
   }).catch(function(err) {
     console.error('Error loading today sessions card:', err);
     container.innerHTML = '';
