@@ -2245,11 +2245,6 @@
       return;
     } else if (action === 'toggle-pass') {
       checkoutData.passApplied = !!btn.checked;
-      if (checkoutData.passApplied) {
-        autoApplyPasses();
-      } else {
-        checkoutData.passAssignments = {};
-      }
       updateTotals();
       return;
     } else if (action === 'apply-coupon') {
