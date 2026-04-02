@@ -462,7 +462,7 @@
     if (!grid) return;
 
     var filtered = allClasses.filter(function(c) {
-      if (c.status !== 'active') return false;
+      if (c.status !== 'active' && c.status !== 'published') return false;
       if (currentFilter !== 'all' && (c.category || '').toLowerCase() !== currentFilter.toLowerCase()) return false;
       return true;
     });
@@ -537,7 +537,7 @@
       // Build category pills from actual class data
       var cats = {};
       allClasses.forEach(function(c) {
-        if (c.status === 'active' && c.category) cats[c.category.toLowerCase()] = true;
+        if ((c.status === 'active' || c.status === 'published') && c.category) cats[c.category.toLowerCase()] = true;
       });
       buildFilterPills(Object.keys(cats).sort());
       renderClasses();

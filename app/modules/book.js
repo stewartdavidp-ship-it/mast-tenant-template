@@ -26,7 +26,7 @@
   var currentSubTab = 'classes';
 
   var CLASS_TYPES = ['series', 'single', 'dropin', 'private'];
-  var CLASS_STATUSES = ['active', 'draft', 'archived'];
+  var CLASS_STATUSES = ['draft', 'active', 'published', 'completed', 'archived'];
   var ENROLLMENT_STATUSES = ['confirmed', 'waitlisted', 'cancelled', 'no-show', 'completed', 'late'];
   var DAYS_OF_WEEK = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
   var DAY_LABELS = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
@@ -413,9 +413,11 @@
       '<span style="' + badgeStyle(STATUS_BADGE_COLORS, cls.status) + '">' + esc(cls.status) + '</span>' +
       '</div>' +
       '</div>' +
-      '<div style="display:flex;gap:8px;">' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
       '<button class="btn btn-primary" onclick="window._bookEditClass(\'' + esc(cls.id) + '\')">Edit</button>' +
       '<button class="btn" onclick="window._bookGenerateSessions(\'' + esc(cls.id) + '\')">Generate Sessions</button>' +
+      (cls.status === 'draft' || cls.status === 'active' ? '<button class="btn" style="background:' + SUCCESS_COLOR + ';color:#fff;" onclick="window._bookPublishClass(\'' + esc(cls.id) + '\')">Publish</button>' : '') +
+      (cls.status === 'published' ? '<button class="btn" onclick="window._bookUnpublishClass(\'' + esc(cls.id) + '\')">Unpublish</button>' : '') +
       '</div>' +
       '</div>';
 
@@ -1774,6 +1776,53 @@
     var cls = classesData.find(function(c) { return c.id === id; });
     if (cls) materializeSessions(id, cls).then(function() { loadClassDetail(id); });
   };
+
+  window._bookPublishClass = async function(id) {
+    var cls = classesData.find(function(c) { return c.id === id; });
+    if (!cls) return;
+
+    // Pre-publish checklist
+    var issues = [];
+    if (!cls.instructorId) issues.push('No instructor assigned');
+    if (!cls.capacity || cls.capacity < 1) issues.push('Capacity not set');
+    if (!cls.priceCents && cls.priceCents !== 0) issues.push('Price not set');
+    if (!cls.schedule || (!cls.schedule.startDate && !cls.schedule.date)) issues.push('Schedule not configured');
+
+    // Check sessions exist
+    var sessSnap = await MastDB.classSessions.byClass(id);
+    var sessVal = sessSnap.val();
+    if (!sessVal || Object.keys(sessVal).length === 0) issues.push('No sessions generated');
+
+    if (issues.length > 0) {
+      MastAdmin.showToast('Cannot publish:\n• ' + issues.join('\n• '), true);
+      return;
+    }
+
+    if (!confirm('Publish this class? It will appear on the public storefront.')) return;
+
+    try {
+      await MastDB.classes.update(id, { status: 'published', publishedAt: new Date().toISOString() });
+      MastAdmin.showToast('Class published!');
+      classesLoaded = false;
+      await loadClasses();
+      loadClassDetail(id);
+    } catch (err) {
+      MastAdmin.showToast('Failed: ' + err.message, true);
+    }
+  };
+
+  window._bookUnpublishClass = async function(id) {
+    if (!confirm('Unpublish this class? It will be hidden from the storefront.')) return;
+    try {
+      await MastDB.classes.update(id, { status: 'draft' });
+      MastAdmin.showToast('Class unpublished — back to draft');
+      classesLoaded = false;
+      await loadClasses();
+      loadClassDetail(id);
+    } catch (err) {
+      MastAdmin.showToast('Failed: ' + err.message, true);
+    }
+  };
   window._bookCancelSession = function(id) { cancelSession(id); };
   window._bookCompleteSession = function(id) { completeSession(id); };
   window._bookViewSessionEnrollments = function(sessionId, classId) { loadEnrollments(sessionId, classId); };
@@ -2588,6 +2637,33 @@
     }, 300);
   };
 
+  // Auto-create a student record if none exists for this email
+  async function ensureStudentByEmail(name, email) {
+    if (!email) return;
+    try {
+      var snap = await MastDB._ref('students').orderByChild('email').equalTo(email).limitToFirst(1).once('value');
+      if (snap.exists()) return; // Already exists
+      var studentId = 'stu_' + Date.now();
+      await MastDB._ref('students/' + studentId).set({
+        displayName: name || '',
+        email: email,
+        waiverStatus: 'pending',
+        safetyOrientationCompleted: false,
+        status: 'active',
+        onboardingChecklist: {
+          liabilityWaiver: 'pending',
+          safetyOrientation: 'pending',
+          photoRelease: 'pending'
+        },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+      console.log('[book] Auto-created student:', studentId, email);
+    } catch (err) {
+      console.error('[book] Student auto-create failed:', err);
+    }
+  }
+
   window._bookWalkinEnroll = async function(sessionId, classId, studentId) {
     try {
       var studentSnap = await MastDB._ref('students/' + studentId).once('value');
@@ -2626,6 +2702,9 @@
     var name = prompt('Student name:');
     if (!name || !name.trim()) return;
     var email = prompt('Student email (optional):') || '';
+
+    // Auto-create student record
+    if (email.trim()) ensureStudentByEmail(name.trim(), email.trim());
 
     try {
       var sessSnap = await MastDB.classSessions.get(sessionId);

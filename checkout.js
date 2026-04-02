@@ -2239,6 +2239,41 @@
     });
   }
 
+  // ── Student Auto-Create ──
+  // After enrollment, ensure a student record exists for this user.
+  function ensureStudentRecord(db, user) {
+    if (!db || !user || user.isAnonymous || !user.uid) return;
+    var studentsRef = db.ref(TENANT_ID + '/students');
+    studentsRef.orderByChild('uid').equalTo(user.uid).limitToFirst(1).once('value')
+      .then(function(snap) {
+        if (snap.exists()) return; // Student record already exists
+        // Create minimal student record
+        var studentId = 'stu_' + Date.now();
+        studentsRef.child(studentId).set({
+          uid: user.uid,
+          displayName: user.displayName || '',
+          email: user.email || '',
+          waiverStatus: 'pending',
+          safetyOrientationCompleted: false,
+          status: 'active',
+          onboardingChecklist: {
+            liabilityWaiver: 'pending',
+            safetyOrientation: 'pending',
+            photoRelease: 'pending'
+          },
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }).then(function() {
+          console.log('[checkout] Auto-created student record:', studentId);
+        }).catch(function(err) {
+          console.error('[checkout] Failed to auto-create student:', err);
+        });
+      })
+      .catch(function(err) {
+        console.error('[checkout] Student lookup failed:', err);
+      });
+  }
+
   // ── Series Auto-Enrollment ──
   // After checkout for a series item, enroll the student in all future sessions.
   function provisionSeriesEnrollments(items, orderId) {
@@ -2251,6 +2286,9 @@
       return it.bookingType === 'class' && it.classId && !it.sessionId;
     });
     if (seriesItems.length === 0) return;
+
+    // Auto-create student record if needed
+    ensureStudentRecord(db, user);
 
     var today = new Date().toISOString().slice(0, 10);
 
