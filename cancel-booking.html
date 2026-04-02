@@ -351,17 +351,27 @@
     }
     infoHtml += '</div>';
 
-    // Payment-specific messaging
+    // Payment-specific messaging (window-aware)
     var paymentNote = '';
     if (info.paymentType === 'pass') {
       var pn = info.passName ? esc(info.passName) : 'your pass';
-      paymentNote = '<div class="cb-note cb-note--pass">' +
-        '<p>Your <strong>' + pn + '</strong> visit will be restored to your account when you cancel.</p>' +
-      '</div>';
+      if (info.withinWindow) {
+        paymentNote = '<div class="cb-note cb-note--paid">' +
+          '<p>This cancellation is within the <strong>' + info.cancellationWindowHours + '-hour</strong> cancellation window. ' +
+          'Your <strong>' + pn + '</strong> visit will be restored if the spot is filled from the waitlist. Otherwise, the studio will review your request.</p></div>';
+      } else {
+        paymentNote = '<div class="cb-note cb-note--pass">' +
+          '<p>Your <strong>' + pn + '</strong> visit will be restored to your account when you cancel.</p></div>';
+      }
     } else if (info.paymentType === 'paid' && info.pricePaidCents > 0) {
-      paymentNote = '<div class="cb-note cb-note--paid">' +
-        '<p>You paid <strong>' + formatPrice(info.pricePaidCents) + '</strong> for this booking. The studio will review your cancellation and process a refund or store credit.</p>' +
-      '</div>';
+      if (info.withinWindow) {
+        paymentNote = '<div class="cb-note cb-note--paid">' +
+          '<p>This cancellation is within the <strong>' + info.cancellationWindowHours + '-hour</strong> cancellation window. ' +
+          'You paid <strong>' + formatPrice(info.pricePaidCents) + '</strong> for this booking. You\'ll receive store credit if the spot is filled from the waitlist. Otherwise, the studio will review your request.</p></div>';
+      } else {
+        paymentNote = '<div class="cb-note cb-note--pass">' +
+          '<p>You paid <strong>' + formatPrice(info.pricePaidCents) + '</strong> for this booking. Store credit will be added to your account.</p></div>';
+      }
     }
 
     el.innerHTML = '<div class="cb-card">' +
@@ -406,9 +416,15 @@
           var pn = result.passName ? esc(result.passName) : 'Your pass';
           refundMsg = '<div class="cb-note cb-note--pass" style="margin:1rem 0;text-align:left;">' +
             '<p><strong>Pass visit restored.</strong> ' + pn + ' visit has been returned to your account.</p></div>';
+        } else if (result.paymentType === 'pass' && result.refundStatus === 'pending_review') {
+          refundMsg = '<div class="cb-note cb-note--paid" style="margin:1rem 0;text-align:left;">' +
+            '<p><strong>Under review.</strong> This cancellation is within the cancellation window. Your pass visit will be restored if the spot is filled, or the studio will review your request.</p></div>';
+        } else if (result.paymentType === 'paid' && result.refundStatus === 'store_credit') {
+          refundMsg = '<div class="cb-note cb-note--pass" style="margin:1rem 0;text-align:left;">' +
+            '<p><strong>Store credit approved.</strong> Your payment of ' + formatPrice(result.pricePaidCents) + ' will be added to your account as store credit.</p></div>';
         } else if (result.paymentType === 'paid' && result.pricePaidCents > 0) {
           refundMsg = '<div class="cb-note cb-note--paid" style="margin:1rem 0;text-align:left;">' +
-            '<p><strong>Refund pending.</strong> Your payment of ' + formatPrice(result.pricePaidCents) + ' is being reviewed. The studio will contact you about your refund or store credit.</p></div>';
+            '<p><strong>Under review.</strong> This cancellation is within the cancellation window. You\'ll receive store credit if the spot is filled, or the studio will review your request.</p></div>';
         }
         el.innerHTML = '<div class="cb-success">' +
           '<div class="cb-success-icon">&#10003;</div>' +

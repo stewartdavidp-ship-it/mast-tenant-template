@@ -5152,6 +5152,8 @@
         <div id="dashCardReadyToShip"></div>
         <div id="dashCardLowInventory"></div>
         <div id="dashCardActiveSales"></div>
+        <div id="dashCardPendingRefunds"></div>
+        <div id="dashCardRecentCancellations"></div>
       </div>
       <div id="dashboardContent" style="color:var(--warm-gray);font-size:0.9rem;"></div>
     </div>
@@ -25030,7 +25032,9 @@ var DASHBOARD_CARDS = [
   { id: 'newOrders',    title: 'New Orders',    containerId: 'dashCardNewOrders',    viewAllRoute: 'orders' },
   { id: 'readyToShip',  title: 'Ready to Ship', containerId: 'dashCardReadyToShip',  viewAllRoute: 'ship' },
   { id: 'lowInventory', title: 'Low Inventory', containerId: 'dashCardLowInventory', viewAllRoute: 'inventory' },
-  { id: 'activeSales',  title: 'Active Sales',  containerId: 'dashCardActiveSales',  viewAllRoute: 'promotions' }
+  { id: 'activeSales',  title: 'Active Sales',  containerId: 'dashCardActiveSales',  viewAllRoute: 'promotions' },
+  { id: 'pendingRefunds', title: 'Pending Refund Reviews', containerId: 'dashCardPendingRefunds', viewAllRoute: 'schedule' },
+  { id: 'recentCancellations', title: 'Recent Cancellations', containerId: 'dashCardRecentCancellations', viewAllRoute: 'schedule' }
 ];
 var customDashboardCards = []; // Platform dashboard cards loaded from mast-platform/dashboardCards
 var dashboardCardPrefs = {};
@@ -25372,6 +25376,11 @@ async function renderAllDashboardCards() {
   });
   renderDashCardWithGating(DASHBOARD_CARDS.find(function(c) { return c.id === 'lowInventory'; }), renderDashCardLowInventory);
   renderDashCardWithGating(DASHBOARD_CARDS.find(function(c) { return c.id === 'activeSales'; }), renderDashCardActiveSales);
+  // Booking cancellation cards
+  MastAdmin.loadModule('book').then(function() {
+    renderDashCardWithGating(DASHBOARD_CARDS.find(function(c) { return c.id === 'pendingRefunds'; }), renderDashCardPendingRefunds);
+    renderDashCardWithGating(DASHBOARD_CARDS.find(function(c) { return c.id === 'recentCancellations'; }), renderDashCardRecentCancellations);
+  });
   // Render custom cards
   customDashboardCards.forEach(function(cardDef) {
     if (cardDef.type === 'status-queue') renderStatusQueueCard(cardDef);
@@ -25860,6 +25869,200 @@ function renderDashCardActiveSales() {
     }
   }).catch(function(err) {
     console.error('Error loading active sales:', err);
+    container.innerHTML = '';
+  });
+}
+
+// ── Pending Refund Reviews Card ──
+function renderDashCardPendingRefunds() {
+  var container = document.getElementById('dashCardPendingRefunds');
+  if (!container) return;
+  var cardConfig = DASHBOARD_CARDS.find(function(c) { return c.id === 'pendingRefunds'; });
+  var db = MastDB._db();
+  if (!db) { container.innerHTML = ''; return; }
+
+  db.ref(MastDB._tid() + '/admin/enrollments').orderByChild('refundStatus').equalTo('pending_review').limitToLast(50).once('value').then(function(snap) {
+    var items = [];
+    if (snap.exists()) {
+      snap.forEach(function(child) {
+        var enr = child.val();
+        if ((enr.status || '').startsWith('cancelled')) {
+          items.push({ id: child.key, ...enr });
+        }
+      });
+    }
+    // Sort newest first
+    items.sort(function(a, b) { return (b.cancelledAt || '').localeCompare(a.cancelledAt || ''); });
+
+    var contentHtml = '';
+    if (items.length === 0) {
+      contentHtml = '<div class="dash-queue-empty">No pending refund reviews.</div>';
+    } else {
+      contentHtml = '<div class="dash-queue-grid">';
+      items.slice(0, 10).forEach(function(enr) {
+        var name = enr.customerName || enr.studentName || 'Student';
+        var amt = enr.pricePaidCents ? '$' + (enr.pricePaidCents / 100).toFixed(2) : '';
+        var isPass = enr.passId ? true : false;
+        var typeLabel = isPass ? 'Pass' : (amt || 'Free');
+        var cancelDate = enr.cancelledAt ? new Date(enr.cancelledAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+
+        contentHtml += '<div class="dash-queue-item">' +
+          '<div class="dash-queue-row">' +
+            '<span style="font-weight:500;font-size:0.88rem;">' + esc(name) + '</span>' +
+            '<span class="status-badge pill" style="font-size:0.7rem;padding:2px 8px;background:rgba(255,213,79,0.2);color:var(--amber,#FFD54F);">Pending</span>' +
+          '</div>' +
+          '<div style="font-size:0.78rem;color:var(--warm-gray);display:flex;gap:10px;">' +
+            '<span>' + esc(typeLabel) + '</span>' +
+            '<span>' + esc(cancelDate) + '</span>' +
+          '</div>' +
+          '<div style="display:flex;gap:6px;margin-top:6px;">' +
+            '<button onclick="event.stopPropagation(); approveRefund(\'' + esc(enr.id) + '\', \'' + (isPass ? 'pass' : 'paid') + '\')" style="flex:1;padding:4px 8px;font-size:0.75rem;border:1px solid var(--teal,#2A7C6F);color:var(--teal,#2A7C6F);background:transparent;border-radius:4px;cursor:pointer;">Approve Credit</button>' +
+            '<button onclick="event.stopPropagation(); denyRefund(\'' + esc(enr.id) + '\')" style="flex:1;padding:4px 8px;font-size:0.75rem;border:1px solid var(--warm-gray);color:var(--warm-gray);background:transparent;border-radius:4px;cursor:pointer;">Deny</button>' +
+          '</div>' +
+        '</div>';
+      });
+      contentHtml += '</div>';
+    }
+
+    container.innerHTML = renderDashboardCard(cardConfig, items.length, contentHtml);
+    if (items.length > 0) {
+      updateCardActivity('pendingRefunds', items[0].cancelledAt || '');
+    }
+  }).catch(function(err) {
+    console.error('Error loading pending refunds:', err);
+    container.innerHTML = '';
+  });
+}
+
+function approveRefund(enrollmentId, paymentType) {
+  var db = MastDB._db();
+  if (!db) return;
+  var update = { refundStatus: 'store_credit', refundApprovedAt: new Date().toISOString() };
+  db.ref(MastDB._tid() + '/admin/enrollments/' + enrollmentId).update(update).then(function() {
+    if (paymentType === 'pass') {
+      // Restore pass visit
+      db.ref(MastDB._tid() + '/admin/enrollments/' + enrollmentId).once('value').then(function(snap) {
+        var enr = snap.val();
+        if (enr && enr.passId && enr.studentUid) {
+          var passRef = db.ref(MastDB._tid() + '/public/accounts/' + enr.studentUid + '/passes/' + enr.passId);
+          passRef.once('value').then(function(passSnap) {
+            if (passSnap.exists()) {
+              var pass = passSnap.val();
+              var updates = { visitsUsed: Math.max(0, (pass.visitsUsed || 0) - 1) };
+              if (pass.visitsRemaining !== null && pass.visitsRemaining !== undefined) {
+                updates.visitsRemaining = (pass.visitsRemaining || 0) + 1;
+              }
+              if (pass.status === 'expired' && updates.visitsRemaining > 0) updates.status = 'active';
+              passRef.update(updates);
+            }
+          });
+        }
+      });
+    }
+    // TODO: For paid bookings, issue wallet store credit when wallet credit system is built
+    renderDashCardPendingRefunds();
+    if (typeof MastAdmin !== 'undefined' && MastAdmin.showToast) MastAdmin.showToast('Refund approved');
+  });
+}
+
+function denyRefund(enrollmentId) {
+  var db = MastDB._db();
+  if (!db) return;
+  db.ref(MastDB._tid() + '/admin/enrollments/' + enrollmentId).update({
+    refundStatus: 'denied',
+    refundDeniedAt: new Date().toISOString()
+  }).then(function() {
+    renderDashCardPendingRefunds();
+    if (typeof MastAdmin !== 'undefined' && MastAdmin.showToast) MastAdmin.showToast('Refund denied');
+  });
+}
+
+// ── Recent Cancellations Card ──
+function renderDashCardRecentCancellations() {
+  var container = document.getElementById('dashCardRecentCancellations');
+  if (!container) return;
+  var cardConfig = DASHBOARD_CARDS.find(function(c) { return c.id === 'recentCancellations'; });
+  var db = MastDB._db();
+  if (!db) { container.innerHTML = ''; return; }
+
+  var sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+
+  db.ref(MastDB._tid() + '/admin/enrollments').orderByChild('cancelledAt').startAt(sevenDaysAgo).limitToLast(100).once('value').then(function(snap) {
+    var cancelled = [];
+    if (snap.exists()) {
+      snap.forEach(function(child) {
+        var enr = child.val();
+        if ((enr.status || '').startsWith('cancelled') && enr.cancelledAt) {
+          cancelled.push(enr);
+        }
+      });
+    }
+
+    // Group by sessionId
+    var bySession = {};
+    cancelled.forEach(function(enr) {
+      var key = enr.sessionId || enr.classId || 'unknown';
+      if (!bySession[key]) bySession[key] = { sessionId: enr.sessionId, classId: enr.classId, cancellations: [] };
+      bySession[key].cancellations.push(enr);
+    });
+
+    var sessionKeys = Object.keys(bySession);
+    if (sessionKeys.length === 0) {
+      container.innerHTML = renderDashboardCard(cardConfig, 0, '<div class="dash-queue-empty">No recent cancellations.</div>');
+      return;
+    }
+
+    // Load class and session data for each group
+    var promises = sessionKeys.map(function(key) {
+      var group = bySession[key];
+      var p1 = group.classId ? db.ref(MastDB._tid() + '/public/classes/' + group.classId).once('value') : Promise.resolve(null);
+      var p2 = group.sessionId ? db.ref(MastDB._tid() + '/public/classSessions/' + group.sessionId).once('value') : Promise.resolve(null);
+      return Promise.all([p1, p2]).then(function(results) {
+        group.classData = results[0] && results[0].exists() ? results[0].val() : {};
+        group.sessionData = results[1] && results[1].exists() ? results[1].val() : {};
+      });
+    });
+
+    Promise.all(promises).then(function() {
+      var groups = sessionKeys.map(function(k) { return bySession[k]; });
+      // Sort by session date descending
+      groups.sort(function(a, b) { return (b.sessionData.date || '').localeCompare(a.sessionData.date || ''); });
+
+      var contentHtml = '<div class="dash-queue-grid">';
+      groups.slice(0, 8).forEach(function(group) {
+        var className = group.classData.name || 'Class';
+        var date = group.sessionData.date || '';
+        var dateDisplay = date ? new Date(date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+        var enrolled = group.sessionData.enrolled || 0;
+        var capacity = group.sessionData.capacity || group.classData.capacity || '?';
+        var minEnrollment = group.classData.minEnrollment || 0;
+        var cancelCount = group.cancellations.length;
+        var pendingCount = group.cancellations.filter(function(c) { return c.refundStatus === 'pending_review'; }).length;
+
+        var belowMin = minEnrollment > 0 && enrolled < minEnrollment;
+
+        contentHtml += '<div class="dash-queue-item" onclick="navigateTo(\'schedule\')" style="cursor:pointer;">' +
+          '<div class="dash-queue-row">' +
+            '<span style="font-weight:500;font-size:0.88rem;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(className) + '</span>' +
+            '<span style="font-size:0.78rem;color:var(--warm-gray);">' + esc(dateDisplay) + '</span>' +
+          '</div>' +
+          '<div style="font-size:0.78rem;color:var(--warm-gray);display:flex;gap:10px;flex-wrap:wrap;margin-top:2px;">' +
+            '<span style="color:var(--red,#E57373);">' + cancelCount + ' cancelled</span>' +
+            '<span>' + enrolled + '/' + capacity + ' enrolled</span>' +
+            (belowMin ? '<span style="color:var(--amber,#FFD54F);font-weight:500;">&#9888; Below min (' + minEnrollment + ')</span>' : '') +
+            (pendingCount > 0 ? '<span style="color:var(--amber,#FFD54F);">' + pendingCount + ' pending review</span>' : '') +
+          '</div>' +
+        '</div>';
+      });
+      contentHtml += '</div>';
+
+      container.innerHTML = renderDashboardCard(cardConfig, cancelled.length, contentHtml);
+      if (cancelled.length > 0) {
+        updateCardActivity('recentCancellations', cancelled[cancelled.length - 1].cancelledAt || '');
+      }
+    });
+  }).catch(function(err) {
+    console.error('Error loading recent cancellations:', err);
     container.innerHTML = '';
   });
 }
