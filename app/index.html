@@ -25447,7 +25447,8 @@ function renderImportStatusBanner() {
 
 async function loadCustomDashboardCards() {
   try {
-    var snap = await MastDB._ref('admin/dashboardCards').once('value');
+    var db = firebase.database();
+    var snap = await db.ref('mast-platform/dashboardCards').once('value');
     var val = snap.val();
     if (!val) { customDashboardCards = []; return; }
     var parent = document.getElementById('dashboardCards');
