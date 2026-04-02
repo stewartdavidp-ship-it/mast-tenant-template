@@ -26033,7 +26033,7 @@ function renderDashCardRecentCancellations() {
 
         var belowMin = minEnrollment > 0 && enrolled < minEnrollment;
 
-        contentHtml += '<div class="dash-queue-item" onclick="navigateTo(\'book\'); MastAdmin.loadModule(\'book\').then(function(){ if(window._bookViewClass) _bookViewClass(\'' + esc(group.classId || '') + '\'); });" style="cursor:pointer;">' +
+        contentHtml += '<div class="dash-queue-item" onclick="navigateTo(\'book\'); MastAdmin.loadModule(\'book\').then(function(){ if(window._bookViewSessionEnrollments) _bookViewSessionEnrollments(\'' + esc(group.sessionId || '') + '\', \'' + esc(group.classId || '') + '\'); });" style="cursor:pointer;">' +
           '<div class="dash-queue-row">' +
             '<span style="font-weight:500;font-size:0.88rem;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(className) + '</span>' +
             '<span style="font-size:0.78rem;color:var(--warm-gray);">' + esc(dateDisplay) + '</span>' +
