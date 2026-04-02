@@ -25376,11 +25376,9 @@ async function renderAllDashboardCards() {
   });
   renderDashCardWithGating(DASHBOARD_CARDS.find(function(c) { return c.id === 'lowInventory'; }), renderDashCardLowInventory);
   renderDashCardWithGating(DASHBOARD_CARDS.find(function(c) { return c.id === 'activeSales'; }), renderDashCardActiveSales);
-  // Booking cancellation cards
-  MastAdmin.loadModule('book').then(function() {
-    renderDashCardWithGating(DASHBOARD_CARDS.find(function(c) { return c.id === 'pendingRefunds'; }), renderDashCardPendingRefunds);
-    renderDashCardWithGating(DASHBOARD_CARDS.find(function(c) { return c.id === 'recentCancellations'; }), renderDashCardRecentCancellations);
-  });
+  // Booking cancellation cards (query admin/enrollments directly, no module dependency)
+  renderDashCardWithGating(DASHBOARD_CARDS.find(function(c) { return c.id === 'pendingRefunds'; }), renderDashCardPendingRefunds);
+  renderDashCardWithGating(DASHBOARD_CARDS.find(function(c) { return c.id === 'recentCancellations'; }), renderDashCardRecentCancellations);
   // Render custom cards
   customDashboardCards.forEach(function(cardDef) {
     if (cardDef.type === 'status-queue') renderStatusQueueCard(cardDef);
