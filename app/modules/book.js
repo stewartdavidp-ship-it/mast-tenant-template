@@ -27,7 +27,7 @@
 
   var CLASS_TYPES = ['series', 'single', 'dropin', 'private'];
   var CLASS_STATUSES = ['active', 'draft', 'archived'];
-  var ENROLLMENT_STATUSES = ['confirmed', 'waitlisted', 'cancelled', 'no-show', 'completed'];
+  var ENROLLMENT_STATUSES = ['confirmed', 'waitlisted', 'cancelled', 'no-show', 'completed', 'late'];
   var DAYS_OF_WEEK = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
   var DAY_LABELS = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
   var RESOURCE_TYPES = ['room', 'equipment'];
@@ -84,7 +84,8 @@
     'no-show':  { bg: 'rgba(183,28,28,0.2)', color: '#EF9A9A', border: 'rgba(183,28,28,0.35)' },
     'checked-in': { bg: 'rgba(6,95,70,0.25)',   color: '#4DB6AC', border: 'rgba(6,95,70,0.4)' },
     'attended-pending-waiver': { bg: 'rgba(146,64,14,0.2)', color: '#FFD54F', border: 'rgba(146,64,14,0.35)' },
-    'incomplete': { bg: 'rgba(230,81,0,0.2)',   color: '#FF8A65', border: 'rgba(230,81,0,0.35)' }
+    'incomplete': { bg: 'rgba(230,81,0,0.2)',   color: '#FF8A65', border: 'rgba(230,81,0,0.35)' },
+    'late':       { bg: 'rgba(146,64,14,0.2)',  color: '#FFD54F', border: 'rgba(146,64,14,0.35)' }
   };
 
   var SEVERITY_BADGE_COLORS = {
@@ -504,6 +505,14 @@
     if (!instructorsLoaded) await loadInstructors();
     if (!resourcesLoaded) await loadResources();
 
+    // Check if sessions exist (locks Type field on edit)
+    var hasSessions = false;
+    if (classId) {
+      var sessCheck = await MastDB.classSessions.byClass(classId);
+      var sessVal = sessCheck.val();
+      hasSessions = sessVal && Object.keys(sessVal).length > 0;
+    }
+
     hideAllViews();
     document.getElementById('bookDetailView').style.display = '';
 
@@ -516,6 +525,7 @@
       return '<label class="book-day-pill"><input type="checkbox" name="schedDays" value="' + d + '"' + checked + '>' + DAY_LABELS[d] + '</label>';
     }).join('') + '</div>';
 
+    var typeLocked = !isNew && hasSessions;
     var typeOptions = CLASS_TYPES.map(function(t) {
       return '<option value="' + t + '"' + (cls && cls.type === t ? ' selected' : '') + '>' + t.charAt(0).toUpperCase() + t.slice(1) + '</option>';
     }).join('');
@@ -538,7 +548,8 @@
       '<div class="book-field"><label class="form-label">Description</label>' +
       '<textarea id="bcfDesc" class="form-input" rows="3" placeholder="Class description for students...">' + esc(cls ? cls.description : '') + '</textarea></div>' +
       '<div class="book-responsive-grid">' +
-      '<div class="book-field"><label class="form-label">Type <span class="book-required">*</span></label><select id="bcfType" class="form-input" onchange="window._bookToggleSeriesFields()">' + typeOptions + '</select></div>' +
+      '<div class="book-field"><label class="form-label">Type <span class="book-required">*</span></label><select id="bcfType" class="form-input"' + (typeLocked ? ' disabled' : '') + ' onchange="window._bookToggleSeriesFields()">' + typeOptions + '</select>' +
+      (typeLocked ? '<div class="book-field-hint">Type cannot be changed after sessions are generated</div>' : '') + '</div>' +
       '<div class="book-field"><label class="form-label">Category</label><input type="text" id="bcfCategory" class="form-input" value="' + esc(cls ? cls.category : '') + '" placeholder="e.g. Pottery, Glass"></div>' +
       '<div class="book-field"><label class="form-label">Status</label><select id="bcfStatus" class="form-input">' + statusOptions + '</select></div>' +
       '</div></div>' +
@@ -601,6 +612,18 @@
       '<div class="book-field"><label class="form-label">Materials Note</label><input type="text" id="bcfMaterialsNote" class="form-input" value="' + esc(cls ? cls.materialsNote : '') + '" placeholder="e.g. 25lbs of clay + glazes"></div>' +
       '</div></div>' +
 
+      // ── Policies ──
+      '<div class="book-form-section">' +
+      '<div class="book-form-section-title">Policies</div>' +
+      '<div class="book-responsive-grid">' +
+      '<div class="book-field"><label class="form-label">Requires Waiver</label><select id="bcfRequiresWaiver" class="form-input"><option value="false"' + (cls && cls.requiresWaiver ? '' : ' selected') + '>No</option><option value="true"' + (cls && cls.requiresWaiver ? ' selected' : '') + '>Yes</option></select>' +
+      '<div class="book-field-hint">Students must sign a waiver before class</div></div>' +
+      '<div class="book-field"><label class="form-label">Enrollment Opens</label><input type="date" id="bcfEnrollOpen" class="form-input" value="' + esc(cls && cls.enrollmentOpenDate ? cls.enrollmentOpenDate : '') + '">' +
+      '<div class="book-field-hint">Leave blank for immediately open</div></div>' +
+      '<div class="book-field"><label class="form-label">Enrollment Closes</label><input type="date" id="bcfEnrollClose" class="form-input" value="' + esc(cls && cls.enrollmentCloseDate ? cls.enrollmentCloseDate : '') + '">' +
+      '<div class="book-field-hint">Leave blank for no cutoff</div></div>' +
+      '</div></div>' +
+
       // ── Assignment ──
       '<div class="book-form-section">' +
       '<div class="book-form-section-title">Assignment</div>' +
@@ -659,6 +682,13 @@
       schedule.startDate = document.getElementById('bcfOnceDate').value;
     }
 
+    // If Type field is disabled (sessions exist), preserve existing type
+    var typeEl = document.getElementById('bcfType');
+    if (typeEl.disabled && classId) {
+      var existing = classesData.find(function(c) { return c.id === classId; });
+      if (existing) type = existing.type;
+    }
+
     var data = {
       name: name,
       description: document.getElementById('bcfDesc').value.trim(),
@@ -674,6 +704,9 @@
       materialsIncluded: document.getElementById('bcfMaterials').value === 'true',
       materialsCostCents: document.getElementById('bcfMaterials').value === 'true' ? null : (function() { var v = parseFloat(document.getElementById('bcfMaterialsCost').value); return isNaN(v) || v <= 0 ? null : Math.round(v * 100); })(),
       materialsNote: document.getElementById('bcfMaterialsNote').value.trim() || null,
+      requiresWaiver: document.getElementById('bcfRequiresWaiver').value === 'true',
+      enrollmentOpenDate: document.getElementById('bcfEnrollOpen').value || null,
+      enrollmentCloseDate: document.getElementById('bcfEnrollClose').value || null,
       imageIds: [],
       updatedAt: new Date().toISOString()
     };
@@ -950,6 +983,7 @@
 
       if (e.status === 'confirmed') {
         html += '<button class="btn-icon" onclick="window._bookMarkAttended(\'' + esc(e.id) + '\')" title="Mark Attended">&#10003;</button>';
+        html += '<button class="btn-icon" onclick="window._bookMarkLate(\'' + esc(e.id) + '\')" title="Mark Late" style="color:#FFD54F;">&#128336;</button>';
         html += '<button class="btn-icon" onclick="window._bookMarkNoShow(\'' + esc(e.id) + '\')" title="Mark No-Show">&#128683;</button>';
         html += '<button class="btn-icon danger" onclick="window._bookCancelEnrollment(\'' + esc(e.id) + '\')" title="Cancel Enrollment">&#10006;</button>';
       }
@@ -1744,6 +1778,7 @@
   window._bookCompleteSession = function(id) { completeSession(id); };
   window._bookViewSessionEnrollments = function(sessionId, classId) { loadEnrollments(sessionId, classId); };
   window._bookMarkAttended = function(id) { updateEnrollmentStatus(id, 'completed'); };
+  window._bookMarkLate = function(id) { updateEnrollmentStatus(id, 'late'); };
   window._bookMarkNoShow = function(id) { updateEnrollmentStatus(id, 'no-show'); };
   window._bookCancelEnrollment = async function(id) {
     if (!confirm('Cancel this enrollment?')) return;
@@ -2101,7 +2136,7 @@
   var INCIDENT_TYPE_LABELS = { equipment_damage: 'Equipment Damage', safety: 'Safety', conduct: 'Conduct', medical: 'Medical' };
   var SEVERITY_COLORS = { low: '#4DB6AC', medium: '#FFD54F', high: '#FF8A65', critical: '#EF9A9A' };
   var WAIVER_STATUSES = ['na', 'signed', 'missing', 'expired'];
-  var CLOSEOUT_STATUSES = ['completed', 'incomplete', 'no-show'];
+  var CLOSEOUT_STATUSES = ['completed', 'incomplete', 'no-show', 'late'];
   var opsSessionId = null;
   var opsClassId = null;
 
@@ -2142,7 +2177,7 @@
       var isStarted = !!session.classStartedAt;
       var isClosed = session.status === 'completed';
       var checkedInCount = students.filter(function(s) { return s.status === 'checked-in'; }).length;
-      var closedOutCount = students.filter(function(s) { return ['completed', 'incomplete', 'no-show', 'attended-pending-waiver'].indexOf(s.status) !== -1; }).length;
+      var closedOutCount = students.filter(function(s) { return ['completed', 'incomplete', 'no-show', 'attended-pending-waiver', 'late'].indexOf(s.status) !== -1; }).length;
       var confirmedCount = students.filter(function(s) { return s.status === 'confirmed'; }).length;
 
       var phaseLabel = isClosed ? 'Completed' : isStarted ? 'In Progress' : 'Check-In';
@@ -2187,12 +2222,26 @@
       html += '<span style="margin-left:auto;">' + students.length + ' student' + (students.length !== 1 ? 's' : '') + '</span>';
       html += '</div>';
 
+      // ── Walk-in enrollment (check-in & in-progress phases) ──
+      if (!isClosed) {
+        html += '<div style="margin-bottom:1rem;">';
+        html += '<div id="walkinSearchWrap" style="display:none;margin-bottom:12px;">';
+        html += '<div class="book-form-section" style="margin:0;">';
+        html += '<div class="book-form-section-title">Add Walk-in Student</div>';
+        html += '<input type="text" id="walkinSearchInput" class="form-input" placeholder="Search by name or email..." oninput="window._bookWalkinSearch(this.value, \'' + esc(sessionId) + '\', \'' + esc(classId) + '\')" style="margin-bottom:8px;">';
+        html += '<div id="walkinResults"></div>';
+        html += '<div style="margin-top:8px;font-size:0.8rem;color:var(--warm-gray);">Or <a href="#" style="color:var(--teal);" onclick="event.preventDefault();window._bookWalkinManual(\'' + esc(sessionId) + '\', \'' + esc(classId) + '\')">add manually</a> if student not found</div>';
+        html += '</div></div>';
+        html += '<button class="btn btn-small" onclick="var w=document.getElementById(\'walkinSearchWrap\');w.style.display=w.style.display===\'none\'?\'block\':\'none\';if(w.style.display!==\'none\')document.getElementById(\'walkinSearchInput\').focus();">+ Walk-in</button>';
+        html += '</div>';
+      }
+
       // ── Enrollment cards ──
       if (students.length === 0) {
         html += bookEmptyState('\ud83d\udccb', 'No enrollments', 'No students are enrolled in this session.');
       } else {
         students.forEach(function(s) {
-          var statusColor = { 'confirmed': '#64B5F6', 'checked-in': '#4DB6AC', 'completed': '#4DB6AC', 'incomplete': '#FFD54F', 'no-show': '#EF9A9A', 'attended-pending-waiver': '#FFD54F' };
+          var statusColor = { 'confirmed': '#64B5F6', 'checked-in': '#4DB6AC', 'completed': '#4DB6AC', 'incomplete': '#FFD54F', 'no-show': '#EF9A9A', 'attended-pending-waiver': '#FFD54F', 'late': '#FFD54F' };
           var waiverWarning = s.waiverStatus && (s.waiverStatus === 'missing' || s.waiverStatus === 'expired');
 
           html += '<div class="book-card" style="cursor:default;">';
@@ -2494,6 +2543,113 @@
       MastAdmin.showToast('Incident saved');
       document.getElementById('incidentFormWrap').style.display = 'none';
       window._bookManageSession(opsSessionId, opsClassId);
+    } catch (err) {
+      MastAdmin.showToast('Failed: ' + err.message, true);
+    }
+  };
+
+  // ============================================================
+  // Walk-in Student Search & Enrollment
+  // ============================================================
+
+  var _walkinSearchTimer = null;
+  window._bookWalkinSearch = function(query, sessionId, classId) {
+    clearTimeout(_walkinSearchTimer);
+    var results = document.getElementById('walkinResults');
+    if (!results) return;
+    query = (query || '').trim().toLowerCase();
+    if (query.length < 2) { results.innerHTML = ''; return; }
+    _walkinSearchTimer = setTimeout(async function() {
+      try {
+        var snap = await MastDB._ref('students').once('value');
+        var val = snap.val() || {};
+        var matches = Object.entries(val).filter(function(e) {
+          var s = e[1];
+          var name = (s.displayName || s.name || '').toLowerCase();
+          var email = (s.email || '').toLowerCase();
+          return name.indexOf(query) !== -1 || email.indexOf(query) !== -1;
+        }).slice(0, 5);
+        var html = '';
+        if (matches.length === 0) {
+          html = '<div style="font-size:0.8rem;color:var(--warm-gray);padding:4px 0;">No students found</div>';
+        } else {
+          matches.forEach(function(entry) {
+            var id = entry[0], s = entry[1];
+            html += '<div class="book-card" style="cursor:pointer;padding:8px 12px;margin-bottom:4px;" onclick="window._bookWalkinEnroll(\'' + esc(sessionId) + '\', \'' + esc(classId) + '\', \'' + esc(id) + '\')">';
+            html += '<div style="font-weight:500;font-size:0.88rem;">' + esc(s.displayName || s.name || '—') + '</div>';
+            html += '<div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(s.email || '') + '</div>';
+            html += '</div>';
+          });
+        }
+        results.innerHTML = html;
+      } catch (err) {
+        results.innerHTML = '<div style="color:' + DANGER_COLOR + ';font-size:0.8rem;">Search failed</div>';
+      }
+    }, 300);
+  };
+
+  window._bookWalkinEnroll = async function(sessionId, classId, studentId) {
+    try {
+      var studentSnap = await MastDB._ref('students/' + studentId).once('value');
+      var student = studentSnap.val();
+      if (!student) { MastAdmin.showToast('Student not found', true); return; }
+
+      var sessSnap = await MastDB.classSessions.get(sessionId);
+      var session = sessSnap.val() || {};
+
+      var enrollId = MastDB.enrollments.newKey();
+      var now = new Date().toISOString();
+      await MastDB.enrollments.set(enrollId, {
+        classId: classId,
+        sessionId: sessionId,
+        studentUid: student.uid || null,
+        studentName: student.displayName || student.name || '',
+        studentEmail: student.email || '',
+        customerName: student.displayName || student.name || '',
+        customerEmail: student.email || '',
+        status: session.classStartedAt ? 'checked-in' : 'confirmed',
+        checkedInAt: session.classStartedAt ? now : null,
+        enrollmentType: 'dropin',
+        pricePaidCents: 0,
+        waiverStatus: 'na',
+        enrolledAt: now,
+        walkIn: true
+      });
+      MastAdmin.showToast('Walk-in enrolled: ' + (student.displayName || student.name));
+      window._bookManageSession(sessionId, opsClassId);
+    } catch (err) {
+      MastAdmin.showToast('Failed: ' + err.message, true);
+    }
+  };
+
+  window._bookWalkinManual = async function(sessionId, classId) {
+    var name = prompt('Student name:');
+    if (!name || !name.trim()) return;
+    var email = prompt('Student email (optional):') || '';
+
+    try {
+      var sessSnap = await MastDB.classSessions.get(sessionId);
+      var session = sessSnap.val() || {};
+
+      var enrollId = MastDB.enrollments.newKey();
+      var now = new Date().toISOString();
+      await MastDB.enrollments.set(enrollId, {
+        classId: classId,
+        sessionId: sessionId,
+        studentName: name.trim(),
+        studentEmail: email.trim(),
+        customerName: name.trim(),
+        customerEmail: email.trim(),
+        status: session.classStartedAt ? 'checked-in' : 'confirmed',
+        checkedInAt: session.classStartedAt ? now : null,
+        enrollmentType: 'dropin',
+        pricePaidCents: 0,
+        waiverStatus: 'na',
+        enrolledAt: now,
+        walkIn: true
+      });
+      MastAdmin.showToast('Walk-in enrolled: ' + name.trim());
+      window._bookManageSession(sessionId, opsClassId);
     } catch (err) {
       MastAdmin.showToast('Failed: ' + err.message, true);
     }

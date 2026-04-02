@@ -3005,6 +3005,7 @@
     }
     .dash-card.collapsed .dash-card-body { display: none; }
     .dash-card.hidden-card { display: none; }
+    .dash-card.auto-hidden { display: none; }
     .dash-card.has-activity {
       border-color: var(--amber, #C4853C);
       box-shadow: 0 0 0 1px var(--amber, #C4853C);
@@ -25039,6 +25040,8 @@ function renderDashboardCard(cardConfig, count, contentHtml) {
   var prefs = dashboardCardPrefs[cardConfig.id] || {};
   var collapsed = prefs.collapsed ? ' collapsed' : '';
   var hidden = prefs.hidden ? ' hidden-card' : '';
+  // Auto-hide empty cards unless pinned
+  var autoHidden = (count === 0 && !prefs.pinned) ? ' auto-hidden' : '';
   var activity = prefs.hasNewActivity ? ' has-activity' : '';
   var countClass = (count === 0) ? 'dash-card-count zero' : 'dash-card-count';
   var viewAllHtml = cardConfig.viewAllRoute
@@ -25052,7 +25055,7 @@ function renderDashboardCard(cardConfig, count, contentHtml) {
   var pinIcon = isPinned ? '\uD83D\uDCCC' : '\uD83D\uDCCC';
   var pinHtml = '<span class="' + pinClass + '" onclick="event.stopPropagation(); togglePinDashCard(\'' + cardConfig.id + '\')" title="' + (isPinned ? 'Unpin from top' : 'Pin to top') + '">' + pinIcon + '</span>';
 
-  return '<div class="dash-card' + collapsed + hidden + activity + '" id="dashCard_' + cardConfig.id + '">' +
+  return '<div class="dash-card' + collapsed + hidden + autoHidden + activity + '" id="dashCard_' + cardConfig.id + '">' +
     '<div class="dash-card-header" onclick="toggleDashCard(\'' + cardConfig.id + '\')">' +
       '<div class="dash-card-title">' +
         '<h3>' + esc(cardConfig.title) + '</h3>' +
@@ -25545,8 +25548,9 @@ function renderStatusQueueCard(cardDef) {
     // Deep link config
     var dl = cardDef.deepLink || null;
 
-    // Hide card if no items match
-    if (items.length === 0) {
+    // Hide card if no items match (unless pinned)
+    var sqPrefs = dashboardCardPrefs[cardDef._cardId] || {};
+    if (items.length === 0 && !sqPrefs.pinned) {
       container.innerHTML = '';
       return;
     }
