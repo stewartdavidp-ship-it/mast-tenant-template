@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdn.jsdelivr.net https://*.firebaseio.com https://apis.google.com https://maps.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://us-central1-mast-platform-prod.cloudfunctions.net https://*.firebaseio.com wss://*.firebaseio.com https://*.firebasestorage.app https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://api.ipify.org; img-src 'self' data: blob: https:; frame-src 'self' https://*.firebaseapp.com https://*.firebaseio.com; frame-ancestors 'none';">
+<title>Cancel Booking</title>
+<link rel="preconnect" href="https://mast-platform-prod-default-rtdb.firebaseio.com" crossorigin>
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<script>
+(function(){
+  var P='https://mast-platform-prod-default-rtdb.firebaseio.com/mast-platform';
+  var h=location.hostname,C=5*60*1000;
+  if(h==='localhost'||h==='127.0.0.1')return;
+  try{var r=localStorage.getItem('mast_tenant_'+h);if(r){var c=JSON.parse(r);if(Date.now()-c.timestamp<C){window.__earlyTenant=Promise.resolve(c.data);return;}}}catch(e){}
+  var ek=h.replace(/\./g,'_');
+  window.__earlyTenant=fetch(P+'/tenantsByDomain/'+ek+'.json').then(function(r){return r.ok?r.json():null}).then(function(tid){
+    if(!tid)return null;
+    return fetch(P+'/tenants/'+tid+'/publicConfig.json').then(function(r){return r.ok?r.json():null}).then(function(pc){
+      return pc?{tenantId:tid,publicConfig:pc}:null;
+    });
+  }).catch(function(){return null;});
+})();
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="storefront.css">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<style>
+.cb-container {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 7rem 2rem 4rem;
+}
+.cb-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+.cb-header h1 {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 2rem;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  margin: 0 0 0.5rem;
+  color: var(--text);
+}
+.cb-header p {
+  font-size: 0.95rem;
+  color: var(--warm-gray, #888);
+}
+.cb-card {
+  background: var(--surface-card, #FAF6F0);
+  border-radius: 12px;
+  padding: 2rem;
+  border: 1px solid var(--border-subtle, #E8E0D4);
+}
+.cb-info {
+  margin: 0 0 1.5rem;
+  padding: 16px 20px;
+  background: var(--bg, #fff);
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle, #E8E0D4);
+}
+.cb-info-title {
+  margin: 0 0 12px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text, #1A1A1A);
+}
+.cb-info-row {
+  display: flex;
+  padding: 4px 0;
+  font-size: 0.88rem;
+}
+.cb-info-label {
+  width: 100px;
+  font-weight: 500;
+  color: var(--text, #1A1A1A);
+}
+.cb-info-value {
+  color: var(--warm-gray, #666);
+}
+.cb-field {
+  margin-bottom: 1.25rem;
+}
+.cb-field label {
+  display: block;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--warm-gray, #888);
+  margin-bottom: 6px;
+}
+.cb-field select {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border-subtle, #E8E0D4);
+  border-radius: 6px;
+  font-size: 0.95rem;
+  background: var(--bg, #fff);
+  color: var(--text, #1A1A1A);
+  box-sizing: border-box;
+}
+.cb-field select:focus {
+  outline: none;
+  border-color: var(--primary, #C4853C);
+  box-shadow: 0 0 0 2px rgba(196,133,60,0.15);
+}
+.cb-btn {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  background: #CC5500;
+  color: #fff;
+  transition: background 0.2s;
+}
+.cb-btn:hover { background: #B34A00; }
+.cb-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.cb-msg {
+  text-align: center;
+  padding: 2rem;
+  font-size: 0.95rem;
+  color: var(--warm-gray, #888);
+}
+.cb-success {
+  text-align: center;
+  padding: 2rem 0;
+}
+.cb-success-icon {
+  font-size: 3rem;
+  color: var(--teal, #2A7C6F);
+  margin-bottom: 1rem;
+}
+.cb-success h2 {
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 400;
+  font-size: 1.5rem;
+  margin: 0 0 0.75rem;
+  color: var(--text);
+}
+.cb-success p {
+  font-size: 0.88rem;
+  color: var(--warm-gray, #888);
+  line-height: 1.6;
+}
+.cb-error {
+  text-align: center;
+  padding: 2rem 0;
+}
+.cb-error-icon {
+  font-size: 3rem;
+  color: #CC5500;
+  margin-bottom: 1rem;
+}
+.cb-error h2 {
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 400;
+  font-size: 1.5rem;
+  margin: 0 0 0.75rem;
+  color: var(--text);
+}
+.cb-error p {
+  font-size: 0.88rem;
+  color: var(--warm-gray, #888);
+  line-height: 1.6;
+}
+.cb-link {
+  display: inline-block;
+  margin-top: 1.5rem;
+  padding: 10px 24px;
+  border-radius: 6px;
+  background: var(--primary, #C4853C);
+  color: #fff;
+  text-decoration: none;
+  font-size: 0.88rem;
+}
+@media (max-width: 768px) {
+  .cb-container { padding: 6rem 1.25rem 3rem; }
+  .cb-header h1 { font-size: 1.6rem; }
+}
+</style>
+</head>
+<body>
+<nav id="mainNav"></nav>
+<div class="nav-mobile-menu" id="mobileMenu"></div>
+
+<div class="cb-container">
+  <div class="cb-header">
+    <h1>Cancel Booking</h1>
+    <p>Cancel your class enrollment</p>
+  </div>
+  <div id="cbContent">
+    <div class="cb-msg">Loading...</div>
+  </div>
+</div>
+
+<footer id="siteFooter"></footer>
+
+<script src="storefront-tenant.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="storefront-theme.js"></script>
+<script src="storefront-nav.js"></script>
+<script src="tenant-brand.js?v=2"></script>
+
+<script>
+(function() {
+  'use strict';
+
+  var TENANT_ID = null;
+  var FUNCTION_BASE = 'https://us-central1-mast-platform-prod.cloudfunctions.net/';
+
+  function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  function getEnrollmentId() {
+    var params = new URLSearchParams(window.location.search);
+    return params.get('enrollment') || '';
+  }
+
+  function formatDate(dateStr) {
+    if (!dateStr) return '';
+    try {
+      var d = new Date(dateStr + 'T12:00:00');
+      return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    } catch (_) { return dateStr; }
+  }
+
+  function formatTime(timeStr) {
+    if (!timeStr || !timeStr.includes(':')) return timeStr || '';
+    var parts = timeStr.split(':').map(Number);
+    var h = parts[0]; var m = parts[1];
+    var ampm = h >= 12 ? 'PM' : 'AM';
+    return ((h % 12) || 12) + ':' + String(m).padStart(2, '0') + ' ' + ampm;
+  }
+
+  function showMessage(msg) {
+    document.getElementById('cbContent').innerHTML = '<div class="cb-msg">' + esc(msg) + '</div>';
+  }
+
+  function init() {
+    var enrollmentId = getEnrollmentId();
+    if (!enrollmentId) {
+      showMessage('Invalid link. No enrollment ID found.');
+      return;
+    }
+
+    window.TENANT_READY.then(function() {
+      TENANT_ID = window.TENANT_ID;
+      loadCancelInfo(enrollmentId);
+    });
+  }
+
+  function loadCancelInfo(enrollmentId) {
+    fetch(FUNCTION_BASE + 'getBookingCancelInfo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: { tenantId: TENANT_ID, enrollmentId: enrollmentId } })
+    })
+    .then(function(resp) { return resp.json(); })
+    .then(function(data) {
+      var result = data.result || data;
+      if (result.error) {
+        showErrorState(result.error, result.alreadyCancelled);
+        return;
+      }
+      if (!result.success) {
+        showMessage('Unable to load booking details. Please try again.');
+        return;
+      }
+      renderCancelForm(enrollmentId, result);
+    })
+    .catch(function(err) {
+      showMessage('Unable to load booking details. Please try again.');
+    });
+  }
+
+  function showErrorState(message, alreadyCancelled) {
+    var el = document.getElementById('cbContent');
+    var icon = alreadyCancelled ? '&#10003;' : '&#9888;';
+    var iconClass = alreadyCancelled ? 'cb-success-icon' : 'cb-error-icon';
+    var title = alreadyCancelled ? 'Already Cancelled' : 'Unable to Cancel';
+    el.innerHTML = '<div class="cb-error">' +
+      '<div class="' + iconClass + '">' + icon + '</div>' +
+      '<h2>' + esc(title) + '</h2>' +
+      '<p>' + esc(message) + '</p>' +
+      '<a href="/classes.html" class="cb-link">Browse Classes</a>' +
+    '</div>';
+  }
+
+  function renderCancelForm(enrollmentId, info) {
+    var el = document.getElementById('cbContent');
+
+    var infoHtml = '<div class="cb-info">' +
+      '<p class="cb-info-title">' + esc(info.className) + '</p>';
+
+    if (info.date) {
+      infoHtml += '<div class="cb-info-row"><span class="cb-info-label">Date</span><span class="cb-info-value">' + esc(formatDate(info.date)) + '</span></div>';
+    }
+    if (info.startTime) {
+      infoHtml += '<div class="cb-info-row"><span class="cb-info-label">Time</span><span class="cb-info-value">' + esc(formatTime(info.startTime)) + '</span></div>';
+    }
+    if (info.instructorName) {
+      infoHtml += '<div class="cb-info-row"><span class="cb-info-label">Instructor</span><span class="cb-info-value">' + esc(info.instructorName) + '</span></div>';
+    }
+    if (info.locationName) {
+      infoHtml += '<div class="cb-info-row"><span class="cb-info-label">Location</span><span class="cb-info-value">' + esc(info.locationName) + '</span></div>';
+    }
+    infoHtml += '</div>';
+
+    el.innerHTML = '<div class="cb-card">' +
+      '<p style="font-size:0.88rem;color:var(--warm-gray);margin:0 0 1.25rem;">Hi ' + esc(info.customerName || 'there') + ', you can cancel your enrollment below.</p>' +
+      infoHtml +
+      '<div class="cb-field">' +
+        '<label>Reason for cancellation (optional)</label>' +
+        '<select id="cbReason">' +
+          '<option value="">Select a reason</option>' +
+          '<option value="Schedule conflict">Schedule conflict</option>' +
+          '<option value="No longer interested">No longer interested</option>' +
+          '<option value="Found another class">Found another class</option>' +
+          '<option value="Financial reasons">Financial reasons</option>' +
+          '<option value="Other">Other</option>' +
+        '</select>' +
+      '</div>' +
+      '<button class="cb-btn" id="cbSubmitBtn" onclick="window._submitCancel()">Cancel My Enrollment</button>' +
+      '<p style="text-align:center;margin:1rem 0 0;font-size:0.78rem;color:var(--warm-gray,#888);">If you paid for this class, a refund or credit will be issued.</p>' +
+    '</div>';
+  }
+
+  window._submitCancel = function() {
+    var enrollmentId = getEnrollmentId();
+    var reasonEl = document.getElementById('cbReason');
+    var btn = document.getElementById('cbSubmitBtn');
+    var reason = reasonEl ? reasonEl.value : '';
+
+    if (btn) { btn.disabled = true; btn.textContent = 'Cancelling...'; }
+
+    fetch(FUNCTION_BASE + 'cancelBookingEnrollment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: { tenantId: TENANT_ID, enrollmentId: enrollmentId, reason: reason } })
+    })
+    .then(function(resp) { return resp.json(); })
+    .then(function(data) {
+      var result = data.result || data;
+      if (result.success) {
+        var el = document.getElementById('cbContent');
+        el.innerHTML = '<div class="cb-success">' +
+          '<div class="cb-success-icon">&#10003;</div>' +
+          '<h2>Enrollment Cancelled</h2>' +
+          '<p>Your enrollment has been cancelled successfully.</p>' +
+          '<p style="margin-top:0.75rem;">If you paid for this class, a refund or credit will be issued.</p>' +
+          '<a href="/classes.html" class="cb-link">Browse Classes</a>' +
+        '</div>';
+      } else {
+        showErrorState(result.error || 'Unable to cancel. Please try again or contact us.');
+        if (btn) { btn.disabled = false; btn.textContent = 'Cancel My Enrollment'; }
+      }
+    })
+    .catch(function(err) {
+      alert('Error: ' + err.message);
+      if (btn) { btn.disabled = false; btn.textContent = 'Cancel My Enrollment'; }
+    });
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+</body>
+</html>
