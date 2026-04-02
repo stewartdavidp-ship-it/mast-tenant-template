@@ -794,7 +794,7 @@
 
     var html = '';
     if (activePasses.length > 0) {
-      var aggText = hasUnlimited ? 'Unlimited visits available' : totalVisits + ' visit' + (totalVisits !== 1 ? 's' : '') + ' available';
+      var aggText = hasUnlimited ? 'Unlimited sessions available' : totalVisits + ' session' + (totalVisits !== 1 ? 's' : '') + ' available';
       var nextExpiry = null;
       activePasses.forEach(function(p) {
         if (p.expiresAt && (!nextExpiry || p.expiresAt < nextExpiry)) nextExpiry = p.expiresAt;
