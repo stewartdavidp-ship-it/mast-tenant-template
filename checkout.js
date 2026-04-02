@@ -2498,19 +2498,19 @@
 
     if (action === 'toggle-wallet') {
       checkoutData.walletCreditApplied = !!btn.checked;
-      debouncedBreakdownRefresh();
+      if (currentStep === 'review') { renderReview(); } else { debouncedBreakdownRefresh(); }
       return;
     } else if (action === 'toggle-loyalty') {
       checkoutData.loyaltyApplied = !!btn.checked;
-      debouncedBreakdownRefresh();
+      if (currentStep === 'review') { renderReview(); } else { debouncedBreakdownRefresh(); }
       return;
     } else if (action === 'toggle-giftcard') {
       checkoutData.walletGiftCardApplied = !!btn.checked;
-      debouncedBreakdownRefresh();
+      if (currentStep === 'review') { renderReview(); } else { debouncedBreakdownRefresh(); }
       return;
     } else if (action === 'toggle-pass') {
       checkoutData.passApplied = !!btn.checked;
-      debouncedBreakdownRefresh();
+      if (currentStep === 'review') { renderReview(); } else { debouncedBreakdownRefresh(); }
       return;
     } else if (action === 'apply-coupon') {
       applyCoupon();
