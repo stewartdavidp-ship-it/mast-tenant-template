@@ -836,8 +836,16 @@
           checkoutData.itemShippingData = productMap;
           checkoutData.shippingConfig = config;
 
+          // Filter to shippable items only (exclude classes, passes, gift cards, etc.)
+          var shippableItems = items.filter(function(it) {
+            var meta = window.MastCart.getItemMetadata
+              ? window.MastCart.getItemMetadata(window.MastCart.resolveItemType(it), it._metaOverrides || null)
+              : null;
+            return meta ? meta.requiresShipping : !it.bookingType;
+          });
+
           // Calculate flat-rate shipping
-          var shipResult = calculateShipping(items, productMap, config);
+          var shipResult = calculateShipping(shippableItems, productMap, config);
           checkoutData.shippingMethod = {
             key: 'calculated',
             label: shipResult.label,
