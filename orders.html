@@ -1240,6 +1240,9 @@ window.TENANT_READY.then(function() {
     // Wallet deductions
     if (order.walletDeductions && order.walletDeductions.totalDeductionCents > 0) {
       var wd = order.walletDeductions;
+      if (wd.passDeductionCents > 0) {
+        html += '<div class="order-total-row" style="color:var(--accent,#C6A96C)"><span>Class Pass</span><span>-' + formatPrice(wd.passDeductionCents / 100) + '</span></div>';
+      }
       if (wd.loyalty && wd.loyalty.amountCents > 0) {
         html += '<div class="order-total-row" style="color:var(--accent,#C6A96C)"><span>Loyalty Points</span><span>-' + formatPrice(wd.loyalty.amountCents / 100) + '</span></div>';
       }
