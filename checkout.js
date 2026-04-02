@@ -28,7 +28,8 @@
     walletGiftCardApplied: false, // whether to apply gift cards to this order
     savedCoupons: [],          // [{ code, ... }] saved coupons from wallet
     customerPasses: [],        // [{ _id, passDefinitionId, visitsRemaining, expiresAt, status, priority, _def }] active passes with definitions
-    passAssignments: {}        // { cartItemIndex: { passId, passName, coversAmountCents, surchargeAmountCents } } — pass applied to each cart item
+    passApplied: false,        // whether to apply class passes to this order
+    passAssignments: {}        // { cartItemIndex: { passId, passName, coversAmountCents, surchargeAmountCents } } — computed from customerPasses when passApplied=true
   };
 
   var shippingConfigCache = null; // cached flat-rate config
@@ -81,13 +82,7 @@
     var items = window.MastCart.getItems();
     var total = 0;
     for (var i = 0; i < items.length; i++) {
-      var passAssignment = checkoutData.passAssignments[i];
-      if (passAssignment) {
-        // Pass covers part or all — only charge the surcharge
-        total += (passAssignment.surchargeAmountCents || 0) / 100;
-      } else {
-        total += parsePrice(items[i].price) * (items[i].qty || 1);
-      }
+      total += parsePrice(items[i].price) * (items[i].qty || 1);
     }
     return Math.round(total * 100) / 100;
   }
@@ -98,12 +93,7 @@
     var total = 0;
     for (var i = 0; i < items.length; i++) {
       if (items[i].bookingType === 'gift-card') continue;
-      var passAssignment = checkoutData.passAssignments[i];
-      if (passAssignment) {
-        total += (passAssignment.surchargeAmountCents || 0) / 100;
-      } else {
-        total += parsePrice(items[i].price) * (items[i].qty || 1);
-      }
+      total += parsePrice(items[i].price) * (items[i].qty || 1);
     }
     return Math.round(total * 100) / 100;
   }
@@ -811,14 +801,28 @@
 
           html += '</div>';
 
-          // ── Wallet Deductions (order: Coupons → Loyalty → Gift Cards → Credits) ──
+          // ── Wallet Deductions (order: Passes → Coupons → Loyalty → Gift Cards → Credits) ──
           var hasAnyWalletInstrument = checkoutData.walletCredits.length > 0 ||
             checkoutData.walletGiftCards.length > 0 ||
-            (checkoutData.loyaltyConfig && checkoutData.loyaltyConfig.enabled && checkoutData.loyaltyBalance && checkoutData.loyaltyBalance.totalPoints > 0);
+            (checkoutData.loyaltyConfig && checkoutData.loyaltyConfig.enabled && checkoutData.loyaltyBalance && checkoutData.loyaltyBalance.totalPoints > 0) ||
+            (checkoutData.customerPasses.length > 0 && Object.keys(checkoutData.passAssignments).length > 0);
 
           if (hasAnyWalletInstrument) {
             html += '<div class="checkout-section">' +
               '<div class="checkout-section-title">Wallet Deductions</div>';
+
+            // Class passes (1st in priority — before coupons)
+            if (checkoutData.customerPasses.length > 0 && Object.keys(checkoutData.passAssignments).length > 0) {
+              var passCoversCents = 0;
+              var passVisitsUsed = Object.keys(checkoutData.passAssignments).length;
+              Object.keys(checkoutData.passAssignments).forEach(function(idx) {
+                passCoversCents += checkoutData.passAssignments[idx].coversAmountCents || 0;
+              });
+              html += '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;color:var(--text);margin-bottom:8px;">' +
+                '<input type="checkbox" id="coPassToggle" ' + (checkoutData.passApplied ? 'checked' : '') + ' data-co="toggle-pass">' +
+                '&#127915; Use class pass (' + passVisitsUsed + ' visit' + (passVisitsUsed !== 1 ? 's' : '') + ', ' + formatMoney(passCoversCents / 100) + ' off)' +
+              '</label>';
+            }
 
             // Loyalty (2nd in priority after coupons)
             if (checkoutData.loyaltyConfig && checkoutData.loyaltyConfig.enabled && checkoutData.loyaltyBalance && checkoutData.loyaltyBalance.totalPoints > 0) {
@@ -849,7 +853,7 @@
               '</label>';
             }
 
-            html += '<div style="font-size:0.75rem;color:var(--warm-gray-light);margin-top:6px;">Deductions applied in order: coupons \u2192 loyalty \u2192 gift cards \u2192 credits</div>' +
+            html += '<div style="font-size:0.75rem;color:var(--warm-gray-light);margin-top:6px;">Deductions applied in order: passes \u2192 coupons \u2192 loyalty \u2192 gift cards \u2192 credits</div>' +
               '</div>';
           }
 
@@ -917,11 +921,22 @@
   function buildTotalsHtml(subtotal) {
     var shipCost = checkoutData.shippingMethod ? checkoutData.shippingMethod.price : 0;
     var couponDiscount = checkoutData.coupon ? checkoutData.coupon.discount : 0;
-    // Tax on post-coupon amount (most jurisdictions tax the discounted price)
-    var taxableAmount = Math.max(0, calcTaxableSubtotal() - couponDiscount);
+
+    // 1. Pass deduction (applied to subtotal before tax/coupons)
+    var passDeductionCents = 0;
+    if (checkoutData.passApplied && Object.keys(checkoutData.passAssignments).length > 0) {
+      Object.keys(checkoutData.passAssignments).forEach(function(idx) {
+        passDeductionCents += checkoutData.passAssignments[idx].coversAmountCents || 0;
+      });
+    }
+    var passDeductionDollars = passDeductionCents / 100;
+    var subtotalAfterPass = Math.max(0, subtotal - passDeductionDollars);
+
+    // Tax on post-pass, post-coupon amount
+    var taxableAmount = Math.max(0, subtotalAfterPass - couponDiscount);
     var tax = Math.round(taxableAmount * checkoutData.taxRate * 100) / 100;
-    // ── Deduction cascade: Coupons → Loyalty → Gift Cards → Credits ──
-    var runningCents = Math.round((subtotal + tax + shipCost - couponDiscount) * 100);
+    // ── Deduction cascade: Passes → Coupons → Loyalty → Gift Cards → Credits ──
+    var runningCents = Math.round((subtotalAfterPass + tax + shipCost - couponDiscount) * 100);
 
     // 2. Loyalty
     var loyaltyDollars = 0;
@@ -955,12 +970,8 @@
     var html = '<div class="order-totals">';
     html += '<div class="order-total-row"><span class="order-total-label">Subtotal</span><span class="order-total-value">' + formatMoney(subtotal) + '</span></div>';
 
-    // Show pass savings note if any passes applied
-    var passSavingsCents = 0;
-    var assignments = checkoutData.passAssignments || {};
-    Object.keys(assignments).forEach(function(idx) { passSavingsCents += assignments[idx].coversAmountCents || 0; });
-    if (passSavingsCents > 0) {
-      html += '<div style="text-align:right;font-size:0.72rem;color:var(--accent,#2D7D46);margin-top:-4px;margin-bottom:4px;">Includes ' + formatMoney(passSavingsCents / 100) + ' covered by pass</div>';
+    if (passDeductionDollars > 0) {
+      html += '<div class="order-total-row discount"><span class="order-total-label">Class Pass</span><span class="order-total-value">-' + formatMoney(passDeductionDollars) + '</span></div>';
     }
 
     html += '<div class="order-total-row"><span class="order-total-label">Shipping</span><span class="order-total-value">' + (shipCost ? formatMoney(shipCost) : '--') + '</span></div>';
@@ -1196,8 +1207,11 @@
             return ea.localeCompare(eb);
           });
 
-          // Auto-apply passes to class items
-          autoApplyPasses();
+          // Auto-apply if any applicable passes found
+          if (checkoutData.customerPasses.length > 0) {
+            checkoutData.passApplied = true;
+            autoApplyPasses();
+          }
         });
       })
       .catch(function(err) {
@@ -1269,18 +1283,6 @@
     }
   }
 
-  // Remove pass assignment for a cart item (user opted out)
-  function removePassAssignment(itemIndex) {
-    delete checkoutData.passAssignments[itemIndex];
-    // Recalculate remaining assignments (a freed pass may now cover a later item)
-    // Simple approach: just remove this one — re-apply would be complex and the user is opting out intentionally
-  }
-
-  // Re-apply pass for a cart item (user opted back in)
-  function reapplyPassAssignment(itemIndex) {
-    // Run full auto-apply and restore
-    autoApplyPasses();
-  }
 
   // ── Loyalty: Load config + balance ──
   function loadLoyaltyData() {
@@ -1605,51 +1607,14 @@
       }
 
       var lineTotal = parsePrice(item.price) * (item.qty || 1);
-      var passAssignment = checkoutData.passAssignments[i];
-      var priceHtml = '';
-      var passHtml = '';
-
-      if (passAssignment) {
-        if (passAssignment.surchargeAmountCents > 0) {
-          // Partial coverage: pass covers some, customer pays surcharge
-          priceHtml = '<div class="review-item-price">' +
-            '<span style="text-decoration:line-through;color:var(--warm-gray,#9B958E);font-size:0.8em;">' + formatMoney(lineTotal) + '</span> ' +
-            formatMoney(passAssignment.surchargeAmountCents / 100) +
-          '</div>';
-          passHtml = '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px;padding:4px 8px;background:color-mix(in srgb, var(--accent,#2D7D46) 10%, transparent);border-radius:4px;font-size:0.75rem;">' +
-            '<span style="color:var(--accent,#2D7D46);">&#10003; ' + esc(passAssignment.passName) + ' covers ' + formatMoney(passAssignment.coversAmountCents / 100) + '</span>' +
-            '<button data-co="remove-pass" data-pass-idx="' + i + '" style="background:none;border:none;color:var(--warm-gray,#9B958E);font-size:0.7rem;cursor:pointer;text-decoration:underline;">Pay instead</button>' +
-          '</div>';
-        } else {
-          // Full coverage
-          priceHtml = '<div class="review-item-price">' +
-            '<span style="text-decoration:line-through;color:var(--warm-gray,#9B958E);font-size:0.8em;">' + formatMoney(lineTotal) + '</span> ' +
-            '<span style="color:var(--accent,#2D7D46);">$0.00</span>' +
-          '</div>';
-          passHtml = '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px;padding:4px 8px;background:color-mix(in srgb, var(--accent,#2D7D46) 10%, transparent);border-radius:4px;font-size:0.75rem;">' +
-            '<span style="color:var(--accent,#2D7D46);">&#10003; ' + esc(passAssignment.passName) + ' applied</span>' +
-            '<button data-co="remove-pass" data-pass-idx="' + i + '" style="background:none;border:none;color:var(--warm-gray,#9B958E);font-size:0.7rem;cursor:pointer;text-decoration:underline;">Pay instead</button>' +
-          '</div>';
-        }
-      } else if (item.bookingType === 'class' && checkoutData.customerPasses.length > 0 && item._passOptedOut) {
-        // User opted out of pass — show re-apply option
-        priceHtml = '<div class="review-item-price">' + formatMoney(lineTotal) + '</div>';
-        passHtml = '<div style="margin-top:4px;font-size:0.75rem;">' +
-          '<button data-co="reapply-pass" data-pass-idx="' + i + '" style="background:none;border:none;color:var(--accent,#2D7D46);font-size:0.75rem;cursor:pointer;text-decoration:underline;">Use pass instead</button>' +
-        '</div>';
-      } else {
-        priceHtml = '<div class="review-item-price">' + formatMoney(lineTotal) + '</div>';
-      }
-
       html += '<div class="review-item">' +
         imgHtml +
         '<div class="review-item-info">' +
           '<div class="review-item-name">' + esc(item.name) + '</div>' +
           (optStr ? '<div class="review-item-meta">' + optStr + '</div>' : '') +
           '<div class="review-item-meta">Qty: ' + item.qty + '</div>' +
-          passHtml +
         '</div>' +
-        priceHtml +
+        '<div class="review-item-price">' + formatMoney(lineTotal) + '</div>' +
       '</div>';
     }
     html += '</div>';
@@ -1806,8 +1771,15 @@
     };
 
     // Wallet deductions — server verifies actual balances
-    if (checkoutData.loyaltyApplied || checkoutData.walletGiftCardApplied || checkoutData.walletCreditApplied) {
+    if (checkoutData.passApplied || checkoutData.loyaltyApplied || checkoutData.walletGiftCardApplied || checkoutData.walletCreditApplied) {
       payload.walletDeductions = {};
+      // Pass deductions (server deducts visits and adjusts pricing)
+      if (checkoutData.passApplied && Object.keys(checkoutData.passAssignments).length > 0) {
+        payload.walletDeductions.passes = Object.keys(checkoutData.passAssignments).map(function(idx) {
+          var a = checkoutData.passAssignments[idx];
+          return { itemIndex: parseInt(idx, 10), passId: a.passId, coversAmountCents: a.coversAmountCents, surchargeAmountCents: a.surchargeAmountCents };
+        });
+      }
       if (checkoutData.loyaltyApplied && checkoutData.loyaltyBalance && checkoutData.loyaltyConfig) {
         payload.walletDeductions.loyalty = {
           pointsToRedeem: checkoutData.loyaltyBalance.totalPoints || 0,
@@ -2271,23 +2243,14 @@
       checkoutData.walletGiftCardApplied = !!btn.checked;
       updateTotals();
       return;
-    } else if (action === 'remove-pass') {
-      var removeIdx = parseInt(btn.getAttribute('data-pass-idx'), 10);
-      if (!isNaN(removeIdx)) {
-        var items = window.MastCart.getItems();
-        if (items[removeIdx]) items[removeIdx]._passOptedOut = true;
-        removePassAssignment(removeIdx);
-        renderReview();
+    } else if (action === 'toggle-pass') {
+      checkoutData.passApplied = !!btn.checked;
+      if (checkoutData.passApplied) {
+        autoApplyPasses();
+      } else {
+        checkoutData.passAssignments = {};
       }
-      return;
-    } else if (action === 'reapply-pass') {
-      var reapplyIdx = parseInt(btn.getAttribute('data-pass-idx'), 10);
-      if (!isNaN(reapplyIdx)) {
-        var ritems = window.MastCart.getItems();
-        if (ritems[reapplyIdx]) ritems[reapplyIdx]._passOptedOut = false;
-        reapplyPassAssignment(reapplyIdx);
-        renderReview();
-      }
+      updateTotals();
       return;
     } else if (action === 'apply-coupon') {
       applyCoupon();
