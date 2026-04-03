@@ -2017,10 +2017,10 @@
         var priceStr = annualPrice ? formatMoney(annualPrice) + '/year' : '';
         html += '<div class="review-section" id="coMembershipUpsell" style="background:linear-gradient(135deg,rgba(42,124,111,0.08),rgba(196,133,60,0.08));border:1px solid rgba(42,124,111,0.2);border-radius:8px;padding:14px 16px;margin-bottom:12px;">' +
           '<div style="display:flex;justify-content:space-between;align-items:flex-start;">' +
-            '<div>' +
+            '<a href="/membership.html" style="text-decoration:none;display:block;flex:1;min-width:0;">' +
               '<div style="font-size:0.82rem;font-weight:600;color:var(--teal,#2A7C6F);margin-bottom:4px;">' + programName + '</div>' +
-              '<div style="font-size:0.78rem;color:var(--warm-gray,#888);line-height:1.4;">Save on every order with member discounts' + (priceStr ? ' — ' + priceStr : '') + '</div>' +
-            '</div>' +
+              '<div style="font-size:0.78rem;color:var(--warm-gray,#888);line-height:1.4;">Save on every order with member discounts' + (priceStr ? ' \u2014 ' + priceStr : '') + '. <span style="text-decoration:underline;">Learn more \u2192</span></div>' +
+            '</a>' +
             '<button style="background:none;border:none;color:var(--warm-gray,#888);cursor:pointer;font-size:1.1rem;padding:0 4px;line-height:1;" data-co="dismiss-membership-upsell">&times;</button>' +
           '</div>' +
         '</div>';

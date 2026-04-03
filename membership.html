@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdn.jsdelivr.net https://*.firebaseio.com https://apis.google.com https://maps.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://us-central1-mast-platform-prod.cloudfunctions.net https://*.firebaseio.com wss://*.firebaseio.com https://*.firebasestorage.app https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://api.ipify.org; img-src 'self' data: blob: https:; frame-src 'self' https://*.firebaseapp.com https://*.firebaseio.com; frame-ancestors 'none';">
+<title>Membership &mdash; My Shop</title>
+<link rel="preconnect" href="https://mast-platform-prod-default-rtdb.firebaseio.com" crossorigin>
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<script>
+(function(){
+  var P='https://mast-platform-prod-default-rtdb.firebaseio.com/mast-platform';
+  var h=location.hostname,C=5*60*1000;
+  if(h==='localhost'||h==='127.0.0.1')return;
+  try{var r=localStorage.getItem('mast_tenant_'+h);if(r){var c=JSON.parse(r);if(Date.now()-c.timestamp<C){window.__earlyTenant=Promise.resolve(c.data);return;}}}catch(e){}
+  var ek=h.replace(/\./g,'_');
+  window.__earlyTenant=fetch(P+'/tenantsByDomain/'+ek+'.json').then(function(r){return r.ok?r.json():null}).then(function(tid){
+    if(!tid)return null;
+    return fetch(P+'/tenants/'+tid+'/publicConfig.json').then(function(r){return r.ok?r.json():null}).then(function(pc){
+      return pc?{tenantId:tid,publicConfig:pc}:null;
+    });
+  }).catch(function(){return null;});
+})();
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="storefront.css">
+<link rel="stylesheet" href="cart.css">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<style>
+.ms-container {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 7rem 2rem 4rem;
+}
+.ms-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+.ms-header h1 {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 2.4rem;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  margin: 0 0 0.5rem;
+  color: var(--text);
+}
+.ms-header p {
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  font-family: 'DM Sans', sans-serif;
+}
+.ms-card {
+  background: var(--surface-card, var(--cream, #FAF6F0));
+  border: 1px solid var(--border, #F0E8DB);
+  border-radius: 10px;
+  padding: 28px 32px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+.ms-benefits {
+  list-style: none;
+  padding: 0;
+  margin: 24px 0;
+}
+.ms-benefits li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  font-size: 0.92rem;
+  font-family: 'DM Sans', sans-serif;
+  color: var(--text);
+  border-bottom: 1px solid var(--border, #F0E8DB);
+}
+.ms-benefits li:last-child { border-bottom: none; }
+.ms-benefits li .ms-icon {
+  font-size: 1.2rem;
+  flex-shrink: 0;
+  width: 28px;
+  text-align: center;
+}
+.ms-price {
+  text-align: center;
+  margin: 24px 0 8px;
+}
+.ms-price-amount {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 2rem;
+  font-weight: 500;
+  color: var(--text);
+}
+.ms-price-period {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-family: 'DM Sans', sans-serif;
+}
+.ms-cta {
+  display: block;
+  width: 100%;
+  padding: 14px 24px;
+  border: none;
+  border-radius: 8px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+  margin-top: 20px;
+}
+.ms-cta-primary {
+  background: var(--primary, #C4853C);
+  color: #fff;
+}
+.ms-cta-primary:hover { background: #b37832; }
+.ms-cta-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.ms-cta-secondary {
+  background: transparent;
+  border: 1px solid var(--border, #ccc);
+  color: var(--text);
+}
+.ms-cta-secondary:hover { background: rgba(0,0,0,0.04); }
+.ms-status {
+  text-align: center;
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-family: 'DM Sans', sans-serif;
+}
+.ms-status-active {
+  background: rgba(22,163,74,0.08);
+  border: 1px solid rgba(22,163,74,0.2);
+  color: #16a34a;
+}
+.ms-status-cancelled {
+  background: rgba(245,158,11,0.08);
+  border: 1px solid rgba(245,158,11,0.2);
+  color: #b45309;
+}
+.ms-status-expired {
+  background: rgba(156,163,175,0.08);
+  border: 1px solid rgba(156,163,175,0.2);
+  color: #6b7280;
+}
+.ms-signin {
+  text-align: center;
+  padding: 32px 20px;
+}
+.ms-signin-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 28px;
+  border: 1px solid var(--border, #ccc);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: box-shadow 0.15s;
+}
+.ms-signin-btn:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+.ms-detail {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-family: 'DM Sans', sans-serif;
+  margin-top: 8px;
+}
+.ms-success {
+  text-align: center;
+  padding: 32px 20px;
+}
+.ms-success-icon { font-size: 3rem; margin-bottom: 12px; }
+.ms-success h2 {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.6rem;
+  font-weight: 400;
+  margin: 0 0 8px;
+  color: var(--text);
+}
+.ms-success p {
+  font-size: 0.92rem;
+  color: var(--text-secondary);
+  font-family: 'DM Sans', sans-serif;
+}
+.ms-error {
+  text-align: center;
+  padding: 24px;
+  color: #DC3545;
+  font-size: 0.9rem;
+  font-family: 'DM Sans', sans-serif;
+}
+.ms-loading {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-secondary, #9B958E);
+  font-size: 0.9rem;
+  font-family: 'DM Sans', sans-serif;
+}
+.ms-loading::before {
+  content: '';
+  display: block;
+  width: 32px;
+  height: 32px;
+  margin: 0 auto 12px;
+  border: 3px solid var(--border, #F0E8DB);
+  border-top-color: var(--primary, #C4853C);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+  .ms-card { background: #2a2a2a; border-color: #444; }
+  .ms-benefits li { border-color: #444; }
+  .ms-signin-btn { background: #2a2a2a; border-color: #555; }
+  .ms-cta-secondary { border-color: #555; }
+  .ms-cta-secondary:hover { background: rgba(255,255,255,0.06); }
+}
+[data-theme="dark"] .ms-card { background: #2a2a2a; border-color: #444; }
+[data-theme="dark"] .ms-benefits li { border-color: #444; }
+[data-theme="dark"] .ms-signin-btn { background: #2a2a2a; border-color: #555; }
+[data-theme="dark"] .ms-cta-secondary { border-color: #555; }
+[data-theme="dark"] .ms-cta-secondary:hover { background: rgba(255,255,255,0.06); }
+</style>
+</head>
+<body>
+
+<nav id="siteNav"></nav>
+
+<div class="ms-container">
+  <div id="msContent">
+    <div class="ms-loading">Loading membership...</div>
+  </div>
+</div>
+
+<footer id="siteFooter"></footer>
+
+<script src="storefront-tenant.js"></script>
+<script src="storefront-theme.js"></script>
+<script src="storefront-nav.js"></script>
+<script src="tenant-brand.js?v=2"></script>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+
+<script>
+(function() {
+  'use strict';
+
+  var TENANT_ID = null;
+  var FUNCTION_BASE = 'https://us-central1-mast-platform-prod.cloudfunctions.net/';
+  var content = document.getElementById('msContent');
+  var memberConfig = null;
+  var memberStatus = null;
+  var currentUser = null;
+  var db = null;
+  var joiningInProgress = false;
+
+  function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  function formatDate(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    return (d.getMonth() + 1) + '/' + d.getDate() + '/' + d.getFullYear();
+  }
+
+  function formatMoney(amount) {
+    if (amount == null) return '';
+    return '$' + Number(amount).toFixed(2);
+  }
+
+  // ---- Benefits builder ----
+
+  function buildBenefitsHtml(config) {
+    var items = [];
+    if (config.productDiscountPct) {
+      items.push({ icon: '\uD83D\uDED2', text: esc(config.productDiscountPct) + '% off products' });
+    }
+    if (config.serviceDiscountPct) {
+      items.push({ icon: '\u2728', text: esc(config.serviceDiscountPct) + '% off services' });
+    }
+    if (config.classSeatDiscountPct) {
+      items.push({ icon: '\uD83C\uDF93', text: esc(config.classSeatDiscountPct) + '% off class seats' });
+    }
+    if (config.classMaterialsDiscountPct) {
+      items.push({ icon: '\uD83C\uDFA8', text: esc(config.classMaterialsDiscountPct) + '% off class materials' });
+    }
+    if (config.freeShippingThreshold != null) {
+      if (config.freeShippingThreshold === 0) {
+        items.push({ icon: '\uD83D\uDE9A', text: 'Free shipping on every order' });
+      } else {
+        items.push({ icon: '\uD83D\uDE9A', text: 'Free shipping on orders over ' + formatMoney(config.freeShippingThreshold) });
+      }
+    }
+    if (config.loyaltyPointMultiplier && config.loyaltyPointMultiplier > 1) {
+      items.push({ icon: '\u2B50', text: esc(config.loyaltyPointMultiplier) + 'x loyalty points on every purchase' });
+    }
+
+    if (items.length === 0) {
+      items.push({ icon: '\uD83C\uDF1F', text: 'Exclusive member benefits' });
+    }
+
+    var html = '<ul class="ms-benefits">';
+    for (var i = 0; i < items.length; i++) {
+      html += '<li><span class="ms-icon">' + items[i].icon + '</span>' + items[i].text + '</li>';
+    }
+    html += '</ul>';
+    return html;
+  }
+
+  // ---- Renderers ----
+
+  function renderSuccess() {
+    var name = memberConfig ? esc(memberConfig.programName || 'Membership') : 'Membership';
+    content.innerHTML =
+      '<div class="ms-card">' +
+        '<div class="ms-success">' +
+          '<div class="ms-success-icon">\uD83C\uDF89</div>' +
+          '<h2>Welcome to ' + name + '!</h2>' +
+          '<p>Your membership is now active. Benefits will apply automatically on your next order.</p>' +
+          '<a href="/shop.html" class="ms-cta ms-cta-primary" style="display:inline-block;width:auto;margin-top:20px;text-decoration:none;">Start Shopping</a>' +
+        '</div>' +
+      '</div>';
+    // Clean URL
+    try { window.history.replaceState({}, '', window.location.pathname); } catch (e) {}
+  }
+
+  function renderNotAvailable() {
+    content.innerHTML =
+      '<div class="ms-header">' +
+        '<h1>Membership</h1>' +
+        '<p>This shop does not currently offer a membership program.</p>' +
+      '</div>';
+  }
+
+  function renderSignIn() {
+    var name = memberConfig ? esc(memberConfig.programName || 'Membership') : 'Membership';
+    var price = memberConfig && memberConfig.annualPrice ? formatMoney(memberConfig.annualPrice) : '';
+    content.innerHTML =
+      '<div class="ms-header">' +
+        '<h1>' + name + '</h1>' +
+        (price ? '<p>' + price + ' / year</p>' : '') +
+      '</div>' +
+      '<div class="ms-card">' +
+        buildBenefitsHtml(memberConfig) +
+        '<div class="ms-signin">' +
+          '<p style="margin-bottom:16px;font-size:0.9rem;color:var(--text-secondary);">Sign in to join or manage your membership.</p>' +
+          '<button class="ms-signin-btn" onclick="if(window.siteSignIn)window.siteSignIn();">' +
+            '\uD83D\uDD12 Sign in with Google' +
+          '</button>' +
+        '</div>' +
+      '</div>';
+  }
+
+  function renderNonMember() {
+    var name = esc(memberConfig.programName || 'Membership');
+    var price = memberConfig.annualPrice ? formatMoney(memberConfig.annualPrice) : '';
+    content.innerHTML =
+      '<div class="ms-header">' +
+        '<h1>' + name + '</h1>' +
+        '<p>Unlock exclusive benefits on every order.</p>' +
+      '</div>' +
+      '<div class="ms-card">' +
+        buildBenefitsHtml(memberConfig) +
+        (price
+          ? '<div class="ms-price">' +
+              '<span class="ms-price-amount">' + price + '</span>' +
+              '<span class="ms-price-period"> / year</span>' +
+            '</div>'
+          : '') +
+        '<button class="ms-cta ms-cta-primary" id="msJoinBtn" onclick="window._joinMembership()">Join ' + name + '</button>' +
+      '</div>';
+  }
+
+  function renderActiveMember() {
+    var name = esc(memberConfig.programName || 'Membership');
+    var isGracePeriod = memberStatus.status === 'cancelled' && memberStatus.expiryDate;
+    var isExpired = memberStatus.status === 'expired';
+
+    var statusClass = isExpired ? 'ms-status-expired' : (isGracePeriod ? 'ms-status-cancelled' : 'ms-status-active');
+    var statusText = isExpired ? 'Expired' : (isGracePeriod ? 'Cancelled \u2014 active until ' + formatDate(memberStatus.expiryDate) : 'Active Member');
+
+    var html =
+      '<div class="ms-header">' +
+        '<h1>' + name + '</h1>' +
+      '</div>' +
+      '<div class="ms-card">' +
+        '<div class="ms-status ' + statusClass + '">' +
+          '<strong>' + statusText + '</strong>' +
+        '</div>';
+
+    if (!isExpired) {
+      html += buildBenefitsHtml(memberConfig);
+
+      // Details
+      html += '<div style="margin-top:16px;">';
+      if (memberStatus.startDate) {
+        html += '<div class="ms-detail">Member since: ' + formatDate(memberStatus.startDate) + '</div>';
+      }
+      if (!isGracePeriod && memberStatus.renewalDate) {
+        html += '<div class="ms-detail">Next renewal: ' + formatDate(memberStatus.renewalDate) + '</div>';
+      }
+      if (memberStatus.paymentStatus === 'failed') {
+        html += '<div class="ms-detail" style="color:#DC3545;">Payment failed \u2014 please update your payment method.</div>';
+      }
+      html += '</div>';
+
+      // Cancel button (only for active, not already cancelled)
+      if (!isGracePeriod) {
+        html += '<button class="ms-cta ms-cta-secondary" style="margin-top:24px;" onclick="window._cancelMembership()">Cancel Membership</button>';
+      }
+    } else {
+      // Expired — show rejoin
+      html += buildBenefitsHtml(memberConfig);
+      var price = memberConfig.annualPrice ? formatMoney(memberConfig.annualPrice) : '';
+      if (price) {
+        html += '<div class="ms-price">' +
+          '<span class="ms-price-amount">' + price + '</span>' +
+          '<span class="ms-price-period"> / year</span>' +
+        '</div>';
+      }
+      html += '<button class="ms-cta ms-cta-primary" id="msJoinBtn" onclick="window._joinMembership()">Rejoin ' + name + '</button>';
+    }
+
+    html += '</div>';
+    content.innerHTML = html;
+  }
+
+  function renderSquareFallback() {
+    var name = memberConfig ? esc(memberConfig.programName || 'Membership') : 'Membership';
+    content.innerHTML =
+      '<div class="ms-header">' +
+        '<h1>' + name + '</h1>' +
+      '</div>' +
+      '<div class="ms-card">' +
+        (memberConfig ? buildBenefitsHtml(memberConfig) : '') +
+        '<div style="text-align:center;padding:20px 0;">' +
+          '<p style="font-size:0.9rem;color:var(--text-secondary);margin-bottom:12px;">Interested in joining? Contact us to get started.</p>' +
+          '<a href="/about.html" class="ms-cta ms-cta-primary" style="display:inline-block;width:auto;text-decoration:none;">Contact Us</a>' +
+        '</div>' +
+      '</div>';
+  }
+
+  // ---- Actions ----
+
+  window._joinMembership = function() {
+    if (joiningInProgress) return;
+    joiningInProgress = true;
+    var btn = document.getElementById('msJoinBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Redirecting...'; }
+
+    currentUser.getIdToken().then(function(token) {
+      return fetch(FUNCTION_BASE + 'createMembershipCheckout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token,
+          'X-Tenant-ID': TENANT_ID
+        },
+        body: JSON.stringify({ tenantId: TENANT_ID })
+      });
+    })
+    .then(function(resp) { return resp.json(); })
+    .then(function(data) {
+      var result = data.result || data;
+      if (result.sessionUrl) {
+        window.location.href = result.sessionUrl;
+      } else {
+        var errMsg = result.error || data.error || 'Unable to start checkout. Please try again.';
+        alert(errMsg);
+        joiningInProgress = false;
+        if (btn) { btn.disabled = false; btn.textContent = 'Join ' + esc(memberConfig.programName || 'Membership'); }
+      }
+    })
+    .catch(function(err) {
+      console.error('[membership] Join error:', err);
+      alert('Something went wrong. Please try again.');
+      joiningInProgress = false;
+      if (btn) { btn.disabled = false; btn.textContent = 'Join ' + esc(memberConfig.programName || 'Membership'); }
+    });
+  };
+
+  window._cancelMembership = function() {
+    if (!confirm('Cancel your membership? You\u2019ll keep your benefits until the current period ends.')) return;
+
+    currentUser.getIdToken().then(function(token) {
+      return fetch(FUNCTION_BASE + 'cancelMembershipSubscription', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token,
+          'X-Tenant-ID': TENANT_ID
+        },
+        body: JSON.stringify({ tenantId: TENANT_ID })
+      });
+    })
+    .then(function(resp) { return resp.json(); })
+    .then(function(data) {
+      var result = data.result || data;
+      if (result.success) {
+        memberStatus.status = 'cancelled';
+        memberStatus.expiryDate = result.expiryDate;
+        renderActiveMember();
+      } else {
+        alert(result.error || data.error || 'Unable to cancel. Please try again.');
+      }
+    })
+    .catch(function(err) {
+      console.error('[membership] Cancel error:', err);
+      alert('Something went wrong. Please try again.');
+    });
+  };
+
+  // ---- Data loading ----
+
+  function loadMembership(user) {
+    currentUser = user;
+
+    // Check for success redirect
+    var params = new URLSearchParams(window.location.search);
+    if (params.get('success') === '1') {
+      // Load config for the welcome message, then show success
+      db.ref(TENANT_ID + '/admin/membership/config').once('value')
+        .then(function(snap) {
+          memberConfig = snap.val();
+          renderSuccess();
+        })
+        .catch(function() {
+          renderSuccess();
+        });
+      return;
+    }
+
+    // Load config and status in parallel
+    Promise.all([
+      db.ref(TENANT_ID + '/admin/membership/config').once('value'),
+      db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/wallet/membership').once('value'),
+      db.ref(TENANT_ID + '/config/paymentProcessor').once('value')
+    ])
+    .then(function(snaps) {
+      memberConfig = snaps[0].val();
+      memberStatus = snaps[1].val();
+      var processor = snaps[2].val();
+
+      if (!memberConfig || !memberConfig.enabled) {
+        renderNotAvailable();
+        return;
+      }
+
+      // Check if Square-only tenant (no Stripe subscription support yet)
+      if (processor === 'square') {
+        renderSquareFallback();
+        return;
+      }
+
+      // Determine state
+      var today = new Date().toISOString().slice(0, 10);
+      var isActive = memberStatus && memberStatus.status === 'active';
+      var isGracePeriod = memberStatus && memberStatus.status === 'cancelled'
+        && memberStatus.expiryDate && memberStatus.expiryDate > today;
+      var isExpired = memberStatus && memberStatus.status === 'expired';
+
+      if (isActive || isGracePeriod || isExpired) {
+        renderActiveMember();
+      } else {
+        renderNonMember();
+      }
+    })
+    .catch(function(err) {
+      console.error('[membership] Load error:', err);
+      content.innerHTML = '<div class="ms-error">Unable to load membership information. Please try again.</div>';
+    });
+  }
+
+  // ---- Init ----
+
+  window.TENANT_READY.then(function() {
+    TENANT_ID = window.TENANT_ID;
+    document.title = 'Membership \u2014 ' + (window.TENANT_TITLE_SUFFIX ? TENANT_TITLE_SUFFIX() : 'Shop');
+
+    var app;
+    try { app = firebase.app(); } catch (e) { app = firebase.initializeApp(TENANT_FIREBASE_CONFIG); }
+    db = app.database();
+    var auth = app.auth();
+
+    // Check for success redirect before auth (unauthenticated success page is fine)
+    var params = new URLSearchParams(window.location.search);
+    if (params.get('success') === '1') {
+      db.ref(TENANT_ID + '/admin/membership/config').once('value')
+        .then(function(snap) {
+          memberConfig = snap.val();
+          renderSuccess();
+        })
+        .catch(function() { renderSuccess(); });
+      return;
+    }
+
+    auth.onAuthStateChanged(function(user) {
+      if (user && !user.isAnonymous) {
+        loadMembership(user);
+      } else {
+        // Load config for benefits display even when signed out
+        db.ref(TENANT_ID + '/admin/membership/config').once('value')
+          .then(function(snap) {
+            memberConfig = snap.val();
+            if (!memberConfig || !memberConfig.enabled) {
+              renderNotAvailable();
+            } else {
+              renderSignIn();
+            }
+          })
+          .catch(function() { renderNotAvailable(); });
+      }
+    });
+  }).catch(function(err) {
+    console.error('[membership] Tenant failed:', err);
+  });
+})();
+</script>
+<script src="cart.js"></script>
+<script defer src="feedback-widget.js"></script>
+<script defer src="share-widget.js"></script>
+
+</body>
+</html>
