@@ -226,6 +226,7 @@
       classId: item.classId || null,
       passDefinitionId: item.passDefinitionId || null,
       passId: item.passId || null,
+      totalSessions: item.totalSessions || null,
       addedAt: Date.now(),
       // ── Order engine metadata ──
       itemType: meta.itemType,
