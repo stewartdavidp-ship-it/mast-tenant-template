@@ -31,7 +31,10 @@
     passApplied: false,        // whether to apply class passes to this order
     passAssignments: {},        // { cartItemIndex: { passId, passName, coversAmountCents, surchargeAmountCents } } — computed from customerPasses when passApplied=true
     serverBreakdown: null,      // cached response from computeOrderBreakdown engine
-    seatAttendees: {}           // { cartItemIndex: [{ email }] } — attendee emails for multi-seat class items
+    seatAttendees: {},          // { cartItemIndex: [{ email }] } — attendee emails for multi-seat class items
+    membershipConfig: null,     // tenant membership config (if enabled)
+    membershipStatus: null,     // customer membership status from wallet
+    effectiveMember: false      // computed: active or cancelled-but-not-expired
   };
 
   var shippingConfigCache = null; // cached flat-rate config
@@ -39,7 +42,7 @@
   var isSubmitting = false;
   var walletLoadedResolve = null;
   var walletLoadedPromise = new Promise(function(resolve) { walletLoadedResolve = resolve; });
-  var walletLoadPending = 4;       // credits, gift cards, loyalty, passes
+  var walletLoadPending = 5;       // credits, gift cards, loyalty, passes, membership
   function walletLoadDone() { walletLoadPending--; if (walletLoadPending <= 0 && walletLoadedResolve) { walletLoadedResolve(); walletLoadedResolve = null; } }
   var placesLoaded = false;
   var placesApiKey = null;
@@ -1093,6 +1096,12 @@
       html += '<div class="order-total-row discount"><span class="order-total-label">Class Pass</span><span class="order-total-value">-' + formatMoney(b.passDeductionCents / 100) + '</span></div>';
     }
 
+    // Membership discount
+    if (b.membershipApplied && b.membershipDiscountCents > 0) {
+      var memberLabel = (b.membershipData && b.membershipData.programName) ? b.membershipData.programName : 'Member Discount';
+      html += '<div class="order-total-row discount"><span class="order-total-label">' + esc(memberLabel) + '</span><span class="order-total-value">-' + formatMoney(b.membershipDiscountCents / 100) + '</span></div>';
+    }
+
     // Shipping
     var shipLabel = b.shippingLabel || 'Shipping';
     html += '<div class="order-total-row"><span class="order-total-label">' + esc(shipLabel) + '</span><span class="order-total-value">' + (b.shippingCents > 0 ? formatMoney(b.shippingCents / 100) : '--') + '</span></div>';
@@ -1131,7 +1140,9 @@
 
     // Loyalty earning message
     if (b.loyaltyPointsEarned > 0 && b.loyaltyConfig) {
-      html += '<div style="text-align:center;color:#2D7D46;font-size:0.75rem;margin-top:8px;letter-spacing:0.08em;">&#11088; You\'ll earn ' + b.loyaltyPointsEarned + ' ' + esc(b.loyaltyConfig.pointName || 'points') + '</div>';
+      var earnSuffix = (b.membershipData && b.membershipData.loyaltyMultiplier > 1)
+        ? ' (' + b.membershipData.loyaltyMultiplier + 'x Member)' : '';
+      html += '<div style="text-align:center;color:#2D7D46;font-size:0.75rem;margin-top:8px;letter-spacing:0.08em;">&#11088; You\'ll earn ' + b.loyaltyPointsEarned + ' ' + esc(b.loyaltyConfig.pointName || 'points') + esc(earnSuffix) + '</div>';
     }
 
     // Free shipping threshold
@@ -1489,6 +1500,43 @@
       })
       .catch(function(err) {
         console.warn('[checkout] Failed to load loyalty data:', err);
+        walletLoadDone();
+      });
+  }
+
+  // ── Membership: Load config + status ──
+  function loadMembershipData() {
+    checkoutData.membershipConfig = null;
+    checkoutData.membershipStatus = null;
+    checkoutData.effectiveMember = false;
+    var user = window.MastCart && window.MastCart.getCurrentUser();
+    if (!user || user.isAnonymous) { walletLoadDone(); return; }
+    var db = getDb();
+    if (!db) { walletLoadDone(); return; }
+
+    db.ref(TENANT_ID + '/admin/membership/config').once('value')
+      .then(function(cfgSnap) {
+        var config = cfgSnap.val();
+        if (!config || !config.enabled) { walletLoadDone(); return; }
+        checkoutData.membershipConfig = config;
+
+        return db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/wallet/membership').once('value');
+      })
+      .then(function(statusSnap) {
+        if (!statusSnap) { walletLoadDone(); return; }
+        var status = statusSnap.val();
+        if (!status) { walletLoadDone(); return; }
+        checkoutData.membershipStatus = status;
+
+        var today = new Date().toISOString().slice(0, 10);
+        checkoutData.effectiveMember = (
+          status.status === 'active' ||
+          (status.status === 'cancelled' && status.expiryDate && status.expiryDate > today)
+        );
+        walletLoadDone();
+      })
+      .catch(function(err) {
+        console.warn('[checkout] Failed to load membership data:', err);
         walletLoadDone();
       });
   }
@@ -1957,6 +2005,26 @@
 
       html += '<div style="font-size:0.75rem;color:var(--warm-gray-light);margin-top:6px;">Deductions applied in order: passes \u2192 coupons \u2192 loyalty \u2192 gift cards \u2192 credits</div>' +
         '</div>';
+    }
+
+    // Membership upsell banner (non-members only, dismissible)
+    if (!checkoutData.effectiveMember && checkoutData.membershipConfig && checkoutData.membershipConfig.enabled) {
+      var dismissed = false;
+      try { dismissed = localStorage.getItem('mast_membership_upsell_dismissed') === '1'; } catch (_) {}
+      if (!dismissed) {
+        var programName = esc(checkoutData.membershipConfig.programName || 'Membership');
+        var annualPrice = checkoutData.membershipConfig.annualPrice;
+        var priceStr = annualPrice ? formatMoney(annualPrice) + '/year' : '';
+        html += '<div class="review-section" id="coMembershipUpsell" style="background:linear-gradient(135deg,rgba(42,124,111,0.08),rgba(196,133,60,0.08));border:1px solid rgba(42,124,111,0.2);border-radius:8px;padding:14px 16px;margin-bottom:12px;">' +
+          '<div style="display:flex;justify-content:space-between;align-items:flex-start;">' +
+            '<div>' +
+              '<div style="font-size:0.82rem;font-weight:600;color:var(--teal,#2A7C6F);margin-bottom:4px;">' + programName + '</div>' +
+              '<div style="font-size:0.78rem;color:var(--warm-gray,#888);line-height:1.4;">Save on every order with member discounts' + (priceStr ? ' — ' + priceStr : '') + '</div>' +
+            '</div>' +
+            '<button style="background:none;border:none;color:var(--warm-gray,#888);cursor:pointer;font-size:1.1rem;padding:0 4px;line-height:1;" data-co="dismiss-membership-upsell">&times;</button>' +
+          '</div>' +
+        '</div>';
+      }
     }
 
     // Totals — loading placeholder, then engine call
@@ -2525,6 +2593,11 @@
     } else if (action === 'toggle-pass') {
       checkoutData.passApplied = !!btn.checked;
       if (currentStep === 'review') { renderReview(); } else { debouncedBreakdownRefresh(); }
+      return;
+    } else if (action === 'dismiss-membership-upsell') {
+      try { localStorage.setItem('mast_membership_upsell_dismissed', '1'); } catch (_) {}
+      var upsell = document.getElementById('coMembershipUpsell');
+      if (upsell) upsell.remove();
       return;
     } else if (action === 'apply-coupon') {
       applyCoupon();
@@ -3210,6 +3283,7 @@
       loadLoyaltyData();
       loadSavedCoupons();
       loadCustomerPasses();
+      loadMembershipData();
       // Load Google Places lazily, then render address
       loadGooglePlaces(function () {
         renderAddress();
