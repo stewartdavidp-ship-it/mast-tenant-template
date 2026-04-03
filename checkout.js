@@ -1338,10 +1338,15 @@
           // Store class category info for pass matching
           var classMap = {};
           classes.forEach(function(c) { if (c.val) classMap[c.id] = c.val; });
-          // Attach category to cart items
+          // Attach class metadata to cart items for pass matching
           cartItems.forEach(function(it) {
             if (it.classId && classMap[it.classId]) {
-              it._classCategory = classMap[it.classId].category || null;
+              var cls = classMap[it.classId];
+              it._classCategory = cls.category || null;
+              // For series: ensure totalSessions is set from class data (cart item may not have it)
+              if (cls.type === 'series' && cls.seriesInfo && cls.seriesInfo.totalSessions && !it.totalSessions) {
+                it.totalSessions = cls.seriesInfo.totalSessions;
+              }
             }
           });
 
