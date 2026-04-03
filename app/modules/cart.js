@@ -730,34 +730,38 @@
   var currentMemberFilter = 'all';
 
   function loadMembershipAdmin() {
-    console.log('[Membership] loadMembershipAdmin called');
     var container = document.getElementById('membershipAdmin');
-    if (!container) { console.log('[Membership] container not found'); return; }
+    if (!container) return;
 
     var tenantId = MastDB.tenantId();
-    if (!db || !tenantId) return;
-    console.log('[Membership] db:', !!db, 'tenantId:', tenantId);
-    if (!db || !tenantId) return;
+    if (!db || !tenantId) {
+      container.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);"><p>Not connected.</p></div>';
+      return;
+    }
 
     container.innerHTML = '<div class="loading">Loading membership...</div>';
 
-    Promise.all([
-      db.ref(tenantId + '/admin/membership/config').once('value'),
-      db.ref(tenantId + '/customers').orderByChild('membership/status').limitToLast(200).once('value')
-    ]).then(function(snaps) {
-      console.log('[Membership] data loaded, config:', JSON.stringify(snaps[0].val()), 'customerKeys:', Object.keys(snaps[1].val() || {}).length);
-      membershipConfig = snaps[0].val() || {};
-      var custData = snaps[1].val() || {};
-      membershipMembers = [];
-      Object.keys(custData).forEach(function(uid) {
-        var c = custData[uid];
-        if (c.membership) {
-          membershipMembers.push(Object.assign({ _uid: uid }, c.membership, { email: c.email || c.membership.email || uid }));
-        }
+    // Load config first, then members separately (customers query may be slow/empty)
+    db.ref(tenantId + '/admin/membership/config').once('value').then(function(configSnap) {
+      membershipConfig = configSnap.val() || {};
+      // Try loading members but don't block render on it
+      return db.ref(tenantId + '/customers').orderByChild('membership/status').limitToLast(200).once('value').then(function(custSnap) {
+        var custData = custSnap.val() || {};
+        membershipMembers = [];
+        Object.keys(custData).forEach(function(uid) {
+          var c = custData[uid];
+          if (c.membership) {
+            membershipMembers.push(Object.assign({ _uid: uid }, c.membership, { email: c.email || c.membership.email || uid }));
+          }
+        });
+        membershipMembers.sort(function(a, b) {
+          return (b.startDate || '').localeCompare(a.startDate || '');
+        });
+      }).catch(function(custErr) {
+        console.warn('[Membership] Could not load customer list:', custErr.message);
+        membershipMembers = [];
       });
-      membershipMembers.sort(function(a, b) {
-        return (b.startDate || '').localeCompare(a.startDate || '');
-      });
+    }).then(function() {
       renderMembershipAdmin(container);
     }).catch(function(err) {
       console.error('[Membership] load error:', err);
