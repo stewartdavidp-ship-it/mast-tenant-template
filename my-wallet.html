@@ -272,7 +272,13 @@
     var loyaltyEnabled = walletData.loyalty && walletData.loyalty.totalPoints != null;
     var loyaltyPoints = loyaltyEnabled ? (walletData.loyalty.totalPoints || 0) : 0;
     var pointName = (walletData.loyalty && walletData.loyalty.pointName) || 'pts';
-    var activePasses = walletData.passes.filter(function(p) { return p.status === 'active'; }).length;
+    var activePassList = walletData.passes.filter(function(p) { return p.status === 'active'; });
+    var totalSessionsLeft = 0;
+    var hasUnlimitedPass = false;
+    activePassList.forEach(function(p) {
+      if (p.visitsRemaining === null || p.visitsRemaining === undefined) { hasUnlimitedPass = true; }
+      else { totalSessionsLeft += (p.visitsRemaining || 0); }
+    });
 
     // Build balance sections — always show dollars, conditionally show loyalty + passes
     var sections = [];
@@ -288,9 +294,10 @@
       '</div>');
     }
 
-    if (activePasses > 0) {
+    if (activePassList.length > 0) {
+      var sessDisplay = hasUnlimitedPass ? '&#8734;' : String(totalSessionsLeft);
       sections.push('<div style="text-align:center;">' +
-        '<div class="mw-balance-amount" style="color:var(--teal,#2A7C6F);">' + activePasses + ' <span style="font-size:0.6em;">pass' + (activePasses !== 1 ? 'es' : '') + '</span></div>' +
+        '<div class="mw-balance-amount" style="color:var(--teal,#2A7C6F);">' + sessDisplay + ' <span style="font-size:0.6em;">session' + (totalSessionsLeft !== 1 || hasUnlimitedPass ? 's' : '') + '</span></div>' +
         '<div class="mw-balance-label">Passes</div>' +
       '</div>');
     }
@@ -507,13 +514,18 @@
         if (!t) return;
         var isRestore = t.type === 'restored';
         var visits = Math.abs(t.visits || t.visitsUsed || 1);
+        var balanceNote = '';
+        if (t.previousRemaining != null && t.newRemaining != null) {
+          balanceNote = t.previousRemaining + ' → ' + t.newRemaining + ' remaining';
+        }
         allTxns.push({
           date: t.createdAt || t.timestamp || '',
           category: 'Pass',
           description: (isRestore ? 'Restored' : 'Used') + ' — ' + esc(p.passDefinitionName || 'Pass') + (t.reason ? ' (' + t.reason + ')' : ''),
           amount: (isRestore ? '+' : '-') + visits + ' visit' + (visits !== 1 ? 's' : ''),
           positive: isRestore,
-          orderId: t.orderId || null
+          orderId: t.orderId || null,
+          balanceNote: balanceNote
         });
       });
     });
@@ -586,7 +598,10 @@
           '<div style="font-size:0.88rem;margin-top:2px;">' + esc(txn.description) + '</div>' +
           '<div style="font-size:0.75rem;color:var(--warm-gray,#888);margin-top:4px;">' + formatDate(txn.date) + '</div>' +
         '</div>' +
-        '<div style="font-size:0.95rem;font-weight:600;color:' + (txn.positive ? 'var(--teal,#2A7C6F)' : 'var(--warm-gray,#888)') + ';white-space:nowrap;">' + esc(txn.amount) + '</div>' +
+        '<div style="text-align:right;">' +
+          '<div style="font-size:0.95rem;font-weight:600;color:' + (txn.positive ? 'var(--teal,#2A7C6F)' : 'var(--warm-gray,#888)') + ';white-space:nowrap;">' + esc(txn.amount) + '</div>' +
+          (txn.balanceNote ? '<div style="font-size:0.7rem;color:var(--warm-gray-light,#666);margin-top:2px;">' + esc(txn.balanceNote) + '</div>' : '') +
+        '</div>' +
       '</div>';
     });
     html += '</div>';
