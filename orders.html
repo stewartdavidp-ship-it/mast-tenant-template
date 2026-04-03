@@ -1979,7 +1979,9 @@ window.TENANT_READY.then(function() {
     var taxOnReturned = !order.taxExempt ? Math.round(effectiveValue * taxRate * 100) / 100 : 0;
 
     var restockingFeePct = (_termsConfig && _termsConfig.restockingFeePercent) || 0;
+    var restockingFeeMaxCents = (_termsConfig && _termsConfig.restockingFeeMaxCents) || 0;
     var restockingFee = Math.round(effectiveValue * restockingFeePct / 100 * 100) / 100;
+    if (restockingFeeMaxCents > 0 && restockingFee > restockingFeeMaxCents / 100) restockingFee = restockingFeeMaxCents / 100;
     var refundAmount = effectiveValue + taxOnReturned - restockingFee;
 
     var refundMethod = 'Original payment method';

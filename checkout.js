@@ -30,7 +30,8 @@
     customerPasses: [],        // [{ _id, passDefinitionId, visitsRemaining, expiresAt, status, priority, _def }] active passes with definitions
     passApplied: false,        // whether to apply class passes to this order
     passAssignments: {},        // { cartItemIndex: { passId, passName, coversAmountCents, surchargeAmountCents } } — computed from customerPasses when passApplied=true
-    serverBreakdown: null       // cached response from computeOrderBreakdown engine
+    serverBreakdown: null,      // cached response from computeOrderBreakdown engine
+    seatAttendees: {}           // { cartItemIndex: [{ email }] } — attendee emails for multi-seat class items
   };
 
   var shippingConfigCache = null; // cached flat-rate config
@@ -327,7 +328,7 @@
     return Object.keys(wd).length > 0 ? wd : null;
   }
 
-  // ── Order Breakdown Engine Call ──
+  // ── Order Breakdown Engine Call (with 1 retry) ──
   function callBreakdownEngine(callback) {
     var items = window.MastCart.getItems();
     var user = window.MastCart.getCurrentUser();
@@ -347,16 +348,29 @@
       couponCode: checkoutData.coupon ? checkoutData.coupon.code : null,
       walletDeductions: buildWalletDeductionsPayload()
     };
-    callFunction('computeOrderBreakdown', payload, function(result) {
-      if (result && result.success && result.breakdown) {
-        checkoutData.serverBreakdown = result.breakdown;
-        callback(result.breakdown);
-      } else {
-        // Fallback: render client-side totals if engine fails
-        console.warn('Order engine error:', result && result.error ? result.error : 'Unknown error');
-        callback(null);
-      }
-    });
+    function attempt(retryCount) {
+      callFunction('computeOrderBreakdown', payload, function(result) {
+        if (result && result.success && result.breakdown) {
+          checkoutData.serverBreakdown = result.breakdown;
+          callback(result.breakdown);
+        } else if (retryCount > 0) {
+          console.warn('Order engine failed, retrying...', result && result.error ? result.error : '');
+          setTimeout(function() { attempt(retryCount - 1); }, 1500);
+        } else {
+          console.error('Order engine failed after retry:', result && result.error ? result.error : 'Unknown error');
+          callback(null);
+        }
+      });
+    }
+    attempt(1);
+  }
+
+  // ── Error display when engine fails (no client-side fallback) ──
+  function buildTotalsErrorHtml() {
+    return '<div class="order-totals" style="text-align:center;padding:16px;">' +
+      '<div style="color:var(--error-red, #E53935);font-size:0.9rem;margin-bottom:8px;">Unable to calculate order totals</div>' +
+      '<button class="checkout-btn-secondary" style="font-size:0.82rem;padding:6px 16px;" onclick="window.MastCheckout.retryEngine()">Try Again</button>' +
+    '</div>';
   }
 
   // ── Debounced engine call for wallet toggles ──
@@ -376,7 +390,7 @@
             totalsContainer.innerHTML = buildTotalsFromBreakdown(breakdown);
             syncCouponMessage(breakdown);
           } else {
-            totalsContainer.innerHTML = buildTotalsHtml(calcSubtotal());
+            totalsContainer.innerHTML = buildTotalsErrorHtml();
           }
         }
       });
@@ -1002,7 +1016,7 @@
           callBreakdownEngine(function(breakdown) {
             var tc = document.querySelector('.engine-totals-container');
             if (tc) {
-              tc.innerHTML = breakdown ? buildTotalsFromBreakdown(breakdown) : buildTotalsHtml(subtotal);
+              tc.innerHTML = breakdown ? buildTotalsFromBreakdown(breakdown) : buildTotalsErrorHtml();
             }
             if (breakdown) syncCouponMessage(breakdown);
           });
@@ -1052,107 +1066,6 @@
       }
       debouncedBreakdownRefresh();
     });
-  }
-
-  function buildTotalsHtml(subtotal) {
-    var shipCost = checkoutData.shippingMethod ? checkoutData.shippingMethod.price : 0;
-    var couponDiscount = checkoutData.coupon ? checkoutData.coupon.discount : 0;
-
-    // 1. Pass deduction (applied to subtotal before tax/coupons)
-    var passDeductionCents = 0;
-    if (checkoutData.passApplied && Object.keys(checkoutData.passAssignments).length > 0) {
-      Object.keys(checkoutData.passAssignments).forEach(function(idx) {
-        passDeductionCents += checkoutData.passAssignments[idx].coversAmountCents || 0;
-      });
-    }
-    var passDeductionDollars = passDeductionCents / 100;
-    var subtotalAfterPass = Math.max(0, subtotal - passDeductionDollars);
-
-    // Tax on post-pass, post-coupon amount
-    var taxableAmount = Math.max(0, subtotalAfterPass - couponDiscount);
-    var tax = Math.round(taxableAmount * checkoutData.taxRate * 100) / 100;
-    // ── Deduction cascade: Passes → Coupons → Loyalty → Gift Cards → Credits ──
-    var runningCents = Math.round((subtotalAfterPass + tax + shipCost - couponDiscount) * 100);
-
-    // 2. Loyalty
-    var loyaltyDollars = 0;
-    if (checkoutData.loyaltyApplied && checkoutData.loyaltyBalance && checkoutData.loyaltyConfig) {
-      var loyaltyCents = calcLoyaltyRedemptionCents();
-      loyaltyDollars = Math.min(loyaltyCents, Math.max(0, runningCents)) / 100;
-      runningCents -= Math.round(loyaltyDollars * 100);
-    }
-
-    // 3. Gift Cards (expiring soonest first)
-    var giftCardDollars = 0;
-    if (checkoutData.walletGiftCardApplied && checkoutData.walletGiftCards.length > 0) {
-      var totalGcCents = checkoutData.walletGiftCards.reduce(function(sum, g) { return sum + (g.remainingCents || 0); }, 0);
-      var gcUseCents = Math.min(totalGcCents, Math.max(0, runningCents));
-      giftCardDollars = gcUseCents / 100;
-      runningCents -= gcUseCents;
-    }
-
-    // 4. Credits (FIFO, oldest first)
-    var walletCreditDollars = 0;
-    if (checkoutData.walletCreditApplied && checkoutData.walletCredits.length > 0) {
-      var totalCreditCents = checkoutData.walletCredits.reduce(function(sum, c) { return sum + (c.remainingCents != null ? c.remainingCents : (c.amountCents || 0)); }, 0);
-      var creditUseCents = Math.min(totalCreditCents, Math.max(0, runningCents));
-      walletCreditDollars = creditUseCents / 100;
-      runningCents -= creditUseCents;
-    }
-
-    var total = Math.max(0, runningCents) / 100;
-    if (total < 0) total = 0;
-
-    var html = '<div class="order-totals">';
-    html += '<div class="order-total-row"><span class="order-total-label">Subtotal</span><span class="order-total-value">' + formatMoney(subtotal) + '</span></div>';
-
-    if (passDeductionDollars > 0) {
-      html += '<div class="order-total-row discount"><span class="order-total-label">Class Pass</span><span class="order-total-value">-' + formatMoney(passDeductionDollars) + '</span></div>';
-    }
-
-    html += '<div class="order-total-row"><span class="order-total-label">Shipping</span><span class="order-total-value">' + (shipCost ? formatMoney(shipCost) : '--') + '</span></div>';
-
-    var taxLabel = 'Tax';
-    if (checkoutData.taxState) taxLabel += ' (' + checkoutData.taxState + ')';
-    html += '<div class="order-total-row"><span class="order-total-label">' + esc(taxLabel) + '</span><span class="order-total-value">' + formatMoney(tax) + '</span></div>';
-
-    if (couponDiscount > 0) {
-      html += '<div class="order-total-row discount"><span class="order-total-label">Coupon (' + esc(checkoutData.coupon.code) + ')</span><span class="order-total-value">-' + formatMoney(couponDiscount) + '</span></div>';
-    }
-
-    if (loyaltyDollars > 0) {
-      var loyaltyLabel = checkoutData.loyaltyConfig ? checkoutData.loyaltyConfig.pointName : 'Loyalty';
-      html += '<div class="order-total-row discount"><span class="order-total-label">' + esc(loyaltyLabel) + '</span><span class="order-total-value">-' + formatMoney(loyaltyDollars) + '</span></div>';
-    }
-
-    if (giftCardDollars > 0) {
-      html += '<div class="order-total-row discount"><span class="order-total-label">Gift Card</span><span class="order-total-value">-' + formatMoney(giftCardDollars) + '</span></div>';
-    }
-
-    if (walletCreditDollars > 0) {
-      html += '<div class="order-total-row discount"><span class="order-total-label">Store Credit</span><span class="order-total-value">-' + formatMoney(walletCreditDollars) + '</span></div>';
-    }
-
-    html += '<div class="order-total-row grand-total"><span class="order-total-label">Total</span><span class="order-total-value">' + formatMoney(total) + '</span></div>';
-    var totFreeThreshold = getShippingThreshold();
-    if (totFreeThreshold != null) {
-      if (subtotal >= totFreeThreshold) {
-        html += '<div style="text-align:center;color:#2D7D46;font-size:0.75rem;margin-top:8px;letter-spacing:0.08em;">&#10003; FREE SHIPPING</div>';
-      } else if (subtotal > 0) {
-        var away = (totFreeThreshold - subtotal).toFixed(2);
-        html += '<div style="text-align:center;color:var(--warm-gray,#9B958E);font-size:0.75rem;margin-top:8px;letter-spacing:0.08em;">You\'re $' + away + ' away from free shipping!</div>';
-      }
-    }
-    html += '</div>';
-    return html;
-  }
-
-  function updateTotals() {
-    var container = document.querySelector('.order-totals');
-    if (!container) return;
-    var parent = container.parentNode;
-    var subtotal = calcSubtotal();
-    parent.innerHTML = buildTotalsHtml(subtotal);
   }
 
   // ── Build Totals from Server Breakdown (pure renderer, no math) ──
@@ -1855,6 +1768,40 @@
     }
     html += '</div>';
 
+    // Multi-seat attendee emails (class items with qty > 1)
+    var multiSeatItems = [];
+    for (var ms = 0; ms < items.length; ms++) {
+      if (items[ms].bookingType === 'class' && (items[ms].qty || 1) > 1) {
+        multiSeatItems.push({ idx: ms, item: items[ms] });
+      }
+    }
+    if (multiSeatItems.length > 0) {
+      html += '<div class="review-section">';
+      html += '<div class="review-section-header"><span class="review-section-title">Seat Attendees</span></div>';
+      html += '<div style="font-size:0.78rem;color:var(--warm-gray-light);margin-bottom:10px;">Enter an email for each seat. You may use your own email for all seats now &mdash; each seat will need a unique email entered prior to class start.</div>';
+      for (var msi = 0; msi < multiSeatItems.length; msi++) {
+        var msItem = multiSeatItems[msi];
+        var msQty = msItem.item.qty || 1;
+        html += '<div style="margin-bottom:12px;"><div style="font-size:0.85rem;font-weight:500;margin-bottom:6px;">' + esc(msItem.item.name) + ' (' + msQty + ' seats)</div>';
+        // Initialize attendee data if not set
+        if (!checkoutData.seatAttendees[msItem.idx]) {
+          checkoutData.seatAttendees[msItem.idx] = [];
+          for (var sq = 0; sq < msQty; sq++) {
+            checkoutData.seatAttendees[msItem.idx].push({ email: checkoutData.email || '' });
+          }
+        }
+        for (var seat = 0; seat < msQty; seat++) {
+          var seatEmail = (checkoutData.seatAttendees[msItem.idx][seat] || {}).email || '';
+          html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' +
+            '<span style="font-size:0.78rem;color:var(--warm-gray);min-width:50px;">Seat ' + (seat + 1) + '</span>' +
+            '<input type="email" class="checkout-input" data-co="seat-email" data-item-idx="' + msItem.idx + '" data-seat-idx="' + seat + '" value="' + esc(seatEmail) + '" placeholder="Email address" style="flex:1;padding:6px 10px;font-size:0.85rem;">' +
+          '</div>';
+        }
+        html += '</div>';
+      }
+      html += '</div>';
+    }
+
     // Shipping address
     html += '<div class="review-section">' +
       '<div class="review-section-header">' +
@@ -2004,6 +1951,18 @@
 
     body.innerHTML = html;
 
+    // Attach seat attendee email listeners
+    var seatInputs = body.querySelectorAll('[data-co="seat-email"]');
+    for (var si = 0; si < seatInputs.length; si++) {
+      seatInputs[si].addEventListener('blur', function() {
+        var itemIdx = parseInt(this.getAttribute('data-item-idx'), 10);
+        var seatIdx = parseInt(this.getAttribute('data-seat-idx'), 10);
+        if (checkoutData.seatAttendees[itemIdx] && checkoutData.seatAttendees[itemIdx][seatIdx]) {
+          checkoutData.seatAttendees[itemIdx][seatIdx].email = this.value.trim();
+        }
+      });
+    }
+
     // Attach payment method change listeners
     if (hasWholesale) {
       var radios = body.querySelectorAll('[data-co="pay-method"]');
@@ -2019,7 +1978,7 @@
     callBreakdownEngine(function(breakdown) {
       var tc = document.querySelector('.engine-totals-container');
       if (tc) {
-        tc.innerHTML = breakdown ? buildTotalsFromBreakdown(breakdown) : buildTotalsHtml(subtotal);
+        tc.innerHTML = breakdown ? buildTotalsFromBreakdown(breakdown) : buildTotalsErrorHtml();
       }
       if (breakdown) syncCouponMessage(breakdown);
     });
@@ -2078,6 +2037,10 @@
           mapped.passCoversAmountCents = passAssignment.coversAmountCents;
           mapped.surchargeAmountCents = passAssignment.surchargeAmountCents;
           mapped.passVisitsUsed = passAssignment.visitsUsed || 1;
+        }
+        // Attach seat attendee emails for multi-seat class items
+        if (checkoutData.seatAttendees[idx] && checkoutData.seatAttendees[idx].length > 0) {
+          mapped.seatAttendees = checkoutData.seatAttendees[idx];
         }
         return mapped;
       }),
@@ -2508,7 +2471,8 @@
       taxRate: 0,
       taxState: '',
       walletCredits: [],
-      walletCreditApplied: false
+      walletCreditApplied: false,
+      seatAttendees: {}
     };
     var titleEl = document.querySelector('.cart-drawer-title');
     if (titleEl) titleEl.textContent = 'Your Cart';
@@ -3239,6 +3203,14 @@
     },
     cancel: cancelCheckout,
     checkPaymentReturn: checkPaymentReturn,
+    retryEngine: function() {
+      var tc = document.querySelector('.engine-totals-container');
+      if (tc) tc.innerHTML = buildTotalsLoadingHtml();
+      callBreakdownEngine(function(breakdown) {
+        if (tc) tc.innerHTML = breakdown ? buildTotalsFromBreakdown(breakdown) : buildTotalsErrorHtml();
+        if (breakdown) syncCouponMessage(breakdown);
+      });
+    },
     // Expose CSV helpers for orders page
     watchOrderAndDownloadCSV: watchOrderAndDownloadCSV,
     generatePirateShipCSV: generatePirateShipCSV,
