@@ -493,10 +493,44 @@
     var app; try { app = firebase.app(); } catch (e) { app = firebase.initializeApp(TENANT_FIREBASE_CONFIG); }
     var db = app.database();
 
-    Promise.all([
+    // Load class, sessions, and membership data in parallel
+    var auth = (function() { try { return firebase.app().auth(); } catch(e) { return firebase.initializeApp(TENANT_FIREBASE_CONFIG).auth(); } })();
+    var currentUid = auth.currentUser && !auth.currentUser.isAnonymous ? auth.currentUser.uid : null;
+
+    var fetches = [
       db.ref(TENANT_ID + '/public/classes/' + classId).once('value'),
-      db.ref(TENANT_ID + '/public/classSessions').orderByChild('classId').equalTo(classId).once('value')
-    ]).then(function(results) {
+      db.ref(TENANT_ID + '/public/classSessions').orderByChild('classId').equalTo(classId).once('value'),
+      db.ref(TENANT_ID + '/admin/membership/config').once('value'),
+      currentUid
+        ? db.ref(TENANT_ID + '/public/accounts/' + currentUid + '/wallet/membership').once('value')
+        : Promise.resolve({ val: function() { return null; } })
+    ];
+
+    // Also listen for auth changes to re-render with membership
+    auth.onAuthStateChanged(function(user) {
+      if (user && !user.isAnonymous && !currentUid) {
+        currentUid = user.uid;
+        // Reload membership status for newly signed-in user
+        db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/wallet/membership').once('value')
+          .then(function(snap) {
+            window._cdMemberStatus = snap.val();
+            window._cdEffectiveMember = computeEffectiveMember(window._cdMemberConfig, snap.val());
+            // Re-render if already loaded
+            if (window._cdClass && window._cdSessions) {
+              renderDetail(window._cdClass, window._cdSessions);
+            }
+          });
+      }
+    });
+
+    function computeEffectiveMember(config, status) {
+      if (!config || !config.enabled || !status) return false;
+      var today = todayStr();
+      return status.status === 'active' ||
+        (status.status === 'cancelled' && status.expiryDate && status.expiryDate > today);
+    }
+
+    Promise.all(fetches).then(function(results) {
       var cls = results[0].val();
       if (!cls || (cls.status !== 'active' && cls.status !== 'published')) {
         document.getElementById('classDetailContainer').innerHTML =
@@ -516,6 +550,13 @@
       }).sort(function(a, b) {
         return (a.date + a.startTime).localeCompare(b.date + b.startTime);
       });
+
+      // Store membership data globally for re-render on auth change
+      window._cdMemberConfig = results[2].val();
+      window._cdMemberStatus = results[3].val();
+      window._cdEffectiveMember = computeEffectiveMember(window._cdMemberConfig, window._cdMemberStatus);
+      window._cdClass = cls;
+      window._cdSessions = sessions;
 
       document.title = cls.name + ' \u2014 ' + (window.TENANT_TITLE_SUFFIX ? TENANT_TITLE_SUFFIX() : 'Studio');
       renderDetail(cls, sessions);
@@ -600,6 +641,51 @@
       html += '</div>';
     }
 
+    // Membership priority enrollment check
+    var memberConfig = window._cdMemberConfig;
+    var effectiveMember = window._cdEffectiveMember;
+    var regOpensAt = cls.enrollmentOpenDate || null; // ISO date string e.g. "2026-04-10"
+    var priorityDays = memberConfig && memberConfig.priorityEnrollmentDays ? memberConfig.priorityEnrollmentDays : 0;
+    var regState = 'open'; // 'open' | 'early_access' | 'locked'
+    var memberOpensAt = null;
+
+    if (regOpensAt) {
+      var today = todayStr();
+      if (priorityDays > 0) {
+        var regDate = new Date(regOpensAt + 'T00:00:00');
+        var earlyDate = new Date(regDate.getTime() - priorityDays * 86400000);
+        memberOpensAt = earlyDate.getFullYear() + '-' + String(earlyDate.getMonth() + 1).padStart(2, '0') + '-' + String(earlyDate.getDate()).padStart(2, '0');
+      }
+      if (today >= regOpensAt) {
+        regState = 'open';
+      } else if (memberOpensAt && today >= memberOpensAt) {
+        regState = 'early_access';
+      } else {
+        regState = 'locked';
+      }
+    }
+
+    // Registration gate banner
+    if (regState === 'early_access' && effectiveMember) {
+      html += '<div style="background:rgba(42,124,111,0.08);border:1px solid rgba(42,124,111,0.2);border-radius:8px;padding:10px 16px;margin-bottom:16px;font-size:0.85rem;color:var(--teal,#2A7C6F);font-family:\'DM Sans\',sans-serif;">' +
+        '<span class="status-badge" style="background:#2A7C6F;color:#fff;margin-right:8px;">Early Access</span>' +
+        'Registration opens to everyone on ' + formatSessionDate(regOpensAt) + '. You have priority access as a member!' +
+      '</div>';
+    } else if (regState === 'early_access' && !effectiveMember) {
+      html += '<div style="background:rgba(196,133,60,0.08);border:1px solid rgba(196,133,60,0.2);border-radius:8px;padding:10px 16px;margin-bottom:16px;font-size:0.85rem;color:var(--warm-gray,#6B6560);font-family:\'DM Sans\',sans-serif;">' +
+        'Registration opens ' + formatSessionDate(regOpensAt) + '. ' +
+        '<a href="/membership.html" style="color:var(--teal,#2A7C6F);text-decoration:underline;">Members get early access</a>' +
+      '</div>';
+    } else if (regState === 'locked') {
+      var lockedDate = memberOpensAt && priorityDays > 0
+        ? 'Member early access opens ' + formatSessionDate(memberOpensAt) + '. '
+        : '';
+      html += '<div style="background:rgba(156,163,175,0.08);border:1px solid rgba(156,163,175,0.2);border-radius:8px;padding:10px 16px;margin-bottom:16px;font-size:0.85rem;color:var(--warm-gray,#6B6560);font-family:\'DM Sans\',sans-serif;">' +
+        'Registration opens ' + formatSessionDate(regOpensAt) + '. ' + lockedDate +
+        (priorityDays > 0 ? '<a href="/membership.html" style="color:var(--teal,#2A7C6F);text-decoration:underline;">Learn about membership</a>' : '') +
+      '</div>';
+    }
+
     // Series enrollment CTA
     var isSeries = cls.type === 'series' && cls.seriesInfo;
     var seriesPrice = isSeries && cls.seriesInfo.seriesPriceCents ? cls.seriesInfo.seriesPriceCents : 0;
@@ -610,12 +696,20 @@
     var firstSessionDate = sessions.length > 0 ? sessions[0].date : null;
     var seriesStarted = firstSessionDate && firstSessionDate < todayStr();
 
+    // Registration gate: can the user book right now?
+    var canBook = regState === 'open' || (regState === 'early_access' && effectiveMember);
+
     if (isSeries && sessions.length > 0) {
       if (seriesStarted) {
         html += '<div class="cd-series-cta">' +
           '<div class="cd-series-started">This series has already started' +
           (allowDropIn ? ' &mdash; drop-in sessions available below' : '') +
           '</div></div>';
+      } else if (!canBook) {
+        // Registration not yet open for this user
+        html += '<div class="cd-series-cta">' +
+          '<button class="cd-series-btn" disabled style="opacity:0.5;cursor:not-allowed;">Enroll in Full Series &mdash; ' + formatPrice(seriesPrice) + '</button>' +
+          '</div>';
       } else if (seriesSpotsLeft <= 0) {
         var seriesWaitlisted = cls.seriesWaitlisted || 0;
         html += '<div class="cd-series-cta">' +
@@ -649,7 +743,8 @@
 
         // For series without drop-in, don't show per-session Book buttons
         // Also only show drop-in for future sessions (not past)
-        var showBookBtn = (!isSeries || allowDropIn) && s.date >= todayStr();
+        // Gate by registration state: if registration not open for this user, hide book buttons
+        var showBookBtn = canBook && (!isSeries || allowDropIn) && s.date >= todayStr();
 
         var sessionWaitlisted = s.waitlisted || 0;
         html += '<div class="cd-session-row">' +

@@ -532,9 +532,52 @@ window.TENANT_READY.then(function() {
     container.innerHTML = html;
   }
 
+  // Membership state for early product access
+  var _shopMemberConfig = null;
+  var _shopEffectiveMember = false;
+
   (function() {
     var app; try { app = firebase.app(); } catch (e) { app = firebase.initializeApp(TENANT_FIREBASE_CONFIG); }
     var db = app.database();
+
+    // Load membership data for early product access gating
+    (function() {
+      var auth = app.auth();
+      var user = auth.currentUser;
+      if (user && !user.isAnonymous) {
+        Promise.all([
+          db.ref(TENANT_ID + '/admin/membership/config').once('value'),
+          db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/wallet/membership').once('value')
+        ]).then(function(snaps) {
+          _shopMemberConfig = snaps[0].val();
+          var status = snaps[1].val();
+          if (_shopMemberConfig && _shopMemberConfig.enabled && status) {
+            var today = new Date().toISOString().slice(0, 10);
+            _shopEffectiveMember = status.status === 'active' ||
+              (status.status === 'cancelled' && status.expiryDate && status.expiryDate > today);
+          }
+        }).catch(function() {});
+      }
+      // Listen for auth changes (user signs in after page load)
+      auth.onAuthStateChanged(function(u) {
+        if (u && !u.isAnonymous && !_shopEffectiveMember) {
+          Promise.all([
+            db.ref(TENANT_ID + '/admin/membership/config').once('value'),
+            db.ref(TENANT_ID + '/public/accounts/' + u.uid + '/wallet/membership').once('value')
+          ]).then(function(snaps) {
+            _shopMemberConfig = snaps[0].val();
+            var status = snaps[1].val();
+            if (_shopMemberConfig && _shopMemberConfig.enabled && status) {
+              var today = new Date().toISOString().slice(0, 10);
+              _shopEffectiveMember = status.status === 'active' ||
+                (status.status === 'cancelled' && status.expiryDate && status.expiryDate > today);
+              // Re-render if products already loaded
+              if (allShopItems.length > 0) renderShop(null);
+            }
+          }).catch(function() {});
+        }
+      });
+    })();
 
     // Load shop header background image from gallery
     db.ref(TENANT_ID + '/public/gallery').orderByChild('section').equalTo('shop').once('value').then(function(snap) {
@@ -573,6 +616,20 @@ window.TENANT_READY.then(function() {
           if (SHOP_IDS.length === 0) return p.status === 'active' || !p.status;
           var cats = p.categories || [];
           if (!cats.some(function(c) { return SHOP_IDS.indexOf(c) !== -1; })) return false;
+          // Early product access gate: products with future publishDate visible only to members
+          if (p.publishDate) {
+            var pubDate = p.publishDate;
+            var nowStr = new Date().toISOString().slice(0, 10);
+            if (pubDate > nowStr) {
+              if (!_shopEffectiveMember) return false;
+              var earlyHours = _shopMemberConfig && _shopMemberConfig.earlyProductAccessHours;
+              if (!earlyHours) return false;
+              var accessTime = new Date(new Date(pubDate + 'T00:00:00').getTime() - earlyHours * 3600000);
+              if (new Date() < accessTime) return false;
+              // Mark for early access badge
+              p._earlyAccess = true;
+            }
+          }
           // Seconds products: hide if no price or no stock (they can't be built, only sold from inventory)
           if (cats.indexOf('seconds') !== -1) {
             var hasPriceCents = typeof p.priceCents === 'number' && p.priceCents > 0;
@@ -705,7 +762,8 @@ window.TENANT_READY.then(function() {
           priceDisplay = '<p class="product-price">' + regularPrice + '</p>';
         }
         var saleBadge = isOnSale && !isSold;
-        var badgeToShow = showBadge ? { label: badgeLabel, bg: badgeBg } : saleBadge ? { label: 'Sale', bg: 'rgba(192,86,33,0.85)' } : null;
+        var earlyAccessBadge = product._earlyAccess ? { label: 'Early Access', bg: 'rgba(42,124,111,0.9)' } : null;
+        var badgeToShow = earlyAccessBadge || (showBadge ? { label: badgeLabel, bg: badgeBg } : saleBadge ? { label: 'Sale', bg: 'rgba(192,86,33,0.85)' } : null);
         var isRetired = product.availability === 'discontinued' && stockBadge && stockBadge.cssClass === 'retired';
         var leadTime = resolveLeadTime(product, _sdCfg);
         var leadTimeHtml = leadTime ? '<p style="font-size:0.75rem;color:var(--text-muted,#9e9890);margin:2px 0 0 0;">' + esc(leadTime) + '</p>' : '';
