@@ -2298,7 +2298,6 @@
     body.dark-mode {
       --cream: #2a2a2a;
       --cream-dark: #3a3a3a;
-      --charcoal: #e0e0e0;
       --warm-gray: #888;
       --warm-gray-light: #aaa;
       --bg-secondary: #2a2a2a;
@@ -2501,6 +2500,15 @@
     body.dark-mode #moduleSelectionUI div[style*="border:2px solid var(--amber"] { border-color: var(--amber) !important; background: #333 !important; }
     body.dark-mode #subscriptionTierSelector div[style*="border:2px solid var(--amber"] { border-color: var(--amber) !important; background: #333 !important; }
     body.dark-mode #subscriptionTierSelector div[style*="border:2px solid var(--teal"] { border-color: var(--teal) !important; }
+
+    /* ========== MEMBERSHIP ADMIN (Cart module) ========== */
+    body.dark-mode #membershipAdmin div[style*="background:var(--cream)"] { background: #2a2a2a !important; border-color: #444 !important; }
+    body.dark-mode #membershipAdmin div[style*="color:var(--charcoal)"] { color: #e0e0e0 !important; }
+    body.dark-mode #membershipAdmin button[style*="background:var(--cream)"] { background: #2a2a2a !important; border-color: #444 !important; color: #999 !important; }
+    body.dark-mode #membershipAdmin tr[style*="border-bottom"] { border-color: #444 !important; }
+    body.dark-mode #membershipAdmin th { color: #999 !important; }
+    /* Membership settings modal */
+    body.dark-mode .modal input[style*="background:var(--cream)"] { background: #333 !important; color: #e0e0e0 !important; border-color: #555 !important; }
 
     /* ========== SIDEBAR GATING (Subscription Enforcement) ========== */
     .sidebar-section.locked .sidebar-items { display: none !important; }
