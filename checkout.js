@@ -3310,6 +3310,7 @@
       else if (step === 'review') renderReview();
     },
     cancel: cancelCheckout,
+    _debug: function() { return { passes: (checkoutData.customerPasses || []).map(function(p) { return { id: p._id, name: p.passDefinitionName, rem: p.visitsRemaining }; }), assignments: checkoutData.passAssignments, passApplied: checkoutData.passApplied }; },
     checkPaymentReturn: checkPaymentReturn,
     retryEngine: function() {
       var tc = document.querySelector('.engine-totals-container');
