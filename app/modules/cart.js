@@ -730,11 +730,13 @@
   var currentMemberFilter = 'all';
 
   function loadMembershipAdmin() {
+    console.log('[Membership] loadMembershipAdmin called');
     var container = document.getElementById('membershipAdmin');
-    if (!container) return;
+    if (!container) { console.log('[Membership] container not found'); return; }
 
     var db = MastAdmin.getData('db');
     var tenantId = MastAdmin.getData('tenantId');
+    console.log('[Membership] db:', !!db, 'tenantId:', tenantId);
     if (!db || !tenantId) return;
 
     container.innerHTML = '<div class="loading">Loading membership...</div>';
@@ -743,6 +745,7 @@
       db.ref(tenantId + '/admin/membership/config').once('value'),
       db.ref(tenantId + '/customers').orderByChild('membership/status').limitToLast(200).once('value')
     ]).then(function(snaps) {
+      console.log('[Membership] data loaded, config:', JSON.stringify(snaps[0].val()), 'customerKeys:', Object.keys(snaps[1].val() || {}).length);
       membershipConfig = snaps[0].val() || {};
       var custData = snaps[1].val() || {};
       membershipMembers = [];
@@ -757,6 +760,7 @@
       });
       renderMembershipAdmin(container);
     }).catch(function(err) {
+      console.error('[Membership] load error:', err);
       container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--danger);">Error: ' + esc(err.message) + '</div>';
     });
   }
