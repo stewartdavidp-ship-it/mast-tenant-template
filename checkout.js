@@ -1446,13 +1446,22 @@
       // Track per-pass usage: { passId: { passName, visitsUsed, coversCents, surchargeCents } }
       var passesUsedMap = {};
 
+      // Track per-pass visits used for THIS item (unlimited passes cap at 1 seat)
+      var itemPassVisits = {};
+
       for (var q = 0; q < qty; q++) {
         for (var j = 0; j < passes.length; j++) {
           var pass = passes[j];
           if (visitBudget[pass._id] <= 0) continue;
           if (!passCoversClass(pass, classId, item._classCategory)) continue;
 
+          // Unlimited passes: 1 seat only (cover totalSessions for that seat, not extra seats)
           var def = pass._def;
+          if (def.type === 'unlimited') {
+            var maxForUnlimited = item.totalSessions || 1;
+            if ((itemPassVisits[pass._id] || 0) >= maxForUnlimited) continue;
+          }
+
           var unitCoversCents = unitPriceCents;
           var unitSurchargeCents = 0;
 
@@ -1465,6 +1474,7 @@
           totalSurchargeCents += unitSurchargeCents;
           totalVisitsUsed++;
           visitBudget[pass._id]--;
+          itemPassVisits[pass._id] = (itemPassVisits[pass._id] || 0) + 1;
 
           // Accumulate into per-pass map
           if (!passesUsedMap[pass._id]) {
