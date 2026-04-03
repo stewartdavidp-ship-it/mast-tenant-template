@@ -32,6 +32,7 @@
     wallet:     { label: 'My Wallet',  href: 'my-wallet.html',   enabled: false, order: 3.6 },
     schedule:   { label: 'Schedule',    href: 'schedule.html',    enabled: false, order: 6 },
     blog:       { label: 'From the Studio', href: 'blog/',        enabled: true,  order: 7 },
+    membership: { label: 'Membership',    href: 'membership.html', enabled: false, order: 3.7 },
     terms:      { label: 'Terms',         href: 'terms.html',    enabled: false, order: 8 }
   };
 
