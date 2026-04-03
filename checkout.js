@@ -1081,7 +1081,7 @@
   // ── Build Totals from Server Breakdown (pure renderer, no math) ──
   function buildTotalsFromBreakdown(b) {
     var html = '<div class="order-totals">';
-    html += '<div class="order-total-row"><span class="order-total-label">Subtotal</span><span class="order-total-value">' + formatMoney(b.subtotalCents / 100) + '</span></div>';
+    html += '<div class="order-total-row"><span class="order-total-label">Subtotal</span><span class="order-total-value">' + formatMoney((b.preDiscountSubtotalCents || b.subtotalCents) / 100) + '</span></div>';
 
     // Sale discounts
     if (b.saleDiscounts && b.saleDiscounts.length > 0) {
