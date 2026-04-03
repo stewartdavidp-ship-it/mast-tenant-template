@@ -499,6 +499,25 @@
       }
     });
 
+    // Pass transactions (deducted/restored visits)
+    walletData.passes.forEach(function(p) {
+      var txns = p.transactions || {};
+      var txArr = Array.isArray(txns) ? txns : Object.values(txns);
+      txArr.forEach(function(t) {
+        if (!t) return;
+        var isRestore = t.type === 'restored';
+        var visits = Math.abs(t.visits || t.visitsUsed || 1);
+        allTxns.push({
+          date: t.createdAt || t.timestamp || '',
+          category: 'Pass',
+          description: (isRestore ? 'Restored' : 'Used') + ' — ' + esc(p.passDefinitionName || 'Pass') + (t.reason ? ' (' + t.reason + ')' : ''),
+          amount: (isRestore ? '+' : '-') + visits + ' visit' + (visits !== 1 ? 's' : ''),
+          positive: isRestore,
+          orderId: t.orderId || null
+        });
+      });
+    });
+
     // Sort by date descending
     allTxns.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
 
@@ -519,6 +538,7 @@
     html += filterPill('type', 'Loyalty', 'Loyalty');
     html += filterPill('type', 'Store Credit', 'Credits');
     html += filterPill('type', 'Gift Card', 'Gift Cards');
+    html += filterPill('type', 'Pass', 'Passes');
     html += '</div>';
     // Direction + Time range
     html += '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
@@ -818,35 +838,6 @@
         visitsText = 'Unlimited';
       }
 
-      // Build pass transaction history
-      var txnHtml = '';
-      var txns = p.transactions || {};
-      var txnList = Object.keys(txns).map(function(k) { return txns[k]; })
-        .sort(function(a, b) { return (b.createdAt || b.timestamp || '').localeCompare(a.createdAt || a.timestamp || ''); });
-      if (txnList.length > 0) {
-        txnHtml = '<div class="mw-pass-txns" id="passTxn_' + esc(p._id) + '" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);">';
-        txnList.forEach(function(tx) {
-          var txType = tx.type || 'used';
-          var isRestore = txType === 'restored';
-          var visits = Math.abs(tx.visits || tx.visitsUsed || 1);
-          var label = isRestore ? 'Restored' : 'Used';
-          var color = isRestore ? 'var(--accent-green, #2D7D46)' : 'var(--warm-gray, #9B958E)';
-          var sign = isRestore ? '+' : '-';
-          var txDate = tx.createdAt || tx.timestamp || '';
-          txnHtml += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:0.8rem;">' +
-            '<div><span style="color:' + color + ';font-weight:500;">' + label + '</span>' +
-            (txDate ? '<span style="color:var(--warm-gray-light);margin-left:8px;">' + formatDate(txDate) + '</span>' : '') +
-            '</div>' +
-            '<span style="color:' + color + ';font-weight:500;">' + sign + visits + ' visit' + (visits !== 1 ? 's' : '') + '</span>' +
-          '</div>';
-        });
-        txnHtml += '</div>';
-      }
-
-      var txnToggle = txnList.length > 0
-        ? '<button onclick="var el=document.getElementById(\'passTxn_' + esc(p._id) + '\');el.style.display=el.style.display===\'none\'?\'block\':\'none\';this.textContent=el.style.display===\'none\'?\'History\':\'Hide\'" style="font-size:0.72rem;color:var(--primary);background:none;border:none;cursor:pointer;padding:2px 0;margin-top:4px;">History</button>'
-        : '';
-
       html += '<div class="mw-card"' + (!isActive ? ' style="opacity:0.5;"' : '') + '>' +
         '<div class="mw-card-info">' +
           '<h3>' + esc(p.passDefinitionName || 'Pass') + '</h3>' +
@@ -854,12 +845,10 @@
             visitsText +
             (p.expiresAt ? '<br>Expires: ' + formatDate(p.expiresAt) : '') +
           '</div>' +
-          txnToggle +
         '</div>' +
         '<div style="text-align:right;">' +
           '<span class="mw-card-status ' + (isActive ? 'mw-status-active' : 'mw-status-expired') + '">' + esc(p.status || 'active') + '</span>' +
         '</div>' +
-        txnHtml +
         '</div>';
     });
     html += '</div>';
