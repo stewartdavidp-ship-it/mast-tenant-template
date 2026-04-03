@@ -1436,10 +1436,13 @@
       var classId = item.classId;
       if (!classId) continue;
 
-      // Each session needs a visit — series uses totalSessions
+      // Each session/seat needs a visit — series uses totalSessions, multi-seat uses qty
       var visitsNeeded = item.totalSessions || item.qty || 1;
       var qty = visitsNeeded;
-      var unitPriceCents = Math.round((item.priceCents || Math.round(parsePrice(item.price) * 100)) / visitsNeeded);
+      // For series: priceCents is total series price, divide by totalSessions for per-session cost
+      // For single-session: priceCents is already per-seat, don't divide by qty
+      var priceForDivision = item.totalSessions || 1;
+      var unitPriceCents = Math.round((item.priceCents || Math.round(parsePrice(item.price) * 100)) / priceForDivision);
       var totalCoveredCents = 0;
       var totalSurchargeCents = 0;
       var totalVisitsUsed = 0;
