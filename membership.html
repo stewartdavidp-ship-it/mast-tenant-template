@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdn.jsdelivr.net https://*.firebaseio.com https://apis.google.com https://maps.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://us-central1-mast-platform-prod.cloudfunctions.net https://*.firebaseio.com wss://*.firebaseio.com https://*.firebasestorage.app https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://api.ipify.org; img-src 'self' data: blob: https:; frame-src 'self' https://*.firebaseapp.com https://*.firebaseio.com; frame-ancestors 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdn.jsdelivr.net https://*.firebaseio.com https://apis.google.com https://maps.googleapis.com https://sandbox.web.squarecdn.com https://web.squarecdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://us-central1-mast-platform-prod.cloudfunctions.net https://*.firebaseio.com wss://*.firebaseio.com https://*.firebasestorage.app https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://api.ipify.org https://pci-connect.squareup.com https://connect.squareupsandbox.com; img-src 'self' data: blob: https:; frame-src 'self' https://*.firebaseapp.com https://*.firebaseio.com https://pci-connect.squareup.com https://connect.squareupsandbox.com; frame-ancestors 'none';">
 <title>Membership &mdash; My Shop</title>
 <link rel="preconnect" href="https://mast-platform-prod-default-rtdb.firebaseio.com" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
@@ -433,20 +433,135 @@
     content.innerHTML = html;
   }
 
-  function renderSquareFallback() {
+  // ---- Square Web Payments SDK ----
+  var squareCard = null;
+  var squarePayments = null;
+
+  function renderSquareCheckout() {
     var name = memberConfig ? esc(memberConfig.programName || 'Membership') : 'Membership';
+    var price = memberConfig && memberConfig.annualPrice
+      ? '$' + Number(memberConfig.annualPrice).toFixed(2) + '/year'
+      : '';
+
     content.innerHTML =
       '<div class="ms-header">' +
         '<h1>' + name + '</h1>' +
+        '<p class="ms-subtitle">Unlock exclusive benefits on every order.</p>' +
       '</div>' +
       '<div class="ms-card">' +
         (memberConfig ? buildBenefitsHtml(memberConfig) : '') +
-        '<div style="text-align:center;padding:20px 0;">' +
-          '<p style="font-size:0.9rem;color:var(--text-secondary);margin-bottom:12px;">Interested in joining? Contact us to get started.</p>' +
-          '<a href="/about.html" class="ms-cta ms-cta-primary" style="display:inline-block;width:auto;text-decoration:none;">Contact Us</a>' +
+        '<div style="padding:20px 0;">' +
+          '<div id="sq-card-container" style="min-height:90px;margin-bottom:16px;"></div>' +
+          '<div id="sq-card-error" style="color:#e74c3c;font-size:0.85rem;margin-bottom:12px;display:none;"></div>' +
+          '<button id="msJoinBtn" class="ms-cta ms-cta-primary" onclick="window._joinSquareMembership()">' +
+            'Join ' + name + (price ? ' \u2014 ' + price : '') +
+          '</button>' +
         '</div>' +
       '</div>';
+
+    initSquareCard();
   }
+
+  function initSquareCard() {
+    // Check if already loaded
+    if (window.Square) {
+      setupSquareCard();
+      return;
+    }
+
+    // Read environment from public config, then load SDK
+    db.ref(TENANT_ID + '/public/config/square/environment').once('value').then(function(envSnap) {
+      var squareEnv = envSnap.val() || 'sandbox';
+      var sdkUrl = squareEnv === 'production'
+        ? 'https://web.squarecdn.com/v1/square.js'
+        : 'https://sandbox.web.squarecdn.com/v1/square.js';
+
+      var script = document.createElement('script');
+      script.src = sdkUrl;
+      script.onload = function() { setupSquareCard(); };
+      script.onerror = function() {
+        var errEl = document.getElementById('sq-card-error');
+        if (errEl) { errEl.style.display = ''; errEl.textContent = 'Failed to load payment form. Please refresh and try again.'; }
+      };
+      document.head.appendChild(script);
+    });
+  }
+
+  function setupSquareCard() {
+    // Read applicationId and locationId from public config (no auth required)
+    db.ref(TENANT_ID + '/public/config/square').once('value').then(function(sqSnap) {
+      var sqPublicConfig = sqSnap.val() || {};
+      var applicationId = sqPublicConfig.applicationId;
+      var locationId = sqPublicConfig.locationId;
+
+      if (!applicationId) {
+        var errEl = document.getElementById('sq-card-error');
+        if (errEl) { errEl.style.display = ''; errEl.textContent = 'Payment not configured. Please contact the store.'; }
+        return;
+      }
+      if (!locationId) {
+        var errEl = document.getElementById('sq-card-error');
+        if (errEl) { errEl.style.display = ''; errEl.textContent = 'Payment location not configured.'; }
+        return;
+      }
+
+      squarePayments = window.Square.payments(applicationId, locationId);
+      return squarePayments.card().then(function(card) {
+        squareCard = card;
+        return card.attach('#sq-card-container');
+      });
+    }).catch(function(err) {
+      console.error('[membership] Square card init error:', err);
+      var errEl = document.getElementById('sq-card-error');
+      if (errEl) { errEl.style.display = ''; errEl.textContent = 'Unable to initialize payment form.'; }
+    });
+  }
+
+  window._joinSquareMembership = function() {
+    if (joiningInProgress || !squareCard) return;
+    joiningInProgress = true;
+    var btn = document.getElementById('msJoinBtn');
+    var errEl = document.getElementById('sq-card-error');
+    if (errEl) errEl.style.display = 'none';
+    if (btn) { btn.disabled = true; btn.textContent = 'Processing...'; }
+
+    squareCard.tokenize().then(function(tokenResult) {
+      if (tokenResult.status !== 'OK') {
+        throw new Error(tokenResult.errors ? tokenResult.errors[0].message : 'Card tokenization failed');
+      }
+      return currentUser.getIdToken().then(function(token) {
+        return fetch(FUNCTION_BASE + 'createMembershipCheckout', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token,
+            'X-Tenant-ID': TENANT_ID
+          },
+          body: JSON.stringify({ tenantId: TENANT_ID, sourceId: tokenResult.token })
+        });
+      });
+    })
+    .then(function(resp) { return resp.json(); })
+    .then(function(data) {
+      var result = data.result || data;
+      if (result.success) {
+        // Reload membership status and show active member view
+        db.ref(TENANT_ID + '/public/accounts/' + currentUser.uid + '/wallet/membership').once('value')
+          .then(function(snap) {
+            memberStatus = snap.val();
+            renderSuccess();
+          });
+      } else {
+        throw new Error(result.error || data.error || 'Signup failed');
+      }
+    })
+    .catch(function(err) {
+      console.error('[membership] Square join error:', err);
+      if (errEl) { errEl.style.display = ''; errEl.textContent = err.message || 'Something went wrong. Please try again.'; }
+      joiningInProgress = false;
+      if (btn) { btn.disabled = false; btn.textContent = 'Join ' + esc(memberConfig.programName || 'Membership'); }
+    });
+  };
 
   // ---- Actions ----
 
@@ -554,9 +669,18 @@
         return;
       }
 
-      // Check if Square-only tenant (no Stripe subscription support yet)
+      // Square tenants use inline card checkout (not Stripe redirect)
       if (processor === 'square') {
-        renderSquareFallback();
+        var today = new Date().toISOString().slice(0, 10);
+        var isActive = memberStatus && memberStatus.status === 'active';
+        var isGracePeriod = memberStatus && memberStatus.status === 'cancelled'
+          && memberStatus.expiryDate && memberStatus.expiryDate > today;
+        var isExpired = memberStatus && memberStatus.status === 'expired';
+        if (isActive || isGracePeriod || isExpired) {
+          renderActiveMember();
+        } else {
+          renderSquareCheckout();
+        }
         return;
       }
 
