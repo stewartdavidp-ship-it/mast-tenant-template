@@ -442,13 +442,18 @@
         if (!t) return;
         var isPositive = t.type === 'earned' || t.type === 'restored';
         var pointName = walletData.loyalty.pointName || 'pts';
+        var loyaltyBalNote = '';
+        if (t.previousBalance != null && t.newBalance != null) {
+          loyaltyBalNote = t.previousBalance + ' \u2192 ' + t.newBalance + ' ' + pointName;
+        }
         allTxns.push({
           date: t.timestamp || t.createdAt || '',
           category: 'Loyalty',
-          description: (t.type || '').charAt(0).toUpperCase() + (t.type || '').slice(1) + (t.note ? ' — ' + t.note : ''),
+          description: (t.type || '').charAt(0).toUpperCase() + (t.type || '').slice(1) + (t.note ? ' \u2014 ' + t.note : ''),
           amount: (isPositive ? '+' : '') + (t.points || 0) + ' ' + pointName,
           positive: isPositive,
-          orderId: t.orderId || null
+          orderId: t.orderId || null,
+          balanceNote: loyaltyBalNote
         });
       });
     }
@@ -458,13 +463,33 @@
       allTxns.push({
         date: c.createdAt || '',
         category: 'Store Credit',
-        description: (c.source === 'return' ? 'Return refund' : c.source === 'return-gift-card-fallback' ? 'Return refund' : 'Credit issued') + (c.note ? ' — ' + c.note : ''),
+        description: (c.source === 'return' ? 'Return refund' : c.source === 'return-gift-card-fallback' ? 'Return refund' : 'Credit issued') + (c.note ? ' \u2014 ' + c.note : ''),
         amount: '+' + formatMoney(c.amountCents || 0),
         positive: true,
         orderId: c.orderId || null
       });
-      // If credit was used (status depleted or has applied transactions)
-      if (c.status === 'depleted' || (c.remainingCents != null && c.remainingCents === 0)) {
+      // Individual transactions if available (preferred over synthetic entry)
+      if (c.transactions) {
+        var crTxArr = Array.isArray(c.transactions) ? c.transactions : Object.values(c.transactions);
+        crTxArr.forEach(function(t) {
+          if (!t) return;
+          var isPos = t.type === 'refund' || t.type === 'credit';
+          var crBalNote = '';
+          if (t.previousBalanceCents != null && t.newBalanceCents != null) {
+            crBalNote = formatMoney(t.previousBalanceCents) + ' \u2192 ' + formatMoney(t.newBalanceCents);
+          }
+          allTxns.push({
+            date: t.timestamp || t.createdAt || '',
+            category: 'Store Credit',
+            description: (t.type || '').charAt(0).toUpperCase() + (t.type || '').slice(1) + ' to order',
+            amount: (isPos ? '+' : '-') + formatMoney(t.amountCents || 0),
+            positive: isPos,
+            orderId: t.orderId || null,
+            balanceNote: crBalNote
+          });
+        });
+      } else if (c.status === 'depleted' || (c.remainingCents != null && c.remainingCents === 0)) {
+        // Fallback synthetic entry for credits without transaction records
         allTxns.push({
           date: c.updatedAt || c.createdAt || '',
           category: 'Store Credit',
@@ -494,13 +519,18 @@
         gcTxArr.forEach(function(t) {
           if (!t || t.type === 'claimed') return;
           var isPos = t.type === 'refund' || t.type === 'credit';
+          var gcBalNote = '';
+          if (t.previousBalanceCents != null && t.newBalanceCents != null) {
+            gcBalNote = formatMoney(t.previousBalanceCents) + ' \u2192 ' + formatMoney(t.newBalanceCents);
+          }
           allTxns.push({
             date: t.timestamp || t.createdAt || '',
             category: 'Gift Card',
             description: (t.type || '').charAt(0).toUpperCase() + (t.type || '').slice(1) + ' (' + esc(gc.code || '').slice(-4) + ')',
             amount: (isPos ? '+' : '-') + formatMoney(t.amountCents || 0),
             positive: isPos,
-            orderId: t.orderId || null
+            orderId: t.orderId || null,
+            balanceNote: gcBalNote
           });
         });
       }
