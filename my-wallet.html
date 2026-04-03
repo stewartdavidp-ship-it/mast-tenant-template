@@ -540,7 +540,7 @@
 
     function filterPill(key, val, label) {
       var active = historyFilter[key] === val;
-      return '<button style="padding:4px 12px;border-radius:16px;border:1px solid ' + (active ? 'var(--accent,#C6A96C)' : 'var(--border-subtle,#444)') + ';background:' + (active ? 'rgba(196,133,60,0.15)' : 'transparent') + ';color:' + (active ? 'var(--accent,#C6A96C)' : 'var(--warm-gray,#888)') + ';font-size:0.75rem;cursor:pointer;" onclick="window._mwHistoryFilter(\'' + key + '\',\'' + val + '\')">' + esc(label) + '</button>';
+      return '<button style="padding:4px 12px;border-radius:16px;border:1px solid ' + (active ? 'var(--accent,#C6A96C)' : 'rgba(255,255,255,0.2)') + ';background:' + (active ? 'rgba(196,133,60,0.15)' : 'rgba(255,255,255,0.04)') + ';color:' + (active ? 'var(--accent,#C6A96C)' : 'var(--warm-gray,#999)') + ';font-size:0.75rem;cursor:pointer;" onclick="window._mwHistoryFilter(\'' + key + '\',\'' + val + '\')">' + esc(label) + '</button>';
     }
 
     var html = '<div style="margin-bottom:1rem;">';
@@ -552,12 +552,14 @@
     html += filterPill('type', 'Gift Card', 'Gift Cards');
     html += filterPill('type', 'Pass', 'Passes');
     html += '</div>';
-    // Direction + Time range
-    html += '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
+    // Direction
+    html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">';
     html += filterPill('direction', 'all', 'All');
     html += filterPill('direction', 'credit', 'Credits In');
     html += filterPill('direction', 'debit', 'Debits Out');
-    html += '<span style="width:8px;"></span>';
+    html += '</div>';
+    // Time range
+    html += '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
     html += filterPill('range', 'all', 'All Time');
     html += filterPill('range', 'week', 'This Week');
     html += filterPill('range', 'month', 'This Month');
