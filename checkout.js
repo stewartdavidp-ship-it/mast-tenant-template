@@ -347,6 +347,7 @@
         if (it.sessionId) mapped.sessionId = it.sessionId;
         if (it.priceCents != null) mapped.priceCents = it.priceCents;
         if (it.shippingCategory) mapped.shippingCategory = it.shippingCategory;
+        if (it.totalSessions) mapped.totalSessions = it.totalSessions;
         return mapped;
       }),
       shipping: checkoutData.shipping,
@@ -1409,9 +1410,11 @@
       var classId = item.classId;
       if (!classId) continue;
 
-      // Find best pass for this item — each qty unit needs a visit
-      var qty = item.qty || 1;
-      var unitPriceCents = item.priceCents || Math.round(parsePrice(item.price) * 100);
+      // Find best pass for this item — each session needs a visit
+      // For series classes, totalSessions determines visit count (not qty)
+      var visitsNeeded = item.totalSessions || item.qty || 1;
+      var qty = visitsNeeded;
+      var unitPriceCents = Math.round((item.priceCents || Math.round(parsePrice(item.price) * 100)) / visitsNeeded);
       var totalCoveredCents = 0;
       var totalSurchargeCents = 0;
       var visitsUsed = 0;
