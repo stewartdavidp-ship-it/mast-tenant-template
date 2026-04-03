@@ -374,12 +374,28 @@
         if (totalsContainer) {
           if (breakdown) {
             totalsContainer.innerHTML = buildTotalsFromBreakdown(breakdown);
+            syncCouponMessage(breakdown);
           } else {
             totalsContainer.innerHTML = buildTotalsHtml(calcSubtotal());
           }
         }
       });
     }, 300);
+  }
+
+  // ── Update coupon message to reflect engine-computed discount ──
+  function syncCouponMessage(breakdown) {
+    if (!breakdown || !checkoutData.coupon) return;
+    var msgEl = document.getElementById('coCouponMsg');
+    if (!msgEl) return;
+    if (breakdown.couponDiscountCents > 0) {
+      msgEl.innerHTML = '<div class="coupon-success">Coupon ' + esc(checkoutData.coupon.code) +
+        ' applied: -' + formatMoney(breakdown.couponDiscountCents / 100) + '</div>';
+    } else if (breakdown.couponData && breakdown.couponData.code) {
+      // Coupon recognized but $0 discount (e.g. all items non-discountable)
+      msgEl.innerHTML = '<div class="coupon-success">Coupon ' + esc(checkoutData.coupon.code) +
+        ' applied (no eligible items)</div>';
+    }
   }
 
   // ── Step Indicator HTML ──
@@ -988,6 +1004,7 @@
             if (tc) {
               tc.innerHTML = breakdown ? buildTotalsFromBreakdown(breakdown) : buildTotalsHtml(subtotal);
             }
+            if (breakdown) syncCouponMessage(breakdown);
           });
         });
       });
@@ -2004,6 +2021,7 @@
       if (tc) {
         tc.innerHTML = breakdown ? buildTotalsFromBreakdown(breakdown) : buildTotalsHtml(subtotal);
       }
+      if (breakdown) syncCouponMessage(breakdown);
     });
 
     // Footer
