@@ -1397,6 +1397,12 @@
     if (!passes || passes.length === 0) return;
 
     var items = window.MastCart.getItems();
+    // Sort passes: most visits remaining first (maximizes single-pass coverage for series)
+    passes.sort(function(a, b) {
+      var aVis = (a.visitsRemaining !== null && a.visitsRemaining !== undefined) ? a.visitsRemaining : 999;
+      var bVis = (b.visitsRemaining !== null && b.visitsRemaining !== undefined) ? b.visitsRemaining : 999;
+      return bVis - aVis;
+    });
     // Track remaining visits per pass (don't mutate originals)
     var visitBudget = {};
     passes.forEach(function(p) {
