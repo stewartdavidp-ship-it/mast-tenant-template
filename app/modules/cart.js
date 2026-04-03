@@ -51,14 +51,19 @@
       return;
     }
 
-    db.ref(tenantId + '/admin/walletConfig').once('value').then(function(snap) {
-      var config = snap.val() || {};
+    Promise.all([
+      db.ref(tenantId + '/admin/walletConfig').once('value'),
+      db.ref(tenantId + '/admin/membership/config').once('value')
+    ]).then(function(snaps) {
+      var config = snaps[0].val() || {};
+      var msConfig = snaps[1].val() || {};
       walletLoaded = true;
       giftCardConfig = config;
 
       var giftCardsEnabled = config.giftCardsEnabled || false;
       var loyaltyEnabled = config.loyaltyEnabled || false;
       var creditsEnabled = config.creditsEnabled !== false;
+      var membershipEnabled = msConfig.enabled || false;
 
       container.innerHTML =
         '<div style="margin-bottom:24px;">' +
@@ -68,6 +73,7 @@
           renderInstrumentCard('&#128179;', 'Store Credits', 'Returns, admin grants, promotions. Never expire.', creditsEnabled ? 'Active' : 'Off', creditsEnabled) +
           renderInstrumentCard('&#127873;', 'Gift Cards', 'eGift cards \u2014 purchase, send, redeem.', giftCardsEnabled ? 'Active' : 'Off', giftCardsEnabled, "navigateTo('gift-cards')") +
           renderInstrumentCard('&#11088;', 'Loyalty Program', 'Points-based rewards for repeat customers.', loyaltyEnabled ? 'Active' : 'Off', loyaltyEnabled, "navigateTo('loyalty')") +
+          renderInstrumentCard('&#127941;', 'Membership', 'Subscription program with exclusive benefits.', membershipEnabled ? 'Active' : 'Off', membershipEnabled, "navigateTo('membership')") +
           renderInstrumentCard('&#127915;', 'Coupons', 'Discount codes for customers.', 'Active', true, "navigateTo('coupons')") +
           renderInstrumentCard('&#127991;', 'Sale Promotions', 'Seasonal sales, markdowns, clearance.', 'Active', true, "navigateTo('promotions')") +
         '</div>';
@@ -716,6 +722,419 @@
   };
 
   // ============================================================
+  // MEMBERSHIP ADMIN
+  // ============================================================
+
+  var membershipConfig = null;
+  var membershipMembers = [];
+  var currentMemberFilter = 'all';
+
+  function loadMembershipAdmin() {
+    var container = document.getElementById('membershipAdmin');
+    if (!container) return;
+
+    var db = MastAdmin.getData('db');
+    var tenantId = MastAdmin.getData('tenantId');
+    if (!db || !tenantId) return;
+
+    container.innerHTML = '<div class="loading">Loading membership...</div>';
+
+    Promise.all([
+      db.ref(tenantId + '/admin/membership/config').once('value'),
+      db.ref(tenantId + '/customers').orderByChild('membership/status').limitToLast(200).once('value')
+    ]).then(function(snaps) {
+      membershipConfig = snaps[0].val() || {};
+      var custData = snaps[1].val() || {};
+      membershipMembers = [];
+      Object.keys(custData).forEach(function(uid) {
+        var c = custData[uid];
+        if (c.membership) {
+          membershipMembers.push(Object.assign({ _uid: uid }, c.membership, { email: c.email || c.membership.email || uid }));
+        }
+      });
+      membershipMembers.sort(function(a, b) {
+        return (b.startDate || '').localeCompare(a.startDate || '');
+      });
+      renderMembershipAdmin(container);
+    }).catch(function(err) {
+      container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--danger);">Error: ' + esc(err.message) + '</div>';
+    });
+  }
+
+  function msStatusBadge(status) {
+    var colors = {
+      active: 'background:#16a34a;color:white;',
+      cancelled: 'background:#f59e0b;color:white;',
+      expired: 'background:#9ca3af;color:white;'
+    };
+    return '<span class="status-badge" style="' + (colors[status] || 'background:#9ca3af;color:white;') + '">' + esc((status || 'unknown').toUpperCase()) + '</span>';
+  }
+
+  function renderMembershipAdmin(container) {
+    var config = membershipConfig || {};
+    var enabled = config.enabled || false;
+
+    var html = '<div class="section-header">' +
+      '<h2>Membership</h2>' +
+      '<button class="btn btn-primary btn-small" onclick="window._membershipOpenConfig()">&#9881; Settings</button>' +
+    '</div>';
+
+    if (!enabled) {
+      html += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">' +
+        '<div style="font-size:2rem;margin-bottom:12px;">&#127941;</div>' +
+        '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">Membership program is disabled</p>' +
+        '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Enable it in Settings to offer subscription-based benefits to your customers.</p>' +
+      '</div>';
+      container.innerHTML = html;
+      return;
+    }
+
+    // Config summary cards
+    var programName = config.programName || 'Membership';
+    var price = config.annualPrice ? '$' + Number(config.annualPrice).toFixed(2) + '/yr' : 'Not set';
+
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:24px;">';
+
+    function summaryCard(label, value, detail) {
+      return '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;">' + esc(label) + '</div>' +
+        '<div style="font-size:1.2rem;font-weight:500;color:var(--charcoal);">' + esc(value) + '</div>' +
+        (detail ? '<div style="font-size:0.75rem;color:var(--warm-gray);">' + esc(detail) + '</div>' : '') +
+      '</div>';
+    }
+
+    html += summaryCard('Program', programName, price);
+
+    // Discounts
+    var discounts = [];
+    if (config.productDiscountPct) discounts.push('Products ' + config.productDiscountPct + '%');
+    if (config.serviceDiscountPct) discounts.push('Services ' + config.serviceDiscountPct + '%');
+    if (config.classSeatDiscountPct) discounts.push('Classes ' + config.classSeatDiscountPct + '%');
+    if (config.classMaterialsDiscountPct) discounts.push('Materials ' + config.classMaterialsDiscountPct + '%');
+    html += summaryCard('Discounts', discounts.length > 0 ? discounts.length + ' active' : 'None', discounts.join(', '));
+
+    if (config.freeShippingThreshold != null) {
+      html += summaryCard('Free Shipping', config.freeShippingThreshold === 0 ? 'Always' : 'Over $' + config.freeShippingThreshold, 'Member benefit');
+    }
+    if (config.loyaltyPointMultiplier && config.loyaltyPointMultiplier > 1) {
+      html += summaryCard('Loyalty', config.loyaltyPointMultiplier + 'x', 'Point multiplier');
+    }
+    if (config.priorityEnrollmentDays) {
+      html += summaryCard('Early Enrollment', config.priorityEnrollmentDays + ' days', 'Priority access');
+    }
+    if (config.earlyProductAccessHours) {
+      html += summaryCard('Early Products', config.earlyProductAccessHours + ' hrs', 'Before public');
+    }
+    html += summaryCard('Promo Stacking', config.allowPromoStack ? 'Allowed' : 'Membership only', config.allowPromoStack ? 'Sale + membership combo' : 'Replaces sale price');
+
+    // Stripe info
+    if (config.stripeProductId) {
+      html += summaryCard('Stripe', 'Connected', 'Product: ' + config.stripeProductId.slice(0, 12) + '...');
+    } else {
+      html += summaryCard('Stripe', 'Auto-create', 'On first signup');
+    }
+
+    html += '</div>';
+
+    // Active member count
+    var activeCt = membershipMembers.filter(function(m) { return m.status === 'active'; }).length;
+    var cancelledCt = membershipMembers.filter(function(m) { return m.status === 'cancelled'; }).length;
+    var expiredCt = membershipMembers.filter(function(m) { return m.status === 'expired'; }).length;
+
+    // Member list
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
+      '<div style="font-size:0.95rem;font-weight:500;color:var(--charcoal);">Members (' + membershipMembers.length + ')</div>' +
+      '<button class="btn btn-outline btn-small" onclick="window._membershipGrantModal()">+ Grant</button>' +
+    '</div>';
+
+    // Filter pills
+    html += '<div style="display:flex;gap:6px;margin-bottom:12px;">';
+    ['all', 'active', 'cancelled', 'expired'].forEach(function(f) {
+      var ct = f === 'all' ? membershipMembers.length : (f === 'active' ? activeCt : f === 'cancelled' ? cancelledCt : expiredCt);
+      var isActive = currentMemberFilter === f;
+      html += '<button style="padding:5px 12px;border-radius:12px;font-size:0.78rem;font-weight:500;cursor:pointer;border:1px solid ' + (isActive ? 'var(--amber)' : 'var(--cream-dark)') + ';background:' + (isActive ? 'rgba(196,133,60,0.15)' : 'var(--cream)') + ';color:' + (isActive ? 'var(--amber)' : 'var(--warm-gray)') + ';" onclick="window._membershipFilter(\'' + f + '\')">' +
+        esc(f.charAt(0).toUpperCase() + f.slice(1)) + ' (' + ct + ')</button>';
+    });
+    html += '</div>';
+
+    var filtered = currentMemberFilter === 'all' ? membershipMembers : membershipMembers.filter(function(m) { return m.status === currentMemberFilter; });
+
+    if (filtered.length === 0) {
+      html += '<div style="text-align:center;padding:24px;color:var(--warm-gray);font-size:0.85rem;">No members' + (currentMemberFilter !== 'all' ? ' with status "' + esc(currentMemberFilter) + '"' : '') + '.</div>';
+    } else {
+      html += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;">' +
+        '<thead><tr style="border-bottom:2px solid var(--cream-dark);">' +
+          '<th style="text-align:left;padding:8px;color:var(--warm-gray);font-weight:500;">Email / UID</th>' +
+          '<th style="text-align:left;padding:8px;color:var(--warm-gray);font-weight:500;">Status</th>' +
+          '<th style="text-align:left;padding:8px;color:var(--warm-gray);font-weight:500;">Since</th>' +
+          '<th style="text-align:left;padding:8px;color:var(--warm-gray);font-weight:500;">Renewal</th>' +
+          '<th style="text-align:left;padding:8px;color:var(--warm-gray);font-weight:500;">Processor</th>' +
+          '<th style="text-align:right;padding:8px;color:var(--warm-gray);font-weight:500;">Actions</th>' +
+        '</tr></thead><tbody>';
+      filtered.forEach(function(m) {
+        html += '<tr style="border-bottom:1px solid var(--cream-dark);">' +
+          '<td style="padding:8px;">' + esc(m.email) + '</td>' +
+          '<td style="padding:8px;">' + msStatusBadge(m.status) + '</td>' +
+          '<td style="padding:8px;">' + formatDate(m.startDate) + '</td>' +
+          '<td style="padding:8px;">' + formatDate(m.renewalDate || m.expiryDate) + '</td>' +
+          '<td style="padding:8px;font-size:0.78rem;color:var(--warm-gray);">' + esc(m.processor || 'manual') + '</td>' +
+          '<td style="padding:8px;text-align:right;">' +
+            (m.status === 'active' ? '<button class="btn btn-danger btn-small" onclick="window._membershipRevoke(\'' + esc(m._uid) + '\')">Revoke</button>' : '') +
+            (m.status === 'expired' || m.status === 'cancelled' ? '<button class="btn btn-outline btn-small" onclick="window._membershipReactivate(\'' + esc(m._uid) + '\')">Reactivate</button>' : '') +
+          '</td>' +
+        '</tr>';
+      });
+      html += '</tbody></table></div>';
+    }
+
+    container.innerHTML = html;
+  }
+
+  window._membershipFilter = function(filter) {
+    currentMemberFilter = filter;
+    var container = document.getElementById('membershipAdmin');
+    if (container) renderMembershipAdmin(container);
+  };
+
+  // ---- Settings Modal ----
+
+  window._membershipOpenConfig = function() {
+    var c = membershipConfig || {};
+
+    var html = '<h3 style="margin-top:0;">Membership Settings</h3>' +
+      // Enable toggle
+      '<div style="margin-bottom:16px;">' +
+        '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;">' +
+          '<input type="checkbox" id="msConfigEnabled" ' + (c.enabled ? 'checked' : '') + '>' +
+          'Enable membership program' +
+        '</label>' +
+      '</div>' +
+      // Program name + price
+      '<div style="display:flex;gap:12px;margin-bottom:16px;">' +
+        '<div style="flex:1;">' +
+          '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Program Name</label>' +
+          '<input type="text" id="msConfigName" value="' + esc(c.programName || '') + '" placeholder="Membership" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);font-family:\'DM Sans\';font-size:0.9rem;">' +
+        '</div>' +
+        '<div style="flex:1;">' +
+          '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Annual Price ($)</label>' +
+          '<input type="number" id="msConfigPrice" value="' + (c.annualPrice || '') + '" min="0" step="0.01" placeholder="49.99" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);font-family:\'DM Sans\';font-size:0.9rem;">' +
+        '</div>' +
+      '</div>' +
+      // Discounts
+      '<div style="font-size:0.85rem;font-weight:600;margin-bottom:8px;">Member Discounts (%)</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">' +
+        '<div><label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:2px;">Products</label>' +
+          '<input type="number" id="msConfigProdPct" value="' + (c.productDiscountPct || '') + '" min="0" max="100" step="1" placeholder="0" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);font-family:\'DM Sans\';font-size:0.9rem;"></div>' +
+        '<div><label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:2px;">Services</label>' +
+          '<input type="number" id="msConfigSvcPct" value="' + (c.serviceDiscountPct || '') + '" min="0" max="100" step="1" placeholder="0" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);font-family:\'DM Sans\';font-size:0.9rem;"></div>' +
+        '<div><label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:2px;">Class Seats</label>' +
+          '<input type="number" id="msConfigClassPct" value="' + (c.classSeatDiscountPct || '') + '" min="0" max="100" step="1" placeholder="0" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);font-family:\'DM Sans\';font-size:0.9rem;"></div>' +
+        '<div><label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:2px;">Class Materials</label>' +
+          '<input type="number" id="msConfigMatPct" value="' + (c.classMaterialsDiscountPct || '') + '" min="0" max="100" step="1" placeholder="0" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);font-family:\'DM Sans\';font-size:0.9rem;"></div>' +
+      '</div>' +
+      // Shipping + loyalty
+      '<div style="display:flex;gap:12px;margin-bottom:16px;">' +
+        '<div style="flex:1;">' +
+          '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Free Shipping Threshold ($)</label>' +
+          '<input type="number" id="msConfigShipThresh" value="' + (c.freeShippingThreshold != null ? c.freeShippingThreshold : '') + '" min="0" step="1" placeholder="0 = always free" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);font-family:\'DM Sans\';font-size:0.9rem;">' +
+          '<div style="font-size:0.75rem;color:var(--warm-gray);margin-top:2px;">0 = always free for members</div>' +
+        '</div>' +
+        '<div style="flex:1;">' +
+          '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Loyalty Multiplier</label>' +
+          '<input type="number" id="msConfigLoyaltyMult" value="' + (c.loyaltyPointMultiplier || '') + '" min="1" step="0.5" placeholder="2" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);font-family:\'DM Sans\';font-size:0.9rem;">' +
+          '<div style="font-size:0.75rem;color:var(--warm-gray);margin-top:2px;">e.g., 2 = double loyalty points</div>' +
+        '</div>' +
+      '</div>' +
+      // Access gates
+      '<div style="display:flex;gap:12px;margin-bottom:16px;">' +
+        '<div style="flex:1;">' +
+          '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Priority Enrollment (days)</label>' +
+          '<input type="number" id="msConfigPriorityDays" value="' + (c.priorityEnrollmentDays || '') + '" min="0" step="1" placeholder="e.g., 7" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);font-family:\'DM Sans\';font-size:0.9rem;">' +
+        '</div>' +
+        '<div style="flex:1;">' +
+          '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Early Product Access (hours)</label>' +
+          '<input type="number" id="msConfigEarlyHrs" value="' + (c.earlyProductAccessHours || '') + '" min="0" step="1" placeholder="e.g., 48" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);font-family:\'DM Sans\';font-size:0.9rem;">' +
+        '</div>' +
+      '</div>' +
+      // Stacking
+      '<div style="margin-bottom:16px;">' +
+        '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;">' +
+          '<input type="checkbox" id="msConfigPromoStack" ' + (c.allowPromoStack ? 'checked' : '') + '>' +
+          'Allow promo stacking (sale discount + membership discount)' +
+        '</label>' +
+        '<div style="font-size:0.75rem;color:var(--warm-gray);margin-top:2px;margin-left:24px;">When off, membership discount replaces sale price (no double discount).</div>' +
+      '</div>' +
+      // Footer
+      '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;">' +
+        '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+        '<button class="btn btn-primary" onclick="window._membershipSaveConfig()">Save</button>' +
+      '</div>';
+
+    openModal(html);
+  };
+
+  window._membershipSaveConfig = async function() {
+    var enabled = document.getElementById('msConfigEnabled').checked;
+    var name = (document.getElementById('msConfigName').value || '').trim() || 'Membership';
+    var price = parseFloat(document.getElementById('msConfigPrice').value) || 0;
+    var prodPct = parseFloat(document.getElementById('msConfigProdPct').value) || null;
+    var svcPct = parseFloat(document.getElementById('msConfigSvcPct').value) || null;
+    var classPct = parseFloat(document.getElementById('msConfigClassPct').value) || null;
+    var matPct = parseFloat(document.getElementById('msConfigMatPct').value) || null;
+    var shipThresh = document.getElementById('msConfigShipThresh').value;
+    var loyaltyMult = parseFloat(document.getElementById('msConfigLoyaltyMult').value) || null;
+    var priorityDays = parseInt(document.getElementById('msConfigPriorityDays').value) || null;
+    var earlyHrs = parseInt(document.getElementById('msConfigEarlyHrs').value) || null;
+    var promoStack = document.getElementById('msConfigPromoStack').checked;
+
+    if (enabled && price <= 0) {
+      showToast('Annual price must be greater than $0 when enabled.', true);
+      return;
+    }
+
+    // Validate percentages 0-100
+    [prodPct, svcPct, classPct, matPct].forEach(function(v) {
+      if (v !== null && (v < 0 || v > 100)) {
+        showToast('Discount percentages must be between 0 and 100.', true);
+        return;
+      }
+    });
+
+    var data = {
+      enabled: enabled,
+      programName: name,
+      annualPrice: price,
+      productDiscountPct: prodPct,
+      serviceDiscountPct: svcPct,
+      classSeatDiscountPct: classPct,
+      classMaterialsDiscountPct: matPct,
+      freeShippingThreshold: shipThresh !== '' ? parseFloat(shipThresh) : null,
+      loyaltyPointMultiplier: loyaltyMult,
+      priorityEnrollmentDays: priorityDays,
+      earlyProductAccessHours: earlyHrs,
+      allowPromoStack: promoStack,
+      updatedAt: new Date().toISOString()
+    };
+
+    var db = MastAdmin.getData('db');
+    var tenantId = MastAdmin.getData('tenantId');
+    if (!db || !tenantId) return;
+
+    try {
+      await db.ref(tenantId + '/admin/membership/config').update(data);
+      writeAudit('update', 'membership-config', 'settings');
+      membershipConfig = Object.assign(membershipConfig || {}, data);
+      closeModal();
+      showToast('Membership settings saved');
+      loadMembershipAdmin();
+    } catch (err) {
+      showToast('Failed to save: ' + err.message, true);
+    }
+  };
+
+  // ---- Grant / Revoke / Reactivate ----
+
+  window._membershipGrantModal = function() {
+    var html = '<h3 style="margin-top:0;">Grant Membership</h3>' +
+      '<div style="margin-bottom:16px;">' +
+        '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Customer UID</label>' +
+        '<input type="text" id="msGrantUid" placeholder="Firebase UID" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);font-family:\'DM Sans\';font-size:0.9rem;">' +
+        '<div style="font-size:0.75rem;color:var(--warm-gray);margin-top:2px;">Find the UID in Contacts or Firebase Auth console.</div>' +
+      '</div>' +
+      '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;">' +
+        '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+        '<button class="btn btn-primary" onclick="window._membershipGrant()">Grant</button>' +
+      '</div>';
+    openModal(html);
+  };
+
+  window._membershipGrant = async function() {
+    var uid = (document.getElementById('msGrantUid').value || '').trim();
+    if (!uid) { showToast('UID is required.', true); return; }
+
+    var db = MastAdmin.getData('db');
+    var tenantId = MastAdmin.getData('tenantId');
+    if (!db || !tenantId) return;
+
+    var now = new Date().toISOString();
+    var oneYear = new Date(Date.now() + 365 * 86400000).toISOString().slice(0, 10);
+    var memberData = {
+      status: 'active',
+      startDate: now.slice(0, 10),
+      renewalDate: oneYear,
+      expiryDate: oneYear,
+      processor: 'manual',
+      processorSubscriptionId: null,
+      processorCustomerId: null,
+      plan: 'manual-grant',
+      paymentStatus: null,
+      updatedAt: now
+    };
+
+    try {
+      await db.ref(tenantId + '/public/accounts/' + uid + '/wallet/membership').set(memberData);
+      await db.ref(tenantId + '/customers/' + uid + '/membership').set(memberData);
+      writeAudit('create', 'membership-grant', uid);
+      closeModal();
+      showToast('Membership granted');
+      loadMembershipAdmin();
+    } catch (err) {
+      showToast('Failed: ' + err.message, true);
+    }
+  };
+
+  window._membershipRevoke = async function(uid) {
+    if (!confirm('Revoke this membership? The customer will lose all benefits immediately.')) return;
+
+    var db = MastAdmin.getData('db');
+    var tenantId = MastAdmin.getData('tenantId');
+    if (!db || !tenantId) return;
+
+    var now = new Date().toISOString();
+    var updates = { status: 'expired', expiredAt: now, updatedAt: now, paymentStatus: null };
+
+    try {
+      await db.ref(tenantId + '/public/accounts/' + uid + '/wallet/membership').update(updates);
+      await db.ref(tenantId + '/customers/' + uid + '/membership').update(updates);
+      writeAudit('update', 'membership-revoke', uid);
+      showToast('Membership revoked');
+      loadMembershipAdmin();
+    } catch (err) {
+      showToast('Failed: ' + err.message, true);
+    }
+  };
+
+  window._membershipReactivate = async function(uid) {
+    var db = MastAdmin.getData('db');
+    var tenantId = MastAdmin.getData('tenantId');
+    if (!db || !tenantId) return;
+
+    var now = new Date().toISOString();
+    var oneYear = new Date(Date.now() + 365 * 86400000).toISOString().slice(0, 10);
+    var updates = {
+      status: 'active',
+      startDate: now.slice(0, 10),
+      renewalDate: oneYear,
+      expiryDate: oneYear,
+      processor: 'manual',
+      paymentStatus: null,
+      cancelledAt: null,
+      expiredAt: null,
+      updatedAt: now
+    };
+
+    try {
+      await db.ref(tenantId + '/public/accounts/' + uid + '/wallet/membership').update(updates);
+      await db.ref(tenantId + '/customers/' + uid + '/membership').update(updates);
+      writeAudit('update', 'membership-reactivate', uid);
+      showToast('Membership reactivated');
+      loadMembershipAdmin();
+    } catch (err) {
+      showToast('Failed: ' + err.message, true);
+    }
+  };
+
+  // ============================================================
   // MODULE REGISTRATION
   // ============================================================
 
@@ -732,6 +1151,10 @@
       'loyalty': {
         tab: 'loyaltyTab',
         setup: function() { loadLoyaltyAdmin(); }
+      },
+      'membership': {
+        tab: 'membershipTab',
+        setup: function() { loadMembershipAdmin(); }
       }
     },
     lazyLoad: function() { loadWalletDashboard(); },
@@ -757,6 +1180,9 @@
       giftCardsData = {};
       giftCardConfig = null;
       loyaltyConfig = null;
+      membershipConfig = null;
+      membershipMembers = [];
+      currentMemberFilter = 'all';
     }
   });
 

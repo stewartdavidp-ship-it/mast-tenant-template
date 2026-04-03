@@ -6125,6 +6125,14 @@
       </div>
     </div>
 
+    <!-- Admin: Membership Tab -->
+    <div id="membershipTab" style="display:none;">
+      <div class="section-header">
+        <h2>Membership</h2>
+      </div>
+      <div id="membershipAdmin"></div>
+    </div>
+
     <!-- ===== SALES TAB (PoS) ===== -->
     <div id="salesTab" style="display:none;">
       <div class="section-header">
@@ -11400,7 +11408,7 @@ var SECTION_ROUTES = {
   'make':   ['jobs', 'production', 'procurement'],
   'market': ['social', 'blog', 'newsletter', 'stories'],
   'sell':   ['pos', 'orders', 'commissions', 'wholesale', 'galleries', 'receipts', 'terms'],
-  'cart':   ['wallet', 'gift-cards', 'coupons', 'loyalty', 'promotions'],
+  'cart':   ['wallet', 'gift-cards', 'coupons', 'loyalty', 'membership', 'promotions'],
   'show':   ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'],
   'ship':   ['pack', 'ship'],
   'run':    ['trips', 'expenses', 'reports', 'financials', 'contacts', 'customers', 'email-log', 'studio', 'team'],
@@ -11410,7 +11418,7 @@ var SECTION_ROUTES = {
   'advise': ['advisor']
 };
 
-var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'expensesTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab'];
+var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'expensesTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab'];
 
 var currentRoute = 'dashboard';
 
@@ -11830,7 +11838,7 @@ homepage: { src: 'modules/homepage.js', routes: ['homepage'] },
   brand: { src: 'modules/brand.js', routes: ['brand'] },
   promotions: { src: 'modules/promotions.js', routes: ['promotions'] },
   book: { src: 'modules/book.js', routes: ['book', 'book-detail', 'enrollments', 'instructors', 'instructor-detail', 'resources', 'resource-detail', 'passes', 'pass-detail', 'calendar', 'book-reports'] },
-  cart: { src: 'modules/cart.js', routes: ['wallet', 'gift-cards', 'loyalty'] },
+  cart: { src: 'modules/cart.js', routes: ['wallet', 'gift-cards', 'loyalty', 'membership'] },
   advisor: { src: 'modules/advisor.js', routes: ['advisor'] },
   studio: { src: 'modules/studio.js', routes: ['studio'] },
   team: { src: 'modules/team.js', routes: ['team'] },
