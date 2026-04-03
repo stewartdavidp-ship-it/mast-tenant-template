@@ -29,7 +29,7 @@
     savedCoupons: [],          // [{ code, ... }] saved coupons from wallet
     customerPasses: [],        // [{ _id, passDefinitionId, visitsRemaining, expiresAt, status, priority, _def }] active passes with definitions
     passApplied: false,        // whether to apply class passes to this order
-    passAssignments: {},        // { cartItemIndex: { passId, passName, coversAmountCents, surchargeAmountCents } } — computed from customerPasses when passApplied=true
+    passAssignments: {},        // { cartItemIndex: { passes: [{ passId, passName, visitsUsed, coversCents, surchargeCents }], totalCoveredCents, totalSurchargeCents, totalVisitsUsed } } — multi-pass support
     serverBreakdown: null,      // cached response from computeOrderBreakdown engine
     seatAttendees: {},          // { cartItemIndex: [{ email }] } — attendee emails for multi-seat class items
     membershipConfig: null,     // tenant membership config (if enabled)
@@ -313,7 +313,13 @@
     if (checkoutData.passApplied && Object.keys(checkoutData.passAssignments).length > 0) {
       wd.passes = Object.keys(checkoutData.passAssignments).map(function(idx) {
         var a = checkoutData.passAssignments[idx];
-        return { itemIndex: parseInt(idx, 10), passId: a.passId, coversAmountCents: a.coversAmountCents, surchargeAmountCents: a.surchargeAmountCents, visitsUsed: a.visitsUsed || 1 };
+        return {
+          itemIndex: parseInt(idx, 10),
+          passes: a.passes,
+          totalCoversCents: a.totalCoveredCents,
+          totalSurchargeCents: a.totalSurchargeCents,
+          totalVisitsUsed: a.totalVisitsUsed
+        };
       });
     }
     if (checkoutData.loyaltyApplied && checkoutData.loyaltyBalance && checkoutData.loyaltyConfig) {
@@ -954,13 +960,20 @@
             if (checkoutData.customerPasses.length > 0 && Object.keys(checkoutData.passAssignments).length > 0) {
               var passCoversCents = 0;
               var passVisitsUsed = 0;
+              var uniquePassIds = {};
               Object.keys(checkoutData.passAssignments).forEach(function(idx) {
-                passCoversCents += checkoutData.passAssignments[idx].coversAmountCents || 0;
-                passVisitsUsed += checkoutData.passAssignments[idx].visitsUsed || 1;
+                var a = checkoutData.passAssignments[idx];
+                passCoversCents += a.totalCoveredCents || 0;
+                passVisitsUsed += a.totalVisitsUsed || 0;
+                (a.passes || []).forEach(function(p) { uniquePassIds[p.passId] = true; });
               });
+              var passCount = Object.keys(uniquePassIds).length;
+              var passLabel = passCount > 1
+                ? '&#127915; Use class passes (' + passVisitsUsed + ' visit' + (passVisitsUsed !== 1 ? 's' : '') + ' across ' + passCount + ' passes, ' + formatMoney(passCoversCents / 100) + ' off)'
+                : '&#127915; Use class pass (' + passVisitsUsed + ' visit' + (passVisitsUsed !== 1 ? 's' : '') + ', ' + formatMoney(passCoversCents / 100) + ' off)';
               html += '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;color:var(--text);margin-bottom:8px;">' +
                 '<input type="checkbox" id="coPassToggle" ' + (checkoutData.passApplied ? 'checked' : '') + ' data-co="toggle-pass">' +
-                '&#127915; Use class pass (' + passVisitsUsed + ' visit' + (passVisitsUsed !== 1 ? 's' : '') + ', ' + formatMoney(passCoversCents / 100) + ' off)' +
+                passLabel +
               '</label>';
               if (checkoutData.passApplied) sRunning -= passCoversCents;
             }
@@ -1395,24 +1408,26 @@
     return true;
   }
 
-  // Auto-apply passes to class items in cart (greedy: soonest-expiring first)
+  // Auto-apply passes to class items in cart (greedy: soonest-expiring first, spans multiple passes)
   function autoApplyPasses() {
     checkoutData.passAssignments = {};
     var passes = checkoutData.customerPasses;
     if (!passes || passes.length === 0) return;
 
     var items = window.MastCart.getItems();
-    // Sort passes: most visits remaining first (maximizes single-pass coverage for series)
+    // Sort passes: soonest-expiring first, fewest remaining visits as tiebreaker
     passes.sort(function(a, b) {
-      var aVis = (a.visitsRemaining !== null && a.visitsRemaining !== undefined) ? a.visitsRemaining : 999;
-      var bVis = (b.visitsRemaining !== null && b.visitsRemaining !== undefined) ? b.visitsRemaining : 999;
-      return bVis - aVis;
+      var aExp = a.expiresAt || '9999-12-31';
+      var bExp = b.expiresAt || '9999-12-31';
+      if (aExp !== bExp) return aExp < bExp ? -1 : 1;
+      var aVis = (a.visitsRemaining != null) ? a.visitsRemaining : 999;
+      var bVis = (b.visitsRemaining != null) ? b.visitsRemaining : 999;
+      return aVis - bVis;
     });
     // Track remaining visits per pass (don't mutate originals)
     var visitBudget = {};
     passes.forEach(function(p) {
-      visitBudget[p._id] = (p.visitsRemaining !== null && p.visitsRemaining !== undefined)
-        ? p.visitsRemaining : 999; // unlimited
+      visitBudget[p._id] = (p.visitsRemaining != null) ? p.visitsRemaining : 999; // unlimited
     });
 
     for (var i = 0; i < items.length; i++) {
@@ -1421,19 +1436,17 @@
       var classId = item.classId;
       if (!classId) continue;
 
-      // Find best pass for this item — each session needs a visit
-      // For series classes, totalSessions determines visit count (not qty)
+      // Each session needs a visit — series uses totalSessions
       var visitsNeeded = item.totalSessions || item.qty || 1;
       var qty = visitsNeeded;
       var unitPriceCents = Math.round((item.priceCents || Math.round(parsePrice(item.price) * 100)) / visitsNeeded);
       var totalCoveredCents = 0;
       var totalSurchargeCents = 0;
-      var visitsUsed = 0;
-      var assignedPassId = null;
-      var assignedPassName = '';
+      var totalVisitsUsed = 0;
+      // Track per-pass usage: { passId: { passName, visitsUsed, coversCents, surchargeCents } }
+      var passesUsedMap = {};
 
       for (var q = 0; q < qty; q++) {
-        // Find a pass with remaining budget for this unit
         for (var j = 0; j < passes.length; j++) {
           var pass = passes[j];
           if (visitBudget[pass._id] <= 0) continue;
@@ -1450,21 +1463,31 @@
 
           totalCoveredCents += unitCoversCents;
           totalSurchargeCents += unitSurchargeCents;
-          visitsUsed++;
-          assignedPassId = pass._id;
-          assignedPassName = def.name || pass.passDefinitionName || 'Class Pass';
+          totalVisitsUsed++;
           visitBudget[pass._id]--;
+
+          // Accumulate into per-pass map
+          if (!passesUsedMap[pass._id]) {
+            passesUsedMap[pass._id] = {
+              passId: pass._id,
+              passName: def.name || pass.passDefinitionName || 'Class Pass',
+              visitsUsed: 0, coversCents: 0, surchargeCents: 0
+            };
+          }
+          passesUsedMap[pass._id].visitsUsed++;
+          passesUsedMap[pass._id].coversCents += unitCoversCents;
+          passesUsedMap[pass._id].surchargeCents += unitSurchargeCents;
           break;
         }
       }
 
-      if (visitsUsed > 0) {
+      if (totalVisitsUsed > 0) {
+        var passesArr = Object.keys(passesUsedMap).map(function(pid) { return passesUsedMap[pid]; });
         checkoutData.passAssignments[i] = {
-          passId: assignedPassId,
-          passName: assignedPassName,
-          coversAmountCents: totalCoveredCents,
-          surchargeAmountCents: totalSurchargeCents,
-          visitsUsed: visitsUsed
+          passes: passesArr,
+          totalCoveredCents: totalCoveredCents,
+          totalSurchargeCents: totalSurchargeCents,
+          totalVisitsUsed: totalVisitsUsed
         };
       }
     }
@@ -1967,13 +1990,20 @@
       if (checkoutData.customerPasses.length > 0 && Object.keys(checkoutData.passAssignments).length > 0) {
         var pCoversCents = 0;
         var pVisits = 0;
+        var pUniqueIds = {};
         Object.keys(checkoutData.passAssignments).forEach(function(idx) {
-          pCoversCents += checkoutData.passAssignments[idx].coversAmountCents || 0;
-          pVisits += checkoutData.passAssignments[idx].visitsUsed || 1;
+          var a = checkoutData.passAssignments[idx];
+          pCoversCents += a.totalCoveredCents || 0;
+          pVisits += a.totalVisitsUsed || 0;
+          (a.passes || []).forEach(function(p) { pUniqueIds[p.passId] = true; });
         });
+        var pCount = Object.keys(pUniqueIds).length;
+        var pLabel = pCount > 1
+          ? '&#127915; Use class passes (' + pVisits + ' visit' + (pVisits !== 1 ? 's' : '') + ' across ' + pCount + ' passes, ' + formatMoney(pCoversCents / 100) + ' off)'
+          : '&#127915; Use class pass (' + pVisits + ' visit' + (pVisits !== 1 ? 's' : '') + ', ' + formatMoney(pCoversCents / 100) + ' off)';
         html += '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;color:var(--text);margin-bottom:8px;">' +
           '<input type="checkbox" id="coPassToggle" ' + (checkoutData.passApplied ? 'checked' : '') + ' data-co="toggle-pass">' +
-          '&#127915; Use class pass (' + pVisits + ' visit' + (pVisits !== 1 ? 's' : '') + ', ' + formatMoney(pCoversCents / 100) + ' off)' +
+          pLabel +
         '</label>';
         if (checkoutData.passApplied) walletRunningCents -= pCoversCents;
       }
@@ -2132,13 +2162,14 @@
         if (it.classId) mapped.classId = it.classId;
         if (it.sessionId) mapped.sessionId = it.sessionId;
         if (it.priceCents != null) mapped.priceCents = it.priceCents;
-        // Attach pass assignment for server-side deduction
+        // Attach pass assignment for server-side deduction (multi-pass)
         var passAssignment = checkoutData.passAssignments[idx];
-        if (passAssignment) {
-          mapped.passId = passAssignment.passId;
-          mapped.passCoversAmountCents = passAssignment.coversAmountCents;
-          mapped.surchargeAmountCents = passAssignment.surchargeAmountCents;
-          mapped.passVisitsUsed = passAssignment.visitsUsed || 1;
+        if (passAssignment && passAssignment.passes && passAssignment.passes.length > 0) {
+          mapped.passAssignments = passAssignment.passes;
+          mapped.passId = passAssignment.passes[0].passId; // backward compat
+          mapped.passCoversAmountCents = passAssignment.totalCoveredCents;
+          mapped.surchargeAmountCents = passAssignment.totalSurchargeCents;
+          mapped.passVisitsUsed = passAssignment.totalVisitsUsed;
         }
         // Attach seat attendee emails for multi-seat class items
         if (checkoutData.seatAttendees[idx] && checkoutData.seatAttendees[idx].length > 0) {
