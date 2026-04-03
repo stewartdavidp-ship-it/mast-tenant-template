@@ -1232,8 +1232,16 @@ window.TENANT_READY.then(function() {
 
     // Totals
     html += '<div class="order-detail-section"><div class="order-totals">';
-    if (order.subtotal != null) html += '<div class="order-total-row"><span>Subtotal</span><span>' + formatPrice(order.subtotal) + '</span></div>';
-    if (order.shippingCost != null) html += '<div class="order-total-row"><span>Shipping</span><span>' + (order.shippingCost === 0 ? 'Free' : formatPrice(order.shippingCost)) + '</span></div>';
+    var displaySubtotal = order.subtotal || 0;
+    if (order.membershipDiscount && order.membershipDiscount.discountCents) {
+      displaySubtotal = displaySubtotal + (order.membershipDiscount.discountCents / 100);
+    }
+    if (displaySubtotal > 0) html += '<div class="order-total-row"><span>Subtotal</span><span>' + formatPrice(displaySubtotal) + '</span></div>';
+    if (order.membershipDiscount && order.membershipDiscount.discountCents) {
+      html += '<div class="order-total-row" style="color:var(--accent,#C6A96C)"><span>' + esc(order.membershipDiscount.programName || 'Member Discount') + '</span><span>-' + formatPrice(order.membershipDiscount.discountCents / 100) + '</span></div>';
+    }
+    var shipLabel = (order.shippingMethod && order.shippingMethod.label) || 'Shipping';
+    if (order.shippingCost != null) html += '<div class="order-total-row"><span>' + esc(shipLabel) + '</span><span>' + (order.shippingCost === 0 ? 'Free' : formatPrice(order.shippingCost)) + '</span></div>';
     if (order.tax != null && order.tax > 0) html += '<div class="order-total-row"><span>Tax</span><span>' + formatPrice(order.tax) + '</span></div>';
     var couponAmt = (order.coupon && order.coupon.discount) || order.couponDiscount || 0;
     if (couponAmt > 0) html += '<div class="order-total-row" style="color:var(--teal,#2A7C6F)"><span>Coupon (' + esc((order.coupon && order.coupon.code) || '') + ')</span><span>-' + formatPrice(couponAmt) + '</span></div>';

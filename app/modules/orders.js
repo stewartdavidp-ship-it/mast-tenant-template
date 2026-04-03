@@ -450,14 +450,42 @@
     });
 
     // Order summary
-    var summaryHtml = '<div class="order-summary-row"><span>Subtotal</span><span>$' + (o.subtotal || 0).toFixed(2) + '</span></div>';
+    var displaySubtotal = o.subtotal || 0;
+    if (o.membershipDiscount && o.membershipDiscount.discountCents) {
+      displaySubtotal = displaySubtotal + (o.membershipDiscount.discountCents / 100);
+    }
+    var summaryHtml = '<div class="order-summary-row"><span>Subtotal</span><span>$' + displaySubtotal.toFixed(2) + '</span></div>';
+    if (o.membershipDiscount && o.membershipDiscount.discountCents) {
+      summaryHtml += '<div class="order-summary-row discount"><span>' + esc(o.membershipDiscount.programName || 'Member Discount') + '</span><span>-$' + (o.membershipDiscount.discountCents / 100).toFixed(2) + '</span></div>';
+    }
+    var shipLabel = (o.shippingMethod && o.shippingMethod.label) || 'Standard';
+    var shipCost = o.shippingCost || 0;
+    summaryHtml += '<div class="order-summary-row"><span>' + esc(shipLabel) + '</span><span>' + (shipCost > 0 ? '$' + shipCost.toFixed(2) : 'Free') + '</span></div>';
     if (o.tax) {
       var displayRate = o.taxRate || (o.subtotal ? o.tax / o.subtotal : 0);
       summaryHtml += '<div class="order-summary-row"><span>Tax (' + (displayRate * 100).toFixed(1) + '% ' + (o.taxState || '') + ')</span><span>$' + o.tax.toFixed(2) + '</span></div>';
     }
-    summaryHtml += '<div class="order-summary-row"><span>Shipping (' + esc((o.shippingMethod && o.shippingMethod.label) || 'Standard') + ')</span><span>$' + (o.shippingCost || 0).toFixed(2) + '</span></div>';
     if (o.coupon && o.coupon.discount) {
       summaryHtml += '<div class="order-summary-row discount"><span>Coupon (' + esc(o.coupon.code) + ')</span><span>-$' + o.coupon.discount.toFixed(2) + '</span></div>';
+    }
+    if (o.walletDeductions && o.walletDeductions.totalDeductionCents > 0) {
+      if (o.walletDeductions.loyalty && o.walletDeductions.loyalty.amountCents > 0) {
+        summaryHtml += '<div class="order-summary-row discount"><span>Loyalty</span><span>-$' + (o.walletDeductions.loyalty.amountCents / 100).toFixed(2) + '</span></div>';
+      }
+      var gcTotal = 0;
+      if (o.walletDeductions.giftCards) {
+        for (var gi = 0; gi < o.walletDeductions.giftCards.length; gi++) gcTotal += o.walletDeductions.giftCards[gi].amountCents || 0;
+      }
+      if (gcTotal > 0) {
+        summaryHtml += '<div class="order-summary-row discount"><span>Gift Card</span><span>-$' + (gcTotal / 100).toFixed(2) + '</span></div>';
+      }
+      var credTotal = 0;
+      if (o.walletDeductions.credits) {
+        for (var ci = 0; ci < o.walletDeductions.credits.length; ci++) credTotal += o.walletDeductions.credits[ci].amountCents || 0;
+      }
+      if (credTotal > 0) {
+        summaryHtml += '<div class="order-summary-row discount"><span>Store Credit</span><span>-$' + (credTotal / 100).toFixed(2) + '</span></div>';
+      }
     }
     summaryHtml += '<div class="order-summary-row total"><span>Total</span><span class="order-summary-value">$' + (o.total || 0).toFixed(2) + '</span></div>';
 
@@ -3215,12 +3243,18 @@
         var html = '<div class="order-detail-section" style="background:rgba(0,0,0,0.15);border-radius:8px;padding:1rem;">' +
           '<div class="order-detail-section-title">Original Order Payment</div>' +
           '<div style="display:flex;flex-direction:column;gap:4px;font-size:0.85rem;">';
-        html += '<div style="display:flex;justify-content:space-between;"><span>Subtotal</span><span>' + fp(order.subtotal) + '</span></div>';
+        var rmaSubtotal = order.subtotal || 0;
+        if (order.membershipDiscount && order.membershipDiscount.discountCents) rmaSubtotal += order.membershipDiscount.discountCents / 100;
+        html += '<div style="display:flex;justify-content:space-between;"><span>Subtotal</span><span>' + fp(rmaSubtotal) + '</span></div>';
+        if (order.membershipDiscount && order.membershipDiscount.discountCents) {
+          html += '<div style="display:flex;justify-content:space-between;color:var(--amber-light);"><span>' + esc(order.membershipDiscount.programName || 'Member Discount') + '</span><span>-' + fp(order.membershipDiscount.discountCents / 100) + '</span></div>';
+        }
         if (order.coupon && order.coupon.discount) {
           html += '<div style="display:flex;justify-content:space-between;color:var(--teal);"><span>Coupon (' + esc(order.coupon.code) + ')</span><span>-' + fp(order.coupon.discount) + '</span></div>';
         }
         html += '<div style="display:flex;justify-content:space-between;"><span>Tax</span><span>' + fp(order.tax) + '</span></div>';
-        html += '<div style="display:flex;justify-content:space-between;"><span>Shipping</span><span>' + fp(order.shippingCost) + '</span></div>';
+        var rmaShipLabel = (order.shippingMethod && order.shippingMethod.label) || 'Shipping';
+        html += '<div style="display:flex;justify-content:space-between;"><span>' + esc(rmaShipLabel) + '</span><span>' + (order.shippingCost > 0 ? fp(order.shippingCost) : 'Free') + '</span></div>';
         var wd = order.walletDeductions || {};
         if (wd.totalDeductionCents > 0) {
           if (wd.loyalty && wd.loyalty.amountCents > 0) {
