@@ -44,8 +44,8 @@
     if (!container) return;
     container.innerHTML = '<div class="loading">Loading wallet overview...</div>';
 
-    var db = MastAdmin.getData('db');
-    var tenantId = MastAdmin.getData('tenantId');
+    var db = firebase.database();
+    var tenantId = MastDB.tenantId();
     if (!db || !tenantId) {
       container.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);"><p>Not connected.</p></div>';
       return;
@@ -103,8 +103,8 @@
     if (!container) return;
 
     // Load config first, then issued cards
-    var db = MastAdmin.getData('db');
-    var tenantId = MastAdmin.getData('tenantId');
+    var db = firebase.database();
+    var tenantId = MastDB.tenantId();
     if (!db || !tenantId) return;
 
     Promise.all([
@@ -341,7 +341,7 @@
     var amountCents = Math.round(amountVal * 100);
     var email = (document.getElementById('gcIssueEmail').value || '').trim();
     var note = (document.getElementById('gcIssueNote').value || '').trim();
-    var currentUser = MastAdmin.getData('currentUser');
+    var currentUser = firebase.auth().currentUser;
     var adminUid = currentUser ? currentUser.uid : 'admin';
 
     // Generate code (client-side for manual issuance)
@@ -434,7 +434,7 @@
     var customCode = (document.getElementById('gcPromoCode').value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
     var email = (document.getElementById('gcPromoEmail').value || '').trim();
     var note = (document.getElementById('gcPromoNote').value || '').trim();
-    var currentUser = MastAdmin.getData('currentUser');
+    var currentUser = firebase.auth().currentUser;
     var adminUid = currentUser ? currentUser.uid : 'admin';
 
     // Generate code or use custom
@@ -550,8 +550,8 @@
     var container = document.getElementById('loyaltyTab');
     if (!container) return;
 
-    var db = MastAdmin.getData('db');
-    var tenantId = MastAdmin.getData('tenantId');
+    var db = firebase.database();
+    var tenantId = MastDB.tenantId();
     if (!db || !tenantId) return;
 
     container.innerHTML = '<div class="section-header"><h2>Loyalty Program</h2></div><div class="loading">Loading...</div>';
@@ -734,8 +734,8 @@
     var container = document.getElementById('membershipAdmin');
     if (!container) { console.log('[Membership] container not found'); return; }
 
-    var db = MastAdmin.getData('db');
-    var tenantId = MastAdmin.getData('tenantId');
+    var db = firebase.database();
+    var tenantId = MastDB.tenantId();
     console.log('[Membership] db:', !!db, 'tenantId:', tenantId);
     if (!db || !tenantId) return;
 
@@ -1020,8 +1020,8 @@
       updatedAt: new Date().toISOString()
     };
 
-    var db = MastAdmin.getData('db');
-    var tenantId = MastAdmin.getData('tenantId');
+    var db = firebase.database();
+    var tenantId = MastDB.tenantId();
     if (!db || !tenantId) return;
 
     try {
@@ -1056,8 +1056,8 @@
     var uid = (document.getElementById('msGrantUid').value || '').trim();
     if (!uid) { showToast('UID is required.', true); return; }
 
-    var db = MastAdmin.getData('db');
-    var tenantId = MastAdmin.getData('tenantId');
+    var db = firebase.database();
+    var tenantId = MastDB.tenantId();
     if (!db || !tenantId) return;
 
     var now = new Date().toISOString();
@@ -1090,8 +1090,8 @@
   window._membershipRevoke = async function(uid) {
     if (!confirm('Revoke this membership? The customer will lose all benefits immediately.')) return;
 
-    var db = MastAdmin.getData('db');
-    var tenantId = MastAdmin.getData('tenantId');
+    var db = firebase.database();
+    var tenantId = MastDB.tenantId();
     if (!db || !tenantId) return;
 
     var now = new Date().toISOString();
@@ -1109,8 +1109,8 @@
   };
 
   window._membershipReactivate = async function(uid) {
-    var db = MastAdmin.getData('db');
-    var tenantId = MastAdmin.getData('tenantId');
+    var db = firebase.database();
+    var tenantId = MastDB.tenantId();
     if (!db || !tenantId) return;
 
     var now = new Date().toISOString();
