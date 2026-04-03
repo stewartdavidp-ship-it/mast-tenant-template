@@ -265,6 +265,18 @@
 
   function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
+  // Dark-mode-friendly error toast
+  function showMsError(msg) {
+    var existing = document.getElementById('msErrorToast');
+    if (existing) existing.remove();
+    var toast = document.createElement('div');
+    toast.id = 'msErrorToast';
+    toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);max-width:420px;width:90%;padding:14px 20px;background:var(--surface-dark,#2a2420);color:var(--text-primary,#f5f0eb);border:1px solid var(--danger,#e74c3c);border-radius:10px;font-family:"DM Sans",sans-serif;font-size:0.9rem;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.3);display:flex;align-items:center;gap:12px;';
+    toast.innerHTML = '<span style="flex:1;">' + esc(msg) + '</span><button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--text-secondary,#a09080);cursor:pointer;font-size:1.1rem;padding:0 4px;">&times;</button>';
+    document.body.appendChild(toast);
+    setTimeout(function() { if (toast.parentElement) toast.remove(); }, 6000);
+  }
+
   function formatDate(iso) {
     if (!iso) return '';
     var d = new Date(iso);
@@ -589,14 +601,14 @@
         window.location.href = result.sessionUrl;
       } else {
         var errMsg = result.error || data.error || 'Unable to start checkout. Please try again.';
-        alert(errMsg);
+        showMsError(errMsg);
         joiningInProgress = false;
         if (btn) { btn.disabled = false; btn.textContent = 'Join ' + esc(memberConfig.programName || 'Membership'); }
       }
     })
     .catch(function(err) {
       console.error('[membership] Join error:', err);
-      alert('Something went wrong. Please try again.');
+      showMsError('Something went wrong. Please try again.');
       joiningInProgress = false;
       if (btn) { btn.disabled = false; btn.textContent = 'Join ' + esc(memberConfig.programName || 'Membership'); }
     });
@@ -624,12 +636,12 @@
         memberStatus.expiryDate = result.expiryDate;
         renderActiveMember();
       } else {
-        alert(result.error || data.error || 'Unable to cancel. Please try again.');
+        showMsError(result.error || data.error || 'Unable to cancel. Please try again.');
       }
     })
     .catch(function(err) {
       console.error('[membership] Cancel error:', err);
-      alert('Something went wrong. Please try again.');
+      showMsError('Something went wrong. Please try again.');
     });
   };
 
