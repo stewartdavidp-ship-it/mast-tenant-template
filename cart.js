@@ -175,6 +175,12 @@
   function addItem(item) {
     if (!item || !item.pid || !item.name) return cart;
 
+    // Reject if stock-tracked product has 0 available
+    if (typeof item.availableStock === 'number' && item.availableStock <= 0) {
+      showToast('Sorry, ' + item.name + ' is out of stock.');
+      return cart;
+    }
+
     var maxQty = item.isWholesale ? MAX_QTY_WHOLESALE : MAX_QTY;
     // For strict-mode products, cap at available stock
     if (typeof item.availableStock === 'number' && item.availableStock > 0) {
