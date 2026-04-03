@@ -528,6 +528,27 @@
       }).catch(function() {});
   }
 
+  // ── Membership Icon Visibility ──
+  var _membershipEnabled = false;
+
+  function showMembershipIcons() {
+    if (!_membershipEnabled) return;
+    var li = document.getElementById('membershipIconLi');
+    var mob = document.getElementById('membershipIconMobile');
+    if (li) li.style.display = '';
+    if (mob) mob.style.display = '';
+  }
+
+  function checkMembershipEnabled() {
+    if (!TENANT_ID || !FIREBASE_CONFIG.databaseURL) return;
+    fetch(FIREBASE_CONFIG.databaseURL + '/' + TENANT_ID + '/public/config/membership/enabled.json')
+      .then(function(r) { return r.ok ? r.json() : false; })
+      .then(function(enabled) {
+        _membershipEnabled = !!enabled;
+        showMembershipIcons();
+      }).catch(function() {});
+  }
+
   // ── Drawer HTML Injection ──
   function injectDrawer() {
     // Cart icon SVG template
@@ -548,6 +569,12 @@
         '<path d="M21 7H3c-1.1 0-2 .9-2 2v6c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2zm0 8H3V9h18v6zm-3-3.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM21 4H3c-1.1 0-2 .45-2 1v1h22V5c0-.55-.9-1-2-1z"/>' +
       '</svg>';
 
+    // Membership icon SVG template (badge/card)
+    var membershipSvg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">' +
+        '<path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V6h16v12zM6 10h2v2H6v-2zm0 4h8v2H6v-2zm10-4h2v2h-2v-2zm-4 0h2v2h-2v-2z"/>' +
+      '</svg>';
+
     // Desktop + mobile cart & wallet icons — inject into nav once it's built
     function injectCartIcons() {
       var navLinks = document.querySelector('.nav-links');
@@ -561,6 +588,16 @@
             giftCardSvg +
           '</a>';
         navLinks.appendChild(giftLi);
+
+        // Membership icon (before wallet) — hidden until config check
+        var membershipLi = document.createElement('li');
+        membershipLi.id = 'membershipIconLi';
+        membershipLi.style.display = 'none';
+        membershipLi.innerHTML =
+          '<a href="membership.html" class="cart-icon-wrap" id="membershipIconWrap" title="Membership">' +
+            membershipSvg +
+          '</a>';
+        navLinks.appendChild(membershipLi);
 
         // Wallet icon (before cart)
         var walletLi = document.createElement('li');
@@ -595,6 +632,18 @@
           navToggle.parentNode.insertBefore(giftMobile, navToggle);
         }
 
+        // Membership icon mobile (before wallet) — hidden until config check
+        if (!document.getElementById('membershipIconMobile')) {
+          var membershipMobile = document.createElement('a');
+          membershipMobile.href = 'membership.html';
+          membershipMobile.className = 'cart-icon-wrap cart-icon-mobile';
+          membershipMobile.id = 'membershipIconMobile';
+          membershipMobile.title = 'Membership';
+          membershipMobile.style.display = 'none';
+          membershipMobile.innerHTML = membershipSvg;
+          navToggle.parentNode.insertBefore(membershipMobile, navToggle);
+        }
+
         // Wallet icon mobile (before cart)
         if (!document.getElementById('walletIconMobile')) {
           var walletMobile = document.createElement('a');
@@ -618,6 +667,7 @@
       }
       updateBadge();
       showGiftCardIcons();
+      showMembershipIcons();
     }
 
     // Try immediately; if nav not built yet, wait for the event
@@ -940,6 +990,7 @@
     initFirebase();
     loadFreeShippingThreshold();
     checkGiftCardEnabled();
+    checkMembershipEnabled();
     injectDrawer();
     updateBadge();
     renderDrawerItems();
