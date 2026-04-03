@@ -822,19 +822,20 @@
       var txnHtml = '';
       var txns = p.transactions || {};
       var txnList = Object.keys(txns).map(function(k) { return txns[k]; })
-        .sort(function(a, b) { return (b.timestamp || '').localeCompare(a.timestamp || ''); });
+        .sort(function(a, b) { return (b.createdAt || b.timestamp || '').localeCompare(a.createdAt || a.timestamp || ''); });
       if (txnList.length > 0) {
         txnHtml = '<div class="mw-pass-txns" id="passTxn_' + esc(p._id) + '" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);">';
         txnList.forEach(function(tx) {
           var txType = tx.type || 'used';
           var isRestore = txType === 'restored';
-          var visits = tx.visitsUsed || tx.visits || 1;
+          var visits = Math.abs(tx.visits || tx.visitsUsed || 1);
           var label = isRestore ? 'Restored' : 'Used';
           var color = isRestore ? 'var(--accent-green, #2D7D46)' : 'var(--warm-gray, #9B958E)';
           var sign = isRestore ? '+' : '-';
+          var txDate = tx.createdAt || tx.timestamp || '';
           txnHtml += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:0.8rem;">' +
             '<div><span style="color:' + color + ';font-weight:500;">' + label + '</span>' +
-            (tx.timestamp ? '<span style="color:var(--warm-gray-light);margin-left:8px;">' + formatDate(tx.timestamp) + '</span>' : '') +
+            (txDate ? '<span style="color:var(--warm-gray-light);margin-left:8px;">' + formatDate(txDate) + '</span>' : '') +
             '</div>' +
             '<span style="color:' + color + ';font-weight:500;">' + sign + visits + ' visit' + (visits !== 1 ? 's' : '') + '</span>' +
           '</div>';
