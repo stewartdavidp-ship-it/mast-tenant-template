@@ -37,6 +37,10 @@
   var shippingConfigCache = null; // cached flat-rate config
   var breakdownTimer = null;      // debounce timer for engine calls
   var isSubmitting = false;
+  var walletLoadedResolve = null;
+  var walletLoadedPromise = new Promise(function(resolve) { walletLoadedResolve = resolve; });
+  var walletLoadPending = 4;       // credits, gift cards, loyalty, passes
+  function walletLoadDone() { walletLoadPending--; if (walletLoadPending <= 0 && walletLoadedResolve) { walletLoadedResolve(); walletLoadedResolve = null; } }
   var placesLoaded = false;
   var placesApiKey = null;
 
@@ -854,10 +858,12 @@
       if (pids.indexOf(items[i].pid) === -1) pids.push(items[i].pid);
     }
 
-    // Fetch product shipping data, shipping config, and tax in parallel
+    // Fetch product shipping data, shipping config, tax, and wait for wallet in parallel
     fetchProductShippingData(pids, function (productMap) {
       fetchShippingConfig(function (config) {
         fetchTaxRate(checkoutData.shipping.state, function (rate) {
+          // Wait for wallet data before rendering (prevents missing toggles on fast address fill)
+          walletLoadedPromise.then(function() {
           // Wholesale orders: no tax (buyers provide resale certificate)
           checkoutData.taxRate = isWholesaleCart() ? 0 : rate;
           checkoutData.taxState = checkoutData.shipping.state;
@@ -1020,6 +1026,7 @@
             }
             if (breakdown) syncCouponMessage(breakdown);
           });
+          }); // walletLoadedPromise.then
         });
       });
     });
@@ -1155,9 +1162,9 @@
     checkoutData.walletCredits = [];
     checkoutData.walletCreditApplied = false;
     var user = window.MastCart && window.MastCart.getCurrentUser();
-    if (!user || user.isAnonymous) return;
+    if (!user || user.isAnonymous) { walletLoadDone(); return; }
     var db = getDb();
-    if (!db) return;
+    if (!db) { walletLoadDone(); return; }
 
     db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/wallet/credits')
       .orderByChild('status').equalTo('active').once('value')
@@ -1182,9 +1189,11 @@
         if (checkoutData.walletCredits.length > 0) {
           checkoutData.walletCreditApplied = true;
         }
+        walletLoadDone();
       })
       .catch(function(err) {
         console.warn('[checkout] Failed to load wallet credits:', err);
+        walletLoadDone();
       });
   }
 
@@ -1193,9 +1202,9 @@
     checkoutData.walletGiftCards = [];
     checkoutData.walletGiftCardApplied = false;
     var user = window.MastCart && window.MastCart.getCurrentUser();
-    if (!user || user.isAnonymous) return;
+    if (!user || user.isAnonymous) { walletLoadDone(); return; }
     var db = getDb();
-    if (!db) return;
+    if (!db) { walletLoadDone(); return; }
 
     db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/wallet/giftCards')
       .once('value')
@@ -1224,9 +1233,11 @@
         if (checkoutData.walletGiftCards.length > 0) {
           checkoutData.walletGiftCardApplied = true;
         }
+        walletLoadDone();
       })
       .catch(function(err) {
         console.warn('[checkout] Failed to load wallet gift cards:', err);
+        walletLoadDone();
       });
   }
 
@@ -1262,9 +1273,9 @@
     checkoutData.customerPasses = [];
     checkoutData.passAssignments = {};
     var user = window.MastCart && window.MastCart.getCurrentUser();
-    if (!user || user.isAnonymous) return;
+    if (!user || user.isAnonymous) { walletLoadDone(); return; }
     var db = getDb();
-    if (!db) return;
+    if (!db) { walletLoadDone(); return; }
 
     db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/passes')
       .once('value')
@@ -1343,10 +1354,12 @@
             checkoutData.passApplied = true;
             autoApplyPasses();
           }
+          walletLoadDone();
         });
       })
       .catch(function(err) {
         console.warn('[checkout] Failed to load customer passes:', err);
+        walletLoadDone();
       });
   }
 
@@ -1439,9 +1452,9 @@
     checkoutData.loyaltyBalance = null;
     checkoutData.loyaltyApplied = false;
     var user = window.MastCart && window.MastCart.getCurrentUser();
-    if (!user || user.isAnonymous) return;
+    if (!user || user.isAnonymous) { walletLoadDone(); return; }
     var db = getDb();
-    if (!db) return;
+    if (!db) { walletLoadDone(); return; }
 
     // Load config
     db.ref(TENANT_ID + '/admin/walletConfig').once('value')
@@ -1472,9 +1485,11 @@
           }
           checkoutData.loyaltyBalance = data;
         }
+        walletLoadDone();
       })
       .catch(function(err) {
         console.warn('[checkout] Failed to load loyalty data:', err);
+        walletLoadDone();
       });
   }
 
@@ -1981,6 +1996,11 @@
         tc.innerHTML = breakdown ? buildTotalsFromBreakdown(breakdown) : buildTotalsErrorHtml();
       }
       if (breakdown) syncCouponMessage(breakdown);
+      // Update button label if $0 wallet-covered order
+      if (breakdown && breakdown.chargeAmountCents <= 0) {
+        var btn = document.querySelector('[data-co="place-order"]');
+        if (btn) btn.textContent = 'Place Order';
+      }
     });
 
     // Footer
