@@ -12126,7 +12126,7 @@ function toggleAllEmailTriggers() {
     emailTriggerPrefs[t.id] = newState;
   });
 
-  MastDB._ref().update(updates).then(function() {
+  MastDB._multiUpdate(updates).then(function() {
     showToast((newState ? 'Enabled' : 'Disabled') + ' all email triggers (' + EMAIL_TRIGGER_REGISTRY.length + ')');
     renderEmailTriggers();
   }).catch(function(err) {
@@ -12160,7 +12160,7 @@ function toggleEmailTrigger(triggerId, enabled) {
   // Save to Firebase
   var updates = {};
   updates['config/emailTriggers/' + triggerId] = enabled;
-  MastDB._ref().update(updates).then(function() {
+  MastDB._multiUpdate(updates).then(function() {
     emailTriggerPrefs[triggerId] = enabled;
     showToast((enabled ? 'Enabled' : 'Disabled') + ': ' + getTriggerName(triggerId));
     renderEmailTriggers();
