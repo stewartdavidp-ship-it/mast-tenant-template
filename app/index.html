@@ -7073,9 +7073,12 @@
         </div><!-- end emailInnerProvider -->
 
         <div id="emailInnerTriggers" style="display:none;">
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
-            Control which automated emails are sent to customers. Toggle individual emails on or off. Click any email to preview what your customers will see.
-          </p>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+            <p style="font-size:0.85rem;color:var(--warm-gray);margin:0;flex:1;">
+              Control which automated emails are sent to customers. Toggle individual emails on or off. Click any email to preview what your customers will see.
+            </p>
+            <div id="emailTriggersGlobalPill" style="flex-shrink:0;margin-left:16px;"></div>
+          </div>
           <div id="emailTriggersContent"></div>
         </div>
       </div>
@@ -12031,6 +12034,16 @@ function renderEmailTriggers() {
   var moduleOrder = ['Orders', 'Returns', 'Booking', 'Commissions', 'Contacts', 'POS', 'Team', 'Waivers'];
   var moduleIcons = { Orders: '\uD83D\uDCE6', Returns: '\u21A9\uFE0F', Booking: '\uD83D\uDCC5', Commissions: '\uD83C\uDFA8', Contacts: '\uD83D\uDCEC', POS: '\uD83D\uDCF1', Team: '\uD83D\uDC65', Waivers: '\uD83D\uDCDD' };
 
+  // Global pill
+  var totalTriggers = EMAIL_TRIGGER_REGISTRY.length;
+  var totalEnabled = EMAIL_TRIGGER_REGISTRY.filter(function(t) { return emailTriggerPrefs[t.id] !== false; }).length;
+  var allOn = totalEnabled === totalTriggers;
+  var pillEl = document.getElementById('emailTriggersGlobalPill');
+  if (pillEl) {
+    var pillColor = totalEnabled === 0 ? 'rgba(156,163,175,0.3)' : allOn ? 'var(--teal)' : 'rgba(42,124,111,0.5)';
+    pillEl.innerHTML = '<span onclick="toggleAllEmailTriggers()" style="font-size:0.8rem;color:#fff;background:' + pillColor + ';padding:5px 14px;border-radius:12px;font-weight:600;cursor:pointer;transition:background 0.15s ease;user-select:none;" title="Toggle all email triggers">' + totalEnabled + '/' + totalTriggers + ' on</span>';
+  }
+
   var h = '';
 
   moduleOrder.forEach(function(mod) {
@@ -12101,6 +12114,24 @@ function toggleEmailModule(mod) {
   if (el) el.style.display = emailModuleCollapsed[mod] ? 'none' : '';
   // Update chevron in the header
   renderEmailTriggers();
+}
+
+function toggleAllEmailTriggers() {
+  var anyOn = EMAIL_TRIGGER_REGISTRY.some(function(t) { return emailTriggerPrefs[t.id] !== false; });
+  var newState = !anyOn;
+
+  var updates = {};
+  EMAIL_TRIGGER_REGISTRY.forEach(function(t) {
+    updates['config/emailTriggers/' + t.id] = newState;
+    emailTriggerPrefs[t.id] = newState;
+  });
+
+  MastDB._ref().update(updates).then(function() {
+    showToast((newState ? 'Enabled' : 'Disabled') + ' all email triggers (' + EMAIL_TRIGGER_REGISTRY.length + ')');
+    renderEmailTriggers();
+  }).catch(function(err) {
+    showToast('Failed to update: ' + err.message, true);
+  });
 }
 
 function toggleEmailModuleTriggers(mod) {
