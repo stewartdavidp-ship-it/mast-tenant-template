@@ -223,8 +223,8 @@ function renderWholesaleUsers() {
   });
 }
 
-function addWholesaleUser() {
-  var email = prompt('Enter the buyer\'s Google email address:');
+async function addWholesaleUser() {
+  var email = await mastPrompt('Enter the buyer\'s Google email address:', { title: 'Add Wholesale User' });
   if (!email) return;
   email = email.trim().toLowerCase();
   if (!email.includes('@')) { showToast('Invalid email address', true); return; }
@@ -243,9 +243,9 @@ function addWholesaleUser() {
   });
 }
 
-function revokeWholesaleUser(key) {
+async function revokeWholesaleUser(key) {
   var email = wsKeyToEmail(key);
-  if (!confirm('Revoke wholesale access for ' + email + '?')) return;
+  if (!await mastConfirm('Revoke wholesale access for ' + email + '?', { title: 'Revoke Access', danger: true })) return;
   MastDB._ref('admin/wholesaleAuthorized/' + key).update({ active: false }).then(function() {
     showToast('Access revoked for ' + email);
     renderWholesaleUsers();
@@ -369,10 +369,10 @@ function approveWholesaleRequest(requestId) {
   });
 }
 
-function denyWholesaleRequest(requestId) {
+async function denyWholesaleRequest(requestId) {
   var r = wholesaleRequestsData[requestId];
   if (!r) return;
-  if (!confirm('Deny wholesale access request from ' + r.email + '?')) return;
+  if (!await mastConfirm('Deny wholesale access request from ' + r.email + '?', { title: 'Deny Request' })) return;
 
   var updates = {};
   updates['admin/wholesaleRequests/' + requestId + '/status'] = 'denied';

@@ -866,7 +866,7 @@
   // ============================================================
 
   async function cancelSession(sessionId) {
-    if (!confirm('Cancel this session? Students will need to be notified.')) return;
+    if (!await mastConfirm('Cancel this session? Students will need to be notified.', { title: 'Cancel Session', danger: true })) return;
     try {
       await MastDB.classSessions.update(sessionId, { status: 'cancelled', cancelReason: 'Admin cancelled' });
       MastAdmin.showToast('Session cancelled');
@@ -1804,7 +1804,7 @@
       return;
     }
 
-    if (!confirm('Publish this class? It will appear on the public storefront.')) return;
+    if (!await mastConfirm('Publish this class? It will appear on the public storefront.', { title: 'Publish Class' })) return;
 
     try {
       await MastDB.classes.update(id, { status: 'published', publishedAt: new Date().toISOString() });
@@ -1818,7 +1818,7 @@
   };
 
   window._bookUnpublishClass = async function(id) {
-    if (!confirm('Unpublish this class? It will be hidden from the storefront.')) return;
+    if (!await mastConfirm('Unpublish this class? It will be hidden from the storefront.', { title: 'Unpublish Class' })) return;
     try {
       await MastDB.classes.update(id, { status: 'draft' });
       MastAdmin.showToast('Class unpublished — back to draft');
@@ -1836,7 +1836,7 @@
   window._bookMarkLate = function(id) { updateEnrollmentStatus(id, 'late'); };
   window._bookMarkNoShow = function(id) { updateEnrollmentStatus(id, 'no-show'); };
   window._bookCancelEnrollment = async function(id) {
-    if (!confirm('Cancel this enrollment?')) return;
+    if (!await mastConfirm('Cancel this enrollment?', { title: 'Cancel Enrollment', danger: true })) return;
     // Get enrollment to check if waitlisted (for renumbering)
     try {
       var snap = await MastDB.enrollments.get(id);
@@ -2122,7 +2122,7 @@
     });
     msg += '\nCancel these sessions and notify enrolled students?';
 
-    if (!confirm(msg)) return;
+    if (!await mastConfirm(msg, { title: 'Cancel Sessions', danger: true })) return;
 
     // Execute cancellation for each flagged session
     var totalAffected = 0;
@@ -2741,9 +2741,9 @@
   };
 
   window._bookWalkinManual = async function(sessionId, classId) {
-    var name = prompt('Student name:');
+    var name = await mastPrompt('Student name:', { title: 'Walk-in Student' });
     if (!name || !name.trim()) return;
-    var email = prompt('Student email (optional):') || '';
+    var email = await mastPrompt('Student email (optional):', { title: 'Walk-in Student' }) || '';
 
     // Auto-create student record
     if (email.trim()) ensureStudentByEmail(name.trim(), email.trim());

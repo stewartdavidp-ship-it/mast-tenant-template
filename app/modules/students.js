@@ -716,7 +716,7 @@
   }
 
   async function deleteStudent(studentId) {
-    if (!confirm('Delete this student? This cannot be undone.')) return;
+    if (!await mastConfirm('Delete this student? This cannot be undone.', { title: 'Delete Student', danger: true })) return;
     try {
       await MastDB._ref('students/' + studentId).remove();
       showToast('Student deleted');
@@ -912,7 +912,7 @@
   }
 
   async function deleteClearanceType(clearanceTypeId) {
-    if (!confirm('Delete this clearance type? This cannot be undone.')) return;
+    if (!await mastConfirm('Delete this clearance type? This cannot be undone.', { title: 'Delete Clearance Type', danger: true })) return;
     try {
       await MastDB._ref('settings/clearanceTypes/' + clearanceTypeId).remove();
       showToast('Clearance type deleted');
@@ -1019,7 +1019,7 @@
   }
 
   async function deleteDoc(studentId, docIdx) {
-    if (!confirm('Delete this document? This cannot be undone.')) return;
+    if (!await mastConfirm('Delete this document? This cannot be undone.', { title: 'Delete Document', danger: true })) return;
     try {
       if (studentId) {
         var stu = studentsData.find(function(s) { return s._key === studentId; });
@@ -1274,7 +1274,7 @@
   }
 
   async function deleteWaiverTemplate(templateId) {
-    if (!confirm('Delete this waiver template? This cannot be undone.')) return;
+    if (!await mastConfirm('Delete this waiver template? This cannot be undone.', { title: 'Delete Waiver Template', danger: true })) return;
     try {
       await MastDB._ref('settings/waiverTemplates/' + templateId).remove();
       await MastDB._ref('public/waivers/' + templateId).remove();
@@ -1356,7 +1356,7 @@
     var url = 'https://' + domain + '/waiver.html?t=' + encodeURIComponent(id);
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(url).then(function() { showToast('Waiver link copied'); });
-    } else { prompt('Copy this link:', url); }
+    } else { mastCopyFallback('Copy this link', url); }
   };
   window.studentsViewSignatures = function(templateId) {
     viewingSignaturesTemplateId = templateId; currentView = 'waiverSignatures';

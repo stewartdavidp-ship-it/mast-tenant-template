@@ -979,7 +979,7 @@ function editShowSale(showId, saleId) {
 }
 
 async function deleteShowSale(showId, saleId) {
-  if (!confirm('Delete this sale record?')) return;
+  if (!await mastConfirm('Delete this sale record?', { title: 'Delete Sale', danger: true })) return;
   var s = showsData[showId];
   var multiDay = isMultiDayShow(s);
   var dateEl = document.getElementById('executeContent');
@@ -1413,7 +1413,7 @@ function editShowExpense(showId, expenseId) {
 }
 
 async function deleteShowExpense(showId, expenseId) {
-  if (!confirm('Delete this expense?')) return;
+  if (!await mastConfirm('Delete this expense?', { title: 'Delete Expense', danger: true })) return;
   try {
     await MastDB.shows.subRef(showId, 'history', 'expenses', expenseId).remove();
     showToast('Expense deleted.');
@@ -1626,7 +1626,7 @@ async function saveShowStaff(showId) {
 }
 
 async function removeShowStaff(showId, uid) {
-  if (!confirm('Remove this staff member from the show?')) return;
+  if (!await mastConfirm('Remove this staff member from the show?', { title: 'Remove Staff' })) return;
   try {
     await MastDB.shows.subRef(showId, 'prep', 'staffing', uid).remove();
     showToast('Staff removed.');
@@ -1718,7 +1718,7 @@ async function toggleShowInventoryPacked(showId, itemId, packed) {
 }
 
 async function removeShowInventoryItem(showId, itemId) {
-  if (!confirm('Remove this item from the pull list?')) return;
+  if (!await mastConfirm('Remove this item from the pull list?', { title: 'Remove Item' })) return;
   try {
     await MastDB.shows.subRef(showId, 'prep', 'inventory', itemId).remove();
     showToast('Item removed.');
@@ -1859,7 +1859,7 @@ async function autoPublishShow(showId, showData) {
 
 async function archiveShow(showId) {
   if (!hasPermission('shows', 'delete')) { showToast('You do not have permission to delete shows.', true); return; }
-  if (!confirm('Delete this show? This cannot be undone.')) return;
+  if (!await mastConfirm('Delete this show? This cannot be undone.', { title: 'Delete Show', danger: true })) return;
   try {
     await MastDB.shows.remove(showId);
     // Also remove from public events if it was published

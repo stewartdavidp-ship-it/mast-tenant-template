@@ -1300,7 +1300,7 @@
   async function nlUnsubscribe(subId) {
     var sub = nlSubscribers.find(function(s) { return s.id === subId; });
     if (!sub) return;
-    if (!confirm('Remove ' + sub.name + ' (' + sub.email + ') from the mailing list?')) return;
+    if (!await mastConfirm('Remove ' + sub.name + ' (' + sub.email + ') from the mailing list?', { title: 'Remove Subscriber', danger: true })) return;
     try {
       sub.status = 'unsubscribed';
       sub.unsubscribedAt = new Date().toISOString();

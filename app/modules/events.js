@@ -587,7 +587,7 @@
     if (navigator.clipboard) {
       navigator.clipboard.writeText(url).then(function() { showToast('URL copied!'); });
     } else {
-      prompt('Copy this URL:', url);
+      mastCopyFallback('Copy this URL', url);
     }
   }
 
@@ -679,8 +679,8 @@
     }).catch(function(err) { showToast('Error: ' + err.message, true); });
   }
 
-  function deleteShow(showId) {
-    if (!confirm('Delete this show and all its data? This cannot be undone.')) return;
+  async function deleteShow(showId) {
+    if (!await mastConfirm('Delete this show and all its data? This cannot be undone.', { title: 'Delete Show', danger: true })) return;
     var show = showsData[showId];
     DB.shows.remove(showId).then(function() {
       var promises = [];
@@ -854,8 +854,8 @@
     p.then(function() { evCloseModal('evBoothModal'); }).catch(function(err) { showToast('Error: ' + err.message, true); });
   }
 
-  function deleteBooth(showId, boothId) {
-    if (!confirm('Delete this booth?')) return;
+  async function deleteBooth(showId, boothId) {
+    if (!await mastConfirm('Delete this booth?', { title: 'Delete Booth', danger: true })) return;
     DB.booths.remove(showId, boothId).then(function() {
       return DB.boothPins.remove(showId, boothId);
     }).then(function() { showToast('Booth deleted'); }).catch(function(err) { showToast('Error: ' + err.message, true); });
@@ -976,20 +976,20 @@
     }).catch(function(err) { showToast('Upload failed: ' + err.message, true); });
   }
 
-  function removeFloorPlan(showId) {
-    if (!confirm('Remove floor plan and clear all pin placements?')) return;
+  async function removeFloorPlan(showId) {
+    if (!await mastConfirm('Remove floor plan and clear all pin placements?', { title: 'Remove Floor Plan', danger: true })) return;
     DB.shows.update(showId, { floorPlanUrl: null, updatedAt: nowISO() }).then(function() {
       return DB.boothPins.remove(showId);
     }).then(function() { showToast('Floor plan removed'); }).catch(function(err) { showToast('Error: ' + err.message, true); });
   }
 
-  function clearAllPins(showId) {
-    if (!confirm('Clear all pin placements?')) return;
+  async function clearAllPins(showId) {
+    if (!await mastConfirm('Clear all pin placements?', { title: 'Clear Pins', danger: true })) return;
     DB.boothPins.remove(showId).then(function() { showToast('All pins cleared'); }).catch(function(err) { showToast('Error: ' + err.message, true); });
   }
 
-  function detectBooths(showId) {
-    if (!confirm('Use AI to auto-detect booth positions from the floor plan? This will add new booths.')) return;
+  async function detectBooths(showId) {
+    if (!await mastConfirm('Use AI to auto-detect booth positions from the floor plan? This will add new booths.', { title: 'Detect Booths' })) return;
     showToast('Detecting booths...');
     callEventsFunction('eventsDetectBooths', { showId: showId }).then(function(result) {
       showToast('Detected ' + (result.boothsCreated || 0) + ' booths');
@@ -1238,8 +1238,8 @@
     }).catch(function(err) { showToast('Error: ' + err.message, true); });
   }
 
-  function deleteVendor(showId, vendorId) {
-    if (!confirm('Delete this vendor?')) return;
+  async function deleteVendor(showId, vendorId) {
+    if (!await mastConfirm('Delete this vendor?', { title: 'Delete Vendor', danger: true })) return;
     var v = vendorsData[vendorId];
     var p = Promise.resolve();
     if (v && v.boothId) {
@@ -1250,8 +1250,8 @@
     }).catch(function(err) { showToast('Error: ' + err.message, true); });
   }
 
-  function sendVendorInvite(showId, vendorId) {
-    if (!confirm('Send invite email to this vendor?')) return;
+  async function sendVendorInvite(showId, vendorId) {
+    if (!await mastConfirm('Send invite email to this vendor?', { title: 'Send Invite' })) return;
     callEventsFunction('eventsSendVendorInvite', { showId: showId, vendorId: vendorId }).then(function() {
       showToast('Invite sent!');
     }).catch(function(err) { showToast('Error: ' + err.message, true); });
@@ -1361,8 +1361,8 @@
     }).catch(function(err) { showToast('Error: ' + err.message, true); });
   }
 
-  function sendSubmissionNotifications(showId) {
-    if (!confirm('Send email notifications to all reviewed vendors (accepted & declined)?')) return;
+  async function sendSubmissionNotifications(showId) {
+    if (!await mastConfirm('Send email notifications to all reviewed vendors (accepted & declined)?', { title: 'Send Notifications' })) return;
     callEventsFunction('eventsSendNotifications', { showId: showId }).then(function(result) {
       showToast('Notifications sent to ' + (result.sentCount || 0) + ' vendors');
     }).catch(function(err) { showToast('Error: ' + err.message, true); });

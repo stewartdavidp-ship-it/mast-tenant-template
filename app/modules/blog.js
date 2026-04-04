@@ -630,7 +630,7 @@
 
   async function blogDeletePost() {
     if (!blogCurrentPost) return;
-    if (!confirm('Delete this blog post? This cannot be undone.')) return;
+    if (!await mastConfirm('Delete this blog post? This cannot be undone.', { title: 'Delete Post', danger: true })) return;
     try {
       await MastDB.blog.posts.ref(blogCurrentPostId).remove();
       blogPosts = blogPosts.filter(function(p) { return p.id !== blogCurrentPostId; });

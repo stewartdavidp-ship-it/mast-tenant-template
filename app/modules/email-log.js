@@ -329,7 +329,7 @@
       showToast('No recipient address on this email.', true);
       return;
     }
-    if (!confirm('Resend this email to ' + email.to + '?')) return;
+    if (!await mastConfirm('Resend this email to ' + email.to + '?', { title: 'Resend Email' })) return;
 
     try {
       var result = await firebase.functions().httpsCallable('sendTestEmail')({ toEmail: email.to });

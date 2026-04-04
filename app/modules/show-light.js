@@ -659,7 +659,7 @@
   }
 
   async function slDeleteShow(id) {
-    if (!confirm('Delete this show?')) return;
+    if (!await mastConfirm('Delete this show?', { title: 'Delete Show', danger: true })) return;
     try {
       await MastDB.showLight.shows.ref(id).remove();
       delete slShows[id];
@@ -953,8 +953,8 @@
     renderApplyFetch(document.getElementById('slApplyContent'), slShows[slCurrentShowId] || {});
   }
 
-  function slAddParsedField() {
-    var name = prompt('Field name (e.g. "Product Description"):');
+  async function slAddParsedField() {
+    var name = await mastPrompt('Field name (e.g. "Product Description"):', { title: 'Add Field' });
     if (!name) return;
     if (!slParsedRequirements) slParsedRequirements = { fields: [], photos: [] };
     if (!slParsedRequirements.fields) slParsedRequirements.fields = [];
@@ -969,8 +969,8 @@
     renderApplyFetch(document.getElementById('slApplyContent'), slShows[slCurrentShowId] || {});
   }
 
-  function slAddParsedPhoto() {
-    var slot = prompt('Photo slot name (e.g. "Process Photo 1"):');
+  async function slAddParsedPhoto() {
+    var slot = await mastPrompt('Photo slot name (e.g. "Process Photo 1"):', { title: 'Add Photo Slot' });
     if (!slot) return;
     if (!slParsedRequirements) slParsedRequirements = { fields: [], photos: [] };
     if (!slParsedRequirements.photos) slParsedRequirements.photos = [];

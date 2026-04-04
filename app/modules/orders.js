@@ -1929,7 +1929,7 @@
   }
 
   async function shippingVoidLabel(orderId) {
-    if (!confirm('Void this shipping label? The postage will be refunded to your account.')) return;
+    if (!await mastConfirm('Void this shipping label? The postage will be refunded to your account.', { title: 'Void Label', danger: true })) return;
     var o = orders[orderId];
     if (!o || !o.tracking || !o.tracking.shipmentId) {
       showToast('No API-purchased label to void', true);
@@ -2672,7 +2672,7 @@
   }
 
   async function removeCommissionDoc(commId, docId) {
-    if (!confirm('Remove this document?')) return;
+    if (!await mastConfirm('Remove this document?', { title: 'Remove Document', danger: true })) return;
     try {
       await MastDB.commissions.documents(commId, docId).remove();
       if (commissionsData[commId] && commissionsData[commId].documents) {

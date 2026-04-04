@@ -806,7 +806,7 @@
   }
 
   async function deleteReference(empId, refId) {
-    if (!confirm('Delete this reference? This cannot be undone.')) return;
+    if (!await mastConfirm('Delete this reference? This cannot be undone.', { title: 'Delete Reference', danger: true })) return;
     try {
       await MastDB._ref('admin/employees/' + empId + '/references/' + refId).remove();
       showToast('Reference deleted');
@@ -1030,7 +1030,7 @@
   }
 
   async function deleteDoc(docId) {
-    if (!confirm('Delete this document? This cannot be undone.')) return;
+    if (!await mastConfirm('Delete this document? This cannot be undone.', { title: 'Delete Document', danger: true })) return;
     try {
       await MastDB._ref('admin/documents/' + docId).remove();
       showToast('Document deleted');
@@ -1042,7 +1042,7 @@
   }
 
   async function deleteEmpDoc(empId, docId) {
-    if (!confirm('Delete this document? This cannot be undone.')) return;
+    if (!await mastConfirm('Delete this document? This cannot be undone.', { title: 'Delete Document', danger: true })) return;
     try {
       await MastDB._ref('admin/employees/' + empId + '/documents/' + docId).remove();
       showToast('Document deleted');
@@ -1205,7 +1205,7 @@
   }
 
   async function deleteEmployee(empId) {
-    if (!confirm('Delete this employee and all their data? This cannot be undone.')) return;
+    if (!await mastConfirm('Delete this employee and all their data? This cannot be undone.', { title: 'Delete Employee', danger: true })) return;
     try {
       await MastDB._ref('admin/employees/' + empId).remove();
       showToast('Employee deleted');

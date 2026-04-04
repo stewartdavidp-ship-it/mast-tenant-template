@@ -314,7 +314,7 @@
   };
 
   window.brandDeleteVariant = async function(type) {
-    if (!confirm('Delete the ' + type + ' variant?')) return;
+    if (!await mastConfirm('Delete the ' + type + ' variant?', { title: 'Delete Variant', danger: true })) return;
     try {
       // Delete from Storage if we have a path
       var data = getTypeData(type);

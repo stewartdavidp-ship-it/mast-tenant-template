@@ -342,7 +342,7 @@
   }
 
   async function deleteEquipment(equipId) {
-    if (!confirm('Delete this equipment? This cannot be undone.')) return;
+    if (!await mastConfirm('Delete this equipment? This cannot be undone.', { title: 'Delete Equipment', danger: true })) return;
     try {
       await MastDB.lpe.equipment.remove(equipId);
       showToast('Equipment deleted');
@@ -477,7 +477,7 @@
   }
 
   async function deleteFounder(founderId) {
-    if (!confirm('Delete this founder? This cannot be undone.')) return;
+    if (!await mastConfirm('Delete this founder? This cannot be undone.', { title: 'Delete Founder', danger: true })) return;
     try {
       await MastDB._ref('admin/lpe/founders/' + founderId).remove();
       showToast('Founder deleted');
@@ -597,7 +597,7 @@
   }
 
   async function deleteEmployee(empId) {
-    if (!confirm('Delete this team member? This cannot be undone.')) return;
+    if (!await mastConfirm('Delete this team member? This cannot be undone.', { title: 'Delete Team Member', danger: true })) return;
     try {
       await MastDB._ref('admin/employees/' + empId).remove();
       showToast('Team member deleted');
@@ -717,7 +717,7 @@
   }
 
   async function deleteOverheadItem(itemId) {
-    if (!confirm('Delete this overhead cost? This cannot be undone.')) return;
+    if (!await mastConfirm('Delete this overhead cost? This cannot be undone.', { title: 'Delete Overhead Cost', danger: true })) return;
     try {
       await MastDB._ref('admin/lpe/overheadItems/' + itemId).remove();
       showToast('Overhead cost deleted');

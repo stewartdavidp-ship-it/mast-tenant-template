@@ -11029,24 +11029,112 @@ function showToast(message, isError) {
 
 // Dark-mode-compliant confirm dialog (replaces native confirm())
 function showConfirmDialog(title, message, onConfirm, options) {
-  var confirmLabel = (options && options.confirmLabel) || 'OK';
-  var cancelLabel = (options && options.cancelLabel) || 'Cancel';
+  mastConfirm(message, { title: title, confirmLabel: (options && options.confirmLabel) || 'OK', cancelLabel: (options && options.cancelLabel) || 'Cancel' }).then(function(ok) { if (ok) onConfirm(); });
+}
+
+// ============================================================
+// Dark-Mode Dialog Utilities (replaces native alert/confirm/prompt)
+// ============================================================
+
+// mastConfirm(message, options?) → Promise<boolean>
+// options: { title, confirmLabel, cancelLabel, danger }
+function mastConfirm(message, options) {
+  var opts = options || {};
+  return new Promise(function(resolve) {
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+    var btnClass = opts.danger ? 'btn btn-danger' : 'btn btn-primary';
+    var h = '<div style="background:var(--cream);border-radius:10px;max-width:420px;width:90%;padding:24px 28px;box-shadow:0 8px 30px rgba(0,0,0,0.2);">';
+    if (opts.title) h += '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.2rem;font-weight:600;color:var(--charcoal);margin-bottom:12px;">' + esc(opts.title) + '</div>';
+    h += '<p style="font-size:0.9rem;color:var(--warm-gray);line-height:1.5;margin-bottom:20px;white-space:pre-line;">' + esc(message) + '</p>';
+    h += '<div style="display:flex;justify-content:flex-end;gap:8px;">';
+    h += '<button class="btn btn-secondary" id="mastDialogCancel">' + esc(opts.cancelLabel || 'Cancel') + '</button>';
+    h += '<button class="' + btnClass + '" id="mastDialogOK">' + esc(opts.confirmLabel || 'OK') + '</button>';
+    h += '</div></div>';
+    overlay.innerHTML = h;
+    document.body.appendChild(overlay);
+    function close(result) { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); resolve(result); }
+    overlay.querySelector('#mastDialogCancel').addEventListener('click', function() { close(false); });
+    overlay.querySelector('#mastDialogOK').addEventListener('click', function() { close(true); });
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) close(false); });
+    overlay.addEventListener('keydown', function(e) { if (e.key === 'Escape') { e.stopImmediatePropagation(); close(false); } });
+    overlay.setAttribute('tabindex', '-1');
+    overlay.focus();
+  });
+}
+
+// mastAlert(message, options?) → Promise<void>
+// options: { title, confirmLabel }
+function mastAlert(message, options) {
+  var opts = options || {};
+  return new Promise(function(resolve) {
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+    var h = '<div style="background:var(--cream);border-radius:10px;max-width:420px;width:90%;padding:24px 28px;box-shadow:0 8px 30px rgba(0,0,0,0.2);">';
+    if (opts.title) h += '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.2rem;font-weight:600;color:var(--charcoal);margin-bottom:12px;">' + esc(opts.title) + '</div>';
+    h += '<p style="font-size:0.9rem;color:var(--warm-gray);line-height:1.5;margin-bottom:20px;white-space:pre-line;">' + esc(message) + '</p>';
+    h += '<div style="display:flex;justify-content:flex-end;">';
+    h += '<button class="btn btn-primary" id="mastDialogOK">' + esc(opts.confirmLabel || 'OK') + '</button>';
+    h += '</div></div>';
+    overlay.innerHTML = h;
+    document.body.appendChild(overlay);
+    function close() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); resolve(); }
+    overlay.querySelector('#mastDialogOK').addEventListener('click', close);
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) close(); });
+    overlay.addEventListener('keydown', function(e) { if (e.key === 'Escape') { e.stopImmediatePropagation(); close(); } });
+    overlay.setAttribute('tabindex', '-1');
+    overlay.focus();
+  });
+}
+
+// mastPrompt(message, options?) → Promise<string|null>
+// options: { title, defaultValue, placeholder, confirmLabel }
+function mastPrompt(message, options) {
+  var opts = options || {};
+  return new Promise(function(resolve) {
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+    var h = '<div style="background:var(--cream);border-radius:10px;max-width:420px;width:90%;padding:24px 28px;box-shadow:0 8px 30px rgba(0,0,0,0.2);">';
+    if (opts.title) h += '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.2rem;font-weight:600;color:var(--charcoal);margin-bottom:12px;">' + esc(opts.title) + '</div>';
+    h += '<p style="font-size:0.9rem;color:var(--warm-gray);line-height:1.5;margin-bottom:12px;">' + esc(message) + '</p>';
+    h += '<input type="text" id="mastDialogInput" class="form-input" style="width:100%;margin-bottom:20px;" value="' + esc(opts.defaultValue || '') + '" placeholder="' + esc(opts.placeholder || '') + '">';
+    h += '<div style="display:flex;justify-content:flex-end;gap:8px;">';
+    h += '<button class="btn btn-secondary" id="mastDialogCancel">Cancel</button>';
+    h += '<button class="btn btn-primary" id="mastDialogOK">' + esc(opts.confirmLabel || 'OK') + '</button>';
+    h += '</div></div>';
+    overlay.innerHTML = h;
+    document.body.appendChild(overlay);
+    var input = overlay.querySelector('#mastDialogInput');
+    input.focus();
+    if (opts.defaultValue) input.select();
+    function close(result) { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); resolve(result); }
+    overlay.querySelector('#mastDialogCancel').addEventListener('click', function() { close(null); });
+    overlay.querySelector('#mastDialogOK').addEventListener('click', function() { close(input.value); });
+    input.addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); close(input.value); } });
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) close(null); });
+    overlay.addEventListener('keydown', function(e) { if (e.key === 'Escape') { e.stopImmediatePropagation(); close(null); } });
+  });
+}
+
+// mastCopyFallback(label, text) — fallback for clipboard copy failures
+function mastCopyFallback(label, text) {
   var overlay = document.createElement('div');
-  overlay.id = 'confirmDialogOverlay';
-  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
   var h = '<div style="background:var(--cream);border-radius:10px;max-width:420px;width:90%;padding:24px 28px;box-shadow:0 8px 30px rgba(0,0,0,0.2);">';
-  h += '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.2rem;font-weight:600;color:var(--charcoal);margin-bottom:12px;">' + esc(title) + '</div>';
-  h += '<p style="font-size:0.9rem;color:var(--warm-gray);line-height:1.5;margin-bottom:20px;">' + esc(message) + '</p>';
-  h += '<div style="display:flex;justify-content:flex-end;gap:8px;">';
-  h += '<button class="btn btn-secondary" id="confirmDialogCancel">' + esc(cancelLabel) + '</button>';
-  h += '<button class="btn btn-primary" id="confirmDialogOK">' + esc(confirmLabel) + '</button>';
+  h += '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.2rem;font-weight:600;color:var(--charcoal);margin-bottom:12px;">' + esc(label) + '</div>';
+  h += '<input type="text" id="mastCopyInput" class="form-input" style="width:100%;margin-bottom:20px;" value="' + esc(text) + '" readonly>';
+  h += '<div style="display:flex;justify-content:flex-end;">';
+  h += '<button class="btn btn-primary" id="mastCopyClose">Close</button>';
   h += '</div></div>';
   overlay.innerHTML = h;
   document.body.appendChild(overlay);
+  var input = overlay.querySelector('#mastCopyInput');
+  input.focus();
+  input.select();
   function close() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }
-  overlay.querySelector('#confirmDialogCancel').addEventListener('click', close);
-  overlay.querySelector('#confirmDialogOK').addEventListener('click', function() { close(); onConfirm(); });
+  overlay.querySelector('#mastCopyClose').addEventListener('click', close);
   overlay.addEventListener('click', function(e) { if (e.target === overlay) close(); });
+  overlay.addEventListener('keydown', function(e) { if (e.key === 'Escape') { e.stopImmediatePropagation(); close(); } });
 }
 
 // ============================================================
@@ -13449,7 +13537,7 @@ async function verifyDomainStatus(domain) {
 
 async function removeCustomDomain(domain) {
   if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
-  if (!confirm('Remove domain "' + domain + '"? This will disconnect it from your storefront.')) return;
+  if (!await mastConfirm('Remove domain "' + domain + '"? This will disconnect it from your storefront.', { title: 'Remove Domain', danger: true })) return;
 
   try {
     var token = await firebase.auth().currentUser.getIdToken();
@@ -13830,7 +13918,7 @@ async function generateAiApiKey() {
 }
 
 async function revokeAiApiKey(keyId) {
-  if (!confirm('Revoke this API key? Any AI tools using it will immediately lose access.')) return;
+  if (!await mastConfirm('Revoke this API key? Any AI tools using it will immediately lose access.', { title: 'Revoke API Key', danger: true })) return;
   if (!hasPermission('settings', 'update')) {
     showToast('You need admin permissions to revoke API keys.', true);
     return;
@@ -14754,7 +14842,7 @@ async function saveTaxRates() {
 
 async function clearTaxRates() {
   if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
-  if (!confirm('Clear all tax rates? Customers will not be charged tax until rates are re-configured.')) return;
+  if (!await mastConfirm('Clear all tax rates? Customers will not be charged tax until rates are re-configured.', { title: 'Clear Tax Rates', danger: true })) return;
   try {
     await MastDB.config.taxRates().remove();
     await writeAudit('update', 'settings', 'taxRates-cleared');
@@ -15100,7 +15188,7 @@ async function checkEmailDomainStatus() {
 
 async function removeEmailDomain() {
   if (!hasPermission('settings', 'update')) { showToast('You do not have permission.', true); return; }
-  if (!confirm('Remove email domain? This will delete the domain from Resend.')) return;
+  if (!await mastConfirm('Remove email domain? This will delete the domain from Resend.', { title: 'Remove Email Domain', danger: true })) return;
 
   var statusEl = document.getElementById('emailDomainStatus');
   if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Removing domain...</span>';
@@ -15160,7 +15248,7 @@ async function connectEtsy() {
 }
 
 async function disconnectEtsy() {
-  if (!confirm('Disconnect Etsy? You will need to re-authorize to sync orders again.')) return;
+  if (!await mastConfirm('Disconnect Etsy? You will need to re-authorize to sync orders again.', { title: 'Disconnect Etsy' })) return;
   try {
     await writeAudit('delete', 'settings', 'etsyConfig');
     // Remove metadata from RTDB (secrets in Secret Manager become stale — overwritten on reconnect)
@@ -20738,7 +20826,7 @@ async function changeUserRole(uid, newRole) {
       renderUsersList(); // reset dropdown
       return;
     }
-    if (!confirm('Change ' + (user.displayName || user.email) + ' from Owner to ' + (ROLE_DISPLAY_NAMES[newRole] || newRole) + '? They will lose Owner access on next login.')) {
+    if (!await mastConfirm('Change ' + (user.displayName || user.email) + ' from Owner to ' + (ROLE_DISPLAY_NAMES[newRole] || newRole) + '? They will lose Owner access on next login.', { title: 'Change Role', danger: true })) {
       renderUsersList(); // reset dropdown
       return;
     }
@@ -22780,7 +22868,7 @@ async function addOperator() {
 }
 
 async function removeOperator(opId) {
-  if (!confirm('Remove this operator?')) return;
+  if (!await mastConfirm('Remove this operator?', { title: 'Remove Operator' })) return;
   try {
     await writeAudit('delete', 'operators', opId);
     await MastDB.operators.ref(opId).remove();
@@ -22975,7 +23063,7 @@ function addStudioLocation() {
 }
 
 async function removeStudioLocation(locId) {
-  if (!confirm('Remove this studio location?')) return;
+  if (!await mastConfirm('Remove this studio location?', { title: 'Remove Location', danger: true })) return;
   try {
     await writeAudit('delete', 'locations', locId);
     await MastDB.studioLocations.ref(locId).remove();
@@ -23277,7 +23365,7 @@ function getHomeLocationId() {
 async function renameLocation(locId) {
   var loc = locationsData[locId];
   if (!loc) return;
-  var newName = prompt('Rename location:', loc.name);
+  var newName = await mastPrompt('Rename location:', { title: 'Rename Location', defaultValue: loc.name });
   if (!newName || newName.trim() === loc.name) return;
   try {
     await MastDB.locations.ref(locId).update({ name: newName.trim(), updatedAt: new Date().toISOString() });
@@ -23298,7 +23386,7 @@ async function archiveLocation(locId) {
     showToast('Move ' + itemCount + ' items out of this location first', true);
     return;
   }
-  if (!confirm('Archive "' + loc.name + '"? You can reactivate it later.')) return;
+  if (!await mastConfirm('Archive "' + loc.name + '"? You can reactivate it later.', { title: 'Archive Location' })) return;
   try {
     await MastDB.locations.ref(locId).update({ status: 'archived', updatedAt: new Date().toISOString() });
     await writeAudit('update', 'locations', locId);
@@ -23329,7 +23417,7 @@ function copyLocationQR(locId) {
   navigator.clipboard.writeText(url).then(function() {
     showToast('QR URL copied: ' + url);
   }).catch(function() {
-    prompt('Copy this QR URL:', url);
+    mastCopyFallback('Copy this QR URL', url);
   });
 }
 
@@ -23341,7 +23429,7 @@ function exportLocationToLabelKeeper(locId) {
   navigator.clipboard.writeText(labelData).then(function() {
     showToast('LabelKeeper format copied to clipboard');
   }).catch(function() {
-    prompt('Copy this LabelKeeper data:', labelData);
+    mastCopyFallback('Copy this data', labelData);
   });
 }
 
@@ -25360,9 +25448,9 @@ async function askStudioAssistant() {
 }
 
 // --- Reset ---
-function resetTestingProgress() {
+async function resetTestingProgress() {
   if (!isAdmin()) return;
-  if (!confirm('Reset all testing progress? This clears tasks, reflections, and questions for all missions.')) return;
+  if (!await mastConfirm('Reset all testing progress? This clears tasks, reflections, and questions for all missions.', { title: 'Reset Progress', danger: true })) return;
   var user = auth.currentUser;
   if (!user) return;
   MastDB.testingMode.ref(user.uid).remove();

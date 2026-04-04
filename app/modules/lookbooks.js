@@ -458,8 +458,8 @@
     });
   }
 
-  function deleteDoc(docId) {
-    if (!confirm('Delete this document? This cannot be undone.')) return;
+  async function deleteDoc(docId) {
+    if (!await mastConfirm('Delete this document? This cannot be undone.', { title: 'Delete Document', danger: true })) return;
     deleteDocument(docId).then(function() {
       showView('list');
     });

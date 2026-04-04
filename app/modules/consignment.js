@@ -769,8 +769,8 @@
   window.consignmentSaveNew = saveNewPlacement;
   window.consignmentEditLocation = editLocationModal;
   window.consignmentSaveLocation = saveLocation;
-  window.consignmentClose = function(id) {
-    if (confirm('Close this placement? You can reopen it later.')) closePlacement(id);
+  window.consignmentClose = async function(id) {
+    if (await mastConfirm('Close this placement? You can reopen it later.', { title: 'Close Placement' })) closePlacement(id);
   };
   window.consignmentReopen = reopenPlacement;
 

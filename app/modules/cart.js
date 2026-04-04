@@ -1092,7 +1092,7 @@
   };
 
   window._membershipRevoke = async function(uid) {
-    if (!confirm('Revoke this membership? The customer will lose all benefits immediately.')) return;
+    if (!await mastConfirm('Revoke this membership? The customer will lose all benefits immediately.', { title: 'Revoke Membership', danger: true })) return;
 
     var tenantId = MastDB.tenantId();
     if (!db || !tenantId) return;

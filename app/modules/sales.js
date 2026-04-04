@@ -262,7 +262,7 @@ function closeSaleDetail() {
 }
 
 async function reconcileSale(saleId) {
-  if (!confirm('Mark this sale as reconciled?')) return;
+  if (!await mastConfirm('Mark this sale as reconciled?', { title: 'Reconcile Sale' })) return;
   try {
     await MastDB.sales.ref(saleId).child('status').set('reconciled');
     await writeAudit('update', 'pos', saleId);
@@ -274,7 +274,7 @@ async function reconcileSale(saleId) {
 }
 
 async function voidSale(saleId) {
-  if (!confirm('Void this sale? Inventory will NOT be restored automatically.')) return;
+  if (!await mastConfirm('Void this sale? Inventory will NOT be restored automatically.', { title: 'Void Sale', danger: true })) return;
   try {
     await MastDB.sales.ref(saleId).child('status').set('voided');
     await writeAudit('update', 'pos', saleId);
@@ -872,7 +872,7 @@ function closeSalesEventDetail() {
 // === Event Status Transitions ===
 
 async function startFairMode(eventId) {
-  if (!confirm('Start fair mode? The PoS will link sales to this event.')) return;
+  if (!await mastConfirm('Start fair mode? The PoS will link sales to this event.', { title: 'Start Fair Mode' })) return;
   try {
     await MastDB.salesEvents.ref(eventId).update({
       status: 'active', updatedAt: new Date().toISOString()
@@ -903,7 +903,7 @@ async function closeEvent(eventId) {
   if (!ev) return;
   var stats = getEventAllocationsStats(ev);
   var unsoldCount = stats.totalPacked - stats.totalSold;
-  if (!confirm('Close this event?\n\n' + stats.totalSold + ' of ' + stats.totalPacked + ' items sold.' + (unsoldCount > 0 ? '\n' + unsoldCount + ' unsold items will be returned to their source location.' : ''))) return;
+  if (!await mastConfirm('Close this event?\n\n' + stats.totalSold + ' of ' + stats.totalPacked + ' items sold.' + (unsoldCount > 0 ? '\n' + unsoldCount + ' unsold items will be returned to their source location.' : ''), { title: 'Close Event' })) return;
   try {
     await MastDB.salesEvents.ref(eventId).update({
       status: 'closed', closedAt: new Date().toISOString(), updatedAt: new Date().toISOString()
@@ -1081,7 +1081,7 @@ async function saveManualSale(eventId) {
 }
 
 async function deleteEvent(eventId) {
-  if (!confirm('Delete this event? This cannot be undone.')) return;
+  if (!await mastConfirm('Delete this event? This cannot be undone.', { title: 'Delete Event', danger: true })) return;
   try {
     await writeAudit('delete', 'salesEvents', eventId);
     await MastDB.salesEvents.ref(eventId).remove();
@@ -1108,7 +1108,7 @@ async function adjustAllocation(eventId, productId, delta) {
 }
 
 async function removeAllocation(eventId, productId) {
-  if (!confirm('Remove this product from the packing list?')) return;
+  if (!await mastConfirm('Remove this product from the packing list?', { title: 'Remove Product' })) return;
   try {
     await writeAudit('update', 'salesEvents', eventId);
     await MastDB.salesEvents.allocations(eventId, productId).remove();
@@ -1367,7 +1367,7 @@ async function exitPackingMode() {
     if (ev && ev.status === 'planning') {
       var stats = getEventAllocationsStats(ev);
       if (stats.totalPacked > 0) {
-        if (confirm('Mark event as packed? (' + stats.totalPacked + ' items, ' + stats.productCount + ' products)')) {
+        if (await mastConfirm('Mark event as packed? (' + stats.totalPacked + ' items, ' + stats.productCount + ' products)', { title: 'Pack Event' })) {
           await MastDB.salesEvents.ref(packingEventId).update({
             status: 'packed', updatedAt: new Date().toISOString()
           });

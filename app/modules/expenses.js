@@ -34,18 +34,7 @@ var PLAID_BANK_LIMITS = { 'free': 0, 'publish': 2, 'launch': 2, 'operate': 3, 'c
 
 // Custom confirm dialog (dark mode compliant, replaces native confirm())
 function expConfirm(title, message, confirmLabel, onConfirm, cancelLabel) {
-  var h = '<div style="max-width:420px;">';
-  h += '<h3 style="margin:0 0 12px 0;font-size:1.1rem;">' + esc(title) + '</h3>';
-  h += '<p style="font-size:0.9rem;color:var(--warm-gray, #6B6560);line-height:1.5;margin:0 0 20px 0;white-space:pre-line;">' + esc(message) + '</p>';
-  h += '<div style="display:flex;justify-content:flex-end;gap:8px;">';
-  h += '<button class="btn btn-secondary" onclick="closeModal()">' + esc(cancelLabel || 'Cancel') + '</button>';
-  h += '<button class="btn btn-primary" id="expConfirmBtn">' + esc(confirmLabel || 'Continue') + '</button>';
-  h += '</div></div>';
-  openModal(h);
-  document.getElementById('expConfirmBtn').onclick = function() {
-    closeModal();
-    onConfirm();
-  };
+  mastConfirm(message, { title: title, confirmLabel: confirmLabel || 'Continue', cancelLabel: cancelLabel || 'Cancel' }).then(function(ok) { if (ok) onConfirm(); });
 }
 
 function getPlaidBankLimit() {

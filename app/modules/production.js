@@ -691,7 +691,7 @@ function renderProductionJobDetail(jobId) {
 }
 
 async function transitionProductionJob(jobId, newStatus) {
-  if (newStatus === 'cancelled' && !confirm('Cancel this job?')) return;
+  if (newStatus === 'cancelled' && !await mastConfirm('Cancel this job?', { title: 'Cancel Job', danger: true })) return;
   try {
     var updates = { status: newStatus };
     var now = new Date().toISOString();
@@ -856,7 +856,7 @@ async function doAddLineItem(jobId) {
 }
 
 async function removeLineItem(jobId, lineItemId) {
-  if (!confirm('Remove this line item?')) return;
+  if (!await mastConfirm('Remove this line item?', { title: 'Remove Line Item' })) return;
   try {
     await writeAudit('update', 'jobs', jobId);
     await MastDB.productionJobs.lineItems(jobId, lineItemId).remove();
@@ -1194,7 +1194,7 @@ async function doCompleteBuild(jobId, buildId) {
         if (completed < target) allMet = false;
       });
       if (allMet && liKeys.length > 0) {
-        if (confirm('All line items have met their targets! Mark job as completed?')) {
+        if (await mastConfirm('All line items have met their targets! Mark job as completed?', { title: 'Complete Job' })) {
           await MastDB.productionJobs.ref(jobId).update({
             status: 'completed',
             completedAt: now.toISOString()
@@ -1529,7 +1529,7 @@ function updateBuildMediaCount(buildId) {
 }
 
 async function deleteBuildMedia(buildId, mediaId) {
-  if (!confirm('Delete this photo?')) return;
+  if (!await mastConfirm('Delete this photo?', { title: 'Delete Photo', danger: true })) return;
   try {
     await writeAudit('update', 'jobs', selectedProductionJobId || buildId);
     await storage.ref(MastDB.storagePath('builds/' + buildId + '/' + mediaId + '.jpg')).delete();
@@ -1904,7 +1904,7 @@ function copyStoryQRUrl(url) {
   navigator.clipboard.writeText(url).then(function() {
     showToast('Product URL copied');
   }).catch(function() {
-    prompt('Copy this URL:', url);
+    mastCopyFallback('Copy this URL', url);
   });
 }
 
@@ -2010,7 +2010,7 @@ async function generateStoryQRCodes(storyId, jobId) {
 async function publishStoryFromDetail(storyId) {
   var story = storiesData[storyId];
   if (!story) return;
-  if (!confirm('Publish this story? It will be visible to customers.')) return;
+  if (!await mastConfirm('Publish this story? It will be visible to customers.', { title: 'Publish Story' })) return;
   try {
     var updates = {
       status: 'published',
@@ -2063,7 +2063,7 @@ async function publishStoryFromDetail(storyId) {
 }
 
 async function unpublishStoryFromDetail(storyId) {
-  if (!confirm('Unpublish this story?')) return;
+  if (!await mastConfirm('Unpublish this story?', { title: 'Unpublish Story' })) return;
   try {
     var story = storiesData[storyId];
     await MastDB.stories.ref(storyId).update({ status: 'draft', updatedAt: new Date().toISOString() });
@@ -2477,7 +2477,7 @@ async function publishStory(existingId) {
 }
 
 async function unpublishStory(storyId) {
-  if (!confirm('Unpublish this story?')) return;
+  if (!await mastConfirm('Unpublish this story?', { title: 'Unpublish Story' })) return;
   try {
     // Read story to get jobId before unpublishing
     var storySnap = await MastDB.stories.ref(storyId).once('value');

@@ -1032,10 +1032,10 @@
     }
   }
 
-  function archiveMaterialConfirm(id) {
+  async function archiveMaterialConfirm(id) {
     var m = materialsData[id];
     if (!m) return;
-    if (!confirm('Archive "' + m.name + '"? This cannot be undone.')) return;
+    if (!await mastConfirm('Archive "' + m.name + '"? This cannot be undone.', { title: 'Archive Material', danger: true })) return;
     archiveMaterial(id).then(function() {
       MastAdmin.showToast('Material archived');
     }).catch(function(err) {
@@ -1047,8 +1047,8 @@
   // Category Management
   // ============================================================
 
-  function addCategoryPrompt() {
-    var cat = prompt('Enter new category name:');
+  async function addCategoryPrompt() {
+    var cat = await mastPrompt('Enter new category name:', { title: 'Add Category' });
     if (!cat || !cat.trim()) return;
     cat = cat.trim();
 
@@ -1920,7 +1920,7 @@
   window.makerSeedMaterials = seedMaterials;
   window.makerResetOnboarding = resetOnboarding;
   window.makerResetOnboardingUI = async function() {
-    if (!confirm('This will clear your craft profile and remove all seeded draft materials. Continue?')) return;
+    if (!await mastConfirm('This will clear your craft profile and remove all seeded draft materials. Continue?', { title: 'Reset Onboarding', danger: true })) return;
     try {
       await resetOnboarding();
       renderMaterials();

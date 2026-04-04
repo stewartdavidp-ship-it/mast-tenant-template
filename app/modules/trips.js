@@ -643,9 +643,9 @@
     ref.child('label').set(locationObj.label);
   }
 
-  function discardActiveTrip() {
+  async function discardActiveTrip() {
     if (!activeTripData) return;
-    if (!confirm('Discard this trip? It will be deleted and not logged.')) return;
+    if (!await mastConfirm('Discard this trip? It will be deleted and not logged.', { title: 'Discard Trip', danger: true })) return;
     var user = auth.currentUser;
     if (!user) return;
     MastDB.trips.ref(user.uid + '/' + activeTripData.id).remove().then(function() {
@@ -1189,8 +1189,8 @@
     });
   }
 
-  function removeIrsRate(year) {
-    if (!confirm('Remove IRS rate for ' + year + '?')) return;
+  async function removeIrsRate(year) {
+    if (!await mastConfirm('Remove IRS rate for ' + year + '?', { title: 'Remove Rate' })) return;
     MastDB.tripSettings.subRef('irsRates', year).remove().then(function() {
       delete tripSettingsData.irsRates[year];
       renderIrsRates();
@@ -1240,8 +1240,8 @@
     });
   }
 
-  function removeTripLocation(key) {
-    if (!confirm('Remove this location?')) return;
+  async function removeTripLocation(key) {
+    if (!await mastConfirm('Remove this location?', { title: 'Remove Location' })) return;
     MastDB.tripLocations.ref(key).remove().then(function() {
       delete tripLocationsData[key];
       renderTripLocations();
