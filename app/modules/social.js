@@ -705,6 +705,7 @@
     try {
       var result = await firebase.functions().httpsCallable('socialAI')({
         action: 'shootCard',
+        tenantId: MastDB.tenantId(),
         treatment: treatmentName,
         subject: subject,
         productDetails: d.productName ? [d.productName, d.productPrice, d.productMaterials, d.productCategory].filter(Boolean).join(', ') : '',
@@ -813,6 +814,7 @@
       try {
         var visionResult = await firebase.functions().httpsCallable('socialAI')({
           action: 'readiness',
+          tenantId: MastDB.tenantId(),
           treatment: d.treatment,
           thumbnailBase64: d.thumbnailBase64
         });
@@ -834,6 +836,7 @@
       var treatment = SM_TREATMENTS.find(function(t) { return t.id === d.treatment; });
       var captionResult = await firebase.functions().httpsCallable('socialAI')({
         action: 'captions',
+        tenantId: MastDB.tenantId(),
         treatment: treatment ? treatment.name : d.treatment,
         platform: d.destinations.join(', '),
         productName: d.productName || null,

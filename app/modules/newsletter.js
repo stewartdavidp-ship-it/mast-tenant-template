@@ -828,7 +828,7 @@
 
     try {
       var polishFn = firebase.functions().httpsCallable('socialAI');
-      var result = await polishFn({ action: 'newsletterPolish', rawInput: sec.rawInput, sectionType: sec.type });
+      var result = await polishFn({ action: 'newsletterPolish', tenantId: MastDB.tenantId(), rawInput: sec.rawInput, sectionType: sec.type });
       var polished = result.data && result.data.polished ? result.data.polished : sec.rawInput;
 
       nlAiResults[secId] = polished;

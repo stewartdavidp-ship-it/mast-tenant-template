@@ -1188,6 +1188,7 @@
       var cleanBody = (tempDiv.textContent || tempDiv.innerText || '').replace(/\[Image \d+\]/g, '').replace(/\[IMG:[^\]]+\]/g, '').trim();
       var result = await firebase.functions().httpsCallable('socialAI')({
         action: 'suggestBlogTags',
+        tenantId: MastDB.tenantId(),
         body: cleanBody,
         title: blogCurrentPost.title || ''
       });
@@ -1233,6 +1234,7 @@
       var author = BLOG_AUTHORS[blogCurrentPost.author] || BLOG_AUTHORS[Object.keys(BLOG_AUTHORS)[0]] || { name: blogCurrentPost.author || 'Author', photoUrl: '', bio: '' };
       var result = await firebase.functions().httpsCallable('socialAI')({
         action: 'blogPolish',
+        tenantId: MastDB.tenantId(),
         body: cleanBody,
         authorName: author.name,
         title: blogCurrentPost.title || ''
