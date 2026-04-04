@@ -11958,7 +11958,7 @@ function switchEmailInnerTab(tab) {
     var onclick = btn.getAttribute('onclick') || '';
     if (onclick.indexOf("'" + tab + "'") !== -1) btn.classList.add('active');
   });
-  if (tab === 'triggers' && !emailTriggersLoaded) { loadEmailTriggers(); }
+  if (tab === 'triggers') { loadEmailTriggers(); }
 }
 
 // ============================================================
