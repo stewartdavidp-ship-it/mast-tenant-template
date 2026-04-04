@@ -6528,6 +6528,7 @@
         <button class="view-tab" onclick="switchSettingsSubView('shipping')">Shipping</button>
         <button class="view-tab" onclick="switchSettingsSubView('tax')">Tax</button>
         <button class="view-tab" onclick="switchSettingsSubView('email')">Email</button>
+        <button class="view-tab" onclick="switchSettingsSubView('emailTriggers')">Email Triggers</button>
         <button class="view-tab" onclick="switchSettingsSubView('integrations')">Integrations</button>
         <button class="view-tab" onclick="switchSettingsSubView('workshop')">Workshop</button>
         <button class="view-tab" onclick="switchSettingsSubView('trips')">Trips</button>
@@ -7065,6 +7066,17 @@
           <label style="font-size:1rem;font-weight:600;">Email Sending Domain</label>
           <div id="emailDomainContent"></div>
         </div>
+      </div>
+
+      <!-- Email Triggers Settings Sub-Tab -->
+      <div id="settingsSubEmailTriggers" style="display:none;max-width:700px;">
+        <div class="form-group">
+          <label style="font-size:1.1rem;font-weight:600;">Email Triggers</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
+            Control which automated emails are sent to customers. Toggle individual emails on or off. Click any email to preview what your customers will see.
+          </p>
+        </div>
+        <div id="emailTriggersContent"></div>
       </div>
 
       <!-- Notifications Settings Sub-Tab -->
@@ -11871,7 +11883,7 @@ function getModuleForRouteManifest(route) {
 // ============================================================
 // Settings Sub-Tabs
 // ============================================================
-var settingsSubViews = ['general', 'payments', 'shipping', 'tax', 'email', 'integrations', 'workshop', 'trips', 'storefront', 'dashboard', 'domains', 'ai', 'notifications'];
+var settingsSubViews = ['general', 'payments', 'shipping', 'tax', 'email', 'emailTriggers', 'integrations', 'workshop', 'trips', 'storefront', 'dashboard', 'domains', 'ai', 'notifications'];
 function switchSettingsSubView(view) {
   // Hide all sub-views
   settingsSubViews.forEach(function(v) {
@@ -11885,13 +11897,17 @@ function switchSettingsSubView(view) {
   document.querySelectorAll('#settingsSubNav .view-tab').forEach(function(btn) {
     btn.classList.remove('active');
   });
-  // Find the matching tab button by text content
+  // Find the matching tab button by onclick attribute
   document.querySelectorAll('#settingsSubNav .view-tab').forEach(function(btn) {
-    if (btn.textContent.toLowerCase().trim() === view) btn.classList.add('active');
+    var onclick = btn.getAttribute('onclick') || '';
+    var match = onclick.match(/switchSettingsSubView\('([^']+)'\)/);
+    if (match && match[1] === view) btn.classList.add('active');
+    else if (btn.textContent.toLowerCase().trim() === view) btn.classList.add('active');
   });
   // Lazy loads
   if (view === 'shipping') { loadShipProviderConfig(); }
   if (view === 'email') { loadEmailConfig(); loadEmailDomainSection(); }
+  if (view === 'emailTriggers') { loadEmailTriggers(); }
   if (view === 'trips') { MastAdmin.loadModule('trips').then(function() { if (typeof loadTripsSettings === 'function') loadTripsSettings(); }); }
   if (view === 'storefront') loadShopDisplaySettings();
   if (view === 'dashboard') renderDashCardSettings();
@@ -11900,6 +11916,238 @@ function switchSettingsSubView(view) {
   if (view === 'subscription') renderSubscriptionSettings();
   if (view === 'about') renderAboutSettings();
   if (view === 'notifications') loadNotificationsSettings();
+}
+
+// ============================================================
+// Email Triggers Settings
+// ============================================================
+
+var EMAIL_TRIGGER_REGISTRY = [
+  // ---- Orders ----
+  { id: 'order_confirmed', module: 'Orders', name: 'Order Confirmation', description: 'Sent when an order is confirmed after payment.', auto: true, emailType: 'confirmed' },
+  { id: 'order_shipped', module: 'Orders', name: 'Order Shipped', description: 'Sent automatically when order status changes to shipped.', auto: true, emailType: 'shipped' },
+  { id: 'order_delivered', module: 'Orders', name: 'Order Delivered', description: 'Sent when order is marked as delivered.', auto: false, emailType: 'delivered' },
+  { id: 'order_cancelled', module: 'Orders', name: 'Order Cancelled', description: 'Sent when an order is cancelled.', auto: true, emailType: 'cancelled' },
+  // ---- Returns / RMA ----
+  { id: 'rma_approved', module: 'Returns', name: 'Return Approved', description: 'Sent when a return request is approved with return instructions.', auto: true, emailType: 'rma_approved' },
+  { id: 'rma_refund', module: 'Returns', name: 'Refund Issued', description: 'Sent when a refund is processed for a return.', auto: true, emailType: 'rma_refund' },
+  // ---- Booking / Classes ----
+  { id: 'enrollment_confirmed', module: 'Booking', name: 'Enrollment Confirmation', description: 'Sent when a student enrolls in a class.', auto: true, emailType: 'enrollment_confirmed' },
+  { id: 'session_cancelled', module: 'Booking', name: 'Session Cancelled', description: 'Sent to all enrolled students when a class session is cancelled.', auto: true, emailType: 'session_cancelled' },
+  { id: 'enrollment_cancelled', module: 'Booking', name: 'Enrollment Cancelled', description: 'Sent when a student\'s enrollment is cancelled.', auto: true, emailType: 'enrollment_cancelled' },
+  { id: 'waitlist_promoted', module: 'Booking', name: 'Waitlist Promoted', description: 'Sent when a waitlisted student gets a spot in a class.', auto: true, emailType: 'waitlist_promoted' },
+  { id: 'session_rescheduled', module: 'Booking', name: 'Session Rescheduled', description: 'Sent to enrolled students when a class session date/time changes.', auto: true, emailType: 'session_rescheduled' },
+  { id: 'walkin_confirmed', module: 'Booking', name: 'Walk-In Confirmation', description: 'Sent to walk-in students after being added to a class.', auto: true, emailType: 'walkin_confirmed' },
+  // ---- Commissions ----
+  { id: 'commission_inquiry', module: 'Commissions', name: 'Commission Inquiry', description: 'Sent to the shop owner when a customer submits a commission request.', auto: true, emailType: 'commission_inquiry' },
+  { id: 'commission_proposal', module: 'Commissions', name: 'Commission Proposal', description: 'Sent to the customer with pricing and details for a commission piece.', auto: false, emailType: 'commission_proposal' },
+  // ---- Contacts ----
+  { id: 'inquiry_response', module: 'Contacts', name: 'Inquiry Response', description: 'Manual reply sent to a customer who submitted a contact form inquiry.', auto: false, emailType: 'inquiry_response' },
+  // ---- POS ----
+  { id: 'pos_receipt', module: 'POS', name: 'POS Receipt', description: 'Email receipt sent from the point-of-sale system after a transaction.', auto: false, emailType: 'receipt' },
+  // ---- Team ----
+  { id: 'team_invite', module: 'Team', name: 'Team Invite', description: 'Sent when inviting a new team member to join the admin dashboard.', auto: false, emailType: 'team_invite' },
+  // ---- Waivers ----
+  { id: 'waiver_confirmation', module: 'Waivers', name: 'Waiver Confirmation', description: 'Sent to confirm a signed liability waiver for a class or event.', auto: true, emailType: 'waiver_confirmation' }
+];
+
+var emailTriggersLoaded = false;
+var emailTriggerPrefs = {};
+
+function escAttrGlobal(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function loadEmailTriggers() {
+  var container = document.getElementById('emailTriggersContent');
+  if (!container) return;
+
+  // Load saved preferences from Firebase
+  MastDB._ref('config/emailTriggers').once('value').then(function(snap) {
+    emailTriggerPrefs = snap.val() || {};
+    emailTriggersLoaded = true;
+    renderEmailTriggers();
+  }).catch(function(err) {
+    console.error('Failed to load email trigger prefs:', err);
+    emailTriggersLoaded = true;
+    renderEmailTriggers();
+  });
+}
+
+function renderEmailTriggers() {
+  var container = document.getElementById('emailTriggersContent');
+  if (!container) return;
+
+  // Group triggers by module
+  var modules = {};
+  EMAIL_TRIGGER_REGISTRY.forEach(function(t) {
+    if (!modules[t.module]) modules[t.module] = [];
+    modules[t.module].push(t);
+  });
+
+  var moduleOrder = ['Orders', 'Returns', 'Booking', 'Commissions', 'Contacts', 'POS', 'Team', 'Waivers'];
+  var moduleIcons = { Orders: '\uD83D\uDCE6', Returns: '\u21A9\uFE0F', Booking: '\uD83D\uDCC5', Commissions: '\uD83C\uDFA8', Contacts: '\uD83D\uDCEC', POS: '\uD83D\uDCF1', Team: '\uD83D\uDC65', Waivers: '\uD83D\uDCDD' };
+
+  var h = '';
+
+  moduleOrder.forEach(function(mod) {
+    var triggers = modules[mod];
+    if (!triggers || triggers.length === 0) return;
+
+    h += '<div style="margin-bottom:24px;">';
+    h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">';
+    h += '<span style="font-size:1.1rem;">' + moduleIcons[mod] + '</span>';
+    h += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--charcoal);margin:0;">' + mod + '</h3>';
+    h += '<span style="font-size:0.75rem;color:var(--warm-gray);background:var(--cream);padding:2px 8px;border-radius:10px;">' + triggers.length + '</span>';
+    h += '</div>';
+
+    triggers.forEach(function(t) {
+      var enabled = emailTriggerPrefs[t.id] !== false; // default ON
+      var isAuto = t.auto;
+
+      h += '<div class="email-trigger-row" style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:10px;padding:14px 16px;margin-bottom:8px;transition:all 0.15s ease;">';
+      h += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">';
+
+      // Left side: info
+      h += '<div style="flex:1;min-width:0;">';
+      h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">';
+      h += '<span style="font-weight:600;font-size:0.92rem;color:var(--charcoal);">' + t.name + '</span>';
+      if (isAuto) {
+        h += '<span style="font-size:0.65rem;background:rgba(42,124,111,0.12);color:var(--teal);padding:2px 6px;border-radius:4px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;">Auto</span>';
+      } else {
+        h += '<span style="font-size:0.65rem;background:rgba(156,163,175,0.15);color:var(--warm-gray);padding:2px 6px;border-radius:4px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;">Manual</span>';
+      }
+      h += '</div>';
+      h += '<p style="font-size:0.82rem;color:var(--warm-gray);margin:0;line-height:1.4;">' + t.description + '</p>';
+
+      // Preview button
+      h += '<button onclick="previewEmailTrigger(\'' + t.id + '\')" style="margin-top:8px;background:none;border:1px solid var(--cream-dark);color:var(--warm-gray);padding:4px 10px;border-radius:6px;font-size:0.75rem;cursor:pointer;font-family:\'DM Sans\',sans-serif;transition:all 0.15s ease;" onmouseover="this.style.borderColor=\'var(--teal)\';this.style.color=\'var(--teal)\'" onmouseout="this.style.borderColor=\'var(--cream-dark)\';this.style.color=\'var(--warm-gray)\'">';
+      h += '\uD83D\uDC41 Preview</button>';
+
+      h += '</div>'; // end left
+
+      // Right side: toggle
+      h += '<div style="flex-shrink:0;padding-top:2px;">';
+      h += '<label style="position:relative;display:inline-block;width:44px;height:24px;cursor:pointer;">';
+      h += '<input type="checkbox" ' + (enabled ? 'checked' : '') + ' onchange="toggleEmailTrigger(\'' + t.id + '\', this.checked)" style="opacity:0;width:0;height:0;position:absolute;">';
+      h += '<span style="position:absolute;top:0;left:0;right:0;bottom:0;background:' + (enabled ? 'var(--teal)' : 'rgba(156,163,175,0.3)') + ';border-radius:24px;transition:background 0.2s ease;"></span>';
+      h += '<span style="position:absolute;top:2px;left:' + (enabled ? '22px' : '2px') + ';width:20px;height:20px;background:white;border-radius:50%;transition:left 0.2s ease;box-shadow:0 1px 3px rgba(0,0,0,0.15);"></span>';
+      h += '</label>';
+      h += '</div>';
+
+      h += '</div>'; // end flex row
+
+      // Preview container (hidden by default)
+      h += '<div id="emailTriggerPreview_' + t.id + '" style="display:none;margin-top:12px;border-top:1px solid var(--cream-dark);padding-top:12px;"></div>';
+
+      h += '</div>'; // end trigger row
+    });
+
+    h += '</div>'; // end module group
+  });
+
+  container.innerHTML = h;
+}
+
+function toggleEmailTrigger(triggerId, enabled) {
+  // Save to Firebase
+  var updates = {};
+  updates['config/emailTriggers/' + triggerId] = enabled;
+  MastDB._ref().update(updates).then(function() {
+    emailTriggerPrefs[triggerId] = enabled;
+    showToast((enabled ? 'Enabled' : 'Disabled') + ': ' + getTriggerName(triggerId));
+    renderEmailTriggers();
+  }).catch(function(err) {
+    showToast('Failed to update: ' + err.message, true);
+  });
+}
+
+function getTriggerName(triggerId) {
+  var t = EMAIL_TRIGGER_REGISTRY.find(function(t) { return t.id === triggerId; });
+  return t ? t.name : triggerId;
+}
+
+function previewEmailTrigger(triggerId) {
+  var previewEl = document.getElementById('emailTriggerPreview_' + triggerId);
+  if (!previewEl) return;
+
+  // Toggle visibility
+  if (previewEl.style.display !== 'none') {
+    previewEl.style.display = 'none';
+    return;
+  }
+
+  previewEl.style.display = '';
+  previewEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--warm-gray);font-size:0.85rem;">Loading preview...</div>';
+
+  // Call Cloud Function to generate preview HTML
+  firebase.functions().httpsCallable('previewEmail')({
+    emailType: triggerId,
+    tenantId: MastDB.tenantId()
+  }).then(function(result) {
+    var html = result.data && result.data.html;
+    var subject = result.data && result.data.subject;
+    if (!html) {
+      previewEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--warm-gray);font-size:0.85rem;">No preview available for this email type.</div>';
+      return;
+    }
+    var ph = '';
+    if (subject) {
+      ph += '<div style="margin-bottom:8px;">';
+      ph += '<span style="font-size:0.75rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Subject</span>';
+      ph += '<span style="font-size:0.88rem;color:var(--charcoal);font-weight:500;">' + esc(subject) + '</span>';
+      ph += '</div>';
+    }
+    ph += '<div style="background:white;border-radius:6px;overflow:hidden;">';
+    ph += '<iframe sandbox="" srcdoc="' + escAttrGlobal(html) + '" style="width:100%;min-height:250px;max-height:500px;border:none;display:block;" onload="this.style.height=Math.min(this.contentDocument.body.scrollHeight+20,500)+\'px\'"></iframe>';
+    ph += '</div>';
+    ph += '<button onclick="document.getElementById(\'emailTriggerPreview_' + triggerId + '\').style.display=\'none\'" style="margin-top:8px;background:none;border:none;color:var(--warm-gray);font-size:0.75rem;cursor:pointer;padding:4px 0;font-family:\'DM Sans\',sans-serif;">Close preview</button>';
+    previewEl.innerHTML = ph;
+  }).catch(function(err) {
+    // If the Cloud Function doesn't exist yet, try loading from email log
+    loadPreviewFromEmailLog(triggerId, previewEl);
+  });
+}
+
+function loadPreviewFromEmailLog(triggerId, previewEl) {
+  var trigger = EMAIL_TRIGGER_REGISTRY.find(function(t) { return t.id === triggerId; });
+  if (!trigger) {
+    previewEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--warm-gray);font-size:0.85rem;">No preview available.</div>';
+    return;
+  }
+
+  // Search email log for the most recent email of this type
+  MastDB._ref('emails').orderByChild('emailType').equalTo(trigger.emailType).limitToLast(1).once('value').then(function(snap) {
+    var val = snap.val();
+    if (!val) {
+      previewEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--warm-gray);font-size:0.85rem;">No preview available yet. This email will appear here after it has been sent at least once.</div>';
+      return;
+    }
+    var key = Object.keys(val)[0];
+    var email = val[key];
+    var ph = '';
+    if (email.subject) {
+      ph += '<div style="margin-bottom:8px;">';
+      ph += '<span style="font-size:0.75rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Subject</span>';
+      ph += '<span style="font-size:0.88rem;color:var(--charcoal);font-weight:500;">' + esc(email.subject) + '</span>';
+      ph += '</div>';
+    }
+    if (email.htmlSnapshot) {
+      ph += '<div style="background:white;border-radius:6px;overflow:hidden;">';
+      ph += '<iframe sandbox="" srcdoc="' + escAttrGlobal(email.htmlSnapshot) + '" style="width:100%;min-height:250px;max-height:500px;border:none;display:block;" onload="this.style.height=Math.min(this.contentDocument.body.scrollHeight+20,500)+\'px\'"></iframe>';
+      ph += '</div>';
+    } else {
+      ph += '<div style="text-align:center;padding:16px;color:var(--warm-gray);font-size:0.85rem;">No HTML preview stored for this email.</div>';
+    }
+    ph += '<div style="display:flex;align-items:center;gap:8px;margin-top:8px;">';
+    ph += '<span style="font-size:0.7rem;color:var(--warm-gray);">From most recent send' + (email.sentAt ? ' (' + new Date(email.sentAt).toLocaleDateString() + ')' : '') + '</span>';
+    ph += '<button onclick="document.getElementById(\'emailTriggerPreview_' + triggerId + '\').style.display=\'none\'" style="margin-left:auto;background:none;border:none;color:var(--warm-gray);font-size:0.75rem;cursor:pointer;padding:4px 0;font-family:\'DM Sans\',sans-serif;">Close preview</button>';
+    ph += '</div>';
+    previewEl.innerHTML = ph;
+  }).catch(function(err) {
+    previewEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--warm-gray);font-size:0.85rem;">Failed to load preview: ' + esc(err.message) + '</div>';
+  });
 }
 
 // ============================================================
