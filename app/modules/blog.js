@@ -213,7 +213,9 @@
     html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">' +
       '<button class="detail-back" onclick="blogBackToList()">\u2190 Back to Posts</button>' +
       '<button class="btn" onclick="blogTogglePreview()" style="' + (blogShowPreview ? 'background:var(--amber);color:#fff;border-color:var(--amber);' : '') + '">' + (blogShowPreview ? '\u270f\ufe0f Edit' : '\ud83d\udc41 Preview') + '</button>' +
-      '<div style="margin-left:auto;display:flex;align-items:center;gap:8px;">' + blogBadgeHtml(status) + '</div>' +
+      '<div style="margin-left:auto;display:flex;align-items:center;gap:8px;">' +
+      '<span id="blogSaveStatus" class="blog-save-status"></span>' +
+      blogBadgeHtml(status) + '</div>' +
       '<button class="btn" style="color:#c44;border-color:#c44;" onclick="blogDeletePost()">Delete</button>' +
       '</div>';
 
@@ -292,6 +294,15 @@
         '<button class="blog-format-btn" id="blogBtnItalic" onmousedown="event.preventDefault();blogFormatCmd(\'italic\')" title="Italic"><i>I</i></button>' +
         '<button class="blog-format-btn" id="blogBtnUnderline" onmousedown="event.preventDefault();blogFormatCmd(\'underline\')" title="Underline"><u>U</u></button>' +
         '<div class="blog-format-sep"></div>' +
+        '<button class="blog-format-btn blog-format-btn-wide" id="blogBtnH2" onmousedown="event.preventDefault();blogFormatBlock(\'h2\')" title="Heading 2">H2</button>' +
+        '<button class="blog-format-btn blog-format-btn-wide" id="blogBtnH3" onmousedown="event.preventDefault();blogFormatBlock(\'h3\')" title="Heading 3">H3</button>' +
+        '<div class="blog-format-sep"></div>' +
+        '<button class="blog-format-btn" id="blogBtnQuote" onmousedown="event.preventDefault();blogFormatBlock(\'blockquote\')" title="Blockquote" style="font-size:1.1rem;">\u201c</button>' +
+        '<button class="blog-format-btn" id="blogBtnUL" onmousedown="event.preventDefault();blogFormatCmd(\'insertUnorderedList\')" title="Bullet List" style="font-size:0.9rem;">\u2022\u2261</button>' +
+        '<button class="blog-format-btn" id="blogBtnOL" onmousedown="event.preventDefault();blogFormatCmd(\'insertOrderedList\')" title="Numbered List" style="font-size:0.75rem;">1.</button>' +
+        '<button class="blog-format-btn" id="blogBtnLink" onmousedown="event.preventDefault();blogInsertLink()" title="Insert Link" style="font-size:0.85rem;">\ud83d\udd17</button>' +
+        '<button class="blog-format-btn" onmousedown="event.preventDefault();document.execCommand(\'insertHorizontalRule\');blogBodyChanged()" title="Divider">\u2015</button>' +
+        '<div class="blog-format-sep"></div>' +
         '<select class="blog-format-select" onchange="blogFormatFont(this.value);this.value=\'\'" title="Font">' +
         '<option value="" disabled selected>Font</option>' +
         '<option value="DM Sans, Arial, sans-serif" style="font-family:DM Sans,Arial,sans-serif">Sans Serif</option>' +
@@ -314,6 +325,9 @@
         '<button class="blog-format-btn" onmousedown="event.preventDefault();blogInsertImage()" title="Insert Image" style="font-size:1rem;width:auto;padding:0 8px;">\ud83d\udcf7</button>' +
         '<button class="blog-format-btn" onmousedown="event.preventDefault();blogInsertCoupon()" title="Insert Coupon" style="font-size:1rem;width:auto;padding:0 8px;">\uD83C\uDFF7\uFE0F</button>' +
         '</div>';
+
+      // Word count bar
+      html += '<div class="blog-word-count" id="blogWordCount"></div>';
 
       // ContentEditable body
       html += '<div class="blog-body-editable" id="blogBodyEditable" contenteditable="true" data-placeholder="Write your post here..." oninput="blogBodyChanged()"></div>';
@@ -368,6 +382,7 @@
       var editable = document.getElementById('blogBodyEditable');
       if (editable) {
         editable.innerHTML = blogLoadBodyToEditor(post.body || '', post.inlineImages || []);
+        blogUpdateWordCount();
       }
     }
   }
@@ -452,15 +467,22 @@
 
   function blogBodyChanged() {
     if (!blogCurrentPost) return;
+    blogUpdateWordCount();
     clearTimeout(blogBodySaveTimer);
     blogBodySaveTimer = setTimeout(function() {
       var body = blogSaveBodyFromEditor();
       blogCurrentPost.body = body;
       blogCurrentPost.updatedAt = new Date().toISOString();
+      blogSetSaveStatus('Saving...', 'saving');
       MastDB.blog.posts.ref(blogCurrentPostId).update({
         body: body,
         updatedAt: blogCurrentPost.updatedAt
-      }).catch(function(err) { showToast('Auto-save failed: ' + err.message, true); });
+      }).then(function() {
+        blogSetSaveStatus('\u2713 Saved', 'saved');
+      }).catch(function(err) {
+        blogSetSaveStatus('Save failed', 'error');
+        showToast('Auto-save failed: ' + err.message, true);
+      });
     }, 500);
   }
 
@@ -481,6 +503,103 @@
     document.execCommand('fontSize', false, size);
     var editable = document.getElementById('blogBodyEditable');
     if (editable) editable.focus();
+  }
+
+  function blogFormatBlock(tag) {
+    var current = document.queryCommandValue('formatBlock').toLowerCase();
+    if (current === tag) {
+      document.execCommand('formatBlock', false, '<div>');
+    } else {
+      document.execCommand('formatBlock', false, '<' + tag + '>');
+    }
+    blogUpdateToolbarState();
+    blogBodyChanged();
+  }
+
+  function blogInsertLink() {
+    var sel = window.getSelection();
+    if (sel.rangeCount > 0) window._blogSavedRange = sel.getRangeAt(0).cloneRange();
+    var selectedText = sel.toString();
+    var existingUrl = '';
+    // Check if selection is inside an existing link
+    if (sel.anchorNode) {
+      var linkEl = sel.anchorNode.nodeType === 1 ? sel.anchorNode.closest('a') : (sel.anchorNode.parentElement ? sel.anchorNode.parentElement.closest('a') : null);
+      if (linkEl) existingUrl = linkEl.href || '';
+    }
+    var html = '<div class="modal-header"><h3>' + (existingUrl ? 'Edit Link' : 'Insert Link') + '</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>' +
+      '<div class="modal-body">' +
+      (selectedText ? '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">Text: "' + esc(selectedText.substring(0, 60)) + '"</div>' : '') +
+      '<input type="url" id="blogLinkUrl" placeholder="https://..." value="' + esc(existingUrl) + '" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:6px;background:var(--card-bg);color:var(--text);font-size:0.9rem;box-sizing:border-box;" />' +
+      '<div style="display:flex;gap:8px;margin-top:12px;">' +
+      '<button class="btn btn-primary" onclick="blogApplyLink()">Apply</button>' +
+      (existingUrl ? '<button class="btn btn-outline" onclick="blogRemoveLink()">Remove Link</button>' : '') +
+      '</div></div>';
+    openModal(html);
+    setTimeout(function() { var inp = document.getElementById('blogLinkUrl'); if (inp) inp.focus(); }, 100);
+  }
+
+  function blogApplyLink() {
+    var url = (document.getElementById('blogLinkUrl') || {}).value;
+    if (!url) { closeModal(); return; }
+    if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+    closeModal();
+    var editable = document.getElementById('blogBodyEditable');
+    if (editable) editable.focus();
+    if (window._blogSavedRange) {
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(window._blogSavedRange);
+      window._blogSavedRange = null;
+    }
+    document.execCommand('createLink', false, url);
+    // Set links to open in new tab
+    var links = editable ? editable.querySelectorAll('a[href="' + url + '"]') : [];
+    links.forEach(function(a) { a.target = '_blank'; a.rel = 'noopener'; });
+    blogBodyChanged();
+  }
+
+  function blogRemoveLink() {
+    closeModal();
+    var editable = document.getElementById('blogBodyEditable');
+    if (editable) editable.focus();
+    if (window._blogSavedRange) {
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(window._blogSavedRange);
+      window._blogSavedRange = null;
+    }
+    document.execCommand('unlink', false, null);
+    blogBodyChanged();
+  }
+
+  // ===== AUTOSAVE INDICATOR =====
+
+  var blogSaveStatusTimer = null;
+
+  function blogSetSaveStatus(text, type) {
+    var el = document.getElementById('blogSaveStatus');
+    if (!el) return;
+    clearTimeout(blogSaveStatusTimer);
+    el.textContent = text;
+    el.className = 'blog-save-status' + (type === 'error' ? ' save-error' : type === 'saving' ? ' saving' : ' saved');
+    if (type === 'saved') {
+      blogSaveStatusTimer = setTimeout(function() { el.textContent = ''; el.className = 'blog-save-status'; }, 2500);
+    }
+  }
+
+  // ===== WORD COUNT =====
+
+  function blogUpdateWordCount() {
+    var el = document.getElementById('blogWordCount');
+    if (!el) return;
+    var editable = document.getElementById('blogBodyEditable');
+    if (!editable) return;
+    var text = (editable.textContent || '').replace(/\u00a0/g, ' ');
+    // Strip marker text
+    text = text.replace(/📷 Image \d+/g, '').replace(/🏷️ [^\s]+/g, '').trim();
+    var words = text ? text.split(/\s+/).filter(function(w) { return w.length > 0; }).length : 0;
+    var readMin = Math.max(1, Math.ceil(words / 225));
+    el.textContent = words + ' word' + (words !== 1 ? 's' : '') + ' \u00b7 ' + readMin + ' min read';
   }
 
   var blogEmojiCategories = {
@@ -560,6 +679,30 @@
     if (btnBold) btnBold.classList.toggle('active', document.queryCommandState('bold'));
     if (btnItalic) btnItalic.classList.toggle('active', document.queryCommandState('italic'));
     if (btnUnderline) btnUnderline.classList.toggle('active', document.queryCommandState('underline'));
+    // Block-level formatting state
+    var block = (document.queryCommandValue('formatBlock') || '').toLowerCase().replace(/[<>]/g, '');
+    var btnH2 = document.getElementById('blogBtnH2');
+    var btnH3 = document.getElementById('blogBtnH3');
+    var btnQuote = document.getElementById('blogBtnQuote');
+    if (btnH2) btnH2.classList.toggle('active', block === 'h2');
+    if (btnH3) btnH3.classList.toggle('active', block === 'h3');
+    if (btnQuote) btnQuote.classList.toggle('active', block === 'blockquote');
+    // List state
+    var btnUL = document.getElementById('blogBtnUL');
+    var btnOL = document.getElementById('blogBtnOL');
+    if (btnUL) btnUL.classList.toggle('active', document.queryCommandState('insertUnorderedList'));
+    if (btnOL) btnOL.classList.toggle('active', document.queryCommandState('insertOrderedList'));
+    // Link state
+    var btnLink = document.getElementById('blogBtnLink');
+    if (btnLink) {
+      var sel = window.getSelection();
+      var inLink = false;
+      if (sel && sel.anchorNode) {
+        var node = sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement;
+        inLink = node ? !!node.closest('a') : false;
+      }
+      btnLink.classList.toggle('active', inLink);
+    }
   }
 
   // Listen for selection changes to update toolbar state
@@ -1220,6 +1363,10 @@
   window.blogFormatCmd = blogFormatCmd;
   window.blogFormatFont = blogFormatFont;
   window.blogFormatSize = blogFormatSize;
+  window.blogFormatBlock = blogFormatBlock;
+  window.blogInsertLink = blogInsertLink;
+  window.blogApplyLink = blogApplyLink;
+  window.blogRemoveLink = blogRemoveLink;
   window.blogToggleEmojiPicker = blogToggleEmojiPicker;
   window.blogEmojiSwitchTab = blogEmojiSwitchTab;
   window.blogInsertEmoji = blogInsertEmoji;
