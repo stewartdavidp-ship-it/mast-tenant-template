@@ -376,8 +376,16 @@
 
           html += '<h2 class="nl-grid-section-title">' + nlEscHtml(sec.title) + '</h2>';
 
+          var gridBodyContent = content;
+          if (sec.type === 'coupon' && sec.couponCode && window.MastCouponCard) {
+            var allCouponsGrid = window.coupons || {};
+            var couponDataGrid = allCouponsGrid[sec.couponCode];
+            if (couponDataGrid) {
+              gridBodyContent = window.MastCouponCard.renderHtml(Object.assign({}, couponDataGrid, { code: sec.couponCode, _code: sec.couponCode }), { showCta: false, compact: true });
+            }
+          }
           html += '<div class="nl-grid-section-body">' +
-            (content ? content.replace(/\n/g, '<br>') : '<span class="placeholder">Click to add content...</span>') + '</div>';
+            (gridBodyContent ? gridBodyContent.replace(/\n/g, '<br>') : '<span class="placeholder">Click to add content...</span>') + '</div>';
 
           var imgs = sec.images || [];
           imgs.forEach(function(imgId) {
@@ -606,7 +614,22 @@
       html += '<div class="nl-section-prompt" style="margin-bottom:12px;">' + sec.guidedPrompt + '</div>';
     }
 
-    if (aiResult && !sec.finalContent) {
+    // Coupon section — show picker/preview instead of textarea
+    if (sec.type === 'coupon') {
+      if (sec.couponCode && window.MastCouponCard) {
+        var allCouponsEditor = window.coupons || {};
+        var couponDataEditor = allCouponsEditor[sec.couponCode];
+        if (couponDataEditor) {
+          html += window.MastCouponCard.renderHtml(Object.assign({}, couponDataEditor, { code: sec.couponCode, _code: sec.couponCode }), { showCta: false });
+        } else {
+          html += '<div style="padding:16px;text-align:center;color:var(--warm-gray);">Coupon "' + esc(sec.couponCode) + '" not found</div>';
+        }
+      } else {
+        html += '<div style="padding:16px;text-align:center;color:var(--warm-gray);">No coupon selected</div>';
+      }
+      html += '<div style="margin-top:8px;"><button class="btn btn-outline" style="font-size:0.8rem;" onclick="nlPickCouponForSection(\'' + secId + '\')">' +
+        (sec.couponCode ? 'Change Coupon' : 'Select Coupon') + '</button></div>';
+    } else if (aiResult && !sec.finalContent) {
       html += '<div class="nl-ai-compare">' +
         '<div class="nl-ai-panel original"><div class="nl-ai-panel-label">Your Original</div>' + nlEscHtml(sec.rawInput) + '</div>' +
         '<div class="nl-ai-panel polished"><div class="nl-ai-panel-label">AI Polished</div>' + nlEscHtml(aiResult) + '</div></div>' +

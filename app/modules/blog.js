@@ -428,7 +428,7 @@
       var c = allCoupons[code];
       var valStr = c ? (c.type === 'percent' ? c.value + '% off' : '$' + (c.value || 0).toFixed(2) + ' off') : 'coupon';
       return '<div class="blog-coupon-marker" data-coupon-code="' + esc(code) + '" contenteditable="false" ' +
-        'style="display:inline-block;padding:8px 14px;margin:4px 0;background:rgba(42,124,111,0.08);border:1px dashed var(--teal,#2A7C6F);border-radius:6px;font-size:0.9rem;color:var(--charcoal,#1A1A1A);cursor:default;">' +
+        'style="display:inline-block;padding:8px 14px;margin:4px 0;background:rgba(42,124,111,0.15);border:1px dashed var(--teal,#2A7C6F);border-radius:6px;font-size:0.9rem;color:inherit;cursor:default;">' +
         '\uD83C\uDFF7\uFE0F ' + esc(code) + ' \u2014 ' + esc(valStr) + '</div>';
     });
     return html;
@@ -788,7 +788,7 @@
     if (editable) {
       editable.focus();
       var markerHtml = '<br><div class="blog-coupon-marker" data-coupon-code="' + esc(code) + '" contenteditable="false" ' +
-        'style="display:inline-block;padding:8px 14px;margin:4px 0;background:rgba(42,124,111,0.08);border:1px dashed var(--teal,#2A7C6F);border-radius:6px;font-size:0.9rem;color:var(--charcoal,#1A1A1A);cursor:default;">' +
+        'style="display:inline-block;padding:8px 14px;margin:4px 0;background:rgba(42,124,111,0.15);border:1px dashed var(--teal,#2A7C6F);border-radius:6px;font-size:0.9rem;color:inherit;cursor:default;">' +
         '\uD83C\uDFF7\uFE0F ' + esc(code) + ' \u2014 ' + esc(valStr) +
         '</div><br>';
       document.execCommand('insertHTML', false, markerHtml);
