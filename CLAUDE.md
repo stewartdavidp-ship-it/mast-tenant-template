@@ -34,6 +34,7 @@ Features: public storefront (shop, commissions, blog), admin app (Studio Compani
 - UI Design System — all views must conform to documented standards. Dark mode compliance required.
 - docs/workflows.md is owned by Claude Code. Claude Chat must not push updates directly.
 - Provisioning review required. Any change that adds new Firebase paths, Cloud Function calls, CSP domains, API integrations, or tenant config must be reviewed against the 13-step provisioning pipeline in `mast-architecture/functions/platform-functions.js` (`runProvisioningPipeline`) and the MCP `createTenant` flow in `mast-mcp-server/src/tools/mast-tenants.ts`. Both deploy paths (Stripe-triggered and MCP manual) must produce identical results.
+- AI discoverability required. When adding or redesigning a public page that displays tenant data, you must: (1) add Schema.org JSON-LD using the `MastSchema` utility in `schema-org.js`, and (2) update the `serveLlmsTxt` Cloud Function in `mast-architecture/functions/tenant-functions.js` if a new data type is surfaced. See the AI Interface section in Technical Notes for details.
 
 ## CONSTRAINTs — External realities. Work within these.
 
@@ -61,3 +62,21 @@ Features: public storefront (shop, commissions, blog), admin app (Studio Compani
 - `MastDB` is the data access layer — all Firebase reads/writes go through it
 - Deploy all tenants at once: `mast_hosting(action: "deploy_all")` — deploys sequentially to all active tenants
 - Follow existing code patterns for new features: function components, hooks for state, consistent with current UI styling (dark mode, existing color palette)
+
+### AI Interface (Schema.org + llms.txt)
+
+All public pages that display tenant data must include structured data for AI and search engine discoverability.
+
+**Schema.org JSON-LD** — `schema-org.js` is a shared utility loaded on public pages via `<script src="schema-org.js"></script>` (before `cart.js`). After page data loads from Firebase, call the appropriate generator and inject:
+```
+if (window.MastSchema) MastSchema.inject(MastSchema.organization());
+```
+
+Available generators: `organization()`, `product(p, saleInfo)`, `productList(products, pageName)`, `event(e)`, `eventList(events)`, `course(cls)`, `courseWithSessions(cls, sessions)`, `courseList(classes)`, `breadcrumbList(items)`, `blogPosting(post)`, `blogList(posts)`, `giftCardList(config)`, `membership(config)`, `service(name, desc)`.
+
+The `blogPosting()` generator expects these fields on the post object: `_id` (or `id`), `title`, `publishedAt`, `updatedAt`, `author`, `bodyHtml`, `excerpt`, `image`/`coverImage`, `tags` (array). If post field names change during a redesign, update the generator to match.
+
+**llms.txt** — Served by the `serveLlmsTxt` Cloud Function in `mast-architecture/functions/tenant-functions.js`. Reads products, events, classes, blog posts (`{tenantId}/blog/published`), wallet config, and membership config in parallel, then generates a plain-text summary per the llmstxt.org spec. If the Firebase path for published data changes, update the function to match.
+
+**Pages currently covered (13):** index, about, shop, product, schedule, classes, class-detail, blog/index, blog/post, gift-cards, membership, show/index, commission.
+**Pages correctly excluded (auth-gated/transactional):** my-classes, my-passes, my-wallet, cancel-booking, manage-seats, waiver, return-shipped, orders, redeem-gift-card, claim-coupon, wholesale.
