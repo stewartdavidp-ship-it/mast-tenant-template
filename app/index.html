@@ -6528,7 +6528,6 @@
         <button class="view-tab" onclick="switchSettingsSubView('shipping')">Shipping</button>
         <button class="view-tab" onclick="switchSettingsSubView('tax')">Tax</button>
         <button class="view-tab" onclick="switchSettingsSubView('email')">Email</button>
-        <button class="view-tab" onclick="switchSettingsSubView('emailTriggers')">Email Triggers</button>
         <button class="view-tab" onclick="switchSettingsSubView('integrations')">Integrations</button>
         <button class="view-tab" onclick="switchSettingsSubView('workshop')">Workshop</button>
         <button class="view-tab" onclick="switchSettingsSubView('trips')">Trips</button>
@@ -6958,7 +6957,12 @@
           <div id="taxRatesStatus" style="margin-top:8px;font-size:0.85rem;"></div>
         </div>
       </div>
-      <div id="settingsSubEmail" style="display:none;max-width:500px;">
+      <div id="settingsSubEmail" style="display:none;max-width:700px;">
+        <div style="display:flex;gap:0;border-bottom:1px solid rgba(255,255,255,0.1);margin-bottom:16px;" id="emailInnerTabs">
+          <button class="view-tab active" onclick="switchEmailInnerTab('provider')" style="padding:8px 16px;font-size:0.82rem;">Provider</button>
+          <button class="view-tab" onclick="switchEmailInnerTab('triggers')" style="padding:8px 16px;font-size:0.82rem;">Email Triggers</button>
+        </div>
+        <div id="emailInnerProvider" style="max-width:500px;">
         <!-- Provider-Agnostic Email Configuration (moved from Integrations tab) -->
         <div class="form-group" id="emailConfigSection">
           <label style="font-size:1.1rem;font-weight:600;">Email Provider</label>
@@ -7066,17 +7070,14 @@
           <label style="font-size:1rem;font-weight:600;">Email Sending Domain</label>
           <div id="emailDomainContent"></div>
         </div>
-      </div>
+        </div><!-- end emailInnerProvider -->
 
-      <!-- Email Triggers Settings Sub-Tab -->
-      <div id="settingsSubEmailTriggers" style="display:none;max-width:700px;">
-        <div class="form-group">
-          <label style="font-size:1.1rem;font-weight:600;">Email Triggers</label>
+        <div id="emailInnerTriggers" style="display:none;">
           <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
             Control which automated emails are sent to customers. Toggle individual emails on or off. Click any email to preview what your customers will see.
           </p>
+          <div id="emailTriggersContent"></div>
         </div>
-        <div id="emailTriggersContent"></div>
       </div>
 
       <!-- Notifications Settings Sub-Tab -->
@@ -11883,7 +11884,7 @@ function getModuleForRouteManifest(route) {
 // ============================================================
 // Settings Sub-Tabs
 // ============================================================
-var settingsSubViews = ['general', 'payments', 'shipping', 'tax', 'email', 'emailTriggers', 'integrations', 'workshop', 'trips', 'storefront', 'dashboard', 'domains', 'ai', 'notifications'];
+var settingsSubViews = ['general', 'payments', 'shipping', 'tax', 'email', 'integrations', 'workshop', 'trips', 'storefront', 'dashboard', 'domains', 'ai', 'notifications'];
 function switchSettingsSubView(view) {
   // Hide all sub-views
   settingsSubViews.forEach(function(v) {
@@ -11907,7 +11908,6 @@ function switchSettingsSubView(view) {
   // Lazy loads
   if (view === 'shipping') { loadShipProviderConfig(); }
   if (view === 'email') { loadEmailConfig(); loadEmailDomainSection(); }
-  if (view === 'emailTriggers') { loadEmailTriggers(); }
   if (view === 'trips') { MastAdmin.loadModule('trips').then(function() { if (typeof loadTripsSettings === 'function') loadTripsSettings(); }); }
   if (view === 'storefront') loadShopDisplaySettings();
   if (view === 'dashboard') renderDashCardSettings();
@@ -11916,6 +11916,24 @@ function switchSettingsSubView(view) {
   if (view === 'subscription') renderSubscriptionSettings();
   if (view === 'about') renderAboutSettings();
   if (view === 'notifications') loadNotificationsSettings();
+}
+
+// ============================================================
+// Email Inner Tab Switching
+// ============================================================
+function switchEmailInnerTab(tab) {
+  var providerEl = document.getElementById('emailInnerProvider');
+  var triggersEl = document.getElementById('emailInnerTriggers');
+  if (providerEl) providerEl.style.display = tab === 'provider' ? '' : 'none';
+  if (triggersEl) triggersEl.style.display = tab === 'triggers' ? '' : 'none';
+  document.querySelectorAll('#emailInnerTabs .view-tab').forEach(function(btn) {
+    btn.classList.remove('active');
+  });
+  document.querySelectorAll('#emailInnerTabs .view-tab').forEach(function(btn) {
+    var onclick = btn.getAttribute('onclick') || '';
+    if (onclick.indexOf("'" + tab + "'") !== -1) btn.classList.add('active');
+  });
+  if (tab === 'triggers' && !emailTriggersLoaded) { loadEmailTriggers(); }
 }
 
 // ============================================================
