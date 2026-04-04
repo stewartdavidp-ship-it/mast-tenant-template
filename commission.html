@@ -579,6 +579,12 @@ window.TENANT_READY.then(function() {
     window._commInspirationPids.push(preselect);
   }
 
+  // Schema.org: Service (custom commissions)
+  if (window.MastSchema) {
+    MastSchema.inject(MastSchema.organization());
+    MastSchema.inject(MastSchema.service('Custom Commission', 'Request a custom piece from ' + (window.TENANT_BRAND ? TENANT_BRAND.name : 'our studio')));
+  }
+
   // Load catalog on page load
   loadProductCatalog();
 })();
@@ -767,6 +773,7 @@ function siteSignIn() {
   window.location.href = 'app/index.html';
 }
 </script>
+<script src="schema-org.js"></script>
 <script src="cart.js"></script>
 <script defer src="checkout.js?v=2"></script>
 <script defer src="feedback-widget.js"></script>

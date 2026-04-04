@@ -633,6 +633,11 @@
           renderEmpty();
           return;
         }
+        // Schema.org: Gift card products
+        if (window.MastSchema) {
+          MastSchema.inject(MastSchema.organization());
+          MastSchema.injectAll(MastSchema.giftCardList(config));
+        }
         renderPage(config);
       })
       .catch(function(err) {
@@ -644,6 +649,7 @@
   });
 })();
 </script>
+<script src="schema-org.js"></script>
 <script src="cart.js"></script>
 <script defer src="checkout.js?v=2"></script>
 <script defer src="feedback-widget.js"></script>

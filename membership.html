@@ -682,6 +682,11 @@
         return;
       }
 
+      // Schema.org: Membership product
+      if (window.MastSchema) {
+        MastSchema.inject(MastSchema.membership(memberConfig));
+      }
+
       // Square tenants use inline card checkout (not Stripe redirect)
       if (processor === 'square') {
         var today = new Date().toISOString().slice(0, 10);
@@ -761,6 +766,7 @@
   });
 })();
 </script>
+<script src="schema-org.js"></script>
 <script src="cart.js"></script>
 <script defer src="feedback-widget.js"></script>
 <script defer src="share-widget.js"></script>

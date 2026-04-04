@@ -302,6 +302,144 @@
     };
   }
 
+  // --- Blog ---
+
+  function blogPosting(post) {
+    var brand = getBrand();
+    var base = getBaseUrl();
+    var schema = {
+      '@context': 'https://schema.org',
+      '@type': 'BlogPosting',
+      headline: post.title || '',
+      url: base + '/blog/post.html?id=' + encodeURIComponent(post._id || post.id || '')
+    };
+
+    if (post.publishedAt) schema.datePublished = post.publishedAt;
+    if (post.updatedAt) schema.dateModified = post.updatedAt;
+    if (post.bodyHtml) {
+      // Strip HTML for description, truncate to 200 chars
+      var tmp = document.createElement('div');
+      tmp.innerHTML = post.bodyHtml;
+      var text = (tmp.textContent || tmp.innerText || '').trim();
+      if (text) schema.description = text.substring(0, 200);
+    }
+    if (post.excerpt) schema.description = post.excerpt;
+
+    if (post.author) {
+      schema.author = { '@type': 'Person', name: post.author };
+    }
+
+    if (brand.name) {
+      schema.publisher = { '@type': 'Organization', name: brand.name };
+    }
+
+    if (post.image || post.coverImage) {
+      schema.image = post.image || post.coverImage;
+    }
+
+    if (post.tags && post.tags.length) {
+      schema.keywords = Array.isArray(post.tags) ? post.tags.join(', ') : post.tags;
+    }
+
+    return schema;
+  }
+
+  function blogList(posts) {
+    return posts.filter(function(p) {
+      return p.title;
+    }).map(function(p) {
+      return blogPosting(p);
+    });
+  }
+
+  // --- Gift Cards ---
+
+  function giftCardList(config) {
+    var brand = getBrand();
+    var base = getBaseUrl();
+    var denoms = config.giftCardDenominations || [];
+    if (!denoms.length) return [];
+
+    return denoms.map(function(cents) {
+      var price = formatPrice(cents);
+      if (!price) return null;
+      return {
+        '@context': 'https://schema.org',
+        '@type': 'Product',
+        name: (brand.name || '') + ' Gift Card — $' + (cents / 100).toFixed(0),
+        url: base + '/gift-cards.html',
+        description: 'Digital gift card for ' + (brand.name || 'this shop'),
+        brand: brand.name ? { '@type': 'Brand', name: brand.name } : undefined,
+        offers: {
+          '@type': 'Offer',
+          price: price,
+          priceCurrency: 'USD',
+          availability: 'https://schema.org/InStock'
+        }
+      };
+    }).filter(Boolean);
+  }
+
+  // --- Membership ---
+
+  function membership(config) {
+    var brand = getBrand();
+    var base = getBaseUrl();
+    var price = config.annualPrice ? formatPrice(config.annualPrice) : null;
+
+    var schema = {
+      '@context': 'https://schema.org',
+      '@type': 'Product',
+      name: (config.programName || 'Membership') + ' — ' + (brand.name || ''),
+      url: base + '/membership.html',
+      description: 'Annual membership program'
+    };
+
+    var benefits = [];
+    if (config.productDiscountPct) benefits.push(config.productDiscountPct + '% off products');
+    if (config.serviceDiscountPct) benefits.push(config.serviceDiscountPct + '% off services');
+    if (config.freeShippingThreshold === 0) benefits.push('Free shipping');
+    if (config.loyaltyMultiplier && config.loyaltyMultiplier > 1) benefits.push(config.loyaltyMultiplier + 'x loyalty points');
+    if (benefits.length) schema.description = benefits.join(', ');
+
+    if (brand.name) {
+      schema.brand = { '@type': 'Brand', name: brand.name };
+    }
+
+    if (price) {
+      schema.offers = {
+        '@type': 'Offer',
+        price: price,
+        priceCurrency: 'USD',
+        availability: 'https://schema.org/InStock'
+      };
+    }
+
+    return schema;
+  }
+
+  // --- Service (Commissions) ---
+
+  function service(name, description) {
+    var brand = getBrand();
+    var base = getBaseUrl();
+    var schema = {
+      '@context': 'https://schema.org',
+      '@type': 'Service',
+      name: name || 'Custom Commission',
+      url: base + '/commission.html',
+      serviceType: 'Custom artwork commission'
+    };
+
+    if (description) schema.description = description;
+
+    if (brand.name) {
+      schema.provider = { '@type': 'Organization', name: brand.name };
+    }
+
+    return schema;
+  }
+
   // --- Public API ---
   window.MastSchema = {
     inject: inject,
@@ -314,6 +452,11 @@
     course: course,
     courseWithSessions: courseWithSessions,
     courseList: courseList,
-    breadcrumbList: breadcrumbList
+    breadcrumbList: breadcrumbList,
+    blogPosting: blogPosting,
+    blogList: blogList,
+    giftCardList: giftCardList,
+    membership: membership,
+    service: service
   };
 })();

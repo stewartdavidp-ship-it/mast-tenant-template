@@ -271,6 +271,12 @@ window.TENANT_READY.then(function() {
 
     document.title = post.title + ' \u2014 ' + TENANT_TITLE_SUFFIX();
 
+    // Schema.org: BlogPosting
+    if (window.MastSchema) {
+      post._id = post._id || postId;
+      MastSchema.inject(MastSchema.blogPosting(post));
+    }
+
     var date = post.publishedAt ? new Date(post.publishedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
     var numLabel = source === 'newsletter' ? 'Issue #' + (post.issueNumber || '?') : 'Post #' + (post.postNumber || '?');
 
@@ -327,6 +333,7 @@ window.TENANT_READY.then(function() {
   console.error('[blog-post] Tenant resolution failed:', err.message);
 });
 </script>
+<script src="../schema-org.js"></script>
 <script src="../cart.js"></script>
 <script defer src="../checkout.js?v=2"></script>
 <script defer src="../feedback-widget.js"></script>

@@ -91,6 +91,17 @@
       .then(function(d) {
         data = d;
         document.title = (data.show.name || 'Show') + ' — Event';
+        // Schema.org: Event
+        if (window.MastSchema && data.show) {
+          MastSchema.inject(MastSchema.event({
+            name: data.show.name,
+            date: data.show.startDate,
+            dateEnd: data.show.endDate,
+            description: data.show.description,
+            location: (data.show.venue || '') + (data.show.city ? ', ' + data.show.city : '') + (data.show.state ? ', ' + data.show.state : ''),
+            url: window.location.href
+          }));
+        }
         render();
         if (data.huntEnabled && huntParticipantId) loadHuntStatus();
         // Start ad timer after 30s

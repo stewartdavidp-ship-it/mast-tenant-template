@@ -582,6 +582,12 @@ window.TENANT_READY.then(function() {
         return;
       }
 
+      // Schema.org: Blog listing
+      if (window.MastSchema) {
+        MastSchema.inject(MastSchema.organization());
+        MastSchema.injectAll(MastSchema.blogList(posts.slice(0, 10)));
+      }
+
       // Render latest post in full
       var latest = posts[0];
       var older = posts.slice(1);
@@ -845,6 +851,7 @@ window.TENANT_READY.then(function() {
   console.error('[blog] Tenant resolution failed:', err.message);
 });
 </script>
+<script src="../schema-org.js"></script>
 <script src="../cart.js"></script>
 <script defer src="../checkout.js?v=2"></script>
 <script defer src="../feedback-widget.js"></script>
