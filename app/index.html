@@ -11137,6 +11137,12 @@ function mastCopyFallback(label, text) {
   overlay.addEventListener('keydown', function(e) { if (e.key === 'Escape') { e.stopImmediatePropagation(); close(); } });
 }
 
+// Expose dialog utilities globally for lazy-loaded modules
+window.mastConfirm = mastConfirm;
+window.mastAlert = mastAlert;
+window.mastPrompt = mastPrompt;
+window.mastCopyFallback = mastCopyFallback;
+
 // ============================================================
 // Auth
 // ============================================================
