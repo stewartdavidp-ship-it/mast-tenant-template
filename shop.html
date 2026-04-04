@@ -460,7 +460,7 @@ window.TENANT_READY.then(function() {
     var si = product.stockInfo;
     var badges = (config && config.badges) || {};
     var isDiscontinued = product.availability === 'discontinued';
-    var effective = si ? ((si.totalAvailable || 0) - (si.totalReserved || 0)) : 0;
+    var effective = si ? ((si.totalAvailable || 0)) : 0;
     var stockType = si ? si.stockType : null;
     if (isDiscontinued && effective <= 0) return { text: badges.discontinuedSold || 'Retired', cssClass: 'retired' };
     if (isDiscontinued && effective > 0) return { text: badges.discontinuedInStock || 'Final Stock', cssClass: 'final-stock' };
@@ -479,7 +479,7 @@ window.TENANT_READY.then(function() {
     if (!config || !config.showLeadTime) return null;
     var si = product.stockInfo;
     if (!si) return null;
-    var effective = (si.totalAvailable || 0) - (si.totalReserved || 0);
+    var effective = (si.totalAvailable || 0);
     if ((si.stockType === 'strict' || si.stockType === 'in-stock' || si.stockType === 'stock-to-build') && effective > 0) {
       var d = si.stockFulfillmentDays || 2;
       return 'Ships in ' + d + ' day' + (d !== 1 ? 's' : '');
@@ -637,7 +637,7 @@ window.TENANT_READY.then(function() {
             if (!hasPriceCents && !hasPriceNum) return false;
             var si = p.stockInfo;
             if (si) {
-              var eff = (si.totalAvailable || 0) - (si.totalReserved || 0);
+              var eff = (si.totalAvailable || 0);
               if (eff <= 0) return false;
             }
           }

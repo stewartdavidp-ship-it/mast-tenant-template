@@ -1135,7 +1135,7 @@
       // Discontinued notes
       var isDiscontinued = p.availability === 'discontinued';
       var si = p.stockInfo || {};
-      var effectiveStock = (si.totalAvailable || 0) - (si.totalReserved || 0);
+      var effectiveStock = (si.totalAvailable || 0);
       if (isDiscontinued && effectiveStock > 0) {
         availHtml += '<div class="product-discontinued-note">This item will not be restocked once sold out.</div>';
       }
@@ -1300,7 +1300,7 @@
               if (vStock) {
                 var variantMode = vStock.inventoryModeOverride || siType;
                 var variantStrict = (variantMode === 'strict' || variantMode === 'in-stock' || variantMode === 'limited');
-                if (variantStrict && (vStock.available - (vStock.reserved || 0)) <= 0) {
+                if (variantStrict && ((vStock.available || 0)) <= 0) {
                   var chip = document.querySelector('.product-option-chip[data-value="' + choice + '"]');
                   if (chip) chip.classList.add('unavailable');
                 }
@@ -1456,7 +1456,7 @@
         if (vStock) {
           var variantMode = vStock.inventoryModeOverride || stockType;
           var variantStrict = variantMode === 'strict' || variantMode === 'in-stock' || variantMode === 'limited';
-          if (variantStrict && (vStock.available - (vStock.reserved || 0)) <= 0) {
+          if (variantStrict && ((vStock.available || 0)) <= 0) {
             stockBlocked = true;
             btnText = 'Unavailable';
           }
@@ -1465,13 +1465,13 @@
           stockBlocked = true;
           btnText = 'Unavailable';
         }
-      } else if (isStrict && (si.totalAvailable - si.totalReserved) <= 0) {
+      } else if (isStrict && ((si.totalAvailable || 0)) <= 0) {
         stockBlocked = true;
         btnText = 'Sold Out';
       }
     }
     // Discontinued + no stock
-    if (p && p.availability === 'discontinued' && si && (si.totalAvailable - si.totalReserved) <= 0) {
+    if (p && p.availability === 'discontinued' && si && ((si.totalAvailable || 0)) <= 0) {
       stockBlocked = true;
       btnText = 'No Longer Available';
     }
@@ -1495,7 +1495,7 @@
       // Update lead time display for selected variant
       var ltEl = document.querySelector('.product-lead-time');
       if (ltEl && si.variants && si.variants[ck]) {
-        var vEff = (si.variants[ck].available || 0) - (si.variants[ck].reserved || 0);
+        var vEff = (si.variants[ck].available || 0);
         var ltText = '';
         if (vEff > 0 && typeof si.stockFulfillmentDays === 'number' && si.stockFulfillmentDays > 0) {
           ltText = 'Ships in ' + si.stockFulfillmentDays + ' business day' + (si.stockFulfillmentDays !== 1 ? 's' : '');
@@ -1547,9 +1547,9 @@
         if (cartRequired.length > 0 && cartSi.variants) {
           var cartCk = cartRequired.map(function(l) { return (window._selectedOptions || {})[l]; }).join('|');
           var cartV = cartSi.variants[cartCk];
-          if (cartV) cartAvailableStock = Math.max(0, (cartV.available || 0) - (cartV.reserved || 0));
+          if (cartV) cartAvailableStock = Math.max(0, (cartV.available || 0));
         } else {
-          cartAvailableStock = Math.max(0, (cartSi.totalAvailable || 0) - (cartSi.totalReserved || 0));
+          cartAvailableStock = Math.max(0, (cartSi.totalAvailable || 0));
         }
       }
     }
@@ -1885,7 +1885,7 @@
     var si = product.stockInfo;
     var badges = (config && config.badges) || {};
     var isDiscontinued = product.availability === 'discontinued';
-    var effective = si ? (si.totalAvailable - si.totalReserved) : 0;
+    var effective = si ? ((si.totalAvailable || 0)) : 0;
     var stockType = si ? si.stockType : null;
 
     if (isDiscontinued && effective <= 0) {
@@ -1924,7 +1924,7 @@
     var si = product.stockInfo;
     if (!si || !si.variants || !si.variants[comboKey]) return resolveBadge(product, config);
     var v = si.variants[comboKey];
-    var effective = (v.available || 0) - (v.reserved || 0);
+    var effective = (v.available || 0);
     var badges = (config && config.badges) || {};
     var stockType = v.inventoryModeOverride || si.stockType;
     if (stockType === 'strict' || stockType === 'in-stock' || stockType === 'limited') {
@@ -1950,7 +1950,7 @@
     if (!config || !config.showLeadTime) return null;
     var si = product.stockInfo;
     if (!si) return null;
-    var effective = si.totalAvailable - si.totalReserved;
+    var effective = (si.totalAvailable || 0);
     var stockType = si.stockType;
     if ((stockType === 'strict' || stockType === 'in-stock' || stockType === 'limited') && effective > 0) {
       var days = si.stockFulfillmentDays || 2;

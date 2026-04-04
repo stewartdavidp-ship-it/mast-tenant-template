@@ -708,7 +708,7 @@ async function transitionProductionJob(jobId, newStatus) {
         var qty = (li.completedQuantity || 0) - (li.lossQuantity || 0);
         if (qty <= 0) continue;
         try {
-          var stockRef = MastDB.inventory.stockAvailable(li.productId);
+          var stockRef = MastDB.inventory.stockOnHand(li.productId);
           await stockRef.transaction(function(current) { return (current || 0) + qty; });
           await writeAudit('update', 'inventory', li.productId);
           invCount++;
@@ -1331,7 +1331,7 @@ async function autoUpdateInventory(jobId, buildId, buildOutput, freshJob) {
 
     try {
       // Firebase transaction for atomic increment
-      var stockRef = MastDB.inventory.stockAvailable(li.productId);
+      var stockRef = MastDB.inventory.stockOnHand(li.productId);
       await stockRef.transaction(function(current) {
         return (current || 0) + qty;
       });

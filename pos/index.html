@@ -909,20 +909,25 @@ function decrementInventory(productQtys) {
       stockRef.once('value').then(function(snap) {
         var current = snap.val();
         if (current !== null && typeof current === 'number') {
+          // Legacy flat stock number — treat as onHand
           var newVal = Math.max(0, current - qty);
           return stockRef.set(newVal).then(function() {
-            // Auto-set sold status for sculptures when stock reaches 0
             if (prod && prod.businessLine === 'sculpture' && newVal <= 0) {
               return db.ref(TENANT_ID + '/public/products/' + pid + '/status').set('sold');
             }
           });
         }
-        // Object-based stock (e.g. _default.available)
+        // Object-based stock — decrement onHand
         if (current && typeof current === 'object' && current._default) {
-          var curAvail = current._default.available || 0;
-          var newAvail = Math.max(0, curAvail - qty);
-          return db.ref(TENANT_ID + '/admin/inventory/' + pid + '/stock/_default/available').set(newAvail).then(function() {
-            if (prod && prod.businessLine === 'sculpture' && newAvail <= 0) {
+          var curOnHand = current._default.onHand || 0;
+          var newOnHand = Math.max(0, curOnHand - qty);
+          return db.ref(TENANT_ID + '/admin/inventory/' + pid + '/stock/_default/onHand').set(newOnHand).then(function() {
+            // Write audit trail
+            db.ref(TENANT_ID + '/admin/inventory/' + pid + '/history').push({
+              action: 'sold', reason: 'pos_sale', qty: -qty, previousQty: curOnHand, newQty: newOnHand,
+              actor: 'pos', actorType: 'system', timestamp: new Date().toISOString()
+            });
+            if (prod && prod.businessLine === 'sculpture' && newOnHand <= 0) {
               return db.ref(TENANT_ID + '/public/products/' + pid + '/status').set('sold');
             }
           });

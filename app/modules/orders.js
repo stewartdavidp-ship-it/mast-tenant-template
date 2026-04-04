@@ -981,14 +981,14 @@
     if (inv.stockType === 'stock-to-build') {
       var ck2 = getItemComboKey(item.pid, item.options);
       var se2 = (ck2 !== '_default' && inv.stock && inv.stock[ck2]) ? inv.stock[ck2] : (inv.stock && inv.stock._default) || null;
-      var avail2 = se2 ? (se2.available || 0) : 0;
+      var avail2 = se2 ? Math.max(0, (se2.onHand || 0) - (se2.committed || 0) - (se2.held || 0) - (se2.damaged || 0)) : 0;
       if (avail2 <= 0) return { status: 'build', label: 'Made to Order (stock depleted)', available: 0 };
     }
     var ck = getItemComboKey(item.pid, item.options);
     var stockEntry = (ck !== '_default' && inv.stock && inv.stock[ck])
       ? inv.stock[ck]
       : (inv.stock && inv.stock._default) || null;
-    var available = stockEntry ? (stockEntry.available || 0) : 0;
+    var available = stockEntry ? Math.max(0, (stockEntry.onHand || 0) - (stockEntry.committed || 0) - (stockEntry.held || 0) - (stockEntry.damaged || 0)) : 0;
     if (available >= qty) {
       return { status: 'stock', label: 'In Stock (' + available + ' available)', available: available };
     } else if (available > 0) {
@@ -1295,18 +1295,14 @@
     try {
       var stockRef = MastDB.inventory.stockRef(pid);
       var updates = {};
-      updates['_default/available'] = firebase.database.ServerValue.increment(-qty);
-      updates['_default/reserved'] = firebase.database.ServerValue.increment(qty);
-      // Also update specific variant if combo key exists in stock
+      updates['_default/committed'] = firebase.database.ServerValue.increment(qty);
       if (ck && ck !== '_default' && inv.stock[ck]) {
-        updates[ck + '/available'] = firebase.database.ServerValue.increment(-qty);
-        updates[ck + '/reserved'] = firebase.database.ServerValue.increment(qty);
+        updates[ck + '/committed'] = firebase.database.ServerValue.increment(qty);
       }
       await stockRef.update(updates);
       await writeAudit('update', 'inventory', pid);
-      // Write inventory audit trail
       await MastDB.inventory.ref(pid + '/history').push({
-        action: 'reserved', qty: qty, comboKey: ck || '_default',
+        action: 'reserved', reason: 'order_placed', qty: qty, comboKey: ck || '_default',
         orderId: orderId || null, actor: 'maker', actorType: 'maker',
         timestamp: new Date().toISOString()
       });
@@ -1321,17 +1317,14 @@
     try {
       var stockRef = MastDB.inventory.stockRef(pid);
       var updates = {};
-      updates['_default/available'] = firebase.database.ServerValue.increment(qty);
-      updates['_default/reserved'] = firebase.database.ServerValue.increment(-qty);
+      updates['_default/committed'] = firebase.database.ServerValue.increment(-qty);
       if (ck && ck !== '_default' && inv.stock[ck]) {
-        updates[ck + '/available'] = firebase.database.ServerValue.increment(qty);
-        updates[ck + '/reserved'] = firebase.database.ServerValue.increment(-qty);
+        updates[ck + '/committed'] = firebase.database.ServerValue.increment(-qty);
       }
       await stockRef.update(updates);
       await writeAudit('update', 'inventory', pid);
-      // Write inventory audit trail
       await MastDB.inventory.ref(pid + '/history').push({
-        action: 'released', qty: qty, comboKey: ck || '_default',
+        action: 'released', reason: 'order_cancelled', qty: qty, comboKey: ck || '_default',
         orderId: orderId || null, actor: 'maker', actorType: 'maker',
         timestamp: new Date().toISOString()
       });
@@ -1346,15 +1339,16 @@
     try {
       var stockRef = MastDB.inventory.stockRef(pid);
       var updates = {};
-      updates['_default/reserved'] = firebase.database.ServerValue.increment(-qty);
+      updates['_default/committed'] = firebase.database.ServerValue.increment(-qty);
+      updates['_default/onHand'] = firebase.database.ServerValue.increment(-qty);
       if (ck && ck !== '_default' && inv.stock[ck]) {
-        updates[ck + '/reserved'] = firebase.database.ServerValue.increment(-qty);
+        updates[ck + '/committed'] = firebase.database.ServerValue.increment(-qty);
+        updates[ck + '/onHand'] = firebase.database.ServerValue.increment(-qty);
       }
       await stockRef.update(updates);
       await writeAudit('update', 'inventory', pid);
-      // Write inventory audit trail
       await MastDB.inventory.ref(pid + '/history').push({
-        action: 'shipped', qty: -qty, comboKey: ck || '_default',
+        action: 'shipped', reason: 'order_shipped', qty: -qty, comboKey: ck || '_default',
         orderId: orderId || null, actor: 'maker', actorType: 'maker',
         timestamp: new Date().toISOString()
       });

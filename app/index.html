@@ -8301,7 +8301,11 @@ MastDB.inventory = {
   },
   unlisten: function(handle) { this.ref().off('value', handle); },
   stockRef: function(pid) { return MastDB._ref(this.PATH + '/' + pid + '/stock'); },
+  stockOnHand: function(pid, variant) {
+    return MastDB._ref(this.PATH + '/' + pid + '/stock/' + (variant || '_default') + '/onHand');
+  },
   stockAvailable: function(pid, variant) {
+    // DEPRECATED: use stockOnHand for writes. Available is now calculated.
     return MastDB._ref(this.PATH + '/' + pid + '/stock/' + (variant || '_default') + '/available');
   },
   stockLocations: function(pid, variant) {
@@ -17478,7 +17482,8 @@ function renderProducts() {
     var invHtml = '';
     var totals = getInventoryTotals(inv);
     var avail = totals.available;
-    var reserved = totals.reserved;
+    var onHand = totals.onHand;
+    var committed = totals.committed;
     var stockType = (inv && inv.stockType) ? inv.stockType : 'made-to-order';
     var threshold = (inv && inv.lowStockThreshold) ? inv.lowStockThreshold : 2;
 
@@ -17503,9 +17508,9 @@ function renderProducts() {
 
     // On-hand count — always shown if there's any stock
     var qtyHtml = '';
-    if (avail > 0 || reserved > 0) {
-      qtyHtml = ' <span class="stock-reserved" style="font-size:0.75rem;">' + avail + ' on hand' +
-        (reserved > 0 ? ' · ' + reserved + ' reserved' : '') + '</span>';
+    if (onHand > 0 || committed > 0) {
+      qtyHtml = ' <span class="stock-reserved" style="font-size:0.75rem;">' + onHand + ' on hand' +
+        (committed > 0 ? ' · ' + committed + ' committed' : '') + '</span>';
     }
     invHtml = '<div class="product-inventory">' + invHtml + qtyHtml + '</div>';
 
@@ -17563,31 +17568,47 @@ async function syncStockInfoToPublic(pid) {
     if (!product) return;
     var stockType = inv.stockType || 'build-to-order';
     var rawStock = inv.stock;
-    // Handle flat stock number (e.g., stock: 4 from MCP update_inventory)
-    var stock = (typeof rawStock === 'number') ? { _default: { available: rawStock, reserved: 0 } } : (rawStock || {});
-    var totalAvailable = 0, totalReserved = 0;
+    // Handle flat stock number (legacy: stock: 4) — treat as onHand
+    var stock = (typeof rawStock === 'number') ? { _default: { onHand: rawStock, committed: 0, held: 0, damaged: 0, incoming: 0 } } : (rawStock || {});
+    var totalOnHand = 0, totalCommitted = 0, totalHeld = 0, totalDamaged = 0, totalIncoming = 0;
     var variants = {};
     Object.keys(stock).forEach(function(key) {
       if (key === '_default') return;
       var entry = stock[key] || {};
-      var avail = entry.available || 0;
-      var reserved = entry.reserved || 0;
-      totalAvailable += avail;
-      totalReserved += reserved;
-      var variantData = { available: avail, reserved: reserved };
+      var onHand = entry.onHand || 0;
+      var committed = entry.committed || 0;
+      var held = entry.held || 0;
+      var damaged = entry.damaged || 0;
+      var incoming = entry.incoming || 0;
+      totalOnHand += onHand;
+      totalCommitted += committed;
+      totalHeld += held;
+      totalDamaged += damaged;
+      totalIncoming += incoming;
+      var available = Math.max(0, onHand - committed - held - damaged);
+      var variantData = { onHand: onHand, available: available, committed: committed, held: held, damaged: damaged, incoming: incoming, lastCountedAt: entry.lastCountedAt || null };
       if (entry.inventoryModeOverride) variantData.inventoryModeOverride = entry.inventoryModeOverride;
       if (entry.productionLeadTimeDaysOverride) variantData.productionLeadTimeDaysOverride = entry.productionLeadTimeDaysOverride;
       if (entry.stockFulfillmentDaysOverride) variantData.stockFulfillmentDaysOverride = entry.stockFulfillmentDaysOverride;
       variants[key] = variantData;
     });
     if (Object.keys(variants).length === 0 && stock._default) {
-      totalAvailable = (stock._default && stock._default.available) || 0;
-      totalReserved = (stock._default && stock._default.reserved) || 0;
+      totalOnHand = (stock._default && stock._default.onHand) || 0;
+      totalCommitted = (stock._default && stock._default.committed) || 0;
+      totalHeld = (stock._default && stock._default.held) || 0;
+      totalDamaged = (stock._default && stock._default.damaged) || 0;
+      totalIncoming = (stock._default && stock._default.incoming) || 0;
     }
+    var totalAvailable = Math.max(0, totalOnHand - totalCommitted - totalHeld - totalDamaged);
     var stockInfo = {
       stockType: stockType,
+      totalOnHand: totalOnHand,
       totalAvailable: totalAvailable,
-      totalReserved: totalReserved,
+      totalCommitted: totalCommitted,
+      totalHeld: totalHeld,
+      totalDamaged: totalDamaged,
+      totalIncoming: totalIncoming,
+      lastCountedAt: (stock._default && stock._default.lastCountedAt) || null,
       lowStockThreshold: inv.lowStockThreshold || 2,
       productionLeadTimeDays: typeof inv.productionLeadTimeDays === 'number' ? inv.productionLeadTimeDays : null,
       stockFulfillmentDays: typeof inv.stockFulfillmentDays === 'number' ? inv.stockFulfillmentDays : 2,
@@ -17603,33 +17624,47 @@ async function syncStockInfoToPublic(pid) {
 }
 
 function getInventoryTotals(inv) {
-  if (!inv || !inv.stock) return { available: 0, reserved: 0 };
-  // Handle flat stock number (e.g., stock: 4 from MCP update_inventory)
-  if (typeof inv.stock === 'number') return { available: inv.stock, reserved: 0 };
-  // If _default summary exists (has available property), use it as the source of truth
-  if (inv.stock._default && typeof inv.stock._default.available === 'number') {
+  if (!inv || !inv.stock) return { onHand: 0, available: 0, committed: 0, held: 0, damaged: 0, incoming: 0 };
+  // Handle flat stock number (legacy: stock: 4)
+  if (typeof inv.stock === 'number') return { onHand: inv.stock, available: inv.stock, committed: 0, held: 0, damaged: 0, incoming: 0 };
+  // If _default summary exists (has onHand property), use it as the source of truth
+  if (inv.stock._default && typeof inv.stock._default.onHand === 'number') {
+    var d = inv.stock._default;
+    var onHand = d.onHand || 0;
+    var committed = d.committed || 0;
+    var held = d.held || 0;
+    var damaged = d.damaged || 0;
+    var incoming = d.incoming || 0;
     return {
-      available: inv.stock._default.available,
-      reserved: inv.stock._default.reserved || 0
+      onHand: onHand,
+      available: Math.max(0, onHand - committed - held - damaged),
+      committed: committed,
+      held: held,
+      damaged: damaged,
+      incoming: incoming
     };
   }
   // Fallback: sum across all variant keys (excluding _default)
-  var total = 0;
-  var reserved = 0;
+  var totalOnHand = 0, totalCommitted = 0, totalHeld = 0, totalDamaged = 0, totalIncoming = 0;
   Object.keys(inv.stock).forEach(function(k) {
-    if (k === '_default') return; // skip _default in fallback to avoid double-count
+    if (k === '_default') return;
     var entry = inv.stock[k];
-    if (entry && typeof entry.available === 'number') {
-      total += entry.available;
-    } else if (entry && entry.locations) {
-      // Sum from locations if available field not set
-      Object.keys(entry.locations).forEach(function(locId) {
-        total += (entry.locations[locId] || 0);
-      });
+    if (entry && typeof entry.onHand === 'number') {
+      totalOnHand += entry.onHand;
     }
-    if (entry && entry.reserved) reserved += entry.reserved;
+    if (entry && entry.committed) totalCommitted += entry.committed;
+    if (entry && entry.held) totalHeld += entry.held;
+    if (entry && entry.damaged) totalDamaged += entry.damaged;
+    if (entry && entry.incoming) totalIncoming += entry.incoming;
   });
-  return { available: total, reserved: reserved };
+  return {
+    onHand: totalOnHand,
+    available: Math.max(0, totalOnHand - totalCommitted - totalHeld - totalDamaged),
+    committed: totalCommitted,
+    held: totalHeld,
+    damaged: totalDamaged,
+    incoming: totalIncoming
+  };
 }
 
 function getProductVariantCombos(product) {
@@ -18225,7 +18260,7 @@ function renderInventoryOverview() {
   // Build summary stats
   var totalProducts = productsData.length;
   var totalOnHand = 0;
-  var totalReserved = 0;
+  var totalCommitted = 0;
   var outOfStockCount = 0;
   var lowStockCount = 0;
   var strictCount = 0;
@@ -18241,8 +18276,8 @@ function renderInventoryOverview() {
     var variantInfo = getProductVariantCombos(p);
     var stock = (inv && inv.stock) ? inv.stock : {};
 
-    totalOnHand += totals.available;
-    totalReserved += totals.reserved;
+    totalOnHand += totals.onHand;
+    totalCommitted += totals.committed;
     if (stockType === 'build-to-order' || stockType === 'made-to-order') buildToOrderCount++;
     else if (stockType === 'stock-to-build') { stockToBuildCount++; if (totals.available > 0 && totals.available <= threshold) lowStockCount++; }
     else if (stockType === 'strict' || stockType === 'in-stock' || stockType === 'limited') { strictCount++; if (totals.available <= 0) outOfStockCount++; else if (totals.available <= threshold) lowStockCount++; }
@@ -18257,9 +18292,9 @@ function renderInventoryOverview() {
         variantInfo.combos.forEach(function(combo) {
           var val = combo[labelIdx];
           var key = comboKey(combo);
-          var s = stock[key] || { available: 0, reserved: 0 };
+          var s = stock[key] || { onHand: 0 };
           if (!valueCounts[val]) valueCounts[val] = 0;
-          valueCounts[val] += (s.available || 0);
+          valueCounts[val] += (s.onHand || 0);
         });
         var tags = '';
         Object.keys(valueCounts).forEach(function(val) {
@@ -18284,8 +18319,9 @@ function renderInventoryOverview() {
       categories: p.categories || [],
       stockType: stockType,
       threshold: threshold,
+      onHand: totals.onHand,
       available: totals.available,
-      reserved: totals.reserved,
+      committed: totals.committed,
       hasVariants: variantInfo.combos.length > 0,
       attrSummary: attrSummary,
       productionLeadTimeDays: inv.productionLeadTimeDays || null,
@@ -18323,8 +18359,8 @@ function renderInventoryOverview() {
       '<div class="inv-overview-stat-label">Total On Hand</div>' +
     '</div>' +
     '<div class="inv-overview-stat">' +
-      '<div class="inv-overview-stat-value">' + totalReserved + '</div>' +
-      '<div class="inv-overview-stat-label">Reserved</div>' +
+      '<div class="inv-overview-stat-value">' + totalCommitted + '</div>' +
+      '<div class="inv-overview-stat-label">Committed</div>' +
     '</div>' +
     (outOfStockCount > 0 ? '<div class="inv-overview-stat inv-overview-stat-alert">' +
       '<div class="inv-overview-stat-value">' + outOfStockCount + '</div>' +
@@ -18355,7 +18391,7 @@ function renderInventoryOverview() {
       '<th>Product</th>' +
       '<th style="text-align:center;">Type</th>' +
       '<th style="text-align:center;">On Hand</th>' +
-      '<th style="text-align:center;">Reserved</th>' +
+      '<th style="text-align:center;">Committed</th>' +
       '<th style="text-align:center;">Lead Time</th>' +
       '<th>Attributes</th>' +
     '</tr></thead><tbody>';
@@ -18410,8 +18446,8 @@ function renderInventoryOverview() {
         '<a href="#" data-pid="' + esc(r.pid) + '" onclick="event.stopPropagation();viewProductFromInventory(this.dataset.pid);return false;" style="font-size:0.7rem;color:var(--teal);">View Detail →</a>' +
       '</td>' +
       '<td style="text-align:center;">' + statusBadge + '</td>' +
-      '<td style="text-align:center;' + qtyStyle + '">' + (isBTORow ? '<span style="color:var(--warm-gray-light);">—</span>' : r.available) + '</td>' +
-      '<td style="text-align:center;color:var(--warm-gray);">' + (r.reserved > 0 ? r.reserved : (isBTORow ? '<span style="color:var(--warm-gray-light);">—</span>' : '0')) + '</td>' +
+      '<td style="text-align:center;' + qtyStyle + '">' + (isBTORow ? '<span style="color:var(--warm-gray-light);">—</span>' : r.onHand) + '</td>' +
+      '<td style="text-align:center;color:var(--warm-gray);">' + (r.committed > 0 ? r.committed : (isBTORow ? '<span style="color:var(--warm-gray-light);">—</span>' : '0')) + '</td>' +
       '<td style="text-align:center;color:var(--warm-gray);font-size:0.82rem;">' + leadTimeStr + '</td>' +
       '<td>' + (r.attrSummary || '<span style="color:var(--warm-gray-light);font-size:0.78rem;">No variants</span>') + '</td>' +
     '</tr>';
@@ -18451,21 +18487,24 @@ function renderVariantDrillDown(pid) {
   if (!product) return '';
   var inv = inventory[pid] || {};
   var rawStock = inv.stock;
-  var stock = (typeof rawStock === 'number') ? { _default: { available: rawStock, reserved: 0 } } : (rawStock || {});
+  var stock = (typeof rawStock === 'number') ? { _default: { onHand: rawStock, committed: 0 } } : (rawStock || {});
   var stockType = inv.stockType || 'build-to-order';
   var variantInfo = getProductVariantCombos(product);
   if (!variantInfo.combos.length) return '<div style="color:var(--warm-gray-light);font-size:0.8rem;">No variants</div>';
 
   var html = '<table class="inv-variant-table"><thead><tr>' +
-    '<th>Variant</th><th style="text-align:center;">On Hand</th><th style="text-align:center;">Reserved</th>' +
+    '<th>Variant</th><th style="text-align:center;">On Hand</th><th style="text-align:center;">Committed</th>' +
     '<th>Effective Mode</th><th></th>' +
   '</tr></thead><tbody>';
 
   variantInfo.combos.forEach(function(combo) {
     var key = comboKey(combo);
     var entry = stock[key] || {};
-    var avail = entry.available || 0;
-    var reserved = entry.reserved || 0;
+    var onHand = entry.onHand || 0;
+    var committed = entry.committed || 0;
+    var held = entry.held || 0;
+    var damaged = entry.damaged || 0;
+    var avail = Math.max(0, onHand - committed - held - damaged);
     var modeOverride = entry.inventoryModeOverride || null;
     var effectiveMode = modeOverride || stockType;
     var modeLabel = effectiveMode === 'strict' ? 'Strict' : effectiveMode === 'stock-to-build' ? 'Stock to Build' : 'Build to Order';
@@ -18504,8 +18543,8 @@ function renderVariantDrillDown(pid) {
     } else {
       html += '<tr>' +
         '<td style="font-weight:500;">' + esc(comboLabel) + '</td>' +
-        '<td style="text-align:center;' + availStyle + '">' + (isBTO ? '—' : avail) + '</td>' +
-        '<td style="text-align:center;color:var(--warm-gray);">' + (reserved > 0 ? reserved : (isBTO ? '—' : '0')) + '</td>' +
+        '<td style="text-align:center;' + availStyle + '">' + (isBTO ? '—' : onHand) + '</td>' +
+        '<td style="text-align:center;color:var(--warm-gray);">' + (committed > 0 ? committed : (isBTO ? '—' : '0')) + '</td>' +
         '<td>' + esc(modeLabel) + overrideTag + '</td>' +
         '<td><button class="btn btn-secondary btn-small" style="font-size:0.72rem;padding:3px 8px;" data-key="' + esc(key) + '" onclick="event.stopPropagation();editingVariantKey=this.dataset.key;renderInventoryOverview();">Edit</button></td>' +
       '</tr>';
@@ -18894,8 +18933,9 @@ function renderProductDetail(pid) {
     detailsHtml += '<div class="product-detail-section" style="margin-top:16px;">' +
       '<div class="product-detail-section-title">Inventory Summary</div>' +
       '<div style="display:flex;gap:24px;flex-wrap:wrap;font-size:0.88rem;">' +
-        '<div><span style="color:var(--warm-gray);">On Hand</span> <strong style="color:' + invColor + ';">' + pdTotals.available + '</strong></div>' +
-        (pdTotals.reserved > 0 ? '<div><span style="color:var(--warm-gray);">Reserved</span> <strong>' + pdTotals.reserved + '</strong></div>' : '') +
+        '<div><span style="color:var(--warm-gray);">On Hand</span> <strong style="color:' + invColor + ';">' + pdTotals.onHand + '</strong></div>' +
+        '<div><span style="color:var(--warm-gray);">Available</span> <strong>' + pdTotals.available + '</strong></div>' +
+        (pdTotals.committed > 0 ? '<div><span style="color:var(--warm-gray);">Committed</span> <strong>' + pdTotals.committed + '</strong></div>' : '') +
         '<div style="font-size:0.78rem;"><a href="#" onclick="event.preventDefault();switchProductTab(\'inventory\');" style="color:var(--teal);text-decoration:none;">View full inventory →</a></div>' +
       '</div>' +
     '</div>';
@@ -19173,12 +19213,16 @@ function renderProductDetail(pid) {
     var hasVariants = variantInfo.combos.length > 0;
     var totals = getInventoryTotals(inv);
 
-    // Inventory on hand (FIRST)
+    // Inventory positions (FIRST)
     invTabHtml += '<div class="product-detail-section">' +
-      '<div class="product-detail-section-title">Inventory on Hand</div>' +
-      '<div style="display:flex;gap:24px;align-items:baseline;margin-bottom:12px;">' +
-        '<div style="font-size:1.5rem;font-weight:700;color:var(--dark-brown);">' + totals.available + ' <span style="font-size:0.85rem;font-weight:400;color:var(--warm-gray);">available</span></div>' +
-        (totals.reserved > 0 ? '<div style="font-size:1rem;color:var(--warm-gray);">' + totals.reserved + ' reserved</div>' : '') +
+      '<div class="product-detail-section-title">Inventory Positions</div>' +
+      '<div style="display:flex;gap:24px;align-items:baseline;margin-bottom:12px;flex-wrap:wrap;">' +
+        '<div style="font-size:1.5rem;font-weight:700;color:var(--dark-brown);">' + totals.onHand + ' <span style="font-size:0.85rem;font-weight:400;color:var(--warm-gray);">on hand</span></div>' +
+        '<div style="font-size:1rem;color:var(--teal);">' + totals.available + ' available</div>' +
+        (totals.committed > 0 ? '<div style="font-size:1rem;color:var(--warm-gray);">' + totals.committed + ' committed</div>' : '') +
+        (totals.held > 0 ? '<div style="font-size:1rem;color:var(--amber);">' + totals.held + ' held</div>' : '') +
+        (totals.damaged > 0 ? '<div style="font-size:1rem;color:var(--danger);">' + totals.damaged + ' damaged</div>' : '') +
+        (totals.incoming > 0 ? '<div style="font-size:1rem;color:var(--info);">' + totals.incoming + ' incoming</div>' : '') +
       '</div>';
 
     if (hasVariants) {
@@ -19188,9 +19232,9 @@ function renderProductDetail(pid) {
         variantInfo.combos.forEach(function(combo) {
           var val = combo[labelIdx];
           var key = comboKey(combo);
-          var s = stock[key] || { available: 0, reserved: 0 };
+          var s = stock[key] || { onHand: 0 };
           if (!valueCounts[val]) valueCounts[val] = 0;
-          valueCounts[val] += (s.available || 0);
+          valueCounts[val] += (s.onHand || 0);
         });
         var tags = '';
         Object.keys(valueCounts).forEach(function(val) {
@@ -19574,16 +19618,16 @@ function selectProductImageFromLibrary(pid) {
 function buildVariantTable(pid, labels, combos, inv) {
   var stock = (inv && inv.stock) ? inv.stock : {};
   var rows = '';
-  var totalAvail = 0;
-  var totalReserved = 0;
+  var totalOnHand = 0;
+  var totalCommitted = 0;
 
   combos.forEach(function(combo) {
     var key = comboKey(combo);
-    var s = stock[key] || { available: 0, reserved: 0 };
-    var avail = s.available || 0;
-    var reserved = s.reserved || 0;
-    totalAvail += avail;
-    totalReserved += reserved;
+    var s = stock[key] || { onHand: 0, committed: 0 };
+    var onHand = s.onHand || 0;
+    var committed = s.committed || 0;
+    totalOnHand += onHand;
+    totalCommitted += committed;
 
     rows += '<tr data-combo="' + esc(key) + '">';
     combo.forEach(function(val) {
@@ -19592,11 +19636,11 @@ function buildVariantTable(pid, labels, combos, inv) {
     rows += '<td>' +
         '<div style="display:flex;align-items:center;gap:4px;">' +
           '<button class="btn-adj" onclick="pdAdjustVariant(\'' + esc(key) + '\',-1)">-</button>' +
-          '<input type="number" min="0" value="' + avail + '" class="pd-variant-avail" data-combo="' + esc(key) + '" style="width:56px;text-align:center;" onchange="pdRecalcTotal()">' +
+          '<input type="number" min="0" value="' + onHand + '" class="pd-variant-avail" data-combo="' + esc(key) + '" style="width:56px;text-align:center;" onchange="pdRecalcTotal()">' +
           '<button class="btn-adj" onclick="pdAdjustVariant(\'' + esc(key) + '\',1)">+</button>' +
         '</div>' +
       '</td>' +
-      '<td style="color:var(--warm-gray);">' + reserved + '</td>' +
+      '<td style="color:var(--warm-gray);">' + committed + '</td>' +
     '</tr>';
   });
 
@@ -19605,8 +19649,8 @@ function buildVariantTable(pid, labels, combos, inv) {
   labels.forEach(function(l, i) {
     rows += '<td>' + (i === 0 ? '' : '') + '</td>';
   });
-  rows += '<td id="pdTotalAvail">' + totalAvail + '</td>' +
-    '<td>' + totalReserved + '</td>' +
+  rows += '<td id="pdTotalAvail">' + totalOnHand + '</td>' +
+    '<td>' + totalCommitted + '</td>' +
   '</tr>';
 
   // Header
@@ -19614,7 +19658,7 @@ function buildVariantTable(pid, labels, combos, inv) {
   labels.forEach(function(l) {
     thHtml += '<th>' + esc(l) + '</th>';
   });
-  thHtml += '<th>Available</th><th>Reserved</th>';
+  thHtml += '<th>On Hand</th><th>Committed</th>';
 
   return '<div class="product-detail-section">' +
     '<div class="product-detail-section-title">Inventory by Variant</div>' +
@@ -19719,16 +19763,23 @@ function openAdjustStockModal(pid) {
   if (variantInfo.combos.length > 0) {
     html += buildVariantTable(pid, variantInfo.labels, variantInfo.combos, inv);
   } else {
-    var defAvail = (stock._default) ? (stock._default.available || 0) : 0;
-    var defReserved = (stock._default) ? (stock._default.reserved || 0) : 0;
+    var defOnHand = (stock._default) ? (stock._default.onHand || 0) : 0;
+    var defCommitted = (stock._default) ? (stock._default.committed || 0) : 0;
+    var defHeld = (stock._default) ? (stock._default.held || 0) : 0;
+    var defDamaged = (stock._default) ? (stock._default.damaged || 0) : 0;
+    var defAvailable = Math.max(0, defOnHand - defCommitted - defHeld - defDamaged);
     html += '<div style="display:flex;gap:16px;align-items:flex-end;">' +
       '<div class="form-group" style="margin:0;">' +
-        '<label style="font-size:0.78rem;" id="adjDefaultLabel">Available</label>' +
-        '<input type="number" id="adjDefaultAvail" min="0" value="' + defAvail + '" style="width:80px;">' +
+        '<label style="font-size:0.78rem;" id="adjDefaultLabel">On Hand</label>' +
+        '<input type="number" id="adjDefaultAvail" min="0" value="' + defOnHand + '" style="width:80px;">' +
       '</div>' +
       '<div class="form-group" style="margin:0;">' +
-        '<label style="font-size:0.78rem;">Reserved</label>' +
-        '<input type="number" value="' + defReserved + '" readonly style="width:80px;opacity:0.6;">' +
+        '<label style="font-size:0.78rem;">Committed</label>' +
+        '<input type="number" value="' + defCommitted + '" readonly style="width:80px;opacity:0.6;">' +
+      '</div>' +
+      '<div class="form-group" style="margin:0;">' +
+        '<label style="font-size:0.78rem;">Available</label>' +
+        '<input type="number" value="' + defAvailable + '" readonly style="width:80px;opacity:0.6;">' +
       '</div>' +
     '</div>';
   }
@@ -19747,43 +19798,43 @@ async function saveAdjustStock(pid) {
     var variantInfo = getProductVariantCombos(product);
 
     // Use multi-path update instead of set() to avoid overwriting
-    // concurrent reservation changes. Only write 'available' fields;
-    // 'reserved' is managed atomically by reserveInventory/releaseInventory/pullFromStock.
+    // concurrent reservation changes. Only write 'onHand' fields;
+    // 'committed' is managed atomically by reserveInventory/releaseInventory/pullFromStock.
     var adjMode = (document.getElementById('adjStockMode') || {}).value || 'set';
     var inv = inventory[pid] || {};
     var curStock = (inv && inv.stock) ? inv.stock : {};
     var updates = {};
     if (variantInfo.combos.length > 0) {
-      var totalAvail = 0;
+      var totalOnHand = 0;
       variantInfo.combos.forEach(function(combo) {
         var key = comboKey(combo);
         var availInput = document.querySelector('.pd-variant-avail[data-combo="' + key + '"]');
         var inputVal = availInput ? (parseInt(availInput.value) || 0) : 0;
-        var avail = inputVal;
+        var onHand = inputVal;
         if (adjMode === 'add') {
-          var curVal = (curStock[key]) ? (curStock[key].available || 0) : 0;
-          avail = curVal + inputVal;
+          var curVal = (curStock[key]) ? (curStock[key].onHand || 0) : 0;
+          onHand = curVal + inputVal;
         }
-        updates['stock/' + key + '/available'] = Math.max(0, avail);
-        totalAvail += Math.max(0, avail);
+        updates['stock/' + key + '/onHand'] = Math.max(0, onHand);
+        totalOnHand += Math.max(0, onHand);
       });
-      updates['stock/_default/available'] = totalAvail;
+      updates['stock/_default/onHand'] = totalOnHand;
     } else {
       var inputVal = parseInt(document.getElementById('adjDefaultAvail').value) || 0;
-      var avail = inputVal;
+      var onHand = inputVal;
       if (adjMode === 'add') {
-        var curVal = (curStock._default) ? (curStock._default.available || 0) : 0;
-        avail = curVal + inputVal;
+        var curVal = (curStock._default) ? (curStock._default.onHand || 0) : 0;
+        onHand = curVal + inputVal;
       }
-      updates['stock/_default/available'] = Math.max(0, avail);
+      updates['stock/_default/onHand'] = Math.max(0, onHand);
     }
     updates['updatedAt'] = new Date().toISOString();
 
     // Sculpture qty cap enforcement
     var isSculptureAdj = (document.getElementById('adjIsSculpture') || {}).value === '1';
     if (isSculptureAdj) {
-      var newAvail = updates['stock/_default/available'] || 0;
-      if (newAvail > 1) {
+      var newOnHand = updates['stock/_default/onHand'] || 0;
+      if (newOnHand > 1) {
         showToast('Sculptures are limited to 1 unit in stock', true);
         return;
       }
@@ -19791,7 +19842,7 @@ async function saveAdjustStock(pid) {
 
     // Auto-set stockType to 'strict' when stock is added to a build-to-order product
     if (!inv.stockType || inv.stockType === 'made-to-order' || inv.stockType === 'build-to-order') {
-      var totalSet = updates['stock/_default/available'] || 0;
+      var totalSet = updates['stock/_default/onHand'] || 0;
       if (totalSet > 0) {
         updates['stockType'] = 'strict';
       }
@@ -19801,8 +19852,9 @@ async function saveAdjustStock(pid) {
     await writeAudit('update', 'inventory', pid);
     // Write inventory audit trail for stock adjustments
     var adjAction = adjMode === 'add' ? 'restocked' : 'recount';
+    var adjReason = adjMode === 'add' ? 'stock_received' : 'recount';
     await MastDB.inventory.ref(pid + '/history').push({
-      action: adjAction, actor: 'maker', actorType: 'maker',
+      action: adjAction, reason: adjReason, actor: 'maker', actorType: 'maker',
       detail: adjMode === 'add' ? 'Added stock via admin' : 'Stock count adjusted via admin',
       timestamp: new Date().toISOString()
     });
@@ -19812,8 +19864,8 @@ async function saveAdjustStock(pid) {
 
     // Auto-set sold status when sculpture stock reaches 0
     if (isSculptureAdj) {
-      var finalAvail = updates['stock/_default/available'] || 0;
-      if (finalAvail <= 0) {
+      var finalOnHand = updates['stock/_default/onHand'] || 0;
+      if (finalOnHand <= 0) {
         await MastDB.products.statusRef(pid).set('sold');
         writeAudit('update', 'products', pid);
         var localP = productsData.find(function(x) { return x.pid === pid; });
@@ -23642,22 +23694,22 @@ async function addToLocation(pid, variantKey, locationId, qty) {
   var updates = {};
   updates[key + '/locations/' + locationId] = current + qty;
 
-  // Increment variant available
-  var availSnap = await MastDB.inventory.stockAvailable(pid, key).once('value');
-  var availCurrent = availSnap.val() || 0;
-  updates[key + '/available'] = availCurrent + qty;
+  // Increment variant onHand
+  var onHandSnap = await MastDB.inventory.stockOnHand(pid, key).once('value');
+  var onHandCurrent = onHandSnap.val() || 0;
+  updates[key + '/onHand'] = onHandCurrent + qty;
 
-  // Recompute _default.available as sum of all variant availables
+  // Recompute _default.onHand as sum of all variant onHand
   if (key !== '_default') {
     var stockSnap = await stockRef.once('value');
     var stockData = stockSnap.val() || {};
     var total = 0;
     Object.keys(stockData).forEach(function(k) {
-      if (k !== '_default' && stockData[k] && stockData[k].available) {
-        total += (k === key) ? (availCurrent + qty) : stockData[k].available;
+      if (k !== '_default' && stockData[k] && stockData[k].onHand) {
+        total += (k === key) ? (onHandCurrent + qty) : stockData[k].onHand;
       }
     });
-    updates['_default/available'] = total;
+    updates['_default/onHand'] = total;
   }
 
   await stockRef.update(updates);
@@ -23665,18 +23717,18 @@ async function addToLocation(pid, variantKey, locationId, qty) {
   // Refresh local cache
   if (!inventory[pid]) inventory[pid] = { pid: pid, stock: {} };
   if (!inventory[pid].stock) inventory[pid].stock = {};
-  if (!inventory[pid].stock[key]) inventory[pid].stock[key] = { available: 0, locations: {} };
+  if (!inventory[pid].stock[key]) inventory[pid].stock[key] = { onHand: 0, locations: {} };
   if (!inventory[pid].stock[key].locations) inventory[pid].stock[key].locations = {};
   inventory[pid].stock[key].locations[locationId] = current + qty;
-  inventory[pid].stock[key].available = availCurrent + qty;
+  inventory[pid].stock[key].onHand = onHandCurrent + qty;
   if (key !== '_default') {
-    if (!inventory[pid].stock._default) inventory[pid].stock._default = { available: 0 };
+    if (!inventory[pid].stock._default) inventory[pid].stock._default = { onHand: 0 };
     // Recompute from local cache
     var localTotal = 0;
     Object.keys(inventory[pid].stock).forEach(function(k) {
-      if (k !== '_default') localTotal += (inventory[pid].stock[k].available || 0);
+      if (k !== '_default') localTotal += (inventory[pid].stock[k].onHand || 0);
     });
-    inventory[pid].stock._default.available = localTotal;
+    inventory[pid].stock._default.onHand = localTotal;
   }
 }
 
@@ -23935,7 +23987,8 @@ async function executeClone(sourcePid) {
     await MastDB.products.ref(newPid).set(cloned);
     // Initialize inventory at 0
     await MastDB._ref('admin/inventory/' + newPid).set({
-      stock: { _default: { available: 0 } },
+      stockType: 'stock-to-build',
+      stock: { _default: { onHand: 0, committed: 0, held: 0, damaged: 0, incoming: 0 } },
       lowStockThreshold: 5,
       updatedAt: now
     });
