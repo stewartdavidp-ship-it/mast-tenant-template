@@ -12148,7 +12148,7 @@ function toggleEmailModuleTriggers(mod) {
     emailTriggerPrefs[t.id] = newState;
   });
 
-  MastDB._ref().update(updates).then(function() {
+  MastDB._multiUpdate(updates).then(function() {
     showToast((newState ? 'Enabled' : 'Disabled') + ' all ' + mod + ' emails (' + triggers.length + ')');
     renderEmailTriggers();
   }).catch(function(err) {
