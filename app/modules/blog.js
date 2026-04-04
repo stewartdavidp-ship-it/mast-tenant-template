@@ -23,7 +23,7 @@
 
   function blogBadgeHtml(status) {
     var s = status || 'draft';
-    var colors = { draft: 'background:rgba(196,133,60,0.15);color:var(--amber)', complete: 'background:rgba(42,124,111,0.15);color:var(--teal)', posted: 'background:#16a34a;color:#fff', published: 'background:#16a34a;color:#fff' };
+    var colors = { draft: 'background:rgba(196,133,60,0.15);color:var(--amber)', complete: 'background:rgba(42,124,111,0.15);color:var(--teal)', scheduled: 'background:rgba(59,130,246,0.15);color:#3b82f6', posted: 'background:#16a34a;color:#fff', published: 'background:#16a34a;color:#fff' };
     return '<span class="status-badge pill" style="' + (colors[s] || colors.draft) + '">' + s + '</span>';
   }
 
@@ -51,6 +51,7 @@
       blogIdeas = ideaVal ? Object.values(ideaVal).sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); }) : [];
 
       blogLoaded = true;
+      blogCheckScheduledPosts();
       renderBlog();
     } catch (err) {
       console.error('Error loading blog:', err);
@@ -174,6 +175,9 @@
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         publishedAt: null,
+        scheduledAt: null,
+        featuredImageId: null,
+        excerpt: '',
         substackDraftUrl: null
       };
       await MastDB.blog.posts.ref(id).set(post);
@@ -236,11 +240,37 @@
         (tags.length > 0 ? '<div class="blog-preview-tags">' + tags.map(function(t) { return '<span class="blog-preview-tag">' + escapeHtml(t) + '</span>'; }).join('') + '</div>' : '') +
         '<div class="blog-preview-body">' + bodyHtml + '</div>' +
         '</article></div>';
+
+      // Social card preview
+      var scDomain = (window.TENANT_CONFIG && TENANT_CONFIG.domain) || window.location.hostname;
+      var scTitle = (post.title || 'Untitled Post').substring(0, 70);
+      var scDesc = post.excerpt || '';
+      if (!scDesc && bodyHtml) { var _t = document.createElement('div'); _t.innerHTML = bodyHtml; scDesc = (_t.textContent || '').trim().substring(0, 200); }
+      var scFeatImg = post.featuredImageId && imageLibrary ? imageLibrary[post.featuredImageId] : null;
+      html += '<div class="blog-social-preview" style="max-width:680px;margin:24px auto 0;">' +
+        '<h4 style="font-size:0.85rem;font-weight:500;color:var(--text-secondary);margin-bottom:8px;">Social Card Preview</h4>' +
+        '<div class="blog-social-card">' +
+        (scFeatImg ? '<div class="blog-social-card-image"><img src="' + esc(scFeatImg.url || scFeatImg.thumbnailUrl) + '" alt="" /></div>' :
+          '<div class="blog-social-card-image blog-social-card-noimg"><span>\ud83d\uddbc\ufe0f</span><div>No featured image set</div></div>') +
+        '<div class="blog-social-card-content">' +
+        '<div class="blog-social-card-domain">' + esc(scDomain) + '</div>' +
+        '<div class="blog-social-card-title">' + escapeHtml(scTitle) + (post.title && post.title.length > 70 ? '...' : '') + '</div>' +
+        '<div class="blog-social-card-desc">' + escapeHtml(scDesc.substring(0, 200)) + (scDesc.length > 200 ? '...' : '') + '</div>' +
+        '</div></div>';
+      if (!scFeatImg) html += '<div style="font-size:0.75rem;color:var(--amber);margin-top:6px;">\u26a0 Add a featured image for better social sharing</div>';
+      if (!post.excerpt) html += '<div style="font-size:0.75rem;color:var(--text-secondary);margin-top:2px;">\u2139\ufe0f Using auto-generated excerpt \u2014 add a custom one for better control</div>';
+      html += '</div>';
+
       // Actions bar even in preview
       html += '<div class="blog-actions" style="max-width:680px;margin:16px auto 0;">';
       if (status === 'draft') {
         html += '<button class="btn" onclick="blogPolishWithAI()" id="blogPolishBtn">\u2728 Polish with AI</button>';
         html += '<button class="btn btn-primary" onclick="blogMarkComplete()">\u2705 Finish Post</button>';
+      } else if (status === 'scheduled') {
+        var schedDate = post.scheduledAt ? new Date(post.scheduledAt).toLocaleString('en-US', { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' }) : '';
+        html += '<span style="font-size:0.85rem;color:#3b82f6;">\ud83d\udcc5 Scheduled for ' + schedDate + '</span>';
+        html += '<button class="btn" onclick="blogCancelSchedule()" style="font-size:0.8rem;">Cancel Schedule</button>';
+        html += '<button class="btn" onclick="blogBackToDraft()">\u270f\ufe0f Back to Draft</button>';
       } else if (status === 'complete') {
         html += '<button class="btn" onclick="blogBackToDraft()">\u270f\ufe0f Back to Draft</button>';
         if (post.publishedToWebsite) {
@@ -272,6 +302,33 @@
     html += '<div style="display:flex;align-items:center;gap:8px;">' +
       '<input class="blog-tags-input" style="margin-bottom:0;" type="text" value="' + (post.tags || []).join(', ') + '" placeholder="Tags (comma-separated)..." onchange="blogUpdateTags(this.value)" />' +
       '<button class="btn" id="blogSuggestTagsBtn" onclick="blogSuggestTags()" style="white-space:nowrap;font-size:0.8rem;padding:6px 10px;" title="AI-suggested tags based on your content">\ud83d\udca1 Suggest</button>' +
+      '</div>';
+
+    // Featured image
+    var featImg = post.featuredImageId && imageLibrary ? imageLibrary[post.featuredImageId] : null;
+    html += '<div class="blog-featured-image">';
+    if (featImg) {
+      html += '<div style="display:flex;align-items:center;gap:12px;">' +
+        '<img src="' + esc(featImg.thumbnailUrl || featImg.url) + '" alt="" style="width:120px;height:80px;object-fit:cover;border-radius:6px;border:1px solid var(--border);" />' +
+        '<div>' +
+        '<div style="font-size:0.8rem;font-weight:500;margin-bottom:6px;">Featured Image</div>' +
+        '<div style="display:flex;gap:6px;">' +
+        '<button class="btn btn-outline" style="font-size:0.75rem;padding:4px 10px;" onclick="blogSetFeaturedImage()">Change</button>' +
+        '<button class="btn btn-outline" style="font-size:0.75rem;padding:4px 10px;color:var(--danger);border-color:var(--danger);" onclick="blogRemoveFeaturedImage()">Remove</button>' +
+        '</div></div></div>';
+    } else {
+      html += '<div class="blog-featured-placeholder" onclick="blogSetFeaturedImage()">' +
+        '<span style="font-size:1.2rem;">\ud83d\uddbc\ufe0f</span> Set Featured Image' +
+        '<div style="font-size:0.7rem;color:var(--text-secondary);margin-top:2px;">Used for social cards and blog listings</div>' +
+        '</div>';
+    }
+    html += '</div>';
+
+    // Excerpt
+    html += '<div style="margin-bottom:12px;">' +
+      '<textarea class="blog-excerpt-input" maxlength="300" placeholder="Write a short excerpt for social sharing and blog listings..." onchange="blogUpdateExcerpt(this.value)" oninput="blogUpdateExcerptCount(this.value)">' +
+      escapeHtml(post.excerpt || '') + '</textarea>' +
+      '<div style="font-size:0.7rem;color:var(--text-secondary);text-align:right;" id="blogExcerptCount">' + (post.excerpt || '').length + '/300</div>' +
       '</div>';
 
     // AI compare mode or rich text editor
@@ -364,6 +421,11 @@
     if (status === 'draft') {
       html += '<button class="btn" onclick="blogPolishWithAI()" id="blogPolishBtn">\u2728 Polish with AI</button>';
       html += '<button class="btn btn-primary" onclick="blogMarkComplete()">\u2705 Finish Post</button>';
+    } else if (status === 'scheduled') {
+      var schedDate2 = post.scheduledAt ? new Date(post.scheduledAt).toLocaleString('en-US', { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' }) : '';
+      html += '<span style="font-size:0.85rem;color:#3b82f6;">\ud83d\udcc5 Scheduled for ' + schedDate2 + '</span>';
+      html += '<button class="btn" onclick="blogCancelSchedule()" style="font-size:0.8rem;">Cancel Schedule</button>';
+      html += '<button class="btn" onclick="blogBackToDraft()">\u270f\ufe0f Back to Draft</button>';
     } else if (status === 'complete') {
       html += '<button class="btn" onclick="blogBackToDraft()">\u270f\ufe0f Back to Draft</button>';
       if (post.publishedToWebsite) {
@@ -1244,6 +1306,79 @@
 
   // ===== PUBLISH DIALOG =====
 
+  // ===== FEATURED IMAGE =====
+
+  function blogSetFeaturedImage() {
+    openImagePicker(function(imageId) {
+      if (!blogCurrentPost || !imageId) return;
+      blogCurrentPost.featuredImageId = imageId;
+      blogCurrentPost.updatedAt = new Date().toISOString();
+      MastDB.blog.posts.ref(blogCurrentPostId).update({
+        featuredImageId: imageId,
+        updatedAt: blogCurrentPost.updatedAt
+      }).then(function() { renderBlogEditor(); })
+        .catch(function(err) { showToast('Error setting featured image: ' + err.message, true); });
+    });
+  }
+
+  function blogRemoveFeaturedImage() {
+    if (!blogCurrentPost) return;
+    blogCurrentPost.featuredImageId = null;
+    blogCurrentPost.updatedAt = new Date().toISOString();
+    MastDB.blog.posts.ref(blogCurrentPostId).update({
+      featuredImageId: null,
+      updatedAt: blogCurrentPost.updatedAt
+    }).then(function() { renderBlogEditor(); })
+      .catch(function(err) { showToast('Error removing featured image: ' + err.message, true); });
+  }
+
+  // ===== EXCERPT =====
+
+  function blogUpdateExcerpt(val) {
+    if (!blogCurrentPost) return;
+    blogCurrentPost.excerpt = val;
+    blogCurrentPost.updatedAt = new Date().toISOString();
+    MastDB.blog.posts.ref(blogCurrentPostId).update({
+      excerpt: val,
+      updatedAt: blogCurrentPost.updatedAt
+    }).catch(function(err) { showToast('Error saving excerpt: ' + err.message, true); });
+  }
+
+  function blogUpdateExcerptCount(val) {
+    var el = document.getElementById('blogExcerptCount');
+    if (el) el.textContent = val.length + '/300';
+  }
+
+  // ===== SCHEDULED PUBLISHING =====
+
+  function blogCheckScheduledPosts() {
+    var now = new Date().toISOString();
+    blogPosts.forEach(function(post) {
+      if (post.status === 'scheduled' && post.scheduledAt && post.scheduledAt <= now) {
+        blogCurrentPostId = post.id;
+        blogCurrentPost = post;
+        blogPublishToWebsite().then(function() {
+          showToast('Scheduled post "' + (post.title || 'Untitled') + '" published automatically');
+        });
+      }
+    });
+  }
+
+  function blogCancelSchedule() {
+    if (!blogCurrentPost) return;
+    blogCurrentPost.status = 'complete';
+    blogCurrentPost.scheduledAt = null;
+    blogCurrentPost.updatedAt = new Date().toISOString();
+    MastDB.blog.posts.ref(blogCurrentPostId).update({
+      status: 'complete',
+      scheduledAt: null,
+      updatedAt: blogCurrentPost.updatedAt
+    }).then(function() {
+      renderBlogEditor();
+      showToast('Schedule cancelled');
+    }).catch(function(err) { showToast('Error cancelling schedule: ' + err.message, true); });
+  }
+
   function blogOpenPublishDialog() {
     if (!blogCurrentPost) return;
     var html = '<div class="modal-header"><h3>Publish Post</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>' +
@@ -1264,20 +1399,73 @@
       '<input type="checkbox" class="platform-check" disabled />' +
       '</div>' +
       '</div>' +
+      '<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);">' +
+      '<div style="display:flex;gap:16px;align-items:flex-start;">' +
+      '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.9rem;">' +
+      '<input type="radio" name="blogPublishTiming" value="now" checked onchange="document.getElementById(\'blogScheduleRow\').style.display=\'none\';document.getElementById(\'blogPublishBtn2\').textContent=\'\ud83d\udce4 Publish\'" /> Publish now' +
+      '</label>' +
+      '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.9rem;">' +
+      '<input type="radio" name="blogPublishTiming" value="schedule" onchange="document.getElementById(\'blogScheduleRow\').style.display=\'flex\';document.getElementById(\'blogPublishBtn2\').textContent=\'\ud83d\udcc5 Schedule\'" /> Schedule for later' +
+      '</label>' +
+      '</div>' +
+      '<div id="blogScheduleRow" style="display:none;margin-top:10px;align-items:center;gap:8px;">' +
+      '<input type="datetime-local" id="blogScheduleDate" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--card-bg);color:var(--text);font-size:0.85rem;" />' +
+      '</div>' +
+      '</div>' +
       '<div class="modal-footer">' +
       '<button class="btn" onclick="closeModal()">Cancel</button>' +
-      '<button class="btn btn-primary" onclick="blogPublishSelected()">\ud83d\udce4 Publish</button>' +
+      '<button class="btn btn-primary" id="blogPublishBtn2" onclick="blogPublishSelected()">\ud83d\udce4 Publish</button>' +
       '</div>';
     openModal(html);
+    // Set min date to now
+    var dateInput = document.getElementById('blogScheduleDate');
+    if (dateInput) {
+      var now = new Date();
+      now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+      dateInput.min = now.toISOString().slice(0, 16);
+    }
   }
 
   async function blogPublishSelected() {
     var websiteChecked = document.getElementById('publishWebsite');
-    if (websiteChecked && websiteChecked.checked) {
-      await blogPublishToWebsite();
-    } else {
+    if (!websiteChecked || !websiteChecked.checked) {
       showToast('Select at least one platform', true);
+      return;
     }
+    // Check if scheduling
+    var timing = document.querySelector('input[name="blogPublishTiming"]:checked');
+    if (timing && timing.value === 'schedule') {
+      var dateInput = document.getElementById('blogScheduleDate');
+      if (!dateInput || !dateInput.value) {
+        showToast('Please select a date and time', true);
+        return;
+      }
+      var scheduledAt = new Date(dateInput.value).toISOString();
+      if (scheduledAt <= new Date().toISOString()) {
+        showToast('Scheduled time must be in the future', true);
+        return;
+      }
+      closeModal();
+      // Save body from editor if open
+      var editable = document.getElementById('blogBodyEditable');
+      if (editable) blogCurrentPost.body = blogSaveBodyFromEditor();
+      blogCurrentPost.status = 'scheduled';
+      blogCurrentPost.scheduledAt = scheduledAt;
+      blogCurrentPost.updatedAt = new Date().toISOString();
+      try {
+        await MastDB.blog.posts.ref(blogCurrentPostId).update({
+          status: 'scheduled',
+          scheduledAt: scheduledAt,
+          updatedAt: blogCurrentPost.updatedAt
+        });
+        renderBlogEditor();
+        var schedStr = new Date(scheduledAt).toLocaleString('en-US', { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' });
+        showToast('Post scheduled for ' + schedStr + ' \ud83d\udcc5');
+      } catch (err) { showToast('Schedule failed: ' + err.message, true); }
+      return;
+    }
+    // Publish now
+    await blogPublishToWebsite();
   }
 
   async function blogPublishToWebsite() {
@@ -1295,6 +1483,7 @@
         .replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').substring(0, 80);
 
       var publishedAt = new Date().toISOString();
+      var featImgPub = blogCurrentPost.featuredImageId && imageLibrary ? imageLibrary[blogCurrentPost.featuredImageId] : null;
       var publishedData = {
         title: blogCurrentPost.title || 'Untitled',
         postNumber: blogCurrentPost.postNumber || 0,
@@ -1302,7 +1491,9 @@
         publishedAt: publishedAt,
         author: author.name,
         bodyHtml: bodyHtml,
-        tags: blogCurrentPost.tags || []
+        tags: blogCurrentPost.tags || [],
+        excerpt: blogCurrentPost.excerpt || '',
+        image: featImgPub ? (featImgPub.url || '') : ''
       };
 
       await MastDB.blog.published.ref(blogCurrentPostId).set(publishedData);
@@ -1367,6 +1558,11 @@
   window.blogInsertLink = blogInsertLink;
   window.blogApplyLink = blogApplyLink;
   window.blogRemoveLink = blogRemoveLink;
+  window.blogSetFeaturedImage = blogSetFeaturedImage;
+  window.blogRemoveFeaturedImage = blogRemoveFeaturedImage;
+  window.blogUpdateExcerpt = blogUpdateExcerpt;
+  window.blogUpdateExcerptCount = blogUpdateExcerptCount;
+  window.blogCancelSchedule = blogCancelSchedule;
   window.blogToggleEmojiPicker = blogToggleEmojiPicker;
   window.blogEmojiSwitchTab = blogEmojiSwitchTab;
   window.blogInsertEmoji = blogInsertEmoji;

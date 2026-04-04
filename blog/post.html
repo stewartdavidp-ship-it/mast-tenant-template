@@ -289,6 +289,26 @@ window.TENANT_READY.then(function() {
 
     document.title = post.title + ' \u2014 ' + TENANT_TITLE_SUFFIX();
 
+    // OG meta tags for social sharing
+    var ogTags = [
+      { property: 'og:title', content: post.title || '' },
+      { property: 'og:type', content: 'article' },
+      { property: 'og:url', content: window.location.href }
+    ];
+    if (post.excerpt) ogTags.push({ property: 'og:description', content: post.excerpt });
+    else if (post.bodyHtml) {
+      var _ogTmp = document.createElement('div'); _ogTmp.innerHTML = post.bodyHtml;
+      var _ogDesc = (_ogTmp.textContent || '').trim().substring(0, 200);
+      if (_ogDesc) ogTags.push({ property: 'og:description', content: _ogDesc });
+    }
+    if (post.image) ogTags.push({ property: 'og:image', content: post.image });
+    ogTags.push({ name: 'twitter:card', content: post.image ? 'summary_large_image' : 'summary' });
+    ogTags.forEach(function(tag) {
+      var meta = document.createElement('meta');
+      Object.keys(tag).forEach(function(k) { meta.setAttribute(k, tag[k]); });
+      document.head.appendChild(meta);
+    });
+
     // Schema.org: BlogPosting
     if (window.MastSchema) {
       post._id = post._id || postId;

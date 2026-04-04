@@ -672,7 +672,9 @@ window.TENANT_READY.then(function() {
         older.forEach(function(post) {
           var pDate = post.publishedAt ? new Date(post.publishedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
           var excerpt = '';
-          if (tab === 'blog' && post.bodyHtml) {
+          if (tab === 'blog' && post.excerpt) {
+            excerpt = post.excerpt;
+          } else if (tab === 'blog' && post.bodyHtml) {
             var tmp = document.createElement('div');
             tmp.innerHTML = DOMPurify.sanitize(post.bodyHtml);
             var text = tmp.textContent || tmp.innerText || '';
