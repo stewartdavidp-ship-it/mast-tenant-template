@@ -114,6 +114,8 @@
           '<span class="nl-issue-title">' + esc(issue.title || 'Untitled Issue') + '</span>' +
           nlBadgeHtml(issue.status) +
           '<span class="nl-issue-date">' + dateStr + '</span>' +
+          '<button class="nl-issue-action" onclick="event.stopPropagation();nlDuplicateIssue(\'' + issue.id + '\')" title="Duplicate as template">📋</button>' +
+          '<button class="nl-issue-action nl-issue-delete" onclick="event.stopPropagation();nlDeleteIssue(\'' + issue.id + '\')" title="Delete issue">🗑</button>' +
           '</div>';
       });
     }
@@ -144,6 +146,7 @@
         sentAt: null,
         publishedAt: null,
         sentSubscriberCount: null,
+        subjectLine: '',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
@@ -246,6 +249,10 @@
       '<div class="nl-compose-header">' +
       '<span style="font-weight:600;color:var(--text-secondary);white-space:nowrap;">#' + (issue.issueNumber || '?') + '</span>' +
       '<input type="text" value="' + (issue.title || '').replace(/"/g, '&quot;') + '" placeholder="Issue title..." onchange="nlUpdateTitle(this.value)" />' +
+      '</div>' +
+      '<div class="nl-compose-header" style="margin-top:6px;">' +
+      '<span style="font-weight:600;color:var(--text-secondary);white-space:nowrap;font-size:0.85rem;">Subject</span>' +
+      '<input type="text" value="' + (issue.subjectLine || '').replace(/"/g, '&quot;') + '" placeholder="Email subject line (defaults to title if empty)" style="font-size:0.9rem;" onchange="nlUpdateSubjectLine(this.value)" />' +
       '</div>';
 
     if (nlViewMode === 'list') {
@@ -263,6 +270,7 @@
           '<input type="text" class="nl-section-title-input" value="' + (sec.title || '').replace(/"/g, '&quot;') + '"' +
           ' onclick="event.stopPropagation()" onchange="nlUpdateSectionTitle(\'' + sec.id + '\', this.value)" />' +
           '<span class="nl-section-status ' + contentStatus + '">' + statusLabel + '</span>' +
+          '<button class="nl-section-delete" onclick="event.stopPropagation();nlDeleteSection(\'' + sec.id + '\')" title="Delete section">🗑</button>' +
           '<span class="nl-section-toggle ' + (isExpanded ? 'open' : '') + '">▶</span>' +
           '</div>';
         if (isExpanded) {
@@ -288,16 +296,18 @@
           if (sec.guidedPrompt) html += '<div class="nl-section-prompt">' + sec.guidedPrompt + '</div>';
           if (aiResult && !sec.finalContent) {
             html += '<div class="nl-ai-compare">' +
-              '<div class="nl-ai-panel original"><div class="nl-ai-panel-label">Your Original</div>' + nlEscHtml(sec.rawInput) + '</div>' +
+              '<div class="nl-ai-panel original"><div class="nl-ai-panel-label">Your Original</div>' + (sec.rawInput || '') + '</div>' +
               '<div class="nl-ai-panel polished"><div class="nl-ai-panel-label">AI Polished</div>' + nlEscHtml(aiResult) + '</div></div>' +
               '<div class="nl-ai-actions"><button class="btn btn-outline" onclick="nlPickVersion(\'' + sec.id + '\', \'original\')">Use Original</button>' +
               '<button class="btn btn-primary" onclick="nlPickVersion(\'' + sec.id + '\', \'ai\')">Use AI Version</button></div>';
           } else if (sec.finalContent) {
-            html += '<textarea class="nl-section-textarea" id="nlFinal_' + sec.id + '" onchange="nlUpdateFinalContent(\'' + sec.id + '\', this.value)">' + nlEscHtml(sec.finalContent) + '</textarea>';
+            var charLimitList = NL_CHAR_LIMITS[sec.cardSize || 'medium'];
+            html += nlContentEditableHtml('nlListFinal', sec.id, 'finalContent', sec.finalContent, charLimitList);
             html += '<div style="margin-top:8px;"><button class="btn btn-outline" style="font-size:0.8rem;" onclick="nlResetSection(\'' + sec.id + '\')">Reset to Draft</button></div>';
           } else {
-            html += '<textarea class="nl-section-textarea" id="nlRaw_' + sec.id + '" placeholder="Write your content here..." onchange="nlUpdateRawInput(\'' + sec.id + '\', this.value)">' + nlEscHtml(sec.rawInput || '') + '</textarea>';
-            var hasContent = !!(sec.rawInput && sec.rawInput.trim());
+            var charLimitList = NL_CHAR_LIMITS[sec.cardSize || 'medium'];
+            html += nlContentEditableHtml('nlListRaw', sec.id, 'rawInput', sec.rawInput || '', charLimitList);
+            var hasContent = !!(sec.rawInput && nlStripTags(sec.rawInput).trim());
             html += '<div style="margin-top:8px;display:flex;gap:8px;align-items:center;">' +
               '<button class="btn btn-outline" style="font-size:0.8rem;" ' + (hasContent ? '' : 'disabled') + ' onclick="nlPolishSection(\'' + sec.id + '\')">✨ Polish with AI</button>';
             if (hasContent) html += '<button class="btn btn-outline" style="font-size:0.8rem;" onclick="nlUseAsIs(\'' + sec.id + '\')">Use as-is</button>';
@@ -356,7 +366,7 @@
           var sizeClass = 'size-' + (sec.cardSize || 'medium');
           var content = sec.finalContent || sec.rawInput || '';
           var charLimit = NL_CHAR_LIMITS[sec.cardSize || 'medium'];
-          var charCount = content.length;
+          var charCount = nlStripTags(content).length;
           var charClass = charCount >= charLimit ? 'at-limit' : charCount >= charLimit * 0.8 ? 'near-limit' : '';
 
           if (colIdx > 0) html += '<div class="nl-grid-col-gap"></div>';
@@ -372,7 +382,8 @@
           html += '<div class="nl-grid-overlay" onclick="event.stopPropagation()">' +
             '<input type="checkbox" class="nl-grid-include" ' + (sec.included ? 'checked' : '') +
             ' onclick="event.stopPropagation(); nlToggleInclude(\'' + sec.id + '\', this.checked)" title="Include in newsletter" />' +
-            '<span class="nl-grid-overlay-badge ' + charClass + '">' + charCount + '/' + charLimit + '</span></div>';
+            '<span class="nl-grid-overlay-badge ' + charClass + '">' + charCount + '/' + charLimit + '</span>' +
+            '<button class="nl-grid-delete" onclick="event.stopPropagation();nlDeleteSection(\'' + sec.id + '\')" title="Delete section">×</button></div>';
 
           html += '<h2 class="nl-grid-section-title">' + nlEscHtml(sec.title) + '</h2>';
 
@@ -385,7 +396,7 @@
             }
           }
           html += '<div class="nl-grid-section-body">' +
-            (gridBodyContent ? gridBodyContent.replace(/\n/g, '<br>') : '<span class="placeholder">Click to add content...</span>') + '</div>';
+            (gridBodyContent ? gridBodyContent : '<span class="placeholder">Click to add content...</span>') + '</div>';
 
           var imgs = sec.images || [];
           imgs.forEach(function(imgId) {
@@ -426,6 +437,7 @@
       '<button class="btn btn-primary" onclick="nlExportHTML()">📥 Export HTML</button>' +
       '<button class="btn btn-outline" onclick="nlPublishToWebsite()">🌐 Publish to Website</button>' +
       '<button class="btn btn-outline" onclick="nlMarkAsSent()">✉️ Mark as Sent</button>' +
+      '<button class="btn btn-outline" style="color:var(--danger);border-color:var(--danger);margin-left:auto;" onclick="nlDeleteIssue(\'' + nlCurrentIssueId + '\')">Delete Issue</button>' +
       '</div>';
 
     document.getElementById('newsletterContent').innerHTML = html;
@@ -434,6 +446,128 @@
   function nlEscHtml(str) {
     if (!str) return '';
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/\n/g, '<br>');
+  }
+
+  // ===== RICH TEXT HELPERS =====
+  var _nlSaveTimer = null;
+
+  function nlStripTags(html) {
+    if (!html) return '';
+    var tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    return tmp.textContent || tmp.innerText || '';
+  }
+
+  function nlFormatToolbarHtml(idPrefix) {
+    return '<div class="nl-format-toolbar">' +
+      '<button class="nl-format-btn" id="' + idPrefix + 'Bold" onmousedown="event.preventDefault();nlFormatCmd(\'' + idPrefix + '\',\'bold\')" title="Bold"><b>B</b></button>' +
+      '<button class="nl-format-btn" id="' + idPrefix + 'Italic" onmousedown="event.preventDefault();nlFormatCmd(\'' + idPrefix + '\',\'italic\')" title="Italic"><i>I</i></button>' +
+      '<span class="nl-format-sep"></span>' +
+      '<button class="nl-format-btn nl-format-btn-wide" id="' + idPrefix + 'Link" onmousedown="event.preventDefault();nlInsertLink(\'' + idPrefix + '\')" title="Insert Link">🔗</button>' +
+      '</div>';
+  }
+
+  function nlFormatCmd(idPrefix, cmd) {
+    document.execCommand(cmd, false, null);
+    nlUpdateToolbarState(idPrefix);
+  }
+
+  function nlUpdateToolbarState(idPrefix) {
+    var btnBold = document.getElementById(idPrefix + 'Bold');
+    var btnItalic = document.getElementById(idPrefix + 'Italic');
+    if (btnBold) btnBold.classList.toggle('active', document.queryCommandState('bold'));
+    if (btnItalic) btnItalic.classList.toggle('active', document.queryCommandState('italic'));
+  }
+
+  function nlInsertLink(idPrefix) {
+    var sel = window.getSelection();
+    if (sel.rangeCount > 0) window._nlSavedRange = sel.getRangeAt(0).cloneRange();
+    var selectedText = sel.toString();
+    var existingUrl = '';
+    if (sel.anchorNode) {
+      var linkEl = sel.anchorNode.nodeType === 1 ? sel.anchorNode.closest('a') : (sel.anchorNode.parentElement ? sel.anchorNode.parentElement.closest('a') : null);
+      if (linkEl) existingUrl = linkEl.href || '';
+    }
+    var html = '<div class="modal-header"><h3>Insert Link</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>' +
+      '<div class="modal-body">' +
+      (selectedText ? '<p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:8px;">Text: "' + esc(selectedText) + '"</p>' : '') +
+      '<input type="url" id="nlLinkUrl" class="form-control" value="' + (existingUrl || '').replace(/"/g, '&quot;') + '" placeholder="https://..." style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;background:var(--card-bg);color:var(--text);font-size:0.9rem;" />' +
+      '</div><div class="modal-footer">' +
+      (existingUrl ? '<button class="btn btn-outline" style="color:var(--danger);border-color:var(--danger);" onclick="nlRemoveLink()">Remove Link</button>' : '') +
+      '<button class="btn btn-primary" onclick="nlApplyLink()">Apply</button>' +
+      '</div>';
+    openModal(html);
+    setTimeout(function() { var inp = document.getElementById('nlLinkUrl'); if (inp) inp.focus(); }, 100);
+  }
+
+  function nlApplyLink() {
+    var url = (document.getElementById('nlLinkUrl') || {}).value;
+    if (!url) { closeModal(); return; }
+    if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+    closeModal();
+    if (window._nlSavedRange) {
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(window._nlSavedRange);
+    }
+    document.execCommand('createLink', false, url);
+    // Force target=_blank on newly created links
+    var editables = document.querySelectorAll('.nl-section-editable');
+    editables.forEach(function(ed) {
+      var links = ed.querySelectorAll('a[href="' + url + '"]');
+      links.forEach(function(a) { a.target = '_blank'; a.rel = 'noopener'; });
+    });
+  }
+
+  function nlRemoveLink() {
+    closeModal();
+    if (window._nlSavedRange) {
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(window._nlSavedRange);
+    }
+    document.execCommand('unlink', false, null);
+  }
+
+  function nlContentEditableHtml(idPrefix, secId, fieldName, content, charLimit) {
+    var textLen = nlStripTags(content).length;
+    var charClass = textLen >= charLimit ? 'at-limit' : textLen >= charLimit * 0.8 ? 'near-limit' : '';
+    return nlFormatToolbarHtml(idPrefix + '_' + secId) +
+      '<div class="nl-section-editable" id="' + idPrefix + '_' + secId + '" contenteditable="true"' +
+      ' data-sec-id="' + secId + '" data-field="' + fieldName + '" data-char-limit="' + charLimit + '"' +
+      ' oninput="nlEditableChanged(\'' + idPrefix + '_' + secId + '\',\'' + secId + '\',\'' + fieldName + '\',' + charLimit + ')"' +
+      ' onkeyup="nlUpdateToolbarState(\'' + idPrefix + '_' + secId + '\')"' +
+      ' onmouseup="nlUpdateToolbarState(\'' + idPrefix + '_' + secId + '\')"' +
+      ' onblur="nlFlushEditableSave(\'' + secId + '\',\'' + fieldName + '\',\'' + idPrefix + '_' + secId + '\')"' +
+      '>' + (content || '') + '</div>' +
+      '<div class="nl-editor-char-counter ' + charClass + '" id="nlCharCounter_' + idPrefix + '_' + secId + '">' + textLen + '/' + charLimit + '</div>';
+  }
+
+  function nlEditableChanged(elId, secId, fieldName, charLimit) {
+    var el = document.getElementById(elId);
+    if (!el) return;
+    var textLen = nlStripTags(el.innerHTML).length;
+    var counter = document.getElementById('nlCharCounter_' + elId);
+    if (counter) {
+      counter.textContent = textLen + '/' + charLimit;
+      counter.style.color = textLen >= charLimit ? '#dc3545' : textLen >= charLimit * 0.8 ? 'var(--amber)' : 'var(--text-secondary)';
+    }
+    nlUpdateToolbarState(elId);
+    clearTimeout(_nlSaveTimer);
+    _nlSaveTimer = setTimeout(function() {
+      var val = el.innerHTML || '';
+      if (fieldName === 'rawInput') nlUpdateRawInput(secId, val);
+      else nlUpdateFinalContent(secId, val);
+    }, 500);
+  }
+
+  function nlFlushEditableSave(secId, fieldName, elId) {
+    clearTimeout(_nlSaveTimer);
+    var el = document.getElementById(elId);
+    if (!el) return;
+    var val = el.innerHTML || '';
+    if (fieldName === 'rawInput') nlUpdateRawInput(secId, val);
+    else nlUpdateFinalContent(secId, val);
   }
 
   // ===== GRID VIEW HELPERS =====
@@ -585,7 +719,7 @@
 
     var charLimit = NL_CHAR_LIMITS[sec.cardSize || 'medium'];
     var content = sec.finalContent || sec.rawInput || '';
-    var charCount = content.length;
+    var charCount = nlStripTags(content).length;
     var aiResult = nlAiResults[secId];
 
     var html = '<div style="display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--border);">' +
@@ -595,6 +729,7 @@
       ' style="border:none;background:transparent;font-size:1.1rem;font-weight:600;color:var(--text);flex:1;padding:4px 0;"' +
       ' onchange="nlUpdateSectionTitle(\'' + secId + '\', this.value)" />' +
       '</div>' +
+      '<button style="background:none;border:none;font-size:0.85rem;cursor:pointer;color:var(--danger);padding:4px 8px;opacity:0.6;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.6" onclick="nlDeleteSection(\'' + secId + '\');nlEditingCardId=null;document.getElementById(\'modalOverlay\').classList.remove(\'open\');document.getElementById(\'modalContent\').innerHTML=\'\'" title="Delete section">🗑</button>' +
       '<button style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--text-secondary);padding:4px 8px;" onclick="nlCloseCardEditor(\'' + secId + '\')">×</button></div>';
 
     html += '<div style="padding:16px 24px;">';
@@ -631,27 +766,17 @@
         (sec.couponCode ? 'Change Coupon' : 'Select Coupon') + '</button></div>';
     } else if (aiResult && !sec.finalContent) {
       html += '<div class="nl-ai-compare">' +
-        '<div class="nl-ai-panel original"><div class="nl-ai-panel-label">Your Original</div>' + nlEscHtml(sec.rawInput) + '</div>' +
+        '<div class="nl-ai-panel original"><div class="nl-ai-panel-label">Your Original</div>' + (sec.rawInput || '') + '</div>' +
         '<div class="nl-ai-panel polished"><div class="nl-ai-panel-label">AI Polished</div>' + nlEscHtml(aiResult) + '</div></div>' +
         '<div class="nl-ai-actions" style="margin-top:8px;">' +
         '<button class="btn btn-outline" onclick="nlPickVersion(\'' + secId + '\',\'original\'); setTimeout(function(){nlOpenCardEditor(\'' + secId + '\')},100);">Use Original</button>' +
         '<button class="btn btn-primary" onclick="nlPickVersion(\'' + secId + '\',\'ai\'); setTimeout(function(){nlOpenCardEditor(\'' + secId + '\')},100);">Use AI Version</button></div>';
     } else if (sec.finalContent) {
-      html += '<textarea class="nl-section-textarea" id="nlModalFinal_' + secId + '"' +
-        ' maxlength="' + charLimit + '" style="min-height:120px;"' +
-        ' oninput="nlEditorCharCount(\'' + secId + '\', this.value, ' + charLimit + ')"' +
-        ' onchange="nlUpdateFinalContent(\'' + secId + '\', this.value)">' +
-        nlEscHtml(sec.finalContent) + '</textarea>' +
-        '<div class="nl-editor-char-counter" id="nlCharCounter_' + secId + '">' + charCount + '/' + charLimit + '</div>' +
-        '<div style="margin-top:8px;"><button class="btn btn-outline" style="font-size:0.8rem;" onclick="nlResetSection(\'' + secId + '\'); setTimeout(function(){nlOpenCardEditor(\'' + secId + '\')},100);">Reset to Draft</button></div>';
+      html += nlContentEditableHtml('nlModalFinal', secId, 'finalContent', sec.finalContent, charLimit);
+      html += '<div style="margin-top:8px;"><button class="btn btn-outline" style="font-size:0.8rem;" onclick="nlResetSection(\'' + secId + '\'); setTimeout(function(){nlOpenCardEditor(\'' + secId + '\')},100);">Reset to Draft</button></div>';
     } else {
-      html += '<textarea class="nl-section-textarea" id="nlModalRaw_' + secId + '"' +
-        ' placeholder="Write your content here..." maxlength="' + charLimit + '" style="min-height:120px;"' +
-        ' oninput="nlEditorCharCount(\'' + secId + '\', this.value, ' + charLimit + ')"' +
-        ' onchange="nlUpdateRawInput(\'' + secId + '\', this.value)">' +
-        nlEscHtml(sec.rawInput || '') + '</textarea>' +
-        '<div class="nl-editor-char-counter" id="nlCharCounter_' + secId + '">' + charCount + '/' + charLimit + '</div>';
-      var hasContent = !!(sec.rawInput && sec.rawInput.trim());
+      html += nlContentEditableHtml('nlModalRaw', secId, 'rawInput', sec.rawInput || '', charLimit);
+      var hasContent = !!(sec.rawInput && nlStripTags(sec.rawInput).trim());
       html += '<div style="margin-top:8px;display:flex;gap:8px;">' +
         '<button class="btn btn-outline" style="font-size:0.8rem;" ' + (hasContent ? '' : 'disabled') +
         ' onclick="nlPolishSection(\'' + secId + '\')">✨ Polish with AI</button>';
@@ -691,10 +816,10 @@
     if (secId && nlCurrentIssue && nlCurrentIssue.sections && nlCurrentIssue.sections[secId]) {
       var rawEl = document.getElementById('nlModalRaw_' + secId);
       var finalEl = document.getElementById('nlModalFinal_' + secId);
-      if (rawEl && rawEl.value !== (nlCurrentIssue.sections[secId].rawInput || '')) {
-        nlUpdateRawInput(secId, rawEl.value);
-      } else if (finalEl && finalEl.value !== (nlCurrentIssue.sections[secId].finalContent || '')) {
-        nlUpdateFinalContent(secId, finalEl.value);
+      if (rawEl && rawEl.innerHTML !== (nlCurrentIssue.sections[secId].rawInput || '')) {
+        nlUpdateRawInput(secId, rawEl.innerHTML);
+      } else if (finalEl && finalEl.innerHTML !== (nlCurrentIssue.sections[secId].finalContent || '')) {
+        nlUpdateFinalContent(secId, finalEl.innerHTML);
       }
     }
     nlEditingCardId = null;
@@ -758,6 +883,17 @@
     } catch (err) { showToast('Error saving title: ' + err.message, true); }
   }
 
+  async function nlUpdateSubjectLine(val) {
+    if (!nlCurrentIssue) return;
+    nlCurrentIssue.subjectLine = val;
+    nlCurrentIssue.updatedAt = new Date().toISOString();
+    try {
+      await MastDB.newsletter.issues.ref(nlCurrentIssueId).update({
+        subjectLine: val, updatedAt: nlCurrentIssue.updatedAt
+      });
+    } catch (err) { showToast('Error saving subject: ' + err.message, true); }
+  }
+
   async function nlUpdateSectionTitle(secId, val) {
     if (!nlCurrentIssue || !nlCurrentIssue.sections || !nlCurrentIssue.sections[secId]) return;
     nlCurrentIssue.sections[secId].title = val;
@@ -778,9 +914,9 @@
     if (!nlCurrentIssue || !nlCurrentIssue.sections || !nlCurrentIssue.sections[secId]) return;
     var sec = nlCurrentIssue.sections[secId];
     var charLimit = NL_CHAR_LIMITS[sec.cardSize || 'medium'];
-    if (val.length > charLimit) {
-      val = val.substring(0, charLimit);
-      showToast('Content trimmed to ' + charLimit + ' char limit');
+    var textLen = nlStripTags(val).length;
+    if (textLen > charLimit) {
+      showToast('Content exceeds ' + charLimit + ' char limit');
     }
     sec.rawInput = val;
     try {
@@ -792,9 +928,9 @@
     if (!nlCurrentIssue || !nlCurrentIssue.sections || !nlCurrentIssue.sections[secId]) return;
     var sec = nlCurrentIssue.sections[secId];
     var charLimit = NL_CHAR_LIMITS[sec.cardSize || 'medium'];
-    if (val.length > charLimit) {
-      val = val.substring(0, charLimit);
-      showToast('Content trimmed to ' + charLimit + ' char limit');
+    var textLen = nlStripTags(val).length;
+    if (textLen > charLimit) {
+      showToast('Content exceeds ' + charLimit + ' char limit');
     }
     sec.finalContent = val;
     try {
@@ -819,7 +955,7 @@
   async function nlPolishSection(secId) {
     if (!nlCurrentIssue || !nlCurrentIssue.sections || !nlCurrentIssue.sections[secId]) return;
     var sec = nlCurrentIssue.sections[secId];
-    if (!sec.rawInput || !sec.rawInput.trim()) { showToast('Write some content first', true); return; }
+    if (!sec.rawInput || !nlStripTags(sec.rawInput).trim()) { showToast('Write some content first', true); return; }
 
     var btn = event.target;
     var origText = btn.textContent;
@@ -828,7 +964,7 @@
 
     try {
       var polishFn = firebase.functions().httpsCallable('socialAI');
-      var result = await polishFn({ action: 'newsletterPolish', tenantId: MastDB.tenantId(), rawInput: sec.rawInput, sectionType: sec.type });
+      var result = await polishFn({ action: 'newsletterPolish', tenantId: MastDB.tenantId(), rawInput: nlStripTags(sec.rawInput), sectionType: sec.type });
       var polished = result.data && result.data.polished ? result.data.polished : sec.rawInput;
 
       nlAiResults[secId] = polished;
@@ -897,6 +1033,79 @@
       await MastDB.newsletter.issues.section(nlCurrentIssueId, secId).set(newSec);
       renderNLCompose();
     } catch (err) { showToast('Error adding section: ' + err.message, true); }
+  }
+
+  async function nlDeleteSection(secId) {
+    if (!nlCurrentIssue || !nlCurrentIssue.sections || !nlCurrentIssue.sections[secId]) return;
+    var sec = nlCurrentIssue.sections[secId];
+    if (!await mastConfirm('Delete the "' + (sec.title || 'Untitled') + '" section? This cannot be undone.', { title: 'Delete Section', danger: true })) return;
+    delete nlCurrentIssue.sections[secId];
+    var remaining = Object.values(nlCurrentIssue.sections).sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
+    nlRepackGrid(remaining);
+    try {
+      var fbUpdates = {};
+      fbUpdates['newsletter/issues/' + nlCurrentIssueId + '/sections/' + secId] = null;
+      remaining.forEach(function(s) {
+        var prefix = 'newsletter/issues/' + nlCurrentIssueId + '/sections/' + s.id + '/';
+        fbUpdates[prefix + 'order'] = s.order;
+        fbUpdates[prefix + 'gridCol'] = s.gridCol;
+        fbUpdates[prefix + 'gridRow'] = s.gridRow;
+      });
+      await MastDB._multiUpdate(fbUpdates);
+      showToast('Section deleted');
+      renderNLCompose();
+    } catch (err) { showToast('Error deleting section: ' + err.message, true); }
+  }
+
+  async function nlDeleteIssue(issueId) {
+    var issue = nlIssues.find(function(i) { return i.id === issueId; });
+    if (!issue) return;
+    if (!await mastConfirm('Delete Issue #' + (issue.issueNumber || '?') + ' "' + (issue.title || 'Untitled') + '"? This cannot be undone.', { title: 'Delete Issue', danger: true })) return;
+    try {
+      await MastDB.newsletter.issues.ref(issueId).remove();
+      if (issue.status === 'published' || issue.publishedAt) {
+        try { await MastDB.newsletter.published.ref(issueId).remove(); } catch (e) { /* ignore if not published */ }
+      }
+      nlIssues = nlIssues.filter(function(i) { return i.id !== issueId; });
+      if (nlCurrentIssueId === issueId) {
+        nlCurrentIssueId = null;
+        nlCurrentIssue = null;
+      }
+      showToast('Issue deleted');
+      renderNLIssueList();
+    } catch (err) { showToast('Error deleting issue: ' + err.message, true); }
+  }
+
+  async function nlDuplicateIssue(issueId) {
+    var source = nlIssues.find(function(i) { return i.id === issueId; });
+    if (!source || !source.sections) { showToast('Nothing to duplicate', true); return; }
+    try {
+      var counterRef = MastDB.newsletter.meta.issueCounter();
+      var result = await counterRef.transaction(function(current) { return (current || 0) + 1; });
+      var issueNumber = result.snapshot.val();
+      var newId = MastDB.newsletter.issues.newKey();
+      var newIssue = {
+        id: newId, issueNumber: issueNumber, title: '', subjectLine: '', slug: '',
+        status: 'draft', sentAt: null, publishedAt: null, sentSubscriberCount: null,
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+      };
+      var sections = {};
+      Object.values(source.sections).sort(function(a, b) { return (a.order || 0) - (b.order || 0); }).forEach(function(s) {
+        var secId = MastDB._newRootKey();
+        sections[secId] = {
+          id: secId, type: s.type, title: s.title, guidedPrompt: s.guidedPrompt || '',
+          rawInput: '', aiVersion: null, finalContent: '', usedAI: false,
+          images: [], order: s.order, included: s.included,
+          cardSize: s.cardSize || 'medium', gridWidth: s.gridWidth || 1,
+          gridCol: s.gridCol || 0, gridRow: s.gridRow || 0, couponCode: null
+        };
+      });
+      newIssue.sections = sections;
+      await MastDB.newsletter.issues.ref(newId).set(newIssue);
+      nlIssues.unshift(newIssue);
+      showToast('Duplicated as Issue #' + issueNumber);
+      nlOpenIssue(newId);
+    } catch (err) { showToast('Error duplicating issue: ' + err.message, true); }
   }
 
   function nlShowAddSectionMenu() {
@@ -1026,7 +1235,7 @@
       }
     }
     var content = sec.finalContent || sec.rawInput || '';
-    return '<p style="font-size:15px;line-height:1.7;color:#444;margin:0;">' + content.replace(/\n/g, '<br>') + '</p>';
+    return '<div style="font-size:15px;line-height:1.7;color:#444;margin:0;">' + content + '</div>';
   }
 
   function nlExportHTML() {
@@ -1096,7 +1305,7 @@
 
     var _ec = TENANT_CONFIG || { brand: { name: 'Newsletter', tagline: '', location: '', logoUrl: '' }, domain: 'localhost' };
     var emailHtml = '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">' +
-      '<title>' + esc(_ec.brand.name) + ' — Issue #' + nlCurrentIssue.issueNumber + '</title></head>' +
+      '<title>' + esc(nlCurrentIssue.subjectLine || nlCurrentIssue.title || (_ec.brand.name + ' — Issue #' + nlCurrentIssue.issueNumber)) + '</title></head>' +
       '<body style="margin:0;padding:0;background:#F5F0EB;font-family:\'DM Sans\',Arial,sans-serif;">' +
       '<table width="100%" cellpadding="0" cellspacing="0" style="background:#F5F0EB;"><tr><td align="center" style="padding:30px 10px;">' +
       '<table width="600" cellpadding="0" cellspacing="0" style="background:#FFFFFF;border-radius:8px;overflow:hidden;max-width:600px;">' +
@@ -1158,6 +1367,7 @@
     var postData = {
       issueNumber: nlCurrentIssue.issueNumber,
       title: nlCurrentIssue.title,
+      subjectLine: nlCurrentIssue.subjectLine || '',
       slug: nlCurrentIssue.slug,
       publishedAt: publishedAt,
       sections: sections
@@ -1342,6 +1552,7 @@
   window.nlToggleSection = nlToggleSection;
   window.nlSetViewMode = nlSetViewMode;
   window.nlUpdateTitle = nlUpdateTitle;
+  window.nlUpdateSubjectLine = nlUpdateSubjectLine;
   window.nlUpdateSectionTitle = nlUpdateSectionTitle;
   window.nlToggleInclude = nlToggleInclude;
   window.nlUpdateRawInput = nlUpdateRawInput;
@@ -1351,6 +1562,16 @@
   window.nlPickVersion = nlPickVersion;
   window.nlResetSection = nlResetSection;
   window.nlAddSection = nlAddSection;
+  window.nlDeleteSection = nlDeleteSection;
+  window.nlDeleteIssue = nlDeleteIssue;
+  window.nlDuplicateIssue = nlDuplicateIssue;
+  window.nlFormatCmd = nlFormatCmd;
+  window.nlUpdateToolbarState = nlUpdateToolbarState;
+  window.nlInsertLink = nlInsertLink;
+  window.nlApplyLink = nlApplyLink;
+  window.nlRemoveLink = nlRemoveLink;
+  window.nlEditableChanged = nlEditableChanged;
+  window.nlFlushEditableSave = nlFlushEditableSave;
   window.nlOpenImagePicker = nlOpenImagePicker;
   window.nlCloseImagePicker = nlCloseImagePicker;
   window.nlSelectImage = nlSelectImage;
