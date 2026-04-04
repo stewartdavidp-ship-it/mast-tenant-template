@@ -337,9 +337,8 @@
         '<div class="nl-ai-panel original"><div class="nl-ai-panel-label">Your Original</div>' +
         '<div style="font-size:0.9rem;line-height:1.7;">' + (blogIsHtmlBody(post.body) ? (post.body || '') : escapeHtml(post.body || '').replace(/\n/g, '<br>')) + '</div></div>' +
         '<div class="nl-ai-panel polished"><div class="nl-ai-panel-label">AI Polished</div>' +
-        '<div style="white-space:pre-wrap;font-size:0.9rem;line-height:1.7;">' + escapeHtml(blogAiResult) + '</div></div>' +
+        '<div class="blog-preview-body" style="font-size:0.9rem;line-height:1.7;">' + blogStructuredTextToHtml(blogAiResult) + '</div></div>' +
         '</div>' +
-        '<div style="font-size:0.75rem;color:var(--text-secondary);margin-top:6px;font-style:italic;">Note: AI works with text content. Formatting won\'t carry over to the polished version.</div>' +
         '<div class="nl-ai-actions">' +
         '<button class="btn" onclick="blogPickVersion(\'original\')">Keep Original</button>' +
         '<button class="btn btn-primary" onclick="blogPickVersion(\'ai\')">Use Polished</button>' +
@@ -470,6 +469,112 @@
     if (!text) return '';
     var escaped = escapeHtml(text);
     return escaped.split(/\n\n+/).map(function(p) { return '<p>' + p.replace(/\n/g, '<br>') + '</p>'; }).join('');
+  }
+
+  // Structure-aware text extraction for AI polish (preserves headings, lists, quotes)
+  function blogExtractStructuredText(html) {
+    if (!html) return '';
+    var div = document.createElement('div');
+    div.innerHTML = html;
+    var lines = [];
+    function walk(node) {
+      if (node.nodeType === 3) { // text node
+        var t = node.textContent.trim();
+        if (t) lines.push(t);
+        return;
+      }
+      if (node.nodeType !== 1) return;
+      var tag = node.tagName.toLowerCase();
+      // Skip markers
+      if (node.classList && (node.classList.contains('blog-img-marker') || node.classList.contains('blog-coupon-marker'))) {
+        if (node.dataset.couponCode) lines.push('[Coupon:' + node.dataset.couponCode + ']');
+        else if (node.dataset.image) lines.push('[Image ' + node.dataset.image + ']');
+        return;
+      }
+      if (tag === 'h2') { lines.push('## ' + (node.textContent || '').trim()); return; }
+      if (tag === 'h3') { lines.push('### ' + (node.textContent || '').trim()); return; }
+      if (tag === 'blockquote') { lines.push('> ' + (node.textContent || '').trim()); return; }
+      if (tag === 'ul') {
+        Array.from(node.children).forEach(function(li) {
+          if (li.tagName === 'LI') lines.push('- ' + (li.textContent || '').trim());
+        });
+        return;
+      }
+      if (tag === 'ol') {
+        Array.from(node.children).forEach(function(li, i) {
+          if (li.tagName === 'LI') lines.push((i + 1) + '. ' + (li.textContent || '').trim());
+        });
+        return;
+      }
+      if (tag === 'hr') { lines.push('---'); return; }
+      if (tag === 'br') { return; }
+      // Block elements get their own line
+      if (/^(p|div)$/.test(tag)) {
+        var childText = [];
+        Array.from(node.childNodes).forEach(function(c) {
+          if (c.nodeType === 3) childText.push(c.textContent);
+          else if (c.nodeType === 1) {
+            if (c.classList && (c.classList.contains('blog-img-marker') || c.classList.contains('blog-coupon-marker'))) {
+              if (c.dataset.couponCode) childText.push('[Coupon:' + c.dataset.couponCode + ']');
+              else if (c.dataset.image) childText.push('[Image ' + c.dataset.image + ']');
+            } else {
+              childText.push(c.textContent || '');
+            }
+          }
+        });
+        var joined = childText.join('').trim();
+        if (joined) lines.push(joined);
+        return;
+      }
+      // Recurse for other elements
+      Array.from(node.childNodes).forEach(walk);
+    }
+    Array.from(div.childNodes).forEach(walk);
+    return lines.join('\n\n');
+  }
+
+  // Convert structured text (from AI) back to HTML
+  function blogStructuredTextToHtml(text) {
+    if (!text) return '';
+    var lines = text.split('\n');
+    var html = '';
+    var inUL = false, inOL = false;
+    function closeLists() {
+      if (inUL) { html += '</ul>'; inUL = false; }
+      if (inOL) { html += '</ol>'; inOL = false; }
+    }
+    lines.forEach(function(line) {
+      var trimmed = line.trim();
+      if (!trimmed) { closeLists(); return; }
+      // Headings
+      if (/^### (.+)/.test(trimmed)) { closeLists(); html += '<h3>' + escapeHtml(trimmed.replace(/^### /, '')) + '</h3>'; return; }
+      if (/^## (.+)/.test(trimmed)) { closeLists(); html += '<h2>' + escapeHtml(trimmed.replace(/^## /, '')) + '</h2>'; return; }
+      // Blockquote
+      if (/^> (.+)/.test(trimmed)) { closeLists(); html += '<blockquote><p>' + escapeHtml(trimmed.replace(/^> /, '')) + '</p></blockquote>'; return; }
+      // Horizontal rule
+      if (trimmed === '---') { closeLists(); html += '<hr>'; return; }
+      // Unordered list
+      if (/^[-*] (.+)/.test(trimmed)) {
+        if (inOL) { html += '</ol>'; inOL = false; }
+        if (!inUL) { html += '<ul>'; inUL = true; }
+        html += '<li>' + escapeHtml(trimmed.replace(/^[-*] /, '')) + '</li>';
+        return;
+      }
+      // Ordered list
+      if (/^\d+\. (.+)/.test(trimmed)) {
+        if (inUL) { html += '</ul>'; inUL = false; }
+        if (!inOL) { html += '<ol>'; inOL = true; }
+        html += '<li>' + escapeHtml(trimmed.replace(/^\d+\. /, '')) + '</li>';
+        return;
+      }
+      // Markers
+      if (/^\[Image \d+\]$/.test(trimmed) || /^\[Coupon:[^\]]+\]$/.test(trimmed)) { closeLists(); html += '<p>' + trimmed + '</p>'; return; }
+      // Regular paragraph
+      closeLists();
+      html += '<p>' + escapeHtml(trimmed) + '</p>';
+    });
+    closeLists();
+    return html;
   }
 
   function blogSanitizeHtml(html) {
@@ -663,6 +768,178 @@
     var readMin = Math.max(1, Math.ceil(words / 225));
     el.textContent = words + ' word' + (words !== 1 ? 's' : '') + ' \u00b7 ' + readMin + ' min read';
   }
+
+  // ===== SLASH COMMAND MENU =====
+
+  var blogSlashActive = false;
+  var blogSlashQuery = '';
+  var blogSlashIndex = 0;
+
+  var SLASH_COMMANDS = [
+    { label: 'Heading 2', icon: 'H2', cmd: function() { blogFormatBlock('h2'); } },
+    { label: 'Heading 3', icon: 'H3', cmd: function() { blogFormatBlock('h3'); } },
+    { label: 'Bullet List', icon: '\u2022', cmd: function() { blogFormatCmd('insertUnorderedList'); } },
+    { label: 'Numbered List', icon: '1.', cmd: function() { blogFormatCmd('insertOrderedList'); } },
+    { label: 'Blockquote', icon: '\u201c', cmd: function() { blogFormatBlock('blockquote'); } },
+    { label: 'Divider', icon: '\u2015', cmd: function() { document.execCommand('insertHorizontalRule'); blogBodyChanged(); } },
+    { label: 'Image', icon: '\ud83d\udcf7', cmd: function() { blogInsertImage(); } },
+    { label: 'Coupon', icon: '\uD83C\uDFF7\uFE0F', cmd: function() { blogInsertCoupon(); } }
+  ];
+
+  function blogFilterSlashCommands() {
+    if (!blogSlashQuery) return SLASH_COMMANDS;
+    var q = blogSlashQuery.toLowerCase();
+    return SLASH_COMMANDS.filter(function(c) { return c.label.toLowerCase().indexOf(q) !== -1; });
+  }
+
+  function blogShowSlashMenu() {
+    var existing = document.getElementById('blogSlashMenu');
+    if (existing) existing.remove();
+
+    var filtered = blogFilterSlashCommands();
+    if (filtered.length === 0) { blogSlashActive = false; return; }
+    if (blogSlashIndex >= filtered.length) blogSlashIndex = filtered.length - 1;
+
+    var menu = document.createElement('div');
+    menu.id = 'blogSlashMenu';
+    menu.className = 'blog-slash-menu';
+
+    var html = '';
+    filtered.forEach(function(c, i) {
+      html += '<div class="blog-slash-item' + (i === blogSlashIndex ? ' active' : '') + '" onmousedown="event.preventDefault();blogExecuteSlashCommand(' + i + ')">' +
+        '<span class="blog-slash-icon">' + c.icon + '</span>' +
+        '<span>' + c.label + '</span></div>';
+    });
+    menu.innerHTML = html;
+
+    // Position below cursor
+    var sel = window.getSelection();
+    if (sel.rangeCount > 0) {
+      var rect = sel.getRangeAt(0).getBoundingClientRect();
+      var editable = document.getElementById('blogBodyEditable');
+      var edRect = editable ? editable.getBoundingClientRect() : { left: 0, top: 0 };
+      menu.style.left = Math.max(0, rect.left - edRect.left) + 'px';
+      menu.style.top = (rect.bottom - edRect.top + 4) + 'px';
+    }
+
+    var editable = document.getElementById('blogBodyEditable');
+    if (editable) editable.parentNode.style.position = 'relative';
+    if (editable) editable.parentNode.appendChild(menu);
+  }
+
+  function blogHideSlashMenu() {
+    blogSlashActive = false;
+    blogSlashQuery = '';
+    blogSlashIndex = 0;
+    var menu = document.getElementById('blogSlashMenu');
+    if (menu) menu.remove();
+  }
+
+  function blogDeleteSlashText() {
+    // Delete the /query text
+    var sel = window.getSelection();
+    if (!sel.rangeCount) return;
+    var range = sel.getRangeAt(0);
+    var node = range.startContainer;
+    if (node.nodeType === 3) {
+      var text = node.textContent;
+      var pos = range.startOffset;
+      // Find the / before cursor
+      var slashPos = text.lastIndexOf('/', pos);
+      if (slashPos >= 0) {
+        node.textContent = text.substring(0, slashPos) + text.substring(pos);
+        range.setStart(node, slashPos);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+    }
+  }
+
+  function blogExecuteSlashCommand(idx) {
+    var filtered = blogFilterSlashCommands();
+    var cmd = filtered[idx];
+    if (!cmd) return;
+    blogDeleteSlashText();
+    blogHideSlashMenu();
+    cmd.cmd();
+  }
+
+  // Keydown handler for slash commands
+  function blogHandleKeydown(e) {
+    if (blogSlashActive) {
+      var filtered = blogFilterSlashCommands();
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        blogSlashIndex = Math.min(blogSlashIndex + 1, filtered.length - 1);
+        blogShowSlashMenu();
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        blogSlashIndex = Math.max(blogSlashIndex - 1, 0);
+        blogShowSlashMenu();
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        blogExecuteSlashCommand(blogSlashIndex);
+        return;
+      }
+      if (e.key === 'Escape' || e.key === ' ') {
+        blogHideSlashMenu();
+        return;
+      }
+      if (e.key === 'Backspace') {
+        if (blogSlashQuery.length === 0) {
+          blogHideSlashMenu();
+        } else {
+          blogSlashQuery = blogSlashQuery.slice(0, -1);
+          blogSlashIndex = 0;
+          setTimeout(blogShowSlashMenu, 0);
+        }
+        return;
+      }
+      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
+        blogSlashQuery += e.key;
+        blogSlashIndex = 0;
+        setTimeout(blogShowSlashMenu, 0);
+        return;
+      }
+    }
+
+    // Detect / at start of empty block
+    if (e.key === '/') {
+      var sel = window.getSelection();
+      if (sel.rangeCount > 0) {
+        var node = sel.anchorNode;
+        var text = node ? (node.textContent || '') : '';
+        var offset = sel.anchorOffset;
+        // Check if line is empty or cursor is at start
+        if (text.trim() === '' || offset === 0) {
+          blogSlashActive = true;
+          blogSlashQuery = '';
+          blogSlashIndex = 0;
+          setTimeout(blogShowSlashMenu, 10);
+        }
+      }
+    }
+  }
+
+  // Attach keydown listener when editor exists
+  document.addEventListener('keydown', function(e) {
+    var editable = document.getElementById('blogBodyEditable');
+    if (!editable) return;
+    if (!editable.contains(document.activeElement) && document.activeElement !== editable) return;
+    blogHandleKeydown(e);
+  });
+
+  // Close slash menu on click outside
+  document.addEventListener('mousedown', function(e) {
+    if (blogSlashActive && !e.target.closest('.blog-slash-menu')) {
+      blogHideSlashMenu();
+    }
+  });
 
   var blogEmojiCategories = {
     'Smileys': ['\ud83d\ude0a','\ud83d\ude02','\ud83e\udd70','\ud83d\ude0d','\ud83d\ude0e','\ud83e\udd29','\ud83d\ude22','\ud83d\ude2d','\ud83e\udd7a','\ud83d\ude2e','\ud83e\udd14','\ud83d\ude4f','\ud83d\udc4f','\ud83c\udf89','\u2764\ufe0f','\ud83d\udd25','\u2728','\ud83d\udcab','\u2b50','\ud83c\udf1f','\ud83d\udcaa','\ud83d\udc4d','\ud83d\udc4b','\ud83e\udd17','\ud83d\ude07','\ud83e\udd73','\ud83d\udc80','\ud83d\ude31','\ud83e\udd2f','\ud83d\udcaf'],
@@ -1227,10 +1504,8 @@
     var btn = document.getElementById('blogPolishBtn');
     if (btn) { btn.disabled = true; btn.innerHTML = '<span class="nl-ai-loading">Polishing...</span>'; }
     try {
-      var tempDiv = document.createElement('div');
-      tempDiv.innerHTML = blogCurrentPost.body || '';
-      var plainText = tempDiv.textContent || tempDiv.innerText || '';
-      var cleanBody = plainText.replace(/\[Image \d+\]/g, '').replace(/\[IMG:[^\]]+\]/g, '').trim();
+      var structuredBody = blogExtractStructuredText(blogCurrentPost.body || '');
+      var cleanBody = structuredBody.replace(/\[Image \d+\]/g, '').replace(/\[Coupon:[^\]]+\]/g, '').trim();
       var author = BLOG_AUTHORS[blogCurrentPost.author] || BLOG_AUTHORS[Object.keys(BLOG_AUTHORS)[0]] || { name: blogCurrentPost.author || 'Author', photoUrl: '', bio: '' };
       var result = await firebase.functions().httpsCallable('socialAI')({
         action: 'blogPolish',
@@ -1250,10 +1525,12 @@
   async function blogPickVersion(version) {
     if (!blogCurrentPost) return;
     if (version === 'ai' && blogAiResult) {
-      var aiHtml = blogPlainToHtml(blogAiResult);
+      var aiHtml = blogStructuredTextToHtml(blogAiResult);
+      // Re-append image placeholders if not already in the polished text
       var images = blogCurrentPost.inlineImages || [];
       images.forEach(function(img, idx) {
-        aiHtml += '<p>[Image ' + (idx + 1) + ']</p>';
+        var marker = '[Image ' + (idx + 1) + ']';
+        if (aiHtml.indexOf(marker) === -1) aiHtml += '<p>' + marker + '</p>';
       });
       blogCurrentPost.body = aiHtml;
       blogCurrentPost.aiVersion = blogAiResult;
@@ -1565,6 +1842,7 @@
   window.blogUpdateExcerpt = blogUpdateExcerpt;
   window.blogUpdateExcerptCount = blogUpdateExcerptCount;
   window.blogCancelSchedule = blogCancelSchedule;
+  window.blogExecuteSlashCommand = blogExecuteSlashCommand;
   window.blogToggleEmojiPicker = blogToggleEmojiPicker;
   window.blogEmojiSwitchTab = blogEmojiSwitchTab;
   window.blogInsertEmoji = blogInsertEmoji;
