@@ -6576,6 +6576,7 @@
         <div style="display:flex;gap:8px;">
           <button class="btn btn-primary" onclick="startIntakeMode()">📷 Inventory Intake</button>
           <button class="btn btn-secondary" onclick="openMoveItemsModal()">↔ Move Items</button>
+          <button class="btn btn-secondary" onclick="openRecountModal()">📋 Recount</button>
         </div>
       </div>
       <div id="inventoryOverviewContent"></div>
@@ -18579,7 +18580,7 @@ async function saveVariantOverrides(pid, key) {
     // Update local cache
     if (!inventory[pid]) inventory[pid] = {};
     if (!inventory[pid].stock) inventory[pid].stock = {};
-    if (!inventory[pid].stock[key]) inventory[pid].stock[key] = { available: 0, reserved: 0 };
+    if (!inventory[pid].stock[key]) inventory[pid].stock[key] = { onHand: 0, committed: 0, held: 0, damaged: 0, incoming: 0 };
     Object.assign(inventory[pid].stock[key], updates);
     await syncStockInfoToPublic(pid);
     editingVariantKey = null;
@@ -18587,6 +18588,281 @@ async function saveVariantOverrides(pid, key) {
     renderInventoryOverview();
   } catch (err) {
     showToast('Error saving overrides: ' + esc(err.message), true);
+  }
+}
+
+// ============================================================
+// Inventory Recount
+// ============================================================
+
+var recountProducts = []; // [{pid, name, imgSrc, onHand, physicalCount, comboKey}]
+
+function openRecountModal() {
+  // Build product selection for recount
+  if (!productsData || !productsData.length) {
+    showToast('Loading products...', false);
+    loadProducts().then(function() { openRecountModal(); });
+    return;
+  }
+
+  // Get categories for filter
+  var cats = {};
+  productsData.forEach(function(p) {
+    (p.categories || []).forEach(function(c) { cats[c] = true; });
+  });
+  var catOptions = '<option value="all">All Products</option>';
+  Object.keys(cats).sort().forEach(function(c) {
+    catOptions += '<option value="' + esc(c) + '">' + esc(c) + '</option>';
+  });
+
+  var html = '<div style="max-width:600px;">' +
+    '<h3>Start Inventory Recount</h3>' +
+    '<p style="color:var(--warm-gray);font-size:0.85rem;margin:8px 0 16px;">Select which products to count. Only stock-tracked products (strict and stock-to-build) are shown.</p>' +
+    '<div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;">' +
+      '<select id="recountCategoryFilter" onchange="filterRecountProducts()" style="font-size:0.85rem;padding:6px 10px;">' + catOptions + '</select>' +
+      '<label style="font-size:0.82rem;display:flex;align-items:center;gap:4px;cursor:pointer;">' +
+        '<input type="checkbox" id="recountSelectAll" onchange="toggleRecountSelectAll(this.checked)"> Select All' +
+      '</label>' +
+    '</div>' +
+    '<div id="recountProductList" style="max-height:300px;overflow-y:auto;border:1px solid var(--cream-dark);border-radius:8px;padding:4px;"></div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">' +
+      '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+      '<button class="btn btn-primary" onclick="startRecountSession()">Start Counting</button>' +
+    '</div>' +
+  '</div>';
+  openModal(html);
+  filterRecountProducts();
+}
+
+function filterRecountProducts() {
+  var cat = document.getElementById('recountCategoryFilter').value;
+  var el = document.getElementById('recountProductList');
+  if (!el) return;
+
+  var items = productsData.filter(function(p) {
+    var inv = inventory[p.pid] || {};
+    var st = inv.stockType || 'made-to-order';
+    // Only stock-tracked products
+    if (st === 'build-to-order' || st === 'made-to-order') return false;
+    if (p.status === 'archived') return false;
+    if (cat !== 'all') {
+      if (!p.categories || p.categories.indexOf(cat) === -1) return false;
+    }
+    return true;
+  });
+
+  if (items.length === 0) {
+    el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--warm-gray);">No stock-tracked products found.</div>';
+    return;
+  }
+
+  var html = '';
+  items.forEach(function(p) {
+    var inv = inventory[p.pid] || {};
+    var totals = getInventoryTotals(inv);
+    var imgSrc = firstProductImage(p);
+    var imgHtml = imgSrc
+      ? '<img src="' + esc(imgSrc) + '" style="width:32px;height:32px;object-fit:cover;border-radius:4px;">'
+      : '<div style="width:32px;height:32px;border-radius:4px;background:var(--cream-dark);"></div>';
+    html += '<label style="display:flex;align-items:center;gap:10px;padding:8px;cursor:pointer;border-bottom:1px solid var(--cream-dark);" data-pid="' + esc(p.pid) + '">' +
+      '<input type="checkbox" class="recount-product-cb" data-pid="' + esc(p.pid) + '" data-name="' + esc(p.name || p.pid) + '" data-onhand="' + totals.onHand + '" data-img="' + esc(imgSrc || '') + '">' +
+      imgHtml +
+      '<div style="flex:1;">' +
+        '<div style="font-size:0.85rem;font-weight:500;">' + esc(p.name || p.pid) + '</div>' +
+        '<div style="font-size:0.75rem;color:var(--warm-gray);">System: ' + totals.onHand + ' on hand</div>' +
+      '</div>' +
+    '</label>';
+  });
+  el.innerHTML = html;
+}
+
+function toggleRecountSelectAll(checked) {
+  var cbs = document.querySelectorAll('.recount-product-cb');
+  cbs.forEach(function(cb) { cb.checked = checked; });
+}
+
+function startRecountSession() {
+  var cbs = document.querySelectorAll('.recount-product-cb:checked');
+  if (cbs.length === 0) {
+    showToast('Select at least one product to count.', true);
+    return;
+  }
+
+  recountProducts = [];
+  cbs.forEach(function(cb) {
+    recountProducts.push({
+      pid: cb.dataset.pid,
+      name: cb.dataset.name,
+      imgSrc: cb.dataset.img,
+      onHand: parseInt(cb.dataset.onhand) || 0,
+      physicalCount: null,
+      comboKey: '_default'
+    });
+  });
+
+  renderRecountForm();
+}
+
+function renderRecountForm() {
+  var counted = recountProducts.filter(function(p) { return p.physicalCount !== null; }).length;
+  var total = recountProducts.length;
+
+  var html = '<div style="max-width:700px;">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
+      '<h3>Counting Inventory</h3>' +
+      '<span style="font-size:0.82rem;color:var(--warm-gray);">' + counted + ' / ' + total + ' counted</span>' +
+    '</div>' +
+    '<div style="max-height:400px;overflow-y:auto;">' +
+    '<table style="width:100%;font-size:0.85rem;border-collapse:collapse;">' +
+    '<thead><tr style="border-bottom:2px solid var(--cream-dark);">' +
+      '<th style="text-align:left;padding:8px;">Product</th>' +
+      '<th style="text-align:center;padding:8px;width:80px;">System</th>' +
+      '<th style="text-align:center;padding:8px;width:100px;">Actual</th>' +
+      '<th style="text-align:center;padding:8px;width:80px;">Variance</th>' +
+    '</tr></thead><tbody>';
+
+  recountProducts.forEach(function(p, idx) {
+    var imgHtml = p.imgSrc
+      ? '<img src="' + esc(p.imgSrc) + '" style="width:28px;height:28px;object-fit:cover;border-radius:4px;margin-right:8px;vertical-align:middle;">'
+      : '';
+    var variance = '';
+    var varianceStyle = '';
+    if (p.physicalCount !== null) {
+      var diff = p.physicalCount - p.onHand;
+      if (diff === 0) {
+        variance = '✓';
+        varianceStyle = 'color:var(--teal);font-weight:600;';
+      } else if (diff > 0) {
+        variance = '+' + diff;
+        varianceStyle = 'color:#2196F3;font-weight:600;';
+      } else {
+        variance = '' + diff;
+        varianceStyle = 'color:var(--danger);font-weight:600;';
+      }
+    }
+    html += '<tr style="border-bottom:1px solid var(--cream-dark);">' +
+      '<td style="padding:8px;">' + imgHtml + esc(p.name) + '</td>' +
+      '<td style="text-align:center;padding:8px;color:var(--warm-gray);">' + p.onHand + '</td>' +
+      '<td style="text-align:center;padding:8px;"><input type="number" min="0" style="width:70px;text-align:center;padding:4px 6px;font-size:0.85rem;" ' +
+        'data-idx="' + idx + '" ' +
+        (p.physicalCount !== null ? 'value="' + p.physicalCount + '"' : '') +
+        ' onchange="updateRecountEntry(this)" oninput="updateRecountEntry(this)"></td>' +
+      '<td style="text-align:center;padding:8px;' + varianceStyle + '">' + variance + '</td>' +
+    '</tr>';
+  });
+
+  html += '</tbody></table></div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">' +
+      '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+      '<button class="btn btn-primary" id="applyRecountBtn" onclick="applyRecount()" ' +
+        (counted === 0 ? 'disabled style="opacity:0.5;"' : '') + '>Apply Recount (' + counted + ')</button>' +
+    '</div>' +
+  '</div>';
+  openModal(html);
+}
+
+function updateRecountEntry(input) {
+  var idx = parseInt(input.dataset.idx);
+  var val = input.value.trim();
+  if (val === '') {
+    recountProducts[idx].physicalCount = null;
+  } else {
+    var num = parseInt(val);
+    recountProducts[idx].physicalCount = isNaN(num) || num < 0 ? null : num;
+  }
+  // Update variance display and button without full re-render
+  var counted = recountProducts.filter(function(p) { return p.physicalCount !== null; }).length;
+  var btn = document.getElementById('applyRecountBtn');
+  if (btn) {
+    btn.textContent = 'Apply Recount (' + counted + ')';
+    btn.disabled = counted === 0;
+    btn.style.opacity = counted === 0 ? '0.5' : '1';
+  }
+  // Update variance cell (next sibling of input's parent td)
+  var varianceTd = input.parentElement.nextElementSibling;
+  if (varianceTd && recountProducts[idx].physicalCount !== null) {
+    var diff = recountProducts[idx].physicalCount - recountProducts[idx].onHand;
+    if (diff === 0) {
+      varianceTd.innerHTML = '<span style="color:var(--teal);font-weight:600;">✓</span>';
+    } else if (diff > 0) {
+      varianceTd.innerHTML = '<span style="color:#2196F3;font-weight:600;">+' + diff + '</span>';
+    } else {
+      varianceTd.innerHTML = '<span style="color:var(--danger);font-weight:600;">' + diff + '</span>';
+    }
+  } else if (varianceTd) {
+    varianceTd.innerHTML = '';
+  }
+}
+
+async function applyRecount() {
+  var toApply = recountProducts.filter(function(p) { return p.physicalCount !== null; });
+  if (toApply.length === 0) {
+    showToast('No counts entered.', true);
+    return;
+  }
+
+  var btn = document.getElementById('applyRecountBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Applying...'; }
+
+  var now = new Date().toISOString();
+  var varianceCount = 0;
+  var totalVariance = 0;
+
+  try {
+    for (var i = 0; i < toApply.length; i++) {
+      var p = toApply[i];
+      var ck = p.comboKey || '_default';
+      var stockPath = p.pid + '/stock/' + ck;
+      var variance = p.physicalCount - p.onHand;
+
+      // Set onHand to physical count
+      await MastDB.inventory.ref(stockPath + '/onHand').set(p.physicalCount);
+      await MastDB.inventory.ref(stockPath + '/lastCountedAt').set(now);
+
+      // Write audit
+      await MastDB.inventory.ref(p.pid + '/history').push({
+        action: 'recount',
+        reason: 'recount',
+        previousQty: p.onHand,
+        newQty: p.physicalCount,
+        qty: variance,
+        comboKey: ck,
+        actor: 'maker',
+        actorType: 'maker',
+        timestamp: now
+      });
+
+      await MastDB.inventory.ref(p.pid + '/updatedAt').set(now);
+
+      // Update local cache
+      if (inventory[p.pid] && inventory[p.pid].stock && inventory[p.pid].stock[ck]) {
+        inventory[p.pid].stock[ck].onHand = p.physicalCount;
+        inventory[p.pid].stock[ck].lastCountedAt = now;
+      }
+
+      // Sync to public
+      await syncStockInfoToPublic(p.pid);
+
+      if (variance !== 0) {
+        varianceCount++;
+        totalVariance += Math.abs(variance);
+      }
+    }
+
+    closeModal();
+    recountProducts = [];
+    renderInventoryOverview();
+
+    var msg = 'Counted ' + toApply.length + ' product' + (toApply.length !== 1 ? 's' : '') + '. ';
+    if (varianceCount === 0) {
+      msg += 'All counts matched!';
+    } else {
+      msg += varianceCount + ' variance' + (varianceCount !== 1 ? 's' : '') + ' found, ' + totalVariance + ' unit' + (totalVariance !== 1 ? 's' : '') + ' adjusted.';
+    }
+    showToast(msg);
+  } catch (err) {
+    showToast('Error applying recount: ' + err.message, true);
+    if (btn) { btn.disabled = false; btn.textContent = 'Apply Recount'; }
   }
 }
 
@@ -19879,7 +20155,7 @@ async function saveAdjustStock(pid) {
       }
     }
 
-    // Refresh local cache from Firebase to pick up current reserved values
+    // Refresh local cache from Firebase to pick up current committed values
     if (!inventory[pid]) inventory[pid] = { pid: pid };
     var freshSnap = await MastDB.inventory.stockRef(pid).once('value');
     inventory[pid].stock = freshSnap.val() || {};
@@ -23838,8 +24114,9 @@ function updateMoveVariants() {
     variantInfo.combos.forEach(function(combo) {
       var key = comboKey(combo);
       var inv = inventory[pid];
-      var stock = inv && inv.stock && inv.stock[key] ? inv.stock[key] : { available: 0 };
-      options += '<option value="' + esc(key) + '">' + combo.join(' / ') + ' (' + (stock.available || 0) + ')</option>';
+      var stock = inv && inv.stock && inv.stock[key] ? inv.stock[key] : { onHand: 0, committed: 0, held: 0, damaged: 0 };
+      var avail = Math.max(0, (stock.onHand || 0) - (stock.committed || 0) - (stock.held || 0) - (stock.damaged || 0));
+      options += '<option value="' + esc(key) + '">' + combo.join(' / ') + ' (' + avail + ')</option>';
     });
     varSel.innerHTML = options;
     varRow.style.display = '';

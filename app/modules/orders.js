@@ -1118,7 +1118,7 @@
     } else if (stockCount === 0) {
       msg = '<strong>' + buildCount + ' item' + (buildCount !== 1 ? 's' : '') + ' need building.</strong> Order will advance to <strong style="color:#7B1FA2;">Building</strong> with production requests created.';
     } else {
-      msg = '<strong>' + stockCount + ' from stock, ' + buildCount + ' need building.</strong> Stock items reserved. Build items sent to production. Order status: <strong style="color:#7B1FA2;">Building</strong>';
+      msg = '<strong>' + stockCount + ' from stock, ' + buildCount + ' need building.</strong> Stock committed. Build items sent to production. Order status: <strong style="color:#7B1FA2;">Building</strong>';
     }
     summaryEl.innerHTML = msg;
   }
@@ -1302,7 +1302,7 @@
       await stockRef.update(updates);
       await writeAudit('update', 'inventory', pid);
       await MastDB.inventory.ref(pid + '/history').push({
-        action: 'reserved', reason: 'order_placed', qty: qty, comboKey: ck || '_default',
+        action: 'committed', reason: 'order_placed', qty: qty, comboKey: ck || '_default',
         orderId: orderId || null, actor: 'maker', actorType: 'maker',
         timestamp: new Date().toISOString()
       });
@@ -1802,7 +1802,7 @@
       var history = (order && order.statusHistory) ? order.statusHistory.slice() : [];
       history.push({ status: 'shipped', at: now, by: 'admin', note: (result.carrier || '') + ' via ' + s.provider });
 
-      // Pull reserved items from stock
+      // Pull committed items from stock
       if (order && order.fulfillment) {
         (order.items || []).forEach(function(item) {
           var ffKey = getItemFulfillmentKey(item);
@@ -1983,7 +1983,7 @@
       var history = (o && o.statusHistory) ? o.statusHistory.slice() : [];
       history.push({ status: 'shipped', at: now, by: 'admin', note: note || carrier + ' ' + trackingNum });
 
-      // Pull reserved items from stock (variant-aware)
+      // Pull committed items from stock (variant-aware)
       if (o && o.fulfillment) {
         (o.items || []).forEach(function(item) {
           var ffKey = getItemFulfillmentKey(item);
@@ -2100,7 +2100,7 @@
       var history = Array.isArray(o.statusHistory) ? o.statusHistory.slice() : (o.statusHistory ? Object.values(o.statusHistory) : []);
       history.push({ status: 'shipped', at: now, by: 'admin', note: carrier + ' ' + method + ' ' + trackingNum });
 
-      // Pull reserved items from stock
+      // Pull committed items from stock
       if (o && o.fulfillment) {
         (o.items || []).forEach(function(item) {
           var ffKey = getItemFulfillmentKey(item);
@@ -2146,7 +2146,7 @@
     var html = '<div style="max-width:400px;">' +
       '<h3>Cancel Order</h3>' +
       '<p style="margin:12px 0;color:var(--warm-gray);">Are you sure you want to cancel order <strong>' + esc(num) + '</strong>? ' +
-      'This will release reserved inventory and cancel any open production requests.</p>' +
+      'This will release committed inventory and cancel any open production requests.</p>' +
       '<div class="form-group">' +
         '<label>Reason (optional)</label>' +
         '<textarea id="cancelReason" rows="3" placeholder="Why is this order being cancelled?"></textarea>' +
@@ -2169,7 +2169,7 @@
       var history = o.statusHistory ? o.statusHistory.slice() : [];
       history.push({ status: 'cancelled', at: now, by: 'admin', note: reason || null });
 
-      // Release reserved inventory (variant-aware)
+      // Release committed inventory (variant-aware)
       if (o.fulfillment) {
         (o.items || []).forEach(function(item) {
           var ffKey = getItemFulfillmentKey(item);
