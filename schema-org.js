@@ -124,6 +124,11 @@
       schema.brand = { '@type': 'Brand', name: brand.name };
     }
 
+    if (p.sku) schema.sku = p.sku;
+    if (p.materials && Array.isArray(p.materials) && p.materials.length) {
+      schema.material = p.materials.join(', ');
+    }
+
     // Offers — handle variants
     if (p.variants && p.variants.length > 1) {
       var prices = p.variants.map(function(v) {

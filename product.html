@@ -965,7 +965,13 @@
       window._calcSalePrice = _calcSalePrice;
 
       // Update page title
-      document.title = (isStoryView ? 'How It Was Made: ' : '') + p.name + ' — ' + TENANT_TITLE_SUFFIX();
+      document.title = (isStoryView ? 'How It Was Made: ' : '') + (p.seoTitle || p.name) + ' — ' + TENANT_TITLE_SUFFIX();
+      // SEO meta description override
+      if (p.seoDescription) {
+        var metaDesc = document.querySelector('meta[name="description"]');
+        if (!metaDesc) { metaDesc = document.createElement('meta'); metaDesc.setAttribute('name', 'description'); document.head.appendChild(metaDesc); }
+        metaDesc.setAttribute('content', p.seoDescription);
+      }
 
       // Show content
       document.getElementById('productContent').style.display = '';
@@ -1161,6 +1167,19 @@
         descEl.style.display = 'block';
       }
 
+      // Materials display
+      if (p.materials && Array.isArray(p.materials) && p.materials.length > 0) {
+        var matsHtml = '<div class="product-materials" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:6px;">';
+        p.materials.forEach(function(m) {
+          matsHtml += '<span style="display:inline-block;padding:3px 10px;background:var(--cream, #FAF6F0);border:1px solid var(--accent-light, #E8D8C4);border-radius:12px;font-size:0.78rem;color:var(--warm-gray, #6B6560);">' + escHtml(m) + '</span>';
+        });
+        matsHtml += '</div>';
+        var matsEl = document.createElement('div');
+        matsEl.innerHTML = matsHtml;
+        var descEl2 = document.getElementById('productDescription');
+        if (descEl2) descEl2.after(matsEl.firstChild);
+      }
+
       // Categories
       var catsHtml = '';
       if (p.categories && p.categories.length) {
@@ -1169,6 +1188,15 @@
         });
       }
       document.getElementById('productCats').innerHTML = catsHtml;
+
+      // SKU display
+      if (p.sku) {
+        var skuEl = document.createElement('div');
+        skuEl.className = 'product-detail-sku';
+        skuEl.style.cssText = 'font-size:0.78rem;color:var(--warm-gray, #8B7E74);margin-top:4px;';
+        skuEl.textContent = 'SKU: ' + p.sku;
+        document.getElementById('productCats').after(skuEl);
+      }
 
       // Highlight active category in shop nav
       if (p.categories && p.categories.length) {
@@ -1501,6 +1529,25 @@
     }
   }
 
+  // Personalization input
+  if (window._productData && window._productData.personalization && window._productData.personalization.enabled) {
+    var pPers = window._productData.personalization;
+    var persHtml = '<div id="personalizationSection" style="margin:16px 0;padding:12px;background:var(--cream, #FAF6F0);border-radius:8px;">' +
+      '<label for="personalizationInput" style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:6px;">' +
+        'Personalization' + (pPers.required ? ' <span style="color:#C4853C;">*</span>' : '') +
+      '</label>' +
+      (pPers.instructions ? '<p style="font-size:0.78rem;color:var(--warm-gray, #6B6560);margin:0 0 8px 0;">' + escHtml(pPers.instructions) + '</p>' : '') +
+      '<input type="text" id="personalizationInput" placeholder="Enter personalization text" style="width:100%;padding:8px 12px;border:1px solid var(--accent-light, #E8D8C4);border-radius:6px;font-size:0.85rem;">' +
+    '</div>';
+    // Insert before the add-to-cart button
+    var addBtn = document.getElementById('addToCartBtn');
+    if (addBtn) {
+      var persEl = document.createElement('div');
+      persEl.innerHTML = persHtml;
+      addBtn.parentNode.insertBefore(persEl.firstChild, addBtn);
+    }
+  }
+
   // ── Add to Cart ──
   document.getElementById('addToCartBtn').addEventListener('click', function() {
     if (this.disabled) return;
@@ -1545,6 +1592,17 @@
         }
       }
     }
+    // Personalization validation and capture
+    var personalizationText = null;
+    if (p.personalization && p.personalization.enabled) {
+      var persInput = document.getElementById('personalizationInput');
+      personalizationText = persInput ? persInput.value.trim() : '';
+      if (p.personalization.required && !personalizationText) {
+        MastCart.showToast('Please enter personalization text');
+        if (persInput) persInput.focus();
+        return;
+      }
+    }
     MastCart.addItem({
       pid: p.pid,
       name: p.name,
@@ -1552,6 +1610,7 @@
       priceCents: resolvedCents,
       image: (document.getElementById('mainImage') || {}).src || images[0] || '',
       options: Object.assign({}, window._selectedOptions),
+      personalization: personalizationText,
       qty: window._productQty || 1,
       originalPrice: onSale ? formatPriceCents(baseCents) : null,
       salePriceCents: onSale ? saleCents : null,

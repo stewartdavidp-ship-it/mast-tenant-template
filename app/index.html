@@ -19264,7 +19264,8 @@ function renderProductDetail(pid) {
       pid: '', name: '', description: '', shortDescription: '', price: '', priceCents: null,
       slug: '', categories: [], availability: 'available', sortOrder: null,
       options: [], images: [], imageIds: [],
-      buildTime: null, costToBuild: null, materials: '',
+      buildTime: null, costToBuild: null, materials: [],
+      sku: null, processingDays: null, personalization: null, seoTitle: null, seoDescription: null,
       introducedAt: null, discontinuedAt: null, etsyListingId: null,
       priceHistory: [], buildTimeHistory: [], costToBuildHistory: []
     };
@@ -19340,6 +19341,43 @@ function renderProductDetail(pid) {
         '<div class="form-group" style="min-width:150px;"><label>Etsy Listing ID</label><input type="text" id="pdEtsyId" value="' + esc(product.etsyListingId || '') + '"></div>' +
       '</div>' +
       '<div class="form-group"><label>Introduced Date</label><input type="date" id="pdIntroducedAt" value="' + esc(product.introducedAt || '') + '"></div>';
+
+    // SKU and Processing Time row
+    detailsHtml +=
+      '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;">' +
+        '<div class="form-group" style="min-width:200px;"><label>SKU</label><input type="text" id="pdSku" value="' + esc(product.sku || '') + '" placeholder="e.g., BV-12OZ-BLUE"></div>' +
+        '<div class="form-group" style="min-width:100px;"><label>Processing Min (days)</label><input type="number" id="pdProcessingMin" value="' + ((product.processingDays && product.processingDays.min) || '') + '" placeholder="e.g., 3" min="0"></div>' +
+        '<div class="form-group" style="min-width:100px;"><label>Processing Max (days)</label><input type="number" id="pdProcessingMax" value="' + ((product.processingDays && product.processingDays.max) || '') + '" placeholder="e.g., 7" min="0"></div>' +
+      '</div>';
+
+    // Personalization section
+    var persEnabled = product.personalization && product.personalization.enabled;
+    var persRequired = product.personalization && product.personalization.required;
+    var persInstructions = (product.personalization && product.personalization.instructions) || '';
+    detailsHtml +=
+      '<div style="margin-top:12px;padding:12px;background:var(--cream);border-radius:8px;">' +
+        '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.85rem;font-weight:600;">' +
+          '<input type="checkbox" id="pdPersonalizationEnabled"' + (persEnabled ? ' checked' : '') + ' onchange="document.getElementById(\'pdPersonalizationFields\').style.display=this.checked?\'\':\'none\'">' +
+          'Enable Personalization' +
+        '</label>' +
+        '<div id="pdPersonalizationFields" style="' + (persEnabled ? '' : 'display:none;') + 'margin-top:8px;">' +
+          '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.82rem;margin-bottom:8px;">' +
+            '<input type="checkbox" id="pdPersonalizationRequired"' + (persRequired ? ' checked' : '') + '>' +
+            'Required (block add-to-cart without input)' +
+          '</label>' +
+          '<div class="form-group" style="margin:0;"><label style="font-size:0.72rem;">Instructions for customer</label><input type="text" id="pdPersonalizationInstructions" value="' + esc(persInstructions) + '" placeholder="e.g., Enter name for engraving (max 20 chars)"></div>' +
+        '</div>' +
+      '</div>';
+
+    // SEO section (collapsible)
+    detailsHtml +=
+      '<details style="margin-top:12px;">' +
+        '<summary style="font-size:0.85rem;font-weight:600;cursor:pointer;color:var(--warm-gray);">SEO Settings</summary>' +
+        '<div style="padding:8px 0;">' +
+          '<div class="form-group"><label>SEO Title</label><input type="text" id="pdSeoTitle" value="' + esc(product.seoTitle || '') + '" placeholder="Leave blank to use product name"></div>' +
+          '<div class="form-group"><label>SEO Description</label><textarea id="pdSeoDescription" rows="2" placeholder="Leave blank to use product description">' + esc(product.seoDescription || '') + '</textarea></div>' +
+        '</div>' +
+      '</details>';
   } else {
     detailsHtml +=
       '<div class="product-detail-section"><div class="product-detail-section-title">Product Info</div>' +
@@ -19493,7 +19531,15 @@ function renderProductDetail(pid) {
         '<div class="form-group" style="min-width:150px;"><label>Build Time (minutes)</label><input type="number" id="pdBuildTime" min="0" value="' + currentBuildTime + '" placeholder="e.g. 120"></div>' +
         '<div class="form-group" style="min-width:150px;"><label>Cost to Build ($)</label><input type="text" id="pdCostToBuild" value="' + currentCostToBuild + '" placeholder="e.g. 15.00"></div>' +
       '</div>' +
-      '<div class="form-group"><label>Materials / Techniques Notes</label><textarea id="pdMaterials" rows="3" placeholder="e.g. Borosilicate glass, lampwork technique">' + esc(product.materials || '') + '</textarea></div>' +
+      '<div class="form-group"><label>Materials</label>' +
+        '<div id="pdMaterialsTags" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;">' +
+          (Array.isArray(product.materials) ? product.materials : (product.materials ? [product.materials] : [])).map(function(m) {
+            return '<span class="pd-material-tag" style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:var(--accent-light);border-radius:12px;font-size:0.8rem;">' +
+              esc(m) + '<span onclick="this.parentElement.remove()" style="cursor:pointer;font-size:0.9rem;opacity:0.6;">&times;</span></span>';
+          }).join('') +
+        '</div>' +
+        '<input type="text" id="pdMaterialsInput" placeholder="Type material name, press Enter to add" onkeydown="if(event.key===\'Enter\'){event.preventDefault();var v=this.value.trim();if(v){var tag=document.createElement(\'span\');tag.className=\'pd-material-tag\';tag.style.cssText=\'display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:var(--accent-light);border-radius:12px;font-size:0.8rem;\';tag.innerHTML=esc(v)+\'<span onclick=&quot;this.parentElement.remove()&quot; style=&quot;cursor:pointer;font-size:0.9rem;opacity:0.6;&quot;>&times;</span>\';document.getElementById(\'pdMaterialsTags\').appendChild(tag);this.value=\'\';}}">' +
+      '</div>' +
       '<div class="product-detail-section-title" style="margin-top:16px;">Shipping</div>' +
       '<div style="display:flex;gap:16px;flex-wrap:wrap;">' +
         '<div class="form-group" style="min-width:150px;"><label>Shipping Category</label>' +
@@ -19800,8 +19846,7 @@ async function saveProduct(pid) {
     var buildTime = buildTimeEl && buildTimeEl.value !== '' ? parseInt(buildTimeEl.value) : null;
     var costToBuildEl = document.getElementById('pdCostToBuild');
     var costToBuild = costToBuildEl ? parsePriceToCents(costToBuildEl.value) : null;
-    var materialsEl = document.getElementById('pdMaterials');
-    var materials = materialsEl ? materialsEl.value.trim() : '';
+    var materials = Array.from(document.querySelectorAll('#pdMaterialsTags .pd-material-tag')).map(function(tag) { return tag.textContent.replace(/\u00d7$/, '').trim(); }).filter(Boolean);
     var shippingCatEl = document.getElementById('pdShippingCategory');
     var shippingCategory = shippingCatEl && shippingCatEl.value ? shippingCatEl.value : null;
     var weightOzEl = document.getElementById('pdWeightOz');
@@ -19884,7 +19929,27 @@ async function saveProduct(pid) {
       heightIn: heightIn,
       businessLine: businessLine,
       introducedAt: introducedAt,
-      discontinuedAt: availability === 'discontinued' ? (existing && existing.discontinuedAt ? existing.discontinuedAt : new Date().toISOString().split('T')[0]) : null
+      discontinuedAt: availability === 'discontinued' ? (existing && existing.discontinuedAt ? existing.discontinuedAt : new Date().toISOString().split('T')[0]) : null,
+      sku: (document.getElementById('pdSku') || {}).value.trim() || null,
+      processingDays: (function() {
+        var min = parseInt((document.getElementById('pdProcessingMin') || {}).value);
+        var max = parseInt((document.getElementById('pdProcessingMax') || {}).value);
+        if (!isNaN(min) && !isNaN(max) && min >= 0 && max >= min) return { min: min, max: max };
+        if (!isNaN(min) && min >= 0) return { min: min, max: min };
+        return null;
+      })(),
+      personalization: (function() {
+        var enabled = !!(document.getElementById('pdPersonalizationEnabled') || {}).checked;
+        if (!enabled) return null;
+        return {
+          enabled: true,
+          required: !!(document.getElementById('pdPersonalizationRequired') || {}).checked,
+          instructions: ((document.getElementById('pdPersonalizationInstructions') || {}).value || '').trim() || null,
+          type: 'text'
+        };
+      })(),
+      seoTitle: (document.getElementById('pdSeoTitle') || {}).value.trim() || null,
+      seoDescription: (document.getElementById('pdSeoDescription') || {}).value.trim() || null
     };
 
     // Preserve existing fields we don't edit here
@@ -19895,6 +19960,7 @@ async function saveProduct(pid) {
       productData.storyId = existing.storyId || null;
       productData.buildIds = existing.buildIds || [];
       if (existing.status) productData.status = existing.status;
+      if (existing.statusReason) productData.statusReason = existing.statusReason;
     } else {
       productData.url = '';
     }

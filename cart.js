@@ -142,7 +142,7 @@
   }
 
   // Build a key that uniquely identifies a product + option combo
-  function optionKey(pid, options, bookingType, sessionId, passDefinitionId) {
+  function optionKey(pid, options, bookingType, sessionId, passDefinitionId, personalization) {
     var parts = [pid];
     // Class bookings dedup by sessionId so same class on different dates stays separate
     if (bookingType === 'class' && sessionId) {
@@ -157,6 +157,10 @@
       for (var i = 0; i < keys.length; i++) {
         parts.push(keys[i] + '=' + options[keys[i]]);
       }
+    }
+    // Personalization makes each unique text a separate line item
+    if (personalization) {
+      parts.push('pers=' + personalization);
     }
     return parts.join('|');
   }
@@ -186,9 +190,9 @@
     if (typeof item.availableStock === 'number' && item.availableStock > 0) {
       maxQty = Math.min(maxQty, item.availableStock);
     }
-    var key = optionKey(item.pid, item.options, item.bookingType, item.sessionId, item.passDefinitionId);
+    var key = optionKey(item.pid, item.options, item.bookingType, item.sessionId, item.passDefinitionId, item.personalization);
     for (var i = 0; i < cart.length; i++) {
-      if (optionKey(cart[i].pid, cart[i].options, cart[i].bookingType, cart[i].sessionId, cart[i].passDefinitionId) === key) {
+      if (optionKey(cart[i].pid, cart[i].options, cart[i].bookingType, cart[i].sessionId, cart[i].passDefinitionId, cart[i].personalization) === key) {
         var itemMax = cart[i].isWholesale ? MAX_QTY_WHOLESALE : MAX_QTY;
         if (typeof cart[i].availableStock === 'number' && cart[i].availableStock > 0) {
           itemMax = Math.min(itemMax, cart[i].availableStock);
@@ -227,6 +231,7 @@
       passDefinitionId: item.passDefinitionId || null,
       passId: item.passId || null,
       totalSessions: item.totalSessions || null,
+      personalization: item.personalization || null,
       addedAt: Date.now(),
       // ── Order engine metadata ──
       itemType: meta.itemType,
@@ -820,6 +825,12 @@
         }
       }
 
+      // Personalization text
+      var persHtml = '';
+      if (item.personalization) {
+        persHtml = '<div class="cart-item-personalization" style="font-size:0.78rem;color:var(--warm-gray, #6B6560);font-style:italic;margin-top:2px;">Personalization: ' + escHtml(item.personalization) + '</div>';
+      }
+
       var imgHtml = item.image
         ? '<img class="cart-item-img" src="' + escAttr(item.image) + '" alt="' + escAttr(item.name) + '">'
         : '<div class="cart-item-img" style="display:flex;align-items:center;justify-content:center;color:#9B958E;font-size:1.5rem;">&#9670;</div>';
@@ -856,6 +867,7 @@
           '<div class="cart-item-details">' +
             '<div class="cart-item-name">' + escHtml(item.name) + wholesaleBadge + '</div>' +
             optionsHtml +
+            persHtml +
             leadTimeHtml +
             '<div class="cart-item-row">' +
               '<span class="cart-item-price">' +

@@ -767,6 +767,7 @@
       imgHtml +
       '<div class="ws-card-body">' +
         '<div class="ws-card-wpid">#' + esc(p.wpid) + '</div>' +
+        (p.sku ? '<div class="ws-card-sku" style="font-size:0.72rem;color:#999;margin-bottom:2px;">SKU: ' + esc(p.sku) + '</div>' : '') +
         '<div class="ws-card-name">' + esc(p.name) + '</div>' +
         '<div class="ws-card-price">' + priceHtml + '</div>' +
         variantsHtml +
