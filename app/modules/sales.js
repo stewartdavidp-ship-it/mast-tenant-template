@@ -781,11 +781,13 @@ function renderSalesEventDetail(eventId) {
   } else if (ev.status === 'packed') {
     html += '<button class="btn btn-primary" onclick="startPackingMode(\'' + eventId + '\')">\uD83D\uDCE6 Add More Items</button>';
     html += '<button class="btn btn-success" onclick="startFairMode(\'' + eventId + '\')">\uD83C\uDFEA Start Fair</button>';
+    html += '<button class="btn btn-secondary" onclick="printPackingManifest(\'' + eventId + '\')">\uD83D\uDCCB Packing List</button>';
     html += '<button class="btn btn-secondary" onclick="revertToPlanningStatus(\'' + eventId + '\')">\u21A9\uFE0F Back to Planning</button>';
   } else if (ev.status === 'active') {
     html += '<button class="btn btn-primary" onclick="window.open(\'../pos/?eventId=' + eventId + '\', \'_blank\')">\uD83D\uDCB0 Open PoS</button>';
     html += '<button class="btn btn-primary" onclick="startPackingMode(\'' + eventId + '\')">\uD83D\uDCE6 Add More Items</button>';
     html += '<button class="btn btn-secondary" onclick="showManualSaleModal(\'' + eventId + '\')" title="Record a cash or offline sale that wasn\'t captured through the PoS">+ Manual Sale</button>';
+    html += '<button class="btn btn-secondary" onclick="printPackingManifest(\'' + eventId + '\')">\uD83D\uDCCB Packing List</button>';
     html += '<button class="btn btn-danger" onclick="closeEvent(\'' + eventId + '\')">\uD83C\uDFC1 Close Event</button>';
   } else if (ev.status === 'closed') {
     html += '<button class="btn btn-secondary" onclick="showManualSaleModal(\'' + eventId + '\')" title="Record a missed sale (e.g. cash sale not captured during the event)">+ Manual Sale</button>';
@@ -898,46 +900,170 @@ async function revertToPlanningStatus(eventId) {
   }
 }
 
-async function closeEvent(eventId) {
+function closeEvent(eventId) {
+  // Open reconciliation form instead of simple confirm
+  openEventReconciliationModal(eventId);
+}
+
+function openEventReconciliationModal(eventId) {
   var ev = salesEventsData[eventId];
-  if (!ev) return;
-  var stats = getEventAllocationsStats(ev);
-  var unsoldCount = stats.totalPacked - stats.totalSold;
-  if (!await mastConfirm('Close this event?\n\n' + stats.totalSold + ' of ' + stats.totalPacked + ' items sold.' + (unsoldCount > 0 ? '\n' + unsoldCount + ' unsold items will be returned to their source location.' : ''), { title: 'Close Event' })) return;
+  if (!ev || !ev.allocations) {
+    showToast('No allocations to reconcile.', true);
+    return;
+  }
+
+  var allocs = ev.allocations;
+  var pids = Object.keys(allocs);
+  var html = '<div style="max-width:700px;">' +
+    '<h3>Reconcile & Close Event</h3>' +
+    '<p style="color:var(--warm-gray);font-size:0.85rem;margin:8px 0 16px;">Account for all packed items. Sold counts are pre-filled from POS. Enter returned and damaged counts.</p>' +
+    '<div style="max-height:400px;overflow-y:auto;">' +
+    '<table style="width:100%;font-size:0.82rem;border-collapse:collapse;">' +
+    '<thead><tr style="border-bottom:2px solid var(--cream-dark);">' +
+      '<th style="text-align:left;padding:6px 8px;">Product</th>' +
+      '<th style="text-align:center;padding:6px 4px;width:60px;">Packed</th>' +
+      '<th style="text-align:center;padding:6px 4px;width:60px;">Sold</th>' +
+      '<th style="text-align:center;padding:6px 4px;width:70px;">Returned</th>' +
+      '<th style="text-align:center;padding:6px 4px;width:70px;">Damaged</th>' +
+      '<th style="text-align:center;padding:6px 4px;width:80px;">Unaccounted</th>' +
+    '</tr></thead><tbody>';
+
+  pids.forEach(function(pid, idx) {
+    var alloc = allocs[pid];
+    var packed = alloc.quantity || 0;
+    var sold = alloc.sold || 0;
+    var remaining = packed - sold;
+    html += '<tr style="border-bottom:1px solid var(--cream-dark);" data-pid="' + esc(pid) + '">' +
+      '<td style="padding:6px 8px;">' + esc(alloc.productName || pid) + '</td>' +
+      '<td style="text-align:center;padding:6px 4px;color:var(--warm-gray);">' + packed + '</td>' +
+      '<td style="text-align:center;padding:6px 4px;font-weight:600;">' + sold + '</td>' +
+      '<td style="text-align:center;padding:6px 4px;"><input type="number" min="0" max="' + remaining + '" value="' + remaining + '" class="recon-returned" data-idx="' + idx + '" data-pid="' + esc(pid) + '" data-remaining="' + remaining + '" style="width:50px;text-align:center;padding:3px;font-size:0.82rem;" onchange="updateReconUnaccounted(this)" oninput="updateReconUnaccounted(this)"></td>' +
+      '<td style="text-align:center;padding:6px 4px;"><input type="number" min="0" max="' + remaining + '" value="0" class="recon-damaged" data-idx="' + idx + '" data-pid="' + esc(pid) + '" style="width:50px;text-align:center;padding:3px;font-size:0.82rem;" onchange="updateReconUnaccounted(this)" oninput="updateReconUnaccounted(this)"></td>' +
+      '<td style="text-align:center;padding:6px 4px;" class="recon-unaccounted" data-idx="' + idx + '"><span style="color:var(--teal);">0</span></td>' +
+    '</tr>';
+  });
+
+  html += '</tbody></table></div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">' +
+      '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+      '<button class="btn btn-primary" onclick="applyEventReconciliation(\'' + esc(eventId) + '\')">Close & Reconcile</button>' +
+    '</div>' +
+  '</div>';
+  openModal(html);
+}
+
+function updateReconUnaccounted(input) {
+  var idx = input.dataset.idx;
+  var remaining = parseInt(input.dataset.remaining) || 0;
+  var row = input.closest('tr');
+  var returned = parseInt(row.querySelector('.recon-returned').value) || 0;
+  var damaged = parseInt(row.querySelector('.recon-damaged').value) || 0;
+  var unaccounted = remaining - returned - damaged;
+  var cell = row.querySelector('.recon-unaccounted');
+  if (unaccounted === 0) {
+    cell.innerHTML = '<span style="color:var(--teal);">0</span>';
+  } else if (unaccounted > 0) {
+    cell.innerHTML = '<span style="color:var(--danger);font-weight:600;">' + unaccounted + '</span>';
+  } else {
+    cell.innerHTML = '<span style="color:var(--danger);font-weight:600;">Over by ' + Math.abs(unaccounted) + '</span>';
+  }
+}
+
+async function applyEventReconciliation(eventId) {
+  var ev = salesEventsData[eventId];
+  if (!ev || !ev.allocations) return;
+
+  var allocs = ev.allocations;
+  var pids = Object.keys(allocs);
+  var now = new Date().toISOString();
+  var totalReturned = 0, totalDamaged = 0, totalUnaccounted = 0;
+
   try {
+    for (var i = 0; i < pids.length; i++) {
+      var pid = pids[i];
+      var alloc = allocs[pid];
+      var packed = alloc.quantity || 0;
+      var sold = alloc.sold || 0;
+      var remaining = packed - sold;
+
+      var returnedInput = document.querySelector('.recon-returned[data-pid="' + pid + '"]');
+      var damagedInput = document.querySelector('.recon-damaged[data-pid="' + pid + '"]');
+      var returned = returnedInput ? (parseInt(returnedInput.value) || 0) : remaining;
+      var damaged = damagedInput ? (parseInt(damagedInput.value) || 0) : 0;
+      var unaccounted = remaining - returned - damaged;
+
+      totalReturned += returned;
+      totalDamaged += damaged;
+      totalUnaccounted += Math.abs(unaccounted);
+
+      // Move damaged to damaged position
+      if (damaged > 0) {
+        var dmgRef = MastDB.inventory.ref(pid + '/stock/_default/damaged');
+        await dmgRef.transaction(function(current) { return (current || 0) + damaged; });
+        // Decrement onHand for damaged (they're no longer sellable)
+        var ohRef = MastDB.inventory.stockOnHand(pid);
+        await ohRef.transaction(function(current) { return Math.max(0, (current || 0) - damaged); });
+        await MastDB.inventory.ref(pid + '/history').push({
+          action: 'adjusted', reason: 'event_reconciled', qty: -damaged,
+          note: 'Damaged at event: ' + (ev.name || eventId),
+          actor: 'maker', actorType: 'maker', timestamp: now
+        });
+      }
+
+      // Log unaccounted as adjustment
+      if (unaccounted !== 0) {
+        await MastDB.inventory.ref(pid + '/history').push({
+          action: 'adjusted', reason: 'event_reconciled', qty: -Math.abs(unaccounted),
+          note: 'Unaccounted at event: ' + (ev.name || eventId) + ' (' + unaccounted + ' units)',
+          actor: 'maker', actorType: 'maker', timestamp: now
+        });
+        if (unaccounted > 0) {
+          // Shrinkage — decrement onHand
+          var ohRef2 = MastDB.inventory.stockOnHand(pid);
+          await ohRef2.transaction(function(current) { return Math.max(0, (current || 0) - unaccounted); });
+        }
+      }
+
+      await syncStockInfoToPublic(pid);
+    }
+
+    // Close the event
     await MastDB.salesEvents.ref(eventId).update({
-      status: 'closed', closedAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+      status: 'closed', closedAt: now, updatedAt: now,
+      reconciliation: { totalReturned: totalReturned, totalDamaged: totalDamaged, totalUnaccounted: totalUnaccounted, reconciledAt: now }
     });
     await writeAudit('update', 'salesEvents', eventId);
     if (activeEventId === eventId) activeEventId = null;
 
-    // Move unsold items back to source locations
+    // Move unsold items back to source locations (returned items)
     var eventLocId = getEventLocation(eventId);
-    if (eventLocId && ev.allocations) {
+    if (eventLocId) {
       var returnHomeId = getHomeLocationId();
-      Object.keys(ev.allocations).forEach(function(pid) {
-        var alloc = ev.allocations[pid];
-        var unsold = (alloc.quantity || 0) - (alloc.sold || 0);
-        if (unsold > 0) {
+      pids.forEach(function(pid) {
+        var alloc = allocs[pid];
+        var returnedInput = document.querySelector('.recon-returned[data-pid="' + pid + '"]');
+        var returned = returnedInput ? (parseInt(returnedInput.value) || 0) : 0;
+        if (returned > 0) {
           var returnTo = alloc.sourceLocationId || returnHomeId;
           if (returnTo && eventLocId) {
-            moveInventory(pid, '_default', eventLocId, returnTo, unsold).catch(function() { /* best-effort */ });
+            moveInventory(pid, '_default', eventLocId, returnTo, returned).catch(function() {});
           }
         }
       });
+
+      // Archive the event location
+      MastDB.locations.ref(eventLocId).update({ status: 'archived', updatedAt: now }).catch(function() {});
     }
 
-    // Archive the event location
-    if (eventLocId) {
-      MastDB.locations.ref(eventLocId).update({ status: 'archived', updatedAt: new Date().toISOString() }).then(function() {
-        writeAudit('update', 'locations', eventLocId);
-      }).catch(function() {});
-    }
-
-    showToast('Event closed.' + (unsoldCount > 0 ? ' ' + unsoldCount + ' items returned.' : ''));
+    closeModal();
+    var msg = 'Event closed. ' + totalReturned + ' returned';
+    if (totalDamaged > 0) msg += ', ' + totalDamaged + ' damaged';
+    if (totalUnaccounted > 0) msg += ', ' + totalUnaccounted + ' unaccounted';
+    msg += '.';
+    showToast(msg);
     emitTestingEvent('closeEvent', {});
   } catch (err) {
-    showToast('Error: ' + err.message, true);
+    showToast('Error reconciling: ' + err.message, true);
   }
 }
 
@@ -1826,6 +1952,67 @@ async function exitPackingMode() {
   // ============================================================
   // Register with MastAdmin
   // ============================================================
+
+  function printPackingManifest(eventId) {
+    var ev = salesEventsData[eventId];
+    if (!ev || !ev.allocations) {
+      showToast('No items packed for this event.', true);
+      return;
+    }
+
+    var allocs = ev.allocations;
+    var pids = Object.keys(allocs);
+
+    // Group by category
+    var byCategory = {};
+    pids.forEach(function(pid) {
+      var alloc = allocs[pid];
+      var product = productsData.find(function(p) { return p.pid === pid; });
+      var cat = (product && product.categories && product.categories[0]) || 'Uncategorized';
+      if (!byCategory[cat]) byCategory[cat] = [];
+      byCategory[cat].push({
+        name: alloc.productName || (product ? product.name : pid),
+        quantity: alloc.quantity || 0,
+        sold: alloc.sold || 0
+      });
+    });
+
+    var totalPacked = 0;
+    var lines = '';
+    var cats = Object.keys(byCategory).sort();
+    cats.forEach(function(cat) {
+      lines += '<tr style="background:var(--cream);"><td colspan="3" style="padding:8px 12px;font-weight:600;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--warm-gray);">' + esc(cat) + '</td></tr>';
+      byCategory[cat].forEach(function(item) {
+        totalPacked += item.quantity;
+        lines += '<tr style="border-bottom:1px solid #ddd;">' +
+          '<td style="padding:8px 12px;">' + esc(item.name) + '</td>' +
+          '<td style="text-align:center;padding:8px;font-weight:600;">' + item.quantity + '</td>' +
+          '<td style="text-align:center;padding:8px;width:60px;border:1px solid #ccc;"></td>' +
+        '</tr>';
+      });
+    });
+
+    var printHtml = '<!DOCTYPE html><html><head><title>Packing List — ' + esc(ev.name || 'Event') + '</title>' +
+      '<style>body{font-family:system-ui,sans-serif;padding:24px;max-width:600px;margin:0 auto;color:#333;}' +
+      'table{width:100%;border-collapse:collapse;margin-top:16px;}' +
+      'th{text-align:left;padding:8px 12px;border-bottom:2px solid #333;font-size:0.82rem;}' +
+      '@media print{body{padding:12px;}button{display:none!important;}}</style></head><body>' +
+      '<h2 style="margin:0 0 4px;">' + esc(ev.name || 'Event') + '</h2>' +
+      (ev.date ? '<p style="color:#666;margin:0 0 4px;">' + esc(ev.date) + '</p>' : '') +
+      (ev.location ? '<p style="color:#666;margin:0 0 16px;">' + esc(ev.location) + '</p>' : '') +
+      '<p style="font-size:0.9rem;"><strong>' + totalPacked + '</strong> items across <strong>' + pids.length + '</strong> products</p>' +
+      '<table><thead><tr><th>Product</th><th style="text-align:center;">Qty</th><th style="text-align:center;width:60px;">Check</th></tr></thead>' +
+      '<tbody>' + lines + '</tbody></table>' +
+      '<p style="margin-top:24px;font-size:0.8rem;color:#999;">Generated ' + new Date().toLocaleDateString() + '</p>' +
+      '<button onclick="window.print()" style="margin-top:12px;padding:8px 16px;cursor:pointer;">Print</button>' +
+      '</body></html>';
+
+    var w = window.open('', '_blank');
+    if (w) {
+      w.document.write(printHtml);
+      w.document.close();
+    }
+  }
 
   function ensureSalesData() {
     if (!salesLoaded) loadSales();

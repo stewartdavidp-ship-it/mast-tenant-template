@@ -695,26 +695,81 @@ async function transitionProductionJob(jobId, newStatus) {
   try {
     var updates = { status: newStatus };
     var now = new Date().toISOString();
-    if (newStatus === 'in-progress') updates.startedAt = now;
+    var job = productionJobs[jobId];
+    var lineItems = job ? (job.lineItems || {}) : {};
+
+    if (newStatus === 'in-progress') {
+      updates.startedAt = now;
+      // Increment incoming for each line item with a product
+      for (var liKey of Object.keys(lineItems)) {
+        var li = lineItems[liKey];
+        if (!li.productId || !(li.targetQuantity > 0)) continue;
+        try {
+          var incomingRef = MastDB.inventory.stockIncoming(li.productId);
+          await incomingRef.transaction(function(current) { return (current || 0) + (li.targetQuantity || 0); });
+          await MastDB.inventory.ref(li.productId + '/history').push({
+            action: 'incoming', reason: 'production_started', qty: li.targetQuantity,
+            jobId: jobId, actor: 'maker', actorType: 'maker', timestamp: now
+          });
+          await syncStockInfoToPublic(li.productId);
+        } catch (e) { console.error('Incoming increment error for ' + li.productId + ':', e); }
+      }
+    }
+
     if (newStatus === 'completed') {
       updates.completedAt = now;
-      // Auto-update inventory for each completed line item
-      var job = productionJobs[jobId];
-      var lineItems = job ? (job.lineItems || {}) : {};
+      // Auto-update inventory: decrement incoming, increment onHand
       var invCount = 0;
       for (var liKey of Object.keys(lineItems)) {
         var li = lineItems[liKey];
         if (!li.productId || !(li.completedQuantity > 0)) continue;
         var qty = (li.completedQuantity || 0) - (li.lossQuantity || 0);
-        if (qty <= 0) continue;
         try {
-          var stockRef = MastDB.inventory.stockOnHand(li.productId);
-          await stockRef.transaction(function(current) { return (current || 0) + qty; });
+          // Decrement incoming by target quantity (what was planned)
+          var incomingRef = MastDB.inventory.stockIncoming(li.productId);
+          await incomingRef.transaction(function(current) { return Math.max(0, (current || 0) - (li.targetQuantity || 0)); });
+          // Increment onHand by actual completed (minus loss)
+          if (qty > 0) {
+            var stockRef = MastDB.inventory.stockOnHand(li.productId);
+            await stockRef.transaction(function(current) { return (current || 0) + qty; });
+            await MastDB.inventory.ref(li.productId + '/history').push({
+              action: 'adjusted', reason: 'production_completed', qty: qty,
+              jobId: jobId, actor: 'maker', actorType: 'maker', timestamp: now
+            });
+            invCount++;
+          }
+          // Log loss separately if any
+          if ((li.lossQuantity || 0) > 0) {
+            await MastDB.inventory.ref(li.productId + '/history').push({
+              action: 'adjusted', reason: 'production_loss', qty: -(li.lossQuantity),
+              jobId: jobId, actor: 'maker', actorType: 'maker', timestamp: now
+            });
+          }
           await writeAudit('update', 'inventory', li.productId);
-          invCount++;
+          await syncStockInfoToPublic(li.productId);
         } catch (e) { console.error('Inventory update error for ' + li.productId + ':', e); }
       }
     }
+
+    if (newStatus === 'cancelled') {
+      // Decrement incoming for any in-progress job being cancelled
+      if (job && job.status === 'in-progress') {
+        for (var liKey of Object.keys(lineItems)) {
+          var li = lineItems[liKey];
+          if (!li.productId || !(li.targetQuantity > 0)) continue;
+          try {
+            var incomingRef = MastDB.inventory.stockIncoming(li.productId);
+            await incomingRef.transaction(function(current) { return Math.max(0, (current || 0) - (li.targetQuantity || 0)); });
+            await MastDB.inventory.ref(li.productId + '/history').push({
+              action: 'adjusted', reason: 'production_cancelled', qty: -(li.targetQuantity),
+              jobId: jobId, actor: 'maker', actorType: 'maker', timestamp: now
+            });
+            await syncStockInfoToPublic(li.productId);
+          } catch (e) { console.error('Incoming decrement error for ' + li.productId + ':', e); }
+        }
+      }
+    }
+
     await MastDB.productionJobs.ref(jobId).update(updates);
     await writeAudit('update', 'jobs', jobId);
     if (newStatus === 'completed' && invCount > 0) {

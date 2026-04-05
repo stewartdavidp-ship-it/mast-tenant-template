@@ -8305,6 +8305,9 @@ MastDB.inventory = {
   stockOnHand: function(pid, variant) {
     return MastDB._ref(this.PATH + '/' + pid + '/stock/' + (variant || '_default') + '/onHand');
   },
+  stockIncoming: function(pid, variant) {
+    return MastDB._ref(this.PATH + '/' + pid + '/stock/' + (variant || '_default') + '/incoming');
+  },
   stockAvailable: function(pid, variant) {
     // DEPRECATED: use stockOnHand for writes. Available is now calculated.
     return MastDB._ref(this.PATH + '/' + pid + '/stock/' + (variant || '_default') + '/available');
@@ -18267,6 +18270,7 @@ function renderInventoryOverview() {
   var strictCount = 0;
   var stockToBuildCount = 0;
   var buildToOrderCount = 0;
+  var healthGreen = 0, healthYellow = 0, healthRed = 0, neverCounted = 0;
 
   // Build rows data
   var rows = productsData.map(function(p) {
@@ -18312,6 +18316,22 @@ function renderInventoryOverview() {
       });
     }
 
+    // Health score: green/yellow/red based on lastCountedAt
+    var isBTO = (stockType === 'build-to-order' || stockType === 'made-to-order');
+    var health = 'none'; // BTO products don't need counting
+    if (!isBTO) {
+      var lastCounted = (stock._default && stock._default.lastCountedAt) ? new Date(stock._default.lastCountedAt) : null;
+      if (!lastCounted) {
+        health = 'red';
+        neverCounted++;
+      } else {
+        var daysSinceCount = Math.floor((Date.now() - lastCounted.getTime()) / 86400000);
+        if (daysSinceCount <= 30) { health = 'green'; healthGreen++; }
+        else if (daysSinceCount <= 60) { health = 'yellow'; healthYellow++; }
+        else { health = 'red'; healthRed++; }
+      }
+    }
+
     return {
       pid: p.pid,
       name: p.name,
@@ -18327,7 +18347,8 @@ function renderInventoryOverview() {
       attrSummary: attrSummary,
       productionLeadTimeDays: inv.productionLeadTimeDays || null,
       stockFulfillmentDays: inv.stockFulfillmentDays || null,
-      availability: p.availability || ''
+      availability: p.availability || '',
+      health: health
     };
   });
 
@@ -18383,7 +18404,14 @@ function renderInventoryOverview() {
       '<div class="inv-overview-stat-value" style="opacity:0.5;">' + buildToOrderCount + '</div>' +
       '<div class="inv-overview-stat-label">Build to Order</div>' +
     '</div>' : '') +
-  '</div>';
+  '</div>' +
+  ((healthGreen + healthYellow + healthRed + neverCounted > 0) ? '<div style="display:flex;gap:12px;align-items:center;padding:6px 12px;font-size:0.78rem;color:var(--warm-gray);border-top:1px solid var(--cream-dark);margin-top:4px;">' +
+    '<span style="font-weight:500;">Count Health:</span>' +
+    (healthGreen > 0 ? '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#4CAF50;margin-right:3px;vertical-align:middle;"></span>' + healthGreen + ' good</span>' : '') +
+    (healthYellow > 0 ? '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#FF9800;margin-right:3px;vertical-align:middle;"></span>' + healthYellow + ' aging</span>' : '') +
+    (healthRed > 0 ? '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#F44336;margin-right:3px;vertical-align:middle;"></span>' + healthRed + ' overdue</span>' : '') +
+    (neverCounted > 0 ? '<span style="opacity:0.7;">' + neverCounted + ' never counted</span>' : '') +
+  '</div>' : '');
 
   // Table
   var tableHtml = '<div class="inv-overview-table data-table"><table>' +
@@ -18437,12 +18465,17 @@ function renderInventoryOverview() {
       leadTimeStr = typeof r.stockFulfillmentDays === 'number' ? r.stockFulfillmentDays + 'd' : '<span style="color:var(--warm-gray-light);">—</span>';
     }
 
+    var healthDot = '';
+    if (r.health === 'green') healthDot = '<span title="Counted recently" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#4CAF50;margin-left:5px;vertical-align:middle;"></span>';
+    else if (r.health === 'yellow') healthDot = '<span title="Count aging (30-60 days)" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#FF9800;margin-left:5px;vertical-align:middle;"></span>';
+    else if (r.health === 'red') healthDot = '<span title="Needs recount (60+ days or never counted)" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#F44336;margin-left:5px;vertical-align:middle;"></span>';
+
     var isExpanded = expandedInventoryPid === r.pid;
     var expandIcon = r.hasVariants ? '<span style="font-size:0.7rem;color:var(--warm-gray-light);margin-right:4px;">' + (isExpanded ? '▼' : '▶') + '</span>' : '';
     tableHtml += '<tr class="inv-overview-row' + (isExpanded ? ' expanded' : '') + '" data-pid="' + esc(r.pid) + '" onclick="toggleInventoryExpand(this.dataset.pid)" style="cursor:pointer;' + rowOpacity + '">' +
       '<td>' + imgHtml + '</td>' +
       '<td>' +
-        '<div style="font-weight:500;font-size:0.85rem;">' + expandIcon + esc(r.name) + discontinuedBadge + '</div>' +
+        '<div style="font-weight:500;font-size:0.85rem;">' + expandIcon + esc(r.name) + healthDot + discontinuedBadge + '</div>' +
         (r.price ? '<div style="font-size:0.75rem;color:var(--warm-gray);">' + esc(r.price) + '</div>' : '') +
         '<a href="#" data-pid="' + esc(r.pid) + '" onclick="event.stopPropagation();viewProductFromInventory(this.dataset.pid);return false;" style="font-size:0.7rem;color:var(--teal);">View Detail →</a>' +
       '</td>' +
@@ -18863,6 +18896,125 @@ async function applyRecount() {
   } catch (err) {
     showToast('Error applying recount: ' + err.message, true);
     if (btn) { btn.disabled = false; btn.textContent = 'Apply Recount'; }
+  }
+}
+
+// ============================================================
+// Hold / Release Stock
+// ============================================================
+
+function openHoldStockModal(pid) {
+  var product = productsData.find(function(p) { return p.pid === pid; });
+  var inv = inventory[pid] || {};
+  var totals = getInventoryTotals(inv);
+  var html = '<div style="max-width:400px;">' +
+    '<h3>Hold Stock: ' + esc(product ? product.name : pid) + '</h3>' +
+    '<p style="color:var(--warm-gray);font-size:0.85rem;margin:8px 0 16px;">Held stock is removed from available inventory but stays on hand. Use for safety stock, personal use, or quality holds.</p>' +
+    '<div style="margin-bottom:8px;font-size:0.85rem;">Available to hold: <strong>' + totals.available + '</strong></div>' +
+    '<div class="form-group"><label>Quantity</label>' +
+      '<input type="number" id="holdQty" min="1" max="' + totals.available + '" value="1" style="width:100px;"></div>' +
+    '<div class="form-group"><label>Reason</label>' +
+      '<select id="holdReason">' +
+        '<option value="safety_stock">Safety Stock</option>' +
+        '<option value="personal_use">Personal Use</option>' +
+        '<option value="quality_hold">Quality Hold</option>' +
+        '<option value="photography">Photography</option>' +
+        '<option value="other">Other</option>' +
+      '</select></div>' +
+    '<div class="form-group"><label>Note (optional)</label>' +
+      '<input type="text" id="holdNote" placeholder="e.g., Set aside for holiday market"></div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">' +
+      '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+      '<button class="btn btn-primary" onclick="applyHoldStock(\'' + esc(pid) + '\')">Hold Stock</button>' +
+    '</div>' +
+  '</div>';
+  openModal(html);
+}
+
+async function applyHoldStock(pid) {
+  var qty = parseInt(document.getElementById('holdQty').value) || 0;
+  var reason = document.getElementById('holdReason').value;
+  var note = document.getElementById('holdNote').value.trim();
+  if (qty <= 0) { showToast('Enter a quantity to hold.', true); return; }
+
+  var inv = inventory[pid] || {};
+  var totals = getInventoryTotals(inv);
+  if (qty > totals.available) { showToast('Cannot hold more than available (' + totals.available + ').', true); return; }
+
+  try {
+    var now = new Date().toISOString();
+    var heldRef = MastDB.inventory.ref(pid + '/stock/_default/held');
+    await heldRef.transaction(function(current) { return (current || 0) + qty; });
+
+    await MastDB.inventory.ref(pid + '/history').push({
+      action: 'held', reason: reason, qty: qty, note: note || null,
+      actor: 'maker', actorType: 'maker', timestamp: now
+    });
+    await MastDB.inventory.ref(pid + '/updatedAt').set(now);
+
+    // Update local cache
+    if (inventory[pid] && inventory[pid].stock && inventory[pid].stock._default) {
+      inventory[pid].stock._default.held = (inventory[pid].stock._default.held || 0) + qty;
+    }
+    await syncStockInfoToPublic(pid);
+    closeModal();
+    showToast(qty + ' unit' + (qty !== 1 ? 's' : '') + ' held (' + reason.replace(/_/g, ' ') + ')');
+    renderProductDetail(pid);
+  } catch (err) {
+    showToast('Error holding stock: ' + err.message, true);
+  }
+}
+
+function openReleaseHoldModal(pid) {
+  var product = productsData.find(function(p) { return p.pid === pid; });
+  var inv = inventory[pid] || {};
+  var totals = getInventoryTotals(inv);
+  var html = '<div style="max-width:400px;">' +
+    '<h3>Release Hold: ' + esc(product ? product.name : pid) + '</h3>' +
+    '<p style="color:var(--warm-gray);font-size:0.85rem;margin:8px 0 16px;">Release held stock back to available inventory.</p>' +
+    '<div style="margin-bottom:8px;font-size:0.85rem;">Currently held: <strong>' + totals.held + '</strong></div>' +
+    '<div class="form-group"><label>Quantity to release</label>' +
+      '<input type="number" id="releaseQty" min="1" max="' + totals.held + '" value="' + totals.held + '" style="width:100px;"></div>' +
+    '<div class="form-group"><label>Note (optional)</label>' +
+      '<input type="text" id="releaseNote" placeholder="e.g., Photography complete"></div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">' +
+      '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+      '<button class="btn btn-primary" onclick="applyReleaseHold(\'' + esc(pid) + '\')">Release</button>' +
+    '</div>' +
+  '</div>';
+  openModal(html);
+}
+
+async function applyReleaseHold(pid) {
+  var qty = parseInt(document.getElementById('releaseQty').value) || 0;
+  var note = document.getElementById('releaseNote').value.trim();
+  if (qty <= 0) { showToast('Enter a quantity to release.', true); return; }
+
+  var inv = inventory[pid] || {};
+  var totals = getInventoryTotals(inv);
+  if (qty > totals.held) { showToast('Cannot release more than held (' + totals.held + ').', true); return; }
+
+  try {
+    var now = new Date().toISOString();
+    var heldRef = MastDB.inventory.ref(pid + '/stock/_default/held');
+    await heldRef.transaction(function(current) { return Math.max(0, (current || 0) - qty); });
+
+    await MastDB.inventory.ref(pid + '/history').push({
+      action: 'released_hold', reason: 'hold_released', qty: -qty, note: note || null,
+      actor: 'maker', actorType: 'maker', timestamp: now
+    });
+    await MastDB.inventory.ref(pid + '/updatedAt').set(now);
+
+    // Update local cache
+    if (inventory[pid] && inventory[pid].stock && inventory[pid].stock._default) {
+      inventory[pid].stock._default.held = Math.max(0, (inventory[pid].stock._default.held || 0) - qty);
+    }
+    await syncStockInfoToPublic(pid);
+    closeModal();
+    showToast(qty + ' unit' + (qty !== 1 ? 's' : '') + ' released from hold');
+    renderProductDetail(pid);
+  } catch (err) {
+    showToast('Error releasing hold: ' + err.message, true);
   }
 }
 
@@ -19527,8 +19679,10 @@ function renderProductDetail(pid) {
       });
     }
 
-    invTabHtml += '<div style="margin-top:12px;">' +
+    invTabHtml += '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">' +
       '<button class="btn btn-secondary" style="font-size:0.8rem;padding:5px 14px;" onclick="openAdjustStockModal(\'' + esc(pid) + '\')">Adjust Stock</button>' +
+      '<button class="btn btn-secondary" style="font-size:0.8rem;padding:5px 14px;" onclick="openHoldStockModal(\'' + esc(pid) + '\')">Hold Stock</button>' +
+      (totals.held > 0 ? '<button class="btn btn-secondary" style="font-size:0.8rem;padding:5px 14px;" onclick="openReleaseHoldModal(\'' + esc(pid) + '\')">Release Hold (' + totals.held + ')</button>' : '') +
     '</div></div>';
 
     // Inventory History
