@@ -17458,8 +17458,8 @@ function renderProducts() {
     var optionsHtml = '';
     if (p.options && p.options.length) {
       optionsHtml = p.options.map(function(opt) {
-        var label = opt.label || opt.name || 'Option';
-        var choices = opt.choices || opt.values || [];
+        var label = opt.label || 'Option';
+        var choices = opt.choices || [];
         return '<div class="product-card-options"><span>' + esc(label) + ':</span> ' + choices.length + ' options</div>';
       }).join('');
     }
@@ -17676,8 +17676,8 @@ function getProductVariantCombos(product) {
   var labels = [];
   var choiceArrays = [];
   product.options.forEach(function(opt) {
-    var label = opt.label || opt.name;
-    var choices = opt.choices || opt.values;
+    var label = opt.label;
+    var choices = opt.choices;
     if (label && choices && choices.length) {
       labels.push(label);
       choiceArrays.push(choices);
@@ -19378,8 +19378,8 @@ function renderProductDetail(pid) {
       '<p style="font-size:0.82rem;color:var(--warm-gray);margin:0 0 12px 0;">Define attributes like Color, Opacity, etc. These create inventory tracking combinations. Pricing is per-product, not per-variant.</p>' +
       '<div id="pdOptionsContainer">';
     options.forEach(function(opt, idx) {
-      var optLabel = opt.label || opt.name || '';
-      var optChoices = opt.choices || opt.values || [];
+      var optLabel = opt.label || '';
+      var optChoices = opt.choices || [];
       variantsHtml += '<div class="pd-option-row" style="display:flex;gap:8px;align-items:flex-start;margin-bottom:12px;padding:12px;background:var(--cream);border-radius:8px;">' +
         '<div class="form-group" style="margin:0;min-width:120px;"><label style="font-size:0.72rem;">Label</label><input type="text" class="pd-opt-label" value="' + esc(optLabel) + '"></div>' +
         '<div class="form-group" style="margin:0;flex:1;"><label style="font-size:0.72rem;">Choices (comma-separated)</label><input type="text" class="pd-opt-choices" value="' + esc(optChoices.join(', ')) + '"></div>' +
@@ -19422,8 +19422,8 @@ function renderProductDetail(pid) {
     if (options.length) {
       variantsHtml += '<div class="product-detail-section"><div class="product-detail-section-title">Variant Attributes</div>';
       options.forEach(function(opt) {
-        var optLabel = opt.label || opt.name || 'Option';
-        var optChoices = opt.choices || opt.values || [];
+        var optLabel = opt.label || 'Option';
+        var optChoices = opt.choices || [];
         variantsHtml += '<div style="margin-bottom:8px;"><strong style="font-size:0.85rem;">' + esc(optLabel) + ':</strong> ' +
           '<span style="font-size:0.85rem;">' + optChoices.map(function(c) { return esc(c); }).join(', ') + '</span></div>';
       });

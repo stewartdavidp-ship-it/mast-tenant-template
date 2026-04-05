@@ -1017,20 +1017,13 @@
         for (var i = 0; i < variants.length; i++) {
           var v = variants[i];
           var vOpts = v.combo || v.options;
-          if (vOpts) {
-            // Structured variant with combo/options map — match all keys
-            var match = true;
-            for (var k = 0; k < selectedKeys.length; k++) {
-              if (vOpts[selectedKeys[k]] !== selected[selectedKeys[k]]) { match = false; break; }
-            }
-            if (match) return v;
-          } else if (v.name) {
-            // Simple variant with just a name — match against any selected value
-            var vName = v.name.toLowerCase().trim();
-            for (var s = 0; s < selectedValues.length; s++) {
-              if (selectedValues[s].toLowerCase().trim() === vName) return v;
-            }
+          if (!vOpts) continue;
+          // Structured variant with combo map — match all selected keys
+          var match = true;
+          for (var k = 0; k < selectedKeys.length; k++) {
+            if (vOpts[selectedKeys[k]] !== selected[selectedKeys[k]]) { match = false; break; }
           }
+          if (match) return v;
         }
         return null;
       }
@@ -1090,7 +1083,7 @@
           if (typeof vp !== 'number') continue;
           if (vp < lowest) lowest = vp;
           if (_productSaleInfo) {
-            var vKey = v.combo ? (window._requiredOptions || []).map(function(l) { return v.combo[l]; }).join('|') : (v.name || '');
+            var vKey = v.combo ? (window._requiredOptions || []).map(function(l) { return v.combo[l]; }).join('|') : '';
             var variantInSale = !_productSaleInfo.variants || (_productSaleInfo.variants.indexOf(vKey) !== -1);
             var effPrice = variantInSale ? _calcSalePrice(vp) : vp;
             if (variantInSale) anySaleApplied = true;
@@ -1219,9 +1212,8 @@
       window._productQty = 1;
 
       if (p.options && p.options.length) {
-        // Normalize option format: accept both {label,choices} and {name,values}
         var normalizedOptions = p.options.map(function(o) {
-          return { label: o.label || o.name || 'Option', choices: o.choices || o.values || [] };
+          return { label: o.label || 'Option', choices: o.choices || [] };
         });
         window._requiredOptions = normalizedOptions.map(function(o) { return o.label; });
         var optHtml = '';
