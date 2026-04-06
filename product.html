@@ -1019,15 +1019,33 @@
         if (!variants || !selected) return null;
         var selectedKeys = Object.keys(selected);
         if (selectedKeys.length === 0) return null;
-        var selectedValues = selectedKeys.map(function(k) { return selected[k]; });
         for (var i = 0; i < variants.length; i++) {
           var v = variants[i];
           var vOpts = v.combo || v.options;
           if (!vOpts) continue;
-          // Structured variant with combo map — match all selected keys
+          // Match all selected keys — case-insensitive on keys since imports
+          // may use different casing than option labels (e.g., "size" vs "Size")
+          var vKeys = Object.keys(vOpts);
+          if (vKeys.length !== selectedKeys.length) continue;
           var match = true;
           for (var k = 0; k < selectedKeys.length; k++) {
-            if (vOpts[selectedKeys[k]] !== selected[selectedKeys[k]]) { match = false; break; }
+            var selKey = selectedKeys[k];
+            var selVal = selected[selKey];
+            // Try exact key match first, then case-insensitive
+            if (vOpts[selKey] !== undefined) {
+              if (vOpts[selKey] !== selVal) { match = false; break; }
+            } else {
+              var lcKey = selKey.toLowerCase();
+              var found = false;
+              for (var j = 0; j < vKeys.length; j++) {
+                if (vKeys[j].toLowerCase() === lcKey) {
+                  if (vOpts[vKeys[j]] !== selVal) { match = false; }
+                  found = true; break;
+                }
+              }
+              if (!found) { match = false; break; }
+              if (!match) break;
+            }
           }
           if (match) return v;
         }
