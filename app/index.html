@@ -12272,6 +12272,14 @@ function renderMigrationPlan() {
       '</div>';
     });
 
+    // Execution guidance sections (visible during execution/post-cutover)
+    if (data.status === 'execution' || data.status === 'post-cutover') {
+      html += '<h2 style="margin-top:24px;font-size:1.1rem;">Execution Details</h2>';
+      html += renderImageRehostingProgress(data);
+      html += renderDNSGuidance(data);
+      html += renderPaymentGuidance(data);
+    }
+
     // Post-cutover checklist if in post-cutover phase
     if (data.postCutover) {
       html += '<h2 style="margin-top:24px;font-size:1.1rem;">Post-Cutover Checklist</h2>';
@@ -12393,6 +12401,102 @@ function renderHistoricalOrders() {
   }).catch(function(err) {
     container.innerHTML = '<p style="color:#ef4444;">Failed to load orders: ' + esc(err.message) + '</p>';
   });
+}
+
+// ============================================================
+// Execution Guidance Sections (rendered within Plan view during execution)
+// ============================================================
+
+function renderImageRehostingProgress(data) {
+  if (!data || !data.execution || !data.execution.imageRehosting) return '';
+  var r = data.execution.imageRehosting;
+  var total = r.total || 0;
+  var uploaded = r.uploaded || 0;
+  var failed = r.failed || 0;
+  var pct = total > 0 ? Math.round((uploaded / total) * 100) : 0;
+  var statusLabel = r.status === 'complete' ? 'Complete' : r.status === 'processing' ? 'Processing...' : r.status === 'started' ? 'Starting...' : 'Not started';
+  var statusColor = r.status === 'complete' ? '#16a34a' : r.status === 'processing' ? '#2563eb' : '#9ca3af';
+
+  var html = '<div style="background:var(--surface-card,#f5f5f5);border:1px solid var(--surface-card-border,#e0e0e0);border-radius:10px;padding:18px;margin-bottom:16px;">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">' +
+      '<h3 style="margin:0;font-size:0.95rem;">&#128247; Image Re-hosting</h3>' +
+      '<span style="font-size:0.78rem;color:' + statusColor + ';font-weight:500;">' + statusLabel + '</span>' +
+    '</div>' +
+    '<div style="background:var(--surface-card-border,#e0e0e0);border-radius:4px;height:12px;overflow:hidden;margin-bottom:8px;">' +
+      '<div style="background:var(--primary);height:100%;width:' + pct + '%;transition:width 0.5s;border-radius:4px;"></div>' +
+    '</div>' +
+    '<div style="display:flex;justify-content:space-between;font-size:0.78rem;color:var(--warm-gray);">' +
+      '<span>' + uploaded + ' / ' + total + ' uploaded</span>' +
+      (failed > 0 ? '<span style="color:#ef4444;">' + failed + ' failed</span>' : '') +
+      '<span>' + pct + '%</span>' +
+    '</div>';
+
+  if (r.failedUrls && r.failedUrls.length > 0) {
+    html += '<details style="margin-top:10px;font-size:0.78rem;"><summary style="cursor:pointer;color:var(--warm-gray);">Failed URLs (' + r.failedUrls.length + ')</summary>' +
+      '<div style="margin-top:6px;max-height:120px;overflow-y:auto;">';
+    r.failedUrls.forEach(function(url) {
+      html += '<div style="font-family:monospace;font-size:0.72rem;color:#ef4444;padding:2px 0;word-break:break-all;">' + esc(url) + '</div>';
+    });
+    html += '</div></details>';
+  }
+
+  html += '</div>';
+  return html;
+}
+
+function renderDNSGuidance(data) {
+  if (!data || !data.discovery || !data.discovery.domain) return '';
+  var domain = data.discovery.domain;
+  var name = domain.name || '';
+  if (!name) return '';
+
+  var html = '<div style="background:var(--surface-card,#f5f5f5);border:1px solid var(--surface-card-border,#e0e0e0);border-radius:10px;padding:18px;margin-bottom:16px;">' +
+    '<h3 style="margin:0 0 10px;font-size:0.95rem;">&#127760; DNS Cutover — ' + esc(name) + '</h3>';
+
+  if (domain.platformHosted) {
+    html += '<div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.2);border-radius:6px;padding:10px;font-size:0.82rem;margin-bottom:12px;">' +
+      '&#9888; This domain appears to be hosted by your current platform. You may need to transfer the domain or update nameservers. Allow 5-7 days for DNS propagation.</div>';
+  }
+
+  html += '<div style="font-size:0.85rem;">' +
+    '<p style="margin:0 0 8px;"><strong>Step 1:</strong> Lower your DNS TTL to 300 seconds (5 minutes) at least 3 days before cutover.</p>' +
+    '<p style="margin:0 0 8px;"><strong>Step 2:</strong> Update your DNS records to point to Firebase Hosting:</p>' +
+    '<div style="background:var(--bg);border:1px solid var(--surface-card-border,#e0e0e0);border-radius:6px;padding:10px;font-family:monospace;font-size:0.78rem;margin-bottom:8px;">' +
+      'A record: ' + esc(name) + ' → 199.36.158.100<br>' +
+      'TXT record: ' + esc(name) + ' → hosting-site=mast-{tenantId}<br>' +
+      (domain.mxRecords ? '<div style="margin-top:6px;color:#f59e0b;">&#9888; MX records detected — do NOT change MX records or email will break.</div>' : '') +
+    '</div>' +
+    '<p style="margin:0 0 8px;"><strong>Step 3:</strong> After DNS propagates, register the domain in Mast via Settings > Domain.</p>' +
+    '<p style="margin:0;"><strong>Step 4:</strong> Verify SSL certificate is active (may take up to 24 hours).</p>' +
+  '</div></div>';
+
+  return html;
+}
+
+function renderPaymentGuidance(data) {
+  if (!data || !data.discovery || !data.discovery.payments) return '';
+  var payments = data.discovery.payments;
+  if (!payments.detected) return '';
+
+  var provider = payments.provider || 'your payment processor';
+
+  var html = '<div style="background:var(--surface-card,#f5f5f5);border:1px solid var(--surface-card-border,#e0e0e0);border-radius:10px;padding:18px;margin-bottom:16px;">' +
+    '<h3 style="margin:0 0 10px;font-size:0.95rem;">&#128179; Payment Activation</h3>' +
+    '<div style="font-size:0.85rem;">' +
+      '<p style="margin:0 0 8px;"><strong>Current processor:</strong> ' + esc(provider) + '</p>' +
+      '<p style="margin:0 0 8px;"><strong>Step 1:</strong> Go to <a href="#" onclick="navigateTo(\'settings\');return false;" style="color:var(--primary);">Settings</a> > Payments and enter your production API keys.</p>' +
+      '<p style="margin:0 0 8px;"><strong>Step 2:</strong> Enable payments in your Mast admin.</p>' +
+      '<p style="margin:0 0 8px;"><strong>Step 3:</strong> Place a small test order and verify:</p>' +
+      '<ul style="margin:0 0 8px;padding-left:20px;font-size:0.82rem;">' +
+        '<li>Order appears in your Mast admin</li>' +
+        '<li>Payment shows in your ' + esc(provider) + ' dashboard</li>' +
+        '<li>Confirmation email is sent</li>' +
+        '<li>Refund the test order</li>' +
+      '</ul>' +
+      '<p style="margin:0;color:var(--warm-gray);font-size:0.78rem;">This test transaction must succeed before DNS cutover.</p>' +
+    '</div></div>';
+
+  return html;
 }
 
 // ============================================================
