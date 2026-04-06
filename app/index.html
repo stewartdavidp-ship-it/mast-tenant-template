@@ -11913,15 +11913,27 @@ function renderCSVImportUI(opts) {
 var migrationSidebarVisible = false;
 
 function checkMigrationStatus() {
-  var tenantId = window.TENANT_CONFIG && window.TENANT_CONFIG.tenantId;
-  if (!tenantId) return;
-  // Check platform DB for migration status — via the MCP-written data
-  // For now, always show migration sidebar if tenant has migration data
-  // The sidebar visibility is toggled manually or via migration status
-  var section = document.getElementById('migrationSidebarSection');
-  if (section && migrationSidebarVisible) {
-    section.style.display = 'block';
-  }
+  var tenantId = MastDB.tenantId();
+  var db = MastDB._db();
+  if (!tenantId || !db) return;
+
+  // Check tenant RTDB for migration data (written by MCP dual-write)
+  db.ref(tenantId + '/admin/migration/status').once('value').then(function(snap) {
+    if (!snap.exists()) {
+      hideMigrationSidebar();
+      return;
+    }
+    var status = snap.val();
+    if (status === 'complete') {
+      // Auto-hide sidebar when migration is complete
+      hideMigrationSidebar();
+    } else {
+      // Show sidebar for active migrations
+      showMigrationSidebar();
+    }
+    // Cache migration status for setup shop checklist
+    window._migrationStatus = status;
+  }).catch(function() { /* ignore */ });
 }
 
 function showMigrationSidebar() {
@@ -12309,13 +12321,69 @@ function renderMigrationPlan() {
             (item.confirmedAt ? '<span style="color:var(--warm-gray);font-size:0.72rem;margin-left:8px;">' + esc(item.confirmedAt.split('T')[0]) + '</span>' : '') +
           '</div>';
         });
+
+        // Check if all manual items confirmed
+        var allManualDone = Object.values(manual).every(function(i) { return i.confirmed; });
+        if (allManualDone) {
+          html += '<div style="background:rgba(6,95,70,0.1);border:1px solid rgba(6,95,70,0.2);border-radius:8px;padding:12px;margin-top:12px;font-size:0.85rem;">' +
+            '&#10003; All manual checks confirmed!</div>';
+        }
       }
+
+      // Action buttons for post-cutover
+      html += '<div style="display:flex;gap:10px;margin-top:16px;">' +
+        '<button class="btn btn-secondary" onclick="triggerPostCutoverRerun()" style="font-size:0.82rem;">&#128260; Re-run Automated Checks</button>';
+
+      // Show Complete button only when all checks pass
+      var autoChecks = data.postCutover.automatedChecks || {};
+      var manualChecks = data.postCutover.manualChecklist || {};
+      var allAutoPassed = Object.values(autoChecks).every(function(c) { return c.passed === true; });
+      var allManualConfirmed = Object.values(manualChecks).every(function(c) { return c.confirmed; });
+      if (allAutoPassed && allManualConfirmed) {
+        html += '<button class="btn btn-primary" onclick="completeMigration()" style="font-size:0.82rem;">&#127881; Complete Migration</button>';
+      }
+      html += '</div>';
     }
 
     html += '</div>';
     container.innerHTML = html;
   });
 }
+
+window.triggerPostCutoverRerun = function() {
+  showToast('Re-running automated checks... This may take a moment.');
+  // Call the Cloud Function
+  var tenantId = MastDB.tenantId();
+  if (!tenantId) return;
+  fetch('https://us-central1-mast-platform-prod.cloudfunctions.net/runPostCutoverChecks?tenantId=' + encodeURIComponent(tenantId))
+    .then(function(r) { return r.json(); })
+    .then(function(result) {
+      if (result.success) {
+        showToast('Checks complete. Refreshing...');
+        renderMigrationPlan(); // Re-render with updated data
+      } else {
+        showToast('Check failed: ' + (result.error || 'Unknown error'), true);
+      }
+    })
+    .catch(function(err) { showToast('Failed to run checks: ' + err.message, true); });
+};
+
+window.completeMigration = function() {
+  var tenantId = MastDB.tenantId();
+  var db = MastDB._db();
+  if (!tenantId || !db) return;
+
+  if (!confirm('Complete the migration? This will hide the Migration section from the sidebar.')) return;
+
+  // Update migration status to complete in tenant RTDB
+  db.ref(tenantId + '/admin/migration/status').set('complete').then(function() {
+    showToast('Migration complete! Welcome to your new site.');
+    hideMigrationSidebar();
+    navigateTo('dashboard');
+  }).catch(function(err) {
+    showToast('Failed to complete migration: ' + err.message, true);
+  });
+};
 
 // ============================================================
 // Historical Order Archive View
@@ -18340,7 +18408,8 @@ var NEXT_STEP_DEFINITIONS = [
   { id: 'create-event',   module: 'events',     icon: '\uD83C\uDFAB', title: 'Create your first show',        desc: 'Set up a show with booths, vendors, and applications.',                   route: 'events-shows', check: function() { return false; } },
   { id: 'add-job',        module: 'make',       icon: '\uD83D\uDD25', title: 'Start a production job',        desc: 'Track what you\'re making and when it needs to be done.',                 route: 'jobs',        check: function() { return false; } },
   { id: 'setup-shipping',  module: 'ship',      icon: '\uD83D\uDCE6', title: 'Set up shipping rates',         desc: 'Configure shipping methods and rates for your orders.',                   route: 'settings',    check: function() { return tenantConfigChecklist && tenantConfigChecklist.shippingRates; } },
-  { id: 'social-post',    module: 'market',     icon: '\uD83D\uDCE3', title: 'Create your first post',        desc: 'Draft a social media post or blog entry to promote your work.',           route: 'social',      check: function() { return false; } }
+  { id: 'social-post',    module: 'market',     icon: '\uD83D\uDCE3', title: 'Create your first post',        desc: 'Draft a social media post or blog entry to promote your work.',           route: 'social',      check: function() { return false; } },
+  { id: 'complete-migration', module: null,    icon: '\uD83D\uDD04', title: 'Complete your migration',       desc: 'Finish importing data and cutting over from your previous platform.',     route: 'migration',   check: function() { return window._migrationStatus === 'complete' || !window._migrationStatus; } }
 ];
 
 // Dismissed steps — persisted to Firebase
@@ -27625,6 +27694,7 @@ async function renderAllDashboardCards() {
     });
   }
   renderDashCardSetupShop();
+  checkMigrationStatus();
   renderDashCardNewInquiries();
   renderDashCardQuickActions();
   // Dashboard cards with module gating — orders module provides New Orders + Ready to Ship cards
