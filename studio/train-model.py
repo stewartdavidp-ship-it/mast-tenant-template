@@ -41,11 +41,12 @@ except ImportError as e:
 # ============================================================
 # Config
 # ============================================================
-FIREBASE_PROJECT = "shir-glassworks"
-STORAGE_BUCKET = "shir-glassworks.firebasestorage.app"
-DB_URL = "https://shir-glassworks-default-rtdb.firebaseio.com"
-TRAINING_IMAGES_DB_PATH = "shirglassworks/admin/training-images"
-PRODUCTS_DB_PATH = "shirglassworks/public/products"
+FIREBASE_PROJECT = os.environ.get("FIREBASE_PROJECT", "mast-platform-prod")
+STORAGE_BUCKET = os.environ.get("STORAGE_BUCKET", "mast-platform-prod.firebasestorage.app")
+DB_URL = os.environ.get("FIREBASE_DATABASE_URL", "https://mast-platform-prod-default-rtdb.firebaseio.com")
+TENANT_ID = os.environ.get("TENANT_ID", "dev")
+TRAINING_IMAGES_DB_PATH = f"{TENANT_ID}/admin/training-images"
+PRODUCTS_DB_PATH = f"{TENANT_ID}/public/products"
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "model")
 IMG_SIZE = 224
 BATCH_SIZE = 16
