@@ -5184,6 +5184,17 @@
         <div class="sidebar-item" data-route="images" onclick="navigateTo('images')">Images</div>
       </div>
     </div>
+    <!-- Migration (hidden when no active migration) -->
+    <div class="sidebar-section" data-section="migration" id="migrationSidebarSection" style="display:none;">
+      <div class="sidebar-section-header" onclick="toggleSection('migration')">
+        <span class="sidebar-section-icon">&#128260;</span>
+        <span class="sidebar-section-label">Migration</span>
+        <span class="sidebar-section-arrow">&#9654;</span>
+      </div>
+      <div class="sidebar-items">
+        <div class="sidebar-item" data-route="migration-import" onclick="navigateTo('migration-import')">Import Data</div>
+      </div>
+    </div>
     <!-- Manage -->
     <div class="sidebar-section" data-section="manage">
       <div class="sidebar-section-header" onclick="toggleSection('manage')">
@@ -5230,6 +5241,9 @@
     <!-- ===== ADVISOR TAB ===== -->
     <div id="advisorTab" style="display:none;">
     </div>
+
+    <!-- ===== MIGRATION IMPORT TAB ===== -->
+    <div id="migrationImportTab" style="display:none;"></div>
 
     <!-- ===== SOCIAL MEDIA TAB ===== -->
     <div id="socialMediaTab" style="display:none;">
@@ -11601,6 +11615,497 @@ auth.onAuthStateChanged(async function(user) {
 }); // end FIREBASE_INIT_READY.then()
 
 // ============================================================
+// CSV Import Utility
+// ============================================================
+
+/**
+ * Parse CSV text into rows. Handles quoted fields with commas/newlines.
+ * Returns { headers: string[], rows: string[][] }
+ */
+function parseCSV(text) {
+  var lines = [];
+  var current = [];
+  var field = '';
+  var inQuotes = false;
+
+  for (var i = 0; i < text.length; i++) {
+    var ch = text[i];
+    var next = text[i + 1];
+
+    if (inQuotes) {
+      if (ch === '"' && next === '"') {
+        field += '"';
+        i++;
+      } else if (ch === '"') {
+        inQuotes = false;
+      } else {
+        field += ch;
+      }
+    } else {
+      if (ch === '"') {
+        inQuotes = true;
+      } else if (ch === ',') {
+        current.push(field.trim());
+        field = '';
+      } else if (ch === '\n' || (ch === '\r' && next === '\n')) {
+        current.push(field.trim());
+        if (current.some(function(f) { return f !== ''; })) lines.push(current);
+        current = [];
+        field = '';
+        if (ch === '\r') i++;
+      } else {
+        field += ch;
+      }
+    }
+  }
+  // Last field/row
+  current.push(field.trim());
+  if (current.some(function(f) { return f !== ''; })) lines.push(current);
+
+  if (lines.length < 2) return null;
+  return { headers: lines[0], rows: lines.slice(1) };
+}
+
+/**
+ * Auto-detect column mappings. Maps target fields to header indices.
+ * patterns: { targetField: [list of regex patterns to match headers] }
+ * Returns: { targetField: headerIndex | -1 }
+ */
+function autoMapColumns(headers, patterns) {
+  var mapping = {};
+  for (var field in patterns) {
+    mapping[field] = -1;
+    var matchers = patterns[field];
+    for (var h = 0; h < headers.length; h++) {
+      var header = headers[h].toLowerCase().trim();
+      for (var m = 0; m < matchers.length; m++) {
+        if (matchers[m].test(header)) {
+          mapping[field] = h;
+          break;
+        }
+      }
+      if (mapping[field] !== -1) break;
+    }
+  }
+  return mapping;
+}
+
+/**
+ * Render CSV import UI inside a container element.
+ * opts: {
+ *   containerId: string,
+ *   title: string,
+ *   description: string,
+ *   columnPatterns: { field: [regex] },
+ *   requiredFields: string[],
+ *   onImport: function(mappedRows, mapping) -> Promise<{imported,skipped,errors}>
+ * }
+ */
+function renderCSVImportUI(opts) {
+  var container = document.getElementById(opts.containerId);
+  if (!container) return;
+
+  var csvData = null;
+  var columnMapping = null;
+
+  function render() {
+    var html = '<div style="max-width:900px;">' +
+      '<h2 style="margin-top:0;">' + esc(opts.title) + '</h2>' +
+      '<p style="color:var(--warm-gray);font-size:0.85rem;margin-bottom:20px;">' + esc(opts.description) + '</p>';
+
+    // File upload area
+    html += '<div id="csvDropZone_' + opts.containerId + '" style="border:2px dashed var(--surface-card-border,#ccc);border-radius:8px;padding:2rem;text-align:center;cursor:pointer;margin-bottom:20px;transition:border-color 0.2s;">' +
+      '<div style="font-size:2rem;margin-bottom:8px;">&#128196;</div>' +
+      '<div style="font-size:0.85rem;color:var(--warm-gray);">Click to select or drag a CSV file here</div>' +
+      '<div style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Supports .csv and .tsv files</div>' +
+      '<input type="file" id="csvFileInput_' + opts.containerId + '" accept=".csv,.tsv,.txt" style="display:none;">' +
+    '</div>';
+
+    if (csvData) {
+      // Column mapping UI
+      html += '<div style="background:var(--surface-card,#f5f5f5);border-radius:8px;padding:16px;margin-bottom:20px;">' +
+        '<h3 style="margin:0 0 12px;font-size:0.95rem;">Column Mapping</h3>' +
+        '<p style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:12px;">Map your CSV columns to the required fields. Auto-detected mappings are pre-selected.</p>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">';
+
+      var fields = Object.keys(opts.columnPatterns);
+      for (var f = 0; f < fields.length; f++) {
+        var field = fields[f];
+        var isRequired = opts.requiredFields.indexOf(field) !== -1;
+        html += '<div class="form-group" style="margin-bottom:8px;">' +
+          '<label style="font-size:0.8rem;font-weight:500;">' + esc(field) + (isRequired ? ' *' : '') + '</label>' +
+          '<select id="csvMap_' + opts.containerId + '_' + field + '" style="width:100%;padding:6px 8px;border:1px solid var(--surface-card-border,#ccc);border-radius:4px;font-size:0.82rem;background:var(--bg);color:var(--text);">' +
+          '<option value="-1">— Skip —</option>';
+        for (var h = 0; h < csvData.headers.length; h++) {
+          var selected = columnMapping[field] === h ? ' selected' : '';
+          html += '<option value="' + h + '"' + selected + '>' + esc(csvData.headers[h]) + '</option>';
+        }
+        html += '</select></div>';
+      }
+      html += '</div></div>';
+
+      // Preview table
+      var previewRows = csvData.rows.slice(0, 5);
+      html += '<div style="margin-bottom:20px;">' +
+        '<h3 style="font-size:0.95rem;margin-bottom:8px;">Preview (' + csvData.rows.length + ' rows total)</h3>' +
+        '<div style="overflow-x:auto;"><table class="data-table" style="font-size:0.78rem;"><thead><tr>';
+      for (var ph = 0; ph < csvData.headers.length; ph++) {
+        html += '<th>' + esc(csvData.headers[ph]) + '</th>';
+      }
+      html += '</tr></thead><tbody>';
+      for (var pr = 0; pr < previewRows.length; pr++) {
+        html += '<tr>';
+        for (var pc = 0; pc < csvData.headers.length; pc++) {
+          html += '<td>' + esc(previewRows[pr][pc] || '') + '</td>';
+        }
+        html += '</tr>';
+      }
+      if (csvData.rows.length > 5) {
+        html += '<tr><td colspan="' + csvData.headers.length + '" style="text-align:center;color:var(--warm-gray);font-style:italic;">... and ' + (csvData.rows.length - 5) + ' more rows</td></tr>';
+      }
+      html += '</tbody></table></div></div>';
+
+      // Import button
+      html += '<div style="display:flex;gap:12px;align-items:center;">' +
+        '<button class="btn btn-primary" id="csvImportBtn_' + opts.containerId + '" style="padding:10px 24px;">Import ' + csvData.rows.length + ' Row' + (csvData.rows.length !== 1 ? 's' : '') + '</button>' +
+        '<button class="btn btn-secondary" id="csvClearBtn_' + opts.containerId + '">Clear</button>' +
+        '<div id="csvProgress_' + opts.containerId + '" style="display:none;flex:1;">' +
+          '<div style="background:var(--surface-card-border,#e0e0e0);border-radius:4px;height:8px;overflow:hidden;">' +
+            '<div id="csvProgressBar_' + opts.containerId + '" style="background:var(--primary);height:100%;width:0%;transition:width 0.3s;"></div>' +
+          '</div>' +
+          '<div id="csvProgressText_' + opts.containerId + '" style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;"></div>' +
+        '</div>' +
+      '</div>';
+
+      // Results area
+      html += '<div id="csvResults_' + opts.containerId + '" style="margin-top:16px;"></div>';
+    }
+
+    html += '</div>';
+    container.innerHTML = html;
+
+    // Wire up file input
+    var dropZone = document.getElementById('csvDropZone_' + opts.containerId);
+    var fileInput = document.getElementById('csvFileInput_' + opts.containerId);
+    if (dropZone && fileInput) {
+      dropZone.addEventListener('click', function() { fileInput.click(); });
+      dropZone.addEventListener('dragover', function(e) { e.preventDefault(); dropZone.style.borderColor = 'var(--primary)'; });
+      dropZone.addEventListener('dragleave', function() { dropZone.style.borderColor = 'var(--surface-card-border,#ccc)'; });
+      dropZone.addEventListener('drop', function(e) {
+        e.preventDefault();
+        dropZone.style.borderColor = 'var(--surface-card-border,#ccc)';
+        if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+      });
+      fileInput.addEventListener('change', function() { if (fileInput.files.length) handleFile(fileInput.files[0]); });
+    }
+
+    // Wire up import/clear buttons
+    var importBtn = document.getElementById('csvImportBtn_' + opts.containerId);
+    var clearBtn = document.getElementById('csvClearBtn_' + opts.containerId);
+    if (importBtn) importBtn.addEventListener('click', doImport);
+    if (clearBtn) clearBtn.addEventListener('click', function() { csvData = null; columnMapping = null; render(); });
+  }
+
+  function handleFile(file) {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var text = e.target.result;
+      // Detect TSV
+      var firstLine = text.split('\n')[0];
+      if (firstLine.indexOf('\t') !== -1 && firstLine.indexOf(',') === -1) {
+        text = text.replace(/\t/g, ',');
+      }
+      csvData = parseCSV(text);
+      if (!csvData) {
+        showToast('Could not parse CSV file. Check the format and try again.', true);
+        return;
+      }
+      columnMapping = autoMapColumns(csvData.headers, opts.columnPatterns);
+      render();
+    };
+    reader.readAsText(file);
+  }
+
+  function readMapping() {
+    var mapping = {};
+    var fields = Object.keys(opts.columnPatterns);
+    for (var f = 0; f < fields.length; f++) {
+      var sel = document.getElementById('csvMap_' + opts.containerId + '_' + fields[f]);
+      mapping[fields[f]] = sel ? parseInt(sel.value, 10) : -1;
+    }
+    return mapping;
+  }
+
+  function doImport() {
+    var mapping = readMapping();
+
+    // Validate required fields
+    for (var r = 0; r < opts.requiredFields.length; r++) {
+      if (mapping[opts.requiredFields[r]] === -1) {
+        showToast('Required field "' + opts.requiredFields[r] + '" is not mapped.', true);
+        return;
+      }
+    }
+
+    // Map rows
+    var mappedRows = [];
+    for (var i = 0; i < csvData.rows.length; i++) {
+      var row = csvData.rows[i];
+      var mapped = {};
+      for (var field in mapping) {
+        if (mapping[field] >= 0 && mapping[field] < row.length) {
+          mapped[field] = row[mapping[field]];
+        }
+      }
+      mappedRows.push(mapped);
+    }
+
+    // Show progress
+    var btn = document.getElementById('csvImportBtn_' + opts.containerId);
+    var progress = document.getElementById('csvProgress_' + opts.containerId);
+    if (btn) { btn.disabled = true; btn.textContent = 'Importing...'; }
+    if (progress) progress.style.display = 'block';
+
+    var progressBar = document.getElementById('csvProgressBar_' + opts.containerId);
+    var progressText = document.getElementById('csvProgressText_' + opts.containerId);
+    if (progressBar) progressBar.style.width = '50%';
+    if (progressText) progressText.textContent = 'Processing ' + mappedRows.length + ' rows...';
+
+    opts.onImport(mappedRows, mapping).then(function(result) {
+      if (progressBar) progressBar.style.width = '100%';
+      if (progressText) progressText.textContent = 'Complete';
+      if (btn) { btn.disabled = false; btn.textContent = 'Import Complete'; }
+
+      var resultsEl = document.getElementById('csvResults_' + opts.containerId);
+      if (resultsEl) {
+        resultsEl.innerHTML = '<div style="background:rgba(6,95,70,0.1);border:1px solid rgba(6,95,70,0.2);border-radius:8px;padding:16px;font-size:0.85rem;">' +
+          '<strong>Import Results:</strong><br>' +
+          (result.imported ? '&#10003; ' + result.imported + ' imported<br>' : '') +
+          (result.skipped ? '&#9888; ' + result.skipped + ' skipped (duplicates)<br>' : '') +
+          (result.errors ? '&#10007; ' + result.errors + ' errors<br>' : '') +
+          (result.message || '') +
+        '</div>';
+      }
+    }).catch(function(err) {
+      if (progressBar) progressBar.style.width = '0%';
+      if (progressText) progressText.textContent = '';
+      if (progress) progress.style.display = 'none';
+      if (btn) { btn.disabled = false; btn.textContent = 'Retry Import'; }
+      showToast('Import failed: ' + err.message, true);
+    });
+  }
+
+  render();
+}
+
+// ============================================================
+// Migration Import View
+// ============================================================
+
+var migrationSidebarVisible = false;
+
+function checkMigrationStatus() {
+  var tenantId = window.TENANT_CONFIG && window.TENANT_CONFIG.tenantId;
+  if (!tenantId) return;
+  // Check platform DB for migration status — via the MCP-written data
+  // For now, always show migration sidebar if tenant has migration data
+  // The sidebar visibility is toggled manually or via migration status
+  var section = document.getElementById('migrationSidebarSection');
+  if (section && migrationSidebarVisible) {
+    section.style.display = 'block';
+  }
+}
+
+function showMigrationSidebar() {
+  migrationSidebarVisible = true;
+  var section = document.getElementById('migrationSidebarSection');
+  if (section) section.style.display = 'block';
+}
+
+function hideMigrationSidebar() {
+  migrationSidebarVisible = false;
+  var section = document.getElementById('migrationSidebarSection');
+  if (section) section.style.display = 'none';
+}
+
+function renderMigrationImport() {
+  var container = document.getElementById('migrationImportTab');
+  if (!container) return;
+
+  showMigrationSidebar();
+
+  var tenantId = MastDB.tenantId();
+  if (!tenantId) {
+    container.innerHTML = '<p>Tenant not loaded.</p>';
+    return;
+  }
+
+  container.innerHTML = '<div style="max-width:960px;">' +
+    '<h1 style="margin-top:0;margin-bottom:4px;">Data Import</h1>' +
+    '<p style="color:var(--warm-gray);font-size:0.85rem;margin-bottom:24px;">Import data from your previous platform into Mast. Upload CSV or TSV files exported from Squarespace, Shopify, or other platforms.</p>' +
+
+    // Tab switcher
+    '<div style="display:flex;gap:8px;margin-bottom:24px;">' +
+      '<button class="btn btn-secondary" id="migTabSubscribers" onclick="switchMigrationTab(\'subscribers\')" style="font-size:0.82rem;">Email Subscribers</button>' +
+      '<button class="btn btn-secondary" id="migTabInventory" onclick="switchMigrationTab(\'inventory\')" style="font-size:0.82rem;">Inventory</button>' +
+    '</div>' +
+
+    '<div id="migrationSubscribersPane"></div>' +
+    '<div id="migrationInventoryPane" style="display:none;"></div>' +
+  '</div>';
+
+  switchMigrationTab('subscribers');
+}
+
+window.switchMigrationTab = function(tab) {
+  var subsPane = document.getElementById('migrationSubscribersPane');
+  var invPane = document.getElementById('migrationInventoryPane');
+  var subsBtn = document.getElementById('migTabSubscribers');
+  var invBtn = document.getElementById('migTabInventory');
+
+  if (subsPane) subsPane.style.display = tab === 'subscribers' ? 'block' : 'none';
+  if (invPane) invPane.style.display = tab === 'inventory' ? 'block' : 'none';
+  if (subsBtn) { subsBtn.className = tab === 'subscribers' ? 'btn btn-primary' : 'btn btn-secondary'; }
+  if (invBtn) { invBtn.className = tab === 'inventory' ? 'btn btn-primary' : 'btn btn-secondary'; }
+
+  if (tab === 'subscribers') renderSubscriberImport();
+  if (tab === 'inventory') renderInventoryImport();
+};
+
+function renderSubscriberImport() {
+  var tenantId = MastDB.tenantId();
+  renderCSVImportUI({
+    containerId: 'migrationSubscribersPane',
+    title: 'Import Email Subscribers',
+    description: 'Upload a CSV of email subscribers from your previous platform. Duplicates (matching email) will be skipped.',
+    columnPatterns: {
+      'email': [/^e-?mail$/i, /^email.?address$/i, /^subscriber.?email$/i],
+      'name': [/^name$/i, /^full.?name$/i, /^subscriber.?name$/i, /^first.?name$/i],
+      'firstName': [/^first.?name$/i, /^given.?name$/i],
+      'lastName': [/^last.?name$/i, /^surname$/i, /^family.?name$/i]
+    },
+    requiredFields: ['email'],
+    onImport: function(rows) {
+      return new Promise(function(resolve, reject) {
+        var db = MastDB._db();
+        if (!db) return reject(new Error('Database not available'));
+
+        // Read existing subscribers to dedup
+        db.ref(tenantId + '/newsletter/subscribers').once('value').then(function(snap) {
+          var existing = new Set();
+          if (snap.exists()) {
+            Object.values(snap.val()).forEach(function(sub) {
+              if (sub.email) existing.add(sub.email.toLowerCase());
+            });
+          }
+
+          var updates = {};
+          var imported = 0;
+          var skipped = 0;
+          var now = new Date().toISOString();
+
+          rows.forEach(function(row) {
+            var email = (row.email || '').trim().toLowerCase();
+            if (!email || !/\S+@\S+\.\S+/.test(email)) { skipped++; return; }
+            if (existing.has(email)) { skipped++; return; }
+
+            var name = row.name || '';
+            if (!name && (row.firstName || row.lastName)) {
+              name = ((row.firstName || '') + ' ' + (row.lastName || '')).trim();
+            }
+
+            var key = db.ref(tenantId + '/newsletter/subscribers').push().key;
+            updates[tenantId + '/newsletter/subscribers/' + key] = {
+              email: email,
+              name: name || null,
+              source: 'migrated',
+              subscribedAt: now
+            };
+            existing.add(email);
+            imported++;
+          });
+
+          if (Object.keys(updates).length === 0) {
+            return resolve({ imported: 0, skipped: skipped, message: 'No new subscribers to import.' });
+          }
+
+          db.ref().update(updates).then(function() {
+            resolve({ imported: imported, skipped: skipped });
+          }).catch(reject);
+        }).catch(reject);
+      });
+    }
+  });
+}
+
+function renderInventoryImport() {
+  var tenantId = MastDB.tenantId();
+  renderCSVImportUI({
+    containerId: 'migrationInventoryPane',
+    title: 'Import Inventory Counts',
+    description: 'Upload a CSV with product names or SKUs and stock quantities. Products will be matched by name or SKU and inventory updated.',
+    columnPatterns: {
+      'name': [/^product.?name$/i, /^name$/i, /^title$/i, /^item$/i],
+      'sku': [/^sku$/i, /^product.?sku$/i, /^item.?sku$/i, /^variant.?sku$/i],
+      'quantity': [/^qty$/i, /^quantity$/i, /^stock$/i, /^on.?hand$/i, /^count$/i, /^inventory$/i, /^available$/i]
+    },
+    requiredFields: ['quantity'],
+    onImport: function(rows) {
+      return new Promise(function(resolve, reject) {
+        var db = MastDB._db();
+        if (!db) return reject(new Error('Database not available'));
+
+        // Load all products for matching
+        db.ref(tenantId + '/products').once('value').then(function(snap) {
+          if (!snap.exists()) return resolve({ imported: 0, errors: 0, message: 'No products found to match against.' });
+
+          var products = snap.val();
+          // Build lookup maps
+          var byName = {};
+          var bySku = {};
+          Object.keys(products).forEach(function(pid) {
+            var p = products[pid];
+            if (p.name) byName[p.name.toLowerCase().trim()] = pid;
+            if (p.sku) bySku[p.sku.toLowerCase().trim()] = pid;
+          });
+
+          var updates = {};
+          var imported = 0;
+          var errors = 0;
+          var now = new Date().toISOString();
+
+          rows.forEach(function(row) {
+            var qty = parseInt(row.quantity, 10);
+            if (isNaN(qty) || qty < 0) { errors++; return; }
+
+            // Try to match by SKU first, then by name
+            var pid = null;
+            if (row.sku) pid = bySku[row.sku.toLowerCase().trim()];
+            if (!pid && row.name) pid = byName[row.name.toLowerCase().trim()];
+
+            if (!pid) { errors++; return; }
+
+            // Update inventory — set onHand count
+            updates[tenantId + '/admin/inventory/' + pid + '/onHand'] = qty;
+            updates[tenantId + '/admin/inventory/' + pid + '/lastUpdated'] = now;
+            updates[tenantId + '/admin/inventory/' + pid + '/lastUpdateSource'] = 'csv-import';
+            imported++;
+          });
+
+          if (Object.keys(updates).length === 0) {
+            return resolve({ imported: 0, errors: errors, message: errors ? errors + ' rows could not be matched to products.' : 'Nothing to import.' });
+          }
+
+          db.ref().update(updates).then(function() {
+            resolve({ imported: imported, errors: errors });
+          }).catch(reject);
+        }).catch(reject);
+      });
+    }
+  });
+}
+
+// ============================================================
 // Tabs
 // ============================================================
 // ============================================================
@@ -11652,7 +12157,8 @@ var ROUTE_MAP = {
   'salesEvents': { tab: 'salesEventsTab' },  // legacy route — sales module handles rendering
   'gallery':     { tab: 'galleryTab' },
   'coupons':     { tab: 'couponsTab' },
-  'analytics':   { tab: 'analyticsTab' }
+  'analytics':   { tab: 'analyticsTab' },
+  'migration-import': { tab: 'migrationImportTab', setup: function() { renderMigrationImport(); } }
 };
 
 // Section → which routes belong to it (for auto-expanding)
@@ -11667,10 +12173,11 @@ var SECTION_ROUTES = {
   'events': ['events-shows', 'events-settings'],
   'web':    ['website', 'homepage', 'images'],
   'manage': ['products', 'inventory', 'employees', 'analytics', 'auditlog', 'settings'],
-  'advise': ['advisor']
+  'advise': ['advisor'],
+  'migration': ['migration-import']
 };
 
-var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'expensesTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab'];
+var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'expensesTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationImportTab'];
 
 var currentRoute = 'dashboard';
 

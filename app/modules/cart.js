@@ -196,7 +196,7 @@
           '<td style="font-family:monospace;font-size:0.82rem;">' + esc(gc._code) + '</td>' +
           '<td>' + formatMoney(gc.amountCents || 0) + '</td>' +
           '<td>' + formatMoney(gc.balanceCents != null ? gc.balanceCents : (gc.amountCents || 0)) + '</td>' +
-          '<td>' + gcStatusBadge(gc.status) + '</td>' +
+          '<td>' + gcStatusBadge(gc.status) + (gc.source === 'migrated' ? ' <span class="status-badge" style="background:#7c3aed;color:white;font-size:0.65rem;">MIG</span>' : '') + '</td>' +
           '<td style="font-size:0.82rem;">' + esc(gc.purchasedBy || 'admin') + '</td>' +
           '<td style="font-size:0.82rem;">' + esc(gc.recipientEmail || (gc.status === 'claimed' ? 'self' : '')) + '</td>' +
           '<td style="font-size:0.82rem;">' + formatDate(gc.issuedAt) + '</td>' +
@@ -512,7 +512,9 @@
       '<div style="text-align:center;margin-bottom:16px;">' +
         '<div style="font-family:monospace;font-size:1.4rem;letter-spacing:2px;color:var(--charcoal);margin-bottom:8px;">' + esc(code) + '</div>' +
         gcStatusBadge(gc.status) +
+        (gc.source === 'migrated' ? ' <span class="status-badge" style="background:#7c3aed;color:white;">MIGRATED</span>' : '') +
       '</div>' +
+      (gc.legacyCode ? '<div style="text-align:center;margin-bottom:12px;font-size:0.82rem;color:var(--warm-gray,#888);">Legacy code: <span style="font-family:monospace;">' + esc(gc.legacyCode) + '</span>' + (gc.legacyPlatform ? ' (' + esc(gc.legacyPlatform) + ')' : '') + '</div>' : '') +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;font-size:0.85rem;margin-bottom:16px;">' +
         '<div><strong>Original Amount:</strong> ' + formatMoney(gc.amountCents || 0) + '</div>' +
         '<div><strong>Balance:</strong> ' + formatMoney(balance) + '</div>' +

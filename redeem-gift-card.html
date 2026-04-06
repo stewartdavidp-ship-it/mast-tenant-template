@@ -160,6 +160,49 @@
   cursor: not-allowed;
 }
 
+/* Legacy code toggle */
+.rgc-legacy-toggle {
+  text-align: center;
+  margin-bottom: 1rem;
+}
+.rgc-legacy-link {
+  font-size: 0.8rem;
+  color: var(--warm-gray, #888);
+  cursor: pointer;
+  text-decoration: underline;
+  background: none;
+  border: none;
+  font-family: inherit;
+}
+.rgc-legacy-link:hover { color: var(--primary); }
+.rgc-legacy-input {
+  width: 100%;
+  max-width: 320px;
+  height: 44px;
+  text-align: center;
+  font-family: 'DM Sans', monospace;
+  font-size: 1rem;
+  border: 1px solid var(--surface-card-border, #e0e0e0);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+  margin: 0 auto 1.5rem;
+  display: block;
+  padding: 0 12px;
+  transition: border-color 0.2s;
+}
+.rgc-legacy-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 20%, transparent);
+}
+.rgc-legacy-hint {
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--warm-gray, #888);
+  margin-bottom: 0.75rem;
+}
+
 /* Status messages */
 .rgc-status {
   text-align: center;
@@ -366,7 +409,52 @@
           '<button class="rgc-submit" id="rgcSubmit">Redeem</button>' +
         '</div>' +
         '<div class="rgc-status" id="rgcStatus"></div>' +
+        '<div class="rgc-legacy-toggle">' +
+          '<button class="rgc-legacy-link" id="rgcLegacyToggle">I have a gift card from our previous website</button>' +
+        '</div>' +
       '</div>';
+
+    // Legacy mode state
+    var legacyMode = false;
+
+    document.getElementById('rgcLegacyToggle').addEventListener('click', function() {
+      legacyMode = !legacyMode;
+      var codeGroup = document.querySelector('.rgc-code-group');
+      var legacyToggle = document.getElementById('rgcLegacyToggle');
+      var card = document.querySelector('.rgc-card');
+
+      if (legacyMode) {
+        // Hide standard inputs, show free-form input
+        codeGroup.style.display = 'none';
+        legacyToggle.textContent = 'Use a standard gift card code instead';
+        // Insert legacy input before submit
+        var submitWrap = document.querySelector('.rgc-submit-wrap');
+        var hint = document.createElement('div');
+        hint.className = 'rgc-legacy-hint';
+        hint.id = 'rgcLegacyHint';
+        hint.textContent = 'Enter the code exactly as it appears on your old gift card';
+        var inp = document.createElement('input');
+        inp.type = 'text';
+        inp.className = 'rgc-legacy-input';
+        inp.id = 'rgcLegacyInput';
+        inp.placeholder = 'Enter your old gift card code';
+        inp.autocomplete = 'off';
+        inp.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter') { e.preventDefault(); document.getElementById('rgcSubmit').click(); }
+        });
+        card.insertBefore(hint, submitWrap);
+        card.insertBefore(inp, submitWrap);
+        inp.focus();
+      } else {
+        // Remove legacy input, show standard inputs
+        codeGroup.style.display = 'flex';
+        legacyToggle.textContent = 'I have a gift card from our previous website';
+        var oldHint = document.getElementById('rgcLegacyHint');
+        var oldInp = document.getElementById('rgcLegacyInput');
+        if (oldHint) oldHint.remove();
+        if (oldInp) oldInp.remove();
+      }
+    });
 
     // Wire up auto-advance and input filtering
     var inputs = [
@@ -425,7 +513,7 @@
     }
 
     document.getElementById('rgcSubmit').addEventListener('click', function() {
-      handleRedeem(inputs);
+      handleRedeem(inputs, legacyMode);
     });
   }
 
@@ -445,19 +533,32 @@
     if (el) { el.className = 'rgc-status'; el.innerHTML = ''; }
   }
 
-  function handleRedeem(inputs) {
+  function handleRedeem(inputs, isLegacy) {
     hideStatus();
 
-    // Build code
-    var segments = inputs.map(function(inp) { return inp.value.trim().toUpperCase(); });
-    for (var i = 0; i < 4; i++) {
-      if (segments[i].length !== 4) {
-        showStatus('error', 'Please enter all 4 segments of the gift card code.');
-        inputs[i].focus();
+    var code, legacyCode;
+
+    if (isLegacy) {
+      // Legacy mode: free-form text input
+      var legacyInput = document.getElementById('rgcLegacyInput');
+      legacyCode = (legacyInput ? legacyInput.value.trim() : '');
+      if (!legacyCode) {
+        showStatus('error', 'Please enter your old gift card code.');
+        if (legacyInput) legacyInput.focus();
         return;
       }
+    } else {
+      // Standard mode: 4-segment code
+      var segments = inputs.map(function(inp) { return inp.value.trim().toUpperCase(); });
+      for (var i = 0; i < 4; i++) {
+        if (segments[i].length !== 4) {
+          showStatus('error', 'Please enter all 4 segments of the gift card code.');
+          inputs[i].focus();
+          return;
+        }
+      }
+      code = segments.join('-');
     }
-    var code = segments.join('-');
 
     // Rate limit check
     if (!checkRateLimit()) {
@@ -471,7 +572,35 @@
     btn.disabled = true;
     btn.textContent = 'Redeeming...';
 
-    // Lookup gift card via Firebase REST (client-side read access)
+    if (isLegacy) {
+      // Legacy lookup: scan all gift cards for matching legacyCode
+      _db.ref(TENANT_ID + '/admin/giftCards').orderByChild('legacyCode').equalTo(legacyCode).limitToFirst(1).once('value').then(function(snap) {
+        if (!snap.exists()) {
+          btn.disabled = false;
+          btn.textContent = 'Redeem';
+          showStatus('error', 'We couldn\'t find that gift card. Please check the code or contact us for help.');
+          return;
+        }
+        // Found — extract the first match
+        var found = null;
+        snap.forEach(function(child) { found = { code: child.key, data: child.val() }; });
+        if (!found) {
+          btn.disabled = false;
+          btn.textContent = 'Redeem';
+          showStatus('error', 'We couldn\'t find that gift card. Please contact us for help.');
+          return;
+        }
+        processRedemption(found.code, found.data, btn);
+      }).catch(function(err) {
+        console.error('[redeem-gift-card] Legacy lookup failed:', err);
+        btn.disabled = false;
+        btn.textContent = 'Redeem';
+        showStatus('error', 'Unable to look up gift card. Please try again.');
+      });
+      return;
+    }
+
+    // Standard lookup by exact code
     var basePath = TENANT_ID + '/admin/giftCards/' + code;
 
     _db.ref(basePath).once('value').then(function(snap) {
@@ -484,6 +613,16 @@
         return;
       }
 
+      processRedemption(code, gc, btn);
+    }).catch(function(err) {
+      console.error('[redeem-gift-card] Lookup failed:', err);
+      btn.disabled = false;
+      btn.textContent = 'Redeem';
+      showStatus('error', 'Unable to look up gift card. Please try again.');
+    });
+  }
+
+  function processRedemption(code, gc, btn) {
       if (gc.status === 'claimed') {
         btn.disabled = false;
         btn.textContent = 'Redeem';
@@ -553,13 +692,6 @@
         btn.textContent = 'Redeem';
         showStatus('error', 'Something went wrong. Please try again.');
       });
-
-    }).catch(function(err) {
-      console.error('[redeem-gift-card] Lookup failed:', err);
-      btn.disabled = false;
-      btn.textContent = 'Redeem';
-      showStatus('error', 'Unable to look up gift card. Please try again.');
-    });
   }
 
   function renderSuccess(amountCents) {
