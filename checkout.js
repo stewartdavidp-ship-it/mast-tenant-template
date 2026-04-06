@@ -348,6 +348,7 @@
     var payload = {
       items: items.map(function(it) {
         var mapped = { pid: it.pid, name: it.name, options: it.options, price: it.price, qty: it.qty, isWholesale: it.isWholesale || false };
+        if (it.variantId) mapped.variantId = it.variantId;
         if (it.bookingType) mapped.bookingType = it.bookingType;
         if (it.classId) mapped.classId = it.classId;
         if (it.sessionId) mapped.sessionId = it.sessionId;
@@ -2170,6 +2171,7 @@
       billing: checkoutData.billing,
       items: items.map(function (it, idx) {
         var mapped = { pid: it.pid, name: it.name, options: it.options, price: it.price, qty: it.qty, isWholesale: it.isWholesale || false };
+        if (it.variantId) mapped.variantId = it.variantId;
         // Pass booking fields so server can verify prices from class data instead of products
         if (it.bookingType) mapped.bookingType = it.bookingType;
         if (it.classId) mapped.classId = it.classId;
@@ -2319,6 +2321,7 @@
       billing: checkoutData.billing.same ? checkoutData.shipping : checkoutData.billing,
       items: items.map(function(it) {
         var mapped = { pid: it.pid, name: it.name, options: it.options, price: it.price, qty: it.qty, priceCents: it.priceCents || 0 };
+        if (it.variantId) mapped.variantId = it.variantId;
         if (it.bookingType) mapped.bookingType = it.bookingType;
         if (it.classId) mapped.classId = it.classId;
         if (it.sessionId) mapped.sessionId = it.sessionId;

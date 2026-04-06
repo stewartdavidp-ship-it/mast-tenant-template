@@ -329,7 +329,7 @@
     var data = {};
     for (var i = 0; i < cart.length; i++) {
       var item = cart[i];
-      data[item.cartItemId] = {
+      var syncItem = {
         pid: item.pid,
         name: item.name,
         price: item.price || '',
@@ -338,6 +338,8 @@
         qty: item.qty,
         addedAt: item.addedAt || Date.now()
       };
+      if (item.variantId) syncItem.variantId = item.variantId;
+      data[item.cartItemId] = syncItem;
     }
     ref.set(data).catch(function (err) {
       console.warn('Cart sync error:', err.message);
