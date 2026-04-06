@@ -1051,6 +1051,8 @@
         }
         return null;
       }
+      // Expose to outer scope for checkAddToCartReady and lead time updates
+      window.findVariant = findVariant;
 
       // Switch product image when a variant is selected.
       // Uses explicit imageIndex if set on the variant, otherwise falls back to heuristic URL matching.
