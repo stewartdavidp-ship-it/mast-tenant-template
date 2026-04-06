@@ -1034,25 +1034,30 @@
         return null;
       }
 
-      // Heuristic: when a variant is selected, try to find a matching product image
-      // Matches variant name words against image URL path segments and alt text
-      function tryMatchVariantImage(variantValue) {
+      // Switch product image when a variant is selected.
+      // Uses explicit imageIndex if set on the variant, otherwise falls back to heuristic URL matching.
+      function tryMatchVariantImage(variant, variantValue) {
         var images = window._productImages;
         if (!images || images.length <= 1) return;
+        // Explicit imageIndex takes priority
+        if (variant && typeof variant.imageIndex === 'number' && variant.imageIndex >= 0 && variant.imageIndex < images.length) {
+          switchImage(variant.imageIndex);
+          return;
+        }
+        // Heuristic fallback: match variant value words against image filenames
+        if (!variantValue) return;
         var words = variantValue.toLowerCase().split(/[\s\-_]+/).filter(function(w) { return w.length > 2; });
         if (words.length === 0) return;
         var bestIdx = -1;
         var bestScore = 0;
         for (var i = 0; i < images.length; i++) {
           var url = (images[i] || '').toLowerCase();
-          // Extract filename from URL for matching
           var filename = url.split('/').pop().split('?')[0].replace(/[_\-\.]/g, ' ');
           var score = 0;
           for (var w = 0; w < words.length; w++) {
             if (filename.indexOf(words[w]) !== -1) score += 2;
             else if (url.indexOf(words[w]) !== -1) score += 1;
           }
-          // Also check thumbnail alt text if available
           var thumb = document.querySelector('.product-thumb[data-idx="' + i + '"]');
           if (thumb) {
             var alt = (thumb.getAttribute('alt') || thumb.getAttribute('title') || '').toLowerCase();
@@ -1281,9 +1286,8 @@
                     if (!si.variants) {
                       variantOnSale = true; // all variants on sale
                     } else {
-                      // Check if this specific combo is in the sale's variants list
-                      var comboKey = window._requiredOptions.map(function(l) { return window._selectedOptions[l]; }).join('|');
-                      variantOnSale = si.variants.indexOf(comboKey) !== -1;
+                      // Check if this variant ID is in the sale's variants list
+                      variantOnSale = variant && variant.id && si.variants.indexOf(variant.id) !== -1;
                     }
                   }
                   if (variantOnSale) {
@@ -1303,8 +1307,10 @@
                 }
               }
             }
-            // Heuristic: try to match variant name to a product image
-            tryMatchVariantImage(value);
+            // Try to match variant to a product image (explicit imageIndex or heuristic)
+            var selectedVariant = (window._productVariants && window._requiredOptions && window._requiredOptions.every(function(l) { return window._selectedOptions[l]; }))
+              ? findVariant(window._productVariants, window._selectedOptions) : null;
+            tryMatchVariantImage(selectedVariant, value);
             checkAddToCartReady();
           });
         });
@@ -1316,7 +1322,11 @@
           if (normalizedOptions.length === 1) {
             // Single option dimension — can check each chip directly
             normalizedOptions[0].choices.forEach(function(choice) {
-              var vStock = p.stockInfo.variants[choice];
+              // Look up variant by combo match to get stock by variant ID
+              var optLabel = normalizedOptions[0].label;
+              var sel = {}; sel[optLabel] = choice;
+              var matchV = findVariant(window._productVariants, sel);
+              var vStock = matchV && matchV.id ? p.stockInfo.variants[matchV.id] : null;
               if (vStock) {
                 var variantMode = vStock.inventoryModeOverride || siType;
                 var variantStrict = (variantMode === 'strict' || variantMode === 'in-stock' || variantMode === 'limited');
@@ -1471,8 +1481,9 @@
       var isStrict = stockType === 'strict' || stockType === 'in-stock' || stockType === 'limited';
       if (allSelected && required.length > 0 && si.variants) {
         // Check per-variant stock, respecting variant-level mode overrides
-        var comboKey = required.map(function(l) { return selected[l]; }).join('|');
-        var vStock = si.variants[comboKey];
+        var selVariant = findVariant(window._productVariants, selected);
+        var variantKey = selVariant && selVariant.id ? selVariant.id : null;
+        var vStock = variantKey ? si.variants[variantKey] : null;
         if (vStock) {
           var variantMode = vStock.inventoryModeOverride || stockType;
           var variantStrict = variantMode === 'strict' || variantMode === 'in-stock' || variantMode === 'limited';
@@ -1510,12 +1521,13 @@
 
     // Update lead time when variant changes
     if (allSelected && required.length > 0 && si && window._shopDisplayConfig && window._shopDisplayConfig.showLeadTime) {
-      var ck = required.map(function(l) { return selected[l]; }).join('|');
-      var vBadge = resolveVariantBadge(p, ck, window._shopDisplayConfig);
+      var ltVariant = findVariant(window._productVariants, selected);
+      var ltVid = ltVariant && ltVariant.id ? ltVariant.id : null;
+      var vBadge = resolveVariantBadge(p, ltVid, window._shopDisplayConfig);
       // Update lead time display for selected variant
       var ltEl = document.querySelector('.product-lead-time');
-      if (ltEl && si.variants && si.variants[ck]) {
-        var vEff = (si.variants[ck].available || 0);
+      if (ltEl && si.variants && ltVid && si.variants[ltVid]) {
+        var vEff = (si.variants[ltVid].available || 0);
         var ltText = '';
         if (vEff > 0 && typeof si.stockFulfillmentDays === 'number' && si.stockFulfillmentDays > 0) {
           ltText = 'Ships in ' + si.stockFulfillmentDays + ' business day' + (si.stockFulfillmentDays !== 1 ? 's' : '');
@@ -1584,8 +1596,9 @@
       if (cartIsStrict) {
         var cartRequired = window._requiredOptions || [];
         if (cartRequired.length > 0 && cartSi.variants) {
-          var cartCk = cartRequired.map(function(l) { return (window._selectedOptions || {})[l]; }).join('|');
-          var cartV = cartSi.variants[cartCk];
+          var cartVariant = findVariant(window._productVariants, window._selectedOptions);
+          var cartVid = cartVariant && cartVariant.id ? cartVariant.id : null;
+          var cartV = cartVid ? cartSi.variants[cartVid] : null;
           if (cartV) cartAvailableStock = Math.max(0, (cartV.available || 0));
         } else {
           cartAvailableStock = Math.max(0, (cartSi.totalAvailable || 0));
@@ -1603,6 +1616,7 @@
         return;
       }
     }
+    var addVariant = findVariant(window._productVariants, window._selectedOptions);
     MastCart.addItem({
       pid: p.pid,
       name: p.name,
@@ -1610,6 +1624,7 @@
       priceCents: resolvedCents,
       image: (document.getElementById('mainImage') || {}).src || images[0] || '',
       options: Object.assign({}, window._selectedOptions),
+      variantId: addVariant && addVariant.id ? addVariant.id : null,
       personalization: personalizationText,
       qty: window._productQty || 1,
       originalPrice: onSale ? formatPriceCents(baseCents) : null,

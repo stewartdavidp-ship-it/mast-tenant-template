@@ -218,6 +218,7 @@
       priceCents: item.priceCents || 0,
       image: item.image || '',
       options: item.options || {},
+      variantId: item.variantId || null,
       qty: Math.min(Math.max(item.qty || 1, 1), maxQty),
       isWholesale: item.isWholesale || false,
       originalPrice: item.originalPrice || null,

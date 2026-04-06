@@ -17594,6 +17594,11 @@ async function syncStockInfoToPublic(pid) {
       if (entry.inventoryModeOverride) variantData.inventoryModeOverride = entry.inventoryModeOverride;
       if (entry.productionLeadTimeDaysOverride) variantData.productionLeadTimeDaysOverride = entry.productionLeadTimeDaysOverride;
       if (entry.stockFulfillmentDaysOverride) variantData.stockFulfillmentDaysOverride = entry.stockFulfillmentDaysOverride;
+      // Enrich with combo object from product variants for storefront display
+      if (product && Array.isArray(product.variants)) {
+        var matchV = product.variants.find(function(v) { return v.id === key; });
+        if (matchV && matchV.combo) variantData.combo = matchV.combo;
+      }
       variants[key] = variantData;
     });
     if (Object.keys(variants).length === 0 && stock._default) {
@@ -17701,21 +17706,28 @@ function comboKey(values) {
   return values.join('|');
 }
 
-// Convert order item options object to inventory combo key
-// Order items store options as { "Color": "Blue", "Size": "Short" }
-// Inventory combo keys are "Short|Blue" (values in product.options order)
-function getItemComboKey(pid, itemOptions) {
+// Convert order item options object to inventory variant ID
+// Looks up the product's variants array to find a matching combo, returns its stable ID.
+// Falls back to '_default' if no match.
+function getItemVariantId(pid, itemOptions) {
   if (!itemOptions || typeof itemOptions !== 'object' || !Object.keys(itemOptions).length) return '_default';
   var product = productsData ? productsData.find(function(p) { return p.pid === pid; }) : null;
-  if (!product) return '_default';
-  var variantInfo = getProductVariantCombos(product);
-  if (!variantInfo.labels.length) return '_default';
-  var values = variantInfo.labels.map(function(label) {
-    return itemOptions[label] || '';
-  });
-  if (values.some(function(v) { return !v; })) return '_default';
-  return comboKey(values);
+  if (!product || !Array.isArray(product.variants) || !product.variants.length) return '_default';
+  for (var i = 0; i < product.variants.length; i++) {
+    var v = product.variants[i];
+    if (!v.combo || !v.id) continue;
+    var keys = Object.keys(v.combo);
+    if (keys.length === 0) continue;
+    var match = true;
+    for (var j = 0; j < keys.length; j++) {
+      if (v.combo[keys[j]] !== itemOptions[keys[j]]) { match = false; break; }
+    }
+    if (match && keys.length === Object.keys(itemOptions).length) return v.id;
+  }
+  return '_default';
 }
+// Legacy alias
+function getItemComboKey(pid, itemOptions) { return getItemVariantId(pid, itemOptions); }
 
 // ============================================================
 // Forecast View (Production tab — Owner/Manager only)
@@ -18531,8 +18543,17 @@ function renderVariantDrillDown(pid) {
     '<th>Effective Mode</th><th></th>' +
   '</tr></thead><tbody>';
 
-  variantInfo.combos.forEach(function(combo) {
-    var key = comboKey(combo);
+  // Iterate product variants (which have stable IDs) rather than building combo keys
+  var displayVariants = (product.variants || []).filter(function(v) { return v.id && v.combo; });
+  // Fallback: if no variants with IDs, use old combo key approach for pre-migration data
+  if (displayVariants.length === 0) {
+    variantInfo.combos.forEach(function(c) {
+      var obj = {}; variantInfo.labels.forEach(function(l, i) { obj[l] = c[i]; });
+      displayVariants.push({ id: comboKey(c), combo: obj });
+    });
+  }
+  displayVariants.forEach(function(variant) {
+    var key = variant.id;
     var entry = stock[key] || {};
     var onHand = entry.onHand || 0;
     var committed = entry.committed || 0;
@@ -18543,7 +18564,7 @@ function renderVariantDrillDown(pid) {
     var effectiveMode = modeOverride || stockType;
     var modeLabel = effectiveMode === 'strict' ? 'Strict' : effectiveMode === 'stock-to-build' ? 'Stock to Build' : 'Build to Order';
     var overrideTag = modeOverride ? ' <span style="font-size:0.65rem;color:var(--amber);font-weight:600;">OVERRIDE</span>' : '';
-    var comboLabel = combo.join(' / ');
+    var comboLabel = variant.combo ? Object.values(variant.combo).join(' / ') : key;
 
     var availStyle = '';
     if (effectiveMode !== 'build-to-order' && effectiveMode !== 'made-to-order') {
@@ -19869,14 +19890,24 @@ async function saveProduct(pid) {
       }
     });
 
-    // Collect variant prices from DOM
+    // Collect variant prices from DOM, preserving existing IDs and imageIndex
+    var existingVariants = (pdEditProduct && pdEditProduct.variants) || [];
     var variants = [];
     document.querySelectorAll('.pd-variant-price').forEach(function(input) {
       var priceVal = parsePriceToCents(input.value);
       if (priceVal !== null && priceVal > 0) {
         try {
           var combo = JSON.parse(input.getAttribute('data-combo'));
-          variants.push({ combo: combo, priceCents: priceVal });
+          // Find existing variant to preserve id and imageIndex
+          var existing = existingVariants.find(function(v) {
+            if (!v.combo) return false;
+            var keys = Object.keys(combo);
+            return keys.length === Object.keys(v.combo).length && keys.every(function(k) { return v.combo[k] === combo[k]; });
+          });
+          var variant = { combo: combo, priceCents: priceVal };
+          if (existing && existing.id) variant.id = existing.id;
+          if (existing && typeof existing.imageIndex === 'number') variant.imageIndex = existing.imageIndex;
+          variants.push(variant);
         } catch(e) { /* skip invalid */ }
       }
     });
