@@ -12288,6 +12288,7 @@ function renderMigrationPlan() {
     if (data.status === 'execution' || data.status === 'post-cutover') {
       html += '<h2 style="margin-top:24px;font-size:1.1rem;">Execution Details</h2>';
       html += renderImageRehostingProgress(data);
+      html += renderIntegrationGuidance(data);
       html += renderDNSGuidance(data);
       html += renderPaymentGuidance(data);
     }
@@ -12538,6 +12539,55 @@ function renderDNSGuidance(data) {
     '<p style="margin:0;"><strong>Step 4:</strong> Verify SSL certificate is active (may take up to 24 hours).</p>' +
   '</div></div>';
 
+  return html;
+}
+
+var INTEGRATION_GUIDANCE = {
+  square: { name: 'Square', supported: true, route: 'settings', settingsLabel: 'Payments', steps: 'Get your production access token from Square Developer Dashboard and paste it in Settings > Payments.' },
+  resend: { name: 'Resend', supported: true, route: 'settings', settingsLabel: 'Email', steps: 'Generate an API key in your Resend dashboard and add it under Settings > Email.' },
+  gmail: { name: 'Gmail', supported: true, route: 'settings', settingsLabel: 'Email', steps: 'Use the OAuth flow in Settings > Email to connect your Gmail account.' },
+  sendgrid: { name: 'SendGrid', supported: true, route: 'settings', settingsLabel: 'Email', steps: 'Get your API key from SendGrid and paste it in Settings > Email.' },
+  pirateship: { name: 'Pirate Ship', supported: true, route: 'settings', settingsLabel: 'Shipping', steps: 'Connect your Pirate Ship account in Settings > Shipping for label printing.' },
+  shippo: { name: 'Shippo', supported: true, route: 'settings', settingsLabel: 'Shipping', steps: 'Generate a Shippo API token and add it in Settings > Shipping.' },
+  mailchimp: { name: 'Mailchimp', supported: false, message: 'Mailchimp is not directly supported. Export your subscribers as CSV and use the Import Data tool.' },
+  shipstation: { name: 'ShipStation', supported: false, message: 'ShipStation is not directly supported. Use Pirate Ship or Shippo for shipping label management.' },
+  klaviyo: { name: 'Klaviyo', supported: false, message: 'Klaviyo is not directly supported. Export subscribers as CSV and use the Import Data tool.' }
+};
+
+function renderIntegrationGuidance(data) {
+  if (!data || !data.discovery || !data.discovery.integrations) return '';
+  var detected = data.discovery.integrations.detected;
+  if (!Array.isArray(detected) || detected.length === 0) return '';
+
+  var html = '<div style="background:var(--surface-card,#f5f5f5);border:1px solid var(--surface-card-border,#e0e0e0);border-radius:10px;padding:18px;margin-bottom:16px;">' +
+    '<h3 style="margin:0 0 10px;font-size:0.95rem;">&#128268; Integration Reconnection</h3>' +
+    '<p style="font-size:0.82rem;color:var(--warm-gray);margin-bottom:12px;">We detected these integrations on your old site. Reconnect each one in your Mast settings.</p>';
+
+  detected.forEach(function(intKey) {
+    var key = String(intKey).toLowerCase();
+    var info = INTEGRATION_GUIDANCE[key] || { name: intKey, supported: false, message: 'No automated reconnection available — you may need to set this up manually.' };
+
+    if (info.supported) {
+      html += '<div style="border-left:3px solid #16a34a;padding:10px 14px;background:var(--bg);border-radius:0 6px 6px 0;margin-bottom:8px;">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">' +
+          '<strong style="font-size:0.88rem;">' + esc(info.name) + '</strong>' +
+          '<span class="status-badge" style="background:#16a34a;color:white;font-size:0.65rem;">SUPPORTED</span>' +
+        '</div>' +
+        '<div style="font-size:0.8rem;color:var(--warm-gray);margin-bottom:6px;">' + esc(info.steps) + '</div>' +
+        '<button class="btn btn-secondary" style="font-size:0.75rem;padding:4px 10px;" onclick="navigateTo(\'' + esc(info.route) + '\')">Open ' + esc(info.settingsLabel) + ' Settings</button>' +
+      '</div>';
+    } else {
+      html += '<div style="border-left:3px solid #f59e0b;padding:10px 14px;background:var(--bg);border-radius:0 6px 6px 0;margin-bottom:8px;">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">' +
+          '<strong style="font-size:0.88rem;">' + esc(info.name) + '</strong>' +
+          '<span class="status-badge" style="background:#f59e0b;color:white;font-size:0.65rem;">MANUAL</span>' +
+        '</div>' +
+        '<div style="font-size:0.8rem;color:var(--warm-gray);">' + esc(info.message) + '</div>' +
+      '</div>';
+    }
+  });
+
+  html += '</div>';
   return html;
 }
 
