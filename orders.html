@@ -1213,12 +1213,13 @@ window.TENANT_READY.then(function() {
       var item = items[i];
       var name = item.name || item.productName || 'Item';
       var options = '';
-      if (item.selectedOptions) {
+      var optSource = item.options || item.selectedOptions;
+      if (optSource && typeof optSource === 'object') {
         var opts = [];
-        for (var key in item.selectedOptions) {
-          opts.push(item.selectedOptions[key]);
+        for (var key in optSource) {
+          opts.push(key + ': ' + optSource[key]);
         }
-        if (opts.length) options = opts.join(', ');
+        if (opts.length) options = opts.join(' · ');
       }
       html += '<div class="order-item-row">' +
         '<div class="order-item-name">' + esc(name) +
