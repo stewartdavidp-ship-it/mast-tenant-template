@@ -5192,7 +5192,11 @@
         <span class="sidebar-section-arrow">&#9654;</span>
       </div>
       <div class="sidebar-items">
+        <div class="sidebar-item" data-route="migration" onclick="navigateTo('migration')">Dashboard</div>
+        <div class="sidebar-item" data-route="migration-confirm" onclick="navigateTo('migration-confirm')">Confirmation</div>
+        <div class="sidebar-item" data-route="migration-plan" onclick="navigateTo('migration-plan')">Cutover Plan</div>
         <div class="sidebar-item" data-route="migration-import" onclick="navigateTo('migration-import')">Import Data</div>
+        <div class="sidebar-item" data-route="historical-orders" onclick="navigateTo('historical-orders')">Past Orders</div>
       </div>
     </div>
     <!-- Manage -->
@@ -5242,8 +5246,12 @@
     <div id="advisorTab" style="display:none;">
     </div>
 
-    <!-- ===== MIGRATION IMPORT TAB ===== -->
+    <!-- ===== MIGRATION TABS ===== -->
+    <div id="migrationDashTab" style="display:none;"></div>
+    <div id="migrationConfirmTab" style="display:none;"></div>
+    <div id="migrationPlanTab" style="display:none;"></div>
     <div id="migrationImportTab" style="display:none;"></div>
+    <div id="historicalOrdersTab" style="display:none;"></div>
 
     <!-- ===== SOCIAL MEDIA TAB ===== -->
     <div id="socialMediaTab" style="display:none;">
@@ -11928,6 +11936,469 @@ function hideMigrationSidebar() {
   if (section) section.style.display = 'none';
 }
 
+// ============================================================
+// Migration Dashboard View
+// ============================================================
+
+var _migrationData = null;
+var _migrationListener = null;
+
+function loadMigrationData(callback) {
+  var tenantId = MastDB.tenantId();
+  var db = MastDB._db();
+  if (!tenantId || !db) return;
+
+  if (_migrationListener) _migrationListener();
+  var ref = db.ref(tenantId + '/admin/migration');
+  var handler = ref.on('value', function(snap) {
+    _migrationData = snap.exists() ? snap.val() : null;
+    if (callback) callback(_migrationData);
+  });
+  _migrationListener = function() { ref.off('value', handler); };
+}
+
+var MIGRATION_PHASES = ['discovery', 'confirmation', 'planning', 'execution', 'post-cutover', 'complete'];
+var PHASE_LABELS = { discovery: 'Discovery', confirmation: 'Confirmation', planning: 'Planning', execution: 'Execution', 'post-cutover': 'Post-Cutover', complete: 'Complete' };
+var PHASE_ICONS = { discovery: '&#128269;', confirmation: '&#9989;', planning: '&#128197;', execution: '&#9881;', 'post-cutover': '&#128270;', complete: '&#127881;' };
+
+function renderMigrationDashboard() {
+  var container = document.getElementById('migrationDashTab');
+  if (!container) return;
+  showMigrationSidebar();
+
+  container.innerHTML = '<div style="text-align:center;padding:3rem;color:var(--warm-gray);">Loading migration data...</div>';
+
+  loadMigrationData(function(data) {
+    if (!data) {
+      container.innerHTML = '<div style="max-width:700px;">' +
+        '<h1 style="margin-top:0;">Migration</h1>' +
+        '<div style="background:var(--surface-card,#f5f5f5);border-radius:12px;padding:2rem;text-align:center;">' +
+          '<div style="font-size:2.5rem;margin-bottom:12px;">&#128260;</div>' +
+          '<p style="color:var(--warm-gray);margin-bottom:16px;">No migration in progress. Start a migration via Claude to begin the cutover process.</p>' +
+        '</div>' +
+      '</div>';
+      return;
+    }
+
+    var status = data.status || 'discovery';
+    var currentIdx = MIGRATION_PHASES.indexOf(status);
+    if (status === 'paused') currentIdx = MIGRATION_PHASES.indexOf(data.pausedFrom || 'discovery');
+
+    // Phase indicator bar
+    var phases = '<div style="display:flex;gap:4px;margin-bottom:24px;">';
+    for (var i = 0; i < MIGRATION_PHASES.length; i++) {
+      var phase = MIGRATION_PHASES[i];
+      var isActive = i === currentIdx;
+      var isDone = i < currentIdx;
+      var bg = isDone ? 'var(--primary)' : isActive ? 'var(--primary-light, #f59e0b)' : 'var(--surface-card-border, #e0e0e0)';
+      var textColor = (isDone || isActive) ? '#fff' : 'var(--warm-gray)';
+      phases += '<div style="flex:1;text-align:center;padding:10px 4px;background:' + bg + ';color:' + textColor + ';border-radius:6px;font-size:0.72rem;font-weight:500;transition:all 0.3s;">' +
+        '<div style="font-size:1.2rem;margin-bottom:2px;">' + PHASE_ICONS[phase] + '</div>' +
+        PHASE_LABELS[phase] +
+      '</div>';
+    }
+    phases += '</div>';
+
+    // Status banner
+    var banner = '';
+    if (status === 'paused') {
+      banner = '<div style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:0.85rem;">' +
+        '&#9888; Migration is <strong>paused</strong> (was in ' + PHASE_LABELS[data.pausedFrom || 'discovery'] + '). Resume via Claude when ready.</div>';
+    } else if (status === 'complete') {
+      banner = '<div style="background:rgba(6,95,70,0.15);border:1px solid rgba(6,95,70,0.25);border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:0.85rem;">' +
+        '&#127881; Migration <strong>complete</strong>! Your site is live.</div>';
+    }
+
+    // Quick stats
+    var stats = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px;">';
+
+    // Products discovered
+    if (data.discovery && data.discovery.products) {
+      stats += statCard('Products', data.discovery.products.found || 0, '&#128722;');
+    }
+    // Images
+    if (data.discovery && data.discovery.images) {
+      stats += statCard('Images', data.discovery.images.found || 0, '&#128247;');
+    }
+    // Confirmation items
+    if (data.confirmation && data.confirmation.items) {
+      var items = data.confirmation.items;
+      var confirmed = Object.values(items).filter(function(i) { return i.status === 'confirmed'; }).length;
+      stats += statCard('Confirmed', confirmed + '/' + Object.keys(items).length, '&#9989;');
+    }
+    // Plan steps
+    if (data.plan && data.plan.steps) {
+      var steps = data.plan.steps;
+      var done = Object.values(steps).filter(function(s) { return s.status === 'complete'; }).length;
+      stats += statCard('Steps Done', done + '/' + Object.keys(steps).length, '&#128203;');
+    }
+    // Cutover date
+    if (data.plan && data.plan.cutoverDate) {
+      stats += statCard('Cutover', data.plan.cutoverDate, '&#128197;');
+    }
+    // Source platform
+    if (data.sourcePlatform) {
+      stats += statCard('From', esc(data.sourcePlatform), '&#128640;');
+    }
+
+    stats += '</div>';
+
+    // Next actions
+    var actions = '';
+    if (status === 'discovery') {
+      actions = nextActionCard('Discovery in progress', 'Claude is analyzing your current website. Findings will appear here as they are recorded.', 'migration-confirm', 'Review Findings');
+    } else if (status === 'confirmation') {
+      actions = nextActionCard('Items need your review', 'Review discovered data and confirm what should be migrated.', 'migration-confirm', 'Review & Confirm');
+    } else if (status === 'planning') {
+      actions = nextActionCard('Plan your cutover', 'Review the migration plan and adjust dates as needed.', 'migration-plan', 'View Plan');
+    } else if (status === 'execution') {
+      actions = nextActionCard('Migration in progress', 'Data import, image re-hosting, and cutover steps are being executed.', 'migration-plan', 'Track Progress');
+    } else if (status === 'post-cutover') {
+      actions = nextActionCard('Verify your site', 'Complete the post-cutover checklist to confirm everything is working.', 'migration-plan', 'View Checklist');
+    }
+
+    container.innerHTML = '<div style="max-width:800px;">' +
+      '<h1 style="margin-top:0;margin-bottom:4px;">Migration Dashboard</h1>' +
+      '<p style="color:var(--warm-gray);font-size:0.85rem;margin-bottom:20px;">Migrating from ' + esc(data.sourcePlatform || 'unknown') + (data.sourceUrl ? ' (' + esc(data.sourceUrl) + ')' : '') + '</p>' +
+      banner + phases + stats + actions +
+    '</div>';
+  });
+}
+
+function statCard(label, value, icon) {
+  return '<div style="background:var(--surface-card,#f5f5f5);border-radius:8px;padding:14px 16px;text-align:center;">' +
+    '<div style="font-size:1.3rem;margin-bottom:4px;">' + icon + '</div>' +
+    '<div style="font-size:1.1rem;font-weight:600;color:var(--text);">' + value + '</div>' +
+    '<div style="font-size:0.75rem;color:var(--warm-gray);">' + esc(label) + '</div>' +
+  '</div>';
+}
+
+function nextActionCard(title, desc, route, btnLabel) {
+  return '<div style="background:var(--surface-card,#f5f5f5);border:1px solid var(--surface-card-border,#e0e0e0);border-radius:10px;padding:20px;">' +
+    '<h3 style="margin:0 0 6px;font-size:0.95rem;">' + esc(title) + '</h3>' +
+    '<p style="color:var(--warm-gray);font-size:0.85rem;margin-bottom:12px;">' + esc(desc) + '</p>' +
+    '<button class="btn btn-primary" onclick="navigateTo(\'' + route + '\')" style="font-size:0.82rem;">' + esc(btnLabel) + '</button>' +
+  '</div>';
+}
+
+// ============================================================
+// Migration Confirmation View
+// ============================================================
+
+var CONFIRM_CATEGORY_META = {
+  products: { icon: '&#128722;', label: 'Products' },
+  images: { icon: '&#128247;', label: 'Images' },
+  blog: { icon: '&#128221;', label: 'Blog Posts' },
+  inventory: { icon: '&#128230;', label: 'Inventory' },
+  subscribers: { icon: '&#128231;', label: 'Email Subscribers' },
+  giftCards: { icon: '&#127873;', label: 'Gift Cards' },
+  customers: { icon: '&#128101;', label: 'Customers' },
+  orders: { icon: '&#128179;', label: 'Historical Orders' },
+  integrations: { icon: '&#128268;', label: 'Integrations' },
+  domain: { icon: '&#127760;', label: 'Domain' },
+  payments: { icon: '&#128179;', label: 'Payments' }
+};
+
+function renderMigrationConfirmation() {
+  var container = document.getElementById('migrationConfirmTab');
+  if (!container) return;
+  showMigrationSidebar();
+
+  loadMigrationData(function(data) {
+    if (!data || !data.confirmation || !data.confirmation.items) {
+      container.innerHTML = '<div style="max-width:700px;">' +
+        '<h1 style="margin-top:0;">Confirmation</h1>' +
+        '<p style="color:var(--warm-gray);">No confirmation items yet. Discovery must complete first.</p>' +
+      '</div>';
+      return;
+    }
+
+    var items = data.confirmation.items;
+    var itemIds = Object.keys(items);
+
+    var html = '<div style="max-width:800px;">' +
+      '<h1 style="margin-top:0;margin-bottom:4px;">Confirm Migration Items</h1>' +
+      '<p style="color:var(--warm-gray);font-size:0.85rem;margin-bottom:20px;">Review what was discovered on your current site. Confirm items to include in the migration or skip items you don\'t need.</p>';
+
+    // Summary bar
+    var confirmed = 0, skipped = 0, remaining = 0;
+    itemIds.forEach(function(id) { var s = items[id].status; if (s === 'confirmed') confirmed++; else if (s === 'skipped') skipped++; else remaining++; });
+    html += '<div style="display:flex;gap:12px;margin-bottom:20px;font-size:0.85rem;">' +
+      '<span style="color:var(--primary);font-weight:500;">&#9989; ' + confirmed + ' confirmed</span>' +
+      '<span style="color:var(--warm-gray);">&#9898; ' + remaining + ' remaining</span>' +
+      '<span style="color:var(--warm-gray);">&#10060; ' + skipped + ' skipped</span>' +
+    '</div>';
+
+    // Category cards
+    itemIds.forEach(function(id) {
+      var item = items[id];
+      var cat = item.category || 'unknown';
+      var meta = CONFIRM_CATEGORY_META[cat] || { icon: '&#128196;', label: cat };
+      var statusBadge = '';
+      if (item.status === 'confirmed') statusBadge = '<span class="status-badge" style="background:#16a34a;color:white;">CONFIRMED</span>';
+      else if (item.status === 'skipped') statusBadge = '<span class="status-badge" style="background:#9ca3af;color:white;">SKIPPED</span>';
+      else if (item.status === 'needs-input') statusBadge = '<span class="status-badge" style="background:#f59e0b;color:white;">NEEDS INPUT</span>';
+      else statusBadge = '<span class="status-badge" style="background:#2563eb;color:white;">DISCOVERED</span>';
+
+      var discoveredSummary = '';
+      if (item.discoveredValue) {
+        var dv = item.discoveredValue;
+        if (typeof dv === 'object') {
+          if (dv.found !== undefined) discoveredSummary = dv.found + ' found';
+          else if (dv.detected !== undefined) discoveredSummary = dv.detected ? 'Detected' : 'Not detected';
+          else if (dv.name) discoveredSummary = dv.name;
+          else if (dv.count !== undefined) discoveredSummary = dv.count + ' found';
+          else discoveredSummary = JSON.stringify(dv).slice(0, 80);
+        } else {
+          discoveredSummary = String(dv).slice(0, 80);
+        }
+      }
+
+      html += '<div style="background:var(--surface-card,#f5f5f5);border:1px solid var(--surface-card-border,#e0e0e0);border-radius:8px;padding:14px 18px;margin-bottom:10px;display:flex;align-items:center;gap:14px;">' +
+        '<div style="font-size:1.5rem;flex-shrink:0;">' + meta.icon + '</div>' +
+        '<div style="flex:1;min-width:0;">' +
+          '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' +
+            '<strong style="font-size:0.9rem;">' + esc(meta.label) + '</strong>' +
+            statusBadge +
+            (item.required ? '<span style="font-size:0.7rem;color:var(--warm-gray);">Required</span>' : '') +
+          '</div>' +
+          '<div style="font-size:0.8rem;color:var(--warm-gray);">' + esc(discoveredSummary) + '</div>' +
+        '</div>' +
+      '</div>';
+    });
+
+    // Progress note
+    if (remaining === 0 && confirmed > 0) {
+      html += '<div style="background:rgba(6,95,70,0.1);border:1px solid rgba(6,95,70,0.2);border-radius:8px;padding:14px;margin-top:16px;font-size:0.85rem;">' +
+        '&#10003; All items reviewed. Ask Claude to generate a cutover plan.</div>';
+    }
+
+    html += '</div>';
+    container.innerHTML = html;
+  });
+}
+
+// ============================================================
+// Migration Plan View
+// ============================================================
+
+var STEP_CATEGORY_ICONS = { 'data-import': '&#128230;', payments: '&#128179;', dns: '&#127760;', review: '&#128270;', testing: '&#128295;' };
+
+function renderMigrationPlan() {
+  var container = document.getElementById('migrationPlanTab');
+  if (!container) return;
+  showMigrationSidebar();
+
+  loadMigrationData(function(data) {
+    if (!data || !data.plan || !data.plan.steps) {
+      container.innerHTML = '<div style="max-width:700px;">' +
+        '<h1 style="margin-top:0;">Cutover Plan</h1>' +
+        '<p style="color:var(--warm-gray);">No plan generated yet. Confirm all items first, then ask Claude to generate a cutover plan.</p>' +
+      '</div>';
+      return;
+    }
+
+    var plan = data.plan;
+    var steps = plan.steps;
+    var stepIds = Object.keys(steps).sort(function(a, b) { return (steps[a].order || 0) - (steps[b].order || 0); });
+
+    var completed = 0, inProgress = 0, blocked = 0, pending = 0;
+    stepIds.forEach(function(id) {
+      var s = steps[id].status;
+      if (s === 'complete' || s === 'skipped') completed++;
+      else if (s === 'in-progress') inProgress++;
+      else if (s === 'blocked') blocked++;
+      else pending++;
+    });
+
+    var html = '<div style="max-width:850px;">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">' +
+        '<h1 style="margin:0;">Cutover Plan</h1>' +
+        (data.status === 'paused' ? '<span class="status-badge" style="background:#f59e0b;color:white;font-size:0.75rem;">PAUSED</span>' : '') +
+      '</div>' +
+      '<p style="color:var(--warm-gray);font-size:0.85rem;margin-bottom:20px;">Cutover date: <strong>' + esc(plan.cutoverDate) + '</strong></p>';
+
+    // Progress bar
+    var pct = stepIds.length > 0 ? Math.round((completed / stepIds.length) * 100) : 0;
+    html += '<div style="margin-bottom:20px;">' +
+      '<div style="display:flex;justify-content:space-between;font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;">' +
+        '<span>' + completed + ' of ' + stepIds.length + ' steps complete</span>' +
+        '<span>' + pct + '%</span>' +
+      '</div>' +
+      '<div style="background:var(--surface-card-border,#e0e0e0);border-radius:4px;height:10px;overflow:hidden;">' +
+        '<div style="background:var(--primary);height:100%;width:' + pct + '%;transition:width 0.5s;border-radius:4px;"></div>' +
+      '</div>' +
+    '</div>';
+
+    // Summary chips
+    html += '<div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;font-size:0.8rem;">';
+    if (inProgress) html += '<span style="background:rgba(37,99,235,0.15);color:#2563eb;padding:4px 10px;border-radius:12px;">&#9654; ' + inProgress + ' in progress</span>';
+    if (blocked) html += '<span style="background:rgba(239,68,68,0.15);color:#ef4444;padding:4px 10px;border-radius:12px;">&#9888; ' + blocked + ' blocked</span>';
+    if (pending) html += '<span style="background:rgba(156,163,175,0.15);color:#6b7280;padding:4px 10px;border-radius:12px;">&#9898; ' + pending + ' pending</span>';
+    html += '</div>';
+
+    // Step list
+    stepIds.forEach(function(id) {
+      var step = steps[id];
+      var catIcon = STEP_CATEGORY_ICONS[step.category] || '&#128196;';
+      var statusIcon = '&#9898;';
+      var statusColor = 'var(--warm-gray)';
+      if (step.status === 'complete') { statusIcon = '&#9989;'; statusColor = '#16a34a'; }
+      else if (step.status === 'skipped') { statusIcon = '&#10060;'; statusColor = '#9ca3af'; }
+      else if (step.status === 'in-progress') { statusIcon = '&#9654;'; statusColor = '#2563eb'; }
+      else if (step.status === 'blocked') { statusIcon = '&#9888;'; statusColor = '#ef4444'; }
+
+      var depNames = [];
+      if (step.dependsOn && step.dependsOn.length) {
+        step.dependsOn.forEach(function(depId) {
+          if (steps[depId]) depNames.push(steps[depId].name);
+        });
+      }
+
+      html += '<div style="display:flex;align-items:flex-start;gap:12px;padding:12px 16px;border-left:3px solid ' + statusColor + ';background:var(--surface-card,#f5f5f5);border-radius:0 8px 8px 0;margin-bottom:8px;">' +
+        '<div style="font-size:1.2rem;flex-shrink:0;margin-top:2px;">' + statusIcon + '</div>' +
+        '<div style="flex:1;min-width:0;">' +
+          '<div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">' +
+            '<strong style="font-size:0.88rem;">' + esc(step.name) + '</strong>' +
+            (step.isGateCheck ? '<span style="font-size:0.65rem;background:rgba(124,58,237,0.15);color:#7c3aed;padding:2px 6px;border-radius:4px;">GATE</span>' : '') +
+          '</div>' +
+          '<div style="font-size:0.78rem;color:var(--warm-gray);">' +
+            catIcon + ' ' + esc(step.category) + ' &middot; Target: ' + esc(step.targetDate || '—') +
+            (step.completedAt ? ' &middot; Done: ' + esc(step.completedAt.split('T')[0]) : '') +
+          '</div>' +
+          (depNames.length ? '<div style="font-size:0.72rem;color:var(--warm-gray);margin-top:2px;">Depends on: ' + depNames.map(esc).join(', ') + '</div>' : '') +
+          (step.notes ? '<div style="font-size:0.78rem;color:var(--text);margin-top:4px;font-style:italic;">' + esc(step.notes) + '</div>' : '') +
+        '</div>' +
+      '</div>';
+    });
+
+    // Post-cutover checklist if in post-cutover phase
+    if (data.postCutover) {
+      html += '<h2 style="margin-top:24px;font-size:1.1rem;">Post-Cutover Checklist</h2>';
+
+      if (data.postCutover.automatedChecks) {
+        html += '<h3 style="font-size:0.9rem;color:var(--warm-gray);">Automated Checks</h3>';
+        var checks = data.postCutover.automatedChecks;
+        Object.keys(checks).forEach(function(key) {
+          var check = checks[key];
+          var icon = check.passed === true ? '&#9989;' : check.passed === false ? '&#10060;' : '&#9898;';
+          html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;font-size:0.85rem;">' +
+            icon + ' <span>' + esc(key) + '</span>' +
+            (check.note ? '<span style="color:var(--warm-gray);font-size:0.78rem;"> — ' + esc(check.note) + '</span>' : '') +
+          '</div>';
+        });
+      }
+
+      if (data.postCutover.manualChecklist) {
+        html += '<h3 style="font-size:0.9rem;color:var(--warm-gray);margin-top:12px;">Manual Verification</h3>';
+        var manual = data.postCutover.manualChecklist;
+        var manualLabels = { testOrder: 'Place a test order', paymentDeposit: 'Verify payment deposit', emailReceived: 'Confirm email arrived', mobileLoads: 'Check mobile site', externalVisit: 'Ask someone else to visit' };
+        Object.keys(manual).forEach(function(key) {
+          var item = manual[key];
+          var icon = item.confirmed ? '&#9989;' : '&#9898;';
+          html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;font-size:0.85rem;">' +
+            icon + ' <span>' + esc(manualLabels[key] || key) + '</span>' +
+            (item.confirmedAt ? '<span style="color:var(--warm-gray);font-size:0.72rem;margin-left:8px;">' + esc(item.confirmedAt.split('T')[0]) + '</span>' : '') +
+          '</div>';
+        });
+      }
+    }
+
+    html += '</div>';
+    container.innerHTML = html;
+  });
+}
+
+// ============================================================
+// Historical Order Archive View
+// ============================================================
+
+function renderHistoricalOrders() {
+  var container = document.getElementById('historicalOrdersTab');
+  if (!container) return;
+  showMigrationSidebar();
+
+  var tenantId = MastDB.tenantId();
+  var db = MastDB._db();
+  if (!tenantId || !db) {
+    container.innerHTML = '<p>Tenant not loaded.</p>';
+    return;
+  }
+
+  container.innerHTML = '<div style="text-align:center;padding:3rem;color:var(--warm-gray);">Loading past orders...</div>';
+
+  db.ref(tenantId + '/admin/historicalOrders').limitToLast(100).once('value').then(function(snap) {
+    if (!snap.exists()) {
+      container.innerHTML = '<div style="max-width:800px;">' +
+        '<h1 style="margin-top:0;">Past Orders</h1>' +
+        '<p style="color:var(--warm-gray);">No historical orders imported yet. Use the Import Data tool or Claude to import orders from your previous platform.</p>' +
+      '</div>';
+      return;
+    }
+
+    var orders = [];
+    snap.forEach(function(child) {
+      var o = child.val();
+      o._id = child.key;
+      orders.push(o);
+    });
+    orders.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
+
+    // Search filter
+    var html = '<div style="max-width:900px;">' +
+      '<h1 style="margin-top:0;margin-bottom:4px;">Past Orders</h1>' +
+      '<p style="color:var(--warm-gray);font-size:0.85rem;margin-bottom:16px;">' + orders.length + ' order' + (orders.length !== 1 ? 's' : '') + ' imported from your previous platform</p>' +
+      '<div style="margin-bottom:16px;">' +
+        '<input type="text" id="histOrderSearch" placeholder="Search by name or email..." style="width:100%;max-width:320px;padding:8px 12px;border:1px solid var(--surface-card-border,#e0e0e0);border-radius:6px;font-size:0.85rem;background:var(--bg);color:var(--text);">' +
+      '</div>';
+
+    // Table
+    html += '<div class="events-table data-table" style="margin-bottom:16px;">' +
+      '<table><thead><tr>' +
+        '<th>Order #</th><th>Date</th><th>Customer</th><th>Email</th><th>Items</th><th>Total</th><th>Source</th>' +
+      '</tr></thead><tbody id="histOrderBody">';
+
+    orders.forEach(function(o) {
+      var itemsSummary = '';
+      if (o.items && o.items.length) {
+        itemsSummary = o.items.map(function(i) { return (i.qty || 1) + 'x ' + (i.name || 'item'); }).join(', ');
+        if (itemsSummary.length > 50) itemsSummary = itemsSummary.slice(0, 47) + '...';
+      }
+      html += '<tr class="hist-order-row" data-search="' + esc((o.customerName || '') + ' ' + (o.email || '')).toLowerCase() + '">' +
+        '<td style="font-family:monospace;font-size:0.8rem;">' + esc(o.orderNumber || o._id) + '</td>' +
+        '<td style="font-size:0.8rem;">' + esc(o.date || '—') + '</td>' +
+        '<td style="font-size:0.8rem;">' + esc(o.customerName || '—') + '</td>' +
+        '<td style="font-size:0.8rem;">' + esc(o.email || '—') + '</td>' +
+        '<td style="font-size:0.78rem;">' + esc(itemsSummary || '—') + '</td>' +
+        '<td style="font-weight:500;">' + (o.total ? formatMoney(o.total) : '—') + '</td>' +
+        '<td><span class="status-badge" style="background:#7c3aed;color:white;font-size:0.65rem;">IMPORTED</span></td>' +
+      '</tr>';
+    });
+
+    html += '</tbody></table></div></div>';
+    container.innerHTML = html;
+
+    // Wire up search
+    var searchInput = document.getElementById('histOrderSearch');
+    if (searchInput) {
+      searchInput.addEventListener('input', function() {
+        var query = searchInput.value.toLowerCase();
+        var rows = document.querySelectorAll('.hist-order-row');
+        rows.forEach(function(row) {
+          var match = !query || (row.getAttribute('data-search') || '').indexOf(query) !== -1;
+          row.style.display = match ? '' : 'none';
+        });
+      });
+    }
+  }).catch(function(err) {
+    container.innerHTML = '<p style="color:#ef4444;">Failed to load orders: ' + esc(err.message) + '</p>';
+  });
+}
+
+// ============================================================
+// Migration Import View (from Session 2)
+// ============================================================
+
 function renderMigrationImport() {
   var container = document.getElementById('migrationImportTab');
   if (!container) return;
@@ -12158,7 +12629,11 @@ var ROUTE_MAP = {
   'gallery':     { tab: 'galleryTab' },
   'coupons':     { tab: 'couponsTab' },
   'analytics':   { tab: 'analyticsTab' },
-  'migration-import': { tab: 'migrationImportTab', setup: function() { renderMigrationImport(); } }
+  'migration':        { tab: 'migrationDashTab', setup: function() { renderMigrationDashboard(); } },
+  'migration-confirm': { tab: 'migrationConfirmTab', setup: function() { renderMigrationConfirmation(); } },
+  'migration-plan':   { tab: 'migrationPlanTab', setup: function() { renderMigrationPlan(); } },
+  'migration-import': { tab: 'migrationImportTab', setup: function() { renderMigrationImport(); } },
+  'historical-orders': { tab: 'historicalOrdersTab', setup: function() { renderHistoricalOrders(); } }
 };
 
 // Section → which routes belong to it (for auto-expanding)
@@ -12174,10 +12649,10 @@ var SECTION_ROUTES = {
   'web':    ['website', 'homepage', 'images'],
   'manage': ['products', 'inventory', 'employees', 'analytics', 'auditlog', 'settings'],
   'advise': ['advisor'],
-  'migration': ['migration-import']
+  'migration': ['migration', 'migration-confirm', 'migration-plan', 'migration-import', 'historical-orders']
 };
 
-var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'expensesTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationImportTab'];
+var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'expensesTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab'];
 
 var currentRoute = 'dashboard';
 
