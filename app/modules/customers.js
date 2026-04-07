@@ -961,10 +961,20 @@
   }
 
   function openContactFromCustomer(contactId) {
+    // Pending pattern: store the contact ID, navigateTo loads the contacts
+    // module async, and contacts setup checks the pending flag on entry.
+    // Falls back to setTimeout polling if contacts module is already loaded.
+    window._pendingContactView = contactId;
     if (typeof navigateTo === 'function') navigateTo('contacts');
+    // If contacts is already loaded, the setup ran synchronously and may
+    // have missed the pending flag — try again on next tick.
     setTimeout(function() {
-      if (typeof window.viewContact === 'function') window.viewContact(contactId);
-    }, 50);
+      if (window._pendingContactView && typeof window.viewContact === 'function') {
+        var id = window._pendingContactView;
+        window._pendingContactView = null;
+        window.viewContact(id);
+      }
+    }, 0);
   }
 
   async function addContactToCustomer(customerId) {

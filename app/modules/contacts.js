@@ -974,7 +974,17 @@ async function doSyncGoogleContacts() {
 
   MastAdmin.registerModule('contacts', {
     routes: {
-      'contacts': { tab: 'contactsTab', setup: function() { if (!contactsLoaded) loadContacts(); updateGoogleContactsButtons(); } }
+      'contacts': { tab: 'contactsTab', setup: function() {
+        if (!contactsLoaded) loadContacts();
+        updateGoogleContactsButtons();
+        // If another module navigated here to view a specific contact, honor it.
+        if (window._pendingContactView) {
+          var id = window._pendingContactView;
+          window._pendingContactView = null;
+          // Defer so loadContacts has a chance to render first.
+          setTimeout(function() { viewContact(id); }, 0);
+        }
+      } }
     },
     detachListeners: function() {
       contactsData = [];
