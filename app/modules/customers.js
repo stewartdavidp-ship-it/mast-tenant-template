@@ -961,9 +961,14 @@
   }
 
   function openContactFromCustomer(contactId) {
-    // Stash the return route BEFORE navigateTo overwrites currentRoute.
+    // Stash the return route + return state BEFORE navigateTo overwrites currentRoute.
     window._pendingContactView = contactId;
     window._pendingContactReturnRoute = (typeof currentRoute === 'string') ? currentRoute : 'customers';
+    // Remember which customer + tab we were on so we land back here on return.
+    if (selectedCustomerId) {
+      window._pendingCustomerView = selectedCustomerId;
+      window._pendingCustomerTab = detailTab;
+    }
     if (typeof navigateTo === 'function') navigateTo('contacts');
     setTimeout(function() {
       if (window._pendingContactView && typeof window.viewContact === 'function') {
@@ -1186,15 +1191,35 @@
       'customers': {
         tab: 'customersTab',
         setup: function() {
+          // Honor pending detail-view restoration (e.g., user navigated to a
+          // contact and is now coming back via the back button).
+          var pendingId = window._pendingCustomerView;
+          var pendingTab = window._pendingCustomerTab;
+          window._pendingCustomerView = null;
+          window._pendingCustomerTab = null;
+
+          var openPending = function() {
+            if (pendingId && customersData.find(function(x) { return x && x.id === pendingId; })) {
+              selectedCustomerId = pendingId;
+              currentView = 'detail';
+              detailTab = pendingTab || 'overview';
+              render();
+            }
+          };
+
           if (!customersLoaded) {
             currentView = 'list';
             selectedCustomerId = null;
-            loadCustomers();
+            loadCustomers().then(function() { openPending(); });
           } else {
-            currentView = 'list';
-            selectedCustomerId = null;
-            render();
-            requestAnimationFrame(renderTable);
+            if (pendingId) {
+              openPending();
+            } else {
+              currentView = 'list';
+              selectedCustomerId = null;
+              render();
+              requestAnimationFrame(renderTable);
+            }
           }
         }
       }
