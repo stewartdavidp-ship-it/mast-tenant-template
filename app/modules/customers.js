@@ -69,17 +69,19 @@
 
   // Source uses .status-badge with semantic palette colors per ux skill.
   // No new badge system invented — small text label inside the unified badge.
+  // Backgrounds use opaque-ish color stops chosen so contrast works on BOTH
+  // light cream (#FAF6F0) and dark cream (#2a2a2a) cards in admin dark mode.
   function sourceBadge(source) {
     if (!source) return '';
     var bg, color;
     switch (source) {
-      case 'order':       bg = 'rgba(42,124,111,0.18)';  color = 'var(--teal-deep)'; break;
-      case 'enrollment':  bg = 'rgba(196,133,60,0.15)';  color = 'var(--amber)'; break;
-      case 'contact':     bg = 'rgba(99,102,241,0.15)';  color = '#6366f1'; break;
-      case 'newsletter':  bg = 'rgba(220,53,69,0.12)';   color = 'var(--danger)'; break;
-      case 'account':     bg = 'rgba(22,163,74,0.15)';   color = '#16a34a'; break;
-      case 'import':      bg = 'rgba(245,158,11,0.15)';  color = '#f59e0b'; break;
-      default:            bg = 'rgba(155,149,142,0.18)'; color = 'var(--warm-gray)';
+      case 'order':       bg = 'rgba(42,124,111,0.28)';  color = '#6fc'; break;
+      case 'enrollment':  bg = 'rgba(196,133,60,0.30)';  color = '#E8B679'; break;
+      case 'contact':     bg = 'rgba(99,102,241,0.30)';  color = '#a5a8f5'; break;
+      case 'newsletter':  bg = 'rgba(220,53,69,0.25)';   color = '#f49aa3'; break;
+      case 'account':     bg = 'rgba(22,163,74,0.30)';   color = '#7ddca0'; break;
+      case 'import':      bg = 'rgba(245,158,11,0.30)';  color = '#fbcc70'; break;
+      default:            bg = 'rgba(155,149,142,0.35)'; color = '#cfcac3';
     }
     return '<span class="status-badge" style="background:' + bg + ';color:' + color + ';">' + esc(source) + '</span>';
   }
@@ -315,9 +317,10 @@
     h += '</div>';
     h += '</div>';
 
-    // Phase 5 placeholder
-    h += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px 20px;color:var(--warm-gray);font-size:0.85rem;">';
-    h += '<strong style="color:var(--charcoal);">Phase 5 will add:</strong> ';
+    // Phase 5 placeholder — no explicit text colors so they inherit body
+    // (which flips between charcoal and #e0e0e0 in dark mode).
+    h += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px 20px;font-size:0.85rem;">';
+    h += '<strong>Phase 5 will add:</strong> ';
     h += 'linked orders, linked enrollments, interactions tab (absorbs the contacts module), ';
     h += 'wallet · membership · loyalty mirror, inline tag editing, notes, manual merge.';
     h += '</div>';
