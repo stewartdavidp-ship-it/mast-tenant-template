@@ -129,6 +129,7 @@
     }
 
     render();
+    if (currentView === 'list') requestAnimationFrame(renderTable);
   }
 
   // ============================================================
