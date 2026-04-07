@@ -825,45 +825,95 @@
   }
 
   // ============================================================
-  // Variant Helpers
+  // Variant Helpers (cost-shape model — mirrors product variants)
   // ============================================================
 
   /**
-   * Get the active editable data source — either the root recipe or the current variant.
+   * Resolve the linked product's variants array.
+   * Returns array of {id, combo, ...} or [].
+   */
+  function getProductVariants(bs) {
+    if (!bs || !bs.productId) return [];
+    var prod = (window.productsData || []).find(function(p){ return p.pid === bs.productId; });
+    if (!prod || !Array.isArray(prod.variants)) return [];
+    return prod.variants.filter(function(v){ return v && v.id; });
+  }
+
+  /**
+   * Build display name for a product variant (e.g. "Small" or "Small, Red").
+   */
+  function variantDisplayName(pv) {
+    if (!pv) return 'Variant';
+    return pv.combo || pv.name || pv.label || pv.id;
+  }
+
+  /**
+   * Inheritance-aware read for the cost-shape model.
+   * key === 'default' or a productVariantId.
+   * Variant override → default → recipe root. Returns { value, inherited, from }.
+   */
+  function readVariantField(bs, key, field) {
+    var variants = bs.variants || {};
+    var override = variants[key] || {};
+    if (override[field] !== undefined && override[field] !== null) {
+      return { value: override[field], inherited: false, from: 'self' };
+    }
+    if (key !== 'default') {
+      var def = variants.default || {};
+      if (def[field] !== undefined && def[field] !== null) {
+        return { value: def[field], inherited: true, from: 'default' };
+      }
+    }
+    if (bs[field] !== undefined && bs[field] !== null) {
+      return { value: bs[field], inherited: key !== 'default', from: 'root' };
+    }
+    var defaults = { lineItems: {}, laborMinutes: 0, otherCost: 0 };
+    return { value: defaults[field], inherited: key !== 'default', from: 'root' };
+  }
+
+  /**
+   * Materialize a writable slot for the given key.
+   */
+  function ensureVariantSlot(bs, key) {
+    if (!bs.variants) bs.variants = {};
+    if (!bs.variants[key]) bs.variants[key] = {};
+    return bs.variants[key];
+  }
+
+  /**
+   * Materialize lineItems for a key by copying from inheritance chain.
+   * Called the first time the user edits BOM on an inherited tab.
+   */
+  function materializeLineItems(bs, key) {
+    var slot = ensureVariantSlot(bs, key);
+    if (slot.lineItems) return slot.lineItems;
+    var src;
+    if (key === 'default') {
+      src = bs.lineItems || {};
+    } else {
+      var def = (bs.variants && bs.variants.default) || {};
+      src = def.lineItems || bs.lineItems || {};
+    }
+    slot.lineItems = JSON.parse(JSON.stringify(src));
+    return slot.lineItems;
+  }
+
+  /**
+   * Read view of the active tab's data (lineItems, laborMinutes, otherCost)
+   * with full inheritance applied. Used by the renderer.
+   * Mutating callers MUST use materializeLineItems / ensureVariantSlot instead.
    */
   function getActiveVariantData(bs) {
-    if (bs.isVariantEnabled && currentVariantId && bs.variants && bs.variants[currentVariantId]) {
-      return bs.variants[currentVariantId];
-    }
-    return bs;
+    var key = currentVariantId || 'default';
+    return {
+      lineItems: readVariantField(bs, key, 'lineItems').value,
+      laborMinutes: readVariantField(bs, key, 'laborMinutes').value,
+      otherCost: readVariantField(bs, key, 'otherCost').value
+    };
   }
 
   /**
-   * Calculate all variants and return array of results.
-   */
-  function calculateAllVariants(recipe) {
-    var variants = recipe.variants || {};
-    var results = {};
-    Object.keys(variants).forEach(function(vid) {
-      var v = variants[vid];
-      var calc = calculateRecipe({
-        lineItems: v.lineItems || {},
-        laborRatePerHour: recipe.laborRatePerHour || 0,
-        laborMinutes: v.laborMinutes || 0,
-        otherCost: v.otherCost || 0,
-        setupCost: recipe.setupCost || 0,
-        batchSize: recipe.batchSize || 1,
-        wholesaleMarkup: recipe.wholesaleMarkup || 1,
-        directMarkup: recipe.directMarkup || 1,
-        retailMarkup: recipe.retailMarkup || 1
-      });
-      results[vid] = calc;
-    });
-    return results;
-  }
-
-  /**
-   * Get the first variant's price for a given tier (used for product propagation).
+   * Get the first variant's price for a given tier (used for legacy product propagation).
    */
   function getFirstVariantTierPrice(tier, recipe) {
     var variants = recipe.variants || {};
@@ -872,22 +922,6 @@
     var first = variants[keys[0]];
     var priceKey = tier + 'Price';
     return first[priceKey] || 0;
-  }
-
-  function createVariant(label) {
-    var id = MastDB.recipes.newKey();
-    return {
-      variantId: id,
-      label: label || 'Variant',
-      lineItems: {},
-      laborMinutes: 0,
-      otherCost: 0,
-      totalMaterialCost: 0,
-      totalCost: 0,
-      wholesalePrice: 0,
-      directPrice: 0,
-      retailPrice: 0
-    };
   }
 
   // ============================================================
@@ -1828,7 +1862,7 @@
   var piecesView = 'list'; // list | builder
   var editingRecipeId = null;
   var builderState = null; // live state for the recipe builder
-  var currentVariantId = null; // active variant tab (null = non-variant or default)
+  var currentVariantId = 'default'; // active variant tab key — 'default' or productVariantId
 
   function renderPieces() {
     if (piecesView === 'builder' && editingRecipeId) {
@@ -2016,9 +2050,24 @@
     var esc = MastAdmin.esc;
     var bs = builderState;
 
-    // Determine active data source (variant or root)
-    var isVariant = bs.isVariantEnabled && bs.variants && Object.keys(bs.variants).length > 0;
-    var activeData = isVariant ? getActiveVariantData(bs) : bs;
+    // Cost-shape model: variants always exist as a map (default + per-product-variant overrides).
+    // currentVariantId is 'default' or a productVariantId. Resolve product variants for tab rendering.
+    var productVariants = getProductVariants(bs);
+    var hasProductVariants = productVariants.length > 0;
+    var existingVariantKeys = bs.variants ? Object.keys(bs.variants).filter(function(k){ return k !== 'default'; }) : [];
+    var productVariantIds = productVariants.map(function(pv){ return pv.id; });
+    var orphanKeys = existingVariantKeys.filter(function(k){ return productVariantIds.indexOf(k) === -1; });
+    // Sanity: if currentVariantId points to a missing key, fall back to 'default'.
+    if (currentVariantId !== 'default' && existingVariantKeys.indexOf(currentVariantId) === -1) {
+      currentVariantId = 'default';
+    }
+    var activeData = getActiveVariantData(bs);
+    var activeKey = currentVariantId || 'default';
+    var fieldMeta = {
+      lineItems: readVariantField(bs, activeKey, 'lineItems'),
+      laborMinutes: readVariantField(bs, activeKey, 'laborMinutes'),
+      otherCost: readVariantField(bs, activeKey, 'otherCost')
+    };
 
     // Resolve sub-assembly costs (multi-level BOM) before calculating
     var resolvedLineItems = resolveSubAssemblyCosts(activeData.lineItems || {}, editingRecipeId ? (function(){var v={};v[editingRecipeId]=true;return v;})() : {}, 0);
@@ -2087,49 +2136,45 @@
     html += '</div>';
     html += '</div>';
 
-    // ---- VARIANT TOGGLE ----
-    html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;">';
-    html += '<div>';
-    html += '<label style="display:flex;align-items:center;gap:8px;font-size:0.85rem;cursor:pointer;font-weight:500;">';
-    html += '<input type="checkbox" ' + (bs.isVariantEnabled ? 'checked' : '') + ' onchange="makerToggleVariants(this.checked)"> Enable Variants';
-    html += '</label>';
-    if (bs.isVariantEnabled) {
-      html += '<div style="display:flex;gap:12px;margin-top:8px;">';
-      html += '<select style="padding:5px 10px;border:1px solid #ddd;border-radius:4px;font-size:0.82rem;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';" onchange="makerUpdateBuilderField(\'variantDimension\', this.value)">';
-      var dims = ['size', 'color', 'material', 'custom'];
-      dims.forEach(function(d) {
-        html += '<option value="' + d + '"' + (bs.variantDimension === d ? ' selected' : '') + '>' + d.charAt(0).toUpperCase() + d.slice(1) + '</option>';
+    // ---- VARIANT TABS (cost-shape model) ----
+    // Always show a Default tab. If the linked product has variants, show one tab per
+    // recipe-variant override that exists, plus an Add dropdown for missing ones.
+    html += '<div style="display:flex;gap:0;border-bottom:2px solid var(--cream-dark);margin-bottom:16px;align-items:center;flex-wrap:wrap;">';
+    html += '<button class="view-tab' + (activeKey === 'default' ? ' active' : '') + '" onclick="makerSwitchVariant(\'default\')" title="Inheritance template — values here are inherited by any variant tab that does not override them.">Default</button>';
+    if (hasProductVariants) {
+      existingVariantKeys.forEach(function(vk) {
+        if (orphanKeys.indexOf(vk) >= 0) return;
+        var pv = productVariants.find(function(p){ return p.id === vk; });
+        var label = variantDisplayName(pv);
+        html += '<button class="view-tab' + (activeKey === vk ? ' active' : '') + '" onclick="makerSwitchVariant(\'' + esc(vk) + '\')">' + esc(label) + '</button>';
       });
-      html += '</select>';
-      html += '<input type="text" value="' + esc(bs.variantLabel || '') + '" placeholder="Label (e.g. Size)" style="width:120px;padding:5px 10px;border:1px solid #ddd;border-radius:4px;font-size:0.82rem;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';" onchange="makerUpdateBuilderField(\'variantLabel\', this.value)">';
-      html += '</div>';
+      orphanKeys.forEach(function(vk) {
+        html += '<button class="view-tab' + (activeKey === vk ? ' active' : '') + '" onclick="makerSwitchVariant(\'' + esc(vk) + '\')" style="color:#b45309;" title="The product variant this tab was linked to was deleted.">⚠ ' + esc(vk.substring(0, 8)) + '</button>';
+      });
+      var remainingProductVariants = productVariants.filter(function(pv){ return existingVariantKeys.indexOf(pv.id) === -1; });
+      if (remainingProductVariants.length > 0) {
+        html += '<select onchange="makerAddVariantTab(this.value); this.value=\'\';" style="margin-left:8px;padding:6px 10px;border:1px solid #ddd;border-radius:4px;font-size:0.82rem;background:var(--cream);color:var(--teal);font-family:\'DM Sans\';cursor:pointer;">';
+        html += '<option value="">+ Add variant...</option>';
+        remainingProductVariants.forEach(function(pv) {
+          html += '<option value="' + esc(pv.id) + '">' + esc(variantDisplayName(pv)) + '</option>';
+        });
+        html += '</select>';
+      }
     }
     html += '</div>';
-    html += '</div>';
 
-    // ---- VARIANT TABS ----
-    if (isVariant) {
-      var variantKeys = Object.keys(bs.variants);
-      html += '<div style="display:flex;gap:0;border-bottom:2px solid var(--cream-dark);margin-bottom:16px;">';
-      variantKeys.forEach(function(vid) {
-        var v = bs.variants[vid];
-        var isActive = currentVariantId === vid;
-        html += '<button class="view-tab' + (isActive ? ' active' : '') + '" onclick="makerSwitchVariant(\'' + esc(vid) + '\')">' + esc(v.label || 'Variant') + '</button>';
-      });
-      if (variantKeys.length < 3) {
-        html += '<button style="padding:10px 16px;font-size:0.82rem;border:none;background:none;color:var(--teal);cursor:pointer;font-family:\'DM Sans\';" onclick="makerAddVariant()">+ Add</button>';
+    // Tab context bar (for non-default tabs): inheritance hint + Reset/Remove buttons
+    if (activeKey !== 'default') {
+      var isOrphan = orphanKeys.indexOf(activeKey) >= 0;
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding:8px 12px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:6px;font-size:0.78rem;">';
+      if (isOrphan) {
+        html += '<span style="color:#b45309;">⚠ Orphaned — the linked product variant was deleted. Remove this tab or relink the product variant.</span>';
+        html += '<button class="btn btn-danger btn-small" onclick="makerRemoveOrphanVariant(\'' + esc(activeKey) + '\')" style="font-size:0.72rem;">Remove</button>';
+      } else {
+        html += '<span style="color:var(--warm-gray);">Fields shown in <em>italic</em> are inherited from Default. Editing them creates an override.</span>';
+        html += '<button class="btn btn-secondary btn-small" onclick="makerResetVariantToDefault(\'' + esc(activeKey) + '\')" style="font-size:0.72rem;">Reset to Default</button>';
       }
       html += '</div>';
-
-      // Variant label edit + delete
-      if (currentVariantId && bs.variants[currentVariantId]) {
-        html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">';
-        html += '<input type="text" value="' + esc(bs.variants[currentVariantId].label || '') + '" placeholder="Variant name" style="padding:5px 10px;border:1px solid #ddd;border-radius:4px;font-size:0.82rem;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';" onchange="makerRenameVariant(\'' + esc(currentVariantId) + '\', this.value)">';
-        if (variantKeys.length > 1) {
-          html += '<button class="btn btn-danger btn-small" style="font-size:0.72rem;" onclick="makerDeleteVariant(\'' + esc(currentVariantId) + '\')">Delete</button>';
-        }
-        html += '</div>';
-      }
     }
 
     // ---- PARTS SECTION ----
@@ -2205,8 +2250,8 @@
     html += '</div>';
 
     html += '<div style="flex:1;">';
-    html += '<label style="display:block;font-size:0.82rem;font-weight:600;margin-bottom:4px;">Time (minutes)</label>';
-    html += '<input type="number" step="1" min="0" value="' + (activeData.laborMinutes || 0) + '" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);box-sizing:border-box;" onchange="makerUpdateBuilderField(\'laborMinutes\', parseFloat(this.value) || 0)">';
+    html += '<label style="display:block;font-size:0.82rem;font-weight:600;margin-bottom:4px;">Time (minutes)' + (fieldMeta.laborMinutes.inherited ? ' <span style="font-weight:400;color:var(--warm-gray-light);">(inherited)</span>' : '') + '</label>';
+    html += '<input type="number" step="1" min="0" value="' + (activeData.laborMinutes || 0) + '" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);box-sizing:border-box;' + (fieldMeta.laborMinutes.inherited ? 'font-style:italic;opacity:0.7;' : '') + '" onchange="makerUpdateBuilderField(\'laborMinutes\', parseFloat(this.value) || 0)">';
     html += '</div>';
 
     html += '<div style="flex:1;text-align:right;">';
@@ -2222,8 +2267,8 @@
     html += '<div style="display:flex;gap:12px;">';
 
     html += '<div style="flex:1;">';
-    html += '<label style="display:block;font-size:0.82rem;font-weight:600;margin-bottom:4px;">Amount ($)</label>';
-    html += '<input type="number" step="0.01" min="0" value="' + (activeData.otherCost || 0) + '" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);box-sizing:border-box;" onchange="makerUpdateBuilderField(\'otherCost\', parseFloat(this.value) || 0)">';
+    html += '<label style="display:block;font-size:0.82rem;font-weight:600;margin-bottom:4px;">Amount ($)' + (fieldMeta.otherCost.inherited ? ' <span style="font-weight:400;color:var(--warm-gray-light);">(inherited)</span>' : '') + '</label>';
+    html += '<input type="number" step="0.01" min="0" value="' + (activeData.otherCost || 0) + '" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);box-sizing:border-box;' + (fieldMeta.otherCost.inherited ? 'font-style:italic;opacity:0.7;' : '') + '" onchange="makerUpdateBuilderField(\'otherCost\', parseFloat(this.value) || 0)">';
     html += '</div>';
 
     html += '<div style="flex:2;">';
@@ -2337,30 +2382,40 @@
       html += '</div>';
     }
 
-    // ---- VARIANT PRICING SUMMARY (when variants enabled) ----
-    if (isVariant && Object.keys(bs.variants).length > 1) {
-      var allCalcs = calculateAllVariants(bs);
+    // ---- VARIANT PRICING SUMMARY (cost-shape — read computed fields written by calculate_price) ----
+    if (hasProductVariants && bs.variants && existingVariantKeys.length > 0 && bs.variantsShape === 'cost') {
+      var activeTier = bs.activePriceTier || 'direct';
+      var marginKey = activeTier + 'MarginPct';
+      var minMarginV = bs.minMarginPercent;
+      // Build display list: Default first, then each per-variant override (orphans last).
+      var rows = [{ key: 'default', label: 'Default', orphan: false }];
+      productVariants.forEach(function(pv) {
+        if (existingVariantKeys.indexOf(pv.id) >= 0) {
+          rows.push({ key: pv.id, label: variantDisplayName(pv), orphan: false });
+        }
+      });
+      orphanKeys.forEach(function(ok) {
+        rows.push({ key: ok, label: '⚠ ' + ok.substring(0, 8), orphan: true });
+      });
+
       html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;">';
       html += '<h4 style="font-size:0.95rem;font-weight:600;margin:0 0 12px;">Variant Pricing Summary</h4>';
+      html += '<p style="font-size:0.75rem;color:var(--warm-gray);margin:0 0 8px;">Computed at last Save & Recalculate. Run again after edits to refresh.</p>';
       html += '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
       html += '<thead><tr>';
-      html += '<th style="text-align:left;padding:6px 8px;font-size:0.72rem;font-weight:600;text-transform:uppercase;color:var(--warm-gray-light);border-bottom:1px solid var(--cream-dark);">' + esc(bs.variantLabel || 'Variant') + '</th>';
+      html += '<th style="text-align:left;padding:6px 8px;font-size:0.72rem;font-weight:600;text-transform:uppercase;color:var(--warm-gray-light);border-bottom:1px solid var(--cream-dark);">Variant</th>';
       html += '<th style="text-align:right;padding:6px 8px;font-size:0.72rem;font-weight:600;text-transform:uppercase;color:var(--warm-gray-light);border-bottom:1px solid var(--cream-dark);">Cost</th>';
       html += '<th style="text-align:right;padding:6px 8px;font-size:0.72rem;font-weight:600;text-transform:uppercase;color:var(--warm-gray-light);border-bottom:1px solid var(--cream-dark);">Wholesale</th>';
       html += '<th style="text-align:right;padding:6px 8px;font-size:0.72rem;font-weight:600;text-transform:uppercase;color:var(--warm-gray-light);border-bottom:1px solid var(--cream-dark);">Direct</th>';
       html += '<th style="text-align:right;padding:6px 8px;font-size:0.72rem;font-weight:600;text-transform:uppercase;color:var(--warm-gray-light);border-bottom:1px solid var(--cream-dark);">Retail</th>';
       html += '<th style="text-align:right;padding:6px 8px;font-size:0.72rem;font-weight:600;text-transform:uppercase;color:var(--warm-gray-light);border-bottom:1px solid var(--cream-dark);">Margin (active)</th>';
       html += '</tr></thead><tbody>';
-      var activeTier = bs.activePriceTier || 'direct';
-      var marginKey = activeTier + 'MarginPct';
-      var minMarginV = bs.minMarginPercent;
-      Object.keys(bs.variants).forEach(function(vid) {
-        var v = bs.variants[vid];
-        var vc = allCalcs[vid] || {};
+      rows.forEach(function(row) {
+        var vc = (bs.variants && bs.variants[row.key]) || {};
         var vMargin = vc[marginKey] || 0;
         var vBelow = minMarginV != null && vMargin < minMarginV;
         html += '<tr>';
-        html += '<td style="padding:8px;font-weight:500;border-bottom:1px solid var(--cream-dark);">' + esc(v.label || 'Variant') + '</td>';
+        html += '<td style="padding:8px;font-weight:500;border-bottom:1px solid var(--cream-dark);' + (row.orphan ? 'color:#b45309;' : '') + '">' + esc(row.label) + '</td>';
         html += '<td style="text-align:right;padding:8px;font-family:monospace;border-bottom:1px solid var(--cream-dark);">$' + (vc.totalCost || 0).toFixed(2) + '</td>';
         html += '<td style="text-align:right;padding:8px;font-family:monospace;border-bottom:1px solid var(--cream-dark);">$' + (vc.wholesalePrice || 0).toFixed(2) + '</td>';
         html += '<td style="text-align:right;padding:8px;font-family:monospace;border-bottom:1px solid var(--cream-dark);">$' + (vc.directPrice || 0).toFixed(2) + '</td>';
@@ -2393,43 +2448,58 @@
 
   function updateBuilderField(field, value) {
     if (!builderState) return;
-    // Variant-scoped fields: laborMinutes, otherCost go to active variant
+    // Variant-scoped fields: laborMinutes, otherCost go to active variant slot
+    // (or default slot when on the Default tab). Editing promotes inherited → override.
     var variantFields = ['laborMinutes', 'otherCost'];
-    if (builderState.isVariantEnabled && currentVariantId && builderState.variants && builderState.variants[currentVariantId] && variantFields.indexOf(field) >= 0) {
-      builderState.variants[currentVariantId][field] = value;
+    if (variantFields.indexOf(field) >= 0) {
+      var slot = ensureVariantSlot(builderState, currentVariantId || 'default');
+      slot[field] = value;
     } else {
       builderState[field] = value;
     }
-    renderRecipeBuilder(); // live reactive re-render
+    renderRecipeBuilder();
   }
 
   function updateLineItemQty(liId, value) {
     if (!builderState) return;
-    var target = getActiveVariantData(builderState);
-    if (!target.lineItems || !target.lineItems[liId]) return;
-    target.lineItems[liId].quantity = parseFloat(value) || 0;
+    var lineItems = materializeLineItems(builderState, currentVariantId || 'default');
+    if (!lineItems[liId]) return;
+    lineItems[liId].quantity = parseFloat(value) || 0;
     renderRecipeBuilder();
   }
 
   function updateLineItemScrap(liId, value) {
     if (!builderState) return;
-    var target = getActiveVariantData(builderState);
-    if (!target.lineItems || !target.lineItems[liId]) return;
-    target.lineItems[liId].scrapPercent = Math.min(50, Math.max(0, parseFloat(value) || 0));
+    var lineItems = materializeLineItems(builderState, currentVariantId || 'default');
+    if (!lineItems[liId]) return;
+    lineItems[liId].scrapPercent = Math.min(50, Math.max(0, parseFloat(value) || 0));
     renderRecipeBuilder();
   }
 
   function removeLineItemUI(liId) {
     if (!builderState) return;
-    var target = getActiveVariantData(builderState);
-    if (!target.lineItems) return;
-    delete target.lineItems[liId];
+    var lineItems = materializeLineItems(builderState, currentVariantId || 'default');
+    delete lineItems[liId];
     renderRecipeBuilder();
   }
 
   async function saveRecipeBuilder() {
     if (!editingRecipeId || !builderState) return;
     try {
+      // Ensure default slot exists so backend always has an inheritance root.
+      var defaultSlot = ensureVariantSlot(builderState, 'default');
+      // If default slot is empty (legacy recipe being saved for the first time in new UI),
+      // seed it from the recipe-root fields so calculate_price has something to work with.
+      if (defaultSlot.lineItems === undefined && builderState.lineItems) {
+        defaultSlot.lineItems = JSON.parse(JSON.stringify(builderState.lineItems));
+      }
+      if (defaultSlot.laborMinutes === undefined && builderState.laborMinutes != null) {
+        defaultSlot.laborMinutes = builderState.laborMinutes;
+      }
+      if (defaultSlot.otherCost === undefined && builderState.otherCost != null) {
+        defaultSlot.otherCost = builderState.otherCost;
+      }
+
       var updates = {
         laborRatePerHour: builderState.laborRatePerHour || 0,
         wholesaleMarkup: builderState.wholesaleMarkup || 1,
@@ -2440,18 +2510,18 @@
         batchSize: builderState.batchSize || 1,
         minMarginPercent: builderState.minMarginPercent != null ? builderState.minMarginPercent : null,
         notes: builderState.notes || '',
-        isVariantEnabled: builderState.isVariantEnabled || false,
-        variantDimension: builderState.variantDimension || '',
-        variantLabel: builderState.variantLabel || ''
+        // New cost-shape model
+        variantsShape: 'cost',
+        variants: builderState.variants || {},
+        // Strip legacy fields
+        isVariantEnabled: null,
+        variantDimension: null,
+        variantLabel: null,
+        // Mirror default slot to recipe root for backend deepest-fallback compat
+        lineItems: defaultSlot.lineItems || builderState.lineItems || {},
+        laborMinutes: defaultSlot.laborMinutes != null ? defaultSlot.laborMinutes : (builderState.laborMinutes || 0),
+        otherCost: defaultSlot.otherCost != null ? defaultSlot.otherCost : (builderState.otherCost || 0)
       };
-      if (builderState.isVariantEnabled && builderState.variants) {
-        updates.variants = builderState.variants;
-        // Keep root lineItems/labor/otherCost for backward compat but don't use them
-      } else {
-        updates.lineItems = builderState.lineItems || {};
-        updates.laborMinutes = builderState.laborMinutes || 0;
-        updates.otherCost = builderState.otherCost || 0;
-      }
       await updateRecipe(editingRecipeId, updates);
       MastAdmin.showToast('Recipe saved');
     } catch (err) {
@@ -3012,8 +3082,8 @@
     }
 
     var liId = 'li_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-    var target = getActiveVariantData(builderState);
-    if (!target.lineItems) target.lineItems = {};
+    var lineItems = materializeLineItems(builderState, currentVariantId || 'default');
+    var target = { lineItems: lineItems };
 
     if (addPartKind === 'recipe') {
       var recipeId = document.getElementById('addPartRecipeId').value;
@@ -3183,56 +3253,29 @@
   window.makerCloseAddPartModal = closeAddPartModal;
   window.makerConfirmAddPart = confirmAddPart;
 
-  // Variants
-  window.makerToggleVariants = function(enabled) {
-    if (!builderState) return;
-    builderState.isVariantEnabled = enabled;
-    if (enabled && (!builderState.variants || Object.keys(builderState.variants).length === 0)) {
-      // Create first variant from existing recipe data
-      var v = createVariant('Default');
-      v.lineItems = JSON.parse(JSON.stringify(builderState.lineItems || {}));
-      v.laborMinutes = builderState.laborMinutes || 0;
-      v.otherCost = builderState.otherCost || 0;
-      builderState.variants = {};
-      builderState.variants[v.variantId] = v;
-      builderState.variantDimension = 'size';
-      builderState.variantLabel = 'Size';
-      currentVariantId = v.variantId;
-    } else if (enabled) {
-      var keys = Object.keys(builderState.variants);
-      currentVariantId = keys[0] || null;
-    } else {
-      currentVariantId = null;
-    }
+  // Variants (cost-shape model — keyed by productVariantId, with 'default' inheritance template)
+  window.makerSwitchVariant = function(key) {
+    currentVariantId = key || 'default';
     renderRecipeBuilder();
   };
-  window.makerSwitchVariant = function(vid) {
-    currentVariantId = vid;
+  window.makerAddVariantTab = function(productVariantId) {
+    if (!builderState || !productVariantId) return;
+    ensureVariantSlot(builderState, productVariantId); // empty override = inherits from default
+    currentVariantId = productVariantId;
     renderRecipeBuilder();
   };
-  window.makerAddVariant = function() {
-    if (!builderState || !builderState.variants) return;
-    if (Object.keys(builderState.variants).length >= 3) {
-      showToast('Maximum 3 variants', 'error');
-      return;
-    }
-    var v = createVariant('Variant ' + (Object.keys(builderState.variants).length + 1));
-    builderState.variants[v.variantId] = v;
-    currentVariantId = v.variantId;
+  window.makerResetVariantToDefault = function(key) {
+    if (!builderState || !key || key === 'default') return;
+    if (!builderState.variants || !builderState.variants[key]) return;
+    builderState.variants[key] = {}; // wipe overrides; tab stays, fully inherited
     renderRecipeBuilder();
   };
-  window.makerDeleteVariant = function(vid) {
-    if (!builderState || !builderState.variants) return;
-    if (Object.keys(builderState.variants).length <= 1) return;
-    delete builderState.variants[vid];
-    var keys = Object.keys(builderState.variants);
-    currentVariantId = keys[0] || null;
+  window.makerRemoveOrphanVariant = function(key) {
+    if (!builderState || !key || key === 'default') return;
+    if (!builderState.variants) return;
+    delete builderState.variants[key];
+    currentVariantId = 'default';
     renderRecipeBuilder();
-  };
-  window.makerRenameVariant = function(vid, name) {
-    if (!builderState || !builderState.variants || !builderState.variants[vid]) return;
-    builderState.variants[vid].label = name;
-    // Don't re-render (focus would be lost on the input)
   };
 
   // Settings & Seeding
