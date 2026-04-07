@@ -469,8 +469,9 @@
       if (prod.status === 'archived') return;
       var price = '';
       if (prod.retailPrice) price = ' ($' + parseFloat(prod.retailPrice).toFixed(2) + ')';
-      else if (prod.price) price = ' ($' + parseFloat(prod.price).toFixed(2) + ')';
-      options += '<option value="' + esc(prod.pid) + '" data-name="' + esc(prod.name) + '" data-price="' + (prod.retailPrice || prod.price || 0) + '">' + esc(prod.name) + price + '</option>';
+      else if (typeof prod.priceCents === 'number' && prod.priceCents > 0) price = ' (' + (window.formatCents ? window.formatCents(prod.priceCents) : ('$' + (prod.priceCents / 100).toFixed(2))) + ')';
+      var dataPrice = prod.retailPrice || (typeof prod.priceCents === 'number' ? (prod.priceCents / 100) : 0);
+      options += '<option value="' + esc(prod.pid) + '" data-name="' + esc(prod.name) + '" data-price="' + dataPrice + '">' + esc(prod.name) + price + '</option>';
     });
 
     var rowHtml =
@@ -686,8 +687,9 @@
       if (prod.status === 'archived') return;
       var price = '';
       if (prod.retailPrice) price = ' ($' + parseFloat(prod.retailPrice).toFixed(2) + ')';
-      else if (prod.price) price = ' ($' + parseFloat(prod.price).toFixed(2) + ')';
-      options += '<option value="' + esc(prod.pid) + '" data-name="' + esc(prod.name) + '" data-price="' + (prod.retailPrice || prod.price || 0) + '">' + esc(prod.name) + price + '</option>';
+      else if (typeof prod.priceCents === 'number' && prod.priceCents > 0) price = ' (' + (window.formatCents ? window.formatCents(prod.priceCents) : ('$' + (prod.priceCents / 100).toFixed(2))) + ')';
+      var dataPrice = prod.retailPrice || (typeof prod.priceCents === 'number' ? (prod.priceCents / 100) : 0);
+      options += '<option value="' + esc(prod.pid) + '" data-name="' + esc(prod.name) + '" data-price="' + dataPrice + '">' + esc(prod.name) + price + '</option>';
     });
 
     var html =

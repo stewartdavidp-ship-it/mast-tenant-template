@@ -1267,7 +1267,8 @@
       h += '<option value="">— Select a product —</option>';
       prodOptions.forEach(function(prod) {
         var sel = prod.pid === currentPid ? ' selected' : '';
-        h += '<option value="' + esc(prod.pid) + '"' + sel + '>' + esc(prod.name) + (prod.price ? ' (' + esc(prod.price) + ')' : '') + '</option>';
+        var prodPriceStr = (typeof prod.priceCents === 'number' && prod.priceCents > 0 && window.formatCents) ? (' (' + window.formatCents(prod.priceCents) + ')') : '';
+        h += '<option value="' + esc(prod.pid) + '"' + sel + '>' + esc(prod.name) + prodPriceStr + '</option>';
       });
       h += '</select>';
 

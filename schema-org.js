@@ -105,7 +105,7 @@
   function product(p, saleInfo) {
     var base = getBaseUrl();
     var pid = p.pid || p.id || '';
-    var priceCents = p.priceCents || (p.price ? Math.round(p.price * 100) : 0);
+    var priceCents = (typeof p.priceCents === 'number') ? p.priceCents : 0;
 
     var schema = {
       '@context': 'https://schema.org',
@@ -230,7 +230,7 @@
   function course(cls) {
     var brand = getBrand();
     var base = getBaseUrl();
-    var priceCents = cls.priceCents || (cls.price ? Math.round(cls.price * 100) : 0);
+    var priceCents = (typeof cls.priceCents === 'number') ? cls.priceCents : 0;
 
     var schema = {
       '@context': 'https://schema.org',

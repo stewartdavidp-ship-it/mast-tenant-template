@@ -633,8 +633,7 @@ window.TENANT_READY.then(function() {
           // Seconds products: hide if no price or no stock (they can't be built, only sold from inventory)
           if (cats.indexOf('seconds') !== -1) {
             var hasPriceCents = typeof p.priceCents === 'number' && p.priceCents > 0;
-            var hasPriceNum = typeof p.price === 'number' && p.price > 0;
-            if (!hasPriceCents && !hasPriceNum) return false;
+            if (!hasPriceCents) return false;
             var si = p.stockInfo;
             if (si) {
               var eff = (si.totalAvailable || 0);
@@ -699,7 +698,7 @@ window.TENANT_READY.then(function() {
       html += '<div class="product-grid">';
       items.forEach(function(product) {
         var name = product.name || '';
-        var price = product.price || '';
+        var priceCentsVal = (typeof product.priceCents === 'number') ? product.priceCents : 0;
         var pid = product.pid || '';
         var img = (product.images && product.images.length > 0) ? (typeof product.images[0] === 'string' ? product.images[0] : (product.images[0].url || '')) : '';
         var link = pid ? 'product.html?id=' + encodeURIComponent(pid) : 'shop.html';
@@ -714,25 +713,25 @@ window.TENANT_READY.then(function() {
         // Format price with "from" prefix for variant products, sale strikethrough
         var priceDisplay = '';
         var saleInfo = saleLookup[pid];
-        var isOnSale = saleInfo && typeof product.price === 'number' && product.price > 0;
+        var isOnSale = saleInfo && priceCentsVal > 0;
         if (isSold || isSoldSculpture) {
           priceDisplay = '<p class="product-price" style="font-size:0.82rem;color:var(--warm-gray,#6B6560);">Commission available</p>';
         } else if (product.priceType === 'request') {
           priceDisplay = '<p class="product-price" style="font-size:0.82rem;color:var(--warm-gray,#6B6560);">Price on request</p>';
         } else if (isOnSale && product.priceType !== 'from') {
-          var origFormatted = formatCents(product.price);
-          var salePrice = calcSalePrice(product.price, saleInfo.discountType, saleInfo.discountValue);
+          var origFormatted = formatCents(priceCentsVal);
+          var salePrice = calcSalePrice(priceCentsVal, saleInfo.discountType, saleInfo.discountValue);
           priceDisplay = '<p class="product-price">' +
             '<span style="text-decoration:line-through;color:var(--warm-gray,#6B6560);font-weight:400;">' + origFormatted + '</span> ' +
             '<span style="font-weight:700;color:var(--accent,var(--primary,#c05621));">' + formatCents(salePrice) + '</span></p>';
-        } else if (product.priceType === 'from' && price) {
+        } else if (product.priceType === 'from' && priceCentsVal > 0) {
           if (isOnSale && product.variants && product.variants.length > 0) {
             // Calculate true "from" price accounting for variant-specific sale targeting
             var minEffective = Infinity;
             var minOriginal = Infinity;
             for (var vi = 0; vi < product.variants.length; vi++) {
               var v = product.variants[vi];
-              var vp = v.priceCents || v.price || product.price;
+              var vp = (typeof v.priceCents === 'number') ? v.priceCents : priceCentsVal;
               if (typeof vp !== 'number') continue;
               if (vp < minOriginal) minOriginal = vp;
               var vKey = v.combo ? Object.values(v.combo).join('|') : (v.name || '');
@@ -748,18 +747,15 @@ window.TENANT_READY.then(function() {
               priceDisplay = '<p class="product-price"><span style="font-size:0.8rem;color:var(--warm-gray,#6B6560);font-weight:400;">from </span>' + formatCents(minOriginal) + '</p>';
             }
           } else if (isOnSale) {
-            var formattedPrice = typeof product.price === 'number' ? formatCents(product.price) : esc(price);
-            var fromSalePrice = calcSalePrice(product.price, saleInfo.discountType, saleInfo.discountValue);
+            var fromSalePrice = calcSalePrice(priceCentsVal, saleInfo.discountType, saleInfo.discountValue);
             priceDisplay = '<p class="product-price"><span style="font-size:0.8rem;color:var(--warm-gray,#6B6560);font-weight:400;">from </span>' +
-              '<span style="text-decoration:line-through;color:var(--warm-gray,#6B6560);font-weight:400;">' + formattedPrice + '</span> ' +
+              '<span style="text-decoration:line-through;color:var(--warm-gray,#6B6560);font-weight:400;">' + formatCents(priceCentsVal) + '</span> ' +
               '<span style="font-weight:700;color:var(--accent,var(--primary,#c05621));">' + formatCents(fromSalePrice) + '</span></p>';
           } else {
-            var formattedPrice = typeof product.price === 'number' ? formatCents(product.price) : esc(price);
-            priceDisplay = '<p class="product-price"><span style="font-size:0.8rem;color:var(--warm-gray,#6B6560);font-weight:400;">from </span>' + formattedPrice + '</p>';
+            priceDisplay = '<p class="product-price"><span style="font-size:0.8rem;color:var(--warm-gray,#6B6560);font-weight:400;">from </span>' + formatCents(priceCentsVal) + '</p>';
           }
-        } else if (price) {
-          var regularPrice = typeof product.price === 'number' ? formatCents(product.price) : esc(price);
-          priceDisplay = '<p class="product-price">' + regularPrice + '</p>';
+        } else if (priceCentsVal > 0) {
+          priceDisplay = '<p class="product-price">' + formatCents(priceCentsVal) + '</p>';
         }
         var saleBadge = isOnSale && !isSold;
         var earlyAccessBadge = product._earlyAccess ? { label: 'Early Access', bg: 'rgba(42,124,111,0.9)' } : null;

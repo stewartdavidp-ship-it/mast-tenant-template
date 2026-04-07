@@ -19091,9 +19091,7 @@ function renderProducts() {
     var imgSrc = firstProductImage(p);
     var priceHtml = p.priceCents
       ? '<div class="product-card-price">' + formatPriceCents(p.priceCents) + '</div>'
-      : p.price
-        ? '<div class="product-card-price">' + (typeof p.price === 'number' ? formatPriceCents(p.price) : esc(p.price)) + '</div>'
-        : '<div class="product-card-price no-price">Price on request</div>';
+      : '<div class="product-card-price no-price">Price on request</div>';
 
     var catsHtml = '';
     if (p.categories && p.categories.length) {
@@ -19994,7 +19992,7 @@ function renderInventoryOverview() {
     return {
       pid: p.pid,
       name: p.name,
-      price: p.priceCents ? formatPriceCents(p.priceCents) : (typeof p.price === 'number' ? formatPriceCents(p.price) : (p.price || '')),
+      price: p.priceCents ? formatPriceCents(p.priceCents) : '',
       imgSrc: firstProductImage(p),
       categories: p.categories || [],
       stockType: stockType,
@@ -20929,7 +20927,7 @@ function renderProductDetail(pid) {
   // Defaults for new product
   if (isCreate) {
     product = {
-      pid: '', name: '', description: '', shortDescription: '', price: '', priceCents: null,
+      pid: '', name: '', description: '', shortDescription: '', priceCents: null,
       slug: '', categories: [], availability: 'available', sortOrder: null,
       options: [], images: [], imageIds: [],
       buildTime: null, costToBuild: null, materials: [],
@@ -20950,7 +20948,6 @@ function renderProductDetail(pid) {
     '<div style="flex:1;">' +
       '<h2 class="product-detail-name">' + esc(product.name || 'New Product') + '</h2>' +
       (product.priceCents ? '<div class="product-detail-price">' + formatPriceCents(product.priceCents) + '</div>' :
-       product.price ? '<div class="product-detail-price">' + (typeof product.price === 'number' ? formatPriceCents(product.price) : esc(product.price)) + '</div>' :
        '<div style="color:var(--warm-gray);font-style:italic;margin-bottom:8px;">Price on request</div>') +
       (product.availability === 'discontinued' ? '<span class="status-badge stock-badge out-of-stock">Discontinued</span>' : '') +
     '</div>' +
@@ -20981,7 +20978,7 @@ function renderProductDetail(pid) {
   var catOptions = CATEGORIES.length > 0 ? CATEGORIES : ['other'];
   var currentPrice = product.priceCents !== null && product.priceCents !== undefined
     ? (product.priceCents / 100).toFixed(2)
-    : (product.price ? (typeof product.price === 'number' ? (product.price / 100).toFixed(2) : String(product.price).replace('$', '')) : '');
+    : '';
 
   var detailsHtml = '<div class="pd-tab-content" data-tab="details" style="' + (tab !== 'details' ? 'display:none;' : '') + 'padding:16px 0;">';
   if (isEditing) {
@@ -21638,7 +21635,6 @@ async function saveProduct(pid) {
       variants: variants.length > 0 ? variants : null,
       priceType: priceType,
       priceCents: priceCents,
-      price: priceCents !== null ? '$' + (priceCents / 100).toFixed(2) : '',
       etsyListingId: etsyId,
       buildTime: buildTime,
       costToBuild: costToBuild,

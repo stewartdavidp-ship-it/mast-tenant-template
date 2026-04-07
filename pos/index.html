@@ -694,7 +694,6 @@ function handleCapture(result) {
         productName: item.product || (prod ? prod.name : 'Unknown'),
         quantity: item.quantity || 1,
         confidence: item.confidence || 0,
-        price: prod ? prod.price : '',
         priceCents: prod ? (prod.priceCents || 0) : 0,
         imageUrl: prod && prod.images && prod.images.length > 0 ? (typeof prod.images[0] === 'string' ? prod.images[0] : (prod.images[0].url || '')) : ''
       };
@@ -734,7 +733,7 @@ function renderItems() {
       '<div class="sale-item-info">' +
         '<div class="sale-item-name">' + item.productName + '</div>' +
         '<div class="sale-item-meta">' +
-          (item.price ? item.price + ' &bull; ' : '') +
+          (item.priceCents > 0 && window.formatCents ? window.formatCents(item.priceCents) + ' &bull; ' : '') +
           '<span class="' + confClass + '">' + confIcon + ' ' + item.confidence + '%</span>' +
         '</div>' +
       '</div>' +
@@ -985,7 +984,7 @@ function renderPicker(filter) {
       (img ? '<img src="' + img + '" alt="" loading="lazy">' : '<div style="width:100%;aspect-ratio:1;background:var(--border);"></div>') +
       '<div class="picker-card-info">' +
         '<div class="picker-card-name">' + (p.name || '') + '</div>' +
-        '<div class="picker-card-price">' + (p.price || '') + '</div>' +
+        '<div class="picker-card-price">' + (typeof p.priceCents === 'number' && p.priceCents > 0 ? '$' + (p.priceCents / 100).toFixed(2) : '') + '</div>' +
       '</div>' +
     '</div>';
   });
@@ -1008,7 +1007,6 @@ function pickProduct(pid) {
       productName: prod.name,
       quantity: 1,
       confidence: 100, // manual pick
-      price: prod.price || '',
       priceCents: prod.priceCents || 0,
       imageUrl: prod.images && prod.images.length > 0 ? (typeof prod.images[0] === 'string' ? prod.images[0] : (prod.images[0].url || '')) : ''
     });

@@ -1116,7 +1116,7 @@
         }
         window._productVariants = combos.map(function(combo) {
           var idParts = Object.keys(combo).map(function(k) { return slugify(combo[k]); });
-          return { id: idParts.join('-'), options: combo, combo: combo, priceCents: p.priceCents || p.price };
+          return { id: idParts.join('-'), options: combo, combo: combo, priceCents: (typeof p.priceCents === 'number' ? p.priceCents : 0) };
         });
       } else {
         window._productVariants = null;
@@ -1125,7 +1125,8 @@
 
       // Price
       var priceEl = document.getElementById('productPrice');
-      if (p.priceType === 'request' || (!p.price && !p.variants)) {
+      var pCents = (typeof p.priceCents === 'number') ? p.priceCents : 0;
+      if (p.priceType === 'request' || (!pCents && !p.variants)) {
         priceEl.textContent = 'Price on request';
         priceEl.classList.add('no-price');
         var cartBtn = document.getElementById('addToCartBtn');
@@ -1137,8 +1138,8 @@
         var anySaleApplied = false;
         for (var vi = 0; vi < window._productVariants.length; vi++) {
           var v = window._productVariants[vi];
-          var vp = v.priceCents || v.price;
-          if (typeof vp !== 'number') continue;
+          var vp = (typeof v.priceCents === 'number') ? v.priceCents : 0;
+          if (!vp) continue;
           if (vp < lowest) lowest = vp;
           if (_productSaleInfo) {
             var vKey = v.combo ? (window._requiredOptions || []).map(function(l) { return v.combo[l]; }).join('|') : '';
@@ -1157,14 +1158,14 @@
         } else {
           priceEl.innerHTML = '<span class="price-prefix">from</span>' + escHtml(formatPriceCents(lowest));
         }
-      } else if (p.price && _productSaleInfo) {
-        var saleP = _calcSalePrice(p.price);
+      } else if (pCents && _productSaleInfo) {
+        var saleP = _calcSalePrice(pCents);
         var saleNameLabel = _productSaleInfo.saleName ? ' ' + escHtml(_productSaleInfo.saleName) : '';
-        priceEl.innerHTML = '<span style="text-decoration:line-through;color:var(--warm-gray,#6B6560);font-weight:400;">' + formatPriceCents(p.price) + '</span> ' +
+        priceEl.innerHTML = '<span style="text-decoration:line-through;color:var(--warm-gray,#6B6560);font-weight:400;">' + formatPriceCents(pCents) + '</span> ' +
           '<span style="font-weight:700;color:var(--accent,var(--primary,#c05621));">' + formatPriceCents(saleP) + '</span> ' +
           '<span style="display:inline-block;margin-left:8px;background:rgba(192,86,33,0.85);color:white;font-size:0.7rem;font-weight:600;padding:3px 8px;border-radius:4px;vertical-align:middle;">SALE' + saleNameLabel + '</span>';
-      } else if (p.price) {
-        priceEl.textContent = displayPrice(p.price);
+      } else if (pCents) {
+        priceEl.textContent = formatPriceCents(pCents);
       } else {
         priceEl.textContent = 'Price on request';
         priceEl.classList.add('no-price');
@@ -1345,7 +1346,7 @@
               if (allPicked) {
                 var variant = findVariant(window._productVariants, window._selectedOptions);
                 if (variant) {
-                  var vPrice = variant.priceCents || variant.price;
+                  var vPrice = (typeof variant.priceCents === 'number') ? variant.priceCents : 0;
                   // Check variant-level sale eligibility
                   var variantOnSale = false;
                   if (window._productSaleInfo && vPrice) {
@@ -1532,7 +1533,7 @@
     var selected = window._selectedOptions || {};
     var allSelected = required.every(function(label) { return selected[label]; });
     var p = window._productData;
-    var hasPrice = p && (p.price || window._resolvedVariantPrice);
+    var hasPrice = p && (p.priceCents || window._resolvedVariantPrice);
     // If variants exist with pricing, require a resolved variant price
     if (window._productVariants && window._productVariants.length > 0) {
       hasPrice = !!window._resolvedVariantPrice;
@@ -1634,7 +1635,7 @@
     if (!p) return;
 
     var images = window._productImages || [];
-    var baseCents = window._resolvedVariantPrice || parsePriceToCents(p.price);
+    var baseCents = window._resolvedVariantPrice || (typeof p.priceCents === 'number' ? p.priceCents : 0);
     var saleInfo = window._productSaleInfo;
     var onSale = false;
     var saleCents = null;
@@ -1652,7 +1653,6 @@
         saleCents = window._calcSalePrice(baseCents);
       }
     }
-    var resolvedPrice = onSale && saleCents != null ? formatPriceCents(saleCents) : formatPriceCents(baseCents);
     var resolvedCents = onSale && saleCents != null ? saleCents : baseCents;
     // Compute available stock for strict-mode products
     var cartAvailableStock = null;
@@ -1687,7 +1687,6 @@
     MastCart.addItem({
       pid: p.pid,
       name: p.name,
-      price: resolvedPrice,
       priceCents: resolvedCents,
       image: (document.getElementById('mainImage') || {}).src || images[0] || '',
       options: Object.assign({}, window._selectedOptions),

@@ -90,22 +90,22 @@
 
   function calcSubtotal() {
     var items = window.MastCart.getItems();
-    var total = 0;
+    var cents = 0;
     for (var i = 0; i < items.length; i++) {
-      total += parsePrice(items[i].price) * (items[i].qty || 1);
+      cents += (items[i].priceCents || 0) * (items[i].qty || 1);
     }
-    return Math.round(total * 100) / 100;
+    return cents / 100;
   }
 
   // Taxable subtotal excludes gift cards (stored value, not taxable)
   function calcTaxableSubtotal() {
     var items = window.MastCart.getItems();
-    var total = 0;
+    var cents = 0;
     for (var i = 0; i < items.length; i++) {
       if (items[i].bookingType === 'gift-card') continue;
-      total += parsePrice(items[i].price) * (items[i].qty || 1);
+      cents += (items[i].priceCents || 0) * (items[i].qty || 1);
     }
-    return Math.round(total * 100) / 100;
+    return cents / 100;
   }
 
   // ── Firebase helpers ──
@@ -347,12 +347,11 @@
     var user = window.MastCart.getCurrentUser();
     var payload = {
       items: items.map(function(it) {
-        var mapped = { pid: it.pid, name: it.name, options: it.options, price: it.price, qty: it.qty, isWholesale: it.isWholesale || false };
+        var mapped = { pid: it.pid, name: it.name, options: it.options, priceCents: it.priceCents || 0, qty: it.qty, isWholesale: it.isWholesale || false };
         if (it.variantId) mapped.variantId = it.variantId;
         if (it.bookingType) mapped.bookingType = it.bookingType;
         if (it.classId) mapped.classId = it.classId;
         if (it.sessionId) mapped.sessionId = it.sessionId;
-        if (it.priceCents != null) mapped.priceCents = it.priceCents;
         if (it.shippingCategory) mapped.shippingCategory = it.shippingCategory;
         if (it.totalSessions) mapped.totalSessions = it.totalSessions;
         return mapped;
@@ -1457,7 +1456,7 @@
       // For series: priceCents is total series price, divide by totalSessions for per-session cost
       // For single-session: priceCents is already per-seat, don't divide by qty
       var priceForDivision = item.totalSessions || 1;
-      var unitPriceCents = Math.round((item.priceCents || Math.round(parsePrice(item.price) * 100)) / priceForDivision);
+      var unitPriceCents = Math.round((item.priceCents || 0) / priceForDivision);
       var totalCoveredCents = 0;
       var totalSurchargeCents = 0;
       var totalVisitsUsed = 0;
@@ -1635,7 +1634,7 @@
       if (item.isGiftCard || item.bookingType === 'gift-card') return;
       if (item.options && item.options.bookingType === 'gift-card') return;
       if (exclusions.length > 0 && item.category && exclusions.indexOf(item.category) !== -1) return;
-      eligibleCents += (item.priceCents || Math.round((parseFloat(item.price) || 0) * 100)) * (item.qty || 1);
+      eligibleCents += (item.priceCents || 0) * (item.qty || 1);
     });
 
     // Subtract coupon discount
@@ -1883,7 +1882,7 @@
         optStr = oParts.join(' &middot; ');
       }
 
-      var lineTotal = parsePrice(item.price) * (item.qty || 1);
+      var lineTotalCents = (item.priceCents || 0) * (item.qty || 1);
       html += '<div class="review-item">' +
         imgHtml +
         '<div class="review-item-info">' +
@@ -1891,7 +1890,7 @@
           (optStr ? '<div class="review-item-meta">' + optStr + '</div>' : '') +
           '<div class="review-item-meta">Qty: ' + item.qty + '</div>' +
         '</div>' +
-        '<div class="review-item-price">' + formatMoney(lineTotal) + '</div>' +
+        '<div class="review-item-price">' + formatMoney(lineTotalCents / 100) + '</div>' +
       '</div>';
     }
     html += '</div>';
@@ -2184,13 +2183,12 @@
       shipping: checkoutData.shipping,
       billing: checkoutData.billing,
       items: items.map(function (it, idx) {
-        var mapped = { pid: it.pid, name: it.name, options: it.options, price: it.price, qty: it.qty, isWholesale: it.isWholesale || false };
+        var mapped = { pid: it.pid, name: it.name, options: it.options, priceCents: it.priceCents || 0, qty: it.qty, isWholesale: it.isWholesale || false };
         if (it.variantId) mapped.variantId = it.variantId;
         // Pass booking fields so server can verify prices from class data instead of products
         if (it.bookingType) mapped.bookingType = it.bookingType;
         if (it.classId) mapped.classId = it.classId;
         if (it.sessionId) mapped.sessionId = it.sessionId;
-        if (it.priceCents != null) mapped.priceCents = it.priceCents;
         // Attach pass assignment for server-side deduction (multi-pass)
         var passAssignment = checkoutData.passAssignments[idx];
         if (passAssignment && passAssignment.passes && passAssignment.passes.length > 0) {
@@ -2334,7 +2332,7 @@
       shipping: checkoutData.shipping,
       billing: checkoutData.billing.same ? checkoutData.shipping : checkoutData.billing,
       items: items.map(function(it) {
-        var mapped = { pid: it.pid, name: it.name, options: it.options, price: it.price, qty: it.qty, priceCents: it.priceCents || 0 };
+        var mapped = { pid: it.pid, name: it.name, options: it.options, priceCents: it.priceCents || 0, qty: it.qty };
         if (it.variantId) mapped.variantId = it.variantId;
         if (it.bookingType) mapped.bookingType = it.bookingType;
         if (it.classId) mapped.classId = it.classId;
@@ -2483,8 +2481,7 @@
           productName: it.name,
           options: it.options || {},
           selectedOptions: it.options || {},
-          priceCents: it.priceCents || Math.round(parsePrice(it.price) * 100),
-          price: (it.priceCents || Math.round(parsePrice(it.price) * 100)) / 100,
+          priceCents: it.priceCents || 0,
           qty: it.qty || 1,
           isWholesale: it.isWholesale || false
         };
@@ -2851,7 +2848,7 @@
 
     gcItems.forEach(function(item) {
       var qty = item.qty || 1;
-      var amountCents = item.priceCents || Math.round(parseFloat((item.price || '0').toString().replace(/[^0-9.]/g, '')) * 100);
+      var amountCents = item.priceCents || 0;
       var giftType = (item.options && item.options.giftType) || 'self';
       var recipientEmail = (item.options && item.options.recipientEmail) || '';
 

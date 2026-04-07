@@ -1936,7 +1936,7 @@
         html += '<td><span style="color:var(--warm-gray-light);font-size:0.82rem;">no recipe</span></td>';
         html += '<td style="text-align:right;">—</td>';
         html += '<td>—</td>';
-        html += '<td style="text-align:right;font-family:monospace;">$' + (p.priceCents ? (p.priceCents / 100).toFixed(2) : (p.price || 0).toFixed(2)) + '</td>';
+        html += '<td style="text-align:right;font-family:monospace;">$' + (p.priceCents ? (p.priceCents / 100).toFixed(2) : '0.00') + '</td>';
         html += '<td style="text-align:right;">';
         html += '<button class="btn btn-outline btn-small" data-pid="' + esc(pid) + '" data-name="' + esc(p.name || '') + '" onclick="makerCreateRecipeForProduct(this.dataset.pid, this.dataset.name)">+ Add Recipe</button>';
         html += '</td>';

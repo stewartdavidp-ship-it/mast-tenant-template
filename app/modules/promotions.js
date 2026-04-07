@@ -87,7 +87,7 @@
       return {
         pid: val.pid || entry[0],
         name: val.name || entry[0],
-        price: val.price || val.priceCents || 0,
+        priceCents: val.priceCents || 0,
         categories: val.categories || [],
         options: val.options || [],
         status: val.status || 'active'
@@ -253,7 +253,7 @@
       for (var i = 0; i < allProducts.length; i++) {
         var p = allProducts[i];
         var isChecked = existingPids.indexOf(p.pid) !== -1;
-        var priceStr = p.price ? formatCents(p.price) : '';
+        var priceStr = p.priceCents ? formatCents(p.priceCents) : '';
         html += '<label style="display:flex;align-items:center;gap:8px;padding:6px 4px;cursor:pointer;border-bottom:1px solid var(--border-light,#eee);">' +
           '<input type="checkbox" class="promo-product-cb" data-pid="' + esc(p.pid) + '"' + (isChecked ? ' checked' : '') + ' />' +
           '<span style="flex:1;">' + esc(p.name) + '</span>' +

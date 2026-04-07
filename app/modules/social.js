@@ -521,7 +521,8 @@
       // Access productsData from core (global)
       var products = window.productsData || [];
       products.forEach(function(p) {
-        html += '<option value="' + esc(p.pid) + '"' + (d.productId === p.pid ? ' selected' : '') + '>' + esc(p.name) + (p.price ? ' — ' + esc(p.price) : '') + '</option>';
+        var pPriceStr = (typeof p.priceCents === 'number' && p.priceCents > 0 && window.formatCents) ? (' — ' + window.formatCents(p.priceCents)) : '';
+        html += '<option value="' + esc(p.pid) + '"' + (d.productId === p.pid ? ' selected' : '') + '>' + esc(p.name) + pPriceStr + '</option>';
       });
       html += '</select></div>';
     } else if (d.subjectType === 'event') {
@@ -642,7 +643,7 @@
       var product = products.find(function(p) { return p.pid === d.productId; });
       if (product) {
         d.productName = product.name;
-        d.productPrice = product.price;
+        d.productPriceCents = product.priceCents || 0;
         d.productMaterials = product.materials;
         d.productCategory = product.categories ? product.categories.join(', ') : '';
       }

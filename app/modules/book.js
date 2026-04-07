@@ -3135,7 +3135,7 @@
       if (!o.items) return;
       (Array.isArray(o.items) ? o.items : Object.values(o.items)).forEach(function(item) {
         if (item.bookingType === 'class' || item.bookingType === 'pass') {
-          revenue += (item.total || item.price || 0);
+          revenue += (item.total || ((item.priceCents || 0) / 100) || 0);
         }
       });
     });
@@ -3237,7 +3237,7 @@
           if (!o.items) return;
           (Array.isArray(o.items) ? o.items : Object.values(o.items)).forEach(function(item) {
             if (item.bookingType === 'class' && item.classId === cid) {
-              clsRevenue += (item.total || item.price || 0);
+              clsRevenue += (item.total || ((item.priceCents || 0) / 100) || 0);
             }
           });
         });

@@ -1226,7 +1226,7 @@ window.TENANT_READY.then(function() {
           (options ? '<div class="order-item-options">' + esc(options) + '</div>' : '') +
         '</div>' +
         '<div class="order-item-qty">&times;' + (item.qty || 1) + '</div>' +
-        '<div class="order-item-price">' + formatPrice(item.price * (item.qty || 1)) + '</div>' +
+        '<div class="order-item-price">' + formatPrice(((item.priceCents || 0) * (item.qty || 1)) / 100) + '</div>' +
       '</div>';
     }
     html += '</div>';
@@ -1886,7 +1886,7 @@ window.TENANT_READY.then(function() {
       var availableQty = (item.qty || 1) - (item.returnedQty || 0);
       if (availableQty <= 0) continue; // Already fully returned
       var name = item.name || item.productName || 'Item';
-      var price = (item.price || 0) * availableQty;
+      var price = ((item.priceCents || 0) / 100) * availableQty;
       var qtyLabel = availableQty < (item.qty || 1)
         ? availableQty + ' of ' + (item.qty || 1) + ' remaining'
         : 'x' + availableQty;
@@ -1944,7 +1944,7 @@ window.TENANT_READY.then(function() {
       var cb = document.getElementById('rmaItem_' + i);
       if (cb && cb.checked) {
         var availQty = parseInt(cb.getAttribute('data-available-qty') || '0', 10) || (items[i].qty || 1);
-        selectedTotal += (items[i].price || 0) * availQty;
+        selectedTotal += ((items[i].priceCents || 0) / 100) * availQty;
         selectedCount++;
       }
     }

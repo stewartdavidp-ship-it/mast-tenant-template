@@ -718,7 +718,6 @@ async function runWholesaleSeed() {
         createdAt: new Date().toISOString()
       };
       if (np.priceCents) product.priceCents = np.priceCents;
-      if (np.priceCents) product.price = '$' + (np.priceCents / 100).toFixed(2);
       updates['public/products/' + np.pid] = product;
     });
 

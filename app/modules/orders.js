@@ -445,7 +445,7 @@
           (optStr ? '<div class="order-item-options">' + esc(optStr) + '</div>' : '') +
           ffHtml +
         '</div>' +
-        '<div class="order-item-price">$' + ((item.price || 0) * (item.qty || 1)).toFixed(2) + '</div>' +
+        '<div class="order-item-price">$' + (((item.priceCents || 0) * (item.qty || 1)) / 100).toFixed(2) + '</div>' +
       '</div>';
     });
 

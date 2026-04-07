@@ -1255,7 +1255,7 @@
             html += '<label style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--cream-dark);border-radius:6px;margin-bottom:4px;cursor:pointer;font-size:0.85rem;">';
             html += '<input type="checkbox"' + (sel ? ' checked' : '') + ' onchange="wpToggleCherryPick(\'' + esc(job.id) + '\', \'products\', \'' + esc(p.url || String(idx)) + '\', this.checked)">';
             html += '<span style="flex:1;">' + esc(p.title || 'Unknown Product');
-            if (p.price) html += ' &mdash; ' + esc(p.price);
+            if (typeof p.priceCents === 'number' && p.priceCents > 0 && window.formatCents) html += ' &mdash; ' + window.formatCents(p.priceCents);
             html += '</span>';
             html += '</label>';
           });
@@ -1784,7 +1784,6 @@
       html += '<div style="font-weight:600;font-size:0.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(p.name || 'Untitled') + '</div>';
       html += '<div style="font-size:0.8rem;color:var(--warm-gray);">';
       if (p.priceCents) html += '$' + (p.priceCents / 100).toFixed(2);
-      else if (p.price) html += esc(String(p.price));
       if (isDraft) html += ' &middot; <span style="color:var(--amber);">Draft</span>';
       else html += ' &middot; <span style="color:var(--teal);">Published</span>';
       html += '</div>';

@@ -95,6 +95,7 @@
   // at add-to-cart time or by tenant config in the future.
   var ITEM_TYPE_DEFAULTS = {
     product:          { taxable: true,  requiresShipping: true,  loyaltyEligible: true,  discountEligible: true,  passEligible: false, fulfillmentType: 'ship' },
+    'digital':        { taxable: true,  requiresShipping: false, loyaltyEligible: true,  discountEligible: true,  passEligible: false, fulfillmentType: 'digital' },
     'class':          { taxable: true,  requiresShipping: false, loyaltyEligible: true,  discountEligible: false, passEligible: true,  fulfillmentType: 'enrollment' },
     'pass':           { taxable: true,  requiresShipping: false, loyaltyEligible: false, discountEligible: false, passEligible: false, fulfillmentType: 'wallet-credit' },
     'gift-card':      { taxable: false, requiresShipping: false, loyaltyEligible: false, discountEligible: false, passEligible: false, fulfillmentType: 'wallet-credit' },
@@ -103,13 +104,23 @@
   };
 
   /**
+   * Canonical money formatter. Takes integer cents, returns "$X.XX".
+   * This is the single cents-based helper used across tenant template pages.
+   */
+  function formatCents(cents) {
+    var n = (typeof cents === 'number' && isFinite(cents)) ? cents : 0;
+    return '$' + (n / 100).toFixed(2);
+  }
+
+  /**
    * Returns the canonical itemType for a cart item.
-   * If an explicit itemType is provided, use it. Otherwise infer from bookingType.
-   * Products have no bookingType → default to 'product'.
+   * If an explicit itemType is provided, use it. Otherwise infer from
+   * bookingType, or digital shipping category, else default to 'product'.
    */
   function resolveItemType(item) {
     if (item.itemType) return item.itemType;
     if (item.bookingType) return item.bookingType; // class, pass, gift-card, class-materials
+    if (item.shippingCategory === 'digital') return 'digital';
     return 'product';
   }
 
@@ -214,7 +225,6 @@
       cartItemId: generateId(),
       pid: item.pid,
       name: item.name,
-      price: item.price || '',
       priceCents: item.priceCents || 0,
       image: item.image || '',
       options: item.options || {},
@@ -332,7 +342,7 @@
       var syncItem = {
         pid: item.pid,
         name: item.name,
-        price: item.price || '',
+        priceCents: item.priceCents || 0,
         image: item.image || '',
         options: item.options || {},
         qty: item.qty,
@@ -875,8 +885,8 @@
             '<div class="cart-item-row">' +
               '<span class="cart-item-price">' +
                 (item.originalPrice && item.salePriceCents
-                  ? '<span style="text-decoration:line-through;color:var(--warm-gray,#6B6560);font-weight:400;font-size:0.85em;">' + escHtml(item.originalPrice) + '</span> <span style="font-weight:700;color:var(--accent,var(--primary,#c05621));">' + escHtml(item.price) + '</span>'
-                  : escHtml(item.price || 'Price on request')) +
+                  ? '<span style="text-decoration:line-through;color:var(--warm-gray,#6B6560);font-weight:400;font-size:0.85em;">' + escHtml(item.originalPrice) + '</span> <span style="font-weight:700;color:var(--accent,var(--primary,#c05621));">' + formatCents(item.salePriceCents) + '</span>'
+                  : (item.priceCents > 0 ? formatCents(item.priceCents) : 'Price on request')) +
               '</span>' +
               qtyHtml +
             '</div>' +
@@ -888,17 +898,20 @@
 
     // Summary + free shipping reminder
     if (summaryEl) {
-      var subtotal = 0;
+      var subtotalCents = 0;
       var hasWholesale = false;
       for (var s = 0; s < cart.length; s++) {
-        // Use sale price (already in display price) for subtotal
-        var p = parseFloat(String(cart[s].price || '0').replace(/[^0-9.]/g, '')) || 0;
-        subtotal += p * (cart[s].qty || 1);
+        // Use sale price when available, else list priceCents
+        var lineCents = (cart[s].salePriceCents != null && cart[s].salePriceCents > 0)
+          ? cart[s].salePriceCents
+          : (cart[s].priceCents || 0);
+        subtotalCents += lineCents * (cart[s].qty || 1);
         if (cart[s].isWholesale) hasWholesale = true;
       }
+      var subtotal = subtotalCents / 100;
       var freeThreshold = hasWholesale ? _cartWholesaleFreeThreshold : _cartFreeThreshold;
       var summaryText = count + ' item' + (count !== 1 ? 's' : '') + ' in cart';
-      if (subtotal > 0) summaryText += ' \u00B7 $' + subtotal.toFixed(2);
+      if (subtotalCents > 0) summaryText += ' \u00B7 ' + formatCents(subtotalCents);
       var shippingHtml = '';
       if (freeThreshold != null && subtotal >= freeThreshold) {
         shippingHtml = '<div style="color:#2D7D46;font-size:0.75rem;margin-top:6px;letter-spacing:0.08em;">&#10003; FREE SHIPPING</div>';
@@ -1059,8 +1072,13 @@
     isClassOnlyCart: function() { return cart.length > 0 && cart.every(function(i) { return i.bookingType === 'class'; }); },
     hasProductItems: function() { return cart.some(function(i) { return !i.bookingType; }); },
     getItemMetadata: getItemMetadata,
-    resolveItemType: resolveItemType
+    resolveItemType: resolveItemType,
+    formatCents: formatCents
   };
+
+  // Expose canonical cents formatter globally so shop.html, product.html,
+  // admin modules, and email previews can all use the same helper.
+  window.formatCents = window.formatCents || formatCents;
 
   // Backward-compat alias
   window.ShirCart = window.MastCart;
