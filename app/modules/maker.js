@@ -761,9 +761,33 @@
 
     var priceCents = null;
     if (recipe.productId) {
-      priceCents = Math.round(tierPrice * 100);
-      updates['public/products/' + recipe.productId + '/priceCents'] = priceCents;
-      updates['public/products/' + recipe.productId + '/price'] = tierPrice;
+      // Cost-shape model: propagate per-variant prices to product.variants[].priceCents
+      // when the recipe has variantsShape="cost" and the linked product has variants.
+      var product = (window.productsData || []).find(function(p){ return p.pid === recipe.productId; });
+      var didPerVariantPropagate = false;
+      if (recipe.variantsShape === 'cost' && product && Array.isArray(product.variants) && product.variants.length > 0) {
+        var priceKey = tier + 'Price';
+        var rv = recipe.variants || {};
+        var defaultTierPrice = (rv.default && rv.default[priceKey]) || tierPrice || 0;
+        var newVariants = product.variants.map(function(pv) {
+          var slot = rv[pv.id];
+          var pp = (slot && slot[priceKey] != null) ? slot[priceKey] : defaultTierPrice;
+          return Object.assign({}, pv, { priceCents: Math.round(pp * 100) });
+        });
+        updates['public/products/' + recipe.productId + '/variants'] = newVariants;
+        // Recompute base: lowest variant priceCents, priceType "from"
+        var lowestPriceCents = Math.min.apply(null, newVariants.map(function(v){ return v.priceCents; }));
+        priceCents = lowestPriceCents;
+        updates['public/products/' + recipe.productId + '/priceCents'] = lowestPriceCents;
+        updates['public/products/' + recipe.productId + '/price'] = lowestPriceCents / 100;
+        updates['public/products/' + recipe.productId + '/priceType'] = 'from';
+        didPerVariantPropagate = true;
+      }
+      if (!didPerVariantPropagate) {
+        priceCents = Math.round(tierPrice * 100);
+        updates['public/products/' + recipe.productId + '/priceCents'] = priceCents;
+        updates['public/products/' + recipe.productId + '/price'] = tierPrice;
+      }
     }
 
     await MastDB._multiUpdate(updates);
