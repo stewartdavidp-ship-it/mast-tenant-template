@@ -166,7 +166,7 @@
   // ============================================================
 
   function renderList() {
-    var totalCount = customersData.length;
+    var totalCount = customersData.filter(function(c) { return c && c.status !== 'merged'; }).length;
 
     var h = '';
     h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;flex-wrap:wrap;gap:12px;">';
@@ -230,6 +230,7 @@
 
     var filtered = customersData.filter(function(c) {
       if (!c) return false;
+      if (c.status === 'merged') return false; // hide merged-out customers
       if (sourceFilter !== 'all' && c.source !== sourceFilter) return false;
       if (!q) return true;
       var name = (c.displayName || '').toLowerCase();
@@ -276,7 +277,8 @@
     }).join('');
 
     var html = '';
-    html += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">Showing ' + filtered.length + ' of ' + customersData.length + '</div>';
+    var nonMergedTotal = customersData.filter(function(c) { return c && c.status !== 'merged'; }).length;
+    html += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">Showing ' + filtered.length + ' of ' + nonMergedTotal + '</div>';
     html += '<div class="data-table"><table>';
     html += '<thead><tr>';
     html += '<th>Name</th><th>Primary email</th><th>Source</th><th>Linked</th><th>Last activity</th>';

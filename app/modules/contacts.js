@@ -326,8 +326,22 @@ async function pushContactToGoogle(contact) {
 // Contact Detail View
 // ============================================================
 
+var _viewContactReturnRoute = null;
+
 function viewContact(contactId) {
+  // Track where the user came from so back button returns there.
+  try {
+    _viewContactReturnRoute = (typeof currentRoute === 'string' && currentRoute !== 'contacts') ? currentRoute : null;
+  } catch (e) { _viewContactReturnRoute = null; }
   selectedContactId = contactId;
+  // Update back button label to reflect actual return destination.
+  var backBtn = document.querySelector('#contactDetailView .detail-back');
+  if (backBtn) {
+    var label = _viewContactReturnRoute
+      ? _viewContactReturnRoute.charAt(0).toUpperCase() + _viewContactReturnRoute.slice(1)
+      : 'Contacts';
+    backBtn.innerHTML = '\u2190 Back to ' + label;
+  }
   document.getElementById('contactsListView').style.display = 'none';
   document.getElementById('contactDetailView').style.display = '';
   loadContactDetail(contactId);
@@ -335,9 +349,19 @@ function viewContact(contactId) {
 
 function backToContactsList() {
   selectedContactId = null;
+  if (_viewContactReturnRoute) {
+    var route = _viewContactReturnRoute;
+    _viewContactReturnRoute = null;
+    document.getElementById('contactDetailView').style.display = 'none';
+    document.getElementById('contactsListView').style.display = '';
+    // Reset label for next visit
+    var backBtn = document.querySelector('#contactDetailView .detail-back');
+    if (backBtn) backBtn.innerHTML = '\u2190 Back to Contacts';
+    if (typeof navigateTo === 'function') navigateTo(route);
+    return;
+  }
   document.getElementById('contactDetailView').style.display = 'none';
   document.getElementById('contactsListView').style.display = '';
-  // Refresh list to pick up any new interactions
   if (contactsLoaded) {
     contactsLoaded = false;
     loadContacts();
