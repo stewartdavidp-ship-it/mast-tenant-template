@@ -11668,7 +11668,10 @@ function mastPrompt(message, options) {
   var opts = options || {};
   return new Promise(function(resolve) {
     var overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+    // z-index 11000 — above all other modal overlays in the app (most use 10000)
+    // so prompts triggered from inside a dialog (e.g. "+ New Category") render
+    // on top of, not behind, the parent modal.
+    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:11000;display:flex;align-items:center;justify-content:center;padding:16px;';
     var h = '<div style="background:var(--cream);border-radius:10px;max-width:420px;width:90%;padding:24px 28px;box-shadow:0 8px 30px rgba(0,0,0,0.2);">';
     if (opts.title) h += '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.2rem;font-weight:600;color:var(--charcoal);margin-bottom:12px;">' + esc(opts.title) + '</div>';
     h += '<p style="font-size:0.9rem;color:var(--warm-gray);line-height:1.5;margin-bottom:12px;">' + esc(message) + '</p>';

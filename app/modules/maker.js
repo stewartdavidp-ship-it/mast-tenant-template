@@ -1244,22 +1244,29 @@
     if (!tab) return;
 
     var esc = MastAdmin.esc;
-    var materials = Object.values(materialsData);
+    var allMaterials = Object.values(materialsData);
 
-    // Filter by status
-    if (materialsFilter !== 'all') {
-      materials = materials.filter(function(m) { return m.status === materialsFilter; });
-    }
+    // Filter by status first — categories chip row is derived from this set
+    // so empty categories disappear automatically when their only members are
+    // archived (or otherwise filtered out).
+    var statusFiltered = materialsFilter === 'all'
+      ? allMaterials.slice()
+      : allMaterials.filter(function(m) { return m.status === materialsFilter; });
 
-    // Filter by category
-    if (materialsCategoryFilter !== 'all') {
-      materials = materials.filter(function(m) { return m.category === materialsCategoryFilter; });
-    }
+    // Then filter by category to get the actual rows
+    var materials = materialsCategoryFilter === 'all'
+      ? statusFiltered.slice()
+      : statusFiltered.filter(function(m) { return m.category === materialsCategoryFilter; });
 
     // Sort by name
     materials.sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
 
-    var categories = getMaterialCategories();
+    // Categories shown as chips: only those represented in the post-status set
+    var catCounts = {};
+    statusFiltered.forEach(function(m) {
+      if (m.category) catCounts[m.category] = (catCounts[m.category] || 0) + 1;
+    });
+    var categories = Object.keys(catCounts).sort();
     var totalCount = Object.keys(materialsData).length;
     var activeCount = Object.values(materialsData).filter(function(m) { return m.status === 'active'; }).length;
 
@@ -1287,9 +1294,9 @@
       html += '</div>';
     }
 
-    // Filter pills
+    // Filter pills (All first, then status states)
     html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">';
-    ['active', 'draft', 'archived', 'all'].forEach(function(f) {
+    ['all', 'active', 'draft', 'archived'].forEach(function(f) {
       var active = materialsFilter === f ? ' style="background:var(--charcoal);color:white;border-color:var(--charcoal);"' : '';
       html += '<button class="order-filter-pill"' + active + ' onclick="makerFilterMaterials(\'' + f + '\')">' + f.charAt(0).toUpperCase() + f.slice(1) + '</button>';
     });
@@ -1336,7 +1343,8 @@
 
     materials.forEach(function(m) {
       var id = m.materialId;
-      html += '<tr>';
+      // Whole row is clickable → opens edit modal. Action icons stop propagation.
+      html += '<tr data-mid="' + esc(id) + '" style="cursor:pointer;" onclick="makerEditMaterial(this.dataset.mid)">';
       var spotChip = m.pricingMode === 'spot-linked' ? ' <span style="display:inline-block;font-size:0.68rem;font-weight:500;padding:1px 6px;background:rgba(42,124,111,0.12);color:var(--teal);border-radius:8px;margin-left:4px;" title="Linked to ' + esc(m.spotMetal || 'metal') + ' spot price">🔗 ' + esc(m.spotMetal || 'spot') + '</span>' : '';
       html += '<td style="font-weight:500;">' + esc(m.name) + spotChip + '</td>';
       html += '<td>' + esc(m.category || '') + '</td>';
@@ -1344,10 +1352,10 @@
       html += '<td style="text-align:right;font-family:monospace;">$' + (m.unitCost || 0).toFixed(2) + '</td>';
       html += '<td style="text-align:right;">' + (m.onHandQty || 0) + '</td>';
       html += '<td><span class="status-badge" style="' + materialStatusBadgeStyle(m.status) + '">' + esc(m.status || 'draft') + '</span></td>';
-      html += '<td style="text-align:right;">';
-      html += '<button style="background:none;border:none;color:var(--teal);cursor:pointer;font-size:0.85rem;font-family:\'DM Sans\';" onclick="makerEditMaterial(\'' + esc(id) + '\')">Edit</button>';
+      html += '<td style="text-align:right;white-space:nowrap;" onclick="event.stopPropagation()">';
+      html += '<button class="btn-icon" data-mid="' + esc(id) + '" onclick="event.stopPropagation();makerEditMaterial(this.dataset.mid)" title="Edit">\u270E</button>';
       if (m.status !== 'archived') {
-        html += ' <button style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:0.85rem;font-family:\'DM Sans\';margin-left:4px;" onclick="makerArchiveMaterialConfirm(\'' + esc(id) + '\')">Archive</button>';
+        html += ' <button class="btn-icon danger" data-mid="' + esc(id) + '" onclick="event.stopPropagation();makerArchiveMaterialConfirm(this.dataset.mid)" title="Archive">\uD83D\uDCE6</button>';
       }
       html += '</td>';
       html += '</tr>';
@@ -2170,8 +2178,8 @@
         }
         html += '<tr>';
         html += '<td style="padding:8px;font-size:0.85rem;border-bottom:1px solid var(--cream-dark);">' + esc(li.materialName || '') + subBadge + lockChip + '</td>';
-        html += '<td style="text-align:right;padding:8px;border-bottom:1px solid var(--cream-dark);"><input type="number" step="0.01" min="0" value="' + (li.quantity || 0) + '" style="width:70px;text-align:right;padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);" onchange="makerUpdateLineItemQty(\'' + esc(liId) + '\', this.value)">' + (scrapPct > 0 ? '<div style="font-size:0.7rem;color:var(--warm-gray);text-align:right;margin-top:2px;">eff: ' + effQty.toFixed(2) + '</div>' : '') + '</td>';
-        html += '<td style="text-align:right;padding:8px;border-bottom:1px solid var(--cream-dark);"><input type="number" step="1" min="0" max="50" value="' + scrapPct + '" style="width:55px;text-align:right;padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);" onchange="makerUpdateLineItemScrap(\'' + esc(liId) + '\', this.value)"></td>';
+        html += '<td style="text-align:right;padding:8px;border-bottom:1px solid var(--cream-dark);"><input type="number" step="0.01" min="0" value="' + (li.quantity || 0) + '" style="width:90px;text-align:right;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;font-family:monospace;background:var(--cream);color:var(--charcoal);" onchange="makerUpdateLineItemQty(\'' + esc(liId) + '\', this.value)">' + (scrapPct > 0 ? '<div style="font-size:0.7rem;color:var(--warm-gray);text-align:right;margin-top:2px;">eff: ' + effQty.toFixed(2) + '</div>' : '') + '</td>';
+        html += '<td style="text-align:right;padding:8px;border-bottom:1px solid var(--cream-dark);"><input type="number" step="1" min="0" max="200" value="' + scrapPct + '" style="width:80px;text-align:right;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;font-family:monospace;background:var(--cream);color:var(--charcoal);" onchange="makerUpdateLineItemScrap(\'' + esc(liId) + '\', this.value)"></td>';
         html += '<td style="text-align:center;padding:8px;font-size:0.82rem;color:var(--warm-gray);border-bottom:1px solid var(--cream-dark);">' + esc(li.unitOfMeasure || '') + '</td>';
         html += '<td style="text-align:right;padding:8px;font-family:monospace;font-size:0.85rem;border-bottom:1px solid var(--cream-dark);">$' + (li.unitCost || 0).toFixed(2) + '</td>';
         html += '<td style="text-align:right;padding:8px;font-family:monospace;font-size:0.85rem;font-weight:600;border-bottom:1px solid var(--cream-dark);">$' + ext.toFixed(2) + '</td>';
@@ -3289,9 +3297,18 @@
   }
 
   function closeImport() {
+    var type = importState && importState.type;
     importState = null;
-    if (piecesView === 'list') renderPiecesList();
-    else renderMaterials();
+    // Route back to whichever tab opened the wizard, not whichever happens
+    // to be the default piecesView state.
+    if (type === 'materials') {
+      renderMaterials();
+    } else if (type === 'products') {
+      if (piecesView === 'builder') renderRecipeBuilder();
+      else renderPiecesList();
+    } else {
+      renderMaterials();
+    }
   }
 
   function autoDetectMappings(headers, fields) {
