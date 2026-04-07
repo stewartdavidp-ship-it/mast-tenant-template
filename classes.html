@@ -557,12 +557,15 @@
       buildFilterPills(Object.keys(cats).sort());
       renderClasses();
 
-      // Render passes
+      // Render passes — filter out archived/inactive entries that may linger
+      // in public/passDefinitions when admin tools archive without syncing public.
       var passData = results[1].val() || {};
       var passes = Object.keys(passData).map(function(id) {
         var p = passData[id];
         p.id = id;
         return p;
+      }).filter(function(p) {
+        return !p.status || p.status === 'active' || p.status === 'published';
       }).sort(function(a, b) { return (a.sortOrder || 0) - (b.sortOrder || 0); });
 
       if (passes.length > 0) renderPasses(passes);

@@ -1098,11 +1098,25 @@
     var html = '<div class="order-totals">';
     html += '<div class="order-total-row"><span class="order-total-label">Subtotal</span><span class="order-total-value">' + formatMoney((b.preDiscountSubtotalCents || b.subtotalCents) / 100) + '</span></div>';
 
-    // Sale discounts
+    // Sale discounts — server entry has saleId, saleName, pid, originalPriceCents,
+    // salePriceCents (NOT discountCents). Compute from price fields and per-line qty
+    // looked up from cart by pid.
     if (b.saleDiscounts && b.saleDiscounts.length > 0) {
+      var saleItemsByPid = {};
+      var saleCartItems = window.MastCart && window.MastCart.getItems ? window.MastCart.getItems() : [];
+      for (var sci = 0; sci < saleCartItems.length; sci++) {
+        var sit = saleCartItems[sci];
+        saleItemsByPid[sit.pid] = (saleItemsByPid[sit.pid] || 0) + (sit.qty || 1);
+      }
       for (var si = 0; si < b.saleDiscounts.length; si++) {
         var sd = b.saleDiscounts[si];
-        html += '<div class="order-total-row discount"><span class="order-total-label">Sale' + (sd.saleName ? ' (' + esc(sd.saleName) + ')' : '') + '</span><span class="order-total-value">-' + formatMoney(sd.discountCents / 100) + '</span></div>';
+        var sdCents = (typeof sd.discountCents === 'number') ? sd.discountCents : null;
+        if (sdCents == null && typeof sd.originalPriceCents === 'number' && typeof sd.salePriceCents === 'number') {
+          var sdQty = saleItemsByPid[sd.pid] || 1;
+          sdCents = (sd.originalPriceCents - sd.salePriceCents) * sdQty;
+        }
+        if (sdCents == null || isNaN(sdCents)) sdCents = 0;
+        html += '<div class="order-total-row discount"><span class="order-total-label">Sale' + (sd.saleName ? ' (' + esc(sd.saleName) + ')' : '') + '</span><span class="order-total-value">-' + formatMoney(sdCents / 100) + '</span></div>';
       }
     }
 
