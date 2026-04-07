@@ -330,8 +330,15 @@ var _viewContactReturnRoute = null;
 
 function viewContact(contactId) {
   // Track where the user came from so back button returns there.
+  // Prefer an explicit pending return route stashed by the caller (e.g.,
+  // customers module) since by the time we get here currentRoute === 'contacts'.
   try {
-    _viewContactReturnRoute = (typeof currentRoute === 'string' && currentRoute !== 'contacts') ? currentRoute : null;
+    if (window._pendingContactReturnRoute) {
+      _viewContactReturnRoute = window._pendingContactReturnRoute;
+      window._pendingContactReturnRoute = null;
+    } else {
+      _viewContactReturnRoute = (typeof currentRoute === 'string' && currentRoute !== 'contacts') ? currentRoute : null;
+    }
   } catch (e) { _viewContactReturnRoute = null; }
   selectedContactId = contactId;
   // Update back button label to reflect actual return destination.

@@ -961,13 +961,10 @@
   }
 
   function openContactFromCustomer(contactId) {
-    // Pending pattern: store the contact ID, navigateTo loads the contacts
-    // module async, and contacts setup checks the pending flag on entry.
-    // Falls back to setTimeout polling if contacts module is already loaded.
+    // Stash the return route BEFORE navigateTo overwrites currentRoute.
     window._pendingContactView = contactId;
+    window._pendingContactReturnRoute = (typeof currentRoute === 'string') ? currentRoute : 'customers';
     if (typeof navigateTo === 'function') navigateTo('contacts');
-    // If contacts is already loaded, the setup ran synchronously and may
-    // have missed the pending flag — try again on next tick.
     setTimeout(function() {
       if (window._pendingContactView && typeof window.viewContact === 'function') {
         var id = window._pendingContactView;
