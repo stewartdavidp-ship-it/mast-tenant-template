@@ -102,6 +102,8 @@
     var laborRate = params.laborRatePerHour || 0;
     var laborMinutes = params.laborMinutes || 0;
     var otherCost = params.otherCost || 0;
+    var setupCost = params.setupCost || 0;
+    var batchSize = Math.max(1, params.batchSize || 1);
     var wholesaleMarkup = params.wholesaleMarkup || 1;
     var directMarkup = params.directMarkup || 1;
     var retailMarkup = params.retailMarkup || 1;
@@ -125,25 +127,37 @@
     // Labor cost
     var laborCost = roundCents((laborMinutes / 60) * laborRate);
 
+    // Per-unit setup cost (amortized over batch)
+    var perUnitSetup = roundCents(setupCost / batchSize);
+
     // Total cost
-    var totalCost = roundCents(totalMaterialCost + laborCost + otherCost);
+    var totalCost = roundCents(totalMaterialCost + laborCost + otherCost + perUnitSetup);
 
     // Pricing tiers
     var wholesalePrice = roundCents(totalCost * wholesaleMarkup);
     var directPrice = roundCents(totalCost * directMarkup);
     var retailPrice = roundCents(totalCost * retailMarkup);
 
+    // Margin % helper (gross profit / sell price)
+    function pct(price) {
+      return price > 0 ? roundCents(((price - totalCost) / price) * 100) : 0;
+    }
+
     return {
       lineItems: calculatedLineItems,
       totalMaterialCost: totalMaterialCost,
       laborCost: laborCost,
+      perUnitSetup: perUnitSetup,
       totalCost: totalCost,
       wholesalePrice: wholesalePrice,
       wholesaleGrossProfit: roundCents(wholesalePrice - totalCost),
+      wholesaleMarginPct: pct(wholesalePrice),
       directPrice: directPrice,
       directGrossProfit: roundCents(directPrice - totalCost),
+      directMarginPct: pct(directPrice),
       retailPrice: retailPrice,
-      retailGrossProfit: roundCents(retailPrice - totalCost)
+      retailGrossProfit: roundCents(retailPrice - totalCost),
+      retailMarginPct: pct(retailPrice)
     };
   }
 
@@ -152,6 +166,90 @@
    */
   function roundCents(value) {
     return Math.round(value * 100) / 100;
+  }
+
+  // ============================================================
+  // Sub-assembly Resolver — Multi-level BOM
+  // ============================================================
+
+  var SUB_ASSEMBLY_MAX_DEPTH = 3;
+
+  /**
+   * Walk a recipe's line items and resolve sub-assembly (kind='recipe')
+   * unitCosts from current recipesData. Cycle-safe via visited set; depth-limited.
+   * Returns refreshed lineItems map. Sub-assembly cost basis = sub-recipe totalCost
+   * (no markup compounding).
+   */
+  function resolveSubAssemblyCosts(lineItems, visited, depth) {
+    visited = visited || {};
+    depth = depth || 0;
+    var refreshed = {};
+    Object.keys(lineItems || {}).forEach(function(liId) {
+      var li = lineItems[liId];
+      if (li && li.kind === 'recipe') {
+        var subId = li.materialId; // for kind=recipe, materialId stores recipeId
+        var copy = Object.assign({}, li);
+        if (depth >= SUB_ASSEMBLY_MAX_DEPTH) {
+          copy.unitCost = 0;
+          copy.subAssemblyError = 'max depth ' + SUB_ASSEMBLY_MAX_DEPTH + ' exceeded';
+        } else if (visited[subId]) {
+          copy.unitCost = 0;
+          copy.subAssemblyError = 'cycle detected';
+        } else {
+          var sub = recipesData[subId];
+          if (!sub || sub.status === 'archived') {
+            copy.unitCost = 0;
+            copy.subAssemblyError = 'sub-recipe missing';
+          } else {
+            // Recursively resolve the sub-recipe's cost from its own line items
+            var nextVisited = Object.assign({}, visited);
+            nextVisited[subId] = true;
+            var subResolved = resolveSubAssemblyCosts(sub.lineItems || {}, nextVisited, depth + 1);
+            var subCalc = calculateRecipe({
+              lineItems: subResolved,
+              laborRatePerHour: sub.laborRatePerHour || 0,
+              laborMinutes: sub.laborMinutes || 0,
+              otherCost: sub.otherCost || 0,
+              setupCost: sub.setupCost || 0,
+              batchSize: sub.batchSize || 1,
+              wholesaleMarkup: 1, directMarkup: 1, retailMarkup: 1
+            });
+            copy.unitCost = subCalc.totalCost;
+            copy.materialName = sub.name || copy.materialName || 'Sub-recipe';
+            copy.unitOfMeasure = 'each';
+            delete copy.subAssemblyError;
+          }
+        }
+        refreshed[liId] = copy;
+      } else {
+        refreshed[liId] = li;
+      }
+    });
+    return refreshed;
+  }
+
+  /**
+   * Detect whether adding `candidateRecipeId` as a sub-assembly to `parentRecipeId`
+   * would create a cycle. Returns true if a cycle would form.
+   */
+  function wouldCreateCycle(parentRecipeId, candidateRecipeId) {
+    if (parentRecipeId === candidateRecipeId) return true;
+    var stack = [candidateRecipeId];
+    var seen = {};
+    while (stack.length > 0) {
+      var rid = stack.pop();
+      if (seen[rid]) continue;
+      seen[rid] = true;
+      if (rid === parentRecipeId) return true;
+      var r = recipesData[rid];
+      if (!r) continue;
+      var lis = r.lineItems || {};
+      Object.keys(lis).forEach(function(liId) {
+        var li = lis[liId];
+        if (li && li.kind === 'recipe' && li.materialId) stack.push(li.materialId);
+      });
+    }
+    return false;
   }
 
   // ============================================================
@@ -207,8 +305,33 @@
   }
 
   async function updateMaterial(id, updates) {
-    updates.updatedAt = new Date().toISOString();
+    var now = new Date().toISOString();
+    updates.updatedAt = now;
     var oldMaterial = materialsData[id];
+
+    // If unitCost changed, append prior cost to costHistory[] (rolling, capped at 50 entries)
+    if (oldMaterial && updates.unitCost !== undefined && updates.unitCost !== oldMaterial.unitCost) {
+      var history = Array.isArray(oldMaterial.costHistory) ? oldMaterial.costHistory.slice() : [];
+      // Migrate legacy previousUnitCost into history if present and history is empty
+      if (history.length === 0 && oldMaterial.previousUnitCost != null) {
+        history.push({
+          cost: oldMaterial.previousUnitCost,
+          changedAt: oldMaterial.costChangedAt || oldMaterial.updatedAt || now,
+          changedBy: 'legacy'
+        });
+      }
+      history.push({
+        cost: oldMaterial.unitCost || 0,
+        changedAt: now,
+        changedBy: (firebase.auth().currentUser && firebase.auth().currentUser.uid) || 'admin'
+      });
+      // Cap at 50 entries (rolling)
+      if (history.length > 50) history = history.slice(history.length - 50);
+      updates.costHistory = history;
+      updates.previousUnitCost = oldMaterial.unitCost || 0; // keep legacy field for back-compat
+      updates.costChangedAt = now;
+    }
+
     await MastDB.materials.update(id, updates);
     MastAdmin.writeAudit('update', 'material', id);
 
@@ -268,6 +391,10 @@
       laborCost: 0,
       otherCost: data.otherCost || 0,
       otherCostNote: data.otherCostNote || '',
+      setupCost: data.setupCost || 0,
+      batchSize: data.batchSize || 1,
+      minMarginPercent: data.minMarginPercent != null ? data.minMarginPercent : null,
+      costHistorySnapshot: null,
       totalMaterialCost: 0,
       totalCost: 0,
       wholesaleMarkup: data.wholesaleMarkup || settings.defaultWholesaleMarkup || 2.0,
@@ -323,10 +450,15 @@
     if (!recipe) throw new Error('Recipe not found: ' + recipeId);
 
     // Refresh unitCost on each line item from current materials data
+    // (sub-assembly items are resolved separately below)
     var lineItems = recipe.lineItems || {};
     var refreshedLineItems = {};
     Object.keys(lineItems).forEach(function(liId) {
       var li = lineItems[liId];
+      if (li && li.kind === 'recipe') {
+        refreshedLineItems[liId] = li; // resolve in next step
+        return;
+      }
       var material = materialsData[li.materialId];
       var currentCost = material ? material.unitCost : li.unitCost;
       refreshedLineItems[liId] = Object.assign({}, li, {
@@ -334,6 +466,10 @@
         materialName: material ? material.name : li.materialName
       });
     });
+    // Resolve sub-assembly costs
+    var rootVisited = {};
+    rootVisited[recipeId] = true;
+    refreshedLineItems = resolveSubAssemblyCosts(refreshedLineItems, rootVisited, 0);
 
     // Run calculation
     var calc = calculateRecipe({
@@ -341,6 +477,8 @@
       laborRatePerHour: recipe.laborRatePerHour,
       laborMinutes: recipe.laborMinutes,
       otherCost: recipe.otherCost,
+      setupCost: recipe.setupCost,
+      batchSize: recipe.batchSize,
       wholesaleMarkup: recipe.wholesaleMarkup,
       directMarkup: recipe.directMarkup,
       retailMarkup: recipe.retailMarkup
@@ -368,11 +506,12 @@
       var variantUpdates = {};
       Object.keys(recipe.variants).forEach(function(vid) {
         var v = recipe.variants[vid];
-        // Refresh variant line items from materials
+        // Refresh variant line items from materials (sub-assemblies resolved next)
         var vLineItems = v.lineItems || {};
         var vRefreshed = {};
         Object.keys(vLineItems).forEach(function(liId) {
           var li = vLineItems[liId];
+          if (li && li.kind === 'recipe') { vRefreshed[liId] = li; return; }
           var material = materialsData[li.materialId];
           var currentCost = material ? material.unitCost : li.unitCost;
           vRefreshed[liId] = Object.assign({}, li, {
@@ -380,11 +519,16 @@
             materialName: material ? material.name : li.materialName
           });
         });
+        var vVisited = {};
+        vVisited[recipeId] = true;
+        vRefreshed = resolveSubAssemblyCosts(vRefreshed, vVisited, 0);
         var vCalc = calculateRecipe({
           lineItems: vRefreshed,
           laborRatePerHour: recipe.laborRatePerHour,
           laborMinutes: v.laborMinutes || 0,
           otherCost: v.otherCost || 0,
+          setupCost: recipe.setupCost,
+          batchSize: recipe.batchSize,
           wholesaleMarkup: recipe.wholesaleMarkup,
           directMarkup: recipe.directMarkup,
           retailMarkup: recipe.retailMarkup
@@ -603,6 +747,8 @@
         laborRatePerHour: recipe.laborRatePerHour || 0,
         laborMinutes: v.laborMinutes || 0,
         otherCost: v.otherCost || 0,
+        setupCost: recipe.setupCost || 0,
+        batchSize: recipe.batchSize || 1,
         wholesaleMarkup: recipe.wholesaleMarkup || 1,
         directMarkup: recipe.directMarkup || 1,
         retailMarkup: recipe.retailMarkup || 1
@@ -643,6 +789,257 @@
   // ============================================================
   // Maker Settings
   // ============================================================
+
+  // ============================================================
+  // Channel Fee Profiles — admin/channels/{channelId}
+  // ============================================================
+
+  var channelsData = {};
+  var channelsLoaded = false;
+
+  function channelsRef(id) {
+    return MastDB._ref('admin/channels' + (id ? '/' + id : ''));
+  }
+
+  async function loadChannels() {
+    var snap = await channelsRef().once('value');
+    channelsData = snap.val() || {};
+    channelsLoaded = true;
+    return channelsData;
+  }
+
+  async function createChannel(data) {
+    var id = channelsRef().push().key;
+    var now = new Date().toISOString();
+    var channel = {
+      channelId: id,
+      name: data.name || '',
+      percentFee: data.percentFee != null ? Number(data.percentFee) : 0,           // e.g. 6.5 for 6.5%
+      fixedFeePerOrderCents: data.fixedFeePerOrderCents != null ? Math.round(data.fixedFeePerOrderCents) : 0,
+      monthlyFixedCents: data.monthlyFixedCents != null ? Math.round(data.monthlyFixedCents) : 0,
+      autoMatchSources: Array.isArray(data.autoMatchSources) ? data.autoMatchSources : [], // e.g. ['etsy','shopify']
+      notes: data.notes || '',
+      createdAt: now,
+      updatedAt: now
+    };
+    await channelsRef(id).set(channel);
+    channelsData[id] = channel;
+    MastAdmin.writeAudit('create', 'channel', id);
+    return channel;
+  }
+
+  async function updateChannel(id, updates) {
+    updates.updatedAt = new Date().toISOString();
+    await channelsRef(id).update(updates);
+    if (channelsData[id]) Object.assign(channelsData[id], updates);
+    MastAdmin.writeAudit('update', 'channel', id);
+  }
+
+  async function deleteChannel(id) {
+    await channelsRef(id).remove();
+    delete channelsData[id];
+    MastAdmin.writeAudit('delete', 'channel', id);
+  }
+
+  /**
+   * Compute net-of-fee margin for an order on a given channel.
+   * Caller passes order subtotal (cents) and order COGS (cents). Returns:
+   *   { feeCents, netRevenueCents, grossProfitCents, marginPct, channelName }
+   * Pure function — does not amortize monthlyFixedCents (that requires order count
+   * over a period; caller should compute separately if needed).
+   */
+  function getChannelNetMargin(channelId, subtotalCents, totalCostCents) {
+    var ch = channelsData[channelId];
+    if (!ch) {
+      var net0 = subtotalCents - 0;
+      var profit0 = net0 - totalCostCents;
+      return {
+        feeCents: 0,
+        netRevenueCents: net0,
+        grossProfitCents: profit0,
+        marginPct: net0 > 0 ? (profit0 / net0) * 100 : 0,
+        channelName: 'Direct (no channel)'
+      };
+    }
+    var feeCents = Math.round((subtotalCents * (ch.percentFee || 0)) / 100) + (ch.fixedFeePerOrderCents || 0);
+    var netRevenueCents = subtotalCents - feeCents;
+    var grossProfitCents = netRevenueCents - totalCostCents;
+    return {
+      feeCents: feeCents,
+      netRevenueCents: netRevenueCents,
+      grossProfitCents: grossProfitCents,
+      marginPct: netRevenueCents > 0 ? (grossProfitCents / netRevenueCents) * 100 : 0,
+      channelName: ch.name
+    };
+  }
+
+  /**
+   * Auto-detect channel from an order based on its source field.
+   * Returns channelId or null. Order detail UI can call this then fall back
+   * to a manual channel selector.
+   */
+  function detectChannelForOrder(order) {
+    if (!order) return null;
+    if (order.channelId) return order.channelId; // explicit override wins
+    var source = (order.source || order.platform || '').toLowerCase();
+    if (!source) return null;
+    var ids = Object.keys(channelsData);
+    for (var i = 0; i < ids.length; i++) {
+      var ch = channelsData[ids[i]];
+      if (ch && Array.isArray(ch.autoMatchSources)) {
+        for (var j = 0; j < ch.autoMatchSources.length; j++) {
+          if ((ch.autoMatchSources[j] || '').toLowerCase() === source) return ids[i];
+        }
+      }
+    }
+    return null;
+  }
+
+  // ---- Channels Manager Modal ----
+
+  async function openChannelsManager() {
+    if (!channelsLoaded) await loadChannels();
+    renderChannelsManager();
+  }
+
+  function closeChannelsManager(event) {
+    if (event && event.target && event.target.id !== 'channelsManagerOverlay') return;
+    var c = document.getElementById('channelsManagerContainer');
+    if (c) c.remove();
+  }
+
+  function renderChannelsManager() {
+    var esc = MastAdmin.esc;
+    var existing = document.getElementById('channelsManagerContainer');
+    if (existing) existing.remove();
+
+    var ids = Object.keys(channelsData).sort(function(a, b) {
+      return (channelsData[a].name || '').localeCompare(channelsData[b].name || '');
+    });
+
+    var html = '';
+    html += '<div id="channelsManagerOverlay" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;" onclick="makerCloseChannelsManager(event)">';
+    html += '<div style="background:var(--cream);border-radius:10px;max-width:680px;width:92%;max-height:80vh;overflow-y:auto;box-shadow:0 8px 30px rgba(0,0,0,0.2);padding:20px 24px;" onclick="event.stopPropagation()">';
+
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">';
+    html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.3rem;font-weight:500;margin:0;">Sales Channels</h3>';
+    html += '<button class="btn btn-secondary btn-small" onclick="makerCloseChannelsManager()">Close</button>';
+    html += '</div>';
+    html += '<p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 14px;">Define each channel\'s fee structure once. Order margin reports will subtract fees to show true net profit. Auto-match links a channel to orders coming in from a specific source (etsy, shopify, in-person, etc.).</p>';
+
+    if (ids.length === 0) {
+      html += '<p style="font-size:0.85rem;color:var(--warm-gray-light);text-align:center;padding:20px;font-style:italic;">No channels defined yet.</p>';
+    } else {
+      html += '<table style="width:100%;border-collapse:collapse;margin-bottom:14px;">';
+      html += '<thead><tr style="border-bottom:1px solid var(--cream-dark);">';
+      html += '<th style="text-align:left;padding:6px 8px;font-size:0.7rem;text-transform:uppercase;color:var(--warm-gray);">Channel</th>';
+      html += '<th style="text-align:right;padding:6px 8px;font-size:0.7rem;text-transform:uppercase;color:var(--warm-gray);">% fee</th>';
+      html += '<th style="text-align:right;padding:6px 8px;font-size:0.7rem;text-transform:uppercase;color:var(--warm-gray);">$/order</th>';
+      html += '<th style="text-align:right;padding:6px 8px;font-size:0.7rem;text-transform:uppercase;color:var(--warm-gray);">$/month</th>';
+      html += '<th style="text-align:left;padding:6px 8px;font-size:0.7rem;text-transform:uppercase;color:var(--warm-gray);">Auto-match</th>';
+      html += '<th style="width:80px;"></th>';
+      html += '</tr></thead><tbody>';
+      ids.forEach(function(cid) {
+        var ch = channelsData[cid];
+        html += '<tr>';
+        html += '<td style="padding:8px;font-size:0.85rem;font-weight:500;border-bottom:1px solid var(--cream-dark);">' + esc(ch.name || '') + '</td>';
+        html += '<td style="text-align:right;padding:8px;font-family:monospace;font-size:0.82rem;border-bottom:1px solid var(--cream-dark);">' + (ch.percentFee || 0).toFixed(2) + '%</td>';
+        html += '<td style="text-align:right;padding:8px;font-family:monospace;font-size:0.82rem;border-bottom:1px solid var(--cream-dark);">$' + ((ch.fixedFeePerOrderCents || 0) / 100).toFixed(2) + '</td>';
+        html += '<td style="text-align:right;padding:8px;font-family:monospace;font-size:0.82rem;border-bottom:1px solid var(--cream-dark);">$' + ((ch.monthlyFixedCents || 0) / 100).toFixed(2) + '</td>';
+        html += '<td style="padding:8px;font-size:0.78rem;color:var(--warm-gray);border-bottom:1px solid var(--cream-dark);">' + ((ch.autoMatchSources || []).join(', ') || '—') + '</td>';
+        html += '<td style="text-align:right;padding:8px;border-bottom:1px solid var(--cream-dark);">';
+        html += '<button style="background:none;border:none;color:var(--teal);cursor:pointer;font-size:0.78rem;font-family:\'DM Sans\';" onclick="makerEditChannelPrompt(\'' + esc(cid) + '\')">Edit</button> ';
+        html += '<button style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:0.78rem;font-family:\'DM Sans\';" onclick="makerDeleteChannelConfirm(\'' + esc(cid) + '\')">×</button>';
+        html += '</td>';
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+    }
+
+    html += '<div style="border-top:1px dashed var(--cream-dark);padding-top:14px;">';
+    html += '<h4 style="font-size:0.9rem;font-weight:600;margin:0 0 8px;">Add channel</h4>';
+    html += '<div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">';
+    html += '<input id="newChannelName" type="text" placeholder="Name (e.g. Etsy)" style="flex:1;min-width:140px;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:0.85rem;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';">';
+    html += '<input id="newChannelPct" type="number" step="0.01" min="0" placeholder="% fee" style="width:80px;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);">';
+    html += '<input id="newChannelFixed" type="number" step="0.01" min="0" placeholder="$/order" style="width:90px;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);">';
+    html += '<input id="newChannelMonthly" type="number" step="0.01" min="0" placeholder="$/month" style="width:90px;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);">';
+    html += '</div>';
+    html += '<div style="display:flex;gap:8px;align-items:center;">';
+    html += '<input id="newChannelAutoMatch" type="text" placeholder="Auto-match sources (comma sep, e.g. etsy,etsy-mobile)" style="flex:1;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:0.82rem;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';">';
+    html += '<button class="btn btn-primary btn-small" onclick="makerCreateChannelFromForm()">Add</button>';
+    html += '</div>';
+    html += '</div>';
+
+    html += '</div></div>';
+
+    var container = document.createElement('div');
+    container.id = 'channelsManagerContainer';
+    container.innerHTML = html;
+    document.body.appendChild(container);
+  }
+
+  async function createChannelFromForm() {
+    var name = (document.getElementById('newChannelName').value || '').trim();
+    if (!name) { MastAdmin.showToast('Channel name required', true); return; }
+    var pct = parseFloat(document.getElementById('newChannelPct').value) || 0;
+    var fixedDollars = parseFloat(document.getElementById('newChannelFixed').value) || 0;
+    var monthlyDollars = parseFloat(document.getElementById('newChannelMonthly').value) || 0;
+    var autoMatch = (document.getElementById('newChannelAutoMatch').value || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+    try {
+      await createChannel({
+        name: name,
+        percentFee: pct,
+        fixedFeePerOrderCents: Math.round(fixedDollars * 100),
+        monthlyFixedCents: Math.round(monthlyDollars * 100),
+        autoMatchSources: autoMatch
+      });
+      MastAdmin.showToast('Channel "' + name + '" added');
+      renderChannelsManager();
+    } catch (err) {
+      MastAdmin.showToast('Error: ' + err.message, true);
+    }
+  }
+
+  async function editChannelPrompt(id) {
+    var ch = channelsData[id];
+    if (!ch) return;
+    var newName = prompt('Channel name:', ch.name || '');
+    if (newName == null) return;
+    var newPct = prompt('Percent fee (e.g. 6.5):', String(ch.percentFee || 0));
+    if (newPct == null) return;
+    var newFixed = prompt('Fixed fee per order ($):', String((ch.fixedFeePerOrderCents || 0) / 100));
+    if (newFixed == null) return;
+    var newMonthly = prompt('Monthly fixed cost ($):', String((ch.monthlyFixedCents || 0) / 100));
+    if (newMonthly == null) return;
+    var newAuto = prompt('Auto-match sources (comma sep):', (ch.autoMatchSources || []).join(','));
+    if (newAuto == null) return;
+    try {
+      await updateChannel(id, {
+        name: newName.trim() || ch.name,
+        percentFee: parseFloat(newPct) || 0,
+        fixedFeePerOrderCents: Math.round((parseFloat(newFixed) || 0) * 100),
+        monthlyFixedCents: Math.round((parseFloat(newMonthly) || 0) * 100),
+        autoMatchSources: newAuto.split(',').map(function(s) { return s.trim(); }).filter(Boolean)
+      });
+      MastAdmin.showToast('Channel updated');
+      renderChannelsManager();
+    } catch (err) {
+      MastAdmin.showToast('Error: ' + err.message, true);
+    }
+  }
+
+  async function deleteChannelConfirm(id) {
+    var ch = channelsData[id];
+    if (!ch) return;
+    if (!confirm('Delete channel "' + (ch.name || '') + '"? Existing orders that reference it will lose their fee profile.')) return;
+    try {
+      await deleteChannel(id);
+      MastAdmin.showToast('Channel deleted');
+      renderChannelsManager();
+    } catch (err) {
+      MastAdmin.showToast('Error: ' + err.message, true);
+    }
+  }
 
   async function getMakerSettings() {
     var snap = await MastDB.config.makerSettings().once('value');
@@ -906,12 +1303,39 @@
 
     html += '</div>';
 
-    // Cost history note (edit only, when previousUnitCost exists)
-    if (isEdit && m && m.previousUnitCost != null) {
-      html += '<div style="background:rgba(42,124,111,0.06);border:1px solid rgba(42,124,111,0.15);border-radius:6px;padding:8px 12px;margin-bottom:16px;font-size:0.82rem;color:var(--warm-gray);">';
-      html += 'Previous cost: <strong style="font-family:monospace;">$' + (m.previousUnitCost || 0).toFixed(2) + '</strong>';
-      if (m.costChangedAt) html += ' (changed ' + new Date(m.costChangedAt).toLocaleDateString() + ')';
-      html += '</div>';
+    // Landed cost helper — prorate freight $ across last purchase qty into unitCost
+    html += '<details style="margin-bottom:16px;background:rgba(196,133,60,0.05);border:1px solid rgba(196,133,60,0.2);border-radius:6px;">';
+    html += '<summary style="cursor:pointer;padding:8px 12px;font-size:0.82rem;font-weight:600;color:var(--amber);">+ Apply landed cost (freight, customs)</summary>';
+    html += '<div style="padding:0 12px 12px;">';
+    html += '<p style="font-size:0.75rem;color:var(--warm-gray);margin:6px 0 10px;">Add freight, customs, or supplier fees to your unit cost. Enter the extra charge and the qty it covers — we will prorate per unit and update Unit Cost above.</p>';
+    html += '<div style="display:flex;gap:8px;align-items:flex-end;">';
+    html += '<div style="flex:1;"><label style="display:block;font-size:0.75rem;font-weight:600;margin-bottom:2px;">Extra charge ($)</label><input id="matLandedExtra" type="number" step="0.01" min="0" placeholder="e.g. 25.00" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);box-sizing:border-box;"></div>';
+    html += '<div style="flex:1;"><label style="display:block;font-size:0.75rem;font-weight:600;margin-bottom:2px;">Qty covered</label><input id="matLandedQty" type="number" step="0.01" min="0" placeholder="e.g. 100" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);box-sizing:border-box;"></div>';
+    html += '<button type="button" class="btn btn-secondary btn-small" style="font-size:0.78rem;" onclick="makerApplyLandedCost()">Apply</button>';
+    html += '</div>';
+    html += '</div></details>';
+
+    // Cost history (edit only) — show last 5 entries
+    if (isEdit && m) {
+      var history = Array.isArray(m.costHistory) ? m.costHistory.slice() : [];
+      // Fall back to legacy single snapshot if no history array yet
+      if (history.length === 0 && m.previousUnitCost != null) {
+        history.push({
+          cost: m.previousUnitCost,
+          changedAt: m.costChangedAt || m.updatedAt,
+          changedBy: 'legacy'
+        });
+      }
+      if (history.length > 0) {
+        var recent = history.slice(-5).reverse();
+        html += '<div style="background:rgba(42,124,111,0.06);border:1px solid rgba(42,124,111,0.15);border-radius:6px;padding:10px 12px;margin-bottom:16px;font-size:0.78rem;color:var(--warm-gray);">';
+        html += '<div style="font-weight:600;margin-bottom:6px;color:var(--charcoal);">Cost History <span style="font-weight:400;color:var(--warm-gray-light);">(most recent ' + recent.length + ' of ' + history.length + ')</span></div>';
+        recent.forEach(function(h) {
+          var when = h.changedAt ? new Date(h.changedAt).toLocaleDateString() : '—';
+          html += '<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>' + when + '</span><span style="font-family:monospace;">$' + (h.cost || 0).toFixed(2) + '</span></div>';
+        });
+        html += '</div>';
+      }
     }
 
     // Purchase UOM + Conversion Factor (optional — for buy vs use unit)
@@ -989,6 +1413,35 @@
     var container = document.getElementById('materialModalContainer');
     if (container) container.remove();
     editingMaterialId = null;
+  }
+
+  /**
+   * Landed-cost helper — adds (extra / qty) to current unitCost in the open form.
+   * Does not save until user clicks Save Material; once saved, normal cost-history
+   * + costsDirty propagation kicks in.
+   */
+  function applyLandedCost() {
+    var extraEl = document.getElementById('matLandedExtra');
+    var qtyEl = document.getElementById('matLandedQty');
+    var costEl = document.getElementById('matCost');
+    if (!extraEl || !qtyEl || !costEl) return;
+    var extra = parseFloat(extraEl.value);
+    var qty = parseFloat(qtyEl.value);
+    if (isNaN(extra) || extra <= 0) {
+      MastAdmin.showToast('Enter a positive extra charge', true);
+      return;
+    }
+    if (isNaN(qty) || qty <= 0) {
+      MastAdmin.showToast('Enter a positive qty', true);
+      return;
+    }
+    var current = parseFloat(costEl.value) || 0;
+    var addPerUnit = extra / qty;
+    var next = Math.round((current + addPerUnit) * 10000) / 10000;
+    costEl.value = next;
+    extraEl.value = '';
+    qtyEl.value = '';
+    MastAdmin.showToast('Added $' + addPerUnit.toFixed(4) + '/unit — review and Save to commit');
   }
 
   async function saveMaterialForm() {
@@ -1200,7 +1653,32 @@
     html += '<h2 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">Pieces</h2>';
     html += '<span style="font-size:0.82rem;color:var(--warm-gray);">' + products.length + ' products, ' + Object.keys(recipeByProduct).length + ' with recipes</span>';
     html += '</div>';
+    html += '<div style="display:flex;gap:8px;align-items:center;">';
+
+    // Health badges: dirty count + below-floor count
+    var dirtyCount = 0;
+    var belowFloorCount = 0;
+    Object.keys(recipesData).forEach(function(rid) {
+      var r = recipesData[rid];
+      if (!r || r.status === 'archived') return;
+      if (r.costsDirty) dirtyCount++;
+      if (r.minMarginPercent != null) {
+        var aTier = r.activePriceTier || 'direct';
+        var aPrice = (r.isVariantEnabled && r.variants) ? getFirstVariantTierPrice(aTier, r) : (r[aTier + 'Price'] || 0);
+        var aPct = aPrice > 0 ? ((aPrice - (r.totalCost || 0)) / aPrice) * 100 : 0;
+        if (aPct < r.minMarginPercent) belowFloorCount++;
+      }
+    });
+    if (dirtyCount > 0) {
+      html += '<button class="btn btn-secondary btn-small" style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.4);color:#b45309;" onclick="makerRecalcAllDirty()" title="Recalculate all flagged recipes">⚠ ' + dirtyCount + ' need recalc</button>';
+    }
+    if (belowFloorCount > 0) {
+      html += '<span class="status-badge" style="background:rgba(220,38,38,0.1);color:#991b1b;border:1px solid rgba(220,38,38,0.3);font-size:0.72rem;padding:5px 9px;">' + belowFloorCount + ' below margin floor</span>';
+    }
+
+    html += '<button class="btn btn-secondary btn-small" onclick="makerOpenChannelsManager()" title="Manage sales channel fee profiles">Channels</button>';
     html += '<button class="btn btn-secondary btn-small" onclick="makerOpenImport(\'products\')">Import CSV</button>';
+    html += '</div>';
     html += '</div>';
 
     if (products.length === 0) {
@@ -1319,12 +1797,17 @@
     var isVariant = bs.isVariantEnabled && bs.variants && Object.keys(bs.variants).length > 0;
     var activeData = isVariant ? getActiveVariantData(bs) : bs;
 
+    // Resolve sub-assembly costs (multi-level BOM) before calculating
+    var resolvedLineItems = resolveSubAssemblyCosts(activeData.lineItems || {}, editingRecipeId ? (function(){var v={};v[editingRecipeId]=true;return v;})() : {}, 0);
+
     // Run live calculation on active data
     var calc = calculateRecipe({
-      lineItems: activeData.lineItems || {},
+      lineItems: resolvedLineItems,
       laborRatePerHour: bs.laborRatePerHour || 0,
       laborMinutes: activeData.laborMinutes || 0,
       otherCost: activeData.otherCost || 0,
+      setupCost: bs.setupCost || 0,
+      batchSize: bs.batchSize || 1,
       wholesaleMarkup: bs.wholesaleMarkup || 1,
       directMarkup: bs.directMarkup || 1,
       retailMarkup: bs.retailMarkup || 1
@@ -1343,6 +1826,17 @@
       html += '</div>';
     }
 
+    // Margin floor alert (active tier below minMarginPercent)
+    if (bs.minMarginPercent != null) {
+      var activeTierKey = bs.activePriceTier || 'direct';
+      var activeMarginPct = calc[activeTierKey + 'MarginPct'] || 0;
+      if (activeMarginPct < bs.minMarginPercent) {
+        html += '<div style="background:rgba(220,38,38,0.08);border:1px solid rgba(220,38,38,0.3);border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:0.85rem;color:#991b1b;">';
+        html += '⚠ Active <strong>' + activeTierKey + '</strong> tier margin is <strong>' + activeMarginPct.toFixed(1) + '%</strong> — below your floor of <strong>' + bs.minMarginPercent + '%</strong>. Raise the markup or reduce cost.';
+        html += '</div>';
+      }
+    }
+
     // Header
     html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">';
     html += '<div>';
@@ -1350,6 +1844,7 @@
     html += '<span style="font-size:0.82rem;color:var(--warm-gray);">Recipe for product ' + esc(bs.productId || '') + '</span>';
     html += '</div>';
     html += '<div style="display:flex;gap:8px;">';
+    html += '<button class="btn btn-secondary btn-small" onclick="makerDuplicateCurrentRecipe()" title="Clone this recipe as a new draft">Duplicate</button>';
     html += '<button class="btn btn-secondary btn-small" onclick="makerSaveRecipeBuilder()">Save</button>';
     html += '<button class="btn btn-primary btn-small" onclick="makerSaveAndRecalcRecipe()">Save & Recalculate</button>';
     html += '</div>';
@@ -1430,8 +1925,13 @@
         var ext = calcLi.extendedCost || roundCents((li.quantity || 0) * (li.unitCost || 0));
         var effQty = calcLi.effectiveQty || li.quantity || 0;
         var scrapPct = li.scrapPercent || 0;
+        var subBadge = '';
+        if (li.kind === 'recipe') {
+          var errFlag = calcLi.subAssemblyError ? ' <span title="' + esc(calcLi.subAssemblyError) + '" style="color:var(--danger);">⚠</span>' : '';
+          subBadge = ' <span class="status-badge" style="background:rgba(196,133,60,0.15);color:var(--amber);font-size:0.62rem;padding:1px 6px;margin-left:4px;">sub-assembly</span>' + errFlag;
+        }
         html += '<tr>';
-        html += '<td style="padding:8px;font-size:0.85rem;border-bottom:1px solid var(--cream-dark);">' + esc(li.materialName || '') + '</td>';
+        html += '<td style="padding:8px;font-size:0.85rem;border-bottom:1px solid var(--cream-dark);">' + esc(li.materialName || '') + subBadge + '</td>';
         html += '<td style="text-align:right;padding:8px;border-bottom:1px solid var(--cream-dark);"><input type="number" step="0.01" min="0" value="' + (li.quantity || 0) + '" style="width:70px;text-align:right;padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);" onchange="makerUpdateLineItemQty(\'' + esc(liId) + '\', this.value)">' + (scrapPct > 0 ? '<div style="font-size:0.7rem;color:var(--warm-gray);text-align:right;margin-top:2px;">eff: ' + effQty.toFixed(2) + '</div>' : '') + '</td>';
         html += '<td style="text-align:right;padding:8px;border-bottom:1px solid var(--cream-dark);"><input type="number" step="1" min="0" max="50" value="' + scrapPct + '" style="width:55px;text-align:right;padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);" onchange="makerUpdateLineItemScrap(\'' + esc(liId) + '\', this.value)"></td>';
         html += '<td style="text-align:center;padding:8px;font-size:0.82rem;color:var(--warm-gray);border-bottom:1px solid var(--cream-dark);">' + esc(li.unitOfMeasure || '') + '</td>';
@@ -1485,6 +1985,22 @@
     html += '<input type="text" value="' + esc(bs.otherCostNote || '') + '" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';box-sizing:border-box;" onchange="makerUpdateBuilderField(\'otherCostNote\', this.value)" placeholder="e.g. packaging, shipping supplies">';
     html += '</div>';
 
+    html += '</div>';
+
+    // Setup cost + batch size (amortized fixed cost — kiln firing, casting tree, etc.)
+    html += '<div style="display:flex;gap:12px;margin-top:12px;padding-top:12px;border-top:1px dashed var(--cream-dark);">';
+    html += '<div style="flex:1;">';
+    html += '<label style="display:block;font-size:0.82rem;font-weight:600;margin-bottom:4px;">Setup Cost ($) <span style="font-weight:400;color:var(--warm-gray-light);">amortized</span></label>';
+    html += '<input type="number" step="0.01" min="0" value="' + (bs.setupCost || 0) + '" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);box-sizing:border-box;" onchange="makerUpdateBuilderField(\'setupCost\', parseFloat(this.value) || 0)">';
+    html += '</div>';
+    html += '<div style="flex:1;">';
+    html += '<label style="display:block;font-size:0.82rem;font-weight:600;margin-bottom:4px;">Batch Size <span style="font-weight:400;color:var(--warm-gray-light);">units per setup</span></label>';
+    html += '<input type="number" step="1" min="1" value="' + (bs.batchSize || 1) + '" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);box-sizing:border-box;" onchange="makerUpdateBuilderField(\'batchSize\', Math.max(1, parseInt(this.value) || 1))">';
+    html += '</div>';
+    html += '<div style="flex:1;text-align:right;">';
+    html += '<label style="display:block;font-size:0.82rem;font-weight:600;margin-bottom:4px;">Per Unit</label>';
+    html += '<div style="padding:8px 10px;font-family:monospace;font-size:0.85rem;font-weight:600;">$' + (calc.perUnitSetup || 0).toFixed(2) + '</div>';
+    html += '</div>';
     html += '</div></div>';
 
     // ---- COST SUMMARY ----
@@ -1501,9 +2017,9 @@
     html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;">';
 
     var tiers = [
-      { key: 'wholesale', label: 'Wholesale', markupField: 'wholesaleMarkup', price: calc.wholesalePrice, profit: calc.wholesaleGrossProfit },
-      { key: 'direct', label: 'Direct', markupField: 'directMarkup', price: calc.directPrice, profit: calc.directGrossProfit },
-      { key: 'retail', label: 'Retail', markupField: 'retailMarkup', price: calc.retailPrice, profit: calc.retailGrossProfit }
+      { key: 'wholesale', label: 'Wholesale', markupField: 'wholesaleMarkup', price: calc.wholesalePrice, profit: calc.wholesaleGrossProfit, marginPct: calc.wholesaleMarginPct },
+      { key: 'direct', label: 'Direct', markupField: 'directMarkup', price: calc.directPrice, profit: calc.directGrossProfit, marginPct: calc.directMarginPct },
+      { key: 'retail', label: 'Retail', markupField: 'retailMarkup', price: calc.retailPrice, profit: calc.retailGrossProfit, marginPct: calc.retailMarginPct }
     ];
 
     tiers.forEach(function(tier) {
@@ -1531,8 +2047,13 @@
       // Price
       html += '<div style="text-align:center;font-size:1.3rem;font-family:monospace;font-weight:700;color:var(--charcoal);margin-bottom:4px;">$' + tier.price.toFixed(2) + '</div>';
 
-      // Gross profit
-      html += '<div style="text-align:center;font-size:0.78rem;color:' + (tier.profit > 0 ? '#16a34a' : 'var(--danger)') + ';">Profit: $' + tier.profit.toFixed(2) + '</div>';
+      // Gross profit + margin %
+      var minMargin = bs.minMarginPercent;
+      var belowMin = minMargin != null && tier.marginPct < minMargin;
+      var profitColor = tier.profit > 0 ? '#16a34a' : 'var(--danger)';
+      var marginColor = belowMin ? 'var(--danger)' : profitColor;
+      html += '<div style="text-align:center;font-size:0.78rem;color:' + profitColor + ';">Profit: $' + tier.profit.toFixed(2) + '</div>';
+      html += '<div style="text-align:center;font-size:0.82rem;font-weight:600;color:' + marginColor + ';margin-top:2px;">Margin: ' + tier.marginPct.toFixed(1) + '%' + (belowMin ? ' ⚠' : '') + '</div>';
 
       // Etsy sync indicator + Set active button
       if (isActive) {
@@ -1566,20 +2087,34 @@
       html += '<th style="text-align:right;padding:6px 8px;font-size:0.72rem;font-weight:600;text-transform:uppercase;color:var(--warm-gray-light);border-bottom:1px solid var(--cream-dark);">Wholesale</th>';
       html += '<th style="text-align:right;padding:6px 8px;font-size:0.72rem;font-weight:600;text-transform:uppercase;color:var(--warm-gray-light);border-bottom:1px solid var(--cream-dark);">Direct</th>';
       html += '<th style="text-align:right;padding:6px 8px;font-size:0.72rem;font-weight:600;text-transform:uppercase;color:var(--warm-gray-light);border-bottom:1px solid var(--cream-dark);">Retail</th>';
+      html += '<th style="text-align:right;padding:6px 8px;font-size:0.72rem;font-weight:600;text-transform:uppercase;color:var(--warm-gray-light);border-bottom:1px solid var(--cream-dark);">Margin (active)</th>';
       html += '</tr></thead><tbody>';
+      var activeTier = bs.activePriceTier || 'direct';
+      var marginKey = activeTier + 'MarginPct';
+      var minMarginV = bs.minMarginPercent;
       Object.keys(bs.variants).forEach(function(vid) {
         var v = bs.variants[vid];
         var vc = allCalcs[vid] || {};
+        var vMargin = vc[marginKey] || 0;
+        var vBelow = minMarginV != null && vMargin < minMarginV;
         html += '<tr>';
         html += '<td style="padding:8px;font-weight:500;border-bottom:1px solid var(--cream-dark);">' + esc(v.label || 'Variant') + '</td>';
         html += '<td style="text-align:right;padding:8px;font-family:monospace;border-bottom:1px solid var(--cream-dark);">$' + (vc.totalCost || 0).toFixed(2) + '</td>';
         html += '<td style="text-align:right;padding:8px;font-family:monospace;border-bottom:1px solid var(--cream-dark);">$' + (vc.wholesalePrice || 0).toFixed(2) + '</td>';
         html += '<td style="text-align:right;padding:8px;font-family:monospace;border-bottom:1px solid var(--cream-dark);">$' + (vc.directPrice || 0).toFixed(2) + '</td>';
         html += '<td style="text-align:right;padding:8px;font-family:monospace;border-bottom:1px solid var(--cream-dark);">$' + (vc.retailPrice || 0).toFixed(2) + '</td>';
+        html += '<td style="text-align:right;padding:8px;font-family:monospace;font-weight:600;color:' + (vBelow ? 'var(--danger)' : '#16a34a') + ';border-bottom:1px solid var(--cream-dark);">' + vMargin.toFixed(1) + '%' + (vBelow ? ' ⚠' : '') + '</td>';
         html += '</tr>';
       });
       html += '</tbody></table></div>';
     }
+
+    // ---- MIN MARGIN FLOOR ----
+    html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;">';
+    html += '<label style="font-size:0.85rem;font-weight:600;flex-shrink:0;">Minimum Margin Floor (%)</label>';
+    html += '<input type="number" step="1" min="0" max="100" value="' + (bs.minMarginPercent != null ? bs.minMarginPercent : '') + '" style="width:90px;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);" placeholder="off" onchange="makerUpdateBuilderField(\'minMarginPercent\', this.value === \'\' ? null : parseFloat(this.value))">';
+    html += '<span style="font-size:0.78rem;color:var(--warm-gray);">Active tier margin must stay above this; leave blank to disable.</span>';
+    html += '</div>';
 
     // ---- NOTES ----
     html += '<div style="margin-bottom:16px;">';
@@ -1639,6 +2174,9 @@
         directMarkup: builderState.directMarkup || 1,
         retailMarkup: builderState.retailMarkup || 1,
         otherCostNote: builderState.otherCostNote || '',
+        setupCost: builderState.setupCost || 0,
+        batchSize: builderState.batchSize || 1,
+        minMarginPercent: builderState.minMarginPercent != null ? builderState.minMarginPercent : null,
         notes: builderState.notes || '',
         isVariantEnabled: builderState.isVariantEnabled || false,
         variantDimension: builderState.variantDimension || '',
@@ -1677,6 +2215,102 @@
     } catch (err) {
       MastAdmin.showToast('Error: ' + err.message, true);
     }
+  }
+
+  /**
+   * Duplicate a recipe — clones line items, labor, other costs, variants, markups.
+   * New recipe starts in draft status with name suffixed " (copy)".
+   * NOTE: productId is intentionally NOT copied — duplicates are unlinked drafts.
+   */
+  async function duplicateRecipe(recipeId) {
+    var src = recipesData[recipeId];
+    if (!src) throw new Error('Recipe not found: ' + recipeId);
+    var clone = JSON.parse(JSON.stringify(src));
+    // Reassign IDs and reset link fields
+    delete clone.recipeId;
+    clone.productId = '';
+    clone.name = (src.name || 'Untitled') + ' (copy)';
+    clone.status = 'draft';
+    clone.activePriceTier = 'none';
+    clone.lastEtsySyncAt = null;
+    clone.lastCalculatedAt = null;
+    clone.costsDirty = false;
+    // Generate fresh line item ids so sub-assembly cycle checks remain stable
+    if (clone.lineItems) {
+      var freshLis = {};
+      Object.keys(clone.lineItems).forEach(function(oldId) {
+        var newId = 'li_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+        var li = clone.lineItems[oldId];
+        li.lineItemId = newId;
+        freshLis[newId] = li;
+      });
+      clone.lineItems = freshLis;
+    }
+    if (clone.variants) {
+      var freshVariants = {};
+      Object.keys(clone.variants).forEach(function(vid) {
+        var v = clone.variants[vid];
+        var newVid = 'v_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+        v.variantId = newVid;
+        if (v.lineItems) {
+          var fLis = {};
+          Object.keys(v.lineItems).forEach(function(oldId) {
+            var newId = 'li_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+            var li = v.lineItems[oldId];
+            li.lineItemId = newId;
+            fLis[newId] = li;
+          });
+          v.lineItems = fLis;
+        }
+        freshVariants[newVid] = v;
+      });
+      clone.variants = freshVariants;
+    }
+    var created = await createRecipe(clone);
+    return created;
+  }
+
+  async function duplicateCurrentRecipe() {
+    if (!editingRecipeId) return;
+    if (!confirm('Duplicate this recipe as a new draft? The clone will not be linked to a product.')) return;
+    try {
+      // Save current state first so the clone reflects unsaved edits
+      await saveRecipeBuilder();
+      var clone = await duplicateRecipe(editingRecipeId);
+      MastAdmin.showToast('Duplicated as "' + clone.name + '"');
+      // Open the clone for editing
+      editingRecipeId = clone.recipeId;
+      builderState = JSON.parse(JSON.stringify(clone));
+      renderRecipeBuilder();
+    } catch (err) {
+      MastAdmin.showToast('Error: ' + err.message, true);
+    }
+  }
+
+  async function recalcAllDirty() {
+    var dirtyIds = Object.keys(recipesData).filter(function(rid) {
+      var r = recipesData[rid];
+      return r && r.status !== 'archived' && r.costsDirty;
+    });
+    if (dirtyIds.length === 0) {
+      MastAdmin.showToast('No recipes need recalculation');
+      return;
+    }
+    if (!confirm('Recalculate ' + dirtyIds.length + ' flagged recipe' + (dirtyIds.length === 1 ? '' : 's') + '? This refreshes material costs and updates totals.')) {
+      return;
+    }
+    var ok = 0, fail = 0;
+    for (var i = 0; i < dirtyIds.length; i++) {
+      try {
+        await recalculateRecipe(dirtyIds[i]);
+        ok++;
+      } catch (err) {
+        console.error('Recalc failed for ' + dirtyIds[i], err);
+        fail++;
+      }
+    }
+    MastAdmin.showToast('Recalculated ' + ok + (fail > 0 ? ' (' + fail + ' failed)' : ''));
+    renderPiecesList();
   }
 
   async function recalcAndRefresh() {
@@ -1726,10 +2360,32 @@
   // Add Part Modal (material picker)
   // ============================================================
 
+  var addPartKind = 'material'; // 'material' | 'recipe'
+
   function openAddPartModal() {
+    addPartKind = 'material';
+    renderAddPartModal();
+  }
+
+  function setAddPartKind(kind) {
+    addPartKind = kind;
+    var existing = document.getElementById('addPartContainer');
+    if (existing) existing.remove();
+    renderAddPartModal();
+  }
+
+  function renderAddPartModal() {
     var esc = MastAdmin.esc;
     var activeMaterials = Object.values(materialsData).filter(function(m) {
       return m.status === 'active';
+    }).sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
+
+    // Eligible sub-assembly recipes: active, not self, no cycle
+    var eligibleRecipes = Object.values(recipesData).filter(function(r) {
+      if (!r || r.status === 'archived') return false;
+      if (r.recipeId === editingRecipeId) return false;
+      if (editingRecipeId && wouldCreateCycle(editingRecipeId, r.recipeId)) return false;
+      return true;
     }).sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
 
     var html = '';
@@ -1738,28 +2394,62 @@
 
     html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.2rem;font-weight:500;margin:0 0 16px;">Add Part</h3>';
 
-    if (activeMaterials.length === 0) {
-      html += '<p style="font-size:0.85rem;color:var(--warm-gray);text-align:center;padding:20px;">No active materials. Go to Materials to add some first.</p>';
-    } else {
-      html += '<div style="margin-bottom:12px;">';
-      html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Material</label>';
-      html += '<select id="addPartMaterialId" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">';
-      html += '<option value="">Select material...</option>';
-      activeMaterials.forEach(function(m) {
-        html += '<option value="' + esc(m.materialId) + '">' + esc(m.name) + ' (' + esc(m.unitOfMeasure) + ' @ $' + (m.unitCost || 0).toFixed(2) + ')</option>';
-      });
-      html += '</select>';
-      html += '</div>';
+    // Kind toggle (Material vs Sub-assembly)
+    html += '<div style="display:flex;gap:0;margin-bottom:14px;border:1px solid var(--cream-dark);border-radius:6px;overflow:hidden;">';
+    var matBg = addPartKind === 'material' ? 'var(--teal)' : 'var(--cream)';
+    var matFg = addPartKind === 'material' ? 'white' : 'var(--charcoal)';
+    var subBg = addPartKind === 'recipe' ? 'var(--teal)' : 'var(--cream)';
+    var subFg = addPartKind === 'recipe' ? 'white' : 'var(--charcoal)';
+    html += '<button style="flex:1;padding:8px 12px;border:none;background:' + matBg + ';color:' + matFg + ';font-size:0.82rem;font-weight:600;cursor:pointer;font-family:\'DM Sans\';" onclick="makerSetAddPartKind(\'material\')">Material</button>';
+    html += '<button style="flex:1;padding:8px 12px;border:none;background:' + subBg + ';color:' + subFg + ';font-size:0.82rem;font-weight:600;cursor:pointer;font-family:\'DM Sans\';" onclick="makerSetAddPartKind(\'recipe\')">Sub-assembly</button>';
+    html += '</div>';
 
-      html += '<div style="margin-bottom:16px;">';
-      html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Quantity</label>';
-      html += '<input id="addPartQty" type="number" step="0.01" min="0" value="1" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;box-sizing:border-box;">';
-      html += '</div>';
+    if (addPartKind === 'material') {
+      if (activeMaterials.length === 0) {
+        html += '<p style="font-size:0.85rem;color:var(--warm-gray);text-align:center;padding:20px;">No active materials. Go to Materials to add some first.</p>';
+      } else {
+        html += '<div style="margin-bottom:12px;">';
+        html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Material</label>';
+        html += '<select id="addPartMaterialId" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">';
+        html += '<option value="">Select material...</option>';
+        activeMaterials.forEach(function(m) {
+          html += '<option value="' + esc(m.materialId) + '">' + esc(m.name) + ' (' + esc(m.unitOfMeasure) + ' @ $' + (m.unitCost || 0).toFixed(2) + ')</option>';
+        });
+        html += '</select>';
+        html += '</div>';
+
+        html += '<div style="margin-bottom:16px;">';
+        html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Quantity</label>';
+        html += '<input id="addPartQty" type="number" step="0.01" min="0" value="1" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;box-sizing:border-box;">';
+        html += '</div>';
+      }
+    } else {
+      if (eligibleRecipes.length === 0) {
+        html += '<p style="font-size:0.85rem;color:var(--warm-gray);text-align:center;padding:20px;">No eligible recipes available as sub-assemblies. Recipes that would create a cycle are excluded.</p>';
+      } else {
+        html += '<div style="margin-bottom:12px;">';
+        html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Sub-recipe</label>';
+        html += '<select id="addPartRecipeId" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">';
+        html += '<option value="">Select recipe...</option>';
+        eligibleRecipes.forEach(function(r) {
+          html += '<option value="' + esc(r.recipeId) + '">' + esc(r.name || 'Untitled') + ' (cost $' + (r.totalCost || 0).toFixed(2) + ')</option>';
+        });
+        html += '</select>';
+        html += '</div>';
+
+        html += '<div style="margin-bottom:16px;">';
+        html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Quantity</label>';
+        html += '<input id="addPartQty" type="number" step="0.01" min="0" value="1" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;box-sizing:border-box;">';
+        html += '</div>';
+
+        html += '<p style="font-size:0.75rem;color:var(--warm-gray-light);margin:0 0 12px;">Sub-assembly cost = sub-recipe total cost (no markup compounding). Max nesting depth ' + SUB_ASSEMBLY_MAX_DEPTH + '.</p>';
+      }
     }
 
     html += '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;">';
     html += '<button class="btn btn-secondary" onclick="makerCloseAddPartModal()">Cancel</button>';
-    if (activeMaterials.length > 0) {
+    var canAdd = (addPartKind === 'material' && activeMaterials.length > 0) || (addPartKind === 'recipe' && eligibleRecipes.length > 0);
+    if (canAdd) {
       html += '<button class="btn btn-primary" onclick="makerConfirmAddPart()">Add Part</button>';
     }
     html += '</div>';
@@ -1779,34 +2469,58 @@
   }
 
   function confirmAddPart() {
-    var matId = document.getElementById('addPartMaterialId').value;
     var qty = parseFloat(document.getElementById('addPartQty').value) || 0;
-
-    if (!matId) {
-      MastAdmin.showToast('Select a material', true);
-      return;
-    }
     if (qty <= 0) {
       MastAdmin.showToast('Quantity must be greater than 0', true);
       return;
     }
 
-    var material = materialsData[matId];
-    if (!material) return;
-
-    // Add to active data source (variant or root)
     var liId = 'li_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
     var target = getActiveVariantData(builderState);
     if (!target.lineItems) target.lineItems = {};
-    target.lineItems[liId] = {
-      lineItemId: liId,
-      materialId: matId,
-      materialName: material.name,
-      quantity: qty,
-      unitOfMeasure: material.unitOfMeasure,
-      unitCost: material.unitCost,
-      extendedCost: roundCents(qty * material.unitCost)
-    };
+
+    if (addPartKind === 'recipe') {
+      var recipeId = document.getElementById('addPartRecipeId').value;
+      if (!recipeId) {
+        MastAdmin.showToast('Select a sub-recipe', true);
+        return;
+      }
+      // Final cycle pre-check (defensive — selector already filters)
+      if (editingRecipeId && wouldCreateCycle(editingRecipeId, recipeId)) {
+        MastAdmin.showToast('Cannot add — would create a cycle', true);
+        return;
+      }
+      var sub = recipesData[recipeId];
+      if (!sub) return;
+      target.lineItems[liId] = {
+        lineItemId: liId,
+        kind: 'recipe',
+        materialId: recipeId, // stores sub-recipe id
+        materialName: sub.name || 'Sub-recipe',
+        quantity: qty,
+        unitOfMeasure: 'each',
+        unitCost: sub.totalCost || 0,
+        extendedCost: roundCents(qty * (sub.totalCost || 0))
+      };
+    } else {
+      var matId = document.getElementById('addPartMaterialId').value;
+      if (!matId) {
+        MastAdmin.showToast('Select a material', true);
+        return;
+      }
+      var material = materialsData[matId];
+      if (!material) return;
+      target.lineItems[liId] = {
+        lineItemId: liId,
+        kind: 'material',
+        materialId: matId,
+        materialName: material.name,
+        quantity: qty,
+        unitOfMeasure: material.unitOfMeasure,
+        unitCost: material.unitCost,
+        extendedCost: roundCents(qty * material.unitCost)
+      };
+    }
 
     closeAddPartModal();
     renderRecipeBuilder();
@@ -1853,6 +2567,20 @@
   window.makerSaveRecipeBuilder = saveRecipeBuilder;
   window.makerSaveAndRecalcRecipe = saveAndRecalcRecipe;
   window.makerRecalcAndRefresh = recalcAndRefresh;
+  window.makerRecalcAllDirty = recalcAllDirty;
+  window.makerDuplicateCurrentRecipe = duplicateCurrentRecipe;
+  window.makerSetAddPartKind = setAddPartKind;
+  window.makerApplyLandedCost = applyLandedCost;
+
+  // Channels (1D)
+  window.makerOpenChannelsManager = openChannelsManager;
+  window.makerCloseChannelsManager = closeChannelsManager;
+  window.makerCreateChannelFromForm = createChannelFromForm;
+  window.makerEditChannelPrompt = editChannelPrompt;
+  window.makerDeleteChannelConfirm = deleteChannelConfirm;
+  window.makerGetChannelNetMargin = getChannelNetMargin;
+  window.makerDetectChannelForOrder = detectChannelForOrder;
+  window.makerLoadChannels = loadChannels;
   window.makerSetTierFromBuilder = setTierFromBuilder;
   window.makerUpdateBuilderField = updateBuilderField;
   window.makerUpdateLineItemQty = updateLineItemQty;

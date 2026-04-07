@@ -633,6 +633,8 @@ function renderProductionJobDetail(jobId) {
       (buildKeys.length > 0 ? buildsHtml : '<p style="font-size:0.85rem;color:var(--warm-gray);font-style:italic;">No builds yet. Start a build session to begin tracking production.</p>') +
     '</div>' +
 
+    renderCostTracking(jobId, job) +
+
     '<div class="prod-detail-section">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
         '<strong>Story</strong>' +
@@ -885,6 +887,198 @@ function onLineItemProductSelect() {
   }
 }
 
+/**
+ * Snapshot a per-unit BOM forecast from a product's active recipe, if one exists.
+ * Returns { recipeId, recipeName, materialCostPerUnitCents, laborCostPerUnitCents,
+ *           laborMinutesPerUnit, totalCostPerUnitCents, snapshotAt } or null.
+ * Snapshot is taken at add-time so later recipe edits don't ripple into existing jobs.
+ */
+async function snapshotBomForecast(productId) {
+  if (!productId) return null;
+  try {
+    var snap = await MastDB.recipes.list(200);
+    var recipes = snap.val() || {};
+    var recipe = null;
+    Object.keys(recipes).forEach(function(rid) {
+      var r = recipes[rid];
+      if (!r || r.status === 'archived') return;
+      if (r.productId === productId && !recipe) recipe = r;
+    });
+    if (!recipe) return null;
+    // For variant recipes, use the first variant's totals as the representative per-unit.
+    var totalCost = recipe.totalCost || 0;
+    var materialCost = recipe.totalMaterialCost || 0;
+    var laborCost = recipe.laborCost || 0;
+    var laborMinutes = recipe.laborMinutes || 0;
+    if (recipe.isVariantEnabled && recipe.variants) {
+      var firstKey = Object.keys(recipe.variants)[0];
+      if (firstKey) {
+        var v = recipe.variants[firstKey];
+        totalCost = v.totalCost || totalCost;
+        materialCost = v.totalMaterialCost || materialCost;
+        laborMinutes = v.laborMinutes || laborMinutes;
+        laborCost = Math.round((laborMinutes / 60) * (recipe.laborRatePerHour || 0) * 100) / 100;
+      }
+    }
+    return {
+      recipeId: recipe.recipeId || null,
+      recipeName: recipe.name || '',
+      materialCostPerUnitCents: Math.round(materialCost * 100),
+      laborCostPerUnitCents: Math.round(laborCost * 100),
+      laborMinutesPerUnit: laborMinutes,
+      totalCostPerUnitCents: Math.round(totalCost * 100),
+      snapshotAt: new Date().toISOString()
+    };
+  } catch (err) {
+    console.warn('snapshotBomForecast failed:', err);
+    return null;
+  }
+}
+
+/**
+ * Compute and render the cost-tracking section: budgeted vs actual material/labor/total.
+ * Pulls per-line-item bomForecast snapshots and reconciles against completed quantities
+ * and any operator-entered actual overrides.
+ */
+function renderCostTracking(jobId, job) {
+  if (!job) return '';
+  var lineItems = job.lineItems || {};
+  var liKeys = Object.keys(lineItems);
+  if (liKeys.length === 0) return '';
+
+  // Skip if no line item has any forecast at all
+  var anyForecast = liKeys.some(function(k) { return lineItems[k] && lineItems[k].bomForecast; });
+  if (!anyForecast) {
+    return '<div class="prod-detail-section">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
+        '<strong>Cost Tracking</strong>' +
+      '</div>' +
+      '<p style="font-size:0.82rem;color:var(--warm-gray);font-style:italic;">No BOM forecast available. Line items added before recipes existed have no cost snapshot. Re-add line items to capture forecasts.</p>' +
+    '</div>';
+  }
+
+  var totalBudgetMaterialCents = 0;
+  var totalBudgetLaborCents = 0;
+  var totalActualMaterialCents = 0;
+  var totalActualLaborCents = 0;
+
+  var rows = '';
+  liKeys.forEach(function(k) {
+    var li = lineItems[k];
+    var f = li.bomForecast;
+    var target = li.targetQuantity || 0;
+    var completed = li.completedQuantity || 0;
+    if (!f) {
+      rows += '<tr><td style="padding:6px 8px;font-size:0.82rem;">' + esc(li.productName || '') + '</td>' +
+        '<td colspan="6" style="padding:6px 8px;font-size:0.78rem;color:var(--warm-gray-light);font-style:italic;">no recipe forecast</td></tr>';
+      return;
+    }
+    var budMatCents = (f.materialCostPerUnitCents || 0) * target;
+    var budLabCents = (f.laborCostPerUnitCents || 0) * target;
+    var actMatCents = li.actualMaterialCostCents != null
+      ? li.actualMaterialCostCents
+      : (f.materialCostPerUnitCents || 0) * completed;
+    var actLabCents = li.actualLaborCostCents != null
+      ? li.actualLaborCostCents
+      : (f.laborCostPerUnitCents || 0) * completed;
+
+    totalBudgetMaterialCents += budMatCents;
+    totalBudgetLaborCents += budLabCents;
+    totalActualMaterialCents += actMatCents;
+    totalActualLaborCents += actLabCents;
+
+    var actMatOverride = li.actualMaterialCostCents != null ? ' style="background:rgba(196,133,60,0.08);"' : '';
+    var actLabOverride = li.actualLaborCostCents != null ? ' style="background:rgba(196,133,60,0.08);"' : '';
+
+    rows += '<tr>' +
+      '<td style="padding:6px 8px;font-size:0.82rem;">' + esc(li.productName || '') + '<div style="font-size:0.7rem;color:var(--warm-gray-light);">' + completed + '/' + target + ' done</div></td>' +
+      '<td style="text-align:right;padding:6px 8px;font-family:monospace;font-size:0.82rem;">$' + (budMatCents / 100).toFixed(2) + '</td>' +
+      '<td style="text-align:right;padding:6px 8px;">' +
+        '<input type="number" step="0.01" min="0" value="' + (actMatCents / 100).toFixed(2) + '" ' + actMatOverride +
+        ' style="width:80px;text-align:right;padding:3px 6px;border:1px solid var(--cream-dark);border-radius:4px;font-family:monospace;font-size:0.82rem;background:var(--cream);color:var(--charcoal);"' +
+        ' onchange="setLineItemActual(\'' + esc(jobId) + '\',\'' + esc(k) + '\',\'material\',this.value)"' +
+        ' title="Actual material cost. Defaults to forecast × completed; type to override.">' +
+      '</td>' +
+      '<td style="text-align:right;padding:6px 8px;font-family:monospace;font-size:0.82rem;">$' + (budLabCents / 100).toFixed(2) + '</td>' +
+      '<td style="text-align:right;padding:6px 8px;">' +
+        '<input type="number" step="0.01" min="0" value="' + (actLabCents / 100).toFixed(2) + '" ' + actLabOverride +
+        ' style="width:80px;text-align:right;padding:3px 6px;border:1px solid var(--cream-dark);border-radius:4px;font-family:monospace;font-size:0.82rem;background:var(--cream);color:var(--charcoal);"' +
+        ' onchange="setLineItemActual(\'' + esc(jobId) + '\',\'' + esc(k) + '\',\'labor\',this.value)"' +
+        ' title="Actual labor cost. Defaults to forecast × completed; type to override.">' +
+      '</td>' +
+      '<td style="text-align:right;padding:6px 8px;font-family:monospace;font-size:0.82rem;font-weight:600;">$' + ((budMatCents + budLabCents) / 100).toFixed(2) + '</td>' +
+      '<td style="text-align:right;padding:6px 8px;font-family:monospace;font-size:0.82rem;font-weight:600;">$' + ((actMatCents + actLabCents) / 100).toFixed(2) + '</td>' +
+    '</tr>';
+  });
+
+  var totalBudget = totalBudgetMaterialCents + totalBudgetLaborCents;
+  var totalActual = totalActualMaterialCents + totalActualLaborCents;
+  var variance = totalActual - totalBudget;
+  var varPct = totalBudget > 0 ? (variance / totalBudget) * 100 : 0;
+  var varColor = variance > 0 ? 'var(--danger)' : '#16a34a';
+  var varSign = variance >= 0 ? '+' : '';
+
+  return '<div class="prod-detail-section">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
+      '<strong>Cost Tracking</strong>' +
+      '<span style="font-size:0.78rem;color:var(--warm-gray);">Budgeted from BOM forecast vs actual</span>' +
+    '</div>' +
+    '<div style="overflow-x:auto;">' +
+      '<table style="width:100%;border-collapse:collapse;font-size:0.82rem;">' +
+        '<thead><tr style="border-bottom:1px solid var(--cream-dark);">' +
+          '<th style="text-align:left;padding:6px 8px;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--warm-gray);">Item</th>' +
+          '<th style="text-align:right;padding:6px 8px;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--warm-gray);">Bud Mat</th>' +
+          '<th style="text-align:right;padding:6px 8px;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--warm-gray);">Act Mat</th>' +
+          '<th style="text-align:right;padding:6px 8px;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--warm-gray);">Bud Labor</th>' +
+          '<th style="text-align:right;padding:6px 8px;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--warm-gray);">Act Labor</th>' +
+          '<th style="text-align:right;padding:6px 8px;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--warm-gray);">Bud Total</th>' +
+          '<th style="text-align:right;padding:6px 8px;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--warm-gray);">Act Total</th>' +
+        '</tr></thead>' +
+        '<tbody>' + rows + '</tbody>' +
+        '<tfoot><tr style="border-top:2px solid var(--charcoal);font-weight:700;">' +
+          '<td style="padding:8px;">Job Total</td>' +
+          '<td style="text-align:right;padding:8px;font-family:monospace;">$' + (totalBudgetMaterialCents / 100).toFixed(2) + '</td>' +
+          '<td style="text-align:right;padding:8px;font-family:monospace;">$' + (totalActualMaterialCents / 100).toFixed(2) + '</td>' +
+          '<td style="text-align:right;padding:8px;font-family:monospace;">$' + (totalBudgetLaborCents / 100).toFixed(2) + '</td>' +
+          '<td style="text-align:right;padding:8px;font-family:monospace;">$' + (totalActualLaborCents / 100).toFixed(2) + '</td>' +
+          '<td style="text-align:right;padding:8px;font-family:monospace;">$' + (totalBudget / 100).toFixed(2) + '</td>' +
+          '<td style="text-align:right;padding:8px;font-family:monospace;">$' + (totalActual / 100).toFixed(2) + '</td>' +
+        '</tr></tfoot>' +
+      '</table>' +
+    '</div>' +
+    '<div style="margin-top:10px;text-align:right;font-size:0.85rem;color:' + varColor + ';font-weight:600;">' +
+      'Variance: ' + varSign + '$' + (variance / 100).toFixed(2) + ' (' + varSign + varPct.toFixed(1) + '%)' +
+    '</div>' +
+  '</div>';
+}
+
+/**
+ * Save an actual cost override (material or labor) on a job line item.
+ * Empty value clears the override (reverts to forecast × completed derivation).
+ */
+async function setLineItemActual(jobId, lineItemId, kind, value) {
+  try {
+    var cents = (value === '' || value == null) ? null : Math.round(parseFloat(value) * 100);
+    if (cents != null && (isNaN(cents) || cents < 0)) {
+      showToast('Invalid amount', true);
+      return;
+    }
+    var field = kind === 'labor' ? 'actualLaborCostCents' : 'actualMaterialCostCents';
+    var updates = {};
+    updates[field] = cents;
+    await MastDB.productionJobs.lineItems(jobId, lineItemId).update(updates);
+    if (productionJobs[jobId] && productionJobs[jobId].lineItems && productionJobs[jobId].lineItems[lineItemId]) {
+      productionJobs[jobId].lineItems[lineItemId][field] = cents;
+    }
+    await writeAudit('update', 'jobs', jobId);
+    showToast(cents == null ? 'Override cleared (reverted to forecast)' : 'Actual ' + kind + ' saved');
+    // Re-render the detail to refresh totals
+    if (typeof renderProductionJobDetail === 'function') renderProductionJobDetail(jobId);
+  } catch (err) {
+    showToast('Error saving actual: ' + err.message, true);
+  }
+}
+
 async function doAddLineItem(jobId) {
   var pid = document.getElementById('liProductPicker').value || null;
   var name = document.getElementById('liProductName').value.trim();
@@ -892,6 +1086,8 @@ async function doAddLineItem(jobId) {
   var specs = document.getElementById('liSpecs').value.trim();
   if (!name) { showToast('Enter a product name', true); return; }
   try {
+    // Snapshot recipe BOM forecast if product has an active recipe
+    var bomForecast = await snapshotBomForecast(pid);
     var ref = MastDB.productionJobs.lineItems(jobId).push();
     await ref.set({
       productId: pid,
@@ -900,11 +1096,16 @@ async function doAddLineItem(jobId) {
       completedQuantity: 0,
       lossQuantity: 0,
       specifications: specs,
-      productionRequestId: null
+      productionRequestId: null,
+      bomForecast: bomForecast,
+      actualMaterialCostCents: null, // override; null = derive from forecast × completed
+      actualLaborCostCents: null     // override; null = derive from forecast × completed
     });
     await writeAudit('update', 'jobs', jobId);
     closeModal();
-    showToast('Line item added');
+    showToast(bomForecast
+      ? 'Line item added with BOM forecast ($' + (bomForecast.totalCostPerUnitCents / 100).toFixed(2) + '/unit)'
+      : 'Line item added');
   } catch (err) {
     showToast('Error adding line item: ' + err.message, true);
   }
