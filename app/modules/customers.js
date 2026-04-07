@@ -27,6 +27,17 @@
   var customersLoaded = false;
   var currentView = 'list'; // list | detail | duplicates
   var selectedCustomerId = null;
+  var detailTab = 'overview'; // overview | orders | classes | interactions | wallet
+  // Per-customer cache: { customerId: { orders, enrollments, interactions, wallets, loaded:{...} } }
+  var detailCache = {};
+
+  var DETAIL_TABS = [
+    { value: 'overview',     label: 'Overview' },
+    { value: 'orders',       label: 'Orders' },
+    { value: 'classes',      label: 'Classes' },
+    { value: 'interactions', label: 'Interactions' },
+    { value: 'wallet',       label: 'Wallet' }
+  ];
 
   var SOURCE_OPTIONS = [
     { value: 'all',         label: 'All sources' },
@@ -275,7 +286,7 @@
   }
 
   // ============================================================
-  // Surface 2: Customer Detail (Phase 5 stub)
+  // Surface 2: Customer Detail (Phase 5a — tabbed)
   // ============================================================
 
   function renderDetail() {
@@ -283,13 +294,12 @@
     if (!c) {
       return '<div style="text-align:center;padding:40px;color:var(--warm-gray);">Customer not found.</div>';
     }
-    var linked = c.linkedIds || {};
 
     var h = '';
     h += '<button class="detail-back" onclick="customersSwitchView(\'list\')">← Back to Customers</button>';
 
-    // Header — matches detail-view layout from style guide
-    h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap;gap:12px;">';
+    // Header
+    h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;flex-wrap:wrap;gap:12px;">';
     h += '<div>';
     h += '<h3 style="margin:0;">' + esc(c.displayName || c.primaryEmail || c.id) + '</h3>';
     h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-top:4px;">' + esc(c.primaryEmail || 'no primary email') + '</div>';
@@ -297,9 +307,68 @@
     h += '<div>' + sourceBadge(c.source) + '</div>';
     h += '</div>';
 
+    // Sub-tabs
+    h += '<div class="view-tabs" style="margin-bottom:16px;">';
+    DETAIL_TABS.forEach(function(t) {
+      var active = (detailTab === t.value) ? ' active' : '';
+      h += '<button class="view-tab' + active + '" data-detail-tab="' + esc(t.value) +
+           '" onclick="customersSwitchDetailTab(this.dataset.detailTab)">' + esc(t.label) + '</button>';
+    });
+    h += '</div>';
+
+    h += '<div id="customersDetailTabBody">';
+    if (detailTab === 'overview')          h += renderOverviewTab(c);
+    else if (detailTab === 'orders')       h += renderOrdersTab(c);
+    else if (detailTab === 'classes')      h += renderClassesTab(c);
+    else if (detailTab === 'interactions') h += renderInteractionsTab(c);
+    else if (detailTab === 'wallet')       h += renderWalletTab(c);
+    h += '</div>';
+
+    return h;
+  }
+
+  function identityRow(label, valueHtml) {
+    return '<div style="color:var(--warm-gray-light);">' + esc(label) + '</div>' +
+           '<div>' + valueHtml + '</div>';
+  }
+
+  function detailCardOpen(title) {
+    var h = '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px 20px;margin-bottom:16px;">';
+    if (title) h += '<div style="font-size:0.85rem;font-weight:600;margin-bottom:12px;">' + esc(title) + '</div>';
+    return h;
+  }
+  function detailCardClose() { return '</div>'; }
+
+  function getCache(customerId) {
+    if (!detailCache[customerId]) {
+      detailCache[customerId] = { orders: [], enrollments: [], interactions: [], wallets: [], loaded: {} };
+    }
+    return detailCache[customerId];
+  }
+
+  function fmtMoney(cents) {
+    if (typeof cents !== 'number') return '—';
+    return '$' + (cents / 100).toFixed(2);
+  }
+  function fmtDate(iso) {
+    if (!iso) return '—';
+    try { return new Date(iso).toLocaleDateString(); } catch (e) { return '—'; }
+  }
+  function fmtDateTime(iso) {
+    if (!iso) return '—';
+    try { return new Date(iso).toLocaleString(); } catch (e) { return '—'; }
+  }
+
+  // ----- Overview tab -----
+
+  function renderOverviewTab(c) {
+    var linked = c.linkedIds || {};
+    var cache = getCache(c.id);
+
+    var h = '';
+
     // Identity card
-    h += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px 20px;margin-bottom:16px;">';
-    h += '<div style="font-size:0.85rem;font-weight:600;margin-bottom:12px;">Identity</div>';
+    h += detailCardOpen('Identity');
     h += '<div style="display:grid;grid-template-columns:160px 1fr;gap:8px 16px;font-size:0.85rem;">';
     h += identityRow('Customer ID', '<span style="font-family:monospace;font-size:0.78rem;">' + esc(c.id) + '</span>');
     h += identityRow('Emails', (c.emails || []).map(esc).join('<br>') || '—');
@@ -312,25 +381,284 @@
     }).join('<br>') || '—');
     h += identityRow('Tags', (c.tags || []).map(esc).join(', ') || '—');
     h += identityRow('Newsletter', c.marketing && c.marketing.newsletterOptIn ? 'Opted in' : '—');
-    h += identityRow('Created', esc(c.createdAt || '—'));
-    h += identityRow('Updated', esc(c.updatedAt || '—'));
+    h += identityRow('Source', sourceBadge(c.source) || '—');
+    h += identityRow('Created', esc(fmtDateTime(c.createdAt)));
+    h += identityRow('Updated', esc(fmtDateTime(c.updatedAt)));
     h += '</div>';
-    h += '</div>';
+    h += detailCardClose();
 
-    // Phase 5 placeholder — no explicit text colors so they inherit body
-    // (which flips between charcoal and #e0e0e0 in dark mode).
-    h += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px 20px;font-size:0.85rem;">';
-    h += '<strong>Phase 5 will add:</strong> ';
-    h += 'linked orders, linked enrollments, interactions tab (absorbs the contacts module), ';
-    h += 'wallet · membership · loyalty mirror, inline tag editing, notes, manual merge.';
+    // Stats card
+    h += detailCardOpen('Stats');
+    if (!cache.loaded.orders || !cache.loaded.enrollments) {
+      h += '<div style="font-size:0.85rem;color:var(--warm-gray);">';
+      h += 'Open the Orders and Classes tabs to populate lifetime stats.';
+      h += '</div>';
+    }
+    var totalCents = (cache.orders || []).reduce(function(s, o) { return s + (o.totalCents || 0); }, 0);
+    var orderCount = (cache.orders || []).length;
+    var enrollCount = (cache.enrollments || []).length;
+
+    var sortedOrders = (cache.orders || []).slice().sort(function(a, b) {
+      return (a.createdAt || '').localeCompare(b.createdAt || '');
+    });
+    var firstOrder = sortedOrders.length ? sortedOrders[0].createdAt : null;
+    var lastOrder = sortedOrders.length ? sortedOrders[sortedOrders.length - 1].createdAt : null;
+
+    h += '<div style="display:grid;grid-template-columns:160px 1fr;gap:8px 16px;font-size:0.85rem;margin-top:8px;">';
+    h += identityRow('Lifetime spend', cache.loaded.orders ? esc(fmtMoney(totalCents)) : '<em style="color:var(--warm-gray);">load Orders tab</em>');
+    h += identityRow('Order count', cache.loaded.orders ? String(orderCount) : '<em style="color:var(--warm-gray);">load Orders tab</em>');
+    h += identityRow('First order', cache.loaded.orders ? esc(fmtDate(firstOrder)) : '—');
+    h += identityRow('Last order', cache.loaded.orders ? esc(fmtDate(lastOrder)) : '—');
+    h += identityRow('Enrollments', cache.loaded.enrollments ? String(enrollCount) : '<em style="color:var(--warm-gray);">load Classes tab</em>');
     h += '</div>';
+    h += detailCardClose();
 
     return h;
   }
 
-  function identityRow(label, valueHtml) {
-    return '<div style="color:var(--warm-gray-light);">' + esc(label) + '</div>' +
-           '<div>' + valueHtml + '</div>';
+  // ----- Orders tab -----
+
+  function renderOrdersTab(c) {
+    var cache = getCache(c.id);
+    if (!cache.loaded.orders) {
+      // Fire async load and show loading
+      loadCustomerOrders(c.id);
+      return '<div class="loading">Loading orders…</div>';
+    }
+    var orders = cache.orders;
+    if (!orders.length) {
+      return '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">No orders linked to this customer.</div>';
+    }
+    orders = orders.slice().sort(function(a, b) {
+      return (b.createdAt || '').localeCompare(a.createdAt || '');
+    });
+
+    var rows = orders.map(function(o) {
+      var num = o.orderNumber || o._id || '—';
+      var status = o.status || '—';
+      var items = (o.items || []).reduce(function(s, it) { return s + (it.qty || 1); }, 0);
+      return '<tr data-order-id="' + esc(o._id) + '" style="cursor:pointer;" onclick="customersOpenOrder(this.dataset.orderId)">' +
+        '<td>' + esc(num) + '</td>' +
+        '<td><span class="status-badge">' + esc(status) + '</span></td>' +
+        '<td>' + esc(fmtMoney(o.totalCents)) + '</td>' +
+        '<td style="color:var(--warm-gray);">' + items + '</td>' +
+        '<td style="color:var(--warm-gray);font-size:0.78rem;">' + esc(fmtDate(o.createdAt)) + '</td>' +
+      '</tr>';
+    }).join('');
+
+    var h = '';
+    h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">' + orders.length + ' order' + (orders.length === 1 ? '' : 's') + '</div>';
+    h += '<div class="data-table"><table>';
+    h += '<thead><tr><th>Order #</th><th>Status</th><th>Total</th><th>Items</th><th>Placed</th></tr></thead>';
+    h += '<tbody>' + rows + '</tbody>';
+    h += '</table></div>';
+    return h;
+  }
+
+  function loadCustomerOrders(customerId) {
+    var cache = getCache(customerId);
+    MastDB._ref('admin/orders').orderByChild('customerId').equalTo(customerId).once('value')
+      .then(function(snap) {
+        var val = snap.val() || {};
+        cache.orders = Object.entries(val).map(function(e) { var o = e[1] || {}; o._id = e[0]; return o; });
+        cache.loaded.orders = true;
+        if (currentView === 'detail' && selectedCustomerId === customerId &&
+            (detailTab === 'orders' || detailTab === 'overview')) {
+          render();
+        }
+      })
+      .catch(function(e) {
+        console.error('[customers] orders load failed', e);
+        cache.orders = [];
+        cache.loaded.orders = true;
+        if (currentView === 'detail' && selectedCustomerId === customerId) render();
+      });
+  }
+
+  // ----- Classes tab -----
+
+  function renderClassesTab(c) {
+    var cache = getCache(c.id);
+    if (!cache.loaded.enrollments) {
+      loadCustomerEnrollments(c.id);
+      return '<div class="loading">Loading enrollments…</div>';
+    }
+    var enrollments = cache.enrollments;
+    if (!enrollments.length) {
+      return '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">No class enrollments linked to this customer.</div>';
+    }
+    enrollments = enrollments.slice().sort(function(a, b) {
+      return (b.createdAt || '').localeCompare(a.createdAt || '');
+    });
+
+    var rows = enrollments.map(function(en) {
+      var name = en.className || en.classTitle || en.classId || '—';
+      var sessionDate = en.sessionDate || en.sessionStartAt || en.scheduledFor || en.createdAt;
+      var status = en.status || en.enrollmentStatus || '—';
+      var price = (typeof en.priceCents === 'number') ? en.priceCents : (typeof en.amountCents === 'number' ? en.amountCents : null);
+      return '<tr>' +
+        '<td>' + esc(name) + '</td>' +
+        '<td style="color:var(--warm-gray);font-size:0.78rem;">' + esc(fmtDate(sessionDate)) + '</td>' +
+        '<td><span class="status-badge">' + esc(status) + '</span></td>' +
+        '<td>' + esc(price === null ? '—' : fmtMoney(price)) + '</td>' +
+      '</tr>';
+    }).join('');
+
+    var h = '';
+    h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">' + enrollments.length + ' enrollment' + (enrollments.length === 1 ? '' : 's') + '</div>';
+    h += '<div class="data-table"><table>';
+    h += '<thead><tr><th>Class</th><th>Session</th><th>Status</th><th>Price</th></tr></thead>';
+    h += '<tbody>' + rows + '</tbody>';
+    h += '</table></div>';
+    return h;
+  }
+
+  function loadCustomerEnrollments(customerId) {
+    var cache = getCache(customerId);
+    MastDB._ref('admin/enrollments').orderByChild('customerId').equalTo(customerId).once('value')
+      .then(function(snap) {
+        var val = snap.val() || {};
+        cache.enrollments = Object.entries(val).map(function(e) { var en = e[1] || {}; en._id = e[0]; return en; });
+        cache.loaded.enrollments = true;
+        if (currentView === 'detail' && selectedCustomerId === customerId &&
+            (detailTab === 'classes' || detailTab === 'overview')) {
+          render();
+        }
+      })
+      .catch(function(e) {
+        console.error('[customers] enrollments load failed', e);
+        cache.enrollments = [];
+        cache.loaded.enrollments = true;
+        if (currentView === 'detail' && selectedCustomerId === customerId) render();
+      });
+  }
+
+  // ----- Interactions tab -----
+
+  function renderInteractionsTab(c) {
+    var linked = c.linkedIds || {};
+    var contactIds = linked.contactIds || [];
+    if (contactIds.length === 0) {
+      var h = '';
+      h += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">';
+      h += '<p style="font-size:0.95rem;font-weight:500;margin-bottom:8px;">No linked contacts</p>';
+      h += '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Interactions live on contact records. ';
+      h += '<a href="#" onclick="navigateTo(\'contacts\');return false;" style="color:var(--teal);text-decoration:underline;">Open Contacts module</a></p>';
+      h += '</div>';
+      return h;
+    }
+
+    var cache = getCache(c.id);
+    if (!cache.loaded.interactions) {
+      loadCustomerInteractions(c.id, contactIds);
+      return '<div class="loading">Loading interactions…</div>';
+    }
+    var ix = cache.interactions;
+    if (!ix.length) {
+      return '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">No interactions recorded for any linked contact.</div>';
+    }
+
+    var h = '';
+    h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">' + ix.length + ' interaction' + (ix.length === 1 ? '' : 's') + ' across ' + contactIds.length + ' contact' + (contactIds.length === 1 ? '' : 's') + '</div>';
+    ix.forEach(function(item) {
+      h += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;margin-bottom:8px;">';
+      h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">';
+      h += '<div style="font-size:0.85rem;flex:1;min-width:200px;">';
+      h += '<span class="status-badge" style="margin-right:8px;">' + esc(item.type || 'note') + '</span>';
+      h += esc(item.notes || item.body || item.summary || '—');
+      h += '</div>';
+      h += '<div style="color:var(--warm-gray);font-size:0.78rem;white-space:nowrap;">' + esc(fmtDateTime(item.date || item.createdAt)) + '</div>';
+      h += '</div>';
+      h += '</div>';
+    });
+    return h;
+  }
+
+  function loadCustomerInteractions(customerId, contactIds) {
+    var cache = getCache(customerId);
+    var promises = contactIds.map(function(cid) {
+      return MastDB._ref('admin/contacts/' + cid + '/interactions').once('value')
+        .then(function(s) { return s.val() || {}; })
+        .catch(function() { return {}; });
+    });
+    Promise.all(promises).then(function(results) {
+      var merged = [];
+      results.forEach(function(r) {
+        Object.entries(r).forEach(function(e) {
+          var item = e[1] || {};
+          item._id = e[0];
+          merged.push(item);
+        });
+      });
+      merged.sort(function(a, b) {
+        var ad = a.date || a.createdAt || '';
+        var bd = b.date || b.createdAt || '';
+        return bd.localeCompare(ad);
+      });
+      cache.interactions = merged;
+      cache.loaded.interactions = true;
+      if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'interactions') render();
+    });
+  }
+
+  // ----- Wallet tab -----
+
+  function renderWalletTab(c) {
+    var linked = c.linkedIds || {};
+    var uids = linked.uids || [];
+    if (uids.length === 0) {
+      return '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">' +
+        '<p style="font-size:0.95rem;font-weight:500;margin-bottom:8px;">No linked account</p>' +
+        '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Wallet, passes, membership and loyalty live on a customer-facing account. This customer has no linked uid yet.</p>' +
+        '</div>';
+    }
+
+    var cache = getCache(c.id);
+    if (!cache.loaded.wallets) {
+      loadCustomerWallets(c.id, uids);
+      return '<div class="loading">Loading wallet…</div>';
+    }
+
+    var h = '';
+    cache.wallets.forEach(function(w) {
+      h += detailCardOpen('Account · ' + (w.uid || ''));
+      var creditCount = w.credits ? Object.keys(w.credits).length : 0;
+      var creditBalance = 0;
+      if (w.credits) {
+        Object.values(w.credits).forEach(function(cr) {
+          if (cr && typeof cr.amountCents === 'number' && cr.status !== 'redeemed') creditBalance += cr.amountCents;
+        });
+      }
+      var passCount = w.passes ? Object.keys(w.passes).length : 0;
+      var membershipTier = w.membership && (w.membership.tier || w.membership.tierName) || '—';
+      var loyaltyPoints = w.loyalty && (typeof w.loyalty.points === 'number' ? w.loyalty.points : (typeof w.loyalty.balance === 'number' ? w.loyalty.balance : '—'));
+
+      h += '<div style="display:grid;grid-template-columns:160px 1fr;gap:8px 16px;font-size:0.85rem;">';
+      h += identityRow('Credits', esc(fmtMoney(creditBalance)) + ' <span style="color:var(--warm-gray);font-size:0.78rem;">(' + creditCount + ' record' + (creditCount === 1 ? '' : 's') + ')</span>');
+      h += identityRow('Passes', String(passCount));
+      h += identityRow('Membership', esc(String(membershipTier)));
+      h += identityRow('Loyalty', esc(String(loyaltyPoints)));
+      h += '</div>';
+      h += '<div style="margin-top:12px;font-size:0.78rem;">';
+      h += '<a href="#" onclick="navigateTo(\'wallet\');return false;" style="color:var(--teal);text-decoration:underline;">Edit in Wallet module →</a>';
+      h += '</div>';
+      h += detailCardClose();
+    });
+    return h;
+  }
+
+  function loadCustomerWallets(customerId, uids) {
+    var cache = getCache(customerId);
+    var promises = uids.map(function(uid) {
+      return MastDB._ref('public/accounts/' + uid + '/wallet').once('value')
+        .then(function(s) { var v = s.val() || {}; v.uid = uid; return v; })
+        .catch(function() { return { uid: uid }; });
+    });
+    Promise.all(promises).then(function(wallets) {
+      cache.wallets = wallets;
+      cache.loaded.wallets = true;
+      if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'wallet') render();
+    });
   }
 
   // ============================================================
@@ -394,7 +722,20 @@
   function openDetail(customerId) {
     selectedCustomerId = customerId;
     currentView = 'detail';
+    detailTab = 'overview';
     render();
+  }
+
+  function switchDetailTab(tab) {
+    detailTab = tab;
+    render();
+  }
+
+  function openOrderFromCustomer(orderId) {
+    if (typeof window.viewOrder === 'function') {
+      if (typeof navigateTo === 'function') navigateTo('orders');
+      setTimeout(function() { window.viewOrder(orderId); }, 50);
+    }
   }
 
   // ============================================================
@@ -405,6 +746,8 @@
   window.customersSwitchView = switchView;
   window.customersOpenDetail = openDetail;
   window.customersRender = renderTable;
+  window.customersSwitchDetailTab = switchDetailTab;
+  window.customersOpenOrder = openOrderFromCustomer;
 
   // ============================================================
   // Module registration
@@ -434,6 +777,8 @@
       customersLoaded = false;
       currentView = 'list';
       selectedCustomerId = null;
+      detailTab = 'overview';
+      detailCache = {};
     }
   });
 
