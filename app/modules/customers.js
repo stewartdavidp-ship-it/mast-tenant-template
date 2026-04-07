@@ -915,23 +915,37 @@
 
   function loadCustomerContacts(customerId) {
     var c = customersData.find(function(x) { return x && x.id === customerId; });
-    if (!c) return;
+    if (!c) { console.warn('[customers] loadContacts: customer not in memory', customerId); return; }
     var contactIds = (c.linkedIds && c.linkedIds.contactIds) || [];
     var cache = getCache(customerId);
+    // Guard: if a load is already in flight for this customer, don't start another.
+    if (cache._contactsLoading) return;
+    cache._contactsLoading = true;
+    console.log('[customers] loadContacts start', customerId, contactIds);
+
     if (contactIds.length === 0) {
       cache.contacts = [];
       cache.loaded.contacts = true;
+      cache._contactsLoading = false;
       if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'overview') render();
       return;
     }
     var promises = contactIds.map(function(cid) {
       return MastDB._ref('admin/contacts/' + cid).once('value')
         .then(function(s) { var v = s.val(); if (v) v.id = cid; return v; })
-        .catch(function() { return null; });
+        .catch(function(e) { console.warn('[customers] contact read failed', cid, e); return null; });
     });
     Promise.all(promises).then(function(results) {
+      console.log('[customers] loadContacts done', customerId, results);
       cache.contacts = results.filter(function(x) { return x; });
       cache.loaded.contacts = true;
+      cache._contactsLoading = false;
+      if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'overview') render();
+    }).catch(function(e) {
+      console.error('[customers] loadContacts FAILED', customerId, e);
+      cache.contacts = [];
+      cache.loaded.contacts = true;
+      cache._contactsLoading = false;
       if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'overview') render();
     });
   }
