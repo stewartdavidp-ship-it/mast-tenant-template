@@ -62,6 +62,10 @@
       if (typeof t === 'number') repricingThresholdPct = t;
       priceLocksData = snaps[1].val() || {};
       spotPricesCurrent = snaps[2].val() || null;
+      // Re-render whichever maker tab is currently visible so the lock table
+      // and drift badges pick up the freshly-loaded data.
+      if (document.getElementById('materialsTab') && materialsLoaded) renderMaterials();
+      if (document.getElementById('piecesTab') && recipesLoaded) renderPieces();
     } catch (err) {
       console.warn('loadVolatilePricingData failed', err);
     }
