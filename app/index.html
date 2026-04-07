@@ -8273,6 +8273,11 @@ var MastCustomers = (function() {
           }
           changed = true;
         }
+        // Backfill newsletter opt-in when source is newsletter (resolver gap fix).
+        if (source === 'newsletter' && !(existing.marketing && existing.marketing.newsletterOptIn)) {
+          updates['admin/customers/' + existingId + '/marketing/newsletterOptIn'] = true;
+          changed = true;
+        }
         if (changed) {
           updates['admin/customers/' + existingId + '/linkedIds'] = linked;
           updates['admin/customers/' + existingId + '/updatedAt'] = new Date().toISOString();

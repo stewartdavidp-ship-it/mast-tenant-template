@@ -346,6 +346,222 @@
     return detailCache[customerId];
   }
 
+  function renderTagsEditor(c) {
+    var tags = c.tags || [];
+    var h = '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">';
+    tags.forEach(function(t) {
+      h += '<span class="status-badge" style="background:rgba(196,133,60,0.30);color:#E8B679;display:inline-flex;align-items:center;gap:6px;">' +
+        esc(t) +
+        '<button data-customer-id="' + esc(c.id) + '" data-tag="' + esc(t) + '" ' +
+        'onclick="customersRemoveTag(this.dataset.customerId, this.dataset.tag)" ' +
+        'style="background:none;border:none;color:inherit;cursor:pointer;font-size:0.95rem;line-height:1;padding:0;">×</button>' +
+        '</span>';
+    });
+    h += '<input type="text" id="customersTagInput" placeholder="+ tag" ' +
+         'data-customer-id="' + esc(c.id) + '" ' +
+         'onkeydown="if(event.key===\'Enter\'){event.preventDefault();customersAddTag(this.dataset.customerId,this.value);this.value=\'\';}" ' +
+         'style="padding:4px 8px;border:1px solid var(--cream-dark);border-radius:4px;background:var(--cream);font-family:DM Sans,sans-serif;font-size:0.78rem;width:90px;">';
+    h += '</div>';
+    return h;
+  }
+
+  function renderNewsletterToggle(c) {
+    var on = !!(c.marketing && c.marketing.newsletterOptIn);
+    var bg = on ? 'rgba(22,163,74,0.30)' : 'rgba(155,149,142,0.35)';
+    var color = on ? '#7ddca0' : '#cfcac3';
+    var label = on ? 'Opted in' : 'Not opted in';
+    return '<button data-customer-id="' + esc(c.id) + '" data-on="' + (on ? '1' : '0') + '" ' +
+      'onclick="customersToggleNewsletter(this.dataset.customerId, this.dataset.on === \'1\')" ' +
+      'style="background:' + bg + ';color:' + color + ';border:none;padding:3px 10px;border-radius:12px;font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;cursor:pointer;">' +
+      esc(label) + '</button>';
+  }
+
+  // Writer — updates customer field and refreshes the in-memory copy + UI.
+  function saveCustomerField(customerId, fieldPath, value) {
+    var updates = {};
+    updates[fieldPath] = value;
+    updates['updatedAt'] = new Date().toISOString();
+    return MastDB._ref('admin/customers/' + customerId).update(updates).then(function() {
+      // Mirror into in-memory copy
+      var c = customersData.find(function(x) { return x && x.id === customerId; });
+      if (c) {
+        // Apply field path (only top-level or marketing.x for now)
+        if (fieldPath.indexOf('.') !== -1) {
+          var parts = fieldPath.split('.');
+          if (!c[parts[0]]) c[parts[0]] = {};
+          c[parts[0]][parts[1]] = value;
+        } else {
+          c[fieldPath] = value;
+        }
+        c.updatedAt = updates['updatedAt'];
+      }
+      if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'overview') {
+        render();
+      }
+    }).catch(function(e) {
+      console.error('[customers] save failed', fieldPath, e);
+      alert('Save failed: ' + (e && e.message));
+    });
+  }
+
+  function addTag(customerId, raw) {
+    var t = (raw || '').trim();
+    if (!t) return;
+    var c = customersData.find(function(x) { return x && x.id === customerId; });
+    if (!c) return;
+    var tags = (c.tags || []).slice();
+    if (tags.indexOf(t) !== -1) return;
+    tags.push(t);
+    saveCustomerField(customerId, 'tags', tags);
+  }
+
+  function removeTag(customerId, tag) {
+    var c = customersData.find(function(x) { return x && x.id === customerId; });
+    if (!c) return;
+    var tags = (c.tags || []).filter(function(t) { return t !== tag; });
+    saveCustomerField(customerId, 'tags', tags);
+  }
+
+  function toggleNewsletter(customerId, currentlyOn) {
+    saveCustomerField(customerId, 'marketing/newsletterOptIn', !currentlyOn);
+    // saveCustomerField stores via update on the customer ref, but marketing is
+    // nested. Use a separate path-based update so we don't blow away smsOptIn.
+  }
+
+  // Override toggleNewsletter to use a deep update via _ref directly.
+  toggleNewsletter = function(customerId, currentlyOn) {
+    var newVal = !currentlyOn;
+    MastDB._ref('admin/customers/' + customerId + '/marketing/newsletterOptIn').set(newVal).then(function() {
+      return MastDB._ref('admin/customers/' + customerId + '/updatedAt').set(new Date().toISOString());
+    }).then(function() {
+      var c = customersData.find(function(x) { return x && x.id === customerId; });
+      if (c) {
+        if (!c.marketing) c.marketing = {};
+        c.marketing.newsletterOptIn = newVal;
+        c.updatedAt = new Date().toISOString();
+      }
+      if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'overview') render();
+    }).catch(function(e) {
+      console.error('[customers] newsletter toggle failed', e);
+      alert('Toggle failed: ' + (e && e.message));
+    });
+  };
+
+  function saveNotes(customerId, value) {
+    saveCustomerField(customerId, 'notes', value || '');
+  }
+
+  // ----- Merge -----
+
+  function uniq(arr) {
+    var seen = {}, out = [];
+    (arr || []).forEach(function(v) { if (v != null && !seen[v]) { seen[v] = 1; out.push(v); } });
+    return out;
+  }
+
+  async function mergeCustomers(flagId, winnerId, loserId) {
+    if (!winnerId || !loserId || winnerId === loserId) return;
+    if (!confirm('Merge customer ' + loserId + ' into ' + winnerId + '? This rewrites linked orders/enrollments/contacts and archives the loser. This cannot be undone.')) return;
+
+    try {
+      var refs = await Promise.all([
+        MastDB._ref('admin/customers/' + winnerId).once('value'),
+        MastDB._ref('admin/customers/' + loserId).once('value'),
+        MastDB._ref('admin/orders').orderByChild('customerId').equalTo(loserId).once('value'),
+        MastDB._ref('admin/enrollments').orderByChild('customerId').equalTo(loserId).once('value')
+      ]);
+      var winner = refs[0].val();
+      var loser = refs[1].val();
+      if (!winner || !loser) { alert('One of the customers no longer exists.'); return; }
+
+      var loserOrders = refs[2].val() || {};
+      var loserEnrollments = refs[3].val() || {};
+
+      var winnerLinked = winner.linkedIds || { uids: [], contactIds: [], studentIds: [], squareCustomerId: null };
+      var loserLinked = loser.linkedIds || { uids: [], contactIds: [], studentIds: [], squareCustomerId: null };
+
+      var mergedEmails = uniq([].concat(winner.emails || [], loser.emails || []));
+      var mergedPhones = uniq([].concat(winner.phones || [], loser.phones || []));
+      var mergedUids = uniq([].concat(winnerLinked.uids || [], loserLinked.uids || []));
+      var mergedContactIds = uniq([].concat(winnerLinked.contactIds || [], loserLinked.contactIds || []));
+      var mergedStudentIds = uniq([].concat(winnerLinked.studentIds || [], loserLinked.studentIds || []));
+      var mergedTags = uniq([].concat(winner.tags || [], loser.tags || []));
+      var mergedFromList = uniq([].concat(winner.mergedFrom || [], [loserId], loser.mergedFrom || []));
+      var now = new Date().toISOString();
+
+      var notes = winner.notes || '';
+      if (loser.notes) {
+        notes = (notes ? notes + '\n\n' : '') + '— merged from ' + loserId + ' —\n' + loser.notes;
+      }
+
+      var updates = {};
+      // Winner record overwrites
+      updates['admin/customers/' + winnerId + '/emails'] = mergedEmails;
+      updates['admin/customers/' + winnerId + '/phones'] = mergedPhones;
+      updates['admin/customers/' + winnerId + '/linkedIds'] = {
+        uids: mergedUids,
+        contactIds: mergedContactIds,
+        studentIds: mergedStudentIds,
+        squareCustomerId: winnerLinked.squareCustomerId || loserLinked.squareCustomerId || null
+      };
+      updates['admin/customers/' + winnerId + '/tags'] = mergedTags;
+      updates['admin/customers/' + winnerId + '/notes'] = notes;
+      updates['admin/customers/' + winnerId + '/marketing/newsletterOptIn'] =
+        !!((winner.marketing && winner.marketing.newsletterOptIn) || (loser.marketing && loser.marketing.newsletterOptIn));
+      updates['admin/customers/' + winnerId + '/mergedFrom'] = mergedFromList;
+      updates['admin/customers/' + winnerId + '/updatedAt'] = now;
+
+      // Loser archive
+      updates['admin/customers/' + loserId + '/status'] = 'merged';
+      updates['admin/customers/' + loserId + '/mergedInto'] = winnerId;
+      updates['admin/customers/' + loserId + '/updatedAt'] = now;
+
+      // Reindex byEmail/byUid/byContactId for loser → winner
+      function emailKey(e) { return e ? String(e).trim().toLowerCase().replace(/[.#$\[\]\/]/g, ',') : null; }
+      (loser.emails || []).forEach(function(e) {
+        var k = emailKey(e);
+        if (k) updates['admin/customerIndexes/byEmail/' + k] = winnerId;
+      });
+      (loserLinked.uids || []).forEach(function(u) {
+        updates['admin/customerIndexes/byUid/' + u] = winnerId;
+      });
+      (loserLinked.contactIds || []).forEach(function(cid) {
+        updates['admin/customerIndexes/byContactId/' + cid] = winnerId;
+      });
+
+      // Rewrite customerId on linked orders + enrollments
+      Object.keys(loserOrders).forEach(function(orderId) {
+        updates['admin/orders/' + orderId + '/customerId'] = winnerId;
+      });
+      Object.keys(loserEnrollments).forEach(function(enId) {
+        updates['admin/enrollments/' + enId + '/customerId'] = winnerId;
+      });
+
+      // Rewrite customerId on linked contacts (so contact records still point at winner)
+      (loserLinked.contactIds || []).forEach(function(cid) {
+        updates['admin/contacts/' + cid + '/customerId'] = winnerId;
+      });
+
+      // Mark duplicate flag merged
+      if (flagId) {
+        updates['admin/customerDuplicates/' + flagId + '/status'] = 'merged';
+        updates['admin/customerDuplicates/' + flagId + '/mergedAt'] = now;
+        updates['admin/customerDuplicates/' + flagId + '/winnerId'] = winnerId;
+        updates['admin/customerDuplicates/' + flagId + '/loserId'] = loserId;
+      }
+
+      await MastDB._multiUpdate(updates);
+
+      // Reload
+      customersLoaded = false;
+      detailCache = {};
+      await loadCustomers();
+    } catch (e) {
+      console.error('[customers] merge failed', e);
+      alert('Merge failed: ' + (e && e.message));
+    }
+  }
+
   function fmtMoney(cents) {
     if (typeof cents !== 'number') return '—';
     return '$' + (cents / 100).toFixed(2);
@@ -379,12 +595,19 @@
     h += identityRow('Contact IDs', (linked.contactIds || []).map(function(id) {
       return '<span style="font-family:monospace;font-size:0.78rem;">' + esc(id) + '</span>';
     }).join('<br>') || '—');
-    h += identityRow('Tags', (c.tags || []).map(esc).join(', ') || '—');
-    h += identityRow('Newsletter', c.marketing && c.marketing.newsletterOptIn ? 'Opted in' : '—');
+    h += identityRow('Tags', renderTagsEditor(c));
+    h += identityRow('Newsletter', renderNewsletterToggle(c));
     h += identityRow('Source', sourceBadge(c.source) || '—');
     h += identityRow('Created', esc(fmtDateTime(c.createdAt)));
     h += identityRow('Updated', esc(fmtDateTime(c.updatedAt)));
     h += '</div>';
+    h += detailCardClose();
+
+    // Notes card
+    h += detailCardOpen('Notes');
+    h += '<textarea data-customer-id="' + esc(c.id) + '" onblur="customersSaveNotes(this.dataset.customerId, this.value)" ' +
+         'placeholder="Internal notes (saved on blur)…" ' +
+         'style="width:100%;min-height:90px;padding:9px 12px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--cream);font-family:DM Sans,sans-serif;font-size:0.85rem;resize:vertical;">' + esc(c.notes || '') + '</textarea>';
     h += detailCardClose();
 
     // Stats card
@@ -687,7 +910,7 @@
     duplicatesData.forEach(function(d) {
       h += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:14px 18px;margin-bottom:10px;">';
       h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">';
-      h += '<div style="font-size:0.85rem;">';
+      h += '<div style="font-size:0.85rem;flex:1;min-width:240px;">';
       h += '<div style="font-weight:600;margin-bottom:4px;">' + esc(d.reason || 'duplicate detected') + '</div>';
       h += '<div style="color:var(--warm-gray);font-size:0.78rem;">';
       h += 'A: <span data-customer-id="' + esc(d.customerIdA) + '" style="font-family:monospace;cursor:pointer;text-decoration:underline;" onclick="customersOpenDetail(this.dataset.customerId)">' + esc(d.customerIdA) + '</span><br>';
@@ -697,7 +920,15 @@
         h += '<div style="color:var(--warm-gray-light);font-size:0.78rem;margin-top:4px;">trigger: ' + esc(JSON.stringify(d.sourceRecord)) + '</div>';
       }
       h += '</div>';
+      h += '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">';
       h += '<div style="color:var(--warm-gray);font-size:0.78rem;">' + esc(relativeTime(d.detectedAt)) + '</div>';
+      h += '<div style="display:flex;gap:6px;">';
+      h += '<button class="btn btn-secondary btn-small" data-flag-id="' + esc(d._flagId) + '" data-winner="' + esc(d.customerIdA) + '" data-loser="' + esc(d.customerIdB) + '" ' +
+        'onclick="customersMerge(this.dataset.flagId,this.dataset.winner,this.dataset.loser)">Keep A</button>';
+      h += '<button class="btn btn-secondary btn-small" data-flag-id="' + esc(d._flagId) + '" data-winner="' + esc(d.customerIdB) + '" data-loser="' + esc(d.customerIdA) + '" ' +
+        'onclick="customersMerge(this.dataset.flagId,this.dataset.winner,this.dataset.loser)">Keep B</button>';
+      h += '</div>';
+      h += '</div>';
       h += '</div>';
       h += '</div>';
     });
@@ -748,6 +979,11 @@
   window.customersRender = renderTable;
   window.customersSwitchDetailTab = switchDetailTab;
   window.customersOpenOrder = openOrderFromCustomer;
+  window.customersAddTag = addTag;
+  window.customersRemoveTag = removeTag;
+  window.customersToggleNewsletter = function(id, on) { return toggleNewsletter(id, on); };
+  window.customersSaveNotes = saveNotes;
+  window.customersMerge = mergeCustomers;
 
   // ============================================================
   // Module registration
