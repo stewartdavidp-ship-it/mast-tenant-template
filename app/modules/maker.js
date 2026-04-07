@@ -307,13 +307,14 @@
   // ============================================================
 
   function loadMaterials() {
+    // Always refresh volatile data so price-lock table reflects current state.
+    loadVolatilePricingData();
     if (materialsListener) return;
     materialsListener = MastDB.materials.listen(500, function(snap) {
       materialsData = snap.val() || {};
       materialsLoaded = true;
       renderMaterials();
     });
-    loadVolatilePricingData();
   }
 
   function unloadMaterials() {
@@ -423,14 +424,15 @@
   // ============================================================
 
   function loadRecipes() {
+    // Phase 2A-2E: always refresh volatile pricing state on nav so drift
+    // badges and price-lock chips reflect current reality.
+    loadVolatilePricingData();
     if (recipesListener) return;
     recipesListener = MastDB.recipes.listen(200, function(snap) {
       recipesData = snap.val() || {};
       recipesLoaded = true;
       renderPieces();
     });
-    // Phase 2A-2E: warm up volatile pricing state on first load
-    loadVolatilePricingData();
   }
 
   function unloadRecipes() {
