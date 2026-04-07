@@ -441,7 +441,9 @@
         c.marketing.newsletterOptIn = newVal;
         c.updatedAt = new Date().toISOString();
       }
-      if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'overview') render();
+      setTimeout(function() {
+        if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'overview') render();
+      }, 0);
     }).catch(function(e) {
       console.error('[customers] newsletter toggle failed', e);
       window.mastAlert('Toggle failed: ' + (e && e.message));
@@ -927,7 +929,9 @@
       cache.contacts = [];
       cache.loaded.contacts = true;
       cache._contactsLoading = false;
-      if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'overview') render();
+      setTimeout(function() {
+        if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'overview') render();
+      }, 0);
       return;
     }
     var promises = contactIds.map(function(cid) {
@@ -940,13 +944,17 @@
       cache.contacts = results.filter(function(x) { return x; });
       cache.loaded.contacts = true;
       cache._contactsLoading = false;
-      if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'overview') render();
+      setTimeout(function() {
+        if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'overview') render();
+      }, 0);
     }).catch(function(e) {
       console.error('[customers] loadContacts FAILED', customerId, e);
       cache.contacts = [];
       cache.loaded.contacts = true;
       cache._contactsLoading = false;
-      if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'overview') render();
+      setTimeout(function() {
+        if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'overview') render();
+      }, 0);
     });
   }
 
