@@ -1291,6 +1291,24 @@
       window._selectedOptions = {};
       window._productQty = 1;
 
+      // Personalization input — must render after product data loads, not at module init
+      if (p.personalization && p.personalization.enabled && !document.getElementById('personalizationInput')) {
+        var pPers2 = p.personalization;
+        var persHtml2 = '<div id="personalizationSection" style="margin:16px 0;padding:12px;background:var(--cream, #FAF6F0);border-radius:8px;">' +
+          '<label for="personalizationInput" style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:6px;">' +
+            'Personalization' + (pPers2.required ? ' <span style="color:#C4853C;">*</span>' : '') +
+          '</label>' +
+          (pPers2.instructions ? '<p style="font-size:0.78rem;color:var(--warm-gray, #6B6560);margin:0 0 8px 0;">' + escHtml(pPers2.instructions) + '</p>' : '') +
+          '<input type="text" id="personalizationInput" placeholder="Enter personalization text" style="width:100%;padding:8px 12px;border:1px solid var(--accent-light, #E8D8C4);border-radius:6px;font-size:0.85rem;">' +
+        '</div>';
+        var addBtn2 = document.getElementById('addToCartBtn');
+        if (addBtn2) {
+          var persEl2 = document.createElement('div');
+          persEl2.innerHTML = persHtml2;
+          addBtn2.parentNode.insertBefore(persEl2.firstChild, addBtn2);
+        }
+      }
+
       if (p.options && p.options.length) {
         var normalizedOptions = p.options.map(function(o) {
           return { label: o.label || 'Option', choices: o.choices || [] };
