@@ -844,7 +844,14 @@
    */
   function variantDisplayName(pv) {
     if (!pv) return 'Variant';
-    return pv.combo || pv.name || pv.label || pv.id;
+    var c = pv.combo;
+    if (typeof c === 'string' && c) return c;
+    if (c && typeof c === 'object') {
+      // combo can be {Size:"Small"} or {Size:"Small",Color:"Red"} — join axis values.
+      var parts = Object.keys(c).map(function(k){ return c[k]; }).filter(function(v){ return v != null && v !== ''; });
+      if (parts.length) return parts.join(', ');
+    }
+    return pv.name || pv.label || pv.id || 'Variant';
   }
 
   /**
