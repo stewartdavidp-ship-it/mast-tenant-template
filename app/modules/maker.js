@@ -503,6 +503,30 @@
     });
 
     var now = new Date().toISOString();
+
+    // Phase 2C.1: drift detection vs baseline
+    var baseline = typeof recipe.driftBaseline === 'number' ? recipe.driftBaseline : null;
+    var currentDriftPct = 0;
+    if (baseline != null && baseline > 0) {
+      currentDriftPct = Math.round(((calc.totalCost - baseline) / baseline) * 10000) / 100;
+    }
+
+    // Phase 2C.2: marginHistory append (cap 365)
+    var activeTier = recipe.activePriceTier || 'direct';
+    var activeTierMargin = (function() {
+      var price = calc[activeTier + 'Price'] || 0;
+      return price > 0 ? Math.round(((price - calc.totalCost) / price) * 10000) / 100 : 0;
+    })();
+    var marginHistory = Array.isArray(recipe.marginHistory) ? recipe.marginHistory.slice() : [];
+    marginHistory.push({
+      date: now,
+      totalCost: calc.totalCost,
+      activeTierPrice: calc[activeTier + 'Price'] || 0,
+      marginPct: activeTierMargin,
+      triggeredBy: recipe.costsDirty ? 'cost-change' : 'manual'
+    });
+    if (marginHistory.length > 365) marginHistory = marginHistory.slice(marginHistory.length - 365);
+
     var updates = {
       lineItems: calc.lineItems,
       totalMaterialCost: calc.totalMaterialCost,
@@ -515,6 +539,8 @@
       retailPrice: calc.retailPrice,
       retailGrossProfit: calc.retailGrossProfit,
       costsDirty: false,
+      currentDriftPct: currentDriftPct,
+      marginHistory: marginHistory,
       lastCalculatedAt: now,
       updatedAt: now
     };
@@ -673,6 +699,10 @@
     var updates = {};
     updates['admin/recipes/' + recipeId + '/activePriceTier'] = tier;
     updates['admin/recipes/' + recipeId + '/updatedAt'] = now;
+    // Phase 2C.1: snapshot drift baseline + reset drift
+    updates['admin/recipes/' + recipeId + '/driftBaseline'] = recipe.totalCost || 0;
+    updates['admin/recipes/' + recipeId + '/lastPropagatedAt'] = now;
+    updates['admin/recipes/' + recipeId + '/currentDriftPct'] = 0;
 
     var priceCents = null;
     if (recipe.productId) {
