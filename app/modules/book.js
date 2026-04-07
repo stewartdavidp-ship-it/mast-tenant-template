@@ -44,6 +44,9 @@
   var calendarLoaded = false;
   var selectedCalendarDay = null;
 
+  // Class form image state (single image)
+  var editingClassImageUrl = null;
+
   // Reports state
   var reportsLoaded = false;
 
@@ -539,6 +542,9 @@
     var schedTypeOnce = sched.type === 'once' ? ' checked' : '';
     var schedTypeRecurring = sched.type === 'recurring' || !sched.type ? ' checked' : '';
 
+    // Initialize image state from existing class (single image — first imageIds entry)
+    editingClassImageUrl = (cls && Array.isArray(cls.imageIds) && cls.imageIds.length > 0) ? cls.imageIds[0] : null;
+
     var html = '<h2 style="margin:0 0 1.5rem;font-size:1.4rem;">' + (isNew ? 'New Class' : 'Edit: ' + esc(cls.name)) + '</h2>' +
       '<form id="bookClassForm" onsubmit="return false;" style="max-width:720px;">' +
 
@@ -646,6 +652,19 @@
       '</select></div>' +
       '</div></div>' +
 
+      // ── Class Image ──
+      '<div class="book-form-section">' +
+      '<div class="book-form-section-title">Class Image</div>' +
+      '<div id="bcfImagePreviewWrap">' + _renderClassImagePreview() + '</div>' +
+      '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">' +
+        '<button type="button" class="btn btn-secondary" style="font-size:0.8rem;" onclick="window._bookSelectClassImage()">Select from Library</button>' +
+        '<label class="btn btn-secondary" style="font-size:0.8rem;cursor:pointer;">' +
+          '<input type="file" accept="image/*" style="display:none;" onchange="window._bookUploadClassImage(this)">' +
+          'Upload New' +
+        '</label>' +
+      '</div>' +
+      '</div>' +
+
       // ── Actions ──
       '<div class="book-form-actions">' +
       '<button class="btn btn-primary" onclick="window._bookSaveClass(\'' + (classId || '') + '\')">Save Class</button>' +
@@ -714,7 +733,7 @@
       waiverTemplateId: document.getElementById('bcfRequiresWaiver').value === 'true' ? (document.getElementById('bcfWaiverTemplate') || {}).value || null : null,
       enrollmentOpenDate: document.getElementById('bcfEnrollOpen').value || null,
       enrollmentCloseDate: document.getElementById('bcfEnrollClose').value || null,
-      imageIds: [],
+      imageIds: editingClassImageUrl ? [editingClassImageUrl] : [],
       updatedAt: new Date().toISOString()
     };
 
@@ -1952,6 +1971,69 @@
   window._enrollFilterClass = function() {
     var classFilter = document.getElementById('enrollFilterClass').value;
     loadEnrollments(null, classFilter);
+  };
+
+  function _renderClassImagePreview() {
+    if (editingClassImageUrl) {
+      return '<div style="display:flex;align-items:center;gap:12px;">' +
+        '<div style="width:120px;height:120px;border-radius:8px;overflow:hidden;background:var(--cream);">' +
+          '<img src="' + esc(editingClassImageUrl) + '" style="width:100%;height:100%;object-fit:cover;" loading="lazy">' +
+        '</div>' +
+        '<button type="button" class="btn btn-secondary" style="font-size:0.8rem;" onclick="window._bookRemoveClassImage()">Remove</button>' +
+      '</div>';
+    }
+    return '<div style="padding:16px;background:var(--cream);border-radius:8px;color:var(--warm-gray);font-size:0.85rem;text-align:center;">No image selected.</div>';
+  }
+
+  function _refreshClassImagePreview() {
+    var wrap = document.getElementById('bcfImagePreviewWrap');
+    if (wrap) wrap.innerHTML = _renderClassImagePreview();
+  }
+
+  window._bookSelectClassImage = function() {
+    if (typeof window.openImagePicker !== 'function') {
+      MastAdmin.showToast('Image picker unavailable', true);
+      return;
+    }
+    window.openImagePicker(function(imgId, url) {
+      editingClassImageUrl = url;
+      _refreshClassImagePreview();
+    });
+  };
+
+  window._bookRemoveClassImage = function() {
+    editingClassImageUrl = null;
+    _refreshClassImagePreview();
+  };
+
+  window._bookUploadClassImage = async function(fileInput) {
+    if (!fileInput.files || !fileInput.files[0]) return;
+    var file = fileInput.files[0];
+    try {
+      MastAdmin.showToast('Uploading image...');
+      var reader = new FileReader();
+      reader.onload = async function(e) {
+        try {
+          var base64 = e.target.result.split(',')[1];
+          var token = await window.auth.currentUser.getIdToken();
+          var resp = await window.callCF('/uploadImage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({ image: base64, tags: ['class'], source: 'admin-upload' })
+          });
+          var result = await resp.json();
+          if (!result.success) throw new Error(result.error || 'Upload failed');
+          editingClassImageUrl = result.url;
+          _refreshClassImagePreview();
+          MastAdmin.showToast('Image uploaded');
+        } catch (err) {
+          MastAdmin.showToast('Upload failed: ' + err.message, true);
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      MastAdmin.showToast('Error: ' + err.message, true);
+    }
   };
 
   window._bookToggleSeriesFields = function() {
