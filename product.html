@@ -1093,7 +1093,34 @@
       }
 
       // Store variant state
-      window._productVariants = (p.variants && p.variants.length > 0) ? p.variants : null;
+      // If product has options[] but no top-level variants[], synthesize one so
+      // findVariant() can resolve a stable id for cart line items.
+      if (p.variants && p.variants.length > 0) {
+        window._productVariants = p.variants;
+      } else if (p.options && p.options.length > 0) {
+        var slugify = function(s) { return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); };
+        var combos = [{}];
+        for (var oi = 0; oi < p.options.length; oi++) {
+          var opt = p.options[oi];
+          var label = opt.label || ('Option' + (oi + 1));
+          var choices = opt.choices || [];
+          var next = [];
+          for (var ci = 0; ci < combos.length; ci++) {
+            for (var cj = 0; cj < choices.length; cj++) {
+              var clone = Object.assign({}, combos[ci]);
+              clone[label] = choices[cj];
+              next.push(clone);
+            }
+          }
+          combos = next;
+        }
+        window._productVariants = combos.map(function(combo) {
+          var idParts = Object.keys(combo).map(function(k) { return slugify(combo[k]); });
+          return { id: idParts.join('-'), options: combo, combo: combo, priceCents: p.priceCents || p.price };
+        });
+      } else {
+        window._productVariants = null;
+      }
       window._resolvedVariantPrice = null;
 
       // Price
