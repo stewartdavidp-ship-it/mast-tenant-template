@@ -299,6 +299,9 @@
       spotMetal: data.spotMetal || null,
       purity: data.purity != null ? Number(data.purity) : null,
       markupOverSpot: data.markupOverSpot != null ? Number(data.markupOverSpot) : null,
+      // Phase 2B: dual-basis costing. On manual create, all three converge.
+      bookCost: data.unitCost || 0,
+      replacementCost: data.unitCost || 0,
       notes: data.notes || '',
       createdAt: now,
       updatedAt: now
@@ -312,6 +315,16 @@
     var now = new Date().toISOString();
     updates.updatedAt = now;
     var oldMaterial = materialsData[id];
+
+    // Phase 2B: Manual edits record what the maker actually paid.
+    // For non-spot materials, sync all three. For spot-linked, only update bookCost
+    // (replacementCost is auto-managed by the daily spot fetch).
+    if (oldMaterial && updates.unitCost !== undefined && updates.unitCost !== oldMaterial.unitCost) {
+      if (updates.bookCost === undefined) updates.bookCost = updates.unitCost;
+      if (updates.replacementCost === undefined && oldMaterial.pricingMode !== 'spot-linked') {
+        updates.replacementCost = updates.unitCost;
+      }
+    }
 
     // If unitCost changed, append prior cost to costHistory[] (rolling, capped at 50 entries)
     if (oldMaterial && updates.unitCost !== undefined && updates.unitCost !== oldMaterial.unitCost) {
@@ -464,7 +477,8 @@
         return;
       }
       var material = materialsData[li.materialId];
-      var currentCost = material ? material.unitCost : li.unitCost;
+      // Phase 2B: pricing path uses replacementCost; falls back to unitCost.
+      var currentCost = material ? (material.replacementCost != null ? material.replacementCost : material.unitCost) : li.unitCost;
       refreshedLineItems[liId] = Object.assign({}, li, {
         unitCost: currentCost,
         materialName: material ? material.name : li.materialName
@@ -517,7 +531,8 @@
           var li = vLineItems[liId];
           if (li && li.kind === 'recipe') { vRefreshed[liId] = li; return; }
           var material = materialsData[li.materialId];
-          var currentCost = material ? material.unitCost : li.unitCost;
+          // Phase 2B: pricing path uses replacementCost
+          var currentCost = material ? (material.replacementCost != null ? material.replacementCost : material.unitCost) : li.unitCost;
           vRefreshed[liId] = Object.assign({}, li, {
             unitCost: currentCost,
             materialName: material ? material.name : li.materialName
@@ -1174,9 +1189,18 @@
     html += '<div style="display:flex;gap:8px;">';
     html += '<button class="btn btn-secondary btn-small" onclick="makerResetOnboardingUI()" title="Reset craft profile and re-seed defaults">Reset Defaults</button>';
     html += '<button class="btn btn-secondary btn-small" onclick="makerOpenImport(\'materials\')">Import CSV</button>';
+    html += '<button class="btn btn-secondary btn-small" id="spotRefreshBtn" onclick="makerRefreshSpotPrices()" title="Manually fetch current metals spot prices">↻ Refresh Spot</button>';
     html += '<button class="btn btn-primary" onclick="makerOpenAddMaterial()">+ New Material</button>';
     html += '</div>';
     html += '</div>';
+
+    // Phase 2A gap: spot price status banner
+    var hasSpotMaterials = Object.values(materialsData).some(function(m) { return m && m.pricingMode === 'spot-linked'; });
+    if (hasSpotMaterials) {
+      html += '<div id="spotPriceStatus" style="margin-bottom:12px;padding:8px 12px;background:rgba(42,124,111,0.06);border:1px solid rgba(42,124,111,0.18);border-radius:6px;font-size:0.78rem;color:var(--warm-gray);">';
+      html += '<span id="spotPriceStatusText">Loading spot price status…</span>';
+      html += '</div>';
+    }
 
     // Filter pills
     html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">';
@@ -2595,6 +2619,50 @@
     var checked = (document.getElementById('matPricingSpot') || {}).checked;
     var fields = document.getElementById('matSpotFields');
     if (fields) fields.style.display = checked ? 'flex' : 'none';
+  };
+
+  // Phase 2A gap: refresh spot prices via tenant MCP / Cloud Function flow.
+  // Reads admin/spotPrices/current after the fetch completes.
+  window.makerRefreshSpotPrices = async function() {
+    var btn = document.getElementById('spotRefreshBtn');
+    if (btn) { btn.disabled = true; btn.textContent = '⌛ Fetching…'; }
+    try {
+      // The browser can't call the Cloud Function directly (auth-gated).
+      // It calls a Firebase callable wrapper instead, which is a separate
+      // hardening pass. For now, the daily cron + tenant MCP refresh tool
+      // are the only paths. Surface the current snapshot from RTDB.
+      var snap = await MastDB.ref('admin/spotPrices/current').once('value');
+      var current = snap.val();
+      var statusEl = document.getElementById('spotPriceStatusText');
+      if (statusEl) {
+        if (current && current.fetchedAt) {
+          var when = new Date(current.fetchedAt).toLocaleString();
+          statusEl.innerHTML = '🔗 Last spot fetch: <strong>' + when + '</strong> · '
+            + 'Au $' + current.gold.toFixed(2) + '/oz · '
+            + 'Ag $' + current.silver.toFixed(2) + '/oz · '
+            + 'Pt $' + current.platinum.toFixed(2) + '/oz '
+            + '<span style="opacity:0.6;">(' + (current.source || 'unknown') + ')</span>';
+        } else {
+          statusEl.textContent = 'No spot prices yet. Daily cron runs at 13:00 UTC. Use the tenant MCP refresh_spot_prices tool to trigger a manual fetch.';
+        }
+      }
+      MastAdmin.showToast(current ? 'Spot prices loaded' : 'No spot prices yet');
+    } catch (err) {
+      MastAdmin.showToast('Spot fetch error: ' + err.message, true);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '↻ Refresh Spot'; }
+    }
+  };
+
+  // Auto-load spot status when materials tab renders (and spot materials exist)
+  var _origRenderMaterials = renderMaterials;
+  renderMaterials = function() {
+    _origRenderMaterials();
+    setTimeout(function() {
+      if (document.getElementById('spotPriceStatusText')) {
+        window.makerRefreshSpotPrices();
+      }
+    }, 0);
   };
   window.makerArchiveMaterialConfirm = archiveMaterialConfirm;
   window.makerFilterMaterials = filterMaterials;
