@@ -24,12 +24,23 @@
 
   var customersData = [];
   var duplicatesData = [];
+  var segmentsData = [];           // Phase 6.3 — saved segments from admin/customerSegments
+  var currentSegmentId = null;     // active segment id (built-in or saved)
   var customersLoaded = false;
+  var customersBackfillRunning = false; // Phase 6.1 — guards the backfill button
   var currentView = 'list'; // list | detail | duplicates
   var selectedCustomerId = null;
   var detailTab = 'overview'; // overview | orders | classes | interactions | wallet
   // Per-customer cache: { customerId: { orders, enrollments, interactions, wallets, loaded:{...} } }
   var detailCache = {};
+
+  // Phase 6.3 — built-in segments (not stored). Filter object matches the
+  // shape of saved segments. `_builtin` flag prevents save-over.
+  var BUILTIN_SEGMENTS = [
+    { id: '__all',          name: 'All customers',  filters: {}, _builtin: true },
+    { id: '__new_week',     name: 'New this week',  filters: { _newThisWeek: true }, _builtin: true },
+    { id: '__no_orders',    name: 'No orders yet',  filters: { _noOrders: true }, _builtin: true }
+  ];
 
   var DETAIL_TABS = [
     { value: 'overview',     label: 'Overview' },
@@ -51,10 +62,12 @@
   ];
 
   var SORT_OPTIONS = [
-    { value: 'updatedAt', label: 'Recently updated' },
-    { value: 'createdAt', label: 'Newest' },
-    { value: 'name',      label: 'Name (A–Z)' },
-    { value: 'email',     label: 'Email (A–Z)' }
+    { value: 'updatedAt',  label: 'Recently updated' },
+    { value: 'createdAt',  label: 'Newest' },
+    { value: 'name',       label: 'Name (A–Z)' },
+    { value: 'email',      label: 'Email (A–Z)' },
+    { value: 'spend',      label: 'Lifetime spend (high → low)' },
+    { value: 'lastOrder',  label: 'Last order (recent → old)' }
   ];
 
   // ============================================================
@@ -109,7 +122,8 @@
     try {
       var results = await Promise.all([
         MastDB._ref('admin/customers').orderByChild('updatedAt').limitToLast(500).once('value'),
-        MastDB._ref('admin/customerDuplicates').orderByChild('detectedAt').limitToLast(50).once('value')
+        MastDB._ref('admin/customerDuplicates').orderByChild('detectedAt').limitToLast(50).once('value'),
+        MastDB._ref('admin/customerSegments').once('value').catch(function() { return { val: function() { return null; } }; })
       ]);
       var cVal = results[0].val() || {};
       customersData = Object.values(cVal);
@@ -118,6 +132,11 @@
       duplicatesData = Object.entries(dVal)
         .map(function(entry) { var v = entry[1]; v._flagId = entry[0]; return v; })
         .filter(function(d) { return d.status !== 'merged'; });
+
+      var sVal = (results[2] && results[2].val && results[2].val()) || {};
+      segmentsData = Object.entries(sVal).map(function(e) {
+        var v = e[1] || {}; v.id = e[0]; return v;
+      });
 
       customersLoaded = true;
     } catch (e) {
@@ -165,6 +184,17 @@
   // Surface 1: Customers List
   // ============================================================
 
+  // Phase 6.3 — gather every distinct tag in current customer set for the
+  // tag filter dropdown.
+  function allKnownTags() {
+    var seen = {};
+    customersData.forEach(function(c) {
+      if (!c || !c.tags) return;
+      c.tags.forEach(function(t) { if (t) seen[t] = 1; });
+    });
+    return Object.keys(seen).sort();
+  }
+
   function renderList() {
     var totalCount = customersData.filter(function(c) { return c && c.status !== 'merged'; }).length;
 
@@ -176,6 +206,10 @@
     h += totalCount + ' total · auto-created from orders, enrollments, contacts, newsletter signups';
     h += '</div>';
     h += '</div>';
+    h += '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
+    h += '<button class="btn btn-secondary btn-small" onclick="customersExportCsv()" title="Download current view as CSV">⤓ Export CSV</button>';
+    h += '<button class="btn btn-secondary btn-small" onclick="customersBackfillStats()" title="Recompute cached stats for all customers">↻ Recompute stats</button>';
+    h += '</div>';
     h += '</div>';
 
     if (totalCount === 0) {
@@ -183,7 +217,30 @@
       return h;
     }
 
-    // Filter bar
+    // ----- Segments dropdown row -----
+    h += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">';
+    h += '<label style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;">Segment:</label>';
+    h += '<select id="customersSegmentSelect" onchange="customersApplySegment(this.value)" ' +
+         'style="padding:7px 10px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:DM Sans,sans-serif;font-size:0.85rem;min-width:180px;">';
+    BUILTIN_SEGMENTS.forEach(function(s) {
+      var sel = (currentSegmentId === s.id || (!currentSegmentId && s.id === '__all')) ? ' selected' : '';
+      h += '<option value="' + esc(s.id) + '"' + sel + '>' + esc(s.name) + '</option>';
+    });
+    if (segmentsData.length > 0) {
+      h += '<option disabled>──────────</option>';
+      segmentsData.forEach(function(s) {
+        var sel = (currentSegmentId === s.id) ? ' selected' : '';
+        h += '<option value="' + esc(s.id) + '"' + sel + '>' + esc(s.name) + '</option>';
+      });
+    }
+    h += '</select>';
+    h += '<button class="btn btn-secondary btn-small" onclick="customersSaveSegment()" title="Save current filters as a segment">+ Save as segment</button>';
+    if (segmentsData.length > 0) {
+      h += '<button class="btn btn-secondary btn-small" onclick="customersManageSegments()">Manage</button>';
+    }
+    h += '</div>';
+
+    // ----- Filter bar -----
     h += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:16px;">';
     h += '<input type="text" id="customersSearch" placeholder="Search by name or email…" oninput="customersRender()" ' +
          'style="flex:1;min-width:220px;padding:9px 12px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:DM Sans,sans-serif;font-size:0.9rem;">';
@@ -194,6 +251,21 @@
       h += '<option value="' + esc(opt.value) + '">' + esc(opt.label) + '</option>';
     });
     h += '</select>';
+
+    var tags = allKnownTags();
+    h += '<select id="customersTagFilter" onchange="customersRender()" ' +
+         'style="padding:9px 12px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:DM Sans,sans-serif;font-size:0.9rem;">';
+    h += '<option value="">All tags</option>';
+    tags.forEach(function(t) {
+      h += '<option value="' + esc(t) + '">' + esc(t) + '</option>';
+    });
+    h += '</select>';
+
+    h += '<input type="date" id="customersLastOrderBefore" onchange="customersRender()" title="Last order before…" ' +
+         'style="padding:8px 10px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:DM Sans,sans-serif;font-size:0.85rem;">';
+
+    h += '<input type="number" id="customersMinSpend" min="0" step="1" placeholder="Min spend $" onchange="customersRender()" oninput="customersRender()" ' +
+         'style="width:120px;padding:8px 10px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:DM Sans,sans-serif;font-size:0.85rem;">';
 
     h += '<select id="customersSortBy" onchange="customersRender()" ' +
          'style="padding:9px 12px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:DM Sans,sans-serif;font-size:0.9rem;">';
@@ -208,6 +280,66 @@
     return h;
   }
 
+  // Phase 6.1/6.2/6.3 — collect the active filter object from DOM controls.
+  // Returns { search, source, tag, lastOrderBefore, minSpendCents, sortBy, builtinFlags }.
+  function readActiveFilters() {
+    return {
+      search:           ((document.getElementById('customersSearch')           || {}).value || '').trim().toLowerCase(),
+      source:           (document.getElementById('customersSourceFilter')      || {}).value || 'all',
+      tag:              (document.getElementById('customersTagFilter')         || {}).value || '',
+      lastOrderBefore:  (document.getElementById('customersLastOrderBefore')   || {}).value || '',
+      minSpendDollars:  (document.getElementById('customersMinSpend')          || {}).value || '',
+      sortBy:           (document.getElementById('customersSortBy')            || {}).value || 'updatedAt'
+    };
+  }
+
+  // Phase 6.1 — apply filter object to a customer record. Centralised so the
+  // list table, CSV export and segments all share the same logic.
+  function customerMatchesFilters(c, f) {
+    if (!c) return false;
+    if (c.status === 'merged') return false;
+
+    if (f.source && f.source !== 'all' && c.source !== f.source) return false;
+
+    if (f.tag) {
+      var tags = c.tags || [];
+      if (tags.indexOf(f.tag) === -1) return false;
+    }
+
+    if (f.search) {
+      var name = (c.displayName || '').toLowerCase();
+      var email = (c.primaryEmail || '').toLowerCase();
+      var emails = (c.emails || []).join(' ').toLowerCase();
+      if (name.indexOf(f.search) === -1 && email.indexOf(f.search) === -1 && emails.indexOf(f.search) === -1) {
+        return false;
+      }
+    }
+
+    var stats = c.stats || {};
+
+    if (f.lastOrderBefore) {
+      // Inclusive of the chosen date — anything strictly after is excluded.
+      var cutoff = f.lastOrderBefore + 'T23:59:59';
+      if (!stats.lastOrderAt || stats.lastOrderAt > cutoff) return false;
+    }
+
+    if (f.minSpendDollars !== '' && f.minSpendDollars != null) {
+      var minCents = Math.round(parseFloat(f.minSpendDollars) * 100);
+      if (!isNaN(minCents) && (stats.lifetimeSpendCents || 0) < minCents) return false;
+    }
+
+    // Built-in segment flags
+    if (f._newThisWeek) {
+      var weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+      if (!c.createdAt || c.createdAt < weekAgo) return false;
+    }
+    if (f._noOrders) {
+      if ((stats.orderCount || 0) > 0) return false;
+    }
+
+    return true;
+  }
+
   function renderEmptyState() {
     var h = '';
     h += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">';
@@ -218,35 +350,45 @@
     return h;
   }
 
-  // Re-rendered on every search/filter/sort change without re-fetching.
-  function renderTable() {
-    var wrap = document.getElementById('customersTableWrap');
-    if (!wrap) return;
+  // Phase 6.1 — apply current segment + filters to the customer set.
+  // Returns the filtered, sorted array. Shared by renderTable and CSV export.
+  function getFilteredCustomers() {
+    var f = readActiveFilters();
 
-    var search = (document.getElementById('customersSearch') || {}).value || '';
-    var sourceFilter = (document.getElementById('customersSourceFilter') || {}).value || 'all';
-    var sortBy = (document.getElementById('customersSortBy') || {}).value || 'updatedAt';
-    var q = search.trim().toLowerCase();
+    // Mix in built-in segment flags from the active segment.
+    var seg = findSegmentById(currentSegmentId);
+    if (seg && seg.filters) {
+      if (seg.filters._newThisWeek) f._newThisWeek = true;
+      if (seg.filters._noOrders)    f._noOrders = true;
+    }
 
     var filtered = customersData.filter(function(c) {
-      if (!c) return false;
-      if (c.status === 'merged') return false; // hide merged-out customers
-      if (sourceFilter !== 'all' && c.source !== sourceFilter) return false;
-      if (!q) return true;
-      var name = (c.displayName || '').toLowerCase();
-      var email = (c.primaryEmail || '').toLowerCase();
-      var emails = (c.emails || []).join(' ').toLowerCase();
-      return name.indexOf(q) !== -1 || email.indexOf(q) !== -1 || emails.indexOf(q) !== -1;
+      return customerMatchesFilters(c, f);
     });
 
+    var sortBy = f.sortBy;
     filtered.sort(function(a, b) {
-      if (sortBy === 'name')  return (a.displayName || '').localeCompare(b.displayName || '');
-      if (sortBy === 'email') return (a.primaryEmail || '').localeCompare(b.primaryEmail || '');
+      var sa = a.stats || {};
+      var sb = b.stats || {};
+      if (sortBy === 'name')      return (a.displayName || '').localeCompare(b.displayName || '');
+      if (sortBy === 'email')     return (a.primaryEmail || '').localeCompare(b.primaryEmail || '');
+      if (sortBy === 'spend')     return (sb.lifetimeSpendCents || 0) - (sa.lifetimeSpendCents || 0);
+      if (sortBy === 'lastOrder') return (sb.lastOrderAt || '').localeCompare(sa.lastOrderAt || '');
       // createdAt / updatedAt — newest first
       var av = a[sortBy] || '';
       var bv = b[sortBy] || '';
       return bv.localeCompare(av);
     });
+
+    return filtered;
+  }
+
+  // Re-rendered on every search/filter/sort change without re-fetching.
+  function renderTable() {
+    var wrap = document.getElementById('customersTableWrap');
+    if (!wrap) return;
+
+    var filtered = getFilteredCustomers();
 
     if (filtered.length === 0) {
       wrap.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">No customers match your filters.</div>';
@@ -267,10 +409,20 @@
       var nameDisplay = esc(c.displayName || c.primaryEmail || c.id);
       var emailDisplay = esc(c.primaryEmail || '—');
 
+      var stats = c.stats || {};
+      var spendCell = (typeof stats.lifetimeSpendCents === 'number')
+        ? esc(fmtMoney(stats.lifetimeSpendCents))
+        : '<span style="color:var(--warm-gray-light);">—</span>';
+      var lastOrderCell = stats.lastOrderAt
+        ? esc(relativeTime(stats.lastOrderAt))
+        : '<span style="color:var(--warm-gray-light);">—</span>';
+
       return '<tr data-customer-id="' + esc(c.id) + '" style="cursor:pointer;" onclick="customersOpenDetail(this.dataset.customerId)">' +
         '<td>' + nameDisplay + '</td>' +
         '<td style="color:var(--warm-gray);">' + emailDisplay + '</td>' +
         '<td>' + sourceBadge(c.source) + '</td>' +
+        '<td>' + spendCell + '</td>' +
+        '<td style="color:var(--warm-gray);font-size:0.78rem;">' + lastOrderCell + '</td>' +
         '<td style="color:var(--warm-gray);font-size:0.78rem;">' + esc(linkedText) + '</td>' +
         '<td style="color:var(--warm-gray);font-size:0.78rem;">' + esc(relativeTime(c.updatedAt || c.createdAt)) + '</td>' +
       '</tr>';
@@ -281,7 +433,7 @@
     html += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">Showing ' + filtered.length + ' of ' + nonMergedTotal + '</div>';
     html += '<div class="data-table"><table>';
     html += '<thead><tr>';
-    html += '<th>Name</th><th>Primary email</th><th>Source</th><th>Linked</th><th>Last activity</th>';
+    html += '<th>Name</th><th>Primary email</th><th>Source</th><th>Spend</th><th>Last order</th><th>Linked</th><th>Last activity</th>';
     html += '</tr></thead>';
     html += '<tbody>' + rows + '</tbody>';
     html += '</table></div>';
@@ -634,30 +786,37 @@
          'style="width:100%;min-height:90px;padding:9px 12px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--cream);font-family:DM Sans,sans-serif;font-size:0.85rem;resize:vertical;">' + esc(c.notes || '') + '</textarea>';
     h += detailCardClose();
 
-    // Stats card
+    // Stats card — Phase 6.1 reads from c.stats (maintained by Cloud Function
+    // triggers). Falls back to per-tab cache when stats haven't been computed
+    // yet, which is "—" for an empty customer. The "load Orders tab" copy is
+    // gone — stats are always available without opening tabs.
     h += detailCardOpen('Stats');
-    if (!cache.loaded.orders || !cache.loaded.enrollments) {
-      h += '<div style="font-size:0.85rem;color:var(--warm-gray);">';
-      h += 'Open the Orders and Classes tabs to populate lifetime stats.';
+    var stats = c.stats || null;
+    var hasStats = !!(stats && (typeof stats.lifetimeSpendCents === 'number' || stats.statsUpdatedAt));
+    var spendStr   = hasStats ? fmtMoney(stats.lifetimeSpendCents || 0) : '—';
+    var ordCntStr  = hasStats ? String(stats.orderCount || 0) : '—';
+    var firstStr   = hasStats ? fmtDate(stats.firstOrderAt) : '—';
+    var lastStr    = hasStats ? fmtDate(stats.lastOrderAt) : '—';
+    var enrCntStr  = hasStats ? String(stats.enrollmentCount || 0) : '—';
+    var lastEnrStr = hasStats ? fmtDate(stats.lastEnrollmentAt) : '—';
+
+    h += '<div style="display:grid;grid-template-columns:160px 1fr;gap:8px 16px;font-size:0.85rem;margin-top:4px;">';
+    h += identityRow('Lifetime spend',  esc(spendStr));
+    h += identityRow('Order count',     esc(ordCntStr));
+    h += identityRow('First order',     esc(firstStr));
+    h += identityRow('Last order',      esc(lastStr));
+    h += identityRow('Enrollments',     esc(enrCntStr));
+    h += identityRow('Last enrollment', esc(lastEnrStr));
+    h += '</div>';
+    if (!hasStats) {
+      h += '<div style="font-size:0.78rem;color:var(--warm-gray-light);margin-top:10px;">';
+      h += 'Cached stats not yet computed. They populate automatically on the next order or enrollment write — or run "Recompute stats" from the customers list.';
+      h += '</div>';
+    } else if (stats.statsUpdatedAt) {
+      h += '<div style="font-size:0.72rem;color:var(--warm-gray-light);margin-top:10px;">';
+      h += 'Updated ' + esc(relativeTime(stats.statsUpdatedAt));
       h += '</div>';
     }
-    var totalCents = (cache.orders || []).reduce(function(s, o) { return s + (o.totalCents || 0); }, 0);
-    var orderCount = (cache.orders || []).length;
-    var enrollCount = (cache.enrollments || []).length;
-
-    var sortedOrders = (cache.orders || []).slice().sort(function(a, b) {
-      return (a.createdAt || '').localeCompare(b.createdAt || '');
-    });
-    var firstOrder = sortedOrders.length ? sortedOrders[0].createdAt : null;
-    var lastOrder = sortedOrders.length ? sortedOrders[sortedOrders.length - 1].createdAt : null;
-
-    h += '<div style="display:grid;grid-template-columns:160px 1fr;gap:8px 16px;font-size:0.85rem;margin-top:8px;">';
-    h += identityRow('Lifetime spend', cache.loaded.orders ? esc(fmtMoney(totalCents)) : '<em style="color:var(--warm-gray);">load Orders tab</em>');
-    h += identityRow('Order count', cache.loaded.orders ? String(orderCount) : '<em style="color:var(--warm-gray);">load Orders tab</em>');
-    h += identityRow('First order', cache.loaded.orders ? esc(fmtDate(firstOrder)) : '—');
-    h += identityRow('Last order', cache.loaded.orders ? esc(fmtDate(lastOrder)) : '—');
-    h += identityRow('Enrollments', cache.loaded.enrollments ? String(enrollCount) : '<em style="color:var(--warm-gray);">load Classes tab</em>');
-    h += '</div>';
     h += detailCardClose();
 
     return h;
@@ -1212,6 +1371,246 @@
   }
 
   // ============================================================
+  // Phase 6.1 — Stats backfill (admin button → callable)
+  // ============================================================
+
+  async function backfillStats() {
+    if (customersBackfillRunning) return;
+    var ok = await window.mastConfirm(
+      'Recompute cached stats for every customer in this tenant? Runs once and may take a few seconds.',
+      { title: 'Recompute customer stats', confirmLabel: 'Recompute' }
+    );
+    if (!ok) return;
+    customersBackfillRunning = true;
+    try {
+      var fn = firebase.functions().httpsCallable('recomputeAllCustomerStats');
+      var result = await fn({ tenantId: MastDB.tenantId() });
+      var d = (result && result.data) || {};
+      window.mastAlert('Stats recomputed. ' + (d.processed || 0) + ' customers processed (' + (d.skipped || 0) + ' skipped).');
+      // Reload to pick up the new stats fields.
+      customersLoaded = false;
+      await loadCustomers();
+    } catch (e) {
+      console.error('[customers] backfill failed', e);
+      window.mastAlert('Backfill failed: ' + (e && e.message));
+    } finally {
+      customersBackfillRunning = false;
+    }
+  }
+
+  // ============================================================
+  // Phase 6.2 — CSV export
+  // ============================================================
+
+  function csvField(v) {
+    if (v == null) return '';
+    var s = String(v);
+    if (s.indexOf(',') !== -1 || s.indexOf('"') !== -1 || s.indexOf('\n') !== -1) {
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+  }
+
+  function exportCsv() {
+    var rows = getFilteredCustomers();
+    if (rows.length === 0) {
+      window.mastAlert('No customers in the current view to export.');
+      return;
+    }
+    var header = ['displayName', 'primaryEmail', 'phones', 'tags', 'lifetimeSpend', 'orderCount', 'lastOrderAt', 'source', 'createdAt', 'customerId'];
+    var lines = [header.join(',')];
+    rows.forEach(function(c) {
+      var stats = c.stats || {};
+      var phones = (c.phones || []).join('; ');
+      var tags = (c.tags || []).join('; ');
+      var spend = (typeof stats.lifetimeSpendCents === 'number') ? (stats.lifetimeSpendCents / 100).toFixed(2) : '';
+      var orderCount = (typeof stats.orderCount === 'number') ? String(stats.orderCount) : '';
+      var lastOrder = stats.lastOrderAt || '';
+      var line = [
+        csvField(c.displayName || ''),
+        csvField(c.primaryEmail || ''),
+        csvField(phones),
+        csvField(tags),
+        csvField(spend),
+        csvField(orderCount),
+        csvField(lastOrder),
+        csvField(c.source || ''),
+        csvField(c.createdAt || ''),
+        csvField(c.id || '')
+      ].join(',');
+      lines.push(line);
+    });
+    var csvText = lines.join('\n');
+
+    var tenantId = (typeof MastDB !== 'undefined' && MastDB.tenantId) ? MastDB.tenantId() : 'tenant';
+    var ymd = new Date().toISOString().slice(0, 10);
+    var filename = 'mast-customers-' + tenantId + '-' + ymd + '.csv';
+
+    try {
+      var blob = new Blob([csvText], { type: 'text/csv' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('[customers] csv export failed', e);
+      window.mastAlert('CSV export failed: ' + (e && e.message));
+    }
+  }
+
+  // ============================================================
+  // Phase 6.3 — Segments
+  // ============================================================
+
+  function findSegmentById(id) {
+    if (!id) return null;
+    var b = BUILTIN_SEGMENTS.find(function(s) { return s.id === id; });
+    if (b) return b;
+    return segmentsData.find(function(s) { return s.id === id; }) || null;
+  }
+
+  // Apply a segment by writing its filters into the DOM controls and re-rendering.
+  function applySegment(segId) {
+    currentSegmentId = segId;
+    var seg = findSegmentById(segId);
+    var f = (seg && seg.filters) || {};
+
+    var src = document.getElementById('customersSourceFilter'); if (src) src.value = f.source || 'all';
+    var tag = document.getElementById('customersTagFilter');    if (tag) tag.value = f.tag || '';
+    var lob = document.getElementById('customersLastOrderBefore'); if (lob) lob.value = f.lastOrderBefore || '';
+    var min = document.getElementById('customersMinSpend');     if (min) min.value = (typeof f.minSpendCents === 'number') ? (f.minSpendCents / 100) : '';
+    var srch = document.getElementById('customersSearch');      if (srch && typeof f.search === 'string') srch.value = f.search;
+
+    renderTable();
+  }
+
+  // Snapshot current filter DOM into a serialisable filter object.
+  function readFilterSnapshot() {
+    var f = readActiveFilters();
+    var snap = {};
+    if (f.source && f.source !== 'all') snap.source = f.source;
+    if (f.tag) snap.tag = f.tag;
+    if (f.lastOrderBefore) snap.lastOrderBefore = f.lastOrderBefore;
+    if (f.minSpendDollars !== '' && f.minSpendDollars != null) {
+      var n = Math.round(parseFloat(f.minSpendDollars) * 100);
+      if (!isNaN(n)) snap.minSpendCents = n;
+    }
+    if (f.search) snap.search = f.search;
+    return snap;
+  }
+
+  async function saveSegment() {
+    var name = window.prompt('Name this segment:');
+    if (!name) return;
+    name = name.trim();
+    if (!name) return;
+    var filters = readFilterSnapshot();
+    var id = 'seg_' + Date.now().toString(36);
+    var now = new Date().toISOString();
+    var record = {
+      id: id,
+      name: name,
+      filters: filters,
+      createdBy: (window.currentUser && window.currentUser.uid) || null,
+      createdAt: now,
+      updatedAt: now
+    };
+    try {
+      await MastDB._ref('admin/customerSegments/' + id).set(record);
+      segmentsData.push(record);
+      currentSegmentId = id;
+      render();
+      requestAnimationFrame(renderTable);
+    } catch (e) {
+      console.error('[customers] save segment failed', e);
+      window.mastAlert('Save segment failed: ' + (e && e.message));
+    }
+  }
+
+  async function deleteSegment(segId) {
+    var seg = segmentsData.find(function(s) { return s.id === segId; });
+    if (!seg) return;
+    var ok = await window.mastConfirm('Delete segment "' + seg.name + '"?', { title: 'Delete segment', confirmLabel: 'Delete', danger: true });
+    if (!ok) return;
+    try {
+      await MastDB._ref('admin/customerSegments/' + segId).remove();
+      segmentsData = segmentsData.filter(function(s) { return s.id !== segId; });
+      if (currentSegmentId === segId) currentSegmentId = '__all';
+      render();
+      requestAnimationFrame(renderTable);
+      // Re-render manage modal if open
+      if (document.getElementById('cmSegmentsModalBody')) manageSegments();
+    } catch (e) {
+      console.error('[customers] delete segment failed', e);
+      window.mastAlert('Delete segment failed: ' + (e && e.message));
+    }
+  }
+
+  async function renameSegment(segId) {
+    var seg = segmentsData.find(function(s) { return s.id === segId; });
+    if (!seg) return;
+    var name = window.prompt('Rename segment:', seg.name);
+    if (!name) return;
+    name = name.trim();
+    if (!name || name === seg.name) return;
+    var now = new Date().toISOString();
+    try {
+      await MastDB._ref('admin/customerSegments/' + segId).update({ name: name, updatedAt: now });
+      seg.name = name;
+      seg.updatedAt = now;
+      render();
+      requestAnimationFrame(renderTable);
+      if (document.getElementById('cmSegmentsModalBody')) manageSegments();
+    } catch (e) {
+      console.error('[customers] rename segment failed', e);
+      window.mastAlert('Rename failed: ' + (e && e.message));
+    }
+  }
+
+  function manageSegments() {
+    var html = '';
+    html += '<div class="modal-header"><h3>Manage segments</h3></div>';
+    html += '<div class="modal-body" id="cmSegmentsModalBody">';
+    if (segmentsData.length === 0) {
+      html += '<p style="font-size:0.85rem;color:var(--warm-gray);">No saved segments yet. Build a filter combination on the customers list and click "Save as segment".</p>';
+    } else {
+      html += '<div style="display:flex;flex-direction:column;gap:8px;">';
+      segmentsData.forEach(function(s) {
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;background:var(--cream);border:1px solid var(--cream-dark);border-radius:6px;padding:10px 14px;gap:12px;">';
+        html += '<div style="font-size:0.85rem;flex:1;min-width:0;">';
+        html += '<div style="font-weight:600;">' + esc(s.name) + '</div>';
+        html += '<div style="font-size:0.72rem;color:var(--warm-gray-light);">' + esc(describeFilters(s.filters || {})) + '</div>';
+        html += '</div>';
+        html += '<div style="display:flex;gap:6px;">';
+        html += '<button class="btn btn-secondary btn-small" data-seg-id="' + esc(s.id) + '" onclick="customersRenameSegment(this.dataset.segId)">Rename</button>';
+        html += '<button class="btn btn-secondary btn-small" data-seg-id="' + esc(s.id) + '" onclick="customersDeleteSegment(this.dataset.segId)" style="color:var(--danger);">Delete</button>';
+        html += '</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+    html += '</div>';
+    html += '<div class="modal-footer"><button class="btn btn-primary" onclick="closeModal()">Close</button></div>';
+    if (typeof openModal === 'function') openModal(html);
+  }
+
+  function describeFilters(f) {
+    var bits = [];
+    if (f.source) bits.push('source=' + f.source);
+    if (f.tag) bits.push('tag=' + f.tag);
+    if (f.lastOrderBefore) bits.push('last order before ' + f.lastOrderBefore);
+    if (typeof f.minSpendCents === 'number') bits.push('min spend $' + (f.minSpendCents / 100).toFixed(2));
+    if (f.search) bits.push('search "' + f.search + '"');
+    if (f._newThisWeek) bits.push('new this week');
+    if (f._noOrders) bits.push('no orders yet');
+    return bits.length ? bits.join(' · ') : 'no filters';
+  }
+
+  // ============================================================
   // Globals exposed for inline onclick handlers
   // (matching the studentsSwitchView / studentsViewDetail pattern)
   // ============================================================
@@ -1229,6 +1628,13 @@
   window.customersOpenContact = openContactFromCustomer;
   window.customersAddContact = addContactToCustomer;
   window.customersSaveNewContact = saveNewContactForCustomer;
+  window.customersBackfillStats = backfillStats;
+  window.customersExportCsv = exportCsv;
+  window.customersApplySegment = applySegment;
+  window.customersSaveSegment = saveSegment;
+  window.customersManageSegments = manageSegments;
+  window.customersDeleteSegment = deleteSegment;
+  window.customersRenameSegment = renameSegment;
 
   // ============================================================
   // Module registration
@@ -1275,6 +1681,8 @@
     detachListeners: function() {
       customersData = [];
       duplicatesData = [];
+      segmentsData = [];
+      currentSegmentId = null;
       customersLoaded = false;
       currentView = 'list';
       selectedCustomerId = null;
