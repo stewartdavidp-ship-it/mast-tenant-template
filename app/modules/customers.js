@@ -461,7 +461,11 @@
 
   async function mergeCustomers(flagId, winnerId, loserId) {
     if (!winnerId || !loserId || winnerId === loserId) return;
-    if (!confirm('Merge customer ' + loserId + ' into ' + winnerId + '? This rewrites linked orders/enrollments/contacts and archives the loser. This cannot be undone.')) return;
+    var winnerCust = customersData.find(function(x) { return x && x.id === winnerId; });
+    var loserCust = customersData.find(function(x) { return x && x.id === loserId; });
+    var winnerLabel = (winnerCust && (winnerCust.displayName || winnerCust.primaryEmail)) || 'this customer';
+    var loserLabel = (loserCust && (loserCust.displayName || loserCust.primaryEmail)) || 'the other customer';
+    if (!confirm('Merge "' + loserLabel + '" into "' + winnerLabel + '"? This rewrites all linked orders, enrollments and contacts. This cannot be undone.')) return;
 
     try {
       var refs = await Promise.all([
@@ -578,7 +582,6 @@
   // ----- Overview tab -----
 
   function renderOverviewTab(c) {
-    var linked = c.linkedIds || {};
     var cache = getCache(c.id);
 
     var h = '';
@@ -586,15 +589,8 @@
     // Identity card
     h += detailCardOpen('Identity');
     h += '<div style="display:grid;grid-template-columns:160px 1fr;gap:8px 16px;font-size:0.85rem;">';
-    h += identityRow('Customer ID', '<span style="font-family:monospace;font-size:0.78rem;">' + esc(c.id) + '</span>');
     h += identityRow('Emails', (c.emails || []).map(esc).join('<br>') || '—');
     h += identityRow('Phones', (c.phones || []).map(esc).join('<br>') || '—');
-    h += identityRow('Linked uids', (linked.uids || []).map(function(u) {
-      return '<span style="font-family:monospace;font-size:0.78rem;">' + esc(u) + '</span>';
-    }).join('<br>') || '—');
-    h += identityRow('Contact IDs', (linked.contactIds || []).map(function(id) {
-      return '<span style="font-family:monospace;font-size:0.78rem;">' + esc(id) + '</span>';
-    }).join('<br>') || '—');
     h += identityRow('Tags', renderTagsEditor(c));
     h += identityRow('Newsletter', renderNewsletterToggle(c));
     h += identityRow('Source', sourceBadge(c.source) || '—');
@@ -832,7 +828,7 @@
     if (uids.length === 0) {
       return '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">' +
         '<p style="font-size:0.95rem;font-weight:500;margin-bottom:8px;">No linked account</p>' +
-        '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Wallet, passes, membership and loyalty live on a customer-facing account. This customer has no linked uid yet.</p>' +
+        '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Wallet, passes, membership and loyalty live on a customer-facing account. This customer hasn\'t signed in yet.</p>' +
         '</div>';
     }
 
@@ -843,8 +839,9 @@
     }
 
     var h = '';
-    cache.wallets.forEach(function(w) {
-      h += detailCardOpen('Account · ' + (w.uid || ''));
+    cache.wallets.forEach(function(w, idx) {
+      var label = cache.wallets.length > 1 ? 'Account ' + (idx + 1) : 'Account';
+      h += detailCardOpen(label);
       var creditCount = w.credits ? Object.keys(w.credits).length : 0;
       var creditBalance = 0;
       if (w.credits) {
@@ -910,15 +907,18 @@
     duplicatesData.forEach(function(d) {
       h += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:14px 18px;margin-bottom:10px;">';
       h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">';
+      // Look up display names from in-memory customer list (fallback to "Customer A/B").
+      var custA = customersData.find(function(x) { return x && x.id === d.customerIdA; });
+      var custB = customersData.find(function(x) { return x && x.id === d.customerIdB; });
+      var labelA = (custA && (custA.displayName || custA.primaryEmail)) || 'Customer A';
+      var labelB = (custB && (custB.displayName || custB.primaryEmail)) || 'Customer B';
+
       h += '<div style="font-size:0.85rem;flex:1;min-width:240px;">';
       h += '<div style="font-weight:600;margin-bottom:4px;">' + esc(d.reason || 'duplicate detected') + '</div>';
       h += '<div style="color:var(--warm-gray);font-size:0.78rem;">';
-      h += 'A: <span data-customer-id="' + esc(d.customerIdA) + '" style="font-family:monospace;cursor:pointer;text-decoration:underline;" onclick="customersOpenDetail(this.dataset.customerId)">' + esc(d.customerIdA) + '</span><br>';
-      h += 'B: <span data-customer-id="' + esc(d.customerIdB) + '" style="font-family:monospace;cursor:pointer;text-decoration:underline;" onclick="customersOpenDetail(this.dataset.customerId)">' + esc(d.customerIdB) + '</span>';
+      h += 'A: <span data-customer-id="' + esc(d.customerIdA) + '" style="cursor:pointer;text-decoration:underline;" onclick="customersOpenDetail(this.dataset.customerId)">' + esc(labelA) + '</span><br>';
+      h += 'B: <span data-customer-id="' + esc(d.customerIdB) + '" style="cursor:pointer;text-decoration:underline;" onclick="customersOpenDetail(this.dataset.customerId)">' + esc(labelB) + '</span>';
       h += '</div>';
-      if (d.sourceRecord) {
-        h += '<div style="color:var(--warm-gray-light);font-size:0.78rem;margin-top:4px;">trigger: ' + esc(JSON.stringify(d.sourceRecord)) + '</div>';
-      }
       h += '</div>';
       h += '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">';
       h += '<div style="color:var(--warm-gray);font-size:0.78rem;">' + esc(relativeTime(d.detectedAt)) + '</div>';
