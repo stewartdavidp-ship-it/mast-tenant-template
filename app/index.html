@@ -8374,8 +8374,108 @@ var MastCustomers = (function() {
     }).reverse();
   }
 
+  // ----- Order → Contact (address) resolver -----
+  // Each order ships to ONE address. That address must be a contact record.
+  // This finds an existing contact for the customer matching the order's
+  // shipping address, or creates a new one. Match key: normalized
+  // (email + address1 + city + state + zip). Returns null when there's no
+  // shipping data or no customerId.
+  // MIRRORS:
+  //   mast-architecture/functions/customer-resolver-functions.js
+  //   mast-tenant-mcp-server/src/shared/customer-resolver.ts
+  function _normKey(s) {
+    if (!s) return '';
+    return String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
+  function _flattenShipping(shipping) {
+    if (!shipping) return '';
+    var parts = [
+      shipping.address1 || '',
+      shipping.address2 || '',
+      shipping.city || '',
+      shipping.state || '',
+      shipping.zip || ''
+    ].filter(Boolean);
+    return parts.join(', ');
+  }
+  function _contactMatchKey(contact) {
+    if (!contact || !contact.address) return null;
+    return _normKey(contact.email || '') + '|' + _normKey(contact.address);
+  }
+
+  async function resolveOrderContact(params) {
+    params = params || {};
+    var customerId = params.customerId;
+    var shipping = params.shipping;
+    var email = _normalizeEmail(params.email);
+    var phone = params.phone || null;
+
+    if (!customerId) return null;
+    if (!shipping || !shipping.address1) return null;
+
+    var flatAddress = _flattenShipping(shipping);
+    var wantedKey = _normKey(email || '') + '|' + _normKey(flatAddress);
+
+    var customer = await getCustomer(customerId);
+    if (!customer) return null;
+    var linked = customer.linkedIds || {};
+    var linkedContactIds = linked.contactIds || [];
+
+    for (var i = 0; i < linkedContactIds.length; i++) {
+      var cid = linkedContactIds[i];
+      try {
+        var cSnap = await MastDB._ref('admin/contacts/' + cid).once('value');
+        var c = cSnap.val();
+        if (!c) continue;
+        var key = _contactMatchKey(c);
+        if (key && key === wantedKey) {
+          return cid;
+        }
+      } catch (e) {
+        console.warn('[MastCustomers] linked contact read failed', cid, e);
+      }
+    }
+
+    // No match — create a new contact.
+    var newId = MastDB._newKey('admin/contacts');
+    var now = new Date().toISOString();
+    var newContact = {
+      id: newId,
+      customerId: customerId,
+      name: shipping.name || customer.displayName || '',
+      email: email || customer.primaryEmail || '',
+      phone: phone || '',
+      address: flatAddress,
+      category: 'Other',
+      source: 'order',
+      createdAt: now,
+      updatedAt: now
+    };
+
+    var updates = {};
+    updates['admin/contacts/' + newId] = newContact;
+    updates['admin/customerIndexes/byContactId/' + newId] = customerId;
+    updates['admin/customers/' + customerId + '/linkedIds/contactIds'] =
+      linkedContactIds.concat([newId]);
+    updates['admin/customers/' + customerId + '/updatedAt'] = now;
+    await MastDB._multiUpdate(updates);
+
+    return newId;
+  }
+
+  async function resolveOrderContactSafe(params) {
+    try {
+      return await resolveOrderContact(params);
+    } catch (e) {
+      console.warn('[MastCustomers] resolveOrderContactSafe failed', e);
+      return null;
+    }
+  }
+
   return {
     resolveCustomer: resolveCustomer,
+    resolveOrderContact: resolveOrderContact,
+    resolveOrderContactSafe: resolveOrderContactSafe,
     getCustomer: getCustomer,
     listCustomers: listCustomers,
     listDuplicates: listDuplicates,
@@ -9506,12 +9606,25 @@ MastDB.passDefinitions = {
 (function installCustomerHooks() {
   async function _stampCustomerId(data, identity, sourceTag) {
     try {
-      if (!data || typeof data !== 'object' || data.customerId) return;
+      if (!data || typeof data !== 'object') return;
       identity = identity || {};
       identity.source = identity.source || sourceTag;
-      var result = await MastCustomers.resolveCustomer(identity);
-      if (result && result.customerId) {
-        data.customerId = result.customerId;
+      if (!data.customerId) {
+        var result = await MastCustomers.resolveCustomer(identity);
+        if (result && result.customerId) {
+          data.customerId = result.customerId;
+        }
+      }
+      // For orders: also resolve contactId from shipping address.
+      if (sourceTag === 'order' && data.customerId && !data.contactId &&
+          data.shipping && data.shipping.address1) {
+        var contactId = await MastCustomers.resolveOrderContactSafe({
+          customerId: data.customerId,
+          email: identity.email,
+          phone: identity.phone,
+          shipping: data.shipping
+        });
+        if (contactId) data.contactId = contactId;
       }
     } catch (e) {
       console.warn('[MastCustomers] hook failed for ' + sourceTag + ':', e);

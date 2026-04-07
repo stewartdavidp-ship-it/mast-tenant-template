@@ -480,7 +480,7 @@
       var refs = await Promise.all([
         MastDB._ref('admin/customers/' + winnerId).once('value'),
         MastDB._ref('admin/customers/' + loserId).once('value'),
-        MastDB._ref('admin/orders').orderByChild('customerId').equalTo(loserId).once('value'),
+        MastDB._ref('orders').orderByChild('customerId').equalTo(loserId).once('value'),
         MastDB._ref('admin/enrollments').orderByChild('customerId').equalTo(loserId).once('value')
       ]);
       var winner = refs[0].val();
@@ -544,7 +544,7 @@
 
       // Rewrite customerId on linked orders + enrollments
       Object.keys(loserOrders).forEach(function(orderId) {
-        updates['admin/orders/' + orderId + '/customerId'] = winnerId;
+        updates['orders/' + orderId + '/customerId'] = winnerId;
       });
       Object.keys(loserEnrollments).forEach(function(enId) {
         updates['admin/enrollments/' + enId + '/customerId'] = winnerId;
@@ -680,15 +680,35 @@
       return (b.createdAt || '').localeCompare(a.createdAt || '');
     });
 
+    var contactsById = cache.orderContacts || {};
+
     var rows = orders.map(function(o) {
       var num = o.orderNumber || o._id || '—';
       var status = o.status || '—';
       var items = (o.items || []).reduce(function(s, it) { return s + (it.qty || 1); }, 0);
+
+      // Ship to cell — drill-through to contact module if contactId present.
+      var shipCell;
+      if (o.contactId && contactsById[o.contactId]) {
+        var ct = contactsById[o.contactId];
+        var shipName = ct.name || '';
+        var shipAddr = ct.address || '';
+        var displayName = (shipName && shipName !== c.displayName) ? shipName : '';
+        var shipText = displayName ? (displayName + ' · ' + shipAddr) : shipAddr;
+        shipCell = '<td style="color:var(--warm-gray);font-size:0.78rem;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;" ' +
+          'data-contact-id="' + esc(o.contactId) + '" ' +
+          'onclick="event.stopPropagation();customersOpenContact(this.dataset.contactId);">' +
+          esc(shipText || '—') + '</td>';
+      } else {
+        shipCell = '<td style="color:var(--warm-gray);">—</td>';
+      }
+
       return '<tr data-order-id="' + esc(o._id) + '" style="cursor:pointer;" onclick="customersOpenOrder(this.dataset.orderId)">' +
         '<td>' + esc(num) + '</td>' +
         '<td><span class="status-badge">' + esc(status) + '</span></td>' +
         '<td>' + esc(fmtMoney(o.totalCents)) + '</td>' +
         '<td style="color:var(--warm-gray);">' + items + '</td>' +
+        shipCell +
         '<td style="color:var(--warm-gray);font-size:0.78rem;">' + esc(fmtDate(o.createdAt)) + '</td>' +
       '</tr>';
     }).join('');
@@ -696,7 +716,7 @@
     var h = '';
     h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">' + orders.length + ' order' + (orders.length === 1 ? '' : 's') + '</div>';
     h += '<div class="data-table"><table>';
-    h += '<thead><tr><th>Order #</th><th>Status</th><th>Total</th><th>Items</th><th>Placed</th></tr></thead>';
+    h += '<thead><tr><th>Order #</th><th>Status</th><th>Total</th><th>Items</th><th>Ship to</th><th>Placed</th></tr></thead>';
     h += '<tbody>' + rows + '</tbody>';
     h += '</table></div>';
     return h;
@@ -704,19 +724,42 @@
 
   function loadCustomerOrders(customerId) {
     var cache = getCache(customerId);
-    MastDB._ref('admin/orders').orderByChild('customerId').equalTo(customerId).once('value')
+    MastDB._ref('orders').orderByChild('customerId').equalTo(customerId).once('value')
       .then(function(snap) {
         var val = snap.val() || {};
         cache.orders = Object.entries(val).map(function(e) { var o = e[1] || {}; o._id = e[0]; return o; });
         cache.loaded.orders = true;
-        if (currentView === 'detail' && selectedCustomerId === customerId &&
-            (detailTab === 'orders' || detailTab === 'overview')) {
-          render();
+
+        // Load any linked shipping contacts in parallel.
+        var contactIds = cache.orders
+          .map(function(o) { return o.contactId; })
+          .filter(function(id, i, arr) { return id && arr.indexOf(id) === i; });
+        if (contactIds.length === 0) {
+          cache.orderContacts = {};
+          if (currentView === 'detail' && selectedCustomerId === customerId &&
+              (detailTab === 'orders' || detailTab === 'overview')) {
+            render();
+          }
+          return;
         }
+        Promise.all(contactIds.map(function(cid) {
+          return MastDB._ref('admin/contacts/' + cid).once('value')
+            .then(function(s) { return { id: cid, val: s.val() }; })
+            .catch(function() { return { id: cid, val: null }; });
+        })).then(function(results) {
+          var byId = {};
+          results.forEach(function(r) { if (r.val) byId[r.id] = r.val; });
+          cache.orderContacts = byId;
+          if (currentView === 'detail' && selectedCustomerId === customerId &&
+              (detailTab === 'orders' || detailTab === 'overview')) {
+            render();
+          }
+        });
       })
       .catch(function(e) {
         console.error('[customers] orders load failed', e);
         cache.orders = [];
+        cache.orderContacts = {};
         cache.loaded.orders = true;
         if (currentView === 'detail' && selectedCustomerId === customerId) render();
       });
