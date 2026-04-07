@@ -763,7 +763,12 @@ window.TENANT_READY.then(function() {
         }
         var saleBadge = isOnSale && !isSold;
         var earlyAccessBadge = product._earlyAccess ? { label: 'Early Access', bg: 'rgba(42,124,111,0.9)' } : null;
-        var badgeToShow = earlyAccessBadge || (showBadge ? { label: badgeLabel, bg: badgeBg } : saleBadge ? { label: 'Sale', bg: 'rgba(192,86,33,0.85)' } : null);
+        // Sale badge takes priority over generic stock badges (Made to Order, etc.)
+        // so customers can see at a glance which items are discounted. Sold/early-access
+        // still win because they convey scarcity.
+        var badgeToShow = earlyAccessBadge ||
+          (saleBadge ? { label: 'Sale', bg: 'rgba(192,86,33,0.85)' } :
+            (showBadge ? { label: badgeLabel, bg: badgeBg } : null));
         var isRetired = product.availability === 'discontinued' && stockBadge && stockBadge.cssClass === 'retired';
         var leadTime = resolveLeadTime(product, _sdCfg);
         var leadTimeHtml = leadTime ? '<p style="font-size:0.75rem;color:var(--text-muted,#9e9890);margin:2px 0 0 0;">' + esc(leadTime) + '</p>' : '';

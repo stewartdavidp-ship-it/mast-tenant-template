@@ -1159,8 +1159,10 @@
         }
       } else if (p.price && _productSaleInfo) {
         var saleP = _calcSalePrice(p.price);
+        var saleNameLabel = _productSaleInfo.saleName ? ' ' + escHtml(_productSaleInfo.saleName) : '';
         priceEl.innerHTML = '<span style="text-decoration:line-through;color:var(--warm-gray,#6B6560);font-weight:400;">' + formatPriceCents(p.price) + '</span> ' +
-          '<span style="font-weight:700;color:var(--accent,var(--primary,#c05621));">' + formatPriceCents(saleP) + '</span>';
+          '<span style="font-weight:700;color:var(--accent,var(--primary,#c05621));">' + formatPriceCents(saleP) + '</span> ' +
+          '<span style="display:inline-block;margin-left:8px;background:rgba(192,86,33,0.85);color:white;font-size:0.7rem;font-weight:600;padding:3px 8px;border-radius:4px;vertical-align:middle;">SALE' + saleNameLabel + '</span>';
       } else if (p.price) {
         priceEl.textContent = displayPrice(p.price);
       } else {

@@ -499,7 +499,17 @@
         (cls.duration ? '<div class="class-card-schedule">' + cls.duration + ' min' + (cls.materialsIncluded ? ' &middot; Materials included' : (cls.materialsCostCents ? ' &middot; + $' + (cls.materialsCostCents / 100).toFixed(2) + ' materials' : '')) + '</div>' : '') +
         '<div class="class-card-meta">' +
         '<span class="class-card-price">' + price + '</span>' +
-        '<span class="class-card-spots">' + (cls.capacity || '') + ' spots</span>' +
+        '<span class="class-card-spots">' + (function() {
+          var ns = cls._nextSession;
+          var cap = (ns && typeof ns.capacity === 'number') ? ns.capacity : (cls.capacity || 0);
+          var enrolled = (ns && typeof ns.enrolled === 'number') ? ns.enrolled : 0;
+          var remaining = Math.max(0, cap - enrolled);
+          if (cap === 0) return '';
+          if (remaining === 0) return 'Full';
+          if (remaining === 1) return '1 spot left';
+          if (remaining <= 3) return remaining + ' spots left';
+          return remaining + ' of ' + cap + ' open';
+        })() + '</span>' +
         '</div>' +
         '</div></a></div>';
     });
@@ -533,12 +543,18 @@
       var sessionData = results[2].val() || {};
       var today = new Date().toISOString().slice(0, 10);
 
-      // Build set of classIds that have at least one future scheduled session
+      // Build set of classIds that have at least one future scheduled session,
+      // and pick the soonest future session per class for booking display.
       var classesWithFutureSessions = {};
+      var nextSessionByClass = {};
       Object.keys(sessionData).forEach(function(sid) {
         var s = sessionData[sid];
         if (s.status === 'scheduled' && s.date >= today && s.classId) {
           classesWithFutureSessions[s.classId] = true;
+          var prev = nextSessionByClass[s.classId];
+          if (!prev || s.date < prev.date) {
+            nextSessionByClass[s.classId] = s;
+          }
         }
       });
 
@@ -546,6 +562,7 @@
         var c = data[id];
         c.id = id;
         c._hasFutureSessions = !!classesWithFutureSessions[id];
+        c._nextSession = nextSessionByClass[id] || null;
         return c;
       });
 
