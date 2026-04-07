@@ -54,9 +54,9 @@
   async function loadVolatilePricingData() {
     try {
       var snaps = await Promise.all([
-        MastDB.ref('admin/config/makerSettings/repricingThresholdPct').once('value'),
-        MastDB.ref('admin/priceLocks').once('value'),
-        MastDB.ref('admin/spotPrices/current').once('value')
+        MastDB._ref('admin/config/makerSettings/repricingThresholdPct').once('value'),
+        MastDB._ref('admin/priceLocks').once('value'),
+        MastDB._ref('admin/spotPrices/current').once('value')
       ]);
       var t = snaps[0].val();
       if (typeof t === 'number') repricingThresholdPct = t;
@@ -2842,7 +2842,7 @@
     if (!lock) return;
     if (!await mastConfirm('Delete this price lock from ' + (lock.supplierName || 'supplier') + '?', { title: 'Delete Lock', danger: true })) return;
     try {
-      await MastDB.ref('admin/priceLocks/' + lockId).remove();
+      await MastDB._ref('admin/priceLocks/' + lockId).remove();
       MastAdmin.showToast('Lock deleted');
       await loadVolatilePricingData();
       renderMaterials();
@@ -3073,7 +3073,7 @@
       // It calls a Firebase callable wrapper instead, which is a separate
       // hardening pass. For now, the daily cron + tenant MCP refresh tool
       // are the only paths. Surface the current snapshot from RTDB.
-      var snap = await MastDB.ref('admin/spotPrices/current').once('value');
+      var snap = await MastDB._ref('admin/spotPrices/current').once('value');
       var current = snap.val();
       var statusEl = document.getElementById('spotPriceStatusText');
       if (statusEl) {
