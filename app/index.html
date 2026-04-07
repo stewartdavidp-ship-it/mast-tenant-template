@@ -21572,7 +21572,8 @@ async function saveProduct(pid) {
     });
 
     // Collect variant prices + image bindings from DOM, preserving existing IDs
-    var existingVariants = (pdEditProduct && pdEditProduct.variants) || [];
+    var existingProductForVariants = pid ? productsData.find(function(p) { return p.pid === pid; }) : null;
+    var existingVariants = (existingProductForVariants && existingProductForVariants.variants) || [];
     var variants = [];
     document.querySelectorAll('.pd-variant-price').forEach(function(input) {
       var priceVal = parsePriceToCents(input.value);
