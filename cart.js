@@ -22,7 +22,7 @@
   // is shared with siteSignIn() and other page-level Firebase usage.
   var fireApp, fireDb, fireAuth, currentUser = null;
   var _cartFreeThreshold = null; // loaded from shipping config
-  var _cartWholesaleFreeThreshold = 350; // default, loaded from config
+  var _cartWholesaleFreeThreshold = 35000; // cents; loaded from config
 
   function initFirebase() {
     try {
@@ -908,16 +908,15 @@
         subtotalCents += lineCents * (cart[s].qty || 1);
         if (cart[s].isWholesale) hasWholesale = true;
       }
-      var subtotal = subtotalCents / 100;
-      var freeThreshold = hasWholesale ? _cartWholesaleFreeThreshold : _cartFreeThreshold;
+      // freeThreshold is in cents (loaded from retailMods[i].threshold). Compare cents-to-cents.
+      var freeThresholdCents = hasWholesale ? _cartWholesaleFreeThreshold : _cartFreeThreshold;
       var summaryText = count + ' item' + (count !== 1 ? 's' : '') + ' in cart';
       if (subtotalCents > 0) summaryText += ' \u00B7 ' + formatCents(subtotalCents);
       var shippingHtml = '';
-      if (freeThreshold != null && subtotal >= freeThreshold) {
+      if (freeThresholdCents != null && subtotalCents >= freeThresholdCents) {
         shippingHtml = '<div style="color:#2D7D46;font-size:0.75rem;margin-top:6px;letter-spacing:0.08em;">&#10003; FREE SHIPPING</div>';
-      } else if (freeThreshold != null && subtotal > 0) {
-        var away = (freeThreshold - subtotal).toFixed(2);
-        shippingHtml = '<div style="color:var(--warm-gray);font-size:0.75rem;margin-top:6px;letter-spacing:0.08em;">You\'re $' + away + ' away from free shipping!</div>';
+      } else if (freeThresholdCents != null && subtotalCents > 0) {
+        shippingHtml = '<div style="color:var(--warm-gray);font-size:0.75rem;margin-top:6px;letter-spacing:0.08em;">You\'re ' + formatCents(freeThresholdCents - subtotalCents) + ' away from free shipping!</div>';
       }
       summaryEl.innerHTML = summaryText + shippingHtml;
     }
