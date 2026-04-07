@@ -21,6 +21,52 @@
   var recipesLoaded = false;
   var recipesListener = null;
 
+  // Phase 2A-2E: volatile pricing state
+  var repricingThresholdPct = 15; // refreshed from admin/config/makerSettings on render
+  var priceLocksData = {}; // refreshed on demand from admin/priceLocks
+  var spotPricesCurrent = null; // refreshed on demand from admin/spotPrices/current
+
+  // Lock helpers (mirror of tenant MCP shared/maker.ts)
+  function isLockActive(lock) {
+    if (!lock || lock.status !== 'active') return false;
+    if (lock.expiresAt && new Date(lock.expiresAt).getTime() < Date.now()) return false;
+    if ((lock.qtyConsumed || 0) >= (lock.qtyLocked || 0)) return false;
+    return true;
+  }
+  function recomputeLockStatus(lock) {
+    if (!lock) return 'expired';
+    if ((lock.qtyConsumed || 0) >= (lock.qtyLocked || 0)) return 'exhausted';
+    if (lock.expiresAt && new Date(lock.expiresAt).getTime() < Date.now()) return 'expired';
+    return 'active';
+  }
+  function getActiveLockForMaterial(materialId) {
+    var best = null;
+    Object.keys(priceLocksData).forEach(function(lid) {
+      var lock = priceLocksData[lid];
+      if (!lock || lock.materialId !== materialId) return;
+      if (!isLockActive(lock)) return;
+      if (!best || (lock.createdAt && best.createdAt && lock.createdAt > best.createdAt)) {
+        best = Object.assign({ lockId: lid }, lock);
+      }
+    });
+    return best;
+  }
+  async function loadVolatilePricingData() {
+    try {
+      var snaps = await Promise.all([
+        MastDB.ref('admin/config/makerSettings/repricingThresholdPct').once('value'),
+        MastDB.ref('admin/priceLocks').once('value'),
+        MastDB.ref('admin/spotPrices/current').once('value')
+      ]);
+      var t = snaps[0].val();
+      if (typeof t === 'number') repricingThresholdPct = t;
+      priceLocksData = snaps[1].val() || {};
+      spotPricesCurrent = snaps[2].val() || null;
+    } catch (err) {
+      console.warn('loadVolatilePricingData failed', err);
+    }
+  }
+
   // ============================================================
   // Unit of Measure Reference
   // ============================================================
@@ -263,6 +309,7 @@
       materialsLoaded = true;
       renderMaterials();
     });
+    loadVolatilePricingData();
   }
 
   function unloadMaterials() {
@@ -378,6 +425,8 @@
       recipesLoaded = true;
       renderPieces();
     });
+    // Phase 2A-2E: warm up volatile pricing state on first load
+    loadVolatilePricingData();
   }
 
   function unloadRecipes() {
@@ -1300,6 +1349,47 @@
 
     html += '</tbody></table></div>';
 
+    // Phase 2D: price locks section
+    var lockEntries = Object.keys(priceLocksData).map(function(lid) {
+      return Object.assign({ lockId: lid }, priceLocksData[lid]);
+    });
+    if (lockEntries.length > 0) {
+      // Live status recompute
+      lockEntries.forEach(function(l) { l.liveStatus = recomputeLockStatus(l); });
+      // Sort: active first, then expired/exhausted, then by createdAt desc
+      lockEntries.sort(function(a, b) {
+        if (a.liveStatus === 'active' && b.liveStatus !== 'active') return -1;
+        if (a.liveStatus !== 'active' && b.liveStatus === 'active') return 1;
+        return (b.createdAt || '').localeCompare(a.createdAt || '');
+      });
+      html += '<div style="margin-top:24px;">';
+      html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.3rem;font-weight:500;margin:0 0 8px;">🔒 Price Locks</h3>';
+      html += '<p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 12px;">Forward purchase agreements with suppliers. Active unexhausted locks override spot pricing in recipes.</p>';
+      html += '<div class="data-table"><table><thead><tr>';
+      html += '<th>Material</th><th>Locked Price</th><th>Supplier</th><th>Consumed</th><th>Expires</th><th>Status</th><th></th>';
+      html += '</tr></thead><tbody>';
+      lockEntries.forEach(function(l) {
+        var mat = materialsData[l.materialId];
+        var matName = mat ? mat.name : '(deleted material)';
+        var pctUsed = l.qtyLocked > 0 ? Math.round((l.qtyConsumed / l.qtyLocked) * 100) : 0;
+        var daysLeft = l.expiresAt ? Math.ceil((new Date(l.expiresAt).getTime() - Date.now()) / 86400000) : null;
+        var statusColor = l.liveStatus === 'active' ? '#16a34a' : (l.liveStatus === 'expired' ? '#dc2626' : '#6b7280');
+        var statusBg = l.liveStatus === 'active' ? 'rgba(34,197,94,0.12)' : (l.liveStatus === 'expired' ? 'rgba(220,38,38,0.12)' : 'rgba(107,114,128,0.12)');
+        html += '<tr>';
+        html += '<td style="font-weight:500;">' + esc(matName) + '</td>';
+        html += '<td style="font-family:monospace;">$' + (l.lockedUnitCost || 0).toFixed(2) + '</td>';
+        html += '<td>' + esc(l.supplierName || '') + '</td>';
+        html += '<td><div style="display:flex;align-items:center;gap:6px;"><div style="background:#e5e7eb;width:80px;height:6px;border-radius:3px;overflow:hidden;"><div style="background:var(--teal);height:100%;width:' + pctUsed + '%;"></div></div><span style="font-size:0.72rem;font-family:monospace;">' + (l.qtyConsumed || 0) + '/' + (l.qtyLocked || 0) + '</span></div></td>';
+        html += '<td style="font-size:0.78rem;">' + (l.expiresAt ? new Date(l.expiresAt).toLocaleDateString() : '—') + (daysLeft != null && daysLeft >= 0 && l.liveStatus === 'active' ? ' <span style="color:var(--warm-gray-light);">(' + daysLeft + 'd)</span>' : '') + '</td>';
+        html += '<td><span class="status-badge" style="background:' + statusBg + ';color:' + statusColor + ';font-size:0.7rem;padding:2px 7px;">' + l.liveStatus + '</span></td>';
+        html += '<td style="text-align:right;">';
+        html += '<button data-lid="' + esc(l.lockId) + '" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:0.8rem;font-family:\'DM Sans\';" onclick="makerDeletePriceLockConfirm(this.dataset.lid)">Delete</button>';
+        html += '</td></tr>';
+      });
+      html += '</tbody></table></div>';
+      html += '</div>';
+    }
+
     tab.innerHTML = html;
   }
 
@@ -1757,13 +1847,15 @@
     html += '</div>';
     html += '<div style="display:flex;gap:8px;align-items:center;">';
 
-    // Health badges: dirty count + below-floor count
+    // Health badges: dirty count + below-floor count + Phase 2C drift count
     var dirtyCount = 0;
     var belowFloorCount = 0;
+    var driftFlagged = 0;
     Object.keys(recipesData).forEach(function(rid) {
       var r = recipesData[rid];
       if (!r || r.status === 'archived') return;
       if (r.costsDirty) dirtyCount++;
+      if (typeof r.currentDriftPct === 'number' && Math.abs(r.currentDriftPct) >= repricingThresholdPct && r.driftBaseline) driftFlagged++;
       if (r.minMarginPercent != null) {
         var aTier = r.activePriceTier || 'direct';
         var aPrice = (r.isVariantEnabled && r.variants) ? getFirstVariantTierPrice(aTier, r) : (r[aTier + 'Price'] || 0);
@@ -1774,10 +1866,14 @@
     if (dirtyCount > 0) {
       html += '<button class="btn btn-secondary btn-small" style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.4);color:#b45309;" onclick="makerRecalcAllDirty()" title="Recalculate all flagged recipes">⚠ ' + dirtyCount + ' need recalc</button>';
     }
+    if (driftFlagged > 0) {
+      html += '<button class="btn btn-secondary btn-small" style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.4);color:#991b1b;" onclick="makerOpenRepriceAllModal()" title="Bulk reprice — preview before commit">↻ ' + driftFlagged + ' need repricing</button>';
+    }
     if (belowFloorCount > 0) {
       html += '<span class="status-badge" style="background:rgba(220,38,38,0.1);color:#991b1b;border:1px solid rgba(220,38,38,0.3);font-size:0.72rem;padding:5px 9px;">' + belowFloorCount + ' below margin floor</span>';
     }
 
+    html += '<button class="btn btn-secondary btn-small" onclick="makerOpenWhatIfSimulator()" title="Simulate metals price shifts across all recipes">📊 What-if</button>';
     html += '<button class="btn btn-secondary btn-small" onclick="makerOpenChannelsManager()" title="Manage sales channel fee profiles">Channels</button>';
     html += '<button class="btn btn-secondary btn-small" onclick="makerOpenImport(\'products\')">Import CSV</button>';
     html += '</div>';
@@ -1928,6 +2024,20 @@
       html += '</div>';
     }
 
+    // Phase 2C+2E: drift banner + Reprice now button (when drift exceeds threshold)
+    var driftPct = typeof bs.currentDriftPct === 'number' ? bs.currentDriftPct : 0;
+    if (Math.abs(driftPct) >= repricingThresholdPct && bs.driftBaseline) {
+      var dir = driftPct > 0 ? '↑' : '↓';
+      var driftColor = driftPct > 0 ? '#b45309' : '#1d4ed8';
+      html += '<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.35);border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;">';
+      html += '<div style="font-size:0.85rem;">';
+      html += '<strong style="color:' + driftColor + ';">' + dir + ' ' + Math.abs(driftPct).toFixed(1) + '% cost drift</strong> ';
+      html += '<span style="color:var(--warm-gray);">since last propagation ($' + (bs.driftBaseline || 0).toFixed(2) + ' → $' + (bs.totalCost || 0).toFixed(2) + '). Threshold: ' + repricingThresholdPct + '%.</span>';
+      html += '</div>';
+      html += '<button class="btn btn-primary btn-small" onclick="makerRepriceNow()" title="Recalculate + propagate to product price + reset baseline">↻ Reprice now</button>';
+      html += '</div>';
+    }
+
     // Margin floor alert (active tier below minMarginPercent)
     if (bs.minMarginPercent != null) {
       var activeTierKey = bs.activePriceTier || 'direct';
@@ -2032,8 +2142,17 @@
           var errFlag = calcLi.subAssemblyError ? ' <span title="' + esc(calcLi.subAssemblyError) + '" style="color:var(--danger);">⚠</span>' : '';
           subBadge = ' <span class="status-badge" style="background:rgba(196,133,60,0.15);color:var(--amber);font-size:0.62rem;padding:1px 6px;margin-left:4px;">sub-assembly</span>' + errFlag;
         }
+        // Phase 2D: lock chip on materials with active locks
+        var lockChip = '';
+        if (li.kind !== 'recipe' && li.materialId) {
+          var activeLock = getActiveLockForMaterial(li.materialId);
+          if (activeLock) {
+            var pctUsed = activeLock.qtyLocked > 0 ? Math.round((activeLock.qtyConsumed / activeLock.qtyLocked) * 100) : 0;
+            lockChip = ' <span class="status-badge" style="background:rgba(42,124,111,0.15);color:var(--teal);font-size:0.62rem;padding:1px 6px;margin-left:4px;" title="Locked at $' + activeLock.lockedUnitCost.toFixed(2) + ' from ' + esc(activeLock.supplierName || 'supplier') + ', ' + pctUsed + '% consumed">🔒 $' + activeLock.lockedUnitCost.toFixed(2) + '</span>';
+          }
+        }
         html += '<tr>';
-        html += '<td style="padding:8px;font-size:0.85rem;border-bottom:1px solid var(--cream-dark);">' + esc(li.materialName || '') + subBadge + '</td>';
+        html += '<td style="padding:8px;font-size:0.85rem;border-bottom:1px solid var(--cream-dark);">' + esc(li.materialName || '') + subBadge + lockChip + '</td>';
         html += '<td style="text-align:right;padding:8px;border-bottom:1px solid var(--cream-dark);"><input type="number" step="0.01" min="0" value="' + (li.quantity || 0) + '" style="width:70px;text-align:right;padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);" onchange="makerUpdateLineItemQty(\'' + esc(liId) + '\', this.value)">' + (scrapPct > 0 ? '<div style="font-size:0.7rem;color:var(--warm-gray);text-align:right;margin-top:2px;">eff: ' + effQty.toFixed(2) + '</div>' : '') + '</td>';
         html += '<td style="text-align:right;padding:8px;border-bottom:1px solid var(--cream-dark);"><input type="number" step="1" min="0" max="50" value="' + scrapPct + '" style="width:55px;text-align:right;padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);" onchange="makerUpdateLineItemScrap(\'' + esc(liId) + '\', this.value)"></td>';
         html += '<td style="text-align:center;padding:8px;font-size:0.82rem;color:var(--warm-gray);border-bottom:1px solid var(--cream-dark);">' + esc(li.unitOfMeasure || '') + '</td>';
@@ -2176,6 +2295,22 @@
     });
 
     html += '</div>';
+
+    // ---- Phase 2C.2: marginHistory sparkline ----
+    var history = Array.isArray(bs.marginHistory) ? bs.marginHistory : [];
+    if (history.length >= 2) {
+      var activeTierKeyForSpark = bs.activePriceTier || 'direct';
+      var spark = makerSparklineSvg(history, activeTierKeyForSpark);
+      var oldestDate = history[0].date ? new Date(history[0].date).toLocaleDateString() : '';
+      var newestDate = history[history.length - 1].date ? new Date(history[history.length - 1].date).toLocaleDateString() : '';
+      html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:14px 16px;margin-bottom:16px;">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">';
+      html += '<h4 style="font-size:0.95rem;font-weight:600;margin:0;">Margin history</h4>';
+      html += '<span style="font-size:0.72rem;color:var(--warm-gray);">' + history.length + ' calc' + (history.length === 1 ? '' : 's') + ' · ' + oldestDate + ' → ' + newestDate + '</span>';
+      html += '</div>';
+      html += spark;
+      html += '</div>';
+    }
 
     // ---- VARIANT PRICING SUMMARY (when variants enabled) ----
     if (isVariant && Object.keys(bs.variants).length > 1) {
@@ -2458,6 +2593,277 @@
     renderPiecesList();
   }
 
+  // Phase 2C.2: inline SVG sparkline of marginPct over time
+  function makerSparklineSvg(history, activeTierKey) {
+    if (!Array.isArray(history) || history.length < 2) return '';
+    var W = 360, H = 60, P = 4;
+    var ys = history.map(function(h) { return h.marginPct || 0; });
+    var minY = Math.min.apply(null, ys);
+    var maxY = Math.max.apply(null, ys);
+    if (maxY === minY) { minY -= 1; maxY += 1; }
+    var pts = history.map(function(h, i) {
+      var x = P + (i / (history.length - 1)) * (W - 2 * P);
+      var y = H - P - ((h.marginPct - minY) / (maxY - minY)) * (H - 2 * P);
+      return x.toFixed(1) + ',' + y.toFixed(1);
+    }).join(' ');
+    var lastPct = history[history.length - 1].marginPct || 0;
+    var firstPct = history[0].marginPct || 0;
+    var trend = lastPct >= firstPct ? '#16a34a' : '#dc2626';
+    var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:60px;display:block;">';
+    svg += '<polyline fill="none" stroke="' + trend + '" stroke-width="1.8" points="' + pts + '" />';
+    // last point dot
+    var parts = pts.split(' ');
+    var last = parts[parts.length - 1].split(',');
+    svg += '<circle cx="' + last[0] + '" cy="' + last[1] + '" r="2.5" fill="' + trend + '" />';
+    svg += '</svg>';
+    svg += '<div style="display:flex;justify-content:space-between;font-size:0.7rem;color:var(--warm-gray);margin-top:4px;">';
+    svg += '<span>min ' + minY.toFixed(1) + '%</span><span>' + activeTierKey + ' tier</span><span>max ' + maxY.toFixed(1) + '%</span>';
+    svg += '</div>';
+    return svg;
+  }
+
+  // Phase 2C.3: cross-BOM what-if simulator (in-memory recalc, zero writes)
+  function runMetalShiftSimulation(goldPct, silverPct, platinumPct) {
+    var shifts = { gold: goldPct || 0, silver: silverPct || 0, platinum: platinumPct || 0 };
+    var spot = spotPricesCurrent || {};
+    var simulatedMatCost = {};
+    Object.keys(materialsData).forEach(function(mid) {
+      var m = materialsData[mid];
+      if (m && m.pricingMode === 'spot-linked' && m.spotMetal && typeof spot[m.spotMetal] === 'number') {
+        var shiftedSpot = spot[m.spotMetal] * (1 + (shifts[m.spotMetal] || 0) / 100);
+        simulatedMatCost[mid] = roundCents(shiftedSpot * (m.purity || 0) * (1 + (m.markupOverSpot || 0) / 100));
+      } else if (m) {
+        simulatedMatCost[mid] = m.replacementCost != null ? m.replacementCost : (m.unitCost || 0);
+      }
+    });
+    var results = [];
+    Object.keys(recipesData).forEach(function(rid) {
+      var r = recipesData[rid];
+      if (!r || r.status === 'archived') return;
+      var lis = r.lineItems || {};
+      var simLis = {};
+      var usesShifted = false;
+      Object.keys(lis).forEach(function(liId) {
+        var li = lis[liId];
+        if (li.kind === 'recipe') { simLis[liId] = li; return; }
+        var newCost = (li.materialId && simulatedMatCost[li.materialId] != null) ? simulatedMatCost[li.materialId] : (li.unitCost || 0);
+        var m = li.materialId ? materialsData[li.materialId] : null;
+        if (m && m.pricingMode === 'spot-linked' && shifts[m.spotMetal]) usesShifted = true;
+        simLis[liId] = Object.assign({}, li, { unitCost: newCost });
+      });
+      if (!usesShifted) return;
+      var sim = calculateRecipe({
+        lineItems: simLis,
+        laborRatePerHour: r.laborRatePerHour,
+        laborMinutes: r.laborMinutes,
+        otherCost: r.otherCost,
+        setupCost: r.setupCost,
+        batchSize: r.batchSize,
+        wholesaleMarkup: r.wholesaleMarkup || 2.0,
+        directMarkup: r.directMarkup || 2.5,
+        retailMarkup: r.retailMarkup || 3.5
+      });
+      var tier = r.activePriceTier || 'direct';
+      results.push({
+        recipeId: rid,
+        name: r.name,
+        tier: tier,
+        currentTotalCost: r.totalCost || 0,
+        simulatedTotalCost: sim.totalCost,
+        costDelta: roundCents(sim.totalCost - (r.totalCost || 0)),
+        currentMarginPct: r[tier + 'MarginPct'] || 0,
+        simulatedMarginPct: sim[tier + 'MarginPct'] || 0,
+        breachesFloor: r.minMarginPercent != null && sim[tier + 'MarginPct'] < r.minMarginPercent
+      });
+    });
+    results.sort(function(a, b) { return Math.abs(b.costDelta) - Math.abs(a.costDelta); });
+    return results;
+  }
+
+  function openWhatIfSimulator() {
+    var html = '';
+    html += '<div id="whatIfOverlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;" onclick="if(event.target.id===\'whatIfOverlay\')makerCloseWhatIf()">';
+    html += '<div style="background:var(--cream);border-radius:10px;max-width:760px;width:92%;max-height:88vh;overflow-y:auto;padding:20px 24px;box-shadow:0 8px 30px rgba(0,0,0,0.2);">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">';
+    html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.4rem;font-weight:500;margin:0;">📊 What-If Simulator</h3>';
+    html += '<button style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--warm-gray);" onclick="makerCloseWhatIf()">✕</button>';
+    html += '</div>';
+    html += '<p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 16px;">Shift metals spot prices and see how every recipe that uses spot-linked materials would change. Zero writes — preview only.</p>';
+    if (!spotPricesCurrent) {
+      html += '<p style="font-size:0.85rem;color:var(--warm-gray);">No spot prices available yet. Run refresh first.</p>';
+    } else {
+      html += '<div style="display:flex;gap:12px;margin-bottom:16px;">';
+      ['gold','silver','platinum'].forEach(function(metal) {
+        html += '<div style="flex:1;">';
+        html += '<label style="display:block;font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--warm-gray);margin-bottom:4px;">' + metal.charAt(0).toUpperCase() + metal.slice(1) + ' shift %</label>';
+        html += '<input id="whatIf_' + metal + '" type="number" step="1" value="0" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-family:monospace;background:var(--cream);color:var(--charcoal);box-sizing:border-box;" oninput="makerRunWhatIf()">';
+        html += '<div style="font-size:0.7rem;color:var(--warm-gray-light);margin-top:2px;">spot $' + (spotPricesCurrent[metal] || 0).toFixed(2) + '/oz</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+      html += '<div id="whatIfResults" style="margin-top:8px;"></div>';
+    }
+    html += '</div></div>';
+    var c = document.createElement('div');
+    c.id = 'whatIfContainer';
+    c.innerHTML = html;
+    document.body.appendChild(c);
+    if (spotPricesCurrent) runWhatIfRender();
+  }
+
+  function runWhatIfRender() {
+    var g = parseFloat((document.getElementById('whatIf_gold') || {}).value) || 0;
+    var s = parseFloat((document.getElementById('whatIf_silver') || {}).value) || 0;
+    var p = parseFloat((document.getElementById('whatIf_platinum') || {}).value) || 0;
+    var results = runMetalShiftSimulation(g, s, p);
+    var box = document.getElementById('whatIfResults');
+    if (!box) return;
+    var esc = MastAdmin.esc;
+    if (results.length === 0) {
+      box.innerHTML = '<p style="font-size:0.85rem;color:var(--warm-gray);text-align:center;padding:12px;">No spot-linked recipes affected by this shift.</p>';
+      return;
+    }
+    var html = '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:6px;">' + results.length + ' recipe(s) affected:</div>';
+    html += '<div class="data-table"><table style="width:100%;font-size:0.82rem;"><thead><tr>';
+    html += '<th>Recipe</th><th style="text-align:right;">Current $</th><th style="text-align:right;">Simulated $</th><th style="text-align:right;">Δ Cost</th><th style="text-align:right;">Margin → Sim</th>';
+    html += '</tr></thead><tbody>';
+    results.forEach(function(r) {
+      var deltaColor = r.costDelta > 0 ? '#dc2626' : (r.costDelta < 0 ? '#16a34a' : 'var(--warm-gray)');
+      var floorWarn = r.breachesFloor ? ' ⚠' : '';
+      html += '<tr>';
+      html += '<td style="padding:6px 8px;border-bottom:1px solid var(--cream-dark);">' + esc(r.name || '') + '</td>';
+      html += '<td style="text-align:right;font-family:monospace;padding:6px 8px;border-bottom:1px solid var(--cream-dark);">$' + r.currentTotalCost.toFixed(2) + '</td>';
+      html += '<td style="text-align:right;font-family:monospace;padding:6px 8px;border-bottom:1px solid var(--cream-dark);">$' + r.simulatedTotalCost.toFixed(2) + '</td>';
+      html += '<td style="text-align:right;font-family:monospace;color:' + deltaColor + ';padding:6px 8px;border-bottom:1px solid var(--cream-dark);">' + (r.costDelta >= 0 ? '+' : '') + '$' + r.costDelta.toFixed(2) + '</td>';
+      html += '<td style="text-align:right;font-family:monospace;padding:6px 8px;border-bottom:1px solid var(--cream-dark);">' + r.currentMarginPct.toFixed(1) + '% → ' + r.simulatedMarginPct.toFixed(1) + '%' + floorWarn + '</td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+    box.innerHTML = html;
+  }
+
+  function closeWhatIf() {
+    var c = document.getElementById('whatIfContainer');
+    if (c) c.remove();
+  }
+
+  // Phase 2E: bulk reprice modal — preview-then-confirm
+  function openRepriceAllModal() {
+    var candidates = [];
+    Object.keys(recipesData).forEach(function(rid) {
+      var r = recipesData[rid];
+      if (!r || r.status === 'archived') return;
+      var d = typeof r.currentDriftPct === 'number' ? r.currentDriftPct : 0;
+      if (Math.abs(d) >= repricingThresholdPct && r.driftBaseline) {
+        candidates.push(Object.assign({ recipeId: rid }, r));
+      }
+    });
+    candidates.sort(function(a, b) { return Math.abs(b.currentDriftPct) - Math.abs(a.currentDriftPct); });
+
+    var html = '';
+    html += '<div id="repriceOverlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;" onclick="if(event.target.id===\'repriceOverlay\')makerCloseRepriceAll()">';
+    html += '<div style="background:var(--cream);border-radius:10px;max-width:680px;width:92%;max-height:88vh;overflow-y:auto;padding:20px 24px;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">';
+    html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.4rem;font-weight:500;margin:0;">↻ Reprice ' + candidates.length + ' recipe' + (candidates.length === 1 ? '' : 's') + '</h3>';
+    html += '<button style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--warm-gray);" onclick="makerCloseRepriceAll()">✕</button>';
+    html += '</div>';
+    html += '<p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 12px;">Drift threshold: ' + repricingThresholdPct + '%. Each reprice runs calculate_price + propagates the active tier price to the linked product + resets the drift baseline.</p>';
+    if (candidates.length === 0) {
+      html += '<p style="font-size:0.85rem;color:var(--warm-gray);text-align:center;padding:12px;">No recipes need repricing.</p>';
+    } else {
+      var esc = MastAdmin.esc;
+      html += '<div class="data-table"><table style="width:100%;font-size:0.82rem;"><thead><tr>';
+      html += '<th>Recipe</th><th>Tier</th><th style="text-align:right;">Drift</th><th style="text-align:right;">Baseline</th><th style="text-align:right;">Now</th>';
+      html += '</tr></thead><tbody>';
+      candidates.forEach(function(r) {
+        html += '<tr>';
+        html += '<td style="padding:6px 8px;border-bottom:1px solid var(--cream-dark);">' + esc(r.name || '') + '</td>';
+        html += '<td style="padding:6px 8px;border-bottom:1px solid var(--cream-dark);">' + esc(r.activePriceTier || 'direct') + '</td>';
+        html += '<td style="text-align:right;font-family:monospace;color:#b45309;padding:6px 8px;border-bottom:1px solid var(--cream-dark);">' + (r.currentDriftPct > 0 ? '+' : '') + r.currentDriftPct.toFixed(1) + '%</td>';
+        html += '<td style="text-align:right;font-family:monospace;padding:6px 8px;border-bottom:1px solid var(--cream-dark);">$' + (r.driftBaseline || 0).toFixed(2) + '</td>';
+        html += '<td style="text-align:right;font-family:monospace;padding:6px 8px;border-bottom:1px solid var(--cream-dark);">$' + (r.totalCost || 0).toFixed(2) + '</td>';
+        html += '</tr>';
+      });
+      html += '</tbody></table></div>';
+      html += '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px;">';
+      html += '<button class="btn btn-secondary" onclick="makerCloseRepriceAll()">Cancel</button>';
+      html += '<button class="btn btn-primary" onclick="makerExecuteRepriceAll()">Reprice all ' + candidates.length + '</button>';
+      html += '</div>';
+    }
+    html += '</div></div>';
+    var c = document.createElement('div');
+    c.id = 'repriceContainer';
+    c.innerHTML = html;
+    document.body.appendChild(c);
+  }
+
+  function closeRepriceAllModal() {
+    var c = document.getElementById('repriceContainer');
+    if (c) c.remove();
+  }
+
+  async function executeRepriceAll() {
+    var candidates = [];
+    Object.keys(recipesData).forEach(function(rid) {
+      var r = recipesData[rid];
+      if (!r || r.status === 'archived') return;
+      var d = typeof r.currentDriftPct === 'number' ? r.currentDriftPct : 0;
+      if (Math.abs(d) >= repricingThresholdPct && r.driftBaseline) candidates.push(rid);
+    });
+    closeRepriceAllModal();
+    var ok = 0, fail = 0;
+    for (var i = 0; i < candidates.length; i++) {
+      var rid = candidates[i];
+      try {
+        var r = recipesData[rid];
+        var tier = r.activePriceTier || 'direct';
+        await recalculateRecipe(rid);
+        await setActivePriceTier(rid, tier);
+        ok++;
+      } catch (err) {
+        fail++;
+        console.error('Reprice failed for', rid, err);
+      }
+    }
+    MastAdmin.showToast('Repriced ' + ok + (fail > 0 ? ' / ' + fail + ' failed' : ''));
+    await loadVolatilePricingData();
+    renderPiecesList();
+  }
+
+  // Phase 2D: lock delete confirm
+  async function deletePriceLockConfirm(lockId) {
+    var lock = priceLocksData[lockId];
+    if (!lock) return;
+    if (!await mastConfirm('Delete this price lock from ' + (lock.supplierName || 'supplier') + '?', { title: 'Delete Lock', danger: true })) return;
+    try {
+      await MastDB.ref('admin/priceLocks/' + lockId).remove();
+      MastAdmin.showToast('Lock deleted');
+      await loadVolatilePricingData();
+      renderMaterials();
+    } catch (err) {
+      MastAdmin.showToast('Error: ' + err.message, true);
+    }
+  }
+
+  // Phase 2E: one-click reprice — recalc + set active tier (which propagates)
+  async function repriceNow() {
+    if (!editingRecipeId || !builderState) return;
+    var tier = builderState.activePriceTier || 'direct';
+    try {
+      await saveRecipeBuilder();
+      await recalculateRecipe(editingRecipeId);
+      await setActivePriceTier(editingRecipeId, tier);
+      var snap = await MastDB.recipes.get(editingRecipeId);
+      var fresh = snap.val();
+      if (fresh) builderState = JSON.parse(JSON.stringify(fresh));
+      await loadVolatilePricingData();
+      renderRecipeBuilder();
+      MastAdmin.showToast('Repriced — ' + tier + ' tier propagated');
+    } catch (err) {
+      MastAdmin.showToast('Reprice failed: ' + err.message, true);
+    }
+  }
+
   // ============================================================
   // Add Part Modal (material picker)
   // ============================================================
@@ -2733,6 +3139,14 @@
   window.makerDetectChannelForOrder = detectChannelForOrder;
   window.makerLoadChannels = loadChannels;
   window.makerSetTierFromBuilder = setTierFromBuilder;
+  window.makerRepriceNow = repriceNow;
+  window.makerOpenWhatIfSimulator = openWhatIfSimulator;
+  window.makerCloseWhatIf = closeWhatIf;
+  window.makerRunWhatIf = runWhatIfRender;
+  window.makerOpenRepriceAllModal = openRepriceAllModal;
+  window.makerCloseRepriceAll = closeRepriceAllModal;
+  window.makerExecuteRepriceAll = executeRepriceAll;
+  window.makerDeletePriceLockConfirm = deletePriceLockConfirm;
   window.makerUpdateBuilderField = updateBuilderField;
   window.makerUpdateLineItemQty = updateLineItemQty;
   window.makerUpdateLineItemScrap = updateLineItemScrap;
