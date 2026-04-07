@@ -8176,6 +8176,204 @@ var MastDB = (function() {
 })();
 
 // ============================================================
+// MastCustomers — Customer record hub & find-or-create resolver.
+// All write paths that touch a person (orders, enrollments, contacts,
+// accounts, newsletter subscribers) call resolveCustomer() to get
+// or create a canonical customer record. See plan: snoopy-gathering-sun.md
+// ============================================================
+var MastCustomers = (function() {
+  // Firebase keys can't contain . # $ [ ] / — sanitize emails for index keys.
+  function _emailKey(email) {
+    if (!email) return null;
+    return String(email).trim().toLowerCase().replace(/[.#$\[\]\/]/g, ',');
+  }
+
+  function _normalizeEmail(email) {
+    if (!email) return null;
+    return String(email).trim().toLowerCase();
+  }
+
+  async function _readIndex(indexName, key) {
+    if (!key) return null;
+    try {
+      var snap = await MastDB._ref('admin/customerIndexes/' + indexName + '/' + key).once('value');
+      return snap.val();
+    } catch (e) {
+      console.warn('[MastCustomers] index read failed', indexName, key, e);
+      return null;
+    }
+  }
+
+  async function getCustomer(customerId) {
+    if (!customerId) return null;
+    var snap = await MastDB._ref('admin/customers/' + customerId).once('value');
+    return snap.val();
+  }
+
+  // Core resolver. Returns { customerId, created, conflict }.
+  // - uid match wins over email match.
+  // - On uid+email mismatch (different customers), flags a duplicate
+  //   for admin review and returns the uid match (uid is stronger signal).
+  // - Skips entirely if neither uid nor email is provided.
+  async function resolveCustomer(params) {
+    params = params || {};
+    var uid = params.uid || null;
+    var email = _normalizeEmail(params.email);
+    var contactId = params.contactId || null;
+    var displayName = params.displayName || '';
+    var source = params.source || 'manual';
+    var phone = params.phone || null;
+
+    // No identity = no customer. POS walk-ins fall through here.
+    if (!uid && !email && !contactId) {
+      return { customerId: null, created: false, conflict: false, skipped: true };
+    }
+
+    var emailKey = _emailKey(email);
+    var customerIdByUid = uid ? await _readIndex('byUid', uid) : null;
+    var customerIdByEmail = emailKey ? await _readIndex('byEmail', emailKey) : null;
+    var customerIdByContact = contactId ? await _readIndex('byContactId', contactId) : null;
+
+    // Conflict: uid points to A, email points to B, A !== B.
+    var conflict = false;
+    var conflictPartnerId = null;
+    if (customerIdByUid && customerIdByEmail && customerIdByUid !== customerIdByEmail) {
+      conflict = true;
+      conflictPartnerId = customerIdByEmail;
+    }
+
+    // Resolution priority: uid > email > contactId.
+    var existingId = customerIdByUid || customerIdByEmail || customerIdByContact;
+
+    if (existingId) {
+      // Customer exists. Backfill any new identifiers we just learned.
+      var updates = {};
+      var indexUpdates = {};
+      var existing = await getCustomer(existingId);
+      if (existing) {
+        var linked = existing.linkedIds || {};
+        var changed = false;
+
+        if (uid && (linked.uids || []).indexOf(uid) === -1) {
+          linked.uids = (linked.uids || []).concat([uid]);
+          indexUpdates['admin/customerIndexes/byUid/' + uid] = existingId;
+          changed = true;
+        }
+        if (contactId && (linked.contactIds || []).indexOf(contactId) === -1) {
+          linked.contactIds = (linked.contactIds || []).concat([contactId]);
+          indexUpdates['admin/customerIndexes/byContactId/' + contactId] = existingId;
+          changed = true;
+        }
+        if (email && (existing.emails || []).indexOf(email) === -1) {
+          updates['admin/customers/' + existingId + '/emails'] = (existing.emails || []).concat([email]);
+          if (emailKey && !customerIdByEmail) {
+            indexUpdates['admin/customerIndexes/byEmail/' + emailKey] = existingId;
+          }
+          changed = true;
+        }
+        if (changed) {
+          updates['admin/customers/' + existingId + '/linkedIds'] = linked;
+          updates['admin/customers/' + existingId + '/updatedAt'] = new Date().toISOString();
+          Object.keys(indexUpdates).forEach(function(k) { updates[k] = indexUpdates[k]; });
+          await MastDB._multiUpdate(updates);
+        }
+      }
+
+      if (conflict) {
+        await _flagDuplicate({
+          customerIdA: customerIdByUid,
+          customerIdB: conflictPartnerId,
+          reason: 'uid and email resolve to different customers',
+          sourceRecord: { uid: uid, email: email, source: source }
+        });
+      }
+
+      return { customerId: existingId, created: false, conflict: conflict };
+    }
+
+    // No existing customer — create one.
+    var customerId = MastDB._newKey('admin/customers');
+    var now = new Date().toISOString();
+    var record = {
+      id: customerId,
+      displayName: displayName || email || '',
+      primaryEmail: email || '',
+      emails: email ? [email] : [],
+      phones: phone ? [phone] : [],
+      addresses: [],
+      linkedIds: {
+        uids: uid ? [uid] : [],
+        contactIds: contactId ? [contactId] : [],
+        studentIds: [],
+        squareCustomerId: null
+      },
+      tags: [],
+      notes: '',
+      marketing: {
+        newsletterOptIn: source === 'newsletter',
+        smsOptIn: false
+      },
+      source: source,
+      status: 'active',
+      createdAt: now,
+      updatedAt: now,
+      mergedFrom: []
+    };
+
+    var createUpdates = {};
+    createUpdates['admin/customers/' + customerId] = record;
+    if (emailKey) createUpdates['admin/customerIndexes/byEmail/' + emailKey] = customerId;
+    if (uid) createUpdates['admin/customerIndexes/byUid/' + uid] = customerId;
+    if (contactId) createUpdates['admin/customerIndexes/byContactId/' + contactId] = customerId;
+
+    await MastDB._multiUpdate(createUpdates);
+    return { customerId: customerId, created: true, conflict: false };
+  }
+
+  async function _flagDuplicate(payload) {
+    var flagId = MastDB._newKey('admin/customerDuplicates');
+    var record = {
+      customerIdA: payload.customerIdA,
+      customerIdB: payload.customerIdB,
+      reason: payload.reason || 'duplicate detected',
+      sourceRecord: payload.sourceRecord || null,
+      detectedAt: new Date().toISOString(),
+      status: 'open'
+    };
+    var updates = {};
+    updates['admin/customerDuplicates/' + flagId] = record;
+    await MastDB._multiUpdate(updates);
+    return flagId;
+  }
+
+  async function listCustomers(opts) {
+    opts = opts || {};
+    var limit = opts.limit || 200;
+    var snap = await MastDB._ref('admin/customers').orderByChild('updatedAt').limitToLast(limit).once('value');
+    var val = snap.val() || {};
+    return Object.keys(val).map(function(k) { return val[k]; }).reverse();
+  }
+
+  async function listDuplicates() {
+    var snap = await MastDB._ref('admin/customerDuplicates').orderByChild('detectedAt').limitToLast(200).once('value');
+    var val = snap.val() || {};
+    return Object.keys(val).map(function(k) {
+      var r = val[k]; r._flagId = k; return r;
+    }).reverse();
+  }
+
+  return {
+    resolveCustomer: resolveCustomer,
+    getCustomer: getCustomer,
+    listCustomers: listCustomers,
+    listDuplicates: listDuplicates,
+    _emailKey: _emailKey,
+    _normalizeEmail: _normalizeEmail
+  };
+})();
+window.MastCustomers = MastCustomers;
+
+// ============================================================
 // TENANT_CONFIG — Loaded from platform registry after tenant resolution.
 // All tenant-specific branding, URLs, and service config reads from this.
 // Defaults loaded from platform registry after tenant resolution.
@@ -9284,6 +9482,124 @@ MastDB.passDefinitions = {
 // MastDB.init() is called dynamically in the auth flow after tenant resolution.
 // Entity namespace definitions above are safe — they define functions but
 // don't call _ref() until invoked after init.
+
+// ============================================================
+// MastCustomers — Write-path hooks
+// Wrap both .set() and .ref(id).set() on every resource that creates a
+// person-touching record. Each wrapper extracts identity (uid/email/
+// contactId) from the payload, runs resolveCustomer, then stamps
+// customerId before delegating to the real .set. Existing call sites
+// using either pattern get the behavior for free.
+// ============================================================
+(function installCustomerHooks() {
+  async function _stampCustomerId(data, identity, sourceTag) {
+    try {
+      if (!data || typeof data !== 'object' || data.customerId) return;
+      identity = identity || {};
+      identity.source = identity.source || sourceTag;
+      var result = await MastCustomers.resolveCustomer(identity);
+      if (result && result.customerId) {
+        data.customerId = result.customerId;
+      }
+    } catch (e) {
+      console.warn('[MastCustomers] hook failed for ' + sourceTag + ':', e);
+      // Fail open — never block the underlying write.
+    }
+  }
+
+  // Wrap resource-level .set(id, data) — used by book.js etc.
+  function wrapSet(resource, extractIdentity, sourceTag) {
+    if (!resource || typeof resource.set !== 'function') return;
+    if (resource.__customerSetHooked) return;
+    var originalSet = resource.set.bind(resource);
+    resource.set = async function(id, data) {
+      await _stampCustomerId(data, extractIdentity(id, data), sourceTag);
+      return originalSet(id, data);
+    };
+    resource.__customerSetHooked = true;
+  }
+
+  // Wrap resource-level .ref(id) so that .ref(id).set(data) also intercepts.
+  // Uses Proxy to forward every other method/property to the real Firebase ref.
+  function wrapRef(resource, extractIdentity, sourceTag) {
+    if (!resource || typeof resource.ref !== 'function') return;
+    if (resource.__customerRefHooked) return;
+    var originalRef = resource.ref.bind(resource);
+    resource.ref = function(id) {
+      var realRef = originalRef.apply(this, arguments);
+      if (!id) return realRef; // collection-level — no hook needed
+      return new Proxy(realRef, {
+        get: function(target, prop) {
+          if (prop === 'set') {
+            return async function(data) {
+              await _stampCustomerId(data, extractIdentity(id, data), sourceTag);
+              return target.set(data);
+            };
+          }
+          var val = target[prop];
+          return typeof val === 'function' ? val.bind(target) : val;
+        }
+      });
+    };
+    resource.__customerRefHooked = true;
+  }
+
+  function hookResource(resource, extractIdentity, sourceTag) {
+    wrapSet(resource, extractIdentity, sourceTag);
+    wrapRef(resource, extractIdentity, sourceTag);
+  }
+
+  // Orders: customerEmail (canonical), uid, customerName
+  hookResource(MastDB.orders, function(id, data) {
+    return {
+      uid: data.uid || null,
+      email: data.customerEmail || data.email || null,
+      displayName: data.customerName || '',
+      phone: data.customerPhone || null
+    };
+  }, 'order');
+
+  // Enrollments: studentUid, studentEmail, contactId, studentName
+  hookResource(MastDB.enrollments, function(id, data) {
+    return {
+      uid: data.studentUid || data.uid || null,
+      email: data.studentEmail || data.email || null,
+      contactId: data.contactId || null,
+      displayName: data.studentName || data.displayName || ''
+    };
+  }, 'enrollment');
+
+  // Contacts: contactId is the id param. Email/name from data.
+  hookResource(MastDB.contacts, function(id, data) {
+    return {
+      contactId: id,
+      email: data.email || null,
+      displayName: data.name || data.displayName || '',
+      phone: data.phone || null
+    };
+  }, 'contact');
+
+  // Newsletter subscribers: email + name
+  if (MastDB.newsletter && MastDB.newsletter.subscribers) {
+    hookResource(MastDB.newsletter.subscribers, function(id, data) {
+      return {
+        email: data.email || null,
+        displayName: data.name || ''
+      };
+    }, 'newsletter');
+  }
+
+  // Accounts: uid is the id param (Firebase Auth uid).
+  hookResource(MastDB.accounts, function(id, data) {
+    return {
+      uid: id,
+      email: (data && data.email) || null,
+      displayName: (data && (data.displayName || data.name)) || ''
+    };
+  }, 'account');
+
+  console.log('[MastCustomers] write-path hooks installed on 5 resources (set + ref-set)');
+})();
 
 // ============================================================
 // End MastDB
