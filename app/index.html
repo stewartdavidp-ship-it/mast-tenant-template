@@ -7863,60 +7863,8 @@
       </div>
     </div>
 
-    <!-- Admin: Customers Tab -->
-    <div id="customersTab" style="display:none;">
-      <!-- Customers List View -->
-      <div id="customersListView">
-        <div class="section-header">
-          <h2>Customers</h2>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <span class="products-stat" id="customersCount"></span>
-            <button class="btn btn-secondary" style="font-size:0.82rem;padding:6px 12px;" onclick="window._customersOpenDuplicates && window._customersOpenDuplicates()" id="customersDuplicatesBtn" title="Review pending duplicates">Duplicates <span id="customersDuplicatesBadge" style="display:none;background:#ef4444;color:#fff;border-radius:10px;padding:1px 7px;font-size:0.72rem;margin-left:4px;"></span></button>
-          </div>
-        </div>
-        <div class="contacts-filter-bar" style="margin-bottom:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-          <input type="text" class="contacts-search" id="customersSearch" placeholder="Search by name or email..." oninput="window._customersRender && window._customersRender()" style="flex:1;min-width:220px;">
-          <select id="customersSourceFilter" onchange="window._customersRender && window._customersRender()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;">
-            <option value="all">All sources</option>
-            <option value="order">Order</option>
-            <option value="enrollment">Enrollment</option>
-            <option value="contact">Contact</option>
-            <option value="newsletter">Newsletter</option>
-            <option value="account">Account</option>
-            <option value="manual">Manual</option>
-            <option value="import">Import</option>
-          </select>
-          <select id="customersSortBy" onchange="window._customersRender && window._customersRender()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;">
-            <option value="updatedAt">Recently updated</option>
-            <option value="createdAt">Newest</option>
-            <option value="name">Name (A–Z)</option>
-            <option value="email">Email (A–Z)</option>
-          </select>
-        </div>
-        <div id="customersLoading" class="loading-state">Loading customers…</div>
-        <div id="customersEmpty" style="display:none;padding:24px;text-align:center;color:#9ca3af;">No customers yet. They'll appear here as orders, enrollments, contacts, and newsletter signups come in.</div>
-        <div id="customersTableWrap" style="display:none;">
-          <table class="data-table" style="width:100%;">
-            <thead>
-              <tr>
-                <th style="text-align:left;">Name</th>
-                <th style="text-align:left;">Primary email</th>
-                <th style="text-align:left;">Source</th>
-                <th style="text-align:left;">Linked</th>
-                <th style="text-align:left;">Last activity</th>
-              </tr>
-            </thead>
-            <tbody id="customersTableBody"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Customer Detail View (Phase 5 placeholder) -->
-      <div id="customerDetailView" style="display:none;">
-        <button class="detail-back" onclick="window._customersBackToList && window._customersBackToList()">&#8592; Back to customers</button>
-        <div id="customerDetailContent" style="margin-top:12px;"></div>
-      </div>
-    </div>
+    <!-- Admin: Customers Tab — rendered entirely from app/modules/customers.js -->
+    <div id="customersTab" style="display:none;"></div>
 
     <!-- Admin: Book Tab -->
     <div id="bookTab" style="display:none;">
@@ -13244,7 +13192,7 @@ var SECTION_ROUTES = {
   'migration': ['migration', 'migration-confirm', 'migration-plan', 'migration-import', 'historical-orders']
 };
 
-var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'expensesTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab'];
+var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'expensesTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab'];
 
 var currentRoute = 'dashboard';
 
