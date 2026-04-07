@@ -1650,14 +1650,25 @@
     if (spotEl && spotEl.checked) {
       var purity = parseFloat((document.getElementById('matPurity') || {}).value);
       var markupOverSpot = parseFloat((document.getElementById('matMarkupSpot') || {}).value);
-      if (!(purity > 0)) {
-        MastAdmin.showToast('Purity is required for spot-linked materials (e.g. 0.585 for 14k)', true);
+      // Friendly auto-correct: if the user typed a karat number (e.g. 14, 18, 24)
+      // instead of the fraction, convert it. 24k = .999 fine.
+      if (purity > 1 && purity <= 24) {
+        purity = Math.round((purity / 24) * 1000) / 1000;
+      }
+      if (!(purity > 0) || purity > 1) {
+        MastAdmin.showToast('Purity must be a fraction between 0 and 1 (e.g. 0.585 for 14k, 0.925 for sterling, 0.999 for fine)', true);
         return;
       }
       data.pricingMode = 'spot-linked';
       data.spotMetal = (document.getElementById('matSpotMetal') || {}).value || 'gold';
       data.purity = purity;
       data.markupOverSpot = isNaN(markupOverSpot) ? 0 : markupOverSpot;
+      // Auto-fill conversionFactor if blank, based on the UOM. Spot is per troy oz.
+      if (!(convFactor > 0)) {
+        var uomNow = (document.getElementById('matUnit') || {}).value;
+        var auto = ({ oz: 1, dwt: 20, carat: 155.5174, gram: 31.1035, kg: 0.0311035, lb: 0.0685714 })[uomNow];
+        if (auto) data.conversionFactor = auto;
+      }
     } else {
       data.pricingMode = 'fixed';
       data.spotMetal = null;
@@ -2637,7 +2648,10 @@
       var m = materialsData[mid];
       if (m && m.pricingMode === 'spot-linked' && m.spotMetal && typeof spot[m.spotMetal] === 'number') {
         var shiftedSpot = spot[m.spotMetal] * (1 + (shifts[m.spotMetal] || 0) / 100);
-        simulatedMatCost[mid] = roundCents(shiftedSpot * (m.purity || 0) * (1 + (m.markupOverSpot || 0) / 100));
+        var explicit = Number(m.conversionFactor || 0);
+        var auto = ({ oz: 1, dwt: 20, carat: 155.5174, gram: 31.1035, kg: 0.0311035, lb: 0.0685714 })[m.unitOfMeasure];
+        var unitsPerOz = explicit > 0 ? explicit : (auto || 1);
+        simulatedMatCost[mid] = roundCents(shiftedSpot * (m.purity || 0) * (1 + (m.markupOverSpot || 0) / 100) / unitsPerOz);
       } else if (m) {
         simulatedMatCost[mid] = m.replacementCost != null ? m.replacementCost : (m.unitCost || 0);
       }
