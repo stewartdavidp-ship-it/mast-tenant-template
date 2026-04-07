@@ -984,13 +984,18 @@
     if (!c) return;
 
     // Inline modal — uses the global openModal/closeModal helpers from index.html.
+    var customerLabel = c.displayName || c.primaryEmail || 'customer';
     var html = '';
-    html += '<h3 style="margin-top:0;">Add contact to ' + esc(c.displayName || c.primaryEmail || 'customer') + '</h3>';
+    html += '<div class="modal-header"><h3>Add contact to ' + esc(customerLabel) + '</h3></div>';
+    html += '<div class="modal-body">';
     html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">Each contact captures one address and phone. A customer can have many.</p>';
-    html += '<div class="form-group"><label>Name</label><input type="text" id="cmAddCName" placeholder="Full name"></div>';
-    html += '<div class="form-group"><label>Email</label><input type="email" id="cmAddCEmail" value="' + esc(c.primaryEmail || '') + '"></div>';
-    html += '<div class="form-group"><label>Phone</label><input type="text" id="cmAddCPhone" placeholder="555-555-5555"></div>';
+    html += '<div class="form-group"><label class="field-required">Name</label><input type="text" id="cmAddCName" placeholder="Full name"></div>';
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
+    html += '<div class="form-group"><label>Email</label><input type="email" id="cmAddCEmail" value="' + esc(c.primaryEmail || '') + '" placeholder="email@example.com"></div>';
+    html += '<div class="form-group"><label>Phone</label><input type="tel" id="cmAddCPhone" placeholder="(555) 123-4567"></div>';
+    html += '</div>';
     html += '<div class="form-group"><label>Address</label><input type="text" id="cmAddCAddress" placeholder="Street, City, State ZIP"></div>';
+    html += '</div>';
     html += '<div class="modal-footer">';
     html += '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>';
     html += '<button class="btn btn-primary" data-customer-id="' + esc(customerId) + '" onclick="customersSaveNewContact(this.dataset.customerId)">Create contact</button>';

@@ -129,7 +129,7 @@ function renderContacts() {
 
     tr.innerHTML =
       '<td><strong>' + esc(c.name || '') + '</strong>' + (c.company ? '<div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(c.company) + '</div>' : '') + '</td>' +
-      '<td style="font-size:0.85rem;">' + (c.email ? '<a href="mailto:' + esc(c.email) + '" onclick="event.stopPropagation();" style="color:var(--accent);">' + esc(c.email) + '</a>' : '<span style="color:var(--warm-gray-light);">—</span>') + '</td>' +
+      '<td style="font-size:0.85rem;">' + (c.email ? '<a href="mailto:' + esc(c.email) + '" onclick="event.stopPropagation();" style="color:var(--teal);">' + esc(c.email) + '</a>' : '<span style="color:var(--warm-gray-light);">—</span>') + '</td>' +
       '<td style="font-size:0.85rem;">' + (c.phone ? esc(c.phone) : '<span style="color:var(--warm-gray-light);">—</span>') + '</td>' +
       '<td><span class="status-badge" style="' + contactCatBadgeStyle(c.category) + '">' + esc(c.category || 'Other') + '</span></td>' +
       '<td>' + lastIntHtml + '</td>';
@@ -145,14 +145,14 @@ function openAddContactModal() {
   var html = '' +
     '<div class="modal-header"><h3>Add Contact</h3></div>' +
     '<div class="modal-body">' +
-      '<div class="form-group"><label>Name *</label><input type="text" id="contactNameInput" placeholder="Company or person name"></div>' +
+      '<div class="form-group"><label class="field-required">Name</label><input type="text" id="contactNameInput" placeholder="Company or person name"></div>' +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
         '<div class="form-group"><label>Email</label><input type="email" id="contactEmailInput" placeholder="email@example.com"></div>' +
         '<div class="form-group"><label>Phone</label><input type="tel" id="contactPhoneInput" placeholder="(555) 123-4567"></div>' +
       '</div>' +
       '<div class="form-group"><label>Company / Organization</label><input type="text" id="contactCompanyInput" placeholder="Company name"></div>' +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
-        '<div class="form-group"><label>Category *</label><select id="contactCategoryInput">' + catOptions + '</select></div>' +
+        '<div class="form-group"><label class="field-required">Category</label><select id="contactCategoryInput">' + catOptions + '</select></div>' +
         '<div class="form-group"><label>Website</label><input type="url" id="contactWebsiteInput" placeholder="https://..."></div>' +
       '</div>' +
       '<div class="form-group"><label>Address</label><input type="text" id="contactAddressInput" placeholder="Street, City, State ZIP"></div>' +
@@ -232,14 +232,14 @@ async function openEditContactModal(contactId) {
   var html = '' +
     '<div class="modal-header"><h3>Edit Contact</h3></div>' +
     '<div class="modal-body">' +
-      '<div class="form-group"><label>Name *</label><input type="text" id="editContactName" value="' + esc(c.name || '') + '"></div>' +
+      '<div class="form-group"><label class="field-required">Name</label><input type="text" id="editContactName" value="' + esc(c.name || '') + '"></div>' +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
         '<div class="form-group"><label>Email</label><input type="email" id="editContactEmail" value="' + esc(c.email || '') + '"></div>' +
         '<div class="form-group"><label>Phone</label><input type="tel" id="editContactPhone" value="' + esc(c.phone || '') + '"></div>' +
       '</div>' +
       '<div class="form-group"><label>Company / Organization</label><input type="text" id="editContactCompany" value="' + esc(c.company || '') + '"></div>' +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
-        '<div class="form-group"><label>Category *</label><select id="editContactCategory">' + catOptions + '</select></div>' +
+        '<div class="form-group"><label class="field-required">Category</label><select id="editContactCategory">' + catOptions + '</select></div>' +
         '<div class="form-group"><label>Website</label><input type="url" id="editContactWebsite" value="' + esc(c.website || '') + '"></div>' +
       '</div>' +
       '<div class="form-group"><label>Address</label><input type="text" id="editContactAddress" value="' + esc(c.address || '') + '"></div>' +
@@ -420,10 +420,10 @@ function renderContactDetail(contact) {
 
   var detailFieldsHtml = '';
   var fields = [];
-  if (contact.email) fields.push('<a href="mailto:' + esc(contact.email) + '" style="color:var(--accent);">' + esc(contact.email) + '</a>');
-  if (contact.phone) fields.push('<a href="tel:' + esc(contact.phone) + '" style="color:var(--accent);">' + esc(contact.phone) + '</a>');
+  if (contact.email) fields.push('<a href="mailto:' + esc(contact.email) + '" style="color:var(--teal);">' + esc(contact.email) + '</a>');
+  if (contact.phone) fields.push('<a href="tel:' + esc(contact.phone) + '" style="color:var(--teal);">' + esc(contact.phone) + '</a>');
   if (contact.company) fields.push(esc(contact.company));
-  if (contact.website) fields.push('<a href="' + esc(contact.website) + '" target="_blank" rel="noopener" style="color:var(--accent);">' + esc(contact.website) + '</a>');
+  if (contact.website) fields.push('<a href="' + esc(contact.website) + '" target="_blank" rel="noopener" style="color:var(--teal);">' + esc(contact.website) + '</a>');
   if (contact.address) fields.push(esc(contact.address));
   if (fields.length) {
     detailFieldsHtml = '<div style="display:flex;flex-wrap:wrap;gap:8px 16px;margin:8px 0;font-size:0.88rem;color:var(--warm-gray-light);">' +
@@ -440,10 +440,10 @@ function renderContactDetail(contact) {
         notesHtml +
         (linksHtml ? '<div class="contact-detail-links">' + linksHtml + '</div>' : '') +
       '</div>' +
-      '<div style="display:flex;gap:8px;">' +
-        '<button class="btn btn-secondary" style="font-size:0.82rem;padding:6px 16px;white-space:nowrap;" onclick="openEditContactModal(\'' + esc(contact.id) + '\')">Edit</button>' +
-        (contact.email ? '<button class="btn btn-primary" style="font-size:0.82rem;padding:6px 16px;white-space:nowrap;" onclick="openInquiryResponseModal(\'' + esc(contact.id) + '\')">Respond</button>' : '') +
-        '<button class="btn btn-primary" style="font-size:0.82rem;padding:6px 16px;white-space:nowrap;" onclick="openLogInteractionModal(\'' + esc(contact.id) + '\')">+ Log Interaction</button>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+        '<button class="btn btn-secondary btn-small" onclick="openEditContactModal(\'' + esc(contact.id) + '\')">Edit</button>' +
+        (contact.email ? '<button class="btn btn-primary btn-small" onclick="openInquiryResponseModal(\'' + esc(contact.id) + '\')">Respond</button>' : '') +
+        '<button class="btn btn-primary btn-small" onclick="openLogInteractionModal(\'' + esc(contact.id) + '\')">+ Log Interaction</button>' +
       '</div>' +
     '</div>';
 
