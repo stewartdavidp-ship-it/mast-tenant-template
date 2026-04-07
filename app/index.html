@@ -5134,8 +5134,7 @@
         <div class="sidebar-item" data-route="expenses" onclick="navigateTo('expenses')">Expenses</div>
         <div class="sidebar-item muted" data-route="reports" onclick="navigateTo('reports')">Reports <span class="sidebar-badge new">New</span></div>
         <div class="sidebar-item" data-route="financials" onclick="navigateTo('financials')">Revenue</div>
-        <div class="sidebar-item" data-route="contacts" onclick="navigateTo('contacts')">Contacts</div>
-        <div class="sidebar-item muted" data-route="customers" onclick="navigateTo('customers')">Customers <span class="sidebar-badge new">New</span></div>
+        <div class="sidebar-item" data-route="customers" onclick="navigateTo('customers')">Customers</div>
         <div class="sidebar-item" data-route="email-log" onclick="navigateTo('email-log')">Email Log</div>
         <div class="sidebar-item" data-route="studio" onclick="navigateTo('studio')">Studio</div>
         <div class="sidebar-item" data-route="team" onclick="navigateTo('team')">Team</div>
@@ -7861,6 +7860,61 @@
       <div id="contactDetailView" style="display:none;">
         <button class="detail-back" onclick="backToContactsList()">&#8592; Back to Contacts</button>
         <div id="contactDetailContent"></div>
+      </div>
+    </div>
+
+    <!-- Admin: Customers Tab -->
+    <div id="customersTab" style="display:none;">
+      <!-- Customers List View -->
+      <div id="customersListView">
+        <div class="section-header">
+          <h2>Customers</h2>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span class="products-stat" id="customersCount"></span>
+            <button class="btn btn-secondary" style="font-size:0.82rem;padding:6px 12px;" onclick="window._customersOpenDuplicates && window._customersOpenDuplicates()" id="customersDuplicatesBtn" title="Review pending duplicates">Duplicates <span id="customersDuplicatesBadge" style="display:none;background:#ef4444;color:#fff;border-radius:10px;padding:1px 7px;font-size:0.72rem;margin-left:4px;"></span></button>
+          </div>
+        </div>
+        <div class="contacts-filter-bar" style="margin-bottom:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <input type="text" class="contacts-search" id="customersSearch" placeholder="Search by name or email..." oninput="window._customersRender && window._customersRender()" style="flex:1;min-width:220px;">
+          <select id="customersSourceFilter" onchange="window._customersRender && window._customersRender()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;">
+            <option value="all">All sources</option>
+            <option value="order">Order</option>
+            <option value="enrollment">Enrollment</option>
+            <option value="contact">Contact</option>
+            <option value="newsletter">Newsletter</option>
+            <option value="account">Account</option>
+            <option value="manual">Manual</option>
+            <option value="import">Import</option>
+          </select>
+          <select id="customersSortBy" onchange="window._customersRender && window._customersRender()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;">
+            <option value="updatedAt">Recently updated</option>
+            <option value="createdAt">Newest</option>
+            <option value="name">Name (A–Z)</option>
+            <option value="email">Email (A–Z)</option>
+          </select>
+        </div>
+        <div id="customersLoading" class="loading-state">Loading customers…</div>
+        <div id="customersEmpty" style="display:none;padding:24px;text-align:center;color:#9ca3af;">No customers yet. They'll appear here as orders, enrollments, contacts, and newsletter signups come in.</div>
+        <div id="customersTableWrap" style="display:none;">
+          <table class="data-table" style="width:100%;">
+            <thead>
+              <tr>
+                <th style="text-align:left;">Name</th>
+                <th style="text-align:left;">Primary email</th>
+                <th style="text-align:left;">Source</th>
+                <th style="text-align:left;">Linked</th>
+                <th style="text-align:left;">Last activity</th>
+              </tr>
+            </thead>
+            <tbody id="customersTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Customer Detail View (Phase 5 placeholder) -->
+      <div id="customerDetailView" style="display:none;">
+        <button class="detail-back" onclick="window._customersBackToList && window._customersBackToList()">&#8592; Back to customers</button>
+        <div id="customerDetailContent" style="margin-top:12px;"></div>
       </div>
     </div>
 
@@ -13596,6 +13650,7 @@ var MODULE_MANIFEST = {
   shows: { src: 'modules/shows.js', routes: ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'] },
   production: { src: 'modules/production.js', routes: ['jobs', 'production', 'stories'] },
   contacts: { src: 'modules/contacts.js', routes: ['contacts'] },
+  customers: { src: 'modules/customers.js', routes: ['customers'] },
   orders: { src: 'modules/orders.js', routes: ['orders', 'commissions'] },
   sales: { src: 'modules/sales.js', routes: ['pos', 'receipts', 'events', 'salesEvents', 'terms'] },
   fulfillment: { src: 'modules/fulfillment.js', routes: ['pack', 'ship', 'fulfillment'] },
