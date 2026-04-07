@@ -1319,7 +1319,7 @@
           return true;
         });
 
-        if (activePasses.length === 0) return;
+        if (activePasses.length === 0) { walletLoadDone(); return; }
 
         // Load pass definitions for scope checking
         var defIds = {};
