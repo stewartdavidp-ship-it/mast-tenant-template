@@ -295,6 +295,10 @@
       vendorSku: data.vendorSku || null,
       leadTimeDays: data.leadTimeDays || null,
       craftAttributes: data.craftAttributes || {},
+      pricingMode: data.pricingMode === 'spot-linked' ? 'spot-linked' : 'fixed',
+      spotMetal: data.spotMetal || null,
+      purity: data.purity != null ? Number(data.purity) : null,
+      markupOverSpot: data.markupOverSpot != null ? Number(data.markupOverSpot) : null,
       notes: data.notes || '',
       createdAt: now,
       updatedAt: now
@@ -1224,7 +1228,8 @@
     materials.forEach(function(m) {
       var id = m.materialId;
       html += '<tr>';
-      html += '<td style="font-weight:500;">' + esc(m.name) + '</td>';
+      var spotChip = m.pricingMode === 'spot-linked' ? ' <span style="display:inline-block;font-size:0.68rem;font-weight:500;padding:1px 6px;background:rgba(42,124,111,0.12);color:var(--teal);border-radius:8px;margin-left:4px;" title="Linked to ' + esc(m.spotMetal || 'metal') + ' spot price">🔗 ' + esc(m.spotMetal || 'spot') + '</span>' : '';
+      html += '<td style="font-weight:500;">' + esc(m.name) + spotChip + '</td>';
       html += '<td>' + esc(m.category || '') + '</td>';
       html += '<td>' + esc(getUomShort(m.unitOfMeasure)) + '</td>';
       html += '<td style="text-align:right;font-family:monospace;">$' + (m.unitCost || 0).toFixed(2) + '</td>';
@@ -1301,6 +1306,29 @@
     html += '<input id="matCost" type="number" step="0.01" min="0" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;box-sizing:border-box;" value="' + (m ? m.unitCost || '' : '') + '" placeholder="0.00">';
     html += '</div>';
 
+    html += '</div>';
+
+    // Spot-linked pricing (volatile metals) — toggle shows when mode is spot-linked
+    var isSpot = m && m.pricingMode === 'spot-linked';
+    html += '<div style="margin-bottom:16px;padding:10px 12px;background:rgba(42,124,111,0.06);border:1px solid rgba(42,124,111,0.18);border-radius:6px;">';
+    html += '<label style="display:flex;align-items:center;gap:8px;font-size:0.85rem;font-weight:600;cursor:pointer;">';
+    html += '<input id="matPricingSpot" type="checkbox"' + (isSpot ? ' checked' : '') + ' onchange="makerToggleSpotFields()"> ';
+    html += '🔗 Spot-linked pricing (updates daily from metals market)';
+    html += '</label>';
+    html += '<div id="matSpotFields" style="display:' + (isSpot ? 'flex' : 'none') + ';gap:8px;margin-top:10px;">';
+    html += '<div style="flex:1;"><label style="display:block;font-size:0.75rem;font-weight:600;margin-bottom:2px;">Metal</label>';
+    html += '<select id="matSpotMetal" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:5px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.85rem;">';
+    ['gold','silver','platinum'].forEach(function(mt) {
+      var sel = m && m.spotMetal === mt ? ' selected' : '';
+      html += '<option value="' + mt + '"' + sel + '>' + mt.charAt(0).toUpperCase() + mt.slice(1) + '</option>';
+    });
+    html += '</select></div>';
+    html += '<div style="flex:1;"><label style="display:block;font-size:0.75rem;font-weight:600;margin-bottom:2px;">Purity</label>';
+    html += '<input id="matPurity" type="number" step="0.001" min="0" max="1" placeholder="e.g. 0.585 (14k)" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);box-sizing:border-box;" value="' + (m && m.purity != null ? m.purity : '') + '"></div>';
+    html += '<div style="flex:1;"><label style="display:block;font-size:0.75rem;font-weight:600;margin-bottom:2px;">Markup %</label>';
+    html += '<input id="matMarkupSpot" type="number" step="0.1" min="0" placeholder="e.g. 8" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);box-sizing:border-box;" value="' + (m && m.markupOverSpot != null ? m.markupOverSpot : '') + '"></div>';
+    html += '</div>';
+    html += '<p style="font-size:0.72rem;color:var(--warm-gray);margin:8px 0 0;">Unit Cost auto-updates daily: spot × purity × (1 + markup%) ÷ unitConversion. Set purity (e.g. 0.999 fine, 0.925 sterling, 0.585 14k) and supplier markup.</p>';
     html += '</div>';
 
     // Landed cost helper — prorate freight $ across last purchase qty into unitCost
@@ -1466,6 +1494,26 @@
     };
     if (purchaseUOM) data.purchaseUOM = purchaseUOM;
     if (convFactor > 0) data.conversionFactor = convFactor;
+
+    // Spot-linked pricing fields
+    var spotEl = document.getElementById('matPricingSpot');
+    if (spotEl && spotEl.checked) {
+      var purity = parseFloat((document.getElementById('matPurity') || {}).value);
+      var markupOverSpot = parseFloat((document.getElementById('matMarkupSpot') || {}).value);
+      if (!(purity > 0)) {
+        MastAdmin.showToast('Purity is required for spot-linked materials (e.g. 0.585 for 14k)', true);
+        return;
+      }
+      data.pricingMode = 'spot-linked';
+      data.spotMetal = (document.getElementById('matSpotMetal') || {}).value || 'gold';
+      data.purity = purity;
+      data.markupOverSpot = isNaN(markupOverSpot) ? 0 : markupOverSpot;
+    } else {
+      data.pricingMode = 'fixed';
+      data.spotMetal = null;
+      data.purity = null;
+      data.markupOverSpot = null;
+    }
 
     var statusEl = document.getElementById('matStatus');
     if (statusEl) data.status = statusEl.value;
@@ -2543,6 +2591,11 @@
   window.makerEditMaterial = function(id) { openMaterialModal(id); };
   window.makerCloseMaterialModal = closeMaterialModal;
   window.makerSaveMaterialForm = saveMaterialForm;
+  window.makerToggleSpotFields = function() {
+    var checked = (document.getElementById('matPricingSpot') || {}).checked;
+    var fields = document.getElementById('matSpotFields');
+    if (fields) fields.style.display = checked ? 'flex' : 'none';
+  };
   window.makerArchiveMaterialConfirm = archiveMaterialConfirm;
   window.makerFilterMaterials = filterMaterials;
   window.makerFilterMaterialsCategory = filterMaterialsCategory;
