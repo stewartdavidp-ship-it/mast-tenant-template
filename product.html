@@ -1223,7 +1223,7 @@
 
       // Materials display
       if (p.materials && Array.isArray(p.materials) && p.materials.length > 0) {
-        var matsHtml = '<div class="product-materials" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:6px;">';
+        var matsHtml = '<div class="product-materials" style="margin-top:12px;margin-bottom:1.5rem;display:flex;flex-wrap:wrap;gap:6px;">';
         p.materials.forEach(function(m) {
           matsHtml += '<span style="display:inline-block;padding:3px 10px;background:var(--cream, #FAF6F0);border:1px solid var(--accent-light, #E8D8C4);border-radius:12px;font-size:0.78rem;color:var(--warm-gray, #6B6560);">' + escHtml(m) + '</span>';
         });
