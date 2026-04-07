@@ -594,13 +594,32 @@
     // Identity card
     h += detailCardOpen('Identity');
     h += '<div style="display:grid;grid-template-columns:160px 1fr;gap:8px 16px;font-size:0.85rem;">';
-    h += identityRow('Emails', (c.emails || []).map(esc).join('<br>') || '—');
-    h += identityRow('Phones', (c.phones || []).map(esc).join('<br>') || '—');
+    h += identityRow('Primary email', esc(c.primaryEmail || '—'));
     h += identityRow('Tags', renderTagsEditor(c));
     h += identityRow('Newsletter', renderNewsletterToggle(c));
     h += identityRow('Source', sourceBadge(c.source) || '—');
     h += identityRow('Created', esc(fmtDateTime(c.createdAt)));
     h += identityRow('Updated', esc(fmtDateTime(c.updatedAt)));
+    h += '</div>';
+    h += detailCardClose();
+
+    // Contacts card (linked contact records — each one = an address/phone)
+    h += detailCardOpen('Contacts');
+    h += '<div id="customersContactsList">';
+    var ccCache = getCache(c.id);
+    if (!ccCache.loaded.contacts) {
+      h += '<div class="loading">Loading contacts…</div>';
+      loadCustomerContacts(c.id);
+    } else if (!ccCache.contacts.length) {
+      h += '<div style="font-size:0.85rem;color:var(--warm-gray);">No contact records yet. Add one to capture an address or phone number.</div>';
+    } else {
+      ccCache.contacts.forEach(function(ct) {
+        h += renderContactCard(ct);
+      });
+    }
+    h += '</div>';
+    h += '<div style="margin-top:12px;">';
+    h += '<button class="btn btn-secondary btn-small" data-customer-id="' + esc(c.id) + '" onclick="customersAddContact(this.dataset.customerId)">+ Add contact</button>';
     h += '</div>';
     h += detailCardClose();
 
@@ -872,6 +891,140 @@
     return h;
   }
 
+  // ----- Contacts (linked contact records, used for addresses/phones) -----
+
+  function renderContactCard(ct) {
+    var name = ct.name || ct.displayName || '(unnamed contact)';
+    var bits = [];
+    if (ct.email)   bits.push(esc(ct.email));
+    if (ct.phone)   bits.push(esc(ct.phone));
+    if (ct.address) bits.push(esc(ct.address));
+    if (ct.company) bits.push(esc(ct.company));
+    var h = '';
+    h += '<div data-contact-id="' + esc(ct.id) + '" onclick="customersOpenContact(this.dataset.contactId)" ' +
+         'style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:6px;padding:10px 14px;margin-bottom:8px;cursor:pointer;">';
+    h += '<div style="font-weight:600;font-size:0.85rem;margin-bottom:4px;">' + esc(name) + '</div>';
+    if (bits.length) {
+      h += '<div style="font-size:0.78rem;color:var(--warm-gray);line-height:1.5;">' + bits.join(' · ') + '</div>';
+    } else {
+      h += '<div style="font-size:0.78rem;color:var(--warm-gray-light);">No details yet — click to edit</div>';
+    }
+    h += '</div>';
+    return h;
+  }
+
+  function loadCustomerContacts(customerId) {
+    var c = customersData.find(function(x) { return x && x.id === customerId; });
+    if (!c) return;
+    var contactIds = (c.linkedIds && c.linkedIds.contactIds) || [];
+    var cache = getCache(customerId);
+    if (contactIds.length === 0) {
+      cache.contacts = [];
+      cache.loaded.contacts = true;
+      if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'overview') render();
+      return;
+    }
+    var promises = contactIds.map(function(cid) {
+      return MastDB._ref('admin/contacts/' + cid).once('value')
+        .then(function(s) { var v = s.val(); if (v) v.id = cid; return v; })
+        .catch(function() { return null; });
+    });
+    Promise.all(promises).then(function(results) {
+      cache.contacts = results.filter(function(x) { return x; });
+      cache.loaded.contacts = true;
+      if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'overview') render();
+    });
+  }
+
+  function openContactFromCustomer(contactId) {
+    if (typeof navigateTo === 'function') navigateTo('contacts');
+    setTimeout(function() {
+      if (typeof window.viewContact === 'function') window.viewContact(contactId);
+    }, 50);
+  }
+
+  async function addContactToCustomer(customerId) {
+    var c = customersData.find(function(x) { return x && x.id === customerId; });
+    if (!c) return;
+
+    // Inline modal — uses the global openModal/closeModal helpers from index.html.
+    var html = '';
+    html += '<h3 style="margin-top:0;">Add contact to ' + esc(c.displayName || c.primaryEmail || 'customer') + '</h3>';
+    html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">Each contact captures one address and phone. A customer can have many.</p>';
+    html += '<div class="form-group"><label>Name</label><input type="text" id="cmAddCName" placeholder="Full name"></div>';
+    html += '<div class="form-group"><label>Email</label><input type="email" id="cmAddCEmail" value="' + esc(c.primaryEmail || '') + '"></div>';
+    html += '<div class="form-group"><label>Phone</label><input type="text" id="cmAddCPhone" placeholder="555-555-5555"></div>';
+    html += '<div class="form-group"><label>Address</label><input type="text" id="cmAddCAddress" placeholder="Street, City, State ZIP"></div>';
+    html += '<div class="modal-footer">';
+    html += '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>';
+    html += '<button class="btn btn-primary" data-customer-id="' + esc(customerId) + '" onclick="customersSaveNewContact(this.dataset.customerId)">Create contact</button>';
+    html += '</div>';
+    if (typeof openModal === 'function') openModal(html);
+  }
+
+  async function saveNewContactForCustomer(customerId) {
+    var name = (document.getElementById('cmAddCName') || {}).value || '';
+    var email = (document.getElementById('cmAddCEmail') || {}).value || '';
+    var phone = (document.getElementById('cmAddCPhone') || {}).value || '';
+    var address = (document.getElementById('cmAddCAddress') || {}).value || '';
+    name = name.trim(); email = email.trim(); phone = phone.trim(); address = address.trim();
+    if (!name) {
+      if (typeof window.mastAlert === 'function') return window.mastAlert('Contact name is required.');
+      return;
+    }
+
+    var contactId = 'contact_' + Date.now().toString(36);
+    var now = new Date().toISOString();
+    var contactData = {
+      id: contactId,
+      name: name,
+      email: email || null,
+      phone: phone || null,
+      address: address || null,
+      company: null,
+      category: 'customer',
+      website: null,
+      notes: null,
+      googleContactId: null,
+      driveFolderLink: null,
+      customerId: customerId,
+      createdAt: now,
+      createdBy: (window.currentUser && window.currentUser.uid) || 'customers-module',
+      updatedAt: now
+    };
+
+    try {
+      // Write contact + explicit link to customer.linkedIds.contactIds + reverse index.
+      var c = customersData.find(function(x) { return x && x.id === customerId; });
+      var linked = (c && c.linkedIds) || { uids: [], contactIds: [], studentIds: [], squareCustomerId: null };
+      var contactIds = (linked.contactIds || []).slice();
+      if (contactIds.indexOf(contactId) === -1) contactIds.push(contactId);
+
+      var updates = {};
+      updates['admin/contacts/' + contactId] = contactData;
+      updates['admin/customers/' + customerId + '/linkedIds/contactIds'] = contactIds;
+      updates['admin/customers/' + customerId + '/updatedAt'] = now;
+      updates['admin/customerIndexes/byContactId/' + contactId] = customerId;
+      await MastDB._multiUpdate(updates);
+
+      // Update in-memory copy
+      if (c) {
+        if (!c.linkedIds) c.linkedIds = { uids: [], contactIds: [], studentIds: [], squareCustomerId: null };
+        c.linkedIds.contactIds = contactIds;
+        c.updatedAt = now;
+      }
+      var cache = getCache(customerId);
+      cache.contacts = (cache.contacts || []).concat([contactData]);
+      cache.loaded.contacts = true;
+
+      if (typeof closeModal === 'function') closeModal();
+      if (currentView === 'detail' && selectedCustomerId === customerId) render();
+    } catch (e) {
+      console.error('[customers] add contact failed', e);
+      if (typeof window.mastAlert === 'function') window.mastAlert('Add contact failed: ' + (e && e.message));
+    }
+  }
+
   function loadCustomerWallets(customerId, uids) {
     var cache = getCache(customerId);
     var promises = uids.map(function(uid) {
@@ -989,6 +1142,9 @@
   window.customersToggleNewsletter = function(id, on) { return toggleNewsletter(id, on); };
   window.customersSaveNotes = saveNotes;
   window.customersMerge = mergeCustomers;
+  window.customersOpenContact = openContactFromCustomer;
+  window.customersAddContact = addContactToCustomer;
+  window.customersSaveNewContact = saveNewContactForCustomer;
 
   // ============================================================
   // Module registration
