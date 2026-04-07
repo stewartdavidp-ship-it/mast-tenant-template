@@ -401,7 +401,7 @@
       }
     }).catch(function(e) {
       console.error('[customers] save failed', fieldPath, e);
-      alert('Save failed: ' + (e && e.message));
+      window.mastAlert('Save failed: ' + (e && e.message));
     });
   }
 
@@ -444,7 +444,7 @@
       if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'overview') render();
     }).catch(function(e) {
       console.error('[customers] newsletter toggle failed', e);
-      alert('Toggle failed: ' + (e && e.message));
+      window.mastAlert('Toggle failed: ' + (e && e.message));
     });
   };
 
@@ -466,7 +466,11 @@
     var loserCust = customersData.find(function(x) { return x && x.id === loserId; });
     var winnerLabel = (winnerCust && (winnerCust.displayName || winnerCust.primaryEmail)) || 'this customer';
     var loserLabel = (loserCust && (loserCust.displayName || loserCust.primaryEmail)) || 'the other customer';
-    if (!confirm('Merge "' + loserLabel + '" into "' + winnerLabel + '"? This rewrites all linked orders, enrollments and contacts. This cannot be undone.')) return;
+    var ok = await window.mastConfirm(
+      'Merge "' + loserLabel + '" into "' + winnerLabel + '"?\n\nThis rewrites all linked orders, enrollments and contacts. This cannot be undone.',
+      { title: 'Merge customers', confirmLabel: 'Merge', danger: true }
+    );
+    if (!ok) return;
 
     try {
       var refs = await Promise.all([
@@ -477,7 +481,7 @@
       ]);
       var winner = refs[0].val();
       var loser = refs[1].val();
-      if (!winner || !loser) { alert('One of the customers no longer exists.'); return; }
+      if (!winner || !loser) { await window.mastAlert('One of the customers no longer exists.'); return; }
 
       var loserOrders = refs[2].val() || {};
       var loserEnrollments = refs[3].val() || {};
@@ -563,7 +567,7 @@
       await loadCustomers();
     } catch (e) {
       console.error('[customers] merge failed', e);
-      alert('Merge failed: ' + (e && e.message));
+      window.mastAlert('Merge failed: ' + (e && e.message));
     }
   }
 
