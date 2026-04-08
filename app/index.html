@@ -12183,14 +12183,18 @@ auth.onAuthStateChanged(async function(user) {
         cfBase = TENANT_FIREBASE_CONFIG.cloudFunctionsBase;
       }
       if (cfBase) {
+        // Pass the domain-resolved tenantId so the function can also check
+        // per-tenant admin invites, not just platform pendingOwners.
+        var domainTid = (typeof TENANT_ID !== 'undefined' && TENANT_ID !== 'unknown') ? TENANT_ID : null;
         var claimResp = await fetch(cfBase + '/claimTenant', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + claimToken }
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + claimToken },
+          body: JSON.stringify(domainTid ? { tenantId: domainTid } : {})
         });
         if (claimResp.ok) {
           var claimResult = await claimResp.json();
           if (claimResult.claimed) {
-            console.log('Tenant claimed via pendingOwner:', claimResult.tenantId);
+            console.log('Tenant claimed (' + (claimResult.via || 'unknown') + '):', claimResult.tenantId);
             tenantId = claimResult.tenantId;
           }
         }
