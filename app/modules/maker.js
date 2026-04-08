@@ -2323,6 +2323,15 @@
     }
     html += '</div>';
 
+    // Push-to-all bar (visible for any normal variant tab when product has >1 variant)
+    if (hasProductVariants && orphanKeys.indexOf(activeKey) < 0 && productVariants.length > 1) {
+      var activeLabel = variantDisplayName(productVariants.find(function(p){ return p.id === activeKey; }));
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding:8px 12px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:6px;font-size:0.78rem;">';
+      html += '<span style="color:var(--warm-gray);">Editing <strong>' + esc(activeLabel) + '</strong> — changes below affect this variant only.</span>';
+      html += '<button class="btn btn-secondary btn-small" onclick="makerPushVariantToAll()" style="font-size:0.72rem;" title="Copy this variant\'s Parts, Labor, and Other Costs to every other variant. Overwrites their current values.">↓ Apply to all variants</button>';
+      html += '</div>';
+    }
+
     // Orphan warning bar (if viewing an orphaned variant tab)
     if (hasProductVariants && orphanKeys.indexOf(activeKey) >= 0) {
       html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding:8px 12px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:6px;font-size:0.78rem;">';
@@ -3435,6 +3444,26 @@
   window.makerRepriceNow = repriceNow;
   window.makerOpenWhatIfSimulator = openWhatIfSimulator;
   window.makerSetCategoryFilter = function(v) { piecesCategoryFilter = v || ''; renderPiecesList(); };
+  window.makerPushVariantToAll = function() {
+    if (!builderState || !currentVariantId || currentVariantId === 'default') return;
+    var pvs = getProductVariants(builderState);
+    if (pvs.length < 2) return;
+    var src = builderState.variants && builderState.variants[currentVariantId];
+    if (!src) return;
+    var srcLabel = variantDisplayName(pvs.find(function(p){ return p.id === currentVariantId; }));
+    var otherCount = pvs.length - 1;
+    if (!confirm('Copy Parts, Labor minutes, and Other Costs from "' + srcLabel + '" to the other ' + otherCount + ' variant' + (otherCount === 1 ? '' : 's') + '? Their current values will be overwritten.')) return;
+    pvs.forEach(function(pv) {
+      if (pv.id === currentVariantId) return;
+      if (!builderState.variants[pv.id]) builderState.variants[pv.id] = {};
+      var dst = builderState.variants[pv.id];
+      dst.lineItems = JSON.parse(JSON.stringify(src.lineItems || {}));
+      dst.laborMinutes = src.laborMinutes || 0;
+      dst.otherCost = src.otherCost || 0;
+    });
+    MastAdmin.showToast('Applied to ' + otherCount + ' variant' + (otherCount === 1 ? '' : 's') + '. Save and recalculate to propagate pricing.');
+    renderRecipeBuilder();
+  };
   window.makerTogglePieceVariants = function(pid) {
     if (!pid) return;
     if (piecesExpandedPids[pid]) delete piecesExpandedPids[pid];
