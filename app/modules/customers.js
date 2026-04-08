@@ -528,7 +528,8 @@
     }
 
     var h = '';
-    h += '<button class="detail-back" onclick="customersSwitchView(\'list\')">← Back to Customers</button>';
+    var backLabel = (window.MastNavStack && MastNavStack.label()) ? ('← Back to ' + MastNavStack.label()) : '← Back to Customers';
+    h += '<button class="detail-back" onclick="customersBackFromDetail()">' + esc(backLabel) + '</button>';
 
     // Header — Paradigm A: Edit button right side (read mode only); Source badge inline
     h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;flex-wrap:wrap;gap:12px;">';
@@ -648,16 +649,57 @@
   // Paradigm A — customer edit mode lifecycle
   // ------------------------------------------------------------
 
+  // MastDirty integration — baseline of identity inputs only.
+  // Notes/tags/newsletter/archive are atomic widgets, excluded by design.
+  var _custEditBaseline = null;
+  function _custEditCaptureBaseline() {
+    setTimeout(function() {
+      var nameInput = document.getElementById('custIdentityDisplayName');
+      var emailInput = document.getElementById('custIdentityPrimaryEmail');
+      _custEditBaseline = {
+        name: nameInput ? nameInput.value : '',
+        email: emailInput ? emailInput.value : ''
+      };
+      _custEditUpdateDirtyIndicator();
+    }, 0);
+  }
+  function _custEditIsDirty() {
+    if (!customerEditMode) return false;
+    var nameInput = document.getElementById('custIdentityDisplayName');
+    var emailInput = document.getElementById('custIdentityPrimaryEmail');
+    if (!nameInput || !emailInput || !_custEditBaseline) return false;
+    return nameInput.value !== _custEditBaseline.name || emailInput.value !== _custEditBaseline.email;
+  }
+  function _custEditUpdateDirtyIndicator() {
+    var btn = document.querySelector('#customersTab button.btn-primary[onclick*="customersSaveEdit"]');
+    if (!btn) return;
+    if (_custEditIsDirty()) btn.classList.add('dirty');
+    else btn.classList.remove('dirty');
+  }
+
   function enterCustomerEditMode() {
     customerEditMode = true;
     renderPreservingEdits();
+    if (window.MastDirty) {
+      MastDirty.register('customerEdit', _custEditIsDirty, { label: 'Customer detail' });
+    }
+    _custEditCaptureBaseline();
   }
 
   function cancelCustomerEditMode() {
-    customerEditMode = false;
-    // Discard any in-flight changes by NOT preserving — straight render
-    // pulls fresh values from in-memory customersData.
-    render();
+    var doCancel = function() {
+      customerEditMode = false;
+      _custEditBaseline = null;
+      if (window.MastDirty) MastDirty.unregister('customerEdit');
+      // Discard any in-flight changes by NOT preserving — straight render
+      // pulls fresh values from in-memory customersData.
+      render();
+    };
+    if (window.MastDirty && MastDirty.getDirtyKeys().indexOf('customerEdit') !== -1) {
+      MastDirty.checkAndExit(doCancel);
+    } else {
+      doCancel();
+    }
   }
 
   // Save commits any changed identity fields, stays in edit mode (matches
@@ -700,8 +742,9 @@
       var h3 = document.querySelector('#customersTab h3');
       if (h3) h3.innerText = c.displayName || c.primaryEmail || c.id;
       toast('Saved');
-      // Stay in edit mode — Paradigm A
+      // Stay in edit mode — Paradigm A. Retake baseline so dirty clears.
       renderPreservingEdits();
+      _custEditCaptureBaseline();
     }).catch(function(e) {
       console.error('[customers] save edit failed', e);
       toast('Save failed: ' + (e && e.message), true);
@@ -1419,22 +1462,47 @@
   }
 
   function openContactFromCustomer(contactId) {
-    // Stash the return route + return state BEFORE navigateTo overwrites currentRoute.
-    window._pendingContactView = contactId;
-    window._pendingContactReturnRoute = (typeof currentRoute === 'string') ? currentRoute : 'customers';
-    // Remember which customer + tab we were on so we land back here on return.
-    if (selectedCustomerId) {
-      window._pendingCustomerView = selectedCustomerId;
-      window._pendingCustomerTab = detailTab;
+    var c = selectedCustomerId
+      ? customersData.find(function(x) { return x && x.id === selectedCustomerId; })
+      : null;
+    var label = c ? (c.displayName || c.primaryEmail || 'customer') : 'Customers';
+    if (window.MastNavStack && selectedCustomerId) {
+      MastNavStack.push({
+        route: 'customers',
+        view: 'detail',
+        state: { customerId: selectedCustomerId, detailTab: detailTab, scrollTop: window.scrollY || 0 },
+        label: label
+      });
     }
-    if (typeof navigateTo === 'function') navigateTo('contacts');
-    setTimeout(function() {
-      if (window._pendingContactView && typeof window.viewContact === 'function') {
-        var id = window._pendingContactView;
-        window._pendingContactView = null;
-        window.viewContact(id);
+    var doNav = function() {
+      window._mastNavInternal = true;
+      try {
+        if (typeof navigateTo === 'function') navigateTo('contacts');
+      } finally {
+        window._mastNavInternal = false;
       }
-    }, 0);
+      setTimeout(function() {
+        if (typeof window.viewContact === 'function') window.viewContact(contactId);
+      }, 0);
+    };
+    if (window.MastDirty) MastDirty.checkAndExit(doNav); else doNav();
+  }
+
+  // Back button from a customer detail. If MastNavStack has an entry,
+  // pop and return to the original context. Otherwise fall back to list.
+  function backFromDetail() {
+    if (window.MastNavStack && MastNavStack.size() > 0) {
+      MastNavStack.popAndReturn();
+      return;
+    }
+    var doBack = function() {
+      if (customerEditMode) {
+        customerEditMode = false;
+        if (window.MastDirty) MastDirty.unregister('customerEdit');
+      }
+      switchView('list');
+    };
+    if (window.MastDirty) MastDirty.checkAndExit(doBack); else doBack();
   }
 
   async function addContactToCustomer(customerId) {
@@ -1883,6 +1951,33 @@
   window.customersSaveNotes = saveNotes;
   window.customersMerge = mergeCustomers;
   window.customersOpenContact = openContactFromCustomer;
+  window.customersBackFromDetail = backFromDetail;
+
+  // Delegated input listener for dirty indicator on customer edit.
+  document.addEventListener('input', function(e) {
+    var tab = document.getElementById('customersTab');
+    if (tab && tab.contains(e.target)) _custEditUpdateDirtyIndicator();
+  }, true);
+
+  // Register MastNavStack restorer for the customers route.
+  if (window.MastNavStack) {
+    window.MastNavStack.registerRestorer('customers', function(view, state) {
+      if (view !== 'detail' || !state || !state.customerId) return;
+      var openIt = function() {
+        if (customersData.find(function(x) { return x && x.id === state.customerId; })) {
+          selectedCustomerId = state.customerId;
+          currentView = 'detail';
+          detailTab = state.detailTab || 'overview';
+          render();
+          if (state.scrollTop != null) {
+            setTimeout(function() { window.scrollTo(0, state.scrollTop); }, 50);
+          }
+        }
+      };
+      if (!customersLoaded) loadCustomers().then(openIt);
+      else openIt();
+    });
+  }
   window.customersAddContact = addContactToCustomer;
   window.customersSaveNewContact = saveNewContactForCustomer;
   window.customersEnterEdit = enterCustomerEditMode;
@@ -1912,35 +2007,16 @@
       'customers': {
         tab: 'customersTab',
         setup: function() {
-          // Honor pending detail-view restoration (e.g., user navigated to a
-          // contact and is now coming back via the back button).
-          var pendingId = window._pendingCustomerView;
-          var pendingTab = window._pendingCustomerTab;
-          window._pendingCustomerView = null;
-          window._pendingCustomerTab = null;
-
-          var openPending = function() {
-            if (pendingId && customersData.find(function(x) { return x && x.id === pendingId; })) {
-              selectedCustomerId = pendingId;
-              currentView = 'detail';
-              detailTab = pendingTab || 'overview';
-              render();
-            }
-          };
-
+          // Detail-view restoration is now handled by MastNavStack restorer.
           if (!customersLoaded) {
             currentView = 'list';
             selectedCustomerId = null;
-            loadCustomers().then(function() { openPending(); });
+            loadCustomers();
           } else {
-            if (pendingId) {
-              openPending();
-            } else {
-              currentView = 'list';
-              selectedCustomerId = null;
-              render();
-              requestAnimationFrame(renderTable);
-            }
+            currentView = 'list';
+            selectedCustomerId = null;
+            render();
+            requestAnimationFrame(renderTable);
           }
         }
       }

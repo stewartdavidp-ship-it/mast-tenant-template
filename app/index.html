@@ -565,6 +565,14 @@
       background: #b37832;
     }
 
+    .btn.dirty::before, .btn-primary.dirty::before {
+      content: '•';
+      display: inline-block;
+      margin-right: 4px;
+      color: #fff;
+      font-weight: 700;
+    }
+
     .btn-secondary {
       background: var(--cream);
       color: var(--charcoal);
@@ -8128,6 +8136,159 @@ var FIREBASE_INIT_READY = (function() {
 const TEST_MODE = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
 
 // ============================================================
+// MastNavStack — context-aware navigation history
+// Singleton on window. Pushed before navigating away from a
+// detail screen so the destination's back button can return
+// to the original context (route + view + state + label).
+// Persists in sessionStorage so refresh keeps the trail.
+// ============================================================
+var MastNavStack = (function() {
+  var STORAGE_KEY = 'mastNavStack';
+  var MAX_DEPTH = 10;
+  var stack = [];
+  var restorers = {}; // route -> function(view, state)
+
+  try {
+    var raw = sessionStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      var parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) stack = parsed;
+    }
+  } catch (e) { stack = []; }
+
+  function persist() {
+    try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(stack)); } catch (e) {}
+  }
+
+  function push(entry) {
+    if (!entry || !entry.route) return;
+    stack.push({
+      route: entry.route,
+      view: entry.view || null,
+      state: entry.state || {},
+      label: entry.label || null
+    });
+    while (stack.length > MAX_DEPTH) stack.shift();
+    persist();
+  }
+
+  function peek() { return stack.length ? stack[stack.length - 1] : null; }
+  function size() { return stack.length; }
+  function label() { var t = peek(); return t ? t.label : null; }
+
+  function clear() {
+    stack = [];
+    persist();
+  }
+
+  function registerRestorer(route, fn) {
+    restorers[route] = fn;
+  }
+
+  function popAndReturn() {
+    var entry = stack.pop();
+    persist();
+    if (!entry) return false;
+    var doPop = function() {
+      window._mastNavInternal = true;
+      try {
+        if (typeof navigateTo === 'function') navigateTo(entry.route);
+      } finally {
+        window._mastNavInternal = false;
+      }
+      var fn = restorers[entry.route];
+      if (typeof fn === 'function') {
+        try { fn(entry.view, entry.state || {}); } catch (e) { console.error('[MastNavStack] restorer error', e); }
+      }
+    };
+    if (window.MastDirty && typeof MastDirty.checkAndExit === 'function') {
+      MastDirty.checkAndExit(doPop);
+    } else {
+      doPop();
+    }
+    return true;
+  }
+
+  return {
+    push: push,
+    peek: peek,
+    size: size,
+    label: label,
+    clear: clear,
+    registerRestorer: registerRestorer,
+    popAndReturn: popAndReturn
+  };
+})();
+window.MastNavStack = MastNavStack;
+
+// ============================================================
+// MastDirty — unsaved-changes registry
+// Screens register on entering edit mode with an isDirtyFn that
+// returns true when current DOM state diverges from baseline.
+// Top-level navigation wraps with checkAndExit to prompt before
+// discarding unsaved work. beforeunload also consults the
+// registry to trigger the browser's native dialog on refresh/close.
+// ============================================================
+var MastDirty = (function() {
+  var registrations = {}; // key -> { isDirtyFn, opts }
+
+  function register(key, isDirtyFn, opts) {
+    if (!key || typeof isDirtyFn !== 'function') return;
+    registrations[key] = { isDirtyFn: isDirtyFn, opts: opts || {} };
+  }
+
+  function unregister(key) {
+    delete registrations[key];
+  }
+
+  function getDirtyKeys() {
+    var keys = [];
+    Object.keys(registrations).forEach(function(k) {
+      try { if (registrations[k].isDirtyFn()) keys.push(k); }
+      catch (e) { console.error('[MastDirty] isDirtyFn error', k, e); }
+    });
+    return keys;
+  }
+
+  function isAnyDirty() { return getDirtyKeys().length > 0; }
+
+  function checkAndExit(exitFn) {
+    if (typeof exitFn !== 'function') exitFn = function() {};
+    var dirty = getDirtyKeys();
+    if (dirty.length === 0) { exitFn(); return; }
+    var labels = dirty.map(function(k) { return registrations[k].opts.label || k; });
+    var msg = 'You have unsaved changes on ' + labels.join(', ') + '. Discard them?';
+    if (window.confirm(msg)) {
+      dirty.forEach(function(k) {
+        var d = registrations[k].opts.discardFn;
+        if (typeof d === 'function') { try { d(); } catch (e) {} }
+      });
+      // Cleared on caller side via unregister, but defensively wipe
+      dirty.forEach(function(k) { delete registrations[k]; });
+      exitFn();
+    }
+    // Else: stay
+  }
+
+  window.addEventListener('beforeunload', function(e) {
+    if (isAnyDirty()) {
+      e.preventDefault();
+      e.returnValue = '';
+      return '';
+    }
+  });
+
+  return {
+    register: register,
+    unregister: unregister,
+    checkAndExit: checkAndExit,
+    isAnyDirty: isAnyDirty,
+    getDirtyKeys: getDirtyKeys
+  };
+})();
+window.MastDirty = MastDirty;
+
+// ============================================================
 // MastDB — Database Abstraction Layer
 // All data access routes through this object. No code should
 // call db.ref('{tenantId}/...') directly.
@@ -11025,6 +11186,38 @@ var inventory = {};
 var inventoryListener = null;
 var selectedProductPid = null;
 var productEditMode = false; // false = view, true = editing/creating
+
+// One-time wiring: dirty indicator updates on any input/change inside product detail,
+// and MastNavStack restorer for the products route.
+(function() {
+  document.addEventListener('input', function(e) {
+    var detail = document.getElementById('productDetailView');
+    if (detail && detail.contains(e.target) && typeof _productEditUpdateDirtyIndicator === 'function') {
+      _productEditUpdateDirtyIndicator();
+    }
+  }, true);
+  document.addEventListener('change', function(e) {
+    var detail = document.getElementById('productDetailView');
+    if (detail && detail.contains(e.target) && typeof _productEditUpdateDirtyIndicator === 'function') {
+      _productEditUpdateDirtyIndicator();
+    }
+  }, true);
+  // Register the restorer once MastNavStack exists.
+  if (window.MastNavStack) {
+    MastNavStack.registerRestorer('products', function(view, state) {
+      if (view === 'detail' && state && state.productPid) {
+        // navigateTo('products') already ran via popAndReturn. Open the detail.
+        setTimeout(function() {
+          if (state.productEditTab) productEditTab = state.productEditTab;
+          if (typeof viewProduct === 'function') viewProduct(state.productPid);
+          if (state.scrollTop != null) {
+            setTimeout(function() { window.scrollTo(0, state.scrollTop); }, 50);
+          }
+        }, 50);
+      }
+    });
+  }
+})();
 var productCreateMode = false; // true when creating new product
 var productEditTab = 'details'; // details | variants | images | production | inventory
 
@@ -13323,6 +13516,22 @@ var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'prod
 var currentRoute = 'dashboard';
 
 function navigateTo(route) {
+  // Top-level nav (sidebar click, dashboard tile, in-page button) consults
+  // the unsaved-changes registry and resets the back-nav stack. Programmatic
+  // navigation from inside MastNavStack.popAndReturn sets _mastNavInternal
+  // to bypass these checks.
+  if (!window._mastNavInternal && window.MastDirty && window.MastNavStack) {
+    var dirty = MastDirty.getDirtyKeys();
+    if (dirty.length > 0) {
+      var targetRoute = route;
+      MastDirty.checkAndExit(function() {
+        MastNavStack.clear();
+        navigateTo(targetRoute);
+      });
+      return;
+    }
+    MastNavStack.clear();
+  }
   // Check both ROUTE_MAP (core routes) and MODULE_MANIFEST (lazy-loaded module routes)
   var isKnownRoute = !!ROUTE_MAP[route] || !!getModuleForRouteManifest(route);
   if (!isKnownRoute) route = 'dashboard';
@@ -13708,7 +13917,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260407paradigm-a-2';
+var MAST_MODULES_V = '20260407navstack-dirty';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -20735,6 +20944,14 @@ function viewProduct(pid) {
 
 function viewProductFromInventory(pid) {
   productViewOrigin = 'inventory';
+  if (window.MastNavStack) {
+    MastNavStack.push({
+      route: 'inventory',
+      view: 'list',
+      state: { scrollTop: window.scrollY || 0 },
+      label: 'Inventory'
+    });
+  }
   switchTab('products');
   setTimeout(function() {
     selectedProductPid = pid;
@@ -20750,18 +20967,33 @@ function viewProductFromInventory(pid) {
 }
 
 function backToProducts() {
-  selectedProductPid = null;
-  var detailEl = document.getElementById('productDetailView');
-  detailEl.style.display = 'none';
-  detailEl.innerHTML = '';
-  if (productViewOrigin === 'inventory') {
-    productViewOrigin = 'products';
-    navigateTo('inventory');
-  } else {
-    document.getElementById('productsGrid').style.display = '';
-    document.querySelector('#productsTab .section-header').style.display = '';
-    renderProducts();
-  }
+  var doBack = function() {
+    selectedProductPid = null;
+    productEditMode = false;
+    if (window.MastDirty) MastDirty.unregister('productEdit');
+    var detailEl = document.getElementById('productDetailView');
+    if (detailEl) {
+      detailEl.style.display = 'none';
+      detailEl.innerHTML = '';
+    }
+    // If MastNavStack has an entry, return to that context.
+    if (window.MastNavStack && MastNavStack.size() > 0) {
+      MastNavStack.popAndReturn();
+      return;
+    }
+    if (productViewOrigin === 'inventory') {
+      productViewOrigin = 'products';
+      window._mastNavInternal = true;
+      try { navigateTo('inventory'); } finally { window._mastNavInternal = false; }
+    } else {
+      var grid = document.getElementById('productsGrid');
+      if (grid) grid.style.display = '';
+      var sh = document.querySelector('#productsTab .section-header');
+      if (sh) sh.style.display = '';
+      renderProducts();
+    }
+  };
+  if (window.MastDirty) MastDirty.checkAndExit(doBack); else doBack();
 }
 
 function createNewProduct() {
@@ -20778,18 +21010,53 @@ function createNewProduct() {
   renderProductDetail(null);
 }
 
+var _productEditBaseline = null;
+function _productEditCaptureBaseline() {
+  // Defer one tick so renderProductDetail has flushed the inputs.
+  setTimeout(function() {
+    _productEditBaseline = pdSnapshotFormState();
+    _productEditUpdateDirtyIndicator();
+  }, 0);
+}
+function _productEditIsDirty() {
+  if (!productEditMode) return false;
+  var cur = pdSnapshotFormState();
+  if (!cur || !_productEditBaseline) return false;
+  return JSON.stringify(cur) !== JSON.stringify(_productEditBaseline);
+}
+function _productEditUpdateDirtyIndicator() {
+  var btn = document.querySelector('#productDetailView button.btn-primary');
+  if (!btn) return;
+  if (_productEditIsDirty()) btn.classList.add('dirty');
+  else btn.classList.remove('dirty');
+}
+
 function editProduct(pid) {
   productEditMode = true;
   // Preserve current tab so Edit from a specific tab (Variants, Images, etc.) stays there
   if (!productEditTab) productEditTab = 'details';
   renderProductDetail(pid);
+  if (window.MastDirty) {
+    MastDirty.register('productEdit', _productEditIsDirty, { label: 'Product detail' });
+  }
+  _productEditCaptureBaseline();
 }
 
 // Cancel product edit — discards in-flight changes and returns to read mode.
 // Replaces the inline state mutation in the Cancel button onclick.
 function cancelProductEdit(pid) {
-  productEditMode = false;
-  renderProductDetail(pid);
+  var doCancel = function() {
+    productEditMode = false;
+    _productEditBaseline = null;
+    if (window.MastDirty) MastDirty.unregister('productEdit');
+    renderProductDetail(pid);
+  };
+  // Cancel itself counts as exit-edit-mode — prompt if dirty.
+  if (window.MastDirty && MastDirty.getDirtyKeys().indexOf('productEdit') !== -1) {
+    MastDirty.checkAndExit(doCancel);
+  } else {
+    doCancel();
+  }
 }
 
 function switchProductTab(tab) {
@@ -21958,6 +22225,8 @@ async function saveProduct(pid) {
 
     showToast(isCreate ? 'Product created' : 'Product saved');
     emitTestingEvent('saveProduct', {});
+    // Retake dirty baseline — Save stays in edit mode (Paradigm A) but clears dirty.
+    _productEditCaptureBaseline();
 
     // Update in-memory productsData so subsequent re-renders see the saved state
     var pdIdx = productsData.findIndex(function(p) { return p.pid === targetPid; });
