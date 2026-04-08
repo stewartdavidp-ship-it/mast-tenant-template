@@ -142,12 +142,19 @@ function openAddContactModal() {
     return '<option value="' + esc(c) + '">' + esc(c) + '</option>';
   }).join('');
 
+  // If the caller (e.g., customers module) stashed a pending customer link,
+  // pre-fill the name/email fields and default the category to 'customer'.
+  var pending = window._pendingContactCustomerLink || null;
+  var prefillName = (pending && pending.prefillName) || '';
+  var prefillEmail = (pending && pending.prefillEmail) || '';
+  var defaultCategory = pending ? 'customer' : '';
+
   var html = '' +
     '<div class="modal-header"><h3>Add Contact</h3></div>' +
     '<div class="modal-body">' +
-      '<div class="form-group"><label class="field-required">Name</label><input type="text" id="contactNameInput" placeholder="Company or person name"></div>' +
+      '<div class="form-group"><label class="field-required">Name</label><input type="text" id="contactNameInput" value="' + esc(prefillName) + '" placeholder="Company or person name"></div>' +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
-        '<div class="form-group"><label>Email</label><input type="email" id="contactEmailInput" placeholder="email@example.com"></div>' +
+        '<div class="form-group"><label>Email</label><input type="email" id="contactEmailInput" value="' + esc(prefillEmail) + '" placeholder="email@example.com"></div>' +
         '<div class="form-group"><label>Phone</label><input type="tel" id="contactPhoneInput" placeholder="(555) 123-4567"></div>' +
       '</div>' +
       '<div class="form-group"><label>Company / Organization</label><input type="text" id="contactCompanyInput" placeholder="Company name"></div>' +
@@ -161,10 +168,27 @@ function openAddContactModal() {
         '<p style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">Paste an existing Google Drive folder link.</p></div>' +
     '</div>' +
     '<div class="modal-footer">' +
-      '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+      '<button class="btn btn-secondary" onclick="cancelAddContactModal()">Cancel</button>' +
       '<button class="btn btn-primary" onclick="saveNewContact()">Create Contact</button>' +
     '</div>';
   openModal(html);
+  if (defaultCategory) {
+    var sel = document.getElementById('contactCategoryInput');
+    if (sel) {
+      for (var i = 0; i < sel.options.length; i++) {
+        if ((sel.options[i].value || '').toLowerCase() === defaultCategory) { sel.selectedIndex = i; break; }
+      }
+    }
+  }
+}
+
+// Cancel handler — clears any pending customer-link hint so the next
+// add-contact call doesn't accidentally reuse it. Does NOT popAndReturn —
+// the user stays on the contacts list view; they can use the back button
+// to return to the originating customer if they want.
+function cancelAddContactModal() {
+  window._pendingContactCustomerLink = null;
+  closeModal();
 }
 
 async function saveNewContact() {
@@ -200,6 +224,54 @@ async function saveNewContact() {
   };
 
   try {
+    // Check for a pending customer link BEFORE writing, so we can atomically
+    // write the contact + customer.linkedIds + byContactId index in one go
+    // (matches the legacy customers-module create path).
+    var pending = window._pendingContactCustomerLink || null;
+
+    if (pending && pending.customerId) {
+      // Fetch current linkedIds.contactIds so we can append the new id.
+      var custRef = MastDB._ref('admin/customers/' + pending.customerId + '/linkedIds');
+      var linkedSnap = await custRef.once('value');
+      var linked = linkedSnap.val() || { uids: [], contactIds: [], studentIds: [], squareCustomerId: null };
+      var contactIds = (linked.contactIds || []).slice();
+      if (contactIds.indexOf(id) === -1) contactIds.push(id);
+
+      var now2 = new Date().toISOString();
+      var updates = {};
+      updates['admin/contacts/' + id] = contactData;
+      updates['admin/customers/' + pending.customerId + '/linkedIds/contactIds'] = contactIds;
+      updates['admin/customers/' + pending.customerId + '/updatedAt'] = now2;
+      updates['admin/customerIndexes/byContactId/' + id] = pending.customerId;
+      await MastDB._multiUpdate(updates);
+      await writeAudit('create', 'contacts', id);
+      showToast('Contact created.');
+      emitTestingEvent('createContact', {});
+      closeModal();
+      contactsLoaded = false;
+
+      // Patch the customers module's in-memory linkedIds so the return
+      // render immediately shows the new contact in the Contacts tab.
+      // Also invalidates the per-customer contacts cache so the next render
+      // refetches and picks up the new record.
+      try {
+        if (typeof window.customersAppendLinkedContact === 'function') {
+          window.customersAppendLinkedContact(pending.customerId, id);
+        }
+      } catch (e) { /* non-fatal */ }
+
+      // Clear the hint and pop the MastNavStack back to the originating
+      // customer's Contacts tab.
+      window._pendingContactCustomerLink = null;
+      createGoogleContact(contactData);
+      if (window.MastNavStack && MastNavStack.size() > 0) {
+        MastNavStack.popAndReturn();
+      } else {
+        loadContacts();
+      }
+      return;
+    }
+
     await MastDB.contacts.ref(id).set(contactData);
     await writeAudit('create', 'contacts', id);
     showToast('Contact created.');
@@ -956,6 +1028,7 @@ async function doSyncGoogleContacts() {
   window.loadContacts = loadContacts;
   window.renderContacts = renderContacts;
   window.openAddContactModal = openAddContactModal;
+  window.cancelAddContactModal = cancelAddContactModal;
   window.saveNewContact = saveNewContact;
   window.viewContact = viewContact;
   window.backToContactsList = backToContactsList;

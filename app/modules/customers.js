@@ -30,7 +30,7 @@
   var customersBackfillRunning = false; // Phase 6.1 — guards the backfill button
   var currentView = 'list'; // list | detail | duplicates
   var selectedCustomerId = null;
-  var detailTab = 'overview'; // overview | orders | classes | interactions | wallet
+  var detailTab = 'overview'; // overview | orders | contacts | classes | interactions | wallet
   var customerEditMode = false;    // Paradigm A — read-only until user clicks Edit
   // Per-customer cache: { customerId: { orders, enrollments, interactions, wallets, loaded:{...} } }
   var detailCache = {};
@@ -46,6 +46,7 @@
   var DETAIL_TABS = [
     { value: 'overview',     label: 'Overview' },
     { value: 'orders',       label: 'Orders' },
+    { value: 'contacts',     label: 'Contacts' },
     { value: 'classes',      label: 'Classes' },
     { value: 'interactions', label: 'Interactions' },
     { value: 'wallet',       label: 'Wallet' }
@@ -198,8 +199,7 @@
       fields: {},
       focusId: (active && tab.contains(active)) ? active.id : null,
       focusSelStart: null,
-      focusSelEnd: null,
-      expandedContactId: expandedContactId
+      focusSelEnd: null
     };
     if (snap.focusId && active && typeof active.selectionStart === 'number') {
       snap.focusSelStart = active.selectionStart;
@@ -248,9 +248,6 @@
     render();
     restoreFormState(snap);
   }
-
-  // Contact editor expansion state (which contact card, if any, is in edit mode)
-  var expandedContactId = null;
 
   // Non-blocking feedback — reuse the global showToast helper from index.html.
   function toast(msg, isErr) {
@@ -559,6 +556,7 @@
     h += '<div id="customersDetailTabBody">';
     if (detailTab === 'overview')          h += renderOverviewTab(c);
     else if (detailTab === 'orders')       h += renderOrdersTab(c);
+    else if (detailTab === 'contacts')     h += renderContactsTab(c);
     else if (detailTab === 'classes')      h += renderClassesTab(c);
     else if (detailTab === 'interactions') h += renderInteractionsTab(c);
     else if (detailTab === 'wallet')       h += renderWalletTab(c);
@@ -969,26 +967,6 @@
     h += '</div>';
     h += detailCardClose();
 
-    // Contacts card (linked contact records — each one = an address/phone)
-    h += detailCardOpen('Contacts');
-    h += '<div id="customersContactsList">';
-    var ccCache = getCache(c.id);
-    if (!ccCache.loaded.contacts) {
-      h += '<div class="loading">Loading contacts…</div>';
-      loadCustomerContacts(c.id);
-    } else if (!ccCache.contacts.length) {
-      h += '<div style="font-size:0.85rem;color:var(--warm-gray);">No contact records yet. Add one to capture an address or phone number.</div>';
-    } else {
-      ccCache.contacts.forEach(function(ct) {
-        h += renderContactCard(ct);
-      });
-    }
-    h += '</div>';
-    h += '<div style="margin-top:12px;">';
-    h += '<button class="btn btn-secondary btn-small" data-customer-id="' + esc(c.id) + '" onclick="customersAddContact(this.dataset.customerId)">+ Add contact</button>';
-    h += '</div>';
-    h += detailCardClose();
-
     // Notes card
     h += detailCardOpen('Notes');
     h += '<textarea id="custNotesTextarea" data-customer-id="' + esc(c.id) + '" onblur="customersSaveNotes(this.dataset.customerId, this.value)" ' +
@@ -1315,107 +1293,76 @@
     return h;
   }
 
-  // ----- Contacts (linked contact records, used for addresses/phones) -----
+  // ----- Contacts tab (linked contact records — addresses/phones) -----
+  //
+  // Paradigm A drill-through: list-only on the customer. All edits happen
+  // in the contacts module (via customersOpenContact → openContactFromCustomer
+  // → MastNavStack push → contacts.viewContact). Creation also routes through
+  // the contacts module via customersAddContact (see addContactToCustomer).
 
-  function renderContactCard(ct) {
-    var name = ct.name || ct.displayName || '(unnamed contact)';
-    var expanded = expandedContactId === ct.id;
-    var inlineInputStyle = 'width:100%;padding:6px 10px;border:1px solid var(--cream-dark);border-radius:4px;background:white;font-family:DM Sans,sans-serif;font-size:0.85rem;';
+  function renderContactsTab(c) {
+    var cache = getCache(c.id);
+    if (!cache.loaded.contacts) {
+      loadCustomerContacts(c.id);
+      return '<div class="loading">Loading contacts…</div>';
+    }
+    // Orders cache is used to compute # Orders + Last Order per contact.
+    // Trigger the load in the background if not yet present — the columns
+    // will show "—" until it resolves, then a re-render fills them in.
+    if (!cache.loaded.orders) loadCustomerOrders(c.id);
 
+    var contacts = cache.contacts || [];
     var h = '';
-    h += '<div data-contact-id="' + esc(ct.id) + '" ' +
-         'style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:6px;padding:10px 14px;margin-bottom:8px;">';
 
-    if (!expanded) {
-      // Compact summary — click toggles to expanded editor
-      var bits = [];
-      if (ct.email)   bits.push(esc(ct.email));
-      if (ct.phone)   bits.push(esc(ct.phone));
-      if (ct.address) bits.push(esc(ct.address));
-      if (ct.company) bits.push(esc(ct.company));
-      h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;cursor:pointer;" ' +
-           'data-contact-id="' + esc(ct.id) + '" ' +
-           'onclick="customersExpandContact(this.dataset.contactId)">';
-      h += '<div style="flex:1;">';
-      h += '<div style="font-weight:600;font-size:0.85rem;margin-bottom:4px;">' + esc(name) + '</div>';
-      if (bits.length) {
-        h += '<div style="font-size:0.78rem;color:var(--warm-gray);line-height:1.5;">' + bits.join(' · ') + '</div>';
-      } else {
-        h += '<div style="font-size:0.78rem;color:var(--warm-gray-light);font-style:italic;">No details yet — click to edit</div>';
-      }
-      h += '</div>';
-      h += '<button data-contact-id="' + esc(ct.id) + '" ' +
-           'onclick="event.stopPropagation();customersExpandContact(this.dataset.contactId)" ' +
-           'style="background:none;border:1px solid var(--cream-dark);border-radius:4px;padding:4px 10px;font-size:0.72rem;cursor:pointer;color:var(--warm-gray);">Edit</button>';
-      h += '</div>';
+    if (!contacts.length) {
+      h += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">No contacts linked to this customer yet.</div>';
     } else {
-      // Expanded inline editor — save-on-blur per field, Done button collapses
-      h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">';
-      h += '<div style="font-weight:600;font-size:0.85rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;">Edit contact</div>';
-      h += '<div style="display:flex;gap:6px;">';
-      h += '<button data-contact-id="' + esc(ct.id) + '" ' +
-           'onclick="customersOpenContact(this.dataset.contactId)" ' +
-           'style="background:none;border:none;font-size:0.72rem;cursor:pointer;color:var(--warm-gray);text-decoration:underline;">Open full contact →</button>';
-      h += '<button onclick="customersCollapseContact()" ' +
-           'style="background:var(--teal);color:white;border:none;border-radius:4px;padding:4px 12px;font-size:0.72rem;cursor:pointer;">Done</button>';
-      h += '</div>';
-      h += '</div>';
-      h += '<div style="display:grid;grid-template-columns:90px 1fr;gap:8px 12px;font-size:0.85rem;">';
-      ['name', 'email', 'phone', 'address', 'company'].forEach(function(field) {
-        var label = field.charAt(0).toUpperCase() + field.slice(1);
-        var val = ct[field] || '';
-        var type = field === 'email' ? 'email' : (field === 'phone' ? 'tel' : 'text');
-        h += '<div style="color:var(--warm-gray);padding-top:6px;">' + label + '</div>';
-        h += '<div>';
-        h += '<input type="' + type + '" id="custContactEdit_' + esc(ct.id) + '_' + field + '" ' +
-             'data-contact-id="' + esc(ct.id) + '" data-field="' + field + '" ' +
-             'value="' + esc(val) + '" ' +
-             'onblur="customersSaveContactField(this.dataset.contactId, this.dataset.field, this.value)" ' +
-             'style="' + inlineInputStyle + '">';
-        h += '</div>';
-      });
-      h += '</div>';
+      // Pre-compute per-contact order aggregates from cache.orders (if loaded).
+      var ordersByContact = {};
+      if (cache.loaded.orders && Array.isArray(cache.orders)) {
+        cache.orders.forEach(function(o) {
+          if (!o.contactId) return;
+          var bucket = ordersByContact[o.contactId] || (ordersByContact[o.contactId] = { count: 0, last: null });
+          bucket.count += 1;
+          if (!bucket.last || (o.createdAt || '') > bucket.last) bucket.last = o.createdAt || null;
+        });
+      }
+
+      var rows = contacts.map(function(ct) {
+        var name = ct.name || ct.displayName || '(unnamed contact)';
+        var email = ct.email || '—';
+        var phone = ct.phone || '—';
+        var address = ct.address || '—';
+        var agg = ordersByContact[ct.id];
+        var ordCountCell, lastOrderCell;
+        if (cache.loaded.orders) {
+          ordCountCell = agg ? String(agg.count) : '0';
+          lastOrderCell = (agg && agg.last) ? fmtDate(agg.last) : '—';
+        } else {
+          ordCountCell = '—';
+          lastOrderCell = '—';
+        }
+        return '<tr data-contact-id="' + esc(ct.id) + '" style="cursor:pointer;" onclick="customersOpenContact(this.dataset.contactId)">' +
+          '<td style="font-weight:500;">' + esc(name) + '</td>' +
+          '<td style="color:var(--warm-gray);">' + esc(email) + '</td>' +
+          '<td style="color:var(--warm-gray);">' + esc(phone) + '</td>' +
+          '<td style="color:var(--warm-gray);font-size:0.78rem;">' + esc(address) + '</td>' +
+          '<td style="text-align:right;color:var(--warm-gray);">' + esc(ordCountCell) + '</td>' +
+          '<td style="color:var(--warm-gray);font-size:0.78rem;">' + esc(lastOrderCell) + '</td>' +
+        '</tr>';
+      }).join('');
+
+      h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">' + contacts.length + ' contact' + (contacts.length === 1 ? '' : 's') + '</div>';
+      h += '<div class="data-table"><table>';
+      h += '<thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Address</th><th style="text-align:right;"># Orders</th><th>Last Order</th></tr></thead>';
+      h += '<tbody>' + rows + '</tbody>';
+      h += '</table></div>';
     }
 
+    h += '<div style="margin-top:16px;">';
+    h += '<button class="btn btn-secondary btn-small" data-customer-id="' + esc(c.id) + '" onclick="customersAddContact(this.dataset.customerId)">+ Add contact</button>';
     h += '</div>';
     return h;
-  }
-
-  // Toggle contact-card expansion. Uses renderPreservingEdits so typing in
-  // another field (notes, identity) isn't lost when the card expands.
-  function expandContact(contactId) {
-    expandedContactId = contactId;
-    renderPreservingEdits();
-  }
-
-  function collapseContact() {
-    expandedContactId = null;
-    renderPreservingEdits();
-  }
-
-  // Inline contact save — writes to admin/contacts/{contactId} and updates
-  // the in-memory cache. No full render; just touch the cached copy so
-  // subsequent re-renders show the new value.
-  function saveContactField(contactId, field, value) {
-    var trimmed = (value || '').trim();
-    // Find the contact in any customer cache and in-memory update
-    var cache = getCache(selectedCustomerId);
-    var contact = (cache.contacts || []).find(function(c) { return c.id === contactId; });
-    if (!contact) return;
-    var current = contact[field] || '';
-    if (trimmed === current) return;
-    var now = new Date().toISOString();
-    var updates = {};
-    updates['admin/contacts/' + contactId + '/' + field] = trimmed || null;
-    updates['admin/contacts/' + contactId + '/updatedAt'] = now;
-    MastDB._multiUpdate(updates).then(function() {
-      contact[field] = trimmed || null;
-      contact.updatedAt = now;
-      toast('Saved');
-    }).catch(function(e) {
-      console.error('[customers] contact save failed', field, e);
-      toast('Save failed: ' + (e && e.message), true);
-    });
   }
 
   function loadCustomerContacts(customerId) {
@@ -1433,7 +1380,7 @@
       cache.loaded.contacts = true;
       cache._contactsLoading = false;
       setTimeout(function() {
-        if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'overview') renderPreservingEdits();
+        if (currentView === 'detail' && selectedCustomerId === customerId && (detailTab === 'contacts' || detailTab === 'overview')) renderPreservingEdits();
       }, 0);
       return;
     }
@@ -1448,7 +1395,7 @@
       cache.loaded.contacts = true;
       cache._contactsLoading = false;
       setTimeout(function() {
-        if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'overview') renderPreservingEdits();
+        if (currentView === 'detail' && selectedCustomerId === customerId && (detailTab === 'contacts' || detailTab === 'overview')) renderPreservingEdits();
       }, 0);
     }).catch(function(e) {
       console.error('[customers] loadContacts FAILED', customerId, e);
@@ -1456,7 +1403,7 @@
       cache.loaded.contacts = true;
       cache._contactsLoading = false;
       setTimeout(function() {
-        if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'overview') renderPreservingEdits();
+        if (currentView === 'detail' && selectedCustomerId === customerId && (detailTab === 'contacts' || detailTab === 'overview')) renderPreservingEdits();
       }, 0);
     });
   }
@@ -1505,92 +1452,60 @@
     if (window.MastDirty) MastDirty.checkAndExit(doBack); else doBack();
   }
 
-  async function addContactToCustomer(customerId) {
+  // Route "+ Add contact" through the contacts module, mirroring the
+  // openOrderFromCustomer / openContactFromCustomer drill-through pattern.
+  // Pushes a MastNavStack breadcrumb, stashes a pending-link hint so the
+  // contacts module can atomically link the new contact to this customer,
+  // then navigates to contacts and opens its Add Contact modal. On save,
+  // contacts.saveNewContact reads the hint, writes the link + byContactId
+  // index, and popAndReturns here — restoring the Contacts tab with the
+  // new record visible.
+  function addContactToCustomer(customerId) {
+    if (!customerId) customerId = selectedCustomerId;
     var c = customersData.find(function(x) { return x && x.id === customerId; });
     if (!c) return;
+    var label = c.displayName || c.primaryEmail || 'customer';
 
-    // Inline modal — uses the global openModal/closeModal helpers from index.html.
-    var customerLabel = c.displayName || c.primaryEmail || 'customer';
-    var html = '';
-    html += '<div class="modal-header"><h3>Add contact to ' + esc(customerLabel) + '</h3></div>';
-    html += '<div class="modal-body">';
-    html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">Each contact captures one address and phone. A customer can have many.</p>';
-    html += '<div class="form-group"><label class="field-required">Name</label><input type="text" id="cmAddCName" placeholder="Full name"></div>';
-    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
-    html += '<div class="form-group"><label>Email</label><input type="email" id="cmAddCEmail" value="' + esc(c.primaryEmail || '') + '" placeholder="email@example.com"></div>';
-    html += '<div class="form-group"><label>Phone</label><input type="tel" id="cmAddCPhone" placeholder="(555) 123-4567"></div>';
-    html += '</div>';
-    html += '<div class="form-group"><label>Address</label><input type="text" id="cmAddCAddress" placeholder="Street, City, State ZIP"></div>';
-    html += '</div>';
-    html += '<div class="modal-footer">';
-    html += '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>';
-    html += '<button class="btn btn-primary" data-customer-id="' + esc(customerId) + '" onclick="customersSaveNewContact(this.dataset.customerId)">Create contact</button>';
-    html += '</div>';
-    if (typeof openModal === 'function') openModal(html);
-  }
-
-  async function saveNewContactForCustomer(customerId) {
-    var name = (document.getElementById('cmAddCName') || {}).value || '';
-    var email = (document.getElementById('cmAddCEmail') || {}).value || '';
-    var phone = (document.getElementById('cmAddCPhone') || {}).value || '';
-    var address = (document.getElementById('cmAddCAddress') || {}).value || '';
-    name = name.trim(); email = email.trim(); phone = phone.trim(); address = address.trim();
-    if (!name) {
-      if (typeof window.mastAlert === 'function') return window.mastAlert('Contact name is required.');
-      return;
+    if (window.MastNavStack && customerId) {
+      MastNavStack.push({
+        route: 'customers',
+        view: 'detail',
+        state: { customerId: customerId, detailTab: 'contacts', scrollTop: window.scrollY || 0 },
+        label: label
+      });
     }
 
-    var contactId = 'contact_' + Date.now().toString(36);
-    var now = new Date().toISOString();
-    var contactData = {
-      id: contactId,
-      name: name,
-      email: email || null,
-      phone: phone || null,
-      address: address || null,
-      company: null,
-      category: 'customer',
-      website: null,
-      notes: null,
-      googleContactId: null,
-      driveFolderLink: null,
+    window._pendingContactCustomerLink = {
       customerId: customerId,
-      createdAt: now,
-      createdBy: (window.currentUser && window.currentUser.uid) || 'customers-module',
-      updatedAt: now
+      prefillName: c.displayName || '',
+      prefillEmail: c.primaryEmail || ''
     };
 
-    try {
-      // Write contact + explicit link to customer.linkedIds.contactIds + reverse index.
-      var c = customersData.find(function(x) { return x && x.id === customerId; });
-      var linked = (c && c.linkedIds) || { uids: [], contactIds: [], studentIds: [], squareCustomerId: null };
-      var contactIds = (linked.contactIds || []).slice();
-      if (contactIds.indexOf(contactId) === -1) contactIds.push(contactId);
-
-      var updates = {};
-      updates['admin/contacts/' + contactId] = contactData;
-      updates['admin/customers/' + customerId + '/linkedIds/contactIds'] = contactIds;
-      updates['admin/customers/' + customerId + '/updatedAt'] = now;
-      updates['admin/customerIndexes/byContactId/' + contactId] = customerId;
-      await MastDB._multiUpdate(updates);
-
-      // Update in-memory copy
-      if (c) {
-        if (!c.linkedIds) c.linkedIds = { uids: [], contactIds: [], studentIds: [], squareCustomerId: null };
-        c.linkedIds.contactIds = contactIds;
-        c.updatedAt = now;
+    var doNav = function() {
+      window._mastNavInternal = true;
+      try {
+        if (typeof navigateTo === 'function') navigateTo('contacts');
+      } finally {
+        window._mastNavInternal = false;
       }
-      var cache = getCache(customerId);
-      cache.contacts = (cache.contacts || []).concat([contactData]);
-      cache.loaded.contacts = true;
-
-      if (typeof closeModal === 'function') closeModal();
-      if (currentView === 'detail' && selectedCustomerId === customerId) renderPreservingEdits();
-      toast('Contact created');
-    } catch (e) {
-      console.error('[customers] add contact failed', e);
-      toast('Add contact failed: ' + (e && e.message), true);
-    }
+      var openIt = function() {
+        if (typeof window.openAddContactModal === 'function') {
+          window.openAddContactModal();
+        } else {
+          console.error('[customers] openAddContactModal not available after contacts load');
+          toast('Failed to open add-contact form', true);
+        }
+      };
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') {
+        MastAdmin.loadModule('contacts').then(openIt).catch(function(err) {
+          console.error('[customers] contacts module load failed', err);
+          toast('Failed to load contacts module: ' + (err && err.message || err), true);
+        });
+      } else {
+        setTimeout(openIt, 50);
+      }
+    };
+    if (window.MastDirty) MastDirty.checkAndExit(doNav); else doNav();
   }
 
   function loadCustomerWallets(customerId, uids) {
@@ -2014,7 +1929,25 @@
     });
   }
   window.customersAddContact = addContactToCustomer;
-  window.customersSaveNewContact = saveNewContactForCustomer;
+  // Called by contacts.js after atomically creating a contact that's linked
+  // to a customer. Keeps the customers module's in-memory copy in sync so
+  // MastNavStack.popAndReturn → restorer → render shows the new entry.
+  window.customersAppendLinkedContact = function(customerId, contactId) {
+    var cust = customersData.find(function(x) { return x && x.id === customerId; });
+    if (!cust) return;
+    if (!cust.linkedIds) cust.linkedIds = {};
+    var ids = (cust.linkedIds.contactIds || []).slice();
+    if (ids.indexOf(contactId) === -1) ids.push(contactId);
+    cust.linkedIds.contactIds = ids;
+    cust.updatedAt = new Date().toISOString();
+    // Invalidate the per-customer contacts cache so loadCustomerContacts
+    // refetches fresh and picks up the new contact record.
+    var cache = detailCache[customerId];
+    if (cache) {
+      cache.loaded.contacts = false;
+      cache._contactsLoading = false;
+    }
+  };
   window.customersEnterEdit = enterCustomerEditMode;
   window.customersCancelEdit = cancelCustomerEditMode;
   window.customersSaveEdit = saveCustomerEditMode;
@@ -2022,9 +1955,6 @@
     var h3 = document.querySelector('#customersTab h3');
     if (h3) h3.innerText = (v || '').trim() || '(no name)';
   };
-  window.customersExpandContact = expandContact;
-  window.customersCollapseContact = collapseContact;
-  window.customersSaveContactField = saveContactField;
   window.customersBackfillStats = backfillStats;
   window.customersExportCsv = exportCsv;
   window.customersApplySegment = applySegment;
