@@ -8321,7 +8321,15 @@ var MastDirty = (function() {
     if (dirty.length === 0) { exitFn(); return; }
     var labels = dirty.map(function(k) { return registrations[k].opts.label || k; });
     var msg = 'You have unsaved changes on ' + labels.join(', ') + '. Discard them?';
-    if (window.confirm(msg)) {
+    // Use mastConfirm (dark-mode-compliant) — async, so the nav happens in the callback
+    // when the user confirms. This means callers of checkAndExit must not rely on
+    // synchronous return; they should perform the nav only inside exitFn.
+    (typeof mastConfirm === 'function' ? mastConfirm(msg, {
+      title: 'Unsaved changes',
+      confirmLabel: 'Discard',
+      danger: true
+    }) : Promise.resolve(window.confirm(msg))).then(function(ok) {
+      if (!ok) return; // Stay
       dirty.forEach(function(k) {
         var d = registrations[k].opts.discardFn;
         if (typeof d === 'function') { try { d(); } catch (e) {} }
@@ -8329,8 +8337,7 @@ var MastDirty = (function() {
       // Cleared on caller side via unregister, but defensively wipe
       dirty.forEach(function(k) { delete registrations[k]; });
       exitFn();
-    }
-    // Else: stay
+    });
   }
 
   window.addEventListener('beforeunload', function(e) {
