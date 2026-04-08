@@ -758,7 +758,12 @@
     '</div>';
     emailSendHtml += '</div>';
 
-    var backLabel = _viewOrderReturnRoute ? 'Back to ' + _viewOrderReturnRoute.charAt(0).toUpperCase() + _viewOrderReturnRoute.slice(1) : 'Back to Orders';
+    // Prefer the MastNavStack label (set by the pushing context, e.g. a
+    // customer detail's Orders tab) so the back button reads "Back to <name>".
+    var stackLabel = (window.MastNavStack && MastNavStack.size() > 0 && typeof MastNavStack.label === 'function') ? MastNavStack.label() : null;
+    var backLabel = stackLabel
+      ? 'Back to ' + stackLabel
+      : (_viewOrderReturnRoute ? 'Back to ' + _viewOrderReturnRoute.charAt(0).toUpperCase() + _viewOrderReturnRoute.slice(1) : 'Back to Orders');
     detailEl.innerHTML = '<button class="detail-back" onclick="backToOrders()">&#8592; ' + backLabel + '</button>' +
       '<div class="order-detail-header">' +
         '<div>' +

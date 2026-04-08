@@ -1689,25 +1689,45 @@
   }
 
   function openOrderFromCustomer(orderId) {
-    // Navigate to the orders tab, loading the module first if needed. The
-    // orders module is lazy-loaded, so window.viewOrder may not exist yet
-    // the first time a user clicks an order row from a customer detail view.
-    if (typeof navigateTo === 'function') navigateTo('orders');
-    var callView = function() {
-      if (typeof window.viewOrder === 'function') {
-        window.viewOrder(orderId);
+    // Push a MastNavStack entry so Back from the order detail returns to
+    // THIS customer's Orders tab (Paradigm A popAndReturn). Must happen
+    // BEFORE navigateTo('orders') so navigateTo doesn't clear the stack.
+    var c = selectedCustomerId
+      ? customersData.find(function(x) { return x && x.id === selectedCustomerId; })
+      : null;
+    var label = c ? (c.displayName || c.primaryEmail || 'customer') : 'Customers';
+    if (window.MastNavStack && selectedCustomerId) {
+      MastNavStack.push({
+        route: 'customers',
+        view: 'detail',
+        state: { customerId: selectedCustomerId, detailTab: 'orders', scrollTop: window.scrollY || 0 },
+        label: label
+      });
+    }
+    var doNav = function() {
+      window._mastNavInternal = true;
+      try {
+        if (typeof navigateTo === 'function') navigateTo('orders');
+      } finally {
+        window._mastNavInternal = false;
+      }
+      var callView = function() {
+        if (typeof window.viewOrder === 'function') {
+          window.viewOrder(orderId);
+        } else {
+          showToast && showToast('Could not open order — orders module failed to load.', true);
+        }
+      };
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') {
+        MastAdmin.loadModule('orders').then(callView).catch(function(err) {
+          console.error('[customers] failed to load orders module', err);
+          showToast && showToast('Failed to load orders module: ' + (err && err.message || err), true);
+        });
       } else {
-        showToast && showToast('Could not open order — orders module failed to load.', true);
+        setTimeout(callView, 50);
       }
     };
-    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') {
-      MastAdmin.loadModule('orders').then(callView).catch(function(err) {
-        console.error('[customers] failed to load orders module', err);
-        showToast && showToast('Failed to load orders module: ' + (err && err.message || err), true);
-      });
-    } else {
-      setTimeout(callView, 50);
-    }
+    if (window.MastDirty) MastDirty.checkAndExit(doNav); else doNav();
   }
 
   // ============================================================
