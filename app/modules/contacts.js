@@ -355,12 +355,10 @@ function viewContact(contactId) {
 }
 
 function backToContactsList() {
-  console.log('[contacts] backToContactsList called; MastNavStack size:', (window.MastNavStack && MastNavStack.size && MastNavStack.size()) || 0);
   if (window.MastNavStack && MastNavStack.size() > 0) {
     selectedContactId = null;
     document.getElementById('contactDetailView').style.display = 'none';
     document.getElementById('contactsListView').style.display = '';
-    console.log('[contacts] calling popAndReturn');
     MastNavStack.popAndReturn();
     return;
   }
