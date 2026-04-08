@@ -1536,6 +1536,13 @@ function showDetailCard(label, value) {
 }
 
 function backToShowsList() {
+  if (window.MastNavStack && MastNavStack.size() > 0) {
+    selectedShowId = null;
+    var dv = document.getElementById('showDetailView');
+    if (dv) dv.style.display = 'none';
+    MastNavStack.popAndReturn();
+    return;
+  }
   selectedShowId = null;
   var detailView = document.getElementById('showDetailView');
   if (detailView) detailView.style.display = 'none';
@@ -2580,6 +2587,29 @@ async function runShowDeepDive(showId) {
   function ensureShowsData() {
     if (!showsLoaded) loadShows();
     if (!productsLoaded) loadProducts();
+  }
+
+  // MastNavStack restorer for show routes — re-opens a show detail
+  // when popping back from a cross-module navigation.
+  if (window.MastNavStack) {
+    var showRestorer = function(view, state) {
+      if (view !== 'detail' || !state || !state.showId) return;
+      var openIt = function() {
+        if (typeof viewShowDetail === 'function') {
+          selectedShowId = state.showId;
+          viewShowDetail(state.showId);
+        }
+      };
+      if (!showsLoaded) {
+        var tries = 0;
+        var iv = setInterval(function() {
+          if (showsLoaded || tries++ > 25) { clearInterval(iv); openIt(); }
+        }, 100);
+      } else openIt();
+    };
+    ['show', 'show-apply', 'show-prep', 'show-execute', 'show-history'].forEach(function(r) {
+      window.MastNavStack.registerRestorer(r, showRestorer);
+    });
   }
 
   MastAdmin.registerModule('shows', {

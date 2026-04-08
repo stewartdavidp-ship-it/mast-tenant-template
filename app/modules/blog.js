@@ -449,6 +449,15 @@
   }
 
   function blogBackToList() {
+    if (window.MastNavStack && MastNavStack.size() > 0) {
+      blogCurrentView = 'list';
+      blogCurrentPostId = null;
+      blogCurrentPost = null;
+      blogAiResult = null;
+      blogShowPreview = false;
+      MastNavStack.popAndReturn();
+      return;
+    }
     blogCurrentView = 'list';
     blogCurrentPostId = null;
     blogCurrentPost = null;
@@ -1867,6 +1876,17 @@
   // ============================================================
   // Register with MastAdmin
   // ============================================================
+
+  // MastNavStack restorer for blog route — re-opens a post on pop.
+  if (window.MastNavStack) {
+    window.MastNavStack.registerRestorer('blog', function(view, state) {
+      if (view !== 'detail' || !state || !state.postId) return;
+      var openIt = function() {
+        if (typeof blogEditPost === 'function') blogEditPost(state.postId);
+      };
+      setTimeout(openIt, 100);
+    });
+  }
 
   MastAdmin.registerModule('blog', {
     routes: {

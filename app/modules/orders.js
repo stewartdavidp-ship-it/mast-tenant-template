@@ -363,6 +363,14 @@
   }
 
   function backToOrders() {
+    // MastNavStack-aware: if there's a stacked entry, return to that context.
+    if (window.MastNavStack && MastNavStack.size() > 0) {
+      selectedOrderId = null;
+      document.getElementById('orderDetailView').style.display = 'none';
+      document.getElementById('orderDetailView').className = 'order-detail';
+      MastNavStack.popAndReturn();
+      return;
+    }
     selectedOrderId = null;
     if (_viewOrderReturnRoute) {
       var route = _viewOrderReturnRoute;
@@ -3628,6 +3636,29 @@
 
   function ensureOrdersData() {
     if (ordersLoaded) renderOrders();
+  }
+
+  // Register MastNavStack restorer for the orders route — re-opens an
+  // order detail when popping back from a cross-module navigation.
+  if (window.MastNavStack) {
+    window.MastNavStack.registerRestorer('orders', function(view, state) {
+      if (view !== 'detail' || !state || !state.orderId) return;
+      var openIt = function() {
+        if (orders[state.orderId]) {
+          viewOrder(state.orderId);
+          if (state.scrollTop != null) {
+            setTimeout(function() { window.scrollTo(0, state.scrollTop); }, 50);
+          }
+        }
+      };
+      if (!ordersLoaded) {
+        // Defer until orders load
+        var tries = 0;
+        var iv = setInterval(function() {
+          if (ordersLoaded || tries++ > 25) { clearInterval(iv); openIt(); }
+        }, 100);
+      } else openIt();
+    });
   }
 
   MastAdmin.registerModule('orders', {

@@ -1780,6 +1780,13 @@
   // ============================================================
 
   function backToList() {
+    // MastNavStack-aware: pop and return to original context if any.
+    if (window.MastNavStack && MastNavStack.size() > 0) {
+      selectedClassId = null;
+      hideAllViews();
+      MastNavStack.popAndReturn();
+      return;
+    }
     selectedClassId = null;
     hideAllViews();
     document.getElementById('bookListView').style.display = '';
@@ -3342,6 +3349,29 @@
   // ============================================================
   // Module Registration
   // ============================================================
+
+  // Register MastNavStack restorer for the book route — re-opens
+  // a class detail when popping back from a cross-module navigation.
+  if (window.MastNavStack) {
+    window.MastNavStack.registerRestorer('book', function(view, state) {
+      if (view !== 'detail' || !state || !state.classId) return;
+      var openIt = function() {
+        loadClassDetail(state.classId);
+        if (state.scrollTop != null) {
+          setTimeout(function() { window.scrollTo(0, state.scrollTop); }, 50);
+        }
+      };
+      // classesData may not be loaded yet if cross-module hop
+      if (!classesData || !classesData.length) {
+        var tries = 0;
+        var iv = setInterval(function() {
+          if ((classesData && classesData.length) || tries++ > 25) {
+            clearInterval(iv); openIt();
+          }
+        }, 100);
+      } else openIt();
+    });
+  }
 
   MastAdmin.registerModule('book', {
     routes: {

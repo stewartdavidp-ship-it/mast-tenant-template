@@ -355,6 +355,13 @@ function viewContact(contactId) {
 }
 
 function backToContactsList() {
+  if (window.MastNavStack && MastNavStack.size() > 0) {
+    selectedContactId = null;
+    document.getElementById('contactDetailView').style.display = 'none';
+    document.getElementById('contactsListView').style.display = '';
+    MastNavStack.popAndReturn();
+    return;
+  }
   selectedContactId = null;
   if (_viewContactReturnRoute) {
     var route = _viewContactReturnRoute;
@@ -977,6 +984,22 @@ async function doSyncGoogleContacts() {
     var connected = await isGoogleContactsConnected();
     connectBtn.style.display = connected ? 'none' : '';
     syncBtn.style.display = connected ? '' : 'none';
+  }
+
+  // MastNavStack restorer for the contacts route — re-opens contact detail.
+  if (window.MastNavStack) {
+    window.MastNavStack.registerRestorer('contacts', function(view, state) {
+      if (view !== 'detail' || !state || !state.contactId) return;
+      var openIt = function() {
+        if (typeof viewContact === 'function') viewContact(state.contactId);
+      };
+      if (!contactsLoaded) {
+        var tries = 0;
+        var iv = setInterval(function() {
+          if (contactsLoaded || tries++ > 25) { clearInterval(iv); openIt(); }
+        }, 100);
+      } else openIt();
+    });
   }
 
   MastAdmin.registerModule('contacts', {

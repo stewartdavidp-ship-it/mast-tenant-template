@@ -2713,6 +2713,14 @@
   }
 
   function closeRecipeBuilder() {
+    // MastNavStack-aware: pop and return if we came from a cross-module nav.
+    if (window.MastNavStack && MastNavStack.size() > 0) {
+      piecesView = 'list';
+      editingRecipeId = null;
+      builderState = null;
+      MastNavStack.popAndReturn();
+      return;
+    }
     piecesView = 'list';
     editingRecipeId = null;
     builderState = null;
@@ -3803,6 +3811,23 @@
   // ============================================================
   // Register with MastAdmin
   // ============================================================
+
+  // MastNavStack restorer for the pieces (recipes) route — re-opens
+  // a recipe builder when popping back from a cross-module navigation.
+  if (window.MastNavStack) {
+    window.MastNavStack.registerRestorer('pieces', function(view, state) {
+      if (view !== 'detail' || !state || !state.recipeId) return;
+      var openIt = function() {
+        if (recipesData[state.recipeId]) openRecipeBuilder(state.recipeId);
+      };
+      if (!recipesLoaded) {
+        var tries = 0;
+        var iv = setInterval(function() {
+          if (recipesLoaded || tries++ > 25) { clearInterval(iv); openIt(); }
+        }, 100);
+      } else openIt();
+    });
+  }
 
   MastAdmin.registerModule('maker', {
     routes: {
