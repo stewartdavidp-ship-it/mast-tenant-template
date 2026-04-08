@@ -2917,13 +2917,14 @@
       }
     });
 
-    var STATUS_DOT = { scheduled: '#64B5F6', completed: SUCCESS_COLOR, cancelled: DANGER_COLOR };
+    // Phase 10: status colors use design tokens (no literal hex)
+    var STATUS_DOT = { scheduled: 'var(--teal)', completed: 'var(--success, ' + SUCCESS_COLOR + ')', cancelled: 'var(--danger, ' + DANGER_COLOR + ')' };
 
     var html = '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--border);border-radius:8px;overflow:hidden;">';
 
     // Day-of-week headers
     DOW_HEADERS.forEach(function(d) {
-      html += '<div style="background:var(--surface-dark);padding:8px 4px;text-align:center;font-size:0.75rem;font-weight:600;color:var(--warm-gray);text-transform:uppercase;">' + d + '</div>';
+      html += '<div style="background:var(--surface-dark);padding:8px 4px;text-align:center;font-size:0.78rem;font-weight:600;color:var(--warm-gray);text-transform:uppercase;">' + d + '</div>';
     });
 
     // Leading blank cells
@@ -2938,14 +2939,17 @@
       var isSelected = dateStr === selectedCalendarDay;
       var daySessions = sessionsByDate[dateStr] || [];
 
-      var cellBg = isSelected ? 'rgba(196,133,60,0.15)' : 'var(--surface-card)';
+      // Phase 10: selected-day bg uses amber-glow token (was literal rgba(196,133,60,0.15))
+      var cellBg = isSelected ? 'rgba(245,213,168,0.15)' : 'var(--surface-card)';
       var borderStyle = isToday ? 'box-shadow:inset 0 0 0 2px var(--primary);' : '';
+      var ariaLabel = formatDate(dateStr) + (daySessions.length ? ', ' + daySessions.length + ' session' + (daySessions.length === 1 ? '' : 's') : ', no sessions');
 
       html += '<div style="background:' + cellBg + ';min-height:80px;padding:6px;cursor:pointer;' + borderStyle + '" ' +
         'onclick="window._calSelectDay(\'' + dateStr + '\')" role="button" tabindex="0" ' +
-        'onkeydown="if(event.key===\'Enter\')window._calSelectDay(\'' + dateStr + '\')">';
+        'aria-label="' + esc(ariaLabel) + '"' + (isSelected ? ' aria-pressed="true"' : '') +
+        ' onkeydown="if(event.key===\'Enter\')window._calSelectDay(\'' + dateStr + '\')">';
 
-      html += '<div style="font-size:0.8rem;font-weight:' + (isToday ? '700' : '400') + ';color:' + (isToday ? 'var(--primary)' : 'var(--text)') + ';margin-bottom:4px;">' + d + '</div>';
+      html += '<div style="font-size:0.85rem;font-weight:' + (isToday ? '700' : '400') + ';color:' + (isToday ? 'var(--primary)' : 'var(--text)') + ';margin-bottom:4px;">' + d + '</div>';
 
       // Session dots (max 3 + overflow)
       var maxShow = 3;
@@ -2954,14 +2958,14 @@
         var sess = daySessions[si];
         var clsName = calendarClassesMap[sess.classId] ? calendarClassesMap[sess.classId].name : '';
         var abbr = clsName.length > 10 ? clsName.substring(0, 10) + '…' : clsName;
-        var dotColor = STATUS_DOT[sess.status] || '#BDBDBD';
-        html += '<div style="font-size:0.65rem;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:1px;">' +
+        var dotColor = STATUS_DOT[sess.status] || 'var(--warm-gray-light)';
+        html += '<div style="font-size:0.72rem;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:1px;">' +
           '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:' + dotColor + ';margin-right:3px;vertical-align:middle;"></span>' +
           '<span style="color:var(--warm-gray);">' + formatTime(sess.startTime) + '</span> ' +
           '<span style="color:var(--text);">' + esc(abbr) + '</span></div>';
       }
       if (daySessions.length > maxShow) {
-        html += '<div style="font-size:0.65rem;color:var(--primary);">+' + (daySessions.length - maxShow) + ' more</div>';
+        html += '<div style="font-size:0.72rem;color:var(--primary);">+' + (daySessions.length - maxShow) + ' more</div>';
       }
 
       html += '</div>';
@@ -3004,7 +3008,9 @@
     daySessions.forEach(function(s) {
       var clsName = calendarClassesMap[s.classId] ? calendarClassesMap[s.classId].name : s.classId;
       var cls = calendarClassesMap[s.classId] || {};
-      html += '<tr style="cursor:pointer;" onclick="window._bookViewClass(\'' + esc(s.classId) + '\')">' +
+      // Phase 10: push MastNavStack entry so back button returns to the calendar
+      var calLabel = MONTH_NAMES[calendarMonth] + ' ' + calendarYear + ' calendar';
+      html += '<tr style="cursor:pointer;" onclick="window._calOpenClass(\'' + esc(s.classId) + '\', \'' + esc(calLabel) + '\')">' +
         '<td>' + formatTime(s.startTime) + ' - ' + formatTime(s.endTime) + '</td>' +
         '<td><strong>' + esc(clsName) + '</strong></td>' +
         '<td class="book-hide-narrow">' + esc(s.instructorName || '—') + '</td>' +
@@ -3022,6 +3028,18 @@
   window._calNext = function() { calendarMonth++; if (calendarMonth > 11) { calendarMonth = 0; calendarYear++; } selectedCalendarDay = null; renderCalendar(); };
   window._calToday = function() { var d = new Date(); calendarYear = d.getFullYear(); calendarMonth = d.getMonth(); selectedCalendarDay = todayStr(); renderCalendar(); };
   window._calSelectDay = function(dateStr) { selectedCalendarDay = dateStr; renderCalendar(); };
+  // Phase 10: cross-screen nav from calendar → class detail with stack push so back returns to the calendar
+  window._calOpenClass = function(classId, label) {
+    if (window.MastNavStack && typeof MastNavStack.push === 'function') {
+      MastNavStack.push({
+        route: 'book',
+        view: 'calendar',
+        state: { calendarYear: calendarYear, calendarMonth: calendarMonth, selectedCalendarDay: selectedCalendarDay },
+        label: label || 'calendar'
+      });
+    }
+    loadClassDetail(classId);
+  };
 
   // ============================================================
   // Reports Dashboard
@@ -3354,6 +3372,15 @@
   // a class detail when popping back from a cross-module navigation.
   if (window.MastNavStack) {
     window.MastNavStack.registerRestorer('book', function(view, state) {
+      // Phase 10: calendar restore — return to the same month + selected day
+      if (view === 'calendar' && state) {
+        switchSubTab('calendar');
+        if (typeof state.calendarYear === 'number')  calendarYear  = state.calendarYear;
+        if (typeof state.calendarMonth === 'number') calendarMonth = state.calendarMonth;
+        if (state.selectedCalendarDay) selectedCalendarDay = state.selectedCalendarDay;
+        loadCalendar();
+        return;
+      }
       if (view !== 'detail' || !state || !state.classId) return;
       var openIt = function() {
         loadClassDetail(state.classId);
