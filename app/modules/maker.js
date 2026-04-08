@@ -1912,6 +1912,7 @@
 
   var piecesView = 'list'; // list | builder
   var piecesCategoryFilter = ''; // '' = all
+  var piecesExpandedPids = {}; // pid -> true when variants expanded
   var editingRecipeId = null;
   var builderState = null; // live state for the recipe builder
   var currentVariantId = 'default'; // active variant tab key — 'default' or productVariantId
@@ -2046,8 +2047,12 @@
         ? 'makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\')'
         : 'makerCreateRecipeForProduct(this.dataset.pid, this.dataset.name)';
       html += '<tr style="cursor:pointer;" data-pid="' + esc(pid) + '" data-name="' + esc(p.name || '') + '" onclick="' + rowClick + '">';
+      var isExpanded = !!piecesExpandedPids[pid];
+      var expandToggle = hasVariants
+        ? '<span onclick="event.stopPropagation();makerTogglePieceVariants(\'' + esc(pid) + '\')" style="display:inline-block;width:16px;text-align:center;cursor:pointer;color:var(--warm-gray);margin-right:6px;user-select:none;" title="' + (isExpanded ? 'Collapse' : 'Expand') + ' variants">' + (isExpanded ? '▾' : '▸') + '</span>'
+        : '<span style="display:inline-block;width:16px;margin-right:6px;"></span>';
       var variantCountBadge = hasVariants ? ' <span style="font-size:0.72rem;color:var(--warm-gray-light);font-weight:400;">(' + prodVariants.length + ' variants)</span>' : '';
-      html += '<td style="font-weight:500;">' + esc(p.name || '') + variantCountBadge + '</td>';
+      html += '<td style="font-weight:500;">' + expandToggle + esc(p.name || '') + variantCountBadge + '</td>';
       html += '<td>' + esc((p.categories || []).join(', ')) + '</td>';
 
       if (hasRecipe) {
@@ -2080,7 +2085,7 @@
       html += '</tr>';
 
       // Variant sub-rows — one per product variant, showing recipe override cost/price if present
-      if (hasVariants) {
+      if (hasVariants && isExpanded) {
         var activeTier = hasRecipe ? (recipe.activePriceTier || 'direct') : 'direct';
         prodVariants.forEach(function(pv) {
           var vName = variantDisplayName(pv);
@@ -3402,6 +3407,12 @@
   window.makerRepriceNow = repriceNow;
   window.makerOpenWhatIfSimulator = openWhatIfSimulator;
   window.makerSetCategoryFilter = function(v) { piecesCategoryFilter = v || ''; renderPiecesList(); };
+  window.makerTogglePieceVariants = function(pid) {
+    if (!pid) return;
+    if (piecesExpandedPids[pid]) delete piecesExpandedPids[pid];
+    else piecesExpandedPids[pid] = true;
+    renderPiecesList();
+  };
   window.makerCloseWhatIf = closeWhatIf;
   window.makerRunWhatIf = runWhatIfRender;
   window.makerOpenRepriceAllModal = openRepriceAllModal;
