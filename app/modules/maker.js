@@ -2127,7 +2127,7 @@
             vPrice = pv.priceCents / 100;
           }
           var vRowClick = hasRecipe
-            ? 'makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\')'
+            ? 'makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\', \'' + esc(pv.id) + '\')'
             : 'makerCreateRecipeForProduct(this.dataset.pid, this.dataset.name)';
           html += '<tr style="cursor:pointer;background:rgba(0,0,0,0.015);" data-pid="' + esc(pid) + '" data-name="' + esc(p.name || '') + '" onclick="' + vRowClick + '">';
           html += '<td style="padding-left:28px;font-size:0.85rem;color:var(--warm-gray);">↳ ' + esc(vName) + '</td>';
@@ -2161,7 +2161,7 @@
   // Recipe Builder — "The Money Screen"
   // ============================================================
 
-  async function openRecipeBuilder(recipeId) {
+  async function openRecipeBuilder(recipeId, variantId) {
     var recipe = recipesData[recipeId];
     if (!recipe) {
       MastAdmin.showToast('Recipe not found', true);
@@ -2182,8 +2182,14 @@
     // If product has variants, hydrate so each variant is an independent recipe slot
     hydrateVariantsIndependent(builderState);
     var pvList = getProductVariants(builderState);
-    if (pvList.length > 0 && (currentVariantId === 'default' || !currentVariantId)) {
-      currentVariantId = pvList[0].id;
+    if (pvList.length > 0) {
+      // Honor explicit variantId if caller passed one and it exists
+      if (variantId && pvList.some(function(pv){ return pv.id === variantId; })) {
+        currentVariantId = variantId;
+      } else if (currentVariantId === 'default' || !currentVariantId ||
+                 !pvList.some(function(pv){ return pv.id === currentVariantId; })) {
+        currentVariantId = pvList[0].id;
+      }
     }
     renderRecipeBuilder();
   }
