@@ -225,15 +225,17 @@ nav.scrolled .nav-logo img {
 
 .nav-shop {
   padding: 0.5rem 1.4rem !important;
-  border: 1px solid var(--amber) !important;
-  color: var(--amber-light) !important;
+  /* Use accent (CTA color) instead of primary so the button is visible
+     even when a tenant sets a very dark primaryColor like #000. */
+  border: 1px solid var(--accent) !important;
+  color: var(--accent-light) !important;
   border-radius: 2px;
   font-size: 0.72rem !important;
   transition: all 0.3s !important;
 }
 
 .nav-shop:hover {
-  background: var(--amber) !important;
+  background: var(--accent) !important;
   color: #fff !important;
 }
 
