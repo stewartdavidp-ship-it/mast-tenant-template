@@ -6,8 +6,9 @@
 
 1. **Read ARCHITECTURE.md** in this repo — it documents the Mast three-app architecture, deployment procedures, data model, and key patterns. Do NOT assume hosting strategy, deploy process, or auth flow.
 2. **Read memory files** — Check `~/.claude/projects/-Users-davidstewart-Downloads/memory/MEMORY.md` for cross-project context, active jobs, and deployment procedures.
-3. **Deploy via `mast_hosting`** — Tenants deploy via the Mast MCP tool, NOT Firebase CLI. Standard command: `mast_hosting(action: "deploy", tenantId: "{tenantId}")`. If MCP tools aren't in your tool list, use the HTTP fallback documented in memory.
-4. **After context compaction** — Re-read this bootstrap section, ARCHITECTURE.md, and memory files. Never improvise from summary alone.
+3. **If touching admin UI, load the Admin Design System.** Read `/Users/davidstewart/Developer/mast-architecture/docs/admin-design-system.md` and load the `mast-ux-style-guide` skill first, then relevant sub-skills (`mast-ux-tokens`, `mast-ux-screen-types`, `mast-ux-interaction`, `mast-ux-widgets`, `mast-ux-navigation-toasts`, `mast-ux-accessibility`). Customer and product detail screens are the reference implementations of Paradigm A. Do NOT copy patterns from non-retrofitted modules.
+4. **Deploy via `mast_hosting`** — Tenants deploy via the Mast MCP tool, NOT Firebase CLI. Standard command: `mast_hosting(action: "deploy", tenantId: "{tenantId}")`. If MCP tools aren't in your tool list, use the HTTP fallback documented in memory.
+5. **After context compaction** — Re-read this bootstrap section, ARCHITECTURE.md, and memory files. Never improvise from summary alone.
 
 ## What This Repo Is
 
