@@ -84,20 +84,25 @@
     return parseFloat(String(s).replace(/[^0-9.]/g, '')) || 0;
   }
 
-  function formatMoney(n) {
-    return '$' + n.toFixed(2);
+  // Cents-native formatter. Takes integer cents, returns "$X.XX".
+  // Kept as `formatMoney` (alias for cart.js's formatCents) for minimal churn.
+  function formatMoney(cents) {
+    var n = (typeof cents === 'number' && isFinite(cents)) ? cents : 0;
+    return '$' + (n / 100).toFixed(2);
   }
+  var formatCents = formatMoney;
 
+  // Returns cart subtotal in integer cents.
   function calcSubtotal() {
     var items = window.MastCart.getItems();
     var cents = 0;
     for (var i = 0; i < items.length; i++) {
       cents += (items[i].priceCents || 0) * (items[i].qty || 1);
     }
-    return cents / 100;
+    return cents;
   }
 
-  // Taxable subtotal excludes gift cards (stored value, not taxable)
+  // Taxable subtotal in cents, excludes gift cards (stored value, not taxable).
   function calcTaxableSubtotal() {
     var items = window.MastCart.getItems();
     var cents = 0;
@@ -105,7 +110,7 @@
       if (items[i].bookingType === 'gift-card') continue;
       cents += (items[i].priceCents || 0) * (items[i].qty || 1);
     }
-    return cents / 100;
+    return cents;
   }
 
   // ── Firebase helpers ──
@@ -168,33 +173,37 @@
       return {
         strategy: 'percent-of-subtotal',
         rate: config.wholesaleShippingPercent != null ? config.wholesaleShippingPercent : 10,
-        modifiers: config.wholesaleFreeThreshold != null ? [{ type: 'free-above', threshold: config.wholesaleFreeThreshold }] : [{ type: 'free-above', threshold: 350 }]
+        modifiers: config.wholesaleFreeThreshold != null ? [{ type: 'free-above', threshold: config.wholesaleFreeThreshold }] : [{ type: 'free-above', threshold: 35000 }]
       };
     }
+    // Legacy config format: rates stored as integer cents (Phase C).
     return {
       strategy: 'category-flat',
-      rates: { small: (config.small || {}).rate || 6, medium: (config.medium || {}).rate || 10, large: (config.large || {}).rate || 15, oversized: (config.oversized || {}).rate || 22 },
-      additionalItemSurcharge: config.additionalItemSurcharge || 2,
+      rates: { small: (config.small || {}).rate || 600, medium: (config.medium || {}).rate || 1000, large: (config.large || {}).rate || 1500, oversized: (config.oversized || {}).rate || 2200 },
+      additionalItemSurcharge: config.additionalItemSurcharge != null ? config.additionalItemSurcharge : 200,
       modifiers: config.freeThreshold != null ? [{ type: 'free-above', threshold: config.freeThreshold }] : []
     };
   }
 
+  // Cents-native. `subtotal` is integer cents. ruleSet.rate / rates / threshold / maxRate
+  // / additionalItemSurcharge are all integer cents (Phase C). Returns { price: cents, ... }.
+  // `wholesaleShippingPercent` stays as a plain percent number (e.g. 10 = 10%).
   function evaluateStrategy(ruleSet, subtotal, items, productMap) {
     var strategy = ruleSet.strategy || 'category-flat';
     switch (strategy) {
       case 'free':
         return { price: 0, label: 'Free Shipping', description: 'Free shipping on all orders', category: 'free' };
       case 'flat':
-        var rate = ruleSet.rate || 0;
-        return { price: Math.round(rate * 100) / 100, label: 'Flat Rate Shipping', description: formatMoney(rate) + ' flat rate', category: 'flat' };
+        var rate = Math.round(ruleSet.rate || 0);
+        return { price: rate, label: 'Flat Rate Shipping', description: formatMoney(rate) + ' flat rate', category: 'flat' };
       case 'percent-of-subtotal':
         var pct = ruleSet.rate != null ? ruleSet.rate : 10;
-        var pctPrice = Math.round(subtotal * pct) / 100;
+        var pctPrice = Math.round(subtotal * pct / 100);
         return { price: pctPrice, label: 'Standard Shipping', description: pct + '% of order subtotal', category: 'percent' };
       case 'category-flat':
       default:
         var catOrder = ['small', 'medium', 'large', 'oversized'];
-        var rates = ruleSet.rates || { small: 6, medium: 10, large: 15, oversized: 22 };
+        var rates = ruleSet.rates || { small: 600, medium: 1000, large: 1500, oversized: 2200 };
         var highestIdx = 0;
         var totalItems = 0;
         for (var i = 0; i < items.length; i++) {
@@ -204,10 +213,10 @@
           totalItems += (items[i].qty || 1);
         }
         var cat = catOrder[highestIdx];
-        var baseRate = rates[cat] != null ? rates[cat] : 6;
-        var surcharge = ruleSet.additionalItemSurcharge || 2;
+        var baseRate = rates[cat] != null ? rates[cat] : 600;
+        var surcharge = ruleSet.additionalItemSurcharge != null ? ruleSet.additionalItemSurcharge : 200;
         var additional = Math.max(totalItems - 1, 0) * surcharge;
-        var price = Math.round((baseRate + additional) * 100) / 100;
+        var price = Math.round(baseRate + additional);
         var desc = cat.charAt(0).toUpperCase() + cat.slice(1) + ' package';
         if (totalItems > 1) desc += ' + ' + (totalItems - 1) + ' additional item' + (totalItems > 2 ? 's' : '');
         return { price: price, label: 'Standard Shipping', description: desc, category: cat };
@@ -222,7 +231,7 @@
         return { price: 0, label: 'Free Shipping', description: 'Free shipping on orders over ' + formatMoney(mod.threshold), category: 'free' };
       }
       if (mod.type === 'cap' && mod.maxRate != null && result.price > mod.maxRate) {
-        result.price = Math.round(mod.maxRate * 100) / 100;
+        result.price = Math.round(mod.maxRate);
         result.description += ' (capped at ' + formatMoney(mod.maxRate) + ')';
       }
     }
@@ -418,7 +427,7 @@
     if (!msgEl) return;
     if (breakdown.couponDiscountCents > 0) {
       msgEl.innerHTML = '<div class="coupon-success">Coupon ' + esc(checkoutData.coupon.code) +
-        ' applied: -' + formatMoney(breakdown.couponDiscountCents / 100) + '</div>';
+        ' applied: -' + formatMoney(breakdown.couponDiscountCents) + '</div>';
     } else if (breakdown.couponData && breakdown.couponData.code) {
       // Coupon recognized but $0 discount (e.g. all items non-discountable)
       msgEl.innerHTML = '<div class="coupon-success">Coupon ' + esc(checkoutData.coupon.code) +
@@ -548,14 +557,13 @@
     }
 
     // Free shipping reminder on address step (only if threshold is configured)
-    var addrSubtotal = calcSubtotal();
-    var addrFreeThreshold = getShippingThreshold();
-    if (addrFreeThreshold != null) {
-      if (addrSubtotal >= addrFreeThreshold) {
+    var addrSubtotalCents = calcSubtotal();
+    var addrFreeThresholdCents = getShippingThreshold();
+    if (addrFreeThresholdCents != null) {
+      if (addrSubtotalCents >= addrFreeThresholdCents) {
         html += '<div style="text-align:center;color:#2D7D46;font-size:0.75rem;margin:12px 0 4px;letter-spacing:0.08em;">&#10003; FREE SHIPPING on this order!</div>';
-      } else if (addrSubtotal > 0) {
-        var addrAway = (addrFreeThreshold - addrSubtotal).toFixed(2);
-        html += '<div style="text-align:center;color:var(--warm-gray,#9B958E);font-size:0.75rem;margin:12px 0 4px;letter-spacing:0.08em;">You\'re $' + addrAway + ' away from free shipping!</div>';
+      } else if (addrSubtotalCents > 0) {
+        html += '<div style="text-align:center;color:var(--warm-gray,#9B958E);font-size:0.75rem;margin:12px 0 4px;letter-spacing:0.08em;">You\'re ' + formatMoney(addrFreeThresholdCents - addrSubtotalCents) + ' away from free shipping!</div>';
       }
     }
 
@@ -899,7 +907,7 @@
             price: shipResult.price
           };
 
-          var subtotal = calcSubtotal();
+          var subtotalCents = calcSubtotal();
           var html = stepIndicatorHtml('shipping');
 
           // Display calculated shipping (single line, no radio options)
@@ -953,8 +961,8 @@
             html += '<div class="checkout-section">' +
               '<div class="checkout-section-title">Wallet Deductions</div>';
 
-            var sRunning = Math.round(subtotal * 100);
-            var sCouponCents = checkoutData.coupon ? Math.round(checkoutData.coupon.discount * 100) : 0;
+            var sRunning = subtotalCents;
+            var sCouponCents = checkoutData.coupon ? Math.round((checkoutData.coupon.discount || 0) * 100) : 0;
 
             // Class passes (1st in priority)
             if (checkoutData.customerPasses.length > 0 && Object.keys(checkoutData.passAssignments).length > 0) {
@@ -969,8 +977,8 @@
               });
               var passCount = Object.keys(uniquePassIds).length;
               var passLabel = passCount > 1
-                ? '&#127915; Use class passes (' + passVisitsUsed + ' visit' + (passVisitsUsed !== 1 ? 's' : '') + ' across ' + passCount + ' passes, ' + formatMoney(passCoversCents / 100) + ' off)'
-                : '&#127915; Use class pass (' + passVisitsUsed + ' visit' + (passVisitsUsed !== 1 ? 's' : '') + ', ' + formatMoney(passCoversCents / 100) + ' off)';
+                ? '&#127915; Use class passes (' + passVisitsUsed + ' visit' + (passVisitsUsed !== 1 ? 's' : '') + ' across ' + passCount + ' passes, ' + formatMoney(passCoversCents) + ' off)'
+                : '&#127915; Use class pass (' + passVisitsUsed + ' visit' + (passVisitsUsed !== 1 ? 's' : '') + ', ' + formatMoney(passCoversCents) + ' off)';
               html += '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;color:var(--text);margin-bottom:8px;">' +
                 '<input type="checkbox" id="coPassToggle" ' + (checkoutData.passApplied ? 'checked' : '') + ' data-co="toggle-pass">' +
                 passLabel +
@@ -988,7 +996,7 @@
               var sLoyDis = sRunning <= 0;
               html += '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;color:var(--text);margin-bottom:8px;' + (sLoyDis ? 'opacity:0.4;' : '') + '">' +
                 '<input type="checkbox" id="coLoyaltyToggle" ' + (checkoutData.loyaltyApplied && !sLoyDis ? 'checked' : '') + (sLoyDis ? ' disabled' : '') + ' data-co="toggle-loyalty">' +
-                '&#11088; Apply ' + lb.totalPoints + ' ' + esc(lc.pointName) + ' (' + formatMoney(loyaltyValueCents / 100) + ' off)' +
+                '&#11088; Apply ' + lb.totalPoints + ' ' + esc(lc.pointName) + ' (' + formatMoney(loyaltyValueCents) + ' off)' +
                 (sLoyDis ? ' <span style="font-size:0.75rem;color:var(--warm-gray);">— already covered</span>' : '') +
               '</label>';
               if (checkoutData.loyaltyApplied && !sLoyDis) sRunning -= Math.min(loyaltyValueCents, sRunning);
@@ -1000,7 +1008,7 @@
               var sGcDis = sRunning <= 0;
               html += '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;color:var(--text);margin-bottom:8px;' + (sGcDis ? 'opacity:0.4;' : '') + '">' +
                 '<input type="checkbox" id="coGiftCardToggle" ' + (checkoutData.walletGiftCardApplied && !sGcDis ? 'checked' : '') + (sGcDis ? ' disabled' : '') + ' data-co="toggle-giftcard">' +
-                '&#127873; Apply gift cards (' + formatMoney(totalGcCents / 100) + ' available)' +
+                '&#127873; Apply gift cards (' + formatMoney(totalGcCents) + ' available)' +
                 (sGcDis ? ' <span style="font-size:0.75rem;color:var(--warm-gray);">— already covered</span>' : '') +
               '</label>';
               if (checkoutData.walletGiftCardApplied && !sGcDis) sRunning -= Math.min(totalGcCents, sRunning);
@@ -1012,7 +1020,7 @@
               var sCrDis = sRunning <= 0;
               html += '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;color:var(--text);margin-bottom:4px;' + (sCrDis ? 'opacity:0.4;' : '') + '">' +
                 '<input type="checkbox" id="coWalletToggle" ' + (checkoutData.walletCreditApplied && !sCrDis ? 'checked' : '') + (sCrDis ? ' disabled' : '') + ' data-co="toggle-wallet">' +
-                '&#128179; Apply store credits (' + formatMoney(totalCreditCents / 100) + ' available)' +
+                '&#128179; Apply store credits (' + formatMoney(totalCreditCents) + ' available)' +
                 (sCrDis ? ' <span style="font-size:0.75rem;color:var(--warm-gray);">— already covered</span>' : '') +
               '</label>';
             }
@@ -1031,7 +1039,7 @@
             var msgEl = document.getElementById('coCouponMsg');
             if (msgEl) {
               msgEl.innerHTML = '<div class="coupon-success">Coupon ' + esc(checkoutData.coupon.code) +
-                ' applied: -' + formatMoney(checkoutData.coupon.discount) + '</div>';
+                ' applied: -' + formatMoney(Math.round((checkoutData.coupon.discount || 0) * 100)) + '</div>';
             }
           }
 
@@ -1072,7 +1080,9 @@
 
     if (btn) { btn.disabled = true; btn.textContent = '...'; }
 
-    callFunction('validateCoupon', { code: code, subtotal: calcSubtotal() }, function (result) {
+    // validateCoupon Cloud Function still expects dollars in subtotal and returns
+    // discount in dollars (not cents-converted). Convert for the call.
+    callFunction('validateCoupon', { code: code, subtotal: calcSubtotal() / 100 }, function (result) {
       if (btn) { btn.disabled = false; btn.textContent = 'Apply'; }
 
       if (result && result.valid) {
@@ -1083,7 +1093,7 @@
           discount: result.discount
         };
         msgEl.innerHTML = '<div class="coupon-success">Coupon ' + esc(code) +
-          ' applied: -' + formatMoney(result.discount) + '</div>';
+          ' applied: -' + formatMoney(Math.round((result.discount || 0) * 100)) + '</div>';
       } else {
         checkoutData.coupon = null;
         msgEl.innerHTML = '<div class="coupon-error">' + esc(result && result.reason ? result.reason : 'Invalid coupon') + '</div>';
@@ -1095,7 +1105,7 @@
   // ── Build Totals from Server Breakdown (pure renderer, no math) ──
   function buildTotalsFromBreakdown(b) {
     var html = '<div class="order-totals">';
-    html += '<div class="order-total-row"><span class="order-total-label">Subtotal</span><span class="order-total-value">' + formatMoney((b.preDiscountSubtotalCents || b.subtotalCents) / 100) + '</span></div>';
+    html += '<div class="order-total-row"><span class="order-total-label">Subtotal</span><span class="order-total-value">' + formatMoney(b.preDiscountSubtotalCents || b.subtotalCents) + '</span></div>';
 
     // Sale discounts — server entry has saleId, saleName, pid, originalPriceCents,
     // salePriceCents (NOT discountCents). Compute from price fields and per-line qty
@@ -1115,56 +1125,56 @@
           sdCents = (sd.originalPriceCents - sd.salePriceCents) * sdQty;
         }
         if (sdCents == null || isNaN(sdCents)) sdCents = 0;
-        html += '<div class="order-total-row discount"><span class="order-total-label">Sale' + (sd.saleName ? ' (' + esc(sd.saleName) + ')' : '') + '</span><span class="order-total-value">-' + formatMoney(sdCents / 100) + '</span></div>';
+        html += '<div class="order-total-row discount"><span class="order-total-label">Sale' + (sd.saleName ? ' (' + esc(sd.saleName) + ')' : '') + '</span><span class="order-total-value">-' + formatMoney(sdCents) + '</span></div>';
       }
     }
 
     // Pass deduction
     if (b.passDeductionCents > 0) {
-      html += '<div class="order-total-row discount"><span class="order-total-label">Class Pass</span><span class="order-total-value">-' + formatMoney(b.passDeductionCents / 100) + '</span></div>';
+      html += '<div class="order-total-row discount"><span class="order-total-label">Class Pass</span><span class="order-total-value">-' + formatMoney(b.passDeductionCents) + '</span></div>';
     }
 
     // Membership discount
     if (b.membershipApplied && b.membershipDiscountCents > 0) {
       var memberLabel = (b.membershipData && b.membershipData.programName) ? b.membershipData.programName : 'Member Discount';
-      html += '<div class="order-total-row discount"><span class="order-total-label">' + esc(memberLabel) + '</span><span class="order-total-value">-' + formatMoney(b.membershipDiscountCents / 100) + '</span></div>';
+      html += '<div class="order-total-row discount"><span class="order-total-label">' + esc(memberLabel) + '</span><span class="order-total-value">-' + formatMoney(b.membershipDiscountCents) + '</span></div>';
     }
 
     // Shipping
     var shipLabel = b.shippingLabel || 'Shipping';
-    html += '<div class="order-total-row"><span class="order-total-label">' + esc(shipLabel) + '</span><span class="order-total-value">' + (b.shippingCents > 0 ? formatMoney(b.shippingCents / 100) : '--') + '</span></div>';
+    html += '<div class="order-total-row"><span class="order-total-label">' + esc(shipLabel) + '</span><span class="order-total-value">' + (b.shippingCents > 0 ? formatMoney(b.shippingCents) : '--') + '</span></div>';
 
     // Tax
     var taxLabel = 'Tax';
     if (b.taxState) taxLabel += ' (' + b.taxState + ')';
     if (b.taxExempt) taxLabel += ' (exempt)';
-    html += '<div class="order-total-row"><span class="order-total-label">' + esc(taxLabel) + '</span><span class="order-total-value">' + formatMoney(b.taxCents / 100) + '</span></div>';
+    html += '<div class="order-total-row"><span class="order-total-label">' + esc(taxLabel) + '</span><span class="order-total-value">' + formatMoney(b.taxCents) + '</span></div>';
 
     // Coupon
     if (b.couponDiscountCents > 0) {
       var couponLabel = 'Coupon';
       if (b.couponData && b.couponData.code) couponLabel += ' (' + esc(b.couponData.code) + ')';
-      html += '<div class="order-total-row discount"><span class="order-total-label">' + couponLabel + '</span><span class="order-total-value">-' + formatMoney(b.couponDiscountCents / 100) + '</span></div>';
+      html += '<div class="order-total-row discount"><span class="order-total-label">' + couponLabel + '</span><span class="order-total-value">-' + formatMoney(b.couponDiscountCents) + '</span></div>';
     }
 
     // Loyalty
     if (b.loyaltyDeductionCents > 0) {
       var loyaltyLabel = (b.loyaltyConfig && b.loyaltyConfig.pointName) ? b.loyaltyConfig.pointName : 'Loyalty';
-      html += '<div class="order-total-row discount"><span class="order-total-label">' + esc(loyaltyLabel) + '</span><span class="order-total-value">-' + formatMoney(b.loyaltyDeductionCents / 100) + '</span></div>';
+      html += '<div class="order-total-row discount"><span class="order-total-label">' + esc(loyaltyLabel) + '</span><span class="order-total-value">-' + formatMoney(b.loyaltyDeductionCents) + '</span></div>';
     }
 
     // Gift Cards
     if (b.giftCardDeductionCents > 0) {
-      html += '<div class="order-total-row discount"><span class="order-total-label">Gift Card</span><span class="order-total-value">-' + formatMoney(b.giftCardDeductionCents / 100) + '</span></div>';
+      html += '<div class="order-total-row discount"><span class="order-total-label">Gift Card</span><span class="order-total-value">-' + formatMoney(b.giftCardDeductionCents) + '</span></div>';
     }
 
     // Store Credits
     if (b.creditDeductionCents > 0) {
-      html += '<div class="order-total-row discount"><span class="order-total-label">Store Credit</span><span class="order-total-value">-' + formatMoney(b.creditDeductionCents / 100) + '</span></div>';
+      html += '<div class="order-total-row discount"><span class="order-total-label">Store Credit</span><span class="order-total-value">-' + formatMoney(b.creditDeductionCents) + '</span></div>';
     }
 
     // Total
-    html += '<div class="order-total-row grand-total"><span class="order-total-label">Total</span><span class="order-total-value">' + formatMoney(b.chargeAmountCents / 100) + '</span></div>';
+    html += '<div class="order-total-row grand-total"><span class="order-total-label">Total</span><span class="order-total-value">' + formatMoney(b.chargeAmountCents) + '</span></div>';
 
     // Loyalty earning message
     if (b.loyaltyPointsEarned > 0 && b.loyaltyConfig) {
@@ -1174,14 +1184,13 @@
     }
 
     // Free shipping threshold
-    var totFreeThreshold = getShippingThreshold();
-    if (totFreeThreshold != null) {
-      var subtotalDollars = b.subtotalCents / 100;
-      if (subtotalDollars >= totFreeThreshold) {
+    var totFreeThresholdCents = getShippingThreshold();
+    if (totFreeThresholdCents != null) {
+      var totSubtotalCents = b.subtotalCents || 0;
+      if (totSubtotalCents >= totFreeThresholdCents) {
         html += '<div style="text-align:center;color:#2D7D46;font-size:0.75rem;margin-top:8px;letter-spacing:0.08em;">&#10003; FREE SHIPPING</div>';
-      } else if (subtotalDollars > 0) {
-        var away = (totFreeThreshold - subtotalDollars).toFixed(2);
-        html += '<div style="text-align:center;color:var(--warm-gray,#9B958E);font-size:0.75rem;margin-top:8px;letter-spacing:0.08em;">You\'re $' + away + ' away from free shipping!</div>';
+      } else if (totSubtotalCents > 0) {
+        html += '<div style="text-align:center;color:var(--warm-gray,#9B958E);font-size:0.75rem;margin-top:8px;letter-spacing:0.08em;">You\'re ' + formatMoney(totFreeThresholdCents - totSubtotalCents) + ' away from free shipping!</div>';
       }
     }
 
@@ -1740,16 +1749,17 @@
     var db = getDb();
     if (!db) return Promise.resolve();
 
-    // Calculate how much gift card to apply — use saved state if cart is empty
-    var subtotal = calcSubtotal();
-    if (subtotal === 0 && walletState) subtotal = walletState.subtotal || 0;
-    var shipCost = checkoutData.shippingMethod ? checkoutData.shippingMethod.price : (walletState ? walletState.shippingCost || 0 : 0);
-    var taxableAmt = calcTaxableSubtotal();
-    if (taxableAmt === 0 && walletState) taxableAmt = walletState.taxableSubtotal || 0;
+    // Calculate how much gift card to apply — cents-native. Use saved state if cart is empty.
+    // walletState fields may still be dollar-era from pre-refactor redirects — convert on the fly.
+    var subtotalCents = calcSubtotal();
+    if (subtotalCents === 0 && walletState) subtotalCents = Math.round((walletState.subtotal || 0) * 100);
+    var shipCents = checkoutData.shippingMethod ? checkoutData.shippingMethod.price : (walletState ? Math.round((walletState.shippingCost || 0) * 100) : 0);
+    var taxableCents = calcTaxableSubtotal();
+    if (taxableCents === 0 && walletState) taxableCents = Math.round((walletState.taxableSubtotal || 0) * 100);
     var taxRate = checkoutData.taxRate || (walletState ? walletState.taxRate || 0 : 0);
-    var tax = Math.round(taxableAmt * taxRate * 100) / 100;
-    var couponDiscount = checkoutData.coupon ? checkoutData.coupon.discount : (walletState ? walletState.couponDiscount || 0 : 0);
-    var runningCents = Math.round((subtotal + tax + shipCost - couponDiscount) * 100);
+    var taxCents = Math.round(taxableCents * taxRate);
+    var couponDiscountCents = checkoutData.coupon ? Math.round((checkoutData.coupon.discount || 0) * 100) : (walletState ? Math.round((walletState.couponDiscount || 0) * 100) : 0);
+    var runningCents = subtotalCents + taxCents + shipCents - couponDiscountCents;
 
     // Subtract loyalty first
     if (checkoutData.loyaltyApplied && checkoutData.loyaltyBalance && checkoutData.loyaltyConfig) {
@@ -1804,15 +1814,16 @@
     var db = getDb();
     if (!db) return Promise.resolve();
 
-    var subtotal = calcSubtotal();
-    if (subtotal === 0 && walletState) subtotal = walletState.subtotal || 0;
-    var shipCost = checkoutData.shippingMethod ? checkoutData.shippingMethod.price : (walletState ? walletState.shippingCost || 0 : 0);
-    var taxableAmt = calcTaxableSubtotal();
-    if (taxableAmt === 0 && walletState) taxableAmt = walletState.taxableSubtotal || 0;
+    // Cents-native. walletState fields may be dollar-era — convert on the fly.
+    var subtotalCents = calcSubtotal();
+    if (subtotalCents === 0 && walletState) subtotalCents = Math.round((walletState.subtotal || 0) * 100);
+    var shipCents = checkoutData.shippingMethod ? checkoutData.shippingMethod.price : (walletState ? Math.round((walletState.shippingCost || 0) * 100) : 0);
+    var taxableCents = calcTaxableSubtotal();
+    if (taxableCents === 0 && walletState) taxableCents = Math.round((walletState.taxableSubtotal || 0) * 100);
     var taxRate = checkoutData.taxRate || (walletState ? walletState.taxRate || 0 : 0);
-    var tax = Math.round(taxableAmt * taxRate * 100) / 100;
-    var couponDiscount = checkoutData.coupon ? checkoutData.coupon.discount : (walletState ? walletState.couponDiscount || 0 : 0);
-    var remainingCents = Math.round((subtotal + tax + shipCost - couponDiscount) * 100);
+    var taxCents = Math.round(taxableCents * taxRate);
+    var couponDiscountCents = checkoutData.coupon ? Math.round((checkoutData.coupon.discount || 0) * 100) : (walletState ? Math.round((walletState.couponDiscount || 0) * 100) : 0);
+    var remainingCents = subtotalCents + taxCents + shipCents - couponDiscountCents;
     if (remainingCents <= 0) return Promise.resolve();
 
     var now = new Date().toISOString();
@@ -1860,7 +1871,7 @@
     attachDelegate(); // ensure delegation is live before rendering Place Order button
 
     var items = window.MastCart.getItems();
-    var subtotal = calcSubtotal();
+    var subtotalCents = calcSubtotal();
 
     var html = stepIndicatorHtml('review');
     html += '<div class="checkout-section">';
@@ -1890,7 +1901,7 @@
           (optStr ? '<div class="review-item-meta">' + optStr + '</div>' : '') +
           '<div class="review-item-meta">Qty: ' + item.qty + '</div>' +
         '</div>' +
-        '<div class="review-item-price">' + formatMoney(lineTotalCents / 100) + '</div>' +
+        '<div class="review-item-price">' + formatMoney(lineTotalCents) + '</div>' +
       '</div>';
     }
     html += '</div>';
@@ -2010,8 +2021,8 @@
         '<div class="review-section-header"><span class="review-section-title">Wallet Deductions</span></div>';
 
       // Track running remaining to disable lower-priority instruments when total is already covered
-      var walletRunningCents = Math.round(subtotal * 100);
-      var couponDiscountCents = checkoutData.coupon ? Math.round(checkoutData.coupon.discount * 100) : 0;
+      var walletRunningCents = subtotalCents;
+      var couponDiscountCents = checkoutData.coupon ? Math.round((checkoutData.coupon.discount || 0) * 100) : 0;
 
       // Class passes (1st priority)
       if (checkoutData.customerPasses.length > 0 && Object.keys(checkoutData.passAssignments).length > 0) {
@@ -2026,8 +2037,8 @@
         });
         var pCount = Object.keys(pUniqueIds).length;
         var pLabel = pCount > 1
-          ? '&#127915; Use class passes (' + pVisits + ' visit' + (pVisits !== 1 ? 's' : '') + ' across ' + pCount + ' passes, ' + formatMoney(pCoversCents / 100) + ' off)'
-          : '&#127915; Use class pass (' + pVisits + ' visit' + (pVisits !== 1 ? 's' : '') + ', ' + formatMoney(pCoversCents / 100) + ' off)';
+          ? '&#127915; Use class passes (' + pVisits + ' visit' + (pVisits !== 1 ? 's' : '') + ' across ' + pCount + ' passes, ' + formatMoney(pCoversCents) + ' off)'
+          : '&#127915; Use class pass (' + pVisits + ' visit' + (pVisits !== 1 ? 's' : '') + ', ' + formatMoney(pCoversCents) + ' off)';
         html += '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;color:var(--text);margin-bottom:8px;">' +
           '<input type="checkbox" id="coPassToggle" ' + (checkoutData.passApplied ? 'checked' : '') + ' data-co="toggle-pass">' +
           pLabel +
@@ -2045,7 +2056,7 @@
         var loyaltyDisabled = walletRunningCents <= 0;
         html += '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;color:var(--text);margin-bottom:8px;' + (loyaltyDisabled ? 'opacity:0.4;' : '') + '">' +
           '<input type="checkbox" id="coLoyaltyToggle" ' + (checkoutData.loyaltyApplied && !loyaltyDisabled ? 'checked' : '') + (loyaltyDisabled ? ' disabled' : '') + ' data-co="toggle-loyalty">' +
-          '&#11088; Apply ' + rlb.totalPoints + ' ' + esc(rlc.pointName) + ' (' + formatMoney(rLoyaltyVal / 100) + ' off)' +
+          '&#11088; Apply ' + rlb.totalPoints + ' ' + esc(rlc.pointName) + ' (' + formatMoney(rLoyaltyVal) + ' off)' +
           (loyaltyDisabled ? ' <span style="font-size:0.75rem;color:var(--warm-gray);">— already covered</span>' : '') +
         '</label>';
         if (checkoutData.loyaltyApplied && !loyaltyDisabled) walletRunningCents -= Math.min(rLoyaltyVal, walletRunningCents);
@@ -2057,7 +2068,7 @@
         var gcDisabled = walletRunningCents <= 0;
         html += '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;color:var(--text);margin-bottom:8px;' + (gcDisabled ? 'opacity:0.4;' : '') + '">' +
           '<input type="checkbox" id="coGiftCardToggle" ' + (checkoutData.walletGiftCardApplied && !gcDisabled ? 'checked' : '') + (gcDisabled ? ' disabled' : '') + ' data-co="toggle-giftcard">' +
-          '&#127873; Apply gift cards (' + formatMoney(rTotalGc / 100) + ' available)' +
+          '&#127873; Apply gift cards (' + formatMoney(rTotalGc) + ' available)' +
           (gcDisabled ? ' <span style="font-size:0.75rem;color:var(--warm-gray);">— already covered</span>' : '') +
         '</label>';
         if (checkoutData.walletGiftCardApplied && !gcDisabled) walletRunningCents -= Math.min(rTotalGc, walletRunningCents);
@@ -2069,7 +2080,7 @@
         var crDisabled = walletRunningCents <= 0;
         html += '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;color:var(--text);margin-bottom:8px;' + (crDisabled ? 'opacity:0.4;' : '') + '">' +
           '<input type="checkbox" id="coWalletToggle" ' + (checkoutData.walletCreditApplied && !crDisabled ? 'checked' : '') + (crDisabled ? ' disabled' : '') + ' data-co="toggle-wallet">' +
-          '&#128179; Apply store credits (' + formatMoney(rTotalCr / 100) + ' available)' +
+          '&#128179; Apply store credits (' + formatMoney(rTotalCr) + ' available)' +
           (crDisabled ? ' <span style="font-size:0.75rem;color:var(--warm-gray);">— already covered</span>' : '') +
         '</label>';
       }
@@ -2085,7 +2096,8 @@
       if (!dismissed) {
         var programName = esc(checkoutData.membershipConfig.programName || 'Membership');
         var annualPrice = checkoutData.membershipConfig.annualPrice;
-        var priceStr = annualPrice ? formatMoney(annualPrice) + '/year' : '';
+        // annualPrice is stored as dollars in membership config — convert for cents-native formatter.
+        var priceStr = annualPrice ? formatMoney(Math.round(annualPrice * 100)) + '/year' : '';
         html += '<div class="review-section" id="coMembershipUpsell" style="background:linear-gradient(135deg,rgba(42,124,111,0.08),rgba(196,133,60,0.08));border:1px solid rgba(42,124,111,0.2);border-radius:8px;padding:14px 16px;margin-bottom:12px;">' +
           '<div style="display:flex;justify-content:space-between;align-items:flex-start;">' +
             '<a href="/membership.html" style="text-decoration:none;display:block;flex:1;min-width:0;">' +
@@ -2303,9 +2315,9 @@
     var db = getDb();
     if (!db) { isSubmitting = false; return; }
 
-    var subtotal = calcSubtotal();
-    var shipCost = checkoutData.shippingMethod ? checkoutData.shippingMethod.price : 0;
-    var tax = Math.round(calcTaxableSubtotal() * checkoutData.taxRate * 100) / 100;
+    var subtotalCents = calcSubtotal();
+    var shipCostCents = checkoutData.shippingMethod ? checkoutData.shippingMethod.price : 0;
+    var taxCents = Math.round(calcTaxableSubtotal() * checkoutData.taxRate);
     var couponDiscount = checkoutData.coupon ? checkoutData.coupon.discount : 0;
     var now = new Date().toISOString();
 
@@ -2340,9 +2352,9 @@
         if (it.isGiftCard) mapped.isGiftCard = true;
         return mapped;
       }),
-      subtotalCents: Math.round(subtotal * 100),
-      shippingCents: Math.round(shipCost * 100),
-      taxCents: Math.round(tax * 100),
+      subtotalCents: subtotalCents,
+      shippingCents: shipCostCents,
+      taxCents: taxCents,
       couponDiscount: couponDiscount,
       coupon: checkoutData.coupon || null,
       totalCents: 0,
@@ -2456,9 +2468,9 @@
 
     var items = window.MastCart.getItems();
     var user = window.MastCart.getCurrentUser();
-    var subtotal = calcSubtotal();
-    var shippingCost = checkoutData.shippingMethod ? checkoutData.shippingMethod.price : 0;
-    var totalCents = Math.round((subtotal + shippingCost) * 100);
+    var subtotalCents = calcSubtotal();
+    var shippingCents = checkoutData.shippingMethod ? checkoutData.shippingMethod.price : 0;
+    var totalCents = subtotalCents + shippingCents;
 
     var orderNumber = 'WS-' + Date.now().toString(36).toUpperCase();
 
@@ -2486,8 +2498,8 @@
           isWholesale: it.isWholesale || false
         };
       }),
-      subtotalCents: Math.round(subtotal * 100),
-      shippingCents: Math.round(shippingCost * 100),
+      subtotalCents: subtotalCents,
+      shippingCents: shippingCents,
       totalCents: totalCents,
       total: totalCents / 100,
       shippingMethod: checkoutData.shippingMethod || null,

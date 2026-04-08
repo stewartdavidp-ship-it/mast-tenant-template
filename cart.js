@@ -434,6 +434,13 @@
     if (!fireAuth) return;
     fireAuth.signOut();
     currentUser = null;
+    // G-014: clear cached checkout PII (email, shipping/billing addresses) on sign out
+    // so the next guest or different user doesn't see the previous user's identity.
+    try {
+      localStorage.removeItem('mast_checkout_info');
+      sessionStorage.removeItem('mast_checkout_wallet');
+      sessionStorage.removeItem('mast_pending_order');
+    } catch (e) { /* private browsing may block storage */ }
     updateAuthUI();
     updateNavAuth(null);
   }
