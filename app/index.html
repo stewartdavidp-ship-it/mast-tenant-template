@@ -13708,7 +13708,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260407paradigm-a-1';
+var MAST_MODULES_V = '20260407paradigm-a-2';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -20785,6 +20785,13 @@ function editProduct(pid) {
   renderProductDetail(pid);
 }
 
+// Cancel product edit — discards in-flight changes and returns to read mode.
+// Replaces the inline state mutation in the Cancel button onclick.
+function cancelProductEdit(pid) {
+  productEditMode = false;
+  renderProductDetail(pid);
+}
+
 function switchProductTab(tab) {
   productEditTab = tab;
   document.querySelectorAll('.pd-tab-btn').forEach(function(b) {
@@ -20955,10 +20962,13 @@ function renderProductDetail(pid) {
        '<div style="color:var(--warm-gray);font-style:italic;margin-bottom:8px;">Price on request</div>') +
       (product.availability === 'discontinued' ? '<span class="status-badge stock-badge out-of-stock">Discontinued</span>' : '') +
     '</div>' +
-    (!isCreate && !isEditing ? '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
-      '<button class="btn btn-secondary" style="font-size:0.8rem;" onclick="editProduct(\'' + esc(pid) + '\')">Edit</button>' +
-      '<button class="btn btn-secondary" style="font-size:0.8rem;" onclick="openCloneDialog(\'' + esc(pid) + '\')">Clone</button>' +
-      '<button class="btn btn-secondary" style="font-size:0.8rem;" onclick="openAddToSaleDialog(\'' + esc(pid) + '\')">Add to Sale</button>' +
+    (!isCreate && !isEditing ? '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">' +
+      '<button class="btn btn-secondary btn-small" onclick="editProduct(\'' + esc(pid) + '\')">Edit</button>' +
+      '<button class="btn btn-secondary btn-small" onclick="openCloneDialog(\'' + esc(pid) + '\')">Duplicate</button>' +
+      '<button class="btn btn-secondary btn-small" onclick="openAddToSaleDialog(\'' + esc(pid) + '\')">Add to Sale</button>' +
+    '</div>' : '') +
+    (isEditing && !isCreate ? '<div style="display:flex;align-items:center;gap:8px;">' +
+      '<span style="font-size:0.72rem;color:var(--amber);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;">Editing</span>' +
     '</div>' : '') +
   '</div>';
 
@@ -21050,7 +21060,7 @@ function renderProductDetail(pid) {
   } else {
     detailsHtml +=
       '<div class="product-detail-section"><div class="product-detail-section-title">Product Info</div>' +
-      '<div style="display:grid;grid-template-columns:120px 1fr;gap:8px 16px;font-size:0.88rem;">' +
+      '<div style="display:grid;grid-template-columns:160px 1fr;gap:8px 16px;font-size:0.85rem;">' +
         '<span style="color:var(--warm-gray);">Name</span><span>' + esc(product.name) + '</span>' +
         '<span style="color:var(--warm-gray);">Description</span><span>' + esc(product.description || '—') + '</span>' +
         '<span style="color:var(--warm-gray);">Category</span><span>' + (product.categories || []).join(', ') + '</span>' +
@@ -21067,7 +21077,7 @@ function renderProductDetail(pid) {
     var invColor = pdTotals.available <= 0 ? 'var(--danger)' : 'var(--teal)';
     detailsHtml += '<div class="product-detail-section" style="margin-top:16px;">' +
       '<div class="product-detail-section-title">Inventory Summary</div>' +
-      '<div style="display:flex;gap:24px;flex-wrap:wrap;font-size:0.88rem;">' +
+      '<div style="display:flex;gap:24px;flex-wrap:wrap;font-size:0.85rem;">' +
         '<div><span style="color:var(--warm-gray);">On Hand</span> <strong style="color:' + invColor + ';">' + pdTotals.onHand + '</strong></div>' +
         '<div><span style="color:var(--warm-gray);">Available</span> <strong>' + pdTotals.available + '</strong></div>' +
         (pdTotals.committed > 0 ? '<div><span style="color:var(--warm-gray);">Committed</span> <strong>' + pdTotals.committed + '</strong></div>' : '') +
@@ -21291,7 +21301,7 @@ function renderProductDetail(pid) {
     }
   } else {
     prodHtml += '<div class="product-detail-section"><div class="product-detail-section-title">Production Details</div>' +
-      '<div style="display:grid;grid-template-columns:140px 1fr;gap:8px 16px;font-size:0.88rem;">' +
+      '<div style="display:grid;grid-template-columns:160px 1fr;gap:8px 16px;font-size:0.85rem;">' +
         '<span style="color:var(--warm-gray);">Build Time</span><span>' + (product.buildTime ? product.buildTime + ' min' : '—') + '</span>' +
         '<span style="color:var(--warm-gray);">Cost to Build</span><span>' + (product.costToBuild ? formatPriceCents(product.costToBuild) : '—') + '</span>' +
         '<span style="color:var(--warm-gray);">Materials</span><span>' + esc(product.materials || '—') + '</span>' +
@@ -21306,7 +21316,7 @@ function renderProductDetail(pid) {
     if (hasMakerAttrs) {
       prodHtml += '<div id="pdMakerAttributesReadOnly" style="display:none;">' +
         '<div class="product-detail-section"><div class="product-detail-section-title">Maker Details</div>' +
-        '<div style="display:grid;grid-template-columns:140px 1fr;gap:8px 16px;font-size:0.88rem;">';
+        '<div style="display:grid;grid-template-columns:160px 1fr;gap:8px 16px;font-size:0.85rem;">';
       if (maRo.metalType) prodHtml += '<span style="color:var(--warm-gray);">Metal</span><span>' + esc((maRo.metalPurity ? maRo.metalPurity + ' ' : '') + maRo.metalType) + '</span>';
       if (maRo.stoneType) prodHtml += '<span style="color:var(--warm-gray);">Stone</span><span>' + esc(maRo.stoneType + (maRo.stoneCut ? ' (' + maRo.stoneCut + ')' : '')) + '</span>';
       if (maRo.finish) prodHtml += '<span style="color:var(--warm-gray);">Finish</span><span>' + esc(maRo.finish) + '</span>';
@@ -21442,7 +21452,7 @@ function renderProductDetail(pid) {
   if (isEditing) {
     actionHtml = '<div style="display:flex;gap:8px;margin-top:20px;padding-top:16px;border-top:1px solid var(--cream-dark);">' +
       '<button class="btn btn-primary" onclick="saveProduct(\'' + esc(pid || '') + '\')">' + (isCreate ? 'Create Product' : 'Save') + '</button>' +
-      '<button class="btn btn-secondary" onclick="' + (isCreate ? 'backToProducts()' : 'productEditMode=false;renderProductDetail(\'' + esc(pid) + '\')') + '">Cancel</button>' +
+      '<button class="btn btn-secondary" onclick="' + (isCreate ? 'backToProducts()' : 'cancelProductEdit(\'' + esc(pid) + '\')') + '">Cancel</button>' +
     '</div>';
   }
 
