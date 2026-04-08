@@ -950,6 +950,35 @@
   }
 
   /**
+   * Hydrate variant slots so each product variant is a fully independent copy.
+   * Called when a builder opens for a product that has variants. Each variant
+   * gets its own lineItems/laborMinutes/otherCost copied from Default (or the
+   * recipe root as fallback). The Default slot is then removed since every
+   * variant stands alone. Idempotent: variants with existing data are left
+   * alone.
+   */
+  function hydrateVariantsIndependent(bs) {
+    if (!bs || !bs.productId) return;
+    var pvs = getProductVariants(bs);
+    if (pvs.length === 0) return;
+    if (!bs.variants) bs.variants = {};
+    var def = bs.variants.default || {};
+    var srcLineItems = def.lineItems || bs.lineItems || {};
+    var srcLaborMinutes = (def.laborMinutes != null) ? def.laborMinutes : (bs.laborMinutes || 0);
+    var srcOtherCost = (def.otherCost != null) ? def.otherCost : (bs.otherCost || 0);
+    pvs.forEach(function(pv) {
+      var slot = bs.variants[pv.id] || {};
+      if (slot.lineItems == null) slot.lineItems = JSON.parse(JSON.stringify(srcLineItems));
+      if (slot.laborMinutes == null) slot.laborMinutes = srcLaborMinutes;
+      if (slot.otherCost == null) slot.otherCost = srcOtherCost;
+      bs.variants[pv.id] = slot;
+    });
+    // Remove Default — each variant is now independent
+    delete bs.variants.default;
+    bs.isVariantEnabled = true;
+  }
+
+  /**
    * Read view of the active tab's data (lineItems, laborMinutes, otherCost)
    * with full inheritance applied. Used by the renderer.
    * Mutating callers MUST use materializeLineItems / ensureVariantSlot instead.
@@ -2150,6 +2179,12 @@
     builderState = JSON.parse(JSON.stringify(recipe));
     editingRecipeId = recipeId;
     piecesView = 'builder';
+    // If product has variants, hydrate so each variant is an independent recipe slot
+    hydrateVariantsIndependent(builderState);
+    var pvList = getProductVariants(builderState);
+    if (pvList.length > 0 && (currentVariantId === 'default' || !currentVariantId)) {
+      currentVariantId = pvList[0].id;
+    }
     renderRecipeBuilder();
   }
 
@@ -2266,40 +2301,27 @@
     // Always show a Default tab. If the linked product has variants, show one tab per
     // recipe-variant override that exists, plus an Add dropdown for missing ones.
     html += '<div style="display:flex;gap:0;border-bottom:2px solid var(--cream-dark);margin-bottom:16px;align-items:center;flex-wrap:wrap;">';
-    html += '<button class="view-tab' + (activeKey === 'default' ? ' active' : '') + '" onclick="makerSwitchVariant(\'default\')" title="Inheritance template — values here are inherited by any variant tab that does not override them.">Default</button>';
-    if (hasProductVariants) {
-      existingVariantKeys.forEach(function(vk) {
-        if (orphanKeys.indexOf(vk) >= 0) return;
-        var pv = productVariants.find(function(p){ return p.id === vk; });
+    if (!hasProductVariants) {
+      // No product variants — show single Default tab (legacy single-recipe mode)
+      html += '<button class="view-tab active" onclick="makerSwitchVariant(\'default\')">Default</button>';
+    } else {
+      // Product has variants — each variant is its own independent recipe, no Default
+      productVariants.forEach(function(pv) {
         var label = variantDisplayName(pv);
-        html += '<button class="view-tab' + (activeKey === vk ? ' active' : '') + '" onclick="makerSwitchVariant(\'' + esc(vk) + '\')">' + esc(label) + '</button>';
+        html += '<button class="view-tab' + (activeKey === pv.id ? ' active' : '') + '" onclick="makerSwitchVariant(\'' + esc(pv.id) + '\')">' + esc(label) + '</button>';
       });
+      // Orphaned variant tabs (recipe had entries for product variants that were later deleted)
       orphanKeys.forEach(function(vk) {
         html += '<button class="view-tab' + (activeKey === vk ? ' active' : '') + '" onclick="makerSwitchVariant(\'' + esc(vk) + '\')" style="color:#b45309;" title="The product variant this tab was linked to was deleted.">⚠ ' + esc(vk.substring(0, 8)) + '</button>';
       });
-      var remainingProductVariants = productVariants.filter(function(pv){ return existingVariantKeys.indexOf(pv.id) === -1; });
-      if (remainingProductVariants.length > 0) {
-        html += '<select onchange="makerAddVariantTab(this.value); this.value=\'\';" style="margin-left:8px;padding:6px 10px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;background:var(--cream);color:var(--teal);font-family:\'DM Sans\';cursor:pointer;">';
-        html += '<option value="">+ Add variant...</option>';
-        remainingProductVariants.forEach(function(pv) {
-          html += '<option value="' + esc(pv.id) + '">' + esc(variantDisplayName(pv)) + '</option>';
-        });
-        html += '</select>';
-      }
     }
     html += '</div>';
 
-    // Tab context bar (for non-default tabs): inheritance hint + Reset/Remove buttons
-    if (activeKey !== 'default') {
-      var isOrphan = orphanKeys.indexOf(activeKey) >= 0;
+    // Orphan warning bar (if viewing an orphaned variant tab)
+    if (hasProductVariants && orphanKeys.indexOf(activeKey) >= 0) {
       html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding:8px 12px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:6px;font-size:0.78rem;">';
-      if (isOrphan) {
-        html += '<span style="color:#b45309;">⚠ Orphaned — the linked product variant was deleted. Remove this tab or relink the product variant.</span>';
-        html += '<button class="btn btn-danger btn-small" onclick="makerRemoveOrphanVariant(\'' + esc(activeKey) + '\')" style="font-size:0.72rem;">Remove</button>';
-      } else {
-        html += '<span style="color:var(--warm-gray);">Fields shown in <em>italic</em> are inherited from Default. Editing them creates an override.</span>';
-        html += '<button class="btn btn-secondary btn-small" onclick="makerResetVariantToDefault(\'' + esc(activeKey) + '\')" style="font-size:0.72rem;">Reset to Default</button>';
-      }
+      html += '<span style="color:#b45309;">⚠ Orphaned — the linked product variant was deleted.</span>';
+      html += '<button class="btn btn-danger btn-small" onclick="makerRemoveOrphanVariant(\'' + esc(activeKey) + '\')" style="font-size:0.72rem;">Remove</button>';
       html += '</div>';
     }
 
