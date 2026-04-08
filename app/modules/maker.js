@@ -856,11 +856,31 @@
    * Resolve the linked product's variants array.
    * Returns array of {id, combo, ...} or [].
    */
+  // Build a stable ID for a product variant. Some products have v.id directly;
+  // others (imported from Squarespace) only have {combo, priceCents}. Derive a
+  // stable key from the combo so downstream code (tabs, recipe overrides) works.
+  function productVariantKey(v) {
+    if (!v) return '';
+    if (v.id) return v.id;
+    if (v.combo && typeof v.combo === 'object') {
+      return Object.keys(v.combo).sort().map(function(k){ return k + ':' + v.combo[k]; }).join('|');
+    }
+    if (typeof v.combo === 'string') return v.combo;
+    return '';
+  }
+
   function getProductVariants(bs) {
     if (!bs || !bs.productId) return [];
     var prod = (window.productsData || []).find(function(p){ return p.pid === bs.productId; });
     if (!prod || !Array.isArray(prod.variants)) return [];
-    return prod.variants.filter(function(v){ return v && v.id; });
+    return prod.variants.map(function(v) {
+      if (v && v.id) return v;
+      var k = productVariantKey(v);
+      if (!k) return null;
+      // Clone with synthesized id so existing code paths keep working
+      var out = Object.assign({}, v, { id: k });
+      return out;
+    }).filter(function(v){ return v && v.id; });
   }
 
   /**
@@ -2014,7 +2034,11 @@
       var pid = p.pid;
       var recipe = recipeByProduct[pid];
       var hasRecipe = !!recipe;
-      var prodVariants = Array.isArray(p.variants) ? p.variants.filter(function(v){ return v && v.id; }) : [];
+      var prodVariants = Array.isArray(p.variants) ? p.variants.map(function(v) {
+        if (v && v.id) return v;
+        var k = productVariantKey(v);
+        return k ? Object.assign({}, v, { id: k }) : null;
+      }).filter(Boolean) : [];
       var hasVariants = prodVariants.length > 0;
 
       // Whole-row click dispatches to the default action (Edit or + Add Recipe).
