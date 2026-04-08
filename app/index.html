@@ -21508,22 +21508,25 @@ function pdRestoreFormState(snap) {
     if (s.type === 'check') el.checked = s.checked;
     else el.value = s.value;
   });
-  // Restore option rows — only if count matches (user added attributes that aren't in saved state)
-  var rows = detail.querySelectorAll('.pd-option-row');
-  if (snap.options.length > rows.length) {
-    // Add missing rows via addVariantOption
-    var need = snap.options.length - rows.length;
-    for (var i = 0; i < need; i++) addVariantOption();
-    rows = detail.querySelectorAll('.pd-option-row');
+  // Rebuild the options container from the snapshot so added/removed/edited
+  // attribute rows all reflect the user's in-flight state (not the saved
+  // state that renderProductDetail just drew from product.options).
+  var optsContainer = document.getElementById('pdOptionsContainer');
+  if (optsContainer) {
+    optsContainer.innerHTML = '';
+    snap.options.forEach(function(o) {
+      optsContainer.insertAdjacentHTML('beforeend',
+        '<div class="pd-option-row" style="display:flex;gap:8px;align-items:flex-start;margin-bottom:12px;padding:12px;background:var(--cream);border-radius:8px;">' +
+          '<div class="form-group" style="margin:0;min-width:120px;"><label style="font-size:0.72rem;">Label</label><input type="text" class="pd-opt-label" value="' + esc(o.label) + '" oninput="pdRebuildVariantGrid()"></div>' +
+          '<div class="form-group" style="margin:0;flex:1;"><label style="font-size:0.72rem;">Choices (comma-separated)</label><input type="text" class="pd-opt-choices" value="' + esc(o.choices) + '" oninput="pdRebuildVariantGrid()"></div>' +
+          '<button class="btn btn-secondary" style="margin-top:18px;padding:4px 10px;font-size:0.75rem;" onclick="this.closest(\'.pd-option-row\').remove();pdRebuildVariantGrid()">Remove</button>' +
+        '</div>'
+      );
+    });
+    // Now that options reflect the snapshot, regenerate the grid so the
+    // price + image-binding inputs exist for combos the user cares about.
+    pdRebuildVariantGrid();
   }
-  rows.forEach(function(row, idx) {
-    if (idx >= snap.options.length) return;
-    var o = snap.options[idx];
-    var l = row.querySelector('.pd-opt-label');
-    var c = row.querySelector('.pd-opt-choices');
-    if (l) l.value = o.label;
-    if (c) c.value = o.choices;
-  });
   // Variant pricing and image index — only restore keys that still exist
   Object.keys(snap.variantPrices).forEach(function(key) {
     var inp = detail.querySelector('.pd-variant-price[data-combo=\'' + key + '\']');
@@ -21531,7 +21534,19 @@ function pdRestoreFormState(snap) {
   });
   Object.keys(snap.variantImages).forEach(function(key) {
     var inp = detail.querySelector('.pd-variant-image-index[data-combo=\'' + key + '\']');
-    if (inp) inp.value = snap.variantImages[key];
+    if (inp) {
+      inp.value = snap.variantImages[key];
+      // Sync the visual selected state of the image strip thumbnails
+      var strip = detail.querySelector('.pd-variant-image-strip[data-combo=\'' + key + '\']');
+      if (strip) {
+        var targetIdx = snap.variantImages[key] === '' ? '-1' : snap.variantImages[key];
+        strip.querySelectorAll('.pd-variant-image-thumb').forEach(function(btn) {
+          var isSel = btn.getAttribute('data-img-idx') === targetIdx;
+          btn.classList.toggle('selected', isSel);
+          btn.style.borderColor = isSel ? 'var(--teal)' : 'transparent';
+        });
+      }
+    }
   });
   // Materials tags
   if (snap.materials.length) {
