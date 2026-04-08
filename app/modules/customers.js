@@ -887,7 +887,7 @@
 
     // Notes card
     h += detailCardOpen('Notes');
-    h += '<textarea data-customer-id="' + esc(c.id) + '" onblur="customersSaveNotes(this.dataset.customerId, this.value)" ' +
+    h += '<textarea id="custNotesTextarea" data-customer-id="' + esc(c.id) + '" onblur="customersSaveNotes(this.dataset.customerId, this.value)" ' +
          'placeholder="Internal notes (saved on blur)…" ' +
          'style="width:100%;min-height:90px;padding:9px 12px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--cream);font-family:DM Sans,sans-serif;font-size:0.85rem;resize:vertical;">' + esc(c.notes || '') + '</textarea>';
     h += detailCardClose();
