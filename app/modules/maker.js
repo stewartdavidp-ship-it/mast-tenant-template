@@ -1891,6 +1891,7 @@
   // ============================================================
 
   var piecesView = 'list'; // list | builder
+  var piecesCategoryFilter = ''; // '' = all
   var editingRecipeId = null;
   var builderState = null; // live state for the recipe builder
   var currentVariantId = 'default'; // active variant tab key — 'default' or productVariantId
@@ -1933,7 +1934,11 @@
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
     html += '<div>';
     html += '<h2 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">Pieces</h2>';
-    html += '<span style="font-size:0.85rem;color:var(--warm-gray);">' + products.length + ' products, ' + Object.keys(recipeByProduct).length + ' with recipes</span>';
+    var filteredProducts = piecesCategoryFilter
+      ? products.filter(function(p) { return (p.categories || []).indexOf(piecesCategoryFilter) >= 0; })
+      : products;
+    var filteredWithRecipes = filteredProducts.filter(function(p){ return !!recipeByProduct[p.pid]; }).length;
+    html += '<span style="font-size:0.85rem;color:var(--warm-gray);">' + filteredProducts.length + ' product' + (filteredProducts.length === 1 ? '' : 's') + (piecesCategoryFilter ? ' in ' + esc(piecesCategoryFilter) : '') + ', ' + filteredWithRecipes + ' with recipes</span>';
     html += '</div>';
     html += '<div style="display:flex;gap:8px;align-items:center;">';
 
@@ -1963,6 +1968,21 @@
       html += '<span class="status-badge" style="background:rgba(220,38,38,0.1);color:#991b1b;border:1px solid rgba(220,38,38,0.3);font-size:0.72rem;padding:5px 9px;">' + belowFloorCount + ' below margin floor</span>';
     }
 
+    // Category filter — collect unique categories from all products
+    var categorySet = {};
+    products.forEach(function(p) {
+      (p.categories || []).forEach(function(c) { if (c) categorySet[c] = true; });
+    });
+    var categoryList = Object.keys(categorySet).sort();
+    if (categoryList.length > 0) {
+      html += '<select onchange="makerSetCategoryFilter(this.value)" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';cursor:pointer;" title="Filter by category">';
+      html += '<option value=""' + (piecesCategoryFilter === '' ? ' selected' : '') + '>All categories</option>';
+      categoryList.forEach(function(c) {
+        html += '<option value="' + esc(c) + '"' + (piecesCategoryFilter === c ? ' selected' : '') + '>' + esc(c) + '</option>';
+      });
+      html += '</select>';
+    }
+
     html += '<button class="btn btn-secondary btn-small" onclick="makerOpenWhatIfSimulator()" title="Simulate metals price shifts across all recipes">📊 What-if</button>';
     html += '<button class="btn btn-secondary btn-small" onclick="makerOpenChannelsManager()" title="Manage sales channel fee profiles">Channels</button>';
     html += '<button class="btn btn-secondary btn-small" onclick="makerOpenImport(\'products\')">Import CSV</button>';
@@ -1990,7 +2010,7 @@
     html += '<th style="text-align:right;">Actions</th>';
     html += '</tr></thead><tbody>';
 
-    products.forEach(function(p) {
+    filteredProducts.forEach(function(p) {
       var pid = p.pid;
       var recipe = recipeByProduct[pid];
       var hasRecipe = !!recipe;
@@ -2210,6 +2230,39 @@
         html += '<button class="btn btn-secondary btn-small" onclick="makerResetVariantToDefault(\'' + esc(activeKey) + '\')" style="font-size:0.72rem;">Reset to Default</button>';
       }
       html += '</div>';
+    }
+
+    // ---- PRODUCT IMAGE SECTION (collapsible, variant-aware) ----
+    var linkedProductForImg = bs.productId ? (window.productsData || []).find(function(p){ return p.pid === bs.productId; }) : null;
+    if (linkedProductForImg) {
+      var rawImgs = Array.isArray(linkedProductForImg.images) ? linkedProductForImg.images : [];
+      var imgUrls = rawImgs.map(function(img){ return typeof img === 'string' ? img : (img && img.url ? img.url : ''); }).filter(function(u){ return !!u; });
+      if (imgUrls.length > 0) {
+        var activeImgIdx = 0;
+        if (activeKey !== 'default') {
+          var activePv = productVariants.find(function(p){ return p.id === activeKey; });
+          if (activePv && typeof activePv.imageIndex === 'number' && activePv.imageIndex >= 0 && activePv.imageIndex < imgUrls.length) {
+            activeImgIdx = activePv.imageIndex;
+          }
+        }
+        var imgLabel = activeKey === 'default' ? 'Default' : variantDisplayName(productVariants.find(function(p){ return p.id === activeKey; }));
+        html += '<details open style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;margin-bottom:16px;">';
+        html += '<summary style="cursor:pointer;font-size:0.9rem;font-weight:600;display:flex;justify-content:space-between;align-items:center;list-style:none;">';
+        html += '<span>Product Image <span style="font-weight:400;color:var(--warm-gray-light);font-size:0.78rem;">— ' + esc(imgLabel) + '</span></span>';
+        html += '<span style="font-size:0.78rem;color:var(--warm-gray);">' + imgUrls.length + ' image' + (imgUrls.length === 1 ? '' : 's') + '</span>';
+        html += '</summary>';
+        html += '<div style="margin-top:12px;display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;">';
+        html += '<img src="' + esc(imgUrls[activeImgIdx]) + '" alt="' + esc(linkedProductForImg.name || '') + '" style="max-width:240px;max-height:240px;border-radius:6px;border:1px solid var(--cream-dark);object-fit:cover;background:#fff;" />';
+        if (imgUrls.length > 1) {
+          html += '<div style="display:flex;flex-wrap:wrap;gap:6px;flex:1;min-width:180px;">';
+          imgUrls.forEach(function(u, i) {
+            var isActive = i === activeImgIdx;
+            html += '<img src="' + esc(u) + '" alt="thumb ' + (i+1) + '" title="Image ' + (i+1) + '" style="width:56px;height:56px;border-radius:4px;object-fit:cover;border:2px solid ' + (isActive ? 'var(--teal)' : 'transparent') + ';opacity:' + (isActive ? '1' : '0.7') + ';" />';
+          });
+          html += '</div>';
+        }
+        html += '</div></details>';
+      }
     }
 
     // ---- PARTS SECTION ----
@@ -3282,6 +3335,7 @@
   window.makerSetTierFromBuilder = setTierFromBuilder;
   window.makerRepriceNow = repriceNow;
   window.makerOpenWhatIfSimulator = openWhatIfSimulator;
+  window.makerSetCategoryFilter = function(v) { piecesCategoryFilter = v || ''; renderPiecesList(); };
   window.makerCloseWhatIf = closeWhatIf;
   window.makerRunWhatIf = runWhatIfRender;
   window.makerOpenRepriceAllModal = openRepriceAllModal;
