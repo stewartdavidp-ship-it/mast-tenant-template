@@ -14,6 +14,8 @@
   var selectedContactId = null;
   var contactInteractions = [];
   var contactInteractionsLoaded = false;
+  var contactEditMode = false;     // Paradigm A — read-only until user clicks Edit
+  var contactEditBaseline = null;  // snapshot for Cancel / dirty tracking
 
   var CONTACT_CATEGORIES = ['Supplier', 'Facilities', 'Gallery', 'Marketplace', 'Event Organizer', 'Partner', 'Student', 'Press', 'Other'];
   var INTERACTION_TYPES = ['Call', 'Email', 'Meeting', 'Site Visit', 'Payment', 'Signed Doc', 'Other'];
@@ -288,70 +290,106 @@ async function saveNewContact() {
 }
 
 // ============================================================
-// Edit Contact
+// Edit Contact — Paradigm A (read-only detail with Edit toggle)
 // ============================================================
 
-async function openEditContactModal(contactId) {
-  var snap = await MastDB.contacts.ref(contactId).once('value');
-  var c = snap.val();
-  if (!c) { showToast('Contact not found.', true); return; }
-
-  var catOptions = CONTACT_CATEGORIES.map(function(cat) {
-    var sel = (cat === c.category) ? ' selected' : '';
-    return '<option value="' + esc(cat) + '"' + sel + '>' + esc(cat) + '</option>';
-  }).join('');
-
-  var html = '' +
-    '<div class="modal-header"><h3>Edit Contact</h3></div>' +
-    '<div class="modal-body">' +
-      '<div class="form-group"><label class="field-required">Name</label><input type="text" id="editContactName" value="' + esc(c.name || '') + '"></div>' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
-        '<div class="form-group"><label>Email</label><input type="email" id="editContactEmail" value="' + esc(c.email || '') + '"></div>' +
-        '<div class="form-group"><label>Phone</label><input type="tel" id="editContactPhone" value="' + esc(c.phone || '') + '"></div>' +
-      '</div>' +
-      '<div class="form-group"><label>Company / Organization</label><input type="text" id="editContactCompany" value="' + esc(c.company || '') + '"></div>' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
-        '<div class="form-group"><label class="field-required">Category</label><select id="editContactCategory">' + catOptions + '</select></div>' +
-        '<div class="form-group"><label>Website</label><input type="url" id="editContactWebsite" value="' + esc(c.website || '') + '"></div>' +
-      '</div>' +
-      '<div class="form-group"><label>Address</label><input type="text" id="editContactAddress" value="' + esc(c.address || '') + '"></div>' +
-      '<div class="form-group"><label>Notes</label><textarea id="editContactNotes" rows="2">' + esc(c.notes || '') + '</textarea></div>' +
-      '<div class="form-group"><label>Drive Folder Link</label><input type="text" id="editContactDrive" value="' + esc(c.driveFolderLink || '') + '"></div>' +
-    '</div>' +
-    '<div class="modal-footer">' +
-      '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
-      '<button class="btn btn-primary" onclick="saveEditContact(\'' + esc(contactId) + '\')">Save Changes</button>' +
-    '</div>';
-  openModal(html);
+function _contactEditIsDirty() {
+  if (!contactEditMode || !contactEditBaseline) return false;
+  var ids = ['contactDetailName','contactDetailEmail','contactDetailPhone','contactDetailCompany','contactDetailCategory','contactDetailWebsite','contactDetailAddress','contactDetailNotes','contactDetailDriveFolder'];
+  for (var i = 0; i < ids.length; i++) {
+    var el = document.getElementById(ids[i]);
+    if (!el) continue;
+    var key = ids[i].replace('contactDetail','');
+    key = key.charAt(0).toLowerCase() + key.slice(1);
+    if (key === 'driveFolder') key = 'driveFolderLink';
+    var baseline = contactEditBaseline[key] || '';
+    if ((el.value || '') !== baseline) return true;
+  }
+  return false;
 }
 
-async function saveEditContact(contactId) {
-  var name = document.getElementById('editContactName').value.trim();
-  if (!name) { showToast('Name is required.', true); return; }
+async function enterContactEditMode() {
+  if (!selectedContactId) return;
+  try {
+    var snap = await MastDB.contacts.ref(selectedContactId).once('value');
+    var c = snap.val();
+    if (!c) { showToast('Contact not found.', true); return; }
+    contactEditBaseline = {
+      name: c.name || '',
+      email: c.email || '',
+      phone: c.phone || '',
+      company: c.company || '',
+      category: c.category || 'Other',
+      website: c.website || '',
+      address: c.address || '',
+      notes: c.notes || '',
+      driveFolderLink: c.driveFolderLink || ''
+    };
+    contactEditMode = true;
+    if (window.MastDirty) {
+      MastDirty.register('contactEdit', _contactEditIsDirty, { label: 'Contact detail' });
+    }
+    renderContactDetail(c);
+  } catch (err) {
+    showToast('Error entering edit mode: ' + err.message, true);
+  }
+}
+
+function cancelContactEditMode() {
+  var doCancel = function() {
+    contactEditMode = false;
+    contactEditBaseline = null;
+    if (window.MastDirty) MastDirty.unregister('contactEdit');
+    loadContactDetail(selectedContactId);
+  };
+  if (window.MastDirty && MastDirty.getDirtyKeys && MastDirty.getDirtyKeys().indexOf('contactEdit') !== -1) {
+    MastDirty.checkAndExit(doCancel);
+  } else {
+    doCancel();
+  }
+}
+
+async function saveContactEditMode() {
+  if (!selectedContactId) return;
+  var name = (document.getElementById('contactDetailName') || {}).value;
+  name = (name || '').trim();
+  if (!name) { showToast('Contact name is required.', true); return; }
 
   var updates = {
     name: name,
-    email: document.getElementById('editContactEmail').value.trim() || null,
-    phone: document.getElementById('editContactPhone').value.trim() || null,
-    company: document.getElementById('editContactCompany').value.trim() || null,
-    category: document.getElementById('editContactCategory').value,
-    website: document.getElementById('editContactWebsite').value.trim() || null,
-    address: document.getElementById('editContactAddress').value.trim() || null,
-    notes: document.getElementById('editContactNotes').value.trim() || null,
-    driveFolderLink: document.getElementById('editContactDrive').value.trim() || null,
+    email: document.getElementById('contactDetailEmail').value.trim() || null,
+    phone: document.getElementById('contactDetailPhone').value.trim() || null,
+    company: document.getElementById('contactDetailCompany').value.trim() || null,
+    category: document.getElementById('contactDetailCategory').value,
+    website: document.getElementById('contactDetailWebsite').value.trim() || null,
+    address: document.getElementById('contactDetailAddress').value.trim() || null,
+    notes: document.getElementById('contactDetailNotes').value.trim() || null,
+    driveFolderLink: document.getElementById('contactDetailDriveFolder').value.trim() || null,
     updatedAt: new Date().toISOString()
   };
 
   try {
-    await MastDB.contacts.update(contactId, updates);
-    await writeAudit('update', 'contacts', contactId);
+    await MastDB.contacts.update(selectedContactId, updates);
+    await writeAudit('update', 'contacts', selectedContactId);
     showToast('Contact updated.');
-    closeModal();
-    loadContactDetail(contactId);
     contactsLoaded = false; // refresh list on back
 
+    // Refresh baseline so dirty tracking clears, stay in edit mode (Paradigm A).
+    contactEditBaseline = {
+      name: updates.name,
+      email: updates.email || '',
+      phone: updates.phone || '',
+      company: updates.company || '',
+      category: updates.category,
+      website: updates.website || '',
+      address: updates.address || '',
+      notes: updates.notes || '',
+      driveFolderLink: updates.driveFolderLink || ''
+    };
+    loadContactDetail(selectedContactId);
+
     // Push changes to Google Contact in background
-    var snap = await MastDB.contacts.ref(contactId).once('value');
+    var snap = await MastDB.contacts.ref(selectedContactId).once('value');
     var contact = snap.val();
     if (contact && contact.googleContactId) {
       pushContactToGoogle(contact);
@@ -483,48 +521,126 @@ async function loadContactDetail(contactId) {
   }
 }
 
+function _contactDetailCardOpen(title) {
+  var h = '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px 20px;margin-bottom:16px;">';
+  if (title) h += '<div style="font-size:0.85rem;font-weight:600;margin-bottom:12px;">' + esc(title) + '</div>';
+  return h;
+}
+function _contactDetailCardClose() { return '</div>'; }
+function _contactDetailRow(label, valueHtml) {
+  return '<div style="color:var(--warm-gray-light);">' + esc(label) + '</div>' +
+         '<div>' + valueHtml + '</div>';
+}
+
 function renderContactDetail(contact) {
   var container = document.getElementById('contactDetailContent');
-  var linksHtml = '';
-  if (contact.driveFolderLink) {
-    linksHtml += '<a href="' + esc(contact.driveFolderLink) + '" target="_blank" rel="noopener">&#128193; Drive Folder</a>';
-  }
-  if (contact.googleContactId) {
-    linksHtml += '<a href="https://contacts.google.com/person/' + esc(contact.googleContactId.replace('people/', '')) + '" target="_blank" rel="noopener">&#128100; Google Contact</a>';
-  }
+  var editing = !!contactEditMode;
+  var inlineInputStyle = 'width:100%;padding:6px 10px;border:1px solid var(--cream-dark);border-radius:4px;background:var(--cream);font-family:DM Sans,sans-serif;font-size:0.85rem;';
 
-  var notesHtml = contact.notes
-    ? '<div class="contact-detail-notes">' + esc(contact.notes) + '</div>'
-    : '';
-
-  var detailFieldsHtml = '';
-  var fields = [];
-  if (contact.email) fields.push('<a href="mailto:' + esc(contact.email) + '" style="color:var(--teal);">' + esc(contact.email) + '</a>');
-  if (contact.phone) fields.push('<a href="tel:' + esc(contact.phone) + '" style="color:var(--teal);">' + esc(contact.phone) + '</a>');
-  if (contact.company) fields.push(esc(contact.company));
-  if (contact.website) fields.push('<a href="' + esc(contact.website) + '" target="_blank" rel="noopener" style="color:var(--teal);">' + esc(contact.website) + '</a>');
-  if (contact.address) fields.push(esc(contact.address));
-  if (fields.length) {
-    detailFieldsHtml = '<div style="display:flex;flex-wrap:wrap;gap:8px 16px;margin:8px 0;font-size:0.9rem;color:var(--warm-gray-light);">' +
-      fields.map(function(f) { return '<span>' + f + '</span>'; }).join('<span style="color:var(--warm-gray);">|</span>') +
-    '</div>';
+  // ---- Header ----
+  var headerActions = '';
+  if (!editing) {
+    headerActions += '<button class="btn btn-secondary btn-small" onclick="enterContactEditMode()">Edit</button>';
+    if (contact.email) {
+      headerActions += '<button class="btn btn-primary btn-small" onclick="openInquiryResponseModal(\'' + esc(contact.id) + '\')">Respond</button>';
+    }
+    headerActions += '<button class="btn btn-primary btn-small" onclick="openLogInteractionModal(\'' + esc(contact.id) + '\')">+ Log Interaction</button>';
+  } else {
+    headerActions += '<span style="font-size:0.72rem;color:var(--amber);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;">Editing</span>';
   }
 
   var headerHtml = '' +
-    '<div class="contact-detail-header">' +
+    '<div class="contact-detail-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:16px;">' +
       '<div>' +
-        '<h2 class="contact-detail-name">' + esc(contact.name || '') + '</h2>' +
-        '<span class="status-badge" style="' + contactCatBadgeStyle(contact.category) + '">' + esc(contact.category || 'Other') + '</span>' +
-        detailFieldsHtml +
-        notesHtml +
-        (linksHtml ? '<div class="contact-detail-links">' + linksHtml + '</div>' : '') +
+        '<h2 class="contact-detail-name" style="margin:0;">' + esc(contact.name || '') + '</h2>' +
+        '<div style="margin-top:6px;"><span class="status-badge" style="' + contactCatBadgeStyle(contact.category) + '">' + esc(contact.category || 'Other') + '</span></div>' +
       '</div>' +
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
-        '<button class="btn btn-secondary btn-small" onclick="openEditContactModal(\'' + esc(contact.id) + '\')">Edit</button>' +
-        (contact.email ? '<button class="btn btn-primary btn-small" onclick="openInquiryResponseModal(\'' + esc(contact.id) + '\')">Respond</button>' : '') +
-        '<button class="btn btn-primary btn-small" onclick="openLogInteractionModal(\'' + esc(contact.id) + '\')">+ Log Interaction</button>' +
-      '</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">' + headerActions + '</div>' +
     '</div>';
+
+  // ---- Identity card ----
+  function readField(val, linkPrefix) {
+    if (!val) return '<span style="color:var(--warm-gray-light);">—</span>';
+    if (linkPrefix === 'mailto:' || linkPrefix === 'tel:') {
+      return '<a href="' + linkPrefix + esc(val) + '" style="color:var(--teal);">' + esc(val) + '</a>';
+    }
+    if (linkPrefix === 'http') {
+      return '<a href="' + esc(val) + '" target="_blank" rel="noopener" style="color:var(--teal);">' + esc(val) + '</a>';
+    }
+    return esc(val);
+  }
+
+  var nameField, emailField, phoneField, companyField, categoryField, websiteField, addressField, notesField, driveField;
+  if (editing) {
+    nameField = '<input type="text" id="contactDetailName" value="' + esc(contact.name || '') + '" style="' + inlineInputStyle + '">';
+    emailField = '<input type="email" id="contactDetailEmail" value="' + esc(contact.email || '') + '" style="' + inlineInputStyle + '">';
+    phoneField = '<input type="tel" id="contactDetailPhone" value="' + esc(contact.phone || '') + '" style="' + inlineInputStyle + '">';
+    companyField = '<input type="text" id="contactDetailCompany" value="' + esc(contact.company || '') + '" style="' + inlineInputStyle + '">';
+    var catOptions = CONTACT_CATEGORIES.map(function(cat) {
+      var sel = (cat === contact.category) ? ' selected' : '';
+      return '<option value="' + esc(cat) + '"' + sel + '>' + esc(cat) + '</option>';
+    }).join('');
+    categoryField = '<select id="contactDetailCategory" style="' + inlineInputStyle + '">' + catOptions + '</select>';
+    websiteField = '<input type="url" id="contactDetailWebsite" value="' + esc(contact.website || '') + '" style="' + inlineInputStyle + '">';
+    addressField = '<input type="text" id="contactDetailAddress" value="' + esc(contact.address || '') + '" style="' + inlineInputStyle + '">';
+    notesField = '<textarea id="contactDetailNotes" rows="3" style="' + inlineInputStyle + 'resize:vertical;">' + esc(contact.notes || '') + '</textarea>';
+    driveField = '<input type="text" id="contactDetailDriveFolder" value="' + esc(contact.driveFolderLink || '') + '" placeholder="https://drive.google.com/..." style="' + inlineInputStyle + '">';
+  } else {
+    nameField = readField(contact.name);
+    emailField = readField(contact.email, 'mailto:');
+    phoneField = readField(contact.phone, 'tel:');
+    companyField = readField(contact.company);
+    categoryField = '<span class="status-badge" style="' + contactCatBadgeStyle(contact.category) + '">' + esc(contact.category || 'Other') + '</span>';
+    websiteField = readField(contact.website, 'http');
+    addressField = readField(contact.address);
+    notesField = contact.notes ? esc(contact.notes) : '<span style="color:var(--warm-gray-light);">—</span>';
+    driveField = contact.driveFolderLink
+      ? '<a href="' + esc(contact.driveFolderLink) + '" target="_blank" rel="noopener" style="color:var(--teal);">&#128193; ' + esc(contact.driveFolderLink) + '</a>'
+      : '<span style="color:var(--warm-gray-light);">—</span>';
+  }
+
+  var identityHtml = _contactDetailCardOpen('Identity') +
+    '<div style="display:grid;grid-template-columns:160px 1fr;gap:8px 16px;font-size:0.85rem;">' +
+      _contactDetailRow('Name', nameField) +
+      _contactDetailRow('Email', emailField) +
+      _contactDetailRow('Phone', phoneField) +
+      _contactDetailRow('Company', companyField) +
+      _contactDetailRow('Category', categoryField) +
+      _contactDetailRow('Website', websiteField) +
+      _contactDetailRow('Address', addressField) +
+    '</div>' +
+    _contactDetailCardClose();
+
+  var notesCardHtml = _contactDetailCardOpen('Notes') +
+    '<div style="font-size:0.85rem;white-space:pre-wrap;">' + notesField + '</div>' +
+    _contactDetailCardClose();
+
+  var googleSync = contact.googleContactId
+    ? '<a href="https://contacts.google.com/person/' + esc(contact.googleContactId.replace('people/', '')) + '" target="_blank" rel="noopener" style="color:var(--teal);">&#128100; Synced</a>'
+    : '<span style="color:var(--warm-gray-light);">Not synced</span>';
+  var linksCardHtml = _contactDetailCardOpen('Links') +
+    '<div style="display:grid;grid-template-columns:160px 1fr;gap:8px 16px;font-size:0.85rem;">' +
+      _contactDetailRow('Drive folder', driveField) +
+      _contactDetailRow('Google Contact', googleSync) +
+    '</div>' +
+    _contactDetailCardClose();
+
+  function fmtDT(iso) { if (!iso) return '—'; try { return new Date(iso).toLocaleString(); } catch (e) { return iso; } }
+  var recordCardHtml = _contactDetailCardOpen('Record') +
+    '<div style="display:grid;grid-template-columns:160px 1fr;gap:8px 16px;font-size:0.85rem;">' +
+      _contactDetailRow('Created', esc(fmtDT(contact.createdAt))) +
+      _contactDetailRow('Created by', esc(contact.createdBy || '—')) +
+      _contactDetailRow('Updated', esc(fmtDT(contact.updatedAt))) +
+    '</div>' +
+    _contactDetailCardClose();
+
+  var saveCancelHtml = '';
+  if (editing) {
+    saveCancelHtml = '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--cream-dark);">' +
+      '<button class="btn btn-secondary" onclick="cancelContactEditMode()">Cancel</button>' +
+      '<button class="btn btn-primary" onclick="saveContactEditMode()">Save</button>' +
+    '</div>';
+  }
 
   // Interaction timeline
   var timelineHtml = '<div class="interaction-timeline">';
@@ -570,7 +686,7 @@ function renderContactDetail(contact) {
   }
   timelineHtml += '</div>';
 
-  container.innerHTML = headerHtml + timelineHtml;
+  container.innerHTML = headerHtml + identityHtml + notesCardHtml + linksCardHtml + recordCardHtml + saveCancelHtml + timelineHtml;
 }
 
 function openLogInteractionModal(contactId) {
@@ -1041,8 +1157,9 @@ async function doSyncGoogleContacts() {
   window.doSyncGoogleContacts = doSyncGoogleContacts;
   window.connectGoogleContacts = connectGoogleContacts;
   window.isGoogleContactsConnected = isGoogleContactsConnected;
-  window.openEditContactModal = openEditContactModal;
-  window.saveEditContact = saveEditContact;
+  window.enterContactEditMode = enterContactEditMode;
+  window.cancelContactEditMode = cancelContactEditMode;
+  window.saveContactEditMode = saveContactEditMode;
   window.openInquiryResponseModal = openInquiryResponseModal;
   window.sendInquiryResponse = sendInquiryResponse;
 
@@ -1088,6 +1205,9 @@ async function doSyncGoogleContacts() {
       selectedContactId = null;
       contactInteractions = [];
       contactInteractionsLoaded = false;
+      contactEditMode = false;
+      contactEditBaseline = null;
+      if (window.MastDirty) { try { MastDirty.unregister('contactEdit'); } catch (e) {} }
     }
   });
 
