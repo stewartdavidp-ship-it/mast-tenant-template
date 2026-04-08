@@ -1514,34 +1514,44 @@
     /* ========== TOAST ========== */
     .toast-container {
       position: fixed;
-      bottom: 24px;
-      left: 50%;
-      transform: translateX(-50%);
       z-index: 10100;
       display: flex;
       flex-direction: column;
       gap: 8px;
-      align-items: center;
+      pointer-events: none;
     }
+    /* Position variants — set on .toast-container via data-position attribute */
+    .toast-container[data-position="bottom-center"] { bottom: 24px; left: 50%; transform: translateX(-50%); align-items: center; }
+    .toast-container[data-position="bottom-right"]  { bottom: 24px; right: 24px; align-items: flex-end; }
+    .toast-container[data-position="bottom-left"]   { bottom: 24px; left: 24px;  align-items: flex-start; }
+    .toast-container[data-position="top-center"]    { top: 76px; left: 50%; transform: translateX(-50%); align-items: center; }
+    .toast-container[data-position="top-right"]     { top: 76px; right: 24px; align-items: flex-end; }
+    .toast-container[data-position="top-left"]      { top: 76px; left: 24px;  align-items: flex-start; }
 
     .toast {
       background: var(--charcoal);
       color: white;
       padding: 14px 28px;
       border-radius: 10px;
-      font-size: 1.05rem;
+      font-size: 0.9rem;
       font-weight: 500;
       box-shadow: 0 6px 20px rgba(0,0,0,0.3);
       opacity: 1;
       animation: toastIn 0.3s ease, toastOut 0.3s ease 4.7s forwards;
       max-width: 90vw;
       text-align: center;
+      pointer-events: auto;
     }
+    /* Size variants — set on .toast via data-size attribute */
+    .toast[data-size="compact"]     { font-size: 0.85rem; padding: 10px 20px; }
+    .toast[data-size="comfortable"] { font-size: 0.9rem;  padding: 14px 28px; }
+    .toast[data-size="large"]       { font-size: 1rem;    padding: 16px 32px; }
 
     .toast.error {
       background: var(--danger);
-      animation: toastIn 0.3s ease, toastShake 0.5s ease 0.3s, toastOut 0.3s ease 4.7s forwards;
+      animation: toastIn 0.3s ease, toastShake 0.5s ease 0.3s;
     }
+    .toast.persistent { animation: toastIn 0.3s ease; }
 
     @keyframes toastIn {
       from { transform: translateY(10px); }
@@ -7260,6 +7270,7 @@
         <div style="display:flex;gap:0;border-bottom:1px solid rgba(255,255,255,0.1);margin-bottom:16px;" id="notifInnerTabs">
           <button class="view-tab active" onclick="switchNotifInnerTab('alerts')" style="padding:8px 16px;font-size:0.82rem;">Alerts</button>
           <button class="view-tab" onclick="switchNotifInnerTab('history')" style="padding:8px 16px;font-size:0.82rem;">History</button>
+          <button class="view-tab" onclick="switchNotifInnerTab('toasts')" style="padding:8px 16px;font-size:0.82rem;">Toasts</button>
         </div>
         <div id="notifInnerAlerts">
           <p style="font-size:0.85rem;color:rgba(255,255,255,0.5);margin-bottom:16px;">
@@ -7270,6 +7281,47 @@
         </div>
         <div id="notifInnerHistory" style="display:none;">
           <div id="notificationsHistoryList"></div>
+        </div>
+        <div id="notifInnerToasts" style="display:none;">
+          <p style="font-size:0.85rem;color:rgba(255,255,255,0.5);margin-bottom:16px;">
+            Customize where confirmation toasts appear, how long they stay visible, and how big they are. Errors are always persistent until dismissed regardless of these settings. Preferences are stored on this device.
+          </p>
+
+          <div class="form-group" style="margin-bottom:18px;">
+            <label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:6px;">Position</label>
+            <select id="toastPrefPosition" onchange="onToastPrefChange()" style="width:100%;max-width:280px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
+              <option value="bottom-center">Bottom center (default)</option>
+              <option value="bottom-right">Bottom right</option>
+              <option value="bottom-left">Bottom left</option>
+              <option value="top-center">Top center</option>
+              <option value="top-right">Top right</option>
+              <option value="top-left">Top left</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-bottom:18px;">
+            <label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:6px;">Duration</label>
+            <select id="toastPrefDuration" onchange="onToastPrefChange()" style="width:100%;max-width:280px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
+              <option value="fast">Fast (1.5 seconds)</option>
+              <option value="normal">Normal (3 seconds, default)</option>
+              <option value="slow">Slow (6 seconds)</option>
+              <option value="persistent">Persistent (until I dismiss)</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-bottom:18px;">
+            <label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:6px;">Size</label>
+            <select id="toastPrefSize" onchange="onToastPrefChange()" style="width:100%;max-width:280px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
+              <option value="compact">Compact</option>
+              <option value="comfortable">Comfortable (default)</option>
+              <option value="large">Large</option>
+            </select>
+          </div>
+
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <button class="btn btn-small" onclick="testMastToast()">Show test toast</button>
+            <button class="btn btn-small btn-secondary" onclick="resetMastToastPrefs()">Reset to defaults</button>
+          </div>
         </div>
       </div>
 
@@ -8113,7 +8165,7 @@
   </div>
 
   <!-- ===== TOAST CONTAINER ===== -->
-  <div class="toast-container" id="toastContainer"></div>
+  <div class="toast-container" id="toastContainer" data-position="bottom-center" role="status" aria-live="polite"></div>
 
 <script>
 // ============================================================
@@ -11795,15 +11847,85 @@ async function writeAudit(action, entity, entityId) {
 // ============================================================
 // Toast Notifications
 // ============================================================
+// ============================================================
+// Toast preferences (Phase 9)
+// Stored per-uid in localStorage. Loaded into MastToastPrefs at bootstrap.
+// Spec: mast-ux-navigation-toasts skill — position / duration / size.
+// ============================================================
+window.MastToastPrefs = {
+  position: 'bottom-center',
+  duration: 'normal',  // fast | normal | slow | persistent
+  size: 'comfortable', // compact | comfortable | large
+};
+var MAST_TOAST_DURATION_MS = { fast: 1500, normal: 3000, slow: 6000, persistent: 0 };
+
+function mastToastPrefsKey() {
+  var uid = (window.currentUser && window.currentUser.uid) || (firebase.auth().currentUser && firebase.auth().currentUser.uid) || 'anon';
+  return 'mastToastPrefs:' + uid;
+}
+function loadMastToastPrefs() {
+  try {
+    var raw = localStorage.getItem(mastToastPrefsKey());
+    if (raw) {
+      var parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        if (parsed.position) window.MastToastPrefs.position = parsed.position;
+        if (parsed.duration) window.MastToastPrefs.duration = parsed.duration;
+        if (parsed.size)     window.MastToastPrefs.size     = parsed.size;
+      }
+    }
+  } catch (e) {}
+  // Apply position to the existing container immediately so toasts honor prefs from first call
+  var container = document.getElementById('toastContainer');
+  if (container) container.setAttribute('data-position', window.MastToastPrefs.position);
+}
+function saveMastToastPrefs(next) {
+  if (next.position) window.MastToastPrefs.position = next.position;
+  if (next.duration) window.MastToastPrefs.duration = next.duration;
+  if (next.size)     window.MastToastPrefs.size     = next.size;
+  try { localStorage.setItem(mastToastPrefsKey(), JSON.stringify(window.MastToastPrefs)); } catch (e) {}
+  var container = document.getElementById('toastContainer');
+  if (container) container.setAttribute('data-position', window.MastToastPrefs.position);
+}
+
 function showToast(message, isError) {
   var container = document.getElementById('toastContainer');
+  if (!container) return;
+  var prefs = window.MastToastPrefs || { position: 'bottom-center', duration: 'normal', size: 'comfortable' };
+  container.setAttribute('data-position', prefs.position);
+
   var toast = document.createElement('div');
   toast.className = 'toast' + (isError ? ' error' : '');
+  toast.setAttribute('data-size', prefs.size);
+  toast.setAttribute('role', isError ? 'alert' : 'status');
   toast.textContent = message;
+
+  // Override rules per skill: errors are always persistent. Otherwise honor pref.
+  var durationMs;
+  if (isError) {
+    durationMs = 0; // persistent — user must dismiss
+    toast.classList.add('persistent');
+    toast.style.cursor = 'pointer';
+    toast.title = 'Click to dismiss';
+    toast.addEventListener('click', function() { if (toast.parentNode) toast.parentNode.removeChild(toast); });
+  } else {
+    durationMs = MAST_TOAST_DURATION_MS[prefs.duration];
+    if (durationMs == null) durationMs = 3000;
+    if (durationMs === 0) {
+      toast.classList.add('persistent');
+      toast.style.cursor = 'pointer';
+      toast.title = 'Click to dismiss';
+      toast.addEventListener('click', function() { if (toast.parentNode) toast.parentNode.removeChild(toast); });
+    } else {
+      // Replace stock animation timing with the actual duration: in 0.3s, hold, fade-out 0.3s
+      var holdMs = Math.max(300, durationMs - 600);
+      toast.style.animation = 'toastIn 0.3s ease, toastOut 0.3s ease ' + (holdMs / 1000) + 's forwards';
+    }
+  }
   container.appendChild(toast);
-  setTimeout(function() {
-    if (toast.parentNode) toast.parentNode.removeChild(toast);
-  }, 5000);
+  if (durationMs > 0) {
+    setTimeout(function() { if (toast.parentNode) toast.parentNode.removeChild(toast); }, durationMs);
+  }
 }
 
 // Dark-mode-compliant confirm dialog (replaces native confirm())
@@ -12002,6 +12124,7 @@ auth.getRedirectResult().catch(function(err) {
 auth.onAuthStateChanged(async function(user) {
   if (TEST_MODE && new URLSearchParams(window.location.search).get('testmode') === '1') return; // Already handled above
   currentUser = user;
+  if (user) { try { loadMastToastPrefs(); } catch (e) {} }
   const authScreen = document.getElementById('authScreen');
   const deniedScreen = document.getElementById('deniedScreen');
   const header = document.getElementById('header');
@@ -13928,7 +14051,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260408phase8-fontscale';
+var MAST_MODULES_V = '20260408phase9-toastprefs';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -14390,12 +14513,44 @@ var _unreadAlertCount = 0;
 function switchNotifInnerTab(tab) {
   var alertsEl = document.getElementById('notifInnerAlerts');
   var historyEl = document.getElementById('notifInnerHistory');
-  if (alertsEl) alertsEl.style.display = tab === 'alerts' ? '' : 'none';
+  var toastsEl = document.getElementById('notifInnerToasts');
+  if (alertsEl)  alertsEl.style.display  = tab === 'alerts'  ? '' : 'none';
   if (historyEl) historyEl.style.display = tab === 'history' ? '' : 'none';
+  if (toastsEl)  toastsEl.style.display  = tab === 'toasts'  ? '' : 'none';
   document.querySelectorAll('#notifInnerTabs .view-tab').forEach(function(btn) {
     btn.classList.toggle('active', btn.textContent.trim().toLowerCase() === tab);
   });
   if (tab === 'history') loadAlertHistory();
+  if (tab === 'toasts')  populateToastPrefsForm();
+}
+
+function populateToastPrefsForm() {
+  loadMastToastPrefs(); // make sure we have the latest from localStorage
+  var p = document.getElementById('toastPrefPosition');
+  var d = document.getElementById('toastPrefDuration');
+  var s = document.getElementById('toastPrefSize');
+  if (p) p.value = window.MastToastPrefs.position;
+  if (d) d.value = window.MastToastPrefs.duration;
+  if (s) s.value = window.MastToastPrefs.size;
+}
+function onToastPrefChange() {
+  var p = document.getElementById('toastPrefPosition');
+  var d = document.getElementById('toastPrefDuration');
+  var s = document.getElementById('toastPrefSize');
+  saveMastToastPrefs({
+    position: p ? p.value : undefined,
+    duration: d ? d.value : undefined,
+    size:     s ? s.value : undefined,
+  });
+  showToast('Toast preferences saved');
+}
+function resetMastToastPrefs() {
+  saveMastToastPrefs({ position: 'bottom-center', duration: 'normal', size: 'comfortable' });
+  populateToastPrefsForm();
+  showToast('Toast preferences reset');
+}
+function testMastToast() {
+  showToast('This is a test toast');
 }
 
 function loadNotificationsSettings() {
