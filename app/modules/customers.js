@@ -180,6 +180,82 @@
     container.innerHTML = h;
   }
 
+  // ------------------------------------------------------------
+  // State-preserving render
+  // ------------------------------------------------------------
+  // Every field save in the customer module triggers a re-render of the
+  // overview tab, which blows away unsaved input in siblings (notes,
+  // tag input, identity fields, contact editor fields). snapshotFormState
+  // captures in-flight values + focus + selection range so restore can put
+  // them back after the innerHTML replace.
+
+  function snapshotFormState() {
+    var tab = document.getElementById('customersTab');
+    if (!tab) return null;
+    var active = document.activeElement;
+    var snap = {
+      fields: {},
+      focusId: (active && tab.contains(active)) ? active.id : null,
+      focusSelStart: null,
+      focusSelEnd: null,
+      expandedContactId: expandedContactId
+    };
+    if (snap.focusId && active && typeof active.selectionStart === 'number') {
+      snap.focusSelStart = active.selectionStart;
+      snap.focusSelEnd = active.selectionEnd;
+    }
+    // Capture any element with id starting "cust" or known editable markers
+    tab.querySelectorAll('input, textarea, select').forEach(function(el) {
+      if (!el.id) return;
+      if (el.type === 'checkbox' || el.type === 'radio') {
+        snap.fields[el.id] = { type: 'check', checked: el.checked };
+      } else {
+        snap.fields[el.id] = { type: 'val', value: el.value };
+      }
+    });
+    return snap;
+  }
+
+  function restoreFormState(snap) {
+    if (!snap) return;
+    var tab = document.getElementById('customersTab');
+    if (!tab) return;
+    Object.keys(snap.fields).forEach(function(id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      var s = snap.fields[id];
+      if (s.type === 'check') el.checked = s.checked;
+      else el.value = s.value;
+    });
+    if (snap.focusId) {
+      var el = document.getElementById(snap.focusId);
+      if (el) {
+        try {
+          el.focus();
+          if (snap.focusSelStart !== null && typeof el.setSelectionRange === 'function') {
+            el.setSelectionRange(snap.focusSelStart, snap.focusSelEnd);
+          }
+        } catch (e) { /* focus may fail on detached elements */ }
+      }
+    }
+  }
+
+  // Public helper: any caller that would have called render() should call
+  // this instead so in-flight edits survive.
+  function renderPreservingEdits() {
+    var snap = snapshotFormState();
+    render();
+    restoreFormState(snap);
+  }
+
+  // Contact editor expansion state (which contact card, if any, is in edit mode)
+  var expandedContactId = null;
+
+  // Non-blocking feedback — reuse the global showToast helper from index.html.
+  function toast(msg, isErr) {
+    if (typeof window.showToast === 'function') window.showToast(msg, !!isErr);
+  }
+
   // ============================================================
   // Surface 1: Customers List
   // ============================================================
@@ -551,12 +627,30 @@
         c.updatedAt = updates['updatedAt'];
       }
       if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'overview') {
-        render();
+        renderPreservingEdits();
       }
+      toast('Saved');
     }).catch(function(e) {
       console.error('[customers] save failed', fieldPath, e);
-      window.mastAlert('Save failed: ' + (e && e.message));
+      toast('Save failed: ' + (e && e.message), true);
     });
+  }
+
+  // Inline identity save — used by displayName and primaryEmail input onblur.
+  // Skips the write if the value is unchanged so we don't thrash.
+  function saveIdentityField(customerId, fieldPath, value) {
+    var c = customersData.find(function(x) { return x && x.id === customerId; });
+    if (!c) return;
+    var current = c[fieldPath] || '';
+    var trimmed = (value || '').trim();
+    if (trimmed === current) return;
+    // Live-update the header h3 immediately (before the Firebase round trip)
+    // so the user sees the name change reflected while typing.
+    if (fieldPath === 'displayName') {
+      var h3 = document.querySelector('#customersTab h3');
+      if (h3) h3.innerText = trimmed || c.primaryEmail || c.id;
+    }
+    saveCustomerField(customerId, fieldPath, trimmed || null);
   }
 
   function addTag(customerId, raw) {
@@ -596,11 +690,12 @@
         c.updatedAt = new Date().toISOString();
       }
       setTimeout(function() {
-        if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'overview') render();
+        if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'overview') renderPreservingEdits();
       }, 0);
+      toast(newVal ? 'Opted in to newsletter' : 'Opted out of newsletter');
     }).catch(function(e) {
       console.error('[customers] newsletter toggle failed', e);
-      window.mastAlert('Toggle failed: ' + (e && e.message));
+      toast('Toggle failed: ' + (e && e.message), true);
     });
   };
 
@@ -747,10 +842,21 @@
 
     var h = '';
 
-    // Identity card
+    // Identity card — displayName and primaryEmail are inline-editable
+    var inlineInputStyle = 'width:100%;padding:6px 10px;border:1px solid var(--cream-dark);border-radius:4px;background:var(--cream);font-family:DM Sans,sans-serif;font-size:0.85rem;';
+    var nameInput = '<input type="text" id="custIdentityDisplayName" data-customer-id="' + esc(c.id) + '" ' +
+      'value="' + esc(c.displayName || '') + '" placeholder="(no name)" ' +
+      'oninput="customersLiveUpdateHeader(this.value)" ' +
+      'onblur="customersSaveIdentity(this.dataset.customerId, \'displayName\', this.value)" ' +
+      'style="' + inlineInputStyle + '">';
+    var emailInput = '<input type="email" id="custIdentityPrimaryEmail" data-customer-id="' + esc(c.id) + '" ' +
+      'value="' + esc(c.primaryEmail || '') + '" placeholder="no primary email" ' +
+      'onblur="customersSaveIdentity(this.dataset.customerId, \'primaryEmail\', this.value)" ' +
+      'style="' + inlineInputStyle + '">';
     h += detailCardOpen('Identity');
     h += '<div style="display:grid;grid-template-columns:160px 1fr;gap:8px 16px;font-size:0.85rem;">';
-    h += identityRow('Primary email', esc(c.primaryEmail || '—'));
+    h += identityRow('Name', nameInput);
+    h += identityRow('Primary email', emailInput);
     h += identityRow('Tags', renderTagsEditor(c));
     h += identityRow('Newsletter', renderNewsletterToggle(c));
     h += identityRow('Source', sourceBadge(c.source) || '—');
@@ -897,7 +1003,7 @@
           cache.orderContacts = {};
           if (currentView === 'detail' && selectedCustomerId === customerId &&
               (detailTab === 'orders' || detailTab === 'overview')) {
-            render();
+            renderPreservingEdits();
           }
           return;
         }
@@ -911,7 +1017,7 @@
           cache.orderContacts = byId;
           if (currentView === 'detail' && selectedCustomerId === customerId &&
               (detailTab === 'orders' || detailTab === 'overview')) {
-            render();
+            renderPreservingEdits();
           }
         });
       })
@@ -920,7 +1026,7 @@
         cache.orders = [];
         cache.orderContacts = {};
         cache.loaded.orders = true;
-        if (currentView === 'detail' && selectedCustomerId === customerId) render();
+        if (currentView === 'detail' && selectedCustomerId === customerId) renderPreservingEdits();
       });
   }
 
@@ -971,14 +1077,14 @@
         cache.loaded.enrollments = true;
         if (currentView === 'detail' && selectedCustomerId === customerId &&
             (detailTab === 'classes' || detailTab === 'overview')) {
-          render();
+          renderPreservingEdits();
         }
       })
       .catch(function(e) {
         console.error('[customers] enrollments load failed', e);
         cache.enrollments = [];
         cache.loaded.enrollments = true;
-        if (currentView === 'detail' && selectedCustomerId === customerId) render();
+        if (currentView === 'detail' && selectedCustomerId === customerId) renderPreservingEdits();
       });
   }
 
@@ -1046,7 +1152,7 @@
       });
       cache.interactions = merged;
       cache.loaded.interactions = true;
-      if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'interactions') render();
+      if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'interactions') renderPreservingEdits();
     });
   }
 
@@ -1101,22 +1207,103 @@
 
   function renderContactCard(ct) {
     var name = ct.name || ct.displayName || '(unnamed contact)';
-    var bits = [];
-    if (ct.email)   bits.push(esc(ct.email));
-    if (ct.phone)   bits.push(esc(ct.phone));
-    if (ct.address) bits.push(esc(ct.address));
-    if (ct.company) bits.push(esc(ct.company));
+    var expanded = expandedContactId === ct.id;
+    var inlineInputStyle = 'width:100%;padding:6px 10px;border:1px solid var(--cream-dark);border-radius:4px;background:white;font-family:DM Sans,sans-serif;font-size:0.82rem;';
+
     var h = '';
-    h += '<div data-contact-id="' + esc(ct.id) + '" onclick="customersOpenContact(this.dataset.contactId)" ' +
-         'style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:6px;padding:10px 14px;margin-bottom:8px;cursor:pointer;">';
-    h += '<div style="font-weight:600;font-size:0.85rem;margin-bottom:4px;">' + esc(name) + '</div>';
-    if (bits.length) {
-      h += '<div style="font-size:0.78rem;color:var(--warm-gray);line-height:1.5;">' + bits.join(' · ') + '</div>';
+    h += '<div data-contact-id="' + esc(ct.id) + '" ' +
+         'style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:6px;padding:10px 14px;margin-bottom:8px;">';
+
+    if (!expanded) {
+      // Compact summary — click toggles to expanded editor
+      var bits = [];
+      if (ct.email)   bits.push(esc(ct.email));
+      if (ct.phone)   bits.push(esc(ct.phone));
+      if (ct.address) bits.push(esc(ct.address));
+      if (ct.company) bits.push(esc(ct.company));
+      h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;cursor:pointer;" ' +
+           'data-contact-id="' + esc(ct.id) + '" ' +
+           'onclick="customersExpandContact(this.dataset.contactId)">';
+      h += '<div style="flex:1;">';
+      h += '<div style="font-weight:600;font-size:0.85rem;margin-bottom:4px;">' + esc(name) + '</div>';
+      if (bits.length) {
+        h += '<div style="font-size:0.78rem;color:var(--warm-gray);line-height:1.5;">' + bits.join(' · ') + '</div>';
+      } else {
+        h += '<div style="font-size:0.78rem;color:var(--warm-gray-light);font-style:italic;">No details yet — click to edit</div>';
+      }
+      h += '</div>';
+      h += '<button data-contact-id="' + esc(ct.id) + '" ' +
+           'onclick="event.stopPropagation();customersExpandContact(this.dataset.contactId)" ' +
+           'style="background:none;border:1px solid var(--cream-dark);border-radius:4px;padding:4px 10px;font-size:0.72rem;cursor:pointer;color:var(--warm-gray);">Edit</button>';
+      h += '</div>';
     } else {
-      h += '<div style="font-size:0.78rem;color:var(--warm-gray-light);">No details yet — click to edit</div>';
+      // Expanded inline editor — save-on-blur per field, Done button collapses
+      h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">';
+      h += '<div style="font-weight:600;font-size:0.82rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;">Edit contact</div>';
+      h += '<div style="display:flex;gap:6px;">';
+      h += '<button data-contact-id="' + esc(ct.id) + '" ' +
+           'onclick="customersOpenContact(this.dataset.contactId)" ' +
+           'style="background:none;border:none;font-size:0.72rem;cursor:pointer;color:var(--warm-gray);text-decoration:underline;">Open full contact →</button>';
+      h += '<button onclick="customersCollapseContact()" ' +
+           'style="background:var(--teal);color:white;border:none;border-radius:4px;padding:4px 12px;font-size:0.72rem;cursor:pointer;">Done</button>';
+      h += '</div>';
+      h += '</div>';
+      h += '<div style="display:grid;grid-template-columns:90px 1fr;gap:8px 12px;font-size:0.82rem;">';
+      ['name', 'email', 'phone', 'address', 'company'].forEach(function(field) {
+        var label = field.charAt(0).toUpperCase() + field.slice(1);
+        var val = ct[field] || '';
+        var type = field === 'email' ? 'email' : (field === 'phone' ? 'tel' : 'text');
+        h += '<div style="color:var(--warm-gray);padding-top:6px;">' + label + '</div>';
+        h += '<div>';
+        h += '<input type="' + type + '" id="custContactEdit_' + esc(ct.id) + '_' + field + '" ' +
+             'data-contact-id="' + esc(ct.id) + '" data-field="' + field + '" ' +
+             'value="' + esc(val) + '" ' +
+             'onblur="customersSaveContactField(this.dataset.contactId, this.dataset.field, this.value)" ' +
+             'style="' + inlineInputStyle + '">';
+        h += '</div>';
+      });
+      h += '</div>';
     }
+
     h += '</div>';
     return h;
+  }
+
+  // Toggle contact-card expansion. Uses renderPreservingEdits so typing in
+  // another field (notes, identity) isn't lost when the card expands.
+  function expandContact(contactId) {
+    expandedContactId = contactId;
+    renderPreservingEdits();
+  }
+
+  function collapseContact() {
+    expandedContactId = null;
+    renderPreservingEdits();
+  }
+
+  // Inline contact save — writes to admin/contacts/{contactId} and updates
+  // the in-memory cache. No full render; just touch the cached copy so
+  // subsequent re-renders show the new value.
+  function saveContactField(contactId, field, value) {
+    var trimmed = (value || '').trim();
+    // Find the contact in any customer cache and in-memory update
+    var cache = getCache(selectedCustomerId);
+    var contact = (cache.contacts || []).find(function(c) { return c.id === contactId; });
+    if (!contact) return;
+    var current = contact[field] || '';
+    if (trimmed === current) return;
+    var now = new Date().toISOString();
+    var updates = {};
+    updates['admin/contacts/' + contactId + '/' + field] = trimmed || null;
+    updates['admin/contacts/' + contactId + '/updatedAt'] = now;
+    MastDB._multiUpdate(updates).then(function() {
+      contact[field] = trimmed || null;
+      contact.updatedAt = now;
+      toast('Saved');
+    }).catch(function(e) {
+      console.error('[customers] contact save failed', field, e);
+      toast('Save failed: ' + (e && e.message), true);
+    });
   }
 
   function loadCustomerContacts(customerId) {
@@ -1134,7 +1321,7 @@
       cache.loaded.contacts = true;
       cache._contactsLoading = false;
       setTimeout(function() {
-        if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'overview') render();
+        if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'overview') renderPreservingEdits();
       }, 0);
       return;
     }
@@ -1149,7 +1336,7 @@
       cache.loaded.contacts = true;
       cache._contactsLoading = false;
       setTimeout(function() {
-        if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'overview') render();
+        if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'overview') renderPreservingEdits();
       }, 0);
     }).catch(function(e) {
       console.error('[customers] loadContacts FAILED', customerId, e);
@@ -1157,7 +1344,7 @@
       cache.loaded.contacts = true;
       cache._contactsLoading = false;
       setTimeout(function() {
-        if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'overview') render();
+        if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'overview') renderPreservingEdits();
       }, 0);
     });
   }
@@ -1261,10 +1448,11 @@
       cache.loaded.contacts = true;
 
       if (typeof closeModal === 'function') closeModal();
-      if (currentView === 'detail' && selectedCustomerId === customerId) render();
+      if (currentView === 'detail' && selectedCustomerId === customerId) renderPreservingEdits();
+      toast('Contact created');
     } catch (e) {
       console.error('[customers] add contact failed', e);
-      if (typeof window.mastAlert === 'function') window.mastAlert('Add contact failed: ' + (e && e.message));
+      toast('Add contact failed: ' + (e && e.message), true);
     }
   }
 
@@ -1278,7 +1466,7 @@
     Promise.all(promises).then(function(wallets) {
       cache.wallets = wallets;
       cache.loaded.wallets = true;
-      if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'wallet') render();
+      if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'wallet') renderPreservingEdits();
     });
   }
 
@@ -1628,6 +1816,14 @@
   window.customersOpenContact = openContactFromCustomer;
   window.customersAddContact = addContactToCustomer;
   window.customersSaveNewContact = saveNewContactForCustomer;
+  window.customersSaveIdentity = saveIdentityField;
+  window.customersLiveUpdateHeader = function(v) {
+    var h3 = document.querySelector('#customersTab h3');
+    if (h3) h3.innerText = (v || '').trim() || '(no name)';
+  };
+  window.customersExpandContact = expandContact;
+  window.customersCollapseContact = collapseContact;
+  window.customersSaveContactField = saveContactField;
   window.customersBackfillStats = backfillStats;
   window.customersExportCsv = exportCsv;
   window.customersApplySegment = applySegment;
