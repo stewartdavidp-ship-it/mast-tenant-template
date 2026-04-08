@@ -2014,13 +2014,16 @@
       var pid = p.pid;
       var recipe = recipeByProduct[pid];
       var hasRecipe = !!recipe;
+      var prodVariants = Array.isArray(p.variants) ? p.variants.filter(function(v){ return v && v.id; }) : [];
+      var hasVariants = prodVariants.length > 0;
 
       // Whole-row click dispatches to the default action (Edit or + Add Recipe).
       var rowClick = hasRecipe
         ? 'makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\')'
         : 'makerCreateRecipeForProduct(this.dataset.pid, this.dataset.name)';
       html += '<tr style="cursor:pointer;" data-pid="' + esc(pid) + '" data-name="' + esc(p.name || '') + '" onclick="' + rowClick + '">';
-      html += '<td style="font-weight:500;">' + esc(p.name || '') + '</td>';
+      var variantCountBadge = hasVariants ? ' <span style="font-size:0.72rem;color:var(--warm-gray-light);font-weight:400;">(' + prodVariants.length + ' variants)</span>' : '';
+      html += '<td style="font-weight:500;">' + esc(p.name || '') + variantCountBadge + '</td>';
       html += '<td>' + esc((p.categories || []).join(', ')) + '</td>';
 
       if (hasRecipe) {
@@ -2051,6 +2054,45 @@
       }
 
       html += '</tr>';
+
+      // Variant sub-rows — one per product variant, showing recipe override cost/price if present
+      if (hasVariants) {
+        var activeTier = hasRecipe ? (recipe.activePriceTier || 'direct') : 'direct';
+        prodVariants.forEach(function(pv) {
+          var vName = variantDisplayName(pv);
+          var rvOverride = hasRecipe && recipe.variants && recipe.variants[pv.id] ? recipe.variants[pv.id] : null;
+          var vCost = rvOverride && typeof rvOverride.totalCost === 'number' ? rvOverride.totalCost : (hasRecipe ? (recipe.totalCost || 0) : 0);
+          var vPrice = 0;
+          if (rvOverride && typeof rvOverride[activeTier + 'Price'] === 'number') {
+            vPrice = rvOverride[activeTier + 'Price'];
+          } else if (typeof pv.priceCents === 'number') {
+            vPrice = pv.priceCents / 100;
+          }
+          var vRowClick = hasRecipe
+            ? 'makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\')'
+            : 'makerCreateRecipeForProduct(this.dataset.pid, this.dataset.name)';
+          html += '<tr style="cursor:pointer;background:rgba(0,0,0,0.015);" data-pid="' + esc(pid) + '" data-name="' + esc(p.name || '') + '" onclick="' + vRowClick + '">';
+          html += '<td style="padding-left:28px;font-size:0.85rem;color:var(--warm-gray);">↳ ' + esc(vName) + '</td>';
+          html += '<td></td>';
+          if (hasRecipe) {
+            var overrideBadge = rvOverride
+              ? '<span class="status-badge" style="background:rgba(196,133,60,0.12);color:var(--amber);font-size:0.7rem;">override</span>'
+              : '<span style="font-size:0.75rem;color:var(--warm-gray-light);font-style:italic;">inherits default</span>';
+            html += '<td>' + overrideBadge + '</td>';
+            html += '<td style="text-align:right;font-family:monospace;font-size:0.82rem;color:var(--warm-gray);">$' + vCost.toFixed(2) + '</td>';
+            html += '<td></td>';
+            html += '<td style="text-align:right;font-family:monospace;font-size:0.82rem;">$' + vPrice.toFixed(2) + '</td>';
+            html += '<td></td>';
+          } else {
+            html += '<td><span style="color:var(--warm-gray-light);font-size:0.78rem;">—</span></td>';
+            html += '<td style="text-align:right;">—</td>';
+            html += '<td></td>';
+            html += '<td style="text-align:right;font-family:monospace;font-size:0.82rem;">$' + vPrice.toFixed(2) + '</td>';
+            html += '<td></td>';
+          }
+          html += '</tr>';
+        });
+      }
     });
 
     html += '</tbody></table></div>';
