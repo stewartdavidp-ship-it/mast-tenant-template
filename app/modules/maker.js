@@ -2219,14 +2219,25 @@
 
     // Cost-shape model: variants always exist as a map (default + per-product-variant overrides).
     // currentVariantId is 'default' or a productVariantId. Resolve product variants for tab rendering.
+    // Hydrate every render so late productsData updates (e.g. after bulk
+    // materialize_variants) are picked up without needing to re-open.
+    hydrateVariantsIndependent(bs);
     var productVariants = getProductVariants(bs);
     var hasProductVariants = productVariants.length > 0;
     var existingVariantKeys = bs.variants ? Object.keys(bs.variants).filter(function(k){ return k !== 'default'; }) : [];
     var productVariantIds = productVariants.map(function(pv){ return pv.id; });
     var orphanKeys = existingVariantKeys.filter(function(k){ return productVariantIds.indexOf(k) === -1; });
-    // Sanity: if currentVariantId points to a missing key, fall back to 'default'.
-    if (currentVariantId !== 'default' && existingVariantKeys.indexOf(currentVariantId) === -1) {
-      currentVariantId = 'default';
+    // Sanity: keep currentVariantId in sync with what the product/recipe actually has.
+    if (hasProductVariants) {
+      // Product has variants → never show Default. Land on a real variant id.
+      if (productVariantIds.indexOf(currentVariantId) === -1) {
+        currentVariantId = productVariantIds[0];
+      }
+    } else {
+      // Legacy single-recipe mode → fall back to Default if currentVariantId is unknown.
+      if (currentVariantId !== 'default' && existingVariantKeys.indexOf(currentVariantId) === -1) {
+        currentVariantId = 'default';
+      }
     }
     var activeData = getActiveVariantData(bs);
     var activeKey = currentVariantId || 'default';
