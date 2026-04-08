@@ -13140,12 +13140,12 @@ window.triggerPostCutoverRerun = function() {
     .catch(function(err) { showToast('Failed to run checks: ' + err.message, true); });
 };
 
-window.completeMigration = function() {
+window.completeMigration = async function() {
   var tenantId = MastDB.tenantId();
   var db = MastDB._db();
   if (!tenantId || !db) return;
 
-  if (!confirm('Complete the migration? This will hide the Migration section from the sidebar.')) return;
+  if (!await mastConfirm('Complete the migration? This will hide the Migration section from the sidebar.', { title: 'Complete Migration' })) return;
 
   // Update migration status to complete in tenant RTDB
   db.ref(tenantId + '/admin/migration/status').set('complete').then(function() {

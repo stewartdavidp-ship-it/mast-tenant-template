@@ -1172,15 +1172,15 @@
   async function editChannelPrompt(id) {
     var ch = channelsData[id];
     if (!ch) return;
-    var newName = prompt('Channel name:', ch.name || '');
+    var newName = await mastPrompt('Channel name:', { title: 'Edit Channel', defaultValue: ch.name || '' });
     if (newName == null) return;
-    var newPct = prompt('Percent fee (e.g. 6.5):', String(ch.percentFee || 0));
+    var newPct = await mastPrompt('Percent fee (e.g. 6.5):', { title: 'Edit Channel', defaultValue: String(ch.percentFee || 0) });
     if (newPct == null) return;
-    var newFixed = prompt('Fixed fee per order ($):', String((ch.fixedFeePerOrderCents || 0) / 100));
+    var newFixed = await mastPrompt('Fixed fee per order ($):', { title: 'Edit Channel', defaultValue: String((ch.fixedFeePerOrderCents || 0) / 100) });
     if (newFixed == null) return;
-    var newMonthly = prompt('Monthly fixed cost ($):', String((ch.monthlyFixedCents || 0) / 100));
+    var newMonthly = await mastPrompt('Monthly fixed cost ($):', { title: 'Edit Channel', defaultValue: String((ch.monthlyFixedCents || 0) / 100) });
     if (newMonthly == null) return;
-    var newAuto = prompt('Auto-match sources (comma sep):', (ch.autoMatchSources || []).join(','));
+    var newAuto = await mastPrompt('Auto-match sources (comma sep):', { title: 'Edit Channel', defaultValue: (ch.autoMatchSources || []).join(',') });
     if (newAuto == null) return;
     try {
       await updateChannel(id, {
@@ -1200,7 +1200,7 @@
   async function deleteChannelConfirm(id) {
     var ch = channelsData[id];
     if (!ch) return;
-    if (!confirm('Delete channel "' + (ch.name || '') + '"? Existing orders that reference it will lose their fee profile.')) return;
+    if (!await mastConfirm('Delete channel "' + (ch.name || '') + '"? Existing orders that reference it will lose their fee profile.', { title: 'Delete Channel', danger: true })) return;
     try {
       await deleteChannel(id);
       MastAdmin.showToast('Channel deleted');
@@ -2635,7 +2635,7 @@
 
   async function duplicateCurrentRecipe() {
     if (!editingRecipeId) return;
-    if (!confirm('Duplicate this recipe as a new draft? The clone will not be linked to a product.')) return;
+    if (!await mastConfirm('Duplicate this recipe as a new draft? The clone will not be linked to a product.', { title: 'Duplicate Recipe' })) return;
     try {
       // Save current state first so the clone reflects unsaved edits
       await saveRecipeBuilder();
@@ -2659,7 +2659,7 @@
       MastAdmin.showToast('No recipes need recalculation');
       return;
     }
-    if (!confirm('Recalculate ' + dirtyIds.length + ' flagged recipe' + (dirtyIds.length === 1 ? '' : 's') + '? This refreshes material costs and updates totals.')) {
+    if (!await mastConfirm('Recalculate ' + dirtyIds.length + ' flagged recipe' + (dirtyIds.length === 1 ? '' : 's') + '? This refreshes material costs and updates totals.', { title: 'Recalculate Recipes' })) {
       return;
     }
     var ok = 0, fail = 0;
