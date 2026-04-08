@@ -1536,7 +1536,7 @@
     function renderViewer() {
       overlay.innerHTML =
         '<div style="position:relative;max-width:800px;width:100%;margin:0 16px;" onclick="event.stopPropagation()">' +
-          '<button style="position:absolute;top:-40px;right:0;background:none;border:none;color:#fff;font-size:24px;cursor:pointer;" onclick="evCloseModal(\'evImageViewer\')">&times;</button>' +
+          '<button aria-label="Close image viewer" style="position:absolute;top:-40px;right:0;background:none;border:none;color:#fff;font-size:1.6rem;cursor:pointer;" onclick="evCloseModal(\'evImageViewer\')">&times;</button>' +
           '<img src="' + esc(images[idx]) + '" style="width:100%;max-height:80vh;object-fit:contain;border-radius:8px;" alt="Image ' + (idx + 1) + '">' +
           (images.length > 1 ?
             '<div style="display:flex;justify-content:center;gap:16px;margin-top:12px;">' +
@@ -1564,7 +1564,7 @@
     var images = st.images;
     overlay.innerHTML =
       '<div style="position:relative;max-width:800px;width:100%;margin:0 16px;" onclick="event.stopPropagation()">' +
-        '<button style="position:absolute;top:-40px;right:0;background:none;border:none;color:#fff;font-size:24px;cursor:pointer;" onclick="evCloseModal(\'evImageViewer\')">&times;</button>' +
+        '<button aria-label="Close image viewer" style="position:absolute;top:-40px;right:0;background:none;border:none;color:#fff;font-size:1.6rem;cursor:pointer;" onclick="evCloseModal(\'evImageViewer\')">&times;</button>' +
         '<img src="' + esc(images[idx]) + '" style="width:100%;max-height:80vh;object-fit:contain;border-radius:8px;" alt="Image ' + (idx + 1) + '">' +
         (images.length > 1 ?
           '<div style="display:flex;justify-content:center;gap:16px;margin-top:12px;">' +

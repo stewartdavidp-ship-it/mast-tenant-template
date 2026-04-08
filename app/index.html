@@ -25,6 +25,17 @@
   <style>
     /* Pre-paint dark mode on html element to prevent flash before body exists */
     html.dark-mode { background: #1a1a1a; }
+    /* ADA: lock root font-size to 100% so rem scales with OS font preference */
+    html { font-size: 100%; }
+    /* ADA: honor prefers-reduced-motion — kill animations/transitions for users who ask for them */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
     :root {
       --amber: #C4853C;
       --amber-light: #E8B679;
@@ -90,7 +101,7 @@
     .header-mast-wm {
       font-family: 'Archivo', sans-serif;
       font-weight: 800;
-      font-size: 16px;
+      font-size: 1rem;
       letter-spacing: -0.025em;
       color: #f0ebe0;
       line-height: 1;
@@ -98,7 +109,7 @@
 
     .header-brand-divider {
       color: rgba(255,255,255,0.15);
-      font-size: 18px;
+      font-size: 1.15rem;
       font-weight: 300;
       margin: 0 2px;
     }
@@ -121,7 +132,7 @@
       background: none;
       border: none;
       color: var(--warm-gray-light);
-      font-size: 22px;
+      font-size: 1.6rem;
       cursor: pointer;
       -webkit-tap-highlight-color: transparent;
     }
@@ -3573,7 +3584,7 @@
     .media-thumb img { width:100%;height:100%;object-fit:cover; }
     .media-thumb .delete-media {
       position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);color:#fff;
-      border:none;border-radius:50%;width:24px;height:24px;font-size:14px;
+      border:none;border-radius:50%;width:24px;height:24px;font-size:0.85rem;
       cursor:pointer;display:none;align-items:center;justify-content:center;line-height:1;
     }
     .media-thumb:hover .delete-media { display:flex; }
@@ -3622,7 +3633,7 @@
     .media-select-thumb img { width:100%;height:100%;object-fit:cover; }
     .media-select-thumb .check-overlay {
       position:absolute;top:4px;left:4px;width:22px;height:22px;background:var(--teal);
-      color:#fff;border-radius:50%;font-size:14px;display:none;align-items:center;justify-content:center;
+      color:#fff;border-radius:50%;font-size:0.85rem;display:none;align-items:center;justify-content:center;
     }
     .media-select-thumb.selected .check-overlay { display:flex; }
     body.dark-mode .media-thumb { background:#2a2a2a;border-color:#3a3a3a; }
@@ -5002,7 +5013,7 @@
   <div class="mobile-menu-overlay" id="mobileMenuOverlay"></div>
   <header class="header" id="header" style="display:none;">
     <div style="display:flex;align-items:center;gap:12px;">
-      <button class="hamburger-btn" id="hamburgerBtn" onclick="toggleMobileMenu(event)">&#9776;</button>
+      <button class="hamburger-btn" id="hamburgerBtn" aria-label="Toggle menu" onclick="toggleMobileMenu(event)">&#9776;</button>
       <div class="header-brand-lockup">
         <svg class="header-mast-mark" viewBox="0 0 32 64" fill="none"><rect x="14" y="0" width="3.5" height="64" rx="1.75" fill="#f0ebe0"/><path d="M17.5 3 L32 11 L17.5 20 Z" fill="#e8a84c"/><path d="M17.5 24 L28 30.5 L17.5 38 Z" fill="#f0ebe0" opacity="0.25"/></svg>
         <span class="header-mast-wm">Mast</span>
@@ -13917,7 +13928,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260408phase5-navstack';
+var MAST_MODULES_V = '20260408phase8-fontscale';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
