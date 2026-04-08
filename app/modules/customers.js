@@ -1689,9 +1689,24 @@
   }
 
   function openOrderFromCustomer(orderId) {
-    if (typeof window.viewOrder === 'function') {
-      if (typeof navigateTo === 'function') navigateTo('orders');
-      setTimeout(function() { window.viewOrder(orderId); }, 50);
+    // Navigate to the orders tab, loading the module first if needed. The
+    // orders module is lazy-loaded, so window.viewOrder may not exist yet
+    // the first time a user clicks an order row from a customer detail view.
+    if (typeof navigateTo === 'function') navigateTo('orders');
+    var callView = function() {
+      if (typeof window.viewOrder === 'function') {
+        window.viewOrder(orderId);
+      } else {
+        showToast && showToast('Could not open order — orders module failed to load.', true);
+      }
+    };
+    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') {
+      MastAdmin.loadModule('orders').then(callView).catch(function(err) {
+        console.error('[customers] failed to load orders module', err);
+        showToast && showToast('Failed to load orders module: ' + (err && err.message || err), true);
+      });
+    } else {
+      setTimeout(callView, 50);
     }
   }
 
@@ -1829,8 +1844,8 @@
   }
 
   async function saveSegment() {
-    var name = window.prompt('Name this segment:');
-    if (!name) return;
+    var name = await window.mastPrompt('Name this segment:', { title: 'Save segment', confirmLabel: 'Save' });
+    if (name === null) return;
     name = name.trim();
     if (!name) return;
     var filters = readFilterSnapshot();
@@ -1878,8 +1893,8 @@
   async function renameSegment(segId) {
     var seg = segmentsData.find(function(s) { return s.id === segId; });
     if (!seg) return;
-    var name = window.prompt('Rename segment:', seg.name);
-    if (!name) return;
+    var name = await window.mastPrompt('Rename segment:', { title: 'Rename segment', confirmLabel: 'Rename', defaultValue: seg.name });
+    if (name === null) return;
     name = name.trim();
     if (!name || name === seg.name) return;
     var now = new Date().toISOString();
