@@ -596,10 +596,8 @@ admin/materials/{materialId}
 
 admin/recipes/{recipeId}
   ├── lineItems/{lineItemId} → materialId (keyed objects, not arrays)
-  ├── activePriceTier → propagates to product.priceCents + product.variants[].priceCents
-  ├── variantsShape: "cost" | null → marks recipes using the cost-shape variant model
-  ├── variants/default → inheritance template (lineItems, laborMinutes, otherCost, computed)
-  ├── variants/{productVariantId} → per-product-variant override slot (partial; inherits from default)
+  ├── activePriceTier → propagates to product.priceCents + Etsy listing
+  ├── variants/{variantId} → independent lineItems, labor, costs (shared markups)
   └── productId → links to public/products/{pid}
 
 public/products/{pid}
@@ -617,9 +615,9 @@ admin/lookbooks/{documentId}
 #### Key Architectural Patterns
 
 - **costsDirty flag:** Set when a material's `unitCost` changes (client-side scan of recipes referencing that material). Cleared on `recalculateRecipe()`. Lazy pattern — costs recalc when recipe is opened, not eagerly.
-- **activePriceTier propagation:** `setActivePriceTier(recipeId, tier)` does an atomic multi-path write. For cost-shape recipes linked to a product with variants, it propagates each recipe slot's tier price to `public/products/{pid}/variants[i].priceCents` (matching by id) and recomputes the product base as the lowest variant priceCents with `priceType: "from"`. For legacy/single-price recipes it writes `product.priceCents` directly. Fire-and-forget Etsy sync — failure never blocks local update.
-- **Calculation engine:** `calculateRecipe()` is pure math — no Firebase calls. Takes lineItems, labor, markups → returns all costs and tier prices. Backend `calculate_price` iterates the `variants` map and writes computed fields (`totalCost`, `*Price`, `*MarginPct`) back to each slot.
-- **Variant recipes (cost-shape model):** Recipe variants mirror product variants — keyed by `productVariantId` rather than freeform names. The `default` slot is the inheritance template; per-variant slots override only what differs (lineItems, laborMinutes, otherCost). Inheritance chain: variant override → default → recipe root. Markups, setupCost, batchSize, minMarginPercent stay at recipe root (shared). Legacy recipes without `variantsShape === "cost"` are lazily migrated on their first save in the new UI (recipe-root fields copied into `variants.default`). Standalone recipes with no `productId` render a single Default tab with no Add button.
+- **activePriceTier propagation:** `setActivePriceTier(recipeId, tier)` does an atomic multi-path write: `recipe.activePriceTier` + `product.priceCents` + fire-and-forget Etsy sync. Etsy failure never blocks local update.
+- **Calculation engine:** `calculateRecipe()` is pure math — no Firebase calls. Takes lineItems, labor, markups → returns all costs and tier prices. `calculateAllVariants()` runs it per-variant with shared markups.
+- **Variant recipes:** `isVariantEnabled` flag (default false). Up to 3 variants with independent lineItems/labor/otherCost but shared markups at recipe level. First variant's price used for `product.priceCents` propagation.
 - **Pre-seed system:** Craft profile selection triggers `seedMaterials()` — creates draft materials with category structure and default markups. `materialsSeeded` flag prevents re-seeding.
 - **lineItems as objects:** Keyed by lineItemId, not arrays — RTDB compatibility requirement.
 - **CSV Import:** Client-side parsing (PapaParse for CSV, SheetJS for XLSX). 3-step wizard: upload → column mapping with auto-detection → preview & confirm. All imports land as `status: draft` with `importedFrom: 'csv'` tag. Import history logged to `admin/importLog`.
