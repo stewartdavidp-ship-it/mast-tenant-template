@@ -1995,7 +1995,11 @@
       var recipe = recipeByProduct[pid];
       var hasRecipe = !!recipe;
 
-      html += '<tr>';
+      // Whole-row click dispatches to the default action (Edit or + Add Recipe).
+      var rowClick = hasRecipe
+        ? 'makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\')'
+        : 'makerCreateRecipeForProduct(this.dataset.pid, this.dataset.name)';
+      html += '<tr style="cursor:pointer;" data-pid="' + esc(pid) + '" data-name="' + esc(p.name || '') + '" onclick="' + rowClick + '">';
       html += '<td style="font-weight:500;">' + esc(p.name || '') + '</td>';
       html += '<td>' + esc((p.categories || []).join(', ')) + '</td>';
 
@@ -2014,7 +2018,7 @@
         }
         html += '<td style="text-align:right;font-family:monospace;font-weight:600;">$' + activePrice.toFixed(2) + '</td>';
         html += '<td style="text-align:right;">';
-        html += '<button style="background:none;border:none;color:var(--teal);cursor:pointer;font-size:0.85rem;font-family:\'DM Sans\';" onclick="makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\')">Edit Recipe</button>';
+        html += '<button style="background:none;border:none;color:var(--teal);cursor:pointer;font-size:0.85rem;font-family:\'DM Sans\';" onclick="event.stopPropagation();makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\')">Edit Recipe</button>';
         html += '</td>';
       } else {
         html += '<td><span style="color:var(--warm-gray-light);font-size:0.85rem;">no recipe</span></td>';
@@ -2022,7 +2026,7 @@
         html += '<td>—</td>';
         html += '<td style="text-align:right;font-family:monospace;">$' + (p.priceCents ? (p.priceCents / 100).toFixed(2) : '0.00') + '</td>';
         html += '<td style="text-align:right;">';
-        html += '<button class="btn btn-outline btn-small" data-pid="' + esc(pid) + '" data-name="' + esc(p.name || '') + '" onclick="makerCreateRecipeForProduct(this.dataset.pid, this.dataset.name)">+ Add Recipe</button>';
+        html += '<button class="btn btn-outline btn-small" data-pid="' + esc(pid) + '" data-name="' + esc(p.name || '') + '" onclick="event.stopPropagation();makerCreateRecipeForProduct(this.dataset.pid, this.dataset.name)">+ Add Recipe</button>';
         html += '</td>';
       }
 
