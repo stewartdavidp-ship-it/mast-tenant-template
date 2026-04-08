@@ -157,8 +157,8 @@
       '<p style="margin:0 0 12px;color:var(--warm-gray-light);font-size:0.9rem;">Your CSV has been downloaded. Pirate Ship auto-maps address fields, but the following fields need to be <strong style="color:var(--amber);">manually mapped</strong> the first time you upload a CSV:</p>' +
       '<table style="width:100%;border-collapse:collapse;margin:12px 0;">' +
         '<thead><tr style="border-bottom:2px solid var(--cream-dark);text-align:left;">' +
-          '<th style="padding:6px 10px;font-size:0.82rem;">Our CSV Column</th>' +
-          '<th style="padding:6px 10px;font-size:0.82rem;">Map To in Pirate Ship</th>' +
+          '<th style="padding:6px 10px;font-size:0.85rem;">Our CSV Column</th>' +
+          '<th style="padding:6px 10px;font-size:0.85rem;">Map To in Pirate Ship</th>' +
         '</tr></thead>' +
         '<tbody>' +
           '<tr style="border-bottom:1px solid var(--cream-dark);">' +
@@ -191,7 +191,7 @@
           '</tr>' +
         '</tbody>' +
       '</table>' +
-      '<p style="margin:12px 0 0;color:var(--warm-gray);font-size:0.82rem;">Pirate Ship remembers your mappings — you only need to do this once.</p>' +
+      '<p style="margin:12px 0 0;color:var(--warm-gray);font-size:0.85rem;">Pirate Ship remembers your mappings — you only need to do this once.</p>' +
     '</div>' +
     '<div class="modal-footer" style="padding:12px 16px;display:flex;gap:8px;justify-content:flex-end;">' +
       '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
@@ -562,8 +562,8 @@
     var itemNames = (o.items || []).map(function(it) { return it.name + ' x' + (it.qty || 1); }).join(', ');
     if (resultEl) {
       resultEl.innerHTML = '<div style="text-align:center;padding:16px;background:#E8F5E9;border-radius:8px;">' +
-        '<div style="font-size:2rem;">&#10003;</div>' +
-        '<div style="font-weight:600;font-size:1.1rem;">' + esc(getOrderDisplayNumber(o)) + ' — Packed!</div>' +
+        '<div style="font-size:1.6rem;">&#10003;</div>' +
+        '<div style="font-weight:600;font-size:1.15rem;">' + esc(getOrderDisplayNumber(o)) + ' — Packed!</div>' +
         '<div style="color:var(--warm-gray);font-size:0.85rem;">' + esc(o.shipping ? o.shipping.name : '') + '</div>' +
         '<div style="color:var(--warm-gray);font-size:0.85rem;">' + esc(itemNames) + '</div>' +
         (bundleId ? '<div style="color:var(--teal);font-size:0.78rem;margin-top:4px;">Added to bundle (' + ((bundles[bundleId] || {}).orderIds || []).length + ' packages)</div>' : '') +
@@ -657,7 +657,7 @@
       var num = o ? getOrderDisplayNumber(o) : oid;
       var isDone = scanned.indexOf(oid) !== -1;
       listHtml += '<div style="padding:6px 0;display:flex;align-items:center;gap:8px;">' +
-        '<span style="font-size:1.1rem;">' + (isDone ? '&#10003;' : '&#9744;') + '</span>' +
+        '<span style="font-size:1.15rem;">' + (isDone ? '&#10003;' : '&#9744;') + '</span>' +
         '<span style="font-family:monospace;font-weight:' + (isDone ? '400' : '600') + ';' + (isDone ? 'color:var(--warm-gray);text-decoration:line-through;' : '') + '">' + esc(num) + '</span>' +
       '</div>';
     });

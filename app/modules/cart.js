@@ -86,11 +86,11 @@
     var clickAttr = onclick ? ' cursor:pointer;" onclick="' + onclick + '"' : '"';
     return '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);' + (onclick ? 'cursor:pointer;' : '') + '" ' + (onclick ? 'onclick="' + onclick + '"' : '') + '>' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
-        '<span style="font-size:1.2rem;">' + icon + '</span>' +
+        '<span style="font-size:1.15rem;">' + icon + '</span>' +
         '<span class="status-badge" style="background:' + (isActive ? '#16a34a' : '#9ca3af') + ';color:white;">' + esc(statusLabel) + '</span>' +
       '</div>' +
-      '<div style="font-size:0.95rem;font-weight:500;color:var(--charcoal);margin-bottom:4px;">' + esc(name) + '</div>' +
-      '<div style="font-size:0.8rem;color:var(--warm-gray);">' + esc(desc) + '</div>' +
+      '<div style="font-size:0.9rem;font-weight:500;color:var(--charcoal);margin-bottom:4px;">' + esc(name) + '</div>' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(desc) + '</div>' +
     '</div>';
   }
 
@@ -180,8 +180,8 @@
 
     if (filtered.length === 0) {
       html += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">' +
-        '<div style="font-size:2rem;margin-bottom:12px;">&#127873;</div>' +
-        '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No gift cards' + (currentGiftCardFilter !== 'all' ? ' (' + currentGiftCardFilter + ')' : '') + '</p>' +
+        '<div style="font-size:1.6rem;margin-bottom:12px;">&#127873;</div>' +
+        '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No gift cards' + (currentGiftCardFilter !== 'all' ? ' (' + currentGiftCardFilter + ')' : '') + '</p>' +
         '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Gift cards will appear here when purchased or manually issued.</p>' +
       '</div>';
     } else {
@@ -193,13 +193,13 @@
 
       filtered.forEach(function(gc) {
         html += '<tr>' +
-          '<td style="font-family:monospace;font-size:0.82rem;">' + esc(gc._code) + '</td>' +
+          '<td style="font-family:monospace;font-size:0.85rem;">' + esc(gc._code) + '</td>' +
           '<td>' + formatMoney(gc.amountCents || 0) + '</td>' +
           '<td>' + formatMoney(gc.balanceCents != null ? gc.balanceCents : (gc.amountCents || 0)) + '</td>' +
-          '<td>' + gcStatusBadge(gc.status) + (gc.source === 'migrated' ? ' <span class="status-badge" style="background:#7c3aed;color:white;font-size:0.65rem;">MIG</span>' : '') + '</td>' +
-          '<td style="font-size:0.82rem;">' + esc(gc.purchasedBy || 'admin') + '</td>' +
-          '<td style="font-size:0.82rem;">' + esc(gc.recipientEmail || (gc.status === 'claimed' ? 'self' : '')) + '</td>' +
-          '<td style="font-size:0.82rem;">' + formatDate(gc.issuedAt) + '</td>' +
+          '<td>' + gcStatusBadge(gc.status) + (gc.source === 'migrated' ? ' <span class="status-badge" style="background:#7c3aed;color:white;font-size:0.72rem;">MIG</span>' : '') + '</td>' +
+          '<td style="font-size:0.85rem;">' + esc(gc.purchasedBy || 'admin') + '</td>' +
+          '<td style="font-size:0.85rem;">' + esc(gc.recipientEmail || (gc.status === 'claimed' ? 'self' : '')) + '</td>' +
+          '<td style="font-size:0.85rem;">' + formatDate(gc.issuedAt) + '</td>' +
           '<td><button class="btn btn-secondary btn-small" onclick="window._gcViewDetail(\'' + esc(gc._code) + '\')">View</button></td>' +
         '</tr>';
       });
@@ -211,14 +211,14 @@
       filtered.forEach(function(gc) {
         html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;margin-bottom:8px;">' +
           '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">' +
-            '<span style="font-family:monospace;font-size:0.82rem;">' + esc(gc._code) + '</span>' +
+            '<span style="font-family:monospace;font-size:0.85rem;">' + esc(gc._code) + '</span>' +
             gcStatusBadge(gc.status) +
           '</div>' +
           '<div style="display:flex;justify-content:space-between;align-items:center;">' +
             '<span style="font-weight:500;">' + formatMoney(gc.amountCents || 0) + '</span>' +
-            '<span style="font-size:0.8rem;color:var(--warm-gray);">Bal: ' + formatMoney(gc.balanceCents != null ? gc.balanceCents : (gc.amountCents || 0)) + '</span>' +
+            '<span style="font-size:0.78rem;color:var(--warm-gray);">Bal: ' + formatMoney(gc.balanceCents != null ? gc.balanceCents : (gc.amountCents || 0)) + '</span>' +
           '</div>' +
-          '<div style="font-size:0.8rem;color:var(--warm-gray);margin-top:4px;">' + formatDate(gc.issuedAt) + '</div>' +
+          '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">' + formatDate(gc.issuedAt) + '</div>' +
         '</div>';
       });
       html += '</div>';
@@ -510,11 +510,11 @@
 
     var html = '<h3 style="margin-top:0;">Gift Card Details</h3>' +
       '<div style="text-align:center;margin-bottom:16px;">' +
-        '<div style="font-family:monospace;font-size:1.4rem;letter-spacing:2px;color:var(--charcoal);margin-bottom:8px;">' + esc(code) + '</div>' +
+        '<div style="font-family:monospace;font-size:1.6rem;letter-spacing:2px;color:var(--charcoal);margin-bottom:8px;">' + esc(code) + '</div>' +
         gcStatusBadge(gc.status) +
         (gc.source === 'migrated' ? ' <span class="status-badge" style="background:#7c3aed;color:white;">MIGRATED</span>' : '') +
       '</div>' +
-      (gc.legacyCode ? '<div style="text-align:center;margin-bottom:12px;font-size:0.82rem;color:var(--warm-gray,#888);">Legacy code: <span style="font-family:monospace;">' + esc(gc.legacyCode) + '</span>' + (gc.legacyPlatform ? ' (' + esc(gc.legacyPlatform) + ')' : '') + '</div>' : '') +
+      (gc.legacyCode ? '<div style="text-align:center;margin-bottom:12px;font-size:0.85rem;color:var(--warm-gray,#888);">Legacy code: <span style="font-family:monospace;">' + esc(gc.legacyCode) + '</span>' + (gc.legacyPlatform ? ' (' + esc(gc.legacyPlatform) + ')' : '') + '</div>' : '') +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;font-size:0.85rem;margin-bottom:16px;">' +
         '<div><strong>Original Amount:</strong> ' + formatMoney(gc.amountCents || 0) + '</div>' +
         '<div><strong>Balance:</strong> ' + formatMoney(balance) + '</div>' +
@@ -583,8 +583,8 @@
 
     if (!enabled) {
       html += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">' +
-        '<div style="font-size:2rem;margin-bottom:12px;">&#11088;</div>' +
-        '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">Loyalty program is disabled</p>' +
+        '<div style="font-size:1.6rem;margin-bottom:12px;">&#11088;</div>' +
+        '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">Loyalty program is disabled</p>' +
         '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Enable it in Settings to start rewarding your customers.</p>' +
       '</div>';
     } else {
@@ -592,26 +592,26 @@
       html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;margin-bottom:24px;">' +
         // Earn rate card
         '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">' +
-          '<div style="font-size:0.8rem;color:var(--warm-gray);margin-bottom:4px;">Earn Rate</div>' +
-          '<div style="font-size:1.4rem;font-weight:500;color:var(--charcoal);">' + earnRate + ' ' + esc(pointName) + '</div>' +
+          '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;">Earn Rate</div>' +
+          '<div style="font-size:1.6rem;font-weight:500;color:var(--charcoal);">' + earnRate + ' ' + esc(pointName) + '</div>' +
           '<div style="font-size:0.78rem;color:var(--warm-gray);">per $1 spent</div>' +
         '</div>' +
         // Redemption rate card
         '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">' +
-          '<div style="font-size:0.8rem;color:var(--warm-gray);margin-bottom:4px;">Redemption</div>' +
-          '<div style="font-size:1.4rem;font-weight:500;color:var(--charcoal);">' + redeemRate + ' ' + esc(pointName) + '</div>' +
+          '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;">Redemption</div>' +
+          '<div style="font-size:1.6rem;font-weight:500;color:var(--charcoal);">' + redeemRate + ' ' + esc(pointName) + '</div>' +
           '<div style="font-size:0.78rem;color:var(--warm-gray);">= $1.00 off</div>' +
         '</div>' +
         // Expiry card
         '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">' +
-          '<div style="font-size:0.8rem;color:var(--warm-gray);margin-bottom:4px;">Expiry Window</div>' +
-          '<div style="font-size:1.4rem;font-weight:500;color:var(--charcoal);">' + expiryDays + ' days</div>' +
+          '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;">Expiry Window</div>' +
+          '<div style="font-size:1.6rem;font-weight:500;color:var(--charcoal);">' + expiryDays + ' days</div>' +
           '<div style="font-size:0.78rem;color:var(--warm-gray);">of inactivity</div>' +
         '</div>' +
         // Point name card
         '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">' +
-          '<div style="font-size:0.8rem;color:var(--warm-gray);margin-bottom:4px;">Point Name</div>' +
-          '<div style="font-size:1.4rem;font-weight:500;color:var(--charcoal);">' + esc(pointName) + '</div>' +
+          '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;">Point Name</div>' +
+          '<div style="font-size:1.6rem;font-weight:500;color:var(--charcoal);">' + esc(pointName) + '</div>' +
           '<div style="font-size:0.78rem;color:var(--warm-gray);">Customer-facing label</div>' +
         '</div>' +
       '</div>';
@@ -630,7 +630,7 @@
       // How it works summary
       html += '<div style="padding:16px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;">' +
         '<div style="font-size:0.85rem;font-weight:500;margin-bottom:8px;color:var(--charcoal);">How it works for customers</div>' +
-        '<div style="font-size:0.82rem;color:var(--warm-gray);line-height:1.6;">' +
+        '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.6;">' +
           '1. Customers earn <strong>' + earnRate + ' ' + esc(pointName) + '</strong> per $1 of eligible spend at checkout.<br>' +
           '2. At checkout, they can redeem all their points: <strong>' + redeemRate + ' ' + esc(pointName) + ' = $1.00 off</strong> (all-or-nothing).<br>' +
           '3. Points expire after <strong>' + expiryDays + ' days</strong> of inactivity. Any purchase resets the clock.<br>' +
@@ -791,8 +791,8 @@
 
     if (!enabled) {
       html += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">' +
-        '<div style="font-size:2rem;margin-bottom:12px;">&#127941;</div>' +
-        '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">Membership program is disabled</p>' +
+        '<div style="font-size:1.6rem;margin-bottom:12px;">&#127941;</div>' +
+        '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">Membership program is disabled</p>' +
         '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Enable it in Settings to offer subscription-based benefits to your customers.</p>' +
       '</div>';
       container.innerHTML = html;
@@ -808,8 +808,8 @@
     function summaryCard(label, value, detail) {
       return '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">' +
         '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;">' + esc(label) + '</div>' +
-        '<div style="font-size:1.2rem;font-weight:500;color:var(--charcoal);">' + esc(value) + '</div>' +
-        (detail ? '<div style="font-size:0.75rem;color:var(--warm-gray);">' + esc(detail) + '</div>' : '') +
+        '<div style="font-size:1.15rem;font-weight:500;color:var(--charcoal);">' + esc(value) + '</div>' +
+        (detail ? '<div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(detail) + '</div>' : '') +
       '</div>';
     }
 
@@ -853,7 +853,7 @@
 
     // Member list
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
-      '<div style="font-size:0.95rem;font-weight:500;color:var(--charcoal);">Members (' + membershipMembers.length + ')</div>' +
+      '<div style="font-size:0.9rem;font-weight:500;color:var(--charcoal);">Members (' + membershipMembers.length + ')</div>' +
       '<button class="btn btn-outline btn-small" onclick="window._membershipGrantModal()">+ Grant</button>' +
     '</div>';
 
@@ -947,12 +947,12 @@
         '<div style="flex:1;">' +
           '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Free Shipping Threshold ($)</label>' +
           '<input type="number" id="msConfigShipThresh" value="' + (c.freeShippingThreshold != null ? c.freeShippingThreshold : '') + '" min="0" step="1" placeholder="0 = always free" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);font-family:\'DM Sans\';font-size:0.9rem;">' +
-          '<div style="font-size:0.75rem;color:var(--warm-gray);margin-top:2px;">0 = always free for members</div>' +
+          '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">0 = always free for members</div>' +
         '</div>' +
         '<div style="flex:1;">' +
           '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Loyalty Multiplier</label>' +
           '<input type="number" id="msConfigLoyaltyMult" value="' + (c.loyaltyPointMultiplier || '') + '" min="1" step="0.5" placeholder="2" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);font-family:\'DM Sans\';font-size:0.9rem;">' +
-          '<div style="font-size:0.75rem;color:var(--warm-gray);margin-top:2px;">e.g., 2 = double loyalty points</div>' +
+          '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">e.g., 2 = double loyalty points</div>' +
         '</div>' +
       '</div>' +
       // Access gates
@@ -972,7 +972,7 @@
           '<input type="checkbox" id="msConfigPromoStack" ' + (c.allowPromoStack ? 'checked' : '') + '>' +
           'Allow promo stacking (sale discount + membership discount)' +
         '</label>' +
-        '<div style="font-size:0.75rem;color:var(--warm-gray);margin-top:2px;margin-left:24px;">When off, membership discount replaces sale price (no double discount).</div>' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;margin-left:24px;">When off, membership discount replaces sale price (no double discount).</div>' +
       '</div>' +
       // Footer
       '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;">' +
@@ -1049,7 +1049,7 @@
       '<div style="margin-bottom:16px;">' +
         '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Customer UID</label>' +
         '<input type="text" id="msGrantUid" placeholder="Firebase UID" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);font-family:\'DM Sans\';font-size:0.9rem;">' +
-        '<div style="font-size:0.75rem;color:var(--warm-gray);margin-top:2px;">Find the UID in Contacts or Firebase Auth console.</div>' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">Find the UID in Contacts or Firebase Auth console.</div>' +
       '</div>' +
       '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;">' +
         '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +

@@ -95,13 +95,13 @@
   // Source uses .status-badge with semantic palette colors per ux skill.
   // No new badge system invented — small text label inside the unified badge.
   // Backgrounds use opaque-ish color stops chosen so contrast works on BOTH
-  // light cream (#FAF6F0) and dark cream (#2a2a2a) cards in admin dark mode.
+  // light cream (var(--cream)) and dark cream (#2a2a2a) cards in admin dark mode.
   function sourceBadge(source) {
     if (!source) return '';
     var bg, color;
     switch (source) {
       case 'order':       bg = 'rgba(42,124,111,0.28)';  color = '#6fc'; break;
-      case 'enrollment':  bg = 'rgba(196,133,60,0.30)';  color = '#E8B679'; break;
+      case 'enrollment':  bg = 'rgba(196,133,60,0.30)';  color = 'var(--amber-light)'; break;
       case 'contact':     bg = 'rgba(99,102,241,0.30)';  color = '#a5a8f5'; break;
       case 'newsletter':  bg = 'rgba(220,53,69,0.25)';   color = '#f49aa3'; break;
       case 'account':     bg = 'rgba(22,163,74,0.30)';   color = '#7ddca0'; break;
@@ -420,8 +420,8 @@
   function renderEmptyState() {
     var h = '';
     h += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">';
-    h += '<div style="font-size:2rem;margin-bottom:12px;">👥</div>';
-    h += '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No customers yet</p>';
+    h += '<div style="font-size:1.6rem;margin-bottom:12px;">👥</div>';
+    h += '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No customers yet</p>';
     h += '<p style="font-size:0.85rem;color:var(--warm-gray-light);">They\'ll appear here automatically as orders, enrollments, contacts, and newsletter signups come in.</p>';
     h += '</div>';
     return h;
@@ -590,11 +590,11 @@
     var tags = c.tags || [];
     var h = '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">';
     tags.forEach(function(t) {
-      h += '<span class="status-badge" style="background:rgba(196,133,60,0.30);color:#E8B679;display:inline-flex;align-items:center;gap:6px;">' +
+      h += '<span class="status-badge" style="background:rgba(196,133,60,0.30);color:var(--amber-light);display:inline-flex;align-items:center;gap:6px;">' +
         esc(t) +
         '<button data-customer-id="' + esc(c.id) + '" data-tag="' + esc(t) + '" ' +
         'onclick="customersRemoveTag(this.dataset.customerId, this.dataset.tag)" ' +
-        'style="background:none;border:none;color:inherit;cursor:pointer;font-size:0.95rem;line-height:1;padding:0;">×</button>' +
+        'style="background:none;border:none;color:inherit;cursor:pointer;font-size:0.9rem;line-height:1;padding:0;">×</button>' +
         '</span>';
     });
     h += '<input type="text" id="customersTagInput" placeholder="+ tag" ' +
@@ -1208,7 +1208,7 @@
     if (contactIds.length === 0) {
       var h = '';
       h += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">';
-      h += '<p style="font-size:0.95rem;font-weight:500;margin-bottom:8px;">No linked contacts</p>';
+      h += '<p style="font-size:0.9rem;font-weight:500;margin-bottom:8px;">No linked contacts</p>';
       h += '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Interactions live on contact records. ';
       h += '<a href="#" onclick="navigateTo(\'contacts\');return false;" style="color:var(--teal);text-decoration:underline;">Open Contacts module</a></p>';
       h += '</div>';
@@ -1275,7 +1275,7 @@
     var uids = linked.uids || [];
     if (uids.length === 0) {
       return '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">' +
-        '<p style="font-size:0.95rem;font-weight:500;margin-bottom:8px;">No linked account</p>' +
+        '<p style="font-size:0.9rem;font-weight:500;margin-bottom:8px;">No linked account</p>' +
         '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Wallet, passes, membership and loyalty live on a customer-facing account. This customer hasn\'t signed in yet.</p>' +
         '</div>';
     }
@@ -1320,7 +1320,7 @@
   function renderContactCard(ct) {
     var name = ct.name || ct.displayName || '(unnamed contact)';
     var expanded = expandedContactId === ct.id;
-    var inlineInputStyle = 'width:100%;padding:6px 10px;border:1px solid var(--cream-dark);border-radius:4px;background:white;font-family:DM Sans,sans-serif;font-size:0.82rem;';
+    var inlineInputStyle = 'width:100%;padding:6px 10px;border:1px solid var(--cream-dark);border-radius:4px;background:white;font-family:DM Sans,sans-serif;font-size:0.85rem;';
 
     var h = '';
     h += '<div data-contact-id="' + esc(ct.id) + '" ' +
@@ -1351,7 +1351,7 @@
     } else {
       // Expanded inline editor — save-on-blur per field, Done button collapses
       h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">';
-      h += '<div style="font-weight:600;font-size:0.82rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;">Edit contact</div>';
+      h += '<div style="font-weight:600;font-size:0.85rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;">Edit contact</div>';
       h += '<div style="display:flex;gap:6px;">';
       h += '<button data-contact-id="' + esc(ct.id) + '" ' +
            'onclick="customersOpenContact(this.dataset.contactId)" ' +
@@ -1360,7 +1360,7 @@
            'style="background:var(--teal);color:white;border:none;border-radius:4px;padding:4px 12px;font-size:0.72rem;cursor:pointer;">Done</button>';
       h += '</div>';
       h += '</div>';
-      h += '<div style="display:grid;grid-template-columns:90px 1fr;gap:8px 12px;font-size:0.82rem;">';
+      h += '<div style="display:grid;grid-template-columns:90px 1fr;gap:8px 12px;font-size:0.85rem;">';
       ['name', 'email', 'phone', 'address', 'company'].forEach(function(field) {
         var label = field.charAt(0).toUpperCase() + field.slice(1);
         var val = ct[field] || '';
@@ -1623,8 +1623,8 @@
 
     if (duplicatesData.length === 0) {
       h += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">';
-      h += '<div style="font-size:2rem;margin-bottom:12px;">✓</div>';
-      h += '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No pending duplicates</p>';
+      h += '<div style="font-size:1.6rem;margin-bottom:12px;">✓</div>';
+      h += '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No pending duplicates</p>';
       h += '<p style="font-size:0.85rem;color:var(--warm-gray-light);">When the resolver detects a conflict, it shows up here.</p>';
       h += '</div>';
       return h;

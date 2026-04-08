@@ -114,7 +114,7 @@
 
   function badgeStyle(map, key) {
     var c = map[(key || '').toLowerCase()] || { bg: 'rgba(158,158,158,0.15)', color: '#BDBDBD', border: 'rgba(158,158,158,0.25)' };
-    return 'display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;background:' + c.bg + ';color:' + c.color + ';border:1px solid ' + c.border + ';';
+    return 'display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.78rem;font-weight:600;background:' + c.bg + ';color:' + c.color + ';border:1px solid ' + c.border + ';';
   }
 
   // Inject book-specific CSS
@@ -132,31 +132,31 @@
         /* .form-label and .form-input are now defined globally in index.html */
 
         /* Form section cards — theme-adaptive */
-        '.book-form-section{background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#ddd);' +
+        '.book-form-section{background:var(--cream,var(--cream));border:1px solid var(--cream-dark,#ddd);' +
           'border-radius:12px;padding:1.25rem 1.5rem;margin-bottom:1.25rem;}' +
         'body.dark-mode .book-form-section{background:var(--surface-card,#2a2a2a);border-color:var(--border,#444);}' +
-        '.book-form-section-title{font-size:0.8rem;font-weight:700;text-transform:uppercase;' +
-          'letter-spacing:0.06em;color:var(--primary,#C4853C);margin:0 0 1rem;padding-bottom:0.6rem;' +
+        '.book-form-section-title{font-size:0.78rem;font-weight:700;text-transform:uppercase;' +
+          'letter-spacing:0.06em;color:var(--primary,var(--amber));margin:0 0 1rem;padding-bottom:0.6rem;' +
           'border-bottom:1px solid var(--cream-dark,#ddd);display:flex;align-items:center;gap:8px;}' +
         'body.dark-mode .book-form-section-title{border-bottom-color:var(--border,#444);}' +
 
         /* Card list items — theme-adaptive */
-        '.book-card{background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#ddd);' +
+        '.book-card{background:var(--cream,var(--cream));border:1px solid var(--cream-dark,#ddd);' +
           'border-radius:8px;padding:12px 16px;margin-bottom:8px;cursor:pointer;transition:border-color 0.15s;}' +
-        '.book-card:hover{border-color:var(--amber,#C4853C);}' +
+        '.book-card:hover{border-color:var(--amber,var(--amber));}' +
         'body.dark-mode .book-card{background:var(--surface-card,#2a2a2a);border-color:var(--border,#444);}' +
-        'body.dark-mode .book-card:hover{border-color:var(--amber,#C4853C);}' +
+        'body.dark-mode .book-card:hover{border-color:var(--amber,var(--amber));}' +
 
         /* Collapsible sections — detail views */
-        '.book-collapse{background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#ddd);' +
+        '.book-collapse{background:var(--cream,var(--cream));border:1px solid var(--cream-dark,#ddd);' +
           'border-radius:12px;margin-bottom:1.25rem;overflow:hidden;}' +
         'body.dark-mode .book-collapse{background:var(--surface-card,#2a2a2a);border-color:var(--border,#444);}' +
         '.book-collapse-header{display:flex;justify-content:space-between;align-items:center;' +
           'padding:1rem 1.5rem;cursor:pointer;user-select:none;}' +
         '.book-collapse-header:hover{opacity:0.85;}' +
-        '.book-collapse-title{display:flex;align-items:center;gap:8px;font-size:0.8rem;font-weight:700;' +
-          'text-transform:uppercase;letter-spacing:0.06em;color:var(--primary,#C4853C);margin:0;}' +
-        '.book-collapse-arrow{font-size:0.65rem;color:var(--warm-gray,#888);transition:transform 0.15s;}' +
+        '.book-collapse-title{display:flex;align-items:center;gap:8px;font-size:0.78rem;font-weight:700;' +
+          'text-transform:uppercase;letter-spacing:0.06em;color:var(--primary,var(--amber));margin:0;}' +
+        '.book-collapse-arrow{font-size:0.72rem;color:var(--warm-gray,#888);transition:transform 0.15s;}' +
         '.book-collapse-right{display:flex;align-items:center;gap:8px;}' +
         '.book-collapse-body{padding:0 1.5rem 1.25rem;}' +
         '.book-collapse.collapsed .book-collapse-body{display:none;}' +
@@ -164,16 +164,16 @@
 
         /* Session lifecycle stepper */
         '.book-stepper{display:flex;align-items:center;gap:0;margin-bottom:1.5rem;overflow-x:auto;}' +
-        '.book-step{display:flex;align-items:center;gap:8px;padding:8px 16px;font-size:0.8rem;font-weight:600;' +
+        '.book-step{display:flex;align-items:center;gap:8px;padding:8px 16px;font-size:0.78rem;font-weight:600;' +
           'color:var(--warm-gray,#888);cursor:default;white-space:nowrap;position:relative;}' +
-        '.book-step.active{color:var(--primary,#C4853C);}' +
-        '.book-step.done{color:var(--teal,#2A7C6F);}' +
+        '.book-step.active{color:var(--primary,var(--amber));}' +
+        '.book-step.done{color:var(--teal,var(--teal));}' +
         '.book-step-dot{width:24px;height:24px;border-radius:50%;border:2px solid var(--warm-gray,#888);' +
-          'display:flex;align-items:center;justify-content:center;font-size:0.7rem;flex-shrink:0;}' +
-        '.book-step.active .book-step-dot{border-color:var(--primary,#C4853C);background:var(--primary,#C4853C);color:#fff;}' +
-        '.book-step.done .book-step-dot{border-color:var(--teal,#2A7C6F);background:var(--teal,#2A7C6F);color:#fff;}' +
+          'display:flex;align-items:center;justify-content:center;font-size:0.72rem;flex-shrink:0;}' +
+        '.book-step.active .book-step-dot{border-color:var(--primary,var(--amber));background:var(--primary,var(--amber));color:#fff;}' +
+        '.book-step.done .book-step-dot{border-color:var(--teal,var(--teal));background:var(--teal,var(--teal));color:#fff;}' +
         '.book-step-line{width:32px;height:2px;background:var(--warm-gray,#888);flex-shrink:0;}' +
-        '.book-step-line.done{background:var(--teal,#2A7C6F);}' +
+        '.book-step-line.done{background:var(--teal,var(--teal));}' +
 
         /* Field hint text */
         '.book-field-hint{font-size:0.72rem;color:var(--warm-gray,#888);margin-top:4px;line-height:1.4;}' +
@@ -188,7 +188,7 @@
         /* Checkbox / radio styling */
         '.book-check{display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:0.9rem;color:var(--text,#e0e0e0);}' +
         '.book-check input[type="checkbox"],.book-check input[type="radio"]{' +
-          'width:18px;height:18px;accent-color:var(--primary,#C4853C);cursor:pointer;}' +
+          'width:18px;height:18px;accent-color:var(--primary,var(--amber));cursor:pointer;}' +
 
         /* Form action buttons area */
         '.book-form-actions{display:flex;gap:10px;margin-top:1.5rem;padding-top:1.25rem;border-top:1px solid var(--cream-dark,#ddd);}' +
@@ -198,8 +198,8 @@
         '.book-day-pills{display:flex;flex-wrap:wrap;gap:6px;}' +
         '.book-day-pill{display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border-radius:20px;' +
           'border:1px solid var(--border,#444);background:transparent;color:var(--text,#e0e0e0);' +
-          'font-size:0.8rem;cursor:pointer;transition:all 0.2s;}' +
-        '.book-day-pill:has(input:checked){background:var(--primary,#C4853C);color:#fff;border-color:var(--primary,#C4853C);}' +
+          'font-size:0.78rem;cursor:pointer;transition:all 0.2s;}' +
+        '.book-day-pill:has(input:checked){background:var(--primary,var(--amber));color:#fff;border-color:var(--primary,var(--amber));}' +
         '.book-day-pill input{display:none;}' +
 
         /* Override for schedule radio */
@@ -207,7 +207,7 @@
         '.book-sched-toggle label{padding:8px 20px;cursor:pointer;font-size:0.85rem;color:var(--text,#e0e0e0);' +
           'transition:all 0.2s;border-right:1px solid var(--border,#444);}' +
         '.book-sched-toggle label:last-child{border-right:none;}' +
-        '.book-sched-toggle label:has(input:checked){background:var(--primary,#C4853C);color:#fff;}' +
+        '.book-sched-toggle label:has(input:checked){background:var(--primary,var(--amber));color:#fff;}' +
         '.book-sched-toggle input{display:none;}' +
 
         '';
@@ -267,9 +267,9 @@
 
   function bookEmptyState(emoji, title, subtitle) {
     return '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">' +
-      '<div style="font-size:2rem;margin-bottom:12px;">' + emoji + '</div>' +
-      '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">' + esc(title) + '</p>' +
-      '<p style="font-size:0.85rem;color:var(--warm-gray-light,#9B958E);">' + esc(subtitle) + '</p>' +
+      '<div style="font-size:1.6rem;margin-bottom:12px;">' + emoji + '</div>' +
+      '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">' + esc(title) + '</p>' +
+      '<p style="font-size:0.85rem;color:var(--warm-gray-light,var(--warm-gray-light));">' + esc(subtitle) + '</p>' +
       '</div>';
   }
 
@@ -410,7 +410,7 @@
 
     var html = '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.5rem;">' +
       '<div>' +
-      '<h2 style="margin:0 0 6px;font-size:1.4rem;">' + esc(cls.name) + '</h2>' +
+      '<h2 style="margin:0 0 6px;font-size:1.6rem;">' + esc(cls.name) + '</h2>' +
       '<div style="display:flex;gap:8px;align-items:center;">' +
       '<span style="' + badgeStyle(TYPE_BADGE_COLORS, cls.type) + '">' + esc(cls.type) + '</span>' +
       '<span style="' + badgeStyle(STATUS_BADGE_COLORS, cls.status) + '">' + esc(cls.status) + '</span>' +
@@ -488,14 +488,14 @@
 
   function _detailField(label, value) {
     return '<div style="margin-bottom:0.75rem;">' +
-      '<div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--warm-gray);margin-bottom:4px;">' + esc(label) + '</div>' +
-      '<div style="font-size:0.95rem;color:var(--text);">' + esc(String(value)) + '</div></div>';
+      '<div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--warm-gray);margin-bottom:4px;">' + esc(label) + '</div>' +
+      '<div style="font-size:0.9rem;color:var(--text);">' + esc(String(value)) + '</div></div>';
   }
 
   function _infoCard(label, value) {
     return '<div style="background:var(--surface-dark);border-radius:8px;padding:12px 16px;">' +
-      '<div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--warm-gray);margin-bottom:4px;">' + esc(label) + '</div>' +
-      '<div style="font-size:0.95rem;color:var(--on-dark);">' + esc(String(value)) + '</div></div>';
+      '<div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--warm-gray);margin-bottom:4px;">' + esc(label) + '</div>' +
+      '<div style="font-size:0.9rem;color:var(--on-dark);">' + esc(String(value)) + '</div></div>';
   }
 
   // ============================================================
@@ -545,7 +545,7 @@
     // Initialize image state from existing class (single image — first imageIds entry)
     editingClassImageUrl = (cls && Array.isArray(cls.imageIds) && cls.imageIds.length > 0) ? cls.imageIds[0] : null;
 
-    var html = '<h2 style="margin:0 0 1.5rem;font-size:1.4rem;">' + (isNew ? 'New Class' : 'Edit: ' + esc(cls.name)) + '</h2>' +
+    var html = '<h2 style="margin:0 0 1.5rem;font-size:1.6rem;">' + (isNew ? 'New Class' : 'Edit: ' + esc(cls.name)) + '</h2>' +
       '<form id="bookClassForm" onsubmit="return false;" style="max-width:720px;">' +
 
       // ── Basic Info ──
@@ -657,8 +657,8 @@
       '<div class="book-form-section-title">Class Image</div>' +
       '<div id="bcfImagePreviewWrap">' + _renderClassImagePreview() + '</div>' +
       '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">' +
-        '<button type="button" class="btn btn-secondary" style="font-size:0.8rem;" onclick="window._bookSelectClassImage()">Select from Library</button>' +
-        '<label class="btn btn-secondary" style="font-size:0.8rem;cursor:pointer;">' +
+        '<button type="button" class="btn btn-secondary" style="font-size:0.78rem;" onclick="window._bookSelectClassImage()">Select from Library</button>' +
+        '<label class="btn btn-secondary" style="font-size:0.78rem;cursor:pointer;">' +
           '<input type="file" accept="image/*" style="display:none;" onchange="window._bookUploadClassImage(this)">' +
           'Upload New' +
         '</label>' +
@@ -995,7 +995,7 @@
         ? e.status + ' #' + e.waitlistPosition : e.status;
 
       html += '<tr>' +
-        '<td><strong>' + esc(e.studentName || e.customerName || '—') + '</strong><br><span style="font-size:0.8rem;color:var(--warm-gray);">' + esc(e.studentEmail || e.customerEmail || '') + '</span></td>' +
+        '<td><strong>' + esc(e.studentName || e.customerName || '—') + '</strong><br><span style="font-size:0.78rem;color:var(--warm-gray);">' + esc(e.studentEmail || e.customerEmail || '') + '</span></td>' +
         '<td>' + esc(className) + '</td>' +
         '<td>' + (function() {
           if (!e.sessionId) return '—';
@@ -1146,8 +1146,8 @@
         '<div style="display:flex;justify-content:space-between;align-items:center;">' +
         '<div>' +
         '<div style="font-weight:600;">' + esc(i.name) + '</div>' +
-        (specs ? '<div style="font-size:0.82rem;color:var(--warm-gray);margin-top:2px;">' + esc(specs) + '</div>' : '') +
-        (i.email ? '<div style="font-size:0.8rem;color:var(--warm-gray-light,#9B958E);margin-top:2px;">' + esc(i.email) + '</div>' : '') +
+        (specs ? '<div style="font-size:0.85rem;color:var(--warm-gray);margin-top:2px;">' + esc(specs) + '</div>' : '') +
+        (i.email ? '<div style="font-size:0.78rem;color:var(--warm-gray-light,var(--warm-gray-light));margin-top:2px;">' + esc(i.email) + '</div>' : '') +
         '</div>' +
         '<div style="display:flex;align-items:center;gap:8px;">' +
         '<span style="' + badgeStyle(STATUS_BADGE_COLORS, i.status) + '">' + esc(i.status) + '</span>' +
@@ -1176,7 +1176,7 @@
       return '<option value="' + s + '"' + (instr && instr.status === s ? ' selected' : '') + '>' + s.charAt(0).toUpperCase() + s.slice(1) + '</option>';
     }).join('');
 
-    var html = '<h2 style="margin:0 0 1.5rem;font-size:1.4rem;">' + (isNew ? 'New Instructor' : 'Edit: ' + esc(instr.name)) + '</h2>' +
+    var html = '<h2 style="margin:0 0 1.5rem;font-size:1.6rem;">' + (isNew ? 'New Instructor' : 'Edit: ' + esc(instr.name)) + '</h2>' +
       '<form id="instrForm" onsubmit="return false;" style="max-width:720px;">' +
 
       // ── Basic Info ──
@@ -1314,8 +1314,8 @@
         '<div>' +
         '<div style="font-weight:600;">' + esc(r.name) +
         ' <span style="' + badgeStyle(RESOURCE_TYPE_BADGE_COLORS, r.type) + '">' + esc(r.type) + '</span></div>' +
-        (r.subType ? '<div style="font-size:0.82rem;color:var(--warm-gray);margin-top:2px;">' + esc(r.subType) + '</div>' : '') +
-        (r.capacity ? '<div style="font-size:0.8rem;color:var(--warm-gray-light,#9B958E);margin-top:2px;">Capacity: ' + r.capacity + '</div>' : '') +
+        (r.subType ? '<div style="font-size:0.85rem;color:var(--warm-gray);margin-top:2px;">' + esc(r.subType) + '</div>' : '') +
+        (r.capacity ? '<div style="font-size:0.78rem;color:var(--warm-gray-light,var(--warm-gray-light));margin-top:2px;">Capacity: ' + r.capacity + '</div>' : '') +
         '</div>' +
         '<div style="display:flex;align-items:center;gap:8px;">' +
         '<span style="' + badgeStyle(STATUS_BADGE_COLORS, r.status) + '">' + esc(r.status) + '</span>' +
@@ -1348,7 +1348,7 @@
       return '<option value="' + s + '"' + (res && res.status === s ? ' selected' : '') + '>' + s.charAt(0).toUpperCase() + s.slice(1) + '</option>';
     }).join('');
 
-    var html = '<h2 style="margin:0 0 1.5rem;font-size:1.4rem;">' + (isNew ? 'New Resource' : 'Edit: ' + esc(res.name)) + '</h2>' +
+    var html = '<h2 style="margin:0 0 1.5rem;font-size:1.6rem;">' + (isNew ? 'New Resource' : 'Edit: ' + esc(res.name)) + '</h2>' +
       '<form id="resForm" onsubmit="return false;" style="max-width:720px;">' +
 
       // ── Basic Info ──
@@ -1468,12 +1468,12 @@
       var visits = p.visitCount ? p.visitCount + ' visits' : 'Unlimited';
       var validity = p.validityDays ? p.validityDays + ' days' : 'No limit';
       html += '<tr>' +
-        '<td><strong>' + esc(p.name) + '</strong>' + (p.introOnly ? '<br><span style="font-size:0.75rem;color:var(--amber);">Intro only</span>' : '') + '</td>' +
+        '<td><strong>' + esc(p.name) + '</strong>' + (p.introOnly ? '<br><span style="font-size:0.78rem;color:var(--amber);">Intro only</span>' : '') + '</td>' +
         '<td><span style="' + badgeStyle(PASS_TYPE_BADGE_COLORS, p.type) + '">' + esc(p.type) + '</span></td>' +
-        '<td>' + formatPrice(p.priceCents) + (p.autoRenew ? '<br><span style="font-size:0.75rem;color:var(--warm-gray);">/' + (p.renewFrequency || 'month') + '</span>' : '') + '</td>' +
+        '<td>' + formatPrice(p.priceCents) + (p.autoRenew ? '<br><span style="font-size:0.78rem;color:var(--warm-gray);">/' + (p.renewFrequency || 'month') + '</span>' : '') + '</td>' +
         '<td>' + esc(visits) + '</td>' +
         '<td>' + esc(validity) + '</td>' +
-        '<td><span style="font-size:0.8rem;">' + esc(p.priority || 'medium') + '</span></td>' +
+        '<td><span style="font-size:0.78rem;">' + esc(p.priority || 'medium') + '</span></td>' +
         '<td><span style="' + badgeStyle(STATUS_BADGE_COLORS, p.status) + '">' + esc(p.status) + '</span></td>' +
         '<td><div class="event-actions"><button class="btn-icon" onclick="window._passEdit(\'' + esc(p.id) + '\')" title="Edit">&#9998;</button></div></td>' +
         '</tr>';
@@ -1527,7 +1527,7 @@
         '<input type="checkbox" name="passClassScope" value="' + esc(c.id) + '"' + checked + '> ' + esc(c.name) + '</label>';
     }).join('<br>');
 
-    var html = '<h2 style="margin:0 0 1.5rem;font-size:1.4rem;">' + (isNew ? 'New Pass Definition' : 'Edit: ' + esc(pd.name)) + '</h2>' +
+    var html = '<h2 style="margin:0 0 1.5rem;font-size:1.6rem;">' + (isNew ? 'New Pass Definition' : 'Edit: ' + esc(pd.name)) + '</h2>' +
       '<form id="passDefForm" onsubmit="return false;" style="max-width:720px;">' +
 
       // ── Basic Info ──
@@ -1986,7 +1986,7 @@
         '<div style="width:120px;height:120px;border-radius:8px;overflow:hidden;background:var(--cream);">' +
           '<img src="' + esc(editingClassImageUrl) + '" style="width:100%;height:100%;object-fit:cover;" loading="lazy">' +
         '</div>' +
-        '<button type="button" class="btn btn-secondary" style="font-size:0.8rem;" onclick="window._bookRemoveClassImage()">Remove</button>' +
+        '<button type="button" class="btn btn-secondary" style="font-size:0.78rem;" onclick="window._bookRemoveClassImage()">Remove</button>' +
       '</div>';
     }
     return '<div style="padding:16px;background:var(--cream);border-radius:8px;color:var(--warm-gray);font-size:0.85rem;text-align:center;">No image selected.</div>';
@@ -2410,7 +2410,7 @@
         html += '<div class="book-form-section-title">Add Walk-in Student</div>';
         html += '<input type="text" id="walkinSearchInput" class="form-input" placeholder="Search by name or email..." oninput="window._bookWalkinSearch(this.value, \'' + esc(sessionId) + '\', \'' + esc(classId) + '\')" style="margin-bottom:8px;">';
         html += '<div id="walkinResults"></div>';
-        html += '<div style="margin-top:8px;font-size:0.8rem;color:var(--warm-gray);">Or <a href="#" style="color:var(--teal);" onclick="event.preventDefault();window._bookWalkinManual(\'' + esc(sessionId) + '\', \'' + esc(classId) + '\')">add manually</a> if student not found</div>';
+        html += '<div style="margin-top:8px;font-size:0.78rem;color:var(--warm-gray);">Or <a href="#" style="color:var(--teal);" onclick="event.preventDefault();window._bookWalkinManual(\'' + esc(sessionId) + '\', \'' + esc(classId) + '\')">add manually</a> if student not found</div>';
         html += '</div></div>';
         html += '<button class="btn btn-small" onclick="var w=document.getElementById(\'walkinSearchWrap\');w.style.display=w.style.display===\'none\'?\'block\':\'none\';if(w.style.display!==\'none\')document.getElementById(\'walkinSearchInput\').focus();">+ Walk-in</button>';
         html += '</div>';
@@ -2430,7 +2430,7 @@
           // Left: student info
           html += '<div>';
           html += '<div style="font-weight:600;">' + esc(s.customerName || s.studentName || '—') + '</div>';
-          html += '<div style="font-size:0.8rem;color:var(--warm-gray);">' + esc(s.customerEmail || s.studentEmail || '') + '</div>';
+          html += '<div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(s.customerEmail || s.studentEmail || '') + '</div>';
           if (waiverWarning) {
             html += '<div style="font-size:0.78rem;color:#d97706;margin-top:4px;">&#9888; Waiver ' + esc(s.waiverStatus) + '</div>';
           }
@@ -2442,7 +2442,7 @@
           }
           if (s.incidents && s.incidents.length > 0) {
             s.incidents.forEach(function(inc) {
-              html += '<div style="font-size:0.75rem;margin-top:4px;padding:2px 6px;border-left:3px solid ' + (SEVERITY_COLORS[inc.severity] || '#BDBDBD') + ';">' +
+              html += '<div style="font-size:0.78rem;margin-top:4px;padding:2px 6px;border-left:3px solid ' + (SEVERITY_COLORS[inc.severity] || '#BDBDBD') + ';">' +
                 '<span style="' + badgeStyle(SEVERITY_BADGE_COLORS, inc.severity) + '">' + esc(inc.severity) + '</span> ' +
                 esc(INCIDENT_TYPE_LABELS[inc.type] || inc.type) + ': ' + esc(inc.description) + '</div>';
             });
@@ -2751,19 +2751,19 @@
         }).slice(0, 5);
         var html = '';
         if (matches.length === 0) {
-          html = '<div style="font-size:0.8rem;color:var(--warm-gray);padding:4px 0;">No students found</div>';
+          html = '<div style="font-size:0.78rem;color:var(--warm-gray);padding:4px 0;">No students found</div>';
         } else {
           matches.forEach(function(entry) {
             var id = entry[0], s = entry[1];
             html += '<div class="book-card" style="cursor:pointer;padding:8px 12px;margin-bottom:4px;" onclick="window._bookWalkinEnroll(\'' + esc(sessionId) + '\', \'' + esc(classId) + '\', \'' + esc(id) + '\')">';
-            html += '<div style="font-weight:500;font-size:0.88rem;">' + esc(s.displayName || s.name || '—') + '</div>';
+            html += '<div style="font-weight:500;font-size:0.9rem;">' + esc(s.displayName || s.name || '—') + '</div>';
             html += '<div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(s.email || '') + '</div>';
             html += '</div>';
           });
         }
         results.innerHTML = html;
       } catch (err) {
-        results.innerHTML = '<div style="color:' + DANGER_COLOR + ';font-size:0.8rem;">Search failed</div>';
+        results.innerHTML = '<div style="color:' + DANGER_COLOR + ';font-size:0.78rem;">Search failed</div>';
       }
     }, 300);
   };
@@ -2924,7 +2924,7 @@
 
     // Day-of-week headers
     DOW_HEADERS.forEach(function(d) {
-      html += '<div style="background:var(--surface-dark);padding:8px 4px;text-align:center;font-size:0.78rem;font-weight:600;color:var(--warm-gray);text-transform:uppercase;">' + d + '</div>';
+      html += '<div aria-hidden="true" style="background:var(--surface-dark);padding:8px 4px;text-align:center;font-size:0.78rem;font-weight:600;color:var(--warm-gray);text-transform:uppercase;">' + d + '</div>';
     });
 
     // Leading blank cells
@@ -3186,7 +3186,7 @@
       if (pctAbsent > 0) html += '<div style="width:' + pctAbsent + '%;background:' + WARNING_COLOR + ';"></div>';
       if (pctNoShow > 0) html += '<div style="width:' + pctNoShow + '%;background:' + DANGER_COLOR + ';"></div>';
       html += '</div>';
-      html += '<div style="display:flex;gap:1.5rem;font-size:0.8rem;color:var(--warm-gray);margin-bottom:2rem;">';
+      html += '<div style="display:flex;gap:1.5rem;font-size:0.78rem;color:var(--warm-gray);margin-bottom:2rem;">';
       html += '<span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:' + SUCCESS_COLOR + ';margin-right:4px;vertical-align:middle;"></span>Completed (' + attCompleted + ')</span>';
       html += '<span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:' + WARNING_COLOR + ';margin-right:4px;vertical-align:middle;"></span>Absent (' + attAbsent + ')</span>';
       html += '<span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:' + DANGER_COLOR + ';margin-right:4px;vertical-align:middle;"></span>No-Show (' + attNoShow + ')</span>';
@@ -3221,7 +3221,7 @@
           '<div style="display:flex;gap:8px;align-items:center;">' +
           '<span style="' + badgeStyle(SEVERITY_BADGE_COLORS, inc.severity) + '">' + esc(inc.severity) + '</span>' +
           '<span style="font-weight:500;font-size:0.9rem;">' + esc(INCIDENT_TYPE_LABELS[inc.type] || inc.type) + '</span>' +
-          '<span style="color:var(--warm-gray);font-size:0.75rem;margin-left:auto;">' + esc(inc.followUpStatus || 'open') + '</span>' +
+          '<span style="color:var(--warm-gray);font-size:0.78rem;margin-left:auto;">' + esc(inc.followUpStatus || 'open') + '</span>' +
           '</div>' +
           '<p style="margin:6px 0 0;color:var(--warm-gray);font-size:0.85rem;">' + esc(inc.description) + '</p>' +
           '</div>';
@@ -3301,8 +3301,8 @@
 
   function _reportCard(label, value, color) {
     return '<div style="' + CARD_STYLE + 'text-align:center;">' +
-      '<div style="font-size:2rem;font-weight:700;color:' + color + ';line-height:1.2;">' + value + '</div>' +
-      '<div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;margin-top:4px;">' + esc(label) + '</div>' +
+      '<div style="font-size:1.6rem;font-weight:700;color:' + color + ';line-height:1.2;">' + value + '</div>' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;margin-top:4px;">' + esc(label) + '</div>' +
       '</div>';
   }
 

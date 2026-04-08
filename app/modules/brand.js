@@ -129,13 +129,13 @@
 
     // Header row with type name + badge
     html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">' +
-      '<h3 style="margin:0;font-size:1.1rem;color:var(--text-primary);">' + esc(typeDef.label) + '</h3>' +
-      '<span style="font-size:0.75rem;color:var(--warm-gray);">' + esc(typeDef.desc) + '</span>';
+      '<h3 style="margin:0;font-size:1.15rem;color:var(--text-primary);">' + esc(typeDef.label) + '</h3>' +
+      '<span style="font-size:0.78rem;color:var(--warm-gray);">' + esc(typeDef.desc) + '</span>';
     if (hasData) {
       var source = selectedType === 'primary' ? 'Uploaded' : (data.generatedFrom === 'primary' ? 'Auto-generated' : 'Manual');
-      html += '<span class="status-badge pill" style="background:rgba(42,124,111,0.15);color:var(--teal);font-size:0.7rem;">' + source + '</span>';
+      html += '<span class="status-badge pill" style="background:rgba(42,124,111,0.15);color:var(--teal);font-size:0.72rem;">' + source + '</span>';
     } else {
-      html += '<span class="status-badge pill" style="background:rgba(196,133,60,0.15);color:var(--amber);font-size:0.7rem;">Not configured</span>';
+      html += '<span class="status-badge pill" style="background:rgba(196,133,60,0.15);color:var(--amber);font-size:0.72rem;">Not configured</span>';
     }
     html += '</div>';
 
@@ -143,7 +143,7 @@
       // Empty state with actions
       html += '<div style="display:flex;gap:16px;align-items:center;padding:32px 0;flex-wrap:wrap;">' +
         '<div style="background:' + typeDef.bg + ';border-radius:8px;width:200px;height:120px;display:flex;align-items:center;justify-content:center;">' +
-          '<span style="font-size:0.8rem;color:var(--warm-gray);">No image</span>' +
+          '<span style="font-size:0.78rem;color:var(--warm-gray);">No image</span>' +
         '</div>' +
         '<div>';
 
@@ -153,7 +153,7 @@
         var hasPrimary = !!(logoConfig && logoConfig.primary);
         if (hasPrimary) {
           html += '<button class="btn btn-primary" onclick="brandGenerateVariant(\'' + selectedType + '\')">Generate from Primary</button>';
-          html += '<div style="margin-top:8px;"><button class="btn btn-secondary" onclick="brandUploadLogoPrompt(\'' + selectedType + '\')" style="font-size:0.8rem;">Or upload manually</button></div>';
+          html += '<div style="margin-top:8px;"><button class="btn btn-secondary" onclick="brandUploadLogoPrompt(\'' + selectedType + '\')" style="font-size:0.78rem;">Or upload manually</button></div>';
         } else {
           html += '<div style="color:var(--warm-gray);font-size:0.85rem;">Upload a primary logo first</div>';
         }
@@ -177,16 +177,16 @@
 
       html += '</div>' +
         '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">' +
-          '<button class="btn btn-secondary" onclick="brandUploadLogoPrompt(\'' + selectedType + '\')" style="font-size:0.8rem;padding:4px 12px;">Replace</button>';
+          '<button class="btn btn-secondary" onclick="brandUploadLogoPrompt(\'' + selectedType + '\')" style="font-size:0.78rem;padding:4px 12px;">Replace</button>';
 
       // Generate button for auto-gen types
       if (selectedType !== 'primary' && typeDef.autoGen && logoConfig && logoConfig.primary) {
-        html += '<button class="btn btn-secondary" onclick="brandGenerateVariant(\'' + selectedType + '\')" style="font-size:0.8rem;padding:4px 12px;">Regenerate</button>';
+        html += '<button class="btn btn-secondary" onclick="brandGenerateVariant(\'' + selectedType + '\')" style="font-size:0.78rem;padding:4px 12px;">Regenerate</button>';
       }
 
       // Delete button for variants (not primary)
       if (selectedType !== 'primary') {
-        html += '<button class="btn btn-secondary" onclick="brandDeleteVariant(\'' + selectedType + '\')" style="font-size:0.8rem;padding:4px 12px;color:var(--red,#ef4444);">Delete</button>';
+        html += '<button class="btn btn-secondary" onclick="brandDeleteVariant(\'' + selectedType + '\')" style="font-size:0.78rem;padding:4px 12px;color:var(--red,#ef4444);">Delete</button>';
       }
 
       html += '</div></div></div>';
@@ -213,12 +213,12 @@
       if (data) {
         html += '<img src="' + esc(data.url) + '" alt="" style="max-width:100%;max-height:58px;object-fit:contain;" onerror="this.parentElement.innerHTML=\'&#10060;\'">';
       } else {
-        html += '<span style="font-size:0.65rem;color:var(--warm-gray);">Empty</span>';
+        html += '<span style="font-size:0.72rem;color:var(--warm-gray);">Empty</span>';
       }
 
       html += '</div>' +
         '<div style="padding:6px 8px;text-align:center;">' +
-          '<div style="font-size:0.8rem;font-weight:600;color:' + (isSelected ? 'var(--teal)' : 'var(--text-primary)') + ';">' + esc(lt.label) + '</div>' +
+          '<div style="font-size:0.78rem;font-weight:600;color:' + (isSelected ? 'var(--teal)' : 'var(--text-primary)') + ';">' + esc(lt.label) + '</div>' +
         '</div></div>';
     });
 
@@ -233,7 +233,7 @@
     var availableKeys = getAvailableVariantKeys();
 
     var html = '<div style="background:var(--surface-card);border-radius:8px;padding:20px;">' +
-      '<h3 style="margin:0 0 16px;font-size:1.1rem;color:var(--text-primary);">Placement Assignments</h3>';
+      '<h3 style="margin:0 0 16px;font-size:1.15rem;color:var(--text-primary);">Placement Assignments</h3>';
 
     if (!logoConfig || !logoConfig.primary) {
       html += '<div style="color:var(--warm-gray);font-size:0.85rem;">Upload a primary logo first to configure placements.</div></div>';
@@ -253,12 +253,12 @@
       if (resolvedUrl) {
         html += '<img src="' + esc(resolvedUrl) + '" alt="" style="max-width:46px;max-height:30px;object-fit:contain;" onerror="this.style.display=\'none\'">';
       } else {
-        html += '<span style="font-size:0.55rem;color:var(--warm-gray);">--</span>';
+        html += '<span style="font-size:0.72rem;color:var(--warm-gray);">--</span>';
       }
       html += '</div>' +
         '<div style="min-width:110px;flex-shrink:0;font-size:0.85rem;font-weight:600;color:var(--text-primary);">' + esc(p.label) + '</div>' +
         '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:200px;">' +
-          '<select id="brandPlacement_' + p.key + '_variant" style="flex:1;padding:4px 8px;border-radius:4px;border:1px solid var(--warm-gray);background:var(--surface-card);color:var(--text-primary);font-size:0.8rem;">';
+          '<select id="brandPlacement_' + p.key + '_variant" style="flex:1;padding:4px 8px;border-radius:4px;border:1px solid var(--warm-gray);background:var(--surface-card);color:var(--text-primary);font-size:0.78rem;">';
 
       availableKeys.forEach(function(k) {
         var selected = (k === currentKey) ? ' selected' : '';
@@ -267,9 +267,9 @@
       });
 
       html += '</select>' +
-          '<input type="number" id="brandPlacement_' + p.key + '_height" value="' + currentHeight + '" min="16" max="200" style="width:55px;padding:4px 6px;border-radius:4px;border:1px solid var(--warm-gray);background:var(--surface-card);color:var(--text-primary);font-size:0.8rem;" title="Max height (px)">' +
-          '<span style="font-size:0.65rem;color:var(--warm-gray);">px</span>' +
-          '<button class="btn btn-primary" onclick="brandSavePlacement(\'' + p.key + '\')" style="font-size:0.75rem;padding:4px 10px;">Save</button>' +
+          '<input type="number" id="brandPlacement_' + p.key + '_height" value="' + currentHeight + '" min="16" max="200" style="width:55px;padding:4px 6px;border-radius:4px;border:1px solid var(--warm-gray);background:var(--surface-card);color:var(--text-primary);font-size:0.78rem;" title="Max height (px)">' +
+          '<span style="font-size:0.72rem;color:var(--warm-gray);">px</span>' +
+          '<button class="btn btn-primary" onclick="brandSavePlacement(\'' + p.key + '\')" style="font-size:0.78rem;padding:4px 10px;">Save</button>' +
         '</div></div>';
     });
 
@@ -352,7 +352,7 @@
           '<input type="text" id="brandLogoUrlInput" placeholder="https://example.com/logo.png" style="width:100%;padding:8px 12px;border-radius:4px;border:1px solid var(--warm-gray);background:var(--surface-card);color:var(--text-primary);font-size:0.9rem;">' +
           '<input type="hidden" id="brandLogoTargetType" value="' + esc(targetType) + '">' +
         '</div>' +
-        '<div style="text-align:center;color:var(--warm-gray);font-size:0.8rem;">— or —</div>' +
+        '<div style="text-align:center;color:var(--warm-gray);font-size:0.78rem;">— or —</div>' +
         '<div style="text-align:center;">' +
           '<button class="btn btn-secondary" onclick="brandPickFromLibrary(\'' + esc(targetType) + '\')" style="font-size:0.85rem;">Choose from Image Library</button>' +
         '</div>' +

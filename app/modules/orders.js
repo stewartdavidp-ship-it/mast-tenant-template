@@ -519,13 +519,13 @@
     if (o.squarePaymentId || o.squareOrderId || o.squareCheckoutId) {
       var payRows = '';
       if (o.squarePaymentId) {
-        payRows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Payment ID</span><span style="font-family:monospace;font-size:0.82rem;">' + esc(o.squarePaymentId) + '</span></div>';
+        payRows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Payment ID</span><span style="font-family:monospace;font-size:0.85rem;">' + esc(o.squarePaymentId) + '</span></div>';
       }
       if (o.paidAmount) {
         payRows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Amount Paid</span><span>$' + (o.paidAmount / 100).toFixed(2) + '</span></div>';
       }
       if (o.squareOrderId) {
-        payRows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Square Order</span><span style="font-family:monospace;font-size:0.82rem;">' + esc(o.squareOrderId) + '</span></div>';
+        payRows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Square Order</span><span style="font-family:monospace;font-size:0.85rem;">' + esc(o.squareOrderId) + '</span></div>';
       }
       var payStatus = status === 'pending_payment' ? 'Awaiting Payment' : status === 'payment_failed' ? 'Failed' : 'Paid';
       payRows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Payment Status</span><span>' + payStatus + '</span></div>';
@@ -540,7 +540,7 @@
     if (o.source === 'etsy' && o.etsyReceiptId) {
       var etsyRows = '';
       etsyRows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Source</span><span class="status-badge" style="' + etsySourceBadgeStyle() + '">Etsy</span></div>';
-      etsyRows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Receipt ID</span><span style="font-family:monospace;font-size:0.82rem;">' +
+      etsyRows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Receipt ID</span><span style="font-family:monospace;font-size:0.85rem;">' +
         (o.etsyOrderUrl ? '<a href="' + esc(o.etsyOrderUrl) + '" target="_blank" style="color:var(--teal);">' + esc(o.etsyReceiptId) + '</a>' : esc(o.etsyReceiptId)) +
         '</span></div>';
       if (o.etsyBuyerUsername) {
@@ -573,7 +573,7 @@
           (o.tracking.trackingUrl ? '<a href="' + esc(o.tracking.trackingUrl) + '" target="_blank" class="order-tracking-link">Track Package</a>' : '') +
         '</div>' +
         (labelActions ? '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">' + labelActions + '</div>' : '') +
-        (o.tracking.labelProvider ? '<div style="font-size:0.75rem;color:var(--warm-gray-light);margin-top:6px;">Label via ' + esc(o.tracking.labelProvider) + (o.tracking.purchasedAt ? ' on ' + formatOrderDateTime(o.tracking.purchasedAt) : '') + '</div>' : '') +
+        (o.tracking.labelProvider ? '<div style="font-size:0.78rem;color:var(--warm-gray-light);margin-top:6px;">Label via ' + esc(o.tracking.labelProvider) + (o.tracking.purchasedAt ? ' on ' + formatOrderDateTime(o.tracking.purchasedAt) : '') + '</div>' : '') +
       '</div>';
     }
 
@@ -664,7 +664,7 @@
       // Always show timeline section even if empty
       timelineHtml = '<div class="order-detail-section">' +
         '<div class="order-detail-section-title">Timeline</div>' +
-        '<div style="font-size:0.82rem;color:var(--warm-gray-light);padding:8px 0;">No history recorded yet.</div>' +
+        '<div style="font-size:0.85rem;color:var(--warm-gray-light);padding:8px 0;">No history recorded yet.</div>' +
       '</div>';
     }
 
@@ -730,7 +730,7 @@
     var emailSectionId = 'orderEmailSection_' + orderId;
     var emailHtml = '<div class="order-detail-section" id="' + emailSectionId + '">' +
       '<div class="order-detail-section-title">Email History</div>' +
-      '<div style="font-size:0.82rem;color:var(--warm-gray-light);padding:4px 0;">Loading...</div>' +
+      '<div style="font-size:0.85rem;color:var(--warm-gray-light);padding:4px 0;">Loading...</div>' +
     '</div>';
 
     // Manual send buttons — contextual based on order status
@@ -818,7 +818,7 @@
 
       if (emails.length === 0) {
         container.innerHTML = '<div class="order-detail-section-title">Email History</div>' +
-          '<div style="font-size:0.82rem;color:var(--warm-gray-light);padding:4px 0;">No emails sent for this order yet.</div>';
+          '<div style="font-size:0.85rem;color:var(--warm-gray-light);padding:4px 0;">No emails sent for this order yet.</div>';
         return;
       }
 
@@ -832,7 +832,7 @@
         entriesHtml += '<div class="order-email-entry" onclick="toggleEmailDetail(\'' + esc(em._key) + '\')">' +
           '<div class="order-email-header">' +
             '<span class="order-email-subject">' + esc(em.subject || '(no subject)') + '</span>' +
-            '<span class="status-badge" style="font-size:0.7rem;padding:2px 8px;background:' + (em.status === 'sent' ? 'rgba(46,125,50,0.2)' : 'rgba(198,40,40,0.2)') + ';color:' + statusColor + ';border:1px solid ' + (em.status === 'sent' ? 'rgba(46,125,50,0.35)' : 'rgba(198,40,40,0.35)') + ';">' + statusIcon + ' ' + esc(em.status || '') + '</span>' +
+            '<span class="status-badge" style="font-size:0.72rem;padding:2px 8px;background:' + (em.status === 'sent' ? 'rgba(46,125,50,0.2)' : 'rgba(198,40,40,0.2)') + ';color:' + statusColor + ';border:1px solid ' + (em.status === 'sent' ? 'rgba(46,125,50,0.35)' : 'rgba(198,40,40,0.35)') + ';">' + statusIcon + ' ' + esc(em.status || '') + '</span>' +
           '</div>' +
           '<div class="order-email-meta">' +
             '<span>' + esc(typeLabel) + '</span>' +
@@ -866,7 +866,7 @@
       var container = document.getElementById(containerId);
       if (container) {
         container.innerHTML = '<div class="order-detail-section-title">Email History</div>' +
-          '<div style="font-size:0.82rem;color:#EF5350;padding:4px 0;">Failed to load emails: ' + esc(err.message) + '</div>';
+          '<div style="font-size:0.85rem;color:#EF5350;padding:4px 0;">Failed to load emails: ' + esc(err.message) + '</div>';
       }
     });
   }
@@ -1043,7 +1043,7 @@
         rowsHtml += '<tr>' +
           '<td style="padding:8px 10px;">' +
             '<div style="font-weight:500;">' + esc(item.name) + ' x' + qty + '</div>' +
-            (optStr ? '<div style="font-size:0.8rem;color:var(--warm-gray);">' + esc(optStr) + '</div>' : '') +
+            (optStr ? '<div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(optStr) + '</div>' : '') +
           '</td>' +
           '<td style="padding:8px 10px;text-align:center;">&mdash;</td>' +
           '<td style="padding:8px 10px;"><span class="order-item-inv inv-stock" style="background:rgba(46,125,50,0.2);color:#66BB6A;">Digital</span></td>' +
@@ -1059,7 +1059,7 @@
       rowsHtml += '<tr>' +
         '<td style="padding:8px 10px;">' +
           '<div style="font-weight:500;">' + esc(item.name) + ' x' + qty + '</div>' +
-          (optStr ? '<div style="font-size:0.8rem;color:var(--warm-gray);">' + esc(optStr) + '</div>' : '') +
+          (optStr ? '<div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(optStr) + '</div>' : '') +
         '</td>' +
         '<td style="padding:8px 10px;text-align:center;">' + invStatus.available + '</td>' +
         '<td style="padding:8px 10px;"><span class="order-item-inv ' + invCls + '">' + esc(invStatus.label) + '</span></td>' +
@@ -1570,7 +1570,7 @@
       // Ship-to (read-only)
       '<div class="form-group">' +
         '<label style="font-weight:600;">Ship To</label>' +
-        '<div style="padding:8px 12px;background:var(--cream);border-radius:6px;font-size:0.88rem;">' + esc(toLine || 'No shipping address on order') + '</div>' +
+        '<div style="padding:8px 12px;background:var(--cream);border-radius:6px;font-size:0.9rem;">' + esc(toLine || 'No shipping address on order') + '</div>' +
       '</div>' +
 
       // Package
@@ -1586,13 +1586,13 @@
         '</div>' +
       '</div>' +
       '<div class="form-group" style="max-width:200px;">' +
-        '<label>Weight (oz)' + (autoWeightNote ? '<span style="font-size:0.75rem;color:var(--warm-gray);font-weight:400;">' + autoWeightNote + '</span>' : '') + '</label>' +
+        '<label>Weight (oz)' + (autoWeightNote ? '<span style="font-size:0.78rem;color:var(--warm-gray);font-weight:400;">' + autoWeightNote + '</span>' : '') + '</label>' +
         '<input type="number" id="shipWeight" min="0" step="0.1" value="' + currentWeight + '">' +
       '</div>' +
 
       // Actions
       '<div style="display:flex;gap:8px;justify-content:space-between;margin-top:16px;flex-wrap:wrap;">' +
-        '<button class="btn btn-secondary" style="font-size:0.82rem;" onclick="shippingSwitchToManual(\'' + esc(s.orderId) + '\')">Enter tracking manually</button>' +
+        '<button class="btn btn-secondary" style="font-size:0.85rem;" onclick="shippingSwitchToManual(\'' + esc(s.orderId) + '\')">Enter tracking manually</button>' +
         '<div style="display:flex;gap:8px;">' +
           '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
           '<button class="btn btn-primary" id="shipGetRatesBtn" onclick="shippingGetRates()" ' + (fromOptions === '' ? 'disabled' : '') + '>Get Rates</button>' +
@@ -1617,7 +1617,7 @@
 
     var html = '<div style="max-width:550px;">' +
       '<h3 style="margin:0 0 4px;">Shipping Rates — ' + esc(num) + '</h3>' +
-      '<p style="color:var(--warm-gray);font-size:0.82rem;margin:0 0 16px;">Select a rate to purchase a shipping label</p>';
+      '<p style="color:var(--warm-gray);font-size:0.85rem;margin:0 0 16px;">Select a rate to purchase a shipping label</p>';
 
     if (s.rateError) {
       html += '<div style="background:#FFEBEE;border:1px solid #E53935;border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:0.85rem;color:#C62828;">' + esc(s.rateError) + '</div>';
@@ -1859,9 +1859,9 @@
     var carrier = (order && order.tracking && order.tracking.carrier) || '';
     var isMobile = window.innerWidth < 600;
     var html = '<div style="max-width:400px;text-align:center;">' +
-      '<div style="font-size:2rem;margin-bottom:8px;">&#x2705;</div>' +
+      '<div style="font-size:1.6rem;margin-bottom:8px;">&#x2705;</div>' +
       '<h3 style="margin:0 0 8px;">Label Ready</h3>' +
-      '<p style="color:var(--warm-gray);font-size:0.88rem;margin:0 0 16px;">Your shipping label has been purchased and tracking is set.</p>' +
+      '<p style="color:var(--warm-gray);font-size:0.9rem;margin:0 0 16px;">Your shipping label has been purchased and tracking is set.</p>' +
       '<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">' +
         (isMobile ?
           '<a href="' + esc(labelUrl) + '" target="_blank" class="btn btn-primary" style="text-decoration:none;">View Label</a>' :
@@ -2059,7 +2059,7 @@
       '<div class="form-group">' +
         '<label>Attach Label <span style="color:var(--warm-gray);font-weight:400;">(optional)</span></label>' +
         '<input type="file" id="simpleShipLabel" accept=".pdf,.png,.jpg,.jpeg" style="font-size:0.85rem;">' +
-        '<p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">PDF or image of shipping label. Stored with order for reprinting.</p>' +
+        '<p style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">PDF or image of shipping label. Stored with order for reprinting.</p>' +
       '</div>' +
       '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">' +
         '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
@@ -2306,11 +2306,11 @@
           '<span style="font-size:0.85rem;">' + esc(pieceName) + '</span>' +
         '</td>' +
         '<td style="font-size:0.85rem;">' + esc(c.customerName || '—') + '</td>' +
-        '<td style="font-size:0.82rem;">' + esc(c.customerContact || '—') + '</td>' +
-        '<td style="font-size:0.82rem;color:var(--warm-gray);">' + esc(notes) + '</td>' +
+        '<td style="font-size:0.85rem;">' + esc(c.customerContact || '—') + '</td>' +
+        '<td style="font-size:0.85rem;color:var(--warm-gray);">' + esc(notes) + '</td>' +
         '<td><span class="status-badge" style="' + (statusColors[c.status] || '') + 'font-size:0.72rem;">' + esc(statusLabel) + '</span></td>' +
-        '<td style="font-size:0.82rem;">' + esc((c.channel || '').toUpperCase()) + '</td>' +
-        '<td style="font-size:0.82rem;">' + esc(dateStr) + '</td>' +
+        '<td style="font-size:0.85rem;">' + esc((c.channel || '').toUpperCase()) + '</td>' +
+        '<td style="font-size:0.85rem;">' + esc(dateStr) + '</td>' +
       '</tr>';
     });
     document.getElementById('commissionsTableBody').innerHTML = html;
@@ -2362,19 +2362,19 @@
       proposalSection =
         '<div style="background:var(--cream,#f5f0e8);border-radius:8px;padding:24px;box-shadow:0 1px 3px rgba(0,0,0,0.08);margin-top:16px;">' +
           '<h4 style="margin:0 0 16px 0;font-size:1rem;">Proposal</h4>' +
-          '<div style="display:grid;grid-template-columns:120px 1fr;gap:8px 16px;font-size:0.88rem;">' +
+          '<div style="display:grid;grid-template-columns:120px 1fr;gap:8px 16px;font-size:0.9rem;">' +
             '<span style="color:var(--warm-gray);">Price</span>' +
-            '<span><input type="text" id="commProposalPrice" value="' + esc(c.proposalPrice || '') + '" placeholder="e.g. $250" style="width:140px;padding:6px 8px;border-radius:6px;border:1px solid var(--cream-dark);font-size:0.88rem;"></span>' +
+            '<span><input type="text" id="commProposalPrice" value="' + esc(c.proposalPrice || '') + '" placeholder="e.g. $250" style="width:140px;padding:6px 8px;border-radius:6px;border:1px solid var(--cream-dark);font-size:0.9rem;"></span>' +
             '<span style="color:var(--warm-gray);">Timeline</span>' +
-            '<span><input type="text" id="commProposalTimeline" value="' + esc(c.proposalTimeline || '') + '" placeholder="e.g. 3-4 weeks" style="width:200px;padding:6px 8px;border-radius:6px;border:1px solid var(--cream-dark);font-size:0.88rem;"></span>' +
+            '<span><input type="text" id="commProposalTimeline" value="' + esc(c.proposalTimeline || '') + '" placeholder="e.g. 3-4 weeks" style="width:200px;padding:6px 8px;border-radius:6px;border:1px solid var(--cream-dark);font-size:0.9rem;"></span>' +
             '<span style="color:var(--warm-gray);">Spec / Design Notes</span>' +
-            '<span><textarea id="commProposalSpec" rows="4" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--cream-dark);font-size:0.88rem;resize:vertical;box-sizing:border-box;" placeholder="Describe the piece, materials, design details...">' + esc(c.proposalSpec || '') + '</textarea></span>' +
+            '<span><textarea id="commProposalSpec" rows="4" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--cream-dark);font-size:0.9rem;resize:vertical;box-sizing:border-box;" placeholder="Describe the piece, materials, design details...">' + esc(c.proposalSpec || '') + '</textarea></span>' +
           '</div>' +
           '<div style="display:flex;gap:8px;margin-top:14px;">' +
-            '<button class="btn btn-secondary" style="font-size:0.82rem;" onclick="saveCommissionProposal(\'' + esc(commId) + '\')">Save Proposal</button>' +
-            (hasProposal && c.customerContact ? '<button class="btn btn-primary" style="font-size:0.82rem;" onclick="sendCommissionProposal(\'' + esc(commId) + '\')">Send Proposal to Customer</button>' : '') +
+            '<button class="btn btn-secondary" style="font-size:0.85rem;" onclick="saveCommissionProposal(\'' + esc(commId) + '\')">Save Proposal</button>' +
+            (hasProposal && c.customerContact ? '<button class="btn btn-primary" style="font-size:0.85rem;" onclick="sendCommissionProposal(\'' + esc(commId) + '\')">Send Proposal to Customer</button>' : '') +
           '</div>' +
-          '<div id="commProposalStatus" style="margin-top:8px;font-size:0.82rem;"></div>' +
+          '<div id="commProposalStatus" style="margin-top:8px;font-size:0.85rem;"></div>' +
           (c.proposalSentAt ? '<div style="margin-top:8px;font-size:0.78rem;color:var(--warm-gray);">Proposal sent: ' + esc(new Date(c.proposalSentAt).toLocaleString()) + '</div>' : '') +
         '</div>';
     }
@@ -2390,23 +2390,23 @@
         var icon = doc.type === 'drive' ? '&#x1F4C4;' : '&#x1F4CE;';
         var dateStr = doc.addedAt ? new Date(doc.addedAt).toLocaleDateString() : '';
         docsListHtml += '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--cream-dark,#e8e0d4);font-size:0.85rem;">' +
-          '<span style="font-size:1.1rem;">' + icon + '</span>' +
+          '<span style="font-size:1.15rem;">' + icon + '</span>' +
           '<div style="flex:1;min-width:0;">' +
             '<a href="' + esc(doc.url || doc.webViewLink || '#') + '" target="_blank" style="color:var(--teal);text-decoration:none;font-weight:500;">' + esc(doc.name || 'Untitled') + '</a>' +
-            (doc.mimeType ? '<span style="color:var(--warm-gray);font-size:0.75rem;margin-left:8px;">' + esc(doc.mimeType.split('/').pop()) + '</span>' : '') +
+            (doc.mimeType ? '<span style="color:var(--warm-gray);font-size:0.78rem;margin-left:8px;">' + esc(doc.mimeType.split('/').pop()) + '</span>' : '') +
           '</div>' +
           '<span style="color:var(--warm-gray);font-size:0.78rem;white-space:nowrap;">' + esc(dateStr) + '</span>' +
-          '<button class="btn-icon danger" style="padding:4px 6px;font-size:0.75rem;" onclick="event.stopPropagation();removeCommissionDoc(\'' + esc(commId) + '\',\'' + esc(doc.id) + '\')" title="Remove">&times;</button>' +
+          '<button class="btn-icon danger" style="padding:4px 6px;font-size:0.78rem;" onclick="event.stopPropagation();removeCommissionDoc(\'' + esc(commId) + '\',\'' + esc(doc.id) + '\')" title="Remove">&times;</button>' +
         '</div>';
       });
 
       docsSection =
         '<div style="background:var(--cream,#f5f0e8);border-radius:8px;padding:24px;box-shadow:0 1px 3px rgba(0,0,0,0.08);margin-top:16px;">' +
           '<h4 style="margin:0 0 12px 0;font-size:1rem;">Documents</h4>' +
-          (docsListHtml ? '<div style="margin-bottom:16px;">' + docsListHtml + '</div>' : '<p style="font-size:0.82rem;color:var(--warm-gray);margin:0 0 16px 0;">No documents attached yet.</p>') +
+          (docsListHtml ? '<div style="margin-bottom:16px;">' + docsListHtml + '</div>' : '<p style="font-size:0.85rem;color:var(--warm-gray);margin:0 0 16px 0;">No documents attached yet.</p>') +
           '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
-            '<button class="btn btn-secondary" style="font-size:0.82rem;" onclick="openCommissionDocLinkModal(\'' + esc(commId) + '\')">+ Link Google Doc</button>' +
-            '<button class="btn btn-secondary" style="font-size:0.82rem;" onclick="openCommissionDocUploadModal(\'' + esc(commId) + '\')">+ Upload File</button>' +
+            '<button class="btn btn-secondary" style="font-size:0.85rem;" onclick="openCommissionDocLinkModal(\'' + esc(commId) + '\')">+ Link Google Doc</button>' +
+            '<button class="btn btn-secondary" style="font-size:0.85rem;" onclick="openCommissionDocUploadModal(\'' + esc(commId) + '\')">+ Upload File</button>' +
           '</div>' +
         '</div>';
     }
@@ -2418,7 +2418,7 @@
         '<div style="background:var(--cream,#f5f0e8);border-radius:8px;padding:24px;box-shadow:0 1px 3px rgba(0,0,0,0.08);margin-top:16px;">' +
           '<h4 style="margin:0 0 8px 0;font-size:1rem;">Production</h4>' +
           '<p style="font-size:0.85rem;color:var(--warm-gray);margin:0 0 12px 0;">Customer accepted — create a production job to track the build.</p>' +
-          '<button class="btn btn-primary" style="font-size:0.82rem;" onclick="createCommissionJob(\'' + esc(commId) + '\')">Create Production Job</button>' +
+          '<button class="btn btn-primary" style="font-size:0.85rem;" onclick="createCommissionJob(\'' + esc(commId) + '\')">Create Production Job</button>' +
         '</div>';
     } else if (c.productionJobId) {
       jobSection =
@@ -2433,11 +2433,11 @@
       '<div style="display:flex;gap:16px;align-items:flex-start;margin-bottom:20px;">' +
         (imgSrc ? '<img src="' + esc(imgSrc) + '" style="width:80px;height:80px;border-radius:8px;object-fit:cover;">' : '') +
         '<div>' +
-          '<h3 style="margin:0 0 4px 0;font-size:1.1rem;">' + esc(pieceName) + '</h3>' +
-          '<div style="font-size:0.82rem;color:var(--warm-gray);">Commission Inquiry</div>' +
+          '<h3 style="margin:0 0 4px 0;font-size:1.15rem;">' + esc(pieceName) + '</h3>' +
+          '<div style="font-size:0.85rem;color:var(--warm-gray);">Commission Inquiry</div>' +
         '</div>' +
       '</div>' +
-      '<div style="display:grid;grid-template-columns:120px 1fr;gap:8px 16px;font-size:0.88rem;">' +
+      '<div style="display:grid;grid-template-columns:120px 1fr;gap:8px 16px;font-size:0.9rem;">' +
         '<span style="color:var(--warm-gray);">Customer</span><span>' + esc(c.customerName || '—') + '</span>' +
         '<span style="color:var(--warm-gray);">Contact</span><span>' + esc(c.customerContact || '—') + '</span>' +
         '<span style="color:var(--warm-gray);">Channel</span><span>' + esc((c.channel || '').toUpperCase()) + '</span>' +
@@ -2472,7 +2472,7 @@
       if (statusEl) { statusEl.textContent = 'Proposal saved.'; statusEl.style.color = 'var(--teal)'; }
       await writeAudit('update', 'commission', commId);
     } catch (err) {
-      if (statusEl) { statusEl.textContent = 'Error: ' + err.message; statusEl.style.color = '#DC3545'; }
+      if (statusEl) { statusEl.textContent = 'Error: ' + err.message; statusEl.style.color = 'var(--danger)'; }
     }
   }
 
@@ -2561,7 +2561,7 @@
         '<div class="form-group">' +
           '<label>Google Drive URL</label>' +
           '<input type="text" id="commDocDriveUrl" placeholder="https://docs.google.com/document/d/...">' +
-          '<p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Paste a link to a Google Doc, Sheet, or Drive file.</p>' +
+          '<p style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">Paste a link to a Google Doc, Sheet, or Drive file.</p>' +
         '</div>' +
         '<div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end;">' +
           '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
@@ -2605,9 +2605,9 @@
         '<div class="form-group">' +
           '<label>Select File</label>' +
           '<input type="file" id="commDocFileInput" style="font-size:0.85rem;">' +
-          '<p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Max 10 MB. PDFs, images, and documents accepted.</p>' +
+          '<p style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">Max 10 MB. PDFs, images, and documents accepted.</p>' +
         '</div>' +
-        '<div id="commDocUploadStatus" style="font-size:0.82rem;margin-top:8px;"></div>' +
+        '<div id="commDocUploadStatus" style="font-size:0.85rem;margin-top:8px;"></div>' +
         '<div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end;">' +
           '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
           '<button class="btn btn-primary" id="commDocUploadBtn" onclick="uploadCommissionDoc(\'' + esc(commId) + '\')">Upload</button>' +
@@ -2701,29 +2701,29 @@
       catalogHtml += '<div class="new-comm-catalog-item" data-pid="' + esc(p.pid) + '" onclick="toggleNewCommInspiration(this,\'' + esc(p.pid) + '\')" ' +
         'style="width:64px;cursor:pointer;text-align:center;border:2px solid transparent;border-radius:6px;padding:4px;">' +
         '<img src="' + esc(p.images[0]) + '" style="width:56px;height:56px;border-radius:4px;object-fit:cover;" />' +
-        '<div style="font-size:0.68rem;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(p.name) + '</div>' +
+        '<div style="font-size:0.72rem;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(p.name) + '</div>' +
       '</div>';
     });
 
     modal.innerHTML = '<div style="background:var(--cream,#f5f0e8);border-radius:12px;padding:24px;max-width:560px;width:90%;max-height:85vh;overflow-y:auto;">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
-        '<h3 style="margin:0;font-size:1.1rem;">New Commission</h3>' +
-        '<span onclick="closeNewCommissionModal()" style="cursor:pointer;font-size:1.3rem;color:var(--warm-gray);">&times;</span>' +
+        '<h3 style="margin:0;font-size:1.15rem;">New Commission</h3>' +
+        '<span onclick="closeNewCommissionModal()" style="cursor:pointer;font-size:1.15rem;color:var(--warm-gray);">&times;</span>' +
       '</div>' +
 
       '<div style="margin-bottom:14px;">' +
-        '<label style="font-size:0.82rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Customer Name *</label>' +
-        '<input type="text" id="newCommName" placeholder="Jane Smith" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--cream-dark);font-size:0.88rem;background:var(--cream,#f5f0e8);box-sizing:border-box;">' +
+        '<label style="font-size:0.85rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Customer Name *</label>' +
+        '<input type="text" id="newCommName" placeholder="Jane Smith" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--cream-dark);font-size:0.9rem;background:var(--cream,#f5f0e8);box-sizing:border-box;">' +
       '</div>' +
 
       '<div style="margin-bottom:14px;">' +
-        '<label style="font-size:0.82rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Email or Phone *</label>' +
-        '<input type="text" id="newCommContact" placeholder="jane@example.com or (555) 123-4567" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--cream-dark);font-size:0.88rem;background:var(--cream,#f5f0e8);box-sizing:border-box;">' +
+        '<label style="font-size:0.85rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Email or Phone *</label>' +
+        '<input type="text" id="newCommContact" placeholder="jane@example.com or (555) 123-4567" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--cream-dark);font-size:0.9rem;background:var(--cream,#f5f0e8);box-sizing:border-box;">' +
       '</div>' +
 
       '<div style="margin-bottom:14px;">' +
-        '<label style="font-size:0.82rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Channel</label>' +
-        '<select id="newCommChannel" style="padding:8px 10px;border-radius:6px;border:1px solid var(--cream-dark);font-size:0.88rem;background:var(--cream,#f5f0e8);">' +
+        '<label style="font-size:0.85rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Channel</label>' +
+        '<select id="newCommChannel" style="padding:8px 10px;border-radius:6px;border:1px solid var(--cream-dark);font-size:0.9rem;background:var(--cream,#f5f0e8);">' +
           '<option value="phone">Phone Call</option>' +
           '<option value="email">Email</option>' +
           '<option value="in-person">In Person</option>' +
@@ -2733,16 +2733,16 @@
       '</div>' +
 
       '<div style="margin-bottom:14px;">' +
-        '<label style="font-size:0.82rem;color:var(--warm-gray);display:block;margin-bottom:4px;">What are they looking for?</label>' +
-        '<textarea id="newCommNotes" rows="3" placeholder="Describe what the customer asked about — size, colors, style, occasion..." style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--cream-dark);font-size:0.88rem;resize:vertical;background:var(--cream,#f5f0e8);box-sizing:border-box;"></textarea>' +
+        '<label style="font-size:0.85rem;color:var(--warm-gray);display:block;margin-bottom:4px;">What are they looking for?</label>' +
+        '<textarea id="newCommNotes" rows="3" placeholder="Describe what the customer asked about — size, colors, style, occasion..." style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--cream-dark);font-size:0.9rem;resize:vertical;background:var(--cream,#f5f0e8);box-sizing:border-box;"></textarea>' +
       '</div>' +
 
       (catalogHtml ? '<div style="margin-bottom:14px;">' +
-        '<label style="font-size:0.82rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Inspiration pieces <span style="font-size:0.75rem;">(optional — click to select)</span></label>' +
+        '<label style="font-size:0.85rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Inspiration pieces <span style="font-size:0.78rem;">(optional — click to select)</span></label>' +
         '<div id="newCommCatalogGrid" style="display:flex;flex-wrap:wrap;gap:6px;max-height:180px;overflow-y:auto;padding:4px;">' + catalogHtml + '</div>' +
       '</div>' : '') +
 
-      '<div id="newCommError" style="color:#DC3545;font-size:0.82rem;margin-bottom:8px;display:none;"></div>' +
+      '<div id="newCommError" style="color:var(--danger);font-size:0.85rem;margin-bottom:8px;display:none;"></div>' +
 
       '<div style="display:flex;gap:8px;justify-content:flex-end;">' +
         '<button class="btn btn-secondary" onclick="closeNewCommissionModal()">Cancel</button>' +
@@ -2876,11 +2876,11 @@
         var num = esc(getOrderDisplayNumber(o));
         var status = o.status || 'placed';
         var customer = o.customerName || o.email || '';
-        var sourceBadge = o.source === 'etsy' ? ' <span class="status-badge" style="font-size:0.7rem;' + etsySourceBadgeStyle() + '">Etsy</span>' : '';
+        var sourceBadge = o.source === 'etsy' ? ' <span class="status-badge" style="font-size:0.72rem;' + etsySourceBadgeStyle() + '">Etsy</span>' : '';
         contentHtml += '<div class="dash-queue-item" onclick="viewOrder(\'' + esc(key) + '\')">' +
           '<div class="dash-queue-row">' +
             '<span class="dash-queue-order-num">' + num + sourceBadge + '</span>' +
-            '<span class="status-badge pill" style="font-size:0.7rem;padding:2px 8px;' + orderStatusBadgeStyle(status) + '">' + status.replace(/_/g, ' ') + '</span>' +
+            '<span class="status-badge pill" style="font-size:0.72rem;padding:2px 8px;' + orderStatusBadgeStyle(status) + '">' + status.replace(/_/g, ' ') + '</span>' +
           '</div>' +
           (customer ? '<div class="dash-queue-customer">' + esc(customer) + '</div>' : '') +
           '<div class="dash-queue-meta">' +
@@ -2921,11 +2921,11 @@
         var key = o._key;
         var num = esc(getOrderDisplayNumber(o));
         var customer = o.customerName || o.email || '';
-        var sourceBadge = o.source === 'etsy' ? ' <span class="status-badge" style="font-size:0.7rem;' + etsySourceBadgeStyle() + '">Etsy</span>' : '';
+        var sourceBadge = o.source === 'etsy' ? ' <span class="status-badge" style="font-size:0.72rem;' + etsySourceBadgeStyle() + '">Etsy</span>' : '';
         contentHtml += '<div class="dash-queue-item" onclick="viewOrder(\'' + esc(key) + '\')">' +
           '<div class="dash-queue-row">' +
             '<span class="dash-queue-order-num">' + num + sourceBadge + '</span>' +
-            '<span class="status-badge pill" style="font-size:0.7rem;padding:2px 8px;' + orderStatusBadgeStyle('packed') + '">packed</span>' +
+            '<span class="status-badge pill" style="font-size:0.72rem;padding:2px 8px;' + orderStatusBadgeStyle('packed') + '">packed</span>' +
           '</div>' +
           (customer ? '<div class="dash-queue-customer">' + esc(customer) + '</div>' : '') +
           '<div class="dash-queue-meta">' +
@@ -3206,7 +3206,7 @@
       '<div class="order-summary-row"><span>Items Total</span><span>$' + (itemsTotalCents / 100).toFixed(2) + '</span></div>' +
       (taxOnReturnCents > 0 ? '<div class="order-summary-row"><span>Tax</span><span>$' + (taxOnReturnCents / 100).toFixed(2) + '</span></div>' : '') +
       '<div class="order-summary-row total" style="color:var(--text,#e0e0e0);"><span>Refund Amount</span><span>$' + ((r.refundAmountCents || 0) / 100).toFixed(2) + '</span></div>' +
-      '<div style="margin-top:0.5rem;font-size:0.82rem;color:var(--warm-gray-light);">Method: ' + esc((r.refundMethod || 'original_payment').replace(/_/g, ' ')) + '</div>';
+      '<div style="margin-top:0.5rem;font-size:0.85rem;color:var(--warm-gray-light);">Method: ' + esc((r.refundMethod || 'original_payment').replace(/_/g, ' ')) + '</div>';
 
     // Admin override for refund method (hide on terminal statuses)
     var terminalStatuses = ['refund-issued', 'declined', 'restocked', 'seconds', 'repair-queued', 'written-off'];
@@ -3214,12 +3214,12 @@
       refundHtml += '<div style="margin-top:0.75rem;">' +
         '<label style="font-size:0.72rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--warm-gray-light);">Override Refund Method</label>' +
         '<div style="display:flex;gap:8px;margin-top:4px;">' +
-          '<select id="rmaRefundMethodOverride" style="padding:4px 8px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.82rem;background:var(--cream);color:var(--charcoal);">' +
+          '<select id="rmaRefundMethodOverride" style="padding:4px 8px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.85rem;background:var(--cream);color:var(--charcoal);">' +
             '<option value="original_payment"' + (r.refundMethod === 'original_payment' ? ' selected' : '') + '>Original Payment</option>' +
             '<option value="store_credit"' + (r.refundMethod === 'store_credit' ? ' selected' : '') + '>Store Credit</option>' +
           '</select>' +
-          '<input type="number" id="rmaRefundAmountOverride" value="' + ((r.refundAmountCents || 0) / 100).toFixed(2) + '" step="0.01" min="0" style="width:100px;padding:4px 8px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.82rem;background:var(--cream);color:var(--charcoal);">' +
-          '<button class="btn btn-secondary" style="font-size:0.75rem;padding:4px 10px;" onclick="overrideRmaRefund(\'' + esc(rmaId) + '\')">Update</button>' +
+          '<input type="number" id="rmaRefundAmountOverride" value="' + ((r.refundAmountCents || 0) / 100).toFixed(2) + '" step="0.01" min="0" style="width:100px;padding:4px 8px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.85rem;background:var(--cream);color:var(--charcoal);">' +
+          '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 10px;" onclick="overrideRmaRefund(\'' + esc(rmaId) + '\')">Update</button>' +
         '</div>' +
       '</div>';
     }
@@ -3230,7 +3230,7 @@
     if (r.orderId) {
       orderLinkHtml = '<div class="order-detail-section">' +
         '<div class="order-detail-section-title">Linked Order</div>' +
-        '<a href="#" onclick="backToRmaList();viewOrder(\'' + esc(r.orderId) + '\');return false;" style="color:var(--teal);font-size:0.88rem;">' +
+        '<a href="#" onclick="backToRmaList();viewOrder(\'' + esc(r.orderId) + '\');return false;" style="color:var(--teal);font-size:0.9rem;">' +
         'View Order ' + esc(r.orderNumber || r.orderId) + ' &rarr;</a>' +
       '</div>';
 
@@ -3299,7 +3299,7 @@
       '</div>' +
       '<div class="order-detail-section">' +
         '<div class="order-detail-section-title">Return Reason</div>' +
-        '<div style="font-size:0.88rem;">' + esc(r.returnReason || 'No reason provided') + '</div>' +
+        '<div style="font-size:0.9rem;">' + esc(r.returnReason || 'No reason provided') + '</div>' +
       '</div>' +
       '<div class="order-detail-section">' +
         '<div class="order-detail-section-title">Items Being Returned</div>' +
@@ -3307,7 +3307,7 @@
       '</div>' +
       (r.returnTrackingNumber ? '<div class="order-detail-section">' +
         '<div class="order-detail-section-title">Return Tracking</div>' +
-        '<div style="font-family:monospace;font-size:0.88rem;">' + esc(r.returnTrackingNumber) + '</div>' +
+        '<div style="font-family:monospace;font-size:0.9rem;">' + esc(r.returnTrackingNumber) + '</div>' +
       '</div>' : '') +
       // Inspection panel (when status is 'received')
       (status === 'received' ? '<div class="order-detail-section" style="border:1px solid var(--teal);border-radius:8px;padding:1rem;">' +
@@ -3361,7 +3361,7 @@
       // Disposition result display (when terminal)
       (r.disposition ? '<div class="order-detail-section">' +
         '<div class="order-detail-section-title">Disposition</div>' +
-        '<div style="font-size:0.88rem;"><strong>' + esc({ restock: 'Restocked', seconds: 'Seconds/Clearance', repair: 'Repair Queued', 'write-off': 'Written Off' }[r.disposition.action] || r.disposition.action) + '</strong></div>' +
+        '<div style="font-size:0.9rem;"><strong>' + esc({ restock: 'Restocked', seconds: 'Seconds/Clearance', repair: 'Repair Queued', 'write-off': 'Written Off' }[r.disposition.action] || r.disposition.action) + '</strong></div>' +
         (r.disposition.notes ? '<div style="margin-top:0.5rem;font-size:0.85rem;color:var(--warm-gray);">' + esc(r.disposition.notes) + '</div>' : '') +
       '</div>' : '') +
       refundHtml +
@@ -3521,7 +3521,7 @@
       var label = rmaIdList.length > 1 ? 'Return #' + (i + 1) : 'Return Request';
       bannersHtml += '<div class="order-detail-section" style="background:rgba(230,81,0,0.08);border-radius:6px;padding:12px 16px;margin-top:8px;">' +
         '<div style="display:flex;align-items:center;gap:8px;">' +
-          '<span style="font-size:1.1rem;">&#x21A9;</span>' +
+          '<span style="font-size:1.15rem;">&#x21A9;</span>' +
           '<span style="font-size:0.85rem;font-weight:500;">' + esc(label) + '</span>' +
           '<span class="status-badge" style="' + rmaBadgeStyle(rmaStatus) + '">' + esc(rmaStatus.replace(/-/g, ' ')) + '</span>' +
           '<a href="#" onclick="navigateTo(\'rma\');setTimeout(function(){viewRma(\'' + esc(rid) + '\');},100);return false;" style="font-size:0.78rem;color:var(--teal);margin-left:auto;">View RMA &rarr;</a>' +

@@ -59,7 +59,7 @@
 
   function statusBadge(status) {
     var bg = STATUS_COLORS[status] || '#9ca3af';
-    return '<span style="display:inline-block;background:' + bg + ';color:white;font-size:0.7rem;font-weight:600;padding:2px 8px;border-radius:4px;text-transform:capitalize;">' + status + '</span>';
+    return '<span style="display:inline-block;background:' + bg + ';color:white;font-size:0.72rem;font-weight:600;padding:2px 8px;border-radius:4px;text-transform:capitalize;">' + status + '</span>';
   }
 
   // ── Data Loading ──
@@ -162,12 +162,12 @@
 
       tableHtml += '<tr>' +
         '<td><strong>' + esc(s.name) + '</strong>' +
-          (s.keepAfterEnd ? ' <span style="font-size:0.65rem;background:rgba(37,99,235,0.15);color:#2563eb;padding:2px 6px;border-radius:3px;">Ongoing</span>' : '') +
+          (s.keepAfterEnd ? ' <span style="font-size:0.72rem;background:rgba(37,99,235,0.15);color:#2563eb;padding:2px 6px;border-radius:3px;">Ongoing</span>' : '') +
         '</td>' +
         '<td>' + esc(formatDiscount(s)) + '</td>' +
         '<td>' + pids.length + ' product' + (pids.length !== 1 ? 's' : '') + '</td>' +
         '<td>' + statusBadge(s.computedStatus) + '</td>' +
-        '<td><span style="font-size:0.82rem;color:var(--warm-gray);">' + dateStr + '</span></td>' +
+        '<td><span style="font-size:0.85rem;color:var(--warm-gray);">' + dateStr + '</span></td>' +
         '<td><div class="event-actions">' +
           '<button class="btn-icon" onclick="openPromotionModal(\'' + esc(s.id) + '\')" title="Edit">\u270E</button>' +
           (s.computedStatus === 'active' ? '<button class="btn-icon" onclick="confirmEndPromotion(\'' + esc(s.id) + '\')" title="End Sale">\u23F9</button>' : '') +
@@ -194,7 +194,7 @@
           '<span style="font-weight:600;">' + esc(formatDiscount(sc)) + '</span>' +
           ' \u00B7 ' + pidsc.length + ' product' + (pidsc.length !== 1 ? 's' : '') +
         '</div>' +
-        (dateStrc ? '<div style="font-size:0.82rem;color:var(--warm-gray);">' + dateStrc + '</div>' : '') +
+        (dateStrc ? '<div style="font-size:0.85rem;color:var(--warm-gray);">' + dateStrc + '</div>' : '') +
         '<div class="coupon-card-actions" style="margin-top:10px;display:flex;gap:8px;">' +
           '<button class="btn btn-sm" onclick="openPromotionModal(\'' + esc(sc.id) + '\')">Edit</button>' +
           (sc.computedStatus === 'active' ? '<button class="btn btn-sm" onclick="confirmEndPromotion(\'' + esc(sc.id) + '\')">End</button>' : '') +

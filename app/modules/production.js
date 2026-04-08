@@ -142,7 +142,7 @@ function renderProductionQueue() {
   pending.forEach(function(k) {
     var pr = productionRequests[k];
     var ago = getTimeAgo(pr.createdAt);
-    var priorityBadge = pr.priority === 'urgent' ? '<span style="background:#C62828;color:white;padding:1px 6px;border-radius:4px;font-size:0.7rem;font-weight:600;">URGENT</span> ' : '';
+    var priorityBadge = pr.priority === 'urgent' ? '<span style="background:#C62828;color:white;padding:1px 6px;border-radius:4px;font-size:0.72rem;font-weight:600;">URGENT</span> ' : '';
     html += '<div class="prod-queue-card">' +
       '<div>' +
         priorityBadge +
@@ -382,7 +382,7 @@ function renderProductionJobs() {
         '<div style="flex:1;">' +
           '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' +
             '<span class="prod-priority-dot ' + (j.priority || 'medium') + '"></span>' +
-            '<strong style="font-size:0.95rem;">' + esc(j.name || 'Untitled') + '</strong>' +
+            '<strong style="font-size:0.9rem;">' + esc(j.name || 'Untitled') + '</strong>' +
           '</div>' +
           '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">' +
             '<span class="status-badge" style="' + purposeBadgeStyle(j.purpose) + '">' + (PURPOSE_LABELS[j.purpose] || j.purpose || '') + '</span>' +
@@ -391,7 +391,7 @@ function renderProductionJobs() {
             deadlineHtml +
           '</div>' +
         '</div>' +
-        '<div style="text-align:right;font-size:0.82rem;color:var(--warm-gray);min-width:60px;">' +
+        '<div style="text-align:right;font-size:0.85rem;color:var(--warm-gray);min-width:60px;">' +
           (progress.total > 0 ? Math.round(progress.pct) + '%' : '') +
         '</div>' +
       '</div>' +
@@ -521,15 +521,15 @@ function renderProductionJobDetail(jobId) {
         '<strong>' + esc(li.productName || '') + '</strong>' +
         (li.specifications ? '<br><span style="font-size:0.78rem;color:var(--warm-gray);">' + esc(li.specifications) + '</span>' : '') +
       '</div>' +
-      '<div style="text-align:right;font-size:0.82rem;">' +
+      '<div style="text-align:right;font-size:0.85rem;">' +
         (isEditable ?
           '<div style="display:flex;align-items:center;gap:4px;justify-content:flex-end;">' +
-            '<input type="number" min="0" value="' + (li.completedQuantity || 0) + '" style="width:42px;text-align:center;padding:2px 4px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.82rem;background:var(--cream);" onblur="updateLineItemProgress(\'' + esc(jobId) + '\',\'' + esc(k) + '\',this.value,null)">' +
+            '<input type="number" min="0" value="' + (li.completedQuantity || 0) + '" style="width:42px;text-align:center;padding:2px 4px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.85rem;background:var(--cream);" onblur="updateLineItemProgress(\'' + esc(jobId) + '\',\'' + esc(k) + '\',this.value,null)">' +
             '<span style="color:var(--warm-gray);">/ ' + (li.targetQuantity || 0) + '</span>' +
           '</div>' +
           '<div style="display:flex;align-items:center;gap:4px;justify-content:flex-end;margin-top:2px;">' +
             '<span style="font-size:0.72rem;color:#C62828;">loss:</span>' +
-            '<input type="number" min="0" value="' + (li.lossQuantity || 0) + '" style="width:42px;text-align:center;padding:2px 4px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.75rem;background:var(--cream);" onblur="updateLineItemProgress(\'' + esc(jobId) + '\',\'' + esc(k) + '\',null,this.value)">'  +
+            '<input type="number" min="0" value="' + (li.lossQuantity || 0) + '" style="width:42px;text-align:center;padding:2px 4px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.78rem;background:var(--cream);" onblur="updateLineItemProgress(\'' + esc(jobId) + '\',\'' + esc(k) + '\',null,this.value)">'  +
           '</div>'
         :
           (li.completedQuantity || 0) + '/' + (li.targetQuantity || 0) +
@@ -537,7 +537,7 @@ function renderProductionJobDetail(jobId) {
           '<br><span style="font-size:0.72rem;color:var(--warm-gray);">' + pct + '%</span>'
         ) +
       '</div>' +
-      (status !== 'completed' && status !== 'cancelled' ? '<div style="margin-left:8px;"><button class="btn btn-secondary" style="font-size:0.7rem;padding:2px 8px;" onclick="removeLineItem(\'' + esc(jobId) + '\', \'' + esc(k) + '\')">×</button></div>' : '') +
+      (status !== 'completed' && status !== 'cancelled' ? '<div style="margin-left:8px;"><button class="btn btn-secondary" style="font-size:0.72rem;padding:2px 8px;" onclick="removeLineItem(\'' + esc(jobId) + '\', \'' + esc(k) + '\')">×</button></div>' : '') +
     '</div>';
   });
 
@@ -567,7 +567,7 @@ function renderProductionJobDetail(jobId) {
           ' &middot; <span class="status-badge prod-status-pill ' + bStatus + '">' + bStatus + '</span>' +
           ' <span id="buildMediaBadge_' + k + '" class="media-count-badge" style="display:none;"></span>' +
         '</div>' +
-        '<div style="font-size:0.82rem;color:var(--warm-gray);">' +
+        '<div style="font-size:0.85rem;color:var(--warm-gray);">' +
           duration +
           (outputSummary ? '<br>' + outputSummary : '') +
         '</div>' +
@@ -584,9 +584,9 @@ function renderProductionJobDetail(jobId) {
   // Check for active (draft) build
   var hasActiveBuild = buildKeys.some(function(k) { return builds[k].status === 'draft'; });
   var startBuildBtn = (status === 'definition' || status === 'in-progress') && !hasActiveBuild ?
-    '<button class="btn btn-primary" style="padding:14px 18px;font-size:0.95rem;" onclick="startBuild(\'' + esc(jobId) + '\')">&#x1F525; Start Build</button>' : '';
+    '<button class="btn btn-primary" style="padding:14px 18px;font-size:0.9rem;" onclick="startBuild(\'' + esc(jobId) + '\')">&#x1F525; Start Build</button>' : '';
   var activeBuildBtn = hasActiveBuild ?
-    '<button class="btn btn-primary" style="padding:14px 18px;font-size:0.95rem;" onclick="openActiveBuild(\'' + esc(jobId) + '\', \'' + esc(buildKeys.find(function(k) { return builds[k].status === 'draft'; })) + '\')">&#x1F3AD; Continue Active Build</button>' : '';
+    '<button class="btn btn-primary" style="padding:14px 18px;font-size:0.9rem;" onclick="openActiveBuild(\'' + esc(jobId) + '\', \'' + esc(buildKeys.find(function(k) { return builds[k].status === 'draft'; })) + '\')">&#x1F3AD; Continue Active Build</button>' : '';
 
   el.innerHTML = '<button class="detail-back" onclick="backToProductionList()">&#8592; Back to Jobs</button>' +
     '<div style="margin-bottom:16px;">' +
@@ -597,7 +597,7 @@ function renderProductionJobDetail(jobId) {
             '<span class="status-badge" style="' + purposeBadgeStyle(job.purpose) + '">' + (PURPOSE_LABELS[job.purpose] || '') + '</span>' +
             '<span class="status-badge prod-status-pill ' + status + '">' + status.replace('-', ' ') + '</span>' +
             '<span class="prod-priority-dot ' + (job.priority || 'medium') + '"></span>' +
-            '<span style="font-size:0.82rem;text-transform:capitalize;">' + (job.priority || 'medium') + '</span>' +
+            '<span style="font-size:0.85rem;text-transform:capitalize;">' + (job.priority || 'medium') + '</span>' +
             deadlineHtml + eventHtml +
           '</div>' +
         '</div>' +
@@ -607,7 +607,7 @@ function renderProductionJobDetail(jobId) {
         '</div>' +
       '</div>' +
       (job.description ? '<p style="margin-top:8px;font-size:0.85rem;color:var(--warm-gray);">' + esc(job.description) + '</p>' : '') +
-      '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:0.82rem;color:var(--warm-gray);">' +
+      '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:0.85rem;color:var(--warm-gray);">' +
         (job.workType ? '<span><strong style="color:var(--text-secondary);">Type:</strong> ' + esc(job.workType.charAt(0).toUpperCase() + job.workType.slice(1)) + '</span>' : '') +
         (job.createdAt ? '<span><strong style="color:var(--text-secondary);">Created:</strong> ' + new Date(job.createdAt).toLocaleDateString() + '</span>' : '') +
         (job.startedAt ? '<span><strong style="color:var(--text-secondary);">Started:</strong> ' + new Date(job.startedAt).toLocaleDateString() + '</span>' : '') +
@@ -666,7 +666,7 @@ function renderProductionJobDetail(jobId) {
           if (b.status === 'completed') {
             var pushed = b.inventoryPushed ? '✓ Pushed to inventory' : '— Not pushed';
             var style = b.inventoryPushed ? 'color:var(--teal);' : 'color:var(--warm-gray);';
-            invIndicators += '<div style="font-size:0.82rem;' + style + '">Build #' + (b.buildNumber || '?') + ': ' + pushed + '</div>';
+            invIndicators += '<div style="font-size:0.85rem;' + style + '">Build #' + (b.buildNumber || '?') + ': ' + pushed + '</div>';
           }
         });
         return '<div class="prod-detail-section">' +
@@ -953,7 +953,7 @@ function renderCostTracking(jobId, job) {
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
         '<strong>Cost Tracking</strong>' +
       '</div>' +
-      '<p style="font-size:0.82rem;color:var(--warm-gray);font-style:italic;">No BOM forecast available. Line items added before recipes existed have no cost snapshot. Re-add line items to capture forecasts.</p>' +
+      '<p style="font-size:0.85rem;color:var(--warm-gray);font-style:italic;">No BOM forecast available. Line items added before recipes existed have no cost snapshot. Re-add line items to capture forecasts.</p>' +
     '</div>';
   }
 
@@ -969,7 +969,7 @@ function renderCostTracking(jobId, job) {
     var target = li.targetQuantity || 0;
     var completed = li.completedQuantity || 0;
     if (!f) {
-      rows += '<tr><td style="padding:6px 8px;font-size:0.82rem;">' + esc(li.productName || '') + '</td>' +
+      rows += '<tr><td style="padding:6px 8px;font-size:0.85rem;">' + esc(li.productName || '') + '</td>' +
         '<td colspan="6" style="padding:6px 8px;font-size:0.78rem;color:var(--warm-gray-light);font-style:italic;">no recipe forecast</td></tr>';
       return;
     }
@@ -991,23 +991,23 @@ function renderCostTracking(jobId, job) {
     var actLabOverride = li.actualLaborCostCents != null ? ' style="background:rgba(196,133,60,0.08);"' : '';
 
     rows += '<tr>' +
-      '<td style="padding:6px 8px;font-size:0.82rem;">' + esc(li.productName || '') + '<div style="font-size:0.7rem;color:var(--warm-gray-light);">' + completed + '/' + target + ' done</div></td>' +
-      '<td style="text-align:right;padding:6px 8px;font-family:monospace;font-size:0.82rem;">$' + (budMatCents / 100).toFixed(2) + '</td>' +
+      '<td style="padding:6px 8px;font-size:0.85rem;">' + esc(li.productName || '') + '<div style="font-size:0.72rem;color:var(--warm-gray-light);">' + completed + '/' + target + ' done</div></td>' +
+      '<td style="text-align:right;padding:6px 8px;font-family:monospace;font-size:0.85rem;">$' + (budMatCents / 100).toFixed(2) + '</td>' +
       '<td style="text-align:right;padding:6px 8px;">' +
         '<input type="number" step="0.01" min="0" value="' + (actMatCents / 100).toFixed(2) + '" ' + actMatOverride +
-        ' style="width:80px;text-align:right;padding:3px 6px;border:1px solid var(--cream-dark);border-radius:4px;font-family:monospace;font-size:0.82rem;background:var(--cream);color:var(--charcoal);"' +
+        ' style="width:80px;text-align:right;padding:3px 6px;border:1px solid var(--cream-dark);border-radius:4px;font-family:monospace;font-size:0.85rem;background:var(--cream);color:var(--charcoal);"' +
         ' onchange="setLineItemActual(\'' + esc(jobId) + '\',\'' + esc(k) + '\',\'material\',this.value)"' +
         ' title="Actual material cost. Defaults to forecast × completed; type to override.">' +
       '</td>' +
-      '<td style="text-align:right;padding:6px 8px;font-family:monospace;font-size:0.82rem;">$' + (budLabCents / 100).toFixed(2) + '</td>' +
+      '<td style="text-align:right;padding:6px 8px;font-family:monospace;font-size:0.85rem;">$' + (budLabCents / 100).toFixed(2) + '</td>' +
       '<td style="text-align:right;padding:6px 8px;">' +
         '<input type="number" step="0.01" min="0" value="' + (actLabCents / 100).toFixed(2) + '" ' + actLabOverride +
-        ' style="width:80px;text-align:right;padding:3px 6px;border:1px solid var(--cream-dark);border-radius:4px;font-family:monospace;font-size:0.82rem;background:var(--cream);color:var(--charcoal);"' +
+        ' style="width:80px;text-align:right;padding:3px 6px;border:1px solid var(--cream-dark);border-radius:4px;font-family:monospace;font-size:0.85rem;background:var(--cream);color:var(--charcoal);"' +
         ' onchange="setLineItemActual(\'' + esc(jobId) + '\',\'' + esc(k) + '\',\'labor\',this.value)"' +
         ' title="Actual labor cost. Defaults to forecast × completed; type to override.">' +
       '</td>' +
-      '<td style="text-align:right;padding:6px 8px;font-family:monospace;font-size:0.82rem;font-weight:600;">$' + ((budMatCents + budLabCents) / 100).toFixed(2) + '</td>' +
-      '<td style="text-align:right;padding:6px 8px;font-family:monospace;font-size:0.82rem;font-weight:600;">$' + ((actMatCents + actLabCents) / 100).toFixed(2) + '</td>' +
+      '<td style="text-align:right;padding:6px 8px;font-family:monospace;font-size:0.85rem;font-weight:600;">$' + ((budMatCents + budLabCents) / 100).toFixed(2) + '</td>' +
+      '<td style="text-align:right;padding:6px 8px;font-family:monospace;font-size:0.85rem;font-weight:600;">$' + ((actMatCents + actLabCents) / 100).toFixed(2) + '</td>' +
     '</tr>';
   });
 
@@ -1024,15 +1024,15 @@ function renderCostTracking(jobId, job) {
       '<span style="font-size:0.78rem;color:var(--warm-gray);">Budgeted from BOM forecast vs actual</span>' +
     '</div>' +
     '<div style="overflow-x:auto;">' +
-      '<table style="width:100%;border-collapse:collapse;font-size:0.82rem;">' +
+      '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">' +
         '<thead><tr style="border-bottom:1px solid var(--cream-dark);">' +
-          '<th style="text-align:left;padding:6px 8px;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--warm-gray);">Item</th>' +
-          '<th style="text-align:right;padding:6px 8px;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--warm-gray);">Bud Mat</th>' +
-          '<th style="text-align:right;padding:6px 8px;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--warm-gray);">Act Mat</th>' +
-          '<th style="text-align:right;padding:6px 8px;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--warm-gray);">Bud Labor</th>' +
-          '<th style="text-align:right;padding:6px 8px;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--warm-gray);">Act Labor</th>' +
-          '<th style="text-align:right;padding:6px 8px;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--warm-gray);">Bud Total</th>' +
-          '<th style="text-align:right;padding:6px 8px;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--warm-gray);">Act Total</th>' +
+          '<th style="text-align:left;padding:6px 8px;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--warm-gray);">Item</th>' +
+          '<th style="text-align:right;padding:6px 8px;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--warm-gray);">Bud Mat</th>' +
+          '<th style="text-align:right;padding:6px 8px;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--warm-gray);">Act Mat</th>' +
+          '<th style="text-align:right;padding:6px 8px;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--warm-gray);">Bud Labor</th>' +
+          '<th style="text-align:right;padding:6px 8px;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--warm-gray);">Act Labor</th>' +
+          '<th style="text-align:right;padding:6px 8px;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--warm-gray);">Bud Total</th>' +
+          '<th style="text-align:right;padding:6px 8px;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--warm-gray);">Act Total</th>' +
         '</tr></thead>' +
         '<tbody>' + rows + '</tbody>' +
         '<tfoot><tr style="border-top:2px solid var(--charcoal);font-weight:700;">' +
@@ -1246,12 +1246,12 @@ function renderActiveBuild(jobId, buildId) {
     '<div style="text-align:center;margin:20px 0;">' +
       '<h2 style="font-family:\'Cormorant Garamond\',serif;margin:0;">Build #' + (build.buildNumber || '?') + '</h2>' +
       '<p style="color:var(--warm-gray);font-size:0.85rem;">' + esc(job.name || '') + ' &middot; ' + (build.sessionDate || '') + '</p>' +
-      '<p style="color:var(--teal);font-size:1.1rem;font-weight:600;">' + elapsed + '</p>' +
-      '<p style="color:var(--warm-gray);font-size:0.82rem;">Operators: ' + (build.operators || []).map(esc).join(', ') + '</p>' +
+      '<p style="color:var(--teal);font-size:1.15rem;font-weight:600;">' + elapsed + '</p>' +
+      '<p style="color:var(--warm-gray);font-size:0.85rem;">Operators: ' + (build.operators || []).map(esc).join(', ') + '</p>' +
     '</div>' +
 
     '<div style="text-align:center;margin:24px 0;">' +
-      '<button class="btn btn-primary" style="padding:16px 28px;font-size:1.1rem;border-radius:12px;" onclick="capturePhoto(\'' + esc(jobId) + '\', \'' + esc(buildId) + '\')">' +
+      '<button class="btn btn-primary" style="padding:16px 28px;font-size:1.15rem;border-radius:12px;" onclick="capturePhoto(\'' + esc(jobId) + '\', \'' + esc(buildId) + '\')">' +
         '&#x1F4F7; Capture Photo</button>' +
       '<input type="file" id="buildPhotoInput" accept="image/*" capture="environment" multiple style="display:none;" ' +
         'onchange="handlePhotoUpload(this, \'' + esc(jobId) + '\', \'' + esc(buildId) + '\')">' +
@@ -1260,8 +1260,8 @@ function renderActiveBuild(jobId, buildId) {
     '<div id="buildMediaGallery" class="media-gallery" style="margin-bottom:24px;"></div>' +
 
     '<div style="display:flex;gap:12px;justify-content:center;margin:24px 0;flex-wrap:wrap;">' +
-      '<button class="btn btn-secondary" style="padding:14px 18px;font-size:0.95rem;" onclick="addBuildNote(\'' + esc(jobId) + '\', \'' + esc(buildId) + '\')">&#x1F4DD; Add Note</button>' +
-      '<button class="btn btn-secondary" style="padding:14px 18px;font-size:0.95rem;" onclick="addBuildMilestone(\'' + esc(jobId) + '\', \'' + esc(buildId) + '\')">&#x2B50; Add Milestone</button>' +
+      '<button class="btn btn-secondary" style="padding:14px 18px;font-size:0.9rem;" onclick="addBuildNote(\'' + esc(jobId) + '\', \'' + esc(buildId) + '\')">&#x1F4DD; Add Note</button>' +
+      '<button class="btn btn-secondary" style="padding:14px 18px;font-size:0.9rem;" onclick="addBuildMilestone(\'' + esc(jobId) + '\', \'' + esc(buildId) + '\')">&#x2B50; Add Milestone</button>' +
     '</div>' +
 
     (build.notes ? '<div class="prod-detail-section"><strong>Notes</strong><p style="margin-top:8px;font-size:0.85rem;white-space:pre-wrap;">' + esc(build.notes) + '</p></div>' : '') +
@@ -1269,7 +1269,7 @@ function renderActiveBuild(jobId, buildId) {
     (milestoneKeys.length > 0 ? '<div class="prod-detail-section"><strong>Milestones</strong><div style="margin-top:8px;">' + milestonesHtml + '</div></div>' : '') +
 
     '<div style="text-align:center;margin-top:32px;">' +
-      '<button class="btn btn-primary" style="padding:14px 18px;font-size:0.95rem;min-width:200px;" onclick="openCompleteBuild(\'' + esc(jobId) + '\', \'' + esc(buildId) + '\')">&#x2705; Complete Build</button>' +
+      '<button class="btn btn-primary" style="padding:14px 18px;font-size:0.9rem;min-width:200px;" onclick="openCompleteBuild(\'' + esc(jobId) + '\', \'' + esc(buildId) + '\')">&#x2705; Complete Build</button>' +
     '</div>';
   // Load and display media for this build
   loadBuildMedia(buildId);
@@ -1617,7 +1617,7 @@ function showCompletionSummary(items) {
   }
   // Multi-action: show summary modal
   var html = '<div style="padding:16px;max-width:440px;">' +
-    '<h3 style="margin:0 0 16px;font-size:1.1rem;">Build Completed</h3>' +
+    '<h3 style="margin:0 0 16px;font-size:1.15rem;">Build Completed</h3>' +
     '<div style="display:flex;flex-direction:column;gap:8px;">';
   items.forEach(function(item) {
     html += '<div style="font-size:0.9rem;padding:6px 10px;background:var(--cream-dark,#f5f0e8);border-radius:6px;">' + esc(item) + '</div>';
@@ -1682,7 +1682,7 @@ async function uploadBuildPhoto(file, jobId, buildId) {
       var placeholder = document.createElement('div');
       placeholder.className = 'media-thumb';
       placeholder.id = 'upload_' + mediaId;
-      placeholder.innerHTML = '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--warm-gray);font-size:0.75rem;">Uploading...</div>' +
+      placeholder.innerHTML = '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--warm-gray);font-size:0.78rem;">Uploading...</div>' +
         '<div class="upload-progress"><div class="upload-progress-fill" id="progress_' + mediaId + '" style="width:0%;"></div></div>';
       galleryEl.appendChild(placeholder);
     }
@@ -1760,10 +1760,10 @@ function renderBuildMediaGallery(buildId, media) {
     return (media[a].uploadedAt || '').localeCompare(media[b].uploadedAt || '');
   });
   if (keys.length === 0) {
-    el.innerHTML = '<p style="font-size:0.82rem;color:var(--warm-gray);text-align:center;grid-column:1/-1;">No photos yet. Tap the camera button to capture build photos.</p>';
+    el.innerHTML = '<p style="font-size:0.85rem;color:var(--warm-gray);text-align:center;grid-column:1/-1;">No photos yet. Tap the camera button to capture build photos.</p>';
     return;
   }
-  el.innerHTML = '<div style="grid-column:1/-1;font-size:0.82rem;color:var(--warm-gray);margin-bottom:4px;">' + keys.length + ' photo' + (keys.length !== 1 ? 's' : '') + '</div>' +
+  el.innerHTML = '<div style="grid-column:1/-1;font-size:0.85rem;color:var(--warm-gray);margin-bottom:4px;">' + keys.length + ' photo' + (keys.length !== 1 ? 's' : '') + '</div>' +
     keys.map(function(k) {
       var m = media[k];
       return '<div class="media-thumb">' +
@@ -1938,19 +1938,19 @@ function renderStoriesList() {
     }
 
     var publishedInfo = s.status === 'published' && s.publishedAt
-      ? '<span style="font-size:0.75rem;color:var(--warm-gray);">Published ' + getTimeAgo(s.publishedAt) + '</span>'
-      : '<span style="font-size:0.75rem;color:var(--warm-gray);">Updated ' + getTimeAgo(s.updatedAt || s.createdAt) + '</span>';
+      ? '<span style="font-size:0.78rem;color:var(--warm-gray);">Published ' + getTimeAgo(s.publishedAt) + '</span>'
+      : '<span style="font-size:0.78rem;color:var(--warm-gray);">Updated ' + getTimeAgo(s.updatedAt || s.createdAt) + '</span>';
 
     html += '<div class="prod-job-card" onclick="viewStoryDetail(\'' + esc(s._key) + '\')" style="display:flex;gap:12px;align-items:flex-start;">' +
       (thumbUrl ? '<div style="width:60px;height:60px;border-radius:6px;overflow:hidden;flex-shrink:0;background:var(--cream);">' +
         '<img src="' + esc(thumbUrl) + '" style="width:100%;height:100%;object-fit:cover;" alt="">' +
-      '</div>' : '<div style="width:60px;height:60px;border-radius:6px;flex-shrink:0;background:var(--cream);display:flex;align-items:center;justify-content:center;font-size:1.5rem;">📖</div>') +
+      '</div>' : '<div style="width:60px;height:60px;border-radius:6px;flex-shrink:0;background:var(--cream);display:flex;align-items:center;justify-content:center;font-size:1.6rem;">📖</div>') +
       '<div style="flex:1;min-width:0;">' +
         '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' +
-          '<strong style="font-size:0.95rem;">' + esc(s.title || 'Untitled Story') + '</strong>' +
-          '<span class="status-badge prod-status-pill" style="background:' + statusColor + ';color:white;font-size:0.7rem;padding:1px 8px;border-radius:4px;">' + statusLabel + '</span>' +
+          '<strong style="font-size:0.9rem;">' + esc(s.title || 'Untitled Story') + '</strong>' +
+          '<span class="status-badge prod-status-pill" style="background:' + statusColor + ';color:white;font-size:0.72rem;padding:1px 8px;border-radius:4px;">' + statusLabel + '</span>' +
         '</div>' +
-        '<div style="font-size:0.82rem;color:var(--warm-gray);">' +
+        '<div style="font-size:0.85rem;color:var(--warm-gray);">' +
           (jobName ? '🔗 ' + esc(jobName) + ' · ' : '') +
           entryCount + ' entr' + (entryCount === 1 ? 'y' : 'ies') +
         '</div>' +
@@ -2095,7 +2095,7 @@ function renderStoryDetail(storyId) {
           '<img src="' + esc(e.mediaUrl) + '" style="width:100%;height:100%;object-fit:cover;" alt="">' +
         '</div>';
       } else {
-        html += '<div style="width:80px;height:80px;border-radius:6px;flex-shrink:0;background:var(--cream);display:flex;align-items:center;justify-content:center;font-size:0.8rem;color:var(--warm-gray);">Text</div>';
+        html += '<div style="width:80px;height:80px;border-radius:6px;flex-shrink:0;background:var(--cream);display:flex;align-items:center;justify-content:center;font-size:0.78rem;color:var(--warm-gray);">Text</div>';
       }
       html += '<div style="flex:1;min-width:0;">' +
         (e.milestone ? '<div style="font-weight:600;font-size:0.85rem;margin-bottom:4px;">' + esc(e.milestone) + '</div>' : '') +
@@ -2116,7 +2116,7 @@ function renderStoryDetail(storyId) {
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">';
     story.operators.forEach(function(op) {
       var opName = operators[op] ? (operators[op].name || op) : op;
-      html += '<span style="background:var(--cream);padding:4px 10px;border-radius:12px;font-size:0.82rem;">' + esc(opName) + '</span>';
+      html += '<span style="background:var(--cream);padding:4px 10px;border-radius:12px;font-size:0.85rem;">' + esc(opName) + '</span>';
     });
     html += '</div></div>';
   }
@@ -2124,12 +2124,12 @@ function renderStoryDetail(storyId) {
   // QR Codes
   if (story.qrCodes && story.qrCodes.length > 0) {
     html += '<div class="prod-detail-section"><strong>QR Codes</strong>' +
-      '<p style="font-size:0.82rem;color:var(--warm-gray);margin:4px 0 12px;">Scan to view the product page with this story.</p>' +
+      '<p style="font-size:0.85rem;color:var(--warm-gray);margin:4px 0 12px;">Scan to view the product page with this story.</p>' +
       '<div style="display:flex;gap:16px;flex-wrap:wrap;">';
     story.qrCodes.forEach(function(qr) {
       html += '<div style="text-align:center;background:white;padding:12px;border-radius:8px;border:1px solid var(--cream-dark);">' +
         '<img src="' + esc(qr.dataUrl) + '" style="width:150px;height:150px;" alt="QR Code">' +
-        '<div style="font-size:0.82rem;font-weight:600;margin-top:6px;">' + esc(qr.productName) + '</div>' +
+        '<div style="font-size:0.85rem;font-weight:600;margin-top:6px;">' + esc(qr.productName) + '</div>' +
         '<div style="display:flex;gap:6px;margin-top:8px;justify-content:center;flex-wrap:wrap;">' +
           '<button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 8px;" onclick="printStoryQR(\'' + esc(qr.dataUrl) + '\', \'' + esc(qr.productName) + '\')">🖨 Print</button>' +
           '<button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 8px;" onclick="copyStoryQRUrl(\'' + esc(qr.url) + '\')">📋 Copy URL</button>' +
@@ -2147,7 +2147,7 @@ function printStoryQR(dataUrl, productName) {
   var win = window.open('', '_blank', 'width=400,height=500');
   win.document.write('<html><head><title>QR Code - ' + esc(productName) + '</title>' +
     '<style>body{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:sans-serif;margin:0;}' +
-    'img{width:250px;height:250px;}h3{margin:16px 0 4px;font-size:1rem;}p{font-size:0.8rem;color:#666;}</style></head><body>' +
+    'img{width:250px;height:250px;}h3{margin:16px 0 4px;font-size:1rem;}p{font-size:0.78rem;color:#666;}</style></head><body>' +
     '<img src="' + esc(dataUrl) + '" alt="QR Code">' +
     '<h3>' + esc(productName) + '</h3>' +
     '<p>' + ((typeof TENANT_BRAND !== 'undefined' && TENANT_BRAND.name) || 'My Business') + '</p>' +
@@ -2368,8 +2368,8 @@ async function loadJobStoryStatus(jobId) {
         '<span style="color:' + statusColor + ';font-weight:600;">' + (story.status || 'draft') + '</span> &middot; ' +
         entryCount + ' entries</div>' +
       '<div style="display:flex;gap:6px;">' +
-        '<button class="btn btn-secondary" style="font-size:0.75rem;padding:3px 8px;" onclick="previewStory(\'' + esc(storyId) + '\')">Preview</button>' +
-        (story.status === 'published' ? '<button class="btn btn-secondary" style="font-size:0.75rem;padding:3px 8px;" onclick="unpublishStory(\'' + esc(storyId) + '\')">Unpublish</button>' : '') +
+        '<button class="btn btn-secondary" style="font-size:0.78rem;padding:3px 8px;" onclick="previewStory(\'' + esc(storyId) + '\')">Preview</button>' +
+        (story.status === 'published' ? '<button class="btn btn-secondary" style="font-size:0.78rem;padding:3px 8px;" onclick="unpublishStory(\'' + esc(storyId) + '\')">Unpublish</button>' : '') +
       '</div>' +
     '</div>';
   } catch (err) {
@@ -2484,7 +2484,7 @@ function buildStoryCurationHtml(job, builds, buildKeys, allMedia, existingStory,
         '<strong>Select Photos</strong>' +
         '<span style="font-size:0.78rem;color:var(--warm-gray);">' + totalPhotos + ' available</span>' +
       '</div>' +
-      '<p style="font-size:0.82rem;color:var(--warm-gray);margin:0 0 12px;">Tap photos to add or remove them from the story.</p>';
+      '<p style="font-size:0.85rem;color:var(--warm-gray);margin:0 0 12px;">Tap photos to add or remove them from the story.</p>';
 
     var selectedMediaIds = {};
     if (existingStory && existingStory.entries) {
@@ -2501,7 +2501,7 @@ function buildStoryCurationHtml(job, builds, buildKeys, allMedia, existingStory,
       });
       if (mKeys.length === 0) return;
       html += '<div style="margin-bottom:12px;">' +
-        '<div style="font-size:0.82rem;font-weight:600;margin-bottom:6px;">Build #' + (b.buildNumber || '?') + ' — ' + (b.sessionDate || '') + ' (' + mKeys.length + ' photos)</div>' +
+        '<div style="font-size:0.85rem;font-weight:600;margin-bottom:6px;">Build #' + (b.buildNumber || '?') + ' — ' + (b.sessionDate || '') + ' (' + mKeys.length + ' photos)</div>' +
         '<div class="media-select-grid">';
       mKeys.forEach(function(mk) {
         var m = media[mk];
@@ -2568,12 +2568,12 @@ function renderStoryEntries() {
   var el = document.getElementById('storyEntriesList');
   if (!el) return;
   if (storyDraft.length === 0) {
-    el.innerHTML = '<p style="font-size:0.82rem;color:var(--warm-gray);font-style:italic;">Select photos above to add them to the story, or add a text-only entry.</p>';
+    el.innerHTML = '<p style="font-size:0.85rem;color:var(--warm-gray);font-style:italic;">Select photos above to add them to the story, or add a text-only entry.</p>';
     return;
   }
   el.innerHTML = storyDraft.map(function(entry, idx) {
     return '<div class="story-entry-card" data-idx="' + idx + '">' +
-      (entry.mediaUrl ? '<img class="story-entry-thumb" src="' + esc(entry.mediaUrl) + '">' : '<div class="story-entry-thumb" style="background:#e8e2d8;display:flex;align-items:center;justify-content:center;font-size:0.75rem;color:var(--warm-gray);">Text</div>') +
+      (entry.mediaUrl ? '<img class="story-entry-thumb" src="' + esc(entry.mediaUrl) + '">' : '<div class="story-entry-thumb" style="background:#e8e2d8;display:flex;align-items:center;justify-content:center;font-size:0.78rem;color:var(--warm-gray);">Text</div>') +
       '<div class="story-entry-fields">' +
         '<input type="text" placeholder="Milestone (e.g. body formed...)" value="' + esc(entry.milestone) + '" onchange="updateStoryEntry(' + idx + ', \'milestone\', this.value)">' +
         '<textarea rows="2" placeholder="Caption..." onchange="updateStoryEntry(' + idx + ', \'caption\', this.value)">' + esc(entry.caption) + '</textarea>' +
@@ -2820,7 +2820,7 @@ async function loadJobProductLinks(jobId) {
   var html = '';
   liKeys.forEach(function(lk) {
     var li = lineItems[lk];
-    var linked = li.productLinked ? '<span style="color:var(--teal);font-size:0.82rem;">✓ Linked</span>' :
+    var linked = li.productLinked ? '<span style="color:var(--teal);font-size:0.85rem;">✓ Linked</span>' :
       '<button class="btn btn-secondary" style="font-size:0.72rem;padding:2px 8px;" onclick="linkProductToBuild(\'' + esc(jobId) + '\', \'' + esc(lk) + '\')">Link to Product</button>';
     html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #eee;">' +
       '<span style="font-size:0.85rem;">' + esc(li.productName || 'Unknown') + '</span>' +

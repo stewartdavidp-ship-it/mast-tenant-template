@@ -125,21 +125,21 @@ function renderSales() {
   if (summaryEl) {
     summaryEl.innerHTML =
       '<div style="flex:1;min-width:140px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;">' +
-        '<div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Total</div>' +
-        '<div style="font-size:1.4rem;font-weight:600;font-family:Cormorant Garamond,serif;">' + formatCents(totalAmount) + '</div>' +
-        '<div style="font-size:0.75rem;color:var(--warm-gray);">' + all.filter(function(s){return s.status !== 'voided';}).length + ' sales</div>' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Total</div>' +
+        '<div style="font-size:1.6rem;font-weight:600;font-family:Cormorant Garamond,serif;">' + formatCents(totalAmount) + '</div>' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);">' + all.filter(function(s){return s.status !== 'voided';}).length + ' sales</div>' +
       '</div>' +
       '<div style="flex:1;min-width:140px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;">' +
-        '<div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Cash</div>' +
-        '<div style="font-size:1.4rem;font-weight:600;font-family:Cormorant Garamond,serif;color:var(--teal);">' + formatCents(totalCash) + '</div>' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Cash</div>' +
+        '<div style="font-size:1.6rem;font-weight:600;font-family:Cormorant Garamond,serif;color:var(--teal);">' + formatCents(totalCash) + '</div>' +
       '</div>' +
       '<div style="flex:1;min-width:140px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;">' +
-        '<div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Square</div>' +
-        '<div style="font-size:1.4rem;font-weight:600;font-family:Cormorant Garamond,serif;color:var(--amber);">' + formatCents(totalSquare) + '</div>' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Square</div>' +
+        '<div style="font-size:1.6rem;font-weight:600;font-family:Cormorant Garamond,serif;color:var(--amber);">' + formatCents(totalSquare) + '</div>' +
       '</div>' +
       (totalVoided > 0 ? '<div style="flex:1;min-width:140px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;">' +
-        '<div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Voided</div>' +
-        '<div style="font-size:1.4rem;font-weight:600;font-family:Cormorant Garamond,serif;color:var(--danger);">' + totalVoided + '</div>' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Voided</div>' +
+        '<div style="font-size:1.6rem;font-weight:600;font-family:Cormorant Garamond,serif;color:var(--danger);">' + totalVoided + '</div>' +
       '</div>' : '');
   }
 
@@ -166,10 +166,10 @@ function renderSales() {
       '<td title="' + esc(itemNames) + '">' + getSaleItemsLabel(s) + '</td>' +
       '<td style="text-transform:capitalize;">' + esc(s.paymentType || '-') + '</td>' +
       '<td style="font-weight:500;">' + formatCents(s.amount) + '</td>' +
-      '<td><span style="' + statusClass + ';font-size:0.8rem;text-transform:capitalize;">' + esc(s.status || 'captured') + '</span></td>' +
+      '<td><span style="' + statusClass + ';font-size:0.78rem;text-transform:capitalize;">' + esc(s.status || 'captured') + '</span></td>' +
       '<td>' +
-        (s.status === 'captured' ? '<button class="btn btn-small" onclick="event.stopPropagation();reconcileSale(\'' + esc(s._key) + '\')" style="font-size:0.7rem;padding:3px 8px;">Reconcile</button> ' : '') +
-        (s.status !== 'voided' ? '<button class="btn btn-small btn-danger" onclick="event.stopPropagation();voidSale(\'' + esc(s._key) + '\')" style="font-size:0.7rem;padding:3px 8px;">Void</button>' : '') +
+        (s.status === 'captured' ? '<button class="btn btn-small" onclick="event.stopPropagation();reconcileSale(\'' + esc(s._key) + '\')" style="font-size:0.72rem;padding:3px 8px;">Reconcile</button> ' : '') +
+        (s.status !== 'voided' ? '<button class="btn btn-small btn-danger" onclick="event.stopPropagation();voidSale(\'' + esc(s._key) + '\')" style="font-size:0.72rem;padding:3px 8px;">Void</button>' : '') +
       '</td>' +
     '</tr>';
   });
@@ -185,11 +185,11 @@ function renderSales() {
     cards += '<div class="order-card" onclick="viewSaleDetail(\'' + esc(s._key) + '\')" style="cursor:pointer;">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;">' +
         '<span style="font-weight:500;">' + formatCents(s.amount) + '</span>' +
-        '<span style="font-size:0.75rem;color:' + statusColor + ';text-transform:capitalize;">' + esc(s.status || 'captured') + '</span>' +
+        '<span style="font-size:0.78rem;color:' + statusColor + ';text-transform:capitalize;">' + esc(s.status || 'captured') + '</span>' +
       '</div>' +
-      '<div style="font-size:0.8rem;color:var(--warm-gray);margin-top:4px;">' + formatSaleDate(s.timestamp) + ' ' + formatSaleTime(s.timestamp) + '</div>' +
-      '<div style="font-size:0.8rem;margin-top:4px;">' + esc(itemNames || 'No items') + '</div>' +
-      '<div style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;text-transform:capitalize;">' + esc(s.paymentType || '-') + '</div>' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">' + formatSaleDate(s.timestamp) + ' ' + formatSaleTime(s.timestamp) + '</div>' +
+      '<div style="font-size:0.78rem;margin-top:4px;">' + esc(itemNames || 'No items') + '</div>' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;text-transform:capitalize;">' + esc(s.paymentType || '-') + '</div>' +
     '</div>';
   });
   if (cardsEl) cardsEl.innerHTML = cards;
@@ -214,7 +214,7 @@ function viewSaleDetail(saleId) {
     itemsHtml += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--cream-dark);">' +
       '<div>' +
         '<div style="font-weight:500;">' + esc(item.productName || 'Unknown') + '</div>' +
-        '<div style="font-size:0.8rem;color:var(--warm-gray);">Qty: ' + (item.quantity || 1) +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);">Qty: ' + (item.quantity || 1) +
           (item.confidence ? ' &middot; Confidence: ' + Math.round(item.confidence * 100) + '%' : '') +
         '</div>' +
       '</div>' +
@@ -232,10 +232,10 @@ function viewSaleDetail(saleId) {
         '<span style="font-size:0.85rem;color:' + statusColor + ';text-transform:capitalize;font-weight:500;">' + esc(s.status || 'captured') + '</span>' +
       '</div>' +
       '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:16px;">' +
-        '<div><div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;">Date/Time</div><div>' + formatSaleDate(s.timestamp) + ' ' + formatSaleTime(s.timestamp) + '</div></div>' +
-        '<div><div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;">Payment</div><div style="text-transform:capitalize;">' + esc(s.paymentType || '-') + '</div></div>' +
-        '<div><div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;">Amount</div><div style="font-weight:600;font-size:1.2rem;">' + formatCents(s.amount) + '</div></div>' +
-        (s.notes ? '<div><div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;">Notes</div><div>' + esc(s.notes) + '</div></div>' : '') +
+        '<div><div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;">Date/Time</div><div>' + formatSaleDate(s.timestamp) + ' ' + formatSaleTime(s.timestamp) + '</div></div>' +
+        '<div><div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;">Payment</div><div style="text-transform:capitalize;">' + esc(s.paymentType || '-') + '</div></div>' +
+        '<div><div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;">Amount</div><div style="font-weight:600;font-size:1.15rem;">' + formatCents(s.amount) + '</div></div>' +
+        (s.notes ? '<div><div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;">Notes</div><div>' + esc(s.notes) + '</div></div>' : '') +
       '</div>' +
       '<h4 style="margin:12px 0 8px;">Items</h4>' +
       (itemsHtml || '<div style="color:var(--warm-gray);">No items recorded</div>') +
@@ -357,20 +357,20 @@ function renderSquarePayments() {
 
   summaryEl.innerHTML =
     '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;min-width:120px;">' +
-      '<div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;">Total</div>' +
-      '<div style="font-size:1.3rem;font-weight:600;">' + totalCount + '</div>' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;">Total</div>' +
+      '<div style="font-size:1.15rem;font-weight:600;">' + totalCount + '</div>' +
     '</div>' +
     '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;min-width:120px;">' +
-      '<div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;">Matched</div>' +
-      '<div style="font-size:1.3rem;font-weight:600;color:var(--teal);">' + matchedCount + '</div>' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;">Matched</div>' +
+      '<div style="font-size:1.15rem;font-weight:600;color:var(--teal);">' + matchedCount + '</div>' +
     '</div>' +
     '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;min-width:120px;">' +
-      '<div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;">Unmatched</div>' +
-      '<div style="font-size:1.3rem;font-weight:600;color:' + (unmatchedCount > 0 ? '#FF9800' : 'var(--teal)') + ';">' + unmatchedCount + '</div>' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;">Unmatched</div>' +
+      '<div style="font-size:1.15rem;font-weight:600;color:' + (unmatchedCount > 0 ? '#FF9800' : 'var(--teal)') + ';">' + unmatchedCount + '</div>' +
     '</div>' +
     (unmatchedAmount > 0 ? '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;min-width:120px;">' +
-      '<div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;">Unmatched $</div>' +
-      '<div style="font-size:1.3rem;font-weight:600;color:#FF9800;">' + formatCents(unmatchedAmount) + '</div>' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;">Unmatched $</div>' +
+      '<div style="font-size:1.15rem;font-weight:600;color:#FF9800;">' + formatCents(unmatchedAmount) + '</div>' +
     '</div>' : '');
 
   if (filtered.length === 0) {
@@ -399,8 +399,8 @@ function renderSquarePayments() {
       '<td><span style="color:' + statusColor + ';font-weight:500;">' + statusText + '</span></td>' +
       '<td>' + (isMatched ? '<span style="font-family:monospace;font-size:0.78rem;">' + esc((p.matchedSaleId || '').slice(-8)) + '</span>' : '-') + '</td>' +
       '<td>' +
-        (!isMatched ? '<button class="btn btn-small" onclick="openManualMatchModal(\'' + esc(p._key) + '\')" style="font-size:0.7rem;padding:3px 8px;">Match</button>' : '') +
-        (p.receiptUrl ? ' <a href="' + esc(p.receiptUrl) + '" target="_blank" style="font-size:0.7rem;color:var(--teal);">Receipt</a>' : '') +
+        (!isMatched ? '<button class="btn btn-small" onclick="openManualMatchModal(\'' + esc(p._key) + '\')" style="font-size:0.72rem;padding:3px 8px;">Match</button>' : '') +
+        (p.receiptUrl ? ' <a href="' + esc(p.receiptUrl) + '" target="_blank" style="font-size:0.72rem;color:var(--teal);">Receipt</a>' : '') +
       '</td>' +
     '</tr>';
   });
@@ -418,15 +418,15 @@ function renderSquarePayments() {
 
     cards += '<div class="order-card" style="border-left:3px solid ' + statusColor + ';">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;">' +
-        '<span style="font-weight:600;font-size:1.1rem;">' + formatCents(p.amount || 0) + '</span>' +
+        '<span style="font-weight:600;font-size:1.15rem;">' + formatCents(p.amount || 0) + '</span>' +
         '<span style="color:' + statusColor + ';font-weight:500;font-size:0.85rem;">' + statusText + '</span>' +
       '</div>' +
       '<div style="font-size:0.85rem;color:var(--warm-gray);margin-top:4px;">' + timeStr + '</div>' +
-      '<div style="font-size:0.82rem;color:var(--warm-gray-light);margin-top:2px;text-transform:capitalize;">' + esc(sourceLabel) + '</div>' +
-      (isMatched ? '<div style="font-size:0.8rem;margin-top:4px;">Matched: <span style="font-family:monospace;">' + esc((p.matchedSaleId || '').slice(-8)) + '</span></div>' : '') +
+      '<div style="font-size:0.85rem;color:var(--warm-gray-light);margin-top:2px;text-transform:capitalize;">' + esc(sourceLabel) + '</div>' +
+      (isMatched ? '<div style="font-size:0.78rem;margin-top:4px;">Matched: <span style="font-family:monospace;">' + esc((p.matchedSaleId || '').slice(-8)) + '</span></div>' : '') +
       '<div style="margin-top:8px;display:flex;gap:8px;">' +
-        (!isMatched ? '<button class="btn btn-small" onclick="openManualMatchModal(\'' + esc(p._key) + '\')" style="font-size:0.8rem;padding:4px 12px;">Match to Sale</button>' : '') +
-        (p.receiptUrl ? '<a href="' + esc(p.receiptUrl) + '" target="_blank" class="btn btn-small" style="font-size:0.8rem;padding:4px 12px;text-decoration:none;">Receipt</a>' : '') +
+        (!isMatched ? '<button class="btn btn-small" onclick="openManualMatchModal(\'' + esc(p._key) + '\')" style="font-size:0.78rem;padding:4px 12px;">Match to Sale</button>' : '') +
+        (p.receiptUrl ? '<a href="' + esc(p.receiptUrl) + '" target="_blank" class="btn btn-small" style="font-size:0.78rem;padding:4px 12px;text-decoration:none;">Receipt</a>' : '') +
       '</div>' +
     '</div>';
   });
@@ -478,11 +478,11 @@ function openManualMatchModal(paymentKey) {
         'onmouseover="this.style.background=\'var(--cream)\'" onmouseout="this.style.background=\'' + (amountMatch ? 'rgba(0,150,136,0.05)' : 'white') + '\'">' +
         '<div style="display:flex;justify-content:space-between;align-items:center;">' +
           '<span style="font-weight:600;">' + formatCents(c.amount) + '</span>' +
-          '<span style="font-size:0.8rem;color:var(--warm-gray);">' + deltaStr + ' apart</span>' +
+          '<span style="font-size:0.78rem;color:var(--warm-gray);">' + deltaStr + ' apart</span>' +
         '</div>' +
         '<div style="font-size:0.85rem;color:var(--warm-gray);margin-top:2px;">' + timeStr + '</div>' +
         '<div style="font-size:0.85rem;margin-top:2px;">' + esc(items || 'No items recorded') + '</div>' +
-        (amountMatch ? '<div style="font-size:0.75rem;color:var(--teal);margin-top:4px;">\u2713 Amount matches</div>' : '<div style="font-size:0.75rem;color:#FF9800;margin-top:4px;">\u26A0 Amount mismatch (sale: ' + formatCents(c.amount) + ', payment: ' + formatCents(payment.amount || 0) + ')</div>') +
+        (amountMatch ? '<div style="font-size:0.78rem;color:var(--teal);margin-top:4px;">\u2713 Amount matches</div>' : '<div style="font-size:0.78rem;color:#FF9800;margin-top:4px;">\u26A0 Amount mismatch (sale: ' + formatCents(c.amount) + ', payment: ' + formatCents(payment.amount || 0) + ')</div>') +
       '</div>';
     });
   }
@@ -495,11 +495,11 @@ function openManualMatchModal(paymentKey) {
     '<div style="background:var(--cream);border-radius:12px;padding:24px;max-width:500px;width:100%;max-height:80vh;overflow-y:auto;">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
         '<h3 style="margin:0;">Match Square Payment</h3>' +
-        '<button onclick="document.getElementById(\'manualMatchModal\').remove()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;">\u2715</button>' +
+        '<button onclick="document.getElementById(\'manualMatchModal\').remove()" style="background:none;border:none;font-size:1.15rem;cursor:pointer;">\u2715</button>' +
       '</div>' +
       '<div style="background:var(--cream);border-radius:8px;padding:12px;margin-bottom:16px;">' +
-        '<div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;">Square Payment</div>' +
-        '<div style="font-weight:600;font-size:1.1rem;">' + formatCents(payment.amount || 0) + '</div>' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;">Square Payment</div>' +
+        '<div style="font-weight:600;font-size:1.15rem;">' + formatCents(payment.amount || 0) + '</div>' +
         '<div style="font-size:0.85rem;color:var(--warm-gray);">' + (payment.createdAt ? new Date(payment.createdAt).toLocaleString() : '-') + '</div>' +
       '</div>' +
       '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">Select a sale to match:</div>' +
@@ -751,24 +751,24 @@ function renderSalesEventDetail(eventId) {
   // Summary cards
   html += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;">' +
     '<div style="background:var(--cream);border-radius:8px;padding:12px 16px;flex:1;min-width:120px;">' +
-      '<div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;">Packed</div>' +
-      '<div style="font-size:1.5rem;font-weight:700;">' + stats.totalPacked + '</div>' +
-      '<div style="font-size:0.8rem;color:var(--warm-gray);">' + stats.productCount + ' products</div>' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;">Packed</div>' +
+      '<div style="font-size:1.6rem;font-weight:700;">' + stats.totalPacked + '</div>' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);">' + stats.productCount + ' products</div>' +
     '</div>' +
     '<div style="background:var(--cream);border-radius:8px;padding:12px 16px;flex:1;min-width:120px;">' +
-      '<div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;">Sold</div>' +
-      '<div style="font-size:1.5rem;font-weight:700;">' + stats.totalSold + '</div>' +
-      '<div style="font-size:0.8rem;color:var(--warm-gray);">' + sellThrough + '% sell-through</div>' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;">Sold</div>' +
+      '<div style="font-size:1.6rem;font-weight:700;">' + stats.totalSold + '</div>' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);">' + sellThrough + '% sell-through</div>' +
     '</div>' +
     '<div style="background:var(--cream);border-radius:8px;padding:12px 16px;flex:1;min-width:120px;">' +
-      '<div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;">Revenue</div>' +
-      '<div style="font-size:1.5rem;font-weight:700;">' + formatCents(eventRevenue) + '</div>' +
-      '<div style="font-size:0.8rem;color:var(--warm-gray);">' + eventSales.length + ' sale' + (eventSales.length !== 1 ? 's' : '') + '</div>' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;">Revenue</div>' +
+      '<div style="font-size:1.6rem;font-weight:700;">' + formatCents(eventRevenue) + '</div>' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);">' + eventSales.length + ' sale' + (eventSales.length !== 1 ? 's' : '') + '</div>' +
     '</div>' +
     '<div style="background:var(--cream);border-radius:8px;padding:12px 16px;flex:1;min-width:120px;">' +
-      '<div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;">Remaining</div>' +
-      '<div style="font-size:1.5rem;font-weight:700;">' + (stats.totalPacked - stats.totalSold) + '</div>' +
-      '<div style="font-size:0.8rem;color:var(--warm-gray);">unsold items</div>' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;">Remaining</div>' +
+      '<div style="font-size:1.6rem;font-weight:700;">' + (stats.totalPacked - stats.totalSold) + '</div>' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);">unsold items</div>' +
     '</div>' +
   '</div>';
 
@@ -822,9 +822,9 @@ function renderSalesEventDetail(eventId) {
 
       if (ev.status !== 'closed') {
         html += '<td>' +
-          '<button class="btn btn-secondary" style="font-size:0.75rem;padding:2px 8px;" onclick="adjustAllocation(\'' + eventId + '\',\'' + pid + '\', 1)">+1</button> ' +
-          '<button class="btn btn-secondary" style="font-size:0.75rem;padding:2px 8px;" onclick="adjustAllocation(\'' + eventId + '\',\'' + pid + '\', -1)">-1</button> ' +
-          '<button class="btn btn-secondary" style="font-size:0.75rem;padding:2px 8px;color:#E53935;" onclick="removeAllocation(\'' + eventId + '\',\'' + pid + '\')">\u2715</button>' +
+          '<button class="btn btn-secondary" style="font-size:0.78rem;padding:2px 8px;" onclick="adjustAllocation(\'' + eventId + '\',\'' + pid + '\', 1)">+1</button> ' +
+          '<button class="btn btn-secondary" style="font-size:0.78rem;padding:2px 8px;" onclick="adjustAllocation(\'' + eventId + '\',\'' + pid + '\', -1)">-1</button> ' +
+          '<button class="btn btn-secondary" style="font-size:0.78rem;padding:2px 8px;color:#E53935;" onclick="removeAllocation(\'' + eventId + '\',\'' + pid + '\')">\u2715</button>' +
         '</td>';
       } else {
         html += '<td>' + st + '</td>';
@@ -918,7 +918,7 @@ function openEventReconciliationModal(eventId) {
     '<h3>Reconcile & Close Event</h3>' +
     '<p style="color:var(--warm-gray);font-size:0.85rem;margin:8px 0 16px;">Account for all packed items. Sold counts are pre-filled from POS. Enter returned and damaged counts.</p>' +
     '<div style="max-height:400px;overflow-y:auto;">' +
-    '<table style="width:100%;font-size:0.82rem;border-collapse:collapse;">' +
+    '<table style="width:100%;font-size:0.85rem;border-collapse:collapse;">' +
     '<thead><tr style="border-bottom:2px solid var(--cream-dark);">' +
       '<th style="text-align:left;padding:6px 8px;">Product</th>' +
       '<th style="text-align:center;padding:6px 4px;width:60px;">Packed</th>' +
@@ -937,8 +937,8 @@ function openEventReconciliationModal(eventId) {
       '<td style="padding:6px 8px;">' + esc(alloc.productName || pid) + '</td>' +
       '<td style="text-align:center;padding:6px 4px;color:var(--warm-gray);">' + packed + '</td>' +
       '<td style="text-align:center;padding:6px 4px;font-weight:600;">' + sold + '</td>' +
-      '<td style="text-align:center;padding:6px 4px;"><input type="number" min="0" max="' + remaining + '" value="' + remaining + '" class="recon-returned" data-idx="' + idx + '" data-pid="' + esc(pid) + '" data-remaining="' + remaining + '" style="width:50px;text-align:center;padding:3px;font-size:0.82rem;" onchange="updateReconUnaccounted(this)" oninput="updateReconUnaccounted(this)"></td>' +
-      '<td style="text-align:center;padding:6px 4px;"><input type="number" min="0" max="' + remaining + '" value="0" class="recon-damaged" data-idx="' + idx + '" data-pid="' + esc(pid) + '" style="width:50px;text-align:center;padding:3px;font-size:0.82rem;" onchange="updateReconUnaccounted(this)" oninput="updateReconUnaccounted(this)"></td>' +
+      '<td style="text-align:center;padding:6px 4px;"><input type="number" min="0" max="' + remaining + '" value="' + remaining + '" class="recon-returned" data-idx="' + idx + '" data-pid="' + esc(pid) + '" data-remaining="' + remaining + '" style="width:50px;text-align:center;padding:3px;font-size:0.85rem;" onchange="updateReconUnaccounted(this)" oninput="updateReconUnaccounted(this)"></td>' +
+      '<td style="text-align:center;padding:6px 4px;"><input type="number" min="0" max="' + remaining + '" value="0" class="recon-damaged" data-idx="' + idx + '" data-pid="' + esc(pid) + '" style="width:50px;text-align:center;padding:3px;font-size:0.85rem;" onchange="updateReconUnaccounted(this)" oninput="updateReconUnaccounted(this)"></td>' +
       '<td style="text-align:center;padding:6px 4px;" class="recon-unaccounted" data-idx="' + idx + '"><span style="color:var(--teal);">0</span></td>' +
     '</tr>';
   });
@@ -1354,7 +1354,7 @@ async function capturePackingPhoto() {
 
       resultEl.innerHTML = '<div style="color:white;">' +
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
-          '<span style="font-weight:700;font-size:1.1rem;">' + esc(prodName) + '</span>' +
+          '<span style="font-weight:700;font-size:1.15rem;">' + esc(prodName) + '</span>' +
           '<span style="color:' + confColor + ';font-size:0.85rem;">' + confLabel + ' (' + confidence + '%)</span>' +
         '</div>' +
         '<div style="display:flex;gap:8px;align-items:center;">' +
@@ -1461,7 +1461,7 @@ function filterPackProducts() {
 
     html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid rgba(255,255,255,0.1);cursor:pointer;" data-pid="' + esc(pid) + '" data-pname="' + esc(name) + '" onclick="selectManualPackProduct(this.dataset.pid, this.dataset.pname)">' +
       '<span style="color:white;">' + esc(name) + '</span>' +
-      '<span style="color:var(--cream);font-size:0.8rem;">' + esc(p.category || '') + '</span>' +
+      '<span style="color:var(--cream);font-size:0.78rem;">' + esc(p.category || '') + '</span>' +
     '</div>';
   });
 
@@ -1473,7 +1473,7 @@ function selectManualPackProduct(productId, productName) {
   var resultEl = document.getElementById('packingRecognitionResult');
   resultEl.style.display = '';
   resultEl.innerHTML = '<div style="color:white;">' +
-    '<div style="font-weight:700;font-size:1.1rem;margin-bottom:8px;">' + esc(productName) + '</div>' +
+    '<div style="font-weight:700;font-size:1.15rem;margin-bottom:8px;">' + esc(productName) + '</div>' +
     '<div style="display:flex;gap:8px;align-items:center;">' +
       '<label style="color:var(--cream);font-size:0.85rem;">Quantity:</label>' +
       '<input type="number" id="packQtyInput" value="1" min="1" style="width:60px;padding:6px;border-radius:4px;border:1px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.1);color:white;text-align:center;">' +
@@ -1665,7 +1665,7 @@ async function exitPackingMode() {
 
     // Last published
     if (tc.lastPublishedAt) {
-      html += '<div style="font-size:0.8rem;color:var(--warm-gray);text-align:right;">Last published: ' + esc(new Date(tc.lastPublishedAt).toLocaleString()) + '</div>';
+      html += '<div style="font-size:0.78rem;color:var(--warm-gray);text-align:right;">Last published: ' + esc(new Date(tc.lastPublishedAt).toLocaleString()) + '</div>';
     }
 
     html += '</div>';
@@ -1759,7 +1759,7 @@ async function exitPackingMode() {
           '<div>' +
             '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Category-Specific Rules</label>' +
             '<div id="tcCategoryRules">' + catRulesHtml + '</div>' +
-            '<button class="btn btn-secondary" style="margin-top:6px;padding:6px 12px;font-size:0.8rem;" onclick="window._addCategoryRule()">+ Add Rule</button>' +
+            '<button class="btn btn-secondary" style="margin-top:6px;padding:6px 12px;font-size:0.78rem;" onclick="window._addCategoryRule()">+ Add Rule</button>' +
           '</div>' +
 
           // Gift card terms
@@ -1794,7 +1794,7 @@ async function exitPackingMode() {
     return '<div class="tc-cat-rule-row" style="display:flex;gap:8px;margin-bottom:6px;align-items:center;">' +
       '<select class="tc-cat-select" style="flex:1;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.85rem;">' + catOpts + '</select>' +
       '<select class="tc-rule-select" style="flex:1;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.85rem;">' + ruleOptionsHtml + '</select>' +
-      '<button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--warm-gray);cursor:pointer;font-size:1.1rem;padding:4px;" title="Remove">&times;</button>' +
+      '<button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--warm-gray);cursor:pointer;font-size:1.15rem;padding:4px;" title="Remove">&times;</button>' +
     '</div>';
   }
 
@@ -1995,7 +1995,7 @@ async function exitPackingMode() {
     var printHtml = '<!DOCTYPE html><html><head><title>Packing List — ' + esc(ev.name || 'Event') + '</title>' +
       '<style>body{font-family:system-ui,sans-serif;padding:24px;max-width:600px;margin:0 auto;color:#333;}' +
       'table{width:100%;border-collapse:collapse;margin-top:16px;}' +
-      'th{text-align:left;padding:8px 12px;border-bottom:2px solid #333;font-size:0.82rem;}' +
+      'th{text-align:left;padding:8px 12px;border-bottom:2px solid #333;font-size:0.85rem;}' +
       '@media print{body{padding:12px;}button{display:none!important;}}</style></head><body>' +
       '<h2 style="margin:0 0 4px;">' + esc(ev.name || 'Event') + '</h2>' +
       (ev.date ? '<p style="color:#666;margin:0 0 4px;">' + esc(ev.date) + '</p>' : '') +
@@ -2003,7 +2003,7 @@ async function exitPackingMode() {
       '<p style="font-size:0.9rem;"><strong>' + totalPacked + '</strong> items across <strong>' + pids.length + '</strong> products</p>' +
       '<table><thead><tr><th>Product</th><th style="text-align:center;">Qty</th><th style="text-align:center;width:60px;">Check</th></tr></thead>' +
       '<tbody>' + lines + '</tbody></table>' +
-      '<p style="margin-top:24px;font-size:0.8rem;color:#999;">Generated ' + new Date().toLocaleDateString() + '</p>' +
+      '<p style="margin-top:24px;font-size:0.78rem;color:#999;">Generated ' + new Date().toLocaleDateString() + '</p>' +
       '<button onclick="window.print()" style="margin-top:12px;padding:8px 16px;cursor:pointer;">Print</button>' +
       '</body></html>';
 

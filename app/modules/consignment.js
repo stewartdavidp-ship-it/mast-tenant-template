@@ -213,8 +213,8 @@
     if (!placements.length) {
       tab.innerHTML =
         '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">' +
-          '<div style="font-size:2rem;margin-bottom:12px;">🏛️</div>' +
-          '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No consignment placements yet</p>' +
+          '<div style="font-size:1.6rem;margin-bottom:12px;">🏛️</div>' +
+          '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No consignment placements yet</p>' +
           '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Track pieces placed at galleries, boutiques, and shops.</p>' +
           '<button class="btn btn-primary" style="margin-top:16px;" onclick="consignmentShowNew()">+ New Placement</button>' +
         '</div>';
@@ -239,8 +239,8 @@
         '<div class="consignment-card' + (isClosed ? ' closed' : '') + '" onclick="consignmentShowDetail(\'' + esc(p.placementId) + '\')">' +
           '<div style="display:flex;justify-content:space-between;align-items:flex-start;">' +
             '<div>' +
-              '<div style="font-weight:500;font-size:0.95rem;">' + esc(p.locationName) + '</div>' +
-              '<div style="font-size:0.8rem;color:var(--warm-gray);margin-top:2px;">' +
+              '<div style="font-weight:500;font-size:0.9rem;">' + esc(p.locationName) + '</div>' +
+              '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">' +
                 totals.totalItemsPlaced + ' item' + (totals.totalItemsPlaced !== 1 ? 's' : '') + ' placed · ' +
                 Math.round((p.commissionRate || 0) * 100) + '% commission' +
               '</div>' +
@@ -292,7 +292,7 @@
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">' +
         '<div>' +
           '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">' + esc(p.locationName) + '</h3>' +
-          '<div style="font-size:0.8rem;color:var(--warm-gray);margin-top:4px;">' +
+          '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">' +
             (p.locationContact ? esc(p.locationContact) : '') +
             (p.locationContact && p.locationEmail ? ' · ' : '') +
             (p.locationEmail ? esc(p.locationEmail) : '') +
@@ -313,19 +313,19 @@
         '<div class="consignment-earnings-grid">' +
           '<div class="consignment-earnings-item">' +
             '<div class="consignment-stat-label">Total Placed Value</div>' +
-            '<div style="font-size:1.3rem;font-weight:600;">' + formatCurrency(totals.totalRetailValue) + '</div>' +
+            '<div style="font-size:1.15rem;font-weight:600;">' + formatCurrency(totals.totalRetailValue) + '</div>' +
           '</div>' +
           '<div class="consignment-earnings-item">' +
             '<div class="consignment-stat-label">Total Sold</div>' +
-            '<div style="font-size:1.3rem;font-weight:600;">' + formatCurrency(totals.totalSold) + '</div>' +
+            '<div style="font-size:1.15rem;font-weight:600;">' + formatCurrency(totals.totalSold) + '</div>' +
           '</div>' +
           '<div class="consignment-earnings-item">' +
             '<div class="consignment-stat-label">Your Earnings</div>' +
-            '<div style="font-size:1.5rem;font-weight:700;color:#16a34a;">' + formatCurrency(totals.makerEarnings) + '</div>' +
+            '<div style="font-size:1.6rem;font-weight:700;color:#16a34a;">' + formatCurrency(totals.makerEarnings) + '</div>' +
           '</div>' +
           '<div class="consignment-earnings-item">' +
             '<div class="consignment-stat-label">Commission Owed</div>' +
-            '<div style="font-size:1.3rem;font-weight:600;color:var(--warm-gray);">' + formatCurrency(totals.commissionOwed) + '</div>' +
+            '<div style="font-size:1.15rem;font-weight:600;color:var(--warm-gray);">' + formatCurrency(totals.commissionOwed) + '</div>' +
           '</div>' +
         '</div>' +
       '</div>';
@@ -429,7 +429,7 @@
         '<div class="form-group" style="margin-bottom:16px;">' +
           '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Commission Rate (%) *</label>' +
           '<input type="number" id="cpCommissionRate" placeholder="40" min="0" max="100" step="1" style="width:120px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">' +
-          '<span style="font-size:0.8rem;color:var(--warm-gray);margin-left:8px;">% goes to the gallery</span>' +
+          '<span style="font-size:0.78rem;color:var(--warm-gray);margin-left:8px;">% goes to the gallery</span>' +
         '</div>' +
         '<div class="form-group" style="margin-bottom:16px;">' +
           '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Notes</label>' +
@@ -637,7 +637,7 @@
       '<div class="form-group" style="margin-bottom:16px;">' +
         '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Quantity Sold</label>' +
         '<input type="number" id="saleQty" min="1" max="' + maxQty + '" value="1" style="width:100px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;text-align:center;">' +
-        '<span style="font-size:0.8rem;color:var(--warm-gray);margin-left:8px;">' + maxQty + ' on hand</span>' +
+        '<span style="font-size:0.78rem;color:var(--warm-gray);margin-left:8px;">' + maxQty + ' on hand</span>' +
       '</div>' +
       '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;">' +
         '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
@@ -662,7 +662,7 @@
       '<div class="form-group" style="margin-bottom:16px;">' +
         '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Quantity Returned</label>' +
         '<input type="number" id="returnQty" min="1" max="' + maxQty + '" value="1" style="width:100px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;text-align:center;">' +
-        '<span style="font-size:0.8rem;color:var(--warm-gray);margin-left:8px;">' + maxQty + ' on hand</span>' +
+        '<span style="font-size:0.78rem;color:var(--warm-gray);margin-left:8px;">' + maxQty + ' on hand</span>' +
       '</div>' +
       '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;">' +
         '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +

@@ -81,16 +81,16 @@ async function loadPlaidAccounts() {
     var includedLimit = getPlaidBankLimit();
 
     if (keys.length === 0) {
-      container.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray, #6B6560);">' +
-        '<div style="font-size:2rem;margin-bottom:12px;">\uD83C\uDFE6</div>' +
-        '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No banks connected</p>' +
-        '<p style="font-size:0.85rem;color:var(--warm-gray-light, #9B958E);">Connect a bank or credit card to automatically import transactions.</p>' +
-        '<p style="font-size:0.8rem;color:var(--warm-gray-light, #9B958E);margin-top:8px;">' + includedLimit + ' banks included in your plan. Additional banks cost 100 tokens/month.</p></div>';
+      container.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray, var(--warm-gray));">' +
+        '<div style="font-size:1.6rem;margin-bottom:12px;">\uD83C\uDFE6</div>' +
+        '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No banks connected</p>' +
+        '<p style="font-size:0.85rem;color:var(--warm-gray-light, var(--warm-gray-light));">Connect a bank or credit card to automatically import transactions.</p>' +
+        '<p style="font-size:0.78rem;color:var(--warm-gray-light, var(--warm-gray-light));margin-top:8px;">' + includedLimit + ' banks included in your plan. Additional banks cost 100 tokens/month.</p></div>';
       return;
     }
 
     var activeCount = keys.filter(function(k) { return items[k].status === 'active'; }).length;
-    var h = '<div style="font-size:0.85rem;color:var(--warm-gray, #6B6560);margin-bottom:12px;">' +
+    var h = '<div style="font-size:0.85rem;color:var(--warm-gray, var(--warm-gray));margin-bottom:12px;">' +
       activeCount + ' of ' + includedLimit + ' included banks used' +
       (activeCount > includedLimit ? ' \u00B7 <span style="color:#f59e0b;">' + (activeCount - includedLimit) + ' extra (' + ((activeCount - includedLimit) * 100) + ' tokens/month)</span>' : '') +
       '</div>';
@@ -100,16 +100,16 @@ async function loadPlaidAccounts() {
       var statusBg = item.status === 'active' ? '#16a34a' : item.status === 'error' ? '#dc2626' : '#9ca3af';
       var acctCount = (item.accounts && item.accounts.length) || 0;
 
-      h += '<div style="background:var(--cream, #FAF6F0);border:1px solid var(--cream-dark, #F0E8DB);border-radius:8px;padding:12px 16px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
+      h += '<div style="background:var(--cream, var(--cream));border:1px solid var(--cream-dark, var(--cream-dark));border-radius:8px;padding:12px 16px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
 
       // Header row — always visible, clickable to expand
       h += '<div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;" onclick="toggleBankCard(\'' + esc(itemId) + '\')">';
       h += '<div style="display:flex;align-items:center;gap:8px;">';
-      h += '<span id="expBankArrow_' + esc(itemId) + '" style="font-size:0.7rem;transition:transform 0.2s;">\u25B6</span>';
+      h += '<span id="expBankArrow_' + esc(itemId) + '" style="font-size:0.72rem;transition:transform 0.2s;">\u25B6</span>';
       h += '<span style="font-weight:600;font-size:1rem;">' + esc(item.institutionName || 'Unknown Bank') + '</span>';
-      h += '<span style="font-size:0.8rem;color:var(--warm-gray, #6B6560);">' + acctCount + ' account' + (acctCount !== 1 ? 's' : '') + '</span>';
+      h += '<span style="font-size:0.78rem;color:var(--warm-gray, var(--warm-gray));">' + acctCount + ' account' + (acctCount !== 1 ? 's' : '') + '</span>';
       h += '<span class="status-badge" style="background:' + statusBg + ';color:white;">' + esc(item.status || 'unknown') + '</span>';
-      if (item.lastSyncAt) h += '<span style="font-size:0.75rem;color:var(--warm-gray-light, #9B958E);">Synced ' + new Date(item.lastSyncAt).toLocaleDateString() + '</span>';
+      if (item.lastSyncAt) h += '<span style="font-size:0.78rem;color:var(--warm-gray-light, var(--warm-gray-light));">Synced ' + new Date(item.lastSyncAt).toLocaleDateString() + '</span>';
       h += '</div>';
 
       // Action buttons (always visible)
@@ -122,23 +122,23 @@ async function loadPlaidAccounts() {
       h += '</div>';
 
       // Collapsible detail section
-      h += '<div id="expBankDetail_' + esc(itemId) + '" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--cream-dark, #F0E8DB);">';
+      h += '<div id="expBankDetail_' + esc(itemId) + '" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--cream-dark, var(--cream-dark));">';
 
       if (item.accounts && item.accounts.length) {
         item.accounts.forEach(function(acct) {
-          h += '<div style="font-size:0.85rem;color:var(--warm-gray, #6B6560);margin-top:2px;">';
+          h += '<div style="font-size:0.85rem;color:var(--warm-gray, var(--warm-gray));margin-top:2px;">';
           h += esc(acct.name || acct.type) + ' \u2022\u2022' + esc(acct.mask || '????');
-          h += ' <span style="text-transform:capitalize;font-size:0.75rem;">(' + esc(acct.subtype || acct.type) + ')</span>';
+          h += ' <span style="text-transform:capitalize;font-size:0.78rem;">(' + esc(acct.subtype || acct.type) + ')</span>';
           h += '</div>';
         });
       }
 
       if (item.lastSyncAt) {
-        h += '<div style="font-size:0.75rem;color:var(--warm-gray-light, #9B958E);margin-top:6px;">Last synced ' + new Date(item.lastSyncAt).toLocaleString() + '</div>';
+        h += '<div style="font-size:0.78rem;color:var(--warm-gray-light, var(--warm-gray-light));margin-top:6px;">Last synced ' + new Date(item.lastSyncAt).toLocaleString() + '</div>';
       }
 
       if (item.lastError) {
-        h += '<div style="font-size:0.75rem;color:var(--danger, #DC3545);margin-top:4px;">' + esc(item.lastError) + '</div>';
+        h += '<div style="font-size:0.78rem;color:var(--danger, var(--danger));margin-top:4px;">' + esc(item.lastError) + '</div>';
       }
 
       h += '</div>'; // close collapsible detail
@@ -148,7 +148,7 @@ async function loadPlaidAccounts() {
 
     container.innerHTML = h;
   } catch (err) {
-    container.innerHTML = '<div style="color:var(--danger, #DC3545);padding:12px;">' + esc(err.message) + '</div>';
+    container.innerHTML = '<div style="color:var(--danger, var(--danger));padding:12px;">' + esc(err.message) + '</div>';
   }
 }
 
@@ -359,7 +359,7 @@ async function loadExpenses() {
       total += e.amount || 0;
       if (!e.reviewed) unreviewedCount++;
     });
-    summaryEl.innerHTML = '<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:0.85rem;color:var(--warm-gray, #6B6560);">' +
+    summaryEl.innerHTML = '<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:0.85rem;color:var(--warm-gray, var(--warm-gray));">' +
       '<span><strong>' + expenses.length + '</strong> expenses</span>' +
       '<span>Total: <strong>$' + (total / 100).toFixed(2) + '</strong></span>' +
       (unreviewedCount > 0 ? '<span style="color:#f59e0b;">' + unreviewedCount + ' unreviewed</span>' : '') +
@@ -368,16 +368,16 @@ async function loadExpenses() {
     if (expenses.length === 0) {
       listEl.innerHTML = '';
       emptyEl.style.display = '';
-      emptyEl.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray, #6B6560);">' +
-        '<div style="font-size:2rem;margin-bottom:12px;">\uD83D\uDCB8</div>' +
-        '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No expenses found</p>' +
-        '<p style="font-size:0.85rem;color:var(--warm-gray-light, #9B958E);">Connect a bank account or add expenses manually.</p></div>';
+      emptyEl.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray, var(--warm-gray));">' +
+        '<div style="font-size:1.6rem;margin-bottom:12px;">\uD83D\uDCB8</div>' +
+        '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No expenses found</p>' +
+        '<p style="font-size:0.85rem;color:var(--warm-gray-light, var(--warm-gray-light));">Connect a bank account or add expenses manually.</p></div>';
       return;
     }
 
     renderExpensesList(expenses);
   } catch (err) {
-    listEl.innerHTML = '<div style="color:var(--danger, #DC3545);padding:12px;">' + esc(err.message) + '</div>';
+    listEl.innerHTML = '<div style="color:var(--danger, var(--danger));padding:12px;">' + esc(err.message) + '</div>';
   }
 }
 
@@ -391,12 +391,12 @@ function renderExpensesList(expenses) {
     var reviewedBorder = exp.reviewed ? '3px solid transparent' : '3px solid #f59e0b';
     var sourceIcon = exp.source === 'plaid' ? '\uD83C\uDFE6' : exp.source === 'csv_import' ? '\uD83D\uDCC4' : '\u270D\uFE0F';
 
-    h += '<div style="background:var(--cream, #FAF6F0);border:1px solid var(--cream-dark, #F0E8DB);border-left:' + reviewedBorder + ';border-radius:8px;padding:10px 14px;box-shadow:0 1px 3px rgba(0,0,0,0.08);transition:background 0.15s;display:flex;align-items:center;gap:10px;" ';
+    h += '<div style="background:var(--cream, var(--cream));border:1px solid var(--cream-dark, var(--cream-dark));border-left:' + reviewedBorder + ';border-radius:8px;padding:10px 14px;box-shadow:0 1px 3px rgba(0,0,0,0.08);transition:background 0.15s;display:flex;align-items:center;gap:10px;" ';
     h += 'data-expense-id="' + esc(exp._key) + '">';
 
     // Checkbox (only for unapproved)
     if (!exp.reviewed) {
-      h += '<input type="checkbox" class="exp-checkbox" data-key="' + esc(exp._key) + '" onclick="event.stopPropagation();updateApproveButton()" style="width:18px;height:18px;flex-shrink:0;cursor:pointer;accent-color:var(--amber, #C4853C);">';
+      h += '<input type="checkbox" class="exp-checkbox" data-key="' + esc(exp._key) + '" onclick="event.stopPropagation();updateApproveButton()" style="width:18px;height:18px;flex-shrink:0;cursor:pointer;accent-color:var(--amber, var(--amber));">';
     } else {
       h += '<div style="width:18px;height:18px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#16a34a;font-size:0.9rem;">\u2713</div>';
     }
@@ -411,7 +411,7 @@ function renderExpensesList(expenses) {
     h += sourceIcon + ' ' + esc(exp.merchantName || exp.description);
     if (exp.pending) h += ' <span class="status-badge" style="background:#f59e0b;color:white;">pending</span>';
     h += '</div>';
-    h += '<div style="font-size:0.8rem;color:var(--warm-gray, #6B6560);margin-top:2px;">' + esc(exp.date || '');
+    h += '<div style="font-size:0.78rem;color:var(--warm-gray, var(--warm-gray));margin-top:2px;">' + esc(exp.date || '');
     if (exp.plaidAccountId && accountLookup[exp.plaidAccountId]) {
       var acctInfo = accountLookup[exp.plaidAccountId];
       h += ' \u00B7 ' + esc(acctInfo.institution) + ' \u2022\u2022' + esc(acctInfo.mask);
@@ -424,23 +424,23 @@ function renderExpensesList(expenses) {
     // Category badge
     var catLabel = CATEGORIES.find(function(c) { return c.value === exp.category; });
     h += '<div style="margin-top:4px;">';
-    h += '<span class="status-badge" style="background:rgba(196,133,60,0.15);color:var(--amber, #C4853C);">' + esc(catLabel ? catLabel.label : exp.category) + '</span>';
+    h += '<span class="status-badge" style="background:rgba(196,133,60,0.15);color:var(--amber, var(--amber));">' + esc(catLabel ? catLabel.label : exp.category) + '</span>';
     if (exp.isStudioOverhead) {
-      h += ' <span class="status-badge" style="background:rgba(42,124,111,0.15);color:var(--teal, #2A7C6F);font-size:0.7rem;">Studio overhead</span>';
+      h += ' <span class="status-badge" style="background:rgba(42,124,111,0.15);color:var(--teal, var(--teal));font-size:0.72rem;">Studio overhead</span>';
     }
     if (!exp.reviewed) {
-      h += ' <span style="font-size:0.75rem;color:#f59e0b;">Needs review</span>';
+      h += ' <span style="font-size:0.78rem;color:#f59e0b;">Needs review</span>';
     } else {
-      h += ' <span style="font-size:0.75rem;color:#16a34a;">\u2713 Approved</span>';
+      h += ' <span style="font-size:0.78rem;color:#16a34a;">\u2713 Approved</span>';
     }
     h += '</div>';
     h += '</div>';
 
     // Right: amount
     h += '<div style="text-align:right;flex-shrink:0;">';
-    h += '<div style="font-weight:700;font-size:1.05rem;color:' + amountColor + ';">' + amountStr + '</div>';
+    h += '<div style="font-weight:700;font-size:1.0rem;color:' + amountColor + ';">' + amountStr + '</div>';
     if (exp.plaidCategory) {
-      h += '<div style="font-size:0.7rem;color:var(--warm-gray-light, #9B958E);">' + esc(exp.plaidCategory) + '</div>';
+      h += '<div style="font-size:0.72rem;color:var(--warm-gray-light, var(--warm-gray-light));">' + esc(exp.plaidCategory) + '</div>';
     }
     h += '</div>';
 
@@ -503,7 +503,7 @@ async function showExpenseDetail(expenseId) {
   try {
     var snap = await MastDB.expenses.get(expenseId);
     if (!snap.exists()) {
-      detailContent.innerHTML = '<div style="color:var(--danger, #DC3545);">Expense not found.</div>';
+      detailContent.innerHTML = '<div style="color:var(--danger, var(--danger));">Expense not found.</div>';
       return;
     }
 
@@ -519,15 +519,15 @@ async function showExpenseDetail(expenseId) {
     h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">';
     h += '<div>';
     h += '<h3 style="margin:0;">' + sourceIcon + ' ' + esc(exp.merchantName || exp.description) + '</h3>';
-    h += '<div style="font-size:0.8rem;color:var(--warm-gray, #6B6560);margin-top:4px;">' + esc(exp.date || '') + ' \u00B7 ' + sourceLabel;
+    h += '<div style="font-size:0.78rem;color:var(--warm-gray, var(--warm-gray));margin-top:4px;">' + esc(exp.date || '') + ' \u00B7 ' + sourceLabel;
     if (exp.pending) h += ' \u00B7 <span class="status-badge" style="background:#f59e0b;color:white;">pending</span>';
     h += '</div>';
     h += '</div>';
-    h += '<div style="font-size:1.5rem;font-weight:700;color:' + amountColor + ';">' + amountStr + '</div>';
+    h += '<div style="font-size:1.6rem;font-weight:700;color:' + amountColor + ';">' + amountStr + '</div>';
     h += '</div>';
 
     // Details card
-    h += '<div style="background:var(--cream, #FAF6F0);border:1px solid var(--cream-dark, #F0E8DB);border-radius:8px;padding:16px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.08);margin-bottom:16px;">';
+    h += '<div style="background:var(--cream, var(--cream));border:1px solid var(--cream-dark, var(--cream-dark));border-radius:8px;padding:16px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.08);margin-bottom:16px;">';
 
     // Description
     if (exp.description) {
@@ -540,7 +540,7 @@ async function showExpenseDetail(expenseId) {
     // Category
     h += '<div style="margin-bottom:16px;">';
     h += '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Category</label>';
-    h += '<select data-expense-id="' + esc(expenseId) + '" onchange="updateExpenseField(this.dataset.expenseId, \'category\', this.value)" style="padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;background:var(--cream, #FAF6F0);color:inherit;">';
+    h += '<select data-expense-id="' + esc(expenseId) + '" onchange="updateExpenseField(this.dataset.expenseId, \'category\', this.value)" style="padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;background:var(--cream, var(--cream));color:inherit;">';
     CATEGORIES.forEach(function(cat) {
       h += '<option value="' + cat.value + '"' + (exp.category === cat.value ? ' selected' : '') + '>' + cat.label + '</option>';
     });
@@ -550,7 +550,7 @@ async function showExpenseDetail(expenseId) {
     // Business Line
     h += '<div style="margin-bottom:16px;">';
     h += '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Business Line</label>';
-    h += '<select data-expense-id="' + esc(expenseId) + '" onchange="updateExpenseField(this.dataset.expenseId, \'businessLine\', this.value)" style="padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;background:var(--cream, #FAF6F0);color:inherit;">';
+    h += '<select data-expense-id="' + esc(expenseId) + '" onchange="updateExpenseField(this.dataset.expenseId, \'businessLine\', this.value)" style="padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;background:var(--cream, var(--cream));color:inherit;">';
     BUSINESS_LINES.forEach(function(bl) {
       h += '<option value="' + bl.value + '"' + ((exp.businessLine || '') === bl.value ? ' selected' : '') + '>' + bl.label + '</option>';
     });
@@ -563,7 +563,7 @@ async function showExpenseDetail(expenseId) {
     h += '<input type="checkbox" data-expense-id="' + esc(expenseId) + '" ' + (exp.isStudioOverhead ? 'checked' : '') + ' onchange="updateExpenseField(this.dataset.expenseId, \'isStudioOverhead\', this.checked)" style="width:18px;height:18px;cursor:pointer;">';
     h += '<div>';
     h += '<div style="font-size:0.85rem;font-weight:600;">Fixed studio overhead</div>';
-    h += '<div style="font-size:0.78rem;color:var(--warm-gray, #6B6560);">Recurring costs to keep your studio running (rent, insurance, subscriptions, utilities not tied to specific equipment)</div>';
+    h += '<div style="font-size:0.78rem;color:var(--warm-gray, var(--warm-gray));">Recurring costs to keep your studio running (rent, insurance, subscriptions, utilities not tied to specific equipment)</div>';
     h += '</div>';
     h += '</label>';
     h += '</div>';
@@ -571,23 +571,23 @@ async function showExpenseDetail(expenseId) {
     // Notes
     h += '<div style="margin-bottom:16px;">';
     h += '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Notes</label>';
-    h += '<textarea data-expense-id="' + esc(expenseId) + '" onblur="updateExpenseField(this.dataset.expenseId, \'notes\', this.value)" rows="3" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;background:var(--cream, #FAF6F0);color:inherit;resize:vertical;box-sizing:border-box;">' + esc(exp.notes || '') + '</textarea>';
+    h += '<textarea data-expense-id="' + esc(expenseId) + '" onblur="updateExpenseField(this.dataset.expenseId, \'notes\', this.value)" rows="3" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;background:var(--cream, var(--cream));color:inherit;resize:vertical;box-sizing:border-box;">' + esc(exp.notes || '') + '</textarea>';
     h += '</div>';
 
     h += '</div>'; // end details card
 
     // Source info card (read-only)
-    h += '<div style="background:var(--cream, #FAF6F0);border:1px solid var(--cream-dark, #F0E8DB);border-radius:8px;padding:16px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.08);margin-bottom:16px;">';
+    h += '<div style="background:var(--cream, var(--cream));border:1px solid var(--cream-dark, var(--cream-dark));border-radius:8px;padding:16px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.08);margin-bottom:16px;">';
     h += '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:8px;">Source Details</label>';
     h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:0.85rem;">';
-    h += '<div><span style="color:var(--warm-gray, #6B6560);">Source:</span> ' + sourceLabel + '</div>';
-    if (exp.plaidCategory) h += '<div><span style="color:var(--warm-gray, #6B6560);">Plaid Category:</span> ' + esc(exp.plaidCategory) + '</div>';
-    if (exp.plaidCategoryDetailed) h += '<div><span style="color:var(--warm-gray, #6B6560);">Plaid Detail:</span> ' + esc(exp.plaidCategoryDetailed) + '</div>';
-    if (exp.categoryConfidence != null) h += '<div><span style="color:var(--warm-gray, #6B6560);">Confidence:</span> ' + Math.round(exp.categoryConfidence * 100) + '%</div>';
-    if (exp.sourceTransactionId) h += '<div><span style="color:var(--warm-gray, #6B6560);">Transaction ID:</span> <span style="font-size:0.75rem;">' + esc(exp.sourceTransactionId) + '</span></div>';
-    if (exp.plaidAccountId) h += '<div><span style="color:var(--warm-gray, #6B6560);">Account ID:</span> <span style="font-size:0.75rem;">' + esc(exp.plaidAccountId) + '</span></div>';
-    h += '<div><span style="color:var(--warm-gray, #6B6560);">Created:</span> ' + (exp.createdAt ? new Date(exp.createdAt).toLocaleString() : '\u2014') + '</div>';
-    h += '<div><span style="color:var(--warm-gray, #6B6560);">Updated:</span> ' + (exp.updatedAt ? new Date(exp.updatedAt).toLocaleString() : '\u2014') + '</div>';
+    h += '<div><span style="color:var(--warm-gray, var(--warm-gray));">Source:</span> ' + sourceLabel + '</div>';
+    if (exp.plaidCategory) h += '<div><span style="color:var(--warm-gray, var(--warm-gray));">Plaid Category:</span> ' + esc(exp.plaidCategory) + '</div>';
+    if (exp.plaidCategoryDetailed) h += '<div><span style="color:var(--warm-gray, var(--warm-gray));">Plaid Detail:</span> ' + esc(exp.plaidCategoryDetailed) + '</div>';
+    if (exp.categoryConfidence != null) h += '<div><span style="color:var(--warm-gray, var(--warm-gray));">Confidence:</span> ' + Math.round(exp.categoryConfidence * 100) + '%</div>';
+    if (exp.sourceTransactionId) h += '<div><span style="color:var(--warm-gray, var(--warm-gray));">Transaction ID:</span> <span style="font-size:0.78rem;">' + esc(exp.sourceTransactionId) + '</span></div>';
+    if (exp.plaidAccountId) h += '<div><span style="color:var(--warm-gray, var(--warm-gray));">Account ID:</span> <span style="font-size:0.78rem;">' + esc(exp.plaidAccountId) + '</span></div>';
+    h += '<div><span style="color:var(--warm-gray, var(--warm-gray));">Created:</span> ' + (exp.createdAt ? new Date(exp.createdAt).toLocaleString() : '\u2014') + '</div>';
+    h += '<div><span style="color:var(--warm-gray, var(--warm-gray));">Updated:</span> ' + (exp.updatedAt ? new Date(exp.updatedAt).toLocaleString() : '\u2014') + '</div>';
     h += '</div></div>';
 
     // Action buttons
@@ -603,7 +603,7 @@ async function showExpenseDetail(expenseId) {
 
     detailContent.innerHTML = h;
   } catch (err) {
-    detailContent.innerHTML = '<div style="color:var(--danger, #DC3545);padding:12px;">' + esc(err.message) + '</div>';
+    detailContent.innerHTML = '<div style="color:var(--danger, var(--danger));padding:12px;">' + esc(err.message) + '</div>';
   }
 }
 

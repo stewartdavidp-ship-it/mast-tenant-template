@@ -121,7 +121,7 @@ function renderWholesaleAdmin() {
 
   var html = '<div style="max-width:1100px;margin:0 auto;padding:24px;">' +
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">' +
-      '<h2 style="font-size:1.4rem;font-weight:700;color:var(--charcoal);">Wholesale</h2>' +
+      '<h2 style="font-size:1.6rem;font-weight:700;color:var(--charcoal);">Wholesale</h2>' +
     '</div>' +
     '<div class="view-tabs" style="margin-bottom:20px;">' +
       '<div class="view-tab' + (wholesaleSubView === 'orders' ? ' active' : '') + '" onclick="switchWholesaleView(\'orders\')">Orders</div>' +
@@ -177,15 +177,15 @@ function renderWholesaleUsers() {
 
     var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">' +
       '<div style="font-size:0.85rem;color:var(--warm-gray);">' + users.length + ' authorized user' + (users.length !== 1 ? 's' : '') + '</div>' +
-      '<button class="btn-small" onclick="addWholesaleUser()" style="background:var(--teal);color:#fff;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-size:0.8rem;">+ New User</button>' +
+      '<button class="btn-small" onclick="addWholesaleUser()" style="background:var(--teal);color:#fff;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-size:0.78rem;">+ New User</button>' +
     '</div>';
 
     // PDF catalog link section
     html += '<div style="background:rgba(42,124,111,0.08);border:1px solid rgba(42,124,111,0.2);border-radius:8px;padding:16px;margin-bottom:20px;">' +
       '<div style="font-weight:600;font-size:0.85rem;margin-bottom:8px;">PDF Catalog</div>' +
       '<div style="display:flex;gap:12px;align-items:center;">' +
-        '<button class="btn-small" onclick="uploadWholesalePDF()" style="background:var(--amber);color:#fff;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-size:0.8rem;">Upload PDF</button>' +
-        '<span id="wholesalePdfStatus" style="font-size:0.8rem;color:var(--warm-gray);">Checking...</span>' +
+        '<button class="btn-small" onclick="uploadWholesalePDF()" style="background:var(--amber);color:#fff;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Upload PDF</button>' +
+        '<span id="wholesalePdfStatus" style="font-size:0.78rem;color:var(--warm-gray);">Checking...</span>' +
       '</div>' +
       '<div id="wholesalePdfQR" style="margin-top:12px;"></div>' +
     '</div>';
@@ -193,7 +193,7 @@ function renderWholesaleUsers() {
 
     if (users.length === 0) {
       html += '<div style="text-align:center;padding:60px 20px;color:var(--warm-gray);">' +
-        '<div style="font-size:2rem;margin-bottom:12px;">&#128100;</div>' +
+        '<div style="font-size:1.6rem;margin-bottom:12px;">&#128100;</div>' +
         '<h3 style="font-weight:600;margin-bottom:8px;">No authorized users yet</h3>' +
         '<p style="font-size:0.85rem;">Add a buyer\'s Google email address to grant them wholesale catalog access.</p>' +
       '</div>';
@@ -204,15 +204,15 @@ function renderWholesaleUsers() {
         html += '<div style="background:#fff;border:1px solid #e8e0d4;border-radius:8px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;' + (!isActive ? 'opacity:0.5;' : '') + '">' +
           '<div>' +
             '<div style="font-weight:500;font-size:0.9rem;">' + esc(u._email) + '</div>' +
-            '<div style="font-size:0.75rem;color:var(--warm-gray);margin-top:2px;">' +
+            '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">' +
               (u.displayName ? esc(u.displayName) + ' &middot; ' : '') +
               'Added ' + formatDate(u.createdAt) +
               (u.approvedFrom ? ' &middot; From request' : '') +
             '</div>' +
           '</div>' +
           '<div style="display:flex;gap:8px;align-items:center;">' +
-            '<span style="font-size:0.7rem;padding:3px 8px;border-radius:4px;' + (isActive ? 'background:rgba(45,125,70,0.15);color:#2D7D46;' : 'background:rgba(220,53,69,0.15);color:#DC3545;') + '">' + (isActive ? 'Active' : 'Revoked') + '</span>' +
-            (isActive ? '<button onclick="revokeWholesaleUser(\'' + esc(u._key) + '\')" style="background:none;border:1px solid #DC3545;color:#DC3545;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:0.72rem;">Revoke</button>' : '') +
+            '<span style="font-size:0.72rem;padding:3px 8px;border-radius:4px;' + (isActive ? 'background:rgba(45,125,70,0.15);color:#2D7D46;' : 'background:rgba(220,53,69,0.15);color:var(--danger);') + '">' + (isActive ? 'Active' : 'Revoked') + '</span>' +
+            (isActive ? '<button onclick="revokeWholesaleUser(\'' + esc(u._key) + '\')" style="background:none;border:1px solid var(--danger);color:var(--danger);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:0.72rem;">Revoke</button>' : '') +
           '</div>' +
         '</div>';
       });
@@ -261,7 +261,7 @@ function updateWholesaleRequestBadge() {
       var badge = document.getElementById('wsRequestBadge');
       if (badge) {
         badge.textContent = count > 0 ? '(' + count + ')' : '';
-        badge.style.color = count > 0 ? '#DC3545' : '';
+        badge.style.color = count > 0 ? 'var(--danger)' : '';
         badge.style.fontWeight = count > 0 ? '700' : '';
       }
     });
@@ -283,7 +283,7 @@ function renderWholesaleRequests() {
 
     if (requests.length === 0) {
       container.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--warm-gray);">' +
-        '<div style="font-size:2rem;margin-bottom:12px;">&#128233;</div>' +
+        '<div style="font-size:1.6rem;margin-bottom:12px;">&#128233;</div>' +
         '<h3 style="font-weight:600;margin-bottom:8px;">No access requests</h3>' +
         '<p style="font-size:0.85rem;">When buyers request wholesale access from the catalog page, their requests will appear here.</p>' +
       '</div>';
@@ -303,14 +303,14 @@ function renderWholesaleRequests() {
           '<div style="display:flex;justify-content:space-between;align-items:flex-start;">' +
             '<div>' +
               '<div style="font-weight:500;font-size:0.9rem;">' + esc(r.email) + '</div>' +
-              '<div style="font-size:0.75rem;color:var(--warm-gray);margin-top:2px;">' +
+              '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">' +
                 (r.displayName ? esc(r.displayName) + ' &middot; ' : '') +
                 'Requested ' + formatDate(r.createdAt) +
               '</div>' +
             '</div>' +
             '<div style="display:flex;gap:8px;">' +
               '<button onclick="approveWholesaleRequest(\'' + esc(r._id) + '\')" style="background:var(--teal);color:#fff;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Approve</button>' +
-              '<button onclick="denyWholesaleRequest(\'' + esc(r._id) + '\')" style="background:none;border:1px solid #DC3545;color:#DC3545;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Deny</button>' +
+              '<button onclick="denyWholesaleRequest(\'' + esc(r._id) + '\')" style="background:none;border:1px solid var(--danger);color:var(--danger);padding:6px 14px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Deny</button>' +
             '</div>' +
           '</div>' +
         '</div>';
@@ -322,16 +322,16 @@ function renderWholesaleRequests() {
       html += '<div style="font-weight:600;font-size:0.85rem;margin-bottom:12px;color:var(--warm-gray);">Resolved</div>';
       html += '<div style="display:flex;flex-direction:column;gap:8px;">';
       resolved.forEach(function(r) {
-        var statusStyle = r.status === 'approved' ? 'background:rgba(45,125,70,0.15);color:#2D7D46;' : 'background:rgba(220,53,69,0.15);color:#DC3545;';
+        var statusStyle = r.status === 'approved' ? 'background:rgba(45,125,70,0.15);color:#2D7D46;' : 'background:rgba(220,53,69,0.15);color:var(--danger);';
         html += '<div style="background:#fff;border:1px solid #e8e0d4;border-radius:8px;padding:14px 16px;opacity:0.7;display:flex;justify-content:space-between;align-items:center;">' +
           '<div>' +
             '<div style="font-weight:500;font-size:0.9rem;">' + esc(r.email) + '</div>' +
-            '<div style="font-size:0.75rem;color:var(--warm-gray);margin-top:2px;">' +
+            '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">' +
               (r.displayName ? esc(r.displayName) + ' &middot; ' : '') +
               formatDate(r.createdAt) +
             '</div>' +
           '</div>' +
-          '<span style="font-size:0.7rem;padding:3px 8px;border-radius:4px;text-transform:capitalize;' + statusStyle + '">' + esc(r.status) + '</span>' +
+          '<span style="font-size:0.72rem;padding:3px 8px;border-radius:4px;text-transform:capitalize;' + statusStyle + '">' + esc(r.status) + '</span>' +
         '</div>';
       });
       html += '</div>';
@@ -463,8 +463,8 @@ function checkWholesalePdfStatus() {
         qrEl.innerHTML = '<div style="display:flex;gap:16px;align-items:center;">' +
           '<div id="pdfQRCanvas" style="display:inline-block;"></div>' +
           '<div>' +
-            '<div style="font-size:0.8rem;font-weight:600;">PDF Catalog QR</div>' +
-            '<div style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Links directly to the downloadable PDF</div>' +
+            '<div style="font-size:0.78rem;font-weight:600;">PDF Catalog QR</div>' +
+            '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">Links directly to the downloadable PDF</div>' +
             '<button onclick="copyToClipboard(\'' + esc(url) + '\'); showToast(\'PDF link copied!\')" style="margin-top:8px;background:none;border:1px solid #ccc;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:0.72rem;">Copy PDF Link</button>' +
             '<button onclick="copyQRImage()" style="margin-top:4px;background:none;border:1px solid #ccc;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:0.72rem;">Copy QR Image</button>' +
           '</div>' +
@@ -476,7 +476,7 @@ function checkWholesalePdfStatus() {
               text: url,
               width: 120,
               height: 120,
-              colorDark: '#1A1A1A',
+              colorDark: 'var(--charcoal)',
               colorLight: '#ffffff',
               correctLevel: QRCode.CorrectLevel.M
             });
@@ -508,7 +508,7 @@ function renderWholesaleOrders() {
 
     if (orders.length === 0) {
       container.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--warm-gray);">' +
-        '<div style="font-size:2rem;margin-bottom:12px;">&#128230;</div>' +
+        '<div style="font-size:1.6rem;margin-bottom:12px;">&#128230;</div>' +
         '<h3 style="font-weight:600;margin-bottom:8px;">No wholesale orders yet</h3>' +
         '<p style="font-size:0.85rem;">Share your catalog link to get started. Orders placed by wholesale buyers will appear here.</p>' +
       '</div>';
@@ -527,21 +527,21 @@ function renderWholesaleOrders() {
         pending_check_verification: 'background:rgba(245,158,11,0.15);color:#D97706;',
         paid: 'background:rgba(45,125,70,0.15);color:#2D7D46;',
         processing: 'background:rgba(59,130,246,0.15);color:#3B82F6;',
-        shipped: 'background:rgba(42,124,111,0.15);color:#2A7C6F;',
+        shipped: 'background:rgba(42,124,111,0.15);color:var(--teal);',
         completed: 'background:rgba(45,125,70,0.15);color:#2D7D46;',
-        cancelled: 'background:rgba(220,53,69,0.15);color:#DC3545;'
+        cancelled: 'background:rgba(220,53,69,0.15);color:var(--danger);'
       };
       var statusStyle = statusColors[o.status] || 'background:#f0f0f0;color:#666;';
       var statusLabel = (o.status || 'unknown').replace(/_/g, ' ');
 
       html += '<tr onclick="viewWholesaleOrder(\'' + esc(o._id) + '\')" style="cursor:pointer;">' +
-        '<td style="font-family:monospace;font-size:0.8rem;">' + esc(o.orderNumber || o._id.substr(-6)) + '</td>' +
+        '<td style="font-family:monospace;font-size:0.78rem;">' + esc(o.orderNumber || o._id.substr(-6)) + '</td>' +
         '<td>' + esc(o.buyerName || o.buyerEmail || 'Unknown') + '</td>' +
-        '<td style="font-size:0.8rem;">' + formatDate(o.createdAt) + '</td>' +
+        '<td style="font-size:0.78rem;">' + formatDate(o.createdAt) + '</td>' +
         '<td style="text-align:center;">' + itemCount + '</td>' +
         '<td>$' + ((o.totalCents || 0) / 100).toFixed(2) + '</td>' +
-        '<td style="font-size:0.75rem;">' + esc(o.paymentMethod === 'check' ? 'Check' : 'Card') + '</td>' +
-        '<td><span style="font-size:0.7rem;padding:3px 8px;border-radius:4px;text-transform:capitalize;' + statusStyle + '">' + statusLabel + '</span></td>' +
+        '<td style="font-size:0.78rem;">' + esc(o.paymentMethod === 'check' ? 'Check' : 'Card') + '</td>' +
+        '<td><span style="font-size:0.72rem;padding:3px 8px;border-radius:4px;text-transform:capitalize;' + statusStyle + '">' + statusLabel + '</span></td>' +
       '</tr>';
     });
 
@@ -558,7 +558,7 @@ function viewWholesaleOrder(orderId) {
   var itemsHtml = items.map(function(it) {
     var opts = it.options ? Object.entries(it.options).map(function(e) { return e[0] + ': ' + e[1]; }).join(', ') : '';
     return '<tr>' +
-      '<td>' + esc(it.name) + (opts ? '<div style="font-size:0.75rem;color:var(--warm-gray);">' + esc(opts) + '</div>' : '') + '</td>' +
+      '<td>' + esc(it.name) + (opts ? '<div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(opts) + '</div>' : '') + '</td>' +
       '<td style="text-align:center;">' + (it.qty || 1) + '</td>' +
       '<td style="text-align:right;">$' + ((it.priceCents || 0) / 100).toFixed(2) + '</td>' +
       '<td style="text-align:right;">$' + (((it.priceCents || 0) * (it.qty || 1)) / 100).toFixed(2) + '</td>' +
@@ -566,7 +566,7 @@ function viewWholesaleOrder(orderId) {
   }).join('');
 
   var statusOptions = ['pending_check_verification', 'paid', 'processing', 'shipped', 'completed', 'cancelled'];
-  var statusSelect = '<select onchange="updateWholesaleOrderStatus(\'' + esc(orderId) + '\', this.value)" style="padding:4px 8px;border-radius:4px;border:1px solid #ccc;font-size:0.8rem;">';
+  var statusSelect = '<select onchange="updateWholesaleOrderStatus(\'' + esc(orderId) + '\', this.value)" style="padding:4px 8px;border-radius:4px;border:1px solid #ccc;font-size:0.78rem;">';
   statusOptions.forEach(function(s) {
     statusSelect += '<option value="' + s + '"' + (o.status === s ? ' selected' : '') + '>' + s.replace(/_/g, ' ') + '</option>';
   });
@@ -578,29 +578,29 @@ function viewWholesaleOrder(orderId) {
   '<div style="background:#fff;border:1px solid #e8e0d4;border-radius:8px;padding:20px;">' +
     '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">' +
       '<div>' +
-        '<h3 style="font-weight:700;font-size:1.1rem;">Order ' + esc(o.orderNumber || orderId.substr(-6)) + '</h3>' +
-        '<div style="font-size:0.8rem;color:var(--warm-gray);margin-top:4px;">' + formatDate(o.createdAt) + '</div>' +
+        '<h3 style="font-weight:700;font-size:1.15rem;">Order ' + esc(o.orderNumber || orderId.substr(-6)) + '</h3>' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">' + formatDate(o.createdAt) + '</div>' +
       '</div>' +
       '<div style="display:flex;gap:8px;align-items:center;">' +
-        '<span style="font-size:0.8rem;">Status:</span>' + statusSelect +
+        '<span style="font-size:0.78rem;">Status:</span>' + statusSelect +
       '</div>' +
     '</div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">' +
       '<div>' +
-        '<div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;">Buyer</div>' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;">Buyer</div>' +
         '<div style="font-size:0.9rem;">' + esc(o.buyerName || 'N/A') + '</div>' +
-        '<div style="font-size:0.8rem;color:var(--warm-gray);">' + esc(o.buyerEmail || '') + '</div>' +
-        '<div style="font-size:0.8rem;color:var(--warm-gray);">' + esc(o.buyerPhone || '') + '</div>' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(o.buyerEmail || '') + '</div>' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(o.buyerPhone || '') + '</div>' +
       '</div>' +
       '<div>' +
-        '<div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;">Shipping</div>' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;">Shipping</div>' +
         '<div style="font-size:0.85rem;">' + esc(o.shipping ? (o.shipping.name || '') : '') + '</div>' +
-        '<div style="font-size:0.8rem;color:var(--warm-gray);">' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);">' +
           esc(o.shipping ? [o.shipping.address1, o.shipping.city, o.shipping.state, o.shipping.zip].filter(Boolean).join(', ') : 'N/A') +
         '</div>' +
       '</div>' +
     '</div>' +
-    '<div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">Payment: ' + esc(o.paymentMethod === 'check' ? 'Pay by Check' : 'Credit Card') + '</div>' +
+    '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">Payment: ' + esc(o.paymentMethod === 'check' ? 'Pay by Check' : 'Credit Card') + '</div>' +
     '<table class="data-table" style="width:100%;">' +
       '<thead><tr><th>Product</th><th style="text-align:center;">Qty</th><th style="text-align:right;">Price</th><th style="text-align:right;">Total</th></tr></thead>' +
       '<tbody>' + itemsHtml + '</tbody>' +
@@ -650,7 +650,7 @@ function renderWholesaleSetup() {
     } else {
       html += '<div style="margin-bottom:16px;">' +
         '<h4 style="font-size:0.85rem;font-weight:600;margin-bottom:8px;">Existing products to update:</h4>' +
-        '<div style="font-size:0.8rem;color:var(--warm-gray);">';
+        '<div style="font-size:0.78rem;color:var(--warm-gray);">';
       Object.keys(WHOLESALE_SEED.existing).forEach(function(pid) {
         var s = WHOLESALE_SEED.existing[pid];
         var existing = products[pid];
@@ -661,7 +661,7 @@ function renderWholesaleSetup() {
 
       html += '<div style="margin-bottom:16px;">' +
         '<h4 style="font-size:0.85rem;font-weight:600;margin-bottom:8px;">New products to create:</h4>' +
-        '<div style="font-size:0.8rem;color:var(--warm-gray);">';
+        '<div style="font-size:0.78rem;color:var(--warm-gray);">';
       WHOLESALE_SEED.newProducts.forEach(function(np) {
         var already = products[np.pid];
         html += '<div style="padding:2px 0;' + (already ? 'text-decoration:line-through;opacity:0.5;' : '') + '">  ' + np.pid + ' — ' + np.name + ' (wpid ' + np.wpid + ', $' + (np.wholesalePriceCents / 100).toFixed(2) + ')</div>';

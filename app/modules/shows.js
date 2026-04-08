@@ -63,7 +63,7 @@ function updateShowTabBadges() {
       if (!badge) {
         badge = document.createElement('span');
         badge.className = 'show-tab-badge';
-        badge.style.cssText = 'font-size:0.7rem;background:var(--text-secondary, #888);color:white;padding:1px 6px;border-radius:8px;margin-left:4px;';
+        badge.style.cssText = 'font-size:0.72rem;background:var(--text-secondary, #888);color:white;padding:1px 6px;border-radius:8px;margin-left:4px;';
         tab.appendChild(badge);
       }
       badge.textContent = count;
@@ -352,10 +352,10 @@ function renderShowDetail(showId) {
   h += '<h2 style="margin:0 0 4px 0;">' + esc(s.name || 'Unnamed Show') + '</h2>';
   h += '<span class="status-badge" style="' + showStatusBadgeStyle(statusClass) + '">' + statusLabel + '</span>';
   h += ' <span style="font-size:0.85rem;color:var(--text-secondary, #888);">' + esc(typeLabel) + '</span>';
-  if (s.aiGenerated) h += ' <span style="font-size:0.75rem;background:var(--teal, #2a7c6f);color:white;padding:2px 6px;border-radius:4px;">AI Found</span>';
+  if (s.aiGenerated) h += ' <span style="font-size:0.78rem;background:var(--teal, var(--teal));color:white;padding:2px 6px;border-radius:4px;">AI Found</span>';
   h += '</div>';
   h += '<div style="display:flex;gap:8px;">';
-  if (hasPermission('shows', 'update') && s.websiteUrl) h += '<button id="deepDiveBtn-' + showId + '" class="btn btn-sm" onclick="runShowDeepDive(\'' + showId + '\')" style="background:var(--teal, #2a7c6f);color:white;border:none;">Deep Dive</button>';
+  if (hasPermission('shows', 'update') && s.websiteUrl) h += '<button id="deepDiveBtn-' + showId + '" class="btn btn-sm" onclick="runShowDeepDive(\'' + showId + '\')" style="background:var(--teal, var(--teal));color:white;border:none;">Deep Dive</button>';
   if (hasPermission('shows', 'update')) h += '<button class="btn btn-secondary btn-sm" onclick="openCreateShowModal(\'' + showId + '\')">Edit</button>';
   if (hasPermission('shows', 'delete')) h += '<button class="btn btn-sm" onclick="archiveShow(\'' + showId + '\')" style="background:#dc2626;color:white;border:none;">Delete</button>';
   h += '</div>';
@@ -383,11 +383,11 @@ function renderShowDetailInfo(showId, s, location, dates, statusClass) {
   h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px;margin-bottom:24px;">';
   h += showDetailCard('Location', location || '—');
   h += showDetailCard('Dates', dates || '—');
-  h += showDetailCard('Website', s.websiteUrl ? '<a href="' + esc(s.websiteUrl) + '" target="_blank" style="color:var(--primary, #2a7c6f);">' + esc(s.websiteUrl) + '</a>' : '—');
+  h += showDetailCard('Website', s.websiteUrl ? '<a href="' + esc(s.websiteUrl) + '" target="_blank" style="color:var(--primary, var(--teal));">' + esc(s.websiteUrl) + '</a>' : '—');
   h += showDetailCard('Booth Fee', s.boothFee ? '$' + (s.boothFee / 100).toFixed(2) : '—');
   h += showDetailCard('Jury Fee', s.juryFee ? '$' + (s.juryFee / 100).toFixed(2) : '—');
   h += showDetailCard('Application Deadline', s.applicationDeadline ? formatShowDate(s.applicationDeadline) : '—');
-  h += showDetailCard('Application URL', s.applicationUrl ? '<a href="' + esc(s.applicationUrl) + '" target="_blank" style="color:var(--primary, #2a7c6f);">Open</a>' : '—');
+  h += showDetailCard('Application URL', s.applicationUrl ? '<a href="' + esc(s.applicationUrl) + '" target="_blank" style="color:var(--primary, var(--teal));">Open</a>' : '—');
   h += showDetailCard('Notes', s.notes ? esc(s.notes) : '—');
   h += '</div>';
 
@@ -395,9 +395,9 @@ function renderShowDetailInfo(showId, s, location, dates, statusClass) {
   var dd = s.deepDive || {};
   if (Object.keys(dd).length > 0) {
     h += '<div style="margin-bottom:24px;">';
-    h += '<h3 style="margin:0 0 12px 0;">Deep Dive Details <span style="font-size:0.75rem;background:var(--teal, #2a7c6f);color:white;padding:2px 6px;border-radius:4px;">AI Researched</span></h3>';
+    h += '<h3 style="margin:0 0 12px 0;">Deep Dive Details <span style="font-size:0.78rem;background:var(--teal, var(--teal));color:white;padding:2px 6px;border-radius:4px;">AI Researched</span></h3>';
     h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px;">';
-    if (dd.applicationMethod) h += showDetailCard('Apply Via', esc(dd.applicationMethod) + (dd.applicationUrl ? ' — <a href="' + esc(dd.applicationUrl) + '" target="_blank" style="color:var(--primary, #2a7c6f);">Open</a>' : ''));
+    if (dd.applicationMethod) h += showDetailCard('Apply Via', esc(dd.applicationMethod) + (dd.applicationUrl ? ' — <a href="' + esc(dd.applicationUrl) + '" target="_blank" style="color:var(--primary, var(--teal));">Open</a>' : ''));
     if (dd.boothFeeNotes) h += showDetailCard('Booth Fee Details', esc(dd.boothFeeNotes));
     if (dd.juryFeeNotes) h += showDetailCard('Jury Fee Details', esc(dd.juryFeeNotes));
     if (dd.applicationDeadline) h += showDetailCard('Application Deadline', formatShowDate(dd.applicationDeadline) + (dd.lateDeadline ? ' (Late: ' + formatShowDate(dd.lateDeadline) + ')' : ''));
@@ -441,9 +441,9 @@ function renderShowDetailInfo(showId, s, location, dates, statusClass) {
   } else {
     history.forEach(function(entry) {
       h += '<div style="padding:8px 0;border-bottom:1px solid var(--border-color, #eee);font-size:0.9rem;">';
-      h += '<span class="status-badge" style="font-size:0.7rem;' + showStatusBadgeStyle(entry.newStatus || '') + '">' + (entry.newStatus || '').charAt(0).toUpperCase() + (entry.newStatus || '').slice(1) + '</span>';
+      h += '<span class="status-badge" style="font-size:0.72rem;' + showStatusBadgeStyle(entry.newStatus || '') + '">' + (entry.newStatus || '').charAt(0).toUpperCase() + (entry.newStatus || '').slice(1) + '</span>';
       if (entry.oldStatus) h += ' <span style="color:var(--text-secondary, #888);">from ' + entry.oldStatus + '</span>';
-      h += ' <span style="color:var(--text-secondary, #888);font-size:0.8rem;">' + (entry.timestamp ? new Date(entry.timestamp).toLocaleDateString() : '') + '</span>';
+      h += ' <span style="color:var(--text-secondary, #888);font-size:0.78rem;">' + (entry.timestamp ? new Date(entry.timestamp).toLocaleDateString() : '') + '</span>';
       h += '</div>';
     });
   }
@@ -462,7 +462,7 @@ function renderShowDetailPrep(showId, s) {
   h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
   h += '<h3 style="margin:0;">Staffing</h3>';
   if (hasPermission('shows', 'update')) {
-    h += '<button class="btn btn-sm" onclick="openShowStaffingModal(\'' + showId + '\')" style="background:var(--primary, #2a7c6f);color:white;border:none;">+ Assign Staff</button>';
+    h += '<button class="btn btn-sm" onclick="openShowStaffingModal(\'' + showId + '\')" style="background:var(--primary, var(--teal));color:white;border:none;">+ Assign Staff</button>';
   }
   h += '</div>';
   var staffing = prep.staffing || {};
@@ -473,14 +473,14 @@ function renderShowDetailPrep(showId, s) {
     h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;">';
     staffKeys.forEach(function(uid) {
       var entry = staffing[uid];
-      var roleBadgeColor = entry.showRole === 'lead' ? '#2563eb' : entry.showRole === 'driver' ? '#7c3aed' : 'var(--teal, #2a7c6f)';
+      var roleBadgeColor = entry.showRole === 'lead' ? '#2563eb' : entry.showRole === 'driver' ? '#7c3aed' : 'var(--teal, var(--teal))';
       h += '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:12px;display:flex;justify-content:space-between;align-items:center;">';
       h += '<div>';
       h += '<div style="font-weight:600;font-size:0.9rem;">' + esc(entry.name || 'Unknown') + '</div>';
-      h += '<span style="font-size:0.75rem;background:' + roleBadgeColor + ';color:white;padding:2px 8px;border-radius:4px;">' + esc((entry.showRole || 'support').charAt(0).toUpperCase() + (entry.showRole || 'support').slice(1)) + '</span>';
+      h += '<span style="font-size:0.78rem;background:' + roleBadgeColor + ';color:white;padding:2px 8px;border-radius:4px;">' + esc((entry.showRole || 'support').charAt(0).toUpperCase() + (entry.showRole || 'support').slice(1)) + '</span>';
       h += '</div>';
       if (hasPermission('shows', 'update')) {
-        h += '<button onclick="removeShowStaff(\'' + showId + '\', \'' + uid + '\')" style="background:none;border:none;color:var(--text-secondary, #888);cursor:pointer;font-size:1.1rem;" title="Remove">&times;</button>';
+        h += '<button onclick="removeShowStaff(\'' + showId + '\', \'' + uid + '\')" style="background:none;border:none;color:var(--text-secondary, #888);cursor:pointer;font-size:1.15rem;" title="Remove">&times;</button>';
       }
       h += '</div>';
     });
@@ -493,7 +493,7 @@ function renderShowDetailPrep(showId, s) {
   h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
   h += '<h3 style="margin:0;">Inventory Pull List</h3>';
   if (hasPermission('shows', 'update')) {
-    h += '<button class="btn btn-sm" onclick="addShowInventoryItem(\'' + showId + '\')" style="background:var(--primary, #2a7c6f);color:white;border:none;">+ Add Item</button>';
+    h += '<button class="btn btn-sm" onclick="addShowInventoryItem(\'' + showId + '\')" style="background:var(--primary, var(--teal));color:white;border:none;">+ Add Item</button>';
   }
   h += '</div>';
   var inventory = prep.inventory || {};
@@ -512,12 +512,12 @@ function renderShowDetailPrep(showId, s) {
       var meta = [];
       if (item.quantity) meta.push('Qty: ' + item.quantity);
       if (item.notes) meta.push(esc(item.notes));
-      if (item.linkedMakeJob) meta.push('<span style="color:var(--primary, #2a7c6f);font-size:0.8rem;">🔗 Linked to Make</span>');
-      if (meta.length) h += '<div style="font-size:0.8rem;color:var(--text-secondary, #888);">' + meta.join(' · ') + '</div>';
+      if (item.linkedMakeJob) meta.push('<span style="color:var(--primary, var(--teal));font-size:0.78rem;">🔗 Linked to Make</span>');
+      if (meta.length) h += '<div style="font-size:0.78rem;color:var(--text-secondary, #888);">' + meta.join(' · ') + '</div>';
       h += '</div>';
       if (hasPermission('shows', 'update')) {
         h += '<button onclick="editShowInventoryItem(\'' + showId + '\', \'' + itemId + '\')" style="background:none;border:none;color:var(--text-secondary, #888);cursor:pointer;font-size:0.85rem;" title="Edit">✏️</button>';
-        h += '<button onclick="removeShowInventoryItem(\'' + showId + '\', \'' + itemId + '\')" style="background:none;border:none;color:var(--text-secondary, #888);cursor:pointer;font-size:1.1rem;" title="Remove">&times;</button>';
+        h += '<button onclick="removeShowInventoryItem(\'' + showId + '\', \'' + itemId + '\')" style="background:none;border:none;color:var(--text-secondary, #888);cursor:pointer;font-size:1.15rem;" title="Remove">&times;</button>';
       }
       h += '</div>';
     });
@@ -533,7 +533,7 @@ function renderShowDetailPrep(showId, s) {
   h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
   h += '<h3 style="margin:0;">Logistics</h3>';
   if (hasPermission('shows', 'update')) {
-    h += '<button class="btn btn-sm" onclick="editShowLogistics(\'' + showId + '\')" style="background:var(--primary, #2a7c6f);color:white;border:none;">Edit</button>';
+    h += '<button class="btn btn-sm" onclick="editShowLogistics(\'' + showId + '\')" style="background:var(--primary, var(--teal));color:white;border:none;">Edit</button>';
   }
   h += '</div>';
   var logistics = prep.logistics || {};
@@ -551,7 +551,7 @@ function renderShowDetailPrep(showId, s) {
     h += '</div>';
     if (logistics.notes) {
       h += '<div style="margin-top:12px;background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:12px;">';
-      h += '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:4px;">Notes</div>';
+      h += '<div style="font-size:0.78rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:4px;">Notes</div>';
       h += '<div style="font-size:0.9rem;white-space:pre-wrap;">' + esc(logistics.notes) + '</div>';
       h += '</div>';
     }
@@ -597,13 +597,13 @@ function renderShowDetailExecute(showId, s) {
     h += '<div style="background:linear-gradient(135deg, #16a34a, #15803d);color:white;border-radius:12px;padding:16px 20px;margin-bottom:24px;display:flex;align-items:center;gap:12px;">';
     h += '<div style="width:12px;height:12px;border-radius:50%;background:white;animation:pulse 2s infinite;flex-shrink:0;"></div>';
     h += '<div>';
-    h += '<div style="font-weight:700;font-size:1.1rem;">Show Day — Live</div>';
+    h += '<div style="font-weight:700;font-size:1.15rem;">Show Day — Live</div>';
     h += '<div style="font-size:0.85rem;opacity:0.9;">' + esc(s.name || 'Show') + ' is happening now</div>';
     h += '</div></div>';
   } else if (s.applicationStatus === 'accepted' && s.startDate && s.startDate > today) {
     var daysUntil = Math.ceil((new Date(s.startDate + 'T00:00:00') - new Date()) / 86400000);
     h += '<div class="exec-upcoming-banner" style="background:var(--bg-secondary, #f5f5f5);border-radius:12px;padding:16px 20px;margin-bottom:24px;display:flex;align-items:center;gap:12px;">';
-    h += '<div style="font-size:1.5rem;">&#128197;</div>';
+    h += '<div style="font-size:1.6rem;">&#128197;</div>';
     h += '<div>';
     h += '<div style="font-weight:600;">Show starts in ' + daysUntil + ' day' + (daysUntil !== 1 ? 's' : '') + '</div>';
     h += '<div style="font-size:0.85rem;color:var(--text-secondary, #888);">Execute tools become active on show day.</div>';
@@ -628,9 +628,9 @@ function renderShowDetailExecute(showId, s) {
       var dayLabel = new Date(dt + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
       var isToday = dt === today;
       h += '<button class="btn btn-small exec-day-btn' + (isSelected ? ' active' : '') + '" onclick="switchExecuteDate(\'' + showId + '\', \'' + dt + '\')" style="' +
-        'border:1px solid ' + (isSelected ? 'var(--teal, #2a7c6f)' : '#ddd') + ';' +
-        'background:' + (isSelected ? 'var(--teal, #2a7c6f)' : 'var(--cream, #FAF6F0)') + ';' +
-        'color:' + (isSelected ? 'white' : 'var(--charcoal, #1A1A1A)') + ';font-weight:' + (isSelected ? '600' : '400') + ';">' +
+        'border:1px solid ' + (isSelected ? 'var(--teal, var(--teal))' : '#ddd') + ';' +
+        'background:' + (isSelected ? 'var(--teal, var(--teal))' : 'var(--cream, var(--cream))') + ';' +
+        'color:' + (isSelected ? 'white' : 'var(--charcoal, var(--charcoal))') + ';font-weight:' + (isSelected ? '600' : '400') + ';">' +
         dayLabel + (isToday ? ' (Today)' : '') + '</button>';
     });
     h += '</div></div>';
@@ -644,7 +644,7 @@ function renderShowDetailExecute(showId, s) {
   h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
   h += '<h3 style="margin:0;">Sales Log</h3>';
   if (hasPermission('shows', 'update')) {
-    h += '<button class="btn btn-sm" onclick="openShowSaleModal(\'' + showId + '\')" style="background:var(--primary, #2a7c6f);color:white;border:none;">+ Record Sale</button>';
+    h += '<button class="btn btn-sm" onclick="openShowSaleModal(\'' + showId + '\')" style="background:var(--primary, var(--teal));color:white;border:none;">+ Record Sale</button>';
   }
   h += '</div>';
 
@@ -672,11 +672,11 @@ function renderShowDetailExecute(showId, s) {
     saleKeys.forEach(function(k) { var sl = daySales[k]; totalRevenue += (sl.priceCents || 0); if (sl.paymentMethod === 'cash') cashCount++; else if (sl.paymentMethod === 'card') cardCount++; else if (sl.paymentMethod === 'square') squareCount++; });
     h += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;">';
     h += '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:10px 16px;text-align:center;">';
-    h += '<div style="font-size:1.25rem;font-weight:700;">$' + (totalRevenue / 100).toFixed(2) + '</div>';
-    h += '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;">Revenue</div></div>';
+    h += '<div style="font-size:1.15rem;font-weight:700;">$' + (totalRevenue / 100).toFixed(2) + '</div>';
+    h += '<div style="font-size:0.78rem;color:var(--text-secondary, #888);text-transform:uppercase;">Revenue</div></div>';
     h += '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:10px 16px;text-align:center;">';
-    h += '<div style="font-size:1.25rem;font-weight:700;">' + saleKeys.length + '</div>';
-    h += '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;">Sales</div></div>';
+    h += '<div style="font-size:1.15rem;font-weight:700;">' + saleKeys.length + '</div>';
+    h += '<div style="font-size:0.78rem;color:var(--text-secondary, #888);text-transform:uppercase;">Sales</div></div>';
     var methodParts = [];
     if (cashCount) methodParts.push(cashCount + ' cash');
     if (cardCount) methodParts.push(cardCount + ' card');
@@ -684,7 +684,7 @@ function renderShowDetailExecute(showId, s) {
     if (methodParts.length) {
       h += '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:10px 16px;text-align:center;">';
       h += '<div style="font-size:0.85rem;font-weight:600;">' + methodParts.join(', ') + '</div>';
-      h += '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;">By Method</div></div>';
+      h += '<div style="font-size:0.78rem;color:var(--text-secondary, #888);text-transform:uppercase;">By Method</div></div>';
     }
     h += '</div>';
 
@@ -697,17 +697,17 @@ function renderShowDetailExecute(showId, s) {
       var methodBadge = '';
       var methodColors = { cash: '#16a34a', card: '#2563eb', square: '#7c3aed' };
       if (sl.paymentMethod) {
-        methodBadge = '<span style="font-size:0.7rem;background:' + (methodColors[sl.paymentMethod] || '#888') + ';color:white;padding:2px 6px;border-radius:4px;">' + sl.paymentMethod.charAt(0).toUpperCase() + sl.paymentMethod.slice(1) + '</span>';
+        methodBadge = '<span style="font-size:0.72rem;background:' + (methodColors[sl.paymentMethod] || '#888') + ';color:white;padding:2px 6px;border-radius:4px;">' + sl.paymentMethod.charAt(0).toUpperCase() + sl.paymentMethod.slice(1) + '</span>';
       }
       h += '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:12px;">';
       h += '<div style="flex:1;">';
       h += '<div style="font-weight:600;font-size:0.9rem;">' + esc(sl.description || 'Sale') + '</div>';
-      h += '<div style="font-size:0.8rem;color:var(--text-secondary, #888);">' + time + ' ' + methodBadge + '</div>';
+      h += '<div style="font-size:0.78rem;color:var(--text-secondary, #888);">' + time + ' ' + methodBadge + '</div>';
       h += '</div>';
-      h += '<div style="font-weight:700;font-size:0.95rem;">$' + ((sl.priceCents || 0) / 100).toFixed(2) + '</div>';
+      h += '<div style="font-weight:700;font-size:0.9rem;">$' + ((sl.priceCents || 0) / 100).toFixed(2) + '</div>';
       if (hasPermission('shows', 'update')) {
         h += '<button onclick="editShowSale(\'' + showId + '\', \'' + sl._key + '\')" style="background:none;border:none;color:var(--text-secondary, #888);cursor:pointer;font-size:0.85rem;" title="Edit">&#9998;</button>';
-        h += '<button onclick="deleteShowSale(\'' + showId + '\', \'' + sl._key + '\')" style="background:none;border:none;color:var(--text-secondary, #888);cursor:pointer;font-size:1.1rem;" title="Delete">&times;</button>';
+        h += '<button onclick="deleteShowSale(\'' + showId + '\', \'' + sl._key + '\')" style="background:none;border:none;color:var(--text-secondary, #888);cursor:pointer;font-size:1.15rem;" title="Delete">&times;</button>';
       }
       h += '</div>';
     });
@@ -738,23 +738,23 @@ function renderShowDetailExecute(showId, s) {
     });
     h += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;">';
     h += '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:10px 16px;text-align:center;">';
-    h += '<div style="font-size:1.25rem;font-weight:700;">' + totalBrought + '</div>';
-    h += '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;">Brought</div></div>';
+    h += '<div style="font-size:1.15rem;font-weight:700;">' + totalBrought + '</div>';
+    h += '<div style="font-size:0.78rem;color:var(--text-secondary, #888);text-transform:uppercase;">Brought</div></div>';
     h += '<div style="background:#16a34a22;border-radius:8px;padding:10px 16px;text-align:center;">';
-    h += '<div style="font-size:1.25rem;font-weight:700;color:#16a34a;">' + totalSold + '</div>';
-    h += '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;">Sold</div></div>';
+    h += '<div style="font-size:1.15rem;font-weight:700;color:#16a34a;">' + totalSold + '</div>';
+    h += '<div style="font-size:0.78rem;color:var(--text-secondary, #888);text-transform:uppercase;">Sold</div></div>';
     h += '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:10px 16px;text-align:center;">';
-    h += '<div style="font-size:1.25rem;font-weight:700;">' + totalReturned + '</div>';
-    h += '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;">Returned</div></div>';
+    h += '<div style="font-size:1.15rem;font-weight:700;">' + totalReturned + '</div>';
+    h += '<div style="font-size:0.78rem;color:var(--text-secondary, #888);text-transform:uppercase;">Returned</div></div>';
     if (totalDamaged > 0) {
       h += '<div style="background:#dc262622;border-radius:8px;padding:10px 16px;text-align:center;">';
-      h += '<div style="font-size:1.25rem;font-weight:700;color:#dc2626;">' + totalDamaged + '</div>';
-      h += '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;">Damaged</div></div>';
+      h += '<div style="font-size:1.15rem;font-weight:700;color:#dc2626;">' + totalDamaged + '</div>';
+      h += '<div style="font-size:0.78rem;color:var(--text-secondary, #888);text-transform:uppercase;">Damaged</div></div>';
     }
     if (totalGifted > 0) {
       h += '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:10px 16px;text-align:center;">';
-      h += '<div style="font-size:1.25rem;font-weight:700;">' + totalGifted + '</div>';
-      h += '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;">Gifted</div></div>';
+      h += '<div style="font-size:1.15rem;font-weight:700;">' + totalGifted + '</div>';
+      h += '<div style="font-size:0.78rem;color:var(--text-secondary, #888);text-transform:uppercase;">Gifted</div></div>';
     }
     h += '</div>';
 
@@ -770,7 +770,7 @@ function renderShowDetailExecute(showId, s) {
       h += '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">';
       h += '<div style="flex:1;min-width:150px;">';
       h += '<div style="font-weight:600;font-size:0.9rem;">' + esc(item.name || 'Item') + '</div>';
-      h += '<div style="font-size:0.8rem;color:var(--text-secondary, #888);">Brought: ' + qty + ' | Accounted: ' + accounted + '</div>';
+      h += '<div style="font-size:0.78rem;color:var(--text-secondary, #888);">Brought: ' + qty + ' | Accounted: ' + accounted + '</div>';
       h += '</div>';
       h += '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">';
       if (hasPermission('shows', 'update')) {
@@ -779,10 +779,10 @@ function renderShowDetailExecute(showId, s) {
         h += reconCounterButton(showId, itemId, 'damaged', rec.damaged || 0, '#dc2626');
         h += reconCounterButton(showId, itemId, 'gifted', rec.gifted || 0, '#7c3aed');
       } else {
-        if (rec.sold) h += '<span style="font-size:0.8rem;color:#16a34a;">Sold: ' + rec.sold + '</span> ';
-        if (rec.returned) h += '<span style="font-size:0.8rem;color:#2563eb;">Ret: ' + rec.returned + '</span> ';
-        if (rec.damaged) h += '<span style="font-size:0.8rem;color:#dc2626;">Dmg: ' + rec.damaged + '</span> ';
-        if (rec.gifted) h += '<span style="font-size:0.8rem;color:#7c3aed;">Gift: ' + rec.gifted + '</span> ';
+        if (rec.sold) h += '<span style="font-size:0.78rem;color:#16a34a;">Sold: ' + rec.sold + '</span> ';
+        if (rec.returned) h += '<span style="font-size:0.78rem;color:#2563eb;">Ret: ' + rec.returned + '</span> ';
+        if (rec.damaged) h += '<span style="font-size:0.78rem;color:#dc2626;">Dmg: ' + rec.damaged + '</span> ';
+        if (rec.gifted) h += '<span style="font-size:0.78rem;color:#7c3aed;">Gift: ' + rec.gifted + '</span> ';
       }
       h += '</div>';
       h += '<div style="width:8px;height:8px;border-radius:50%;background:' + statusColor + ';flex-shrink:0;" title="' + accounted + '/' + qty + ' accounted"></div>';
@@ -797,7 +797,7 @@ function renderShowDetailExecute(showId, s) {
   h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
   h += '<h3 style="margin:0;">Show Notes</h3>';
   if (hasPermission('shows', 'update')) {
-    h += '<button class="btn btn-sm" onclick="editShowNotes(\'' + showId + '\')" style="background:var(--primary, #2a7c6f);color:white;border:none;">Edit Notes</button>';
+    h += '<button class="btn btn-sm" onclick="editShowNotes(\'' + showId + '\')" style="background:var(--primary, var(--teal));color:white;border:none;">Edit Notes</button>';
   }
   h += '</div>';
   var notes = exec.notes || {};
@@ -826,18 +826,18 @@ function renderShowDetailExecute(showId, s) {
       grandSalesCount += dayKeys.length;
       var dayLabel = new Date(dt + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
       var isToday = dt === today;
-      h += '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;' + (isToday ? 'border-left:3px solid var(--primary, #2a7c6f);' : '') + '">';
+      h += '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;' + (isToday ? 'border-left:3px solid var(--primary, var(--teal));' : '') + '">';
       h += '<div>';
       h += '<div style="font-weight:600;font-size:0.9rem;">' + dayLabel + (isToday ? ' (Today)' : '') + '</div>';
-      h += '<div style="font-size:0.8rem;color:var(--text-secondary, #888);">' + dayKeys.length + ' sale' + (dayKeys.length !== 1 ? 's' : '') + '</div>';
+      h += '<div style="font-size:0.78rem;color:var(--text-secondary, #888);">' + dayKeys.length + ' sale' + (dayKeys.length !== 1 ? 's' : '') + '</div>';
       h += '</div>';
-      h += '<div style="font-weight:700;font-size:0.95rem;">$' + (dayRevenue / 100).toFixed(2) + '</div>';
+      h += '<div style="font-weight:700;font-size:0.9rem;">$' + (dayRevenue / 100).toFixed(2) + '</div>';
       h += '</div>';
     });
     h += '</div>';
-    h += '<div style="margin-top:12px;background:var(--primary, #2a7c6f);color:white;border-radius:8px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;">';
+    h += '<div style="margin-top:12px;background:var(--primary, var(--teal));color:white;border-radius:8px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;">';
     h += '<div style="font-weight:600;">Show Total</div>';
-    h += '<div><span style="font-size:0.85rem;opacity:0.9;margin-right:12px;">' + grandSalesCount + ' sales</span><span style="font-weight:700;font-size:1.1rem;">$' + (grandTotal / 100).toFixed(2) + '</span></div>';
+    h += '<div><span style="font-size:0.85rem;opacity:0.9;margin-right:12px;">' + grandSalesCount + ' sales</span><span style="font-weight:700;font-size:1.15rem;">$' + (grandTotal / 100).toFixed(2) + '</span></div>';
     h += '</div>';
     h += '</div>';
   }
@@ -848,9 +848,9 @@ function renderShowDetailExecute(showId, s) {
 
 function reconCounterButton(showId, itemId, field, count, color) {
   return '<div style="display:flex;align-items:center;gap:2px;">' +
-    '<button onclick="updateReconCount(\'' + showId + '\', \'' + itemId + '\', \'' + field + '\', -1)" style="background:none;border:1px solid var(--border-color, #ddd);border-radius:4px 0 0 4px;padding:2px 6px;cursor:pointer;font-size:0.8rem;color:var(--text-primary, #333);font-family:inherit;">&minus;</button>' +
-    '<span style="font-size:0.8rem;font-weight:600;min-width:40px;text-align:center;padding:2px 4px;border-top:1px solid var(--border-color, #ddd);border-bottom:1px solid var(--border-color, #ddd);color:' + color + ';">' + field.charAt(0).toUpperCase() + field.slice(1) + ': ' + count + '</span>' +
-    '<button onclick="updateReconCount(\'' + showId + '\', \'' + itemId + '\', \'' + field + '\', 1)" style="background:none;border:1px solid var(--border-color, #ddd);border-radius:0 4px 4px 0;padding:2px 6px;cursor:pointer;font-size:0.8rem;color:var(--text-primary, #333);font-family:inherit;">+</button>' +
+    '<button onclick="updateReconCount(\'' + showId + '\', \'' + itemId + '\', \'' + field + '\', -1)" style="background:none;border:1px solid var(--border-color, #ddd);border-radius:4px 0 0 4px;padding:2px 6px;cursor:pointer;font-size:0.78rem;color:var(--text-primary, #333);font-family:inherit;">&minus;</button>' +
+    '<span style="font-size:0.78rem;font-weight:600;min-width:40px;text-align:center;padding:2px 4px;border-top:1px solid var(--border-color, #ddd);border-bottom:1px solid var(--border-color, #ddd);color:' + color + ';">' + field.charAt(0).toUpperCase() + field.slice(1) + ': ' + count + '</span>' +
+    '<button onclick="updateReconCount(\'' + showId + '\', \'' + itemId + '\', \'' + field + '\', 1)" style="background:none;border:1px solid var(--border-color, #ddd);border-radius:0 4px 4px 0;padding:2px 6px;cursor:pointer;font-size:0.78rem;color:var(--text-primary, #333);font-family:inherit;">+</button>' +
   '</div>';
 }
 
@@ -921,7 +921,7 @@ function openShowSaleModal(showId, saleId) {
   h += '</select></div>';
   h += '<div style="display:flex;gap:8px;justify-content:flex-end;">';
   h += '<button class="btn btn-secondary btn-sm" onclick="document.getElementById(\'showSaleModal\').remove()">Cancel</button>';
-  h += '<button class="btn btn-sm" onclick="saveShowSale(\'' + showId + '\', ' + (saleId ? '\'' + saleId + '\'' : 'null') + ')" style="background:var(--primary, #2a7c6f);color:white;border:none;">Save</button>';
+  h += '<button class="btn btn-sm" onclick="saveShowSale(\'' + showId + '\', ' + (saleId ? '\'' + saleId + '\'' : 'null') + ')" style="background:var(--primary, var(--teal));color:white;border:none;">Save</button>';
   h += '</div></div></div>';
   document.body.insertAdjacentHTML('beforeend', h);
 }
@@ -1035,7 +1035,7 @@ function editShowNotes(showId) {
   h += '</div>';
   h += '<div style="display:flex;gap:8px;justify-content:flex-end;">';
   h += '<button class="btn btn-secondary btn-sm" onclick="document.getElementById(\'showNotesModal\').remove()">Cancel</button>';
-  h += '<button class="btn btn-sm" onclick="saveShowNotes(\'' + showId + '\')" style="background:var(--primary, #2a7c6f);color:white;border:none;">Save</button>';
+  h += '<button class="btn btn-sm" onclick="saveShowNotes(\'' + showId + '\')" style="background:var(--primary, var(--teal));color:white;border:none;">Save</button>';
   h += '</div></div></div>';
   document.body.insertAdjacentHTML('beforeend', h);
 }
@@ -1143,7 +1143,7 @@ function renderShowDetailHistory(showId, s) {
     // Payment method breakdown
     if (cashCount || cardCount || squareCount) {
       h += '<div class="history-payment-breakdown" style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:12px 16px;margin-bottom:16px;">';
-      h += '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:8px;">Sales by Payment Method</div>';
+      h += '<div style="font-size:0.78rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:8px;">Sales by Payment Method</div>';
       h += '<div style="display:flex;gap:16px;flex-wrap:wrap;">';
       if (cashCount) h += '<div><span style="font-weight:600;color:#16a34a;">Cash:</span> ' + cashCount + ' sales / $' + (cashRevenue / 100).toFixed(2) + '</div>';
       if (cardCount) h += '<div><span style="font-weight:600;color:#2563eb;">Card:</span> ' + cardCount + ' sales / $' + (cardRevenue / 100).toFixed(2) + '</div>';
@@ -1154,15 +1154,15 @@ function renderShowDetailHistory(showId, s) {
     // Per-day breakdown for multi-day shows
     if (multiDay && Object.keys(perDayRevenue).length > 0) {
       h += '<div class="history-daily-breakdown" style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:12px 16px;margin-bottom:16px;">';
-      h += '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:8px;">Per-Day Revenue</div>';
+      h += '<div style="font-size:0.78rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:8px;">Per-Day Revenue</div>';
       h += '<div style="display:flex;flex-direction:column;gap:6px;">';
       Object.keys(perDayRevenue).sort().forEach(function(dt) {
         var d = perDayRevenue[dt];
         var dayLabel = new Date(dt + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
         var pct = totalRevenue > 0 ? Math.round((d.revenue / totalRevenue) * 100) : 0;
         h += '<div style="display:flex;justify-content:space-between;align-items:center;">';
-        h += '<span style="font-size:0.9rem;">' + dayLabel + ' <span style="color:var(--text-secondary, #888);font-size:0.8rem;">(' + d.count + ' sale' + (d.count !== 1 ? 's' : '') + ')</span></span>';
-        h += '<span style="font-weight:600;">$' + (d.revenue / 100).toFixed(2) + ' <span style="color:var(--text-secondary, #888);font-size:0.8rem;">(' + pct + '%)</span></span>';
+        h += '<span style="font-size:0.9rem;">' + dayLabel + ' <span style="color:var(--text-secondary, #888);font-size:0.78rem;">(' + d.count + ' sale' + (d.count !== 1 ? 's' : '') + ')</span></span>';
+        h += '<span style="font-weight:600;">$' + (d.revenue / 100).toFixed(2) + ' <span style="color:var(--text-secondary, #888);font-size:0.78rem;">(' + pct + '%)</span></span>';
         h += '</div>';
       });
       h += '</div></div>';
@@ -1179,7 +1179,7 @@ function renderShowDetailHistory(showId, s) {
   h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
   h += '<h3 style="margin:0;">Profit &amp; Loss</h3>';
   if (hasPermission('shows', 'update')) {
-    h += '<button class="btn btn-sm" onclick="openShowExpenseModal(\'' + showId + '\')" style="background:var(--primary, #2a7c6f);color:white;border:none;">+ Add Expense</button>';
+    h += '<button class="btn btn-sm" onclick="openShowExpenseModal(\'' + showId + '\')" style="background:var(--primary, var(--teal));color:white;border:none;">+ Add Expense</button>';
   }
   h += '</div>';
 
@@ -1239,7 +1239,7 @@ function renderShowDetailHistory(showId, s) {
     h += '<span style="font-weight:600;color:#dc2626;">-$' + ((exp.amountCents || 0) / 100).toFixed(2) + '</span>';
     if (hasPermission('shows', 'update')) {
       h += '<button onclick="editShowExpense(\'' + showId + '\', \'' + k + '\')" style="background:none;border:none;color:var(--text-secondary, #888);cursor:pointer;font-size:0.85rem;" title="Edit">&#9998;</button>';
-      h += '<button onclick="deleteShowExpense(\'' + showId + '\', \'' + k + '\')" style="background:none;border:none;color:var(--text-secondary, #888);cursor:pointer;font-size:1.1rem;" title="Delete">&times;</button>';
+      h += '<button onclick="deleteShowExpense(\'' + showId + '\', \'' + k + '\')" style="background:none;border:none;color:var(--text-secondary, #888);cursor:pointer;font-size:1.15rem;" title="Delete">&times;</button>';
     }
     h += '</div></div>';
   });
@@ -1249,10 +1249,10 @@ function renderShowDetailHistory(showId, s) {
   var netColor = netCents >= 0 ? '#16a34a' : '#dc2626';
   h += '<div class="history-pl-net" style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:' + (netCents >= 0 ? '#16a34a15' : '#dc262615') + ';border-radius:8px;border:1px solid ' + netColor + '33;">';
   h += '<div>';
-  h += '<div style="font-weight:700;font-size:1.1rem;color:' + netColor + ';">' + (netCents >= 0 ? 'Profit' : 'Loss') + ': $' + (Math.abs(netCents) / 100).toFixed(2) + '</div>';
-  h += '<div style="font-size:0.8rem;color:var(--text-secondary, #888);">ROI: ' + (roi === '—' ? '—' : roi + '%') + '</div>';
+  h += '<div style="font-weight:700;font-size:1.15rem;color:' + netColor + ';">' + (netCents >= 0 ? 'Profit' : 'Loss') + ': $' + (Math.abs(netCents) / 100).toFixed(2) + '</div>';
+  h += '<div style="font-size:0.78rem;color:var(--text-secondary, #888);">ROI: ' + (roi === '—' ? '—' : roi + '%') + '</div>';
   h += '</div>';
-  h += '<div style="text-align:right;font-size:0.8rem;color:var(--text-secondary, #888);">';
+  h += '<div style="text-align:right;font-size:0.78rem;color:var(--text-secondary, #888);">';
   h += 'Costs: $' + (totalCostsCents / 100).toFixed(2);
   h += '</div></div>';
   h += '</div>';
@@ -1262,7 +1262,7 @@ function renderShowDetailHistory(showId, s) {
   h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
   h += '<h3 style="margin:0;">Show Review</h3>';
   if (hasPermission('shows', 'update')) {
-    h += '<button class="btn btn-sm" onclick="openShowReviewModal(\'' + showId + '\')" style="background:var(--primary, #2a7c6f);color:white;border:none;">Edit Review</button>';
+    h += '<button class="btn btn-sm" onclick="openShowReviewModal(\'' + showId + '\')" style="background:var(--primary, var(--teal));color:white;border:none;">Edit Review</button>';
   }
   h += '</div>';
   var review = historyData.review || {};
@@ -1273,8 +1273,8 @@ function renderShowDetailHistory(showId, s) {
     // Rating
     if (review.rating) {
       h += '<div style="margin-bottom:12px;">';
-      h += '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:4px;">Rating</div>';
-      h += '<div style="font-size:1.2rem;">';
+      h += '<div style="font-size:0.78rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:4px;">Rating</div>';
+      h += '<div style="font-size:1.15rem;">';
       for (var i = 1; i <= 5; i++) {
         h += '<span style="color:' + (i <= review.rating ? '#f59e0b' : '#d1d5db') + ';">&#9733;</span>';
       }
@@ -1285,21 +1285,21 @@ function renderShowDetailHistory(showId, s) {
       var attendColors = { yes: '#16a34a', maybe: '#f59e0b', no: '#dc2626' };
       var attendLabels = { yes: 'Yes', maybe: 'Maybe', no: 'No' };
       h += '<div style="margin-bottom:12px;">';
-      h += '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:4px;">Would Attend Again</div>';
+      h += '<div style="font-size:0.78rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:4px;">Would Attend Again</div>';
       h += '<span style="font-size:0.85rem;font-weight:600;color:' + (attendColors[review.wouldAttendAgain] || '#888') + ';">' + (attendLabels[review.wouldAttendAgain] || review.wouldAttendAgain) + '</span>';
       h += '</div>';
     }
     // Best sellers
     if (review.bestSellers) {
       h += '<div style="margin-bottom:12px;">';
-      h += '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:4px;">Best Sellers</div>';
+      h += '<div style="font-size:0.78rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:4px;">Best Sellers</div>';
       h += '<div style="font-size:0.9rem;white-space:pre-wrap;line-height:1.5;">' + esc(review.bestSellers) + '</div>';
       h += '</div>';
     }
     // Lessons learned
     if (review.lessonsLearned) {
       h += '<div>';
-      h += '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:4px;">Lessons Learned</div>';
+      h += '<div style="font-size:0.78rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:4px;">Lessons Learned</div>';
       h += '<div style="font-size:0.9rem;white-space:pre-wrap;line-height:1.5;">' + esc(review.lessonsLearned) + '</div>';
       h += '</div>';
     }
@@ -1320,8 +1320,8 @@ function renderShowDetailHistory(showId, s) {
       if (noteText) {
         hasNotes = true;
         var dayLabel = new Date(dt + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-        notesHtml += '<div class="history-note-entry" style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:12px 16px;margin-bottom:8px;border-left:3px solid var(--primary, #2a7c6f);">';
-        notesHtml += '<div style="font-size:0.8rem;font-weight:600;color:var(--primary, #2a7c6f);margin-bottom:6px;">' + dayLabel + '</div>';
+        notesHtml += '<div class="history-note-entry" style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:12px 16px;margin-bottom:8px;border-left:3px solid var(--primary, var(--teal));">';
+        notesHtml += '<div style="font-size:0.78rem;font-weight:600;color:var(--primary, var(--teal));margin-bottom:6px;">' + dayLabel + '</div>';
         notesHtml += '<div style="font-size:0.9rem;white-space:pre-wrap;line-height:1.5;">' + esc(noteText) + '</div>';
         notesHtml += '</div>';
       }
@@ -1331,7 +1331,7 @@ function renderShowDetailHistory(showId, s) {
     var singleNote = typeof notes === 'string' ? notes : (notes._default || '');
     if (singleNote) {
       hasNotes = true;
-      h += '<div class="history-note-entry" style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:12px 16px;border-left:3px solid var(--primary, #2a7c6f);">';
+      h += '<div class="history-note-entry" style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:12px 16px;border-left:3px solid var(--primary, var(--teal));">';
       h += '<div style="font-size:0.9rem;white-space:pre-wrap;line-height:1.5;">' + esc(singleNote) + '</div>';
       h += '</div>';
     }
@@ -1346,8 +1346,8 @@ function renderShowDetailHistory(showId, s) {
 
 function historyStat(value, label, color) {
   return '<div class="history-stat-card" style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:10px 16px;text-align:center;">' +
-    '<div style="font-size:1.25rem;font-weight:700;' + (color ? 'color:' + color + ';' : '') + '">' + value + '</div>' +
-    '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;">' + label + '</div>' +
+    '<div style="font-size:1.15rem;font-weight:700;' + (color ? 'color:' + color + ';' : '') + '">' + value + '</div>' +
+    '<div style="font-size:0.78rem;color:var(--text-secondary, #888);text-transform:uppercase;">' + label + '</div>' +
   '</div>';
 }
 
@@ -1374,7 +1374,7 @@ function openShowExpenseModal(showId, expenseId) {
   h += '</div>';
   h += '<div style="display:flex;gap:8px;justify-content:flex-end;">';
   h += '<button class="btn btn-secondary btn-sm" onclick="document.getElementById(\'showExpenseModal\').remove()">Cancel</button>';
-  h += '<button class="btn btn-sm" onclick="saveShowExpense(\'' + showId + '\', ' + (expenseId ? '\'' + expenseId + '\'' : 'null') + ')" style="background:var(--primary, #2a7c6f);color:white;border:none;">Save</button>';
+  h += '<button class="btn btn-sm" onclick="saveShowExpense(\'' + showId + '\', ' + (expenseId ? '\'' + expenseId + '\'' : 'null') + ')" style="background:var(--primary, var(--teal));color:white;border:none;">Save</button>';
   h += '</div></div></div>';
   document.body.insertAdjacentHTML('beforeend', h);
 }
@@ -1438,7 +1438,7 @@ function openShowReviewModal(showId) {
   h += '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Rating</label>';
   h += '<div id="reviewStars" style="display:flex;gap:4px;">';
   for (var i = 1; i <= 5; i++) {
-    h += '<span class="review-star" data-value="' + i + '" onclick="setReviewRating(' + i + ')" style="font-size:1.8rem;cursor:pointer;color:' + (i <= (review.rating || 0) ? '#f59e0b' : '#d1d5db') + ';">&#9733;</span>';
+    h += '<span class="review-star" data-value="' + i + '" onclick="setReviewRating(' + i + ')" style="font-size:1.6rem;cursor:pointer;color:' + (i <= (review.rating || 0) ? '#f59e0b' : '#d1d5db') + ';">&#9733;</span>';
   }
   h += '</div>';
   h += '<input type="hidden" id="reviewRating" value="' + (review.rating || 0) + '">';
@@ -1454,8 +1454,8 @@ function openShowReviewModal(showId) {
     var isSelected = review.wouldAttendAgain === val;
     h += '<button class="btn btn-small review-attend-btn" data-value="' + val + '" onclick="setReviewAttend(\'' + val + '\')" style="' +
       'border:1px solid ' + (isSelected ? colors[val] : '#ddd') + ';' +
-      'background:' + (isSelected ? colors[val] : 'var(--cream, #FAF6F0)') + ';' +
-      'color:' + (isSelected ? 'white' : 'var(--charcoal, #1A1A1A)') + ';font-weight:' + (isSelected ? '600' : '400') + ';">' + label + '</button>';
+      'background:' + (isSelected ? colors[val] : 'var(--cream, var(--cream))') + ';' +
+      'color:' + (isSelected ? 'white' : 'var(--charcoal, var(--charcoal))') + ';font-weight:' + (isSelected ? '600' : '400') + ';">' + label + '</button>';
   });
   h += '</div>';
   h += '<input type="hidden" id="reviewAttend" value="' + (review.wouldAttendAgain || '') + '">';
@@ -1475,7 +1475,7 @@ function openShowReviewModal(showId) {
 
   h += '<div style="display:flex;gap:8px;justify-content:flex-end;">';
   h += '<button class="btn btn-secondary btn-sm" onclick="document.getElementById(\'showReviewModal\').remove()">Cancel</button>';
-  h += '<button class="btn btn-sm" onclick="saveShowReview(\'' + showId + '\')" style="background:var(--primary, #2a7c6f);color:white;border:none;">Save</button>';
+  h += '<button class="btn btn-sm" onclick="saveShowReview(\'' + showId + '\')" style="background:var(--primary, var(--teal));color:white;border:none;">Save</button>';
   h += '</div></div></div>';
   document.body.insertAdjacentHTML('beforeend', h);
 }
@@ -1496,8 +1496,8 @@ function setReviewAttend(val) {
   btns.forEach(function(btn) {
     var bv = btn.getAttribute('data-value');
     var isSelected = bv === val;
-    btn.style.background = isSelected ? colors[bv] : 'var(--cream, #FAF6F0)';
-    btn.style.color = isSelected ? 'white' : 'var(--charcoal, #1A1A1A)';
+    btn.style.background = isSelected ? colors[bv] : 'var(--cream, var(--cream))';
+    btn.style.color = isSelected ? 'white' : 'var(--charcoal, var(--charcoal))';
     btn.style.borderColor = isSelected ? colors[bv] : '#ddd';
     btn.style.fontWeight = isSelected ? '600' : '400';
   });
@@ -1530,7 +1530,7 @@ async function saveShowReview(showId) {
 
 function showDetailCard(label, value) {
   return '<div style="background:var(--bg-secondary, #f9f9f9);border-radius:8px;padding:12px;">' +
-    '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:4px;">' + label + '</div>' +
+    '<div style="font-size:0.78rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:4px;">' + label + '</div>' +
     '<div style="font-size:0.9rem;">' + value + '</div>' +
   '</div>';
 }
@@ -1607,7 +1607,7 @@ async function openShowStaffingModal(showId) {
   h += '</select></div>';
   h += '<div style="display:flex;gap:8px;justify-content:flex-end;">';
   h += '<button class="btn btn-secondary btn-sm" onclick="document.getElementById(\'showStaffingModal\').remove()">Cancel</button>';
-  h += '<button class="btn btn-sm" onclick="saveShowStaff(\'' + showId + '\')" style="background:var(--primary, #2a7c6f);color:white;border:none;">Assign</button>';
+  h += '<button class="btn btn-sm" onclick="saveShowStaff(\'' + showId + '\')" style="background:var(--primary, var(--teal));color:white;border:none;">Assign</button>';
   h += '</div></div></div>';
   document.body.insertAdjacentHTML('beforeend', h);
 }
@@ -1679,7 +1679,7 @@ function openShowInventoryModal(showId, itemId, existing) {
   h += '</div>';
   h += '<div style="display:flex;gap:8px;justify-content:flex-end;">';
   h += '<button class="btn btn-secondary btn-sm" onclick="document.getElementById(\'showInventoryModal\').remove()">Cancel</button>';
-  h += '<button class="btn btn-sm" onclick="saveShowInventoryItem(\'' + showId + '\', ' + (itemId ? '\'' + itemId + '\'' : 'null') + ')" style="background:var(--primary, #2a7c6f);color:white;border:none;">Save</button>';
+  h += '<button class="btn btn-sm" onclick="saveShowInventoryItem(\'' + showId + '\', ' + (itemId ? '\'' + itemId + '\'' : 'null') + ')" style="background:var(--primary, var(--teal));color:white;border:none;">Save</button>';
   h += '</div></div></div>';
   document.body.insertAdjacentHTML('beforeend', h);
 }
@@ -1776,7 +1776,7 @@ function editShowLogistics(showId) {
   h += '</div>';
   h += '<div style="display:flex;gap:8px;justify-content:flex-end;">';
   h += '<button class="btn btn-secondary btn-sm" onclick="document.getElementById(\'showLogisticsModal\').remove()">Cancel</button>';
-  h += '<button class="btn btn-sm" onclick="saveShowLogistics(\'' + showId + '\')" style="background:var(--primary, #2a7c6f);color:white;border:none;">Save</button>';
+  h += '<button class="btn btn-sm" onclick="saveShowLogistics(\'' + showId + '\')" style="background:var(--primary, var(--teal));color:white;border:none;">Save</button>';
   h += '</div></div></div>';
   document.body.insertAdjacentHTML('beforeend', h);
 }
@@ -1915,11 +1915,11 @@ function renderShowPrepView() {
     var daysBadge = '';
     if (daysUntil !== null) {
       if (daysUntil < 0) {
-        daysBadge = '<span style="background:#16a34a;color:white;padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;">In Progress</span>';
+        daysBadge = '<span style="background:#16a34a;color:white;padding:2px 8px;border-radius:4px;font-size:0.78rem;font-weight:600;">In Progress</span>';
       } else if (daysUntil === 0) {
-        daysBadge = '<span style="background:#f59e0b;color:white;padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;">Today</span>';
+        daysBadge = '<span style="background:#f59e0b;color:white;padding:2px 8px;border-radius:4px;font-size:0.78rem;font-weight:600;">Today</span>';
       } else {
-        daysBadge = '<span style="background:var(--bg-tertiary, #e5e5e5);color:var(--text-primary, #333);padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;">' + daysUntil + ' day' + (daysUntil !== 1 ? 's' : '') + ' away</span>';
+        daysBadge = '<span style="background:var(--bg-tertiary, #e5e5e5);color:var(--text-primary, #333);padding:2px 8px;border-radius:4px;font-size:0.78rem;font-weight:600;">' + daysUntil + ' day' + (daysUntil !== 1 ? 's' : '') + ' away</span>';
       }
     }
 
@@ -1941,15 +1941,15 @@ function renderShowPrepView() {
       '</div>' +
       '<div style="margin-top:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;">' +
         '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:6px;padding:10px;">' +
-          '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:4px;">Staffing</div>' +
+          '<div style="font-size:0.78rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:4px;">Staffing</div>' +
           '<div style="font-size:0.85rem;' + (staffCount ? '' : 'color:var(--text-secondary, #888);font-style:italic;') + '">' + (staffCount ? staffCount + ' assigned' : 'Not assigned') + '</div>' +
         '</div>' +
         '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:6px;padding:10px;">' +
-          '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:4px;">Inventory</div>' +
+          '<div style="font-size:0.78rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:4px;">Inventory</div>' +
           '<div style="font-size:0.85rem;' + (invTotal ? '' : 'color:var(--text-secondary, #888);font-style:italic;') + '">' + (invTotal ? invPacked + '/' + invTotal + ' packed' : 'No items') + '</div>' +
         '</div>' +
         '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:6px;padding:10px;">' +
-          '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:4px;">Logistics</div>' +
+          '<div style="font-size:0.78rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:4px;">Logistics</div>' +
           '<div style="font-size:0.85rem;' + (hasLogistics ? '' : 'color:var(--text-secondary, #888);font-style:italic;') + '">' + (hasLogistics ? '✓ Details added' : 'Not set') + '</div>' +
         '</div>' +
       '</div>' +
@@ -2009,10 +2009,10 @@ function renderShowExecuteView() {
     var location = [s.locationCity, s.locationState].filter(Boolean).join(', ');
     var liveBadge = '';
     if (!isUpcoming) {
-      liveBadge = '<span style="background:#16a34a;color:white;padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;animation:pulse 2s infinite;">Live Now</span>';
+      liveBadge = '<span style="background:#16a34a;color:white;padding:2px 8px;border-radius:4px;font-size:0.78rem;font-weight:600;animation:pulse 2s infinite;">Live Now</span>';
     } else {
       var daysUntil = Math.ceil((new Date(s.startDate + 'T00:00:00') - new Date()) / 86400000);
-      liveBadge = '<span style="background:#2563eb;color:white;padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;">Starts in ' + daysUntil + ' day' + (daysUntil !== 1 ? 's' : '') + '</span>';
+      liveBadge = '<span style="background:#2563eb;color:white;padding:2px 8px;border-radius:4px;font-size:0.78rem;font-weight:600;">Starts in ' + daysUntil + ' day' + (daysUntil !== 1 ? 's' : '') + '</span>';
     }
 
     // Calculate real execute data for this show
@@ -2053,13 +2053,13 @@ function renderShowExecuteView() {
       '</div>' +
       '<div style="margin-top:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;">' +
         '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:6px;padding:10px;">' +
-          '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:4px;">Sales</div>' +
+          '<div style="font-size:0.78rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:4px;">Sales</div>' +
           '<div style="font-size:0.85rem;' + (totalSalesCount ? '' : 'color:var(--text-secondary, #888);font-style:italic;') + '">' +
             (totalSalesCount ? '$' + (totalRevenue / 100).toFixed(2) + ' (' + totalSalesCount + ' sale' + (totalSalesCount !== 1 ? 's' : '') + ')' : 'No sales yet') +
           '</div>' +
         '</div>' +
         '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:6px;padding:10px;">' +
-          '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:4px;">Reconciliation</div>' +
+          '<div style="font-size:0.78rem;color:var(--text-secondary, #888);text-transform:uppercase;margin-bottom:4px;">Reconciliation</div>' +
           '<div style="font-size:0.85rem;' + (reconCount ? '' : 'color:var(--text-secondary, #888);font-style:italic;') + '">' +
             (reconCount ? reconCount + '/' + prepInv + ' items tracked' : (prepInv ? prepInv + ' items to track' : 'No inventory')) +
           '</div>' +
@@ -2112,16 +2112,16 @@ function renderShowHistoryView() {
     statsEl.style.display = historyShows.length > 0 ? 'flex' : 'none';
     statsEl.innerHTML =
       '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:10px 16px;text-align:center;">' +
-        '<div style="font-size:1.25rem;font-weight:700;">' + historyShows.length + '</div>' +
-        '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;">Total</div>' +
+        '<div style="font-size:1.15rem;font-weight:700;">' + historyShows.length + '</div>' +
+        '<div style="font-size:0.78rem;color:var(--text-secondary, #888);text-transform:uppercase;">Total</div>' +
       '</div>' +
       '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:10px 16px;text-align:center;">' +
-        '<div style="font-size:1.25rem;font-weight:700;color:#16a34a;">' + acceptedCount + '</div>' +
-        '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;">Accepted</div>' +
+        '<div style="font-size:1.15rem;font-weight:700;color:#16a34a;">' + acceptedCount + '</div>' +
+        '<div style="font-size:0.78rem;color:var(--text-secondary, #888);text-transform:uppercase;">Accepted</div>' +
       '</div>' +
       '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:10px 16px;text-align:center;">' +
-        '<div style="font-size:1.25rem;font-weight:700;color:#dc2626;">' + rejectedCount + '</div>' +
-        '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;">Rejected</div>' +
+        '<div style="font-size:1.15rem;font-weight:700;color:#dc2626;">' + rejectedCount + '</div>' +
+        '<div style="font-size:0.78rem;color:var(--text-secondary, #888);text-transform:uppercase;">Rejected</div>' +
       '</div>';
   }
 
@@ -2206,18 +2206,18 @@ function renderShowHistoryView() {
       cards += '<div class="history-card-metrics" style="margin-top:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px;">';
       cards += '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:6px;padding:8px;text-align:center;">' +
         '<div style="font-size:1rem;font-weight:700;color:#16a34a;">$' + (totalRevenue / 100).toFixed(0) + '</div>' +
-        '<div style="font-size:0.7rem;color:var(--text-secondary, #888);text-transform:uppercase;">Revenue</div></div>';
+        '<div style="font-size:0.72rem;color:var(--text-secondary, #888);text-transform:uppercase;">Revenue</div></div>';
       cards += '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:6px;padding:8px;text-align:center;">' +
         '<div style="font-size:1rem;font-weight:700;">' + (itemsSold || totalSalesCount) + '</div>' +
-        '<div style="font-size:0.7rem;color:var(--text-secondary, #888);text-transform:uppercase;">Items</div></div>';
+        '<div style="font-size:0.72rem;color:var(--text-secondary, #888);text-transform:uppercase;">Items</div></div>';
       var netColor = net >= 0 ? '#16a34a' : '#dc2626';
       cards += '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:6px;padding:8px;text-align:center;">' +
         '<div style="font-size:1rem;font-weight:700;color:' + netColor + ';">' + (net >= 0 ? '+' : '-') + '$' + (Math.abs(net) / 100).toFixed(0) + '</div>' +
-        '<div style="font-size:0.7rem;color:var(--text-secondary, #888);text-transform:uppercase;">Net</div></div>';
+        '<div style="font-size:0.72rem;color:var(--text-secondary, #888);text-transform:uppercase;">Net</div></div>';
       if (ratingStars) {
         cards += '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:6px;padding:8px;text-align:center;">' +
           '<div>' + ratingStars + '</div>' +
-          '<div style="font-size:0.7rem;color:var(--text-secondary, #888);text-transform:uppercase;">Rating</div></div>';
+          '<div style="font-size:0.72rem;color:var(--text-secondary, #888);text-transform:uppercase;">Rating</div></div>';
       }
       cards += '</div>';
     }
@@ -2250,20 +2250,20 @@ function renderShowHistoryView() {
     var rejectedCount = historyShows.filter(function(s) { return s.applicationStatus === 'rejected'; }).length;
     statsEl.innerHTML =
       '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:10px 16px;text-align:center;">' +
-        '<div style="font-size:1.25rem;font-weight:700;">' + historyShows.length + '</div>' +
-        '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;">Total</div>' +
+        '<div style="font-size:1.15rem;font-weight:700;">' + historyShows.length + '</div>' +
+        '<div style="font-size:0.78rem;color:var(--text-secondary, #888);text-transform:uppercase;">Total</div>' +
       '</div>' +
       '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:10px 16px;text-align:center;">' +
-        '<div style="font-size:1.25rem;font-weight:700;color:#16a34a;">' + acceptedCount + '</div>' +
-        '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;">Accepted</div>' +
+        '<div style="font-size:1.15rem;font-weight:700;color:#16a34a;">' + acceptedCount + '</div>' +
+        '<div style="font-size:0.78rem;color:var(--text-secondary, #888);text-transform:uppercase;">Accepted</div>' +
       '</div>' +
       '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:10px 16px;text-align:center;">' +
-        '<div style="font-size:1.25rem;font-weight:700;color:#dc2626;">' + rejectedCount + '</div>' +
-        '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;">Rejected</div>' +
+        '<div style="font-size:1.15rem;font-weight:700;color:#dc2626;">' + rejectedCount + '</div>' +
+        '<div style="font-size:0.78rem;color:var(--text-secondary, #888);text-transform:uppercase;">Rejected</div>' +
       '</div>' +
       (totalHistoryRevenue > 0 ? '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:10px 16px;text-align:center;">' +
-        '<div style="font-size:1.25rem;font-weight:700;color:#16a34a;">$' + (totalHistoryRevenue / 100).toFixed(0) + '</div>' +
-        '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;">Total Revenue</div>' +
+        '<div style="font-size:1.15rem;font-weight:700;color:#16a34a;">$' + (totalHistoryRevenue / 100).toFixed(0) + '</div>' +
+        '<div style="font-size:0.78rem;color:var(--text-secondary, #888);text-transform:uppercase;">Total Revenue</div>' +
       '</div>' : '');
   }
 
@@ -2372,7 +2372,7 @@ function renderShowFinderResults() {
     cards += '<div class="order-card" id="showFinderCard-' + idx + '" style="position:relative;">' +
       '<div class="order-card-header" style="display:flex;justify-content:space-between;align-items:center;">' +
         '<span class="order-card-id" style="font-weight:600;">' + esc(s.name) + '</span>' +
-        '<span style="font-size:0.75rem;background:var(--teal, #2a7c6f);color:white;padding:2px 6px;border-radius:4px;">AI Found</span>' +
+        '<span style="font-size:0.78rem;background:var(--teal, var(--teal));color:white;padding:2px 6px;border-radius:4px;">AI Found</span>' +
       '</div>' +
       '<div class="order-card-details">' +
         '<span>' + esc(typeLabel) + '</span>' +
@@ -2384,16 +2384,16 @@ function renderShowFinderResults() {
 
     // Extra details
     if (s.audienceProfile) {
-      cards += '<div style="margin-top:8px;font-size:0.8rem;color:var(--text-secondary, #888);">' + esc(s.audienceProfile) + '</div>';
+      cards += '<div style="margin-top:8px;font-size:0.78rem;color:var(--text-secondary, #888);">' + esc(s.audienceProfile) + '</div>';
     }
     if (s.notes) {
-      cards += '<div style="margin-top:4px;font-size:0.8rem;color:var(--text-secondary, #888);font-style:italic;">' + esc(s.notes) + '</div>';
+      cards += '<div style="margin-top:4px;font-size:0.78rem;color:var(--text-secondary, #888);font-style:italic;">' + esc(s.notes) + '</div>';
     }
 
     // Links
     var links = '';
-    if (s.websiteUrl) links += '<a href="' + esc(s.websiteUrl) + '" target="_blank" style="color:var(--primary, #2a7c6f);font-size:0.8rem;">Website</a>';
-    if (s.applicationUrl) links += (links ? ' · ' : '') + '<a href="' + esc(s.applicationUrl) + '" target="_blank" style="color:var(--primary, #2a7c6f);font-size:0.8rem;">Apply</a>';
+    if (s.websiteUrl) links += '<a href="' + esc(s.websiteUrl) + '" target="_blank" style="color:var(--primary, var(--teal));font-size:0.78rem;">Website</a>';
+    if (s.applicationUrl) links += (links ? ' · ' : '') + '<a href="' + esc(s.applicationUrl) + '" target="_blank" style="color:var(--primary, var(--teal));font-size:0.78rem;">Apply</a>';
     if (links) cards += '<div style="margin-top:8px;">' + links + '</div>';
 
     // Action buttons

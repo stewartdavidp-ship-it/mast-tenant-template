@@ -322,11 +322,11 @@
       html += '<h4>Images (' + sectionImages.length + ')</h4>';
       html += '<div style="display:flex;gap:8px;align-items:center;">';
       if (sec.id === 'hero') {
-        html += '<select id="heroRotationSpeed" onchange="saveHeroRotationSpeed(this.value)" style="font-size:0.75rem;padding:3px 8px;border-radius:4px;border:1px solid var(--warm-gray);background:var(--surface-card);color:var(--text-primary);cursor:pointer;" title="Image rotation speed">' +
+        html += '<select id="heroRotationSpeed" onchange="saveHeroRotationSpeed(this.value)" style="font-size:0.78rem;padding:3px 8px;border-radius:4px;border:1px solid var(--warm-gray);background:var(--surface-card);color:var(--text-primary);cursor:pointer;" title="Image rotation speed">' +
           '<option value="3">3s</option><option value="4">4s</option><option value="5">5s</option><option value="6" selected>6s</option><option value="8">8s</option><option value="10">10s</option><option value="15">15s</option><option value="20">20s</option>' +
           '</select>';
       }
-      html += '<button class="btn btn-primary" style="font-size:0.8rem;padding:4px 12px;" onclick="hpAddImage(\'' + sec.id + '\')">+ Add from Library</button>';
+      html += '<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 12px;" onclick="hpAddImage(\'' + sec.id + '\')">+ Add from Library</button>';
       html += '</div>';
       html += '</div>';
       html += renderSectionImageGrid(sec.id, sectionImages);
@@ -347,7 +347,7 @@
     var currentVariant = tc[variantKey] || m[variantKey] || options[0].id;
     var defaultVariant = m[variantKey] || options[0].id;
 
-    var html = '<select onclick="event.stopPropagation();" onchange="hpUpdateThemeField(\'' + variantKey + '\', this.value)" style="font-size:0.75rem;padding:3px 6px;border-radius:6px;background:var(--charcoal-light, #333);color:var(--text-primary, #e0e0e0);border:1px solid var(--charcoal-light, #444);cursor:pointer;min-width:100px;">';
+    var html = '<select onclick="event.stopPropagation();" onchange="hpUpdateThemeField(\'' + variantKey + '\', this.value)" style="font-size:0.78rem;padding:3px 6px;border-radius:6px;background:var(--charcoal-light, #333);color:var(--text-primary, #e0e0e0);border:1px solid var(--charcoal-light, #444);cursor:pointer;min-width:100px;">';
     options.forEach(function(opt) {
       var selected = currentVariant === opt.id ? ' selected' : '';
       html += '<option value="' + opt.id + '"' + selected + ' title="' + esc(opt.desc) + '">' + esc(opt.label) + '</option>';
@@ -355,7 +355,7 @@
     html += '</select>';
 
     if (currentVariant !== defaultVariant) {
-      html += '<span style="font-size:0.65rem;color:var(--warm-gray);margin-left:4px;" title="Template default: ' + esc(defaultVariant) + '">&#8226; customized</span>';
+      html += '<span style="font-size:0.72rem;color:var(--warm-gray);margin-left:4px;" title="Template default: ' + esc(defaultVariant) + '">&#8226; customized</span>';
     }
 
     return html;
@@ -441,7 +441,7 @@
 
       html += '<div class="gallery-card">';
       if (isVidEntry) {
-        html += '<div class="gallery-card-img" style="display:flex;align-items:center;justify-content:center;background:var(--charcoal);color:var(--amber);font-size:2rem;min-height:120px;">&#9654;</div>';
+        html += '<div class="gallery-card-img" style="display:flex;align-items:center;justify-content:center;background:var(--charcoal);color:var(--amber);font-size:1.6rem;min-height:120px;">&#9654;</div>';
       } else if (img.url) {
         var fitStyle = img.imageFit ? ' style="object-fit:' + img.imageFit + ';"' : '';
         html += '<img class="gallery-card-img" src="' + esc(img.url) + '" alt="' + esc(img.alt || '') + '"' + fitStyle + ' onerror="this.classList.add(\'broken\')">';
@@ -453,11 +453,11 @@
       // Show relevant metadata per section
       if (typeof SHOP_SECTION_IDS !== 'undefined' && SHOP_SECTION_IDS.indexOf(sectionId) !== -1 && img.productName) {
         html += '<span class="category-badge">' + esc(img.productName) + '</span>';
-        if (img.price) html += '<span class="category-badge" style="background:#2A7C6F;color:white;">' + esc(img.price) + '</span>';
+        if (img.price) html += '<span class="category-badge" style="background:var(--teal);color:white;">' + esc(img.price) + '</span>';
       } else if (sectionId === 'gallery') {
         html += '<span class="category-badge">' + esc(img.category || 'other') + '</span>';
       } else if (sectionId === 'hero' && img.videoUrl) {
-        html += '<span class="category-badge" style="font-size:0.68rem;">video + poster</span>';
+        html += '<span class="category-badge" style="font-size:0.72rem;">video + poster</span>';
       }
 
       html += '<span class="order-num">#' + (img.order || 0) + '</span>';
@@ -482,7 +482,7 @@
       return g.section === sectionId && g.templateHidden;
     }).length;
     if (hiddenCount > 0) {
-      html += '<div style="margin-top:8px;padding:8px 12px;background:color-mix(in srgb, var(--amber, #C4853C) 10%, transparent);border:1px solid color-mix(in srgb, var(--amber, #C4853C) 25%, transparent);border-radius:6px;font-size:0.8rem;color:var(--warm-gray);">';
+      html += '<div style="margin-top:8px;padding:8px 12px;background:color-mix(in srgb, var(--amber, var(--amber)) 10%, transparent);border:1px solid color-mix(in srgb, var(--amber, var(--amber)) 25%, transparent);border-radius:6px;font-size:0.78rem;color:var(--warm-gray);">';
       html += hiddenCount + ' image' + (hiddenCount !== 1 ? 's' : '') + ' hidden by template switch';
       html += '</div>';
     }

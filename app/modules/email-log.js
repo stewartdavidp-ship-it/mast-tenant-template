@@ -153,7 +153,7 @@
       h += '<option value="' + esc(t) + '"' + (emailTypeFilter === t ? ' selected' : '') + '>' + esc(t) + '</option>';
     });
     h += '</select>';
-    h += '<button class="btn btn-secondary" style="font-size:0.82rem;padding:6px 12px;" onclick="window._emailLogRefresh()">&#x21bb; Refresh</button>';
+    h += '<button class="btn btn-secondary" style="font-size:0.85rem;padding:6px 12px;" onclick="window._emailLogRefresh()">&#x21bb; Refresh</button>';
     h += '</div>';
 
     if (!emailsLoaded) {
@@ -172,12 +172,12 @@
     h += '<div style="overflow-x:auto;">';
     h += '<table class="data-table" style="width:100%;border-collapse:collapse;">';
     h += '<thead><tr>';
-    h += '<th style="text-align:left;padding:8px 12px;font-size:0.8rem;color:var(--warm-gray);border-bottom:1px solid rgba(255,255,255,0.06);">Date</th>';
-    h += '<th style="text-align:left;padding:8px 12px;font-size:0.8rem;color:var(--warm-gray);border-bottom:1px solid rgba(255,255,255,0.06);">Recipient</th>';
-    h += '<th style="text-align:left;padding:8px 12px;font-size:0.8rem;color:var(--warm-gray);border-bottom:1px solid rgba(255,255,255,0.06);">Subject</th>';
-    h += '<th style="text-align:left;padding:8px 12px;font-size:0.8rem;color:var(--warm-gray);border-bottom:1px solid rgba(255,255,255,0.06);">Type</th>';
-    h += '<th style="text-align:left;padding:8px 12px;font-size:0.8rem;color:var(--warm-gray);border-bottom:1px solid rgba(255,255,255,0.06);">Status</th>';
-    h += '<th style="text-align:left;padding:8px 12px;font-size:0.8rem;color:var(--warm-gray);border-bottom:1px solid rgba(255,255,255,0.06);">Provider</th>';
+    h += '<th style="text-align:left;padding:8px 12px;font-size:0.78rem;color:var(--warm-gray);border-bottom:1px solid rgba(255,255,255,0.06);">Date</th>';
+    h += '<th style="text-align:left;padding:8px 12px;font-size:0.78rem;color:var(--warm-gray);border-bottom:1px solid rgba(255,255,255,0.06);">Recipient</th>';
+    h += '<th style="text-align:left;padding:8px 12px;font-size:0.78rem;color:var(--warm-gray);border-bottom:1px solid rgba(255,255,255,0.06);">Subject</th>';
+    h += '<th style="text-align:left;padding:8px 12px;font-size:0.78rem;color:var(--warm-gray);border-bottom:1px solid rgba(255,255,255,0.06);">Type</th>';
+    h += '<th style="text-align:left;padding:8px 12px;font-size:0.78rem;color:var(--warm-gray);border-bottom:1px solid rgba(255,255,255,0.06);">Status</th>';
+    h += '<th style="text-align:left;padding:8px 12px;font-size:0.78rem;color:var(--warm-gray);border-bottom:1px solid rgba(255,255,255,0.06);">Provider</th>';
     h += '</tr></thead>';
     h += '<tbody>';
 
@@ -194,8 +194,8 @@
       h += '<td style="padding:8px 12px;font-size:0.85rem;white-space:nowrap;">' + esc(dateStr) + '</td>';
       h += '<td style="padding:8px 12px;font-size:0.85rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;">' + esc(recipient) + '</td>';
       h += '<td style="padding:8px 12px;font-size:0.85rem;max-width:250px;overflow:hidden;text-overflow:ellipsis;">' + esc(subject) + '</td>';
-      h += '<td style="padding:8px 12px;"><span style="' + emailTypeBadgeStyle(emailType) + 'padding:2px 8px;border-radius:12px;font-size:0.75rem;font-weight:600;">' + esc(emailType) + '</span></td>';
-      h += '<td style="padding:8px 12px;"><span style="' + emailStatusBadgeStyle(status) + 'padding:2px 8px;border-radius:12px;font-size:0.75rem;font-weight:600;">' + esc(status) + '</span></td>';
+      h += '<td style="padding:8px 12px;"><span style="' + emailTypeBadgeStyle(emailType) + 'padding:2px 8px;border-radius:12px;font-size:0.78rem;font-weight:600;">' + esc(emailType) + '</span></td>';
+      h += '<td style="padding:8px 12px;"><span style="' + emailStatusBadgeStyle(status) + 'padding:2px 8px;border-radius:12px;font-size:0.78rem;font-weight:600;">' + esc(status) + '</span></td>';
       h += '<td style="padding:8px 12px;font-size:0.85rem;">' + esc(provider) + '</td>';
       h += '</tr>';
 
@@ -226,22 +226,22 @@
 
     // Meta info
     h += '<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(200px, 1fr));gap:12px;margin-bottom:16px;">';
-    h += '<div><span style="font-size:0.75rem;color:var(--warm-gray);display:block;">From</span><span style="font-size:0.85rem;">' + esc(email.from || '—') + '</span></div>';
-    h += '<div><span style="font-size:0.75rem;color:var(--warm-gray);display:block;">To</span><span style="font-size:0.85rem;">' + esc(email.to || '—') + '</span></div>';
-    h += '<div><span style="font-size:0.75rem;color:var(--warm-gray);display:block;">Provider</span><span style="font-size:0.85rem;">' + esc(PROVIDER_LABELS[email.provider] || email.provider || '—') + '</span></div>';
-    h += '<div><span style="font-size:0.75rem;color:var(--warm-gray);display:block;">Token Cost</span><span style="font-size:0.85rem;">' + (email.tokenCost || 0) + '</span></div>';
+    h += '<div><span style="font-size:0.78rem;color:var(--warm-gray);display:block;">From</span><span style="font-size:0.85rem;">' + esc(email.from || '—') + '</span></div>';
+    h += '<div><span style="font-size:0.78rem;color:var(--warm-gray);display:block;">To</span><span style="font-size:0.85rem;">' + esc(email.to || '—') + '</span></div>';
+    h += '<div><span style="font-size:0.78rem;color:var(--warm-gray);display:block;">Provider</span><span style="font-size:0.85rem;">' + esc(PROVIDER_LABELS[email.provider] || email.provider || '—') + '</span></div>';
+    h += '<div><span style="font-size:0.78rem;color:var(--warm-gray);display:block;">Token Cost</span><span style="font-size:0.85rem;">' + (email.tokenCost || 0) + '</span></div>';
     if (email.orderId) {
-      h += '<div><span style="font-size:0.75rem;color:var(--warm-gray);display:block;">Order ID</span><span style="font-size:0.85rem;cursor:pointer;color:var(--teal);text-decoration:underline;" onclick="event.stopPropagation(); MastAdmin.navigateTo(\'orders\');">' + esc(email.orderId) + '</span></div>';
+      h += '<div><span style="font-size:0.78rem;color:var(--warm-gray);display:block;">Order ID</span><span style="font-size:0.85rem;cursor:pointer;color:var(--teal);text-decoration:underline;" onclick="event.stopPropagation(); MastAdmin.navigateTo(\'orders\');">' + esc(email.orderId) + '</span></div>';
     }
     if (email.error) {
-      h += '<div style="grid-column:1/-1;"><span style="font-size:0.75rem;color:var(--warm-gray);display:block;">Error</span><span style="font-size:0.85rem;color:#EF5350;">' + esc(email.error) + '</span></div>';
+      h += '<div style="grid-column:1/-1;"><span style="font-size:0.78rem;color:var(--warm-gray);display:block;">Error</span><span style="font-size:0.85rem;color:#EF5350;">' + esc(email.error) + '</span></div>';
     }
     h += '</div>';
 
     // HTML preview (sandboxed iframe)
     if (email.htmlSnapshot) {
       h += '<div style="margin-bottom:12px;">';
-      h += '<span style="font-size:0.75rem;color:var(--warm-gray);display:block;margin-bottom:6px;">Email Preview</span>';
+      h += '<span style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:6px;">Email Preview</span>';
       h += '<div style="background:white;border-radius:6px;overflow:hidden;max-height:400px;">';
       // Use srcdoc for sandboxed preview — no scripts, no navigation
       h += '<iframe sandbox="" srcdoc="' + escAttr(email.htmlSnapshot) + '" style="width:100%;min-height:250px;max-height:400px;border:none;display:block;" onload="this.style.height=Math.min(this.contentDocument.body.scrollHeight+20,400)+\'px\'"></iframe>';
@@ -251,7 +251,7 @@
 
     // Resend button
     h += '<div style="display:flex;gap:8px;">';
-    h += '<button class="btn btn-secondary" style="font-size:0.82rem;padding:6px 12px;" onclick="event.stopPropagation(); window._emailLogResend(\'' + esc(email._key) + '\')">Resend</button>';
+    h += '<button class="btn btn-secondary" style="font-size:0.85rem;padding:6px 12px;" onclick="event.stopPropagation(); window._emailLogResend(\'' + esc(email._key) + '\')">Resend</button>';
     h += '</div>';
 
     h += '</div>';

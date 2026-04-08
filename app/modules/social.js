@@ -110,7 +110,7 @@
     html += '<div class="sm-section">';
     html += '<div class="sm-section-label">Pending <span class="status-badge pill" style="background:var(--amber);color:#fff;">' + pendingActive.length + '</span></div>';
     if (pendingActive.length === 0) {
-      html += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);"><div style="font-size:2rem;margin-bottom:12px;">📱</div><p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No pending clips yet</p><button class="btn btn-primary" style="margin-top:16px;" onclick="smStartNewPost()">+ New Post</button></div>';
+      html += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);"><div style="font-size:1.6rem;margin-bottom:12px;">📱</div><p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No pending clips yet</p><button class="btn btn-primary" style="margin-top:16px;" onclick="smStartNewPost()">+ New Post</button></div>';
     } else {
       pendingActive.forEach(function(clip) {
         var dateStr = clip.uploadedAt ? new Date(clip.uploadedAt).toLocaleDateString() : '';
@@ -133,7 +133,7 @@
     html += '<div class="sm-section">';
     html += '<div class="sm-section-label">Posted <span class="status-badge pill" style="background:var(--amber);color:#fff;">' + smPosts.length + '</span></div>';
     if (smPosts.length === 0) {
-      html += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);"><div style="font-size:2rem;margin-bottom:12px;">📝</div><p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No posts yet</p><p style="font-size:0.85rem;color:var(--warm-gray-light);">Complete the pipeline to see your history here.</p></div>';
+      html += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);"><div style="font-size:1.6rem;margin-bottom:12px;">📝</div><p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No posts yet</p><p style="font-size:0.85rem;color:var(--warm-gray-light);">Complete the pipeline to see your history here.</p></div>';
     } else {
       smPosts.forEach(function(post) {
         var dateStr = post.postedAt ? new Date(post.postedAt).toLocaleDateString() : '';
@@ -157,7 +157,7 @@
 
         var thumbHtml = post.thumbnailUrl
           ? '<img class="sm-post-thumb" src="' + esc(post.thumbnailUrl) + '" alt="">'
-          : '<div class="sm-post-thumb" style="display:flex;align-items:center;justify-content:center;font-size:1.2rem;">📱</div>';
+          : '<div class="sm-post-thumb" style="display:flex;align-items:center;justify-content:center;font-size:1.15rem;">📱</div>';
 
         html += '<div class="sm-post-card" onclick="smTogglePostCaption(\'' + esc(post.postId) + '\')">' +
           '<div class="sm-post-card-top">' +
@@ -582,7 +582,7 @@
       var smValStr = smC ? (smC.type === 'percent' ? smC.value + '% off' : '$' + (smC.value || 0).toFixed(2) + ' off') : '';
       html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:rgba(42,124,111,0.06);border:1px dashed rgba(42,124,111,0.3);border-radius:6px;">' +
         '<span>\uD83C\uDFF7\uFE0F <span style="font-family:monospace;font-weight:600;">' + esc(d.attachedCoupon) + '</span> \u2014 ' + esc(smValStr) + '</span>' +
-        '<button class="btn btn-small" style="font-size:0.75rem;" onclick="smEnhanceData.attachedCoupon=null;renderSocialMedia()">Remove</button>' +
+        '<button class="btn btn-small" style="font-size:0.78rem;" onclick="smEnhanceData.attachedCoupon=null;renderSocialMedia()">Remove</button>' +
       '</div>';
       html += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:6px;">Claim URL will be added to caption</div>';
     } else {

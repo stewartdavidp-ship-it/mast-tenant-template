@@ -121,10 +121,10 @@ function renderContacts() {
     var lastInt = c._lastInteraction;
     var lastIntHtml = lastInt
       ? '<span class="contact-last-interaction"><span class="status-badge" style="' + interactionTypeBadgeStyle(lastInt.type) + '">' + esc(lastInt.type || '') + '</span> &mdash; ' + esc(lastInt.date || '') + '</span>'
-      : '<span style="color:var(--warm-gray-light);font-size:0.82rem;">None</span>';
+      : '<span style="color:var(--warm-gray-light);font-size:0.85rem;">None</span>';
 
     var driveHtml = c.driveFolderLink
-      ? '<a href="' + esc(c.driveFolderLink) + '" target="_blank" rel="noopener" onclick="event.stopPropagation();" title="Open Drive folder" style="font-size:1.1rem;">&#128193;</a>'
+      ? '<a href="' + esc(c.driveFolderLink) + '" target="_blank" rel="noopener" onclick="event.stopPropagation();" title="Open Drive folder" style="font-size:1.15rem;">&#128193;</a>'
       : '';
 
     tr.innerHTML =
@@ -158,7 +158,7 @@ function openAddContactModal() {
       '<div class="form-group"><label>Address</label><input type="text" id="contactAddressInput" placeholder="Street, City, State ZIP"></div>' +
       '<div class="form-group"><label>Notes</label><textarea id="contactNotesInput" rows="2" placeholder="Optional notes about this contact"></textarea></div>' +
       '<div class="form-group"><label>Drive Folder Link</label><input type="text" id="contactDriveFolderInput" placeholder="https://drive.google.com/drive/folders/...">' +
-        '<p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Paste an existing Google Drive folder link.</p></div>' +
+        '<p style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">Paste an existing Google Drive folder link.</p></div>' +
     '</div>' +
     '<div class="modal-footer">' +
       '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
@@ -433,7 +433,7 @@ function renderContactDetail(contact) {
   if (contact.website) fields.push('<a href="' + esc(contact.website) + '" target="_blank" rel="noopener" style="color:var(--teal);">' + esc(contact.website) + '</a>');
   if (contact.address) fields.push(esc(contact.address));
   if (fields.length) {
-    detailFieldsHtml = '<div style="display:flex;flex-wrap:wrap;gap:8px 16px;margin:8px 0;font-size:0.88rem;color:var(--warm-gray-light);">' +
+    detailFieldsHtml = '<div style="display:flex;flex-wrap:wrap;gap:8px 16px;margin:8px 0;font-size:0.9rem;color:var(--warm-gray-light);">' +
       fields.map(function(f) { return '<span>' + f + '</span>'; }).join('<span style="color:var(--warm-gray);">|</span>') +
     '</div>';
   }
@@ -516,7 +516,7 @@ function openLogInteractionModal(contactId) {
       '<div class="form-group">' +
         '<label>Attach Document (optional)</label>' +
         '<input type="text" id="interactionDriveUrlInput" placeholder="Paste Google Drive file URL">' +
-        '<p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Paste a Drive URL to attach file metadata to this interaction.</p>' +
+        '<p style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">Paste a Drive URL to attach file metadata to this interaction.</p>' +
       '</div>' +
     '</div>' +
     '<div class="modal-footer">' +
@@ -849,11 +849,11 @@ function openSyncGoogleContactsModal() {
       '<p style="margin-bottom:16px;color:var(--warm-gray);">Choose which Google contacts to import:</p>' +
       '<div class="form-group">' +
         '<label><input type="radio" name="syncMode" value="group" checked style="margin-right:8px;">Only contacts in my "' + esc(groupName) + '" group</label>' +
-        '<p style="font-size:0.75rem;color:var(--warm-gray);margin:4px 0 12px 24px;">Imports only contacts you\'ve organized into your business group in Google Contacts.</p>' +
+        '<p style="font-size:0.78rem;color:var(--warm-gray);margin:4px 0 12px 24px;">Imports only contacts you\'ve organized into your business group in Google Contacts.</p>' +
       '</div>' +
       '<div class="form-group">' +
         '<label><input type="radio" name="syncMode" value="all" style="margin-right:8px;">All my Google contacts</label>' +
-        '<p style="font-size:0.75rem;color:var(--warm-gray);margin:4px 0 0 24px;">Imports all contacts from your Google account.</p>' +
+        '<p style="font-size:0.78rem;color:var(--warm-gray);margin:4px 0 0 24px;">Imports all contacts from your Google account.</p>' +
       '</div>' +
     '</div>' +
     '<div class="modal-footer">' +
@@ -1007,13 +1007,6 @@ async function doSyncGoogleContacts() {
       'contacts': { tab: 'contactsTab', setup: function() {
         if (!contactsLoaded) loadContacts();
         updateGoogleContactsButtons();
-        // If another module navigated here to view a specific contact, honor it.
-        if (window._pendingContactView) {
-          var id = window._pendingContactView;
-          window._pendingContactView = null;
-          // Defer so loadContacts has a chance to render first.
-          setTimeout(function() { viewContact(id); }, 0);
-        }
       } }
     },
     detachListeners: function() {

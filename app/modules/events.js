@@ -417,15 +417,15 @@
     for (var id in showsData) shows.push(Object.assign({ id: id }, showsData[id]));
     shows.sort(function(a, b) { return (b.startDate || '').localeCompare(a.startDate || ''); });
 
-    var html = '<div class="ev-page-header"><h2 style="margin:0;font-size:1.3rem;">Shows</h2><div>';
+    var html = '<div class="ev-page-header"><h2 style="margin:0;font-size:1.15rem;">Shows</h2><div>';
     html += '<button class="btn btn-small btn-secondary" onclick="evNavigateTo(\'settings\')" style="margin-right:8px;">&#9881; Settings</button>';
     html += '<button class="btn btn-small btn-primary" onclick="evOpenCreateShowModal()">+ New Show</button>';
     html += '</div></div>';
 
     if (shows.length === 0) {
       html += '<div style="text-align:center;padding:60px 20px;color:var(--warm-gray);">' +
-        '<div style="font-size:2.5rem;margin-bottom:12px;">&#127914;</div>' +
-        '<p style="font-size:1.1rem;font-weight:600;margin-bottom:4px;">No shows yet</p>' +
+        '<div style="font-size:1.6rem;margin-bottom:12px;">&#127914;</div>' +
+        '<p style="font-size:1.15rem;font-weight:600;margin-bottom:4px;">No shows yet</p>' +
         '<p style="font-size:0.85rem;">Create your first show to get started.</p>' +
         '<button class="btn btn-primary" onclick="evOpenCreateShowModal()" style="margin-top:16px;">Create Show</button>' +
       '</div>';
@@ -463,7 +463,7 @@
         evBadgeHtml(show.status) +
       '</div>' +
       (show.venue ? '<p style="font-size:0.85rem;color:var(--warm-gray);margin:0 0 4px;">&#128205; ' + esc(show.venue) + '</p>' : '') +
-      (dateStr ? '<p style="font-size:0.8rem;color:var(--warm-gray);margin:0;">&#128197; ' + dateStr + '</p>' : '') +
+      (dateStr ? '<p style="font-size:0.78rem;color:var(--warm-gray);margin:0;">&#128197; ' + dateStr + '</p>' : '') +
     '</div>';
   }
 
@@ -560,7 +560,7 @@
 
     var html = '<button class="detail-back" onclick="evNavigateTo(\'shows-list\')">← Back to Shows</button>';
     html += '<div class="ev-page-header">';
-    html += '<h2 style="margin:0;font-size:1.3rem;">' + esc(show.name) + ' ' + evBadgeHtml(show.status) + '</h2>';
+    html += '<h2 style="margin:0;font-size:1.15rem;">' + esc(show.name) + ' ' + evBadgeHtml(show.status) + '</h2>';
     html += '</div>';
     html += '<div class="view-tabs">';
     for (var t = 0; t < tabs.length; t++) {
@@ -619,7 +619,7 @@
     html += '<div class="ev-stat-card"><div class="ev-stat-label">Slug</div><div class="ev-stat-value" style="font-size:0.85rem;word-break:break-all;">' + esc(show.slug || '—') + '</div></div>';
     html += '</div>';
 
-    html += '<div class="ev-card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;"><h3 style="margin:0;">Show Details</h3><button style="background:none;border:none;color:var(--teal);cursor:pointer;font-size:0.85rem;font-family:'DM Sans';" onclick="evOpenEditShowModal(\'' + esc(showId) + '\')">Edit</button></div>';
+    html += '<div class="ev-card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;"><h3 style="margin:0;">Show Details</h3><button style="background:none;border:none;color:var(--teal);cursor:pointer;font-size:0.85rem;font-family:\'DM Sans\';" onclick="evOpenEditShowModal(\'' + esc(showId) + '\')">Edit</button></div>';
     if (show.description) html += '<p style="font-size:0.9rem;margin:0 0 8px;">' + esc(show.description) + '</p>';
     if (show.venue) html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin:0 0 4px;">&#128205; ' + esc(show.venue) + (show.address ? ', ' + esc(show.address) : '') + (show.city ? ', ' + esc(show.city) : '') + (show.state ? ' ' + esc(show.state) : '') + '</p>';
     if (show.startDate) {
@@ -642,7 +642,7 @@
     html += '<button class="btn btn-small btn-primary" style="width:100%;margin-top:8px;" onclick="evOpenSubmissionConfig(\'' + esc(showId) + '\')">' +
       (show.submissionConfig && show.submissionConfig.enabled ? '&#9881; Submission Settings' : 'Create Submission Page') + '</button>';
     if (show.submissionConfig && show.submissionConfig.enabled && show.slug) {
-      html += '<p style="font-size:0.75rem;color:var(--warm-gray);margin-top:8px;">Public URL: /apply/' + esc(show.slug) + '</p>';
+      html += '<p style="font-size:0.78rem;color:var(--warm-gray);margin-top:8px;">Public URL: /apply/' + esc(show.slug) + '</p>';
     }
     html += '</div>';
 
@@ -787,7 +787,7 @@
       for (var i = 0; i < boothsList.length; i++) {
         var b = boothsList[i];
         html += '<tr><td style="font-weight:600;">' + esc(b.name || '') + '</td><td>' + esc(b.size || '') + '</td><td>' + evBadgeHtml(b.type || 'standard') + '</td><td>' + formatCurrency(b.price || 0) + '</td><td style="color:var(--warm-gray);">' + esc(b.location || '—') + '</td><td>' + evBadgeHtml(b.status || 'open') + '</td>' +
-          '<td style="text-align:right;"><button style="background:none;border:none;color:var(--teal);cursor:pointer;font-size:0.85rem;font-family:'DM Sans';" onclick="evOpenEditBoothModal(\'' + esc(showId) + '\', \'' + esc(b.id) + '\')">Edit</button> <button style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:0.85rem;font-family:'DM Sans';" onclick="evDeleteBooth(\'' + esc(showId) + '\', \'' + esc(b.id) + '\')">Del</button></td></tr>';
+          '<td style="text-align:right;"><button style="background:none;border:none;color:var(--teal);cursor:pointer;font-size:0.85rem;font-family:\'DM Sans\';" onclick="evOpenEditBoothModal(\'' + esc(showId) + '\', \'' + esc(b.id) + '\')">Edit</button> <button style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:0.85rem;font-family:\'DM Sans\';" onclick="evDeleteBooth(\'' + esc(showId) + '\', \'' + esc(b.id) + '\')">Del</button></td></tr>';
       }
       html += '</tbody></table></div>';
     }
@@ -926,9 +926,9 @@
 
     if (!show.floorPlanUrl) {
       html += '<div style="background:var(--cream);border:2px dashed var(--cream-dark);border-radius:10px;padding:60px 20px;text-align:center;">' +
-        '<div style="font-size:2.5rem;margin-bottom:12px;">&#128506;</div><p style="color:var(--warm-gray);margin-bottom:16px;">Upload a floor plan image to place booth markers.</p>' +
+        '<div style="font-size:1.6rem;margin-bottom:12px;">&#128506;</div><p style="color:var(--warm-gray);margin-bottom:16px;">Upload a floor plan image to place booth markers.</p>' +
         '<label class="btn btn-primary" style="cursor:pointer;">Upload Floor Plan<input type="file" accept="image/*" onchange="evUploadFloorPlan(event, \'' + esc(showId) + '\')" style="display:none;"></label>' +
-        '<p style="font-size:0.75rem;color:var(--warm-gray);margin-top:12px;">PNG, JPG, or SVG up to 10MB</p></div>';
+        '<p style="font-size:0.78rem;color:var(--warm-gray);margin-top:12px;">PNG, JPG, or SVG up to 10MB</p></div>';
     } else {
       html += '<div id="evFpPlaceBanner" style="display:none;background:rgba(42,124,111,0.15);border:1px solid rgba(42,124,111,0.3);border-radius:8px;padding:10px 16px;margin-bottom:12px;font-size:0.85rem;align-items:center;justify-content:space-between;">' +
         '<span>Click on the floor plan to place <strong id="evFpPlacingName"></strong></span>' +
@@ -943,13 +943,13 @@
       var unpinned = boothsList.filter(function(b) { return !pins[b.id]; });
       var pinned = boothsList.filter(function(b) { return pins[b.id]; });
       if (unpinned.length > 0) {
-        html += '<div class="ev-card"><h4 style="font-size:0.8rem;text-transform:uppercase;color:var(--warm-gray);margin:0 0 10px;">Unplaced</h4>';
+        html += '<div class="ev-card"><h4 style="font-size:0.78rem;text-transform:uppercase;color:var(--warm-gray);margin:0 0 10px;">Unplaced</h4>';
         for (var u = 0; u < unpinned.length; u++) html += '<button onclick="evStartPinPlacement(\'' + esc(showId) + '\', \'' + esc(unpinned[u].id) + '\', \'' + esc(unpinned[u].name) + '\')" style="display:block;width:100%;text-align:left;padding:6px 10px;font-size:0.85rem;background:none;border:none;border-radius:4px;cursor:pointer;color:var(--charcoal);">' + esc(unpinned[u].name) + '</button>';
         html += '</div>';
       }
       if (pinned.length > 0) {
-        html += '<div class="ev-card"><h4 style="font-size:0.8rem;text-transform:uppercase;color:var(--warm-gray);margin:0 0 10px;">Placed</h4>';
-        for (var p2 = 0; p2 < pinned.length; p2++) html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 10px;font-size:0.85rem;"><button onclick="evStartPinPlacement(\'' + esc(showId) + '\', \'' + esc(pinned[p2].id) + '\', \'' + esc(pinned[p2].name) + '\')" style="background:none;border:none;cursor:pointer;color:var(--charcoal);font-size:0.85rem;">' + esc(pinned[p2].name) + '</button><button onclick="evRemovePin(\'' + esc(showId) + '\', \'' + esc(pinned[p2].id) + '\')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:0.75rem;font-family:'DM Sans';">Remove</button></div>';
+        html += '<div class="ev-card"><h4 style="font-size:0.78rem;text-transform:uppercase;color:var(--warm-gray);margin:0 0 10px;">Placed</h4>';
+        for (var p2 = 0; p2 < pinned.length; p2++) html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 10px;font-size:0.85rem;"><button onclick="evStartPinPlacement(\'' + esc(showId) + '\', \'' + esc(pinned[p2].id) + '\', \'' + esc(pinned[p2].name) + '\')" style="background:none;border:none;cursor:pointer;color:var(--charcoal);font-size:0.85rem;">' + esc(pinned[p2].name) + '</button><button onclick="evRemovePin(\'' + esc(showId) + '\', \'' + esc(pinned[p2].id) + '\')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:0.78rem;font-family:\'DM Sans\';">Remove</button></div>';
         html += '</div>';
       }
       html += '</div></div>';
@@ -1062,7 +1062,7 @@
       var isPlacing = floorPlanState.placingBoothId === bid;
       ctx.beginPath();
       ctx.arc(px, py, isPlacing ? 14 : 10, 0, Math.PI * 2);
-      ctx.fillStyle = isPlacing ? '#818cf8' : '#2a7c6f';
+      ctx.fillStyle = isPlacing ? '#818cf8' : 'var(--teal)';
       ctx.fill();
       ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
       ctx.fillStyle = '#fff'; ctx.font = 'bold 9px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -1093,20 +1093,20 @@
         var boothName = '—';
         if (v.boothId && boothsData[v.boothId]) boothName = boothsData[v.boothId].name || v.boothId;
         html += '<tr>' +
-          '<td><div style="font-weight:600;">' + esc(v.businessName || '') + '</div><div style="font-size:0.75rem;color:var(--warm-gray);">' + esc(v.ownerName || '') + (v.email ? ' · ' + esc(v.email) : '') + '</div></td>' +
-          '<td style="font-size:0.8rem;">' + esc(v.category || '—') + '</td>' +
+          '<td><div style="font-weight:600;">' + esc(v.businessName || '') + '</div><div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(v.ownerName || '') + (v.email ? ' · ' + esc(v.email) : '') + '</div></td>' +
+          '<td style="font-size:0.78rem;">' + esc(v.category || '—') + '</td>' +
           '<td>' + esc(boothName) + '</td>' +
           '<td>' + evBadgeHtml(v.paymentStatus || 'pending') + '</td>' +
-          '<td><select style="font-size:0.8rem;padding:2px 6px;border-radius:4px;border:1px solid var(--cream-dark);background:var(--cream);color:var(--charcoal);" onchange="evUpdateVendorStatus(\'' + esc(showId) + '\', \'' + esc(v.id) + '\', this.value)">';
+          '<td><select style="font-size:0.78rem;padding:2px 6px;border-radius:4px;border:1px solid var(--cream-dark);background:var(--cream);color:var(--charcoal);" onchange="evUpdateVendorStatus(\'' + esc(showId) + '\', \'' + esc(v.id) + '\', this.value)">';
         for (var si = 0; si < VENDOR_STATUSES.length; si++) {
           html += '<option value="' + VENDOR_STATUSES[si] + '"' + (VENDOR_STATUSES[si] === (v.status || 'pending') ? ' selected' : '') + '>' + VENDOR_STATUSES[si] + '</option>';
         }
         html += '</select></td>' +
           '<td style="text-align:right;white-space:nowrap;">' +
-            (v.email && !v.inviteSentAt ? '<button style="background:none;border:none;color:#3b82f6;cursor:pointer;font-size:0.85rem;font-family:'DM Sans';" onclick="evSendVendorInvite(\'' + esc(showId) + '\', \'' + esc(v.id) + '\')">Invite</button> ' : '') +
-            (v.inviteSentAt ? '<span style="font-size:0.7rem;color:var(--warm-gray);">Invited </span>' : '') +
-            '<button style="background:none;border:none;color:var(--teal);cursor:pointer;font-size:0.85rem;font-family:'DM Sans';" onclick="evOpenVendorModal(\'' + esc(showId) + '\', \'' + esc(v.id) + '\')">Edit</button> ' +
-            '<button style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:0.85rem;font-family:'DM Sans';" onclick="evDeleteVendor(\'' + esc(showId) + '\', \'' + esc(v.id) + '\')">Del</button>' +
+            (v.email && !v.inviteSentAt ? '<button style="background:none;border:none;color:#3b82f6;cursor:pointer;font-size:0.85rem;font-family:\'DM Sans\';" onclick="evSendVendorInvite(\'' + esc(showId) + '\', \'' + esc(v.id) + '\')">Invite</button> ' : '') +
+            (v.inviteSentAt ? '<span style="font-size:0.72rem;color:var(--warm-gray);">Invited </span>' : '') +
+            '<button style="background:none;border:none;color:var(--teal);cursor:pointer;font-size:0.85rem;font-family:\'DM Sans\';" onclick="evOpenVendorModal(\'' + esc(showId) + '\', \'' + esc(v.id) + '\')">Edit</button> ' +
+            '<button style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:0.85rem;font-family:\'DM Sans\';" onclick="evDeleteVendor(\'' + esc(showId) + '\', \'' + esc(v.id) + '\')">Del</button>' +
           '</td></tr>';
       }
       html += '</tbody></table></div>';
@@ -1273,7 +1273,7 @@
 
     var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
     html += '<h3 style="margin:0;font-size:1rem;">Submissions</h3>';
-    html += '<div style="display:flex;gap:12px;align-items:center;font-size:0.8rem;color:var(--warm-gray);">' +
+    html += '<div style="display:flex;gap:12px;align-items:center;font-size:0.78rem;color:var(--warm-gray);">' +
       '<span style="color:#f59e0b;">' + pending.length + ' pending</span>' +
       '<span style="color:#10b981;">' + accepted.length + ' accepted</span>' +
       '<span style="color:var(--danger);">' + declined.length + ' declined</span>' +
@@ -1288,15 +1288,15 @@
         html += '<div class="ev-card" style="margin-bottom:12px;">';
         html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;">';
         html += '<div><strong>' + esc(s.businessName || '') + '</strong> ' + evBadgeHtml(s.reviewDecision || s.status || 'pending');
-        if (s.notified) html += ' <span style="font-size:0.7rem;color:var(--warm-gray);">notified</span>';
-        html += '<div style="font-size:0.8rem;color:var(--warm-gray);margin-top:4px;">' + esc(s.ownerName || '') + (s.email ? ' · ' + esc(s.email) : '') + (s.phone ? ' · ' + esc(s.phone) : '') + '</div>';
-        html += '<div style="font-size:0.75rem;color:var(--warm-gray);margin-top:2px;">' + esc(s.category || '') + ' · Submitted ' + (s.submittedAt ? new Date(s.submittedAt).toLocaleDateString() : '') + '</div>';
+        if (s.notified) html += ' <span style="font-size:0.72rem;color:var(--warm-gray);">notified</span>';
+        html += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">' + esc(s.ownerName || '') + (s.email ? ' · ' + esc(s.email) : '') + (s.phone ? ' · ' + esc(s.phone) : '') + '</div>';
+        html += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">' + esc(s.category || '') + ' · Submitted ' + (s.submittedAt ? new Date(s.submittedAt).toLocaleDateString() : '') + '</div>';
         html += '</div></div>';
 
         if (s.businessDescription) html += '<p style="font-size:0.85rem;margin:10px 0 0;">' + esc(s.businessDescription) + '</p>';
-        if (s.websiteUrl) html += '<p style="font-size:0.8rem;margin:4px 0 0;"><a href="' + esc(s.websiteUrl) + '" target="_blank" style="color:var(--teal);">' + esc(s.websiteUrl) + '</a></p>';
-        if (s.instagramHandle) html += '<p style="font-size:0.8rem;margin:4px 0 0;color:var(--warm-gray);">IG: ' + esc(s.instagramHandle) + '</p>';
-        if (s.additionalInfo) html += '<p style="font-size:0.8rem;margin:8px 0 0;padding:8px;background:var(--cream-dark);border-radius:6px;">' + esc(s.additionalInfo) + '</p>';
+        if (s.websiteUrl) html += '<p style="font-size:0.78rem;margin:4px 0 0;"><a href="' + esc(s.websiteUrl) + '" target="_blank" style="color:var(--teal);">' + esc(s.websiteUrl) + '</a></p>';
+        if (s.instagramHandle) html += '<p style="font-size:0.78rem;margin:4px 0 0;color:var(--warm-gray);">IG: ' + esc(s.instagramHandle) + '</p>';
+        if (s.additionalInfo) html += '<p style="font-size:0.78rem;margin:8px 0 0;padding:8px;background:var(--cream-dark);border-radius:6px;">' + esc(s.additionalInfo) + '</p>';
 
         if (s.imageUrls && s.imageUrls.length > 0) {
           html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;">';
@@ -1308,12 +1308,12 @@
 
         if (s.status === 'pending') {
           html += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--cream-dark);display:flex;gap:8px;align-items:center;">';
-          html += '<input type="text" id="evReviewNote_' + esc(s.id) + '" class="ev-form-input" style="flex:1;padding:6px 10px;font-size:0.8rem;" placeholder="Review notes (optional)">';
+          html += '<input type="text" id="evReviewNote_' + esc(s.id) + '" class="ev-form-input" style="flex:1;padding:6px 10px;font-size:0.78rem;" placeholder="Review notes (optional)">';
           html += '<button class="btn btn-small" style="background:#10b981;color:#fff;" onclick="evReviewSubmission(\'' + esc(showId) + '\', \'' + esc(s.id) + '\', \'accepted\')">Accept</button>';
           html += '<button class="btn btn-small btn-danger" onclick="evReviewSubmission(\'' + esc(showId) + '\', \'' + esc(s.id) + '\', \'declined\')">Decline</button>';
           html += '</div>';
         } else if (s.reviewNotes) {
-          html += '<p style="font-size:0.8rem;margin-top:8px;color:var(--warm-gray);">Review notes: ' + esc(s.reviewNotes) + '</p>';
+          html += '<p style="font-size:0.78rem;margin-top:8px;color:var(--warm-gray);">Review notes: ' + esc(s.reviewNotes) + '</p>';
         }
         html += '</div>';
       }
@@ -1398,7 +1398,7 @@
 
     if (confirmed.length === 0) {
       html += '<div style="text-align:center;padding:40px;color:var(--warm-gray);">' +
-        '<div style="font-size:2rem;margin-bottom:8px;">&#128203;</div>' +
+        '<div style="font-size:1.6rem;margin-bottom:8px;">&#128203;</div>' +
         '<p>No confirmed vendors. Confirm vendors first to use check-in.</p></div>';
     } else {
       var filtered = confirmed;
@@ -1411,8 +1411,8 @@
         var booth = v.boothId && boothsData[v.boothId] ? boothsData[v.boothId] : null;
         html += '<div class="ev-card" style="margin-bottom:8px;display:flex;align-items:center;gap:12px;">';
         html += '<div style="flex:1;min-width:0;">';
-        html += '<div style="font-weight:600;font-size:0.95rem;">' + esc(v.businessName || '') + '</div>';
-        if (booth) html += '<div style="font-size:0.8rem;color:var(--warm-gray);">Booth: ' + esc(booth.name || '') + (booth.location ? ' — ' + esc(booth.location) : '') + '</div>';
+        html += '<div style="font-weight:600;font-size:0.9rem;">' + esc(v.businessName || '') + '</div>';
+        if (booth) html += '<div style="font-size:0.78rem;color:var(--warm-gray);">Booth: ' + esc(booth.name || '') + (booth.location ? ' — ' + esc(booth.location) : '') + '</div>';
         html += '</div>';
         html += '<div style="display:flex;gap:8px;">';
         html += '<button class="btn btn-small" style="' + (v.checkedIn ? 'background:#10b981;color:#fff;' : 'background:var(--cream-dark);color:var(--warm-gray);') + '" onclick="evToggleCheckin(\'' + esc(showId) + '\', \'' + esc(v.id) + '\', ' + (v.checkedIn ? 'false' : 'true') + ')">' + (v.checkedIn ? '&#10003; Arrived' : 'Not Arrived') + '</button>';
@@ -1483,7 +1483,7 @@
           '</div>' +
           '<div class="ev-form-group"><label style="display:flex;align-items:center;gap:8px;font-size:0.85rem;cursor:pointer;">' +
             '<input type="checkbox" id="evsc_enabled"' + (existing.enabled ? ' checked' : '') + '> Enable public submission page</label></div>' +
-          (existing.enabled && show.slug ? '<div style="background:var(--cream-dark);border-radius:8px;padding:10px;font-size:0.8rem;color:var(--warm-gray);margin-bottom:12px;">Public URL: <strong>/apply/' + esc(show.slug) + '</strong></div>' : '') +
+          (existing.enabled && show.slug ? '<div style="background:var(--cream-dark);border-radius:8px;padding:10px;font-size:0.78rem;color:var(--warm-gray);margin-bottom:12px;">Public URL: <strong>/apply/' + esc(show.slug) + '</strong></div>' : '') +
           '<div class="ev-form-actions">' +
             (existing.enabled ? '<button type="button" class="btn btn-small btn-danger" onclick="evCloseSubmissions(\'' + esc(showId) + '\')">Close Submissions</button>' : '<span></span>') +
             '<div style="display:flex;gap:8px;"><button type="button" class="btn btn-secondary" onclick="evCloseModal(\'evSubConfigModal\')">Cancel</button>' +
@@ -1602,10 +1602,10 @@
         html += '<div class="ev-card" style="margin-bottom:8px;">';
         html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;">';
         html += '<strong style="font-size:0.9rem;">' + esc(a.subject || '') + '</strong>';
-        html += '<span style="font-size:0.75rem;color:var(--warm-gray);">' + (a.sentAt ? new Date(a.sentAt).toLocaleString() : '') + '</span>';
+        html += '<span style="font-size:0.78rem;color:var(--warm-gray);">' + (a.sentAt ? new Date(a.sentAt).toLocaleString() : '') + '</span>';
         html += '</div>';
         html += '<p style="font-size:0.85rem;margin:8px 0 0;white-space:pre-wrap;">' + esc(a.body || '') + '</p>';
-        if (a.recipientCount) html += '<p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">Sent to ' + a.recipientCount + ' vendors</p>';
+        if (a.recipientCount) html += '<p style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">Sent to ' + a.recipientCount + ' vendors</p>';
         html += '</div>';
       }
     }
@@ -1679,7 +1679,7 @@
       html += '</div>';
 
       if (stats.vendorScans) {
-        html += '<h5 style="font-size:0.8rem;color:var(--warm-gray);margin:12px 0 8px;">Vendor Scans</h5>';
+        html += '<h5 style="font-size:0.78rem;color:var(--warm-gray);margin:12px 0 8px;">Vendor Scans</h5>';
         var scanList = [];
         for (var vid in stats.vendorScans) scanList.push({ id: vid, count: stats.vendorScans[vid] });
         scanList.sort(function(a, b) { return b.count - a.count; });
@@ -1826,18 +1826,18 @@
     if (!container) return;
 
     var html = '<button class="detail-back" onclick="evNavigateTo(\'shows-list\')">← Back to Shows</button>';
-    html += '<div class="ev-page-header"><h2 style="margin:0;font-size:1.3rem;">Events Settings</h2>';
+    html += '<div class="ev-page-header"><h2 style="margin:0;font-size:1.15rem;">Events Settings</h2>';
     html += '</div>';
 
     html += '<div class="ev-card">';
-    html += '<h3 style="display:flex;align-items:center;gap:8px;"><span style="font-size:1.2rem;">&#128179;</span> Payment Processing</h3>';
+    html += '<h3 style="display:flex;align-items:center;gap:8px;"><span style="font-size:1.15rem;">&#128179;</span> Payment Processing</h3>';
     html += '<div id="evPaymentProcessorStatus" style="margin-bottom:12px;"><span style="color:var(--warm-gray);font-size:0.85rem;">Detecting payment processor...</span></div>';
     html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">Booth fees and vendor coin purchases route through your configured payment processor. Configure it in your main admin settings.</p>';
     html += '<button class="btn btn-small btn-secondary" onclick="navigateTo(\'settings\')">Open Admin Settings</button>';
     html += '</div>';
 
     html += '<div class="ev-card">';
-    html += '<h3 style="display:flex;align-items:center;gap:8px;"><span style="font-size:1.2rem;">&#9881;</span> Events Defaults</h3>';
+    html += '<h3 style="display:flex;align-items:center;gap:8px;"><span style="font-size:1.15rem;">&#9881;</span> Events Defaults</h3>';
     html += '<p style="font-size:0.85rem;color:var(--warm-gray);">Default settings for new shows. These can be overridden per show.</p>';
     html += '<div style="margin-top:16px;color:var(--warm-gray);font-size:0.85rem;font-style:italic;">Coming soon — default booth types, pricing, vendor categories, and email templates.</div>';
     html += '</div>';
@@ -1867,7 +1867,7 @@
     } else {
       el.innerHTML = '<div style="padding:10px 14px;border-radius:6px;background:rgba(255,160,0,0.12);border:1px solid rgba(255,160,0,0.3);">' +
         '<div style="font-size:0.85rem;font-weight:600;color:#ffa000;">&#9888; No payment processor configured</div>' +
-        '<div style="font-size:0.8rem;color:var(--warm-gray);margin-top:4px;">Set up Square or Stripe in admin settings.</div>' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">Set up Square or Stripe in admin settings.</div>' +
       '</div>';
     }
   }

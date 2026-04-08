@@ -155,8 +155,8 @@
     if (!docs.length) {
       tab.innerHTML =
         '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">' +
-          '<div style="font-size:2rem;margin-bottom:12px;">📄</div>' +
-          '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No look books or line sheets yet</p>' +
+          '<div style="font-size:1.6rem;margin-bottom:12px;">📄</div>' +
+          '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No look books or line sheets yet</p>' +
           '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Create professional PDF catalogs from your product data.</p>' +
           '<button class="btn btn-primary" style="margin-top:16px;" onclick="lbNewDoc()">+ New Document</button>' +
         '</div>';
@@ -184,7 +184,7 @@
         '<div class="lb-doc-card" onclick="lbEditDoc(\'' + esc(doc.documentId) + '\')">' +
           '<div style="display:flex;justify-content:space-between;align-items:flex-start;">' +
             '<div>' +
-              '<div style="font-weight:500;font-size:0.95rem;">' + esc(doc.title || 'Untitled') + '</div>' +
+              '<div style="font-weight:500;font-size:0.9rem;">' + esc(doc.title || 'Untitled') + '</div>' +
               '<div style="display:flex;gap:8px;align-items:center;margin-top:6px;">' +
                 typeBadge + statusBadge +
                 '<span style="font-size:0.78rem;color:var(--warm-gray);">' + tierLabel + ' prices</span>' +
@@ -300,7 +300,7 @@
     html +=
       '<div class="lb-builder-section">' +
         '<div style="font-size:1rem;font-weight:500;margin-bottom:8px;">Categories</div>' +
-        '<div style="font-size:0.8rem;color:var(--warm-gray);margin-bottom:12px;">Select categories to include. All are included if none selected.</div>' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:12px;">Select categories to include. All are included if none selected.</div>' +
         '<div id="lbCategories">';
 
     if (categoryList.length) {
@@ -318,7 +318,7 @@
     html +=
       '<div class="lb-builder-section">' +
         '<div style="font-size:1rem;font-weight:500;margin-bottom:8px;">Exclude Products</div>' +
-        '<div style="font-size:0.8rem;color:var(--warm-gray);margin-bottom:12px;">Optionally exclude specific products.</div>' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:12px;">Optionally exclude specific products.</div>' +
         '<div id="lbExcluded">';
 
     excludeProductIds.forEach(function(pid) {

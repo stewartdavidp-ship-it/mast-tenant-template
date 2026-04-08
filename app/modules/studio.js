@@ -33,7 +33,7 @@
     return { monthlyCostToOwn: monthlyCostToOwn, totalMonthlyCost: totalMonthlyCost, costPerUnit: costPerUnit };
   }
   // Standard input style (dark mode aware)
-  var INPUT_STYLE = 'width:100%;padding:9px 12px;border:1px solid var(--cream-dark,#ddd);border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;background:var(--cream,#FAF6F0);color:var(--charcoal,#1a1a1a);box-sizing:border-box;';
+  var INPUT_STYLE = 'width:100%;padding:9px 12px;border:1px solid var(--cream-dark,#ddd);border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;background:var(--cream,var(--cream));color:var(--charcoal,var(--charcoal));box-sizing:border-box;';
 
   // --- Load ---
   async function loadStudio() {
@@ -124,11 +124,11 @@
     var hasTeam = employeesData.length > 0;
     var isEmpty = !hasEquip && !hasOverhead && !hasFounders;
 
-    var h = '<div style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:20px 24px;margin-bottom:24px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
+    var h = '<div style="background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:20px 24px;margin-bottom:24px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
     h += '<div style="font-size:1.15rem;font-weight:500;font-family:\'DM Sans\',sans-serif;margin-bottom:12px;">Your studio costs to run</div>';
 
     if (isEmpty) {
-      h += '<div style="font-size:0.9rem;color:var(--warm-gray,#6B6560);">';
+      h += '<div style="font-size:0.9rem;color:var(--warm-gray,var(--warm-gray));">';
       h += 'Add your equipment and expenses below to see what your studio costs per month before you make anything.';
       h += '</div>';
     } else {
@@ -139,7 +139,7 @@
       if (hasEquip) {
         h += '<span style="font-weight:600;">' + fmtDollarsWhole(totalEquipMonthly) + (equipPartial ? ' *' : '') + '</span>';
       } else {
-        h += '<span style="color:var(--warm-gray-light,#9B958E);">not set</span>';
+        h += '<span style="color:var(--warm-gray-light,var(--warm-gray-light));">not set</span>';
       }
       h += '</div>';
 
@@ -148,7 +148,7 @@
       if (hasOverhead) {
         h += '<span style="font-weight:600;">' + fmtDollars(combinedOverhead) + '</span>';
       } else {
-        h += '<span style="color:var(--warm-gray-light,#9B958E);">not set</span>';
+        h += '<span style="color:var(--warm-gray-light,var(--warm-gray-light));">not set</span>';
       }
       h += '</div>';
 
@@ -164,7 +164,7 @@
         h += '</div>';
       }
 
-      h += '<hr style="border:none;border-top:1px solid var(--cream-dark,#F0E8DB);margin:4px 0;">';
+      h += '<hr style="border:none;border-top:1px solid var(--cream-dark,var(--cream-dark));margin:4px 0;">';
 
       var floorCost = totalEquipMonthly + (combinedOverhead / 100);
       var isComplete = hasEquip && !equipPartial && hasOverhead;
@@ -176,7 +176,7 @@
       h += '</div>';
 
       if (equipPartial) {
-        h += '<div style="font-size:0.78rem;color:var(--warm-gray,#6B6560);margin-top:8px;">* Some equipment details missing \u2014 see below</div>';
+        h += '<div style="font-size:0.78rem;color:var(--warm-gray,var(--warm-gray));margin-top:8px;">* Some equipment details missing \u2014 see below</div>';
       }
     }
 
@@ -189,18 +189,18 @@
     var h = '<div style="margin-bottom:28px;">';
     h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
     h += '<h3 style="margin:0;font-size:1.15rem;font-weight:500;">Your Equipment</h3>';
-    h += '<button class="btn btn-primary" style="font-size:0.82rem;padding:6px 16px;" onclick="studioAddEquipment()">+ New Equipment</button>';
+    h += '<button class="btn btn-primary" style="font-size:0.85rem;padding:6px 16px;" onclick="studioAddEquipment()">+ New Equipment</button>';
     h += '</div>';
 
-    h += '<div id="studioEquipForm" style="display:none;background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:16px 20px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
+    h += '<div id="studioEquipForm" style="display:none;background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:16px 20px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
     h += '<div id="studioEquipFormInner"></div>';
     h += '</div>';
 
     if (equipmentData.length === 0) {
-      h += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray,#6B6560);">';
-      h += '<div style="font-size:2rem;margin-bottom:12px;">\uD83D\uDD27</div>';
-      h += '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No equipment yet</p>';
-      h += '<p style="font-size:0.85rem;color:var(--warm-gray-light,#9B958E);">Add your kiln, torch, or other major tools.</p>';
+      h += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray,var(--warm-gray));">';
+      h += '<div style="font-size:1.6rem;margin-bottom:12px;">\uD83D\uDD27</div>';
+      h += '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No equipment yet</p>';
+      h += '<p style="font-size:0.85rem;color:var(--warm-gray-light,var(--warm-gray-light));">Add your kiln, torch, or other major tools.</p>';
       h += '</div>';
     } else {
       equipmentData.forEach(function(item) {
@@ -209,9 +209,9 @@
         var hasGaps = Object.keys(gaps).length > 0;
         var hasHighGap = Object.values(gaps).some(function(g) { return g.priority === 'high'; });
 
-        h += '<div style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:14px 18px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
+        h += '<div style="background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:14px 18px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
         h += '<div style="display:flex;justify-content:space-between;align-items:center;">';
-        h += '<div style="font-weight:600;font-size:0.95rem;">' + esc(item.name || 'Untitled');
+        h += '<div style="font-weight:600;font-size:0.9rem;">' + esc(item.name || 'Untitled');
         if (hasHighGap) h += ' <span title="Some details missing" style="color:#d97706;cursor:help;">\u26A0</span>';
         h += '</div>';
         h += '<button class="btn btn-secondary btn-small" data-id="' + esc(item._key) + '" onclick="studioEditEquipment(this.dataset.id)">Edit</button>';
@@ -224,13 +224,13 @@
         else parts.push('running cost not on file');
         if (costs.costPerUnit != null) parts.push(fmtDollarsWhole(costs.costPerUnit) + '/' + esc(item.outputUnit || 'unit'));
 
-        h += '<div style="font-size:0.82rem;color:var(--warm-gray,#6B6560);margin-top:4px;">' + parts.join(' \u00B7 ') + '</div>';
+        h += '<div style="font-size:0.85rem;color:var(--warm-gray,var(--warm-gray));margin-top:4px;">' + parts.join(' \u00B7 ') + '</div>';
 
         if (hasGaps) {
           h += '<div style="margin-top:6px;">';
           Object.entries(gaps).forEach(function(entry) {
             var gap = entry[1];
-            h += '<div style="font-size:0.75rem;color:#d97706;padding:1px 0;">\u26A0 ' + esc(gap.hint || entry[0]) + '</div>';
+            h += '<div style="font-size:0.78rem;color:#d97706;padding:1px 0;">\u26A0 ' + esc(gap.hint || entry[0]) + '</div>';
           });
           h += '</div>';
         }
@@ -253,7 +253,7 @@
     var innerEl = document.getElementById('studioEquipFormInner');
     if (!formEl || !innerEl) return;
 
-    var h = '<div style="font-weight:600;font-size:0.95rem;margin-bottom:12px;">' + (isNew ? 'New Equipment' : 'Edit Equipment') + '</div>';
+    var h = '<div style="font-weight:600;font-size:0.9rem;margin-bottom:12px;">' + (isNew ? 'New Equipment' : 'Edit Equipment') + '</div>';
 
     h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
 
@@ -274,7 +274,7 @@
 
     h += '<div>';
     h += '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Monthly running cost?</label>';
-    h += '<div style="font-size:0.72rem;color:var(--warm-gray,#6B6560);margin-bottom:2px;">Electricity, gas, maintenance</div>';
+    h += '<div style="font-size:0.72rem;color:var(--warm-gray,var(--warm-gray));margin-bottom:2px;">Electricity, gas, maintenance</div>';
     h += '<input id="eqRunCost" type="number" step="0.01" value="' + (item.monthlyRunningCost != null ? item.monthlyRunningCost : '') + '" placeholder="$/month" style="' + INPUT_STYLE + '">';
     h += '</div>';
 
@@ -375,12 +375,12 @@
     h += '<button class="btn btn-primary btn-small" onclick="studioAddFounder()">+ New Founder</button>';
     h += '</div>';
 
-    h += '<div id="studioFounderForm" style="display:none;background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:16px 20px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
+    h += '<div id="studioFounderForm" style="display:none;background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:16px 20px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
     h += '<div id="studioFounderFormInner"></div>';
     h += '</div>';
 
     if (foundersData.length === 0) {
-      h += '<div style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:14px 18px;box-shadow:0 1px 3px rgba(0,0,0,0.08);color:var(--warm-gray,#6B6560);font-size:0.9rem;">';
+      h += '<div style="background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:14px 18px;box-shadow:0 1px 3px rgba(0,0,0,0.08);color:var(--warm-gray,var(--warm-gray));font-size:0.9rem;">';
       h += 'No founders added yet. Add yourself (and any co-owners) to track time and target pay.';
       h += '</div>';
     } else {
@@ -391,12 +391,12 @@
         var total = (prod != null && admin != null) ? prod + admin : (prod || admin || null);
         var monthlyCost = ((rate || 0) * (total || 0) * 4.33);
 
-        h += '<div style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:14px 18px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
+        h += '<div style="background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:14px 18px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
         h += '<div style="display:flex;justify-content:space-between;align-items:center;">';
         h += '<span style="font-weight:600;">' + esc(f.name || 'Founder') + '</span>';
         h += '<button class="btn btn-secondary btn-small" data-id="' + esc(f._key) + '" onclick="studioEditFounder(this.dataset.id)">Edit</button>';
         h += '</div>';
-        h += '<div style="font-size:0.82rem;color:var(--warm-gray,#6B6560);margin-top:4px;">';
+        h += '<div style="font-size:0.85rem;color:var(--warm-gray,var(--warm-gray));margin-top:4px;">';
         h += (rate != null ? '$' + rate + '/hr' : 'rate not set');
         h += ' \u00B7 ' + (prod != null ? prod + ' hrs making' : 'making hrs not set');
         h += ' \u00B7 ' + (admin != null ? admin + ' hrs business' : 'business hrs not set');
@@ -422,18 +422,18 @@
     if (!formEl || !innerEl) return;
 
     var rate = f.hourlyRate || f.ownerHourlyRate;
-    var h = '<div style="font-weight:600;font-size:0.95rem;margin-bottom:12px;">' + (isNew ? 'New Founder' : 'Edit Founder') + '</div>';
+    var h = '<div style="font-weight:600;font-size:0.9rem;margin-bottom:12px;">' + (isNew ? 'New Founder' : 'Edit Founder') + '</div>';
     h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
     h += '<div style="grid-column:1/-1;"><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Name</label>';
     h += '<input id="founderName" type="text" value="' + esc(f.name || '') + '" placeholder="e.g. Madeline" style="' + INPUT_STYLE + '"></div>';
     h += '<div><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Target hourly pay</label>';
-    h += '<div style="font-size:0.72rem;color:var(--warm-gray,#6B6560);margin-bottom:2px;">What you\'d pay a skilled person to do this job</div>';
+    h += '<div style="font-size:0.72rem;color:var(--warm-gray,var(--warm-gray));margin-bottom:2px;">What you\'d pay a skilled person to do this job</div>';
     h += '<input id="founderRate" type="number" step="0.01" value="' + (rate != null ? rate : '') + '" placeholder="$/hr" style="' + INPUT_STYLE + '"></div>';
     h += '<div><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Making hours/week</label>';
-    h += '<div style="font-size:0.72rem;color:var(--warm-gray,#6B6560);margin-bottom:2px;">At the bench, kiln, or torch</div>';
+    h += '<div style="font-size:0.72rem;color:var(--warm-gray,var(--warm-gray));margin-bottom:2px;">At the bench, kiln, or torch</div>';
     h += '<input id="founderProd" type="number" value="' + (f.productionHoursPerWeek != null ? f.productionHoursPerWeek : '') + '" placeholder="hrs" style="' + INPUT_STYLE + '"></div>';
     h += '<div><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Business tasks/week</label>';
-    h += '<div style="font-size:0.72rem;color:var(--warm-gray,#6B6560);margin-bottom:2px;">Packing, photos, emails, markets</div>';
+    h += '<div style="font-size:0.72rem;color:var(--warm-gray,var(--warm-gray));margin-bottom:2px;">Packing, photos, emails, markets</div>';
     h += '<input id="founderAdmin" type="number" value="' + (f.adminHoursPerWeek != null ? f.adminHoursPerWeek : '') + '" placeholder="hrs" style="' + INPUT_STYLE + '"></div>';
     h += '</div>';
     h += '<div style="display:flex;gap:8px;margin-top:14px;align-items:center;">';
@@ -496,12 +496,12 @@
     h += '<button class="btn btn-primary btn-small" onclick="studioAddEmployee()">+ New Team Member</button>';
     h += '</div>';
 
-    h += '<div id="studioEmpForm" style="display:none;background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:16px 20px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
+    h += '<div id="studioEmpForm" style="display:none;background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:16px 20px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
     h += '<div id="studioEmpFormInner"></div>';
     h += '</div>';
 
     if (employeesData.length === 0) {
-      h += '<div style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:14px 18px;box-shadow:0 1px 3px rgba(0,0,0,0.08);color:var(--warm-gray,#6B6560);font-size:0.9rem;">';
+      h += '<div style="background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:14px 18px;box-shadow:0 1px 3px rgba(0,0,0,0.08);color:var(--warm-gray,var(--warm-gray));font-size:0.9rem;">';
       h += 'No team members added. If you have studio help, add them here so the advisor can factor in total labor cost.';
       h += '</div>';
     } else {
@@ -510,14 +510,14 @@
         var rate = emp.payRate || 0; // cents
         var hours = emp.scheduledHoursPerWeek || 0;
         var monthlyCost = emp.payType === 'salary' ? rate : Math.round(rate * hours * 4.33); // cents/month
-        h += '<div style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:14px 18px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
+        h += '<div style="background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:14px 18px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
         h += '<div style="display:flex;justify-content:space-between;align-items:center;">';
         h += '<div><span style="font-weight:600;">' + esc(emp.fullName || emp.name || '') + '</span>';
-        if (emp.jobTitle || emp.role) h += ' <span style="font-size:0.82rem;color:var(--warm-gray);">\u2014 ' + esc(emp.jobTitle || emp.role) + '</span>';
+        if (emp.jobTitle || emp.role) h += ' <span style="font-size:0.85rem;color:var(--warm-gray);">\u2014 ' + esc(emp.jobTitle || emp.role) + '</span>';
         h += '</div>';
         h += '<button class="btn btn-secondary btn-small" data-id="' + esc(emp._key) + '" onclick="studioEditEmployee(this.dataset.id)">Edit</button>';
         h += '</div>';
-        h += '<div style="font-size:0.82rem;color:var(--warm-gray,#6B6560);margin-top:4px;">';
+        h += '<div style="font-size:0.85rem;color:var(--warm-gray,var(--warm-gray));margin-top:4px;">';
         var rateLabel = emp.payType === 'salary' ? '/mo' : '/hr';
         h += (rate > 0 ? fmtDollars(rate) + rateLabel : 'rate not set');
         h += ' \u00B7 ' + (hours > 0 ? hours + ' hrs/week' : 'hours not set');
@@ -541,7 +541,7 @@
     var innerEl = document.getElementById('studioEmpFormInner');
     if (!formEl || !innerEl) return;
 
-    var h = '<div style="font-weight:600;font-size:0.95rem;margin-bottom:12px;">' + (isNew ? 'New Team Member' : 'Edit Team Member') + '</div>';
+    var h = '<div style="font-weight:600;font-size:0.9rem;margin-bottom:12px;">' + (isNew ? 'New Team Member' : 'Edit Team Member') + '</div>';
     h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
     h += '<div><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Name</label>';
     h += '<input id="empName" type="text" value="' + esc(emp.fullName || emp.name || '') + '" placeholder="e.g. Sarah Chen" style="' + INPUT_STYLE + '"></div>';
@@ -616,14 +616,14 @@
     h += '<button class="btn btn-primary btn-small" onclick="studioAddOverheadItem()">+ New Cost</button>';
     h += '</div>';
 
-    h += '<div id="studioOhForm" style="display:none;background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:16px 20px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
+    h += '<div id="studioOhForm" style="display:none;background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:16px 20px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
     h += '<div id="studioOhFormInner"></div>';
     h += '</div>';
 
     // Direct overhead items
     if (overheadItemsData.length > 0) {
       overheadItemsData.forEach(function(item) {
-        h += '<div style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:14px 18px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
+        h += '<div style="background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:14px 18px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
         h += '<div style="display:flex;justify-content:space-between;align-items:center;">';
         h += '<span style="font-weight:600;">' + esc(item.name) + '</span>';
         h += '<div style="display:flex;align-items:center;gap:8px;">';
@@ -637,18 +637,18 @@
 
     // Expense-tagged overhead
     if (overheadExpenseCount > 0) {
-      h += '<div style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:14px 18px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
+      h += '<div style="background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:14px 18px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
       h += '<div style="display:flex;justify-content:space-between;align-items:center;">';
       h += '<span style="font-weight:600;">From expenses</span>';
       h += '<span style="font-weight:600;">' + fmtDollars(overheadExpenseTotal) + '</span>';
       h += '</div>';
-      h += '<div style="font-size:0.78rem;color:var(--warm-gray,#6B6560);margin-top:4px;">' + overheadExpenseCount + ' expense' + (overheadExpenseCount !== 1 ? 's' : '') + ' tagged as studio overhead in <a href="#expenses" onclick="navigateTo(\'expenses\')" style="color:var(--teal,#2A7C6F);">Expenses</a></div>';
+      h += '<div style="font-size:0.78rem;color:var(--warm-gray,var(--warm-gray));margin-top:4px;">' + overheadExpenseCount + ' expense' + (overheadExpenseCount !== 1 ? 's' : '') + ' tagged as studio overhead in <a href="#expenses" onclick="navigateTo(\'expenses\')" style="color:var(--teal,var(--teal));">Expenses</a></div>';
       h += '</div>';
     }
 
     if (overheadItemsData.length === 0 && overheadExpenseCount === 0) {
-      h += '<div style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:14px 18px;box-shadow:0 1px 3px rgba(0,0,0,0.08);color:var(--warm-gray,#6B6560);font-size:0.9rem;">';
-      h += 'No overhead costs yet. Add recurring costs like rent, mortgage, insurance, or tag expenses in the <a href="#expenses" onclick="navigateTo(\'expenses\')" style="color:var(--teal,#2A7C6F);">Expenses</a> section.';
+      h += '<div style="background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:14px 18px;box-shadow:0 1px 3px rgba(0,0,0,0.08);color:var(--warm-gray,var(--warm-gray));font-size:0.9rem;">';
+      h += 'No overhead costs yet. Add recurring costs like rent, mortgage, insurance, or tag expenses in the <a href="#expenses" onclick="navigateTo(\'expenses\')" style="color:var(--teal,var(--teal));">Expenses</a> section.';
       h += '</div>';
     }
 
@@ -667,7 +667,7 @@
     var innerEl = document.getElementById('studioOhFormInner');
     if (!formEl || !innerEl) return;
 
-    var h = '<div style="font-weight:600;font-size:0.95rem;margin-bottom:12px;">' + (isNew ? 'New Overhead Cost' : 'Edit Overhead Cost') + '</div>';
+    var h = '<div style="font-weight:600;font-size:0.9rem;margin-bottom:12px;">' + (isNew ? 'New Overhead Cost' : 'Edit Overhead Cost') + '</div>';
     h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
     h += '<div><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">What is this cost?</label>';
     h += '<input id="ohName" type="text" value="' + esc(item.name || '') + '" placeholder="e.g. Studio rent, Insurance" style="' + INPUT_STYLE + '"></div>';

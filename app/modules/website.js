@@ -478,8 +478,8 @@
       if (manifest.colorSchemes && manifest.colorSchemes.length) {
         html += '<div class="wp-tpl-colors">';
         manifest.colorSchemes.forEach(function(scheme) {
-          var primary = (scheme.colors && scheme.colors.primaryColor) || '#C4853C';
-          var accent = (scheme.colors && scheme.colors.accentColor) || '#2A7C6F';
+          var primary = (scheme.colors && scheme.colors.primaryColor) || 'var(--amber)';
+          var accent = (scheme.colors && scheme.colors.accentColor) || 'var(--teal)';
           html += '<span class="wp-tpl-color-dot" title="' + esc(scheme.name) + '" style="background:linear-gradient(135deg, ' + esc(primary) + ' 50%, ' + esc(accent) + ' 50%);"></span>';
         });
         html += '</div>';
@@ -530,7 +530,7 @@
     html += '</div>';
 
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
-    html += '<h3 style="font-size:1.1rem;margin:0;">Preview: ' + esc(name) + '</h3>';
+    html += '<h3 style="font-size:1.15rem;margin:0;">Preview: ' + esc(name) + '</h3>';
     html += '<div style="display:flex;gap:6px;">';
     ['desktop', 'tablet', 'mobile'].forEach(function(vp) {
       var icon = vp === 'desktop' ? '&#128187;' : vp === 'tablet' ? '&#128241;' : '&#128241;';
@@ -624,12 +624,12 @@
     });
 
     html += '<div class="wp-switch-dialog">';
-    html += '<h3 style="font-size:1.1rem;margin-bottom:4px;">Switch to ' + esc(newManifest.name) + '?</h3>';
-    html += '<p style="font-size:0.8rem;color:var(--warm-gray);margin-bottom:16px;">' + esc(newManifest.description) + '</p>';
+    html += '<h3 style="font-size:1.15rem;margin-bottom:4px;">Switch to ' + esc(newManifest.name) + '?</h3>';
+    html += '<p style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:16px;">' + esc(newManifest.description) + '</p>';
 
     if (keepSections.length) {
       html += '<div class="wp-switch-section wp-switch-keep">';
-      html += '<h4 style="color:var(--teal, #2A7C6F);">Sections you\'ll keep</h4>';
+      html += '<h4 style="color:var(--teal, var(--teal));">Sections you\'ll keep</h4>';
       html += '<ul>';
       keepSections.forEach(function(s) {
         var label = s.from === s.to ? s.from : s.from + ' &rarr; ' + s.to;
@@ -660,12 +660,12 @@
     var activeImages = totalImages - (galleryMigration.hide.length + galleryMigration.restore.length);
 
     if (totalImages > 0 && (galleryMigration.hide.length > 0 || galleryMigration.restore.length > 0)) {
-      html += '<div class="wp-switch-section" style="margin-top:12px;padding:10px 14px;background:color-mix(in srgb, var(--accent, #2A7C6F) 8%, transparent);border-radius:8px;">';
-      html += '<h4 style="color:var(--accent, #2A7C6F);font-size:0.85rem;margin-bottom:6px;">Gallery Images</h4>';
+      html += '<div class="wp-switch-section" style="margin-top:12px;padding:10px 14px;background:color-mix(in srgb, var(--accent, var(--teal)) 8%, transparent);border-radius:8px;">';
+      html += '<h4 style="color:var(--accent, var(--teal));font-size:0.85rem;margin-bottom:6px;">Gallery Images</h4>';
 
       if (galleryMigration.migrate.length > 0) {
-        html += '<div style="font-size:0.8rem;color:var(--warm-gray);margin-bottom:4px;">';
-        html += '<span style="color:var(--teal, #2A7C6F);">' + galleryMigration.migrate.length + '</span> image' + (galleryMigration.migrate.length !== 1 ? 's' : '') + ' will carry over';
+        html += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;">';
+        html += '<span style="color:var(--teal, var(--teal));">' + galleryMigration.migrate.length + '</span> image' + (galleryMigration.migrate.length !== 1 ? 's' : '') + ' will carry over';
         html += '</div>';
       }
 
@@ -677,7 +677,7 @@
           SECTIONS.forEach(function(s) { if (s.id === h.section) secLabel = s.label; });
           hiddenBySec[secLabel] = (hiddenBySec[secLabel] || 0) + 1;
         });
-        html += '<div style="font-size:0.8rem;color:var(--danger, #e74c3c);margin-bottom:4px;">';
+        html += '<div style="font-size:0.78rem;color:var(--danger, #e74c3c);margin-bottom:4px;">';
         html += '<span style="font-weight:600;">' + galleryMigration.hide.length + '</span> image' + (galleryMigration.hide.length !== 1 ? 's' : '') + ' will be hidden (not deleted)';
         html += '<ul style="margin:4px 0 0 16px;list-style:disc;">';
         Object.keys(hiddenBySec).forEach(function(label) {
@@ -687,7 +687,7 @@
       }
 
       if (galleryMigration.restore.length > 0) {
-        html += '<div style="font-size:0.8rem;color:var(--teal, #2A7C6F);margin-bottom:4px;">';
+        html += '<div style="font-size:0.78rem;color:var(--teal, var(--teal));margin-bottom:4px;">';
         html += '<span style="font-weight:600;">' + galleryMigration.restore.length + '</span> previously hidden image' + (galleryMigration.restore.length !== 1 ? 's' : '') + ' will be restored';
         html += '</div>';
       }
@@ -740,7 +740,7 @@
 
     // Design Scale dropdown
     html += '<div class="wp-field-group">';
-    html += '<label style="font-size:0.8rem;">Design Scale</label>';
+    html += '<label style="font-size:0.78rem;">Design Scale</label>';
     html += '<select onchange="wpUpdateThemeField(\'designScale\', this.value)" style="width:100%;">';
     [['standard', 'Standard', 'Balanced spacing & type sizes'],
      ['editorial', 'Editorial', 'Generous whitespace, large type'],
@@ -748,7 +748,7 @@
       html += '<option value="' + opt[0] + '"' + (currentScale === opt[0] ? ' selected' : '') + '>' + opt[1] + '</option>';
     });
     html += '</select>';
-    html += '<div style="font-size:0.7rem;color:var(--warm-gray);margin-top:2px;">';
+    html += '<div style="font-size:0.72rem;color:var(--warm-gray);margin-top:2px;">';
     if (currentScale !== defaultScale) {
       html += 'Default: ' + defaultScale;
     } else {
@@ -759,7 +759,7 @@
 
     // Nav Style dropdown
     html += '<div class="wp-field-group">';
-    html += '<label style="font-size:0.8rem;">Navigation</label>';
+    html += '<label style="font-size:0.78rem;">Navigation</label>';
     html += '<select onchange="wpUpdateThemeField(\'navStyle\', this.value)" style="width:100%;">';
     [['top-bar', 'Top Bar', 'Full links across top'],
      ['minimal', 'Minimal', 'Hamburger menu only'],
@@ -767,7 +767,7 @@
       html += '<option value="' + opt[0] + '"' + (currentNav === opt[0] ? ' selected' : '') + '>' + opt[1] + '</option>';
     });
     html += '</select>';
-    html += '<div style="font-size:0.7rem;color:var(--warm-gray);margin-top:2px;">';
+    html += '<div style="font-size:0.72rem;color:var(--warm-gray);margin-top:2px;">';
     if (currentNav !== defaultNav) {
       html += 'Default: ' + defaultNav;
     } else {
@@ -778,7 +778,7 @@
 
     // Responsive Priority dropdown
     html += '<div class="wp-field-group">';
-    html += '<label style="font-size:0.8rem;">Optimized For</label>';
+    html += '<label style="font-size:0.78rem;">Optimized For</label>';
     html += '<select onchange="wpUpdateThemeField(\'responsivePriority\', this.value)" style="width:100%;">';
     [['balanced', 'Balanced', 'Works equally on all devices'],
      ['desktop', 'Desktop', 'Large screens, visual impact'],
@@ -786,7 +786,7 @@
       html += '<option value="' + opt[0] + '"' + (currentResPri === opt[0] ? ' selected' : '') + '>' + opt[1] + '</option>';
     });
     html += '</select>';
-    html += '<div style="font-size:0.7rem;color:var(--warm-gray);margin-top:2px;">';
+    html += '<div style="font-size:0.72rem;color:var(--warm-gray);margin-top:2px;">';
     if (currentResPri !== defaultResPri) {
       html += 'Default: ' + defaultResPri;
     } else {
@@ -802,7 +802,7 @@
     if (warnings.length > 0) {
       html += '<div style="margin-bottom:20px;padding:10px 14px;border-radius:8px;background:rgba(255,180,0,0.1);border:1px solid rgba(255,180,0,0.25);">';
       warnings.forEach(function(w) {
-        html += '<div style="font-size:0.8rem;color:#e8a735;margin-bottom:4px;">&#9888; ' + esc(w) + '</div>';
+        html += '<div style="font-size:0.78rem;color:#e8a735;margin-bottom:4px;">&#9888; ' + esc(w) + '</div>';
       });
       html += '</div>';
     }
@@ -849,7 +849,7 @@
     // Template name
     html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:20px;">';
     html += '<span style="font-size:0.85rem;color:var(--warm-gray);">Template:</span>';
-    html += '<strong style="font-size:0.95rem;">' + esc(templateManifest.name || 'Unknown') + '</strong>';
+    html += '<strong style="font-size:0.9rem;">' + esc(templateManifest.name || 'Unknown') + '</strong>';
     html += '</div>';
 
     // ── Layout & Scale ──
@@ -862,7 +862,7 @@
     templateManifest.colorSchemes.forEach(function(scheme) {
       var isActive = !showCustomColors && currentSchemeId === scheme.id;
       var c = scheme.colors;
-      html += '<div class="wp-scheme-card' + (isActive ? ' selected' : '') + '" onclick="wpSelectScheme(\'' + esc(scheme.id) + '\')" style="cursor:pointer;padding:12px;border-radius:10px;border:2px solid ' + (isActive ? 'var(--accent)' : 'var(--charcoal-light, #333)') + ';background:var(--charcoal, #1a1a1a);transition:border-color 0.2s;">';
+      html += '<div class="wp-scheme-card' + (isActive ? ' selected' : '') + '" onclick="wpSelectScheme(\'' + esc(scheme.id) + '\')" style="cursor:pointer;padding:12px;border-radius:10px;border:2px solid ' + (isActive ? 'var(--accent)' : 'var(--charcoal-light, #333)') + ';background:var(--charcoal, var(--charcoal));transition:border-color 0.2s;">';
       // Color circles row
       html += '<div style="display:flex;gap:6px;margin-bottom:8px;">';
       html += '<div style="width:28px;height:28px;border-radius:50%;background:' + esc(c.primaryColor) + ';border:2px solid rgba(255,255,255,0.15);" title="Primary"></div>';
@@ -872,18 +872,18 @@
       // Name
       html += '<strong style="font-size:0.85rem;">' + esc(scheme.name) + '</strong>';
       if (scheme.default) {
-        html += '<span style="font-size:0.7rem;color:var(--warm-gray);margin-left:6px;">(default)</span>';
+        html += '<span style="font-size:0.72rem;color:var(--warm-gray);margin-left:6px;">(default)</span>';
       }
       html += '</div>';
     });
 
     // Custom option card
-    html += '<div class="wp-scheme-card' + (showCustomColors ? ' selected' : '') + '" onclick="wpSelectSchemeCustom()" style="cursor:pointer;padding:12px;border-radius:10px;border:2px solid ' + (showCustomColors ? 'var(--accent)' : 'var(--charcoal-light, #333)') + ';background:var(--charcoal, #1a1a1a);transition:border-color 0.2s;">';
+    html += '<div class="wp-scheme-card' + (showCustomColors ? ' selected' : '') + '" onclick="wpSelectSchemeCustom()" style="cursor:pointer;padding:12px;border-radius:10px;border:2px solid ' + (showCustomColors ? 'var(--accent)' : 'var(--charcoal-light, #333)') + ';background:var(--charcoal, var(--charcoal));transition:border-color 0.2s;">';
     html += '<div style="display:flex;gap:6px;margin-bottom:8px;">';
     html += '<div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg, #ff6b6b, #4ecdc4, #45b7d1);border:2px solid rgba(255,255,255,0.15);"></div>';
     html += '</div>';
     html += '<strong style="font-size:0.85rem;">Custom</strong>';
-    html += '<span style="font-size:0.7rem;color:var(--warm-gray);margin-left:6px;">Pick your own</span>';
+    html += '<span style="font-size:0.72rem;color:var(--warm-gray);margin-left:6px;">Pick your own</span>';
     html += '</div>';
 
     html += '</div>';
@@ -900,11 +900,11 @@
 
     templateManifest.fontPairs.forEach(function(fp) {
       var isActive = currentFontPair === fp.id;
-      html += '<div class="wp-font-card' + (isActive ? ' selected' : '') + '" onclick="wpSelectFontPair(\'' + esc(fp.id) + '\')" style="cursor:pointer;padding:14px;border-radius:10px;border:2px solid ' + (isActive ? 'var(--accent)' : 'var(--charcoal-light, #333)') + ';background:var(--charcoal, #1a1a1a);transition:border-color 0.2s;">';
-      html += '<div style="font-family:\'' + esc(fp.heading) + '\', serif;font-size:1.1rem;font-weight:600;margin-bottom:4px;line-height:1.2;">' + esc(fp.name) + '</div>';
-      html += '<div style="font-family:\'' + esc(fp.body) + '\', sans-serif;font-size:0.8rem;color:var(--warm-gray);line-height:1.4;">' + esc(fp.heading) + ' + ' + esc(fp.body) + '</div>';
+      html += '<div class="wp-font-card' + (isActive ? ' selected' : '') + '" onclick="wpSelectFontPair(\'' + esc(fp.id) + '\')" style="cursor:pointer;padding:14px;border-radius:10px;border:2px solid ' + (isActive ? 'var(--accent)' : 'var(--charcoal-light, #333)') + ';background:var(--charcoal, var(--charcoal));transition:border-color 0.2s;">';
+      html += '<div style="font-family:\'' + esc(fp.heading) + '\', serif;font-size:1.15rem;font-weight:600;margin-bottom:4px;line-height:1.2;">' + esc(fp.name) + '</div>';
+      html += '<div style="font-family:\'' + esc(fp.body) + '\', sans-serif;font-size:0.78rem;color:var(--warm-gray);line-height:1.4;">' + esc(fp.heading) + ' + ' + esc(fp.body) + '</div>';
       if (fp.default) {
-        html += '<span style="font-size:0.7rem;color:var(--warm-gray);margin-top:4px;display:inline-block;">(default)</span>';
+        html += '<span style="font-size:0.72rem;color:var(--warm-gray);margin-top:4px;display:inline-block;">(default)</span>';
       }
       html += '</div>';
     });
@@ -919,7 +919,7 @@
     var primaryColor = tc.primaryColor || '#8B7355';
     var accentColor = tc.accentColor || '#2D5F5D';
     var html = '';
-    html += '<div style="margin-top:12px;padding:16px;background:var(--charcoal, #1a1a1a);border-radius:10px;border:1px solid var(--charcoal-light, #333);">';
+    html += '<div style="margin-top:12px;padding:16px;background:var(--charcoal, var(--charcoal));border-radius:10px;border:1px solid var(--charcoal-light, #333);">';
     html += '<div class="wp-color-row" style="margin-bottom:0;">';
     html += '<div class="wp-field-group" style="flex:1;">';
     html += '<label>Primary Color</label>';
@@ -948,9 +948,9 @@
     html += '<div class="wp-style-grid">';
     STYLE_DEFS.forEach(function(s) {
       html += '<div class="wp-style-card' + (s.id === currentStyle ? ' selected' : '') + '" onclick="wpSelectStyle(\'' + s.id + '\')">';
-      html += '<div style="font-size:1.5rem;margin-bottom:6px;">' + s.icon + '</div>';
+      html += '<div style="font-size:1.6rem;margin-bottom:6px;">' + s.icon + '</div>';
       html += '<strong style="font-size:0.9rem;">' + esc(s.name) + '</strong>';
-      html += '<p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">' + esc(s.desc) + '</p>';
+      html += '<p style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">' + esc(s.desc) + '</p>';
       html += '</div>';
     });
     html += '</div>';
@@ -999,8 +999,8 @@
 
     if (cats.length === 0) {
       html += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">';
-      html += '<div style="font-size:2rem;margin-bottom:12px;">&#128193;</div>';
-      html += '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No categories yet</p>';
+      html += '<div style="font-size:1.6rem;margin-bottom:12px;">&#128193;</div>';
+      html += '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No categories yet</p>';
       html += '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Add your first product category below.</p>';
       html += '</div>';
     } else {
@@ -1020,15 +1020,15 @@
           html += '<div class="wp-cat-fields" style="flex:1;">';
           html += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">';
           html += '<div class="wp-field-group" style="flex:2;min-width:140px;margin:0;">';
-          html += '<label style="font-size:0.75rem;">Label</label>';
+          html += '<label style="font-size:0.78rem;">Label</label>';
           html += '<input type="text" id="wpCatEditLabel" value="' + esc(cat.label) + '" style="padding:6px 8px;">';
           html += '</div>';
           html += '<div class="wp-field-group" style="flex:1;min-width:100px;margin:0;">';
-          html += '<label style="font-size:0.75rem;">ID (slug)</label>';
+          html += '<label style="font-size:0.78rem;">ID (slug)</label>';
           html += '<input type="text" id="wpCatEditId" value="' + esc(cat.id) + '" style="padding:6px 8px;color:var(--warm-gray);" readonly>';
           html += '</div>';
           html += '<div class="wp-field-group" style="flex:1;min-width:140px;margin:0;">';
-          html += '<label style="font-size:0.75rem;">Wholesale Group (optional)</label>';
+          html += '<label style="font-size:0.78rem;">Wholesale Group (optional)</label>';
           html += '<input type="text" id="wpCatEditWholesale" value="' + esc(cat.wholesaleGroup || '') + '" placeholder="e.g. Decorative" style="padding:6px 8px;">';
           html += '</div>';
           html += '</div>';
@@ -1041,9 +1041,9 @@
           // Display mode
           html += '<div style="flex:1;display:flex;align-items:center;gap:12px;min-width:0;">';
           html += '<strong style="font-size:0.9rem;">' + esc(cat.label) + '</strong>';
-          html += '<span style="font-size:0.75rem;color:var(--warm-gray);font-family:monospace;">' + esc(cat.id) + '</span>';
+          html += '<span style="font-size:0.78rem;color:var(--warm-gray);font-family:monospace;">' + esc(cat.id) + '</span>';
           if (cat.wholesaleGroup) {
-            html += '<span style="font-size:0.7rem;background:var(--charcoal-light, #333);padding:2px 8px;border-radius:4px;color:var(--warm-gray);">wholesale: ' + esc(cat.wholesaleGroup) + '</span>';
+            html += '<span style="font-size:0.72rem;background:var(--charcoal-light, #333);padding:2px 8px;border-radius:4px;color:var(--warm-gray);">wholesale: ' + esc(cat.wholesaleGroup) + '</span>';
           }
           html += '</div>';
           html += '<div style="display:flex;gap:4px;">';
@@ -1062,16 +1062,16 @@
     html += '<h4 style="font-size:0.9rem;margin-bottom:8px;">Add Category</h4>';
     html += '<div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">';
     html += '<div class="wp-field-group" style="flex:2;min-width:140px;margin:0;">';
-    html += '<label style="font-size:0.75rem;">Label</label>';
+    html += '<label style="font-size:0.78rem;">Label</label>';
     html += '<input type="text" id="wpCatNewLabel" placeholder="e.g. Drinkware" style="padding:6px 8px;">';
     html += '</div>';
     html += '<div class="wp-field-group" style="flex:1;min-width:140px;margin:0;">';
-    html += '<label style="font-size:0.75rem;">Wholesale Group (optional)</label>';
+    html += '<label style="font-size:0.78rem;">Wholesale Group (optional)</label>';
     html += '<input type="text" id="wpCatNewWholesale" placeholder="e.g. Decorative" style="padding:6px 8px;">';
     html += '</div>';
     html += '<button class="btn btn-primary btn-small" onclick="wpCatAdd()" style="height:34px;">Add</button>';
     html += '</div>';
-    html += '<p id="wpCatAddError" style="font-size:0.8rem;color:var(--danger);margin-top:4px;display:none;"></p>';
+    html += '<p id="wpCatAddError" style="font-size:0.78rem;color:var(--danger);margin-top:4px;display:none;"></p>';
     html += '</div>';
 
     return html;
@@ -1085,9 +1085,9 @@
     var html = '';
     html += '<div style="background:var(--cream-dark);border:1px solid var(--teal);border-radius:8px;padding:16px;margin-bottom:20px;">';
     html += '<div style="display:flex;align-items:flex-start;gap:12px;">';
-    html += '<div style="font-size:1.5rem;line-height:1;">&#127912;</div>';
+    html += '<div style="font-size:1.6rem;line-height:1;">&#127912;</div>';
     html += '<div style="flex:1;">';
-    html += '<div style="font-weight:600;font-size:0.95rem;margin-bottom:4px;color:var(--charcoal);">Template Generated from Your Site</div>';
+    html += '<div style="font-weight:600;font-size:0.9rem;margin-bottom:4px;color:var(--charcoal);">Template Generated from Your Site</div>';
     html += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:10px;">';
     html += 'We analyzed your site and created a draft template with ' + sectionCount + ' sections';
     if (draft.businessName) html += ' for <strong>' + esc(draft.businessName) + '</strong>';
@@ -1198,7 +1198,7 @@
     html += '<div id="wpRescanStatus" style="font-size:0.85rem;margin-top:-8px;margin-bottom:8px;"></div>';
 
     if (hasActiveJob) {
-      html += '<div style="font-size:0.8rem;color:var(--amber);margin-bottom:8px;">An import is already in progress. Wait for it to complete before starting a new one.</div>';
+      html += '<div style="font-size:0.78rem;color:var(--amber);margin-bottom:8px;">An import is already in progress. Wait for it to complete before starting a new one.</div>';
     }
 
     html += '</div>';
@@ -1245,8 +1245,8 @@
         html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">';
         html += '<strong style="font-size:0.9rem;">Products (' + disc.products.count + ')</strong>';
         html += '<div style="display:flex;gap:8px;">';
-        html += '<button class="btn btn-secondary" onclick="wpCherryPickAll(\'' + esc(job.id) + '\', \'products\', true)" style="font-size:0.75rem;padding:3px 8px;">Select All</button>';
-        html += '<button class="btn btn-secondary" onclick="wpCherryPickAll(\'' + esc(job.id) + '\', \'products\', false)" style="font-size:0.75rem;padding:3px 8px;">Deselect All</button>';
+        html += '<button class="btn btn-secondary" onclick="wpCherryPickAll(\'' + esc(job.id) + '\', \'products\', true)" style="font-size:0.78rem;padding:3px 8px;">Select All</button>';
+        html += '<button class="btn btn-secondary" onclick="wpCherryPickAll(\'' + esc(job.id) + '\', \'products\', false)" style="font-size:0.78rem;padding:3px 8px;">Deselect All</button>';
         html += '</div></div>';
 
         if (disc.products.pages && disc.products.pages.length > 0) {
@@ -1318,8 +1318,8 @@
       html += '</div>';
       html += '<div style="display:flex;align-items:center;gap:8px;">';
       html += renderImportedCountsBadges(job.imported);
-      html += '<span style="font-size:0.8rem;padding:3px 10px;border-radius:12px;background:' + statusInfo.bg + ';color:' + statusInfo.color + ';font-weight:600;">' + statusInfo.label + '</span>';
-      html += '<span style="color:var(--warm-gray);font-size:0.8rem;">' + (isExpanded ? '&#9650;' : '&#9660;') + '</span>';
+      html += '<span style="font-size:0.78rem;padding:3px 10px;border-radius:12px;background:' + statusInfo.bg + ';color:' + statusInfo.color + ';font-weight:600;">' + statusInfo.label + '</span>';
+      html += '<span style="color:var(--warm-gray);font-size:0.78rem;">' + (isExpanded ? '&#9650;' : '&#9660;') + '</span>';
       html += '</div></div>';
 
       // Expanded detail
@@ -1331,7 +1331,7 @@
         }
         if (job.status === 'failed') {
           html += '<div style="color:var(--danger);margin-bottom:8px;">' + esc(job.error || 'Unknown error') + '</div>';
-          html += '<button class="btn btn-secondary" onclick="event.stopPropagation(); wpRetryImport(\'' + esc(job.id) + '\')" style="font-size:0.8rem;">Retry Import</button>';
+          html += '<button class="btn btn-secondary" onclick="event.stopPropagation(); wpRetryImport(\'' + esc(job.id) + '\')" style="font-size:0.78rem;">Retry Import</button>';
         }
 
         // Timing
@@ -1359,10 +1359,10 @@
     if (!imported) return '';
     var html = '';
     if (imported.products && imported.products.done) {
-      html += '<span style="font-size:0.75rem;background:var(--teal);color:white;padding:2px 6px;border-radius:4px;">' + imported.products.done + 'P</span>';
+      html += '<span style="font-size:0.78rem;background:var(--teal);color:white;padding:2px 6px;border-radius:4px;">' + imported.products.done + 'P</span>';
     }
     if (imported.images && imported.images.done) {
-      html += '<span style="font-size:0.75rem;background:var(--teal);color:white;padding:2px 6px;border-radius:4px;">' + imported.images.done + 'I</span>';
+      html += '<span style="font-size:0.78rem;background:var(--teal);color:white;padding:2px 6px;border-radius:4px;">' + imported.images.done + 'I</span>';
     }
     return html;
   }
@@ -1384,8 +1384,8 @@
 
     // Show failed items if any
     if (imported.products && imported.products.failedItems && imported.products.failedItems.length > 0) {
-      html += '<details style="margin-top:4px;"><summary style="cursor:pointer;color:var(--danger);font-size:0.8rem;">Failed items</summary>';
-      html += '<div style="font-size:0.8rem;color:var(--warm-gray);padding:4px 0;">';
+      html += '<details style="margin-top:4px;"><summary style="cursor:pointer;color:var(--danger);font-size:0.78rem;">Failed items</summary>';
+      html += '<div style="font-size:0.78rem;color:var(--warm-gray);padding:4px 0;">';
       imported.products.failedItems.forEach(function(item) {
         html += '<div>' + esc(item) + '</div>';
       });
@@ -1404,9 +1404,9 @@
     html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">';
     html += '<div>';
     html += '<div style="font-weight:600;font-size:0.9rem;">' + esc(job.url) + '</div>';
-    html += '<div style="font-size:0.8rem;color:var(--warm-gray);margin-top:2px;">' + timeAgo + '</div>';
+    html += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">' + timeAgo + '</div>';
     html += '</div>';
-    html += '<span style="font-size:0.8rem;padding:3px 10px;border-radius:12px;background:' + statusInfo.bg + ';color:' + statusInfo.color + ';font-weight:600;white-space:nowrap;">';
+    html += '<span style="font-size:0.78rem;padding:3px 10px;border-radius:12px;background:' + statusInfo.bg + ';color:' + statusInfo.color + ';font-weight:600;white-space:nowrap;">';
     html += statusInfo.icon + ' ' + statusInfo.label;
     html += '</span>';
     html += '</div>';
@@ -1417,7 +1417,7 @@
       var pendingMs = Date.now() - new Date(job.createdAt).getTime();
       if (pendingMs > 2 * 60 * 60 * 1000) {
         html += '<div style="font-size:0.85rem;color:var(--danger);margin-bottom:4px;">&#9888; This job has been queued for over 2 hours. It may be stuck.</div>';
-        html += '<button class="btn btn-secondary" onclick="wpRetryImport(\'' + esc(job.id) + '\')" style="font-size:0.8rem;">Retry</button>';
+        html += '<button class="btn btn-secondary" onclick="wpRetryImport(\'' + esc(job.id) + '\')" style="font-size:0.78rem;">Retry</button>';
       } else {
         html += '<div style="font-size:0.85rem;color:var(--warm-gray);">Queued for processing. The import runs every 30 minutes.</div>';
       }
@@ -1426,7 +1426,7 @@
       var processMs = Date.now() - new Date(job.claimedAt || job.createdAt).getTime();
       if (processMs > 2 * 60 * 60 * 1000) {
         html += '<div style="font-size:0.85rem;color:var(--danger);margin-bottom:4px;">&#9888; Scan has been running for over 2 hours. It may be stuck.</div>';
-        html += '<button class="btn btn-secondary" onclick="wpRetryImport(\'' + esc(job.id) + '\')" style="font-size:0.8rem;">Reset &amp; Retry</button>';
+        html += '<button class="btn btn-secondary" onclick="wpRetryImport(\'' + esc(job.id) + '\')" style="font-size:0.78rem;">Reset &amp; Retry</button>';
       } else {
         html += '<div style="font-size:0.85rem;color:var(--warm-gray);">Scanning your website for products, images, and content...</div>';
         html += renderProgressBar(30);
@@ -1441,7 +1441,7 @@
       }
     } else if (job.status === 'failed') {
       html += '<div style="font-size:0.85rem;color:var(--danger);margin-top:4px;">' + esc(job.error || 'Import encountered an error.') + '</div>';
-      html += '<button class="btn btn-secondary" onclick="wpRetryImport(\'' + esc(job.id) + '\')" style="margin-top:8px;font-size:0.8rem;">Retry Import</button>';
+      html += '<button class="btn btn-secondary" onclick="wpRetryImport(\'' + esc(job.id) + '\')" style="margin-top:8px;font-size:0.78rem;">Retry Import</button>';
     }
 
     html += '</div>';
@@ -1560,7 +1560,7 @@
     Object.keys(fieldLabels).forEach(function(field) {
       var count = g[field] || 0;
       var icon = count >= total ? '<span style="color:var(--teal);">&#10003;</span>' : count > 0 ? '<span style="color:var(--amber);">&#9679;</span>' : '<span style="color:var(--warm-gray);">&#9675;</span>';
-      html += '<div style="font-size:0.82rem;">' + icon + ' ' + esc(fieldLabels[field]) + ' <span style="color:var(--warm-gray);">(' + count + '/' + total + ')</span></div>';
+      html += '<div style="font-size:0.85rem;">' + icon + ' ' + esc(fieldLabels[field]) + ' <span style="color:var(--warm-gray);">(' + count + '/' + total + ')</span></div>';
     });
     html += '</div></div>';
 
@@ -1575,18 +1575,18 @@
 
       if (freeGaps.length > 0) {
         html += '<div style="margin-bottom:12px;">';
-        html += '<div style="font-size:0.82rem;font-weight:600;color:var(--teal);margin-bottom:6px;">&#10003; Can be filled automatically (free)</div>';
+        html += '<div style="font-size:0.85rem;font-weight:600;color:var(--teal);margin-bottom:6px;">&#10003; Can be filled automatically (free)</div>';
         freeGaps.forEach(function(gap) {
-          html += '<div style="font-size:0.82rem;color:var(--warm-gray);margin-bottom:4px;padding-left:16px;">' + esc(gap.description) + '</div>';
+          html += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:4px;padding-left:16px;">' + esc(gap.description) + '</div>';
         });
         html += '</div>';
       }
 
       if (paidGaps.length > 0) {
         html += '<div style="margin-bottom:12px;">';
-        html += '<div style="font-size:0.82rem;font-weight:600;color:var(--amber);margin-bottom:6px;">&#10024; AI enrichment available (' + esc(cost.estimatedCost || 'varies') + ')</div>';
+        html += '<div style="font-size:0.85rem;font-weight:600;color:var(--amber);margin-bottom:6px;">&#10024; AI enrichment available (' + esc(cost.estimatedCost || 'varies') + ')</div>';
         paidGaps.forEach(function(gap) {
-          html += '<div style="font-size:0.82rem;color:var(--warm-gray);margin-bottom:4px;padding-left:16px;">' + esc(gap.description) + '</div>';
+          html += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:4px;padding-left:16px;">' + esc(gap.description) + '</div>';
         });
         html += '<button class="btn btn-primary btn-small" style="margin-top:8px;margin-left:16px;" onclick="wpRunEnrichment(\'' + esc(jobId) + '\')">Enrich with AI</button>';
         html += '</div>';
@@ -1594,9 +1594,9 @@
 
       if (manualGaps.length > 0) {
         html += '<div style="margin-bottom:4px;">';
-        html += '<div style="font-size:0.82rem;font-weight:600;color:var(--warm-gray);margin-bottom:6px;">&#9998; Best added manually</div>';
+        html += '<div style="font-size:0.85rem;font-weight:600;color:var(--warm-gray);margin-bottom:6px;">&#9998; Best added manually</div>';
         manualGaps.forEach(function(gap) {
-          html += '<div style="font-size:0.82rem;color:var(--warm-gray);margin-bottom:4px;padding-left:16px;">' + esc(gap.description) + '</div>';
+          html += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:4px;padding-left:16px;">' + esc(gap.description) + '</div>';
         });
         html += '</div>';
       }
@@ -1635,17 +1635,17 @@
 
       // Content
       html += '<div style="flex:1;min-width:0;">';
-      html += '<div style="font-size:0.88rem;font-weight:600;margin-bottom:2px;">' + esc(row.capability) + '</div>';
+      html += '<div style="font-size:0.9rem;font-weight:600;margin-bottom:2px;">' + esc(row.capability) + '</div>';
 
       // Detected → Matched
-      html += '<div style="font-size:0.8rem;color:var(--warm-gray);">';
+      html += '<div style="font-size:0.78rem;color:var(--warm-gray);">';
       html += esc(row.detectedLabel);
       if (row.matchedLabel) html += ' &rarr; ' + esc(row.matchedLabel);
       html += '</div>';
 
       // Gap + Plan
       if (row.gap) {
-        html += '<div style="font-size:0.8rem;margin-top:4px;">';
+        html += '<div style="font-size:0.78rem;margin-top:4px;">';
         html += '<span style="color:var(--amber);">' + esc(row.gap) + '</span>';
         if (row.plan && row.plan !== 'Complete') {
           html += ' &mdash; <span style="color:var(--warm-gray-dark,#666);">' + esc(row.plan) + '</span>';
@@ -1663,7 +1663,7 @@
     var actionCount = rows.filter(function(r) { return r.status === 'action-needed' || r.status === 'partial'; }).length;
 
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">';
-    html += '<div style="font-size:0.82rem;color:var(--warm-gray);">';
+    html += '<div style="font-size:0.85rem;color:var(--warm-gray);">';
     html += '<span style="color:var(--teal);">' + completeCount + '</span> complete';
     if (actionCount > 0) html += ' &middot; <span style="color:var(--amber);">' + actionCount + '</span> need attention';
     html += '</div>';
@@ -1755,10 +1755,10 @@
     html += '</div>';
     html += '<div style="display:flex;gap:6px;">';
     if (draftProducts.length > 0) {
-      html += '<button class="btn btn-primary" onclick="wpPublishAllProducts()" style="font-size:0.8rem;">Publish All Drafts</button>';
+      html += '<button class="btn btn-primary" onclick="wpPublishAllProducts()" style="font-size:0.78rem;">Publish All Drafts</button>';
     }
     if (selectedProductIds.size > 0) {
-      html += '<button class="btn btn-secondary" onclick="wpDeleteSelectedProducts()" style="font-size:0.8rem;color:var(--danger);">Delete Selected (' + selectedProductIds.size + ')</button>';
+      html += '<button class="btn btn-secondary" onclick="wpDeleteSelectedProducts()" style="font-size:0.78rem;color:var(--danger);">Delete Selected (' + selectedProductIds.size + ')</button>';
     }
     html += '</div>';
     html += '</div>';
@@ -1776,13 +1776,13 @@
       if (img) {
         html += '<img src="' + esc(typeof img === 'string' ? img : img.url || '') + '" style="width:48px;height:48px;object-fit:cover;border-radius:6px;" alt="">';
       } else {
-        html += '<div style="width:48px;height:48px;background:var(--cream-dark);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:var(--warm-gray);">&#128247;</div>';
+        html += '<div style="width:48px;height:48px;background:var(--cream-dark);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:1.15rem;color:var(--warm-gray);">&#128247;</div>';
       }
 
       // Info
       html += '<div style="flex:1;min-width:0;">';
       html += '<div style="font-weight:600;font-size:0.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(p.name || 'Untitled') + '</div>';
-      html += '<div style="font-size:0.8rem;color:var(--warm-gray);">';
+      html += '<div style="font-size:0.78rem;color:var(--warm-gray);">';
       if (p.priceCents) html += '$' + (p.priceCents / 100).toFixed(2);
       if (isDraft) html += ' &middot; <span style="color:var(--amber);">Draft</span>';
       else html += ' &middot; <span style="color:var(--teal);">Published</span>';
@@ -1791,7 +1791,7 @@
 
       // Actions (publish only — delete is now bulk)
       if (isDraft) {
-        html += '<button class="btn btn-primary" onclick="wpPublishProduct(\'' + esc(p.id) + '\')" style="font-size:0.75rem;padding:4px 10px;">Publish</button>';
+        html += '<button class="btn btn-primary" onclick="wpPublishProduct(\'' + esc(p.id) + '\')" style="font-size:0.78rem;padding:4px 10px;">Publish</button>';
       }
 
       html += '</div>';
@@ -2249,10 +2249,10 @@
       var fp = data.siteFingerprint;
       if (fp) {
         var pill = function(text) {
-          return '<span style="display:inline-block;background:var(--cream-dark,#e8e0d4);border-radius:12px;padding:2px 10px;font-size:0.8rem;margin:2px 4px 2px 0;color:var(--charcoal,#333);">' + esc(String(text)) + '</span>';
+          return '<span style="display:inline-block;background:var(--cream-dark,#e8e0d4);border-radius:12px;padding:2px 10px;font-size:0.78rem;margin:2px 4px 2px 0;color:var(--charcoal,#333);">' + esc(String(text)) + '</span>';
         };
         var fpLabel = function(label) {
-          return '<span style="color:var(--warm-gray,#888);font-size:0.8rem;min-width:90px;display:inline-block;">' + label + '</span>';
+          return '<span style="color:var(--warm-gray,#888);font-size:0.78rem;min-width:90px;display:inline-block;">' + label + '</span>';
         };
 
         rhtml += '<div class="wp-import-result" style="margin-top:12px;">';
@@ -2295,7 +2295,7 @@
           rhtml += '<div style="margin-bottom:10px;font-size:0.9rem;">';
           rhtml += 'Best Match: <strong>' + esc(tm.bestMatch.templateId) + '</strong>';
           rhtml += ' &middot; Score: <strong>' + Math.round(tm.bestMatch.score * 100) + '%</strong>';
-          rhtml += ' &middot; <span style="background:' + confColor + ';color:#fff;border-radius:12px;padding:2px 10px;font-size:0.75rem;">' + esc(confLevel) + '</span>';
+          rhtml += ' &middot; <span style="background:' + confColor + ';color:#fff;border-radius:12px;padding:2px 10px;font-size:0.78rem;">' + esc(confLevel) + '</span>';
           rhtml += '</div>';
         }
 
@@ -2311,12 +2311,12 @@
           rhtml += '<div style="flex:1;background:var(--cream-dark,#e8e0d4);border-radius:4px;height:8px;overflow:hidden;">';
           rhtml += '<div style="width:' + pct + '%;height:100%;background:' + barColor + ';border-radius:4px;transition:width 0.3s;"></div>';
           rhtml += '</div>';
-          rhtml += '<span style="font-size:0.8rem;color:var(--warm-gray,#888);min-width:35px;text-align:right;">' + pct + '%</span>';
+          rhtml += '<span style="font-size:0.78rem;color:var(--warm-gray,#888);min-width:35px;text-align:right;">' + pct + '%</span>';
           rhtml += '</div>';
 
           // Signal breakdown
           if (entry.signals) {
-            rhtml += '<div style="font-size:0.75rem;color:var(--warm-gray,#888);">';
+            rhtml += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);">';
             var signalNames = { archetype: 'archetype', productCount: 'products', aboutOnHomepage: 'about', homepageSections: 'sections', productPlacement: 'placement', contentTypes: 'content', heroStyle: 'hero' };
             Object.keys(signalNames).forEach(function(key) {
               if (entry.signals[key] !== undefined) {
@@ -2794,7 +2794,7 @@
     var colors = scheme ? scheme.colors : {};
 
     var html = '<div style="padding:20px;">';
-    html += '<h3 style="font-size:1.1rem;margin-bottom:16px;">Draft Template Review</h3>';
+    html += '<h3 style="font-size:1.15rem;margin-bottom:16px;">Draft Template Review</h3>';
 
     // Section Flow
     html += '<div style="margin-bottom:16px;">';
@@ -2804,9 +2804,9 @@
     for (var i = 0; i < sections.length; i++) {
       html += '<div draggable="true" data-idx="' + i + '" style="display:inline-flex;align-items:center;gap:6px;background:var(--cream-dark,#e8e0d4);border-radius:8px;padding:6px 12px;font-size:0.85rem;cursor:grab;">';
       html += '<span>' + esc(sections[i]) + '</span>';
-      html += '<button class="btn-icon" style="width:20px;height:20px;font-size:0.7rem;border:none;" onclick="wpDraftMoveSection(\'' + esc(draftId) + '\',' + i + ',-1)" title="Move up">&#9650;</button>';
-      html += '<button class="btn-icon" style="width:20px;height:20px;font-size:0.7rem;border:none;" onclick="wpDraftMoveSection(\'' + esc(draftId) + '\',' + i + ',1)" title="Move down">&#9660;</button>';
-      html += '<button class="btn-icon" style="width:20px;height:20px;font-size:0.7rem;border:none;color:var(--danger);" onclick="wpDraftRemoveSection(\'' + esc(draftId) + '\',' + i + ')" title="Remove">&#10005;</button>';
+      html += '<button class="btn-icon" style="width:20px;height:20px;font-size:0.72rem;border:none;" onclick="wpDraftMoveSection(\'' + esc(draftId) + '\',' + i + ',-1)" title="Move up">&#9650;</button>';
+      html += '<button class="btn-icon" style="width:20px;height:20px;font-size:0.72rem;border:none;" onclick="wpDraftMoveSection(\'' + esc(draftId) + '\',' + i + ',1)" title="Move down">&#9660;</button>';
+      html += '<button class="btn-icon" style="width:20px;height:20px;font-size:0.72rem;border:none;color:var(--danger);" onclick="wpDraftRemoveSection(\'' + esc(draftId) + '\',' + i + ')" title="Remove">&#10005;</button>';
       html += '</div>';
       if (i < sections.length - 1) html += '<span style="color:var(--warm-gray-light);">&#8594;</span>';
     }
@@ -2839,14 +2839,14 @@
     // Section Variants (placeholder — deferred to future phase)
     html += '<div style="margin-bottom:16px;opacity:0.5;">';
     html += '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Section Variants</label>';
-    html += '<span style="font-size:0.82rem;color:var(--warm-gray);">Variant selection coming soon — each section will support layout variants (e.g., gallery grid, masonry, carousel).</span>';
+    html += '<span style="font-size:0.85rem;color:var(--warm-gray);">Variant selection coming soon — each section will support layout variants (e.g., gallery grid, masonry, carousel).</span>';
     html += '</div>';
 
     // Section classification details (if available)
     if (draft.classifiedSections && draft.classifiedSections.length > 0) {
       html += '<div style="margin-bottom:16px;">';
       html += '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Classification Details</label>';
-      html += '<div style="font-size:0.82rem;color:var(--warm-gray);">';
+      html += '<div style="font-size:0.85rem;color:var(--warm-gray);">';
       for (var j = 0; j < draft.classifiedSections.length; j++) {
         var cs = draft.classifiedSections[j];
         var confColor = cs.confidence === 'high' ? 'var(--teal)' : cs.confidence === 'medium' ? 'var(--amber)' : 'var(--warm-gray-light)';

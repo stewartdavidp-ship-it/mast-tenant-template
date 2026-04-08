@@ -76,8 +76,8 @@
 
     if (blogPosts.length === 0) {
       html += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">' +
-        '<div style="font-size:2rem;margin-bottom:12px;">\u270d\ufe0f</div>' +
-        '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No blog posts yet</p>' +
+        '<div style="font-size:1.6rem;margin-bottom:12px;">\u270d\ufe0f</div>' +
+        '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No blog posts yet</p>' +
         '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Write your first post to share your voice as an artist.</p></div>';
     } else {
       blogPosts.forEach(function(post) {
@@ -88,7 +88,7 @@
           '<span class="blog-post-title">' + esc(post.title || 'Untitled Post') + '</span>' +
           '<span class="blog-post-author">' + esc(author.name) + '</span>' +
           blogBadgeHtml(post.status) +
-          (post.publishedToWebsite ? '<span style="font-size:0.75rem;" title="Published to website">\ud83c\udf10</span>' : '') +
+          (post.publishedToWebsite ? '<span style="font-size:0.78rem;" title="Published to website">\ud83c\udf10</span>' : '') +
           '<span class="blog-post-date">' + dateStr + '</span>' +
           '</div>';
       });
@@ -257,8 +257,8 @@
         '<div class="blog-social-card-title">' + escapeHtml(scTitle) + (post.title && post.title.length > 70 ? '...' : '') + '</div>' +
         '<div class="blog-social-card-desc">' + escapeHtml(scDesc.substring(0, 200)) + (scDesc.length > 200 ? '...' : '') + '</div>' +
         '</div></div>';
-      if (!scFeatImg) html += '<div style="font-size:0.75rem;color:var(--amber);margin-top:6px;">\u26a0 Add a featured image for better social sharing</div>';
-      if (!post.excerpt) html += '<div style="font-size:0.75rem;color:var(--text-secondary);margin-top:2px;">\u2139\ufe0f Using auto-generated excerpt \u2014 add a custom one for better control</div>';
+      if (!scFeatImg) html += '<div style="font-size:0.78rem;color:var(--amber);margin-top:6px;">\u26a0 Add a featured image for better social sharing</div>';
+      if (!post.excerpt) html += '<div style="font-size:0.78rem;color:var(--text-secondary);margin-top:2px;">\u2139\ufe0f Using auto-generated excerpt \u2014 add a custom one for better control</div>';
       html += '</div>';
 
       // Actions bar even in preview
@@ -269,13 +269,13 @@
       } else if (status === 'scheduled') {
         var schedDate = post.scheduledAt ? new Date(post.scheduledAt).toLocaleString('en-US', { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' }) : '';
         html += '<span style="font-size:0.85rem;color:#3b82f6;">\ud83d\udcc5 Scheduled for ' + schedDate + '</span>';
-        html += '<button class="btn" onclick="blogCancelSchedule()" style="font-size:0.8rem;">Cancel Schedule</button>';
+        html += '<button class="btn" onclick="blogCancelSchedule()" style="font-size:0.78rem;">Cancel Schedule</button>';
         html += '<button class="btn" onclick="blogBackToDraft()">\u270f\ufe0f Back to Draft</button>';
       } else if (status === 'complete') {
         html += '<button class="btn" onclick="blogBackToDraft()">\u270f\ufe0f Back to Draft</button>';
         if (post.publishedToWebsite) {
           html += '<span class="status-badge pill" style="background:#16a34a;color:#fff;">\ud83c\udf10 Published</span>';
-          html += '<button class="btn" onclick="blogUnpublishFromWebsite()" style="font-size:0.8rem;">Unpublish</button>';
+          html += '<button class="btn" onclick="blogUnpublishFromWebsite()" style="font-size:0.78rem;">Unpublish</button>';
         } else {
           html += '<button class="btn btn-primary" onclick="blogOpenPublishDialog()">\ud83d\udce4 Publish</button>';
         }
@@ -301,7 +301,7 @@
     // Tags
     html += '<div style="display:flex;align-items:center;gap:8px;">' +
       '<input class="blog-tags-input" style="margin-bottom:0;" type="text" value="' + (post.tags || []).join(', ') + '" placeholder="Tags (comma-separated)..." onchange="blogUpdateTags(this.value)" />' +
-      '<button class="btn" id="blogSuggestTagsBtn" onclick="blogSuggestTags()" style="white-space:nowrap;font-size:0.8rem;padding:6px 10px;" title="AI-suggested tags based on your content">\ud83d\udca1 Suggest</button>' +
+      '<button class="btn" id="blogSuggestTagsBtn" onclick="blogSuggestTags()" style="white-space:nowrap;font-size:0.78rem;padding:6px 10px;" title="AI-suggested tags based on your content">\ud83d\udca1 Suggest</button>' +
       '</div>';
 
     // Featured image
@@ -311,15 +311,15 @@
       html += '<div style="display:flex;align-items:center;gap:12px;">' +
         '<img src="' + esc(featImg.thumbnailUrl || featImg.url) + '" alt="" style="width:120px;height:80px;object-fit:cover;border-radius:6px;border:1px solid var(--border);" />' +
         '<div>' +
-        '<div style="font-size:0.8rem;font-weight:500;margin-bottom:6px;">Featured Image</div>' +
+        '<div style="font-size:0.78rem;font-weight:500;margin-bottom:6px;">Featured Image</div>' +
         '<div style="display:flex;gap:6px;">' +
-        '<button class="btn btn-outline" style="font-size:0.75rem;padding:4px 10px;" onclick="blogSetFeaturedImage()">Change</button>' +
-        '<button class="btn btn-outline" style="font-size:0.75rem;padding:4px 10px;color:var(--danger);border-color:var(--danger);" onclick="blogRemoveFeaturedImage()">Remove</button>' +
+        '<button class="btn btn-outline" style="font-size:0.78rem;padding:4px 10px;" onclick="blogSetFeaturedImage()">Change</button>' +
+        '<button class="btn btn-outline" style="font-size:0.78rem;padding:4px 10px;color:var(--danger);border-color:var(--danger);" onclick="blogRemoveFeaturedImage()">Remove</button>' +
         '</div></div></div>';
     } else {
       html += '<div class="blog-featured-placeholder" onclick="blogSetFeaturedImage()">' +
-        '<span style="font-size:1.2rem;">\ud83d\uddbc\ufe0f</span> Set Featured Image' +
-        '<div style="font-size:0.7rem;color:var(--text-secondary);margin-top:2px;">Used for social cards and blog listings</div>' +
+        '<span style="font-size:1.15rem;">\ud83d\uddbc\ufe0f</span> Set Featured Image' +
+        '<div style="font-size:0.72rem;color:var(--text-secondary);margin-top:2px;">Used for social cards and blog listings</div>' +
         '</div>';
     }
     html += '</div>';
@@ -328,7 +328,7 @@
     html += '<div style="margin-bottom:12px;">' +
       '<textarea class="blog-excerpt-input" maxlength="300" placeholder="Write a short excerpt for social sharing and blog listings..." onchange="blogUpdateExcerpt(this.value)" oninput="blogUpdateExcerptCount(this.value)">' +
       escapeHtml(post.excerpt || '') + '</textarea>' +
-      '<div style="font-size:0.7rem;color:var(--text-secondary);text-align:right;" id="blogExcerptCount">' + (post.excerpt || '').length + '/300</div>' +
+      '<div style="font-size:0.72rem;color:var(--text-secondary);text-align:right;" id="blogExcerptCount">' + (post.excerpt || '').length + '/300</div>' +
       '</div>';
 
     // AI compare mode or rich text editor
@@ -353,9 +353,9 @@
         '<button class="blog-format-btn blog-format-btn-wide" id="blogBtnH2" onmousedown="event.preventDefault();blogFormatBlock(\'h2\')" title="Heading 2">H2</button>' +
         '<button class="blog-format-btn blog-format-btn-wide" id="blogBtnH3" onmousedown="event.preventDefault();blogFormatBlock(\'h3\')" title="Heading 3">H3</button>' +
         '<div class="blog-format-sep"></div>' +
-        '<button class="blog-format-btn" id="blogBtnQuote" onmousedown="event.preventDefault();blogFormatBlock(\'blockquote\')" title="Blockquote" style="font-size:1.1rem;">\u201c</button>' +
+        '<button class="blog-format-btn" id="blogBtnQuote" onmousedown="event.preventDefault();blogFormatBlock(\'blockquote\')" title="Blockquote" style="font-size:1.15rem;">\u201c</button>' +
         '<button class="blog-format-btn" id="blogBtnUL" onmousedown="event.preventDefault();blogFormatCmd(\'insertUnorderedList\')" title="Bullet List" style="font-size:0.9rem;">\u2022\u2261</button>' +
-        '<button class="blog-format-btn" id="blogBtnOL" onmousedown="event.preventDefault();blogFormatCmd(\'insertOrderedList\')" title="Numbered List" style="font-size:0.75rem;">1.</button>' +
+        '<button class="blog-format-btn" id="blogBtnOL" onmousedown="event.preventDefault();blogFormatCmd(\'insertOrderedList\')" title="Numbered List" style="font-size:0.78rem;">1.</button>' +
         '<button class="blog-format-btn" id="blogBtnLink" onmousedown="event.preventDefault();blogInsertLink()" title="Insert Link" style="font-size:0.85rem;">\ud83d\udd17</button>' +
         '<button class="blog-format-btn" onmousedown="event.preventDefault();document.execCommand(\'insertHorizontalRule\');blogBodyChanged()" title="Divider">\u2015</button>' +
         '<div class="blog-format-sep"></div>' +
@@ -403,12 +403,12 @@
           '<div class="blog-inline-img" onclick="blogEditCaption(' + idx + ')" style="cursor:pointer;" title="Click to edit caption">' +
           '<img src="' + thumbUrl + '" alt="inline image" />' +
           '<button class="remove-btn" onclick="event.stopPropagation();blogRemoveInlineImage(' + idx + ')">×</button>' +
-          (caption ? '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.6);color:#fff;font-size:0.6rem;padding:2px 4px;text-align:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">\ud83d\udcac</div>' : '') +
+          (caption ? '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.6);color:#fff;font-size:0.72rem;padding:2px 4px;text-align:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">\ud83d\udcac</div>' : '') +
           '</div>' +
           '<div class="blog-inline-img-label">Image ' + (idx + 1) + '</div>' +
           (inlineImages.length > 1 ? '<div style="display:flex;justify-content:center;gap:2px;margin-top:2px;">' +
-            '<button onclick="event.stopPropagation();blogMoveImage(' + idx + ',-1)" style="background:none;border:none;cursor:pointer;font-size:0.7rem;color:' + (isFirst ? 'var(--border)' : 'var(--text-secondary)') + ';padding:1px 4px;"' + (isFirst ? ' disabled' : '') + ' title="Move left">\u25c0</button>' +
-            '<button onclick="event.stopPropagation();blogMoveImage(' + idx + ',1)" style="background:none;border:none;cursor:pointer;font-size:0.7rem;color:' + (isLast ? 'var(--border)' : 'var(--text-secondary)') + ';padding:1px 4px;"' + (isLast ? ' disabled' : '') + ' title="Move right">\u25b6</button>' +
+            '<button onclick="event.stopPropagation();blogMoveImage(' + idx + ',-1)" style="background:none;border:none;cursor:pointer;font-size:0.72rem;color:' + (isFirst ? 'var(--border)' : 'var(--text-secondary)') + ';padding:1px 4px;"' + (isFirst ? ' disabled' : '') + ' title="Move left">\u25c0</button>' +
+            '<button onclick="event.stopPropagation();blogMoveImage(' + idx + ',1)" style="background:none;border:none;cursor:pointer;font-size:0.72rem;color:' + (isLast ? 'var(--border)' : 'var(--text-secondary)') + ';padding:1px 4px;"' + (isLast ? ' disabled' : '') + ' title="Move right">\u25b6</button>' +
             '</div>' : '') +
           '</div>';
       });
@@ -423,13 +423,13 @@
     } else if (status === 'scheduled') {
       var schedDate2 = post.scheduledAt ? new Date(post.scheduledAt).toLocaleString('en-US', { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' }) : '';
       html += '<span style="font-size:0.85rem;color:#3b82f6;">\ud83d\udcc5 Scheduled for ' + schedDate2 + '</span>';
-      html += '<button class="btn" onclick="blogCancelSchedule()" style="font-size:0.8rem;">Cancel Schedule</button>';
+      html += '<button class="btn" onclick="blogCancelSchedule()" style="font-size:0.78rem;">Cancel Schedule</button>';
       html += '<button class="btn" onclick="blogBackToDraft()">\u270f\ufe0f Back to Draft</button>';
     } else if (status === 'complete') {
       html += '<button class="btn" onclick="blogBackToDraft()">\u270f\ufe0f Back to Draft</button>';
       if (post.publishedToWebsite) {
         html += '<span class="status-badge pill" style="background:#16a34a;color:#fff;">\ud83c\udf10 Published</span>';
-        html += '<button class="btn" onclick="blogUnpublishFromWebsite()" style="font-size:0.8rem;">Unpublish</button>';
+        html += '<button class="btn" onclick="blogUnpublishFromWebsite()" style="font-size:0.78rem;">Unpublish</button>';
       } else {
         html += '<button class="btn btn-primary" onclick="blogOpenPublishDialog()">\ud83d\udce4 Publish</button>';
       }
@@ -619,7 +619,7 @@
       var c = allCoupons[code];
       var valStr = c ? (c.type === 'percent' ? c.value + '% off' : '$' + (c.value || 0).toFixed(2) + ' off') : 'coupon';
       return '<div class="blog-coupon-marker" data-coupon-code="' + esc(code) + '" contenteditable="false" ' +
-        'style="display:inline-block;padding:8px 14px;margin:4px 0;background:rgba(42,124,111,0.15);border:1px dashed var(--teal,#2A7C6F);border-radius:6px;font-size:0.9rem;color:inherit;cursor:default;">' +
+        'style="display:inline-block;padding:8px 14px;margin:4px 0;background:rgba(42,124,111,0.15);border:1px dashed var(--teal,var(--teal));border-radius:6px;font-size:0.9rem;color:inherit;cursor:default;">' +
         '\uD83C\uDFF7\uFE0F ' + esc(code) + ' \u2014 ' + esc(valStr) + '</div>';
     });
     return html;
@@ -1140,8 +1140,8 @@
       '<div class="modal-body" style="text-align:center;padding:30px;">' +
       '<p style="margin-bottom:20px;color:var(--text-secondary);">Choose how to add an image to your post:</p>' +
       '<div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;">' +
-      '<button class="btn btn-primary" onclick="closeModal();blogInsertFromLibrary()" style="padding:16px 24px;font-size:0.95rem;">\ud83d\udcda From Library</button>' +
-      '<button class="btn btn-primary" onclick="closeModal();blogUploadFromComputer()" style="padding:16px 24px;font-size:0.95rem;">\ud83d\udcbb From Computer</button>' +
+      '<button class="btn btn-primary" onclick="closeModal();blogInsertFromLibrary()" style="padding:16px 24px;font-size:0.9rem;">\ud83d\udcda From Library</button>' +
+      '<button class="btn btn-primary" onclick="closeModal();blogUploadFromComputer()" style="padding:16px 24px;font-size:0.9rem;">\ud83d\udcbb From Computer</button>' +
       '</div></div>';
     openModal(html);
   }
@@ -1253,7 +1253,7 @@
       var code = activeCodes[i];
       var c = allCoupons[code];
       var valStr = c.type === 'percent' ? c.value + '% off' : '$' + (c.value || 0).toFixed(2) + ' off';
-      listHtml += '<div data-coupon-code="' + esc(code) + '" style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid var(--cream-dark,#F0E8DB);border-radius:6px;cursor:pointer;transition:background 0.15s;" ' +
+      listHtml += '<div data-coupon-code="' + esc(code) + '" style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid var(--cream-dark,var(--cream-dark));border-radius:6px;cursor:pointer;transition:background 0.15s;" ' +
         'onmouseover="this.style.background=\'rgba(42,124,111,0.06)\'" onmouseout="this.style.background=\'transparent\'" ' +
         'onclick="blogFinishInsertCoupon(this.dataset.couponCode)">' +
         '<div><span style="font-family:monospace;font-weight:600;">' + esc(code) + '</span>' +
@@ -1279,7 +1279,7 @@
     if (editable) {
       editable.focus();
       var markerHtml = '<br><div class="blog-coupon-marker" data-coupon-code="' + esc(code) + '" contenteditable="false" ' +
-        'style="display:inline-block;padding:8px 14px;margin:4px 0;background:rgba(42,124,111,0.15);border:1px dashed var(--teal,#2A7C6F);border-radius:6px;font-size:0.9rem;color:inherit;cursor:default;">' +
+        'style="display:inline-block;padding:8px 14px;margin:4px 0;background:rgba(42,124,111,0.15);border:1px dashed var(--teal,var(--teal));border-radius:6px;font-size:0.9rem;color:inherit;cursor:default;">' +
         '\uD83C\uDFF7\uFE0F ' + esc(code) + ' \u2014 ' + esc(valStr) +
         '</div><br>';
       document.execCommand('insertHTML', false, markerHtml);

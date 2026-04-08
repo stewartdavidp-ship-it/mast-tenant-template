@@ -32,7 +32,7 @@
   var WAIVER_STATUSES = ['pending', 'signed', 'expired'];
   var PHOTO_WAIVER_STATUSES = ['pending', 'accepted', 'declined'];
 
-  var INPUT_STYLE = 'width:100%;padding:9px 12px;border:1px solid var(--cream-dark,#ddd);border-radius:6px;font-size:0.9rem;background:var(--cream,#FAF6F0);box-sizing:border-box;font-family:DM Sans,sans-serif;color:var(--charcoal,#1A1A1A);';
+  var INPUT_STYLE = 'width:100%;padding:9px 12px;border:1px solid var(--cream-dark,#ddd);border-radius:6px;font-size:0.9rem;background:var(--cream,var(--cream));box-sizing:border-box;font-family:DM Sans,sans-serif;color:var(--charcoal,var(--charcoal));';
 
   // --- Helpers ---
   function capitalize(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1).replace(/-/g, ' ') : ''; }
@@ -68,7 +68,7 @@
     var h = '<div style="margin-bottom:16px;">';
     h += '<div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;padding:6px 0;" onclick="studentsToggleSection(\'' + id + '\')">';
     h += '<div style="display:flex;align-items:center;gap:8px;">';
-    h += '<span style="font-size:0.7rem;color:var(--warm-gray);transition:transform 0.15s;" id="' + id + 'Arrow">' + (open ? '\u25bc' : '\u25b6') + '</span>';
+    h += '<span style="font-size:0.72rem;color:var(--warm-gray);transition:transform 0.15s;" id="' + id + 'Arrow">' + (open ? '\u25bc' : '\u25b6') + '</span>';
     h += '<span style="font-size:1rem;font-weight:600;">' + esc(title) + '</span>';
     if (badge) h += ' ' + badge;
     h += '</div>';
@@ -100,7 +100,7 @@
 
   function renderDrivePreview(prefix, drive) {
     var h = '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;">';
-    h += '<div style="font-size:0.82rem;">\ud83d\udcc4 <strong>' + esc(drive.driveFileName || '') + '</strong>';
+    h += '<div style="font-size:0.85rem;">\ud83d\udcc4 <strong>' + esc(drive.driveFileName || '') + '</strong>';
     if (drive.driveLastModified) h += ' \u00b7 Modified ' + (drive.driveLastModified || '').split('T')[0];
     h += '</div>';
     h += '<button type="button" class="btn btn-secondary btn-small" onclick="studentsUnlinkDrive(\'' + esc(prefix) + '\')">Unlink</button>';
@@ -281,8 +281,8 @@
 
     if (active.length === 0) {
       h += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">';
-      h += '<div style="font-size:2rem;margin-bottom:12px;">\ud83c\udf93</div>';
-      h += '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No students yet</p>';
+      h += '<div style="font-size:1.6rem;margin-bottom:12px;">\ud83c\udf93</div>';
+      h += '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No students yet</p>';
       h += '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Add your first student to start tracking onboarding and clearances.</p>';
       h += '</div>';
       return h;
@@ -306,13 +306,13 @@
     var today = new Date().toISOString().split('T')[0];
     var activeClearances = clearances.filter(function(c) { return !c.expiresAt || c.expiresAt >= today; });
 
-    var h = '<div data-id="' + esc(id) + '" style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#ddd);border-radius:8px;padding:12px 16px;margin-bottom:8px;cursor:pointer;transition:border-color 0.15s;" onclick="studentsViewDetail(\'' + esc(id) + '\')" onmouseover="this.style.borderColor=\'var(--amber)\'" onmouseout="this.style.borderColor=\'var(--cream-dark,#ddd)\'">';
+    var h = '<div data-id="' + esc(id) + '" style="background:var(--cream,var(--cream));border:1px solid var(--cream-dark,#ddd);border-radius:8px;padding:12px 16px;margin-bottom:8px;cursor:pointer;transition:border-color 0.15s;" onclick="studentsViewDetail(\'' + esc(id) + '\')" onmouseover="this.style.borderColor=\'var(--amber)\'" onmouseout="this.style.borderColor=\'var(--cream-dark,#ddd)\'">';
     h += '<div style="display:flex;justify-content:space-between;align-items:center;">';
     h += '<div>';
     h += '<div style="font-weight:600;">\ud83c\udf93 ' + esc(stu.displayName || 'Unnamed');
     if (stu.isMinor) h += ' <span style="font-size:0.72rem;background:#6366f1;color:white;padding:1px 6px;border-radius:4px;margin-left:6px;">MINOR</span>';
     h += '</div>';
-    h += '<div style="font-size:0.82rem;color:var(--warm-gray);margin-top:2px;">';
+    h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-top:2px;">';
     if (waiverOk && safetyOk) {
       h += '<span style="color:#16a34a;">\u2713 Onboarded</span>';
     } else {
@@ -346,7 +346,7 @@
     h += '<h3 style="margin:0;">' + esc(stu.displayName || 'Unnamed');
     if (stu.isMinor) h += ' <span style="font-size:0.72rem;background:#6366f1;color:white;padding:1px 6px;border-radius:4px;margin-left:6px;">MINOR</span>';
     h += '</h3>';
-    h += '<div style="font-size:0.8rem;color:var(--warm-gray);">';
+    h += '<div style="font-size:0.78rem;color:var(--warm-gray);">';
     if (stu.contactId) h += 'Contact: ' + esc(stu.contactId);
     if (stu.createdAt) h += ' \u00b7 Added ' + stu.createdAt.split('T')[0];
     h += '</div>';
@@ -357,7 +357,7 @@
     // Onboarding Status Card
     var waiverOk = stu.waiverStatus === 'signed';
     var safetyOk = stu.safetyOrientationCompleted === true;
-    h += '<div style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#ddd);border-radius:8px;padding:16px;margin-bottom:16px;">';
+    h += '<div style="background:var(--cream,var(--cream));border:1px solid var(--cream-dark,#ddd);border-radius:8px;padding:16px;margin-bottom:16px;">';
     h += '<div style="display:flex;gap:24px;flex-wrap:wrap;">';
     h += '<div><span style="font-size:0.78rem;color:var(--warm-gray);">Waiver</span><div style="font-weight:600;color:' + (waiverOk ? '#16a34a' : '#d97706') + ';">' + (waiverOk ? '\u2713 Signed' : '\u26a0 ' + capitalize(stu.waiverStatus || 'pending')) + '</div></div>';
     h += '<div><span style="font-size:0.78rem;color:var(--warm-gray);">Safety Orientation</span><div style="font-weight:600;color:' + (safetyOk ? '#16a34a' : '#d97706') + ';">' + (safetyOk ? '\u2713 Completed' : '\u26a0 Not completed') + '</div></div>';
@@ -435,10 +435,10 @@
       var statusColor = status === 'completed' ? '#16a34a' : status === 'not-applicable' ? 'var(--warm-gray)' : '#d97706';
       var statusIcon = status === 'completed' ? '\u2713' : status === 'not-applicable' ? '\u2014' : '\u26a0';
 
-      h += '<div style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#ddd);border-radius:6px;padding:10px 14px;margin-bottom:6px;cursor:pointer;" onclick="studentsEditChecklist(\'' + esc(stu._key) + '\',\'' + f.key + '\')" onmouseover="this.style.borderColor=\'var(--amber)\'" onmouseout="this.style.borderColor=\'var(--cream-dark,#ddd)\'">';
+      h += '<div style="background:var(--cream,var(--cream));border:1px solid var(--cream-dark,#ddd);border-radius:6px;padding:10px 14px;margin-bottom:6px;cursor:pointer;" onclick="studentsEditChecklist(\'' + esc(stu._key) + '\',\'' + f.key + '\')" onmouseover="this.style.borderColor=\'var(--amber)\'" onmouseout="this.style.borderColor=\'var(--cream-dark,#ddd)\'">';
       h += '<div style="display:flex;justify-content:space-between;align-items:center;">';
       h += '<div>';
-      h += '<span style="color:' + statusColor + ';font-weight:600;font-size:0.82rem;">' + statusIcon + ' ' + esc(f.label) + '</span>';
+      h += '<span style="color:' + statusColor + ';font-weight:600;font-size:0.85rem;">' + statusIcon + ' ' + esc(f.label) + '</span>';
       if (item.storageLocation) h += ' <span style="font-size:0.72rem;color:var(--warm-gray);margin-left:6px;">' + capitalize(item.storageLocation) + '</span>';
       if (item.signatureId) h += ' <span onclick="event.stopPropagation();studentsViewSignatureDetail(\'' + esc(item.signatureId) + '\')" style="font-size:0.72rem;color:var(--teal,#2A9D8F);cursor:pointer;margin-left:6px;text-decoration:underline;">View Signature</span>';
       h += '</div>';
@@ -471,7 +471,7 @@
     clearances.forEach(function(c, idx) {
       var isExpired = c.expiresAt && c.expiresAt < today;
       var isActive = !c.expiresAt || c.expiresAt >= today;
-      h += '<div style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#ddd);border-radius:6px;padding:10px 14px;margin-bottom:6px;">';
+      h += '<div style="background:var(--cream,var(--cream));border:1px solid var(--cream-dark,#ddd);border-radius:6px;padding:10px 14px;margin-bottom:6px;">';
       h += '<div style="display:flex;justify-content:space-between;align-items:center;">';
       h += '<div>';
       h += '<span style="font-weight:600;color:' + (isActive ? '#16a34a' : '#dc2626') + ';">' + (isActive ? '\u2713' : '\u2717') + ' ' + esc(c.label || c.clearanceId) + '</span>';
@@ -491,7 +491,7 @@
   }
 
   function renderDocCard(doc, studentId, idx) {
-    var h = '<div style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#ddd);border-radius:6px;padding:10px 14px;margin-bottom:6px;cursor:pointer;" onclick="studentsEditDoc(\'' + esc(studentId) + '\',' + idx + ')" onmouseover="this.style.borderColor=\'var(--amber)\'" onmouseout="this.style.borderColor=\'var(--cream-dark,#ddd)\'">';
+    var h = '<div style="background:var(--cream,var(--cream));border:1px solid var(--cream-dark,#ddd);border-radius:6px;padding:10px 14px;margin-bottom:6px;cursor:pointer;" onclick="studentsEditDoc(\'' + esc(studentId) + '\',' + idx + ')" onmouseover="this.style.borderColor=\'var(--amber)\'" onmouseout="this.style.borderColor=\'var(--cream-dark,#ddd)\'">';
     h += '<div style="display:flex;justify-content:space-between;align-items:center;">';
     h += '<div>';
     h += '<span style="font-weight:500;">' + esc(doc.title || 'Untitled') + '</span>';
@@ -519,19 +519,19 @@
 
     if (clearanceTypes.length === 0) {
       h += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">';
-      h += '<div style="font-size:2rem;margin-bottom:12px;">\ud83d\udee1\ufe0f</div>';
-      h += '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No clearance types defined</p>';
+      h += '<div style="font-size:1.6rem;margin-bottom:12px;">\ud83d\udee1\ufe0f</div>';
+      h += '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No clearance types defined</p>';
       h += '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Create clearance types to track student qualifications.</p>';
       h += '</div>';
       return h;
     }
 
     clearanceTypes.forEach(function(ct) {
-      h += '<div style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#ddd);border-radius:8px;padding:12px 16px;margin-bottom:8px;cursor:pointer;" onclick="studentsEditClearanceType(\'' + esc(ct._key) + '\')" onmouseover="this.style.borderColor=\'var(--amber)\'" onmouseout="this.style.borderColor=\'var(--cream-dark,#ddd)\'">';
+      h += '<div style="background:var(--cream,var(--cream));border:1px solid var(--cream-dark,#ddd);border-radius:8px;padding:12px 16px;margin-bottom:8px;cursor:pointer;" onclick="studentsEditClearanceType(\'' + esc(ct._key) + '\')" onmouseover="this.style.borderColor=\'var(--amber)\'" onmouseout="this.style.borderColor=\'var(--cream-dark,#ddd)\'">';
       h += '<div style="display:flex;justify-content:space-between;align-items:center;">';
       h += '<div>';
       h += '<span style="font-weight:600;">\ud83d\udee1\ufe0f ' + esc(ct.label || 'Unnamed') + '</span>';
-      if (ct.description) h += '<div style="font-size:0.82rem;color:var(--warm-gray);margin-top:2px;">' + esc(ct.description) + '</div>';
+      if (ct.description) h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-top:2px;">' + esc(ct.description) + '</div>';
       h += '</div>';
       h += '<span style="font-size:0.72rem;padding:1px 6px;border-radius:4px;background:rgba(196,133,60,0.15);color:var(--amber);">' + (ct.requiresExpiry ? 'Expires' : 'No expiry') + '</span>';
       h += '</div>';
@@ -554,8 +554,8 @@
 
     if (tenantDocs.length === 0) {
       h += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">';
-      h += '<div style="font-size:2rem;margin-bottom:12px;">\ud83d\udcda</div>';
-      h += '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No business documents</p>';
+      h += '<div style="font-size:1.6rem;margin-bottom:12px;">\ud83d\udcda</div>';
+      h += '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No business documents</p>';
       h += '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Track business licenses, insurance certificates, and other shared documents.</p>';
       h += '</div>';
       return h;
@@ -1049,8 +1049,8 @@
 
     if (waiverTemplatesData.length === 0) {
       h += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">';
-      h += '<div style="font-size:2rem;margin-bottom:12px;">\ud83d\udcdd</div>';
-      h += '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No waiver templates</p>';
+      h += '<div style="font-size:1.6rem;margin-bottom:12px;">\ud83d\udcdd</div>';
+      h += '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No waiver templates</p>';
       h += '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Create a waiver template to start collecting signed waivers from students.</p>';
       h += '</div>';
       return h;
@@ -1063,10 +1063,10 @@
     });
 
     sorted.forEach(function(wt) {
-      var statusColor = wt.status === 'active' ? 'var(--teal,#2A9D8F)' : wt.status === 'archived' ? 'var(--warm-gray,#8B8680)' : 'var(--amber,#C4853C)';
+      var statusColor = wt.status === 'active' ? 'var(--teal,#2A9D8F)' : wt.status === 'archived' ? 'var(--warm-gray,#8B8680)' : 'var(--amber,var(--amber))';
       var statusBg = wt.status === 'active' ? 'rgba(42,157,143,0.15)' : wt.status === 'archived' ? 'rgba(139,134,128,0.15)' : 'rgba(196,133,60,0.15)';
 
-      h += '<div style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#ddd);border-radius:8px;padding:12px 16px;margin-bottom:8px;cursor:pointer;" onclick="studentsEditWaiverTemplate(\'' + esc(wt._key) + '\')" onmouseover="this.style.borderColor=\'var(--amber)\'" onmouseout="this.style.borderColor=\'var(--cream-dark,#ddd)\'">';
+      h += '<div style="background:var(--cream,var(--cream));border:1px solid var(--cream-dark,#ddd);border-radius:8px;padding:12px 16px;margin-bottom:8px;cursor:pointer;" onclick="studentsEditWaiverTemplate(\'' + esc(wt._key) + '\')" onmouseover="this.style.borderColor=\'var(--amber)\'" onmouseout="this.style.borderColor=\'var(--cream-dark,#ddd)\'">';
       h += '<div style="display:flex;justify-content:space-between;align-items:center;">';
       h += '<div style="flex:1;min-width:0;">';
       h += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">';
@@ -1075,7 +1075,7 @@
       if (wt.isDefault) h += '<span style="font-size:0.72rem;padding:1px 6px;border-radius:4px;background:rgba(42,157,143,0.15);color:var(--teal,#2A9D8F);">Default</span>';
       h += '<span style="font-size:0.72rem;color:var(--warm-gray);">v' + (wt.version || 1) + '</span>';
       h += '</div>';
-      if (wt.expiryDays) h += '<div style="font-size:0.82rem;color:var(--warm-gray);margin-top:2px;">Expires after ' + wt.expiryDays + ' days</div>';
+      if (wt.expiryDays) h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-top:2px;">Expires after ' + wt.expiryDays + ' days</div>';
       h += '</div>';
       h += '<div style="display:flex;gap:6px;align-items:center;margin-left:12px;" onclick="event.stopPropagation()">';
       if (wt.status === 'active') h += '<button class="btn" onclick="studentsCopyWaiverLink(\'' + esc(wt._key) + '\')" style="font-size:0.78rem;padding:4px 8px;">Copy Link</button>';
@@ -1117,20 +1117,20 @@
     h += '<div style="margin-top:16px;max-width:720px;">';
     h += '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Waiver Body</label>';
     h += '<div id="wtToolbar" style="display:flex;gap:4px;padding:8px;background:var(--cream-dark,#E8E0D4);border-radius:6px 6px 0 0;">';
-    h += '<button type="button" onclick="studentsWaiverExec(\'bold\')" style="padding:4px 8px;border:1px solid var(--cream-dark,#ddd);border-radius:4px;background:var(--cream,#FAF6F0);cursor:pointer;font-weight:bold;" title="Bold">B</button>';
-    h += '<button type="button" onclick="studentsWaiverExec(\'italic\')" style="padding:4px 8px;border:1px solid var(--cream-dark,#ddd);border-radius:4px;background:var(--cream,#FAF6F0);cursor:pointer;font-style:italic;" title="Italic">I</button>';
-    h += '<button type="button" onclick="studentsWaiverExec(\'underline\')" style="padding:4px 8px;border:1px solid var(--cream-dark,#ddd);border-radius:4px;background:var(--cream,#FAF6F0);cursor:pointer;text-decoration:underline;" title="Underline">U</button>';
+    h += '<button type="button" onclick="studentsWaiverExec(\'bold\')" style="padding:4px 8px;border:1px solid var(--cream-dark,#ddd);border-radius:4px;background:var(--cream,var(--cream));cursor:pointer;font-weight:bold;" title="Bold">B</button>';
+    h += '<button type="button" onclick="studentsWaiverExec(\'italic\')" style="padding:4px 8px;border:1px solid var(--cream-dark,#ddd);border-radius:4px;background:var(--cream,var(--cream));cursor:pointer;font-style:italic;" title="Italic">I</button>';
+    h += '<button type="button" onclick="studentsWaiverExec(\'underline\')" style="padding:4px 8px;border:1px solid var(--cream-dark,#ddd);border-radius:4px;background:var(--cream,var(--cream));cursor:pointer;text-decoration:underline;" title="Underline">U</button>';
     h += '<span style="width:1px;background:var(--warm-gray);margin:0 4px;opacity:0.3;"></span>';
-    h += '<button type="button" onclick="studentsWaiverExec(\'formatBlock\',\'H2\')" style="padding:4px 8px;border:1px solid var(--cream-dark,#ddd);border-radius:4px;background:var(--cream,#FAF6F0);cursor:pointer;font-size:0.78rem;font-weight:600;" title="Heading 2">H2</button>';
-    h += '<button type="button" onclick="studentsWaiverExec(\'formatBlock\',\'H3\')" style="padding:4px 8px;border:1px solid var(--cream-dark,#ddd);border-radius:4px;background:var(--cream,#FAF6F0);cursor:pointer;font-size:0.78rem;font-weight:600;" title="Heading 3">H3</button>';
+    h += '<button type="button" onclick="studentsWaiverExec(\'formatBlock\',\'H2\')" style="padding:4px 8px;border:1px solid var(--cream-dark,#ddd);border-radius:4px;background:var(--cream,var(--cream));cursor:pointer;font-size:0.78rem;font-weight:600;" title="Heading 2">H2</button>';
+    h += '<button type="button" onclick="studentsWaiverExec(\'formatBlock\',\'H3\')" style="padding:4px 8px;border:1px solid var(--cream-dark,#ddd);border-radius:4px;background:var(--cream,var(--cream));cursor:pointer;font-size:0.78rem;font-weight:600;" title="Heading 3">H3</button>';
     h += '<span style="width:1px;background:var(--warm-gray);margin:0 4px;opacity:0.3;"></span>';
-    h += '<button type="button" onclick="studentsWaiverExec(\'insertUnorderedList\')" style="padding:4px 8px;border:1px solid var(--cream-dark,#ddd);border-radius:4px;background:var(--cream,#FAF6F0);cursor:pointer;font-size:0.78rem;" title="Bullet List">UL</button>';
-    h += '<button type="button" onclick="studentsWaiverExec(\'insertOrderedList\')" style="padding:4px 8px;border:1px solid var(--cream-dark,#ddd);border-radius:4px;background:var(--cream,#FAF6F0);cursor:pointer;font-size:0.78rem;" title="Numbered List">OL</button>';
+    h += '<button type="button" onclick="studentsWaiverExec(\'insertUnorderedList\')" style="padding:4px 8px;border:1px solid var(--cream-dark,#ddd);border-radius:4px;background:var(--cream,var(--cream));cursor:pointer;font-size:0.78rem;" title="Bullet List">UL</button>';
+    h += '<button type="button" onclick="studentsWaiverExec(\'insertOrderedList\')" style="padding:4px 8px;border:1px solid var(--cream-dark,#ddd);border-radius:4px;background:var(--cream,var(--cream));cursor:pointer;font-size:0.78rem;" title="Numbered List">OL</button>';
     h += '<span style="flex:1;"></span>';
-    h += '<button type="button" onclick="studentsToggleWaiverPreview()" id="wtPreviewBtn" style="padding:4px 10px;border:1px solid var(--cream-dark,#ddd);border-radius:4px;background:var(--cream,#FAF6F0);cursor:pointer;font-size:0.78rem;">Preview</button>';
+    h += '<button type="button" onclick="studentsToggleWaiverPreview()" id="wtPreviewBtn" style="padding:4px 10px;border:1px solid var(--cream-dark,#ddd);border-radius:4px;background:var(--cream,var(--cream));cursor:pointer;font-size:0.78rem;">Preview</button>';
     h += '</div>';
-    h += '<div id="wtEditor" contenteditable="true" style="min-height:200px;max-height:400px;overflow-y:auto;padding:12px;border:1px solid var(--cream-dark,#ddd);border-top:none;border-radius:0 0 6px 6px;background:#fff;font-size:0.9rem;line-height:1.6;outline:none;font-family:DM Sans,sans-serif;color:var(--charcoal,#1A1A1A);">' + (wt.bodyHtml || '') + '</div>';
-    h += '<div id="wtPreview" style="display:none;min-height:200px;max-height:400px;overflow-y:auto;padding:12px;border:1px solid var(--cream-dark,#ddd);border-top:none;border-radius:0 0 6px 6px;background:var(--cream,#FAF6F0);font-size:0.9rem;line-height:1.6;"></div>';
+    h += '<div id="wtEditor" contenteditable="true" style="min-height:200px;max-height:400px;overflow-y:auto;padding:12px;border:1px solid var(--cream-dark,#ddd);border-top:none;border-radius:0 0 6px 6px;background:#fff;font-size:0.9rem;line-height:1.6;outline:none;font-family:DM Sans,sans-serif;color:var(--charcoal,var(--charcoal));">' + (wt.bodyHtml || '') + '</div>';
+    h += '<div id="wtPreview" style="display:none;min-height:200px;max-height:400px;overflow-y:auto;padding:12px;border:1px solid var(--cream-dark,#ddd);border-top:none;border-radius:0 0 6px 6px;background:var(--cream,var(--cream));font-size:0.9rem;line-height:1.6;"></div>';
     h += '</div>';
 
     // Actions
@@ -1166,22 +1166,22 @@
       var val = snap.val() || {};
       var sigs = Object.entries(val).map(function(e) { var s = e[1]; s._key = e[0]; return s; });
       if (sigs.length === 0) {
-        container.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);"><div style="font-size:2rem;margin-bottom:12px;">\u270d\ufe0f</div><p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No signatures yet</p><p style="font-size:0.85rem;color:var(--warm-gray-light);">Signatures will appear here once students sign this waiver.</p></div>';
+        container.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);"><div style="font-size:1.6rem;margin-bottom:12px;">\u270d\ufe0f</div><p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No signatures yet</p><p style="font-size:0.85rem;color:var(--warm-gray-light);">Signatures will appear here once students sign this waiver.</p></div>';
         return;
       }
       sigs.sort(function(a, b) { return (b.signedAt || '').localeCompare(a.signedAt || ''); });
-      var h = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.88rem;"><thead><tr style="background:var(--cream-dark,#E8E0D4);text-align:left;">';
+      var h = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.9rem;"><thead><tr style="background:var(--cream-dark,#E8E0D4);text-align:left;">';
       h += '<th style="padding:8px 12px;">Name</th><th style="padding:8px 12px;">Email</th><th style="padding:8px 12px;">Signed</th><th style="padding:8px 12px;">Expires</th><th style="padding:8px 12px;"></th></tr></thead><tbody>';
       sigs.forEach(function(sig) {
         var signedDate = sig.signedAt ? sig.signedAt.split('T')[0] : '\u2014';
         var expiryDate = sig.expiresAt ? sig.expiresAt.split('T')[0] : 'Never';
         var isExpired = sig.expiresAt && new Date(sig.expiresAt) < new Date();
-        h += '<tr style="border-bottom:1px solid var(--cream-dark,#ddd);cursor:pointer;" onclick="studentsViewSignatureDetail(\'' + esc(sig._key) + '\')" onmouseover="this.style.background=\'var(--cream,#FAF6F0)\'" onmouseout="this.style.background=\'\'">';
+        h += '<tr style="border-bottom:1px solid var(--cream-dark,#ddd);cursor:pointer;" onclick="studentsViewSignatureDetail(\'' + esc(sig._key) + '\')" onmouseover="this.style.background=\'var(--cream,var(--cream))\'" onmouseout="this.style.background=\'\'">';
         h += '<td style="padding:8px 12px;">' + esc(sig.signerName || '\u2014') + '</td>';
         h += '<td style="padding:8px 12px;">' + esc(sig.signerEmail || '\u2014') + '</td>';
         h += '<td style="padding:8px 12px;">' + esc(signedDate) + '</td>';
         h += '<td style="padding:8px 12px;">' + (isExpired ? '<span style="color:var(--danger);">' + esc(expiryDate) + ' (expired)</span>' : esc(expiryDate)) + '</td>';
-        h += '<td style="padding:8px 12px;text-align:right;"><span style="font-size:0.75rem;color:var(--warm-gray);">View \u203a</span></td>';
+        h += '<td style="padding:8px 12px;text-align:right;"><span style="font-size:0.78rem;color:var(--warm-gray);">View \u203a</span></td>';
         h += '</tr>';
       });
       h += '</tbody></table></div>';
@@ -1196,24 +1196,24 @@
       var sig = snap.val();
       if (!sig) { showToast('Signature not found', true); return; }
       var h = '<div id="sigDetailOverlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this)this.remove()">';
-      h += '<div style="background:var(--cream,#FAF6F0);border-radius:12px;padding:24px;max-width:600px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.2);">';
+      h += '<div style="background:var(--cream,var(--cream));border-radius:12px;padding:24px;max-width:600px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.2);">';
       h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;"><h3 style="margin:0;">Signature Detail</h3>';
-      h += '<button onclick="document.getElementById(\'sigDetailOverlay\').remove()" style="border:none;background:none;font-size:1.2rem;cursor:pointer;color:var(--warm-gray);">\u2715</button></div>';
-      h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;font-size:0.88rem;margin-bottom:16px;">';
+      h += '<button onclick="document.getElementById(\'sigDetailOverlay\').remove()" style="border:none;background:none;font-size:1.15rem;cursor:pointer;color:var(--warm-gray);">\u2715</button></div>';
+      h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;font-size:0.9rem;margin-bottom:16px;">';
       h += '<div><span style="font-weight:600;color:var(--warm-gray);font-size:0.78rem;">NAME</span><br>' + esc(sig.signerName || '\u2014') + '</div>';
       h += '<div><span style="font-weight:600;color:var(--warm-gray);font-size:0.78rem;">EMAIL</span><br>' + esc(sig.signerEmail || '\u2014') + '</div>';
       h += '<div><span style="font-weight:600;color:var(--warm-gray);font-size:0.78rem;">SIGNED AT</span><br>' + esc(sig.signedAt || '\u2014') + '</div>';
       h += '<div><span style="font-weight:600;color:var(--warm-gray);font-size:0.78rem;">EXPIRES</span><br>' + esc(sig.expiresAt || 'Never') + '</div>';
       h += '<div><span style="font-weight:600;color:var(--warm-gray);font-size:0.78rem;">IP ADDRESS</span><br>' + esc(sig.signerIp || '\u2014') + '</div>';
       h += '<div><span style="font-weight:600;color:var(--warm-gray);font-size:0.78rem;">WAIVER VERSION</span><br>v' + (sig.templateVersion || '\u2014') + '</div>';
-      h += '<div style="grid-column:1/-1;"><span style="font-weight:600;color:var(--warm-gray);font-size:0.78rem;">USER AGENT</span><br><span style="font-size:0.8rem;word-break:break-all;">' + esc(sig.signerUserAgent || '\u2014') + '</span></div>';
+      h += '<div style="grid-column:1/-1;"><span style="font-weight:600;color:var(--warm-gray);font-size:0.78rem;">USER AGENT</span><br><span style="font-size:0.78rem;word-break:break-all;">' + esc(sig.signerUserAgent || '\u2014') + '</span></div>';
       if (sig.guardianName) {
         h += '<div><span style="font-weight:600;color:var(--warm-gray);font-size:0.78rem;">GUARDIAN</span><br>' + esc(sig.guardianName) + '</div>';
         h += '<div><span style="font-weight:600;color:var(--warm-gray);font-size:0.78rem;">RELATIONSHIP</span><br>' + esc(sig.guardianRelationship || '\u2014') + '</div>';
       }
       h += '</div>';
       if (sig.waiverTextSnapshot) {
-        h += '<details style="margin-top:8px;"><summary style="cursor:pointer;font-weight:600;font-size:0.88rem;color:var(--teal,#2A9D8F);padding:6px 0;">View Waiver Text</summary>';
+        h += '<details style="margin-top:8px;"><summary style="cursor:pointer;font-weight:600;font-size:0.9rem;color:var(--teal,#2A9D8F);padding:6px 0;">View Waiver Text</summary>';
         h += '<div style="margin-top:8px;padding:12px;background:#fff;border:1px solid var(--cream-dark,#ddd);border-radius:6px;font-size:0.85rem;line-height:1.6;max-height:300px;overflow-y:auto;">' + sig.waiverTextSnapshot + '</div></details>';
       }
       h += '</div></div>';

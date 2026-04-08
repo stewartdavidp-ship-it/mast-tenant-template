@@ -1091,7 +1091,7 @@
     html += '<div style="background:var(--cream);border-radius:10px;max-width:680px;width:92%;max-height:80vh;overflow-y:auto;box-shadow:0 8px 30px rgba(0,0,0,0.2);padding:20px 24px;" onclick="event.stopPropagation()">';
 
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">';
-    html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.3rem;font-weight:500;margin:0;">Sales Channels</h3>';
+    html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:500;margin:0;">Sales Channels</h3>';
     html += '<button class="btn btn-secondary btn-small" onclick="makerCloseChannelsManager()">Close</button>';
     html += '</div>';
     html += '<p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 14px;">Define each channel\'s fee structure once. Order margin reports will subtract fees to show true net profit. Auto-match links a channel to orders coming in from a specific source (etsy, shopify, in-person, etc.).</p>';
@@ -1101,20 +1101,20 @@
     } else {
       html += '<table style="width:100%;border-collapse:collapse;margin-bottom:14px;">';
       html += '<thead><tr style="border-bottom:1px solid var(--cream-dark);">';
-      html += '<th style="text-align:left;padding:6px 8px;font-size:0.7rem;text-transform:uppercase;color:var(--warm-gray);">Channel</th>';
-      html += '<th style="text-align:right;padding:6px 8px;font-size:0.7rem;text-transform:uppercase;color:var(--warm-gray);">% fee</th>';
-      html += '<th style="text-align:right;padding:6px 8px;font-size:0.7rem;text-transform:uppercase;color:var(--warm-gray);">$/order</th>';
-      html += '<th style="text-align:right;padding:6px 8px;font-size:0.7rem;text-transform:uppercase;color:var(--warm-gray);">$/month</th>';
-      html += '<th style="text-align:left;padding:6px 8px;font-size:0.7rem;text-transform:uppercase;color:var(--warm-gray);">Auto-match</th>';
+      html += '<th style="text-align:left;padding:6px 8px;font-size:0.72rem;text-transform:uppercase;color:var(--warm-gray);">Channel</th>';
+      html += '<th style="text-align:right;padding:6px 8px;font-size:0.72rem;text-transform:uppercase;color:var(--warm-gray);">% fee</th>';
+      html += '<th style="text-align:right;padding:6px 8px;font-size:0.72rem;text-transform:uppercase;color:var(--warm-gray);">$/order</th>';
+      html += '<th style="text-align:right;padding:6px 8px;font-size:0.72rem;text-transform:uppercase;color:var(--warm-gray);">$/month</th>';
+      html += '<th style="text-align:left;padding:6px 8px;font-size:0.72rem;text-transform:uppercase;color:var(--warm-gray);">Auto-match</th>';
       html += '<th style="width:80px;"></th>';
       html += '</tr></thead><tbody>';
       ids.forEach(function(cid) {
         var ch = channelsData[cid];
         html += '<tr>';
         html += '<td style="padding:8px;font-size:0.85rem;font-weight:500;border-bottom:1px solid var(--cream-dark);">' + esc(ch.name || '') + '</td>';
-        html += '<td style="text-align:right;padding:8px;font-family:monospace;font-size:0.82rem;border-bottom:1px solid var(--cream-dark);">' + (ch.percentFee || 0).toFixed(2) + '%</td>';
-        html += '<td style="text-align:right;padding:8px;font-family:monospace;font-size:0.82rem;border-bottom:1px solid var(--cream-dark);">$' + ((ch.fixedFeePerOrderCents || 0) / 100).toFixed(2) + '</td>';
-        html += '<td style="text-align:right;padding:8px;font-family:monospace;font-size:0.82rem;border-bottom:1px solid var(--cream-dark);">$' + ((ch.monthlyFixedCents || 0) / 100).toFixed(2) + '</td>';
+        html += '<td style="text-align:right;padding:8px;font-family:monospace;font-size:0.85rem;border-bottom:1px solid var(--cream-dark);">' + (ch.percentFee || 0).toFixed(2) + '%</td>';
+        html += '<td style="text-align:right;padding:8px;font-family:monospace;font-size:0.85rem;border-bottom:1px solid var(--cream-dark);">$' + ((ch.fixedFeePerOrderCents || 0) / 100).toFixed(2) + '</td>';
+        html += '<td style="text-align:right;padding:8px;font-family:monospace;font-size:0.85rem;border-bottom:1px solid var(--cream-dark);">$' + ((ch.monthlyFixedCents || 0) / 100).toFixed(2) + '</td>';
         html += '<td style="padding:8px;font-size:0.78rem;color:var(--warm-gray);border-bottom:1px solid var(--cream-dark);">' + ((ch.autoMatchSources || []).join(', ') || '—') + '</td>';
         html += '<td style="text-align:right;padding:8px;border-bottom:1px solid var(--cream-dark);">';
         html += '<button style="background:none;border:none;color:var(--teal);cursor:pointer;font-size:0.78rem;font-family:\'DM Sans\';" onclick="makerEditChannelPrompt(\'' + esc(cid) + '\')">Edit</button> ';
@@ -1134,7 +1134,7 @@
     html += '<input id="newChannelMonthly" type="number" step="0.01" min="0" placeholder="$/month" style="width:90px;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);">';
     html += '</div>';
     html += '<div style="display:flex;gap:8px;align-items:center;">';
-    html += '<input id="newChannelAutoMatch" type="text" placeholder="Auto-match sources (comma sep, e.g. etsy,etsy-mobile)" style="flex:1;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:0.82rem;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';">';
+    html += '<input id="newChannelAutoMatch" type="text" placeholder="Auto-match sources (comma sep, e.g. etsy,etsy-mobile)" style="flex:1;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:0.85rem;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';">';
     html += '<button class="btn btn-primary btn-small" onclick="makerCreateChannelFromForm()">Add</button>';
     html += '</div>';
     html += '</div>';
@@ -1341,7 +1341,7 @@
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
     html += '<div>';
     html += '<h2 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">Materials</h2>';
-    html += '<span style="font-size:0.82rem;color:var(--warm-gray);">' + activeCount + ' active of ' + totalCount + ' total</span>';
+    html += '<span style="font-size:0.85rem;color:var(--warm-gray);">' + activeCount + ' active of ' + totalCount + ' total</span>';
     html += '</div>';
     html += '<div style="display:flex;gap:8px;">';
     html += '<button class="btn btn-secondary btn-small" onclick="makerResetOnboardingUI()" title="Reset craft profile and re-seed defaults">Reset Defaults</button>';
@@ -1381,8 +1381,8 @@
     // Empty state
     if (materials.length === 0) {
       html += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">';
-      html += '<div style="font-size:2rem;margin-bottom:12px;">🧱</div>';
-      html += '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No materials found</p>';
+      html += '<div style="font-size:1.6rem;margin-bottom:12px;">🧱</div>';
+      html += '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No materials found</p>';
       if (materialsFilter === 'active' && totalCount === 0) {
         html += '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Add your raw materials to start building recipes and pricing.</p>';
         html += '<button class="btn btn-primary" style="margin-top:16px;" onclick="makerOpenAddMaterial()">+ New Material</button>';
@@ -1410,7 +1410,7 @@
       var id = m.materialId;
       // Whole row is clickable → opens edit modal. Action icons stop propagation.
       html += '<tr data-mid="' + esc(id) + '" style="cursor:pointer;" onclick="makerEditMaterial(this.dataset.mid)">';
-      var spotChip = m.pricingMode === 'spot-linked' ? ' <span style="display:inline-block;font-size:0.68rem;font-weight:500;padding:1px 6px;background:rgba(42,124,111,0.12);color:var(--teal);border-radius:8px;margin-left:4px;" title="Linked to ' + esc(m.spotMetal || 'metal') + ' spot price">🔗 ' + esc(m.spotMetal || 'spot') + '</span>' : '';
+      var spotChip = m.pricingMode === 'spot-linked' ? ' <span style="display:inline-block;font-size:0.72rem;font-weight:500;padding:1px 6px;background:rgba(42,124,111,0.12);color:var(--teal);border-radius:8px;margin-left:4px;" title="Linked to ' + esc(m.spotMetal || 'metal') + ' spot price">🔗 ' + esc(m.spotMetal || 'spot') + '</span>' : '';
       html += '<td style="font-weight:500;">' + esc(m.name) + spotChip + '</td>';
       html += '<td>' + esc(m.category || '') + '</td>';
       html += '<td>' + esc(getUomShort(m.unitOfMeasure)) + '</td>';
@@ -1442,7 +1442,7 @@
         return (b.createdAt || '').localeCompare(a.createdAt || '');
       });
       html += '<div style="margin-top:24px;">';
-      html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.3rem;font-weight:500;margin:0 0 8px;">🔒 Price Locks</h3>';
+      html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:500;margin:0 0 8px;">🔒 Price Locks</h3>';
       html += '<p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 12px;">Forward purchase agreements with suppliers. Active unexhausted locks override spot pricing in recipes.</p>';
       html += '<div class="data-table"><table><thead><tr>';
       html += '<th>Material</th><th>Locked Price</th><th>Supplier</th><th>Consumed</th><th>Expires</th><th>Status</th><th></th>';
@@ -1460,9 +1460,9 @@
         html += '<td>' + esc(l.supplierName || '') + '</td>';
         html += '<td><div style="display:flex;align-items:center;gap:6px;"><div style="background:#e5e7eb;width:80px;height:6px;border-radius:3px;overflow:hidden;"><div style="background:var(--teal);height:100%;width:' + pctUsed + '%;"></div></div><span style="font-size:0.72rem;font-family:monospace;">' + (l.qtyConsumed || 0) + '/' + (l.qtyLocked || 0) + '</span></div></td>';
         html += '<td style="font-size:0.78rem;">' + (l.expiresAt ? new Date(l.expiresAt).toLocaleDateString() : '—') + (daysLeft != null && daysLeft >= 0 && l.liveStatus === 'active' ? ' <span style="color:var(--warm-gray-light);">(' + daysLeft + 'd)</span>' : '') + '</td>';
-        html += '<td><span class="status-badge" style="background:' + statusBg + ';color:' + statusColor + ';font-size:0.7rem;padding:2px 7px;">' + l.liveStatus + '</span></td>';
+        html += '<td><span class="status-badge" style="background:' + statusBg + ';color:' + statusColor + ';font-size:0.72rem;padding:2px 7px;">' + l.liveStatus + '</span></td>';
         html += '<td style="text-align:right;">';
-        html += '<button data-lid="' + esc(l.lockId) + '" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:0.8rem;font-family:\'DM Sans\';" onclick="makerDeletePriceLockConfirm(this.dataset.lid)">Delete</button>';
+        html += '<button data-lid="' + esc(l.lockId) + '" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:0.78rem;font-family:\'DM Sans\';" onclick="makerDeletePriceLockConfirm(this.dataset.lid)">Delete</button>';
         html += '</td></tr>';
       });
       html += '</tbody></table></div>';
@@ -1488,7 +1488,7 @@
     html += '<div style="background:var(--cream);border-radius:10px;max-width:560px;width:90%;max-height:85vh;overflow-y:auto;box-shadow:0 8px 30px rgba(0,0,0,0.2);padding:20px 24px;" onclick="event.stopPropagation()">';
 
     // Header
-    html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.3rem;font-weight:500;margin:0 0 16px;">' + (isEdit ? 'Edit Material' : 'New Material') + '</h3>';
+    html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:500;margin:0 0 16px;">' + (isEdit ? 'Edit Material' : 'New Material') + '</h3>';
 
     // Name
     html += '<div style="margin-bottom:16px;">';
@@ -1539,16 +1539,16 @@
     html += '🔗 Spot-linked pricing (updates daily from metals market)';
     html += '</label>';
     html += '<div id="matSpotFields" style="display:' + (isSpot ? 'flex' : 'none') + ';gap:8px;margin-top:10px;">';
-    html += '<div style="flex:1;"><label style="display:block;font-size:0.75rem;font-weight:600;margin-bottom:2px;">Metal</label>';
+    html += '<div style="flex:1;"><label style="display:block;font-size:0.78rem;font-weight:600;margin-bottom:2px;">Metal</label>';
     html += '<select id="matSpotMetal" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:5px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.85rem;">';
     ['gold','silver','platinum'].forEach(function(mt) {
       var sel = m && m.spotMetal === mt ? ' selected' : '';
       html += '<option value="' + mt + '"' + sel + '>' + mt.charAt(0).toUpperCase() + mt.slice(1) + '</option>';
     });
     html += '</select></div>';
-    html += '<div style="flex:1;"><label style="display:block;font-size:0.75rem;font-weight:600;margin-bottom:2px;">Purity</label>';
+    html += '<div style="flex:1;"><label style="display:block;font-size:0.78rem;font-weight:600;margin-bottom:2px;">Purity</label>';
     html += '<input id="matPurity" type="number" step="0.001" min="0" max="1" placeholder="e.g. 0.585 (14k)" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);box-sizing:border-box;" value="' + (m && m.purity != null ? m.purity : '') + '"></div>';
-    html += '<div style="flex:1;"><label style="display:block;font-size:0.75rem;font-weight:600;margin-bottom:2px;">Markup %</label>';
+    html += '<div style="flex:1;"><label style="display:block;font-size:0.78rem;font-weight:600;margin-bottom:2px;">Markup %</label>';
     html += '<input id="matMarkupSpot" type="number" step="0.1" min="0" placeholder="e.g. 8" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);box-sizing:border-box;" value="' + (m && m.markupOverSpot != null ? m.markupOverSpot : '') + '"></div>';
     html += '</div>';
     html += '<p style="font-size:0.72rem;color:var(--warm-gray);margin:8px 0 0;">Unit Cost auto-updates daily: spot × purity × (1 + markup%) ÷ unitConversion. Set purity (e.g. 0.999 fine, 0.925 sterling, 0.585 14k) and supplier markup.</p>';
@@ -1556,12 +1556,12 @@
 
     // Landed cost helper — prorate freight $ across last purchase qty into unitCost
     html += '<details style="margin-bottom:16px;background:rgba(196,133,60,0.05);border:1px solid rgba(196,133,60,0.2);border-radius:6px;">';
-    html += '<summary style="cursor:pointer;padding:8px 12px;font-size:0.82rem;font-weight:600;color:var(--amber);">+ Apply landed cost (freight, customs)</summary>';
+    html += '<summary style="cursor:pointer;padding:8px 12px;font-size:0.85rem;font-weight:600;color:var(--amber);">+ Apply landed cost (freight, customs)</summary>';
     html += '<div style="padding:0 12px 12px;">';
-    html += '<p style="font-size:0.75rem;color:var(--warm-gray);margin:6px 0 10px;">Add freight, customs, or supplier fees to your unit cost. Enter the extra charge and the qty it covers — we will prorate per unit and update Unit Cost above.</p>';
+    html += '<p style="font-size:0.78rem;color:var(--warm-gray);margin:6px 0 10px;">Add freight, customs, or supplier fees to your unit cost. Enter the extra charge and the qty it covers — we will prorate per unit and update Unit Cost above.</p>';
     html += '<div style="display:flex;gap:8px;align-items:flex-end;">';
-    html += '<div style="flex:1;"><label style="display:block;font-size:0.75rem;font-weight:600;margin-bottom:2px;">Extra charge ($)</label><input id="matLandedExtra" type="number" step="0.01" min="0" placeholder="e.g. 25.00" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);box-sizing:border-box;"></div>';
-    html += '<div style="flex:1;"><label style="display:block;font-size:0.75rem;font-weight:600;margin-bottom:2px;">Qty covered</label><input id="matLandedQty" type="number" step="0.01" min="0" placeholder="e.g. 100" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);box-sizing:border-box;"></div>';
+    html += '<div style="flex:1;"><label style="display:block;font-size:0.78rem;font-weight:600;margin-bottom:2px;">Extra charge ($)</label><input id="matLandedExtra" type="number" step="0.01" min="0" placeholder="e.g. 25.00" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);box-sizing:border-box;"></div>';
+    html += '<div style="flex:1;"><label style="display:block;font-size:0.78rem;font-weight:600;margin-bottom:2px;">Qty covered</label><input id="matLandedQty" type="number" step="0.01" min="0" placeholder="e.g. 100" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);box-sizing:border-box;"></div>';
     html += '<button type="button" class="btn btn-secondary btn-small" style="font-size:0.78rem;" onclick="makerApplyLandedCost()">Apply</button>';
     html += '</div>';
     html += '</div></details>';
@@ -1829,7 +1829,7 @@
 
     var html = '';
     html += '<div id="makerOnboardingBanner" style="background:rgba(42,124,111,0.08);border:1px solid var(--teal-light);border-radius:8px;padding:20px 24px;margin-bottom:20px;">';
-    html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.2rem;font-weight:500;margin:0 0 8px;color:var(--teal-deep);">Welcome to Materials</h3>';
+    html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:500;margin:0 0 8px;color:var(--teal-deep);">Welcome to Materials</h3>';
     html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin:0 0 16px;">Select your craft to pre-load categories and sample materials. You can customize everything later.</p>';
     html += '<div style="display:flex;flex-wrap:wrap;gap:8px;">';
 
@@ -1933,7 +1933,7 @@
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
     html += '<div>';
     html += '<h2 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">Pieces</h2>';
-    html += '<span style="font-size:0.82rem;color:var(--warm-gray);">' + products.length + ' products, ' + Object.keys(recipeByProduct).length + ' with recipes</span>';
+    html += '<span style="font-size:0.85rem;color:var(--warm-gray);">' + products.length + ' products, ' + Object.keys(recipeByProduct).length + ' with recipes</span>';
     html += '</div>';
     html += '<div style="display:flex;gap:8px;align-items:center;">';
 
@@ -1971,8 +1971,8 @@
 
     if (products.length === 0) {
       html += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">';
-      html += '<div style="font-size:2rem;margin-bottom:12px;">📦</div>';
-      html += '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No products yet</p>';
+      html += '<div style="font-size:1.6rem;margin-bottom:12px;">📦</div>';
+      html += '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No products yet</p>';
       html += '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Add products first, then create recipes to calculate pricing.</p>';
       html += '</div>';
       tab.innerHTML = html;
@@ -2003,8 +2003,8 @@
         var dirtyIcon = recipe.costsDirty ? ' <span title="Costs changed" style="color:#f59e0b;">⚠</span>' : '';
         html += '<td><span class="status-badge" style="' + materialStatusBadgeStyle('active') + '">has recipe</span>' + dirtyIcon + '</td>';
         html += '<td style="text-align:right;font-family:monospace;">$' + (recipe.totalCost || 0).toFixed(2) + '</td>';
-        var etsyIcon = p.etsyListingId ? (recipe.lastEtsySyncAt ? ' <span title="Synced to Etsy" style="font-size:0.75rem;">🔗</span>' : ' <span title="Etsy listing linked" style="font-size:0.75rem;opacity:0.5;">🔗</span>') : '';
-        var variantBadge = recipe.isVariantEnabled && recipe.variants ? ' <span class="status-badge" style="background:rgba(196,133,60,0.15);color:var(--amber);font-size:0.65rem;">' + Object.keys(recipe.variants).length + ' variants</span>' : '';
+        var etsyIcon = p.etsyListingId ? (recipe.lastEtsySyncAt ? ' <span title="Synced to Etsy" style="font-size:0.78rem;">🔗</span>' : ' <span title="Etsy listing linked" style="font-size:0.78rem;opacity:0.5;">🔗</span>') : '';
+        var variantBadge = recipe.isVariantEnabled && recipe.variants ? ' <span class="status-badge" style="background:rgba(196,133,60,0.15);color:var(--amber);font-size:0.72rem;">' + Object.keys(recipe.variants).length + ' variants</span>' : '';
         html += '<td><span class="status-badge pill" style="background:rgba(42,124,111,0.12);color:var(--teal);border:1px solid rgba(42,124,111,0.25);">' + esc(recipe.activePriceTier || 'none') + '</span>' + variantBadge + etsyIcon + '</td>';
         var activePrice;
         if (recipe.isVariantEnabled && recipe.variants) {
@@ -2017,7 +2017,7 @@
         html += '<button style="background:none;border:none;color:var(--teal);cursor:pointer;font-size:0.85rem;font-family:\'DM Sans\';" onclick="makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\')">Edit Recipe</button>';
         html += '</td>';
       } else {
-        html += '<td><span style="color:var(--warm-gray-light);font-size:0.82rem;">no recipe</span></td>';
+        html += '<td><span style="color:var(--warm-gray-light);font-size:0.85rem;">no recipe</span></td>';
         html += '<td style="text-align:right;">—</td>';
         html += '<td>—</td>';
         html += '<td style="text-align:right;font-family:monospace;">$' + (p.priceCents ? (p.priceCents / 100).toFixed(2) : '0.00') + '</td>';
@@ -2157,8 +2157,8 @@
     // Header
     html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">';
     html += '<div>';
-    html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.4rem;font-weight:500;margin:0;">' + esc(bs.name || 'Untitled Recipe') + '</h3>';
-    html += '<span style="font-size:0.82rem;color:var(--warm-gray);">Recipe for product ' + esc(bs.productId || '') + '</span>';
+    html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">' + esc(bs.name || 'Untitled Recipe') + '</h3>';
+    html += '<span style="font-size:0.85rem;color:var(--warm-gray);">Recipe for product ' + esc(bs.productId || '') + '</span>';
     html += '</div>';
     html += '<div style="display:flex;gap:8px;">';
     html += '<button class="btn btn-secondary btn-small" onclick="makerDuplicateCurrentRecipe()" title="Clone this recipe as a new draft">Duplicate</button>';
@@ -2184,7 +2184,7 @@
       });
       var remainingProductVariants = productVariants.filter(function(pv){ return existingVariantKeys.indexOf(pv.id) === -1; });
       if (remainingProductVariants.length > 0) {
-        html += '<select onchange="makerAddVariantTab(this.value); this.value=\'\';" style="margin-left:8px;padding:6px 10px;border:1px solid #ddd;border-radius:4px;font-size:0.82rem;background:var(--cream);color:var(--teal);font-family:\'DM Sans\';cursor:pointer;">';
+        html += '<select onchange="makerAddVariantTab(this.value); this.value=\'\';" style="margin-left:8px;padding:6px 10px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;background:var(--cream);color:var(--teal);font-family:\'DM Sans\';cursor:pointer;">';
         html += '<option value="">+ Add variant...</option>';
         remainingProductVariants.forEach(function(pv) {
           html += '<option value="' + esc(pv.id) + '">' + esc(variantDisplayName(pv)) + '</option>';
@@ -2211,7 +2211,7 @@
     // ---- PARTS SECTION ----
     html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;">';
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
-    html += '<h4 style="font-size:0.95rem;font-weight:600;margin:0;">Parts (Bill of Materials)</h4>';
+    html += '<h4 style="font-size:0.9rem;font-weight:600;margin:0;">Parts (Bill of Materials)</h4>';
     html += '<button class="btn btn-outline btn-small" onclick="makerOpenAddPartModal()">+ Add Part</button>';
     html += '</div>';
 
@@ -2241,7 +2241,7 @@
         var subBadge = '';
         if (li.kind === 'recipe') {
           var errFlag = calcLi.subAssemblyError ? ' <span title="' + esc(calcLi.subAssemblyError) + '" style="color:var(--danger);">⚠</span>' : '';
-          subBadge = ' <span class="status-badge" style="background:rgba(196,133,60,0.15);color:var(--amber);font-size:0.62rem;padding:1px 6px;margin-left:4px;">sub-assembly</span>' + errFlag;
+          subBadge = ' <span class="status-badge" style="background:rgba(196,133,60,0.15);color:var(--amber);font-size:0.72rem;padding:1px 6px;margin-left:4px;">sub-assembly</span>' + errFlag;
         }
         // Phase 2D: lock chip on materials with active locks
         var lockChip = '';
@@ -2249,14 +2249,14 @@
           var activeLock = getActiveLockForMaterial(li.materialId);
           if (activeLock) {
             var pctUsed = activeLock.qtyLocked > 0 ? Math.round((activeLock.qtyConsumed / activeLock.qtyLocked) * 100) : 0;
-            lockChip = ' <span class="status-badge" style="background:rgba(42,124,111,0.15);color:var(--teal);font-size:0.62rem;padding:1px 6px;margin-left:4px;" title="Locked at $' + activeLock.lockedUnitCost.toFixed(2) + ' from ' + esc(activeLock.supplierName || 'supplier') + ', ' + pctUsed + '% consumed">🔒 $' + activeLock.lockedUnitCost.toFixed(2) + '</span>';
+            lockChip = ' <span class="status-badge" style="background:rgba(42,124,111,0.15);color:var(--teal);font-size:0.72rem;padding:1px 6px;margin-left:4px;" title="Locked at $' + activeLock.lockedUnitCost.toFixed(2) + ' from ' + esc(activeLock.supplierName || 'supplier') + ', ' + pctUsed + '% consumed">🔒 $' + activeLock.lockedUnitCost.toFixed(2) + '</span>';
           }
         }
         html += '<tr>';
         html += '<td style="padding:8px;font-size:0.85rem;border-bottom:1px solid var(--cream-dark);">' + esc(li.materialName || '') + subBadge + lockChip + '</td>';
-        html += '<td style="text-align:right;padding:8px;border-bottom:1px solid var(--cream-dark);"><input type="number" step="0.01" min="0" value="' + (li.quantity || 0) + '" style="width:90px;text-align:right;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;font-family:monospace;background:var(--cream);color:var(--charcoal);" onchange="makerUpdateLineItemQty(\'' + esc(liId) + '\', this.value)">' + (scrapPct > 0 ? '<div style="font-size:0.7rem;color:var(--warm-gray);text-align:right;margin-top:2px;">eff: ' + effQty.toFixed(2) + '</div>' : '') + '</td>';
-        html += '<td style="text-align:right;padding:8px;border-bottom:1px solid var(--cream-dark);"><input type="number" step="1" min="0" max="200" value="' + scrapPct + '" style="width:80px;text-align:right;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;font-family:monospace;background:var(--cream);color:var(--charcoal);" onchange="makerUpdateLineItemScrap(\'' + esc(liId) + '\', this.value)"></td>';
-        html += '<td style="text-align:center;padding:8px;font-size:0.82rem;color:var(--warm-gray);border-bottom:1px solid var(--cream-dark);">' + esc(li.unitOfMeasure || '') + '</td>';
+        html += '<td style="text-align:right;padding:8px;border-bottom:1px solid var(--cream-dark);"><input type="number" step="0.01" min="0" value="' + (li.quantity || 0) + '" style="width:90px;text-align:right;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;font-family:monospace;background:var(--cream);color:var(--charcoal);" onchange="makerUpdateLineItemQty(\'' + esc(liId) + '\', this.value)">' + (scrapPct > 0 ? '<div style="font-size:0.72rem;color:var(--warm-gray);text-align:right;margin-top:2px;">eff: ' + effQty.toFixed(2) + '</div>' : '') + '</td>';
+        html += '<td style="text-align:right;padding:8px;border-bottom:1px solid var(--cream-dark);"><input type="number" step="1" min="0" max="200" value="' + scrapPct + '" style="width:80px;text-align:right;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;font-family:monospace;background:var(--cream);color:var(--charcoal);" onchange="makerUpdateLineItemScrap(\'' + esc(liId) + '\', this.value)"></td>';
+        html += '<td style="text-align:center;padding:8px;font-size:0.85rem;color:var(--warm-gray);border-bottom:1px solid var(--cream-dark);">' + esc(li.unitOfMeasure || '') + '</td>';
         html += '<td style="text-align:right;padding:8px;font-family:monospace;font-size:0.85rem;border-bottom:1px solid var(--cream-dark);">$' + (li.unitCost || 0).toFixed(2) + '</td>';
         html += '<td style="text-align:right;padding:8px;font-family:monospace;font-size:0.85rem;font-weight:600;border-bottom:1px solid var(--cream-dark);">$' + ext.toFixed(2) + '</td>';
         html += '<td style="text-align:center;padding:8px;border-bottom:1px solid var(--cream-dark);"><button style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:0.9rem;" onclick="makerRemoveLineItemUI(\'' + esc(liId) + '\')" title="Remove">✕</button></td>';
@@ -2272,21 +2272,21 @@
 
     // ---- LABOR SECTION ----
     html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;">';
-    html += '<h4 style="font-size:0.95rem;font-weight:600;margin:0 0 12px;">Labor</h4>';
+    html += '<h4 style="font-size:0.9rem;font-weight:600;margin:0 0 12px;">Labor</h4>';
     html += '<div style="display:flex;gap:12px;align-items:flex-end;">';
 
     html += '<div style="flex:1;">';
-    html += '<label style="display:block;font-size:0.82rem;font-weight:600;margin-bottom:4px;">Rate ($/hr)</label>';
+    html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Rate ($/hr)</label>';
     html += '<input type="number" step="0.01" min="0" value="' + (bs.laborRatePerHour || 0) + '" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);box-sizing:border-box;" onchange="makerUpdateBuilderField(\'laborRatePerHour\', parseFloat(this.value) || 0)">';
     html += '</div>';
 
     html += '<div style="flex:1;">';
-    html += '<label style="display:block;font-size:0.82rem;font-weight:600;margin-bottom:4px;">Time (minutes)' + (fieldMeta.laborMinutes.inherited ? ' <span style="font-weight:400;color:var(--warm-gray-light);">(inherited)</span>' : '') + '</label>';
+    html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Time (minutes)' + (fieldMeta.laborMinutes.inherited ? ' <span style="font-weight:400;color:var(--warm-gray-light);">(inherited)</span>' : '') + '</label>';
     html += '<input type="number" step="1" min="0" value="' + (activeData.laborMinutes || 0) + '" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);box-sizing:border-box;' + (fieldMeta.laborMinutes.inherited ? 'font-style:italic;opacity:0.7;' : '') + '" onchange="makerUpdateBuilderField(\'laborMinutes\', parseFloat(this.value) || 0)">';
     html += '</div>';
 
     html += '<div style="flex:1;text-align:right;">';
-    html += '<label style="display:block;font-size:0.82rem;font-weight:600;margin-bottom:4px;">Labor Cost</label>';
+    html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Labor Cost</label>';
     html += '<div style="padding:8px 10px;font-family:monospace;font-size:0.85rem;font-weight:600;">$' + calc.laborCost.toFixed(2) + '</div>';
     html += '</div>';
 
@@ -2294,16 +2294,16 @@
 
     // ---- OTHER COSTS SECTION ----
     html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;">';
-    html += '<h4 style="font-size:0.95rem;font-weight:600;margin:0 0 12px;">Other Costs</h4>';
+    html += '<h4 style="font-size:0.9rem;font-weight:600;margin:0 0 12px;">Other Costs</h4>';
     html += '<div style="display:flex;gap:12px;">';
 
     html += '<div style="flex:1;">';
-    html += '<label style="display:block;font-size:0.82rem;font-weight:600;margin-bottom:4px;">Amount ($)' + (fieldMeta.otherCost.inherited ? ' <span style="font-weight:400;color:var(--warm-gray-light);">(inherited)</span>' : '') + '</label>';
+    html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Amount ($)' + (fieldMeta.otherCost.inherited ? ' <span style="font-weight:400;color:var(--warm-gray-light);">(inherited)</span>' : '') + '</label>';
     html += '<input type="number" step="0.01" min="0" value="' + (activeData.otherCost || 0) + '" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);box-sizing:border-box;' + (fieldMeta.otherCost.inherited ? 'font-style:italic;opacity:0.7;' : '') + '" onchange="makerUpdateBuilderField(\'otherCost\', parseFloat(this.value) || 0)">';
     html += '</div>';
 
     html += '<div style="flex:2;">';
-    html += '<label style="display:block;font-size:0.82rem;font-weight:600;margin-bottom:4px;">Note</label>';
+    html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Note</label>';
     html += '<input type="text" value="' + esc(bs.otherCostNote || '') + '" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';box-sizing:border-box;" onchange="makerUpdateBuilderField(\'otherCostNote\', this.value)" placeholder="e.g. packaging, shipping supplies">';
     html += '</div>';
 
@@ -2312,15 +2312,15 @@
     // Setup cost + batch size (amortized fixed cost — kiln firing, casting tree, etc.)
     html += '<div style="display:flex;gap:12px;margin-top:12px;padding-top:12px;border-top:1px dashed var(--cream-dark);">';
     html += '<div style="flex:1;">';
-    html += '<label style="display:block;font-size:0.82rem;font-weight:600;margin-bottom:4px;">Setup Cost ($) <span style="font-weight:400;color:var(--warm-gray-light);">amortized</span></label>';
+    html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Setup Cost ($) <span style="font-weight:400;color:var(--warm-gray-light);">amortized</span></label>';
     html += '<input type="number" step="0.01" min="0" value="' + (bs.setupCost || 0) + '" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);box-sizing:border-box;" onchange="makerUpdateBuilderField(\'setupCost\', parseFloat(this.value) || 0)">';
     html += '</div>';
     html += '<div style="flex:1;">';
-    html += '<label style="display:block;font-size:0.82rem;font-weight:600;margin-bottom:4px;">Batch Size <span style="font-weight:400;color:var(--warm-gray-light);">units per setup</span></label>';
+    html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Batch Size <span style="font-weight:400;color:var(--warm-gray-light);">units per setup</span></label>';
     html += '<input type="number" step="1" min="1" value="' + (bs.batchSize || 1) + '" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);box-sizing:border-box;" onchange="makerUpdateBuilderField(\'batchSize\', Math.max(1, parseInt(this.value) || 1))">';
     html += '</div>';
     html += '<div style="flex:1;text-align:right;">';
-    html += '<label style="display:block;font-size:0.82rem;font-weight:600;margin-bottom:4px;">Per Unit</label>';
+    html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Per Unit</label>';
     html += '<div style="padding:8px 10px;font-family:monospace;font-size:0.85rem;font-weight:600;">$' + (calc.perUnitSetup || 0).toFixed(2) + '</div>';
     html += '</div>';
     html += '</div></div>';
@@ -2332,7 +2332,7 @@
     if (bs.otherCost > 0) {
       html += '<div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:6px;"><span>Other</span><span style="font-family:monospace;">$' + (bs.otherCost || 0).toFixed(2) + '</span></div>';
     }
-    html += '<div style="display:flex;justify-content:space-between;font-size:1.1rem;font-weight:700;padding-top:8px;border-top:1px solid rgba(255,255,255,0.2);"><span>Total Cost</span><span style="font-family:monospace;">$' + calc.totalCost.toFixed(2) + '</span></div>';
+    html += '<div style="display:flex;justify-content:space-between;font-size:1.15rem;font-weight:700;padding-top:8px;border-top:1px solid rgba(255,255,255,0.2);"><span>Total Cost</span><span style="font-family:monospace;">$' + calc.totalCost.toFixed(2) + '</span></div>';
     html += '</div>';
 
     // ---- PRICING TIERS (3 columns side-by-side) ----
@@ -2353,21 +2353,21 @@
 
       // Active indicator
       if (isActive) {
-        html += '<div style="position:absolute;top:-1px;right:12px;background:var(--teal);color:white;font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:0 0 4px 4px;text-transform:uppercase;letter-spacing:0.06em;">Active</div>';
+        html += '<div style="position:absolute;top:-1px;right:12px;background:var(--teal);color:white;font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:0 0 4px 4px;text-transform:uppercase;letter-spacing:0.06em;">Active</div>';
       }
 
       // Tier header
-      html += '<div style="text-align:center;font-size:0.82rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--warm-gray);margin-bottom:10px;background:' + headerBg + ';padding:4px;border-radius:4px;">' + tier.label + '</div>';
+      html += '<div style="text-align:center;font-size:0.85rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--warm-gray);margin-bottom:10px;background:' + headerBg + ';padding:4px;border-radius:4px;">' + tier.label + '</div>';
 
       // Markup input
       html += '<div style="text-align:center;margin-bottom:8px;">';
       html += '<label style="font-size:0.72rem;color:var(--warm-gray-light);display:block;margin-bottom:2px;">Markup</label>';
-      html += '<input type="number" step="0.1" min="1" value="' + (bs[tier.markupField] || 1) + '" style="width:70px;text-align:center;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;font-family:monospace;font-weight:600;background:var(--cream);color:var(--charcoal);" onchange="makerUpdateBuilderField(\'' + tier.markupField + '\', parseFloat(this.value) || 1)">';
-      html += '<span style="font-size:0.82rem;color:var(--warm-gray);margin-left:2px;">×</span>';
+      html += '<input type="number" step="0.1" min="1" value="' + (bs[tier.markupField] || 1) + '" style="width:70px;text-align:center;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;font-family:monospace;font-weight:600;background:var(--cream);color:var(--charcoal);" onchange="makerUpdateBuilderField(\'' + tier.markupField + '\', parseFloat(this.value) || 1)">';
+      html += '<span style="font-size:0.85rem;color:var(--warm-gray);margin-left:2px;">×</span>';
       html += '</div>';
 
       // Price
-      html += '<div style="text-align:center;font-size:1.3rem;font-family:monospace;font-weight:700;color:var(--charcoal);margin-bottom:4px;">$' + tier.price.toFixed(2) + '</div>';
+      html += '<div style="text-align:center;font-size:1.15rem;font-family:monospace;font-weight:700;color:var(--charcoal);margin-bottom:4px;">$' + tier.price.toFixed(2) + '</div>';
 
       // Gross profit + margin %
       var minMargin = bs.minMarginPercent;
@@ -2375,7 +2375,7 @@
       var profitColor = tier.profit > 0 ? '#16a34a' : 'var(--danger)';
       var marginColor = belowMin ? 'var(--danger)' : profitColor;
       html += '<div style="text-align:center;font-size:0.78rem;color:' + profitColor + ';">Profit: $' + tier.profit.toFixed(2) + '</div>';
-      html += '<div style="text-align:center;font-size:0.82rem;font-weight:600;color:' + marginColor + ';margin-top:2px;">Margin: ' + tier.marginPct.toFixed(1) + '%' + (belowMin ? ' ⚠' : '') + '</div>';
+      html += '<div style="text-align:center;font-size:0.85rem;font-weight:600;color:' + marginColor + ';margin-top:2px;">Margin: ' + tier.marginPct.toFixed(1) + '%' + (belowMin ? ' ⚠' : '') + '</div>';
 
       // Etsy sync indicator + Set active button
       if (isActive) {
@@ -2383,7 +2383,7 @@
         if (linkedProduct && linkedProduct.etsyListingId) {
           html += '<div style="text-align:center;margin-top:8px;font-size:0.72rem;color:var(--teal);">Etsy listing will sync</div>';
           if (bs.lastEtsySyncAt) {
-            html += '<div style="text-align:center;font-size:0.68rem;color:var(--warm-gray-light);">Last sync: ' + new Date(bs.lastEtsySyncAt).toLocaleDateString() + '</div>';
+            html += '<div style="text-align:center;font-size:0.72rem;color:var(--warm-gray-light);">Last sync: ' + new Date(bs.lastEtsySyncAt).toLocaleDateString() + '</div>';
           }
         } else if (linkedProduct) {
           html += '<div style="text-align:center;margin-top:8px;font-size:0.72rem;color:var(--warm-gray-light);">No Etsy listing</div>';
@@ -2406,7 +2406,7 @@
       var newestDate = history[history.length - 1].date ? new Date(history[history.length - 1].date).toLocaleDateString() : '';
       html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:14px 16px;margin-bottom:16px;">';
       html += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">';
-      html += '<h4 style="font-size:0.95rem;font-weight:600;margin:0;">Margin history</h4>';
+      html += '<h4 style="font-size:0.9rem;font-weight:600;margin:0;">Margin history</h4>';
       html += '<span style="font-size:0.72rem;color:var(--warm-gray);">' + history.length + ' calc' + (history.length === 1 ? '' : 's') + ' · ' + oldestDate + ' → ' + newestDate + '</span>';
       html += '</div>';
       html += spark;
@@ -2430,8 +2430,8 @@
       });
 
       html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;">';
-      html += '<h4 style="font-size:0.95rem;font-weight:600;margin:0 0 12px;">Variant Pricing Summary</h4>';
-      html += '<p style="font-size:0.75rem;color:var(--warm-gray);margin:0 0 8px;">Computed at last Save & Recalculate. Run again after edits to refresh.</p>';
+      html += '<h4 style="font-size:0.9rem;font-weight:600;margin:0 0 12px;">Variant Pricing Summary</h4>';
+      html += '<p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 8px;">Computed at last Save & Recalculate. Run again after edits to refresh.</p>';
       html += '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
       html += '<thead><tr>';
       html += '<th style="text-align:left;padding:6px 8px;font-size:0.72rem;font-weight:600;text-transform:uppercase;color:var(--warm-gray-light);border-bottom:1px solid var(--cream-dark);">Variant</th>';
@@ -2750,7 +2750,7 @@
     var last = parts[parts.length - 1].split(',');
     svg += '<circle cx="' + last[0] + '" cy="' + last[1] + '" r="2.5" fill="' + trend + '" />';
     svg += '</svg>';
-    svg += '<div style="display:flex;justify-content:space-between;font-size:0.7rem;color:var(--warm-gray);margin-top:4px;">';
+    svg += '<div style="display:flex;justify-content:space-between;font-size:0.72rem;color:var(--warm-gray);margin-top:4px;">';
     svg += '<span>min ' + minY.toFixed(1) + '%</span><span>' + activeTierKey + ' tier</span><span>max ' + maxY.toFixed(1) + '%</span>';
     svg += '</div>';
     return svg;
@@ -2822,8 +2822,8 @@
     html += '<div id="whatIfOverlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;" onclick="if(event.target.id===\'whatIfOverlay\')makerCloseWhatIf()">';
     html += '<div style="background:var(--cream);border-radius:10px;max-width:760px;width:92%;max-height:88vh;overflow-y:auto;padding:20px 24px;box-shadow:0 8px 30px rgba(0,0,0,0.2);">';
     html += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">';
-    html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.4rem;font-weight:500;margin:0;">📊 What-If Simulator</h3>';
-    html += '<button style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--warm-gray);" onclick="makerCloseWhatIf()">✕</button>';
+    html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">📊 What-If Simulator</h3>';
+    html += '<button style="background:none;border:none;font-size:1.15rem;cursor:pointer;color:var(--warm-gray);" onclick="makerCloseWhatIf()">✕</button>';
     html += '</div>';
     html += '<p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 16px;">Shift metals spot prices and see how every recipe that uses spot-linked materials would change. Zero writes — preview only.</p>';
     if (!spotPricesCurrent) {
@@ -2834,7 +2834,7 @@
         html += '<div style="flex:1;">';
         html += '<label style="display:block;font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--warm-gray);margin-bottom:4px;">' + metal.charAt(0).toUpperCase() + metal.slice(1) + ' shift %</label>';
         html += '<input id="whatIf_' + metal + '" type="number" step="1" value="0" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-family:monospace;background:var(--cream);color:var(--charcoal);box-sizing:border-box;" oninput="makerRunWhatIf()">';
-        html += '<div style="font-size:0.7rem;color:var(--warm-gray-light);margin-top:2px;">spot $' + (spotPricesCurrent[metal] || 0).toFixed(2) + '/oz</div>';
+        html += '<div style="font-size:0.72rem;color:var(--warm-gray-light);margin-top:2px;">spot $' + (spotPricesCurrent[metal] || 0).toFixed(2) + '/oz</div>';
         html += '</div>';
       });
       html += '</div>';
@@ -2861,7 +2861,7 @@
       return;
     }
     var html = '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:6px;">' + results.length + ' recipe(s) affected:</div>';
-    html += '<div class="data-table"><table style="width:100%;font-size:0.82rem;"><thead><tr>';
+    html += '<div class="data-table"><table style="width:100%;font-size:0.85rem;"><thead><tr>';
     html += '<th>Recipe</th><th style="text-align:right;">Current $</th><th style="text-align:right;">Simulated $</th><th style="text-align:right;">Δ Cost</th><th style="text-align:right;">Margin → Sim</th>';
     html += '</tr></thead><tbody>';
     results.forEach(function(r) {
@@ -2901,15 +2901,15 @@
     html += '<div id="repriceOverlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;" onclick="if(event.target.id===\'repriceOverlay\')makerCloseRepriceAll()">';
     html += '<div style="background:var(--cream);border-radius:10px;max-width:680px;width:92%;max-height:88vh;overflow-y:auto;padding:20px 24px;">';
     html += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">';
-    html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.4rem;font-weight:500;margin:0;">↻ Reprice ' + candidates.length + ' recipe' + (candidates.length === 1 ? '' : 's') + '</h3>';
-    html += '<button style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--warm-gray);" onclick="makerCloseRepriceAll()">✕</button>';
+    html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">↻ Reprice ' + candidates.length + ' recipe' + (candidates.length === 1 ? '' : 's') + '</h3>';
+    html += '<button style="background:none;border:none;font-size:1.15rem;cursor:pointer;color:var(--warm-gray);" onclick="makerCloseRepriceAll()">✕</button>';
     html += '</div>';
     html += '<p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 12px;">Drift threshold: ' + repricingThresholdPct + '%. Each reprice runs calculate_price + propagates the active tier price to the linked product + resets the drift baseline.</p>';
     if (candidates.length === 0) {
       html += '<p style="font-size:0.85rem;color:var(--warm-gray);text-align:center;padding:12px;">No recipes need repricing.</p>';
     } else {
       var esc = MastAdmin.esc;
-      html += '<div class="data-table"><table style="width:100%;font-size:0.82rem;"><thead><tr>';
+      html += '<div class="data-table"><table style="width:100%;font-size:0.85rem;"><thead><tr>';
       html += '<th>Recipe</th><th>Tier</th><th style="text-align:right;">Drift</th><th style="text-align:right;">Baseline</th><th style="text-align:right;">Now</th>';
       html += '</tr></thead><tbody>';
       candidates.forEach(function(r) {
@@ -3037,7 +3037,7 @@
     html += '<div id="addPartOverlay" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;" onclick="makerCloseAddPartModal(event)">';
     html += '<div style="background:var(--cream);border-radius:10px;max-width:480px;width:90%;max-height:70vh;overflow-y:auto;box-shadow:0 8px 30px rgba(0,0,0,0.2);padding:20px 24px;" onclick="event.stopPropagation()">';
 
-    html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.2rem;font-weight:500;margin:0 0 16px;">Add Part</h3>';
+    html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:500;margin:0 0 16px;">Add Part</h3>';
 
     // Kind toggle (Material vs Sub-assembly)
     html += '<div style="display:flex;gap:0;margin-bottom:14px;border:1px solid var(--cream-dark);border-radius:6px;overflow:hidden;">';
@@ -3045,8 +3045,8 @@
     var matFg = addPartKind === 'material' ? 'white' : 'var(--charcoal)';
     var subBg = addPartKind === 'recipe' ? 'var(--teal)' : 'var(--cream)';
     var subFg = addPartKind === 'recipe' ? 'white' : 'var(--charcoal)';
-    html += '<button style="flex:1;padding:8px 12px;border:none;background:' + matBg + ';color:' + matFg + ';font-size:0.82rem;font-weight:600;cursor:pointer;font-family:\'DM Sans\';" onclick="makerSetAddPartKind(\'material\')">Material</button>';
-    html += '<button style="flex:1;padding:8px 12px;border:none;background:' + subBg + ';color:' + subFg + ';font-size:0.82rem;font-weight:600;cursor:pointer;font-family:\'DM Sans\';" onclick="makerSetAddPartKind(\'recipe\')">Sub-assembly</button>';
+    html += '<button style="flex:1;padding:8px 12px;border:none;background:' + matBg + ';color:' + matFg + ';font-size:0.85rem;font-weight:600;cursor:pointer;font-family:\'DM Sans\';" onclick="makerSetAddPartKind(\'material\')">Material</button>';
+    html += '<button style="flex:1;padding:8px 12px;border:none;background:' + subBg + ';color:' + subFg + ';font-size:0.85rem;font-weight:600;cursor:pointer;font-family:\'DM Sans\';" onclick="makerSetAddPartKind(\'recipe\')">Sub-assembly</button>';
     html += '</div>';
 
     if (addPartKind === 'material') {
@@ -3087,7 +3087,7 @@
         html += '<input id="addPartQty" type="number" step="0.01" min="0" value="1" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;box-sizing:border-box;">';
         html += '</div>';
 
-        html += '<p style="font-size:0.75rem;color:var(--warm-gray-light);margin:0 0 12px;">Sub-assembly cost = sub-recipe total cost (no markup compounding). Max nesting depth ' + SUB_ASSEMBLY_MAX_DEPTH + '.</p>';
+        html += '<p style="font-size:0.78rem;color:var(--warm-gray-light);margin:0 0 12px;">Sub-assembly cost = sub-recipe total cost (no markup compounding). Max nesting depth ' + SUB_ASSEMBLY_MAX_DEPTH + '.</p>';
       }
     }
 
@@ -3598,14 +3598,14 @@
       validRows.length + ' valid rows ready, ' + invalidRows.length + ' will be skipped.</div>';
 
     if (invalidRows.length > 0) {
-      html += '<div style="background:rgba(220,53,69,0.08);border:1px solid rgba(220,53,69,0.2);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:0.82rem;color:var(--danger);">' +
+      html += '<div style="background:rgba(220,53,69,0.08);border:1px solid rgba(220,53,69,0.2);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:0.85rem;color:var(--danger);">' +
         invalidRows.length + ' rows missing required fields will be skipped.</div>';
     }
 
     // Preview table (first 10 valid rows)
     var previewFields = fields.filter(function(f) { return importState.mappings[f.key] !== undefined || f.required; });
     html += '<div style="overflow-x:auto;margin-bottom:16px;">';
-    html += '<table style="width:100%;border-collapse:collapse;font-size:0.82rem;">';
+    html += '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
     html += '<thead><tr>';
     previewFields.forEach(function(f) {
       html += '<th style="padding:6px 8px;text-align:left;border-bottom:2px solid var(--cream-dark);font-weight:600;font-size:0.72rem;text-transform:uppercase;">' + f.label + '</th>';
@@ -3749,8 +3749,8 @@
     if (tab) {
       tab.innerHTML =
         '<div style="text-align:center;padding:40px 20px;">' +
-          '<div style="font-size:2rem;margin-bottom:12px;">✅</div>' +
-          '<p style="font-size:1.1rem;font-weight:500;margin-bottom:8px;">Import Complete</p>' +
+          '<div style="font-size:1.6rem;margin-bottom:12px;">✅</div>' +
+          '<p style="font-size:1.15rem;font-weight:500;margin-bottom:8px;">Import Complete</p>' +
           '<p style="font-size:0.9rem;color:var(--warm-gray);">' + imported + ' ' + importState.type + ' imported, ' + skipped + ' skipped.</p>' +
           '<button class="btn btn-primary" style="margin-top:20px;" onclick="makerCloseImport()">View ' + (importState.type === 'materials' ? 'Materials' : 'Pieces') + '</button>' +
         '</div>';

@@ -449,7 +449,7 @@
     var isDark = document.body.classList.contains('dark-mode');
     var bg = isDark ? '#2a2a2a' : 'white';
     var border = isDark ? '#444' : '#ddd';
-    var textColor = isDark ? '#e0e0e0' : '#1A1A1A';
+    var textColor = isDark ? '#e0e0e0' : 'var(--charcoal)';
     var inputBg = isDark ? '#1e1e1e' : '#f9f9f9';
 
     var overlay = document.createElement('div');
@@ -458,13 +458,13 @@
     overlay.innerHTML =
       '<div style="background:' + bg + ';border-radius:12px;padding:24px;width:100%;max-width:340px;box-shadow:0 8px 32px rgba(0,0,0,0.3);">' +
         '<div style="font-weight:700;font-size:1rem;margin-bottom:4px;color:' + textColor + ';">What was this trip for?</div>' +
-        '<div style="font-size:0.8rem;color:var(--warm-gray);margin-bottom:16px;">Enter a purpose — it will be saved for future trips.</div>' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:16px;">Enter a purpose — it will be saved for future trips.</div>' +
         '<input id="otherPurposeInput" type="text" placeholder="e.g. Glass class, Repair job, Post office" ' +
           'style="width:100%;padding:10px 12px;border:1px solid ' + border + ';border-radius:8px;font-size:0.9rem;' +
           'background:' + inputBg + ';color:' + textColor + ';box-sizing:border-box;font-family:DM Sans,sans-serif;" />' +
         '<div style="display:flex;gap:10px;margin-top:16px;">' +
           '<button onclick="cancelOtherPurpose()" style="flex:1;padding:10px;border:1px solid ' + border + ';border-radius:8px;background:transparent;color:' + textColor + ';cursor:pointer;font-family:DM Sans,sans-serif;font-size:0.85rem;">Cancel</button>' +
-          '<button onclick="confirmOtherPurpose()" style="flex:1;padding:10px;border:none;border-radius:8px;background:var(--amber-glow,#C4853C);color:white;cursor:pointer;font-weight:600;font-family:DM Sans,sans-serif;font-size:0.85rem;">Save</button>' +
+          '<button onclick="confirmOtherPurpose()" style="flex:1;padding:10px;border:none;border-radius:8px;background:var(--amber-glow,var(--amber));color:white;cursor:pointer;font-weight:600;font-family:DM Sans,sans-serif;font-size:0.85rem;">Save</button>' +
         '</div>' +
       '</div>';
     document.body.appendChild(overlay);
@@ -935,8 +935,8 @@
 
     if (completed.length === 0) {
       container.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">' +
-        '<div style="font-size:2rem;margin-bottom:12px;">🚗</div>' +
-        '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No trips yet</p>' +
+        '<div style="font-size:1.6rem;margin-bottom:12px;">🚗</div>' +
+        '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No trips yet</p>' +
         '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Start your first business trip to begin tracking mileage.</p>' +
       '</div>';
       return;
@@ -947,16 +947,16 @@
     completed.forEach(function(t) { totalMiles += (t.miles || 0); totalDeductible += (t.deductibleValue || 0); });
 
     var html = '<div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap;">' +
-      '<div class="trip-stat-card" style="background:var(--cream,#FAF6F0);border-radius:8px;padding:12px 18px;flex:1;min-width:120px;text-align:center;">' +
-        '<div class="trip-stat-value" style="font-size:1.5rem;font-weight:700;color:var(--charcoal);">' + completed.length + '</div>' +
+      '<div class="trip-stat-card" style="background:var(--cream,var(--cream));border-radius:8px;padding:12px 18px;flex:1;min-width:120px;text-align:center;">' +
+        '<div class="trip-stat-value" style="font-size:1.6rem;font-weight:700;color:var(--charcoal);">' + completed.length + '</div>' +
         '<div class="trip-stat-label" style="font-size:0.78rem;color:var(--warm-gray);">Trips</div>' +
       '</div>' +
-      '<div class="trip-stat-card" style="background:var(--cream,#FAF6F0);border-radius:8px;padding:12px 18px;flex:1;min-width:120px;text-align:center;">' +
-        '<div class="trip-stat-value" style="font-size:1.5rem;font-weight:700;color:var(--charcoal);">' + totalMiles.toFixed(1) + '</div>' +
+      '<div class="trip-stat-card" style="background:var(--cream,var(--cream));border-radius:8px;padding:12px 18px;flex:1;min-width:120px;text-align:center;">' +
+        '<div class="trip-stat-value" style="font-size:1.6rem;font-weight:700;color:var(--charcoal);">' + totalMiles.toFixed(1) + '</div>' +
         '<div class="trip-stat-label" style="font-size:0.78rem;color:var(--warm-gray);">Miles</div>' +
       '</div>' +
-      '<div class="trip-stat-card" style="background:var(--cream,#FAF6F0);border-radius:8px;padding:12px 18px;flex:1;min-width:120px;text-align:center;">' +
-        '<div class="trip-stat-value" style="font-size:1.5rem;font-weight:700;color:var(--charcoal);">$' + totalDeductible.toFixed(2) + '</div>' +
+      '<div class="trip-stat-card" style="background:var(--cream,var(--cream));border-radius:8px;padding:12px 18px;flex:1;min-width:120px;text-align:center;">' +
+        '<div class="trip-stat-value" style="font-size:1.6rem;font-weight:700;color:var(--charcoal);">$' + totalDeductible.toFixed(2) + '</div>' +
         '<div class="trip-stat-label" style="font-size:0.78rem;color:var(--warm-gray);">Deductible</div>' +
       '</div>' +
     '</div>';
@@ -974,11 +974,11 @@
         '<div style="display:flex;justify-content:space-between;align-items:center;">' +
           '<div>' +
             '<span class="trip-dest" style="font-weight:600;font-size:0.9rem;">' + purposeIcon + ' ' + esc(dest) + '</span>' +
-            '<div style="font-size:0.8rem;color:var(--warm-gray);">' + dateStr + driverNote + '</div>' +
+            '<div style="font-size:0.78rem;color:var(--warm-gray);">' + dateStr + driverNote + '</div>' +
           '</div>' +
           '<div style="text-align:right;">' +
             '<div class="trip-miles" style="font-weight:600;">' + (t.miles || 0).toFixed(1) + ' mi</div>' +
-            '<div class="trip-deductible" style="font-size:0.8rem;color:#059669;">$' + (t.deductibleValue || 0).toFixed(2) + '</div>' +
+            '<div class="trip-deductible" style="font-size:0.78rem;color:#059669;">$' + (t.deductibleValue || 0).toFixed(2) + '</div>' +
           '</div>' +
         '</div>' +
         '<div class="trip-detail" id="tripDetail_' + t.id + '" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid #eee;font-size:0.85rem;color:var(--warm-gray);">' +
@@ -1062,28 +1062,28 @@
       html += '<option value="' + y + '"' + (y === currentYear ? ' selected' : '') + '>' + y + '</option>';
     }
     html += '</select>' +
-        '<button class="btn btn-secondary" style="font-size:0.82rem;" onclick="exportTripsCSV()">📄 Export CSV</button>' +
-        '<button class="btn btn-secondary" style="font-size:0.82rem;" onclick="printTaxReport()">🖨️ Print Report</button>' +
+        '<button class="btn btn-secondary" style="font-size:0.85rem;" onclick="exportTripsCSV()">📄 Export CSV</button>' +
+        '<button class="btn btn-secondary" style="font-size:0.85rem;" onclick="printTaxReport()">🖨️ Print Report</button>' +
       '</div>' +
     '</div>';
 
     // Summary cards
     html += '<div style="display:flex;gap:16px;margin-bottom:24px;flex-wrap:wrap;">' +
-      '<div class="trip-stat-card" style="background:var(--cream,#FAF6F0);border-radius:8px;padding:16px 20px;flex:1;min-width:140px;">' +
+      '<div class="trip-stat-card" style="background:var(--cream,var(--cream));border-radius:8px;padding:16px 20px;flex:1;min-width:140px;">' +
         '<div class="trip-stat-label" style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Total Trips</div>' +
-        '<div class="trip-stat-value" style="font-size:1.8rem;font-weight:700;margin-top:4px;">' + completed.length + '</div>' +
+        '<div class="trip-stat-value" style="font-size:1.6rem;font-weight:700;margin-top:4px;">' + completed.length + '</div>' +
       '</div>' +
-      '<div class="trip-stat-card" style="background:var(--cream,#FAF6F0);border-radius:8px;padding:16px 20px;flex:1;min-width:140px;">' +
+      '<div class="trip-stat-card" style="background:var(--cream,var(--cream));border-radius:8px;padding:16px 20px;flex:1;min-width:140px;">' +
         '<div class="trip-stat-label" style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Total Miles</div>' +
-        '<div class="trip-stat-value" style="font-size:1.8rem;font-weight:700;margin-top:4px;">' + totalMiles.toFixed(1) + '</div>' +
+        '<div class="trip-stat-value" style="font-size:1.6rem;font-weight:700;margin-top:4px;">' + totalMiles.toFixed(1) + '</div>' +
       '</div>' +
-      '<div class="trip-stat-card" style="background:var(--cream,#FAF6F0);border-radius:8px;padding:16px 20px;flex:1;min-width:140px;">' +
+      '<div class="trip-stat-card" style="background:var(--cream,var(--cream));border-radius:8px;padding:16px 20px;flex:1;min-width:140px;">' +
         '<div class="trip-stat-label" style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">IRS Rate</div>' +
-        '<div class="trip-stat-value" style="font-size:1.8rem;font-weight:700;margin-top:4px;">' + rate + '¢</div>' +
+        '<div class="trip-stat-value" style="font-size:1.6rem;font-weight:700;margin-top:4px;">' + rate + '¢</div>' +
       '</div>' +
       '<div class="trip-stat-card trip-stat-highlight" style="background:#ecfdf5;border-radius:8px;padding:16px 20px;flex:1;min-width:140px;">' +
         '<div class="trip-stat-label" style="font-size:0.78rem;color:#059669;text-transform:uppercase;letter-spacing:0.5px;">Total Deductible</div>' +
-        '<div class="trip-stat-value" style="font-size:1.8rem;font-weight:700;margin-top:4px;color:#059669;">$' + totalDeductible.toFixed(2) + '</div>' +
+        '<div class="trip-stat-value" style="font-size:1.6rem;font-weight:700;margin-top:4px;color:#059669;">$' + totalDeductible.toFixed(2) + '</div>' +
       '</div>' +
     '</div>';
 
@@ -1163,10 +1163,10 @@
     }
     var html = '';
     years.forEach(function(y) {
-      html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--cream,#FAF6F0);border-radius:6px;margin-bottom:6px;">' +
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--cream,var(--cream));border-radius:6px;margin-bottom:6px;">' +
         '<span style="font-weight:600;">' + y + '</span>' +
         '<span>' + rates[y] + '¢/mile</span>' +
-        '<button class="btn btn-secondary" style="font-size:0.75rem;padding:4px 10px;color:#E53935;" onclick="removeIrsRate(\'' + y + '\')">Remove</button>' +
+        '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 10px;color:#E53935;" onclick="removeIrsRate(\'' + y + '\')">Remove</button>' +
       '</div>';
     });
     container.innerHTML = html;
@@ -1214,12 +1214,12 @@
     var html = '';
     keys.forEach(function(k) {
       var loc = tripLocationsData[k];
-      html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--cream,#FAF6F0);border-radius:6px;margin-bottom:6px;">' +
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--cream,var(--cream));border-radius:6px;margin-bottom:6px;">' +
         '<div>' +
           '<div style="font-weight:600;font-size:0.9rem;">' + esc(loc.label || k) + '</div>' +
           '<div style="font-size:0.78rem;color:var(--warm-gray);">Used ' + (loc.useCount || 0) + ' times</div>' +
         '</div>' +
-        '<button class="btn btn-secondary" style="font-size:0.75rem;padding:4px 10px;color:#E53935;" onclick="removeTripLocation(\'' + k + '\')">Remove</button>' +
+        '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 10px;color:#E53935;" onclick="removeTripLocation(\'' + k + '\')">Remove</button>' +
       '</div>';
     });
     container.innerHTML = html;
@@ -1397,8 +1397,8 @@
     var bg = isDark ? '#1e1e1e' : 'white';
     var cardBg = isDark ? '#2a2a2a' : '#f9f9f9';
     var border = isDark ? '#444' : '#ddd';
-    var textColor = isDark ? '#e0e0e0' : '#1A1A1A';
-    var inputBg = isDark ? '#1a1a1a' : '#fff';
+    var textColor = isDark ? '#e0e0e0' : 'var(--charcoal)';
+    var inputBg = isDark ? 'var(--charcoal)' : '#fff';
 
     var isEventBased = !!retroModalData.showId;
     var title = isEventBased ? 'Record Mileage — ' + esc(retroModalData.showName) : 'Add Past Trip';
@@ -1412,10 +1412,10 @@
       '<div style="background:' + bg + ';border-radius:12px;padding:24px;width:100%;max-width:420px;' +
         'box-shadow:0 8px 32px rgba(0,0,0,0.3);margin-top:40px;color:' + textColor + ';">' +
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">' +
-          '<div style="font-weight:700;font-size:1.05rem;">' + title + '</div>' +
-          '<button onclick="closeRetroTripModal()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:' + textColor + ';">✕</button>' +
+          '<div style="font-weight:700;font-size:1.0rem;">' + title + '</div>' +
+          '<button onclick="closeRetroTripModal()" style="background:none;border:none;font-size:1.15rem;cursor:pointer;color:' + textColor + ';">✕</button>' +
         '</div>' +
-        (dateHint ? '<div style="font-size:0.8rem;color:var(--warm-gray);margin-bottom:16px;">' + dateHint + '</div>' : '<div style="margin-bottom:16px;"></div>') +
+        (dateHint ? '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:16px;">' + dateHint + '</div>' : '<div style="margin-bottom:16px;"></div>') +
 
         // Logged legs summary
         '<div id="retroLegsSummary" style="display:none;margin-bottom:16px;"></div>' +
@@ -1424,14 +1424,14 @@
         '<div id="retroLegForm">' +
           // Trip date (manual only, event-based pre-fills)
           (!isEventBased ? '<div style="margin-bottom:12px;">' +
-            '<label style="font-size:0.8rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Trip Date</label>' +
+            '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Trip Date</label>' +
             '<input type="date" id="retroTripDate" style="width:100%;padding:8px 10px;border:1px solid ' + border + ';border-radius:8px;font-size:0.9rem;' +
               'background:' + inputBg + ';color:' + textColor + ';box-sizing:border-box;font-family:DM Sans,sans-serif;" value="' + new Date().toISOString().slice(0, 10) + '">' +
           '</div>' : '') +
 
           // Start location
           '<div style="margin-bottom:12px;">' +
-            '<label style="font-size:0.8rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Start Location</label>' +
+            '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Start Location</label>' +
             '<select id="retroOrigin" style="width:100%;padding:8px 10px;border:1px solid ' + border + ';border-radius:8px;font-size:0.9rem;' +
               'background:' + inputBg + ';color:' + textColor + ';box-sizing:border-box;font-family:DM Sans,sans-serif;">' +
               buildRetroOriginOptions() +
@@ -1440,7 +1440,7 @@
 
           // End location
           '<div style="margin-bottom:12px;">' +
-            '<label style="font-size:0.8rem;color:var(--warm-gray);display:block;margin-bottom:4px;">End Location</label>' +
+            '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:4px;">End Location</label>' +
             (isEventBased && retroModalData.legs.length === 0
               ? '<input type="text" id="retroDestination" value="' + esc(retroModalData.showLocation || '') + '" style="width:100%;padding:8px 10px;border:1px solid ' + border + ';border-radius:8px;font-size:0.9rem;' +
                 'background:' + inputBg + ';color:' + textColor + ';box-sizing:border-box;font-family:DM Sans,sans-serif;" list="retroDestList">'
@@ -1451,7 +1451,7 @@
 
           // Purpose
           '<div style="margin-bottom:12px;">' +
-            '<label style="font-size:0.8rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Purpose</label>' +
+            '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Purpose</label>' +
             '<input type="text" id="retroPurpose" value="' + esc(isEventBased && retroModalData.legs.length === 0 ? retroModalData.showName || '' : '') + '" ' +
               'placeholder="e.g. Show, Supplies, Delivery" style="width:100%;padding:8px 10px;border:1px solid ' + border + ';border-radius:8px;font-size:0.9rem;' +
               'background:' + inputBg + ';color:' + textColor + ';box-sizing:border-box;font-family:DM Sans,sans-serif;">' +
@@ -1473,7 +1473,7 @@
           // Actions
           '<div style="display:flex;gap:10px;">' +
             '<button onclick="closeRetroTripModal()" style="flex:1;padding:10px;border:1px solid ' + border + ';border-radius:8px;background:transparent;color:' + textColor + ';cursor:pointer;font-family:DM Sans,sans-serif;font-size:0.85rem;">Cancel</button>' +
-            '<button id="retroSaveLegBtn" onclick="saveRetroactiveLeg()" style="flex:1;padding:10px;border:none;border-radius:8px;background:var(--amber-glow,#C4853C);color:white;cursor:pointer;font-weight:600;font-family:DM Sans,sans-serif;font-size:0.85rem;">Calculate & Save Leg</button>' +
+            '<button id="retroSaveLegBtn" onclick="saveRetroactiveLeg()" style="flex:1;padding:10px;border:none;border-radius:8px;background:var(--amber-glow,var(--amber));color:white;cursor:pointer;font-weight:600;font-family:DM Sans,sans-serif;font-size:0.85rem;">Calculate & Save Leg</button>' +
           '</div>' +
         '</div>' +
       '</div>';
@@ -1545,10 +1545,10 @@
     }
     container.style.display = '';
     var isDark = document.body.classList.contains('dark-mode');
-    var html = '<div style="font-size:0.8rem;font-weight:600;margin-bottom:6px;color:var(--warm-gray);">Legs recorded:</div>';
+    var html = '<div style="font-size:0.78rem;font-weight:600;margin-bottom:6px;color:var(--warm-gray);">Legs recorded:</div>';
     retroModalData.legs.forEach(function(leg) {
       html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;' +
-        'background:' + (isDark ? '#1a2e1a' : '#f0fdf4') + ';border-radius:6px;margin-bottom:4px;font-size:0.82rem;">' +
+        'background:' + (isDark ? '#1a2e1a' : '#f0fdf4') + ';border-radius:6px;margin-bottom:4px;font-size:0.85rem;">' +
         '<span>' + esc(leg.origin.label) + ' → ' + esc(leg.destination.label) +
           (leg.roundTrip ? ' (round trip)' : '') + '</span>' +
         '<span style="font-weight:600;">' + leg.miles.toFixed(1) + ' mi</span>' +
@@ -1661,15 +1661,15 @@
 
     var isDark = document.body.classList.contains('dark-mode');
     var border = isDark ? '#444' : '#ddd';
-    var textColor = isDark ? '#e0e0e0' : '#1A1A1A';
+    var textColor = isDark ? '#e0e0e0' : 'var(--charcoal)';
 
     renderRetroLegsSummary();
 
     formEl.innerHTML =
       '<div style="text-align:center;padding:20px 0;">' +
-        '<div style="font-size:1.1rem;margin-bottom:16px;">Any other destinations on this trip?</div>' +
+        '<div style="font-size:1.15rem;margin-bottom:16px;">Any other destinations on this trip?</div>' +
         '<div style="display:flex;gap:10px;justify-content:center;">' +
-          '<button onclick="addAnotherLeg()" style="padding:10px 24px;border:none;border-radius:8px;background:var(--amber-glow,#C4853C);color:white;cursor:pointer;font-weight:600;font-family:DM Sans,sans-serif;font-size:0.9rem;">Yes, add another</button>' +
+          '<button onclick="addAnotherLeg()" style="padding:10px 24px;border:none;border-radius:8px;background:var(--amber-glow,var(--amber));color:white;cursor:pointer;font-weight:600;font-family:DM Sans,sans-serif;font-size:0.9rem;">Yes, add another</button>' +
           '<button onclick="finishRetroactiveTrip()" style="padding:10px 24px;border:1px solid ' + border + ';border-radius:8px;background:transparent;color:' + textColor + ';cursor:pointer;font-family:DM Sans,sans-serif;font-size:0.9rem;">No, I\'m done</button>' +
         '</div>' +
       '</div>';
@@ -1818,7 +1818,7 @@
     var isDark = document.body.classList.contains('dark-mode');
     var bg = isDark ? '#1e1e1e' : 'white';
     var border = isDark ? '#444' : '#ddd';
-    var textColor = isDark ? '#e0e0e0' : '#1A1A1A';
+    var textColor = isDark ? '#e0e0e0' : 'var(--charcoal)';
 
     var existing = document.getElementById('prevTripsModal');
     if (existing) existing.remove();
@@ -1830,10 +1830,10 @@
     overlay.innerHTML =
       '<div style="background:' + bg + ';border-radius:12px;padding:24px;width:100%;max-width:420px;box-shadow:0 8px 32px rgba(0,0,0,0.3);margin-top:40px;color:' + textColor + ';">' +
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
-          '<div style="font-weight:700;font-size:1.05rem;">Previous Trips</div>' +
-          '<button onclick="closePrevTripsModal()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:' + textColor + ';">✕</button>' +
+          '<div style="font-weight:700;font-size:1.0rem;">Previous Trips</div>' +
+          '<button onclick="closePrevTripsModal()" style="background:none;border:none;font-size:1.15rem;cursor:pointer;color:' + textColor + ';">✕</button>' +
         '</div>' +
-        '<div style="font-size:0.82rem;color:var(--warm-gray);margin-bottom:12px;">Past shows with no mileage recorded:</div>' +
+        '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">Past shows with no mileage recorded:</div>' +
         '<div id="prevTripsListContent" style="color:' + textColor + ';">Loading...</div>' +
         '<div style="margin-top:16px;padding-top:12px;border-top:1px solid ' + border + ';">' +
           '<button onclick="closePrevTripsModal(); startRetroactiveManual();" style="width:100%;padding:10px;border:1px solid ' + border + ';border-radius:8px;background:transparent;color:' + textColor + ';cursor:pointer;font-family:DM Sans,sans-serif;font-size:0.85rem;">+ Add Past Trip Manually</button>' +
@@ -1912,7 +1912,7 @@
         'padding:12px;border-radius:8px;margin-bottom:8px;cursor:pointer;' +
         'background:' + (isDark ? '#2a2a2a' : '#f9f9f9') + ';border:1px solid ' + (isDark ? '#444' : '#eee') + ';">' +
         '<div style="font-weight:600;font-size:0.9rem;">' + esc(s.name || 'Unnamed show') + '</div>' +
-        '<div style="font-size:0.8rem;color:var(--warm-gray);margin-top:2px;">' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">' +
           formatShowDate(s.startDate) + (location ? ' · ' + esc(location) : '') +
         '</div>' +
       '</div>';

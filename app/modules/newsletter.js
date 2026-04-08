@@ -103,8 +103,8 @@
 
     if (nlIssues.length === 0) {
       html += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">' +
-        '<div style="font-size:2rem;margin-bottom:12px;">📰</div>' +
-        '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No newsletter issues yet</p>' +
+        '<div style="font-size:1.6rem;margin-bottom:12px;">📰</div>' +
+        '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No newsletter issues yet</p>' +
         '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Create your first issue to start composing.</p></div>';
     } else {
       nlIssues.forEach(function(issue) {
@@ -288,7 +288,7 @@
             } else {
               html += '<div style="padding:16px;text-align:center;color:var(--warm-gray);">No coupon selected</div>';
             }
-            html += '<div style="margin-top:8px;"><button class="btn btn-outline" style="font-size:0.8rem;" onclick="nlPickCouponForSection(\'' + sec.id + '\')">' +
+            html += '<div style="margin-top:8px;"><button class="btn btn-outline" style="font-size:0.78rem;" onclick="nlPickCouponForSection(\'' + sec.id + '\')">' +
               (sec.couponCode ? 'Change Coupon' : 'Select Coupon') + '</button></div>';
             html += '</div></div>';
             return; // skip rest of section rendering in forEach
@@ -303,21 +303,21 @@
           } else if (sec.finalContent) {
             var charLimitList = NL_CHAR_LIMITS[sec.cardSize || 'medium'];
             html += nlContentEditableHtml('nlListFinal', sec.id, 'finalContent', sec.finalContent, charLimitList);
-            html += '<div style="margin-top:8px;"><button class="btn btn-outline" style="font-size:0.8rem;" onclick="nlResetSection(\'' + sec.id + '\')">Reset to Draft</button></div>';
+            html += '<div style="margin-top:8px;"><button class="btn btn-outline" style="font-size:0.78rem;" onclick="nlResetSection(\'' + sec.id + '\')">Reset to Draft</button></div>';
           } else {
             var charLimitList = NL_CHAR_LIMITS[sec.cardSize || 'medium'];
             html += nlContentEditableHtml('nlListRaw', sec.id, 'rawInput', sec.rawInput || '', charLimitList);
             var hasContent = !!(sec.rawInput && nlStripTags(sec.rawInput).trim());
             html += '<div style="margin-top:8px;display:flex;gap:8px;align-items:center;">' +
-              '<button class="btn btn-outline" style="font-size:0.8rem;" ' + (hasContent ? '' : 'disabled') + ' onclick="nlPolishSection(\'' + sec.id + '\')">✨ Polish with AI</button>';
-            if (hasContent) html += '<button class="btn btn-outline" style="font-size:0.8rem;" onclick="nlUseAsIs(\'' + sec.id + '\')">Use as-is</button>';
+              '<button class="btn btn-outline" style="font-size:0.78rem;" ' + (hasContent ? '' : 'disabled') + ' onclick="nlPolishSection(\'' + sec.id + '\')">✨ Polish with AI</button>';
+            if (hasContent) html += '<button class="btn btn-outline" style="font-size:0.78rem;" onclick="nlUseAsIs(\'' + sec.id + '\')">Use as-is</button>';
             html += '</div>';
           }
           var images = sec.images || [];
           html += '<div class="nl-section-images">';
           images.forEach(function(imgId, idx) {
             var img = imageLibrary ? imageLibrary[imgId] : null;
-            if (img) html += '<div style="position:relative;"><img class="nl-section-img-thumb" src="' + esc(img.url) + '" alt="" /><span style="position:absolute;top:-4px;right:-4px;cursor:pointer;background:var(--danger);color:#fff;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;font-size:0.6rem;" onclick="nlRemoveImage(\'' + sec.id + '\',' + idx + ')">×</span></div>';
+            if (img) html += '<div style="position:relative;"><img class="nl-section-img-thumb" src="' + esc(img.url) + '" alt="" /><span style="position:absolute;top:-4px;right:-4px;cursor:pointer;background:var(--danger);color:#fff;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;font-size:0.72rem;" onclick="nlRemoveImage(\'' + sec.id + '\',' + idx + ')">×</span></div>';
           });
           if (images.length < 3) html += '<div class="nl-section-img-add" onclick="nlOpenImagePicker(\'' + sec.id + '\')">+</div>';
           html += '</div></div>';
@@ -550,7 +550,7 @@
     var counter = document.getElementById('nlCharCounter_' + elId);
     if (counter) {
       counter.textContent = textLen + '/' + charLimit;
-      counter.style.color = textLen >= charLimit ? '#dc3545' : textLen >= charLimit * 0.8 ? 'var(--amber)' : 'var(--text-secondary)';
+      counter.style.color = textLen >= charLimit ? 'var(--danger)' : textLen >= charLimit * 0.8 ? 'var(--amber)' : 'var(--text-secondary)';
     }
     nlUpdateToolbarState(elId);
     clearTimeout(_nlSaveTimer);
@@ -724,19 +724,19 @@
 
     var html = '<div style="display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--border);">' +
       '<div style="display:flex;align-items:center;gap:8px;flex:1;">' +
-      '<span style="font-size:1.2rem;">' + nlGetTypeIcon(sec.type) + '</span>' +
+      '<span style="font-size:1.15rem;">' + nlGetTypeIcon(sec.type) + '</span>' +
       '<input type="text" value="' + (sec.title || '').replace(/"/g, '&quot;') + '"' +
-      ' style="border:none;background:transparent;font-size:1.1rem;font-weight:600;color:var(--text);flex:1;padding:4px 0;"' +
+      ' style="border:none;background:transparent;font-size:1.15rem;font-weight:600;color:var(--text);flex:1;padding:4px 0;"' +
       ' onchange="nlUpdateSectionTitle(\'' + secId + '\', this.value)" />' +
       '</div>' +
       '<button style="background:none;border:none;font-size:0.85rem;cursor:pointer;color:var(--danger);padding:4px 8px;opacity:0.6;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.6" onclick="nlDeleteSection(\'' + secId + '\');nlEditingCardId=null;document.getElementById(\'modalOverlay\').classList.remove(\'open\');document.getElementById(\'modalContent\').innerHTML=\'\'" title="Delete section">🗑</button>' +
-      '<button style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--text-secondary);padding:4px 8px;" onclick="nlCloseCardEditor(\'' + secId + '\')">×</button></div>';
+      '<button style="background:none;border:none;font-size:1.15rem;cursor:pointer;color:var(--text-secondary);padding:4px 8px;" onclick="nlCloseCardEditor(\'' + secId + '\')">×</button></div>';
 
     html += '<div style="padding:16px 24px;">';
 
     // Card size selector
     html += '<div style="display:flex;gap:6px;margin-bottom:16px;align-items:center;flex-wrap:wrap;">' +
-      '<span style="font-size:0.8rem;color:var(--text-secondary);margin-right:4px;">Size:</span>';
+      '<span style="font-size:0.78rem;color:var(--text-secondary);margin-right:4px;">Size:</span>';
     ['small', 'medium', 'large', 'full'].forEach(function(size) {
       var isActive = (sec.cardSize || 'medium') === size;
       html += '<button class="nl-editor-size-btn ' + (isActive ? 'active' : '') + '"' +
@@ -762,7 +762,7 @@
       } else {
         html += '<div style="padding:16px;text-align:center;color:var(--warm-gray);">No coupon selected</div>';
       }
-      html += '<div style="margin-top:8px;"><button class="btn btn-outline" style="font-size:0.8rem;" onclick="nlPickCouponForSection(\'' + secId + '\')">' +
+      html += '<div style="margin-top:8px;"><button class="btn btn-outline" style="font-size:0.78rem;" onclick="nlPickCouponForSection(\'' + secId + '\')">' +
         (sec.couponCode ? 'Change Coupon' : 'Select Coupon') + '</button></div>';
     } else if (aiResult && !sec.finalContent) {
       html += '<div class="nl-ai-compare">' +
@@ -773,25 +773,25 @@
         '<button class="btn btn-primary" onclick="nlPickVersion(\'' + secId + '\',\'ai\'); setTimeout(function(){nlOpenCardEditor(\'' + secId + '\')},100);">Use AI Version</button></div>';
     } else if (sec.finalContent) {
       html += nlContentEditableHtml('nlModalFinal', secId, 'finalContent', sec.finalContent, charLimit);
-      html += '<div style="margin-top:8px;"><button class="btn btn-outline" style="font-size:0.8rem;" onclick="nlResetSection(\'' + secId + '\'); setTimeout(function(){nlOpenCardEditor(\'' + secId + '\')},100);">Reset to Draft</button></div>';
+      html += '<div style="margin-top:8px;"><button class="btn btn-outline" style="font-size:0.78rem;" onclick="nlResetSection(\'' + secId + '\'); setTimeout(function(){nlOpenCardEditor(\'' + secId + '\')},100);">Reset to Draft</button></div>';
     } else {
       html += nlContentEditableHtml('nlModalRaw', secId, 'rawInput', sec.rawInput || '', charLimit);
       var hasContent = !!(sec.rawInput && nlStripTags(sec.rawInput).trim());
       html += '<div style="margin-top:8px;display:flex;gap:8px;">' +
-        '<button class="btn btn-outline" style="font-size:0.8rem;" ' + (hasContent ? '' : 'disabled') +
+        '<button class="btn btn-outline" style="font-size:0.78rem;" ' + (hasContent ? '' : 'disabled') +
         ' onclick="nlPolishSection(\'' + secId + '\')">✨ Polish with AI</button>';
-      if (hasContent) html += '<button class="btn btn-outline" style="font-size:0.8rem;" onclick="nlUseAsIs(\'' + secId + '\'); setTimeout(function(){nlOpenCardEditor(\'' + secId + '\')},100);">Use as-is</button>';
+      if (hasContent) html += '<button class="btn btn-outline" style="font-size:0.78rem;" onclick="nlUseAsIs(\'' + secId + '\'); setTimeout(function(){nlOpenCardEditor(\'' + secId + '\')},100);">Use as-is</button>';
       html += '</div>';
     }
 
     // Images
     var images = sec.images || [];
-    html += '<div style="margin-top:16px;"><div style="font-size:0.8rem;font-weight:600;margin-bottom:8px;">Images (max 3)</div>';
+    html += '<div style="margin-top:16px;"><div style="font-size:0.78rem;font-weight:600;margin-bottom:8px;">Images (max 3)</div>';
     html += '<div class="nl-section-images">';
     images.forEach(function(imgId, idx) {
       var img = imageLibrary ? imageLibrary[imgId] : null;
       if (img) html += '<div style="position:relative;"><img class="nl-section-img-thumb" src="' + img.url + '" alt="" />' +
-        '<span style="position:absolute;top:-4px;right:-4px;cursor:pointer;background:var(--danger);color:#fff;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;font-size:0.6rem;" onclick="nlRemoveImage(\'' + secId + '\',' + idx + '); setTimeout(function(){nlOpenCardEditor(\'' + secId + '\')},100);">×</span></div>';
+        '<span style="position:absolute;top:-4px;right:-4px;cursor:pointer;background:var(--danger);color:#fff;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;font-size:0.72rem;" onclick="nlRemoveImage(\'' + secId + '\',' + idx + '); setTimeout(function(){nlOpenCardEditor(\'' + secId + '\')},100);">×</span></div>';
     });
     if (images.length < 3) html += '<div class="nl-section-img-add" onclick="closeModal(); nlOpenImagePicker(\'' + secId + '\')">+</div>';
     html += '</div></div>';
@@ -809,7 +809,7 @@
     if (!counter) return;
     var count = val.length;
     counter.textContent = count + '/' + limit;
-    counter.style.color = count >= limit ? '#dc3545' : count >= limit * 0.8 ? 'var(--amber)' : 'var(--text-secondary)';
+    counter.style.color = count >= limit ? 'var(--danger)' : count >= limit * 0.8 ? 'var(--amber)' : 'var(--text-secondary)';
   }
 
   function nlCloseCardEditor(secId) {
@@ -1171,7 +1171,7 @@
       '<div class="nl-img-picker" onclick="event.stopPropagation()">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;">' +
       '<h3 style="margin:0;">Select Image</h3>' +
-      '<button class="btn btn-outline" onclick="nlCloseImagePicker()" style="font-size:0.8rem;">Close</button></div>' +
+      '<button class="btn btn-outline" onclick="nlCloseImagePicker()" style="font-size:0.78rem;">Close</button></div>' +
       '<div class="nl-img-picker-grid">';
     images.forEach(function(img) {
       var isSelected = currentImages.indexOf(img.id || img.imageId) !== -1;
@@ -1428,8 +1428,8 @@
 
     if (filtered.length === 0) {
       html += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">' +
-        '<div style="font-size:2rem;margin-bottom:12px;">📬</div>' +
-        '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No subscribers yet</p>' +
+        '<div style="font-size:1.6rem;margin-bottom:12px;">📬</div>' +
+        '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No subscribers yet</p>' +
         '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Add subscribers manually or share the sign-up form on your website.</p></div>';
     } else {
       html += '<table class="nl-sub-table"><thead><tr>' +
@@ -1447,7 +1447,7 @@
           '<td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + nlEscHtml(sub.notes || '') + '</td>' +
           '<td>';
         if (sub.status === 'active') {
-          html += '<button class="btn btn-outline" style="font-size:0.7rem;padding:2px 6px;" onclick="nlUnsubscribe(\'' + sub.id + '\')">Remove</button>';
+          html += '<button class="btn btn-outline" style="font-size:0.72rem;padding:2px 6px;" onclick="nlUnsubscribe(\'' + sub.id + '\')">Remove</button>';
         }
         html += '</td></tr>';
       });

@@ -31,7 +31,7 @@
   var PAY_FREQUENCIES = ['weekly', 'bi-weekly', 'monthly'];
   var REFERENCE_OUTCOMES = ['positive', 'neutral', 'concerning', 'not-checked'];
 
-  var INPUT_STYLE = 'width:100%;padding:9px 12px;border:1px solid var(--cream-dark,#ddd);border-radius:6px;font-size:0.9rem;background:var(--cream,#FAF6F0);box-sizing:border-box;font-family:DM Sans,sans-serif;color:var(--charcoal,#1A1A1A);';
+  var INPUT_STYLE = 'width:100%;padding:9px 12px;border:1px solid var(--cream-dark,#ddd);border-radius:6px;font-size:0.9rem;background:var(--cream,var(--cream));box-sizing:border-box;font-family:DM Sans,sans-serif;color:var(--charcoal,var(--charcoal));';
 
   // --- Helpers ---
   function fmtDollars(cents) {
@@ -77,7 +77,7 @@
     var h = '<div style="margin-bottom:16px;">';
     h += '<div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;padding:6px 0;" onclick="teamToggleSection(\'' + id + '\')">';
     h += '<div style="display:flex;align-items:center;gap:8px;">';
-    h += '<span style="font-size:0.7rem;color:var(--warm-gray);transition:transform 0.15s;" id="' + id + 'Arrow">' + (open ? '\u25bc' : '\u25b6') + '</span>';
+    h += '<span style="font-size:0.72rem;color:var(--warm-gray);transition:transform 0.15s;" id="' + id + 'Arrow">' + (open ? '\u25bc' : '\u25b6') + '</span>';
     h += '<span style="font-size:1rem;font-weight:600;">' + esc(title) + '</span>';
     if (badge) h += ' ' + badge;
     h += '</div>';
@@ -123,7 +123,7 @@
 
   function renderDrivePreview(prefix, drive) {
     var h = '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;">';
-    h += '<div style="font-size:0.82rem;">\ud83d\udcc4 <strong>' + esc(drive.driveFileName || '') + '</strong>';
+    h += '<div style="font-size:0.85rem;">\ud83d\udcc4 <strong>' + esc(drive.driveFileName || '') + '</strong>';
     if (drive.driveLastModified) h += ' \u00b7 Modified ' + (drive.driveLastModified || '').split('T')[0];
     h += '</div>';
     h += '<button type="button" class="btn btn-secondary btn-small" onclick="teamUnlinkDrive(\'' + esc(prefix) + '\')">Unlink</button>';
@@ -302,15 +302,15 @@
     h += '<button class="btn btn-primary" onclick="teamAddEmployee()">+ New Employee</button>';
     h += '</div>';
 
-    h += '<div id="teamAddForm" style="display:none;background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
+    h += '<div id="teamAddForm" style="display:none;background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
     h += '<div id="teamAddFormInner"></div>';
     h += '</div>';
 
     h += '<div id="teamRosterCards">';
     if (active.length === 0) {
       h += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">';
-      h += '<div style="font-size:2rem;margin-bottom:12px;">\ud83d\udc65</div>';
-      h += '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No employees yet</p>';
+      h += '<div style="font-size:1.6rem;margin-bottom:12px;">\ud83d\udc65</div>';
+      h += '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No employees yet</p>';
       h += '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Add your team members to track pay, hours, and compliance.</p>';
       h += '</div>';
     } else {
@@ -321,13 +321,13 @@
   }
 
   function renderEmployeeCard(emp) {
-    var h = '<div data-id="' + esc(emp._key) + '" onclick="teamViewEmployee(this.dataset.id)" style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:14px 18px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);cursor:pointer;transition:border-color 0.15s;" onmouseover="this.style.borderColor=\'var(--amber)\'" onmouseout="this.style.borderColor=\'var(--cream-dark,#F0E8DB)\'">';
+    var h = '<div data-id="' + esc(emp._key) + '" onclick="teamViewEmployee(this.dataset.id)" style="background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:14px 18px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);cursor:pointer;transition:border-color 0.15s;" onmouseover="this.style.borderColor=\'var(--amber)\'" onmouseout="this.style.borderColor=\'var(--cream-dark,var(--cream-dark))\'">';
     h += '<div style="display:flex;justify-content:space-between;align-items:center;">';
     h += '<div>';
-    h += '<span style="font-weight:600;font-size:0.95rem;">\ud83d\udc64 ' + esc(emp.fullName || '') + '</span>';
-    if (emp.preferredName) h += ' <span style="font-size:0.82rem;color:var(--warm-gray);">(' + esc(emp.preferredName) + ')</span>';
-    if (emp.jobTitle) h += ' <span style="font-size:0.82rem;color:var(--warm-gray);">\u2014 ' + esc(emp.jobTitle) + '</span>';
-    h += '<div style="font-size:0.82rem;color:var(--warm-gray,#6B6560);margin-top:2px;">';
+    h += '<span style="font-weight:600;font-size:0.9rem;">\ud83d\udc64 ' + esc(emp.fullName || '') + '</span>';
+    if (emp.preferredName) h += ' <span style="font-size:0.85rem;color:var(--warm-gray);">(' + esc(emp.preferredName) + ')</span>';
+    if (emp.jobTitle) h += ' <span style="font-size:0.85rem;color:var(--warm-gray);">\u2014 ' + esc(emp.jobTitle) + '</span>';
+    h += '<div style="font-size:0.85rem;color:var(--warm-gray,var(--warm-gray));margin-top:2px;">';
     if (emp.employmentType) h += capitalize(emp.employmentType.replace('-', ' '));
     h += ' \u00b7 ' + fmtRate(emp.payRate, emp.payType);
     if (emp.scheduledHoursPerWeek) h += ' \u00b7 ' + emp.scheduledHoursPerWeek + ' hrs/week';
@@ -343,11 +343,11 @@
     COMPLIANCE_FIELDS.forEach(function(f) {
       var item = cl[f.key];
       if (item && item.status === 'completed') {
-        badges.push('<span style="color:#16a34a;font-size:0.75rem;">\u2713 ' + esc(f.label) + '</span>');
+        badges.push('<span style="color:#16a34a;font-size:0.78rem;">\u2713 ' + esc(f.label) + '</span>');
       } else {
         hasGaps = true;
         if (f.key === 'workersComp') {
-          badges.push('<span style="color:#d97706;font-size:0.75rem;">\u26a0 Workers comp missing</span>');
+          badges.push('<span style="color:#d97706;font-size:0.78rem;">\u26a0 Workers comp missing</span>');
         }
       }
     });
@@ -366,9 +366,9 @@
 
     if (!hasGaps) {
       var expiryNote = soonestExpiry ? ' \u00b7 Expires ' + soonestExpiry.date : '';
-      h += '<div style="font-size:0.75rem;color:#16a34a;margin-top:4px;">\u2713 All documents on file' + expiryNote + '</div>';
+      h += '<div style="font-size:0.78rem;color:#16a34a;margin-top:4px;">\u2713 All documents on file' + expiryNote + '</div>';
     } else {
-      h += '<div style="font-size:0.75rem;margin-top:4px;">' + badges.join(' \u00b7 ') + '</div>';
+      h += '<div style="font-size:0.78rem;margin-top:4px;">' + badges.join(' \u00b7 ') + '</div>';
     }
 
     h += '</div>';
@@ -388,7 +388,7 @@
     h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">';
     h += '<div>';
     h += '<h3 style="margin:0;">' + esc(emp.fullName || '') + '</h3>';
-    h += '<div style="font-size:0.82rem;color:var(--warm-gray);margin-top:4px;">';
+    h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-top:4px;">';
     if (emp.jobTitle) h += esc(emp.jobTitle) + ' \u00b7 ';
     h += capitalize((emp.employmentType || '').replace('-', ' '));
     if (emp.startDate) h += ' \u00b7 Started ' + emp.startDate;
@@ -399,7 +399,7 @@
     h += '</div>';
 
     // Edit form container (form renders here when Edit is clicked)
-    h += '<div id="teamAddForm" style="display:none;background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
+    h += '<div id="teamAddForm" style="display:none;background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
     h += '<div id="teamAddFormInner"></div>';
     h += '</div>';
 
@@ -407,7 +407,7 @@
     h += '<div id="teamDetailBody">';
 
     // --- Pay & Employment (always visible, no collapse) ---
-    h += '<div style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:14px 18px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
+    h += '<div style="background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:14px 18px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
     h += '<div style="display:flex;gap:24px;flex-wrap:wrap;font-size:0.9rem;">';
     h += '<div><span style="color:var(--warm-gray);font-size:0.78rem;">\ud83d\udcb0 Pay</span><br><strong>' + fmtRate(emp.payRate, emp.payType) + '</strong></div>';
     h += '<div><span style="color:var(--warm-gray);font-size:0.78rem;">Type</span><br><strong>' + esc(capitalize((emp.payType || 'not set').replace('-', ' '))) + '</strong></div>';
@@ -453,18 +453,18 @@
       var statusLabel = status === 'completed' ? 'Complete' : status === 'not-applicable' ? 'N/A' : 'Missing';
       if (status !== 'completed' && status !== 'not-applicable') compGaps++;
 
-      compHtml += '<div data-emp="' + esc(emp._key) + '" data-key="' + esc(f.key) + '" onclick="teamEditCompliance(this.dataset.emp, this.dataset.key)" style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:10px 14px;margin-bottom:6px;cursor:pointer;transition:border-color 0.15s;" onmouseover="this.style.borderColor=\'var(--amber)\'" onmouseout="this.style.borderColor=\'var(--cream-dark,#F0E8DB)\'">';
+      compHtml += '<div data-emp="' + esc(emp._key) + '" data-key="' + esc(f.key) + '" onclick="teamEditCompliance(this.dataset.emp, this.dataset.key)" style="background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:10px 14px;margin-bottom:6px;cursor:pointer;transition:border-color 0.15s;" onmouseover="this.style.borderColor=\'var(--amber)\'" onmouseout="this.style.borderColor=\'var(--cream-dark,var(--cream-dark))\'">';
       compHtml += '<div style="display:flex;justify-content:space-between;align-items:center;">';
       compHtml += '<div>';
       compHtml += '<span style="font-weight:500;font-size:0.9rem;">' + esc(f.label) + '</span>';
-      if (item.storageLocation) compHtml += ' <span style="font-size:0.75rem;color:var(--warm-gray);">\u00b7 ' + esc(capitalize(item.storageLocation.replace('-', ' '))) + '</span>';
+      if (item.storageLocation) compHtml += ' <span style="font-size:0.78rem;color:var(--warm-gray);">\u00b7 ' + esc(capitalize(item.storageLocation.replace('-', ' '))) + '</span>';
       if (item.expiryDate) {
         var daysToExpiry = Math.floor((new Date(item.expiryDate).getTime() - Date.now()) / 86400000);
-        if (daysToExpiry <= 90 && daysToExpiry > 0) compHtml += ' <span style="font-size:0.75rem;color:#d97706;">\u26a0 expires in ' + daysToExpiry + 'd</span>';
-        else if (daysToExpiry <= 0) compHtml += ' <span style="font-size:0.75rem;color:var(--danger);">Expired</span>';
+        if (daysToExpiry <= 90 && daysToExpiry > 0) compHtml += ' <span style="font-size:0.78rem;color:#d97706;">\u26a0 expires in ' + daysToExpiry + 'd</span>';
+        else if (daysToExpiry <= 0) compHtml += ' <span style="font-size:0.78rem;color:var(--danger);">Expired</span>';
       }
       compHtml += '</div>';
-      compHtml += '<span style="color:' + statusColor + ';font-weight:600;font-size:0.82rem;">' + statusIcon + ' ' + statusLabel + '</span>';
+      compHtml += '<span style="color:' + statusColor + ';font-weight:600;font-size:0.85rem;">' + statusIcon + ' ' + statusLabel + '</span>';
       compHtml += '</div>';
       if (f.key === 'workersComp' && status !== 'completed') {
         compHtml += '<div style="font-size:0.72rem;color:#d97706;margin-top:4px;">Required in most states from your first employee. Check with your insurance agent if unsure.</div>';
@@ -526,8 +526,8 @@
     var formEl = document.getElementById('teamComplianceForm');
     if (!formEl) return;
 
-    var h = '<div style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:16px 20px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
-    h += '<div style="font-weight:600;font-size:0.95rem;margin-bottom:12px;">Edit: ' + esc(fieldLabel ? fieldLabel.label : fieldKey) + '</div>';
+    var h = '<div style="background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:16px 20px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
+    h += '<div style="font-weight:600;font-size:0.9rem;margin-bottom:12px;">Edit: ' + esc(fieldLabel ? fieldLabel.label : fieldKey) + '</div>';
     h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
 
     h += labelField('compStatus', 'Status', selectInput('compStatus', [
@@ -587,7 +587,7 @@
   function renderHoursSection(emp) {
     var h = '';
 
-    h += '<div id="teamHoursForm" style="display:none;background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:14px 18px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
+    h += '<div id="teamHoursForm" style="display:none;background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:14px 18px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
     h += '<div id="teamHoursFormInner"></div>';
     h += '</div>';
     h += '<div id="teamHoursTable" style="font-size:0.85rem;color:var(--warm-gray);">Loading hours\u2026</div>';
@@ -633,13 +633,13 @@
 
       var h = '';
       if (currentWeekTotal >= 38) {
-        h += '<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:8px 12px;margin-bottom:8px;font-size:0.82rem;color:#92400e;">\u26a0 This employee has logged ' + currentWeekTotal.toFixed(1) + ' hours this week \u2014 approaching overtime.</div>';
+        h += '<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:8px 12px;margin-bottom:8px;font-size:0.85rem;color:#92400e;">\u26a0 This employee has logged ' + currentWeekTotal.toFixed(1) + ' hours this week \u2014 approaching overtime.</div>';
       }
 
       h += '<table style="width:100%;font-size:0.85rem;border-collapse:collapse;">';
-      h += '<tr style="border-bottom:1px solid var(--cream-dark,#F0E8DB);"><th style="text-align:left;padding:6px 8px;font-weight:600;">Date</th><th style="text-align:right;padding:6px 8px;font-weight:600;">Hours</th><th style="text-align:right;padding:6px 8px;font-weight:600;">OT</th><th style="text-align:left;padding:6px 8px;font-weight:600;">Notes</th></tr>';
+      h += '<tr style="border-bottom:1px solid var(--cream-dark,var(--cream-dark));"><th style="text-align:left;padding:6px 8px;font-weight:600;">Date</th><th style="text-align:right;padding:6px 8px;font-weight:600;">Hours</th><th style="text-align:right;padding:6px 8px;font-weight:600;">OT</th><th style="text-align:left;padding:6px 8px;font-weight:600;">Notes</th></tr>';
       entries.slice(0, 20).forEach(function(entry) {
-        h += '<tr style="border-bottom:1px solid var(--cream-dark,#F0E8DB);">';
+        h += '<tr style="border-bottom:1px solid var(--cream-dark,var(--cream-dark));">';
         h += '<td style="padding:6px 8px;">' + esc(entry.date || '') + '</td>';
         h += '<td style="padding:6px 8px;text-align:right;">' + (entry.hoursWorked || 0) + '</td>';
         h += '<td style="padding:6px 8px;text-align:right;">' + (entry.overtimeHours > 0 ? entry.overtimeHours : '\u2014') + '</td>';
@@ -716,15 +716,15 @@
     } else {
       refList.forEach(function(ref) {
         var outcomeColor = ref.outcome === 'concerning' ? '#d97706' : ref.outcome === 'positive' ? '#16a34a' : 'var(--warm-gray)';
-        h += '<div data-emp="' + esc(emp._key) + '" data-ref="' + esc(ref._key) + '" onclick="teamEditReference(this.dataset.emp, this.dataset.ref)" style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:10px 14px;margin-bottom:6px;cursor:pointer;transition:border-color 0.15s;" onmouseover="this.style.borderColor=\'var(--amber)\'" onmouseout="this.style.borderColor=\'var(--cream-dark,#F0E8DB)\'">';
+        h += '<div data-emp="' + esc(emp._key) + '" data-ref="' + esc(ref._key) + '" onclick="teamEditReference(this.dataset.emp, this.dataset.ref)" style="background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:10px 14px;margin-bottom:6px;cursor:pointer;transition:border-color 0.15s;" onmouseover="this.style.borderColor=\'var(--amber)\'" onmouseout="this.style.borderColor=\'var(--cream-dark,var(--cream-dark))\'">';
         h += '<div>';
         h += '<span style="font-weight:500;">' + esc(ref.name || '') + '</span>';
-        if (ref.phone) h += ' <span style="font-size:0.82rem;color:var(--warm-gray);">' + esc(ref.phone) + '</span>';
-        if (ref.relationship) h += ' <span style="font-size:0.82rem;color:var(--warm-gray);">(' + esc(ref.relationship) + ')</span>';
+        if (ref.phone) h += ' <span style="font-size:0.85rem;color:var(--warm-gray);">' + esc(ref.phone) + '</span>';
+        if (ref.relationship) h += ' <span style="font-size:0.85rem;color:var(--warm-gray);">(' + esc(ref.relationship) + ')</span>';
         h += ' <span class="status-badge" style="background:' + outcomeColor + '22;color:' + outcomeColor + ';">' + esc(capitalize((ref.outcome || 'not-checked').replace('-', ' '))) + '</span>';
-        if (ref.checkedDate) h += ' <span style="font-size:0.75rem;color:var(--warm-gray-light);">' + esc(ref.checkedDate) + '</span>';
+        if (ref.checkedDate) h += ' <span style="font-size:0.78rem;color:var(--warm-gray-light);">' + esc(ref.checkedDate) + '</span>';
         h += '</div>';
-        if (ref.notes) h += '<div style="font-size:0.82rem;color:var(--warm-gray);margin-top:4px;">' + esc(ref.notes) + '</div>';
+        if (ref.notes) h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-top:4px;">' + esc(ref.notes) + '</div>';
         h += '</div>';
       });
     }
@@ -749,8 +749,8 @@
     var formEl = document.getElementById('teamRefForm');
     if (!formEl) return;
 
-    var h = '<div style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:16px 20px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
-    h += '<div style="font-weight:600;font-size:0.95rem;margin-bottom:12px;">' + (refId ? 'Edit Reference' : 'New Reference') + '</div>';
+    var h = '<div style="background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:16px 20px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
+    h += '<div style="font-weight:600;font-size:0.9rem;margin-bottom:12px;">' + (refId ? 'Edit Reference' : 'New Reference') + '</div>';
     h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
 
     h += labelField('refName', 'Name', textInput('refName', ref.name || '', 'Reference name'));
@@ -827,15 +827,15 @@
     h += '<button class="btn btn-primary" onclick="teamAddTenantDoc()">+ New Document</button>';
     h += '</div>';
 
-    h += '<div id="teamDocForm" style="display:none;background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
+    h += '<div id="teamDocForm" style="display:none;background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
     h += '<div id="teamDocFormInner"></div>';
     h += '</div>';
 
     h += '<div id="teamDocCards">';
     if (tenantDocs.length === 0) {
       h += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">';
-      h += '<div style="font-size:2rem;margin-bottom:12px;">\ud83d\udcc4</div>';
-      h += '<p style="font-size:0.95rem;font-weight:500;margin-bottom:4px;">No business documents</p>';
+      h += '<div style="font-size:1.6rem;margin-bottom:12px;">\ud83d\udcc4</div>';
+      h += '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No business documents</p>';
       h += '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Track business licenses, insurance certificates, leases, and permits.</p>';
       h += '</div>';
     } else {
@@ -853,11 +853,11 @@
     } else if (empId) {
       clickAction = 'teamEditEmpDoc(\'' + esc(empId) + '\', \'' + docKey + '\')';
     }
-    var h = '<div' + (clickAction ? ' onclick="' + clickAction + '"' : '') + ' style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:12px 16px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);' + (clickAction ? 'cursor:pointer;transition:border-color 0.15s;" onmouseover="this.style.borderColor=\'var(--amber)\'" onmouseout="this.style.borderColor=\'var(--cream-dark,#F0E8DB)\'"' : '"') + '>';
+    var h = '<div' + (clickAction ? ' onclick="' + clickAction + '"' : '') + ' style="background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:12px 16px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);' + (clickAction ? 'cursor:pointer;transition:border-color 0.15s;" onmouseover="this.style.borderColor=\'var(--amber)\'" onmouseout="this.style.borderColor=\'var(--cream-dark,var(--cream-dark))\'"' : '"') + '>';
     h += '<div style="display:flex;justify-content:space-between;align-items:center;">';
     h += '<div style="font-weight:600;font-size:0.9rem;">\ud83d\udcc4 ' + esc(doc.title || 'Untitled') + '</div>';
     h += '</div>';
-    h += '<div style="font-size:0.82rem;color:var(--warm-gray);margin-top:4px;">';
+    h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-top:4px;">';
     var parts = [];
     if (doc.type) parts.push(capitalize(doc.type));
     if (doc.storageLocation) parts.push(capitalize(doc.storageLocation.replace('-', ' ')));
@@ -915,9 +915,9 @@
 
     var h = '';
     if (!isTenantLevel) {
-      h += '<div style="background:var(--cream,#FAF6F0);border:1px solid var(--cream-dark,#F0E8DB);border-radius:8px;padding:16px 20px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
+      h += '<div style="background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:16px 20px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
     }
-    h += '<div style="font-weight:600;font-size:0.95rem;margin-bottom:12px;">' + (isNew ? 'New Document' : 'Edit Document') + '</div>';
+    h += '<div style="font-weight:600;font-size:0.9rem;margin-bottom:12px;">' + (isNew ? 'New Document' : 'Edit Document') + '</div>';
     h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
 
     h += labelField('docTitle', 'Title', textInput('docTitle', doc.title || '', 'e.g. Business License'));
@@ -1068,7 +1068,7 @@
     var innerEl = document.getElementById('teamAddFormInner');
     if (!formEl || !innerEl) return;
 
-    var h = '<div style="font-weight:600;font-size:0.95rem;margin-bottom:12px;">' + (isNew ? 'New Employee' : 'Edit Employee') + '</div>';
+    var h = '<div style="font-weight:600;font-size:0.9rem;margin-bottom:12px;">' + (isNew ? 'New Employee' : 'Edit Employee') + '</div>';
 
     // Identity & Contact
     h += '<div style="font-size:0.85rem;font-weight:600;color:var(--teal);margin-bottom:8px;">Identity & Contact</div>';

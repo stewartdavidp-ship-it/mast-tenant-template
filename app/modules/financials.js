@@ -124,7 +124,7 @@ function renderFinancials(data) {
   var h = '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:24px;">';
   h += financialCard('Revenue', '$' + (data.totalRevenue / 100).toFixed(2), '#16a34a');
   h += financialCard('Processing Fees', '-$' + (data.totalFees / 100).toFixed(2), '#dc2626');
-  h += financialCard('Net', '$' + (netRevenue / 100).toFixed(2), 'var(--primary, #2a7c6f)');
+  h += financialCard('Net', '$' + (netRevenue / 100).toFixed(2), 'var(--primary, var(--teal))');
   h += financialCard('Tips', '$' + (data.totalTips / 100).toFixed(2), '#f59e0b');
   h += financialCard('Transactions', String(data.totalPayments), 'var(--text-primary, #333)');
   h += '</div>';
@@ -146,8 +146,8 @@ function renderFinancials(data) {
       var s = bySource[src];
       h += '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:10px 16px;min-width:140px;">';
       h += '<div style="font-weight:600;font-size:0.9rem;">' + esc(src) + '</div>';
-      h += '<div style="font-size:1.1rem;font-weight:700;">$' + (s.total / 100).toFixed(2) + '</div>';
-      h += '<div style="font-size:0.75rem;color:var(--text-secondary, #888);">' + s.count + ' txn' + (s.count !== 1 ? 's' : '') + '</div>';
+      h += '<div style="font-size:1.15rem;font-weight:700;">$' + (s.total / 100).toFixed(2) + '</div>';
+      h += '<div style="font-size:0.78rem;color:var(--text-secondary, #888);">' + s.count + ' txn' + (s.count !== 1 ? 's' : '') + '</div>';
       h += '</div>';
     });
     h += '</div></div>';
@@ -173,8 +173,8 @@ function renderFinancials(data) {
       var color = procColors[proc] || '#888';
       h += '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:10px 16px;min-width:140px;border-left:3px solid ' + color + ';">';
       h += '<div style="font-weight:600;font-size:0.9rem;text-transform:capitalize;">' + esc(proc) + '</div>';
-      h += '<div style="font-size:1.1rem;font-weight:700;">$' + (d.total / 100).toFixed(2) + '</div>';
-      h += '<div style="font-size:0.75rem;color:var(--text-secondary, #888);">' + d.count + ' txn' + (d.count !== 1 ? 's' : '') + ' · fees $' + (d.fees / 100).toFixed(2) + '</div>';
+      h += '<div style="font-size:1.15rem;font-weight:700;">$' + (d.total / 100).toFixed(2) + '</div>';
+      h += '<div style="font-size:0.78rem;color:var(--text-secondary, #888);">' + d.count + ' txn' + (d.count !== 1 ? 's' : '') + ' · fees $' + (d.fees / 100).toFixed(2) + '</div>';
       h += '</div>';
     });
     h += '</div></div>';
@@ -198,7 +198,7 @@ function renderFinancials(data) {
       h += '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:10px 16px;min-width:120px;">';
       h += '<div style="font-weight:600;font-size:0.85rem;">' + esc(m) + '</div>';
       h += '<div style="font-size:1rem;font-weight:700;">$' + (d.total / 100).toFixed(2) + '</div>';
-      h += '<div style="font-size:0.75rem;color:var(--text-secondary, #888);">' + d.count + '</div>';
+      h += '<div style="font-size:0.78rem;color:var(--text-secondary, #888);">' + d.count + '</div>';
       h += '</div>';
     });
     h += '</div></div>';
@@ -230,8 +230,8 @@ function renderFinancials(data) {
 
     var procColors = { square: '#7c3aed', stripe: '#635bff', etsy: '#f1641e', manual: '#6b7280' };
     var procColor = procColors[p.processor] || '#888';
-    txnH += '<div style="font-size:0.8rem;color:var(--text-secondary, #888);">' + date + ' ' + time;
-    if (p.processor) txnH += ' <span style="font-size:0.7rem;background:' + procColor + ';color:white;padding:1px 5px;border-radius:3px;text-transform:capitalize;">' + esc(p.processor) + '</span>';
+    txnH += '<div style="font-size:0.78rem;color:var(--text-secondary, #888);">' + date + ' ' + time;
+    if (p.processor) txnH += ' <span style="font-size:0.72rem;background:' + procColor + ';color:white;padding:1px 5px;border-radius:3px;text-transform:capitalize;">' + esc(p.processor) + '</span>';
     if (p.cardBrand) txnH += ' · ' + esc(p.cardBrand);
     if (p.cardLast4) txnH += ' ••' + esc(p.cardLast4);
     if (p.orderSource) txnH += ' · ' + esc(p.orderSource);
@@ -240,8 +240,8 @@ function renderFinancials(data) {
 
     txnH += '<div style="text-align:right;">';
     txnH += '<div style="font-weight:700;font-size:1rem;">$' + (p.totalAmount / 100).toFixed(2) + '</div>';
-    if (p.tipAmount > 0) txnH += '<div style="font-size:0.75rem;color:#f59e0b;">tip $' + (p.tipAmount / 100).toFixed(2) + '</div>';
-    if (p.processingFee > 0) txnH += '<div style="font-size:0.75rem;color:var(--text-secondary, #888);">fee -$' + (p.processingFee / 100).toFixed(2) + '</div>';
+    if (p.tipAmount > 0) txnH += '<div style="font-size:0.78rem;color:#f59e0b;">tip $' + (p.tipAmount / 100).toFixed(2) + '</div>';
+    if (p.processingFee > 0) txnH += '<div style="font-size:0.78rem;color:var(--text-secondary, #888);">fee -$' + (p.processingFee / 100).toFixed(2) + '</div>';
     txnH += '</div>';
 
     txnH += '</div></div>';
@@ -252,8 +252,8 @@ function renderFinancials(data) {
 
 function financialCard(label, value, color) {
   return '<div style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:12px 18px;text-align:center;min-width:120px;">' +
-    '<div style="font-size:1.3rem;font-weight:700;color:' + color + ';">' + value + '</div>' +
-    '<div style="font-size:0.75rem;color:var(--text-secondary, #888);text-transform:uppercase;letter-spacing:0.5px;">' + label + '</div></div>';
+    '<div style="font-size:1.15rem;font-weight:700;color:' + color + ';">' + value + '</div>' +
+    '<div style="font-size:0.78rem;color:var(--text-secondary, #888);text-transform:uppercase;letter-spacing:0.5px;">' + label + '</div></div>';
 }
 
 // ── Window exports for onclick handlers ──

@@ -204,7 +204,7 @@
     // ── Booth Photo (default) ──
     h += '<div class="sl-card">';
     h += '<div class="sl-card-header"><span class="sl-card-title">Default Booth Photo</span></div>';
-    h += '<p style="font-size:0.8rem;color:var(--warm-gray);margin:0 0 12px;">This photo auto-fills booth photo slots in every application.</p>';
+    h += '<p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 12px;">This photo auto-fills booth photo slots in every application.</p>';
     if (p.boothPhotoUrl) {
       h += '<div style="display:flex;gap:16px;align-items:flex-start;">';
       h += '<img src="' + esc(p.boothPhotoUrl) + '" style="max-width:200px;max-height:150px;border-radius:8px;object-fit:cover;">';
@@ -213,7 +213,7 @@
       h += '</div>';
     } else {
       h += '<div class="sl-slot" onclick="slChangeBoothPhoto()" style="max-width:300px;">';
-      h += '<div style="font-size:1.5rem;">🎪</div>';
+      h += '<div style="font-size:1.6rem;">🎪</div>';
       h += '<div style="font-size:0.85rem;color:var(--warm-gray);">Click to set your default booth photo</div>';
       h += '</div>';
     }
@@ -368,12 +368,12 @@
     var filtered = slGalleryFilter === 'app' ? entries.filter(function(e) { return e[1].applicationPhoto; }) : entries;
 
     if (entries.length > 0 && appCount === 0) {
-      h += '<div style="font-size:0.8rem;color:var(--warm-gray);margin-bottom:12px;">Click images to mark your best as application photos</div>';
+      h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:12px;">Click images to mark your best as application photos</div>';
     }
 
     if (filtered.length === 0) {
       h += '<div style="text-align:center;padding:40px;color:var(--warm-gray);">';
-      h += '<div style="font-size:2rem;margin-bottom:8px;">🖼</div>';
+      h += '<div style="font-size:1.6rem;margin-bottom:8px;">🖼</div>';
       h += '<div>' + (entries.length === 0 ? 'No images yet. Upload photos or go to the <a onclick="navigateTo(\'images\')" style="color:var(--amber);cursor:pointer;">Images</a> tab.' : 'No application photos selected. Switch to "All" and click images to mark them.') + '</div>';
       h += '</div>';
     } else {
@@ -385,11 +385,11 @@
         h += '<div class="sl-gallery-item" onclick="slToggleAppPhoto(\'' + esc(id) + '\')" style="' + (isApp ? 'border-color:var(--amber);' : '') + '">';
         h += '<img src="' + esc(img.thumbnailUrl || img.url || '') + '" alt="' + esc((img.tags || [])[0] || '') + '" loading="lazy">';
         if (isApp) {
-          h += '<div style="position:absolute;top:6px;left:6px;background:var(--amber);color:white;font-size:0.6rem;padding:2px 5px;border-radius:3px;font-weight:600;">⭐ APP</div>';
-          h += '<div style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.6);color:white;font-size:0.6rem;padding:2px 5px;border-radius:3px;cursor:pointer;" onclick="event.stopPropagation(); slShowAppDescModal(\'' + esc(id) + '\', (imageLibrary || {})[\'' + esc(id) + '\'])">✏️</div>';
+          h += '<div style="position:absolute;top:6px;left:6px;background:var(--amber);color:white;font-size:0.72rem;padding:2px 5px;border-radius:3px;font-weight:600;">⭐ APP</div>';
+          h += '<div style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.6);color:white;font-size:0.72rem;padding:2px 5px;border-radius:3px;cursor:pointer;" onclick="event.stopPropagation(); slShowAppDescModal(\'' + esc(id) + '\', (imageLibrary || {})[\'' + esc(id) + '\'])">✏️</div>';
         }
         var caption = isApp ? (img.applicationDescription || img.productName || img.description || '') : (img.description || img.productName || '');
-        if (caption) h += '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.6);color:white;font-size:0.65rem;padding:3px 6px;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;">' + esc(caption) + '</div>';
+        if (caption) h += '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.6);color:white;font-size:0.72rem;padding:3px 6px;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;">' + esc(caption) + '</div>';
         h += '</div>';
       });
       h += '</div>';
@@ -455,7 +455,7 @@
           '<img src="' + esc(img.thumbnailUrl || img.url || '') + '" style="width:120px;height:120px;object-fit:cover;border-radius:8px;flex-shrink:0;" />' +
           '<div style="flex:1;">' +
             '<p style="font-size:0.85rem;color:var(--warm-gray);margin:0 0 8px;">Describe this product for show applications. This text will auto-fill the product description field whenever this photo is used.</p>' +
-            (img.productName ? '<div style="font-size:0.75rem;color:var(--amber);margin-bottom:8px;">Linked to: ' + esc(img.productName) + '</div>' : '') +
+            (img.productName ? '<div style="font-size:0.78rem;color:var(--amber);margin-bottom:8px;">Linked to: ' + esc(img.productName) + '</div>' : '') +
             '<textarea id="slAppDescInput" rows="4" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--warm-gray);background:var(--charcoal);color:var(--cream);font-size:0.85rem;resize:vertical;" placeholder="e.g. Hand-blown glass octopus figurine, 4-6 inches tall, made with borosilicate glass...">' + esc(existing) + '</textarea>' +
           '</div>' +
         '</div>' +
@@ -510,7 +510,7 @@
 
     if (entries.length === 0) {
       h += '<div style="text-align:center;padding:40px;color:var(--warm-gray);">';
-      h += '<div style="font-size:2rem;margin-bottom:8px;">🎪</div>';
+      h += '<div style="font-size:1.6rem;margin-bottom:8px;">🎪</div>';
       h += '<div>No shows yet. Add shows you want to apply to.</div>';
       h += '</div>';
     } else {
@@ -520,11 +520,11 @@
         h += '<div class="sl-show-card" onclick="slOpenEditShowModal(\'' + esc(id) + '\')">';
         h += '<div style="flex:1;">';
         h += '<div style="font-weight:600;font-size:1rem;margin-bottom:4px;">' + esc(s.name || 'Untitled') + '</div>';
-        h += '<div style="font-size:0.8rem;color:var(--warm-gray);margin-bottom:4px;">';
+        h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;">';
         if (s.date) h += esc(s.date);
         if (s.location) h += ' • ' + esc(s.location);
         h += '</div>';
-        if (s.deadline) h += '<div style="font-size:0.75rem;color:var(--amber);">Deadline: ' + esc(s.deadline) + '</div>';
+        if (s.deadline) h += '<div style="font-size:0.78rem;color:var(--amber);">Deadline: ' + esc(s.deadline) + '</div>';
         h += '</div>';
         h += '<span class="sl-show-status ' + esc(s.status || 'researching') + '">' + esc(s.status || 'researching') + '</span>';
         h += '</div>';
@@ -710,7 +710,7 @@
         h += '<div class="sl-show-card" onclick="slStartApply(\'' + esc(id) + '\')">';
         h += '<div style="flex:1;">';
         h += '<div style="font-weight:600;">' + esc(s.name) + '</div>';
-        if (s.deadline) h += '<div style="font-size:0.75rem;color:var(--amber);">Deadline: ' + esc(s.deadline) + '</div>';
+        if (s.deadline) h += '<div style="font-size:0.78rem;color:var(--amber);">Deadline: ' + esc(s.deadline) + '</div>';
         h += '</div>';
         h += '<span style="color:var(--amber);font-size:0.9rem;">→</span>';
         h += '</div>';
@@ -729,9 +729,9 @@
         h += '<div class="sl-show-card" onclick="slResumeApplication(\'' + esc(id) + '\')">';
         h += '<div style="flex:1;">';
         h += '<div style="font-weight:600;">' + esc(show.name || app.showName || 'Unknown Show') + '</div>';
-        h += '<div style="font-size:0.75rem;color:var(--warm-gray);">Created: ' + esc(app.createdAt ? new Date(app.createdAt).toLocaleDateString() : '') + '</div>';
+        h += '<div style="font-size:0.78rem;color:var(--warm-gray);">Created: ' + esc(app.createdAt ? new Date(app.createdAt).toLocaleDateString() : '') + '</div>';
         h += '</div>';
-        h += '<span style="font-size:0.75rem;color:var(--sage);">' + esc(app.status || 'draft') + '</span>';
+        h += '<span style="font-size:0.78rem;color:var(--sage);">' + esc(app.status || 'draft') + '</span>';
         h += '</div>';
       });
       h += '</div>';
@@ -772,9 +772,9 @@
     var h = '';
 
     h += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">';
-    h += '<button onclick="slBackToShowSelect();" style="background:none;border:none;cursor:pointer;font-size:1.2rem;color:var(--warm-gray);">←</button>';
-    h += '<div><span style="font-weight:600;font-size:1.1rem;">' + esc(show.name || 'Show') + '</span>';
-    if (show.deadline) h += '<span style="font-size:0.8rem;color:var(--amber);margin-left:8px;">Deadline: ' + esc(show.deadline) + '</span>';
+    h += '<button onclick="slBackToShowSelect();" style="background:none;border:none;cursor:pointer;font-size:1.15rem;color:var(--warm-gray);">←</button>';
+    h += '<div><span style="font-weight:600;font-size:1.15rem;">' + esc(show.name || 'Show') + '</span>';
+    if (show.deadline) h += '<span style="font-size:0.78rem;color:var(--amber);margin-left:8px;">Deadline: ' + esc(show.deadline) + '</span>';
     h += '</div></div>';
 
     h += '<div class="sl-step-indicator">';
@@ -819,32 +819,32 @@
         h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
         h += '<div style="font-weight:600;color:var(--sage);">Parsed Requirements</div>';
         h += '<div style="display:flex;gap:8px;">';
-        h += '<a href="' + esc(show.applicationUrl) + '" target="_blank" style="color:var(--amber);font-size:0.8rem;cursor:pointer;text-decoration:underline;">View Source Page</a>';
-        h += '<button onclick="slParsedRequirements=null; renderApplyFetch(document.getElementById(\'slApplyContent\'), slShows[slCurrentShowId]||{});" style="background:none;border:none;color:var(--warm-gray);font-size:0.75rem;cursor:pointer;text-decoration:underline;">Re-parse</button>';
+        h += '<a href="' + esc(show.applicationUrl) + '" target="_blank" style="color:var(--amber);font-size:0.78rem;cursor:pointer;text-decoration:underline;">View Source Page</a>';
+        h += '<button onclick="slParsedRequirements=null; renderApplyFetch(document.getElementById(\'slApplyContent\'), slShows[slCurrentShowId]||{});" style="background:none;border:none;color:var(--warm-gray);font-size:0.78rem;cursor:pointer;text-decoration:underline;">Re-parse</button>';
         h += '</div></div>';
 
         // Fields
         h += '<div style="margin-bottom:12px;">';
-        h += '<div style="font-size:0.8rem;font-weight:600;color:var(--cream);margin-bottom:6px;">Application Fields (' + (reqs.fields || []).length + ')</div>';
+        h += '<div style="font-size:0.78rem;font-weight:600;color:var(--cream);margin-bottom:6px;">Application Fields (' + (reqs.fields || []).length + ')</div>';
         (reqs.fields || []).forEach(function(f, idx) {
           h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:0.85rem;border-bottom:1px solid rgba(255,255,255,0.05);">';
-          h += '<span>' + esc(f.name) + (f.required ? ' <span style="color:var(--danger);font-size:0.7rem;">required</span>' : '') + '</span>';
-          h += '<button onclick="slRemoveParsedField(' + idx + ')" style="background:none;border:none;color:var(--warm-gray);cursor:pointer;font-size:0.75rem;">&times;</button>';
+          h += '<span>' + esc(f.name) + (f.required ? ' <span style="color:var(--danger);font-size:0.72rem;">required</span>' : '') + '</span>';
+          h += '<button onclick="slRemoveParsedField(' + idx + ')" style="background:none;border:none;color:var(--warm-gray);cursor:pointer;font-size:0.78rem;">&times;</button>';
           h += '</div>';
         });
-        h += '<button onclick="slAddParsedField()" style="background:none;border:none;color:var(--amber);cursor:pointer;font-size:0.8rem;margin-top:4px;">+ Add field</button>';
+        h += '<button onclick="slAddParsedField()" style="background:none;border:none;color:var(--amber);cursor:pointer;font-size:0.78rem;margin-top:4px;">+ Add field</button>';
         h += '</div>';
 
         // Photos
         h += '<div style="margin-bottom:12px;">';
-        h += '<div style="font-size:0.8rem;font-weight:600;color:var(--cream);margin-bottom:6px;">Photo Requirements (' + (reqs.photos || []).length + ')</div>';
+        h += '<div style="font-size:0.78rem;font-weight:600;color:var(--cream);margin-bottom:6px;">Photo Requirements (' + (reqs.photos || []).length + ')</div>';
         (reqs.photos || []).forEach(function(p, idx) {
           h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:0.85rem;border-bottom:1px solid rgba(255,255,255,0.05);">';
-          h += '<span>' + esc(p.slot) + (p.dimensions ? ' <span style="color:var(--warm-gray);font-size:0.75rem;">' + esc(p.dimensions) + '</span>' : '') + '</span>';
-          h += '<button onclick="slRemoveParsedPhoto(' + idx + ')" style="background:none;border:none;color:var(--warm-gray);cursor:pointer;font-size:0.75rem;">&times;</button>';
+          h += '<span>' + esc(p.slot) + (p.dimensions ? ' <span style="color:var(--warm-gray);font-size:0.78rem;">' + esc(p.dimensions) + '</span>' : '') + '</span>';
+          h += '<button onclick="slRemoveParsedPhoto(' + idx + ')" style="background:none;border:none;color:var(--warm-gray);cursor:pointer;font-size:0.78rem;">&times;</button>';
           h += '</div>';
         });
-        h += '<button onclick="slAddParsedPhoto()" style="background:none;border:none;color:var(--amber);cursor:pointer;font-size:0.8rem;margin-top:4px;">+ Add photo slot</button>';
+        h += '<button onclick="slAddParsedPhoto()" style="background:none;border:none;color:var(--amber);cursor:pointer;font-size:0.78rem;margin-top:4px;">+ Add photo slot</button>';
         h += '</div>';
 
         // Fees, deadline, special requirements
@@ -854,12 +854,12 @@
           h += '<div style="font-size:0.85rem;margin-bottom:4px;"><strong>Special:</strong> ' + reqs.specialRequirements.map(function(r) { return esc(r); }).join('; ') + '</div>';
         }
         if (reqs.rawNotes) {
-          h += '<details style="margin-top:8px;"><summary style="font-size:0.8rem;color:var(--warm-gray);cursor:pointer;">Raw AI notes</summary>';
-          h += '<div style="font-size:0.8rem;color:var(--warm-gray);white-space:pre-wrap;margin-top:4px;max-height:200px;overflow-y:auto;">' + esc(reqs.rawNotes) + '</div></details>';
+          h += '<details style="margin-top:8px;"><summary style="font-size:0.78rem;color:var(--warm-gray);cursor:pointer;">Raw AI notes</summary>';
+          h += '<div style="font-size:0.78rem;color:var(--warm-gray);white-space:pre-wrap;margin-top:4px;max-height:200px;overflow-y:auto;">' + esc(reqs.rawNotes) + '</div></details>';
         }
         h += '</div>';
 
-        h += '<div style="font-size:0.75rem;color:var(--warm-gray);font-style:italic;margin-bottom:12px;">Review the parsed requirements above. Remove or add items before continuing.</div>';
+        h += '<div style="font-size:0.78rem;color:var(--warm-gray);font-style:italic;margin-bottom:12px;">Review the parsed requirements above. Remove or add items before continuing.</div>';
         h += '<button class="btn btn-primary" onclick="slGoToStep(2);">Continue to Images →</button>';
       } else {
         h += '<div style="display:flex;gap:8px;align-items:center;">';
@@ -1082,9 +1082,9 @@
       h += '<div class="sl-form-group">';
       h += '<div style="display:flex;justify-content:space-between;align-items:center;">';
       h += '<label>' + esc(f.name) + (f.required ? ' <span style="color:var(--danger);">*</span>' : '') + '</label>';
-      h += '<span style="font-size:0.7rem;color:' + confColor + ';">' + confLabel + '</span>';
+      h += '<span style="font-size:0.72rem;color:' + confColor + ';">' + confLabel + '</span>';
       h += '</div>';
-      if (f.description) h += '<div style="font-size:0.75rem;color:var(--warm-gray);margin-bottom:4px;">' + esc(f.description) + '</div>';
+      if (f.description) h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;">' + esc(f.description) + '</div>';
       h += '<textarea id="slMap_' + esc(f.name.replace(/\s+/g, '_')) + '" rows="2" placeholder="Enter value...">' + esc(m.value) + '</textarea>';
       h += '</div>';
     });
@@ -1155,7 +1155,7 @@
 
     if (gaps.length === 0) {
       h += '<div style="text-align:center;padding:20px;color:var(--sage);">';
-      h += '<div style="font-size:1.5rem;margin-bottom:8px;">✓</div>';
+      h += '<div style="font-size:1.6rem;margin-bottom:8px;">✓</div>';
       h += '<div style="font-weight:600;">All requirements met!</div>';
       h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-top:4px;">Your profile and gallery cover everything this show needs.</div>';
       h += '</div>';
@@ -1166,9 +1166,9 @@
         h += '<span class="sl-gap-icon">' + (g.type === 'photo' ? '📷' : '📝') + '</span>';
         h += '<div style="flex:1;">';
         h += '<div style="font-weight:500;">' + esc(g.name) + '</div>';
-        if (g.description) h += '<div style="font-size:0.75rem;color:var(--warm-gray);">' + esc(g.description) + '</div>';
+        if (g.description) h += '<div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(g.description) + '</div>';
         h += '</div>';
-        h += '<a onclick="slSwitchView(\'' + esc(g.section) + '\')" style="color:var(--amber);cursor:pointer;font-size:0.8rem;">Fix →</a>';
+        h += '<a onclick="slSwitchView(\'' + esc(g.section) + '\')" style="color:var(--amber);cursor:pointer;font-size:0.78rem;">Fix →</a>';
         h += '</div>';
       });
     }
@@ -1222,13 +1222,13 @@
         h += '<div class="sl-slot' + (assignedImg ? ' filled' : '') + '" onclick="slPickImageForSlot(' + idx + ')">';
         if (assignedImg) {
           h += '<img src="' + esc(assignedImg.url || assignedImg.thumbnailUrl || '') + '" alt="">';
-          h += '<div style="font-size:0.75rem;color:var(--sage);margin-top:4px;">✓ ' + esc(p.slot || 'Photo ' + (idx + 1)) + '</div>';
-          if (isProfileBooth) h += '<div style="font-size:0.65rem;color:var(--amber);">From profile default</div>';
+          h += '<div style="font-size:0.78rem;color:var(--sage);margin-top:4px;">✓ ' + esc(p.slot || 'Photo ' + (idx + 1)) + '</div>';
+          if (isProfileBooth) h += '<div style="font-size:0.72rem;color:var(--amber);">From profile default</div>';
         } else {
-          h += '<div style="font-size:1.5rem;color:var(--warm-gray);">+</div>';
-          h += '<div style="font-size:0.8rem;color:var(--warm-gray);">' + esc(p.slot || 'Photo ' + (idx + 1)) + '</div>';
-          if (p.description) h += '<div style="font-size:0.7rem;color:var(--warm-gray);opacity:0.7;">' + esc(p.description) + '</div>';
-          if (p.dimensions) h += '<div style="font-size:0.65rem;color:var(--amber);">' + esc(p.dimensions) + '</div>';
+          h += '<div style="font-size:1.6rem;color:var(--warm-gray);">+</div>';
+          h += '<div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(p.slot || 'Photo ' + (idx + 1)) + '</div>';
+          if (p.description) h += '<div style="font-size:0.72rem;color:var(--warm-gray);opacity:0.7;">' + esc(p.description) + '</div>';
+          if (p.dimensions) h += '<div style="font-size:0.72rem;color:var(--amber);">' + esc(p.dimensions) + '</div>';
         }
         h += '</div>';
       });
@@ -1254,14 +1254,14 @@
         .sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
 
       h += '<div style="margin-top:16px;padding:16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:10px;position:relative;">';
-      h += '<button onclick="slAssignImage(' + idx + ', null)" style="position:absolute;top:8px;right:8px;background:none;border:none;color:var(--warm-gray);font-size:1.2rem;cursor:pointer;padding:4px 8px;line-height:1;" title="Remove image">&times;</button>';
+      h += '<button onclick="slAssignImage(' + idx + ', null)" style="position:absolute;top:8px;right:8px;background:none;border:none;color:var(--warm-gray);font-size:1.15rem;cursor:pointer;padding:4px 8px;line-height:1;" title="Remove image">&times;</button>';
       h += '<div style="display:flex;gap:16px;align-items:flex-start;">';
       h += '<img src="' + esc(img.thumbnailUrl || img.url || '') + '" style="width:100px;height:100px;object-fit:cover;border-radius:8px;flex-shrink:0;" />';
       h += '<div style="flex:1;">';
       h += '<div style="font-size:0.9rem;font-weight:600;color:var(--cream);margin-bottom:8px;">' + esc(p.slot || 'Product Photo') + '</div>';
 
       // Product dropdown
-      h += '<label style="font-size:0.8rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Link to Product</label>';
+      h += '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Link to Product</label>';
       h += '<select id="slProdSelect_' + idx + '" onchange="slLinkProduct(' + idx + ', this.value)" ' +
         'style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:var(--charcoal);color:var(--cream);font-size:0.85rem;margin-bottom:12px;cursor:pointer;">';
       h += '<option value="">— Select a product —</option>';
@@ -1273,7 +1273,7 @@
       h += '</select>';
 
       // Application description
-      h += '<label style="font-size:0.8rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Application Description</label>';
+      h += '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Application Description</label>';
       h += '<textarea id="slAppDesc_' + idx + '" rows="4" placeholder="Describe this product for show applications. Select a product above to pre-fill..." ' +
         'style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:var(--charcoal);color:var(--cream);font-size:0.9rem;line-height:1.4;resize:vertical;" ' +
         'onblur="slSaveSlotDesc(' + idx + ', this.value)">' + esc(appDesc) + '</textarea>';
@@ -1283,7 +1283,7 @@
     });
 
     if (hasProductDesc) {
-      h += '<div style="margin-top:8px;font-size:0.75rem;color:var(--warm-gray);font-style:italic;">These descriptions will auto-fill the product description field in Step 3.</div>';
+      h += '<div style="margin-top:8px;font-size:0.78rem;color:var(--warm-gray);font-style:italic;">These descriptions will auto-fill the product description field in Step 3.</div>';
     }
 
     h += '<div style="display:flex;gap:8px;margin-top:16px;">';
@@ -1314,8 +1314,8 @@
       '</div>' +
       '<div class="modal-body">' +
         (showingAll
-          ? '<div style="font-size:0.8rem;color:var(--warm-gray);margin-bottom:8px;">No application photos marked yet — showing all gallery images. Mark your best photos as "Application Photo" in the Gallery.</div>'
-          : '<div style="font-size:0.8rem;color:var(--amber);margin-bottom:8px;">⭐ Showing ' + appEntries.length + ' application photo' + (appEntries.length !== 1 ? 's' : '') + '</div>') +
+          ? '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">No application photos marked yet — showing all gallery images. Mark your best photos as "Application Photo" in the Gallery.</div>'
+          : '<div style="font-size:0.78rem;color:var(--amber);margin-bottom:8px;">⭐ Showing ' + appEntries.length + ' application photo' + (appEntries.length !== 1 ? 's' : '') + '</div>') +
         '<div class="sl-gallery-grid">';
 
     entries.forEach(function(entry) {
@@ -1323,8 +1323,8 @@
       var img = entry[1];
       html += '<div class="sl-gallery-item" onclick="slAssignImage(' + slotIdx + ', \'' + esc(id) + '\'); closeModal();" style="cursor:pointer;">';
       html += '<img src="' + esc(img.url || img.thumbnailUrl || '') + '" alt="" loading="lazy">';
-      if (img.category) html += '<span class="status-badge" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.6);color:white;font-size:0.65rem;">' + esc(img.category) + '</span>';
-      if (img.productName) html += '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.6);color:white;font-size:0.6rem;padding:2px 4px;">' + esc(img.productName) + '</div>';
+      if (img.category) html += '<span class="status-badge" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.6);color:white;font-size:0.72rem;">' + esc(img.category) + '</span>';
+      if (img.productName) html += '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.6);color:white;font-size:0.72rem;padding:2px 4px;">' + esc(img.productName) + '</div>';
       html += '</div>';
     });
 
@@ -1464,7 +1464,7 @@
     // Show header
     h += '<div style="background:var(--charcoal, #2A2A2A);color:white;padding:16px;border-radius:8px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;">';
     h += '<div>';
-    h += '<div style="font-family:\'Cormorant Garamond\', serif;font-size:1.3rem;font-weight:600;">' + esc(show.name || 'Show') + '</div>';
+    h += '<div style="font-family:\'Cormorant Garamond\', serif;font-size:1.15rem;font-weight:600;">' + esc(show.name || 'Show') + '</div>';
     if (show.date) h += '<div style="font-size:0.85rem;opacity:0.8;">' + esc(show.date) + '</div>';
     h += '</div>';
     if (appUrl) {
@@ -1491,15 +1491,15 @@
       h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">';
       h += '<div style="display:flex;align-items:center;gap:8px;">';
       if (isCopied) {
-        h += '<span style="color:var(--sage);font-size:0.8rem;">&#10003;</span>';
+        h += '<span style="color:var(--sage);font-size:0.78rem;">&#10003;</span>';
       } else {
-        h += '<span style="color:var(--warm-gray);font-size:0.75rem;font-weight:600;">' + (idx + 1) + '</span>';
+        h += '<span style="color:var(--warm-gray);font-size:0.78rem;font-weight:600;">' + (idx + 1) + '</span>';
       }
-      h += '<span style="font-size:0.8rem;color:var(--warm-gray);text-transform:uppercase;font-weight:500;">' + esc(f.name) + '</span>';
-      if (f.required) h += '<span style="color:var(--danger);font-size:0.65rem;">required</span>';
+      h += '<span style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;font-weight:500;">' + esc(f.name) + '</span>';
+      if (f.required) h += '<span style="color:var(--danger);font-size:0.72rem;">required</span>';
       h += '</div>';
       if (val) {
-        h += '<button onclick="slCopyField(' + idx + ')" style="background:' + (isCurrent ? 'var(--amber)' : 'rgba(255,255,255,0.1)') + ';color:' + (isCurrent ? 'white' : 'var(--cream)') + ';border:none;border-radius:6px;padding:4px 12px;font-size:0.75rem;cursor:pointer;font-weight:600;">' + (isCopied ? 'Copied' : 'Copy') + '</button>';
+        h += '<button onclick="slCopyField(' + idx + ')" style="background:' + (isCurrent ? 'var(--amber)' : 'rgba(255,255,255,0.1)') + ';color:' + (isCurrent ? 'white' : 'var(--cream)') + ';border:none;border-radius:6px;padding:4px 12px;font-size:0.78rem;cursor:pointer;font-weight:600;">' + (isCopied ? 'Copied' : 'Copy') + '</button>';
       }
       h += '</div>';
       if (val) {
@@ -1527,11 +1527,11 @@
         h += '<div style="text-align:center;padding:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.1);border-radius:8px;">';
         if (img && img.url) {
           h += '<img src="' + esc(img.url) + '" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;margin-bottom:8px;">';
-          h += '<div style="font-size:0.75rem;color:var(--warm-gray);margin-bottom:6px;">' + esc(p.slot || 'Photo ' + (idx + 1)) + '</div>';
-          h += '<button onclick="slDownloadPhoto(\'' + esc(img.url) + '\', \'' + esc(p.slot || 'photo') + '\')" style="background:rgba(255,255,255,0.1);color:var(--cream);border:none;border-radius:6px;padding:4px 12px;font-size:0.75rem;cursor:pointer;">Download</button>';
+          h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:6px;">' + esc(p.slot || 'Photo ' + (idx + 1)) + '</div>';
+          h += '<button onclick="slDownloadPhoto(\'' + esc(img.url) + '\', \'' + esc(p.slot || 'photo') + '\')" style="background:rgba(255,255,255,0.1);color:var(--cream);border:none;border-radius:6px;padding:4px 12px;font-size:0.78rem;cursor:pointer;">Download</button>';
         } else {
           h += '<div style="width:100%;aspect-ratio:1;background:var(--cream-dark);border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--warm-gray);margin-bottom:8px;">—</div>';
-          h += '<div style="font-size:0.75rem;color:var(--danger);">' + esc(p.slot || 'Photo') + ' — not assigned</div>';
+          h += '<div style="font-size:0.78rem;color:var(--danger);">' + esc(p.slot || 'Photo') + ' — not assigned</div>';
         }
         h += '</div>';
       });
