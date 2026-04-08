@@ -3452,17 +3452,20 @@
     if (!src) return;
     var srcLabel = variantDisplayName(pvs.find(function(p){ return p.id === currentVariantId; }));
     var otherCount = pvs.length - 1;
-    if (!confirm('Copy Parts, Labor minutes, and Other Costs from "' + srcLabel + '" to the other ' + otherCount + ' variant' + (otherCount === 1 ? '' : 's') + '? Their current values will be overwritten.')) return;
-    pvs.forEach(function(pv) {
-      if (pv.id === currentVariantId) return;
-      if (!builderState.variants[pv.id]) builderState.variants[pv.id] = {};
-      var dst = builderState.variants[pv.id];
-      dst.lineItems = JSON.parse(JSON.stringify(src.lineItems || {}));
-      dst.laborMinutes = src.laborMinutes || 0;
-      dst.otherCost = src.otherCost || 0;
+    var msg = 'Copy Parts, Labor minutes, and Other Costs from "' + srcLabel + '" to the other ' + otherCount + ' variant' + (otherCount === 1 ? '' : 's') + '? Their current values will be overwritten.';
+    window.mastConfirm(msg, { title: 'Apply to all variants', confirmLabel: 'Apply', cancelLabel: 'Cancel' }).then(function(ok) {
+      if (!ok) return;
+      pvs.forEach(function(pv) {
+        if (pv.id === currentVariantId) return;
+        if (!builderState.variants[pv.id]) builderState.variants[pv.id] = {};
+        var dst = builderState.variants[pv.id];
+        dst.lineItems = JSON.parse(JSON.stringify(src.lineItems || {}));
+        dst.laborMinutes = src.laborMinutes || 0;
+        dst.otherCost = src.otherCost || 0;
+      });
+      MastAdmin.showToast('Applied to ' + otherCount + ' variant' + (otherCount === 1 ? '' : 's') + '. Save and recalculate to propagate pricing.');
+      renderRecipeBuilder();
     });
-    MastAdmin.showToast('Applied to ' + otherCount + ' variant' + (otherCount === 1 ? '' : 's') + '. Save and recalculate to propagate pricing.');
-    renderRecipeBuilder();
   };
   window.makerTogglePieceVariants = function(pid) {
     if (!pid) return;
