@@ -351,7 +351,17 @@
   function viewOrder(orderId) {
     _viewOrderReturnRoute = currentRoute !== 'orders' ? currentRoute : null;
     selectedOrderId = orderId;
-    navigateTo('orders');
+    // Preserve MastNavStack across this internal navigation — top-level
+    // navigateTo() clears the stack unless _mastNavInternal is set. Without
+    // this, pushing a stack entry then calling viewOrder (e.g. from a
+    // customer detail) loses the push and "Back" falls through to the
+    // orders list instead of the pushing context.
+    window._mastNavInternal = true;
+    try {
+      navigateTo('orders');
+    } finally {
+      window._mastNavInternal = false;
+    }
     // Hide feature gate callout on detail view
     var gateEls = document.querySelectorAll('.feature-gate-callout');
     gateEls.forEach(function(el) { el.remove(); });
