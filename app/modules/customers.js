@@ -31,6 +31,7 @@
   var currentView = 'list'; // list | detail | duplicates
   var selectedCustomerId = null;
   var detailTab = 'overview'; // overview | orders | classes | interactions | wallet
+  var customerEditMode = false;    // Paradigm A — read-only until user clicks Edit
   // Per-customer cache: { customerId: { orders, enrollments, interactions, wallets, loaded:{...} } }
   var detailCache = {};
 
@@ -529,13 +530,20 @@
     var h = '';
     h += '<button class="detail-back" onclick="customersSwitchView(\'list\')">← Back to Customers</button>';
 
-    // Header
+    // Header — Paradigm A: Edit button right side (read mode only); Source badge inline
     h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;flex-wrap:wrap;gap:12px;">';
     h += '<div>';
     h += '<h3 style="margin:0;">' + esc(c.displayName || c.primaryEmail || c.id) + '</h3>';
     h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-top:4px;">' + esc(c.primaryEmail || 'no primary email') + '</div>';
     h += '</div>';
-    h += '<div>' + sourceBadge(c.source) + '</div>';
+    h += '<div style="display:flex;align-items:center;gap:8px;">';
+    h += sourceBadge(c.source) || '';
+    if (!customerEditMode) {
+      h += '<button class="btn btn-secondary btn-small" onclick="customersEnterEdit()">Edit</button>';
+    } else {
+      h += '<span style="font-size:0.72rem;color:var(--amber);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;">Editing</span>';
+    }
+    h += '</div>';
     h += '</div>';
 
     // Sub-tabs
@@ -636,21 +644,68 @@
     });
   }
 
-  // Inline identity save — used by displayName and primaryEmail input onblur.
-  // Skips the write if the value is unchanged so we don't thrash.
-  function saveIdentityField(customerId, fieldPath, value) {
-    var c = customersData.find(function(x) { return x && x.id === customerId; });
+  // ------------------------------------------------------------
+  // Paradigm A — customer edit mode lifecycle
+  // ------------------------------------------------------------
+
+  function enterCustomerEditMode() {
+    customerEditMode = true;
+    renderPreservingEdits();
+  }
+
+  function cancelCustomerEditMode() {
+    customerEditMode = false;
+    // Discard any in-flight changes by NOT preserving — straight render
+    // pulls fresh values from in-memory customersData.
+    render();
+  }
+
+  // Save commits any changed identity fields, stays in edit mode (matches
+  // the product flow Paradigm A pattern), and shows a toast.
+  function saveCustomerEditMode() {
+    if (!selectedCustomerId) return;
+    var c = customersData.find(function(x) { return x && x.id === selectedCustomerId; });
     if (!c) return;
-    var current = c[fieldPath] || '';
-    var trimmed = (value || '').trim();
-    if (trimmed === current) return;
-    // Live-update the header h3 immediately (before the Firebase round trip)
-    // so the user sees the name change reflected while typing.
-    if (fieldPath === 'displayName') {
-      var h3 = document.querySelector('#customersTab h3');
-      if (h3) h3.innerText = trimmed || c.primaryEmail || c.id;
+
+    var nameInput = document.getElementById('custIdentityDisplayName');
+    var emailInput = document.getElementById('custIdentityPrimaryEmail');
+    if (!nameInput && !emailInput) {
+      // Nothing to save (probably not on overview tab)
+      toast('Saved');
+      return;
     }
-    saveCustomerField(customerId, fieldPath, trimmed || null);
+
+    var newName = nameInput ? (nameInput.value || '').trim() : (c.displayName || '');
+    var newEmail = emailInput ? (emailInput.value || '').trim() : (c.primaryEmail || '');
+    var oldName = c.displayName || '';
+    var oldEmail = c.primaryEmail || '';
+
+    var updates = {};
+    if (newName !== oldName) updates.displayName = newName || null;
+    if (newEmail !== oldEmail) updates.primaryEmail = newEmail || null;
+
+    if (Object.keys(updates).length === 0) {
+      // No changes — just confirm and stay in edit mode
+      toast('No changes to save');
+      return;
+    }
+
+    updates.updatedAt = new Date().toISOString();
+    MastDB._ref('admin/customers/' + selectedCustomerId).update(updates).then(function() {
+      // Mirror into in-memory copy
+      Object.keys(updates).forEach(function(k) {
+        c[k] = updates[k];
+      });
+      // Live-update the header h3 since the name may have changed
+      var h3 = document.querySelector('#customersTab h3');
+      if (h3) h3.innerText = c.displayName || c.primaryEmail || c.id;
+      toast('Saved');
+      // Stay in edit mode — Paradigm A
+      renderPreservingEdits();
+    }).catch(function(e) {
+      console.error('[customers] save edit failed', e);
+      toast('Save failed: ' + (e && e.message), true);
+    });
   }
 
   function addTag(customerId, raw) {
@@ -842,21 +897,27 @@
 
     var h = '';
 
-    // Identity card — displayName and primaryEmail are inline-editable
+    // Identity card — Paradigm A: plain text in read mode, inputs in edit mode.
+    // Tags and Newsletter are atomic widgets and stay live regardless of edit mode.
     var inlineInputStyle = 'width:100%;padding:6px 10px;border:1px solid var(--cream-dark);border-radius:4px;background:var(--cream);font-family:DM Sans,sans-serif;font-size:0.85rem;';
-    var nameInput = '<input type="text" id="custIdentityDisplayName" data-customer-id="' + esc(c.id) + '" ' +
-      'value="' + esc(c.displayName || '') + '" placeholder="(no name)" ' +
-      'oninput="customersLiveUpdateHeader(this.value)" ' +
-      'onblur="customersSaveIdentity(this.dataset.customerId, \'displayName\', this.value)" ' +
-      'style="' + inlineInputStyle + '">';
-    var emailInput = '<input type="email" id="custIdentityPrimaryEmail" data-customer-id="' + esc(c.id) + '" ' +
-      'value="' + esc(c.primaryEmail || '') + '" placeholder="no primary email" ' +
-      'onblur="customersSaveIdentity(this.dataset.customerId, \'primaryEmail\', this.value)" ' +
-      'style="' + inlineInputStyle + '">';
+    var nameField, emailField;
+    if (customerEditMode) {
+      nameField = '<input type="text" id="custIdentityDisplayName" data-customer-id="' + esc(c.id) + '" ' +
+        'value="' + esc(c.displayName || '') + '" placeholder="(no name)" ' +
+        'oninput="customersLiveUpdateHeader(this.value)" ' +
+        'style="' + inlineInputStyle + '">';
+      emailField = '<input type="text" id="custIdentityPrimaryEmail" data-customer-id="' + esc(c.id) + '" ' +
+        'value="' + esc(c.primaryEmail || '') + '" placeholder="no primary email" ' +
+        'autocomplete="off" ' +
+        'style="' + inlineInputStyle + '">';
+    } else {
+      nameField = esc(c.displayName || '—');
+      emailField = esc(c.primaryEmail || '—');
+    }
     h += detailCardOpen('Identity');
     h += '<div style="display:grid;grid-template-columns:160px 1fr;gap:8px 16px;font-size:0.85rem;">';
-    h += identityRow('Name', nameInput);
-    h += identityRow('Primary email', emailInput);
+    h += identityRow('Name', nameField);
+    h += identityRow('Primary email', emailField);
     h += identityRow('Tags', renderTagsEditor(c));
     h += identityRow('Newsletter', renderNewsletterToggle(c));
     h += identityRow('Source', sourceBadge(c.source) || '—');
@@ -924,6 +985,14 @@
       h += '</div>';
     }
     h += detailCardClose();
+
+    // Save / Cancel buttons — Paradigm A, only when editing
+    if (customerEditMode) {
+      h += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--cream-dark);">';
+      h += '<button class="btn btn-secondary" onclick="customersCancelEdit()">Cancel</button>';
+      h += '<button class="btn btn-primary" onclick="customersSaveEdit()">Save</button>';
+      h += '</div>';
+    }
 
     return h;
   }
@@ -1816,7 +1885,9 @@
   window.customersOpenContact = openContactFromCustomer;
   window.customersAddContact = addContactToCustomer;
   window.customersSaveNewContact = saveNewContactForCustomer;
-  window.customersSaveIdentity = saveIdentityField;
+  window.customersEnterEdit = enterCustomerEditMode;
+  window.customersCancelEdit = cancelCustomerEditMode;
+  window.customersSaveEdit = saveCustomerEditMode;
   window.customersLiveUpdateHeader = function(v) {
     var h3 = document.querySelector('#customersTab h3');
     if (h3) h3.innerText = (v || '').trim() || '(no name)';
