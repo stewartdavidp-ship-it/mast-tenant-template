@@ -6035,7 +6035,8 @@
             <option value="sculpture">Sculpture</option>
           </select>
           <span class="products-stat" id="productsCount"></span>
-          <button class="btn btn-primary" style="margin-left:auto;font-size:0.85rem;padding:6px 16px;" onclick="createNewProduct()">+ New Product</button>
+          <button class="btn btn-secondary" id="bulkPublishShopifyBtn" style="margin-left:auto;font-size:0.82rem;padding:5px 12px;display:none;" onclick="bulkPublishToShopify()">Publish All to Shopify</button>
+          <button class="btn btn-primary" style="font-size:0.85rem;padding:6px 16px;" onclick="createNewProduct()">+ New Product</button>
         </div>
       </div>
       <div id="productsLoading" class="loading" style="display:none;padding:40px;text-align:center;">Loading products...</div>
@@ -7432,10 +7433,18 @@
               </div>
 
               <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:6px;">Admin API Access Token <span id="shopifyTokenBadge"></span></label>
-              <div style="display:flex;gap:6px;margin-bottom:8px;">
+              <div style="display:flex;gap:6px;margin-bottom:12px;">
                 <input type="password" id="shopifyAccessToken" placeholder="shpat_..."
                   style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
                 <button type="button" onclick="toggleReveal('shopifyAccessToken',this)" class="btn btn-small" style="font-size:0.78rem;padding:6px 10px;white-space:nowrap;">Show</button>
+              </div>
+
+              <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:6px;">Webhook Secret (API Secret Key) <span id="shopifyWebhookSecretBadge" style="font-size:0.75rem;color:var(--warm-gray);">optional</span></label>
+              <p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 6px;">Found under your custom app's <strong>API credentials</strong> tab → "API secret key". Used to verify inbound webhooks. Without it, webhooks are accepted unsigned.</p>
+              <div style="display:flex;gap:6px;margin-bottom:8px;">
+                <input type="password" id="shopifyWebhookSecret" placeholder="Shopify API secret key…"
+                  style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
+                <button type="button" onclick="toggleReveal('shopifyWebhookSecret',this)" class="btn btn-small" style="font-size:0.78rem;padding:6px 10px;white-space:nowrap;">Show</button>
               </div>
             </div>
 
@@ -7455,6 +7464,25 @@
               <button class="btn btn-danger" onclick="disconnectShopify()">Disconnect</button>
             </div>
             <div id="shopifyWebhookStatus" style="margin-top:8px;font-size:0.82rem;color:var(--warm-gray);"></div>
+            <div id="shopifyWebhookRegistry" style="margin-top:8px;"></div>
+
+            <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+
+            <div style="font-size:0.95rem;font-weight:600;margin-bottom:6px;">Drift Review Queue</div>
+            <p style="font-size:0.82rem;color:var(--warm-gray);margin:0 0 10px;">
+              Review all drift alerts across products. Resolve, accept, or dismiss drifts from one place.
+            </p>
+            <button class="btn btn-secondary" onclick="openDriftReviewQueue()">Open Drift Queue</button>
+            <div id="driftReviewQueueContainer" style="display:none;margin-top:12px;"></div>
+
+            <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+
+            <div style="font-size:0.95rem;font-weight:600;margin-bottom:6px;">Sync History</div>
+            <p style="font-size:0.82rem;color:var(--warm-gray);margin:0 0 10px;">
+              Audit trail of all push and pull sync events. Undo recent syncs if needed.
+            </p>
+            <button class="btn btn-secondary" onclick="openSyncLog()">Open Sync Log</button>
+            <div id="syncLogContainer" style="display:none;margin-top:12px;"></div>
 
             <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
 
@@ -17678,13 +17706,18 @@ function loadShopifyConfig() {
       var resultColor = lastResult === 'ok' ? 'var(--teal)' : (lastResult.indexOf('error') === 0 ? '#ef4444' : 'var(--warm-gray)');
       if (statusEl) statusEl.innerHTML =
         '<span style="color:var(--teal);">&#10003; Connected to <strong>' + esc(shopName) + '</strong></span>';
+      var webhookSecretStatus = config.webhookSecret
+        ? '<span style="color:var(--teal);">&#10003; configured</span>'
+        : '<span style="color:#f59e0b;">&#9888; not set — webhooks accepted unsigned</span>';
+      loadShopifyWebhookStatus();
       if (detailsEl) {
         detailsEl.innerHTML =
           '<div><strong>Shop:</strong> ' + esc(shopName) + '</div>' +
           '<div><strong>Domain:</strong> ' + esc(config.shopDomain) + '.myshopify.com</div>' +
           '<div><strong>API version:</strong> ' + esc(config.apiVersion || '2024-10') + '</div>' +
           '<div><strong>Connected:</strong> ' + esc(config.connectedAt ? new Date(config.connectedAt).toLocaleString() : 'Unknown') + '</div>' +
-          '<div><strong>Last test:</strong> ' + esc(lastTest) + ' <span style="color:' + resultColor + ';">' + esc(lastResult) + '</span></div>';
+          '<div><strong>Last test:</strong> ' + esc(lastTest) + ' <span style="color:' + resultColor + ';">' + esc(lastResult) + '</span></div>' +
+          '<div><strong>Webhook HMAC:</strong> ' + webhookSecretStatus + '</div>';
       }
     } else {
       disconnectedEl.style.display = 'block';
@@ -17725,6 +17758,11 @@ async function saveShopifyConfig() {
   var sp = MastDB.tenantId();
   var secrets = {};
   secrets[sp + '-shopify-admin-token'] = token;
+  // Include webhook secret if provided
+  var webhookSecret = (getFieldValue('shopifyWebhookSecret') || '').trim();
+  if (webhookSecret && !webhookSecret.includes('••••')) {
+    secrets[sp + '-shopify-webhook-secret'] = webhookSecret;
+  }
   var metadata = {
     shopDomain: rawDomain,
     apiVersion: '2024-10',
@@ -17854,10 +17892,41 @@ async function registerShopifyWebhooks() {
     }).join(', ');
     if (statusEl) statusEl.textContent = 'Webhooks registered: ' + summary;
     showToast('Webhooks registered ✓', false);
+    loadShopifyWebhookStatus();
   } catch (err) {
     if (statusEl) statusEl.textContent = 'Error: ' + (err.message || err);
     showToast('Webhook registration failed: ' + (err.message || err), true);
   }
+}
+
+function loadShopifyWebhookStatus() {
+  var el = document.getElementById('shopifyWebhookRegistry');
+  if (!el) return;
+  MastDB._ref('config/shopify/webhooks').once('value', function(snap) {
+    var webhooks = snap.val();
+    if (!webhooks || typeof webhooks !== 'object') {
+      el.innerHTML = '<div style="font-size:0.82rem;color:var(--warm-gray);">No webhooks registered.</div>';
+      return;
+    }
+    var rows = Object.entries(webhooks).map(function(kv) {
+      var topicKey = kv[0];
+      var w = kv[1];
+      var topic = (w && w.topic) || topicKey.replace('_', '/');
+      var wid = (w && w.id) || '—';
+      var created = (w && w.createdAt) ? new Date(w.createdAt).toLocaleString() : '—';
+      return '<tr><td style="padding:4px 10px 4px 0;">' + esc(topic) + '</td>' +
+        '<td style="padding:4px 10px 4px 0;color:var(--warm-gray);">#' + esc(String(wid)) + '</td>' +
+        '<td style="padding:4px 0;color:var(--warm-gray);">' + esc(created) + '</td></tr>';
+    });
+    el.innerHTML =
+      '<div style="font-size:0.85rem;font-weight:600;margin-bottom:4px;">Registered Webhooks</div>' +
+      '<table style="font-size:0.82rem;border-collapse:collapse;">' +
+      '<tr style="color:var(--warm-gray);"><th style="text-align:left;padding:2px 10px 2px 0;font-weight:500;">Topic</th>' +
+      '<th style="text-align:left;padding:2px 10px 2px 0;font-weight:500;">ID</th>' +
+      '<th style="text-align:left;padding:2px 0;font-weight:500;">Registered</th></tr>' +
+      rows.join('') + '</table>' +
+      '<button class="btn btn-small" style="margin-top:6px;font-size:0.78rem;" onclick="registerShopifyWebhooks()">Re-register</button>';
+  });
 }
 
 // ============================================================
@@ -20244,6 +20313,7 @@ async function loadProducts() {
     productsData.sort(function(a, b) { return a.name.localeCompare(b.name); });
     productsLoaded = true;
     renderProducts();
+    showBulkPublishButton();
   } catch (err) {
     console.error('Error loading products:', err);
     document.getElementById('productsGrid').innerHTML = '<p style="color:var(--danger);padding:20px;">Error loading products.</p>';
@@ -22159,6 +22229,58 @@ function parsePriceToCents(str) {
 }
 
 // ---------------------------------------------------------------------------
+// PIM Adapter v1 — Bulk Publish to Shopify (Build 4)
+// ---------------------------------------------------------------------------
+function showBulkPublishButton() {
+  var btn = document.getElementById('bulkPublishShopifyBtn');
+  if (!btn) return;
+  // Show button if Shopify config exists in RTDB (lighter than calling secretsManager)
+  MastDB._ref('config/shopify/shopDomain').once('value', function(snap) {
+    var domain = snap.val();
+    btn.style.display = domain ? '' : 'none';
+  });
+}
+
+async function bulkPublishToShopify() {
+  if (!hasPermission('products', 'update')) { showToast('You do not have permission to publish products.', true); return; }
+  // Get all active products
+  var active = productsData.filter(function(p) { return p.status === 'active'; });
+  if (active.length === 0) { showToast('No active products to publish.', true); return; }
+
+  var confirmed = await mastConfirm(
+    'Publish ' + active.length + ' active product(s) to Shopify? This will create or update each product on your connected Shopify store.',
+    { title: 'Bulk Publish to Shopify', confirmLabel: 'Publish All' }
+  );
+  if (!confirmed) return;
+
+  var btn = document.getElementById('bulkPublishShopifyBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '0 / ' + active.length + '…'; }
+
+  var successes = 0;
+  var failures = 0;
+  for (var i = 0; i < active.length; i++) {
+    var p = active[i];
+    try {
+      await firebase.functions().httpsCallable('publishProductToShopify')({
+        tenantId: MastDB.tenantId(),
+        pid: p.pid,
+        trigger: 'bulk'
+      });
+      successes++;
+    } catch (err) {
+      console.error('Bulk publish failed for', p.pid, err.message);
+      failures++;
+    }
+    if (btn) btn.innerHTML = (i + 1) + ' / ' + active.length + '…';
+  }
+
+  if (btn) { btn.disabled = false; btn.textContent = 'Publish All to Shopify'; }
+  var msg = successes + ' published';
+  if (failures > 0) msg += ', ' + failures + ' failed';
+  showToast(msg, failures > 0);
+}
+
+// ---------------------------------------------------------------------------
 // PIM Adapter v1 — Publish to Shopify (Build 2)
 // ---------------------------------------------------------------------------
 // Session-bound rollback: holds the most recent publish operationId per pid
@@ -22297,9 +22419,14 @@ function renderDriftAlertBanner(pid) {
     if (Array.isArray(d.diffs)) {
       for (var j = 0; j < d.diffs.length; j++) {
         var df = d.diffs[j];
-        diffLines += '<div style="font-size:0.78rem;margin:2px 0;"><strong>' + esc(df.field) + ':</strong> ' +
-          'Mast: <code style="background:rgba(0,0,0,0.15);padding:1px 4px;border-radius:3px;">' + esc(String(df.mast)) + '</code> → ' +
-          'Shopify: <code style="background:rgba(0,0,0,0.15);padding:1px 4px;border-radius:3px;">' + esc(String(df.shopify)) + '</code></div>';
+        var lenInfo = (df.mastLength || df.shopifyLength)
+          ? ' <span style="color:var(--warm-gray);font-size:0.72rem;">(' + (df.mastLength || '?') + ' chars → ' + (df.shopifyLength || '?') + ' chars)</span>'
+          : '';
+        diffLines += '<div style="font-size:0.78rem;margin:6px 0;"><strong>' + esc(df.field) + '</strong>' + lenInfo + '</div>' +
+          '<div style="font-size:0.75rem;margin:2px 0 4px;padding:6px 8px;border-radius:4px;background:rgba(34,197,94,0.1);border-left:3px solid var(--teal,#14b8a6);word-break:break-word;white-space:pre-wrap;">' +
+            '<span style="color:var(--warm-gray);font-size:0.7rem;">Mast (source of truth):</span><br>' + esc(String(df.mast)) + '</div>' +
+          '<div style="font-size:0.75rem;margin:2px 0;padding:6px 8px;border-radius:4px;background:rgba(220,38,38,0.08);border-left:3px solid var(--red,#dc2626);word-break:break-word;white-space:pre-wrap;">' +
+            '<span style="color:var(--warm-gray);font-size:0.7rem;">Shopify (changed):</span><br>' + esc(String(df.shopify)) + '</div>';
       }
     }
     html += '<div class="mast-drift-alert-banner" style="margin:8px 0;padding:10px 14px;border:1px solid var(--red,#dc2626);border-radius:6px;background:rgba(220,38,38,0.08);">' +
@@ -22311,6 +22438,7 @@ function renderDriftAlertBanner(pid) {
       '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
         '<button class="btn btn-secondary btn-small" onclick="toggleDriftDiff(\'' + esc(d.driftId) + '\')">View diff</button>' +
         '<button class="btn btn-secondary btn-small" onclick="overwriteShopifyFromDrift(\'' + esc(pid) + '\',\'' + esc(d.driftId) + '\')">Overwrite Shopify</button>' +
+        '<button class="btn btn-secondary btn-small" onclick="acceptShopifyEdits(\'' + esc(pid) + '\',\'' + esc(d.driftId) + '\')">Accept Shopify Edits</button>' +
         '<button class="btn btn-secondary btn-small" onclick="dismissDriftAlert(\'' + esc(d.driftId) + '\',\'' + esc(pid) + '\')">Dismiss</button>' +
       '</div>' +
     '</div>';
@@ -22329,7 +22457,7 @@ async function overwriteShopifyFromDrift(pid, driftId) {
     if (!ok) return;
     showToast('Updating Shopify…', false);
     var callable = firebase.functions().httpsCallable('publishProductToShopify');
-    var res = await callable({ tenantId: MastDB.tenantId(), pid: pid });
+    var res = await callable({ tenantId: MastDB.tenantId(), pid: pid, trigger: 'overwrite-drift' });
     var result = res && res.data;
     if (!result || !result.ok) {
       showToast('Update failed: ' + ((result && result.error) || 'unknown'), true);
@@ -22343,8 +22471,47 @@ async function overwriteShopifyFromDrift(pid, driftId) {
     delete window.__mastDriftAlerts[pid];
     showToast('Shopify updated ✓', false);
     renderProductDetail(pid);
+    // Refresh drift queue if open
+    if (document.getElementById('driftReviewQueueContainer') && document.getElementById('driftReviewQueueContainer').style.display !== 'none') {
+      openDriftReviewQueue();
+    }
   } catch (err) {
     showToast('Overwrite failed: ' + (err && err.message ? err.message : err), true);
+  }
+}
+
+async function acceptShopifyEdits(pid, driftId) {
+  try {
+    var ok = await mastConfirm('Accept the Shopify version of the drifted fields? This will update the Mast product to match Shopify.', { title: 'Accept Shopify Edits', confirmLabel: 'Accept' });
+    if (!ok) return;
+    showToast('Pulling Shopify data…');
+    var result = await firebase.functions().httpsCallable('acceptShopifyDrift')({
+      tenantId: MastDB.tenantId(),
+      pid: pid,
+      driftId: driftId
+    });
+    var data = result && result.data;
+    if (!data || !data.ok) {
+      showToast('Accept failed: ' + ((data && data.error) || 'unknown'), true);
+      return;
+    }
+    // Remove from cache
+    if (window.__mastDriftAlerts[pid]) {
+      window.__mastDriftAlerts[pid] = window.__mastDriftAlerts[pid].filter(function(a) { return a.driftId !== driftId; });
+    }
+    // Update local product cache with accepted fields
+    var localProduct = productsData.find(function(p) { return p.pid === pid; });
+    if (localProduct && data.updates) {
+      Object.assign(localProduct, data.updates);
+    }
+    showToast('Shopify edits accepted: ' + (data.fieldsAccepted || []).join(', '), false);
+    renderProductDetail(pid);
+    // Refresh drift queue if open
+    if (document.getElementById('driftReviewQueueContainer') && document.getElementById('driftReviewQueueContainer').style.display !== 'none') {
+      openDriftReviewQueue();
+    }
+  } catch (err) {
+    showToast('Accept failed: ' + (err && err.message ? err.message : err), true);
   }
 }
 
@@ -22359,8 +22526,226 @@ async function dismissDriftAlert(driftId, pid) {
     }
     showToast('Drift alert dismissed', false);
     renderProductDetail(pid);
+    // Refresh drift queue if open
+    if (document.getElementById('driftReviewQueueContainer') && document.getElementById('driftReviewQueueContainer').style.display !== 'none') {
+      openDriftReviewQueue();
+    }
   } catch (err) {
     showToast('Dismiss failed: ' + (err && err.message ? err.message : err), true);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// PIM Adapter v1 — Build 5: Drift Review Queue
+// ---------------------------------------------------------------------------
+
+window.__mastDriftQueueData = [];
+window.__mastDriftQueueTab = 'unresolved';
+
+async function openDriftReviewQueue() {
+  var container = document.getElementById('driftReviewQueueContainer');
+  if (!container) return;
+  container.style.display = 'block';
+  container.innerHTML = '<p style="color:var(--warm-gray);font-size:0.82rem;">Loading drift alerts\u2026</p>';
+  try {
+    var snap = await firebase.database().ref(MastDB.tenantId() + '/admin/publishDrift')
+      .orderByChild('detectedAt').limitToLast(100).once('value');
+    var data = [];
+    snap.forEach(function(child) { var v = child.val(); if (v) data.push(v); });
+    data.sort(function(a, b) { return (b.detectedAt || '').localeCompare(a.detectedAt || ''); });
+    window.__mastDriftQueueData = data;
+    renderDriftReviewQueue(window.__mastDriftQueueTab || 'unresolved');
+  } catch (err) {
+    container.innerHTML = '<p style="color:#dc2626;">Failed to load: ' + esc(err.message) + '</p>';
+  }
+}
+
+function renderDriftReviewQueue(tab) {
+  window.__mastDriftQueueTab = tab;
+  var container = document.getElementById('driftReviewQueueContainer');
+  if (!container) return;
+  var data = window.__mastDriftQueueData || [];
+
+  // Count per status
+  var counts = { unresolved: 0, dismissed: 0, resolved: 0, all: data.length };
+  data.forEach(function(d) {
+    if (d.status === 'unresolved') counts.unresolved++;
+    else if (d.status === 'dismissed') counts.dismissed++;
+    else if (d.status === 'resolved') counts.resolved++;
+  });
+
+  // Filter
+  var filtered = tab === 'all' ? data : data.filter(function(d) { return d.status === tab; });
+
+  var html = '<div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;">';
+  ['unresolved', 'dismissed', 'resolved', 'all'].forEach(function(t) {
+    var active = t === tab;
+    var label = t.charAt(0).toUpperCase() + t.slice(1) + ' (' + counts[t] + ')';
+    html += '<button class="btn ' + (active ? 'btn-primary' : 'btn-secondary') + ' btn-small" ' +
+      'onclick="renderDriftReviewQueue(\'' + t + '\')">' + label + '</button>';
+  });
+  html += '</div>';
+
+  if (filtered.length === 0) {
+    html += '<p style="color:var(--warm-gray);font-size:0.85rem;">No ' + tab + ' drift alerts.</p>';
+  } else {
+    html += '<div style="display:flex;flex-direction:column;gap:8px;">';
+    filtered.forEach(function(d) {
+      var fields = (d.diffs || []).map(function(df) { return df.field; }).join(', ');
+      var date = d.detectedAt ? new Date(d.detectedAt).toLocaleDateString() + ' ' + new Date(d.detectedAt).toLocaleTimeString() : '';
+      var statusColor = d.status === 'unresolved' ? '#dc2626' : d.status === 'resolved' ? '#0d9488' : '#9ca3af';
+      var statusLabel = d.status === 'unresolved' ? 'Unresolved' : d.status === 'resolved' ? 'Resolved' : 'Dismissed';
+      if (d.resolvedBy && d.status === 'resolved') statusLabel += ' (' + d.resolvedBy.replace(/_/g, ' ') + ')';
+
+      html += '<div style="background:var(--surface-card,#faf8f5);border:1px solid #e8e0d4;border-radius:8px;padding:12px;">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">';
+      html += '<strong style="font-size:0.9rem;cursor:pointer;text-decoration:underline;" onclick="navigateToProduct(\'' + esc(d.mastProductId) + '\')">' + esc(d.productName || 'Unknown') + '</strong>';
+      html += '<span style="font-size:0.75rem;color:' + statusColor + ';font-weight:600;">' + statusLabel + '</span>';
+      html += '</div>';
+      html += '<div style="font-size:0.82rem;color:var(--warm-gray);">Fields: ' + esc(fields) + ' &middot; ' + esc(date) + '</div>';
+
+      // Action buttons for unresolved and dismissed
+      if (d.status === 'unresolved' || d.status === 'dismissed') {
+        html += '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">';
+        html += '<button class="btn btn-secondary btn-small" onclick="overwriteShopifyFromDrift(\'' + esc(d.mastProductId) + '\',\'' + esc(d.driftId) + '\')">Overwrite Shopify</button>';
+        html += '<button class="btn btn-secondary btn-small" onclick="acceptShopifyEdits(\'' + esc(d.mastProductId) + '\',\'' + esc(d.driftId) + '\')">Accept Shopify</button>';
+        if (d.status === 'unresolved') {
+          html += '<button class="btn btn-secondary btn-small" onclick="dismissDriftAlert(\'' + esc(d.driftId) + '\',\'' + esc(d.mastProductId) + '\')">Dismiss</button>';
+        }
+        html += '</div>';
+      }
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  html += '<div style="margin-top:12px;"><button class="btn btn-secondary btn-small" onclick="document.getElementById(\'driftReviewQueueContainer\').style.display=\'none\'">Close</button></div>';
+  container.innerHTML = html;
+}
+
+function navigateToProduct(pid) {
+  // Close the drift queue, switch to products tab, and open product detail
+  document.getElementById('driftReviewQueueContainer').style.display = 'none';
+  if (typeof switchTab === 'function') switchTab('products');
+  if (typeof renderProductDetail === 'function') renderProductDetail(pid);
+}
+
+// ---------------------------------------------------------------------------
+// PIM Adapter v1 — Build 5: Sync Log UI
+// ---------------------------------------------------------------------------
+
+window.__mastSyncLogData = [];
+window.__mastSyncLogFilters = { direction: 'all', trigger: 'all', product: '' };
+
+async function openSyncLog() {
+  var container = document.getElementById('syncLogContainer');
+  if (!container) return;
+  container.style.display = 'block';
+  container.innerHTML = '<p style="color:var(--warm-gray);font-size:0.82rem;">Loading sync log\u2026</p>';
+  try {
+    var snap = await firebase.database().ref(MastDB.tenantId() + '/admin/syncLog')
+      .orderByChild('timestamp').limitToLast(50).once('value');
+    var data = [];
+    snap.forEach(function(child) { var v = child.val(); if (v) data.push(v); });
+    data.sort(function(a, b) { return (b.timestamp || '').localeCompare(a.timestamp || ''); });
+    window.__mastSyncLogData = data;
+    renderSyncLog();
+  } catch (err) {
+    container.innerHTML = '<p style="color:#dc2626;">Failed to load: ' + esc(err.message) + '</p>';
+  }
+}
+
+function renderSyncLog() {
+  var container = document.getElementById('syncLogContainer');
+  if (!container) return;
+  var data = window.__mastSyncLogData || [];
+  var f = window.__mastSyncLogFilters;
+
+  // Apply filters
+  var filtered = data.filter(function(d) {
+    if (f.direction !== 'all' && d.direction !== f.direction) return false;
+    if (f.trigger !== 'all' && d.trigger !== f.trigger) return false;
+    if (f.product && (d.productName || '').toLowerCase().indexOf(f.product.toLowerCase()) === -1) return false;
+    return true;
+  });
+
+  var html = '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">';
+  // Direction filter
+  html += '<select style="font-size:0.82rem;padding:4px 8px;border:1px solid #ccc;border-radius:4px;background:#fff;" onchange="window.__mastSyncLogFilters.direction=this.value;renderSyncLog()">';
+  html += '<option value="all"' + (f.direction === 'all' ? ' selected' : '') + '>All directions</option>';
+  html += '<option value="push"' + (f.direction === 'push' ? ' selected' : '') + '>Push only</option>';
+  html += '<option value="pull"' + (f.direction === 'pull' ? ' selected' : '') + '>Pull only</option>';
+  html += '</select>';
+  // Trigger filter
+  html += '<select style="font-size:0.82rem;padding:4px 8px;border:1px solid #ccc;border-radius:4px;background:#fff;" onchange="window.__mastSyncLogFilters.trigger=this.value;renderSyncLog()">';
+  html += '<option value="all"' + (f.trigger === 'all' ? ' selected' : '') + '>All triggers</option>';
+  ['manual', 'auto-sync', 'overwrite-drift', 'accept-drift', 'undo', 'bulk'].forEach(function(t) {
+    html += '<option value="' + t + '"' + (f.trigger === t ? ' selected' : '') + '>' + t + '</option>';
+  });
+  html += '</select>';
+  // Product filter
+  html += '<input type="text" placeholder="Filter by product\u2026" style="font-size:0.82rem;padding:4px 8px;border:1px solid #ccc;border-radius:4px;width:160px;" value="' + esc(f.product) + '" oninput="window.__mastSyncLogFilters.product=this.value;renderSyncLog()">';
+  html += '<span style="font-size:0.78rem;color:var(--warm-gray);">' + filtered.length + ' of ' + data.length + ' entries</span>';
+  html += '</div>';
+
+  if (filtered.length === 0) {
+    html += '<p style="color:var(--warm-gray);font-size:0.85rem;">No sync events match filters.</p>';
+  } else {
+    html += '<div style="display:flex;flex-direction:column;gap:6px;">';
+    filtered.forEach(function(d) {
+      var isPush = d.direction === 'push';
+      var dirColor = isPush ? '#d97706' : '#0d9488';
+      var dirLabel = isPush ? '\u2191 Push' : '\u2193 Pull';
+      var fields = (d.fieldsChanged || []).join(', ');
+      var ts = d.timestamp ? new Date(d.timestamp).toLocaleDateString() + ' ' + new Date(d.timestamp).toLocaleTimeString() : '';
+      var isUndone = !!d.undoneAt;
+      var opacity = isUndone ? '0.6' : '1';
+
+      html += '<div style="background:var(--surface-card,#faf8f5);border:1px solid #e8e0d4;border-radius:6px;padding:10px;opacity:' + opacity + ';' + (isUndone ? 'font-style:italic;' : '') + '">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;">';
+      html += '<div style="display:flex;align-items:center;gap:8px;">';
+      html += '<span style="font-size:0.82rem;font-weight:600;color:' + dirColor + ';">' + dirLabel + '</span>';
+      html += '<span style="font-size:0.85rem;font-weight:500;">' + esc(d.productName || 'Unknown') + '</span>';
+      html += '<span style="font-size:0.75rem;background:#f3f4f6;padding:2px 6px;border-radius:3px;">' + esc(d.trigger || 'manual') + '</span>';
+      html += '</div>';
+      html += '<span style="font-size:0.75rem;color:var(--warm-gray);">' + esc(ts) + '</span>';
+      html += '</div>';
+      html += '<div style="font-size:0.8rem;color:var(--warm-gray);margin-top:4px;">Fields: ' + esc(fields) + '</div>';
+
+      if (isUndone) {
+        var undoneTs = new Date(d.undoneAt).toLocaleDateString() + ' ' + new Date(d.undoneAt).toLocaleTimeString();
+        html += '<div style="font-size:0.78rem;color:#9ca3af;margin-top:4px;">Undone ' + esc(undoneTs) + '</div>';
+      } else if (d.previousValues && d.trigger !== 'undo') {
+        html += '<div style="margin-top:6px;"><button class="btn btn-secondary btn-small" style="font-size:0.75rem;" onclick="undoSyncEntry(\'' + esc(d.logId) + '\')">Undo</button></div>';
+      }
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  html += '<div style="margin-top:12px;"><button class="btn btn-secondary btn-small" onclick="document.getElementById(\'syncLogContainer\').style.display=\'none\'">Close</button></div>';
+  container.innerHTML = html;
+}
+
+async function undoSyncEntry(logId) {
+  try {
+    var ok = await mastConfirm('Undo this sync event? This will restore the previous values.', { title: 'Undo Sync', confirmLabel: 'Undo', danger: true });
+    if (!ok) return;
+    showToast('Undoing sync\u2026');
+    var result = await firebase.functions().httpsCallable('undoSync')({
+      tenantId: MastDB.tenantId(),
+      logId: logId
+    });
+    var data = result && result.data;
+    if (!data || !data.ok) {
+      showToast('Undo failed: ' + ((data && data.error) || 'unknown'), true);
+      return;
+    }
+    showToast('Sync undone successfully');
+    // Refresh the sync log
+    openSyncLog();
+  } catch (err) {
+    showToast('Undo failed: ' + (err && err.message ? err.message : err), true);
   }
 }
 
@@ -23331,6 +23716,7 @@ async function saveProduct(pid) {
       productData.buildIds = existing.buildIds || [];
       if (existing.status) productData.status = existing.status;
       if (existing.statusReason) productData.statusReason = existing.statusReason;
+      if (existing.externalRefs) productData.externalRefs = existing.externalRefs;
     } else {
       productData.url = '';
     }
@@ -23404,6 +23790,20 @@ async function saveProduct(pid) {
 
     showToast(isCreate ? 'Product created' : 'Product saved');
     emitTestingEvent('saveProduct', {});
+
+    // Auto-sync to Shopify if product is linked (fire-and-forget, non-blocking)
+    if (!isCreate && productData.externalRefs && productData.externalRefs.shopify && productData.externalRefs.shopify.externalId) {
+      showToast('Syncing to Shopify\u2026');
+      firebase.functions().httpsCallable('publishProductToShopify')({
+        tenantId: MastDB.tenantId(), pid: targetPid, trigger: 'auto-sync'
+      }).then(function(res) {
+        if (res.data && res.data.ok) showToast('Synced to Shopify');
+        else showToast('Shopify sync issue: ' + ((res.data && res.data.error) || ''), true);
+      }).catch(function(err) {
+        showToast('Shopify sync failed: ' + (err.message || err), true);
+      });
+    }
+
     // Retake dirty baseline — Save stays in edit mode (Paradigm A) but clears dirty.
     _productEditCaptureBaseline();
 
