@@ -22182,8 +22182,17 @@ async function publishProductToShopify(pid) {
       operation: result.operation,
       startedAt: result.lastSyncedAt || new Date().toISOString(),
     };
+    // Update local product cache so the button label switches to "Update on Shopify"
+    var localProduct = productsData.find(function(p) { return p.pid === pid; });
+    if (localProduct) {
+      if (!localProduct.externalRefs) localProduct.externalRefs = {};
+      localProduct.externalRefs.shopify = {
+        externalId: result.externalId,
+        externalUrl: result.externalUrl,
+        lastSyncedAt: result.lastSyncedAt,
+      };
+    }
     showToast((result.operation === 'update' ? 'Updated on Shopify' : 'Published to Shopify') + ' ✓', false);
-    // Re-render the product detail to show the new state + undo banner.
     renderProductDetail(pid);
   } catch (err) {
     showToast('Publish failed: ' + (err && err.message ? err.message : err), true);
@@ -22208,6 +22217,11 @@ async function undoPublishToShopify(pid) {
       return;
     }
     delete window.__mastPublishState[pid];
+    // Clear local cache so button reverts to "Publish to Shopify"
+    var localProd = productsData.find(function(p) { return p.pid === pid; });
+    if (localProd && localProd.externalRefs) {
+      delete localProd.externalRefs.shopify;
+    }
     showToast('Publish undone ✓', false);
     renderProductDetail(pid);
   } catch (err) {
