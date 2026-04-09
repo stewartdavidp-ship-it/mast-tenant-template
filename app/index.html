@@ -7433,6 +7433,13 @@
                 <span style="font-size:0.85rem;color:var(--warm-gray);">.myshopify.com</span>
               </div>
 
+              <button class="btn btn-secondary" onclick="openShopifyDevSettings()" style="margin-bottom:14px;font-size:0.82rem;padding:7px 14px;display:flex;align-items:center;gap:6px;">
+                <span style="font-size:1rem;">&#8599;</span> Open Shopify Developer Settings
+              </button>
+              <p id="shopifyDeepLinkHint" style="font-size:0.78rem;color:var(--warm-gray);margin:-8px 0 14px;display:none;">
+                In Shopify: <strong>Create an app</strong> → configure the scopes listed above → <strong>Install</strong> → copy the <strong>Admin API access token</strong> and paste it below.
+              </p>
+
               <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:6px;">Admin API Access Token <span id="shopifyTokenBadge"></span></label>
               <div style="display:flex;gap:6px;margin-bottom:12px;">
                 <input type="password" id="shopifyAccessToken" placeholder="shpat_..."
@@ -17710,6 +17717,17 @@ function loadEtsyConfig() {
 // ============================================================
 // Shopify Integration (PIM publish target)
 // ============================================================
+function openShopifyDevSettings() {
+  var domain = (document.getElementById('shopifyShopDomain').value || '').trim();
+  if (!domain) {
+    document.getElementById('shopifyShopDomain').focus();
+    showToast('Enter your shop subdomain first', 'error');
+    return;
+  }
+  document.getElementById('shopifyDeepLinkHint').style.display = 'block';
+  window.open('https://admin.shopify.com/store/' + encodeURIComponent(domain) + '/settings/apps/development', '_blank');
+}
+
 function loadShopifyConfig() {
   var statusEl = document.getElementById('shopifyConfigStatus');
   var connectedEl = document.getElementById('shopifyConnected');
