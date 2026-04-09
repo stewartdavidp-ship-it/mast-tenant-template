@@ -20411,6 +20411,7 @@ function renderProducts() {
       + (imgSrc ? '<img class="product-card-img" src="' + esc(imgSrc) + '" alt="' + esc(p.name) + '" loading="lazy">' : '<div class="product-card-img"></div>')
       + '<div class="product-card-body">'
       + '<div class="product-card-name">' + esc(p.name) + '</div>'
+      + renderChannelSyncBadges(p, { size: 'small' })
       + priceHtml
       + blBadge
       + availBadge
@@ -22536,6 +22537,59 @@ async function dismissDriftAlert(driftId, pid) {
 }
 
 // ---------------------------------------------------------------------------
+// PIM Adapter v1 — Build 5: Channel Sync Badge
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns HTML for channel sync badges. Generic — works for any platform
+ * by reading externalRefs keys (shopify, etsy, square, woo, etc.).
+ * Shows a small pill per linked channel with last-synced timestamp.
+ */
+function renderChannelSyncBadges(product, opts) {
+  if (!product || !product.externalRefs) return '';
+  var refs = product.externalRefs;
+  var channels = Object.keys(refs).filter(function(k) { return refs[k] && refs[k].externalId; });
+  if (channels.length === 0) return '';
+
+  var size = (opts && opts.size) || 'small'; // 'small' for card, 'normal' for detail
+  var fontSize = size === 'small' ? '0.68rem' : '0.78rem';
+  var padding = size === 'small' ? '1px 6px' : '2px 8px';
+  var gap = size === 'small' ? '3px' : '4px';
+
+  // Channel display config — extend this map as new platforms are added
+  var channelMeta = {
+    shopify: { label: 'Shopify', color: '#96bf48', icon: '\u21c5' },
+    etsy:    { label: 'Etsy', color: '#f1641e', icon: '\u21c5' },
+    square:  { label: 'Square', color: '#006aff', icon: '\u21c5' },
+    woo:     { label: 'WooCommerce', color: '#7f54b3', icon: '\u21c5' },
+  };
+
+  var html = '<div style="display:inline-flex;gap:' + gap + ';flex-wrap:wrap;align-items:center;">';
+  channels.forEach(function(ch) {
+    var meta = channelMeta[ch] || { label: ch.charAt(0).toUpperCase() + ch.slice(1), color: '#6b7280', icon: '\u21c5' };
+    var ref = refs[ch];
+    var title = 'Synced to ' + meta.label;
+    if (ref.lastSyncedAt) {
+      var d = new Date(ref.lastSyncedAt);
+      title += ' \u00b7 Last sync: ' + d.toLocaleDateString() + ' ' + d.toLocaleTimeString();
+    }
+    html += '<span title="' + esc(title) + '" style="' +
+      'display:inline-flex;align-items:center;gap:3px;' +
+      'font-size:' + fontSize + ';' +
+      'padding:' + padding + ';' +
+      'border-radius:10px;' +
+      'background:' + meta.color + '18;' +
+      'color:' + meta.color + ';' +
+      'font-weight:600;' +
+      'border:1px solid ' + meta.color + '40;' +
+      'white-space:nowrap;' +
+    '">' + meta.icon + ' ' + esc(meta.label) + '</span>';
+  });
+  html += '</div>';
+  return html;
+}
+
+// ---------------------------------------------------------------------------
 // PIM Adapter v1 — Build 5: Drift Review Queue
 // ---------------------------------------------------------------------------
 
@@ -22779,6 +22833,7 @@ function renderProductDetail(pid) {
     (imgSrc ? '<img class="product-detail-img" src="' + esc(imgSrc) + '" alt="' + esc(product.name || 'New Product') + '">' : '') +
     '<div style="flex:1;">' +
       '<h2 class="product-detail-name">' + esc(product.name || 'New Product') + '</h2>' +
+      renderChannelSyncBadges(product, { size: 'normal' }) +
       (product.priceCents ? '<div class="product-detail-price">' + formatPriceCents(product.priceCents) + '</div>' :
        '<div style="color:var(--warm-gray);font-style:italic;margin-bottom:8px;">Price on request</div>') +
       (product.availability === 'discontinued' ? '<span class="status-badge stock-badge out-of-stock">Discontinued</span>' : '') +
