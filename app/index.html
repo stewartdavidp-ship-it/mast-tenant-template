@@ -7386,6 +7386,75 @@
           </div>
           <div id="lkApiKeyStatus" style="margin-top:8px;font-size:0.85rem;"></div>
         </div>
+
+        <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
+
+        <div class="form-group">
+          <label style="font-size:1.15rem;font-weight:600;">Shopify Integration</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">
+            Connect your Shopify store so Mast can read your catalog and publish product changes back to Shopify. Your access token is stored in encrypted secret storage — Mast staff never see it.
+          </p>
+
+          <details style="margin-bottom:16px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:6px;padding:10px 14px;">
+            <summary style="cursor:pointer;font-size:0.85rem;font-weight:600;">How to get your Shopify token (5 minutes)</summary>
+            <ol style="font-size:0.82rem;color:var(--warm-gray);margin:10px 0 4px;padding-left:20px;line-height:1.55;">
+              <li>Log in to your Shopify admin at <code>admin.shopify.com</code>.</li>
+              <li>Click <strong>Settings</strong> (gear icon, bottom left) → <strong>Apps and sales channels</strong> → <strong>Develop apps</strong>.</li>
+              <li>If prompted, click <strong>Allow custom app development</strong> and confirm.</li>
+              <li>Click <strong>Create an app</strong> → name it <code>Mast Integration</code> → <strong>Create app</strong>.</li>
+              <li>Open the <strong>Configuration</strong> tab → under Admin API access scopes, click <strong>Configure</strong>. Check these boxes:
+                <ul style="margin:6px 0;">
+                  <li><code>read_products</code>, <code>write_products</code></li>
+                  <li><code>read_product_listings</code></li>
+                  <li><code>read_inventory</code>, <code>write_inventory</code></li>
+                  <li><code>read_orders</code></li>
+                  <li><code>read_locations</code></li>
+                  <li><code>read_content</code> (optional)</li>
+                </ul>
+                Click <strong>Save</strong>.
+              </li>
+              <li>Open the <strong>API credentials</strong> tab → click <strong>Install app</strong> at the top → confirm <strong>Install</strong>.</li>
+              <li>Under <strong>Admin API access token</strong>, click <strong>Reveal token once</strong> and copy it. It starts with <code>shpat_</code>. You can only view it once.</li>
+              <li>Paste it into the token field below and click <strong>Save &amp; Test</strong>.</li>
+            </ol>
+          </details>
+
+          <div id="shopifyConfigStatus" style="margin-bottom:12px;font-size:0.85rem;"></div>
+
+          <div id="shopifyDisconnected" style="display:none;">
+            <div style="background:var(--cream,#faf8f5);border:1px solid #e8e0d4;border-radius:8px;padding:16px;margin-bottom:12px;">
+              <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:6px;">Shop Subdomain <span id="shopifyDomainBadge"></span></label>
+              <p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 6px;">Just the subdomain — we append <code>.myshopify.com</code> automatically.</p>
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;">
+                <input type="text" id="shopifyShopDomain" placeholder="your-shop-name"
+                  style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
+                <span style="font-size:0.85rem;color:var(--warm-gray);">.myshopify.com</span>
+              </div>
+
+              <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:6px;">Admin API Access Token <span id="shopifyTokenBadge"></span></label>
+              <div style="display:flex;gap:6px;margin-bottom:8px;">
+                <input type="password" id="shopifyAccessToken" placeholder="shpat_..."
+                  style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
+                <button type="button" onclick="toggleReveal('shopifyAccessToken',this)" class="btn btn-small" style="font-size:0.78rem;padding:6px 10px;white-space:nowrap;">Show</button>
+              </div>
+            </div>
+
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-primary" onclick="saveShopifyConfig()">Save &amp; Test</button>
+            </div>
+          </div>
+
+          <div id="shopifyConnected" style="display:none;">
+            <div style="background:var(--cream,#faf8f5);border:1px solid #e8e0d4;border-radius:8px;padding:16px;margin-bottom:12px;">
+              <div id="shopifyConnectedDetails" style="font-size:0.85rem;line-height:1.6;"></div>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-secondary" onclick="testShopifyConnection()">Test Connection</button>
+              <button class="btn btn-secondary" onclick="editShopifyConfig()">Change Token</button>
+              <button class="btn btn-danger" onclick="disconnectShopify()">Disconnect</button>
+            </div>
+          </div>
+        </div>
       </div>
       <div id="settingsSubWorkshop" style="display:none;max-width:500px;">
         <div class="form-group">
@@ -14142,6 +14211,7 @@ function switchSettingsSubView(view) {
   // Lazy loads
   if (view === 'shipping') { loadShipProviderConfig(); }
   if (view === 'email') { loadEmailConfig(); loadEmailDomainSection(); }
+  if (view === 'integrations') { loadEtsyConfig(); loadShopifyConfig(); }
   if (view === 'trips') { MastAdmin.loadModule('trips').then(function() { if (typeof loadTripsSettings === 'function') loadTripsSettings(); }); }
   if (view === 'storefront') loadShopDisplaySettings();
   if (view === 'dashboard') renderDashCardSettings();
@@ -15928,6 +15998,7 @@ function loadSettings() {
   loadTaxRates();
   loadGoogleConfig();
   loadEtsyConfig();
+  loadShopifyConfig();
 }
 
 async function toggleDarkMode() {
@@ -17468,6 +17539,188 @@ function loadEtsyConfig() {
     // Clean URL
     var cleanUrl = window.location.pathname;
     window.history.replaceState({}, '', cleanUrl);
+  }
+}
+
+// ============================================================
+// Shopify Integration (PIM publish target)
+// ============================================================
+function loadShopifyConfig() {
+  var statusEl = document.getElementById('shopifyConfigStatus');
+  var connectedEl = document.getElementById('shopifyConnected');
+  var disconnectedEl = document.getElementById('shopifyDisconnected');
+  var detailsEl = document.getElementById('shopifyConnectedDetails');
+  if (!disconnectedEl || !connectedEl) return; // Not rendered yet
+
+  firebase.functions().httpsCallable('secretsManager')({
+    action: 'read',
+    service: 'shopify',
+    tenantId: MastDB.tenantId()
+  }).then(function(result) {
+    var config = (result && result.data) || {};
+    if (config.connected && config.shopDomain) {
+      disconnectedEl.style.display = 'none';
+      connectedEl.style.display = 'block';
+      var shopName = config.shopName || config.shopDomain;
+      var lastTest = config.lastTestAt ? new Date(config.lastTestAt).toLocaleString() : 'Never';
+      var lastResult = config.lastTestResult || '';
+      var resultColor = lastResult === 'ok' ? 'var(--teal)' : (lastResult.indexOf('error') === 0 ? '#ef4444' : 'var(--warm-gray)');
+      if (statusEl) statusEl.innerHTML =
+        '<span style="color:var(--teal);">&#10003; Connected to <strong>' + esc(shopName) + '</strong></span>';
+      if (detailsEl) {
+        detailsEl.innerHTML =
+          '<div><strong>Shop:</strong> ' + esc(shopName) + '</div>' +
+          '<div><strong>Domain:</strong> ' + esc(config.shopDomain) + '.myshopify.com</div>' +
+          '<div><strong>API version:</strong> ' + esc(config.apiVersion || '2024-10') + '</div>' +
+          '<div><strong>Connected:</strong> ' + esc(config.connectedAt ? new Date(config.connectedAt).toLocaleString() : 'Unknown') + '</div>' +
+          '<div><strong>Last test:</strong> ' + esc(lastTest) + ' <span style="color:' + resultColor + ';">' + esc(lastResult) + '</span></div>';
+      }
+    } else {
+      disconnectedEl.style.display = 'block';
+      connectedEl.style.display = 'none';
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray-light);">Not connected. Paste your Shopify credentials below to link your store.</span>';
+    }
+  }).catch(function(err) {
+    console.warn('secretsManager Shopify read failed:', err && err.message);
+    if (disconnectedEl) disconnectedEl.style.display = 'block';
+    if (connectedEl) connectedEl.style.display = 'none';
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray-light);">Not connected.</span>';
+  });
+}
+
+async function saveShopifyConfig() {
+  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
+  var rawDomain = (getFieldValue('shopifyShopDomain') || '').trim().toLowerCase();
+  var token = getFieldValue('shopifyAccessToken') || '';
+
+  // Normalize domain — strip https://, trailing slashes, and .myshopify.com if user pasted the full URL
+  rawDomain = rawDomain.replace(/^https?:\/\//, '').replace(/\/$/, '').replace(/\.myshopify\.com$/, '');
+  if (!/^[a-z0-9][a-z0-9-]{0,58}[a-z0-9]$/.test(rawDomain)) {
+    showToast('Shop subdomain looks invalid. Use just the subdomain, e.g., "your-shop-name" (no .myshopify.com).', true);
+    return;
+  }
+  if (!token || token.includes('••••')) {
+    showToast('Paste your Admin API access token (starts with shpat_).', true);
+    return;
+  }
+  if (!token.startsWith('shpat_')) {
+    showToast('Token does not look like a Shopify Admin API token (should start with shpat_).', true);
+    return;
+  }
+
+  var statusEl = document.getElementById('shopifyConfigStatus');
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Saving and testing connection…</span>';
+
+  var sp = MastDB.tenantId();
+  var secrets = {};
+  secrets[sp + '-shopify-admin-token'] = token;
+  var metadata = {
+    shopDomain: rawDomain,
+    apiVersion: '2024-10',
+    updatedAt: new Date().toISOString()
+  };
+
+  try {
+    var result = await firebase.functions().httpsCallable('secretsManager')({
+      action: 'write',
+      service: 'shopify',
+      tenantId: MastDB.tenantId(),
+      secrets: secrets,
+      metadata: metadata
+    });
+    await writeAudit('update', 'settings', 'shopifyConfig');
+
+    var v = result.data && result.data.verification;
+    if (v && v.token) {
+      if (v.token.valid) {
+        var shopName = (v.shop && v.shop.name) || rawDomain;
+        showToast('Shopify connected to ' + shopName);
+        if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Connected to <strong>' + esc(shopName) + '</strong></span>';
+        // Clear token field (we have it saved now) and reload the connected view
+        var tokEl = document.getElementById('shopifyAccessToken');
+        if (tokEl) tokEl.value = '';
+        loadShopifyConfig();
+      } else {
+        var errMsg = (typeof v.token.error === 'string') ? v.token.error : JSON.stringify(v.token.error);
+        if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">&#10007; Connection failed: ' + esc(errMsg) + '</span>';
+        showToast('Shopify connection failed: ' + errMsg, true);
+      }
+    } else {
+      // Verification block didn't run — unexpected but we did save
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Saved, but no verification response.</span>';
+      loadShopifyConfig();
+    }
+  } catch (err) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">&#10007; Error: ' + esc(err.message || 'unknown') + '</span>';
+    showToast('Error saving Shopify config: ' + err.message, true);
+  }
+}
+
+async function testShopifyConnection() {
+  var statusEl = document.getElementById('shopifyConfigStatus');
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Testing connection…</span>';
+  try {
+    // Re-run write with empty secrets + current metadata to trigger verification path
+    var snap = await firebase.functions().httpsCallable('secretsManager')({
+      action: 'read',
+      service: 'shopify',
+      tenantId: MastDB.tenantId()
+    });
+    var cfg = (snap && snap.data) || {};
+    if (!cfg.shopDomain) { showToast('Nothing to test — no shop connected.', true); return; }
+    var result = await firebase.functions().httpsCallable('secretsManager')({
+      action: 'write',
+      service: 'shopify',
+      tenantId: MastDB.tenantId(),
+      secrets: {},
+      metadata: { shopDomain: cfg.shopDomain, apiVersion: cfg.apiVersion || '2024-10', updatedAt: new Date().toISOString() }
+    });
+    var v = result.data && result.data.verification;
+    if (v && v.token && v.token.valid) {
+      showToast('Shopify connection OK');
+    } else {
+      var errMsg = (v && v.token && v.token.error) || 'Unknown error';
+      showToast('Shopify test failed: ' + errMsg, true);
+    }
+    loadShopifyConfig();
+  } catch (err) {
+    showToast('Error testing Shopify: ' + err.message, true);
+  }
+}
+
+function editShopifyConfig() {
+  // Switch the view back to the disconnected form so the user can paste a new token
+  var connectedEl = document.getElementById('shopifyConnected');
+  var disconnectedEl = document.getElementById('shopifyDisconnected');
+  if (connectedEl) connectedEl.style.display = 'none';
+  if (disconnectedEl) disconnectedEl.style.display = 'block';
+  // Pre-fill the current shop domain
+  firebase.functions().httpsCallable('secretsManager')({
+    action: 'read',
+    service: 'shopify',
+    tenantId: MastDB.tenantId()
+  }).then(function(result) {
+    var cfg = (result && result.data) || {};
+    var domEl = document.getElementById('shopifyShopDomain');
+    if (domEl && cfg.shopDomain) domEl.value = cfg.shopDomain;
+    var tokEl = document.getElementById('shopifyAccessToken');
+    if (tokEl) { tokEl.value = ''; tokEl.focus(); }
+  });
+}
+
+async function disconnectShopify() {
+  if (!await mastConfirm('Disconnect Shopify? Your access token will be removed and any published products will stop syncing. You can reconnect later.', { title: 'Disconnect Shopify', confirmLabel: 'Disconnect', danger: true })) return;
+  try {
+    await firebase.functions().httpsCallable('secretsManager')({
+      action: 'disconnect',
+      service: 'shopify',
+      tenantId: MastDB.tenantId()
+    });
+    await writeAudit('delete', 'settings', 'shopifyConfig');
+    showToast('Shopify disconnected.');
+    loadShopifyConfig();
+  } catch (err) {
+    showToast('Error disconnecting: ' + err.message, true);
   }
 }
 
