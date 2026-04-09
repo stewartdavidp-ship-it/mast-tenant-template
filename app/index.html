@@ -17717,7 +17717,17 @@ function loadShopifyConfig() {
           '<div><strong>API version:</strong> ' + esc(config.apiVersion || '2024-10') + '</div>' +
           '<div><strong>Connected:</strong> ' + esc(config.connectedAt ? new Date(config.connectedAt).toLocaleString() : 'Unknown') + '</div>' +
           '<div><strong>Last test:</strong> ' + esc(lastTest) + ' <span style="color:' + resultColor + ';">' + esc(lastResult) + '</span></div>' +
-          '<div><strong>Webhook HMAC:</strong> ' + webhookSecretStatus + '</div>';
+          '<div><strong>Webhook HMAC:</strong> ' + webhookSecretStatus +
+            (config.webhookSecret ? '' : ' <button class="btn btn-small" style="font-size:0.72rem;padding:2px 8px;margin-left:6px;" onclick="showSetWebhookSecret()">Set Secret</button>') +
+          '</div>' +
+          '<div id="shopifyWebhookSecretInline" style="display:none;margin-top:8px;">' +
+            '<p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 6px;">Paste your Shopify app\'s <strong>API secret key</strong> (found under API credentials tab). This verifies inbound webhooks are genuinely from Shopify.</p>' +
+            '<div style="display:flex;gap:6px;">' +
+              '<input type="password" id="shopifyWebhookSecretInlineInput" placeholder="Shopify API secret key\u2026" style="flex:1;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;">' +
+              '<button class="btn btn-primary btn-small" onclick="saveWebhookSecretInline()">Save</button>' +
+              '<button class="btn btn-secondary btn-small" onclick="document.getElementById(\'shopifyWebhookSecretInline\').style.display=\'none\'">Cancel</button>' +
+            '</div>' +
+          '</div>';
       }
     } else {
       disconnectedEl.style.display = 'block';
@@ -17834,6 +17844,36 @@ async function testShopifyConnection() {
     loadShopifyConfig();
   } catch (err) {
     showToast('Error testing Shopify: ' + err.message, true);
+  }
+}
+
+function showSetWebhookSecret() {
+  var el = document.getElementById('shopifyWebhookSecretInline');
+  if (el) { el.style.display = 'block'; }
+  var input = document.getElementById('shopifyWebhookSecretInlineInput');
+  if (input) { input.value = ''; input.focus(); }
+}
+
+async function saveWebhookSecretInline() {
+  var input = document.getElementById('shopifyWebhookSecretInlineInput');
+  var secret = input ? input.value.trim() : '';
+  if (!secret) { showToast('Please enter the webhook secret.', true); return; }
+  try {
+    showToast('Saving webhook secret\u2026');
+    var tid = MastDB.tenantId();
+    var secrets = {};
+    secrets[tid + '-shopify-webhook-secret'] = secret;
+    await firebase.functions().httpsCallable('secretsManager')({
+      action: 'write',
+      service: 'shopify',
+      tenantId: tid,
+      secrets: secrets
+    });
+    showToast('Webhook secret saved. HMAC verification is now active.');
+    document.getElementById('shopifyWebhookSecretInline').style.display = 'none';
+    loadShopifyConfig(); // Refresh the connected view
+  } catch (err) {
+    showToast('Failed to save: ' + (err.message || err), true);
   }
 }
 
