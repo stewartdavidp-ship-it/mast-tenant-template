@@ -6697,6 +6697,7 @@
         <button class="view-tab" onclick="switchSettingsSubView('domains')">Domains</button>
         <button class="view-tab" onclick="switchSettingsSubView('ai')">AI</button>
         <button class="view-tab" onclick="switchSettingsSubView('notifications')">Notifications <span id="settingsNotifBadge" class="sidebar-badge alert" style="display:none;margin-left:4px;"></span></button>
+        <button class="view-tab" onclick="switchSettingsSubView('pim')">PIM</button>
       </div>
       <div id="settingsSubGeneral" style="max-width:500px;">
         <div id="githubPatSection" class="form-group" style="display:none;">
@@ -7465,133 +7466,148 @@
             </div>
             <div id="shopifyWebhookStatus" style="margin-top:8px;font-size:0.82rem;color:var(--warm-gray);"></div>
             <div id="shopifyWebhookRegistry" style="margin-top:8px;"></div>
+          </div>
+        </div>
+      </div>
+      <div id="settingsSubPim" style="display:none;max-width:700px;">
+        <div style="margin-bottom:20px;">
+          <div style="font-size:1.15rem;font-weight:600;margin-bottom:4px;">Product Information Management</div>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin:0;">Manage channel sync drift alerts, review the sync audit log, and run integration tests.</p>
+        </div>
+        <div class="view-tabs" id="pimTabBar" style="margin-bottom:16px;">
+          <button class="view-tab active" data-tab="drift" onclick="switchPimTab('drift')">Drift Queue</button>
+          <button class="view-tab" data-tab="sync" onclick="switchPimTab('sync')">Sync Log</button>
+          <button class="view-tab" data-tab="testing" onclick="switchPimTab('testing')">Testing</button>
+        </div>
 
-            <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+        <!-- Drift Queue tab -->
+        <div id="pimTab_drift">
+          <div id="driftReviewQueueContainer">
+            <div class="loading">Loading drift alerts...</div>
+          </div>
+        </div>
 
-            <div style="font-size:0.95rem;font-weight:600;margin-bottom:6px;">Drift Review Queue</div>
-            <p style="font-size:0.82rem;color:var(--warm-gray);margin:0 0 10px;">
-              Review all drift alerts across products. Resolve, accept, or dismiss drifts from one place.
-            </p>
-            <button class="btn btn-secondary" onclick="openDriftReviewQueue()">Open Drift Queue</button>
-            <div id="driftReviewQueueContainer" style="display:none;margin-top:12px;"></div>
+        <!-- Sync Log tab -->
+        <div id="pimTab_sync" style="display:none;">
+          <div id="syncLogContainer">
+            <div class="loading">Loading sync log...</div>
+          </div>
+        </div>
 
-            <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+        <!-- Testing tab -->
+        <div id="pimTab_testing" style="display:none;">
+          <div style="margin-bottom:12px;">
+            <button class="btn btn-secondary" id="pimShowTestingBtn" onclick="togglePimTesting()">Show Testing Tools</button>
+          </div>
+          <div id="pimTestingTools" style="display:none;">
 
-            <div style="font-size:0.95rem;font-weight:600;margin-bottom:6px;">Sync History</div>
-            <p style="font-size:0.82rem;color:var(--warm-gray);margin:0 0 10px;">
-              Audit trail of all push and pull sync events. Undo recent syncs if needed.
-            </p>
-            <button class="btn btn-secondary" onclick="openSyncLog()">Open Sync Log</button>
-            <div id="syncLogContainer" style="display:none;margin-top:12px;"></div>
-
-            <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
-
-            <div style="font-size:0.95rem;font-weight:600;margin-bottom:6px;">Test Harness (Phase 1: read-only)</div>
-            <p style="font-size:0.82rem;color:var(--warm-gray);margin:0 0 10px;">
-              Runs a set of read-only API calls against your Shopify store to map what we can see. No writes, no changes to your products. Every call is logged to an audit trail so you can review exactly what was read.
+            <div style="font-size:0.9rem;font-weight:600;margin-bottom:6px;">Test Harness (Phase 1: read-only)</div>
+            <p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 10px;">
+              Runs read-only API calls against your Shopify store. No writes, no changes. Every call is audit-logged.
             </p>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
               <button class="btn btn-primary" id="shopifyHarnessRunBtn" onclick="runShopifyHarness()">Run Read-Only Harness</button>
-              <span id="shopifyHarnessStatus" style="font-size:0.82rem;color:var(--warm-gray);"></span>
+              <span id="shopifyHarnessStatus" style="font-size:0.78rem;color:var(--warm-gray);"></span>
             </div>
             <div id="shopifyHarnessReport" style="margin-top:12px;"></div>
 
-            <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+            <hr style="border:none;border-top:1px solid var(--cream-dark);margin:20px 0;">
 
-            <div style="font-size:0.95rem;font-weight:600;margin-bottom:6px;">Seed Sample Products (writes — tagged, reversible)</div>
-            <p style="font-size:0.82rem;color:var(--warm-gray);margin:0 0 10px;">
-              Creates 3 sample products in your store (T-shirt, mug, art print) with status <code>draft</code>, tagged <code>mast-seed-data</code>. Not visible on the storefront. "Clean Up Seed Data" deletes every product with that tag. Safe to run multiple times.
+            <div style="font-size:0.9rem;font-weight:600;margin-bottom:6px;">Seed Sample Products (writes — tagged, reversible)</div>
+            <p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 10px;">
+              Creates 3 sample draft products tagged <code>mast-seed-data</code>. Not visible on storefront. Clean up deletes all tagged products.
             </p>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
               <button class="btn btn-secondary" id="shopifySeedBtn" onclick="runShopifySeed()">Seed Sample Products</button>
               <button class="btn btn-secondary" id="shopifyCleanupBtn" onclick="runShopifyCleanup()">Clean Up Seed Data</button>
-              <span id="shopifySeedStatus" style="font-size:0.82rem;color:var(--warm-gray);"></span>
+              <span id="shopifySeedStatus" style="font-size:0.78rem;color:var(--warm-gray);"></span>
             </div>
             <div id="shopifySeedReport" style="margin-top:12px;"></div>
 
-            <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+            <hr style="border:none;border-top:1px solid var(--cream-dark);margin:20px 0;">
 
-            <div style="font-size:0.95rem;font-weight:600;margin-bottom:6px;">Phase 2: Metafield Write &amp; Revert</div>
-            <p style="font-size:0.82rem;color:var(--warm-gray);margin:0 0 10px;">
-              First write-and-revert test. Targets the first seed product, creates a metafield in the <code>mast_harness</code> namespace, verifies it appeared, deletes it, then verifies the metafield list is back to its original state. Every step is audit-logged with the captured pre-state. Halts immediately on any anomaly and writes a recovery report. Requires seed products to exist first.
+            <div style="font-size:0.9rem;font-weight:600;margin-bottom:6px;">Phase 2: Metafield Write &amp; Revert</div>
+            <p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 10px;">
+              Creates a metafield, verifies, deletes, confirms restored state. Requires seed products.
             </p>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
               <button class="btn btn-primary" id="shopifyPhase2Btn" onclick="runShopifyPhase2()">Run Phase 2 (metafields)</button>
-              <span id="shopifyPhase2Status" style="font-size:0.82rem;color:var(--warm-gray);"></span>
+              <span id="shopifyPhase2Status" style="font-size:0.78rem;color:var(--warm-gray);"></span>
             </div>
             <div id="shopifyPhase2Report" style="margin-top:12px;"></div>
 
-            <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+            <hr style="border:none;border-top:1px solid var(--cream-dark);margin:20px 0;">
 
-            <div style="font-size:0.95rem;font-weight:600;margin-bottom:6px;">Phase 3: Product Content Write &amp; Revert</div>
-            <p style="font-size:0.82rem;color:var(--warm-gray);margin:0 0 10px;">
-              The PIM-critical test. Captures the seed product's title, body_html, vendor, product_type, tags, handle, and status; updates title + body_html with a marker; verifies; reverts with a full PUT of the captured values; confirms byte-level equality on every tracked field. Halts and writes a recovery report on any anomaly.
+            <div style="font-size:0.9rem;font-weight:600;margin-bottom:6px;">Phase 3: Product Content Write &amp; Revert</div>
+            <p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 10px;">
+              PIM-critical test. Captures title, body_html, vendor, etc.; updates; verifies; reverts; confirms byte-level equality.
             </p>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
               <button class="btn btn-primary" id="shopifyPhase3Btn" onclick="runShopifyPhase3()">Run Phase 3 (product content)</button>
-              <span id="shopifyPhase3Status" style="font-size:0.82rem;color:var(--warm-gray);"></span>
+              <span id="shopifyPhase3Status" style="font-size:0.78rem;color:var(--warm-gray);"></span>
             </div>
             <div id="shopifyPhase3Report" style="margin-top:12px;"></div>
 
-            <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+            <hr style="border:none;border-top:1px solid var(--cream-dark);margin:20px 0;">
 
-            <div style="font-size:0.95rem;font-weight:600;margin-bottom:6px;">Phase 4: Variant Price Write &amp; Revert</div>
-            <p style="font-size:0.82rem;color:var(--warm-gray);margin:0 0 10px;">
-              Captures the first seed variant's price, compare_at_price, sku, taxable, and inventory_policy; bumps price by $1.00; verifies the new price took effect; reverts with a full PUT restoring every tracked field; confirms byte-level equality. Halts on any anomaly.
+            <div style="font-size:0.9rem;font-weight:600;margin-bottom:6px;">Phase 4: Variant Price Write &amp; Revert</div>
+            <p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 10px;">
+              Captures variant price, bumps by $1, verifies, reverts, confirms equality.
             </p>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
               <button class="btn btn-primary" id="shopifyPhase4Btn" onclick="runShopifyPhase4()">Run Phase 4 (variant price)</button>
-              <span id="shopifyPhase4Status" style="font-size:0.82rem;color:var(--warm-gray);"></span>
+              <span id="shopifyPhase4Status" style="font-size:0.78rem;color:var(--warm-gray);"></span>
             </div>
             <div id="shopifyPhase4Report" style="margin-top:12px;"></div>
 
-            <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+            <hr style="border:none;border-top:1px solid var(--cream-dark);margin:20px 0;">
 
-            <div style="font-size:0.95rem;font-weight:600;margin-bottom:6px;">Phase 5: Inventory Level Delta (+1 / −1)</div>
-            <p style="font-size:0.82rem;color:var(--warm-gray);margin:0 0 10px;">
-              Reads the first seed variant's current <code>available</code> inventory at the primary location, adjusts +1, verifies the new value equals captured+1, adjusts −1, confirms the level matches the captured pre-state. Delta-based so it's race-safe. Halts on any anomaly.
+            <div style="font-size:0.9rem;font-weight:600;margin-bottom:6px;">Phase 5: Inventory Level Delta (+1 / -1)</div>
+            <p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 10px;">
+              Adjusts inventory +1, verifies, adjusts -1, confirms restored. Delta-based, race-safe.
             </p>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
               <button class="btn btn-primary" id="shopifyPhase5Btn" onclick="runShopifyPhase5()">Run Phase 5 (inventory delta)</button>
-              <span id="shopifyPhase5Status" style="font-size:0.82rem;color:var(--warm-gray);"></span>
+              <span id="shopifyPhase5Status" style="font-size:0.78rem;color:var(--warm-gray);"></span>
             </div>
             <div id="shopifyPhase5Report" style="margin-top:12px;"></div>
 
-            <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+            <hr style="border:none;border-top:1px solid var(--cream-dark);margin:20px 0;">
 
-            <div style="font-size:0.95rem;font-weight:600;margin-bottom:6px;">Phase 6: Product Image Add &amp; Delete</div>
-            <p style="font-size:0.82rem;color:var(--warm-gray);margin:0 0 10px;">
-              Captures the seed product's image id list, uploads a hermetic 1×1 transparent PNG via the product images endpoint, verifies it appeared, deletes it, confirms the image id list is back to the captured state. No external image fetch. Halts on any anomaly.
+            <div style="font-size:0.9rem;font-weight:600;margin-bottom:6px;">Phase 6: Product Image Add &amp; Delete</div>
+            <p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 10px;">
+              Uploads a 1x1 PNG, verifies, deletes, confirms image list restored. No external fetch.
             </p>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
               <button class="btn btn-primary" id="shopifyPhase6Btn" onclick="runShopifyPhase6()">Run Phase 6 (image add/delete)</button>
-              <span id="shopifyPhase6Status" style="font-size:0.82rem;color:var(--warm-gray);"></span>
+              <span id="shopifyPhase6Status" style="font-size:0.78rem;color:var(--warm-gray);"></span>
             </div>
             <div id="shopifyPhase6Report" style="margin-top:12px;"></div>
 
-            <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+            <hr style="border:none;border-top:1px solid var(--cream-dark);margin:20px 0;">
 
-            <div style="font-size:0.95rem;font-weight:600;margin-bottom:6px;">Phase 7: Full Product Lifecycle (Create &amp; Delete)</div>
-            <p style="font-size:0.82rem;color:var(--warm-gray);margin:0 0 10px;">
-              Creates a throwaway draft product tagged <code>mast-harness-ephemeral</code> (not a seed), verifies it exists via direct GET, deletes it, confirms the GET returns 404. No existing data touched. Tests the highest-risk write path — full product create/delete against the real API.
+            <div style="font-size:0.9rem;font-weight:600;margin-bottom:6px;">Phase 7: Full Product Lifecycle (Create &amp; Delete)</div>
+            <p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 10px;">
+              Creates ephemeral draft product, verifies via GET, deletes, confirms 404. No existing data touched.
             </p>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
               <button class="btn btn-primary" id="shopifyPhase7Btn" onclick="runShopifyPhase7()">Run Phase 7 (product lifecycle)</button>
-              <span id="shopifyPhase7Status" style="font-size:0.82rem;color:var(--warm-gray);"></span>
+              <span id="shopifyPhase7Status" style="font-size:0.78rem;color:var(--warm-gray);"></span>
             </div>
             <div id="shopifyPhase7Report" style="margin-top:12px;"></div>
 
-            <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+            <hr style="border:none;border-top:1px solid var(--cream-dark);margin:20px 0;">
 
-            <div style="font-size:0.95rem;font-weight:600;margin-bottom:6px;">Phase 8: Webhook Subscription Create &amp; Delete</div>
-            <p style="font-size:0.82rem;color:var(--warm-gray);margin:0 0 10px;">
-              Shop-level, fully isolated from product data. Captures the webhook list, creates a <code>products/update</code> webhook pointing at <code>example.com/mast-harness-test</code>, verifies it appeared, deletes it, confirms the webhook list is back to the captured state. Halts on any anomaly.
+            <div style="font-size:0.9rem;font-weight:600;margin-bottom:6px;">Phase 8: Webhook Subscription Create &amp; Delete</div>
+            <p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 10px;">
+              Creates a test webhook, verifies, deletes, confirms list restored. Shop-level, isolated from product data.
             </p>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
               <button class="btn btn-primary" id="shopifyPhase8Btn" onclick="runShopifyPhase8()">Run Phase 8 (webhook)</button>
-              <span id="shopifyPhase8Status" style="font-size:0.82rem;color:var(--warm-gray);"></span>
+              <span id="shopifyPhase8Status" style="font-size:0.78rem;color:var(--warm-gray);"></span>
             </div>
             <div id="shopifyPhase8Report" style="margin-top:12px;"></div>
+
           </div>
         </div>
       </div>
@@ -14326,7 +14342,7 @@ function getModuleForRouteManifest(route) {
 // ============================================================
 // Settings Sub-Tabs
 // ============================================================
-var settingsSubViews = ['general', 'payments', 'shipping', 'tax', 'email', 'integrations', 'workshop', 'trips', 'storefront', 'dashboard', 'domains', 'ai', 'notifications'];
+var settingsSubViews = ['general', 'payments', 'shipping', 'tax', 'email', 'integrations', 'workshop', 'trips', 'storefront', 'dashboard', 'domains', 'ai', 'notifications', 'pim'];
 function switchSettingsSubView(view) {
   // Hide all sub-views
   settingsSubViews.forEach(function(v) {
@@ -14359,6 +14375,7 @@ function switchSettingsSubView(view) {
   if (view === 'subscription') renderSubscriptionSettings();
   if (view === 'about') renderAboutSettings();
   if (view === 'notifications') loadNotificationsSettings();
+  if (view === 'pim') loadPimSettings();
 }
 
 // ============================================================
@@ -22583,7 +22600,6 @@ async function dismissDriftAlert(driftId, pid) {
 /**
  * Returns HTML for channel sync badges. Generic — works for any platform
  * by reading externalRefs keys (shopify, etsy, square, woo, etc.).
- * Shows a small pill per linked channel with last-synced timestamp.
  */
 function renderChannelSyncBadges(product, opts) {
   if (!product || !product.externalRefs) return '';
@@ -22591,12 +22607,10 @@ function renderChannelSyncBadges(product, opts) {
   var channels = Object.keys(refs).filter(function(k) { return refs[k] && refs[k].externalId; });
   if (channels.length === 0) return '';
 
-  var size = (opts && opts.size) || 'small'; // 'small' for card, 'normal' for detail
-  var fontSize = size === 'small' ? '0.68rem' : '0.78rem';
-  var padding = size === 'small' ? '1px 6px' : '2px 8px';
-  var gap = size === 'small' ? '3px' : '4px';
+  var size = (opts && opts.size) || 'small';
+  var fontSize = '0.72rem';
+  var padding = size === 'small' ? '2px 6px' : '3px 10px';
 
-  // Channel display config — extend this map as new platforms are added
   var channelMeta = {
     shopify: { label: 'Shopify', color: '#96bf48', icon: '\u21c5' },
     etsy:    { label: 'Etsy', color: '#f1641e', icon: '\u21c5' },
@@ -22604,7 +22618,7 @@ function renderChannelSyncBadges(product, opts) {
     woo:     { label: 'WooCommerce', color: '#7f54b3', icon: '\u21c5' },
   };
 
-  var html = '<div style="display:inline-flex;gap:' + gap + ';flex-wrap:wrap;align-items:center;">';
+  var html = '<div style="display:inline-flex;gap:4px;flex-wrap:wrap;align-items:center;">';
   channels.forEach(function(ch) {
     var meta = channelMeta[ch] || { label: ch.charAt(0).toUpperCase() + ch.slice(1), color: '#6b7280', icon: '\u21c5' };
     var ref = refs[ch];
@@ -22615,13 +22629,9 @@ function renderChannelSyncBadges(product, opts) {
     }
     html += '<span title="' + esc(title) + '" style="' +
       'display:inline-flex;align-items:center;gap:3px;' +
-      'font-size:' + fontSize + ';' +
-      'padding:' + padding + ';' +
-      'border-radius:10px;' +
-      'background:' + meta.color + '18;' +
-      'color:' + meta.color + ';' +
-      'font-weight:600;' +
-      'border:1px solid ' + meta.color + '40;' +
+      'font-size:' + fontSize + ';font-weight:600;letter-spacing:0.04em;text-transform:uppercase;' +
+      'padding:' + padding + ';border-radius:12px;' +
+      'background:' + meta.color + '30;color:' + meta.color + ';' +
       'white-space:nowrap;' +
     '">' + meta.icon + ' ' + esc(meta.label) + '</span>';
   });
@@ -22630,7 +22640,39 @@ function renderChannelSyncBadges(product, opts) {
 }
 
 // ---------------------------------------------------------------------------
-// PIM Adapter v1 — Build 5: Drift Review Queue
+// PIM Adapter v1 — Build 5: PIM Settings Tab
+// ---------------------------------------------------------------------------
+
+window.__pimActiveTab = 'drift';
+
+function loadPimSettings() {
+  switchPimTab(window.__pimActiveTab || 'drift');
+}
+
+function switchPimTab(tab) {
+  window.__pimActiveTab = tab;
+  ['drift', 'sync', 'testing'].forEach(function(t) {
+    var el = document.getElementById('pimTab_' + t);
+    if (el) el.style.display = t === tab ? '' : 'none';
+  });
+  document.querySelectorAll('#pimTabBar .view-tab').forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  });
+  if (tab === 'drift') openDriftReviewQueue();
+  if (tab === 'sync') openSyncLog();
+}
+
+function togglePimTesting() {
+  var el = document.getElementById('pimTestingTools');
+  var btn = document.getElementById('pimShowTestingBtn');
+  if (!el) return;
+  var show = el.style.display === 'none';
+  el.style.display = show ? '' : 'none';
+  if (btn) btn.textContent = show ? 'Hide Testing Tools' : 'Show Testing Tools';
+}
+
+// ---------------------------------------------------------------------------
+// PIM Adapter v1 — Build 5: Drift Review Queue (UX-compliant)
 // ---------------------------------------------------------------------------
 
 window.__mastDriftQueueData = [];
@@ -22639,8 +22681,7 @@ window.__mastDriftQueueTab = 'unresolved';
 async function openDriftReviewQueue() {
   var container = document.getElementById('driftReviewQueueContainer');
   if (!container) return;
-  container.style.display = 'block';
-  container.innerHTML = '<p style="color:var(--warm-gray);font-size:0.82rem;">Loading drift alerts\u2026</p>';
+  container.innerHTML = '<div class="loading">Loading drift alerts...</div>';
   try {
     var snap = await firebase.database().ref(MastDB.tenantId() + '/admin/publishDrift')
       .orderByChild('detectedAt').limitToLast(100).once('value');
@@ -22650,7 +22691,7 @@ async function openDriftReviewQueue() {
     window.__mastDriftQueueData = data;
     renderDriftReviewQueue(window.__mastDriftQueueTab || 'unresolved');
   } catch (err) {
-    container.innerHTML = '<p style="color:#dc2626;">Failed to load: ' + esc(err.message) + '</p>';
+    container.innerHTML = '<p style="color:var(--danger);font-size:0.85rem;">Failed to load: ' + esc(err.message) + '</p>';
   }
 }
 
@@ -22660,7 +22701,6 @@ function renderDriftReviewQueue(tab) {
   if (!container) return;
   var data = window.__mastDriftQueueData || [];
 
-  // Count per status
   var counts = { unresolved: 0, dismissed: 0, resolved: 0, all: data.length };
   data.forEach(function(d) {
     if (d.status === 'unresolved') counts.unresolved++;
@@ -22668,10 +22708,15 @@ function renderDriftReviewQueue(tab) {
     else if (d.status === 'resolved') counts.resolved++;
   });
 
-  // Filter
   var filtered = tab === 'all' ? data : data.filter(function(d) { return d.status === tab; });
 
-  var html = '<div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;">';
+  // Header with count + filter tabs
+  var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
+  html += '<div style="font-size:0.9rem;font-weight:500;">Drift Alerts <span style="font-size:0.78rem;color:var(--warm-gray);">(' + filtered.length + ')</span></div>';
+  html += '</div>';
+
+  // Filter tabs
+  html += '<div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;">';
   ['unresolved', 'dismissed', 'resolved', 'all'].forEach(function(t) {
     var active = t === tab;
     var label = t.charAt(0).toUpperCase() + t.slice(1) + ' (' + counts[t] + ')';
@@ -22681,24 +22726,32 @@ function renderDriftReviewQueue(tab) {
   html += '</div>';
 
   if (filtered.length === 0) {
-    html += '<p style="color:var(--warm-gray);font-size:0.85rem;">No ' + tab + ' drift alerts.</p>';
+    html += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">';
+    html += '<div style="font-size:2rem;margin-bottom:12px;">\u2705</div>';
+    html += '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No ' + tab + ' drift alerts</p>';
+    html += '<p style="font-size:0.85rem;color:var(--warm-gray-light);">All synced products are in agreement.</p>';
+    html += '</div>';
   } else {
     html += '<div style="display:flex;flex-direction:column;gap:8px;">';
     filtered.forEach(function(d) {
       var fields = (d.diffs || []).map(function(df) { return df.field; }).join(', ');
       var date = d.detectedAt ? new Date(d.detectedAt).toLocaleDateString() + ' ' + new Date(d.detectedAt).toLocaleTimeString() : '';
-      var statusColor = d.status === 'unresolved' ? '#dc2626' : d.status === 'resolved' ? '#0d9488' : '#9ca3af';
+
+      // Status badge using design system
+      var badgeBg, badgeColor;
+      if (d.status === 'unresolved') { badgeBg = '#dc2626'; badgeColor = 'white'; }
+      else if (d.status === 'resolved') { badgeBg = '#16a34a'; badgeColor = 'white'; }
+      else { badgeBg = '#9ca3af'; badgeColor = 'white'; }
       var statusLabel = d.status === 'unresolved' ? 'Unresolved' : d.status === 'resolved' ? 'Resolved' : 'Dismissed';
       if (d.resolvedBy && d.status === 'resolved') statusLabel += ' (' + d.resolvedBy.replace(/_/g, ' ') + ')';
 
-      html += '<div style="background:var(--surface-card,#faf8f5);border:1px solid #e8e0d4;border-radius:8px;padding:12px;">';
+      html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;cursor:default;transition:background 0.15s;" onmouseover="this.style.background=\'rgba(196,133,60,0.08)\'" onmouseout="this.style.background=\'var(--cream)\'">';
       html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">';
-      html += '<strong style="font-size:0.9rem;cursor:pointer;text-decoration:underline;" onclick="navigateToProduct(\'' + esc(d.mastProductId) + '\')">' + esc(d.productName || 'Unknown') + '</strong>';
-      html += '<span style="font-size:0.75rem;color:' + statusColor + ';font-weight:600;">' + statusLabel + '</span>';
+      html += '<span style="font-size:0.9rem;font-weight:500;cursor:pointer;" onclick="navigateToProduct(\'' + esc(d.mastProductId) + '\')" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'">' + esc(d.productName || 'Unknown') + '</span>';
+      html += '<span class="status-badge" style="background:' + badgeBg + ';color:' + badgeColor + ';">' + statusLabel + '</span>';
       html += '</div>';
-      html += '<div style="font-size:0.82rem;color:var(--warm-gray);">Fields: ' + esc(fields) + ' &middot; ' + esc(date) + '</div>';
+      html += '<div style="font-size:0.78rem;color:var(--warm-gray);">Fields: ' + esc(fields) + ' &middot; <span style="font-size:0.72rem;">' + esc(date) + '</span></div>';
 
-      // Action buttons for unresolved and dismissed
       if (d.status === 'unresolved' || d.status === 'dismissed') {
         html += '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">';
         html += '<button class="btn btn-secondary btn-small" onclick="overwriteShopifyFromDrift(\'' + esc(d.mastProductId) + '\',\'' + esc(d.driftId) + '\')">Overwrite Shopify</button>';
@@ -22713,19 +22766,16 @@ function renderDriftReviewQueue(tab) {
     html += '</div>';
   }
 
-  html += '<div style="margin-top:12px;"><button class="btn btn-secondary btn-small" onclick="document.getElementById(\'driftReviewQueueContainer\').style.display=\'none\'">Close</button></div>';
   container.innerHTML = html;
 }
 
 function navigateToProduct(pid) {
-  // Close the drift queue, switch to products tab, and open product detail
-  document.getElementById('driftReviewQueueContainer').style.display = 'none';
   if (typeof switchTab === 'function') switchTab('products');
   if (typeof renderProductDetail === 'function') renderProductDetail(pid);
 }
 
 // ---------------------------------------------------------------------------
-// PIM Adapter v1 — Build 5: Sync Log UI
+// PIM Adapter v1 — Build 5: Sync Log (UX-compliant Report pattern)
 // ---------------------------------------------------------------------------
 
 window.__mastSyncLogData = [];
@@ -22734,8 +22784,7 @@ window.__mastSyncLogFilters = { direction: 'all', trigger: 'all', product: '' };
 async function openSyncLog() {
   var container = document.getElementById('syncLogContainer');
   if (!container) return;
-  container.style.display = 'block';
-  container.innerHTML = '<p style="color:var(--warm-gray);font-size:0.82rem;">Loading sync log\u2026</p>';
+  container.innerHTML = '<div class="loading">Loading sync log...</div>';
   try {
     var snap = await firebase.database().ref(MastDB.tenantId() + '/admin/syncLog')
       .orderByChild('timestamp').limitToLast(50).once('value');
@@ -22745,7 +22794,7 @@ async function openSyncLog() {
     window.__mastSyncLogData = data;
     renderSyncLog();
   } catch (err) {
-    container.innerHTML = '<p style="color:#dc2626;">Failed to load: ' + esc(err.message) + '</p>';
+    container.innerHTML = '<p style="color:var(--danger);font-size:0.85rem;">Failed to load: ' + esc(err.message) + '</p>';
   }
 }
 
@@ -22755,7 +22804,6 @@ function renderSyncLog() {
   var data = window.__mastSyncLogData || [];
   var f = window.__mastSyncLogFilters;
 
-  // Apply filters
   var filtered = data.filter(function(d) {
     if (f.direction !== 'all' && d.direction !== f.direction) return false;
     if (f.trigger !== 'all' && d.trigger !== f.trigger) return false;
@@ -22763,61 +22811,67 @@ function renderSyncLog() {
     return true;
   });
 
-  var html = '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">';
-  // Direction filter
-  html += '<select style="font-size:0.82rem;padding:4px 8px;border:1px solid #ccc;border-radius:4px;background:#fff;" onchange="window.__mastSyncLogFilters.direction=this.value;renderSyncLog()">';
+  // Filter bar — design system form inputs
+  var html = '<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">';
+  html += '<select style="padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.85rem;" onchange="window.__mastSyncLogFilters.direction=this.value;renderSyncLog()">';
   html += '<option value="all"' + (f.direction === 'all' ? ' selected' : '') + '>All directions</option>';
   html += '<option value="push"' + (f.direction === 'push' ? ' selected' : '') + '>Push only</option>';
   html += '<option value="pull"' + (f.direction === 'pull' ? ' selected' : '') + '>Pull only</option>';
   html += '</select>';
-  // Trigger filter
-  html += '<select style="font-size:0.82rem;padding:4px 8px;border:1px solid #ccc;border-radius:4px;background:#fff;" onchange="window.__mastSyncLogFilters.trigger=this.value;renderSyncLog()">';
+  html += '<select style="padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.85rem;" onchange="window.__mastSyncLogFilters.trigger=this.value;renderSyncLog()">';
   html += '<option value="all"' + (f.trigger === 'all' ? ' selected' : '') + '>All triggers</option>';
   ['manual', 'auto-sync', 'overwrite-drift', 'accept-drift', 'undo', 'bulk'].forEach(function(t) {
     html += '<option value="' + t + '"' + (f.trigger === t ? ' selected' : '') + '>' + t + '</option>';
   });
   html += '</select>';
-  // Product filter
-  html += '<input type="text" placeholder="Filter by product\u2026" style="font-size:0.82rem;padding:4px 8px;border:1px solid #ccc;border-radius:4px;width:160px;" value="' + esc(f.product) + '" oninput="window.__mastSyncLogFilters.product=this.value;renderSyncLog()">';
-  html += '<span style="font-size:0.78rem;color:var(--warm-gray);">' + filtered.length + ' of ' + data.length + ' entries</span>';
+  html += '<input type="text" placeholder="Filter by product\u2026" style="padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.85rem;width:180px;" value="' + esc(f.product) + '" oninput="window.__mastSyncLogFilters.product=this.value;renderSyncLog()">';
+  html += '<span style="font-size:0.78rem;color:var(--warm-gray);">' + filtered.length + ' of ' + data.length + '</span>';
   html += '</div>';
 
   if (filtered.length === 0) {
-    html += '<p style="color:var(--warm-gray);font-size:0.85rem;">No sync events match filters.</p>';
+    html += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">';
+    html += '<div style="font-size:2rem;margin-bottom:12px;">\uD83D\uDCCB</div>';
+    html += '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No sync events</p>';
+    html += '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Sync events will appear here after publishing or accepting edits.</p>';
+    html += '</div>';
   } else {
-    html += '<div style="display:flex;flex-direction:column;gap:6px;">';
+    html += '<div style="display:flex;flex-direction:column;gap:8px;">';
     filtered.forEach(function(d) {
       var isPush = d.direction === 'push';
-      var dirColor = isPush ? '#d97706' : '#0d9488';
+      var isUndone = !!d.undoneAt;
+
+      // Direction badge — .status-badge.pill
+      var dirBadgeBg = isPush ? 'var(--amber)' : 'var(--teal)';
       var dirLabel = isPush ? '\u2191 Push' : '\u2193 Pull';
+
+      // Trigger badge — draft style
+      var triggerLabel = esc(d.trigger || 'manual');
+
       var fields = (d.fieldsChanged || []).join(', ');
       var ts = d.timestamp ? new Date(d.timestamp).toLocaleDateString() + ' ' + new Date(d.timestamp).toLocaleTimeString() : '';
-      var isUndone = !!d.undoneAt;
-      var opacity = isUndone ? '0.6' : '1';
 
-      html += '<div style="background:var(--surface-card,#faf8f5);border:1px solid #e8e0d4;border-radius:6px;padding:10px;opacity:' + opacity + ';' + (isUndone ? 'font-style:italic;' : '') + '">';
+      html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;' + (isUndone ? 'opacity:0.5;font-style:italic;' : '') + 'transition:background 0.15s;" onmouseover="this.style.background=\'rgba(196,133,60,0.08)\'" onmouseout="this.style.background=\'var(--cream)\'">';
       html += '<div style="display:flex;justify-content:space-between;align-items:center;">';
       html += '<div style="display:flex;align-items:center;gap:8px;">';
-      html += '<span style="font-size:0.82rem;font-weight:600;color:' + dirColor + ';">' + dirLabel + '</span>';
-      html += '<span style="font-size:0.85rem;font-weight:500;">' + esc(d.productName || 'Unknown') + '</span>';
-      html += '<span style="font-size:0.75rem;background:#f3f4f6;padding:2px 6px;border-radius:3px;">' + esc(d.trigger || 'manual') + '</span>';
+      html += '<span class="status-badge pill" style="background:' + dirBadgeBg + ';color:white;">' + dirLabel + '</span>';
+      html += '<span style="font-size:0.9rem;font-weight:500;">' + esc(d.productName || 'Unknown') + '</span>';
+      html += '<span class="status-badge" style="background:rgba(196,133,60,0.30);color:var(--amber);">' + triggerLabel + '</span>';
       html += '</div>';
-      html += '<span style="font-size:0.75rem;color:var(--warm-gray);">' + esc(ts) + '</span>';
+      html += '<span style="font-size:0.72rem;color:var(--warm-gray);">' + esc(ts) + '</span>';
       html += '</div>';
-      html += '<div style="font-size:0.8rem;color:var(--warm-gray);margin-top:4px;">Fields: ' + esc(fields) + '</div>';
+      html += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">Fields: ' + esc(fields) + '</div>';
 
       if (isUndone) {
         var undoneTs = new Date(d.undoneAt).toLocaleDateString() + ' ' + new Date(d.undoneAt).toLocaleTimeString();
-        html += '<div style="font-size:0.78rem;color:#9ca3af;margin-top:4px;">Undone ' + esc(undoneTs) + '</div>';
+        html += '<div style="font-size:0.78rem;color:var(--warm-gray-light);margin-top:4px;">Undone ' + esc(undoneTs) + '</div>';
       } else if (d.previousValues && d.trigger !== 'undo') {
-        html += '<div style="margin-top:6px;"><button class="btn btn-secondary btn-small" style="font-size:0.75rem;" onclick="undoSyncEntry(\'' + esc(d.logId) + '\')">Undo</button></div>';
+        html += '<div style="margin-top:6px;"><button class="btn btn-secondary btn-small" onclick="undoSyncEntry(\'' + esc(d.logId) + '\')">Undo</button></div>';
       }
       html += '</div>';
     });
     html += '</div>';
   }
 
-  html += '<div style="margin-top:12px;"><button class="btn btn-secondary btn-small" onclick="document.getElementById(\'syncLogContainer\').style.display=\'none\'">Close</button></div>';
   container.innerHTML = html;
 }
 
@@ -22836,7 +22890,6 @@ async function undoSyncEntry(logId) {
       return;
     }
     showToast('Sync undone successfully');
-    // Refresh the sync log
     openSyncLog();
   } catch (err) {
     showToast('Undo failed: ' + (err && err.message ? err.message : err), true);
