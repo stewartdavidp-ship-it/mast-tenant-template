@@ -455,6 +455,15 @@ Key shipping-related fields:
 
 These fields are editable in the admin app's product edit form (Production tab).
 
+### PIM / Outbound Publishing Fields (added 2026-04-09 — Build 1)
+
+Canonical product shape for the Outbound PIM play (Mast as source of truth, publish to external storefronts). Both fields default to empty objects and are non-breaking for legacy products — reads treat missing fields as empty. Backfill via the `runProductSchemaBackfill` callable in `tenant-functions.js`.
+
+- `attributes: { [attrKey]: { value, sourceChannel, mappedChannels[], dataType, label } }` — flexible extended attributes map for channel-native fields that don't fit the core schema. Keys are FLAT, not dot-namespaced by channel. Same logical attribute across multiple channels is ONE entry with multiple `mappedChannels`. Disambiguate colliding semantics via distinct key names (`materialEtsy`, `materialShopify`). Default: `{}`.
+- `externalRefs: { [channelId]: { externalId, externalUrl, lastSyncedAt } }` — external-channel identity mapping. Paired with the reverse index at `{tenantId}/channelMappings/{channelId}/{externalId} = mastId` (written by adapters on publish). Default: `{}`.
+
+Publish safety: adapter mutations run through `withRollbackPoint` (`tenant-functions.js`), which persists pre-state under `{tenantId}/admin/publishRollback/{operationId}` for session-bound undo via `rollbackPublishOperation`.
+
 ## Admin App
 
 React app with a core shell (`/app/index.html`, ~17.6K lines) and 14 lazy-loaded feature modules (`/app/modules/*.js`, ~18.2K lines combined). Uses React 18 via CDN (no JSX — `React.createElement` / htm tagged templates), Tailwind CSS via CDN, Firebase compat SDK.

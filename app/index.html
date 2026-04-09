@@ -21905,6 +21905,7 @@ function backToProducts() {
   var doBack = function() {
     selectedProductPid = null;
     productEditMode = false;
+    if (typeof clearPublishStateOnLeave === 'function') clearPublishStateOnLeave();
     if (window.MastDirty) MastDirty.unregister('productEdit');
     var detailEl = document.getElementById('productDetailView');
     if (detailEl) {
@@ -22130,6 +22131,94 @@ function parsePriceToCents(str) {
   return isNaN(parsed) ? null : Math.round(parsed * 100);
 }
 
+// ---------------------------------------------------------------------------
+// PIM Adapter v1 — Publish to Shopify (Build 2)
+// ---------------------------------------------------------------------------
+// Session-bound rollback: holds the most recent publish operationId per pid
+// for the lifetime of this admin session. Cleared when the user navigates
+// away from the product detail view or explicitly undoes. Per DECISION
+// -OpkCSixsL46rGvwD_QD (publish rollback is session-bound).
+window.__mastPublishState = window.__mastPublishState || {};
+
+function renderPublishToShopifyButton(product) {
+  if (!product || !product.pid) return '';
+  var hasShopify = product.externalRefs && product.externalRefs.shopify && product.externalRefs.shopify.externalId;
+  var label = hasShopify ? 'Update on Shopify' : 'Publish to Shopify';
+  var title = hasShopify
+    ? 'Push the latest Mast data to the existing Shopify listing'
+    : 'Create this product on the connected Shopify store';
+  return '<button class="btn btn-secondary btn-small" title="' + esc(title) + '" onclick="publishProductToShopify(\'' + esc(product.pid) + '\')">' + esc(label) + '</button>';
+}
+
+function renderPublishUndoBanner(pid) {
+  var state = window.__mastPublishState[pid];
+  if (!state) return '';
+  var when = state.startedAt ? new Date(state.startedAt).toLocaleTimeString() : '';
+  var linkHtml = state.externalUrl
+    ? '<a href="' + esc(state.externalUrl) + '" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;">View on Shopify</a> · '
+    : '';
+  return '<div class="mast-publish-undo-banner" style="margin:8px 0;padding:10px 14px;border:1px solid var(--amber,#d97706);border-radius:6px;background:rgba(217,119,6,0.08);display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
+    '<span style="font-size:0.82rem;"><strong>Published to Shopify</strong>' + (when ? ' at ' + esc(when) : '') + '. ' + linkHtml + 'You can undo this during this session.</span>' +
+    '<button class="btn btn-secondary btn-small" onclick="undoPublishToShopify(\'' + esc(pid) + '\')">Undo publish</button>' +
+  '</div>';
+}
+
+async function publishProductToShopify(pid) {
+  try {
+    if (!confirm('Publish this product to Shopify? You can undo during this session.')) return;
+    showToast('Publishing to Shopify…', false);
+    var callable = firebase.functions().httpsCallable('publishProductToShopify');
+    var res = await callable({ tenantId: MastDB.tenantId(), pid: pid });
+    var result = res && res.data;
+    if (!result || !result.ok) {
+      showToast('Publish failed: ' + ((result && result.error) || 'unknown error'), true);
+      return;
+    }
+    window.__mastPublishState[pid] = {
+      operationId: result.operationId,
+      externalId: result.externalId,
+      externalUrl: result.externalUrl,
+      operation: result.operation,
+      startedAt: result.lastSyncedAt || new Date().toISOString(),
+    };
+    showToast((result.operation === 'update' ? 'Updated on Shopify' : 'Published to Shopify') + ' ✓', false);
+    // Re-render the product detail to show the new state + undo banner.
+    renderProductDetail(pid);
+  } catch (err) {
+    showToast('Publish failed: ' + (err && err.message ? err.message : err), true);
+  }
+}
+
+async function undoPublishToShopify(pid) {
+  var state = window.__mastPublishState[pid];
+  if (!state || !state.operationId) {
+    showToast('Nothing to undo', true);
+    return;
+  }
+  try {
+    if (!confirm('Undo this publish? On Shopify this will ' + (state.operation === 'create' ? 'delete the product' : 'restore the previous data') + '.')) return;
+    showToast('Rolling back…', false);
+    var callable = firebase.functions().httpsCallable('rollbackPublishOperation');
+    var res = await callable({ tenantId: MastDB.tenantId(), operationId: state.operationId });
+    var result = res && res.data;
+    if (!result || !result.ok) {
+      showToast('Rollback failed: ' + ((result && result.error) || 'unknown error'), true);
+      return;
+    }
+    delete window.__mastPublishState[pid];
+    showToast('Publish undone ✓', false);
+    renderProductDetail(pid);
+  } catch (err) {
+    showToast('Rollback failed: ' + (err && err.message ? err.message : err), true);
+  }
+}
+
+// Clear session-bound publish state when leaving the product detail view.
+// Attached via the existing MastNavStack product-route restorer below.
+function clearPublishStateOnLeave() {
+  window.__mastPublishState = {};
+}
+
 function renderProductDetail(pid) {
   var el = document.getElementById('productDetailView');
   var product = pid ? productsData.find(function(p) { return p.pid === pid; }) : null;
@@ -22168,6 +22257,7 @@ function renderProductDetail(pid) {
       '<button class="btn btn-secondary btn-small" onclick="editProduct(\'' + esc(pid) + '\')">Edit</button>' +
       '<button class="btn btn-secondary btn-small" onclick="openCloneDialog(\'' + esc(pid) + '\')">Duplicate</button>' +
       '<button class="btn btn-secondary btn-small" onclick="openAddToSaleDialog(\'' + esc(pid) + '\')">Add to Sale</button>' +
+      renderPublishToShopifyButton(product) +
     '</div>' : '') +
     (isEditing && !isCreate ? '<div style="display:flex;align-items:center;gap:8px;">' +
       '<span style="font-size:0.72rem;color:var(--amber);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;">Editing</span>' +
@@ -22659,8 +22749,9 @@ function renderProductDetail(pid) {
   }
 
   var backLabel = productViewOrigin === 'inventory' ? 'Back to Inventory' : 'Back to Products';
+  var publishUndoHtml = (!isCreate && pid) ? renderPublishUndoBanner(pid) : '';
   el.innerHTML = '<button class="detail-back" onclick="backToProducts()">&larr; ' + backLabel + '</button>' +
-    headerHtml + tabBarHtml + detailsHtml + variantsHtml + imagesHtml + prodHtml + invTabHtml + actionHtml;
+    publishUndoHtml + headerHtml + tabBarHtml + detailsHtml + variantsHtml + imagesHtml + prodHtml + invTabHtml + actionHtml;
 
   // Load inventory history if starting on inventory tab
   if (tab === 'inventory' && pid) {
