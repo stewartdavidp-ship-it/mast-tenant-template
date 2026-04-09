@@ -7478,6 +7478,7 @@
           <button class="view-tab active" data-tab="drift" onclick="switchPimTab('drift')">Drift Queue</button>
           <button class="view-tab" data-tab="sync" onclick="switchPimTab('sync')">Sync Log</button>
           <button class="view-tab" data-tab="testing" onclick="switchPimTab('testing')">Testing</button>
+          <button class="view-tab" data-tab="rules" onclick="switchPimTab('rules')">Rules</button>
         </div>
 
         <!-- Drift Queue tab -->
@@ -7610,6 +7611,14 @@
 
           </div>
         </div>
+
+        <!-- Rules tab -->
+        <div id="pimTab_rules" style="display:none;">
+          <div id="syncRulesContainer">
+            <div class="loading">Loading rules...</div>
+          </div>
+        </div>
+
       </div>
       <div id="settingsSubWorkshop" style="display:none;max-width:500px;">
         <div class="form-group">
@@ -22651,7 +22660,7 @@ function loadPimSettings() {
 
 function switchPimTab(tab) {
   window.__pimActiveTab = tab;
-  ['drift', 'sync', 'testing'].forEach(function(t) {
+  ['drift', 'sync', 'testing', 'rules'].forEach(function(t) {
     var el = document.getElementById('pimTab_' + t);
     if (el) el.style.display = t === tab ? '' : 'none';
   });
@@ -22660,6 +22669,7 @@ function switchPimTab(tab) {
   });
   if (tab === 'drift') openDriftReviewQueue();
   if (tab === 'sync') openSyncLog();
+  if (tab === 'rules') openSyncRules();
 }
 
 function togglePimTesting() {
@@ -22820,7 +22830,7 @@ function renderSyncLog() {
   html += '</select>';
   html += '<select style="padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.85rem;" onchange="window.__mastSyncLogFilters.trigger=this.value;renderSyncLog()">';
   html += '<option value="all"' + (f.trigger === 'all' ? ' selected' : '') + '>All triggers</option>';
-  ['manual', 'auto-sync', 'overwrite-drift', 'accept-drift', 'undo', 'bulk'].forEach(function(t) {
+  ['manual', 'auto-sync', 'overwrite-drift', 'accept-drift', 'undo', 'bulk', 'rule'].forEach(function(t) {
     html += '<option value="' + t + '"' + (f.trigger === t ? ' selected' : '') + '>' + t + '</option>';
   });
   html += '</select>';
@@ -22893,6 +22903,116 @@ async function undoSyncEntry(logId) {
     openSyncLog();
   } catch (err) {
     showToast('Undo failed: ' + (err && err.message ? err.message : err), true);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// PIM — Build 6: Sync Rules UI
+// ---------------------------------------------------------------------------
+
+var SYNC_RULE_FIELDS = ['title', 'description', 'status', 'price'];
+var SYNC_RULE_ACTIONS = ['notify', 'accept', 'overwrite', 'ignore'];
+var SYNC_RULE_ACTION_LABELS = { notify: 'Notify', accept: 'Accept', overwrite: 'Overwrite', ignore: 'Ignore' };
+
+async function openSyncRules() {
+  var container = document.getElementById('syncRulesContainer');
+  if (!container) return;
+  container.innerHTML = '<div class="loading">Loading rules...</div>';
+  try {
+    var snap = await firebase.database().ref(MastDB.tenantId() + '/admin/syncRules/shopify').once('value');
+    window.__mastSyncRules = snap.val() || {};
+    renderSyncRules();
+  } catch (err) {
+    container.innerHTML = '<p style="color:var(--danger);font-size:0.85rem;">Failed to load: ' + esc(err.message) + '</p>';
+  }
+}
+
+function renderSyncRules() {
+  var container = document.getElementById('syncRulesContainer');
+  if (!container) return;
+  var rules = window.__mastSyncRules || {};
+
+  var html = '';
+  html += '<div style="font-size:1.15rem;font-weight:600;margin-bottom:4px;">Sync Rules</div>';
+  html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin:0 0 16px;">Configure how each field is handled when an external channel\'s data differs from Mast.</p>';
+
+  // Table
+  html += '<div style="overflow-x:auto;">';
+  html += '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
+  html += '<thead><tr style="border-bottom:2px solid var(--cream-dark);text-align:left;">';
+  html += '<th style="padding:8px 12px;font-weight:600;">Field</th>';
+  html += '<th style="padding:8px 12px;font-weight:600;">Channel</th>';
+  html += '<th style="padding:8px 12px;font-weight:600;">Action</th>';
+  html += '<th style="padding:8px 12px;font-weight:600;">Last Updated</th>';
+  html += '</tr></thead><tbody>';
+
+  SYNC_RULE_FIELDS.forEach(function(field) {
+    var rule = rules[field] || {};
+    var currentAction = rule.action || 'notify';
+    var updatedAt = rule.updatedAt ? new Date(rule.updatedAt).toLocaleDateString() : null;
+    var updatedBy = rule.updatedBy || null;
+
+    html += '<tr style="border-bottom:1px solid var(--cream-dark);">';
+    html += '<td style="padding:10px 12px;font-weight:500;text-transform:capitalize;">' + esc(field) + '</td>';
+    html += '<td style="padding:10px 12px;color:var(--warm-gray);">Shopify</td>';
+    html += '<td style="padding:10px 12px;">';
+    html += '<select style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\',sans-serif;font-size:0.85rem;" onchange="saveSyncRule(\'' + esc(field) + '\', this.value)">';
+    SYNC_RULE_ACTIONS.forEach(function(action) {
+      html += '<option value="' + action + '"' + (action === currentAction ? ' selected' : '') + '>' + SYNC_RULE_ACTION_LABELS[action] + '</option>';
+    });
+    html += '</select>';
+    html += '</td>';
+    html += '<td style="padding:10px 12px;font-size:0.78rem;color:var(--warm-gray);">';
+    if (updatedAt) {
+      html += esc(updatedAt);
+      if (updatedBy) html += ' by ' + esc(updatedBy);
+    } else {
+      html += '\u2014';
+    }
+    html += '</td>';
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+  html += '</div>';
+
+  // Reset button
+  html += '<div style="margin-top:16px;">';
+  html += '<button class="btn btn-secondary btn-small" onclick="resetAllSyncRules()">Reset All to Notify</button>';
+  html += '</div>';
+
+  container.innerHTML = html;
+}
+
+async function saveSyncRule(field, action) {
+  try {
+    var now = new Date().toISOString();
+    var userId = firebase.auth().currentUser ? firebase.auth().currentUser.uid : 'unknown';
+    await firebase.database().ref(MastDB.tenantId() + '/admin/syncRules/shopify/' + field).set({
+      action: action,
+      updatedAt: now,
+      updatedBy: userId
+    });
+    // Update local cache
+    if (!window.__mastSyncRules) window.__mastSyncRules = {};
+    window.__mastSyncRules[field] = { action: action, updatedAt: now, updatedBy: userId };
+    renderSyncRules();
+    showToast('Rule updated: ' + field + ' \u2192 ' + action);
+  } catch (err) {
+    showToast('Failed to save rule: ' + (err && err.message ? err.message : err), true);
+  }
+}
+
+async function resetAllSyncRules() {
+  var ok = await mastConfirm('Reset all sync rules to "Notify"? This means all drift will require manual review.', { title: 'Reset Sync Rules', confirmLabel: 'Reset All', danger: true });
+  if (!ok) return;
+  try {
+    await firebase.database().ref(MastDB.tenantId() + '/admin/syncRules/shopify').remove();
+    window.__mastSyncRules = {};
+    renderSyncRules();
+    showToast('All sync rules reset to Notify');
+  } catch (err) {
+    showToast('Reset failed: ' + (err && err.message ? err.message : err), true);
   }
 }
 
