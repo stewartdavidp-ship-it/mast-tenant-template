@@ -7460,11 +7460,24 @@
             <p style="font-size:0.82rem;color:var(--warm-gray);margin:0 0 10px;">
               Runs a set of read-only API calls against your Shopify store to map what we can see. No writes, no changes to your products. Every call is logged to an audit trail so you can review exactly what was read.
             </p>
-            <div style="display:flex;gap:8px;align-items:center;">
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
               <button class="btn btn-primary" id="shopifyHarnessRunBtn" onclick="runShopifyHarness()">Run Read-Only Harness</button>
               <span id="shopifyHarnessStatus" style="font-size:0.82rem;color:var(--warm-gray);"></span>
             </div>
             <div id="shopifyHarnessReport" style="margin-top:12px;"></div>
+
+            <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+
+            <div style="font-size:0.95rem;font-weight:600;margin-bottom:6px;">Seed Sample Products (writes — tagged, reversible)</div>
+            <p style="font-size:0.82rem;color:var(--warm-gray);margin:0 0 10px;">
+              Creates 3 sample products in your store (T-shirt, mug, art print) with status <code>draft</code>, tagged <code>mast-seed-data</code>. Not visible on the storefront. "Clean Up Seed Data" deletes every product with that tag. Safe to run multiple times.
+            </p>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <button class="btn btn-secondary" id="shopifySeedBtn" onclick="runShopifySeed()">Seed Sample Products</button>
+              <button class="btn btn-secondary" id="shopifyCleanupBtn" onclick="runShopifyCleanup()">Clean Up Seed Data</button>
+              <span id="shopifySeedStatus" style="font-size:0.82rem;color:var(--warm-gray);"></span>
+            </div>
+            <div id="shopifySeedReport" style="margin-top:12px;"></div>
           </div>
         </div>
       </div>
@@ -17764,6 +17777,99 @@ async function runShopifyHarness() {
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = 'Run Read-Only Harness'; }
   }
+}
+
+async function runShopifySeed() {
+  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to run the seed.', true); return; }
+  var confirmed = await mastConfirm(
+    'Create 3 sample products (Mast Seed — T-Shirt, Mug, Art Print) in your Shopify store? They will be marked as DRAFT (not visible on the storefront) and tagged "mast-seed-data" so they can be removed later with the Clean Up button. This is a real write to your store.',
+    { title: 'Seed sample products?', confirmLabel: 'Seed', cancelLabel: 'Cancel' }
+  );
+  if (!confirmed) return;
+
+  var btn = document.getElementById('shopifySeedBtn');
+  var statusEl = document.getElementById('shopifySeedStatus');
+  var reportEl = document.getElementById('shopifySeedReport');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-small"></span> Seeding…'; }
+  if (statusEl) statusEl.textContent = 'Creating products in Shopify…';
+  if (reportEl) reportEl.innerHTML = '';
+
+  try {
+    var result = await firebase.functions().httpsCallable('shopifyHarnessSeedStore')({
+      tenantId: MastDB.tenantId()
+    });
+    var data = result.data || {};
+    await writeAudit('create', 'settings', 'shopifyHarnessSeed:' + (data.seedId || ''));
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; ' + data.createdCount + ' created, ' + data.failedCount + ' failed</span>';
+    renderShopifySeedReport(data, 'created');
+    showToast('Seeded ' + data.createdCount + ' sample products');
+  } catch (err) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">&#10007; ' + esc(err.message || 'Unknown error') + '</span>';
+    showToast('Seed failed: ' + err.message, true);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = 'Seed Sample Products'; }
+  }
+}
+
+async function runShopifyCleanup() {
+  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to run cleanup.', true); return; }
+  var confirmed = await mastConfirm(
+    'Delete every product in your Shopify store tagged "mast-seed-data"? This cannot be undone — Shopify does not restore deleted products. Only products created by the Mast seed action will be removed.',
+    { title: 'Clean up seed data?', confirmLabel: 'Delete', cancelLabel: 'Cancel', danger: true }
+  );
+  if (!confirmed) return;
+
+  var btn = document.getElementById('shopifyCleanupBtn');
+  var statusEl = document.getElementById('shopifySeedStatus');
+  var reportEl = document.getElementById('shopifySeedReport');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-small"></span> Cleaning…'; }
+  if (statusEl) statusEl.textContent = 'Finding and deleting seed products…';
+  if (reportEl) reportEl.innerHTML = '';
+
+  try {
+    var result = await firebase.functions().httpsCallable('shopifyHarnessCleanupSeed')({
+      tenantId: MastDB.tenantId()
+    });
+    var data = result.data || {};
+    await writeAudit('delete', 'settings', 'shopifyHarnessCleanup:' + (data.cleanupId || ''));
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; ' + data.deletedCount + ' deleted, ' + data.failedCount + ' failed</span>';
+    renderShopifySeedReport(data, 'deleted');
+    showToast('Cleaned up ' + data.deletedCount + ' seed products');
+  } catch (err) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">&#10007; ' + esc(err.message || 'Unknown error') + '</span>';
+    showToast('Cleanup failed: ' + err.message, true);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = 'Clean Up Seed Data'; }
+  }
+}
+
+function renderShopifySeedReport(data, kind) {
+  var reportEl = document.getElementById('shopifySeedReport');
+  if (!reportEl || !data) return;
+  var list = (kind === 'created' ? data.created : data.deleted) || [];
+  var fails = data.failed || [];
+  var html = '';
+  html += '<div style="background:var(--cream,#faf8f5);border:1px solid #e8e0d4;border-radius:8px;padding:12px 14px;font-size:0.82rem;">';
+  if (list.length > 0) {
+    html += '<div style="font-weight:600;margin-bottom:6px;color:var(--teal);">' + (kind === 'created' ? '&#10003; Created' : '&#10003; Deleted') + ' ' + list.length + ' product' + (list.length === 1 ? '' : 's') + '</div>';
+    html += '<ul style="margin:0;padding-left:20px;">';
+    list.forEach(function(p) {
+      html += '<li><code style="font-size:0.78rem;">' + esc(p.id || '') + '</code> — ' + esc(p.title || '') + (p.variantCount != null ? ' <span style="color:var(--warm-gray);">(' + p.variantCount + ' variant' + (p.variantCount === 1 ? '' : 's') + ')</span>' : '') + '</li>';
+    });
+    html += '</ul>';
+  } else {
+    html += '<div style="color:var(--warm-gray);">No ' + (kind === 'created' ? 'products created' : 'products found to delete') + '.</div>';
+  }
+  if (fails.length > 0) {
+    html += '<div style="margin-top:10px;font-weight:600;color:#ef4444;">&#10007; ' + fails.length + ' failed</div>';
+    html += '<ul style="margin:4px 0 0;padding-left:20px;">';
+    fails.forEach(function(f) {
+      html += '<li>' + esc(f.title || f.id || '?') + ' — <span style="color:#ef4444;">' + esc(f.error || 'unknown') + '</span></li>';
+    });
+    html += '</ul>';
+  }
+  html += '</div>';
+  reportEl.innerHTML = html;
 }
 
 function renderShopifyHarnessReport(data) {
