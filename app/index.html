@@ -22165,7 +22165,8 @@ function renderPublishUndoBanner(pid) {
 
 async function publishProductToShopify(pid) {
   try {
-    if (!confirm('Publish this product to Shopify? You can undo during this session.')) return;
+    var ok = await mastConfirm('Publish this product to Shopify? You can undo during this session.', { title: 'Publish to Shopify', confirmLabel: 'Publish' });
+    if (!ok) return;
     showToast('Publishing to Shopify…', false);
     var callable = firebase.functions().httpsCallable('publishProductToShopify');
     var res = await callable({ tenantId: MastDB.tenantId(), pid: pid });
@@ -22196,7 +22197,8 @@ async function undoPublishToShopify(pid) {
     return;
   }
   try {
-    if (!confirm('Undo this publish? On Shopify this will ' + (state.operation === 'create' ? 'delete the product' : 'restore the previous data') + '.')) return;
+    var undoOk = await mastConfirm('Undo this publish? On Shopify this will ' + (state.operation === 'create' ? 'delete the product' : 'restore the previous data') + '.', { title: 'Undo Publish', confirmLabel: 'Undo', danger: true });
+    if (!undoOk) return;
     showToast('Rolling back…', false);
     var callable = firebase.functions().httpsCallable('rollbackPublishOperation');
     var res = await callable({ tenantId: MastDB.tenantId(), operationId: state.operationId });
