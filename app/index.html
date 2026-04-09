@@ -7478,6 +7478,18 @@
               <span id="shopifySeedStatus" style="font-size:0.82rem;color:var(--warm-gray);"></span>
             </div>
             <div id="shopifySeedReport" style="margin-top:12px;"></div>
+
+            <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+
+            <div style="font-size:0.95rem;font-weight:600;margin-bottom:6px;">Phase 2: Metafield Write &amp; Revert</div>
+            <p style="font-size:0.82rem;color:var(--warm-gray);margin:0 0 10px;">
+              First write-and-revert test. Targets the first seed product, creates a metafield in the <code>mast_harness</code> namespace, verifies it appeared, deletes it, then verifies the metafield list is back to its original state. Every step is audit-logged with the captured pre-state. Halts immediately on any anomaly and writes a recovery report. Requires seed products to exist first.
+            </p>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <button class="btn btn-primary" id="shopifyPhase2Btn" onclick="runShopifyPhase2()">Run Phase 2 (metafields)</button>
+              <span id="shopifyPhase2Status" style="font-size:0.82rem;color:var(--warm-gray);"></span>
+            </div>
+            <div id="shopifyPhase2Report" style="margin-top:12px;"></div>
           </div>
         </div>
       </div>
@@ -17868,6 +17880,88 @@ function renderShopifySeedReport(data, kind) {
     });
     html += '</ul>';
   }
+  html += '</div>';
+  reportEl.innerHTML = html;
+}
+
+async function runShopifyPhase2() {
+  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to run Phase 2.', true); return; }
+  var confirmed = await mastConfirm(
+    'Run Phase 2 write/revert test? This creates a metafield on one of your seed products, verifies it, then deletes it. Every step is audited. If any step fails, the run halts and a recovery report is written with the original data so you can restore by hand.',
+    { title: 'Run Phase 2?', confirmLabel: 'Run', cancelLabel: 'Cancel' }
+  );
+  if (!confirmed) return;
+
+  var btn = document.getElementById('shopifyPhase2Btn');
+  var statusEl = document.getElementById('shopifyPhase2Status');
+  var reportEl = document.getElementById('shopifyPhase2Report');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-small"></span> Running…'; }
+  if (statusEl) statusEl.textContent = 'Capturing → writing → verifying → reverting → confirming…';
+  if (reportEl) reportEl.innerHTML = '';
+
+  try {
+    var result = await firebase.functions().httpsCallable('shopifyHarnessRunPhase2')({
+      tenantId: MastDB.tenantId()
+    });
+    var data = result.data || {};
+    await writeAudit('update', 'settings', 'shopifyHarnessPhase2:' + (data.runId || ''));
+
+    if (data.status === 'halted') {
+      if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">&#10007; HALTED — ' + esc(data.haltReason || 'unknown') + '</span>';
+    } else {
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Complete — ' + data.summary.passed + '/' + data.summary.total + ' tests passed</span>';
+    }
+    renderShopifyPhase2Report(data);
+    if (data.hasLeftoverChanges) {
+      showToast('CRITICAL: revert failed. Check recovery report.', true);
+    } else if (data.status === 'halted') {
+      showToast('Phase 2 halted: ' + (data.haltReason || 'unknown'), true);
+    } else {
+      showToast('Phase 2 complete — all reverts verified');
+    }
+  } catch (err) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">&#10007; ' + esc(err.message || 'Unknown error') + '</span>';
+    showToast('Phase 2 failed: ' + err.message, true);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = 'Run Phase 2 (metafields)'; }
+  }
+}
+
+function renderShopifyPhase2Report(data) {
+  var reportEl = document.getElementById('shopifyPhase2Report');
+  if (!reportEl || !data) return;
+  var html = '';
+  var bannerColor = data.hasLeftoverChanges ? '#ef4444' : (data.status === 'halted' ? '#f59e0b' : 'var(--teal)');
+  html += '<div style="background:var(--cream,#faf8f5);border:1px solid #e8e0d4;border-radius:8px;padding:14px;font-size:0.82rem;">';
+  html += '<div style="font-weight:600;margin-bottom:6px;">Run ID: <code>' + esc(data.runId || '') + '</code></div>';
+  if (data.targetProduct) {
+    html += '<div style="margin-bottom:10px;color:var(--warm-gray);">Target: ' + esc(data.targetProduct.title || '') + ' <code style="font-size:0.78rem;">' + esc(data.targetProduct.id || '') + '</code></div>';
+  }
+  if (data.hasLeftoverChanges) {
+    html += '<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.35);border-radius:6px;padding:10px 12px;margin-bottom:10px;">';
+    html += '<div style="color:#ef4444;font-weight:700;">&#9888; CRITICAL: Revert Failed</div>';
+    html += '<div style="margin-top:4px;">Data in your Shopify store was modified and could not be automatically reverted. Check the audit trail at <code>admin/shopifyHarness/runs/' + esc(data.runId || '') + '/recoveryReport</code> for the exact captured state so you can restore by hand.</div>';
+    html += '</div>';
+  } else if (data.status === 'halted') {
+    html += '<div style="color:#f59e0b;margin-bottom:10px;">Halted: ' + esc(data.haltReason || 'unknown') + '</div>';
+  }
+  html += '<table style="width:100%;border-collapse:collapse;">';
+  html += '<thead><tr style="border-bottom:1px solid #e8e0d4;">';
+  html += '<th style="text-align:left;padding:6px 8px;">Test</th>';
+  html += '<th style="text-align:left;padding:6px 8px;">Status</th>';
+  html += '<th style="text-align:left;padding:6px 8px;">Detail</th>';
+  html += '</tr></thead><tbody>';
+  (data.tests || []).forEach(function(t) {
+    var color = t.ok ? 'var(--teal)' : '#ef4444';
+    var symbol = t.ok ? '&#10003;' : '&#10007;';
+    html += '<tr style="border-bottom:1px solid #f0ebe0;">';
+    html += '<td style="padding:6px 8px;">' + esc(t.name || '') + '</td>';
+    html += '<td style="padding:6px 8px;color:' + color + ';">' + symbol + ' ' + (t.ok ? 'passed' : 'failed') + '</td>';
+    html += '<td style="padding:6px 8px;color:var(--warm-gray);">' + esc(t.correlationId || t.error || '') + '</td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  html += '<div style="margin-top:10px;font-size:0.78rem;color:var(--warm-gray);">Full audit: <code>admin/shopifyHarness/runs/' + esc(data.runId || '') + '/events</code></div>';
   html += '</div>';
   reportEl.innerHTML = html;
 }
