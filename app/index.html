@@ -7502,6 +7502,66 @@
               <span id="shopifyPhase3Status" style="font-size:0.82rem;color:var(--warm-gray);"></span>
             </div>
             <div id="shopifyPhase3Report" style="margin-top:12px;"></div>
+
+            <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+
+            <div style="font-size:0.95rem;font-weight:600;margin-bottom:6px;">Phase 4: Variant Price Write &amp; Revert</div>
+            <p style="font-size:0.82rem;color:var(--warm-gray);margin:0 0 10px;">
+              Captures the first seed variant's price, compare_at_price, sku, taxable, and inventory_policy; bumps price by $1.00; verifies the new price took effect; reverts with a full PUT restoring every tracked field; confirms byte-level equality. Halts on any anomaly.
+            </p>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <button class="btn btn-primary" id="shopifyPhase4Btn" onclick="runShopifyPhase4()">Run Phase 4 (variant price)</button>
+              <span id="shopifyPhase4Status" style="font-size:0.82rem;color:var(--warm-gray);"></span>
+            </div>
+            <div id="shopifyPhase4Report" style="margin-top:12px;"></div>
+
+            <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+
+            <div style="font-size:0.95rem;font-weight:600;margin-bottom:6px;">Phase 5: Inventory Level Delta (+1 / −1)</div>
+            <p style="font-size:0.82rem;color:var(--warm-gray);margin:0 0 10px;">
+              Reads the first seed variant's current <code>available</code> inventory at the primary location, adjusts +1, verifies the new value equals captured+1, adjusts −1, confirms the level matches the captured pre-state. Delta-based so it's race-safe. Halts on any anomaly.
+            </p>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <button class="btn btn-primary" id="shopifyPhase5Btn" onclick="runShopifyPhase5()">Run Phase 5 (inventory delta)</button>
+              <span id="shopifyPhase5Status" style="font-size:0.82rem;color:var(--warm-gray);"></span>
+            </div>
+            <div id="shopifyPhase5Report" style="margin-top:12px;"></div>
+
+            <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+
+            <div style="font-size:0.95rem;font-weight:600;margin-bottom:6px;">Phase 6: Product Image Add &amp; Delete</div>
+            <p style="font-size:0.82rem;color:var(--warm-gray);margin:0 0 10px;">
+              Captures the seed product's image id list, uploads a hermetic 1×1 transparent PNG via the product images endpoint, verifies it appeared, deletes it, confirms the image id list is back to the captured state. No external image fetch. Halts on any anomaly.
+            </p>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <button class="btn btn-primary" id="shopifyPhase6Btn" onclick="runShopifyPhase6()">Run Phase 6 (image add/delete)</button>
+              <span id="shopifyPhase6Status" style="font-size:0.82rem;color:var(--warm-gray);"></span>
+            </div>
+            <div id="shopifyPhase6Report" style="margin-top:12px;"></div>
+
+            <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+
+            <div style="font-size:0.95rem;font-weight:600;margin-bottom:6px;">Phase 7: Full Product Lifecycle (Create &amp; Delete)</div>
+            <p style="font-size:0.82rem;color:var(--warm-gray);margin:0 0 10px;">
+              Creates a throwaway draft product tagged <code>mast-harness-ephemeral</code> (not a seed), verifies it exists via direct GET, deletes it, confirms the GET returns 404. No existing data touched. Tests the highest-risk write path — full product create/delete against the real API.
+            </p>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <button class="btn btn-primary" id="shopifyPhase7Btn" onclick="runShopifyPhase7()">Run Phase 7 (product lifecycle)</button>
+              <span id="shopifyPhase7Status" style="font-size:0.82rem;color:var(--warm-gray);"></span>
+            </div>
+            <div id="shopifyPhase7Report" style="margin-top:12px;"></div>
+
+            <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+
+            <div style="font-size:0.95rem;font-weight:600;margin-bottom:6px;">Phase 8: Webhook Subscription Create &amp; Delete</div>
+            <p style="font-size:0.82rem;color:var(--warm-gray);margin:0 0 10px;">
+              Shop-level, fully isolated from product data. Captures the webhook list, creates a <code>products/update</code> webhook pointing at <code>example.com/mast-harness-test</code>, verifies it appeared, deletes it, confirms the webhook list is back to the captured state. Halts on any anomaly.
+            </p>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <button class="btn btn-primary" id="shopifyPhase8Btn" onclick="runShopifyPhase8()">Run Phase 8 (webhook)</button>
+              <span id="shopifyPhase8Status" style="font-size:0.82rem;color:var(--warm-gray);"></span>
+            </div>
+            <div id="shopifyPhase8Report" style="margin-top:12px;"></div>
           </div>
         </div>
       </div>
@@ -17981,6 +18041,109 @@ async function runShopifyPhase3() {
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = 'Run Phase 3 (product content)'; }
   }
+}
+
+// Generic handler for Phases 4–8. All share the same UI flow and report shape.
+async function runShopifyGenericPhase(cfg) {
+  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to run ' + cfg.phaseLabel + '.', true); return; }
+  var confirmed = await mastConfirm(cfg.confirmText, {
+    title: 'Run ' + cfg.phaseLabel + '?', confirmLabel: 'Run', cancelLabel: 'Cancel'
+  });
+  if (!confirmed) return;
+
+  var btn = document.getElementById(cfg.btnId);
+  var statusEl = document.getElementById(cfg.statusId);
+  var reportEl = document.getElementById(cfg.reportId);
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-small"></span> Running…'; }
+  if (statusEl) statusEl.textContent = 'Capturing → writing → verifying → reverting → confirming…';
+  if (reportEl) reportEl.innerHTML = '';
+
+  try {
+    var result = await firebase.functions().httpsCallable(cfg.callable)({
+      tenantId: MastDB.tenantId()
+    });
+    var data = result.data || {};
+    await writeAudit('update', 'settings', cfg.callable + ':' + (data.runId || ''));
+
+    if (data.status === 'halted') {
+      if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">&#10007; HALTED — ' + esc(data.haltReason || 'unknown') + '</span>';
+    } else {
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Complete — ' + data.summary.passed + '/' + data.summary.total + ' tests passed</span>';
+    }
+    if (reportEl) reportEl.innerHTML = buildShopifyPhaseReportHtml(data);
+    if (data.hasLeftoverChanges) {
+      showToast('CRITICAL: revert failed. Check recovery report.', true);
+    } else if (data.status === 'halted') {
+      showToast(cfg.phaseLabel + ' halted: ' + (data.haltReason || 'unknown'), true);
+    } else {
+      showToast(cfg.phaseLabel + ' complete — all reverts verified');
+    }
+  } catch (err) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">&#10007; ' + esc(err.message || 'Unknown error') + '</span>';
+    showToast(cfg.phaseLabel + ' failed: ' + err.message, true);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = cfg.btnLabel; }
+  }
+}
+
+function runShopifyPhase4() {
+  return runShopifyGenericPhase({
+    phaseLabel: 'Phase 4',
+    callable: 'shopifyHarnessRunPhase4',
+    btnId: 'shopifyPhase4Btn',
+    btnLabel: 'Run Phase 4 (variant price)',
+    statusId: 'shopifyPhase4Status',
+    reportId: 'shopifyPhase4Report',
+    confirmText: 'Run Phase 4 write/revert test? Captures the first seed variant\'s price + related fields, bumps price by $1, verifies, then PUTs every tracked field back to the captured values. Halts on any anomaly and writes a recovery report.'
+  });
+}
+
+function runShopifyPhase5() {
+  return runShopifyGenericPhase({
+    phaseLabel: 'Phase 5',
+    callable: 'shopifyHarnessRunPhase5',
+    btnId: 'shopifyPhase5Btn',
+    btnLabel: 'Run Phase 5 (inventory delta)',
+    statusId: 'shopifyPhase5Status',
+    reportId: 'shopifyPhase5Report',
+    confirmText: 'Run Phase 5 write/revert test? Adjusts the first seed variant\'s inventory +1 at the primary location, verifies, then adjusts −1 and confirms the level matches the captured pre-state. Delta-based so it\'s race-safe. Halts on any anomaly.'
+  });
+}
+
+function runShopifyPhase6() {
+  return runShopifyGenericPhase({
+    phaseLabel: 'Phase 6',
+    callable: 'shopifyHarnessRunPhase6',
+    btnId: 'shopifyPhase6Btn',
+    btnLabel: 'Run Phase 6 (image add/delete)',
+    statusId: 'shopifyPhase6Status',
+    reportId: 'shopifyPhase6Report',
+    confirmText: 'Run Phase 6 write/revert test? Uploads a tiny hermetic 1×1 PNG to the seed product, verifies it appeared in the image list, then deletes it and confirms the image list is back to the captured state. Halts on any anomaly.'
+  });
+}
+
+function runShopifyPhase7() {
+  return runShopifyGenericPhase({
+    phaseLabel: 'Phase 7',
+    callable: 'shopifyHarnessRunPhase7',
+    btnId: 'shopifyPhase7Btn',
+    btnLabel: 'Run Phase 7 (product lifecycle)',
+    statusId: 'shopifyPhase7Status',
+    reportId: 'shopifyPhase7Report',
+    confirmText: 'Run Phase 7 write/revert test? Creates a throwaway draft product (NOT a seed — brand new), verifies it exists, deletes it, confirms the GET returns 404. This is the highest-risk write path. Halts on any anomaly and writes a recovery report.'
+  });
+}
+
+function runShopifyPhase8() {
+  return runShopifyGenericPhase({
+    phaseLabel: 'Phase 8',
+    callable: 'shopifyHarnessRunPhase8',
+    btnId: 'shopifyPhase8Btn',
+    btnLabel: 'Run Phase 8 (webhook)',
+    statusId: 'shopifyPhase8Status',
+    reportId: 'shopifyPhase8Report',
+    confirmText: 'Run Phase 8 write/revert test? Creates a products/update webhook pointing at example.com/mast-harness-test, verifies it appeared in the webhook list, deletes it, confirms the list is back to the captured pre-state. Shop-level — isolated from product data. Halts on any anomaly.'
+  });
 }
 
 // Shared HTML builder used by Phase 2 and Phase 3 reports.
