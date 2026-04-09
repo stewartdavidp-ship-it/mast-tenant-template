@@ -7490,6 +7490,18 @@
               <span id="shopifyPhase2Status" style="font-size:0.82rem;color:var(--warm-gray);"></span>
             </div>
             <div id="shopifyPhase2Report" style="margin-top:12px;"></div>
+
+            <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+
+            <div style="font-size:0.95rem;font-weight:600;margin-bottom:6px;">Phase 3: Product Content Write &amp; Revert</div>
+            <p style="font-size:0.82rem;color:var(--warm-gray);margin:0 0 10px;">
+              The PIM-critical test. Captures the seed product's title, body_html, vendor, product_type, tags, handle, and status; updates title + body_html with a marker; verifies; reverts with a full PUT of the captured values; confirms byte-level equality on every tracked field. Halts and writes a recovery report on any anomaly.
+            </p>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <button class="btn btn-primary" id="shopifyPhase3Btn" onclick="runShopifyPhase3()">Run Phase 3 (product content)</button>
+              <span id="shopifyPhase3Status" style="font-size:0.82rem;color:var(--warm-gray);"></span>
+            </div>
+            <div id="shopifyPhase3Report" style="margin-top:12px;"></div>
           </div>
         </div>
       </div>
@@ -17927,20 +17939,66 @@ async function runShopifyPhase2() {
   }
 }
 
-function renderShopifyPhase2Report(data) {
-  var reportEl = document.getElementById('shopifyPhase2Report');
-  if (!reportEl || !data) return;
+async function runShopifyPhase3() {
+  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to run Phase 3.', true); return; }
+  var confirmed = await mastConfirm(
+    'Run Phase 3 write/revert test? This updates the seed product\'s title and body_html, verifies, then reverts to the captured pre-state with a full PUT. Every step is audited. If any step fails, the run halts and a recovery report is written with the original data.',
+    { title: 'Run Phase 3?', confirmLabel: 'Run', cancelLabel: 'Cancel' }
+  );
+  if (!confirmed) return;
+
+  var btn = document.getElementById('shopifyPhase3Btn');
+  var statusEl = document.getElementById('shopifyPhase3Status');
+  var reportEl = document.getElementById('shopifyPhase3Report');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-small"></span> Running…'; }
+  if (statusEl) statusEl.textContent = 'Capturing → writing → verifying → reverting → confirming…';
+  if (reportEl) reportEl.innerHTML = '';
+
+  try {
+    var result = await firebase.functions().httpsCallable('shopifyHarnessRunPhase3')({
+      tenantId: MastDB.tenantId()
+    });
+    var data = result.data || {};
+    await writeAudit('update', 'settings', 'shopifyHarnessPhase3:' + (data.runId || ''));
+
+    if (data.status === 'halted') {
+      if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">&#10007; HALTED — ' + esc(data.haltReason || 'unknown') + '</span>';
+    } else {
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Complete — ' + data.summary.passed + '/' + data.summary.total + ' tests passed</span>';
+    }
+    // Reuse the phase2 report renderer — same shape
+    reportEl.innerHTML = buildShopifyPhaseReportHtml(data);
+    if (data.hasLeftoverChanges) {
+      showToast('CRITICAL: revert failed. Check recovery report.', true);
+    } else if (data.status === 'halted') {
+      showToast('Phase 3 halted: ' + (data.haltReason || 'unknown'), true);
+    } else {
+      showToast('Phase 3 complete — all reverts verified');
+    }
+  } catch (err) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">&#10007; ' + esc(err.message || 'Unknown error') + '</span>';
+    showToast('Phase 3 failed: ' + err.message, true);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = 'Run Phase 3 (product content)'; }
+  }
+}
+
+// Shared HTML builder used by Phase 2 and Phase 3 reports.
+function buildShopifyPhaseReportHtml(data) {
+  if (!data) return '';
   var html = '';
-  var bannerColor = data.hasLeftoverChanges ? '#ef4444' : (data.status === 'halted' ? '#f59e0b' : 'var(--teal)');
   html += '<div style="background:var(--cream,#faf8f5);border:1px solid #e8e0d4;border-radius:8px;padding:14px;font-size:0.82rem;">';
   html += '<div style="font-weight:600;margin-bottom:6px;">Run ID: <code>' + esc(data.runId || '') + '</code></div>';
   if (data.targetProduct) {
     html += '<div style="margin-bottom:10px;color:var(--warm-gray);">Target: ' + esc(data.targetProduct.title || '') + ' <code style="font-size:0.78rem;">' + esc(data.targetProduct.id || '') + '</code></div>';
   }
+  if (data.trackedFields) {
+    html += '<div style="margin-bottom:10px;color:var(--warm-gray);font-size:0.78rem;">Tracked fields: ' + data.trackedFields.map(function(f){return '<code>' + esc(f) + '</code>';}).join(', ') + '</div>';
+  }
   if (data.hasLeftoverChanges) {
     html += '<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.35);border-radius:6px;padding:10px 12px;margin-bottom:10px;">';
     html += '<div style="color:#ef4444;font-weight:700;">&#9888; CRITICAL: Revert Failed</div>';
-    html += '<div style="margin-top:4px;">Data in your Shopify store was modified and could not be automatically reverted. Check the audit trail at <code>admin/shopifyHarness/runs/' + esc(data.runId || '') + '/recoveryReport</code> for the exact captured state so you can restore by hand.</div>';
+    html += '<div style="margin-top:4px;">Data in your Shopify store was modified and could not be automatically reverted. Check <code>admin/shopifyHarness/runs/' + esc(data.runId || '') + '/recoveryReport</code> for the captured state to restore by hand.</div>';
     html += '</div>';
   } else if (data.status === 'halted') {
     html += '<div style="color:#f59e0b;margin-bottom:10px;">Halted: ' + esc(data.haltReason || 'unknown') + '</div>';
@@ -17963,7 +18021,13 @@ function renderShopifyPhase2Report(data) {
   html += '</tbody></table>';
   html += '<div style="margin-top:10px;font-size:0.78rem;color:var(--warm-gray);">Full audit: <code>admin/shopifyHarness/runs/' + esc(data.runId || '') + '/events</code></div>';
   html += '</div>';
-  reportEl.innerHTML = html;
+  return html;
+}
+
+function renderShopifyPhase2Report(data) {
+  var reportEl = document.getElementById('shopifyPhase2Report');
+  if (!reportEl || !data) return;
+  reportEl.innerHTML = buildShopifyPhaseReportHtml(data);
 }
 
 function renderShopifyHarnessReport(data) {
