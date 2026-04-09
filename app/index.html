@@ -7448,11 +7448,23 @@
             <div style="background:var(--cream,#faf8f5);border:1px solid #e8e0d4;border-radius:8px;padding:16px;margin-bottom:12px;">
               <div id="shopifyConnectedDetails" style="font-size:0.85rem;line-height:1.6;"></div>
             </div>
-            <div style="display:flex;gap:8px;">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
               <button class="btn btn-secondary" onclick="testShopifyConnection()">Test Connection</button>
               <button class="btn btn-secondary" onclick="editShopifyConfig()">Change Token</button>
               <button class="btn btn-danger" onclick="disconnectShopify()">Disconnect</button>
             </div>
+
+            <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+
+            <div style="font-size:0.95rem;font-weight:600;margin-bottom:6px;">Test Harness (Phase 1: read-only)</div>
+            <p style="font-size:0.82rem;color:var(--warm-gray);margin:0 0 10px;">
+              Runs a set of read-only API calls against your Shopify store to map what we can see. No writes, no changes to your products. Every call is logged to an audit trail so you can review exactly what was read.
+            </p>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <button class="btn btn-primary" id="shopifyHarnessRunBtn" onclick="runShopifyHarness()">Run Read-Only Harness</button>
+              <span id="shopifyHarnessStatus" style="font-size:0.82rem;color:var(--warm-gray);"></span>
+            </div>
+            <div id="shopifyHarnessReport" style="margin-top:12px;"></div>
           </div>
         </div>
       </div>
@@ -17722,6 +17734,72 @@ async function disconnectShopify() {
   } catch (err) {
     showToast('Error disconnecting: ' + err.message, true);
   }
+}
+
+// ============================================================
+// Shopify Test Harness — Phase 1 (read-only)
+// ============================================================
+async function runShopifyHarness() {
+  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to run the harness.', true); return; }
+  var btn = document.getElementById('shopifyHarnessRunBtn');
+  var statusEl = document.getElementById('shopifyHarnessStatus');
+  var reportEl = document.getElementById('shopifyHarnessReport');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-small"></span> Running…'; }
+  if (statusEl) statusEl.textContent = 'Calling Shopify API…';
+  if (reportEl) reportEl.innerHTML = '';
+
+  try {
+    var result = await firebase.functions().httpsCallable('shopifyHarnessRun')({
+      tenantId: MastDB.tenantId()
+    });
+    var data = result.data || {};
+    await writeAudit('update', 'settings', 'shopifyHarnessRun:' + (data.runId || ''));
+
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Run complete — ' + data.summary.passed + ' passed, ' + data.summary.failed + ' failed</span>';
+    renderShopifyHarnessReport(data);
+    showToast('Harness complete: ' + data.summary.passed + '/' + data.summary.totalReads + ' reads OK');
+  } catch (err) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">&#10007; ' + esc(err.message || 'Unknown error') + '</span>';
+    showToast('Harness failed: ' + err.message, true);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = 'Run Read-Only Harness'; }
+  }
+}
+
+function renderShopifyHarnessReport(data) {
+  var reportEl = document.getElementById('shopifyHarnessReport');
+  if (!reportEl || !data || !data.matrix) return;
+  var rows = Object.keys(data.matrix).sort();
+  var html = '';
+  html += '<div style="background:var(--cream,#faf8f5);border:1px solid #e8e0d4;border-radius:8px;padding:16px;">';
+  html += '<div style="font-weight:600;font-size:0.88rem;margin-bottom:10px;">Coverage Matrix</div>';
+  html += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:12px;">Run ID: <code>' + esc(data.runId || '') + '</code></div>';
+  html += '<div style="overflow-x:auto;">';
+  html += '<table style="width:100%;border-collapse:collapse;font-size:0.82rem;">';
+  html += '<thead><tr style="border-bottom:1px solid #e8e0d4;">';
+  html += '<th style="text-align:left;padding:6px 8px;">Resource</th>';
+  html += '<th style="text-align:left;padding:6px 8px;">Status</th>';
+  html += '<th style="text-align:right;padding:6px 8px;">Count</th>';
+  html += '<th style="text-align:right;padding:6px 8px;">Time</th>';
+  html += '<th style="text-align:left;padding:6px 8px;">Note</th>';
+  html += '</tr></thead><tbody>';
+  rows.forEach(function(resource) {
+    var r = data.matrix[resource];
+    var statusColor = r.ok ? 'var(--teal)' : '#ef4444';
+    var statusSymbol = r.ok ? '&#10003; ' + r.status : '&#10007; ' + (r.status || r.error || 'fail');
+    html += '<tr style="border-bottom:1px solid #f0ebe0;">';
+    html += '<td style="padding:6px 8px;font-family:monospace;font-size:0.78rem;">' + esc(resource) + '</td>';
+    html += '<td style="padding:6px 8px;color:' + statusColor + ';">' + statusSymbol + '</td>';
+    html += '<td style="padding:6px 8px;text-align:right;font-family:monospace;">' + (r.count != null ? r.count : '—') + '</td>';
+    html += '<td style="padding:6px 8px;text-align:right;font-family:monospace;color:var(--warm-gray);">' + (r.durationMs != null ? r.durationMs + 'ms' : '—') + '</td>';
+    html += '<td style="padding:6px 8px;color:var(--warm-gray);font-size:0.78rem;">' + esc(r.note || '') + (r.error ? ' — <span style="color:#ef4444;">' + esc(r.error) + '</span>' : '') + '</td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  html += '</div>';
+  html += '<div style="margin-top:10px;font-size:0.78rem;color:var(--warm-gray);">Full audit trail: <code>' + esc(MastDB.tenantId()) + '/admin/shopifyHarness/runs/' + esc(data.runId || '') + '/events</code></div>';
+  html += '</div>';
+  reportEl.innerHTML = html;
 }
 
 async function syncEtsyOrders() {
