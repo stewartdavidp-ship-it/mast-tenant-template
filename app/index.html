@@ -17781,7 +17781,7 @@ function switchShopifyMethod(method) {
 }
 
 async function saveShopifyClientCredentials() {
-  if (!checkPermission('settings:update')) return;
+  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
   var statusEl = document.getElementById('shopifyConfigStatus');
   var domain = (document.getElementById('shopifyCC_Domain').value || '').trim().toLowerCase();
   var clientId = (document.getElementById('shopifyCC_ClientId').value || '').trim();
