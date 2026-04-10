@@ -7429,7 +7429,49 @@
           <div id="shopifyConfigStatus" style="margin-bottom:12px;font-size:0.85rem;"></div>
 
           <div id="shopifyDisconnected" style="display:none;">
-            <div style="background:var(--cream,#faf8f5);border:1px solid #e8e0d4;border-radius:8px;padding:16px;margin-bottom:12px;">
+            <div style="display:flex;gap:0;margin-bottom:12px;">
+              <button class="btn btn-secondary shopify-method-tab" id="shopifyTabClientCreds" onclick="switchShopifyMethod('clientCreds')" style="border-radius:6px 0 0 6px;font-size:0.82rem;padding:7px 14px;border-right:none;">Client Credentials</button>
+              <button class="btn btn-secondary shopify-method-tab" id="shopifyTabAccessToken" onclick="switchShopifyMethod('accessToken')" style="border-radius:0 6px 6px 0;font-size:0.82rem;padding:7px 14px;opacity:0.6;">Access Token (Legacy)</button>
+            </div>
+
+            <!-- Client Credentials method (new, default) -->
+            <div id="shopifyMethodClientCreds" style="background:var(--cream,#faf8f5);border:1px solid #e8e0d4;border-radius:8px;padding:16px;margin-bottom:12px;">
+              <p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 12px;">Create an app in the <strong>Shopify Dev Dashboard</strong>, then paste the Client ID and Secret below.</p>
+
+              <button class="btn btn-secondary" onclick="openShopifyDevSettings()" style="margin-bottom:14px;font-size:0.82rem;padding:7px 14px;display:flex;align-items:center;gap:6px;">
+                <span style="font-size:1rem;">&#8599;</span> Open Shopify Dev Dashboard
+              </button>
+
+              <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:6px;">Shop Subdomain</label>
+              <p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 6px;">Just the subdomain — we append <code>.myshopify.com</code> automatically.</p>
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;">
+                <input type="text" id="shopifyCC_Domain" placeholder="your-shop-name"
+                  style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
+                <span style="font-size:0.85rem;color:var(--warm-gray);">.myshopify.com</span>
+              </div>
+
+              <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;">Client ID</label>
+              <p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 6px;">Found in your app's <strong>Settings</strong> → <strong>Credentials</strong> section.</p>
+              <div style="margin-bottom:12px;">
+                <input type="text" id="shopifyCC_ClientId" placeholder="e.g. ee3d440f2ff66be3..."
+                  style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
+              </div>
+
+              <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;">Client Secret</label>
+              <div style="display:flex;gap:6px;margin-bottom:8px;">
+                <input type="password" id="shopifyCC_ClientSecret" placeholder="Client secret from Settings → Credentials"
+                  style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
+                <button type="button" onclick="toggleReveal('shopifyCC_ClientSecret',this)" class="btn btn-small" style="font-size:0.78rem;padding:6px 10px;white-space:nowrap;">Show</button>
+              </div>
+            </div>
+            <div id="shopifyMethodClientCredsActions" style="display:flex;gap:8px;margin-bottom:12px;">
+              <button class="btn btn-primary" onclick="saveShopifyClientCredentials()">Connect</button>
+            </div>
+
+            <!-- Access Token method (legacy) -->
+            <div id="shopifyMethodAccessToken" style="display:none;background:var(--cream,#faf8f5);border:1px solid #e8e0d4;border-radius:8px;padding:16px;margin-bottom:12px;">
+              <p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 12px;">For stores with an existing custom app that provides a static <code>shpat_</code> access token.</p>
+
               <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:6px;">Shop Subdomain <span id="shopifyDomainBadge"></span></label>
               <p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 6px;">Just the subdomain — we append <code>.myshopify.com</code> automatically.</p>
               <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;">
@@ -7437,13 +7479,6 @@
                   style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
                 <span style="font-size:0.85rem;color:var(--warm-gray);">.myshopify.com</span>
               </div>
-
-              <button class="btn btn-secondary" onclick="openShopifyDevSettings()" style="margin-bottom:14px;font-size:0.82rem;padding:7px 14px;display:flex;align-items:center;gap:6px;">
-                <span style="font-size:1rem;">&#8599;</span> Open Shopify Admin
-              </button>
-              <p id="shopifyDeepLinkHint" style="font-size:0.78rem;color:var(--warm-gray);margin:-8px 0 14px;display:none;">
-                In Shopify: <strong>Settings</strong> (bottom left) → <strong>Apps and sales channels</strong> → <strong>Develop apps</strong> → create an app, configure scopes, install, and copy the <strong>Admin API access token</strong>.
-              </p>
 
               <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:6px;">Admin API Access Token <span id="shopifyTokenBadge"></span></label>
               <div style="display:flex;gap:6px;margin-bottom:12px;">
@@ -7460,9 +7495,10 @@
                 <button type="button" onclick="toggleReveal('shopifyWebhookSecret',this)" class="btn btn-small" style="font-size:0.78rem;padding:6px 10px;white-space:nowrap;">Show</button>
               </div>
             </div>
-
-            <div style="display:flex;gap:8px;">
-              <button class="btn btn-primary" onclick="saveShopifyConfig()">Save &amp; Test</button>
+            <div id="shopifyMethodAccessTokenActions" style="display:none;">
+              <div style="display:flex;gap:8px;">
+                <button class="btn btn-primary" onclick="saveShopifyConfig()">Save &amp; Test</button>
+              </div>
             </div>
           </div>
 
@@ -17723,8 +17759,80 @@ function loadEtsyConfig() {
 // Shopify Integration (PIM publish target)
 // ============================================================
 function openShopifyDevSettings() {
-  document.getElementById('shopifyDeepLinkHint').style.display = 'block';
-  window.open('https://admin.shopify.com', '_blank');
+  window.open('https://dev.shopify.com', '_blank');
+}
+
+function switchShopifyMethod(method) {
+  var ccTab = document.getElementById('shopifyTabClientCreds');
+  var atTab = document.getElementById('shopifyTabAccessToken');
+  var ccForm = document.getElementById('shopifyMethodClientCreds');
+  var ccActions = document.getElementById('shopifyMethodClientCredsActions');
+  var atForm = document.getElementById('shopifyMethodAccessToken');
+  var atActions = document.getElementById('shopifyMethodAccessTokenActions');
+  if (method === 'clientCreds') {
+    ccTab.style.opacity = '1'; atTab.style.opacity = '0.6';
+    ccForm.style.display = ''; ccActions.style.display = '';
+    atForm.style.display = 'none'; atActions.style.display = 'none';
+  } else {
+    ccTab.style.opacity = '0.6'; atTab.style.opacity = '1';
+    ccForm.style.display = 'none'; ccActions.style.display = 'none';
+    atForm.style.display = ''; atActions.style.display = '';
+  }
+}
+
+async function saveShopifyClientCredentials() {
+  if (!checkPermission('settings:update')) return;
+  var statusEl = document.getElementById('shopifyConfigStatus');
+  var domain = (document.getElementById('shopifyCC_Domain').value || '').trim().toLowerCase();
+  var clientId = (document.getElementById('shopifyCC_ClientId').value || '').trim();
+  var clientSecret = (document.getElementById('shopifyCC_ClientSecret').value || '').trim();
+
+  // Normalize domain
+  domain = domain.replace(/^https?:\/\//, '').replace(/\/+$/, '').replace(/\.myshopify\.com$/, '');
+  if (!/^[a-z0-9][a-z0-9-]{0,58}[a-z0-9]$/.test(domain) && !/^[a-z0-9]$/.test(domain)) {
+    showToast('Enter a valid Shopify subdomain.', 'error'); return;
+  }
+  if (!clientId || clientId.length < 10) {
+    showToast('Enter the Client ID from your Shopify app settings.', 'error'); return;
+  }
+  if (!clientSecret || clientSecret.length < 10 || clientSecret.includes('••••')) {
+    showToast('Enter the Client Secret from your Shopify app settings.', 'error'); return;
+  }
+
+  statusEl.innerHTML = '<span style="color:var(--warm-gray);">Connecting via client credentials…</span>';
+  try {
+    var sp = MastDB.tenantId();
+    try { var prefixRes = await firebase.functions().httpsCallable('secretsManager')({ action: 'read', service: 'shopify', tenantId: sp }); sp = prefixRes.data.secretPrefix || sp; } catch (_) {}
+    var secrets = {};
+    secrets[sp + '-shopify-client-id'] = clientId;
+    secrets[sp + '-shopify-client-secret'] = clientSecret;
+    var result = await firebase.functions().httpsCallable('secretsManager')({
+      action: 'write',
+      service: 'shopify',
+      tenantId: MastDB.tenantId(),
+      secrets: secrets,
+      metadata: {
+        shopDomain: domain,
+        apiVersion: '2024-10',
+        connectionMethod: 'client_credentials',
+        updatedAt: new Date().toISOString()
+      }
+    });
+    var v = result.data.verification || {};
+    if (v.token && v.token.valid) {
+      showToast('Connected to ' + (v.shop && v.shop.name ? v.shop.name : domain) + '!', 'success');
+      document.getElementById('shopifyCC_ClientSecret').value = '';
+      writeAudit('update', 'settings', 'shopifyConfig');
+      loadShopifyConfig();
+    } else {
+      var err = (v.token && v.token.error) || 'Connection failed. Check your credentials.';
+      statusEl.innerHTML = '<span style="color:#ef4444;">&#10007; ' + esc(err) + '</span>';
+      showToast('Shopify connection failed: ' + err, 'error');
+    }
+  } catch (e) {
+    statusEl.innerHTML = '<span style="color:#ef4444;">&#10007; ' + esc(e.message) + '</span>';
+    showToast('Error: ' + e.message, 'error');
+  }
 }
 
 function loadShopifyConfig() {
