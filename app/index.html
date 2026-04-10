@@ -17759,7 +17759,13 @@ function loadEtsyConfig() {
 // Shopify Integration (PIM publish target)
 // ============================================================
 function openShopifyDevSettings() {
-  window.open('https://dev.shopify.com', '_blank');
+  var domain = (document.getElementById('shopifyCC_Domain').value || document.getElementById('shopifyShopDomain').value || '').trim().toLowerCase();
+  if (domain) {
+    domain = domain.replace(/^https?:\/\//, '').replace(/\/+$/, '').replace(/\.myshopify\.com$/, '');
+    window.open('https://admin.shopify.com/store/' + encodeURIComponent(domain) + '/settings/apps/development', '_blank');
+  } else {
+    window.open('https://admin.shopify.com', '_blank');
+  }
 }
 
 function switchShopifyMethod(method) {
