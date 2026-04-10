@@ -7438,17 +7438,17 @@
             <div id="shopifyMethodClientCreds" style="background:var(--cream,#faf8f5);border:1px solid #e8e0d4;border-radius:8px;padding:16px;margin-bottom:12px;">
               <p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 12px;">Create an app in the <strong>Shopify Dev Dashboard</strong>, then paste the Client ID and Secret below.</p>
 
-              <button class="btn btn-secondary" onclick="openShopifyDevSettings()" style="margin-bottom:14px;font-size:0.82rem;padding:7px 14px;display:flex;align-items:center;gap:6px;">
-                <span style="font-size:1rem;">&#8599;</span> Open Shopify Dev Dashboard
-              </button>
-
               <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:6px;">Shop Subdomain</label>
-              <p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 6px;">Just the subdomain — we append <code>.myshopify.com</code> automatically.</p>
+              <p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 6px;">Your full <code>.myshopify.com</code> subdomain — find it in your Shopify admin URL or Settings → Domains.</p>
               <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;">
                 <input type="text" id="shopifyCC_Domain" placeholder="your-shop-name"
                   style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
                 <span style="font-size:0.85rem;color:var(--warm-gray);">.myshopify.com</span>
               </div>
+
+              <button class="btn btn-secondary" onclick="openShopifyDevSettings()" style="margin-bottom:14px;font-size:0.82rem;padding:7px 14px;display:flex;align-items:center;gap:6px;">
+                <span style="font-size:1rem;">&#8599;</span> Open Shopify Dev Settings
+              </button>
 
               <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;">Client ID</label>
               <p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 6px;">Found in your app's <strong>Settings</strong> → <strong>Credentials</strong> section.</p>
