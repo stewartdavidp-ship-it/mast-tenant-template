@@ -1645,7 +1645,7 @@
     .feedback-segmented {
       display: flex;
       gap: 0;
-      border: 1px solid #ddd;
+      border: 1px solid var(--cream-dark, #ddd);
       border-radius: 6px;
       overflow: hidden;
       margin-bottom: 14px;
@@ -1657,9 +1657,10 @@
       font-size: 0.85rem;
       font-weight: 500;
       cursor: pointer;
-      background: white;
+      background: var(--cream, white);
+      color: inherit;
       transition: background 0.15s, color 0.15s;
-      border-right: 1px solid #ddd;
+      border-right: 1px solid var(--cream-dark, #ddd);
       margin: 0;
     }
     .feedback-segmented label:last-child { border-right: none; }
@@ -1676,21 +1677,25 @@
       width: 100%;
       min-height: 100px;
       padding: 10px 12px;
-      border: 1px solid #ddd;
+      border: 1px solid var(--cream-dark, #ddd);
       border-radius: 6px;
       font-family: 'DM Sans', sans-serif;
       font-size: 0.9rem;
       resize: vertical;
       box-sizing: border-box;
+      background: var(--cream, white);
+      color: inherit;
     }
     .feedback-dialog input[type="email"] {
       width: 100%;
       padding: 9px 12px;
-      border: 1px solid #ddd;
+      border: 1px solid var(--cream-dark, #ddd);
       border-radius: 6px;
       font-family: 'DM Sans', sans-serif;
       font-size: 0.9rem;
       box-sizing: border-box;
+      background: var(--cream, white);
+      color: inherit;
     }
     .feedback-dialog-footer {
       padding: 0 24px 20px;
