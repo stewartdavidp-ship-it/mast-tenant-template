@@ -5246,6 +5246,7 @@
       </div>
       <div class="sidebar-items">
         <div class="sidebar-item" data-route="products" onclick="navigateTo('products')">Products</div>
+        <div class="sidebar-item" data-route="channels" onclick="navigateTo('channels')">Channels</div>
         <div class="sidebar-item" data-route="inventory" onclick="navigateTo('inventory')">Inventory</div>
         <div class="sidebar-item" data-route="employees" onclick="navigateTo('employees')">Permissions</div>
         <div class="sidebar-item" data-route="analytics" onclick="navigateTo('analytics')">Analytics</div>
@@ -5692,6 +5693,9 @@
     <!-- ===== MAKER MODULE TABS ===== -->
     <div id="materialsTab" style="display:none;"></div>
     <div id="piecesTab" style="display:none;"></div>
+
+    <!-- ===== CHANNELS MODULE TAB ===== -->
+    <div id="channelsTab" style="display:none;"></div>
 
     <!-- ===== CONSIGNMENT MODULE TAB ===== -->
     <div id="galleriesTab" style="display:none;"></div>
@@ -13937,7 +13941,7 @@ var SECTION_ROUTES = {
   'migration': ['migration', 'migration-confirm', 'migration-plan', 'migration-import', 'historical-orders']
 };
 
-var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'expensesTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab'];
+var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'expensesTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab', 'channelsTab'];
 
 var currentRoute = 'dashboard';
 
@@ -14378,7 +14382,8 @@ homepage: { src: 'modules/homepage.js', routes: ['homepage'] },
   advisor: { src: 'modules/advisor.js', routes: ['advisor'] },
   studio: { src: 'modules/studio.js', routes: ['studio'] },
   team: { src: 'modules/team.js', routes: ['team'] },
-  students: { src: 'modules/students.js', routes: ['students'] }
+  students: { src: 'modules/students.js', routes: ['students'] },
+  channels: { src: 'modules/channels.js', routes: ['channels'] }
 };
 
 // Reverse lookup: route → moduleId (built from MODULE_MANIFEST)
