@@ -58,6 +58,20 @@
     social_live:      { label: 'Social / Live',   color: '#ec4899', ownership: 'partner', pricing: 'full_retail',  inventory: 'retained' }
   };
 
+  // Onboarding defaults per channel type
+  var ONBOARDING_META = {
+    dtc_online:       { icon: '\uD83C\uDF10', desc: 'Your Mast storefront. Full retail, you ship.',              defaultName: 'Online Store',     feePercent: 2.9, feeFixed: 30 },
+    own_storefront:   { icon: '\uD83C\uDFEA', desc: 'Brick-and-mortar shop. Walk-in sales, full retail.',        defaultName: 'My Storefront',    feePercent: 0,   feeFixed: 0 },
+    mobile_events:    { icon: '\uD83C\uDFAA', desc: 'Craft fairs, pop-ups, markets. On-site POS.',              defaultName: 'Craft Fairs',      feePercent: 0,   feeFixed: 0 },
+    marketplace:      { icon: '\uD83D\uDED2', desc: 'Etsy, Amazon, Shopify. Retail minus platform fees.',       defaultName: 'Etsy',             feePercent: 6.5, feeFixed: 20 },
+    wholesale_prebuy: { icon: '\uD83D\uDCE6', desc: 'Retailers buy outright at wholesale price.',               defaultName: 'Wholesale',        feePercent: 0,   feeFixed: 0 },
+    consignment:      { icon: '\uD83C\uDFDB\uFE0F', desc: 'Gallery or boutique placement. Commission split.',         defaultName: '',                 feePercent: 0,   feeFixed: 0 },
+    retail_prebuy:    { icon: '\uD83C\uDFEC', desc: 'Curated retailers (e.g. Uncommon Goods). Buy outright.',   defaultName: '',                 feePercent: 0,   feeFixed: 0 },
+    social_live:      { icon: '\uD83D\uDCF1', desc: 'TikTok Shop, Instagram Live, live selling.',              defaultName: '',                 feePercent: 0,   feeFixed: 0 }
+  };
+
+  var onboardingSelections = {}; // type → { name, feePercent, feeFixed, extPlatform }
+
   var DETAIL_TABS = [
     { value: 'overview',  label: 'Overview' },
     { value: 'products',  label: 'Products' },
@@ -213,8 +227,15 @@
       renderDetail();
     } else if (currentView === 'new') {
       renderNewForm();
+    } else if (currentView === 'onboarding') {
+      renderOnboarding();
     } else {
-      renderList();
+      // Auto-show onboarding when no channels exist
+      if (channelsLoaded && !Object.keys(channelsData).length) {
+        renderOnboarding();
+      } else {
+        renderList();
+      }
     }
   }
 
@@ -245,13 +266,8 @@
     });
 
     if (!channels.length) {
-      tab.innerHTML =
-        '<div style="text-align:center;padding:40px 20px;color:#999;">' +
-          '<div style="font-size:1.6rem;margin-bottom:12px;">📡</div>' +
-          '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No sales channels yet</p>' +
-          '<p style="font-size:0.85rem;color:#666;">Add your first channel to start tracking multi-channel sales.</p>' +
-          '<button class="btn btn-primary" style="margin-top:16px;" onclick="channelShowNew()">+ New Channel</button>' +
-        '</div>';
+      // Redirect to onboarding flow
+      renderOnboarding();
       return;
     }
 
@@ -324,6 +340,239 @@
     }
 
     tab.innerHTML = h;
+  }
+
+  // ============================================================
+  // Onboarding — Quick-add flow for first-time setup
+  // ============================================================
+
+  function renderOnboarding() {
+    var tab = document.getElementById('channelsTab');
+    if (!tab) return;
+
+    var h = '';
+
+    // If channels already exist, show back link
+    if (Object.keys(channelsData).length) {
+      h += '<button class="detail-back" onclick="channelShowList()">\u2190 Back to Channels</button>';
+    }
+
+    h += '<div style="text-align:center;margin-bottom:24px;">';
+    h += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0 0 8px 0;">Set Up Your Sales Channels</h3>';
+    h += '<p style="font-size:0.85rem;color:var(--warm-gray, #888);max-width:480px;margin:0 auto;">Select the channels you sell through. We\'ll pre-fill smart defaults\u2014you can customize everything later.</p>';
+    h += '</div>';
+
+    // Channel type grid
+    h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;margin-bottom:24px;">';
+    Object.keys(CHANNEL_TYPES).forEach(function(type) {
+      var ct = CHANNEL_TYPES[type];
+      var meta = ONBOARDING_META[type] || {};
+      var isSelected = !!onboardingSelections[type];
+      var borderColor = isSelected ? ct.color : '#444';
+      var bgColor = isSelected ? ct.color + '15' : 'var(--bg-secondary, #232323)';
+
+      h += '<div style="border:2px solid ' + borderColor + ';border-radius:8px;padding:16px;cursor:pointer;' +
+        'background:' + bgColor + ';transition:border-color 0.15s,background 0.15s;"' +
+        ' onclick="channelToggleOnboarding(\'' + type + '\')" role="checkbox" tabindex="0"' +
+        ' aria-checked="' + isSelected + '" aria-label="' + esc(ct.label) + '"' +
+        ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();channelToggleOnboarding(\'' + type + '\');}">';
+
+      // Header row: icon + name + checkbox
+      h += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">';
+      h += '<span style="font-size:1.15rem;" aria-hidden="true">' + (meta.icon || '') + '</span>';
+      h += '<span style="font-weight:500;font-size:0.9rem;color:#e0e0e0;flex:1;">' + esc(ct.label) + '</span>';
+      // Visual checkbox
+      h += '<span style="width:20px;height:20px;border-radius:4px;border:2px solid ' + (isSelected ? ct.color : '#666') + ';' +
+        'display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;' +
+        (isSelected ? 'background:' + ct.color + ';' : '') + '" aria-hidden="true">';
+      if (isSelected) h += '<span style="color:#fff;font-size:0.78rem;font-weight:700;">\u2713</span>';
+      h += '</span>';
+      h += '</div>';
+
+      // Description
+      h += '<p style="font-size:0.78rem;color:var(--warm-gray, #888);margin:0;line-height:1.4;">' + esc(meta.desc || '') + '</p>';
+
+      h += '</div>';
+    });
+    h += '</div>';
+
+    // Inline config for selected types
+    var selectedTypes = Object.keys(onboardingSelections);
+    if (selectedTypes.length) {
+      h += '<div style="border-top:1px solid #444;padding-top:20px;margin-bottom:24px;">';
+      h += '<h4 style="font-family:\'DM Sans\',sans-serif;font-size:1.0rem;font-weight:500;margin:0 0 16px 0;color:#e0e0e0;">Configure Selected Channels</h4>';
+
+      selectedTypes.forEach(function(type) {
+        var ct = CHANNEL_TYPES[type] || {};
+        var meta = ONBOARDING_META[type] || {};
+        var sel = onboardingSelections[type];
+        var prefix = 'ob_' + type + '_';
+
+        h += '<div style="background:var(--bg-secondary, #232323);border:1px solid #444;border-radius:8px;padding:16px;margin-bottom:12px;">';
+
+        // Section header with type badge
+        h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">';
+        h += '<span style="font-size:1.0rem;" aria-hidden="true">' + (meta.icon || '') + '</span>';
+        h += typeBadge(type);
+        h += '</div>';
+
+        // Config fields in a grid
+        h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">';
+
+        // Channel name
+        h += '<div>';
+        h += '<label style="font-size:0.78rem;color:#999;display:block;margin-bottom:4px;" for="' + prefix + 'name">Channel Name *</label>';
+        h += '<input type="text" id="' + prefix + 'name" value="' + esc(sel.name || '') + '"' +
+          ' placeholder="e.g. ' + esc(meta.defaultName || ct.label) + '"' +
+          ' onchange="channelUpdateOnboarding(\'' + type + '\',\'name\',this.value)"' +
+          ' style="width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+        h += '</div>';
+
+        // Fee percent
+        h += '<div>';
+        h += '<label style="font-size:0.78rem;color:#999;display:block;margin-bottom:4px;" for="' + prefix + 'fee">Fee (%)</label>';
+        h += '<input type="number" id="' + prefix + 'fee" value="' + (sel.feePercent || 0) + '" min="0" step="0.1"' +
+          ' onchange="channelUpdateOnboarding(\'' + type + '\',\'feePercent\',this.value)"' +
+          ' style="width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+        h += '</div>';
+
+        // Fixed fee
+        h += '<div>';
+        h += '<label style="font-size:0.78rem;color:#999;display:block;margin-bottom:4px;" for="' + prefix + 'fixed">Fixed Fee (cents)</label>';
+        h += '<input type="number" id="' + prefix + 'fixed" value="' + (sel.feeFixed || 0) + '" min="0"' +
+          ' onchange="channelUpdateOnboarding(\'' + type + '\',\'feeFixed\',this.value)"' +
+          ' style="width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+        h += '</div>';
+
+        h += '</div>'; // end config grid
+
+        // External platform for marketplace and social_live
+        if (type === 'marketplace' || type === 'social_live') {
+          h += '<div style="margin-top:12px;">';
+          h += '<label style="font-size:0.78rem;color:#999;display:block;margin-bottom:4px;" for="' + prefix + 'ext">External Platform</label>';
+          h += '<input type="text" id="' + prefix + 'ext" value="' + esc(sel.extPlatform || '') + '"' +
+            ' placeholder="e.g. ' + (type === 'marketplace' ? 'Etsy, Shopify, Amazon' : 'TikTok, Instagram') + '"' +
+            ' onchange="channelUpdateOnboarding(\'' + type + '\',\'extPlatform\',this.value)"' +
+            ' style="max-width:320px;width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+          h += '</div>';
+        }
+
+        h += '</div>'; // end card
+      });
+
+      h += '</div>'; // end config section
+
+      // Create button
+      h += '<div style="display:flex;justify-content:center;gap:12px;">';
+      if (Object.keys(channelsData).length) {
+        h += '<button class="btn btn-secondary" onclick="channelShowList()">Cancel</button>';
+      }
+      h += '<button class="btn btn-primary" onclick="channelSaveOnboarding()" style="min-width:200px;">' +
+        'Create ' + selectedTypes.length + ' Channel' + (selectedTypes.length !== 1 ? 's' : '') + '</button>';
+      h += '</div>';
+    }
+
+    tab.innerHTML = h;
+  }
+
+  function toggleOnboardingType(type) {
+    if (onboardingSelections[type]) {
+      delete onboardingSelections[type];
+    } else {
+      var meta = ONBOARDING_META[type] || {};
+      onboardingSelections[type] = {
+        name: meta.defaultName || '',
+        feePercent: meta.feePercent || 0,
+        feeFixed: meta.feeFixed || 0,
+        extPlatform: ''
+      };
+    }
+    renderOnboarding();
+  }
+
+  function updateOnboardingField(type, field, value) {
+    if (!onboardingSelections[type]) return;
+    if (field === 'feePercent' || field === 'feeFixed') {
+      onboardingSelections[type][field] = parseFloat(value) || 0;
+    } else {
+      onboardingSelections[type][field] = value;
+    }
+    // Don't re-render on field change — values are read from DOM on save
+  }
+
+  function saveOnboarding() {
+    var types = Object.keys(onboardingSelections);
+    if (!types.length) {
+      showToast('Select at least one channel type.', true);
+      return;
+    }
+
+    // Validate: each selected type must have a name
+    for (var i = 0; i < types.length; i++) {
+      var type = types[i];
+      var nameEl = document.getElementById('ob_' + type + '_name');
+      var name = nameEl ? nameEl.value.trim() : onboardingSelections[type].name;
+      if (!name) {
+        showToast('Please enter a name for the ' + (CHANNEL_TYPES[type] || {}).label + ' channel.', true);
+        if (nameEl) nameEl.focus();
+        return;
+      }
+    }
+
+    // Build batch writes
+    var updates = {};
+    var now = new Date().toISOString();
+    var createdIds = [];
+
+    types.forEach(function(type) {
+      var sel = onboardingSelections[type];
+      var t = CHANNEL_TYPES[type] || {};
+      var id = 'ch_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+
+      // Read current values from DOM
+      var nameEl = document.getElementById('ob_' + type + '_name');
+      var feeEl = document.getElementById('ob_' + type + '_fee');
+      var fixedEl = document.getElementById('ob_' + type + '_fixed');
+      var extEl = document.getElementById('ob_' + type + '_ext');
+
+      var channel = {
+        channelId: id,
+        name: (nameEl ? nameEl.value.trim() : sel.name) || t.label,
+        type: type,
+        ownershipModel: t.ownership || 'owned',
+        pricingModel: t.pricing || 'full_retail',
+        inventoryModel: t.inventory || 'retained',
+        percentFee: parseFloat(feeEl ? feeEl.value : sel.feePercent) || 0,
+        fixedFeePerOrderCents: parseInt(fixedEl ? fixedEl.value : sel.feeFixed) || 0,
+        monthlyFixedCents: 0,
+        externalPlatform: (extEl ? extEl.value.trim() : sel.extPlatform) || null,
+        defaultEligibility: 'opt-out',
+        contactName: null,
+        contactEmail: null,
+        contactPhone: null,
+        notes: null,
+        autoMatchSources: [],
+        isActive: true,
+        createdAt: now,
+        updatedAt: now
+      };
+
+      updates['admin/channels/' + id] = channel;
+      channelsData[id] = channel;
+      createdIds.push(id);
+    });
+
+    // Batch write to Firebase
+    MastDB._ref().update(updates).then(function() {
+      onboardingSelections = {};
+      showToast(createdIds.length + ' channel' + (createdIds.length !== 1 ? 's' : '') + ' created');
+      currentView = 'list';
+      renderCurrentView();
+    }).catch(function(err) {
+      // Roll back local state
+      createdIds.forEach(function(id) { delete channelsData[id]; });
+      showToast('Error creating channels: ' + err.message, true);
+    });
   }
 
   // ============================================================
@@ -1931,6 +2180,10 @@
   window.channelLoadEventComparison = loadEventComparison;
   window.channelSortEventComp = setEventCompSort;
   window.channelLoadLiveSessions = loadLiveSessions;
+  window.channelToggleOnboarding = toggleOnboardingType;
+  window.channelUpdateOnboarding = updateOnboardingField;
+  window.channelSaveOnboarding = saveOnboarding;
+  window.channelShowOnboarding = function() { currentView = 'onboarding'; onboardingSelections = {}; renderCurrentView(); };
 
   // ============================================================
   // Register with MastAdmin
