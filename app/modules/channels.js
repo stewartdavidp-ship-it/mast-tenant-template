@@ -467,39 +467,188 @@
   // ============================================================
 
   function renderProductsTab(ch) {
-    var products = getProductsForChannel(ch.channelId);
+    var onChannel = getProductsForChannel(ch.channelId);
     var h = '';
 
-    if (!products.length) {
-      h += '<div style="text-align:center;padding:30px;color:#999;">';
+    // Header with count + actions
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
+    h += '<div style="font-size:0.85rem;color:var(--warm-gray,#999);">' + onChannel.length + ' product' + (onChannel.length !== 1 ? 's' : '') + ' on this channel</div>';
+    h += '<button class="btn btn-secondary btn-small" onclick="channelShowAddProducts()">+ Add Products</button>';
+    h += '</div>';
+
+    if (!onChannel.length) {
+      h += '<div style="text-align:center;padding:30px;color:var(--warm-gray,#999);">';
       h += '<div style="font-size:0.9rem;margin-bottom:4px;">No products on this channel</div>';
-      h += '<div style="font-size:0.78rem;color:#666;">Products are assigned to channels via the product detail page or channel eligibility defaults.</div>';
+      h += '<div style="font-size:0.78rem;color:var(--warm-gray-light,#666);">Click "+ Add Products" to assign products to this channel.</div>';
       h += '</div>';
       return h;
     }
 
     h += '<div class="data-table"><table>';
     h += '<thead><tr>';
-    h += '<th style="font-size:0.78rem;">Product</th>';
-    h += '<th style="font-size:0.78rem;">Price</th>';
-    h += '<th style="font-size:0.78rem;">Status</th>';
+    h += '<th>Product</th>';
+    h += '<th>Price</th>';
+    h += '<th>Status</th>';
+    h += '<th style="text-align:right;">Actions</th>';
     h += '</tr></thead><tbody>';
 
-    products.sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
-    products.forEach(function(p) {
+    onChannel.sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
+    onChannel.forEach(function(p) {
+      var pid = p.pid || p.id || '';
       h += '<tr>';
-      h += '<td style="font-size:0.85rem;">' + esc(p.name || p.pid) + '</td>';
-      h += '<td style="font-size:0.85rem;">' + (p.priceCents ? formatCurrency(p.priceCents) : '—') + '</td>';
-      h += '<td style="font-size:0.85rem;">';
+      h += '<td>' + esc(p.name || pid) + '</td>';
+      h += '<td>' + (p.priceCents ? formatCurrency(p.priceCents) : '\u2014') + '</td>';
+      h += '<td>';
       var st = p.status || 'active';
       var stColor = st === 'active' ? '#22c55e' : st === 'draft' ? '#f59e0b' : '#9ca3af';
       h += '<span style="color:' + stColor + ';">' + esc(st) + '</span>';
+      h += '</td>';
+      h += '<td style="text-align:right;">';
+      h += '<button class="btn btn-secondary btn-small" style="font-size:0.72rem;padding:2px 8px;" onclick="channelRemoveProduct(\'' + esc(pid) + '\')">Remove</button>';
       h += '</td>';
       h += '</tr>';
     });
 
     h += '</tbody></table></div>';
     return h;
+  }
+
+  // Add Products modal overlay
+  function showAddProducts() {
+    var ch = channelsData[selectedChannelId];
+    if (!ch) return;
+
+    var onChannel = getProductsForChannel(ch.channelId);
+    var onChannelIds = {};
+    onChannel.forEach(function(p) { onChannelIds[p.pid || p.id] = true; });
+
+    var available = Object.values(productsData).filter(function(p) {
+      var pid = p.pid || p.id;
+      return pid && !onChannelIds[pid] && (p.status || 'active') !== 'archived';
+    }).sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
+
+    if (!available.length) {
+      showToast('All products are already on this channel');
+      return;
+    }
+
+    // Build modal
+    var overlay = document.createElement('div');
+    overlay.id = 'channelAddProductsOverlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
+
+    var modal = document.createElement('div');
+    modal.style.cssText = 'background:#1e1e1e;border:1px solid #444;border-radius:10px;padding:24px;max-width:500px;width:90%;max-height:70vh;display:flex;flex-direction:column;';
+
+    var h = '';
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
+    h += '<h4 style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:500;margin:0;color:#e0e0e0;">Add Products to ' + esc(ch.name) + '</h4>';
+    h += '<button onclick="channelCloseAddProducts()" style="background:none;border:none;color:#999;font-size:1.15rem;cursor:pointer;padding:4px;">&times;</button>';
+    h += '</div>';
+    h += '<div style="margin-bottom:12px;">';
+    h += '<label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;color:#e0e0e0;cursor:pointer;">';
+    h += '<input type="checkbox" id="chAddSelectAll" onchange="channelToggleSelectAll(this.checked)"> Select all (' + available.length + ')';
+    h += '</label>';
+    h += '</div>';
+    h += '<div style="overflow-y:auto;flex:1;border:1px solid #333;border-radius:6px;">';
+    available.forEach(function(p) {
+      var pid = p.pid || p.id || '';
+      h += '<label style="display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid #333;cursor:pointer;font-size:0.85rem;color:#e0e0e0;"' +
+        ' onmouseenter="this.style.background=\'rgba(196,133,60,0.04)\'" onmouseleave="this.style.background=\'none\'">';
+      h += '<input type="checkbox" class="chAddProductCb" value="' + esc(pid) + '">';
+      h += '<span>' + esc(p.name || pid) + '</span>';
+      if (p.priceCents) h += '<span style="margin-left:auto;color:var(--warm-gray,#999);font-size:0.78rem;">' + formatCurrency(p.priceCents) + '</span>';
+      h += '</label>';
+    });
+    h += '</div>';
+    h += '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px;">';
+    h += '<button class="btn btn-secondary" onclick="channelCloseAddProducts()">Cancel</button>';
+    h += '<button class="btn btn-primary" onclick="channelConfirmAddProducts()">Add Selected</button>';
+    h += '</div>';
+
+    modal.innerHTML = h;
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    // Close on backdrop click
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) channelCloseAddProducts();
+    });
+  }
+
+  function closeAddProducts() {
+    var overlay = document.getElementById('channelAddProductsOverlay');
+    if (overlay) overlay.remove();
+  }
+
+  function toggleSelectAll(checked) {
+    var cbs = document.querySelectorAll('.chAddProductCb');
+    cbs.forEach(function(cb) { cb.checked = checked; });
+  }
+
+  function confirmAddProducts() {
+    var cbs = document.querySelectorAll('.chAddProductCb:checked');
+    var pids = [];
+    cbs.forEach(function(cb) { pids.push(cb.value); });
+
+    if (!pids.length) {
+      showToast('No products selected');
+      return;
+    }
+
+    var ch = channelsData[selectedChannelId];
+    if (!ch) return;
+
+    // Update each product's channelIds locally + in Firebase
+    var updates = {};
+    pids.forEach(function(pid) {
+      var p = productsData[pid];
+      if (!p) return;
+      var ids = Array.isArray(p.channelIds) ? p.channelIds.slice() : [];
+      if (ids.indexOf(ch.channelId) === -1) {
+        ids.push(ch.channelId);
+        p.channelIds = ids;
+        updates[pid + '/channelIds'] = ids;
+      }
+    });
+
+    var count = Object.keys(updates).length;
+    if (!count) {
+      showToast('Products already on this channel');
+      closeAddProducts();
+      return;
+    }
+
+    // Batch write to Firebase
+    var batch = {};
+    Object.keys(updates).forEach(function(path) {
+      batch[path] = updates[path];
+    });
+    MastDB._ref('public/products').update(batch).then(function() {
+      showToast(count + ' product' + (count !== 1 ? 's' : '') + ' added to ' + ch.name);
+      closeAddProducts();
+      renderPreservingEdits();
+    }).catch(function(err) {
+      showToast('Error adding products: ' + err.message, true);
+    });
+  }
+
+  function removeProduct(pid) {
+    var ch = channelsData[selectedChannelId];
+    if (!ch || !pid) return;
+
+    var p = productsData[pid];
+    if (!p) return;
+
+    var ids = Array.isArray(p.channelIds) ? p.channelIds.filter(function(id) { return id !== ch.channelId; }) : [];
+    p.channelIds = ids;
+
+    MastDB._ref('public/products/' + pid + '/channelIds').set(ids).then(function() {
+      showToast(esc(p.name || pid) + ' removed from ' + esc(ch.name));
+      renderPreservingEdits();
+    }).catch(function(err) {
+      showToast('Error removing product: ' + err.message, true);
+    });
   }
 
   // ============================================================
@@ -1430,6 +1579,11 @@
   window.channelToggleEligibility = toggleEligibility;
   window.channelToggleActive = toggleActive;
   window.channelLoadActivity = loadActivity;
+  window.channelShowAddProducts = showAddProducts;
+  window.channelCloseAddProducts = closeAddProducts;
+  window.channelToggleSelectAll = toggleSelectAll;
+  window.channelConfirmAddProducts = confirmAddProducts;
+  window.channelRemoveProduct = removeProduct;
 
   // ============================================================
   // Register with MastAdmin
