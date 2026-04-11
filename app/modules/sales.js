@@ -1509,6 +1509,306 @@ async function exitPackingMode() {
 }
 
   // ============================================================
+  // LIVE SALE MODE
+  // ============================================================
+
+  var liveSessionId = null;
+  var liveSessionData = null;
+  var liveSessionTimer = null;
+  var liveSessionChannels = null; // cached social_live channels
+
+  function checkLiveSessionButton() {
+    // Show Go Live button if there are social_live channels
+    var btn = document.getElementById('goLiveBtn');
+    if (!btn) return;
+    MastDB._ref('admin/channels').once('value').then(function(snap) {
+      var chs = snap.val() || {};
+      var socialChannels = [];
+      Object.keys(chs).forEach(function(id) {
+        var ch = chs[id];
+        if (ch.type === 'social_live' && ch.isActive !== false) {
+          socialChannels.push({ channelId: id, name: ch.name || id, externalPlatform: ch.externalPlatform || '' });
+        }
+      });
+      liveSessionChannels = socialChannels;
+      if (socialChannels.length > 0) {
+        btn.style.display = '';
+      }
+      // Also check for active session
+      checkActiveLiveSession();
+    });
+  }
+
+  function checkActiveLiveSession() {
+    MastDB._ref('admin/liveSessions').orderByChild('status').equalTo('active').once('value').then(function(snap) {
+      var data = snap.val() || {};
+      var keys = Object.keys(data);
+      if (keys.length > 0) {
+        liveSessionId = keys[0];
+        liveSessionData = data[keys[0]];
+        renderLiveBanner();
+        startLiveTimer();
+        // Change Go Live button to show active state
+        var btn = document.getElementById('goLiveBtn');
+        if (btn) btn.style.display = 'none';
+      }
+    });
+  }
+
+  function goLiveStart() {
+    if (!liveSessionChannels || !liveSessionChannels.length) return;
+
+    // If only one channel, start immediately
+    if (liveSessionChannels.length === 1) {
+      startLiveSession(liveSessionChannels[0].channelId);
+      return;
+    }
+
+    // Multiple channels — show picker modal
+    var modal = document.getElementById('liveSessionModal');
+    var inner = document.getElementById('liveSessionModalInner');
+    if (!modal || !inner) return;
+
+    var h = '<div style="padding:20px;">';
+    h += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.4rem;font-weight:500;margin:0 0 16px;">Go Live</h3>';
+    h += '<p style="font-size:0.85rem;color:var(--warm-gray,#999);margin-bottom:16px;">Select a channel to start your live sale session:</p>';
+
+    liveSessionChannels.forEach(function(ch) {
+      h += '<button class="btn btn-secondary" onclick="startLiveSession(\'' + esc(ch.channelId) + '\')" style="display:block;width:100%;text-align:left;margin-bottom:8px;padding:12px 16px;">';
+      h += '<div style="font-weight:600;font-size:0.85rem;">' + esc(ch.name) + '</div>';
+      if (ch.externalPlatform) {
+        h += '<div style="font-size:0.78rem;color:var(--warm-gray,#999);">' + esc(ch.externalPlatform) + '</div>';
+      }
+      h += '</button>';
+    });
+
+    h += '<button class="btn btn-secondary" onclick="closeLiveModal()" style="margin-top:12px;width:100%;">Cancel</button>';
+    h += '</div>';
+
+    inner.innerHTML = h;
+    modal.style.display = '';
+  }
+
+  function startLiveSession(channelId) {
+    closeLiveModal();
+    var banner = document.getElementById('liveSessionBanner');
+    if (banner) banner.innerHTML = '<div style="text-align:center;padding:12px;color:#999;font-size:0.85rem;">Starting live session\u2026</div>';
+    if (banner) banner.style.display = '';
+
+    var now = new Date().toISOString();
+    var chName = '';
+    if (liveSessionChannels) {
+      for (var i = 0; i < liveSessionChannels.length; i++) {
+        if (liveSessionChannels[i].channelId === channelId) {
+          chName = liveSessionChannels[i].name;
+          break;
+        }
+      }
+    }
+
+    var ref = MastDB._ref('admin/liveSessions').push();
+    var sessionId = ref.key;
+    var record = {
+      sessionId: sessionId,
+      channelId: channelId,
+      channelName: chName,
+      status: 'active',
+      startTime: now,
+      createdBy: currentUser ? currentUser.uid : 'unknown'
+    };
+
+    ref.set(record).then(function() {
+      liveSessionId = sessionId;
+      liveSessionData = record;
+      renderLiveBanner();
+      startLiveTimer();
+      var btn = document.getElementById('goLiveBtn');
+      if (btn) btn.style.display = 'none';
+      if (window.MastToast) MastToast.show('Live session started! Sales will be tagged to ' + chName, 'success');
+    }).catch(function(err) {
+      console.error('[live] Start failed:', err);
+      if (banner) banner.style.display = 'none';
+      if (window.MastToast) MastToast.show('Failed to start live session', 'error');
+    });
+  }
+
+  function renderLiveBanner() {
+    var banner = document.getElementById('liveSessionBanner');
+    if (!banner || !liveSessionData) return;
+
+    var h = '<div style="background:linear-gradient(135deg,#dc2626 0%,#b91c1c 100%);border-radius:10px;padding:14px 18px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">';
+
+    // Left: status + channel
+    h += '<div style="display:flex;align-items:center;gap:10px;">';
+    h += '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#fff;animation:pulse 1.5s infinite;"></span>';
+    h += '<div>';
+    h += '<div style="font-weight:600;font-size:0.9rem;color:#fff;">LIVE</div>';
+    h += '<div style="font-size:0.78rem;color:rgba(255,255,255,0.8);">' + esc(liveSessionData.channelName || 'Social Live') + '</div>';
+    h += '</div>';
+    h += '</div>';
+
+    // Center: timer + stats
+    h += '<div style="display:flex;gap:20px;align-items:center;">';
+    h += '<div style="text-align:center;">';
+    h += '<div id="liveTimer" style="font-size:1.1rem;font-weight:700;color:#fff;font-variant-numeric:tabular-nums;">0:00</div>';
+    h += '<div style="font-size:0.72rem;color:rgba(255,255,255,0.7);">Duration</div>';
+    h += '</div>';
+    h += '<div style="text-align:center;">';
+    h += '<div id="liveSaleCount" style="font-size:1.1rem;font-weight:700;color:#fff;">0</div>';
+    h += '<div style="font-size:0.72rem;color:rgba(255,255,255,0.7);">Sales</div>';
+    h += '</div>';
+    h += '<div style="text-align:center;">';
+    h += '<div id="liveRevenue" style="font-size:1.1rem;font-weight:700;color:#fff;">$0.00</div>';
+    h += '<div style="font-size:0.72rem;color:rgba(255,255,255,0.7);">Revenue</div>';
+    h += '</div>';
+    h += '</div>';
+
+    // Right: end button
+    h += '<button class="btn" onclick="endLiveSession()" style="background:rgba(255,255,255,0.2);color:#fff;border:1px solid rgba(255,255,255,0.4);font-size:0.85rem;padding:8px 16px;">End Session</button>';
+
+    h += '</div>';
+
+    // Pulse animation
+    h += '<style>@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}</style>';
+
+    banner.innerHTML = h;
+    banner.style.display = '';
+  }
+
+  function startLiveTimer() {
+    if (liveSessionTimer) clearInterval(liveSessionTimer);
+    liveSessionTimer = setInterval(function() {
+      updateLiveStats();
+    }, 5000); // Update every 5 seconds
+    updateLiveStats(); // immediate
+  }
+
+  function updateLiveStats() {
+    if (!liveSessionData) return;
+
+    // Update timer
+    var timerEl = document.getElementById('liveTimer');
+    if (timerEl) {
+      var start = new Date(liveSessionData.startTime).getTime();
+      var elapsed = Math.floor((Date.now() - start) / 1000);
+      var mins = Math.floor(elapsed / 60);
+      var secs = elapsed % 60;
+      var hrs = Math.floor(mins / 60);
+      mins = mins % 60;
+      timerEl.textContent = hrs > 0 ? hrs + ':' + String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0') :
+        mins + ':' + String(secs).padStart(2, '0');
+    }
+
+    // Count sales during session window
+    var startTime = liveSessionData.startTime;
+    var count = 0, rev = 0;
+    Object.values(sales || {}).forEach(function(s) {
+      if (s.status === 'voided') return;
+      var t = s.timestamp || s.createdAt || '';
+      if (t >= startTime) { count++; rev += s.amount || 0; }
+    });
+
+    var countEl = document.getElementById('liveSaleCount');
+    if (countEl) countEl.textContent = String(count);
+    var revEl = document.getElementById('liveRevenue');
+    if (revEl) revEl.textContent = formatCents(rev);
+  }
+
+  function endLiveSession() {
+    if (!liveSessionId || !liveSessionData) return;
+
+    var now = new Date().toISOString();
+    var startTime = liveSessionData.startTime;
+    var startMs = new Date(startTime).getTime();
+    var durationMin = Math.round((Date.now() - startMs) / 60000);
+
+    // Aggregate sales
+    var saleCount = 0, revenue = 0, itemsSold = 0;
+    var tagUpdates = {};
+    Object.keys(sales || {}).forEach(function(saleId) {
+      var s = sales[saleId];
+      if (s.status === 'voided') return;
+      var t = s.timestamp || s.createdAt || '';
+      if (t >= startTime && t <= now) {
+        saleCount++;
+        revenue += s.amount || 0;
+        if (s.items) {
+          var items = Array.isArray(s.items) ? s.items : Object.values(s.items);
+          items.forEach(function(item) { itemsSold += item.quantity || 1; });
+        }
+        // Tag sales
+        if (!s.channelId) {
+          tagUpdates['admin/sales/' + saleId + '/channelId'] = liveSessionData.channelId;
+          tagUpdates['admin/sales/' + saleId + '/liveSessionId'] = liveSessionId;
+        }
+      }
+    });
+
+    var avgSale = saleCount > 0 ? Math.round(revenue / saleCount) : 0;
+    var summary = {
+      itemsSold: itemsSold,
+      revenue: revenue,
+      revenueFormatted: formatCents(revenue),
+      saleCount: saleCount,
+      avgSale: avgSale,
+      avgSaleFormatted: formatCents(avgSale),
+      durationMinutes: durationMin
+    };
+
+    // Batch update: tag sales + close session
+    var updates = Object.assign({}, tagUpdates);
+    updates['admin/liveSessions/' + liveSessionId + '/status'] = 'ended';
+    updates['admin/liveSessions/' + liveSessionId + '/endTime'] = now;
+    updates['admin/liveSessions/' + liveSessionId + '/summary'] = summary;
+
+    MastDB._ref('').update(updates).then(function() {
+      if (liveSessionTimer) { clearInterval(liveSessionTimer); liveSessionTimer = null; }
+      showEndSessionSummary(summary, liveSessionData.channelName);
+      liveSessionId = null;
+      liveSessionData = null;
+      var btn = document.getElementById('goLiveBtn');
+      if (btn) btn.style.display = '';
+    }).catch(function(err) {
+      console.error('[live] End failed:', err);
+      if (window.MastToast) MastToast.show('Failed to end session', 'error');
+    });
+  }
+
+  function showEndSessionSummary(summary, channelName) {
+    var banner = document.getElementById('liveSessionBanner');
+    if (!banner) return;
+
+    var h = '<div style="background:#1a1a2e;border:1px solid #333;border-radius:10px;padding:20px;margin-bottom:12px;">';
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
+    h += '<div style="font-size:0.9rem;font-weight:600;color:#e0e0e0;">Live Session Complete</div>';
+    h += '<button onclick="dismissLiveSummary()" style="background:none;border:none;color:var(--warm-gray,#999);cursor:pointer;font-size:1.2rem;">&times;</button>';
+    h += '</div>';
+
+    h += '<div style="font-size:0.78rem;color:var(--warm-gray,#999);margin-bottom:12px;">' + esc(channelName || 'Social Live') +
+      ' \u2022 ' + summary.durationMinutes + ' min</div>';
+
+    h += '<div class="analytics-summary" style="margin-bottom:0;">';
+    h += '<div class="stat-card"><div class="stat-card-value">' + summary.revenueFormatted + '</div><div class="stat-card-label">Revenue</div></div>';
+    h += '<div class="stat-card"><div class="stat-card-value">' + summary.saleCount + '</div><div class="stat-card-label">Sales</div></div>';
+    h += '<div class="stat-card"><div class="stat-card-value">' + summary.itemsSold + '</div><div class="stat-card-label">Items</div></div>';
+    h += '<div class="stat-card"><div class="stat-card-value">' + summary.avgSaleFormatted + '</div><div class="stat-card-label">Avg Sale</div></div>';
+    h += '</div>';
+    h += '</div>';
+
+    banner.innerHTML = h;
+  }
+
+  function dismissLiveSummary() {
+    var banner = document.getElementById('liveSessionBanner');
+    if (banner) { banner.innerHTML = ''; banner.style.display = 'none'; }
+  }
+
+  function closeLiveModal() {
+    var modal = document.getElementById('liveSessionModal');
+    if (modal) modal.style.display = 'none';
+  }
+
+  // ============================================================
   // Window exports
   // ============================================================
 
@@ -1563,6 +1863,11 @@ async function exitPackingMode() {
   window.filterPackProducts = filterPackProducts;
   window.selectManualPackProduct = selectManualPackProduct;
   window.exitPackingMode = exitPackingMode;
+  window.goLiveStart = goLiveStart;
+  window.startLiveSession = startLiveSession;
+  window.endLiveSession = endLiveSession;
+  window.closeLiveModal = closeLiveModal;
+  window.dismissLiveSummary = dismissLiveSummary;
 
   // ============================================================
   // TERMS & CONDITIONS MANAGEMENT
@@ -2020,7 +2325,7 @@ async function exitPackingMode() {
 
   MastAdmin.registerModule('sales', {
     routes: {
-      'pos': { tab: 'salesTab', setup: function() { ensureSalesData(); if (showingSquarePayments) toggleSquarePayments(); } },
+      'pos': { tab: 'salesTab', setup: function() { ensureSalesData(); if (showingSquarePayments) toggleSquarePayments(); checkLiveSessionButton(); } },
       'receipts': { tab: 'salesTab', setup: function() { ensureSalesData(); if (!showingSquarePayments) toggleSquarePayments(); } },
       'events': { tab: 'salesEventsTab', setup: function() {
         if (!salesEventsLoaded) loadSalesEvents();
@@ -2042,6 +2347,10 @@ async function exitPackingMode() {
       editingEventId = null;
       packingEventId = null;
       if (packingCamera) { stopPackingCamera(); }
+      if (liveSessionTimer) { clearInterval(liveSessionTimer); liveSessionTimer = null; }
+      liveSessionId = null;
+      liveSessionData = null;
+      liveSessionChannels = null;
     }
   });
 

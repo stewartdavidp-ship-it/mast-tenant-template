@@ -6336,7 +6336,16 @@
         <!-- Quick Actions -->
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0;align-items:center;">
           <a href="../pos/" target="_blank" class="btn btn-primary" style="font-size:0.85rem;text-decoration:none;">💰 Open Point of Sale</a>
-          <span style="font-size:0.78rem;color:var(--warm-gray);">Use the PoS app to start a transaction — works for studio sales, trade shows, or anywhere with a phone/tablet.</span>
+          <button id="goLiveBtn" class="btn btn-secondary" onclick="goLiveStart()" style="font-size:0.85rem;display:none;">🔴 Go Live</button>
+          <span id="goLiveHint" style="font-size:0.78rem;color:var(--warm-gray);">Use the PoS app to start a transaction — works for studio sales, trade shows, or anywhere with a phone/tablet.</span>
+        </div>
+
+        <!-- Live Session Banner -->
+        <div id="liveSessionBanner" style="display:none;"></div>
+
+        <!-- Live Session Modal (channel picker / end summary) -->
+        <div id="liveSessionModal" class="modal-overlay" style="display:none;">
+          <div class="modal-content" style="max-width:420px;" id="liveSessionModalInner"></div>
         </div>
 
         <!-- Daily Summary -->

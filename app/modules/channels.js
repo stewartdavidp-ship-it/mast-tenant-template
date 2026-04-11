@@ -33,6 +33,8 @@
   var consignmentsData = {};   // for dashboard P&L
   var salesEventsData = {};    // for craft fair comparison
   var salesEventsLoaded = false;
+  var liveSessionsData = {};   // for social_live session history
+  var liveSessionsLoaded = false;
   var dashboardPeriod = '30d'; // '7d' | '30d' | '90d' | 'ytd' | 'all'
   var dashboardSort = { col: 'netRevenue', asc: false };
   var eventCompSort = { col: 'roi', asc: false };
@@ -188,6 +190,8 @@
     consignmentsData = {};
     salesEventsData = {};
     salesEventsLoaded = false;
+    liveSessionsData = {};
+    liveSessionsLoaded = false;
     currentView = 'list';
     selectedChannelId = null;
     detailTab = 'overview';
@@ -491,6 +495,22 @@
       }
       h += '<div style="font-size:0.78rem;color:#666;margin-top:4px;">Wholesale orders managed via the Wholesale module.</div>';
       h += '</div>';
+    } else if (ch.type === 'social_live') {
+      h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;margin-bottom:16px;">';
+      h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">';
+      h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;">Live Sale Sessions</div>';
+      if (!liveSessionsLoaded) {
+        h += '<button class="btn btn-secondary btn-small" onclick="channelLoadLiveSessions()">Show History</button>';
+      }
+      h += '</div>';
+      h += '<div id="channelLiveSessions">';
+      if (liveSessionsLoaded) {
+        h += renderLiveSessionHistory(ch);
+      } else {
+        h += '<div style="font-size:0.85rem;color:#999;">Click &ldquo;Show History&rdquo; to see past live sale sessions.</div>';
+      }
+      h += '</div>';
+      h += '</div>';
     }
     return h;
   }
@@ -691,6 +711,99 @@
       eventCompSort.asc = false;
     }
     renderPreservingEdits();
+  }
+
+  // ============================================================
+  // Live Session History (social_live channel type)
+  // ============================================================
+
+  function loadLiveSessions() {
+    var el = document.getElementById('channelLiveSessions');
+    if (el) el.innerHTML = '<div style="font-size:0.85rem;color:#999;text-align:center;padding:12px;">Loading session data\u2026</div>';
+    MastDB._ref('admin/liveSessions').once('value').then(function(snap) {
+      liveSessionsData = snap.val() || {};
+      liveSessionsLoaded = true;
+      renderPreservingEdits();
+    }).catch(function(err) {
+      console.error('Error loading live sessions:', err);
+      liveSessionsData = {};
+      liveSessionsLoaded = true;
+      renderPreservingEdits();
+    });
+  }
+
+  function renderLiveSessionHistory(ch) {
+    var sessions = [];
+    Object.keys(liveSessionsData).forEach(function(id) {
+      var s = liveSessionsData[id];
+      if (s.channelId === ch.channelId) {
+        sessions.push({
+          sessionId: id,
+          startTime: s.startTime || '',
+          endTime: s.endTime || null,
+          status: s.status || 'active',
+          platform: s.platform || null,
+          summary: s.summary || null
+        });
+      }
+    });
+
+    if (!sessions.length) {
+      return '<div style="font-size:0.85rem;color:#999;">No live sessions recorded yet. Use &ldquo;Go Live&rdquo; in the Sales tab to start one.</div>';
+    }
+
+    // Sort by startTime descending
+    sessions.sort(function(a, b) { return (b.startTime || '').localeCompare(a.startTime || ''); });
+
+    // Summary stats
+    var totalRev = 0, totalSales = 0, totalSessions = sessions.length;
+    sessions.forEach(function(s) {
+      if (s.summary) {
+        totalRev += s.summary.revenue || 0;
+        totalSales += s.summary.saleCount || 0;
+      }
+    });
+
+    var h = '';
+    h += '<div class="analytics-summary" style="margin-bottom:12px;">';
+    h += '<div class="stat-card"><div class="stat-card-value">' + totalSessions + '</div><div class="stat-card-label">Sessions</div></div>';
+    h += '<div class="stat-card"><div class="stat-card-value">' + esc(formatCurrency(totalRev)) + '</div><div class="stat-card-label">Total Revenue</div></div>';
+    h += '<div class="stat-card"><div class="stat-card-value">' + totalSales + '</div><div class="stat-card-label">Total Sales</div></div>';
+    h += '</div>';
+
+    // Session table
+    h += '<div class="data-table" style="overflow-x:auto;">';
+    h += '<table role="grid"><thead><tr>';
+    h += '<th style="text-align:left;">Date</th>';
+    h += '<th style="text-align:right;">Duration</th>';
+    h += '<th style="text-align:right;">Sales</th>';
+    h += '<th style="text-align:right;">Revenue</th>';
+    h += '<th style="text-align:right;">Avg Sale</th>';
+    h += '<th style="text-align:center;">Status</th>';
+    h += '</tr></thead><tbody>';
+
+    sessions.forEach(function(s) {
+      var dateStr = s.startTime ? new Date(s.startTime).toLocaleDateString() : '\u2014';
+      var dur = s.summary && s.summary.durationMinutes ? s.summary.durationMinutes + ' min' : '\u2014';
+      var sales = s.summary ? String(s.summary.saleCount || 0) : '\u2014';
+      var rev = s.summary ? formatCurrency(s.summary.revenue || 0) : '\u2014';
+      var avg = s.summary ? formatCurrency(s.summary.avgSale || 0) : '\u2014';
+      var statusColor = s.status === 'active' ? '#dc2626' : '#9ca3af';
+      var statusLabel = s.status === 'active' ? '🔴 LIVE' : 'Ended';
+
+      h += '<tr>';
+      h += '<td>' + esc(dateStr) + '</td>';
+      h += '<td style="text-align:right;color:var(--warm-gray,#999);">' + esc(dur) + '</td>';
+      h += '<td style="text-align:right;">' + esc(sales) + '</td>';
+      h += '<td style="text-align:right;font-weight:500;">' + esc(rev) + '</td>';
+      h += '<td style="text-align:right;color:var(--warm-gray,#999);">' + esc(avg) + '</td>';
+      h += '<td style="text-align:center;"><span style="font-size:0.72rem;padding:2px 8px;border-radius:4px;background:' + statusColor + ';color:#fff;">' + statusLabel + '</span></td>';
+      h += '</tr>';
+    });
+
+    h += '</tbody></table></div>';
+
+    return h;
   }
 
   // ============================================================
@@ -1817,6 +1930,7 @@
   window.channelRemoveProduct = removeProduct;
   window.channelLoadEventComparison = loadEventComparison;
   window.channelSortEventComp = setEventCompSort;
+  window.channelLoadLiveSessions = loadLiveSessions;
 
   // ============================================================
   // Register with MastAdmin
