@@ -1908,10 +1908,9 @@
       else if (platform.indexOf('squarespace') !== -1) channelKey = 'squarespace';
     }
 
-    // Write a sync request to Firebase that the Cloud Function can pick up
-    // OR — call the Cloud Function directly via fetch
+    // Call the Cloud Function directly via fetch
     var cfUrl = 'https://us-central1-mast-platform-prod.cloudfunctions.net/syncInventoryToChannels';
-    var tenantId = window.TENANT_CONFIG && window.TENANT_CONFIG.tenantId;
+    var tenantId = (typeof MastDB !== 'undefined' && typeof MastDB.tenantId === 'function') ? MastDB.tenantId() : null;
 
     if (!tenantId) {
       showToast('Tenant not resolved. Cannot sync.', true);
