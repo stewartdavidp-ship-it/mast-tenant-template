@@ -120,7 +120,7 @@
   function loadChannels() {
     if (channelsLoaded) { renderCurrentView(); return; }
     var tab = document.getElementById('channelsTab');
-    if (tab) tab.innerHTML = '<div style="text-align:center;padding:40px;color:var(--warm-gray);font-size:0.9rem;">Loading channels...</div>';
+    if (tab) tab.innerHTML = '<div style="text-align:center;padding:40px;color:#999;font-size:0.9rem;">Loading channels...</div>';
 
     MastDB._ref('admin/channels').once('value').then(function(snap) {
       channelsData = snap.val() || {};
@@ -130,7 +130,7 @@
       });
     }).catch(function(err) {
       console.error('Error loading channels:', err);
-      if (tab) tab.innerHTML = '<div style="text-align:center;padding:40px;color:var(--danger);font-size:0.9rem;">Error loading channels.</div>';
+      if (tab) tab.innerHTML = '<div style="text-align:center;padding:40px;color:#dc3545;font-size:0.9rem;">Error loading channels.</div>';
     });
   }
 
@@ -210,10 +210,10 @@
 
     if (!channels.length) {
       tab.innerHTML =
-        '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">' +
+        '<div style="text-align:center;padding:40px 20px;color:#999;">' +
           '<div style="font-size:1.6rem;margin-bottom:12px;">📡</div>' +
           '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No sales channels yet</p>' +
-          '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Add your first channel to start tracking multi-channel sales.</p>' +
+          '<p style="font-size:0.85rem;color:#666;">Add your first channel to start tracking multi-channel sales.</p>' +
           '<button class="btn btn-primary" style="margin-top:16px;" onclick="channelShowNew()">+ New Channel</button>' +
         '</div>';
       return;
@@ -231,9 +231,9 @@
     h += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:16px;">';
     h += '<input type="text" id="chSearchInput" placeholder="Search channels\u2026" oninput="channelRerender()"' +
       ' value="' + esc(searchVal) + '"' +
-      ' style="flex:1;min-width:200px;padding:9px 12px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+      ' style="flex:1;min-width:200px;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
     h += '<select id="chTypeFilter" onchange="channelRerender()"' +
-      ' style="padding:9px 12px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+      ' style="padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
     h += '<option value="">All types</option>';
     Object.keys(CHANNEL_TYPES).forEach(function(key) {
       var sel = typeVal === key ? ' selected' : '';
@@ -244,19 +244,19 @@
 
     // Channel cards
     if (!filtered.length) {
-      h += '<div style="text-align:center;padding:30px;color:var(--warm-gray);font-size:0.85rem;">No channels match your filters.</div>';
+      h += '<div style="text-align:center;padding:30px;color:#999;font-size:0.85rem;">No channels match your filters.</div>';
     } else {
       h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;">';
       filtered.forEach(function(ch) {
         var pCount = productCountForChannel(ch.channelId);
-        h += '<div style="background:var(--charcoal);border:1px solid var(--warm-gray-light);border-radius:8px;padding:16px;cursor:pointer;transition:border-color 0.15s;"' +
-          ' onmouseenter="this.style.borderColor=\'var(--amber)\'" onmouseleave="this.style.borderColor=\'var(--warm-gray-light)\'"' +
+        h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;cursor:pointer;transition:border-color 0.15s;"' +
+          ' onmouseenter="this.style.borderColor=\'#C4853C\'" onmouseleave="this.style.borderColor=\'var(--warm-gray-light)\'"' +
           ' onclick="channelOpenDetail(\'' + esc(ch.channelId) + '\')" role="button" tabindex="0"' +
           ' onkeydown="if(event.key===\'Enter\')channelOpenDetail(\'' + esc(ch.channelId) + '\')">';
 
         // Row 1: name + status
         h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">';
-        h += '<div style="font-weight:500;font-size:0.9rem;color:var(--cream);">' + esc(ch.name) + '</div>';
+        h += '<div style="font-weight:500;font-size:0.9rem;color:#e0e0e0;">' + esc(ch.name) + '</div>';
         h += statusDot(ch.isActive);
         h += '</div>';
 
@@ -264,19 +264,19 @@
         h += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">';
         h += typeBadge(ch.type);
         if (ch.externalPlatform) {
-          h += '<span style="font-size:0.72rem;color:var(--warm-gray);">' + esc(ch.externalPlatform) + '</span>';
+          h += '<span style="font-size:0.72rem;color:#999;">' + esc(ch.externalPlatform) + '</span>';
         }
         h += '</div>';
 
         // Row 3: stats
-        h += '<div style="display:flex;gap:16px;font-size:0.78rem;color:var(--warm-gray);">';
+        h += '<div style="display:flex;gap:16px;font-size:0.78rem;color:#999;">';
         h += '<span>' + feeSummary(ch) + '</span>';
         h += '<span>' + pCount + ' product' + (pCount !== 1 ? 's' : '') + '</span>';
         h += '</div>';
 
         // Row 4: last updated
         if (ch.updatedAt) {
-          h += '<div style="font-size:0.72rem;color:var(--warm-gray-light);margin-top:8px;">Updated ' + relativeTime(ch.updatedAt) + '</div>';
+          h += '<div style="font-size:0.72rem;color:#666;margin-top:8px;">Updated ' + relativeTime(ch.updatedAt) + '</div>';
         }
 
         h += '</div>';
@@ -315,7 +315,7 @@
     h += '<div style="display:flex;align-items:center;gap:8px;margin-top:4px;">';
     h += typeBadge(ch.type);
     h += statusDot(ch.isActive);
-    if (ch.externalPlatform) h += '<span style="font-size:0.78rem;color:var(--warm-gray);">' + esc(ch.externalPlatform) + '</span>';
+    if (ch.externalPlatform) h += '<span style="font-size:0.78rem;color:#999;">' + esc(ch.externalPlatform) + '</span>';
     h += '</div>';
     h += '</div>';
 
@@ -324,7 +324,7 @@
     if (!channelEditMode) {
       h += '<button class="btn btn-secondary btn-small" onclick="channelEnterEdit()">Edit</button>';
     } else {
-      h += '<span style="font-size:0.72rem;color:var(--amber);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;">Editing</span>';
+      h += '<span style="font-size:0.72rem;color:#C4853C;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;">Editing</span>';
     }
     h += '</div>';
     h += '</div>';
@@ -340,8 +340,8 @@
       }
       h += '<button onclick="channelSetTab(\'' + t.value + '\')" ' +
         'style="padding:8px 16px;font-size:0.85rem;font-family:\'DM Sans\',sans-serif;border:none;background:none;cursor:pointer;' +
-        'color:' + (isActive ? 'var(--amber)' : 'var(--warm-gray)') + ';' +
-        'border-bottom:2px solid ' + (isActive ? 'var(--amber)' : 'transparent') + ';' +
+        'color:' + (isActive ? '#C4853C' : 'var(--warm-gray)') + ';' +
+        'border-bottom:2px solid ' + (isActive ? '#C4853C' : 'transparent') + ';' +
         'font-weight:' + (isActive ? '600' : '400') + ';"' +
         ' aria-pressed="' + isActive + '">' + esc(tabLabel) + '</button>';
     });
@@ -369,42 +369,42 @@
     var h = '';
 
     // Fee profile card
-    h += '<div style="background:var(--charcoal);border:1px solid var(--warm-gray-light);border-radius:8px;padding:16px;margin-bottom:16px;">';
-    h += '<div style="font-size:0.85rem;font-weight:600;color:var(--cream);margin-bottom:12px;">Fee Profile</div>';
-    h += '<div style="font-size:1.15rem;font-weight:500;color:var(--amber);">' + esc(feeSummary(ch)) + '</div>';
-    h += '<div style="display:flex;gap:24px;margin-top:12px;font-size:0.78rem;color:var(--warm-gray);">';
-    h += '<div><span style="color:var(--warm-gray-light);">Ownership:</span> ' + esc(ch.ownershipModel || '—') + '</div>';
-    h += '<div><span style="color:var(--warm-gray-light);">Pricing:</span> ' + esc(ch.pricingModel || '—') + '</div>';
-    h += '<div><span style="color:var(--warm-gray-light);">Inventory:</span> ' + esc(ch.inventoryModel || '—') + '</div>';
+    h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;margin-bottom:16px;">';
+    h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;margin-bottom:12px;">Fee Profile</div>';
+    h += '<div style="font-size:1.15rem;font-weight:500;color:#C4853C;">' + esc(feeSummary(ch)) + '</div>';
+    h += '<div style="display:flex;gap:24px;margin-top:12px;font-size:0.78rem;color:#999;">';
+    h += '<div><span style="color:#666;">Ownership:</span> ' + esc(ch.ownershipModel || '—') + '</div>';
+    h += '<div><span style="color:#666;">Pricing:</span> ' + esc(ch.pricingModel || '—') + '</div>';
+    h += '<div><span style="color:#666;">Inventory:</span> ' + esc(ch.inventoryModel || '—') + '</div>';
     h += '</div>';
     if (ch.defaultPricingTier) {
-      h += '<div style="margin-top:8px;font-size:0.78rem;color:var(--warm-gray);"><span style="color:var(--warm-gray-light);">Pricing tier:</span> ' + esc(ch.defaultPricingTier) + '</div>';
+      h += '<div style="margin-top:8px;font-size:0.78rem;color:#999;"><span style="color:#666;">Pricing tier:</span> ' + esc(ch.defaultPricingTier) + '</div>';
     }
     h += '</div>';
 
     // Contact info
     if (ch.contactName || ch.contactEmail || ch.contactPhone) {
-      h += '<div style="background:var(--charcoal);border:1px solid var(--warm-gray-light);border-radius:8px;padding:16px;margin-bottom:16px;">';
-      h += '<div style="font-size:0.85rem;font-weight:600;color:var(--cream);margin-bottom:8px;">Contact</div>';
-      if (ch.contactName) h += '<div style="font-size:0.9rem;color:var(--cream);">' + esc(ch.contactName) + '</div>';
-      if (ch.contactEmail) h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">' + esc(ch.contactEmail) + '</div>';
-      if (ch.contactPhone) h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">' + esc(ch.contactPhone) + '</div>';
+      h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;margin-bottom:16px;">';
+      h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;margin-bottom:8px;">Contact</div>';
+      if (ch.contactName) h += '<div style="font-size:0.9rem;color:#e0e0e0;">' + esc(ch.contactName) + '</div>';
+      if (ch.contactEmail) h += '<div style="font-size:0.78rem;color:#999;margin-top:2px;">' + esc(ch.contactEmail) + '</div>';
+      if (ch.contactPhone) h += '<div style="font-size:0.78rem;color:#999;margin-top:2px;">' + esc(ch.contactPhone) + '</div>';
       h += '</div>';
     }
 
     // Relationship notes
     if (ch.relationshipNotes) {
-      h += '<div style="background:var(--charcoal);border:1px solid var(--warm-gray-light);border-radius:8px;padding:16px;margin-bottom:16px;">';
-      h += '<div style="font-size:0.85rem;font-weight:600;color:var(--cream);margin-bottom:8px;">Notes</div>';
-      h += '<div style="font-size:0.85rem;color:var(--warm-gray);white-space:pre-wrap;">' + esc(ch.relationshipNotes) + '</div>';
+      h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;margin-bottom:16px;">';
+      h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;margin-bottom:8px;">Notes</div>';
+      h += '<div style="font-size:0.85rem;color:#999;white-space:pre-wrap;">' + esc(ch.relationshipNotes) + '</div>';
       h += '</div>';
     }
 
     // Contract terms
     if (ch.contractTerms) {
-      h += '<div style="background:var(--charcoal);border:1px solid var(--warm-gray-light);border-radius:8px;padding:16px;margin-bottom:16px;">';
-      h += '<div style="font-size:0.85rem;font-weight:600;color:var(--cream);margin-bottom:8px;">Contract Terms</div>';
-      h += '<div style="font-size:0.85rem;color:var(--warm-gray);white-space:pre-wrap;">' + esc(ch.contractTerms) + '</div>';
+      h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;margin-bottom:16px;">';
+      h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;margin-bottom:8px;">Contract Terms</div>';
+      h += '<div style="font-size:0.85rem;color:#999;white-space:pre-wrap;">' + esc(ch.contractTerms) + '</div>';
       h += '</div>';
     }
 
@@ -422,28 +422,28 @@
   function renderTypeSpecificOverview(ch) {
     var h = '';
     if (ch.type === 'consignment') {
-      h += '<div style="background:var(--charcoal);border:1px solid var(--warm-gray-light);border-radius:8px;padding:16px;margin-bottom:16px;">';
-      h += '<div style="font-size:0.85rem;font-weight:600;color:var(--cream);margin-bottom:8px;">Consignment Details</div>';
-      h += '<div style="font-size:0.85rem;color:var(--warm-gray);">Settlement tracking available in Galleries &amp; Consignment module.</div>';
+      h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;margin-bottom:16px;">';
+      h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;margin-bottom:8px;">Consignment Details</div>';
+      h += '<div style="font-size:0.85rem;color:#999;">Settlement tracking available in Galleries &amp; Consignment module.</div>';
       h += '</div>';
     } else if (ch.type === 'marketplace') {
-      h += '<div style="background:var(--charcoal);border:1px solid var(--warm-gray-light);border-radius:8px;padding:16px;margin-bottom:16px;">';
-      h += '<div style="font-size:0.85rem;font-weight:600;color:var(--cream);margin-bottom:8px;">Marketplace</div>';
-      h += '<div style="font-size:0.85rem;color:var(--warm-gray);">Platform: ' + esc(ch.externalPlatform || 'Not set') + '</div>';
-      h += '<div style="font-size:0.78rem;color:var(--warm-gray-light);margin-top:4px;">PIM sync managed via publish tools.</div>';
+      h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;margin-bottom:16px;">';
+      h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;margin-bottom:8px;">Marketplace</div>';
+      h += '<div style="font-size:0.85rem;color:#999;">Platform: ' + esc(ch.externalPlatform || 'Not set') + '</div>';
+      h += '<div style="font-size:0.78rem;color:#666;margin-top:4px;">PIM sync managed via publish tools.</div>';
       h += '</div>';
     } else if (ch.type === 'mobile_events') {
-      h += '<div style="background:var(--charcoal);border:1px solid var(--warm-gray-light);border-radius:8px;padding:16px;margin-bottom:16px;">';
-      h += '<div style="font-size:0.85rem;font-weight:600;color:var(--cream);margin-bottom:8px;">Craft Fairs &amp; Events</div>';
-      h += '<div style="font-size:0.85rem;color:var(--warm-gray);">Per-show P&amp;L available in the Shows module.</div>';
+      h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;margin-bottom:16px;">';
+      h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;margin-bottom:8px;">Craft Fairs &amp; Events</div>';
+      h += '<div style="font-size:0.85rem;color:#999;">Per-show P&amp;L available in the Shows module.</div>';
       h += '</div>';
     } else if (ch.type === 'wholesale_prebuy' || ch.type === 'retail_prebuy') {
-      h += '<div style="background:var(--charcoal);border:1px solid var(--warm-gray-light);border-radius:8px;padding:16px;margin-bottom:16px;">';
-      h += '<div style="font-size:0.85rem;font-weight:600;color:var(--cream);margin-bottom:8px;">Wholesale</div>';
+      h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;margin-bottom:16px;">';
+      h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;margin-bottom:8px;">Wholesale</div>';
       if (ch.defaultPricingTier) {
-        h += '<div style="font-size:0.85rem;color:var(--warm-gray);">Default pricing tier: ' + esc(ch.defaultPricingTier) + '</div>';
+        h += '<div style="font-size:0.85rem;color:#999;">Default pricing tier: ' + esc(ch.defaultPricingTier) + '</div>';
       }
-      h += '<div style="font-size:0.78rem;color:var(--warm-gray-light);margin-top:4px;">Wholesale orders managed via the Wholesale module.</div>';
+      h += '<div style="font-size:0.78rem;color:#666;margin-top:4px;">Wholesale orders managed via the Wholesale module.</div>';
       h += '</div>';
     }
     return h;
@@ -458,9 +458,9 @@
     var h = '';
 
     if (!products.length) {
-      h += '<div style="text-align:center;padding:30px;color:var(--warm-gray);">';
+      h += '<div style="text-align:center;padding:30px;color:#999;">';
       h += '<div style="font-size:0.9rem;margin-bottom:4px;">No products on this channel</div>';
-      h += '<div style="font-size:0.78rem;color:var(--warm-gray-light);">Products are assigned to channels via the product detail page or channel eligibility defaults.</div>';
+      h += '<div style="font-size:0.78rem;color:#666;">Products are assigned to channels via the product detail page or channel eligibility defaults.</div>';
       h += '</div>';
       return h;
     }
@@ -516,15 +516,15 @@
     if (!channelOrders.length) {
       // Try loading orders if not loaded yet
       if (!Object.keys(ordersData).length) {
-        h += '<div style="text-align:center;padding:30px;color:var(--warm-gray);">';
+        h += '<div style="text-align:center;padding:30px;color:#999;">';
         h += '<div style="font-size:0.9rem;margin-bottom:8px;">Loading activity...</div>';
         h += '<button class="btn btn-secondary btn-small" onclick="channelLoadActivity()">Load Orders</button>';
         h += '</div>';
         return h;
       }
-      h += '<div style="text-align:center;padding:30px;color:var(--warm-gray);">';
+      h += '<div style="text-align:center;padding:30px;color:#999;">';
       h += '<div style="font-size:0.9rem;">No orders attributed to this channel yet.</div>';
-      h += '<div style="font-size:0.78rem;color:var(--warm-gray-light);margin-top:4px;">Orders are attributed via autoMatchSources or channelId.</div>';
+      h += '<div style="font-size:0.78rem;color:#666;margin-top:4px;">Orders are attributed via autoMatchSources or channelId.</div>';
       h += '</div>';
       return h;
     }
@@ -561,8 +561,8 @@
     h += '<div style="display:grid;gap:16px;">';
 
     // Fee profile
-    h += '<div style="background:var(--charcoal);border:1px solid var(--warm-gray-light);border-radius:8px;padding:16px;">';
-    h += '<div style="font-size:0.85rem;font-weight:600;color:var(--cream);margin-bottom:12px;">Fee Profile</div>';
+    h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;">';
+    h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;margin-bottom:12px;">Fee Profile</div>';
     h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">';
     h += fieldGroup('Percent Fee (%)', 'chFeePercent', ch.percentFee || '', ro, 'number', '0', '0.1');
     h += fieldGroup('Fixed Fee / Order (cents)', 'chFeeFixed', ch.fixedFeePerOrderCents || '', ro, 'number', '0');
@@ -571,26 +571,26 @@
     h += '</div>';
 
     // Auto-match sources
-    h += '<div style="background:var(--charcoal);border:1px solid var(--warm-gray-light);border-radius:8px;padding:16px;">';
-    h += '<div style="font-size:0.85rem;font-weight:600;color:var(--cream);margin-bottom:8px;">Auto-Match Sources</div>';
+    h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;">';
+    h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;margin-bottom:8px;">Auto-Match Sources</div>';
     var srcs = ch.autoMatchSources || [];
     if (srcs.length) {
       h += '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
       srcs.forEach(function(s) {
-        h += '<span style="background:var(--warm-gray-light);color:var(--cream);padding:2px 8px;border-radius:4px;font-size:0.78rem;">' + esc(s) + '</span>';
+        h += '<span style="background:var(--warm-gray-light);color:#e0e0e0;padding:2px 8px;border-radius:4px;font-size:0.78rem;">' + esc(s) + '</span>';
       });
       h += '</div>';
     } else {
-      h += '<div style="font-size:0.78rem;color:var(--warm-gray-light);">No auto-match sources configured.</div>';
+      h += '<div style="font-size:0.78rem;color:#666;">No auto-match sources configured.</div>';
     }
     h += '</div>';
 
     // Default eligibility toggle (atomic widget — saves on action)
-    h += '<div style="background:var(--charcoal);border:1px solid var(--warm-gray-light);border-radius:8px;padding:16px;">';
+    h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;">';
     h += '<div style="display:flex;justify-content:space-between;align-items:center;">';
     h += '<div>';
-    h += '<div style="font-size:0.85rem;font-weight:600;color:var(--cream);">Default Eligibility</div>';
-    h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">' +
+    h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;">Default Eligibility</div>';
+    h += '<div style="font-size:0.78rem;color:#999;margin-top:2px;">' +
       (ch.defaultEligibility === 'opt-in' ? 'Opt-in: products must be explicitly added to this channel.' : 'Opt-out: new products are automatically eligible for this channel.') +
       '</div>';
     h += '</div>';
@@ -598,7 +598,7 @@
     h += '<input type="checkbox" ' + (ch.defaultEligibility !== 'opt-in' ? 'checked' : '') +
       ' onchange="channelToggleEligibility(\'' + esc(ch.channelId) + '\', this.checked)"' +
       ' style="opacity:0;width:0;height:0;">';
-    h += '<span style="position:absolute;inset:0;background:' + (ch.defaultEligibility !== 'opt-in' ? 'var(--teal)' : 'var(--warm-gray-light)') +
+    h += '<span style="position:absolute;inset:0;background:' + (ch.defaultEligibility !== 'opt-in' ? '#2A7C6F' : 'var(--warm-gray-light)') +
       ';border-radius:12px;transition:background 0.2s;"></span>';
     h += '<span style="position:absolute;top:2px;left:' + (ch.defaultEligibility !== 'opt-in' ? '22px' : '2px') +
       ';width:20px;height:20px;background:white;border-radius:50%;transition:left 0.2s;"></span>';
@@ -607,8 +607,8 @@
     h += '</div>';
 
     // Contact fields
-    h += '<div style="background:var(--charcoal);border:1px solid var(--warm-gray-light);border-radius:8px;padding:16px;">';
-    h += '<div style="font-size:0.85rem;font-weight:600;color:var(--cream);margin-bottom:12px;">Contact</div>';
+    h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;">';
+    h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;margin-bottom:12px;">Contact</div>';
     h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">';
     h += fieldGroup('Name', 'chContactName', ch.contactName || '', ro);
     h += fieldGroup('Email', 'chContactEmail', ch.contactEmail || '', ro, 'email');
@@ -617,7 +617,7 @@
     h += '</div>';
 
     // Revenue target
-    h += '<div style="background:var(--charcoal);border:1px solid var(--warm-gray-light);border-radius:8px;padding:16px;">';
+    h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;">';
     h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
     h += fieldGroup('Revenue Target (cents)', 'chRevenueTarget', ch.revenueTarget || '', ro, 'number', '0');
     h += fieldGroup('External Platform', 'chExtPlatform', ch.externalPlatform || '', ro);
@@ -625,12 +625,12 @@
     h += '</div>';
 
     // Notes
-    h += '<div style="background:var(--charcoal);border:1px solid var(--warm-gray-light);border-radius:8px;padding:16px;">';
-    h += '<div style="font-size:0.85rem;font-weight:600;color:var(--cream);margin-bottom:8px;">Notes</div>';
+    h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;">';
+    h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;margin-bottom:8px;">Notes</div>';
     if (ro) {
-      h += '<div style="font-size:0.85rem;color:var(--warm-gray);white-space:pre-wrap;">' + esc(ch.notes || 'No notes.') + '</div>';
+      h += '<div style="font-size:0.85rem;color:#999;white-space:pre-wrap;">' + esc(ch.notes || 'No notes.') + '</div>';
     } else {
-      h += '<textarea id="chNotes" rows="3" style="width:100%;padding:9px 12px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\',sans-serif;font-size:0.85rem;resize:vertical;">' +
+      h += '<textarea id="chNotes" rows="3" style="width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.85rem;resize:vertical;">' +
         esc(ch.notes || '') + '</textarea>';
     }
     h += '</div>';
@@ -647,14 +647,14 @@
 
   function fieldGroup(label, id, value, readOnly, type, min, step) {
     var h = '<div>';
-    h += '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:4px;" for="' + id + '">' + esc(label) + '</label>';
+    h += '<label style="font-size:0.78rem;color:#999;display:block;margin-bottom:4px;" for="' + id + '">' + esc(label) + '</label>';
     if (readOnly) {
-      h += '<div style="font-size:0.9rem;color:var(--cream);padding:9px 0;">' + esc(value || '—') + '</div>';
+      h += '<div style="font-size:0.9rem;color:#e0e0e0;padding:9px 0;">' + esc(value || '—') + '</div>';
     } else {
       h += '<input type="' + (type || 'text') + '" id="' + id + '" value="' + esc(String(value)) + '"' +
         (min !== undefined ? ' min="' + min + '"' : '') +
         (step ? ' step="' + step + '"' : '') +
-        ' style="width:100%;padding:9px 12px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+        ' style="width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
     }
     h += '</div>';
     return h;
@@ -677,15 +677,15 @@
 
     // Name
     h += '<div>';
-    h += '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:4px;" for="newChName">Channel Name *</label>';
-    h += '<input type="text" id="newChName" placeholder="e.g. Etsy, Gallery Blue, TikTok Shop" style="width:100%;padding:9px 12px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+    h += '<label style="font-size:0.78rem;color:#999;display:block;margin-bottom:4px;" for="newChName">Channel Name *</label>';
+    h += '<input type="text" id="newChName" placeholder="e.g. Etsy, Gallery Blue, TikTok Shop" style="width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
     h += '</div>';
 
     // Type selector
     h += '<div>';
-    h += '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:4px;" for="newChType">Channel Type *</label>';
+    h += '<label style="font-size:0.78rem;color:#999;display:block;margin-bottom:4px;" for="newChType">Channel Type *</label>';
     h += '<select id="newChType" onchange="channelTypeChanged()"' +
-      ' style="width:100%;padding:9px 12px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+      ' style="width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
     h += '<option value="">Select a type...</option>';
     Object.keys(CHANNEL_TYPES).forEach(function(key) {
       var t = CHANNEL_TYPES[key];
@@ -695,7 +695,7 @@
     h += '</div>';
 
     // Auto-filled classification (shown after type selected)
-    h += '<div id="newChClassification" style="display:none;font-size:0.78rem;color:var(--warm-gray);padding:8px 12px;background:var(--charcoal);border:1px solid var(--warm-gray-light);border-radius:6px;"></div>';
+    h += '<div id="newChClassification" style="display:none;font-size:0.78rem;color:#999;padding:8px 12px;background:#2a2a2a;border:1px solid #444;border-radius:6px;"></div>';
 
     // Fee fields
     h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">';
@@ -706,15 +706,15 @@
 
     // External platform
     h += '<div id="newChExtPlatformWrap">';
-    h += '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:4px;" for="newChExtPlatform">External Platform</label>';
-    h += '<input type="text" id="newChExtPlatform" placeholder="e.g. Etsy, Shopify, TikTok" style="width:100%;padding:9px 12px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+    h += '<label style="font-size:0.78rem;color:#999;display:block;margin-bottom:4px;" for="newChExtPlatform">External Platform</label>';
+    h += '<input type="text" id="newChExtPlatform" placeholder="e.g. Etsy, Shopify, TikTok" style="width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
     h += '</div>';
 
     // Default eligibility
     h += '<div style="display:flex;align-items:center;gap:12px;">';
-    h += '<label style="font-size:0.85rem;color:var(--cream);" for="newChOptOut">New products auto-eligible</label>';
-    h += '<input type="checkbox" id="newChOptOut" checked style="accent-color:var(--teal);">';
-    h += '<span style="font-size:0.72rem;color:var(--warm-gray);">(opt-out = checked, opt-in = unchecked)</span>';
+    h += '<label style="font-size:0.85rem;color:#e0e0e0;" for="newChOptOut">New products auto-eligible</label>';
+    h += '<input type="checkbox" id="newChOptOut" checked style="accent-color:#2A7C6F;">';
+    h += '<span style="font-size:0.72rem;color:#999;">(opt-out = checked, opt-in = unchecked)</span>';
     h += '</div>';
 
     // Contact
@@ -726,8 +726,8 @@
 
     // Notes
     h += '<div>';
-    h += '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:4px;" for="newChNotes">Notes</label>';
-    h += '<textarea id="newChNotes" rows="3" placeholder="Optional notes about this channel..." style="width:100%;padding:9px 12px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\',sans-serif;font-size:0.85rem;resize:vertical;"></textarea>';
+    h += '<label style="font-size:0.78rem;color:#999;display:block;margin-bottom:4px;" for="newChNotes">Notes</label>';
+    h += '<textarea id="newChNotes" rows="3" placeholder="Optional notes about this channel..." style="width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.85rem;resize:vertical;"></textarea>';
     h += '</div>';
 
     // Buttons
