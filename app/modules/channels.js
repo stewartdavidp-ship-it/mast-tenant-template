@@ -718,8 +718,22 @@
       h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;margin-bottom:16px;">';
       h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;margin-bottom:8px;">Marketplace</div>';
       h += '<div style="font-size:0.85rem;color:#999;">Platform: ' + esc(ch.externalPlatform || 'Not set') + '</div>';
-      h += '<div style="font-size:0.78rem;color:#666;margin-top:4px;">PIM sync managed via publish tools.</div>';
+
+      // Inventory sync status section
+      h += '<div id="channelSyncStatus" style="margin-top:12px;padding-top:12px;border-top:1px solid #444;">';
+      h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">';
+      h += '<div style="font-size:0.85rem;font-weight:500;color:#e0e0e0;">Inventory Sync</div>';
+      h += '<button class="btn btn-secondary btn-small" onclick="channelSyncNow(\'' + esc(ch.channelId) + '\')" id="syncNowBtn">Sync Now</button>';
       h += '</div>';
+      h += '<div id="syncStatusContent" style="font-size:0.78rem;color:#999;">';
+      h += '<span style="color:#666;">Loading sync status\u2026</span>';
+      h += '</div>';
+      h += '</div>';
+
+      h += '</div>';
+
+      // Kick off async load of sync status
+      setTimeout(function() { loadSyncStatus(); }, 0);
     } else if (ch.type === 'mobile_events') {
       h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;margin-bottom:16px;">';
       h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">';
@@ -1842,6 +1856,94 @@
   }
 
   // ============================================================
+  // Inventory Sync Status (for marketplace channels)
+  // ============================================================
+
+  function loadSyncStatus() {
+    var el = document.getElementById('syncStatusContent');
+    if (!el) return;
+
+    MastDB._ref('admin/inventorySync/lastSync').once('value').then(function(snap) {
+      var data = snap.val();
+      if (!data) {
+        el.innerHTML = 'No sync history yet. Click &ldquo;Sync Now&rdquo; to push inventory to marketplace.';
+        return;
+      }
+      var ts = data.timestamp ? new Date(data.timestamp) : null;
+      var timeStr = ts ? relativeTime(data.timestamp) : 'Unknown';
+      var synced = data.syncedCount || 0;
+      var errors = data.errorCount || 0;
+
+      var statusColor = errors > 0 ? '#f59e0b' : '#22c55e';
+      var statusIcon = errors > 0 ? '\u26A0' : '\u2713';
+
+      el.innerHTML =
+        '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">' +
+          '<span style="color:' + statusColor + ';">' + statusIcon + '</span>' +
+          '<span>Last sync: ' + esc(timeStr) + '</span>' +
+        '</div>' +
+        '<div style="display:flex;gap:12px;">' +
+          '<span>' + synced + ' synced</span>' +
+          (errors > 0 ? '<span style="color:#f59e0b;">' + errors + ' error' + (errors !== 1 ? 's' : '') + '</span>' : '') +
+          (data.initiatedBy ? '<span>by ' + esc(data.initiatedBy === 'system' ? 'system' : 'admin') + '</span>' : '') +
+        '</div>';
+    }).catch(function() {
+      el.innerHTML = 'Unable to load sync status.';
+    });
+  }
+
+  function syncNow(channelId) {
+    var btn = document.getElementById('syncNowBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Syncing\u2026'; }
+
+    // Get the external platform from the channel to determine which adapter to use
+    var ch = channelsData[channelId];
+    var platform = ch && ch.externalPlatform ? ch.externalPlatform.toLowerCase() : null;
+    // Map common platform names to channel keys
+    var channelKey = null;
+    if (platform) {
+      if (platform.indexOf('etsy') !== -1) channelKey = 'etsy';
+      else if (platform.indexOf('shopify') !== -1) channelKey = 'shopify';
+      else if (platform.indexOf('square') !== -1) channelKey = 'square';
+      else if (platform.indexOf('squarespace') !== -1) channelKey = 'squarespace';
+    }
+
+    // Write a sync request to Firebase that the Cloud Function can pick up
+    // OR — call the Cloud Function directly via fetch
+    var cfUrl = 'https://us-central1-mast-platform-prod.cloudfunctions.net/syncInventoryToChannels';
+    var tenantId = window.TENANT_CONFIG && window.TENANT_CONFIG.tenantId;
+
+    if (!tenantId) {
+      showToast('Tenant not resolved. Cannot sync.', true);
+      if (btn) { btn.disabled = false; btn.textContent = 'Sync Now'; }
+      return;
+    }
+
+    // Get current user token for auth
+    firebase.auth().currentUser.getIdToken().then(function(token) {
+      return fetch(cfUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ data: { tenantId: tenantId, channel: channelKey } })
+      });
+    }).then(function(resp) {
+      return resp.json();
+    }).then(function(result) {
+      var data = result.result || result;
+      if (data && data.ok) {
+        showToast(data.synced + ' product' + (data.synced !== 1 ? 's' : '') + ' synced' + (data.errors ? ', ' + data.errors + ' error(s)' : ''));
+      } else {
+        showToast('Sync completed with issues: ' + (data.error || 'unknown'), true);
+      }
+      if (btn) { btn.disabled = false; btn.textContent = 'Sync Now'; }
+      loadSyncStatus();
+    }).catch(function(err) {
+      showToast('Sync failed: ' + err.message, true);
+      if (btn) { btn.disabled = false; btn.textContent = 'Sync Now'; }
+    });
+  }
+
+  // ============================================================
   // Dashboard — Cross-channel P&L comparison
   // ============================================================
 
@@ -2184,6 +2286,7 @@
   window.channelUpdateOnboarding = updateOnboardingField;
   window.channelSaveOnboarding = saveOnboarding;
   window.channelShowOnboarding = function() { currentView = 'onboarding'; onboardingSelections = {}; renderCurrentView(); };
+  window.channelSyncNow = syncNow;
 
   // ============================================================
   // Register with MastAdmin
