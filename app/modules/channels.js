@@ -1288,7 +1288,7 @@
       h += '<button onclick="channelSetPeriod(\'' + p + '\')"' +
         ' style="padding:6px 16px;border-radius:6px;font-size:0.85rem;cursor:pointer;border:none;transition:all 0.15s;' +
         'font-family:\'DM Sans\',sans-serif;' +
-        (isActive ? 'background:var(--teal);color:#fff;' : 'background:var(--bg-secondary,#232323);color:var(--warm-gray,#888);') + '">' +
+        (isActive ? 'background:var(--teal,#14b8a6);color:#fff;' : 'background:var(--bg-secondary,#232323);color:var(--warm-gray,#888);') + '">' +
         periods[p] + '</button>';
     });
     h += '</div>';
