@@ -31,8 +31,11 @@
   var ordersData = {};         // for activity tab
   var salesData = {};          // for dashboard P&L
   var consignmentsData = {};   // for dashboard P&L
+  var salesEventsData = {};    // for craft fair comparison
+  var salesEventsLoaded = false;
   var dashboardPeriod = '30d'; // '7d' | '30d' | '90d' | 'ytd' | 'all'
   var dashboardSort = { col: 'netRevenue', asc: false };
+  var eventCompSort = { col: 'roi', asc: false };
 
   var formatCurrency = typeof formatPriceCents === 'function'
     ? function(cents) { return formatPriceCents(cents); }
@@ -158,6 +161,23 @@
     });
   }
 
+  function loadSalesEvents() {
+    if (salesEventsLoaded) return Promise.resolve();
+    return Promise.all([
+      MastDB._ref('admin/salesEvents').once('value').then(function(snap) {
+        salesEventsData = snap.val() || {};
+      }).catch(function(err) {
+        console.error('Error loading sales events:', err);
+        salesEventsData = {};
+      }),
+      MastDB._ref('admin/sales').orderByChild('timestamp').limitToLast(500).once('value').then(function(snap) {
+        salesData = snap.val() || {};
+      }).catch(function() { salesData = {}; })
+    ]).then(function() {
+      salesEventsLoaded = true;
+    });
+  }
+
   function unloadChannels() {
     channelsData = {};
     channelsLoaded = false;
@@ -166,6 +186,8 @@
     ordersData = {};
     salesData = {};
     consignmentsData = {};
+    salesEventsData = {};
+    salesEventsLoaded = false;
     currentView = 'list';
     selectedChannelId = null;
     detailTab = 'overview';
@@ -447,8 +469,19 @@
       h += '</div>';
     } else if (ch.type === 'mobile_events') {
       h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;margin-bottom:16px;">';
-      h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;margin-bottom:8px;">Craft Fairs &amp; Events</div>';
-      h += '<div style="font-size:0.85rem;color:#999;">Per-show P&amp;L available in the Shows module.</div>';
+      h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">';
+      h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;">Craft Fairs &amp; Events</div>';
+      if (!salesEventsLoaded) {
+        h += '<button class="btn btn-secondary btn-small" onclick="channelLoadEventComparison()">Show Comparison</button>';
+      }
+      h += '</div>';
+      h += '<div id="channelEventComparison">';
+      if (salesEventsLoaded) {
+        h += renderEventComparisonTable(ch);
+      } else {
+        h += '<div style="font-size:0.85rem;color:#999;">Click &ldquo;Show Comparison&rdquo; to see per-show P&amp;L rankings.</div>';
+      }
+      h += '</div>';
       h += '</div>';
     } else if (ch.type === 'wholesale_prebuy' || ch.type === 'retail_prebuy') {
       h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;margin-bottom:16px;">';
@@ -460,6 +493,204 @@
       h += '</div>';
     }
     return h;
+  }
+
+  // ============================================================
+  // Event Comparison (mobile_events channel type)
+  // ============================================================
+
+  function loadEventComparison() {
+    var el = document.getElementById('channelEventComparison');
+    if (el) el.innerHTML = '<div style="font-size:0.85rem;color:#999;text-align:center;padding:12px;">Loading event data\u2026</div>';
+    loadSalesEvents().then(function() {
+      renderPreservingEdits();
+    });
+  }
+
+  function computeEventPnl(ev, evId, channelsRef) {
+    var boothCost = ev.boothCost || 0;
+    var travelCost = ev.travelCost || 0;
+    var lodgingCost = ev.lodgingCost || 0;
+    var applicationFee = ev.applicationFee || 0;
+    var otherCosts = ev.otherCosts || 0;
+    var totalCosts = boothCost + travelCost + lodgingCost + applicationFee + otherCosts;
+
+    // Revenue from POS sales linked to this event
+    var grossRevenue = 0;
+    var saleCount = 0;
+    Object.values(salesData).forEach(function(sale) {
+      if (sale.eventId !== evId) return;
+      if (sale.status === 'voided') return;
+      grossRevenue += sale.amount || 0;
+      saleCount++;
+    });
+
+    // Channel fees
+    var channelFees = 0;
+    if (ev.channelId && channelsRef[ev.channelId]) {
+      var ch = channelsRef[ev.channelId];
+      channelFees = Math.round((grossRevenue * (ch.percentFee || 0)) / 100) + ((ch.fixedFeePerOrderCents || 0) * saleCount);
+    }
+
+    // Sell-through
+    var allocations = ev.allocations || {};
+    var totalPacked = 0, totalSold = 0;
+    Object.values(allocations).forEach(function(alloc) {
+      totalPacked += alloc.quantity || 0;
+      totalSold += alloc.sold || 0;
+    });
+
+    var netProfit = grossRevenue - totalCosts - channelFees;
+    var roi = totalCosts > 0 ? Math.round((netProfit / totalCosts) * 10000) / 100 : 0;
+
+    return {
+      eventId: evId,
+      name: ev.name || evId,
+      date: ev.date || null,
+      location: ev.location || null,
+      status: ev.status || 'planning',
+      grossRevenue: grossRevenue,
+      totalCosts: totalCosts,
+      channelFees: channelFees,
+      netProfit: netProfit,
+      roi: roi,
+      sellThrough: totalPacked > 0 ? Math.round((totalSold / totalPacked) * 100) : 0,
+      saleCount: saleCount,
+      totalPacked: totalPacked,
+      totalSold: totalSold
+    };
+  }
+
+  function renderEventComparisonTable(ch) {
+    var events = Object.entries(salesEventsData).map(function(entry) {
+      return computeEventPnl(entry[1], entry[0], channelsData);
+    });
+
+    // Filter to events linked to this channel (or all if none linked)
+    var linked = events.filter(function(e) {
+      var ev = salesEventsData[e.eventId];
+      return ev && ev.channelId === ch.channelId;
+    });
+    // If no events are explicitly linked, show all events (craft fairs typically share one channel)
+    var showing = linked.length > 0 ? linked : events;
+
+    if (!showing.length) {
+      return '<div style="font-size:0.85rem;color:#999;">No events recorded yet. Create events in the Shows module.</div>';
+    }
+
+    // Sort
+    var sortCol = eventCompSort.col;
+    var sortAsc = eventCompSort.asc;
+    showing.sort(function(a, b) {
+      var va = a[sortCol], vb = b[sortCol];
+      if (typeof va === 'string') return sortAsc ? (va || '').localeCompare(vb || '') : (vb || '').localeCompare(va || '');
+      return sortAsc ? (va || 0) - (vb || 0) : (vb || 0) - (va || 0);
+    });
+
+    // Summary stats
+    var totRev = 0, totCosts = 0, totProfit = 0, roiSum = 0, roiCount = 0;
+    showing.forEach(function(e) {
+      totRev += e.grossRevenue;
+      totCosts += e.totalCosts;
+      totProfit += e.netProfit;
+      if (e.totalCosts > 0) { roiSum += e.roi; roiCount++; }
+    });
+    var avgRoi = roiCount > 0 ? Math.round(roiSum / roiCount * 100) / 100 : 0;
+
+    // Best / worst
+    var withRevenue = showing.filter(function(e) { return e.saleCount > 0; });
+    var bestEv = withRevenue.length ? withRevenue.reduce(function(b, e) { return e.roi > b.roi ? e : b; }) : null;
+    var worstEv = withRevenue.length > 1 ? withRevenue.reduce(function(w, e) { return e.roi < w.roi ? e : w; }) : null;
+    if (worstEv && bestEv && worstEv.eventId === bestEv.eventId) worstEv = null;
+
+    var h = '';
+
+    // Stat cards
+    h += '<div class="analytics-summary" style="margin-bottom:12px;">';
+    h += '<div class="stat-card"><div class="stat-card-value">' + esc(formatCurrency(totRev)) + '</div><div class="stat-card-label">Total Revenue</div></div>';
+    h += '<div class="stat-card"><div class="stat-card-value">' + esc(formatCurrency(totProfit)) + '</div><div class="stat-card-label">Total Profit</div></div>';
+    h += '<div class="stat-card"><div class="stat-card-value">' + avgRoi + '%</div><div class="stat-card-label">Avg ROI</div></div>';
+    h += '<div class="stat-card"><div class="stat-card-value">' + showing.length + '</div><div class="stat-card-label">Events</div></div>';
+    if (bestEv) {
+      h += '<div class="stat-card"><div class="stat-card-value">' + esc(bestEv.name) + '</div><div class="stat-card-label">Best ROI</div>' +
+        '<div style="font-size:0.72rem;color:var(--warm-gray);margin-top:2px;">' + bestEv.roi + '%</div></div>';
+    }
+    h += '</div>';
+
+    // Comparison table
+    var cols = [
+      { key: 'name', label: 'Show', align: 'left' },
+      { key: 'date', label: 'Date', align: 'left' },
+      { key: 'grossRevenue', label: 'Revenue', align: 'right' },
+      { key: 'totalCosts', label: 'Costs', align: 'right' },
+      { key: 'netProfit', label: 'Net', align: 'right' },
+      { key: 'roi', label: 'ROI %', align: 'right' },
+      { key: 'sellThrough', label: 'Sell-Thru', align: 'right' }
+    ];
+
+    h += '<div class="data-table" style="overflow-x:auto;">';
+    h += '<table role="grid">';
+    h += '<thead><tr>';
+    cols.forEach(function(col) {
+      var arrow = '';
+      if (eventCompSort.col === col.key) arrow = eventCompSort.asc ? ' &#9650;' : ' &#9660;';
+      h += '<th style="text-align:' + col.align + ';cursor:pointer;user-select:none;white-space:nowrap;"' +
+        ' onclick="channelSortEventComp(\'' + col.key + '\')" role="columnheader" tabindex="0"' +
+        ' onkeydown="if(event.key===\'Enter\')channelSortEventComp(\'' + col.key + '\')"' +
+        ' aria-sort="' + (eventCompSort.col === col.key ? (eventCompSort.asc ? 'ascending' : 'descending') : 'none') + '">' +
+        esc(col.label) + arrow + '</th>';
+    });
+    h += '</tr></thead>';
+    h += '<tbody>';
+
+    showing.forEach(function(e) {
+      var isBest = bestEv && e.eventId === bestEv.eventId;
+      var isWorst = worstEv && e.eventId === worstEv.eventId;
+      var rowBg = isWorst ? 'rgba(239,68,68,0.06)' : (isBest ? 'rgba(34,197,94,0.06)' : '');
+
+      h += '<tr style="' + (rowBg ? 'background:' + rowBg + ';' : '') + '">';
+      h += '<td style="font-weight:500;">' + esc(e.name) + '</td>';
+      h += '<td style="color:var(--warm-gray,#999);">' + esc(e.date || '\u2014') + '</td>';
+      h += '<td style="text-align:right;">' + formatCurrency(e.grossRevenue) + '</td>';
+      h += '<td style="text-align:right;color:#f87171;">' + (e.totalCosts > 0 ? formatCurrency(e.totalCosts) : '$0.00') + '</td>';
+
+      var netColor = e.netProfit >= 0 ? '#22c55e' : '#ef4444';
+      h += '<td style="text-align:right;font-weight:600;color:' + netColor + ';">' + formatCurrency(e.netProfit) + '</td>';
+
+      var roiColor = e.roi >= 100 ? '#22c55e' : (e.roi >= 0 ? '#f59e0b' : '#ef4444');
+      if (e.saleCount === 0) roiColor = 'var(--warm-gray-light,#666)';
+      h += '<td style="text-align:right;color:' + roiColor + ';">' + (e.saleCount > 0 ? e.roi + '%' : '\u2014') + '</td>';
+
+      h += '<td style="text-align:right;color:var(--warm-gray,#999);">' + (e.totalPacked > 0 ? e.sellThrough + '%' : '\u2014') + '</td>';
+      h += '</tr>';
+    });
+
+    // Totals row
+    h += '<tr style="font-weight:600;border-top:2px solid var(--cream-dark,#555);">';
+    h += '<td>Total</td>';
+    h += '<td></td>';
+    h += '<td style="text-align:right;">' + formatCurrency(totRev) + '</td>';
+    h += '<td style="text-align:right;color:#f87171;">' + formatCurrency(totCosts) + '</td>';
+    var totNetColor = totProfit >= 0 ? '#22c55e' : '#ef4444';
+    h += '<td style="text-align:right;color:' + totNetColor + ';">' + formatCurrency(totProfit) + '</td>';
+    h += '<td style="text-align:right;">' + avgRoi + '%</td>';
+    h += '<td></td>';
+    h += '</tr>';
+
+    h += '</tbody></table>';
+    h += '</div>';
+
+    return h;
+  }
+
+  function setEventCompSort(col) {
+    if (eventCompSort.col === col) {
+      eventCompSort.asc = !eventCompSort.asc;
+    } else {
+      eventCompSort.col = col;
+      eventCompSort.asc = false;
+    }
+    renderPreservingEdits();
   }
 
   // ============================================================
@@ -1584,6 +1815,8 @@
   window.channelToggleSelectAll = toggleSelectAll;
   window.channelConfirmAddProducts = confirmAddProducts;
   window.channelRemoveProduct = removeProduct;
+  window.channelLoadEventComparison = loadEventComparison;
+  window.channelSortEventComp = setEventCompSort;
 
   // ============================================================
   // Register with MastAdmin
