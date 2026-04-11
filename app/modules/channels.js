@@ -23,12 +23,16 @@
   var channelsLoaded = false;
   var productsData = {};       // pid → product (for product counts + products tab)
   var productsLoaded = false;
-  var currentView = 'list';    // 'list' | 'detail' | 'new'
+  var currentView = 'list';    // 'list' | 'detail' | 'new' | 'dashboard'
   var selectedChannelId = null;
   var detailTab = 'overview';  // 'overview' | 'products' | 'activity' | 'settings'
   var channelEditMode = false; // Paradigm A — read-only until user clicks Edit
   var editBaseline = null;     // snapshot for dirty check
   var ordersData = {};         // for activity tab
+  var salesData = {};          // for dashboard P&L
+  var consignmentsData = {};   // for dashboard P&L
+  var dashboardPeriod = '30d'; // '7d' | '30d' | '90d' | 'ytd' | 'all'
+  var dashboardSort = { col: 'netRevenue', asc: false };
 
   var formatCurrency = typeof formatPriceCents === 'function'
     ? function(cents) { return formatPriceCents(cents); }
@@ -160,11 +164,15 @@
     productsData = {};
     productsLoaded = false;
     ordersData = {};
+    salesData = {};
+    consignmentsData = {};
     currentView = 'list';
     selectedChannelId = null;
     detailTab = 'overview';
     channelEditMode = false;
     editBaseline = null;
+    dashboardPeriod = '30d';
+    dashboardSort = { col: 'netRevenue', asc: false };
     if (window.MastDirty) { try { MastDirty.unregister('channelEdit'); } catch (e) {} }
   }
 
@@ -173,7 +181,9 @@
   // ============================================================
 
   function renderCurrentView() {
-    if (currentView === 'detail' && selectedChannelId) {
+    if (currentView === 'dashboard') {
+      renderDashboard();
+    } else if (currentView === 'detail' && selectedChannelId) {
       renderDetail();
     } else if (currentView === 'new') {
       renderNewForm();
@@ -224,7 +234,10 @@
     // Header
     h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
     h += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">Channels</h3>';
+    h += '<div style="display:flex;gap:8px;">';
+    h += '<button class="btn btn-secondary" onclick="channelShowDashboard()">Dashboard</button>';
     h += '<button class="btn btn-primary" onclick="channelShowNew()">+ New Channel</button>';
+    h += '</div>';
     h += '</div>';
 
     // Filter bar
@@ -1087,6 +1100,295 @@
   }
 
   // ============================================================
+  // Dashboard — Cross-channel P&L comparison
+  // ============================================================
+
+  function loadDashboardData() {
+    // Load orders + sales + consignments for client-side P&L computation
+    return Promise.all([
+      MastDB._ref('public/orders').orderByChild('createdAt').limitToLast(500).once('value').then(function(snap) {
+        ordersData = snap.val() || {};
+      }).catch(function() { ordersData = {}; }),
+      MastDB._ref('admin/sales').orderByChild('timestamp').limitToLast(500).once('value').then(function(snap) {
+        salesData = snap.val() || {};
+      }).catch(function() { salesData = {}; }),
+      MastDB._ref('admin/consignments').once('value').then(function(snap) {
+        consignmentsData = snap.val() || {};
+      }).catch(function() { consignmentsData = {}; })
+    ]);
+  }
+
+  function computeDateRange(period) {
+    var now = new Date();
+    var todayStr = now.toISOString().split('T')[0];
+    if (period === 'all') return { from: null, to: null, label: 'All time' };
+    if (period === 'ytd') return { from: now.getFullYear() + '-01-01', to: todayStr, label: 'Year to date' };
+    var days = parseInt(period, 10) || 30;
+    var from = new Date(now);
+    from.setDate(from.getDate() - days);
+    return { from: from.toISOString().split('T')[0], to: todayStr, label: 'Last ' + days + ' days' };
+  }
+
+  function computeChannelPnl(ch, dateFrom, dateTo) {
+    var sourceSet = {};
+    (ch.autoMatchSources || []).forEach(function(s) { sourceSet[s.toLowerCase().trim()] = true; });
+
+    var matchesChannel = function(source, fallback) {
+      var s = (source || fallback || '').toLowerCase().trim();
+      if (sourceSet[s]) return true;
+      var keys = Object.keys(sourceSet);
+      for (var i = 0; i < keys.length; i++) {
+        if (s.indexOf(keys[i]) !== -1 || keys[i].indexOf(s) !== -1) return true;
+      }
+      return false;
+    };
+
+    var gross = 0, txns = 0;
+
+    // Orders
+    Object.values(ordersData).forEach(function(order) {
+      var d = (order.createdAt || '').split('T')[0];
+      if (dateFrom && d < dateFrom) return;
+      if (dateTo && d > dateTo) return;
+      if (order.status === 'cancelled' || order.status === 'refunded') return;
+      if (matchesChannel(order.source, 'online')) {
+        gross += order.total || 0;
+        txns++;
+      }
+    });
+
+    // POS sales
+    Object.values(salesData).forEach(function(sale) {
+      var d = (sale.timestamp || sale.createdAt || '').split('T')[0];
+      if (dateFrom && d < dateFrom) return;
+      if (dateTo && d > dateTo) return;
+      if (sale.status === 'voided') return;
+      var hint = sale.eventId ? 'craft-fair' : (sale.source || 'direct-pos');
+      if (matchesChannel(hint)) {
+        gross += sale.amount || 0;
+        txns++;
+      }
+    });
+
+    // Consignment
+    if (sourceSet['consignment']) {
+      Object.values(consignmentsData).forEach(function(p) {
+        gross += p.makerEarnings || 0;
+        txns++;
+      });
+    }
+
+    var pctFee = ch.percentFee || 0;
+    var fixedFee = ch.fixedFeePerOrderCents || 0;
+    var fees = Math.round((gross * pctFee) / 100) + (fixedFee * txns);
+    var net = gross - fees;
+
+    var target = ch.revenueTarget || null;
+    var targetPct = target && net > 0 ? Math.round((net / target) * 10000) / 100 : null;
+
+    return {
+      channelId: ch.channelId,
+      channelName: ch.name || '',
+      channelType: ch.type || null,
+      grossRevenue: gross,
+      fees: fees,
+      netRevenue: net,
+      transactionCount: txns,
+      marginPct: net > 0 ? Math.round(((net) / (gross || 1)) * 10000) / 100 : 0,
+      revenueTarget: target,
+      targetPct: targetPct
+    };
+  }
+
+  function showDashboard() {
+    if (window.MastDirty && MastDirty.isDirty && MastDirty.isDirty()) {
+      if (!confirm('You have unsaved changes. Leave anyway?')) return;
+      MastDirty.unregister('channelEdit');
+    }
+    currentView = 'dashboard';
+    channelEditMode = false;
+    var tab = document.getElementById('channelsTab');
+    if (tab) tab.innerHTML = '<div style="text-align:center;padding:40px;color:#999;font-size:0.9rem;">Loading dashboard\u2026</div>';
+    loadDashboardData().then(function() { renderDashboard(); });
+  }
+
+  function setDashboardPeriod(period) {
+    dashboardPeriod = period;
+    renderDashboard();
+  }
+
+  function setDashboardSort(col) {
+    if (dashboardSort.col === col) {
+      dashboardSort.asc = !dashboardSort.asc;
+    } else {
+      dashboardSort.col = col;
+      dashboardSort.asc = false;
+    }
+    renderDashboard();
+  }
+
+  function renderDashboard() {
+    var tab = document.getElementById('channelsTab');
+    if (!tab) return;
+
+    var channels = Object.values(channelsData).filter(function(ch) { return ch.isActive !== false; });
+
+    if (!channels.length) {
+      tab.innerHTML =
+        '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">' +
+          '<p style="font-size:0.9rem;">No active channels to compare.</p>' +
+          '<button class="detail-back" style="margin-top:12px;" onclick="channelShowList()">\u2190 Back to Channels</button>' +
+        '</div>';
+      return;
+    }
+
+    var range = computeDateRange(dashboardPeriod);
+    var results = channels.map(function(ch) { return computeChannelPnl(ch, range.from, range.to); });
+
+    // Sort
+    var sortCol = dashboardSort.col;
+    var sortAsc = dashboardSort.asc;
+    results.sort(function(a, b) {
+      var va = a[sortCol], vb = b[sortCol];
+      if (typeof va === 'string') return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+      return sortAsc ? (va || 0) - (vb || 0) : (vb || 0) - (va || 0);
+    });
+
+    // Totals
+    var totals = { grossRevenue: 0, fees: 0, netRevenue: 0, transactionCount: 0 };
+    results.forEach(function(r) {
+      totals.grossRevenue += r.grossRevenue;
+      totals.fees += r.fees;
+      totals.netRevenue += r.netRevenue;
+      totals.transactionCount += r.transactionCount;
+    });
+    var totalMargin = totals.grossRevenue > 0 ? Math.round(((totals.netRevenue) / totals.grossRevenue) * 10000) / 100 : 0;
+
+    // Best / worst
+    var withTxns = results.filter(function(r) { return r.transactionCount > 0; });
+    var best = withTxns.length ? withTxns.reduce(function(b, r) { return r.marginPct > b.marginPct ? r : b; }) : null;
+    var worst = withTxns.length > 1 ? withTxns.reduce(function(w, r) { return r.marginPct < w.marginPct ? r : w; }) : null;
+    if (worst && best && worst.channelId === best.channelId) worst = null;
+
+    var h = '';
+
+    // Back link (detail-back pattern)
+    h += '<button class="detail-back" onclick="channelShowList()">\u2190 Back to Channels</button>';
+
+    // Header
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
+    h += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">Channel Dashboard</h3>';
+    h += '</div>';
+
+    // Period selector (button tab pattern — matches advisor.js)
+    h += '<div style="display:flex;gap:4px;margin-bottom:16px;">';
+    var periods = { '7d': '7 days', '30d': '30 days', '90d': '90 days', 'ytd': 'YTD', 'all': 'All time' };
+    Object.keys(periods).forEach(function(p) {
+      var isActive = dashboardPeriod === p;
+      h += '<button onclick="channelSetPeriod(\'' + p + '\')"' +
+        ' style="padding:6px 16px;border-radius:6px;font-size:0.85rem;cursor:pointer;border:none;transition:all 0.15s;' +
+        'font-family:\'DM Sans\',sans-serif;' +
+        (isActive ? 'background:var(--teal);color:#fff;' : 'background:var(--bg-secondary,#232323);color:var(--warm-gray,#888);') + '">' +
+        periods[p] + '</button>';
+    });
+    h += '</div>';
+
+    // Summary cards (stat-card pattern — matches analytics)
+    h += '<div class="analytics-summary">';
+
+    function summaryCard(label, value, sub) {
+      return '<div class="stat-card">' +
+        '<div class="stat-card-value">' + esc(value) + '</div>' +
+        '<div class="stat-card-label">' + esc(label) + '</div>' +
+        (sub ? '<div style="font-size:0.72rem;color:var(--warm-gray);margin-top:2px;">' + sub + '</div>' : '') +
+        '</div>';
+    }
+
+    h += summaryCard('Net Revenue', formatCurrency(totals.netRevenue));
+    h += summaryCard('Gross Revenue', formatCurrency(totals.grossRevenue));
+    h += summaryCard('Total Fees', formatCurrency(totals.fees));
+    h += summaryCard('Avg Margin', totalMargin + '%');
+    h += summaryCard('Active Channels', String(results.length));
+    if (best) h += summaryCard('Best Margin', esc(best.channelName), best.marginPct + '%');
+    h += '</div>';
+
+    // Comparison table (data-table pattern)
+    var cols = [
+      { key: 'channelName', label: 'Channel', align: 'left' },
+      { key: 'channelType', label: 'Type', align: 'left' },
+      { key: 'grossRevenue', label: 'Gross', align: 'right' },
+      { key: 'fees', label: 'Fees', align: 'right' },
+      { key: 'netRevenue', label: 'Net', align: 'right' },
+      { key: 'marginPct', label: 'Margin', align: 'right' },
+      { key: 'transactionCount', label: 'Txns', align: 'right' },
+      { key: 'targetPct', label: 'Target', align: 'right' }
+    ];
+
+    h += '<div class="data-table" style="overflow-x:auto;">';
+    h += '<table role="grid">';
+    h += '<thead><tr>';
+    cols.forEach(function(col) {
+      var arrow = '';
+      if (dashboardSort.col === col.key) arrow = dashboardSort.asc ? ' &#9650;' : ' &#9660;';
+      h += '<th style="text-align:' + col.align + ';cursor:pointer;user-select:none;white-space:nowrap;"' +
+        ' onclick="channelSortDashboard(\'' + col.key + '\')" role="columnheader" tabindex="0"' +
+        ' onkeydown="if(event.key===\'Enter\')channelSortDashboard(\'' + col.key + '\')"' +
+        ' aria-sort="' + (dashboardSort.col === col.key ? (dashboardSort.asc ? 'ascending' : 'descending') : 'none') + '">' +
+        esc(col.label) + arrow + '</th>';
+    });
+    h += '</tr></thead>';
+    h += '<tbody>';
+
+    results.forEach(function(r) {
+      var isWorst = worst && r.channelId === worst.channelId;
+      var isBest = best && r.channelId === best.channelId;
+      var rowBg = isWorst ? 'rgba(239,68,68,0.06)' : (isBest ? 'rgba(34,197,94,0.06)' : '');
+
+      h += '<tr style="' + (rowBg ? 'background:' + rowBg + ';' : '') + 'cursor:pointer;" onclick="channelOpenDetail(\'' + esc(r.channelId) + '\')"' +
+        ' role="row" tabindex="0" onkeydown="if(event.key===\'Enter\')channelOpenDetail(\'' + esc(r.channelId) + '\')">';
+      h += '<td style="font-weight:500;">' + esc(r.channelName) + '</td>';
+      h += '<td>' + typeBadge(r.channelType) + '</td>';
+      h += '<td style="text-align:right;">' + formatCurrency(r.grossRevenue) + '</td>';
+      h += '<td style="text-align:right;color:#f87171;">' + (r.fees > 0 ? '-' + formatCurrency(r.fees) : '$0.00') + '</td>';
+      h += '<td style="text-align:right;font-weight:600;">' + formatCurrency(r.netRevenue) + '</td>';
+
+      var marginColor = r.marginPct >= 60 ? '#22c55e' : (r.marginPct >= 30 ? '#f59e0b' : '#ef4444');
+      if (r.transactionCount === 0) marginColor = 'var(--warm-gray-light,#666)';
+      h += '<td style="text-align:right;color:' + marginColor + ';">' +
+        (r.transactionCount > 0 ? r.marginPct + '%' : '\u2014') + '</td>';
+
+      h += '<td style="text-align:right;color:var(--warm-gray);">' + r.transactionCount + '</td>';
+
+      // Target column
+      if (r.targetPct !== null) {
+        var tColor = r.targetPct >= 100 ? '#22c55e' : (r.targetPct >= 50 ? '#f59e0b' : '#ef4444');
+        h += '<td style="text-align:right;color:' + tColor + ';">' + r.targetPct + '%</td>';
+      } else {
+        h += '<td style="text-align:right;color:var(--warm-gray-light,#666);">\u2014</td>';
+      }
+
+      h += '</tr>';
+    });
+
+    // Totals row
+    h += '<tr style="font-weight:600;border-top:2px solid var(--cream-dark,#555);">';
+    h += '<td>Total</td>';
+    h += '<td></td>';
+    h += '<td style="text-align:right;">' + formatCurrency(totals.grossRevenue) + '</td>';
+    h += '<td style="text-align:right;color:#f87171;">' + (totals.fees > 0 ? '-' + formatCurrency(totals.fees) : '$0.00') + '</td>';
+    h += '<td style="text-align:right;">' + formatCurrency(totals.netRevenue) + '</td>';
+    h += '<td style="text-align:right;">' + totalMargin + '%</td>';
+    h += '<td style="text-align:right;color:var(--warm-gray);">' + totals.transactionCount + '</td>';
+    h += '<td></td>';
+    h += '</tr>';
+
+    h += '</tbody></table>';
+    h += '</div>';
+
+    tab.innerHTML = h;
+  }
+
+  // ============================================================
   // MastNavStack — Register Restorer
   // ============================================================
 
@@ -1111,6 +1413,9 @@
   // ============================================================
 
   window.channelShowList = showList;
+  window.channelShowDashboard = showDashboard;
+  window.channelSetPeriod = setDashboardPeriod;
+  window.channelSortDashboard = setDashboardSort;
   window.channelOpenDetail = openDetail;
   window.channelShowNew = showNew;
   window.channelEnterEdit = enterEdit;
