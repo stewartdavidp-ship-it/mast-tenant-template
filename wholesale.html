@@ -624,18 +624,22 @@
 
       Object.keys(products).forEach(function(pid) {
         var p = products[pid];
-        // Only show products with a wpid (wholesale product ID)
-        if (!p.wpid) return;
+        // Show products marked as wholesale (new model) or with legacy wpid
+        if (!p.isWholesale && !p.wpid) return;
         if (p.availability === 'discontinued') return;
         p._pid = pid;
         allProducts.push(p);
       });
 
-      // Sort by wpid numeric value
+      // Sort by name (new model has no wpid ordering guarantee)
       allProducts.sort(function(a, b) {
-        var na = parseFloat(a.wpid) || 0;
-        var nb = parseFloat(b.wpid) || 0;
-        return na - nb;
+        // Legacy wpid sort as secondary for backward compat
+        if (a.wpid && b.wpid) {
+          var na = parseFloat(a.wpid) || 0;
+          var nb = parseFloat(b.wpid) || 0;
+          if (na !== nb) return na - nb;
+        }
+        return (a.name || '').localeCompare(b.name || '');
       });
 
       renderFilters();
@@ -716,18 +720,27 @@
       ? '<img class="ws-card-img" src="' + esc(typeof p.images[0] === 'string' ? p.images[0] : (p.images[0].url || '')) + '" alt="' + esc(p.name) + '" loading="lazy">'
       : '<div class="ws-card-img-placeholder">&#9670;</div>';
 
-    // Price display
+    // Price display — prefer new variant-level wholesale prices, fallback to legacy
     var priceHtml = '';
-    if (p.wholesalePriceVariants) {
-      // Multiple prices (e.g., Pumpkins L/M/S)
+    var hasVariantWsPrices = Array.isArray(p.variants) && p.variants.some(function(v) { return v.wholesalePriceCents > 0; });
+    if (hasVariantWsPrices) {
+      // New model: show range from variant wholesale prices
+      var wsPrices = p.variants.filter(function(v) { return v.wholesalePriceCents > 0; }).map(function(v) { return v.wholesalePriceCents; });
+      var minWs = Math.min.apply(null, wsPrices);
+      var maxWs = Math.max.apply(null, wsPrices);
+      priceHtml = minWs === maxWs ? '$' + (minWs / 100).toFixed(0) : '$' + (minWs / 100).toFixed(0) + ' – $' + (maxWs / 100).toFixed(0);
+    } else if (p.wholesalePriceVariants) {
+      // Legacy model: wpid-keyed variant prices
       var prices = [];
       Object.keys(p.wholesalePriceVariants).forEach(function(k) {
         var label = k.replace(/^\d+/, '');
         prices.push(label + ': $' + (p.wholesalePriceVariants[k] / 100).toFixed(0));
       });
       priceHtml = prices.join(' / ');
-    } else {
+    } else if (p.wholesalePriceCents) {
       priceHtml = '$' + (p.wholesalePriceCents / 100).toFixed(0);
+    } else {
+      priceHtml = 'Price TBD';
     }
 
     // Variant chips
@@ -766,7 +779,7 @@
     return '<div class="ws-card">' +
       imgHtml +
       '<div class="ws-card-body">' +
-        '<div class="ws-card-wpid">#' + esc(p.wpid) + '</div>' +
+        (p.wpid ? '<div class="ws-card-wpid">#' + esc(p.wpid) + '</div>' : '') +
         (p.sku ? '<div class="ws-card-sku" style="font-size:0.72rem;color:#999;margin-bottom:2px;">SKU: ' + esc(p.sku) + '</div>' : '') +
         '<div class="ws-card-name">' + esc(p.name) + '</div>' +
         '<div class="ws-card-price">' + priceHtml + '</div>' +
@@ -836,10 +849,22 @@
 
     var opts = selectedOptions[pid] || {};
 
-    // Determine wholesale price — check for variant-specific pricing
+    // Determine wholesale price — prefer new variant model, fallback to legacy
     var priceCents = p.wholesalePriceCents;
-    if (p.wholesalePriceVariants && opts.Size) {
-      // Map size to variant key (e.g., "large" -> "10L")
+    if (Array.isArray(p.variants) && p.variants.length > 0 && Object.keys(opts).length > 0) {
+      // New model: match variant by combo object
+      var match = p.variants.find(function(v) {
+        if (!v.combo) return false;
+        return Object.keys(opts).every(function(k) { return v.combo[k] === opts[k]; });
+      });
+      if (match && match.wholesalePriceCents > 0) {
+        priceCents = match.wholesalePriceCents;
+      } else if (match && match.priceCents > 0 && !priceCents) {
+        // Fallback to retail if no wholesale variant price set
+        priceCents = match.priceCents;
+      }
+    } else if (p.wholesalePriceVariants && opts.Size) {
+      // Legacy model: wpid-keyed variant prices
       var sizeMap = { 'small': 'S', 'medium': 'M', 'large': 'L' };
       var sizeKey = p.wpid + (sizeMap[(opts.Size || '').toLowerCase()] || 'M');
       if (p.wholesalePriceVariants[sizeKey]) {

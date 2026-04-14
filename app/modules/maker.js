@@ -479,6 +479,7 @@
       retailPrice: 0,
       retailGrossProfit: 0,
       activePriceTier: data.activePriceTier || 'direct',
+      channels: data.channels || ['retail'],
       lastCalculatedAt: null,
       costsDirty: false,
       notes: data.notes || '',
@@ -761,8 +762,8 @@
 
     var priceCents = null;
     if (recipe.productId) {
-      // Cost-shape model: propagate per-variant prices to product.variants[].priceCents
-      // when the recipe has variantsShape="cost" and the linked product has variants.
+      // Channels-aware propagation: write retail and/or wholesale prices based on recipe.channels
+      var channels = Array.isArray(recipe.channels) ? recipe.channels : ['retail'];
       var product = (window.productsData || []).find(function(p){ return p.pid === recipe.productId; });
       var didPerVariantPropagate = false;
       if (recipe.variantsShape === 'cost' && product && Array.isArray(product.variants) && product.variants.length > 0) {
@@ -772,7 +773,15 @@
         var newVariants = product.variants.map(function(pv) {
           var slot = rv[pv.id];
           var pp = (slot && slot[priceKey] != null) ? slot[priceKey] : defaultTierPrice;
-          return Object.assign({}, pv, { priceCents: Math.round(pp * 100) });
+          var updated = Object.assign({}, pv, { priceCents: Math.round(pp * 100) });
+          // Wholesale variant propagation: write wholesalePriceCents when wholesale channel is active
+          if (channels.indexOf('wholesale') >= 0) {
+            var wsKey = 'wholesalePrice';
+            var defaultWsPrice = (rv.default && rv.default[wsKey]) || recipe.wholesalePrice || 0;
+            var wspp = (slot && slot[wsKey] != null) ? slot[wsKey] : defaultWsPrice;
+            updated.wholesalePriceCents = Math.round(wspp * 100);
+          }
+          return updated;
         });
         updates['public/products/' + recipe.productId + '/variants'] = newVariants;
         // Recompute base: lowest variant priceCents, priceType "from"
@@ -781,13 +790,31 @@
         updates['public/products/' + recipe.productId + '/priceCents'] = lowestPriceCents;
         updates['public/products/' + recipe.productId + '/price'] = lowestPriceCents / 100;
         updates['public/products/' + recipe.productId + '/priceType'] = 'from';
+        // Wholesale base price from variants
+        if (channels.indexOf('wholesale') >= 0) {
+          var wsVariants = newVariants.filter(function(v) { return v.wholesalePriceCents > 0; });
+          if (wsVariants.length > 0) {
+            var lowestWs = Math.min.apply(null, wsVariants.map(function(v) { return v.wholesalePriceCents; }));
+            updates['public/products/' + recipe.productId + '/wholesalePriceCents'] = lowestWs;
+          }
+        }
         didPerVariantPropagate = true;
       }
       if (!didPerVariantPropagate) {
         priceCents = Math.round(tierPrice * 100);
         updates['public/products/' + recipe.productId + '/priceCents'] = priceCents;
         updates['public/products/' + recipe.productId + '/price'] = tierPrice;
+        // Wholesale for simple products
+        if (channels.indexOf('wholesale') >= 0) {
+          var wsPrice = recipe.wholesalePrice || 0;
+          updates['public/products/' + recipe.productId + '/wholesalePriceCents'] = Math.round(wsPrice * 100);
+        }
       }
+      // Set isWholesale and recipeId on product when wholesale channel is active
+      if (channels.indexOf('wholesale') >= 0) {
+        updates['public/products/' + recipe.productId + '/isWholesale'] = true;
+      }
+      updates['public/products/' + recipe.productId + '/recipeId'] = recipeId;
     }
 
     await MastDB._multiUpdate(updates);
@@ -2314,6 +2341,16 @@
     html += '</div>';
     html += '</div>';
 
+    // ---- CHANNELS (retail/wholesale price propagation) ----
+    var channels = Array.isArray(bs.channels) ? bs.channels : ['retail'];
+    var chRetail = channels.indexOf('retail') >= 0;
+    var chWholesale = channels.indexOf('wholesale') >= 0;
+    html += '<div style="display:flex;gap:16px;align-items:center;margin-bottom:16px;padding:8px 12px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:6px;">';
+    html += '<span style="font-size:0.85rem;font-weight:600;color:var(--warm-gray);">Propagate to:</span>';
+    html += '<label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:0.85rem;"><input type="checkbox"' + (chRetail ? ' checked' : '') + ' onchange="makerToggleChannel(\'retail\', this.checked)"> Retail</label>';
+    html += '<label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:0.85rem;"><input type="checkbox"' + (chWholesale ? ' checked' : '') + ' onchange="makerToggleChannel(\'wholesale\', this.checked)"> Wholesale</label>';
+    html += '</div>';
+
     // ---- VARIANT TABS (cost-shape model) ----
     // Always show a Default tab. If the linked product has variants, show one tab per
     // recipe-variant override that exists, plus an Add dropdown for missing ones.
@@ -2573,6 +2610,43 @@
 
     html += '</div>';
 
+    // ---- DRIFT SUMMARY (recipe vs product price divergence) ----
+    if (bs.productId && editingRecipeId) {
+      var driftData = bs.drift || null;
+      // Try loading from cache if not on builderState
+      if (!driftData && window.__mastRecipeDrift && window.__mastRecipeDrift[editingRecipeId]) {
+        driftData = window.__mastRecipeDrift[editingRecipeId];
+      }
+      if (driftData) {
+        html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:14px 16px;margin-bottom:16px;">';
+        html += '<h4 style="font-size:0.9rem;font-weight:600;margin:0 0 8px;">Price Drift (Recipe vs Product)</h4>';
+        html += '<div style="display:flex;gap:24px;flex-wrap:wrap;">';
+        if (driftData.retail) {
+          var rd = driftData.retail;
+          var rColor = Math.abs(rd.driftPct || 0) <= 5 ? '#16a34a' : Math.abs(rd.driftPct || 0) <= 15 ? '#b45309' : '#dc2626';
+          html += '<div><span style="font-size:0.78rem;color:var(--warm-gray);">Retail:</span> <span style="font-size:0.85rem;font-family:monospace;">$' + ((rd.recipeCents || 0) / 100).toFixed(2) + ' → $' + ((rd.productCents || 0) / 100).toFixed(2) + '</span>';
+          html += ' <span style="font-size:0.78rem;font-weight:600;color:' + rColor + ';">' + (rd.driftPct > 0 ? '+' : '') + (rd.driftPct || 0).toFixed(1) + '%</span></div>';
+        }
+        if (driftData.wholesale) {
+          var wd = driftData.wholesale;
+          var wColor = Math.abs(wd.driftPct || 0) <= 5 ? '#16a34a' : Math.abs(wd.driftPct || 0) <= 15 ? '#b45309' : '#dc2626';
+          html += '<div><span style="font-size:0.78rem;color:var(--warm-gray);">Wholesale:</span> <span style="font-size:0.85rem;font-family:monospace;">$' + ((wd.recipeCents || 0) / 100).toFixed(2) + ' → $' + ((wd.productCents || 0) / 100).toFixed(2) + '</span>';
+          html += ' <span style="font-size:0.78rem;font-weight:600;color:' + wColor + ';">' + (wd.driftPct > 0 ? '+' : '') + (wd.driftPct || 0).toFixed(1) + '%</span></div>';
+        }
+        if (driftData.lastCheckedAt) {
+          html += '<div style="flex-basis:100%;font-size:0.72rem;color:var(--warm-gray);">Last checked: ' + new Date(driftData.lastCheckedAt).toLocaleString() + '</div>';
+        }
+        html += '</div></div>';
+      } else {
+        // Trigger async load
+        if (typeof loadRecipeDrift === 'function') {
+          loadRecipeDrift(editingRecipeId).then(function(drift) {
+            if (drift) renderRecipeBuilder();
+          });
+        }
+      }
+    }
+
     // ---- Phase 2C.2: marginHistory sparkline ----
     var history = Array.isArray(bs.marginHistory) ? bs.marginHistory : [];
     if (history.length >= 2) {
@@ -2653,6 +2727,18 @@
   // Recipe Builder — Interactive Controls
   // ============================================================
 
+  function toggleChannel(channel, enabled) {
+    if (!builderState) return;
+    var channels = Array.isArray(builderState.channels) ? builderState.channels.slice() : ['retail'];
+    var idx = channels.indexOf(channel);
+    if (enabled && idx < 0) channels.push(channel);
+    if (!enabled && idx >= 0) channels.splice(idx, 1);
+    // Ensure at least one channel remains
+    if (channels.length === 0) channels = ['retail'];
+    builderState.channels = channels;
+    renderRecipeBuilder();
+  }
+
   function updateBuilderField(field, value) {
     if (!builderState) return;
     // Variant-scoped fields: laborMinutes, otherCost go to active variant slot
@@ -2715,6 +2801,7 @@
         otherCostNote: builderState.otherCostNote || '',
         setupCost: builderState.setupCost || 0,
         batchSize: builderState.batchSize || 1,
+        channels: Array.isArray(builderState.channels) ? builderState.channels : ['retail'],
         minMarginPercent: builderState.minMarginPercent != null ? builderState.minMarginPercent : null,
         notes: builderState.notes || '',
         // New cost-shape model
@@ -3451,6 +3538,7 @@
   window.makerGetChannelNetMargin = getChannelNetMargin;
   window.makerDetectChannelForOrder = detectChannelForOrder;
   window.makerLoadChannels = loadChannels;
+  window.makerToggleChannel = toggleChannel;
   window.makerSetTierFromBuilder = setTierFromBuilder;
   window.makerRepriceNow = repriceNow;
   window.makerOpenWhatIfSimulator = openWhatIfSimulator;

@@ -8,110 +8,12 @@ var wholesaleTokensData = {};
 var wholesaleOrdersData = {};
 var wholesaleAuthorizedData = {};
 var wholesaleRequestsData = {};
-var wholesaleSubView = 'orders'; // orders | users | requests | setup
+var wholesaleSubView = 'orders'; // orders | users | requests
 var wholesaleQRLib = null; // lazy-loaded QRCode library
 
-// ── Wholesale catalog product seed data ──
-var WHOLESALE_SEED = {
-  // Existing products: add wpid + wholesalePriceCents
-  existing: {
-    p84:  { wpid: '1',   wholesalePriceCents: 4200 },   // Spiral Cups
-    p83:  { wpid: '3',   wholesalePriceCents: 2200 },   // Speckle Cups
-    p88:  { wpid: '9',   wholesalePriceCents: 1500 },   // Flowers
-    p42:  { wpid: '10',  wholesalePriceCents: 2200,      // Pumpkins — medium default
-            wholesalePriceVariants: { '10L': 2800, '10M': 2200, '10S': 1600 } },
-    p112: { wpid: '11',  wholesalePriceCents: 1500 },   // Birds
-    p90:  { wpid: '12',  wholesalePriceCents: 4200 },   // Jellyfish Pendant
-    p66:  { wpid: '13',  wholesalePriceCents: 4200 },   // Heart Pendant
-    p116: { wpid: '14',  wholesalePriceCents: 4200 },   // Honey Pendant
-    p101: { wpid: '15L', wholesalePriceCents: 85000 },  // Large Octopus
-    p100: { wpid: '15S', wholesalePriceCents: 6000 },   // Small Octopus
-    p76:  { wpid: '16a', wholesalePriceCents: 1800 },   // Snail
-    p106: { wpid: '16b', wholesalePriceCents: 1800 }    // Snake
-  },
-  // New products to create
-  newProducts: [
-    {
-      pid: 'pw2', name: 'Pitchers', wpid: '2',
-      wholesalePriceCents: 6400, priceCents: null,
-      categories: ['drinkware'], businessLine: 'production',
-      availability: 'available',
-      options: [{ label: 'Color', choices: ['Rose', 'Gold', 'Emerald', 'Cobalt', 'Aqua', 'Violet'] }],
-      shortDescription: 'Hand-blown glass pitcher with spiral pattern.',
-      description: 'Each pitcher is individually hand-blown with a unique spiral pattern. Available in six signature colors.'
-    },
-    {
-      pid: 'pw4', name: 'Bowls', wpid: '4',
-      wholesalePriceCents: 2200, priceCents: null,
-      categories: ['drinkware'], businessLine: 'production',
-      availability: 'available',
-      options: [{ label: 'Color', choices: ['Emerald', 'Rose', 'Aqua', 'Cobalt', 'Gold', 'Violet'] }],
-      shortDescription: 'Speckled glass bowl.',
-      description: 'Hand-blown glass bowl with our signature speckle pattern. Perfect for serving or display.'
-    },
-    {
-      pid: 'pw5', name: 'Small Dispensers', wpid: '5',
-      wholesalePriceCents: 2200, priceCents: null,
-      categories: ['decoration'], businessLine: 'production',
-      availability: 'available',
-      options: [{ label: 'Color', choices: ['Aqua', 'Emerald', 'Rose', 'Gold', 'Cobalt', 'Violet'] }],
-      shortDescription: 'Small glass oil or vinegar dispenser.',
-      description: 'Compact hand-blown glass dispenser with pour spout. Ideal for olive oil or vinegar.'
-    },
-    {
-      pid: 'pw6', name: 'Pump Dispensers', wpid: '6',
-      wholesalePriceCents: 3300, priceCents: null,
-      categories: ['decoration'], businessLine: 'production',
-      availability: 'available',
-      options: [{ label: 'Color', choices: ['Violet', 'Cobalt', 'Emerald', 'Rose', 'Aqua', 'Gold'] }],
-      shortDescription: 'Glass soap dispenser with pump.',
-      description: 'Hand-blown glass soap or lotion dispenser with stainless steel pump top.'
-    },
-    {
-      pid: 'pw7', name: 'Large Dispensers', wpid: '7',
-      wholesalePriceCents: 3300, priceCents: null,
-      categories: ['decoration'], businessLine: 'production',
-      availability: 'available',
-      options: [{ label: 'Color', choices: ['Violet', 'Cobalt', 'Gold', 'Emerald', 'Aqua', 'Rose'] }],
-      shortDescription: 'Large glass oil dispenser.',
-      description: 'Tall hand-blown glass dispenser with pour spout. Statement piece for kitchen or bar.'
-    },
-    {
-      pid: 'pw8', name: 'Vases', wpid: '8',
-      wholesalePriceCents: 2200, priceCents: null,
-      categories: ['vases', 'decoration'], businessLine: 'production',
-      availability: 'available',
-      options: [
-        { label: 'Style', choices: ['Gold Cone', 'Rose Cylinder', 'Violet Sphere', 'Aqua Cone', 'Emerald Cylinder', 'Cobalt Sphere'] }
-      ],
-      shortDescription: 'Small decorative glass vase.',
-      description: 'Hand-blown glass vase in three shapes (cone, cylinder, sphere) and six colors.'
-    },
-    {
-      pid: 'pw17', name: 'Speckle Ornaments', wpid: '17',
-      wholesalePriceCents: 1500, priceCents: null,
-      categories: ['decoration'], businessLine: 'production',
-      availability: 'available',
-      options: [{ label: 'Color', choices: ['Violet', 'Aqua', 'Gold', 'Emerald', 'Rose', 'Cobalt', 'Mix', 'Scarlet', 'White', 'Yellow'] }],
-      shortDescription: 'Hand-blown speckled glass ornament.',
-      description: 'Delicate speckled glass ornament. Each one is unique. Available in ten colors.'
-    },
-    {
-      pid: 'pw18', name: 'Charm Ornaments', wpid: '18',
-      wholesalePriceCents: 8200, priceCents: null,
-      categories: ['decoration'], businessLine: 'production',
-      availability: 'available',
-      options: [{ label: 'Color', choices: ['Emerald', 'Gold', 'Mix', 'White', 'Aqua', 'Cobalt', 'Rose', 'Violet', 'Scarlet', 'Yellow'] }],
-      shortDescription: 'Glass ornament with blown glass charm.',
-      description: 'Hand-blown lattice glass ornament with a unique glass charm attached. Premium collector item.'
-    }
-  ]
-};
-
-// Also update existing product color options to match wholesale catalog
-var WHOLESALE_COLOR_UPDATES = {
-  p112: { options: [{ label: 'Color', choices: ['Cobalt', 'White', 'Tangerine', 'Blue', 'Mix', 'Pink', 'Aqua', 'Yellow', 'Emerald', 'Scarlet', 'Rose', 'Violet'] }] }
-};
+// WHOLESALE_SEED and WHOLESALE_COLOR_UPDATES removed in unified pricing model Phase 4.
+// Products now use isWholesale flag + wholesalePriceCents on product records.
+// Seed data preserved in ~/.claude/plans/mast-pricing-model-build-plan.md.
 
 // ── Render main wholesale admin view ──
 
@@ -127,7 +29,6 @@ function renderWholesaleAdmin() {
       '<div class="view-tab' + (wholesaleSubView === 'orders' ? ' active' : '') + '" onclick="switchWholesaleView(\'orders\')">Orders</div>' +
       '<div class="view-tab' + (wholesaleSubView === 'users' ? ' active' : '') + '" onclick="switchWholesaleView(\'users\')">Authorized Users</div>' +
       '<div class="view-tab' + (wholesaleSubView === 'requests' ? ' active' : '') + '" onclick="switchWholesaleView(\'requests\')">Access Requests <span id="wsRequestBadge"></span></div>' +
-      '<div class="view-tab' + (wholesaleSubView === 'setup' ? ' active' : '') + '" onclick="switchWholesaleView(\'setup\')">Setup</div>' +
     '</div>' +
     '<div id="wholesaleSubContent"></div>' +
   '</div>';
@@ -140,7 +41,6 @@ function renderWholesaleAdmin() {
   if (wholesaleSubView === 'users') renderWholesaleUsers();
   else if (wholesaleSubView === 'requests') renderWholesaleRequests();
   else if (wholesaleSubView === 'orders') renderWholesaleOrders();
-  else if (wholesaleSubView === 'setup') renderWholesaleSetup();
 }
 
 function switchWholesaleView(view) {
@@ -621,116 +521,6 @@ function updateWholesaleOrderStatus(orderId, newStatus) {
 
 // ── Setup sub-view (seed data migration) ──
 
-function renderWholesaleSetup() {
-  var container = document.getElementById('wholesaleSubContent');
-  if (!container) return;
-
-  container.innerHTML = '<div style="color:var(--warm-gray);padding:40px 0;text-align:center;">Checking product data...</div>';
-
-  // Check how many products already have wpid set
-  MastDB.products.list().then(function(snap) {
-    var products = snap.val() || {};
-    var withWpid = 0;
-    var totalExpected = Object.keys(WHOLESALE_SEED.existing).length + WHOLESALE_SEED.newProducts.length;
-    Object.keys(products).forEach(function(pid) {
-      if (products[pid].wpid) withWpid++;
-    });
-
-    var allSeeded = withWpid >= totalExpected;
-
-    var html = '<div style="background:#fff;border:1px solid #e8e0d4;border-radius:8px;padding:24px;max-width:700px;">' +
-      '<h3 style="font-weight:700;font-size:1rem;margin-bottom:16px;">Wholesale Product Data</h3>' +
-      '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">' +
-        'The 2026 wholesale catalog includes 18 product lines (' + Object.keys(WHOLESALE_SEED.existing).length + ' existing + ' + WHOLESALE_SEED.newProducts.length + ' new). ' +
-        'Currently <strong>' + withWpid + '</strong> of <strong>' + totalExpected + '</strong> products have wholesale data.' +
-      '</div>';
-
-    if (allSeeded) {
-      html += '<div style="background:rgba(45,125,70,0.1);color:#2D7D46;padding:12px;border-radius:6px;font-size:0.85rem;">All wholesale products are configured.</div>';
-    } else {
-      html += '<div style="margin-bottom:16px;">' +
-        '<h4 style="font-size:0.85rem;font-weight:600;margin-bottom:8px;">Existing products to update:</h4>' +
-        '<div style="font-size:0.78rem;color:var(--warm-gray);">';
-      Object.keys(WHOLESALE_SEED.existing).forEach(function(pid) {
-        var s = WHOLESALE_SEED.existing[pid];
-        var existing = products[pid];
-        var already = existing && existing.wpid;
-        html += '<div style="padding:2px 0;' + (already ? 'text-decoration:line-through;opacity:0.5;' : '') + '">  ' + pid + ' (' + (existing ? existing.name : '?') + ') → wpid ' + s.wpid + ', $' + (s.wholesalePriceCents / 100).toFixed(2) + '</div>';
-      });
-      html += '</div></div>';
-
-      html += '<div style="margin-bottom:16px;">' +
-        '<h4 style="font-size:0.85rem;font-weight:600;margin-bottom:8px;">New products to create:</h4>' +
-        '<div style="font-size:0.78rem;color:var(--warm-gray);">';
-      WHOLESALE_SEED.newProducts.forEach(function(np) {
-        var already = products[np.pid];
-        html += '<div style="padding:2px 0;' + (already ? 'text-decoration:line-through;opacity:0.5;' : '') + '">  ' + np.pid + ' — ' + np.name + ' (wpid ' + np.wpid + ', $' + (np.wholesalePriceCents / 100).toFixed(2) + ')</div>';
-      });
-      html += '</div></div>';
-
-      html += '<button onclick="runWholesaleSeed()" style="background:var(--teal);color:#fff;border:none;padding:10px 20px;border-radius:4px;cursor:pointer;font-size:0.85rem;">Seed Wholesale Data</button>';
-    }
-
-    html += '</div>';
-    container.innerHTML = html;
-  });
-}
-
-async function runWholesaleSeed() {
-  var btn = event.target;
-  btn.disabled = true;
-  btn.textContent = 'Seeding...';
-
-  try {
-    // 1. Update existing products
-    var updates = {};
-    Object.keys(WHOLESALE_SEED.existing).forEach(function(pid) {
-      var data = WHOLESALE_SEED.existing[pid];
-      Object.keys(data).forEach(function(field) {
-        updates['public/products/' + pid + '/' + field] = data[field];
-      });
-    });
-
-    // Update bird colors to match wholesale catalog
-    Object.keys(WHOLESALE_COLOR_UPDATES).forEach(function(pid) {
-      var data = WHOLESALE_COLOR_UPDATES[pid];
-      Object.keys(data).forEach(function(field) {
-        updates['public/products/' + pid + '/' + field] = data[field];
-      });
-    });
-
-    // 2. Create new products
-    WHOLESALE_SEED.newProducts.forEach(function(np) {
-      var product = {
-        pid: np.pid,
-        name: np.name,
-        wpid: np.wpid,
-        wholesalePriceCents: np.wholesalePriceCents,
-        categories: np.categories,
-        businessLine: np.businessLine,
-        availability: np.availability,
-        options: np.options,
-        shortDescription: np.shortDescription,
-        description: np.description,
-        images: [],
-        imageIds: [],
-        slug: np.name.toLowerCase().replace(/\s+/g, '-'),
-        createdAt: new Date().toISOString()
-      };
-      if (np.priceCents) product.priceCents = np.priceCents;
-      updates['public/products/' + np.pid] = product;
-    });
-
-    await MastDB._multiUpdate(updates);
-    showToast('Wholesale data seeded successfully! ' + Object.keys(WHOLESALE_SEED.existing).length + ' products updated, ' + WHOLESALE_SEED.newProducts.length + ' new products created.');
-    renderWholesaleSetup();
-  } catch (err) {
-    showToast('Seed error: ' + err.message, true);
-    btn.disabled = false;
-    btn.textContent = 'Seed Wholesale Data';
-  }
-}
-
 function copyToClipboard(text) {
   navigator.clipboard.writeText(text).catch(function() {
     // Fallback
@@ -755,8 +545,7 @@ window.denyWholesaleRequest = denyWholesaleRequest;
 window.renderWholesaleOrders = renderWholesaleOrders;
 window.viewWholesaleOrder = viewWholesaleOrder;
 window.updateWholesaleOrderStatus = updateWholesaleOrderStatus;
-window.renderWholesaleSetup = renderWholesaleSetup;
-window.runWholesaleSeed = runWholesaleSeed;
+// renderWholesaleSetup and runWholesaleSeed removed — wholesale products now managed via product admin
 window.uploadWholesalePDF = uploadWholesalePDF;
 window.copyQRImage = copyQRImage;
 window.copyToClipboard = copyToClipboard;
