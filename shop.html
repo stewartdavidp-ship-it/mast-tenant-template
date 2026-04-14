@@ -871,7 +871,8 @@ window.TENANT_READY.then(function() {
     html += '</div>';
 
     // Options panel
-    html += '<div class="gc-options" id="shopGcOptions">' +
+    html += '<div class="gc-options" id="shopGcOptions" style="position:relative;">' +
+      '<button type="button" onclick="window._shopGcClose()" style="position:absolute;top:12px;right:14px;background:none;border:none;color:var(--warm-gray,#888);font-size:1.4rem;cursor:pointer;padding:4px 8px;line-height:1;transition:color 0.15s;" onmouseover="this.style.color=\'var(--text)\'" onmouseout="this.style.color=\'var(--warm-gray,#888)\'">&times;</button>' +
       '<div class="gc-options-title">Gift Card Options</div>' +
       '<div class="gc-selected-amount" id="shopGcSelectedLabel"></div>' +
       '<div class="gc-toggle">' +
@@ -1057,6 +1058,16 @@ window.TENANT_READY.then(function() {
     if (m) m.value = '';
     panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
+
+  window._shopGcClose = function() {
+    _shopGcSelectedCents = 0;
+    _shopGcQty = 1;
+    _shopGcGiftType = 'self';
+    var cards = document.querySelectorAll('#shopGcGrid .gc-denom-card');
+    for (var i = 0; i < cards.length; i++) cards[i].classList.remove('selected');
+    var panel = document.getElementById('shopGcOptions');
+    if (panel) panel.classList.remove('visible');
+  };
 
   window._shopGcSelect = function(cents, el) {
     _shopGcSelectedCents = cents;
