@@ -2239,32 +2239,120 @@
     }
   }
 
-  async function createNewPiece() {
-    // Prompt for name
-    var name = prompt('Piece name:');
-    if (!name || !name.trim()) return;
-    name = name.trim();
+  function createNewPiece() {
+    openNewPieceModal();
+  }
 
-    // Pick category from existing categories or let them type one
+  // Inline modal (matches openMaterialModal style) — replaces native prompt()
+  // so piece creation is keyboard-friendly, skin-compliant, and testable.
+  function openNewPieceModal() {
+    var esc = MastAdmin.esc;
     var products = window.productsData || [];
     var cats = {};
     products.forEach(function(p) { (p.categories || []).forEach(function(c) { if (c) cats[c] = true; }); });
     var catList = Object.keys(cats).sort();
-    var category = 'other';
-    if (catList.length > 0) {
-      var catPrompt = 'Category?\n' + catList.map(function(c, i) { return (i + 1) + '. ' + c; }).join('\n') + '\n\nEnter number or type a new category:';
-      var catInput = prompt(catPrompt, '1');
-      if (catInput === null) return;
-      var catNum = parseInt(catInput, 10);
-      if (catNum >= 1 && catNum <= catList.length) {
-        category = catList[catNum - 1];
-      } else if (catInput.trim()) {
-        category = catInput.trim().toLowerCase();
-      }
+
+    // Clean up any prior instance
+    var prior = document.getElementById('newPieceModalContainer');
+    if (prior) prior.remove();
+
+    var container = document.createElement('div');
+    container.id = 'newPieceModalContainer';
+    var html = '';
+    html += '<div id="newPieceOverlay" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;" onclick="makerCloseNewPieceModal(event)">';
+    html += '<div style="background:var(--cream);border-radius:10px;max-width:480px;width:90%;max-height:85vh;overflow-y:auto;box-shadow:0 8px 30px rgba(0,0,0,0.2);padding:20px 24px;" onclick="event.stopPropagation()">';
+    html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:500;margin:0 0 16px;">New Piece</h3>';
+
+    // Name
+    html += '<div style="margin-bottom:16px;">';
+    html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Name *</label>';
+    html += '<input id="newPieceName" type="text" autofocus style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;box-sizing:border-box;" placeholder="e.g. Cobalt Pendant">';
+    html += '</div>';
+
+    // Category — dropdown of existing + free-text fallback
+    html += '<div style="margin-bottom:20px;">';
+    html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Category</label>';
+    html += '<select id="newPieceCategorySelect" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;margin-bottom:6px;box-sizing:border-box;" onchange="makerNewPieceCategoryChange()">';
+    catList.forEach(function(c) { html += '<option value="' + esc(c) + '">' + esc(c) + '</option>'; });
+    html += '<option value="__other__">+ New category…</option>';
+    html += '</select>';
+    html += '<input id="newPieceCategoryCustom" type="text" style="display:none;width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;box-sizing:border-box;" placeholder="New category name">';
+    html += '</div>';
+
+    // Buttons
+    html += '<div style="display:flex;gap:8px;justify-content:flex-end;">';
+    html += '<button class="btn btn-secondary" onclick="makerCloseNewPieceModal()">Cancel</button>';
+    html += '<button class="btn btn-primary" onclick="makerSubmitNewPiece()">Create Piece</button>';
+    html += '</div>';
+
+    html += '</div></div>';
+    container.innerHTML = html;
+    document.body.appendChild(container);
+
+    // If no existing categories, show the custom input immediately
+    if (catList.length === 0) {
+      var sel = document.getElementById('newPieceCategorySelect');
+      sel.innerHTML = '<option value="__other__">+ New category…</option>';
+      sel.value = '__other__';
+      document.getElementById('newPieceCategoryCustom').style.display = 'block';
     }
 
+    // Focus name and submit on Enter
+    setTimeout(function() {
+      var nameEl = document.getElementById('newPieceName');
+      if (nameEl) {
+        nameEl.focus();
+        nameEl.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter') { e.preventDefault(); submitNewPiece(); }
+        });
+      }
+    }, 0);
+  }
+
+  function closeNewPieceModal(event) {
+    if (event && event.target && event.target.id !== 'newPieceOverlay') return;
+    var c = document.getElementById('newPieceModalContainer');
+    if (c) c.remove();
+  }
+
+  function newPieceCategoryChange() {
+    var sel = document.getElementById('newPieceCategorySelect');
+    var custom = document.getElementById('newPieceCategoryCustom');
+    if (!sel || !custom) return;
+    if (sel.value === '__other__') {
+      custom.style.display = 'block';
+      custom.focus();
+    } else {
+      custom.style.display = 'none';
+    }
+  }
+
+  async function submitNewPiece() {
+    var nameEl = document.getElementById('newPieceName');
+    var sel = document.getElementById('newPieceCategorySelect');
+    var custom = document.getElementById('newPieceCategoryCustom');
+    if (!nameEl || !sel) return;
+    var name = (nameEl.value || '').trim();
+    if (!name) {
+      MastAdmin.showToast('Name is required', true);
+      nameEl.focus();
+      return;
+    }
+    var category;
+    if (sel.value === '__other__') {
+      category = ((custom && custom.value) || '').trim().toLowerCase();
+      if (!category) {
+        MastAdmin.showToast('Category is required', true);
+        if (custom) custom.focus();
+        return;
+      }
+    } else {
+      category = sel.value || 'other';
+    }
+
+    closeNewPieceModal();
+
     try {
-      // Create draft product
       var pid = 'p' + Date.now().toString(36);
       var slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
       var now = new Date().toISOString();
@@ -2284,12 +2372,10 @@
       });
       MastAdmin.writeAudit('create', 'products', pid);
 
-      // Add to local productsData so it appears immediately
       if (window.productsData) {
         window.productsData.push({ pid: pid, name: name, slug: slug, categories: [category], status: 'draft', availability: 'available', businessLine: 'production', priceCents: null, images: [], imageIds: [] });
       }
 
-      // Create linked recipe and open builder
       await createRecipeForProduct(pid, name);
     } catch (err) {
       MastAdmin.showToast('Error creating piece: ' + err.message, true);
@@ -3580,6 +3666,9 @@
   window.makerCloseRecipeBuilder = closeRecipeBuilder;
   window.makerCreateRecipeForProduct = createRecipeForProduct;
   window.makerCreateNewPiece = createNewPiece;
+  window.makerCloseNewPieceModal = closeNewPieceModal;
+  window.makerNewPieceCategoryChange = newPieceCategoryChange;
+  window.makerSubmitNewPiece = submitNewPiece;
   window.makerSaveRecipeBuilder = saveRecipeBuilder;
   window.makerSaveAndRecalcRecipe = saveAndRecalcRecipe;
   window.makerRecalcAndRefresh = recalcAndRefresh;

@@ -69,11 +69,69 @@
   // ── Cart State ──
   var cart = [];
 
+  // Bump when the cart item shape changes. Stored carts with a different
+  // (or missing) version are cleared on load to prevent malformed items
+  // from reaching the order-breakdown engine.
+  var CART_SCHEMA_VERSION = 1;
+
+  // Returns true if a cart item has the minimum fields required by the
+  // order-breakdown engine. Items missing these are filtered out on load
+  // and the customer sees a non-blocking banner.
+  function isValidCartItem(it) {
+    if (!it || typeof it !== 'object') return false;
+    if (!it.pid || typeof it.pid !== 'string') return false;
+    if (typeof it.qty !== 'number' || it.qty <= 0) return false;
+    // Gift cards may be $0 at the line (amount lives in options/metadata),
+    // but they must carry a non-empty giftType to be well-formed.
+    var isGiftCard = (it.itemType === 'gift-card') || (it.pid && /^gift-card/i.test(it.pid));
+    if (isGiftCard) {
+      var opts = it.options || {};
+      if (!opts.giftType || !opts.amountCents) return false;
+      return true;
+    }
+    // Non-gift-card items must have a numeric, non-negative priceCents.
+    // $0 is allowed (free classes, comped items) but missing/null/negative is not.
+    if (typeof it.priceCents !== 'number' || it.priceCents < 0) return false;
+    return true;
+  }
+
   function loadLocal() {
     try {
       var raw = localStorage.getItem(STORAGE_KEY);
-      cart = raw ? JSON.parse(raw) : [];
-      if (!Array.isArray(cart)) cart = [];
+      if (!raw) { cart = []; return; }
+      var parsed = JSON.parse(raw);
+      // New shape: { version, items: [] }. Legacy shape: plain array.
+      var storedVersion = null;
+      var rawItems = null;
+      if (Array.isArray(parsed)) {
+        // Legacy — force a migration by clearing.
+        storedVersion = null;
+        rawItems = parsed;
+      } else if (parsed && typeof parsed === 'object' && Array.isArray(parsed.items)) {
+        storedVersion = parsed.version || null;
+        rawItems = parsed.items;
+      } else {
+        cart = [];
+        return;
+      }
+      if (storedVersion !== CART_SCHEMA_VERSION) {
+        // Schema mismatch — discard to prevent malformed items reaching the engine.
+        console.warn('[cart] schema v' + storedVersion + ' → v' + CART_SCHEMA_VERSION + ', cart cleared');
+        cart = [];
+        saveLocal();
+        return;
+      }
+      // Same version — still sanitize defensively (guards against partial writes).
+      var valid = rawItems.filter(isValidCartItem);
+      var dropped = rawItems.length - valid.length;
+      cart = valid;
+      if (dropped > 0) {
+        console.warn('[cart] dropped ' + dropped + ' malformed item(s)');
+        try {
+          window.dispatchEvent(new CustomEvent('mastCartItemsDropped', { detail: { count: dropped } }));
+        } catch (e) { /* ignore */ }
+        saveLocal();
+      }
     } catch (e) {
       cart = [];
     }
@@ -81,7 +139,7 @@
 
   function saveLocal() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(cart));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: CART_SCHEMA_VERSION, items: cart }));
     } catch (e) { /* quota exceeded — silent */ }
   }
 

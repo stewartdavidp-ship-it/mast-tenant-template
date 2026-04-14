@@ -1163,9 +1163,17 @@
       html += '<div class="order-total-row discount"><span class="order-total-label">' + esc(loyaltyLabel) + '</span><span class="order-total-value">-' + formatMoney(b.loyaltyDeductionCents) + '</span></div>';
     }
 
-    // Gift Cards
+    // Gift Cards — show source (e.g. last 4 of code) when available
     if (b.giftCardDeductionCents > 0) {
-      html += '<div class="order-total-row discount"><span class="order-total-label">Gift Card</span><span class="order-total-value">-' + formatMoney(b.giftCardDeductionCents) + '</span></div>';
+      var gcLabel = 'Wallet credit';
+      var appliedCards = (checkoutData.walletGiftCards || []).filter(function(g) { return (g.remainingCents || 0) > 0; });
+      if (appliedCards.length === 1 && appliedCards[0].code) {
+        var code = String(appliedCards[0].code);
+        gcLabel = 'Wallet credit (ends ' + esc(code.slice(-4)) + ')';
+      } else if (appliedCards.length > 1) {
+        gcLabel = 'Wallet credit (' + appliedCards.length + ' cards)';
+      }
+      html += '<div class="order-total-row discount"><span class="order-total-label">' + gcLabel + '</span><span class="order-total-value">-' + formatMoney(b.giftCardDeductionCents) + '</span></div>';
     }
 
     // Store Credits
@@ -2110,12 +2118,37 @@
       }
     }
 
+    // Wallet toggle — show when customer has wallet gift cards with balance so they can opt out of auto-apply
+    var walletCards = checkoutData.walletGiftCards || [];
+    if (walletCards.length > 0) {
+      var totalBalance = walletCards.reduce(function(s, g) { return s + (g.remainingCents || 0); }, 0);
+      var applied = !!checkoutData.walletGiftCardApplied;
+      html += '<div class="review-section" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:12px 14px;margin:8px 0;">';
+      html += '<label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:0.9rem;">';
+      html += '<input type="checkbox" data-co="wallet-toggle"' + (applied ? ' checked' : '') + ' style="width:16px;height:16px;cursor:pointer;">';
+      html += '<span><strong>Apply wallet balance</strong> (' + formatMoney(totalBalance) + ' available across ' + walletCards.length + ' card' + (walletCards.length === 1 ? '' : 's') + ')</span>';
+      html += '</label>';
+      html += '</div>';
+    }
+
     // Totals — loading placeholder, then engine call
     html += '<div class="review-section engine-totals-container">' + buildTotalsLoadingHtml() + '</div>';
 
     html += '</div>'; // close checkout-section
 
     body.innerHTML = html;
+
+    // Wire wallet toggle
+    var walletToggle = body.querySelector('[data-co="wallet-toggle"]');
+    if (walletToggle) {
+      walletToggle.addEventListener('change', function() {
+        checkoutData.walletGiftCardApplied = this.checked;
+        checkoutData._walletConfirmed = false; // re-require confirmation
+        // Also re-apply to credits with the same toggle (keep UX simple)
+        checkoutData.walletCreditApplied = this.checked;
+        debouncedBreakdownRefresh();
+      });
+    }
 
     // Attach seat attendee email listeners
     var seatInputs = body.querySelectorAll('[data-co="seat-email"]');
@@ -2147,10 +2180,27 @@
         tc.innerHTML = breakdown ? buildTotalsFromBreakdown(breakdown) : buildTotalsErrorHtml();
       }
       if (breakdown) syncCouponMessage(breakdown);
-      // Update button label if $0 wallet-covered order
+      // Wallet-covered order ($0 charge): surface banner + require explicit confirm
       if (breakdown && breakdown.chargeAmountCents <= 0) {
         var btn = document.querySelector('[data-co="place-order"]');
-        if (btn) btn.textContent = 'Place Order';
+        if (btn) {
+          btn.textContent = 'Place Order';
+          btn.setAttribute('data-wallet-covered', '1');
+        }
+        // Inject "no card will be charged" banner just above the footer
+        var footerEl = document.querySelector('.checkout-footer') || document.querySelector('[data-co="place-order"]');
+        if (footerEl && !document.getElementById('walletCoveredBanner')) {
+          var totalDeducted = (breakdown.giftCardDeductionCents || 0) + (breakdown.creditDeductionCents || 0);
+          var banner = document.createElement('div');
+          banner.id = 'walletCoveredBanner';
+          banner.style.cssText = 'background:#f0f9ff;border:1px solid #bfdbfe;border-radius:6px;padding:10px 12px;margin:12px 0;font-size:0.85rem;color:#1e40af;line-height:1.4;';
+          banner.innerHTML = '<strong>No card will be charged.</strong><br>This order is fully covered by your wallet balance (' + formatMoney(totalDeducted) + ' will be deducted).';
+          footerEl.parentNode.insertBefore(banner, footerEl);
+        }
+      } else {
+        // Remove banner if breakdown changed and wallet no longer covers
+        var existingBanner = document.getElementById('walletCoveredBanner');
+        if (existingBanner) existingBanner.remove();
       }
     });
 
@@ -2171,6 +2221,17 @@
     if (hasWholesale && checkoutData.paymentMethod === 'check') {
       placeCheckOrder();
       return;
+    }
+
+    // Wallet-covered $0 order — require explicit confirmation so the customer
+    // doesn't miss that wallet balance is being spent.
+    var btn = document.querySelector('[data-co="place-order"]');
+    if (btn && btn.getAttribute('data-wallet-covered') === '1' && !checkoutData._walletConfirmed) {
+      var bd = checkoutData.serverBreakdown || {};
+      var deducted = (bd.giftCardDeductionCents || 0) + (bd.creditDeductionCents || 0);
+      var ok = window.confirm('Place this order? ' + formatMoney(deducted) + ' will be deducted from your wallet. No card will be charged.');
+      if (!ok) return;
+      checkoutData._walletConfirmed = true;
     }
 
     // All orders (including $0 wallet-covered) go through submitOrder server-side.
