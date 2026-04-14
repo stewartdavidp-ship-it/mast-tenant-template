@@ -6034,6 +6034,7 @@
       <div class="section-header">
         <h2>Product Catalog</h2>
         <div class="products-filter-bar">
+          <input type="text" id="productsSearchInput" placeholder="Search products..." oninput="debouncedProductSearch()" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.85rem;background:var(--surface-card);color:var(--text);width:180px;">
           <select id="productsCategory" onchange="renderProducts()">
             <option value="all">All Categories</option>
             <option value="figurines">Figurines</option>
@@ -20533,10 +20534,24 @@ async function loadProducts() {
   }
 }
 
+var _productSearchTimer = null;
+function debouncedProductSearch() {
+  clearTimeout(_productSearchTimer);
+  _productSearchTimer = setTimeout(renderProducts, 300);
+}
+
 function renderProducts() {
   var cat = document.getElementById('productsCategory').value;
-  var filtered = cat === 'all' ? productsData : productsData.filter(function(p) {
-    return p.categories && p.categories.indexOf(cat) !== -1;
+  var searchInput = document.getElementById('productsSearchInput');
+  var searchTerm = (searchInput ? searchInput.value : '').toLowerCase().trim();
+  var filtered = productsData.filter(function(p) {
+    if (cat !== 'all' && (!p.categories || p.categories.indexOf(cat) === -1)) return false;
+    if (searchTerm) {
+      var name = (p.name || '').toLowerCase();
+      var desc = (p.description || '').toLowerCase();
+      if (name.indexOf(searchTerm) === -1 && desc.indexOf(searchTerm) === -1) return false;
+    }
+    return true;
   });
 
   document.getElementById('productsCount').textContent = filtered.length + ' of ' + productsData.length + ' products';
@@ -22399,7 +22414,16 @@ function renderInventoryHistory() {
       actorBadge = '<span style="font-size:0.72rem;color:var(--warm-gray-light);">—</span>';
     }
     var detail = e.detail || '';
-    if (e.comboKey && e.comboKey !== '_default') detail += (detail ? ' · ' : '') + e.comboKey;
+    if (e.comboKey && e.comboKey !== '_default') {
+      // Resolve variant ID to human-readable label
+      var comboDisplay = e.comboKey;
+      var histProduct = productsData.find(function(p) { return p.pid === selectedProductPid; });
+      if (histProduct && histProduct.variants) {
+        var matchedVariant = histProduct.variants.find(function(v) { return v.id === e.comboKey; });
+        if (matchedVariant && matchedVariant.combo) comboDisplay = Object.values(matchedVariant.combo).join(' / ');
+      }
+      detail += (detail ? ' · ' : '') + comboDisplay;
+    }
     var orderLink = '';
     if (e.orderId) {
       orderLink = ' · <a href="#" data-order-id="' + esc(e.orderId) + '" onclick="navigateToOrderFromHistory(this.dataset.orderId);return false;" style="color:var(--teal);text-decoration:underline;cursor:pointer;">Order ' + esc(e.orderId.slice(0, 8)) + '</a>';
@@ -23197,6 +23221,7 @@ function renderProductDetail(pid) {
       (product.availability === 'discontinued' ? '<span class="status-badge stock-badge out-of-stock">Discontinued</span>' : '') +
     '</div>' +
     (!isCreate && !isEditing ? '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">' +
+      (pid && product.availability !== 'discontinued' ? '<a href="' + window.location.origin + '/product.html?id=' + encodeURIComponent(pid) + '" target="_blank" rel="noopener" class="btn btn-secondary btn-small" style="text-decoration:none;font-size:0.78rem;">View on site &#8599;</a>' : '') +
       '<button class="btn btn-secondary btn-small" onclick="editProduct(\'' + esc(pid) + '\')">Edit</button>' +
       '<button class="btn btn-secondary btn-small" onclick="openCloneDialog(\'' + esc(pid) + '\')">Duplicate</button>' +
       '<button class="btn btn-secondary btn-small" onclick="openAddToSaleDialog(\'' + esc(pid) + '\')">Add to Sale</button>' +
@@ -23207,13 +23232,16 @@ function renderProductDetail(pid) {
     '</div>' : '') +
   '</div>';
 
-  // Tab bar
+  // Tab bar — hide irrelevant tabs unless editing (so user can add data)
+  var hasVariants = product.options && product.options.length > 0;
+  var hasProduction = product.buildTime || product.costToBuild || (product.materials && product.materials.length) ||
+    product.shippingCategory || product.weightOz || product.dimensions;
   var tabs = [
-    { id: 'details', label: 'Details' },
-    { id: 'variants', label: 'Variants' },
-    { id: 'images', label: 'Images' },
-    { id: 'production', label: 'Production' }
+    { id: 'details', label: 'Details' }
   ];
+  if (hasVariants || isEditing) tabs.push({ id: 'variants', label: 'Variants' });
+  tabs.push({ id: 'images', label: 'Images' });
+  if (hasProduction || isEditing) tabs.push({ id: 'production', label: 'Production' });
   if (!isCreate) tabs.push({ id: 'inventory', label: 'Inventory' });
 
   var tabBarHtml = '<div class="view-tabs" style="margin:16px 0 0 0;">';
@@ -23685,9 +23713,18 @@ function renderProductDetail(pid) {
   // Action buttons (save/cancel when editing, nothing when viewing — back arrow at top handles navigation)
   var actionHtml = '';
   if (isEditing) {
-    actionHtml = '<div style="display:flex;gap:8px;margin-top:20px;padding-top:16px;border-top:1px solid var(--cream-dark);">' +
-      '<button class="btn btn-primary" onclick="saveProduct(\'' + esc(pid || '') + '\')">' + (isCreate ? 'Create Product' : 'Save') + '</button>' +
-      '<button class="btn btn-secondary" onclick="' + (isCreate ? 'backToProducts()' : 'cancelProductEdit(\'' + esc(pid) + '\')') + '">Cancel</button>' +
+    var saveLabel = isCreate ? 'Create Product' : 'Save';
+    var cancelAction = isCreate ? 'backToProducts()' : 'cancelProductEdit(\'' + esc(pid) + '\')';
+    var saveAction = 'saveProduct(\'' + esc(pid || '') + '\')';
+    actionHtml = '<div id="pdSaveButtons" style="display:flex;gap:8px;margin-top:20px;padding-top:16px;border-top:1px solid var(--cream-dark);">' +
+      '<button class="btn btn-primary" onclick="' + saveAction + '">' + saveLabel + '</button>' +
+      '<button class="btn btn-secondary" onclick="' + cancelAction + '">Cancel</button>' +
+    '</div>' +
+    '<div id="pdStickySaveBar" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:999;background:var(--surface-dark);border-top:2px solid var(--primary);padding:10px 24px;box-shadow:0 -2px 8px rgba(0,0,0,0.3);">' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;max-width:1200px;margin:0 auto;">' +
+        '<button class="btn btn-primary" onclick="' + saveAction + '">' + saveLabel + '</button>' +
+        '<button class="btn btn-secondary" onclick="' + cancelAction + '">Cancel</button>' +
+      '</div>' +
     '</div>';
   }
 
@@ -23707,6 +23744,22 @@ function renderProductDetail(pid) {
   // Load inventory history if starting on inventory tab
   if (tab === 'inventory' && pid) {
     loadProductInventoryHistory(pid);
+  }
+
+  // Sticky save bar — show when original save buttons scroll out of view
+  if (isEditing) {
+    var saveBtns = document.getElementById('pdSaveButtons');
+    var stickyBar = document.getElementById('pdStickySaveBar');
+    if (saveBtns && stickyBar && window.IntersectionObserver) {
+      if (window._pdStickyObserver) window._pdStickyObserver.disconnect();
+      window._pdStickyObserver = new IntersectionObserver(function(entries) {
+        stickyBar.style.display = entries[0].isIntersecting ? 'none' : 'block';
+      }, { threshold: 0.1 });
+      window._pdStickyObserver.observe(saveBtns);
+    }
+  } else if (window._pdStickyObserver) {
+    window._pdStickyObserver.disconnect();
+    window._pdStickyObserver = null;
   }
 }
 
