@@ -22418,9 +22418,23 @@ function renderInventoryHistory() {
       // Resolve variant ID to human-readable label
       var comboDisplay = e.comboKey;
       var histProduct = productsData.find(function(p) { return p.pid === selectedProductPid; });
-      if (histProduct && histProduct.variants) {
-        var matchedVariant = histProduct.variants.find(function(v) { return v.id === e.comboKey; });
-        if (matchedVariant && matchedVariant.combo) comboDisplay = Object.values(matchedVariant.combo).join(' / ');
+      if (histProduct) {
+        // Try product.variants first (has combo mapping)
+        if (histProduct.variants && histProduct.variants.length) {
+          var matchedVariant = histProduct.variants.find(function(v) { return v.id === e.comboKey; });
+          if (matchedVariant && matchedVariant.combo) comboDisplay = Object.values(matchedVariant.combo).join(' / ');
+        }
+        // Fallback: if comboKey is a v_ push ID and product has single-dimension options,
+        // build a positional map from sorted stock keys to option choices
+        if (comboDisplay === e.comboKey && e.comboKey.indexOf('v_') === 0 && histProduct.options && histProduct.options.length === 1) {
+          var histInv = inventory[selectedProductPid];
+          if (histInv && histInv.stock) {
+            var vKeys = Object.keys(histInv.stock).filter(function(k) { return k.indexOf('v_') === 0; }).sort();
+            var choices = histProduct.options[0].choices || [];
+            var idx = vKeys.indexOf(e.comboKey);
+            if (idx >= 0 && idx < choices.length) comboDisplay = choices[idx];
+          }
+        }
       }
       detail += (detail ? ' · ' : '') + comboDisplay;
     }
