@@ -21551,6 +21551,7 @@ function renderInventoryOverview() {
       '<th style="text-align:center;">Committed</th>' +
       '<th style="text-align:center;">Lead Time</th>' +
       '<th>Attributes</th>' +
+      '<th style="width:70px;"></th>' +
     '</tr></thead><tbody>';
 
   rows.forEach(function(r) {
@@ -21612,9 +21613,13 @@ function renderInventoryOverview() {
       '<td style="text-align:center;color:var(--warm-gray);">' + (r.committed > 0 ? r.committed : (isBTORow ? '<span style="color:var(--warm-gray-light);">—</span>' : '0')) + '</td>' +
       '<td style="text-align:center;color:var(--warm-gray);font-size:0.85rem;">' + leadTimeStr + '</td>' +
       '<td>' + (r.attrSummary || '<span style="color:var(--warm-gray-light);font-size:0.78rem;">No variants</span>') + '</td>' +
+      '<td style="text-align:center;">' + (!isBTORow ? '<button class="btn btn-secondary btn-small" style="font-size:0.72rem;padding:3px 8px;" data-pid="' + esc(r.pid) + '" onclick="event.stopPropagation();toggleInlineAdjust(this.dataset.pid);" aria-label="Adjust stock for ' + esc(r.name) + '">Adjust</button>' : '') + '</td>' +
     '</tr>';
+    if (inlineAdjustPid === r.pid) {
+      tableHtml += '<tr class="inv-adjust-row"><td colspan="8">' + renderInlineAdjustRow(r.pid) + '</td></tr>';
+    }
     if (isExpanded && r.hasVariants) {
-      tableHtml += '<tr class="inv-expand-row"><td colspan="7">' + renderVariantDrillDown(r.pid) + '</td></tr>';
+      tableHtml += '<tr class="inv-expand-row"><td colspan="8">' + renderVariantDrillDown(r.pid) + '</td></tr>';
     }
   });
 
@@ -21625,6 +21630,130 @@ function renderInventoryOverview() {
 
 var expandedInventoryPid = null;
 var editingVariantKey = null;
+var inlineAdjustPid = null;
+
+function toggleInlineAdjust(pid) {
+  inlineAdjustPid = (inlineAdjustPid === pid) ? null : pid;
+  renderInventoryOverview();
+}
+
+function renderInlineAdjustRow(pid) {
+  var product = productsData.find(function(p) { return p.pid === pid; });
+  if (!product) return '';
+  var inv = inventory[pid] || {};
+  var variantInfo = product ? getProductVariantCombos(product) : { combos: [] };
+  var hasVariants = variantInfo.combos.length > 0;
+  var rawStock = inv.stock;
+  var stock = (typeof rawStock === 'number') ? { _default: { onHand: rawStock, committed: 0 } } : (rawStock || {});
+
+  var html = '<div style="padding:12px 16px;background:var(--cream);border-radius:8px;margin:4px 0;">' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">' +
+      '<span style="font-weight:600;font-size:0.85rem;">' + esc(product.name) + ' — Quick Adjust</span>' +
+      '<div style="display:flex;gap:6px;align-items:center;">' +
+        '<label style="font-size:0.72rem;color:var(--warm-gray);">Mode:</label>' +
+        '<select id="inlineAdjMode" style="font-size:0.78rem;padding:2px 6px;">' +
+          '<option value="add">Add to stock</option>' +
+          '<option value="set">Set exact</option>' +
+        '</select>' +
+      '</div>' +
+    '</div>';
+
+  if (hasVariants) {
+    // Show variant rows
+    var displayVariants = (product.variants || []).filter(function(v) { return v.id && v.combo; });
+    if (displayVariants.length === 0) {
+      variantInfo.combos.forEach(function(c) {
+        var obj = {}; variantInfo.labels.forEach(function(l, i) { obj[l] = c[i]; });
+        displayVariants.push({ id: comboKey(c), combo: obj });
+      });
+    }
+    html += '<div style="display:flex;flex-direction:column;gap:6px;">';
+    displayVariants.forEach(function(variant) {
+      var key = variant.id;
+      var entry = stock[key] || {};
+      var onHand = entry.onHand || 0;
+      var comboLabel = variant.combo ? Object.values(variant.combo).join(' / ') : key;
+      var safeId = safeElId(key);
+      html += '<div style="display:flex;align-items:center;gap:12px;font-size:0.85rem;">' +
+        '<span style="min-width:120px;font-weight:500;">' + esc(comboLabel) + '</span>' +
+        '<span style="color:var(--warm-gray);font-size:0.78rem;min-width:60px;">Current: ' + onHand + '</span>' +
+        '<input type="number" id="inlineAdj_' + safeId + '" class="inline-adj-input" data-key="' + esc(key) + '" value="0" min="0" style="width:70px;font-size:0.85rem;padding:4px 6px;">' +
+      '</div>';
+    });
+    html += '</div>';
+  } else {
+    var defOnHand = (stock._default && stock._default.onHand) || 0;
+    html += '<div style="display:flex;align-items:center;gap:12px;font-size:0.85rem;">' +
+      '<span style="color:var(--warm-gray);font-size:0.78rem;">Current: ' + defOnHand + '</span>' +
+      '<input type="number" id="inlineAdjDefault" value="0" min="0" style="width:70px;font-size:0.85rem;padding:4px 6px;">' +
+    '</div>';
+  }
+
+  html += '<div style="display:flex;gap:8px;margin-top:10px;">' +
+    '<button class="btn btn-primary btn-small" data-pid="' + esc(pid) + '" onclick="saveInlineAdjust(this.dataset.pid)">Save</button>' +
+    '<button class="btn btn-secondary btn-small" onclick="inlineAdjustPid=null;renderInventoryOverview();">Cancel</button>' +
+  '</div></div>';
+  return html;
+}
+
+async function saveInlineAdjust(pid) {
+  try {
+    var product = productsData.find(function(p) { return p.pid === pid; });
+    var variantInfo = product ? getProductVariantCombos(product) : { combos: [] };
+    var adjMode = (document.getElementById('inlineAdjMode') || {}).value || 'add';
+    var inv = inventory[pid] || {};
+    var curStock = (inv && inv.stock) ? inv.stock : {};
+    var updates = {};
+
+    if (variantInfo.combos.length > 0) {
+      var totalOnHand = 0;
+      var inputs = document.querySelectorAll('.inline-adj-input');
+      inputs.forEach(function(input) {
+        var key = input.dataset.key;
+        var inputVal = parseInt(input.value) || 0;
+        var curVal = (curStock[key]) ? (curStock[key].onHand || 0) : 0;
+        var onHand = adjMode === 'add' ? curVal + inputVal : inputVal;
+        updates['stock/' + key + '/onHand'] = Math.max(0, onHand);
+        totalOnHand += Math.max(0, onHand);
+      });
+      updates['stock/_default/onHand'] = totalOnHand;
+    } else {
+      var inputVal = parseInt((document.getElementById('inlineAdjDefault') || {}).value) || 0;
+      var curVal = (curStock._default) ? (curStock._default.onHand || 0) : 0;
+      var onHand = adjMode === 'add' ? curVal + inputVal : inputVal;
+      updates['stock/_default/onHand'] = Math.max(0, onHand);
+    }
+    updates['updatedAt'] = new Date().toISOString();
+
+    // Auto-set stockType to 'strict' when stock is added to a build-to-order product
+    if (!inv.stockType || inv.stockType === 'made-to-order' || inv.stockType === 'build-to-order') {
+      var totalSet = updates['stock/_default/onHand'] || 0;
+      if (totalSet > 0) updates['stockType'] = 'strict';
+    }
+
+    await MastDB.inventory.ref(pid).update(updates);
+    await writeAudit('update', 'inventory', pid);
+    var adjAction = adjMode === 'add' ? 'restocked' : 'recount';
+    var adjReason = adjMode === 'add' ? 'stock_received' : 'recount';
+    await MastDB.inventory.ref(pid + '/history').push({
+      action: adjAction, reason: adjReason, actor: 'maker', actorType: 'maker',
+      detail: adjMode === 'add' ? 'Added stock via inline adjust' : 'Stock set via inline adjust',
+      timestamp: new Date().toISOString()
+    });
+    await syncStockInfoToPublic(pid);
+
+    // Refresh local inventory cache
+    var snap = await MastDB.inventory.ref(pid).once('value');
+    if (snap.val()) inventory[pid] = snap.val();
+
+    inlineAdjustPid = null;
+    renderInventoryOverview();
+    showToast('Stock updated');
+  } catch (err) {
+    console.error('Inline adjust error:', err);
+    showToast('Failed to update stock', true);
+  }
+}
 
 function toggleInventoryExpand(pid) {
   // If product has no variants, navigate to detail instead
@@ -22289,6 +22418,18 @@ function _productEditUpdateDirtyIndicator() {
   if (!btn) return;
   if (_productEditIsDirty()) btn.classList.add('dirty');
   else btn.classList.remove('dirty');
+}
+
+function toggleProductAdvanced() {
+  var panel = document.getElementById('productAdvancedPanel');
+  var chevron = document.getElementById('productAdvancedChevron');
+  var header = panel ? panel.previousElementSibling : null;
+  if (!panel) return;
+  var isHidden = panel.style.display === 'none';
+  panel.style.display = isHidden ? '' : 'none';
+  if (chevron) chevron.textContent = isHidden ? '▼' : '▶';
+  if (header) header.setAttribute('aria-expanded', String(isHidden));
+  sessionStorage.setItem('productAdvancedCollapsed', isHidden ? 'false' : 'true');
 }
 
 function editProduct(pid) {
@@ -23291,15 +23432,21 @@ function renderProductDetail(pid) {
           '<option value="sculpture"' + (product.businessLine === 'sculpture' ? ' selected' : '') + '>Sculpture</option>' +
         '</select></div>' : '') +
       '</div>' +
+    // ── Advanced Settings (collapsible) ──
+    var advCollapsed = sessionStorage.getItem('productAdvancedCollapsed') !== 'false';
+    detailsHtml +=
+      '<div style="margin-top:16px;border:1px solid var(--cream-dark);border-radius:8px;overflow:hidden;">' +
+        '<div onclick="toggleProductAdvanced()" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;cursor:pointer;background:var(--cream);user-select:none;" role="button" aria-expanded="' + (!advCollapsed) + '" aria-controls="productAdvancedPanel">' +
+          '<span style="font-size:0.85rem;font-weight:600;color:var(--warm-gray);">Advanced Settings</span>' +
+          '<span id="productAdvancedChevron" style="font-size:0.72rem;color:var(--warm-gray);transition:transform 0.2s;">' + (advCollapsed ? '▶' : '▼') + '</span>' +
+        '</div>' +
+        '<div id="productAdvancedPanel" style="padding:12px 14px;' + (advCollapsed ? 'display:none;' : '') + '">' +
       '<div style="display:flex;gap:16px;flex-wrap:wrap;">' +
         '<div class="form-group" style="min-width:200px;"><label>Slug (URL-safe)</label><input type="text" id="pdSlug" value="' + esc(product.slug || '') + '"></div>' +
         '<div class="form-group" style="min-width:100px;"><label>Sort Order</label><input type="number" id="pdSortOrder" value="' + (product.sortOrder !== null && product.sortOrder !== undefined ? product.sortOrder : '') + '" placeholder="auto"></div>' +
         '<div class="form-group" style="min-width:150px;"><label>Etsy Listing ID</label><input type="text" id="pdEtsyId" value="' + esc(product.etsyListingId || '') + '"></div>' +
       '</div>' +
-      '<div class="form-group"><label>Introduced Date</label><input type="date" id="pdIntroducedAt" value="' + esc(product.introducedAt || '') + '"></div>';
-
-    // SKU and Processing Time row
-    detailsHtml +=
+      '<div class="form-group"><label>Introduced Date</label><input type="date" id="pdIntroducedAt" value="' + esc(product.introducedAt || '') + '"></div>' +
       '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;">' +
         '<div class="form-group" style="min-width:200px;"><label>SKU</label><input type="text" id="pdSku" value="' + esc(product.sku || '') + '" placeholder="e.g., BV-12OZ-BLUE"></div>' +
         '<div class="form-group" style="min-width:100px;"><label>Processing Min (days)</label><input type="number" id="pdProcessingMin" value="' + ((product.processingDays && product.processingDays.min) || '') + '" placeholder="e.g., 3" min="0"></div>' +
@@ -23325,15 +23472,15 @@ function renderProductDetail(pid) {
         '</div>' +
       '</div>';
 
-    // SEO section (collapsible)
+    // SEO section
     detailsHtml +=
-      '<details style="margin-top:12px;">' +
-        '<summary style="font-size:0.85rem;font-weight:600;cursor:pointer;color:var(--warm-gray);">SEO Settings</summary>' +
-        '<div style="padding:8px 0;">' +
-          '<div class="form-group"><label>SEO Title</label><input type="text" id="pdSeoTitle" value="' + esc(product.seoTitle || '') + '" placeholder="Leave blank to use product name"></div>' +
-          '<div class="form-group"><label>SEO Description</label><textarea id="pdSeoDescription" rows="2" placeholder="Leave blank to use product description">' + esc(product.seoDescription || '') + '</textarea></div>' +
+      '<div style="margin-top:12px;">' +
+        '<div style="font-size:0.85rem;font-weight:600;color:var(--warm-gray);margin-bottom:8px;">SEO Settings</div>' +
+        '<div class="form-group"><label>SEO Title</label><input type="text" id="pdSeoTitle" value="' + esc(product.seoTitle || '') + '" placeholder="Leave blank to use product name"></div>' +
+        '<div class="form-group"><label>SEO Description</label><textarea id="pdSeoDescription" rows="2" placeholder="Leave blank to use product description">' + esc(product.seoDescription || '') + '</textarea></div>' +
+      '</div>' +
         '</div>' +
-      '</details>';
+      '</div>';
   } else {
     detailsHtml +=
       '<div class="product-detail-section"><div class="product-detail-section-title">Product Info</div>' +
@@ -31124,6 +31271,44 @@ function renderDashCardQuickActions() {
 
 // ─── Dashboard Card: Low Inventory ──────────────────────────
 
+async function saveDashInlineAdjust(pid) {
+  try {
+    var qtyInput = document.getElementById('dashAdjQty_' + pid);
+    var addQty = parseInt((qtyInput || {}).value) || 0;
+    if (addQty <= 0) { showToast('Enter a quantity to add', true); return; }
+
+    var inv = inventory[pid] || {};
+    var curStock = (inv && inv.stock) ? inv.stock : {};
+    var curOnHand = (curStock._default) ? (curStock._default.onHand || 0) : 0;
+    var updates = {
+      'stock/_default/onHand': curOnHand + addQty,
+      'updatedAt': new Date().toISOString()
+    };
+
+    if (!inv.stockType || inv.stockType === 'made-to-order' || inv.stockType === 'build-to-order') {
+      updates['stockType'] = 'strict';
+    }
+
+    await MastDB.inventory.ref(pid).update(updates);
+    await writeAudit('update', 'inventory', pid);
+    await MastDB.inventory.ref(pid + '/history').push({
+      action: 'restocked', reason: 'stock_received', actor: 'maker', actorType: 'maker',
+      detail: 'Added ' + addQty + ' via dashboard quick-adjust',
+      timestamp: new Date().toISOString()
+    });
+    await syncStockInfoToPublic(pid);
+
+    // Refresh local cache and re-render card
+    var snap = await MastDB.inventory.ref(pid).once('value');
+    if (snap.val()) inventory[pid] = snap.val();
+    renderDashCardLowInventory();
+    showToast('Added ' + addQty + ' to stock');
+  } catch (err) {
+    console.error('Dashboard adjust error:', err);
+    showToast('Failed to update stock', true);
+  }
+}
+
 function renderDashCardLowInventory() {
   var container = document.getElementById('dashCardLowInventory');
   if (!container) return;
@@ -31174,11 +31359,21 @@ function renderDashCardLowInventory() {
         var thumbHtml = item.image
           ? '<img class="dash-inv-thumb" src="' + esc(item.image) + '" alt="">'
           : '<div class="dash-inv-thumb"></div>';
-        contentHtml += '<div class="dash-inv-item" onclick="navigateTo(\'inventory\'); setTimeout(function(){ var el = document.querySelector(\'[data-pid=\\x27' + esc(item.pid) + '\\x27]\'); if(el) el.click(); }, 300);">' +
-          thumbHtml +
-          '<div class="dash-inv-info">' +
-            '<div class="dash-inv-name">' + esc(item.name) + '</div>' +
-            '<div class="dash-inv-stock ' + stockClass + '">' + stockLabel + '</div>' +
+        contentHtml += '<div class="dash-inv-item" data-pid="' + esc(item.pid) + '">' +
+          '<div style="display:flex;align-items:center;flex:1;min-width:0;cursor:pointer;" onclick="navigateTo(\'inventory\'); setTimeout(function(){ var el = document.querySelector(\'[data-pid=\\x27' + esc(item.pid) + '\\x27]\'); if(el) el.click(); }, 300);">' +
+            thumbHtml +
+            '<div class="dash-inv-info">' +
+              '<div class="dash-inv-name">' + esc(item.name) + '</div>' +
+              '<div class="dash-inv-stock ' + stockClass + '">' + stockLabel + '</div>' +
+            '</div>' +
+          '</div>' +
+          '<div style="display:flex;align-items:center;gap:4px;margin-left:8px;flex-shrink:0;">' +
+            '<div id="dashAdjForm_' + esc(item.pid) + '" style="display:none;align-items:center;gap:4px;">' +
+              '<input type="number" id="dashAdjQty_' + esc(item.pid) + '" min="1" value="1" style="width:50px;font-size:0.78rem;padding:3px 4px;border:1px solid var(--cream-dark);border-radius:4px;background:var(--bg);color:var(--text);">' +
+              '<button class="btn btn-primary btn-small" style="font-size:0.72rem;padding:2px 8px;" data-pid="' + esc(item.pid) + '" onclick="event.stopPropagation();saveDashInlineAdjust(this.dataset.pid);" aria-label="Confirm add stock">OK</button>' +
+              '<button class="btn btn-secondary btn-small" style="font-size:0.72rem;padding:2px 6px;" data-pid="' + esc(item.pid) + '" onclick="event.stopPropagation();document.getElementById(\'dashAdjForm_\'+this.dataset.pid).style.display=\'none\';" aria-label="Cancel">✕</button>' +
+            '</div>' +
+            '<button class="btn btn-secondary btn-small" id="dashAdjBtn_' + esc(item.pid) + '" style="font-size:0.85rem;padding:2px 8px;line-height:1;" data-pid="' + esc(item.pid) + '" onclick="event.stopPropagation();document.getElementById(\'dashAdjForm_\'+this.dataset.pid).style.display=\'flex\';this.style.display=\'none\';" aria-label="Add stock for ' + esc(item.name) + '">+</button>' +
           '</div>' +
         '</div>';
       });
