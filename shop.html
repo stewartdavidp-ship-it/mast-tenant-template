@@ -848,7 +848,7 @@ window.TENANT_READY.then(function() {
     denoms.forEach(function(cents) {
       html += '<div class="gc-denom-card" data-cents="' + cents + '" onclick="window._shopGcSelect(' + cents + ', this)">' +
         '<div class="gc-denom-icon">&#127873;</div>' +
-        '<div class="gc-denom-amount">' + esc(formatMoney(cents)) + '</div>' +
+        '<div class="gc-denom-amount">' + esc(formatCents(cents)) + '</div>' +
         '<button class="gc-denom-btn" type="button">Select</button>' +
       '</div>';
     });
@@ -859,7 +859,7 @@ window.TENANT_READY.then(function() {
           '<span class="gc-custom-prefix">$</span>' +
           '<input type="number" class="gc-custom-input" id="shopGcCustomInput" placeholder="0.00" min="' + (customMin / 100).toFixed(2) + '" max="' + (customMax / 100).toFixed(2) + '" step="0.01">' +
         '</div>' +
-        '<div class="gc-custom-range">' + esc(formatMoney(customMin)) + ' &ndash; ' + esc(formatMoney(customMax)) + '</div>' +
+        '<div class="gc-custom-range">' + esc(formatCents(customMin)) + ' &ndash; ' + esc(formatCents(customMax)) + '</div>' +
         '<button class="gc-denom-btn" type="button" onclick="window._shopGcSelectCustom()">Select</button>' +
       '</div>';
     }
@@ -1037,7 +1037,7 @@ window.TENANT_READY.then(function() {
     var panel = document.getElementById('shopGcOptions');
     if (!panel) return;
     panel.classList.add('visible');
-    document.getElementById('shopGcSelectedLabel').textContent = formatMoney(_shopGcSelectedCents) + ' Gift Card';
+    document.getElementById('shopGcSelectedLabel').textContent = formatCents(_shopGcSelectedCents) + ' Gift Card';
     document.getElementById('shopGcQtyVal').textContent = '1';
     document.getElementById('shopGcQtyMinus').disabled = true;
     document.getElementById('shopGcQtyPlus').disabled = false;
@@ -1118,8 +1118,8 @@ window.TENANT_READY.then(function() {
     if (typeof MastCart === 'undefined' || !MastCart.addItem) { console.error('[shop-gc] MastCart not available'); return; }
     MastCart.addItem({
       pid: 'gift-card-' + _shopGcSelectedCents,
-      name: 'Gift Card - ' + formatMoney(_shopGcSelectedCents),
-      price: formatMoney(_shopGcSelectedCents),
+      name: 'Gift Card - ' + formatCents(_shopGcSelectedCents),
+      price: formatCents(_shopGcSelectedCents),
       priceCents: _shopGcSelectedCents,
       image: '',
       bookingType: 'gift-card',
