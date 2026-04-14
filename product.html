@@ -1114,18 +1114,23 @@
           }
           combos = next;
         }
+        var _synthBase = (window.getProductTierPrice ? window.getProductTierPrice(p, 'retail') : null);
+        if (typeof _synthBase !== 'number' || _synthBase <= 0) _synthBase = (typeof p.priceCents === 'number' ? p.priceCents : 0);
         window._productVariants = combos.map(function(combo) {
           var idParts = Object.keys(combo).map(function(k) { return slugify(combo[k]); });
-          return { id: idParts.join('-'), options: combo, combo: combo, priceCents: (typeof p.priceCents === 'number' ? p.priceCents : 0) };
+          return { id: idParts.join('-'), options: combo, combo: combo, priceCents: _synthBase };
         });
       } else {
         window._productVariants = null;
       }
       window._resolvedVariantPrice = null;
 
-      // Price
+      // Price — Channel-First Phase 1a: resolve via tier helper (default retail), fallback to legacy priceCents
       var priceEl = document.getElementById('productPrice');
-      var pCents = (typeof p.priceCents === 'number') ? p.priceCents : 0;
+      var _resolveTier = (window.getProductTierPrice ? window.getProductTierPrice(p, 'retail') : null);
+      var pCents = (typeof _resolveTier === 'number' && _resolveTier > 0)
+        ? _resolveTier
+        : ((typeof p.priceCents === 'number') ? p.priceCents : 0);
       if (p.priceType === 'request' || (!pCents && !p.variants)) {
         priceEl.textContent = 'Price on request';
         priceEl.classList.add('no-price');
@@ -1138,7 +1143,9 @@
         var anySaleApplied = false;
         for (var vi = 0; vi < window._productVariants.length; vi++) {
           var v = window._productVariants[vi];
-          var vp = (typeof v.priceCents === 'number') ? v.priceCents : 0;
+          // Channel-First Phase 1a — prefer per-tier read on the variant; fallback to legacy priceCents
+          var vp = (window.getProductTierPrice ? window.getProductTierPrice(p, 'retail', v.id) : null);
+          if (typeof vp !== 'number' || vp <= 0) vp = (typeof v.priceCents === 'number') ? v.priceCents : 0;
           if (!vp) continue;
           if (vp < lowest) lowest = vp;
           if (_productSaleInfo) {
@@ -1346,7 +1353,9 @@
               if (allPicked) {
                 var variant = findVariant(window._productVariants, window._selectedOptions);
                 if (variant) {
-                  var vPrice = (typeof variant.priceCents === 'number') ? variant.priceCents : 0;
+                  // Channel-First Phase 1a — resolve via tier helper (default retail), fallback to legacy
+                  var vPrice = (window.getProductTierPrice ? window.getProductTierPrice(window._productData, 'retail', variant.id) : null);
+                  if (typeof vPrice !== 'number' || vPrice <= 0) vPrice = (typeof variant.priceCents === 'number') ? variant.priceCents : 0;
                   // Check variant-level sale eligibility
                   var variantOnSale = false;
                   if (window._productSaleInfo && vPrice) {
@@ -1533,7 +1542,9 @@
     var selected = window._selectedOptions || {};
     var allSelected = required.every(function(label) { return selected[label]; });
     var p = window._productData;
-    var hasPrice = p && (p.priceCents || window._resolvedVariantPrice);
+    // Channel-First Phase 1a — accept any tier price (retail/direct) or legacy priceCents
+    var _hp = p && window.getProductTierPrice ? window.getProductTierPrice(p, 'retail') : null;
+    var hasPrice = p && ((typeof _hp === 'number' && _hp > 0) || p.priceCents || window._resolvedVariantPrice);
     // If variants exist with pricing, require a resolved variant price
     if (window._productVariants && window._productVariants.length > 0) {
       hasPrice = !!window._resolvedVariantPrice;
@@ -1635,7 +1646,9 @@
     if (!p) return;
 
     var images = window._productImages || [];
-    var baseCents = window._resolvedVariantPrice || (typeof p.priceCents === 'number' ? p.priceCents : 0);
+    // Channel-First Phase 1a — base cents resolved via tier helper (retail default), fallback to legacy priceCents
+    var _baseTier = (window.getProductTierPrice ? window.getProductTierPrice(p, 'retail') : null);
+    var baseCents = window._resolvedVariantPrice || (typeof _baseTier === 'number' && _baseTier > 0 ? _baseTier : (typeof p.priceCents === 'number' ? p.priceCents : 0));
     var saleInfo = window._productSaleInfo;
     var onSale = false;
     var saleCents = null;

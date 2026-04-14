@@ -788,7 +788,9 @@ window.TENANT_READY.then(function() {
           }
           // Seconds products: hide if no price or no stock (they can't be built, only sold from inventory)
           if (cats.indexOf('seconds') !== -1) {
-            var hasPriceCents = typeof p.priceCents === 'number' && p.priceCents > 0;
+            // Channel-First Phase 1a — accept any tier price (retail/direct) or legacy priceCents
+            var _scTier = window.getProductTierPrice ? window.getProductTierPrice(p, 'retail') : null;
+            var hasPriceCents = (typeof _scTier === 'number' && _scTier > 0) || (typeof p.priceCents === 'number' && p.priceCents > 0);
             if (!hasPriceCents) return false;
             var si = p.stockInfo;
             if (si) {
@@ -933,7 +935,11 @@ window.TENANT_READY.then(function() {
       html += '<div class="product-grid">';
       items.forEach(function(product) {
         var name = product.name || '';
-        var priceCentsVal = (typeof product.priceCents === 'number') ? product.priceCents : 0;
+        // Channel-First Phase 1a — resolve via tier helper (default retail), fallback to legacy priceCents
+        var _shopTier = (window.getProductTierPrice ? window.getProductTierPrice(product, 'retail') : null);
+        var priceCentsVal = (typeof _shopTier === 'number' && _shopTier > 0)
+          ? _shopTier
+          : ((typeof product.priceCents === 'number') ? product.priceCents : 0);
         var pid = product.pid || '';
         var img = (product.images && product.images.length > 0) ? (typeof product.images[0] === 'string' ? product.images[0] : (product.images[0].url || '')) : '';
         var link = pid ? 'product.html?id=' + encodeURIComponent(pid) : 'shop.html';
@@ -966,7 +972,9 @@ window.TENANT_READY.then(function() {
             var minOriginal = Infinity;
             for (var vi = 0; vi < product.variants.length; vi++) {
               var v = product.variants[vi];
-              var vp = (typeof v.priceCents === 'number') ? v.priceCents : priceCentsVal;
+              // Channel-First Phase 1a — variant tier resolve, fallback to legacy priceCents then base
+              var vp = (window.getProductTierPrice ? window.getProductTierPrice(product, 'retail', v.id) : null);
+              if (typeof vp !== 'number' || vp <= 0) vp = (typeof v.priceCents === 'number') ? v.priceCents : priceCentsVal;
               if (typeof vp !== 'number') continue;
               if (vp < minOriginal) minOriginal = vp;
               var vKey = v.combo ? Object.values(v.combo).join('|') : (v.name || '');

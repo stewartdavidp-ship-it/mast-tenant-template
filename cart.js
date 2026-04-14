@@ -10,6 +10,32 @@
 (function () {
   'use strict';
 
+  // ── Channel-First Phase 1a — tier price resolver (window-scoped for all storefront pages) ──
+  // tier ∈ 'wholesale' | 'direct' | 'retail' (default 'retail').
+  // variantId optional; when matched, reads from the variant; else from the product.
+  // Read order: tier-specific field → (retail/direct only) other tier fields → legacy priceCents.
+  // Wholesale never falls through to retail/direct (different price). Returns cents or null.
+  if (!window.getProductTierPrice) {
+    window.getProductTierPrice = function (product, tier, variantId) {
+      if (!product) return null;
+      tier = tier || 'retail';
+      var target = product;
+      if (variantId && Array.isArray(product.variants)) {
+        for (var i = 0; i < product.variants.length; i++) {
+          if (product.variants[i] && product.variants[i].id === variantId) { target = product.variants[i]; break; }
+        }
+      }
+      var fieldByTier = { wholesale: 'wholesalePriceCents', direct: 'directPriceCents', retail: 'retailPriceCents' };
+      var primary = fieldByTier[tier];
+      if (primary && typeof target[primary] === 'number' && target[primary] > 0) return target[primary];
+      if (tier === 'wholesale') return null;
+      if (typeof target.retailPriceCents === 'number' && target.retailPriceCents > 0) return target.retailPriceCents;
+      if (typeof target.directPriceCents === 'number' && target.directPriceCents > 0) return target.directPriceCents;
+      if (typeof target.priceCents === 'number' && target.priceCents > 0) return target.priceCents;
+      return null;
+    };
+  }
+
   // ── Constants ──
   // These are set lazily in init() after TENANT_READY resolves
   var STORAGE_KEY = 'mast_cart'; // default; overwritten in init()

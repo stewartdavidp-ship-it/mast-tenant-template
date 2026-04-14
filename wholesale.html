@@ -720,15 +720,21 @@
       ? '<img class="ws-card-img" src="' + esc(typeof p.images[0] === 'string' ? p.images[0] : (p.images[0].url || '')) + '" alt="' + esc(p.name) + '" loading="lazy">'
       : '<div class="ws-card-img-placeholder">&#9670;</div>';
 
-    // Price display — prefer new variant-level wholesale prices, fallback to legacy
+    // Price display — Channel-First Phase 1a: tier helper for wholesale, fallback chain preserved
     var priceHtml = '';
     var hasVariantWsPrices = Array.isArray(p.variants) && p.variants.some(function(v) { return v.wholesalePriceCents > 0; });
     if (hasVariantWsPrices) {
-      // New model: show range from variant wholesale prices
-      var wsPrices = p.variants.filter(function(v) { return v.wholesalePriceCents > 0; }).map(function(v) { return v.wholesalePriceCents; });
-      var minWs = Math.min.apply(null, wsPrices);
-      var maxWs = Math.max.apply(null, wsPrices);
-      priceHtml = minWs === maxWs ? '$' + (minWs / 100).toFixed(0) : '$' + (minWs / 100).toFixed(0) + ' – $' + (maxWs / 100).toFixed(0);
+      // Variant-level wholesale prices via tier helper (returns null if not wholesale-priced)
+      var wsPrices = [];
+      p.variants.forEach(function(v) {
+        var c = window.getProductTierPrice ? window.getProductTierPrice(p, 'wholesale', v.id) : v.wholesalePriceCents;
+        if (typeof c === 'number' && c > 0) wsPrices.push(c);
+      });
+      if (wsPrices.length > 0) {
+        var minWs = Math.min.apply(null, wsPrices);
+        var maxWs = Math.max.apply(null, wsPrices);
+        priceHtml = minWs === maxWs ? '$' + (minWs / 100).toFixed(0) : '$' + (minWs / 100).toFixed(0) + ' – $' + (maxWs / 100).toFixed(0);
+      }
     } else if (p.wholesalePriceVariants) {
       // Legacy model: wpid-keyed variant prices
       var prices = [];
@@ -737,10 +743,11 @@
         prices.push(label + ': $' + (p.wholesalePriceVariants[k] / 100).toFixed(0));
       });
       priceHtml = prices.join(' / ');
-    } else if (p.wholesalePriceCents) {
-      priceHtml = '$' + (p.wholesalePriceCents / 100).toFixed(0);
     } else {
-      priceHtml = 'Price TBD';
+      var pTierWs = window.getProductTierPrice ? window.getProductTierPrice(p, 'wholesale') : (p.wholesalePriceCents || null);
+      priceHtml = (typeof pTierWs === 'number' && pTierWs > 0)
+        ? '$' + (pTierWs / 100).toFixed(0)
+        : 'Price TBD';
     }
 
     // Variant chips
@@ -849,18 +856,24 @@
 
     var opts = selectedOptions[pid] || {};
 
-    // Determine wholesale price — prefer new variant model, fallback to legacy
-    var priceCents = p.wholesalePriceCents;
+    // Determine wholesale price — Channel-First Phase 1a: tier helper, fallback to legacy
+    var priceCents = window.getProductTierPrice ? window.getProductTierPrice(p, 'wholesale') : p.wholesalePriceCents;
     if (Array.isArray(p.variants) && p.variants.length > 0 && Object.keys(opts).length > 0) {
-      // New model: match variant by combo object
+      // Match variant by combo object, then ask helper for the variant's wholesale price
       var match = p.variants.find(function(v) {
         if (!v.combo) return false;
         return Object.keys(opts).every(function(k) { return v.combo[k] === opts[k]; });
       });
-      if (match && match.wholesalePriceCents > 0) {
+      if (match && match.id && window.getProductTierPrice) {
+        var vWs = window.getProductTierPrice(p, 'wholesale', match.id);
+        if (typeof vWs === 'number' && vWs > 0) {
+          priceCents = vWs;
+        } else if (match.priceCents > 0 && !priceCents) {
+          priceCents = match.priceCents; // last-resort retail fallback when no wholesale set anywhere
+        }
+      } else if (match && match.wholesalePriceCents > 0) {
         priceCents = match.wholesalePriceCents;
       } else if (match && match.priceCents > 0 && !priceCents) {
-        // Fallback to retail if no wholesale variant price set
         priceCents = match.priceCents;
       }
     } else if (p.wholesalePriceVariants && opts.Size) {

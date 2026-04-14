@@ -22811,6 +22811,32 @@ function parsePriceToCents(str) {
   return isNaN(parsed) ? null : Math.round(parsed * 100);
 }
 
+// Channel-First Phase 1a — Resolve a per-tier price for a product (or a specific variant).
+// tier ∈ 'wholesale' | 'direct' | 'retail' (default 'retail').
+// variantId optional: when provided and matched, reads from the variant; else from the product.
+// Read order: tier-specific field on target → (for retail/direct) other tier fields → legacy priceCents.
+// Wholesale never falls through to retail/direct (those are different prices); returns null if no wholesale set.
+// Always returns a number (cents) or null — never undefined when priceCents exists.
+function getProductTierPrice(product, tier, variantId) {
+  if (!product) return null;
+  tier = tier || 'retail';
+  var target = product;
+  if (variantId && Array.isArray(product.variants)) {
+    for (var i = 0; i < product.variants.length; i++) {
+      if (product.variants[i] && product.variants[i].id === variantId) { target = product.variants[i]; break; }
+    }
+  }
+  var fieldByTier = { wholesale: 'wholesalePriceCents', direct: 'directPriceCents', retail: 'retailPriceCents' };
+  var primary = fieldByTier[tier];
+  if (primary && typeof target[primary] === 'number' && target[primary] > 0) return target[primary];
+  if (tier === 'wholesale') return null;
+  if (typeof target.retailPriceCents === 'number' && target.retailPriceCents > 0) return target.retailPriceCents;
+  if (typeof target.directPriceCents === 'number' && target.directPriceCents > 0) return target.directPriceCents;
+  if (typeof target.priceCents === 'number' && target.priceCents > 0) return target.priceCents;
+  return null;
+}
+window.getProductTierPrice = getProductTierPrice;
+
 // ---------------------------------------------------------------------------
 // PIM Adapter v1 — Bulk Publish to Shopify (Build 4)
 // ---------------------------------------------------------------------------
@@ -23636,6 +23662,11 @@ function renderProductDetail(pid) {
     ? (product.priceCents / 100).toFixed(2)
     : '';
 
+  var currentRetailPrice = product.retailPriceCents != null
+    ? (product.retailPriceCents / 100).toFixed(2) : '';
+  var currentDirectPrice = product.directPriceCents != null
+    ? (product.directPriceCents / 100).toFixed(2) : '';
+
   var detailsHtml = '<div class="pd-tab-content" data-tab="details" style="' + (tab !== 'details' ? 'display:none;' : '') + 'padding:16px 0;">';
   if (isEditing) {
     detailsHtml +=
@@ -23646,11 +23677,16 @@ function renderProductDetail(pid) {
         '<div class="form-group" style="min-width:150px;"><label>Category</label><select id="pdCategory">' +
           catOptions.map(function(c) { return '<option value="' + c + '"' + (product.categories && product.categories.indexOf(c) !== -1 ? ' selected' : '') + '>' + c.charAt(0).toUpperCase() + c.slice(1) + '</option>'; }).join('') +
         '</select></div>' +
-        '<div class="form-group" style="min-width:120px;"><label>Price ($)' + (function() {
+        '<div class="form-group" style="min-width:120px;"><label>Retail Price ($)' + (function() {
           var drift = product.recipeId ? window.__mastRecipeDrift[product.recipeId] : null;
           if (drift && drift.retail) return renderDriftBadge(drift.retail.driftPct, drift.retail.recipeCents);
           return '';
-        })() + '</label><input type="text" id="pdPrice" value="' + esc(currentPrice) + '" placeholder="45.00"></div>' +
+        })() + '</label><input type="text" id="pdPrice" value="' + esc(currentRetailPrice || currentPrice) + '" placeholder="45.00"></div>' +
+        '<div class="form-group" style="min-width:120px;"><label>Direct Price ($)' + (function() {
+          var drift = product.recipeId ? window.__mastRecipeDrift[product.recipeId] : null;
+          if (drift && drift.direct) return renderDriftBadge(drift.direct.driftPct, drift.direct.recipeCents);
+          return '';
+        })() + '</label><input type="text" id="pdDirectPrice" value="' + esc(currentDirectPrice) + '" placeholder="optional"></div>' +
         '<div class="form-group" style="min-width:120px;"><label>Availability</label><select id="pdAvailability">' +
           '<option value="available"' + (product.availability !== 'discontinued' ? ' selected' : '') + '>Available</option>' +
           '<option value="discontinued"' + (product.availability === 'discontinued' ? ' selected' : '') + '>Discontinued</option>' +
@@ -24328,7 +24364,8 @@ function pdBuildVariantGridHtml(labels, combos, productImages, existingVariants)
     '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;">' +
     '<thead><tr style="border-bottom:2px solid var(--cream-dark);">';
   labels.forEach(function(l) { html += '<th style="text-align:left;padding:8px 12px;color:var(--warm-gray);font-weight:600;">' + esc(l) + '</th>'; });
-  html += '<th style="text-align:right;padding:8px 12px;color:var(--warm-gray);font-weight:600;">Price ($)</th>' +
+  html += '<th style="text-align:right;padding:8px 12px;color:var(--warm-gray);font-weight:600;">Retail ($)</th>' +
+    '<th style="text-align:right;padding:8px 12px;color:var(--warm-gray);font-weight:600;">Direct ($)</th>' +
     '<th class="pd-ws-col" style="text-align:right;padding:8px 12px;color:var(--warm-gray);font-weight:600;' + (wsEnabled ? '' : 'display:none;') + '">Wholesale ($)</th>' +
     '<th style="text-align:left;padding:8px 12px;color:var(--warm-gray);font-weight:600;">Image</th>' +
     '</tr></thead><tbody>';
@@ -24338,7 +24375,10 @@ function pdBuildVariantGridHtml(labels, combos, productImages, existingVariants)
     var match = (existingVariants || []).find(function(v) {
       return v.combo && labels.every(function(l) { return v.combo[l] === comboObj[l]; });
     });
-    var existingPrice = match && match.priceCents ? (match.priceCents / 100).toFixed(2) : '';
+    // Retail = retailPriceCents (new) ?? legacy priceCents fallback
+    var existingRetailCents = match ? (match.retailPriceCents != null ? match.retailPriceCents : match.priceCents) : null;
+    var existingPrice = (existingRetailCents != null && existingRetailCents > 0) ? (existingRetailCents / 100).toFixed(2) : '';
+    var existingDirectPrice = match && match.directPriceCents > 0 ? (match.directPriceCents / 100).toFixed(2) : '';
     var existingWsPrice = match && match.wholesalePriceCents ? (match.wholesalePriceCents / 100).toFixed(2) : '';
     var existingImageIdx = (match && typeof match.imageIndex === 'number') ? match.imageIndex : -1;
     var comboKeyAttr = esc(JSON.stringify(comboObj));
@@ -24347,6 +24387,11 @@ function pdBuildVariantGridHtml(labels, combos, productImages, existingVariants)
     html += '<td style="text-align:right;padding:4px 12px;">' +
       '<input type="text" class="pd-variant-price" data-combo=\'' + comboKeyAttr + '\' ' +
       'value="' + existingPrice + '" placeholder="0.00" ' +
+      'style="width:100px;text-align:right;padding:4px 8px;font-size:0.85rem;float:right;">' +
+    '</td>';
+    html += '<td style="text-align:right;padding:4px 12px;">' +
+      '<input type="text" class="pd-variant-direct-price" data-combo=\'' + comboKeyAttr + '\' ' +
+      'value="' + existingDirectPrice + '" placeholder="opt" ' +
       'style="width:100px;text-align:right;padding:4px 8px;font-size:0.85rem;float:right;">' +
     '</td>';
     html += '<td class="pd-ws-col" style="text-align:right;padding:4px 12px;' + (wsEnabled ? '' : 'display:none;') + '">' +
@@ -24417,11 +24462,16 @@ function pdRebuildVariantGrid() {
   if (labels.length === 0) combos = [];
   // Snapshot current prices + image indexes from existing grid so we can preserve them
   var priceByCombo = {};
+  var directPriceByCombo = {};
   var wsPriceByCombo = {};
   var imgByCombo = {};
   container.querySelectorAll('.pd-variant-price').forEach(function(inp) {
     var k = inp.getAttribute('data-combo');
     if (k) priceByCombo[k] = inp.value;
+  });
+  container.querySelectorAll('.pd-variant-direct-price').forEach(function(inp) {
+    var k = inp.getAttribute('data-combo');
+    if (k) directPriceByCombo[k] = inp.value;
   });
   container.querySelectorAll('.pd-variant-ws-price').forEach(function(inp) {
     var k = inp.getAttribute('data-combo');
@@ -24439,12 +24489,18 @@ function pdRebuildVariantGrid() {
     labels.forEach(function(l, i) { obj[l] = combo[i]; });
     var key = JSON.stringify(obj);
     var price = priceByCombo[key];
+    var directPrice = directPriceByCombo[key];
     var wsPrice = wsPriceByCombo[key];
     var imgStr = imgByCombo[key];
     var v = { combo: obj };
     if (price) {
       var parsed = parsePriceToCents(price);
-      if (parsed !== null) v.priceCents = parsed;
+      // The Retail input feeds both legacy priceCents and new retailPriceCents
+      if (parsed !== null) { v.priceCents = parsed; v.retailPriceCents = parsed; }
+    }
+    if (directPrice) {
+      var dParsed = parsePriceToCents(directPrice);
+      if (dParsed !== null) v.directPriceCents = dParsed;
     }
     if (wsPrice) {
       var wsParsed = parsePriceToCents(wsPrice);
@@ -24481,8 +24537,13 @@ async function saveProduct(pid) {
       showToast('Product name is required', true); return;
     }
 
+    // Channel-First Phase 1a — primary "Price" input now represents the Retail tier;
+    // Direct is captured separately. priceCents stays as legacy fallback (== retail).
     var priceStr = document.getElementById('pdPrice').value.trim();
-    var priceCents = parsePriceToCents(priceStr);
+    var retailPriceCents = parsePriceToCents(priceStr);
+    var priceCents = retailPriceCents;
+    var directPriceStr = ((document.getElementById('pdDirectPrice') || {}).value || '').trim();
+    var directPriceCents = directPriceStr ? parsePriceToCents(directPriceStr) : null;
     var isWholesale = !!(document.getElementById('pdIsWholesale') || {}).checked;
     var wholesalePriceStr = (document.getElementById('pdWholesalePrice') || {}).value || '';
     var wholesalePriceCents = isWholesale ? parsePriceToCents(wholesalePriceStr.trim()) : null;
@@ -24541,8 +24602,15 @@ async function saveProduct(pid) {
             var keys = Object.keys(combo);
             return keys.length === Object.keys(v.combo).length && keys.every(function(k) { return v.combo[k] === combo[k]; });
           });
-          var variant = { combo: combo, priceCents: priceVal };
+          // Channel-First Phase 1a — Retail input is the primary; mirror to retailPriceCents.
+          var variant = { combo: combo, priceCents: priceVal, retailPriceCents: priceVal };
           if (existing && existing.id) variant.id = existing.id;
+          // Read direct price from sibling input
+          var directInput = document.querySelector('.pd-variant-direct-price[data-combo=\'' + input.getAttribute('data-combo') + '\']');
+          if (directInput && directInput.value.trim()) {
+            var dPriceVal = parsePriceToCents(directInput.value);
+            if (dPriceVal !== null && dPriceVal > 0) variant.directPriceCents = dPriceVal;
+          }
           // Read wholesale price from sibling input
           var wsInput = document.querySelector('.pd-variant-ws-price[data-combo=\'' + input.getAttribute('data-combo') + '\']');
           if (isWholesale && wsInput && wsInput.value.trim()) {
@@ -24571,6 +24639,13 @@ async function saveProduct(pid) {
       // Only override base price if user didn't manually enter one, or if lowest variant is lower
       if (priceCents === null || lowestVariantPrice < priceCents) {
         priceCents = lowestVariantPrice;
+        retailPriceCents = lowestVariantPrice;
+      }
+      // Direct: lowest of any variants that set a directPriceCents
+      var dVariants = variants.filter(function(v) { return v.directPriceCents > 0; });
+      if (dVariants.length > 0) {
+        var lowestDirect = Math.min.apply(null, dVariants.map(function(v) { return v.directPriceCents; }));
+        if (directPriceCents === null || lowestDirect < directPriceCents) directPriceCents = lowestDirect;
       }
       // Auto-set wholesale base price from variants (lowest with a wholesale price)
       if (isWholesale) {
@@ -24609,6 +24684,11 @@ async function saveProduct(pid) {
       variants: variants.length > 0 ? variants : null,
       priceType: priceType,
       priceCents: priceCents,
+      // Channel-First Phase 1a — explicit tier fields. retail mirrors priceCents
+      // by default; backfill below ensures retailPriceCents is set whenever
+      // priceCents is, so legacy callers that update priceCents alone heal on save.
+      retailPriceCents: (retailPriceCents !== null && retailPriceCents !== undefined) ? retailPriceCents : (priceCents != null ? priceCents : null),
+      directPriceCents: directPriceCents,
       isWholesale: isWholesale,
       wholesalePriceCents: wholesalePriceCents,
       etsyListingId: etsyId,
