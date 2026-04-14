@@ -2138,7 +2138,7 @@
 
     body.innerHTML = html;
 
-    // Wire wallet toggle
+    // Wire wallet toggle — re-render review so banner/button state stays in sync
     var walletToggle = body.querySelector('[data-co="wallet-toggle"]');
     if (walletToggle) {
       walletToggle.addEventListener('change', function() {
@@ -2146,7 +2146,12 @@
         checkoutData._walletConfirmed = false; // re-require confirmation
         // Also re-apply to credits with the same toggle (keep UX simple)
         checkoutData.walletCreditApplied = this.checked;
-        debouncedBreakdownRefresh();
+        // Remove stale banner/button-label state before re-render picks the correct one
+        var staleBanner = document.getElementById('walletCoveredBanner');
+        if (staleBanner) staleBanner.remove();
+        var staleBtn = document.querySelector('[data-co="place-order"]');
+        if (staleBtn) staleBtn.removeAttribute('data-wallet-covered');
+        renderReview();
       });
     }
 
