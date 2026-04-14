@@ -20540,6 +20540,184 @@ function debouncedProductSearch() {
   _productSearchTimer = setTimeout(renderProducts, 300);
 }
 
+// ── Phase 4: Inline edit helpers for product grid ──
+
+function startInlinePrice(el, pid, e) {
+  e.stopPropagation();
+  var product = productsData.find(function(p) { return p.pid === pid; });
+  if (!product) return;
+  var currentPrice = product.priceCents ? (product.priceCents / 100).toFixed(2) : '';
+  el.innerHTML = '<input type="text" class="inline-price-input" value="' + esc(currentPrice) + '" ' +
+    'data-pid="' + esc(pid) + '" ' +
+    'onclick="event.stopPropagation()" ' +
+    'onkeydown="if(event.key===\'Enter\'){saveInlinePrice(this);} if(event.key===\'Escape\'){cancelInlinePrice(this);}" ' +
+    'onblur="saveInlinePrice(this)" ' +
+    'style="width:70px;font-size:0.85rem;padding:2px 6px;text-align:right;border:1px solid var(--amber);border-radius:4px;background:var(--bg);color:var(--text);">';
+  var input = el.querySelector('input');
+  if (input) { input.focus(); input.select(); }
+}
+
+async function saveInlinePrice(input) {
+  var pid = input.dataset.pid;
+  var product = productsData.find(function(p) { return p.pid === pid; });
+  if (!product) return;
+  var newCents = parsePriceToCents(input.value);
+  if (newCents === null || newCents === product.priceCents) {
+    renderProducts();
+    return;
+  }
+  try {
+    // Update price + history
+    var priceHistory = (product.priceHistory || []).slice();
+    var lastPrice = priceHistory.length > 0 ? priceHistory[priceHistory.length - 1].value : null;
+    if (lastPrice !== newCents) {
+      priceHistory.push({ value: newCents, effectiveDate: new Date().toISOString().split('T')[0], changedBy: 'admin' });
+    }
+    await MastDB.products.ref(pid).update({ priceCents: newCents, priceHistory: priceHistory });
+    await writeAudit('update', 'products', pid);
+    // Update local data
+    product.priceCents = newCents;
+    product.priceHistory = priceHistory;
+    renderProducts();
+    showToast('Price updated');
+  } catch (err) {
+    console.error('Inline price save error:', err);
+    showToast('Failed to save price', true);
+    renderProducts();
+  }
+}
+
+function cancelInlinePrice(input) {
+  input.onblur = null;
+  renderProducts();
+}
+
+function showStatusDropdown(el, pid, e) {
+  e.stopPropagation();
+  // Remove any existing dropdown
+  var existing = document.querySelector('.inline-status-dropdown');
+  if (existing) existing.remove();
+  var product = productsData.find(function(p) { return p.pid === pid; });
+  if (!product) return;
+  var current = product.availability || 'available';
+  var options = [
+    { value: 'available', label: 'Available', badge: 'in-stock' },
+    { value: 'draft', label: 'Draft', badge: 'low-stock' },
+    { value: 'discontinued', label: 'Discontinued', badge: 'out-of-stock' }
+  ];
+  var dd = document.createElement('div');
+  dd.className = 'inline-status-dropdown';
+  dd.style.cssText = 'position:absolute;z-index:100;background:var(--surface-card,var(--cream));border:1px solid var(--cream-dark);border-radius:8px;padding:4px 0;box-shadow:0 4px 12px rgba(0,0,0,0.3);min-width:130px;';
+  dd.onclick = function(ev) { ev.stopPropagation(); };
+  options.forEach(function(opt) {
+    var item = document.createElement('div');
+    item.style.cssText = 'padding:6px 12px;cursor:pointer;font-size:0.78rem;display:flex;align-items:center;gap:6px;' + (opt.value === current ? 'font-weight:600;' : '');
+    item.innerHTML = '<span class="status-badge stock-badge ' + opt.badge + '" style="font-size:0.72rem;">' + opt.label + '</span>';
+    item.onmouseenter = function() { this.style.background = 'var(--cream-dark)'; };
+    item.onmouseleave = function() { this.style.background = ''; };
+    item.onclick = function(ev) { ev.stopPropagation(); dd.remove(); saveInlineStatus(pid, opt.value); };
+    dd.appendChild(item);
+  });
+  el.style.position = 'relative';
+  el.appendChild(dd);
+  // Close on outside click
+  setTimeout(function() {
+    document.addEventListener('click', function closeDd() {
+      dd.remove();
+      document.removeEventListener('click', closeDd);
+    }, { once: true });
+  }, 0);
+}
+
+async function saveInlineStatus(pid, newStatus) {
+  var product = productsData.find(function(p) { return p.pid === pid; });
+  if (!product) return;
+  if (newStatus === 'discontinued' && product.availability !== 'discontinued') {
+    var confirmed = await mastConfirm('Archive this product as Discontinued?');
+    if (!confirmed) return;
+  }
+  try {
+    var updates = { availability: newStatus };
+    if (newStatus === 'discontinued' && !product.discontinuedAt) {
+      updates.discontinuedAt = new Date().toISOString().split('T')[0];
+    } else if (newStatus !== 'discontinued') {
+      updates.discontinuedAt = null;
+    }
+    await MastDB.products.ref(pid).update(updates);
+    await writeAudit('update', 'products', pid);
+    product.availability = newStatus;
+    if (updates.discontinuedAt) product.discontinuedAt = updates.discontinuedAt;
+    renderProducts();
+    showToast('Status updated');
+  } catch (err) {
+    console.error('Inline status save error:', err);
+    showToast('Failed to update status', true);
+  }
+}
+
+function showCardStockAdjust(el, pid, e) {
+  e.stopPropagation();
+  var existing = document.querySelector('.inline-stock-popover');
+  if (existing) existing.remove();
+  var inv = inventory[pid] || {};
+  var totals = getInventoryTotals(inv);
+  var product = productsData.find(function(p) { return p.pid === pid; });
+  var pop = document.createElement('div');
+  pop.className = 'inline-stock-popover';
+  pop.style.cssText = 'position:absolute;z-index:100;background:var(--surface-card,var(--cream));border:1px solid var(--cream-dark);border-radius:8px;padding:10px 12px;box-shadow:0 4px 12px rgba(0,0,0,0.3);min-width:160px;bottom:100%;left:0;margin-bottom:4px;';
+  pop.onclick = function(ev) { ev.stopPropagation(); };
+  pop.innerHTML =
+    '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:6px;">Current: ' + totals.onHand + ' on hand</div>' +
+    '<div style="display:flex;gap:6px;align-items:center;">' +
+      '<span style="font-size:0.78rem;">Add:</span>' +
+      '<input type="number" id="cardStockAdj_' + esc(pid) + '" value="1" min="1" style="width:50px;font-size:0.78rem;padding:3px 4px;border:1px solid var(--cream-dark);border-radius:4px;background:var(--bg);color:var(--text);" onclick="event.stopPropagation()">' +
+      '<button class="btn btn-primary btn-small" style="font-size:0.72rem;padding:2px 8px;" onclick="event.stopPropagation();saveCardStockAdjust(\'' + esc(pid) + '\')">OK</button>' +
+    '</div>';
+  el.style.position = 'relative';
+  el.appendChild(pop);
+  setTimeout(function() {
+    document.addEventListener('click', function closePop() {
+      pop.remove();
+      document.removeEventListener('click', closePop);
+    }, { once: true });
+  }, 0);
+}
+
+async function saveCardStockAdjust(pid) {
+  try {
+    var input = document.getElementById('cardStockAdj_' + pid);
+    var addQty = parseInt((input || {}).value) || 0;
+    if (addQty <= 0) { showToast('Enter a quantity to add', true); return; }
+    var inv = inventory[pid] || {};
+    var curStock = (inv && inv.stock) ? inv.stock : {};
+    var curOnHand = (curStock._default) ? (curStock._default.onHand || 0) : 0;
+    var updates = {
+      'stock/_default/onHand': curOnHand + addQty,
+      'updatedAt': new Date().toISOString()
+    };
+    if (!inv.stockType || inv.stockType === 'made-to-order' || inv.stockType === 'build-to-order') {
+      updates['stockType'] = 'strict';
+    }
+    await MastDB.inventory.ref(pid).update(updates);
+    await writeAudit('update', 'inventory', pid);
+    await MastDB.inventory.ref(pid + '/history').push({
+      action: 'restocked', reason: 'stock_received', actor: 'maker', actorType: 'maker',
+      detail: 'Added ' + addQty + ' via product card quick-adjust',
+      timestamp: new Date().toISOString()
+    });
+    await syncStockInfoToPublic(pid);
+    var snap = await MastDB.inventory.ref(pid).once('value');
+    if (snap.val()) inventory[pid] = snap.val();
+    var pop = document.querySelector('.inline-stock-popover');
+    if (pop) pop.remove();
+    renderProducts();
+    showToast('Added ' + addQty + ' to stock');
+  } catch (err) {
+    console.error('Card stock adjust error:', err);
+    showToast('Failed to update stock', true);
+  }
+}
+
 function renderProducts() {
   var cat = document.getElementById('productsCategory').value;
   var searchInput = document.getElementById('productsSearchInput');
@@ -20560,8 +20738,8 @@ function renderProducts() {
   filtered.forEach(function(p) {
     var imgSrc = firstProductImage(p);
     var priceHtml = p.priceCents
-      ? '<div class="product-card-price">' + formatPriceCents(p.priceCents) + '</div>'
-      : '<div class="product-card-price no-price">Price on request</div>';
+      ? '<div class="product-card-price" style="cursor:pointer;" title="Click to edit price" data-pid="' + esc(p.pid) + '" onclick="startInlinePrice(this,this.dataset.pid,event)">' + formatPriceCents(p.priceCents) + '</div>'
+      : '<div class="product-card-price no-price" style="cursor:pointer;" title="Click to set price" data-pid="' + esc(p.pid) + '" onclick="startInlinePrice(this,this.dataset.pid,event)">Price on request</div>';
 
     var catsHtml = '';
     if (p.categories && p.categories.length) {
@@ -20581,10 +20759,19 @@ function renderProducts() {
 
     var imgCount = (p.images && p.images.length) ? p.images.length : 0;
 
-    // Availability badge
+    // Availability badge (click to toggle status)
     var availBadge = '';
-    if (p.availability === 'discontinued') {
-      availBadge = '<span class="status-badge stock-badge out-of-stock" style="font-size:0.72rem;">Discontinued</span> ';
+    var availClass = p.availability === 'discontinued' ? 'out-of-stock' : (p.availability === 'draft' ? 'low-stock' : '');
+    var availLabel = p.availability === 'discontinued' ? 'Discontinued' : (p.availability === 'draft' ? 'Draft' : '');
+    if (availLabel) {
+      availBadge = '<span style="position:relative;display:inline-block;" data-pid="' + esc(p.pid) + '" onclick="showStatusDropdown(this,this.dataset.pid,event)">' +
+        '<span class="status-badge stock-badge ' + availClass + '" style="font-size:0.72rem;cursor:pointer;" title="Click to change status">' + availLabel + '</span>' +
+      '</span> ';
+    } else {
+      // Active products: show a subtle status dot that's clickable
+      availBadge = '<span style="position:relative;display:inline-block;" data-pid="' + esc(p.pid) + '" onclick="showStatusDropdown(this,this.dataset.pid,event)">' +
+        '<span class="status-badge stock-badge in-stock" style="font-size:0.72rem;cursor:pointer;opacity:0.7;" title="Click to change status">Active</span>' +
+      '</span> ';
     }
 
     // Business line badge
@@ -20631,7 +20818,12 @@ function renderProducts() {
       qtyHtml = ' <span class="stock-reserved" style="font-size:0.78rem;">' + onHand + ' on hand' +
         (committed > 0 ? ' · ' + committed + ' committed' : '') + '</span>';
     }
-    invHtml = '<div class="product-inventory">' + invHtml + qtyHtml + '</div>';
+    var isBTO = (stockType === 'build-to-order' || stockType === 'made-to-order');
+    if (!isBTO) {
+      invHtml = '<div class="product-inventory" style="position:relative;cursor:pointer;" title="Click to adjust stock" data-pid="' + esc(p.pid) + '" onclick="showCardStockAdjust(this,this.dataset.pid,event)">' + invHtml + qtyHtml + '</div>';
+    } else {
+      invHtml = '<div class="product-inventory">' + invHtml + qtyHtml + '</div>';
+    }
 
     html += '<div class="product-card" style="cursor:pointer;" onclick="viewProduct(\'' + esc(p.pid) + '\')">'
       + (imgSrc ? '<img class="product-card-img" src="' + esc(imgSrc) + '" alt="' + esc(p.name) + '" loading="lazy">' : '<div class="product-card-img"></div>')
