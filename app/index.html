@@ -23623,7 +23623,7 @@ function renderProductDetail(pid) {
           '<option value="production"' + ((product.businessLine || 'production') === 'production' ? ' selected' : '') + '>Production</option>' +
           '<option value="sculpture"' + (product.businessLine === 'sculpture' ? ' selected' : '') + '>Sculpture</option>' +
         '</select></div>' : '') +
-      '</div>' +
+      '</div>';
     // ── Advanced Settings (collapsible) ──
     var advCollapsed = sessionStorage.getItem('productAdvancedCollapsed') !== 'false';
     detailsHtml +=
