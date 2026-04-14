@@ -724,10 +724,10 @@
     var priceHtml = '';
     var hasVariantWsPrices = Array.isArray(p.variants) && p.variants.some(function(v) { return v.wholesalePriceCents > 0; });
     if (hasVariantWsPrices) {
-      // Variant-level wholesale prices via tier helper (returns null if not wholesale-priced)
+      // Variant-level wholesale prices via tier helper (pass variant obj to support legacy data without IDs)
       var wsPrices = [];
       p.variants.forEach(function(v) {
-        var c = window.getProductTierPrice ? window.getProductTierPrice(p, 'wholesale', v.id) : v.wholesalePriceCents;
+        var c = window.getProductTierPrice ? window.getProductTierPrice(p, 'wholesale', v) : v.wholesalePriceCents;
         if (typeof c === 'number' && c > 0) wsPrices.push(c);
       });
       if (wsPrices.length > 0) {
@@ -864,8 +864,8 @@
         if (!v.combo) return false;
         return Object.keys(opts).every(function(k) { return v.combo[k] === opts[k]; });
       });
-      if (match && match.id && window.getProductTierPrice) {
-        var vWs = window.getProductTierPrice(p, 'wholesale', match.id);
+      if (match && window.getProductTierPrice) {
+        var vWs = window.getProductTierPrice(p, 'wholesale', match);
         if (typeof vWs === 'number' && vWs > 0) {
           priceCents = vWs;
         } else if (match.priceCents > 0 && !priceCents) {

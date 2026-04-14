@@ -1143,8 +1143,8 @@
         var anySaleApplied = false;
         for (var vi = 0; vi < window._productVariants.length; vi++) {
           var v = window._productVariants[vi];
-          // Channel-First Phase 1a — prefer per-tier read on the variant; fallback to legacy priceCents
-          var vp = (window.getProductTierPrice ? window.getProductTierPrice(p, 'retail', v.id) : null);
+          // Channel-First Phase 1a — pass variant object so legacy data (no v.id) still resolves correctly
+          var vp = (window.getProductTierPrice ? window.getProductTierPrice(p, 'retail', v) : null);
           if (typeof vp !== 'number' || vp <= 0) vp = (typeof v.priceCents === 'number') ? v.priceCents : 0;
           if (!vp) continue;
           if (vp < lowest) lowest = vp;
@@ -1353,8 +1353,8 @@
               if (allPicked) {
                 var variant = findVariant(window._productVariants, window._selectedOptions);
                 if (variant) {
-                  // Channel-First Phase 1a — resolve via tier helper (default retail), fallback to legacy
-                  var vPrice = (window.getProductTierPrice ? window.getProductTierPrice(window._productData, 'retail', variant.id) : null);
+                  // Channel-First Phase 1a — pass variant object so legacy data (no variant.id) still resolves
+                  var vPrice = (window.getProductTierPrice ? window.getProductTierPrice(window._productData, 'retail', variant) : null);
                   if (typeof vPrice !== 'number' || vPrice <= 0) vPrice = (typeof variant.priceCents === 'number') ? variant.priceCents : 0;
                   // Check variant-level sale eligibility
                   var variantOnSale = false;

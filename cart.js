@@ -12,17 +12,21 @@
 
   // ── Channel-First Phase 1a — tier price resolver (window-scoped for all storefront pages) ──
   // tier ∈ 'wholesale' | 'direct' | 'retail' (default 'retail').
-  // variantId optional; when matched, reads from the variant; else from the product.
+  // variantOrId optional: a variant id (string), a variant object, or omitted.
   // Read order: tier-specific field → (retail/direct only) other tier fields → legacy priceCents.
   // Wholesale never falls through to retail/direct (different price). Returns cents or null.
   if (!window.getProductTierPrice) {
-    window.getProductTierPrice = function (product, tier, variantId) {
+    window.getProductTierPrice = function (product, tier, variantOrId) {
       if (!product) return null;
       tier = tier || 'retail';
       var target = product;
-      if (variantId && Array.isArray(product.variants)) {
-        for (var i = 0; i < product.variants.length; i++) {
-          if (product.variants[i] && product.variants[i].id === variantId) { target = product.variants[i]; break; }
+      if (variantOrId) {
+        if (typeof variantOrId === 'string' && Array.isArray(product.variants)) {
+          for (var i = 0; i < product.variants.length; i++) {
+            if (product.variants[i] && product.variants[i].id === variantOrId) { target = product.variants[i]; break; }
+          }
+        } else if (typeof variantOrId === 'object') {
+          target = variantOrId;
         }
       }
       var fieldByTier = { wholesale: 'wholesalePriceCents', direct: 'directPriceCents', retail: 'retailPriceCents' };

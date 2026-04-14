@@ -22813,17 +22813,21 @@ function parsePriceToCents(str) {
 
 // Channel-First Phase 1a — Resolve a per-tier price for a product (or a specific variant).
 // tier ∈ 'wholesale' | 'direct' | 'retail' (default 'retail').
-// variantId optional: when provided and matched, reads from the variant; else from the product.
+// variantOrId optional: a variant id (string), a variant object, or omitted.
 // Read order: tier-specific field on target → (for retail/direct) other tier fields → legacy priceCents.
 // Wholesale never falls through to retail/direct (those are different prices); returns null if no wholesale set.
 // Always returns a number (cents) or null — never undefined when priceCents exists.
-function getProductTierPrice(product, tier, variantId) {
+function getProductTierPrice(product, tier, variantOrId) {
   if (!product) return null;
   tier = tier || 'retail';
   var target = product;
-  if (variantId && Array.isArray(product.variants)) {
-    for (var i = 0; i < product.variants.length; i++) {
-      if (product.variants[i] && product.variants[i].id === variantId) { target = product.variants[i]; break; }
+  if (variantOrId) {
+    if (typeof variantOrId === 'string' && Array.isArray(product.variants)) {
+      for (var i = 0; i < product.variants.length; i++) {
+        if (product.variants[i] && product.variants[i].id === variantOrId) { target = product.variants[i]; break; }
+      }
+    } else if (typeof variantOrId === 'object') {
+      target = variantOrId;
     }
   }
   var fieldByTier = { wholesale: 'wholesalePriceCents', direct: 'directPriceCents', retail: 'retailPriceCents' };

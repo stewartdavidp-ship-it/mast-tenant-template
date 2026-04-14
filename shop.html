@@ -972,8 +972,8 @@ window.TENANT_READY.then(function() {
             var minOriginal = Infinity;
             for (var vi = 0; vi < product.variants.length; vi++) {
               var v = product.variants[vi];
-              // Channel-First Phase 1a — variant tier resolve, fallback to legacy priceCents then base
-              var vp = (window.getProductTierPrice ? window.getProductTierPrice(product, 'retail', v.id) : null);
+              // Channel-First Phase 1a — pass variant obj so legacy variants without IDs still resolve
+              var vp = (window.getProductTierPrice ? window.getProductTierPrice(product, 'retail', v) : null);
               if (typeof vp !== 'number' || vp <= 0) vp = (typeof v.priceCents === 'number') ? v.priceCents : priceCentsVal;
               if (typeof vp !== 'number') continue;
               if (vp < minOriginal) minOriginal = vp;
