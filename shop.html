@@ -357,7 +357,139 @@
   @media (max-width: 768px) {
     section { padding: 4rem 1.5rem; }
   }
-  
+
+  /* ========= GIFT CARD (inline in shop) ========= */
+  .gc-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1.25rem;
+    margin-bottom: 2rem;
+    max-width: 1200px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .gc-denom-card {
+    background: var(--surface-card);
+    border: 1px solid var(--surface-card-border);
+    border-radius: 10px;
+    padding: 1.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .gc-denom-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+  }
+  .gc-denom-card.selected {
+    border-color: var(--amber, #D4A853);
+    box-shadow: 0 0 0 2px var(--amber, #D4A853);
+  }
+  .gc-denom-icon { font-size: 2rem; margin-bottom: 0.5rem; }
+  .gc-denom-amount {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 1.6rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 0.75rem;
+  }
+  .gc-denom-btn {
+    display: inline-block;
+    padding: 6px 20px;
+    border-radius: 6px;
+    border: 1px solid var(--primary, #D4A853);
+    background: transparent;
+    color: var(--primary, #D4A853);
+    font-size: 0.82rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .gc-denom-btn:hover { background: var(--primary, #D4A853); color: #fff; }
+  .gc-custom-input-wrap {
+    display: flex; align-items: center; justify-content: center; gap: 2px; margin-bottom: 0.75rem;
+  }
+  .gc-custom-prefix { font-size: 1.4rem; font-weight: 600; color: var(--text); }
+  .gc-custom-input {
+    width: 90px; font-size: 1.4rem; font-weight: 600;
+    font-family: 'DM Sans', sans-serif; color: var(--text);
+    background: transparent; border: none;
+    border-bottom: 2px solid var(--surface-card-border, #444);
+    text-align: center; padding: 2px 4px; outline: none;
+  }
+  .gc-custom-input:focus { border-bottom-color: var(--primary, #D4A853); }
+  .gc-custom-range { font-size: 0.75rem; color: var(--warm-gray, #888); margin-bottom: 0.5rem; }
+  .gc-options {
+    background: var(--surface-card); border: 1px solid var(--surface-card-border);
+    border-radius: 10px; padding: 1.5rem; margin-bottom: 2rem; display: none;
+    max-width: 1200px; margin-left: auto; margin-right: auto;
+  }
+  .gc-options.visible { display: block; }
+  .gc-options-title {
+    font-family: 'Cormorant Garamond', serif; font-size: 1.3rem;
+    font-weight: 400; color: var(--text); margin: 0 0 1rem; text-align: center;
+  }
+  .gc-selected-amount {
+    text-align: center; font-size: 1.1rem; font-weight: 500;
+    color: var(--primary, #D4A853); margin-bottom: 1rem;
+  }
+  .gc-toggle {
+    display: flex; gap: 0; border: 1px solid var(--surface-card-border, #444);
+    border-radius: 8px; overflow: hidden; margin: 0 auto 1.25rem; max-width: 340px;
+  }
+  .gc-toggle-btn {
+    flex: 1; padding: 10px 16px; font-size: 0.85rem; font-weight: 500;
+    font-family: 'DM Sans', sans-serif; border: none; background: transparent;
+    color: var(--warm-gray, #888); cursor: pointer; transition: all 0.15s; text-align: center;
+  }
+  .gc-toggle-btn.active { background: var(--primary, #D4A853); color: #fff; }
+  .gc-gift-fields { display: none; flex-direction: column; gap: 0.75rem; margin-bottom: 1rem; }
+  .gc-gift-fields.visible { display: flex; }
+  .gc-field label {
+    display: block; font-size: 0.8rem; font-weight: 500;
+    color: var(--warm-gray, #888); margin-bottom: 4px;
+  }
+  .gc-field input, .gc-field textarea {
+    width: 100%; padding: 8px 12px; font-size: 0.9rem;
+    font-family: 'DM Sans', sans-serif; color: var(--text);
+    background: var(--bg, #1a1a1a); border: 1px solid var(--surface-card-border, #444);
+    border-radius: 6px; outline: none; box-sizing: border-box;
+  }
+  .gc-field input:focus, .gc-field textarea:focus { border-color: var(--primary, #D4A853); }
+  .gc-field textarea { resize: vertical; min-height: 70px; }
+  .gc-qty-row {
+    display: flex; align-items: center; justify-content: center; gap: 12px; margin: 1rem 0;
+  }
+  .gc-qty-label { font-size: 0.85rem; color: var(--warm-gray, #888); }
+  .gc-qty-stepper {
+    display: flex; align-items: center; gap: 0;
+    border: 1px solid var(--surface-card-border, #444); border-radius: 6px; overflow: hidden;
+  }
+  .gc-qty-btn {
+    width: 34px; height: 34px; border: none; background: transparent;
+    color: var(--text); font-size: 1.1rem; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; transition: background 0.15s;
+  }
+  .gc-qty-btn:hover { background: rgba(255,255,255,0.05); }
+  .gc-qty-btn:disabled { opacity: 0.3; cursor: default; }
+  .gc-qty-val {
+    width: 40px; text-align: center; font-size: 0.95rem; font-weight: 500;
+    color: var(--text); font-family: 'DM Sans', sans-serif;
+  }
+  .gc-add-btn {
+    display: block; width: 100%; max-width: 340px; margin: 0 auto;
+    padding: 12px 24px; border-radius: 6px; border: none;
+    background: var(--primary, #D4A853); color: #fff; font-size: 0.95rem;
+    font-weight: 600; font-family: 'DM Sans', sans-serif; cursor: pointer; transition: opacity 0.15s;
+  }
+  .gc-add-btn:hover { opacity: 0.9; }
+
+  @media (max-width: 768px) {
+    .gc-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 1rem; }
+    .gc-denom-amount { font-size: 1.3rem; }
+    .gc-options { padding: 1.25rem; }
+  }
 
 </style>
 </head>
@@ -442,7 +574,11 @@ window.TENANT_READY.then(function() {
   var allShopItems = [];
   var SHOP_CATS = [];
   var SHOP_IDS = [];
-  var saleLookup = {}; // pid → {discountType, discountValue, saleName, variants?}
+  var saleLookup = {};
+  var _shopGiftCardConfig = null;
+  var _shopGcSelectedCents = 0;
+  var _shopGcGiftType = 'self';
+  var _shopGcQty = 1; // pid → {discountType, discountValue, saleName, variants?}
 
   function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
@@ -529,6 +665,14 @@ window.TENANT_READY.then(function() {
     SHOP_CATS.forEach(function(cat) {
       html += '<span class="filter-pill" onclick="filterShop(\'' + cat.id + '\', this)">' + esc(cat.label) + '</span>';
     });
+    // Add Gift Cards pill if enabled for this tenant
+    if (_shopGiftCardConfig && _shopGiftCardConfig.giftCardsEnabled) {
+      var denoms = _shopGiftCardConfig.giftCardDenominations || [];
+      var customEnabled = _shopGiftCardConfig.giftCardCustomEnabled || false;
+      if (denoms.length > 0 || customEnabled) {
+        html += '<span class="filter-pill" onclick="filterShop(\'gift-cards\', this)">Gift Cards</span>';
+      }
+    }
     container.innerHTML = html;
   }
 
@@ -590,20 +734,27 @@ window.TENANT_READY.then(function() {
       }
     }).catch(function() {});
 
-    // Load categories from Firebase, then load products
+    // Load categories, products, sales, and wallet config in parallel
+    var dbUrl = TENANT_FIREBASE_CONFIG.databaseURL || 'https://mast-platform-prod-default-rtdb.firebaseio.com';
+    var gcConfigPromise = fetch(dbUrl + '/' + TENANT_ID + '/public/config/walletConfig.json')
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .catch(function() { return null; });
+
     db.ref(TENANT_ID + '/public/config/categories').once('value').then(function(catSnap) {
       var catData = catSnap.val();
       if (catData && Array.isArray(catData)) {
         SHOP_CATS = catData.filter(function(c) { return c && c.id && c.id !== 'shop' && c.label; });
       }
       SHOP_IDS = SHOP_CATS.map(function(c) { return c.id; });
-      buildFilterPills();
-      // Load products and active sales in parallel
+      // Load products, sales, and gift card config in parallel
       return Promise.all([
         db.ref(TENANT_ID + '/public/products').once('value'),
-        db.ref(TENANT_ID + '/public/sales-promotions').once('value')
+        db.ref(TENANT_ID + '/public/sales-promotions').once('value'),
+        gcConfigPromise
       ]);
     }).then(function(results) {
+      _shopGiftCardConfig = results[2];
+      buildFilterPills();
       var data = results[0].val();
       var salesData = results[1].val();
       buildSaleLookup(salesData);
@@ -648,12 +799,21 @@ window.TENANT_READY.then(function() {
           if (sa !== sb) return sa - sb;
           return (a.name || '').localeCompare(b.name || '');
         });
-      // Check URL hash for category auto-filter (e.g., /shop#drinkware)
+      // Check URL hash for category auto-filter (e.g., /shop#drinkware or /shop#gift-cards)
       var hash = window.location.hash.replace('#', '').toLowerCase();
-      var matchedCat = hash ? SHOP_CATS.find(function(c) { return c.id.toLowerCase() === hash || c.label.toLowerCase() === hash; }) : null;
-      if (matchedCat) {
+      var isGcHash = hash === 'gift-cards' || hash === 'gift cards' || hash === 'giftcards';
+      var matchedCat = (!isGcHash && hash) ? SHOP_CATS.find(function(c) { return c.id.toLowerCase() === hash || c.label.toLowerCase() === hash; }) : null;
+      if (isGcHash && _shopGiftCardConfig && _shopGiftCardConfig.giftCardsEnabled) {
+        renderShop('gift-cards');
+        setTimeout(function() {
+          var pills = document.querySelectorAll('.filter-pill');
+          pills.forEach(function(p) {
+            p.classList.remove('active');
+            if (p.textContent.toLowerCase() === 'gift cards') p.classList.add('active');
+          });
+        }, 0);
+      } else if (matchedCat) {
         renderShop(matchedCat.id);
-        // Update pill active state
         setTimeout(function() {
           var pills = document.querySelectorAll('.filter-pill');
           pills.forEach(function(p) {
@@ -674,10 +834,79 @@ window.TENANT_READY.then(function() {
     });
   })();
 
+  // --- Gift Card Section (inline in shop) ---
+  function renderGiftCardSection() {
+    var config = _shopGiftCardConfig;
+    if (!config || !config.giftCardsEnabled) return '';
+    var denoms = config.giftCardDenominations || [];
+    var customEnabled = config.giftCardCustomEnabled || false;
+    var customMin = config.giftCardCustomMin || 500;
+    var customMax = config.giftCardCustomMax || 50000;
+    if (denoms.length === 0 && !customEnabled) return '';
+
+    var html = '<div class="gc-grid" id="shopGcGrid">';
+    denoms.forEach(function(cents) {
+      html += '<div class="gc-denom-card" data-cents="' + cents + '" onclick="window._shopGcSelect(' + cents + ', this)">' +
+        '<div class="gc-denom-icon">&#127873;</div>' +
+        '<div class="gc-denom-amount">' + esc(formatMoney(cents)) + '</div>' +
+        '<button class="gc-denom-btn" type="button">Select</button>' +
+      '</div>';
+    });
+    if (customEnabled) {
+      html += '<div class="gc-denom-card" id="shopGcCustomCard" data-cents="custom">' +
+        '<div class="gc-denom-icon">&#9997;&#65039;</div>' +
+        '<div class="gc-custom-input-wrap">' +
+          '<span class="gc-custom-prefix">$</span>' +
+          '<input type="number" class="gc-custom-input" id="shopGcCustomInput" placeholder="0.00" min="' + (customMin / 100).toFixed(2) + '" max="' + (customMax / 100).toFixed(2) + '" step="0.01">' +
+        '</div>' +
+        '<div class="gc-custom-range">' + esc(formatMoney(customMin)) + ' &ndash; ' + esc(formatMoney(customMax)) + '</div>' +
+        '<button class="gc-denom-btn" type="button" onclick="window._shopGcSelectCustom()">Select</button>' +
+      '</div>';
+    }
+    html += '</div>';
+
+    // Options panel
+    html += '<div class="gc-options" id="shopGcOptions">' +
+      '<div class="gc-options-title">Gift Card Options</div>' +
+      '<div class="gc-selected-amount" id="shopGcSelectedLabel"></div>' +
+      '<div class="gc-toggle">' +
+        '<button class="gc-toggle-btn active" id="shopGcToggleSelf" type="button" onclick="window._shopGcToggleType(\'self\')">Buy for myself</button>' +
+        '<button class="gc-toggle-btn" id="shopGcToggleGift" type="button" onclick="window._shopGcToggleType(\'gift\')">Send as gift</button>' +
+      '</div>' +
+      '<div class="gc-gift-fields" id="shopGcGiftFields">' +
+        '<div class="gc-field"><label for="shopGcRecipientEmail">Recipient email</label>' +
+          '<input type="email" id="shopGcRecipientEmail" placeholder="friend@example.com"></div>' +
+        '<div class="gc-field"><label for="shopGcSenderName">Your name</label>' +
+          '<input type="text" id="shopGcSenderName" placeholder="Your name"></div>' +
+        '<div class="gc-field"><label for="shopGcSenderMessage">Personal message (optional)</label>' +
+          '<textarea id="shopGcSenderMessage" placeholder="Enjoy this gift!"></textarea></div>' +
+      '</div>' +
+      '<div class="gc-qty-row">' +
+        '<span class="gc-qty-label">Quantity:</span>' +
+        '<div class="gc-qty-stepper">' +
+          '<button class="gc-qty-btn" type="button" id="shopGcQtyMinus" onclick="window._shopGcQty(-1)">&minus;</button>' +
+          '<span class="gc-qty-val" id="shopGcQtyVal">1</span>' +
+          '<button class="gc-qty-btn" type="button" id="shopGcQtyPlus" onclick="window._shopGcQty(1)">+</button>' +
+        '</div>' +
+      '</div>' +
+      '<button class="gc-add-btn" type="button" onclick="window._shopGcAddToCart()">Add to Cart</button>' +
+    '</div>';
+
+    return html;
+  }
+
   function renderShop(filter) {
     var container = document.getElementById('shopContainer');
     if (!container) return;
-    if (allShopItems.length === 0) {
+
+    // Gift cards filter — render only gift card section
+    if (filter === 'gift-cards') {
+      var gcHtml = renderGiftCardSection();
+      container.innerHTML = gcHtml || '<p style="text-align:center;color:var(--warm-gray);padding:3rem;">Gift cards are not available.</p>';
+      return;
+    }
+
+    if (allShopItems.length === 0 && !(filter === 'all' && _shopGiftCardConfig && _shopGiftCardConfig.giftCardsEnabled)) {
       container.innerHTML = '<p style="text-align:center;color:var(--warm-gray);padding:3rem;">No products found.</p>';
       return;
     }
@@ -784,6 +1013,15 @@ window.TENANT_READY.then(function() {
       html += '</div>';
     });
 
+    // Append gift cards section when showing all categories
+    if (filter === 'all' && _shopGiftCardConfig && _shopGiftCardConfig.giftCardsEnabled) {
+      var gcSection = renderGiftCardSection();
+      if (gcSection) {
+        html += '<h2 class="category-section-title">Gift Cards</h2>';
+        html += gcSection;
+      }
+    }
+
     container.innerHTML = html;
   }
 
@@ -794,9 +1032,130 @@ window.TENANT_READY.then(function() {
     renderShop(cat);
   };
 
+  // --- Gift Card Interactions (shop inline) ---
+  function _shopGcShowOptions() {
+    var panel = document.getElementById('shopGcOptions');
+    if (!panel) return;
+    panel.classList.add('visible');
+    document.getElementById('shopGcSelectedLabel').textContent = formatMoney(_shopGcSelectedCents) + ' Gift Card';
+    document.getElementById('shopGcQtyVal').textContent = '1';
+    document.getElementById('shopGcQtyMinus').disabled = true;
+    document.getElementById('shopGcQtyPlus').disabled = false;
+    document.getElementById('shopGcToggleSelf').classList.add('active');
+    document.getElementById('shopGcToggleGift').classList.remove('active');
+    document.getElementById('shopGcGiftFields').classList.remove('visible');
+    var e = document.getElementById('shopGcRecipientEmail');
+    var n = document.getElementById('shopGcSenderName');
+    var m = document.getElementById('shopGcSenderMessage');
+    if (e) e.value = '';
+    if (n) n.value = '';
+    if (m) m.value = '';
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  window._shopGcSelect = function(cents, el) {
+    _shopGcSelectedCents = cents;
+    _shopGcQty = 1;
+    _shopGcGiftType = 'self';
+    var cards = document.querySelectorAll('#shopGcGrid .gc-denom-card');
+    for (var i = 0; i < cards.length; i++) cards[i].classList.remove('selected');
+    el.classList.add('selected');
+    _shopGcShowOptions();
+  };
+
+  window._shopGcSelectCustom = function() {
+    var input = document.getElementById('shopGcCustomInput');
+    if (!input) return;
+    var val = parseFloat(input.value);
+    if (isNaN(val) || val <= 0) { input.focus(); return; }
+    var cents = Math.round(val * 100);
+    var minCents = Math.round(parseFloat(input.getAttribute('min')) * 100);
+    var maxCents = Math.round(parseFloat(input.getAttribute('max')) * 100);
+    if (cents < minCents || cents > maxCents) { input.focus(); return; }
+    _shopGcSelectedCents = cents;
+    _shopGcQty = 1;
+    _shopGcGiftType = 'self';
+    var cards = document.querySelectorAll('#shopGcGrid .gc-denom-card');
+    for (var i = 0; i < cards.length; i++) cards[i].classList.remove('selected');
+    var card = document.getElementById('shopGcCustomCard');
+    if (card) card.classList.add('selected');
+    _shopGcShowOptions();
+  };
+
+  window._shopGcToggleType = function(type) {
+    _shopGcGiftType = type;
+    var selfBtn = document.getElementById('shopGcToggleSelf');
+    var giftBtn = document.getElementById('shopGcToggleGift');
+    var fields = document.getElementById('shopGcGiftFields');
+    if (type === 'self') {
+      selfBtn.classList.add('active'); giftBtn.classList.remove('active'); fields.classList.remove('visible');
+    } else {
+      selfBtn.classList.remove('active'); giftBtn.classList.add('active'); fields.classList.add('visible');
+    }
+  };
+
+  window._shopGcQty = function(delta) {
+    _shopGcQty = Math.max(1, Math.min(10, _shopGcQty + delta));
+    document.getElementById('shopGcQtyVal').textContent = String(_shopGcQty);
+    document.getElementById('shopGcQtyMinus').disabled = _shopGcQty <= 1;
+    document.getElementById('shopGcQtyPlus').disabled = _shopGcQty >= 10;
+  };
+
+  window._shopGcAddToCart = function() {
+    if (!_shopGcSelectedCents || _shopGcSelectedCents <= 0) return;
+    var recipientEmail = '', senderName = '', senderMessage = '';
+    if (_shopGcGiftType === 'gift') {
+      var emailEl = document.getElementById('shopGcRecipientEmail');
+      var nameEl = document.getElementById('shopGcSenderName');
+      var msgEl = document.getElementById('shopGcSenderMessage');
+      recipientEmail = (emailEl ? emailEl.value : '').trim();
+      senderName = (nameEl ? nameEl.value : '').trim();
+      senderMessage = (msgEl ? msgEl.value : '').trim();
+      if (!recipientEmail) { emailEl.focus(); return; }
+      if (recipientEmail.indexOf('@') === -1 || recipientEmail.indexOf('.') === -1) { emailEl.focus(); return; }
+      if (!senderName) { nameEl.focus(); return; }
+    }
+    if (typeof MastCart === 'undefined' || !MastCart.addItem) { console.error('[shop-gc] MastCart not available'); return; }
+    MastCart.addItem({
+      pid: 'gift-card-' + _shopGcSelectedCents,
+      name: 'Gift Card - ' + formatMoney(_shopGcSelectedCents),
+      price: formatMoney(_shopGcSelectedCents),
+      priceCents: _shopGcSelectedCents,
+      image: '',
+      bookingType: 'gift-card',
+      options: {
+        giftType: _shopGcGiftType,
+        recipientEmail: recipientEmail,
+        senderName: senderName,
+        senderMessage: senderMessage
+      },
+      qty: _shopGcQty,
+      isGiftCard: true
+    });
+    MastCart.showToast('Gift card added to cart');
+    // Reset
+    _shopGcSelectedCents = 0;
+    _shopGcQty = 1;
+    _shopGcGiftType = 'self';
+    var cards = document.querySelectorAll('#shopGcGrid .gc-denom-card');
+    for (var i = 0; i < cards.length; i++) cards[i].classList.remove('selected');
+    var panel = document.getElementById('shopGcOptions');
+    if (panel) panel.classList.remove('visible');
+  };
+
   // Support back/forward navigation with hash-based category filtering
   window.addEventListener('hashchange', function() {
     var hash = window.location.hash.replace('#', '').toLowerCase();
+    // Handle gift-cards hash
+    if (hash === 'gift-cards' || hash === 'gift cards' || hash === 'giftcards') {
+      var pills = document.querySelectorAll('.filter-pill');
+      pills.forEach(function(p) {
+        p.classList.remove('active');
+        if (p.textContent.toLowerCase() === 'gift cards') p.classList.add('active');
+      });
+      renderShop('gift-cards');
+      return;
+    }
     var matchedCat = hash ? SHOP_CATS.find(function(c) { return c.id.toLowerCase() === hash || c.label.toLowerCase() === hash; }) : null;
     var catId = matchedCat ? matchedCat.id : 'all';
     var catLabel = matchedCat ? matchedCat.label.toLowerCase() : 'all';
