@@ -2060,6 +2060,7 @@
       html += '</select>';
     }
 
+    html += '<button class="btn btn-primary btn-small" onclick="makerCreateNewPiece()">+ New Piece</button>';
     html += '<button class="btn btn-secondary btn-small" onclick="makerOpenWhatIfSimulator()" title="Simulate metals price shifts across all recipes">📊 What-if</button>';
     html += '<button class="btn btn-secondary btn-small" onclick="makerOpenChannelsManager()" title="Manage sales channel fee profiles">Channels</button>';
     html += '<button class="btn btn-secondary btn-small" onclick="makerOpenImport(\'products\')">Import CSV</button>';
@@ -2235,6 +2236,63 @@
       MastAdmin.showToast('Recipe created for ' + productName);
     } catch (err) {
       MastAdmin.showToast('Error: ' + err.message, true);
+    }
+  }
+
+  async function createNewPiece() {
+    // Prompt for name
+    var name = prompt('Piece name:');
+    if (!name || !name.trim()) return;
+    name = name.trim();
+
+    // Pick category from existing categories or let them type one
+    var products = window.productsData || [];
+    var cats = {};
+    products.forEach(function(p) { (p.categories || []).forEach(function(c) { if (c) cats[c] = true; }); });
+    var catList = Object.keys(cats).sort();
+    var category = 'other';
+    if (catList.length > 0) {
+      var catPrompt = 'Category?\n' + catList.map(function(c, i) { return (i + 1) + '. ' + c; }).join('\n') + '\n\nEnter number or type a new category:';
+      var catInput = prompt(catPrompt, '1');
+      if (catInput === null) return;
+      var catNum = parseInt(catInput, 10);
+      if (catNum >= 1 && catNum <= catList.length) {
+        category = catList[catNum - 1];
+      } else if (catInput.trim()) {
+        category = catInput.trim().toLowerCase();
+      }
+    }
+
+    try {
+      // Create draft product
+      var pid = 'p' + Date.now().toString(36);
+      var slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      var now = new Date().toISOString();
+      await MastDB._ref('public/products/' + pid).set({
+        pid: pid,
+        name: name,
+        slug: slug,
+        categories: [category],
+        status: 'draft',
+        availability: 'available',
+        businessLine: 'production',
+        priceCents: null,
+        images: [],
+        imageIds: [],
+        createdAt: now,
+        updatedAt: now
+      });
+      MastAdmin.writeAudit('create', 'products', pid);
+
+      // Add to local productsData so it appears immediately
+      if (window.productsData) {
+        window.productsData.push({ pid: pid, name: name, slug: slug, categories: [category], status: 'draft', availability: 'available', businessLine: 'production', priceCents: null, images: [], imageIds: [] });
+      }
+
+      // Create linked recipe and open builder
+      await createRecipeForProduct(pid, name);
+    } catch (err) {
+      MastAdmin.showToast('Error creating piece: ' + err.message, true);
     }
   }
 
@@ -3521,6 +3579,7 @@
   window.makerOpenRecipeBuilder = openRecipeBuilder;
   window.makerCloseRecipeBuilder = closeRecipeBuilder;
   window.makerCreateRecipeForProduct = createRecipeForProduct;
+  window.makerCreateNewPiece = createNewPiece;
   window.makerSaveRecipeBuilder = saveRecipeBuilder;
   window.makerSaveAndRecalcRecipe = saveAndRecalcRecipe;
   window.makerRecalcAndRefresh = recalcAndRefresh;
