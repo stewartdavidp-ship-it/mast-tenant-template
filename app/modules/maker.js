@@ -993,9 +993,20 @@
     var srcLineItems = def.lineItems || bs.lineItems || {};
     var srcLaborMinutes = (def.laborMinutes != null) ? def.laborMinutes : (bs.laborMinutes || 0);
     var srcOtherCost = (def.otherCost != null) ? def.otherCost : (bs.otherCost || 0);
+    // Skip the clone work entirely when there are no source lineItems to copy —
+    // a brand-new piece with variants has an empty source, so there's nothing
+    // to deep-copy per variant.
+    var hasSrcLineItems = srcLineItems && Object.keys(srcLineItems).length > 0;
+    // Use structuredClone when available (3-10× faster than JSON.parse(JSON.stringify),
+    // and it handles non-serializable values gracefully). Fall back for older browsers.
+    var cloneFn = (typeof structuredClone === 'function')
+      ? function(v) { return structuredClone(v); }
+      : function(v) { return JSON.parse(JSON.stringify(v)); };
     pvs.forEach(function(pv) {
       var slot = bs.variants[pv.id] || {};
-      if (slot.lineItems == null) slot.lineItems = JSON.parse(JSON.stringify(srcLineItems));
+      if (slot.lineItems == null) {
+        slot.lineItems = hasSrcLineItems ? cloneFn(srcLineItems) : {};
+      }
       if (slot.laborMinutes == null) slot.laborMinutes = srcLaborMinutes;
       if (slot.otherCost == null) slot.otherCost = srcOtherCost;
       bs.variants[pv.id] = slot;
