@@ -14831,16 +14831,14 @@ function loadNotificationsSettings() {
   if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Loading alert preferences...</span>';
 
   // Read platform alert definitions (same RTDB as tenant data)
-  var platformRef = firebase.database().ref('mast-platform/alertDefinitions');
   var tenantId = MastDB.tenantId();
-  var overridesRef = MastDB._ref('config/alerts');
 
   Promise.all([
-    platformRef.once('value'),
-    overridesRef.once('value')
+    MastDB.platform.get('mast-platform/alertDefinitions'),
+    MastDB.get('config/alerts')
   ]).then(function(results) {
-    var definitions = results[0].val() || {};
-    var overrides = results[1].val() || {};
+    var definitions = results[0] || {};
+    var overrides = results[1] || {};
     if (statusEl) statusEl.innerHTML = '';
 
     var defList = Object.values(definitions).sort(function(a, b) { return (a.category || '').localeCompare(b.category || ''); });
@@ -23039,9 +23037,7 @@ window.__mastRecipeDrift = window.__mastRecipeDrift || {};
 async function loadRecipeDrift(recipeId) {
   if (!recipeId) return null;
   try {
-    var tid = MastDB.tenantId();
-    var snap = await firebase.database().ref(tid + '/admin/recipes/' + recipeId + '/drift').once('value');
-    var drift = snap.val();
+    var drift = await MastDB.get('admin/recipes/' + recipeId + '/drift');
     window.__mastRecipeDrift[recipeId] = drift;
     return drift;
   } catch (err) {
@@ -23207,20 +23203,19 @@ window.__mastDriftAlerts = window.__mastDriftAlerts || {};
 
 async function loadDriftAlerts(pid) {
   try {
-    var tid = MastDB.tenantId();
     // Phase 4: warm flag + channels + severity in parallel with drift fetch
     // so the subsequent renderProductDetail re-render can render the unified
     // banner fully on the first shot (no FOUC between legacy and unified).
-    var driftPromise = firebase.database().ref(tid + '/admin/publishDrift')
-      .orderByChild('mastProductId').equalTo(pid).once('value');
+    var driftPromise = MastDB.query('admin/publishDrift')
+      .orderByChild('mastProductId').equalTo(pid).once();
     var channelsPromise = new Promise(function(resolve) { loadAdminChannels(resolve); });
     var flagPromise = loadUnifiedDriftUIFlag();
     var severityPromise = loadDriftSeverity();
     var results = await Promise.all([driftPromise, channelsPromise, flagPromise, severityPromise]);
-    var snap = results[0];
+    var driftMap = results[0] || {};
     var alerts = [];
-    snap.forEach(function(child) {
-      var d = child.val();
+    Object.keys(driftMap).forEach(function(k) {
+      var d = driftMap[k];
       if (d && d.status === 'unresolved') alerts.push(d);
     });
     window.__mastDriftAlerts[pid] = alerts;
@@ -23295,9 +23290,11 @@ async function overwriteShopifyFromDrift(pid, driftId) {
       return;
     }
     // Mark drift resolved
-    await firebase.database().ref(MastDB.tenantId() + '/admin/publishDrift/' + driftId + '/status').set('resolved');
-    await firebase.database().ref(MastDB.tenantId() + '/admin/publishDrift/' + driftId + '/resolvedAt').set(new Date().toISOString());
-    await firebase.database().ref(MastDB.tenantId() + '/admin/publishDrift/' + driftId + '/resolvedBy').set('overwrite');
+    await MastDB.update('admin/publishDrift/' + driftId, {
+      status: 'resolved',
+      resolvedAt: new Date().toISOString(),
+      resolvedBy: 'overwrite'
+    });
     // Refresh
     delete window.__mastDriftAlerts[pid];
     showToast('Shopify updated ✓', false);
@@ -23348,9 +23345,11 @@ async function acceptShopifyEdits(pid, driftId) {
 
 async function dismissDriftAlert(driftId, pid) {
   try {
-    await firebase.database().ref(MastDB.tenantId() + '/admin/publishDrift/' + driftId + '/status').set('dismissed');
-    await firebase.database().ref(MastDB.tenantId() + '/admin/publishDrift/' + driftId + '/resolvedAt').set(new Date().toISOString());
-    await firebase.database().ref(MastDB.tenantId() + '/admin/publishDrift/' + driftId + '/resolvedBy').set('dismissed');
+    await MastDB.update('admin/publishDrift/' + driftId, {
+      status: 'dismissed',
+      resolvedAt: new Date().toISOString(),
+      resolvedBy: 'dismissed'
+    });
     // Remove from cache
     if (window.__mastDriftAlerts[pid]) {
       window.__mastDriftAlerts[pid] = window.__mastDriftAlerts[pid].filter(function(a) { return a.driftId !== driftId; });
@@ -23438,10 +23437,8 @@ async function loadUnifiedDriftUIFlag() {
     if (ls === '0' || ls === 'false') { window.__mastUnifiedDriftUIFlag = false; return false; }
   } catch (_) { /* localStorage unavailable — fall through to RTDB */ }
   try {
-    var snap = await firebase.database()
-      .ref(MastDB.tenantId() + '/config/featureFlags/unifiedDriftUI')
-      .once('value');
-    window.__mastUnifiedDriftUIFlag = (snap.val() === true);
+    var val = await MastDB.get('config/featureFlags/unifiedDriftUI');
+    window.__mastUnifiedDriftUIFlag = (val === true);
   } catch (err) {
     console.warn('[phase4] flag load failed, defaulting to legacy:', err && err.message);
     window.__mastUnifiedDriftUIFlag = false;
@@ -23457,14 +23454,12 @@ async function loadDriftSeverity() {
   var platformDefaults = {};
   var tenantOverrides = {};
   try {
-    var platSnap = await firebase.database().ref('mast-platform/driftSeverityDefaults').once('value');
-    platformDefaults = platSnap.val() || {};
+    platformDefaults = (await MastDB.platform.get('mast-platform/driftSeverityDefaults')) || {};
   } catch (err) {
     console.warn('[phase4] platform severity defaults load failed:', err && err.message);
   }
   try {
-    var tSnap = await firebase.database().ref(MastDB.tenantId() + '/admin/syncRuleSeverity').once('value');
-    tenantOverrides = tSnap.val() || {};
+    tenantOverrides = (await MastDB.get('admin/syncRuleSeverity')) || {};
   } catch (err) {
     console.warn('[phase4] tenant severity override load failed:', err && err.message);
   }
@@ -23893,8 +23888,7 @@ function renderDriftReviewQueueUnified(tab) {
 // ---------------------------------------------------------------------------
 async function loadUnifiedSyncRules() {
   try {
-    var snap = await firebase.database().ref(MastDB.tenantId() + '/admin/syncRules').once('value');
-    window.__mastSyncRulesByChannel = snap.val() || {};
+    window.__mastSyncRulesByChannel = (await MastDB.get('admin/syncRules')) || {};
   } catch (err) {
     console.warn('[phase4] unified sync rules load failed:', err && err.message);
     window.__mastSyncRulesByChannel = {};
@@ -24017,12 +24011,12 @@ async function saveUnifiedSyncRule(channelId, field, action) {
     var userId = firebase.auth().currentUser ? firebase.auth().currentUser.uid : 'unknown';
     var record = { action: action, updatedAt: now, updatedBy: userId };
     var writes = [];
-    writes.push(firebase.database().ref(MastDB.tenantId() + '/admin/syncRules/' + channelId + '/' + field).set(record));
+    writes.push(MastDB.set('admin/syncRules/' + channelId + '/' + field, record));
     // Legacy mirror if we can resolve a platform for this channel
     var ch = (window.__mastChannelsCache || {})[channelId];
     var platformStr = ch && (ch.platform || ch.externalPlatform);
     if (platformStr && platformStr !== 'manual') {
-      writes.push(firebase.database().ref(MastDB.tenantId() + '/admin/syncRules/' + platformStr + '/' + field).set(record));
+      writes.push(MastDB.set('admin/syncRules/' + platformStr + '/' + field, record));
     }
     await Promise.all(writes);
 
@@ -24043,11 +24037,11 @@ async function resetChannelSyncRules(channelId) {
   if (!ok) return;
   try {
     var writes = [];
-    writes.push(firebase.database().ref(MastDB.tenantId() + '/admin/syncRules/' + channelId).remove());
+    writes.push(MastDB.remove('admin/syncRules/' + channelId));
     var ch = (window.__mastChannelsCache || {})[channelId];
     var platformStr = ch && (ch.platform || ch.externalPlatform);
     if (platformStr && platformStr !== 'manual') {
-      writes.push(firebase.database().ref(MastDB.tenantId() + '/admin/syncRules/' + platformStr).remove());
+      writes.push(MastDB.remove('admin/syncRules/' + platformStr));
     }
     await Promise.all(writes);
     if (window.__mastSyncRulesByChannel) delete window.__mastSyncRulesByChannel[channelId];
@@ -24341,8 +24335,7 @@ async function loadLatestDriftScan(tenantId) {
     for (var i = 0; i < 7; i++) {
       var d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
       var dateKey = d.toISOString().slice(0, 10);
-      var snap = await firebase.database().ref(tenantId + '/admin/driftScans/' + dateKey).once('value');
-      var val = snap.val();
+      var val = await MastDB.get('admin/driftScans/' + dateKey);
       if (val) return { date: dateKey, record: val };
     }
   } catch (e) { /* non-fatal */ }
@@ -24358,14 +24351,14 @@ async function loadMakerSettings() {
     // Reset cached severity so reloading picks up any external edits.
     window.__mastDriftSeverity = null;
     var results = await Promise.all([
-      firebase.database().ref(tenantId + '/admin/config').once('value'),
+      MastDB.get('admin/config'),
       loadDriftSeverity(),
       // Phase 7c.4 — look back up to 7 days for the most recent scheduled
       // priceCents drift scan record for this tenant. Returns { date, record }
       // or null when no scan has fired.
       loadLatestDriftScan(tenantId)
     ]);
-    var cfg = results[0].val() || {};
+    var cfg = results[0] || {};
     var sev = results[1];
     var latestScan = results[2];
     window.__mastMakerSettings = {
@@ -24516,7 +24509,7 @@ function renderMakerSettings() {
 // ── Atomic handlers: toggle, dropdown, reset ────────────────────────────────
 async function onMakerToggleTrackMat(checked) {
   try {
-    await firebase.database().ref(MastDB.tenantId() + '/admin/config/trackMaterialInventory').set(!!checked);
+    await MastDB.set('admin/config/trackMaterialInventory', !!checked);
     window.__mastMakerSettings.trackMaterialInventory = !!checked;
     showToast('Material deduction ' + (checked ? 'enabled' : 'disabled'));
     renderMakerSettings();
@@ -24529,7 +24522,7 @@ async function onMakerToggleTrackMat(checked) {
 async function onMakerCadenceChange(value) {
   if (['off', 'weekly', 'monthly'].indexOf(value) < 0) return;
   try {
-    await firebase.database().ref(MastDB.tenantId() + '/admin/config/recipeRecalcCadence').set(value);
+    await MastDB.set('admin/config/recipeRecalcCadence', value);
     window.__mastMakerSettings.recipeRecalcCadence = value;
     showToast('Cadence set to ' + value);
   } catch (err) {
@@ -24557,7 +24550,7 @@ async function onMakerRunRecalcNow() {
 async function onMakerSeverityChange(field, value) {
   if (['critical', 'warning', 'info'].indexOf(value) < 0) return;
   try {
-    await firebase.database().ref(MastDB.tenantId() + '/admin/syncRuleSeverity/' + field).set(value);
+    await MastDB.set('admin/syncRuleSeverity/' + field, value);
     if (!window.__mastMakerSettings.severityOverrides) window.__mastMakerSettings.severityOverrides = {};
     window.__mastMakerSettings.severityOverrides[field] = value;
     // Invalidate the unified cache so the drift queue re-reads on next render.
@@ -24572,7 +24565,7 @@ async function onMakerSeverityChange(field, value) {
 
 async function onMakerResetSeverity(field) {
   try {
-    await firebase.database().ref(MastDB.tenantId() + '/admin/syncRuleSeverity/' + field).remove();
+    await MastDB.remove('admin/syncRuleSeverity/' + field);
     if (window.__mastMakerSettings.severityOverrides) delete window.__mastMakerSettings.severityOverrides[field];
     window.__mastDriftSeverity = null;
     showToast(MAST_MAKER_FIELD_LABELS[field] + ' reset to platform default');
@@ -24619,7 +24612,7 @@ async function onMakerSaveThreshold() {
     return;
   }
   try {
-    await firebase.database().ref(MastDB.tenantId() + '/admin/config/makerSettings/repricingThresholdPct').set(parsed);
+    await MastDB.set('admin/config/makerSettings/repricingThresholdPct', parsed);
     window.__mastMakerSettings.repricingThresholdPct = parsed;
     window.__mkThresholdEditMode = false;
     if (window.MastDirty) MastDirty.unregister('makerThresholdEdit');
@@ -24675,15 +24668,14 @@ async function openDriftReviewQueue() {
     // powers severity-then-time sort + color/badge selection.
     var pageSize = window.__mastDriftQueuePageSize || 100;
     // Fetch pageSize+1 to detect whether more records exist below the page.
-    var snapPromise = firebase.database().ref(MastDB.tenantId() + '/admin/publishDrift')
-      .orderByChild('detectedAt').limitToLast(pageSize + 1).once('value');
+    var snapPromise = MastDB.query('admin/publishDrift')
+      .orderByChild('detectedAt').limitToLast(pageSize + 1).once();
     var channelsPromise = new Promise(function(resolve) { loadAdminChannels(resolve); });
     var severityPromise = loadDriftSeverity();
     var flagPromise = loadUnifiedDriftUIFlag();
     var results = await Promise.all([snapPromise, channelsPromise, severityPromise, flagPromise]);
-    var snap = results[0];
-    var data = [];
-    snap.forEach(function(child) { var v = child.val(); if (v) data.push(v); });
+    var driftMap = results[0] || {};
+    var data = Object.keys(driftMap).map(function(k) { return driftMap[k]; }).filter(Boolean);
     data.sort(function(a, b) { return (b.detectedAt || '').localeCompare(a.detectedAt || ''); });
     // If we pulled pageSize+1, more may exist — trim to pageSize for display.
     window.__mastDriftQueueHasMore = data.length > pageSize;
@@ -24723,13 +24715,12 @@ window.loadMoreDriftAlerts = async function() {
   try {
     // Fetch records with detectedAt strictly before the oldest we've loaded.
     // +1 to detect whether more exist below this page.
-    var snap = await firebase.database().ref(MastDB.tenantId() + '/admin/publishDrift')
+    var batchMap = await MastDB.query('admin/publishDrift')
       .orderByChild('detectedAt')
       .endBefore(oldestTs)
       .limitToLast(pageSize + 1)
-      .once('value');
-    var batch = [];
-    snap.forEach(function(child) { var v = child.val(); if (v) batch.push(v); });
+      .once();
+    var batch = Object.keys(batchMap || {}).map(function(k) { return batchMap[k]; }).filter(Boolean);
     batch.sort(function(a, b) { return (b.detectedAt || '').localeCompare(a.detectedAt || ''); });
     window.__mastDriftQueueHasMore = batch.length > pageSize;
     if (window.__mastDriftQueueHasMore) batch = batch.slice(0, pageSize);
@@ -24845,10 +24836,9 @@ async function openSyncLog() {
   if (!container) return;
   container.innerHTML = '<div class="loading">Loading sync log...</div>';
   try {
-    var snap = await firebase.database().ref(MastDB.tenantId() + '/admin/syncLog')
-      .orderByChild('timestamp').limitToLast(50).once('value');
-    var data = [];
-    snap.forEach(function(child) { var v = child.val(); if (v) data.push(v); });
+    var logMap = await MastDB.query('admin/syncLog')
+      .orderByChild('timestamp').limitToLast(50).once();
+    var data = Object.keys(logMap || {}).map(function(k) { return logMap[k]; }).filter(Boolean);
     data.sort(function(a, b) { return (b.timestamp || '').localeCompare(a.timestamp || ''); });
     window.__mastSyncLogData = data;
     renderSyncLog();
@@ -24973,8 +24963,7 @@ async function openSyncRules() {
       await openSyncRulesUnified();
       return;
     }
-    var snap = await firebase.database().ref(MastDB.tenantId() + '/admin/syncRules/shopify').once('value');
-    window.__mastSyncRules = snap.val() || {};
+    window.__mastSyncRules = (await MastDB.get('admin/syncRules/shopify')) || {};
     renderSyncRulesLegacy();
   } catch (err) {
     container.innerHTML = '<p style="color:var(--danger);font-size:0.85rem;">Failed to load: ' + esc(err.message) + '</p>';
@@ -25042,7 +25031,7 @@ async function saveSyncRule(field, action) {
   try {
     var now = new Date().toISOString();
     var userId = firebase.auth().currentUser ? firebase.auth().currentUser.uid : 'unknown';
-    await firebase.database().ref(MastDB.tenantId() + '/admin/syncRules/shopify/' + field).set({
+    await MastDB.set('admin/syncRules/shopify/' + field, {
       action: action,
       updatedAt: now,
       updatedBy: userId
@@ -25061,7 +25050,7 @@ async function resetAllSyncRules() {
   var ok = await mastConfirm('Reset all sync rules to "Notify"? This means all drift will require manual review.', { title: 'Reset Sync Rules', confirmLabel: 'Reset All', danger: true });
   if (!ok) return;
   try {
-    await firebase.database().ref(MastDB.tenantId() + '/admin/syncRules/shopify').remove();
+    await MastDB.remove('admin/syncRules/shopify');
     window.__mastSyncRules = {};
     renderSyncRulesLegacy();
     showToast('All sync rules reset to Notify');
@@ -32995,9 +32984,7 @@ function renderImportStatusBanner() {
 
 async function loadCustomDashboardCards() {
   try {
-    var db = firebase.database();
-    var snap = await db.ref('mast-platform/dashboardCards').once('value');
-    var val = snap.val();
+    var val = await MastDB.platform.get('mast-platform/dashboardCards');
     if (!val) { customDashboardCards = []; return; }
     var parent = document.getElementById('dashboardCards');
     customDashboardCards = [];

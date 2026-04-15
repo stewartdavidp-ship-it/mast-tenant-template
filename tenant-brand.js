@@ -167,11 +167,13 @@
     // Update footer logo and gate logos — try brand system first, fall back to legacy nav logoUrl
     var tid = window.TENANT_ID;
     if (tid && typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0) {
-      var tenantDb = firebase.database();
+      // Ensure MastDB is initialized — tenant-brand.js may run before host page inits it.
+      if (typeof MastDB !== 'undefined' && !MastDB.tenantId()) {
+        MastDB.init({ db: firebase.database(), tenantId: tid });
+      }
 
       // Try brand logo system first (write-time resolved URLs)
-      tenantDb.ref(tid + '/public/config/brand/logo/footer').once('value').then(function(brandSnap) {
-        var brandFooter = brandSnap.val();
+      MastDB.get('public/config/brand/logo/footer').then(function(brandFooter) {
         if (brandFooter && brandFooter.url) {
           var logoEls = document.querySelectorAll('.footer-logo img, .ws-gate-logo');
           for (var fi = 0; fi < logoEls.length; fi++) {
@@ -183,8 +185,7 @@
           }
         } else {
           // Fall back to legacy nav logoUrl
-          tenantDb.ref(tid + '/public/config/nav/logoUrl').once('value').then(function(snap) {
-            var logoUrl = snap.val();
+          MastDB.get('public/config/nav/logoUrl').then(function(logoUrl) {
             if (logoUrl) {
               var logoEls = document.querySelectorAll('.footer-logo img, .ws-gate-logo');
               for (var fi = 0; fi < logoEls.length; fi++) {
@@ -201,8 +202,7 @@
         }
       }).catch(function() {
         // Brand system read failed — fall back to legacy
-        tenantDb.ref(tid + '/public/config/nav/logoUrl').once('value').then(function(snap) {
-          var logoUrl = snap.val();
+        MastDB.get('public/config/nav/logoUrl').then(function(logoUrl) {
           if (logoUrl) {
             var logoEls = document.querySelectorAll('.footer-logo img, .ws-gate-logo');
             for (var fi = 0; fi < logoEls.length; fi++) {
@@ -214,8 +214,7 @@
       });
 
       // Favicon — read from brand system if configured
-      tenantDb.ref(tid + '/public/config/brand/logo/favicon/url').once('value').then(function(favSnap) {
-        var faviconUrl = favSnap.val();
+      MastDB.get('public/config/brand/logo/favicon/url').then(function(faviconUrl) {
         if (faviconUrl) {
           var link = document.querySelector('link[rel="icon"]') || document.querySelector('link[rel="shortcut icon"]');
           if (link) {

@@ -456,9 +456,12 @@
                 if (manifest && manifest.homepageFlow) applyHomepageFlow(manifest);
                 return;
               }
+              // Ensure MastDB is initialized — storefront-theme.js may run before host inits it.
+              if (typeof MastDB !== 'undefined' && !MastDB.tenantId()) {
+                MastDB.init({ db: db, tenantId: window.TENANT_ID });
+              }
               // Check for custom section order
-              db.ref(window.TENANT_ID + '/public/config/sectionOrder').once('value').then(function(snap) {
-                var customOrder = snap.val();
+              MastDB.get('public/config/sectionOrder').then(function(customOrder) {
                 if (customOrder && Array.isArray(customOrder) && customOrder.length > 0) {
                   applyHomepageFlow({ homepageFlow: customOrder, id: 'custom' });
                 } else if (manifest && manifest.homepageFlow) {
@@ -468,8 +471,7 @@
                 if (manifest && manifest.homepageFlow) applyHomepageFlow(manifest);
               });
               // Apply per-section styling (background, spacing)
-              db.ref(window.TENANT_ID + '/webPresence/config/sections').once('value').then(function(snap) {
-                var configs = snap.val();
+              MastDB.get('webPresence/config/sections').then(function(configs) {
                 if (!configs) return;
                 var spacingPresets = { compact: '3rem', normal: '5rem', spacious: '9rem' };
                 Object.keys(configs).forEach(function(sectionId) {

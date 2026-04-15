@@ -96,7 +96,9 @@ var MastDB = (function() {
       else if (spec.orderBy === 'value') q = q.orderByValue();
       if (spec.equalTo !== undefined) q = q.equalTo(spec.equalTo);
       if (spec.startAt !== undefined) q = q.startAt(spec.startAt);
+      if (spec.startAfter !== undefined) q = q.startAfter(spec.startAfter);
       if (spec.endAt !== undefined) q = q.endAt(spec.endAt);
+      if (spec.endBefore !== undefined) q = q.endBefore(spec.endBefore);
       if (spec.limitToFirst !== undefined) q = q.limitToFirst(spec.limitToFirst);
       if (spec.limitToLast !== undefined) q = q.limitToLast(spec.limitToLast);
       return q;
@@ -107,7 +109,9 @@ var MastDB = (function() {
       orderByValue: function() { return extend({ orderBy: 'value' }); },
       equalTo: function(v) { return extend({ equalTo: v }); },
       startAt: function(v) { return extend({ startAt: v }); },
+      startAfter: function(v) { return extend({ startAfter: v }); },
       endAt: function(v) { return extend({ endAt: v }); },
+      endBefore: function(v) { return extend({ endBefore: v }); },
       limitToFirst: function(n) { return extend({ limitToFirst: n }); },
       limitToLast: function(n) { return extend({ limitToLast: n }); },
       once: function() {
