@@ -1149,8 +1149,11 @@
           if (!vp) continue;
           if (vp < lowest) lowest = vp;
           if (_productSaleInfo) {
+            // Channel-First Phase 1b (D30) — saleInfo.variants may contain stable IDs OR legacy combo-keys.
             var vKey = v.combo ? (window._requiredOptions || []).map(function(l) { return v.combo[l]; }).join('|') : '';
-            var variantInSale = !_productSaleInfo.variants || (_productSaleInfo.variants.indexOf(vKey) !== -1);
+            var variantInSale = !_productSaleInfo.variants
+              || (v.id && _productSaleInfo.variants.indexOf(v.id) !== -1)
+              || (_productSaleInfo.variants.indexOf(vKey) !== -1);
             var effPrice = variantInSale ? _calcSalePrice(vp) : vp;
             if (variantInSale) anySaleApplied = true;
           } else {
@@ -1655,8 +1658,12 @@
     if (saleInfo && baseCents) {
       // For variant products, check if this combo is included
       if (window._resolvedVariantPrice && saleInfo.variants) {
+        // Channel-First Phase 1b (D30) — saleInfo.variants may contain stable IDs OR legacy combo-key strings.
+        // Dual-read: try stable ID first, fall back to combo-key match.
+        var saleVariant = findVariant(window._productVariants, window._selectedOptions);
+        var saleVid = saleVariant && saleVariant.id ? saleVariant.id : null;
         var comboKey = (window._requiredOptions || []).map(function(l) { return (window._selectedOptions || {})[l]; }).join('|');
-        onSale = saleInfo.variants.indexOf(comboKey) !== -1;
+        onSale = (saleVid && saleInfo.variants.indexOf(saleVid) !== -1) || saleInfo.variants.indexOf(comboKey) !== -1;
       } else if (window._resolvedVariantPrice && !saleInfo.variants) {
         onSale = true; // all variants on sale
       } else if (!window._resolvedVariantPrice) {
@@ -2064,11 +2071,12 @@
 
   /**
    * Resolve variant-specific badge (checks per-variant stock for strict/stock-to-build).
+   * Channel-First Phase 1b (D30) — variantId is the stable variant ID (v_pushKey).
    */
-  function resolveVariantBadge(product, comboKey, config) {
+  function resolveVariantBadge(product, variantId, config) {
     var si = product.stockInfo;
-    if (!si || !si.variants || !si.variants[comboKey]) return resolveBadge(product, config);
-    var v = si.variants[comboKey];
+    if (!si || !si.variants || !si.variants[variantId]) return resolveBadge(product, config);
+    var v = si.variants[variantId];
     var effective = (v.available || 0);
     var badges = (config && config.badges) || {};
     var stockType = v.inventoryModeOverride || si.stockType;

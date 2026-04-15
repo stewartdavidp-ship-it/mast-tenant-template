@@ -22854,6 +22854,50 @@ function showBulkPublishButton() {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Channel-First Phase 1b — Stable Variant ID Backfill (one-shot)
+// Walks all products and assigns stable IDs (v_<pushKey>) to any variant
+// lacking one. Idempotent: variants with existing IDs are left untouched.
+// Run from admin console: backfillVariantIds()  or  backfillVariantIds({dryRun:true})
+// ---------------------------------------------------------------------------
+async function backfillVariantIds(opts) {
+  opts = opts || {};
+  var dryRun = !!opts.dryRun;
+  if (!hasPermission('products', 'update')) { showToast('You do not have permission to update products.', true); return; }
+  var snap = await MastDB.products.ref().once('value');
+  var all = snap.val() || {};
+  var pids = Object.keys(all);
+  var report = { total: pids.length, productsTouched: 0, variantsAssigned: 0, productsSkipped: 0, errors: [] };
+  for (var i = 0; i < pids.length; i++) {
+    var pid = pids[i];
+    var product = all[pid];
+    if (!product || !Array.isArray(product.variants) || product.variants.length === 0) { report.productsSkipped++; continue; }
+    var changed = false;
+    var newVariants = product.variants.map(function(v) {
+      if (v && !v.id) {
+        changed = true;
+        report.variantsAssigned++;
+        return Object.assign({}, v, { id: 'v_' + MastDB._newKey('products') });
+      }
+      return v;
+    });
+    if (changed) {
+      report.productsTouched++;
+      if (!dryRun) {
+        try {
+          await MastDB.products.ref(pid).update({ variants: newVariants });
+        } catch (e) {
+          report.errors.push({ pid: pid, error: e.message || String(e) });
+        }
+      }
+    }
+  }
+  console.log('[backfillVariantIds]', dryRun ? '(dry run)' : '', report);
+  showToast('Variant ID backfill: ' + report.variantsAssigned + ' assigned across ' + report.productsTouched + ' products' + (dryRun ? ' (dry run)' : ''));
+  return report;
+}
+window.backfillVariantIds = backfillVariantIds;
+
 async function bulkPublishToShopify() {
   if (!hasPermission('products', 'update')) { showToast('You do not have permission to publish products.', true); return; }
   // Get all active products
@@ -24608,7 +24652,9 @@ async function saveProduct(pid) {
           });
           // Channel-First Phase 1a — Retail input is the primary; mirror to retailPriceCents.
           var variant = { combo: combo, priceCents: priceVal, retailPriceCents: priceVal };
-          if (existing && existing.id) variant.id = existing.id;
+          // Channel-First Phase 1b (D30) — every variant gets a stable ID. Format: v_<pushKey>.
+          // Preserve existing.id for already-stable-keyed variants.
+          variant.id = (existing && existing.id) ? existing.id : ('v_' + MastDB._newKey('products'));
           // Read direct price from sibling input
           var directInput = document.querySelector('.pd-variant-direct-price[data-combo=\'' + input.getAttribute('data-combo') + '\']');
           if (directInput && directInput.value.trim()) {

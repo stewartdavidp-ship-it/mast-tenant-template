@@ -977,8 +977,11 @@ window.TENANT_READY.then(function() {
               if (typeof vp !== 'number' || vp <= 0) vp = (typeof v.priceCents === 'number') ? v.priceCents : priceCentsVal;
               if (typeof vp !== 'number') continue;
               if (vp < minOriginal) minOriginal = vp;
+              // Channel-First Phase 1b (D30) — saleInfo.variants may contain stable IDs OR legacy combo-keys.
               var vKey = v.combo ? Object.values(v.combo).join('|') : (v.name || '');
-              var variantInSale = !saleInfo.variants || (vKey && saleInfo.variants.indexOf(vKey) !== -1);
+              var variantInSale = !saleInfo.variants
+                || (v.id && saleInfo.variants.indexOf(v.id) !== -1)
+                || (vKey && saleInfo.variants.indexOf(vKey) !== -1);
               var effectivePrice = variantInSale ? calcSalePrice(vp, saleInfo.discountType, saleInfo.discountValue) : vp;
               if (effectivePrice < minEffective) minEffective = effectivePrice;
             }
