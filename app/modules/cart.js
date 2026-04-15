@@ -52,11 +52,11 @@
     }
 
     Promise.all([
-      db.ref(tenantId + '/admin/walletConfig').once('value'),
-      db.ref(tenantId + '/admin/membership/config').once('value')
-    ]).then(function(snaps) {
-      var config = snaps[0].val() || {};
-      var msConfig = snaps[1].val() || {};
+      MastDB.get('admin/walletConfig'),
+      MastDB.get('admin/membership/config')
+    ]).then(function(results) {
+      var config = results[0] || {};
+      var msConfig = results[1] || {};
       walletLoaded = true;
       giftCardConfig = config;
 
@@ -108,10 +108,10 @@
     if (!db || !tenantId) return;
 
     Promise.all([
-      db.ref(tenantId + '/admin/walletConfig').once('value'),
+      MastDB.get('admin/walletConfig'),
       MastDB.giftCards.list(200)
     ]).then(function(results) {
-      giftCardConfig = results[0].val() || {};
+      giftCardConfig = results[0] || {};
       var cardsSnap = results[1].val() || {};
       giftCardsData = cardsSnap;
       giftCardsLoaded = true;
@@ -558,8 +558,8 @@
 
     container.innerHTML = '<div class="section-header"><h2>Loyalty Program</h2></div><div class="loading">Loading...</div>';
 
-    db.ref(tenantId + '/admin/walletConfig').once('value').then(function(snap) {
-      var config = snap.val() || {};
+    MastDB.get('admin/walletConfig').then(function(config) {
+      config = config || {};
       loyaltyConfig = config;
       renderLoyaltyAdmin(container, config);
     }).catch(function(err) {
@@ -744,11 +744,11 @@
     container.innerHTML = '<div class="loading">Loading membership...</div>';
 
     // Load config first, then members separately (customers query may be slow/empty)
-    db.ref(tenantId + '/admin/membership/config').once('value').then(function(configSnap) {
-      membershipConfig = configSnap.val() || {};
+    MastDB.get('admin/membership/config').then(function(cfg) {
+      membershipConfig = cfg || {};
       // Try loading members but don't block render on it
-      return db.ref(tenantId + '/customers').orderByChild('membership/status').limitToLast(200).once('value').then(function(custSnap) {
-        var custData = custSnap.val() || {};
+      return MastDB.query('customers').orderByChild('membership/status').limitToLast(200).once().then(function(custData) {
+        custData = custData || {};
         membershipMembers = [];
         Object.keys(custData).forEach(function(uid) {
           var c = custData[uid];
@@ -1031,7 +1031,7 @@
     if (!db || !tenantId) return;
 
     try {
-      await db.ref(tenantId + '/admin/membership/config').update(data);
+      await MastDB.update('admin/membership/config', data);
       writeAudit('update', 'membership-config', 'settings');
       membershipConfig = Object.assign(membershipConfig || {}, data);
       closeModal();
@@ -1082,8 +1082,8 @@
     };
 
     try {
-      await db.ref(tenantId + '/public/accounts/' + uid + '/wallet/membership').set(memberData);
-      await db.ref(tenantId + '/customers/' + uid + '/membership').set(memberData);
+      await MastDB.set('public/accounts/' + uid + '/wallet/membership', memberData);
+      await MastDB.set('customers/' + uid + '/membership', memberData);
       writeAudit('create', 'membership-grant', uid);
       closeModal();
       showToast('Membership granted');
@@ -1104,8 +1104,8 @@
     var updates = { status: 'expired', expiredAt: now, updatedAt: now, paymentStatus: null };
 
     try {
-      await db.ref(tenantId + '/public/accounts/' + uid + '/wallet/membership').update(updates);
-      await db.ref(tenantId + '/customers/' + uid + '/membership').update(updates);
+      await MastDB.update('public/accounts/' + uid + '/wallet/membership', updates);
+      await MastDB.update('customers/' + uid + '/membership', updates);
       writeAudit('update', 'membership-revoke', uid);
       showToast('Membership revoked');
       loadMembershipAdmin();
@@ -1134,8 +1134,8 @@
     };
 
     try {
-      await db.ref(tenantId + '/public/accounts/' + uid + '/wallet/membership').update(updates);
-      await db.ref(tenantId + '/customers/' + uid + '/membership').update(updates);
+      await MastDB.update('public/accounts/' + uid + '/wallet/membership', updates);
+      await MastDB.update('customers/' + uid + '/membership', updates);
       writeAudit('update', 'membership-reactivate', uid);
       showToast('Membership reactivated');
       loadMembershipAdmin();

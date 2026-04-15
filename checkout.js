@@ -114,30 +114,34 @@
   }
 
   // ── Firebase helpers ──
-  function getDb() {
+  // Ensure MastDB is initialized before any data operation.
+  // Returns true when ready, false when Firebase app isn't available yet.
+  function ensureMastDB() {
+    if (typeof MastDB === 'undefined') return false;
     var app = window.MastCart.getFirebaseApp();
-    return app ? app.database() : null;
+    if (!app) return false;
+    if (!MastDB.tenantId()) {
+      MastDB.init({ db: app.database(), tenantId: TENANT_ID });
+    }
+    return !!MastDB.tenantId();
   }
 
   function fetchShippingConfig(callback) {
     if (shippingConfigCache) { callback(shippingConfigCache); return; }
-    var db = getDb();
-    if (!db) { callback(DEFAULT_SHIPPING_CONFIG); return; }
-    db.ref(TENANT_ID + '/public/config/shippingRates').once('value').then(function (snap) {
-      shippingConfigCache = snap.val() || DEFAULT_SHIPPING_CONFIG;
+    if (!ensureMastDB()) { callback(DEFAULT_SHIPPING_CONFIG); return; }
+    MastDB.get('public/config/shippingRates').then(function (val) {
+      shippingConfigCache = val || DEFAULT_SHIPPING_CONFIG;
       callback(shippingConfigCache);
     }).catch(function () { callback(DEFAULT_SHIPPING_CONFIG); });
   }
 
   function fetchProductShippingData(pids, callback) {
-    var db = getDb();
-    if (!db || pids.length === 0) { callback({}); return; }
+    if (!ensureMastDB() || pids.length === 0) { callback({}); return; }
     var result = {};
     var remaining = pids.length;
     for (var i = 0; i < pids.length; i++) {
       (function (pid) {
-        db.ref(TENANT_ID + '/public/products/' + pid).once('value').then(function (snap) {
-          var prod = snap.val();
+        MastDB.get('public/products/' + pid).then(function (prod) {
           if (prod) {
             result[pid] = { weightOz: prod.weightOz || 16, shippingCategory: prod.shippingCategory || 'small' };
           } else {
@@ -258,10 +262,9 @@
   }
 
   function fetchTaxRate(state, callback) {
-    var db = getDb();
-    if (!db || !state) { callback(0); return; }
-    db.ref(TENANT_ID + '/public/taxRates/' + state.toUpperCase()).once('value').then(function (snap) {
-      callback(snap.val() || 0);
+    if (!ensureMastDB() || !state) { callback(0); return; }
+    MastDB.get('public/taxRates/' + state.toUpperCase()).then(function (val) {
+      callback(val || 0);
     }).catch(function () { callback(0); });
   }
 
@@ -1219,13 +1222,12 @@
     checkoutData.walletCreditApplied = false;
     var user = window.MastCart && window.MastCart.getCurrentUser();
     if (!user || user.isAnonymous) { walletLoadDone(); return; }
-    var db = getDb();
-    if (!db) { walletLoadDone(); return; }
+    if (!ensureMastDB()) { walletLoadDone(); return; }
 
-    db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/wallet/credits')
-      .orderByChild('status').equalTo('active').once('value')
-      .then(function(snap) {
-        var data = snap.val() || {};
+    MastDB.query('public/accounts/' + user.uid + '/wallet/credits')
+      .orderByChild('status').equalTo('active').once()
+      .then(function(data) {
+        data = data || {};
         var now = new Date().toISOString();
         checkoutData.walletCredits = Object.keys(data).map(function(id) {
           var c = data[id];
@@ -1259,13 +1261,11 @@
     checkoutData.walletGiftCardApplied = false;
     var user = window.MastCart && window.MastCart.getCurrentUser();
     if (!user || user.isAnonymous) { walletLoadDone(); return; }
-    var db = getDb();
-    if (!db) { walletLoadDone(); return; }
+    if (!ensureMastDB()) { walletLoadDone(); return; }
 
-    db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/wallet/giftCards')
-      .once('value')
-      .then(function(snap) {
-        var data = snap.val() || {};
+    MastDB.get('public/accounts/' + user.uid + '/wallet/giftCards')
+      .then(function(data) {
+        data = data || {};
         var now = new Date().toISOString();
         checkoutData.walletGiftCards = Object.keys(data).map(function(id) {
           var g = data[id];
@@ -1302,13 +1302,11 @@
     checkoutData.savedCoupons = [];
     var user = window.MastCart && window.MastCart.getCurrentUser();
     if (!user || user.isAnonymous) return;
-    var db = getDb();
-    if (!db) return;
+    if (!ensureMastDB()) return;
 
-    db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/wallet/coupons')
-      .once('value')
-      .then(function(snap) {
-        var data = snap.val() || {};
+    MastDB.get('public/accounts/' + user.uid + '/wallet/coupons')
+      .then(function(data) {
+        data = data || {};
         checkoutData.savedCoupons = Object.keys(data).map(function(id) {
           var c = data[id];
           c._id = id;
@@ -1330,13 +1328,11 @@
     checkoutData.passAssignments = {};
     var user = window.MastCart && window.MastCart.getCurrentUser();
     if (!user || user.isAnonymous) { walletLoadDone(); return; }
-    var db = getDb();
-    if (!db) { walletLoadDone(); return; }
+    if (!ensureMastDB()) { walletLoadDone(); return; }
 
-    db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/passes')
-      .once('value')
-      .then(function(snap) {
-        var data = snap.val() || {};
+    MastDB.get('public/accounts/' + user.uid + '/passes')
+      .then(function(data) {
+        data = data || {};
         var now = new Date().toISOString();
         var activePasses = Object.keys(data).map(function(id) {
           var p = data[id];
@@ -1356,8 +1352,8 @@
         activePasses.forEach(function(p) { if (p.passDefinitionId) defIds[p.passDefinitionId] = true; });
         var defKeys = Object.keys(defIds);
         var defPromises = defKeys.map(function(defId) {
-          return db.ref(TENANT_ID + '/public/passDefinitions/' + defId).once('value')
-            .then(function(s) { return { id: defId, val: s.val() }; });
+          return MastDB.get('public/passDefinitions/' + defId)
+            .then(function(val) { return { id: defId, val: val }; });
         });
 
         // Also fetch class data for class items in cart (for category matching)
@@ -1367,8 +1363,8 @@
         var classPromises = Object.keys(classIds).map(function(cid) {
           // Strip -series suffix if present
           var baseId = cid.replace(/-series$/, '');
-          return db.ref(TENANT_ID + '/public/classes/' + baseId).once('value')
-            .then(function(s) { return { id: cid, val: s.val() }; })
+          return MastDB.get('public/classes/' + baseId)
+            .then(function(val) { return { id: cid, val: val }; })
             .catch(function() { return { id: cid, val: null }; });
         });
 
@@ -1545,13 +1541,12 @@
     checkoutData.loyaltyApplied = false;
     var user = window.MastCart && window.MastCart.getCurrentUser();
     if (!user || user.isAnonymous) { walletLoadDone(); return; }
-    var db = getDb();
-    if (!db) { walletLoadDone(); return; }
+    if (!ensureMastDB()) { walletLoadDone(); return; }
 
     // Load config
-    db.ref(TENANT_ID + '/admin/walletConfig').once('value')
-      .then(function(snap) {
-        var config = snap.val() || {};
+    MastDB.get('admin/walletConfig')
+      .then(function(config) {
+        config = config || {};
         if (!config.loyaltyEnabled) return;
         checkoutData.loyaltyConfig = {
           enabled: true,
@@ -1563,11 +1558,10 @@
         };
 
         // Load balance
-        return db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/wallet/loyalty').once('value');
+        return MastDB.get('public/accounts/' + user.uid + '/wallet/loyalty');
       })
-      .then(function(loyaltySnap) {
-        if (!loyaltySnap) return;
-        var data = loyaltySnap.val();
+      .then(function(data) {
+        if (data === undefined) return;
         if (data && data.totalPoints > 0) {
           // Check expiry
           var now = new Date();
@@ -1592,20 +1586,16 @@
     checkoutData.effectiveMember = false;
     var user = window.MastCart && window.MastCart.getCurrentUser();
     if (!user || user.isAnonymous) { walletLoadDone(); return; }
-    var db = getDb();
-    if (!db) { walletLoadDone(); return; }
+    if (!ensureMastDB()) { walletLoadDone(); return; }
 
-    db.ref(TENANT_ID + '/admin/membership/config').once('value')
-      .then(function(cfgSnap) {
-        var config = cfgSnap.val();
+    MastDB.get('admin/membership/config')
+      .then(function(config) {
         if (!config || !config.enabled) { walletLoadDone(); return; }
         checkoutData.membershipConfig = config;
 
-        return db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/wallet/membership').once('value');
+        return MastDB.get('public/accounts/' + user.uid + '/wallet/membership');
       })
-      .then(function(statusSnap) {
-        if (!statusSnap) { walletLoadDone(); return; }
-        var status = statusSnap.val();
+      .then(function(status) {
         if (!status) { walletLoadDone(); return; }
         checkoutData.membershipStatus = status;
 
@@ -1693,11 +1683,10 @@
     }
     var user = window.MastCart && window.MastCart.getCurrentUser();
     if (!user || user.isAnonymous) return Promise.resolve();
-    var db = getDb();
-    if (!db) return Promise.resolve();
+    if (!ensureMastDB()) return Promise.resolve();
 
     var now = new Date().toISOString();
-    var basePath = TENANT_ID + '/public/accounts/' + user.uid + '/wallet/loyalty';
+    var basePath = 'public/accounts/' + user.uid + '/wallet/loyalty';
     var updates = {};
     var currentPoints = (checkoutData.loyaltyBalance && checkoutData.loyaltyBalance.totalPoints) || 0;
 
@@ -1740,7 +1729,7 @@
     }
 
     if (Object.keys(updates).length === 0) return Promise.resolve();
-    return db.ref().update(updates);
+    return MastDB.multiUpdate(updates);
   }
 
   // ── Gift Cards: Consume at checkout ──
@@ -1754,8 +1743,7 @@
 
     var user = window.MastCart && window.MastCart.getCurrentUser();
     if (!user || user.isAnonymous) return Promise.resolve();
-    var db = getDb();
-    if (!db) return Promise.resolve();
+    if (!ensureMastDB()) return Promise.resolve();
 
     // Calculate how much gift card to apply — cents-native. Use saved state if cart is empty.
     // walletState fields may still be dollar-era from pre-refactor redirects — convert on the fly.
@@ -1786,7 +1774,7 @@
       var g = gcCards[i];
       var available = g.remainingCents || 0;
       var useCents = Math.min(available, remaining);
-      var gcPath = TENANT_ID + '/public/accounts/' + user.uid + '/wallet/giftCards/' + g._id;
+      var gcPath = 'public/accounts/' + user.uid + '/wallet/giftCards/' + g._id;
 
       updates[gcPath + '/remainingCents'] = available - useCents;
       updates[gcPath + '/updatedAt'] = now;
@@ -1807,7 +1795,7 @@
     }
 
     if (Object.keys(updates).length === 0) return Promise.resolve();
-    return db.ref().update(updates);
+    return MastDB.multiUpdate(updates);
   }
 
   function consumeWalletCredits(orderId) {
@@ -1819,8 +1807,7 @@
 
     var user = window.MastCart && window.MastCart.getCurrentUser();
     if (!user || user.isAnonymous) return Promise.resolve();
-    var db = getDb();
-    if (!db) return Promise.resolve();
+    if (!ensureMastDB()) return Promise.resolve();
 
     // Cents-native. walletState fields may be dollar-era — convert on the fly.
     var subtotalCents = calcSubtotal();
@@ -1842,7 +1829,7 @@
       var c = credits[i];
       var available = c.remainingCents != null ? c.remainingCents : (c.amountCents || 0);
       var useCents = Math.min(available, remainingCents);
-      var creditPath = TENANT_ID + '/public/accounts/' + user.uid + '/wallet/credits/' + c._id;
+      var creditPath = 'public/accounts/' + user.uid + '/wallet/credits/' + c._id;
       var newRemaining = available - useCents;
 
       // Update remaining balance
@@ -1867,7 +1854,7 @@
     }
 
     if (Object.keys(updates).length === 0) return Promise.resolve();
-    return db.ref().update(updates);
+    return MastDB.multiUpdate(updates);
   }
 
   // ── Render: Review Step ──
@@ -2435,19 +2422,19 @@
       statusHistory: [{ status: 'placed', at: now, by: 'wallet-checkout' }]
     };
 
-    var orderRef = db.ref(TENANT_ID + '/orders').push();
-    orderRef.set(orderData).then(function() {
+    var orderKey = MastDB.newKey('orders');
+    MastDB.set('orders/' + orderKey, orderData).then(function() {
       trackCheckoutEvent('wallet_order_placed');
 
       // Consume wallet instruments BEFORE clearing cart (calcSubtotal needs cart items)
-      consumeWalletGiftCards(orderRef.key);
-      consumeWalletCredits(orderRef.key);
-      processLoyaltyForOrder(orderRef.key);
+      consumeWalletGiftCards(orderKey);
+      consumeWalletCredits(orderKey);
+      processLoyaltyForOrder(orderKey);
 
       // Provision passes, enrollments, gift cards
-      provisionCustomerPasses(items, orderRef.key);
-      provisionSeriesEnrollments(items, orderRef.key);
-      issueGiftCardsClientSide(items, orderRef.key, orderNumber);
+      provisionCustomerPasses(items, orderKey);
+      provisionSeriesEnrollments(items, orderKey);
+      issueGiftCardsClientSide(items, orderKey, orderNumber);
 
       // Clear cart after all processing
       window.MastCart.clear();
@@ -2578,33 +2565,31 @@
     };
 
     // Write to Firebase orders (same path as retail, with type: 'wholesale')
-    var db = getDb();
-    if (!db) {
+    if (!ensureMastDB()) {
       isSubmitting = false;
       if (btn) { btn.disabled = false; btn.textContent = 'Place Order (Pay by Check)'; }
       window.MastCart.showToast('Database not available', true);
       return;
     }
 
-    var orderRef = db.ref(TENANT_ID + '/orders').push();
-    orderRef.set(orderData).then(function() {
+    var orderKey = MastDB.newKey('orders');
+    MastDB.set('orders/' + orderKey, orderData).then(function() {
       isSubmitting = false;
       window.MastCart.clear();
       trackCheckoutEvent('wholesale_check_order_placed');
 
       // Update wholesaler resale cert if provided
-      if (checkoutData.resaleCertNumber && user && user.email && window.MastCart.getFirebaseApp) {
+      if (checkoutData.resaleCertNumber && user && user.email) {
         try {
-          var wsDb = window.MastCart.getFirebaseApp().database();
           var emailKey = user.email.toLowerCase().replace(/\./g, ',');
-          wsDb.ref(TENANT_ID + '/admin/wholesaleAuthorized/' + emailKey + '/resaleCertNumber')
-            .set(checkoutData.resaleCertNumber);
+          MastDB.set('admin/wholesaleAuthorized/' + emailKey + '/resaleCertNumber',
+            checkoutData.resaleCertNumber);
         } catch (e) { /* silent — order already placed successfully */ }
       }
 
       // Provision CustomerPass records for any pass items
-      provisionCustomerPasses(items, orderRef.key);
-      provisionSeriesEnrollments(items, orderRef.key);
+      provisionCustomerPasses(items, orderKey);
+      provisionSeriesEnrollments(items, orderKey);
       // Wallet consumption handled server-side for pay-by-card orders.
       // Check orders bypass submitOrder, so wallet isn't typically used here.
 
@@ -2672,9 +2657,7 @@
   // ── Analytics ──
   function trackCheckoutEvent(action) {
     try {
-      var db = getDb();
-      if (!db) return;
-      var hitRef = db.ref(TENANT_ID + '/analytics/hits').push();
+      if (!ensureMastDB()) return;
       var page = location.pathname.split('/').pop().replace('.html', '') || 'index';
       if (page.length > 20) page = page.substring(0, 20);
       var now = new Date();
@@ -2683,7 +2666,7 @@
         String(now.getDate()).padStart(2, '0');
       var hit = { t: 'ev', p: page, ts: Date.now(), d: d, a: action };
       if (hit.a && hit.a.length > 40) hit.a = hit.a.substring(0, 40);
-      hitRef.set(hit).catch(function () {});
+      MastDB.push('analytics/hits', hit).catch(function () {});
     } catch (e) { /* silent */ }
   }
 
@@ -2837,8 +2820,7 @@
   function provisionCustomerPasses(items, orderId) {
     var user = window.MastCart && window.MastCart.getCurrentUser();
     if (!user || user.isAnonymous) return;
-    var db = getDb();
-    if (!db) return;
+    if (!ensureMastDB()) return;
 
     var passItems = (items || []).filter(function(it) {
       return it.bookingType === 'pass' && it.passDefinitionId;
@@ -2847,23 +2829,20 @@
 
     passItems.forEach(function(item) {
       // Idempotency: check if server already provisioned a pass for this order+definition
-      db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/passes')
-        .orderByChild('orderId').equalTo(orderId || '__none__').limitToLast(10).once('value')
-        .then(function(existSnap) {
-          var alreadyProvisioned = false;
-          if (existSnap.exists()) {
-            existSnap.forEach(function(child) {
-              if (child.val().passDefinitionId === item.passDefinitionId) alreadyProvisioned = true;
-            });
-          }
+      MastDB.query('public/accounts/' + user.uid + '/passes')
+        .orderByChild('orderId').equalTo(orderId || '__none__').limitToLast(10).once()
+        .then(function(existMap) {
+          existMap = existMap || {};
+          var alreadyProvisioned = Object.keys(existMap).some(function(k) {
+            return existMap[k].passDefinitionId === item.passDefinitionId;
+          });
           if (alreadyProvisioned) {
             console.log('[checkout] Pass already provisioned for', item.passDefinitionId, '— skipping');
             return;
           }
 
-          return db.ref(TENANT_ID + '/public/passDefinitions/' + item.passDefinitionId).once('value')
-            .then(function(snap) {
-              var def = snap.val();
+          return MastDB.get('public/passDefinitions/' + item.passDefinitionId)
+            .then(function(def) {
               if (!def) {
                 console.warn('[checkout] Pass definition not found:', item.passDefinitionId);
                 return;
@@ -2898,8 +2877,8 @@
                 orderId: orderId || null
               };
 
-              var passId = db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/wallet/passes').push().key;
-              return db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/passes/' + passId).set(passData)
+              var passId = MastDB.newKey('public/accounts/' + user.uid + '/wallet/passes');
+              return MastDB.set('public/accounts/' + user.uid + '/passes/' + passId, passData)
                 .then(function() { console.log('[checkout] CustomerPass created:', passId); });
             });
         })
@@ -2917,8 +2896,7 @@
     if (gcItems.length === 0) return;
     var user = window.MastCart && window.MastCart.getCurrentUser();
     if (!user) return;
-    var db = getDb();
-    if (!db) return;
+    if (!ensureMastDB()) return;
     var now = new Date().toISOString();
     var expiresAt = new Date();
     expiresAt.setFullYear(expiresAt.getFullYear() + 2);
@@ -2941,14 +2919,14 @@
 
         if (isSelf) {
           // Add to buyer's wallet
-          db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/wallet/giftCards').push().set({
+          MastDB.push('public/accounts/' + user.uid + '/wallet/giftCards', {
             code: code, amountCents: amountCents, remainingCents: amountCents,
             sourceOrderId: orderId, issuedAt: now, expiresAt: expiresIso,
             status: 'active', claimedAt: now
           });
         } else if (recipientEmail) {
           // For gift-type on $0 orders, write tracking and trigger email via cloud function
-          db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/giftCardsSent/' + code).set({
+          MastDB.set('public/accounts/' + user.uid + '/giftCardsSent/' + code, {
             recipientEmail: recipientEmail, amountCents: amountCents,
             status: 'sent', issuedAt: now
           });
@@ -2967,15 +2945,15 @@
 
   // ── Student Auto-Create ──
   // After enrollment, ensure a student record exists for this user.
-  function ensureStudentRecord(db, user) {
-    if (!db || !user || user.isAnonymous || !user.uid) return;
-    var studentsRef = db.ref(TENANT_ID + '/students');
-    studentsRef.orderByChild('uid').equalTo(user.uid).limitToFirst(1).once('value')
-      .then(function(snap) {
-        if (snap.exists()) return; // Student record already exists
+  function ensureStudentRecord(user) {
+    if (!user || user.isAnonymous || !user.uid) return;
+    if (!ensureMastDB()) return;
+    MastDB.query('students').orderByChild('uid').equalTo(user.uid).limitToFirst(1).once()
+      .then(function(existing) {
+        if (existing && Object.keys(existing).length > 0) return; // Student record already exists
         // Create minimal student record
         var studentId = 'stu_' + Date.now();
-        studentsRef.child(studentId).set({
+        MastDB.set('students/' + studentId, {
           uid: user.uid,
           displayName: user.displayName || '',
           email: user.email || '',
@@ -3005,8 +2983,7 @@
   function provisionSeriesEnrollments(items, orderId) {
     var user = window.MastCart && window.MastCart.getCurrentUser();
     if (!user || user.isAnonymous) return;
-    var db = getDb();
-    if (!db) return;
+    if (!ensureMastDB()) return;
 
     var seriesItems = (items || []).filter(function(it) {
       return it.bookingType === 'class' && it.classId && !it.sessionId;
@@ -3014,7 +2991,7 @@
     if (seriesItems.length === 0) return;
 
     // Auto-create student record if needed
-    ensureStudentRecord(db, user);
+    ensureStudentRecord(user);
 
     var today = new Date().toISOString().slice(0, 10);
 
@@ -3022,13 +2999,13 @@
       var classId = item.classId.replace('-series', '');
 
       // Increment seriesEnrolled on the class (atomic)
-      db.ref(TENANT_ID + '/public/classes/' + classId + '/seriesEnrolled')
-        .transaction(function(current) { return (current || 0) + 1; });
+      MastDB.transaction('public/classes/' + classId + '/seriesEnrolled',
+        function(current) { return (current || 0) + 1; });
 
       // Find all future sessions for this class and create enrollments
-      db.ref(TENANT_ID + '/public/classSessions').orderByChild('classId').equalTo(classId).once('value')
-        .then(function(snap) {
-          var sessData = snap.val() || {};
+      MastDB.query('public/classSessions').orderByChild('classId').equalTo(classId).once()
+        .then(function(sessData) {
+          sessData = sessData || {};
           var futureSessions = Object.keys(sessData).filter(function(sid) {
             var s = sessData[sid];
             return s.status === 'scheduled' && s.date >= today;
@@ -3036,21 +3013,20 @@
 
           futureSessions.forEach(function(sid) {
             // Idempotency: check if server already created this enrollment
-            db.ref(TENANT_ID + '/public/enrollments')
-              .orderByChild('sessionId').equalTo(sid).limitToLast(10).once('value')
-              .then(function(enrSnap) {
-                var exists = false;
-                if (enrSnap.exists()) {
-                  enrSnap.forEach(function(child) {
-                    if (child.val().studentUid === user.uid && child.val().status === 'confirmed') exists = true;
-                  });
-                }
+            MastDB.query('public/enrollments')
+              .orderByChild('sessionId').equalTo(sid).limitToLast(10).once()
+              .then(function(enrMap) {
+                enrMap = enrMap || {};
+                var exists = Object.keys(enrMap).some(function(k) {
+                  var e = enrMap[k];
+                  return e.studentUid === user.uid && e.status === 'confirmed';
+                });
                 if (exists) {
                   console.log('[checkout] Enrollment already exists for session:', sid, '— skipping');
                   return;
                 }
-                var enrollRef = db.ref(TENANT_ID + '/public/enrollments').push();
-                return enrollRef.set({
+                var enrollId = MastDB.newKey('public/enrollments');
+                return MastDB.set('public/enrollments/' + enrollId, {
                   classId: classId,
                   sessionId: sid,
                   studentUid: user.uid,
@@ -3140,9 +3116,8 @@
       '</div>';
 
     // Load loyalty earned from order record
-    if (orderId) {
-      db.ref(TENANT_ID + '/orders/' + orderId + '/loyaltyEarned').once('value').then(function(snap) {
-        var earned = snap.val();
+    if (orderId && ensureMastDB()) {
+      MastDB.get('orders/' + orderId + '/loyaltyEarned').then(function(earned) {
         if (earned && earned.points > 0) {
           var el = document.getElementById('loyaltyEarnedBadge');
           if (el) {
@@ -3189,10 +3164,9 @@
         return;
       }
       // 2. Fallback: tenant-level key in Firebase
-      var db = getDb();
-      if (!db) { callback(); return; }
-      db.ref(TENANT_ID + '/public/config/googleMapsApiKey').once('value').then(function (snap) {
-        placesApiKey = snap.val();
+      if (!ensureMastDB()) { callback(); return; }
+      MastDB.get('public/config/googleMapsApiKey').then(function (key) {
+        placesApiKey = key;
         if (!placesApiKey) { callback(); return; }
         injectPlacesScript(callback);
       }).catch(function () { callback(); });
@@ -3300,10 +3274,9 @@
 
   // ── Test Mode Banner ──
   function checkTestMode(callback) {
-    var db = getDb();
-    if (!db) { callback(false); return; }
-    db.ref(TENANT_ID + '/public/config/testMode').once('value').then(function (snap) {
-      callback(snap.val() === true);
+    if (!ensureMastDB()) { callback(false); return; }
+    MastDB.get('public/config/testMode').then(function (val) {
+      callback(val === true);
     }).catch(function () { callback(false); });
   }
 
@@ -3383,14 +3356,11 @@
   }
 
   function watchOrderAndDownloadCSV(orderId, pendingOrder) {
-    var db = getDb();
-    if (!db || !pendingOrder) return;
+    if (!ensureMastDB() || !pendingOrder) return;
 
-    var ref = db.ref(TENANT_ID + '/orders/' + orderId + '/status');
-    var handler = ref.on('value', function (snap) {
-      var status = snap.val();
+    var unsub = MastDB.subscribe('orders/' + orderId + '/status', function (status) {
       if (status === 'placed') {
-        ref.off('value', handler);
+        unsub();
         var csv = generatePirateShipCSV(pendingOrder);
         var csvName = 'pirateship-' + (pendingOrder.orderNumber || orderId) + '.csv';
 
@@ -3405,7 +3375,7 @@
       }
     });
     // Safety: auto-detach after 90 seconds
-    setTimeout(function () { ref.off('value', handler); }, 90000);
+    setTimeout(function () { unsub(); }, 90000);
   }
 
   function showCSVDownloadButton() {

@@ -8981,8 +8981,7 @@ var TENANT_CONFIG = null;
 
 async function loadTenantConfig(tenantId) {
   try {
-    var snap = await db.ref('mast-platform/tenants/' + tenantId + '/config').once('value');
-    TENANT_CONFIG = snap.val() || {};
+    TENANT_CONFIG = (await MastDB.platform.get('mast-platform/tenants/' + tenantId + '/config')) || {};
   } catch (err) {
     console.warn('Tenant config load failed, using defaults:', err.message);
     TENANT_CONFIG = {};
@@ -8990,16 +8989,14 @@ async function loadTenantConfig(tenantId) {
   // Read tenant registry fields — try publicConfig first (world-readable), fall back to full registry
   try {
     // publicConfig is readable by anyone — contains tenantStatus, plan, etc.
-    var pcSnap = await db.ref('mast-platform/tenants/' + tenantId + '/publicConfig').once('value');
-    var pc = pcSnap.val() || {};
+    var pc = (await MastDB.platform.get('mast-platform/tenants/' + tenantId + '/publicConfig')) || {};
     TENANT_CONFIG.tenantStatus = pc.tenantStatus || 'active';
     TENANT_CONFIG.plan = pc.plan || 'publish';
     TENANT_CONFIG.registryName = pc.name || pc.brandName || '';
 
     // Try full registry (platformAdmins only — will fail silently for tenant admins)
     try {
-      var registrySnap = await db.ref('mast-platform/tenants/' + tenantId).once('value');
-      var registry = registrySnap.val() || {};
+      var registry = (await MastDB.platform.get('mast-platform/tenants/' + tenantId)) || {};
       TENANT_CONFIG.secretPrefix = registry.secretPrefix || tenantId;
       TENANT_CONFIG.configChecklist = registry.configChecklist || {};
       if (registry.status) TENANT_CONFIG.tenantStatus = registry.status;
@@ -9683,8 +9680,7 @@ MastDB.feedbackSettings = {
 
 MastDB.testingMissions = {
   PATH: 'mast-platform/testingMissions',
-  ref: function() { return db.ref(this.PATH); },
-  list: function() { return this.ref().once('value'); }
+  list: function() { return MastDB.platform.get(this.PATH); }
 };
 
 MastDB.testingMode = {
@@ -11919,7 +11915,7 @@ async function loadUserRole(uid) {
       await MastDB.adminUsers.ref(uid).set(userData);
       // Register in platform userTenantMap so future logins resolve instantly
       if (initialRole !== 'guest') {
-        db.ref('mast-platform/userTenantMap/' + uid + '/' + MastDB.tenantId()).set(true).catch(function(e) {
+        MastDB.platform.set('mast-platform/userTenantMap/' + uid + '/' + MastDB.tenantId(), true).catch(function(e) {
           console.warn('userTenantMap write failed (non-blocking):', e);
         });
       }
@@ -12012,8 +12008,7 @@ async function seedRolesAndAdminUser() {
  */
 async function resolveTenant(uid) {
   try {
-    var mapSnap = await db.ref('mast-platform/userTenantMap/' + uid).once('value');
-    var tenantMap = mapSnap.val();
+    var tenantMap = await MastDB.platform.get('mast-platform/userTenantMap/' + uid);
     if (!tenantMap) return null;
 
     var tenantIds = Object.keys(tenantMap);
@@ -12037,11 +12032,11 @@ async function resolveTenant(uid) {
       var hostTenant = hostMatch[1];
       // Verify this tenant exists in the platform registry before using it
       try {
-        var pcSnap = await db.ref('mast-platform/tenants/' + hostTenant + '/publicConfig/name').once('value');
-        if (pcSnap.val()) {
+        var pcName = await MastDB.platform.get('mast-platform/tenants/' + hostTenant + '/publicConfig/name');
+        if (pcName) {
           // Tenant exists — use it. Add to userTenantMap in the background.
           if (!tenantMap[hostTenant]) {
-            db.ref('mast-platform/userTenantMap/' + uid + '/' + hostTenant).set(true).catch(function() {});
+            MastDB.platform.set('mast-platform/userTenantMap/' + uid + '/' + hostTenant, true).catch(function() {});
           }
           return hostTenant;
         }
@@ -12418,8 +12413,10 @@ auth.onAuthStateChanged(async function(user) {
   var needsClaim = !tenantId;
   if (tenantId && !needsClaim) {
     // Quick check: does the user actually have a role in this tenant?
+    // MastDB isn't init'd yet (that happens after this role check succeeds),
+    // so use the root-ref escape hatch with an explicit tenant-prefixed path.
     try {
-      var roleCheckSnap = await db.ref(tenantId + '/admin/users/' + user.uid + '/role').once('value');
+      var roleCheckSnap = await MastDB._rootRef().child(tenantId + '/admin/users/' + user.uid + '/role').once('value');
       if (!roleCheckSnap.val()) {
         console.log('No role found for user in tenant ' + tenantId + ', attempting claim...');
         needsClaim = true;
@@ -12952,16 +12949,14 @@ var migrationSidebarVisible = false;
 
 function checkMigrationStatus() {
   var tenantId = MastDB.tenantId();
-  var db = MastDB._db();
-  if (!tenantId || !db) return;
+  if (!tenantId) return;
 
   // Check tenant RTDB for migration data (written by MCP dual-write)
-  db.ref(tenantId + '/admin/migration/status').once('value').then(function(snap) {
-    if (!snap.exists()) {
+  MastDB.get('admin/migration/status').then(function(status) {
+    if (status == null) {
       hideMigrationSidebar();
       return;
     }
-    var status = snap.val();
     if (status === 'complete') {
       // Auto-hide sidebar when migration is complete
       hideMigrationSidebar();
@@ -12995,16 +12990,13 @@ var _migrationListener = null;
 
 function loadMigrationData(callback) {
   var tenantId = MastDB.tenantId();
-  var db = MastDB._db();
-  if (!tenantId || !db) return;
+  if (!tenantId) return;
 
   if (_migrationListener) _migrationListener();
-  var ref = db.ref(tenantId + '/admin/migration');
-  var handler = ref.on('value', function(snap) {
-    _migrationData = snap.exists() ? snap.val() : null;
+  _migrationListener = MastDB.subscribe('admin/migration', function(val) {
+    _migrationData = val != null ? val : null;
     if (callback) callback(_migrationData);
   });
-  _migrationListener = function() { ref.off('value', handler); };
 }
 
 var MIGRATION_PHASES = ['discovery', 'confirmation', 'planning', 'execution', 'post-cutover', 'complete'];
@@ -13408,14 +13400,12 @@ window.triggerPostCutoverRerun = function() {
 };
 
 window.completeMigration = async function() {
-  var tenantId = MastDB.tenantId();
-  var db = MastDB._db();
-  if (!tenantId || !db) return;
+  if (!MastDB.tenantId()) return;
 
   if (!await mastConfirm('Complete the migration? This will hide the Migration section from the sidebar.', { title: 'Complete Migration' })) return;
 
   // Update migration status to complete in tenant RTDB
-  db.ref(tenantId + '/admin/migration/status').set('complete').then(function() {
+  MastDB.set('admin/migration/status', 'complete').then(function() {
     showToast('Migration complete! Welcome to your new site.');
     hideMigrationSidebar();
     navigateTo('dashboard');
@@ -13433,17 +13423,15 @@ function renderHistoricalOrders() {
   if (!container) return;
   showMigrationSidebar();
 
-  var tenantId = MastDB.tenantId();
-  var db = MastDB._db();
-  if (!tenantId || !db) {
+  if (!MastDB.tenantId()) {
     container.innerHTML = '<p>Tenant not loaded.</p>';
     return;
   }
 
   container.innerHTML = '<div style="text-align:center;padding:3rem;color:var(--warm-gray);">Loading past orders...</div>';
 
-  db.ref(tenantId + '/admin/historicalOrders').limitToLast(100).once('value').then(function(snap) {
-    if (!snap.exists()) {
+  MastDB.query('admin/historicalOrders').limitToLast(100).once().then(function(data) {
+    if (!data || Object.keys(data).length === 0) {
       container.innerHTML = '<div style="max-width:800px;">' +
         '<h1 style="margin-top:0;">Past Orders</h1>' +
         '<p style="color:var(--warm-gray);">No historical orders imported yet. Use the Import Data tool or Claude to import orders from your previous platform.</p>' +
@@ -13452,9 +13440,9 @@ function renderHistoricalOrders() {
     }
 
     var orders = [];
-    snap.forEach(function(child) {
-      var o = child.val();
-      o._id = child.key;
+    Object.keys(data).forEach(function(key) {
+      var o = data[key];
+      o._id = key;
       orders.push(o);
     });
     orders.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
@@ -13718,14 +13706,13 @@ function renderSubscriberImport() {
     requiredFields: ['email'],
     onImport: function(rows) {
       return new Promise(function(resolve, reject) {
-        var db = MastDB._db();
-        if (!db) return reject(new Error('Database not available'));
+        if (!MastDB.tenantId()) return reject(new Error('Database not available'));
 
         // Read existing subscribers to dedup
-        db.ref(tenantId + '/newsletter/subscribers').once('value').then(function(snap) {
+        MastDB.get('newsletter/subscribers').then(function(subsMap) {
           var existing = new Set();
-          if (snap.exists()) {
-            Object.values(snap.val()).forEach(function(sub) {
+          if (subsMap) {
+            Object.values(subsMap).forEach(function(sub) {
               if (sub.email) existing.add(sub.email.toLowerCase());
             });
           }
@@ -13745,8 +13732,8 @@ function renderSubscriberImport() {
               name = ((row.firstName || '') + ' ' + (row.lastName || '')).trim();
             }
 
-            var key = db.ref(tenantId + '/newsletter/subscribers').push().key;
-            updates[tenantId + '/newsletter/subscribers/' + key] = {
+            var key = MastDB.newKey('newsletter/subscribers');
+            updates['newsletter/subscribers/' + key] = {
               email: email,
               name: name || null,
               source: 'migrated',
@@ -13760,7 +13747,7 @@ function renderSubscriberImport() {
             return resolve({ imported: 0, skipped: skipped, message: 'No new subscribers to import.' });
           }
 
-          db.ref().update(updates).then(function() {
+          MastDB.multiUpdate(updates).then(function() {
             resolve({ imported: imported, skipped: skipped });
           }).catch(reject);
         }).catch(reject);
@@ -13783,14 +13770,12 @@ function renderInventoryImport() {
     requiredFields: ['quantity'],
     onImport: function(rows) {
       return new Promise(function(resolve, reject) {
-        var db = MastDB._db();
-        if (!db) return reject(new Error('Database not available'));
+        if (!MastDB.tenantId()) return reject(new Error('Database not available'));
 
         // Load all products for matching
-        db.ref(tenantId + '/products').once('value').then(function(snap) {
-          if (!snap.exists()) return resolve({ imported: 0, errors: 0, message: 'No products found to match against.' });
+        MastDB.get('products').then(function(products) {
+          if (!products) return resolve({ imported: 0, errors: 0, message: 'No products found to match against.' });
 
-          var products = snap.val();
           // Build lookup maps
           var byName = {};
           var bySku = {};
@@ -13817,9 +13802,9 @@ function renderInventoryImport() {
             if (!pid) { errors++; return; }
 
             // Update inventory — set onHand count
-            updates[tenantId + '/admin/inventory/' + pid + '/onHand'] = qty;
-            updates[tenantId + '/admin/inventory/' + pid + '/lastUpdated'] = now;
-            updates[tenantId + '/admin/inventory/' + pid + '/lastUpdateSource'] = 'csv-import';
+            updates['admin/inventory/' + pid + '/onHand'] = qty;
+            updates['admin/inventory/' + pid + '/lastUpdated'] = now;
+            updates['admin/inventory/' + pid + '/lastUpdateSource'] = 'csv-import';
             imported++;
           });
 
@@ -13827,7 +13812,7 @@ function renderInventoryImport() {
             return resolve({ imported: 0, errors: errors, message: errors ? errors + ' rows could not be matched to products.' : 'Nothing to import.' });
           }
 
-          db.ref().update(updates).then(function() {
+          MastDB.multiUpdate(updates).then(function() {
             resolve({ imported: imported, errors: errors });
           }).catch(reject);
         }).catch(reject);
@@ -18833,8 +18818,8 @@ async function wizardAutoApplyAll(analysis, data) {
 
   // Update platform registry
   if (bizName) {
-    await db.ref('mast-platform/tenants/' + MastDB.tenantId()).update({ name: bizName }).catch(function(e) { writeErrors.push('registry name: ' + e.message); });
-    await db.ref('mast-platform/tenants/' + MastDB.tenantId() + '/publicConfig').update({
+    await MastDB.platform.update('mast-platform/tenants/' + MastDB.tenantId(), { name: bizName }).catch(function(e) { writeErrors.push('registry name: ' + e.message); });
+    await MastDB.platform.update('mast-platform/tenants/' + MastDB.tenantId() + '/publicConfig', {
       brandName: bizName,
       brandTagline: bizTagline,
       brandDescription: bizDesc,
@@ -19453,8 +19438,8 @@ function wizardShowEnrichmentOffer(paidGaps, cost) {
   // Load token balance to show alongside
   try {
     var tid = MastDB.tenantId();
-    db.ref('mast-platform/tenants/' + tid + '/tokenWallet').once('value').then(function(snap) {
-      var wallet = snap.val() || {};
+    MastDB.platform.get('mast-platform/tenants/' + tid + '/tokenWallet').then(function(wallet) {
+      wallet = wallet || {};
       var balance = (wallet.currentBalance || 0) + (wallet.coinTokenSurplus || 0);
       var balanceCoins = wallet.coinBalance || 0;
       if (costEl) costEl.textContent = '~' + coins + ' coins (balance: ' + balance + ' tokens, ' + balanceCoins + ' coins)';
@@ -20167,8 +20152,8 @@ async function wizardComplete() {
     // (or skipped entirely if no website). This function just finalizes.
 
     // Set tenant status to active (both registry and publicConfig for storefront)
-    await db.ref('mast-platform/tenants/' + MastDB.tenantId() + '/status').set('active');
-    await db.ref('mast-platform/tenants/' + MastDB.tenantId() + '/publicConfig/tenantStatus').set('active');
+    await MastDB.platform.set('mast-platform/tenants/' + MastDB.tenantId() + '/status', 'active');
+    await MastDB.platform.set('mast-platform/tenants/' + MastDB.tenantId() + '/publicConfig/tenantStatus', 'active');
     await MastDB.config.ref('setupProgress/completed').set(true);
     await MastDB.config.ref('setupProgress/completedAt').set(new Date().toISOString());
     await updateConfigChecklist('brand', true);
@@ -20223,7 +20208,7 @@ async function updateConfigChecklist(field, value) {
     var update = {};
     update['configChecklist/' + field] = value;
     update['configChecklist/updatedAt'] = new Date().toISOString();
-    await db.ref('mast-platform/tenants/' + MastDB.tenantId()).update(update);
+    await MastDB.platform.update('mast-platform/tenants/' + MastDB.tenantId(), update);
   } catch (err) {
     console.warn('Failed to update configChecklist:', err.message);
   }
@@ -20241,8 +20226,8 @@ async function loadConfigChecklist() {
     tenantConfigChecklist = snap.val() || {};
     if (!tenantConfigChecklist.square) {
       // Fallback: check platform registry path (legacy)
-      var platSnap = await db.ref('mast-platform/tenants/' + MastDB.tenantId() + '/configChecklist').once('value');
-      if (platSnap.val()) tenantConfigChecklist = platSnap.val();
+      var platChecklist = await MastDB.platform.get('mast-platform/tenants/' + MastDB.tenantId() + '/configChecklist');
+      if (platChecklist) tenantConfigChecklist = platChecklist;
     }
   } catch (err) {
     console.warn('Failed to load configChecklist:', err.message);
@@ -32072,10 +32057,10 @@ function loadTestingProgress() {
   var user = auth.currentUser;
   if (!user) return;
   Promise.all([
-    MastDB.testingMissions.ref().once('value'),
+    MastDB.testingMissions.list(),
     MastDB.testingMode.ref(user.uid).once('value')
   ]).then(function(snaps) {
-    var missionsData = snaps[0].val() || {};
+    var missionsData = snaps[0] || {};
     var progressData = snaps[1].val() || {};
     // Convert missions object to sorted array
     testingMissions = Object.keys(missionsData).map(function(key) {
