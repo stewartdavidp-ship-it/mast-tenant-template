@@ -24385,6 +24385,22 @@ var MAST_MAKER_SEVERITY_FALLBACK = {
   status: 'warning'
 };
 
+// Phase 7c.4 — drift scan lookup (read-only, bounded 7-day scan). Reads the
+// tenant-local mirror written by scheduledPriceCentsDriftScan at
+// {tenantId}/admin/driftScans/{YYYY-MM-DD}. Walks back up to 7 days.
+async function loadLatestDriftScan(tenantId) {
+  try {
+    for (var i = 0; i < 7; i++) {
+      var d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
+      var dateKey = d.toISOString().slice(0, 10);
+      var snap = await firebase.database().ref(tenantId + '/admin/driftScans/' + dateKey).once('value');
+      var val = snap.val();
+      if (val) return { date: dateKey, record: val };
+    }
+  } catch (e) { /* non-fatal */ }
+  return null;
+}
+
 async function loadMakerSettings() {
   var container = document.getElementById('makerSettingsContent');
   if (!container) return;
@@ -24395,16 +24411,22 @@ async function loadMakerSettings() {
     window.__mastDriftSeverity = null;
     var results = await Promise.all([
       firebase.database().ref(tenantId + '/admin/config').once('value'),
-      loadDriftSeverity()
+      loadDriftSeverity(),
+      // Phase 7c.4 — look back up to 7 days for the most recent scheduled
+      // priceCents drift scan record for this tenant. Returns { date, record }
+      // or null when no scan has fired.
+      loadLatestDriftScan(tenantId)
     ]);
     var cfg = results[0].val() || {};
     var sev = results[1];
+    var latestScan = results[2];
     window.__mastMakerSettings = {
       trackMaterialInventory: cfg.trackMaterialInventory === true,
       recipeRecalcCadence: (cfg.recipeRecalcCadence || 'off'),
       repricingThresholdPct: (cfg.makerSettings && typeof cfg.makerSettings.repricingThresholdPct === 'number') ? cfg.makerSettings.repricingThresholdPct : 15,
       severityOverrides: sev.tenantOverrides || {},
-      severityDefaults: sev.platformDefaults || {}
+      severityDefaults: sev.platformDefaults || {},
+      latestDriftScan: latestScan || null
     };
     renderMakerSettings();
   } catch (err) {
@@ -24516,6 +24538,28 @@ function renderMakerSettings() {
   } else {
     html += '<div style="font-size:1.6rem;font-weight:600;">' + esc(String(s.repricingThresholdPct)) + '<span style="font-size:0.9rem;font-weight:400;color:var(--warm-gray);margin-left:4px;">%</span></div>';
   }
+
+  // Phase 7c.4 — dwell-period indicator for the scheduled priceCents drift scan.
+  var latest = s.latestDriftScan;
+  html += '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--cream-dark);font-size:0.8rem;color:var(--warm-gray);" aria-live="polite">';
+  if (latest && latest.record && !latest.record.error) {
+    var scannedAt = latest.record.scannedAt || latest.date;
+    var scanDate;
+    try { scanDate = new Date(scannedAt).toLocaleString(); } catch (e) { scanDate = scannedAt; }
+    var driftCount = Number(latest.record.driftCount || 0);
+    var pieces = ['Last price drift scan: <strong>' + esc(scanDate) + '</strong>'];
+    if (driftCount === 0) {
+      pieces.push('<span style="color:var(--warm-gray);">No drift detected</span>');
+    } else {
+      var maxDollars = Number(latest.record.maxSingleDriftDollars || 0);
+      pieces.push('<span>' + driftCount + ' product(s) with drift · max $' + maxDollars.toFixed(2) + '</span>');
+    }
+    html += pieces.join(' · ');
+  } else {
+    html += 'No drift scan run yet — scheduled daily at 03:30 UTC, or trigger via <em>Run recalc now</em> above.';
+  }
+  html += '</div>';
+
   html += '</section>';
 
   container.innerHTML = html;
