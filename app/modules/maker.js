@@ -207,7 +207,10 @@
       directMarginPct: pct(directPrice),
       retailPrice: retailPrice,
       retailGrossProfit: roundCents(retailPrice - totalCost),
-      retailMarginPct: pct(retailPrice)
+      retailMarginPct: pct(retailPrice),
+      // Channel-First Phase 1c (D33) — suggestedPrice map mirrors the flat fields above.
+      // Consumers should prefer this map; flat fields kept for backwards compat.
+      suggestedPrice: { wholesale: wholesalePrice, direct: directPrice, retail: retailPrice }
     };
   }
 
@@ -479,7 +482,14 @@
       retailPrice: 0,
       retailGrossProfit: 0,
       activePriceTier: data.activePriceTier || 'direct',
-      channels: data.channels || ['retail'],
+      // Channel-First Phase 1c (D33, D41) — per-tier override; null means "use suggested".
+      // suggestedPrice mirrors the computed wholesale/direct/retail{Price} fields and is
+      // populated by calculateRecipe(). Effective price = overridePrice[tier] ?? suggestedPrice[tier].
+      overridePrice: data.overridePrice || { wholesale: null, direct: null, retail: null },
+      // Channel-First Phase 1c (D39) — version starts at 1; bumped on each publish.
+      // versionHistory[] retains prior published snapshots. Empty until first publish.
+      versionHistory: [],
+      lastPublishedAt: null,
       lastCalculatedAt: null,
       costsDirty: false,
       notes: data.notes || '',
@@ -594,6 +604,8 @@
       directGrossProfit: calc.directGrossProfit,
       retailPrice: calc.retailPrice,
       retailGrossProfit: calc.retailGrossProfit,
+      // Channel-First Phase 1c (D33) — persist computed suggestedPrice map for consumers
+      suggestedPrice: calc.suggestedPrice,
       costsDirty: false,
       currentDriftPct: currentDriftPct,
       marginHistory: marginHistory,
@@ -640,7 +652,13 @@
           totalCost: vCalc.totalCost,
           wholesalePrice: vCalc.wholesalePrice,
           directPrice: vCalc.directPrice,
-          retailPrice: vCalc.retailPrice
+          retailPrice: vCalc.retailPrice,
+          // Phase 1c (D33) — persist suggestedPrice on each variant
+          suggestedPrice: vCalc.suggestedPrice,
+          // Initialize overridePrice if missing (preserve prior overrides on re-calc)
+          overridePrice: (v.overridePrice && typeof v.overridePrice === 'object')
+            ? v.overridePrice
+            : { wholesale: null, direct: null, retail: null }
         });
       });
       updates.variants = variantUpdates;
@@ -648,16 +666,9 @@
 
     await MastDB.recipes.update(recipeId, updates);
 
-    // Propagate price to product if activePriceTier is set
-    if (recipe.activePriceTier && recipe.productId) {
-      var tierPrice;
-      if (recipe.isVariantEnabled && updates.variants) {
-        tierPrice = getFirstVariantTierPrice(recipe.activePriceTier, { variants: updates.variants });
-      } else {
-        tierPrice = getTierPrice(recipe.activePriceTier, updates);
-      }
-      await propagatePriceToProduct(recipe.productId, tierPrice);
-    }
+    // Channel-First Phase 1c (D34) — auto-propagate to product on recalc REMOVED.
+    // Use explicit publishRecipe(recipeId) action instead. activePriceTier remains
+    // as a display preference but no longer triggers a Product price write.
 
     MastAdmin.writeAudit('recalculate', 'recipe', recipeId);
     return updates;
@@ -730,102 +741,149 @@
   }
 
   // ============================================================
-  // activePriceTier → product.priceCents Propagation
+  // Channel-First Phase 1c — Tier resolution, Publish action, version history
+  // (D33, D34, D35, D36, D39, D41)
   // ============================================================
 
   /**
-   * Set the active price tier on a recipe and propagate price to the product.
+   * Resolve the effective price for a tier on a recipe (or recipe variant).
+   * effective = overridePrice[tier] (if user-set) ?? suggestedPrice[tier] ?? legacy {tier}Price.
+   * Returns dollars.
+   */
+  function effectiveTierPrice(target, tier) {
+    if (!target) return 0;
+    var ov = target.overridePrice;
+    if (ov && typeof ov[tier] === 'number' && ov[tier] > 0) return ov[tier];
+    var sg = target.suggestedPrice;
+    if (sg && typeof sg[tier] === 'number' && sg[tier] > 0) return sg[tier];
+    var legacy = target[tier + 'Price'];
+    return typeof legacy === 'number' ? legacy : 0;
+  }
+
+  /**
+   * Set the active price tier on a recipe (display preference only — no longer
+   * propagates to product per D34). Use publishRecipe() to write to product.
    */
   async function setActivePriceTier(recipeId, tier) {
     var recipe = recipesData[recipeId];
     if (!recipe) throw new Error('Recipe not found: ' + recipeId);
     if (!['wholesale', 'direct', 'retail'].includes(tier)) {
-      throw new Error('Invalid tier: ' + tier + '. Must be wholesale, direct, or retail.');
-    }
-
-    var tierPrice;
-    if (recipe.isVariantEnabled && recipe.variants) {
-      tierPrice = getFirstVariantTierPrice(tier, recipe);
-    } else {
-      tierPrice = getTierPrice(tier, recipe);
+      throw new Error('Invalid tier: ' + tier);
     }
     var now = new Date().toISOString();
+    await MastDB.recipes.update(recipeId, { activePriceTier: tier, updatedAt: now });
+    MastAdmin.writeAudit('set-price-tier', 'recipe', recipeId);
+    return { tier: tier };
+  }
 
-    // Atomic multi-path update: recipe tier + product price
+  /**
+   * Publish a recipe to its linked product (D34, D35, D36).
+   * All-or-nothing: writes wholesalePriceCents, directPriceCents, retailPriceCents,
+   * priceCents (=retail mirror), recipeId, recipeVersion in a single multi-path update.
+   * For variant-shaped recipes, writes per-variant tier prices keyed by stable ID.
+   * Bumps recipe.version, snapshots prior state to versionHistory[] (D39).
+   */
+  async function publishRecipe(recipeId) {
+    var recipe = recipesData[recipeId];
+    if (!recipe) throw new Error('Recipe not found: ' + recipeId);
+    if (!recipe.productId) throw new Error('Recipe has no linked product to publish to');
+
+    var now = new Date().toISOString();
+    var product = (window.productsData || []).find(function(p) { return p.pid === recipe.productId; });
+    var prodPath = 'public/products/' + recipe.productId + '/';
     var updates = {};
-    updates['admin/recipes/' + recipeId + '/activePriceTier'] = tier;
-    updates['admin/recipes/' + recipeId + '/updatedAt'] = now;
-    // Phase 2C.1: snapshot drift baseline + reset drift
-    updates['admin/recipes/' + recipeId + '/driftBaseline'] = recipe.totalCost || 0;
-    updates['admin/recipes/' + recipeId + '/lastPropagatedAt'] = now;
-    updates['admin/recipes/' + recipeId + '/currentDriftPct'] = 0;
 
-    var priceCents = null;
-    if (recipe.productId) {
-      // Channels-aware propagation: write retail and/or wholesale prices based on recipe.channels
-      var channels = Array.isArray(recipe.channels) ? recipe.channels : ['retail'];
-      var product = (window.productsData || []).find(function(p){ return p.pid === recipe.productId; });
-      var didPerVariantPropagate = false;
-      if (recipe.variantsShape === 'cost' && product && Array.isArray(product.variants) && product.variants.length > 0) {
-        var priceKey = tier + 'Price';
-        var rv = recipe.variants || {};
-        var defaultTierPrice = (rv.default && rv.default[priceKey]) || tierPrice || 0;
-        var newVariants = product.variants.map(function(pv) {
-          var slot = rv[pv.id];
-          var pp = (slot && slot[priceKey] != null) ? slot[priceKey] : defaultTierPrice;
-          var updated = Object.assign({}, pv, { priceCents: Math.round(pp * 100) });
-          // Wholesale variant propagation: write wholesalePriceCents when wholesale channel is active
-          if (channels.indexOf('wholesale') >= 0) {
-            var wsKey = 'wholesalePrice';
-            var defaultWsPrice = (rv.default && rv.default[wsKey]) || recipe.wholesalePrice || 0;
-            var wspp = (slot && slot[wsKey] != null) ? slot[wsKey] : defaultWsPrice;
-            updated.wholesalePriceCents = Math.round(wspp * 100);
-          }
-          return updated;
+    // Compute base-product effective tier prices (dollars)
+    var baseEff = {
+      wholesale: effectiveTierPrice(recipe, 'wholesale'),
+      direct:    effectiveTierPrice(recipe, 'direct'),
+      retail:    effectiveTierPrice(recipe, 'retail')
+    };
+
+    // Variant publish if recipe has variant entries AND product has variants
+    var didVariantPublish = false;
+    if (recipe.variants && product && Array.isArray(product.variants) && product.variants.length > 0) {
+      var rv = recipe.variants;
+      var newVariants = product.variants.map(function(pv) {
+        var slot = rv[pv.id] || rv.default || null;
+        var eff = slot ? {
+          wholesale: effectiveTierPrice(slot, 'wholesale') || baseEff.wholesale,
+          direct:    effectiveTierPrice(slot, 'direct')    || baseEff.direct,
+          retail:    effectiveTierPrice(slot, 'retail')    || baseEff.retail
+        } : baseEff;
+        return Object.assign({}, pv, {
+          retailPriceCents:    Math.round(eff.retail    * 100),
+          directPriceCents:    Math.round(eff.direct    * 100),
+          wholesalePriceCents: Math.round(eff.wholesale * 100),
+          priceCents:          Math.round(eff.retail    * 100) // legacy mirror
         });
-        updates['public/products/' + recipe.productId + '/variants'] = newVariants;
-        // Recompute base: lowest variant priceCents, priceType "from"
-        var lowestPriceCents = Math.min.apply(null, newVariants.map(function(v){ return v.priceCents; }));
-        priceCents = lowestPriceCents;
-        updates['public/products/' + recipe.productId + '/priceCents'] = lowestPriceCents;
-        updates['public/products/' + recipe.productId + '/price'] = lowestPriceCents / 100;
-        updates['public/products/' + recipe.productId + '/priceType'] = 'from';
-        // Wholesale base price from variants
-        if (channels.indexOf('wholesale') >= 0) {
-          var wsVariants = newVariants.filter(function(v) { return v.wholesalePriceCents > 0; });
-          if (wsVariants.length > 0) {
-            var lowestWs = Math.min.apply(null, wsVariants.map(function(v) { return v.wholesalePriceCents; }));
-            updates['public/products/' + recipe.productId + '/wholesalePriceCents'] = lowestWs;
-          }
-        }
-        didPerVariantPropagate = true;
+      });
+      updates[prodPath + 'variants'] = newVariants;
+      // Base product prices: lowest of each tier across variants
+      var lowestRetail = Math.min.apply(null, newVariants.map(function(v){ return v.retailPriceCents || 0; }).filter(function(c){ return c > 0; }));
+      var lowestDirect = Math.min.apply(null, newVariants.map(function(v){ return v.directPriceCents || 0; }).filter(function(c){ return c > 0; }));
+      var lowestWs     = Math.min.apply(null, newVariants.map(function(v){ return v.wholesalePriceCents || 0; }).filter(function(c){ return c > 0; }));
+      if (isFinite(lowestRetail)) {
+        updates[prodPath + 'retailPriceCents'] = lowestRetail;
+        updates[prodPath + 'priceCents'] = lowestRetail;
+        updates[prodPath + 'price'] = lowestRetail / 100;
+        updates[prodPath + 'priceType'] = 'from';
       }
-      if (!didPerVariantPropagate) {
-        priceCents = Math.round(tierPrice * 100);
-        updates['public/products/' + recipe.productId + '/priceCents'] = priceCents;
-        updates['public/products/' + recipe.productId + '/price'] = tierPrice;
-        // Wholesale for simple products
-        if (channels.indexOf('wholesale') >= 0) {
-          var wsPrice = recipe.wholesalePrice || 0;
-          updates['public/products/' + recipe.productId + '/wholesalePriceCents'] = Math.round(wsPrice * 100);
-        }
-      }
-      // Set isWholesale and recipeId on product when wholesale channel is active
-      if (channels.indexOf('wholesale') >= 0) {
-        updates['public/products/' + recipe.productId + '/isWholesale'] = true;
-      }
-      updates['public/products/' + recipe.productId + '/recipeId'] = recipeId;
+      if (isFinite(lowestDirect)) updates[prodPath + 'directPriceCents'] = lowestDirect;
+      if (isFinite(lowestWs))     updates[prodPath + 'wholesalePriceCents'] = lowestWs;
+      didVariantPublish = true;
     }
+    if (!didVariantPublish) {
+      // Simple product publish
+      var retailCents    = Math.round(baseEff.retail    * 100);
+      var directCents    = Math.round(baseEff.direct    * 100);
+      var wholesaleCents = Math.round(baseEff.wholesale * 100);
+      updates[prodPath + 'retailPriceCents']    = retailCents;
+      updates[prodPath + 'directPriceCents']    = directCents;
+      updates[prodPath + 'wholesalePriceCents'] = wholesaleCents;
+      updates[prodPath + 'priceCents']          = retailCents; // legacy mirror = retail
+      updates[prodPath + 'price']               = baseEff.retail;
+    }
+
+    // Wholesale flag — set true if any wholesale price > 0
+    var anyWholesale = (baseEff.wholesale > 0)
+      || (didVariantPublish && updates[prodPath + 'wholesalePriceCents'] > 0);
+    if (anyWholesale) updates[prodPath + 'isWholesale'] = true;
+
+    // Link recipe to product
+    updates[prodPath + 'recipeId'] = recipeId;
+    var newVersion = (typeof recipe.version === 'number' ? recipe.version : 1) + 1;
+    updates[prodPath + 'recipeVersion'] = newVersion;
+
+    // Recipe-side: bump version, snapshot prior state to versionHistory[]
+    var priorSnapshot = {
+      version: recipe.version || 1,
+      totalCost: recipe.totalCost || 0,
+      publishedPrices: baseEff,
+      publishedAt: now
+    };
+    var history = Array.isArray(recipe.versionHistory) ? recipe.versionHistory.slice() : [];
+    history.push(priorSnapshot);
+    if (history.length > 50) history = history.slice(history.length - 50); // cap to last 50 versions
+
+    var recipePath = 'admin/recipes/' + recipeId + '/';
+    updates[recipePath + 'version'] = newVersion;
+    updates[recipePath + 'versionHistory'] = history;
+    updates[recipePath + 'lastPublishedAt'] = now;
+    updates[recipePath + 'publishedPrices'] = baseEff;
+    updates[recipePath + 'driftBaseline'] = recipe.totalCost || 0;
+    updates[recipePath + 'currentDriftPct'] = 0;
+    updates[recipePath + 'updatedAt'] = now;
 
     await MastDB._multiUpdate(updates);
-    MastAdmin.writeAudit('set-price-tier', 'recipe', recipeId);
+    MastAdmin.writeAudit('publish', 'recipe', recipeId);
 
-    // Etsy price sync (fire-and-forget — local update is authoritative)
-    if (recipe.productId && priceCents !== null) {
-      syncEtsyListingPrice(recipe.productId, priceCents, recipeId);
+    // Etsy price sync (best-effort; retail tier is what Etsy shows publicly)
+    if (recipe.productId) {
+      syncEtsyListingPrice(recipe.productId, Math.round(baseEff.retail * 100), recipeId);
     }
 
-    return { tier: tier, price: tierPrice };
+    return { version: newVersion, prices: baseEff };
   }
 
   /**
@@ -2468,7 +2526,7 @@
       html += '<strong style="color:' + driftColor + ';">' + dir + ' ' + Math.abs(driftPct).toFixed(1) + '% cost drift</strong> ';
       html += '<span style="color:var(--warm-gray);">since last propagation ($' + (bs.driftBaseline || 0).toFixed(2) + ' → $' + (bs.totalCost || 0).toFixed(2) + '). Threshold: ' + repricingThresholdPct + '%.</span>';
       html += '</div>';
-      html += '<button class="btn btn-primary btn-small" onclick="makerRepriceNow()" title="Recalculate + propagate to product price + reset baseline">↻ Reprice now</button>';
+      html += '<button class="btn btn-primary btn-small" onclick="makerRepriceNow()" title="Recalculate + Publish all 3 tier prices to product + reset drift baseline">↻ Recalculate &amp; Publish</button>';
       html += '</div>';
     }
 
@@ -2492,19 +2550,19 @@
     html += '<div style="display:flex;gap:8px;">';
     html += '<button class="btn btn-secondary btn-small" onclick="makerDuplicateCurrentRecipe()" title="Clone this recipe as a new draft">Duplicate</button>';
     html += '<button class="btn btn-secondary btn-small" onclick="makerSaveRecipeBuilder()">Save</button>';
-    html += '<button class="btn btn-primary btn-small" onclick="makerSaveAndRecalcRecipe()">Save & Recalculate</button>';
+    html += '<button class="btn btn-secondary btn-small" onclick="makerSaveAndRecalcRecipe()">Save & Recalculate</button>';
+    // Channel-First Phase 1c (D35) — explicit Publish: writes all 3 tiers to product as one update
+    if (bs.productId) {
+      var pubTitle = bs.lastPublishedAt
+        ? 'Publish a new version to the product. Last published: ' + new Date(bs.lastPublishedAt).toLocaleString() + ' (v' + (bs.version || 1) + ')'
+        : 'Publish to product (writes Wholesale, Direct, and Retail prices). Recipe has not been published yet.';
+      html += '<button class="btn btn-primary btn-small" onclick="makerPublishFromBuilder()" title="' + esc(pubTitle) + '">↑ Publish to product</button>';
+    }
     html += '</div>';
     html += '</div>';
 
-    // ---- CHANNELS (retail/wholesale price propagation) ----
-    var channels = Array.isArray(bs.channels) ? bs.channels : ['retail'];
-    var chRetail = channels.indexOf('retail') >= 0;
-    var chWholesale = channels.indexOf('wholesale') >= 0;
-    html += '<div style="display:flex;gap:16px;align-items:center;margin-bottom:16px;padding:8px 12px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:6px;">';
-    html += '<span style="font-size:0.85rem;font-weight:600;color:var(--warm-gray);">Propagate to:</span>';
-    html += '<label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:0.85rem;"><input type="checkbox"' + (chRetail ? ' checked' : '') + ' onchange="makerToggleChannel(\'retail\', this.checked)"> Retail</label>';
-    html += '<label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:0.85rem;"><input type="checkbox"' + (chWholesale ? ' checked' : '') + ' onchange="makerToggleChannel(\'wholesale\', this.checked)"> Wholesale</label>';
-    html += '</div>';
+    // Channel-First Phase 1c (D20) — channels[] field removed. Publish now always writes
+    // all three tier prices (wholesale/direct/retail) atomically per D35.
 
     // ---- VARIANT TABS (cost-shape model) ----
     // Always show a Default tab. If the linked product has variants, show one tab per
@@ -2734,8 +2792,23 @@
       html += '<span style="font-size:0.85rem;color:var(--warm-gray);margin-left:2px;">×</span>';
       html += '</div>';
 
-      // Price
-      html += '<div style="text-align:center;font-size:1.15rem;font-family:monospace;font-weight:700;color:var(--charcoal);margin-bottom:4px;">$' + tier.price.toFixed(2) + '</div>';
+      // Price — Channel-First Phase 1c (D33, D41): suggested price + optional override
+      var ovMap = (bs.overridePrice && typeof bs.overridePrice === 'object') ? bs.overridePrice : {};
+      var ovVal = (typeof ovMap[tier.key] === 'number' && ovMap[tier.key] > 0) ? ovMap[tier.key] : null;
+      var effPrice = ovVal != null ? ovVal : tier.price;
+      html += '<div style="text-align:center;font-size:1.15rem;font-family:monospace;font-weight:700;color:var(--charcoal);margin-bottom:4px;">';
+      html += '$' + effPrice.toFixed(2);
+      if (ovVal != null) {
+        html += ' <span style="font-size:0.65rem;color:var(--warm-gray-light);text-decoration:line-through;font-weight:400;">$' + tier.price.toFixed(2) + '</span>';
+      }
+      html += '</div>';
+      // Override input
+      html += '<div style="text-align:center;margin-top:6px;">';
+      html += '<label style="font-size:0.65rem;color:var(--warm-gray-light);display:block;margin-bottom:2px;">Override</label>';
+      html += '<input type="number" step="0.01" min="0" placeholder="—" value="' + (ovVal != null ? ovVal.toFixed(2) : '') + '" ';
+      html += 'style="width:80px;text-align:center;padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:0.78rem;font-family:monospace;background:var(--cream);color:var(--charcoal);" ';
+      html += 'onchange="makerSetOverrideFromBuilder(\'' + tier.key + '\', this.value)" title="Set a fixed price for this tier (overrides the suggested price). Leave blank to use suggested.">';
+      html += '</div>';
 
       // Gross profit + margin %
       var minMargin = bs.minMarginPercent;
@@ -3401,21 +3474,67 @@
   }
 
   // Phase 2E: one-click reprice — recalc + set active tier (which propagates)
+  // Channel-First Phase 1c (D34, D35) — repurposed: save + recalc + publish all tiers to product.
   async function repriceNow() {
     if (!editingRecipeId || !builderState) return;
-    var tier = builderState.activePriceTier || 'direct';
     try {
       await saveRecipeBuilder();
       await recalculateRecipe(editingRecipeId);
-      await setActivePriceTier(editingRecipeId, tier);
+      var result = await publishRecipe(editingRecipeId);
       var snap = await MastDB.recipes.get(editingRecipeId);
       var fresh = snap.val();
       if (fresh) builderState = JSON.parse(JSON.stringify(fresh));
       await loadVolatilePricingData();
       renderRecipeBuilder();
-      MastAdmin.showToast('Repriced — ' + tier + ' tier propagated');
+      MastAdmin.showToast('Published v' + result.version + ' to product');
     } catch (err) {
-      MastAdmin.showToast('Reprice failed: ' + err.message, true);
+      MastAdmin.showToast('Publish failed: ' + (err.message || err), true);
+    }
+  }
+
+  // Channel-First Phase 1c (D35) — explicit Publish from the recipe builder header.
+  // Skips recalc; user has already done that. Just writes effective tier prices to product.
+  async function publishFromBuilder() {
+    if (!editingRecipeId || !builderState) return;
+    if (!builderState.productId) {
+      MastAdmin.showToast('Recipe has no linked product', true);
+      return;
+    }
+    var confirmed = await window.mastConfirm(
+      'Publish ' + (builderState.name || 'recipe') + ' to product?\n\n' +
+      'This writes Wholesale, Direct, and Retail prices to the product as a single update. ' +
+      'A new version snapshot will be saved.',
+      { title: 'Publish recipe', confirmLabel: 'Publish', cancelLabel: 'Cancel' }
+    );
+    if (!confirmed) return;
+    try {
+      await saveRecipeBuilder();
+      var result = await publishRecipe(editingRecipeId);
+      var snap = await MastDB.recipes.get(editingRecipeId);
+      var fresh = snap.val();
+      if (fresh) builderState = JSON.parse(JSON.stringify(fresh));
+      renderRecipeBuilder();
+      MastAdmin.showToast('Published v' + result.version + ' — Wholesale $' + result.prices.wholesale.toFixed(2) + ', Direct $' + result.prices.direct.toFixed(2) + ', Retail $' + result.prices.retail.toFixed(2));
+    } catch (err) {
+      MastAdmin.showToast('Publish failed: ' + (err.message || err), true);
+    }
+  }
+
+  // Channel-First Phase 1c (D41) — set/clear an override for a tier on the active recipe.
+  async function setOverrideFromBuilder(tier, raw) {
+    if (!editingRecipeId || !builderState) return;
+    var ov = (builderState.overridePrice && typeof builderState.overridePrice === 'object')
+      ? Object.assign({}, builderState.overridePrice)
+      : { wholesale: null, direct: null, retail: null };
+    var num = (raw === '' || raw == null) ? null : parseFloat(raw);
+    ov[tier] = (num != null && !isNaN(num) && num > 0) ? num : null;
+    builderState.overridePrice = ov;
+    try {
+      await MastDB.recipes.update(editingRecipeId, { overridePrice: ov, updatedAt: new Date().toISOString() });
+      MastAdmin.showToast(num ? (tier + ' override set to $' + num.toFixed(2)) : (tier + ' override cleared'));
+      renderRecipeBuilder();
+    } catch (err) {
+      MastAdmin.showToast('Override save failed: ' + (err.message || err), true);
     }
   }
 
@@ -3700,6 +3819,11 @@
   window.makerToggleChannel = toggleChannel;
   window.makerSetTierFromBuilder = setTierFromBuilder;
   window.makerRepriceNow = repriceNow;
+  // Channel-First Phase 1c
+  window.makerPublishRecipe = publishRecipe;
+  window.makerPublishFromBuilder = publishFromBuilder;
+  window.makerSetOverrideFromBuilder = setOverrideFromBuilder;
+  window.makerEffectiveTierPrice = effectiveTierPrice;
   window.makerOpenWhatIfSimulator = openWhatIfSimulator;
   window.makerSetCategoryFilter = function(v) { piecesCategoryFilter = v || ''; renderPiecesList(); };
   window.makerPushVariantToAll = function() {

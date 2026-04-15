@@ -22855,6 +22855,34 @@ function showBulkPublishButton() {
 }
 
 // ---------------------------------------------------------------------------
+// Channel-First Phase 1c (D38) — Create a new recipe linked to a product, then jump to maker.
+async function addRecipeForProduct(pid) {
+  if (!hasPermission('products', 'update')) { showToast('You do not have permission to update products.', true); return; }
+  if (typeof window.makerCreateRecipe !== 'function') { showToast('Maker module not loaded — open the Make tab first, then try again.', true); return; }
+  var product = (window.productsData || []).find(function(p) { return p.pid === pid; });
+  if (!product) { showToast('Product not found', true); return; }
+  if (product.recipeId) { showToast('Product already has a linked recipe', true); return; }
+  try {
+    var recipe = await window.makerCreateRecipe({
+      productId: pid,
+      name: product.name || 'Recipe for ' + pid,
+      status: 'draft'
+    });
+    // Link recipe back to product
+    await MastDB.products.ref(pid).update({ recipeId: recipe.recipeId, updatedAt: new Date().toISOString() });
+    showToast('Recipe created — opening in Maker');
+    // Navigate to maker piece editor for this recipe
+    if (typeof window.navigateTo === 'function') {
+      window.navigateTo('pieces');
+      setTimeout(function() {
+        if (typeof window.makerOpenRecipeBuilder === 'function') window.makerOpenRecipeBuilder(recipe.recipeId);
+      }, 300);
+    }
+  } catch (err) {
+    showToast('Failed to create recipe: ' + (err.message || err), true);
+  }
+}
+
 // Channel-First Phase 1b — Stable Variant ID Backfill (one-shot)
 // Walks all products and assigns stable IDs (v_<pushKey>) to any variant
 // lacking one. Idempotent: variants with existing IDs are left untouched.
@@ -23762,7 +23790,12 @@ function renderProductDetail(pid) {
             return '';
           })() + '</label>' +
             '<input type="text" id="pdWholesalePrice" value="' + esc(currentWholesalePrice) + '" placeholder="22.00" style="font-family:monospace;"></div>' +
-          (product.recipeId ? '<span style="font-size:0.72rem;color:var(--warm-gray);align-self:center;">Linked recipe: ' + esc(product.recipeId) + '</span>' : '') +
+          (product.recipeId
+            ? '<span style="font-size:0.72rem;color:var(--warm-gray);align-self:center;">Linked recipe: ' + esc(product.recipeId) + '</span>'
+            : (!isCreate && pid
+                // Channel-First Phase 1c (D38) — Add Recipe CTA when product has no linked recipe
+                ? '<button class="btn btn-secondary btn-small" style="align-self:center;font-size:0.78rem;" onclick="addRecipeForProduct(\'' + esc(pid) + '\')" title="Create a new recipe linked to this product">+ Add recipe</button>'
+                : '')) +
         '</div>' +
       '</div>';
 
