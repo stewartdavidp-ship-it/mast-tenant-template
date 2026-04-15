@@ -438,6 +438,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="shared/mastdb.js?v=1"></script>
 
 <script>
 (function() {
@@ -491,19 +492,19 @@
     if (!classId) return;
 
     var app; try { app = firebase.app(); } catch (e) { app = firebase.initializeApp(TENANT_FIREBASE_CONFIG); }
-    var db = app.database();
+    MastDB.init({ db: app.database(), tenantId: TENANT_ID });
 
     // Load class, sessions, and membership data in parallel
     var auth = (function() { try { return firebase.app().auth(); } catch(e) { return firebase.initializeApp(TENANT_FIREBASE_CONFIG).auth(); } })();
     var currentUid = auth.currentUser && !auth.currentUser.isAnonymous ? auth.currentUser.uid : null;
 
     var fetches = [
-      db.ref(TENANT_ID + '/public/classes/' + classId).once('value'),
-      db.ref(TENANT_ID + '/public/classSessions').orderByChild('classId').equalTo(classId).once('value'),
-      db.ref(TENANT_ID + '/admin/membership/config').once('value'),
+      MastDB.get('public/classes/' + classId),
+      MastDB.query('public/classSessions').orderByChild('classId').equalTo(classId).once(),
+      MastDB.get('admin/membership/config'),
       currentUid
-        ? db.ref(TENANT_ID + '/public/accounts/' + currentUid + '/wallet/membership').once('value')
-        : Promise.resolve({ val: function() { return null; } })
+        ? MastDB.get('public/accounts/' + currentUid + '/wallet/membership')
+        : Promise.resolve(null)
     ];
 
     // Also listen for auth changes to re-render with membership
@@ -511,10 +512,10 @@
       if (user && !user.isAnonymous && !currentUid) {
         currentUid = user.uid;
         // Reload membership status for newly signed-in user
-        db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/wallet/membership').once('value')
-          .then(function(snap) {
-            window._cdMemberStatus = snap.val();
-            window._cdEffectiveMember = computeEffectiveMember(window._cdMemberConfig, snap.val());
+        MastDB.get('public/accounts/' + user.uid + '/wallet/membership')
+          .then(function(val) {
+            window._cdMemberStatus = val;
+            window._cdEffectiveMember = computeEffectiveMember(window._cdMemberConfig, val);
             // Re-render if already loaded
             if (window._cdClass && window._cdSessions) {
               renderDetail(window._cdClass, window._cdSessions);
@@ -531,7 +532,7 @@
     }
 
     Promise.all(fetches).then(function(results) {
-      var cls = results[0].val();
+      var cls = results[0];
       if (!cls || (cls.status !== 'active' && cls.status !== 'published')) {
         document.getElementById('classDetailContainer').innerHTML =
           '<div class="cd-loading">Class not found. <a href="classes.html">Browse all classes</a></div>';
@@ -539,7 +540,7 @@
       }
       cls.id = classId;
 
-      var sessData = results[1].val() || {};
+      var sessData = results[1] || {};
       var today = todayStr();
       var sessions = Object.keys(sessData).map(function(id) {
         var s = sessData[id];
@@ -552,8 +553,8 @@
       });
 
       // Store membership data globally for re-render on auth change
-      window._cdMemberConfig = results[2].val();
-      window._cdMemberStatus = results[3].val();
+      window._cdMemberConfig = results[2];
+      window._cdMemberStatus = results[3];
       window._cdEffectiveMember = computeEffectiveMember(window._cdMemberConfig, window._cdMemberStatus);
       window._cdClass = cls;
       window._cdSessions = sessions;
@@ -831,12 +832,14 @@
       var user = window.MastCart.getCurrentUser();
       var fbApp = window.MastCart.getFirebaseApp();
       if (!user || !fbApp) return;
-      var db = fbApp.database();
+      // Defensive MastDB init in case MastCart loaded before page bootstrap
+      if (typeof MastDB !== 'undefined' && !MastDB.tenantId()) {
+        MastDB.init({ db: fbApp.database(), tenantId: TENANT_ID });
+      }
 
       // Check not already enrolled/waitlisted
-      var checkPath = TENANT_ID + '/public/enrollments';
-      db.ref(checkPath).orderByChild('studentUid').equalTo(user.uid).once('value').then(function(snap) {
-        var existing = snap.val() || {};
+      MastDB.query('public/enrollments').orderByChild('studentUid').equalTo(user.uid).once().then(function(existing) {
+        existing = existing || {};
         var isDuplicate = Object.values(existing).some(function(e) {
           if (e.status === 'cancelled' || e.status === 'cancelled_insufficient_enrollment') return false;
           if (enrollmentType === 'series') return e.classId === classId && e.enrollmentType === 'series';
@@ -850,18 +853,18 @@
         // Get current waitlist count and assign position
         var counterPath;
         if (enrollmentType === 'series') {
-          counterPath = TENANT_ID + '/public/classes/' + classId + '/seriesWaitlisted';
+          counterPath = 'public/classes/' + classId + '/seriesWaitlisted';
         } else {
-          counterPath = TENANT_ID + '/public/classSessions/' + sessionId + '/waitlisted';
+          counterPath = 'public/classSessions/' + sessionId + '/waitlisted';
         }
 
-        db.ref(counterPath).transaction(function(current) {
+        MastDB.transaction(counterPath, function(current) {
           return (current || 0) + 1;
         }).then(function(result) {
-          var position = result.snapshot.val();
+          var position = result.value;
 
           // Create waitlist enrollment
-          var enrollmentRef = db.ref(TENANT_ID + '/public/enrollments').push();
+          var enrollmentId = MastDB.newKey('public/enrollments');
           var enrollmentData = {
             classId: classId,
             studentUid: user.uid,
@@ -875,7 +878,7 @@
             enrolledAt: new Date().toISOString()
           };
           if (sessionId) enrollmentData.sessionId = sessionId;
-          return enrollmentRef.set(enrollmentData).then(function() { return position; });
+          return MastDB.set('public/enrollments/' + enrollmentId, enrollmentData).then(function() { return position; });
         }).then(function(position) {
           // Show confirmation banner
           var banner = document.createElement('div');
@@ -970,11 +973,13 @@
 
       var fbApp = window.MastCart.getFirebaseApp();
       if (!fbApp) { addToCart(); return; }
-      var db = fbApp.database();
+      if (typeof MastDB !== 'undefined' && !MastDB.tenantId()) {
+        MastDB.init({ db: fbApp.database(), tenantId: TENANT_ID });
+      }
 
-      db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/wallet/passes').once('value')
-        .then(function(snap) {
-          var passesObj = snap.val() || {};
+      MastDB.get('public/accounts/' + user.uid + '/wallet/passes')
+        .then(function(passesObj) {
+          passesObj = passesObj || {};
           var now = new Date().toISOString();
           var PRIORITY_ORDER = { high: 0, medium: 1, low: 2 };
 
@@ -999,12 +1004,12 @@
           // Load pass definitions to check scope
           var defIds = applicable.map(function(p) { return p.passDefinitionId; }).filter(Boolean);
           var defPromises = defIds.map(function(did) {
-            return db.ref(TENANT_ID + '/public/passDefinitions/' + did).once('value');
+            return MastDB.get('public/passDefinitions/' + did);
           });
 
-          Promise.all(defPromises).then(function(defSnaps) {
+          Promise.all(defPromises).then(function(defValues) {
             var defMap = {};
-            defSnaps.forEach(function(s, i) { if (s.val()) defMap[defIds[i]] = s.val(); });
+            defValues.forEach(function(v, i) { if (v) defMap[defIds[i]] = v; });
 
             var validPasses = applicable.filter(function(p) {
               var def = defMap[p.passDefinitionId];
@@ -1082,11 +1087,13 @@
         var user = window.MastCart.getCurrentUser();
         var fbApp = window.MastCart.getFirebaseApp();
         if (!user || !fbApp) { closeModal(); addToCart(); return; }
-        var db = fbApp.database();
-        var passRef = db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/passes/' + pass._id);
+        if (typeof MastDB !== 'undefined' && !MastDB.tenantId()) {
+          MastDB.init({ db: fbApp.database(), tenantId: TENANT_ID });
+        }
+        var passPath = 'public/accounts/' + user.uid + '/passes/' + pass._id;
 
         // Atomic deduct via transaction to prevent double-spend
-        passRef.transaction(function(current) {
+        MastDB.transaction(passPath, function(current) {
           if (!current) return current;
           current.visitsUsed = (current.visitsUsed || 0) + 1;
           if (current.visitsRemaining !== null && current.visitsRemaining !== undefined) {
@@ -1105,19 +1112,18 @@
             addToCart();
             return;
           }
-          var updatedPass = result.snapshot.val();
+          var updatedPass = result.value;
           // Set expiration on first-use activation if validity window defined
           if (updatedPass && updatedPass.activatedAt && !updatedPass.expiresAt) {
-            db.ref(TENANT_ID + '/public/passDefinitions/' + pass.passDefinitionId).once('value').then(function(defSnap) {
-              var def = defSnap.val();
+            MastDB.get('public/passDefinitions/' + pass.passDefinitionId).then(function(def) {
               if (def && def.validityDays) {
                 var exp = new Date(updatedPass.activatedAt);
                 exp.setDate(exp.getDate() + def.validityDays);
-                passRef.update({ expiresAt: exp.toISOString() });
+                MastDB.update(passPath, { expiresAt: exp.toISOString() });
               }
             }).catch(function() { /* non-critical */ });
           }
-          createPassEnrollment(db, user, sessionId, classId, className, date, time, pass._id);
+          createPassEnrollment(user, sessionId, classId, className, date, time, pass._id);
           closeModal();
           showBookingConfirmation('Booked with your pass — ' + className, true);
         }).catch(function(err) {
@@ -1135,9 +1141,9 @@
     }
 
     // Create enrollment record for pass-based booking
-    function createPassEnrollment(db, user, sessionId, classId, className, date, time, customerPassId) {
-      var enrollmentRef = db.ref(TENANT_ID + '/public/enrollments').push();
-      enrollmentRef.set({
+    function createPassEnrollment(user, sessionId, classId, className, date, time, customerPassId) {
+      var enrollmentId = MastDB.newKey('public/enrollments');
+      MastDB.set('public/enrollments/' + enrollmentId, {
         classId: classId,
         sessionId: sessionId,
         studentUid: user.uid,
@@ -1151,8 +1157,8 @@
         enrolledAt: new Date().toISOString()
       }).then(function() {
         // Increment session drop-in enrolled count
-        db.ref(TENANT_ID + '/public/classSessions/' + sessionId + '/enrolled')
-          .transaction(function(current) { return (current || 0) + 1; });
+        MastDB.transaction('public/classSessions/' + sessionId + '/enrolled',
+          function(current) { return (current || 0) + 1; });
       }).catch(function(err) {
         console.error('[class-detail] Enrollment creation failed:', err);
       });

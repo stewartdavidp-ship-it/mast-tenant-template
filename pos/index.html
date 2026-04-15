@@ -289,6 +289,7 @@ body {
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="../shared/mastdb.js?v=1"></script>
 <script src="../shared/camera.js"></script>
 <script src="../storefront-tenant.js"></script>
 <script src="../tenant-brand.js?v=2"></script>
@@ -297,6 +298,7 @@ body {
 // Firebase Init — deferred until tenant config resolves
 // ============================================================
 var firebaseApp, db, auth;
+var eventContextUnsub = null;
 var CLASSIFY_URL, UPLOAD_URL, PRODUCTS_PATH, SALES_PATH, SALES_EVENTS_PATH, STUDIO_LOCATIONS_PATH;
 
 function esc(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
@@ -341,8 +343,8 @@ function detectLocation() {
   if (eventId) return; // Already linked via URL param
 
   // Fetch active events first (needed for all scenarios)
-  db.ref(SALES_EVENTS_PATH).orderByChild('status').equalTo('active').once('value').then(function(evSnap) {
-    var activeEvents = evSnap.val() || {};
+  MastDB.query(SALES_EVENTS_PATH).orderByChild('status').equalTo('active').once().then(function(activeEvents) {
+    activeEvents = activeEvents || {};
     var eventKeys = Object.keys(activeEvents);
 
     // Show gear icon now that detection is running
@@ -354,8 +356,7 @@ function detectLocation() {
       return;
     }
 
-    db.ref(STUDIO_LOCATIONS_PATH).once('value').then(function(snap) {
-      var locations = snap.val();
+    MastDB.get(STUDIO_LOCATIONS_PATH).then(function(locations) {
       if (!locations || Object.keys(locations).length === 0) {
         // No studios configured — show modal if events exist
         if (eventKeys.length > 0) showEventModal(activeEvents, null);
@@ -487,8 +488,8 @@ function showEventSettings() {
   if (existing) existing.remove();
 
   // Fetch fresh active events
-  db.ref(SALES_EVENTS_PATH).orderByChild('status').equalTo('active').once('value').then(function(evSnap) {
-    var activeEvents = evSnap.val() || {};
+  MastDB.query(SALES_EVENTS_PATH).orderByChild('status').equalTo('active').once().then(function(activeEvents) {
+    activeEvents = activeEvents || {};
     var eventKeys = Object.keys(activeEvents);
 
     var html = '<div id="eventSettingsModal" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:200;display:flex;align-items:flex-end;justify-content:center;padding:0;">' +
@@ -529,7 +530,7 @@ function switchEvent(evId) {
     return;
   }
   // Detach old listener
-  if (eventId) db.ref(SALES_EVENTS_PATH + '/' + eventId).off();
+  if (eventContextUnsub) { eventContextUnsub(); eventContextUnsub = null; }
   eventId = evId;
   loadEventContext();
   closeEventSettings();
@@ -537,7 +538,7 @@ function switchEvent(evId) {
 }
 
 function unlinkEvent() {
-  if (eventId) db.ref(SALES_EVENTS_PATH + '/' + eventId).off();
+  if (eventContextUnsub) { eventContextUnsub(); eventContextUnsub = null; }
   eventId = null;
   eventData = null;
   document.getElementById('modeBadge').textContent = 'POS';
@@ -557,15 +558,15 @@ function closeEventSettings() {
 // ============================================================
 window.TENANT_READY.then(function() {
   try { firebaseApp = firebase.app(); } catch (e) { firebaseApp = firebase.initializeApp(TENANT_FIREBASE_CONFIG); }
-  db = firebaseApp.database();
+  MastDB.init({ db: firebaseApp.database(), tenantId: TENANT_ID });
   auth = firebaseApp.auth();
 
   CLASSIFY_URL = TENANT_FIREBASE_CONFIG.cloudFunctionsBase + '/classifyImage';
   UPLOAD_URL = TENANT_FIREBASE_CONFIG.cloudFunctionsBase + '/uploadImage';
-  PRODUCTS_PATH = TENANT_ID + '/public/products';
-  SALES_PATH = TENANT_ID + '/admin/sales';
-  SALES_EVENTS_PATH = TENANT_ID + '/admin/salesEvents';
-  STUDIO_LOCATIONS_PATH = TENANT_ID + '/config/studioLocations';
+  PRODUCTS_PATH = 'public/products';
+  SALES_PATH = 'admin/sales';
+  SALES_EVENTS_PATH = 'admin/salesEvents';
+  STUDIO_LOCATIONS_PATH = 'config/studioLocations';
 
   auth.onAuthStateChanged(function(user) {
     if (user) {
@@ -594,8 +595,9 @@ window.TENANT_READY.then(function() {
 
 function loadEventContext() {
   if (!eventId) return;
-  db.ref(SALES_EVENTS_PATH + '/' + eventId).on('value', function(snap) {
-    eventData = snap.val();
+  if (eventContextUnsub) { eventContextUnsub(); eventContextUnsub = null; }
+  eventContextUnsub = MastDB.subscribe(SALES_EVENTS_PATH + '/' + eventId, function(val) {
+    eventData = val;
     if (eventData) {
       document.getElementById('modeBadge').textContent = 'FAIR';
       document.getElementById('modeBadge').style.background = 'var(--green)';
@@ -626,8 +628,8 @@ function signIn() {
 // Products
 // ============================================================
 function loadProducts() {
-  db.ref(PRODUCTS_PATH).once('value').then(function(snap) {
-    products = snap.val() || {};
+  MastDB.get(PRODUCTS_PATH).then(function(val) {
+    products = val || {};
     productsList = Object.values(products)
       .filter(function(p) { return !p.availability || p.availability === 'available'; })
       .sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
@@ -808,7 +810,7 @@ function saveSale() {
   btn.disabled = true;
   btn.textContent = 'Saving...';
 
-  var saleId = db.ref(SALES_PATH).push().key;
+  var saleId = MastDB.newKey(SALES_PATH);
   var now = new Date().toISOString();
 
   var saleRecord = {
@@ -849,7 +851,7 @@ function saveSale() {
 
   savePromise.then(function() {
     // Save sale record
-    return db.ref(SALES_PATH + '/' + saleId).set(saleRecord);
+    return MastDB.set(SALES_PATH + '/' + saleId, saleRecord);
   }).then(function() {
     // Decrement inventory for each item
     var updates = {};
@@ -903,16 +905,15 @@ function decrementInventory(productQtys) {
   Object.keys(productQtys).forEach(function(pid) {
     var qty = productQtys[pid];
     var prod = products[pid];
-    var stockRef = db.ref(TENANT_ID + '/admin/inventory/' + pid + '/stock');
+    var stockPath = 'admin/inventory/' + pid + '/stock';
     promises.push(
-      stockRef.once('value').then(function(snap) {
-        var current = snap.val();
+      MastDB.get(stockPath).then(function(current) {
         if (current !== null && typeof current === 'number') {
           // Legacy flat stock number — treat as onHand
           var newVal = Math.max(0, current - qty);
-          return stockRef.set(newVal).then(function() {
+          return MastDB.set(stockPath, newVal).then(function() {
             if (prod && prod.businessLine === 'sculpture' && newVal <= 0) {
-              return db.ref(TENANT_ID + '/public/products/' + pid + '/status').set('sold');
+              return MastDB.set('public/products/' + pid + '/status', 'sold');
             }
           });
         }
@@ -920,14 +921,14 @@ function decrementInventory(productQtys) {
         if (current && typeof current === 'object' && current._default) {
           var curOnHand = current._default.onHand || 0;
           var newOnHand = Math.max(0, curOnHand - qty);
-          return db.ref(TENANT_ID + '/admin/inventory/' + pid + '/stock/_default/onHand').set(newOnHand).then(function() {
+          return MastDB.set('admin/inventory/' + pid + '/stock/_default/onHand', newOnHand).then(function() {
             // Write audit trail
-            db.ref(TENANT_ID + '/admin/inventory/' + pid + '/history').push({
+            MastDB.push('admin/inventory/' + pid + '/history', {
               action: 'sold', reason: 'pos_sale', qty: -qty, previousQty: curOnHand, newQty: newOnHand,
               actor: 'pos', actorType: 'system', timestamp: new Date().toISOString()
             });
             if (prod && prod.businessLine === 'sculpture' && newOnHand <= 0) {
-              return db.ref(TENANT_ID + '/public/products/' + pid + '/status').set('sold');
+              return MastDB.set('public/products/' + pid + '/status', 'sold');
             }
           });
         }
@@ -942,11 +943,10 @@ function updateEventAllocations(items) {
   var promises = [];
   items.forEach(function(item) {
     if (!item.productId) return;
-    var soldRef = db.ref(SALES_EVENTS_PATH + '/' + eventId + '/allocations/' + item.productId + '/sold');
+    var soldPath = SALES_EVENTS_PATH + '/' + eventId + '/allocations/' + item.productId + '/sold';
     promises.push(
-      soldRef.once('value').then(function(snap) {
-        var current = snap.val() || 0;
-        return soldRef.set(current + (item.quantity || 1));
+      MastDB.get(soldPath).then(function(current) {
+        return MastDB.set(soldPath, (current || 0) + (item.quantity || 1));
       })
     );
   });
@@ -1085,7 +1085,7 @@ async function sendReceipt() {
       if (email) contactUpdate.customerContact.email = email;
       if (phone) contactUpdate.customerContact.phone = phone;
       contactUpdate.customerContact.optIn = optIn;
-      db.ref(SALES_PATH + '/' + lastSaleId).update(contactUpdate);
+      MastDB.update(SALES_PATH + '/' + lastSaleId, contactUpdate);
     }
 
     statusEl.innerHTML = '<span style="color:var(--green);">' + results.join(' · ') + '</span>';
@@ -1189,7 +1189,7 @@ async function submitCommission(pid, pieceName) {
   btn.textContent = 'Saving...';
 
   try {
-    var commId = db.ref(TENANT_ID + '/admin/commissions').push().key;
+    var commId = MastDB.newKey('admin/commissions');
     var record = {
       sourcePieceId: pid,
       sourcePieceName: pieceName,
@@ -1200,7 +1200,7 @@ async function submitCommission(pid, pieceName) {
       channel: 'pos',
       createdAt: new Date().toISOString()
     };
-    await db.ref(TENANT_ID + '/admin/commissions/' + commId).set(record);
+    await MastDB.set('admin/commissions/' + commId, record);
 
     // Trigger SendGrid notification via Cloud Function
     try {
