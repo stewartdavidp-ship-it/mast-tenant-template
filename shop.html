@@ -573,6 +573,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="shared/mastdb.js?v=1"></script>
 <script>
 window.TENANT_READY.then(function() {
   // Firebase — load shop products dynamically grouped by category
@@ -687,7 +688,7 @@ window.TENANT_READY.then(function() {
 
   (function() {
     var app; try { app = firebase.app(); } catch (e) { app = firebase.initializeApp(TENANT_FIREBASE_CONFIG); }
-    var db = app.database();
+    MastDB.init({ db: app.database(), tenantId: TENANT_ID });
 
     // Load membership data for early product access gating
     (function() {
@@ -695,11 +696,11 @@ window.TENANT_READY.then(function() {
       var user = auth.currentUser;
       if (user && !user.isAnonymous) {
         Promise.all([
-          db.ref(TENANT_ID + '/admin/membership/config').once('value'),
-          db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/wallet/membership').once('value')
-        ]).then(function(snaps) {
-          _shopMemberConfig = snaps[0].val();
-          var status = snaps[1].val();
+          MastDB.get('admin/membership/config'),
+          MastDB.get('public/accounts/' + user.uid + '/wallet/membership')
+        ]).then(function(results) {
+          _shopMemberConfig = results[0];
+          var status = results[1];
           if (_shopMemberConfig && _shopMemberConfig.enabled && status) {
             var today = new Date().toISOString().slice(0, 10);
             _shopEffectiveMember = status.status === 'active' ||
@@ -711,11 +712,11 @@ window.TENANT_READY.then(function() {
       auth.onAuthStateChanged(function(u) {
         if (u && !u.isAnonymous && !_shopEffectiveMember) {
           Promise.all([
-            db.ref(TENANT_ID + '/admin/membership/config').once('value'),
-            db.ref(TENANT_ID + '/public/accounts/' + u.uid + '/wallet/membership').once('value')
-          ]).then(function(snaps) {
-            _shopMemberConfig = snaps[0].val();
-            var status = snaps[1].val();
+            MastDB.get('admin/membership/config'),
+            MastDB.get('public/accounts/' + u.uid + '/wallet/membership')
+          ]).then(function(results) {
+            _shopMemberConfig = results[0];
+            var status = results[1];
             if (_shopMemberConfig && _shopMemberConfig.enabled && status) {
               var today = new Date().toISOString().slice(0, 10);
               _shopEffectiveMember = status.status === 'active' ||
@@ -729,9 +730,8 @@ window.TENANT_READY.then(function() {
     })();
 
     // Load shop header background image from gallery
-    db.ref(TENANT_ID + '/public/gallery').orderByChild('section').equalTo('shop').once('value').then(function(snap) {
-      var data = snap.val();
-      if (!data) return;
+    MastDB.query('public/gallery').orderByChild('section').equalTo('shop').once().then(function(data) {
+      if (!data || Object.keys(data).length === 0) return;
       var items = Object.values(data).filter(function(i) { return i.visible !== false && !i.templateHidden && i.url; });
       if (items.length > 0) {
         var header = document.querySelector('.page-header');
@@ -745,23 +745,22 @@ window.TENANT_READY.then(function() {
       .then(function(r) { return r.ok ? r.json() : null; })
       .catch(function() { return null; });
 
-    db.ref(TENANT_ID + '/public/config/categories').once('value').then(function(catSnap) {
-      var catData = catSnap.val();
+    MastDB.get('public/config/categories').then(function(catData) {
       if (catData && Array.isArray(catData)) {
         SHOP_CATS = catData.filter(function(c) { return c && c.id && c.id !== 'shop' && c.label; });
       }
       SHOP_IDS = SHOP_CATS.map(function(c) { return c.id; });
       // Load products, sales, and gift card config in parallel
       return Promise.all([
-        db.ref(TENANT_ID + '/public/products').once('value'),
-        db.ref(TENANT_ID + '/public/sales-promotions').once('value'),
+        MastDB.get('public/products'),
+        MastDB.get('public/sales-promotions'),
         gcConfigPromise
       ]);
     }).then(function(results) {
       _shopGiftCardConfig = results[2];
       buildFilterPills();
-      var data = results[0].val();
-      var salesData = results[1].val();
+      var data = results[0];
+      var salesData = results[1];
       buildSaleLookup(salesData);
       if (!data) return;
       allShopItems = Object.values(data)
@@ -1212,8 +1211,8 @@ window.TENANT_READY.then(function() {
 <!-- ============ ANALYTICS TRACKING ============ -->
 <script>
 window.TENANT_READY.then(function() {
-  var db = firebase.app('public-shop').database();
-  var HITS = TENANT_ID + '/analytics/hits';
+  if (typeof MastDB === 'undefined' || !MastDB.tenantId()) return;
+  var HITS = 'analytics/hits';
   var now = new Date();
   var page = 'shop';
   var d = now.getFullYear() + '-' +
@@ -1225,7 +1224,7 @@ window.TENANT_READY.then(function() {
     var hit = { t: type, p: page, ts: Date.now(), d: d };
     if (action) hit.a = action;
     if (visitorIp) hit.ip = visitorIp;
-    db.ref(HITS).push(hit).catch(function() {});
+    MastDB.push(HITS, hit).catch(function() {});
   }
 
   fetch('https://api.ipify.org?format=json').then(function(r) { return r.json(); }).then(function(data) {

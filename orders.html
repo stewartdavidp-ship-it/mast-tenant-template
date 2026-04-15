@@ -1039,6 +1039,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="shared/mastdb.js?v=1"></script>
 <script>
 // ============ ORDERS PAGE LOGIC ============
 window.TENANT_READY.then(function() {
@@ -1052,7 +1053,7 @@ window.TENANT_READY.then(function() {
   try { defaultApp = firebase.app(); } catch (e) {
     defaultApp = firebase.initializeApp(TENANT_FIREBASE_CONFIG);
   }
-  var db = firebaseApp.database();
+  MastDB.init({ db: firebaseApp.database(), tenantId: TENANT_ID });
   var auth = defaultApp.auth();
 
   var FUNCTION_BASE = TENANT_FIREBASE_CONFIG.cloudFunctionsBase + '/';
@@ -1477,9 +1478,6 @@ window.TENANT_READY.then(function() {
     container.innerHTML = '<div class="lookup-loading" style="display:block;">Loading gift cards...</div>';
 
     var uid = user.uid;
-    var walletRef = db.ref(TENANT_ID + '/public/accounts/' + uid + '/wallet/giftCards');
-    var sentRef = db.ref(TENANT_ID + '/public/accounts/' + uid + '/giftCardsSent');
-
     var walletCards = null;
     var sentCards = null;
     var done = 0;
@@ -1490,15 +1488,13 @@ window.TENANT_READY.then(function() {
       renderGiftCards(walletCards, sentCards, container);
     }
 
-    walletRef.once('value', function(snap) {
-      walletCards = snap.val();
-      tryRender();
-    }, function() { walletCards = null; tryRender(); });
+    MastDB.get('public/accounts/' + uid + '/wallet/giftCards').then(function(val) {
+      walletCards = val; tryRender();
+    }).catch(function() { walletCards = null; tryRender(); });
 
-    sentRef.once('value', function(snap) {
-      sentCards = snap.val();
-      tryRender();
-    }, function() { sentCards = null; tryRender(); });
+    MastDB.get('public/accounts/' + uid + '/giftCardsSent').then(function(val) {
+      sentCards = val; tryRender();
+    }).catch(function() { sentCards = null; tryRender(); });
   }
 
   function renderGiftCards(walletData, sentData, container) {
@@ -1625,16 +1621,15 @@ window.TENANT_READY.then(function() {
   function loadTermsConfig() {
     if (_termsConfigLoaded) return Promise.resolve(_termsConfig);
     // Try config/rma first (new canonical path), fall back to config/termsConfig
-    return db.ref(TENANT_ID + '/config/rma').once('value').then(function(snap) {
-      var val = snap.val();
+    return MastDB.get('config/rma').then(function(val) {
       if (val && val.returnWindowDays) {
         _termsConfig = val;
         _termsConfigLoaded = true;
         return _termsConfig;
       }
       // Fallback to legacy path
-      return db.ref(TENANT_ID + '/config/termsConfig').once('value').then(function(snap2) {
-        _termsConfig = snap2.val() || {};
+      return MastDB.get('config/termsConfig').then(function(val2) {
+        _termsConfig = val2 || {};
         _termsConfigLoaded = true;
         return _termsConfig;
       });
@@ -1749,8 +1744,7 @@ window.TENANT_READY.then(function() {
   }
 
   function loadRmaTracking(rmaId, order) {
-    db.ref(TENANT_ID + '/public/returnRequests/' + rmaId).once('value').then(function(snap) {
-      var rma = snap.val();
+    MastDB.get('public/returnRequests/' + rmaId).then(function(rma) {
       var container = document.getElementById('rmaTracking_' + rmaId);
       if (!container) return;
 
@@ -1837,7 +1831,7 @@ window.TENANT_READY.then(function() {
     updates['status'] = 'shipped-back';
     updates['updatedAt'] = new Date().toISOString();
 
-    db.ref(TENANT_ID + '/public/returnRequests/' + rmaId).update(updates).then(function() {
+    MastDB.update('public/returnRequests/' + rmaId, updates).then(function() {
       loadRmaTracking(rmaId, {});
     }).catch(function(err) {
       alert('Failed to submit tracking: ' + err.message);
@@ -2166,11 +2160,8 @@ window.TENANT_READY.then(function() {
 <!-- ============ ANALYTICS TRACKING ============ -->
 <script>
 window.TENANT_READY.then(function() {
-  try {
-    var app = firebase.app('public-orders');
-    var db = app.database();
-  } catch(e) { return; }
-  var HITS = TENANT_ID + '/analytics/hits';
+  if (typeof MastDB === 'undefined' || !MastDB.tenantId()) return;
+  var HITS = 'analytics/hits';
   var now = new Date();
   var page = 'orders';
   var d = now.getFullYear() + '-' +
@@ -2182,7 +2173,7 @@ window.TENANT_READY.then(function() {
     var hit = { t: type, p: page, ts: Date.now(), d: d };
     if (action) hit.a = action;
     if (visitorIp) hit.ip = visitorIp;
-    db.ref(HITS).push(hit).catch(function() {});
+    MastDB.push(HITS, hit).catch(function() {});
   }
 
   fetch('https://api.ipify.org?format=json').then(function(r) { return r.json(); }).then(function(data) {

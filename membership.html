@@ -250,6 +250,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="shared/mastdb.js?v=1"></script>
 
 <script>
 (function() {
@@ -483,8 +484,8 @@
     }
 
     // Read environment from public config, then load SDK
-    db.ref(TENANT_ID + '/public/config/square/environment').once('value').then(function(envSnap) {
-      var squareEnv = envSnap.val() || 'sandbox';
+    MastDB.get('public/config/square/environment').then(function(squareEnv) {
+      squareEnv = squareEnv || 'sandbox';
       var sdkUrl = squareEnv === 'production'
         ? 'https://web.squarecdn.com/v1/square.js'
         : 'https://sandbox.web.squarecdn.com/v1/square.js';
@@ -502,8 +503,8 @@
 
   function setupSquareCard() {
     // Read applicationId and locationId from public config (no auth required)
-    db.ref(TENANT_ID + '/public/config/square').once('value').then(function(sqSnap) {
-      var sqPublicConfig = sqSnap.val() || {};
+    MastDB.get('public/config/square').then(function(sqPublicConfig) {
+      sqPublicConfig = sqPublicConfig || {};
       var applicationId = sqPublicConfig.applicationId;
       var locationId = sqPublicConfig.locationId;
 
@@ -559,9 +560,9 @@
       var result = data.result || data;
       if (result.success) {
         // Reload membership status and show active member view
-        db.ref(TENANT_ID + '/public/accounts/' + currentUser.uid + '/wallet/membership').once('value')
-          .then(function(snap) {
-            memberStatus = snap.val();
+        MastDB.get('public/accounts/' + currentUser.uid + '/wallet/membership')
+          .then(function(val) {
+            memberStatus = val;
             renderSuccess();
           });
       } else {
@@ -655,9 +656,9 @@
     var params = new URLSearchParams(window.location.search);
     if (params.get('success') === '1') {
       // Load config for the welcome message, then show success
-      db.ref(TENANT_ID + '/admin/membership/config').once('value')
-        .then(function(snap) {
-          memberConfig = snap.val();
+      MastDB.get('admin/membership/config')
+        .then(function(val) {
+          memberConfig = val;
           renderSuccess();
         })
         .catch(function() {
@@ -668,14 +669,14 @@
 
     // Load config and status in parallel
     Promise.all([
-      db.ref(TENANT_ID + '/admin/membership/config').once('value'),
-      db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/wallet/membership').once('value'),
-      db.ref(TENANT_ID + '/config/paymentProcessor').once('value')
+      MastDB.get('admin/membership/config'),
+      MastDB.get('public/accounts/' + user.uid + '/wallet/membership'),
+      MastDB.get('config/paymentProcessor')
     ])
-    .then(function(snaps) {
-      memberConfig = snaps[0].val();
-      memberStatus = snaps[1].val();
-      var processor = snaps[2].val();
+    .then(function(results) {
+      memberConfig = results[0];
+      memberStatus = results[1];
+      var processor = results[2];
 
       if (!memberConfig || !memberConfig.enabled) {
         renderNotAvailable();
@@ -729,15 +730,15 @@
 
     var app;
     try { app = firebase.app(); } catch (e) { app = firebase.initializeApp(TENANT_FIREBASE_CONFIG); }
-    db = app.database();
+    MastDB.init({ db: app.database(), tenantId: TENANT_ID });
     var auth = app.auth();
 
     // Check for success redirect before auth (unauthenticated success page is fine)
     var params = new URLSearchParams(window.location.search);
     if (params.get('success') === '1') {
-      db.ref(TENANT_ID + '/admin/membership/config').once('value')
-        .then(function(snap) {
-          memberConfig = snap.val();
+      MastDB.get('admin/membership/config')
+        .then(function(val) {
+          memberConfig = val;
           renderSuccess();
         })
         .catch(function() { renderSuccess(); });
@@ -749,9 +750,9 @@
         loadMembership(user);
       } else {
         // Load config for benefits display even when signed out
-        db.ref(TENANT_ID + '/admin/membership/config').once('value')
-          .then(function(snap) {
-            memberConfig = snap.val();
+        MastDB.get('admin/membership/config')
+          .then(function(val) {
+            memberConfig = val;
             if (!memberConfig || !memberConfig.enabled) {
               renderNotAvailable();
             } else {

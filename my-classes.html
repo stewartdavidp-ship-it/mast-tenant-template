@@ -378,6 +378,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="shared/mastdb.js?v=1"></script>
 
 <script>
 (function() {
@@ -655,14 +656,14 @@
 
   // ── Wallet credit banner ──
   function loadWalletCredits() {
-    if (!currentUser || !db) return;
+    if (!currentUser || !MastDB.tenantId()) return;
     var banner = document.getElementById('mcCreditBanner');
     if (!banner) return;
 
-    db.ref(TENANT_ID + '/public/accounts/' + currentUser.uid + '/wallet/credits')
-      .orderByChild('status').equalTo('active').once('value')
-      .then(function(snap) {
-        var data = snap.val() || {};
+    MastDB.query('public/accounts/' + currentUser.uid + '/wallet/credits')
+      .orderByChild('status').equalTo('active').once()
+      .then(function(data) {
+        data = data || {};
         var now = new Date().toISOString();
         var totalCents = 0;
         Object.keys(data).forEach(function(id) {
@@ -705,9 +706,9 @@
 
     // Load available sessions
     var today = todayStr();
-    db.ref(TENANT_ID + '/public/classSessions').orderByChild('classId').equalTo(enrollment.classId).once('value')
-      .then(function(snap) {
-        var sessData = snap.val() || {};
+    MastDB.query('public/classSessions').orderByChild('classId').equalTo(enrollment.classId).once()
+      .then(function(sessData) {
+        sessData = sessData || {};
         var seriesEnrolled = cls.seriesEnrolled || 0;
 
         // Also check which sessions this student already has enrollments for
@@ -773,18 +774,18 @@
     var updates = {};
 
     // Update enrollment record
-    updates[TENANT_ID + '/public/enrollments/' + enrollmentId + '/sessionId'] = newSessionId;
-    updates[TENANT_ID + '/public/enrollments/' + enrollmentId + '/swappedAt'] = new Date().toISOString();
-    updates[TENANT_ID + '/public/enrollments/' + enrollmentId + '/previousSessionId'] = oldSessionId;
+    updates['public/enrollments/' + enrollmentId + '/sessionId'] = newSessionId;
+    updates['public/enrollments/' + enrollmentId + '/swappedAt'] = new Date().toISOString();
+    updates['public/enrollments/' + enrollmentId + '/previousSessionId'] = oldSessionId;
 
-    db.ref().update(updates).then(function() {
+    MastDB.multiUpdate(updates).then(function() {
       // Decrement old session enrolled counter
-      return db.ref(TENANT_ID + '/public/classSessions/' + oldSessionId + '/enrolled')
-        .transaction(function(current) { return Math.max(0, (current || 0) - 1); });
+      return MastDB.transaction('public/classSessions/' + oldSessionId + '/enrolled',
+        function(current) { return Math.max(0, (current || 0) - 1); });
     }).then(function() {
       // Increment new session enrolled counter
-      return db.ref(TENANT_ID + '/public/classSessions/' + newSessionId + '/enrolled')
-        .transaction(function(current) { return (current || 0) + 1; });
+      return MastDB.transaction('public/classSessions/' + newSessionId + '/enrolled',
+        function(current) { return (current || 0) + 1; });
     }).then(function() {
       window._mcCloseSwap();
       showToast('Session swapped successfully!');
@@ -813,9 +814,9 @@
 
   // ── Data loading ──
   function loadEnrollments(user) {
-    db.ref(TENANT_ID + '/public/enrollments').orderByChild('studentUid').equalTo(user.uid).once('value')
-      .then(function(snap) {
-        var data = snap.val() || {};
+    MastDB.query('public/enrollments').orderByChild('studentUid').equalTo(user.uid).once()
+      .then(function(data) {
+        data = data || {};
         var enrollments = Object.keys(data).map(function(id) {
           var e = data[id];
           e._id = id;
@@ -840,19 +841,19 @@
 
         // Fetch class and session data in parallel
         var classPromises = Object.keys(classIds).map(function(cid) {
-          return db.ref(TENANT_ID + '/public/classes/' + cid).once('value').then(function(s) {
-            return { id: cid, data: s.val() };
+          return MastDB.get('public/classes/' + cid).then(function(d) {
+            return { id: cid, data: d };
           });
         });
         var sessionPromises = Object.keys(sessionIds).map(function(sid) {
-          return db.ref(TENANT_ID + '/public/classSessions/' + sid).once('value').then(function(s) {
-            return { id: sid, data: s.val() };
+          return MastDB.get('public/classSessions/' + sid).then(function(d) {
+            return { id: sid, data: d };
           });
         });
 
         // Also fetch passes
-        var passesPromise = db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/wallet/passes').once('value').then(function(s) {
-          var pd = s.val() || {};
+        var passesPromise = MastDB.get('public/accounts/' + user.uid + '/wallet/passes').then(function(pd) {
+          pd = pd || {};
           return Object.keys(pd).map(function(id) { var p = pd[id]; p._id = id; return p; });
         }).catch(function() { return []; });
 
@@ -882,7 +883,7 @@
 
     var app;
     try { app = firebase.app(); } catch (e) { app = firebase.initializeApp(TENANT_FIREBASE_CONFIG); }
-    db = app.database();
+    MastDB.init({ db: app.database(), tenantId: TENANT_ID });
     var auth = app.auth();
 
     auth.onAuthStateChanged(function(user) {
