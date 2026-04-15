@@ -25959,6 +25959,24 @@ async function saveProduct(pid) {
       productData.makerAttributes = existing.makerAttributes;
     }
 
+    // Phase 6a.3: ensure legacy priceCents mirrors retail tier (lowest variant priceCents
+    // when variants exist; otherwise retailPriceCents falls back to priceCents).
+    // Guarantees storefront + channel-push readers get the correct retail price.
+    try {
+      if (Array.isArray(productData.variants) && productData.variants.length > 0) {
+        var variantPrices = productData.variants
+          .map(function(v) {
+            return (typeof v.retailPriceCents === 'number') ? v.retailPriceCents : v.priceCents;
+          })
+          .filter(function(p) { return typeof p === 'number' && p >= 0; });
+        if (variantPrices.length > 0) {
+          productData.priceCents = Math.min.apply(null, variantPrices);
+        }
+      } else if (typeof productData.retailPriceCents === 'number' && productData.retailPriceCents > 0) {
+        productData.priceCents = productData.retailPriceCents;
+      }
+    } catch (e) { console.warn('deriveLegacyPriceCents inline failed (non-fatal):', e); }
+
     // Save to Firebase
     await MastDB.products.ref(targetPid).set(productData);
     await writeAudit(isCreate ? 'create' : 'update', 'products', targetPid);

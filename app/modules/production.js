@@ -796,39 +796,52 @@ async function transitionProductionJob(jobId, newStatus) {
 
     if (newStatus === 'completed') {
       updates.completedAt = now;
+      // Phase 6a.3: double-push guard. If ANY build on this job already set
+      // inventoryPushed:true (via autoUpdateInventory at build-completion time),
+      // skip the job-level inventory push entirely — it would double-count.
+      // Still record completedAt and history for loss entries below.
+      var buildsMap = job ? (job.builds || {}) : {};
+      var anyBuildPushed = false;
+      for (var bId of Object.keys(buildsMap)) {
+        if (buildsMap[bId] && buildsMap[bId].inventoryPushed) { anyBuildPushed = true; break; }
+      }
       // Auto-update inventory: decrement incoming, increment onHand
       var invCount = 0;
-      for (var liKey of Object.keys(lineItems)) {
-        var li = lineItems[liKey];
-        if (!li.productId || !(li.completedQuantity > 0)) continue;
-        var qty = (li.completedQuantity || 0) - (li.lossQuantity || 0);
-        try {
-          // Channel-First Phase 1d (D42) — push to per-variant stock when line targets a variant
-          var liVariantKey = li.variantId || null; // stockOnHand defaults to '_default' when null
-          // Decrement incoming by target quantity (what was planned)
-          var incomingRef = MastDB.inventory.stockIncoming(li.productId, liVariantKey);
-          await incomingRef.transaction(function(current) { return Math.max(0, (current || 0) - (li.targetQuantity || 0)); });
-          // Increment onHand by actual completed (minus loss)
-          if (qty > 0) {
-            var stockRef = MastDB.inventory.stockOnHand(li.productId, liVariantKey);
-            await stockRef.transaction(function(current) { return (current || 0) + qty; });
-            await MastDB.inventory.ref(li.productId + '/history').push({
-              action: 'adjusted', reason: 'production_completed', qty: qty,
-              variantId: liVariantKey,
-              jobId: jobId, actor: 'maker', actorType: 'maker', timestamp: now
-            });
-            invCount++;
-          }
-          // Log loss separately if any
-          if ((li.lossQuantity || 0) > 0) {
-            await MastDB.inventory.ref(li.productId + '/history').push({
-              action: 'adjusted', reason: 'production_loss', qty: -(li.lossQuantity),
-              jobId: jobId, actor: 'maker', actorType: 'maker', timestamp: now
-            });
-          }
-          await writeAudit('update', 'inventory', li.productId);
-          await syncStockInfoToPublic(li.productId);
-        } catch (e) { console.error('Inventory update error for ' + li.productId + ':', e); }
+      if (anyBuildPushed) {
+        console.log('transitionProductionJob(completed): skipping job-level inventory push — per-build push already ran (jobId=' + jobId + ')');
+      } else {
+        for (var liKey of Object.keys(lineItems)) {
+          var li = lineItems[liKey];
+          if (!li.productId || !(li.completedQuantity > 0)) continue;
+          var qty = (li.completedQuantity || 0) - (li.lossQuantity || 0);
+          try {
+            // Channel-First Phase 1d (D42) — push to per-variant stock when line targets a variant
+            var liVariantKey = li.variantId || null; // stockOnHand defaults to '_default' when null
+            // Decrement incoming by target quantity (what was planned)
+            var incomingRef = MastDB.inventory.stockIncoming(li.productId, liVariantKey);
+            await incomingRef.transaction(function(current) { return Math.max(0, (current || 0) - (li.targetQuantity || 0)); });
+            // Increment onHand by actual completed (minus loss)
+            if (qty > 0) {
+              var stockRef = MastDB.inventory.stockOnHand(li.productId, liVariantKey);
+              await stockRef.transaction(function(current) { return (current || 0) + qty; });
+              await MastDB.inventory.ref(li.productId + '/history').push({
+                action: 'adjusted', reason: 'production_completed', qty: qty,
+                variantId: liVariantKey,
+                jobId: jobId, actor: 'maker', actorType: 'maker', timestamp: now
+              });
+              invCount++;
+            }
+            // Log loss separately if any
+            if ((li.lossQuantity || 0) > 0) {
+              await MastDB.inventory.ref(li.productId + '/history').push({
+                action: 'adjusted', reason: 'production_loss', qty: -(li.lossQuantity),
+                jobId: jobId, actor: 'maker', actorType: 'maker', timestamp: now
+              });
+            }
+            await writeAudit('update', 'inventory', li.productId);
+            await syncStockInfoToPublic(li.productId);
+          } catch (e) { console.error('Inventory update error for ' + li.productId + ':', e); }
+        }
       }
     }
 

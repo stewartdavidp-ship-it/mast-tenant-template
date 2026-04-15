@@ -3013,17 +3013,8 @@
   // Recipe Builder — Interactive Controls
   // ============================================================
 
-  function toggleChannel(channel, enabled) {
-    if (!builderState) return;
-    var channels = Array.isArray(builderState.channels) ? builderState.channels.slice() : ['retail'];
-    var idx = channels.indexOf(channel);
-    if (enabled && idx < 0) channels.push(channel);
-    if (!enabled && idx >= 0) channels.splice(idx, 1);
-    // Ensure at least one channel remains
-    if (channels.length === 0) channels = ['retail'];
-    builderState.channels = channels;
-    renderRecipeBuilder();
-  }
+  // Phase 6a.3: toggleChannel() removed — zero callers. The UI it served
+  // (recipe-builder legacy channel toggles) was replaced by channelBindings[].
 
   function updateBuilderField(field, value) {
     if (!builderState) return;
@@ -3875,7 +3866,7 @@
   window.makerGetChannelNetMargin = getChannelNetMargin;
   window.makerDetectChannelForOrder = detectChannelForOrder;
   window.makerLoadChannels = loadChannels;
-  window.makerToggleChannel = toggleChannel;
+  // Phase 6a.3: window.makerToggleChannel removed — see toggleChannel removal above.
   window.makerSetTierFromBuilder = setTierFromBuilder;
   window.makerRepriceNow = repriceNow;
   // Channel-First Phase 1c
