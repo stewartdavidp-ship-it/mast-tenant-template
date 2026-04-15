@@ -263,11 +263,13 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="../shared/mastdb.js?v=1"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
 <script>
 window.TENANT_READY.then(function() {
   if (!firebase.apps.length) firebase.initializeApp(TENANT_FIREBASE_CONFIG);
   var db = firebase.database();
+  MastDB.init({ db: db, tenantId: TENANT_ID });
 
   var params = new URLSearchParams(window.location.search);
   var postId = params.get('id');

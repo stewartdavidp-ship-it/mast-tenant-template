@@ -408,10 +408,12 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="shared/mastdb.js?v=1"></script>
 <script>
 window.TENANT_READY.then(function() {
   if (!firebase.apps.length) firebase.initializeApp(TENANT_FIREBASE_CONFIG);
   const db = firebase.database();
+  MastDB.init({ db: db, tenantId: TENANT_ID });
 
   function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
   function fmtMonth(dateStr) {

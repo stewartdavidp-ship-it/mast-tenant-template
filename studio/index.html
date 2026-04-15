@@ -16,6 +16,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
+  <script src="../shared/mastdb.js?v=1"></script>
   <script src="../storefront-tenant.js"></script>
   <script src="../tenant-brand.js?v=2"></script>
 
@@ -444,6 +445,7 @@ window.TENANT_READY.then(function() {
   auth = firebase.auth();
   db = firebase.database();
   storage = firebase.storage();
+  MastDB.init({ db: db, tenantId: TENANT_ID });
 
   PRODUCTS_PATH = TENANT_ID + '/public/products';
   TRAINING_IMAGES_PATH = TENANT_ID + '/admin/training-images';
