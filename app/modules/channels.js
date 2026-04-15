@@ -58,6 +58,99 @@
     social_live:      { label: 'Social / Live',   color: '#ec4899', ownership: 'partner', pricing: 'full_retail',  inventory: 'retained' }
   };
 
+  // ============================================================
+  // Channel-First Phase 2a (D23, D25) — Route/Platform schema split
+  // ============================================================
+  //
+  // The legacy `type` field is being split into `route` + `platform` +
+  // `platformAccountId` + `name`. The 8 CHANNEL_TYPES become valid presets
+  // (not the only combinations). All readers go through the shim helpers
+  // below so unmigrated channels (with only `type`) keep working.
+  //
+  // Cutover: dual-write — every save writes both new fields and legacy
+  // `type` until Phase 3 (Functions refactor) lands.
+
+  var ROUTES = {
+    dtc_online:   { label: 'Online (DTC)',  color: '#3b82f6', defaultUsesTier: 'retail',    desc: 'Your own e-commerce storefront.' },
+    marketplace:  { label: 'Marketplace',   color: '#8b5cf6', defaultUsesTier: 'retail',    desc: 'Etsy, Amazon, third-party platform.' },
+    in_person:    { label: 'In-Person',     color: '#f97316', defaultUsesTier: 'direct',    desc: 'Brick-and-mortar, craft fairs, pop-ups.' },
+    wholesale:    { label: 'Wholesale',     color: '#22c55e', defaultUsesTier: 'wholesale', desc: 'Retailers, galleries, consignment.' }
+  };
+
+  var PLATFORMS = {
+    manual:      { label: 'Manual / Mast' },
+    shopify:     { label: 'Shopify' },
+    etsy:        { label: 'Etsy' },
+    square:      { label: 'Square' },
+    squarespace: { label: 'Squarespace' },
+    amazon:      { label: 'Amazon' },
+    tiktok:      { label: 'TikTok' },
+    instagram:   { label: 'Instagram' }
+  };
+
+  // Map legacy `type` → derived `(route, platform)`. Used by the shim when a
+  // channel only carries the legacy field, and by the new form's preset chips.
+  var TYPE_TO_ROUTE_PLATFORM = {
+    dtc_online:       { route: 'dtc_online',  platform: 'manual' },
+    own_storefront:   { route: 'in_person',   platform: 'manual' },
+    mobile_events:    { route: 'in_person',   platform: 'square' },
+    marketplace:      { route: 'marketplace', platform: 'etsy' },
+    wholesale_prebuy: { route: 'wholesale',   platform: 'manual' },
+    consignment:      { route: 'wholesale',   platform: 'manual' },
+    retail_prebuy:    { route: 'wholesale',   platform: 'manual' },
+    social_live:      { route: 'marketplace', platform: 'instagram' }
+  };
+
+  // Reverse derivation — when a channel has only the new fields, synthesize a
+  // legacy `type` for backwards-compat readers (typeBadge, type-specific
+  // overview cards). Keep the mapping conservative: only derive when we have
+  // a confident answer; otherwise return null and the reader handles it.
+  function deriveLegacyType(route, platform) {
+    if (route === 'dtc_online') return 'dtc_online';
+    if (route === 'marketplace') {
+      if (platform === 'instagram' || platform === 'tiktok') return 'social_live';
+      return 'marketplace';
+    }
+    if (route === 'in_person') {
+      if (platform === 'square') return 'mobile_events';
+      return 'own_storefront';
+    }
+    if (route === 'wholesale') return 'wholesale_prebuy';
+    return null;
+  }
+
+  // Shim accessors — every reader of ch.type / ch.defaultPricingTier / etc.
+  // should call these so unmigrated channels stay readable.
+  function getChannelRoute(ch) {
+    if (!ch) return null;
+    if (ch.route) return ch.route;
+    if (ch.type && TYPE_TO_ROUTE_PLATFORM[ch.type]) return TYPE_TO_ROUTE_PLATFORM[ch.type].route;
+    return null;
+  }
+  function getChannelPlatform(ch) {
+    if (!ch) return null;
+    if (ch.platform) return ch.platform;
+    if (ch.type && TYPE_TO_ROUTE_PLATFORM[ch.type]) return TYPE_TO_ROUTE_PLATFORM[ch.type].platform;
+    return null;
+  }
+  function getChannelType(ch) {
+    if (!ch) return null;
+    if (ch.type) return ch.type; // legacy still authoritative when present
+    return deriveLegacyType(ch.route, ch.platform);
+  }
+  function getChannelPlatformAccountId(ch) {
+    if (!ch) return null;
+    return ch.platformAccountId || null;
+  }
+  function getChannelUsesTier(ch) {
+    if (!ch) return 'retail';
+    if (ch.usesTier) return ch.usesTier;
+    if (ch.defaultPricingTier) return ch.defaultPricingTier; // legacy fallback
+    var route = getChannelRoute(ch);
+    if (route && ROUTES[route]) return ROUTES[route].defaultUsesTier;
+    return 'retail';
+  }
+
   // Onboarding defaults per channel type
   var ONBOARDING_META = {
     dtc_online:       { icon: '\uD83C\uDF10', desc: 'Your Mast storefront. Full retail, you ship.',              defaultName: 'Online Store',     feePercent: 2.9, feeFixed: 30 },
@@ -261,7 +354,8 @@
 
     var filtered = channels.filter(function(ch) {
       if (searchVal && (ch.name || '').toLowerCase().indexOf(searchVal) === -1) return false;
-      if (typeVal && ch.type !== typeVal) return false;
+      // Phase 2a — filter via shim so route+platform-only channels still match
+      if (typeVal && getChannelType(ch) !== typeVal) return false;
       return true;
     });
 
@@ -317,8 +411,14 @@
 
         // Row 2: type badge + external platform
         h += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">';
-        h += typeBadge(ch.type);
-        if (ch.externalPlatform) {
+        h += typeBadge(getChannelType(ch));
+        // Prefer the new platform/account-id surface; fall back to legacy externalPlatform.
+        var rowPlat = getChannelPlatform(ch);
+        var rowAcct = getChannelPlatformAccountId(ch);
+        if (rowPlat && rowPlat !== 'manual') {
+          var platLabel = (PLATFORMS[rowPlat] && PLATFORMS[rowPlat].label) || rowPlat;
+          h += '<span style="font-size:0.72rem;color:#999;">' + esc(platLabel) + (rowAcct ? ' · ' + esc(rowAcct) : '') + '</span>';
+        } else if (ch.externalPlatform) {
           h += '<span style="font-size:0.72rem;color:#999;">' + esc(ch.externalPlatform) + '</span>';
         }
         h += '</div>';
@@ -535,13 +635,24 @@
       var fixedEl = document.getElementById('ob_' + type + '_fixed');
       var extEl = document.getElementById('ob_' + type + '_ext');
 
+      // Phase 2a (D23, D25) — derive new-shape fields from the preset and write
+      // both shapes for the cutover window. Onboarding presets continue to
+      // drive `type`; route/platform are derived via TYPE_TO_ROUTE_PLATFORM.
+      var rp = TYPE_TO_ROUTE_PLATFORM[type] || { route: null, platform: 'manual' };
+      var presetUsesTier = (ROUTES[rp.route] && ROUTES[rp.route].defaultUsesTier) || 'retail';
       var channel = {
         channelId: id,
         name: (nameEl ? nameEl.value.trim() : sel.name) || t.label,
+        // Legacy shape (kept for unmigrated readers + Functions until Phase 3)
         type: type,
         ownershipModel: t.ownership || 'owned',
         pricingModel: t.pricing || 'full_retail',
         inventoryModel: t.inventory || 'retained',
+        // Phase 2a new shape
+        route: rp.route,
+        platform: rp.platform,
+        platformAccountId: null,
+        usesTier: presetUsesTier,
         percentFee: parseFloat(feeEl ? feeEl.value : sel.feePercent) || 0,
         fixedFeePerOrderCents: parseInt(fixedEl ? fixedEl.value : sel.feeFixed) || 0,
         monthlyFixedCents: 0,
@@ -601,9 +712,16 @@
     h += '<div>';
     h += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">' + esc(ch.name) + '</h3>';
     h += '<div style="display:flex;align-items:center;gap:8px;margin-top:4px;">';
-    h += typeBadge(ch.type);
+    h += typeBadge(getChannelType(ch));
     h += statusDot(ch.isActive);
-    if (ch.externalPlatform) h += '<span style="font-size:0.78rem;color:#999;">' + esc(ch.externalPlatform) + '</span>';
+    var hdrPlat = getChannelPlatform(ch);
+    var hdrAcct = getChannelPlatformAccountId(ch);
+    if (hdrPlat && hdrPlat !== 'manual') {
+      var hdrPlatLabel = (PLATFORMS[hdrPlat] && PLATFORMS[hdrPlat].label) || hdrPlat;
+      h += '<span style="font-size:0.78rem;color:#999;">' + esc(hdrPlatLabel) + (hdrAcct ? ' · ' + esc(hdrAcct) : '') + '</span>';
+    } else if (ch.externalPlatform) {
+      h += '<span style="font-size:0.78rem;color:#999;">' + esc(ch.externalPlatform) + '</span>';
+    }
     h += '</div>';
     h += '</div>';
 
@@ -665,9 +783,10 @@
     h += '<div><span style="color:#666;">Pricing:</span> ' + esc(ch.pricingModel || '—') + '</div>';
     h += '<div><span style="color:#666;">Inventory:</span> ' + esc(ch.inventoryModel || '—') + '</div>';
     h += '</div>';
-    if (ch.defaultPricingTier) {
-      h += '<div style="margin-top:8px;font-size:0.78rem;color:#999;"><span style="color:#666;">Pricing tier:</span> ' + esc(ch.defaultPricingTier) + '</div>';
-    }
+    // Phase 2a (D23) — uses shim. Always render so user sees what tier this
+    // channel resolves to, even when no override is set.
+    var ovUsesTier = getChannelUsesTier(ch);
+    h += '<div style="margin-top:8px;font-size:0.78rem;color:#999;"><span style="color:#666;">Uses tier:</span> ' + esc(ovUsesTier) + '</div>';
     h += '</div>';
 
     // Contact info
@@ -709,12 +828,15 @@
 
   function renderTypeSpecificOverview(ch) {
     var h = '';
-    if (ch.type === 'consignment') {
+    // Phase 2a — derive type via shim so route+platform-only channels still
+    // hit the right branch.
+    var chType = getChannelType(ch);
+    if (chType === 'consignment') {
       h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;margin-bottom:16px;">';
       h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;margin-bottom:8px;">Consignment Details</div>';
       h += '<div style="font-size:0.85rem;color:#999;">Settlement tracking available in Galleries &amp; Consignment module.</div>';
       h += '</div>';
-    } else if (ch.type === 'marketplace') {
+    } else if (chType === 'marketplace') {
       h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;margin-bottom:16px;">';
       h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;margin-bottom:8px;">Marketplace</div>';
       h += '<div style="font-size:0.85rem;color:#999;">Platform: ' + esc(ch.externalPlatform || 'Not set') + '</div>';
@@ -734,7 +856,7 @@
 
       // Kick off async load of sync status
       setTimeout(function() { loadSyncStatus(); }, 0);
-    } else if (ch.type === 'mobile_events') {
+    } else if (chType === 'mobile_events') {
       h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;margin-bottom:16px;">';
       h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">';
       h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;">Craft Fairs &amp; Events</div>';
@@ -750,15 +872,13 @@
       }
       h += '</div>';
       h += '</div>';
-    } else if (ch.type === 'wholesale_prebuy' || ch.type === 'retail_prebuy') {
+    } else if (chType === 'wholesale_prebuy' || chType === 'retail_prebuy') {
       h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;margin-bottom:16px;">';
       h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;margin-bottom:8px;">Wholesale</div>';
-      if (ch.defaultPricingTier) {
-        h += '<div style="font-size:0.85rem;color:#999;">Default pricing tier: ' + esc(ch.defaultPricingTier) + '</div>';
-      }
+      h += '<div style="font-size:0.85rem;color:#999;">Uses tier: ' + esc(getChannelUsesTier(ch)) + '</div>';
       h += '<div style="font-size:0.78rem;color:#666;margin-top:4px;">Wholesale orders managed via the Wholesale module.</div>';
       h += '</div>';
-    } else if (ch.type === 'social_live') {
+    } else if (chType === 'social_live') {
       h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;margin-bottom:16px;">';
       h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">';
       h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;">Live Sale Sessions</div>';
@@ -1537,13 +1657,32 @@
     var id = 'ch_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
     var now = new Date().toISOString();
 
+    // Phase 2a/2b — read new-shape fields if the form rendered them; otherwise
+    // derive from the preset `type`. Both shapes always written.
+    var routeEl = document.getElementById('newChRoute');
+    var platformEl = document.getElementById('newChPlatform');
+    var platformAccountEl = document.getElementById('newChPlatformAccount');
+    var usesTierEl = document.getElementById('newChUsesTier');
+    var rpDefault = TYPE_TO_ROUTE_PLATFORM[type] || { route: null, platform: 'manual' };
+    var route = (routeEl && routeEl.value) || rpDefault.route;
+    var platform = (platformEl && platformEl.value) || rpDefault.platform;
+    var platformAccountId = ((platformAccountEl && platformAccountEl.value) || '').trim() || null;
+    var presetUsesTier = (ROUTES[route] && ROUTES[route].defaultUsesTier) || 'retail';
+    var usesTier = (usesTierEl && usesTierEl.value) || presetUsesTier;
+
     var channel = {
       channelId: id,
       name: name.trim(),
-      type: type,
+      // Legacy shape — derived back from (route, platform) when type wasn't picked from preset
+      type: type || deriveLegacyType(route, platform) || 'dtc_online',
       ownershipModel: t.ownership || 'owned',
       pricingModel: t.pricing || 'full_retail',
       inventoryModel: t.inventory || 'retained',
+      // Phase 2a/2b new shape
+      route: route,
+      platform: platform,
+      platformAccountId: platformAccountId,
+      usesTier: usesTier,
       percentFee: parseFloat((document.getElementById('newChFeePercent') || {}).value) || 0,
       fixedFeePerOrderCents: parseInt((document.getElementById('newChFeeFixed') || {}).value) || 0,
       monthlyFixedCents: parseInt((document.getElementById('newChFeeMonthly') || {}).value) || 0,
@@ -1630,6 +1769,21 @@
 
     var notes = document.getElementById('chNotes');
     if (notes) updates.notes = notes.value.trim() || null;
+
+    // Phase 2a/2b — new-shape fields when present in the Settings tab.
+    var routeEdit = document.getElementById('chRoute');
+    if (routeEdit && routeEdit.value) updates.route = routeEdit.value;
+    var platformEdit = document.getElementById('chPlatform');
+    if (platformEdit && platformEdit.value) updates.platform = platformEdit.value;
+    var platformAcctEdit = document.getElementById('chPlatformAccount');
+    if (platformAcctEdit) updates.platformAccountId = platformAcctEdit.value.trim() || null;
+    var usesTierEdit = document.getElementById('chUsesTier');
+    if (usesTierEdit && usesTierEdit.value) updates.usesTier = usesTierEdit.value;
+    // Keep legacy `type` consistent with new shape when both edited
+    if (updates.route && updates.platform) {
+      var derivedType = deriveLegacyType(updates.route, updates.platform);
+      if (derivedType) updates.type = derivedType;
+    }
 
     MastDB._ref('admin/channels/' + selectedChannelId).update(updates).then(function() {
       // Update local cache
@@ -2032,7 +2186,7 @@
     return {
       channelId: ch.channelId,
       channelName: ch.name || '',
-      channelType: ch.type || null,
+      channelType: getChannelType(ch) || null,
       grossRevenue: gross,
       fees: fees,
       netRevenue: net,
@@ -2286,6 +2440,20 @@
   window.channelSaveOnboarding = saveOnboarding;
   window.channelShowOnboarding = function() { currentView = 'onboarding'; onboardingSelections = {}; renderCurrentView(); };
   window.channelSyncNow = syncNow;
+
+  // Phase 2a (D23, D25) — expose shim accessors + metadata for product editor,
+  // recipe handshake banner, and E2E verification.
+  window.MastChannelShim = {
+    ROUTES: ROUTES,
+    PLATFORMS: PLATFORMS,
+    TYPE_TO_ROUTE_PLATFORM: TYPE_TO_ROUTE_PLATFORM,
+    deriveLegacyType: deriveLegacyType,
+    getRoute: getChannelRoute,
+    getPlatform: getChannelPlatform,
+    getPlatformAccountId: getChannelPlatformAccountId,
+    getType: getChannelType,
+    getUsesTier: getChannelUsesTier
+  };
 
   // ============================================================
   // Register with MastAdmin
