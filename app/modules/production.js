@@ -251,6 +251,35 @@ function openAssignToJobModal(requestId) {
   openModal(html);
 }
 
+// Channel-First Phase 1d (D42) — resolve an order item's options object to a stable
+// variant id by looking up the product's variants[] and matching the combo. Returns
+// {variantId, variantLabel} or {variantId: null, variantLabel: null} when no match.
+function resolveVariantFromOptions(productId, options) {
+  if (!productId || !options || typeof options !== 'object' || !Object.keys(options).length) {
+    return { variantId: null, variantLabel: null };
+  }
+  var prod = (window.productsData || []).find(function(p) { return p.pid === productId; });
+  if (!prod || !Array.isArray(prod.variants) || !prod.variants.length) {
+    return { variantId: null, variantLabel: null };
+  }
+  var optKeys = Object.keys(options);
+  for (var i = 0; i < prod.variants.length; i++) {
+    var v = prod.variants[i];
+    if (!v || !v.id || !v.combo) continue;
+    var comboKeys = Object.keys(v.combo);
+    if (comboKeys.length !== optKeys.length) continue;
+    var match = true;
+    for (var j = 0; j < optKeys.length; j++) {
+      if (v.combo[optKeys[j]] !== options[optKeys[j]]) { match = false; break; }
+    }
+    if (match) {
+      var label = comboKeys.map(function(k) { return v.combo[k]; }).filter(Boolean).join(' / ');
+      return { variantId: v.id, variantLabel: label };
+    }
+  }
+  return { variantId: null, variantLabel: null };
+}
+
 async function doAssignNewJob(requestId) {
   var pr = productionRequests[requestId];
   if (!pr) return;
@@ -275,14 +304,22 @@ async function doAssignNewJob(requestId) {
       startedAt: null,
       completedAt: null
     });
+    // Channel-First Phase 1d (D42, D48) — resolve variant + freeze BOM at line creation
+    var resolvedNew = resolveVariantFromOptions(pr.productId, pr.options);
+    var bomNew = await snapshotBomForecast(pr.productId, resolvedNew.variantId);
     await lineItemRef.set({
       productId: pr.productId || null,
       productName: pr.productName || '',
+      variantId: resolvedNew.variantId,
+      variantLabel: resolvedNew.variantLabel,
       targetQuantity: pr.qty || 1,
       completedQuantity: 0,
       lossQuantity: 0,
       specifications: pr.options ? Object.values(pr.options).join(', ') : '',
-      productionRequestId: requestId
+      productionRequestId: requestId,
+      bomForecast: bomNew,
+      actualMaterialCostCents: null,
+      actualLaborCostCents: null
     });
     await writeAudit('create', 'jobs', jobId);
     await assignRequestToJob(requestId, jobId, lineItemId);
@@ -302,14 +339,22 @@ async function doAssignExistingJob(requestId) {
   try {
     var lineItemRef = MastDB.productionJobs.lineItems(jobId).push();
     var lineItemId = lineItemRef.key;
+    // Channel-First Phase 1d (D42, D48) — resolve variant + freeze BOM at line creation
+    var resolvedExist = resolveVariantFromOptions(pr.productId, pr.options);
+    var bomExist = await snapshotBomForecast(pr.productId, resolvedExist.variantId);
     await lineItemRef.set({
       productId: pr.productId || null,
       productName: pr.productName || '',
+      variantId: resolvedExist.variantId,
+      variantLabel: resolvedExist.variantLabel,
       targetQuantity: pr.qty || 1,
       completedQuantity: 0,
       lossQuantity: 0,
       specifications: pr.options ? Object.values(pr.options).join(', ') : '',
-      productionRequestId: requestId
+      productionRequestId: requestId,
+      bomForecast: bomExist,
+      actualMaterialCostCents: null,
+      actualLaborCostCents: null
     });
     await writeAudit('update', 'jobs', jobId);
     await assignRequestToJob(requestId, jobId, lineItemId);
@@ -508,37 +553,68 @@ function renderProductionJobDetail(jobId) {
     return '<button class="btn ' + btnClass + '" style="font-size:0.78rem;padding:4px 12px;" onclick="transitionProductionJob(\'' + esc(jobId) + '\', \'' + t + '\')">' + label + '</button>';
   }).join(' ');
 
-  // Line items
+  // Line items — Channel-First Phase 1d (D43): group by productId, parent header per
+  // product when any line in the group targets a variant; variant rows render indented.
   var lineItems = job.lineItems || {};
   var liKeys = Object.keys(lineItems);
   var liHtml = '';
+
+  // Group line items by productId (or '_freeform' for items with no productId)
+  var groupOrder = [];
+  var groups = {};
   liKeys.forEach(function(k) {
     var li = lineItems[k];
-    var pct = li.targetQuantity > 0 ? Math.min(100, Math.round((li.completedQuantity || 0) / li.targetQuantity * 100)) : 0;
-    var isEditable = (status === 'in-progress' || status === 'queued');
-    liHtml += '<div class="prod-line-item-row">' +
-      '<div style="flex:1;">' +
-        '<strong>' + esc(li.productName || '') + '</strong>' +
-        (li.specifications ? '<br><span style="font-size:0.78rem;color:var(--warm-gray);">' + esc(li.specifications) + '</span>' : '') +
-      '</div>' +
-      '<div style="text-align:right;font-size:0.85rem;">' +
-        (isEditable ?
-          '<div style="display:flex;align-items:center;gap:4px;justify-content:flex-end;">' +
-            '<input type="number" min="0" value="' + (li.completedQuantity || 0) + '" style="width:42px;text-align:center;padding:2px 4px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.85rem;background:var(--cream);" onblur="updateLineItemProgress(\'' + esc(jobId) + '\',\'' + esc(k) + '\',this.value,null)">' +
-            '<span style="color:var(--warm-gray);">/ ' + (li.targetQuantity || 0) + '</span>' +
-          '</div>' +
-          '<div style="display:flex;align-items:center;gap:4px;justify-content:flex-end;margin-top:2px;">' +
-            '<span style="font-size:0.72rem;color:#C62828;">loss:</span>' +
-            '<input type="number" min="0" value="' + (li.lossQuantity || 0) + '" style="width:42px;text-align:center;padding:2px 4px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.78rem;background:var(--cream);" onblur="updateLineItemProgress(\'' + esc(jobId) + '\',\'' + esc(k) + '\',null,this.value)">'  +
-          '</div>'
-        :
-          (li.completedQuantity || 0) + '/' + (li.targetQuantity || 0) +
-          (li.lossQuantity > 0 ? ' <span style="color:#C62828;">(-' + li.lossQuantity + ')</span>' : '') +
-          '<br><span style="font-size:0.72rem;color:var(--warm-gray);">' + pct + '%</span>'
-        ) +
-      '</div>' +
-      (status !== 'completed' && status !== 'cancelled' ? '<div style="margin-left:8px;"><button class="btn btn-secondary" style="font-size:0.72rem;padding:2px 8px;" onclick="removeLineItem(\'' + esc(jobId) + '\', \'' + esc(k) + '\')">×</button></div>' : '') +
-    '</div>';
+    var gk = li && li.productId ? li.productId : '_freeform_' + k;
+    if (!groups[gk]) { groups[gk] = []; groupOrder.push(gk); }
+    groups[gk].push({ key: k, li: li });
+  });
+
+  groupOrder.forEach(function(gk) {
+    var entries = groups[gk];
+    var hasVariantLine = entries.some(function(e) { return e.li && e.li.variantId; });
+    // Emit parent product header when any line in this group targets a variant
+    if (hasVariantLine) {
+      var headerName = (entries[0].li && entries[0].li.productName) || 'Product';
+      liHtml += '<div class="prod-line-item-group-header" style="font-size:0.78rem;font-weight:600;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;padding:6px 0 4px;border-bottom:1px solid var(--cream-dark);margin-top:4px;">' + esc(headerName) + '</div>';
+    }
+    entries.forEach(function(entry) {
+      var k = entry.key;
+      var li = entry.li;
+      var pct = li.targetQuantity > 0 ? Math.min(100, Math.round((li.completedQuantity || 0) / li.targetQuantity * 100)) : 0;
+      var isEditable = (status === 'in-progress' || status === 'queued');
+      // Indent + variant-only label when this line is under a parent header
+      var indentStyle = hasVariantLine ? 'padding-left:18px;' : '';
+      var labelHtml;
+      if (hasVariantLine) {
+        // Variant row under header — show ↳ + variant label (or specifications fallback)
+        var vLabel = li.variantLabel || li.specifications || (li.variantId ? li.variantId : 'Default');
+        labelHtml = '<span style="color:var(--warm-gray);">↳</span> <strong>' + esc(vLabel) + '</strong>';
+      } else {
+        // Standalone product row — full product name + spec sub-line
+        labelHtml = '<strong>' + esc(li.productName || '') + '</strong>' +
+          (li.specifications ? '<br><span style="font-size:0.78rem;color:var(--warm-gray);">' + esc(li.specifications) + '</span>' : '');
+      }
+      liHtml += '<div class="prod-line-item-row" style="' + indentStyle + '">' +
+        '<div style="flex:1;">' + labelHtml + '</div>' +
+        '<div style="text-align:right;font-size:0.85rem;">' +
+          (isEditable ?
+            '<div style="display:flex;align-items:center;gap:4px;justify-content:flex-end;">' +
+              '<input type="number" min="0" value="' + (li.completedQuantity || 0) + '" style="width:42px;text-align:center;padding:2px 4px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.85rem;background:var(--cream);" onblur="updateLineItemProgress(\'' + esc(jobId) + '\',\'' + esc(k) + '\',this.value,null)">' +
+              '<span style="color:var(--warm-gray);">/ ' + (li.targetQuantity || 0) + '</span>' +
+            '</div>' +
+            '<div style="display:flex;align-items:center;gap:4px;justify-content:flex-end;margin-top:2px;">' +
+              '<span style="font-size:0.72rem;color:#C62828;">loss:</span>' +
+              '<input type="number" min="0" value="' + (li.lossQuantity || 0) + '" style="width:42px;text-align:center;padding:2px 4px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.78rem;background:var(--cream);" onblur="updateLineItemProgress(\'' + esc(jobId) + '\',\'' + esc(k) + '\',null,this.value)">'  +
+            '</div>'
+          :
+            (li.completedQuantity || 0) + '/' + (li.targetQuantity || 0) +
+            (li.lossQuantity > 0 ? ' <span style="color:#C62828;">(-' + li.lossQuantity + ')</span>' : '') +
+            '<br><span style="font-size:0.72rem;color:var(--warm-gray);">' + pct + '%</span>'
+          ) +
+        '</div>' +
+        (status !== 'completed' && status !== 'cancelled' ? '<div style="margin-left:8px;"><button class="btn btn-secondary" style="font-size:0.72rem;padding:2px 8px;" onclick="removeLineItem(\'' + esc(jobId) + '\', \'' + esc(k) + '\')">×</button></div>' : '') +
+      '</div>';
+    });
   });
 
   // Builds
@@ -727,15 +803,18 @@ async function transitionProductionJob(jobId, newStatus) {
         if (!li.productId || !(li.completedQuantity > 0)) continue;
         var qty = (li.completedQuantity || 0) - (li.lossQuantity || 0);
         try {
+          // Channel-First Phase 1d (D42) — push to per-variant stock when line targets a variant
+          var liVariantKey = li.variantId || null; // stockOnHand defaults to '_default' when null
           // Decrement incoming by target quantity (what was planned)
-          var incomingRef = MastDB.inventory.stockIncoming(li.productId);
+          var incomingRef = MastDB.inventory.stockIncoming(li.productId, liVariantKey);
           await incomingRef.transaction(function(current) { return Math.max(0, (current || 0) - (li.targetQuantity || 0)); });
           // Increment onHand by actual completed (minus loss)
           if (qty > 0) {
-            var stockRef = MastDB.inventory.stockOnHand(li.productId);
+            var stockRef = MastDB.inventory.stockOnHand(li.productId, liVariantKey);
             await stockRef.transaction(function(current) { return (current || 0) + qty; });
             await MastDB.inventory.ref(li.productId + '/history').push({
               action: 'adjusted', reason: 'production_completed', qty: qty,
+              variantId: liVariantKey,
               jobId: jobId, actor: 'maker', actorType: 'maker', timestamp: now
             });
             invCount++;
@@ -868,6 +947,11 @@ function openAddLineItemModal(jobId) {
     '<h3>Add Line Item</h3>' +
     '<div class="form-group"><label>Product</label><select id="liProductPicker" onchange="onLineItemProductSelect()" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">' + productOptions + '</select></div>' +
     '<div class="form-group"><label>Product Name</label><input type="text" id="liProductName" placeholder="Product name"></div>' +
+    // Channel-First Phase 1d (D42) — variant picker. Hidden when product has no variants;
+    // populated + made required when a variant product is selected.
+    '<div class="form-group" id="liVariantWrap" style="display:none;"><label>Variant <span style="color:var(--danger);">*</span></label>' +
+      '<select id="liVariantPicker" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;"></select>' +
+    '</div>' +
     '<div class="form-group"><label>Target Quantity</label><input type="number" id="liTargetQty" min="1" value="1" style="width:100px;"></div>' +
     '<div class="form-group"><label>Specifications</label><input type="text" id="liSpecs" placeholder="Color, size, notes..."></div>' +
     '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">' +
@@ -878,22 +962,47 @@ function openAddLineItemModal(jobId) {
   openModal(html);
 }
 
+// Channel-First Phase 1d (D42) — when product changes, populate variant dropdown if applicable.
 function onLineItemProductSelect() {
   var picker = document.getElementById('liProductPicker');
   var nameInput = document.getElementById('liProductName');
+  var variantWrap = document.getElementById('liVariantWrap');
+  var variantPicker = document.getElementById('liVariantPicker');
   if (picker.value && productsData && productsData.length) {
     var match = productsData.find(function(p) { return p.pid === picker.value; });
     if (match) nameInput.value = match.name || '';
+    var variants = (match && Array.isArray(match.variants)) ? match.variants : [];
+    if (variants.length > 0) {
+      var opts = '<option value="">-- Pick a variant --</option>';
+      variants.forEach(function(v) {
+        if (!v || !v.id) return;
+        var label = v.combo
+          ? Object.keys(v.combo).map(function(k){ return v.combo[k]; }).filter(Boolean).join(' / ')
+          : (v.name || v.id);
+        opts += '<option value="' + esc(v.id) + '">' + esc(label) + '</option>';
+      });
+      variantPicker.innerHTML = opts;
+      variantWrap.style.display = '';
+    } else {
+      variantWrap.style.display = 'none';
+      variantPicker.innerHTML = '';
+    }
+  } else if (variantWrap) {
+    variantWrap.style.display = 'none';
+    variantPicker.innerHTML = '';
   }
 }
 
 /**
  * Snapshot a per-unit BOM forecast from a product's active recipe, if one exists.
- * Returns { recipeId, recipeName, materialCostPerUnitCents, laborCostPerUnitCents,
- *           laborMinutesPerUnit, totalCostPerUnitCents, snapshotAt } or null.
- * Snapshot is taken at add-time so later recipe edits don't ripple into existing jobs.
+ * Returns { recipeId, recipeVersion, recipeName, variantId, materialCostPerUnitCents,
+ *           laborCostPerUnitCents, laborMinutesPerUnit, totalCostPerUnitCents, snapshotAt }
+ * or null.
+ * Snapshot is taken at add-time so later recipe edits don't ripple into existing jobs (D48).
+ * Channel-First Phase 1d: variantId param pulls the matching recipe variant's totals
+ * instead of the legacy "first variant as representative" heuristic.
  */
-async function snapshotBomForecast(productId) {
+async function snapshotBomForecast(productId, variantId) {
   if (!productId) return null;
   try {
     var snap = await MastDB.recipes.list(200);
@@ -905,24 +1014,35 @@ async function snapshotBomForecast(productId) {
       if (r.productId === productId && !recipe) recipe = r;
     });
     if (!recipe) return null;
-    // For variant recipes, use the first variant's totals as the representative per-unit.
     var totalCost = recipe.totalCost || 0;
     var materialCost = recipe.totalMaterialCost || 0;
     var laborCost = recipe.laborCost || 0;
     var laborMinutes = recipe.laborMinutes || 0;
-    if (recipe.isVariantEnabled && recipe.variants) {
+    if (recipe.variants && variantId && recipe.variants[variantId]) {
+      // Phase 1d — pull the matching variant's costs (D42 / D48)
+      var v = recipe.variants[variantId];
+      totalCost = v.totalCost || totalCost;
+      materialCost = v.totalMaterialCost || materialCost;
+      laborMinutes = v.laborMinutes || laborMinutes;
+      laborCost = Math.round((laborMinutes / 60) * (recipe.laborRatePerHour || 0) * 100) / 100;
+    } else if (recipe.isVariantEnabled && recipe.variants && !variantId) {
+      // Legacy fallback: no variantId provided, take first variant as representative.
+      // Should be rare after Phase 1d (line items now carry variantId for variant products).
       var firstKey = Object.keys(recipe.variants)[0];
       if (firstKey) {
-        var v = recipe.variants[firstKey];
-        totalCost = v.totalCost || totalCost;
-        materialCost = v.totalMaterialCost || materialCost;
-        laborMinutes = v.laborMinutes || laborMinutes;
+        var fv = recipe.variants[firstKey];
+        totalCost = fv.totalCost || totalCost;
+        materialCost = fv.totalMaterialCost || materialCost;
+        laborMinutes = fv.laborMinutes || laborMinutes;
         laborCost = Math.round((laborMinutes / 60) * (recipe.laborRatePerHour || 0) * 100) / 100;
       }
     }
     return {
       recipeId: recipe.recipeId || null,
+      // Channel-First Phase 1d (D48) — freeze recipe version on the line item
+      recipeVersion: typeof recipe.version === 'number' ? recipe.version : 1,
       recipeName: recipe.name || '',
+      variantId: variantId || null,
       materialCostPerUnitCents: Math.round(materialCost * 100),
       laborCostPerUnitCents: Math.round(laborCost * 100),
       laborMinutesPerUnit: laborMinutes,
@@ -1085,13 +1205,31 @@ async function doAddLineItem(jobId) {
   var qty = parseInt(document.getElementById('liTargetQty').value) || 1;
   var specs = document.getElementById('liSpecs').value.trim();
   if (!name) { showToast('Enter a product name', true); return; }
+  // Channel-First Phase 1d (D42) — variantId mandatory when product has variants
+  var variantId = null;
+  var variantLabel = null;
+  if (pid && productsData) {
+    var prod = productsData.find(function(p) { return p.pid === pid; });
+    if (prod && Array.isArray(prod.variants) && prod.variants.length > 0) {
+      var picker = document.getElementById('liVariantPicker');
+      variantId = picker ? picker.value : null;
+      if (!variantId) { showToast('Pick a variant for this product', true); return; }
+      var v = prod.variants.find(function(x) { return x && x.id === variantId; });
+      if (v && v.combo) {
+        variantLabel = Object.keys(v.combo).map(function(k){ return v.combo[k]; }).filter(Boolean).join(' / ');
+      }
+    }
+  }
   try {
-    // Snapshot recipe BOM forecast if product has an active recipe
-    var bomForecast = await snapshotBomForecast(pid);
+    // Snapshot recipe BOM forecast if product has an active recipe (D48 — frozen at creation)
+    var bomForecast = await snapshotBomForecast(pid, variantId);
     var ref = MastDB.productionJobs.lineItems(jobId).push();
     await ref.set({
       productId: pid,
       productName: name,
+      // Channel-First Phase 1d (D42)
+      variantId: variantId,
+      variantLabel: variantLabel,
       targetQuantity: qty,
       completedQuantity: 0,
       lossQuantity: 0,
@@ -1586,12 +1724,14 @@ async function autoUpdateInventory(jobId, buildId, buildOutput, freshJob) {
     }
 
     try {
-      // Firebase transaction for atomic increment
-      var stockRef = MastDB.inventory.stockOnHand(li.productId);
+      // Channel-First Phase 1d (D42) — push to per-variant stock when line targets a variant
+      var liVariantKey = li.variantId || null;
+      var stockRef = MastDB.inventory.stockOnHand(li.productId, liVariantKey);
       await stockRef.transaction(function(current) {
         return (current || 0) + qty;
       });
-      results.push('📦 Inventory +' + qty + ' ' + (li.productName || 'item'));
+      var label = (li.variantLabel ? ' (' + li.variantLabel + ')' : '');
+      results.push('📦 Inventory +' + qty + ' ' + (li.productName || 'item') + label);
     } catch (e) {
       console.error('Inventory update error:', e);
     }
