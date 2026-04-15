@@ -23235,8 +23235,16 @@ window.__mastDriftAlerts = window.__mastDriftAlerts || {};
 async function loadDriftAlerts(pid) {
   try {
     var tid = MastDB.tenantId();
-    var snap = await firebase.database().ref(tid + '/admin/publishDrift')
+    // Phase 4: warm flag + channels + severity in parallel with drift fetch
+    // so the subsequent renderProductDetail re-render can render the unified
+    // banner fully on the first shot (no FOUC between legacy and unified).
+    var driftPromise = firebase.database().ref(tid + '/admin/publishDrift')
       .orderByChild('mastProductId').equalTo(pid).once('value');
+    var channelsPromise = new Promise(function(resolve) { loadAdminChannels(resolve); });
+    var flagPromise = loadUnifiedDriftUIFlag();
+    var severityPromise = loadDriftSeverity();
+    var results = await Promise.all([driftPromise, channelsPromise, flagPromise, severityPromise]);
+    var snap = results[0];
     var alerts = [];
     snap.forEach(function(child) {
       var d = child.val();
@@ -23250,7 +23258,7 @@ async function loadDriftAlerts(pid) {
   }
 }
 
-function renderDriftAlertBanner(pid) {
+function renderDriftAlertBannerLegacy(pid) {
   var alerts = window.__mastDriftAlerts[pid];
   if (!alerts || alerts.length === 0) return '';
 
@@ -23265,15 +23273,15 @@ function renderDriftAlertBanner(pid) {
           ? ' <span style="color:var(--warm-gray);font-size:0.72rem;">(' + (df.mastLength || '?') + ' chars → ' + (df.shopifyLength || '?') + ' chars)</span>'
           : '';
         diffLines += '<div style="font-size:0.78rem;margin:6px 0;"><strong>' + esc(df.field) + '</strong>' + lenInfo + '</div>' +
-          '<div style="font-size:0.75rem;margin:2px 0 4px;padding:6px 8px;border-radius:4px;background:rgba(34,197,94,0.1);border-left:3px solid var(--teal,#14b8a6);word-break:break-word;white-space:pre-wrap;">' +
-            '<span style="color:var(--warm-gray);font-size:0.7rem;">Mast (source of truth):</span><br>' + esc(String(df.mast)) + '</div>' +
-          '<div style="font-size:0.75rem;margin:2px 0;padding:6px 8px;border-radius:4px;background:rgba(220,38,38,0.08);border-left:3px solid var(--red,#dc2626);word-break:break-word;white-space:pre-wrap;">' +
-            '<span style="color:var(--warm-gray);font-size:0.7rem;">Shopify (changed):</span><br>' + esc(String(df.shopify)) + '</div>';
+          '<div style="font-size:0.78rem;margin:2px 0 4px;padding:6px 8px;border-radius:4px;background:rgba(34,197,94,0.25);border-left:3px solid var(--teal);word-break:break-word;white-space:pre-wrap;">' +
+            '<span style="color:var(--warm-gray);font-size:0.72rem;">Mast (source of truth):</span><br>' + esc(String(df.mast)) + '</div>' +
+          '<div style="font-size:0.78rem;margin:2px 0;padding:6px 8px;border-radius:4px;background:rgba(220,53,69,0.25);border-left:3px solid var(--danger);word-break:break-word;white-space:pre-wrap;">' +
+            '<span style="color:var(--warm-gray);font-size:0.72rem;">Shopify (changed):</span><br>' + esc(String(df.shopify)) + '</div>';
       }
     }
-    html += '<div class="mast-drift-alert-banner" style="margin:8px 0;padding:10px 14px;border:1px solid var(--red,#dc2626);border-radius:6px;background:rgba(220,38,38,0.08);">' +
+    html += '<div class="mast-drift-alert-banner" style="margin:8px 0;padding:10px 14px;border:1px solid var(--danger);border-radius:6px;background:rgba(220,53,69,0.25);">' +
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">' +
-        '<span style="font-size:0.82rem;font-weight:600;color:var(--red,#dc2626);">Shopify data has drifted from Mast</span>' +
+        '<span style="font-size:0.85rem;font-weight:600;color:var(--danger);">Shopify data has drifted from Mast <span style="font-size:0.72rem;color:var(--warm-gray);font-weight:400;">(legacy banner)</span></span>' +
         '<span style="font-size:0.72rem;color:var(--warm-gray);">' + esc(d.detectedAt ? new Date(d.detectedAt).toLocaleString() : '') + '</span>' +
       '</div>' +
       '<div id="driftDiffDetail_' + esc(d.driftId) + '" style="display:none;margin-bottom:8px;">' + diffLines + '</div>' +
@@ -23286,6 +23294,14 @@ function renderDriftAlertBanner(pid) {
     '</div>';
   }
   return html;
+}
+
+// Phase 4 dispatcher — switches to unified banner when feature flag is on.
+function renderDriftAlertBanner(pid) {
+  if (window.__mastUnifiedDriftUIFlag === true) {
+    return renderUnifiedDriftBanner(pid);
+  }
+  return renderDriftAlertBannerLegacy(pid);
 }
 
 function toggleDriftDiff(driftId) {
@@ -23374,6 +23390,680 @@ async function dismissDriftAlert(driftId, pid) {
     }
   } catch (err) {
     showToast('Dismiss failed: ' + (err && err.message ? err.message : err), true);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Channel-First Phase 4 (D54-D61) — Drift UX unification
+// ---------------------------------------------------------------------------
+// Generalizes the Shopify-only drift banner/queue/rules into a per-Channel
+// system that works across all bound channels. Behind feature flag
+// `{tenant}/config/featureFlags/unifiedDriftUI` — legacy paths stay intact
+// for cutover rollback.
+//
+// Data flow:
+//  - Drift records today: `admin/publishDrift/{driftId}` with `channel` =
+//    platform string ("shopify"/"square"/etc). UI resolves platform →
+//    Channel by matching channels.platform. Phase 4 reads only; Functions
+//    will write `channelId` field in a follow-on job.
+//  - Sync rules: `admin/syncRules/{channelId}/{field}` new canonical path.
+//    UI dual-writes to `admin/syncRules/{platform}/{field}` for backward
+//    compat with current webhook handlers.
+//  - Severity: tenant override at `{tenant}/admin/syncRuleSeverity/{field}`
+//    overrides platform default at `mast-platform/driftSeverityDefaults`.
+//    Fallback: critical for `inventory`, warning for everything else.
+//  - Feature flag: `{tenant}/config/featureFlags/unifiedDriftUI` (boolean).
+//    Cached on window after first read. Flag can also be set in localStorage
+//    as `mastUnifiedDriftUI` = "1" for a per-browser override.
+
+window.__mastUnifiedDriftUIFlag = null; // tri-state: null = not loaded, true/false after load
+window.__mastDriftSeverity = null;      // { platformDefaults, tenantOverrides }
+window.__mastSyncRulesByChannel = null; // { channelId: { field: {action, updatedAt, ...}}}
+
+var MAST_PHASE4_FIELDS = ['title', 'description', 'price', 'status', 'inventory'];
+var MAST_PHASE4_ACTIONS = ['notify', 'accept', 'overwrite', 'ignore'];
+var MAST_PHASE4_ACTION_LABELS = {
+  notify: 'Notify',
+  accept: 'Accept external',
+  overwrite: 'Overwrite external',
+  ignore: 'Ignore'
+};
+var MAST_PHASE4_FIELD_LABELS = {
+  title: 'Title',
+  description: 'Description',
+  price: 'Price',
+  status: 'Status',
+  inventory: 'Inventory'
+};
+
+// Hard fallback severity if neither platform defaults nor tenant overrides load.
+var MAST_PHASE4_SEVERITY_FALLBACK = {
+  inventory: 'critical',
+  title: 'warning',
+  description: 'warning',
+  price: 'warning',
+  status: 'warning'
+};
+
+// Severity visual tokens — must read correctly on both light and dark card
+// backgrounds. See mast-ux-tokens dark-mode foot-guns.
+function phase4SeverityVisual(sev) {
+  if (sev === 'critical') return { border: 'var(--danger)', bg: 'rgba(220,53,69,0.25)', label: '#E6817F' };
+  if (sev === 'warning')  return { border: 'var(--amber)',  bg: 'rgba(196,133,60,0.30)', label: '#E8B679' };
+  return { border: 'var(--warm-gray)', bg: 'rgba(155,149,142,0.35)', label: '#cfcac3' };
+}
+
+// ---------------------------------------------------------------------------
+// Feature flag loader — tenant-level RTDB flag with per-browser override
+// ---------------------------------------------------------------------------
+async function loadUnifiedDriftUIFlag() {
+  if (window.__mastUnifiedDriftUIFlag !== null) return window.__mastUnifiedDriftUIFlag;
+  // Per-browser override (useful during dev without re-deploying RTDB data)
+  try {
+    var ls = (typeof localStorage !== 'undefined') ? localStorage.getItem('mastUnifiedDriftUI') : null;
+    if (ls === '1' || ls === 'true')  { window.__mastUnifiedDriftUIFlag = true;  return true; }
+    if (ls === '0' || ls === 'false') { window.__mastUnifiedDriftUIFlag = false; return false; }
+  } catch (_) { /* localStorage unavailable — fall through to RTDB */ }
+  try {
+    var snap = await firebase.database()
+      .ref(MastDB.tenantId() + '/config/featureFlags/unifiedDriftUI')
+      .once('value');
+    window.__mastUnifiedDriftUIFlag = (snap.val() === true);
+  } catch (err) {
+    console.warn('[phase4] flag load failed, defaulting to legacy:', err && err.message);
+    window.__mastUnifiedDriftUIFlag = false;
+  }
+  return window.__mastUnifiedDriftUIFlag;
+}
+
+// ---------------------------------------------------------------------------
+// Severity loaders — platform defaults + tenant overrides, cached on window
+// ---------------------------------------------------------------------------
+async function loadDriftSeverity() {
+  if (window.__mastDriftSeverity) return window.__mastDriftSeverity;
+  var platformDefaults = {};
+  var tenantOverrides = {};
+  try {
+    var platSnap = await firebase.database().ref('mast-platform/driftSeverityDefaults').once('value');
+    platformDefaults = platSnap.val() || {};
+  } catch (err) {
+    console.warn('[phase4] platform severity defaults load failed:', err && err.message);
+  }
+  try {
+    var tSnap = await firebase.database().ref(MastDB.tenantId() + '/admin/syncRuleSeverity').once('value');
+    tenantOverrides = tSnap.val() || {};
+  } catch (err) {
+    console.warn('[phase4] tenant severity override load failed:', err && err.message);
+  }
+  window.__mastDriftSeverity = {
+    platformDefaults: platformDefaults,
+    tenantOverrides: tenantOverrides
+  };
+  return window.__mastDriftSeverity;
+}
+
+// Synchronous severity resolver — requires loadDriftSeverity to have warmed
+// the cache first. Precedence: tenant override > platform default > fallback.
+function getFieldSeverity(field) {
+  var cache = window.__mastDriftSeverity;
+  if (cache) {
+    if (cache.tenantOverrides && cache.tenantOverrides[field]) return cache.tenantOverrides[field];
+    if (cache.platformDefaults && cache.platformDefaults[field]) return cache.platformDefaults[field];
+  }
+  return MAST_PHASE4_SEVERITY_FALLBACK[field] || 'warning';
+}
+
+// Returns the highest severity found across an array of diff field names.
+// critical > warning > info.
+function maxSeverity(fields) {
+  var rank = { critical: 3, warning: 2, info: 1 };
+  var max = 'info';
+  for (var i = 0; i < (fields || []).length; i++) {
+    var s = getFieldSeverity(fields[i]);
+    if ((rank[s] || 0) > (rank[max] || 0)) max = s;
+  }
+  return max;
+}
+
+// ---------------------------------------------------------------------------
+// Channel resolution helpers — tolerate drift records that still carry only
+// the legacy `channel` platform string (pre-Functions-rekey state).
+// ---------------------------------------------------------------------------
+// Returns { channelId, channel, legacyPlatform } for a drift record.
+// Priority: drift.channelId → drift.channel (platform) matched against
+// channels cache → legacy fallback with the platform string as-is.
+function resolveDriftChannel(drift, channelsCache) {
+  var cache = channelsCache || window.__mastChannelsCache || {};
+  if (drift && drift.channelId && cache[drift.channelId]) {
+    return { channelId: drift.channelId, channel: cache[drift.channelId], legacyPlatform: null };
+  }
+  var platformStr = drift && drift.channel;
+  if (platformStr) {
+    var keys = Object.keys(cache);
+    for (var i = 0; i < keys.length; i++) {
+      var ch = cache[keys[i]];
+      var plat = (ch && (ch.platform || ch.externalPlatform));
+      if (plat === platformStr) {
+        return { channelId: ch.channelId || keys[i], channel: ch, legacyPlatform: platformStr };
+      }
+    }
+  }
+  return { channelId: null, channel: null, legacyPlatform: platformStr || null };
+}
+
+// Returns the channel display name, falling back to platform / "(unknown)".
+function driftChannelLabel(resolved) {
+  if (resolved && resolved.channel && resolved.channel.name) return resolved.channel.name;
+  if (resolved && resolved.legacyPlatform) return '(legacy) ' + resolved.legacyPlatform;
+  if (resolved && resolved.channelId) return '(deleted channel)';
+  return '(unknown channel)';
+}
+
+// ---------------------------------------------------------------------------
+// Unified drift banner — one banner per product that iterates all bound
+// channels via product.channelBindings[]. Opens a dialog with per-Channel
+// cards.
+// ---------------------------------------------------------------------------
+function renderUnifiedDriftBanner(pid) {
+  var alerts = window.__mastDriftAlerts[pid];
+  if (!alerts || alerts.length === 0) return '';
+
+  // Group unresolved drifts by resolved channelId (or legacy platform as a
+  // synthetic key when no Channel matches).
+  var channelsCache = window.__mastChannelsCache || {};
+  var groups = {}; // key → { resolved, drifts: [], fields: Set }
+  var order = [];
+  alerts.forEach(function(d) {
+    var resolved = resolveDriftChannel(d, channelsCache);
+    var key = resolved.channelId || ('legacy:' + (resolved.legacyPlatform || 'unknown'));
+    if (!groups[key]) {
+      groups[key] = { resolved: resolved, drifts: [], fields: [] };
+      order.push(key);
+    }
+    groups[key].drifts.push(d);
+    (d.diffs || []).forEach(function(df) {
+      if (df && df.field && groups[key].fields.indexOf(df.field) === -1) {
+        groups[key].fields.push(df.field);
+      }
+    });
+  });
+
+  var channelCount = order.length;
+  var allFields = [];
+  order.forEach(function(k) {
+    groups[k].fields.forEach(function(f) { if (allFields.indexOf(f) === -1) allFields.push(f); });
+  });
+  var topSev = maxSeverity(allFields);
+  var v = phase4SeverityVisual(topSev);
+  var sevLabel = topSev === 'critical' ? 'Critical drift' : (topSev === 'warning' ? 'Drift detected' : 'Drift noted');
+  var bannerText = channelCount === 1
+    ? '1 channel has drift'
+    : channelCount + ' channels have drift';
+
+  var html = '';
+  html += '<div class="mast-unified-drift-banner" style="margin:12px 0;padding:12px 16px;border:1px solid ' + v.border + ';border-radius:8px;background:' + v.bg + ';">';
+  html +=   '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">';
+  html +=     '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">';
+  html +=       '<span class="status-badge pill" style="background:' + v.border + ';color:white;">' + esc(sevLabel) + '</span>';
+  html +=       '<span style="font-size:0.9rem;font-weight:500;color:' + v.label + ';">' + esc(bannerText) + ' \u2014 review</span>';
+  html +=     '</div>';
+  html +=     '<div style="display:flex;gap:6px;">';
+  html +=       '<button class="btn btn-secondary btn-small" onclick="openUnifiedDriftDialog(\'' + esc(pid) + '\')">Review drift</button>';
+  html +=     '</div>';
+  html +=   '</div>';
+  // Compact per-Channel summary line
+  var summaryChips = [];
+  order.forEach(function(k) {
+    var g = groups[k];
+    var cSev = maxSeverity(g.fields);
+    var cv = phase4SeverityVisual(cSev);
+    summaryChips.push(
+      '<span class="status-badge" style="background:' + cv.bg + ';color:' + cv.label + ';border:1px solid ' + cv.border + ';">' +
+        esc(driftChannelLabel(g.resolved)) + ' \u00b7 ' + g.fields.length + ' field' + (g.fields.length === 1 ? '' : 's') +
+      '</span>'
+    );
+  });
+  if (summaryChips.length) {
+    html += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">' + summaryChips.join('') + '</div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+// Modal dialog with per-Channel cards, sorted critical-first. Keeps the banner
+// compact and puts all per-field actions here.
+async function openUnifiedDriftDialog(pid) {
+  var alerts = window.__mastDriftAlerts[pid] || [];
+  if (!alerts.length) { showToast('No drift to review'); return; }
+  // Warm caches if a tab jumped straight to the banner without visiting the
+  // drift queue first.
+  await Promise.all([
+    new Promise(function(resolve) { loadAdminChannels(resolve); }),
+    loadDriftSeverity(),
+    loadUnifiedSyncRules()
+  ]);
+
+  var channelsCache = window.__mastChannelsCache || {};
+  var groups = {}; var order = [];
+  alerts.forEach(function(d) {
+    var resolved = resolveDriftChannel(d, channelsCache);
+    var key = resolved.channelId || ('legacy:' + (resolved.legacyPlatform || 'unknown'));
+    if (!groups[key]) { groups[key] = { resolved: resolved, drifts: [] }; order.push(key); }
+    groups[key].drifts.push(d);
+  });
+  // Sort channels by max severity, then by count desc
+  order.sort(function(a, b) {
+    var rank = { critical: 3, warning: 2, info: 1 };
+    var aFields = []; groups[a].drifts.forEach(function(d) { (d.diffs || []).forEach(function(df) { if (df.field && aFields.indexOf(df.field) === -1) aFields.push(df.field); }); });
+    var bFields = []; groups[b].drifts.forEach(function(d) { (d.diffs || []).forEach(function(df) { if (df.field && bFields.indexOf(df.field) === -1) bFields.push(df.field); }); });
+    return (rank[maxSeverity(bFields)] || 0) - (rank[maxSeverity(aFields)] || 0);
+  });
+
+  // Build overlay + modal. Uses the modal CSS tokens from mast-ux-widgets.
+  var existing = document.getElementById('unifiedDriftDialog');
+  if (existing) existing.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'unifiedDriftDialog';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.setAttribute('aria-labelledby', 'unifiedDriftDialogTitle');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:flex-start;justify-content:center;padding:5vh 16px;overflow-y:auto;';
+  overlay.addEventListener('click', function(ev) { if (ev.target === overlay) overlay.remove(); });
+
+  var cards = order.map(function(k) { return renderUnifiedDriftDialogCard(pid, groups[k]); }).join('');
+  var bodyHtml =
+    '<div class="modal" style="background:var(--cream);border-radius:10px;max-width:720px;width:100%;box-shadow:0 8px 30px rgba(0,0,0,0.2);padding:20px 24px;max-height:90vh;overflow-y:auto;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px;">' +
+        '<div>' +
+          '<h3 id="unifiedDriftDialogTitle" style="margin:0;font-size:1.15rem;font-weight:600;">Drift across ' + order.length + ' channel' + (order.length === 1 ? '' : 's') + '</h3>' +
+          '<p style="margin:4px 0 0;font-size:0.78rem;color:var(--warm-gray);">Review per-channel diffs and pick an action. Rules can be updated in the Rules tab.</p>' +
+        '</div>' +
+        '<button class="btn btn-secondary btn-small" aria-label="Close" onclick="document.getElementById(\'unifiedDriftDialog\').remove()">Close</button>' +
+      '</div>' +
+      '<div style="display:flex;flex-direction:column;gap:12px;">' + cards + '</div>' +
+    '</div>';
+  overlay.innerHTML = bodyHtml;
+  document.body.appendChild(overlay);
+
+  // Esc key closes
+  function escHandler(ev) {
+    if (ev.key === 'Escape') {
+      var n = document.getElementById('unifiedDriftDialog');
+      if (n) n.remove();
+      document.removeEventListener('keydown', escHandler);
+    }
+  }
+  document.addEventListener('keydown', escHandler);
+}
+
+function renderUnifiedDriftDialogCard(pid, group) {
+  var resolved = group.resolved;
+  var drifts = group.drifts;
+  var fields = [];
+  drifts.forEach(function(d) { (d.diffs || []).forEach(function(df) { if (df.field && fields.indexOf(df.field) === -1) fields.push(df.field); }); });
+  var sev = maxSeverity(fields);
+  var v = phase4SeverityVisual(sev);
+  var platformStr = (resolved.channel && (resolved.channel.platform || resolved.channel.externalPlatform)) || resolved.legacyPlatform || '';
+
+  var html = '';
+  html += '<div class="unified-drift-card" style="border:1px solid ' + v.border + ';border-left-width:4px;border-radius:8px;padding:12px 16px;background:var(--cream);box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px;flex-wrap:wrap;">';
+  html += '<div>';
+  html += '<div style="font-size:1.0rem;font-weight:500;">' + esc(driftChannelLabel(resolved)) + '</div>';
+  if (platformStr) {
+    html += '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;">' + esc(platformStr) + '</div>';
+  }
+  html += '</div>';
+  html += '<span class="status-badge pill" style="background:' + v.border + ';color:white;">' + esc(sev) + '</span>';
+  html += '</div>';
+
+  // Per-drift diff blocks
+  drifts.forEach(function(d) {
+    var detDate = d.detectedAt ? new Date(d.detectedAt).toLocaleString() : '';
+    html += '<div style="border-top:1px dashed var(--cream-dark);padding-top:10px;margin-top:10px;">';
+    html += '<div style="font-size:0.72rem;color:var(--warm-gray);margin-bottom:6px;">Detected ' + esc(detDate) + ' \u00b7 drift id ' + esc(d.driftId) + '</div>';
+    (d.diffs || []).forEach(function(df) {
+      var fieldSev = getFieldSeverity(df.field);
+      var fv = phase4SeverityVisual(fieldSev);
+      var mastVal = (df.mast !== undefined) ? df.mast : df.mastValue;
+      var chanVal = (df.shopify !== undefined) ? df.shopify : (df.channelValue !== undefined ? df.channelValue : df.squareValue);
+      html += '<div style="margin:6px 0;">';
+      html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">';
+      html += '<strong style="font-size:0.85rem;">' + esc(MAST_PHASE4_FIELD_LABELS[df.field] || df.field) + '</strong>';
+      html += '<span class="status-badge" style="background:' + fv.bg + ';color:' + fv.label + ';">' + esc(fieldSev) + '</span>';
+      html += '</div>';
+      html += '<div style="font-size:0.78rem;padding:6px 8px;border-radius:4px;background:rgba(42,124,111,0.25);border-left:3px solid var(--teal);word-break:break-word;white-space:pre-wrap;margin-bottom:4px;">';
+      html += '<span style="color:var(--warm-gray);font-size:0.72rem;">Mast (source of truth):</span><br>' + esc(String(mastVal == null ? '' : mastVal));
+      html += '</div>';
+      html += '<div style="font-size:0.78rem;padding:6px 8px;border-radius:4px;background:' + fv.bg + ';border-left:3px solid ' + fv.border + ';word-break:break-word;white-space:pre-wrap;">';
+      html += '<span style="color:var(--warm-gray);font-size:0.72rem;">Channel (changed):</span><br>' + esc(String(chanVal == null ? '' : chanVal));
+      html += '</div>';
+      html += '</div>';
+    });
+    // Per-drift action buttons — dispatch to channel-aware handlers.
+    html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;">';
+    html += '<button class="btn btn-secondary btn-small" onclick="overwriteChannelFromDrift(\'' + esc(pid) + '\',\'' + esc(d.driftId) + '\',\'' + esc(platformStr) + '\')">Overwrite Channel</button>';
+    html += '<button class="btn btn-secondary btn-small" onclick="acceptChannelEdits(\'' + esc(pid) + '\',\'' + esc(d.driftId) + '\',\'' + esc(platformStr) + '\')">Accept Channel Edits</button>';
+    html += '<button class="btn btn-secondary btn-small" onclick="dismissDriftAlert(\'' + esc(d.driftId) + '\',\'' + esc(pid) + '\')">Dismiss</button>';
+    html += '</div>';
+    html += '</div>';
+  });
+
+  html += '</div>';
+  return html;
+}
+
+// Channel-aware overwrite/accept dispatchers. Today only Shopify has dedicated
+// Cloud Functions for accept/overwrite; other platforms surface a friendly
+// "not yet implemented" toast pointing at the follow-on work.
+async function overwriteChannelFromDrift(pid, driftId, platform) {
+  if (!platform || platform === 'shopify') {
+    return overwriteShopifyFromDrift(pid, driftId);
+  }
+  showToast('Overwrite for ' + platform + ' not yet implemented \u2014 pending Cloud Functions follow-on', true);
+}
+
+async function acceptChannelEdits(pid, driftId, platform) {
+  if (!platform || platform === 'shopify') {
+    return acceptShopifyEdits(pid, driftId);
+  }
+  showToast('Accept-channel-edits for ' + platform + ' not yet implemented \u2014 pending Cloud Functions follow-on', true);
+}
+
+// ---------------------------------------------------------------------------
+// Unified drift queue — Channel column + filter + severity sort
+// ---------------------------------------------------------------------------
+window.__mastDriftQueueChannelFilter = 'all';
+
+function renderDriftReviewQueueUnified(tab) {
+  window.__mastDriftQueueTab = tab;
+  var container = document.getElementById('driftReviewQueueContainer');
+  if (!container) return;
+  var data = window.__mastDriftQueueData || [];
+  var channelsCache = window.__mastChannelsCache || {};
+
+  var counts = { unresolved: 0, dismissed: 0, resolved: 0, all: data.length };
+  data.forEach(function(d) {
+    if (d.status === 'unresolved') counts.unresolved++;
+    else if (d.status === 'dismissed') counts.dismissed++;
+    else if (d.status === 'resolved') counts.resolved++;
+  });
+
+  // Distinct channels appearing in the data — used for the filter dropdown.
+  var filterMap = {}; // key → label
+  data.forEach(function(d) {
+    var r = resolveDriftChannel(d, channelsCache);
+    var key = r.channelId || ('legacy:' + (r.legacyPlatform || 'unknown'));
+    filterMap[key] = driftChannelLabel(r);
+  });
+  var filterKeys = Object.keys(filterMap).sort(function(a, b) { return filterMap[a].localeCompare(filterMap[b]); });
+
+  var filtered = (tab === 'all' ? data : data.filter(function(d) { return d.status === tab; }));
+  var channelFilter = window.__mastDriftQueueChannelFilter || 'all';
+  if (channelFilter !== 'all') {
+    filtered = filtered.filter(function(d) {
+      var r = resolveDriftChannel(d, channelsCache);
+      var key = r.channelId || ('legacy:' + (r.legacyPlatform || 'unknown'));
+      return key === channelFilter;
+    });
+  }
+
+  // Severity-then-time sort — critical first, oldest-within-bucket at top
+  var rank = { critical: 3, warning: 2, info: 1 };
+  filtered.sort(function(a, b) {
+    var aFields = (a.diffs || []).map(function(df) { return df.field; });
+    var bFields = (b.diffs || []).map(function(df) { return df.field; });
+    var sa = rank[maxSeverity(aFields)] || 0;
+    var sb = rank[maxSeverity(bFields)] || 0;
+    if (sa !== sb) return sb - sa;
+    // Within severity bucket, oldest at top (detectedAt ascending)
+    return (a.detectedAt || '').localeCompare(b.detectedAt || '');
+  });
+
+  // Header + count
+  var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:12px;">';
+  html += '<div style="font-size:0.9rem;font-weight:500;">Drift Alerts <span style="font-size:0.78rem;color:var(--warm-gray);">(' + filtered.length + ')</span></div>';
+  html += '</div>';
+
+  // Status filter tabs + Channel filter
+  html += '<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">';
+  ['unresolved', 'dismissed', 'resolved', 'all'].forEach(function(t) {
+    var active = t === tab;
+    var label = t.charAt(0).toUpperCase() + t.slice(1) + ' (' + counts[t] + ')';
+    html += '<button class="btn ' + (active ? 'btn-primary' : 'btn-secondary') + ' btn-small" ' +
+      'onclick="renderDriftReviewQueueUnified(\'' + t + '\')">' + label + '</button>';
+  });
+  html += '<select aria-label="Filter by channel" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.78rem;" onchange="window.__mastDriftQueueChannelFilter=this.value;renderDriftReviewQueueUnified(window.__mastDriftQueueTab)">';
+  html += '<option value="all"' + (channelFilter === 'all' ? ' selected' : '') + '>All channels</option>';
+  filterKeys.forEach(function(k) {
+    html += '<option value="' + esc(k) + '"' + (channelFilter === k ? ' selected' : '') + '>' + esc(filterMap[k]) + '</option>';
+  });
+  html += '</select>';
+  html += '</div>';
+
+  if (filtered.length === 0) {
+    html += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">';
+    html += '<div style="font-size:1.6rem;margin-bottom:12px;">\u2705</div>';
+    html += '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No ' + esc(tab) + ' drift alerts</p>';
+    html += '<p style="font-size:0.85rem;color:var(--warm-gray-light);">All synced products are in agreement.</p>';
+    html += '</div>';
+  } else {
+    html += '<div style="display:flex;flex-direction:column;gap:8px;">';
+    filtered.forEach(function(d) {
+      var resolved = resolveDriftChannel(d, channelsCache);
+      var fieldNames = (d.diffs || []).map(function(df) { return df.field; });
+      var rowSev = maxSeverity(fieldNames);
+      var sv = phase4SeverityVisual(rowSev);
+      var fieldLabels = fieldNames.map(function(f) { return MAST_PHASE4_FIELD_LABELS[f] || f; }).join(', ');
+      var date = d.detectedAt
+        ? (new Date(d.detectedAt).toLocaleDateString() + ' ' + new Date(d.detectedAt).toLocaleTimeString())
+        : '';
+
+      var badgeBg, badgeColor;
+      if (d.status === 'unresolved') { badgeBg = '#dc2626'; badgeColor = 'white'; }
+      else if (d.status === 'resolved') { badgeBg = '#16a34a'; badgeColor = 'white'; }
+      else { badgeBg = '#9ca3af'; badgeColor = 'white'; }
+      var statusLabel = d.status === 'unresolved' ? 'Unresolved' : d.status === 'resolved' ? 'Resolved' : 'Dismissed';
+      if (d.resolvedBy && d.status === 'resolved') statusLabel += ' (' + d.resolvedBy.replace(/_/g, ' ') + ')';
+
+      var platformStr = (resolved.channel && (resolved.channel.platform || resolved.channel.externalPlatform)) || resolved.legacyPlatform || '';
+
+      html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-left:4px solid ' + sv.border + ';border-radius:8px;padding:12px 16px;transition:background 0.15s;" onmouseover="this.style.background=\'rgba(196,133,60,0.08)\'" onmouseout="this.style.background=\'var(--cream)\'">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">';
+      html += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">';
+      html += '<span style="font-size:0.9rem;font-weight:500;cursor:pointer;" onclick="navigateToProduct(\'' + esc(d.mastProductId) + '\')" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'">' + esc(d.productName || 'Unknown') + '</span>';
+      html += '<span class="status-badge" style="background:' + sv.bg + ';color:' + sv.label + ';border:1px solid ' + sv.border + ';">' + esc(rowSev) + '</span>';
+      html += '<span class="status-badge" style="background:rgba(155,149,142,0.35);color:#cfcac3;">' + esc(driftChannelLabel(resolved)) + '</span>';
+      html += '</div>';
+      html += '<span class="status-badge" style="background:' + badgeBg + ';color:' + badgeColor + ';">' + esc(statusLabel) + '</span>';
+      html += '</div>';
+      html += '<div style="font-size:0.78rem;color:var(--warm-gray);">Fields: ' + esc(fieldLabels) + ' &middot; <span style="font-size:0.72rem;">' + esc(date) + '</span></div>';
+
+      if (d.status === 'unresolved' || d.status === 'dismissed') {
+        html += '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">';
+        html += '<button class="btn btn-secondary btn-small" onclick="overwriteChannelFromDrift(\'' + esc(d.mastProductId) + '\',\'' + esc(d.driftId) + '\',\'' + esc(platformStr) + '\')">Overwrite Channel</button>';
+        html += '<button class="btn btn-secondary btn-small" onclick="acceptChannelEdits(\'' + esc(d.mastProductId) + '\',\'' + esc(d.driftId) + '\',\'' + esc(platformStr) + '\')">Accept Channel Edits</button>';
+        if (d.status === 'unresolved') {
+          html += '<button class="btn btn-secondary btn-small" onclick="dismissDriftAlert(\'' + esc(d.driftId) + '\',\'' + esc(d.mastProductId) + '\')">Dismiss</button>';
+        }
+        html += '</div>';
+      }
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  container.innerHTML = html;
+}
+
+// ---------------------------------------------------------------------------
+// Unified sync rules — per-Channel panels, 5 fields × 4 actions each
+// ---------------------------------------------------------------------------
+async function loadUnifiedSyncRules() {
+  try {
+    var snap = await firebase.database().ref(MastDB.tenantId() + '/admin/syncRules').once('value');
+    window.__mastSyncRulesByChannel = snap.val() || {};
+  } catch (err) {
+    console.warn('[phase4] unified sync rules load failed:', err && err.message);
+    window.__mastSyncRulesByChannel = {};
+  }
+  return window.__mastSyncRulesByChannel;
+}
+
+async function openSyncRulesUnified() {
+  var container = document.getElementById('syncRulesContainer');
+  if (!container) return;
+  container.innerHTML = '<div class="loading">Loading rules...</div>';
+  try {
+    await Promise.all([
+      new Promise(function(resolve) { loadAdminChannels(resolve); }),
+      loadUnifiedSyncRules(),
+      loadDriftSeverity()
+    ]);
+    renderSyncRulesUnified();
+  } catch (err) {
+    container.innerHTML = '<p style="color:var(--danger);font-size:0.85rem;">Failed to load: ' + esc(err.message) + '</p>';
+  }
+}
+
+function renderSyncRulesUnified() {
+  var container = document.getElementById('syncRulesContainer');
+  if (!container) return;
+  var channelsCache = window.__mastChannelsCache || {};
+  var rulesByChannel = window.__mastSyncRulesByChannel || {};
+
+  // Sort channels alphabetically by name for display stability.
+  var channels = Object.keys(channelsCache)
+    .map(function(k) { return channelsCache[k] || {}; })
+    .filter(function(c) { return c && c.channelId; })
+    .sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
+
+  var html = '';
+  html += '<div style="font-size:1.15rem;font-weight:600;margin-bottom:4px;">Sync Rules</div>';
+  html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin:0 0 16px;">Configure how each field is handled when an external channel\'s data differs from Mast. Severity shown per-field uses platform defaults, overridable at <code>{tenant}/admin/syncRuleSeverity</code>.</p>';
+
+  if (channels.length === 0) {
+    html += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">';
+    html += '<div style="font-size:1.6rem;margin-bottom:12px;">\uD83D\uDCE1</div>';
+    html += '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No channels configured</p>';
+    html += '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Add channels in the Channels section to configure sync rules.</p>';
+    html += '</div>';
+    container.innerHTML = html;
+    return;
+  }
+
+  channels.forEach(function(c) {
+    var cid = c.channelId;
+    var chRules = rulesByChannel[cid] || {};
+    var platformStr = c.platform || c.externalPlatform || '';
+    var routeStr = c.route || '';
+
+    html += '<div style="margin-bottom:20px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">';
+    html += '<div>';
+    html += '<div style="font-size:1.0rem;font-weight:500;">' + esc(c.name || '(unnamed channel)') + '</div>';
+    var meta = [];
+    if (routeStr) meta.push(routeStr);
+    if (platformStr && platformStr !== 'manual') meta.push(platformStr);
+    if (meta.length) html += '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;">' + esc(meta.join(' \u00b7 ')) + '</div>';
+    html += '</div>';
+    html += '<button class="btn btn-secondary btn-small" onclick="resetChannelSyncRules(\'' + esc(cid) + '\')">Reset to Notify</button>';
+    html += '</div>';
+
+    html += '<div style="overflow-x:auto;">';
+    html += '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
+    html += '<thead><tr style="border-bottom:2px solid var(--cream-dark);text-align:left;">';
+    html += '<th style="padding:8px 12px;font-weight:600;">Field</th>';
+    html += '<th style="padding:8px 12px;font-weight:600;">Severity</th>';
+    html += '<th style="padding:8px 12px;font-weight:600;">Action</th>';
+    html += '<th style="padding:8px 12px;font-weight:600;">Last Updated</th>';
+    html += '</tr></thead><tbody>';
+
+    MAST_PHASE4_FIELDS.forEach(function(field) {
+      var rule = chRules[field] || {};
+      var currentAction = rule.action || 'notify';
+      var updatedAt = rule.updatedAt ? new Date(rule.updatedAt).toLocaleDateString() : null;
+      var updatedBy = rule.updatedBy || null;
+      var sev = getFieldSeverity(field);
+      var sv = phase4SeverityVisual(sev);
+
+      html += '<tr style="border-bottom:1px solid var(--cream-dark);">';
+      html += '<td style="padding:10px 12px;font-weight:500;">' + esc(MAST_PHASE4_FIELD_LABELS[field] || field) + '</td>';
+      html += '<td style="padding:10px 12px;"><span class="status-badge" style="background:' + sv.bg + ';color:' + sv.label + ';border:1px solid ' + sv.border + ';">' + esc(sev) + '</span></td>';
+      html += '<td style="padding:10px 12px;">';
+      html += '<select aria-label="Action for ' + esc(field) + ' on ' + esc(c.name || cid) + '" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\',sans-serif;font-size:0.85rem;" onchange="saveUnifiedSyncRule(\'' + esc(cid) + '\', \'' + esc(field) + '\', this.value)">';
+      MAST_PHASE4_ACTIONS.forEach(function(action) {
+        html += '<option value="' + action + '"' + (action === currentAction ? ' selected' : '') + '>' + MAST_PHASE4_ACTION_LABELS[action] + '</option>';
+      });
+      html += '</select>';
+      html += '</td>';
+      html += '<td style="padding:10px 12px;font-size:0.78rem;color:var(--warm-gray);">';
+      if (updatedAt) {
+        html += esc(updatedAt);
+        if (updatedBy) html += ' by ' + esc(updatedBy);
+      } else {
+        html += '\u2014';
+      }
+      html += '</td>';
+      html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+    html += '</div>';
+    html += '</div>';
+  });
+
+  container.innerHTML = html;
+}
+
+// Dual-write: new canonical path `admin/syncRules/{channelId}/{field}` and
+// legacy `admin/syncRules/{platform}/{field}` (so existing webhook handlers
+// that still read platform-keyed rules keep working until Functions catch up).
+async function saveUnifiedSyncRule(channelId, field, action) {
+  try {
+    var now = new Date().toISOString();
+    var userId = firebase.auth().currentUser ? firebase.auth().currentUser.uid : 'unknown';
+    var record = { action: action, updatedAt: now, updatedBy: userId };
+    var writes = [];
+    writes.push(firebase.database().ref(MastDB.tenantId() + '/admin/syncRules/' + channelId + '/' + field).set(record));
+    // Legacy mirror if we can resolve a platform for this channel
+    var ch = (window.__mastChannelsCache || {})[channelId];
+    var platformStr = ch && (ch.platform || ch.externalPlatform);
+    if (platformStr && platformStr !== 'manual') {
+      writes.push(firebase.database().ref(MastDB.tenantId() + '/admin/syncRules/' + platformStr + '/' + field).set(record));
+    }
+    await Promise.all(writes);
+
+    // Update in-memory caches so re-render is immediate
+    if (!window.__mastSyncRulesByChannel) window.__mastSyncRulesByChannel = {};
+    if (!window.__mastSyncRulesByChannel[channelId]) window.__mastSyncRulesByChannel[channelId] = {};
+    window.__mastSyncRulesByChannel[channelId][field] = record;
+
+    renderSyncRulesUnified();
+    showToast('Rule updated: ' + (MAST_PHASE4_FIELD_LABELS[field] || field) + ' \u2192 ' + MAST_PHASE4_ACTION_LABELS[action]);
+  } catch (err) {
+    showToast('Failed to save rule: ' + (err && err.message ? err.message : err), true);
+  }
+}
+
+async function resetChannelSyncRules(channelId) {
+  var ok = await mastConfirm('Reset all rules for this channel to "Notify"? Drift for all fields will require manual review.', { title: 'Reset Channel Rules', confirmLabel: 'Reset', danger: true });
+  if (!ok) return;
+  try {
+    var writes = [];
+    writes.push(firebase.database().ref(MastDB.tenantId() + '/admin/syncRules/' + channelId).remove());
+    var ch = (window.__mastChannelsCache || {})[channelId];
+    var platformStr = ch && (ch.platform || ch.externalPlatform);
+    if (platformStr && platformStr !== 'manual') {
+      writes.push(firebase.database().ref(MastDB.tenantId() + '/admin/syncRules/' + platformStr).remove());
+    }
+    await Promise.all(writes);
+    if (window.__mastSyncRulesByChannel) delete window.__mastSyncRulesByChannel[channelId];
+    renderSyncRulesUnified();
+    showToast('Channel rules reset to Notify');
+  } catch (err) {
+    showToast('Reset failed: ' + (err && err.message ? err.message : err), true);
   }
 }
 
@@ -23661,8 +24351,16 @@ async function openDriftReviewQueue() {
   if (!container) return;
   container.innerHTML = '<div class="loading">Loading drift alerts...</div>';
   try {
-    var snap = await firebase.database().ref(MastDB.tenantId() + '/admin/publishDrift')
+    // Warm supporting caches in parallel — needed by both legacy + unified
+    // renderers. Channels cache powers Channel column lookup; severity cache
+    // powers severity-then-time sort + color/badge selection.
+    var snapPromise = firebase.database().ref(MastDB.tenantId() + '/admin/publishDrift')
       .orderByChild('detectedAt').limitToLast(100).once('value');
+    var channelsPromise = new Promise(function(resolve) { loadAdminChannels(resolve); });
+    var severityPromise = loadDriftSeverity();
+    var flagPromise = loadUnifiedDriftUIFlag();
+    var results = await Promise.all([snapPromise, channelsPromise, severityPromise, flagPromise]);
+    var snap = results[0];
     var data = [];
     snap.forEach(function(child) { var v = child.val(); if (v) data.push(v); });
     data.sort(function(a, b) { return (b.detectedAt || '').localeCompare(a.detectedAt || ''); });
@@ -23673,7 +24371,7 @@ async function openDriftReviewQueue() {
   }
 }
 
-function renderDriftReviewQueue(tab) {
+function renderDriftReviewQueueLegacy(tab) {
   window.__mastDriftQueueTab = tab;
   var container = document.getElementById('driftReviewQueueContainer');
   if (!container) return;
@@ -23745,6 +24443,14 @@ function renderDriftReviewQueue(tab) {
   }
 
   container.innerHTML = html;
+}
+
+// Phase 4 dispatcher — switches to unified queue when feature flag is on.
+function renderDriftReviewQueue(tab) {
+  if (window.__mastUnifiedDriftUIFlag === true) {
+    return renderDriftReviewQueueUnified(tab);
+  }
+  return renderDriftReviewQueueLegacy(tab);
 }
 
 function navigateToProduct(pid) {
@@ -23887,15 +24593,20 @@ async function openSyncRules() {
   if (!container) return;
   container.innerHTML = '<div class="loading">Loading rules...</div>';
   try {
+    await loadUnifiedDriftUIFlag();
+    if (window.__mastUnifiedDriftUIFlag === true) {
+      await openSyncRulesUnified();
+      return;
+    }
     var snap = await firebase.database().ref(MastDB.tenantId() + '/admin/syncRules/shopify').once('value');
     window.__mastSyncRules = snap.val() || {};
-    renderSyncRules();
+    renderSyncRulesLegacy();
   } catch (err) {
     container.innerHTML = '<p style="color:var(--danger);font-size:0.85rem;">Failed to load: ' + esc(err.message) + '</p>';
   }
 }
 
-function renderSyncRules() {
+function renderSyncRulesLegacy() {
   var container = document.getElementById('syncRulesContainer');
   if (!container) return;
   var rules = window.__mastSyncRules || {};
@@ -23964,7 +24675,7 @@ async function saveSyncRule(field, action) {
     // Update local cache
     if (!window.__mastSyncRules) window.__mastSyncRules = {};
     window.__mastSyncRules[field] = { action: action, updatedAt: now, updatedBy: userId };
-    renderSyncRules();
+    renderSyncRulesLegacy();
     showToast('Rule updated: ' + field + ' \u2192 ' + action);
   } catch (err) {
     showToast('Failed to save rule: ' + (err && err.message ? err.message : err), true);
@@ -23977,11 +24688,19 @@ async function resetAllSyncRules() {
   try {
     await firebase.database().ref(MastDB.tenantId() + '/admin/syncRules/shopify').remove();
     window.__mastSyncRules = {};
-    renderSyncRules();
+    renderSyncRulesLegacy();
     showToast('All sync rules reset to Notify');
   } catch (err) {
     showToast('Reset failed: ' + (err && err.message ? err.message : err), true);
   }
+}
+
+// Phase 4 dispatcher — switches to unified rules UI when feature flag is on.
+function renderSyncRules() {
+  if (window.__mastUnifiedDriftUIFlag === true) {
+    return renderSyncRulesUnified();
+  }
+  return renderSyncRulesLegacy();
 }
 
 function renderProductDetail(pid) {
