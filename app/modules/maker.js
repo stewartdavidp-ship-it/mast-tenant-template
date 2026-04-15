@@ -777,11 +777,18 @@
   }
 
   /**
-   * Publish a recipe to its linked product (D34, D35, D36).
-   * All-or-nothing: writes wholesalePriceCents, directPriceCents, retailPriceCents,
-   * priceCents (=retail mirror), recipeId, recipeVersion in a single multi-path update.
-   * For variant-shaped recipes, writes per-variant tier prices keyed by stable ID.
-   * Bumps recipe.version, snapshots prior state to versionHistory[] (D39).
+   * Channel-First Phase 2d (D24) — Recipe Publish handshake, Step 1.
+   *
+   * Publish suggests prices: bumps recipe.version, snapshots prior state
+   * into versionHistory[], records publishedPrices + lastPublishedAt + drift
+   * baseline. Does **NOT** write to the linked product. Step 2
+   * (applyRecipeToProduct) is invoked from the product detail "Recipe vN
+   * ready to apply" banner to actually write prices.
+   *
+   * Per-variant data lives on the recipe; the price-resolution math runs in
+   * Step 2 against the live product's variants. We keep that math out of
+   * Step 1 because the product variant set may have changed since the last
+   * apply, and the diff dialog needs to show the truth as of "now".
    */
   async function publishRecipe(recipeId) {
     var recipe = recipesData[recipeId];
@@ -789,20 +796,71 @@
     if (!recipe.productId) throw new Error('Recipe has no linked product to publish to');
 
     var now = new Date().toISOString();
-    var product = (window.productsData || []).find(function(p) { return p.pid === recipe.productId; });
-    var prodPath = 'public/products/' + recipe.productId + '/';
-    var updates = {};
 
-    // Compute base-product effective tier prices (dollars)
+    // Compute base-product effective tier prices (dollars) from current recipe state.
     var baseEff = {
       wholesale: effectiveTierPrice(recipe, 'wholesale'),
       direct:    effectiveTierPrice(recipe, 'direct'),
       retail:    effectiveTierPrice(recipe, 'retail')
     };
 
-    // Variant publish if recipe has variant entries AND product has variants
+    var newVersion = (typeof recipe.version === 'number' ? recipe.version : 1) + 1;
+
+    // Snapshot the prior version into history. Capture publishedPrices from
+    // the prior publish (recipe.publishedPrices) so history shows what the
+    // last actual prices were at that version.
+    var priorSnapshot = {
+      version: recipe.version || 1,
+      totalCost: recipe.totalCost || 0,
+      publishedPrices: recipe.publishedPrices || baseEff,
+      publishedAt: now
+    };
+    var history = Array.isArray(recipe.versionHistory) ? recipe.versionHistory.slice() : [];
+    history.push(priorSnapshot);
+    if (history.length > 50) history = history.slice(history.length - 50);
+
+    var recipePath = 'admin/recipes/' + recipeId + '/';
+    var updates = {};
+    updates[recipePath + 'version']         = newVersion;
+    updates[recipePath + 'versionHistory']  = history;
+    updates[recipePath + 'lastPublishedAt'] = now;
+    updates[recipePath + 'publishedPrices'] = baseEff;
+    updates[recipePath + 'driftBaseline']   = recipe.totalCost || 0;
+    updates[recipePath + 'currentDriftPct'] = 0;
+    updates[recipePath + 'updatedAt']       = now;
+
+    await MastDB._multiUpdate(updates);
+    MastAdmin.writeAudit('publish', 'recipe', recipeId);
+
+    return { version: newVersion, prices: baseEff, applied: false };
+  }
+
+  /**
+   * Channel-First Phase 2d (D24) — Recipe Publish handshake, Step 2.
+   *
+   * Reads recipe.publishedPrices + recipe.version, writes them to the linked
+   * product (tier prices, variant tier prices, recipeId, recipeVersion).
+   * Invoked from the "Recipe vN ready to apply" banner on product detail.
+   *
+   * Returns the { version, prices, applied: true } shape so callers can
+   * tell ratification has occurred.
+   */
+  async function applyRecipeToProduct(recipeId) {
+    var recipe = recipesData[recipeId];
+    if (!recipe) throw new Error('Recipe not found: ' + recipeId);
+    if (!recipe.productId) throw new Error('Recipe has no linked product');
+    if (!recipe.publishedPrices) throw new Error('Recipe has no published prices to apply (publish first).');
+
+    var product = (window.productsData || []).find(function(p) { return p.pid === recipe.productId; });
+    if (!product) throw new Error('Linked product not found: ' + recipe.productId);
+
+    var prodPath = 'public/products/' + recipe.productId + '/';
+    var updates = {};
+    var baseEff = recipe.publishedPrices; // dollars (set in Step 1)
+
+    // Variant publish if recipe has variant entries AND product has variants.
     var didVariantPublish = false;
-    if (recipe.variants && product && Array.isArray(product.variants) && product.variants.length > 0) {
+    if (recipe.variants && Array.isArray(product.variants) && product.variants.length > 0) {
       var rv = recipe.variants;
       var newVariants = product.variants.map(function(pv) {
         var slot = rv[pv.id] || rv.default || null;
@@ -819,29 +877,27 @@
         });
       });
       updates[prodPath + 'variants'] = newVariants;
-      // Base product prices: lowest of each tier across variants
       var lowestRetail = Math.min.apply(null, newVariants.map(function(v){ return v.retailPriceCents || 0; }).filter(function(c){ return c > 0; }));
       var lowestDirect = Math.min.apply(null, newVariants.map(function(v){ return v.directPriceCents || 0; }).filter(function(c){ return c > 0; }));
       var lowestWs     = Math.min.apply(null, newVariants.map(function(v){ return v.wholesalePriceCents || 0; }).filter(function(c){ return c > 0; }));
       if (isFinite(lowestRetail)) {
         updates[prodPath + 'retailPriceCents'] = lowestRetail;
-        updates[prodPath + 'priceCents'] = lowestRetail;
-        updates[prodPath + 'price'] = lowestRetail / 100;
-        updates[prodPath + 'priceType'] = 'from';
+        updates[prodPath + 'priceCents']       = lowestRetail;
+        updates[prodPath + 'price']            = lowestRetail / 100;
+        updates[prodPath + 'priceType']        = 'from';
       }
-      if (isFinite(lowestDirect)) updates[prodPath + 'directPriceCents'] = lowestDirect;
+      if (isFinite(lowestDirect)) updates[prodPath + 'directPriceCents']    = lowestDirect;
       if (isFinite(lowestWs))     updates[prodPath + 'wholesalePriceCents'] = lowestWs;
       didVariantPublish = true;
     }
     if (!didVariantPublish) {
-      // Simple product publish
       var retailCents    = Math.round(baseEff.retail    * 100);
       var directCents    = Math.round(baseEff.direct    * 100);
       var wholesaleCents = Math.round(baseEff.wholesale * 100);
       updates[prodPath + 'retailPriceCents']    = retailCents;
       updates[prodPath + 'directPriceCents']    = directCents;
       updates[prodPath + 'wholesalePriceCents'] = wholesaleCents;
-      updates[prodPath + 'priceCents']          = retailCents; // legacy mirror = retail
+      updates[prodPath + 'priceCents']          = retailCents;
       updates[prodPath + 'price']               = baseEff.retail;
     }
 
@@ -850,40 +906,17 @@
       || (didVariantPublish && updates[prodPath + 'wholesalePriceCents'] > 0);
     if (anyWholesale) updates[prodPath + 'isWholesale'] = true;
 
-    // Link recipe to product
-    updates[prodPath + 'recipeId'] = recipeId;
-    var newVersion = (typeof recipe.version === 'number' ? recipe.version : 1) + 1;
-    updates[prodPath + 'recipeVersion'] = newVersion;
-
-    // Recipe-side: bump version, snapshot prior state to versionHistory[]
-    var priorSnapshot = {
-      version: recipe.version || 1,
-      totalCost: recipe.totalCost || 0,
-      publishedPrices: baseEff,
-      publishedAt: now
-    };
-    var history = Array.isArray(recipe.versionHistory) ? recipe.versionHistory.slice() : [];
-    history.push(priorSnapshot);
-    if (history.length > 50) history = history.slice(history.length - 50); // cap to last 50 versions
-
-    var recipePath = 'admin/recipes/' + recipeId + '/';
-    updates[recipePath + 'version'] = newVersion;
-    updates[recipePath + 'versionHistory'] = history;
-    updates[recipePath + 'lastPublishedAt'] = now;
-    updates[recipePath + 'publishedPrices'] = baseEff;
-    updates[recipePath + 'driftBaseline'] = recipe.totalCost || 0;
-    updates[recipePath + 'currentDriftPct'] = 0;
-    updates[recipePath + 'updatedAt'] = now;
+    // Link recipe to product (and ack the version)
+    updates[prodPath + 'recipeId']      = recipeId;
+    updates[prodPath + 'recipeVersion'] = recipe.version;
 
     await MastDB._multiUpdate(updates);
-    MastAdmin.writeAudit('publish', 'recipe', recipeId);
+    MastAdmin.writeAudit('apply-recipe', 'products', recipe.productId);
 
     // Etsy price sync (best-effort; retail tier is what Etsy shows publicly)
-    if (recipe.productId) {
-      syncEtsyListingPrice(recipe.productId, Math.round(baseEff.retail * 100), recipeId);
-    }
+    syncEtsyListingPrice(recipe.productId, Math.round(baseEff.retail * 100), recipeId);
 
-    return { version: newVersion, prices: baseEff };
+    return { version: recipe.version, prices: baseEff, applied: true };
   }
 
   /**
@@ -2526,7 +2559,7 @@
       html += '<strong style="color:' + driftColor + ';">' + dir + ' ' + Math.abs(driftPct).toFixed(1) + '% cost drift</strong> ';
       html += '<span style="color:var(--warm-gray);">since last propagation ($' + (bs.driftBaseline || 0).toFixed(2) + ' → $' + (bs.totalCost || 0).toFixed(2) + '). Threshold: ' + repricingThresholdPct + '%.</span>';
       html += '</div>';
-      html += '<button class="btn btn-primary btn-small" onclick="makerRepriceNow()" title="Recalculate + Publish all 3 tier prices to product + reset drift baseline">↻ Recalculate &amp; Publish</button>';
+      html += '<button class="btn btn-primary btn-small" onclick="makerRepriceNow()" title="Recalculate + Stage all 3 tier prices on the recipe (product admin accepts via banner) + reset drift baseline">\u21bb Recalculate &amp; Stage</button>';
       html += '</div>';
     }
 
@@ -2551,12 +2584,13 @@
     html += '<button class="btn btn-secondary btn-small" onclick="makerDuplicateCurrentRecipe()" title="Clone this recipe as a new draft">Duplicate</button>';
     html += '<button class="btn btn-secondary btn-small" onclick="makerSaveRecipeBuilder()">Save</button>';
     html += '<button class="btn btn-secondary btn-small" onclick="makerSaveAndRecalcRecipe()">Save & Recalculate</button>';
-    // Channel-First Phase 1c (D35) — explicit Publish: writes all 3 tiers to product as one update
+    // Channel-First Phase 2d (D24) — Publish stages a new version on the recipe.
+    // Product admin must accept it from the product detail banner. Two-step.
     if (bs.productId) {
       var pubTitle = bs.lastPublishedAt
-        ? 'Publish a new version to the product. Last published: ' + new Date(bs.lastPublishedAt).toLocaleString() + ' (v' + (bs.version || 1) + ')'
-        : 'Publish to product (writes Wholesale, Direct, and Retail prices). Recipe has not been published yet.';
-      html += '<button class="btn btn-primary btn-small" onclick="makerPublishFromBuilder()" title="' + esc(pubTitle) + '">↑ Publish to product</button>';
+        ? 'Stage a new version for the product. Last staged: ' + new Date(bs.lastPublishedAt).toLocaleString() + ' (v' + (bs.version || 1) + '). Product admin will see a banner to accept and apply.'
+        : 'Stage prices for the product (writes Wholesale, Direct, and Retail to the recipe; product admin accepts to apply). Recipe has not been staged yet.';
+      html += '<button class="btn btn-primary btn-small" onclick="makerPublishFromBuilder()" title="' + esc(pubTitle) + '">\u2191 Stage for product</button>';
     }
     html += '</div>';
     html += '</div>';
@@ -3473,8 +3507,9 @@
     }
   }
 
-  // Phase 2E: one-click reprice — recalc + set active tier (which propagates)
-  // Channel-First Phase 1c (D34, D35) — repurposed: save + recalc + publish all tiers to product.
+  // Phase 2E: one-click reprice — recalc + stage for product.
+  // Channel-First Phase 2d (D24) — repurposed again: now stages the recipe;
+  // product admin accepts via the banner. No direct write to product.
   async function repriceNow() {
     if (!editingRecipeId || !builderState) return;
     try {
@@ -3486,14 +3521,14 @@
       if (fresh) builderState = JSON.parse(JSON.stringify(fresh));
       await loadVolatilePricingData();
       renderRecipeBuilder();
-      MastAdmin.showToast('Published v' + result.version + ' to product');
+      MastAdmin.showToast('Staged v' + result.version + ' \u2014 open product to apply');
     } catch (err) {
-      MastAdmin.showToast('Publish failed: ' + (err.message || err), true);
+      MastAdmin.showToast('Stage failed: ' + (err.message || err), true);
     }
   }
 
-  // Channel-First Phase 1c (D35) — explicit Publish from the recipe builder header.
-  // Skips recalc; user has already done that. Just writes effective tier prices to product.
+  // Channel-First Phase 2d (D24) — explicit Stage from the recipe builder header.
+  // Skips recalc; user has already done that. Writes recipe-side fields only.
   async function publishFromBuilder() {
     if (!editingRecipeId || !builderState) return;
     if (!builderState.productId) {
@@ -3501,10 +3536,10 @@
       return;
     }
     var confirmed = await window.mastConfirm(
-      'Publish ' + (builderState.name || 'recipe') + ' to product?\n\n' +
-      'This writes Wholesale, Direct, and Retail prices to the product as a single update. ' +
-      'A new version snapshot will be saved.',
-      { title: 'Publish recipe', confirmLabel: 'Publish', cancelLabel: 'Cancel' }
+      'Stage ' + (builderState.name || 'recipe') + ' for the product?\n\n' +
+      'This writes a new version snapshot to the recipe with Wholesale, Direct, and Retail prices. ' +
+      'The product admin will see a banner on product detail to review the diff and apply (or reject).',
+      { title: 'Stage recipe for product', confirmLabel: 'Stage', cancelLabel: 'Cancel' }
     );
     if (!confirmed) return;
     try {
@@ -3514,9 +3549,9 @@
       var fresh = snap.val();
       if (fresh) builderState = JSON.parse(JSON.stringify(fresh));
       renderRecipeBuilder();
-      MastAdmin.showToast('Published v' + result.version + ' — Wholesale $' + result.prices.wholesale.toFixed(2) + ', Direct $' + result.prices.direct.toFixed(2) + ', Retail $' + result.prices.retail.toFixed(2));
+      MastAdmin.showToast('Staged v' + result.version + ' \u2014 Wholesale $' + result.prices.wholesale.toFixed(2) + ', Direct $' + result.prices.direct.toFixed(2) + ', Retail $' + result.prices.retail.toFixed(2) + '. Open product to apply.');
     } catch (err) {
-      MastAdmin.showToast('Publish failed: ' + (err.message || err), true);
+      MastAdmin.showToast('Stage failed: ' + (err.message || err), true);
     }
   }
 
@@ -3821,6 +3856,8 @@
   window.makerRepriceNow = repriceNow;
   // Channel-First Phase 1c
   window.makerPublishRecipe = publishRecipe;
+  // Phase 2d (D24) — Step 2 of the handshake; called from product detail banner.
+  window.makerApplyRecipeToProduct = applyRecipeToProduct;
   window.makerPublishFromBuilder = publishFromBuilder;
   window.makerSetOverrideFromBuilder = setOverrideFromBuilder;
   window.makerEffectiveTierPrice = effectiveTierPrice;

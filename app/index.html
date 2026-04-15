@@ -23088,6 +23088,132 @@ async function loadRecipeDrift(recipeId) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Channel-First Phase 2d (D24) — Recipe Publish handshake reads on Product side
+// ---------------------------------------------------------------------------
+// When a recipe has been staged (publishRecipe bumped recipe.version) but the
+// product hasn't accepted yet (recipe.version > product.recipeVersion), the
+// product detail shows a banner with a per-tier diff and an Accept button.
+window.__mastRecipeMetaCache = window.__mastRecipeMetaCache || {};
+
+async function loadRecipeMeta(recipeId) {
+  if (!recipeId) return null;
+  try {
+    var snap = await MastDB._ref('admin/recipes/' + recipeId).once('value');
+    var recipe = snap.val();
+    if (recipe) {
+      window.__mastRecipeMetaCache[recipeId] = {
+        version: recipe.version || 1,
+        publishedPrices: recipe.publishedPrices || null,
+        lastPublishedAt: recipe.lastPublishedAt || null,
+        name: recipe.name || ''
+      };
+    }
+    return window.__mastRecipeMetaCache[recipeId];
+  } catch (err) {
+    console.error('loadRecipeMeta error:', err);
+    return null;
+  }
+}
+
+function renderRecipeReadyBanner(product) {
+  if (!product || !product.recipeId) return '';
+  var meta = window.__mastRecipeMetaCache[product.recipeId];
+  if (!meta) return ''; // not yet loaded — banner will paint after async load + re-render
+  // Banner shows whenever recipe.version > product.recipeVersion. A product
+  // that has never accepted a recipe (recipeVersion undefined) sees the
+  // banner on the very first staged version.
+  var ackVersion = (typeof product.recipeVersion === 'number') ? product.recipeVersion : 0;
+  if (!(meta.version > ackVersion)) return '';
+  if (!meta.publishedPrices) return '';
+
+  var p = meta.publishedPrices;
+  var curRetailC    = product.retailPriceCents != null ? product.retailPriceCents : (product.priceCents || 0);
+  var curDirectC    = product.directPriceCents || 0;
+  var curWholesaleC = product.wholesalePriceCents || 0;
+  var newRetailC    = Math.round((p.retail || 0) * 100);
+  var newDirectC    = Math.round((p.direct || 0) * 100);
+  var newWholesaleC = Math.round((p.wholesale || 0) * 100);
+
+  function fmtCents(c) { return '$' + ((c || 0) / 100).toFixed(2); }
+  function diffRow(label, cur, neu) {
+    var changed = cur !== neu;
+    return '<tr>' +
+      '<td style="padding:3px 8px 3px 0;color:var(--warm-gray);font-size:0.78rem;">' + label + '</td>' +
+      '<td style="padding:3px 8px;font-size:0.78rem;">' + fmtCents(cur) + '</td>' +
+      '<td style="padding:3px 8px;color:' + (changed ? 'var(--teal)' : 'var(--warm-gray)') + ';font-weight:' + (changed ? '600' : '400') + ';font-size:0.78rem;">' + (changed ? '\u2192 ' + fmtCents(neu) : '\u2014') + '</td>' +
+      '</tr>';
+  }
+
+  var html = '<div id="pdRecipeReadyBanner" style="margin:12px 0;padding:14px;background:var(--cream);border:1px solid var(--teal);border-radius:8px;">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">';
+  html += '<div style="flex:1;min-width:240px;">';
+  html += '<div style="font-size:0.9rem;font-weight:600;color:var(--teal);margin-bottom:4px;">Recipe v' + esc(String(meta.version)) + ' ready to apply</div>';
+  html += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">';
+  html += esc(meta.name || 'Linked recipe') + ' was staged ' + (meta.lastPublishedAt ? new Date(meta.lastPublishedAt).toLocaleString() : 'recently') + '. ';
+  html += 'Currently applied: v' + ackVersion + '.';
+  html += '</div>';
+  html += '<table style="border-collapse:collapse;font-family:monospace;">';
+  html += '<thead><tr><th style="text-align:left;padding:3px 8px 3px 0;font-size:0.72rem;color:var(--warm-gray);font-weight:500;"></th><th style="text-align:left;padding:3px 8px;font-size:0.72rem;color:var(--warm-gray);font-weight:500;">Current</th><th style="text-align:left;padding:3px 8px;font-size:0.72rem;color:var(--warm-gray);font-weight:500;">Will become</th></tr></thead>';
+  html += '<tbody>';
+  html += diffRow('Wholesale', curWholesaleC, newWholesaleC);
+  html += diffRow('Direct',    curDirectC,    newDirectC);
+  html += diffRow('Retail',    curRetailC,    newRetailC);
+  html += '</tbody></table>';
+  html += '</div>';
+  html += '<div style="display:flex;flex-direction:column;gap:6px;align-self:flex-start;">';
+  html += '<button class="btn btn-primary btn-small" onclick="acceptRecipeForProduct(\'' + esc(product.pid) + '\')" title="Apply v' + esc(String(meta.version)) + ' prices to this product">Accept and apply</button>';
+  html += '<button class="btn btn-secondary btn-small" onclick="rejectRecipeForProduct(\'' + esc(product.pid) + '\')" title="Dismiss this banner without changing prices">Reject</button>';
+  html += '</div>';
+  html += '</div>';
+  html += '</div>';
+  return html;
+}
+
+async function acceptRecipeForProduct(pid) {
+  var product = (window.productsData || []).find(function(p) { return p.pid === pid; });
+  if (!product || !product.recipeId) { showToast('No linked recipe to apply', true); return; }
+  if (typeof window.makerApplyRecipeToProduct !== 'function') {
+    showToast('Maker module not loaded \u2014 open the Maker tab once and retry', true);
+    return;
+  }
+  try {
+    var result = await window.makerApplyRecipeToProduct(product.recipeId);
+    showToast('Applied v' + result.version + ' to product');
+    // Update local productsData mirror with new prices + recipeVersion
+    var p = result.prices;
+    product.retailPriceCents    = Math.round((p.retail    || 0) * 100);
+    product.directPriceCents    = Math.round((p.direct    || 0) * 100);
+    product.wholesalePriceCents = Math.round((p.wholesale || 0) * 100);
+    product.priceCents          = product.retailPriceCents;
+    product.recipeVersion       = result.version;
+    if (typeof renderProductDetail === 'function') renderProductDetail(pid);
+  } catch (err) {
+    showToast('Apply failed: ' + (err.message || err), true);
+  }
+}
+
+async function rejectRecipeForProduct(pid) {
+  var product = (window.productsData || []).find(function(p) { return p.pid === pid; });
+  if (!product || !product.recipeId) return;
+  // Reject = ack the current recipe version on the product without writing prices.
+  // The banner derives visibility from (recipe.version > product.recipeVersion);
+  // setting recipeVersion := recipe.version dismisses it without applying.
+  var meta = window.__mastRecipeMetaCache[product.recipeId];
+  if (!meta) return;
+  try {
+    await MastDB.products.ref(pid).update({
+      recipeVersion: meta.version,
+      updatedAt: new Date().toISOString()
+    });
+    product.recipeVersion = meta.version;
+    showToast('Recipe v' + meta.version + ' dismissed (prices unchanged)');
+    if (typeof renderProductDetail === 'function') renderProductDetail(pid);
+  } catch (err) {
+    showToast('Reject failed: ' + (err.message || err), true);
+  }
+}
+
 function renderDriftBadge(driftPct, recipeCents) {
   if (driftPct == null || isNaN(driftPct)) return '';
   var absPct = Math.abs(driftPct);
@@ -23906,6 +24032,10 @@ function renderProductDetail(pid) {
     '</div>' : '') +
   '</div>';
 
+  // Channel-First Phase 2d (D24) — Recipe Publish handshake banner.
+  // Renders only when recipe.version > product.recipeVersion.
+  var recipeReadyHtml = renderRecipeReadyBanner(product);
+
   // Tab bar — hide irrelevant tabs unless editing (so user can add data)
   var hasVariants = product.options && product.options.length > 0;
   var hasProduction = product.buildTime || product.costToBuild || (product.materials && product.materials.length) ||
@@ -24458,7 +24588,19 @@ function renderProductDetail(pid) {
   var publishUndoHtml = (!isCreate && pid) ? renderPublishUndoBanner(pid) : '';
   var driftAlertHtml = (!isCreate && pid) ? renderDriftAlertBanner(pid) : '';
   el.innerHTML = '<button class="detail-back" onclick="backToProducts()">&larr; ' + backLabel + '</button>' +
-    publishUndoHtml + driftAlertHtml + headerHtml + tabBarHtml + detailsHtml + variantsHtml + imagesHtml + prodHtml + invTabHtml + actionHtml;
+    publishUndoHtml + driftAlertHtml + recipeReadyHtml + headerHtml + tabBarHtml + detailsHtml + variantsHtml + imagesHtml + prodHtml + invTabHtml + actionHtml;
+
+  // Channel-First Phase 2d (D24) — async-load recipe meta when product has a
+  // linked recipe but we haven't read it yet. Re-render to paint the banner.
+  if (!isCreate && pid && product.recipeId && !window.__mastRecipeMetaCache[product.recipeId]) {
+    loadRecipeMeta(product.recipeId).then(function(meta) {
+      // Only re-render if the freshly-loaded meta would change banner visibility
+      if (meta && meta.publishedPrices) {
+        var ackVersion = (typeof product.recipeVersion === 'number') ? product.recipeVersion : 0;
+        if (meta.version > ackVersion) renderProductDetail(pid);
+      }
+    });
+  }
 
   // Load drift alerts asynchronously on first render
   if (!isCreate && pid && !window.__mastDriftAlerts[pid]) {
