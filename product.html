@@ -896,7 +896,9 @@
     window._productDb = db;
 
     var params = new URLSearchParams(window.location.search);
-    var pid = params.get('id');
+    // Accept both ?id= and ?pid= for the product key (bug-sweep 2026-04-15).
+    // `?pid=` matches the admin URL convention; `?id=` was the original storefront convention.
+    var pid = params.get('id') || params.get('pid');
     var isStoryView = params.get('view') === 'story';
     window._isStoryView = isStoryView;
     window._pid = pid;
