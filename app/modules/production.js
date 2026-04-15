@@ -1614,16 +1614,52 @@ async function doCompleteBuild(jobId, buildId) {
       });
     }
 
-    // Fulfillment auto-advance (fulfillment + custom purposes)
+    // Fulfillment auto-advance (fulfillment + custom purposes — client-side; not in
+    // the Phase 5 cloud function because it touches productionRequest state outside
+    // the build/recipe surface).
     if (purpose === 'fulfillment' || purpose === 'custom') {
       var fulfillResults = await autoFulfillLinkedRequests(jobId, freshJob, tallies);
       fulfillResults.forEach(function(r) { summaryItems.push(r); });
     }
 
-    // Inventory auto-push (inventory-general only)
-    if (purpose === 'inventory-general') {
-      var invResults = await autoUpdateInventory(jobId, buildId, output, freshJob);
-      invResults.forEach(function(r) { summaryItems.push(r); });
+    // Channel-First Phase 5 (D44/D45/D46/D47) — server-side completion: material
+    // deduction (if trackMaterialInventory on), observedCost rolling-avg recording,
+    // auto-push by purpose matrix, build lock + drift alert eval. Replaces the
+    // client autoUpdateInventory call. autoFulfillLinkedRequests above handles
+    // the productionRequest side; the cloud function handles inventory + recipes.
+    try {
+      var completeRes = await firebase.functions().httpsCallable('completeBuildJob')({
+        tenantId: MastDB.tenantId(),
+        jobId: jobId,
+        buildId: buildId,
+        output: output
+      });
+      var data = completeRes && completeRes.data;
+      if (data && data.alreadyCompleted) {
+        summaryItems.push('ℹ️ Build was already completed (idempotent re-call)');
+      } else if (data) {
+        if (data.autoPushed && data.autoPushed.length) {
+          data.autoPushed.forEach(function(p) {
+            var label = p.productId + (p.variantId ? ' (' + p.variantId + ')' : '');
+            summaryItems.push('📦 Inventory +' + p.qty + ' ' + label + (p.linkedShowId ? ' [show:' + p.linkedShowId + ']' : ''));
+          });
+        }
+        if (data.materialsDeducted && data.materialsDeducted.length) {
+          summaryItems.push('🧪 Materials deducted: ' + data.materialsDeducted.length + ' line(s)');
+        }
+        if (data.driftAlertsFired && data.driftAlertsFired.length) {
+          data.driftAlertsFired.forEach(function(a) {
+            summaryItems.push('⚠️ Recipe ' + a.recipeId + ' cost drifted ' + a.driftPct.toFixed(1) + '% — alert fired');
+          });
+        }
+        if (data.warnings && data.warnings.length) {
+          data.warnings.forEach(function(w) { summaryItems.push('⚠️ ' + w); });
+        }
+      }
+    } catch (cfErr) {
+      console.error('completeBuildJob failed:', cfErr);
+      summaryItems.push('⚠️ Server completion failed: ' + (cfErr.message || cfErr) + ' — inventory + observed cost not updated');
+      showToast('Server completion failed — see summary', true);
     }
 
     // Custom piece story prompt

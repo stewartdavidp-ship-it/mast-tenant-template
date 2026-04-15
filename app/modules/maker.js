@@ -829,6 +829,30 @@
     updates[recipePath + 'currentDriftPct'] = 0;
     updates[recipePath + 'updatedAt']       = now;
 
+    // Channel-First Phase 5 (D45) — estimatedCost snapshot at publish time.
+    // Stored as per-tier prices so observedCost (also per-tier) can be
+    // compared directly. drift % = (observed.retail - estimated.retail) /
+    // estimated.retail. snapshotAt lets the cadence recalc surface
+    // currentRecalcDriftPct based on this baseline.
+    updates[recipePath + 'estimatedCost'] = baseEff;
+    updates[recipePath + 'estimatedCostSnapshotAt'] = now;
+    if (recipe.variantsShape === 'cost' && recipe.variants) {
+      Object.keys(recipe.variants).forEach(function(vKey) {
+        if (vKey === 'default') return;
+        var v = recipe.variants[vKey];
+        if (!v) return;
+        // Variants store overridePrice/suggestedPrice in their own scope;
+        // effectiveTierPrice falls back to recipe-level when variant lacks them.
+        var vEff = {
+          wholesale: effectiveTierPrice(v, 'wholesale') || effectiveTierPrice(recipe, 'wholesale'),
+          direct:    effectiveTierPrice(v, 'direct')    || effectiveTierPrice(recipe, 'direct'),
+          retail:    effectiveTierPrice(v, 'retail')    || effectiveTierPrice(recipe, 'retail')
+        };
+        updates[recipePath + 'variants/' + vKey + '/estimatedCost'] = vEff;
+        updates[recipePath + 'variants/' + vKey + '/estimatedCostSnapshotAt'] = now;
+      });
+    }
+
     await MastDB._multiUpdate(updates);
     MastAdmin.writeAudit('publish', 'recipe', recipeId);
 
