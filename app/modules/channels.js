@@ -198,11 +198,22 @@
     return parts.length ? parts.join(' + ') : 'No fees';
   }
 
+  // Phase 2c (D26) — channelBindings[] is the new binding shape. Each entry:
+  // { channelId, excludedVariantIds: [] }. Legacy `channelIds[]` is a derived
+  // mirror that this module continues to read until Phase 3.
+  function productHasChannelBinding(p, channelId) {
+    if (p && Array.isArray(p.channelBindings) && p.channelBindings.length) {
+      return p.channelBindings.some(function(b) { return b && b.channelId === channelId; });
+    }
+    // Legacy fallback
+    return !!(p && Array.isArray(p.channelIds) && p.channelIds.indexOf(channelId) !== -1);
+  }
+
   function productCountForChannel(channelId) {
     if (!productsLoaded) return 0;
     var count = 0;
     Object.values(productsData).forEach(function(p) {
-      if (p.channelIds && Array.isArray(p.channelIds) && p.channelIds.indexOf(channelId) !== -1) count++;
+      if (productHasChannelBinding(p, channelId)) count++;
     });
     return count;
   }
@@ -210,7 +221,7 @@
   function getProductsForChannel(channelId) {
     if (!productsLoaded) return [];
     return Object.values(productsData).filter(function(p) {
-      return p.channelIds && Array.isArray(p.channelIds) && p.channelIds.indexOf(channelId) !== -1;
+      return productHasChannelBinding(p, channelId);
     });
   }
 
@@ -241,6 +252,8 @@
     MastDB._ref('admin/channels').once('value').then(function(snap) {
       channelsData = snap.val() || {};
       channelsLoaded = true;
+      // Phase 2c — keep the product-editor cache aligned with the latest read.
+      window.__mastChannelsCache = channelsData;
       loadProducts().then(function() {
         renderCurrentView();
       });
@@ -1326,31 +1339,35 @@
     var ch = channelsData[selectedChannelId];
     if (!ch) return;
 
-    // Update each product's channelIds locally + in Firebase
-    var updates = {};
+    // Phase 2c (D26) — dual-write channelBindings (new) and channelIds (legacy).
+    var batch = {};
+    var addedCount = 0;
     pids.forEach(function(pid) {
       var p = productsData[pid];
       if (!p) return;
       var ids = Array.isArray(p.channelIds) ? p.channelIds.slice() : [];
+      var bindings = Array.isArray(p.channelBindings) ? p.channelBindings.slice() : [];
+      var alreadyBound = bindings.some(function(b) { return b && b.channelId === ch.channelId; });
+      if (!alreadyBound) {
+        bindings.push({ channelId: ch.channelId, excludedVariantIds: [] });
+        p.channelBindings = bindings;
+        batch[pid + '/channelBindings'] = bindings;
+      }
       if (ids.indexOf(ch.channelId) === -1) {
         ids.push(ch.channelId);
         p.channelIds = ids;
-        updates[pid + '/channelIds'] = ids;
+        batch[pid + '/channelIds'] = ids;
       }
+      if (!alreadyBound) addedCount++;
     });
 
-    var count = Object.keys(updates).length;
-    if (!count) {
+    if (!addedCount) {
       showToast('Products already on this channel');
       closeAddProducts();
       return;
     }
 
-    // Batch write to Firebase
-    var batch = {};
-    Object.keys(updates).forEach(function(path) {
-      batch[path] = updates[path];
-    });
+    var count = addedCount;
     MastDB._ref('public/products').update(batch).then(function() {
       showToast(count + ' product' + (count !== 1 ? 's' : '') + ' added to ' + ch.name);
       closeAddProducts();
@@ -1367,10 +1384,18 @@
     var p = productsData[pid];
     if (!p) return;
 
+    // Phase 2c (D26) — dual-write removal: channelBindings (new) + channelIds (legacy).
     var ids = Array.isArray(p.channelIds) ? p.channelIds.filter(function(id) { return id !== ch.channelId; }) : [];
+    var bindings = Array.isArray(p.channelBindings)
+      ? p.channelBindings.filter(function(b) { return b && b.channelId !== ch.channelId; })
+      : [];
     p.channelIds = ids;
+    p.channelBindings = bindings;
 
-    MastDB._ref('public/products/' + pid + '/channelIds').set(ids).then(function() {
+    var batch = {};
+    batch[pid + '/channelIds'] = ids;
+    batch[pid + '/channelBindings'] = bindings;
+    MastDB._ref('public/products').update(batch).then(function() {
       showToast(esc(p.name || pid) + ' removed from ' + esc(ch.name));
       renderPreservingEdits();
     }).catch(function(err) {
@@ -1850,6 +1875,7 @@
 
     MastDB._ref('admin/channels/' + id).set(channel).then(function() {
       channelsData[id] = channel;
+      window.__mastChannelsCache = channelsData; // Phase 2c — sync product-editor cache
       showToast('Channel created');
       selectedChannelId = id;
       currentView = 'detail';

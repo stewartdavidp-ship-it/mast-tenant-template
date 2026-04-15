@@ -23298,6 +23298,199 @@ function renderChannelSyncBadges(product, opts) {
 }
 
 // ---------------------------------------------------------------------------
+// Channel-First Phase 2c (D26, D28, D29) — Product channel bindings editor
+// ---------------------------------------------------------------------------
+// product.channelBindings[] is the new binding shape:
+//   [{ channelId: string, excludedVariantIds: string[] }, ...]
+// Phase 2c writes both this and the legacy product.channelIds[] mirror so
+// channels.js readers and Functions (Phase 3) keep working during cutover.
+//
+// Channels load on demand and cache on window.__mastChannelsCache so the
+// renderProductDetail synchronous render can paint immediately on second open.
+
+function loadAdminChannels(callback) {
+  if (window.__mastChannelsCache) { callback(window.__mastChannelsCache); return; }
+  MastDB._ref('admin/channels').once('value').then(function(snap) {
+    window.__mastChannelsCache = snap.val() || {};
+    callback(window.__mastChannelsCache);
+  }).catch(function(err) {
+    console.error('[channelBindings] load failed:', err);
+    window.__mastChannelsCache = {};
+    callback({});
+  });
+}
+
+// Lookup helpers — fall back gracefully if MastChannelShim hasn't loaded yet
+// (channels module is lazy-loaded on first navigation to /channels).
+function _shimRoute(ch)    { return (window.MastChannelShim ? MastChannelShim.getRoute(ch)    : (ch && ch.route))    || null; }
+function _shimPlatform(ch) { return (window.MastChannelShim ? MastChannelShim.getPlatform(ch) : (ch && ch.platform)) || null; }
+function _shimType(ch)     { return (window.MastChannelShim ? MastChannelShim.getType(ch)     : (ch && ch.type))     || null; }
+
+function getProductChannelBindings(product) {
+  if (!product) return [];
+  if (Array.isArray(product.channelBindings)) return product.channelBindings;
+  // Derive from legacy channelIds for unmigrated products
+  if (Array.isArray(product.channelIds)) {
+    return product.channelIds.map(function(cid) { return { channelId: cid, excludedVariantIds: [] }; });
+  }
+  return [];
+}
+
+function renderProductChannelBindings(product, isEditing, isCreate) {
+  var bindings = getProductChannelBindings(product);
+  var boundIds = {};
+  var excludedById = {};
+  bindings.forEach(function(b) {
+    if (!b || !b.channelId) return;
+    boundIds[b.channelId] = true;
+    excludedById[b.channelId] = Array.isArray(b.excludedVariantIds) ? b.excludedVariantIds : [];
+  });
+
+  var channelsCache = window.__mastChannelsCache || null;
+  var hasVariants = Array.isArray(product.variants) && product.variants.length > 0;
+
+  var h = '';
+  h += '<div id="pdChannelBindingsSection" style="margin-top:16px;padding:12px 14px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;">';
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">';
+  h += '<span style="font-size:0.85rem;font-weight:600;color:var(--warm-gray);">Channel Bindings</span>';
+  h += '<span style="font-size:0.72rem;color:var(--warm-gray);">' + bindings.length + ' bound</span>';
+  h += '</div>';
+
+  if (!channelsCache) {
+    h += '<div style="font-size:0.78rem;color:var(--warm-gray);font-style:italic;">Loading channels\u2026</div>';
+    h += '</div>';
+    // Fire load + re-render once cache is warm
+    loadAdminChannels(function() {
+      if (typeof renderProductDetail === 'function') {
+        renderProductDetail(product.pid || null);
+      }
+    });
+    return h;
+  }
+
+  var channels = Object.values(channelsCache).sort(function(a, b) {
+    return (a.name || '').localeCompare(b.name || '');
+  });
+
+  if (!channels.length) {
+    h += '<div style="font-size:0.78rem;color:var(--warm-gray);">No channels configured. Add channels in the Channels section.</div>';
+    h += '</div>';
+    return h;
+  }
+
+  if (!isEditing) {
+    // Read-only: show bound channels as compact chips
+    var boundChannels = channels.filter(function(c) { return boundIds[c.channelId]; });
+    if (!boundChannels.length) {
+      h += '<div style="font-size:0.78rem;color:var(--warm-gray);">Not bound to any channel.</div>';
+    } else {
+      h += '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
+      boundChannels.forEach(function(c) {
+        var excl = (excludedById[c.channelId] || []).length;
+        h += '<span style="font-size:0.78rem;background:var(--cream-dark);color:var(--warm-gray);padding:3px 8px;border-radius:12px;">';
+        h += esc(c.name);
+        if (excl > 0) h += ' <span style="color:var(--amber);">(' + excl + ' excluded)</span>';
+        h += '</span>';
+      });
+      h += '</div>';
+    }
+    h += '</div>';
+    return h;
+  }
+
+  // Edit mode
+  h += '<div style="font-size:0.72rem;color:var(--warm-gray);margin-bottom:8px;">' +
+    'Pick which sales channels carry this product. For products with variants, you can exclude specific variants per channel.' +
+    '</div>';
+  h += '<div style="display:grid;grid-template-columns:1fr;gap:6px;">';
+  channels.forEach(function(c) {
+    var cid = c.channelId;
+    var bound = !!boundIds[cid];
+    var route = _shimRoute(c) || '';
+    var platform = _shimPlatform(c) || '';
+    var rpLabel = [];
+    if (route) rpLabel.push(route);
+    if (platform && platform !== 'manual') rpLabel.push(platform);
+    var rpStr = rpLabel.length ? ' \u00b7 ' + rpLabel.join('/') : '';
+
+    h += '<div class="pd-channel-binding-row" data-channel-id="' + esc(cid) + '" style="border:1px solid var(--cream-dark);border-radius:6px;padding:8px 10px;background:white;">';
+    h += '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.85rem;">';
+    h += '<input type="checkbox" class="pd-channel-binding-cb" data-channel-id="' + esc(cid) + '"' +
+      (bound ? ' checked' : '') +
+      ' onchange="pdToggleChannelBindingExcludeVisibility(\'' + esc(cid) + '\')">';
+    h += '<span style="flex:1;">' + esc(c.name) + '<span style="color:var(--warm-gray);font-size:0.72rem;">' + esc(rpStr) + '</span></span>';
+    if (c.isActive === false) h += '<span style="font-size:0.72rem;color:var(--warm-gray);">paused</span>';
+    h += '</label>';
+
+    // Variant exclusions sub-control (only when product has variants)
+    if (hasVariants) {
+      var excludedSet = {};
+      (excludedById[cid] || []).forEach(function(v) { excludedSet[v] = true; });
+      h += '<div class="pd-channel-binding-exclude" data-channel-id="' + esc(cid) + '"' +
+        ' style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--cream-dark);' + (bound ? '' : 'display:none;') + '">';
+      h += '<div style="font-size:0.72rem;color:var(--warm-gray);margin-bottom:4px;">Excluded variants on this channel:</div>';
+      h += '<div style="display:flex;flex-wrap:wrap;gap:4px;">';
+      product.variants.forEach(function(v) {
+        var vlabel = (v.combo && Object.values(v.combo).join(' / ')) || v.id;
+        var isExcluded = !!excludedSet[v.id];
+        h += '<button type="button" class="pd-variant-exclude-chip" data-channel-id="' + esc(cid) + '" data-variant-id="' + esc(v.id) + '"' +
+          ' data-excluded="' + (isExcluded ? '1' : '0') + '"' +
+          ' onclick="pdToggleVariantExcludeChip(this)"' +
+          ' style="font-size:0.72rem;padding:3px 8px;border-radius:10px;border:1px solid ' +
+          (isExcluded ? 'var(--amber)' : 'var(--cream-dark)') + ';' +
+          'background:' + (isExcluded ? 'var(--amber)' : 'white') + ';' +
+          'color:' + (isExcluded ? 'white' : 'var(--warm-gray)') + ';cursor:pointer;">' +
+          (isExcluded ? '\u2716 ' : '') + esc(vlabel) + '</button>';
+      });
+      h += '</div>';
+      h += '</div>';
+    }
+    h += '</div>';
+  });
+  h += '</div>';
+  h += '</div>';
+  return h;
+}
+
+function pdToggleChannelBindingExcludeVisibility(channelId) {
+  var cb = document.querySelector('.pd-channel-binding-cb[data-channel-id="' + channelId + '"]');
+  var sub = document.querySelector('.pd-channel-binding-exclude[data-channel-id="' + channelId + '"]');
+  if (cb && sub) sub.style.display = cb.checked ? '' : 'none';
+}
+
+function pdToggleVariantExcludeChip(btn) {
+  var nowExcluded = btn.getAttribute('data-excluded') !== '1';
+  btn.setAttribute('data-excluded', nowExcluded ? '1' : '0');
+  btn.style.borderColor = nowExcluded ? 'var(--amber)' : 'var(--cream-dark)';
+  btn.style.background = nowExcluded ? 'var(--amber)' : 'white';
+  btn.style.color = nowExcluded ? 'white' : 'var(--warm-gray)';
+  // Re-render the leading mark
+  var label = btn.textContent.replace(/^\u2716\s*/, '');
+  btn.textContent = (nowExcluded ? '\u2716 ' : '') + label;
+}
+
+// Read DOM and produce { channelBindings, channelIds } for saveProduct.
+function pdCollectChannelBindings() {
+  var section = document.getElementById('pdChannelBindingsSection');
+  if (!section) return null; // section not rendered; preserve existing on save
+  var bindings = [];
+  var channelIds = [];
+  document.querySelectorAll('.pd-channel-binding-cb').forEach(function(cb) {
+    if (!cb.checked) return;
+    var cid = cb.getAttribute('data-channel-id');
+    var excl = [];
+    document.querySelectorAll('.pd-variant-exclude-chip[data-channel-id="' + cid + '"]').forEach(function(chip) {
+      if (chip.getAttribute('data-excluded') === '1') {
+        excl.push(chip.getAttribute('data-variant-id'));
+      }
+    });
+    bindings.push({ channelId: cid, excludedVariantIds: excl });
+    channelIds.push(cid);
+  });
+  return { channelBindings: bindings, channelIds: channelIds };
+}
+
+// ---------------------------------------------------------------------------
 // PIM Adapter v1 — Build 5: PIM Settings Tab
 // ---------------------------------------------------------------------------
 
@@ -23799,6 +23992,9 @@ function renderProductDetail(pid) {
         '</div>' +
       '</div>';
 
+    // ── Channel Bindings (Phase 2c — D26, D28, D29) ──
+    detailsHtml += renderProductChannelBindings(product, true, isCreate);
+
     // ── Advanced Settings (collapsible) ──
     var advCollapsed = sessionStorage.getItem('productAdvancedCollapsed') !== 'false';
     detailsHtml +=
@@ -23875,6 +24071,8 @@ function renderProductDetail(pid) {
         '<div style="font-size:0.78rem;"><a href="#" onclick="event.preventDefault();switchProductTab(\'inventory\');" style="color:var(--teal);text-decoration:none;">View full inventory →</a></div>' +
       '</div>' +
     '</div>';
+    // Channel-First Phase 2c (D26) — read-only summary in non-edit mode
+    detailsHtml += renderProductChannelBindings(product, false, isCreate);
   }
   detailsHtml += '</div>';
 
@@ -24819,8 +25017,22 @@ async function saveProduct(pid) {
       if (existing.statusReason) productData.statusReason = existing.statusReason;
       if (existing.externalRefs) productData.externalRefs = existing.externalRefs;
       if (existing.recipeId) productData.recipeId = existing.recipeId;
+      if (typeof existing.recipeVersion === 'number') productData.recipeVersion = existing.recipeVersion;
     } else {
       productData.url = '';
+    }
+
+    // Channel-First Phase 2c (D26) — collect bindings from DOM and dual-write
+    // both channelBindings (new) and channelIds (legacy mirror). When the
+    // section wasn't rendered (createMode + no channels loaded yet, or other
+    // edge cases), preserve the existing values rather than wiping them.
+    var bindingsResult = pdCollectChannelBindings();
+    if (bindingsResult) {
+      productData.channelBindings = bindingsResult.channelBindings;
+      productData.channelIds = bindingsResult.channelIds;
+    } else if (existing) {
+      if (existing.channelBindings) productData.channelBindings = existing.channelBindings;
+      if (existing.channelIds) productData.channelIds = existing.channelIds;
     }
 
     // Handle history-tracked fields
