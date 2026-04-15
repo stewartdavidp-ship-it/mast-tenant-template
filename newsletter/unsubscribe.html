@@ -102,8 +102,7 @@
 <script>
 (function() {
   if (!firebase.apps.length) firebase.initializeApp(TENANT_FIREBASE_CONFIG);
-  var db = firebase.database();
-  MastDB.init({ db: db, tenantId: TENANT_ID });
+  MastDB.init({ db: firebase.database(), tenantId: TENANT_ID });
 
   var params = new URLSearchParams(window.location.search);
   var token = params.get('token');
@@ -114,14 +113,14 @@
   }
 
   // Find subscriber by token
-  db.ref(TENANT_ID + '/newsletter/subscribers').orderByChild('unsubscribeToken').equalTo(token).once('value').then(function(snap) {
-    var val = snap.val();
-    if (!val) {
+  MastDB.query('newsletter/subscribers').orderByChild('unsubscribeToken').equalTo(token).once().then(function(val) {
+    var keys = Object.keys(val);
+    if (keys.length === 0) {
       showResult('error', 'Link Not Found', 'This unsubscribe link is not valid or has already been used.');
       return;
     }
 
-    var subId = Object.keys(val)[0];
+    var subId = keys[0];
     var sub = val[subId];
 
     if (sub.status === 'unsubscribed') {
@@ -131,10 +130,10 @@
 
     // Unsubscribe
     var updates = {};
-    updates[TENANT_ID + '/newsletter/subscribers/' + subId + '/status'] = 'unsubscribed';
-    updates[TENANT_ID + '/newsletter/subscribers/' + subId + '/unsubscribedAt'] = new Date().toISOString();
+    updates['newsletter/subscribers/' + subId + '/status'] = 'unsubscribed';
+    updates['newsletter/subscribers/' + subId + '/unsubscribedAt'] = new Date().toISOString();
 
-    db.ref().update(updates).then(function() {
+    MastDB.multiUpdate(updates).then(function() {
       showResult('success', 'You\'ve Been Unsubscribed', 'You will no longer receive newsletters from ' + TENANT_TITLE_SUFFIX() + '. We\'re sorry to see you go!');
     }).catch(function(err) {
       console.error('Unsubscribe error:', err);

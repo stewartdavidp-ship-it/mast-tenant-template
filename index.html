@@ -1616,8 +1616,7 @@
 <script>
 window.TENANT_READY.then(function() {
   if (!firebase.apps.length) firebase.initializeApp(TENANT_FIREBASE_CONFIG);
-  const db = firebase.database();
-  MastDB.init({ db: db, tenantId: TENANT_ID });
+  MastDB.init({ db: firebase.database(), tenantId: TENANT_ID });
 
   // Helper: escape for safe innerHTML
   function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
@@ -1637,9 +1636,8 @@ window.TENANT_READY.then(function() {
   }
 
   // ---- IMAGES (all sections from one query) ----
-  db.ref(TENANT_ID + '/public/gallery').orderByChild('order').once('value').then(function(snap) {
-    const data = snap.val();
-    if (!data) return; // keep hardcoded fallback
+  MastDB.query('public/gallery').orderByChild('order').once().then(function(data) {
+    if (!data || Object.keys(data).length === 0) return; // keep hardcoded fallback
     const allItems = Object.values(data).filter(function(i) { return i.visible !== false; });
 
     // Hero: build video playlist from all hero items with videoUrl
@@ -1733,8 +1731,8 @@ window.TENANT_READY.then(function() {
       if (heroImages.length > 1) {
         var imgIndex = 0;
         // Read rotation speed from config (default 6s)
-        db.ref(TENANT_ID + '/public/config/hero/rotationSeconds').once('value').then(function(rSnap) {
-          var rotationMs = ((rSnap.val() || 6) * 1000);
+        MastDB.get('public/config/hero/rotationSeconds').then(function(rVal) {
+          var rotationMs = ((rVal || 6) * 1000);
           var splitImgEl = document.getElementById('heroSplitImage');
           setInterval(function() {
             imgIndex = (imgIndex + 1) % heroImages.length;
@@ -1783,11 +1781,10 @@ window.TENANT_READY.then(function() {
   }).catch(function() { /* keep hardcoded fallback */ });
 
   // ---- EVENTS (configurable count, default 3) ----
-  db.ref(TENANT_ID + '/public/settings/homepageEventsCount').once('value').then(function(countSnap) {
-    var eventsCount = countSnap.val() || 3;
-    return db.ref(TENANT_ID + '/public/events').orderByChild('date').once('value').then(function(snap) {
-      var data = snap.val();
-      if (!data) return;
+  MastDB.get('public/settings/homepageEventsCount').then(function(countVal) {
+    var eventsCount = countVal || 3;
+    return MastDB.query('public/events').orderByChild('date').once().then(function(data) {
+      if (!data || Object.keys(data).length === 0) return;
       var today = new Date().toISOString().split('T')[0];
       var events = Object.values(data)
         .filter(function(e) { return e.visible !== false && e.date >= today; })
@@ -1825,9 +1822,8 @@ window.TENANT_READY.then(function() {
   }).catch(function() { /* no events data — section stays hidden */ });
 
   // ---- TESTIMONIALS (load from Firebase or keep hidden) ----
-  db.ref(TENANT_ID + '/public/testimonials').orderByChild('order').limitToLast(10).once('value').then(function(snap) {
-    var data = snap.val();
-    if (!data) return;
+  MastDB.query('public/testimonials').orderByChild('order').limitToLast(10).once().then(function(data) {
+    if (!data || Object.keys(data).length === 0) return;
     var testimonials = Object.values(data).filter(function(t) { return t.visible !== false && t.quote; });
     if (testimonials.length === 0) return;
     testimonials.sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
@@ -1851,8 +1847,7 @@ window.TENANT_READY.then(function() {
   }).catch(function() { /* no testimonials — section stays hidden */ });
 
   // ---- PROCESS (load from Firebase or keep hidden) ----
-  db.ref(TENANT_ID + '/public/config/homepage/process').once('value').then(function(snap) {
-    var data = snap.val();
+  MastDB.get('public/config/homepage/process').then(function(data) {
     if (!data || !data.cards || data.cards.length === 0) return;
 
     var titleEl = document.getElementById('processTitle');
@@ -1888,8 +1883,7 @@ window.TENANT_READY.then(function() {
   }).catch(function() { /* no process config — section stays hidden */ });
 
   // ---- ABOUT SECTION CONFIG (stats, custom heading) ----
-  db.ref(TENANT_ID + '/public/config/homepage/about').once('value').then(function(snap) {
-    var data = snap.val();
+  MastDB.get('public/config/homepage/about').then(function(data) {
     if (!data) return;
 
     var titleEl = document.getElementById('aboutTitle');
@@ -1913,8 +1907,7 @@ window.TENANT_READY.then(function() {
   }).catch(function() { /* no about config — use defaults */ });
 
   // ---- GALLERY SECTION CONFIG (custom heading) ----
-  db.ref(TENANT_ID + '/public/config/homepage/gallery').once('value').then(function(snap) {
-    var data = snap.val();
+  MastDB.get('public/config/homepage/gallery').then(function(data) {
     if (!data) return;
     var titleEl = document.getElementById('galleryTitle');
     var subtitleEl = document.getElementById('gallerySubtitle');
@@ -1925,8 +1918,7 @@ window.TENANT_READY.then(function() {
   }).catch(function() { /* use defaults */ });
 
   // ---- GALLERY COLUMN COUNT (content setting, not layout variant) ----
-  db.ref(TENANT_ID + '/webPresence/config/sections/gallery').once('value').then(function(snap) {
-    var cfg = snap.val();
+  MastDB.get('webPresence/config/sections/gallery').then(function(cfg) {
     if (!cfg) return;
     var gridEl = document.getElementById('galleryGrid');
     if (!gridEl) return;
@@ -1948,12 +1940,12 @@ window.TENANT_READY.then(function() {
     if (!section) return;
 
     // Load categories and gallery images in parallel
-    var catsP = db.ref(TENANT_ID + '/public/config/categories').once('value');
-    var galleryP = db.ref(TENANT_ID + '/public/gallery').orderByChild('order').once('value');
+    var catsP = MastDB.get('public/config/categories');
+    var galleryP = MastDB.query('public/gallery').orderByChild('order').once();
 
     Promise.all([catsP, galleryP]).then(function(results) {
-      var catsData = results[0].val();
-      var galleryData = results[1].val();
+      var catsData = results[0];
+      var galleryData = results[1];
       if (!catsData || !Array.isArray(catsData) || catsData.length === 0) return;
 
       // Build a map of category → first gallery image
@@ -1997,9 +1989,8 @@ window.TENANT_READY.then(function() {
     var section = document.getElementById('featuredProducts');
     if (!section) return;
 
-    db.ref(TENANT_ID + '/public/products').orderByChild('createdAt').limitToLast(8).once('value').then(function(snap) {
-      var data = snap.val();
-      if (!data) return;
+    MastDB.query('public/products').orderByChild('createdAt').limitToLast(8).once().then(function(data) {
+      if (!data || Object.keys(data).length === 0) return;
       var products = Object.entries(data).map(function(entry) {
         var p = entry[1]; p.pid = p.pid || entry[0]; return p;
       }).filter(function(p) {
@@ -2048,8 +2039,7 @@ window.TENANT_READY.then(function() {
 <!-- ============ ANALYTICS TRACKING ============ -->
 <script>
 window.TENANT_READY.then(function() {
-  var db = firebase.database();
-  var HITS = TENANT_ID + '/analytics/hits';
+  var HITS = 'analytics/hits';
   var now = new Date();
   var page = 'home';
   var d = now.getFullYear() + '-' +
@@ -2061,7 +2051,7 @@ window.TENANT_READY.then(function() {
     var hit = { t: type, p: page, ts: Date.now(), d: d };
     if (action) hit.a = action;
     if (visitorIp) hit.ip = visitorIp;
-    db.ref(HITS).push(hit).catch(function() {});
+    MastDB.push(HITS, hit).catch(function() {});
   }
 
   // Fetch visitor IP then fire page view
@@ -2111,11 +2101,10 @@ window.nlSubmitSignup = function() {
   btn.disabled = true;
   btn.textContent = 'Subscribing...';
 
-  var db = firebase.database();
-  var subRef = db.ref(TENANT_ID + '/newsletter/subscribers').push();
-  var token = subRef.key + '-' + Date.now().toString(36);
-  subRef.set({
-    id: subRef.key, name: name, email: email, notes: null,
+  var subKey = MastDB.newKey('newsletter/subscribers');
+  var token = subKey + '-' + Date.now().toString(36);
+  MastDB.set('newsletter/subscribers/' + subKey, {
+    id: subKey, name: name, email: email, notes: null,
     subscribedAt: new Date().toISOString(), source: 'website-form',
     status: 'active', unsubscribeToken: token, unsubscribedAt: null
   }).then(function() {
@@ -2149,15 +2138,14 @@ window.submitContactForm = function() {
   btn.disabled = true;
   btn.textContent = 'Sending...';
 
-  var db = firebase.database();
   var name = first + (last ? ' ' + last : '');
   var now = new Date().toISOString();
 
   // 1. Save inquiry record
-  var inqRef = db.ref(TENANT_ID + '/inquiries').push();
+  var inqKey = MastDB.newKey('inquiries');
   var contactId = 'contact_' + Date.now().toString(36);
   var inquiryData = {
-    id: inqRef.key, name: name, email: email, phone: phone || null,
+    id: inqKey, name: name, email: email, phone: phone || null,
     type: type, message: message, status: 'new',
     contactId: contactId,
     source: 'website-contact-form', createdAt: now
@@ -2185,8 +2173,8 @@ window.submitContactForm = function() {
   };
 
   Promise.all([
-    inqRef.set(inquiryData),
-    db.ref(TENANT_ID + '/admin/contacts/' + contactId).set(contactData)
+    MastDB.set('inquiries/' + inqKey, inquiryData),
+    MastDB.set('admin/contacts/' + contactId, contactData)
   ]).then(function() {
     var formSection = document.querySelector('#contact .contact-form');
     formSection.innerHTML =

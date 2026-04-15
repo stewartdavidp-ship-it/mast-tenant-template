@@ -469,12 +469,9 @@
 
   // ── Auth-based access control ──
   function init() {
-    // Initialize Firebase
-    try { db = firebase.app().database(); } catch (e) {
-      firebase.initializeApp(TENANT_FIREBASE_CONFIG);
-      db = firebase.database();
-    }
-    MastDB.init({ db: db, tenantId: TENANT_ID });
+    // Initialize Firebase (if not already initialized by another script)
+    if (!firebase.apps.length) firebase.initializeApp(TENANT_FIREBASE_CONFIG);
+    MastDB.init({ db: firebase.database(), tenantId: TENANT_ID });
 
     // Listen for auth state changes
     firebase.auth().onAuthStateChanged(function(user) {
@@ -508,12 +505,11 @@
 
     // Check if a request is already pending
     var emailKey = emailToKey(user.email);
-    db.ref(TENANT_ID + '/admin/wholesaleRequests')
+    MastDB.query('admin/wholesaleRequests')
       .orderByChild('emailKey').equalTo(emailKey)
-      .limitToLast(1).once('value').then(function(snap) {
+      .limitToLast(1).once().then(function(val) {
         var area = document.getElementById('wsRequestArea');
         if (!area) return;
-        var val = snap.val();
         var hasPending = false;
         if (val) {
           Object.keys(val).forEach(function(k) {
@@ -539,17 +535,15 @@
   function checkWholesaleAccess(user) {
     if (!user || !user.email) { showDenied(user); return; }
     var emailKey = emailToKey(user.email);
-    db.ref(TENANT_ID + '/admin/wholesaleAuthorized/' + emailKey)
-      .once('value').then(function(snap) {
-        var val = snap.val();
-        if (val && val.active !== false) {
-          showCatalog();
-        } else {
-          showDenied(user);
-        }
-      }).catch(function() {
+    MastDB.get('admin/wholesaleAuthorized/' + emailKey).then(function(val) {
+      if (val && val.active !== false) {
+        showCatalog();
+      } else {
         showDenied(user);
-      });
+      }
+    }).catch(function() {
+      showDenied(user);
+    });
   }
 
   // Sanitize email for use as Firebase key (replace . with ,)
@@ -575,7 +569,7 @@
     var btn = document.querySelector('.ws-request-btn');
     if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
 
-    var requestId = db.ref(TENANT_ID + '/admin/wholesaleRequests').push().key;
+    var requestId = MastDB.newKey('admin/wholesaleRequests');
     var data = {
       email: wsCurrentUser.email,
       emailKey: emailToKey(wsCurrentUser.email),
@@ -586,7 +580,7 @@
       createdAt: new Date().toISOString()
     };
 
-    db.ref(TENANT_ID + '/admin/wholesaleRequests/' + requestId).set(data).then(function() {
+    MastDB.set('admin/wholesaleRequests/' + requestId, data).then(function() {
       var area = document.getElementById('wsRequestArea');
       if (area) {
         area.innerHTML = '<div class="ws-request-sent">Access request sent! You\'ll be notified when approved.</div>';
@@ -599,8 +593,7 @@
 
   // ── Load categories then products ──
   function loadCategories() {
-    return db.ref(TENANT_ID + '/public/config/categories').once('value').then(function(snap) {
-      var catData = snap.val();
+    return MastDB.get('public/config/categories').then(function(catData) {
       if (catData && Array.isArray(catData)) {
         CATEGORY_MAP = {};
         CATEGORY_ORDER = [];
@@ -619,9 +612,9 @@
 
   function loadProducts() {
     loadCategories().then(function() {
-      return db.ref(TENANT_ID + '/public/products').once('value');
-    }).then(function(snap) {
-      products = snap.val() || {};
+      return MastDB.get('public/products');
+    }).then(function(data) {
+      products = data || {};
       allProducts = [];
 
       Object.keys(products).forEach(function(pid) {

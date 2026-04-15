@@ -443,12 +443,11 @@ function signOut() {
 window.TENANT_READY.then(function() {
   firebase.initializeApp(TENANT_FIREBASE_CONFIG);
   auth = firebase.auth();
-  db = firebase.database();
   storage = firebase.storage();
-  MastDB.init({ db: db, tenantId: TENANT_ID });
+  MastDB.init({ db: firebase.database(), tenantId: TENANT_ID });
 
-  PRODUCTS_PATH = TENANT_ID + '/public/products';
-  TRAINING_IMAGES_PATH = TENANT_ID + '/admin/training-images';
+  PRODUCTS_PATH = 'public/products';
+  TRAINING_IMAGES_PATH = 'admin/training-images';
   CLASSIFY_FUNCTION_URL = TENANT_FIREBASE_CONFIG.cloudFunctionsBase + '/classifyImage';
   UPLOAD_FUNCTION_URL = TENANT_FIREBASE_CONFIG.cloudFunctionsBase + '/uploadTrainingImage';
   SCAN_FUNCTION_URL = TENANT_FIREBASE_CONFIG.cloudFunctionsBase + '/scanCatalog';
@@ -484,8 +483,8 @@ function showScreen(id) {
 // Products
 // ============================================================
 function loadProducts() {
-  db.ref(PRODUCTS_PATH).once('value').then(function(snap) {
-    products = snap.val() || {};
+  MastDB.get(PRODUCTS_PATH).then(function(data) {
+    products = data || {};
     populateProductSelector();
   });
 }
@@ -508,8 +507,8 @@ function populateProductSelector() {
 // Training Counts
 // ============================================================
 function loadTrainingCounts() {
-  db.ref(TRAINING_IMAGES_PATH).once('value').then(function(snap) {
-    var data = snap.val() || {};
+  MastDB.get(TRAINING_IMAGES_PATH).then(function(snap) {
+    var data = snap || {};
     trainingCounts = {};
     Object.keys(data).forEach(function(pid) {
       trainingCounts[pid] = Object.keys(data[pid] || {}).length;

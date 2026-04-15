@@ -268,8 +268,7 @@
 <script>
 window.TENANT_READY.then(function() {
   if (!firebase.apps.length) firebase.initializeApp(TENANT_FIREBASE_CONFIG);
-  var db = firebase.database();
-  MastDB.init({ db: db, tenantId: TENANT_ID });
+  MastDB.init({ db: firebase.database(), tenantId: TENANT_ID });
 
   var params = new URLSearchParams(window.location.search);
   var postId = params.get('id');
@@ -280,10 +279,9 @@ window.TENANT_READY.then(function() {
     return;
   }
 
-  var path = source === 'newsletter' ? TENANT_ID + '/newsletter/published/' : TENANT_ID + '/blog/published/';
+  var path = source === 'newsletter' ? 'newsletter/published/' : 'blog/published/';
 
-  db.ref(path + postId).once('value').then(function(snap) {
-    var post = snap.val();
+  MastDB.get(path + postId).then(function(post) {
     if (!post) {
       document.getElementById('postContent').innerHTML = '<div class="error"><p>Post not found. <a href="./">Back to From the Studio</a></p></div>';
       return;
@@ -343,8 +341,7 @@ window.TENANT_READY.then(function() {
         var paragraphs = sec.content.split('\n').filter(function(p) { return p.trim(); });
         paragraphs.forEach(function(p) { html += '<p>' + escHtml(p) + '</p>'; });
         (sec.images || []).forEach(function(imgId) {
-          db.ref(TENANT_ID + '/images/' + imgId).once('value').then(function(imgSnap) {
-            var img = imgSnap.val();
+          MastDB.get('images/' + imgId).then(function(img) {
             if (img && img.url) {
               var imgEl = document.createElement('img');
               imgEl.src = img.url;

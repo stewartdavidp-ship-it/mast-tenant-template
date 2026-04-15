@@ -536,8 +536,7 @@
 <script>
 window.TENANT_READY.then(function() {
   if (!firebase.apps.length) firebase.initializeApp(TENANT_FIREBASE_CONFIG);
-  var db = firebase.database();
-  MastDB.init({ db: db, tenantId: TENANT_ID });
+  MastDB.init({ db: firebase.database(), tenantId: TENANT_ID });
   var currentTab = 'blog';
 
   // Make switchTab available globally
@@ -548,10 +547,10 @@ window.TENANT_READY.then(function() {
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { alert('Please enter a valid email address.'); return; }
     var btn = document.querySelector('#nlSignupFormBlog button');
     btn.disabled = true; btn.textContent = 'Subscribing...';
-    var subRef = db.ref(TENANT_ID + '/newsletter/subscribers').push();
-    var token = subRef.key + '-' + Date.now().toString(36);
-    subRef.set({
-      id: subRef.key, name: name, email: email, notes: null,
+    var subKey = MastDB.newKey('newsletter/subscribers');
+    var token = subKey + '-' + Date.now().toString(36);
+    MastDB.set('newsletter/subscribers/' + subKey, {
+      id: subKey, name: name, email: email, notes: null,
       subscribedAt: new Date().toISOString(), source: 'website-form',
       status: 'active', unsubscribeToken: token, unsubscribedAt: null
     }).then(function() {
@@ -586,10 +585,9 @@ window.TENANT_READY.then(function() {
   };
 
   function loadPosts(tab) {
-    var path = tab === 'blog' ? TENANT_ID + '/blog/published' : TENANT_ID + '/newsletter/published';
-    db.ref(path).orderByChild('publishedAt').limitToLast(50).once('value').then(function(snap) {
-      var val = snap.val();
-      var posts = val ? Object.keys(val).map(function(k) { var p = val[k]; p._id = k; return p; }) : [];
+    var path = tab === 'blog' ? 'blog/published' : 'newsletter/published';
+    MastDB.query(path).orderByChild('publishedAt').limitToLast(50).once().then(function(val) {
+      var posts = val && Object.keys(val).length ? Object.keys(val).map(function(k) { var p = val[k]; p._id = k; return p; }) : [];
       posts.sort(function(a, b) {
         return new Date(b.publishedAt || 0) - new Date(a.publishedAt || 0);
       });
@@ -646,8 +644,7 @@ window.TENANT_READY.then(function() {
         setTimeout(function() {
           latest.sections.forEach(function(sec, idx) {
             (sec.images || []).forEach(function(imgId) {
-              db.ref(TENANT_ID + '/images/' + imgId).once('value').then(function(imgSnap) {
-                var img = imgSnap.val();
+              MastDB.get('images/' + imgId).then(function(img) {
                 if (img && img.url) {
                   var secEl = document.querySelector('[data-sec-idx="' + idx + '"]');
                   if (secEl) {
@@ -729,8 +726,7 @@ window.TENANT_READY.then(function() {
       renderStoriesList(storiesCache);
       return;
     }
-    db.ref(TENANT_ID + '/public/stories').once('value').then(function(snap) {
-      var val = snap.val();
+    MastDB.get('public/stories').then(function(val) {
       var stories = val ? Object.keys(val).map(function(k) { var s = val[k]; s._id = k; return s; }) : [];
       stories = stories.filter(function(s) { return s.status === 'published'; });
       stories.sort(function(a, b) {
@@ -795,8 +791,7 @@ window.TENANT_READY.then(function() {
     if (story) {
       renderStoryDetail(story);
     } else {
-      db.ref(TENANT_ID + '/public/stories/' + storyId).once('value').then(function(snap) {
-        var s = snap.val();
+      MastDB.get('public/stories/' + storyId).then(function(s) {
         if (s) { s._id = storyId; renderStoryDetail(s); }
         else { container.innerHTML = '<div class="empty-state"><p>Story not found.</p></div>'; }
       });

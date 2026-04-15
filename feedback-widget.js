@@ -18,22 +18,13 @@
   function initFeedbackWidget() {
   var _tenantFallback = (typeof TENANT_ID !== 'undefined' && TENANT_ID !== 'unknown') ? TENANT_ID : null;
   if (!_tenantFallback) { console.warn('feedback-widget: No TENANT_ID resolved, widget disabled.'); return; }
-  var FEEDBACK_PATH = _tenantFallback + '/feedbackReports';
-  var SETTINGS_PATH = _tenantFallback + '/admin/feedbackSettings/publicEnabled';
   var APP_ID = _tenantFallback;
 
-  // Use default app if available, otherwise use first available named app
-  var fbApp;
-  try {
-    fbApp = firebase.app();
-  } catch (e) {
-    if (firebase.apps && firebase.apps.length > 0) {
-      fbApp = firebase.apps[0];
-    } else {
-      return; // No Firebase app available
-    }
+  // Host page must init MastDB before this runs.
+  if (typeof MastDB === 'undefined' || !MastDB.tenantId()) {
+    console.warn('feedback-widget: MastDB not initialized, widget disabled.');
+    return;
   }
-  var db = fbApp.database();
 
   // Console error capture — rolling buffer of last 20
   var _consoleBuffer = [];
@@ -65,8 +56,8 @@
   }
 
   // Check if public feedback is enabled
-  db.ref(SETTINGS_PATH).once('value', function(snap) {
-    if (snap.val() !== true) return;
+  MastDB.get('admin/feedbackSettings/publicEnabled').then(function(v) {
+    if (v !== true) return;
     injectWidget();
   });
 
@@ -227,12 +218,12 @@
       timestamp: new Date().toISOString(),
       status: 'open',
       jobId: null,
-      createdAt: firebase.database.ServerValue.TIMESTAMP
+      createdAt: MastDB.serverTimestamp()
     };
 
     if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Sending...'; }
 
-    db.ref(FEEDBACK_PATH).push(report)
+    MastDB.push('feedbackReports', report)
       .then(function() {
         markSubmitted();
         closeDialog();

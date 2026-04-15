@@ -412,8 +412,7 @@
 <script>
 window.TENANT_READY.then(function() {
   if (!firebase.apps.length) firebase.initializeApp(TENANT_FIREBASE_CONFIG);
-  const db = firebase.database();
-  MastDB.init({ db: db, tenantId: TENANT_ID });
+  MastDB.init({ db: firebase.database(), tenantId: TENANT_ID });
 
   function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
   function fmtMonth(dateStr) {
@@ -426,9 +425,8 @@ window.TENANT_READY.then(function() {
   }
 
   // Load schedule background image
-  db.ref(TENANT_ID + '/public/gallery').orderByChild('section').equalTo('schedule').once('value').then(function(snap) {
-    var data = snap.val();
-    if (!data) return;
+  MastDB.query('public/gallery').orderByChild('section').equalTo('schedule').once().then(function(data) {
+    if (!data || Object.keys(data).length === 0) return;
     var items = Object.values(data).filter(function(i) { return i.visible !== false && !i.templateHidden && i.url; });
     if (items.length > 0) {
       var header = document.querySelector('.page-header');
@@ -437,13 +435,12 @@ window.TENANT_READY.then(function() {
   }).catch(function() {});
 
   // Load events
-  db.ref(TENANT_ID + '/public/events').orderByChild('date').once('value').then(function(snap) {
-    const data = snap.val();
+  MastDB.query('public/events').orderByChild('date').once().then(function(data) {
     const list = document.getElementById('eventsList');
     const empty = document.getElementById('eventsEmpty');
     if (!list) return;
 
-    if (!data) { return; } // keep empty state visible
+    if (!data || Object.keys(data).length === 0) { return; } // keep empty state visible
 
     const events = Object.values(data)
       .filter(function(e) { return e.visible !== false; })
@@ -476,8 +473,7 @@ window.TENANT_READY.then(function() {
 <!-- ============ ANALYTICS TRACKING ============ -->
 <script>
 window.TENANT_READY.then(function() {
-  var db = firebase.database();
-  var HITS = TENANT_ID + '/analytics/hits';
+  var HITS = 'analytics/hits';
   var now = new Date();
   var page = 'schedule';
   var d = now.getFullYear() + '-' +
@@ -489,7 +485,7 @@ window.TENANT_READY.then(function() {
     var hit = { t: type, p: page, ts: Date.now(), d: d };
     if (action) hit.a = action;
     if (visitorIp) hit.ip = visitorIp;
-    db.ref(HITS).push(hit).catch(function() {});
+    MastDB.push(HITS, hit).catch(function() {});
   }
 
   fetch('https://api.ipify.org?format=json').then(function(r) { return r.json(); }).then(function(data) {
