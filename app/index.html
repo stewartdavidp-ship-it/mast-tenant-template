@@ -25730,6 +25730,12 @@ async function saveProduct(pid) {
     // Collect variant prices + image bindings from DOM, preserving existing IDs
     var existingProductForVariants = pid ? productsData.find(function(p) { return p.pid === pid; }) : null;
     var existingVariants = (existingProductForVariants && existingProductForVariants.variants) || [];
+    // Phase 6a follow-on: if the form did not render any variant inputs (edge
+    // case for products imported without surfaced variant controls), preserve
+    // existing variants instead of silently wiping them. The form only emits
+    // .pd-variant-price when variant-edit UI renders — absence means "no user
+    // intent to modify," not "delete all variants."
+    var hasVariantInputs = document.querySelectorAll('.pd-variant-price').length > 0;
     var variants = [];
     document.querySelectorAll('.pd-variant-price').forEach(function(input) {
       var priceVal = parsePriceToCents(input.value);
@@ -25772,6 +25778,14 @@ async function saveProduct(pid) {
         } catch(e) { /* skip invalid */ }
       }
     });
+
+    // Phase 6a follow-on: when the form rendered no variant inputs AND the
+    // product already has variants in Firebase, carry them forward unchanged.
+    // Protects Squarespace-imported "priceType:from" products whose variant
+    // edit UI isn't surfaced in the current product-detail form.
+    if (!hasVariantInputs && existingVariants.length > 0) {
+      variants = existingVariants.slice();
+    }
 
     // Auto-set priceType and base price from variant prices
     var priceType = null;
@@ -25978,7 +25992,15 @@ async function saveProduct(pid) {
     } catch (e) { console.warn('deriveLegacyPriceCents inline failed (non-fatal):', e); }
 
     // Save to Firebase
-    await MastDB.products.ref(targetPid).set(productData);
+    // Phase 6a follow-on: use .update() on edits so fields not present in
+    // productData (stockInfo is maintained separately by syncStockInfoToPublic,
+    // externalRefs by adapter sync, etc.) are preserved. Creates still use
+    // .set() to establish the initial record.
+    if (isCreate) {
+      await MastDB.products.ref(targetPid).set(productData);
+    } else {
+      await MastDB.products.ref(targetPid).update(productData);
+    }
     await writeAudit(isCreate ? 'create' : 'update', 'products', targetPid);
 
     showToast(isCreate ? 'Product created' : 'Product saved');
