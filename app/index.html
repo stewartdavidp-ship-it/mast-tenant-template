@@ -25779,11 +25779,18 @@ async function saveProduct(pid) {
       }
     });
 
-    // Phase 6a follow-on: when the form rendered no variant inputs AND the
-    // product already has variants in Firebase, carry them forward unchanged.
-    // Protects Squarespace-imported "priceType:from" products whose variant
-    // edit UI isn't surfaced in the current product-detail form.
-    if (!hasVariantInputs && existingVariants.length > 0) {
+    // Phase 6a follow-on: preserve existing variants when the form collected
+    // zero but the product already has variants. Covers two discovered failure
+    // modes:
+    //   1. Form rendered no .pd-variant-price inputs at all (Squarespace-import
+    //      products whose variant edit UI isn't surfaced).
+    //   2. Form rendered variant inputs but all were empty (not pre-populated
+    //      from existing prices, e.g. products with case-mismatched combo keys
+    //      — DOM {"Size":"x"} vs stored {"size":"x"} — so the rehydration loop
+    //      leaves inputs blank and every collected priceVal is null).
+    // Absence of collected variants ≠ user intent to delete variants. To
+    // actually remove variants, edit the product options array instead.
+    if (variants.length === 0 && existingVariants.length > 0) {
       variants = existingVariants.slice();
     }
 
