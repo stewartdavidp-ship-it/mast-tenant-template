@@ -1449,6 +1449,64 @@
 
     h += '<div style="display:grid;gap:16px;">';
 
+    // Phase 2b (D23, D25) — Route + Platform + PlatformAccountId + UsesTier
+    h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;">';
+    h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;margin-bottom:12px;">Channel Shape</div>';
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
+    // Route
+    var curRoute = getChannelRoute(ch) || '';
+    h += '<div>';
+    h += '<label style="font-size:0.78rem;color:#999;display:block;margin-bottom:4px;" for="chRoute">Route</label>';
+    if (ro) {
+      var routeLabel = (ROUTES[curRoute] && ROUTES[curRoute].label) || curRoute || '\u2014';
+      h += '<div style="font-size:0.9rem;color:#e0e0e0;padding:9px 0;">' + esc(routeLabel) + '</div>';
+    } else {
+      h += '<select id="chRoute" style="width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+      h += '<option value="">\u2014</option>';
+      Object.keys(ROUTES).forEach(function(k) {
+        h += '<option value="' + k + '"' + (curRoute === k ? ' selected' : '') + '>' + esc(ROUTES[k].label) + '</option>';
+      });
+      h += '</select>';
+    }
+    h += '</div>';
+    // Platform
+    var curPlat = getChannelPlatform(ch) || '';
+    h += '<div>';
+    h += '<label style="font-size:0.78rem;color:#999;display:block;margin-bottom:4px;" for="chPlatform">Platform</label>';
+    if (ro) {
+      var platLabel = (PLATFORMS[curPlat] && PLATFORMS[curPlat].label) || curPlat || '\u2014';
+      h += '<div style="font-size:0.9rem;color:#e0e0e0;padding:9px 0;">' + esc(platLabel) + '</div>';
+    } else {
+      h += '<select id="chPlatform" style="width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+      h += '<option value="">\u2014</option>';
+      Object.keys(PLATFORMS).forEach(function(k) {
+        h += '<option value="' + k + '"' + (curPlat === k ? ' selected' : '') + '>' + esc(PLATFORMS[k].label) + '</option>';
+      });
+      h += '</select>';
+    }
+    h += '</div>';
+    // Platform Account ID
+    h += '<div>';
+    h += '<label style="font-size:0.78rem;color:#999;display:block;margin-bottom:4px;" for="chPlatformAccount">Platform Account ID</label>';
+    h += fieldGroupRaw('chPlatformAccount', getChannelPlatformAccountId(ch) || '', ro, 'text', 'e.g. shop.myshopify.com');
+    h += '</div>';
+    // Uses Tier
+    var curUsesTier = getChannelUsesTier(ch);
+    h += '<div>';
+    h += '<label style="font-size:0.78rem;color:#999;display:block;margin-bottom:4px;" for="chUsesTier">Uses tier</label>';
+    if (ro) {
+      h += '<div style="font-size:0.9rem;color:#e0e0e0;padding:9px 0;">' + esc(curUsesTier) + '</div>';
+    } else {
+      h += '<select id="chUsesTier" style="width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+      ['retail','direct','wholesale'].forEach(function(t) {
+        h += '<option value="' + t + '"' + (curUsesTier === t ? ' selected' : '') + '>' + t.charAt(0).toUpperCase() + t.slice(1) + '</option>';
+      });
+      h += '</select>';
+    }
+    h += '</div>';
+    h += '</div>'; // end grid
+    h += '</div>'; // end card
+
     // Fee profile
     h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;">';
     h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;margin-bottom:12px;">Fee Profile</div>';
@@ -1534,6 +1592,16 @@
     return h;
   }
 
+  // Phase 2b — like fieldGroup but no <label> wrapper (caller already rendered one).
+  function fieldGroupRaw(id, value, readOnly, type, placeholder) {
+    if (readOnly) {
+      return '<div style="font-size:0.9rem;color:#e0e0e0;padding:9px 0;">' + esc(String(value || '\u2014')) + '</div>';
+    }
+    return '<input type="' + (type || 'text') + '" id="' + id + '" value="' + esc(String(value || '')) + '"' +
+      (placeholder ? ' placeholder="' + esc(placeholder) + '"' : '') +
+      ' style="width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+  }
+
   function fieldGroup(label, id, value, readOnly, type, min, step) {
     var h = '<div>';
     h += '<label style="font-size:0.78rem;color:#999;display:block;margin-bottom:4px;" for="' + id + '">' + esc(label) + '</label>';
@@ -1570,20 +1638,68 @@
     h += '<input type="text" id="newChName" placeholder="e.g. Etsy, Gallery Blue, TikTok Shop" style="width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
     h += '</div>';
 
-    // Type selector
+    // Phase 2b (D25) — Quick presets: the 8 legacy CHANNEL_TYPES become
+    // shortcuts that pre-fill route + platform. Custom combinations are
+    // permitted by editing the Route / Platform pickers below directly.
     h += '<div>';
-    h += '<label style="font-size:0.78rem;color:#999;display:block;margin-bottom:4px;" for="newChType">Channel Type *</label>';
+    h += '<label style="font-size:0.78rem;color:#999;display:block;margin-bottom:4px;">Quick preset (optional)</label>';
     h += '<select id="newChType" onchange="channelTypeChanged()"' +
       ' style="width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
-    h += '<option value="">Select a type...</option>';
+    h += '<option value="">Custom (no preset)</option>';
     Object.keys(CHANNEL_TYPES).forEach(function(key) {
       var t = CHANNEL_TYPES[key];
-      h += '<option value="' + key + '">' + esc(t.label) + ' (' + t.ownership + ', ' + t.pricing + ')</option>';
+      var rp = TYPE_TO_ROUTE_PLATFORM[key] || {};
+      h += '<option value="' + key + '">' + esc(t.label) + ' \u2014 ' + esc(rp.route || '?') + ' / ' + esc(rp.platform || '?') + '</option>';
+    });
+    h += '</select>';
+    h += '<div style="font-size:0.72rem;color:#666;margin-top:4px;">Pre-fills Route and Platform below. You can still customise either.</div>';
+    h += '</div>';
+
+    // Phase 2b (D25) — Route picker (required)
+    h += '<div>';
+    h += '<label style="font-size:0.78rem;color:#999;display:block;margin-bottom:4px;" for="newChRoute">Route *</label>';
+    h += '<select id="newChRoute" onchange="channelRouteChanged()"' +
+      ' style="width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+    h += '<option value="">Select a route...</option>';
+    Object.keys(ROUTES).forEach(function(key) {
+      h += '<option value="' + key + '">' + esc(ROUTES[key].label) + ' \u2014 ' + esc(ROUTES[key].desc) + '</option>';
     });
     h += '</select>';
     h += '</div>';
 
-    // Auto-filled classification (shown after type selected)
+    // Phase 2b (D25) — Platform picker (required)
+    h += '<div>';
+    h += '<label style="font-size:0.78rem;color:#999;display:block;margin-bottom:4px;" for="newChPlatform">Platform *</label>';
+    h += '<select id="newChPlatform"' +
+      ' style="width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+    h += '<option value="">Select a platform...</option>';
+    Object.keys(PLATFORMS).forEach(function(key) {
+      h += '<option value="' + key + '">' + esc(PLATFORMS[key].label) + '</option>';
+    });
+    h += '</select>';
+    h += '</div>';
+
+    // Phase 2b (D25) — Platform Account ID (optional, free text)
+    h += '<div>';
+    h += '<label style="font-size:0.78rem;color:#999;display:block;margin-bottom:4px;" for="newChPlatformAccount">Platform Account ID</label>';
+    h += '<input type="text" id="newChPlatformAccount" placeholder="e.g. shop-domain.myshopify.com, etsy_user_id, square_merchant_id"' +
+      ' style="width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+    h += '<div style="font-size:0.72rem;color:#666;margin-top:4px;">Stable per external connection. Used in Phase 3 by webhooks to reverse-route to this channel. Multiple channels can share a platform with different account IDs.</div>';
+    h += '</div>';
+
+    // Phase 2b (D23) — Uses Tier picker
+    h += '<div>';
+    h += '<label style="font-size:0.78rem;color:#999;display:block;margin-bottom:4px;" for="newChUsesTier">Uses tier</label>';
+    h += '<select id="newChUsesTier"' +
+      ' style="width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+    ['retail','direct','wholesale'].forEach(function(t) {
+      h += '<option value="' + t + '">' + t.charAt(0).toUpperCase() + t.slice(1) + '</option>';
+    });
+    h += '</select>';
+    h += '<div style="font-size:0.72rem;color:#666;margin-top:4px;">Which Recipe-published tier price this channel sells at. Defaults from Route.</div>';
+    h += '</div>';
+
+    // Auto-filled classification (shown after preset selected)
     h += '<div id="newChClassification" style="display:none;font-size:0.78rem;color:#999;padding:8px 12px;background:#2a2a2a;border:1px solid #444;border-radius:6px;"></div>';
 
     // Fee fields
@@ -1633,8 +1749,19 @@
   function typeChanged() {
     var typeEl = document.getElementById('newChType');
     var classEl = document.getElementById('newChClassification');
-    if (!typeEl || !classEl) return;
+    if (!typeEl) return;
     var type = typeEl.value;
+    // Phase 2b — pre-fill route + platform + uses tier from preset
+    if (type && TYPE_TO_ROUTE_PLATFORM[type]) {
+      var rp = TYPE_TO_ROUTE_PLATFORM[type];
+      var routeEl = document.getElementById('newChRoute');
+      var platEl = document.getElementById('newChPlatform');
+      var usesTierEl = document.getElementById('newChUsesTier');
+      if (routeEl && rp.route) routeEl.value = rp.route;
+      if (platEl && rp.platform) platEl.value = rp.platform;
+      if (usesTierEl && rp.route && ROUTES[rp.route]) usesTierEl.value = ROUTES[rp.route].defaultUsesTier;
+    }
+    if (!classEl) return;
     if (!type || !CHANNEL_TYPES[type]) {
       classEl.style.display = 'none';
       return;
@@ -1646,12 +1773,35 @@
       'Inventory: <strong>' + esc(t.inventory) + '</strong>';
   }
 
+  // Phase 2b — when user picks a Route directly, default Uses Tier from it.
+  function routeChanged() {
+    var routeEl = document.getElementById('newChRoute');
+    var usesTierEl = document.getElementById('newChUsesTier');
+    if (!routeEl || !usesTierEl) return;
+    var route = routeEl.value;
+    if (route && ROUTES[route]) usesTierEl.value = ROUTES[route].defaultUsesTier;
+  }
+
   function saveNew() {
     var name = (document.getElementById('newChName') || {}).value || '';
     var type = (document.getElementById('newChType') || {}).value || '';
+    var routeNew = (document.getElementById('newChRoute') || {}).value || '';
+    var platformNew = (document.getElementById('newChPlatform') || {}).value || '';
 
     if (!name.trim()) { showToast('Channel name is required.', true); return; }
-    if (!type) { showToast('Please select a channel type.', true); return; }
+    // Phase 2b — Route + Platform are now the required pair (preset is optional)
+    if (!routeNew) { showToast('Please pick a Route.', true); return; }
+    if (!platformNew) { showToast('Please pick a Platform.', true); return; }
+
+    // Phase 2b — multi-channel-per-platform is permitted (Dave confirmed
+    // Option A) but log a console.warn so we know if order attribution
+    // (channels.js:order-section) starts seeing collisions.
+    var sharingPlatform = Object.values(channelsData).filter(function(other) {
+      return getChannelPlatform(other) === platformNew;
+    });
+    if (sharingPlatform.length > 0) {
+      console.warn('[channels] Multi-channel on platform "' + platformNew + '" — order attribution falls back to first match until Phase 3 webhook reverse-routing lands.');
+    }
 
     var t = CHANNEL_TYPES[type] || {};
     var id = 'ch_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
@@ -2423,6 +2573,7 @@
   window.channelDelete = deleteChannel;
   window.channelRerender = function() { renderList(); };
   window.channelTypeChanged = typeChanged;
+  window.channelRouteChanged = routeChanged;
   window.channelSaveNew = saveNew;
   window.channelToggleEligibility = toggleEligibility;
   window.channelToggleActive = toggleActive;
