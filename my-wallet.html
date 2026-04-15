@@ -221,6 +221,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="shared/mastdb.js?v=1"></script>
 
 <script>
 (function() {
@@ -946,47 +947,47 @@
 
   // ---- Data Loading ----
 
-  function loadWallet(user, db) {
-    var basePath = TENANT_ID + '/public/accounts/' + user.uid;
+  function loadWallet(user) {
+    var basePath = 'public/accounts/' + user.uid;
     var now = new Date().toISOString();
 
     Promise.all([
       // Credits
-      db.ref(basePath + '/wallet/credits').orderByChild('status').equalTo('active').once('value'),
+      MastDB.query(basePath + '/wallet/credits').orderByChild('status').equalTo('active').once(),
       // Gift cards
-      db.ref(basePath + '/wallet/giftCards').once('value'),
+      MastDB.get(basePath + '/wallet/giftCards'),
       // Loyalty
-      db.ref(basePath + '/wallet/loyalty').once('value'),
+      MastDB.get(basePath + '/wallet/loyalty'),
       // Passes — canonical path is /passes/ (MCP, Cloud Functions, and server all use this)
-      db.ref(basePath + '/passes').once('value'),
+      MastDB.get(basePath + '/passes'),
       // Saved coupons
-      db.ref(basePath + '/wallet/coupons').once('value'),
+      MastDB.get(basePath + '/wallet/coupons'),
       // Gift cards sent (purchased for others) — stored at account level, not wallet
-      db.ref(basePath + '/giftCardsSent').once('value')
+      MastDB.get(basePath + '/giftCardsSent')
     ]).then(function(results) {
       // Credits
-      var creditsSnap = results[0].val() || {};
-      walletData.credits = Object.keys(creditsSnap).map(function(id) {
-        var c = creditsSnap[id]; c._id = id; return c;
+      var creditsMap = results[0] || {};
+      walletData.credits = Object.keys(creditsMap).map(function(id) {
+        var c = creditsMap[id]; c._id = id; return c;
       }).sort(function(a, b) {
         return (a.createdAt || '').localeCompare(b.createdAt || '');
       });
 
       // Gift cards
-      var gcSnap = results[1].val() || {};
-      walletData.giftCards = Object.keys(gcSnap).map(function(id) {
-        var g = gcSnap[id]; g._id = id; return g;
+      var gcMap = results[1] || {};
+      walletData.giftCards = Object.keys(gcMap).map(function(id) {
+        var g = gcMap[id]; g._id = id; return g;
       }).sort(function(a, b) {
         return (b.createdAt || '').localeCompare(a.createdAt || '');
       });
 
       // Loyalty
-      walletData.loyalty = results[2].val() || null;
+      walletData.loyalty = results[2] || null;
 
       // Passes
-      var passSnap = results[3].val() || {};
-      walletData.passes = Object.keys(passSnap).map(function(id) {
-        var p = passSnap[id]; p._id = id;
+      var passMap = results[3] || {};
+      walletData.passes = Object.keys(passMap).map(function(id) {
+        var p = passMap[id]; p._id = id;
         // Auto-expire
         if (p.status === 'active' && p.expiresAt && p.expiresAt < now) p.status = 'expired';
         return p;
@@ -997,15 +998,15 @@
       });
 
       // Coupons
-      var couponSnap = results[4].val() || {};
-      walletData.coupons = Object.keys(couponSnap).map(function(id) {
-        var c = couponSnap[id]; c._id = id; return c;
+      var couponMap = results[4] || {};
+      walletData.coupons = Object.keys(couponMap).map(function(id) {
+        var c = couponMap[id]; c._id = id; return c;
       });
 
       // Gift cards sent
-      var sentSnap = results[5].val() || {};
-      walletData.giftCardsSent = Object.keys(sentSnap).map(function(id) {
-        var g = sentSnap[id]; g._id = id; return g;
+      var sentMap = results[5] || {};
+      walletData.giftCardsSent = Object.keys(sentMap).map(function(id) {
+        var g = sentMap[id]; g._id = id; return g;
       }).sort(function(a, b) {
         return (b.createdAt || b.issuedAt || '').localeCompare(a.createdAt || a.issuedAt || '');
       });
@@ -1025,12 +1026,12 @@
 
     var app;
     try { app = firebase.app(); } catch (e) { app = firebase.initializeApp(TENANT_FIREBASE_CONFIG); }
-    var db = app.database();
+    MastDB.init({ db: app.database(), tenantId: TENANT_ID });
     var auth = app.auth();
 
     auth.onAuthStateChanged(function(user) {
       if (user && !user.isAnonymous) {
-        loadWallet(user, db);
+        loadWallet(user);
       } else {
         renderSignIn();
       }

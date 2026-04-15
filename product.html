@@ -888,12 +888,12 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
+<script src="shared/mastdb.js?v=1"></script>
 <script>
   // Firebase — load product detail from URL param ?id=pXXX
   window.TENANT_READY.then(function() {
     var app; try { app = firebase.app(); } catch (e) { app = firebase.initializeApp(TENANT_FIREBASE_CONFIG); }
-    var db = app.database();
-    window._productDb = db;
+    MastDB.init({ db: app.database(), tenantId: TENANT_ID });
 
     var params = new URLSearchParams(window.location.search);
     // Accept both ?id= and ?pid= for the product key (bug-sweep 2026-04-15).
@@ -910,8 +910,7 @@
     }
 
     // Build shop category nav
-    db.ref(TENANT_ID + '/public/config/categories').once('value').then(function(catSnap) {
-      var catData = catSnap.val();
+    MastDB.get('public/config/categories').then(function(catData) {
       var navEl = document.getElementById('shopCategoryNav');
       if (!navEl || !catData || !Array.isArray(catData)) return;
       var cats = catData.filter(function(c) { return c && c.id && c.label; });
@@ -924,12 +923,11 @@
 
     // Load product and active sales in parallel
     Promise.all([
-      db.ref(TENANT_ID + '/public/products/' + pid).once('value'),
-      db.ref(TENANT_ID + '/public/sales-promotions').once('value')
+      MastDB.get('public/products/' + pid),
+      MastDB.get('public/sales-promotions')
     ]).then(function(results) {
-      var snap = results[0];
-      var salesSnap = results[1];
-      var p = snap.val();
+      var p = results[0];
+      var salesData = results[1];
       document.getElementById('productLoading').style.display = 'none';
 
       if (!p) {
@@ -939,7 +937,7 @@
 
       // Build sale lookup for this product
       var _productSaleInfo = null;
-      var salesData = salesSnap.val() || {};
+      salesData = salesData || {};
       var now = new Date().toISOString();
       Object.keys(salesData).forEach(function(saleId) {
         var sale = salesData[saleId];
@@ -1793,15 +1791,14 @@
   }
 
   function loadProductCatalog() {
-    var db = window._productDb;
-    if (!db) return;
-    db.ref(TENANT_ID + '/public/products').once('value').then(function(snap) {
+    if (!MastDB.tenantId()) return;
+    MastDB.get('public/products').then(function(val) {
       var products = [];
-      snap.forEach(function(child) {
-        var p = child.val();
+      Object.keys(val || {}).forEach(function(key) {
+        var p = val[key];
         if (p && p.name && p.images && p.images.length) {
           var firstImg = typeof p.images[0] === 'string' ? p.images[0] : (p.images[0].url || '');
-          products.push({ pid: p.pid || child.key, name: p.name, image: firstImg, businessLine: p.businessLine || 'production' });
+          products.push({ pid: p.pid || key, name: p.name, image: firstImg, businessLine: p.businessLine || 'production' });
         }
       });
       window._allProducts = products;
@@ -1899,11 +1896,9 @@
     btn.textContent = 'Sending...';
     statusEl.textContent = '';
 
-    var commDb = window._productDb;
-    if (!commDb) { statusEl.textContent = 'Unable to connect.'; statusEl.style.color = '#DC3545'; return; }
+    if (!MastDB.tenantId()) { statusEl.textContent = 'Unable to connect.'; statusEl.style.color = '#DC3545'; return; }
 
-    var commRef = commDb.ref(TENANT_ID + '/admin/commissions');
-    var commId = commRef.push().key;
+    var commId = MastDB.newKey('admin/commissions');
 
     // Build inspiration list with names
     var inspirationPieces = [];
@@ -1938,7 +1933,7 @@
         createdAt: new Date().toISOString()
       };
 
-      return commRef.child(commId).set(record);
+      return MastDB.set('admin/commissions/' + commId, record);
     }).then(function() {
       // Build piece name string for notification
       var pieceNames = [];
@@ -1967,10 +1962,8 @@
 
   // ── How It Was Made: render story section ──
   function loadProductStory(storyId) {
-    var storyDb = window._productDb;
-    if (!storyDb) return;
-    storyDb.ref(TENANT_ID + '/public/stories/' + storyId).once('value').then(function(snap) {
-      var story = snap.val();
+    if (!MastDB.tenantId()) return;
+    MastDB.get('public/stories/' + storyId).then(function(story) {
       if (!story || story.status !== 'published') return;
 
       var entries = [];
@@ -2148,8 +2141,7 @@
 <!-- ============ ANALYTICS TRACKING ============ -->
 <script>
 window.TENANT_READY.then(function() {
-  var db = window._productDb || firebase.app('public-product').database();
-  var HITS = TENANT_ID + '/analytics/hits';
+  var HITS = 'analytics/hits';
   var now = new Date();
   var page = 'product';
   var d = now.getFullYear() + '-' +
@@ -2161,7 +2153,7 @@ window.TENANT_READY.then(function() {
     var hit = { t: type, p: page, ts: Date.now(), d: d };
     if (action) hit.a = action;
     if (visitorIp) hit.ip = visitorIp;
-    db.ref(HITS).push(hit).catch(function() {});
+    MastDB.push(HITS, hit).catch(function() {});
   }
 
   fetch('https://api.ipify.org?format=json').then(function(r) { return r.json(); }).then(function(data) {
