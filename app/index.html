@@ -6717,6 +6717,7 @@
         <button class="view-tab" onclick="switchSettingsSubView('ai')">AI</button>
         <button class="view-tab" onclick="switchSettingsSubView('notifications')">Notifications <span id="settingsNotifBadge" class="sidebar-badge alert" style="display:none;margin-left:4px;"></span></button>
         <button class="view-tab" onclick="switchSettingsSubView('pim')">PIM</button>
+        <button class="view-tab" onclick="switchSettingsSubView('maker')">Maker</button>
       </div>
       <div id="settingsSubGeneral" style="max-width:500px;">
         <div id="githubPatSection" class="form-group" style="display:none;">
@@ -7682,6 +7683,18 @@
         </div>
 
       </div>
+      <!-- Phase 6b.1 — Maker Settings (cost tracking, drift severity, repricing threshold) -->
+      <div id="settingsSubMaker" style="display:none;max-width:720px;">
+        <div style="margin-bottom:20px;">
+          <div style="font-size:1.15rem;font-weight:600;margin-bottom:4px;">Maker Settings</div>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin:0;">Recipe feedback, drift severity, and repricing thresholds. Toggle and dropdown changes save immediately.</p>
+        </div>
+
+        <div id="makerSettingsContent" aria-live="polite">
+          <div class="loading">Loading maker settings…</div>
+        </div>
+      </div>
+
       <div id="settingsSubWorkshop" style="display:none;max-width:500px;">
         <div class="form-group">
           <label style="font-size:1.15rem;font-weight:600;">Operators</label>
@@ -14414,7 +14427,7 @@ function getModuleForRouteManifest(route) {
 // ============================================================
 // Settings Sub-Tabs
 // ============================================================
-var settingsSubViews = ['general', 'payments', 'shipping', 'tax', 'email', 'integrations', 'workshop', 'trips', 'storefront', 'dashboard', 'domains', 'ai', 'notifications', 'pim'];
+var settingsSubViews = ['general', 'payments', 'shipping', 'tax', 'email', 'integrations', 'workshop', 'trips', 'storefront', 'dashboard', 'domains', 'ai', 'notifications', 'pim', 'maker'];
 function switchSettingsSubView(view) {
   // Hide all sub-views
   settingsSubViews.forEach(function(v) {
@@ -14448,6 +14461,7 @@ function switchSettingsSubView(view) {
   if (view === 'about') renderAboutSettings();
   if (view === 'notifications') loadNotificationsSettings();
   if (view === 'pim') loadPimSettings();
+  if (view === 'maker') loadMakerSettings();
 }
 
 // ============================================================
@@ -23173,9 +23187,20 @@ function renderRecipeReadyBanner(product) {
 async function acceptRecipeForProduct(pid) {
   var product = (window.productsData || []).find(function(p) { return p.pid === pid; });
   if (!product || !product.recipeId) { showToast('No linked recipe to apply', true); return; }
+  // Phase 6b.3: lazy-load the maker module on first use so the banner Accept
+  // button works on initial product-detail visit without requiring the user
+  // to have opened the Maker tab first.
   if (typeof window.makerApplyRecipeToProduct !== 'function') {
-    showToast('Maker module not loaded \u2014 open the Maker tab once and retry', true);
-    return;
+    try {
+      await MastAdmin.loadModule('maker');
+    } catch (loadErr) {
+      showToast('Failed to load Maker module: ' + (loadErr.message || loadErr), true);
+      return;
+    }
+    if (typeof window.makerApplyRecipeToProduct !== 'function') {
+      showToast('Maker module loaded but Apply function unavailable', true);
+      return;
+    }
   }
   try {
     var result = await window.makerApplyRecipeToProduct(product.recipeId);
@@ -23840,6 +23865,13 @@ function renderDriftReviewQueueUnified(tab) {
     html += '<option value="' + esc(k) + '"' + (channelFilter === k ? ' selected' : '') + '>' + esc(filterMap[k]) + '</option>';
   });
   html += '</select>';
+  // Phase 6b.2: page-size selector. Changing size re-fetches from the newest record.
+  var currentPageSize = window.__mastDriftQueuePageSize || 100;
+  html += '<select aria-label="Page size" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.78rem;" onchange="setDriftQueuePageSize(this.value)">';
+  [25, 50, 100, 200].forEach(function(n) {
+    html += '<option value="' + n + '"' + (currentPageSize === n ? ' selected' : '') + '>Show ' + n + '</option>';
+  });
+  html += '</select>';
   html += '</div>';
 
   if (filtered.length === 0) {
@@ -23893,6 +23925,17 @@ function renderDriftReviewQueueUnified(tab) {
     });
     html += '</div>';
   }
+
+  // Phase 6b.2: footer with loaded count + Load More button when more records
+  // exist below the current page. Load More appends in place rather than replacing.
+  var loaded = data.length;
+  var visible = filtered.length;
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;padding-top:12px;border-top:1px solid var(--cream-dark);gap:12px;flex-wrap:wrap;">';
+  html += '<div style="font-size:0.78rem;color:var(--warm-gray);">Showing ' + visible + ' of ' + loaded + ' loaded' + (window.__mastDriftQueueHasMore ? ' (more available)' : '') + '</div>';
+  if (window.__mastDriftQueueHasMore) {
+    html += '<button id="driftQueueLoadMoreBtn" class="btn btn-secondary btn-small" onclick="loadMoreDriftAlerts()" aria-label="Load more drift alerts">Load More</button>';
+  }
+  html += '</div>';
 
   container.innerHTML = html;
 }
@@ -24316,6 +24359,285 @@ function loadPimSettings() {
   switchPimTab(window.__pimActiveTab || 'drift');
 }
 
+// ============================================================
+// Phase 6b.1 — Maker Settings (Paradigm A + Atomic Widgets)
+// ============================================================
+// Data paths:
+//   admin/config/trackMaterialInventory      (bool, atomic toggle)
+//   admin/config/recipeRecalcCadence         (weekly|monthly|off, atomic dropdown)
+//   admin/config/makerSettings/repricingThresholdPct  (number %, non-atomic)
+//   admin/syncRuleSeverity/{field}           (tenant override per field, atomic dropdown)
+//   mast-platform/driftSeverityDefaults/{field}  (platform defaults, read-only)
+
+var MAST_MAKER_DRIFT_FIELDS = ['title', 'description', 'price', 'status', 'inventory'];
+var MAST_MAKER_FIELD_LABELS = {
+  title: 'Title',
+  description: 'Description',
+  price: 'Price',
+  status: 'Status',
+  inventory: 'Inventory'
+};
+var MAST_MAKER_SEVERITY_FALLBACK = {
+  inventory: 'critical',
+  title: 'warning',
+  description: 'warning',
+  price: 'warning',
+  status: 'warning'
+};
+
+async function loadMakerSettings() {
+  var container = document.getElementById('makerSettingsContent');
+  if (!container) return;
+  container.innerHTML = '<div class="loading">Loading maker settings…</div>';
+  try {
+    var tenantId = MastDB.tenantId();
+    // Reset cached severity so reloading picks up any external edits.
+    window.__mastDriftSeverity = null;
+    var results = await Promise.all([
+      firebase.database().ref(tenantId + '/admin/config').once('value'),
+      loadDriftSeverity()
+    ]);
+    var cfg = results[0].val() || {};
+    var sev = results[1];
+    window.__mastMakerSettings = {
+      trackMaterialInventory: cfg.trackMaterialInventory === true,
+      recipeRecalcCadence: (cfg.recipeRecalcCadence || 'off'),
+      repricingThresholdPct: (cfg.makerSettings && typeof cfg.makerSettings.repricingThresholdPct === 'number') ? cfg.makerSettings.repricingThresholdPct : 15,
+      severityOverrides: sev.tenantOverrides || {},
+      severityDefaults: sev.platformDefaults || {}
+    };
+    renderMakerSettings();
+  } catch (err) {
+    container.innerHTML = '<p role="alert" style="color:var(--danger);font-size:0.85rem;">Failed to load: ' + esc(err.message || err) + '</p>';
+  }
+}
+
+function renderMakerSettings() {
+  var container = document.getElementById('makerSettingsContent');
+  if (!container) return;
+  var s = window.__mastMakerSettings || {};
+  var html = '';
+
+  // ── Section 1: Cost Tracking (all atomic widgets) ────────────────────────
+  html += '<section aria-labelledby="makerCostHeading" style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px 20px;margin-bottom:16px;">';
+  html += '<h3 id="makerCostHeading" style="font-size:1.15rem;font-weight:600;margin:0 0 4px;">Cost tracking</h3>';
+  html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin:0 0 16px;">Deduct materials on build complete and recalculate estimated recipe costs on a schedule.</p>';
+
+  // Toggle: trackMaterialInventory (atomic)
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px;padding:8px 0;border-bottom:1px solid var(--cream-dark);">';
+  html += '<div style="flex:1;">';
+  html += '<label for="mkTrackMat" style="font-size:0.9rem;font-weight:500;cursor:pointer;">Deduct materials on build complete</label>';
+  html += '<p style="font-size:0.78rem;color:var(--warm-gray);margin:2px 0 0;">When on, completing a build transactionally decrements materials used.</p>';
+  html += '</div>';
+  html += '<label class="switch" style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;">';
+  html += '<input type="checkbox" id="mkTrackMat" ' + (s.trackMaterialInventory ? 'checked' : '') + ' aria-label="Deduct materials on build complete" onchange="onMakerToggleTrackMat(this.checked)" style="opacity:0;width:0;height:0;">';
+  html += '<span style="position:absolute;cursor:pointer;inset:0;background:' + (s.trackMaterialInventory ? 'var(--copper)' : '#ccc') + ';border-radius:24px;transition:0.2s;"></span>';
+  html += '<span style="position:absolute;height:18px;width:18px;left:' + (s.trackMaterialInventory ? '23px' : '3px') + ';top:3px;background:white;border-radius:50%;transition:0.2s;"></span>';
+  html += '</label>';
+  html += '</div>';
+
+  // Cadence dropdown (atomic — 3 options, valid-from-any-state)
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px;padding:8px 0;border-bottom:1px solid var(--cream-dark);flex-wrap:wrap;">';
+  html += '<div style="flex:1;min-width:220px;">';
+  html += '<label for="mkCadence" style="font-size:0.9rem;font-weight:500;">Recalc cadence</label>';
+  html += '<p style="font-size:0.78rem;color:var(--warm-gray);margin:2px 0 0;">How often the 03:00 UTC cron recomputes estimated cost against current materials.</p>';
+  html += '</div>';
+  html += '<select id="mkCadence" aria-label="Recipe recalc cadence" onchange="onMakerCadenceChange(this.value)" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.85rem;min-width:140px;">';
+  ['off', 'weekly', 'monthly'].forEach(function(v) {
+    var label = v.charAt(0).toUpperCase() + v.slice(1);
+    html += '<option value="' + v + '"' + (s.recipeRecalcCadence === v ? ' selected' : '') + '>' + label + '</option>';
+  });
+  html += '</select>';
+  html += '</div>';
+
+  // Run-now button (atomic action with confirm)
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:8px 0;flex-wrap:wrap;">';
+  html += '<div style="flex:1;min-width:220px;">';
+  html += '<div style="font-size:0.9rem;font-weight:500;">Run recalc now</div>';
+  html += '<p style="font-size:0.78rem;color:var(--warm-gray);margin:2px 0 0;">Manually trigger the recalc pass immediately (ignores cadence).</p>';
+  html += '</div>';
+  html += '<button id="mkRecalcNowBtn" class="btn btn-secondary btn-small" onclick="onMakerRunRecalcNow()">Run recalc now</button>';
+  html += '</div>';
+
+  html += '</section>';
+
+  // ── Section 2: Drift Severity (5 atomic rows) ────────────────────────────
+  html += '<section aria-labelledby="makerSevHeading" style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px 20px;margin-bottom:16px;">';
+  html += '<h3 id="makerSevHeading" style="font-size:1.15rem;font-weight:600;margin:0 0 4px;">Drift severity</h3>';
+  html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin:0 0 16px;">Override how each drift field is classified. Platform defaults shown in italics; your override (if any) takes precedence.</p>';
+
+  MAST_MAKER_DRIFT_FIELDS.forEach(function(field) {
+    var platformDefault = s.severityDefaults[field] || MAST_MAKER_SEVERITY_FALLBACK[field] || 'warning';
+    var override = s.severityOverrides[field] || null;
+    var effective = override || platformDefault;
+    var hasOverride = !!override;
+    var label = MAST_MAKER_FIELD_LABELS[field] || field;
+    var rowId = 'mkSev_' + field;
+
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--cream-dark);flex-wrap:wrap;">';
+    html += '<div style="flex:1;min-width:200px;">';
+    html += '<label for="' + rowId + '" style="font-size:0.9rem;font-weight:500;">' + esc(label) + '</label>';
+    html += '<p style="font-size:0.78rem;color:var(--warm-gray);margin:2px 0 0;">Platform default: <em>' + esc(platformDefault) + '</em>' + (hasOverride ? ' · Currently overridden to <strong>' + esc(override) + '</strong>' : '') + '</p>';
+    html += '</div>';
+    html += '<div style="display:flex;gap:8px;align-items:center;">';
+    html += '<select id="' + rowId + '" aria-label="Severity for ' + esc(label) + '" onchange="onMakerSeverityChange(\'' + esc(field) + '\', this.value)" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.85rem;">';
+    ['critical', 'warning', 'info'].forEach(function(sv) {
+      html += '<option value="' + sv + '"' + (effective === sv ? ' selected' : '') + '>' + sv.charAt(0).toUpperCase() + sv.slice(1) + '</option>';
+    });
+    html += '</select>';
+    html += '<button class="btn btn-secondary btn-small" aria-label="Reset ' + esc(label) + ' to platform default" onclick="onMakerResetSeverity(\'' + esc(field) + '\')" ' + (hasOverride ? '' : 'disabled') + ' title="Reset to platform default">Reset</button>';
+    html += '</div>';
+    html += '</div>';
+  });
+
+  html += '</section>';
+
+  // ── Section 3: Repricing Threshold (Paradigm A edit mode) ────────────────
+  var editMode = !!window.__mkThresholdEditMode;
+  html += '<section aria-labelledby="makerReprHeading" style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px 20px;margin-bottom:16px;">';
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:4px;">';
+  html += '<h3 id="makerReprHeading" style="font-size:1.15rem;font-weight:600;margin:0;">Repricing threshold</h3>';
+  if (editMode) {
+    html += '<span class="status-badge" style="background:#f59e0b;color:#fff;font-size:0.72rem;padding:2px 8px;border-radius:4px;">Editing</span>';
+  } else {
+    html += '<button class="btn btn-secondary btn-small" onclick="onMakerEnterThresholdEdit()" aria-label="Edit repricing threshold">Edit</button>';
+  }
+  html += '</div>';
+  html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin:0 0 16px;">Alert when a recipe\'s observed cost drifts past this percent from the published estimate.</p>';
+
+  if (editMode) {
+    html += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">';
+    html += '<input type="number" id="mkThresholdInput" value="' + esc(String(s.repricingThresholdPct)) + '" min="0" max="100" step="0.1" aria-label="Repricing threshold percent" style="width:120px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+    html += '<span style="font-size:0.9rem;color:var(--warm-gray);">%</span>';
+    html += '<div style="flex-basis:100%;height:0;"></div>';
+    html += '<button class="btn btn-primary" onclick="onMakerSaveThreshold()">Save</button>';
+    html += '<button class="btn btn-secondary" onclick="onMakerCancelThreshold()">Cancel</button>';
+    html += '</div>';
+  } else {
+    html += '<div style="font-size:1.6rem;font-weight:600;">' + esc(String(s.repricingThresholdPct)) + '<span style="font-size:0.9rem;font-weight:400;color:var(--warm-gray);margin-left:4px;">%</span></div>';
+  }
+  html += '</section>';
+
+  container.innerHTML = html;
+}
+
+// ── Atomic handlers: toggle, dropdown, reset ────────────────────────────────
+async function onMakerToggleTrackMat(checked) {
+  try {
+    await firebase.database().ref(MastDB.tenantId() + '/admin/config/trackMaterialInventory').set(!!checked);
+    window.__mastMakerSettings.trackMaterialInventory = !!checked;
+    showToast('Material deduction ' + (checked ? 'enabled' : 'disabled'));
+    renderMakerSettings();
+  } catch (err) {
+    showToast('Save failed: ' + (err.message || err), true);
+    renderMakerSettings(); // revert UI
+  }
+}
+
+async function onMakerCadenceChange(value) {
+  if (['off', 'weekly', 'monthly'].indexOf(value) < 0) return;
+  try {
+    await firebase.database().ref(MastDB.tenantId() + '/admin/config/recipeRecalcCadence').set(value);
+    window.__mastMakerSettings.recipeRecalcCadence = value;
+    showToast('Cadence set to ' + value);
+  } catch (err) {
+    showToast('Save failed: ' + (err.message || err), true);
+    renderMakerSettings();
+  }
+}
+
+async function onMakerRunRecalcNow() {
+  var btn = document.getElementById('mkRecalcNowBtn');
+  var ok = await mastConfirm('Run recipe cost recalc now? This touches every published recipe.', { title: 'Run recalc now' });
+  if (!ok) return;
+  if (btn) { btn.disabled = true; btn.textContent = 'Running…'; }
+  try {
+    var res = await firebase.functions().httpsCallable('triggerRecipeCostRecalc')({ tenantId: MastDB.tenantId(), force: true });
+    var data = (res && res.data) || {};
+    showToast('Recalc complete · ' + (data.recipesProcessed || 0) + ' recipes · ' + (data.alertsFired || 0) + ' alerts');
+  } catch (err) {
+    showToast('Recalc failed: ' + (err.message || err), true);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Run recalc now'; }
+  }
+}
+
+async function onMakerSeverityChange(field, value) {
+  if (['critical', 'warning', 'info'].indexOf(value) < 0) return;
+  try {
+    await firebase.database().ref(MastDB.tenantId() + '/admin/syncRuleSeverity/' + field).set(value);
+    if (!window.__mastMakerSettings.severityOverrides) window.__mastMakerSettings.severityOverrides = {};
+    window.__mastMakerSettings.severityOverrides[field] = value;
+    // Invalidate the unified cache so the drift queue re-reads on next render.
+    window.__mastDriftSeverity = null;
+    showToast(MAST_MAKER_FIELD_LABELS[field] + ' severity set to ' + value);
+    renderMakerSettings();
+  } catch (err) {
+    showToast('Save failed: ' + (err.message || err), true);
+    renderMakerSettings();
+  }
+}
+
+async function onMakerResetSeverity(field) {
+  try {
+    await firebase.database().ref(MastDB.tenantId() + '/admin/syncRuleSeverity/' + field).remove();
+    if (window.__mastMakerSettings.severityOverrides) delete window.__mastMakerSettings.severityOverrides[field];
+    window.__mastDriftSeverity = null;
+    showToast(MAST_MAKER_FIELD_LABELS[field] + ' reset to platform default');
+    renderMakerSettings();
+  } catch (err) {
+    showToast('Reset failed: ' + (err.message || err), true);
+    renderMakerSettings();
+  }
+}
+
+// ── Non-atomic: Repricing threshold (Paradigm A) ────────────────────────────
+function onMakerEnterThresholdEdit() {
+  window.__mkThresholdEditMode = true;
+  window.__mkThresholdBaseline = window.__mastMakerSettings.repricingThresholdPct;
+  renderMakerSettings();
+  // Register with MastDirty so sidebar nav prompts unsaved-changes.
+  if (window.MastDirty) {
+    MastDirty.register('makerThresholdEdit', function() {
+      var input = document.getElementById('mkThresholdInput');
+      if (!input) return false;
+      return parseFloat(input.value) !== window.__mkThresholdBaseline;
+    }, { label: 'Repricing threshold' });
+  }
+  // Focus the input so keyboard users land in edit mode cleanly.
+  setTimeout(function() {
+    var input = document.getElementById('mkThresholdInput');
+    if (input) { input.focus(); input.select(); }
+  }, 30);
+}
+
+function onMakerCancelThreshold() {
+  window.__mkThresholdEditMode = false;
+  if (window.MastDirty) MastDirty.unregister('makerThresholdEdit');
+  renderMakerSettings();
+}
+
+async function onMakerSaveThreshold() {
+  var input = document.getElementById('mkThresholdInput');
+  if (!input) return;
+  var parsed = parseFloat(input.value);
+  if (isNaN(parsed) || parsed < 0 || parsed > 100) {
+    showToast('Threshold must be between 0 and 100', true);
+    input.focus();
+    return;
+  }
+  try {
+    await firebase.database().ref(MastDB.tenantId() + '/admin/config/makerSettings/repricingThresholdPct').set(parsed);
+    window.__mastMakerSettings.repricingThresholdPct = parsed;
+    window.__mkThresholdEditMode = false;
+    if (window.MastDirty) MastDirty.unregister('makerThresholdEdit');
+    showToast('Repricing threshold saved: ' + parsed + '%');
+    renderMakerSettings();
+  } catch (err) {
+    showToast('Save failed: ' + (err.message || err), true);
+  }
+}
+
 function switchPimTab(tab) {
   window.__pimActiveTab = tab;
   ['drift', 'sync', 'testing', 'rules'].forEach(function(t) {
@@ -24345,6 +24667,11 @@ function togglePimTesting() {
 
 window.__mastDriftQueueData = [];
 window.__mastDriftQueueTab = 'unresolved';
+// Phase 6b.2: cursor-based pagination. Page size is user-selectable; oldest-loaded
+// detectedAt anchors the "Load More" fetch. Total-loaded counter powers the footer.
+window.__mastDriftQueuePageSize = 100;
+window.__mastDriftQueueOldestTs = null;
+window.__mastDriftQueueHasMore = false;
 
 async function openDriftReviewQueue() {
   var container = document.getElementById('driftReviewQueueContainer');
@@ -24354,8 +24681,10 @@ async function openDriftReviewQueue() {
     // Warm supporting caches in parallel — needed by both legacy + unified
     // renderers. Channels cache powers Channel column lookup; severity cache
     // powers severity-then-time sort + color/badge selection.
+    var pageSize = window.__mastDriftQueuePageSize || 100;
+    // Fetch pageSize+1 to detect whether more records exist below the page.
     var snapPromise = firebase.database().ref(MastDB.tenantId() + '/admin/publishDrift')
-      .orderByChild('detectedAt').limitToLast(100).once('value');
+      .orderByChild('detectedAt').limitToLast(pageSize + 1).once('value');
     var channelsPromise = new Promise(function(resolve) { loadAdminChannels(resolve); });
     var severityPromise = loadDriftSeverity();
     var flagPromise = loadUnifiedDriftUIFlag();
@@ -24364,12 +24693,66 @@ async function openDriftReviewQueue() {
     var data = [];
     snap.forEach(function(child) { var v = child.val(); if (v) data.push(v); });
     data.sort(function(a, b) { return (b.detectedAt || '').localeCompare(a.detectedAt || ''); });
+    // If we pulled pageSize+1, more may exist — trim to pageSize for display.
+    window.__mastDriftQueueHasMore = data.length > pageSize;
+    if (window.__mastDriftQueueHasMore) data = data.slice(0, pageSize);
     window.__mastDriftQueueData = data;
+    window.__mastDriftQueueOldestTs = data.length > 0 ? data[data.length - 1].detectedAt : null;
     renderDriftReviewQueue(window.__mastDriftQueueTab || 'unresolved');
   } catch (err) {
     container.innerHTML = '<p style="color:var(--danger);font-size:0.85rem;">Failed to load: ' + esc(err.message) + '</p>';
   }
 }
+
+// Phase 6b.2: change page size (25 | 50 | 100 | 200) and refetch from scratch.
+// Page-size dropdown calls this on change.
+window.setDriftQueuePageSize = function(size) {
+  var parsed = parseInt(size, 10);
+  if (!isNaN(parsed) && [25, 50, 100, 200].indexOf(parsed) >= 0) {
+    window.__mastDriftQueuePageSize = parsed;
+    window.__mastDriftQueueOldestTs = null;
+    openDriftReviewQueue();
+  }
+};
+
+// Phase 6b.2: append the next older page to the current in-memory data set.
+// Uses detectedAt endBefore cursor to fetch the slice immediately older than
+// the current oldest loaded record.
+window.loadMoreDriftAlerts = async function() {
+  var container = document.getElementById('driftReviewQueueContainer');
+  if (!container) return;
+  var oldestTs = window.__mastDriftQueueOldestTs;
+  if (!oldestTs) return;
+  var pageSize = window.__mastDriftQueuePageSize || 100;
+  // Visual feedback on the button
+  var btn = document.getElementById('driftQueueLoadMoreBtn');
+  var prevLabel = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Loading…'; }
+  try {
+    // Fetch records with detectedAt strictly before the oldest we've loaded.
+    // +1 to detect whether more exist below this page.
+    var snap = await firebase.database().ref(MastDB.tenantId() + '/admin/publishDrift')
+      .orderByChild('detectedAt')
+      .endBefore(oldestTs)
+      .limitToLast(pageSize + 1)
+      .once('value');
+    var batch = [];
+    snap.forEach(function(child) { var v = child.val(); if (v) batch.push(v); });
+    batch.sort(function(a, b) { return (b.detectedAt || '').localeCompare(a.detectedAt || ''); });
+    window.__mastDriftQueueHasMore = batch.length > pageSize;
+    if (window.__mastDriftQueueHasMore) batch = batch.slice(0, pageSize);
+    if (batch.length > 0) {
+      window.__mastDriftQueueData = (window.__mastDriftQueueData || []).concat(batch);
+      window.__mastDriftQueueOldestTs = batch[batch.length - 1].detectedAt;
+    } else {
+      window.__mastDriftQueueHasMore = false;
+    }
+    renderDriftReviewQueue(window.__mastDriftQueueTab || 'unresolved');
+  } catch (err) {
+    if (btn) { btn.disabled = false; btn.textContent = prevLabel; }
+    showToast('Failed to load more: ' + (err.message || err), true);
+  }
+};
 
 function renderDriftReviewQueueLegacy(tab) {
   window.__mastDriftQueueTab = tab;
