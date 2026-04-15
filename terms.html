@@ -157,6 +157,7 @@
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="shared/mastdb.js?v=1"></script>
 
 <!-- DOMPurify for HTML sanitization -->
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
@@ -178,9 +179,9 @@
       document.getElementById('tcBody').innerHTML = '<div class="tc-placeholder"><p>Unable to load terms.</p></div>';
       return;
     }
+    MastDB.init({ db: db, tenantId: tid });
 
-    db.ref(tid + '/public/content/terms').once('value').then(function(snap) {
-      var data = snap.val();
+    MastDB.get('public/content/terms').then(function(data) {
       var body = document.getElementById('tcBody');
 
       if (!data || !data.html) {

@@ -451,6 +451,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="shared/mastdb.js?v=1"></script>
 <script>
   // Intersection Observer for scroll animations (defined early so Firebase-loaded content can use it)
   const observer = new IntersectionObserver((entries) => {
@@ -470,11 +471,10 @@
   // Firebase — load about page content dynamically
   window.TENANT_READY.then(function() {
     var app; try { app = firebase.app(); } catch (e) { app = firebase.initializeApp(TENANT_FIREBASE_CONFIG); }
-    var db = app.database();
+    MastDB.init({ db: app.database(), tenantId: TENANT_ID });
 
     // Load about page config (heading, label, techniques)
-    db.ref(TENANT_ID + '/public/config/about').once('value').then(function(snap) {
-      var config = snap.val();
+    MastDB.get('public/config/about').then(function(config) {
       if (!config) return;
 
       // Page header
@@ -518,9 +518,8 @@
     }).catch(function() {});
 
     // Load about images from gallery
-    db.ref(TENANT_ID + '/public/gallery').orderByChild('order').once('value').then(function(snap) {
-      var data = snap.val();
-      if (!data) return;
+    MastDB.query('public/gallery').orderByChild('order').once().then(function(data) {
+      if (!data || Object.keys(data).length === 0) return;
       var aboutImages = Object.values(data)
         .filter(function(i) { return i.section === 'about' && i.visible !== false && !i.templateHidden; })
         .sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
@@ -555,8 +554,7 @@
 <!-- ============ ANALYTICS TRACKING ============ -->
 <script>
 window.TENANT_READY.then(function() {
-  var db = firebase.app('public-about').database();
-  var HITS = TENANT_ID + '/analytics/hits';
+  var HITS = 'analytics/hits';
   var now = new Date();
   var page = 'about';
   var d = now.getFullYear() + '-' +
@@ -568,7 +566,7 @@ window.TENANT_READY.then(function() {
     var hit = { t: type, p: page, ts: Date.now(), d: d };
     if (action) hit.a = action;
     if (visitorIp) hit.ip = visitorIp;
-    db.ref(HITS).push(hit).catch(function() {});
+    MastDB.push(HITS, hit).catch(function() {});
   }
 
   fetch('https://api.ipify.org?format=json').then(function(r) { return r.json(); }).then(function(data) {

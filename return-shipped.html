@@ -166,6 +166,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="shared/mastdb.js?v=1"></script>
 <script src="storefront-theme.js"></script>
 <script src="storefront-nav.js"></script>
 <script src="tenant-brand.js?v=2"></script>
@@ -200,6 +201,7 @@
       try { db = firebase.database(firebase.app()); } catch (e) {
         db = firebase.database(firebase.initializeApp(window.TENANT_FIREBASE_CONFIG));
       }
+      MastDB.init({ db: db, tenantId: TENANT_ID });
       auth = firebase.auth();
 
       auth.onAuthStateChanged(function(user) {
@@ -226,8 +228,7 @@
     var el = document.getElementById('rsContent');
 
     // Load RMA record to show refund details
-    db.ref(TENANT_ID + '/admin/rma/' + rmaId).once('value').then(function(snap) {
-      var rma = snap.val();
+    MastDB.get('admin/rma/' + rmaId).then(function(rma) {
       var refundInfo = '';
       if (rma) {
         var items = (rma.items || []).map(function(i) { return esc(i.name); }).join(', ');
@@ -324,8 +325,7 @@
         var el = document.getElementById('rsContent');
         // Load RMA for refund details in confirmation
         var refundLine = '';
-        db.ref(TENANT_ID + '/admin/rma/' + rmaId).once('value').then(function(snap) {
-          var rma = snap.val();
+        MastDB.get('admin/rma/' + rmaId).then(function(rma) {
           if (rma && rma.refundAmountCents) {
             var method = rma.refundMethod === 'store_credit' ? 'store credit' : 'original payment method';
             refundLine = '<p style="margin-top:0.75rem;font-size:0.95rem;"><strong>Estimated refund:</strong> ' + formatPrice(rma.refundAmountCents / 100) + ' via ' + method + '</p>';

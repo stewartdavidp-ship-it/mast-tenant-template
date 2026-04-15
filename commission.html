@@ -552,11 +552,13 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
+<script src="shared/mastdb.js?v=1"></script>
 <script>
 window.TENANT_READY.then(function() {
 (function() {
   var app; try { app = firebase.app(); } catch (e) { app = firebase.initializeApp(TENANT_FIREBASE_CONFIG); }
   var db = app.database();
+  MastDB.init({ db: db, tenantId: TENANT_ID });
   window._commDb = db;
   window._commApp = app;
 
@@ -591,15 +593,14 @@ window.TENANT_READY.then(function() {
 }).catch(function(err) { console.error('[commission] Tenant resolution failed:', err.message); });
 
 function loadProductCatalog() {
-  var db = window._commDb;
-  if (!db) return;
-  db.ref(TENANT_ID + '/public/products').once('value').then(function(snap) {
+  if (!window._commDb) return;
+  MastDB.get('public/products').then(function(val) {
     var products = [];
-    snap.forEach(function(child) {
-      var p = child.val();
+    Object.keys(val || {}).forEach(function(pid) {
+      var p = val[pid];
       if (p && p.name && p.images && p.images.length) {
         var firstImg = typeof p.images[0] === 'string' ? p.images[0] : (p.images[0].url || '');
-        products.push({ pid: p.pid || child.key, name: p.name, image: firstImg, businessLine: p.businessLine || 'production' });
+        products.push({ pid: p.pid || pid, name: p.name, image: firstImg, businessLine: p.businessLine || 'production' });
       }
     });
     window._allProducts = products;

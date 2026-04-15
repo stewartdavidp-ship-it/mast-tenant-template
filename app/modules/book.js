@@ -2243,10 +2243,8 @@
     });
 
     // 2. Fetch all enrollments for this session from public/enrollments
-    var db = firebase.app().database();
-    var enrollSnap = await db.ref(TENANT_ID + '/public/enrollments')
-      .orderByChild('sessionId').equalTo(sessionId).once('value');
-    var enrollData = enrollSnap.val() || {};
+    var enrollData = await MastDB.query('public/enrollments')
+      .orderByChild('sessionId').equalTo(sessionId).once();
     var enrollIds = Object.keys(enrollData);
 
     // 3. Bulk-cancel confirmed/waitlisted enrollments
@@ -2255,9 +2253,9 @@
     enrollIds.forEach(function(eid) {
       var e = enrollData[eid];
       if (e.status === 'confirmed' || e.status === 'waitlisted') {
-        updates[TENANT_ID + '/public/enrollments/' + eid + '/status'] = 'cancelled_insufficient_enrollment';
-        updates[TENANT_ID + '/public/enrollments/' + eid + '/cancelledAt'] = now;
-        updates[TENANT_ID + '/public/enrollments/' + eid + '/cancelReason'] = 'Class cancelled: minimum enrollment not met';
+        updates['public/enrollments/' + eid + '/status'] = 'cancelled_insufficient_enrollment';
+        updates['public/enrollments/' + eid + '/cancelledAt'] = now;
+        updates['public/enrollments/' + eid + '/cancelReason'] = 'Class cancelled: minimum enrollment not met';
         affected.push({
           enrollmentId: eid,
           studentUid: e.studentUid,
@@ -2271,7 +2269,7 @@
     });
 
     if (Object.keys(updates).length > 0) {
-      await db.ref().update(updates);
+      await MastDB.multiUpdate(updates);
     }
 
     // 4. Create wallet credits for affected students
@@ -2287,8 +2285,7 @@
       }
 
       if (creditAmount > 0) {
-        var creditRef = db.ref(TENANT_ID + '/public/accounts/' + student.studentUid + '/wallet/credits').push();
-        await creditRef.set({
+        await MastDB.push('public/accounts/' + student.studentUid + '/wallet/credits', {
           amountCents: creditAmount,
           source: 'cancellation',
           sourceId: student.enrollmentId,

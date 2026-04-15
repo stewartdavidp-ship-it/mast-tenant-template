@@ -394,6 +394,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="shared/mastdb.js?v=1"></script>
 
 <script>
 (function() {
@@ -523,7 +524,7 @@
 
     var app;
     try { app = firebase.app(); } catch (e) { app = firebase.initializeApp(TENANT_FIREBASE_CONFIG); }
-    var db = app.database();
+    MastDB.init({ db: app.database(), tenantId: TENANT_ID });
 
     // Show "My Classes" button for logged-in users
     if (firebase.auth) {
@@ -535,12 +536,12 @@
 
     // Load classes, pass definitions, and sessions in parallel
     Promise.all([
-      db.ref(TENANT_ID + '/public/classes').once('value'),
-      db.ref(TENANT_ID + '/public/passDefinitions').once('value'),
-      db.ref(TENANT_ID + '/public/classSessions').once('value')
+      MastDB.get('public/classes'),
+      MastDB.get('public/passDefinitions'),
+      MastDB.get('public/classSessions')
     ]).then(function(results) {
-      var data = results[0].val() || {};
-      var sessionData = results[2].val() || {};
+      var data = results[0] || {};
+      var sessionData = results[2] || {};
       var today = new Date().toISOString().slice(0, 10);
 
       // Build set of classIds that have at least one future scheduled session,
@@ -576,7 +577,7 @@
 
       // Render passes — filter out archived/inactive entries that may linger
       // in public/passDefinitions when admin tools archive without syncing public.
-      var passData = results[1].val() || {};
+      var passData = results[1] || {};
       var passes = Object.keys(passData).map(function(id) {
         var p = passData[id];
         p.id = id;

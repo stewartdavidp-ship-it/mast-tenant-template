@@ -1863,7 +1863,7 @@ async function handlePhotoUpload(input, jobId, buildId) {
 
 async function uploadBuildPhoto(file, jobId, buildId) {
   try {
-    var mediaId = db.ref().push().key;
+    var mediaId = MastDB._newRootKey();
     var galleryEl = document.getElementById('buildMediaGallery');
 
     // Create placeholder thumbnail with progress
@@ -2736,7 +2736,7 @@ function toggleStoryMediaSelect(el) {
   var buildId = el.getAttribute('data-buildid');
   if (el.classList.contains('selected')) {
     // Add entry
-    var id = db.ref().push().key;
+    var id = MastDB._newRootKey();
     storyDraft.push({ id: id, mediaUrl: url, milestone: '', caption: '', buildId: buildId, order: storyDraft.length });
   } else {
     // Remove entry
@@ -2748,7 +2748,7 @@ function toggleStoryMediaSelect(el) {
 }
 
 function addTextOnlyEntry() {
-  var id = db.ref().push().key;
+  var id = MastDB._newRootKey();
   storyDraft.push({ id: id, mediaUrl: '', milestone: '', caption: '', buildId: '', order: storyDraft.length });
   renderStoryEntries();
 }

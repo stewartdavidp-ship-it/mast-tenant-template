@@ -225,6 +225,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="shared/mastdb.js?v=1"></script>
 
 <script>
 (function() {
@@ -349,12 +350,13 @@
     var app;
     try { app = firebase.app(); } catch (e) { app = firebase.initializeApp(TENANT_FIREBASE_CONFIG); }
     var db = app.database();
+    MastDB.init({ db: db, tenantId: TENANT_ID });
     var auth = app.auth();
 
     function loadPasses(user) {
-      db.ref(TENANT_ID + '/public/accounts/' + user.uid + '/wallet/passes').once('value')
-        .then(function(snap) {
-          var data = snap.val() || {};
+      MastDB.get('public/accounts/' + user.uid + '/wallet/passes')
+        .then(function(data) {
+          data = data || {};
           allPasses = Object.keys(data).map(function(id) {
             var p = data[id];
             p._id = id;
