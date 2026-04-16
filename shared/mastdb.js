@@ -12,6 +12,8 @@ var MastDB = (function() {
   var _fs = null;       // Firestore instance (for tenant operations)
   var _tenantId = null;
 
+  var _fsReady = null; // Promise that resolves when Firestore connection is established
+
   function init(config) {
     _tenantId = config.tenantId;
     // Accept either db (RTDB) or firestore. RTDB kept for platform ops.
@@ -37,6 +39,23 @@ var MastDB = (function() {
       _fs = firebase.firestore();
     }
     _ensureStores();
+
+    // Warm up Firestore connection eagerly so first real read doesn't fail
+    if (_fs && _tenantId) {
+      _fsReady = _fs.collection('tenants').doc(_tenantId).get({ source: 'server' })
+        .then(function() { return true; })
+        .catch(function() {
+          // Retry after 1s
+          return new Promise(function(r) { setTimeout(r, 1500); })
+            .then(function() {
+              return _fs.collection('tenants').doc(_tenantId).get({ source: 'server' });
+            })
+            .then(function() { return true; })
+            .catch(function() { return false; });
+        });
+    } else {
+      _fsReady = Promise.resolve(true);
+    }
   }
 
   // --- Sentinels ---
@@ -270,27 +289,34 @@ var MastDB = (function() {
 
   // --- Firestore tenant store ---
   function _makeFirestoreStore() {
+    // Wait for Firestore connection warmup before first read
+    function _waitThenDo(fn) {
+      var ready = _fsReady || Promise.resolve(true);
+      return ready.then(fn);
+    }
     return {
       get: function(path) {
-        var parsed = _translateTenantPath(path);
-        if (!parsed.docId) {
-          return _fsGet(_collRef(parsed), { source: 'server' }).then(function(snap) {
-            if (snap.empty) return null;
-            var result = {};
-            snap.forEach(function(doc) { result[doc.id] = doc.data(); });
-            return result;
-          });
-        }
-        return _fsGet(_docRef(parsed), { source: 'server' }).then(function(doc) {
-          if (!doc.exists) return null;
-          var data = doc.data();
-          if (parsed.fieldPath) {
-            var segs = parsed.fieldPath.split('.');
-            var val = data;
-            for (var i = 0; i < segs.length && val != null; i++) val = val[segs[i]];
-            return val !== undefined ? val : null;
+        return _waitThenDo(function() {
+          var parsed = _translateTenantPath(path);
+          if (!parsed.docId) {
+            return _fsGet(_collRef(parsed), { source: 'server' }).then(function(snap) {
+              if (snap.empty) return null;
+              var result = {};
+              snap.forEach(function(doc) { result[doc.id] = doc.data(); });
+              return result;
+            });
           }
-          return data;
+          return _fsGet(_docRef(parsed), { source: 'server' }).then(function(doc) {
+            if (!doc.exists) return null;
+            var data = doc.data();
+            if (parsed.fieldPath) {
+              var segs = parsed.fieldPath.split('.');
+              var val = data;
+              for (var i = 0; i < segs.length && val != null; i++) val = val[segs[i]];
+              return val !== undefined ? val : null;
+            }
+            return data;
+          });
         });
       },
       list: function(path, opts) {
