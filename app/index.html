@@ -11466,7 +11466,7 @@ async function seedRolesAndAdminUser() {
     }
 
     // Seed all three default roles
-    await MastDB.roles.set(, DEFAULT_ROLES);
+    await MastDB.roles.set(DEFAULT_ROLES);
 
     // Create admin user record for current user (must be the original admin)
     if (currentUser && currentUser.uid) {
@@ -29666,7 +29666,7 @@ async function setDefaultShipFrom(locId) {
       }
     });
     updates[locId + '/isDefaultShipFrom'] = true;
-    await MastDB.studioLocations.update(, updates);
+    await MastDB.update('config/studioLocations', updates);
     studioLocations[locId].isDefaultShipFrom = true;
     renderStudioLocations();
     showToast('Default ship-from set: ' + esc(studioLocations[locId].name || locId));
