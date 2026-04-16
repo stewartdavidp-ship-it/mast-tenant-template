@@ -260,7 +260,14 @@ var MastDB = (function() {
         q = q.orderBy(firebase.firestore.FieldPath.documentId());
       }
       if (spec.limitToFirst !== undefined) q = q.limit(spec.limitToFirst);
-      if (spec.limitToLast !== undefined) q = q.limitToLast(spec.limitToLast);
+      if (spec.limitToLast !== undefined) {
+        // Firestore limitToLast requires orderBy — fall back to limit() if none set
+        if (!spec.orderBy) {
+          q = q.limit(spec.limitToLast);
+        } else {
+          q = q.limitToLast(spec.limitToLast);
+        }
+      }
       return q;
     }
     function _snapToObj(snap) {
