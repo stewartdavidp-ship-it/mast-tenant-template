@@ -11418,8 +11418,7 @@ async function loadUserRole(uid) {
       }
     } else {
       // Update lastLoginAt only — don't overwrite role (may have been elevated)
-      await MastDB.adminUsers.subRef(uid, 'lastLoginAt')
-        .set(MastDB.serverTimestamp());
+      await MastDB.adminUsers.update(uid, { lastLoginAt: MastDB.serverTimestamp() });
     }
 
     currentUserRole = userData.role || 'guest';
@@ -27349,7 +27348,7 @@ async function changeUserRole(uid, newRole) {
   }
 
   try {
-    await MastDB.adminUsers.subRef(uid, 'role').set(newRole);
+    await MastDB.adminUsers.update(uid, { role: newRole });
     adminUsers[uid].role = newRole;
     await writeAudit('update', 'users', uid);
     showToast('Role changed to ' + (ROLE_DISPLAY_NAMES[newRole] || newRole) + '.');
@@ -30039,10 +30038,9 @@ async function addToLocation(pid, variantKey, locationId, qty) {
   if (!pid || !locationId || qty <= 0) return;
   var key = variantKey || '_default';
   var stockPath = 'admin/inventory/' + pid + '/stock';
-  var locRef = MastDB.inventory.subRef(pid, 'stock', key, 'locations', locationId);
+  var locPath = 'admin/inventory/' + pid + '/stock/' + key + '/locations/' + locationId;
 
-  var snap = await locRef.once('value');
-  var current = snap.val() || 0;
+  var current = (await MastDB.get(locPath)) || 0;
 
   var updates = {};
   updates[key + '/locations/' + locationId] = current + qty;
@@ -30087,15 +30085,14 @@ async function decrementFromLocation(pid, variantKey, locationId, qty) {
   // Remove qty items from a location (used during sales)
   if (!pid || !locationId || qty <= 0) return;
   var key = variantKey || '_default';
-  var locRef = MastDB.inventory.subRef(pid, 'stock', key, 'locations', locationId);
+  var locPath = 'admin/inventory/' + pid + '/stock/' + key + '/locations/' + locationId;
 
-  var snap = await locRef.once('value');
-  var current = snap.val() || 0;
+  var current = (await MastDB.get(locPath)) || 0;
   var newVal = Math.max(0, current - qty);
   if (newVal <= 0) {
-    await locRef.remove();
+    await MastDB.remove(locPath);
   } else {
-    await locRef.set(newVal);
+    await MastDB.set(locPath, newVal);
   }
 }
 
