@@ -259,9 +259,6 @@ var MastDB = (function() {
   function _fsGet(ref, opts, attempt) {
     attempt = attempt || 0;
     return ref.get(opts).catch(function(err) {
-      // Log for diagnostics
-      if (!window.__fsErrors) window.__fsErrors = [];
-      window.__fsErrors.push({ attempt: attempt, code: err.code, msg: (err.message || '').substring(0, 120), path: ref.path || '' });
       var isConnErr = err.code === 'unavailable' || err.code === 'failed-precondition' ||
         (err.message && (err.message.indexOf('offline') !== -1 || err.message.indexOf('unavailable') !== -1));
       if (isConnErr && attempt < 3) {
