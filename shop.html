@@ -836,8 +836,9 @@ window.TENANT_READY.then(function() {
         MastSchema.inject(MastSchema.organization());
         MastSchema.inject(MastSchema.productList(allShopItems, 'Shop'));
       }
-    }).catch(function() {
-      document.getElementById('shopContainer').innerHTML = '<p style="text-align:center;color:var(--warm-gray);padding:3rem;">Unable to load products.</p>';
+    }).catch(function(err) {
+      console.error('Shop load error:', err);
+      document.getElementById('shopContainer').innerHTML = '<p style="text-align:center;color:var(--warm-gray);padding:3rem;">Unable to load products. ' + (err && err.message ? err.message : '') + '</p>';
     });
   })();
 
