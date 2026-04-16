@@ -928,9 +928,9 @@
     ]).then(function(results) {
       var p = results[0];
       var salesData = results[1];
-      document.getElementById('productLoading').style.display = 'none';
 
       if (!p) {
+        document.getElementById('productLoading').style.display = 'none';
         document.getElementById('productNotFound').style.display = '';
         return;
       }
@@ -973,7 +973,8 @@
         metaDesc.setAttribute('content', p.seoDescription);
       }
 
-      // Show content
+      // Show content (hide loading only now to prevent empty-page flash)
+      document.getElementById('productLoading').style.display = 'none';
       document.getElementById('productContent').style.display = '';
 
       // Schema.org structured data

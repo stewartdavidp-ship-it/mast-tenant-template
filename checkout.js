@@ -843,7 +843,7 @@
     if (valid && placesLoaded && !checkoutData._addressValidated) {
       if (!checkoutData._addressValidateAttempts) {
         checkoutData._addressValidateAttempts = 1;
-        var addrEl = document.getElementById('shipAddr1');
+        var addrEl = document.getElementById('shipAddr1') || document.getElementById('shipAddr1Pac');
         if (addrEl) {
           addrEl.classList.add('error');
           var warnDiv = document.createElement('div');
@@ -851,7 +851,7 @@
           warnDiv.style.color = '#B3742E';
           warnDiv.textContent = 'Please select an address from the dropdown to validate. Click Continue again to skip.';
           addrEl.parentNode.appendChild(warnDiv);
-          addrEl.focus();
+          try { addrEl.focus(); } catch(e) {}
         }
         valid = false;
       } else {
