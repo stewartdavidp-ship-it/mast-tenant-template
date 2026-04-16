@@ -236,7 +236,7 @@ var MastDB = (function() {
       endBefore: function(v) { return extend({ endBefore: v }); },
       limitToFirst: function(n) { return extend({ limitToFirst: n }); },
       limitToLast: function(n) { return extend({ limitToLast: n }); },
-      once: function() { return _apply().get().then(_snapToObj); },
+      once: function() { return _apply().get({ source: 'server' }).then(_snapToObj); },
       subscribe: function(cb) {
         return _apply().onSnapshot(function(snap) { cb(_snapToObj(snap)); });
       }
@@ -249,14 +249,14 @@ var MastDB = (function() {
       get: function(path) {
         var parsed = _translateTenantPath(path);
         if (!parsed.docId) {
-          return _collRef(parsed).get().then(function(snap) {
+          return _collRef(parsed).get({ source: 'server' }).then(function(snap) {
             if (snap.empty) return null;
             var result = {};
             snap.forEach(function(doc) { result[doc.id] = doc.data(); });
             return result;
           });
         }
-        return _docRef(parsed).get().then(function(doc) {
+        return _docRef(parsed).get({ source: 'server' }).then(function(doc) {
           if (!doc.exists) return null;
           var data = doc.data();
           if (parsed.fieldPath) {
@@ -273,7 +273,7 @@ var MastDB = (function() {
         var parsed = _translateTenantPath(path);
         var q = _collRef(parsed);
         if (opts.limit) q = q.limit(opts.limit);
-        return q.get().then(function(snap) {
+        return q.get({ source: 'server' }).then(function(snap) {
           var result = {};
           snap.forEach(function(doc) {
             result[doc.id] = opts.shallow ? true : doc.data();
