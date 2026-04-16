@@ -51,6 +51,23 @@ var MastDB = (function() {
     return data;
   }
 
+  // --- Backward-compat: make Promises from get() behave like Firebase refs ---
+  // Allows legacy patterns: MastDB.config.square().once('value').then(snap => snap.val())
+  function _wrapPromise(promise, basePath) {
+    // .once('value') — just return the promise with wrapped result
+    promise.once = function() { return promise.then(_wrapSnap); };
+    // .child(key) — return a new wrapped promise that drills into the result
+    promise.child = function(key) {
+      return _wrapPromise(promise.then(function(data) {
+        if (data == null) return null;
+        return (typeof data === 'object' && key in data) ? data[key] : null;
+      }), basePath ? basePath + '/' + key : key);
+    };
+    // .on('value', cb) — one-shot listener compat (not real-time, but prevents crash)
+    promise.on = function(event, cb) { promise.then(function(d) { cb(_wrapSnap(d)); }); return promise; };
+    return promise;
+  }
+
   // --- Sentinels ---
   var SERVER_TIMESTAMP = Object.freeze({ __sentinel: 'serverTimestamp' });
   function serverTimestamp() { return SERVER_TIMESTAMP; }
@@ -262,7 +279,7 @@ var MastDB = (function() {
       endBefore: function(v) { return extend({ endBefore: v }); },
       limitToFirst: function(n) { return extend({ limitToFirst: n }); },
       limitToLast: function(n) { return extend({ limitToLast: n }); },
-      once: function() { return _fsGet(_apply(), { source: 'server' }).then(_snapToObj); },
+      once: function() { return _fsGet(_apply(), { source: 'server' }).then(_snapToObj).then(_wrapSnap); },
       subscribe: function(cb) {
         return _apply().onSnapshot(function(snap) { cb(_wrapSnap(_snapToObj(snap))); });
       }
@@ -300,14 +317,14 @@ var MastDB = (function() {
       get: function(path) {
         var parsed = _translateTenantPath(path);
         if (!parsed.docId) {
-          return _fsGet(_collRef(parsed), { source: 'server' }).then(function(snap) {
+          return _wrapPromise(_fsGet(_collRef(parsed), { source: 'server' }).then(function(snap) {
             if (snap.empty) return null;
             var result = {};
             snap.forEach(function(doc) { result[doc.id] = _unwrapV(doc.data()); });
             return result;
-          });
+          }), path);
         }
-        return _fsGet(_docRef(parsed), { source: 'server' }).then(function(doc) {
+        return _wrapPromise(_fsGet(_docRef(parsed), { source: 'server' }).then(function(doc) {
           if (!doc.exists) return null;
           var data = _unwrapV(doc.data());
           if (parsed.fieldPath) {
@@ -317,7 +334,7 @@ var MastDB = (function() {
             return val !== undefined ? val : null;
           }
           return data;
-        });
+        }), path);
       },
       list: function(path, opts) {
         opts = opts || {};
