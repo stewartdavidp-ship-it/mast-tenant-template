@@ -248,11 +248,24 @@ var MastDB = (function() {
       endBefore: function(v) { return extend({ endBefore: v }); },
       limitToFirst: function(n) { return extend({ limitToFirst: n }); },
       limitToLast: function(n) { return extend({ limitToLast: n }); },
-      once: function() { return _apply().get({ source: 'server' }).then(_snapToObj); },
+      once: function() { return _fsGet(_apply(), { source: 'server' }).then(_snapToObj); },
       subscribe: function(cb) {
         return _apply().onSnapshot(function(snap) { cb(_snapToObj(snap)); });
       }
     };
+  }
+
+  // --- Firestore retry helper (handles cold-start connection failures) ---
+  function _fsGet(ref, opts) {
+    return ref.get(opts).catch(function(err) {
+      if (err.code === 'unavailable' || (err.message && err.message.indexOf('offline') !== -1)) {
+        // Retry once after a brief delay — Firestore SDK may need time to establish connection
+        return new Promise(function(resolve) { setTimeout(resolve, 1000); }).then(function() {
+          return ref.get(opts);
+        });
+      }
+      throw err;
+    });
   }
 
   // --- Firestore tenant store ---
@@ -261,14 +274,14 @@ var MastDB = (function() {
       get: function(path) {
         var parsed = _translateTenantPath(path);
         if (!parsed.docId) {
-          return _collRef(parsed).get({ source: 'server' }).then(function(snap) {
+          return _fsGet(_collRef(parsed), { source: 'server' }).then(function(snap) {
             if (snap.empty) return null;
             var result = {};
             snap.forEach(function(doc) { result[doc.id] = doc.data(); });
             return result;
           });
         }
-        return _docRef(parsed).get({ source: 'server' }).then(function(doc) {
+        return _fsGet(_docRef(parsed), { source: 'server' }).then(function(doc) {
           if (!doc.exists) return null;
           var data = doc.data();
           if (parsed.fieldPath) {
@@ -285,7 +298,7 @@ var MastDB = (function() {
         var parsed = _translateTenantPath(path);
         var q = _collRef(parsed);
         if (opts.limit) q = q.limit(opts.limit);
-        return q.get({ source: 'server' }).then(function(snap) {
+        return _fsGet(q, { source: 'server' }).then(function(snap) {
           var result = {};
           snap.forEach(function(doc) {
             result[doc.id] = opts.shallow ? true : doc.data();
