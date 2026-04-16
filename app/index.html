@@ -8842,6 +8842,38 @@ async function loadTenantConfig(tenantId) {
 // listen() → unsubscribe function, callbacks receive values (not snapshots).
 
 // Factory for standard CRUD + listen entities
+// Backward-compat ref wrapper: returns an object that mimics Firebase ref API
+// but delegates to MastDB operations. Handles .child(), .set(), .push(), .once(),
+// .remove(), .on(), .orderByChild(), .orderByKey(), .limitToLast(), .equalTo()
+function _makeRefCompat(basePath) {
+  var r = {};
+  r.child = function(k) { return _makeRefCompat(basePath + '/' + k); };
+  r.set = function(val) { return MastDB.set(basePath, val); };
+  r.update = function(val) { return MastDB.update(basePath, val); };
+  r.remove = function() { return MastDB.remove(basePath); };
+  r.push = function(data) {
+    if (data !== undefined) return MastDB.push(basePath, data);
+    // push() with no args returns a ref with a new key
+    var key = MastDB.newKey(basePath);
+    var child = _makeRefCompat(basePath + '/' + key);
+    child.key = key;
+    return child;
+  };
+  r.once = function() { return MastDB.get(basePath); };
+  r.on = function(event, cb) { return MastDB.subscribe(basePath, cb); };
+  r.off = function() {}; // no-op for compat
+  // Query methods — return MastDB query builder
+  r.orderByChild = function(f) { return MastDB.query(basePath).orderByChild(f); };
+  r.orderByKey = function() { return MastDB.query(basePath).orderByKey(); };
+  r.limitToLast = function(n) { return MastDB.query(basePath).limitToLast(n); };
+  r.limitToFirst = function(n) { return MastDB.query(basePath).limitToFirst(n); };
+  r.equalTo = function(v) { return MastDB.query(basePath).equalTo(v); };
+  r.startAt = function(v) { return MastDB.query(basePath).startAt(v); };
+  r.endBefore = function(v) { return MastDB.query(basePath).endBefore(v); };
+  r.toString = function() { return basePath; };
+  return r;
+}
+
 function _makeEntity(path, dl) {
   var e = {
     PATH: path,
@@ -8851,7 +8883,9 @@ function _makeEntity(path, dl) {
     remove: function(id) { return MastDB.remove(path + '/' + id); },
     push: function(data) { return MastDB.push(path, data); },
     newKey: function() { return MastDB.newKey(path); },
-    query: function() { return MastDB.query(path); }
+    query: function() { return MastDB.query(path); },
+    // Backward-compat: .ref() returns a Firebase-ref-like wrapper
+    ref: function(subpath) { return _makeRefCompat(path + (subpath ? '/' + subpath : '')); }
   };
   if (dl) {
     e.list = function(limit) { return MastDB.query(path).limitToLast(limit || dl).once(); };
@@ -9028,7 +9062,8 @@ MastDB.buildMedia = {
   get: function(buildId) { return MastDB.get('admin/buildMedia/' + buildId); },
   set: function(buildId, mediaId, data) { return MastDB.set('admin/buildMedia/' + buildId + '/' + mediaId, data); },
   remove: function(buildId, mediaId) { return MastDB.remove('admin/buildMedia/' + buildId + '/' + mediaId); },
-  listAll: function() { return MastDB.list('admin/buildMedia'); }
+  listAll: function() { return MastDB.list('admin/buildMedia'); },
+  ref: function(subpath) { return _makeRefCompat('admin/buildMedia' + (subpath ? '/' + subpath : '')); }
 };
 
 MastDB.stories = Object.assign(_makeEntity('public/stories', 200), {
@@ -9262,6 +9297,7 @@ MastDB.auditLog = {
   PATH: 'admin/auditLog',
   push: function(data) { return MastDB.push('admin/auditLog', data); },
   newKey: function() { return MastDB.newKey('admin/auditLog'); },
+  ref: function(subpath) { return _makeRefCompat('admin/auditLog' + (subpath ? '/' + subpath : '')); },
   queryByKey: function(opts) {
     var q = MastDB.query('admin/auditLog').orderByKey();
     if (opts && opts.endBefore) q = q.endBefore(opts.endBefore);
@@ -9277,6 +9313,7 @@ MastDB.auditLog = {
 
 MastDB.auditIndex = {
   PATH: 'admin/auditIndex',
+  ref: function(subpath) { var args = Array.from(arguments); return _makeRefCompat('admin/auditIndex' + (args.length ? '/' + args.join('/') : '')); },
   get: function(entity, entityId, opts) {
     var p = 'admin/auditIndex/' + entity + '/' + entityId;
     if (opts && opts.limit) {
@@ -9288,13 +9325,15 @@ MastDB.auditIndex = {
 
 MastDB.feedback = {
   PATH: 'feedbackReports',
-  push: function(data) { return MastDB.push('feedbackReports', data); }
+  push: function(data) { return MastDB.push('feedbackReports', data); },
+  ref: function(subpath) { return _makeRefCompat('feedbackReports' + (subpath ? '/' + subpath : '')); }
 };
 
 MastDB.feedbackSettings = {
   PATH: 'admin/feedbackSettings',
   get: function() { return MastDB.get('admin/feedbackSettings'); },
-  set: function(data) { return MastDB.set('admin/feedbackSettings', data); }
+  set: function(data) { return MastDB.set('admin/feedbackSettings', data); },
+  ref: function(subpath) { return _makeRefCompat('admin/feedbackSettings' + (subpath ? '/' + subpath : '')); }
 };
 
 MastDB.testingMissions = {
@@ -9306,6 +9345,7 @@ MastDB.testingMode = {
   PATH: 'admin/testingMode',
   get: function(uid) { return MastDB.get('admin/testingMode/' + uid); },
   remove: function(uid) { return MastDB.remove('admin/testingMode/' + uid); },
+  ref: function(subpath) { return _makeRefCompat('admin/testingMode' + (subpath ? '/' + subpath : '')); },
   setReflection: function(uid, missionId, type, value) {
     return MastDB.set('admin/testingMode/' + uid + '/' + missionId + '/reflections/' + type, value);
   },
@@ -9351,7 +9391,8 @@ MastDB.tripSettings = {
 MastDB.quickActions = {
   PATH: 'quickActions',
   get: function(uid) { return MastDB.get('quickActions/' + uid); },
-  set: function(uid, data) { return MastDB.set('quickActions/' + uid, data); }
+  set: function(uid, data) { return MastDB.set('quickActions/' + uid, data); },
+  ref: function(subpath) { return _makeRefCompat('quickActions' + (subpath ? '/' + subpath : '')); }
 };
 
 MastDB.dashboardPrefs = {
