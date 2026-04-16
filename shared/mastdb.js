@@ -113,6 +113,7 @@ var MastDB = (function() {
     'admin/historicalOrders': 'historical_orders',
     'admin/lookbooks': 'lookbooks',
     'admin/consignments': 'consignments',
+    'admin/subscription': 'admin_subscription',
     'admin/auditLog': 'audit_log',
     'admin/auditIndex': 'audit_index',
     'public/products': 'products',
@@ -155,7 +156,8 @@ var MastDB = (function() {
 
   var SINGLETON_COLLECTIONS = {
     'token_wallet': true, 'alert_state': true,
-    'trip_settings': true, 'newsletter_meta': true
+    'trip_settings': true, 'newsletter_meta': true,
+    'admin_subscription': true
   };
   var SINGLETON_DOC_ID = '_data';
 
