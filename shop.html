@@ -838,7 +838,7 @@ window.TENANT_READY.then(function() {
       }
     }).catch(function(err) {
       console.error('Shop load error:', err);
-      document.getElementById('shopContainer').innerHTML = '<p style="text-align:center;color:var(--warm-gray);padding:3rem;">Unable to load products. ' + (err && err.message ? err.message : '') + '</p>';
+      document.getElementById('shopContainer').innerHTML = '<p style="text-align:center;color:var(--warm-gray);padding:3rem;">Unable to load products.</p>';
     });
   })();
 
