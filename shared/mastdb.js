@@ -39,6 +39,18 @@ var MastDB = (function() {
     _ensureStores();
   }
 
+  // --- Backward-compat: wrap subscribe data with .val() for legacy snap.val() callers ---
+  function _wrapSnap(data) {
+    if (data == null) return { val: function() { return null; } };
+    if (typeof data !== 'object') return { val: function() { return data; } };
+    // Clone-ish: add .val() as non-enumerable so it doesn't pollute Object.keys/values
+    Object.defineProperty(data, 'val', {
+      value: function() { return data; },
+      enumerable: false, configurable: true, writable: true
+    });
+    return data;
+  }
+
   // --- Sentinels ---
   var SERVER_TIMESTAMP = Object.freeze({ __sentinel: 'serverTimestamp' });
   function serverTimestamp() { return SERVER_TIMESTAMP; }
@@ -250,7 +262,7 @@ var MastDB = (function() {
       limitToLast: function(n) { return extend({ limitToLast: n }); },
       once: function() { return _fsGet(_apply(), { source: 'server' }).then(_snapToObj); },
       subscribe: function(cb) {
-        return _apply().onSnapshot(function(snap) { cb(_snapToObj(snap)); });
+        return _apply().onSnapshot(function(snap) { cb(_wrapSnap(_snapToObj(snap))); });
       }
     };
   }
@@ -412,22 +424,22 @@ var MastDB = (function() {
         var parsed = _translateTenantPath(path);
         if (!parsed.docId) {
           return _collRef(parsed).onSnapshot(function(snap) {
-            if (snap.empty) { cb(null); return; }
+            if (snap.empty) { cb(_wrapSnap(null)); return; }
             var result = {};
             snap.forEach(function(doc) { result[doc.id] = _unwrapV(doc.data()); });
-            cb(result);
+            cb(_wrapSnap(result));
           });
         }
         return _docRef(parsed).onSnapshot(function(doc) {
-          if (!doc.exists) { cb(null); return; }
+          if (!doc.exists) { cb(_wrapSnap(null)); return; }
           var data = _unwrapV(doc.data());
           if (parsed.fieldPath) {
             var segs = parsed.fieldPath.split('.');
             var val = data;
             for (var i = 0; i < segs.length && val != null; i++) val = val[segs[i]];
-            cb(val !== undefined ? val : null);
+            cb(_wrapSnap(val !== undefined ? val : null));
           } else {
-            cb(data);
+            cb(_wrapSnap(data));
           }
         });
       },

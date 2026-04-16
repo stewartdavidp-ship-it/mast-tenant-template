@@ -14489,10 +14489,14 @@ function acknowledgeAlertFromUI(alertHistoryId, btn) {
 
 function initAlertBadgeListener() {
   if (_alertHistoryListener) return;
-  var ref = MastDB.query('alertHistory');
-  _alertHistoryListener = ref.orderByChild('readAt').equalTo(null).on('value', function(snap) {
-    var data = snap.val() || {};
-    var newCount = Object.keys(data).length;
+  _alertHistoryListener = MastDB.subscribe('alertHistory', function(data) {
+    data = data || {};
+    // Filter to unread alerts (readAt is null/undefined)
+    var unread = {};
+    Object.keys(data).forEach(function(k) {
+      if (!data[k].readAt) unread[k] = data[k];
+    });
+    var newCount = Object.keys(unread).length;
     var hadAlerts = _unreadAlertCount;
     _unreadAlertCount = newCount;
     updateAlertBadge();
@@ -14500,7 +14504,7 @@ function initAlertBadgeListener() {
     // Toast for newly arrived alerts (skip initial load)
     if (hadAlerts > 0 || _notificationsLoaded) {
       if (newCount > hadAlerts) {
-        var entries = Object.values(data).sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
+        var entries = Object.values(unread).sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
         var latest = entries[0];
         if (latest) {
           var emoji = latest.severity === 'critical' ? '\u{1F6A8}' : latest.severity === 'warning' ? '\u26A0\uFE0F' : '\u2139\uFE0F';
@@ -14508,8 +14512,6 @@ function initAlertBadgeListener() {
         }
       }
     }
-  }, function(err) {
-    console.warn('Alert badge listener error:', err.message);
   });
 }
 
