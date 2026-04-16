@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Phase B — Firestore Adapter Test</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; padding: 24px; }
+    h1 { color: #f59e0b; margin-bottom: 8px; }
+    h2 { color: #94a3b8; font-size: 14px; margin-bottom: 24px; }
+    .status { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; }
+    .pass { background: #064e3b; border: 1px solid #059669; }
+    .fail { background: #7f1d1d; border: 1px solid #dc2626; }
+    .pending { background: #1e293b; border: 1px solid #334155; }
+    .test-section { margin-bottom: 32px; }
+    .test-section h3 { color: #f59e0b; margin-bottom: 12px; }
+    .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+    .product-card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 16px; }
+    .product-card h4 { color: #f8fafc; margin-bottom: 4px; }
+    .product-card .price { color: #10b981; font-weight: 600; }
+    .product-card .meta { color: #64748b; font-size: 12px; margin-top: 4px; }
+    pre { background: #1e293b; padding: 12px; border-radius: 6px; font-size: 12px; overflow-x: auto; max-height: 200px; overflow-y: auto; }
+    .timer { color: #64748b; font-size: 12px; }
+  </style>
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <!-- Firestore adapter (drop-in replacement for mastdb.js) -->
+  <script src="shared/mastdb-firestore.js"></script>
+</head>
+<body>
+  <h1>Phase B — Firestore Adapter Test</h1>
+  <h2>Same MastDB API, Firestore backend. If products render below, the abstraction layer works.</h2>
+
+  <div id="init-status" class="status pending">Initializing Firestore connection...</div>
+
+  <div class="test-section">
+    <h3>Test 1: MastDB.get() — Single document read</h3>
+    <div id="test-get" class="status pending">Pending...</div>
+  </div>
+
+  <div class="test-section">
+    <h3>Test 2: MastDB.list() — Collection read (products)</h3>
+    <div id="test-list" class="status pending">Pending...</div>
+    <div id="product-grid" class="product-grid" style="margin-top: 12px;"></div>
+  </div>
+
+  <div class="test-section">
+    <h3>Test 3: MastDB.set() + MastDB.get() — Write then read</h3>
+    <div id="test-write" class="status pending">Pending...</div>
+  </div>
+
+  <div class="test-section">
+    <h3>Test 4: MastDB.subscribe() — Real-time listener</h3>
+    <div id="test-subscribe" class="status pending">Pending...</div>
+  </div>
+
+  <div class="test-section">
+    <h3>Test 5: MastDB.multiUpdate() — Atomic batch write</h3>
+    <div id="test-multi" class="status pending">Pending...</div>
+  </div>
+
+  <div class="test-section">
+    <h3>Raw Firestore data</h3>
+    <pre id="raw-data">Loading...</pre>
+  </div>
+
+  <script>
+    var FIRESTORE_CONFIG = {
+      apiKey: "AIzaSyBA_Vh9T90kZR4YIxDit1IEtsIqhswR7bo",
+      authDomain: "mast-platform-test.firebaseapp.com",
+      projectId: "mast-platform-test"
+    };
+
+    function setStatus(id, pass, msg) {
+      var el = document.getElementById(id);
+      el.className = 'status ' + (pass ? 'pass' : 'fail');
+      el.textContent = (pass ? '✅ ' : '❌ ') + msg;
+    }
+
+    async function runTests() {
+      var t0 = performance.now();
+
+      try {
+        // Initialize MastDB with Firestore
+        MastDB.init({
+          tenantId: 'dev',
+          firestoreProject: FIRESTORE_CONFIG
+        });
+        setStatus('init-status', true, 'Firestore connected to mast-platform-test (took ' + Math.round(performance.now() - t0) + 'ms)');
+      } catch (e) {
+        setStatus('init-status', false, 'Init failed: ' + e.message);
+        return;
+      }
+
+      // Test 1: get() — single document
+      try {
+        var t1 = performance.now();
+        var product = await MastDB.get('public/products/e2e-simple-mug');
+        var dt = Math.round(performance.now() - t1);
+        if (product && product.name) {
+          setStatus('test-get', true, 'Got product: "' + product.name + '" ($' + (product.priceCents / 100).toFixed(2) + ') — ' + dt + 'ms');
+        } else {
+          setStatus('test-get', false, 'Product returned null or missing name. Got: ' + JSON.stringify(product));
+        }
+      } catch (e) {
+        setStatus('test-get', false, 'get() failed: ' + e.message);
+      }
+
+      // Test 2: list() — collection read
+      try {
+        var t2 = performance.now();
+        var products = await MastDB.list('public/products');
+        var dt2 = Math.round(performance.now() - t2);
+        var keys = Object.keys(products || {});
+        if (keys.length > 0) {
+          setStatus('test-list', true, 'Listed ' + keys.length + ' products from Firestore — ' + dt2 + 'ms');
+          // Render product cards
+          var grid = document.getElementById('product-grid');
+          keys.forEach(function(pid) {
+            var p = products[pid];
+            var card = document.createElement('div');
+            card.className = 'product-card';
+            card.innerHTML = '<h4>' + (p.name || pid) + '</h4>'
+              + '<div class="price">$' + ((p.priceCents || 0) / 100).toFixed(2) + '</div>'
+              + '<div class="meta">' + (p.categories ? p.categories.join(', ') : 'no category') + '</div>'
+              + '<div class="meta">Stock: ' + (p.stock != null ? p.stock : 'n/a') + '</div>';
+            grid.appendChild(card);
+          });
+          document.getElementById('raw-data').textContent = JSON.stringify(products, null, 2).substring(0, 2000);
+        } else {
+          setStatus('test-list', false, 'list() returned empty');
+        }
+      } catch (e) {
+        setStatus('test-list', false, 'list() failed: ' + e.message);
+      }
+
+      // Test 3: set() + get() — write then read
+      try {
+        var t3 = performance.now();
+        var testKey = 'phase-b-test-' + Date.now();
+        await MastDB.set('public/config/' + testKey, {
+          testValue: 'hello from Firestore',
+          timestamp: new Date().toISOString()
+        });
+        var readBack = await MastDB.get('public/config/' + testKey);
+        var dt3 = Math.round(performance.now() - t3);
+        if (readBack && readBack.testValue === 'hello from Firestore') {
+          setStatus('test-write', true, 'Write + read-back verified — ' + dt3 + 'ms');
+          // Cleanup
+          await MastDB.remove('public/config/' + testKey);
+        } else {
+          setStatus('test-write', false, 'Read-back mismatch: ' + JSON.stringify(readBack));
+        }
+      } catch (e) {
+        setStatus('test-write', false, 'set()/get() failed: ' + e.message);
+      }
+
+      // Test 4: subscribe() — real-time listener
+      try {
+        var t4 = performance.now();
+        var received = false;
+        var unsub = MastDB.subscribe('public/products/e2e-simple-mug', function(val) {
+          if (!received && val) {
+            received = true;
+            var dt4 = Math.round(performance.now() - t4);
+            setStatus('test-subscribe', true, 'Real-time snapshot received: "' + val.name + '" — ' + dt4 + 'ms');
+            unsub();
+          }
+        });
+        // Timeout
+        setTimeout(function() {
+          if (!received) {
+            setStatus('test-subscribe', false, 'No snapshot received within 5s');
+            unsub();
+          }
+        }, 5000);
+      } catch (e) {
+        setStatus('test-subscribe', false, 'subscribe() failed: ' + e.message);
+      }
+
+      // Test 5: multiUpdate() — atomic batch
+      try {
+        var t5 = performance.now();
+        var batchKey1 = 'batch-test-a-' + Date.now();
+        var batchKey2 = 'batch-test-b-' + Date.now();
+        await MastDB.multiUpdate({
+          ['public/config/' + batchKey1]: { val: 'batch-a' },
+          ['public/config/' + batchKey2]: { val: 'batch-b' }
+        });
+        var a = await MastDB.get('public/config/' + batchKey1);
+        var b = await MastDB.get('public/config/' + batchKey2);
+        var dt5 = Math.round(performance.now() - t5);
+        if (a && a.val === 'batch-a' && b && b.val === 'batch-b') {
+          setStatus('test-multi', true, 'Atomic batch write + read-back verified (2 docs) — ' + dt5 + 'ms');
+          await MastDB.remove('public/config/' + batchKey1);
+          await MastDB.remove('public/config/' + batchKey2);
+        } else {
+          setStatus('test-multi', false, 'Batch read-back mismatch');
+        }
+      } catch (e) {
+        setStatus('test-multi', false, 'multiUpdate() failed: ' + e.message);
+      }
+    }
+
+    runTests();
+  </script>
+</body>
+</html>
