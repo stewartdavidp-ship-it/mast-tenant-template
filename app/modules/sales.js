@@ -264,7 +264,7 @@ function closeSaleDetail() {
 async function reconcileSale(saleId) {
   if (!await mastConfirm('Mark this sale as reconciled?', { title: 'Reconcile Sale' })) return;
   try {
-    await MastDB.sales.ref(saleId).child('status').set('reconciled');
+    await MastDB.set('admin/sales/' + saleId + '/status', 'reconciled');
     await writeAudit('update', 'pos', saleId);
     showToast('Sale reconciled.');
     if (selectedSaleId === saleId) viewSaleDetail(saleId);
@@ -276,7 +276,7 @@ async function reconcileSale(saleId) {
 async function voidSale(saleId) {
   if (!await mastConfirm('Void this sale? Inventory will NOT be restored automatically.', { title: 'Void Sale', danger: true })) return;
   try {
-    await MastDB.sales.ref(saleId).child('status').set('voided');
+    await MastDB.set('admin/sales/' + saleId + '/status', 'voided');
     await writeAudit('update', 'pos', saleId);
     showToast('Sale voided.');
     if (selectedSaleId === saleId) viewSaleDetail(saleId);
@@ -521,7 +521,7 @@ async function executeManualMatch(paymentKey, saleId) {
     // Update payment with matched sale
     updates['admin/square-payments/' + paymentKey + '/matchedSaleId'] = saleId;
 
-    await MastDB._multiUpdate(updates);
+    await MastDB.multiUpdate(updates);
     showToast('Payment matched to sale.');
     var modal = document.getElementById('manualMatchModal');
     if (modal) modal.remove();
@@ -1001,8 +1001,7 @@ async function applyEventReconciliation(eventId) {
         var dmgRef = MastDB.inventory.ref(pid + '/stock/_default/damaged');
         await dmgRef.transaction(function(current) { return (current || 0) + damaged; });
         // Decrement onHand for damaged (they're no longer sellable)
-        var ohRef = MastDB.inventory.stockOnHand(pid);
-        await ohRef.transaction(function(current) { return Math.max(0, (current || 0) - damaged); });
+        await MastDB.transaction(MastDB.inventory.stockOnHandPath(pid), function(current) { return Math.max(0, (current || 0) - damaged); });
         await MastDB.inventory.ref(pid + '/history').push({
           action: 'adjusted', reason: 'event_reconciled', qty: -damaged,
           note: 'Damaged at event: ' + (ev.name || eventId),
@@ -1019,8 +1018,7 @@ async function applyEventReconciliation(eventId) {
         });
         if (unaccounted > 0) {
           // Shrinkage — decrement onHand
-          var ohRef2 = MastDB.inventory.stockOnHand(pid);
-          await ohRef2.transaction(function(current) { return Math.max(0, (current || 0) - unaccounted); });
+          await MastDB.transaction(MastDB.inventory.stockOnHandPath(pid), function(current) { return Math.max(0, (current || 0) - unaccounted); });
         }
       }
 
@@ -1052,7 +1050,7 @@ async function applyEventReconciliation(eventId) {
       });
 
       // Archive the event location
-      MastDB.locations.ref(eventLocId).update({ status: 'archived', updatedAt: now }).catch(function() {});
+      MastDB.locations.update(eventLocId, { status: 'archived', updatedAt: now }).catch(function() {});
     }
 
     closeModal();
@@ -1178,7 +1176,7 @@ async function saveManualSale(eventId) {
       items: [{ productId: pid, productName: alloc.productName || pid, quantity: qty, price: amountCents }]
     };
     if (notes) saleRecord.notes = notes;
-    await MastDB.sales.ref(saleId).set(saleRecord);
+    await MastDB.sales.set(saleId, saleRecord);
 
     // 2. Update event allocation sold count
     var newSold = (alloc.sold || 0) + qty;
@@ -1521,7 +1519,7 @@ async function exitPackingMode() {
     // Show Go Live button if there are social_live channels
     var btn = document.getElementById('goLiveBtn');
     if (!btn) return;
-    MastDB._ref('admin/channels').once('value').then(function(snap) {
+    MastDB.get('admin/channels').then(function(snapVal) {
       var chs = snap.val() || {};
       var socialChannels = [];
       Object.keys(chs).forEach(function(id) {
@@ -1540,7 +1538,7 @@ async function exitPackingMode() {
   }
 
   function checkActiveLiveSession() {
-    MastDB._ref('admin/liveSessions').orderByChild('status').equalTo('active').once('value').then(function(snap) {
+    MastDB.query('admin/liveSessions').orderByChild('status').equalTo('active').once('value').then(function(snap) {
       var data = snap.val() || {};
       var keys = Object.keys(data);
       if (keys.length > 0) {
@@ -1606,8 +1604,7 @@ async function exitPackingMode() {
       }
     }
 
-    var ref = MastDB._ref('admin/liveSessions').push();
-    var sessionId = ref.key;
+    var sessionId = MastDB.newKey('admin/liveSessions');
     var record = {
       sessionId: sessionId,
       channelId: channelId,
@@ -1617,7 +1614,7 @@ async function exitPackingMode() {
       createdBy: currentUser ? currentUser.uid : 'unknown'
     };
 
-    ref.set(record).then(function() {
+    MastDB.set('admin/liveSessions/' + sessionId, record).then(function() {
       liveSessionId = sessionId;
       liveSessionData = record;
       renderLiveBanner();
@@ -1761,7 +1758,7 @@ async function exitPackingMode() {
     updates['admin/liveSessions/' + liveSessionId + '/endTime'] = now;
     updates['admin/liveSessions/' + liveSessionId + '/summary'] = summary;
 
-    MastDB._ref('').update(updates).then(function() {
+    MastDB.update('', updates).then(function() {
       if (liveSessionTimer) { clearInterval(liveSessionTimer); liveSessionTimer = null; }
       showEndSessionSummary(summary, liveSessionData.channelName);
       liveSessionId = null;
@@ -2240,7 +2237,7 @@ async function exitPackingMode() {
     }
 
     // Write to public/content/terms
-    MastDB._ref('public/content/terms').set({
+    MastDB.set('public/content/terms', {
       html: html,
       updatedAt: new Date().toISOString()
     }).then(function() {

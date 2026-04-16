@@ -123,9 +123,9 @@
 
     try {
       var results = await Promise.all([
-        MastDB._ref('admin/customers').orderByChild('updatedAt').limitToLast(500).once('value'),
-        MastDB._ref('admin/customerDuplicates').orderByChild('detectedAt').limitToLast(50).once('value'),
-        MastDB._ref('admin/customerSegments').once('value').catch(function() { return { val: function() { return null; } }; })
+        MastDB.query('admin/customers').orderByChild('updatedAt').limitToLast(500).once('value'),
+        MastDB.query('admin/customerDuplicates').orderByChild('detectedAt').limitToLast(50).once('value'),
+        MastDB.get('admin/customerSegments').catch(function() { return { val: function() { return null; } }; })
       ]);
       var cVal = results[0].val() || {};
       customersData = Object.values(cVal);
@@ -619,7 +619,7 @@
     var updates = {};
     updates[fieldPath] = value;
     updates['updatedAt'] = new Date().toISOString();
-    return MastDB._ref('admin/customers/' + customerId).update(updates).then(function() {
+    return MastDB.update('admin/customers/' + customerId, updates).then(function() {
       // Mirror into in-memory copy
       var c = customersData.find(function(x) { return x && x.id === customerId; });
       if (c) {
@@ -731,7 +731,7 @@
     }
 
     updates.updatedAt = new Date().toISOString();
-    MastDB._ref('admin/customers/' + selectedCustomerId).update(updates).then(function() {
+    MastDB.update('admin/customers/' + selectedCustomerId, updates).then(function() {
       // Mirror into in-memory copy
       Object.keys(updates).forEach(function(k) {
         c[k] = updates[k];
@@ -776,8 +776,8 @@
   // Override toggleNewsletter to use a deep update via _ref directly.
   toggleNewsletter = function(customerId, currentlyOn) {
     var newVal = !currentlyOn;
-    MastDB._ref('admin/customers/' + customerId + '/marketing/newsletterOptIn').set(newVal).then(function() {
-      return MastDB._ref('admin/customers/' + customerId + '/updatedAt').set(new Date().toISOString());
+    MastDB.set('admin/customers/' + customerId + '/marketing/newsletterOptIn', newVal).then(function() {
+      return MastDB.set('admin/customers/' + customerId + '/updatedAt', new Date().toISOString());
     }).then(function() {
       var c = customersData.find(function(x) { return x && x.id === customerId; });
       if (c) {
@@ -821,10 +821,10 @@
 
     try {
       var refs = await Promise.all([
-        MastDB._ref('admin/customers/' + winnerId).once('value'),
-        MastDB._ref('admin/customers/' + loserId).once('value'),
-        MastDB._ref('orders').orderByChild('customerId').equalTo(loserId).once('value'),
-        MastDB._ref('admin/enrollments').orderByChild('customerId').equalTo(loserId).once('value')
+        MastDB.get('admin/customers/' + winnerId),
+        MastDB.get('admin/customers/' + loserId),
+        MastDB.query('orders').orderByChild('customerId').equalTo(loserId).once('value'),
+        MastDB.query('admin/enrollments').orderByChild('customerId').equalTo(loserId).once('value')
       ]);
       var winner = refs[0].val();
       var loser = refs[1].val();
@@ -906,7 +906,7 @@
         updates['admin/customerDuplicates/' + flagId + '/loserId'] = loserId;
       }
 
-      await MastDB._multiUpdate(updates);
+      await MastDB.multiUpdate(updates);
 
       // Reload
       customersLoaded = false;
@@ -1079,7 +1079,7 @@
 
   function loadCustomerOrders(customerId) {
     var cache = getCache(customerId);
-    MastDB._ref('orders').orderByChild('customerId').equalTo(customerId).once('value')
+    MastDB.query('orders').orderByChild('customerId').equalTo(customerId).once('value')
       .then(function(snap) {
         var val = snap.val() || {};
         cache.orders = Object.entries(val).map(function(e) { var o = e[1] || {}; o._id = e[0]; return o; });
@@ -1098,7 +1098,7 @@
           return;
         }
         Promise.all(contactIds.map(function(cid) {
-          return MastDB._ref('admin/contacts/' + cid).once('value')
+          return MastDB.get('admin/contacts/' + cid)
             .then(function(s) { return { id: cid, val: s.val() }; })
             .catch(function() { return { id: cid, val: null }; });
         })).then(function(results) {
@@ -1160,7 +1160,7 @@
 
   function loadCustomerEnrollments(customerId) {
     var cache = getCache(customerId);
-    MastDB._ref('admin/enrollments').orderByChild('customerId').equalTo(customerId).once('value')
+    MastDB.query('admin/enrollments').orderByChild('customerId').equalTo(customerId).once('value')
       .then(function(snap) {
         var val = snap.val() || {};
         cache.enrollments = Object.entries(val).map(function(e) { var en = e[1] || {}; en._id = e[0]; return en; });
@@ -1222,7 +1222,7 @@
   function loadCustomerInteractions(customerId, contactIds) {
     var cache = getCache(customerId);
     var promises = contactIds.map(function(cid) {
-      return MastDB._ref('admin/contacts/' + cid + '/interactions').once('value')
+      return MastDB.get('admin/contacts/' + cid + '/interactions')
         .then(function(s) { return s.val() || {}; })
         .catch(function() { return {}; });
     });
@@ -1385,7 +1385,7 @@
       return;
     }
     var promises = contactIds.map(function(cid) {
-      return MastDB._ref('admin/contacts/' + cid).once('value')
+      return MastDB.get('admin/contacts/' + cid)
         .then(function(s) { var v = s.val(); if (v) v.id = cid; return v; })
         .catch(function(e) { console.warn('[customers] contact read failed', cid, e); return null; });
     });
@@ -1511,7 +1511,7 @@
   function loadCustomerWallets(customerId, uids) {
     var cache = getCache(customerId);
     var promises = uids.map(function(uid) {
-      return MastDB._ref('public/accounts/' + uid + '/wallet').once('value')
+      return MastDB.get('public/accounts/' + uid + '/wallet')
         .then(function(s) { var v = s.val() || {}; v.uid = uid; return v; })
         .catch(function() { return { uid: uid }; });
     });
@@ -1795,7 +1795,7 @@
       updatedAt: now
     };
     try {
-      await MastDB._ref('admin/customerSegments/' + id).set(record);
+      await MastDB.set('admin/customerSegments/' + id, record);
       segmentsData.push(record);
       currentSegmentId = id;
       render();
@@ -1812,7 +1812,7 @@
     var ok = await window.mastConfirm('Delete segment "' + seg.name + '"?', { title: 'Delete segment', confirmLabel: 'Delete', danger: true });
     if (!ok) return;
     try {
-      await MastDB._ref('admin/customerSegments/' + segId).remove();
+      await MastDB.remove('admin/customerSegments/' + segId);
       segmentsData = segmentsData.filter(function(s) { return s.id !== segId; });
       if (currentSegmentId === segId) currentSegmentId = '__all';
       render();
@@ -1834,7 +1834,7 @@
     if (!name || name === seg.name) return;
     var now = new Date().toISOString();
     try {
-      await MastDB._ref('admin/customerSegments/' + segId).update({ name: name, updatedAt: now });
+      await MastDB.update('admin/customerSegments/' + segId, { name: name, updatedAt: now });
       seg.name = name;
       seg.updatedAt = now;
       render();

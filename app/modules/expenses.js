@@ -74,8 +74,7 @@ async function loadPlaidAccounts() {
   container.innerHTML = '<div class="loading">Loading connected banks\u2026</div>';
 
   try {
-    var snap = await MastDB.plaidItems.list();
-    var items = snap.val() || {};
+    var items = (await MastDB.plaidItems.list()) || {};
     var keys = Object.keys(items);
 
     var includedLimit = getPlaidBankLimit();
@@ -163,8 +162,7 @@ async function connectPlaidAccount() {
 
   // Check extra account limit + token balance
   try {
-    var itemsSnap = await MastDB.plaidItems.list();
-    var allItems = itemsSnap.val() || {};
+    var allItems = (await MastDB.plaidItems.list()) || {};
     var activeCount = Object.values(allItems).filter(function(i) { return i.status === 'active'; }).length;
     var includedLimit = getPlaidBankLimit();
 
@@ -296,8 +294,7 @@ async function loadExpenses() {
   try {
     // Build account lookup for display names
     try {
-      var itemsSnap = await MastDB.plaidItems.list();
-      var plaidItems = itemsSnap.val() || {};
+      var plaidItems = (await MastDB.plaidItems.list()) || {};
       accountLookup = {};
       Object.values(plaidItems).forEach(function(item) {
         if (item.accounts) {
@@ -502,7 +499,7 @@ async function showExpenseDetail(expenseId) {
 
   try {
     var snap = await MastDB.expenses.get(expenseId);
-    if (!snap.exists()) {
+    if (!(snap != null)) {
       detailContent.innerHTML = '<div style="color:var(--danger, var(--danger));">Expense not found.</div>';
       return;
     }
@@ -683,7 +680,7 @@ async function bulkApproveExpenses() {
         updates['admin/expenses/' + e._key + '/reviewed'] = true;
         updates['admin/expenses/' + e._key + '/updatedAt'] = new Date().toISOString();
       });
-      await MastDB._ref('').update(updates);
+      await MastDB.update('', updates);
       showToast('Approved ' + count + ' expense' + (count !== 1 ? 's' : ''));
       loadExpenses();
     } catch (err) {
@@ -716,7 +713,7 @@ async function markPersonal() {
         updates['admin/expenses/' + cb.dataset.key + '/reviewed'] = true;
         updates['admin/expenses/' + cb.dataset.key + '/updatedAt'] = new Date().toISOString();
       });
-      await MastDB._ref('').update(updates);
+      await MastDB.update('', updates);
       showToast(count + ' expense' + (count !== 1 ? 's' : '') + ' marked as personal');
       loadExpenses();
     } catch (err) {

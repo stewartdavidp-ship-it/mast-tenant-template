@@ -116,10 +116,10 @@
   // ── Load config from RTDB ──
   async function loadWebsiteConfig() {
     try {
-      var snap = await MastDB._ref('webPresence/config').once('value');
+      var snap = await MastDB.get('webPresence/config');
       websiteConfig = snap.val() || {};
       // Also load last analyzed URL
-      var analysisSnap = await MastDB._ref('webPresence/siteAnalysis/url').once('value');
+      var analysisSnap = await MastDB.get('webPresence/siteAnalysis/url');
       websiteConfig._lastAnalyzedUrl = analysisSnap.val() || '';
     } catch (err) {
       console.warn('[Website] Failed to load config:', err.message);
@@ -129,7 +129,7 @@
 
   async function loadImportJobs() {
     try {
-      var snap = await MastDB._ref('webPresence/importJobs').orderByChild('createdAt').limitToLast(10).once('value');
+      var snap = await MastDB.query('webPresence/importJobs').orderByChild('createdAt').limitToLast(10).once('value');
       var raw = snap.val() || {};
       importJobs = Object.values(raw).sort(function(a, b) {
         return (b.createdAt || '').localeCompare(a.createdAt || '');
@@ -142,8 +142,7 @@
 
   async function loadImportedProducts() {
     try {
-      var snap = await MastDB._ref('public/products').once('value');
-      var raw = snap.val() || {};
+      var raw = (await MastDB.get('public/products')) || {};
       importedProducts = Object.keys(raw).map(function(k) {
         var p = raw[k]; p.id = k; return p;
       }).filter(function(p) { return p.importedFrom; });
@@ -155,8 +154,7 @@
 
   async function loadCategories() {
     try {
-      var snap = await MastDB._ref('public/config/categories').once('value');
-      var raw = snap.val();
+      var raw = await MastDB.get('public/config/categories');
       tenantCategories = (raw && Array.isArray(raw)) ? raw.filter(function(c) { return c && c.id && c.label; }) : [];
     } catch (err) {
       console.warn('[Website] Failed to load categories:', err.message);
@@ -166,7 +164,7 @@
 
   async function loadDraftTemplates() {
     try {
-      var snap = await MastDB._ref('webPresence/draftTemplates').orderByChild('createdAt').limitToLast(5).once('value');
+      var snap = await MastDB.query('webPresence/draftTemplates').orderByChild('createdAt').limitToLast(5).once('value');
       var raw = snap.val() || {};
       draftTemplates = Object.keys(raw).map(function(k) {
         var d = raw[k]; d.id = k; return d;
@@ -180,7 +178,7 @@
 
   async function loadThemeConfig() {
     try {
-      var snap = await MastDB._ref('public/config/theme').once('value');
+      var snap = await MastDB.get('public/config/theme');
       themeConfig = snap.val() || {};
     } catch (err) {
       console.warn('[Website] Failed to load theme config:', err.message);
@@ -188,7 +186,7 @@
     }
     // Also load nav section enabled states for section toggles
     try {
-      var navSnap = await MastDB._ref('public/config/nav/sections').once('value');
+      var navSnap = await MastDB.get('public/config/nav/sections');
       themeConfig._navSections = navSnap.val() || {};
     } catch (err) {
       themeConfig._navSections = {};
@@ -280,7 +278,7 @@
 
   async function saveCategories() {
     try {
-      await MastDB._ref('public/config/categories').set(tenantCategories);
+      await MastDB.set('public/config/categories', tenantCategories);
       // Refresh admin CATEGORIES/SECTIONS/SHOP_SECTION_IDS if loadTenantCategories exists
       if (typeof loadTenantCategories === 'function') await loadTenantCategories();
       markUnpublished();
@@ -301,9 +299,8 @@
   function startImportJobsListener() {
     if (importJobsListener) return;
     try {
-      var ref = MastDB._ref('webPresence/importJobs');
-      importJobsListener = ref.on('value', function(snap) {
-        var raw = snap.val() || {};
+      importJobsListener = MastDB.subscribe('webPresence/importJobs', function(raw) {
+        raw = raw || {};
         importJobs = Object.values(raw).sort(function(a, b) {
           return (b.createdAt || '').localeCompare(a.createdAt || '');
         });
@@ -322,7 +319,7 @@
 
   function stopImportJobsListener() {
     if (importJobsListener) {
-      try { MastDB._ref('webPresence/importJobs').off('value', importJobsListener); } catch (e) {}
+      try { importJobsListener(); } catch (e) {}
       importJobsListener = null;
     }
   }
@@ -1945,7 +1942,7 @@
     });
 
     if (Object.keys(updates).length > 0) {
-      await MastDB._ref().update(updates);
+      await MastDB.multiUpdate(updates);
     }
 
     return { hidden: migration.hide.length, restored: migration.restore.length };
@@ -2001,32 +1998,32 @@
       var migrationResult = await executeGalleryMigration(galleryMigration, currentTemplateId);
 
       // Write templateId
-      await MastDB._ref('public/config/theme/templateId').set(pendingSwitchTemplateId);
+      await MastDB.set('public/config/theme/templateId', pendingSwitchTemplateId);
 
       // Set default color scheme from new manifest
       var defaultScheme = (newManifest.colorSchemes || []).find(function(s) { return s.default; });
       var defaultSchemeId = defaultScheme ? defaultScheme.id : (newManifest.colorSchemes && newManifest.colorSchemes[0] ? newManifest.colorSchemes[0].id : null);
       if (defaultSchemeId) {
-        await MastDB._ref('public/config/theme/colorSchemeId').set(defaultSchemeId);
+        await MastDB.set('public/config/theme/colorSchemeId', defaultSchemeId);
         // Clear custom color overrides
-        await MastDB._ref('public/config/theme/primaryColor').set(null);
-        await MastDB._ref('public/config/theme/accentColor').set(null);
+        await MastDB.remove('public/config/theme/primaryColor');
+        await MastDB.remove('public/config/theme/accentColor');
       }
 
       // Set default font pair from new manifest
       var defaultFont = (newManifest.fontPairs || []).find(function(f) { return f.default; });
       var defaultFontId = defaultFont ? defaultFont.id : (newManifest.fontPairs && newManifest.fontPairs[0] ? newManifest.fontPairs[0].id : null);
       if (defaultFontId) {
-        await MastDB._ref('public/config/theme/fontPair').set(defaultFontId);
+        await MastDB.set('public/config/theme/fontPair', defaultFontId);
       }
 
       // Clear layout/variant overrides so new template defaults apply
-      await MastDB._ref('public/config/theme/designScale').set(null);
-      await MastDB._ref('public/config/theme/navStyle').set(null);
-      await MastDB._ref('public/config/theme/responsivePriority').set(null);
-      await MastDB._ref('public/config/theme/heroVariant').set(null);
-      await MastDB._ref('public/config/theme/galleryVariant').set(null);
-      await MastDB._ref('public/config/theme/productGridVariant').set(null);
+      await MastDB.remove('public/config/theme/designScale');
+      await MastDB.remove('public/config/theme/navStyle');
+      await MastDB.remove('public/config/theme/responsivePriority');
+      await MastDB.remove('public/config/theme/heroVariant');
+      await MastDB.remove('public/config/theme/galleryVariant');
+      await MastDB.remove('public/config/theme/productGridVariant');
 
       // Invalidate gallery cache so it reloads with updated data
       window._wpGalleryCache = null;
@@ -2084,10 +2081,10 @@
     delete themeConfig.accentColor;
     showCustomColors = false;
     try {
-      await MastDB._ref('public/config/theme/colorSchemeId').set(schemeId);
+      await MastDB.set('public/config/theme/colorSchemeId', schemeId);
       // Remove custom color overrides from Firebase
-      await MastDB._ref('public/config/theme/primaryColor').set(null);
-      await MastDB._ref('public/config/theme/accentColor').set(null);
+      await MastDB.remove('public/config/theme/primaryColor');
+      await MastDB.remove('public/config/theme/accentColor');
       markUnpublished();
       showToast('Color scheme updated.');
     } catch (err) {
@@ -2100,7 +2097,7 @@
     showCustomColors = true;
     if (!themeConfig) themeConfig = {};
     themeConfig.colorSchemeId = null;
-    MastDB._ref('public/config/theme/colorSchemeId').set(null);
+    MastDB.remove('public/config/theme/colorSchemeId');
     markUnpublished();
     renderWebsite();
   };
@@ -2109,7 +2106,7 @@
     if (!themeConfig) themeConfig = {};
     themeConfig[field] = value;
     debounce('theme-color-' + field, function() {
-      MastDB._ref('public/config/theme/' + field).set(value);
+      MastDB.set('public/config/theme/' + field, value);
       markUnpublished();
     }, 400);
   };
@@ -2118,7 +2115,7 @@
     if (!themeConfig) themeConfig = {};
     themeConfig.fontPair = fontPairId;
     try {
-      await MastDB._ref('public/config/theme/fontPair').set(fontPairId);
+      await MastDB.set('public/config/theme/fontPair', fontPairId);
       markUnpublished();
       showToast('Font pair updated.');
     } catch (err) {
@@ -2132,7 +2129,7 @@
     if (!themeConfig) themeConfig = {};
     themeConfig[field] = value;
     try {
-      await MastDB._ref('public/config/theme/' + field).set(value);
+      await MastDB.set('public/config/theme/' + field, value);
       markUnpublished();
 
       // Friendly field labels
@@ -2158,8 +2155,8 @@
     STYLE_DEFS.forEach(function(s) {
       if (s.id === styleId) websiteConfig.fontPair = s.font;
     });
-    await MastDB._ref('webPresence/config/style').set(styleId);
-    await MastDB._ref('webPresence/config/fontPair').set(websiteConfig.fontPair);
+    await MastDB.set('webPresence/config/style', styleId);
+    await MastDB.set('webPresence/config/fontPair', websiteConfig.fontPair);
     markUnpublished();
     renderWebsite();
   };
@@ -2167,14 +2164,14 @@
   window.wpUpdateColor = function(field, value) {
     websiteConfig[field] = value;
     debounce('color-' + field, function() {
-      MastDB._ref('webPresence/config/' + field).set(value);
+      MastDB.set('webPresence/config/' + field, value);
       markUnpublished();
     }, 400);
   };
 
   window.wpUpdateFont = function(value) {
     websiteConfig.fontPair = value;
-    MastDB._ref('webPresence/config/fontPair').set(value);
+    MastDB.set('webPresence/config/fontPair', value);
     markUnpublished();
   };
 
@@ -2359,18 +2356,18 @@
     if (parts.length === 2) {
       if (!websiteConfig[parts[0]]) websiteConfig[parts[0]] = {};
       websiteConfig[parts[0]][parts[1]] = value;
-      MastDB._ref('webPresence/config/' + parts[0] + '/' + parts[1]).set(value);
+      MastDB.set('webPresence/config/' + parts[0] + '/' + parts[1], value);
     } else {
       websiteConfig[path] = value;
-      MastDB._ref('webPresence/config/' + path).set(value);
+      MastDB.set('webPresence/config/' + path, value);
     }
     markUnpublished();
     showToast('Applied!');
   };
 
   window.wpApplyColors = function(primary, accent) {
-    if (primary) { websiteConfig.primaryColor = primary; MastDB._ref('webPresence/config/primaryColor').set(primary); }
-    if (accent) { websiteConfig.accentColor = accent; MastDB._ref('webPresence/config/accentColor').set(accent); }
+    if (primary) { websiteConfig.primaryColor = primary; MastDB.set('webPresence/config/primaryColor', primary); }
+    if (accent) { websiteConfig.accentColor = accent; MastDB.set('webPresence/config/accentColor', accent); }
     markUnpublished();
     showToast('Colors applied!');
   };
@@ -2380,9 +2377,9 @@
     if (!hero) return;
     if (!websiteConfig.sections) websiteConfig.sections = {};
     if (!websiteConfig.sections.hero) websiteConfig.sections.hero = {};
-    if (hero.headline) { websiteConfig.sections.hero.headline = hero.headline; MastDB._ref('webPresence/config/sections/hero/headline').set(hero.headline); }
-    if (hero.subheadline) { websiteConfig.sections.hero.subheadline = hero.subheadline; MastDB._ref('webPresence/config/sections/hero/subheadline').set(hero.subheadline); }
-    if (hero.ctaText) { websiteConfig.sections.hero.ctaText = hero.ctaText; MastDB._ref('webPresence/config/sections/hero/ctaText').set(hero.ctaText); }
+    if (hero.headline) { websiteConfig.sections.hero.headline = hero.headline; MastDB.set('webPresence/config/sections/hero/headline', hero.headline); }
+    if (hero.subheadline) { websiteConfig.sections.hero.subheadline = hero.subheadline; MastDB.set('webPresence/config/sections/hero/subheadline', hero.subheadline); }
+    if (hero.ctaText) { websiteConfig.sections.hero.ctaText = hero.ctaText; MastDB.set('webPresence/config/sections/hero/ctaText', hero.ctaText); }
     markUnpublished();
     showToast('Hero content applied!');
   };
@@ -2393,7 +2390,7 @@
     if (!websiteConfig.sections) websiteConfig.sections = {};
     if (!websiteConfig.sections.about) websiteConfig.sections.about = {};
     websiteConfig.sections.about.body = text;
-    MastDB._ref('webPresence/config/sections/about/body').set(text);
+    MastDB.set('webPresence/config/sections/about/body', text);
     markUnpublished();
     showToast('About content applied!');
   };
@@ -2406,7 +2403,7 @@
     ['email', 'phone', 'address'].forEach(function(f) {
       if (contact[f]) {
         websiteConfig.sections.contact[f] = contact[f];
-        MastDB._ref('webPresence/config/sections/contact/' + f).set(contact[f]);
+        MastDB.set('webPresence/config/sections/contact/' + f, contact[f]);
       }
     });
     markUnpublished();
@@ -2422,7 +2419,7 @@
     Object.keys(social).forEach(function(p) {
       if (social[p]) {
         websiteConfig.sections.contact.socialLinks[p] = social[p];
-        MastDB._ref('webPresence/config/sections/contact/socialLinks/' + p).set(social[p]);
+        MastDB.set('webPresence/config/sections/contact/socialLinks/' + p, social[p]);
       }
     });
     markUnpublished();
@@ -2438,7 +2435,7 @@
 
   window.wpPublishProduct = async function(pid) {
     try {
-      await MastDB._ref('public/products/' + pid + '/status').set('active');
+      await MastDB.set('public/products/' + pid + '/status', 'active');
       writeAudit('update', 'products', pid);
       showToast('Product published!');
       await loadImportedProducts();
@@ -2455,7 +2452,7 @@
     try {
       var updates = {};
       drafts.forEach(function(p) { updates['public/products/' + p.id + '/status'] = 'active'; });
-      await MastDB._multiUpdate(updates);
+      await MastDB.multiUpdate(updates);
       drafts.forEach(function(p) { writeAudit('update', 'products', p.id); });
       showToast(drafts.length + ' product' + (drafts.length !== 1 ? 's' : '') + ' published!');
       await loadImportedProducts();
@@ -2468,7 +2465,7 @@
   window.wpDeleteProduct = function(pid) {
     showConfirmDialog('Delete Product', 'Delete this product? This cannot be undone.', async function() {
       try {
-        await MastDB._ref('public/products/' + pid).remove();
+        await MastDB.remove('public/products/' + pid);
         writeAudit('delete', 'products', pid);
         showToast('Product deleted.');
         selectedProductIds.delete(pid);
@@ -2506,7 +2503,7 @@
         console.log('[wpDeleteSelectedProducts] Deleting', pids.length, 'products:', pids);
         // Delete each product individually to ensure Firebase processes all
         for (var i = 0; i < pids.length; i++) {
-          await MastDB._ref('public/products/' + pids[i]).remove();
+          await MastDB.remove('public/products/' + pids[i]);
           writeAudit('delete', 'products', pids[i]);
         }
         console.log('[wpDeleteSelectedProducts] All deletes complete');
@@ -2525,9 +2522,9 @@
 
   window.wpRetryImport = async function(jobId) {
     try {
-      await MastDB._ref('webPresence/importJobs/' + jobId + '/status').set('pending');
-      await MastDB._ref('webPresence/importJobs/' + jobId + '/error').set(null);
-      await MastDB._ref('webPresence/importJobs/' + jobId + '/claimedAt').set(null);
+      await MastDB.set('webPresence/importJobs/' + jobId + '/status', 'pending');
+      await MastDB.remove('webPresence/importJobs/' + jobId + '/error');
+      await MastDB.remove('webPresence/importJobs/' + jobId + '/claimedAt');
       showToast('Import job re-queued.');
       await loadImportJobs();
       renderWebsite();
@@ -2550,15 +2547,13 @@
       });
 
       // Get the crawl manifest from site analysis
-      var snap = await MastDB._ref('webPresence/siteAnalysis/crawlManifest').once('value');
-      var manifest = snap.val();
+      var manifest = await MastDB.get('webPresence/siteAnalysis/crawlManifest');
 
       // Create the import job in Firebase directly
       if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Queuing import job...</span>';
-      var jobRef = MastDB._ref('webPresence/importJobs').push();
-      var jobId = jobRef.key;
+      var jobId = MastDB.newKey('webPresence/importJobs');
       var now = new Date().toISOString();
-      await jobRef.set({
+      await MastDB.set('webPresence/importJobs/' + jobId, {
         id: jobId,
         url: url,
         tenantId: MastDB.tenantId(),
@@ -2630,7 +2625,7 @@
   window.wpImportAll = async function(jobId) {
     // Set status to importing — the scheduled task will pick it up
     try {
-      await MastDB._ref('webPresence/importJobs/' + jobId + '/status').set('importing');
+      await MastDB.set('webPresence/importJobs/' + jobId + '/status', 'importing');
       showToast('Import started for all items.');
       await loadImportJobs();
       renderWebsite();
@@ -2651,9 +2646,9 @@
         });
       }
       if (excludeUrls.length > 0) {
-        await MastDB._ref('webPresence/importJobs/' + jobId + '/cherryPickExclude').set(excludeUrls);
+        await MastDB.set('webPresence/importJobs/' + jobId + '/cherryPickExclude', excludeUrls);
       }
-      await MastDB._ref('webPresence/importJobs/' + jobId + '/status').set('importing');
+      await MastDB.set('webPresence/importJobs/' + jobId + '/status', 'importing');
       showToast('Importing selected items.');
       await loadImportJobs();
       renderWebsite();
@@ -2776,9 +2771,9 @@
   window.markUnpublished = function markUnpublished() {
     if (websiteConfig.status === 'published') {
       websiteConfig.status = 'draft';
-      MastDB._ref('webPresence/config/status').set('draft');
+      MastDB.set('webPresence/config/status', 'draft');
     }
-    MastDB._ref('webPresence/config/updatedAt').set(new Date().toISOString());
+    MastDB.set('webPresence/config/updatedAt', new Date().toISOString());
   }
 
   // ── Draft Template Actions ──
@@ -2895,7 +2890,7 @@
   window.wpDismissDraft = function(draftId) {
     showConfirmDialog('Dismiss Draft', 'Dismiss this draft template? You can re-generate it by analyzing your site again.', async function() {
       try {
-        await MastDB._ref('webPresence/draftTemplates/' + draftId + '/status').set('dismissed');
+        await MastDB.set('webPresence/draftTemplates/' + draftId + '/status', 'dismissed');
         draftTemplates = draftTemplates.filter(function(d) { return d.id !== draftId; });
         renderWebsite();
         showToast('Draft dismissed.');
@@ -2915,7 +2910,7 @@
     flow[idx] = flow[newIdx];
     flow[newIdx] = temp;
     draft.homepageFlow = flow;
-    await MastDB._ref('webPresence/draftTemplates/' + draftId + '/homepageFlow').set(flow);
+    await MastDB.set('webPresence/draftTemplates/' + draftId + '/homepageFlow', flow);
     window.wpReviewDraft(draftId);
   };
 
@@ -2925,7 +2920,7 @@
     var flow = draft.homepageFlow.slice();
     flow.splice(idx, 1);
     draft.homepageFlow = flow;
-    await MastDB._ref('webPresence/draftTemplates/' + draftId + '/homepageFlow').set(flow);
+    await MastDB.set('webPresence/draftTemplates/' + draftId + '/homepageFlow', flow);
     window.wpReviewDraft(draftId);
   };
 
@@ -2947,11 +2942,11 @@
         themeUpdate.colorSchemeId = null; // custom colors, no preset
       }
 
-      await MastDB._ref('public/config/theme').update(themeUpdate);
+      await MastDB.update('public/config/theme', themeUpdate);
 
       // Store the custom homepage flow as a draft template override
-      await MastDB._ref('webPresence/draftTemplates/' + draftId + '/status').set('saved');
-      await MastDB._ref('public/config/draftTemplate').set({
+      await MastDB.set('webPresence/draftTemplates/' + draftId + '/status', 'saved');
+      await MastDB.set('public/config/draftTemplate', {
         homepageFlow: draft.homepageFlow,
         baseTemplateId: draft.baseTemplateId,
         savedAt: new Date().toISOString(),

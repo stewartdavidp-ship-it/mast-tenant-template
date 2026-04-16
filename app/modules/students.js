@@ -184,10 +184,10 @@
 
     try {
       var results = await Promise.all([
-        MastDB._ref('students').once('value'),
-        MastDB._ref('settings/clearanceTypes').once('value'),
-        MastDB._ref('admin/documents').once('value'),
-        MastDB._ref('settings/waiverTemplates').once('value'),
+        MastDB.get('students'),
+        MastDB.get('settings/clearanceTypes'),
+        MastDB.get('admin/documents'),
+        MastDB.get('settings/waiverTemplates'),
       ]);
 
       var stuVal = results[0].val() || {};
@@ -684,10 +684,8 @@
     }
 
     try {
-      var ref;
       if (isNew) {
-        ref = MastDB._ref('students').push();
-        id = ref.key;
+        id = MastDB.newKey('students');
         fields.createdAt = new Date().toISOString();
         fields.status = 'active';
         fields.clearances = [];
@@ -698,10 +696,10 @@
           photoRelease: { status: fields.photoWaiverStatus === 'accepted' ? 'completed' : 'pending' },
           guardianConsent: { status: fields.isMinor ? 'pending' : 'not-applicable' },
         };
-        await ref.set(fields);
+        await MastDB.set('students/' + id, fields);
       } else {
         fields.updatedAt = new Date().toISOString();
-        await MastDB._ref('students/' + id).update(fields);
+        await MastDB.update('students/' + id, fields);
       }
 
       showToast(isNew ? 'Student created' : 'Student saved');
@@ -718,7 +716,7 @@
   async function deleteStudent(studentId) {
     if (!await mastConfirm('Delete this student? This cannot be undone.', { title: 'Delete Student', danger: true })) return;
     try {
-      await MastDB._ref('students/' + studentId).remove();
+      await MastDB.remove('students/' + studentId);
       showToast('Student deleted');
       selectedStudentId = null;
       currentView = 'roster';
@@ -775,7 +773,7 @@
     Object.assign(fields, collectDriveFields('cl'));
 
     try {
-      await MastDB._ref('students/' + studentId + '/onboardingChecklist/' + fieldKey).update(fields);
+      await MastDB.update('students/' + studentId + '/onboardingChecklist/' + fieldKey, fields);
       showToast('Checklist updated');
       selectedStudentId = studentId;
       currentView = 'detail';
@@ -844,8 +842,8 @@
       var stu = studentsData.find(function(s) { return s._key === studentId; });
       var clearances = (stu && Array.isArray(stu.clearances)) ? stu.clearances.slice() : [];
       clearances.push(entry);
-      await MastDB._ref('students/' + studentId + '/clearances').set(clearances);
-      await MastDB._ref('students/' + studentId + '/updatedAt').set(new Date().toISOString());
+      await MastDB.set('students/' + studentId + '/clearances', clearances);
+      await MastDB.set('students/' + studentId + '/updatedAt', new Date().toISOString());
 
       showToast('Clearance added');
       selectedStudentId = studentId;
@@ -895,13 +893,12 @@
     };
 
     try {
-      var ref;
       if (clearanceTypeId) {
-        await MastDB._ref('settings/clearanceTypes/' + clearanceTypeId).update(fields);
+        await MastDB.update('settings/clearanceTypes/' + clearanceTypeId, fields);
       } else {
-        ref = MastDB._ref('settings/clearanceTypes').push();
+        var ctKey = MastDB.newKey('settings/clearanceTypes');
         fields.createdAt = new Date().toISOString();
-        await ref.set(fields);
+        await MastDB.set('settings/clearanceTypes/' + ctKey, fields);
       }
       showToast(clearanceTypeId ? 'Clearance type saved' : 'Clearance type created');
       currentView = 'clearanceTypes';
@@ -914,7 +911,7 @@
   async function deleteClearanceType(clearanceTypeId) {
     if (!await mastConfirm('Delete this clearance type? This cannot be undone.', { title: 'Delete Clearance Type', danger: true })) return;
     try {
-      await MastDB._ref('settings/clearanceTypes/' + clearanceTypeId).remove();
+      await MastDB.remove('settings/clearanceTypes/' + clearanceTypeId);
       showToast('Clearance type deleted');
       currentView = 'clearanceTypes';
       await loadStudents();
@@ -993,20 +990,20 @@
           record.createdAt = now;
           docs.push(record);
         }
-        await MastDB._ref('students/' + studentId + '/documents').set(docs);
-        await MastDB._ref('students/' + studentId + '/updatedAt').set(now);
+        await MastDB.set('students/' + studentId + '/documents', docs);
+        await MastDB.set('students/' + studentId + '/updatedAt', now);
         showToast(docIdx != null ? 'Document saved' : 'Document added');
         selectedStudentId = studentId;
         currentView = 'detail';
       } else {
         // Tenant-level doc
         if (editingDocId) {
-          await MastDB._ref('admin/documents/' + editingDocId).update(record);
+          await MastDB.update('admin/documents/' + editingDocId, record);
         } else {
-          var ref = MastDB._ref('admin/documents').push();
-          record.documentId = ref.key;
+          var docKey = MastDB.newKey('admin/documents');
+          record.documentId = docKey;
           record.createdAt = now;
-          await ref.set(record);
+          await MastDB.set('admin/documents/' + docKey, record);
         }
         showToast(editingDocId ? 'Document saved' : 'Document added');
         currentView = 'docs';
@@ -1025,7 +1022,7 @@
         var stu = studentsData.find(function(s) { return s._key === studentId; });
         var docs = (stu && Array.isArray(stu.documents)) ? stu.documents.slice() : [];
         docs.splice(docIdx, 1);
-        await MastDB._ref('students/' + studentId + '/documents').set(docs);
+        await MastDB.set('students/' + studentId + '/documents', docs);
         showToast('Document deleted');
         selectedStudentId = studentId;
         currentView = 'detail';
@@ -1162,7 +1159,7 @@
     var container = document.getElementById('waiverSignaturesContainer');
     if (!container) return;
     try {
-      var snap = await MastDB._ref('admin/waiverSignatures').orderByChild('templateId').equalTo(templateId).once('value');
+      var snap = await MastDB.query('admin/waiverSignatures').orderByChild('templateId').equalTo(templateId).once('value');
       var val = snap.val() || {};
       var sigs = Object.entries(val).map(function(e) { var s = e[1]; s._key = e[0]; return s; });
       if (sigs.length === 0) {
@@ -1192,7 +1189,7 @@
   }
 
   function showSignatureDetailModal(sigId) {
-    MastDB._ref('admin/waiverSignatures/' + sigId).once('value').then(function(snap) {
+    MastDB.get('admin/waiverSignatures/' + sigId).then(function(snapVal) {
       var sig = snap.val();
       if (!sig) { showToast('Signature not found', true); return; }
       var h = '<div id="sigDetailOverlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this)this.remove()">';
@@ -1247,20 +1244,19 @@
       if (isDefault) {
         var unsetPromises = waiverTemplatesData
           .filter(function(w) { return w.isDefault && w._key !== templateId; })
-          .map(function(w) { return MastDB._ref('settings/waiverTemplates/' + w._key + '/isDefault').set(false); });
+          .map(function(w) { return MastDB.set('settings/waiverTemplates/' + w._key + '/isDefault', false); });
         if (unsetPromises.length > 0) await Promise.all(unsetPromises);
       }
       var refKey;
       if (templateId) {
-        await MastDB._ref('settings/waiverTemplates/' + templateId).update(fields);
+        await MastDB.update('settings/waiverTemplates/' + templateId, fields);
         refKey = templateId;
       } else {
-        var ref = MastDB._ref('settings/waiverTemplates').push();
+        refKey = MastDB.newKey('settings/waiverTemplates');
         fields.createdAt = new Date().toISOString();
-        await ref.set(fields);
-        refKey = ref.key;
+        await MastDB.set('settings/waiverTemplates/' + refKey, fields);
       }
-      await MastDB._ref('public/waivers/' + refKey).set({
+      await MastDB.set('public/waivers/' + refKey, {
         title: fields.title, bodyHtml: fields.bodyHtml, version: fields.version,
         requireMinorGuardian: fields.requireMinorGuardian, expiryDays: fields.expiryDays, status: fields.status
       });
@@ -1276,8 +1272,8 @@
   async function deleteWaiverTemplate(templateId) {
     if (!await mastConfirm('Delete this waiver template? This cannot be undone.', { title: 'Delete Waiver Template', danger: true })) return;
     try {
-      await MastDB._ref('settings/waiverTemplates/' + templateId).remove();
-      await MastDB._ref('public/waivers/' + templateId).remove();
+      await MastDB.remove('settings/waiverTemplates/' + templateId);
+      await MastDB.remove('public/waivers/' + templateId);
       showToast('Waiver template deleted');
       editingWaiverTemplateId = null;
       currentView = 'waivers';

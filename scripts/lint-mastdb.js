@@ -52,7 +52,7 @@ function checkFile(file) {
 
     // Rule 1: direct firebase.database().ref(...) — chained or standalone
     // Violation if the call isn't immediately inside a MastDB.init(...) argument.
-    if (/firebase\s*\.\s*database\s*\(\s*\)\s*\.\s*ref\s*\(/.test(line)) {
+    if (/firebase\s*\.\s*database\s*\(\s*\)\s*\.\s*ref\s*\(/.test(line) && !line.includes('mastdb-lint-allow')) {
       violations.push({ file, line: i + 1, msg: 'Direct firebase.database().ref(...) — use MastDB.* ops or MastDB.platform.*' });
     }
 
@@ -81,6 +81,20 @@ function checkFile(file) {
     // `baseRef.ref(`, `snap.ref`, `subRef.ref`, etc.
     if (/[^.\w]db\s*\.\s*ref\s*\(/.test(line) || /^\s*db\s*\.\s*ref\s*\(/.test(line)) {
       violations.push({ file, line: i + 1, msg: 'db.ref(...) bypasses MastDB — use MastDB.* operation methods' });
+    }
+
+    // Rule 5: MastDB escape hatch methods outside mastdb.js
+    // These were the Phase A compat shims — Phase B.1 eliminated all external uses.
+    if (/MastDB\._ref\(/.test(line) && !line.includes('mastdb-lint-allow')) {
+      violations.push({ file, line: i + 1, msg: 'MastDB._ref() escape hatch — use MastDB.get/set/query/subscribe/etc.' });
+    }
+    if (/MastDB\._(rootRef|multiUpdate|prefixPaths|newKey|newRootKey)\(/.test(line) && !line.includes('mastdb-lint-allow')) {
+      violations.push({ file, line: i + 1, msg: 'MastDB escape hatch — use MastDB operation API instead' });
+    }
+
+    // Rule 6: firebase.database.ServerValue — use MastDB.serverTimestamp()/serverIncrement()
+    if (/firebase\.database\.ServerValue/.test(line) && !line.includes('mastdb-lint-allow')) {
+      violations.push({ file, line: i + 1, msg: 'firebase.database.ServerValue — use MastDB.serverTimestamp() or MastDB.serverIncrement()' });
     }
   }
 }

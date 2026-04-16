@@ -36,9 +36,9 @@
 
   async function loadBrandData() {
     try {
-      var logoSnap = await MastDB._ref('config/brand/logo').once('value');
+      var logoSnap = await MastDB.get('config/brand/logo');
       logoConfig = logoSnap.val() || null;
-      var legacySnap = await MastDB._ref('public/config/nav/logoUrl').once('value');
+      var legacySnap = await MastDB.get('public/config/nav/logoUrl');
       legacyLogoUrl = legacySnap.val() || null;
     } catch (err) {
       console.warn('[Brand] Failed to load:', err.message);
@@ -294,7 +294,7 @@
     var heightEl = document.getElementById('brandPlacement_' + placementKey + '_height');
     if (!variantEl) return;
     try {
-      await MastDB._ref('config/brand/logo/placements/' + placementKey).set({
+      await MastDB.set('config/brand/logo/placements/' + placementKey, {
         variantKey: variantEl.value,
         maxHeight: parseInt(heightEl ? heightEl.value : '48', 10) || 48
       });
@@ -319,13 +319,12 @@
       // Delete from Storage if we have a path
       var data = getTypeData(type);
       // Remove config
-      await MastDB._ref('config/brand/logo/variants/' + type).remove();
+      await MastDB.remove('config/brand/logo/variants/' + type);
       // Clear placements referencing this variant
-      var placementsSnap = await MastDB._ref('config/brand/logo/placements').once('value');
-      var placements = placementsSnap.val() || {};
+      var placements = (await MastDB.get('config/brand/logo/placements')) || {};
       for (var key in placements) {
         if (placements[key] && placements[key].variantKey === type) {
-          await MastDB._ref('config/brand/logo/placements/' + key + '/variantKey').set('primary');
+          await MastDB.set('config/brand/logo/placements/' + key + '/variantKey', 'primary');
         }
       }
       await resolvePublicPlacements();
@@ -389,12 +388,12 @@
 
       if (targetType === 'primary') {
         config.uploadedAt = new Date().toISOString();
-        await MastDB._ref('config/brand/logo/primary').set(config);
-        await MastDB._ref('public/config/nav/logoUrl').set(uploadResult.url);
+        await MastDB.set('config/brand/logo/primary', config);
+        await MastDB.set('public/config/nav/logoUrl', uploadResult.url);
       } else {
         config.generatedFrom = 'manual';
         config.createdAt = new Date().toISOString();
-        await MastDB._ref('config/brand/logo/variants/' + targetType).set(config);
+        await MastDB.set('config/brand/logo/variants/' + targetType, config);
       }
 
       await resolvePublicPlacements();
@@ -423,12 +422,12 @@
 
           if (targetType === 'primary') {
             config.uploadedAt = new Date().toISOString();
-            await MastDB._ref('config/brand/logo/primary').set(config);
-            await MastDB._ref('public/config/nav/logoUrl').set(url);
+            await MastDB.set('config/brand/logo/primary', config);
+            await MastDB.set('public/config/nav/logoUrl', url);
           } else {
             config.generatedFrom = 'manual';
             config.createdAt = new Date().toISOString();
-            await MastDB._ref('config/brand/logo/variants/' + targetType).set(config);
+            await MastDB.set('config/brand/logo/variants/' + targetType, config);
           }
 
           await resolvePublicPlacements();
@@ -481,8 +480,7 @@
     if (!logoConfig) return;
     var primary = logoConfig.primary || {};
     var variants = logoConfig.variants || {};
-    var placementsSnap = await MastDB._ref('config/brand/logo/placements').once('value');
-    var placements = placementsSnap.val() || {};
+    var placements = (await MastDB.get('config/brand/logo/placements')) || {};
     var updates = {};
 
     Object.keys(placements).forEach(function(placement) {
@@ -502,7 +500,7 @@
       if (navUrl) updates['public/config/nav/logoUrl'] = navUrl;
     }
 
-    if (Object.keys(updates).length > 0) await MastDB._multiUpdate(updates);
+    if (Object.keys(updates).length > 0) await MastDB.multiUpdate(updates);
   }
 
   // ─── Module Registration ───

@@ -62,7 +62,7 @@
   // ============================================================
 
   function loadEmails(append) {
-    var ref = MastDB._ref('emails');
+    var ref = MastDB.query('emails');
     var query = ref.orderByKey().limitToLast(emailPageSize + 1);
     if (append && emailLastKey) {
       query = ref.orderByKey().endAt(emailLastKey).limitToLast(emailPageSize + 1);

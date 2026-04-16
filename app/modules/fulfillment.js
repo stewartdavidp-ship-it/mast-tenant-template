@@ -917,7 +917,7 @@
   async function fulfillProductionRequest(requestId, orderId, operatorName) {
     try {
       var now = new Date().toISOString();
-      await MastDB.productionRequests.ref(requestId).update({
+      await MastDB.productionRequests.update(requestId, {
         status: 'fulfilled',
         fulfilledAt: now,
         fulfilledBy: operatorName || 'admin'
@@ -938,13 +938,13 @@
             allReady = false;
           }
         });
-        await MastDB.orders.ref(orderId).update(ffUpdates);
+        await MastDB.orders.update(orderId, ffUpdates);
 
         // If all items ready, auto-transition order to ready
         if (allReady) {
           var history = o.statusHistory ? o.statusHistory.slice() : [];
           history.push({ status: 'pack', at: now, by: 'system', note: 'All production requests fulfilled' });
-          await MastDB.orders.ref(orderId).update({
+          await MastDB.orders.update(orderId, {
             status: 'pack',
             readyAt: now,
             statusHistory: history
@@ -962,7 +962,7 @@
 
   async function assignRequestToJob(requestId, jobId, lineItemId) {
     try {
-      await MastDB.productionRequests.ref(requestId).update({
+      await MastDB.productionRequests.update(requestId, {
         status: 'assigned',
         jobId: jobId,
         lineItemId: lineItemId

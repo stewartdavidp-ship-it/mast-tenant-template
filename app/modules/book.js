@@ -284,8 +284,7 @@
 
   async function loadClasses() {
     try {
-      var snap = await MastDB.classes.list(200);
-      var data = snap.val() || {};
+      var data = (await MastDB.classes.list(200)) || {};
       classesData = Object.keys(data).map(function(id) {
         var c = data[id];
         c.id = id;
@@ -372,14 +371,12 @@
     content.innerHTML = LOADING_HTML;
 
     try {
-      var snap = await MastDB.classes.get(classId);
-      var cls = snap.val();
+      var cls = await MastDB.classes.get(classId);
       if (!cls) { content.innerHTML = '<p>Class not found.</p>'; return; }
       cls.id = classId;
 
       // Load sessions for this class
-      var sessSnap = await MastDB.classSessions.byClass(classId);
-      var sessData = sessSnap.val() || {};
+      var sessData = (await MastDB.classSessions.byClass(classId)) || {};
       sessionsData = Object.keys(sessData).map(function(id) {
         var s = sessData[id];
         s.id = id;
@@ -513,8 +510,7 @@
     // Check if sessions exist (locks Type field on edit)
     var hasSessions = false;
     if (classId) {
-      var sessCheck = await MastDB.classSessions.byClass(classId);
-      var sessVal = sessCheck.val();
+      var sessVal = await MastDB.classSessions.byClass(classId);
       hasSessions = sessVal && Object.keys(sessVal).length > 0;
     }
 
@@ -787,8 +783,7 @@
     if (!cls.schedule) return;
 
     // Fetch existing sessions to avoid duplicates
-    var existingSnap = await MastDB.classSessions.byClass(classId);
-    var existing = existingSnap.val() || {};
+    var existing = (await MastDB.classSessions.byClass(classId)) || {};
     var existingDates = {};
     Object.values(existing).forEach(function(s) {
       existingDates[s.date + '_' + s.startTime] = true;
@@ -876,7 +871,7 @@
       multiUpdates[MastDB.classSessions.PATH + '/' + id] = updates[id];
     });
 
-    await MastDB._ref('').update(multiUpdates);
+    await MastDB.update('', multiUpdates);
     MastAdmin.showToast(sessionsToCreate.length + ' session(s) generated');
   }
 
@@ -920,8 +915,7 @@
     if (!classesLoaded) await loadClasses();
     if (!Object.keys(allSessionsMap).length) {
       try {
-        var sessSnap = await MastDB.classSessions.list(1000);
-        var sessObj = sessSnap.val() || {};
+        var sessObj = (await MastDB.classSessions.list(1000)) || {};
         Object.keys(sessObj).forEach(function(id) { allSessionsMap[id] = sessObj[id]; });
       } catch (e) { console.warn('[Book] Could not load sessions map:', e); }
     }
@@ -1033,8 +1027,7 @@
       if (newStatus === 'no-show') updateData.attendedAt = null;
 
       // Get enrollment to update session count
-      var snap = await MastDB.enrollments.get(enrollmentId);
-      var enrollment = snap.val();
+      var enrollment = await MastDB.enrollments.get(enrollmentId);
 
       await MastDB.enrollments.update(enrollmentId, updateData);
 
@@ -1058,8 +1051,7 @@
   }
 
   async function adjustSessionCount(sessionId, field, delta) {
-    var snap = await MastDB.classSessions.get(sessionId);
-    var session = snap.val();
+    var session = await MastDB.classSessions.get(sessionId);
     if (!session) return;
     var current = session[field] || 0;
     var update = {};
@@ -1105,8 +1097,7 @@
 
   async function loadInstructors() {
     try {
-      var snap = await MastDB.instructors.list(100);
-      var data = snap.val() || {};
+      var data = (await MastDB.instructors.list(100)) || {};
       instructorsData = Object.keys(data).map(function(id) {
         var i = data[id];
         i.id = id;
@@ -1270,8 +1261,7 @@
 
   async function loadResources() {
     try {
-      var snap = await MastDB.resources.list(100);
-      var data = snap.val() || {};
+      var data = (await MastDB.resources.list(100)) || {};
       resourcesData = Object.keys(data).map(function(id) {
         var r = data[id];
         r.id = id;
@@ -1425,8 +1415,7 @@
 
   async function loadPassDefinitions() {
     try {
-      var snap = await MastDB.passDefinitions.list(100);
-      var data = snap.val() || {};
+      var data = (await MastDB.passDefinitions.list(100)) || {};
       passDefsData = Object.keys(data).map(function(id) {
         var p = data[id];
         p.id = id;
@@ -1594,7 +1583,7 @@
   // Sync pass definition to public path for storefront access.
   // Only active + onlinePurchasable defs are published; others are removed.
   async function syncPassDefToPublic(passDefId, data) {
-    var pubRef = MastDB._ref('public/passDefinitions/' + passDefId);
+    var pubRef = MastDB.query('public/passDefinitions/' + passDefId);
     if (data.status === 'active' && data.onlinePurchasable) {
       await pubRef.set({
         name: data.name,
@@ -1681,7 +1670,7 @@
 
     try {
       // Query all sessions on the same date
-      var snap = await MastDB.classSessions.ref().orderByChild('date').equalTo(date).once('value');
+      var snap = await MastDB.classSessions.query().orderByChild('date').equalTo(date).once('value');
       var sessions = snap.val() || {};
 
       Object.keys(sessions).forEach(function(id) {
@@ -1821,8 +1810,7 @@
     if (!cls.schedule || (!cls.schedule.startDate && !cls.schedule.date)) issues.push('Schedule not configured');
 
     // Check sessions exist
-    var sessSnap = await MastDB.classSessions.byClass(id);
-    var sessVal = sessSnap.val();
+    var sessVal = await MastDB.classSessions.byClass(id);
     if (!sessVal || Object.keys(sessVal).length === 0) issues.push('No sessions generated');
 
     if (issues.length > 0) {
@@ -1865,14 +1853,13 @@
     if (!await mastConfirm('Cancel this enrollment?', { title: 'Cancel Enrollment', danger: true })) return;
     // Get enrollment to check if waitlisted (for renumbering)
     try {
-      var snap = await MastDB.enrollments.get(id);
-      var enrollment = snap.val();
+      var enrollment = await MastDB.enrollments.get(id);
       await updateEnrollmentStatus(id, 'cancelled');
       if (enrollment && enrollment.status === 'waitlisted') {
         // Decrement waitlist counter
         var isSeries = enrollment.enrollmentType === 'series';
         if (isSeries) {
-          await MastDB.classes.ref(enrollment.classId + '/seriesWaitlisted').transaction(function(c) { return Math.max(0, (c || 0) - 1); });
+          await MastDB.transaction(MastDB.classes.PATH + '/' + enrollment.classId + '/seriesWaitlisted', function(c) { return Math.max(0, (c || 0) - 1); });
         } else if (enrollment.sessionId) {
           await adjustSessionCount(enrollment.sessionId, 'waitlisted', -1);
         }
@@ -1886,8 +1873,7 @@
 
   window._bookPromoteWaitlist = async function(enrollmentId) {
     try {
-      var snap = await MastDB.enrollments.get(enrollmentId);
-      var enrollment = snap.val();
+      var enrollment = await MastDB.enrollments.get(enrollmentId);
       if (!enrollment || enrollment.status !== 'waitlisted') {
         MastAdmin.showToast('Enrollment not found or not waitlisted', true);
         return;
@@ -1899,19 +1885,17 @@
       var isSeries = enrollment.enrollmentType === 'series';
 
       if (isSeries) {
-        var clsSnap = await MastDB.classes.get(classId);
-        var cls = clsSnap.val();
+        var cls = await MastDB.classes.get(classId);
         if (cls && (cls.seriesEnrolled || 0) >= (cls.capacity || 0)) {
           MastAdmin.showToast('No series spots available. Increase capacity first.', true);
           return;
         }
         // Increment series enrolled, decrement series waitlisted
-        await MastDB.classes.ref(classId + '/seriesEnrolled').transaction(function(c) { return (c || 0) + 1; });
-        await MastDB.classes.ref(classId + '/seriesWaitlisted').transaction(function(c) { return Math.max(0, (c || 0) - 1); });
+        await MastDB.transaction(MastDB.classes.PATH + '/' + classId + '/seriesEnrolled', function(c) { return (c || 0) + 1; });
+        await MastDB.transaction(MastDB.classes.PATH + '/' + classId + '/seriesWaitlisted', function(c) { return Math.max(0, (c || 0) - 1); });
       } else {
         if (sessionId) {
-          var sessSnap = await MastDB.classSessions.get(sessionId);
-          var sess = sessSnap.val();
+          var sess = await MastDB.classSessions.get(sessionId);
           if (sess && (sess.enrolled || 0) >= (sess.capacity || 0)) {
             MastAdmin.showToast('No spots available in this session. Increase capacity first.', true);
             return;
@@ -1967,7 +1951,7 @@
         }
       });
       if (Object.keys(updates).length > 0) {
-        await MastDB.enrollments.ref().update(updates);
+        await MastDB.enrollments.update(, updates);
       }
     } catch (err) {
       console.warn('[Book] Waitlist renumbering failed:', err);
@@ -2080,8 +2064,7 @@
       return;
     }
     try {
-      var snap = await MastDB._ref('settings/waiverTemplates').once('value');
-      var val = snap.val() || {};
+      var val = (await MastDB.get('settings/waiverTemplates')) || {};
       _waiverTemplatesCache = Object.entries(val).map(function(e) { return { id: e[0], title: e[1].title || 'Untitled', status: e[1].status }; })
         .filter(function(w) { return w.status === 'active'; });
       _bookPopulateWaiverSelect(select, _waiverTemplatesCache);
@@ -2162,8 +2145,7 @@
       var leadDays = cls.cancellationLeadDays || 2;
 
       try {
-        var sessSnap = await MastDB.classSessions.byClass(cls.id);
-        var sessData = sessSnap.val() || {};
+        var sessData = (await MastDB.classSessions.byClass(cls.id)) || {};
         var sessionIds = Object.keys(sessData);
 
         for (var j = 0; j < sessionIds.length; j++) {
@@ -2559,8 +2541,7 @@
   // ── Check in all confirmed students ──
   window._bookCheckInAll = async function(sessionId) {
     try {
-      var snap = await MastDB.enrollments.bySession(sessionId);
-      var enrollments = snap.val() || {};
+      var enrollments = (await MastDB.enrollments.bySession(sessionId)) || {};
       var uid = firebase.auth().currentUser ? firebase.auth().currentUser.uid : null;
       var now = new Date().toISOString();
       var count = 0;
@@ -2606,8 +2587,7 @@
 
     try {
       // Check waiver enforcement
-      var snap = await MastDB.enrollments.get(enrollId);
-      var enrollment = snap.val() || {};
+      var enrollment = (await MastDB.enrollments.get(enrollId)) || {};
       var finalStatus = status;
       if (status === 'completed' && enrollment.waiverStatus && enrollment.waiverStatus !== 'signed' && enrollment.waiverStatus !== 'na') {
         finalStatus = 'attended-pending-waiver';
@@ -2628,8 +2608,7 @@
   // ── Close out all students as completed ──
   window._bookCloseOutAll = async function(sessionId) {
     try {
-      var snap = await MastDB.enrollments.bySession(sessionId);
-      var enrollments = snap.val() || {};
+      var enrollments = (await MastDB.enrollments.bySession(sessionId)) || {};
       var now = new Date().toISOString();
       var count = 0;
 
@@ -2661,8 +2640,7 @@
 
     try {
       // Auto-complete any unclosed students
-      var snap = await MastDB.enrollments.bySession(sessionId);
-      var enrollments = snap.val() || {};
+      var enrollments = (await MastDB.enrollments.bySession(sessionId)) || {};
       var now = new Date().toISOString();
       var autoCount = 0;
 
@@ -2707,8 +2685,7 @@
     if (!description) { MastAdmin.showToast('Description required', true); return; }
 
     try {
-      var snap = await MastDB.enrollments.get(enrollId);
-      var enrollment = snap.val() || {};
+      var enrollment = (await MastDB.enrollments.get(enrollId)) || {};
       var incidents = enrollment.incidents || [];
       incidents.push({
         type: type,
@@ -2738,8 +2715,7 @@
     if (query.length < 2) { results.innerHTML = ''; return; }
     _walkinSearchTimer = setTimeout(async function() {
       try {
-        var snap = await MastDB._ref('students').once('value');
-        var val = snap.val() || {};
+        var val = (await MastDB.get('students')) || {};
         var matches = Object.entries(val).filter(function(e) {
           var s = e[1];
           var name = (s.displayName || s.name || '').toLowerCase();
@@ -2769,10 +2745,10 @@
   async function ensureStudentByEmail(name, email) {
     if (!email) return;
     try {
-      var snap = await MastDB._ref('students').orderByChild('email').equalTo(email).limitToFirst(1).once('value');
+      var snap = await MastDB.query('students').orderByChild('email').equalTo(email).limitToFirst(1).once('value');
       if (snap.exists()) return; // Already exists
       var studentId = 'stu_' + Date.now();
-      await MastDB._ref('students/' + studentId).set({
+      await MastDB.set('students/' + studentId, {
         displayName: name || '',
         email: email,
         waiverStatus: 'pending',
@@ -2794,12 +2770,10 @@
 
   window._bookWalkinEnroll = async function(sessionId, classId, studentId) {
     try {
-      var studentSnap = await MastDB._ref('students/' + studentId).once('value');
-      var student = studentSnap.val();
+      var student = await MastDB.get('students/' + studentId);
       if (!student) { MastAdmin.showToast('Student not found', true); return; }
 
-      var sessSnap = await MastDB.classSessions.get(sessionId);
-      var session = sessSnap.val() || {};
+      var session = (await MastDB.classSessions.get(sessionId)) || {};
 
       var enrollId = MastDB.enrollments.newKey();
       var now = new Date().toISOString();
@@ -2835,8 +2809,7 @@
     if (email.trim()) ensureStudentByEmail(name.trim(), email.trim());
 
     try {
-      var sessSnap = await MastDB.classSessions.get(sessionId);
-      var session = sessSnap.val() || {};
+      var session = (await MastDB.classSessions.get(sessionId)) || {};
 
       var enrollId = MastDB.enrollments.newKey();
       var now = new Date().toISOString();
@@ -3316,8 +3289,7 @@
     container.innerHTML = '<p style="color:var(--warm-gray);padding:1rem;">Loading settings...</p>';
 
     try {
-      var snap = await MastDB._ref('admin/config/booking').once('value');
-      var config = snap.val() || {};
+      var config = (await MastDB.get('admin/config/booking')) || {};
       var cancelHours = config.cancellationWindowHours != null ? config.cancellationWindowHours : 48;
 
       container.innerHTML =
@@ -3351,7 +3323,7 @@
     }
 
     try {
-      await MastDB._ref('admin/config/booking').update({
+      await MastDB.update('admin/config/booking', {
         cancellationWindowHours: hours
       });
       if (typeof MastAdmin !== 'undefined' && MastAdmin.showToast) MastAdmin.showToast('Settings saved');

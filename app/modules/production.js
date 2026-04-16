@@ -285,7 +285,7 @@ async function doAssignNewJob(requestId) {
   if (!pr) return;
   try {
     // Create new job
-    var jobRef = MastDB.productionJobs.ref().push();
+    var jobRef = MastDB.productionJobs.push();
     var jobId = jobRef.key;
     var lineItemRef = MastDB.productionJobs.lineItems(jobId).push();
     var lineItemId = lineItemRef.key;
@@ -487,7 +487,7 @@ async function doCreateJob(purpose) {
     showToast('Enter a job name', true); return;
   }
   try {
-    var jobRef = MastDB.productionJobs.ref().push();
+    var jobRef = MastDB.productionJobs.push();
     var jobId = jobRef.key;
     await jobRef.set({
       name: name,
@@ -822,8 +822,7 @@ async function transitionProductionJob(jobId, newStatus) {
             await incomingRef.transaction(function(current) { return Math.max(0, (current || 0) - (li.targetQuantity || 0)); });
             // Increment onHand by actual completed (minus loss)
             if (qty > 0) {
-              var stockRef = MastDB.inventory.stockOnHand(li.productId, liVariantKey);
-              await stockRef.transaction(function(current) { return (current || 0) + qty; });
+              await MastDB.transaction(MastDB.inventory.stockOnHandPath(li.productId, liVariantKey), function(current) { return (current || 0) + qty; });
               await MastDB.inventory.ref(li.productId + '/history').push({
                 action: 'adjusted', reason: 'production_completed', qty: qty,
                 variantId: liVariantKey,
@@ -864,7 +863,7 @@ async function transitionProductionJob(jobId, newStatus) {
       }
     }
 
-    await MastDB.productionJobs.ref(jobId).update(updates);
+    await MastDB.productionJobs.update(jobId, updates);
     await writeAudit('update', 'jobs', jobId);
     if (newStatus === 'completed' && invCount > 0) {
       showToast('Job completed — ' + invCount + ' product' + (invCount > 1 ? 's' : '') + ' updated in inventory');
@@ -928,7 +927,7 @@ function openEditJobModal(jobId) {
 
 async function doEditJob(jobId) {
   try {
-    await MastDB.productionJobs.ref(jobId).update({
+    await MastDB.productionJobs.update(jobId, {
       name: document.getElementById('editJobName').value.trim(),
       description: document.getElementById('editJobDesc').value.trim(),
       purpose: document.getElementById('editJobPurpose').value,
@@ -1018,8 +1017,7 @@ function onLineItemProductSelect() {
 async function snapshotBomForecast(productId, variantId) {
   if (!productId) return null;
   try {
-    var snap = await MastDB.recipes.list(200);
-    var recipes = snap.val() || {};
+    var recipes = (await MastDB.recipes.list(200)) || {};
     var recipe = null;
     Object.keys(recipes).forEach(function(rid) {
       var r = recipes[rid];
@@ -1345,7 +1343,7 @@ async function doStartBuild(jobId) {
 
     // Auto-transition job to in-progress if still in definition
     if (job.status === 'definition') {
-      await MastDB.productionJobs.ref(jobId).update({
+      await MastDB.productionJobs.update(jobId, {
         status: 'in-progress',
         startedAt: now.toISOString()
       });
@@ -1570,8 +1568,7 @@ async function doCompleteBuild(jobId, buildId) {
     }
 
     // Re-read all builds to get accurate tallies
-    var jobSnap = await MastDB.productionJobs.ref(jobId).once('value');
-    var freshJob = jobSnap.val();
+    var freshJob = await MastDB.productionJobs.get(jobId);
     var tallies = {};
     if (freshJob && freshJob.lineItems) {
       var freshBuilds = freshJob.builds || {};
@@ -1591,7 +1588,7 @@ async function doCompleteBuild(jobId, buildId) {
         tallyUpdates['lineItems/' + liKey + '/completedQuantity'] = tallies[liKey].completed;
         tallyUpdates['lineItems/' + liKey + '/lossQuantity'] = tallies[liKey].loss;
       });
-      await MastDB.productionJobs.ref(jobId).update(tallyUpdates);
+      await MastDB.productionJobs.update(jobId, tallyUpdates);
 
       // Check if all line items met target
       var allMet = true;
@@ -1602,7 +1599,7 @@ async function doCompleteBuild(jobId, buildId) {
       });
       if (allMet && liKeys.length > 0) {
         if (await mastConfirm('All line items have met their targets! Mark job as completed?', { title: 'Complete Job' })) {
-          await MastDB.productionJobs.ref(jobId).update({
+          await MastDB.productionJobs.update(jobId, {
             status: 'completed',
             completedAt: now.toISOString()
           });
@@ -1680,8 +1677,8 @@ async function doCompleteBuild(jobId, buildId) {
       var hasStory = false;
       try {
         var storyCheck = await MastDB.stories.queryByJob(jobId);
-        if (storyCheck.val()) {
-          Object.values(storyCheck.val()).forEach(function(s) {
+        if (storyCheck) {
+          Object.values(storyCheck).forEach(function(s) {
             if (s.status === 'published') hasStory = true;
           });
         }
@@ -1717,8 +1714,7 @@ async function autoFulfillLinkedRequests(jobId, freshJob, tallies) {
 
     try {
       // Read the production request to get orderId
-      var reqSnap = await MastDB.productionRequests.ref(li.productionRequestId).once('value');
-      var req = reqSnap.val();
+      var req = await MastDB.productionRequests.get(li.productionRequestId);
       if (!req || req.status !== 'assigned') continue;
 
       // Get operator name from builds
@@ -1775,8 +1771,7 @@ async function autoUpdateInventory(jobId, buildId, buildOutput, freshJob) {
     try {
       // Channel-First Phase 1d (D42) — push to per-variant stock when line targets a variant
       var liVariantKey = li.variantId || null;
-      var stockRef = MastDB.inventory.stockOnHand(li.productId, liVariantKey);
-      await stockRef.transaction(function(current) {
+      await MastDB.transaction(MastDB.inventory.stockOnHandPath(li.productId, liVariantKey), function(current) {
         return (current || 0) + qty;
       });
       var label = (li.variantLabel ? ' (' + li.variantLabel + ')' : '');
@@ -1863,7 +1858,7 @@ async function handlePhotoUpload(input, jobId, buildId) {
 
 async function uploadBuildPhoto(file, jobId, buildId) {
   try {
-    var mediaId = MastDB._newRootKey();
+    var mediaId = MastDB.newKey('_ids');
     var galleryEl = document.getElementById('buildMediaGallery');
 
     // Create placeholder thumbnail with progress
@@ -2045,8 +2040,7 @@ async function loadJobPipelineStatus(jobId) {
     // Try to show order status
     if (li.productionRequestId) {
       try {
-        var reqSnap = await MastDB.productionRequests.ref(li.productionRequestId).once('value');
-        var req = reqSnap.val();
+        var req = await MastDB.productionRequests.get(li.productionRequestId);
         if (req && req.orderId && orders[req.orderId]) {
           var order = orders[req.orderId];
           html += '<div style="font-size:0.78rem;color:var(--warm-gray);padding-left:12px;margin-bottom:4px;">Order #' + esc(order.orderNumber || req.orderId) + ' — ' + esc(order.status || '?') + '</div>';
@@ -2359,10 +2353,10 @@ var _lkApiKeyCache = null;
 async function _getLkApiKey() {
   if (_lkApiKeyCache) return _lkApiKeyCache;
   // Check admin path first (UI-saved), then config path (MCP/provisioning)
-  var snap = await MastDB._ref('admin/config/labelkeeper/apiKey').once('value');
+  var snap = await MastDB.get('admin/config/labelkeeper/apiKey');
   _lkApiKeyCache = snap.val();
   if (!_lkApiKeyCache) {
-    snap = await MastDB._ref('config/labelkeeper/apiKey').once('value');
+    snap = await MastDB.get('config/labelkeeper/apiKey');
     _lkApiKeyCache = snap.val();
   }
   return _lkApiKeyCache;
@@ -2481,7 +2475,7 @@ async function publishStoryFromDetail(storyId) {
       if (qrCodes.length > 0) updates.qrCodes = qrCodes;
     }
 
-    await MastDB.stories.ref(storyId).update(updates);
+    await MastDB.stories.update(storyId, updates);
     await writeAudit('update', 'products', storyId);
 
     // Back-fill storyId on linked products
@@ -2511,7 +2505,7 @@ async function unpublishStoryFromDetail(storyId) {
   if (!await mastConfirm('Unpublish this story?', { title: 'Unpublish Story' })) return;
   try {
     var story = storiesData[storyId];
-    await MastDB.stories.ref(storyId).update({ status: 'draft', updatedAt: new Date().toISOString() });
+    await MastDB.stories.update(storyId, { status: 'draft', updatedAt: new Date().toISOString() });
     await writeAudit('update', 'products', storyId);
 
     // Clear storyId from linked products
@@ -2541,8 +2535,7 @@ async function loadJobStoryStatus(jobId) {
   var el = document.getElementById('jobStoryStatus_' + jobId);
   if (!el) return;
   try {
-    var snap = await MastDB.stories.queryByJob(jobId);
-    var stories = snap.val() || {};
+    var stories = (await MastDB.stories.queryByJob(jobId)) || {};
     var keys = Object.keys(stories);
     if (keys.length === 0) {
       el.innerHTML = 'No story yet. Click "Curate Story" to create one from build photos.';
@@ -2594,8 +2587,7 @@ async function openStoryCuration(jobId) {
   var existingStory = null;
   var existingStoryId = null;
   try {
-    var storySnap = await MastDB.stories.queryByJob(jobId);
-    var stories = storySnap.val() || {};
+    var stories = (await MastDB.stories.queryByJob(jobId)) || {};
     var sKeys = Object.keys(stories);
     if (sKeys.length > 0) {
       existingStoryId = sKeys[0];
@@ -2736,7 +2728,7 @@ function toggleStoryMediaSelect(el) {
   var buildId = el.getAttribute('data-buildid');
   if (el.classList.contains('selected')) {
     // Add entry
-    var id = MastDB._newRootKey();
+    var id = MastDB.newKey('_ids');
     storyDraft.push({ id: id, mediaUrl: url, milestone: '', caption: '', buildId: buildId, order: storyDraft.length });
   } else {
     // Remove entry
@@ -2748,7 +2740,7 @@ function toggleStoryMediaSelect(el) {
 }
 
 function addTextOnlyEntry() {
-  var id = MastDB._newRootKey();
+  var id = MastDB.newKey('_ids');
   storyDraft.push({ id: id, mediaUrl: '', milestone: '', caption: '', buildId: '', order: storyDraft.length });
   renderStoryEntries();
 }
@@ -2832,11 +2824,11 @@ async function saveDraftStory(existingId) {
     data.updatedAt = new Date().toISOString();
     var storyId = existingId;
     if (existingId) {
-      await MastDB.stories.ref(existingId).update(data);
+      await MastDB.stories.update(existingId, data);
       await writeAudit('update', 'products', existingId);
     } else {
       data.createdAt = new Date().toISOString();
-      var ref = MastDB.stories.ref().push();
+      var ref = MastDB.stories.push();
       storyId = ref.key;
       await ref.set(data);
       await writeAudit('update', 'products', ref.key);
@@ -2882,10 +2874,10 @@ async function publishStory(existingId) {
 
     var storyId = existingId;
     if (existingId) {
-      await MastDB.stories.ref(existingId).update(data);
+      await MastDB.stories.update(existingId, data);
     } else {
       data.createdAt = new Date().toISOString();
-      var ref = MastDB.stories.ref().push();
+      var ref = MastDB.stories.push();
       storyId = ref.key;
       await ref.set(data);
     }
@@ -2925,10 +2917,9 @@ async function unpublishStory(storyId) {
   if (!await mastConfirm('Unpublish this story?', { title: 'Unpublish Story' })) return;
   try {
     // Read story to get jobId before unpublishing
-    var storySnap = await MastDB.stories.ref(storyId).once('value');
-    var story = storySnap.val();
+    var story = await MastDB.stories.get(storyId);
 
-    await MastDB.stories.ref(storyId).update({ status: 'draft', updatedAt: new Date().toISOString() });
+    await MastDB.stories.update(storyId, { status: 'draft', updatedAt: new Date().toISOString() });
     await writeAudit('update', 'products', storyId);
 
     // Clear storyId from linked products
@@ -2962,8 +2953,7 @@ function previewStoryFromCuration() {
 
 async function previewStory(storyId) {
   try {
-    var snap = await MastDB.stories.ref(storyId).once('value');
-    var story = snap.val();
+    var story = await MastDB.stories.get(storyId);
     if (!story) { showToast('Story not found', true); return; }
     var entries = [];
     if (story.entries) {
@@ -3044,8 +3034,7 @@ async function linkProductToBuild(jobId, lineItemId) {
     await writeAudit('update', 'jobs', jobId);
 
     // Check if a published story exists for this job and write storyId
-    var storiesSnap = await MastDB.stories.queryByJob(jobId);
-    var stories = storiesSnap.val() || {};
+    var stories = (await MastDB.stories.queryByJob(jobId)) || {};
     Object.keys(stories).forEach(function(sk) {
       if (stories[sk].status === 'published') {
         MastDB.products.storyIdRef(productId).set(sk);

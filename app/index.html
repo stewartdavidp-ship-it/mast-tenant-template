@@ -8702,10 +8702,10 @@ var MastCustomers = (function() {
           Object.keys(updates).forEach(function(k) {
             stripped[k.indexOf(prefix) === 0 ? k.slice(prefix.length) : k] = updates[k];
           });
-          return MastDB._multiUpdate(stripped);
+          return MastDB.multiUpdate(stripped);
         },
         pushKey: function(path) {
-          return MastDB._newKey(path.indexOf(prefix) === 0 ? path.slice(prefix.length) : path);
+          return MastDB.newKey(path.indexOf(prefix) === 0 ? path.slice(prefix.length) : path);
         }
       }
     };
@@ -8737,13 +8737,13 @@ var MastCustomers = (function() {
   async function listCustomers(opts) {
     opts = opts || {};
     var limit = opts.limit || 200;
-    var snap = await MastDB._ref('admin/customers').orderByChild('updatedAt').limitToLast(limit).once('value');
+    var snap = await MastDB.query('admin/customers').orderByChild('updatedAt').limitToLast(limit).once('value');
     var val = snap.val() || {};
     return Object.keys(val).map(function(k) { return val[k]; }).reverse();
   }
 
   async function listDuplicates() {
-    var snap = await MastDB._ref('admin/customerDuplicates').orderByChild('detectedAt').limitToLast(200).once('value');
+    var snap = await MastDB.query('admin/customerDuplicates').orderByChild('detectedAt').limitToLast(200).once('value');
     var val = snap.val() || {};
     return Object.keys(val).map(function(k) {
       var r = val[k]; r._flagId = k; return r;
@@ -8836,637 +8836,464 @@ async function loadTenantConfig(tenantId) {
 }
 
 // --- MastDB Entity Namespaces ---
+// All entity methods use MastDB operation API (get/set/query/subscribe/etc.).
+// Return types: get() → Promise<value|null>, list() → Promise<Record>,
+// listen() → unsubscribe function, callbacks receive values (not snapshots).
 
-MastDB.events = {
-  PATH: 'public/events',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  list: function(limit) { return this.ref().limitToLast(limit || 200).once('value'); },
-  get: function(id) { return this.ref(id).once('value'); },
-  set: function(id, data) { return this.ref(id).set(data); },
-  update: function(id, data) { return this.ref(id).update(data); },
-  remove: function(id) { return this.ref(id).remove(); },
-  push: function() { return this.ref().push(); },
-  newKey: function() { return this.ref().push().key; },
-  listen: function(limit, cb, errCb) {
-    return this.ref().limitToLast(limit || 200).on('value', cb, errCb);
-  },
-  unlisten: function(handle) { this.ref().off('value', handle); }
-};
+// Factory for standard CRUD + listen entities
+function _makeEntity(path, dl) {
+  var e = {
+    PATH: path,
+    get: function(id) { return MastDB.get(path + '/' + id); },
+    set: function(id, data) { return MastDB.set(path + '/' + id, data); },
+    update: function(id, data) { return MastDB.update(path + '/' + id, data); },
+    remove: function(id) { return MastDB.remove(path + '/' + id); },
+    push: function(data) { return MastDB.push(path, data); },
+    newKey: function() { return MastDB.newKey(path); },
+    query: function() { return MastDB.query(path); }
+  };
+  if (dl) {
+    e.list = function(limit) { return MastDB.query(path).limitToLast(limit || dl).once(); };
+    e.listen = function(limit, cb) { return MastDB.query(path).limitToLast(limit || dl).subscribe(cb); };
+  } else {
+    e.list = function() { return MastDB.list(path); };
+  }
+  return e;
+}
+
+MastDB.events = _makeEntity('public/events', 200);
 
 // Events Organizer Module entities moved to standalone app (../events/index.html)
 
-MastDB.gallery = {
-  PATH: 'public/gallery',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  list: function(limit) { return this.ref().limitToLast(limit || 500).once('value'); },
-  get: function(id) { return this.ref(id).once('value'); },
-  set: function(id, data) { return this.ref(id).set(data); },
-  update: function(id, data) { return this.ref(id).update(data); },
-  remove: function(id) { return this.ref(id).remove(); },
-  push: function() { return this.ref().push(); },
-  newKey: function() { return this.ref().push().key; },
-  listen: function(limit, cb, errCb) {
-    return this.ref().limitToLast(limit || 500).on('value', cb, errCb);
-  },
-  unlisten: function(handle) { this.ref().off('value', handle); }
-};
+MastDB.gallery = _makeEntity('public/gallery', 500);
 
 MastDB.images = {
   PATH: 'images',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  listen: function(limit, cb, errCb) {
-    return this.ref().limitToLast(limit || 500).on('value', cb, errCb);
-  },
-  unlisten: function(handle) { this.ref().off('value', handle); }
+  listen: function(limit, cb) { return MastDB.query('images').limitToLast(limit || 500).subscribe(cb); }
 };
 
 MastDB.products = {
   PATH: 'public/products',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  list: function() { return this.ref().once('value'); },
-  get: function(id) { return this.ref(id).once('value'); },
-  set: function(id, data) { return this.ref(id).set(data); },
-  update: function(id, data) { return this.ref(id).update(data); },
-  remove: function(id) { return this.ref(id).remove(); },
-  imagesRef: function(id) { return MastDB._ref(this.PATH + '/' + id + '/images'); },
-  imageIdsRef: function(id) { return MastDB._ref(this.PATH + '/' + id + '/imageIds'); },
-  statusRef: function(id) { return MastDB._ref(this.PATH + '/' + id + '/status'); },
-  buildIdsRef: function(id) { return MastDB._ref(this.PATH + '/' + id + '/buildIds'); },
-  storyIdRef: function(id) { return MastDB._ref(this.PATH + '/' + id + '/storyId'); },
-  fieldRef: function(id, field) { return MastDB._ref(this.PATH + '/' + id + '/' + field); }
+  list: function() { return MastDB.list('public/products'); },
+  get: function(id) { return MastDB.get('public/products/' + id); },
+  set: function(id, data) { return MastDB.set('public/products/' + id, data); },
+  update: function(id, data) { return MastDB.update('public/products/' + id, data); },
+  remove: function(id) { return MastDB.remove('public/products/' + id); },
+  query: function() { return MastDB.query('public/products'); },
+  setImages: function(id, images) { return MastDB.set('public/products/' + id + '/images', images); },
+  setImageIds: function(id, imageIds) { return MastDB.set('public/products/' + id + '/imageIds', imageIds); },
+  setStatus: function(id, status) { return MastDB.set('public/products/' + id + '/status', status); },
+  removeStatus: function(id) { return MastDB.remove('public/products/' + id + '/status'); },
+  getBuildIds: function(id) { return MastDB.get('public/products/' + id + '/buildIds'); },
+  setBuildIds: function(id, buildIds) { return MastDB.set('public/products/' + id + '/buildIds', buildIds); },
+  setStoryId: function(id, storyId) { return MastDB.set('public/products/' + id + '/storyId', storyId); },
+  removeStoryId: function(id) { return MastDB.remove('public/products/' + id + '/storyId'); },
+  setField: function(id, field, value) { return MastDB.set('public/products/' + id + '/' + field, value); }
 };
 
 MastDB.inventory = {
   PATH: 'admin/inventory',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  list: function(limit) { return this.ref().limitToLast(limit || 500).once('value'); },
-  get: function(id) { return this.ref(id).once('value'); },
-  set: function(id, data) { return this.ref(id).set(data); },
-  update: function(id, data) { return this.ref(id).update(data); },
-  remove: function(id) { return this.ref(id).remove(); },
-  listen: function(limit, cb, errCb) {
-    return this.ref().limitToLast(limit || 500).on('value', cb, errCb);
+  list: function(limit) { return MastDB.query('admin/inventory').limitToLast(limit || 500).once(); },
+  get: function(id) { return MastDB.get('admin/inventory/' + id); },
+  set: function(id, data) { return MastDB.set('admin/inventory/' + id, data); },
+  update: function(id, data) { return MastDB.update('admin/inventory/' + id, data); },
+  remove: function(id) { return MastDB.remove('admin/inventory/' + id); },
+  listen: function(limit, cb) { return MastDB.query('admin/inventory').limitToLast(limit || 500).subscribe(cb); },
+  query: function() { return MastDB.query('admin/inventory'); },
+  getStock: function(pid) { return MastDB.get('admin/inventory/' + pid + '/stock'); },
+  updateStock: function(pid, data) { return MastDB.update('admin/inventory/' + pid + '/stock', data); },
+  getStockOnHand: function(pid, variant) {
+    return MastDB.get('admin/inventory/' + pid + '/stock/' + (variant || '_default') + '/onHand');
   },
-  unlisten: function(handle) { this.ref().off('value', handle); },
-  stockRef: function(pid) { return MastDB._ref(this.PATH + '/' + pid + '/stock'); },
-  stockOnHand: function(pid, variant) {
-    return MastDB._ref(this.PATH + '/' + pid + '/stock/' + (variant || '_default') + '/onHand');
+  stockOnHandPath: function(pid, variant) {
+    return 'admin/inventory/' + pid + '/stock/' + (variant || '_default') + '/onHand';
   },
-  stockIncoming: function(pid, variant) {
-    return MastDB._ref(this.PATH + '/' + pid + '/stock/' + (variant || '_default') + '/incoming');
+  stockIncomingPath: function(pid, variant) {
+    return 'admin/inventory/' + pid + '/stock/' + (variant || '_default') + '/incoming';
   },
-  stockAvailable: function(pid, variant) {
-    // DEPRECATED: use stockOnHand for writes. Available is now calculated.
-    return MastDB._ref(this.PATH + '/' + pid + '/stock/' + (variant || '_default') + '/available');
+  stockAvailablePath: function(pid, variant) {
+    return 'admin/inventory/' + pid + '/stock/' + (variant || '_default') + '/available';
   },
-  stockLocations: function(pid, variant) {
-    return MastDB._ref(this.PATH + '/' + pid + '/stock/' + (variant || '_default') + '/locations');
+  stockLocationsPath: function(pid, variant) {
+    return 'admin/inventory/' + pid + '/stock/' + (variant || '_default') + '/locations';
   },
-  subRef: function() { return MastDB._ref(this.PATH + '/' + Array.from(arguments).join('/')); }
+  sub: function() { return 'admin/inventory/' + Array.from(arguments).join('/'); }
 };
 
-MastDB.orders = {
-  PATH: 'orders',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  list: function(limit) { return this.ref().limitToLast(limit || 100).once('value'); },
-  get: function(id) { return this.ref(id).once('value'); },
-  set: function(id, data) { return this.ref(id).set(data); },
-  update: function(id, data) { return this.ref(id).update(data); },
-  remove: function(id) { return this.ref(id).remove(); },
-  listen: function(limit, cb, errCb) {
-    return this.ref().limitToLast(limit || 100).on('value', cb, errCb);
-  },
-  unlisten: function(handle) { this.ref().off('value', handle); },
-  subRef: function() { return MastDB._ref(this.PATH + '/' + Array.from(arguments).join('/')); }
-};
+MastDB.orders = _makeEntity('orders', 100);
 
 MastDB.emails = {
   PATH: 'emails',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  list: function(limit) { return this.ref().limitToLast(limit || 100).once('value'); },
-  get: function(id) { return this.ref(id).once('value'); },
-  listen: function(limit, cb, errCb) {
-    return this.ref().limitToLast(limit || 100).on('value', cb, errCb);
-  },
-  unlisten: function(handle) { this.ref().off('value', handle); },
+  list: function(limit) { return MastDB.query('emails').limitToLast(limit || 100).once(); },
+  get: function(id) { return MastDB.get('emails/' + id); },
+  listen: function(limit, cb) { return MastDB.query('emails').limitToLast(limit || 100).subscribe(cb); },
   queryByOrder: function(orderId) {
-    return this.ref().orderByChild('orderId').equalTo(orderId).once('value');
+    return MastDB.query('emails').orderByChild('orderId').equalTo(orderId).once();
   }
 };
 
-MastDB.sales = {
-  PATH: 'admin/sales',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  list: function(limit) { return this.ref().limitToLast(limit || 200).once('value'); },
-  get: function(id) { return this.ref(id).once('value'); },
-  set: function(id, data) { return this.ref(id).set(data); },
-  update: function(id, data) { return this.ref(id).update(data); },
-  listen: function(limit, cb, errCb) {
-    return this.ref().limitToLast(limit || 200).on('value', cb, errCb);
-  },
-  unlisten: function(handle) { this.ref().off('value', handle); }
-};
+MastDB.sales = _makeEntity('admin/sales', 200);
 
 MastDB.squarePayments = {
   PATH: 'admin/square-payments',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  listen: function(limit, cb, errCb) {
-    return this.ref().limitToLast(limit || 200).on('value', cb, errCb);
-  },
-  unlisten: function(handle) { this.ref().off('value', handle); }
+  listen: function(limit, cb) { return MastDB.query('admin/square-payments').limitToLast(limit || 200).subscribe(cb); }
 };
 
-MastDB.coupons = {
-  PATH: 'admin/coupons',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  list: function(limit) { return this.ref().limitToLast(limit || 200).once('value'); },
-  get: function(id) { return this.ref(id).once('value'); },
-  set: function(id, data) { return this.ref(id).set(data); },
-  update: function(id, data) { return this.ref(id).update(data); },
-  remove: function(id) { return this.ref(id).remove(); },
-  listen: function(limit, cb, errCb) {
-    return this.ref().limitToLast(limit || 200).on('value', cb, errCb);
-  },
-  unlisten: function(handle) { this.ref().off('value', handle); }
-};
+MastDB.coupons = _makeEntity('admin/coupons', 200);
 
-MastDB.promotions = {
-  PATH: 'public/sales-promotions',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  list: function(limit) { return this.ref().limitToLast(limit || 200).once('value'); },
-  get: function(id) { return this.ref(id).once('value'); },
-  set: function(id, data) { return this.ref(id).set(data); },
-  update: function(id, data) { return this.ref(id).update(data); },
-  remove: function(id) { return this.ref(id).remove(); },
-  listen: function(limit, cb, errCb) {
-    return this.ref().limitToLast(limit || 200).on('value', cb, errCb);
-  },
-  unlisten: function(handle) { this.ref().off('value', handle); }
-};
+MastDB.promotions = _makeEntity('public/sales-promotions', 200);
 
-MastDB.giftCards = {
-  PATH: 'admin/giftCards',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  list: function(limit) { return this.ref().limitToLast(limit || 100).once('value'); },
-  get: function(id) { return this.ref(id).once('value'); },
-  set: function(id, data) { return this.ref(id).set(data); },
-  update: function(id, data) { return this.ref(id).update(data); },
-  remove: function(id) { return this.ref(id).remove(); },
-  newKey: function() { return this.ref().push().key; },
-  listen: function(limit, cb, errCb) {
-    return this.ref().limitToLast(limit || 100).on('value', cb, errCb);
-  },
-  unlisten: function(handle) { this.ref().off('value', handle); }
-};
+MastDB.giftCards = _makeEntity('admin/giftCards', 100);
 
 MastDB.walletConfig = {
   PATH: 'admin/walletConfig',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  get: function() { return this.ref().once('value'); },
-  set: function(data) { return this.ref().set(data); },
-  update: function(data) { return this.ref().update(data); }
+  get: function() { return MastDB.get('admin/walletConfig'); },
+  set: function(data) { return MastDB.set('admin/walletConfig', data); },
+  update: function(data) { return MastDB.update('admin/walletConfig', data); }
 };
 
 MastDB.termsConfig = {
   PATH: 'admin/termsConfig',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  get: function() { return this.ref().once('value'); },
-  set: function(data) { return this.ref().set(data); },
-  update: function(data) { return this.ref().update(data); }
+  get: function() { return MastDB.get('admin/termsConfig'); },
+  set: function(data) { return MastDB.set('admin/termsConfig', data); },
+  update: function(data) { return MastDB.update('admin/termsConfig', data); }
 };
 
-MastDB.rma = {
-  PATH: 'admin/rma',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  list: function(limit) { return this.ref().limitToLast(limit || 100).once('value'); },
-  get: function(id) { return this.ref(id).once('value'); },
-  set: function(id, data) { return this.ref(id).set(data); },
-  update: function(id, data) { return this.ref(id).update(data); },
-  newKey: function() { return this.ref().push().key; },
-  listen: function(limit, cb, errCb) { return this.ref().limitToLast(limit || 100).on('value', cb, errCb); },
-  unlisten: function(handle) { this.ref().off('value', handle); }
-};
+MastDB.rma = _makeEntity('admin/rma', 100);
 
 MastDB.salesEvents = {
   PATH: 'admin/salesEvents',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  list: function(limit) { return this.ref().limitToLast(limit || 100).once('value'); },
-  get: function(id) { return this.ref(id).once('value'); },
-  set: function(id, data) { return this.ref(id).set(data); },
-  update: function(id, data) { return this.ref(id).update(data); },
-  remove: function(id) { return this.ref(id).remove(); },
-  listen: function(limit, cb, errCb) {
-    return this.ref().limitToLast(limit || 100).on('value', cb, errCb);
+  list: function(limit) { return MastDB.query('admin/salesEvents').limitToLast(limit || 100).once(); },
+  get: function(id) { return MastDB.get('admin/salesEvents/' + id); },
+  set: function(id, data) { return MastDB.set('admin/salesEvents/' + id, data); },
+  update: function(id, data) { return MastDB.update('admin/salesEvents/' + id, data); },
+  remove: function(id) { return MastDB.remove('admin/salesEvents/' + id); },
+  listen: function(limit, cb) { return MastDB.query('admin/salesEvents').limitToLast(limit || 100).subscribe(cb); },
+  query: function() { return MastDB.query('admin/salesEvents'); },
+  removeAllocation: function(eventId, pid) { return MastDB.remove('admin/salesEvents/' + eventId + '/allocations/' + pid); },
+  updateAllocation: function(eventId, pid, data) { return MastDB.update('admin/salesEvents/' + eventId + '/allocations/' + pid, data); },
+  setAllocationField: function(eventId, pid, field, value) {
+    return MastDB.set('admin/salesEvents/' + eventId + '/allocations/' + pid + '/' + field, value);
   },
-  unlisten: function(handle) { this.ref().off('value', handle); },
-  allocations: function(eventId, pid) {
-    return MastDB._ref(this.PATH + '/' + eventId + '/allocations' + (pid ? '/' + pid : ''));
-  },
-  allocationField: function(eventId, pid, field) {
-    return MastDB._ref(this.PATH + '/' + eventId + '/allocations/' + pid + '/' + field);
-  },
-  subRef: function() { return MastDB._ref(this.PATH + '/' + Array.from(arguments).join('/')); }
+  sub: function() { return 'admin/salesEvents/' + Array.from(arguments).join('/'); }
 };
 
 MastDB.shows = {
   PATH: 'admin/shows',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  list: function(limit) { return this.ref().limitToLast(limit || 100).once('value'); },
-  get: function(id) { return this.ref(id).once('value'); },
-  set: function(id, data) { return this.ref(id).set(data); },
-  update: function(id, data) { return this.ref(id).update(data); },
-  remove: function(id) { return this.ref(id).remove(); },
-  newKey: function() { return this.ref().push().key; },
-  listen: function(limit, cb, errCb) {
-    return this.ref().limitToLast(limit || 100).on('value', cb, errCb);
-  },
-  unlisten: function(handle) { this.ref().off('value', handle); },
-  applicationHistory: function(showId) {
-    return MastDB._ref(this.PATH + '/' + showId + '/applicationHistory');
-  },
-  subRef: function() { return MastDB._ref(this.PATH + '/' + Array.from(arguments).join('/')); }
+  list: function(limit) { return MastDB.query('admin/shows').limitToLast(limit || 100).once(); },
+  get: function(id) { return MastDB.get('admin/shows/' + id); },
+  set: function(id, data) { return MastDB.set('admin/shows/' + id, data); },
+  update: function(id, data) { return MastDB.update('admin/shows/' + id, data); },
+  remove: function(id) { return MastDB.remove('admin/shows/' + id); },
+  newKey: function() { return MastDB.newKey('admin/shows'); },
+  listen: function(limit, cb) { return MastDB.query('admin/shows').limitToLast(limit || 100).subscribe(cb); },
+  query: function() { return MastDB.query('admin/shows'); },
+  pushApplicationHistory: function(showId, data) { return MastDB.push('admin/shows/' + showId + '/applicationHistory', data); },
+  sub: function() { return 'admin/shows/' + Array.from(arguments).join('/'); }
 };
 
-MastDB.bundles = {
-  PATH: 'admin/bundles',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  list: function(limit) { return this.ref().limitToLast(limit || 50).once('value'); },
-  get: function(id) { return this.ref(id).once('value'); },
-  set: function(id, data) { return this.ref(id).set(data); },
-  update: function(id, data) { return this.ref(id).update(data); },
-  remove: function(id) { return this.ref(id).remove(); },
-  push: function() { return this.ref().push(); },
-  newKey: function() { return this.ref().push().key; },
-  listen: function(limit, cb, errCb) {
-    return this.ref().limitToLast(limit || 50).on('value', cb, errCb);
-  },
-  unlisten: function(handle) { this.ref().off('value', handle); },
-  subRef: function() { return MastDB._ref(this.PATH + '/' + Array.from(arguments).join('/')); }
-};
+MastDB.bundles = _makeEntity('admin/bundles', 50);
 
-MastDB.productionRequests = {
-  PATH: 'admin/buildJobs',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  list: function(limit) { return this.ref().limitToLast(limit || 100).once('value'); },
-  get: function(id) { return this.ref(id).once('value'); },
-  set: function(id, data) { return this.ref(id).set(data); },
-  update: function(id, data) { return this.ref(id).update(data); },
-  remove: function(id) { return this.ref(id).remove(); },
-  listen: function(limit, cb, errCb) {
-    return this.ref().limitToLast(limit || 100).on('value', cb, errCb);
-  },
-  unlisten: function(handle) { this.ref().off('value', handle); },
-  subRef: function() { return MastDB._ref(this.PATH + '/' + Array.from(arguments).join('/')); }
-};
+MastDB.productionRequests = _makeEntity('admin/buildJobs', 100);
 
 MastDB.productionJobs = {
   PATH: 'admin/jobs',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  list: function(limit) { return this.ref().limitToLast(limit || 100).once('value'); },
-  get: function(id) { return this.ref(id).once('value'); },
-  set: function(id, data) { return this.ref(id).set(data); },
-  update: function(id, data) { return this.ref(id).update(data); },
-  remove: function(id) { return this.ref(id).remove(); },
-  push: function() { return this.ref().push(); },
-  newKey: function() { return this.ref().push().key; },
-  listen: function(limit, cb, errCb) {
-    return this.ref().limitToLast(limit || 100).on('value', cb, errCb);
-  },
-  unlisten: function(handle) { this.ref().off('value', handle); },
-  lineItems: function(jobId, liId) {
-    return MastDB._ref(this.PATH + '/' + jobId + '/lineItems' + (liId ? '/' + liId : ''));
-  },
-  builds: function(jobId, buildId) {
-    return MastDB._ref(this.PATH + '/' + jobId + '/builds' + (buildId ? '/' + buildId : ''));
-  },
-  buildField: function(jobId, buildId, field) {
-    return MastDB._ref(this.PATH + '/' + jobId + '/builds/' + buildId + '/' + field);
-  },
-  notes: function(jobId) {
-    return MastDB._ref(this.PATH + '/' + jobId + '/notes');
-  },
-  subRef: function() { return MastDB._ref(this.PATH + '/' + Array.from(arguments).join('/')); }
+  list: function(limit) { return MastDB.query('admin/jobs').limitToLast(limit || 100).once(); },
+  get: function(id) { return MastDB.get('admin/jobs/' + id); },
+  set: function(id, data) { return MastDB.set('admin/jobs/' + id, data); },
+  update: function(id, data) { return MastDB.update('admin/jobs/' + id, data); },
+  remove: function(id) { return MastDB.remove('admin/jobs/' + id); },
+  push: function(data) { return MastDB.push('admin/jobs', data); },
+  newKey: function() { return MastDB.newKey('admin/jobs'); },
+  listen: function(limit, cb) { return MastDB.query('admin/jobs').limitToLast(limit || 100).subscribe(cb); },
+  query: function() { return MastDB.query('admin/jobs'); },
+  pushLineItem: function(jobId, data) { return MastDB.push('admin/jobs/' + jobId + '/lineItems', data); },
+  newLineItemKey: function(jobId) { return MastDB.newKey('admin/jobs/' + jobId + '/lineItems'); },
+  setLineItem: function(jobId, liId, data) { return MastDB.set('admin/jobs/' + jobId + '/lineItems/' + liId, data); },
+  updateLineItem: function(jobId, liId, data) { return MastDB.update('admin/jobs/' + jobId + '/lineItems/' + liId, data); },
+  removeLineItem: function(jobId, liId) { return MastDB.remove('admin/jobs/' + jobId + '/lineItems/' + liId); },
+  pushBuild: function(jobId, data) { return MastDB.push('admin/jobs/' + jobId + '/builds', data); },
+  updateBuild: function(jobId, buildId, data) { return MastDB.update('admin/jobs/' + jobId + '/builds/' + buildId, data); },
+  getBuildField: function(jobId, buildId, field) { return MastDB.get('admin/jobs/' + jobId + '/builds/' + buildId + '/' + field); },
+  setBuildField: function(jobId, buildId, field, value) { return MastDB.set('admin/jobs/' + jobId + '/builds/' + buildId + '/' + field, value); },
+  pushNote: function(jobId, data) { return MastDB.push('admin/jobs/' + jobId + '/notes', data); },
+  sub: function() { return 'admin/jobs/' + Array.from(arguments).join('/'); }
 };
 
-MastDB.operators = {
-  PATH: 'admin/operators',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  list: function(limit) { return this.ref().limitToLast(limit || 50).once('value'); },
-  get: function(id) { return this.ref(id).once('value'); },
-  set: function(id, data) { return this.ref(id).set(data); },
-  remove: function(id) { return this.ref(id).remove(); },
-  listen: function(limit, cb, errCb) {
-    return this.ref().limitToLast(limit || 50).on('value', cb, errCb);
-  },
-  unlisten: function(handle) { this.ref().off('value', handle); }
-};
+MastDB.operators = _makeEntity('admin/operators', 50);
 
 MastDB.buildMedia = {
   PATH: 'admin/buildMedia',
-  ref: function(buildId, mediaId) {
-    var p = this.PATH;
-    if (buildId) p += '/' + buildId;
-    if (mediaId) p += '/' + mediaId;
-    return MastDB._ref(p);
-  },
-  get: function(buildId) { return this.ref(buildId).once('value'); },
-  set: function(buildId, mediaId, data) { return this.ref(buildId, mediaId).set(data); },
-  remove: function(buildId, mediaId) { return this.ref(buildId, mediaId).remove(); },
-  listAll: function() { return MastDB._ref(this.PATH).once('value'); }
+  get: function(buildId) { return MastDB.get('admin/buildMedia/' + buildId); },
+  set: function(buildId, mediaId, data) { return MastDB.set('admin/buildMedia/' + buildId + '/' + mediaId, data); },
+  remove: function(buildId, mediaId) { return MastDB.remove('admin/buildMedia/' + buildId + '/' + mediaId); },
+  listAll: function() { return MastDB.list('admin/buildMedia'); }
 };
 
-MastDB.stories = {
-  PATH: 'public/stories',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  list: function(limit) { return this.ref().limitToLast(limit || 200).once('value'); },
-  get: function(id) { return this.ref(id).once('value'); },
-  set: function(id, data) { return this.ref(id).set(data); },
-  update: function(id, data) { return this.ref(id).update(data); },
-  remove: function(id) { return this.ref(id).remove(); },
-  push: function() { return this.ref().push(); },
-  newKey: function() { return this.ref().push().key; },
-  listen: function(limit, cb, errCb) {
-    return this.ref().limitToLast(limit || 200).on('value', cb, errCb);
-  },
-  unlisten: function(handle) { this.ref().off('value', handle); },
+MastDB.stories = Object.assign(_makeEntity('public/stories', 200), {
   queryByJob: function(jobId) {
-    return this.ref().orderByChild('jobId').equalTo(jobId).once('value');
+    return MastDB.query('public/stories').orderByChild('jobId').equalTo(jobId).once();
   }
-};
+});
 
 MastDB.contacts = {
   PATH: 'admin/contacts',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  list: function() { return this.ref().once('value'); },
-  get: function(id) { return this.ref(id).once('value'); },
-  set: function(id, data) { return this.ref(id).set(data); },
-  update: function(id, data) { return this.ref(id).update(data); },
-  remove: function(id) { return this.ref(id).remove(); },
-  interactions: function(contactId, interactionId) {
-    var p = this.PATH + '/' + contactId + '/interactions';
-    if (interactionId) p += '/' + interactionId;
-    return MastDB._ref(p);
+  list: function() { return MastDB.list('admin/contacts'); },
+  get: function(id) { return MastDB.get('admin/contacts/' + id); },
+  set: function(id, data) { return MastDB.set('admin/contacts/' + id, data); },
+  update: function(id, data) { return MastDB.update('admin/contacts/' + id, data); },
+  remove: function(id) { return MastDB.remove('admin/contacts/' + id); },
+  query: function() { return MastDB.query('admin/contacts'); },
+  getInteraction: function(contactId, interactionId) {
+    return MastDB.get('admin/contacts/' + contactId + '/interactions' + (interactionId ? '/' + interactionId : ''));
   },
-  interactionsList: function(contactId, opts) {
-    var ref = this.interactions(contactId);
-    if (opts && opts.orderBy) ref = ref.orderByChild(opts.orderBy);
-    if (opts && opts.limit) ref = ref.limitToLast(opts.limit);
-    return ref.once('value');
+  setInteraction: function(contactId, interactionId, data) {
+    return MastDB.set('admin/contacts/' + contactId + '/interactions/' + interactionId, data);
   },
-  googleContactId: function(id) { return MastDB._ref(this.PATH + '/' + id + '/googleContactId'); },
-  subRef: function() { return MastDB._ref(this.PATH + '/' + Array.from(arguments).join('/')); }
+  listInteractions: function(contactId, opts) {
+    var q = MastDB.query('admin/contacts/' + contactId + '/interactions');
+    if (opts && opts.orderBy) q = q.orderByChild(opts.orderBy);
+    if (opts && opts.limit) q = q.limitToLast(opts.limit);
+    return q.once();
+  },
+  setGoogleContactId: function(id, resourceName) {
+    return MastDB.set('admin/contacts/' + id + '/googleContactId', resourceName);
+  },
+  sub: function() { return 'admin/contacts/' + Array.from(arguments).join('/'); }
 };
 
 MastDB.expenses = {
   PATH: 'admin/expenses',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
   list: function(opts) {
-    var ref = this.ref();
-    if (opts && opts.orderBy) ref = ref.orderByChild(opts.orderBy);
-    if (opts && opts.limit) ref = ref.limitToLast(opts.limit);
-    return ref.once('value');
+    var q = MastDB.query('admin/expenses');
+    if (opts && opts.orderBy) q = q.orderByChild(opts.orderBy);
+    if (opts && opts.limit) q = q.limitToLast(opts.limit);
+    return q.once();
   },
-  get: function(id) { return this.ref(id).once('value'); },
-  set: function(id, data) { return this.ref(id).set(data); },
-  update: function(id, data) { return this.ref(id).update(data); },
-  remove: function(id) { return this.ref(id).remove(); },
-  summary: function(month) { return MastDB._ref('admin/expenseSummary/byMonth/' + month).once('value'); }
+  get: function(id) { return MastDB.get('admin/expenses/' + id); },
+  set: function(id, data) { return MastDB.set('admin/expenses/' + id, data); },
+  update: function(id, data) { return MastDB.update('admin/expenses/' + id, data); },
+  remove: function(id) { return MastDB.remove('admin/expenses/' + id); },
+  query: function() { return MastDB.query('admin/expenses'); },
+  summary: function(month) { return MastDB.get('admin/expenseSummary/byMonth/' + month); }
 };
 
 MastDB.plaidItems = {
   PATH: 'admin/plaidItems',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  list: function() { return this.ref().once('value'); },
-  get: function(id) { return this.ref(id).once('value'); },
-  update: function(id, data) { return this.ref(id).update(data); }
+  list: function() { return MastDB.list('admin/plaidItems'); },
+  get: function(id) { return MastDB.get('admin/plaidItems/' + id); },
+  update: function(id, data) { return MastDB.update('admin/plaidItems/' + id, data); }
 };
 
 MastDB.lpe = {
   equipment: {
     PATH: 'admin/lpe/equipment',
-    ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-    list: function() { return this.ref().once('value'); },
-    get: function(id) { return this.ref(id).once('value'); },
-    set: function(id, data) { return this.ref(id).set(data); },
-    update: function(id, data) { return this.ref(id).update(data); },
-    remove: function(id) { return this.ref(id).remove(); }
+    list: function() { return MastDB.list('admin/lpe/equipment'); },
+    get: function(id) { return MastDB.get('admin/lpe/equipment/' + id); },
+    set: function(id, data) { return MastDB.set('admin/lpe/equipment/' + id, data); },
+    update: function(id, data) { return MastDB.update('admin/lpe/equipment/' + id, data); },
+    remove: function(id) { return MastDB.remove('admin/lpe/equipment/' + id); }
   },
   laborProfile: {
     PATH: 'admin/lpe/laborProfile',
-    ref: function() { return MastDB._ref(this.PATH); },
-    get: function() { return this.ref().once('value'); },
-    update: function(data) { return this.ref().update(data); }
+    get: function() { return MastDB.get('admin/lpe/laborProfile'); },
+    update: function(data) { return MastDB.update('admin/lpe/laborProfile', data); }
   }
 };
 
 MastDB.commissions = {
   PATH: 'admin/commissions',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  get: function(id) { return this.ref(id).once('value'); },
-  set: function(id, data) { return this.ref(id).set(data); },
-  update: function(id, data) { return this.ref(id).update(data); },
-  documents: function(commId, docId) {
-    var p = this.PATH + '/' + commId + '/documents';
-    if (docId) p += '/' + docId;
-    return MastDB._ref(p);
-  },
-  subRef: function() { return MastDB._ref(this.PATH + '/' + Array.from(arguments).join('/')); }
+  get: function(id) { return MastDB.get('admin/commissions/' + id); },
+  set: function(id, data) { return MastDB.set('admin/commissions/' + id, data); },
+  update: function(id, data) { return MastDB.update('admin/commissions/' + id, data); },
+  query: function() { return MastDB.query('admin/commissions'); },
+  pushDocument: function(commId, data) { return MastDB.push('admin/commissions/' + commId + '/documents', data); },
+  removeDocument: function(commId, docId) { return MastDB.remove('admin/commissions/' + commId + '/documents/' + docId); },
+  sub: function() { return 'admin/commissions/' + Array.from(arguments).join('/'); }
 };
 
 MastDB.locations = {
   PATH: 'admin/locations',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  list: function() { return this.ref().once('value'); },
-  get: function(id) { return this.ref(id).once('value'); },
-  set: function(id, data) { return this.ref(id).set(data); },
-  update: function(id, data) { return this.ref(id).update(data); },
-  remove: function(id) { return this.ref(id).remove(); },
-  subRef: function() { return MastDB._ref(this.PATH + '/' + Array.from(arguments).join('/')); }
+  list: function() { return MastDB.list('admin/locations'); },
+  get: function(id) { return MastDB.get('admin/locations/' + id); },
+  set: function(id, data) { return MastDB.set('admin/locations/' + id, data); },
+  update: function(id, data) { return MastDB.update('admin/locations/' + id, data); },
+  remove: function(id) { return MastDB.remove('admin/locations/' + id); },
+  sub: function() { return 'admin/locations/' + Array.from(arguments).join('/'); }
 };
 
 MastDB.studioLocations = {
   PATH: 'config/studioLocations',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  list: function() { return this.ref().once('value'); },
-  get: function(id) { return this.ref(id).once('value'); },
-  set: function(id, data) { return this.ref(id).set(data); },
-  remove: function(id) { return this.ref(id).remove(); }
+  list: function() { return MastDB.list('config/studioLocations'); },
+  get: function(id) { return MastDB.get('config/studioLocations/' + id); },
+  set: function(id, data) { return MastDB.set('config/studioLocations/' + id, data); },
+  remove: function(id) { return MastDB.remove('config/studioLocations/' + id); }
 };
 
 MastDB.newsletter = {
   issues: {
     PATH: 'newsletter/issues',
-    ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
     list: function(limit) {
-      return this.ref().orderByChild('issueNumber').limitToLast(limit || 50).once('value');
+      return MastDB.query('newsletter/issues').orderByChild('issueNumber').limitToLast(limit || 50).once();
     },
-    get: function(id) { return this.ref(id).once('value'); },
-    set: function(id, data) { return this.ref(id).set(data); },
-    update: function(id, data) { return this.ref(id).update(data); },
-    newKey: function() { return this.ref().push().key; },
-    section: function(issueId, secId) {
-      return MastDB._ref(this.PATH + '/' + issueId + '/sections/' + secId);
+    get: function(id) { return MastDB.get('newsletter/issues/' + id); },
+    set: function(id, data) { return MastDB.set('newsletter/issues/' + id, data); },
+    update: function(id, data) { return MastDB.update('newsletter/issues/' + id, data); },
+    newKey: function() { return MastDB.newKey('newsletter/issues'); },
+    query: function() { return MastDB.query('newsletter/issues'); },
+    updateSection: function(issueId, secId, data) {
+      return MastDB.update('newsletter/issues/' + issueId + '/sections/' + secId, data);
     },
-    sectionField: function(issueId, secId, field) {
-      return MastDB._ref(this.PATH + '/' + issueId + '/sections/' + secId + '/' + field);
+    setSection: function(issueId, secId, data) {
+      return MastDB.set('newsletter/issues/' + issueId + '/sections/' + secId, data);
+    },
+    setSectionField: function(issueId, secId, field, value) {
+      return MastDB.set('newsletter/issues/' + issueId + '/sections/' + secId + '/' + field, value);
     }
   },
   subscribers: {
     PATH: 'newsletter/subscribers',
-    ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
     list: function(limit) {
-      return this.ref().orderByChild('subscribedAt').limitToLast(limit || 200).once('value');
+      return MastDB.query('newsletter/subscribers').orderByChild('subscribedAt').limitToLast(limit || 200).once();
     },
-    get: function(id) { return this.ref(id).once('value'); },
-    set: function(id, data) { return this.ref(id).set(data); },
-    update: function(id, data) { return this.ref(id).update(data); },
-    newKey: function() { return this.ref().push().key; }
+    get: function(id) { return MastDB.get('newsletter/subscribers/' + id); },
+    set: function(id, data) { return MastDB.set('newsletter/subscribers/' + id, data); },
+    update: function(id, data) { return MastDB.update('newsletter/subscribers/' + id, data); },
+    newKey: function() { return MastDB.newKey('newsletter/subscribers'); },
+    query: function() { return MastDB.query('newsletter/subscribers'); }
   },
   published: {
     PATH: 'newsletter/published',
-    ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-    set: function(id, data) { return this.ref(id).set(data); },
-    remove: function(id) { return this.ref(id).remove(); }
+    set: function(id, data) { return MastDB.set('newsletter/published/' + id, data); },
+    remove: function(id) { return MastDB.remove('newsletter/published/' + id); }
   },
   meta: {
     PATH: 'newsletter/meta',
-    issueCounter: function() { return MastDB._ref(this.PATH + '/issueCounter'); }
+    issueCounterPath: 'newsletter/meta/issueCounter'
   }
 };
 
 MastDB.blog = {
   posts: {
     PATH: 'blog/posts',
-    ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
     list: function(limit) {
-      return this.ref().orderByChild('createdAt').limitToLast(limit || 100).once('value');
+      return MastDB.query('blog/posts').orderByChild('createdAt').limitToLast(limit || 100).once();
     },
-    get: function(id) { return this.ref(id).once('value'); },
-    set: function(id, data) { return this.ref(id).set(data); },
-    update: function(id, data) { return this.ref(id).update(data); },
-    remove: function(id) { return this.ref(id).remove(); },
-    fieldRef: function(id, field) { return MastDB._ref(this.PATH + '/' + id + '/' + field); }
+    get: function(id) { return MastDB.get('blog/posts/' + id); },
+    set: function(id, data) { return MastDB.set('blog/posts/' + id, data); },
+    update: function(id, data) { return MastDB.update('blog/posts/' + id, data); },
+    remove: function(id) { return MastDB.remove('blog/posts/' + id); },
+    query: function() { return MastDB.query('blog/posts'); },
+    setField: function(id, field, value) { return MastDB.set('blog/posts/' + id + '/' + field, value); }
   },
   ideas: {
     PATH: 'blog/ideas',
-    ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
     list: function(limit) {
-      return this.ref().orderByChild('createdAt').limitToLast(limit || 50).once('value');
+      return MastDB.query('blog/ideas').orderByChild('createdAt').limitToLast(limit || 50).once();
     },
-    get: function(id) { return this.ref(id).once('value'); },
-    set: function(id, data) { return this.ref(id).set(data); },
-    remove: function(id) { return this.ref(id).remove(); }
+    get: function(id) { return MastDB.get('blog/ideas/' + id); },
+    set: function(id, data) { return MastDB.set('blog/ideas/' + id, data); },
+    remove: function(id) { return MastDB.remove('blog/ideas/' + id); }
   },
   published: {
     PATH: 'blog/published',
-    ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-    set: function(id, data) { return this.ref(id).set(data); },
-    remove: function(id) { return this.ref(id).remove(); }
+    set: function(id, data) { return MastDB.set('blog/published/' + id, data); },
+    remove: function(id) { return MastDB.remove('blog/published/' + id); }
   },
   meta: {
     PATH: 'blog/meta',
-    postCounter: function() { return MastDB._ref(this.PATH + '/postCounter'); }
+    postCounterPath: 'blog/meta/postCounter'
   }
 };
 
 MastDB.market = {
   pendingClips: {
     PATH: 'market/pendingClips',
-    ref: function(uid, clipId) {
-      var p = this.PATH + '/' + uid;
-      if (clipId) p += '/' + clipId;
-      return MastDB._ref(p);
-    },
-    list: function(uid) { return this.ref(uid).once('value'); },
-    set: function(uid, clipId, data) { return this.ref(uid, clipId).set(data); },
-    statusRef: function(uid, clipId) {
-      return MastDB._ref(this.PATH + '/' + uid + '/' + clipId + '/status');
+    list: function(uid) { return MastDB.get('market/pendingClips/' + uid); },
+    set: function(uid, clipId, data) { return MastDB.set('market/pendingClips/' + uid + '/' + clipId, data); },
+    setStatus: function(uid, clipId, status) {
+      return MastDB.set('market/pendingClips/' + uid + '/' + clipId + '/status', status);
     }
   },
   posts: {
     PATH: 'market/posts',
-    ref: function(uid, postId) {
-      var p = this.PATH + '/' + uid;
-      if (postId) p += '/' + postId;
-      return MastDB._ref(p);
-    },
-    list: function(uid) { return this.ref(uid).once('value'); },
-    set: function(uid, postId, data) { return this.ref(uid, postId).set(data); },
-    update: function(uid, postId, data) { return this.ref(uid, postId).update(data); }
+    list: function(uid) { return MastDB.get('market/posts/' + uid); },
+    set: function(uid, postId, data) { return MastDB.set('market/posts/' + uid + '/' + postId, data); },
+    update: function(uid, postId, data) { return MastDB.update('market/posts/' + uid + '/' + postId, data); }
   }
 };
 
 MastDB.adminUsers = {
   PATH: 'admin/users',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  list: function() { return this.ref().once('value'); },
-  get: function(id) { return this.ref(id).once('value'); },
-  set: function(id, data) { return this.ref(id).set(data); },
-  update: function(id, data) { return this.ref(id).update(data); },
-  subRef: function() { return MastDB._ref(this.PATH + '/' + Array.from(arguments).join('/')); }
+  list: function() { return MastDB.list('admin/users'); },
+  get: function(id) { return MastDB.get('admin/users/' + id); },
+  set: function(id, data) { return MastDB.set('admin/users/' + id, data); },
+  update: function(id, data) { return MastDB.update('admin/users/' + id, data); },
+  sub: function() { return 'admin/users/' + Array.from(arguments).join('/'); }
 };
 
 MastDB.roles = {
   PATH: 'admin/roles',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  list: function() { return this.ref().once('value'); },
-  get: function(id) { return this.ref(id).once('value'); },
-  set: function(id, data) { return this.ref(id).set(data); },
-  permissions: function(roleKey) { return MastDB._ref(this.PATH + '/' + roleKey + '/permissions'); }
+  list: function() { return MastDB.list('admin/roles'); },
+  get: function(id) { return MastDB.get('admin/roles/' + (id || '')); },
+  set: function(id, data) {
+    if (arguments.length === 1) return MastDB.set('admin/roles', id);
+    return MastDB.set('admin/roles/' + id, data);
+  },
+  setPermissions: function(roleKey, permissions) {
+    return MastDB.set('admin/roles/' + roleKey + '/permissions', permissions);
+  }
 };
 
 MastDB.invites = {
   PATH: 'admin/invites',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  list: function() { return this.ref().once('value'); },
-  get: function(id) { return this.ref(id).once('value'); },
-  set: function(id, data) { return this.ref(id).set(data); },
-  update: function(id, data) { return this.ref(id).update(data); },
-  remove: function(id) { return this.ref(id).remove(); },
+  list: function() { return MastDB.list('admin/invites'); },
+  get: function(id) { return MastDB.get('admin/invites/' + id); },
+  set: function(id, data) { return MastDB.set('admin/invites/' + id, data); },
+  update: function(id, data) { return MastDB.update('admin/invites/' + id, data); },
+  remove: function(id) { return MastDB.remove('admin/invites/' + id); },
   queryPending: function() {
-    return this.ref().orderByChild('status').equalTo('pending').once('value');
+    return MastDB.query('admin/invites').orderByChild('status').equalTo('pending').once();
   }
 };
 
 MastDB.auditLog = {
   PATH: 'admin/auditLog',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  push: function(data) { return MastDB._ref(this.PATH).push(data); },
-  newKey: function() { return MastDB._ref(this.PATH).push().key; },
+  push: function(data) { return MastDB.push('admin/auditLog', data); },
+  newKey: function() { return MastDB.newKey('admin/auditLog'); },
   queryByKey: function(opts) {
-    var q = this.ref().orderByKey();
+    var q = MastDB.query('admin/auditLog').orderByKey();
     if (opts && opts.endBefore) q = q.endBefore(opts.endBefore);
     if (opts && opts.limit) q = q.limitToLast(opts.limit);
-    return q.once('value');
+    return q.once();
   },
   queryByEntity: function(entity, entityId, opts) {
-    var q = this.ref().orderByChild('objectId').equalTo(entity + ':' + entityId);
+    var q = MastDB.query('admin/auditLog').orderByChild('objectId').equalTo(entity + ':' + entityId);
     if (opts && opts.limit) q = q.limitToLast(opts.limit);
-    return q.once('value');
+    return q.once();
   }
 };
 
 MastDB.auditIndex = {
   PATH: 'admin/auditIndex',
-  ref: function() { return MastDB._ref(this.PATH + '/' + Array.from(arguments).join('/')); },
   get: function(entity, entityId, opts) {
-    var ref = this.ref(entity, entityId);
-    if (opts && opts.limit) ref = ref.limitToLast(opts.limit);
-    return ref.once('value');
+    var p = 'admin/auditIndex/' + entity + '/' + entityId;
+    if (opts && opts.limit) {
+      return MastDB.query(p).limitToLast(opts.limit).once();
+    }
+    return MastDB.list(p);
   }
 };
 
 MastDB.feedback = {
   PATH: 'feedbackReports',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  push: function(data) { return this.ref().push(data); }
+  push: function(data) { return MastDB.push('feedbackReports', data); }
 };
 
 MastDB.feedbackSettings = {
   PATH: 'admin/feedbackSettings',
-  ref: function(field) { return MastDB._ref(this.PATH + (field ? '/' + field : '')); },
-  get: function() { return this.ref().once('value'); },
-  set: function(data) { return this.ref().set(data); }
+  get: function() { return MastDB.get('admin/feedbackSettings'); },
+  set: function(data) { return MastDB.set('admin/feedbackSettings', data); }
 };
 
 MastDB.testingMissions = {
@@ -9476,398 +9303,281 @@ MastDB.testingMissions = {
 
 MastDB.testingMode = {
   PATH: 'admin/testingMode',
-  ref: function(uid, missionId) {
-    var p = this.PATH + '/' + uid;
-    if (missionId) p += '/' + missionId;
-    return MastDB._ref(p);
+  get: function(uid) { return MastDB.get('admin/testingMode/' + uid); },
+  remove: function(uid) { return MastDB.remove('admin/testingMode/' + uid); },
+  setReflection: function(uid, missionId, type, value) {
+    return MastDB.set('admin/testingMode/' + uid + '/' + missionId + '/reflections/' + type, value);
   },
-  get: function(uid) { return this.ref(uid).once('value'); },
-  remove: function(uid) { return this.ref(uid).remove(); },
-  reflections: function(uid, missionId, type) {
-    return MastDB._ref(this.PATH + '/' + uid + '/' + missionId + '/reflections/' + type);
+  setProgress: function(uid, missionId, taskIdx, value) {
+    return MastDB.set('admin/testingMode/' + uid + '/' + missionId + '/progress/' + taskIdx, value);
   },
-  progress: function(uid, missionId, taskIdx) {
-    return MastDB._ref(this.PATH + '/' + uid + '/' + missionId + '/progress/' + taskIdx);
-  },
-  questions: function(uid, missionId) {
-    return MastDB._ref(this.PATH + '/' + uid + '/' + missionId + '/questions');
+  pushQuestion: function(uid, missionId, data) {
+    return MastDB.push('admin/testingMode/' + uid + '/' + missionId + '/questions', data);
   }
 };
 
 MastDB.trips = {
   PATH: 'trips',
-  ref: function(uid, tripId) {
-    var p = this.PATH;
-    if (uid) p += '/' + uid;
-    if (tripId) p += '/' + tripId;
-    return MastDB._ref(p);
-  },
   list: function(uid, opts) {
-    var q = this.ref(uid);
+    var q = MastDB.query('trips/' + uid);
     if (opts && opts.orderBy) q = q.orderByChild(opts.orderBy);
     if (opts && opts.equalTo !== undefined) q = q.equalTo(opts.equalTo);
     if (opts && opts.limit) q = q.limitToLast(opts.limit);
-    return q.once('value');
+    return q.once();
   },
-  get: function(uid, tripId) { return this.ref(uid, tripId).once('value'); },
-  set: function(uid, tripId, data) { return this.ref(uid, tripId).set(data); },
-  update: function(uid, tripId, data) { return this.ref(uid, tripId).update(data); },
-  push: function(uid) { return this.ref(uid).push(); },
-  allDrivers: function() { return MastDB._ref(this.PATH).once('value'); }
+  get: function(uid, tripId) { return MastDB.get('trips/' + uid + '/' + tripId); },
+  set: function(uid, tripId, data) { return MastDB.set('trips/' + uid + '/' + tripId, data); },
+  update: function(uid, tripId, data) { return MastDB.update('trips/' + uid + '/' + tripId, data); },
+  push: function(uid, data) { return MastDB.push('trips/' + uid, data); },
+  allDrivers: function() { return MastDB.list('trips'); }
 };
 
 MastDB.tripLocations = {
   PATH: 'tripLocations',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  list: function() { return this.ref().once('value'); },
-  set: function(id, data) { return this.ref(id).set(data); },
-  setAll: function(data) { return this.ref().set(data); },
-  remove: function(id) { return this.ref(id).remove(); }
+  list: function() { return MastDB.list('tripLocations'); },
+  set: function(id, data) { return MastDB.set('tripLocations/' + id, data); },
+  setAll: function(data) { return MastDB.set('tripLocations', data); },
+  remove: function(id) { return MastDB.remove('tripLocations/' + id); }
 };
 
 MastDB.tripSettings = {
   PATH: 'settings/trips',
-  ref: function(field) { return MastDB._ref(this.PATH + (field ? '/' + field : '')); },
-  get: function() { return this.ref().once('value'); },
-  set: function(data) { return this.ref().set(data); },
-  subRef: function() { return MastDB._ref(this.PATH + '/' + Array.from(arguments).join('/')); }
+  get: function() { return MastDB.get('settings/trips'); },
+  set: function(data) { return MastDB.set('settings/trips', data); },
+  sub: function() { return 'settings/trips/' + Array.from(arguments).join('/'); }
 };
 
 MastDB.quickActions = {
   PATH: 'quickActions',
-  ref: function(uid) { return MastDB._ref(this.PATH + (uid ? '/' + uid : '')); },
-  get: function(uid) { return this.ref(uid).once('value'); },
-  set: function(uid, data) { return this.ref(uid).set(data); }
+  get: function(uid) { return MastDB.get('quickActions/' + uid); },
+  set: function(uid, data) { return MastDB.set('quickActions/' + uid, data); }
 };
 
 MastDB.dashboardPrefs = {
   PATH: 'admin/users',
-  ref: function(uid) { return MastDB._ref(this.PATH + '/' + uid + '/dashboardPrefs'); },
-  cardRef: function(uid, cardId) { return MastDB._ref(this.PATH + '/' + uid + '/dashboardPrefs/cards/' + cardId); },
-  get: function(uid) { return this.ref(uid).once('value'); },
-  setCard: function(uid, cardId, data) { return this.cardRef(uid, cardId).update(data); },
-  setCardActivity: function(uid, cardId, timestamp) { return this.cardRef(uid, cardId).update({ lastActivity: timestamp }); }
+  get: function(uid) { return MastDB.get('admin/users/' + uid + '/dashboardPrefs'); },
+  setCard: function(uid, cardId, data) {
+    return MastDB.update('admin/users/' + uid + '/dashboardPrefs/cards/' + cardId, data);
+  },
+  setCardActivity: function(uid, cardId, timestamp) {
+    return MastDB.update('admin/users/' + uid + '/dashboardPrefs/cards/' + cardId, { lastActivity: timestamp });
+  }
 };
 
 MastDB.tripCustomPurposes = {
   PATH: 'tripCustomPurposes',
-  ref: function() { return MastDB._ref(this.PATH); },
-  list: function() { return this.ref().once('value'); }
+  list: function() { return MastDB.list('tripCustomPurposes'); }
 };
 
-MastDB.materials = {
-  PATH: 'admin/materials',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  list: function(limit) { return this.ref().limitToLast(limit || 500).once('value'); },
-  get: function(id) { return this.ref(id).once('value'); },
-  set: function(id, data) { return this.ref(id).set(data); },
-  update: function(id, data) { return this.ref(id).update(data); },
-  remove: function(id) { return this.ref(id).remove(); },
-  newKey: function() { return this.ref().push().key; },
-  listen: function(limit, cb, errCb) {
-    return this.ref().limitToLast(limit || 500).on('value', cb, errCb);
-  },
-  unlisten: function(handle) { this.ref().off('value', handle); },
-  fieldRef: function(id, field) { return MastDB._ref(this.PATH + '/' + id + '/' + field); }
-};
+MastDB.materials = Object.assign(_makeEntity('admin/materials', 500), {
+  setField: function(id, field, value) { return MastDB.set('admin/materials/' + id + '/' + field, value); }
+});
 
 MastDB.recipes = {
   PATH: 'admin/recipes',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  list: function(limit) { return this.ref().limitToLast(limit || 200).once('value'); },
-  get: function(id) { return this.ref(id).once('value'); },
-  set: function(id, data) { return this.ref(id).set(data); },
-  update: function(id, data) { return this.ref(id).update(data); },
-  remove: function(id) { return this.ref(id).remove(); },
-  newKey: function() { return this.ref().push().key; },
-  listen: function(limit, cb, errCb) {
-    return this.ref().limitToLast(limit || 200).on('value', cb, errCb);
-  },
-  unlisten: function(handle) { this.ref().off('value', handle); },
-  lineItemsRef: function(recipeId) { return MastDB._ref(this.PATH + '/' + recipeId + '/lineItems'); },
-  fieldRef: function(id, field) { return MastDB._ref(this.PATH + '/' + id + '/' + field); },
-  subRef: function() { return MastDB._ref(this.PATH + '/' + Array.from(arguments).join('/')); }
+  list: function(limit) { return MastDB.query('admin/recipes').limitToLast(limit || 200).once(); },
+  get: function(id) { return MastDB.get('admin/recipes/' + id); },
+  set: function(id, data) { return MastDB.set('admin/recipes/' + id, data); },
+  update: function(id, data) { return MastDB.update('admin/recipes/' + id, data); },
+  remove: function(id) { return MastDB.remove('admin/recipes/' + id); },
+  newKey: function() { return MastDB.newKey('admin/recipes'); },
+  listen: function(limit, cb) { return MastDB.query('admin/recipes').limitToLast(limit || 200).subscribe(cb); },
+  query: function() { return MastDB.query('admin/recipes'); },
+  getLineItems: function(recipeId) { return MastDB.get('admin/recipes/' + recipeId + '/lineItems'); },
+  setField: function(id, field, value) { return MastDB.set('admin/recipes/' + id + '/' + field, value); },
+  sub: function() { return 'admin/recipes/' + Array.from(arguments).join('/'); }
 };
 
 MastDB.importLog = {
   PATH: 'admin/importLog',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  list: function(limit) { return this.ref().limitToLast(limit || 20).once('value'); },
-  set: function(id, data) { return this.ref(id).set(data); },
-  newKey: function() { return this.ref().push().key; }
+  list: function(limit) { return MastDB.query('admin/importLog').limitToLast(limit || 20).once(); },
+  set: function(id, data) { return MastDB.set('admin/importLog/' + id, data); },
+  newKey: function() { return MastDB.newKey('admin/importLog'); }
 };
 
-MastDB.lookbooks = {
-  PATH: 'admin/lookbooks',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  list: function(limit) { return this.ref().limitToLast(limit || 100).once('value'); },
-  get: function(id) { return this.ref(id).once('value'); },
-  set: function(id, data) { return this.ref(id).set(data); },
-  update: function(id, data) { return this.ref(id).update(data); },
-  remove: function(id) { return this.ref(id).remove(); },
-  newKey: function() { return this.ref().push().key; },
-  listen: function(limit, cb, errCb) {
-    return this.ref().limitToLast(limit || 100).on('value', cb, errCb);
-  },
-  unlisten: function(handle) { this.ref().off('value', handle); }
-};
+MastDB.lookbooks = _makeEntity('admin/lookbooks', 100);
 
-MastDB.consignments = {
-  PATH: 'admin/consignments',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  list: function(limit) { return this.ref().limitToLast(limit || 200).once('value'); },
-  get: function(id) { return this.ref(id).once('value'); },
-  set: function(id, data) { return this.ref(id).set(data); },
-  update: function(id, data) { return this.ref(id).update(data); },
-  remove: function(id) { return this.ref(id).remove(); },
-  newKey: function() { return this.ref().push().key; },
-  listen: function(limit, cb, errCb) {
-    return this.ref().limitToLast(limit || 200).on('value', cb, errCb);
-  },
-  unlisten: function(handle) { this.ref().off('value', handle); },
-  lineItemsRef: function(placementId) { return MastDB._ref(this.PATH + '/' + placementId + '/lineItems'); },
-  fieldRef: function(id, field) { return MastDB._ref(this.PATH + '/' + id + '/' + field); }
-};
+MastDB.consignments = Object.assign(_makeEntity('admin/consignments', 200), {
+  getLineItems: function(placementId) { return MastDB.get('admin/consignments/' + placementId + '/lineItems'); },
+  setField: function(id, field, value) { return MastDB.set('admin/consignments/' + id + '/' + field, value); }
+});
 
 MastDB.dismissedNudges = {
   PATH: 'admin/users',
-  ref: function(uid) { return MastDB._ref(this.PATH + '/' + uid + '/dismissedNudges'); },
-  get: function(uid) { return this.ref(uid).once('value'); },
-  dismiss: function(uid, nudgeKey) { return this.ref(uid).child(nudgeKey).set(new Date().toISOString()); }
+  get: function(uid) { return MastDB.get('admin/users/' + uid + '/dismissedNudges'); },
+  dismiss: function(uid, nudgeKey) {
+    return MastDB.set('admin/users/' + uid + '/dismissedNudges/' + nudgeKey, new Date().toISOString());
+  }
 };
 
 MastDB.config = {
-  ref: function(subpath) { return MastDB._ref('config' + (subpath ? '/' + subpath : '')); },
-  square: function() { return MastDB._ref('config/square'); },
-  etsy: function() { return MastDB._ref('config/etsy'); },
-  shipping: function() { return MastDB._ref('public/config/shippingRates'); },
-  shippingProvider: function(subpath) { return MastDB._ref('config/shipping' + (subpath ? '/' + subpath : '')); },
-  taxRates: function() { return MastDB._ref('public/taxRates'); },
-  googleMaps: function() { return MastDB._ref('public/config/googleMapsApiKey'); },
-  testMode: function() { return MastDB._ref('public/config/testMode'); },
-  githubToken: function() { return MastDB._ref('admin/githubToken'); },
-  settings: function() { return MastDB._ref('public/settings'); },
-  settingsField: function(field) { return MastDB._ref('public/settings/' + field); },
-  migrationFlag: function() { return MastDB._ref('admin/sectionsMigrated'); },
-  analyticsHits: function() { return MastDB._ref('analytics/hits'); },
-  makerSettings: function() { return MastDB._ref('admin/config/makerSettings'); },
-  shopDisplay: function() { return MastDB._ref('public/config/shopDisplay'); }
+  get: function(subpath) { return MastDB.get('config' + (subpath ? '/' + subpath : '')); },
+  set: function(subpath, value) { return MastDB.set('config' + (subpath ? '/' + subpath : ''), value); },
+  update: function(subpath, value) { return MastDB.update('config' + (subpath ? '/' + subpath : ''), value); },
+  square: function() { return MastDB.get('config/square'); },
+  setSquare: function(data) { return MastDB.set('config/square', data); },
+  etsy: function() { return MastDB.get('config/etsy'); },
+  removeEtsy: function() { return MastDB.remove('config/etsy'); },
+  shipping: function() { return MastDB.get('public/config/shippingRates'); },
+  setShipping: function(config) { return MastDB.set('public/config/shippingRates', config); },
+  shippingProvider: function(subpath) {
+    return MastDB.get('config/shipping' + (subpath ? '/' + subpath : ''));
+  },
+  setShippingProvider: function(subpath, value) {
+    if (arguments.length === 1) return MastDB.set('config/shipping', subpath);
+    return MastDB.set('config/shipping' + (subpath ? '/' + subpath : ''), value);
+  },
+  taxRates: function() { return MastDB.get('public/taxRates'); },
+  setTaxRates: function(rates) { return MastDB.set('public/taxRates', rates); },
+  removeTaxRates: function() { return MastDB.remove('public/taxRates'); },
+  googleMaps: function() { return MastDB.get('public/config/googleMapsApiKey'); },
+  setGoogleMaps: function(key) { return MastDB.set('public/config/googleMapsApiKey', key); },
+  testMode: function() { return MastDB.get('public/config/testMode'); },
+  setTestMode: function(val) { return MastDB.set('public/config/testMode', val); },
+  githubToken: function() { return MastDB.get('admin/githubToken'); },
+  setGithubToken: function(token) { return MastDB.set('admin/githubToken', token); },
+  settings: function() { return MastDB.get('public/settings'); },
+  settingsField: function(field) { return MastDB.get('public/settings/' + field); },
+  setSettingsField: function(field, value) { return MastDB.set('public/settings/' + field, value); },
+  migrationFlag: function() { return MastDB.get('admin/sectionsMigrated'); },
+  analyticsHits: function() { return MastDB.get('analytics/hits'); },
+  makerSettings: function() { return MastDB.get('admin/config/makerSettings'); },
+  updateMakerSettings: function(data) { return MastDB.update('admin/config/makerSettings', data); },
+  shopDisplay: function() { return MastDB.get('public/config/shopDisplay'); },
+  setShopDisplay: function(cfg) { return MastDB.set('public/config/shopDisplay', cfg); }
 };
 
 MastDB.wholesaleTokens = {
   PATH: 'admin/wholesaleTokens',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  list: function(limit) { return this.ref().limitToLast(limit || 100).once('value'); },
-  get: function(id) { return this.ref(id).once('value'); },
-  set: function(id, data) { return this.ref(id).set(data); },
-  update: function(id, data) { return this.ref(id).update(data); },
-  remove: function(id) { return this.ref(id).remove(); }
+  list: function(limit) { return MastDB.query('admin/wholesaleTokens').limitToLast(limit || 100).once(); },
+  get: function(id) { return MastDB.get('admin/wholesaleTokens/' + id); },
+  set: function(id, data) { return MastDB.set('admin/wholesaleTokens/' + id, data); },
+  update: function(id, data) { return MastDB.update('admin/wholesaleTokens/' + id, data); },
+  remove: function(id) { return MastDB.remove('admin/wholesaleTokens/' + id); }
 };
 
 MastDB.wholesaleOrders = {
   // Wholesale orders live in the unified orders path with type: 'wholesale'
   PATH: 'orders',
-  ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-  list: function(limit) { return this.ref().orderByChild('type').equalTo('wholesale').limitToLast(limit || 100).once('value'); },
-  get: function(id) { return this.ref(id).once('value'); },
-  set: function(id, data) { return this.ref(id).set(data); },
-  update: function(id, data) { return this.ref(id).update(data); },
-  listen: function(limit, cb, errCb) {
-    return this.ref().orderByChild('type').equalTo('wholesale').limitToLast(limit || 100).on('value', cb, errCb);
+  list: function(limit) {
+    return MastDB.query('orders').orderByChild('type').equalTo('wholesale').limitToLast(limit || 100).once();
   },
-  unlisten: function(handle) { this.ref().off('value', handle); }
+  get: function(id) { return MastDB.get('orders/' + id); },
+  set: function(id, data) { return MastDB.set('orders/' + id, data); },
+  update: function(id, data) { return MastDB.update('orders/' + id, data); },
+  listen: function(limit, cb) {
+    return MastDB.query('orders').orderByChild('type').equalTo('wholesale').limitToLast(limit || 100).subscribe(cb);
+  }
 };
 
 MastDB.subscription = {
   PATH: 'admin/subscription',
-  ref: function(subpath) { return MastDB._ref(this.PATH + (subpath ? '/' + subpath : '')); },
-  get: function() { return this.ref().once('value'); },
-  set: function(data) { return this.ref().set(data); },
-  update: function(data) { return this.ref().update(data); }
+  get: function() { return MastDB.get('admin/subscription'); },
+  set: function(data) { return MastDB.set('admin/subscription', data); },
+  update: function(data) { return MastDB.update('admin/subscription', data); }
 };
 
 MastDB.tokenWallet = {
   PATH: 'tokenWallet',
-  ref: function(subpath) { return MastDB._ref(this.PATH + (subpath ? '/' + subpath : '')); },
-  get: function() { return this.ref().once('value'); },
-  set: function(data) { return this.ref().set(data); },
-  update: function(data) { return this.ref().update(data); },
-  listen: function(onValue, onError) {
-    this.ref().on('value', onValue, onError);
-    return this.ref();
-  },
-  unlisten: function(handle) { this.ref().off('value', handle); }
+  get: function() { return MastDB.get('tokenWallet'); },
+  set: function(data) { return MastDB.set('tokenWallet', data); },
+  update: function(data) { return MastDB.update('tokenWallet', data); },
+  listen: function(cb) { return MastDB.subscribe('tokenWallet', cb); }
 };
 
 MastDB.tokenLog = {
   PATH: 'tokenLog',
-  ref: function(subpath) { return MastDB._ref(this.PATH + (subpath ? '/' + subpath : '')); },
-  recent: function(limit) {
-    return this.ref().limitToLast(limit || 50).once('value');
-  }
+  recent: function(limit) { return MastDB.query('tokenLog').limitToLast(limit || 50).once(); }
 };
 
 MastDB.showLight = {
   profile: {
     PATH: 'showLight/profile',
-    ref: function(subpath) { return MastDB._ref(this.PATH + (subpath ? '/' + subpath : '')); },
-    get: function() { return this.ref().once('value'); },
-    set: function(data) { return this.ref().set(data); },
-    update: function(data) { return this.ref().update(data); }
+    get: function() { return MastDB.get('showLight/profile'); },
+    set: function(data) { return MastDB.set('showLight/profile', data); },
+    update: function(data) { return MastDB.update('showLight/profile', data); }
   },
   shows: {
     PATH: 'showLight/shows',
-    ref: function(subpath) { return MastDB._ref(this.PATH + (subpath ? '/' + subpath : '')); },
-    get: function() { return this.ref().once('value'); },
-    set: function(data) { return this.ref().set(data); },
-    update: function(data) { return this.ref().update(data); },
-    newKey: function() { return MastDB._ref(this.PATH).push().key; }
+    get: function() { return MastDB.get('showLight/shows'); },
+    set: function(data) { return MastDB.set('showLight/shows', data); },
+    update: function(data) { return MastDB.update('showLight/shows', data); },
+    newKey: function() { return MastDB.newKey('showLight/shows'); }
   },
   applications: {
     PATH: 'showLight/applications',
-    ref: function(subpath) { return MastDB._ref(this.PATH + (subpath ? '/' + subpath : '')); },
-    get: function() { return this.ref().once('value'); },
-    set: function(data) { return this.ref().set(data); },
-    update: function(data) { return this.ref().update(data); },
-    newKey: function() { return MastDB._ref(this.PATH).push().key; }
+    get: function() { return MastDB.get('showLight/applications'); },
+    set: function(data) { return MastDB.set('showLight/applications', data); },
+    update: function(data) { return MastDB.update('showLight/applications', data); },
+    newKey: function() { return MastDB.newKey('showLight/applications'); }
   }
 };
 
 // ── Book Module Entities ──
-MastDB.classes = {
-    PATH: 'public/classes',
-    ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-    list: function(limit) { return this.ref().limitToLast(limit || 200).once('value'); },
-    get: function(id) { return this.ref(id).once('value'); },
-    set: function(id, data) { return this.ref(id).set(data); },
-    update: function(id, data) { return this.ref(id).update(data); },
-    remove: function(id) { return this.ref(id).remove(); },
-    listen: function(limit, cb, errCb) { return this.ref().limitToLast(limit || 200).on('value', cb, errCb); },
-    unlisten: function(handle) { this.ref().off('value', handle); },
-    newKey: function() { return MastDB._ref(this.PATH).push().key; }
-};
-MastDB.classSessions = {
-    PATH: 'public/classSessions',
-    ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-    list: function(limit) { return this.ref().limitToLast(limit || 500).once('value'); },
-    get: function(id) { return this.ref(id).once('value'); },
-    set: function(id, data) { return this.ref(id).set(data); },
-    update: function(id, data) { return this.ref(id).update(data); },
-    remove: function(id) { return this.ref(id).remove(); },
-    listen: function(limit, cb, errCb) { return this.ref().limitToLast(limit || 500).on('value', cb, errCb); },
-    unlisten: function(handle) { this.ref().off('value', handle); },
-    newKey: function() { return MastDB._ref(this.PATH).push().key; },
-    byClass: function(classId) {
-      return this.ref().orderByChild('classId').equalTo(classId).once('value');
-    }
-};
-MastDB.enrollments = {
-    PATH: 'admin/enrollments',
-    ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-    list: function(limit) { return this.ref().limitToLast(limit || 500).once('value'); },
-    get: function(id) { return this.ref(id).once('value'); },
-    set: function(id, data) { return this.ref(id).set(data); },
-    update: function(id, data) { return this.ref(id).update(data); },
-    remove: function(id) { return this.ref(id).remove(); },
-    listen: function(limit, cb, errCb) { return this.ref().limitToLast(limit || 500).on('value', cb, errCb); },
-    unlisten: function(handle) { this.ref().off('value', handle); },
-    newKey: function() { return MastDB._ref(this.PATH).push().key; },
-    bySession: function(sessionId) {
-      return this.ref().orderByChild('sessionId').equalTo(sessionId).once('value');
-    },
-    byClass: function(classId) {
-      return this.ref().orderByChild('classId').equalTo(classId).once('value');
-    },
-    byContact: function(contactId) {
-      return this.ref().orderByChild('contactId').equalTo(contactId).once('value');
-    }
-};
-MastDB.instructors = {
-    PATH: 'public/instructors',
-    ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-    list: function(limit) { return this.ref().limitToLast(limit || 100).once('value'); },
-    get: function(id) { return this.ref(id).once('value'); },
-    set: function(id, data) { return this.ref(id).set(data); },
-    update: function(id, data) { return this.ref(id).update(data); },
-    remove: function(id) { return this.ref(id).remove(); },
-    listen: function(limit, cb, errCb) { return this.ref().limitToLast(limit || 100).on('value', cb, errCb); },
-    unlisten: function(handle) { this.ref().off('value', handle); },
-    newKey: function() { return MastDB._ref(this.PATH).push().key; },
-    byStatus: function(status) {
-      return this.ref().orderByChild('status').equalTo(status).once('value');
-    }
-};
-MastDB.resources = {
-    PATH: 'admin/resources',
-    ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-    list: function(limit) { return this.ref().limitToLast(limit || 100).once('value'); },
-    get: function(id) { return this.ref(id).once('value'); },
-    set: function(id, data) { return this.ref(id).set(data); },
-    update: function(id, data) { return this.ref(id).update(data); },
-    remove: function(id) { return this.ref(id).remove(); },
-    listen: function(limit, cb, errCb) { return this.ref().limitToLast(limit || 100).on('value', cb, errCb); },
-    unlisten: function(handle) { this.ref().off('value', handle); },
-    newKey: function() { return MastDB._ref(this.PATH).push().key; },
-    byType: function(type) {
-      return this.ref().orderByChild('type').equalTo(type).once('value');
-    }
-};
+MastDB.classes = _makeEntity('public/classes', 200);
+MastDB.classSessions = Object.assign(_makeEntity('public/classSessions', 500), {
+  byClass: function(classId) {
+    return MastDB.query('public/classSessions').orderByChild('classId').equalTo(classId).once();
+  }
+});
+MastDB.enrollments = Object.assign(_makeEntity('admin/enrollments', 500), {
+  bySession: function(sessionId) {
+    return MastDB.query('admin/enrollments').orderByChild('sessionId').equalTo(sessionId).once();
+  },
+  byClass: function(classId) {
+    return MastDB.query('admin/enrollments').orderByChild('classId').equalTo(classId).once();
+  },
+  byContact: function(contactId) {
+    return MastDB.query('admin/enrollments').orderByChild('contactId').equalTo(contactId).once();
+  }
+});
+MastDB.instructors = Object.assign(_makeEntity('public/instructors', 100), {
+  byStatus: function(status) {
+    return MastDB.query('public/instructors').orderByChild('status').equalTo(status).once();
+  }
+});
+MastDB.resources = Object.assign(_makeEntity('admin/resources', 100), {
+  byType: function(type) {
+    return MastDB.query('admin/resources').orderByChild('type').equalTo(type).once();
+  }
+});
 MastDB.accounts = {
-    PATH: 'public/accounts',
-    ref: function(uid) { return MastDB._ref(this.PATH + (uid ? '/' + uid : '')); },
-    get: function(uid) { return this.ref(uid).once('value'); },
-    set: function(uid, data) { return this.ref(uid).set(data); },
-    update: function(uid, data) { return this.ref(uid).update(data); },
-    passes: function(uid, passId) {
-      var p = this.PATH + '/' + uid + '/passes';
-      if (passId) p += '/' + passId;
-      return MastDB._ref(p);
-    },
-    listPasses: function(uid, limit) {
-      return this.passes(uid).limitToLast(limit || 50).once('value');
-    },
-    newPassKey: function(uid) { return this.passes(uid).push().key; },
-    walletCredits: function(uid, creditId) {
-      var p = this.PATH + '/' + uid + '/wallet/credits';
-      if (creditId) p += '/' + creditId;
-      return MastDB._ref(p);
-    },
-    listWalletCredits: function(uid, limit) {
-      return this.walletCredits(uid).limitToLast(limit || 50).once('value');
-    },
-    newWalletCreditKey: function(uid) { return this.walletCredits(uid).push().key; }
+  PATH: 'public/accounts',
+  get: function(uid) { return MastDB.get('public/accounts/' + uid); },
+  set: function(uid, data) { return MastDB.set('public/accounts/' + uid, data); },
+  update: function(uid, data) { return MastDB.update('public/accounts/' + uid, data); },
+  getPass: function(uid, passId) {
+    return MastDB.get('public/accounts/' + uid + '/passes' + (passId ? '/' + passId : ''));
+  },
+  listPasses: function(uid, limit) {
+    return MastDB.query('public/accounts/' + uid + '/passes').limitToLast(limit || 50).once();
+  },
+  newPassKey: function(uid) { return MastDB.newKey('public/accounts/' + uid + '/passes'); },
+  getWalletCredit: function(uid, creditId) {
+    return MastDB.get('public/accounts/' + uid + '/wallet/credits' + (creditId ? '/' + creditId : ''));
+  },
+  listWalletCredits: function(uid, limit) {
+    return MastDB.query('public/accounts/' + uid + '/wallet/credits').limitToLast(limit || 50).once();
+  },
+  newWalletCreditKey: function(uid) { return MastDB.newKey('public/accounts/' + uid + '/wallet/credits'); }
 };
 MastDB.sessionLogs = {
-    PATH: 'admin/sessionLogs',
-    ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-    get: function(id) { return this.ref(id).once('value'); },
-    set: function(id, data) { return this.ref(id).set(data); },
-    update: function(id, data) { return this.ref(id).update(data); },
-    startup: function(sessionId) { return this.ref(sessionId + '/startup'); },
-    completion: function(sessionId) { return this.ref(sessionId + '/completion'); },
-    incidents: function(sessionId, incidentId) {
-      var p = this.PATH + '/' + sessionId + '/incidents';
-      if (incidentId) p += '/' + incidentId;
-      return MastDB._ref(p);
-    },
-    newIncidentKey: function(sessionId) { return this.incidents(sessionId).push().key; }
+  PATH: 'admin/sessionLogs',
+  get: function(id) { return MastDB.get('admin/sessionLogs/' + id); },
+  set: function(id, data) { return MastDB.set('admin/sessionLogs/' + id, data); },
+  update: function(id, data) { return MastDB.update('admin/sessionLogs/' + id, data); },
+  getStartup: function(sessionId) { return MastDB.get('admin/sessionLogs/' + sessionId + '/startup'); },
+  setStartup: function(sessionId, data) { return MastDB.set('admin/sessionLogs/' + sessionId + '/startup', data); },
+  getCompletion: function(sessionId) { return MastDB.get('admin/sessionLogs/' + sessionId + '/completion'); },
+  setCompletion: function(sessionId, data) { return MastDB.set('admin/sessionLogs/' + sessionId + '/completion', data); },
+  pushIncident: function(sessionId, data) { return MastDB.push('admin/sessionLogs/' + sessionId + '/incidents', data); },
+  newIncidentKey: function(sessionId) { return MastDB.newKey('admin/sessionLogs/' + sessionId + '/incidents'); }
 };
-MastDB.passDefinitions = {
-    PATH: 'admin/passDefinitions',
-    ref: function(id) { return MastDB._ref(this.PATH + (id ? '/' + id : '')); },
-    list: function(limit) { return this.ref().limitToLast(limit || 100).once('value'); },
-    get: function(id) { return this.ref(id).once('value'); },
-    set: function(id, data) { return this.ref(id).set(data); },
-    update: function(id, data) { return this.ref(id).update(data); },
-    remove: function(id) { return this.ref(id).remove(); },
-    listen: function(limit, cb, errCb) { return this.ref().limitToLast(limit || 100).on('value', cb, errCb); },
-    unlisten: function(handle) { this.ref().off('value', handle); },
-    newKey: function() { return MastDB._ref(this.PATH).push().key; }
-};
+MastDB.passDefinitions = _makeEntity('admin/passDefinitions', 100);
 
 // MastDB.init() is called dynamically in the auth flow after tenant resolution.
 // Entity namespace definitions above are safe — they define functions but
-// don't call _ref() until invoked after init.
+// don't call MastDB operations until invoked after init.
 
 // ============================================================
 // MastCustomers — Write-path hooks
@@ -10092,13 +9802,12 @@ function getTenantSubscription() {
 // Load subscription from Firebase. If missing, minimal access (no auto-seed as command).
 async function loadTenantSubscription() {
   try {
-    var snap = await MastDB.subscription.get();
-    var data = snap.val();
+    var data = await MastDB.subscription.get();
     if (!data) {
       // No subscription record — provisioning should have written this.
       // For pre-existing tenants (dev, shirglassworks), seed as command with all modules.
       // New tenants get their subscription written during provisioning.
-      var tenantId = MastDB._tenantId;
+      var tenantId = MastDB.tenantId();
       var isLegacyTenant = tenantId === 'dev' || tenantId === 'shirglassworks';
       if (isLegacyTenant) {
         var allPurchasable = Object.keys(MODULE_REGISTRY).filter(function(id) { return MODULE_REGISTRY[id].purchasable; });
@@ -10266,8 +9975,7 @@ async function renderWalletUpcoming() {
   var extraBankCost = 0;
   try {
     if (typeof MastDB !== 'undefined' && MastDB.plaidItems) {
-      var itemsSnap = await MastDB.plaidItems.list();
-      var allItems = itemsSnap.val() || {};
+      var allItems = (await MastDB.plaidItems.list()) || {};
       var activeCount = Object.values(allItems).filter(function(i) { return i.status === 'active'; }).length;
       // Bank limits per plan (mirrors PLAID_BANK_LIMITS in expenses module)
       var bankLimits = { 'free': 0, 'publish': 2, 'launch': 2, 'operate': 3, 'command': 5 };
@@ -11207,8 +10915,7 @@ let SHOP_SECTION_IDS = ['shop'];
 // Load tenant categories from Firebase and rebuild CATEGORIES, SECTIONS, SHOP_SECTION_IDS
 async function loadTenantCategories() {
   try {
-    var snap = await MastDB._ref('public/config/categories').once('value');
-    var catData = snap.val();
+    var catData = await MastDB.get('public/config/categories');
     if (catData && Array.isArray(catData)) {
       var cats = catData.filter(function(c) { return c && c.id && c.id !== 'shop' && c.label; });
       if (cats.length > 0) {
@@ -11663,8 +11370,7 @@ function isStaff() {
 async function loadUserRole(uid) {
   try {
     console.log('[DEBUG] loadUserRole reading:', MastDB.tenantId() + '/admin/users/' + uid);
-    var userSnap = await MastDB.adminUsers.ref(uid).once('value');
-    var userData = userSnap.val();
+    var userData = await MastDB.adminUsers.get(uid);
     console.log('[DEBUG] loadUserRole userData:', userData ? JSON.stringify({role: userData.role, uid: userData.uid}) : 'NULL');
 
     if (!userData) {
@@ -11679,11 +11385,10 @@ async function loadUserRole(uid) {
       if (initialRole !== 'admin' && currentUser.email) {
         var inviteKey = currentUser.email.toLowerCase().replace(/\./g, ',');
         try {
-          var inviteSnap = await MastDB.invites.ref(inviteKey).once('value');
-          var invite = inviteSnap.val();
+          var invite = await MastDB.invites.get(inviteKey);
           if (invite && invite.status === 'pending' && invite.role && invite.invitedBy !== uid) {
             initialRole = invite.role;
-            await MastDB.invites.ref(inviteKey).update({
+            await MastDB.invites.update(inviteKey, {
               status: 'accepted',
               acceptedAt: new Date().toISOString(),
               acceptedByUid: uid
@@ -11700,10 +11405,10 @@ async function loadUserRole(uid) {
         email: currentUser.email || '',
         photoURL: currentUser.photoURL || '',
         role: initialRole,
-        createdAt: firebase.database.ServerValue.TIMESTAMP,
-        lastLoginAt: firebase.database.ServerValue.TIMESTAMP
+        createdAt: MastDB.serverTimestamp(),
+        lastLoginAt: MastDB.serverTimestamp()
       };
-      await MastDB.adminUsers.ref(uid).set(userData);
+      await MastDB.adminUsers.set(uid, userData);
       // Register in platform userTenantMap so future logins resolve instantly
       if (initialRole !== 'guest') {
         MastDB.platform.set('mast-platform/userTenantMap/' + uid + '/' + MastDB.tenantId(), true).catch(function(e) {
@@ -11713,14 +11418,13 @@ async function loadUserRole(uid) {
     } else {
       // Update lastLoginAt only — don't overwrite role (may have been elevated)
       await MastDB.adminUsers.subRef(uid, 'lastLoginAt')
-        .set(firebase.database.ServerValue.TIMESTAMP);
+        .set(MastDB.serverTimestamp());
     }
 
     currentUserRole = userData.role || 'guest';
 
     // Load role permission config
-    var roleSnap = await MastDB.roles.ref(currentUserRole).once('value');
-    currentRoleConfig = roleSnap.val();
+    currentRoleConfig = await MastDB.roles.get(currentUserRole);
 
     // Fallback: if role config missing in Firebase, use built-in defaults
     if (!currentRoleConfig && DEFAULT_ROLES[currentUserRole]) {
@@ -11754,25 +11458,25 @@ async function loadUserRole(uid) {
  */
 async function seedRolesAndAdminUser() {
   try {
-    var rolesSnap = await MastDB.roles.ref().once('value');
-    if (rolesSnap.exists()) {
+    var rolesSnap = await MastDB.roles.get();
+    if ((rolesSnap != null)) {
       console.log('RBAC: Roles already seeded, skipping.');
       return false;
     }
 
     // Seed all three default roles
-    await MastDB.roles.ref().set(DEFAULT_ROLES);
+    await MastDB.roles.set(, DEFAULT_ROLES);
 
     // Create admin user record for current user (must be the original admin)
     if (currentUser && currentUser.uid) {
-      await MastDB.adminUsers.ref(currentUser.uid).set({
+      await MastDB.adminUsers.set(currentUser.uid, {
         uid: currentUser.uid,
         displayName: currentUser.displayName || 'Admin',
         email: currentUser.email || '',
         photoURL: currentUser.photoURL || '',
         role: 'admin',
-        createdAt: firebase.database.ServerValue.TIMESTAMP,
-        lastLoginAt: firebase.database.ServerValue.TIMESTAMP
+        createdAt: MastDB.serverTimestamp(),
+        lastLoginAt: MastDB.serverTimestamp()
       });
     }
 
@@ -11873,7 +11577,7 @@ async function writeAudit(action, entity, entityId) {
         displayName: currentUser ? (currentUser.displayName || currentUser.email || 'Unknown') : 'Unknown',
         role: currentUserRole || 'unknown'
       },
-      time: firebase.database.ServerValue.TIMESTAMP,
+      time: MastDB.serverTimestamp(),
       context: {
         gpsMode: activeEventId ? 'fair' : 'studio',
         eventId: activeEventId || null
@@ -11886,7 +11590,7 @@ async function writeAudit(action, entity, entityId) {
     if (entityId) {
       updates['admin/auditIndex/' + entity + '/' + entityId + '/' + logKey] = entry;
     }
-    await MastDB._multiUpdate(updates);
+    await MastDB.multiUpdate(updates);
   } catch (err) {
     // Audit failures must NEVER block the operation
     console.error('Audit write failed:', err);
@@ -12205,9 +11909,9 @@ auth.onAuthStateChanged(async function(user) {
   if (tenantId && !needsClaim) {
     // Quick check: does the user actually have a role in this tenant?
     // MastDB isn't init'd yet (that happens after this role check succeeds),
-    // so use the root-ref escape hatch with an explicit tenant-prefixed path.
+    // so read the absolute path directly via firebase.database().
     try {
-      var roleCheckSnap = await MastDB._rootRef().child(tenantId + '/admin/users/' + user.uid + '/role').once('value');
+      var roleCheckSnap = await firebase.database().ref(tenantId + '/admin/users/' + user.uid + '/role').once('value'); // mastdb-lint-allow: pre-init role check before MastDB.init()
       if (!roleCheckSnap.val()) {
         console.log('No role found for user in tenant ' + tenantId + ', attempting claim...');
         needsClaim = true;
@@ -12258,8 +11962,7 @@ auth.onAuthStateChanged(async function(user) {
       // Temporarily init MastDB so we can check admin records
       MastDB.init({ tenantId: domainTenant, db: db });
       try {
-        var existingUserSnap = await MastDB.adminUsers.ref(user.uid).once('value');
-        var existingUser = existingUserSnap.val();
+        var existingUser = await MastDB.adminUsers.get(user.uid);
         if (existingUser && (existingUser.role === 'admin' || existingUser.role === 'user')) {
           console.log('Bootstrap: verified existing ' + existingUser.role + ' role for UID ' + user.uid + ' in tenant "' + domainTenant + '"');
           tenantId = domainTenant;
@@ -12268,8 +11971,7 @@ auth.onAuthStateChanged(async function(user) {
           // No existing role — check for pending invite before rejecting
           var inviteKey = user.email.toLowerCase().replace(/\./g, ',');
           try {
-            var inviteSnap = await MastDB.invites.ref(inviteKey).once('value');
-            var invite = inviteSnap.val();
+            var invite = await MastDB.invites.get(inviteKey);
             if (invite && invite.status === 'pending' && invite.role) {
               console.log('Bootstrap: found pending invite for ' + user.email + ' with role "' + invite.role + '" in tenant "' + domainTenant + '"');
               tenantId = domainTenant;
@@ -12339,8 +12041,8 @@ auth.onAuthStateChanged(async function(user) {
   // --- Onboarding Check: Show setup wizard for new tenants ---
   if (TENANT_CONFIG && TENANT_CONFIG.tenantStatus === 'onboarding') {
     // Check if wizard was already completed (setupProgress.completed)
-    var setupSnap = await MastDB.config.ref('setupProgress/completed').once('value');
-    if (!setupSnap.val()) {
+    var setupSnap = await MastDB.config.get('setupProgress/completed');
+    if (!setupSnap) {
       authScreen.style.display = 'none';
       deniedScreen.style.display = 'none';
       header.style.display = 'none';
@@ -14252,7 +13954,7 @@ function loadEmailTriggers() {
   if (!container) return;
 
   // Load saved preferences from Firebase
-  MastDB._ref('config/emailTriggers').once('value').then(function(snap) {
+  MastDB.get('config/emailTriggers').then(function(snapVal) {
     emailTriggerPrefs = snap.val() || {};
     emailTriggersLoaded = true;
     renderEmailTriggers();
@@ -14371,7 +14073,7 @@ function toggleAllEmailTriggers() {
     emailTriggerPrefs[t.id] = newState;
   });
 
-  MastDB._multiUpdate(updates).then(function() {
+  MastDB.multiUpdate(updates).then(function() {
     showToast((newState ? 'Enabled' : 'Disabled') + ' all email triggers (' + EMAIL_TRIGGER_REGISTRY.length + ')');
     renderEmailTriggers();
   }).catch(function(err) {
@@ -14393,7 +14095,7 @@ function toggleEmailModuleTriggers(mod) {
     emailTriggerPrefs[t.id] = newState;
   });
 
-  MastDB._multiUpdate(updates).then(function() {
+  MastDB.multiUpdate(updates).then(function() {
     showToast((newState ? 'Enabled' : 'Disabled') + ' all ' + mod + ' emails (' + triggers.length + ')');
     renderEmailTriggers();
   }).catch(function(err) {
@@ -14405,7 +14107,7 @@ function toggleEmailTrigger(triggerId, enabled) {
   // Save to Firebase
   var updates = {};
   updates['config/emailTriggers/' + triggerId] = enabled;
-  MastDB._multiUpdate(updates).then(function() {
+  MastDB.multiUpdate(updates).then(function() {
     emailTriggerPrefs[triggerId] = enabled;
     showToast((enabled ? 'Enabled' : 'Disabled') + ': ' + getTriggerName(triggerId));
     renderEmailTriggers();
@@ -14490,7 +14192,7 @@ function renderDrawerPreview(html, subject, footerNote) {
 function loadDrawerPreviewFromLog(trigger) {
   var bodyEl = document.getElementById('emailPreviewDrawerBody');
 
-  MastDB._ref('emails').orderByChild('emailType').equalTo(trigger.emailType).limitToLast(1).once('value').then(function(snap) {
+  MastDB.query('emails').orderByChild('emailType').equalTo(trigger.emailType).limitToLast(1).once('value').then(function(snap) {
     var val = snap.val();
     if (!val) {
       bodyEl.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);font-size:0.85rem;">No preview available yet.<br><span style="font-size:0.78rem;">This email will appear here after it has been sent at least once.</span></div>';
@@ -14701,7 +14403,7 @@ function loadNotificationsSettings() {
 }
 
 function toggleAlertEnabled(alertId, enabled) {
-  MastDB._ref('config/alerts/' + alertId).update({ enabled: enabled }).then(function() {
+  MastDB.update('config/alerts/' + alertId, { enabled: enabled }).then(function() {
     showToast(enabled ? 'Alert enabled' : 'Alert disabled');
   }).catch(function(err) { showToast('Error: ' + err.message, true); });
 }
@@ -14709,13 +14411,13 @@ function toggleAlertEnabled(alertId, enabled) {
 function updateAlertThreshold(alertId, value) {
   var num = parseInt(value, 10);
   if (isNaN(num) || num < 0) return;
-  MastDB._ref('config/alerts/' + alertId).update({ threshold: num }).then(function() {
+  MastDB.update('config/alerts/' + alertId, { threshold: num }).then(function() {
     showToast('Threshold updated');
   }).catch(function(err) { showToast('Error: ' + err.message, true); });
 }
 
 function updateAlertDelivery(alertId, method, checked) {
-  MastDB._ref('config/alerts/' + alertId).once('value').then(function(snap) {
+  MastDB.get('config/alerts/' + alertId).then(function(snapVal) {
     var current = (snap.val() || {}).delivery || ['email'];
     var updated;
     if (checked) {
@@ -14724,7 +14426,7 @@ function updateAlertDelivery(alertId, method, checked) {
       updated = current.filter(function(m) { return m !== method; });
     }
     if (updated.length === 0) updated = ['in-app'];
-    return MastDB._ref('config/alerts/' + alertId).update({ delivery: updated });
+    return MastDB.update('config/alerts/' + alertId, { delivery: updated });
   }).then(function() {
     showToast('Delivery updated');
   }).catch(function(err) { showToast('Error: ' + err.message, true); });
@@ -14734,7 +14436,7 @@ function loadAlertHistory() {
   var el = document.getElementById('notificationsHistoryList');
   if (!el) return;
 
-  MastDB._ref('alertHistory').orderByChild('createdAt').limitToLast(20).once('value').then(function(snap) {
+  MastDB.query('alertHistory').orderByChild('createdAt').limitToLast(20).once('value').then(function(snap) {
     var raw = snap.val() || {};
     var history = Object.entries(raw).map(function(e) { return Object.assign({ id: e[0] }, e[1]); })
       .sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
@@ -14773,7 +14475,7 @@ function loadAlertHistory() {
 
 function acknowledgeAlertFromUI(alertHistoryId, btn) {
   if (btn) btn.disabled = true;
-  MastDB._ref('alertHistory/' + alertHistoryId).update({ readAt: new Date().toISOString() }).then(function() {
+  MastDB.update('alertHistory/' + alertHistoryId, { readAt: new Date().toISOString() }).then(function() {
     showToast('Alert dismissed');
     loadAlertHistory();
     updateAlertBadge();
@@ -14786,7 +14488,7 @@ function acknowledgeAlertFromUI(alertHistoryId, btn) {
 
 function initAlertBadgeListener() {
   if (_alertHistoryListener) return;
-  var ref = MastDB._ref('alertHistory');
+  var ref = MastDB.query('alertHistory');
   _alertHistoryListener = ref.orderByChild('readAt').equalTo(null).on('value', function(snap) {
     var data = snap.val() || {};
     var newCount = Object.keys(data).length;
@@ -15780,7 +15482,7 @@ async function saveLkApiKey() {
   if (!key) { showToast('Please enter an API key.', true); return; }
   if (!/^lk_[a-f0-9]{32}$/.test(key)) { showToast('Invalid LabelKeeper key format (expected lk_ + 32 hex chars).', true); return; }
   try {
-    await MastDB._ref('admin/config/labelkeeper/apiKey').set(key);
+    await MastDB.set('admin/config/labelkeeper/apiKey', key);
     await writeAudit('update', 'settings', 'labelkeeperApiKey');
     _lkApiKeyCache = key;
     document.getElementById('lkApiKeyInput').value = '';
@@ -16030,7 +15732,7 @@ async function loadAiIntegrations() {
   }
 
   try {
-    var snap = await MastDB._ref('admin/config/aiIntegrations/keys').orderByChild('status').equalTo('active').once('value');
+    var snap = await MastDB.query('admin/config/aiIntegrations/keys').orderByChild('status').equalTo('active').once('value');
     var keys = snap.val() || {};
     renderAiKeys(keys);
     _aiKeysLoaded = true;
@@ -16337,7 +16039,7 @@ function clearFieldBadges(prefix) {
 // ============================================================
 
 function loadPaymentProcessor() {
-  MastDB._ref('config/paymentProcessor').once('value').then(function(snap) {
+  MastDB.get('config/paymentProcessor').then(function(snapVal) {
     var processor = snap.val() || 'square';
     showPaymentProcessor(processor);
     if (processor === 'stripe') {
@@ -16377,7 +16079,7 @@ function switchPaymentProcessor(newProcessor) {
     'Switch Payment Processor',
     'Switch from ' + currentName + ' to ' + newName + '? Your ' + currentName + ' credentials will be preserved if you switch back.',
     function() {
-      MastDB._ref('config/paymentProcessor').set(newProcessor).then(function() {
+      MastDB.set('config/paymentProcessor', newProcessor).then(function() {
         showPaymentProcessor(newProcessor);
         if (newProcessor === 'stripe') {
           loadStripeConfig();
@@ -16459,7 +16161,7 @@ async function saveStripeConfig() {
       metadata: metadata
     });
     // Ensure paymentProcessor is set to stripe
-    await MastDB._ref('config/paymentProcessor').set('stripe');
+    await MastDB.set('config/paymentProcessor', 'stripe');
     await writeAudit('update', 'settings', 'stripeConfig');
     showToast('Stripe config saved!');
     loadStripeConfig();
@@ -16659,8 +16361,8 @@ function loadShippoKeyStatus() {
 function loadShipFromLocations(selectedKey) {
   var select = document.getElementById('shipDefaultFromSelect');
   if (!select) return;
-  MastDB.studioLocations.ref().once('value').then(function(snap) {
-    var locs = snap.val() || {};
+  MastDB.studioLocations.get().then(function(locs) {
+    locs = locs || {};
     var html = '<option value="">Select a studio location...</option>';
     Object.keys(locs).forEach(function(k) {
       var loc = locs[k];
@@ -17850,8 +17552,7 @@ async function registerShopifyWebhooks() {
 function loadShopifyWebhookStatus() {
   var el = document.getElementById('shopifyWebhookRegistry');
   if (!el) return;
-  MastDB._ref('config/shopify/webhooks').once('value', function(snap) {
-    var webhooks = snap.val();
+  MastDB.get('config/shopify/webhooks').then(function(webhooks) {
     if (!webhooks || typeof webhooks !== 'object') {
       el.innerHTML = '<div style="font-size:0.82rem;color:var(--warm-gray);">No webhooks registered.</div>';
       return;
@@ -18318,7 +18019,7 @@ var _wizardSelectedModules = []; // module selections for step 2
 
 function initSetupWizard() {
   // Load saved progress
-  MastDB.config.ref('setupProgress').once('value').then(function(snap) {
+  MastDB.config.get('setupProgress').then(function(snap) {
     wizardProgress = snap.val() || {};
     wizardCurrentStep = wizardProgress.currentStep || 1;
     // Clamp to 3-step range (handles tenants mid-old-wizard)
@@ -18385,7 +18086,7 @@ function wizardPrev(fromStep) {
 function saveWizardProgress(step, extras) {
   var update = { currentStep: step, updatedAt: new Date().toISOString() };
   if (extras) Object.assign(update, extras);
-  MastDB.config.ref('setupProgress').update(update).catch(function(e) {
+  MastDB.config.update('setupProgress', update).catch(function(e) {
     console.warn('Failed to save wizard progress:', e.message);
   });
 }
@@ -18402,7 +18103,7 @@ function wizardSkipSite() {
     if (!brandName && TENANT_CONFIG.registryName) brandName = TENANT_CONFIG.registryName;
   }
   if (brandName) {
-    MastDB.config.ref('brand').update({ name: brandName, updatedAt: new Date().toISOString() }).catch(function() {});
+    MastDB.config.update('brand', { name: brandName, updatedAt: new Date().toISOString() }).catch(function() {});
   }
   // Skip to step 3 — no modules to choose, no import to watch
   showWizardStep(3);
@@ -18513,12 +18214,12 @@ async function wizardAnalyzeSite() {
 
     // Persist crawl manifest to Firebase (survives page reloads)
     var persistPromises = [
-      MastDB.config.ref('setupProgress/analyzedUrl').set(url).catch(function() {}),
-      MastDB.config.ref('setupProgress/siteAnalyzed').set(true).catch(function() {})
+      MastDB.config.set('setupProgress/analyzedUrl', url).catch(function() {}),
+      MastDB.config.set('setupProgress/siteAnalyzed', true).catch(function() {})
     ];
-    if (crawlManifest) persistPromises.push(MastDB.config.ref('setupProgress/crawlManifest').set(crawlManifest).catch(function() {}));
-    if (data.siteFingerprint) persistPromises.push(MastDB.config.ref('setupProgress/siteFingerprint').set(data.siteFingerprint).catch(function() {}));
-    if (data.draftTemplateId) persistPromises.push(MastDB.config.ref('setupProgress/draftTemplateId').set(data.draftTemplateId).catch(function() {}));
+    if (crawlManifest) persistPromises.push(MastDB.config.set('setupProgress/crawlManifest', crawlManifest).catch(function() {}));
+    if (data.siteFingerprint) persistPromises.push(MastDB.config.set('setupProgress/siteFingerprint', data.siteFingerprint).catch(function() {}));
+    if (data.draftTemplateId) persistPromises.push(MastDB.config.set('setupProgress/draftTemplateId', data.draftTemplateId).catch(function() {}));
 
     // === AUTO-APPLY EVERYTHING ===
     await wizardAutoApplyAll(analysis, data);
@@ -18604,7 +18305,7 @@ async function wizardAutoApplyAll(analysis, data) {
   };
   if (bizDesc) brandUpdate.description = bizDesc;
   if (logoUrl) brandUpdate.logoUrl = logoUrl;
-  await MastDB.config.ref('brand').update(brandUpdate).catch(function(e) { writeErrors.push('brand: ' + e.message); });
+  await MastDB.config.update('brand', brandUpdate).catch(function(e) { writeErrors.push('brand: ' + e.message); });
   autoApplied.brand = true;
 
   // Update platform registry
@@ -18634,7 +18335,7 @@ async function wizardAutoApplyAll(analysis, data) {
     themeUpdate.primaryColor = primaryColor;
     themeUpdate.accentColor = accentColor;
   }
-  await MastDB._ref('public/config/theme').set(themeUpdate).catch(function(e) { writeErrors.push('theme: ' + e.message); });
+  await MastDB.set('public/config/theme', themeUpdate).catch(function(e) { writeErrors.push('theme: ' + e.message); });
   autoApplied.template = templateMapping.templateId;
 
   // 3. Auto-select modules from detected content types
@@ -18672,7 +18373,7 @@ async function wizardAutoApplyAll(analysis, data) {
     shop: hasSell, blog: hasMarket, events: hasShow, members: false,
     newsletter: hasMarket, commissions: hasSell, stories: false, social: hasMarket, wholesale: hasSell
   };
-  await MastDB._ref('webPresence/config/features').set(features).catch(function(e) { writeErrors.push('features: ' + e.message); });
+  await MastDB.set('webPresence/config/features', features).catch(function(e) { writeErrors.push('features: ' + e.message); });
 
   // Nav order: Shop always last in both contexts.
   // Content context renders: About(1), Schedule(2), Blog/FromTheStudio(3), Shop(50)
@@ -18689,8 +18390,8 @@ async function wizardAutoApplyAll(analysis, data) {
   }
   if (features.newsletter) navSections.newsletter = { enabled: true, order: 60 };
   navSections.contact = { enabled: true, order: 99 };
-  await MastDB._ref('public/config/nav/sections').set(navSections).catch(function(e) { writeErrors.push('nav: ' + e.message); });
-  if (logoUrl) await MastDB._ref('public/config/nav/logoUrl').set(logoUrl).catch(function(e) { writeErrors.push('nav logo: ' + e.message); });
+  await MastDB.set('public/config/nav/sections', navSections).catch(function(e) { writeErrors.push('nav: ' + e.message); });
+  if (logoUrl) await MastDB.set('public/config/nav/logoUrl', logoUrl).catch(function(e) { writeErrors.push('nav logo: ' + e.message); });
   autoApplied.nav = true;
 
   // 5. Seed web presence config
@@ -18713,12 +18414,12 @@ async function wizardAutoApplyAll(analysis, data) {
     publishedAt: null,
     updatedAt: new Date().toISOString()
   };
-  await MastDB._ref('webPresence/config').update(wpConfig).catch(function(e) { writeErrors.push('webPresence: ' + e.message); });
+  await MastDB.update('webPresence/config', wpConfig).catch(function(e) { writeErrors.push('webPresence: ' + e.message); });
   autoApplied.webPresence = true;
 
   // Record auto-applied state
   _wizardAutoApplied = autoApplied;
-  await MastDB.config.ref('setupProgress/autoApplied').set(autoApplied).catch(function() {});
+  await MastDB.config.set('setupProgress/autoApplied', autoApplied).catch(function() {});
 
   // Surface write failures
   if (writeErrors.length > 0) {
@@ -18863,7 +18564,7 @@ async function wizardConfirmModules() {
       shop: hasSell, blog: hasMarket, events: hasShow, members: false,
       newsletter: hasMarket, commissions: hasSell, stories: false, social: hasMarket, wholesale: hasSell
     };
-    await MastDB._ref('webPresence/config/features').set(features);
+    await MastDB.set('webPresence/config/features', features);
 
     // Nav order: Shop always last in both contexts (matches wizardAutoApplyAll)
     var navSections = { about: { enabled: true, order: 1 } };
@@ -18877,7 +18578,7 @@ async function wizardConfirmModules() {
     }
     if (features.newsletter) navSections.newsletter = { enabled: true, order: 60 };
     navSections.contact = { enabled: true, order: 99 };
-    await MastDB._ref('public/config/nav/sections').set(navSections);
+    await MastDB.set('public/config/nav/sections', navSections);
 
     logWizardEvent(2, 'modules_confirmed', { modules: _wizardSelectedModules });
     showWizardStep(3);
@@ -18896,7 +18597,7 @@ async function wizardCreateImportJob() {
     if (hasContent) {
       try {
         var jobData = {
-          id: MastDB._ref('webPresence/importJobs').push().key,
+          id: MastDB.newKey('webPresence/importJobs'),
           url: window._wizardAnalyzedUrl,
           tenantId: MastDB.tenantId(),
           status: 'pending',
@@ -18905,7 +18606,7 @@ async function wizardCreateImportJob() {
           crawlManifest: window._wizardCrawlManifest,
           discovered: null, imported: null
         };
-        await MastDB._ref('webPresence/importJobs/' + jobData.id).set(jobData);
+        await MastDB.set('webPresence/importJobs/' + jobData.id, jobData);
       } catch (e) {
         console.error('Failed to create import job:', e);
       }
@@ -18926,8 +18627,8 @@ function showWizardImportTimeline() {
   if (!timeline || !feed) return;
 
   // Find the most recent import job (guard against missing Firebase context)
-  try { MastDB._ref('webPresence/importJobs'); } catch (e) { timeline.style.display = 'none'; return; }
-  MastDB._ref('webPresence/importJobs').orderByChild('createdAt').limitToLast(1).once('value').then(function(snap) {
+  if (!MastDB.tenantId()) { timeline.style.display = 'none'; return; }
+  MastDB.query('webPresence/importJobs').orderByChild('createdAt').limitToLast(1).once('value').then(function(snap) {
     var jobs = snap.val();
     if (!jobs) { timeline.style.display = 'none'; return; }
 
@@ -19009,8 +18710,7 @@ function showWizardImportTimeline() {
 
     // --- Real-time listener on the job ---
     if (_wizardImportListener) { _wizardImportListener(); _wizardImportListener = null; }
-    _wizardImportListener = MastDB._ref('webPresence/importJobs/' + jobId).on('value', function(snap) {
-      var liveJob = snap.val();
+    _wizardImportListener = MastDB.subscribe('webPresence/importJobs/' + jobId, function(liveJob) {
       if (!liveJob) return;
 
       // Start countdown when estimate arrives
@@ -19021,11 +18721,11 @@ function showWizardImportTimeline() {
       if (liveJob.status === 'complete' || liveJob.status === 'failed') {
         // Stop countdown and job status listener
         stopCountdown();
-        if (_wizardImportListener) { MastDB._ref('webPresence/importJobs/' + jobId).off('value', _wizardImportListener); _wizardImportListener = null; }
+        if (_wizardImportListener) { _wizardImportListener(); _wizardImportListener = null; }
         // Delay detaching progressFeed listener — Firebase may deliver status=complete
         // before all progressFeed children have arrived at the client
         setTimeout(function() {
-          if (_wizardProgressFeedListener) { MastDB._ref('webPresence/importJobs/' + jobId + '/progressFeed').off('child_added', _wizardProgressFeedListener); _wizardProgressFeedListener = null; }
+          if (_wizardProgressFeedListener) { _wizardProgressFeedListener(); _wizardProgressFeedListener = null; }
           // Mark any remaining in-progress lines as done
           var remaining = feed.querySelectorAll('.wiz-feed-line[data-status="progress"]');
           for (var r = 0; r < remaining.length; r++) {
@@ -19048,8 +18748,7 @@ function showWizardImportTimeline() {
 
     // --- Real-time listener on progressFeed children ---
     if (_wizardProgressFeedListener) { _wizardProgressFeedListener(); _wizardProgressFeedListener = null; }
-    _wizardProgressFeedListener = MastDB._ref('webPresence/importJobs/' + jobId + '/progressFeed').on('child_added', function(snap) {
-      var evt = snap.val();
+    _wizardProgressFeedListener = MastDB.subscribeChild('webPresence/importJobs/' + jobId + '/progressFeed', 'child_added', function(evt) {
       if (!evt || !evt.message) return;
       var icon = evt.level === 'error' ? 'error' : (evt.level === 'warn' ? 'warn' : 'progress');
       // Mark previous progress line as done (swap gear → check)
@@ -19239,7 +18938,7 @@ function wizardShowEnrichmentOffer(paidGaps, cost) {
 
   // Find the import job ID for the enrichment call
   try {
-    MastDB._ref('webPresence/importJobs').orderByChild('createdAt').limitToLast(1).once('value').then(function(snap) {
+    MastDB.query('webPresence/importJobs').orderByChild('createdAt').limitToLast(1).once('value').then(function(snap) {
       var jobs = snap.val();
       if (jobs) _wizardImportJobId = Object.keys(jobs)[0];
     }).catch(function() {});
@@ -19273,7 +18972,7 @@ async function wizardRequestEnrichment() {
     if (data.updatedReport) {
       // Re-fetch and re-render the report
       try {
-        MastDB._ref('webPresence/importJobs/' + _wizardImportJobId + '/collectionReport').once('value').then(function(snap) {
+        MastDB.get('webPresence/importJobs/' + _wizardImportJobId + '/collectionReport').then(function(snapVal) {
           var report = snap.val();
           if (report) wizardRenderCollectionReport(report);
         });
@@ -19652,10 +19351,10 @@ function wizardExecuteEnrichment() {
 
   // Listen for progress events
   if (_wizardGapProgressListener) {
-    try { MastDB._ref('webPresence/importJobs/' + _wizardGapJobId + '/progressFeed').off('child_added', _wizardGapProgressListener); } catch (e) {}
+    _wizardGapProgressListener();
+    _wizardGapProgressListener = null;
   }
-  _wizardGapProgressListener = MastDB._ref('webPresence/importJobs/' + _wizardGapJobId + '/progressFeed').on('child_added', function(snap) {
-    var evt = snap.val();
+  _wizardGapProgressListener = MastDB.subscribeChild('webPresence/importJobs/' + _wizardGapJobId + '/progressFeed', 'child_added', function(evt) {
     if (!evt || !evt.message) return;
     if (progressFeed) {
       progressFeed.innerHTML += wizardFeedLine('progress', evt.message);
@@ -19674,7 +19373,7 @@ function wizardExecuteEnrichment() {
 
     // Detach progress listener
     if (_wizardGapProgressListener) {
-      try { MastDB._ref('webPresence/importJobs/' + _wizardGapJobId + '/progressFeed').off('child_added', _wizardGapProgressListener); } catch (e) {}
+      _wizardGapProgressListener();
       _wizardGapProgressListener = null;
     }
 
@@ -19691,7 +19390,7 @@ function wizardExecuteEnrichment() {
     }
 
     // Re-fetch updated collection report and re-render gap rows
-    MastDB._ref('webPresence/importJobs/' + _wizardGapJobId + '/collectionReport').once('value').then(function(snap) {
+    MastDB.get('webPresence/importJobs/' + _wizardGapJobId + '/collectionReport').then(function(snapVal) {
       var report = snap.val();
       if (report && report.gapAnalysis) {
         _wizardGapSelections = {};
@@ -19945,8 +19644,8 @@ async function wizardComplete() {
     // Set tenant status to active (both registry and publicConfig for storefront)
     await MastDB.platform.set('mast-platform/tenants/' + MastDB.tenantId() + '/status', 'active');
     await MastDB.platform.set('mast-platform/tenants/' + MastDB.tenantId() + '/publicConfig/tenantStatus', 'active');
-    await MastDB.config.ref('setupProgress/completed').set(true);
-    await MastDB.config.ref('setupProgress/completedAt').set(new Date().toISOString());
+    await MastDB.config.set('setupProgress/completed', true);
+    await MastDB.config.set('setupProgress/completedAt', new Date().toISOString());
     await updateConfigChecklist('brand', true);
 
     // Trigger full template deploy so the public site reflects wizard config.
@@ -20013,7 +19712,7 @@ var tenantConfigChecklist = null;
 async function loadConfigChecklist() {
   try {
     // Read from tenant config path (canonical location)
-    var snap = await MastDB._ref('config/_configChecklist').once('value');
+    var snap = await MastDB.get('config/_configChecklist');
     tenantConfigChecklist = snap.val() || {};
     if (!tenantConfigChecklist.square) {
       // Fallback: check platform registry path (legacy)
@@ -20099,13 +19798,13 @@ var NEXT_STEP_DEFINITIONS = [
 var _dismissedSteps = {};
 async function loadDismissedSteps() {
   try {
-    var snap = await MastDB._ref('webPresence/config/dismissedSteps').once('value');
+    var snap = await MastDB.get('webPresence/config/dismissedSteps');
     _dismissedSteps = snap.val() || {};
   } catch (e) { _dismissedSteps = {}; }
 }
 function dismissNextStep(stepId) {
   _dismissedSteps[stepId] = true;
-  MastDB._ref('webPresence/config/dismissedSteps/' + stepId).set(true);
+  MastDB.set('webPresence/config/dismissedSteps/' + stepId, true);
   updateCardActivity('setupShop', new Date().toISOString());
   renderDashCardSetupShop();
 }
@@ -20193,22 +19892,22 @@ window._nextStepsCache = { hasProducts: false, hasWebsite: false, hasTemplate: f
 async function loadNextStepsCache() {
   try {
     // Check if products exist
-    var prodSnap = await MastDB.products.ref().limitToFirst(1).once('value');
+    var prodSnap = await MastDB.products.query().limitToFirst(1).once('value');
     window._nextStepsCache.hasProducts = prodSnap.exists();
   } catch (e) { /* ignore */ }
   try {
     // Check if website is published
-    var webSnap = await MastDB.config.ref('websiteConfig/published').once('value');
-    window._nextStepsCache.hasWebsite = !!webSnap.val();
+    var webSnap = await MastDB.config.get('websiteConfig/published');
+    window._nextStepsCache.hasWebsite = !!webSnap;
   } catch (e) { /* ignore */ }
   try {
     // Check if template has been selected (beyond wizard default)
-    var themeSnap = await MastDB._ref('public/config/theme/templateId').once('value');
+    var themeSnap = await MastDB.get('public/config/theme/templateId');
     window._nextStepsCache.hasTemplate = !!themeSnap.val();
   } catch (e) { /* ignore */ }
   try {
     // Check if hero content has been customized
-    var heroSnap = await MastDB._ref('webPresence/config/sections/hero/headline').once('value');
+    var heroSnap = await MastDB.get('webPresence/config/sections/hero/headline');
     window._nextStepsCache.hasContent = !!heroSnap.val();
   } catch (e) { /* ignore */ }
 }
@@ -20255,8 +19954,7 @@ async function loadProducts() {
   var loading = document.getElementById('productsLoading');
   loading.style.display = '';
   try {
-    var snap = await MastDB.products.ref().once('value');
-    var val = snap.val();
+    var val = await MastDB.products.get();
     productsData = val ? Object.values(val) : [];
     productsData.sort(function(a, b) { return a.name.localeCompare(b.name); });
     productsLoaded = true;
@@ -20309,7 +20007,7 @@ async function saveInlinePrice(input) {
     if (lastPrice !== newCents) {
       priceHistory.push({ value: newCents, effectiveDate: new Date().toISOString().split('T')[0], changedBy: 'admin' });
     }
-    await MastDB.products.ref(pid).update({ priceCents: newCents, priceHistory: priceHistory });
+    await MastDB.products.update(pid, { priceCents: newCents, priceHistory: priceHistory });
     await writeAudit('update', 'products', pid);
     // Update local data
     product.priceCents = newCents;
@@ -20379,7 +20077,7 @@ async function saveInlineStatus(pid, newStatus) {
     } else if (newStatus !== 'discontinued') {
       updates.discontinuedAt = null;
     }
-    await MastDB.products.ref(pid).update(updates);
+    await MastDB.products.update(pid, updates);
     await writeAudit('update', 'products', pid);
     product.availability = newStatus;
     if (updates.discontinuedAt) product.discontinuedAt = updates.discontinuedAt;
@@ -20434,7 +20132,7 @@ async function saveCardStockAdjust(pid) {
     if (!inv.stockType || inv.stockType === 'made-to-order' || inv.stockType === 'build-to-order') {
       updates['stockType'] = 'strict';
     }
-    await MastDB.inventory.ref(pid).update(updates);
+    await MastDB.inventory.update(pid, updates);
     await writeAudit('update', 'inventory', pid);
     await MastDB.inventory.ref(pid + '/history').push({
       action: 'restocked', reason: 'stock_received', actor: 'maker', actorType: 'maker',
@@ -20442,8 +20140,8 @@ async function saveCardStockAdjust(pid) {
       timestamp: new Date().toISOString()
     });
     await syncStockInfoToPublic(pid);
-    var snap = await MastDB.inventory.ref(pid).once('value');
-    if (snap.val()) inventory[pid] = snap.val();
+    var snap = await MastDB.inventory.get(pid);
+    if (snap) inventory[pid] = snap;
     var pop = document.querySelector('.inline-stock-popover');
     if (pop) pop.remove();
     renderProducts();
@@ -20790,7 +20488,7 @@ function loadAndRenderForecast() {
   if (!salesEventsLoaded) loadSalesEvents();
   // Load orders with limitToLast(500) for forecast (separate from main orders listener)
   if (!forecastOrdersLoaded) {
-    MastDB.orders.ref().limitToLast(500).once('value').then(function(snap) {
+    MastDB.orders.query().limitToLast(500).once('value').then(function(snap) {
       forecastOrders = snap.val() || {};
       forecastOrdersLoaded = true;
       computeAndRenderForecast();
@@ -21122,7 +20820,7 @@ async function doCreateForecastJob(pid, suggestedQty, purpose) {
   }
   try {
     var product = productsData.find(function(p) { return p.pid === pid; });
-    var jobRef = MastDB.productionJobs.ref().push();
+    var jobRef = MastDB.productionJobs.push();
     var jobId = jobRef.key;
     var lineItemId = MastDB.productionJobs.lineItems(jobId).push().key;
     await jobRef.set({
@@ -21659,7 +21357,7 @@ async function saveInlineAdjust(pid) {
       if (totalSet > 0) updates['stockType'] = 'strict';
     }
 
-    await MastDB.inventory.ref(pid).update(updates);
+    await MastDB.inventory.update(pid, updates);
     await writeAudit('update', 'inventory', pid);
     var adjAction = adjMode === 'add' ? 'restocked' : 'recount';
     var adjReason = adjMode === 'add' ? 'stock_received' : 'recount';
@@ -21671,8 +21369,8 @@ async function saveInlineAdjust(pid) {
     await syncStockInfoToPublic(pid);
 
     // Refresh local inventory cache
-    var snap = await MastDB.inventory.ref(pid).once('value');
-    if (snap.val()) inventory[pid] = snap.val();
+    var snap = await MastDB.inventory.get(pid);
+    if (snap) inventory[pid] = snap;
 
     inlineAdjustPid = null;
     renderInventoryOverview();
@@ -21803,7 +21501,7 @@ async function saveVariantOverrides(pid, key) {
   updates.stockFulfillmentDaysOverride = isNaN(fulfillVal) || fulfillVal <= 0 ? null : fulfillVal;
 
   try {
-    await MastDB.inventory.ref(pid + '/stock/' + key).update(updates);
+    await MastDB.inventory.update(pid + '/stock/' + key, updates);
     // Update local cache
     if (!inventory[pid]) inventory[pid] = {};
     if (!inventory[pid].stock) inventory[pid].stock = {};
@@ -22043,8 +21741,8 @@ async function applyRecount() {
       var variance = p.physicalCount - p.onHand;
 
       // Set onHand to physical count
-      await MastDB.inventory.ref(stockPath + '/onHand').set(p.physicalCount);
-      await MastDB.inventory.ref(stockPath + '/lastCountedAt').set(now);
+      await MastDB.inventory.set(stockPath + '/onHand', p.physicalCount);
+      await MastDB.inventory.set(stockPath + '/lastCountedAt', now);
 
       // Write audit
       await MastDB.inventory.ref(p.pid + '/history').push({
@@ -22059,7 +21757,7 @@ async function applyRecount() {
         timestamp: now
       });
 
-      await MastDB.inventory.ref(p.pid + '/updatedAt').set(now);
+      await MastDB.inventory.set(p.pid + '/updatedAt', now);
 
       // Update local cache
       if (inventory[p.pid] && inventory[p.pid].stock && inventory[p.pid].stock[ck]) {
@@ -22144,7 +21842,7 @@ async function applyHoldStock(pid) {
       action: 'held', reason: reason, qty: qty, note: note || null,
       actor: 'maker', actorType: 'maker', timestamp: now
     });
-    await MastDB.inventory.ref(pid + '/updatedAt').set(now);
+    await MastDB.inventory.set(pid + '/updatedAt', now);
 
     // Update local cache
     if (inventory[pid] && inventory[pid].stock && inventory[pid].stock._default) {
@@ -22197,7 +21895,7 @@ async function applyReleaseHold(pid) {
       action: 'released_hold', reason: 'hold_released', qty: -qty, note: note || null,
       actor: 'maker', actorType: 'maker', timestamp: now
     });
-    await MastDB.inventory.ref(pid + '/updatedAt').set(now);
+    await MastDB.inventory.set(pid + '/updatedAt', now);
 
     // Update local cache
     if (inventory[pid] && inventory[pid].stock && inventory[pid].stock._default) {
@@ -22409,7 +22107,7 @@ function loadProductInventoryHistory(pid) {
   if (!el) return;
   invHistoryPid = pid;
   // Read from inventory audit trail (new granular history)
-  MastDB.inventory.ref(pid + '/history').orderByChild('timestamp').limitToLast(25).once('value', function(snap) {
+  MastDB.query(MastDB.inventory.PATH + '/' + pid + '/history').orderByChild('timestamp').limitToLast(25).once('value', function(snap) {
     var entries = [];
     snap.forEach(function(child) {
       entries.push(child.val());
@@ -22584,8 +22282,7 @@ function showBulkPublishButton() {
   var btn = document.getElementById('bulkPublishShopifyBtn');
   if (!btn) return;
   // Show button if Shopify config exists in RTDB (lighter than calling secretsManager)
-  MastDB._ref('config/shopify/shopDomain').once('value', function(snap) {
-    var domain = snap.val();
+  MastDB.get('config/shopify/shopDomain').then(function(domain) {
     btn.style.display = domain ? '' : 'none';
   });
 }
@@ -22605,7 +22302,7 @@ async function addRecipeForProduct(pid) {
       status: 'draft'
     });
     // Link recipe back to product
-    await MastDB.products.ref(pid).update({ recipeId: recipe.recipeId, updatedAt: new Date().toISOString() });
+    await MastDB.products.update(pid, { recipeId: recipe.recipeId, updatedAt: new Date().toISOString() });
     showToast('Recipe created — opening in Maker');
     // Navigate to maker piece editor for this recipe
     if (typeof window.navigateTo === 'function') {
@@ -22628,8 +22325,7 @@ async function backfillVariantIds(opts) {
   opts = opts || {};
   var dryRun = !!opts.dryRun;
   if (!hasPermission('products', 'update')) { showToast('You do not have permission to update products.', true); return; }
-  var snap = await MastDB.products.ref().once('value');
-  var all = snap.val() || {};
+  var all = (await MastDB.products.get()) || {};
   var pids = Object.keys(all);
   var report = { total: pids.length, productsTouched: 0, variantsAssigned: 0, productsSkipped: 0, errors: [] };
   for (var i = 0; i < pids.length; i++) {
@@ -22641,7 +22337,7 @@ async function backfillVariantIds(opts) {
       if (v && !v.id) {
         changed = true;
         report.variantsAssigned++;
-        return Object.assign({}, v, { id: 'v_' + MastDB._newKey('products') });
+        return Object.assign({}, v, { id: 'v_' + MastDB.newKey('products') });
       }
       return v;
     });
@@ -22649,7 +22345,7 @@ async function backfillVariantIds(opts) {
       report.productsTouched++;
       if (!dryRun) {
         try {
-          await MastDB.products.ref(pid).update({ variants: newVariants });
+          await MastDB.products.update(pid, { variants: newVariants });
         } catch (e) {
           report.errors.push({ pid: pid, error: e.message || String(e) });
         }
@@ -22833,8 +22529,7 @@ window.__mastRecipeMetaCache = window.__mastRecipeMetaCache || {};
 async function loadRecipeMeta(recipeId) {
   if (!recipeId) return null;
   try {
-    var snap = await MastDB._ref('admin/recipes/' + recipeId).once('value');
-    var recipe = snap.val();
+    var recipe = await MastDB.get('admin/recipes/' + recipeId);
     if (recipe) {
       window.__mastRecipeMetaCache[recipeId] = {
         version: recipe.version || 1,
@@ -22947,7 +22642,7 @@ async function rejectRecipeForProduct(pid) {
   var meta = window.__mastRecipeMetaCache[product.recipeId];
   if (!meta) return;
   try {
-    await MastDB.products.ref(pid).update({
+    await MastDB.products.update(pid, {
       recipeVersion: meta.version,
       updatedAt: new Date().toISOString()
     });
@@ -23887,7 +23582,7 @@ function renderChannelSyncBadges(product, opts) {
 
 function loadAdminChannels(callback) {
   if (window.__mastChannelsCache) { callback(window.__mastChannelsCache); return; }
-  MastDB._ref('admin/channels').once('value').then(function(snap) {
+  MastDB.get('admin/channels').then(function(snapVal) {
     window.__mastChannelsCache = snap.val() || {};
     callback(window.__mastChannelsCache);
   }).catch(function(err) {
@@ -25892,7 +25587,7 @@ async function saveProduct(pid) {
           var variant = { combo: combo, priceCents: priceVal, retailPriceCents: priceVal };
           // Channel-First Phase 1b (D30) — every variant gets a stable ID. Format: v_<pushKey>.
           // Preserve existing.id for already-stable-keyed variants.
-          variant.id = (existing && existing.id) ? existing.id : ('v_' + MastDB._newKey('products'));
+          variant.id = (existing && existing.id) ? existing.id : ('v_' + MastDB.newKey('products'));
           // Read direct price from sibling input
           var directInput = document.querySelector('.pd-variant-direct-price[data-combo=\'' + input.getAttribute('data-combo') + '\']');
           if (directInput && directInput.value.trim()) {
@@ -26144,9 +25839,9 @@ async function saveProduct(pid) {
     // externalRefs by adapter sync, etc.) are preserved. Creates still use
     // .set() to establish the initial record.
     if (isCreate) {
-      await MastDB.products.ref(targetPid).set(productData);
+      await MastDB.products.set(targetPid, productData);
     } else {
-      await MastDB.products.ref(targetPid).update(productData);
+      await MastDB.products.update(targetPid, productData);
     }
     await writeAudit(isCreate ? 'create' : 'update', 'products', targetPid);
 
@@ -26386,7 +26081,7 @@ async function saveProductSettings(pid) {
       updates.productionLeadTimeDays = productionLeadTimeDays;
     }
 
-    await MastDB.inventory.ref(pid).update(updates);
+    await MastDB.inventory.update(pid, updates);
     await writeAudit('update', 'inventory', pid);
     showToast('Settings saved');
     if (!inventory[pid]) inventory[pid] = {};
@@ -26505,7 +26200,7 @@ async function saveAdjustStock(pid) {
       }
     }
 
-    await MastDB.inventory.ref(pid).update(updates);
+    await MastDB.inventory.update(pid, updates);
     await writeAudit('update', 'inventory', pid);
     // Write inventory audit trail for stock adjustments
     var adjAction = adjMode === 'add' ? 'restocked' : 'recount';
@@ -26538,8 +26233,7 @@ async function saveAdjustStock(pid) {
 
     // Refresh local cache from Firebase to pick up current committed values
     if (!inventory[pid]) inventory[pid] = { pid: pid };
-    var freshSnap = await MastDB.inventory.stockRef(pid).once('value');
-    inventory[pid].stock = freshSnap.val() || {};
+    inventory[pid].stock = await MastDB.get('admin/inventory/' + pid + '/stock') || {};
     closeModal();
     showToast('Stock updated');
     renderProductDetail(pid);
@@ -27506,7 +27200,7 @@ function loadAdminUsers() {
     return;
   }
   document.getElementById('usersLoading').style.display = '';
-  MastDB.adminUsers.ref().once('value').then(function(snap) {
+  MastDB.adminUsers.get().then(function(snap) {
     adminUsers = snap.val() || {};
     adminUsersLoaded = true;
     document.getElementById('usersLoading').style.display = 'none';
@@ -27521,7 +27215,7 @@ function loadAdminUsers() {
 function loadRoles() {
   if (rolesLoaded) { populateRoleSelector(); return; }
   if (!hasPermission('roles', 'read')) return;
-  MastDB.roles.ref().once('value').then(function(snap) {
+  MastDB.roles.get().then(function(snap) {
     rolesData = snap.val() || DEFAULT_ROLES;
     rolesLoaded = true;
     populateRoleSelector();
@@ -27752,7 +27446,7 @@ async function sendUserInvite() {
   // Encode email for use as Firebase key (replace . with ,)
   var emailKey = email.replace(/\./g, ',');
   try {
-    await MastDB.invites.ref(emailKey).set({
+    await MastDB.invites.set(emailKey, {
       email: email,
       role: role,
       invitedAt: new Date().toISOString(),
@@ -27799,7 +27493,7 @@ function cancelInvite(emailKey) {
   var email = inv ? inv.email : emailKey.replace(/,/g, '.');
   showConfirmDialog('Cancel Invite', 'Cancel the pending invite for ' + email + '?', async function() {
     try {
-      await MastDB.invites.ref(emailKey).remove();
+      await MastDB.invites.remove(emailKey);
       delete pendingInvites[emailKey];
       renderUsersList();
       showToast('Invite cancelled.');
@@ -27972,7 +27666,7 @@ async function saveNewRole() {
   };
 
   try {
-    await MastDB.roles.ref(key).set(roleData);
+    await MastDB.roles.set(key, roleData);
     rolesData[key] = roleData;
     await writeAudit('create', 'roles', key);
     closeModal();
@@ -28064,16 +27758,16 @@ async function saveEvent(eventId) {
     description: description,
     location: location,
     visible: visible,
-    updatedAt: firebase.database.ServerValue.TIMESTAMP
+    updatedAt: MastDB.serverTimestamp()
   };
 
   try {
     if (eventId) {
-      await MastDB.events.ref(eventId).update(data);
+      await MastDB.events.update(eventId, data);
       await writeAudit('update', 'schedule', eventId);
       showToast('Event updated.');
     } else {
-      data.createdAt = firebase.database.ServerValue.TIMESTAMP;
+      data.createdAt = MastDB.serverTimestamp();
       var newEvRef = MastDB.events.push();
       await newEvRef.set(data);
       await writeAudit('create', 'schedule', newEvRef.key);
@@ -28089,9 +27783,9 @@ async function toggleEventVisibility(eventId) {
   var ev = events[eventId];
   if (!ev) return;
   try {
-    await MastDB.events.ref(eventId).update({
+    await MastDB.events.update(eventId, {
       visible: ev.visible === false ? true : false,
-      updatedAt: firebase.database.ServerValue.TIMESTAMP
+      updatedAt: MastDB.serverTimestamp()
     });
     await writeAudit('update', 'schedule', eventId);
   } catch (err) {
@@ -28117,7 +27811,7 @@ function confirmDeleteEvent(eventId) {
 async function deleteEvent(eventId) {
   try {
     await writeAudit('delete', 'schedule', eventId);
-    await MastDB.events.ref(eventId).remove();
+    await MastDB.events.remove(eventId);
     showToast('Event deleted.');
     closeModal();
   } catch (err) {
@@ -28508,7 +28202,7 @@ async function saveImage(imageId) {
     category: (section === 'gallery' || section === 'shop') ? category : '',
     visible: visible,
     imageFit: imageFit,
-    updatedAt: firebase.database.ServerValue.TIMESTAMP
+    updatedAt: MastDB.serverTimestamp()
   };
 
   // Hero: video URL + playback speed + timing
@@ -28536,12 +28230,12 @@ async function saveImage(imageId) {
 
   try {
     if (imageId) {
-      await MastDB.gallery.ref(imageId).update(data);
+      await MastDB.gallery.update(imageId, data);
       await writeAudit('update', 'gallery', imageId);
       showToast('Image updated.');
     } else {
       data.order = getNextOrder(section);
-      data.createdAt = firebase.database.ServerValue.TIMESTAMP;
+      data.createdAt = MastDB.serverTimestamp();
       var newImgRef = MastDB.gallery.push();
       await newImgRef.set(data);
       await writeAudit('create', 'gallery', newImgRef.key);
@@ -28572,9 +28266,9 @@ async function toggleImageVisibility(imageId) {
   var img = gallery[imageId];
   if (!img) return;
   try {
-    await MastDB.gallery.ref(imageId).update({
+    await MastDB.gallery.update(imageId, {
       visible: img.visible === false ? true : false,
-      updatedAt: firebase.database.ServerValue.TIMESTAMP
+      updatedAt: MastDB.serverTimestamp()
     });
     await writeAudit('update', 'gallery', imageId);
     if (window.currentRoute === 'homepage' && window.renderHomepage) setTimeout(window.renderHomepage, 100);
@@ -28627,7 +28321,7 @@ async function reindexSection(section) {
   });
 
   if (needsUpdate) {
-    await MastDB._multiUpdate(updates);
+    await MastDB.multiUpdate(updates);
   }
 }
 
@@ -28677,12 +28371,12 @@ async function moveImage(imageId, direction) {
   // Swap order values
   var updates = {};
   updates['public/gallery/' + currentId + '/order'] = swapOrder;
-  updates['public/gallery/' + currentId + '/updatedAt'] = firebase.database.ServerValue.TIMESTAMP;
+  updates['public/gallery/' + currentId + '/updatedAt'] = MastDB.serverTimestamp();
   updates['public/gallery/' + swapId + '/order'] = currentOrder;
-  updates['public/gallery/' + swapId + '/updatedAt'] = firebase.database.ServerValue.TIMESTAMP;
+  updates['public/gallery/' + swapId + '/updatedAt'] = MastDB.serverTimestamp();
 
   try {
-    await MastDB._multiUpdate(updates);
+    await MastDB.multiUpdate(updates);
     if (window.currentRoute === 'homepage' && window.renderHomepage) setTimeout(window.renderHomepage, 100);
   } catch (err) {
     showToast('Error reordering: ' + err.message, true);
@@ -28708,7 +28402,7 @@ function confirmDeleteImage(imageId) {
 async function deleteImage(imageId) {
   try {
     await writeAudit('delete', 'gallery', imageId);
-    await MastDB.gallery.ref(imageId).remove();
+    await MastDB.gallery.remove(imageId);
     showToast('Image deleted.');
     closeModal();
     if (window.currentRoute === 'homepage' && window.renderHomepage) setTimeout(window.renderHomepage, 100);
@@ -29097,7 +28791,7 @@ function confirmPickerSelection() {
 // ---- Hero rotation speed ----
 async function saveHeroRotationSpeed(seconds) {
   try {
-    await MastDB._ref('public/config/hero/rotationSeconds').set(parseInt(seconds, 10));
+    await MastDB.set('public/config/hero/rotationSeconds', parseInt(seconds, 10));
     showToast('Hero rotation set to ' + seconds + 's');
   } catch (err) {
     showToast('Error saving: ' + err.message, true);
@@ -29105,8 +28799,7 @@ async function saveHeroRotationSpeed(seconds) {
 }
 
 function loadHeroRotationSpeed() {
-  MastDB._ref('public/config/hero/rotationSeconds').once('value', function(snap) {
-    var val = snap.val();
+  MastDB.get('public/config/hero/rotationSeconds').then(function(val) {
     var sel = document.getElementById('heroRotationSpeed');
     if (sel && val) sel.value = String(val);
   });
@@ -29193,8 +28886,8 @@ async function saveGalleryFromLibrary(sectionId, imageUrl, libraryImageId) {
     visible: document.getElementById('galVisible') ? document.getElementById('galVisible').checked : true,
     order: getNextOrder(sectionId),
     libraryImageId: libraryImageId,
-    createdAt: firebase.database.ServerValue.TIMESTAMP,
-    updatedAt: firebase.database.ServerValue.TIMESTAMP
+    createdAt: MastDB.serverTimestamp(),
+    updatedAt: MastDB.serverTimestamp()
   };
 
   if (sectionId === 'gallery' || sectionId === 'shop') {
@@ -29647,7 +29340,7 @@ function exitIntakeMode() {
 
 // PRODUCTION SYSTEM — loadProduction, PURPOSE_LABELS, PROD_JOB_TRANSITIONS moved to production module
 function loadOperators() {
-  MastDB.operators.ref().once('value').then(function(snap) {
+  MastDB.operators.get().then(function(snap) {
     operators = snap.val() || {};
     renderOperatorsList();
   });
@@ -29675,7 +29368,7 @@ async function addOperator() {
   var name = input.value.trim();
   if (!name) { showToast('Enter an operator name', true); return; }
   try {
-    var ref = MastDB.operators.ref().push();
+    var ref = MastDB.operators.push();
     await ref.set({ name: name, addedAt: new Date().toISOString() });
     await writeAudit('create', 'operators', ref.key);
     input.value = '';
@@ -29690,7 +29383,7 @@ async function removeOperator(opId) {
   if (!await mastConfirm('Remove this operator?', { title: 'Remove Operator' })) return;
   try {
     await writeAudit('delete', 'operators', opId);
-    await MastDB.operators.ref(opId).remove();
+    await MastDB.operators.remove(opId);
     loadOperators();
     showToast('Operator removed');
   } catch (err) {
@@ -29741,7 +29434,7 @@ var studioLocations = {};
 var STUDIO_RADIUS_METERS = 500;
 
 function loadStudioLocations() {
-  MastDB.studioLocations.ref().once('value').then(function(snap) {
+  MastDB.studioLocations.get().then(function(snap) {
     studioLocations = snap.val() || {};
     renderStudioLocations();
   });
@@ -29849,7 +29542,7 @@ function addStudioLocation() {
     function(pos) {
       var lat = pos.coords.latitude;
       var lng = pos.coords.longitude;
-      var ref = MastDB.studioLocations.ref().push();
+      var ref = MastDB.studioLocations.push();
       var locData = { name: name, lat: lat, lng: lng, radius: STUDIO_RADIUS_METERS, createdAt: new Date().toISOString() };
 
       // Save location with GPS first (no address yet)
@@ -29885,7 +29578,7 @@ async function removeStudioLocation(locId) {
   if (!await mastConfirm('Remove this studio location?', { title: 'Remove Location', danger: true })) return;
   try {
     await writeAudit('delete', 'locations', locId);
-    await MastDB.studioLocations.ref(locId).remove();
+    await MastDB.studioLocations.remove(locId);
     showToast('Location removed.');
     loadStudioLocations();
   } catch (err) {
@@ -29945,7 +29638,7 @@ async function saveStudioLocationAddress(locId) {
     phone: document.getElementById('slPhone').value.trim()
   };
   try {
-    await MastDB.studioLocations.ref(locId).update(updates);
+    await MastDB.studioLocations.update(locId, updates);
     Object.assign(studioLocations[locId], updates);
     closeModal();
     renderStudioLocations();
@@ -29972,7 +29665,7 @@ async function setDefaultShipFrom(locId) {
       }
     });
     updates[locId + '/isDefaultShipFrom'] = true;
-    await MastDB.studioLocations.ref().update(updates);
+    await MastDB.studioLocations.update(, updates);
     studioLocations[locId].isDefaultShipFrom = true;
     renderStudioLocations();
     showToast('Default ship-from set: ' + esc(studioLocations[locId].name || locId));
@@ -30008,7 +29701,7 @@ function isNearAnyStudio(lat, lng, locations) {
 
 function loadLocations() {
   if (locationsLoaded) { renderLocationsList(); return; }
-  MastDB.locations.ref().once('value').then(function(snap) {
+  MastDB.locations.get().then(function(snap) {
     locationsData = snap.val() || {};
     locationsLoaded = true;
     ensureHomeLocation();
@@ -30022,7 +29715,7 @@ function ensureHomeLocation() {
     return locationsData[k].type === 'home' && locationsData[k].status === 'active';
   });
   if (!hasHome) {
-    var ref = MastDB.locations.ref().push();
+    var ref = MastDB.locations.push();
     var homeRecord = {
       locationId: ref.key,
       name: 'Home',
@@ -30122,7 +29815,7 @@ async function createLocation() {
   var type = document.getElementById('newLocationType').value;
 
   try {
-    var ref = MastDB.locations.ref().push();
+    var ref = MastDB.locations.push();
     var record = {
       locationId: ref.key,
       name: name,
@@ -30146,7 +29839,7 @@ async function createLocation() {
 
 function createEventLocation(eventId, eventName) {
   // Auto-create a location linked to a sales event
-  var ref = MastDB.locations.ref().push();
+  var ref = MastDB.locations.push();
   var record = {
     locationId: ref.key,
     name: eventName,
@@ -30187,7 +29880,7 @@ async function renameLocation(locId) {
   var newName = await mastPrompt('Rename location:', { title: 'Rename Location', defaultValue: loc.name });
   if (!newName || newName.trim() === loc.name) return;
   try {
-    await MastDB.locations.ref(locId).update({ name: newName.trim(), updatedAt: new Date().toISOString() });
+    await MastDB.locations.update(locId, { name: newName.trim(), updatedAt: new Date().toISOString() });
     await writeAudit('update', 'locations', locId);
     locationsData[locId].name = newName.trim();
     showToast('Location renamed');
@@ -30207,7 +29900,7 @@ async function archiveLocation(locId) {
   }
   if (!await mastConfirm('Archive "' + loc.name + '"? You can reactivate it later.', { title: 'Archive Location' })) return;
   try {
-    await MastDB.locations.ref(locId).update({ status: 'archived', updatedAt: new Date().toISOString() });
+    await MastDB.locations.update(locId, { status: 'archived', updatedAt: new Date().toISOString() });
     await writeAudit('update', 'locations', locId);
     locationsData[locId].status = 'archived';
     showToast('Location archived');
@@ -30219,7 +29912,7 @@ async function archiveLocation(locId) {
 
 async function reactivateLocation(locId) {
   try {
-    await MastDB.locations.ref(locId).update({ status: 'active', updatedAt: new Date().toISOString() });
+    await MastDB.locations.update(locId, { status: 'active', updatedAt: new Date().toISOString() });
     await writeAudit('update', 'locations', locId);
     locationsData[locId].status = 'active';
     showToast('Location reactivated');
@@ -30342,7 +30035,7 @@ async function addToLocation(pid, variantKey, locationId, qty) {
   // Recomputes _default.available as sum of all variants to avoid double-counting.
   if (!pid || !locationId || qty <= 0) return;
   var key = variantKey || '_default';
-  var stockRef = MastDB.inventory.stockRef(pid);
+  var stockPath = 'admin/inventory/' + pid + '/stock';
   var locRef = MastDB.inventory.subRef(pid, 'stock', key, 'locations', locationId);
 
   var snap = await locRef.once('value');
@@ -30352,14 +30045,12 @@ async function addToLocation(pid, variantKey, locationId, qty) {
   updates[key + '/locations/' + locationId] = current + qty;
 
   // Increment variant onHand
-  var onHandSnap = await MastDB.inventory.stockOnHand(pid, key).once('value');
-  var onHandCurrent = onHandSnap.val() || 0;
+  var onHandCurrent = (await MastDB.get(MastDB.inventory.stockOnHandPath(pid, key))) || 0;
   updates[key + '/onHand'] = onHandCurrent + qty;
 
   // Recompute _default.onHand as sum of all variant onHand
   if (key !== '_default') {
-    var stockSnap = await stockRef.once('value');
-    var stockData = stockSnap.val() || {};
+    var stockData = (await MastDB.get(stockPath)) || {};
     var total = 0;
     Object.keys(stockData).forEach(function(k) {
       if (k !== '_default' && stockData[k] && stockData[k].onHand) {
@@ -30369,7 +30060,7 @@ async function addToLocation(pid, variantKey, locationId, qty) {
     updates['_default/onHand'] = total;
   }
 
-  await stockRef.update(updates);
+  await MastDB.update(stockPath, updates);
 
   // Refresh local cache
   if (!inventory[pid]) inventory[pid] = { pid: pid, stock: {} };
@@ -30622,8 +30313,8 @@ async function executeClone(sourcePid) {
   var newPid = sourcePid + '-copy';
 
   // Check if target already exists
-  var existSnap = await MastDB.products.ref(newPid).once('value');
-  if (existSnap.exists()) {
+  var existSnap = await MastDB.products.get(newPid);
+  if ((existSnap != null)) {
     showToast('Product ' + newPid + ' already exists', true);
     return;
   }
@@ -30642,9 +30333,9 @@ async function executeClone(sourcePid) {
   }
 
   try {
-    await MastDB.products.ref(newPid).set(cloned);
+    await MastDB.products.set(newPid, cloned);
     // Initialize inventory at 0
-    await MastDB._ref('admin/inventory/' + newPid).set({
+    await MastDB.set('admin/inventory/' + newPid, {
       stockType: 'stock-to-build',
       stock: { _default: { onHand: 0, committed: 0, held: 0, damaged: 0, incoming: 0 } },
       lowStockThreshold: 5,
@@ -30669,8 +30360,8 @@ function openAddToSaleDialog(pid) {
   if (!product) { showToast('Product not found', true); return; }
 
   // Read active promotions
-  MastDB.promotions.list(100).then(function(snap) {
-    var data = snap.val() || {};
+  MastDB.promotions.list(100).then(function(data) {
+    data = data || {};
     var now = new Date().toISOString();
     var activeSales = [];
     var currentSaleId = null;
@@ -30734,8 +30425,7 @@ async function executeAddToSale(pid) {
   var saleId = selected.value;
 
   try {
-    var snap = await MastDB.promotions.get(saleId);
-    var sale = snap.val();
+    var sale = await MastDB.promotions.get(saleId);
     if (!sale) { showToast('Sale not found', true); return; }
 
     var prods = sale.products || [];
@@ -30757,8 +30447,7 @@ async function executeAddToSale(pid) {
 
 async function removeFromSale(saleId, pid) {
   try {
-    var snap = await MastDB.promotions.get(saleId);
-    var sale = snap.val();
+    var sale = await MastDB.promotions.get(saleId);
     if (!sale) return;
     var prods = (sale.products || []).filter(function(p) {
       return (typeof p === 'string' ? p : p.pid) !== pid;
@@ -31398,21 +31087,21 @@ async function saveCoupon(existingCode) {
     description: description || null,
     minOrder: minOrder,
     excludeSaleItems: excludeSaleItems,
-    updatedAt: firebase.database.ServerValue.TIMESTAMP
+    updatedAt: MastDB.serverTimestamp()
   };
 
   if (!isEdit) {
     data.claimedCount = 0;
-    data.createdAt = firebase.database.ServerValue.TIMESTAMP;
+    data.createdAt = MastDB.serverTimestamp();
   }
 
   try {
     if (isEdit) {
-      await MastDB.coupons.ref(key).update(data);
+      await MastDB.coupons.update(key, data);
       await writeAudit('update', 'coupons', key);
       showToast('Coupon updated.');
     } else {
-      await MastDB.coupons.ref(key).set(data);
+      await MastDB.coupons.set(key, data);
       await writeAudit('create', 'coupons', key);
       showToast('Coupon created.');
     }
@@ -31438,7 +31127,7 @@ function confirmDeleteCoupon(code) {
 async function deleteCoupon(code) {
   try {
     await writeAudit('delete', 'coupons', code);
-    await MastDB.coupons.ref(code).remove();
+    await MastDB.coupons.remove(code);
     showToast('Coupon deleted.');
     closeModal();
   } catch (err) {
@@ -31700,7 +31389,7 @@ async function submitFeedback() {
     consoleBuffer: window._consoleBuffer ? window._consoleBuffer.slice() : [],
     status: 'open',
     jobId: null,
-    createdAt: firebase.database.ServerValue.TIMESTAMP
+    createdAt: MastDB.serverTimestamp()
   };
 
   try {
@@ -31746,7 +31435,7 @@ function loadPublicFeedbackSetting() {
 var _testingModeVisible = false;
 
 function loadTestingModeVisibility() {
-  MastDB._ref('config/testingModeVisible').once('value').then(function(snap) {
+  MastDB.get('config/testingModeVisible').then(function(snapVal) {
     _testingModeVisible = snap.val() === true;
     applyTestingModeVisibility();
     // Sync the toggle in Settings if it exists
@@ -31768,7 +31457,7 @@ function applyTestingModeVisibility() {
 function toggleTestingModeVisibility() {
   var toggle = document.getElementById('testingModeVisibleToggle');
   var val = toggle ? toggle.checked : false;
-  MastDB._ref('config').update({ testingModeVisible: val }).then(function() {
+  MastDB.update('config', { testingModeVisible: val }).then(function() {
     _testingModeVisible = val;
     applyTestingModeVisibility();
     showToast(val ? 'Testing Mode visible in sidebar' : 'Testing Mode hidden');
@@ -32459,8 +32148,7 @@ async function loadDashboardPrefs() {
   var user = auth.currentUser;
   if (!user) return;
   try {
-    var snap = await MastDB.dashboardPrefs.get(user.uid);
-    var val = snap.val();
+    var val = await MastDB.dashboardPrefs.get(user.uid);
     if (val && val.cards) {
       dashboardCardPrefs = val.cards;
     }
@@ -32645,8 +32333,7 @@ function dashSettingDrop(e, targetCardId) {
 async function ensureProductsLoaded() {
   if (productsLoaded && productsData.length > 0) return;
   try {
-    var snap = await MastDB.products.ref().once('value');
-    var val = snap.val();
+    var val = await MastDB.products.get();
     productsData = val ? Object.values(val) : [];
     productsData.sort(function(a, b) { return a.name.localeCompare(b.name); });
     productsLoaded = true;
@@ -32701,11 +32388,10 @@ function renderImportStatusBanner() {
   if (!banner) return;
   // Detach previous listener to avoid duplicates
   if (_importBannerListener) {
-    MastDB._ref('webPresence/importJobs').off('value', _importBannerListener);
+    _importBannerListener();
   }
-  // Use .on() for real-time updates so banner updates when import completes
-  _importBannerListener = MastDB._ref('webPresence/importJobs').orderByChild('createdAt').limitToLast(3).on('value', function(snap) {
-    var jobs = snap.val();
+  // Use subscribe for real-time updates so banner updates when import completes
+  _importBannerListener = MastDB.query('webPresence/importJobs').orderByChild('createdAt').limitToLast(3).subscribe(function(jobs) {
     if (!jobs) { banner.style.display = 'none'; return; }
     var jobList = Object.entries(jobs).map(function(e) { return Object.assign({ _id: e[0] }, e[1]); }).sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
     // Show banner for active or recently completed imports (last 24h), skip dismissed
@@ -32753,7 +32439,7 @@ function renderImportStatusBanner() {
     }
     banner.innerHTML = html;
     banner.style.display = '';
-  }).catch(function() { banner.style.display = 'none'; });
+  });
 }
 
 // ─── Custom Dashboard Cards (loaded from Firebase) ──────────
@@ -32834,7 +32520,7 @@ function renderStatusQueueCard(cardDef) {
   }
 
   // Use first filter for Firebase query, rest applied client-side
-  var fbQuery = MastDB._ref(path);
+  var fbQuery = MastDB.query(path);
   if (filters.length > 0) {
     fbQuery = fbQuery.orderByChild(filters[0].field).equalTo(filters[0].value);
   }
@@ -32915,7 +32601,7 @@ function renderDashCardNewInquiries() {
   if (!container) return;
   var cardConfig = DASHBOARD_CARDS.find(function(c) { return c.id === 'newInquiries'; });
 
-  MastDB._ref('inquiries').orderByChild('status').equalTo('new').limitToLast(10).once('value').then(function(snap) {
+  MastDB.query('inquiries').orderByChild('status').equalTo('new').limitToLast(10).once('value').then(function(snap) {
     var val = snap.val();
     var items = val ? Object.values(val).sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); }) : [];
 
@@ -33022,7 +32708,7 @@ async function saveDashInlineAdjust(pid) {
       updates['stockType'] = 'strict';
     }
 
-    await MastDB.inventory.ref(pid).update(updates);
+    await MastDB.inventory.update(pid, updates);
     await writeAudit('update', 'inventory', pid);
     await MastDB.inventory.ref(pid + '/history').push({
       action: 'restocked', reason: 'stock_received', actor: 'maker', actorType: 'maker',
@@ -33032,8 +32718,8 @@ async function saveDashInlineAdjust(pid) {
     await syncStockInfoToPublic(pid);
 
     // Refresh local cache and re-render card
-    var snap = await MastDB.inventory.ref(pid).once('value');
-    if (snap.val()) inventory[pid] = snap.val();
+    var snap = await MastDB.inventory.get(pid);
+    if (snap) inventory[pid] = snap;
     renderDashCardLowInventory();
     showToast('Added ' + addQty + ' to stock');
   } catch (err) {
@@ -33226,7 +32912,7 @@ function renderDashCardPendingRefunds() {
   if (!container) return;
   var cardConfig = DASHBOARD_CARDS.find(function(c) { return c.id === 'pendingRefunds'; });
 
-  MastDB._ref('admin/enrollments').orderByChild('refundStatus').equalTo('pending_review').limitToLast(50).once('value').then(function(snap) {
+  MastDB.query('admin/enrollments').orderByChild('refundStatus').equalTo('pending_review').limitToLast(50).once('value').then(function(snap) {
     var items = [];
     if (snap.exists()) {
       snap.forEach(function(child) {
@@ -33284,13 +32970,13 @@ function renderDashCardPendingRefunds() {
 
 function approveRefund(enrollmentId, paymentType) {
   var update = { refundStatus: 'store_credit', refundApprovedAt: new Date().toISOString() };
-  MastDB._ref('admin/enrollments/' + enrollmentId).update(update).then(function() {
+  MastDB.update('admin/enrollments/' + enrollmentId, update).then(function() {
     if (paymentType === 'pass') {
       // Restore pass visit
-      MastDB._ref('admin/enrollments/' + enrollmentId).once('value').then(function(snap) {
+      MastDB.get('admin/enrollments/' + enrollmentId).then(function(snapVal) {
         var enr = snap.val();
         if (enr && enr.passId && enr.studentUid) {
-          var passRef = MastDB._ref('public/accounts/' + enr.studentUid + '/passes/' + enr.passId);
+          var passRef = MastDB.query('public/accounts/' + enr.studentUid + '/passes/' + enr.passId);
           passRef.once('value').then(function(passSnap) {
             if (passSnap.exists()) {
               var pass = passSnap.val();
@@ -33307,12 +32993,11 @@ function approveRefund(enrollmentId, paymentType) {
     }
     if (paymentType !== 'pass') {
       // Issue wallet store credit for paid bookings
-      MastDB._ref('admin/enrollments/' + enrollmentId).once('value').then(function(snap) {
-        var enr = snap.val();
+      MastDB.get('admin/enrollments/' + enrollmentId).then(function(enr) {
         if (enr && enr.studentUid && enr.pricePaidCents && enr.pricePaidCents > 0) {
-          var creditRef = MastDB._ref('public/accounts/' + enr.studentUid + '/wallet/credits').push();
-          creditRef.set({
-            id: creditRef.key,
+          var creditKey = MastDB.newKey('public/accounts/' + enr.studentUid + '/wallet/credits');
+          MastDB.set('public/accounts/' + enr.studentUid + '/wallet/credits/' + creditKey, {
+            id: creditKey,
             type: 'store_credit',
             source: 'cancellation',
             amountCents: enr.pricePaidCents,
@@ -33336,7 +33021,7 @@ function approveRefund(enrollmentId, paymentType) {
 }
 
 function denyRefund(enrollmentId) {
-  MastDB._ref('admin/enrollments/' + enrollmentId).update({
+  MastDB.update('admin/enrollments/' + enrollmentId, {
     refundStatus: 'denied',
     refundDeniedAt: new Date().toISOString()
   }).then(function() {
@@ -33352,7 +33037,7 @@ function renderDashCardRecentCancellations() {
   var cardConfig = DASHBOARD_CARDS.find(function(c) { return c.id === 'recentCancellations'; });
   var sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString();
 
-  MastDB._ref('admin/enrollments').orderByChild('cancelledAt').startAt(sevenDaysAgo).limitToLast(100).once('value').then(function(snap) {
+  MastDB.query('admin/enrollments').orderByChild('cancelledAt').startAt(sevenDaysAgo).limitToLast(100).once('value').then(function(snap) {
     var cancelled = [];
     if (snap.exists()) {
       snap.forEach(function(child) {
@@ -33380,8 +33065,8 @@ function renderDashCardRecentCancellations() {
     // Load class and session data for each group
     var promises = sessionKeys.map(function(key) {
       var group = bySession[key];
-      var p1 = group.classId ? MastDB._ref('public/classes/' + group.classId).once('value') : Promise.resolve(null);
-      var p2 = group.sessionId ? MastDB._ref('public/classSessions/' + group.sessionId).once('value') : Promise.resolve(null);
+      var p1 = group.classId ? MastDB.get('public/classes/' + group.classId) : Promise.resolve(null);
+      var p2 = group.sessionId ? MastDB.get('public/classSessions/' + group.sessionId) : Promise.resolve(null);
       return Promise.all([p1, p2]).then(function(results) {
         group.classData = results[0] && results[0].exists() ? results[0].val() : {};
         group.sessionData = results[1] && results[1].exists() ? results[1].val() : {};
@@ -33444,7 +33129,7 @@ function incrementQuickAction(actionKey) {
   var user = auth.currentUser;
   if (!user) return;
   var ref = MastDB.quickActions.ref(user.uid).child(actionKey);
-  ref.child('count').set(firebase.database.ServerValue.increment(1));
+  ref.child('count').set(MastDB.serverIncrement(1));
   ref.child('lastUsed').set(new Date().toISOString());
 }
 
@@ -33463,8 +33148,7 @@ async function loadDismissedNudges() {
   var user = auth.currentUser;
   if (!user) return;
   try {
-    var snap = await MastDB.dismissedNudges.get(user.uid);
-    dismissedNudgesData = snap.val() || {};
+    dismissedNudgesData = (await MastDB.dismissedNudges.get(user.uid)) || {};
     dismissedNudgesLoaded = true;
   } catch (e) {
     console.error('Error loading dismissed nudges:', e);

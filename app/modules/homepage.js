@@ -28,7 +28,7 @@
   function markUnpublished() {
     if (window.markUnpublished) return window.markUnpublished();
     // Fallback if website module not loaded yet
-    MastDB._ref('webPresence/config/updatedAt').set(new Date().toISOString());
+    MastDB.set('webPresence/config/updatedAt', new Date().toISOString());
   }
 
   // --- Debounce helper ---
@@ -98,22 +98,21 @@
     if (loaded) return;
 
     // Load gallery images
-    var galSnap = await MastDB.gallery.list(500);
-    galleryData = galSnap.val() || {};
+    galleryData = (await MastDB.gallery.list(500)) || {};
 
     // Load webPresence/config (section content fields)
-    var wpSnap = await MastDB._ref('webPresence/config').once('value');
+    var wpSnap = await MastDB.get('webPresence/config');
     websiteConfig = wpSnap.val() || {};
 
     // Load theme config — try shared data first, then load independently
     themeConfig = MastAdmin.getData('themeConfig');
     if (!themeConfig) {
-      var themeSnap = await MastDB._ref('public/config/theme').once('value');
+      var themeSnap = await MastDB.get('public/config/theme');
       themeConfig = themeSnap.val() || {};
     }
 
     // Load nav sections (enabled states)
-    var navSnap = await MastDB._ref('public/config/nav/sections').once('value');
+    var navSnap = await MastDB.get('public/config/nav/sections');
     navSections = navSnap.val() || {};
 
     // Load template manifest — try shared data first, then load independently
@@ -498,7 +497,7 @@
 
   window.hpToggleSection = async function(sectionId, enabled) {
     try {
-      await MastDB._ref('public/config/nav/sections/' + sectionId + '/enabled').set(enabled);
+      await MastDB.set('public/config/nav/sections/' + sectionId + '/enabled', enabled);
       if (!navSections) navSections = {};
       if (!navSections[sectionId]) navSections[sectionId] = {};
       navSections[sectionId].enabled = enabled;
@@ -506,7 +505,7 @@
       if (!websiteConfig.sections) websiteConfig.sections = {};
       if (!websiteConfig.sections[sectionId]) websiteConfig.sections[sectionId] = {};
       websiteConfig.sections[sectionId].enabled = enabled;
-      await MastDB._ref('webPresence/config/sections/' + sectionId + '/enabled').set(enabled);
+      await MastDB.set('webPresence/config/sections/' + sectionId + '/enabled', enabled);
       markUnpublished();
     } catch (err) {
       showToast('Error: ' + err.message, true);
@@ -519,7 +518,7 @@
     if (!websiteConfig.sections[sectionKey]) websiteConfig.sections[sectionKey] = {};
     websiteConfig.sections[sectionKey][fieldId] = value;
     debounce('hp-field-' + sectionKey + '-' + fieldId, function() {
-      MastDB._ref('webPresence/config/sections/' + sectionKey + '/' + fieldId).set(value);
+      MastDB.set('webPresence/config/sections/' + sectionKey + '/' + fieldId, value);
       markUnpublished();
     });
   };
@@ -528,7 +527,7 @@
     if (!themeConfig) themeConfig = {};
     themeConfig[field] = value;
     try {
-      await MastDB._ref('public/config/theme/' + field).set(value);
+      await MastDB.set('public/config/theme/' + field, value);
       markUnpublished();
       var labels = {
         heroVariant: 'Hero layout',
@@ -548,7 +547,7 @@
     if (!websiteConfig.sections.contact.socialLinks) websiteConfig.sections.contact.socialLinks = {};
     websiteConfig.sections.contact.socialLinks[platform] = value;
     debounce('hp-social-' + platform, function() {
-      MastDB._ref('webPresence/config/sections/contact/socialLinks/' + platform).set(value);
+      MastDB.set('webPresence/config/sections/contact/socialLinks/' + platform, value);
       markUnpublished();
     });
   };
@@ -570,7 +569,7 @@
         if (!websiteConfig.sections) websiteConfig.sections = {};
         if (!websiteConfig.sections[sectionKey]) websiteConfig.sections[sectionKey] = {};
         websiteConfig.sections[sectionKey][fieldId] = url;
-        MastDB._ref('webPresence/config/sections/' + sectionKey + '/' + fieldId).set(url);
+        MastDB.set('webPresence/config/sections/' + sectionKey + '/' + fieldId, url);
         markUnpublished();
         renderHomepage();
       });

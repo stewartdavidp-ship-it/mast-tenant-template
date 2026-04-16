@@ -44,10 +44,10 @@
     try {
       var [equipSnap, foundersSnap, employeesSnap, overheadItemsSnap, expSnap] = await Promise.all([
         MastDB.lpe.equipment.list(),
-        MastDB._ref('admin/lpe/founders').once('value'),
-        MastDB._ref('admin/employees').once('value'),
-        MastDB._ref('admin/lpe/overheadItems').once('value'),
-        MastDB._ref('admin/expenses').orderByChild('isStudioOverhead').equalTo(true).limitToLast(200).once('value'),
+        MastDB.get('admin/lpe/founders'),
+        MastDB.get('admin/employees'),
+        MastDB.get('admin/lpe/overheadItems'),
+        MastDB.query('admin/expenses').orderByChild('isStudioOverhead').equalTo(true).limitToLast(200).once('value'),
       ]);
 
       var eqVal = equipSnap.val() || {};
@@ -460,12 +460,12 @@
     };
     try {
       if (editingFounderId) {
-        await MastDB._ref('admin/lpe/founders/' + editingFounderId).update(fields);
+        await MastDB.update('admin/lpe/founders/' + editingFounderId, fields);
         showToast('Founder saved');
       } else {
         fields.createdAt = new Date().toISOString();
         var newId = 'founder_' + Date.now();
-        await MastDB._ref('admin/lpe/founders/' + newId).set(fields);
+        await MastDB.set('admin/lpe/founders/' + newId, fields);
         showToast('Founder added');
       }
       editingFounderId = null;
@@ -479,7 +479,7 @@
   async function deleteFounder(founderId) {
     if (!await mastConfirm('Delete this founder? This cannot be undone.', { title: 'Delete Founder', danger: true })) return;
     try {
-      await MastDB._ref('admin/lpe/founders/' + founderId).remove();
+      await MastDB.remove('admin/lpe/founders/' + founderId);
       showToast('Founder deleted');
       studioLoaded = false;
       loadStudio();
@@ -578,14 +578,14 @@
     try {
       if (editingEmployeeId) {
         // Don't overwrite payType on edit — Team module manages it
-        await MastDB._ref('admin/employees/' + editingEmployeeId).update(fields);
+        await MastDB.update('admin/employees/' + editingEmployeeId, fields);
         showToast('Team member saved');
       } else {
         fields.createdAt = new Date().toISOString();
         fields.payType = 'hourly'; // default for new employees created from studio
         fields.status = 'active';
         var newId = 'emp_' + Date.now();
-        await MastDB._ref('admin/employees/' + newId).set(fields);
+        await MastDB.set('admin/employees/' + newId, fields);
         showToast('Team member added');
       }
       editingEmployeeId = null;
@@ -599,7 +599,7 @@
   async function deleteEmployee(empId) {
     if (!await mastConfirm('Delete this team member? This cannot be undone.', { title: 'Delete Team Member', danger: true })) return;
     try {
-      await MastDB._ref('admin/employees/' + empId).remove();
+      await MastDB.remove('admin/employees/' + empId);
       showToast('Team member deleted');
       studioLoaded = false;
       loadStudio();
@@ -700,12 +700,12 @@
     };
     try {
       if (editingOhItemId) {
-        await MastDB._ref('admin/lpe/overheadItems/' + editingOhItemId).update(fields);
+        await MastDB.update('admin/lpe/overheadItems/' + editingOhItemId, fields);
         showToast('Overhead cost saved');
       } else {
         fields.createdAt = new Date().toISOString();
         var newId = 'oh_' + Date.now();
-        await MastDB._ref('admin/lpe/overheadItems/' + newId).set(fields);
+        await MastDB.set('admin/lpe/overheadItems/' + newId, fields);
         showToast('Overhead cost added');
       }
       editingOhItemId = null;
@@ -719,7 +719,7 @@
   async function deleteOverheadItem(itemId) {
     if (!await mastConfirm('Delete this overhead cost? This cannot be undone.', { title: 'Delete Overhead Cost', danger: true })) return;
     try {
-      await MastDB._ref('admin/lpe/overheadItems/' + itemId).remove();
+      await MastDB.remove('admin/lpe/overheadItems/' + itemId);
       showToast('Overhead cost deleted');
       studioLoaded = false;
       loadStudio();

@@ -925,8 +925,7 @@
 
   async function resendOrderEmail(emailKey, orderId) {
     try {
-      var snap = await MastDB.emails.get(emailKey);
-      var em = snap.val();
+      var em = await MastDB.emails.get(emailKey);
       if (!em) { showToast('Email log entry not found', true); return; }
 
       showToast('Resending email...');
@@ -1213,7 +1212,7 @@
     }
     updates['statusHistory'] = history;
 
-    await MastDB.orders.ref(orderId).update(updates);
+    await MastDB.orders.update(orderId, updates);
     await writeAudit('update', 'orders', orderId);
 
     if (updates['status'] === 'building') {
@@ -1264,7 +1263,7 @@
         return; // triageAndConfirmOrder handles all updates
       }
 
-      await MastDB.orders.ref(orderId).update(updates);
+      await MastDB.orders.update(orderId, updates);
       // Update local state so re-render shows new status
       Object.keys(updates).forEach(function(k) { o[k] = updates[k]; });
       await writeAudit('update', 'orders', orderId);
@@ -1285,7 +1284,7 @@
         var ffLog2 = (updates['fulfillmentLog'] || o.fulfillmentLog || []).slice();
         ffLog2.push({ event: 'shipped', timestamp: shippedAt, userId: 'system', method: 'auto' });
         shippedUpdates['fulfillmentLog'] = ffLog2;
-        await MastDB.orders.ref(orderId).update(shippedUpdates);
+        await MastDB.orders.update(orderId, shippedUpdates);
         Object.keys(shippedUpdates).forEach(function(k) { o[k] = shippedUpdates[k]; });
 
         // Trigger inventory deduction + shipped email via cloud function
@@ -1316,13 +1315,12 @@
     var inv = inventory[pid];
     if (!inv || !inv.stock || !inv.stock._default) return;
     try {
-      var stockRef = MastDB.inventory.stockRef(pid);
       var updates = {};
-      updates['_default/committed'] = firebase.database.ServerValue.increment(qty);
+      updates['_default/committed'] = MastDB.serverIncrement(qty);
       if (ck && ck !== '_default' && inv.stock[ck]) {
-        updates[ck + '/committed'] = firebase.database.ServerValue.increment(qty);
+        updates[ck + '/committed'] = MastDB.serverIncrement(qty);
       }
-      await stockRef.update(updates);
+      await MastDB.update('admin/inventory/' + pid + '/stock', updates);
       await writeAudit('update', 'inventory', pid);
       await MastDB.inventory.ref(pid + '/history').push({
         action: 'committed', reason: 'order_placed', qty: qty, comboKey: ck || '_default',
@@ -1338,13 +1336,12 @@
     var inv = inventory[pid];
     if (!inv || !inv.stock || !inv.stock._default) return;
     try {
-      var stockRef = MastDB.inventory.stockRef(pid);
       var updates = {};
-      updates['_default/committed'] = firebase.database.ServerValue.increment(-qty);
+      updates['_default/committed'] = MastDB.serverIncrement(-qty);
       if (ck && ck !== '_default' && inv.stock[ck]) {
-        updates[ck + '/committed'] = firebase.database.ServerValue.increment(-qty);
+        updates[ck + '/committed'] = MastDB.serverIncrement(-qty);
       }
-      await stockRef.update(updates);
+      await MastDB.update('admin/inventory/' + pid + '/stock', updates);
       await writeAudit('update', 'inventory', pid);
       await MastDB.inventory.ref(pid + '/history').push({
         action: 'released', reason: 'order_cancelled', qty: qty, comboKey: ck || '_default',
@@ -1360,15 +1357,14 @@
     var inv = inventory[pid];
     if (!inv || !inv.stock || !inv.stock._default) return;
     try {
-      var stockRef = MastDB.inventory.stockRef(pid);
       var updates = {};
-      updates['_default/committed'] = firebase.database.ServerValue.increment(-qty);
-      updates['_default/onHand'] = firebase.database.ServerValue.increment(-qty);
+      updates['_default/committed'] = MastDB.serverIncrement(-qty);
+      updates['_default/onHand'] = MastDB.serverIncrement(-qty);
       if (ck && ck !== '_default' && inv.stock[ck]) {
-        updates[ck + '/committed'] = firebase.database.ServerValue.increment(-qty);
-        updates[ck + '/onHand'] = firebase.database.ServerValue.increment(-qty);
+        updates[ck + '/committed'] = MastDB.serverIncrement(-qty);
+        updates[ck + '/onHand'] = MastDB.serverIncrement(-qty);
       }
-      await stockRef.update(updates);
+      await MastDB.update('admin/inventory/' + pid + '/stock', updates);
       await writeAudit('update', 'inventory', pid);
       await MastDB.inventory.ref(pid + '/history').push({
         action: 'shipped', reason: 'order_shipped', qty: -qty, comboKey: ck || '_default',
@@ -1394,7 +1390,7 @@
       var ffKey = getItemFulfillmentKey(item);
       var ff = fulfillment[ffKey];
       if (ff && ff.source === 'build') {
-        var reqRef = MastDB.productionRequests.ref().push();
+        var reqRef = MastDB.productionRequests.push();
         var reqId = reqRef.key;
         await reqRef.set({
           requestId: reqId,
@@ -1438,8 +1434,8 @@
   }
 
   async function _getStudioLocations() {
-    var snap = await MastDB.studioLocations.ref().once('value');
-    return snap.val() || {};
+    var snap = await MastDB.studioLocations.get();
+    return (snap || {});
   }
 
   async function _getPackagePresets() {
@@ -1836,7 +1832,7 @@
         });
       }
 
-      await MastDB.orders.ref(s.orderId).update({
+      await MastDB.orders.update(s.orderId, {
         status: 'shipped',
         shippedAt: now,
         tracking: {
@@ -1908,10 +1904,10 @@
       }
       if (!lkKey) {
         try {
-          var snap = await MastDB._ref('config/labelkeeper/apiKey').once('value');
+          var snap = await MastDB.get('config/labelkeeper/apiKey');
           lkKey = snap.val();
           if (!lkKey) {
-            snap = await MastDB._ref('admin/config/labelkeeper/apiKey').once('value');
+            snap = await MastDB.get('admin/config/labelkeeper/apiKey');
             lkKey = snap.val();
           }
         } catch(e) {}
@@ -1972,7 +1968,7 @@
       var now = new Date().toISOString();
       var history = (o.statusHistory || []).slice();
       history.push({ status: 'confirmed', at: now, by: 'admin', note: 'Label voided — refund initiated' });
-      await MastDB.orders.ref(orderId).update({
+      await MastDB.orders.update(orderId, {
         status: 'confirmed',
         shippedAt: null,
         tracking: null,
@@ -2017,7 +2013,7 @@
         });
       }
 
-      await MastDB.orders.ref(orderId).update({
+      await MastDB.orders.update(orderId, {
         status: 'shipped',
         shippedAt: now,
         tracking: {
@@ -2142,7 +2138,7 @@
       };
       if (labelUrl) trackingData.labelUrl = labelUrl;
 
-      await MastDB.orders.ref(orderId).update({
+      await MastDB.orders.update(orderId, {
         status: 'shipped',
         shippedAt: now,
         tracking: trackingData,
@@ -2209,14 +2205,14 @@
           (productionRequests[k].status === 'pending' || productionRequests[k].status === 'assigned');
       });
       for (var i = 0; i < reqKeys.length; i++) {
-        await MastDB.productionRequests.ref(reqKeys[i]).update({
+        await MastDB.productionRequests.update(reqKeys[i], {
           status: 'cancelled',
           cancelledAt: now
         });
         await writeAudit('update', 'buildJobs', reqKeys[i]);
       }
 
-      await MastDB.orders.ref(orderId).update({
+      await MastDB.orders.update(orderId, {
         status: 'cancelled',
         cancelledAt: now,
         cancelReason: reason || null,
@@ -2261,7 +2257,7 @@
   function loadCommissions() {
     var loading = document.getElementById('commissionsLoading');
     if (loading) loading.style.display = '';
-    MastDB.commissions.ref().limitToLast(200).once('value', function(snap) {
+    MastDB.commissions.query().limitToLast(200).once('value', function(snap) {
       commissionsData = snap.val() || {};
       commissionsLoaded = true;
       if (loading) loading.style.display = 'none';
@@ -2482,7 +2478,7 @@
       updates['proposalPrice'] = price || null;
       updates['proposalTimeline'] = timeline || null;
       updates['proposalSpec'] = spec || null;
-      await MastDB.commissions.ref(commId).update(updates);
+      await MastDB.commissions.update(commId, updates);
       Object.assign(commissionsData[commId], updates);
       if (statusEl) { statusEl.textContent = 'Proposal saved.'; statusEl.style.color = 'var(--teal)'; }
       await writeAudit('update', 'commission', commId);
@@ -2547,7 +2543,7 @@
     var c = commissionsData[commId];
     if (!c) return;
     try {
-      var jobRef = MastDB.productionJobs.ref().push();
+      var jobRef = MastDB.productionJobs.push();
       var jobId = jobRef.key;
       var jobData = {
         name: 'Commission: ' + (c.sourcePieceName || 'Custom Piece') + ' for ' + (c.customerName || 'Customer'),
@@ -3004,7 +3000,7 @@
 
   function loadRmaData() {
     if (rmaLoaded) { renderRma(); return; }
-    MastDB._ref('admin/rma').limitToLast(200).once('value').then(function(snap) {
+    MastDB.query('admin/rma').limitToLast(200).once('value').then(function(snap) {
       rmaData = snap.val() || {};
       rmaLoaded = true;
       renderRma();
@@ -3251,8 +3247,7 @@
 
       // Load original order payment details into a placeholder
       orderLinkHtml += '<div id="rmaOrderPaymentSummary"></div>';
-      MastDB.orders.get(r.orderId).then(function(snap) {
-        var order = snap.val();
+      MastDB.orders.get(r.orderId).then(function(order) {
         if (!order) return;
         var el = document.getElementById('rmaOrderPaymentSummary');
         if (!el) return;
@@ -3405,7 +3400,7 @@
       });
       if (result.data && result.data.success) {
         // Refresh RMA data from server
-        var snap = await MastDB._ref('admin/rma/' + rmaId).once('value');
+        var snap = await MastDB.get('admin/rma/' + rmaId);
         rmaData[rmaId] = snap.val() || rmaData[rmaId];
         renderRmaDetail(rmaId);
         updateRmaSidebarBadge();
@@ -3433,7 +3428,7 @@
         payload: { result: result, notes: notes }
       });
       if (resp.data && resp.data.success) {
-        var snap = await MastDB._ref('admin/rma/' + rmaId).once('value');
+        var snap = await MastDB.get('admin/rma/' + rmaId);
         rmaData[rmaId] = snap.val() || rmaData[rmaId];
         renderRmaDetail(rmaId);
         showToast('Inspection recorded');
@@ -3472,7 +3467,7 @@
         }
       });
       if (resp.data && resp.data.success) {
-        var snap = await MastDB._ref('admin/rma/' + rmaId).once('value');
+        var snap = await MastDB.get('admin/rma/' + rmaId);
         rmaData[rmaId] = snap.val() || rmaData[rmaId];
         renderRmaDetail(rmaId);
         updateRmaSidebarBadge();
@@ -3496,7 +3491,7 @@
     }
 
     try {
-      await MastDB._ref('admin/rma/' + rmaId).update({
+      await MastDB.update('admin/rma/' + rmaId, {
         refundMethod: method,
         refundAmountCents: amountCents,
         updatedAt: new Date().toISOString()

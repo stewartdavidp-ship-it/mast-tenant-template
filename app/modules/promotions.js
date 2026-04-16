@@ -80,8 +80,7 @@
 
   async function loadProductsCache() {
     if (productsCache) return productsCache;
-    var snap = await MastDB.products.list(500);
-    var data = snap.val() || {};
+    var data = (await MastDB.products.list(500)) || {};
     productsCache = Object.entries(data).map(function(entry) {
       var val = entry[1];
       return {
@@ -326,7 +325,7 @@
       } else {
         data.archived = false;
         data.createdAt = now;
-        var ref = MastDB.promotions.ref().push();
+        var ref = MastDB.promotions.push();
         await ref.set(data);
         writeAudit('create', 'sale-promotion', ref.key);
         showToast('Sale created');
@@ -381,7 +380,7 @@
 
   window.deletePromotion = async function(saleId) {
     try {
-      await MastDB.promotions.ref(saleId).remove();
+      await MastDB.promotions.remove(saleId);
       writeAudit('delete', 'sale-promotion', saleId);
       showToast('Sale deleted');
       closeModal();

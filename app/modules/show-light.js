@@ -39,14 +39,11 @@
 
   async function loadShowLight() {
     try {
-      var profileSnap = await MastDB.showLight.profile.get();
-      slProfile = profileSnap.val() || {};
+      slProfile = (await MastDB.showLight.profile.get()) || {};
 
-      var showsSnap = await MastDB.showLight.shows.get();
-      slShows = showsSnap.val() || {};
+      slShows = (await MastDB.showLight.shows.get()) || {};
 
-      var appsSnap = await MastDB.showLight.applications.get();
-      slApplications = appsSnap.val() || {};
+      slApplications = (await MastDB.showLight.applications.get()) || {};
 
       slLoaded = true;
       renderShowLight();

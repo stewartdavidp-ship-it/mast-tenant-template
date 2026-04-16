@@ -1566,8 +1566,7 @@ async function openShowStaffingModal(showId) {
   // Ensure admin users are loaded
   if (!adminUsersLoaded) {
     try {
-      var snap = await MastDB.adminUsers.ref().once('value');
-      adminUsers = snap.val() || {};
+      adminUsers = (await MastDB.adminUsers.get()) || {};
       adminUsersLoaded = true;
     } catch (err) {
       showToast('Failed to load users.', true);
@@ -1858,7 +1857,7 @@ async function autoPublishShow(showId, showData) {
       showId: showId,
       updatedAt: new Date().toISOString()
     };
-    await MastDB.events.ref(showId).set(publicEvent);
+    await MastDB.events.set(showId, publicEvent);
   } catch (err) {
     console.error('Auto-publish failed:', err);
   }
@@ -1870,7 +1869,7 @@ async function archiveShow(showId) {
   try {
     await MastDB.shows.remove(showId);
     // Also remove from public events if it was published
-    try { await MastDB.events.ref(showId).remove(); } catch(e) { /* ignore */ }
+    try { await MastDB.events.remove(showId); } catch(e) { /* ignore */ }
     showToast('Show deleted.');
     backToShowsList();
   } catch (err) {

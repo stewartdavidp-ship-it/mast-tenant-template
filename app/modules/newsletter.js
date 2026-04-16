@@ -154,7 +154,7 @@
       var sections = {};
       var gridCol = 0, gridRow = 0;
       NL_DEFAULT_SECTIONS.forEach(function(def, idx) {
-        var secId = MastDB._newRootKey();
+        var secId = MastDB.newKey('_ids');
         var sizeInfo = NL_CARD_SIZE_MAP[def.type] || NL_CARD_SIZE_MAP['custom'];
         if (sizeInfo.gridWidth === 2 && gridCol !== 0) { gridRow++; gridCol = 0; }
         sections[secId] = {
@@ -224,7 +224,7 @@
           fbUpdates[prefix + 'gridCol'] = sec.gridCol;
           fbUpdates[prefix + 'gridRow'] = sec.gridRow;
         });
-        MastDB._multiUpdate(fbUpdates).catch(function(err) { console.error('Grid migration error:', err); });
+        MastDB.multiUpdate(fbUpdates).catch(function(err) { console.error('Grid migration error:', err); });
       }
     }
     renderNLCompose();
@@ -651,7 +651,7 @@
     });
 
     try {
-      await MastDB._multiUpdate(fbUpdates);
+      await MastDB.multiUpdate(fbUpdates);
       renderNLCompose();
     } catch (err) { showToast('Error reordering: ' + err.message, true); }
   }
@@ -853,7 +853,7 @@
     });
 
     try {
-      await MastDB._multiUpdate(fbUpdates);
+      await MastDB.multiUpdate(fbUpdates);
       closeModal();
       renderNLCompose();
     } catch (err) { showToast('Error saving: ' + err.message, true); }
@@ -1013,7 +1013,7 @@
   async function nlAddSection(sectionType) {
     if (!nlCurrentIssue) return;
     var type = sectionType || 'custom';
-    var secId = MastDB._newRootKey();
+    var secId = MastDB.newKey('_ids');
     var sections = nlCurrentIssue.sections ? Object.values(nlCurrentIssue.sections) : [];
     var maxOrder = sections.reduce(function(m, s) { return Math.max(m, s.order || 0); }, -1);
     var sizeInfo = NL_CARD_SIZE_MAP[type] || NL_CARD_SIZE_MAP['custom'];
@@ -1051,7 +1051,7 @@
         fbUpdates[prefix + 'gridCol'] = s.gridCol;
         fbUpdates[prefix + 'gridRow'] = s.gridRow;
       });
-      await MastDB._multiUpdate(fbUpdates);
+      await MastDB.multiUpdate(fbUpdates);
       showToast('Section deleted');
       renderNLCompose();
     } catch (err) { showToast('Error deleting section: ' + err.message, true); }
@@ -1091,7 +1091,7 @@
       };
       var sections = {};
       Object.values(source.sections).sort(function(a, b) { return (a.order || 0) - (b.order || 0); }).forEach(function(s) {
-        var secId = MastDB._newRootKey();
+        var secId = MastDB.newKey('_ids');
         sections[secId] = {
           id: secId, type: s.type, title: s.title, guidedPrompt: s.guidedPrompt || '',
           rawInput: '', aiVersion: null, finalContent: '', usedAI: false,

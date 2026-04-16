@@ -54,13 +54,11 @@
       return;
     }
     try {
-      var clipSnap = await MastDB.market.pendingClips.list(uid);
-      var clipVal = clipSnap.val();
+      var clipVal = await MastDB.market.pendingClips.list(uid);
       smPendingClips = clipVal ? Object.values(clipVal) : [];
       smPendingClips.sort(function(a, b) { return (b.uploadedAt || 0) - (a.uploadedAt || 0); });
 
-      var postSnap = await MastDB.market.posts.list(uid);
-      var postVal = postSnap.val();
+      var postVal = await MastDB.market.posts.list(uid);
       smPosts = postVal ? Object.values(postVal) : [];
       smPosts.sort(function(a, b) { return (b.postedAt || 0) - (a.postedAt || 0); });
 
@@ -196,7 +194,7 @@
       var newScore = post && post.signalScore === score ? null : score;
       await MastDB.market.posts.update(uid, postId, {
         signalScore: newScore,
-        scoredAt: newScore ? firebase.database.ServerValue.TIMESTAMP : null
+        scoredAt: newScore ? MastDB.serverTimestamp() : null
       });
       if (post) {
         post.signalScore = newScore;
@@ -349,7 +347,7 @@
         fileName: file.name,
         thumbnailUrl: thumbUrl || null,
         fileUrl: fileUrl,
-        uploadedAt: firebase.database.ServerValue.TIMESTAMP,
+        uploadedAt: MastDB.serverTimestamp(),
         status: 'pending',
         fileType: isVideo ? 'video' : 'image',
         duration: duration,
@@ -741,7 +739,7 @@
       fileName: 'Pre-shoot: ' + (smEnhanceData.productName || smEnhanceData.description || 'Untitled'),
       thumbnailUrl: null,
       fileUrl: null,
-      uploadedAt: firebase.database.ServerValue.TIMESTAMP,
+      uploadedAt: MastDB.serverTimestamp(),
       status: 'pending-clip',
       fileType: 'video',
       treatment: smEnhanceData.treatment,
@@ -1047,7 +1045,7 @@
       platforms: platforms,
       caption: selectedCaption,
       hashtags: d.hashtags || null,
-      postedAt: firebase.database.ServerValue.TIMESTAMP,
+      postedAt: MastDB.serverTimestamp(),
       signalScore: null,
       scoredAt: null,
       contentType: d.fileType || 'video',

@@ -181,6 +181,12 @@ var MastDB = (function() {
           return { committed: r.committed, value: r.snapshot ? r.snapshot.val() : null };
         });
       },
+      subscribeChild: function(path, event, cb) {
+        var ref = _db.ref(resolve(path));
+        var handler = function(snap) { cb(snap.val(), snap.key); };
+        ref.on(event, handler);
+        return function() { ref.off(event, handler); };
+      },
       serverTimestamp: serverTimestamp,
       serverIncrement: serverIncrement
     };
@@ -210,6 +216,7 @@ var MastDB = (function() {
     multiUpdate: function(u) { return tenantStore.multiUpdate(u); },
     query: function(p) { return tenantStore.query(p); },
     subscribe: function(p, cb) { return tenantStore.subscribe(p, cb); },
+    subscribeChild: function(p, e, cb) { return tenantStore.subscribeChild(p, e, cb); },
     transaction: function(p, fn) { return tenantStore.transaction(p, fn); },
     serverTimestamp: serverTimestamp,
     serverIncrement: serverIncrement,

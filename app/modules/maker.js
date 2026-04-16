@@ -54,9 +54,9 @@
   async function loadVolatilePricingData() {
     try {
       var snaps = await Promise.all([
-        MastDB._ref('admin/config/makerSettings/repricingThresholdPct').once('value'),
-        MastDB._ref('admin/priceLocks').once('value'),
-        MastDB._ref('admin/spotPrices/current').once('value')
+        MastDB.get('admin/config/makerSettings/repricingThresholdPct'),
+        MastDB.get('admin/priceLocks'),
+        MastDB.get('admin/spotPrices/current')
       ]);
       var t = snaps[0].val();
       if (typeof t === 'number') repricingThresholdPct = t;
@@ -681,7 +681,7 @@
     var material = materialsData[materialId];
     if (!material) throw new Error('Material not found: ' + materialId);
 
-    var liId = MastDB._newKey('admin/recipes/' + recipeId + '/lineItems');
+    var liId = MastDB.newKey('admin/recipes/' + recipeId + '/lineItems');
     var lineItem = {
       lineItemId: liId,
       materialId: materialId,
@@ -715,8 +715,7 @@
   async function markRecipesDirtyForMaterial(materialId) {
     // Ensure recipes are loaded
     if (!recipesLoaded) {
-      var snap = await MastDB.recipes.list(200);
-      recipesData = snap.val() || {};
+      recipesData = (await MastDB.recipes.list(200)) || {};
     }
 
     var updates = {};
@@ -734,7 +733,7 @@
     });
 
     if (Object.keys(updates).length > 0) {
-      await MastDB._multiUpdate(updates);
+      await MastDB.multiUpdate(updates);
       var count = Object.keys(updates).length / 2; // each recipe has 2 update fields
       MastAdmin.showToast(count + ' recipe' + (count === 1 ? '' : 's') + ' flagged for recalculation');
     }
@@ -853,7 +852,7 @@
       });
     }
 
-    await MastDB._multiUpdate(updates);
+    await MastDB.multiUpdate(updates);
     MastAdmin.writeAudit('publish', 'recipe', recipeId);
 
     return { version: newVersion, prices: baseEff, applied: false };
@@ -934,7 +933,7 @@
     updates[prodPath + 'recipeId']      = recipeId;
     updates[prodPath + 'recipeVersion'] = recipe.version;
 
-    await MastDB._multiUpdate(updates);
+    await MastDB.multiUpdate(updates);
     MastAdmin.writeAudit('apply-recipe', 'products', recipe.productId);
 
     // Etsy price sync (best-effort; retail tier is what Etsy shows publicly)
@@ -975,7 +974,7 @@
     var updates = {};
     updates['public/products/' + productId + '/priceCents'] = priceCents;
     updates['public/products/' + productId + '/price'] = price;
-    await MastDB._multiUpdate(updates);
+    await MastDB.multiUpdate(updates);
   }
 
   /**
@@ -1168,19 +1167,14 @@
   var channelsData = {};
   var channelsLoaded = false;
 
-  function channelsRef(id) {
-    return MastDB._ref('admin/channels' + (id ? '/' + id : ''));
-  }
-
   async function loadChannels() {
-    var snap = await channelsRef().once('value');
-    channelsData = snap.val() || {};
+    channelsData = await MastDB.get('admin/channels') || {};
     channelsLoaded = true;
     return channelsData;
   }
 
   async function createChannel(data) {
-    var id = channelsRef().push().key;
+    var id = MastDB.newKey('admin/channels');
     var now = new Date().toISOString();
     var channel = {
       channelId: id,
@@ -1193,7 +1187,7 @@
       createdAt: now,
       updatedAt: now
     };
-    await channelsRef(id).set(channel);
+    await MastDB.set('admin/channels/' + id, channel);
     channelsData[id] = channel;
     MastAdmin.writeAudit('create', 'channel', id);
     return channel;
@@ -1201,13 +1195,13 @@
 
   async function updateChannel(id, updates) {
     updates.updatedAt = new Date().toISOString();
-    await channelsRef(id).update(updates);
+    await MastDB.update('admin/channels/' + id, updates);
     if (channelsData[id]) Object.assign(channelsData[id], updates);
     MastAdmin.writeAudit('update', 'channel', id);
   }
 
   async function deleteChannel(id) {
-    await channelsRef(id).remove();
+    await MastDB.remove('admin/channels/' + id);
     delete channelsData[id];
     MastAdmin.writeAudit('delete', 'channel', id);
   }
@@ -2324,8 +2318,7 @@
 
     // Ensure materials are loaded
     if (!materialsLoaded) {
-      var snap = await MastDB.materials.list(500);
-      materialsData = snap.val() || {};
+      materialsData = (await MastDB.materials.list(500)) || {};
       materialsLoaded = true;
     }
 
@@ -2482,7 +2475,7 @@
       var pid = 'p' + Date.now().toString(36);
       var slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
       var now = new Date().toISOString();
-      await MastDB._ref('public/products/' + pid).set({
+      await MastDB.set('public/products/' + pid, {
         pid: pid,
         name: name,
         slug: slug,
@@ -3108,8 +3101,7 @@
       // Then recalculate (refreshes material costs, clears dirty, propagates price)
       var result = await recalculateRecipe(editingRecipeId);
       // Update builder state with recalculated values
-      var snap = await MastDB.recipes.get(editingRecipeId);
-      var fresh = snap.val();
+      var fresh = await MastDB.recipes.get(editingRecipeId);
       if (fresh) {
         builderState = JSON.parse(JSON.stringify(fresh));
       }
@@ -3220,8 +3212,7 @@
     if (!editingRecipeId) return;
     try {
       await recalculateRecipe(editingRecipeId);
-      var snap = await MastDB.recipes.get(editingRecipeId);
-      var fresh = snap.val();
+      var fresh = await MastDB.recipes.get(editingRecipeId);
       if (fresh) {
         builderState = JSON.parse(JSON.stringify(fresh));
       }
@@ -3240,8 +3231,7 @@
       await recalculateRecipe(editingRecipeId);
       await setActivePriceTier(editingRecipeId, tier);
       // Refresh builder state
-      var snap = await MastDB.recipes.get(editingRecipeId);
-      var fresh = snap.val();
+      var fresh = await MastDB.recipes.get(editingRecipeId);
       if (fresh) {
         builderState = JSON.parse(JSON.stringify(fresh));
       }
@@ -3513,7 +3503,7 @@
     if (!lock) return;
     if (!await mastConfirm('Delete this price lock from ' + (lock.supplierName || 'supplier') + '?', { title: 'Delete Lock', danger: true })) return;
     try {
-      await MastDB._ref('admin/priceLocks/' + lockId).remove();
+      await MastDB.remove('admin/priceLocks/' + lockId);
       MastAdmin.showToast('Lock deleted');
       await loadVolatilePricingData();
       renderMaterials();
@@ -3531,8 +3521,7 @@
       await saveRecipeBuilder();
       await recalculateRecipe(editingRecipeId);
       var result = await publishRecipe(editingRecipeId);
-      var snap = await MastDB.recipes.get(editingRecipeId);
-      var fresh = snap.val();
+      var fresh = await MastDB.recipes.get(editingRecipeId);
       if (fresh) builderState = JSON.parse(JSON.stringify(fresh));
       await loadVolatilePricingData();
       renderRecipeBuilder();
@@ -3560,8 +3549,7 @@
     try {
       await saveRecipeBuilder();
       var result = await publishRecipe(editingRecipeId);
-      var snap = await MastDB.recipes.get(editingRecipeId);
-      var fresh = snap.val();
+      var fresh = await MastDB.recipes.get(editingRecipeId);
       if (fresh) builderState = JSON.parse(JSON.stringify(fresh));
       renderRecipeBuilder();
       MastAdmin.showToast('Staged v' + result.version + ' \u2014 Wholesale $' + result.prices.wholesale.toFixed(2) + ', Direct $' + result.prices.direct.toFixed(2) + ', Retail $' + result.prices.retail.toFixed(2) + '. Open product to apply.');
@@ -3791,8 +3779,7 @@
       // It calls a Firebase callable wrapper instead, which is a separate
       // hardening pass. For now, the daily cron + tenant MCP refresh tool
       // are the only paths. Surface the current snapshot from RTDB.
-      var snap = await MastDB._ref('admin/spotPrices/current').once('value');
-      var current = snap.val();
+      var current = await MastDB.get('admin/spotPrices/current');
       var statusEl = document.getElementById('spotPriceStatusText');
       if (statusEl) {
         if (current && current.fetchedAt) {
@@ -4334,7 +4321,7 @@
         } else {
           var pid = record.pid ? sanitizeString(record.pid) : ('p' + Date.now().toString(36) + i);
           var priceCents = record.price ? Math.round(record.price * 100) : 0;
-          await MastDB.products.ref(pid).set({
+          await MastDB.products.set(pid, {
             pid: pid,
             name: record.name,
             description: record.description || '',

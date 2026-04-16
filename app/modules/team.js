@@ -226,8 +226,8 @@
 
     try {
       var results = await Promise.all([
-        MastDB._ref('admin/employees').once('value'),
-        MastDB._ref('admin/documents').once('value'),
+        MastDB.get('admin/employees'),
+        MastDB.get('admin/documents'),
       ]);
 
       var empVal = results[0].val() || {};
@@ -571,7 +571,7 @@
       updatedAt: new Date().toISOString(),
     };
     try {
-      await MastDB._ref('admin/employees/' + empId + '/complianceChecklist/' + fieldKey).update(fields);
+      await MastDB.update('admin/employees/' + empId + '/complianceChecklist/' + fieldKey, fields);
       showToast('Compliance item saved');
       document.getElementById('teamComplianceForm').style.display = 'none';
       teamLoaded = false;
@@ -602,11 +602,10 @@
     try {
       var eightWeeksAgo = new Date();
       eightWeeksAgo.setDate(eightWeeksAgo.getDate() - 56);
-      var snap = await MastDB._ref('admin/employees/' + empId + '/hoursLog')
+      var data = await MastDB.query('admin/employees/' + empId + '/hoursLog')
         .orderByChild('date')
         .startAt(eightWeeksAgo.toISOString().split('T')[0])
-        .once('value');
-      var data = snap.val() || {};
+        .once() || {};
       var entries = Object.values(data).sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
 
       if (entries.length === 0) {
@@ -685,9 +684,9 @@
       createdAt: new Date().toISOString(),
     };
     try {
-      var ref = MastDB._ref('admin/employees/' + empId + '/hoursLog').push();
-      record.logId = ref.key;
-      await ref.set(record);
+      var logKey = MastDB.newKey('admin/employees/' + empId + '/hoursLog');
+      record.logId = logKey;
+      await MastDB.set('admin/employees/' + empId + '/hoursLog/' + logKey, record);
       showToast('Hours logged');
       document.getElementById('teamHoursForm').style.display = 'none';
       loadHoursForEmployee(empId);
@@ -788,13 +787,13 @@
     };
     try {
       if (editingRefId) {
-        await MastDB._ref('admin/employees/' + empId + '/references/' + editingRefId).update(fields);
+        await MastDB.update('admin/employees/' + empId + '/references/' + editingRefId, fields);
         showToast('Reference saved');
       } else {
         fields.createdAt = new Date().toISOString();
-        var ref = MastDB._ref('admin/employees/' + empId + '/references').push();
-        fields.referenceId = ref.key;
-        await ref.set(fields);
+        var refKey = MastDB.newKey('admin/employees/' + empId + '/references');
+        fields.referenceId = refKey;
+        await MastDB.set('admin/employees/' + empId + '/references/' + refKey, fields);
         showToast('Reference created');
       }
       editingRefId = null;
@@ -808,7 +807,7 @@
   async function deleteReference(empId, refId) {
     if (!await mastConfirm('Delete this reference? This cannot be undone.', { title: 'Delete Reference', danger: true })) return;
     try {
-      await MastDB._ref('admin/employees/' + empId + '/references/' + refId).remove();
+      await MastDB.remove('admin/employees/' + empId + '/references/' + refId);
       showToast('Reference deleted');
       teamLoaded = false;
       loadTeam();
@@ -991,12 +990,12 @@
     if (!fields.title) { showToast('Title is required', true); return; }
     try {
       if (editingDocId) {
-        await MastDB._ref('admin/documents/' + editingDocId).update(fields);
+        await MastDB.update('admin/documents/' + editingDocId, fields);
         showToast('Document saved');
       } else {
         fields.createdAt = new Date().toISOString();
-        fields.documentId = MastDB._ref('admin/documents').push().key;
-        await MastDB._ref('admin/documents/' + fields.documentId).set(fields);
+        fields.documentId = MastDB.newKey('admin/documents');
+        await MastDB.set('admin/documents/' + fields.documentId, fields);
         showToast('Document created');
       }
       editingDocId = null;
@@ -1012,13 +1011,13 @@
     if (!fields.title) { showToast('Title is required', true); return; }
     try {
       if (editingDocId) {
-        await MastDB._ref('admin/employees/' + empId + '/documents/' + editingDocId).update(fields);
+        await MastDB.update('admin/employees/' + empId + '/documents/' + editingDocId, fields);
         showToast('Document saved');
       } else {
         fields.createdAt = new Date().toISOString();
-        var ref = MastDB._ref('admin/employees/' + empId + '/documents').push();
-        fields.documentId = ref.key;
-        await ref.set(fields);
+        var docKey = MastDB.newKey('admin/employees/' + empId + '/documents');
+        fields.documentId = docKey;
+        await MastDB.set('admin/employees/' + empId + '/documents/' + docKey, fields);
         showToast('Document created');
       }
       editingDocId = null;
@@ -1032,7 +1031,7 @@
   async function deleteDoc(docId) {
     if (!await mastConfirm('Delete this document? This cannot be undone.', { title: 'Delete Document', danger: true })) return;
     try {
-      await MastDB._ref('admin/documents/' + docId).remove();
+      await MastDB.remove('admin/documents/' + docId);
       showToast('Document deleted');
       teamLoaded = false;
       loadTeam();
@@ -1044,7 +1043,7 @@
   async function deleteEmpDoc(empId, docId) {
     if (!await mastConfirm('Delete this document? This cannot be undone.', { title: 'Delete Document', danger: true })) return;
     try {
-      await MastDB._ref('admin/employees/' + empId + '/documents/' + docId).remove();
+      await MastDB.remove('admin/employees/' + empId + '/documents/' + docId);
       showToast('Document deleted');
       teamLoaded = false;
       loadTeam();
@@ -1188,12 +1187,12 @@
 
     try {
       if (editingEmployeeId) {
-        await MastDB._ref('admin/employees/' + editingEmployeeId).update(fields);
+        await MastDB.update('admin/employees/' + editingEmployeeId, fields);
         showToast('Employee saved');
       } else {
         fields.createdAt = new Date().toISOString();
         var newId = 'emp_' + Date.now();
-        await MastDB._ref('admin/employees/' + newId).set(fields);
+        await MastDB.set('admin/employees/' + newId, fields);
         showToast('Employee created');
       }
       editingEmployeeId = null;
@@ -1207,7 +1206,7 @@
   async function deleteEmployee(empId) {
     if (!await mastConfirm('Delete this employee and all their data? This cannot be undone.', { title: 'Delete Employee', danger: true })) return;
     try {
-      await MastDB._ref('admin/employees/' + empId).remove();
+      await MastDB.remove('admin/employees/' + empId);
       showToast('Employee deleted');
       editingEmployeeId = null;
       selectedEmployeeId = null;

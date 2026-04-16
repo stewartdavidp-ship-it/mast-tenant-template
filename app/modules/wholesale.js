@@ -66,7 +66,7 @@ function renderWholesaleUsers() {
 
   container.innerHTML = '<div style="color:var(--warm-gray);padding:40px 0;text-align:center;">Loading authorized users...</div>';
 
-  MastDB._ref('admin/wholesaleAuthorized').once('value').then(function(snap) {
+  MastDB.get('admin/wholesaleAuthorized').then(function(snapVal) {
     wholesaleAuthorizedData = snap.val() || {};
     var users = Object.keys(wholesaleAuthorizedData).map(function(k) {
       var u = wholesaleAuthorizedData[k];
@@ -135,7 +135,7 @@ async function addWholesaleUser() {
     createdAt: new Date().toISOString()
   };
 
-  MastDB._ref('admin/wholesaleAuthorized/' + key).set(data).then(function() {
+  MastDB.set('admin/wholesaleAuthorized/' + key, data).then(function() {
     showToast('Wholesale access granted to ' + email);
     renderWholesaleUsers();
   }).catch(function(err) {
@@ -146,7 +146,7 @@ async function addWholesaleUser() {
 async function revokeWholesaleUser(key) {
   var email = wsKeyToEmail(key);
   if (!await mastConfirm('Revoke wholesale access for ' + email + '?', { title: 'Revoke Access', danger: true })) return;
-  MastDB._ref('admin/wholesaleAuthorized/' + key).update({ active: false }).then(function() {
+  MastDB.update('admin/wholesaleAuthorized/' + key, { active: false }).then(function() {
     showToast('Access revoked for ' + email);
     renderWholesaleUsers();
   });
@@ -155,7 +155,7 @@ async function revokeWholesaleUser(key) {
 // ── Access Requests sub-view ──
 
 function updateWholesaleRequestBadge() {
-  MastDB._ref('admin/wholesaleRequests').orderByChild('status').equalTo('pending')
+  MastDB.query('admin/wholesaleRequests').orderByChild('status').equalTo('pending')
     .once('value').then(function(snap) {
       var count = snap.numChildren();
       var badge = document.getElementById('wsRequestBadge');
@@ -173,7 +173,7 @@ function renderWholesaleRequests() {
 
   container.innerHTML = '<div style="color:var(--warm-gray);padding:40px 0;text-align:center;">Loading requests...</div>';
 
-  MastDB._ref('admin/wholesaleRequests').once('value').then(function(snap) {
+  MastDB.get('admin/wholesaleRequests').then(function(snapVal) {
     wholesaleRequestsData = snap.val() || {};
     var requests = Object.keys(wholesaleRequestsData).map(function(k) {
       var r = wholesaleRequestsData[k];
@@ -260,7 +260,7 @@ function approveWholesaleRequest(requestId) {
   updates['admin/wholesaleRequests/' + requestId + '/status'] = 'approved';
   updates['admin/wholesaleRequests/' + requestId + '/resolvedAt'] = new Date().toISOString();
 
-  MastDB._multiUpdate(updates).then(function() {
+  MastDB.multiUpdate(updates).then(function() {
     showToast('Approved! ' + r.email + ' now has wholesale access.');
     renderWholesaleRequests();
     updateWholesaleRequestBadge();
@@ -278,7 +278,7 @@ async function denyWholesaleRequest(requestId) {
   updates['admin/wholesaleRequests/' + requestId + '/status'] = 'denied';
   updates['admin/wholesaleRequests/' + requestId + '/resolvedAt'] = new Date().toISOString();
 
-  MastDB._multiUpdate(updates).then(function() {
+  MastDB.multiUpdate(updates).then(function() {
     showToast('Request denied for ' + r.email);
     renderWholesaleRequests();
     updateWholesaleRequestBadge();
@@ -340,7 +340,7 @@ function uploadWholesalePDF() {
       return ref.getDownloadURL();
     }).then(function(url) {
       // Save URL in config
-      MastDB._ref('admin/wholesaleConfig/pdfUrl').set(url);
+      MastDB.set('admin/wholesaleConfig/pdfUrl', url);
       if (statusEl) statusEl.textContent = 'Uploaded!';
       showToast('PDF uploaded successfully');
       checkWholesalePdfStatus();
@@ -353,7 +353,7 @@ function uploadWholesalePDF() {
 }
 
 function checkWholesalePdfStatus() {
-  MastDB._ref('admin/wholesaleConfig/pdfUrl').once('value').then(function(snap) {
+  MastDB.get('admin/wholesaleConfig/pdfUrl').then(function(snapVal) {
     var url = snap.val();
     var statusEl = document.getElementById('wholesalePdfStatus');
     var qrEl = document.getElementById('wholesalePdfQR');

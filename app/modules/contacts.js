@@ -63,8 +63,7 @@ async function loadContacts() {
   document.getElementById('contactsTableWrap').style.display = 'none';
   document.getElementById('contactsEmpty').style.display = 'none';
   try {
-    var snap = await MastDB.contacts.ref().once('value');
-    var val = snap.val();
+    var val = await MastDB.contacts.get();
     contactsData = val ? Object.values(val) : [];
     contactsData.sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
 
@@ -233,7 +232,7 @@ async function saveNewContact() {
 
     if (pending && pending.customerId) {
       // Fetch current linkedIds.contactIds so we can append the new id.
-      var custRef = MastDB._ref('admin/customers/' + pending.customerId + '/linkedIds');
+      var custRef = MastDB.query('admin/customers/' + pending.customerId + '/linkedIds');
       var linkedSnap = await custRef.once('value');
       var linked = linkedSnap.val() || { uids: [], contactIds: [], studentIds: [], squareCustomerId: null };
       var contactIds = (linked.contactIds || []).slice();
@@ -245,7 +244,7 @@ async function saveNewContact() {
       updates['admin/customers/' + pending.customerId + '/linkedIds/contactIds'] = contactIds;
       updates['admin/customers/' + pending.customerId + '/updatedAt'] = now2;
       updates['admin/customerIndexes/byContactId/' + id] = pending.customerId;
-      await MastDB._multiUpdate(updates);
+      await MastDB.multiUpdate(updates);
       await writeAudit('create', 'contacts', id);
       showToast('Contact created.');
       emitTestingEvent('createContact', {});
@@ -274,7 +273,7 @@ async function saveNewContact() {
       return;
     }
 
-    await MastDB.contacts.ref(id).set(contactData);
+    await MastDB.contacts.set(id, contactData);
     await writeAudit('create', 'contacts', id);
     showToast('Contact created.');
     emitTestingEvent('createContact', {});
@@ -311,8 +310,7 @@ function _contactEditIsDirty() {
 async function enterContactEditMode() {
   if (!selectedContactId) return;
   try {
-    var snap = await MastDB.contacts.ref(selectedContactId).once('value');
-    var c = snap.val();
+    var c = await MastDB.contacts.get(selectedContactId);
     if (!c) { showToast('Contact not found.', true); return; }
     contactEditBaseline = {
       name: c.name || '',
@@ -389,8 +387,7 @@ async function saveContactEditMode() {
     loadContactDetail(selectedContactId);
 
     // Push changes to Google Contact in background
-    var snap = await MastDB.contacts.ref(selectedContactId).once('value');
-    var contact = snap.val();
+    var contact = await MastDB.contacts.get(selectedContactId);
     if (contact && contact.googleContactId) {
       pushContactToGoogle(contact);
     }
@@ -498,8 +495,7 @@ async function loadContactDetail(contactId) {
 
   try {
     // Load contact record
-    var cSnap = await MastDB.contacts.ref(contactId).once('value');
-    var contact = cSnap.val();
+    var contact = await MastDB.contacts.get(contactId);
     if (!contact) {
       container.innerHTML = '<p style="color:var(--danger);">Contact not found.</p>';
       return;
@@ -766,8 +762,7 @@ async function saveInteraction(contactId) {
 async function openInquiryResponseModal(contactId, interactionKey, directInquiryId) {
   try {
     // Load contact
-    var cSnap = await MastDB.contacts.ref(contactId).once('value');
-    var contact = cSnap.val();
+    var contact = await MastDB.contacts.get(contactId);
     if (!contact) { showToast('Contact not found.', true); return; }
 
     // Get the specific interaction if provided
@@ -776,11 +771,11 @@ async function openInquiryResponseModal(contactId, interactionKey, directInquiry
     // Find the inquiry record — use direct ID if provided, else query by contactId
     var inquiry = null;
     if (directInquiryId) {
-      var dirSnap = await MastDB._ref('inquiries/' + directInquiryId).once('value');
+      var dirSnap = await MastDB.get('inquiries/' + directInquiryId);
       inquiry = dirSnap.val();
     }
     if (!inquiry) {
-      var iqSnap = await MastDB._ref('inquiries').orderByChild('contactId').equalTo(contactId).limitToLast(1).once('value');
+      var iqSnap = await MastDB.query('inquiries').orderByChild('contactId').equalTo(contactId).limitToLast(1).once('value');
       var iqVal = iqSnap.val();
       if (iqVal) {
         var keys = Object.keys(iqVal);
@@ -796,7 +791,7 @@ async function openInquiryResponseModal(contactId, interactionKey, directInquiry
     var brandEmail = (TENANT_CONFIG && TENANT_CONFIG.email && TENANT_CONFIG.email.from) || '';
     var brandPhone = '';
     try {
-      var phoneSnap = await MastDB._ref('config/brand/phone').once('value');
+      var phoneSnap = await MastDB.get('config/brand/phone');
       brandPhone = phoneSnap.val() || '';
     } catch (e) { /* no phone */ }
 
@@ -911,8 +906,8 @@ async function sendInquiryResponse() {
 
     // Update inquiry status to 'responded'
     if (inquiryId) {
-      await MastDB._ref('inquiries/' + inquiryId + '/status').set('responded');
-      await MastDB._ref('inquiries/' + inquiryId + '/respondedAt').set(now);
+      await MastDB.set('inquiries/' + inquiryId + '/status', 'responded');
+      await MastDB.set('inquiries/' + inquiryId + '/respondedAt', now);
     }
 
     showToast('Response sent to ' + toEmail);
@@ -942,7 +937,7 @@ var GOOGLE_CONTACTS_FUNCTIONS_BASE = 'https://us-central1-mast-platform-prod.clo
 async function isGoogleContactsConnected() {
   if (!currentUser) return false;
   try {
-    var snap = await MastDB._ref('config/googleContacts/' + currentUser.uid).once('value');
+    var snap = await MastDB.get('config/googleContacts/' + currentUser.uid);
     return snap.exists();
   } catch (e) {
     return false;
@@ -1105,7 +1100,7 @@ async function doSyncGoogleContacts() {
 
       var id = 'contact_' + Date.now().toString(36) + '_' + i;
       var now = new Date().toISOString();
-      await MastDB.contacts.ref(id).set({
+      await MastDB.contacts.set(id, {
         id: id,
         name: person.name || 'Unknown',
         email: person.email || null,

@@ -637,7 +637,7 @@
     if (!locationObj || !locationObj.label) return;
     var slug = locationObj.label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
     var ref = MastDB.tripLocations.ref(slug);
-    ref.child('useCount').set(firebase.database.ServerValue.increment(1));
+    ref.child('useCount').set(MastDB.serverIncrement(1));
     ref.child('lastUsed').set(new Date().toISOString());
     // Ensure label is set
     ref.child('label').set(locationObj.label);
@@ -1017,8 +1017,8 @@
 
     if (checkbox.checked) {
       // Load all drivers
-      MastDB.trips.allDrivers().then(function(snap) {
-        var val = snap.val() || {};
+      MastDB.trips.allDrivers().then(function(val) {
+        val = val || {};
         tripsData = [];
         Object.keys(val).forEach(function(uid) {
           var userTrips = val[uid];
@@ -1287,8 +1287,7 @@
     // Ensure shows data is loaded
     if (!showsLoaded) {
       try {
-        var snap = await MastDB.shows.list(200);
-        showsData = snap.val() || {};
+        showsData = (await MastDB.shows.list(200)) || {};
         showsLoaded = true;
       } catch (e) { return []; }
     }
@@ -1858,8 +1857,7 @@
     // Ensure shows loaded
     if (!showsLoaded) {
       try {
-        var snap = await MastDB.shows.list(200);
-        showsData = snap.val() || {};
+        showsData = (await MastDB.shows.list(200)) || {};
         showsLoaded = true;
       } catch (e) {
         container.innerHTML = '<div style="color:var(--warm-gray);">Could not load shows.</div>';

@@ -103,15 +103,15 @@
     try {
       // Parallel reads
       var [statusSnap, healthSnap, profileSnap, targetsSnap, marginSnap, kpiSnap, channelSnap, calSnap, reviewsSnap] = await Promise.all([
-        MastDB._ref('admin/businessPlan/planStatus').once('value'),
-        MastDB._ref('admin/businessPlan/healthScore').once('value'),
-        MastDB._ref('admin/businessPlan/profile').once('value'),
-        MastDB._ref('admin/businessPlan/revenueTargets').once('value'),
-        MastDB._ref('admin/businessPlan/marginTargets').once('value'),
-        MastDB._ref('admin/businessPlan/kpis/targets').once('value'),
-        MastDB._ref('admin/businessPlan/channelStrategy').once('value'),
-        MastDB._ref('admin/businessPlan/seasonalCalendar').once('value'),
-        MastDB._ref('admin/businessPlan/reviews').orderByChild('createdAt').limitToLast(20).once('value'),
+        MastDB.get('admin/businessPlan/planStatus'),
+        MastDB.get('admin/businessPlan/healthScore'),
+        MastDB.get('admin/businessPlan/profile'),
+        MastDB.get('admin/businessPlan/revenueTargets'),
+        MastDB.get('admin/businessPlan/marginTargets'),
+        MastDB.get('admin/businessPlan/kpis/targets'),
+        MastDB.get('admin/businessPlan/channelStrategy'),
+        MastDB.get('admin/businessPlan/seasonalCalendar'),
+        MastDB.query('admin/businessPlan/reviews').orderByChild('createdAt').limitToLast(20).once('value'),
       ]);
 
       planData = {
@@ -310,8 +310,8 @@
 
       // Read actuals
       var [ordersSnap, salesSnap] = await Promise.all([
-        MastDB._ref('orders').orderByChild('createdAt').limitToLast(500).once('value'),
-        MastDB._ref('admin/sales').orderByChild('timestamp').limitToLast(500).once('value'),
+        MastDB.query('orders').orderByChild('createdAt').limitToLast(500).once('value'),
+        MastDB.query('admin/sales').orderByChild('timestamp').limitToLast(500).once('value'),
       ]);
       var orders = ordersSnap.val() || {};
       var sales = salesSnap.val() || {};

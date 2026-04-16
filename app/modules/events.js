@@ -14,113 +14,103 @@
   // ============================================================
 
   var DB = {
-    ref: function(path) { return MastDB._ref(path); },
-    newKey: function(path) { return MastDB._ref(path).push().key; },
+    newKey: function(path) { return MastDB.newKey(path); },
     storagePath: function(sub) { return MastDB.tenantId() + '/' + sub; },
 
     shows: {
-      ref: function(id) { return DB.ref('events/shows' + (id ? '/' + id : '')); },
-      list: function(limit) { return this.ref().limitToLast(limit || 200).once('value'); },
-      get: function(id) { return this.ref(id).once('value'); },
-      set: function(id, data) { return this.ref(id).set(data); },
-      update: function(id, data) { return this.ref(id).update(data); },
-      remove: function(id) { return this.ref(id).remove(); },
-      newKey: function() { return this.ref().push().key; },
-      listen: function(limit, cb, errCb) { return this.ref().limitToLast(limit || 200).on('value', cb, errCb); },
-      unlisten: function(h) { this.ref().off('value', h); }
+      PATH: 'events/shows',
+      list: function(limit) { return MastDB.query('events/shows').limitToLast(limit || 200).once(); },
+      get: function(id) { return MastDB.get('events/shows/' + id); },
+      set: function(id, data) { return MastDB.set('events/shows/' + id, data); },
+      update: function(id, data) { return MastDB.update('events/shows/' + id, data); },
+      remove: function(id) { return MastDB.remove('events/shows/' + id); },
+      newKey: function() { return MastDB.newKey('events/shows'); },
+      listen: function(limit, cb) { return MastDB.query('events/shows').limitToLast(limit || 200).subscribe(cb); }
     },
     booths: {
-      ref: function(showId, boothId) { return DB.ref('events/booths/' + showId + (boothId ? '/' + boothId : '')); },
-      list: function(showId, limit) { return this.ref(showId).limitToLast(limit || 500).once('value'); },
-      set: function(showId, boothId, data) { return this.ref(showId, boothId).set(data); },
-      update: function(showId, boothId, data) { return this.ref(showId, boothId).update(data); },
-      remove: function(showId, boothId) { return this.ref(showId, boothId).remove(); },
-      newKey: function(showId) { return this.ref(showId).push().key; },
-      listen: function(showId, limit, cb, errCb) { return this.ref(showId).limitToLast(limit || 500).on('value', cb, errCb); },
-      unlisten: function(showId, h) { this.ref(showId).off('value', h); }
+      PATH: 'events/booths',
+      list: function(showId, limit) { return MastDB.query('events/booths/' + showId).limitToLast(limit || 500).once(); },
+      set: function(showId, boothId, data) { return MastDB.set('events/booths/' + showId + '/' + boothId, data); },
+      update: function(showId, boothId, data) { return MastDB.update('events/booths/' + showId + '/' + boothId, data); },
+      remove: function(showId, boothId) { return MastDB.remove('events/booths/' + showId + '/' + boothId); },
+      newKey: function(showId) { return MastDB.newKey('events/booths/' + showId); },
+      listen: function(showId, limit, cb) { return MastDB.query('events/booths/' + showId).limitToLast(limit || 500).subscribe(cb); }
     },
     boothPins: {
-      ref: function(showId, boothId) { return DB.ref('events/boothPins/' + showId + (boothId ? '/' + boothId : '')); },
-      get: function(showId) { return this.ref(showId).once('value'); },
-      set: function(showId, boothId, data) { return this.ref(showId, boothId).set(data); },
-      remove: function(showId, boothId) { if (boothId) return this.ref(showId, boothId).remove(); return this.ref(showId).remove(); },
-      listen: function(showId, cb, errCb) { return this.ref(showId).on('value', cb, errCb); },
-      unlisten: function(showId, h) { this.ref(showId).off('value', h); }
+      PATH: 'events/boothPins',
+      get: function(showId) { return MastDB.get('events/boothPins/' + showId); },
+      set: function(showId, boothId, data) { return MastDB.set('events/boothPins/' + showId + '/' + boothId, data); },
+      remove: function(showId, boothId) {
+        if (boothId) return MastDB.remove('events/boothPins/' + showId + '/' + boothId);
+        return MastDB.remove('events/boothPins/' + showId);
+      },
+      listen: function(showId, cb) { return MastDB.subscribe('events/boothPins/' + showId, cb); }
     },
     showsBySlug: {
-      ref: function(slug) { return DB.ref('events/showsBySlug' + (slug ? '/' + slug : '')); },
-      set: function(slug, showId) { return this.ref(slug).set(showId); },
-      remove: function(slug) { return this.ref(slug).remove(); }
+      PATH: 'events/showsBySlug',
+      set: function(slug, showId) { return MastDB.set('events/showsBySlug/' + slug, showId); },
+      remove: function(slug) { return MastDB.remove('events/showsBySlug/' + slug); }
     },
     vendors: {
-      ref: function(showId, vendorId) { return DB.ref('events/vendors/' + showId + (vendorId ? '/' + vendorId : '')); },
-      list: function(showId, limit) { return this.ref(showId).limitToLast(limit || 500).once('value'); },
-      set: function(showId, vendorId, data) { return this.ref(showId, vendorId).set(data); },
-      update: function(showId, vendorId, data) { return this.ref(showId, vendorId).update(data); },
-      remove: function(showId, vendorId) { return this.ref(showId, vendorId).remove(); },
-      newKey: function(showId) { return this.ref(showId).push().key; },
-      listen: function(showId, limit, cb, errCb) { return this.ref(showId).limitToLast(limit || 500).on('value', cb, errCb); },
-      unlisten: function(showId, h) { this.ref(showId).off('value', h); }
+      PATH: 'events/vendors',
+      list: function(showId, limit) { return MastDB.query('events/vendors/' + showId).limitToLast(limit || 500).once(); },
+      set: function(showId, vendorId, data) { return MastDB.set('events/vendors/' + showId + '/' + vendorId, data); },
+      update: function(showId, vendorId, data) { return MastDB.update('events/vendors/' + showId + '/' + vendorId, data); },
+      remove: function(showId, vendorId) { return MastDB.remove('events/vendors/' + showId + '/' + vendorId); },
+      newKey: function(showId) { return MastDB.newKey('events/vendors/' + showId); },
+      listen: function(showId, limit, cb) { return MastDB.query('events/vendors/' + showId).limitToLast(limit || 500).subscribe(cb); }
     },
     submissions: {
-      ref: function(showId, subId) { return DB.ref('events/submissions/' + showId + (subId ? '/' + subId : '')); },
-      list: function(showId, limit) { return this.ref(showId).limitToLast(limit || 200).once('value'); },
-      update: function(showId, subId, data) { return this.ref(showId, subId).update(data); },
-      listen: function(showId, limit, cb, errCb) { return this.ref(showId).limitToLast(limit || 200).on('value', cb, errCb); },
-      unlisten: function(showId, h) { this.ref(showId).off('value', h); }
+      PATH: 'events/submissions',
+      list: function(showId, limit) { return MastDB.query('events/submissions/' + showId).limitToLast(limit || 200).once(); },
+      update: function(showId, subId, data) { return MastDB.update('events/submissions/' + showId + '/' + subId, data); },
+      listen: function(showId, limit, cb) { return MastDB.query('events/submissions/' + showId).limitToLast(limit || 200).subscribe(cb); }
     },
     announcements: {
-      ref: function(showId, annId) { return DB.ref('events/announcements/' + showId + (annId ? '/' + annId : '')); },
-      list: function(showId, limit) { return this.ref(showId).limitToLast(limit || 100).once('value'); },
-      set: function(showId, annId, data) { return this.ref(showId, annId).set(data); },
-      newKey: function(showId) { return this.ref(showId).push().key; },
-      listen: function(showId, limit, cb, errCb) { return this.ref(showId).limitToLast(limit || 100).on('value', cb, errCb); },
-      unlisten: function(showId, h) { this.ref(showId).off('value', h); }
+      PATH: 'events/announcements',
+      list: function(showId, limit) { return MastDB.query('events/announcements/' + showId).limitToLast(limit || 100).once(); },
+      set: function(showId, annId, data) { return MastDB.set('events/announcements/' + showId + '/' + annId, data); },
+      newKey: function(showId) { return MastDB.newKey('events/announcements/' + showId); },
+      listen: function(showId, limit, cb) { return MastDB.query('events/announcements/' + showId).limitToLast(limit || 100).subscribe(cb); }
     },
     huntConfig: {
-      ref: function(showId) { return DB.ref('events/huntConfig/' + showId); },
-      get: function(showId) { return this.ref(showId).once('value'); },
-      set: function(showId, data) { return this.ref(showId).set(data); }
+      PATH: 'events/huntConfig',
+      get: function(showId) { return MastDB.get('events/huntConfig/' + showId); },
+      set: function(showId, data) { return MastDB.set('events/huntConfig/' + showId, data); }
     },
     huntStats: {
-      ref: function(showId) { return DB.ref('events/huntStats/' + showId); },
-      get: function(showId) { return this.ref(showId).once('value'); },
-      listen: function(showId, cb, errCb) { return this.ref(showId).on('value', cb, errCb); },
-      unlisten: function(showId, h) { this.ref(showId).off('value', h); }
+      PATH: 'events/huntStats',
+      get: function(showId) { return MastDB.get('events/huntStats/' + showId); },
+      listen: function(showId, cb) { return MastDB.subscribe('events/huntStats/' + showId, cb); }
     },
     huntParticipants: {
-      ref: function(showId) { return DB.ref('events/huntParticipants/' + showId); },
-      list: function(showId, limit) { return this.ref(showId).limitToLast(limit || 200).once('value'); }
+      PATH: 'events/huntParticipants',
+      list: function(showId, limit) { return MastDB.query('events/huntParticipants/' + showId).limitToLast(limit || 200).once(); }
     },
     showAdConfig: {
-      ref: function(showId) { return DB.ref('events/showAdConfig/' + showId); },
-      get: function(showId) { return this.ref(showId).once('value'); },
-      set: function(showId, data) { return this.ref(showId).set(data); }
+      PATH: 'events/showAdConfig',
+      get: function(showId) { return MastDB.get('events/showAdConfig/' + showId); },
+      set: function(showId, data) { return MastDB.set('events/showAdConfig/' + showId, data); }
     },
     vendorWallets: {
-      ref: function(showId, vendorId) { return DB.ref('events/vendorWallets/' + showId + (vendorId ? '/' + vendorId : '')); },
-      list: function(showId, limit) { return this.ref(showId).limitToLast(limit || 200).once('value'); },
-      listen: function(showId, limit, cb, errCb) { return this.ref(showId).limitToLast(limit || 200).on('value', cb, errCb); },
-      unlisten: function(showId, h) { this.ref(showId).off('value', h); }
+      PATH: 'events/vendorWallets',
+      list: function(showId, limit) { return MastDB.query('events/vendorWallets/' + showId).limitToLast(limit || 200).once(); },
+      listen: function(showId, limit, cb) { return MastDB.query('events/vendorWallets/' + showId).limitToLast(limit || 200).subscribe(cb); }
     },
     vendorTransactions: {
-      ref: function(showId, vendorId, txId) {
-        var p = 'events/vendorTransactions/' + showId;
-        if (vendorId) p += '/' + vendorId;
-        if (txId) p += '/' + txId;
-        return DB.ref(p);
-      },
-      list: function(showId, vendorId, limit) { return this.ref(showId, vendorId).limitToLast(limit || 50).once('value'); }
+      PATH: 'events/vendorTransactions',
+      list: function(showId, vendorId, limit) {
+        return MastDB.query('events/vendorTransactions/' + showId + '/' + vendorId).limitToLast(limit || 50).once();
+      }
     },
     ads: {
-      ref: function(showId, adId) { return DB.ref('events/ads/' + showId + (adId ? '/' + adId : '')); },
-      list: function(showId, limit) { return this.ref(showId).limitToLast(limit || 200).once('value'); },
-      set: function(showId, adId, data) { return this.ref(showId, adId).set(data); },
-      update: function(showId, adId, data) { return this.ref(showId, adId).update(data); },
-      remove: function(showId, adId) { return this.ref(showId, adId).remove(); },
-      newKey: function(showId) { return this.ref(showId).push().key; },
-      listen: function(showId, limit, cb, errCb) { return this.ref(showId).limitToLast(limit || 200).on('value', cb, errCb); },
-      unlisten: function(showId, h) { return this.ref(showId).off('value', h); }
+      PATH: 'events/ads',
+      list: function(showId, limit) { return MastDB.query('events/ads/' + showId).limitToLast(limit || 200).once(); },
+      set: function(showId, adId, data) { return MastDB.set('events/ads/' + showId + '/' + adId, data); },
+      update: function(showId, adId, data) { return MastDB.update('events/ads/' + showId + '/' + adId, data); },
+      remove: function(showId, adId) { return MastDB.remove('events/ads/' + showId + '/' + adId); },
+      newKey: function(showId) { return MastDB.newKey('events/ads/' + showId); },
+      listen: function(showId, limit, cb) { return MastDB.query('events/ads/' + showId).limitToLast(limit || 200).subscribe(cb); }
     }
   };
 
@@ -241,7 +231,7 @@
   // ============================================================
 
   function loadShows() {
-    if (showsListener) DB.shows.unlisten(showsListener);
+    if (showsListener) showsListener();
     showsListener = DB.shows.listen(200, function(snap) {
       showsData = snap.val() || {};
       showsLoaded = true;
@@ -251,7 +241,7 @@
   }
 
   function loadBooths(showId) {
-    if (boothsListener) DB.booths.unlisten(showId, boothsListener);
+    if (boothsListener) boothsListener();
     boothsListener = DB.booths.listen(showId, 500, function(snap) {
       boothsData = snap.val() || {};
       if (currentView === 'show-detail' && selectedShowId === showId) refreshActiveTab(showId);
@@ -259,7 +249,7 @@
   }
 
   function loadBoothPins(showId) {
-    if (pinsListener) DB.boothPins.unlisten(showId, pinsListener);
+    if (pinsListener) pinsListener();
     pinsListener = DB.boothPins.listen(showId, function(snap) {
       boothPinsData = snap.val() || {};
       if (currentView === 'show-detail' && selectedShowId === showId && activeDetailTab === 'floorplan') renderFloorPlanTab(showId);
@@ -267,7 +257,7 @@
   }
 
   function loadVendors(showId) {
-    if (vendorsListener) DB.vendors.unlisten(showId, vendorsListener);
+    if (vendorsListener) vendorsListener();
     vendorsListener = DB.vendors.listen(showId, 500, function(snap) {
       vendorsData = snap.val() || {};
       if (currentView === 'show-detail' && selectedShowId === showId && activeDetailTab === 'vendors') renderVendorsTab(showId);
@@ -275,7 +265,7 @@
   }
 
   function loadSubmissions(showId) {
-    if (submissionsListener) DB.submissions.unlisten(showId, submissionsListener);
+    if (submissionsListener) submissionsListener();
     submissionsListener = DB.submissions.listen(showId, 200, function(snap) {
       submissionsData = snap.val() || {};
       if (currentView === 'show-detail' && selectedShowId === showId && activeDetailTab === 'submissions') renderSubmissionsTab(showId);
@@ -283,7 +273,7 @@
   }
 
   function loadAnnouncements(showId) {
-    if (announcementsListener) DB.announcements.unlisten(showId, announcementsListener);
+    if (announcementsListener) announcementsListener();
     announcementsListener = DB.announcements.listen(showId, 100, function(snap) {
       announcementsData = snap.val() || {};
       if (currentView === 'show-detail' && selectedShowId === showId && activeDetailTab === 'announcements') renderAnnouncementsTab(showId);
@@ -291,7 +281,7 @@
   }
 
   function loadHuntStats(showId) {
-    if (huntStatsListener) DB.huntStats.unlisten(showId, huntStatsListener);
+    if (huntStatsListener) huntStatsListener();
     huntStatsListener = DB.huntStats.listen(showId, function(snap) {
       huntStatsData = snap.val() || {};
       if (currentView === 'show-detail' && selectedShowId === showId && activeDetailTab === 'hunt') renderHuntTab(showId);
@@ -299,7 +289,7 @@
   }
 
   function loadWallets(showId) {
-    if (walletsListener) DB.vendorWallets.unlisten(showId, walletsListener);
+    if (walletsListener) walletsListener();
     walletsListener = DB.vendorWallets.listen(showId, 200, function(snap) {
       walletsData = snap.val() || {};
       if (currentView === 'show-detail' && selectedShowId === showId && activeDetailTab === 'ads') renderAdsTab(showId);
@@ -307,7 +297,7 @@
   }
 
   function loadAds(showId) {
-    if (adsListener) DB.ads.unlisten(showId, adsListener);
+    if (adsListener) adsListener();
     adsListener = DB.ads.listen(showId, 200, function(snap) {
       adsData = snap.val() || {};
       if (currentView === 'show-detail' && selectedShowId === showId && activeDetailTab === 'ads') renderAdsTab(showId);
@@ -378,14 +368,14 @@
   }
 
   function detachDetailListeners() {
-    if (boothsListener && selectedShowId) { DB.booths.unlisten(selectedShowId, boothsListener); boothsListener = null; }
-    if (pinsListener && selectedShowId) { DB.boothPins.unlisten(selectedShowId, pinsListener); pinsListener = null; }
-    if (vendorsListener && selectedShowId) { DB.vendors.unlisten(selectedShowId, vendorsListener); vendorsListener = null; }
-    if (submissionsListener && selectedShowId) { DB.submissions.unlisten(selectedShowId, submissionsListener); submissionsListener = null; }
-    if (announcementsListener && selectedShowId) { DB.announcements.unlisten(selectedShowId, announcementsListener); announcementsListener = null; }
-    if (huntStatsListener && selectedShowId) { DB.huntStats.unlisten(selectedShowId, huntStatsListener); huntStatsListener = null; }
-    if (walletsListener && selectedShowId) { DB.vendorWallets.unlisten(selectedShowId, walletsListener); walletsListener = null; }
-    if (adsListener && selectedShowId) { DB.ads.unlisten(selectedShowId, adsListener); adsListener = null; }
+    if (boothsListener && selectedShowId) { boothsListener(); boothsListener = null; }
+    if (pinsListener && selectedShowId) { pinsListener(); pinsListener = null; }
+    if (vendorsListener && selectedShowId) { vendorsListener(); vendorsListener = null; }
+    if (submissionsListener && selectedShowId) { submissionsListener(); submissionsListener = null; }
+    if (announcementsListener && selectedShowId) { announcementsListener(); announcementsListener = null; }
+    if (huntStatsListener && selectedShowId) { huntStatsListener(); huntStatsListener = null; }
+    if (walletsListener && selectedShowId) { walletsListener(); walletsListener = null; }
+    if (adsListener && selectedShowId) { adsListener(); adsListener = null; }
     boothsData = {};
     boothPinsData = {};
     vendorsData = {};
@@ -1693,8 +1683,7 @@
 
     container.innerHTML = html;
 
-    DB.huntConfig.get(showId).then(function(snap) {
-      var config = snap.val();
+    DB.huntConfig.get(showId).then(function(config) {
       if (config) {
         var el = document.getElementById('evHunt_enabled');
         if (el) el.checked = !!config.enabled;
@@ -1798,8 +1787,7 @@
 
     container.innerHTML = html;
 
-    DB.showAdConfig.get(showId).then(function(snap) {
-      var config = snap.val();
+    DB.showAdConfig.get(showId).then(function(config) {
       if (config) {
         if (config.coinToTokenRate) { var r = document.getElementById('evAd_rate'); if (r) r.value = config.coinToTokenRate; }
         if (config.minCoinPurchase) { var mn = document.getElementById('evAd_min'); if (mn) mn.value = config.minCoinPurchase; }
@@ -1849,8 +1837,7 @@
   function detectPaymentProcessor() {
     var el = document.getElementById('evPaymentProcessorStatus');
     if (!el) return;
-    DB.ref('config/paymentProcessor').once('value').then(function(snap) {
-      var processor = snap.val();
+    DB.ref('config/paymentProcessor').once('value').then(function(processor) {
       if (processor) { renderProcessorBadge(el, processor); return; }
       return DB.ref('config/square/environment').once('value');
     }).then(function(sqSnap) {
@@ -1935,7 +1922,7 @@
       loadShows();
     },
     detachListeners: function() {
-      if (showsListener) { DB.shows.unlisten(showsListener); showsListener = null; }
+      if (showsListener) { showsListener(); showsListener = null; }
       detachDetailListeners();
       showsData = {};
       showsLoaded = false;

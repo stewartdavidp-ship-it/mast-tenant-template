@@ -449,7 +449,7 @@
       // Check if code already exists
       try {
         var existing = await MastDB.giftCards.get(code);
-        if (existing.val()) {
+        if (existing) {
           showToast('Code "' + code + '" already exists. Choose a different one.', true);
           return;
         }

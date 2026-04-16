@@ -249,7 +249,7 @@
     var tab = document.getElementById('channelsTab');
     if (tab) tab.innerHTML = '<div style="text-align:center;padding:40px;color:#999;font-size:0.9rem;">Loading channels...</div>';
 
-    MastDB._ref('admin/channels').once('value').then(function(snap) {
+    MastDB.get('admin/channels').then(function(snapVal) {
       channelsData = snap.val() || {};
       channelsLoaded = true;
       // Phase 2c — keep the product-editor cache aligned with the latest read.
@@ -265,7 +265,7 @@
 
   function loadProducts() {
     if (productsLoaded) return Promise.resolve();
-    return MastDB._ref('public/products').once('value').then(function(snap) {
+    return MastDB.get('public/products').then(function(snapVal) {
       productsData = snap.val() || {};
       productsLoaded = true;
     }).catch(function(err) {
@@ -275,7 +275,7 @@
   }
 
   function loadOrders() {
-    return MastDB._ref('public/orders').orderByChild('createdAt').limitToLast(200).once('value').then(function(snap) {
+    return MastDB.query('public/orders').orderByChild('createdAt').limitToLast(200).once('value').then(function(snap) {
       ordersData = snap.val() || {};
     }).catch(function(err) {
       console.error('Error loading orders:', err);
@@ -286,13 +286,13 @@
   function loadSalesEvents() {
     if (salesEventsLoaded) return Promise.resolve();
     return Promise.all([
-      MastDB._ref('admin/salesEvents').once('value').then(function(snap) {
+      MastDB.get('admin/salesEvents').then(function(snapVal) {
         salesEventsData = snap.val() || {};
       }).catch(function(err) {
         console.error('Error loading sales events:', err);
         salesEventsData = {};
       }),
-      MastDB._ref('admin/sales').orderByChild('timestamp').limitToLast(500).once('value').then(function(snap) {
+      MastDB.query('admin/sales').orderByChild('timestamp').limitToLast(500).once('value').then(function(snap) {
         salesData = snap.val() || {};
       }).catch(function() { salesData = {}; })
     ]).then(function() {
@@ -687,7 +687,7 @@
     });
 
     // Batch write to Firebase
-    MastDB._ref().update(updates).then(function() {
+    MastDB.multiUpdate(updates).then(function() {
       onboardingSelections = {};
       showToast(createdIds.length + ' channel' + (createdIds.length !== 1 ? 's' : '') + ' created');
       currentView = 'list';
@@ -1116,7 +1116,7 @@
   function loadLiveSessions() {
     var el = document.getElementById('channelLiveSessions');
     if (el) el.innerHTML = '<div style="font-size:0.85rem;color:#999;text-align:center;padding:12px;">Loading session data\u2026</div>';
-    MastDB._ref('admin/liveSessions').once('value').then(function(snap) {
+    MastDB.get('admin/liveSessions').then(function(snapVal) {
       liveSessionsData = snap.val() || {};
       liveSessionsLoaded = true;
       renderPreservingEdits();
@@ -1368,7 +1368,7 @@
     }
 
     var count = addedCount;
-    MastDB._ref('public/products').update(batch).then(function() {
+    MastDB.update('public/products', batch).then(function() {
       showToast(count + ' product' + (count !== 1 ? 's' : '') + ' added to ' + ch.name);
       closeAddProducts();
       renderPreservingEdits();
@@ -1395,7 +1395,7 @@
     var batch = {};
     batch[pid + '/channelIds'] = ids;
     batch[pid + '/channelBindings'] = bindings;
-    MastDB._ref('public/products').update(batch).then(function() {
+    MastDB.update('public/products', batch).then(function() {
       showToast(esc(p.name || pid) + ' removed from ' + esc(ch.name));
       renderPreservingEdits();
     }).catch(function(err) {
@@ -1873,7 +1873,7 @@
       updatedAt: now
     };
 
-    MastDB._ref('admin/channels/' + id).set(channel).then(function() {
+    MastDB.set('admin/channels/' + id, channel).then(function() {
       channelsData[id] = channel;
       window.__mastChannelsCache = channelsData; // Phase 2c — sync product-editor cache
       showToast('Channel created');
@@ -1961,7 +1961,7 @@
       if (derivedType) updates.type = derivedType;
     }
 
-    MastDB._ref('admin/channels/' + selectedChannelId).update(updates).then(function() {
+    MastDB.update('admin/channels/' + selectedChannelId, updates).then(function() {
       // Update local cache
       Object.assign(ch, updates);
       showToast('Saved');
@@ -2058,7 +2058,7 @@
 
   function toggleEligibility(channelId, isOptOut) {
     var val = isOptOut ? 'opt-out' : 'opt-in';
-    MastDB._ref('admin/channels/' + channelId).update({
+    MastDB.update('admin/channels/' + channelId, {
       defaultEligibility: val,
       updatedAt: new Date().toISOString()
     }).then(function() {
@@ -2073,7 +2073,7 @@
     var ch = channelsData[channelId];
     if (!ch) return;
     var newVal = ch.isActive === false ? true : false;
-    MastDB._ref('admin/channels/' + channelId).update({
+    MastDB.update('admin/channels/' + channelId, {
       isActive: newVal,
       updatedAt: new Date().toISOString()
     }).then(function() {
@@ -2109,7 +2109,7 @@
   }
 
   function doDelete(channelId) {
-    MastDB._ref('admin/channels/' + channelId).remove().then(function() {
+    MastDB.remove('admin/channels/' + channelId).then(function() {
       delete channelsData[channelId];
       showToast('Channel deleted');
       currentView = 'list';
@@ -2193,7 +2193,7 @@
     var el = document.getElementById('syncStatusContent');
     if (!el) return;
 
-    MastDB._ref('admin/inventorySync/lastSync').once('value').then(function(snap) {
+    MastDB.get('admin/inventorySync/lastSync').then(function(snapVal) {
       var data = snap.val();
       if (!data) {
         el.innerHTML = 'No sync history yet. Click &ldquo;Sync Now&rdquo; to push inventory to marketplace.';
@@ -2279,13 +2279,13 @@
   function loadDashboardData() {
     // Load orders + sales + consignments for client-side P&L computation
     return Promise.all([
-      MastDB._ref('public/orders').orderByChild('createdAt').limitToLast(500).once('value').then(function(snap) {
+      MastDB.query('public/orders').orderByChild('createdAt').limitToLast(500).once('value').then(function(snap) {
         ordersData = snap.val() || {};
       }).catch(function() { ordersData = {}; }),
-      MastDB._ref('admin/sales').orderByChild('timestamp').limitToLast(500).once('value').then(function(snap) {
+      MastDB.query('admin/sales').orderByChild('timestamp').limitToLast(500).once('value').then(function(snap) {
         salesData = snap.val() || {};
       }).catch(function() { salesData = {}; }),
-      MastDB._ref('admin/consignments').once('value').then(function(snap) {
+      MastDB.get('admin/consignments').then(function(snapVal) {
         consignmentsData = snap.val() || {};
       }).catch(function() { consignmentsData = {}; })
     ]);
