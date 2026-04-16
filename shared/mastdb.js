@@ -234,7 +234,7 @@ var MastDB = (function() {
     }
     function _snapToObj(snap) {
       var result = {};
-      snap.forEach(function(doc) { result[doc.id] = doc.data(); });
+      snap.forEach(function(doc) { result[doc.id] = _unwrapV(doc.data()); });
       return result;
     }
     return {
@@ -271,6 +271,15 @@ var MastDB = (function() {
     });
   }
 
+  // --- Unwrap _v sentinel used when storing primitives/arrays as Firestore docs ---
+  function _unwrapV(data) {
+    if (data && typeof data === 'object' && !Array.isArray(data) &&
+        data._v !== undefined && Object.keys(data).length === 1) {
+      return data._v;
+    }
+    return data;
+  }
+
   // --- Firestore tenant store ---
   function _makeFirestoreStore() {
     return {
@@ -280,13 +289,13 @@ var MastDB = (function() {
           return _fsGet(_collRef(parsed), { source: 'server' }).then(function(snap) {
             if (snap.empty) return null;
             var result = {};
-            snap.forEach(function(doc) { result[doc.id] = doc.data(); });
+            snap.forEach(function(doc) { result[doc.id] = _unwrapV(doc.data()); });
             return result;
           });
         }
         return _fsGet(_docRef(parsed), { source: 'server' }).then(function(doc) {
           if (!doc.exists) return null;
-          var data = doc.data();
+          var data = _unwrapV(doc.data());
           if (parsed.fieldPath) {
             var segs = parsed.fieldPath.split('.');
             var val = data;
@@ -304,7 +313,7 @@ var MastDB = (function() {
         return _fsGet(q, { source: 'server' }).then(function(snap) {
           var result = {};
           snap.forEach(function(doc) {
-            result[doc.id] = opts.shallow ? true : doc.data();
+            result[doc.id] = opts.shallow ? true : _unwrapV(doc.data());
           });
           return result;
         });
@@ -405,13 +414,13 @@ var MastDB = (function() {
           return _collRef(parsed).onSnapshot(function(snap) {
             if (snap.empty) { cb(null); return; }
             var result = {};
-            snap.forEach(function(doc) { result[doc.id] = doc.data(); });
+            snap.forEach(function(doc) { result[doc.id] = _unwrapV(doc.data()); });
             cb(result);
           });
         }
         return _docRef(parsed).onSnapshot(function(doc) {
           if (!doc.exists) { cb(null); return; }
-          var data = doc.data();
+          var data = _unwrapV(doc.data());
           if (parsed.fieldPath) {
             var segs = parsed.fieldPath.split('.');
             var val = data;
@@ -427,11 +436,12 @@ var MastDB = (function() {
         var seen = {};
         return _collRef(parsed).onSnapshot(function(snap) {
           snap.forEach(function(doc) {
+            var d = _unwrapV(doc.data());
             if (event === 'child_added' && !seen[doc.id]) {
               seen[doc.id] = true;
-              cb(doc.data(), doc.id);
+              cb(d, doc.id);
             } else if (event === 'child_changed' && seen[doc.id]) {
-              cb(doc.data(), doc.id);
+              cb(d, doc.id);
             }
             seen[doc.id] = true;
           });
