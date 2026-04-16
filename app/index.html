@@ -19,6 +19,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-functions-compat.js"></script>
   <script src="../shared/mastdb.js?v=1"></script>
+  <script src="../shared/customer-resolver.js?v=1"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="../storefront-tenant.js?v=1773887711"></script>
@@ -8671,12 +8672,10 @@ window.MastDirty = MastDirty;
 
 // ============================================================
 // MastCustomers — Customer record hub & find-or-create resolver.
-// All write paths that touch a person (orders, enrollments, contacts,
-// accounts, newsletter subscribers) call resolveCustomer() to get
-// or create a canonical customer record. See plan: snoopy-gathering-sun.md
+// Resolver logic delegated to shared package (MastCustomerResolver from
+// ../shared/customer-resolver.js). Browser-only helpers remain here.
 // ============================================================
 var MastCustomers = (function() {
-  // Firebase keys can't contain . # $ [ ] / — sanitize emails for index keys.
   function _emailKey(email) {
     if (!email) return null;
     return String(email).trim().toLowerCase().replace(/[.#$\[\]\/]/g, ',');
@@ -8687,162 +8686,52 @@ var MastCustomers = (function() {
     return String(email).trim().toLowerCase();
   }
 
-  async function _readIndex(indexName, key) {
-    if (!key) return null;
-    try {
-      var snap = await MastDB._ref('admin/customerIndexes/' + indexName + '/' + key).once('value');
-      return snap.val();
-    } catch (e) {
-      console.warn('[MastCustomers] index read failed', indexName, key, e);
-      return null;
-    }
+  // Storage adapter: bridges MastDB (tenant-relative paths) to the shared
+  // package (full paths with tenantId/ prefix).
+  function _makeConfig() {
+    var tid = MastDB.tenantId();
+    var prefix = tid + '/';
+    return {
+      tenantId: tid,
+      storage: {
+        get: function(path) {
+          return MastDB.get(path.indexOf(prefix) === 0 ? path.slice(prefix.length) : path);
+        },
+        multiUpdate: function(updates) {
+          var stripped = {};
+          Object.keys(updates).forEach(function(k) {
+            stripped[k.indexOf(prefix) === 0 ? k.slice(prefix.length) : k] = updates[k];
+          });
+          return MastDB._multiUpdate(stripped);
+        },
+        pushKey: function(path) {
+          return MastDB._newKey(path.indexOf(prefix) === 0 ? path.slice(prefix.length) : path);
+        }
+      }
+    };
   }
+
+  // --- Resolver functions (delegated to shared package) ---
+
+  async function resolveCustomer(params) {
+    params = params || {};
+    if (!params.source) params.source = 'manual';
+    return window.MastCustomerResolver.resolveCustomer(_makeConfig(), params);
+  }
+
+  async function resolveOrderContact(params) {
+    return window.MastCustomerResolver.resolveOrderContact(_makeConfig(), params);
+  }
+
+  async function resolveOrderContactSafe(params) {
+    return window.MastCustomerResolver.resolveOrderContactSafe(_makeConfig(), params);
+  }
+
+  // --- Browser-only helpers (not in shared package) ---
 
   async function getCustomer(customerId) {
     if (!customerId) return null;
-    var snap = await MastDB._ref('admin/customers/' + customerId).once('value');
-    return snap.val();
-  }
-
-  // Core resolver. Returns { customerId, created, conflict }.
-  // - uid match wins over email match.
-  // - On uid+email mismatch (different customers), flags a duplicate
-  //   for admin review and returns the uid match (uid is stronger signal).
-  // - Skips entirely if neither uid nor email is provided.
-  async function resolveCustomer(params) {
-    params = params || {};
-    var uid = params.uid || null;
-    var email = _normalizeEmail(params.email);
-    var contactId = params.contactId || null;
-    var displayName = params.displayName || '';
-    var source = params.source || 'manual';
-    var phone = params.phone || null;
-
-    // No identity = no customer. POS walk-ins fall through here.
-    if (!uid && !email && !contactId) {
-      return { customerId: null, created: false, conflict: false, skipped: true };
-    }
-
-    var emailKey = _emailKey(email);
-    var customerIdByUid = uid ? await _readIndex('byUid', uid) : null;
-    var customerIdByEmail = emailKey ? await _readIndex('byEmail', emailKey) : null;
-    var customerIdByContact = contactId ? await _readIndex('byContactId', contactId) : null;
-
-    // Conflict: uid points to A, email points to B, A !== B.
-    var conflict = false;
-    var conflictPartnerId = null;
-    if (customerIdByUid && customerIdByEmail && customerIdByUid !== customerIdByEmail) {
-      conflict = true;
-      conflictPartnerId = customerIdByEmail;
-    }
-
-    // Resolution priority: uid > email > contactId.
-    var existingId = customerIdByUid || customerIdByEmail || customerIdByContact;
-
-    if (existingId) {
-      // Customer exists. Backfill any new identifiers we just learned.
-      var updates = {};
-      var indexUpdates = {};
-      var existing = await getCustomer(existingId);
-      if (existing) {
-        var linked = existing.linkedIds || {};
-        var changed = false;
-
-        if (uid && (linked.uids || []).indexOf(uid) === -1) {
-          linked.uids = (linked.uids || []).concat([uid]);
-          indexUpdates['admin/customerIndexes/byUid/' + uid] = existingId;
-          changed = true;
-        }
-        if (contactId && (linked.contactIds || []).indexOf(contactId) === -1) {
-          linked.contactIds = (linked.contactIds || []).concat([contactId]);
-          indexUpdates['admin/customerIndexes/byContactId/' + contactId] = existingId;
-          changed = true;
-        }
-        if (email && (existing.emails || []).indexOf(email) === -1) {
-          updates['admin/customers/' + existingId + '/emails'] = (existing.emails || []).concat([email]);
-          if (emailKey && !customerIdByEmail) {
-            indexUpdates['admin/customerIndexes/byEmail/' + emailKey] = existingId;
-          }
-          changed = true;
-        }
-        // Backfill newsletter opt-in when source is newsletter (resolver gap fix).
-        if (source === 'newsletter' && !(existing.marketing && existing.marketing.newsletterOptIn)) {
-          updates['admin/customers/' + existingId + '/marketing/newsletterOptIn'] = true;
-          changed = true;
-        }
-        if (changed) {
-          updates['admin/customers/' + existingId + '/linkedIds'] = linked;
-          updates['admin/customers/' + existingId + '/updatedAt'] = new Date().toISOString();
-          Object.keys(indexUpdates).forEach(function(k) { updates[k] = indexUpdates[k]; });
-          await MastDB._multiUpdate(updates);
-        }
-      }
-
-      if (conflict) {
-        await _flagDuplicate({
-          customerIdA: customerIdByUid,
-          customerIdB: conflictPartnerId,
-          reason: 'uid and email resolve to different customers',
-          sourceRecord: { uid: uid, email: email, source: source }
-        });
-      }
-
-      return { customerId: existingId, created: false, conflict: conflict };
-    }
-
-    // No existing customer — create one.
-    var customerId = MastDB._newKey('admin/customers');
-    var now = new Date().toISOString();
-    var record = {
-      id: customerId,
-      displayName: displayName || email || '',
-      primaryEmail: email || '',
-      emails: email ? [email] : [],
-      phones: phone ? [phone] : [],
-      addresses: [],
-      linkedIds: {
-        uids: uid ? [uid] : [],
-        contactIds: contactId ? [contactId] : [],
-        studentIds: [],
-        squareCustomerId: null
-      },
-      tags: [],
-      notes: '',
-      marketing: {
-        newsletterOptIn: source === 'newsletter',
-        smsOptIn: false
-      },
-      source: source,
-      status: 'active',
-      createdAt: now,
-      updatedAt: now,
-      mergedFrom: []
-    };
-
-    var createUpdates = {};
-    createUpdates['admin/customers/' + customerId] = record;
-    if (emailKey) createUpdates['admin/customerIndexes/byEmail/' + emailKey] = customerId;
-    if (uid) createUpdates['admin/customerIndexes/byUid/' + uid] = customerId;
-    if (contactId) createUpdates['admin/customerIndexes/byContactId/' + contactId] = customerId;
-
-    await MastDB._multiUpdate(createUpdates);
-    return { customerId: customerId, created: true, conflict: false };
-  }
-
-  async function _flagDuplicate(payload) {
-    var flagId = MastDB._newKey('admin/customerDuplicates');
-    var record = {
-      customerIdA: payload.customerIdA,
-      customerIdB: payload.customerIdB,
-      reason: payload.reason || 'duplicate detected',
-      sourceRecord: payload.sourceRecord || null,
-      detectedAt: new Date().toISOString(),
-      status: 'open'
-    };
-    var updates = {};
-    updates['admin/customerDuplicates/' + flagId] = record;
-    await MastDB._multiUpdate(updates);
-    return flagId;
+    return MastDB.get('admin/customers/' + customerId);
   }
 
   async function listCustomers(opts) {
@@ -8859,104 +8748,6 @@ var MastCustomers = (function() {
     return Object.keys(val).map(function(k) {
       var r = val[k]; r._flagId = k; return r;
     }).reverse();
-  }
-
-  // ----- Order → Contact (address) resolver -----
-  // Each order ships to ONE address. That address must be a contact record.
-  // This finds an existing contact for the customer matching the order's
-  // shipping address, or creates a new one. Match key: normalized
-  // (email + address1 + city + state + zip). Returns null when there's no
-  // shipping data or no customerId.
-  // MIRRORS:
-  //   mast-architecture/functions/customer-resolver-functions.js
-  //   mast-tenant-mcp-server/src/shared/customer-resolver.ts
-  function _normKey(s) {
-    if (!s) return '';
-    return String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
-  }
-  function _flattenShipping(shipping) {
-    if (!shipping) return '';
-    var parts = [
-      shipping.address1 || '',
-      shipping.address2 || '',
-      shipping.city || '',
-      shipping.state || '',
-      shipping.zip || ''
-    ].filter(Boolean);
-    return parts.join(', ');
-  }
-  function _contactMatchKey(contact) {
-    if (!contact || !contact.address) return null;
-    return _normKey(contact.email || '') + '|' + _normKey(contact.address);
-  }
-
-  async function resolveOrderContact(params) {
-    params = params || {};
-    var customerId = params.customerId;
-    var shipping = params.shipping;
-    var email = _normalizeEmail(params.email);
-    var phone = params.phone || null;
-
-    if (!customerId) return null;
-    if (!shipping || !shipping.address1) return null;
-
-    var flatAddress = _flattenShipping(shipping);
-    var wantedKey = _normKey(email || '') + '|' + _normKey(flatAddress);
-
-    var customer = await getCustomer(customerId);
-    if (!customer) return null;
-    var linked = customer.linkedIds || {};
-    var linkedContactIds = linked.contactIds || [];
-
-    for (var i = 0; i < linkedContactIds.length; i++) {
-      var cid = linkedContactIds[i];
-      try {
-        var cSnap = await MastDB._ref('admin/contacts/' + cid).once('value');
-        var c = cSnap.val();
-        if (!c) continue;
-        var key = _contactMatchKey(c);
-        if (key && key === wantedKey) {
-          return cid;
-        }
-      } catch (e) {
-        console.warn('[MastCustomers] linked contact read failed', cid, e);
-      }
-    }
-
-    // No match — create a new contact.
-    var newId = MastDB._newKey('admin/contacts');
-    var now = new Date().toISOString();
-    var newContact = {
-      id: newId,
-      customerId: customerId,
-      name: shipping.name || customer.displayName || '',
-      email: email || customer.primaryEmail || '',
-      phone: phone || '',
-      address: flatAddress,
-      category: 'Other',
-      source: 'order',
-      createdAt: now,
-      updatedAt: now
-    };
-
-    var updates = {};
-    updates['admin/contacts/' + newId] = newContact;
-    updates['admin/customerIndexes/byContactId/' + newId] = customerId;
-    updates['admin/customers/' + customerId + '/linkedIds/contactIds'] =
-      linkedContactIds.concat([newId]);
-    updates['admin/customers/' + customerId + '/updatedAt'] = now;
-    await MastDB._multiUpdate(updates);
-
-    return newId;
-  }
-
-  async function resolveOrderContactSafe(params) {
-    try {
-      return await resolveOrderContact(params);
-    } catch (e) {
-      console.warn('[MastCustomers] resolveOrderContactSafe failed', e);
-      return null;
-    }
   }
 
   return {
