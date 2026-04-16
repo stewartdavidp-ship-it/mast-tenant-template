@@ -8884,8 +8884,9 @@ function _makeEntity(path, dl) {
     push: function(data) { return MastDB.push(path, data); },
     newKey: function() { return MastDB.newKey(path); },
     query: function() { return MastDB.query(path); },
-    // Backward-compat: .ref() returns a Firebase-ref-like wrapper
-    ref: function(subpath) { return _makeRefCompat(path + (subpath ? '/' + subpath : '')); }
+    // Backward-compat: .ref() and .subRef() return Firebase-ref-like wrappers
+    ref: function(subpath) { return _makeRefCompat(path + (subpath ? '/' + subpath : '')); },
+    subRef: function() { return _makeRefCompat(path + '/' + Array.from(arguments).join('/')); }
   };
   if (dl) {
     e.list = function(limit) { return MastDB.query(path).limitToLast(limit || dl).once(); };
@@ -9385,7 +9386,8 @@ MastDB.tripSettings = {
   PATH: 'settings/trips',
   get: function() { return MastDB.get('settings/trips'); },
   set: function(data) { return MastDB.set('settings/trips', data); },
-  sub: function() { return 'settings/trips/' + Array.from(arguments).join('/'); }
+  sub: function() { return 'settings/trips/' + Array.from(arguments).join('/'); },
+  subRef: function() { return _makeRefCompat('settings/trips/' + Array.from(arguments).join('/')); }
 };
 
 MastDB.quickActions = {
@@ -9403,7 +9405,8 @@ MastDB.dashboardPrefs = {
   },
   setCardActivity: function(uid, cardId, timestamp) {
     return MastDB.update('admin/users/' + uid + '/dashboardPrefs/cards/' + cardId, { lastActivity: timestamp });
-  }
+  },
+  ref: function(uid) { return _makeRefCompat('admin/users/' + uid + '/dashboardPrefs'); }
 };
 
 MastDB.tripCustomPurposes = {

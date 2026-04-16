@@ -1951,7 +1951,7 @@
         }
       });
       if (Object.keys(updates).length > 0) {
-        await MastDB.enrollments.update(, updates);
+        await MastDB.update('admin/enrollments', updates);
       }
     } catch (err) {
       console.warn('[Book] Waitlist renumbering failed:', err);
