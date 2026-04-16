@@ -158,25 +158,37 @@ var MastDB = (function() {
     return null;
   }
 
+  var NAMESPACE_PREFIXES = { 'admin': true, 'public': true, 'newsletter': true, 'blog': true, 'events': true, 'analytics': true };
+
+  function _buildResult(coll, rem) {
+    if (SINGLETON_COLLECTIONS[coll]) {
+      return { collection: coll, docId: SINGLETON_DOC_ID, fieldPath: rem.length > 0 ? rem.join('.') : null };
+    }
+    if (rem.length === 0) return { collection: coll, docId: null, fieldPath: null };
+    if (rem.length === 1) return { collection: coll, docId: rem[0], fieldPath: null };
+    return { collection: coll, docId: rem[0], fieldPath: rem.slice(1).join('.') };
+  }
+
   function _translateTenantPath(path) {
     var segs = path.split('/').filter(Boolean);
     if (segs.length === 0) return { collection: '_root', docId: null, fieldPath: null };
 
+    // 1. Try static map (handles known renames like giftCards → gift_cards)
     var match = _lookupCollection(segs, TENANT_COLLECTION_MAP);
-    if (match) {
-      var coll = match.collection;
-      var rem = match.remaining;
-      if (SINGLETON_COLLECTIONS[coll]) {
-        return { collection: coll, docId: SINGLETON_DOC_ID, fieldPath: rem.length > 0 ? rem.join('.') : null };
-      }
-      if (rem.length === 0) return { collection: coll, docId: null, fieldPath: null };
-      if (rem.length === 1) return { collection: coll, docId: rem[0], fieldPath: null };
-      return { collection: coll, docId: rem[0], fieldPath: rem.slice(1).join('.') };
+    if (match) return _buildResult(match.collection, match.remaining);
+
+    // 2. Namespace-aware fallback for unmapped paths
+    if (segs.length >= 2 && NAMESPACE_PREFIXES[segs[0]]) {
+      var ns = segs[0];
+      var rest = segs.slice(1);
+      // admin/* → admin_{collection} to avoid collision with root paths
+      // public/* → {collection} (public is the public-facing namespace, safe to strip)
+      var coll = (ns === 'admin') ? 'admin_' + rest[0] : rest[0];
+      return _buildResult(coll, rest.slice(1));
     }
 
-    if (segs.length === 1) return { collection: segs[0], docId: null, fieldPath: null };
-    if (segs.length === 2) return { collection: segs[0], docId: segs[1], fieldPath: null };
-    return { collection: segs[0], docId: segs[1], fieldPath: segs.slice(2).join('.') };
+    // 3. Root-level fallback
+    return _buildResult(segs[0], segs.slice(1));
   }
 
   function _tenantRoot() {
