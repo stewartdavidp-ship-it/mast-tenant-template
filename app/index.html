@@ -8499,6 +8499,11 @@ var FIREBASE_INIT_READY = (function() {
     auth = firebase.auth();
     db = firebase.database();
     storage = firebase.storage();
+    // Warm Firestore WebChannel so post-login reads don't pay cold-start cost (Bug #12).
+    // Throwaway get on a non-existent doc establishes the connection without leaking data.
+    if (firebase.firestore) {
+      try { firebase.firestore().doc('_warmup/_').get().catch(function() {}); } catch (e) {}
+    }
   }
   if (typeof TENANT_FIREBASE_CONFIG !== 'undefined' && TENANT_FIREBASE_CONFIG) {
     doInit();
