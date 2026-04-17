@@ -12049,15 +12049,19 @@ auth.onAuthStateChanged(async function(user) {
     }
   }
   MastDB.init({ tenantId: tenantId, db: db });
-  await loadTenantConfig(tenantId);
-  await loadTenantCategories();
-  await loadTenantSubscription();
+  // Parallelize independent boot loads — they don't depend on each other, so
+  // run concurrently instead of sequentially (was ~3.4s gap per Bug #22).
+  var _roleResult = await Promise.all([
+    loadTenantConfig(tenantId),
+    loadTenantCategories(),
+    loadTenantSubscription(),
+    loadUserRole(user.uid)
+  ]);
   loadTokenWallet(); // Start listening for token balance (non-blocking)
   initAlertBadgeListener(); // Start listening for unread alerts (non-blocking)
   // --- End Tenant Resolution ---
 
-  // Load user role from Firebase (auto-provisions as guest if new)
-  var role = await loadUserRole(user.uid);
+  var role = _roleResult[3];
 
   if (!role) {
     // RBAC load failed — fail closed
