@@ -8911,7 +8911,7 @@ MastDB.images = {
 MastDB.products = {
   PATH: 'public/products',
   list: function() { return MastDB.list('public/products'); },
-  get: function(id) { return MastDB.get('public/products/' + id); },
+  get: function(id) { return id ? MastDB.get('public/products/' + id) : MastDB.get('public/products'); },
   set: function(id, data) { return MastDB.set('public/products/' + id, data); },
   update: function(id, data) { return MastDB.update('public/products/' + id, data); },
   remove: function(id) { return MastDB.remove('public/products/' + id); },
