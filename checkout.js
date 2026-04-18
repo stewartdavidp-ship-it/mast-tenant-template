@@ -1260,7 +1260,7 @@
     checkoutData.walletGiftCards = [];
     checkoutData.walletGiftCardApplied = false;
     var user = window.MastCart && window.MastCart.getCurrentUser();
-    if (!user || user.isAnonymous) { walletLoadDone(); return; }
+    if (!user) { walletLoadDone(); return; }
     if (!ensureMastDB()) { walletLoadDone(); return; }
 
     MastDB.get('public/accounts/' + user.uid + '/wallet/giftCards')
