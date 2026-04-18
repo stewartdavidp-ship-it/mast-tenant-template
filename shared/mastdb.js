@@ -309,6 +309,40 @@ var MastDB = (function() {
     });
   }
 
+  // --- Build a nested object from a dotted fieldPath so set({merge:true}) writes
+  //     into nested maps rather than a literal dotted-key field. ---
+  function _buildNestedSet(fieldPath, value) {
+    var segs = fieldPath.split('.');
+    var root = {};
+    var cur = root;
+    for (var i = 0; i < segs.length - 1; i++) {
+      cur[segs[i]] = {};
+      cur = cur[segs[i]];
+    }
+    cur[segs[segs.length - 1]] = value;
+    return root;
+  }
+
+  // --- Convert dotted-keyed field map into nested-object form (for multiUpdate). ---
+  function _nestFields(fields) {
+    var out = {};
+    for (var k in fields) {
+      if (!Object.prototype.hasOwnProperty.call(fields, k)) continue;
+      if (k.indexOf('.') === -1) { out[k] = fields[k]; continue; }
+      var segs = k.split('.');
+      var cur = out;
+      for (var i = 0; i < segs.length - 1; i++) {
+        var seg = segs[i];
+        if (typeof cur[seg] !== 'object' || cur[seg] === null || Array.isArray(cur[seg])) {
+          cur[seg] = {};
+        }
+        cur = cur[seg];
+      }
+      cur[segs[segs.length - 1]] = fields[k];
+    }
+    return out;
+  }
+
   // --- Unwrap _v sentinel used when storing primitives/arrays as Firestore docs ---
   function _unwrapV(data) {
     if (data && typeof data === 'object' && !Array.isArray(data) &&
@@ -360,9 +394,9 @@ var MastDB = (function() {
         var parsed = _translateTenantPath(path);
         var resolved = _translateFs(value);
         if (parsed.fieldPath) {
-          var upd = {};
-          upd[parsed.fieldPath] = resolved;
-          return _docRef(parsed).set(upd, { merge: true });
+          // Build a nested object so merge writes into the nested map rather
+          // than a literal dotted-key field.
+          return _docRef(parsed).set(_buildNestedSet(parsed.fieldPath, resolved), { merge: true });
         }
         if (resolved !== null && typeof resolved === 'object' && !Array.isArray(resolved)) {
           return _docRef(parsed).set(resolved);
@@ -431,13 +465,14 @@ var MastDB = (function() {
         }
         for (var rp in docUpdates) {
           var entry = docUpdates[rp];
+          var nested = _nestFields(entry.fields);
           if (entry.fullReplace) {
             var merged = typeof entry.fullReplace === 'object'
-              ? Object.assign({}, entry.fullReplace, entry.fields)
+              ? Object.assign({}, entry.fullReplace, nested)
               : entry.fullReplace;
             batch.set(entry.ref, merged, { merge: true });
-          } else if (Object.keys(entry.fields).length > 0) {
-            batch.set(entry.ref, entry.fields, { merge: true });
+          } else if (Object.keys(nested).length > 0) {
+            batch.set(entry.ref, nested, { merge: true });
           }
         }
         return batch.commit();
