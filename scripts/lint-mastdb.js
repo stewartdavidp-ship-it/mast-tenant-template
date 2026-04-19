@@ -83,6 +83,25 @@ function checkFile(file) {
       violations.push({ file, line: i + 1, msg: 'db.ref(...) bypasses MastDB — use MastDB.* operation methods' });
     }
 
+    // Rule 4b: any `xxxDb.ref(` or `_db.ref(` call. Catches custDb, fireDb,
+    // wsDb, commDb, _db, this._db, etc. Storage refs are excluded because they
+    // come through `.storage().ref(`.
+    if (!line.includes('mastdb-lint-allow') &&
+        !/storage\(\)\s*\.\s*ref\(/.test(line) &&
+        /(^|[^a-zA-Z0-9])(\w*[Dd]b)\s*\.\s*ref\s*\(/.test(line)) {
+      var m = line.match(/(\w*[Dd]b)\s*\.\s*ref\s*\(/);
+      // Skip plain `db.ref(` — already covered by rule 4
+      if (m && m[1] !== 'db') {
+        violations.push({ file, line: i + 1, msg: m[1] + '.ref(...) bypasses MastDB — use MastDB.* operation methods' });
+      }
+    }
+
+    // Rule 2c: bare `app.database().ref(` — `app` is the variable returned
+    // from `firebase.app()`. Rule 2b only catches the `\w+App` form.
+    if (/\bapp\s*\.\s*database\s*\(\s*\)\s*\.\s*ref\s*\(/.test(line) && !line.includes('mastdb-lint-allow')) {
+      violations.push({ file, line: i + 1, msg: 'app.database().ref(...) bypass — use MastDB.* ops' });
+    }
+
     // Rule 5: MastDB escape hatch methods outside mastdb.js
     // These were the Phase A compat shims — Phase B.1 eliminated all external uses.
     if (/MastDB\._ref\(/.test(line) && !line.includes('mastdb-lint-allow')) {
