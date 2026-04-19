@@ -72,9 +72,9 @@
   }
 
   function loadFreeShippingThreshold() {
-    if (!fireDb || !TENANT_ID) return;
-    fireDb.ref(TENANT_ID + '/public/config/shippingRates').once('value').then(function(snap) {
-      var config = snap.val() || {};
+    if (!TENANT_ID || typeof MastDB === 'undefined') return;
+    MastDB.get('public/config/shippingRates').then(function(config) {
+      config = config || {};
       // New format: shippingRules
       if (config.shippingRules) {
         var retail = config.shippingRules.retail || {};
@@ -597,7 +597,7 @@
   // ── Analytics ──
   function trackEvent(action, pid) {
     try {
-      var hitRef = fireDb.ref(TENANT_ID + '/analytics/hits').push();
+      if (typeof MastDB === 'undefined') return;
       var page = location.pathname.split('/').pop().replace('.html', '') || 'index';
       if (page.length > 20) page = page.substring(0, 20);
 
@@ -616,7 +616,7 @@
       if (pid) hit.a = action + ':' + pid;
       if (hit.a && hit.a.length > 40) hit.a = hit.a.substring(0, 40);
 
-      hitRef.set(hit).catch(function () { /* silent */ });
+      MastDB.push('analytics/hits', hit).catch(function () { /* silent */ });
     } catch (e) { /* silent */ }
   }
 
