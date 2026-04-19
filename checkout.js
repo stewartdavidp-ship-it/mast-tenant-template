@@ -1221,7 +1221,7 @@
     checkoutData.walletCredits = [];
     checkoutData.walletCreditApplied = false;
     var user = window.MastCart && window.MastCart.getCurrentUser();
-    if (!user || user.isAnonymous) { walletLoadDone(); return; }
+    if (!user) { walletLoadDone(); return; }
     if (!ensureMastDB()) { walletLoadDone(); return; }
 
     MastDB.query('public/accounts/' + user.uid + '/wallet/credits')
@@ -1301,7 +1301,7 @@
   function loadSavedCoupons() {
     checkoutData.savedCoupons = [];
     var user = window.MastCart && window.MastCart.getCurrentUser();
-    if (!user || user.isAnonymous) return;
+    if (!user) return;
     if (!ensureMastDB()) return;
 
     MastDB.get('public/accounts/' + user.uid + '/wallet/coupons')
@@ -1327,7 +1327,7 @@
     checkoutData.customerPasses = [];
     checkoutData.passAssignments = {};
     var user = window.MastCart && window.MastCart.getCurrentUser();
-    if (!user || user.isAnonymous) { walletLoadDone(); return; }
+    if (!user) { walletLoadDone(); return; }
     if (!ensureMastDB()) { walletLoadDone(); return; }
 
     MastDB.get('public/accounts/' + user.uid + '/passes')
@@ -1540,7 +1540,7 @@
     checkoutData.loyaltyBalance = null;
     checkoutData.loyaltyApplied = false;
     var user = window.MastCart && window.MastCart.getCurrentUser();
-    if (!user || user.isAnonymous) { walletLoadDone(); return; }
+    if (!user) { walletLoadDone(); return; }
     if (!ensureMastDB()) { walletLoadDone(); return; }
 
     // Load config
@@ -1585,7 +1585,7 @@
     checkoutData.membershipStatus = null;
     checkoutData.effectiveMember = false;
     var user = window.MastCart && window.MastCart.getCurrentUser();
-    if (!user || user.isAnonymous) { walletLoadDone(); return; }
+    if (!user) { walletLoadDone(); return; }
     if (!ensureMastDB()) { walletLoadDone(); return; }
 
     MastDB.get('admin/membership/config')
