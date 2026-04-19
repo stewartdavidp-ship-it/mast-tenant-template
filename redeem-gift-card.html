@@ -520,7 +520,7 @@
 
   /* ---- Redemption Logic ---- */
 
-  var _db, _user;
+  var _user;
 
   function showStatus(type, msg) {
     var el = document.getElementById('rgcStatus');
@@ -534,22 +534,38 @@
     if (el) { el.className = 'rgc-status'; el.innerHTML = ''; }
   }
 
+  function callClaimGiftCard(payload, token) {
+    var cfBase = (typeof TENANT_FIREBASE_CONFIG !== 'undefined' && TENANT_FIREBASE_CONFIG.cloudFunctionsBase)
+      ? TENANT_FIREBASE_CONFIG.cloudFunctionsBase
+      : 'https://us-central1-mast-platform-prod.cloudfunctions.net';
+    var url = cfBase + '/claimGiftCard';
+    var headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    var body = Object.assign({}, payload || {});
+    if (typeof TENANT_ID !== 'undefined') body.tenantId = TENANT_ID;
+    return fetch(url, {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify({ data: body })
+    }).then(function(r) { return r.json(); })
+      .then(function(resp) { return resp.result || resp; });
+  }
+
   function handleRedeem(inputs, isLegacy) {
     hideStatus();
 
-    var code, legacyCode;
+    var payload = {};
 
     if (isLegacy) {
-      // Legacy mode: free-form text input
       var legacyInput = document.getElementById('rgcLegacyInput');
-      legacyCode = (legacyInput ? legacyInput.value.trim() : '');
+      var legacyCode = (legacyInput ? legacyInput.value.trim() : '');
       if (!legacyCode) {
         showStatus('error', 'Please enter your old gift card code.');
         if (legacyInput) legacyInput.focus();
         return;
       }
+      payload.legacyCode = legacyCode;
     } else {
-      // Standard mode: 4-segment code
       var segments = inputs.map(function(inp) { return inp.value.trim().toUpperCase(); });
       for (var i = 0; i < 4; i++) {
         if (segments[i].length !== 4) {
@@ -558,141 +574,35 @@
           return;
         }
       }
-      code = segments.join('-');
+      payload.code = segments.join('-');
     }
 
-    // Rate limit check
     if (!checkRateLimit()) {
       showStatus('error', 'Too many attempts. Please wait a few minutes before trying again.');
       return;
     }
     recordAttempt();
 
-    // Disable button
     var btn = document.getElementById('rgcSubmit');
     btn.disabled = true;
     btn.textContent = 'Redeeming...';
 
-    if (isLegacy) {
-      // Legacy lookup: scan all gift cards for matching legacyCode
-      _db.ref(TENANT_ID + '/admin/giftCards').orderByChild('legacyCode').equalTo(legacyCode).limitToFirst(1).once('value').then(function(snap) {
-        if (!snap.exists()) {
-          btn.disabled = false;
-          btn.textContent = 'Redeem';
-          showStatus('error', 'We couldn\'t find that gift card. Please check the code or contact us for help.');
-          return;
-        }
-        // Found — extract the first match
-        var found = null;
-        snap.forEach(function(child) { found = { code: child.key, data: child.val() }; });
-        if (!found) {
-          btn.disabled = false;
-          btn.textContent = 'Redeem';
-          showStatus('error', 'We couldn\'t find that gift card. Please contact us for help.');
-          return;
-        }
-        processRedemption(found.code, found.data, btn);
-      }).catch(function(err) {
-        console.error('[redeem-gift-card] Legacy lookup failed:', err);
+    _user.getIdToken().then(function(token) {
+      return callClaimGiftCard(payload, token);
+    }).then(function(result) {
+      if (result && result.success) {
+        renderSuccess(result.amountCents || 0);
+      } else {
         btn.disabled = false;
         btn.textContent = 'Redeem';
-        showStatus('error', 'Unable to look up gift card. Please try again.');
-      });
-      return;
-    }
-
-    // Standard lookup by exact code
-    var basePath = TENANT_ID + '/admin/giftCards/' + code;
-
-    _db.ref(basePath).once('value').then(function(snap) {
-      var gc = snap.val();
-
-      if (!gc) {
-        btn.disabled = false;
-        btn.textContent = 'Redeem';
-        showStatus('error', 'Gift card not found. Please check the code and try again.');
-        return;
+        showStatus('error', (result && result.reason) || 'Unable to redeem gift card. Please try again.');
       }
-
-      processRedemption(code, gc, btn);
     }).catch(function(err) {
-      console.error('[redeem-gift-card] Lookup failed:', err);
+      console.error('[redeem-gift-card] Claim failed:', err);
       btn.disabled = false;
       btn.textContent = 'Redeem';
       showStatus('error', 'Unable to look up gift card. Please try again.');
     });
-  }
-
-  function processRedemption(code, gc, btn) {
-      if (gc.status === 'claimed') {
-        btn.disabled = false;
-        btn.textContent = 'Redeem';
-        showStatus('error', 'This gift card has already been redeemed.');
-        return;
-      }
-
-      if (gc.status === 'expired') {
-        btn.disabled = false;
-        btn.textContent = 'Redeem';
-        showStatus('error', 'This gift card has expired.');
-        return;
-      }
-
-      if (gc.status !== 'issued') {
-        btn.disabled = false;
-        btn.textContent = 'Redeem';
-        showStatus('error', 'This gift card is not available for redemption.');
-        return;
-      }
-
-      // Check expiration
-      if (gc.expiresAt && new Date(gc.expiresAt) < new Date()) {
-        btn.disabled = false;
-        btn.textContent = 'Redeem';
-        showStatus('error', 'This gift card has expired.');
-        return;
-      }
-
-      // Valid - perform the multi-path write
-      var now = new Date().toISOString();
-      var uid = _user.uid;
-      var walletPushRef = _db.ref(TENANT_ID + '/public/accounts/' + uid + '/wallet/giftCards').push();
-      var walletKey = walletPushRef.key;
-
-      var updates = {};
-
-      // 1. Create wallet entry for the redeemer
-      updates[TENANT_ID + '/public/accounts/' + uid + '/wallet/giftCards/' + walletKey] = {
-        code: code,
-        amountCents: gc.amountCents || 0,
-        remainingCents: gc.amountCents || 0,
-        sourceOrderId: gc.sourceOrderId || null,
-        issuedAt: gc.issuedAt || gc.createdAt || now,
-        expiresAt: gc.expiresAt || null,
-        status: 'active',
-        claimedAt: now,
-        transactions: []
-      };
-
-      // 2. Update admin gift card record
-      updates[TENANT_ID + '/admin/giftCards/' + code + '/status'] = 'claimed';
-      updates[TENANT_ID + '/admin/giftCards/' + code + '/claimedBy'] = uid;
-      updates[TENANT_ID + '/admin/giftCards/' + code + '/claimedAt'] = now;
-
-      // 3. Update buyer's giftCardsSent if purchasedBy exists
-      if (gc.purchasedBy) {
-        updates[TENANT_ID + '/public/accounts/' + gc.purchasedBy + '/giftCardsSent/' + code + '/status'] = 'claimed';
-        updates[TENANT_ID + '/public/accounts/' + gc.purchasedBy + '/giftCardsSent/' + code + '/claimedAt'] = now;
-      }
-
-      _db.ref().update(updates).then(function() {
-        renderSuccess(gc.amountCents || 0);
-      }).catch(function(err) {
-        console.error('[redeem-gift-card] Write failed:', err);
-        btn.disabled = false;
-        btn.textContent = 'Redeem';
-        showStatus('error', 'Something went wrong. Please try again.');
-      });
   }
 
   function renderSuccess(amountCents) {
@@ -716,7 +626,6 @@
 
     var app;
     try { app = firebase.app(); } catch (e) { app = firebase.initializeApp(TENANT_FIREBASE_CONFIG); }
-    _db = app.database();
     var auth = app.auth();
 
     auth.onAuthStateChanged(function(user) {
