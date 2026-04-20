@@ -415,14 +415,14 @@
   }
 
   // ── Firebase Sync ──
-  function cartRef() {
-    if (!fireDb || !currentUser) return null;
-    return fireDb.ref(TENANT_ID + '/users/' + currentUser.uid + '/cart');
+  function cartPath() {
+    if (typeof MastDB === 'undefined' || !currentUser) return null;
+    return 'users/' + currentUser.uid + '/cart';
   }
 
   function syncToFirebase() {
-    var ref = cartRef();
-    if (!ref) return;
+    var path = cartPath();
+    if (!path) return;
 
     var data = {};
     for (var i = 0; i < cart.length; i++) {
@@ -439,17 +439,16 @@
       if (item.variantId) syncItem.variantId = item.variantId;
       data[item.cartItemId] = syncItem;
     }
-    ref.set(data).catch(function (err) {
+    MastDB.set(path, data).catch(function (err) {
       console.warn('Cart sync error:', err.message);
     });
   }
 
   function loadFromFirebase(callback) {
-    var ref = cartRef();
-    if (!ref) { callback([]); return; }
+    var path = cartPath();
+    if (!path) { callback([]); return; }
 
-    ref.once('value').then(function (snap) {
-      var val = snap.val();
+    MastDB.get(path).then(function (val) {
       if (!val) { callback([]); return; }
       var items = [];
       var keys = Object.keys(val);
