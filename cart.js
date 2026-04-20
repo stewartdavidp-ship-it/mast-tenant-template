@@ -60,7 +60,6 @@
     } catch (e) {
       fireApp = firebase.initializeApp(FIREBASE_CONFIG);
     }
-    fireDb = fireApp.database();
     if (firebase.auth) {
       fireAuth = fireApp.auth();
       fireAuth.onAuthStateChanged(onAuthChanged);
@@ -617,13 +616,11 @@
 
   // Called from init() after TENANT_READY so TENANT_ID and FIREBASE_CONFIG are set
   function checkGiftCardEnabled() {
-    if (!TENANT_ID || !FIREBASE_CONFIG.databaseURL) return;
-    fetch(FIREBASE_CONFIG.databaseURL + '/' + TENANT_ID + '/public/config/walletConfig/giftCardsEnabled.json')
-      .then(function(r) { return r.ok ? r.json() : false; })
-      .then(function(enabled) {
-        _giftCardsEnabled = !!enabled;
-        showGiftCardIcons();
-      }).catch(function() {});
+    if (!TENANT_ID || typeof MastDB === 'undefined') return;
+    MastDB.get('public/config/walletConfig/giftCardsEnabled').then(function(enabled) {
+      _giftCardsEnabled = !!enabled;
+      showGiftCardIcons();
+    }).catch(function() {});
   }
 
   // ── Membership Icon Visibility ──
@@ -638,13 +635,11 @@
   }
 
   function checkMembershipEnabled() {
-    if (!TENANT_ID || !FIREBASE_CONFIG.databaseURL) return;
-    fetch(FIREBASE_CONFIG.databaseURL + '/' + TENANT_ID + '/public/config/membership/enabled.json')
-      .then(function(r) { return r.ok ? r.json() : false; })
-      .then(function(enabled) {
-        _membershipEnabled = !!enabled;
-        showMembershipIcons();
-      }).catch(function() {});
+    if (!TENANT_ID || typeof MastDB === 'undefined') return;
+    MastDB.get('public/config/membership/enabled').then(function(enabled) {
+      _membershipEnabled = !!enabled;
+      showMembershipIcons();
+    }).catch(function() {});
   }
 
   // ── Drawer HTML Injection ──

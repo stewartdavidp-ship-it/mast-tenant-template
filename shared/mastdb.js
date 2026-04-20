@@ -8,31 +8,20 @@
 // See ~/.claude/plans/mast-db-abstraction/phase-b-firestore-detailed.md
 // ============================================================
 var MastDB = (function() {
-  var _db = null;       // RTDB instance (for platform operations)
-  var _fs = null;       // Firestore instance (for tenant operations)
+  var _fs = null;       // Firestore instance (tenant + platform operations)
   var _tenantId = null;
 
   function init(config) {
     _tenantId = config.tenantId;
-    // Accept either db (RTDB) or firestore. RTDB kept for platform ops.
-    if (config.db) {
-      _db = config.db;
-      // Get Firestore from same Firebase app
+    if (config.firestore) {
+      _fs = config.firestore;
+    } else if (config.db) {
+      // Legacy callers still pass config.db (RTDB). Pull Firestore from same app.
       try {
         var app = config.db.app || config.app;
-        if (app && app.firestore) {
-          _fs = app.firestore();
-        } else if (typeof firebase !== 'undefined' && firebase.firestore) {
-          _fs = firebase.firestore();
-        }
-      } catch (e) {
-        // Firestore SDK not loaded — fall back to RTDB for everything
-        if (typeof firebase !== 'undefined' && firebase.firestore) {
-          _fs = firebase.firestore();
-        }
-      }
+        if (app && app.firestore) _fs = app.firestore();
+      } catch (e) { /* fall through */ }
     }
-    if (config.firestore) _fs = config.firestore;
     if (!_fs && typeof firebase !== 'undefined' && firebase.firestore) {
       _fs = firebase.firestore();
     }
@@ -90,22 +79,6 @@ var MastDB = (function() {
     if (typeof value === 'object') {
       var out = {};
       for (var k in value) if (Object.prototype.hasOwnProperty.call(value, k)) out[k] = _translateFs(value[k]);
-      return out;
-    }
-    return value;
-  }
-
-  // Resolve sentinels for RTDB
-  function _translateRtdb(value) {
-    if (value === null || value === undefined) return value;
-    if (_isSentinel(value)) {
-      if (value.__sentinel === 'serverTimestamp') return firebase.database.ServerValue.TIMESTAMP;
-      return firebase.database.ServerValue.increment(value.n);
-    }
-    if (Array.isArray(value)) return value.map(_translateRtdb);
-    if (typeof value === 'object') {
-      var out = {};
-      for (var k in value) if (Object.prototype.hasOwnProperty.call(value, k)) out[k] = _translateRtdb(value[k]);
       return out;
     }
     return value;
@@ -172,10 +145,47 @@ var MastDB = (function() {
     'trips': 'trips'
   };
 
+  var PLATFORM_COLLECTION_MAP = {
+    'auth/oauth/clients': 'platform_auth_oauth_clients',
+    'auth/oauth/tokenIndex': 'platform_auth_oauth_tokenIndex',
+    'auth/oauth/userTokens': 'platform_auth_oauth_userTokens',
+    'auth/oauth/auditLog': 'platform_auth_oauth_auditLog',
+    'auth/oauth/refreshTokenIndex': 'platform_auth_oauth_refreshTokenIndex',
+    'auth/oauth/userRefreshTokens': 'platform_auth_oauth_userRefreshTokens',
+    'auth/apiKeys': 'platform_auth_apiKeys',
+    'auth/tenantApiKeys': 'platform_auth_tenantApiKeys',
+    'tenants': 'platform_tenants',
+    'tenantsByDomain': 'platform_tenantsByDomain',
+    'platformAdmins': 'platform_platformAdmins',
+    'userTenantMap': 'platform_userTenantMap',
+    'dashboardCards': 'platform_dashboardCards',
+    'alertDefinitions': 'platform_alertDefinitions',
+    'alertRuns': 'platform_alertRuns',
+    'driftSeverityDefaults': 'platform_driftSeverityDefaults',
+    'showIndex': 'platform_showIndex',
+    'showSlugs': 'platform_showSlugs',
+    'testingMissions': 'platform_testingMissions',
+    'eventsInviteTokens': 'platform_eventsInviteTokens',
+    'importJobs': 'platform_importJobs',
+    'importCapabilities': 'platform_importCapabilities',
+    'importPatterns': 'platform_importPatterns',
+    'driftScans': 'platform_driftScans',
+    'etsyPendingAuth': 'platform_etsyPendingAuth',
+    'googleContactsPendingAuth': 'platform_googleContactsPendingAuth',
+    'shopifyPendingAuth': 'platform_shopifyPendingAuth',
+    'webhookRouting': 'platform_webhookRouting',
+    'backfills': 'platform_backfills',
+    'spotPrices': 'platform_spotPrices',
+    'config': 'platform_config',
+    'provisioning': 'platform_provisioning',
+    'pendingOwners': 'platform_pendingOwners'
+  };
+
   var SINGLETON_COLLECTIONS = {
     'token_wallet': true, 'alert_state': true,
     'trip_settings': true, 'newsletter_meta': true,
-    'admin_subscription': true
+    'admin_subscription': true,
+    'platform_driftSeverityDefaults': true
   };
   var SINGLETON_DOC_ID = '_data';
 
@@ -223,6 +233,32 @@ var MastDB = (function() {
     return _buildResult(segs[0], segs.slice(1));
   }
 
+  function _translatePlatformPath(fullPath) {
+    var stripped = fullPath.indexOf('mast-platform/') === 0
+      ? fullPath.slice('mast-platform/'.length)
+      : fullPath;
+    var segs = stripped.split('/').filter(Boolean);
+    if (segs.length === 0) return { collection: 'platform', docId: null, fieldPath: null };
+
+    var match = _lookupCollection(segs, PLATFORM_COLLECTION_MAP);
+    if (match) {
+      var coll = match.collection;
+      var rem = match.remaining;
+      if (SINGLETON_COLLECTIONS[coll]) {
+        return { collection: coll, docId: SINGLETON_DOC_ID, fieldPath: rem.length > 0 ? rem.join('.') : null };
+      }
+      if (rem.length === 0) return { collection: coll, docId: null, fieldPath: null };
+      if (rem.length === 1) return { collection: coll, docId: rem[0], fieldPath: null };
+      return { collection: coll, docId: rem[0], fieldPath: rem.slice(1).join('.') };
+    }
+
+    // Fallback: platform_{firstSegment}
+    var fallbackColl = 'platform_' + segs[0];
+    if (segs.length === 1) return { collection: fallbackColl, docId: null, fieldPath: null };
+    if (segs.length === 2) return { collection: fallbackColl, docId: segs[1], fieldPath: null };
+    return { collection: fallbackColl, docId: segs[1], fieldPath: segs.slice(2).join('.') };
+  }
+
   function _tenantRoot() {
     return _fs.collection('tenants').doc(_tenantId);
   }
@@ -234,6 +270,15 @@ var MastDB = (function() {
   function _docRef(parsed) {
     if (!parsed.docId) throw new Error('MastDB: path requires doc ID: ' + parsed.collection);
     return _collRef(parsed).doc(parsed.docId);
+  }
+
+  function _platformCollRef(parsed) {
+    return _fs.collection(parsed.collection);
+  }
+
+  function _platformDocRef(parsed) {
+    if (!parsed.docId) throw new Error('MastDB: platform path requires doc ID: ' + parsed.collection);
+    return _platformCollRef(parsed).doc(parsed.docId);
   }
 
   // --- Firestore query builder ---
@@ -569,78 +614,205 @@ var MastDB = (function() {
     };
   }
 
-  // --- RTDB platform store (kept for platform operations) ---
-  function _makeRtdbPlatformStore() {
+  // --- Firestore platform store (mast-platform/* → top-level platform_* collections) ---
+  function _makeFirestorePlatformStore() {
+    function _platformQuery(collectionRef, spec) {
+      spec = spec || {};
+      function extend(patch) {
+        var next = {};
+        for (var k in spec) next[k] = spec[k];
+        for (var k2 in patch) next[k2] = patch[k2];
+        return _platformQuery(collectionRef, next);
+      }
+      function _apply() {
+        var q = collectionRef;
+        if (spec.orderBy === 'child') {
+          if (spec.equalTo !== undefined) {
+            q = q.where(spec.orderByField, '==', spec.equalTo);
+          } else {
+            q = q.orderBy(spec.orderByField);
+          }
+        } else if (spec.orderBy === 'key') {
+          q = q.orderBy(firebase.firestore.FieldPath.documentId());
+        }
+        if (spec.limitToFirst !== undefined) q = q.limit(spec.limitToFirst);
+        if (spec.limitToLast !== undefined) {
+          if (!spec.orderBy) q = q.limit(spec.limitToLast);
+          else q = q.limitToLast(spec.limitToLast);
+        }
+        return q;
+      }
+      function _snapToObj(snap) {
+        var result = {};
+        snap.forEach(function(doc) { result[doc.id] = _unwrapV(doc.data()); });
+        return result;
+      }
+      return {
+        orderByChild: function(field) { return extend({ orderBy: 'child', orderByField: field }); },
+        orderByKey: function() { return extend({ orderBy: 'key' }); },
+        equalTo: function(v) { return extend({ equalTo: v }); },
+        limitToFirst: function(n) { return extend({ limitToFirst: n }); },
+        limitToLast: function(n) { return extend({ limitToLast: n }); },
+        once: function() { return _fsGet(_apply(), { source: 'server' }).then(_snapToObj).then(_wrapSnap); },
+        subscribe: function(cb) {
+          return _apply().onSnapshot(function(snap) { cb(_wrapSnap(_snapToObj(snap))); });
+        }
+      };
+    }
+
     return {
       get: function(path) {
-        return _db.ref(path).once('value').then(function(s) { return s.val(); });
+        var parsed = _translatePlatformPath(path);
+        if (!parsed.docId) {
+          return _wrapPromise(_fsGet(_platformCollRef(parsed), { source: 'server' }).then(function(snap) {
+            if (snap.empty) return null;
+            var result = {};
+            snap.forEach(function(doc) { result[doc.id] = _unwrapV(doc.data()); });
+            return result;
+          }), path);
+        }
+        return _wrapPromise(_fsGet(_platformDocRef(parsed), { source: 'server' }).then(function(doc) {
+          if (!doc.exists) return null;
+          var data = _unwrapV(doc.data());
+          if (parsed.fieldPath) {
+            var segs = parsed.fieldPath.split('.');
+            var val = data;
+            for (var i = 0; i < segs.length && val != null; i++) val = val[segs[i]];
+            return val !== undefined ? val : null;
+          }
+          return data;
+        }), path);
       },
       list: function(path, opts) {
         opts = opts || {};
-        var q = _db.ref(path);
-        if (opts.limit) q = q.limitToFirst(opts.limit);
-        return q.once('value').then(function(s) { return s.val() || {}; });
+        var parsed = _translatePlatformPath(path);
+        var q = _platformCollRef(parsed);
+        if (opts.limit) q = q.limit(opts.limit);
+        return _fsGet(q, { source: 'server' }).then(function(snap) {
+          var result = {};
+          snap.forEach(function(doc) {
+            result[doc.id] = opts.shallow ? true : _unwrapV(doc.data());
+          });
+          return result;
+        });
       },
-      set: function(path, value) { return _db.ref(path).set(_translateRtdb(value)); },
-      update: function(path, partial) { return _db.ref(path).update(_translateRtdb(partial)); },
-      push: function(path, value) {
-        var baseRef = _db.ref(path);
-        var key = baseRef.push().key;
-        return baseRef.child(key).set(_translateRtdb(value)).then(function() { return { key: key }; });
-      },
-      newKey: function(path) { return _db.ref(path).push().key; },
-      remove: function(path) { return _db.ref(path).remove(); },
-      multiUpdate: function(updates) {
-        var resolved = {};
-        for (var k in updates) {
-          if (Object.prototype.hasOwnProperty.call(updates, k)) resolved[k] = _translateRtdb(updates[k]);
+      set: function(path, value) {
+        var parsed = _translatePlatformPath(path);
+        var resolved = _translateFs(value);
+        if (parsed.fieldPath) {
+          return _platformDocRef(parsed).set(
+            _buildNestedSet(parsed.fieldPath, resolved),
+            { mergeFields: [parsed.fieldPath] }
+          );
         }
-        return _db.ref().update(resolved);
+        if (resolved !== null && typeof resolved === 'object' && !Array.isArray(resolved)) {
+          return _platformDocRef(parsed).set(resolved);
+        }
+        return _platformDocRef(parsed).set({ _v: resolved });
+      },
+      update: function(path, partial) {
+        var parsed = _translatePlatformPath(path);
+        var resolved = _translateFs(partial);
+        if (parsed.fieldPath) {
+          var prefixed = {};
+          for (var k in resolved) {
+            if (Object.prototype.hasOwnProperty.call(resolved, k)) {
+              prefixed[parsed.fieldPath + '.' + k] = resolved[k];
+            }
+          }
+          return _platformDocRef(parsed).update(prefixed);
+        }
+        return _platformDocRef(parsed).set(resolved, { merge: true });
+      },
+      push: function(path, value) {
+        var parsed = _translatePlatformPath(path);
+        var ref = _platformCollRef(parsed).doc();
+        var key = ref.id;
+        return ref.set(_translateFs(value)).then(function() { return { key: key }; });
+      },
+      newKey: function(path) {
+        var parsed = _translatePlatformPath(path);
+        return _platformCollRef(parsed).doc().id;
+      },
+      remove: function(path) {
+        var parsed = _translatePlatformPath(path);
+        if (parsed.fieldPath) {
+          var upd = {};
+          upd[parsed.fieldPath] = firebase.firestore.FieldValue.delete();
+          return _platformDocRef(parsed).update(upd);
+        }
+        if (parsed.docId) return _platformDocRef(parsed).delete();
+        return _platformCollRef(parsed).get().then(function(snap) {
+          var batch = _fs.batch();
+          snap.forEach(function(doc) { batch.delete(doc.ref); });
+          return batch.commit();
+        });
+      },
+      multiUpdate: function(updates) {
+        var batch = _fs.batch();
+        for (var p in updates) {
+          if (!Object.prototype.hasOwnProperty.call(updates, p)) continue;
+          var parsed = _translatePlatformPath(p);
+          if (!parsed.docId) continue;
+          var ref = _platformDocRef(parsed);
+          var resolved = _translateFs(updates[p]);
+          if (resolved === null) {
+            batch.delete(ref);
+          } else if (parsed.fieldPath) {
+            var upd = {};
+            upd[parsed.fieldPath] = resolved;
+            batch.set(ref, _buildNestedSet(parsed.fieldPath, resolved), { mergeFields: [parsed.fieldPath] });
+          } else if (typeof resolved === 'object' && !Array.isArray(resolved)) {
+            batch.set(ref, resolved);
+          } else {
+            batch.set(ref, { _v: resolved });
+          }
+        }
+        return batch.commit();
       },
       query: function(path) {
-        // Simple RTDB query builder for platform
-        function makeQ(rootRef, spec) {
-          spec = spec || {};
-          function ext(patch) {
-            var next = {};
-            for (var kk in spec) next[kk] = spec[kk];
-            for (var kk2 in patch) next[kk2] = patch[kk2];
-            return makeQ(rootRef, next);
-          }
-          function apply() {
-            var q = rootRef;
-            if (spec.orderBy === 'child') q = q.orderByChild(spec.orderByField);
-            if (spec.equalTo !== undefined) q = q.equalTo(spec.equalTo);
-            if (spec.limitToFirst !== undefined) q = q.limitToFirst(spec.limitToFirst);
-            if (spec.limitToLast !== undefined) q = q.limitToLast(spec.limitToLast);
-            return q;
-          }
-          return {
-            orderByChild: function(f) { return ext({ orderBy: 'child', orderByField: f }); },
-            orderByKey: function() { return ext({ orderBy: 'key' }); },
-            equalTo: function(v) { return ext({ equalTo: v }); },
-            limitToFirst: function(n) { return ext({ limitToFirst: n }); },
-            limitToLast: function(n) { return ext({ limitToLast: n }); },
-            once: function() { return apply().once('value').then(function(s) { return s.val() || {}; }); },
-            subscribe: function(cb) {
-              var qq = apply();
-              var h = function(snap) { cb(snap.val() || {}); };
-              qq.on('value', h);
-              return function() { qq.off('value', h); };
-            }
-          };
-        }
-        return makeQ(_db.ref(path), {});
+        var parsed = _translatePlatformPath(path);
+        return _platformQuery(_platformCollRef(parsed), {});
       },
       subscribe: function(path, cb) {
-        var ref = _db.ref(path);
-        var handler = function(snap) { cb(snap.val()); };
-        ref.on('value', handler);
-        return function() { ref.off('value', handler); };
+        var parsed = _translatePlatformPath(path);
+        if (!parsed.docId) {
+          return _platformCollRef(parsed).onSnapshot(function(snap) {
+            if (snap.empty) { cb(_wrapSnap(null)); return; }
+            var result = {};
+            snap.forEach(function(doc) { result[doc.id] = _unwrapV(doc.data()); });
+            cb(_wrapSnap(result));
+          });
+        }
+        return _platformDocRef(parsed).onSnapshot(function(doc) {
+          if (!doc.exists) { cb(_wrapSnap(null)); return; }
+          var data = _unwrapV(doc.data());
+          if (parsed.fieldPath) {
+            var segs = parsed.fieldPath.split('.');
+            var val = data;
+            for (var i = 0; i < segs.length && val != null; i++) val = val[segs[i]];
+            cb(_wrapSnap(val !== undefined ? val : null));
+          } else {
+            cb(_wrapSnap(data));
+          }
+        });
       },
       transaction: function(path, fn) {
-        return _db.ref(path).transaction(fn).then(function(r) {
-          return { committed: r.committed, value: r.snapshot ? r.snapshot.val() : null };
+        var parsed = _translatePlatformPath(path);
+        var ref = _platformDocRef(parsed);
+        return _fs.runTransaction(function(tx) {
+          return tx.get(ref).then(function(doc) {
+            var current = doc.exists ? _unwrapV(doc.data()) : null;
+            var next = fn(current);
+            if (next === undefined) return { committed: false, value: current };
+            var resolved = _translateFs(next);
+            if (resolved !== null && typeof resolved === 'object' && !Array.isArray(resolved)) {
+              tx.set(ref, resolved);
+            } else {
+              tx.set(ref, { _v: resolved });
+            }
+            return { committed: true, value: next };
+          });
         });
       },
       serverTimestamp: serverTimestamp,
@@ -648,14 +820,12 @@ var MastDB = (function() {
     };
   }
 
-  // --- Escape hatches (warn only — should not be used post-Phase B) ---
-  function _ref(path) {
-    console.warn('[MastDB] _ref() escape hatch called in Firestore mode — this is deprecated');
-    return _db ? _db.ref(_tenantId + '/' + path) : null;
+  // --- Escape hatches (deprecated — throw so misuse is caught at call site) ---
+  function _ref() {
+    throw new Error('[MastDB] _ref() escape hatch removed. Use MastDB.get/set/query/subscribe/etc.');
   }
   function _rootRef() {
-    console.warn('[MastDB] _rootRef() escape hatch called in Firestore mode — this is deprecated');
-    return _db ? _db.ref() : null;
+    throw new Error('[MastDB] _rootRef() escape hatch removed. Use MastDB.get/set/query/subscribe/etc.');
   }
   function _newKey(path) {
     var parsed = _translateTenantPath(path);
@@ -673,7 +843,7 @@ var MastDB = (function() {
   var platformStore = null;
   function _ensureStores() {
     if (!tenantStore && _fs) tenantStore = _makeFirestoreStore();
-    if (!platformStore && _db) platformStore = _makeRtdbPlatformStore();
+    if (!platformStore && _fs) platformStore = _makeFirestorePlatformStore();
   }
 
   return {

@@ -15,7 +15,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-functions-compat.js"></script>
@@ -8491,13 +8490,12 @@ var FIREBASE_INIT_READY = (function() {
     var config = {
       apiKey: TENANT_FIREBASE_CONFIG.apiKey,
       authDomain: TENANT_FIREBASE_CONFIG.authDomain,
-      databaseURL: TENANT_FIREBASE_CONFIG.databaseURL,
       projectId: TENANT_FIREBASE_CONFIG.projectId,
       storageBucket: TENANT_FIREBASE_CONFIG.storageBucket
     };
     firebase.initializeApp(config);
     auth = firebase.auth();
-    db = firebase.database();
+    db = firebase.firestore();
     storage = firebase.storage();
     // Warm Firestore WebChannel so post-login reads don't pay cold-start cost (Bug #12).
     // Throwaway get on a non-existent doc establishes the connection without leaking data.
@@ -11902,7 +11900,7 @@ if (TEST_MODE && new URLSearchParams(window.location.search).get('testmode') ===
   // so the UI is viewable but writes will fail (safe for previewing layout).
   console.warn('[TEST_MODE] Running in test mode — Firebase writes will fail.');
   var testTenantId = new URLSearchParams(window.location.search).get('tenant') || TENANT_ID;
-  MastDB.init({ tenantId: testTenantId, db: db }); // Test mode: override with ?tenant= param
+  MastDB.init({ tenantId: testTenantId, firestore: db }); // Test mode: override with ?tenant= param
   loadTenantConfig(testTenantId).then(function() {
     return loadTenantCategories();
   }).then(function() {
@@ -11960,8 +11958,9 @@ auth.onAuthStateChanged(async function(user) {
     // MastDB isn't init'd yet (that happens after this role check succeeds),
     // so read the absolute path directly via firebase.database().
     try {
-      var roleCheckSnap = await firebase.database().ref(tenantId + '/admin/users/' + user.uid + '/role').once('value'); // mastdb-lint-allow: pre-init role check before MastDB.init()
-      if (!roleCheckSnap.val()) {
+      var roleCheckSnap = await firebase.firestore().doc('tenants/' + tenantId + '/admin_users/' + user.uid).get(); // pre-init role check before MastDB.init()
+      var roleCheckData = roleCheckSnap.exists ? roleCheckSnap.data() : null;
+      if (!roleCheckData || !roleCheckData.role) {
         console.log('No role found for user in tenant ' + tenantId + ', attempting claim...');
         needsClaim = true;
       }
@@ -12009,7 +12008,7 @@ auth.onAuthStateChanged(async function(user) {
     if (domainTenant) {
       console.log('Tenant resolution fallback: using domain-based tenant "' + domainTenant + '" for ' + window.location.hostname);
       // Temporarily init MastDB so we can check admin records
-      MastDB.init({ tenantId: domainTenant, db: db });
+      MastDB.init({ tenantId: domainTenant, firestore: db });
       try {
         var existingUser = await MastDB.adminUsers.get(user.uid);
         if (existingUser && (existingUser.role === 'admin' || existingUser.role === 'user')) {
@@ -12053,7 +12052,7 @@ auth.onAuthStateChanged(async function(user) {
       return;
     }
   }
-  MastDB.init({ tenantId: tenantId, db: db });
+  MastDB.init({ tenantId: tenantId, firestore: db });
   // Parallelize independent boot loads — they don't depend on each other, so
   // run concurrently instead of sequentially (was ~3.4s gap per Bug #22).
   var _roleResult = await Promise.all([
@@ -15651,10 +15650,9 @@ async function saveShopDisplaySettings() {
 async function saveSiteVisibility(isPublic) {
   if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
   try {
-    // Write to publicConfig in platform RTDB
+    // Write to publicConfig.searchable field on platform_tenants/{tid}
     var tenantId = MastDB.tenantId();
-    var platformDb = firebase.app('platform').database();
-    await platformDb.ref('mast-platform/tenants/' + tenantId + '/publicConfig/searchable').set(isPublic);
+    await MastDB.platform.set('mast-platform/tenants/' + tenantId + '/publicConfig/searchable', isPublic);
     await writeAudit('update', 'settings', 'siteVisibility');
     var statusEl = document.getElementById('visibilityStatus');
     if (isPublic) {
@@ -15671,9 +15669,8 @@ async function saveSiteVisibility(isPublic) {
 function loadSiteVisibility() {
   try {
     var tenantId = MastDB.tenantId();
-    var platformDb = firebase.app('platform').database();
-    platformDb.ref('mast-platform/tenants/' + tenantId + '/publicConfig/searchable').once('value', function(snap) {
-      var searchable = snap.val() === true;
+    MastDB.platform.get('mast-platform/tenants/' + tenantId + '/publicConfig/searchable').then(function(val) {
+      var searchable = val === true;
       document.getElementById('visibilityPublic').checked = searchable;
       document.getElementById('visibilityPrivate').checked = !searchable;
     });

@@ -347,14 +347,31 @@
     } else {
       // Fallback: fetch directly (shouldn't happen in normal flow)
       dataPromise = Promise.all([window.TENANT_READY, domReady]).then(function() {
-        if (!window.TENANT_ID || !window.TENANT_FIREBASE_CONFIG || !window.TENANT_FIREBASE_CONFIG.databaseURL) {
+        if (!window.TENANT_ID || !window.TENANT_FIREBASE_CONFIG || !window.TENANT_FIREBASE_CONFIG.projectId) {
           return [null, null];
         }
-        var baseUrl = window.TENANT_FIREBASE_CONFIG.databaseURL + '/' + window.TENANT_ID + '/public/config/';
-        return Promise.all([
-          fetch(baseUrl + 'nav.json').then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; }),
-          fetch(baseUrl + 'promoBanner.json').then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; })
-        ]);
+        var fsBase = 'https://firestore.googleapis.com/v1/projects/' +
+          window.TENANT_FIREBASE_CONFIG.projectId + '/databases/(default)/documents/tenants/' +
+          window.TENANT_ID + '/config/';
+        function pick(p) {
+          return fetch(fsBase + p).then(function(r) { return r.ok ? r.json() : null; })
+            .then(function(d) {
+              if (!d || !d.fields) return null;
+              var out = {}, f = d.fields;
+              for (var k in f) {
+                var v = f[k];
+                if ('stringValue' in v) out[k] = v.stringValue;
+                else if ('booleanValue' in v) out[k] = v.booleanValue;
+                else if ('integerValue' in v) out[k] = Number(v.integerValue);
+                else if ('doubleValue' in v) out[k] = v.doubleValue;
+                else if ('mapValue' in v) out[k] = v.mapValue.fields;
+                else if ('arrayValue' in v) out[k] = (v.arrayValue.values || []);
+              }
+              return out && out._v !== undefined && Object.keys(out).length === 1 ? out._v : out;
+            })
+            .catch(function() { return null; });
+        }
+        return Promise.all([pick('nav'), pick('promoBanner')]);
       });
     }
 

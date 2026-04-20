@@ -23,8 +23,41 @@ var TENANT_ID = null;
 var TENANT_FIREBASE_CONFIG = null;
 var TENANT_BRAND = null;
 
-var PLATFORM_RTDB_BASE = 'https://mast-platform-prod-default-rtdb.firebaseio.com/mast-platform';
+var PLATFORM_FIRESTORE_BASE = 'https://firestore.googleapis.com/v1/projects/mast-platform-prod/databases/(default)/documents';
 var CACHE_TTL_MS = 60 * 1000; // 1 minute
+
+// Unwrap Firestore REST field value into a plain JS value.
+function unwrapFirestoreValue(v) {
+  if (v == null) return null;
+  if ('stringValue' in v) return v.stringValue;
+  if ('booleanValue' in v) return v.booleanValue;
+  if ('integerValue' in v) return Number(v.integerValue);
+  if ('doubleValue' in v) return v.doubleValue;
+  if ('nullValue' in v) return null;
+  if ('timestampValue' in v) return v.timestampValue;
+  if ('mapValue' in v) return unwrapFirestoreFields(v.mapValue.fields || {});
+  if ('arrayValue' in v) return (v.arrayValue.values || []).map(unwrapFirestoreValue);
+  return null;
+}
+
+function unwrapFirestoreFields(fields) {
+  var out = {};
+  for (var k in fields) {
+    if (Object.prototype.hasOwnProperty.call(fields, k)) {
+      out[k] = unwrapFirestoreValue(fields[k]);
+    }
+  }
+  return out;
+}
+
+// Unwrap _v container used when a scalar is stored as a Firestore doc.
+function unwrapContainerDoc(data) {
+  if (data && typeof data === 'object' && !Array.isArray(data) &&
+      '_v' in data && Object.keys(data).length === 1) {
+    return data._v;
+  }
+  return data;
+}
 
 window.TENANT_READY = new Promise(function(resolve, reject) {
   // --- helpers ---
@@ -66,7 +99,6 @@ window.TENANT_READY = new Promise(function(resolve, reject) {
     TENANT_FIREBASE_CONFIG = {
       apiKey: publicConfig.apiKey || '',
       authDomain: publicConfig.authDomain || '',
-      databaseURL: publicConfig.databaseURL,
       projectId: publicConfig.projectId || '',
       storageBucket: publicConfig.storageBucket,
       cloudFunctionsBase: publicConfig.cloudFunctionsBase
@@ -119,10 +151,12 @@ window.TENANT_READY = new Promise(function(resolve, reject) {
       // For local dev, resolve tenant from platform RTDB same as production.
       // The override just sets the tenantId — config comes from publicConfig.
       TENANT_ID = override;
-      var devConfigUrl = PLATFORM_RTDB_BASE + '/tenants/' + override + '/publicConfig.json';
+      var devConfigUrl = PLATFORM_FIRESTORE_BASE + '/platform_tenants/' + override;
       fetch(devConfigUrl)
         .then(function(resp) { return resp.ok ? resp.json() : null; })
-        .then(function(publicConfig) {
+        .then(function(doc) {
+          var fields = doc && doc.fields ? unwrapFirestoreFields(doc.fields) : null;
+          var publicConfig = fields && fields.publicConfig ? fields.publicConfig : null;
           if (publicConfig) {
             setGlobals(override, publicConfig);
           } else {
@@ -130,7 +164,6 @@ window.TENANT_READY = new Promise(function(resolve, reject) {
             TENANT_FIREBASE_CONFIG = {
               apiKey: '',
               authDomain: 'mast-platform-prod.firebaseapp.com',
-              databaseURL: 'https://mast-platform-prod-default-rtdb.firebaseio.com',
               projectId: 'mast-platform-prod',
               storageBucket: 'mast-platform-prod.firebasestorage.app',
               cloudFunctionsBase: 'https://us-central1-mast-platform-prod.cloudfunctions.net'
@@ -143,7 +176,6 @@ window.TENANT_READY = new Promise(function(resolve, reject) {
           TENANT_FIREBASE_CONFIG = {
             apiKey: '',
             authDomain: 'mast-platform-prod.firebaseapp.com',
-            databaseURL: 'https://mast-platform-prod-default-rtdb.firebaseio.com',
             projectId: 'mast-platform-prod',
             storageBucket: 'mast-platform-prod.firebasestorage.app',
             cloudFunctionsBase: 'https://us-central1-mast-platform-prod.cloudfunctions.net'
@@ -174,19 +206,23 @@ window.TENANT_READY = new Promise(function(resolve, reject) {
   } else {
     // Fallback: fetch directly (pages without the inline prefetch)
     var escapedHost = escapeHostname(hostname);
-    var domainUrl = PLATFORM_RTDB_BASE + '/tenantsByDomain/' + escapedHost + '.json';
+    var domainUrl = PLATFORM_FIRESTORE_BASE + '/platform_tenantsByDomain/' + escapedHost;
     tenantPromise = fetch(domainUrl)
       .then(function(resp) {
         if (!resp.ok) throw new Error('Domain lookup failed: ' + resp.status);
         return resp.json();
       })
-      .then(function(tenantId) {
-        if (!tenantId) throw new Error('No tenant found for hostname: ' + hostname);
-        var configUrl = PLATFORM_RTDB_BASE + '/tenants/' + tenantId + '/publicConfig.json';
+      .then(function(doc) {
+        var fields = doc && doc.fields ? unwrapFirestoreFields(doc.fields) : null;
+        var tenantId = fields ? unwrapContainerDoc(fields) : null;
+        if (typeof tenantId !== 'string' || !tenantId) throw new Error('No tenant found for hostname: ' + hostname);
+        var configUrl = PLATFORM_FIRESTORE_BASE + '/platform_tenants/' + tenantId;
         return fetch(configUrl).then(function(resp) {
           if (!resp.ok) throw new Error('Config lookup failed: ' + resp.status);
           return resp.json();
-        }).then(function(publicConfig) {
+        }).then(function(tenantDoc) {
+          var tenantFields = tenantDoc && tenantDoc.fields ? unwrapFirestoreFields(tenantDoc.fields) : null;
+          var publicConfig = tenantFields && tenantFields.publicConfig ? tenantFields.publicConfig : null;
           if (!publicConfig) throw new Error('No publicConfig for tenant: ' + tenantId);
           return { tenantId: tenantId, publicConfig: publicConfig };
         });
@@ -217,7 +253,7 @@ window.TENANT_READY = new Promise(function(resolve, reject) {
  * Caches in localStorage alongside tenant data (same 5-min TTL).
  */
 window.STOREFRONT_DATA = window.TENANT_READY.then(function() {
-  if (!TENANT_ID || !TENANT_FIREBASE_CONFIG || !TENANT_FIREBASE_CONFIG.databaseURL) {
+  if (!TENANT_ID || !TENANT_FIREBASE_CONFIG || !TENANT_FIREBASE_CONFIG.projectId) {
     return { theme: null, nav: null, promo: null, pageData: null };
   }
 
@@ -236,40 +272,74 @@ window.STOREFRONT_DATA = window.TENANT_READY.then(function() {
     }
   } catch (e) { /* ignore */ }
 
-  var baseUrl = TENANT_FIREBASE_CONFIG.databaseURL + '/' + TENANT_ID + '/public/';
+  // Firestore REST base for tenant data. Tenant data lives under
+  // tenants/{tenantId}/{collection}/{docId}.
+  var fsBase = 'https://firestore.googleapis.com/v1/projects/' +
+    TENANT_FIREBASE_CONFIG.projectId + '/databases/(default)/documents/tenants/' +
+    TENANT_ID;
 
-  function safeFetch(url) {
-    return fetch(url)
+  // Fetch a Firestore doc and return the unwrapped fields, or null on error.
+  function fetchFsDoc(subpath) {
+    return fetch(fsBase + '/' + subpath)
       .then(function(resp) { return resp.ok ? resp.json() : null; })
+      .then(function(doc) {
+        if (!doc || !doc.fields) return null;
+        var out = unwrapFirestoreFields(doc.fields);
+        return unwrapContainerDoc(out);
+      })
       .catch(function() { return null; });
   }
 
-  // Core config fetches — always needed
+  // Fetch a Firestore collection and return an ordered array of doc data, or [] on error.
+  function fetchFsCollection(subpath) {
+    return fetch(fsBase + '/' + subpath + '?pageSize=300')
+      .then(function(resp) { return resp.ok ? resp.json() : null; })
+      .then(function(body) {
+        if (!body || !body.documents) return {};
+        var map = {};
+        body.documents.forEach(function(doc) {
+          var parts = (doc.name || '').split('/');
+          var id = parts[parts.length - 1];
+          map[id] = unwrapContainerDoc(unwrapFirestoreFields(doc.fields || {}));
+        });
+        return map;
+      })
+      .catch(function() { return {}; });
+  }
+
+  // Core config fetches — always needed.
+  // RTDB path → Firestore translation (via MastDB tenant map):
+  //   public/config/theme        → config/theme
+  //   public/config/nav          → config/nav
+  //   public/config/promoBanner  → config/promoBanner
+  //   public/config/brand        → config/brand (logo is a field)
+  //   public/config/shopDisplay  → config/shopDisplay
   var fetches = [
-    safeFetch(baseUrl + 'config/theme.json'),
-    safeFetch(baseUrl + 'config/nav.json'),
-    safeFetch(baseUrl + 'config/promoBanner.json'),
-    safeFetch(baseUrl + 'config/brand/logo.json'),
-    safeFetch(baseUrl + 'config/shopDisplay.json')
+    fetchFsDoc('config/theme'),
+    fetchFsDoc('config/nav'),
+    fetchFsDoc('config/promoBanner'),
+    fetchFsDoc('config/brand').then(function(brand) { return brand && brand.logo ? brand.logo : null; }),
+    fetchFsDoc('config/shopDisplay')
   ];
 
   // Page-specific data prefetch
   var path = window.location.pathname.replace(/\.html$/, '').replace(/\/$/, '') || '/';
   var pageDataKey = null;
   if (path === '/' || path === '/index') {
-    fetches.push(safeFetch(baseUrl + 'gallery.json'));
+    fetches.push(fetchFsCollection('gallery'));
     pageDataKey = 'gallery';
   } else if (path === '/shop' || path.endsWith('/shop')) {
     fetches.push(Promise.all([
-      safeFetch(baseUrl + 'products.json'),
-      safeFetch(baseUrl + 'config/categories.json')
+      fetchFsCollection('products'),
+      fetchFsDoc('config/categories')
     ]).then(function(r) { return { products: r[0], categories: r[1] }; }));
     pageDataKey = 'shop';
   } else if (path === '/about' || path.endsWith('/about')) {
-    fetches.push(safeFetch(baseUrl + 'config/about.json'));
+    fetches.push(fetchFsDoc('config/about'));
     pageDataKey = 'about';
   } else if (path === '/schedule' || path.endsWith('/schedule')) {
-    fetches.push(safeFetch(baseUrl + 'events.json'));
+    // events data — RTDB path `public/events` → Firestore `events` collection
+    fetches.push(fetchFsCollection('events'));
     pageDataKey = 'schedule';
   }
 

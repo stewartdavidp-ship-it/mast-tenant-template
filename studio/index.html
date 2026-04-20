@@ -14,7 +14,6 @@
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
   <script src="../shared/mastdb.js?v=1"></script>
@@ -445,7 +444,7 @@ window.TENANT_READY.then(function() {
   firebase.initializeApp(TENANT_FIREBASE_CONFIG);
   auth = firebase.auth();
   storage = firebase.storage();
-  MastDB.init({ db: firebase.database(), tenantId: TENANT_ID });
+  MastDB.init({ firestore: firebase.firestore(), tenantId: TENANT_ID });
 
   PRODUCTS_PATH = 'public/products';
   TRAINING_IMAGES_PATH = 'admin/training-images';

@@ -121,7 +121,7 @@
     var app = window.MastCart.getFirebaseApp();
     if (!app) return false;
     if (!MastDB.tenantId()) {
-      MastDB.init({ db: app.database(), tenantId: TENANT_ID });
+      MastDB.init({ firestore: app.firestore(), tenantId: TENANT_ID });
     }
     return !!MastDB.tenantId();
   }

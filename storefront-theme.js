@@ -337,9 +337,26 @@
     } else {
       // Fallback: fetch directly (shouldn't happen in normal flow)
       configPromise = window.TENANT_READY.then(function() {
-        if (!TENANT_ID || !TENANT_FIREBASE_CONFIG || !TENANT_FIREBASE_CONFIG.databaseURL) return null;
-        var url = TENANT_FIREBASE_CONFIG.databaseURL + '/' + TENANT_ID + '/public/config/theme.json';
-        return fetch(url).then(function(resp) { return resp.ok ? resp.json() : null; }).catch(function() { return null; });
+        if (!TENANT_ID || !TENANT_FIREBASE_CONFIG || !TENANT_FIREBASE_CONFIG.projectId) return null;
+        var url = 'https://firestore.googleapis.com/v1/projects/' +
+          TENANT_FIREBASE_CONFIG.projectId + '/databases/(default)/documents/tenants/' +
+          TENANT_ID + '/config/theme';
+        return fetch(url).then(function(resp) { return resp.ok ? resp.json() : null; })
+          .then(function(doc) {
+            if (!doc || !doc.fields) return null;
+            var out = {};
+            for (var k in doc.fields) {
+              var v = doc.fields[k];
+              if ('stringValue' in v) out[k] = v.stringValue;
+              else if ('booleanValue' in v) out[k] = v.booleanValue;
+              else if ('integerValue' in v) out[k] = Number(v.integerValue);
+              else if ('doubleValue' in v) out[k] = v.doubleValue;
+              else if ('mapValue' in v) out[k] = v.mapValue.fields;
+              else if ('arrayValue' in v) out[k] = (v.arrayValue.values || []);
+            }
+            return out;
+          })
+          .catch(function() { return null; });
       });
     }
 
@@ -451,14 +468,14 @@
                 if (manifest && manifest.homepageFlow) applyHomepageFlow(manifest);
                 return;
               }
-              var db = window.TENANT_DB || (window.firebase && window.firebase.database());
-              if (!db) {
+              var fs = (window.firebase && window.firebase.firestore) ? window.firebase.firestore() : null;
+              if (!fs) {
                 if (manifest && manifest.homepageFlow) applyHomepageFlow(manifest);
                 return;
               }
               // Ensure MastDB is initialized — storefront-theme.js may run before host inits it.
               if (typeof MastDB !== 'undefined' && !MastDB.tenantId()) {
-                MastDB.init({ db: db, tenantId: window.TENANT_ID });
+                MastDB.init({ firestore: fs, tenantId: window.TENANT_ID });
               }
               // Check for custom section order
               MastDB.get('public/config/sectionOrder').then(function(customOrder) {

@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Orders &mdash; My Shop</title><!-- TENANT: brand -->
 <!-- Preconnect to external origins — saves ~200ms DNS+TLS per origin -->
-<link rel="preconnect" href="https://mast-platform-prod-default-rtdb.firebaseio.com" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
@@ -13,14 +12,20 @@
      before any external scripts download. storefront-tenant.js consumes the result. -->
 <script>
 (function(){
-  var P='https://mast-platform-prod-default-rtdb.firebaseio.com/mast-platform';
+  var B='https://firestore.googleapis.com/v1/projects/mast-platform-prod/databases/(default)/documents';
   var h=location.hostname,C=5*60*1000;
   if(h==='localhost'||h==='127.0.0.1')return;
   try{var r=localStorage.getItem('mast_tenant_'+h);if(r){var c=JSON.parse(r);if(Date.now()-c.timestamp<C){window.__earlyTenant=Promise.resolve(c.data);return;}}}catch(e){}
   var ek=h.replace(/\./g,'_');
-  window.__earlyTenant=fetch(P+'/tenantsByDomain/'+ek+'.json').then(function(r){return r.ok?r.json():null}).then(function(tid){
-    if(!tid)return null;
-    return fetch(P+'/tenants/'+tid+'/publicConfig.json').then(function(r){return r.ok?r.json():null}).then(function(pc){
+  function uv(v){if(v==null)return null;if('stringValue' in v)return v.stringValue;if('booleanValue' in v)return v.booleanValue;if('integerValue' in v)return Number(v.integerValue);if('doubleValue' in v)return v.doubleValue;if('nullValue' in v)return null;if('timestampValue' in v)return v.timestampValue;if('mapValue' in v){var o={};var f=v.mapValue.fields||{};for(var k in f)o[k]=uv(f[k]);return o;}if('arrayValue' in v)return(v.arrayValue.values||[]).map(uv);return null;}
+  function uf(fields){var o={};for(var k in fields)o[k]=uv(fields[k]);return o;}
+  function uw(d){if(d&&typeof d==='object'&&!Array.isArray(d)&&'_v' in d&&Object.keys(d).length===1)return d._v;return d;}
+  window.__earlyTenant=fetch(B+'/platform_tenantsByDomain/'+ek).then(function(r){return r.ok?r.json():null}).then(function(doc){
+    var tid=doc&&doc.fields?uw(uf(doc.fields)):null;
+    if(typeof tid!=='string'||!tid)return null;
+    return fetch(B+'/platform_tenants/'+tid).then(function(r){return r.ok?r.json():null}).then(function(tdoc){
+      if(!tdoc||!tdoc.fields)return null;
+      var tf=uf(tdoc.fields);var pc=tf.publicConfig||null;
       return pc?{tenantId:tid,publicConfig:pc}:null;
     });
   }).catch(function(){return null;});
@@ -1037,7 +1042,6 @@
 <script src="tenant-brand.js?v=2"></script>
 <!-- Firebase SDK — loaded after storefront scripts so nav/theme render first -->
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="shared/mastdb.js?v=1"></script>
@@ -1054,7 +1058,7 @@ window.TENANT_READY.then(function() {
   try { defaultApp = firebase.app(); } catch (e) {
     defaultApp = firebase.initializeApp(TENANT_FIREBASE_CONFIG);
   }
-  MastDB.init({ db: firebaseApp.database(), tenantId: TENANT_ID });
+  MastDB.init({ firestore: firebaseApp.firestore(), tenantId: TENANT_ID });
   var auth = defaultApp.auth();
 
   var FUNCTION_BASE = TENANT_FIREBASE_CONFIG.cloudFunctionsBase + '/';

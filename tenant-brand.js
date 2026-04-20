@@ -32,12 +32,31 @@
     var tenantId = window.TENANT_ID;
 
     // Fetch extended brand config from platform publicConfig (world-readable)
-    var PLATFORM_BASE = 'https://mast-platform-prod-default-rtdb.firebaseio.com/mast-platform';
+    var PLATFORM_FS_BASE = 'https://firestore.googleapis.com/v1/projects/mast-platform-prod/databases/(default)/documents';
     var brandReady;
     if (tenantId) {
-      var publicConfigUrl = PLATFORM_BASE + '/tenants/' + tenantId + '/publicConfig.json';
+      var publicConfigUrl = PLATFORM_FS_BASE + '/platform_tenants/' + tenantId;
       brandReady = fetch(publicConfigUrl)
         .then(function(resp) { return resp.ok ? resp.json() : null; })
+        .then(function(doc) {
+          if (!doc || !doc.fields) return null;
+          // Firestore REST → JS value unwrap
+          function uv(v) {
+            if (v == null) return null;
+            if ('stringValue' in v) return v.stringValue;
+            if ('booleanValue' in v) return v.booleanValue;
+            if ('integerValue' in v) return Number(v.integerValue);
+            if ('doubleValue' in v) return v.doubleValue;
+            if ('nullValue' in v) return null;
+            if ('timestampValue' in v) return v.timestampValue;
+            if ('mapValue' in v) { var o = {}; var f = v.mapValue.fields || {}; for (var k in f) o[k] = uv(f[k]); return o; }
+            if ('arrayValue' in v) return (v.arrayValue.values || []).map(uv);
+            return null;
+          }
+          var f = {};
+          for (var k in doc.fields) f[k] = uv(doc.fields[k]);
+          return f.publicConfig || null;
+        })
         .then(function(pc) {
           if (pc) {
             brand.location = pc.brandLocation || brand.location || '';
@@ -166,10 +185,10 @@
 
     // Update footer logo and gate logos — try brand system first, fall back to legacy nav logoUrl
     var tid = window.TENANT_ID;
-    if (tid && typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0) {
+    if (tid && typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0 && firebase.firestore) {
       // Ensure MastDB is initialized — tenant-brand.js may run before host page inits it.
       if (typeof MastDB !== 'undefined' && !MastDB.tenantId()) {
-        MastDB.init({ db: firebase.database(), tenantId: tid });
+        MastDB.init({ firestore: firebase.firestore(), tenantId: tid });
       }
 
       // Try brand logo system first (write-time resolved URLs)

@@ -287,7 +287,6 @@ body {
 
 <!-- Firebase + Camera -->
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="../shared/mastdb.js?v=1"></script>
@@ -559,7 +558,7 @@ function closeEventSettings() {
 // ============================================================
 window.TENANT_READY.then(function() {
   try { firebaseApp = firebase.app(); } catch (e) { firebaseApp = firebase.initializeApp(TENANT_FIREBASE_CONFIG); }
-  MastDB.init({ db: firebaseApp.database(), tenantId: TENANT_ID });
+  MastDB.init({ firestore: firebaseApp.firestore(), tenantId: TENANT_ID });
   auth = firebaseApp.auth();
 
   CLASSIFY_URL = TENANT_FIREBASE_CONFIG.cloudFunctionsBase + '/classifyImage';

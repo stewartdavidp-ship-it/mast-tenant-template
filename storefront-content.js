@@ -39,7 +39,7 @@
   window.TENANT_READY.then(function() {
     var tenantId = window.TENANT_ID;
     var config = window.TENANT_FIREBASE_CONFIG;
-    if (!tenantId || !config || !config.databaseURL) return;
+    if (!tenantId || !config || !config.projectId) return;
 
     // Ensure DOM is loaded
     var domReady = new Promise(function(resolve) {
@@ -47,10 +47,28 @@
       else document.addEventListener('DOMContentLoaded', resolve);
     });
 
-    // Fetch sections config from tenant RTDB (world-readable under public rules)
-    var sectionsUrl = config.databaseURL + '/' + tenantId + '/webPresence/config/sections.json';
+    // Firestore REST field-value unwrap
+    function uv(v) {
+      if (v == null) return null;
+      if ('stringValue' in v) return v.stringValue;
+      if ('booleanValue' in v) return v.booleanValue;
+      if ('integerValue' in v) return Number(v.integerValue);
+      if ('doubleValue' in v) return v.doubleValue;
+      if ('mapValue' in v) { var o = {}; var f = v.mapValue.fields || {}; for (var k in f) o[k] = uv(f[k]); return o; }
+      if ('arrayValue' in v) return (v.arrayValue.values || []).map(uv);
+      return null;
+    }
+
+    // Fetch sections config from Firestore (RTDB `webPresence/config/sections`
+    // → Firestore `web_presence/config` doc, field `sections`).
+    var sectionsUrl = 'https://firestore.googleapis.com/v1/projects/' + config.projectId +
+      '/databases/(default)/documents/tenants/' + tenantId + '/web_presence/config';
     var sectionsReady = fetch(sectionsUrl)
       .then(function(resp) { return resp.ok ? resp.json() : null; })
+      .then(function(doc) {
+        if (!doc || !doc.fields || !doc.fields.sections) return null;
+        return uv(doc.fields.sections);
+      })
       .catch(function() { return null; });
 
     Promise.all([sectionsReady, domReady]).then(function(results) {

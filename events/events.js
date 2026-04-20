@@ -1,7 +1,7 @@
 // ============================================================
 // Globals
 // ============================================================
-var firebaseApp, db, auth, storage, currentUser;
+var firebaseApp, auth, storage, currentUser;
 var TENANT_ID_LOCAL = null;
 var FUNCTIONS_BASE = 'https://us-central1-mast-platform-prod.cloudfunctions.net';
 
@@ -80,122 +80,193 @@ function closeModal(id) {
 }
 
 // ============================================================
-// Data Layer (MastDB equivalent for standalone module)
+// Data Layer — MastDB (Firestore-backed) entity helpers
+// ------------------------------------------------------------
+// All persistence goes through the globally loaded MastDB, which
+// handles tenant-prefixing internally. The helper shape below is
+// preserved so the rest of this module is unchanged.
+//
+// Notes:
+//  - Fake "snap" objects ({ val: fn }) are returned from get/listen
+//    callbacks to keep legacy call-site shape (snap.val()).
+//  - listen() uses MastDB.subscribe — the RTDB limitToLast(N) is
+//    not honored on live subscriptions (Firestore limit semantics
+//    differ). .once() reads still apply a query limit.
+//  - Collection-level remove (e.g., removing all booths for a show)
+//    iterates child docs and deletes each via MastDB.remove.
 // ============================================================
 
+function _fakeSnap(value) { return { val: function() { return value; } }; }
+
+function _removeCollection(path) {
+  // Delete every child document under a collection-style path.
+  return MastDB.get(path).then(function(val) {
+    if (!val || typeof val !== 'object') return;
+    var tasks = [];
+    for (var k in val) if (Object.prototype.hasOwnProperty.call(val, k)) {
+      tasks.push(MastDB.remove(path + '/' + k));
+    }
+    return Promise.all(tasks);
+  });
+}
+
 var DB = {
-  _tenantId: null,
-  _db: null,
-  init: function(tenantId, database) { this._tenantId = tenantId; this._db = database; },
-  ref: function(path) { return this._db.ref(this._tenantId + '/' + path); },
-  rootRef: function() { return this._db.ref(); },
-  newKey: function(path) { return this.ref(path).push().key; },
-  storagePath: function(sub) { return this._tenantId + '/' + sub; },
+  init: function() { /* MastDB is initialized globally — no-op */ },
+  storagePath: function(sub) { return MastDB.storagePath(sub); },
 
   // Entity helpers
   shows: {
-    ref: function(id) { return DB.ref('events/shows' + (id ? '/' + id : '')); },
-    list: function(limit) { return this.ref().limitToLast(limit || 200).once('value'); },
-    get: function(id) { return this.ref(id).once('value'); },
-    set: function(id, data) { return this.ref(id).set(data); },
-    update: function(id, data) { return this.ref(id).update(data); },
-    remove: function(id) { return this.ref(id).remove(); },
-    newKey: function() { return this.ref().push().key; },
-    listen: function(limit, cb, errCb) { return this.ref().limitToLast(limit || 200).on('value', cb, errCb); },
-    unlisten: function(h) { this.ref().off('value', h); }
+    _path: function(id) { return 'events/shows' + (id ? '/' + id : ''); },
+    list: function(limit) {
+      return MastDB.query('events/shows').limitToLast(limit || 200).once().then(_fakeSnap);
+    },
+    get: function(id) { return MastDB.get('events/shows/' + id).then(_fakeSnap); },
+    set: function(id, data) { return MastDB.set('events/shows/' + id, data); },
+    update: function(id, data) { return MastDB.update('events/shows/' + id, data); },
+    remove: function(id) { return MastDB.remove('events/shows/' + id); },
+    newKey: function() { return MastDB.newKey('events/shows'); },
+    listen: function(limit, cb, errCb) {
+      return MastDB.subscribe('events/shows', function(val) { cb(_fakeSnap(val || {})); });
+    },
+    unlisten: function(h) { if (typeof h === 'function') { try { h(); } catch(e){} } }
   },
   booths: {
-    ref: function(showId, boothId) { return DB.ref('events/booths/' + showId + (boothId ? '/' + boothId : '')); },
-    list: function(showId, limit) { return this.ref(showId).limitToLast(limit || 500).once('value'); },
-    set: function(showId, boothId, data) { return this.ref(showId, boothId).set(data); },
-    update: function(showId, boothId, data) { return this.ref(showId, boothId).update(data); },
-    remove: function(showId, boothId) { return this.ref(showId, boothId).remove(); },
-    newKey: function(showId) { return this.ref(showId).push().key; },
-    listen: function(showId, limit, cb, errCb) { return this.ref(showId).limitToLast(limit || 500).on('value', cb, errCb); },
-    unlisten: function(showId, h) { this.ref(showId).off('value', h); }
+    _path: function(showId, boothId) { return 'events/booths/' + showId + (boothId ? '/' + boothId : ''); },
+    ref: function(showId) {
+      // Legacy collection-level handle (used for multi-child update / bulk remove).
+      var path = 'events/booths/' + showId;
+      return {
+        update: function(updates) {
+          var tasks = [];
+          for (var k in updates) if (Object.prototype.hasOwnProperty.call(updates, k)) {
+            tasks.push(MastDB.set(path + '/' + k, updates[k]));
+          }
+          return Promise.all(tasks);
+        },
+        remove: function() { return _removeCollection(path); }
+      };
+    },
+    list: function(showId, limit) {
+      return MastDB.query('events/booths/' + showId).limitToLast(limit || 500).once().then(_fakeSnap);
+    },
+    set: function(showId, boothId, data) { return MastDB.set('events/booths/' + showId + '/' + boothId, data); },
+    update: function(showId, boothId, data) { return MastDB.update('events/booths/' + showId + '/' + boothId, data); },
+    remove: function(showId, boothId) { return MastDB.remove('events/booths/' + showId + '/' + boothId); },
+    newKey: function(showId) { return MastDB.newKey('events/booths/' + showId); },
+    listen: function(showId, limit, cb, errCb) {
+      return MastDB.subscribe('events/booths/' + showId, function(val) { cb(_fakeSnap(val || {})); });
+    },
+    unlisten: function(showId, h) { if (typeof h === 'function') { try { h(); } catch(e){} } }
   },
   boothPins: {
-    ref: function(showId, boothId) { return DB.ref('events/boothPins/' + showId + (boothId ? '/' + boothId : '')); },
-    get: function(showId) { return this.ref(showId).once('value'); },
-    set: function(showId, boothId, data) { return this.ref(showId, boothId).set(data); },
-    remove: function(showId, boothId) { if (boothId) return this.ref(showId, boothId).remove(); return this.ref(showId).remove(); },
-    listen: function(showId, cb, errCb) { return this.ref(showId).on('value', cb, errCb); },
-    unlisten: function(showId, h) { this.ref(showId).off('value', h); }
+    get: function(showId) { return MastDB.get('events/boothPins/' + showId).then(_fakeSnap); },
+    set: function(showId, boothId, data) { return MastDB.set('events/boothPins/' + showId + '/' + boothId, data); },
+    remove: function(showId, boothId) {
+      if (boothId) return MastDB.remove('events/boothPins/' + showId + '/' + boothId);
+      return _removeCollection('events/boothPins/' + showId);
+    },
+    listen: function(showId, cb, errCb) {
+      return MastDB.subscribe('events/boothPins/' + showId, function(val) { cb(_fakeSnap(val || {})); });
+    },
+    unlisten: function(showId, h) { if (typeof h === 'function') { try { h(); } catch(e){} } }
   },
   showsBySlug: {
-    ref: function(slug) { return DB.ref('events/showsBySlug' + (slug ? '/' + slug : '')); },
-    set: function(slug, showId) { return this.ref(slug).set(showId); },
-    remove: function(slug) { return this.ref(slug).remove(); }
+    set: function(slug, showId) { return MastDB.set('events/showsBySlug/' + slug, showId); },
+    remove: function(slug) { return MastDB.remove('events/showsBySlug/' + slug); }
   },
   vendors: {
-    ref: function(showId, vendorId) { return DB.ref('events/vendors/' + showId + (vendorId ? '/' + vendorId : '')); },
-    list: function(showId, limit) { return this.ref(showId).limitToLast(limit || 500).once('value'); },
-    set: function(showId, vendorId, data) { return this.ref(showId, vendorId).set(data); },
-    update: function(showId, vendorId, data) { return this.ref(showId, vendorId).update(data); },
-    remove: function(showId, vendorId) { return this.ref(showId, vendorId).remove(); },
-    newKey: function(showId) { return this.ref(showId).push().key; },
-    listen: function(showId, limit, cb, errCb) { return this.ref(showId).limitToLast(limit || 500).on('value', cb, errCb); },
-    unlisten: function(showId, h) { this.ref(showId).off('value', h); }
+    ref: function(showId) {
+      var path = 'events/vendors/' + showId;
+      return { remove: function() { return _removeCollection(path); } };
+    },
+    list: function(showId, limit) {
+      return MastDB.query('events/vendors/' + showId).limitToLast(limit || 500).once().then(_fakeSnap);
+    },
+    set: function(showId, vendorId, data) { return MastDB.set('events/vendors/' + showId + '/' + vendorId, data); },
+    update: function(showId, vendorId, data) { return MastDB.update('events/vendors/' + showId + '/' + vendorId, data); },
+    remove: function(showId, vendorId) { return MastDB.remove('events/vendors/' + showId + '/' + vendorId); },
+    newKey: function(showId) { return MastDB.newKey('events/vendors/' + showId); },
+    listen: function(showId, limit, cb, errCb) {
+      return MastDB.subscribe('events/vendors/' + showId, function(val) { cb(_fakeSnap(val || {})); });
+    },
+    unlisten: function(showId, h) { if (typeof h === 'function') { try { h(); } catch(e){} } }
   },
   submissions: {
-    ref: function(showId, subId) { return DB.ref('events/submissions/' + showId + (subId ? '/' + subId : '')); },
-    list: function(showId, limit) { return this.ref(showId).limitToLast(limit || 200).once('value'); },
-    update: function(showId, subId, data) { return this.ref(showId, subId).update(data); },
-    listen: function(showId, limit, cb, errCb) { return this.ref(showId).limitToLast(limit || 200).on('value', cb, errCb); },
-    unlisten: function(showId, h) { this.ref(showId).off('value', h); }
+    ref: function(showId) {
+      var path = 'events/submissions/' + showId;
+      return { remove: function() { return _removeCollection(path); } };
+    },
+    list: function(showId, limit) {
+      return MastDB.query('events/submissions/' + showId).limitToLast(limit || 200).once().then(_fakeSnap);
+    },
+    update: function(showId, subId, data) { return MastDB.update('events/submissions/' + showId + '/' + subId, data); },
+    listen: function(showId, limit, cb, errCb) {
+      return MastDB.subscribe('events/submissions/' + showId, function(val) { cb(_fakeSnap(val || {})); });
+    },
+    unlisten: function(showId, h) { if (typeof h === 'function') { try { h(); } catch(e){} } }
   },
   announcements: {
-    ref: function(showId, annId) { return DB.ref('events/announcements/' + showId + (annId ? '/' + annId : '')); },
-    list: function(showId, limit) { return this.ref(showId).limitToLast(limit || 100).once('value'); },
-    set: function(showId, annId, data) { return this.ref(showId, annId).set(data); },
-    newKey: function(showId) { return this.ref(showId).push().key; },
-    listen: function(showId, limit, cb, errCb) { return this.ref(showId).limitToLast(limit || 100).on('value', cb, errCb); },
-    unlisten: function(showId, h) { this.ref(showId).off('value', h); }
+    ref: function(showId) {
+      var path = 'events/announcements/' + showId;
+      return { remove: function() { return _removeCollection(path); } };
+    },
+    list: function(showId, limit) {
+      return MastDB.query('events/announcements/' + showId).limitToLast(limit || 100).once().then(_fakeSnap);
+    },
+    set: function(showId, annId, data) { return MastDB.set('events/announcements/' + showId + '/' + annId, data); },
+    newKey: function(showId) { return MastDB.newKey('events/announcements/' + showId); },
+    listen: function(showId, limit, cb, errCb) {
+      return MastDB.subscribe('events/announcements/' + showId, function(val) { cb(_fakeSnap(val || {})); });
+    },
+    unlisten: function(showId, h) { if (typeof h === 'function') { try { h(); } catch(e){} } }
   },
   huntConfig: {
-    ref: function(showId) { return DB.ref('events/huntConfig/' + showId); },
-    get: function(showId) { return this.ref(showId).once('value'); },
-    set: function(showId, data) { return this.ref(showId).set(data); }
+    get: function(showId) { return MastDB.get('events/huntConfig/' + showId).then(_fakeSnap); },
+    set: function(showId, data) { return MastDB.set('events/huntConfig/' + showId, data); }
   },
   huntStats: {
-    ref: function(showId) { return DB.ref('events/huntStats/' + showId); },
-    get: function(showId) { return this.ref(showId).once('value'); },
-    listen: function(showId, cb, errCb) { return this.ref(showId).on('value', cb, errCb); },
-    unlisten: function(showId, h) { this.ref(showId).off('value', h); }
+    get: function(showId) { return MastDB.get('events/huntStats/' + showId).then(_fakeSnap); },
+    listen: function(showId, cb, errCb) {
+      return MastDB.subscribe('events/huntStats/' + showId, function(val) { cb(_fakeSnap(val || {})); });
+    },
+    unlisten: function(showId, h) { if (typeof h === 'function') { try { h(); } catch(e){} } }
   },
   huntParticipants: {
-    ref: function(showId) { return DB.ref('events/huntParticipants/' + showId); },
-    list: function(showId, limit) { return this.ref(showId).limitToLast(limit || 200).once('value'); }
+    list: function(showId, limit) {
+      return MastDB.query('events/huntParticipants/' + showId).limitToLast(limit || 200).once().then(_fakeSnap);
+    }
   },
   showAdConfig: {
-    ref: function(showId) { return DB.ref('events/showAdConfig/' + showId); },
-    get: function(showId) { return this.ref(showId).once('value'); },
-    set: function(showId, data) { return this.ref(showId).set(data); }
+    get: function(showId) { return MastDB.get('events/showAdConfig/' + showId).then(_fakeSnap); },
+    set: function(showId, data) { return MastDB.set('events/showAdConfig/' + showId, data); }
   },
   vendorWallets: {
-    ref: function(showId, vendorId) { return DB.ref('events/vendorWallets/' + showId + (vendorId ? '/' + vendorId : '')); },
-    list: function(showId, limit) { return this.ref(showId).limitToLast(limit || 200).once('value'); },
-    listen: function(showId, limit, cb, errCb) { return this.ref(showId).limitToLast(limit || 200).on('value', cb, errCb); },
-    unlisten: function(showId, h) { this.ref(showId).off('value', h); }
+    list: function(showId, limit) {
+      return MastDB.query('events/vendorWallets/' + showId).limitToLast(limit || 200).once().then(_fakeSnap);
+    },
+    listen: function(showId, limit, cb, errCb) {
+      return MastDB.subscribe('events/vendorWallets/' + showId, function(val) { cb(_fakeSnap(val || {})); });
+    },
+    unlisten: function(showId, h) { if (typeof h === 'function') { try { h(); } catch(e){} } }
   },
   vendorTransactions: {
-    ref: function(showId, vendorId, txId) {
-      var p = 'events/vendorTransactions/' + showId;
-      if (vendorId) p += '/' + vendorId;
-      if (txId) p += '/' + txId;
-      return DB.ref(p);
-    },
-    list: function(showId, vendorId, limit) { return this.ref(showId, vendorId).limitToLast(limit || 50).once('value'); }
+    list: function(showId, vendorId, limit) {
+      var p = 'events/vendorTransactions/' + showId + (vendorId ? '/' + vendorId : '');
+      return MastDB.query(p).limitToLast(limit || 50).once().then(_fakeSnap);
+    }
   },
   ads: {
-    ref: function(showId, adId) { return DB.ref('events/ads/' + showId + (adId ? '/' + adId : '')); },
-    list: function(showId, limit) { return this.ref(showId).limitToLast(limit || 200).once('value'); },
-    set: function(showId, adId, data) { return this.ref(showId, adId).set(data); },
-    update: function(showId, adId, data) { return this.ref(showId, adId).update(data); },
-    remove: function(showId, adId) { return this.ref(showId, adId).remove(); },
-    newKey: function(showId) { return this.ref(showId).push().key; },
-    listen: function(showId, limit, cb, errCb) { return this.ref(showId).limitToLast(limit || 200).on('value', cb, errCb); },
-    unlisten: function(showId, h) { this.ref(showId).off('value', h); }
+    list: function(showId, limit) {
+      return MastDB.query('events/ads/' + showId).limitToLast(limit || 200).once().then(_fakeSnap);
+    },
+    set: function(showId, adId, data) { return MastDB.set('events/ads/' + showId + '/' + adId, data); },
+    update: function(showId, adId, data) { return MastDB.update('events/ads/' + showId + '/' + adId, data); },
+    remove: function(showId, adId) { return MastDB.remove('events/ads/' + showId + '/' + adId); },
+    newKey: function(showId) { return MastDB.newKey('events/ads/' + showId); },
+    listen: function(showId, limit, cb, errCb) {
+      return MastDB.subscribe('events/ads/' + showId, function(val) { cb(_fakeSnap(val || {})); });
+    },
+    unlisten: function(showId, h) { if (typeof h === 'function') { try { h(); } catch(e){} } }
   }
 };
 
@@ -262,11 +333,14 @@ window.TENANT_READY.then(function() {
   }
   TENANT_ID_LOCAL = TENANT_ID;
   try { firebaseApp = firebase.app(); } catch (e) { firebaseApp = firebase.initializeApp(TENANT_FIREBASE_CONFIG); }
-  db = firebaseApp.database();
   auth = firebaseApp.auth();
   try { storage = firebaseApp.storage(); } catch(e) { storage = null; }
 
-  DB.init(TENANT_ID_LOCAL, db);
+  // Defensive MastDB init — storefront pages typically init MastDB themselves,
+  // but this page may be loaded standalone. Firestore compat is loaded via events/index.html.
+  if (typeof MastDB !== 'undefined' && !MastDB.tenantId()) {
+    MastDB.init({ firestore: firebaseApp.firestore(), tenantId: TENANT_ID_LOCAL });
+  }
 
   auth.onAuthStateChanged(function(user) {
     document.getElementById('loadingScreen').style.display = 'none';
@@ -1642,17 +1716,19 @@ function detectPaymentProcessor() {
   if (!el) return;
 
   // Check explicit config first, then auto-detect
-  DB.ref('config/paymentProcessor').once('value').then(function(snap) {
-    var processor = snap.val();
+  MastDB.get('config/paymentProcessor').then(function(processor) {
     if (processor) {
       renderProcessorBadge(el, processor);
-      return;
+      return null; // sentinel: skip the second resolver
     }
     // Auto-detect Square
-    return DB.ref('config/square/environment').once('value');
-  }).then(function(sqSnap) {
-    if (!sqSnap) return; // already rendered
-    if (sqSnap.val()) {
+    return MastDB.get('config/square/environment').then(function(env) {
+      // Wrap non-null so the sentinel check below can distinguish "already rendered" from "no value"
+      return { __value: env };
+    });
+  }).then(function(result) {
+    if (!result) return; // already rendered
+    if (result.__value) {
       renderProcessorBadge(el, 'square');
     } else {
       renderProcessorBadge(el, null);
