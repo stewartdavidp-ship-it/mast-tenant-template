@@ -473,13 +473,16 @@ var MastDB = (function() {
         for (var rp in docUpdates) {
           var entry = docUpdates[rp];
           var nested = _nestFields(entry.fields);
+          var fieldPaths = Object.keys(entry.fields);
           if (entry.fullReplace) {
-            var merged = typeof entry.fullReplace === 'object'
-              ? Object.assign({}, entry.fullReplace, nested)
-              : entry.fullReplace;
-            batch.set(entry.ref, merged, { merge: true });
-          } else if (Object.keys(nested).length > 0) {
-            batch.set(entry.ref, nested, { merge: true });
+            var merged = Object.assign({}, entry.fullReplace, nested);
+            // Each top-level key of fullReplace is a full-replace target, and
+            // each nested fieldPath is a scoped-replace target. Listing them
+            // all in mergeFields preserves any sibling fields not touched.
+            var mergeFields = Object.keys(entry.fullReplace).concat(fieldPaths);
+            batch.set(entry.ref, merged, { mergeFields: mergeFields });
+          } else if (fieldPaths.length > 0) {
+            batch.set(entry.ref, nested, { mergeFields: fieldPaths });
           }
         }
         return batch.commit();
