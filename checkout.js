@@ -2571,13 +2571,14 @@
       window.MastCart.clear();
       trackCheckoutEvent('wholesale_check_order_placed');
 
-      // Update wholesaler resale cert if provided
+      // Update wholesaler resale cert if provided.
+      // admin/wholesaleAuthorized is admin-only in Firestore — route through CF.
       if (checkoutData.resaleCertNumber && user && user.email) {
-        try {
-          var emailKey = user.email.toLowerCase().replace(/\./g, ',');
-          MastDB.set('admin/wholesaleAuthorized/' + emailKey + '/resaleCertNumber',
-            checkoutData.resaleCertNumber);
-        } catch (e) { /* silent — order already placed successfully */ }
+        callFunction('upsertCustomerAccount', {
+          action: 'save',
+          email: user.email,
+          resaleCertNumber: checkoutData.resaleCertNumber
+        }, function() { /* best-effort — order already placed */ });
       }
 
       // Provision CustomerPass records for any pass items
