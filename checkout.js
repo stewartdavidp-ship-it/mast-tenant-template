@@ -637,17 +637,24 @@
             if (!resp || resp.success === false) return;
             var addr = resp.address;
             if (addr && addr.address1) {
+              // Server truth wins over localStorage for signed-in users — overwrite.
               var addrMap = { address1: 'shipAddr1', address2: 'shipAddr2', city: 'shipCity', state: 'shipState', zip: 'shipZip' };
               var filled = false;
               for (var aKey in addrMap) {
-                if (addr[aKey] && !checkoutData.shipping[aKey]) {
+                if (addr[aKey]) {
                   checkoutData.shipping[aKey] = addr[aKey];
                   var aEl = document.getElementById(addrMap[aKey]);
-                  // PAC element replaces shipAddr1
-                  if (!aEl && aKey === 'address1') aEl = document.getElementById('shipAddr1Pac');
+                  var isPac = false;
+                  if (!aEl && aKey === 'address1') {
+                    aEl = document.getElementById('shipAddr1Pac');
+                    isPac = true;
+                  }
                   if (aEl) {
                     aEl.value = addr[aKey];
+                    // PAC web component renders from the value attribute — set both.
+                    if (isPac) aEl.setAttribute('value', addr[aKey]);
                     aEl.dispatchEvent(new Event('input', { bubbles: true }));
+                    aEl.dispatchEvent(new Event('change', { bubbles: true }));
                   }
                   if (aKey === 'address1') filled = true;
                 }
@@ -3192,8 +3199,17 @@
         includedPrimaryTypes: ['street_address']
       });
       pac.style.cssText = 'width:100%;';
+      // Carry over any address1 already loaded (from CF get or localStorage) so
+      // the PAC's initial render shows the saved street — the plain input's
+      // .value doesn't transfer through replaceChild.
+      var carryAddr1 = (input.value || '') || (checkoutData.shipping && checkoutData.shipping.address1) || '';
+      if (carryAddr1) {
+        pac.setAttribute('value', carryAddr1);
+        pac.value = carryAddr1;
+      }
       input.parentNode.replaceChild(pac, input);
       pac.id = 'shipAddr1Pac';
+      if (carryAddr1) checkoutData._addressValidated = true;
 
       pac.addEventListener('gmp-select', function (e) {
         var prediction = e.placePrediction || (e.detail && e.detail.placePrediction);
