@@ -533,39 +533,24 @@
     updateNavAuth(null);
   }
 
-  // Create or update account record in Firebase on sign-in
-  // Migrated from customers/{uid} to public/accounts/{uid} (Phase 3)
+  // Create or update account record on sign-in via upsertCustomerAccount CF.
+  // accounts/{uid} is admin-only per firestore.rules, so writes go through
+  // the CF with admin credentials.
   function ensureCustomerAccount(user) {
-    if (!fireDb || !user) return;
-    var accountRef = fireDb.ref(TENANT_ID + '/public/accounts/' + user.uid);
-    accountRef.once('value').then(function(snap) {
-      var existing = snap.val();
-      var now = new Date().toISOString();
-      var updates = {
-        name: user.displayName || '',
-        email: user.email || '',
-        photoUrl: user.photoURL || '',
-        lastSignIn: now
-      };
-      if (!existing) {
-        updates.createdAt = now;
-        updates.phone = user.phoneNumber || '';
-        updates.roles = ['student'];
-        updates.address = { address1: '', address2: '', city: '', state: '', zip: '', country: 'US' };
-        updates.emergencyContact = null;
-        updates.studentProfile = {};
-        updates.wholesaleProfile = {};
-      }
-      accountRef.update(updates);
-
-      // Write redirect marker to legacy path for backward compat
-      if (!existing) {
-        fireDb.ref(TENANT_ID + '/customers/' + user.uid).update({
-          migratedTo: 'public/accounts',
-          migratedAt: now
-        }).catch(function() {});
-      }
-    }).catch(function() { /* silent — RTDB may be unavailable */ });
+    if (!user || user.isAnonymous) return;
+    var cfBase = (FIREBASE_CONFIG && FIREBASE_CONFIG.cloudFunctionsBase)
+      ? FIREBASE_CONFIG.cloudFunctionsBase
+      : 'https://us-central1-mast-platform-prod.cloudfunctions.net';
+    user.getIdToken().then(function(token) {
+      return fetch(cfBase + '/upsertCustomerAccount', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({ data: { action: 'signin', tenantId: TENANT_ID } })
+      });
+    }).catch(function() { /* silent — account upsert is best-effort */ });
   }
 
   // Update nav sign-in / sign-out links across all pages

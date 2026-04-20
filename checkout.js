@@ -625,13 +625,18 @@
             authName.dispatchEvent(new Event('input', { bubbles: true }));
           }
         }
-        // Load saved address from Firebase customer record
-        if (!authUser.isAnonymous && window.MastCart.getFirebaseApp) {
-          try {
-            var custDb = window.MastCart.getFirebaseApp().database();
-            custDb.ref(TENANT_ID + '/customers/' + authUser.uid + '/address').once('value').then(function(snap) {
-              var addr = snap.val();
-              if (!addr || !addr.address1) return;
+        // Load saved address + optional wholesale resale cert via CF
+        // (accounts/{uid} and admin/wholesaleAuthorized are admin-only).
+        if (!authUser.isAnonymous) {
+          var includeCert = isWholesaleCart() && !!authUser.email;
+          callFunction('upsertCustomerAccount', {
+            action: 'get',
+            includeResaleCert: includeCert,
+            email: includeCert ? authUser.email : undefined
+          }, function(resp) {
+            if (!resp || resp.success === false) return;
+            var addr = resp.address;
+            if (addr && addr.address1) {
               var addrMap = { address1: 'shipAddr1', address2: 'shipAddr2', city: 'shipCity', state: 'shipState', zip: 'shipZip' };
               var filled = false;
               for (var aKey in addrMap) {
@@ -648,24 +653,13 @@
                 }
               }
               if (filled) setTimeout(function () { checkoutData._addressValidated = true; }, 0);
-            }).catch(function() { /* silent */ });
-          } catch (e) { /* silent */ }
-        }
-
-        // Fetch resale cert from wholesaleAuthorized record
-        if (isWholesaleCart() && authUser.email) {
-          try {
-            var wsDb = window.MastCart.getFirebaseApp().database();
-            var emailKey = authUser.email.toLowerCase().replace(/\./g, ',');
-            wsDb.ref(TENANT_ID + '/admin/wholesaleAuthorized/' + emailKey + '/resaleCertNumber').once('value').then(function(snap) {
-              var cert = snap.val();
-              if (cert && !checkoutData.resaleCertNumber) {
-                checkoutData.resaleCertNumber = cert;
-                var certEl = document.getElementById('coResaleCert');
-                if (certEl) certEl.value = cert;
-              }
-            }).catch(function() { /* silent */ });
-          } catch (e) { /* silent */ }
+            }
+            if (resp.resaleCertNumber && !checkoutData.resaleCertNumber) {
+              checkoutData.resaleCertNumber = resp.resaleCertNumber;
+              var certEl = document.getElementById('coResaleCert');
+              if (certEl) certEl.value = resp.resaleCertNumber;
+            }
+          });
         }
       }
     }
@@ -2317,25 +2311,24 @@
         // Clear cart before redirect but keep checkout info for returning customer auto-fill
         window.MastCart.clear();
 
-        // Save address to Firebase customer record for logged-in users
-        if (user && !user.isAnonymous && window.MastCart.getFirebaseApp) {
-          try {
-            var custDb = window.MastCart.getFirebaseApp().database();
-            custDb.ref(TENANT_ID + '/customers/' + user.uid + '/address').update({
+        // Save address + optional resale cert via CF (admin-only writes).
+        if (user && !user.isAnonymous) {
+          var savePayload = {
+            action: 'save',
+            address: {
               address1: checkoutData.shipping.address1 || '',
               address2: checkoutData.shipping.address2 || '',
               city: checkoutData.shipping.city || '',
               state: checkoutData.shipping.state || '',
               zip: checkoutData.shipping.zip || '',
               country: 'US'
-            });
-            // Update wholesaler resale cert if provided
-            if (checkoutData.resaleCertNumber && user.email) {
-              var emailKey = user.email.toLowerCase().replace(/\./g, ',');
-              custDb.ref(TENANT_ID + '/admin/wholesaleAuthorized/' + emailKey + '/resaleCertNumber')
-                .set(checkoutData.resaleCertNumber);
             }
-          } catch (e) { /* silent */ }
+          };
+          if (checkoutData.resaleCertNumber && user.email) {
+            savePayload.resaleCertNumber = checkoutData.resaleCertNumber;
+            savePayload.email = user.email;
+          }
+          callFunction('upsertCustomerAccount', savePayload, function() { /* best-effort */ });
         }
         trackCheckoutEvent('checkout_redirect_to_payment');
 
