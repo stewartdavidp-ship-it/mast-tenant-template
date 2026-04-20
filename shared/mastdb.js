@@ -156,6 +156,7 @@ var MastDB = (function() {
     'alertHistory': 'alert_history',
     'feedbackReports': 'feedback_reports',
     'webPresence': 'web_presence',
+    'webPresence/importJobs': 'web_presence_importJobs',
     'quickActions': 'quick_actions',
     'tripLocations': 'trip_locations',
     'tripSettings': 'trip_settings',
@@ -394,9 +395,15 @@ var MastDB = (function() {
         var parsed = _translateTenantPath(path);
         var resolved = _translateFs(value);
         if (parsed.fieldPath) {
-          // Build a nested object so merge writes into the nested map rather
-          // than a literal dotted-key field.
-          return _docRef(parsed).set(_buildNestedSet(parsed.fieldPath, resolved), { merge: true });
+          // mergeFields scopes the write to exactly parsed.fieldPath: that
+          // field is replaced wholesale while sibling fields on the doc are
+          // preserved. This matches RTDB's ref.set() semantics (set replaces
+          // the targeted subtree) — plain {merge:true} recursively merges
+          // into maps and leaks stale keys on removal.
+          return _docRef(parsed).set(
+            _buildNestedSet(parsed.fieldPath, resolved),
+            { mergeFields: [parsed.fieldPath] }
+          );
         }
         if (resolved !== null && typeof resolved === 'object' && !Array.isArray(resolved)) {
           return _docRef(parsed).set(resolved);
@@ -507,6 +514,22 @@ var MastDB = (function() {
       subscribeChild: function(path, event, cb) {
         var parsed = _translateTenantPath(path);
         var seen = {};
+        if (parsed.fieldPath) {
+          return _docRef(parsed).onSnapshot(function(doc) {
+            if (!doc.exists) return;
+            var data = _unwrapV(doc.data());
+            var segs = parsed.fieldPath.split('.');
+            var val = data;
+            for (var i = 0; i < segs.length && val != null; i++) val = val[segs[i]];
+            if (!val || typeof val !== 'object') return;
+            Object.keys(val).forEach(function(k) {
+              var entry = val[k];
+              if (event === 'child_added' && !seen[k]) { seen[k] = true; cb(entry, k); }
+              else if (event === 'child_changed' && seen[k]) { cb(entry, k); }
+              seen[k] = true;
+            });
+          });
+        }
         return _collRef(parsed).onSnapshot(function(snap) {
           snap.forEach(function(doc) {
             var d = _unwrapV(doc.data());
