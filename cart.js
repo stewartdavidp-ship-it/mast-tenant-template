@@ -439,7 +439,13 @@
       if (item.variantId) syncItem.variantId = item.variantId;
       data[item.cartItemId] = syncItem;
     }
-    MastDB.set(path, data).catch(function (err) {
+    // Remove-then-set to replicate RTDB full-replace semantics. MastDB.set on
+    // a nested fieldPath uses Firestore merge, which would keep stale items
+    // when the user removes from cart.
+    MastDB.remove(path).then(function () {
+      if (Object.keys(data).length === 0) return null;
+      return MastDB.set(path, data);
+    }).catch(function (err) {
       console.warn('Cart sync error:', err.message);
     });
   }
