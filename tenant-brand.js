@@ -35,7 +35,7 @@
     var PLATFORM_FS_BASE = 'https://firestore.googleapis.com/v1/projects/mast-platform-prod/databases/(default)/documents';
     var brandReady;
     if (tenantId) {
-      var publicConfigUrl = PLATFORM_FS_BASE + '/platform_tenants/' + tenantId;
+      var publicConfigUrl = PLATFORM_FS_BASE + '/platform_tenantPublicConfigs/' + tenantId;
       brandReady = fetch(publicConfigUrl)
         .then(function(resp) { return resp.ok ? resp.json() : null; })
         .then(function(doc) {
@@ -53,9 +53,9 @@
             if ('arrayValue' in v) return (v.arrayValue.values || []).map(uv);
             return null;
           }
-          var f = {};
-          for (var k in doc.fields) f[k] = uv(doc.fields[k]);
-          return f.publicConfig || null;
+          var out = {};
+          for (var k in doc.fields) out[k] = uv(doc.fields[k]);
+          return out;
         })
         .then(function(pc) {
           if (pc) {

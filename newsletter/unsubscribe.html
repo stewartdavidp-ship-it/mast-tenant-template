@@ -24,11 +24,11 @@
     window.__earlyTenant=fetch(B+'/platform_tenantsByDomain/'+ek).then(function(r){return r.ok?r.json():null}).then(function(doc){
       var tid=doc&&doc.fields?uw(uf(doc.fields)):null;
       if(typeof tid!=='string'||!tid)return null;
-      return fetch(B+'/platform_tenants/'+tid).then(function(r){return r.ok?r.json():null}).then(function(tdoc){
-        if(!tdoc||!tdoc.fields)return null;
-        var tf=uf(tdoc.fields);var pc=tf.publicConfig||null;
-        return pc?{tenantId:tid,publicConfig:pc}:null;
-      });
+      return fetch(B+'/platform_tenantPublicConfigs/'+tid).then(function(r){return r.ok?r.json():null}).then(function(cdoc){
+      if(!cdoc||!cdoc.fields)return null;
+      var pc=uf(cdoc.fields);
+      return pc?{tenantId:tid,publicConfig:pc}:null;
+    });
     }).catch(function(){return null;});
   })();
   </script>

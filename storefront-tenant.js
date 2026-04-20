@@ -151,12 +151,11 @@ window.TENANT_READY = new Promise(function(resolve, reject) {
       // For local dev, resolve tenant from platform RTDB same as production.
       // The override just sets the tenantId — config comes from publicConfig.
       TENANT_ID = override;
-      var devConfigUrl = PLATFORM_FIRESTORE_BASE + '/platform_tenants/' + override;
+      var devConfigUrl = PLATFORM_FIRESTORE_BASE + '/platform_tenantPublicConfigs/' + override;
       fetch(devConfigUrl)
         .then(function(resp) { return resp.ok ? resp.json() : null; })
         .then(function(doc) {
-          var fields = doc && doc.fields ? unwrapFirestoreFields(doc.fields) : null;
-          var publicConfig = fields && fields.publicConfig ? fields.publicConfig : null;
+          var publicConfig = doc && doc.fields ? unwrapFirestoreFields(doc.fields) : null;
           if (publicConfig) {
             setGlobals(override, publicConfig);
           } else {
@@ -216,13 +215,12 @@ window.TENANT_READY = new Promise(function(resolve, reject) {
         var fields = doc && doc.fields ? unwrapFirestoreFields(doc.fields) : null;
         var tenantId = fields ? unwrapContainerDoc(fields) : null;
         if (typeof tenantId !== 'string' || !tenantId) throw new Error('No tenant found for hostname: ' + hostname);
-        var configUrl = PLATFORM_FIRESTORE_BASE + '/platform_tenants/' + tenantId;
+        var configUrl = PLATFORM_FIRESTORE_BASE + '/platform_tenantPublicConfigs/' + tenantId;
         return fetch(configUrl).then(function(resp) {
           if (!resp.ok) throw new Error('Config lookup failed: ' + resp.status);
           return resp.json();
-        }).then(function(tenantDoc) {
-          var tenantFields = tenantDoc && tenantDoc.fields ? unwrapFirestoreFields(tenantDoc.fields) : null;
-          var publicConfig = tenantFields && tenantFields.publicConfig ? tenantFields.publicConfig : null;
+        }).then(function(configDoc) {
+          var publicConfig = configDoc && configDoc.fields ? unwrapFirestoreFields(configDoc.fields) : null;
           if (!publicConfig) throw new Error('No publicConfig for tenant: ' + tenantId);
           return { tenantId: tenantId, publicConfig: publicConfig };
         });
