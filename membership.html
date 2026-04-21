@@ -431,6 +431,26 @@
       }
       html += '</div>';
 
+      // Birthday capture (for birthday-reward eligibility) — only show when reward is configured.
+      if (memberConfig && memberConfig.birthdayRewardType && memberConfig.birthdayRewardValue) {
+        var bday = (memberStatus.birthday || '').trim();
+        var bdayLabel = memberConfig.birthdayRewardType === 'points'
+          ? memberConfig.birthdayRewardValue + ' bonus points'
+          : '$' + Number(memberConfig.birthdayRewardValue).toFixed(2) + ' credit';
+        html += '<div style="margin-top:20px;padding:14px 16px;background:rgba(42,124,111,0.06);border:1px solid rgba(42,124,111,0.2);border-radius:8px;">' +
+          '<div style="font-size:0.85rem;font-weight:600;margin-bottom:6px;">\uD83C\uDF82 Birthday reward: ' + bdayLabel + '</div>' +
+          '<div style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:8px;">' +
+            (bday
+              ? 'Your birthday is set to ' + esc(bday) + '. We\u2019ll send your reward each year.'
+              : 'Add your birthday (MM-DD) to receive your annual reward.') +
+          '</div>' +
+          '<div style="display:flex;gap:8px;align-items:center;">' +
+            '<input type="text" id="msBirthdayInput" placeholder="MM-DD" maxlength="5" value="' + esc(bday) + '" style="flex:1;max-width:140px;padding:7px 10px;border:1px solid rgba(0,0,0,0.15);border-radius:6px;font-size:0.85rem;">' +
+            '<button onclick="window._saveBirthday()" style="padding:7px 14px;background:#2A7C6F;color:#fff;border:none;border-radius:6px;font-size:0.8rem;font-weight:600;cursor:pointer;">Save</button>' +
+          '</div>' +
+        '</div>';
+      }
+
       // Cancel button (only for active, not already cancelled)
       if (!isGracePeriod) {
         html += '<button class="ms-cta ms-cta-secondary" style="margin-top:24px;" onclick="window._cancelMembership()">Cancel Membership</button>';
@@ -618,6 +638,51 @@
       showMsError('Something went wrong. Please try again.');
       joiningInProgress = false;
       if (btn) { btn.disabled = false; btn.textContent = 'Join ' + esc(memberConfig.programName || 'Membership'); }
+    });
+  };
+
+  window._saveBirthday = function() {
+    var input = document.getElementById('msBirthdayInput');
+    if (!input || !currentUser) return;
+    var raw = (input.value || '').trim();
+    // Accept MM-DD or MM/DD; normalize to MM-DD.
+    var match = raw.match(/^(\d{1,2})[-\/](\d{1,2})$/);
+    if (!match) {
+      showMsError('Please enter your birthday as MM-DD (e.g., 04-20).');
+      return;
+    }
+    var mm = String(parseInt(match[1], 10)).padStart(2, '0');
+    var dd = String(parseInt(match[2], 10)).padStart(2, '0');
+    if (parseInt(mm, 10) < 1 || parseInt(mm, 10) > 12 || parseInt(dd, 10) < 1 || parseInt(dd, 10) > 31) {
+      showMsError('That date doesn\u2019t look right \u2014 please check and try again.');
+      return;
+    }
+    var normalized = mm + '-' + dd;
+
+    currentUser.getIdToken().then(function(token) {
+      return fetch(FUNCTION_BASE + 'setMembershipBirthday', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token,
+          'X-Tenant-ID': TENANT_ID
+        },
+        body: JSON.stringify({ tenantId: TENANT_ID, birthday: normalized })
+      });
+    })
+    .then(function(resp) { return resp.json(); })
+    .then(function(data) {
+      var result = data.result || data;
+      if (result.success) {
+        memberStatus.birthday = normalized;
+        renderActiveMember();
+      } else {
+        showMsError(result.error || data.error || 'Couldn\u2019t save your birthday. Please try again.');
+      }
+    })
+    .catch(function(err) {
+      console.error('[membership] Birthday save error:', err);
+      showMsError('Couldn\u2019t save your birthday. Please try again.');
     });
   };
 

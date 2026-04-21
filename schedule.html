@@ -439,8 +439,37 @@ window.TENANT_READY.then(function() {
     }
   }).catch(function() {});
 
-  // Load events
-  MastDB.query('public/events').orderByChild('date').once().then(function(data) {
+  // Membership effective-member check helper (matches shop.html / class-detail.html)
+  function _scheduleEffectiveMember(cfg, status) {
+    if (!cfg || !cfg.enabled || !status) return false;
+    if (status.status === 'active') return true;
+    if (status.status === 'cancelled' && status.expiryDate) {
+      var today = new Date().toISOString().slice(0, 10);
+      return status.expiryDate >= today;
+    }
+    return false;
+  }
+
+  // Load events + membership in parallel; gate members-only events for non-members
+  var _scheduleEventsP = MastDB.query('public/events').orderByChild('date').once();
+  var _scheduleMemberCfgP = MastDB.get('admin/membership/config').catch(function() { return null; });
+  var _scheduleMemberStatusP = new Promise(function(resolve) {
+    if (!firebase.auth) return resolve(null);
+    // Wait briefly for auth to settle (cart.js handles sign-in); use one-shot snapshot
+    var unsub = firebase.auth().onAuthStateChanged(function(u) {
+      try { unsub(); } catch (e) {}
+      if (!u) return resolve(null);
+      MastDB.get('public/accounts/' + u.uid + '/wallet/membership').then(resolve).catch(function() { resolve(null); });
+    });
+    setTimeout(function() { try { unsub(); } catch (e) {} resolve(null); }, 2000);
+  });
+
+  Promise.all([_scheduleEventsP, _scheduleMemberCfgP, _scheduleMemberStatusP]).then(function(results) {
+    var data = results[0];
+    var memberCfg = results[1];
+    var memberStatus = results[2];
+    var effectiveMember = _scheduleEffectiveMember(memberCfg, memberStatus);
+
     const list = document.getElementById('eventsList');
     const empty = document.getElementById('eventsEmpty');
     if (!list) return;
@@ -449,6 +478,11 @@ window.TENANT_READY.then(function() {
 
     const events = Object.values(data)
       .filter(function(e) { return e.visible !== false; })
+      .filter(function(e) {
+        // Members-only gate: hide flagged events from non-members
+        if (e.membersOnly && !effectiveMember) return false;
+        return true;
+      })
       .sort(function(a, b) { return a.date.localeCompare(b.date); });
 
     if (events.length === 0) { return; } // keep empty state visible
@@ -465,7 +499,8 @@ window.TENANT_READY.then(function() {
       html += '<div class="event-date"><div class="event-month">' + month + '</div>';
       html += '<div class="event-day">' + day + '</div></div>';
       var nameHtml = ev.url ? '<a href="' + esc(ev.url) + '" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;">' + esc(ev.name) + ' <span style="font-size:0.7em;opacity:0.5;">&#8599;</span></a>' : esc(ev.name);
-      html += '<div class="event-info"><h3>' + nameHtml + '</h3>';
+      var memberBadge = ev.membersOnly ? ' <span style="display:inline-block;font-size:0.65rem;padding:2px 8px;background:rgba(42,124,111,0.15);color:#2A7C6F;border-radius:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;vertical-align:middle;">Members</span>' : '';
+      html += '<div class="event-info"><h3>' + nameHtml + memberBadge + '</h3>';
       html += '<p>' + esc(ev.description || '') + '</p></div>';
       html += '<div class="event-location">' + esc((ev.location || '').toUpperCase()) + '</div>';
       html += '</div>';
@@ -526,7 +561,9 @@ window.TENANT_READY.then(function() {
   if (!window.MastDB) return;
   MastDB.get('public/events').then(function(data) {
     if (!data) return;
-    var events = Object.values(data).filter(function(e) { return e.visible !== false; });
+    // Schema.org events: drop members-only entries (they aren't in the public-facing JSON-LD).
+    // Discoverability of those is intentionally member-gated.
+    var events = Object.values(data).filter(function(e) { return e.visible !== false && !e.membersOnly; });
     if (events.length) MastSchema.injectAll(MastSchema.eventList(events));
   }).catch(function() {});
 });

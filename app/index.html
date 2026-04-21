@@ -27772,6 +27772,12 @@ function openEventModal(eventId) {
           '<label for="evVisible">Visible on public site</label>' +
         '</div>' +
       '</div>' +
+      '<div class="form-group">' +
+        '<div class="form-check">' +
+          '<input type="checkbox" id="evMembersOnly"' + (ev.membersOnly ? ' checked' : '') + '>' +
+          '<label for="evMembersOnly">Members only <span style="color:var(--warm-gray-light);font-weight:300;">(hide from non-members)</span></label>' +
+        '</div>' +
+      '</div>' +
     '</div>' +
     '<div class="modal-footer">' +
       '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
@@ -27793,6 +27799,7 @@ async function saveEvent(eventId) {
   var description = document.getElementById('evDesc').value.trim();
   var location = document.getElementById('evLocation').value.trim();
   var visible = document.getElementById('evVisible').checked;
+  var membersOnly = !!(document.getElementById('evMembersOnly') && document.getElementById('evMembersOnly').checked);
 
   if (!validateRequired([
     { el: 'evName', msg: 'Event name is required' },
@@ -27810,6 +27817,7 @@ async function saveEvent(eventId) {
     description: description,
     location: location,
     visible: visible,
+    membersOnly: membersOnly,
     updatedAt: MastDB.serverTimestamp()
   };
 
