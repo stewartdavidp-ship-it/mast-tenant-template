@@ -3135,6 +3135,18 @@
       });
     });
 
+    // Overdue sessions: scheduled sessions whose date is past today and
+    // haven't been marked completed yet. Surfaces missed completion reports.
+    // NOTE: we walk the unfiltered `sessions` list so a past-date session
+    // outside the date-range filter still surfaces as overdue.
+    var todayStr = (function() {
+      var d = new Date();
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    })();
+    var overdueSessions = sessions.filter(function(s) {
+      return s.status === 'scheduled' && s.date && s.date < todayStr;
+    }).sort(function(a, b) { return (a.date || '').localeCompare(b.date || ''); });
+
     var html = '';
 
     // Summary cards
@@ -3143,7 +3155,41 @@
     html += _reportCard('Attendance Rate', attRate + '%', attRate >= 80 ? SUCCESS_COLOR : attRate >= 60 ? WARNING_COLOR : DANGER_COLOR);
     html += _reportCard('Active Enrollments', activeEnrollments, '#64B5F6');
     html += _reportCard('Class Revenue', formatPrice(revenue), 'var(--primary)');
+    html += _reportCard('Overdue Reports', overdueSessions.length, overdueSessions.length > 0 ? DANGER_COLOR : SUCCESS_COLOR);
     html += '</div>';
+
+    // Overdue sessions panel (always visible when count > 0)
+    if (overdueSessions.length > 0) {
+      html += '<div style="background:rgba(239,154,154,0.08);border:1px solid ' + DANGER_COLOR + ';border-left-width:4px;border-radius:6px;padding:14px 16px;margin-bottom:1.5rem;">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">';
+      html += '<div>';
+      html += '<h3 style="margin:0;font-size:1rem;color:' + DANGER_COLOR + ';">&#9888; ' + overdueSessions.length + ' Session' + (overdueSessions.length === 1 ? '' : 's') + ' Awaiting Completion Report</h3>';
+      html += '<p style="margin:4px 0 0;font-size:0.78rem;color:var(--warm-gray);">Past-date sessions still marked &ldquo;scheduled&rdquo;. Submit a completion report or cancel the session to clear.</p>';
+      html += '</div>';
+      html += '</div>';
+      // Show up to 10 oldest first
+      var overdueDisplay = overdueSessions.slice(0, 10);
+      html += '<div style="display:flex;flex-direction:column;gap:6px;">';
+      overdueDisplay.forEach(function(s) {
+        var cls = classes[s.classId] || {};
+        var className = cls.name || s.classId || '(unknown class)';
+        var daysLate = Math.round((new Date(todayStr) - new Date(s.date)) / 86400000);
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;background:#fff;border:1px solid var(--cream-dark,#E8E0D4);border-radius:6px;padding:10px 12px;">';
+        html += '<div style="min-width:0;">';
+        html += '<div style="font-weight:600;font-size:0.9rem;">' + esc(className) + '</div>';
+        html += '<div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(s.date) + (s.startTime ? ' &middot; ' + esc(s.startTime) : '') + ' &middot; ' + daysLate + ' day' + (daysLate === 1 ? '' : 's') + ' overdue</div>';
+        html += '</div>';
+        html += '<div style="display:flex;gap:6px;flex-shrink:0;">';
+        html += '<button class="btn btn-small btn-primary" onclick="window._bookManageSession(\'' + esc(s.id) + '\', \'' + esc(s.classId) + '\')">Open Session</button>';
+        html += '</div>';
+        html += '</div>';
+      });
+      if (overdueSessions.length > overdueDisplay.length) {
+        html += '<div style="font-size:0.78rem;color:var(--warm-gray);text-align:center;padding:4px;">+ ' + (overdueSessions.length - overdueDisplay.length) + ' more not shown</div>';
+      }
+      html += '</div>';
+      html += '</div>';
+    }
 
     // Attendance breakdown bar
     if (attTotal > 0) {
