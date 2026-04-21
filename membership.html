@@ -501,6 +501,33 @@
     initSquareCard();
   }
 
+  // Cached Square storefront config { applicationId, locationId, environment }
+  var squareStorefrontConfig = null;
+
+  function fetchSquareStorefrontConfig() {
+    if (squareStorefrontConfig) return Promise.resolve(squareStorefrontConfig);
+    var url = FUNCTION_BASE + 'getSquareStorefrontConfig';
+    return fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Tenant-ID': TENANT_ID
+      },
+      body: JSON.stringify({ tenantId: TENANT_ID })
+    }).then(function(resp) { return resp.json(); }).then(function(data) {
+      var result = (data && data.result) || data || {};
+      if (!result.success) {
+        throw new Error(result.error || 'Square storefront config unavailable');
+      }
+      squareStorefrontConfig = {
+        applicationId: result.applicationId,
+        locationId: result.locationId,
+        environment: result.environment || 'sandbox'
+      };
+      return squareStorefrontConfig;
+    });
+  }
+
   function initSquareCard() {
     // Check if already loaded
     if (window.Square) {
@@ -508,10 +535,9 @@
       return;
     }
 
-    // Read environment from public config, then load SDK
-    MastDB.get('public/config/square/environment').then(function(squareEnv) {
-      squareEnv = squareEnv || 'sandbox';
-      var sdkUrl = squareEnv === 'production'
+    // Fetch storefront config from CF (no auth required), then load SDK
+    fetchSquareStorefrontConfig().then(function(cfg) {
+      var sdkUrl = cfg.environment === 'production'
         ? 'https://web.squarecdn.com/v1/square.js'
         : 'https://sandbox.web.squarecdn.com/v1/square.js';
 
@@ -523,15 +549,18 @@
         if (errEl) { errEl.style.display = ''; errEl.textContent = 'Failed to load payment form. Please refresh and try again.'; }
       };
       document.head.appendChild(script);
+    }).catch(function(err) {
+      console.error('[membership] Square config fetch error:', err);
+      var errEl = document.getElementById('sq-card-error');
+      if (errEl) { errEl.style.display = ''; errEl.textContent = 'Payment not configured. Please contact the store.'; }
     });
   }
 
   function setupSquareCard() {
-    // Read applicationId and locationId from public config (no auth required)
-    MastDB.get('public/config/square').then(function(sqPublicConfig) {
-      sqPublicConfig = sqPublicConfig || {};
-      var applicationId = sqPublicConfig.applicationId;
-      var locationId = sqPublicConfig.locationId;
+    // Use already-fetched storefront config (no auth required)
+    fetchSquareStorefrontConfig().then(function(cfg) {
+      var applicationId = cfg.applicationId;
+      var locationId = cfg.locationId;
 
       if (!applicationId) {
         var errEl = document.getElementById('sq-card-error');
@@ -539,8 +568,8 @@
         return;
       }
       if (!locationId) {
-        var errEl = document.getElementById('sq-card-error');
-        if (errEl) { errEl.style.display = ''; errEl.textContent = 'Payment location not configured.'; }
+        var errEl2 = document.getElementById('sq-card-error');
+        if (errEl2) { errEl2.style.display = ''; errEl2.textContent = 'Payment location not configured.'; }
         return;
       }
 
