@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdn.jsdelivr.net https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://us-central1-mast-platform-prod.cloudfunctions.net https://*.firebasestorage.app https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://api.ipify.org; img-src 'self' data: blob: https:; frame-src 'self' https://*.firebaseapp.com; frame-ancestors 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdn.jsdelivr.net https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://us-central1-mast-platform-prod.cloudfunctions.net https://*.firebasestorage.app https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com; img-src 'self' data: blob: https:; frame-src 'self' https://*.firebaseapp.com; frame-ancestors 'none';">
 <title>Waiver &mdash; Sign Online</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -289,15 +289,10 @@
     if (errEl) errEl.style.display = 'none';
 
     try {
-      // Get IP address
-      var ipAddress = '';
-      try {
-        var ipResp = await fetch('https://api.ipify.org?format=json');
-        var ipData = await ipResp.json();
-        ipAddress = ipData.ip || '';
-      } catch (e) { /* IP fetch is best-effort */ }
-
-      // Build payload
+      // IP is captured server-side from the Cloud Function request context
+      // (submitWaiverSignature in tenant-functions.js). Client-side ipify.org
+      // fetch removed per legal practice-rec #8. Follow-on: CF must read
+      // context.rawRequest.ip to restore ESIGN audit IP.
       var payload = {
         tenantId: TENANT_ID,
         templateId: templateId,
@@ -306,7 +301,6 @@
         signerPhone: (document.getElementById('wvPhone') || {}).value || '',
         consentToElectronic: true,
         intentToSign: true,
-        ipAddress: ipAddress,
         userAgent: navigator.userAgent,
         classId: classId
       };
