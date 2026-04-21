@@ -246,6 +246,31 @@
           }
         }
       }).catch(function() {});
+
+      // Custom legal URL overrides (privacy/terms/security/ai) — legal practice-rec #11
+      // If tenant has set a custom URL in public/config/privacy, rewrite footer links.
+      MastDB.get('public/config/privacy').then(function(cfg) {
+        if (!cfg) return;
+        var overrides = {
+          'runmast.com/privacy': cfg.customPrivacyUrl,
+          'runmast.com/terms': cfg.customTermsUrl,
+          'runmast.com/security': cfg.customSecurityUrl,
+          'runmast.com/ai': cfg.customAiUrl
+        };
+        for (var key in overrides) {
+          var customUrl = overrides[key];
+          if (!customUrl || typeof customUrl !== 'string') continue;
+          var trimmed = customUrl.trim();
+          if (!trimmed) continue;
+          // Basic http(s) validation — skip anything that isn't a plausible URL
+          if (!/^https?:\/\//i.test(trimmed)) continue;
+          var selector = 'a[href*="' + key + '"]';
+          var links = document.querySelectorAll(selector);
+          for (var li = 0; li < links.length; li++) {
+            links[li].href = trimmed;
+          }
+        }
+      }).catch(function() {});
     }
 
     // Dispatch event so page-specific JS can react

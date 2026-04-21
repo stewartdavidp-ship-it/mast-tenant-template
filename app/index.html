@@ -7867,6 +7867,32 @@
 
         <button class="btn btn-primary" onclick="saveShopDisplaySettings()">Save Storefront Settings</button>
         <div id="sdSaveStatus" style="margin-top:8px;font-size:0.85rem;"></div>
+
+        <!-- Legal URL Overrides — legal practice-rec #11 -->
+        <div style="margin-top:32px;padding-top:24px;border-top:1px solid var(--cream-dark);">
+          <label style="font-size:1.05rem;font-weight:600;display:block;margin-bottom:4px;">Legal Policy Links</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
+            Override the default Mast policy links shown in your storefront footer with your own URLs. Leave blank to use the Mast default policies at runmast.com. Must be a full URL starting with https://.
+          </p>
+          <div class="form-group">
+            <label style="font-size:0.85rem;">Privacy Policy URL</label>
+            <input type="text" id="sdCustomPrivacyUrl" placeholder="https://your-site.com/privacy" style="font-size:0.85rem;">
+          </div>
+          <div class="form-group">
+            <label style="font-size:0.85rem;">Terms of Service URL</label>
+            <input type="text" id="sdCustomTermsUrl" placeholder="https://your-site.com/terms" style="font-size:0.85rem;">
+          </div>
+          <div class="form-group">
+            <label style="font-size:0.85rem;">Security Statement URL</label>
+            <input type="text" id="sdCustomSecurityUrl" placeholder="https://your-site.com/security" style="font-size:0.85rem;">
+          </div>
+          <div class="form-group" style="margin-bottom:12px;">
+            <label style="font-size:0.85rem;">AI Transparency URL</label>
+            <input type="text" id="sdCustomAiUrl" placeholder="https://your-site.com/ai" style="font-size:0.85rem;">
+          </div>
+          <button class="btn btn-primary" onclick="savePrivacyUrlSettings()">Save Legal URLs</button>
+          <div id="privacyUrlSaveStatus" style="margin-top:8px;font-size:0.85rem;"></div>
+        </div>
       </div>
 
       <!-- Dashboard Card Settings -->
@@ -9492,7 +9518,9 @@ MastDB.config = {
   makerSettings: function() { return MastDB.get('admin/config/makerSettings'); },
   updateMakerSettings: function(data) { return MastDB.update('admin/config/makerSettings', data); },
   shopDisplay: function() { return MastDB.get('public/config/shopDisplay'); },
-  setShopDisplay: function(cfg) { return MastDB.set('public/config/shopDisplay', cfg); }
+  setShopDisplay: function(cfg) { return MastDB.set('public/config/shopDisplay', cfg); },
+  privacy: function() { return MastDB.get('public/config/privacy'); },
+  setPrivacy: function(cfg) { return MastDB.set('public/config/privacy', cfg); }
 };
 
 MastDB.wholesaleTokens = {
@@ -13931,7 +13959,7 @@ function switchSettingsSubView(view) {
   if (view === 'email') { loadEmailConfig(); loadEmailDomainSection(); }
   if (view === 'integrations') { loadEtsyConfig(); loadShopifyConfig(); }
   if (view === 'trips') { MastAdmin.loadModule('trips').then(function() { if (typeof loadTripsSettings === 'function') loadTripsSettings(); }); }
-  if (view === 'storefront') loadShopDisplaySettings();
+  if (view === 'storefront') { loadShopDisplaySettings(); loadPrivacyUrlSettings(); }
   if (view === 'dashboard') renderDashCardSettings();
   if (view === 'domains') loadDomainSettings();
   if (view === 'ai') loadAiIntegrations();
@@ -15643,6 +15671,51 @@ async function saveShopDisplaySettings() {
     showToast('Storefront settings saved');
   } catch (err) {
     showToast('Error saving storefront settings: ' + err.message, true);
+  }
+}
+
+// Legal URL overrides — legal practice-rec #11
+async function loadPrivacyUrlSettings() {
+  try {
+    var cfg = (await MastDB.config.privacy()) || {};
+    var el;
+    el = document.getElementById('sdCustomPrivacyUrl');
+    if (el) el.value = cfg.customPrivacyUrl || '';
+    el = document.getElementById('sdCustomTermsUrl');
+    if (el) el.value = cfg.customTermsUrl || '';
+    el = document.getElementById('sdCustomSecurityUrl');
+    if (el) el.value = cfg.customSecurityUrl || '';
+    el = document.getElementById('sdCustomAiUrl');
+    if (el) el.value = cfg.customAiUrl || '';
+  } catch (err) {
+    console.error('Error loading privacy URL settings:', err);
+  }
+}
+
+async function savePrivacyUrlSettings() {
+  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
+  try {
+    function norm(v) {
+      v = (v || '').trim();
+      if (!v) return '';
+      if (!/^https?:\/\//i.test(v)) throw new Error('URLs must start with http:// or https://');
+      return v;
+    }
+    var cfg = {
+      customPrivacyUrl: norm(document.getElementById('sdCustomPrivacyUrl').value),
+      customTermsUrl: norm(document.getElementById('sdCustomTermsUrl').value),
+      customSecurityUrl: norm(document.getElementById('sdCustomSecurityUrl').value),
+      customAiUrl: norm(document.getElementById('sdCustomAiUrl').value),
+      updatedAt: new Date().toISOString()
+    };
+    await MastDB.config.setPrivacy(cfg);
+    await writeAudit('update', 'settings', 'privacyUrls');
+    var statusEl = document.getElementById('privacyUrlSaveStatus');
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Legal URL overrides saved</span>';
+    setTimeout(function() { if (statusEl) statusEl.innerHTML = ''; }, 3000);
+    showToast('Legal URL overrides saved');
+  } catch (err) {
+    showToast('Error saving legal URLs: ' + err.message, true);
   }
 }
 
