@@ -1488,7 +1488,7 @@
   function _renderManualShipping(orderId) {
     var order = orders[orderId];
     var etsyNote = (order && order.source === 'etsy') ?
-      '<div style="background:#FFF3E0;border:1px solid #F1641E;border-radius:6px;padding:8px 12px;margin-bottom:16px;font-size:0.85rem;color:#E65100;">' +
+      '<div style="background:rgba(241,100,30,0.15);border:1px solid rgba(241,100,30,0.4);border-radius:6px;padding:8px 12px;margin-bottom:16px;font-size:0.85rem;color:#fdba74;">' +
         '<strong>Etsy Order</strong> — Tracking will be pushed to Etsy automatically when you mark shipped.' +
       '</div>' : '';
     var html = '<div style="max-width:400px;">' +
@@ -1540,8 +1540,8 @@
     });
 
     var noAddressWarning = fromOptions === '' ?
-      '<div style="background:#FFF3E0;border:1px solid #FF9800;border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:0.85rem;color:#E65100;">' +
-        'No studio locations have ship-from addresses. <a href="#" onclick="closeModal();navigateTo(\'settings\');return false;" style="color:#E65100;font-weight:600;">Add one in Settings</a>' +
+      '<div style="background:rgba(255,152,0,0.15);border:1px solid rgba(255,152,0,0.4);border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:0.85rem;color:#fdba74;">' +
+        'No studio locations have ship-from addresses. <a href="#" onclick="closeModal();navigateTo(\'settings\');return false;" style="color:#fed7aa;font-weight:600;">Add one in Settings</a>' +
       '</div>' : '';
 
     // Ship-to (from order)
@@ -1631,7 +1631,7 @@
       '<p style="color:var(--warm-gray);font-size:0.85rem;margin:0 0 16px;">Select a rate to purchase a shipping label</p>';
 
     if (s.rateError) {
-      html += '<div style="background:#FFEBEE;border:1px solid #E53935;border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:0.85rem;color:#C62828;">' + esc(s.rateError) + '</div>';
+      html += '<div style="background:rgba(220,53,69,0.15);border:1px solid rgba(220,53,69,0.4);border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:0.85rem;color:#fca5a5;">' + esc(s.rateError) + '</div>';
     }
 
     html += '<div style="overflow-x:auto;">' +

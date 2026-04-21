@@ -114,7 +114,7 @@
     h += '</div>';
 
     // Drive explainer (shown once per session when google-drive storage selected)
-    h += '<div id="' + prefix + 'DriveExplainer" style="grid-column:1/-1;display:none;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px 14px;font-size:0.78rem;color:#166534;">';
+    h += '<div id="' + prefix + 'DriveExplainer" style="grid-column:1/-1;display:none;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);border-radius:6px;padding:10px 14px;font-size:0.78rem;color:#86efac;">';
     h += '\ud83d\udd17 Paste a Google Drive share link above to auto-link the file. Make sure linked files are set to <strong>restricted access</strong> in Drive (not "anyone with the link").';
     h += '</div>';
 
@@ -122,7 +122,7 @@
   }
 
   function renderDrivePreview(prefix, drive) {
-    var h = '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;">';
+    var h = '<div style="background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);border-radius:6px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;">';
     h += '<div style="font-size:0.85rem;">\ud83d\udcc4 <strong>' + esc(drive.driveFileName || '') + '</strong>';
     if (drive.driveLastModified) h += ' \u00b7 Modified ' + (drive.driveLastModified || '').split('T')[0];
     h += '</div>';
@@ -632,7 +632,7 @@
 
       var h = '';
       if (currentWeekTotal >= 38) {
-        h += '<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:8px 12px;margin-bottom:8px;font-size:0.85rem;color:#92400e;">\u26a0 This employee has logged ' + currentWeekTotal.toFixed(1) + ' hours this week \u2014 approaching overtime.</div>';
+        h += '<div style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.4);border-radius:6px;padding:8px 12px;margin-bottom:8px;font-size:0.85rem;color:#fbbf24;">\u26a0 This employee has logged ' + currentWeekTotal.toFixed(1) + ' hours this week \u2014 approaching overtime.</div>';
       }
 
       h += '<table style="width:100%;font-size:0.85rem;border-collapse:collapse;">';

@@ -537,9 +537,9 @@
     // Check if order is in a packable state
     if (status !== 'packing' && status !== 'pack') {
       if (resultEl) {
-        resultEl.innerHTML = '<div style="text-align:center;padding:12px;background:#FFF3E0;border-radius:8px;">' +
+        resultEl.innerHTML = '<div style="text-align:center;padding:12px;background:rgba(241,100,30,0.15);border:1px solid rgba(241,100,30,0.4);border-radius:8px;color:#fdba74;">' +
           '<div style="font-weight:600;">' + esc(getOrderDisplayNumber(o)) + '</div>' +
-          '<div style="color:var(--warm-gray);font-size:0.85rem;">Status: ' + status.replace(/_/g, ' ') + ' — cannot pack</div>' +
+          '<div style="color:var(--warm-gray-light);font-size:0.85rem;">Status: ' + status.replace(/_/g, ' ') + ' — cannot pack</div>' +
         '</div>';
         resultEl.style.display = '';
       }
@@ -561,7 +561,7 @@
     // Show success
     var itemNames = (o.items || []).map(function(it) { return it.name + ' x' + (it.qty || 1); }).join(', ');
     if (resultEl) {
-      resultEl.innerHTML = '<div style="text-align:center;padding:16px;background:#E8F5E9;border-radius:8px;">' +
+      resultEl.innerHTML = '<div style="text-align:center;padding:16px;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);border-radius:8px;color:#86efac;">' +
         '<div style="font-size:1.6rem;">&#10003;</div>' +
         '<div style="font-weight:600;font-size:1.15rem;">' + esc(getOrderDisplayNumber(o)) + ' — Packed!</div>' +
         '<div style="color:var(--warm-gray);font-size:0.85rem;">' + esc(o.shipping ? o.shipping.name : '') + '</div>' +
@@ -664,7 +664,7 @@
 
     var carrierHtml = '';
     if (!b.carrier) {
-      carrierHtml = '<div style="background:#FFF3E0;border:1px solid #F1641E;border-radius:8px;padding:12px;margin-bottom:12px;">' +
+      carrierHtml = '<div style="background:rgba(241,100,30,0.15);border:1px solid rgba(241,100,30,0.4);border-radius:8px;padding:12px;margin-bottom:12px;color:#fdba74;">' +
         '<div style="font-weight:600;margin-bottom:8px;">Set carrier before scanning</div>' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
           '<select id="deliverCarrier" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;">' +

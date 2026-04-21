@@ -189,9 +189,9 @@ function renderShowsList() {
     if (s.applicationDeadline && (statusClass === 'considering' || statusClass === 'applied')) {
       var daysUntil = Math.ceil((new Date(s.applicationDeadline + 'T00:00:00') - new Date()) / 86400000);
       if (daysUntil < 0) {
-        deadlineBadge = '<span class="status-badge" style="background:#fecaca;color:#dc2626;">Past due</span>';
+        deadlineBadge = '<span class="status-badge" style="background:rgba(220,53,69,0.2);color:#fca5a5;">Past due</span>';
       } else if (daysUntil <= 14) {
-        deadlineBadge = '<span class="status-badge" style="background:#fef3c7;color:#92400e;">' + daysUntil + 'd left</span>';
+        deadlineBadge = '<span class="status-badge" style="background:rgba(245,158,11,0.2);color:#fbbf24;">' + daysUntil + 'd left</span>';
       }
     }
     var fees = '';

@@ -852,9 +852,9 @@
         // Show soft prompt
         var banner = document.getElementById('activeTripBanner');
         if (banner && currentRoute === 'trips') {
-          banner.innerHTML += '<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:12px 16px;margin-bottom:12px;font-size:0.85rem;color:#92400e;">' +
+          banner.innerHTML += '<div style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.4);border-radius:8px;padding:12px 16px;margin-bottom:12px;font-size:0.85rem;color:#fbbf24;">' +
             '📍 Looks like you\'re back at <strong>' + esc(nearLocation) + '</strong> — ' +
-            '<a href="#" onclick="openEndTripSheet();return false;" style="color:#d97706;font-weight:600;">end your trip?</a>' +
+            '<a href="#" onclick="openEndTripSheet();return false;" style="color:#fcd34d;font-weight:600;">end your trip?</a>' +
           '</div>';
         }
       }
