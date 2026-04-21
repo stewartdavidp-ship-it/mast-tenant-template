@@ -1548,7 +1548,7 @@
     MastDB.get('admin/walletConfig')
       .then(function(config) {
         config = config || {};
-        if (!config.loyaltyEnabled) return;
+        if (!config.loyaltyEnabled) { walletLoadDone(); return null; }
         checkoutData.loyaltyConfig = {
           enabled: true,
           pointName: config.loyaltyPointName || 'Points',
@@ -1559,20 +1559,15 @@
         };
 
         // Load balance
-        return MastDB.get('public/accounts/' + user.uid + '/wallet/loyalty');
-      })
-      .then(function(data) {
-        if (data === undefined) return;
-        if (data && data.totalPoints > 0) {
-          // Check expiry
-          var now = new Date();
-          if (data.expiresAt && new Date(data.expiresAt) < now) {
-            // Points expired — don't show
-            return;
+        return MastDB.get('public/accounts/' + user.uid + '/wallet/loyalty').then(function(data) {
+          if (data && data.totalPoints > 0) {
+            var now = new Date();
+            if (!data.expiresAt || new Date(data.expiresAt) >= now) {
+              checkoutData.loyaltyBalance = data;
+            }
           }
-          checkoutData.loyaltyBalance = data;
-        }
-        walletLoadDone();
+          walletLoadDone();
+        });
       })
       .catch(function(err) {
         console.warn('[checkout] Failed to load loyalty data:', err);
@@ -1591,21 +1586,20 @@
 
     MastDB.get('admin/membership/config')
       .then(function(config) {
-        if (!config || !config.enabled) { walletLoadDone(); return; }
+        if (!config || !config.enabled) { walletLoadDone(); return null; }
         checkoutData.membershipConfig = config;
 
-        return MastDB.get('public/accounts/' + user.uid + '/wallet/membership');
-      })
-      .then(function(status) {
-        if (!status) { walletLoadDone(); return; }
-        checkoutData.membershipStatus = status;
-
-        var today = new Date().toISOString().slice(0, 10);
-        checkoutData.effectiveMember = (
-          status.status === 'active' ||
-          (status.status === 'cancelled' && status.expiryDate && status.expiryDate > today)
-        );
-        walletLoadDone();
+        return MastDB.get('public/accounts/' + user.uid + '/wallet/membership').then(function(status) {
+          if (status) {
+            checkoutData.membershipStatus = status;
+            var today = new Date().toISOString().slice(0, 10);
+            checkoutData.effectiveMember = (
+              status.status === 'active' ||
+              (status.status === 'cancelled' && status.expiryDate && status.expiryDate > today)
+            );
+          }
+          walletLoadDone();
+        });
       })
       .catch(function(err) {
         console.warn('[checkout] Failed to load membership data:', err);
