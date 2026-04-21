@@ -2578,14 +2578,25 @@
       window.MastCart.clear();
       trackCheckoutEvent('wholesale_check_order_placed');
 
-      // Update wholesaler resale cert if provided.
-      // admin/wholesaleAuthorized is admin-only in Firestore — route through CF.
-      if (checkoutData.resaleCertNumber && user && user.email) {
-        callFunction('upsertCustomerAccount', {
+      // Save wholesale buyer as a customer/contact: address + optional resale cert.
+      // admin paths are admin-only in Firestore — route through CF.
+      if (user && user.email) {
+        var wsSavePayload = {
           action: 'save',
           email: user.email,
-          resaleCertNumber: checkoutData.resaleCertNumber
-        }, function() { /* best-effort — order already placed */ });
+          address: {
+            address1: checkoutData.shipping.address1 || '',
+            address2: checkoutData.shipping.address2 || '',
+            city: checkoutData.shipping.city || '',
+            state: checkoutData.shipping.state || '',
+            zip: checkoutData.shipping.zip || '',
+            country: 'US'
+          }
+        };
+        if (checkoutData.resaleCertNumber) {
+          wsSavePayload.resaleCertNumber = checkoutData.resaleCertNumber;
+        }
+        callFunction('upsertCustomerAccount', wsSavePayload, function() { /* best-effort — order already placed */ });
       }
 
       // Provision CustomerPass records for any pass items
