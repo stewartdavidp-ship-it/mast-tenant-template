@@ -696,11 +696,9 @@ function submitCommission() {
   btn.textContent = 'Sending...';
   statusEl.textContent = '';
 
-  var commDb = window._commDb;
-  if (!commDb) { statusEl.textContent = 'Unable to connect.'; statusEl.style.color = '#DC3545'; return; }
+  if (!window.MastDB || !window._commDb) { statusEl.textContent = 'Unable to connect.'; statusEl.style.color = '#DC3545'; return; }
 
-  var commRef = commDb.ref(TENANT_ID + '/admin/commissions');
-  var commId = commRef.push().key;
+  var commId = MastDB.newKey('admin/commissions');
 
   // Build inspiration list with names
   var inspirationPieces = [];
@@ -732,7 +730,7 @@ function submitCommission() {
       createdAt: new Date().toISOString()
     };
 
-    return commRef.child(commId).set(record);
+    return MastDB.set('admin/commissions/' + commId, record);
   }).then(function() {
     // Build piece name string for notification
     var pieceNames = [];
