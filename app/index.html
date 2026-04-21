@@ -6047,7 +6047,7 @@
             <option value="sculpture">Sculpture</option>
           </select>
           <span class="products-stat" id="productsCount"></span>
-          <button class="btn btn-secondary" id="bulkPublishShopifyBtn" style="margin-left:auto;font-size:0.82rem;padding:5px 12px;display:none;" onclick="bulkPublishToShopify()">Publish All to Shopify</button>
+          <button class="btn btn-secondary" id="bulkPublishShopifyBtn" style="margin-left:auto;font-size:0.85rem;padding:5px 12px;display:none;" onclick="bulkPublishToShopify()">Publish All to Shopify</button>
           <button class="btn btn-primary" style="font-size:0.85rem;padding:6px 16px;" onclick="createNewProduct()">+ New Product</button>
         </div>
       </div>
@@ -7421,7 +7421,7 @@
 
           <details style="margin-bottom:16px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:6px;padding:10px 14px;">
             <summary style="cursor:pointer;font-size:0.85rem;font-weight:600;">How to get your Shopify token (5 minutes)</summary>
-            <ol style="font-size:0.82rem;color:var(--warm-gray);margin:10px 0 4px;padding-left:20px;line-height:1.55;">
+            <ol style="font-size:0.85rem;color:var(--warm-gray);margin:10px 0 4px;padding-left:20px;line-height:1.55;">
               <li>Log in to your Shopify admin at <code>admin.shopify.com</code>.</li>
               <li>Click <strong>Settings</strong> (gear icon, bottom left) → <strong>Apps and sales channels</strong> → <strong>Develop apps</strong>.</li>
               <li>If prompted, click <strong>Allow custom app development</strong> and confirm.</li>
@@ -7447,8 +7447,8 @@
 
           <div id="shopifyDisconnected" style="display:none;">
             <div style="display:flex;gap:0;margin-bottom:12px;">
-              <button class="btn btn-secondary shopify-method-tab" id="shopifyTabClientCreds" onclick="switchShopifyMethod('clientCreds')" style="border-radius:6px 0 0 6px;font-size:0.82rem;padding:7px 14px;border-right:none;">Client Credentials</button>
-              <button class="btn btn-secondary shopify-method-tab" id="shopifyTabAccessToken" onclick="switchShopifyMethod('accessToken')" style="border-radius:0 6px 6px 0;font-size:0.82rem;padding:7px 14px;opacity:0.6;">Access Token (Legacy)</button>
+              <button class="btn btn-secondary shopify-method-tab" id="shopifyTabClientCreds" onclick="switchShopifyMethod('clientCreds')" style="border-radius:6px 0 0 6px;font-size:0.85rem;padding:7px 14px;border-right:none;">Client Credentials</button>
+              <button class="btn btn-secondary shopify-method-tab" id="shopifyTabAccessToken" onclick="switchShopifyMethod('accessToken')" style="border-radius:0 6px 6px 0;font-size:0.85rem;padding:7px 14px;opacity:0.6;">Access Token (Legacy)</button>
             </div>
 
             <!-- Client Credentials method (new, default) -->
@@ -7463,7 +7463,7 @@
                 <span style="font-size:0.85rem;color:var(--warm-gray);">.myshopify.com</span>
               </div>
 
-              <button class="btn btn-secondary" onclick="openShopifyDevSettings()" style="margin-bottom:14px;font-size:0.82rem;padding:7px 14px;display:flex;align-items:center;gap:6px;">
+              <button class="btn btn-secondary" onclick="openShopifyDevSettings()" style="margin-bottom:14px;font-size:0.85rem;padding:7px 14px;display:flex;align-items:center;gap:6px;">
                 <span style="font-size:1rem;">&#8599;</span> Open Shopify Dev Settings
               </button>
 
@@ -7504,7 +7504,7 @@
                 <button type="button" onclick="toggleReveal('shopifyAccessToken',this)" class="btn btn-small" style="font-size:0.78rem;padding:6px 10px;white-space:nowrap;">Show</button>
               </div>
 
-              <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:6px;">Webhook Secret (API Secret Key) <span id="shopifyWebhookSecretBadge" style="font-size:0.75rem;color:var(--warm-gray);">optional</span></label>
+              <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:6px;">Webhook Secret (API Secret Key) <span id="shopifyWebhookSecretBadge" style="font-size:0.78rem;color:var(--warm-gray);">optional</span></label>
               <p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 6px;">Found under your custom app's <strong>API credentials</strong> tab → "API secret key". Used to verify inbound webhooks. Without it, webhooks are accepted unsigned.</p>
               <div style="display:flex;gap:6px;margin-bottom:8px;">
                 <input type="password" id="shopifyWebhookSecret" placeholder="Shopify API secret key…"
@@ -7529,7 +7529,7 @@
               <button class="btn btn-secondary" onclick="editShopifyConfig()">Change Token</button>
               <button class="btn btn-danger" onclick="disconnectShopify()">Disconnect</button>
             </div>
-            <div id="shopifyWebhookStatus" style="margin-top:8px;font-size:0.82rem;color:var(--warm-gray);"></div>
+            <div id="shopifyWebhookStatus" style="margin-top:8px;font-size:0.85rem;color:var(--warm-gray);"></div>
             <div id="shopifyWebhookRegistry" style="margin-top:8px;"></div>
           </div>
         </div>
@@ -13848,7 +13848,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260408-contact-paradigm-a';
+var MAST_MODULES_V = '20260421-s20-phase12-alertfix';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -14469,8 +14469,8 @@ function updateAlertThreshold(alertId, value) {
 }
 
 function updateAlertDelivery(alertId, method, checked) {
-  MastDB.get('config/alerts/' + alertId).then(function(snapVal) {
-    var current = (snap.val() || {}).delivery || ['email'];
+  MastDB.get('config/alerts/' + alertId).then(function(override) {
+    var current = ((override || {}).delivery) || ['email'];
     var updated;
     if (checked) {
       updated = current.indexOf(method) < 0 ? current.concat(method) : current;
@@ -17606,7 +17606,7 @@ function loadShopifyWebhookStatus() {
   if (!el) return;
   MastDB.get('config/shopify/webhooks').then(function(webhooks) {
     if (!webhooks || typeof webhooks !== 'object') {
-      el.innerHTML = '<div style="font-size:0.82rem;color:var(--warm-gray);">No webhooks registered.</div>';
+      el.innerHTML = '<div style="font-size:0.85rem;color:var(--warm-gray);">No webhooks registered.</div>';
       return;
     }
     var rows = Object.entries(webhooks).map(function(kv) {
@@ -17621,7 +17621,7 @@ function loadShopifyWebhookStatus() {
     });
     el.innerHTML =
       '<div style="font-size:0.85rem;font-weight:600;margin-bottom:4px;">Registered Webhooks</div>' +
-      '<table style="font-size:0.82rem;border-collapse:collapse;">' +
+      '<table style="font-size:0.85rem;border-collapse:collapse;">' +
       '<tr style="color:var(--warm-gray);"><th style="text-align:left;padding:2px 10px 2px 0;font-weight:500;">Topic</th>' +
       '<th style="text-align:left;padding:2px 10px 2px 0;font-weight:500;">ID</th>' +
       '<th style="text-align:left;padding:2px 0;font-weight:500;">Registered</th></tr>' +
@@ -17730,7 +17730,7 @@ function renderShopifySeedReport(data, kind) {
   var list = (kind === 'created' ? data.created : data.deleted) || [];
   var fails = data.failed || [];
   var html = '';
-  html += '<div style="background:var(--cream,#faf8f5);border:1px solid #e8e0d4;border-radius:8px;padding:12px 14px;font-size:0.82rem;">';
+  html += '<div style="background:var(--cream,#faf8f5);border:1px solid #e8e0d4;border-radius:8px;padding:12px 14px;font-size:0.85rem;">';
   if (list.length > 0) {
     html += '<div style="font-weight:600;margin-bottom:6px;color:var(--teal);">' + (kind === 'created' ? '&#10003; Created' : '&#10003; Deleted') + ' ' + list.length + ' product' + (list.length === 1 ? '' : 's') + '</div>';
     html += '<ul style="margin:0;padding-left:20px;">';
@@ -17947,7 +17947,7 @@ function runShopifyPhase8() {
 function buildShopifyPhaseReportHtml(data) {
   if (!data) return '';
   var html = '';
-  html += '<div style="background:var(--cream,#faf8f5);border:1px solid #e8e0d4;border-radius:8px;padding:14px;font-size:0.82rem;">';
+  html += '<div style="background:var(--cream,#faf8f5);border:1px solid #e8e0d4;border-radius:8px;padding:14px;font-size:0.85rem;">';
   html += '<div style="font-weight:600;margin-bottom:6px;">Run ID: <code>' + esc(data.runId || '') + '</code></div>';
   if (data.targetProduct) {
     html += '<div style="margin-bottom:10px;color:var(--warm-gray);">Target: ' + esc(data.targetProduct.title || '') + ' <code style="font-size:0.78rem;">' + esc(data.targetProduct.id || '') + '</code></div>';
@@ -17996,10 +17996,10 @@ function renderShopifyHarnessReport(data) {
   var rows = Object.keys(data.matrix).sort();
   var html = '';
   html += '<div style="background:var(--cream,#faf8f5);border:1px solid #e8e0d4;border-radius:8px;padding:16px;">';
-  html += '<div style="font-weight:600;font-size:0.88rem;margin-bottom:10px;">Coverage Matrix</div>';
+  html += '<div style="font-weight:600;font-size:0.9rem;margin-bottom:10px;">Coverage Matrix</div>';
   html += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:12px;">Run ID: <code>' + esc(data.runId || '') + '</code></div>';
   html += '<div style="overflow-x:auto;">';
-  html += '<table style="width:100%;border-collapse:collapse;font-size:0.82rem;">';
+  html += '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
   html += '<thead><tr style="border-bottom:1px solid #e8e0d4;">';
   html += '<th style="text-align:left;padding:6px 8px;">Resource</th>';
   html += '<th style="text-align:left;padding:6px 8px;">Status</th>';
@@ -22476,7 +22476,7 @@ function renderPublishUndoBanner(pid) {
     ? '<a href="' + esc(state.externalUrl) + '" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;">View on Shopify</a> · '
     : '';
   return '<div class="mast-publish-undo-banner" style="margin:8px 0;padding:10px 14px;border:1px solid var(--amber,#d97706);border-radius:6px;background:rgba(217,119,6,0.08);display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
-    '<span style="font-size:0.82rem;"><strong>Published to Shopify</strong>' + (when ? ' at ' + esc(when) : '') + '. ' + linkHtml + 'You can undo this during this session.</span>' +
+    '<span style="font-size:0.85rem;"><strong>Published to Shopify</strong>' + (when ? ' at ' + esc(when) : '') + '. ' + linkHtml + 'You can undo this during this session.</span>' +
     '<button class="btn btn-secondary btn-small" onclick="undoPublishToShopify(\'' + esc(pid) + '\')">Undo publish</button>' +
   '</div>';
 }
@@ -24005,7 +24005,7 @@ function renderMakerSettings() {
 
   // Phase 7c.4 — dwell-period indicator for the scheduled priceCents drift scan.
   var latest = s.latestDriftScan;
-  html += '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--cream-dark);font-size:0.8rem;color:var(--warm-gray);" aria-live="polite">';
+  html += '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--cream-dark);font-size:0.78rem;color:var(--warm-gray);" aria-live="polite">';
   if (latest && latest.record && !latest.record.error) {
     var scannedAt = latest.record.scannedAt || latest.date;
     var scanDate;
@@ -24292,7 +24292,7 @@ function renderDriftReviewQueueLegacy(tab) {
 
   if (filtered.length === 0) {
     html += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">';
-    html += '<div style="font-size:2rem;margin-bottom:12px;">\u2705</div>';
+    html += '<div style="font-size:1.6rem;margin-bottom:12px;">\u2705</div>';
     html += '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No ' + tab + ' drift alerts</p>';
     html += '<p style="font-size:0.85rem;color:var(--warm-gray-light);">All synced products are in agreement.</p>';
     html += '</div>';
@@ -24402,7 +24402,7 @@ function renderSyncLog() {
 
   if (filtered.length === 0) {
     html += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">';
-    html += '<div style="font-size:2rem;margin-bottom:12px;">\uD83D\uDCCB</div>';
+    html += '<div style="font-size:1.6rem;margin-bottom:12px;">\uD83D\uDCCB</div>';
     html += '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No sync events</p>';
     html += '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Sync events will appear here after publishing or accepting edits.</p>';
     html += '</div>';

@@ -2282,18 +2282,18 @@
           html += '<td></td>';
           if (hasRecipe) {
             var overrideBadge = rvOverride
-              ? '<span class="status-badge" style="background:rgba(196,133,60,0.12);color:var(--amber);font-size:0.7rem;">override</span>'
-              : '<span style="font-size:0.75rem;color:var(--warm-gray-light);font-style:italic;">inherits default</span>';
+              ? '<span class="status-badge" style="background:rgba(196,133,60,0.12);color:var(--amber);font-size:0.72rem;">override</span>'
+              : '<span style="font-size:0.78rem;color:var(--warm-gray-light);font-style:italic;">inherits default</span>';
             html += '<td>' + overrideBadge + '</td>';
-            html += '<td style="text-align:right;font-family:monospace;font-size:0.82rem;color:var(--warm-gray);">$' + vCost.toFixed(2) + '</td>';
+            html += '<td style="text-align:right;font-family:monospace;font-size:0.85rem;color:var(--warm-gray);">$' + vCost.toFixed(2) + '</td>';
             html += '<td></td>';
-            html += '<td style="text-align:right;font-family:monospace;font-size:0.82rem;">$' + vPrice.toFixed(2) + '</td>';
+            html += '<td style="text-align:right;font-family:monospace;font-size:0.85rem;">$' + vPrice.toFixed(2) + '</td>';
             html += '<td></td>';
           } else {
             html += '<td><span style="color:var(--warm-gray-light);font-size:0.78rem;">—</span></td>';
             html += '<td style="text-align:right;">—</td>';
             html += '<td></td>';
-            html += '<td style="text-align:right;font-family:monospace;font-size:0.82rem;">$' + vPrice.toFixed(2) + '</td>';
+            html += '<td style="text-align:right;font-family:monospace;font-size:0.85rem;">$' + vPrice.toFixed(2) + '</td>';
             html += '<td></td>';
           }
           html += '</tr>';
@@ -2850,12 +2850,12 @@
       html += '<div style="text-align:center;font-size:1.15rem;font-family:monospace;font-weight:700;color:var(--charcoal);margin-bottom:4px;">';
       html += '$' + effPrice.toFixed(2);
       if (ovVal != null) {
-        html += ' <span style="font-size:0.65rem;color:var(--warm-gray-light);text-decoration:line-through;font-weight:400;">$' + tier.price.toFixed(2) + '</span>';
+        html += ' <span style="font-size:0.72rem;color:var(--warm-gray-light);text-decoration:line-through;font-weight:400;">$' + tier.price.toFixed(2) + '</span>';
       }
       html += '</div>';
       // Override input
       html += '<div style="text-align:center;margin-top:6px;">';
-      html += '<label style="font-size:0.65rem;color:var(--warm-gray-light);display:block;margin-bottom:2px;">Override</label>';
+      html += '<label style="font-size:0.72rem;color:var(--warm-gray-light);display:block;margin-bottom:2px;">Override</label>';
       html += '<input type="number" step="0.01" min="0" placeholder="—" value="' + (ovVal != null ? ovVal.toFixed(2) : '') + '" ';
       html += 'style="width:80px;text-align:center;padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:0.78rem;font-family:monospace;background:var(--cream);color:var(--charcoal);" ';
       html += 'onchange="makerSetOverrideFromBuilder(\'' + tier.key + '\', this.value)" title="Set a fixed price for this tier (overrides the suggested price). Leave blank to use suggested.">';

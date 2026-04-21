@@ -83,10 +83,20 @@ console.log('  Hex color warnings (advisory):    ' + hexWarnings);
 
 if (violations.length) {
   console.log('');
-  console.log('First ' + Math.min(violations.length, 50) + ' issues:');
-  violations.slice(0, 50).forEach(v => console.log('  ' + v));
-  if (hexWarnings > 30) {
-    console.log('  ... (' + (hexWarnings - 30) + ' more hex warnings suppressed)');
+  // Always show ALL font violations; cap hex at 30 (advisory only).
+  const fontVios = violations.filter(v => v.startsWith('FONT'));
+  const hexVios = violations.filter(v => v.startsWith('HEX'));
+  if (fontVios.length) {
+    console.log('Font-size violations (' + fontVios.length + '):');
+    fontVios.forEach(v => console.log('  ' + v));
+  }
+  if (hexVios.length) {
+    console.log('');
+    console.log('Hex color warnings (first 30 of ' + hexVios.length + '):');
+    hexVios.slice(0, 30).forEach(v => console.log('  ' + v));
+    if (hexVios.length > 30) {
+      console.log('  ... (' + (hexVios.length - 30) + ' more hex warnings suppressed)');
+    }
   }
 }
 

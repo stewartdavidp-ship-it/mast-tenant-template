@@ -1568,7 +1568,7 @@ async function exitPackingMode() {
     if (!modal || !inner) return;
 
     var h = '<div style="padding:20px;">';
-    h += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.4rem;font-weight:500;margin:0 0 16px;">Go Live</h3>';
+    h += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:500;margin:0 0 16px;">Go Live</h3>';
     h += '<p style="font-size:0.85rem;color:var(--warm-gray,#999);margin-bottom:16px;">Select a channel to start your live sale session:</p>';
 
     liveSessionChannels.forEach(function(ch) {
@@ -1647,15 +1647,15 @@ async function exitPackingMode() {
     // Center: timer + stats
     h += '<div style="display:flex;gap:20px;align-items:center;">';
     h += '<div style="text-align:center;">';
-    h += '<div id="liveTimer" style="font-size:1.1rem;font-weight:700;color:#fff;font-variant-numeric:tabular-nums;">0:00</div>';
+    h += '<div id="liveTimer" style="font-size:1.15rem;font-weight:700;color:#fff;font-variant-numeric:tabular-nums;">0:00</div>';
     h += '<div style="font-size:0.72rem;color:rgba(255,255,255,0.7);">Duration</div>';
     h += '</div>';
     h += '<div style="text-align:center;">';
-    h += '<div id="liveSaleCount" style="font-size:1.1rem;font-weight:700;color:#fff;">0</div>';
+    h += '<div id="liveSaleCount" style="font-size:1.15rem;font-weight:700;color:#fff;">0</div>';
     h += '<div style="font-size:0.72rem;color:rgba(255,255,255,0.7);">Sales</div>';
     h += '</div>';
     h += '<div style="text-align:center;">';
-    h += '<div id="liveRevenue" style="font-size:1.1rem;font-weight:700;color:#fff;">$0.00</div>';
+    h += '<div id="liveRevenue" style="font-size:1.15rem;font-weight:700;color:#fff;">$0.00</div>';
     h += '<div style="font-size:0.72rem;color:rgba(255,255,255,0.7);">Revenue</div>';
     h += '</div>';
     h += '</div>';
@@ -1778,7 +1778,7 @@ async function exitPackingMode() {
     var h = '<div style="background:#1a1a2e;border:1px solid #333;border-radius:10px;padding:20px;margin-bottom:12px;">';
     h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
     h += '<div style="font-size:0.9rem;font-weight:600;color:#e0e0e0;">Live Session Complete</div>';
-    h += '<button onclick="dismissLiveSummary()" style="background:none;border:none;color:var(--warm-gray,#999);cursor:pointer;font-size:1.2rem;">&times;</button>';
+    h += '<button onclick="dismissLiveSummary()" style="background:none;border:none;color:var(--warm-gray,#999);cursor:pointer;font-size:1.15rem;">&times;</button>';
     h += '</div>';
 
     h += '<div style="font-size:0.78rem;color:var(--warm-gray,#999);margin-bottom:12px;">' + esc(channelName || 'Social Live') +
