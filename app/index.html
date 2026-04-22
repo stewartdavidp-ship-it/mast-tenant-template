@@ -19,6 +19,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-functions-compat.js"></script>
   <script src="../shared/mastdb.js?v=1"></script>
+  <script src="../shared/business-entity-constants.js?v=1"></script>
   <script src="../shared/customer-resolver.js?v=1"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -18349,8 +18350,9 @@ async function wizardAnalyzeSite() {
     // === AUTO-APPLY EVERYTHING ===
     await wizardAutoApplyAll(analysis, data);
 
-    // Create import job immediately (Phase 2 starts processing in background)
-    await wizardCreateImportJob();
+    // B0: Import-job creation deferred to wizardConfirmEngagement (B3) so
+    // job.mode can be set per engagement choice (storefront | pim-only | draft-only).
+    // processImportJob reads job.mode and defaults to 'storefront' for legacy jobs.
 
     await Promise.all(persistPromises);
 
@@ -18715,27 +18717,33 @@ async function wizardConfirmModules() {
   }
 }
 
-async function wizardCreateImportJob() {
-  if (window._wizardCrawlManifest) {
-    var ct = window._wizardCrawlManifest.contentTypes || {};
-    var hasContent = (ct.products && ct.products.found) || (ct.blog && ct.blog.found) || (ct.events && ct.events.found);
-    if (hasContent) {
-      try {
-        var jobData = {
-          id: MastDB.newKey('webPresence/importJobs'),
-          url: window._wizardAnalyzedUrl,
-          tenantId: MastDB.tenantId(),
-          status: 'pending',
-          createdAt: new Date().toISOString(),
-          claimedAt: null, completedAt: null, error: null,
-          crawlManifest: window._wizardCrawlManifest,
-          discovered: null, imported: null
-        };
-        await MastDB.set('webPresence/importJobs/' + jobData.id, jobData);
-      } catch (e) {
-        console.error('Failed to create import job:', e);
-      }
-    }
+// B0: import-job creation accepts a `mode` option so B3 can set the job's
+// engagement mode (storefront | pim-only | draft-only) per spec §5.
+// processImportJob branches on job.mode; default 'storefront' keeps legacy jobs safe.
+async function wizardCreateImportJob(opts) {
+  opts = opts || {};
+  var jobMode = opts.mode || 'storefront';
+  if (!window._wizardCrawlManifest) return null;
+  var ct = window._wizardCrawlManifest.contentTypes || {};
+  var hasContent = (ct.products && ct.products.found) || (ct.blog && ct.blog.found) || (ct.events && ct.events.found);
+  if (!hasContent) return null;
+  try {
+    var jobData = {
+      id: MastDB.newKey('webPresence/importJobs'),
+      url: window._wizardAnalyzedUrl,
+      tenantId: MastDB.tenantId(),
+      status: 'pending',
+      mode: jobMode,
+      createdAt: new Date().toISOString(),
+      claimedAt: null, completedAt: null, error: null,
+      crawlManifest: window._wizardCrawlManifest,
+      discovered: null, imported: null
+    };
+    await MastDB.set('webPresence/importJobs/' + jobData.id, jobData);
+    return jobData.id;
+  } catch (e) {
+    console.error('Failed to create import job:', e);
+    return null;
   }
 }
 
