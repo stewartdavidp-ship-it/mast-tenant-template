@@ -5880,8 +5880,26 @@
           </div>
         </div>
 
-        <!-- Step 3: Watch Your Store Come to Life -->
+        <!-- Step 3 (B3): engagement mode + surface + goals picker, then watch pane -->
         <div id="wizardStep3" class="wizard-step" style="display:none;">
+
+          <!-- B3 engagement picker (visible first). After confirm, hides and shows wizardStep3Watch. -->
+          <div id="wizardStep3Engagement">
+            <h2 style="font-size:1.6rem;margin-bottom:8px;">How will you use Mast?</h2>
+            <p style="color:var(--warm-gray);margin-bottom:20px;">Pick the mode that matches your business today. You can always change this later.</p>
+            <div id="wizardEngagementCards" style="display:grid;gap:12px;margin-bottom:20px;"></div>
+            <div id="wizardEngagementGoals" style="background:var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:20px;">
+              <p style="font-size:0.9rem;font-weight:600;margin:0 0 8px;">What do you want Mast to help with? <span style="color:var(--warm-gray);font-weight:400;">(optional)</span></p>
+              <div id="wizardEngagementGoalList" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;">
+              <button class="btn btn-secondary" onclick="showWizardStep(2)">Back</button>
+              <button class="btn btn-primary" id="wizardEngagementConfirmBtn" onclick="wizardConfirmEngagement()">Continue</button>
+            </div>
+          </div>
+
+          <!-- Existing "watch your store come to life" pane — hidden until engagement confirmed. -->
+          <div id="wizardStep3Watch" style="display:none;">
           <h2 style="font-size:1.6rem;margin-bottom:8px;">Watch Your Store Come to Life</h2>
           <p id="wizardStep3Subtitle" style="color:var(--warm-gray);margin-bottom:20px;">We're building your store in real time. Learn what you can do while you wait.</p>
 
@@ -5947,6 +5965,8 @@
           <div id="wizardStep3Actions">
             <button class="btn btn-primary" style="font-size:1rem;padding:12px 32px;" onclick="wizardComplete()">Launch Dashboard</button>
           </div>
+          </div>
+          <!-- end wizardStep3Watch -->
         </div>
       </div>
     </div>
@@ -18331,6 +18351,213 @@ async function wizardConfirmArchetype() {
     btn.disabled = false;
     showToast('Could not save archetype: ' + esc(err.message || ''), true);
   }
+}
+
+// B3: render engagement-mode cards + goals checklist. Reads _wizardArchetype
+// Defaults cached by B1a so we don't re-lookup. In-memory selection state lives
+// on window._wizardEngagement until confirm.
+function renderWizardEngagement() {
+  var BEC = window.BusinessEntityConstants || {};
+  var cards = BEC.ENGAGEMENT_MODE_CARDS || [];
+  var surfaceOptions = BEC.SURFACE_OPTIONS || [];
+  var defaultSurfaceByMode = BEC.DEFAULT_SURFACE_BY_MODE || {};
+  var goalLabels = BEC.GOAL_LABELS || {};
+  var defaults = window._wizardArchetypeDefaults || MastDB.businessEntity.archetypeDefaults('other-maker') || { goalsAvailable: [] };
+
+  // Ensure engagement pane visible, watch pane hidden (in case of back-nav).
+  var engagePane = document.getElementById('wizardStep3Engagement');
+  var watchPane = document.getElementById('wizardStep3Watch');
+  if (engagePane) engagePane.style.display = '';
+  if (watchPane) watchPane.style.display = 'none';
+
+  // Initialize in-memory selection state.
+  if (!window._wizardEngagement) {
+    window._wizardEngagement = {
+      mode: null,
+      surfaceByMode: {},   // { storefront: 'hybrid', ... } so switching modes remembers per-mode surface
+      goals: []
+    };
+  }
+  var state = window._wizardEngagement;
+
+  var cardsEl = document.getElementById('wizardEngagementCards');
+  if (cardsEl) {
+    cardsEl.innerHTML = '';
+    for (var i = 0; i < cards.length; i++) {
+      (function(card) {
+        var wrap = document.createElement('div');
+        wrap.className = 'wizard-feature-card';
+        wrap.style.cssText = 'border:1px solid #ddd;border-radius:8px;padding:14px 16px;cursor:pointer;background:#fff;';
+        var selected = state.mode === card.value;
+        if (selected) { wrap.setAttribute('data-selected', 'true'); wrap.style.borderColor = 'var(--teal)'; }
+        var title = document.createElement('div');
+        title.style.cssText = 'font-weight:600;font-size:0.95rem;margin-bottom:4px;';
+        title.textContent = card.title;
+        var body = document.createElement('div');
+        body.style.cssText = 'font-size:0.85rem;color:var(--warm-gray);margin-bottom:' + (selected ? '10px' : '0') + ';';
+        body.textContent = card.body;
+        wrap.appendChild(title);
+        wrap.appendChild(body);
+        if (selected) {
+          var surfaceRow = document.createElement('div');
+          surfaceRow.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;';
+          var activeSurface = state.surfaceByMode[card.value] || defaultSurfaceByMode[card.value] || card.defaultSurface || 'hybrid';
+          state.surfaceByMode[card.value] = activeSurface;
+          for (var s = 0; s < surfaceOptions.length; s++) {
+            (function(surf) {
+              var btn = document.createElement('button');
+              btn.type = 'button';
+              btn.textContent = surf.label;
+              btn.title = surf.hint;
+              var on = activeSurface === surf.value;
+              btn.style.cssText = 'padding:6px 10px;border-radius:999px;border:1px solid ' + (on ? 'var(--teal)' : '#ccc') + ';background:' + (on ? 'rgba(42,124,111,0.08)' : 'transparent') + ';font-size:0.78rem;cursor:pointer;';
+              btn.onclick = function(ev) {
+                ev.stopPropagation();
+                state.surfaceByMode[card.value] = surf.value;
+                renderWizardEngagement();
+              };
+              surfaceRow.appendChild(btn);
+            })(surfaceOptions[s]);
+          }
+          wrap.appendChild(surfaceRow);
+        }
+        wrap.onclick = function() {
+          state.mode = card.value;
+          if (!state.surfaceByMode[card.value]) {
+            state.surfaceByMode[card.value] = defaultSurfaceByMode[card.value] || card.defaultSurface || 'hybrid';
+          }
+          renderWizardEngagement();
+        };
+        cardsEl.appendChild(wrap);
+      })(cards[i]);
+    }
+  }
+
+  // Goals checklist — archetype-specific first, then universal; capped at ~10 visible.
+  var goalsList = document.getElementById('wizardEngagementGoalList');
+  if (goalsList) {
+    goalsList.innerHTML = '';
+    var available = (defaults && defaults.goalsAvailable) ? defaults.goalsAvailable.slice() : [];
+    // Deduplicate while preserving order.
+    var seen = {}, ordered = [];
+    for (var gi = 0; gi < available.length; gi++) { if (!seen[available[gi]]) { seen[available[gi]] = 1; ordered.push(available[gi]); } }
+    for (var gj = 0; gj < ordered.length; gj++) {
+      (function(goalId) {
+        var chip = document.createElement('label');
+        var on = state.goals.indexOf(goalId) >= 0;
+        chip.style.cssText = 'display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;border:1px solid ' + (on ? 'var(--teal)' : '#ccc') + ';background:' + (on ? 'rgba(42,124,111,0.08)' : '#fff') + ';cursor:pointer;font-size:0.82rem;';
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = on;
+        cb.style.cssText = 'margin:0;';
+        cb.onchange = function() {
+          var idx = state.goals.indexOf(goalId);
+          if (cb.checked && idx < 0) state.goals.push(goalId);
+          else if (!cb.checked && idx >= 0) state.goals.splice(idx, 1);
+          renderWizardEngagement();
+        };
+        var text = document.createElement('span');
+        text.textContent = goalLabels[goalId] || goalId;
+        chip.appendChild(cb);
+        chip.appendChild(text);
+        goalsList.appendChild(chip);
+      })(ordered[gj]);
+    }
+    if (!ordered.length) {
+      goalsList.innerHTML = '<span style="font-size:0.82rem;color:var(--warm-gray);">We\u2019ll recommend goals later based on how you use Mast.</span>';
+    }
+  }
+
+  // Continue button disabled until a mode is picked.
+  var btn = document.getElementById('wizardEngagementConfirmBtn');
+  if (btn) btn.disabled = !state.mode;
+}
+
+// B3: on confirm — write engagement, create import job with mode, branch for storefront.
+async function wizardConfirmEngagement() {
+  var BEC = window.BusinessEntityConstants || {};
+  var state = window._wizardEngagement || {};
+  var mode = state.mode;
+  if (!mode) { showToast('Pick a mode to continue.', true); return; }
+  var surface = (state.surfaceByMode && state.surfaceByMode[mode])
+    || (BEC.DEFAULT_SURFACE_BY_MODE && BEC.DEFAULT_SURFACE_BY_MODE[mode])
+    || 'hybrid';
+  var goals = (state.goals || []).slice();
+  var defaults = window._wizardArchetypeDefaults || MastDB.businessEntity.archetypeDefaults('other-maker') || {};
+  var modulesShown = (defaults.modulesShown || []).slice();
+
+  var btn = document.getElementById('wizardEngagementConfirmBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+  try {
+    await MastDB.businessEntity.update('engagement', {
+      mode: mode,
+      surface: surface,
+      goals: goals,
+      modulesShown: modulesShown,
+      updatedAt: new Date().toISOString()
+    });
+
+    var modeToJob = (BEC.ENGAGEMENT_MODE_TO_JOB_MODE || {});
+    var jobMode = modeToJob[mode] || 'storefront';
+
+    if (mode === 'storefront') {
+      var extracted = window._wizardExtracted || {};
+      var detected = window._wizardDetectedModules || [];
+      try { await applyStorefrontConfig(extracted, detected); }
+      catch (e) { console.warn('[B3] applyStorefrontConfig failed:', e && e.message); }
+      await wizardCreateImportJob({ mode: jobMode });
+    } else if (mode === 'sync-channels') {
+      await wizardCreateImportJob({ mode: jobMode });
+      try { _registerChannelSuggestionCards(); } catch (e) { /* non-blocking */ }
+    } else {
+      // back-office
+      await wizardCreateImportJob({ mode: jobMode });
+    }
+
+    logWizardEvent(3, 'engagement_chosen', {
+      mode: mode, surface: surface, goalsCount: goals.length,
+      archetype: (await MastDB.businessEntity.get('identity')).data && (await MastDB.businessEntity.get('identity')).data.archetype || null
+    });
+
+    // Flip Step 3 from engagement pane to import-watch pane.
+    var engagePane = document.getElementById('wizardStep3Engagement');
+    var watchPane = document.getElementById('wizardStep3Watch');
+    if (engagePane) engagePane.style.display = 'none';
+    if (watchPane) watchPane.style.display = '';
+    // Drive the existing watch UI. Non-storefront modes still see progress text.
+    try {
+      renderWizardSummary();
+      renderCapabilityPreview();
+      showWizardImportTimeline();
+    } catch (e) { /* non-fatal if legacy helpers error */ }
+    saveWizardProgress(3, { engagementConfirmed: { mode: mode, surface: surface, goalsCount: goals.length } });
+  } catch (err) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Continue'; }
+    showToast('Could not save engagement: ' + esc(err.message || ''), true);
+  }
+}
+
+// B3: queue dashboard cards inviting user to connect detected external channels
+// (Etsy, Shopify, etc.) for sync-channels mode. Reads discovery.inferredChannels[]
+// from the latest import job (C8 output).
+async function _registerChannelSuggestionCards() {
+  if (typeof registerDashCard !== 'function') return;
+  try {
+    var view = await MastDB.businessEntity.get('discovery');
+    var disc = view && view.data;
+    var channels = (disc && disc.inferredChannels) || [];
+    for (var i = 0; i < channels.length; i++) {
+      var ch = channels[i];
+      registerDashCard({
+        id: 'channel-suggestion-' + ch,
+        title: 'We saw your ' + ch.charAt(0).toUpperCase() + ch.slice(1) + ' shop',
+        body: 'Connect it so Mast can sync products and orders.',
+        ctaLabel: 'Connect ' + ch,
+        source: 'wizard-channel-suggestion'
+      });
+    }
+  } catch (e) { /* non-blocking */ }
 }
 
 // B2: calibration form renderer. Populates the revenue dropdown + placeholder.
