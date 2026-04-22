@@ -5857,18 +5857,26 @@
           </div>
         </div>
 
-        <!-- Step 2: Module Choice (conditional — only when tier requires it) -->
+        <!-- Step 2 (B2): Calibration — revenue bracket + "one thing you wish was easier" -->
+        <!-- Replaces the legacy module picker per spec §8.1. Both fields optional. -->
         <div id="wizardStep2" class="wizard-step" style="display:none;">
-          <h2 style="font-size:1.6rem;margin-bottom:8px;">Choose Your Tools</h2>
-          <p id="wizardModuleSubtext" style="color:var(--warm-gray);margin-bottom:24px;">We found content on your site. Which tools do you want to activate?</p>
-          <!-- Import progress banner -->
-          <div id="wizardModuleImportBanner" style="display:none;background:linear-gradient(135deg, rgba(42,124,111,0.08), rgba(196,133,60,0.08));border:1px solid var(--teal);border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:0.85rem;">
-            <span style="color:var(--teal);">&#9881;</span> <span id="wizardModuleImportStatus">Importing your products in the background...</span>
+          <h2 style="font-size:1.6rem;margin-bottom:8px;">A quick calibration</h2>
+          <p style="color:var(--warm-gray);margin-bottom:20px;">Helps Mast tailor recommendations. Both questions are optional.</p>
+          <div class="form-group" style="margin-bottom:16px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Roughly, your annual revenue?</label>
+            <select id="wizardRevenueBracket" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;background:#fff;">
+              <option value="">— Prefer not to say —</option>
+            </select>
           </div>
-          <div id="wizardModuleCards" style="margin-bottom:24px;"></div>
+          <div class="form-group" style="margin-bottom:16px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">The one thing you wish was easier?</label>
+            <textarea id="wizardWishStatement" maxlength="500" rows="4" placeholder=""
+              style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;resize:vertical;"></textarea>
+            <p id="wizardWishCount" style="font-size:0.75rem;color:var(--warm-gray);text-align:right;margin-top:4px;">0 / 500</p>
+          </div>
           <div style="display:flex;justify-content:space-between;">
-            <button class="btn btn-secondary" onclick="wizardPrev(2)">Back</button>
-            <button class="btn btn-primary" id="wizardModuleConfirmBtn" onclick="wizardConfirmModules()">Activate These</button>
+            <button class="btn btn-secondary" onclick="wizardSkipCalibration()">Skip</button>
+            <button class="btn btn-primary" id="wizardCalibrationConfirmBtn" onclick="wizardConfirmCalibration()">Save and continue</button>
           </div>
         </div>
 
@@ -18322,6 +18330,73 @@ async function wizardConfirmArchetype() {
   } catch (err) {
     btn.disabled = false;
     showToast('Could not save archetype: ' + esc(err.message || ''), true);
+  }
+}
+
+// B2: calibration form renderer. Populates the revenue dropdown + placeholder.
+function renderWizardCalibration() {
+  var BEC = window.BusinessEntityConstants || {};
+  var brackets = BEC.REVENUE_BRACKETS || [];
+  var sel = document.getElementById('wizardRevenueBracket');
+  var txt = document.getElementById('wizardWishStatement');
+  var cnt = document.getElementById('wizardWishCount');
+  if (sel && sel.options.length <= 1) {
+    for (var i = 0; i < brackets.length; i++) {
+      var o = document.createElement('option');
+      o.value = brackets[i].value;
+      o.textContent = brackets[i].label;
+      sel.appendChild(o);
+    }
+  }
+  if (txt) {
+    txt.placeholder = BEC.WISH_STATEMENT_PLACEHOLDER || '';
+    txt.oninput = function() {
+      if (cnt) cnt.textContent = (txt.value || '').length + ' / 500';
+    };
+    if (cnt) cnt.textContent = (txt.value || '').length + ' / 500';
+  }
+}
+
+// B2: write engagement.calibration, advance to B3.
+async function wizardConfirmCalibration() {
+  var sel = document.getElementById('wizardRevenueBracket');
+  var txt = document.getElementById('wizardWishStatement');
+  var btn = document.getElementById('wizardCalibrationConfirmBtn');
+  if (btn) btn.disabled = true;
+  var bracket = sel ? (sel.value || '') : '';
+  var wish = txt ? (txt.value || '').trim() : '';
+  if (wish.length > 500) wish = wish.slice(0, 500);
+  var calibration = { capturedAt: new Date().toISOString() };
+  if (bracket) calibration.revenueBracket = bracket;
+  if (wish) calibration.wishStatement = wish;
+  try {
+    await MastDB.businessEntity.update('engagement', { calibration: calibration });
+    logWizardEvent(2, 'calibration_saved', {
+      revenueBracket: bracket || null,
+      wishStatementLength: wish.length
+    });
+    showWizardStep(3);
+    saveWizardProgress(3, { calibrationCaptured: true });
+  } catch (err) {
+    if (btn) btn.disabled = false;
+    showToast('Could not save calibration: ' + esc(err.message || ''), true);
+  }
+}
+
+// B2: explicit skip — still records capturedAt so we know the user saw it.
+async function wizardSkipCalibration() {
+  var btn = document.getElementById('wizardCalibrationConfirmBtn');
+  if (btn) btn.disabled = true;
+  try {
+    await MastDB.businessEntity.update('engagement', {
+      calibration: { capturedAt: new Date().toISOString() }
+    });
+    logWizardEvent(2, 'calibration_skipped', {});
+    showWizardStep(3);
+    saveWizardProgress(3, { calibrationCaptured: false });
+  } catch (err) {
+    if (btn) btn.disabled = false;
+    showToast('Could not advance: ' + esc(err.message || ''), true);
   }
 }
 
