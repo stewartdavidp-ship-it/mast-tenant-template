@@ -879,6 +879,190 @@ var MastDB = (function() {
       serverTimestamp: serverTimestamp,
       serverIncrement: serverIncrement
     },
+    businessEntity: (function() {
+      // Spec §4 archetype defaults, mirrored on the client for pure lookup.
+      // Server-side source of truth: entity.ts ARCHETYPE_DEFAULTS in tenant MCP.
+      var UNIVERSAL_GOALS = ['increase-revenue','get-online-shop','sync-channels','take-bookings','track-inventory','reduce-admin-time'];
+      var ARCHETYPE_DEFAULTS = {
+        'glass-artisan':       { businessModel: 'retail', plannerBusinessTypeAlias: 'glassblowing', modulesShown: ['dashboard','products','orders','gallery','production','consignment','shows','maker'], goalsAvailable: UNIVERSAL_GOALS.concat(['consignment-tracking','wholesale-catalog','commission-management']) },
+        'ceramics-pottery':    { businessModel: 'retail', plannerBusinessTypeAlias: 'pottery',     modulesShown: ['dashboard','products','orders','gallery','production','consignment','shows','maker'], goalsAvailable: UNIVERSAL_GOALS.concat(['consignment-tracking','wholesale-catalog','commission-management']) },
+        'jewelry-maker':       { businessModel: 'retail', plannerBusinessTypeAlias: 'jewelry',     modulesShown: ['dashboard','products','orders','gallery','maker','consignment','wholesale'],            goalsAvailable: UNIVERSAL_GOALS.concat(['wholesale-catalog','edition-tracking']) },
+        'fiber-textile':       { businessModel: 'retail', plannerBusinessTypeAlias: 'fiber',       modulesShown: ['dashboard','products','orders','gallery','production','maker','shows'],                  goalsAvailable: UNIVERSAL_GOALS.concat(['wholesale-catalog','edition-tracking']) },
+        'woodworker':          { businessModel: 'retail', plannerBusinessTypeAlias: 'wood',        modulesShown: ['dashboard','products','orders','production','commissions','maker'],                      goalsAvailable: UNIVERSAL_GOALS.concat(['project-timeline','bespoke-quotes','commission-management']) },
+        'painter-printmaker':  { businessModel: 'retail', plannerBusinessTypeAlias: 'art',         modulesShown: ['dashboard','products','orders','gallery','maker'],                                        goalsAvailable: UNIVERSAL_GOALS.concat(['edition-tracking','gallery-submissions','print-on-demand']) },
+        'leather-metal':       { businessModel: 'retail', plannerBusinessTypeAlias: 'leather-metal',modulesShown: ['dashboard','products','orders','production','commissions','maker'],                     goalsAvailable: UNIVERSAL_GOALS.concat(['project-timeline','bespoke-quotes','commission-management']) },
+        'mixed-media-artist':  { businessModel: 'hybrid', plannerBusinessTypeAlias: 'mixed-media', modulesShown: ['dashboard','products','orders','gallery','commissions','maker'],                          goalsAvailable: UNIVERSAL_GOALS.concat(['portfolio-display','commission-management','editorial-features']) },
+        'instructor-studio':   { businessModel: 'education', plannerBusinessTypeAlias: 'education',modulesShown: ['dashboard','classes','students','orders','newsletter'],                                    goalsAvailable: UNIVERSAL_GOALS.concat(['class-registration','waitlist-management','student-communication']) },
+        'commissioned-services':{businessModel: 'commission', plannerBusinessTypeAlias: 'services',modulesShown: ['dashboard','commissions','orders','contacts','newsletter'],                               goalsAvailable: UNIVERSAL_GOALS.concat(['lead-capture','project-pipeline','deposit-tracking','commission-management']) },
+        'other-maker':         { businessModel: 'hybrid', plannerBusinessTypeAlias: 'other',       modulesShown: ['dashboard','products','orders','gallery','maker'],                                        goalsAvailable: UNIVERSAL_GOALS.slice() }
+      };
+
+      // Spec §3 activation required fields.
+      var REQUIRED_AT_ACTIVATE = [
+        { section: 'identity',   path: 'archetype',                         label: 'identity.archetype' },
+        { section: 'identity',   path: 'businessName',                      label: 'identity.businessName' },
+        { section: 'people',     path: 'primaryContact.name',               label: 'people.primaryContact.name' },
+        { section: 'people',     path: 'primaryContact.email',              label: 'people.primaryContact.email' },
+        { section: 'people',     path: 'primaryContact.dpaAcceptedAt',      label: 'people.primaryContact.dpaAcceptedAt' },
+        { section: 'engagement', path: 'mode',                              label: 'engagement.mode' },
+        { section: 'engagement', path: 'surface',                           label: 'engagement.surface' },
+        { section: 'operations', path: 'localization.currency',             label: 'operations.localization.currency' },
+        { section: 'operations', path: 'localization.timezone',             label: 'operations.localization.timezone' },
+        { section: 'operations', path: 'localization.language',             label: 'operations.localization.language' },
+        { section: 'operations', path: 'localization.fiscalYearStartMonth', label: 'operations.localization.fiscalYearStartMonth' }
+      ];
+
+      var UPDATABLE_SECTIONS = { identity: 1, presence: 1, operations: 1, people: 1, engagement: 1 };
+
+      function _dig(obj, dotted) {
+        if (!obj) return undefined;
+        var parts = dotted.split('.');
+        var cur = obj;
+        for (var i = 0; i < parts.length; i++) {
+          if (cur === null || cur === undefined) return undefined;
+          cur = cur[parts[i]];
+        }
+        return cur;
+      }
+
+      function _latestImportJob() {
+        return tenantStore.query('webPresence/importJobs')
+          .orderByChild('completedAt').limitToLast(1).once()
+          .then(function(jobs) {
+            if (!jobs) return null;
+            var keys = Object.keys(jobs);
+            if (!keys.length) return null;
+            var latest = jobs[keys[0]];
+            var d = (latest && latest.discovered) || {};
+            return {
+              lastScrapeAt: latest && latest.completedAt || null,
+              scrapeUrl: latest && latest.url || null,
+              manifest: d.manifest || null,
+              inferredArchetype: d.inferredArchetype || null,
+              archetypeConfidence: d.archetypeConfidence || null,
+              inferredProductTypes: d.inferredProductTypes || [],
+              inferredChannels: d.inferredChannels || []
+            };
+          })
+          .catch(function() { return null; });
+      }
+
+      function _flatten(prefix, data, out) {
+        for (var key in data) {
+          if (!Object.prototype.hasOwnProperty.call(data, key)) continue;
+          var value = data[key];
+          var path = prefix + '/' + key;
+          if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+            _flatten(path, value, out);
+          } else {
+            out[path] = value;
+          }
+        }
+      }
+
+      return {
+        // Full entity read-view per spec §6.4 — reads canonical admin/businessEntity/*,
+        // synthesizes visual from config/brand, discovery from latest import job.
+        // Strips compliance/* (Phase 2, D5).
+        get: function(section) {
+          var req = section || 'all';
+          return Promise.all([
+            tenantStore.get('admin/businessEntity'),
+            tenantStore.get('config/brand'),
+            _latestImportJob()
+          ]).then(function(results) {
+            var ent = results[0] || {};
+            var visual = results[1] || null;
+            var discovery = results[2];
+            if (req === 'all') {
+              // Strip compliance; overlay visual+discovery.
+              var out = {};
+              for (var k in ent) if (Object.prototype.hasOwnProperty.call(ent, k) && k !== 'compliance') out[k] = ent[k];
+              out.entityStatus = ent.entityStatus || 'none';
+              out.visual = visual;
+              out.discovery = discovery;
+              out.compliance = null;
+              out._note = 'compliance is schema-only in Phase 1.';
+              return out;
+            }
+            if (req === 'visual') return { entityStatus: ent.entityStatus || 'none', section: 'visual', data: visual, _note: 'pointer to config/brand' };
+            if (req === 'discovery') return { entityStatus: ent.entityStatus || 'none', section: 'discovery', data: discovery, _note: 'synthesized from latest webPresence/importJobs' };
+            if (req === 'compliance') return { entityStatus: ent.entityStatus || 'none', section: 'compliance', data: null, _note: 'Phase 2 — schema-only in Phase 1' };
+            return { entityStatus: ent.entityStatus || 'none', section: req, data: ent[req] || null };
+          });
+        },
+
+        // Pure lookup over the archetype taxonomy — no Firebase round-trip.
+        archetypeDefaults: function(archetype) {
+          return ARCHETYPE_DEFAULTS[archetype] || null;
+        },
+
+        // Direct-write fallback (Phase 1 dev-env). Promotes entityStatus none→draft
+        // on first write. Future: route through mcpProxyUpdateBusinessEntity callable
+        // once B-layer lands it so server-side EIN validator + audit log fire.
+        update: function(section, data) {
+          if (!UPDATABLE_SECTIONS[section]) {
+            return Promise.reject(new Error("Cannot update section '" + section + "'. Updatable: identity, presence, operations, people, engagement."));
+          }
+          if (!data || typeof data !== 'object' || Array.isArray(data)) {
+            return Promise.reject(new Error('data must be a non-empty object'));
+          }
+          return tenantStore.get('admin/businessEntity/entityStatus').then(function(current) {
+            var updates = {};
+            _flatten('admin/businessEntity/' + section, data, updates);
+            var now = new Date().toISOString();
+            updates['admin/businessEntity/' + section + '/updatedAt'] = now;
+            updates['admin/businessEntity/updatedAt'] = now;
+            if (!current || current === 'none') {
+              updates['admin/businessEntity/entityStatus'] = 'draft';
+              updates['admin/businessEntity/createdAt'] = now;
+              updates['admin/businessEntity/schemaVersion'] = 1;
+            }
+            return tenantStore.multiUpdate(updates).then(function() {
+              return { success: true, section: section, entityStatus: (!current || current === 'none') ? 'draft' : current, updatedFields: Object.keys(data) };
+            });
+          });
+        },
+
+        // Verify required fields per spec §3, then flip entityStatus to 'active'.
+        activate: function() {
+          return tenantStore.get('admin/businessEntity').then(function(ent) {
+            ent = ent || {};
+            var missing = [];
+            for (var i = 0; i < REQUIRED_AT_ACTIVATE.length; i++) {
+              var req = REQUIRED_AT_ACTIVATE[i];
+              var sec = ent[req.section];
+              var v = _dig(sec, req.path);
+              if (v === null || v === undefined || v === '') missing.push(req.label);
+            }
+            if (missing.length > 0) {
+              var err = new Error('Cannot activate business entity — required fields missing');
+              err.missingFields = missing;
+              err.currentStatus = ent.entityStatus || 'none';
+              return Promise.reject(err);
+            }
+            var now = new Date().toISOString();
+            return tenantStore.multiUpdate({
+              'admin/businessEntity/entityStatus': 'active',
+              'admin/businessEntity/updatedAt': now
+            }).then(function() {
+              return { success: true, entityStatus: 'active', activatedAt: now };
+            });
+          });
+        },
+
+        // Subscribe to entity changes — single listener, fires with synthesized
+        // read-view on each change. Mitigates read-cost amplification (plan risk
+        // flag on Build A1): advisor can hydrate once + auto-update instead of
+        // re-reading 4 docs per tab click.
+        subscribe: function(callback) {
+          var self = this;
+          return tenantStore.subscribe('admin/businessEntity', function() {
+            self.get().then(callback).catch(function(err) { console.warn('[MastDB.businessEntity.subscribe] get failed:', err); });
+          });
+        }
+      };
+    })(),
     _ref: _ref,
     _rootRef: _rootRef,
     _newKey: _newKey,
