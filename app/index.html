@@ -18405,93 +18405,143 @@ async function wizardAnalyzeSite() {
   }
 }
 
-// Auto-apply brand config, template, modules, nav sections from analysis
-async function wizardAutoApplyAll(analysis, data) {
-  var autoApplied = {};
-  var writeErrors = [];
+// === B1: wizardAutoApplyAll refactored into composable helpers =============
+// Orchestrator writes the entity tree (identity, presence, operations.localization)
+// plus the brand pointer + platform registry on every wizard run.
+// Storefront-specific writes (public/config/theme, public/config/nav,
+// webPresence/config/features, webPresence/config) are deferred to
+// applyStorefrontConfig, which B3 calls only when engagement.mode === 'storefront'.
+// Sync-channels / back-office modes skip them entirely.
 
-  // 1. Brand config (name, colors, logo, description, tagline)
-  var bizName = analysis.businessName || '';
-  var bizDesc = analysis.description || '';
-  var bizTagline = (analysis.hero && analysis.hero.subheadline) || '';
-  var primaryColor = (analysis.colors && analysis.colors.primary && /^#[0-9A-Fa-f]{6}$/.test(analysis.colors.primary)) ? analysis.colors.primary : 'var(--amber)';
-  var accentColor = (analysis.colors && analysis.colors.accent && /^#[0-9A-Fa-f]{6}$/.test(analysis.colors.accent)) ? analysis.colors.accent : 'var(--teal)';
-  var logoUrl = analysis.logo || '';
+// Pure function: normalize scrape output into a flat shape used by entity writers.
+function _wizardExtractAnalysisFields(analysis, data) {
+  analysis = analysis || {};
+  data = data || {};
+  var discovered = data.discovered
+    || analysis.discovered
+    || (data.crawlManifest && data.crawlManifest.discovered)
+    || {};
+  var primary = (analysis.colors && analysis.colors.primary && /^#[0-9A-Fa-f]{6}$/.test(analysis.colors.primary)) ? analysis.colors.primary : 'var(--amber)';
+  var accent = (analysis.colors && analysis.colors.accent && /^#[0-9A-Fa-f]{6}$/.test(analysis.colors.accent)) ? analysis.colors.accent : 'var(--teal)';
+  var tagline = (analysis.hero && analysis.hero.subheadline) || '';
+  return {
+    businessName: analysis.businessName || '',
+    tagline: tagline,
+    oneLineDescription: analysis.description || '',
+    primaryDomain: window._wizardAnalyzedUrl || analysis.primaryDomain || '',
+    logoUrl: analysis.logo || '',
+    primaryColor: primary,
+    accentColor: accent,
+    styleRecommendation: analysis.styleRecommendation || 'artisan-warm',
+    inferredArchetype: discovered.inferredArchetype || analysis.inferredArchetype || null,
+    archetypeConfidence: (typeof discovered.archetypeConfidence === 'number')
+      ? discovered.archetypeConfidence
+      : (typeof analysis.archetypeConfidence === 'number' ? analysis.archetypeConfidence : null),
+    declaredChannels: (discovered.inferredChannels || analysis.inferredChannels || []).slice(),
+    externalChannels: (discovered.externalChannels || []).slice(),
+    socialProfiles: (analysis.socialProfiles || []).slice()
+  };
+}
 
-  // Process logo (remove white background)
+// Pure function: detect wizard content modules from crawl manifest.
+function _detectModulesFromManifest(manifest) {
+  var ct = (manifest && manifest.contentTypes) || {};
+  var out = [];
+  if (ct.products && ct.products.found) out.push('sell');
+  if (ct.blog && ct.blog.found) out.push('market');
+  if (ct.events && ct.events.found) out.push('show');
+  return out;
+}
+
+// B1: write entity identity (excluding archetype — that's B1a).
+async function _applyEntityIdentity(extracted) {
+  var payload = { businessName: extracted.businessName };
+  if (extracted.tagline) payload.tagline = extracted.tagline;
+  if (extracted.oneLineDescription) payload.oneLineDescription = extracted.oneLineDescription;
+  if (typeof extracted.archetypeConfidence === 'number') payload.archetypeConfidence = extracted.archetypeConfidence;
+  return MastDB.businessEntity.update('identity', payload);
+}
+
+// B1: write entity presence. Arrays pass through untouched; missing fields omitted.
+async function _applyEntityPresence(extracted) {
+  var payload = {};
+  if (extracted.primaryDomain) payload.primaryDomain = extracted.primaryDomain;
+  if (extracted.declaredChannels && extracted.declaredChannels.length) {
+    payload.declaredChannels = extracted.declaredChannels;
+  }
+  if (extracted.socialProfiles && extracted.socialProfiles.length) {
+    payload.socialProfiles = extracted.socialProfiles;
+  }
+  if (!Object.keys(payload).length) return null;
+  return MastDB.businessEntity.update('presence', payload);
+}
+
+// B1: silent-inferred browser defaults per spec D2. Always called, never asked.
+async function _applyEntityOperationsLocalization() {
+  var tz = 'America/New_York';
+  try {
+    var resolved = Intl.DateTimeFormat().resolvedOptions();
+    if (resolved && resolved.timeZone) tz = resolved.timeZone;
+  } catch (e) { /* fall through to default */ }
+  var lang = (typeof navigator !== 'undefined' && navigator.language) ? navigator.language : 'en-US';
+  return MastDB.businessEntity.update('operations', {
+    localization: { currency: 'USD', timezone: tz, language: lang, fiscalYearStartMonth: 1 }
+  });
+}
+
+// B1: brand pointer (config/brand is the canonical visual source; entity.visual
+// reads through to it per spec §2.3). Preserves the existing logo-processing step.
+async function _applyBrandPointer(extracted) {
+  var logoUrl = extracted.logoUrl;
   if (logoUrl) {
     try { logoUrl = await processAndUploadLogo(logoUrl); } catch (e) { /* use original */ }
   }
-
+  extracted.logoUrl = logoUrl;
   var brandUpdate = {
-    name: bizName,
-    tagline: bizTagline,
-    primaryColor: primaryColor,
-    accentColor: accentColor,
+    name: extracted.businessName,
+    tagline: extracted.tagline,
+    primaryColor: extracted.primaryColor,
+    accentColor: extracted.accentColor,
     updatedAt: new Date().toISOString()
   };
-  if (bizDesc) brandUpdate.description = bizDesc;
+  if (extracted.oneLineDescription) brandUpdate.description = extracted.oneLineDescription;
   if (logoUrl) brandUpdate.logoUrl = logoUrl;
-  await MastDB.config.update('brand', brandUpdate).catch(function(e) { writeErrors.push('brand: ' + e.message); });
-  autoApplied.brand = true;
+  return MastDB.config.update('brand', brandUpdate);
+}
 
-  // Update platform registry
-  if (bizName) {
-    await MastDB.platform.update('mast-platform/tenants/' + MastDB.tenantId(), { name: bizName }).catch(function(e) { writeErrors.push('registry name: ' + e.message); });
-    await MastDB.platform.update('mast-platform/tenants/' + MastDB.tenantId() + '/publicConfig', {
-      brandName: bizName,
-      brandTagline: bizTagline,
-      brandDescription: bizDesc,
-      brandLogoUrl: logoUrl,
-      primaryColor: primaryColor,
-      accentColor: accentColor
-    }).catch(function(e) { writeErrors.push('registry publicConfig: ' + e.message); });
-  }
+// B1: platform registry + publicConfig writes (unchanged from v1).
+async function _applyPlatformRegistry(extracted) {
+  if (!extracted.businessName) return null;
+  await MastDB.platform.update('mast-platform/tenants/' + MastDB.tenantId(), { name: extracted.businessName });
+  return MastDB.platform.update('mast-platform/tenants/' + MastDB.tenantId() + '/publicConfig', {
+    brandName: extracted.businessName,
+    brandTagline: extracted.tagline,
+    brandDescription: extracted.oneLineDescription,
+    brandLogoUrl: extracted.logoUrl || '',
+    primaryColor: extracted.primaryColor,
+    accentColor: extracted.accentColor
+  });
+}
 
-  // 2. Template match + color scheme
-  var styleRec = (analysis.styleRecommendation) || 'artisan-warm';
-  var templateMapping = STYLE_TO_TEMPLATE[styleRec] || STYLE_TO_TEMPLATE['artisan-warm'];
-  var themeUpdate = {
-    templateId: templateMapping.templateId,
-    fontPair: templateMapping.fontPair
-  };
+// B1: storefront-only writes. Called by B3 when engagement.mode === 'storefront'.
+// This is the old wizardAutoApplyAll steps 2, 4, 5.
+async function applyStorefrontConfig(extracted, detectedModules) {
+  var errors = [];
+  var logoUrl = extracted.logoUrl || '';
+  var templateMapping = STYLE_TO_TEMPLATE[extracted.styleRecommendation] || STYLE_TO_TEMPLATE['artisan-warm'];
+  var themeUpdate = { templateId: templateMapping.templateId, fontPair: templateMapping.fontPair };
   if (templateMapping.schemeId) {
     themeUpdate.colorSchemeId = templateMapping.schemeId;
   } else {
     themeUpdate.colorSchemeId = null;
-    themeUpdate.primaryColor = primaryColor;
-    themeUpdate.accentColor = accentColor;
+    themeUpdate.primaryColor = extracted.primaryColor;
+    themeUpdate.accentColor = extracted.accentColor;
   }
-  await MastDB.set('public/config/theme', themeUpdate).catch(function(e) { writeErrors.push('theme: ' + e.message); });
-  autoApplied.template = templateMapping.templateId;
+  await MastDB.set('public/config/theme', themeUpdate).catch(function(e) { errors.push('theme: ' + e.message); });
 
-  // 3. Auto-select modules from detected content types
-  var manifest = window._wizardCrawlManifest || {};
-  var ct = manifest.contentTypes || {};
-  var detectedModules = [];
-  if (ct.products && ct.products.found) detectedModules.push('sell');
-  if (ct.blog && ct.blog.found) detectedModules.push('market');
-  if (ct.events && ct.events.found) detectedModules.push('show');
-
-  // Write detected modules to subscription if tier allows
   var sub = getTenantSubscription();
   var tierConfig = TIER_CONFIG[sub.tier] || {};
-  if (tierConfig.moduleLimit >= 7) {
-    // Command tier — all modules, no choice needed
-    autoApplied.modules = sub.modules || [];
-  } else if (tierConfig.moduleLimit === 0) {
-    // Publish tier — no modules
-    autoApplied.modules = sub.baseModules || ['web'];
-  } else {
-    // Launch/Operate — auto-select from detection, up to limit
-    var autoSelected = detectedModules.slice(0, tierConfig.moduleLimit);
-    _wizardSelectedModules = autoSelected;
-    autoApplied.detectedModules = detectedModules;
-    autoApplied.autoSelectedModules = autoSelected;
-  }
-
-  // 4. Nav sections based on modules
-  var mods = (tierConfig.moduleLimit >= 7) ? (sub.modules || []) : (sub.baseModules || ['web']).concat(detectedModules);
+  var mods = (tierConfig.moduleLimit >= 7) ? (sub.modules || []) : (sub.baseModules || ['web']).concat(detectedModules || []);
   var hasSell = mods.indexOf('sell') >= 0;
   var hasMarket = mods.indexOf('market') >= 0;
   var hasShow = mods.indexOf('show') >= 0 || mods.indexOf('show-light') >= 0;
@@ -18500,12 +18550,8 @@ async function wizardAutoApplyAll(analysis, data) {
     shop: hasSell, blog: hasMarket, events: hasShow, members: false,
     newsletter: hasMarket, commissions: hasSell, stories: false, social: hasMarket, wholesale: hasSell
   };
-  await MastDB.set('webPresence/config/features', features).catch(function(e) { writeErrors.push('features: ' + e.message); });
+  await MastDB.set('webPresence/config/features', features).catch(function(e) { errors.push('features: ' + e.message); });
 
-  // Nav order: Shop always last in both contexts.
-  // Content context renders: About(1), Schedule(2), Blog/FromTheStudio(3), Shop(50)
-  // Shop context renders: Orders(10), Wholesale(11), Commission(12), Shop(50)
-  // Newsletter/Contact are non-nav (no href in storefront-nav defaults)
   var navSections = { about: { enabled: true, order: 1 } };
   if (features.events) navSections.schedule = { enabled: true, order: 2 };
   if (features.blog) navSections.blog = { enabled: true, order: 3 };
@@ -18517,38 +18563,77 @@ async function wizardAutoApplyAll(analysis, data) {
   }
   if (features.newsletter) navSections.newsletter = { enabled: true, order: 60 };
   navSections.contact = { enabled: true, order: 99 };
-  await MastDB.set('public/config/nav/sections', navSections).catch(function(e) { writeErrors.push('nav: ' + e.message); });
-  if (logoUrl) await MastDB.set('public/config/nav/logoUrl', logoUrl).catch(function(e) { writeErrors.push('nav logo: ' + e.message); });
-  autoApplied.nav = true;
+  await MastDB.set('public/config/nav/sections', navSections).catch(function(e) { errors.push('nav: ' + e.message); });
+  if (logoUrl) await MastDB.set('public/config/nav/logoUrl', logoUrl).catch(function(e) { errors.push('nav logo: ' + e.message); });
 
-  // 5. Seed web presence config
   var wpConfig = {
-    style: styleRec,
-    primaryColor: primaryColor,
-    accentColor: accentColor,
+    style: extracted.styleRecommendation,
+    primaryColor: extracted.primaryColor,
+    accentColor: extracted.accentColor,
     fontPair: templateMapping.fontPair,
     sections: {
-      hero: { headline: bizName, subheadline: bizTagline, ctaText: 'Shop Now', ctaUrl: '', backgroundType: 'color', backgroundAsset: '', overlayOpacity: 40 },
+      hero: { headline: extracted.businessName, subheadline: extracted.tagline, ctaText: 'Shop Now', ctaUrl: '', backgroundType: 'color', backgroundAsset: '', overlayOpacity: 40 },
       gallery: { enabled: true, heading: 'Our Work', layout: 'grid', columns: 3 },
-      about: { enabled: true, heading: 'About', body: bizDesc, imageUrl: '' },
+      about: { enabled: true, heading: 'About', body: extracted.oneLineDescription, imageUrl: '' },
       contact: { enabled: true, heading: 'Contact', email: '', phone: '', address: '', showForm: true, socialLinks: {} },
       newsletter: { enabled: false, heading: 'Stay in touch', subheadline: '', buttonLabel: 'Subscribe' },
       members: { enabled: false, accessModel: 'passcode', passcode: '', allowedEmails: [], gatedContent: '' }
     },
     nav: { items: ['Work', 'About', 'Contact'], showShopLink: hasSell, shopUrl: '' },
-    meta: { siteTitle: bizName, tagline: bizTagline, favicon: '' },
+    meta: { siteTitle: extracted.businessName, tagline: extracted.tagline, favicon: '' },
     status: 'draft',
     publishedAt: null,
     updatedAt: new Date().toISOString()
   };
-  await MastDB.update('webPresence/config', wpConfig).catch(function(e) { writeErrors.push('webPresence: ' + e.message); });
-  autoApplied.webPresence = true;
+  await MastDB.update('webPresence/config', wpConfig).catch(function(e) { errors.push('webPresence: ' + e.message); });
 
-  // Record auto-applied state
+  return { templateId: templateMapping.templateId, features: features, errors: errors };
+}
+
+// B1 orchestrator. Does NOT write storefront config — B3 does that for storefront mode.
+async function wizardAutoApplyAll(analysis, data) {
+  var extracted = _wizardExtractAnalysisFields(analysis, data);
+  var detectedModules = _detectModulesFromManifest(window._wizardCrawlManifest || {});
+  window._wizardExtracted = extracted;
+  window._wizardDetectedModules = detectedModules;
+
+  var autoApplied = { brand: false, registry: false, entity: false };
+  var writeErrors = [];
+
+  // Universal writes — fire for every engagement mode.
+  await _applyBrandPointer(extracted).then(function() { autoApplied.brand = true; })
+    .catch(function(e) { writeErrors.push('brand: ' + e.message); });
+
+  if (extracted.businessName) {
+    await _applyPlatformRegistry(extracted).then(function() { autoApplied.registry = true; })
+      .catch(function(e) { writeErrors.push('registry: ' + e.message); });
+  }
+
+  await _applyEntityIdentity(extracted)
+    .catch(function(e) { writeErrors.push('entity.identity: ' + e.message); });
+  await _applyEntityPresence(extracted)
+    .catch(function(e) { writeErrors.push('entity.presence: ' + e.message); });
+  await _applyEntityOperationsLocalization()
+    .catch(function(e) { writeErrors.push('entity.operations: ' + e.message); });
+  autoApplied.entity = true;
+
+  // Tier-derived subscription bookkeeping (retained for legacy nav/gating code).
+  var sub = getTenantSubscription();
+  var tierConfig = TIER_CONFIG[sub.tier] || {};
+  if (tierConfig.moduleLimit >= 7) {
+    autoApplied.modules = sub.modules || [];
+  } else if (tierConfig.moduleLimit === 0) {
+    autoApplied.modules = sub.baseModules || ['web'];
+  } else {
+    var autoSelected = detectedModules.slice(0, tierConfig.moduleLimit);
+    _wizardSelectedModules = autoSelected;
+    autoApplied.detectedModules = detectedModules;
+    autoApplied.autoSelectedModules = autoSelected;
+  }
+
   _wizardAutoApplied = autoApplied;
   await MastDB.config.set('setupProgress/autoApplied', autoApplied).catch(function() {});
 
-  // Surface write failures
   if (writeErrors.length > 0) {
     logWizardEvent(1, 'auto_apply_partial', { errors: writeErrors });
     showToast('Some settings could not be saved. You can update them in Settings.', true);
