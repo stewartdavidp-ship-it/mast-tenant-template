@@ -5839,6 +5839,24 @@
           </div>
         </div>
 
+        <!-- Step 1a (B1a): Archetype Confirmation -->
+        <!-- Inserted between scrape completion and calibration. Confidence bands per spec §4 D6. -->
+        <div id="wizardStep1a" class="wizard-step" style="display:none;">
+          <h2 style="font-size:1.6rem;margin-bottom:8px;">What kind of business are you?</h2>
+          <p id="wizardArchetypeBanner" style="color:var(--warm-gray);margin-bottom:20px;"></p>
+          <div class="form-group" style="margin-bottom:16px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Pick the closest match</label>
+            <select id="wizardArchetypeSelect" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;background:#fff;">
+              <option value="">— Select —</option>
+            </select>
+            <p id="wizardArchetypeHint" style="font-size:0.78rem;color:var(--warm-gray);margin-top:6px;min-height:1em;"></p>
+          </div>
+          <div style="display:flex;justify-content:space-between;">
+            <button class="btn btn-secondary" onclick="wizardSkipArchetype()">Not sure, pick later</button>
+            <button class="btn btn-primary" id="wizardArchetypeConfirmBtn" onclick="wizardConfirmArchetype()">Confirm</button>
+          </div>
+        </div>
+
         <!-- Step 2: Module Choice (conditional — only when tier requires it) -->
         <div id="wizardStep2" class="wizard-step" style="display:none;">
           <h2 style="font-size:1.6rem;margin-bottom:8px;">Choose Your Tools</h2>
@@ -18167,18 +18185,156 @@ function initSetupWizard() {
 
 function showWizardStep(step) {
   wizardCurrentStep = step;
-  for (var i = 1; i <= 3; i++) {
-    var el = document.getElementById('wizardStep' + i);
-    if (el) el.style.display = i === step ? '' : 'none';
-  }
+  // Hide every wizard step pane (numbered + interstitials like 1a).
+  var allSteps = document.querySelectorAll('#setupWizardScreen .wizard-step');
+  for (var s = 0; s < allSteps.length; s++) allSteps[s].style.display = 'none';
+  var show = document.getElementById('wizardStep' + step);
+  if (show) show.style.display = '';
   updateWizardProgress();
   if (step === 2) {
-    wizardRenderModuleCards();
+    if (typeof renderWizardCalibration === 'function') {
+      renderWizardCalibration();
+    } else {
+      wizardRenderModuleCards();
+    }
   }
   if (step === 3) {
-    renderWizardSummary();
-    renderCapabilityPreview();
-    showWizardImportTimeline();
+    // B3 renders the engagement picker first; legacy "watch come to life" UI
+    // shows after confirm via renderWizardEngagementPostConfirm.
+    if (typeof renderWizardEngagement === 'function') {
+      renderWizardEngagement();
+    } else {
+      renderWizardSummary();
+      renderCapabilityPreview();
+      showWizardImportTimeline();
+    }
+  }
+}
+
+// B1a: archetype confirmation step. Not a numbered step — progress dot stays at 1.
+function showWizardArchetypeConfirm() {
+  wizardCurrentStep = 1;
+  var allSteps = document.querySelectorAll('#setupWizardScreen .wizard-step');
+  for (var s = 0; s < allSteps.length; s++) allSteps[s].style.display = 'none';
+  var el = document.getElementById('wizardStep1a');
+  if (el) el.style.display = '';
+  updateWizardProgress();
+  renderArchetypeConfirm();
+}
+
+// Build the archetype dropdown options from BusinessEntityConstants.ARCHETYPES.
+// Applies the §4 D6 confidence-band UX (auto-confirm / pre-select / blank).
+function renderArchetypeConfirm() {
+  var BEC = window.BusinessEntityConstants || {};
+  var archetypes = BEC.ARCHETYPES || [];
+  var sel = document.getElementById('wizardArchetypeSelect');
+  var banner = document.getElementById('wizardArchetypeBanner');
+  var hint = document.getElementById('wizardArchetypeHint');
+  var confirmBtn = document.getElementById('wizardArchetypeConfirmBtn');
+  if (!sel || !banner || !confirmBtn) return;
+
+  // Build grouped options once.
+  sel.innerHTML = '<option value="">— Select —</option>';
+  var groups = {};
+  for (var i = 0; i < archetypes.length; i++) {
+    var a = archetypes[i];
+    if (!groups[a.group]) groups[a.group] = [];
+    groups[a.group].push(a);
+  }
+  var order = ['Makers', 'Service', 'Other'];
+  for (var g = 0; g < order.length; g++) {
+    var groupName = order[g];
+    if (!groups[groupName]) continue;
+    var og = document.createElement('optgroup');
+    og.label = groupName;
+    for (var j = 0; j < groups[groupName].length; j++) {
+      var item = groups[groupName][j];
+      var opt = document.createElement('option');
+      opt.value = item.value;
+      opt.textContent = item.label;
+      opt.dataset.hint = item.hint || '';
+      og.appendChild(opt);
+    }
+    sel.appendChild(og);
+  }
+
+  // Resolve confidence band.
+  var extracted = window._wizardExtracted || {};
+  var inferred = extracted.inferredArchetype || null;
+  var confidence = (typeof extracted.archetypeConfidence === 'number') ? extracted.archetypeConfidence : null;
+  var band = 'low';
+  if (confidence !== null && confidence >= 0.80) band = 'high';
+  else if (confidence !== null && confidence >= 0.50) band = 'medium';
+  window._wizardArchetypeConfidenceBand = band;
+
+  var inferredLabel = null;
+  if (inferred) {
+    for (var k = 0; k < archetypes.length; k++) {
+      if (archetypes[k].value === inferred) { inferredLabel = archetypes[k].label; break; }
+    }
+  }
+
+  if (band === 'high' && inferred && inferredLabel) {
+    sel.value = inferred;
+    banner.textContent = 'We detected you\u2019re a ' + inferredLabel + '. Change this below, or confirm to continue.';
+    confirmBtn.textContent = 'Confirm';
+  } else if (band === 'medium' && inferred && inferredLabel) {
+    sel.value = inferred;
+    banner.textContent = 'We think you\u2019re a ' + inferredLabel + ' — tap Confirm, or pick another.';
+    confirmBtn.textContent = 'Confirm';
+  } else {
+    sel.value = '';
+    banner.textContent = 'Not sure which fits? Hover an option to see what each means.';
+    confirmBtn.textContent = 'Confirm';
+  }
+
+  function updateHint() {
+    var v = sel.value;
+    var h = '';
+    for (var m = 0; m < archetypes.length; m++) { if (archetypes[m].value === v) { h = archetypes[m].hint || ''; break; } }
+    if (hint) hint.textContent = h;
+  }
+  sel.onchange = updateHint;
+  updateHint();
+}
+
+// B1a: write the selected archetype, cache archetype defaults, advance to B2.
+async function wizardConfirmArchetype() {
+  var sel = document.getElementById('wizardArchetypeSelect');
+  var btn = document.getElementById('wizardArchetypeConfirmBtn');
+  if (!sel || !btn) return;
+  var archetype = sel.value || '';
+  if (!archetype) { showToast('Please pick an archetype.', true); return; }
+  btn.disabled = true;
+  try {
+    await MastDB.businessEntity.update('identity', { archetype: archetype });
+    var defaults = MastDB.businessEntity.archetypeDefaults(archetype);
+    window._wizardArchetypeDefaults = defaults;
+    var band = window._wizardArchetypeConfidenceBand || 'low';
+    var extracted = window._wizardExtracted || {};
+    logWizardEvent(1.5, 'archetype_confirmed', {
+      archetype: archetype,
+      confidenceBand: band,
+      scrapeInferred: extracted.inferredArchetype || null
+    });
+    showWizardStep(2);
+    saveWizardProgress(2, { archetypeConfirmed: archetype, archetypeConfidenceBand: band });
+  } catch (err) {
+    btn.disabled = false;
+    showToast('Could not save archetype: ' + esc(err.message || ''), true);
+  }
+}
+
+// B1a: user can defer archetype — write 'other-maker' as escape hatch (spec §4 D1).
+async function wizardSkipArchetype() {
+  try {
+    await MastDB.businessEntity.update('identity', { archetype: 'other-maker' });
+    window._wizardArchetypeDefaults = MastDB.businessEntity.archetypeDefaults('other-maker');
+    logWizardEvent(1.5, 'archetype_skipped', { default: 'other-maker' });
+    showWizardStep(2);
+    saveWizardProgress(2, { archetypeConfirmed: 'other-maker', archetypeSkipped: true });
+  } catch (err) {
+    showToast('Could not save archetype: ' + esc(err.message || ''), true);
   }
 }
 
@@ -18368,15 +18524,10 @@ async function wizardAnalyzeSite() {
       templateConfidence: window._wizardTemplateConfidence
     });
 
-    if (needsModuleChoice) {
-      // Step 2: module choice
-      showWizardStep(2);
-      saveWizardProgress(2, { siteAnalyzed: true, autoApplied: _wizardAutoApplied });
-    } else {
-      // Skip module choice — go to step 3
-      showWizardStep(3);
-      saveWizardProgress(3, { siteAnalyzed: true, autoApplied: _wizardAutoApplied });
-    }
+    // B1a: always route to archetype confirmation after scrape. The confidence
+    // band rendered by renderArchetypeConfirm picks the UX (auto / pre-select / blank).
+    showWizardArchetypeConfirm();
+    saveWizardProgress(1, { siteAnalyzed: true, autoApplied: _wizardAutoApplied, archetypePending: true });
     _wizardAnalyzing = false;
   } catch (err) {
     clearInterval(progressTimer);
