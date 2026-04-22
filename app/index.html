@@ -5839,6 +5839,41 @@
           </div>
         </div>
 
+        <!-- Step 1b (B9): No-website 5-question fallback -->
+        <!-- Shown when the user clicks "I don't have a website" on Step 1. -->
+        <div id="wizardStep1b" class="wizard-step" style="display:none;">
+          <h2 style="font-size:1.6rem;margin-bottom:8px;">Tell us a little about your business</h2>
+          <p style="color:var(--warm-gray);margin-bottom:20px;">Five quick questions so Mast can set up the right tools for you.</p>
+          <div class="form-group" style="margin-bottom:14px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Business name</label>
+            <input type="text" id="wizardNwBusinessName" maxlength="100"
+              style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
+          </div>
+          <div class="form-group" style="margin-bottom:14px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">What do you sell or offer?</label>
+            <input type="text" id="wizardNwSells" maxlength="240" placeholder="e.g., hand-thrown ceramics, stained glass panels, pottery classes"
+              style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
+          </div>
+          <div class="form-group" style="margin-bottom:14px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Where do customers buy today? <span style="color:var(--warm-gray);font-weight:400;">(optional, multi-select)</span></label>
+            <div id="wizardNwChannels" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+          </div>
+          <div class="form-group" style="margin-bottom:14px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Roughly, annual revenue? <span style="color:var(--warm-gray);font-weight:400;">(optional)</span></label>
+            <select id="wizardNwRevenue" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;background:#fff;">
+              <option value="">— Prefer not to say —</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:18px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Your role <span style="color:var(--warm-gray);font-weight:400;">(optional)</span></label>
+            <div id="wizardNwRoles" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;">
+            <button class="btn btn-secondary" onclick="showWizardStep(1)">Back</button>
+            <button class="btn btn-primary" id="wizardNwConfirmBtn" onclick="wizardConfirmNoWebsite()">Continue</button>
+          </div>
+        </div>
+
         <!-- Step 1a (B1a): Archetype Confirmation -->
         <!-- Inserted between scrape completion and calibration. Confidence bands per spec §4 D6. -->
         <div id="wizardStep1a" class="wizard-step" style="display:none;">
@@ -18701,23 +18736,193 @@ function saveWizardProgress(step, extras) {
   });
 }
 
-// Step 1: Skip site analysis — no website, go straight to step 3 (dashboard)
+// B9: show the no-website 5-question form instead of jumping to Step 3.
 function wizardSkipSite() {
   _wizardSiteAnalysis = null;
   window._wizardCrawlManifest = null;
   window._wizardAnalyzedUrl = null;
-  // Write minimal brand from tenant config if available
-  var brandName = '';
-  if (TENANT_CONFIG) {
-    brandName = (TENANT_CONFIG.brand && TENANT_CONFIG.brand.name && TENANT_CONFIG.brand.name !== 'Tenant') ? TENANT_CONFIG.brand.name : '';
-    if (!brandName && TENANT_CONFIG.registryName) brandName = TENANT_CONFIG.registryName;
+  // Pre-populate client-side extracted fields so B1a falls into the blank-dropdown path.
+  window._wizardExtracted = {
+    businessName: '',
+    tagline: '',
+    oneLineDescription: '',
+    primaryDomain: '',
+    logoUrl: '',
+    primaryColor: 'var(--amber)',
+    accentColor: 'var(--teal)',
+    styleRecommendation: 'artisan-warm',
+    inferredArchetype: null,
+    archetypeConfidence: null,
+    declaredChannels: [],
+    externalChannels: [],
+    socialProfiles: []
+  };
+  window._wizardDetectedModules = [];
+  // Hide every wizard pane, then show the no-website form.
+  var allSteps = document.querySelectorAll('#setupWizardScreen .wizard-step');
+  for (var s = 0; s < allSteps.length; s++) allSteps[s].style.display = 'none';
+  var pane = document.getElementById('wizardStep1b');
+  if (pane) pane.style.display = '';
+  wizardCurrentStep = 1;
+  updateWizardProgress();
+  renderWizardNoWebsite();
+  logWizardEvent(0.5, 'no_website_shown', {});
+}
+
+// B9: lightweight keyword matcher. Maps free-text "what do you sell" to an
+// archetype ID if a word unambiguously matches; else null (B1a blank-dropdown).
+function _inferArchetypeFromSellText(text) {
+  if (!text) return null;
+  var t = String(text).toLowerCase();
+  var matchers = [
+    { archetype: 'glass-artisan',         words: ['glass', 'stained glass', 'glassblow'] },
+    { archetype: 'ceramics-pottery',      words: ['ceramic', 'pottery', 'pot ', 'clay', 'wheel-thrown', 'porcelain'] },
+    { archetype: 'jewelry-maker',         words: ['jewelry', 'jewellery', 'necklace', 'earring', 'ring', 'beadwork'] },
+    { archetype: 'fiber-textile',         words: ['fiber', 'textile', 'weaving', 'knit', 'quilt', 'sewn', 'rug'] },
+    { archetype: 'woodworker',            words: ['wood', 'furniture', 'carved', 'cutting board', 'turnery'] },
+    { archetype: 'painter-printmaker',    words: ['paint', 'print', 'screenprint', 'letterpress', 'giclée', 'giclee'] },
+    { archetype: 'leather-metal',         words: ['leather', 'blacksmith', 'ironwork', 'metalwork'] },
+    { archetype: 'mixed-media-artist',    words: ['mixed media', 'assemblage', 'sculpture'] },
+    { archetype: 'instructor-studio',     words: ['class', 'classes', 'workshop', 'studio time', 'lesson'] },
+    { archetype: 'commissioned-services', words: ['commission', 'custom', 'bespoke', 'portrait'] }
+  ];
+  for (var i = 0; i < matchers.length; i++) {
+    var m = matchers[i];
+    for (var j = 0; j < m.words.length; j++) {
+      if (t.indexOf(m.words[j]) >= 0) return m.archetype;
+    }
   }
-  if (brandName) {
-    MastDB.config.update('brand', { name: brandName, updatedAt: new Date().toISOString() }).catch(function() {});
+  return null;
+}
+
+function renderWizardNoWebsite() {
+  var BEC = window.BusinessEntityConstants || {};
+  var channelsEl = document.getElementById('wizardNwChannels');
+  var state = window._wizardNoWebsite = window._wizardNoWebsite || { channels: [], role: null };
+  if (channelsEl && channelsEl.childNodes.length === 0) {
+    var channels = BEC.DECLARED_CHANNELS || [];
+    for (var i = 0; i < channels.length; i++) {
+      (function(ch) {
+        var chip = document.createElement('label');
+        chip.style.cssText = 'display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid #ccc;background:#fff;cursor:pointer;font-size:0.78rem;';
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.style.cssText = 'margin:0;';
+        cb.onchange = function() {
+          var idx = state.channels.indexOf(ch.value);
+          if (cb.checked && idx < 0) state.channels.push(ch.value);
+          else if (!cb.checked && idx >= 0) state.channels.splice(idx, 1);
+          chip.style.borderColor = cb.checked ? 'var(--teal)' : '#ccc';
+          chip.style.background = cb.checked ? 'rgba(42,124,111,0.08)' : '#fff';
+        };
+        chip.appendChild(cb);
+        var span = document.createElement('span');
+        span.textContent = ch.label;
+        chip.appendChild(span);
+        channelsEl.appendChild(chip);
+      })(channels[i]);
+    }
   }
-  // Skip to step 3 — no modules to choose, no import to watch
-  showWizardStep(3);
-  saveWizardProgress(3, { skippedSiteAnalysis: true });
+
+  var revSel = document.getElementById('wizardNwRevenue');
+  if (revSel && revSel.options.length <= 1) {
+    var brackets = BEC.REVENUE_BRACKETS || [];
+    for (var b = 0; b < brackets.length; b++) {
+      var o = document.createElement('option');
+      o.value = brackets[b].value;
+      o.textContent = brackets[b].label;
+      revSel.appendChild(o);
+    }
+  }
+
+  var rolesEl = document.getElementById('wizardNwRoles');
+  if (rolesEl && rolesEl.childNodes.length === 0) {
+    var roles = BEC.PRIMARY_CONTACT_ROLES || [];
+    for (var r = 0; r < roles.length; r++) {
+      (function(role) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = role.label;
+        btn.style.cssText = 'padding:6px 10px;border-radius:999px;border:1px solid #ccc;background:#fff;font-size:0.78rem;cursor:pointer;';
+        btn.onclick = function() {
+          state.role = role.value;
+          Array.prototype.forEach.call(rolesEl.children, function(c) {
+            var sel = state.role === c.dataset.value;
+            c.style.borderColor = sel ? 'var(--teal)' : '#ccc';
+            c.style.background = sel ? 'rgba(42,124,111,0.08)' : '#fff';
+          });
+        };
+        btn.dataset.value = role.value;
+        rolesEl.appendChild(btn);
+      })(roles[r]);
+    }
+  }
+}
+
+// B9: write the five fields + localization, set up B1a to land in blank-dropdown
+// (or pre-selected if keyword inference matched), route to archetype confirm.
+async function wizardConfirmNoWebsite() {
+  var nameEl = document.getElementById('wizardNwBusinessName');
+  var sellsEl = document.getElementById('wizardNwSells');
+  var revEl = document.getElementById('wizardNwRevenue');
+  var btn = document.getElementById('wizardNwConfirmBtn');
+  var state = window._wizardNoWebsite || { channels: [], role: null };
+
+  var businessName = nameEl ? (nameEl.value || '').trim() : '';
+  var sells = sellsEl ? (sellsEl.value || '').trim() : '';
+  var revenueBracket = revEl ? (revEl.value || '') : '';
+  if (!businessName) {
+    showToast('Please enter a business name.', true);
+    return;
+  }
+  if (btn) btn.disabled = true;
+
+  var inferredArchetype = _inferArchetypeFromSellText(sells);
+  // Propagate to the shared extracted state so B1a can render with the inference.
+  window._wizardExtracted = window._wizardExtracted || {};
+  window._wizardExtracted.businessName = businessName;
+  window._wizardExtracted.oneLineDescription = sells || window._wizardExtracted.oneLineDescription || '';
+  window._wizardExtracted.inferredArchetype = inferredArchetype;
+  // archetypeConfidence stays null so B1a always renders the blank/pre-select band,
+  // never auto-confirm (user explicitly clicks a button there).
+  window._wizardExtracted.archetypeConfidence = null;
+  window._wizardExtracted.declaredChannels = state.channels.slice();
+
+  try {
+    await MastDB.businessEntity.update('identity', {
+      businessName: businessName,
+      oneLineDescription: sells,
+      archetypeConfidence: null
+    });
+    if (state.channels.length) {
+      await MastDB.businessEntity.update('presence', { declaredChannels: state.channels.slice() });
+    }
+    // Always write localization so activation gate passes (D2 silent inference).
+    await _applyEntityOperationsLocalization();
+    var calibration = { capturedAt: new Date().toISOString() };
+    if (revenueBracket) calibration.revenueBracket = revenueBracket;
+    await MastDB.businessEntity.update('engagement', { calibration: calibration });
+    if (state.role) {
+      await MastDB.businessEntity.update('people', { primaryContact: { role: state.role } });
+    }
+    // Brand pointer gets the name so downstream readers (config/brand) don't
+    // render "Tenant" during the rest of the wizard.
+    await MastDB.config.update('brand', { name: businessName, updatedAt: new Date().toISOString() }).catch(function() {});
+
+    logWizardEvent(0.5, 'no_website_fallback', {
+      sellsLength: sells.length,
+      channelsCount: state.channels.length,
+      role: state.role || null,
+      revenueBracket: revenueBracket || null,
+      inferredArchetype: inferredArchetype || null
+    });
+
+    showWizardArchetypeConfirm();
+    saveWizardProgress(1, { noWebsitePath: true, skippedSiteAnalysis: true });
+  } catch (err) {
+    if (btn) btn.disabled = false;
+    showToast('Could not save: ' + esc(err.message || ''), true);
+  }
 }
 
 // Wizard event logging — writes to {tenantId}/admin/setupLog for diagnostics
