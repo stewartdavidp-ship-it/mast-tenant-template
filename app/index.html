@@ -20697,18 +20697,24 @@ async function wizardComplete() {
       try {
         var idToken = await firebase.auth().currentUser.getIdToken();
         var cfBase = (TENANT_CONFIG && TENANT_CONFIG.cloudFunctionsBase) || 'https://us-central1-mast-platform-prod.cloudfunctions.net';
-        fetch(cfBase + '/triggerTenantDeploy', {
+        var deployResp = await fetch(cfBase + '/triggerTenantDeploy', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
           body: JSON.stringify({ tenantId: MastDB.tenantId() })
-        }).then(function(resp) {
-          if (resp.ok) console.log('[Wizard] Auto-deploy triggered (storefront)');
-          else console.warn('[Wizard] Auto-deploy failed:', resp.status);
-        }).catch(function(err) {
-          console.warn('[Wizard] Auto-deploy error (non-blocking):', err.message);
         });
+        if (deployResp.ok) {
+          console.log('[Wizard] Auto-deploy triggered (storefront)');
+        } else {
+          var deployErrBody = '';
+          try { deployErrBody = await deployResp.text(); } catch (_readErr) {}
+          console.warn('[Wizard] Auto-deploy failed:', deployResp.status, deployErrBody);
+          logWizardEvent(4, 'auto_deploy_failed', { status: deployResp.status, body: deployErrBody.slice(0, 200) });
+          showToast('Your site couldn\u2019t auto-deploy. Open Settings > Hosting to retry, or contact support.', true);
+        }
       } catch (deployErr) {
-        console.warn('[Wizard] Could not trigger auto-deploy:', deployErr.message);
+        console.warn('[Wizard] Auto-deploy network error:', deployErr && deployErr.message);
+        logWizardEvent(4, 'auto_deploy_error', { message: (deployErr && deployErr.message) || 'unknown' });
+        showToast('Your site couldn\u2019t auto-deploy. Open Settings > Hosting to retry, or contact support.', true);
       }
     } else {
       console.log('[Wizard] Skipping storefront deploy (engagement.mode = ' + engagementMode + ')');
