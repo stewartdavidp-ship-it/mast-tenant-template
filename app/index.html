@@ -5962,6 +5962,30 @@
           </div>
 
           <div id="wizardPublishStatus" style="font-size:0.85rem;margin-bottom:16px;"></div>
+
+          <!-- B4: primary-contact progressive capture (optional) + DPA gate -->
+          <div id="wizardPrimaryContact" style="background:var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:12px;">
+            <p style="font-size:0.9rem;font-weight:600;margin:0 0 10px;">A couple of optional details</p>
+            <div class="form-group" style="margin-bottom:10px;">
+              <label style="font-size:0.8rem;font-weight:600;display:block;margin-bottom:4px;">Your role</label>
+              <div id="wizardRoleOptions" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label style="font-size:0.8rem;font-weight:600;display:block;margin-bottom:4px;">Team size</label>
+              <div id="wizardTeamSizeOptions" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+            </div>
+          </div>
+          <!-- Notice at Collection — CCPA required, harmless elsewhere (spec §8.2) -->
+          <p id="wizardNoticeAtCollection" style="font-size:0.75rem;color:var(--warm-gray);margin:0 0 12px;"></p>
+          <!-- DPA click-through gate — submission blocked until checked (spec §8.2, §7.3) -->
+          <div id="wizardDpaGate" style="background:#fff;border:1px solid #ddd;border-radius:8px;padding:12px 14px;margin-bottom:12px;">
+            <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:0.88rem;">
+              <input type="checkbox" id="wizardDpaCheckbox" style="margin-top:3px;flex-shrink:0;">
+              <span id="wizardDpaLabel"></span>
+            </label>
+          </div>
+          <div id="wizardActivateErrors" style="display:none;background:rgba(220,38,38,0.08);border:1px solid var(--danger);border-radius:8px;padding:12px 14px;margin-bottom:12px;font-size:0.85rem;color:var(--danger);"></div>
+
           <div id="wizardStep3Actions">
             <button class="btn btn-primary" style="font-size:1rem;padding:12px 32px;" onclick="wizardComplete()">Launch Dashboard</button>
           </div>
@@ -18525,12 +18549,14 @@ async function wizardConfirmEngagement() {
     var watchPane = document.getElementById('wizardStep3Watch');
     if (engagePane) engagePane.style.display = 'none';
     if (watchPane) watchPane.style.display = '';
-    // Drive the existing watch UI. Non-storefront modes still see progress text.
+    // Drive the existing watch UI + activation gate. Non-storefront modes still
+    // see progress text (no-op watch for back-office; pim-only shows PIM import).
     try {
       renderWizardSummary();
       renderCapabilityPreview();
       showWizardImportTimeline();
     } catch (e) { /* non-fatal if legacy helpers error */ }
+    try { renderWizardActivationGate(); } catch (e) { /* render-on-demand fallback below */ }
     saveWizardProgress(3, { engagementConfirmed: { mode: mode, surface: surface, goalsCount: goals.length } });
   } catch (err) {
     if (btn) { btn.disabled = false; btn.textContent = 'Continue'; }
@@ -20307,59 +20333,209 @@ async function processAndUploadLogo(logoUrl) {
   }
 }
 
-async function wizardComplete() {
-  try {
-    // Brand/template/modules/nav/wpConfig already written by wizardAutoApplyAll in step 1
-    // (or skipped entirely if no website). This function just finalizes.
+// B4: render DPA label + role/team-size radios + Notice at Collection.
+// Idempotent — safe to call repeatedly as the user re-enters Step 3 watch pane.
+function renderWizardActivationGate() {
+  var BEC = window.BusinessEntityConstants || {};
+  var dpaCopy = BEC.DPA_COPY || {};
+  var noc = BEC.NOTICE_AT_COLLECTION_COPY || {};
+  var privacyUrl = BEC.PRIVACY_POLICY_URL || '/privacy';
 
-    // Set tenant status to active (both registry and publicConfig for storefront)
+  var labelEl = document.getElementById('wizardDpaLabel');
+  if (labelEl) {
+    // Construct DPA label with anchor + required marker. innerHTML is safe here —
+    // source strings live in the constants file under counsel-approval lock.
+    labelEl.innerHTML =
+      esc(dpaCopy.checkbox || '') + ' ' +
+      '<a href="' + esc(dpaCopy.linkUrl || '/dpa') + '" target="_blank" rel="noopener">' +
+      esc(dpaCopy.linkText || 'Data Processing Addendum') + '</a> ' +
+      '<span style="color:var(--danger);font-weight:600;">' + esc(dpaCopy.requiredLabel || '(Required.)') + '</span>';
+  }
+  var nocEl = document.getElementById('wizardNoticeAtCollection');
+  if (nocEl) {
+    nocEl.innerHTML =
+      esc(noc.body || '') + ' ' +
+      '<a href="' + esc(privacyUrl) + '" target="_blank" rel="noopener">' + esc(noc.privacyLinkText || 'Privacy Policy') + '</a> · ' +
+      '<a href="' + esc((dpaCopy.linkUrl || '/dpa')) + '" target="_blank" rel="noopener">' + esc(noc.dpaLinkText || 'Data Processing Addendum') + '</a>';
+  }
+
+  var state = window._wizardPeopleSelection = window._wizardPeopleSelection || {};
+  var rolesEl = document.getElementById('wizardRoleOptions');
+  if (rolesEl && rolesEl.childNodes.length === 0) {
+    var roles = BEC.PRIMARY_CONTACT_ROLES || [];
+    for (var i = 0; i < roles.length; i++) {
+      (function(role) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = role.label;
+        btn.style.cssText = 'padding:6px 10px;border-radius:999px;border:1px solid #ccc;background:#fff;font-size:0.78rem;cursor:pointer;';
+        btn.onclick = function() {
+          state.role = role.value;
+          // repaint
+          Array.prototype.forEach.call(rolesEl.children, function(c) {
+            var sel = state.role === c.dataset.value;
+            c.style.borderColor = sel ? 'var(--teal)' : '#ccc';
+            c.style.background = sel ? 'rgba(42,124,111,0.08)' : '#fff';
+          });
+        };
+        btn.dataset.value = role.value;
+        rolesEl.appendChild(btn);
+      })(roles[i]);
+    }
+  }
+  var sizeEl = document.getElementById('wizardTeamSizeOptions');
+  if (sizeEl && sizeEl.childNodes.length === 0) {
+    var bands = BEC.TEAM_SIZE_BANDS || [];
+    for (var j = 0; j < bands.length; j++) {
+      (function(band) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = band.label;
+        btn.style.cssText = 'padding:6px 10px;border-radius:999px;border:1px solid #ccc;background:#fff;font-size:0.78rem;cursor:pointer;';
+        btn.onclick = function() {
+          state.teamSize = band.value;
+          state.hasEmployees = band.value !== 'solo';
+          Array.prototype.forEach.call(sizeEl.children, function(c) {
+            var sel = state.teamSize === c.dataset.value;
+            c.style.borderColor = sel ? 'var(--teal)' : '#ccc';
+            c.style.background = sel ? 'rgba(42,124,111,0.08)' : '#fff';
+          });
+        };
+        btn.dataset.value = band.value;
+        sizeEl.appendChild(btn);
+      })(bands[j]);
+    }
+  }
+}
+
+async function wizardComplete() {
+  var BEC = window.BusinessEntityConstants || {};
+  var dpaCopy = BEC.DPA_COPY || {};
+  renderWizardActivationGate();
+
+  var errorsEl = document.getElementById('wizardActivateErrors');
+  if (errorsEl) { errorsEl.style.display = 'none'; errorsEl.textContent = ''; }
+
+  // Gate 1: DPA checkbox must be ticked (regulatory non-negotiable #14).
+  var dpaCheckbox = document.getElementById('wizardDpaCheckbox');
+  if (!dpaCheckbox || !dpaCheckbox.checked) {
+    if (errorsEl) {
+      errorsEl.style.display = '';
+      errorsEl.textContent = dpaCopy.missingError || 'You must accept the Data Processing Addendum to continue.';
+    }
+    showToast(dpaCopy.missingError || 'You must accept the DPA to continue.', true);
+    return;
+  }
+
+  // Capture primary-contact details from Firebase Auth + optional selections.
+  try {
+    var user = firebase.auth().currentUser;
+    var displayName = (user && user.displayName) || '';
+    var email = (user && user.email) || '';
+    var sel = window._wizardPeopleSelection || {};
+    var peoplePayload = {
+      primaryContact: {
+        name: displayName,
+        email: email,
+        dpaAcceptedAt: new Date().toISOString(),
+        dpaVersion: BEC.DPA_VERSION || '2026-05-v1'
+      }
+    };
+    if (sel.role) peoplePayload.primaryContact.role = sel.role;
+    if (sel.teamSize) peoplePayload.teamSize = sel.teamSize;
+    if (typeof sel.hasEmployees === 'boolean') peoplePayload.hasEmployees = sel.hasEmployees;
+    if (typeof sel.hasContractors === 'boolean') peoplePayload.hasContractors = sel.hasContractors;
+
+    await MastDB.businessEntity.update('people', peoplePayload);
+
+    // Spec §3 activation — all required fields set or we block with missingFields.
+    try {
+      await MastDB.businessEntity.activate();
+    } catch (activateErr) {
+      var missing = (activateErr && activateErr.missingFields) || null;
+      if (errorsEl) {
+        errorsEl.style.display = '';
+        if (missing && missing.length) {
+          errorsEl.innerHTML = '<strong>A few fields are still required:</strong><ul style="margin:6px 0 0 18px;">' +
+            missing.map(function(m) { return '<li>' + esc(m) + '</li>'; }).join('') + '</ul>';
+        } else {
+          errorsEl.textContent = activateErr.message || 'Activation failed. Please try again.';
+        }
+      }
+      logWizardEvent(4, 'activate_failed', { missingFields: missing || null });
+      return;
+    }
+
+    // Read engagement.mode — triggerTenantDeploy fires only for storefront mode.
+    var engagementView = await MastDB.businessEntity.get('engagement');
+    var engagement = (engagementView && engagementView.data) || {};
+    var engagementMode = engagement.mode || 'storefront';
+
+    // Legacy registry bookkeeping retained for backward compat with non-entity consumers.
     await MastDB.platform.set('mast-platform/tenants/' + MastDB.tenantId() + '/status', 'active');
     await MastDB.platform.set('mast-platform/tenants/' + MastDB.tenantId() + '/publicConfig/tenantStatus', 'active');
     await MastDB.config.set('setupProgress/completed', true);
     await MastDB.config.set('setupProgress/completedAt', new Date().toISOString());
     await updateConfigChecklist('brand', true);
 
-    // Trigger full template deploy so the public site reflects wizard config.
-    // Fire-and-forget — don't block wizard on deploy completion.
+    // Legacy planStatus guard: per v1 risk #3, only promote 'none' → 'draft'; never
+    // touch an 'active' plan from the wizard.
     try {
-      var idToken = await firebase.auth().currentUser.getIdToken();
-      var cfBase = (TENANT_CONFIG && TENANT_CONFIG.cloudFunctionsBase) || 'https://us-central1-mast-platform-prod.cloudfunctions.net';
-      fetch(cfBase + '/triggerTenantDeploy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
-        body: JSON.stringify({ tenantId: MastDB.tenantId() })
-      }).then(function(resp) {
-        if (resp.ok) console.log('[Wizard] Auto-deploy triggered successfully');
-        else console.warn('[Wizard] Auto-deploy failed:', resp.status);
-      }).catch(function(err) {
-        console.warn('[Wizard] Auto-deploy error (non-blocking):', err.message);
-      });
-    } catch (deployErr) {
-      console.warn('[Wizard] Could not trigger auto-deploy:', deployErr.message);
+      var planSnap = await MastDB.get('admin/businessPlan/planStatus');
+      var planStatus = planSnap && planSnap.val ? planSnap.val() : planSnap;
+      if (!planStatus || planStatus === 'none') {
+        await MastDB.set('admin/businessPlan/planStatus', 'draft');
+      }
+    } catch (planErr) { /* best-effort */ }
+
+    if (engagementMode === 'storefront') {
+      try {
+        var idToken = await firebase.auth().currentUser.getIdToken();
+        var cfBase = (TENANT_CONFIG && TENANT_CONFIG.cloudFunctionsBase) || 'https://us-central1-mast-platform-prod.cloudfunctions.net';
+        fetch(cfBase + '/triggerTenantDeploy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+          body: JSON.stringify({ tenantId: MastDB.tenantId() })
+        }).then(function(resp) {
+          if (resp.ok) console.log('[Wizard] Auto-deploy triggered (storefront)');
+          else console.warn('[Wizard] Auto-deploy failed:', resp.status);
+        }).catch(function(err) {
+          console.warn('[Wizard] Auto-deploy error (non-blocking):', err.message);
+        });
+      } catch (deployErr) {
+        console.warn('[Wizard] Could not trigger auto-deploy:', deployErr.message);
+      }
+    } else {
+      console.log('[Wizard] Skipping storefront deploy (engagement.mode = ' + engagementMode + ')');
     }
 
-    logWizardEvent(3, 'setup_complete');
+    logWizardEvent(4, 'wizard_complete', {
+      entityStatus: 'active',
+      engagementMode: engagementMode,
+      dpaVersion: BEC.DPA_VERSION || '2026-05-v1'
+    });
     showToast('Setup complete! Welcome to your dashboard.');
 
-    // Transition to dashboard
     await loadTenantSubscription();
     document.getElementById('setupWizardScreen').style.display = 'none';
     document.getElementById('header').style.display = 'flex';
     showSidebar();
     applySidebarGating();
 
-    // Reset cached data so dashboard/products load fresh post-import
     productsLoaded = false;
     productsData = [];
 
-    // Module selection already handled in wizard Step 2 — no post-wizard modal needed
     navigateTo('dashboard');
 
     Promise.all([loadNextStepsCache(), loadDismissedSteps()]).then(function() { renderDashCardSetupShop(); });
     attachListeners();
     loadSettings();
   } catch (err) {
-    showToast('Error completing setup: ' + esc(err.message), true);
+    if (errorsEl) {
+      errorsEl.style.display = '';
+      errorsEl.textContent = 'Error completing setup: ' + (err.message || 'unknown');
+    }
+    showToast('Error completing setup: ' + esc(err.message || ''), true);
   }
 }
 
