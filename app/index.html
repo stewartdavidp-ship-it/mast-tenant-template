@@ -20976,8 +20976,7 @@ async function wizardComplete() {
     // Legacy planStatus guard: per v1 risk #3, only promote 'none' → 'draft'; never
     // touch an 'active' plan from the wizard.
     try {
-      var planSnap = await MastDB.get('admin/businessPlan/planStatus');
-      var planStatus = planSnap && planSnap.val ? planSnap.val() : planSnap;
+      var planStatus = await MastDB.get('admin/businessPlan/planStatus');
       if (!planStatus || planStatus === 'none') {
         await MastDB.set('admin/businessPlan/planStatus', 'draft');
       }
@@ -21060,8 +21059,8 @@ var tenantConfigChecklist = null;
 async function loadConfigChecklist() {
   try {
     // Read from tenant config path (canonical location)
-    var snap = await MastDB.get('config/_configChecklist');
-    tenantConfigChecklist = snap.val() || {};
+    var raw = await MastDB.get('config/_configChecklist');
+    tenantConfigChecklist = raw || {};
     if (!tenantConfigChecklist.square) {
       // Fallback: check platform registry path (legacy)
       var platChecklist = await MastDB.platform.get('mast-platform/tenants/' + MastDB.tenantId() + '/configChecklist');
@@ -21146,8 +21145,8 @@ var NEXT_STEP_DEFINITIONS = [
 var _dismissedSteps = {};
 async function loadDismissedSteps() {
   try {
-    var snap = await MastDB.get('webPresence/config/dismissedSteps');
-    _dismissedSteps = snap.val() || {};
+    var raw = await MastDB.get('webPresence/config/dismissedSteps');
+    _dismissedSteps = raw || {};
   } catch (e) { _dismissedSteps = {}; }
 }
 function dismissNextStep(stepId) {
@@ -21250,13 +21249,13 @@ async function loadNextStepsCache() {
   } catch (e) { /* ignore */ }
   try {
     // Check if template has been selected (beyond wizard default)
-    var themeSnap = await MastDB.get('public/config/theme/templateId');
-    window._nextStepsCache.hasTemplate = !!themeSnap.val();
+    var templateId = await MastDB.get('public/config/theme/templateId');
+    window._nextStepsCache.hasTemplate = !!templateId;
   } catch (e) { /* ignore */ }
   try {
     // Check if hero content has been customized
-    var heroSnap = await MastDB.get('webPresence/config/sections/hero/headline');
-    window._nextStepsCache.hasContent = !!heroSnap.val();
+    var heroHeadline = await MastDB.get('webPresence/config/sections/hero/headline');
+    window._nextStepsCache.hasContent = !!heroHeadline;
   } catch (e) { /* ignore */ }
 }
 
