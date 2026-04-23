@@ -230,14 +230,14 @@
         MastDB.get('admin/documents'),
       ]);
 
-      var empVal = results[0].val() || {};
+      var empVal = results[0] || {};
       employeesData = Object.entries(empVal).map(function(entry) {
         var emp = entry[1];
         emp._key = entry[0];
         return emp;
       });
 
-      var docsVal = results[1].val() || {};
+      var docsVal = results[1] || {};
       tenantDocs = Object.entries(docsVal).map(function(entry) {
         var doc = entry[1];
         doc._key = entry[0];

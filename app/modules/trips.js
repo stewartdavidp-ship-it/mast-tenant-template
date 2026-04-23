@@ -508,7 +508,7 @@
       customTripPurposes.push(newPurpose);
       rebuildTripPurposes();
       // Persist to Firebase
-      MastDB.tripCustomPurposes.ref().child(key).set({ icon: '📌', label: value, createdAt: new Date().toISOString() });
+      MastDB.set('tripCustomPurposes/' + key, { icon: '📌', label: value, createdAt: new Date().toISOString() });
     }
 
     // Select it
@@ -523,8 +523,7 @@
   }
 
   function loadCustomTripPurposes() {
-    MastDB.tripCustomPurposes.ref().once('value').then(function(snap) {
-      var data = snap.val();
+    MastDB.get('tripCustomPurposes').then(function(data) {
       if (!data) return;
       customTripPurposes = [];
       Object.keys(data).forEach(function(key) {

@@ -50,28 +50,28 @@
         MastDB.query('admin/expenses').orderByChild('isStudioOverhead').equalTo(true).limitToLast(200).once('value'),
       ]);
 
-      var eqVal = equipSnap.val() || {};
+      var eqVal = equipSnap || {};
       equipmentData = Object.entries(eqVal).map(function(entry) {
         var item = entry[1];
         item._key = entry[0];
         return item;
       });
 
-      var fVal = foundersSnap.val() || {};
+      var fVal = foundersSnap || {};
       foundersData = Object.entries(fVal).map(function(entry) {
         var f = entry[1];
         f._key = entry[0];
         return f;
       });
 
-      var empVal = employeesSnap.val() || {};
+      var empVal = employeesSnap || {};
       employeesData = Object.entries(empVal).map(function(entry) {
         var emp = entry[1];
         emp._key = entry[0];
         return emp;
       });
 
-      var ohItemsVal = overheadItemsSnap.val() || {};
+      var ohItemsVal = overheadItemsSnap || {};
       overheadItemsData = Object.entries(ohItemsVal).map(function(entry) {
         var item = entry[1];
         item._key = entry[0];
