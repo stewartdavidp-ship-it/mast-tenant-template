@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdn.jsdelivr.net https://apis.google.com https://maps.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://us-central1-mast-platform-prod.cloudfunctions.net https://*.firebasestorage.app https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://maps.googleapis.com https://places.googleapis.com; img-src 'self' data: blob: https:; frame-src 'self' https://*.firebaseapp.com; frame-ancestors 'none';">
+<title>Data Processing Addendum (DRAFT) &mdash; Mast</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<script>
+(function(){
+  var B='https://firestore.googleapis.com/v1/projects/mast-platform-prod/databases/(default)/documents';
+  var h=location.hostname,C=5*60*1000;
+  if(h==='localhost'||h==='127.0.0.1')return;
+  try{var r=localStorage.getItem('mast_tenant_'+h);if(r){var c=JSON.parse(r);if(Date.now()-c.timestamp<C){window.__earlyTenant=Promise.resolve(c.data);return;}}}catch(e){}
+  var ek=h.replace(/\./g,'_');
+  function uv(v){if(v==null)return null;if('stringValue' in v)return v.stringValue;if('booleanValue' in v)return v.booleanValue;if('integerValue' in v)return Number(v.integerValue);if('doubleValue' in v)return v.doubleValue;if('nullValue' in v)return null;if('timestampValue' in v)return v.timestampValue;if('mapValue' in v){var o={};var f=v.mapValue.fields||{};for(var k in f)o[k]=uv(f[k]);return o;}if('arrayValue' in v)return(v.arrayValue.values||[]).map(uv);return null;}
+  function uf(fields){var o={};for(var k in fields)o[k]=uv(fields[k]);return o;}
+  function uw(d){if(d&&typeof d==='object'&&!Array.isArray(d)&&'_v' in d&&Object.keys(d).length===1)return d._v;return d;}
+  window.__earlyTenant=fetch(B+'/platform_tenantsByDomain/'+ek).then(function(r){return r.ok?r.json():null}).then(function(doc){
+    var tid=doc&&doc.fields?uw(uf(doc.fields)):null;
+    if(typeof tid!=='string'||!tid)return null;
+    return fetch(B+'/platform_tenantPublicConfigs/'+tid).then(function(r){return r.ok?r.json():null}).then(function(cdoc){
+      if(!cdoc||!cdoc.fields)return null;
+      var pc=uf(cdoc.fields);
+      return pc?{tenantId:tid,publicConfig:pc}:null;
+    });
+  }).catch(function(){return null;});
+})();
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="storefront.css">
+<link rel="stylesheet" href="cart.css" media="print" onload="this.media='all'">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<script>(function(){var s=localStorage.getItem('mast-theme');var d=window.matchMedia('(prefers-color-scheme:dark)').matches;if(s==='dark'||(s!=='light'&&d))document.documentElement.classList.add('dark');else document.documentElement.classList.add('light');})();</script>
+<style>
+.dpa-draft-banner {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: #b7410e;
+  color: #fff;
+  text-align: center;
+  padding: 0.75rem 1rem;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: 0.9rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  border-bottom: 2px solid #7a2c0a;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+.dpa-draft-banner strong {
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  margin-right: 0.5rem;
+}
+.dpa-container {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 4rem 2rem 4rem;
+}
+.dpa-header {
+  text-align: center;
+  margin-bottom: 2.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--surface-card-border, #eee);
+}
+.dpa-header h1 {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 2.6rem;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  margin: 0 0 0.5rem;
+  color: var(--text);
+}
+.dpa-header .dpa-version {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: 0.95rem;
+  color: var(--warm-gray, #888);
+}
+.dpa-header .dpa-version code {
+  background: var(--surface-card, #f6f6f6);
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+  font-size: 0.85em;
+}
+.dpa-content {
+  background: var(--surface-card, #fff);
+  border: 1px solid var(--surface-card-border, #eee);
+  border-radius: 10px;
+  padding: 2.5rem 2rem;
+  line-height: 1.75;
+  color: var(--text);
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+.dpa-content h2 {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.6rem;
+  font-weight: 500;
+  margin: 2.5rem 0 0.75rem;
+  color: var(--text);
+  padding-top: 1rem;
+  border-top: 1px solid var(--surface-card-border, #eee);
+}
+.dpa-content h2:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+.dpa-content h3 {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: 1.05rem;
+  font-weight: 500;
+  margin: 1.25rem 0 0.5rem;
+  color: var(--text);
+}
+.dpa-content p {
+  margin: 0 0 1rem;
+  font-size: 0.96rem;
+}
+.dpa-content ul, .dpa-content ol {
+  margin: 0 0 1rem;
+  padding-left: 1.75rem;
+}
+.dpa-content li {
+  font-size: 0.96rem;
+  margin-bottom: 0.45rem;
+}
+.dpa-content strong {
+  font-weight: 600;
+}
+.dpa-content code {
+  background: rgba(127,127,127,0.1);
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  font-size: 0.88em;
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+}
+.dpa-content a {
+  color: var(--primary, #b7410e);
+  text-decoration: underline;
+}
+.dpa-content .counsel-marker {
+  display: inline;
+  background: #fff8c5;
+  color: #6d5206;
+  padding: 0.08rem 0.4rem;
+  border-radius: 3px;
+  font-size: 0.85em;
+  font-weight: 500;
+  border: 1px solid #e7d68a;
+}
+html.dark .dpa-content .counsel-marker {
+  background: #4a3d10;
+  color: #fbe7a0;
+  border-color: #6d5206;
+}
+.dpa-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  font-size: 0.88rem;
+}
+.dpa-content th, .dpa-content td {
+  border: 1px solid var(--surface-card-border, #eee);
+  padding: 0.55rem 0.7rem;
+  text-align: left;
+  vertical-align: top;
+}
+.dpa-content th {
+  background: var(--surface-dark, #f6f6f6);
+  color: var(--on-dark, #2a2a2a);
+  font-weight: 600;
+}
+.dpa-content hr {
+  border: none;
+  border-top: 1px solid var(--surface-card-border, #eee);
+  margin: 2.5rem 0;
+}
+.dpa-footer {
+  text-align: center;
+  margin-top: 2rem;
+  padding: 1.5rem;
+  font-size: 0.85rem;
+  color: var(--warm-gray, #888);
+  line-height: 1.6;
+}
+.dpa-preamble-box {
+  background: var(--surface-card, #fafafa);
+  border-left: 3px solid var(--primary, #b7410e);
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 2rem;
+  border-radius: 0 6px 6px 0;
+}
+.dpa-preamble-box p {
+  margin-bottom: 0.75rem;
+}
+.dpa-preamble-box p:last-child {
+  margin-bottom: 0;
+}
+@media (max-width: 640px) {
+  .dpa-container {
+    padding: 2rem 1rem 3rem;
+  }
+  .dpa-content {
+    padding: 1.5rem 1.25rem;
+  }
+  .dpa-header h1 {
+    font-size: 2rem;
+  }
+  .dpa-content table {
+    font-size: 0.82rem;
+  }
+  .dpa-content th, .dpa-content td {
+    padding: 0.4rem 0.5rem;
+  }
+}
+</style>
+</head>
+<body>
+
+<!-- ============ DRAFT BANNER ============ -->
+<div class="dpa-draft-banner" role="alert">
+  <strong>DRAFT</strong> Pending legal counsel review. Not yet in effect. Test environment only.
+</div>
+
+<!-- ============ NAV ============ -->
+<nav id="mainNav"></nav>
+<div class="nav-mobile-menu" id="mobileMenu"></div>
+
+<!-- ============ CONTENT ============ -->
+<div class="dpa-container">
+
+  <div class="dpa-header">
+    <h1>Data Processing Addendum</h1>
+    <p class="dpa-version">Version <code>2026-05-v1</code> &bull; DRAFT &mdash; pending counsel review</p>
+  </div>
+
+  <div class="dpa-content">
+
+    <div class="dpa-preamble-box">
+      <p><strong>This is a draft document.</strong> It has not been reviewed or approved by legal counsel and is not in effect. It is published in the test environment so that reviewers can see how it will render once approved. Do not rely on this text as a legal agreement.</p>
+      <p>The words shown in <span class="counsel-marker">[TO BE CONFIRMED BY COUNSEL]</span> style are placeholders where counsel must decide the final wording.</p>
+    </div>
+
+    <h2>Plain-English Preamble</h2>
+    <p>You (the &ldquo;Customer&rdquo;) are a small-business owner using Mast to run some or all of your business &mdash; your storefront, your bookings, your inventory, your customer list. When your own customers place orders or sign up for classes with you, Mast stores and moves that data on your behalf. This Data Processing Addendum (&ldquo;<strong>DPA</strong>&rdquo;) is the contract that sets the rules for how Mast handles your customers&rsquo; personal information. It&rsquo;s written to satisfy U.S. state privacy laws (and, where applicable, European-style privacy rules), and to be honest about what Mast does and doesn&rsquo;t do.</p>
+    <p>We&rsquo;ve tried to keep the legal text readable. Where plain English would be imprecise, we use defined terms with a capital letter (like &ldquo;Personal Data&rdquo;). Those terms are explained in Section 1.</p>
+    <p>This DPA becomes part of your agreement with Mast when you accept it during signup and is linked from the wizard step where you check the &ldquo;I&rsquo;ve read and agree to the Mast Data Processing Addendum&rdquo; box.</p>
+
+    <h2>1. Definitions</h2>
+    <p>&ldquo;<strong>Applicable Data Protection Law</strong>&rdquo; means the privacy and data-protection laws in effect in the United States that apply to the Customer&rsquo;s use of the Services, including (without limitation) the California Consumer Privacy Act of 2018 as amended by the California Privacy Rights Act (the &ldquo;<strong>CCPA</strong>&rdquo;), the Colorado Privacy Act (&ldquo;<strong>CPA</strong>&rdquo;), the Virginia Consumer Data Protection Act (&ldquo;<strong>VCDPA</strong>&rdquo;), the Connecticut Data Privacy Act (&ldquo;<strong>CTDPA</strong>&rdquo;), the Texas Data Privacy and Security Act (&ldquo;<strong>TDPSA</strong>&rdquo;), and any other state comprehensive-privacy statute that applies. Where a Customer or a Customer&rsquo;s own customer is located in the European Economic Area, United Kingdom, or Switzerland, &ldquo;Applicable Data Protection Law&rdquo; also includes the EU General Data Protection Regulation (&ldquo;<strong>GDPR</strong>&rdquo;), the UK GDPR, and the Swiss Federal Act on Data Protection, together with any implementing regulations.</p>
+
+    <p>&ldquo;<strong>Customer Personal Data</strong>&rdquo; means Personal Data that is (a) uploaded by or collected on behalf of the Customer through the Services, and (b) processed by Mast to provide the Services to the Customer. Customer Personal Data includes, for example, the names, contact information, shipping addresses, and order histories of the Customer&rsquo;s own customers; enrollment records; marketing opt-in status; and content the Customer uploads (product descriptions, images, events, blog posts).</p>
+
+    <p>&ldquo;Customer Personal Data&rdquo; does <strong>not</strong> include: (i) information about the Customer itself or its personnel (handled separately under the Mast Privacy Policy, where Mast is the Controller); (ii) payment card numbers (processed directly by Stripe or Square &mdash; Mast does not store or transmit card numbers); or (iii) data the Customer&rsquo;s own customers submit directly to a third-party channel (for example, a listing on the Customer&rsquo;s own Etsy or Shopify shop), which is governed by that third party&rsquo;s terms with the Customer.</p>
+
+    <p>&ldquo;<strong>Controller</strong>&rdquo; means the party that determines the purposes and means of processing Personal Data. For Customer Personal Data, the Customer is the Controller. For business operations, security, and fraud-prevention data that Mast processes on its own behalf, Mast is the Controller. Where the context requires, the term includes the equivalent role of &ldquo;Business&rdquo; under the CCPA.</p>
+
+    <p>&ldquo;<strong>Data Incident</strong>&rdquo; means a confirmed accidental or unlawful destruction, loss, alteration, or unauthorized disclosure of or access to Customer Personal Data in Mast&rsquo;s custody. A near-miss, suspected incident, or isolated failed-login attempt is not a Data Incident until confirmed.</p>
+
+    <p>&ldquo;<strong>Data Subject</strong>&rdquo; means an identified or identifiable natural person to whom Customer Personal Data relates &mdash; in practice, the Customer&rsquo;s own customers, class registrants, newsletter subscribers, or other individuals whose information the Customer entrusts to Mast.</p>
+
+    <p>&ldquo;<strong>Main Agreement</strong>&rdquo; means the Mast Terms of Service in effect between Mast and the Customer at the time of acceptance of this DPA, as amended.</p>
+
+    <p>&ldquo;<strong>Personal Data</strong>&rdquo; has the meaning given to &ldquo;personal information,&rdquo; &ldquo;personal data,&rdquo; or the equivalent term under Applicable Data Protection Law. In short: information that identifies, relates to, or could reasonably be linked to a specific person.</p>
+
+    <p>&ldquo;<strong>Processor</strong>&rdquo; means a party that processes Personal Data on behalf of a Controller. For Customer Personal Data, Mast is the Processor. Where the context requires, the term includes the equivalent role of &ldquo;Service Provider&rdquo; under the CCPA.</p>
+
+    <p>&ldquo;<strong>Services</strong>&rdquo; means the Mast platform and all features offered under the Main Agreement, including the admin web app, the public storefront generator, the point-of-sale tools, the AI advisor and other AI-assisted features, the third-party-channel integrations, the transactional email and SMS features, and the ancillary reporting and support tools.</p>
+
+    <p>&ldquo;<strong>Subprocessor</strong>&rdquo; means any third party engaged by Mast to process Customer Personal Data in the course of providing the Services.</p>
+
+    <p>Terms not defined here have the meaning given in the Main Agreement. If a term is defined differently in the Main Agreement and this DPA, the DPA&rsquo;s definition applies to the processing of Customer Personal Data.</p>
+
+    <h2>2. Scope and Relationship to the Main Agreement</h2>
+    <p>This DPA supplements the Main Agreement and applies whenever Mast processes Customer Personal Data on the Customer&rsquo;s behalf. The Main Agreement governs the commercial and service terms of the Customer&rsquo;s use of Mast. This DPA governs Mast&rsquo;s handling of Customer Personal Data.</p>
+    <p>If there is any conflict between this DPA and the Main Agreement on a matter of data processing, privacy, or security, <strong>this DPA prevails</strong>. On all other matters, the Main Agreement prevails.</p>
+    <p>The Customer&rsquo;s acceptance of this DPA is recorded at signup as a timestamped click-through (an &ldquo;I&rsquo;ve read and agree&rdquo; checkbox with the version number of the DPA in effect at that moment). The Customer can request a copy of the accepted version at any time by contacting <code>privacy@runmast.com</code> <span class="counsel-marker">[TO BE CONFIRMED BY COUNSEL &mdash; final privacy-contact email]</span>.</p>
+
+    <h2>3. Nature and Purpose of Processing</h2>
+
+    <h3>3.1 What Mast does with Customer Personal Data</h3>
+    <p>Mast processes Customer Personal Data to provide the Services the Customer has signed up for. Typical activities include:</p>
+    <ul>
+      <li><strong>Account management.</strong> Creating and maintaining the Customer&rsquo;s admin account, tenant configuration, and user authentication records.</li>
+      <li><strong>Storefront rendering.</strong> Displaying products, events, classes, and blog posts to the Customer&rsquo;s public visitors when the Customer uses Mast to host their storefront.</li>
+      <li><strong>Order and enrollment processing.</strong> Accepting orders, booking registrations, processing membership sign-ups, and confirming payment via Stripe or Square (see Section 5).</li>
+      <li><strong>Transactional communications.</strong> Sending order confirmations, receipts, event reminders, class registrations, and similar transactional emails and text messages to the Customer&rsquo;s own customers (where the Customer has configured these).</li>
+      <li><strong>AI-assisted features.</strong> Using machine-learning and large-language-model services to help the Customer classify product images, extract product data from existing websites, and receive business-coaching guidance through the &ldquo;Mast Advisor&rdquo; feature. See Section 5.4 for how LLM subprocessor handling works.</li>
+      <li><strong>Third-party channel sync.</strong> On the Customer&rsquo;s instruction, publishing the Customer&rsquo;s product, inventory, and listing data to channels the Customer has connected, such as Etsy, Shopify, or Squarespace. These integrations are controller-to-controller transfers &mdash; see Section 3.3.</li>
+      <li><strong>Back-office tooling.</strong> Inventory management, customer lists, contact records, and reporting.</li>
+      <li><strong>Service operations, security, and fraud prevention.</strong> Maintaining the security and availability of the Services, preventing abuse, and complying with Mast&rsquo;s legal obligations. For these purposes, Mast processes some data as a <strong>Controller</strong>, as permitted by Applicable Data Protection Law; see Section 3.4.</li>
+    </ul>
+    <p>Mast processes Customer Personal Data only as needed to perform these activities, or as otherwise instructed by the Customer in the Main Agreement, in this DPA, or through the Customer&rsquo;s ordinary use of the Services.</p>
+
+    <h3>3.2 Categories of Data Subjects and Data</h3>
+    <p><strong>Data Subjects</strong> typically include: the Customer&rsquo;s own customers; the Customer&rsquo;s class registrants, event attendees, and newsletter subscribers; the Customer&rsquo;s own employees or contractors whose information the Customer uploads; and visitors to storefronts the Customer hosts on Mast.</p>
+    <p><strong>Categories of Customer Personal Data</strong> typically include: name, email address, phone number, shipping and billing addresses, order history, enrollment history, marketing opt-in preferences, any notes the Customer records about the Data Subject, and content the Customer uploads that may incidentally contain Personal Data (for example, a product description that names a person).</p>
+    <p>Mast does <strong>not</strong> intentionally process &ldquo;sensitive&rdquo; categories of Personal Data (for example, government-issued IDs of the Customer&rsquo;s own customers, biometric data, health or medical information, or children&rsquo;s Personal Data under thirteen). If the Customer believes it is uploading such data, the Customer must notify Mast so that appropriate controls can be agreed before the upload occurs. The Customer should not upload material the Customer does not have a lawful basis to process.</p>
+
+    <h3>3.3 Channel integrations are controller-to-controller</h3>
+    <p>When the Customer connects Mast to a third-party channel (Etsy, Shopify, Squarespace, or a successor) via the Customer&rsquo;s own OAuth authorization, Mast acts on the Customer&rsquo;s instruction to push and pull data between Mast and that channel. The channel is <strong>not a Mast Subprocessor</strong>. The channel processes the Customer&rsquo;s data under its own terms with the Customer, as an independent Controller. The Customer is responsible for the data-processing posture of each channel it chooses to integrate with.</p>
+
+    <h3>3.4 Mast as Controller for limited purposes</h3>
+    <p>For business operations &mdash; account billing, service-performance monitoring, product improvement, abuse prevention, fraud detection, and meeting Mast&rsquo;s own legal obligations &mdash; Mast processes certain data as a <strong>Controller</strong>, as permitted by Applicable Data Protection Law. For example: Mast retains admin-server access logs for security; Mast aggregates non-identifying performance telemetry; Mast keeps audit logs of administrative actions. The scope and purpose of these Controller-role activities are described in Mast&rsquo;s Privacy Policy at <code>runmast.com/privacy</code>. Those activities do not involve selling or sharing Personal Data to third parties for cross-context behavioral advertising.</p>
+
+    <h3>3.5 Duration of processing</h3>
+    <p>Mast processes Customer Personal Data for the term of the Main Agreement and for a limited period after termination, as described in Section 11.</p>
+
+    <h2>4. Mast&rsquo;s Processing Obligations</h2>
+
+    <h3>4.1 Processing on documented instructions</h3>
+    <p>Mast processes Customer Personal Data only:</p>
+    <ol>
+      <li>on the Customer&rsquo;s documented instructions (including through the Customer&rsquo;s use of the Services), or</li>
+      <li>as required by a law that applies to Mast, in which case Mast will (unless prohibited by that law) notify the Customer before the required processing occurs.</li>
+    </ol>
+    <p>If Mast reasonably believes a Customer instruction violates Applicable Data Protection Law, Mast will notify the Customer and may decline to execute the instruction until resolved.</p>
+
+    <h3>4.2 Confidentiality</h3>
+    <p>Mast restricts access to Customer Personal Data to personnel and contractors who need it to perform their duties under the Main Agreement. Those personnel are bound by written confidentiality obligations.</p>
+
+    <h3>4.3 Security</h3>
+    <p>Mast implements and maintains the technical and organizational security measures described in Section 7 and in <strong>Appendix B (Security Measures)</strong>.</p>
+
+    <h3>4.4 Subprocessor management</h3>
+    <p>Mast complies with Section 5 when engaging Subprocessors.</p>
+
+    <h3>4.5 Assistance with the Customer&rsquo;s obligations</h3>
+    <p>Mast provides reasonable assistance to help the Customer meet its own obligations under Applicable Data Protection Law, including:</p>
+    <ul>
+      <li>responding to requests from Data Subjects (Section 6);</li>
+      <li>notifying the Customer of a Data Incident (Section 8);</li>
+      <li>conducting a data-protection impact assessment, if the Customer is required to complete one under Applicable Data Protection Law;</li>
+      <li>consulting with a supervisory authority, if required.</li>
+    </ul>
+    <p>Because Mast&rsquo;s Customers are typically small-business operators, Mast prioritizes <strong>self-service tooling</strong> in the Services (for example, export, deletion, and audit-log views within the admin app) so that the Customer can meet most routine obligations without contacting Mast. When assistance beyond self-service tooling is needed, Mast provides it without charge to the extent the request is reasonable in scope and frequency.</p>
+
+    <h3>4.6 Deletion on termination</h3>
+    <p>On termination of the Main Agreement, Mast deletes Customer Personal Data as set out in Section 11.</p>
+
+    <h3>4.7 Demonstrating compliance</h3>
+    <p>Mast makes available to the Customer information reasonably necessary to demonstrate Mast&rsquo;s compliance with this DPA, including the items described in Section 10 (Audits).</p>
+
+    <h2>5. Subprocessors</h2>
+
+    <h3>5.1 Authorization to use Subprocessors</h3>
+    <p>The Customer generally authorizes Mast to engage the Subprocessors listed in <strong>Appendix A (Subprocessors)</strong> and to add new Subprocessors in accordance with Section 5.2. Mast remains responsible for each Subprocessor&rsquo;s performance of the obligations in this DPA.</p>
+
+    <h3>5.2 Notice of new Subprocessors</h3>
+    <p>Mast will give the Customer at least <strong>thirty (30) days&rsquo;</strong> prior notice before engaging a new Subprocessor that will process Customer Personal Data. Notice is provided:</p>
+    <ul>
+      <li>by updating the published Subprocessor list at <code>runmast.com/subprocessors</code> <span class="counsel-marker">[TO BE CONFIRMED BY COUNSEL &mdash; confirm URL and that the page is live before DPA publication]</span>; and</li>
+      <li>by email to the Customer&rsquo;s designated privacy contact, if the Customer has subscribed to subprocessor-change notifications through Settings.</li>
+    </ul>
+
+    <h3>5.3 Objection right</h3>
+    <p>Within the thirty-day notice window, the Customer may object to a new Subprocessor on reasonable data-protection grounds. Mast will work in good faith with the Customer to agree on an alternative. If Mast and the Customer cannot agree within thirty (30) days after the objection is raised, the Customer may terminate the affected Services on written notice and receive a prorated refund of any pre-paid fees attributable to the period after termination.</p>
+
+    <h3>5.4 Flow-down</h3>
+    <p>Before engaging a Subprocessor, Mast enters into a written agreement with that Subprocessor containing data-protection obligations no less protective than those in this DPA, appropriate to the Subprocessor&rsquo;s role. For Subprocessors that provide AI or large-language-model services, the written agreement confirms that the Subprocessor does not train its models on Customer Personal Data transmitted through the Services.</p>
+
+    <h3>5.5 Subprocessors added after signup</h3>
+    <p>If the Customer accepts this DPA and Mast later adds a Subprocessor, the new Subprocessor is considered authorized for the Customer unless the Customer objects within the Section 5.3 window.</p>
+
+    <h2>6. Data Subject Rights</h2>
+
+    <h3>6.1 Self-service is the default</h3>
+    <p>The Services include features that let the Customer respond to most Data Subject requests directly, without Mast&rsquo;s involvement. These include: exporting a customer&rsquo;s record and order history, deleting a customer record, correcting a customer record, and viewing the Customer&rsquo;s own audit log.</p>
+
+    <h3>6.2 Mast&rsquo;s assistance</h3>
+    <p>To the extent a Data Subject request cannot be handled through the Services&rsquo; self-service features, Mast provides reasonable assistance to the Customer on written request. Assistance includes, as applicable: locating Customer Personal Data in Mast&rsquo;s systems, confirming deletion, producing an export, and confirming the scope of processing.</p>
+    <p>Mast responds to a reasonable assistance request within <strong>thirty (30) days</strong> after receipt. If Mast requires more time due to the complexity of the request, Mast notifies the Customer within the initial thirty-day window, identifies the additional time needed (not to exceed an additional sixty days), and provides updates on progress.</p>
+
+    <h3>6.3 Requests received directly by Mast</h3>
+    <p>If Mast receives a Data Subject request that relates to Customer Personal Data, Mast:</p>
+    <ol>
+      <li>confirms that Mast is not the Controller for that data (it is the Customer who is the Controller);</li>
+      <li>redirects the Data Subject to the Customer, or forwards the request to the Customer within ten (10) business days; and</li>
+      <li>does not respond to the Data Subject directly without the Customer&rsquo;s instruction.</li>
+    </ol>
+
+    <h3>6.4 Costs</h3>
+    <p>Routine assistance of the kind described in Section 6.2 is provided without separate charge. If the Customer&rsquo;s requests are unreasonable in scope or frequency (for example, repeated identical requests, or requests that require bespoke engineering work outside the Services&rsquo; normal capability), Mast may recover the reasonable costs of providing that assistance with notice to the Customer before work begins.</p>
+
+    <h2>7. Security</h2>
+
+    <h3>7.1 Security Measures</h3>
+    <p>Mast implements the technical and organizational measures described in <strong>Appendix B (Security Measures)</strong>. These measures are designed to protect Customer Personal Data against unauthorized or unlawful access, disclosure, alteration, loss, or destruction, with a level of protection appropriate to the risk presented by the processing and the nature of the data.</p>
+
+    <h3>7.2 Honest statement of Mast&rsquo;s security posture</h3>
+    <p>Mast&rsquo;s Customers are typically small businesses that do not employ dedicated security staff. In plain terms, the material security facts are:</p>
+    <ul>
+      <li><strong>Hosting:</strong> Mast stores Customer Personal Data in Google Cloud (Firestore and Firebase Realtime Database), in the <code>us-central1</code> region of the United States.</li>
+      <li><strong>Encryption at rest:</strong> Customer Personal Data is encrypted using AES-256 by default, with Google-managed keys and envelope-encryption architecture.</li>
+      <li><strong>Encryption in transit:</strong> All connections to the Services use TLS 1.2 or higher.</li>
+      <li><strong>Access control:</strong> Administrative access to Customer Personal Data is limited to a small number of Mast service accounts and support personnel through Firebase IAM and database security rules.</li>
+      <li><strong>Audit logging:</strong> Cloud Audit Logs are enabled on administrative and sensitive data-access activities.</li>
+      <li><strong>Authentication:</strong> End-user authentication to the Customer&rsquo;s admin account runs on Firebase Authentication.</li>
+      <li><strong>Underlying compliance:</strong> Mast relies on Google Cloud&rsquo;s <strong>SOC 2 Type II</strong> and <strong>ISO 27001</strong> programs for the underlying hosting infrastructure. Google Cloud audit reports are available to Mast and, on reasonable written request subject to confidentiality, to the Customer.</li>
+      <li><strong>Mast&rsquo;s own certifications:</strong> Mast itself is <strong>not currently certified</strong> under SOC 2, ISO 27001, HIPAA, or PCI-DSS (all levels). Mast relies on Stripe Elements and Square for payment processing, which keeps payment-card processing out of Mast&rsquo;s scope (SAQ-A reliance). Mast does not process protected health information. <span class="counsel-marker">[TO BE CONFIRMED BY COUNSEL &mdash; whether to reference any forward-looking statement about a future SOC 2 program]</span></li>
+    </ul>
+
+    <h3>7.3 Personnel</h3>
+    <p>Mast personnel with access to Customer Personal Data receive privacy and security training, are bound by written confidentiality agreements, and are granted access on a need-to-know basis.</p>
+
+    <h3>7.4 Vendor security</h3>
+    <p>Mast reviews the security posture of each Subprocessor before engagement and on an ongoing basis.</p>
+
+    <h2>8. Data Incident Notification</h2>
+
+    <h3>8.1 Notification to the Customer</h3>
+    <p>Mast will notify the Customer of a Data Incident <strong>without undue delay, and in any event no later than seventy-two (72) hours</strong>, after Mast becomes aware that a Data Incident has been confirmed. Notification is made to the Customer&rsquo;s designated privacy contact by email.</p>
+
+    <h3>8.2 Content of the notice</h3>
+    <p>Mast&rsquo;s initial notice describes, to the extent reasonably available at the time:</p>
+    <ul>
+      <li>the nature and scope of the Data Incident, including the categories of Customer Personal Data involved and the approximate number of Data Subjects affected;</li>
+      <li>the likely consequences of the Data Incident;</li>
+      <li>the measures Mast has taken or proposes to take to address the Data Incident and, where appropriate, to mitigate its possible adverse effects; and</li>
+      <li>a point of contact for further information.</li>
+    </ul>
+    <p>Where all relevant information is not reasonably available in the initial notice, Mast provides it in phases as the information is confirmed.</p>
+
+    <h3>8.3 Cooperation</h3>
+    <p>Mast provides reasonable assistance to help the Customer comply with its own notification obligations under Applicable Data Protection Law (for example, notifying affected Data Subjects or a supervisory authority).</p>
+
+    <h3>8.4 Internal escalation alignment</h3>
+    <p>Mast&rsquo;s internal incident-response process is designed to meet the thirty-day notification clock used by the strictest applicable U.S. state breach-notification laws (California, New York, Colorado) for notifying Data Subjects and regulators. The 72-hour Customer-notice commitment in Section 8.1 gives the Customer sufficient lead time to meet its own downstream obligations.</p>
+
+    <h3>8.5 Not an admission</h3>
+    <p>Mast&rsquo;s provision of, or response to, a Data Incident notice is not an acknowledgment of fault or liability.</p>
+
+    <h2>9. International Data Transfers</h2>
+
+    <h3>9.1 Current processing location</h3>
+    <p>Mast currently processes Customer Personal Data <strong>exclusively in the United States</strong>, in the Google Cloud <code>us-central1</code> region. Mast does not currently host or process Customer Personal Data in the European Economic Area, the United Kingdom, Switzerland, Canada, or any other non-U.S. region. <span class="counsel-marker">[TO BE CONFIRMED BY COUNSEL &mdash; phrasing for future non-US hosting flexibility]</span></p>
+
+    <h3>9.2 Data Privacy Framework</h3>
+    <p>Mast is <strong>not currently certified</strong> under the EU-U.S. Data Privacy Framework, the UK Extension to the DPF, or the Swiss-U.S. DPF. Mast does not represent that it is DPF-certified.</p>
+
+    <h3>9.3 Standard Contractual Clauses</h3>
+    <p>If the Customer is established in the European Economic Area, the United Kingdom, or Switzerland, or if any Data Subject whose Personal Data the Customer uploads to Mast is located in those jurisdictions, the <strong>Standard Contractual Clauses</strong> approved by the European Commission in Implementing Decision (EU) 2021/914 of 4 June 2021 (the &ldquo;<strong>2021 SCCs</strong>&rdquo;) are incorporated into this DPA by reference and form an integral part of it. Specifically:</p>
+    <ul>
+      <li>Module Two (Controller-to-Processor) applies where the Customer is the Controller and Mast is the Processor;</li>
+      <li>Module Three (Processor-to-Processor) applies, as applicable, between Mast and its Subprocessors;</li>
+      <li>for transfers subject to UK GDPR, the <strong>International Data Transfer Addendum</strong> issued by the UK Information Commissioner under section 119A of the UK Data Protection Act 2018 is also incorporated by reference;</li>
+      <li>for transfers subject to Swiss law, references in the 2021 SCCs to &ldquo;GDPR&rdquo; are read as references to the Swiss Federal Act on Data Protection where appropriate.</li>
+    </ul>
+    <p>See <strong>Appendix C (Standard Contractual Clauses)</strong> for the incorporation details.</p>
+
+    <h3>9.4 Future transfer mechanisms</h3>
+    <p>If a transfer mechanism relied on in Section 9.3 is invalidated, or if a preferable lawful mechanism (for example, DPF recertification) becomes available, Mast may, on not less than thirty (30) days&rsquo; notice to the Customer, rely on that alternative mechanism in addition to or in place of the 2021 SCCs.</p>
+
+    <h2>10. Audits</h2>
+
+    <h3>10.1 How Mast demonstrates compliance</h3>
+    <p>On the Customer&rsquo;s reasonable written request (no more than once per calendar year except where a Data Incident has occurred or Applicable Data Protection Law requires otherwise), Mast provides:</p>
+    <ul>
+      <li>the most recent Google Cloud SOC 2 Type II report applicable to the Services&rsquo; hosting infrastructure, subject to Google Cloud&rsquo;s confidentiality terms;</li>
+      <li>a written summary of Mast&rsquo;s security controls, aligned with <strong>Appendix B</strong>; and</li>
+      <li>written answers to a reasonable security questionnaire of mutually agreed scope.</li>
+    </ul>
+    <p>These materials are Mast&rsquo;s confidential information and may be shared with the Customer&rsquo;s advisors under confidentiality.</p>
+
+    <h3>10.2 On-site audit</h3>
+    <p>The Customer may conduct or commission an on-site audit only where:</p>
+    <ul>
+      <li>the materials provided under Section 10.1 are insufficient to satisfy the Customer&rsquo;s obligations under Applicable Data Protection Law; or</li>
+      <li>a Data Incident affecting the Customer has occurred and the Customer reasonably requires an audit to respond.</li>
+    </ul>
+    <p>An on-site audit must be requested in writing at least thirty (30) days in advance, must be conducted during business hours, must not unreasonably interfere with Mast&rsquo;s operations, and must be conducted by the Customer or a mutually agreed independent third-party auditor (who must not be a Mast competitor and must accept reasonable confidentiality obligations). The Customer bears its own costs; if an audit reveals a material non-compliance by Mast, Mast bears the reasonable costs of re-audit limited to confirming remediation.</p>
+
+    <h3>10.3 Practical note</h3>
+    <p>Most small-business Customers will never conduct a formal audit. Section 10 exists because Applicable Data Protection Law requires the availability of audit rights, not because audits are expected as a matter of routine.</p>
+
+    <h2>11. Return and Deletion</h2>
+
+    <h3>11.1 Deletion on termination</h3>
+    <p>On termination of the Main Agreement, Mast deletes Customer Personal Data from its active production systems within <strong>thirty (30) days</strong> of the effective date of termination, unless the Customer has requested a data export (in which case Mast completes the export before deletion) or Mast is required by law to retain specific data for a longer period (in which case Mast retains only the data required by that law, for no longer than required).</p>
+
+    <h3>11.2 Backup retention</h3>
+    <p>Residual copies of Customer Personal Data may remain in Mast&rsquo;s underlying hosting provider&rsquo;s standard backup systems for up to <strong>one hundred eighty (180) days</strong> after deletion from production, after which they are purged. This backup-retention window reflects Google Cloud&rsquo;s standard Firestore and Realtime Database backup cycles, which Mast does not independently control. During that window, backup data is not accessed for any purpose other than emergency recovery.</p>
+
+    <h3>11.3 Export</h3>
+    <p>Before termination, the Customer may export its Customer Personal Data through the self-service export tools in the Services. On written request during the term or within thirty (30) days after termination, Mast also provides a structured export of Customer Personal Data in a commonly used electronic format.</p>
+
+    <h3>11.4 Deletion certificate</h3>
+    <p>On written request within sixty (60) days after termination, Mast provides a written confirmation (by email) that deletion of Customer Personal Data from production systems has been completed and that residual backup copies are within the period described in Section 11.2.</p>
+
+    <h2>12. Liability</h2>
+    <p>The limitations of liability set out in the Main Agreement apply to claims arising under this DPA. Nothing in this DPA excludes or limits either party&rsquo;s liability for (a) fraud or fraudulent misrepresentation, (b) willful misconduct, (c) gross negligence, or (d) liability that cannot be excluded or limited by Applicable Data Protection Law. <span class="counsel-marker">[TO BE CONFIRMED BY COUNSEL &mdash; precise carve-outs and interaction with the cap in the Main Agreement]</span></p>
+
+    <h2>13. Term</h2>
+    <p>This DPA enters into effect on the earlier of (a) the Customer&rsquo;s acceptance via the click-through at signup, or (b) the first processing of Customer Personal Data by Mast on the Customer&rsquo;s behalf. It continues for the term of the Main Agreement and survives termination for as long as Mast continues to process Customer Personal Data (including during the deletion and backup-purge windows described in Section 11).</p>
+
+    <h2>14. Governing Law and Disputes</h2>
+    <p>This DPA is governed by the laws of <span class="counsel-marker">[the State of Delaware TBD &mdash; TO BE CONFIRMED BY COUNSEL, expected to align with Mast Platform, Inc.&rsquo;s state of incorporation]</span>, without regard to its conflict-of-laws principles. Disputes arising under this DPA are subject to the jurisdiction and venue provisions of the Main Agreement, except that, where the 2021 SCCs apply, the governing-law and dispute-resolution clauses of the 2021 SCCs apply to the extent required for transfers from the European Economic Area, the United Kingdom, or Switzerland.</p>
+
+    <h2>15. Miscellaneous</h2>
+
+    <h3>15.1 Amendments</h3>
+    <p>Mast may update this DPA from time to time to reflect changes in Applicable Data Protection Law, Mast&rsquo;s operational practices, or Mast&rsquo;s Subprocessors. Mast will provide the Customer with at least thirty (30) days&rsquo; prior notice of any material change (by email to the Customer&rsquo;s designated privacy contact and by update to <code>runmast.com/dpa</code>), together with the new version number. If the Customer does not agree with a material change, the Customer may terminate the Main Agreement with written notice before the effective date of the change. Continued use of the Services after the effective date constitutes acceptance of the updated DPA. Non-material corrections (typographical errors, formatting, updates to the Subprocessor list within the notice procedures of Section 5) do not trigger the thirty-day notice.</p>
+
+    <h3>15.2 Entire agreement</h3>
+    <p>This DPA, together with the Main Agreement and the appendices to this DPA, constitutes the entire agreement between the parties on the subject matter of data processing. It supersedes any prior agreement or understanding on that subject.</p>
+
+    <h3>15.3 Severability</h3>
+    <p>If any provision of this DPA is held to be invalid or unenforceable, the remaining provisions remain in full force and effect, and the parties substitute a valid provision that most closely reflects the original intent.</p>
+
+    <h3>15.4 Order of precedence</h3>
+    <p>In the event of a conflict, the order of precedence is:</p>
+    <ol>
+      <li>the 2021 SCCs (where they apply) as incorporated by Appendix C;</li>
+      <li>this DPA;</li>
+      <li>the Main Agreement;</li>
+      <li>Mast&rsquo;s Privacy Policy;</li>
+      <li>any product-specific terms.</li>
+    </ol>
+
+    <h3>15.5 Counterparts and signatures</h3>
+    <p>This DPA may be accepted by click-through at signup. No signed counterpart is required for the DPA to be binding. The Customer may request a countersigned copy for its own records on written request to <code>privacy@runmast.com</code>.</p>
+
+    <h3>15.6 Privacy contact</h3>
+    <p>The Customer may reach Mast&rsquo;s privacy team at <code>privacy@runmast.com</code> <span class="counsel-marker">[TO BE CONFIRMED BY COUNSEL &mdash; final email address]</span>.</p>
+
+    <hr>
+
+    <h2>Appendix A &mdash; Subprocessors</h2>
+    <p><strong>As of Version <code>2026-05-v1</code></strong> (effective <span class="counsel-marker">[to be set by counsel]</span>).</p>
+    <p>The current and authoritative list is maintained at <code>runmast.com/subprocessors</code> <span class="counsel-marker">[TO BE CONFIRMED BY COUNSEL &mdash; confirm page is live]</span>. This Appendix reflects the list as of the effective date.</p>
+
+    <table>
+      <thead>
+        <tr><th>#</th><th>Subprocessor</th><th>Location</th><th>Category</th><th>What it may process</th><th>Purpose</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>1</td><td><strong>Google LLC</strong> (Google Cloud / Firebase)</td><td>United States (primary: <code>us-central1</code>)</td><td>Hosting, database, auth, storage, secrets, compute</td><td>All categories of Customer Personal Data stored in the Services</td><td>Core Services hosting &mdash; Firestore, Realtime Database, Firebase Authentication, Cloud Storage, Cloud Functions, Secret Manager.</td></tr>
+        <tr><td>2</td><td><strong>Stripe, Inc.</strong></td><td>United States</td><td>Payment processing</td><td>Transaction metadata, email, billing name; payment card numbers are processed directly by Stripe and not stored by Mast</td><td>Processing the Customer&rsquo;s own customers&rsquo; payments, subscriptions, memberships, webhooks.</td></tr>
+        <tr><td>3</td><td><strong>Block, Inc.</strong> (Square)</td><td>United States</td><td>Payment processing / POS</td><td>Transaction metadata, email, billing name; payment card numbers are processed directly by Square and not stored by Mast</td><td>Where the Customer uses Square for in-person or online payments.</td></tr>
+        <tr><td>4</td><td><strong>Twilio Inc.</strong> (SendGrid)</td><td>United States</td><td>Transactional email</td><td>Recipient email address, subject, body content the Customer provides</td><td>Order confirmations, enrollment notices, event reminders, other transactional email.</td></tr>
+        <tr><td>5</td><td><strong>Resend, Inc.</strong></td><td>United States</td><td>Transactional email (fallback)</td><td>Recipient email address, subject, body content the Customer provides</td><td>Same as SendGrid; alternative provider.</td></tr>
+        <tr><td>6</td><td><strong>Google LLC</strong> (Gmail SMTP)</td><td>United States</td><td>Transactional email (fallback)</td><td>Recipient email address, subject, body content the Customer provides</td><td>Used where the Customer configures Gmail SMTP credentials as a fallback email provider.</td></tr>
+        <tr><td>7</td><td><strong>Twilio Inc.</strong> (SMS)</td><td>United States</td><td>SMS messaging</td><td>Recipient phone number, message content</td><td>Event notifications, booth fee notifications, ticket confirmations.</td></tr>
+        <tr><td>8</td><td><strong>Shippo, Inc.</strong></td><td>United States</td><td>Shipping labels / address validation</td><td>Shipping-address Personal Data (name, address, phone, email where provided)</td><td>Generating shipping labels, rate shopping, and tracking for orders the Customer ships.</td></tr>
+        <tr><td>9</td><td><strong>Anthropic, PBC</strong></td><td>United States</td><td>AI / large-language-model services (Claude API)</td><td>Text and image inputs submitted to AI-assisted features</td><td>Image classification, product data extraction during import, Mast Advisor coaching. Anthropic does not train its models on Customer Personal Data transmitted through the API by default.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Channel integrations are NOT Subprocessors</h3>
+    <p>When the Customer connects the Services to a third-party channel the Customer controls &mdash; including <strong>Etsy</strong>, <strong>Shopify</strong>, <strong>Squarespace</strong>, or Google Contacts / Google People API &mdash; that channel is <strong>not a Mast Subprocessor</strong>. The Customer authorizes the integration through the channel&rsquo;s OAuth flow, and the channel processes the Customer&rsquo;s data under the Customer&rsquo;s own terms with that channel, as an independent Controller. Section 3.3 applies.</p>
+
+    <h3>Tenant-financial-data vendors disclosed separately</h3>
+    <p>Where the Customer uses Mast&rsquo;s expense-tracking feature, Mast uses <strong>Plaid Inc.</strong> (United States) to connect the Customer&rsquo;s own business bank or card account. This processes the Customer&rsquo;s <em>own</em> financial data, not the Customer&rsquo;s own customers&rsquo; Personal Data. It is therefore disclosed in Mast&rsquo;s Privacy Policy rather than in this Appendix A, which lists Subprocessors of Customer Personal Data.</p>
+
+    <h2>Appendix B &mdash; Security Measures</h2>
+    <p>This Appendix describes the technical and organizational security measures Mast implements to protect Customer Personal Data. These measures are subject to improvement over time as the Services evolve; Mast will not reduce the overall level of protection during the term of the Main Agreement.</p>
+
+    <h3>B.1 Governance</h3>
+    <ul>
+      <li><strong>Policies.</strong> Mast maintains written information-security policies covering access control, data handling, incident response, vendor management, and employee conduct. These are reviewed and updated at least annually.</li>
+      <li><strong>Ownership.</strong> Security responsibility sits with Mast&rsquo;s engineering leadership. <span class="counsel-marker">[TO BE CONFIRMED BY COUNSEL]</span></li>
+      <li><strong>Training.</strong> All personnel with access to Customer Personal Data complete privacy and security training at onboarding and at least annually thereafter.</li>
+    </ul>
+
+    <h3>B.2 Access Control</h3>
+    <ul>
+      <li><strong>Identity and access management.</strong> Administrative access to Mast infrastructure is controlled via Google Cloud IAM, enforcing least-privilege and requiring multi-factor authentication for all administrative accounts.</li>
+      <li><strong>End-user authentication.</strong> Customer admin accounts authenticate through Firebase Authentication.</li>
+      <li><strong>Application-level access.</strong> Mast&rsquo;s code enforces tenant isolation via database security rules.</li>
+      <li><strong>Audit logging.</strong> Cloud Audit Logs are enabled on administrative operations and on sensitive subtrees. <span class="counsel-marker">[TO BE CONFIRMED BY COUNSEL &mdash; final retention commitments]</span></li>
+    </ul>
+
+    <h3>B.3 Encryption</h3>
+    <ul>
+      <li><strong>At rest.</strong> Customer Personal Data stored in Firestore and Firebase Realtime Database is encrypted using AES-256 with Google-managed keys via envelope encryption (per-object data-encryption keys wrapped by Google-managed key-encryption keys, all validated under FIPS 140-2).</li>
+      <li><strong>In transit.</strong> All connections between Customer endpoints and the Services, and between the Services and their Subprocessors, use TLS 1.2 or higher.</li>
+      <li><strong>Payment-card data.</strong> Payment card numbers are transmitted directly from the Data Subject&rsquo;s browser to Stripe or Square and do not pass through or rest in Mast&rsquo;s systems.</li>
+    </ul>
+
+    <h3>B.4 Operational Security</h3>
+    <ul>
+      <li><strong>Change management.</strong> Production deployments are version-controlled, peer-reviewed, and deployable only by authorized personnel.</li>
+      <li><strong>Vulnerability management.</strong> Dependencies are monitored for known vulnerabilities; critical security patches are applied on a risk-prioritized basis.</li>
+      <li><strong>Isolation.</strong> Production, staging, and development environments are logically isolated.</li>
+      <li><strong>Secrets.</strong> Third-party API credentials are stored in Google Cloud Secret Manager, not in code or configuration files.</li>
+    </ul>
+
+    <h3>B.5 Backups and Resilience</h3>
+    <ul>
+      <li><strong>Backups.</strong> Firestore and Firebase Realtime Database data is covered by Google Cloud&rsquo;s managed backup and point-in-time recovery capabilities, per Google Cloud&rsquo;s published documentation.</li>
+      <li><strong>Resilience.</strong> The Services run in Google Cloud <code>us-central1</code>, with regional redundancy within that region.</li>
+      <li><strong>Disaster recovery.</strong> <span class="counsel-marker">[TO BE CONFIRMED BY COUNSEL &mdash; whether to commit to a specific RTO/RPO]</span></li>
+    </ul>
+
+    <h3>B.6 Incident Response</h3>
+    <ul>
+      <li><strong>Incident-response plan.</strong> Mast maintains a written incident-response plan covering detection, containment, eradication, recovery, and post-incident review.</li>
+      <li><strong>Reporting.</strong> Suspected security issues may be reported by anyone to <code>security@runmast.com</code> <span class="counsel-marker">[TO BE CONFIRMED BY COUNSEL]</span>.</li>
+      <li><strong>Notification to Customers.</strong> See Section 8.</li>
+    </ul>
+
+    <h3>B.7 Subprocessor Security</h3>
+    <ul>
+      <li><strong>Due diligence.</strong> Each Subprocessor is reviewed before engagement and reviewed periodically thereafter.</li>
+      <li><strong>Flow-down.</strong> See Section 5.4.</li>
+    </ul>
+
+    <h3>B.8 Reliance on Google Cloud</h3>
+    <p>Much of the foregoing &mdash; at-rest encryption, in-transit encryption, key management, physical datacenter security, and baseline infrastructure compliance &mdash; is provided by Google Cloud as Mast&rsquo;s hosting Subprocessor. Google Cloud maintains <strong>SOC 2 Type II</strong> and <strong>ISO 27001</strong> programs, with reports available under the confidentiality terms described in Section 10.</p>
+
+    <h2>Appendix C &mdash; Standard Contractual Clauses</h2>
+
+    <h3>C.1 Purpose</h3>
+    <p>This Appendix incorporates the 2021 SCCs into this DPA for transfers of Customer Personal Data from the European Economic Area, the United Kingdom, or Switzerland to Mast in the United States (and onward to authorized Subprocessors).</p>
+
+    <h3>C.2 Incorporation</h3>
+    <p>The Standard Contractual Clauses approved by the European Commission in Implementing Decision (EU) 2021/914 of 4 June 2021 on standard contractual clauses for the transfer of personal data to third countries pursuant to Regulation (EU) 2016/679 (the &ldquo;<strong>2021 SCCs</strong>&rdquo;) are incorporated into this DPA by reference and apply in respect of any transfer of Customer Personal Data from the European Economic Area to Mast. Where the Customer is the Controller, <strong>Module Two (Controller-to-Processor)</strong> applies between the Customer and Mast. Where Mast engages a Subprocessor, <strong>Module Three (Processor-to-Processor)</strong> applies between Mast and the Subprocessor.</p>
+    <p>For each such transfer, the parties agree that:</p>
+    <ul>
+      <li><strong>Clause 7 (Docking Clause):</strong> is included.</li>
+      <li><strong>Clause 9 (Use of Subprocessors):</strong> Option 2 (general written authorization) applies, with a thirty (30) day notice period for new Subprocessors as described in Section 5.2 of this DPA.</li>
+      <li><strong>Clause 11 (Redress):</strong> the optional language permitting Data Subjects to lodge complaints with an independent dispute-resolution body is not included.</li>
+      <li><strong>Clause 17 (Governing Law):</strong> the laws of the Republic of Ireland apply, to the extent Module Two applies. <span class="counsel-marker">[TO BE CONFIRMED BY COUNSEL &mdash; chosen EU Member State]</span></li>
+      <li><strong>Clause 18 (Choice of Forum and Jurisdiction):</strong> the courts of the Republic of Ireland have jurisdiction for disputes arising from the SCCs. <span class="counsel-marker">[TO BE CONFIRMED BY COUNSEL]</span></li>
+      <li><strong>Annex I.A (List of Parties):</strong> the Customer is the Data Exporter and Mast is the Data Importer.</li>
+      <li><strong>Annex I.B (Description of the Transfer):</strong> the categories of Data Subjects, categories of Personal Data, and purposes of processing are as described in Section 3 and Appendix A of this DPA.</li>
+      <li><strong>Annex I.C (Competent Supervisory Authority):</strong> the competent authority is determined by the Customer&rsquo;s place of establishment within the EEA. <span class="counsel-marker">[TO BE CONFIRMED BY COUNSEL]</span></li>
+      <li><strong>Annex II (Technical and Organisational Measures):</strong> the measures in Appendix B of this DPA constitute Annex II.</li>
+      <li><strong>Annex III (List of Subprocessors):</strong> Appendix A of this DPA constitutes Annex III.</li>
+    </ul>
+
+    <h3>C.3 UK Addendum</h3>
+    <p>For transfers subject to UK GDPR, the <strong>International Data Transfer Addendum</strong> issued by the UK Information Commissioner under section 119A of the UK Data Protection Act 2018 (&ldquo;<strong>UK Addendum</strong>&rdquo;) is incorporated by reference. For purposes of Table 4 of the UK Addendum, the Parties select the option that neither party may end this Addendum as set out in Section 19. <span class="counsel-marker">[TO BE CONFIRMED BY COUNSEL &mdash; Table 4 selection]</span></p>
+
+    <h3>C.4 Swiss Addendum</h3>
+    <p>For transfers subject to the Swiss Federal Act on Data Protection, references in the 2021 SCCs to the &ldquo;GDPR&rdquo; are read as references to the Swiss FADP where appropriate, and references to &ldquo;Member State&rdquo; or &ldquo;EEA&rdquo; are read to include Switzerland. The supervisory authority is the Swiss Federal Data Protection and Information Commissioner.</p>
+
+    <h3>C.5 Conflict</h3>
+    <p>In the event of a conflict between the 2021 SCCs (as incorporated and modified by this Appendix C) and any other provision of this DPA or the Main Agreement, the 2021 SCCs prevail to the extent they apply to a given transfer.</p>
+
+  </div>
+
+  <div class="dpa-footer">
+    <p><strong>DRAFT &mdash; pending legal counsel review.</strong> Not in effect. Not legal advice.</p>
+    <p>Version <code>2026-05-v1</code> &bull; Draft last updated 2026-04-23</p>
+  </div>
+
+</div>
+
+<!-- ============ FOOTER ============ -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-logo">
+      <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-tenant-alt="brand" alt="My Shop" />
+      <span data-tenant="year-brand">&copy; 2026 My Shop</span>
+    </div>
+    <ul class="footer-links">
+      <li><a href="index.html">Home</a></li>
+      <li><a href="about.html">About</a></li>
+      <li><a href="shop.html">Shop</a></li>
+      <li><a href="terms.html">Terms</a></li>
+      <li><a href="dpa.html">DPA</a></li>
+      <li><a href="https://runmast.com/privacy" target="_blank" rel="noopener">Privacy</a></li>
+    </ul>
+    <div class="footer-social">
+      <a href="#" target="_blank" aria-label="Instagram" data-tenant-href="instagram">
+        <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
+      </a>
+    </div>
+    <div class="powered-by-mast">
+      <a href="https://runmast.com" target="_blank" rel="noopener" title="Powered by Mast">
+        <svg viewBox="0 0 12 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect y="0" width="12" height="7" rx="1.5" fill="#D4A853"/><rect y="9" width="12" height="7" rx="1.5" fill="#8B7355"/><rect y="18" width="12" height="6" rx="1.5" fill="#5C4A32"/></svg>
+        <div class="pbm-stack"><span class="pbm-wm">Powered by</span><span class="pbm-name">MAST</span></div>
+      </a>
+    </div>
+  </div>
+</footer>
+
+<!-- Storefront scripts -->
+<script src="storefront-tenant.js"></script>
+<script src="storefront-theme.js"></script>
+<script src="storefront-nav.js"></script>
+<script src="tenant-brand.js?v=2"></script>
+<script src="cart.js"></script>
+<script defer src="feedback-widget.js"></script>
+<script defer src="share-widget.js"></script>
+
+</body>
+</html>
