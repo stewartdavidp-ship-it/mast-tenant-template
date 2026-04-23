@@ -5071,6 +5071,7 @@
       </div>
       <div class="sidebar-items">
         <div class="sidebar-item" data-route="jobs" onclick="navigateTo('jobs')">Jobs</div>
+        <div class="sidebar-item" data-route="forecast" onclick="navigateTo('forecast')">Forecast</div>
         <div class="sidebar-item" data-route="materials" onclick="navigateTo('materials')">Materials</div>
         <div class="sidebar-item" data-route="pieces" onclick="navigateTo('pieces')">Pieces</div>
         <div class="sidebar-item" data-route="lookbooks" onclick="navigateTo('lookbooks')">Look Books</div>
@@ -6773,6 +6774,17 @@
       </div>
       <div id="productionJobDetail" style="display:none;"></div>
       <div id="productionBuildView" style="display:none;"></div>
+    </div>
+
+    <!-- ===== FORECAST TAB (standalone) ===== -->
+    <div id="forecastTab" style="display:none;">
+      <div class="section-header">
+        <h2>Forecast</h2>
+      </div>
+      <div id="forecastEventBanner"></div>
+      <div id="forecastSuggestedBuilds"></div>
+      <div id="forecastDemandOverview"></div>
+      <div id="forecastSlowMovement"></div>
     </div>
 
     <!-- ===== INVENTORY TAB (standalone) ===== -->
@@ -13804,6 +13816,7 @@ var ROUTE_MAP = {
   // website route handled by website module (lazy-loaded)
   'products':    { tab: 'productsTab' },
   'inventory':   { tab: 'inventoryTab', setup: function() { renderInventoryOverview(); } },
+  'forecast':    { tab: 'forecastTab', setup: function() { loadAndRenderForecast(); } },
   'customers':   { tab: null, placeholder: { name: 'Customers', desc: 'Contacts, collectors, purchase history.', badge: 'new' } },
   'images':      { tab: 'imagesTab' },
   'employees':   { tab: 'employeesTab', setup: function() { switchEmployeesView('users'); } },
@@ -13851,7 +13864,7 @@ var SECTION_ROUTES = {
   'migration': ['migration', 'migration-confirm', 'migration-plan', 'migration-import', 'historical-orders']
 };
 
-var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'expensesTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab', 'channelsTab'];
+var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'forecastTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'expensesTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab', 'channelsTab'];
 
 var currentRoute = 'dashboard';
 
@@ -13878,6 +13891,11 @@ function navigateTo(route) {
   // Settings tab is admin-only — block non-admin access
   if (route === 'settings' && !isAdmin()) {
     showToast('Settings is restricted to admin users.', true);
+    route = 'dashboard';
+  }
+  // Forecast is Owner/Manager only — Staff lacks forecast:read
+  if (route === 'forecast' && !hasPermission('forecast', 'read')) {
+    showToast('Forecast is restricted to Owner and Manager roles.', true);
     route = 'dashboard';
   }
   // Subscription module gating — block routes for locked modules

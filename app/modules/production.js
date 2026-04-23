@@ -35,6 +35,7 @@ var PURPOSE_LABELS = {
   'wholesale': '🏪 Wholesale',
   'experimental': '🧪 Experimental'
 };
+window.PURPOSE_LABELS = PURPOSE_LABELS;
 
 var PURPOSE_COLORS = {
   'fulfillment': { bg: 'rgba(196,133,60,0.2)', color: '#FFB74D', border: 'rgba(196,133,60,0.35)' },
@@ -80,11 +81,6 @@ function loadProduction() {
   renderProductionQueue();
   renderProductionJobs();
   updateQueueBadge();
-  // Show Forecast tab for Owner/Manager only (not Staff)
-  var forecastBtn = document.getElementById('prodSubForecast');
-  if (forecastBtn) {
-    forecastBtn.style.display = hasPermission('forecast', 'read') ? '' : 'none';
-  }
 }
 
 
