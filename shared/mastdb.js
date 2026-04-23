@@ -1071,7 +1071,161 @@ var MastDB = (function() {
           return tenantStore.subscribe('admin/businessEntity', function() {
             self.get().then(callback).catch(function(err) { console.warn('[MastDB.businessEntity.subscribe] get failed:', err); });
           });
-        }
+        },
+
+        // ─── channels (Phase 2 P2B Build PB-1) ───
+        // OAuth-authenticated sales-channel integrations (Shopify / Etsy /
+        // Square). Distinct from the Channel-First sales-channel entity at
+        // admin/channels/{channelId}; the two coexist. Writes go through
+        // the server-side channels-oauth MCP tools (connect_channel,
+        // disconnect_channel, sync_channel, update_channel_sync_config)
+        // because OAuth code exchange must own the Secret Manager write +
+        // Firestore write together. Client-side `connect` / `disconnect` /
+        // `sync` methods below are provided for tenant UI ergonomics but
+        // require a browser→MCP bridge (mcpProxy*) that lands in PB-3/4/5
+        // adapter sessions. For now they return a hint object; the real
+        // entry points are the OAuth initiate/callback Cloud Functions.
+        channels: (function() {
+          var BASE = 'admin/businessEntity/channels';
+          var VALID_PLATFORMS = { shopify: 1, etsy: 1, square: 1 };
+
+          function _maskTokenRefs(rec) {
+            if (!rec) return rec;
+            var out = {};
+            for (var k in rec) {
+              if (!Object.prototype.hasOwnProperty.call(rec, k)) continue;
+              if (k === 'tokenRef' || k === 'refreshTokenRef' || k === 'webhookSecretRef') {
+                out[k] = rec[k] ? '••masked••' : null;
+              } else {
+                out[k] = rec[k];
+              }
+            }
+            return out;
+          }
+
+          return {
+            // List all OAuth-channel connections for this tenant.
+            list: function() {
+              return tenantStore.get(BASE).then(function(tree) {
+                tree = tree || {};
+                var out = [];
+                for (var channelId in tree) {
+                  if (!Object.prototype.hasOwnProperty.call(tree, channelId)) continue;
+                  var rec = tree[channelId];
+                  if (!rec || typeof rec !== 'object') continue;
+                  out.push(Object.assign({ channelId: channelId }, _maskTokenRefs(rec)));
+                }
+                return out;
+              });
+            },
+
+            // Read a single channel record (masked).
+            getHealth: function(channelId) {
+              if (!VALID_PLATFORMS[channelId]) {
+                return Promise.reject(new Error("Invalid channelId '" + channelId + "'. Valid: shopify, etsy, square."));
+              }
+              return tenantStore.get(BASE + '/' + channelId).then(function(rec) {
+                if (!rec) return { channelId: channelId, status: 'not-connected' };
+                var expiresInSeconds = null;
+                if (rec.expiresAt) {
+                  var t = Date.parse(rec.expiresAt);
+                  if (isFinite(t)) expiresInSeconds = Math.max(0, Math.round((t - Date.now()) / 1000));
+                }
+                return {
+                  channelId: channelId,
+                  status: rec.status || 'unknown',
+                  connectedAt: rec.connectedAt || null,
+                  lastSyncAt: rec.lastSyncAt || null,
+                  lastErrorMessage: rec.lastErrorMessage || null,
+                  webhookSubscriptionCount: Array.isArray(rec.webhookSubscriptions) ? rec.webhookSubscriptions.length : 0,
+                  expiresAt: rec.expiresAt || null,
+                  expiresInSeconds: expiresInSeconds,
+                  syncConfig: rec.syncConfig || null
+                };
+              });
+            },
+
+            // Subscribe to channel changes (fires with refreshed list() on every write).
+            subscribe: function(callback) {
+              var self = this;
+              return tenantStore.subscribe(BASE, function() {
+                self.list().then(callback).catch(function(err) {
+                  console.warn('[MastDB.businessEntity.channels.subscribe] list failed:', err);
+                });
+              });
+            },
+
+            // Client-side OAuth initiate — returns a hint. The real flow is:
+            // browser → shopifyOAuthInitiate / etsyOAuthInitiate / squareOAuthInitiate
+            // Cloud Function → redirect to platform consent. PB-3/4/5 wire this.
+            // PB-1 returns the OAuth-initiate URL pattern so UI code can target it.
+            connect: function(platform /*, authCode (unused in PB-1) */) {
+              if (!VALID_PLATFORMS[platform]) {
+                return Promise.reject(new Error("Invalid platform '" + platform + "'. Valid: shopify, etsy, square."));
+              }
+              return Promise.resolve({
+                ok: false,
+                platform: platform,
+                error: 'mcp-bridge-not-wired',
+                hint: 'Call the OAuth initiate Cloud Function (' + platform + 'OAuthInitiate) to get the authorize URL + redirect the browser. The callback CF completes connect_channel via MCP. PB-1 ships the server side; UI wiring comes in PB-3/4/5.'
+              });
+            },
+
+            // Client-side disconnect — same hint posture as connect().
+            disconnect: function(channelId) {
+              if (!VALID_PLATFORMS[channelId]) {
+                return Promise.reject(new Error("Invalid channelId '" + channelId + "'. Valid: shopify, etsy, square."));
+              }
+              return Promise.resolve({
+                ok: false,
+                channelId: channelId,
+                error: 'mcp-bridge-not-wired',
+                hint: 'Disconnect runs on the server via the disconnect_channel MCP tool. PB-3/4/5 wire the browser → MCP bridge; PB-7 adds the cascading disconnect flow.'
+              });
+            },
+
+            // Client-side manual sync — same hint posture.
+            sync: function(channelId /*, direction */) {
+              if (!VALID_PLATFORMS[channelId]) {
+                return Promise.reject(new Error("Invalid channelId '" + channelId + "'. Valid: shopify, etsy, square."));
+              }
+              return Promise.resolve({
+                ok: false,
+                channelId: channelId,
+                error: 'mcp-bridge-not-wired',
+                hint: 'Manual sync runs on the server via the sync_channel MCP tool. PB-3/4/5 wire the handler per platform.'
+              });
+            },
+
+            // Update syncConfig (direction/cadence) — writes directly (settings are
+            // not OAuth-secret-dependent). Server-side mirror is the
+            // update_channel_sync_config MCP tool; this direct write is the
+            // ergonomic path used in Settings UI.
+            updateSyncConfig: function(channelId, patch) {
+              if (!VALID_PLATFORMS[channelId]) {
+                return Promise.reject(new Error("Invalid channelId '" + channelId + "'. Valid: shopify, etsy, square."));
+              }
+              if (!patch || typeof patch !== 'object') {
+                return Promise.reject(new Error('patch must be a non-empty object'));
+              }
+              return tenantStore.get(BASE + '/' + channelId).then(function(rec) {
+                if (!rec) throw new Error('channel ' + channelId + ' not connected');
+                var current = rec.syncConfig || { direction: 'pull-only', cadence: 'realtime' };
+                var next = {
+                  direction: patch.direction || current.direction,
+                  cadence: patch.cadence || current.cadence
+                };
+                var now = new Date().toISOString();
+                return tenantStore.multiUpdate({
+                  [BASE + '/' + channelId + '/syncConfig']: next,
+                  [BASE + '/' + channelId + '/updatedAt']: now
+                }).then(function() {
+                  return { ok: true, channelId: channelId, syncConfig: next };
+                });
+              });
+            }
+          };
+        })()
       };
     })(),
     _ref: _ref,
