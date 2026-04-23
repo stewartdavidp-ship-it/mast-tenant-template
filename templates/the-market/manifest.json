@@ -42,7 +42,7 @@
                 "id": "newsletter",
                 "label": "Newsletter",
                 "required": false,
-                "description": "SMS/email signup"
+                "description": "Email signup"
             },
             {
                 "id": "testimonials",
