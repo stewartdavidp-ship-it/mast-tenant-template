@@ -8360,6 +8360,9 @@
         <h2>Subscription</h2>
       </div>
       <div id="subscriptionBillingInfo" style="margin-bottom:24px;"></div>
+      <div id="subscriptionRevenueMeter" style="display:none;margin-bottom:24px;"></div>
+      <div id="subscriptionMonthlyBill" style="display:none;margin-bottom:24px;"></div>
+      <div id="subscriptionBillHistory" style="display:none;margin-bottom:24px;"></div>
       <div id="subscriptionTierSelector" style="margin-bottom:24px;"></div>
       <div id="moduleSelectionUI"></div>
     </div>
@@ -15609,17 +15612,129 @@ function updateAlertBadge() {
 // Subscription Settings (Module Selection entry point)
 // ============================================================
 
+// Pricing model — software subscription priced by revenue. Mirrors
+// revenue-accumulator.js on the server (cap-then-round 1% of net).
+var PRICING_MODEL = Object.freeze({
+  rate: 0.01,               // 1%
+  thresholdCents: 50000,    // $500 suppression floor
+  roundToCents: 100000,     // $1,000 bracket
+  capCents: 10000000,       // $100,000 revenue cap
+  maxFeeCents: 100000       // $1,000 fee cap (capCents * rate)
+});
+
+function _revenueMeterFeeCents(netCents) {
+  var net = Number(netCents) || 0;
+  if (net < PRICING_MODEL.thresholdCents) return 0;
+  var capped = Math.min(net, PRICING_MODEL.capCents);
+  var rounded = Math.round(capped / PRICING_MODEL.roundToCents) * PRICING_MODEL.roundToCents;
+  return Math.round(rounded * PRICING_MODEL.rate);
+}
+
+function _revenueMeterMonthKey(date) {
+  var d = date instanceof Date ? date : new Date();
+  var y = d.getUTCFullYear();
+  var m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  return y + '-' + m;
+}
+
+function _revenueMeterPastMonthKeys(count) {
+  var keys = [];
+  var d = new Date();
+  d.setUTCDate(1);
+  for (var i = 0; i < count; i++) {
+    keys.push(_revenueMeterMonthKey(d));
+    d.setUTCMonth(d.getUTCMonth() - 1);
+  }
+  return keys;
+}
+
+function _revenueMeterFormatCents(cents) {
+  var n = Math.round(Number(cents) || 0);
+  var neg = n < 0;
+  var abs = Math.abs(n);
+  var dollars = Math.floor(abs / 100);
+  var rem = abs - dollars * 100;
+  var remStr = String(rem).padStart(2, '0');
+  var withCommas = String(dollars).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return (neg ? '-$' : '$') + withCommas + '.' + remStr;
+}
+
+async function _revenueMeterReadFlag() {
+  try {
+    var tid = MastDB.tenantId();
+    if (!tid) return false;
+    var val = await MastDB.platform.get('mast-platform/tenants/' + tid + '/publicConfig/features/revenueMeter');
+    return val === true;
+  } catch (e) {
+    console.warn('[revenueMeter] flag read failed:', e);
+    return false;
+  }
+}
+
+async function _revenueMeterFetchMonth(monthKey) {
+  try {
+    var tid = MastDB.tenantId();
+    if (!tid || !firebase || !firebase.firestore) return null;
+    var snap = await firebase.firestore()
+      .doc('tenants/' + tid + '/admin_monthlyRevenue/' + monthKey)
+      .get();
+    return snap.exists ? snap.data() : null;
+  } catch (e) {
+    console.warn('[revenueMeter] fetch ' + monthKey + ' failed:', e);
+    return null;
+  }
+}
+
 var _subscriptionSettingsTier = null;
 var _subscriptionDetails = null;
 var _subscriptionDetailsLoading = false;
+var _revenueMeterFlag = null; // null = unknown; loaded async on first render
 
 function renderSubscriptionSettings() {
   var sub = getTenantSubscription();
   var currentTier = _subscriptionSettingsTier || sub.tier || 'command';
   _subscriptionSettingsTier = currentTier;
 
-  // Render billing info section
+  // Render billing info section (shared between flag on/off)
   renderSubscriptionBillingInfo(sub);
+
+  // Feature-flag gate: load once, then re-render with known value.
+  if (_revenueMeterFlag === null) {
+    _revenueMeterReadFlag().then(function(val) {
+      _revenueMeterFlag = !!val;
+      renderSubscriptionSettings();
+    }).catch(function() {
+      _revenueMeterFlag = false;
+      renderSubscriptionSettings();
+    });
+    return;
+  }
+
+  var meterEl = document.getElementById('subscriptionRevenueMeter');
+  var billEl = document.getElementById('subscriptionMonthlyBill');
+  var histEl = document.getElementById('subscriptionBillHistory');
+  var tierEl = document.getElementById('subscriptionTierSelector');
+  var modEl = document.getElementById('moduleSelectionUI');
+
+  if (_revenueMeterFlag) {
+    // Flag ON — render revenue meter three-card view. Hide legacy tier/module pickers.
+    if (tierEl) { tierEl.style.display = 'none'; tierEl.innerHTML = ''; }
+    if (modEl)  { modEl.style.display = 'none';  modEl.innerHTML = '';  }
+    if (meterEl) meterEl.style.display = '';
+    if (billEl)  billEl.style.display  = '';
+    if (histEl)  histEl.style.display  = '';
+    renderRevenueMeter();
+    renderMonthlyBill();
+    renderBillHistory();
+    return;
+  }
+
+  // Flag OFF — legacy tier + module picker (unchanged behavior).
+  if (meterEl) { meterEl.style.display = 'none'; meterEl.innerHTML = ''; }
+  if (billEl)  { billEl.style.display  = 'none'; billEl.innerHTML  = ''; }
+  if (histEl)  { histEl.style.display  = 'none'; histEl.innerHTML  = ''; }
+  if (tierEl)  tierEl.style.display = '';
+  if (modEl)   modEl.style.display  = '';
 
   // Render tier selector — Artist tiers + Events tier family
   var selectorEl = document.getElementById('subscriptionTierSelector');
@@ -15690,6 +15805,189 @@ function renderSubscriptionSettings() {
       renderSubscriptionSettings();
     }
   });
+}
+
+async function renderRevenueMeter() {
+  var el = document.getElementById('subscriptionRevenueMeter');
+  if (!el) return;
+  el.innerHTML = '<div class="loading">Loading revenue meter...</div>';
+
+  var monthKey = _revenueMeterMonthKey();
+  var data = await _revenueMeterFetchMonth(monthKey);
+
+  var h = '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:20px;">';
+
+  if (!data) {
+    h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.2rem;color:var(--charcoal);margin-bottom:4px;">Revenue meter</div>';
+    h += '<div style="font-size:0.82rem;color:var(--warm-gray);margin-bottom:14px;">Software subscription priced by revenue &mdash; 1% of net, capped at ' + esc(_revenueMeterFormatCents(PRICING_MODEL.maxFeeCents)) + '/mo.</div>';
+    h += '<div style="font-size:0.85rem;color:var(--warm-gray);">No revenue recorded yet for <strong>' + esc(monthKey) + '</strong>. Your meter will populate as sales are received.</div>';
+    h += '</div>';
+    el.innerHTML = h;
+    return;
+  }
+
+  var gross = data.grossCents || 0;
+  var salesTax = data.salesTaxCents || 0;
+  var refunds = data.refundsCents || 0;
+  var processor = data.processorFeesCents || 0;
+  var marketplace = data.marketplaceFeesCents || 0;
+  var shipping = data.shippingCents || 0;
+  var net = data.netCents || 0;
+  var channels = data.channels || {};
+
+  var channelOrder = ['stripe', 'tenantStripe', 'square', 'etsy', 'manual', 'consignment'];
+  var channelLabels = {
+    stripe: 'Stripe (Mast)',
+    tenantStripe: 'Stripe (your account)',
+    square: 'Square',
+    etsy: 'Etsy',
+    manual: 'Manual sales',
+    consignment: 'Consignment payouts'
+  };
+
+  // Header with net-to-date summary
+  h += '<div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:10px;">';
+  h += '<div>';
+  h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.2rem;color:var(--charcoal);">Revenue meter</div>';
+  h += '<div style="font-size:0.82rem;color:var(--warm-gray);">Software subscription priced by revenue &mdash; <strong>' + esc(monthKey) + '</strong></div>';
+  h += '</div>';
+  h += '<div style="text-align:right;">';
+  h += '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;">Net to date</div>';
+  h += '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:700;color:var(--amber);">' + esc(_revenueMeterFormatCents(net)) + '</div>';
+  h += '</div>';
+  h += '</div>';
+
+  // Per-channel breakdown
+  h += '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;margin-top:14px;margin-bottom:8px;">By channel</div>';
+  h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px 16px;font-size:0.85rem;">';
+  var anyChannel = false;
+  channelOrder.forEach(function(ch) {
+    var bucket = channels[ch];
+    if (!bucket || !bucket.grossCents) return;
+    anyChannel = true;
+    h += '<div style="background:var(--cream-dark);border-radius:6px;padding:10px 12px;">';
+    h += '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;">' + esc(channelLabels[ch] || ch) + '</div>';
+    h += '<div style="font-weight:600;color:var(--charcoal);">' + esc(_revenueMeterFormatCents(bucket.grossCents)) + '</div>';
+    var count = bucket.count || 0;
+    h += '<div style="font-size:0.75rem;color:var(--warm-gray);">' + String(count) + ' entr' + (count === 1 ? 'y' : 'ies') + '</div>';
+    h += '</div>';
+  });
+  if (!anyChannel) {
+    h += '<div style="color:var(--warm-gray);font-size:0.82rem;grid-column:1/-1;">No channel activity yet this month.</div>';
+  }
+  h += '</div>';
+
+  // Deductions applied
+  h += '<div style="border-top:1px solid var(--cream-dark);padding-top:12px;margin-top:14px;">';
+  h += '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Deductions applied</div>';
+  h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px 20px;font-size:0.85rem;">';
+  h += '<div><span style="color:var(--warm-gray);">Gross:</span> <span style="color:var(--charcoal);font-weight:500;">' + esc(_revenueMeterFormatCents(gross)) + '</span></div>';
+  h += '<div><span style="color:var(--warm-gray);">Sales tax:</span> <span style="color:var(--charcoal);font-weight:500;">&minus;' + esc(_revenueMeterFormatCents(salesTax)) + '</span></div>';
+  h += '<div><span style="color:var(--warm-gray);">Refunds:</span> <span style="color:var(--charcoal);font-weight:500;">&minus;' + esc(_revenueMeterFormatCents(refunds)) + '</span></div>';
+  h += '<div><span style="color:var(--warm-gray);">Processor fees:</span> <span style="color:var(--charcoal);font-weight:500;">&minus;' + esc(_revenueMeterFormatCents(processor)) + '</span></div>';
+  h += '<div><span style="color:var(--warm-gray);">Marketplace fees:</span> <span style="color:var(--charcoal);font-weight:500;">&minus;' + esc(_revenueMeterFormatCents(marketplace)) + '</span></div>';
+  h += '<div><span style="color:var(--warm-gray);">Shipping (excluded):</span> <span style="color:var(--charcoal);font-weight:500;">&minus;' + esc(_revenueMeterFormatCents(shipping)) + '</span></div>';
+  h += '</div>';
+  h += '</div>';
+
+  h += '</div>';
+  el.innerHTML = h;
+}
+
+async function renderMonthlyBill() {
+  var el = document.getElementById('subscriptionMonthlyBill');
+  if (!el) return;
+  el.innerHTML = '<div class="loading">Loading monthly bill...</div>';
+
+  var monthKey = _revenueMeterMonthKey();
+  var data = await _revenueMeterFetchMonth(monthKey);
+  var net = (data && data.netCents) || 0;
+  var fee = _revenueMeterFeeCents(net);
+  var atCap = fee >= PRICING_MODEL.maxFeeCents;
+  var suppressed = net < PRICING_MODEL.thresholdCents;
+
+  var h = '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:20px;">';
+  h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.2rem;color:var(--charcoal);margin-bottom:4px;">Your monthly software fee</div>';
+  h += '<div style="font-size:0.82rem;color:var(--warm-gray);margin-bottom:14px;">Software subscription priced by revenue &mdash; 1% of net, rounded to the nearest ' + esc(_revenueMeterFormatCents(PRICING_MODEL.roundToCents)) + ' of net and capped at ' + esc(_revenueMeterFormatCents(PRICING_MODEL.maxFeeCents)) + '/mo.</div>';
+
+  h += '<div style="display:flex;align-items:baseline;gap:20px;flex-wrap:wrap;margin-bottom:12px;">';
+  h += '<div>';
+  h += '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;">Projected fee for ' + esc(monthKey) + '</div>';
+  h += '<div style="font-family:\'Cormorant Garamond\',serif;font-size:2rem;font-weight:700;color:var(--amber);">' + esc(_revenueMeterFormatCents(fee)) + '</div>';
+  h += '</div>';
+  if (atCap) {
+    h += '<span class="status-badge" style="background:var(--teal);color:white;">Cap reached</span>';
+  } else if (suppressed) {
+    h += '<span class="status-badge" style="background:#16a34a;color:white;">Invoice suppressed</span>';
+  }
+  h += '</div>';
+
+  h += '<div style="font-size:0.85rem;color:var(--warm-gray);">';
+  h += 'Net this month: <span style="color:var(--charcoal);font-weight:500;">' + esc(_revenueMeterFormatCents(net)) + '</span>. ';
+  if (suppressed) {
+    h += 'No invoice &mdash; your software subscription is suppressed below ' + esc(_revenueMeterFormatCents(PRICING_MODEL.thresholdCents)) + ' of net.';
+  } else if (atCap) {
+    h += 'You&rsquo;ve hit the monthly cap; additional net revenue this month won&rsquo;t raise your software fee.';
+  } else {
+    h += 'Your final monthly software fee is set when the month closes.';
+  }
+  h += '</div>';
+
+  h += '</div>';
+  el.innerHTML = h;
+}
+
+async function renderBillHistory() {
+  var el = document.getElementById('subscriptionBillHistory');
+  if (!el) return;
+  el.innerHTML = '<div class="loading">Loading bill history...</div>';
+
+  // Skip the current month; show the 6 most recent months prior.
+  var allKeys = _revenueMeterPastMonthKeys(7);
+  var keys = allKeys.slice(1); // drop current month (covered by the two cards above)
+  var docs = await Promise.all(keys.map(function(k) { return _revenueMeterFetchMonth(k); }));
+
+  var h = '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:20px;">';
+  h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.2rem;color:var(--charcoal);margin-bottom:4px;">Bill history</div>';
+  h += '<div style="font-size:0.82rem;color:var(--warm-gray);margin-bottom:14px;">Last 6 months of your monthly software fee.</div>';
+
+  h += '<div style="max-height:260px;overflow-y:auto;border-top:1px solid var(--cream-dark);">';
+  h += '<div style="display:grid;grid-template-columns:1fr auto auto auto;gap:8px 16px;font-size:0.85rem;align-items:center;padding-top:10px;">';
+  h += '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;">Month</div>';
+  h += '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;text-align:right;">Net</div>';
+  h += '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;text-align:right;">Fee</div>';
+  h += '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;">Status</div>';
+
+  var anyRows = false;
+  for (var i = 0; i < keys.length; i++) {
+    var k = keys[i];
+    var doc = docs[i];
+    if (!doc) {
+      h += '<div style="color:var(--charcoal);">' + esc(k) + '</div>';
+      h += '<div style="color:var(--warm-gray);text-align:right;">&mdash;</div>';
+      h += '<div style="color:var(--warm-gray);text-align:right;">&mdash;</div>';
+      h += '<div style="color:var(--warm-gray);font-size:0.78rem;">No data</div>';
+      continue;
+    }
+    anyRows = true;
+    var finalFee = (doc.feeFinalCents != null) ? doc.feeFinalCents : (doc.feeProjectedCents || 0);
+    var isFinal = (doc.feeFinalCents != null);
+    var invoiced = !!doc.invoiceIssued;
+    var statusText = invoiced ? 'Invoiced' : (isFinal ? 'Closed' : 'Open');
+    var statusColor = invoiced ? '#16a34a' : (isFinal ? 'var(--teal)' : '#f59e0b');
+    h += '<div style="color:var(--charcoal);font-weight:500;">' + esc(k) + '</div>';
+    h += '<div style="color:var(--charcoal);text-align:right;">' + esc(_revenueMeterFormatCents(doc.netCents || 0)) + '</div>';
+    h += '<div style="color:var(--amber);font-weight:600;text-align:right;">' + esc(_revenueMeterFormatCents(finalFee)) + '</div>';
+    h += '<div><span class="status-badge" style="background:' + statusColor + ';color:white;font-size:0.72rem;">' + esc(statusText) + '</span></div>';
+  }
+  h += '</div>';
+  if (!anyRows) {
+    h += '<div style="color:var(--warm-gray);font-size:0.82rem;margin-top:12px;padding-bottom:2px;">No closed bills yet &mdash; each month will appear here after it&rsquo;s closed.</div>';
+  }
+  h += '</div>';
+
+  h += '</div>';
+  el.innerHTML = h;
 }
 
 function selectSubscriptionTier(tierId) {
