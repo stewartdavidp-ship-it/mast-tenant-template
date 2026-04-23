@@ -765,7 +765,6 @@ Full end-to-end "day in the life" walkthrough covering: Production → Inventory
 - **QR Scan Routing:** URL-based QR codes for jobs, products, and locations (`studio.shirglassworks.com/scan/{type}/{id}`) with contextual action resolution. Location QR codes exist (Phase D), job/product QR codes planned.
 - **Product Reference Grid Sheet:** Printable grid of all products (or filtered) for studio wall display — product photo, name, QR code per cell.
 - **New Product Discovery via Camera:** When Vision API doesn't recognize a piece, onboard it as a new product — photo becomes first reference, guided product creation.
-- **Production Forecasting:** Cross-reference order/sales history against current inventory to surface production recommendations. Data model decisions made, OPENs remain on time horizon, trending metrics, event-awareness, and auto-job creation.
 - **Abandoned checkout cleanup:** Scheduled function to auto-cancel `pending_payment` orders older than 48h.
 - **Auto Etsy sync:** Scheduled function to pull Etsy orders every 15 minutes (currently manual trigger).
 - **Etsy refund/cancellation sync:** Pull cancellation events from Etsy back into Firebase.
