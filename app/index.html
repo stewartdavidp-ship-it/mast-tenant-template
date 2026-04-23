@@ -9472,6 +9472,7 @@ MastDB.locations = {
   set: function(id, data) { return MastDB.set('admin/locations/' + id, data); },
   update: function(id, data) { return MastDB.update('admin/locations/' + id, data); },
   remove: function(id) { return MastDB.remove('admin/locations/' + id); },
+  newKey: function() { return MastDB.newKey('admin/locations'); },
   sub: function() { return 'admin/locations/' + Array.from(arguments).join('/'); }
 };
 
@@ -9480,7 +9481,8 @@ MastDB.studioLocations = {
   list: function() { return MastDB.list('config/studioLocations'); },
   get: function(id) { return MastDB.get('config/studioLocations/' + id); },
   set: function(id, data) { return MastDB.set('config/studioLocations/' + id, data); },
-  remove: function(id) { return MastDB.remove('config/studioLocations/' + id); }
+  remove: function(id) { return MastDB.remove('config/studioLocations/' + id); },
+  newKey: function() { return MastDB.newKey('config/studioLocations'); }
 };
 
 MastDB.newsletter = {
@@ -29697,9 +29699,9 @@ async function saveEvent(eventId) {
       showToast('Event updated.');
     } else {
       data.createdAt = MastDB.serverTimestamp();
-      var newEvRef = MastDB.events.push();
-      await newEvRef.set(data);
-      await writeAudit('create', 'schedule', newEvRef.key);
+      var newEvKey = MastDB.events.newKey();
+      await MastDB.events.set(newEvKey, data);
+      await writeAudit('create', 'schedule', newEvKey);
       showToast('Event created.');
     }
     closeModal();
@@ -30165,9 +30167,9 @@ async function saveImage(imageId) {
     } else {
       data.order = getNextOrder(section);
       data.createdAt = MastDB.serverTimestamp();
-      var newImgRef = MastDB.gallery.push();
-      await newImgRef.set(data);
-      await writeAudit('create', 'gallery', newImgRef.key);
+      var newImgKey = MastDB.gallery.newKey();
+      await MastDB.gallery.set(newImgKey, data);
+      await writeAudit('create', 'gallery', newImgKey);
       showToast('Image added.');
     }
 
@@ -30842,9 +30844,9 @@ async function saveGalleryFromLibrary(sectionId, imageUrl, libraryImageId) {
   }
 
   try {
-    var galRef = MastDB.gallery.push();
-    await galRef.set(data);
-    await writeAudit('create', 'gallery', galRef.key);
+    var galKey = MastDB.gallery.newKey();
+    await MastDB.gallery.set(galKey, data);
+    await writeAudit('create', 'gallery', galKey);
     showToast('Image added to ' + sectionId + '.');
     closeModal();
     // Re-render homepage after modal closes so new image appears immediately
@@ -31297,9 +31299,9 @@ async function addOperator() {
   var name = input.value.trim();
   if (!name) { showToast('Enter an operator name', true); return; }
   try {
-    var ref = MastDB.operators.push();
-    await ref.set({ name: name, addedAt: new Date().toISOString() });
-    await writeAudit('create', 'operators', ref.key);
+    var newKey = MastDB.operators.newKey();
+    await MastDB.operators.set(newKey, { name: name, addedAt: new Date().toISOString() });
+    await writeAudit('create', 'operators', newKey);
     input.value = '';
     loadOperators();
     showToast('Operator added');
@@ -31471,21 +31473,21 @@ function addStudioLocation() {
     function(pos) {
       var lat = pos.coords.latitude;
       var lng = pos.coords.longitude;
-      var ref = MastDB.studioLocations.push();
+      var newKey = MastDB.studioLocations.newKey();
       var locData = { name: name, lat: lat, lng: lng, radius: STUDIO_RADIUS_METERS, createdAt: new Date().toISOString() };
 
       // Save location with GPS first (no address yet)
-      ref.set(locData).then(function() {
-        writeAudit('create', 'locations', ref.key);
+      MastDB.studioLocations.set(newKey, locData).then(function() {
+        writeAudit('create', 'locations', newKey);
         document.getElementById('newStudioLocationName').value = '';
-        studioLocations[ref.key] = locData;
+        studioLocations[newKey] = locData;
         renderStudioLocations();
         statusEl.innerHTML = '<span style="color:var(--warm-gray);">Looking up address...</span>';
 
         // Reverse-geocode, then open address form pre-filled for user to confirm
         _reverseGeocode(lat, lng).then(function(addr) {
           statusEl.innerHTML = '';
-          _openAddressConfirmation(ref.key, addr);
+          _openAddressConfirmation(newKey, addr);
         });
       }).catch(function(err) {
         statusEl.innerHTML = '<span style="color:var(--danger);">Error: ' + esc(err.message) + '</span>';
@@ -31644,19 +31646,19 @@ function ensureHomeLocation() {
     return locationsData[k].type === 'home' && locationsData[k].status === 'active';
   });
   if (!hasHome) {
-    var ref = MastDB.locations.push();
+    var newKey = MastDB.locations.newKey();
     var homeRecord = {
-      locationId: ref.key,
+      locationId: newKey,
       name: 'Home',
       type: 'home',
       status: 'active',
       eventId: null,
-      qrUrl: 'https://' + (TENANT_CONFIG ? TENANT_CONFIG.domain : 'localhost') + '/scan/location/' + ref.key,
+      qrUrl: 'https://' + (TENANT_CONFIG ? TENANT_CONFIG.domain : 'localhost') + '/scan/location/' + newKey,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
-    ref.set(homeRecord).then(function() {
-      locationsData[ref.key] = homeRecord;
+    MastDB.locations.set(newKey, homeRecord).then(function() {
+      locationsData[newKey] = homeRecord;
       renderLocationsList();
     });
   }
@@ -31744,20 +31746,20 @@ async function createLocation() {
   var type = document.getElementById('newLocationType').value;
 
   try {
-    var ref = MastDB.locations.push();
+    var newKey = MastDB.locations.newKey();
     var record = {
-      locationId: ref.key,
+      locationId: newKey,
       name: name,
       type: type,
       status: 'active',
       eventId: null,
-      qrUrl: 'https://' + (TENANT_CONFIG ? TENANT_CONFIG.domain : 'localhost') + '/scan/location/' + ref.key,
+      qrUrl: 'https://' + (TENANT_CONFIG ? TENANT_CONFIG.domain : 'localhost') + '/scan/location/' + newKey,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
-    await ref.set(record);
-    await writeAudit('create', 'locations', ref.key);
-    locationsData[ref.key] = record;
+    await MastDB.locations.set(newKey, record);
+    await writeAudit('create', 'locations', newKey);
+    locationsData[newKey] = record;
     document.getElementById('newLocationName').value = '';
     showToast('Location "' + name + '" created');
     renderLocationsList();
@@ -31768,21 +31770,21 @@ async function createLocation() {
 
 function createEventLocation(eventId, eventName) {
   // Auto-create a location linked to a sales event
-  var ref = MastDB.locations.push();
+  var newKey = MastDB.locations.newKey();
   var record = {
-    locationId: ref.key,
+    locationId: newKey,
     name: eventName,
     type: 'event',
     status: 'active',
     eventId: eventId,
-    qrUrl: 'https://' + (TENANT_CONFIG ? TENANT_CONFIG.domain : 'localhost') + '/scan/location/' + ref.key,
+    qrUrl: 'https://' + (TENANT_CONFIG ? TENANT_CONFIG.domain : 'localhost') + '/scan/location/' + newKey,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };
-  return ref.set(record).then(function() {
-    writeAudit('create', 'locations', ref.key);
-    locationsData[ref.key] = record;
-    return ref.key;
+  return MastDB.locations.set(newKey, record).then(function() {
+    writeAudit('create', 'locations', newKey);
+    locationsData[newKey] = record;
+    return newKey;
   });
 }
 
