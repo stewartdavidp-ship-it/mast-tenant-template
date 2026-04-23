@@ -29122,7 +29122,7 @@ function loadAdminUsers() {
   }
   document.getElementById('usersLoading').style.display = '';
   MastDB.adminUsers.get().then(function(snap) {
-    adminUsers = snap.val() || {};
+    adminUsers = snap || {};
     adminUsersLoaded = true;
     document.getElementById('usersLoading').style.display = 'none';
     renderUsersList();
@@ -29137,7 +29137,7 @@ function loadRoles() {
   if (rolesLoaded) { populateRoleSelector(); return; }
   if (!hasPermission('roles', 'read')) return;
   MastDB.roles.get().then(function(snap) {
-    rolesData = snap.val() || DEFAULT_ROLES;
+    rolesData = snap || DEFAULT_ROLES;
     rolesLoaded = true;
     populateRoleSelector();
   }).catch(function(err) {
