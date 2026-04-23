@@ -6821,7 +6821,7 @@
         <button class="view-tab active" onclick="switchSettingsSubView('general')">General</button>
         <button class="view-tab" onclick="switchSettingsSubView('payments')">Payments</button>
         <button class="view-tab" onclick="switchSettingsSubView('shipping')">Shipping</button>
-        <button class="view-tab" onclick="switchSettingsSubView('tax')">Tax</button>
+        <button class="view-tab" onclick="switchSettingsSubView('tax')">Tax &amp; Legal</button>
         <button class="view-tab" onclick="switchSettingsSubView('email')">Email</button>
         <button class="view-tab" onclick="switchSettingsSubView('integrations')">Integrations</button>
         <button class="view-tab" onclick="switchSettingsSubView('workshop')">Workshop</button>
@@ -7218,7 +7218,71 @@
         </div>
 
       </div>
-      <div id="settingsSubTax" style="display:none;max-width:560px;">
+      <div id="settingsSubTax" style="display:none;max-width:640px;">
+        <!-- Legal Identity (S1 — Entity Phase 1) -->
+        <div class="form-group" style="margin-bottom:28px;padding-bottom:24px;border-bottom:1px solid rgba(255,255,255,0.06);">
+          <label style="font-size:1.15rem;font-weight:600;">Legal Identity</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:14px;">
+            Your business's legal details. All fields are optional &mdash; add what you know, skip the rest. Saved to your business entity record.
+          </p>
+
+          <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">Legal Name</label>
+          <input type="text" id="taxLegalName" placeholder="e.g., Acme Studio LLC"
+            style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;margin-bottom:12px;box-sizing:border-box;">
+
+          <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">Doing Business As (DBA)</label>
+          <p style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:6px;">One DBA per line.</p>
+          <textarea id="taxLegalDba" rows="2" placeholder="Acme Shop&#10;Acme Pottery"
+            style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;margin-bottom:12px;box-sizing:border-box;resize:vertical;"></textarea>
+
+          <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">Entity Type</label>
+          <select id="taxLegalEntityType"
+            style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;margin-bottom:12px;box-sizing:border-box;">
+            <option value="">Not set</option>
+            <option value="sole-prop">Sole Proprietorship</option>
+            <option value="llc">LLC</option>
+            <option value="s-corp">S-Corp</option>
+            <option value="c-corp">C-Corp</option>
+            <option value="partnership">Partnership</option>
+            <option value="nonprofit">Nonprofit</option>
+            <option value="unknown">Prefer not to say</option>
+          </select>
+
+          <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">Year Founded</label>
+          <input type="number" id="taxLegalYearFounded" min="1900" max="2100" placeholder="e.g., 2018"
+            style="width:160px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;margin-bottom:14px;box-sizing:border-box;">
+
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-primary" onclick="saveTaxLegalIdentity()">Save Legal Identity</button>
+          </div>
+          <div id="taxLegalIdentityStatus" style="margin-top:8px;font-size:0.85rem;"></div>
+        </div>
+
+        <!-- Business Tax ID (EIN) — regulatory copy locked (spec §8.2) -->
+        <div class="form-group" style="margin-bottom:28px;padding-bottom:24px;border-bottom:1px solid rgba(255,255,255,0.06);">
+          <label id="taxLegalEinLabel" style="font-size:1.15rem;font-weight:600;">Business Tax ID (EIN)</label>
+          <p id="taxLegalEinFormat" style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:10px;">Format: XX-XXXXXXX</p>
+
+          <input type="text" id="taxLegalEin" placeholder="XX-XXXXXXX" autocomplete="off" inputmode="numeric"
+            style="width:240px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;margin-bottom:10px;box-sizing:border-box;letter-spacing:0.5px;">
+
+          <!-- Regulatory defensive copy — DO NOT REMOVE WITHOUT COUNSEL APPROVAL (spec §8.2) -->
+          <div id="taxLegalEinWarning" style="background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.25);border-radius:8px;padding:10px 14px;font-size:0.85rem;line-height:1.45;color:var(--text,#fff);margin-bottom:10px;">
+            <!-- Injected from BusinessEntityConstants.EIN_COPY.warning -->
+          </div>
+          <div id="taxLegalEinError" style="font-size:0.85rem;margin-bottom:10px;"></div>
+
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-primary" onclick="saveTaxLegalEin()">Save EIN</button>
+          </div>
+          <div id="taxLegalEinStatus" style="margin-top:8px;font-size:0.85rem;"></div>
+        </div>
+
+        <!-- Notice at Collection (CCPA — regulatory copy, spec §8.2) -->
+        <div id="taxLegalNoticeAtCollection" style="margin-bottom:28px;padding:12px 14px;background:rgba(66,165,245,0.06);border:1px solid rgba(66,165,245,0.2);border-radius:8px;font-size:0.82rem;color:var(--warm-gray);line-height:1.5;">
+          <!-- Injected from BusinessEntityConstants.NOTICE_AT_COLLECTION_COPY -->
+        </div>
+
         <div class="form-group">
           <label style="font-size:1.15rem;font-weight:600;">Sales Tax</label>
           <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">
@@ -7253,6 +7317,14 @@
             <button class="btn btn-secondary" onclick="clearTaxRates()" style="font-size:0.78rem;padding:8px 14px;">Clear All</button>
           </div>
           <div id="taxRatesStatus" style="margin-top:8px;font-size:0.85rem;"></div>
+        </div>
+
+        <!-- Compliance (Phase 2 placeholder — licenses, insurance, certifications, multi-state jurisdictions) -->
+        <div class="form-group" style="margin-top:28px;padding-top:20px;border-top:1px solid rgba(255,255,255,0.06);opacity:0.72;">
+          <label style="font-size:1.05rem;font-weight:600;">Licenses, insurance, certifications &amp; multi-state tax jurisdictions</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-top:6px;line-height:1.5;">
+            <strong>Coming in Phase 2.</strong> Mast will track renewal dates, expirations, and registration IDs for your business licenses, insurance policies, certifications, and multi-state tax registrations. Document uploads are deferred pending our PII-redaction design.
+          </p>
         </div>
       </div>
       <div id="settingsSubEmail" style="display:none;max-width:700px;">
@@ -14223,6 +14295,7 @@ function switchSettingsSubView(view) {
   if (view === 'pim') loadPimSettings();
   if (view === 'maker') loadMakerSettings();
   if (view === 'engagement') loadEngagementSettings();
+  if (view === 'tax') loadTaxLegalSettings();
 }
 
 // ============================================================
@@ -14366,6 +14439,159 @@ function resetEngagementModulesToArchetype() {
   renderEngagementModulesCheckboxes(defaults.modulesShown.slice());
   var statusEl = document.getElementById('engagementModulesStatus');
   if (statusEl) { statusEl.textContent = 'Reset to archetype defaults. Click Save to apply.'; statusEl.style.color = 'var(--warm-gray)'; }
+}
+
+// ============================================================
+// Tax & Legal Settings (S1 — Entity Phase 1)
+// Progressive-profiling UI for identity.legalName / dba[] / entityType /
+// yearFounded / ein. EIN defensive copy + validator per spec §8.2.
+// ============================================================
+
+async function loadTaxLegalSettings() {
+  var einLabel = document.getElementById('taxLegalEinLabel');
+  var einFormat = document.getElementById('taxLegalEinFormat');
+  var einWarning = document.getElementById('taxLegalEinWarning');
+  var noticeEl = document.getElementById('taxLegalNoticeAtCollection');
+  var einInput = document.getElementById('taxLegalEin');
+
+  // Regulatory copy — must be rendered verbatim from BusinessEntityConstants.
+  var C = window.BusinessEntityConstants || {};
+  var EIN = C.EIN_COPY || {};
+  var NOT = C.NOTICE_AT_COLLECTION_COPY || {};
+  if (einLabel && EIN.label) einLabel.textContent = EIN.label;
+  if (einFormat && EIN.format) einFormat.textContent = EIN.format;
+  if (einWarning && EIN.warning) einWarning.textContent = EIN.warning;
+  if (noticeEl) {
+    var privacyHref = (C.PRIVACY_POLICY_URL) || '/privacy';
+    var dpaHref = (C.DPA_URL) || '/dpa';
+    var privacyLink = '<a href="' + privacyHref + '" target="_blank" rel="noopener" style="color:var(--teal);text-decoration:underline;">' + esc(NOT.privacyLinkText || 'Privacy Policy') + '</a>';
+    var dpaLink = '<a href="' + dpaHref + '" target="_blank" rel="noopener" style="color:var(--teal);text-decoration:underline;">' + esc(NOT.dpaLinkText || 'Data Processing Addendum') + '</a>';
+    noticeEl.innerHTML = '<strong>Notice at Collection</strong> &mdash; ' + esc(NOT.body || '') +
+      ' Read our ' + privacyLink + ' and ' + dpaLink + '.';
+  }
+
+  // Wire the EIN validator onBlur (once — idempotent).
+  if (einInput && !einInput._einValidatorBound) {
+    einInput._einValidatorBound = true;
+    einInput.addEventListener('blur', onTaxLegalEinBlur);
+  }
+
+  // Hydrate existing values.
+  try {
+    var res = await MastDB.businessEntity.get('identity');
+    var ident = (res && res.data) || {};
+    var nameEl = document.getElementById('taxLegalName');
+    var dbaEl = document.getElementById('taxLegalDba');
+    var typeEl = document.getElementById('taxLegalEntityType');
+    var yearEl = document.getElementById('taxLegalYearFounded');
+    if (nameEl) nameEl.value = ident.legalName || '';
+    if (dbaEl) dbaEl.value = Array.isArray(ident.dba) ? ident.dba.join('\n') : '';
+    if (typeEl) typeEl.value = ident.entityType || '';
+    if (yearEl) yearEl.value = ident.yearFounded || '';
+    if (einInput) einInput.value = ident.ein || '';
+  } catch (err) {
+    console.warn('[tax & legal] load failed:', err && err.message);
+  }
+}
+
+function onTaxLegalEinBlur() {
+  var input = document.getElementById('taxLegalEin');
+  var errEl = document.getElementById('taxLegalEinError');
+  if (!input) return;
+  var raw = input.value;
+  var C = window.BusinessEntityConstants;
+  if (!C || typeof C.validateEin !== 'function') return;
+  var result = C.validateEin(raw);
+  if (result.ok) {
+    if (errEl) { errEl.textContent = ''; errEl.style.color = ''; }
+    return;
+  }
+  var reason = result.reason;
+  if (reason === 'ssn-shaped' || reason === 'bare-9-digits') {
+    // SSN-risk — show regulatory modal per spec §8.2.
+    var EIN = C.EIN_COPY || {};
+    if (typeof mastAlert === 'function') {
+      mastAlert(EIN.ssnModalBody || 'Mast only accepts EINs.', {
+        title: EIN.ssnModalTitle || 'That looks like an SSN',
+        confirmLabel: EIN.ssnModalCta || 'Clear the field'
+      }).then(function() {
+        input.value = '';
+        if (errEl) { errEl.textContent = ''; errEl.style.color = ''; }
+        input.focus();
+      });
+    } else {
+      // Fallback if mastAlert unavailable.
+      input.value = '';
+    }
+    if (errEl) { errEl.textContent = 'Cleared — SSN-shaped input rejected.'; errEl.style.color = 'var(--danger,#ef4444)'; }
+  } else if (reason === 'malformed') {
+    if (errEl) { errEl.textContent = 'Invalid format. Expected XX-XXXXXXX (2 digits, dash, 7 digits).'; errEl.style.color = 'var(--danger,#ef4444)'; }
+  }
+}
+
+async function saveTaxLegalIdentity() {
+  var statusEl = document.getElementById('taxLegalIdentityStatus');
+  var nameEl = document.getElementById('taxLegalName');
+  var dbaEl = document.getElementById('taxLegalDba');
+  var typeEl = document.getElementById('taxLegalEntityType');
+  var yearEl = document.getElementById('taxLegalYearFounded');
+  if (!nameEl) return;
+  if (statusEl) { statusEl.textContent = 'Saving...'; statusEl.style.color = 'var(--warm-gray)'; }
+  var data = {};
+  var name = (nameEl.value || '').trim();
+  if (name) data.legalName = name;
+  var dbaRaw = (dbaEl && dbaEl.value) || '';
+  var dbaList = dbaRaw.split(/\n+/).map(function(s) { return s.trim(); }).filter(Boolean);
+  data.dba = dbaList;
+  var entityType = (typeEl && typeEl.value) || '';
+  if (entityType) data.entityType = entityType;
+  var yearRaw = (yearEl && yearEl.value) || '';
+  if (yearRaw) {
+    var y = parseInt(yearRaw, 10);
+    if (!isNaN(y) && y >= 1900 && y <= 2100) data.yearFounded = y;
+    else {
+      if (statusEl) { statusEl.textContent = 'Year Founded must be a 4-digit year between 1900 and 2100.'; statusEl.style.color = 'var(--danger,#ef4444)'; }
+      return;
+    }
+  }
+  try {
+    await MastDB.businessEntity.update('identity', data);
+    if (statusEl) { statusEl.textContent = 'Legal identity saved.'; statusEl.style.color = 'var(--success,#22c55e)'; }
+  } catch (err) {
+    if (statusEl) { statusEl.textContent = 'Save failed: ' + (err.message || 'unknown error'); statusEl.style.color = 'var(--danger,#ef4444)'; }
+  }
+}
+
+async function saveTaxLegalEin() {
+  var statusEl = document.getElementById('taxLegalEinStatus');
+  var input = document.getElementById('taxLegalEin');
+  var errEl = document.getElementById('taxLegalEinError');
+  if (!input) return;
+  var raw = (input.value || '').trim();
+  var C = window.BusinessEntityConstants;
+  if (C && typeof C.validateEin === 'function') {
+    var result = C.validateEin(raw);
+    if (!result.ok) {
+      if (result.reason === 'ssn-shaped' || result.reason === 'bare-9-digits') {
+        // Re-fire the modal so the user clears before save.
+        onTaxLegalEinBlur();
+        if (statusEl) { statusEl.textContent = 'Please clear the SSN-shaped value before saving.'; statusEl.style.color = 'var(--danger,#ef4444)'; }
+      } else {
+        if (errEl) { errEl.textContent = 'Invalid format. Expected XX-XXXXXXX.'; errEl.style.color = 'var(--danger,#ef4444)'; }
+        if (statusEl) { statusEl.textContent = 'Save blocked — fix the format.'; statusEl.style.color = 'var(--danger,#ef4444)'; }
+      }
+      return;
+    }
+  }
+  if (statusEl) { statusEl.textContent = 'Saving...'; statusEl.style.color = 'var(--warm-gray)'; }
+  try {
+    // Empty string means "unset"; preserve as empty string so the user can clear.
+    await MastDB.businessEntity.update('identity', { ein: raw });
+    if (statusEl) { statusEl.textContent = raw ? 'EIN saved.' : 'EIN cleared.'; statusEl.style.color = 'var(--success,#22c55e)'; }
+    if (errEl) { errEl.textContent = ''; }
+  } catch (err) {
+    if (statusEl) { statusEl.textContent = 'Save failed: ' + (err.message || 'unknown error'); statusEl.style.color = 'var(--danger,#ef4444)'; }
+  }
 }
 
 // ============================================================
