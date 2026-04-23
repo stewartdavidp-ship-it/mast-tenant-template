@@ -132,18 +132,18 @@
       ]);
 
       planData = {
-        planStatus: statusSnap.val() || 'none',
-        healthScore: healthSnap.val() || null,
-        profile: profileSnap.val() || null,
-        revenueTargets: targetsSnap.val() || null,
-        marginTargets: marginSnap.val() || null,
-        kpiTargets: kpiSnap.val() || null,
-        channelStrategy: channelSnap.val() || null,
-        seasonalCalendar: calSnap.val() || null,
+        planStatus: statusSnap || 'none',
+        healthScore: healthSnap || null,
+        profile: profileSnap || null,
+        revenueTargets: targetsSnap || null,
+        marginTargets: marginSnap || null,
+        kpiTargets: kpiSnap || null,
+        channelStrategy: channelSnap || null,
+        seasonalCalendar: calSnap || null,
       };
       healthScore = planData.healthScore;
 
-      var revData = reviewsSnap.val() || {};
+      var revData = reviewsSnap || {};
       reviewsData = Object.values(revData).sort(function(a, b) {
         return (b.createdAt || '').localeCompare(a.createdAt || '');
       });
@@ -657,8 +657,8 @@
         MastDB.query('orders').orderByChild('createdAt').limitToLast(500).once('value'),
         MastDB.query('admin/sales').orderByChild('timestamp').limitToLast(500).once('value'),
       ]);
-      var orders = ordersSnap.val() || {};
-      var sales = salesSnap.val() || {};
+      var orders = ordersSnap || {};
+      var sales = salesSnap || {};
 
       var channelActuals = {};
       var totalActual = 0;
