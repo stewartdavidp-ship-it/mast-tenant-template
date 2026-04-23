@@ -19613,8 +19613,14 @@ function wizardPrev(fromStep) {
 function saveWizardProgress(step, extras) {
   var update = { currentStep: step, updatedAt: new Date().toISOString() };
   if (extras) Object.assign(update, extras);
-  MastDB.config.update('setupProgress', update).catch(function(e) {
-    console.warn('Failed to save wizard progress:', e.message);
+  // Per-field set uses Firestore mergeFields: creates the parent doc if missing
+  // (fresh tenants) and preserves siblings written by other setupProgress/*
+  // paths. Previous single .update() threw 5 NOT_FOUND on first wizard step
+  // for any tenant without a pre-seeded config doc.
+  Object.keys(update).forEach(function(k) {
+    MastDB.config.set('setupProgress/' + k, update[k]).catch(function(e) {
+      console.warn('Failed to save wizard progress (' + k + '):', e.message);
+    });
   });
 }
 
