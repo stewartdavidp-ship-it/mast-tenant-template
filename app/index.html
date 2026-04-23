@@ -31270,7 +31270,7 @@ function exitIntakeMode() {
 // PRODUCTION SYSTEM — loadProduction, PURPOSE_LABELS, PROD_JOB_TRANSITIONS moved to production module
 function loadOperators() {
   MastDB.operators.get().then(function(snap) {
-    operators = snap.val() || {};
+    operators = snap || {};
     renderOperatorsList();
   });
 }
@@ -31364,7 +31364,7 @@ var STUDIO_RADIUS_METERS = 500;
 
 function loadStudioLocations() {
   MastDB.studioLocations.get().then(function(snap) {
-    studioLocations = snap.val() || {};
+    studioLocations = snap || {};
     renderStudioLocations();
   });
 }
@@ -31631,7 +31631,7 @@ function isNearAnyStudio(lat, lng, locations) {
 function loadLocations() {
   if (locationsLoaded) { renderLocationsList(); return; }
   MastDB.locations.get().then(function(snap) {
-    locationsData = snap.val() || {};
+    locationsData = snap || {};
     locationsLoaded = true;
     ensureHomeLocation();
     renderLocationsList();
