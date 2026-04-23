@@ -10208,7 +10208,8 @@ async function loadWalletHistory() {
   try {
     var snap = await MastDB.tokenLog.recent(50);
     var entries = [];
-    snap.forEach(function(child) { entries.push(child.val()); });
+    var rows = snap || {};
+    Object.keys(rows).forEach(function(childKey) { entries.push(rows[childKey]); });
     // Filter to last 30 days
     var cutoff = Date.now() - (30 * 24 * 60 * 60 * 1000);
     entries = entries.filter(function(e) { var ts = e.at || e.timestamp; return ts && new Date(ts).getTime() > cutoff; });
@@ -21242,7 +21243,7 @@ async function loadNextStepsCache() {
   try {
     // Check if products exist
     var prodSnap = await MastDB.products.query().limitToFirst(1).once('value');
-    window._nextStepsCache.hasProducts = prodSnap.exists();
+    window._nextStepsCache.hasProducts = !!(prodSnap && Object.keys(prodSnap).length > 0);
   } catch (e) { /* ignore */ }
   try {
     // Check if website is published
@@ -28330,9 +28331,10 @@ function loadAuditLog() {
   ref.once('value').then(function(snap) {
     auditEntries = [];
     auditKnownActors = {};
-    snap.forEach(function(child) {
-      var entry = child.val();
-      entry._key = child.key;
+    var rows = snap || {};
+    Object.keys(rows).forEach(function(childKey) {
+      var entry = rows[childKey];
+      entry._key = childKey;
       auditEntries.push(entry);
       if (entry.actor && entry.actor.displayName) {
         auditKnownActors[entry.actor.uid] = entry.actor.displayName;
@@ -28363,9 +28365,10 @@ function loadMoreAuditEntries() {
   var ref = MastDB.auditLog.ref().orderByKey().endBefore(auditLastKey).limitToLast(auditPageSize + 1);
   ref.once('value').then(function(snap) {
     var newEntries = [];
-    snap.forEach(function(child) {
-      var entry = child.val();
-      entry._key = child.key;
+    var rows = snap || {};
+    Object.keys(rows).forEach(function(childKey) {
+      var entry = rows[childKey];
+      entry._key = childKey;
       newEntries.push(entry);
       if (entry.actor && entry.actor.displayName) {
         auditKnownActors[entry.actor.uid] = entry.actor.displayName;
@@ -28504,11 +28507,13 @@ async function renderRecordHistory(entity, entityId) {
   try {
     var snap = await MastDB.auditIndex.ref(entity, entityId)
       .orderByKey().limitToLast(20).once('value');
-    if (!snap.exists()) return '';
+    var rows = snap || {};
+    var keys = Object.keys(rows);
+    if (keys.length === 0) return '';
     var entries = [];
-    snap.forEach(function(child) {
-      var e = child.val();
-      e._key = child.key;
+    keys.forEach(function(childKey) {
+      var e = rows[childKey];
+      e._key = childKey;
       entries.push(e);
     });
     entries.reverse();
@@ -34016,7 +34021,7 @@ function renderDashCardQuickActions() {
   var cardConfig = DASHBOARD_CARDS.find(function(c) { return c.id === 'quickActions'; });
 
   MastDB.quickActions.ref(user.uid).once('value').then(function(snap) {
-    var freq = snap.val() || {};
+    var freq = snap || {};
     var allKeys = Object.keys(QUICK_ACTION_DEFS);
     allKeys.sort(function(a, b) {
       var ca = freq[a] ? freq[a].count : 0;
@@ -34269,14 +34274,13 @@ function renderDashCardPendingRefunds() {
 
   MastDB.query('admin/enrollments').orderByChild('refundStatus').equalTo('pending_review').limitToLast(50).once('value').then(function(snap) {
     var items = [];
-    if (snap.exists()) {
-      snap.forEach(function(child) {
-        var enr = child.val();
-        if ((enr.status || '').startsWith('cancelled')) {
-          items.push({ id: child.key, ...enr });
-        }
-      });
-    }
+    var rows = snap || {};
+    Object.keys(rows).forEach(function(childKey) {
+      var enr = rows[childKey];
+      if ((enr.status || '').startsWith('cancelled')) {
+        items.push({ id: childKey, ...enr });
+      }
+    });
     // Sort newest first
     items.sort(function(a, b) { return (b.cancelledAt || '').localeCompare(a.cancelledAt || ''); });
 
@@ -34328,13 +34332,12 @@ function approveRefund(enrollmentId, paymentType) {
   MastDB.update('admin/enrollments/' + enrollmentId, update).then(function() {
     if (paymentType === 'pass') {
       // Restore pass visit
-      MastDB.get('admin/enrollments/' + enrollmentId).then(function(snapVal) {
-        var enr = snap.val();
+      MastDB.get('admin/enrollments/' + enrollmentId).then(function(enr) {
         if (enr && enr.passId && enr.studentUid) {
           var passRef = MastDB.query('public/accounts/' + enr.studentUid + '/passes/' + enr.passId);
           passRef.once('value').then(function(passSnap) {
-            if (passSnap.exists()) {
-              var pass = passSnap.val();
+            var pass = passSnap;
+            if (pass && Object.keys(pass).length > 0) {
               var updates = { visitsUsed: Math.max(0, (pass.visitsUsed || 0) - 1) };
               if (pass.visitsRemaining !== null && pass.visitsRemaining !== undefined) {
                 updates.visitsRemaining = (pass.visitsRemaining || 0) + 1;
@@ -34394,14 +34397,13 @@ function renderDashCardRecentCancellations() {
 
   MastDB.query('admin/enrollments').orderByChild('cancelledAt').startAt(sevenDaysAgo).limitToLast(100).once('value').then(function(snap) {
     var cancelled = [];
-    if (snap.exists()) {
-      snap.forEach(function(child) {
-        var enr = child.val();
-        if ((enr.status || '').startsWith('cancelled') && enr.cancelledAt) {
-          cancelled.push(enr);
-        }
-      });
-    }
+    var rows = snap || {};
+    Object.keys(rows).forEach(function(childKey) {
+      var enr = rows[childKey];
+      if ((enr.status || '').startsWith('cancelled') && enr.cancelledAt) {
+        cancelled.push(enr);
+      }
+    });
 
     // Group by sessionId
     var bySession = {};
@@ -34423,8 +34425,8 @@ function renderDashCardRecentCancellations() {
       var p1 = group.classId ? MastDB.get('public/classes/' + group.classId) : Promise.resolve(null);
       var p2 = group.sessionId ? MastDB.get('public/classSessions/' + group.sessionId) : Promise.resolve(null);
       return Promise.all([p1, p2]).then(function(results) {
-        group.classData = results[0] && results[0].exists() ? results[0].val() : {};
-        group.sessionData = results[1] && results[1].exists() ? results[1].val() : {};
+        group.classData = results[0] || {};
+        group.sessionData = results[1] || {};
       });
     });
 
