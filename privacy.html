@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Mast Platform Privacy Policy. How we collect, use, and protect your personal information.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdn.jsdelivr.net https://apis.google.com https://maps.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://us-central1-mast-platform-prod.cloudfunctions.net https://*.firebasestorage.app https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://maps.googleapis.com https://places.googleapis.com; img-src 'self' data: blob: https:; frame-src 'self' https://*.firebaseapp.com; frame-ancestors 'none';">
+<title>Privacy Policy &mdash; Mast</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<script>
+(function(){
+  var B='https://firestore.googleapis.com/v1/projects/mast-platform-prod/databases/(default)/documents';
+  var h=location.hostname,C=5*60*1000;
+  if(h==='localhost'||h==='127.0.0.1')return;
+  try{var r=localStorage.getItem('mast_tenant_'+h);if(r){var c=JSON.parse(r);if(Date.now()-c.timestamp<C){window.__earlyTenant=Promise.resolve(c.data);return;}}}catch(e){}
+  var ek=h.replace(/\./g,'_');
+  function uv(v){if(v==null)return null;if('stringValue' in v)return v.stringValue;if('booleanValue' in v)return v.booleanValue;if('integerValue' in v)return Number(v.integerValue);if('doubleValue' in v)return v.doubleValue;if('nullValue' in v)return null;if('timestampValue' in v)return v.timestampValue;if('mapValue' in v){var o={};var f=v.mapValue.fields||{};for(var k in f)o[k]=uv(f[k]);return o;}if('arrayValue' in v)return(v.arrayValue.values||[]).map(uv);return null;}
+  function uf(fields){var o={};for(var k in fields)o[k]=uv(fields[k]);return o;}
+  function uw(d){if(d&&typeof d==='object'&&!Array.isArray(d)&&'_v' in d&&Object.keys(d).length===1)return d._v;return d;}
+  window.__earlyTenant=fetch(B+'/platform_tenantsByDomain/'+ek).then(function(r){return r.ok?r.json():null}).then(function(doc){
+    var tid=doc&&doc.fields?uw(uf(doc.fields)):null;
+    if(typeof tid!=='string'||!tid)return null;
+    return fetch(B+'/platform_tenantPublicConfigs/'+tid).then(function(r){return r.ok?r.json():null}).then(function(cdoc){
+      if(!cdoc||!cdoc.fields)return null;
+      var pc=uf(cdoc.fields);
+      return pc?{tenantId:tid,publicConfig:pc}:null;
+    });
+  }).catch(function(){return null;});
+})();
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="storefront.css">
+<link rel="stylesheet" href="cart.css" media="print" onload="this.media='all'">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<script>(function(){var s=localStorage.getItem('mast-theme');var d=window.matchMedia('(prefers-color-scheme:dark)').matches;if(s==='dark'||(s!=='light'&&d))document.documentElement.classList.add('dark');else document.documentElement.classList.add('light');})();</script>
+<style>
+.privacy-container {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 4rem 2rem 4rem;
+}
+.privacy-header {
+  text-align: center;
+  margin-bottom: 2.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--surface-card-border, #eee);
+}
+.privacy-header h1 {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 2.6rem;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  margin: 0 0 0.5rem;
+  color: var(--text);
+}
+.privacy-header .privacy-meta {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: 0.95rem;
+  color: var(--warm-gray, #888);
+}
+.privacy-content {
+  background: var(--surface-card, #fff);
+  border: 1px solid var(--surface-card-border, #eee);
+  border-radius: 10px;
+  padding: 2.5rem 2rem;
+  line-height: 1.75;
+  color: var(--text);
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+.privacy-content h2 {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.6rem;
+  font-weight: 500;
+  margin: 2.5rem 0 0.75rem;
+  color: var(--text);
+  padding-top: 1rem;
+  border-top: 1px solid var(--surface-card-border, #eee);
+}
+.privacy-content h2:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+.privacy-content h3 {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: 1.05rem;
+  font-weight: 500;
+  margin: 1.25rem 0 0.5rem;
+  color: var(--text);
+}
+.privacy-content p {
+  margin: 0 0 1rem;
+  font-size: 0.96rem;
+}
+.privacy-content ul, .privacy-content ol {
+  margin: 0 0 1rem;
+  padding-left: 1.75rem;
+}
+.privacy-content li {
+  font-size: 0.96rem;
+  margin-bottom: 0.45rem;
+}
+.privacy-content strong {
+  font-weight: 600;
+}
+.privacy-content a {
+  color: var(--primary, #b7410e);
+  text-decoration: underline;
+}
+.privacy-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  font-size: 0.88rem;
+}
+.privacy-content th, .privacy-content td {
+  border: 1px solid var(--surface-card-border, #eee);
+  padding: 0.55rem 0.7rem;
+  text-align: left;
+  vertical-align: top;
+}
+.privacy-content th {
+  background: var(--surface-dark, #f6f6f6);
+  color: var(--on-dark, #2a2a2a);
+  font-weight: 600;
+}
+.privacy-footer {
+  text-align: center;
+  margin-top: 2rem;
+  padding: 1.5rem;
+  font-size: 0.85rem;
+  color: var(--warm-gray, #888);
+  line-height: 1.6;
+}
+@media (max-width: 640px) {
+  .privacy-container {
+    padding: 2rem 1rem 3rem;
+  }
+  .privacy-content {
+    padding: 1.5rem 1.25rem;
+  }
+  .privacy-header h1 {
+    font-size: 2rem;
+  }
+  .privacy-content table {
+    font-size: 0.82rem;
+  }
+  .privacy-content th, .privacy-content td {
+    padding: 0.4rem 0.5rem;
+  }
+}
+</style>
+</head>
+<body>
+
+<!-- ============ NAV ============ -->
+<nav id="mainNav"></nav>
+<div class="nav-mobile-menu" id="mobileMenu"></div>
+
+<!-- ============ CONTENT ============ -->
+<div class="privacy-container">
+
+  <div class="privacy-header">
+    <h1>Privacy Policy</h1>
+    <p class="privacy-meta">Mast Platform &middot; Effective March 29, 2026 &middot; Last Updated March 29, 2026</p>
+  </div>
+
+  <div class="privacy-content">
+
+    <h2 id="introduction">1. Introduction</h2>
+    <p>Mast Platform (&ldquo;Mast,&rdquo; &ldquo;we,&rdquo; &ldquo;us,&rdquo; or &ldquo;our&rdquo;) provides a hosted e-commerce platform designed for makers, artisans, and small businesses to sell their products online. This Privacy Policy explains how we collect, use, disclose, and protect personal information when you interact with our platform.</p>
+    <p>This policy applies to:</p>
+    <ul>
+      <li><strong>runmast.com</strong> and all Mast-hosted tenant storefronts</li>
+      <li>The Mast admin application</li>
+      <li>All services provided through the Mast platform</li>
+    </ul>
+
+    <h2 id="who-covered">2. Who This Policy Covers</h2>
+    <p>This Privacy Policy covers three types of users:</p>
+    <ul>
+      <li><strong>Tenant Owners (&ldquo;Merchants&rdquo;)</strong> &mdash; Businesses and individuals who use Mast to create and manage their online storefronts.</li>
+      <li><strong>Shoppers (&ldquo;Customers&rdquo;)</strong> &mdash; People who browse or purchase products from Mast-hosted storefronts.</li>
+      <li><strong>Visitors</strong> &mdash; Anyone who visits runmast.com or a Mast-hosted storefront without making a purchase or creating an account.</li>
+    </ul>
+    <p>If a Tenant Owner has published their own privacy policy for their storefront, that policy governs their relationship with their customers. However, this Mast Platform Privacy Policy continues to govern how Mast itself processes data on behalf of all users.</p>
+
+    <h2 id="info-collect">3. Information We Collect</h2>
+
+    <h3>Information You Provide Directly</h3>
+    <p><strong>Shoppers (during checkout and account interactions):</strong></p>
+    <ul>
+      <li>Name, email address, phone number</li>
+      <li>Shipping address (street, city, state, ZIP code)</li>
+      <li>Billing address (if different from shipping)</li>
+      <li>Commission request details (name, contact info, description of requested work)</li>
+      <li>Newsletter signup (email address, name)</li>
+    </ul>
+    <p><strong>Tenant Owners (during account setup and management):</strong></p>
+    <ul>
+      <li>Business name, contact name, email address, phone number</li>
+      <li>Account credentials (managed through Google Sign-In or email/password via Firebase Authentication)</li>
+    </ul>
+    <p><strong>Event Vendors (via vendor application forms):</strong></p>
+    <ul>
+      <li>Business name, contact name, email, phone, product category</li>
+    </ul>
+    <p><strong>Wholesale Customers:</strong></p>
+    <ul>
+      <li>Resale certificate number (in addition to standard checkout information)</li>
+    </ul>
+
+    <h3>Information Collected Automatically</h3>
+    <p>When you visit any Mast-hosted storefront, we automatically collect:</p>
+    <ul>
+      <li><strong>IP address</strong> &mdash; collected via a third-party service (ipify.org) on each page view</li>
+      <li><strong>Page views</strong> &mdash; which pages you visit and when</li>
+      <li><strong>Interaction data</strong> &mdash; actions such as adding items to cart, clicking navigation links, or clicking social media links</li>
+      <li><strong>Timestamps</strong> &mdash; date and time of each visit and interaction</li>
+    </ul>
+    <p>We do <strong>not</strong> collect browser fingerprints, device identifiers, or user agent strings for tracking purposes.</p>
+
+    <h3>Information From Third Parties</h3>
+    <ul>
+      <li><strong>Payment processors (Square, Stripe)</strong> &mdash; Payment confirmation, transaction IDs, and payment status. We never receive or store your credit card number, CVV, or full payment card details.</li>
+      <li><strong>Etsy</strong> &mdash; For Tenant Owners who connect their Etsy shop, we receive order data and listing information from the Etsy API (authorized by the Tenant Owner).</li>
+      <li><strong>Plaid</strong> &mdash; For Tenant Owners who connect bank accounts for expense tracking, we receive transaction data (amounts, categories, merchant names, dates) via the Plaid API. This connection is initiated and authorized by the Tenant Owner.</li>
+    </ul>
+
+    <h2 id="how-use">4. How We Use Your Information</h2>
+    <p><strong>Service Delivery:</strong></p>
+    <ul>
+      <li>Processing and fulfilling orders (shipping, payment confirmation, order status updates)</li>
+      <li>Sending transactional emails (order confirmations, shipping notifications, commission proposals)</li>
+      <li>Sending SMS notifications (sale alerts, point-of-sale updates) when configured by the Tenant Owner</li>
+      <li>Managing Tenant Owner accounts and storefronts</li>
+      <li>Shipping label generation, address validation, and rate quotes</li>
+    </ul>
+    <p><strong>AI-Powered Features:</strong></p>
+    <ul>
+      <li>Generating social media content suggestions based on product data</li>
+      <li>Providing AI studio assistant responses based on business context and user prompts</li>
+      <li>Classifying product images using AI vision capabilities</li>
+      <li>Researching craft shows and events relevant to the Tenant Owner&rsquo;s business</li>
+    </ul>
+    <p>For more detail on how AI processes your data, see our <a href="https://runmast.com/ai" target="_blank" rel="noopener">AI Transparency Page</a>.</p>
+    <p><strong>Analytics:</strong></p>
+    <ul>
+      <li>Understanding how storefronts are used (page views, popular products, navigation patterns)</li>
+      <li>We use only our own built-in analytics. We do <strong>not</strong> use Google Analytics, Facebook Pixel, or any third-party analytics or advertising services.</li>
+    </ul>
+    <p><strong>Communication:</strong></p>
+    <ul>
+      <li>Transactional emails related to orders and account activity</li>
+      <li>Newsletter communications (only with your consent, and you can unsubscribe at any time)</li>
+      <li>Event announcements for vendors and attendees</li>
+    </ul>
+    <p><strong>Payment Processing:</strong></p>
+    <ul>
+      <li>Facilitating payment through Square or Stripe hosted checkout pages</li>
+      <li>Managing platform subscription billing</li>
+    </ul>
+
+    <h2 id="info-share">5. Information We Share</h2>
+
+    <h3>Third-Party Service Providers</h3>
+    <p>We share information with third-party service providers who help us operate the platform. These providers process data on our behalf and are contractually obligated to protect it.</p>
+
+    <table>
+      <thead><tr><th>Service Provider</th><th>Purpose</th><th>Data Shared</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Google Cloud Platform / Firebase</strong></td><td>Infrastructure, database, file storage, authentication, hosting</td><td>All platform data (encrypted at rest and in transit)</td></tr>
+        <tr><td><strong>Anthropic</strong></td><td>AI features (content generation, image classification, research)</td><td>Product data, business context, user prompts, product images. See <a href="https://runmast.com/ai" target="_blank" rel="noopener">AI Transparency Page</a>.</td></tr>
+        <tr><td><strong>Square</strong></td><td>Payment processing (tenant-configurable)</td><td>Order totals and line items. Customers are redirected to Square&rsquo;s hosted checkout.</td></tr>
+        <tr><td><strong>Stripe</strong></td><td>Payment processing (tenant-configurable) and platform billing</td><td>Order totals and line items. Customers are redirected to Stripe&rsquo;s hosted checkout.</td></tr>
+        <tr><td><strong>Resend</strong></td><td>Transactional email delivery (platform default)</td><td>Recipient email address, email content</td></tr>
+        <tr><td><strong>SendGrid</strong></td><td>Transactional email delivery (tenant-configurable)</td><td>Recipient email address, email content</td></tr>
+        <tr><td><strong>Gmail / SMTP</strong></td><td>Transactional email delivery (tenant-configurable)</td><td>Recipient email address, email content</td></tr>
+        <tr><td><strong>Twilio</strong></td><td>SMS notifications</td><td>Phone number, message content</td></tr>
+        <tr><td><strong>Etsy</strong></td><td>Marketplace integration (tenant-configurable)</td><td>Order data, listing data (authorized by Tenant Owner via OAuth)</td></tr>
+        <tr><td><strong>Shippo</strong></td><td>Shipping labels, rates, tracking, address validation</td><td>Shipping addresses, parcel dimensions/weight, tracking numbers</td></tr>
+        <tr><td><strong>Google Maps / Places API</strong></td><td>Address autocomplete during checkout</td><td>Partial address text as typed by the user</td></tr>
+        <tr><td><strong>ipify.org</strong></td><td>Visitor IP address lookup for analytics</td><td>Visitor&rsquo;s browser contacts this service directly, which receives the visitor&rsquo;s IP address and standard browser headers. We are migrating this to a server-side implementation.</td></tr>
+        <tr><td><strong>hCaptcha</strong></td><td>Bot protection on signup forms</td><td>Captcha verification tokens</td></tr>
+        <tr><td><strong>Plaid</strong></td><td>Bank account linking for expense tracking (tenant-configurable)</td><td>Bank credentials handled by Plaid Link; transaction data returned to Mast</td></tr>
+        <tr><td><strong>Porkbun</strong></td><td>DNS record management for custom domains</td><td>Domain names and DNS record data</td></tr>
+        <tr><td><strong>GitHub</strong></td><td>Template code repository for site deployments</td><td>Authentication tokens (no user data)</td></tr>
+      </tbody>
+    </table>
+
+    <h3>What We Do NOT Do</h3>
+    <ul>
+      <li><strong>We do not sell your personal information.</strong> Not to advertisers, data brokers, or anyone else.</li>
+      <li><strong>We do not use advertising networks or tracking pixels.</strong> No Facebook Pixel, Google Ads, or similar services.</li>
+      <li><strong>We do not use cookies for tracking.</strong> See Section 13 for details on our browser storage practices.</li>
+      <li><strong>We do not share your data with third parties for their own marketing purposes.</strong></li>
+    </ul>
+
+    <h2 id="ai-ml">6. AI and Machine Learning</h2>
+    <p>Mast uses AI to power several features available to Tenant Owners. AI processes product data, business context, and user prompts to generate content, classify images, and provide research assistance.</p>
+    <p><strong>Key points:</strong></p>
+    <ul>
+      <li>AI features are invoked only when a Tenant Owner actively uses them &mdash; there is no background AI processing of your data.</li>
+      <li>AI processing happens server-side through Mast&rsquo;s backend. No data flows directly from your browser to the AI provider.</li>
+      <li>Our AI provider (Anthropic) does not use API data to train their models. Your data is processed and discarded, not retained for model improvement.</li>
+    </ul>
+    <p>For complete details, including what data goes to AI, what does not, and how usage is metered, see our <a href="https://runmast.com/ai" target="_blank" rel="noopener">AI Transparency Page</a>.</p>
+
+    <h2 id="storage-security">7. Data Storage and Security</h2>
+    <ul>
+      <li><strong>Location:</strong> All data is stored in Google Cloud Platform (Firebase) infrastructure in the United States.</li>
+      <li><strong>Encryption at rest:</strong> All stored data is encrypted using Google-managed encryption keys (AES-256).</li>
+      <li><strong>Encryption in transit:</strong> All data transmitted between your browser and our servers is encrypted using TLS (HTTPS).</li>
+      <li><strong>Payment data:</strong> Mast never stores credit card numbers, CVVs, or full payment card details. All payment processing is handled by Square or Stripe through their hosted checkout pages. Mast only stores transaction reference IDs.</li>
+      <li><strong>Tenant isolation:</strong> Each Tenant Owner&rsquo;s data is stored in an isolated path within our database, protected by security rules that prevent cross-tenant access.</li>
+      <li><strong>Credentials and API keys:</strong> All sensitive credentials are stored in Google Cloud Secret Manager, not in application code or databases.</li>
+    </ul>
+    <p>For more details, see our <a href="https://runmast.com/security" target="_blank" rel="noopener">Security Statement</a>.</p>
+
+    <h2 id="retention">8. Data Retention</h2>
+    <p>We retain personal information for as long as necessary to provide our services and fulfill the purposes described in this policy. The following table describes our target retention periods:</p>
+
+    <table>
+      <thead><tr><th>Data Type</th><th>Target Retention Period</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Order data</strong></td><td>Duration of Tenant Owner account plus up to 3 years after account closure (for tax and legal compliance)</td></tr>
+        <tr><td><strong>Analytics data</strong> (page views, interactions, IP addresses)</td><td>Up to 24 months, then deleted or aggregated</td></tr>
+        <tr><td><strong>Email logs</strong></td><td>Up to 12 months</td></tr>
+        <tr><td><strong>Newsletter subscriptions</strong></td><td>Until you unsubscribe; unsubscribe records retained to honor your preference</td></tr>
+        <tr><td><strong>Account data</strong> (Tenant Owner)</td><td>Until account deletion is requested, plus 30 days for processing</td></tr>
+        <tr><td><strong>Account data</strong> (authenticated Shopper)</td><td>Until deletion is requested</td></tr>
+        <tr><td><strong>Guest checkout data</strong></td><td>Retained as part of order data (see above); not associated with a deletable account</td></tr>
+        <tr><td><strong>Event vendor applications</strong></td><td>Duration of the associated event plus up to 12 months</td></tr>
+        <tr><td><strong>Plaid/bank transaction data</strong></td><td>Duration of Tenant Owner account; deleted upon disconnection or account closure</td></tr>
+      </tbody>
+    </table>
+    <p>We are implementing automated enforcement of these retention periods. Until automation is complete, data may be retained beyond these targets. When data reaches the end of its retention period, it is permanently deleted from our systems.</p>
+
+    <h2 id="rights">9. Your Privacy Rights</h2>
+    <p>Regardless of where you live, we provide all users with the following rights:</p>
+    <ul>
+      <li><strong>Right to Know</strong> &mdash; You can request a summary of the personal information we have about you.</li>
+      <li><strong>Right to Delete</strong> &mdash; You can request that we delete your personal information.</li>
+      <li><strong>Right to Correct</strong> &mdash; You can request that we correct inaccurate personal information.</li>
+      <li><strong>Right to Opt Out</strong> &mdash; Although we do not sell personal information, you can contact us to opt out of any data processing you object to.</li>
+    </ul>
+    <p><strong>How to exercise your rights:</strong> Send an email to <strong>privacy@runmast.com</strong> with your request. We will acknowledge your request within 10 business days and respond substantively within 45 days. If we need additional time for complex requests, we will notify you of the extension. We may need to verify your identity before processing your request.</p>
+    <p><strong>Breach notification:</strong> In the event of a data breach affecting your personal information, we will notify affected Tenant Owners within 72 hours of confirming the breach, and affected Shoppers as promptly as practicable. See our <a href="https://runmast.com/security" target="_blank" rel="noopener">Security Statement</a> for details on our incident response process.</p>
+
+    <h2 id="ccpa">10. California Privacy Rights (CCPA/CPRA)</h2>
+    <p>If you are a California resident, you have specific rights under the California Consumer Privacy Act (CCPA) and the California Privacy Rights Act (CPRA).</p>
+    <p><strong>Categories of personal information we collect:</strong></p>
+    <ul>
+      <li>Identifiers (name, email, address, phone number, IP address)</li>
+      <li>Commercial information (order history, products purchased)</li>
+      <li>Internet activity (page views, interaction data)</li>
+      <li>Financial information (payment transaction IDs &mdash; not card numbers)</li>
+    </ul>
+    <p><strong>Your California rights:</strong></p>
+    <ul>
+      <li><strong>Right to know</strong> what personal information we collect, use, and share</li>
+      <li><strong>Right to delete</strong> your personal information</li>
+      <li><strong>Right to correct</strong> inaccurate personal information</li>
+      <li><strong>Right to opt out</strong> of the sale or sharing of personal information &mdash; however, <strong>we do not sell or share personal information for cross-context behavioral advertising</strong></li>
+      <li><strong>Right to non-discrimination</strong> for exercising your privacy rights</li>
+    </ul>
+    <p><strong>Do Not Sell or Share My Personal Information:</strong> Mast does not sell personal information. We do not share personal information for cross-context behavioral advertising. No action is required on your part.</p>
+    <p><strong>Sensitive Personal Information:</strong> Under the CPRA, certain categories of personal information receive enhanced protections. Mast may process sensitive personal information in connection with the Plaid bank account integration (financial account data), which is used solely to provide the expense tracking feature requested by the Tenant Owner. We do not use sensitive personal information for purposes beyond what is necessary to provide the requested service.</p>
+    <p>To exercise your California privacy rights, contact us at <strong>privacy@runmast.com</strong>.</p>
+
+    <h2 id="state-laws">11. Other US State Privacy Laws</h2>
+    <p>We respect the privacy rights granted by state privacy laws across the United States, including those in Virginia (VCDPA), Colorado (CPA), Connecticut (CTDPA), Utah (UCPA), and other states that have enacted comprehensive privacy legislation.</p>
+    <p>If you are a resident of any of these states, you may exercise your rights as described in Section 9 of this policy. We apply the same privacy protections to all users regardless of location.</p>
+
+    <h2 id="children">12. Children&rsquo;s Privacy</h2>
+    <p>Mast is not directed at children under the age of 13. We do not knowingly collect personal information from children under 13. If we become aware that we have collected personal information from a child under 13, we will take steps to delete that information promptly.</p>
+    <p>Mast does not provide age-gating controls on tenant storefronts. Tenant Owners whose products may appeal to children under 13 are responsible for implementing appropriate age verification and parental consent mechanisms as required by COPPA and applicable state laws.</p>
+    <p>If you believe a child under 13 has provided us with personal information, please contact us at <strong>privacy@runmast.com</strong>.</p>
+
+    <h2 id="browser-storage">13. Browser Storage Disclosure</h2>
+    <p>Mast does <strong>not</strong> use cookies for tracking or advertising purposes.</p>
+    <p>We use your browser&rsquo;s local storage (localStorage and sessionStorage) for the following limited purposes:</p>
+
+    <table>
+      <thead><tr><th>Storage Type</th><th>Purpose</th><th>Duration</th></tr></thead>
+      <tbody>
+        <tr><td><strong>localStorage</strong> &mdash; Tenant configuration</td><td>Caches storefront settings for faster page loads</td><td>5-minute expiration, auto-refreshed</td></tr>
+        <tr><td><strong>localStorage</strong> &mdash; Checkout information</td><td>Saves your name, address, and email for convenience on return visits</td><td>Until you clear browser data</td></tr>
+        <tr><td><strong>localStorage</strong> &mdash; Theme preference</td><td>Remembers your dark/light mode choice</td><td>Until you clear browser data</td></tr>
+        <tr><td><strong>sessionStorage</strong> &mdash; Pending order data</td><td>Holds order information during the checkout process</td><td>Cleared when you close the browser tab</td></tr>
+      </tbody>
+    </table>
+    <p>None of this data is transmitted to third parties or used for tracking across websites.</p>
+
+    <h2 id="changes">14. Changes to This Policy</h2>
+    <p>We may update this Privacy Policy from time to time. When we make material changes, we will:</p>
+    <ul>
+      <li>Update the &ldquo;Last Updated&rdquo; date at the top of this policy</li>
+      <li>Post a notice on runmast.com</li>
+      <li>Notify Tenant Owners via email for significant changes</li>
+    </ul>
+    <p>Your continued use of the platform after changes are posted constitutes your acceptance of the updated policy.</p>
+
+    <h2 id="contact">15. Contact Us</h2>
+    <p>If you have questions about this Privacy Policy or wish to exercise your privacy rights:</p>
+    <p><strong>Email:</strong> privacy@runmast.com<br>
+    <strong>Entity:</strong> Mast Platform<br>
+    <strong>Address:</strong> 10 Longmeadow Way, Acton, MA 01720</p>
+
+  </div>
+
+  <div class="privacy-footer">
+    <p>Mast Platform Privacy Policy &bull; Effective 2026-03-29 &bull; Last Updated 2026-03-29</p>
+  </div>
+
+</div>
+
+<!-- ============ FOOTER ============ -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-logo">
+      <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-tenant-alt="brand" alt="My Shop" />
+      <span data-tenant="year-brand">&copy; 2026 My Shop</span>
+    </div>
+    <ul class="footer-links">
+      <li><a href="index.html">Home</a></li>
+      <li><a href="about.html">About</a></li>
+      <li><a href="shop.html">Shop</a></li>
+      <li><a href="terms.html">Terms</a></li>
+      <li><a href="dpa.html">DPA</a></li>
+      <li><a href="privacy.html">Privacy</a></li>
+    </ul>
+    <div class="footer-social">
+      <a href="#" target="_blank" aria-label="Instagram" data-tenant-href="instagram">
+        <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
+      </a>
+    </div>
+    <div class="powered-by-mast">
+      <a href="https://runmast.com" target="_blank" rel="noopener" title="Powered by Mast">
+        <svg viewBox="0 0 12 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect y="0" width="12" height="7" rx="1.5" fill="#D4A853"/><rect y="9" width="12" height="7" rx="1.5" fill="#8B7355"/><rect y="18" width="12" height="6" rx="1.5" fill="#5C4A32"/></svg>
+        <div class="pbm-stack"><span class="pbm-wm">Powered by</span><span class="pbm-name">MAST</span></div>
+      </a>
+    </div>
+  </div>
+</footer>
+
+<!-- Storefront scripts -->
+<script src="storefront-tenant.js"></script>
+<script src="storefront-theme.js"></script>
+<script src="storefront-nav.js"></script>
+<script src="tenant-brand.js?v=2"></script>
+<script src="cart.js"></script>
+<script defer src="feedback-widget.js"></script>
+<script defer src="share-widget.js"></script>
+
+</body>
+</html>
