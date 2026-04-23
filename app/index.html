@@ -5277,6 +5277,22 @@
   <!-- ===== MAIN CONTENT ===== -->
   <div class="main">
 
+    <!-- Legacy-tenant Business Entity backfill banner (S2 — Entity Phase 1) -->
+    <div id="legacyEntityBootstrapBanner" style="display:none;background:rgba(42,124,111,0.12);border:1px solid rgba(42,124,111,0.35);border-radius:8px;padding:12px 16px;margin:0 0 16px;font-size:0.9rem;color:var(--text,#fff);">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+        <div style="flex:1 1 300px;">
+          <strong>Set your engagement mode in 30 seconds.</strong>
+          <div style="margin-top:4px;font-size:0.85rem;color:var(--warm-gray);">
+            Mast now adapts the admin to how you work. We can pre-fill based on your existing setup &mdash; you'll review before anything saves.
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <button class="btn btn-primary" id="legacyEntityBannerCta" onclick="onLegacyEntityBannerCta()" style="font-size:0.85rem;padding:6px 14px;">Set up</button>
+          <button onclick="dismissLegacyEntityBanner()" title="Dismiss" style="background:none;border:none;color:var(--warm-gray);font-size:1.25rem;cursor:pointer;padding:2px 8px;line-height:1;">&times;</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ===== EMAIL LOG TAB ===== -->
     <div id="emailLogTab" style="display:none;">
       <div id="emailLogContent"></div>
@@ -8262,11 +8278,14 @@
         <div class="form-group" style="margin-top:20px;">
           <label style="font-weight:600;">Engagement mode</label>
           <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">
-            Captured during onboarding. Controls which import jobs fire when products are added.
+            Controls which import jobs fire and which modules appear. Switching mode re-applies surface defaults.
           </p>
-          <div id="engagementModeDisplay" style="padding:10px 14px;background:var(--bg-secondary,#232323);border-radius:8px;font-size:0.9rem;color:var(--text,#fff);">
-            <span style="color:var(--warm-gray);">Not set</span>
-          </div>
+          <div id="engagementModeDisplay" style="margin-bottom:8px;font-size:0.85rem;color:var(--warm-gray);"></div>
+          <select id="engagementModeSelect" onchange="onEngagementModeChange(this.value)"
+            style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
+            <option value="">Not set</option>
+          </select>
+          <div id="engagementModeStatus" style="margin-top:8px;font-size:0.85rem;"></div>
         </div>
         <div class="form-group" style="margin-top:24px;">
           <label style="font-weight:600;">Surface</label>
@@ -12527,6 +12546,12 @@ auth.onAuthStateChanged(async function(user) {
   // Guided next steps (module-aware onboarding) — replaces old setup banner
   Promise.all([loadNextStepsCache(), loadDismissedSteps()]).then(function() { renderDashCardSetupShop(); });
 
+  // Legacy Business Entity bootstrap banner (S2 — Entity Phase 1).
+  // Non-blocking: failures are swallowed inside the function.
+  if (typeof renderLegacyEntityBannerIfNeeded === 'function') {
+    renderLegacyEntityBannerIfNeeded();
+  }
+
   // Load GitHub token for image uploads — admin only
   if (isAdmin()) {
     MastDB.config.githubToken().once('value').then(function(snap) {
@@ -14327,15 +14352,21 @@ async function loadEngagementSettings() {
   if (bootstrapBanner) bootstrapBanner.style.display = (status === 'draft' && engagement.bootstrappedFromBackfill) ? '' : 'none';
   if (noEntityBanner) noEntityBanner.style.display = status === 'none' ? '' : 'none';
 
-  // Mode display
+  // Mode editor (S2) — dropdown + current-mode hint.
   var modeCards = (window.BusinessEntityConstants && BusinessEntityConstants.ENGAGEMENT_MODE_CARDS) || [];
-  var modeLabel = engagement.mode || null;
+  var modeLabel = engagement.mode || '';
+  var selectEl = document.getElementById('engagementModeSelect');
+  if (selectEl) {
+    var optsHtml = '<option value="">Not set</option>' + modeCards.map(function(c) {
+      return '<option value="' + esc(c.value) + '"' + (c.value === modeLabel ? ' selected' : '') + '>' + esc(c.title) + '</option>';
+    }).join('');
+    selectEl.innerHTML = optsHtml;
+  }
   if (modeLabel) {
     var match = modeCards.filter(function(c) { return c.value === modeLabel; })[0];
-    modeEl.innerHTML = '<strong>' + esc(match ? match.title : modeLabel) + '</strong>' +
-      (match ? ' <span style="color:var(--warm-gray);font-size:0.85rem;">\u2014 ' + esc(match.body) + '</span>' : '');
+    modeEl.innerHTML = match ? esc(match.body) : '';
   } else {
-    modeEl.innerHTML = '<span style="color:var(--warm-gray);">Not set. Complete the Business Entity wizard to capture this.</span>';
+    modeEl.innerHTML = '<span style="color:var(--warm-gray);">Not set. Pick a mode below or complete the onboarding wizard.</span>';
   }
 
   // Surface radios
@@ -14439,6 +14470,188 @@ function resetEngagementModulesToArchetype() {
   renderEngagementModulesCheckboxes(defaults.modulesShown.slice());
   var statusEl = document.getElementById('engagementModulesStatus');
   if (statusEl) { statusEl.textContent = 'Reset to archetype defaults. Click Save to apply.'; statusEl.style.color = 'var(--warm-gray)'; }
+}
+
+// ============================================================
+// Engagement mode editor (S2 — Entity Phase 1)
+// Switching mode re-applies DEFAULT_SURFACE_BY_MODE and surfaces a
+// side-effect preview per spec §5 before committing.
+// ============================================================
+
+var _ENGAGEMENT_MODE_SIDE_EFFECTS = {
+  'storefront':    'Your public storefront becomes the primary sales surface. New imports publish directly to it.',
+  'sync-channels': 'Mast becomes the source-of-truth for your external channels (Etsy, Shopify, Square). New imports route to PIM, not your storefront.',
+  'back-office':   'The public storefront stops publishing new products. POS / orders / inventory remain active. Existing products stay live \u2014 nothing is deleted.'
+};
+
+async function onEngagementModeChange(newMode) {
+  var statusEl = document.getElementById('engagementModeStatus');
+  var selectEl = document.getElementById('engagementModeSelect');
+  if (!selectEl) return;
+  if (!newMode) { if (statusEl) statusEl.textContent = ''; return; }
+
+  var ent = null;
+  try { ent = await MastDB.businessEntity.get(); } catch (e) {}
+  var current = (ent && ent.engagement && ent.engagement.mode) || '';
+  if (newMode === current) return;
+
+  var sideEffect = _ENGAGEMENT_MODE_SIDE_EFFECTS[newMode] || '';
+  var modeCards = (window.BusinessEntityConstants && BusinessEntityConstants.ENGAGEMENT_MODE_CARDS) || [];
+  var nextMatch = modeCards.filter(function(c) { return c.value === newMode; })[0];
+  var title = nextMatch ? nextMatch.title : newMode;
+  var defaults = (window.BusinessEntityConstants && BusinessEntityConstants.DEFAULT_SURFACE_BY_MODE) || {};
+  var nextSurface = defaults[newMode] || 'ui-first';
+
+  var ok = await mastConfirm(
+    'Switch to "' + title + '"?\n\n' + sideEffect +
+    '\n\nYour default surface will reset to "' + nextSurface + '". You can fine-tune surface + modules below.',
+    { title: 'Change engagement mode', confirmLabel: 'Switch mode', cancelLabel: 'Cancel' }
+  );
+  if (!ok) {
+    selectEl.value = current || '';
+    return;
+  }
+
+  if (statusEl) { statusEl.textContent = 'Saving...'; statusEl.style.color = 'var(--warm-gray)'; }
+  try {
+    await MastDB.businessEntity.update('engagement', { mode: newMode, surface: nextSurface });
+    if (statusEl) { statusEl.textContent = 'Mode changed to "' + title + '". Surface reset to "' + nextSurface + '".'; statusEl.style.color = 'var(--success,#22c55e)'; }
+    // Re-hydrate settings UI (refresh surface radios + modules) + sidebar gating.
+    await loadEngagementSettings();
+    if (typeof hydrateEngagementSurface === 'function') await hydrateEngagementSurface();
+    if (typeof applySidebarGating === 'function') applySidebarGating();
+  } catch (err) {
+    if (statusEl) { statusEl.textContent = 'Save failed: ' + (err.message || 'unknown error'); statusEl.style.color = 'var(--danger,#ef4444)'; }
+    selectEl.value = current || '';
+  }
+}
+
+// ============================================================
+// Legacy-tenant Business Entity backfill banner (S2)
+// Shown to tenants without admin/businessEntity whose planner profile
+// is non-empty. Click-through runs backfillBusinessEntity CF
+// (dry-run preview → confirm → commit) and navigates to Settings >
+// Engagement for surface confirmation. Dismissal persists; per cutover
+// RULE "no forced re-onboarding", the banner does NOT return on
+// subsequent sessions once dismissed.
+// ============================================================
+
+var _legacyEntityBannerShown = false;
+
+async function renderLegacyEntityBannerIfNeeded() {
+  if (_legacyEntityBannerShown) return;
+  var banner = document.getElementById('legacyEntityBootstrapBanner');
+  if (!banner) return;
+  try {
+    // 1. Check dismissal.
+    var uiState = await MastDB.get('admin/businessEntity/ui');
+    if (uiState && uiState.bannerDismissedAt) { banner.style.display = 'none'; return; }
+    // 2. Check entity status — show only if none/draft.
+    var ent = await MastDB.businessEntity.get();
+    var status = (ent && ent.entityStatus) || 'none';
+    if (status !== 'none' && status !== 'draft') { banner.style.display = 'none'; return; }
+    // 3. Check planner profile — legacy tenants have admin/businessPlan/profile/*.
+    var plannerProfile = await MastDB.get('admin/businessPlan/profile');
+    var hasPlannerData = plannerProfile && typeof plannerProfile === 'object' && Object.keys(plannerProfile).length > 0;
+    if (!hasPlannerData) { banner.style.display = 'none'; return; }
+    // 4. If entity already has engagement.mode, no point showing banner.
+    if (ent && ent.engagement && ent.engagement.mode && status === 'draft') {
+      banner.style.display = 'none'; return;
+    }
+    banner.style.display = '';
+    _legacyEntityBannerShown = true;
+  } catch (err) {
+    console.warn('[legacy entity banner] render failed:', err && err.message);
+    banner.style.display = 'none';
+  }
+}
+
+async function dismissLegacyEntityBanner() {
+  var banner = document.getElementById('legacyEntityBootstrapBanner');
+  if (banner) banner.style.display = 'none';
+  try {
+    await MastDB.update('admin/businessEntity/ui', { bannerDismissedAt: new Date().toISOString() });
+  } catch (err) {
+    console.warn('[legacy entity banner] dismiss write failed:', err && err.message);
+  }
+}
+
+async function onLegacyEntityBannerCta() {
+  var cta = document.getElementById('legacyEntityBannerCta');
+  if (cta) { cta.disabled = true; cta.textContent = 'Previewing...'; }
+  var tenantId = (typeof TENANT_ID !== 'undefined') ? TENANT_ID : null;
+  if (!tenantId || tenantId === 'unknown') {
+    await mastAlert('Cannot bootstrap: tenant ID unavailable. Reload and try again.', { title: 'Bootstrap failed' });
+    if (cta) { cta.disabled = false; cta.textContent = 'Set up'; }
+    return;
+  }
+  // Step 1: dry-run preview.
+  var proposed = null;
+  try {
+    var dryResult = await firebase.functions().httpsCallable('backfillBusinessEntity')({ tenantId: tenantId, dryRun: true });
+    proposed = (dryResult && dryResult.data) || null;
+  } catch (err) {
+    if (cta) { cta.disabled = false; cta.textContent = 'Set up'; }
+    await mastAlert('Preview failed: ' + (err.message || 'unknown error'), { title: 'Bootstrap preview failed' });
+    return;
+  }
+  if (cta) { cta.disabled = false; cta.textContent = 'Set up'; }
+
+  // Already backfilled? Show info + dismiss banner.
+  if (proposed && proposed.alreadyBackfilled) {
+    await mastAlert('Your business entity record is already set up. The banner will hide.', { title: 'Already set up' });
+    await dismissLegacyEntityBanner();
+    navigateTo('settings');
+    setTimeout(function() { switchSettingsSubView('engagement'); }, 80);
+    return;
+  }
+
+  var summary = _formatBackfillPreview(proposed);
+  var ok = await mastConfirm(
+    summary + '\n\nWe will write these as a draft. You can edit them in Settings > Engagement before activating.',
+    { title: 'Review proposed entity', confirmLabel: 'Confirm and save', cancelLabel: 'Cancel' }
+  );
+  if (!ok) return;
+
+  // Step 2: commit.
+  if (cta) { cta.disabled = true; cta.textContent = 'Saving...'; }
+  try {
+    await firebase.functions().httpsCallable('backfillBusinessEntity')({ tenantId: tenantId, dryRun: false });
+  } catch (err) {
+    if (cta) { cta.disabled = false; cta.textContent = 'Set up'; }
+    await mastAlert('Save failed: ' + (err.message || 'unknown error'), { title: 'Bootstrap save failed' });
+    return;
+  }
+  // Hide banner and navigate to Settings > Engagement.
+  var banner = document.getElementById('legacyEntityBootstrapBanner');
+  if (banner) banner.style.display = 'none';
+  _legacyEntityBannerShown = true;
+  // Note: we intentionally do NOT set bannerDismissedAt here; the post-backfill
+  // entityStatus becomes 'draft' with engagement.mode populated, which the
+  // renderLegacyEntityBannerIfNeeded filter treats as "done" (no re-show).
+  navigateTo('settings');
+  setTimeout(function() {
+    switchSettingsSubView('engagement');
+    var statusEl = document.getElementById('engagementModeStatus');
+    if (statusEl) { statusEl.textContent = 'Entity record created. Review your mode and surface below.'; statusEl.style.color = 'var(--success,#22c55e)'; }
+  }, 120);
+}
+
+function _formatBackfillPreview(proposed) {
+  if (!proposed) return 'No preview available.';
+  var lines = ['Preview of your proposed Business Entity record:'];
+  var p = proposed.proposed || {};
+  var ident = p.identity || {};
+  var eng = p.engagement || {};
+  var peo = p.people || {};
+  if (ident.businessName) lines.push('  \u2022 Business name: ' + ident.businessName);
+  if (ident.archetype) lines.push('  \u2022 Archetype: ' + ident.archetype);
+  if (ident.yearsInBusiness) lines.push('  \u2022 Years in business: ' + ident.yearsInBusiness);
+  if (eng.mode) lines.push('  \u2022 Engagement mode: ' + eng.mode);
+  if (eng.surface) lines.push('  \u2022 Surface: ' + eng.surface);
+  if (peo.primaryContact && peo.primaryContact.email) lines.push('  \u2022 Primary contact: ' + peo.primaryContact.email);
+  if (lines.length === 1) lines.push('  (no mappable fields found \u2014 we will write a minimal draft).');
+  return lines.join('\n');
 }
 
 // ============================================================
