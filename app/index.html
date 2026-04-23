@@ -2592,6 +2592,13 @@
     .sidebar-section.locked .sidebar-section-arrow { display: none; }
     .sidebar-section.locked .sidebar-section-header { cursor: pointer; opacity: 0.25; }
     .sidebar-section.locked .sidebar-section-header:hover { opacity: 0.45; }
+
+    /* ========== SIDEBAR ENGAGEMENT FILTERING (B6 — Entity Phase 1) ========== */
+    /* Hides sections that fall outside the tenant's engagement.surface (ai-first
+       hides everything except dashboard + manage) or engagement.modulesShown[]
+       (ui-first filters). Orthogonal to subscription .locked state — both can
+       stack. Fail-open: unset when _engagementSurface is null/hybrid. */
+    .sidebar-section.engagement-hidden { display: none !important; }
     .sidebar-lock-icon { font-size: 0.72rem; margin-left: auto; flex-shrink: 0; opacity: 0.6; }
     .sidebar-upgrade-nudge {
       display: none;
@@ -6823,6 +6830,7 @@
         <button class="view-tab" onclick="switchSettingsSubView('dashboard')">Dashboard</button>
         <button class="view-tab" onclick="switchSettingsSubView('domains')">Domains</button>
         <button class="view-tab" onclick="switchSettingsSubView('ai')">AI</button>
+        <button class="view-tab" onclick="switchSettingsSubView('engagement')">Engagement</button>
         <button class="view-tab" onclick="switchSettingsSubView('notifications')">Notifications <span id="settingsNotifBadge" class="sidebar-badge alert" style="display:none;margin-left:4px;"></span></button>
         <button class="view-tab" onclick="switchSettingsSubView('pim')">PIM</button>
         <button class="view-tab" onclick="switchSettingsSubView('maker')">Maker</button>
@@ -8157,6 +8165,60 @@
           <p style="font-size:0.78rem;color:var(--warm-gray-light);margin-top:8px;">
             Once pasted, just say <strong>"Startup Mast"</strong> in any conversation to get started.
           </p>
+        </div>
+      </div>
+      <!-- Engagement Settings (B6 — Entity Phase 1) -->
+      <div id="settingsSubEngagement" style="display:none;max-width:640px;">
+        <div class="form-group">
+          <label style="font-size:1.15rem;font-weight:600;">Engagement &amp; Navigation</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
+            Your engagement mode was captured during onboarding. You can change how Mast looks (surface) and which modules appear in the sidebar here.
+          </p>
+        </div>
+        <div id="engagementBootstrapBanner" style="display:none;background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.3);border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:0.9rem;color:var(--text,#fff);">
+          <strong>&#128221; Bootstrapped setup</strong>
+          <div style="margin-top:4px;font-size:0.85rem;color:var(--warm-gray);">
+            Your engagement settings were auto-filled because this tenant pre-dates the onboarding wizard. Review and adjust below.
+          </div>
+        </div>
+        <div id="engagementNoEntityBanner" style="display:none;background:rgba(66,165,245,0.08);border:1px solid rgba(66,165,245,0.25);border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:0.9rem;color:var(--text,#fff);">
+          <strong>&#8505;&#65039; No business entity record</strong>
+          <div style="margin-top:4px;font-size:0.85rem;color:var(--warm-gray);">
+            Changes here save to the entity record as a draft. Complete the Business Entity wizard to finish onboarding.
+          </div>
+        </div>
+        <div class="form-group" style="margin-top:20px;">
+          <label style="font-weight:600;">Engagement mode</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">
+            Captured during onboarding. Controls which import jobs fire when products are added.
+          </p>
+          <div id="engagementModeDisplay" style="padding:10px 14px;background:var(--bg-secondary,#232323);border-radius:8px;font-size:0.9rem;color:var(--text,#fff);">
+            <span style="color:var(--warm-gray);">Not set</span>
+          </div>
+        </div>
+        <div class="form-group" style="margin-top:24px;">
+          <label style="font-weight:600;">Surface</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">
+            How Mast presents itself. AI-first collapses the sidebar to Dashboard + Manage; UI-first shows only the modules you select below; Hybrid shows the full sidebar with an Advisor banner.
+          </p>
+          <div id="engagementSurfaceOptions" style="display:flex;flex-direction:column;gap:8px;">
+            <div style="color:var(--warm-gray);font-size:0.85rem;">Loading...</div>
+          </div>
+          <div id="engagementSurfaceStatus" style="margin-top:8px;font-size:0.85rem;"></div>
+        </div>
+        <div class="form-group" style="margin-top:24px;" id="engagementModulesGroup">
+          <label style="font-weight:600;">Modules shown in sidebar</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">
+            Select which sidebar sections appear when surface is <strong>UI-first</strong>. Dashboard and Manage are always visible. Ignored in AI-first and Hybrid modes.
+          </p>
+          <div id="engagementModulesList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;">
+            <div style="color:var(--warm-gray);font-size:0.85rem;">Loading...</div>
+          </div>
+          <div style="margin-top:12px;display:flex;gap:8px;">
+            <button class="btn btn-primary" onclick="saveEngagementModulesShown()" id="engagementModulesSaveBtn">Save modules</button>
+            <button class="btn btn-secondary" onclick="resetEngagementModulesToArchetype()" id="engagementModulesResetBtn" title="Restore the default list for your archetype">Reset to archetype defaults</button>
+          </div>
+          <div id="engagementModulesStatus" style="margin-top:8px;font-size:0.85rem;"></div>
         </div>
       </div>
     </div>
@@ -9973,6 +10035,42 @@ var EVENTS_TIER_ORDER = ['free', 'starter', 'organizer', 'professional'];
 // --- Subscription State ---
 var _tenantSubscription = null;
 
+// B6 (Entity Phase 1): engagement surface snapshot for sidebar gating.
+// Shape: { mode, surface, modulesShown }. Fail-open default {mode:'hybrid',
+// surface:'ui-first', modulesShown:null} — legacy tenants without an entity
+// record must see the full nav, not a collapsed one.
+var _engagementSurface = null;
+
+function getEngagementSurface() {
+  return _engagementSurface || { mode: 'hybrid', surface: 'ui-first', modulesShown: null };
+}
+
+async function hydrateEngagementSurface() {
+  var fallback = { mode: 'hybrid', surface: 'ui-first', modulesShown: null };
+  try {
+    if (!window.MastDB || !window.MastDB.businessEntity) {
+      _engagementSurface = fallback;
+      return _engagementSurface;
+    }
+    var ent = await window.MastDB.businessEntity.get();
+    var e = ent && ent.engagement;
+    if (e && e.mode) {
+      var defaults = (window.BusinessEntityConstants && window.BusinessEntityConstants.DEFAULT_SURFACE_BY_MODE) || {};
+      _engagementSurface = {
+        mode: e.mode,
+        surface: e.surface || defaults[e.mode] || 'ui-first',
+        modulesShown: Array.isArray(e.modulesShown) ? e.modulesShown : null
+      };
+    } else {
+      _engagementSurface = fallback;
+    }
+  } catch (err) {
+    console.warn('[engagement] hydration failed, fail-open hybrid/ui-first:', err && err.message);
+    _engagementSurface = fallback;
+  }
+  return _engagementSurface;
+}
+
 function getTenantSubscription() {
   // Default: minimal access if subscription not yet loaded
   if (!_tenantSubscription) {
@@ -10031,10 +10129,12 @@ async function loadTenantSubscription() {
       }
     }
     _tenantSubscription = data;
+    await hydrateEngagementSurface();
     return data;
   } catch (err) {
     console.warn('Subscription load failed, defaulting to minimal access:', err.message);
     _tenantSubscription = { tier: 'publish', modules: ['web'], baseModules: ['web'], selectedModules: [], needsModuleSelection: false };
+    await hydrateEngagementSurface();
     return _tenantSubscription;
   }
 }
@@ -10748,6 +10848,52 @@ var SIDEBAR_SECTION_MODULE_MAP = {
   'show-light': 'show-light'
 };
 
+// B6 (Entity Phase 1): sidebar sections that remain visible across every
+// engagement surface. `manage` holds Settings + Subscription + About, so the
+// user can always reach the picker to flip surface back. Dashboard has no
+// data-section attribute and is always visible via its dashboard-link class.
+var ENGAGEMENT_ALWAYS_VISIBLE_SECTIONS = { manage: 1 };
+
+// B6 (Entity Phase 1): apply engagement-driven nav filtering on top of the
+// subscription gating. Fail-open: if _engagementSurface is missing/null (legacy
+// tenant with no entity record), do nothing and let subscription gating decide.
+function applyEngagementNavFiltering() {
+  var allSections = document.querySelectorAll('.sidebar-section[data-section]');
+  for (var i = 0; i < allSections.length; i++) {
+    allSections[i].classList.remove('engagement-hidden');
+  }
+  var eng = _engagementSurface;
+  if (!eng) return; // pre-hydration or unrecoverable error — leave nav unfiltered
+  var surface = eng.surface || 'ui-first';
+  var modulesShown = Array.isArray(eng.modulesShown) ? eng.modulesShown : null;
+  if (surface === 'hybrid') return; // full nav, advisor banner elsewhere
+  for (var j = 0; j < allSections.length; j++) {
+    var el = allSections[j];
+    var name = el.getAttribute('data-section');
+    if (ENGAGEMENT_ALWAYS_VISIBLE_SECTIONS[name]) continue;
+    if (surface === 'ai-first') {
+      el.classList.add('engagement-hidden');
+      continue;
+    }
+    if (surface === 'ui-first' && modulesShown && modulesShown.length > 0) {
+      // Dual-match: modulesShown[] tokens map loosely — some equal the sidebar
+      // data-section name (e.g. 'make'), others equal a data-route within it
+      // (e.g. 'products'). Keep the section if either kind of match is found.
+      var anyMatch = modulesShown.indexOf(name) !== -1;
+      if (!anyMatch) {
+        var items = el.querySelectorAll('.sidebar-item[data-route]');
+        for (var k = 0; k < items.length; k++) {
+          if (modulesShown.indexOf(items[k].getAttribute('data-route')) !== -1) {
+            anyMatch = true;
+            break;
+          }
+        }
+      }
+      if (!anyMatch) el.classList.add('engagement-hidden');
+    }
+  }
+}
+
 function applySidebarGating() {
   for (var section in SIDEBAR_SECTION_MODULE_MAP) {
     var moduleId = SIDEBAR_SECTION_MODULE_MAP[section];
@@ -10822,6 +10968,7 @@ function applySidebarGating() {
     if (hasShowLight) showLightSection.style.display = '';
   }
 
+  applyEngagementNavFiltering();
   updateSidebarExpandToggle();
 }
 
@@ -14039,7 +14186,7 @@ function getModuleForRouteManifest(route) {
 // ============================================================
 // Settings Sub-Tabs
 // ============================================================
-var settingsSubViews = ['general', 'payments', 'shipping', 'tax', 'email', 'integrations', 'workshop', 'trips', 'storefront', 'dashboard', 'domains', 'ai', 'notifications', 'pim', 'maker'];
+var settingsSubViews = ['general', 'payments', 'shipping', 'tax', 'email', 'integrations', 'workshop', 'trips', 'storefront', 'dashboard', 'domains', 'ai', 'engagement', 'notifications', 'pim', 'maker'];
 function switchSettingsSubView(view) {
   // Hide all sub-views
   settingsSubViews.forEach(function(v) {
@@ -14074,6 +14221,150 @@ function switchSettingsSubView(view) {
   if (view === 'notifications') loadNotificationsSettings();
   if (view === 'pim') loadPimSettings();
   if (view === 'maker') loadMakerSettings();
+  if (view === 'engagement') loadEngagementSettings();
+}
+
+// ============================================================
+// Engagement Settings (B6 — Entity Phase 1)
+// ============================================================
+
+var _engagementSettingsArchetype = null;
+
+async function loadEngagementSettings() {
+  var modeEl = document.getElementById('engagementModeDisplay');
+  var surfaceOpts = document.getElementById('engagementSurfaceOptions');
+  var bootstrapBanner = document.getElementById('engagementBootstrapBanner');
+  var noEntityBanner = document.getElementById('engagementNoEntityBanner');
+  var modulesGroup = document.getElementById('engagementModulesGroup');
+  if (!modeEl || !surfaceOpts) return;
+
+  var ent = null;
+  try {
+    ent = await MastDB.businessEntity.get();
+  } catch (err) {
+    console.warn('[engagement settings] get failed:', err && err.message);
+  }
+  var engagement = (ent && ent.engagement) || {};
+  var identity = (ent && ent.identity) || {};
+  var status = (ent && ent.entityStatus) || 'none';
+  _engagementSettingsArchetype = identity.archetype || null;
+
+  // Banners
+  if (bootstrapBanner) bootstrapBanner.style.display = (status === 'draft' && engagement.bootstrappedFromBackfill) ? '' : 'none';
+  if (noEntityBanner) noEntityBanner.style.display = status === 'none' ? '' : 'none';
+
+  // Mode display
+  var modeCards = (window.BusinessEntityConstants && BusinessEntityConstants.ENGAGEMENT_MODE_CARDS) || [];
+  var modeLabel = engagement.mode || null;
+  if (modeLabel) {
+    var match = modeCards.filter(function(c) { return c.value === modeLabel; })[0];
+    modeEl.innerHTML = '<strong>' + esc(match ? match.title : modeLabel) + '</strong>' +
+      (match ? ' <span style="color:var(--warm-gray);font-size:0.85rem;">\u2014 ' + esc(match.body) + '</span>' : '');
+  } else {
+    modeEl.innerHTML = '<span style="color:var(--warm-gray);">Not set. Complete the Business Entity wizard to capture this.</span>';
+  }
+
+  // Surface radios
+  var surfaceOptions = (window.BusinessEntityConstants && BusinessEntityConstants.SURFACE_OPTIONS) || [
+    { value: 'ai-first', label: 'AI-first', hint: 'Dashboard + Advisor. Ask in plain English.' },
+    { value: 'ui-first', label: 'UI-first', hint: 'Classic menus and forms.' },
+    { value: 'hybrid', label: 'Hybrid', hint: 'Both \u2014 Advisor banner + full nav.' }
+  ];
+  var currentSurface = engagement.surface || (modeLabel && BusinessEntityConstants.DEFAULT_SURFACE_BY_MODE[modeLabel]) || 'ui-first';
+  var surfaceHtml = surfaceOptions.map(function(opt) {
+    var isChecked = opt.value === currentSurface;
+    return '<label style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border:1px solid ' + (isChecked ? 'var(--teal,#2a9d8f)' : 'var(--border,rgba(255,255,255,0.08))') + ';border-radius:8px;cursor:pointer;">' +
+      '<input type="radio" name="engagementSurface" value="' + esc(opt.value) + '" ' + (isChecked ? 'checked' : '') + ' onchange="saveEngagementSurface(this.value)">' +
+      '<span><strong>' + esc(opt.label) + '</strong><br><span style="font-size:0.85rem;color:var(--warm-gray);">' + esc(opt.hint) + '</span></span>' +
+      '</label>';
+  }).join('');
+  surfaceOpts.innerHTML = surfaceHtml;
+
+  // Modules checkboxes — ui-first only
+  renderEngagementModulesCheckboxes(engagement.modulesShown || null);
+  if (modulesGroup) modulesGroup.style.display = currentSurface === 'ui-first' ? '' : 'none';
+}
+
+function renderEngagementModulesCheckboxes(modulesShown) {
+  var listEl = document.getElementById('engagementModulesList');
+  if (!listEl) return;
+  // Union of all archetype defaults + sidebar data-sections to produce a
+  // reasonable master list. Users can add/remove anything they have access to.
+  var defaults = (_engagementSettingsArchetype && MastDB.businessEntity.archetypeDefaults && MastDB.businessEntity.archetypeDefaults(_engagementSettingsArchetype)) || null;
+  var archetypeModules = (defaults && Array.isArray(defaults.modulesShown)) ? defaults.modulesShown : [];
+  var sectionNames = [];
+  document.querySelectorAll('.sidebar-section[data-section]').forEach(function(el) {
+    var n = el.getAttribute('data-section');
+    if (n && n !== 'manage') sectionNames.push(n);
+  });
+  var universe = {};
+  archetypeModules.forEach(function(m) { universe[m] = 1; });
+  sectionNames.forEach(function(n) { universe[n] = 1; });
+  var current = Array.isArray(modulesShown) ? modulesShown : [];
+  current.forEach(function(m) { universe[m] = 1; });
+  var keys = Object.keys(universe).sort();
+  if (!keys.length) {
+    listEl.innerHTML = '<div style="color:var(--warm-gray);font-size:0.85rem;">No modules available.</div>';
+    return;
+  }
+  listEl.innerHTML = keys.map(function(k) {
+    var checked = current.indexOf(k) !== -1;
+    return '<label style="display:flex;align-items:center;gap:8px;font-size:0.9rem;cursor:pointer;">' +
+      '<input type="checkbox" data-engagement-module="' + esc(k) + '" ' + (checked ? 'checked' : '') + '>' +
+      '<span>' + esc(k) + '</span>' +
+      '</label>';
+  }).join('');
+}
+
+async function saveEngagementSurface(surface) {
+  var statusEl = document.getElementById('engagementSurfaceStatus');
+  var modulesGroup = document.getElementById('engagementModulesGroup');
+  if (statusEl) { statusEl.textContent = 'Saving...'; statusEl.style.color = 'var(--warm-gray)'; }
+  try {
+    await MastDB.businessEntity.update('engagement', { surface: surface });
+    await hydrateEngagementSurface();
+    applySidebarGating();
+    if (modulesGroup) modulesGroup.style.display = surface === 'ui-first' ? '' : 'none';
+    if (statusEl) { statusEl.textContent = 'Saved. Sidebar updated.'; statusEl.style.color = 'var(--success,#22c55e)'; }
+    // Refresh radio styling (border color) without full reload
+    var radios = document.querySelectorAll('#engagementSurfaceOptions input[type="radio"]');
+    radios.forEach(function(r) {
+      var label = r.closest('label');
+      if (!label) return;
+      label.style.borderColor = r.checked ? 'var(--teal,#2a9d8f)' : 'var(--border,rgba(255,255,255,0.08))';
+    });
+  } catch (err) {
+    if (statusEl) { statusEl.textContent = 'Save failed: ' + (err.message || 'unknown error'); statusEl.style.color = 'var(--danger,#ef4444)'; }
+  }
+}
+
+async function saveEngagementModulesShown() {
+  var statusEl = document.getElementById('engagementModulesStatus');
+  var btn = document.getElementById('engagementModulesSaveBtn');
+  var checks = document.querySelectorAll('#engagementModulesList input[type="checkbox"][data-engagement-module]');
+  var selected = [];
+  checks.forEach(function(c) { if (c.checked) selected.push(c.getAttribute('data-engagement-module')); });
+  if (btn) btn.disabled = true;
+  if (statusEl) { statusEl.textContent = 'Saving...'; statusEl.style.color = 'var(--warm-gray)'; }
+  try {
+    await MastDB.businessEntity.update('engagement', { modulesShown: selected });
+    await hydrateEngagementSurface();
+    applySidebarGating();
+    if (statusEl) { statusEl.textContent = 'Saved ' + selected.length + ' modules. Sidebar updated.'; statusEl.style.color = 'var(--success,#22c55e)'; }
+  } catch (err) {
+    if (statusEl) { statusEl.textContent = 'Save failed: ' + (err.message || 'unknown error'); statusEl.style.color = 'var(--danger,#ef4444)'; }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function resetEngagementModulesToArchetype() {
+  if (!_engagementSettingsArchetype) return;
+  var defaults = MastDB.businessEntity.archetypeDefaults && MastDB.businessEntity.archetypeDefaults(_engagementSettingsArchetype);
+  if (!defaults || !Array.isArray(defaults.modulesShown)) return;
+  renderEngagementModulesCheckboxes(defaults.modulesShown.slice());
+  var statusEl = document.getElementById('engagementModulesStatus');
+  if (statusEl) { statusEl.textContent = 'Reset to archetype defaults. Click Save to apply.'; statusEl.style.color = 'var(--warm-gray)'; }
 }
 
 // ============================================================
