@@ -6847,6 +6847,7 @@
         <button class="view-tab" onclick="switchSettingsSubView('domains')">Domains</button>
         <button class="view-tab" onclick="switchSettingsSubView('ai')">AI</button>
         <button class="view-tab" onclick="switchSettingsSubView('engagement')">Engagement</button>
+        <button class="view-tab" onclick="switchSettingsSubView('channels')">Channels</button>
         <button class="view-tab" onclick="switchSettingsSubView('notifications')">Notifications <span id="settingsNotifBadge" class="sidebar-badge alert" style="display:none;margin-left:4px;"></span></button>
         <button class="view-tab" onclick="switchSettingsSubView('pim')">PIM</button>
         <button class="view-tab" onclick="switchSettingsSubView('maker')">Maker</button>
@@ -8310,6 +8311,33 @@
             <button class="btn btn-secondary" onclick="resetEngagementModulesToArchetype()" id="engagementModulesResetBtn" title="Restore the default list for your archetype">Reset to archetype defaults</button>
           </div>
           <div id="engagementModulesStatus" style="margin-top:8px;font-size:0.85rem;"></div>
+        </div>
+      </div>
+      <!-- Channels Settings (S3 — Entity Phase 1) -->
+      <div id="settingsSubChannels" style="display:none;max-width:640px;">
+        <div class="form-group">
+          <label style="font-size:1.15rem;font-weight:600;">External Channels</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
+            Where else do you sell? This is a light declaration of your presence &mdash; connecting Etsy/Shopify/Square accounts with real sync happens in a separate flow.
+          </p>
+        </div>
+
+        <div id="channelsInferredHint" style="display:none;background:rgba(66,165,245,0.06);border:1px solid rgba(66,165,245,0.25);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:0.85rem;color:var(--warm-gray);">
+          <!-- populated when discovery.inferredChannels has unchecked suggestions -->
+        </div>
+
+        <div class="form-group">
+          <label style="font-weight:600;">Declared channels</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:10px;">
+            Toggle each channel you use. Saved to your business entity record as <code style="font-family:monospace;font-size:0.78rem;">presence.declaredChannels[]</code>.
+          </p>
+          <div id="channelsDeclaredList" style="display:flex;flex-wrap:wrap;gap:8px;">
+            <div style="color:var(--warm-gray);font-size:0.85rem;">Loading...</div>
+          </div>
+          <div style="margin-top:14px;display:flex;gap:8px;">
+            <button class="btn btn-primary" onclick="saveDeclaredChannels()" id="channelsSaveBtn">Save channels</button>
+          </div>
+          <div id="channelsSaveStatus" style="margin-top:8px;font-size:0.85rem;"></div>
         </div>
       </div>
     </div>
@@ -14284,7 +14312,7 @@ function getModuleForRouteManifest(route) {
 // ============================================================
 // Settings Sub-Tabs
 // ============================================================
-var settingsSubViews = ['general', 'payments', 'shipping', 'tax', 'email', 'integrations', 'workshop', 'trips', 'storefront', 'dashboard', 'domains', 'ai', 'engagement', 'notifications', 'pim', 'maker'];
+var settingsSubViews = ['general', 'payments', 'shipping', 'tax', 'email', 'integrations', 'workshop', 'trips', 'storefront', 'dashboard', 'domains', 'ai', 'engagement', 'channels', 'notifications', 'pim', 'maker'];
 function switchSettingsSubView(view) {
   // Hide all sub-views
   settingsSubViews.forEach(function(v) {
@@ -14321,6 +14349,7 @@ function switchSettingsSubView(view) {
   if (view === 'maker') loadMakerSettings();
   if (view === 'engagement') loadEngagementSettings();
   if (view === 'tax') loadTaxLegalSettings();
+  if (view === 'channels') loadChannelsSettings();
 }
 
 // ============================================================
@@ -14635,6 +14664,108 @@ async function onLegacyEntityBannerCta() {
     var statusEl = document.getElementById('engagementModeStatus');
     if (statusEl) { statusEl.textContent = 'Entity record created. Review your mode and surface below.'; statusEl.style.color = 'var(--success,#22c55e)'; }
   }, 120);
+}
+
+// ============================================================
+// Declared Channels Settings (S3 — Entity Phase 1)
+// Post-wizard editor for presence.declaredChannels[]. C8 discovery
+// rollup surfaces inferred channels (from the scrape) as suggestions.
+// No OAuth flows here — that's Phase 2.
+// ============================================================
+
+async function loadChannelsSettings() {
+  var listEl = document.getElementById('channelsDeclaredList');
+  var hintEl = document.getElementById('channelsInferredHint');
+  if (!listEl) return;
+
+  var C = window.BusinessEntityConstants || {};
+  var enumList = Array.isArray(C.DECLARED_CHANNELS) ? C.DECLARED_CHANNELS : [];
+  if (enumList.length === 0) {
+    listEl.innerHTML = '<div style="color:var(--warm-gray);font-size:0.85rem;">Channel registry unavailable. Reload the page.</div>';
+    return;
+  }
+
+  var declared = [];
+  var inferred = [];
+  try {
+    var ent = await MastDB.businessEntity.get();
+    declared = (ent && ent.presence && Array.isArray(ent.presence.declaredChannels)) ? ent.presence.declaredChannels.slice() : [];
+    inferred = (ent && ent.discovery && Array.isArray(ent.discovery.inferredChannels)) ? ent.discovery.inferredChannels.slice() : [];
+  } catch (err) {
+    console.warn('[channels settings] load failed:', err && err.message);
+  }
+
+  // Build chips — each is a toggle button. Declared = teal fill, available = dotted border.
+  var html = enumList.map(function(ch) {
+    var isDeclared = declared.indexOf(ch.value) !== -1;
+    var isInferred = inferred.indexOf(ch.value) !== -1;
+    var bg = isDeclared ? 'var(--teal,#2a9d8f)' : 'transparent';
+    var border = isDeclared ? '1px solid var(--teal,#2a9d8f)' : '1px dashed rgba(255,255,255,0.25)';
+    var color = isDeclared ? '#fff' : 'var(--text,#fff)';
+    var suffix = (!isDeclared && isInferred) ? ' <span style="font-size:0.7rem;opacity:0.7;">(inferred)</span>' : '';
+    return '<label data-declared-channel="' + esc(ch.value) + '" style="display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border-radius:18px;background:' + bg + ';border:' + border + ';color:' + color + ';cursor:pointer;font-size:0.85rem;user-select:none;">' +
+      '<input type="checkbox" value="' + esc(ch.value) + '" ' + (isDeclared ? 'checked' : '') + ' style="accent-color:#fff;">' +
+      '<span>' + esc(ch.label) + suffix + '</span>' +
+      '</label>';
+  }).join('');
+  listEl.innerHTML = html;
+
+  // Inferred-but-not-declared hint — nudges user toward sync without auto-adding.
+  if (hintEl) {
+    var pending = inferred.filter(function(v) { return declared.indexOf(v) === -1; });
+    if (pending.length > 0) {
+      var labelFor = function(v) { var m = enumList.filter(function(x) { return x.value === v; })[0]; return m ? m.label : v; };
+      hintEl.innerHTML = '<strong>\uD83D\uDD0D Suggestion from your website scan:</strong> ' +
+        'We detected signals for ' + pending.map(labelFor).map(esc).join(', ') +
+        '. Toggle them on if you sell there.';
+      hintEl.style.display = '';
+    } else {
+      hintEl.style.display = 'none';
+    }
+  }
+
+  // Live-update chip styling on check/uncheck — write only happens on Save.
+  listEl.querySelectorAll('input[type="checkbox"]').forEach(function(cb) {
+    cb.addEventListener('change', function() {
+      var lbl = cb.closest('label');
+      if (!lbl) return;
+      if (cb.checked) {
+        lbl.style.background = 'var(--teal,#2a9d8f)';
+        lbl.style.border = '1px solid var(--teal,#2a9d8f)';
+        lbl.style.color = '#fff';
+      } else {
+        lbl.style.background = 'transparent';
+        lbl.style.border = '1px dashed rgba(255,255,255,0.25)';
+        lbl.style.color = 'var(--text,#fff)';
+      }
+    });
+  });
+}
+
+async function saveDeclaredChannels() {
+  var listEl = document.getElementById('channelsDeclaredList');
+  var statusEl = document.getElementById('channelsSaveStatus');
+  var btn = document.getElementById('channelsSaveBtn');
+  if (!listEl) return;
+  var selected = [];
+  listEl.querySelectorAll('input[type="checkbox"]').forEach(function(cb) { if (cb.checked) selected.push(cb.value); });
+  if (btn) btn.disabled = true;
+  if (statusEl) { statusEl.textContent = 'Saving...'; statusEl.style.color = 'var(--warm-gray)'; }
+  try {
+    await MastDB.businessEntity.update('presence', { declaredChannels: selected });
+    if (statusEl) {
+      statusEl.textContent = selected.length > 0
+        ? 'Saved ' + selected.length + ' channel' + (selected.length === 1 ? '' : 's') + '.'
+        : 'Saved. No channels declared.';
+      statusEl.style.color = 'var(--success,#22c55e)';
+    }
+    // Refresh to update "(inferred)" suffix state.
+    loadChannelsSettings();
+  } catch (err) {
+    if (statusEl) { statusEl.textContent = 'Save failed: ' + (err.message || 'unknown error'); statusEl.style.color = 'var(--danger,#ef4444)'; }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 function _formatBackfillPreview(proposed) {
