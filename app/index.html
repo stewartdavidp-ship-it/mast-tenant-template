@@ -22739,10 +22739,9 @@ async function doCreateForecastJob(pid, suggestedQty, purpose) {
   }
   try {
     var product = productsData.find(function(p) { return p.pid === pid; });
-    var jobRef = MastDB.productionJobs.push();
-    var jobId = jobRef.key;
-    var lineItemId = MastDB.productionJobs.lineItems(jobId).push().key;
-    await jobRef.set({
+    var jobId = MastDB.productionJobs.newKey();
+    var lineItemId = MastDB.productionJobs.newLineItemKey(jobId);
+    await MastDB.productionJobs.set(jobId, {
       name: name,
       description: 'Auto-suggested from Forecast view',
       purpose: purpose,
@@ -22758,8 +22757,7 @@ async function doCreateForecastJob(pid, suggestedQty, purpose) {
       completedAt: null,
       lineItems: {}
     });
-    // Add pre-populated line item
-    await MastDB.productionJobs.lineItems(jobId, lineItemId).set({
+    await MastDB.productionJobs.setLineItem(jobId, lineItemId, {
       productId: pid,
       productName: product ? product.name : pid,
       targetQuantity: suggestedQty,

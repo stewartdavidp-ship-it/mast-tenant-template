@@ -1390,9 +1390,8 @@
       var ffKey = getItemFulfillmentKey(item);
       var ff = fulfillment[ffKey];
       if (ff && ff.source === 'build') {
-        var reqRef = MastDB.productionRequests.push();
-        var reqId = reqRef.key;
-        await reqRef.set({
+        var reqId = MastDB.productionRequests.newKey();
+        await MastDB.productionRequests.set(reqId, {
           requestId: reqId,
           orderId: orderId,
           orderNumber: order.orderNumber || order.orderId,
@@ -2543,8 +2542,7 @@
     var c = commissionsData[commId];
     if (!c) return;
     try {
-      var jobRef = MastDB.productionJobs.push();
-      var jobId = jobRef.key;
+      var jobId = MastDB.productionJobs.newKey();
       var jobData = {
         name: 'Commission: ' + (c.sourcePieceName || 'Custom Piece') + ' for ' + (c.customerName || 'Customer'),
         status: 'active',
@@ -2553,7 +2551,7 @@
         items: [],
         createdAt: new Date().toISOString()
       };
-      await jobRef.set(jobData);
+      await MastDB.productionJobs.set(jobId, jobData);
       await MastDB.commissions.subRef(commId, 'productionJobId').set(jobId);
       commissionsData[commId].productionJobId = jobId;
       showToast('Production job created');

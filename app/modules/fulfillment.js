@@ -236,9 +236,8 @@
   // ---- Bundles ----
   async function createBundle() {
     try {
-      var ref = MastDB.bundles.push();
-      var bundleId = ref.key;
-      await ref.set({
+      var bundleId = MastDB.bundles.newKey();
+      await MastDB.bundles.set(bundleId, {
         id: bundleId,
         name: 'New Bundle',
         status: 'open',

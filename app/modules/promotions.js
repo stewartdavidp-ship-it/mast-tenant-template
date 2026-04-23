@@ -325,9 +325,9 @@
       } else {
         data.archived = false;
         data.createdAt = now;
-        var ref = MastDB.promotions.push();
-        await ref.set(data);
-        writeAudit('create', 'sale-promotion', ref.key);
+        var promoId = MastDB.promotions.newKey();
+        await MastDB.promotions.set(promoId, data);
+        writeAudit('create', 'sale-promotion', promoId);
         showToast('Sale created');
       }
       closeModal();

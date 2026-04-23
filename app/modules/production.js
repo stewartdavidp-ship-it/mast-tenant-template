@@ -285,11 +285,9 @@ async function doAssignNewJob(requestId) {
   if (!pr) return;
   try {
     // Create new job
-    var jobRef = MastDB.productionJobs.push();
-    var jobId = jobRef.key;
-    var lineItemRef = MastDB.productionJobs.lineItems(jobId).push();
-    var lineItemId = lineItemRef.key;
-    await jobRef.set({
+    var jobId = MastDB.productionJobs.newKey();
+    var lineItemId = MastDB.productionJobs.newLineItemKey(jobId);
+    await MastDB.productionJobs.set(jobId, {
       name: 'Order ' + (pr.orderNumber || '') + ' - ' + (pr.productName || 'Fulfillment'),
       description: '',
       purpose: 'fulfillment',
@@ -307,7 +305,7 @@ async function doAssignNewJob(requestId) {
     // Channel-First Phase 1d (D42, D48) — resolve variant + freeze BOM at line creation
     var resolvedNew = resolveVariantFromOptions(pr.productId, pr.options);
     var bomNew = await snapshotBomForecast(pr.productId, resolvedNew.variantId);
-    await lineItemRef.set({
+    await MastDB.productionJobs.setLineItem(jobId, lineItemId, {
       productId: pr.productId || null,
       productName: pr.productName || '',
       variantId: resolvedNew.variantId,
@@ -337,12 +335,11 @@ async function doAssignExistingJob(requestId) {
   var jobId = document.getElementById('assignJobDropdown').value;
   if (!pr || !jobId) return;
   try {
-    var lineItemRef = MastDB.productionJobs.lineItems(jobId).push();
-    var lineItemId = lineItemRef.key;
+    var lineItemId = MastDB.productionJobs.newLineItemKey(jobId);
     // Channel-First Phase 1d (D42, D48) — resolve variant + freeze BOM at line creation
     var resolvedExist = resolveVariantFromOptions(pr.productId, pr.options);
     var bomExist = await snapshotBomForecast(pr.productId, resolvedExist.variantId);
-    await lineItemRef.set({
+    await MastDB.productionJobs.setLineItem(jobId, lineItemId, {
       productId: pr.productId || null,
       productName: pr.productName || '',
       variantId: resolvedExist.variantId,
@@ -487,9 +484,8 @@ async function doCreateJob(purpose) {
     showToast('Enter a job name', true); return;
   }
   try {
-    var jobRef = MastDB.productionJobs.push();
-    var jobId = jobRef.key;
-    await jobRef.set({
+    var jobId = MastDB.productionJobs.newKey();
+    await MastDB.productionJobs.set(jobId, {
       name: name,
       description: '',
       purpose: purpose,
@@ -881,7 +877,7 @@ async function updateLineItemProgress(jobId, liKey, completedQty, lossQty) {
     var updates = {};
     if (completedQty !== null) updates.completedQuantity = parseInt(completedQty) || 0;
     if (lossQty !== null) updates.lossQuantity = parseInt(lossQty) || 0;
-    await MastDB.productionJobs.lineItems(jobId, liKey).update(updates);
+    await MastDB.productionJobs.updateLineItem(jobId, liKey, updates);
     // Update local cache
     if (productionJobs[jobId] && productionJobs[jobId].lineItems && productionJobs[jobId].lineItems[liKey]) {
       Object.assign(productionJobs[jobId].lineItems[liKey], updates);
@@ -1197,7 +1193,7 @@ async function setLineItemActual(jobId, lineItemId, kind, value) {
     var field = kind === 'labor' ? 'actualLaborCostCents' : 'actualMaterialCostCents';
     var updates = {};
     updates[field] = cents;
-    await MastDB.productionJobs.lineItems(jobId, lineItemId).update(updates);
+    await MastDB.productionJobs.updateLineItem(jobId, lineItemId, updates);
     if (productionJobs[jobId] && productionJobs[jobId].lineItems && productionJobs[jobId].lineItems[lineItemId]) {
       productionJobs[jobId].lineItems[lineItemId][field] = cents;
     }
@@ -1234,8 +1230,8 @@ async function doAddLineItem(jobId) {
   try {
     // Snapshot recipe BOM forecast if product has an active recipe (D48 — frozen at creation)
     var bomForecast = await snapshotBomForecast(pid, variantId);
-    var ref = MastDB.productionJobs.lineItems(jobId).push();
-    await ref.set({
+    var lineItemId = MastDB.productionJobs.newLineItemKey(jobId);
+    await MastDB.productionJobs.setLineItem(jobId, lineItemId, {
       productId: pid,
       productName: name,
       // Channel-First Phase 1d (D42)
@@ -1264,7 +1260,7 @@ async function removeLineItem(jobId, lineItemId) {
   if (!await mastConfirm('Remove this line item?', { title: 'Remove Line Item' })) return;
   try {
     await writeAudit('update', 'jobs', jobId);
-    await MastDB.productionJobs.lineItems(jobId, lineItemId).remove();
+    await MastDB.productionJobs.removeLineItem(jobId, lineItemId);
     showToast('Line item removed');
   } catch (err) {
     showToast('Error removing line item: ' + err.message, true);
@@ -2828,10 +2824,9 @@ async function saveDraftStory(existingId) {
       await writeAudit('update', 'products', existingId);
     } else {
       data.createdAt = new Date().toISOString();
-      var ref = MastDB.stories.push();
-      storyId = ref.key;
-      await ref.set(data);
-      await writeAudit('update', 'products', ref.key);
+      storyId = MastDB.stories.newKey();
+      await MastDB.stories.set(storyId, data);
+      await writeAudit('update', 'products', storyId);
     }
     showToast('Story draft saved');
     if (storyCurationJobId) loadJobStoryStatus(storyCurationJobId);
@@ -2877,9 +2872,8 @@ async function publishStory(existingId) {
       await MastDB.stories.update(existingId, data);
     } else {
       data.createdAt = new Date().toISOString();
-      var ref = MastDB.stories.push();
-      storyId = ref.key;
-      await ref.set(data);
+      storyId = MastDB.stories.newKey();
+      await MastDB.stories.set(storyId, data);
     }
     await writeAudit('update', 'products', storyId);
 
