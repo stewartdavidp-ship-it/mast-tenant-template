@@ -19,7 +19,7 @@
 (function(global) {
   'use strict';
 
-  var DPA_VERSION = '2026-05-v1';
+  var DPA_VERSION = '2026-07-v2';
   var DPA_URL = '/dpa';
   var PRIVACY_POLICY_URL = '/privacy';
 
