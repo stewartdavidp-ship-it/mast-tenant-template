@@ -1110,12 +1110,16 @@ function showManualSaleModal(eventId) {
         '<label for="manualSalePayment">Payment Type</label>' +
         '<select id="manualSalePayment" style="width:100%;padding:8px;border:1px solid var(--cream-dark);border-radius:6px;">' +
           '<option value="cash">Cash</option>' +
+          '<option value="check">Check</option>' +
+          '<option value="venmo">Venmo / Cash App / Zelle</option>' +
           '<option value="card">Square (Card)</option>' +
+          '<option value="wholesale-invoice">Wholesale Invoice (Net-30)</option>' +
         '</select>' +
       '</div>' +
       '<div class="form-group" style="flex:1;">' +
-        '<label for="manualSaleDate">Date</label>' +
+        '<label for="manualSaleDate">Payment Received Date</label>' +
         '<input type="date" id="manualSaleDate" value="' + today + '" style="width:100%;padding:8px;border:1px solid var(--cream-dark);border-radius:6px;">' +
+        '<div style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">For wholesale: use the date payment arrived, not invoice date.</div>' +
       '</div>' +
     '</div>' +
     '<div class="form-group">' +
@@ -1161,6 +1165,8 @@ async function saveManualSale(eventId) {
   var now = new Date().toISOString();
   var saleId = 'manual_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
 
+  var receivedAtIso = saleDate ? saleDate + 'T12:00:00.000Z' : now;
+
   try {
     // 1. Write sale record
     var saleRecord = {
@@ -1170,7 +1176,8 @@ async function saveManualSale(eventId) {
       source: 'manual-reconciliation',
       paymentType: paymentType,
       amount: amountCents,
-      timestamp: saleDate ? saleDate + 'T12:00:00.000Z' : now,
+      receivedAt: receivedAtIso,
+      timestamp: receivedAtIso,
       createdAt: now,
       createdBy: currentUser ? currentUser.uid : 'admin',
       items: [{ productId: pid, productName: alloc.productName || pid, quantity: qty, price: amountCents }]
@@ -1189,10 +1196,35 @@ async function saveManualSale(eventId) {
     // 4. Audit
     await writeAudit('create', 'sales', saleId);
 
+    // 5. Revenue accumulator write-through (Path B billing). Manual sales count
+    // AT receivedDate per cash-received-basis rule. Card sales still subtract
+    // an estimated Square processing fee (2.9% + $0.10) so the admin projection
+    // tracks closer to reality until the nightly reconciler runs.
+    try {
+      var processorFeesCents = 0;
+      if (paymentType === 'card') {
+        processorFeesCents = Math.round(amountCents * 0.029) + 10;
+      }
+      await firebase.functions().httpsCallable('recordTenantRevenue')({
+        tenantId: (MastDB && MastDB.tenantId && MastDB.tenantId()) || undefined,
+        channelKey: 'manual',
+        sourceId: saleId,
+        receivedAt: receivedAtIso,
+        grossCents: amountCents,
+        salesTaxCents: 0,
+        shippingCents: 0,
+        processorFeesCents: processorFeesCents,
+        marketplaceFeesCents: 0,
+        refundsCents: 0
+      });
+    } catch (revErr) {
+      console.warn('Manual sale accumulator write failed (non-fatal):', revErr && revErr.message ? revErr.message : revErr);
+    }
+
     closeModal();
     showToast('Manual sale recorded \u2014 ' + qty + ' \u00D7 ' + (alloc.productName || pid));
 
-    // 5. Refresh — local data update + re-render
+    // 6. Refresh — local data update + re-render
     if (salesEventsData[eventId] && salesEventsData[eventId].allocations && salesEventsData[eventId].allocations[pid]) {
       salesEventsData[eventId].allocations[pid].sold = newSold;
     }

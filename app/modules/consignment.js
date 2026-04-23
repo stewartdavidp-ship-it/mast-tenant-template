@@ -307,6 +307,12 @@
         '</div>' +
       '</div>';
 
+    var payouts = (p.payouts && typeof p.payouts === 'object') ? p.payouts : {};
+    var totalPayouts = Object.values(payouts).reduce(function(sum, py) {
+      return sum + (py && Number(py.amountCents)) / 100 || 0;
+    }, 0);
+    var outstanding = Math.max(0, totals.makerEarnings - totalPayouts);
+
     // Earnings summary panel — the emotional core
     html +=
       '<div class="consignment-earnings-panel">' +
@@ -327,6 +333,14 @@
             '<div class="consignment-stat-label">Commission Owed</div>' +
             '<div style="font-size:1.15rem;font-weight:600;color:var(--warm-gray);">' + formatCurrency(totals.commissionOwed) + '</div>' +
           '</div>' +
+        '</div>' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;padding-top:12px;border-top:1px solid var(--cream-dark);">' +
+          '<div>' +
+            '<div class="consignment-stat-label">Payouts Received</div>' +
+            '<div style="font-size:1rem;font-weight:600;">' + formatCurrency(totalPayouts) +
+              ' · <span style="color:var(--warm-gray);">Outstanding: ' + formatCurrency(outstanding) + '</span></div>' +
+          '</div>' +
+          '<button class="btn btn-outline btn-small" onclick="consignmentRecordPayout(\'' + esc(placementId) + '\')">+ Record Payout</button>' +
         '</div>' +
       '</div>';
 
@@ -680,6 +694,107 @@
     });
   }
 
+  // ============================================================
+  // Payout received — Path B billing (cash-received basis).
+  // Consignment sales count toward monthly revenue WHEN the
+  // payout arrives, not when the gallery sells the item.
+  // ============================================================
+  function recordPayoutModal(placementId) {
+    var p = placementsData[placementId];
+    if (!p) { showToast('Placement not found', 'error'); return; }
+    var totals = calculatePlacementTotals(p);
+    var payouts = (p.payouts && typeof p.payouts === 'object') ? p.payouts : {};
+    var already = Object.values(payouts).reduce(function(sum, py) {
+      return sum + (py && Number(py.amountCents) || 0);
+    }, 0) / 100;
+    var outstanding = Math.max(0, totals.makerEarnings - already);
+    var today = new Date().toISOString().split('T')[0];
+
+    var html =
+      '<h3 style="font-size:1.15rem;font-weight:500;margin:0 0 4px;">Record Payout from ' + esc(p.locationName) + '</h3>' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:16px;">' +
+        'Outstanding earnings: <strong>' + formatCurrency(outstanding) + '</strong>' +
+      '</div>' +
+      '<div class="form-group" style="margin-bottom:12px;">' +
+        '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Amount Received ($)</label>' +
+        '<input type="number" id="payoutAmount" step="0.01" min="0" max="100000" value="' + outstanding.toFixed(2) + '" style="width:160px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">' +
+      '</div>' +
+      '<div class="form-group" style="margin-bottom:12px;">' +
+        '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Received Date</label>' +
+        '<input type="date" id="payoutDate" value="' + today + '" style="width:160px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">' +
+        '<div style="font-size:0.72rem;color:var(--warm-gray);margin-top:4px;">Revenue is attributed to the month the payment actually arrived.</div>' +
+      '</div>' +
+      '<div class="form-group" style="margin-bottom:16px;">' +
+        '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Notes (optional)</label>' +
+        '<input type="text" id="payoutNotes" placeholder="e.g. check #4521" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">' +
+      '</div>' +
+      '<div style="display:flex;justify-content:flex-end;gap:8px;">' +
+        '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+        '<button class="btn btn-primary" onclick="consignmentConfirmPayout(\'' + esc(placementId) + '\')">Record Payout</button>' +
+      '</div>';
+    openModal(html);
+  }
+
+  async function confirmPayout(placementId) {
+    var amountEl = document.getElementById('payoutAmount');
+    var dateEl = document.getElementById('payoutDate');
+    var notesEl = document.getElementById('payoutNotes');
+    var amountDollars = parseFloat(amountEl && amountEl.value) || 0;
+    var receivedDate = (dateEl && dateEl.value) || new Date().toISOString().split('T')[0];
+    var notes = (notesEl && notesEl.value || '').trim();
+
+    if (amountDollars <= 0 || amountDollars > 100000) {
+      showToast('Amount must be between $0.01 and $100,000', 'error');
+      return;
+    }
+    if (!receivedDate) {
+      showToast('Received date required', 'error');
+      return;
+    }
+
+    var amountCents = Math.round(amountDollars * 100);
+    var payoutId = MastDB.consignments.newKey();
+    var receivedAtIso = receivedDate + 'T12:00:00.000Z';
+    var now = new Date().toISOString();
+
+    var payoutRecord = {
+      payoutId: payoutId,
+      amountCents: amountCents,
+      receivedAt: receivedAtIso,
+      notes: notes || null,
+      recordedAt: now,
+      recordedBy: (window.currentUser && window.currentUser.uid) || 'admin'
+    };
+
+    try {
+      await MastDB.consignments.setField(placementId, 'payouts/' + payoutId, payoutRecord);
+
+      try {
+        await firebase.functions().httpsCallable('recordTenantRevenue')({
+          tenantId: (MastDB && MastDB.tenantId && MastDB.tenantId()) || undefined,
+          channelKey: 'consignment',
+          sourceId: placementId + ':' + payoutId,
+          receivedAt: receivedAtIso,
+          grossCents: amountCents,
+          salesTaxCents: 0,
+          shippingCents: 0,
+          processorFeesCents: 0,
+          marketplaceFeesCents: 0,
+          refundsCents: 0
+        });
+      } catch (revErr) {
+        console.warn('Consignment payout accumulator write failed (non-fatal):', revErr && revErr.message ? revErr.message : revErr);
+      }
+
+      closeModal();
+      showToast('Payout of ' + formatCurrency(amountDollars) + ' recorded');
+      renderPlacementDetail(placementId);
+    } catch (err) {
+      console.error('Consignment payout error:', err);
+      showToast('Failed to record payout: ' + err.message, 'error');
+    }
+  }
+
   function addLineItemModal(placementId) {
     var products = window.productsData || [];
     var options = '<option value="">Select a product...</option>';
@@ -784,6 +899,10 @@
   window.consignmentAddLineItem = addLineItemModal;
   window.consignmentAddLiProductChanged = addLiProductChanged;
   window.consignmentConfirmAddLineItem = confirmAddLineItem;
+
+  // Payout received (Path B billing)
+  window.consignmentRecordPayout = recordPayoutModal;
+  window.consignmentConfirmPayout = confirmPayout;
 
   // Product rows in new form
   window.consignmentAddProductRow = addProductRow;
