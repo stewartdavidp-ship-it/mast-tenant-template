@@ -235,7 +235,7 @@ html.dark .dpa-content .counsel-marker {
 
   <div class="dpa-header">
     <h1>Data Processing Addendum</h1>
-    <p class="dpa-version">Version <code>2026-05-v1</code> &bull; DRAFT &mdash; pending counsel review</p>
+    <p class="dpa-version">Version <code>2026-07-v2</code> &bull; DRAFT &mdash; pending counsel review</p>
   </div>
 
   <div class="dpa-content">
@@ -269,7 +269,7 @@ html.dark .dpa-content .counsel-marker {
 
     <p>&ldquo;<strong>Processor</strong>&rdquo; means a party that processes Personal Data on behalf of a Controller. For Customer Personal Data, Mast is the Processor. Where the context requires, the term includes the equivalent role of &ldquo;Service Provider&rdquo; under the CCPA.</p>
 
-    <p>&ldquo;<strong>Services</strong>&rdquo; means the Mast platform and all features offered under the Main Agreement, including the admin web app, the public storefront generator, the point-of-sale tools, the AI advisor and other AI-assisted features, the third-party-channel integrations, the transactional email and SMS features, and the ancillary reporting and support tools.</p>
+    <p>&ldquo;<strong>Services</strong>&rdquo; means the Mast platform and all features offered under the Main Agreement, including the admin web app, the public storefront generator, the point-of-sale tools, the AI advisor and other AI-assisted features, the third-party-channel integrations, the transactional email features, and the ancillary reporting and support tools.</p>
 
     <p>&ldquo;<strong>Subprocessor</strong>&rdquo; means any third party engaged by Mast to process Customer Personal Data in the course of providing the Services.</p>
 
@@ -288,7 +288,7 @@ html.dark .dpa-content .counsel-marker {
       <li><strong>Account management.</strong> Creating and maintaining the Customer&rsquo;s admin account, tenant configuration, and user authentication records.</li>
       <li><strong>Storefront rendering.</strong> Displaying products, events, classes, and blog posts to the Customer&rsquo;s public visitors when the Customer uses Mast to host their storefront.</li>
       <li><strong>Order and enrollment processing.</strong> Accepting orders, booking registrations, processing membership sign-ups, and confirming payment via Stripe or Square (see Section 5).</li>
-      <li><strong>Transactional communications.</strong> Sending order confirmations, receipts, event reminders, class registrations, and similar transactional emails and text messages to the Customer&rsquo;s own customers (where the Customer has configured these).</li>
+      <li><strong>Transactional communications.</strong> Sending order confirmations, receipts, event reminders, class registrations, and similar transactional emails to the Customer&rsquo;s own customers (where the Customer has configured these).</li>
       <li><strong>AI-assisted features.</strong> Using machine-learning and large-language-model services to help the Customer classify product images, extract product data from existing websites, and receive business-coaching guidance through the &ldquo;Mast Advisor&rdquo; feature. See Section 5.4 for how LLM subprocessor handling works.</li>
       <li><strong>Third-party channel sync.</strong> On the Customer&rsquo;s instruction, publishing the Customer&rsquo;s product, inventory, and listing data to channels the Customer has connected, such as Etsy, Shopify, or Squarespace. These integrations are controller-to-controller transfers &mdash; see Section 3.3.</li>
       <li><strong>Back-office tooling.</strong> Inventory management, customer lists, contact records, and reporting.</li>
@@ -530,7 +530,7 @@ html.dark .dpa-content .counsel-marker {
     <hr>
 
     <h2>Appendix A &mdash; Subprocessors</h2>
-    <p><strong>As of Version <code>2026-05-v1</code></strong> (effective <span class="counsel-marker">[to be set by counsel]</span>).</p>
+    <p><strong>As of Version <code>2026-07-v2</code></strong> (effective <span class="counsel-marker">[to be set by counsel]</span>).</p>
     <p>The current and authoritative list is maintained at <code>runmast.com/subprocessors</code> <span class="counsel-marker">[TO BE CONFIRMED BY COUNSEL &mdash; confirm page is live]</span>. This Appendix reflects the list as of the effective date.</p>
 
     <table>
@@ -541,12 +541,10 @@ html.dark .dpa-content .counsel-marker {
         <tr><td>1</td><td><strong>Google LLC</strong> (Google Cloud / Firebase)</td><td>United States (primary: <code>us-central1</code>)</td><td>Hosting, database, auth, storage, secrets, compute</td><td>All categories of Customer Personal Data stored in the Services</td><td>Core Services hosting &mdash; Firestore, Realtime Database, Firebase Authentication, Cloud Storage, Cloud Functions, Secret Manager.</td></tr>
         <tr><td>2</td><td><strong>Stripe, Inc.</strong></td><td>United States</td><td>Payment processing</td><td>Transaction metadata, email, billing name; payment card numbers are processed directly by Stripe and not stored by Mast</td><td>Processing the Customer&rsquo;s own customers&rsquo; payments, subscriptions, memberships, webhooks.</td></tr>
         <tr><td>3</td><td><strong>Block, Inc.</strong> (Square)</td><td>United States</td><td>Payment processing / POS</td><td>Transaction metadata, email, billing name; payment card numbers are processed directly by Square and not stored by Mast</td><td>Where the Customer uses Square for in-person or online payments.</td></tr>
-        <tr><td>4</td><td><strong>Twilio Inc.</strong> (SendGrid)</td><td>United States</td><td>Transactional email</td><td>Recipient email address, subject, body content the Customer provides</td><td>Order confirmations, enrollment notices, event reminders, other transactional email.</td></tr>
-        <tr><td>5</td><td><strong>Resend, Inc.</strong></td><td>United States</td><td>Transactional email (fallback)</td><td>Recipient email address, subject, body content the Customer provides</td><td>Same as SendGrid; alternative provider.</td></tr>
-        <tr><td>6</td><td><strong>Google LLC</strong> (Gmail SMTP)</td><td>United States</td><td>Transactional email (fallback)</td><td>Recipient email address, subject, body content the Customer provides</td><td>Used where the Customer configures Gmail SMTP credentials as a fallback email provider.</td></tr>
-        <tr><td>7</td><td><strong>Twilio Inc.</strong> (SMS)</td><td>United States</td><td>SMS messaging</td><td>Recipient phone number, message content</td><td>Event notifications, booth fee notifications, ticket confirmations.</td></tr>
-        <tr><td>8</td><td><strong>Shippo, Inc.</strong></td><td>United States</td><td>Shipping labels / address validation</td><td>Shipping-address Personal Data (name, address, phone, email where provided)</td><td>Generating shipping labels, rate shopping, and tracking for orders the Customer ships.</td></tr>
-        <tr><td>9</td><td><strong>Anthropic, PBC</strong></td><td>United States</td><td>AI / large-language-model services (Claude API)</td><td>Text and image inputs submitted to AI-assisted features</td><td>Image classification, product data extraction during import, Mast Advisor coaching. Anthropic does not train its models on Customer Personal Data transmitted through the API by default.</td></tr>
+        <tr><td>4</td><td><strong>Resend, Inc.</strong></td><td>United States</td><td>Transactional email</td><td>Recipient email address, subject, body content the Customer provides</td><td>Order confirmations, enrollment notices, event reminders, other transactional email.</td></tr>
+        <tr><td>5</td><td><strong>Google LLC</strong> (Gmail SMTP)</td><td>United States</td><td>Transactional email (alternative provider)</td><td>Recipient email address, subject, body content the Customer provides</td><td>Used where the Customer configures Gmail SMTP credentials as an alternative email provider.</td></tr>
+        <tr><td>6</td><td><strong>Shippo, Inc.</strong></td><td>United States</td><td>Shipping labels / address validation</td><td>Shipping-address Personal Data (name, address, phone, email where provided)</td><td>Generating shipping labels, rate shopping, and tracking for orders the Customer ships.</td></tr>
+        <tr><td>7</td><td><strong>Anthropic, PBC</strong></td><td>United States</td><td>AI / large-language-model services (Claude API)</td><td>Text and image inputs submitted to AI-assisted features</td><td>Image classification, product data extraction during import, Mast Advisor coaching. Anthropic does not train its models on Customer Personal Data transmitted through the API by default.</td></tr>
       </tbody>
     </table>
 
@@ -646,7 +644,7 @@ html.dark .dpa-content .counsel-marker {
 
   <div class="dpa-footer">
     <p><strong>DRAFT &mdash; pending legal counsel review.</strong> Not in effect. Not legal advice.</p>
-    <p>Version <code>2026-05-v1</code> &bull; Draft last updated 2026-04-23</p>
+    <p>Version <code>2026-07-v2</code> &bull; Draft last updated 2026-04-23</p>
   </div>
 
 </div>
