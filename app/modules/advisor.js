@@ -8,6 +8,9 @@
   var advisorLoaded = false;
   var currentPeriod = 'month';
   var actualsCache = {};
+  // B7 (Entity Phase 1): cached entity read-view + subscription handle.
+  var entityData = null;
+  var entitySubscription = null;
 
   // --- CSS (injected once) ---
   var cssInjected = false;
@@ -62,6 +65,20 @@
       '.advisor-empty-icon { font-size:1.6rem;margin-bottom:16px; }',
       '.advisor-section { margin-bottom:28px; }',
       '.advisor-section-title { font-size:1rem;font-weight:600;color:var(--text,#fff);margin-bottom:12px;display:flex;align-items:center;gap:8px; }',
+      // B7 (Entity Phase 1): About Your Business section styling
+      '.advisor-entity-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px; }',
+      '.advisor-entity-card { background:var(--bg-secondary,#232323);border-radius:10px;padding:14px; }',
+      '.advisor-entity-card-title { font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px; }',
+      '.advisor-entity-field { display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:0.9rem;color:var(--text,#fff); }',
+      '.advisor-entity-field .label { color:var(--warm-gray,#888);font-size:0.78rem;min-width:90px; }',
+      '.advisor-entity-field .val { flex:1;word-break:break-word; }',
+      '.advisor-entity-field .pencil { opacity:0.4;cursor:pointer;font-size:0.78rem;padding:2px 6px;border-radius:4px;transition:opacity 0.15s, background 0.15s; }',
+      '.advisor-entity-field .pencil:hover { opacity:1;background:rgba(255,255,255,0.06); }',
+      '.advisor-entity-chip { display:inline-block;padding:2px 8px;border-radius:12px;background:rgba(42,157,143,0.15);color:var(--teal,#2a9d8f);font-size:0.78rem;margin-right:4px;margin-bottom:4px; }',
+      '.advisor-entity-empty { color:var(--warm-gray-light,#666);font-style:italic;font-size:0.85rem; }',
+      '.advisor-entity-cta { background:rgba(42,157,143,0.1);border:1px solid rgba(42,157,143,0.3);border-radius:10px;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap; }',
+      '.advisor-entity-subbanner { background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.2);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:0.85rem;color:var(--text,#fff); }',
+      '.advisor-entity-edit-input { width:100%;padding:6px 8px;background:var(--bg-primary,var(--charcoal));color:var(--text,#fff);border:1px solid var(--teal,#2a9d8f);border-radius:6px;font-size:0.9rem;font-family:inherit; }',
     ].join('\n');
     document.head.appendChild(style);
   }
@@ -133,7 +150,27 @@
 
       advisorLoaded = true;
 
-      if (planData.planStatus === 'none') {
+      // B7 (Entity Phase 1): subscribe once to entity changes. The callback
+      // updates cached entityData and re-renders just the entity section, so
+      // edits roundtrip without reloading the advisor view. Per plan Build A1
+      // risk flag: use .subscribe() (single onSnapshot) not .get() per click.
+      if (!entitySubscription && window.MastDB && MastDB.businessEntity && MastDB.businessEntity.subscribe) {
+        try {
+          entitySubscription = MastDB.businessEntity.subscribe(function(ent) {
+            entityData = ent;
+            rerenderEntitySection();
+          });
+        } catch (subErr) {
+          console.warn('[advisor] entity subscribe failed, falling back to get():', subErr && subErr.message);
+          try { entityData = await MastDB.businessEntity.get(); } catch (_) { entityData = null; }
+        }
+      } else if (!entityData && window.MastDB && MastDB.businessEntity) {
+        try { entityData = await MastDB.businessEntity.get(); } catch (_) { entityData = null; }
+      }
+
+      if (planData.planStatus === 'none' && (!entityData || entityData.entityStatus === 'none' || !entityData.entityStatus)) {
+        // No plan AND no entity data → keep legacy empty state, which already
+        // directs the user to start planning.
         renderEmptyState(container);
       } else {
         await renderAdvisor(container);
@@ -169,6 +206,11 @@
       '</div>';
     }
 
+    // B7 (Entity Phase 1): About Your Business — injected between draft banner
+    // and Health Score per plan Build B7. Wrapped in an id'd div so the
+    // subscription callback can target its innerHTML without full re-render.
+    h += '<div id="advisorEntityRoot">' + renderEntitySection() + '</div>';
+
     // Section A: Health Score
     h += renderHealthSection();
 
@@ -185,6 +227,308 @@
 
     // Load actuals for default period
     await loadAndRenderActuals('month');
+  }
+
+  // --- Section: About Your Business (B7 — Entity Phase 1) ---
+  function escText(s) {
+    if (s === null || s === undefined) return '';
+    return String(s).replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; });
+  }
+
+  function rerenderEntitySection() {
+    var root = document.getElementById('advisorEntityRoot');
+    if (!root) return;
+    root.innerHTML = renderEntitySection();
+  }
+
+  function archetypeLabel(val) {
+    var list = (window.BusinessEntityConstants && BusinessEntityConstants.ARCHETYPES) || [];
+    var m = list.filter(function(a) { return a.value === val; })[0];
+    return m ? m.label : (val || '');
+  }
+
+  function goalLabel(val) {
+    var map = (window.BusinessEntityConstants && BusinessEntityConstants.GOAL_LABELS) || {};
+    return map[val] || val;
+  }
+
+  function channelLabel(val) {
+    var list = (window.BusinessEntityConstants && BusinessEntityConstants.DECLARED_CHANNELS) || [];
+    var m = list.filter(function(c) { return c.value === val; })[0];
+    return m ? m.label : val;
+  }
+
+  function modeLabel(val) {
+    var list = (window.BusinessEntityConstants && BusinessEntityConstants.ENGAGEMENT_MODE_CARDS) || [];
+    var m = list.filter(function(c) { return c.value === val; })[0];
+    return m ? m.title : (val || '');
+  }
+
+  function renderEntitySection() {
+    var h = '<div class="advisor-section">';
+    h += '<div class="advisor-section-title">&#127970; About Your Business</div>';
+
+    var status = (entityData && entityData.entityStatus) || 'none';
+
+    // Empty-state — spec §3
+    if (status === 'none' || !entityData) {
+      h += '<div class="advisor-entity-cta">' +
+        '<div><div style="font-weight:600;margin-bottom:4px;">Let\'s set up your business</div>' +
+        '<div style="font-size:0.85rem;color:var(--warm-gray);">Takes about 2 minutes. We\'ll tailor Mast to how you actually work.</div></div>' +
+        '<button class="btn btn-primary" onclick="navigateTo(\'wizard\')">Start setup</button>' +
+      '</div>';
+      h += '</div>';
+      return h;
+    }
+
+    // Draft sub-banner — spec §3
+    if (status === 'draft') {
+      h += '<div class="advisor-entity-subbanner">' +
+        '<strong>&#9999;&#65039; Setup in progress.</strong> ' +
+        '<a href="#" onclick="event.preventDefault(); navigateTo(\'settings\'); setTimeout(function(){ switchSettingsSubView(\'engagement\'); }, 80); return false;" style="color:var(--teal,#2a9d8f);">Complete your business setup in Settings</a>' +
+      '</div>';
+    }
+
+    var identity = entityData.identity || {};
+    var engagement = entityData.engagement || {};
+    var presence = entityData.presence || {};
+    var operations = entityData.operations || {};
+    var discovery = entityData.discovery || {};
+
+    h += '<div class="advisor-entity-grid">';
+
+    // Identity card
+    h += '<div class="advisor-entity-card">';
+    h += '<div class="advisor-entity-card-title">Identity</div>';
+    h += entityField('businessName', 'Business', identity.businessName || '', {editable: true, type: 'text'});
+    h += entityField('archetype', 'Archetype', archetypeLabel(identity.archetype) || '', {editable: true, type: 'archetype', rawValue: identity.archetype || ''});
+    h += entityField('yearsInBusiness', 'Years', identity.yearsInBusiness != null ? String(identity.yearsInBusiness) : '', {editable: true, type: 'number'});
+    h += '</div>';
+
+    // Engagement card
+    h += '<div class="advisor-entity-card">';
+    h += '<div class="advisor-entity-card-title">Engagement</div>';
+    var modeSurface = engagement.mode ? (modeLabel(engagement.mode) + (engagement.surface ? ' \u00b7 ' + engagement.surface : '')) : '';
+    h += entityField('mode', 'Mode', modeSurface, {editable: false});
+    h += '<div class="advisor-entity-field"><span class="label">Goals</span><span class="val">';
+    var goals = Array.isArray(engagement.goals) ? engagement.goals : [];
+    if (goals.length === 0) {
+      h += '<span class="advisor-entity-empty">Not set \u2014 <a href="#" onclick="event.preventDefault(); window.advisorStartEditEntity(\'goals\'); return false;" style="color:var(--teal,#2a9d8f);">add goals</a></span>';
+    } else {
+      goals.forEach(function(g) { h += '<span class="advisor-entity-chip">' + escText(goalLabel(g)) + '</span>'; });
+    }
+    h += '</span>';
+    h += '<span class="pencil" onclick="window.advisorStartEditEntity(\'goals\')" title="Edit goals">&#9998;</span>';
+    h += '</div>';
+    if (engagement.calibration) {
+      if (engagement.calibration.revenueBracket) {
+        h += entityField('revenueBracket', 'Revenue', engagement.calibration.revenueBracket, {editable: false});
+      }
+      if (engagement.calibration.wishStatement) {
+        var wish = engagement.calibration.wishStatement;
+        if (wish.length > 80) wish = wish.substring(0, 77) + '...';
+        h += entityField('wishStatement', 'Wish', wish, {editable: false});
+      }
+    }
+    h += '</div>';
+
+    // Reach card
+    h += '<div class="advisor-entity-card">';
+    h += '<div class="advisor-entity-card-title">Reach</div>';
+    h += '<div class="advisor-entity-field"><span class="label">Channels</span><span class="val">';
+    var channels = Array.isArray(presence.declaredChannels) ? presence.declaredChannels : [];
+    if (channels.length === 0) {
+      h += '<span class="advisor-entity-empty">None declared</span>';
+    } else {
+      channels.forEach(function(c) { h += '<span class="advisor-entity-chip">' + escText(channelLabel(c)) + '</span>'; });
+    }
+    h += '</span>';
+    h += '<span class="pencil" onclick="window.advisorStartEditEntity(\'declaredChannels\')" title="Edit channels">&#9998;</span>';
+    h += '</div>';
+    if (presence.primaryDomain) {
+      h += entityField('primaryDomain', 'Domain', presence.primaryDomain, {editable: false});
+    }
+    h += '</div>';
+
+    // Operations card
+    h += '<div class="advisor-entity-card">';
+    h += '<div class="advisor-entity-card-title">Operations</div>';
+    var loc = operations.localization || {};
+    var locParts = [];
+    if (loc.currency) locParts.push(loc.currency);
+    if (loc.timezone) locParts.push(loc.timezone);
+    if (loc.language) locParts.push(loc.language);
+    if (loc.fiscalYearStartMonth) locParts.push('FY ' + loc.fiscalYearStartMonth);
+    h += entityField('localization', 'Locale', locParts.join(' \u00b7 '), {editable: false});
+    if (operations.businessModel) {
+      h += entityField('businessModel', 'Model', operations.businessModel, {editable: false});
+    } else {
+      h += '<div class="advisor-entity-field"><span class="label">Model</span><span class="val advisor-entity-empty">Not set</span></div>';
+    }
+    h += '</div>';
+
+    h += '</div>'; // grid
+
+    if (discovery && discovery.lastScrapeAt) {
+      h += '<div style="font-size:0.72rem;color:var(--warm-gray-light,#666);margin-top:10px;">Last site scrape: ' + escText(timeAgo(discovery.lastScrapeAt)) + (discovery.scrapeUrl ? ' \u2014 ' + escText(discovery.scrapeUrl) : '') + '</div>';
+    }
+
+    h += '</div>'; // advisor-section
+    return h;
+  }
+
+  function entityField(key, label, value, opts) {
+    opts = opts || {};
+    var displayVal = value || '';
+    var h = '<div class="advisor-entity-field" data-entity-field="' + escText(key) + '">';
+    h += '<span class="label">' + escText(label) + '</span>';
+    h += '<span class="val">' + (displayVal === '' ? '<span class="advisor-entity-empty">Not set</span>' : escText(displayVal)) + '</span>';
+    if (opts.editable) {
+      h += '<span class="pencil" onclick="window.advisorStartEditEntity(\'' + escText(key) + '\')" title="Edit ' + escText(label) + '">&#9998;</span>';
+    }
+    h += '</div>';
+    return h;
+  }
+
+  // Map field key → {section, path on entity, input type, label}
+  var ENTITY_EDITABLE = {
+    businessName:     { section: 'identity',   path: 'businessName',             type: 'text',       label: 'Business name' },
+    archetype:        { section: 'identity',   path: 'archetype',                type: 'archetype',  label: 'Archetype' },
+    yearsInBusiness:  { section: 'identity',   path: 'yearsInBusiness',          type: 'number',     label: 'Years in business' },
+    goals:            { section: 'engagement', path: 'goals',                    type: 'goals',      label: 'Goals' },
+    declaredChannels: { section: 'presence',   path: 'declaredChannels',         type: 'channels',   label: 'Channels' }
+  };
+
+  function currentEntityValue(key) {
+    if (!entityData) return null;
+    if (key === 'businessName') return (entityData.identity && entityData.identity.businessName) || '';
+    if (key === 'archetype') return (entityData.identity && entityData.identity.archetype) || '';
+    if (key === 'yearsInBusiness') return (entityData.identity && entityData.identity.yearsInBusiness != null) ? entityData.identity.yearsInBusiness : '';
+    if (key === 'goals') return (entityData.engagement && Array.isArray(entityData.engagement.goals)) ? entityData.engagement.goals : [];
+    if (key === 'declaredChannels') return (entityData.presence && Array.isArray(entityData.presence.declaredChannels)) ? entityData.presence.declaredChannels : [];
+    return null;
+  }
+
+  function startEditEntity(key) {
+    var cfg = ENTITY_EDITABLE[key];
+    if (!cfg) return;
+    var fieldEl = document.querySelector('.advisor-entity-field[data-entity-field="' + key + '"]');
+    if (!fieldEl) return;
+    if (fieldEl.dataset.editing === '1') return;
+    fieldEl.dataset.editing = '1';
+    var valEl = fieldEl.querySelector('.val');
+    var pencil = fieldEl.querySelector('.pencil');
+    if (pencil) pencil.style.display = 'none';
+    var current = currentEntityValue(key);
+
+    if (cfg.type === 'text' || cfg.type === 'number') {
+      var inputType = cfg.type === 'number' ? 'number' : 'text';
+      valEl.innerHTML = '<input type="' + inputType + '" class="advisor-entity-edit-input" value="' + escText(current) + '" data-entity-edit-input>';
+      var inputEl = valEl.querySelector('input');
+      inputEl.focus();
+      inputEl.select && inputEl.select();
+      var commit = function() {
+        var v = inputEl.value;
+        if (cfg.type === 'number') {
+          v = v === '' ? null : Number(v);
+          if (v !== null && (isNaN(v) || v < 0)) { cancelEditEntity(key); return; }
+        }
+        saveEntityEdit(key, v);
+      };
+      inputEl.addEventListener('blur', commit);
+      inputEl.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { inputEl.blur(); }
+        else if (e.key === 'Escape') { inputEl.removeEventListener('blur', commit); cancelEditEntity(key); }
+      });
+    } else if (cfg.type === 'archetype') {
+      var archetypes = (window.BusinessEntityConstants && BusinessEntityConstants.ARCHETYPES) || [];
+      var opts = archetypes.map(function(a) {
+        return '<option value="' + escText(a.value) + '"' + (a.value === current ? ' selected' : '') + '>' + escText(a.label) + '</option>';
+      }).join('');
+      valEl.innerHTML = '<select class="advisor-entity-edit-input"><option value="">(pick one)</option>' + opts + '</select>';
+      var sel = valEl.querySelector('select');
+      sel.focus();
+      sel.addEventListener('change', function() {
+        var newVal = sel.value;
+        if (!newVal || newVal === current) { cancelEditEntity(key); return; }
+        if (!confirm('Changing your archetype will reset module recommendations and goal defaults. Continue?')) {
+          cancelEditEntity(key);
+          return;
+        }
+        saveEntityEdit(key, newVal);
+      });
+      sel.addEventListener('blur', function() {
+        // If user tabs out without picking a different value, restore
+        setTimeout(function() {
+          if (fieldEl.dataset.editing === '1') cancelEditEntity(key);
+        }, 100);
+      });
+    } else if (cfg.type === 'goals' || cfg.type === 'channels') {
+      // Multi-select checkbox list.
+      var source, labelFn;
+      if (cfg.type === 'goals') {
+        var arch = (entityData.identity && entityData.identity.archetype) || null;
+        var defaults = arch && MastDB.businessEntity.archetypeDefaults && MastDB.businessEntity.archetypeDefaults(arch);
+        var available = (defaults && Array.isArray(defaults.goalsAvailable)) ? defaults.goalsAvailable : Object.keys((window.BusinessEntityConstants && BusinessEntityConstants.GOAL_LABELS) || {});
+        source = available;
+        labelFn = goalLabel;
+      } else {
+        source = ((window.BusinessEntityConstants && BusinessEntityConstants.DECLARED_CHANNELS) || []).map(function(c) { return c.value; });
+        labelFn = channelLabel;
+      }
+      var currentArr = Array.isArray(current) ? current : [];
+      // Union so pre-existing values not in the source set are still editable
+      source = source.concat(currentArr.filter(function(v) { return source.indexOf(v) === -1; }));
+      var checks = source.map(function(v) {
+        var isChecked = currentArr.indexOf(v) !== -1;
+        return '<label style="display:inline-flex;align-items:center;gap:4px;margin:2px 6px 2px 0;font-size:0.85rem;">' +
+          '<input type="checkbox" value="' + escText(v) + '" ' + (isChecked ? 'checked' : '') + '>' +
+          '<span>' + escText(labelFn(v)) + '</span>' +
+          '</label>';
+      }).join('');
+      valEl.innerHTML = '<div>' + checks + '<div style="margin-top:6px;"><button class="btn btn-primary btn-small" type="button" data-entity-save>Save</button> <button class="btn btn-secondary btn-small" type="button" data-entity-cancel>Cancel</button></div></div>';
+      valEl.querySelector('[data-entity-save]').addEventListener('click', function() {
+        var picked = [];
+        valEl.querySelectorAll('input[type="checkbox"]').forEach(function(c) { if (c.checked) picked.push(c.value); });
+        saveEntityEdit(key, picked);
+      });
+      valEl.querySelector('[data-entity-cancel]').addEventListener('click', function() { cancelEditEntity(key); });
+    }
+  }
+
+  function cancelEditEntity(key) {
+    var fieldEl = document.querySelector('.advisor-entity-field[data-entity-field="' + key + '"]');
+    if (!fieldEl) return;
+    delete fieldEl.dataset.editing;
+    rerenderEntitySection();
+  }
+
+  async function saveEntityEdit(key, newValue) {
+    var cfg = ENTITY_EDITABLE[key];
+    if (!cfg) return;
+    var fieldEl = document.querySelector('.advisor-entity-field[data-entity-field="' + key + '"]');
+    if (fieldEl) {
+      var valEl = fieldEl.querySelector('.val');
+      if (valEl) valEl.innerHTML = '<span class="advisor-entity-empty">Saving...</span>';
+    }
+    try {
+      var payload = {};
+      payload[cfg.path] = newValue;
+      await MastDB.businessEntity.update(cfg.section, payload);
+      // Subscribe will fire and rerender. Belt + suspenders: refetch + rerender
+      // if subscribe didn't fire within a tick.
+      setTimeout(async function() {
+        if (entitySubscription) return; // subscribe path already handled
+        try {
+          entityData = await MastDB.businessEntity.get();
+          rerenderEntitySection();
+        } catch (_) { /* noop */ }
+      }, 400);
+    } catch (err) {
+      console.error('[advisor entity edit] save failed:', err);
+      alert('Couldn\'t save: ' + (err && err.message ? err.message : 'unknown error'));
+      rerenderEntitySection();
+    }
   }
 
   // --- Section A: Health Score ---
@@ -574,6 +918,7 @@
     var el = document.getElementById('advisorReview' + idx);
     if (el) el.classList.toggle('open');
   };
+  window.advisorStartEditEntity = startEditEntity;
 
   // Register module
   MastAdmin.registerModule('advisor', {
@@ -589,6 +934,13 @@
       reviewsData = [];
       advisorLoaded = false;
       actualsCache = {};
+      // B7 (Entity Phase 1): tear down entity subscription so we don't leak
+      // an onSnapshot listener across navigations.
+      if (entitySubscription && typeof entitySubscription === 'function') {
+        try { entitySubscription(); } catch (_) {}
+      }
+      entitySubscription = null;
+      entityData = null;
     }
   });
 })();
