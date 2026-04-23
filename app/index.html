@@ -34470,7 +34470,7 @@ function renderStatusQueueCard(cardDef) {
     fbQuery = fbQuery.orderByChild(filters[0].field).equalTo(filters[0].value);
   }
   fbQuery.limitToLast(limit).once('value').then(function(snap) {
-    var val = snap.val();
+    var val = snap;
     var items = val ? Object.entries(val).map(function(e) { var it = e[1]; it._key = e[0]; return it; }) : [];
 
     // Apply remaining filters client-side
@@ -34547,7 +34547,7 @@ function renderDashCardNewInquiries() {
   var cardConfig = DASHBOARD_CARDS.find(function(c) { return c.id === 'newInquiries'; });
 
   MastDB.query('inquiries').orderByChild('status').equalTo('new').limitToLast(10).once('value').then(function(snap) {
-    var val = snap.val();
+    var val = snap;
     var items = val ? Object.values(val).sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); }) : [];
 
     var contentHtml = '';
@@ -34774,8 +34774,8 @@ function renderDashCardActiveSales() {
   ]).then(function(results) {
     var promoSnap = results[0];
     var ordersSnap = results[1];
-    var promoData = promoSnap.val() || {};
-    var ordersData = ordersSnap.val() || {};
+    var promoData = promoSnap || {};
+    var ordersData = ordersSnap || {};
 
     // Compute active promotions
     var now = new Date().toISOString();
