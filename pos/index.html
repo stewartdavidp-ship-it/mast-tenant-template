@@ -257,10 +257,6 @@ body {
         <label style="font-size:13px;color:var(--muted);display:block;margin-bottom:4px;">Email</label>
         <input type="email" id="receiptEmail" placeholder="customer@email.com" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;font-size:14px;font-family:'DM Sans',sans-serif;box-sizing:border-box;">
       </div>
-      <div style="margin-bottom:10px;">
-        <label style="font-size:13px;color:var(--muted);display:block;margin-bottom:4px;">Phone (SMS)</label>
-        <input type="tel" id="receiptPhone" placeholder="+1 555-123-4567" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;font-size:14px;font-family:'DM Sans',sans-serif;box-sizing:border-box;">
-      </div>
       <div style="margin-bottom:12px;">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--muted);">
           <input type="checkbox" id="receiptOptIn" checked> OK to follow up with future offers
@@ -882,7 +878,6 @@ function saveSale() {
     // Reset receipt form for fresh state
     document.getElementById('receiptForm').style.display = 'none';
     document.getElementById('receiptEmail').value = '';
-    document.getElementById('receiptPhone').value = '';
     document.getElementById('receiptOptIn').checked = true;
     document.getElementById('receiptStatus').textContent = '';
 
@@ -1036,10 +1031,9 @@ function skipReceipt() {
 
 async function sendReceipt() {
   var email = document.getElementById('receiptEmail').value.trim();
-  var phone = document.getElementById('receiptPhone').value.trim();
   var optIn = document.getElementById('receiptOptIn').checked;
 
-  if (!email && !phone) { showToast('Enter email or phone', true); return; }
+  if (!email) { showToast('Enter email', true); return; }
 
   var btn = document.getElementById('sendReceiptBtn');
   var statusEl = document.getElementById('receiptStatus');
@@ -1069,21 +1063,10 @@ async function sendReceipt() {
       results.push(emailResult.success ? '📧 Email sent' : '❌ Email failed');
     }
 
-    if (phone) {
-      var smsResp = await fetch(base + '/sendSMS', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, 'X-Tenant-ID': TENANT_ID },
-        body: JSON.stringify(Object.assign({}, receiptData, { phone: phone }))
-      });
-      var smsResult = await smsResp.json();
-      results.push(smsResult.success ? '📱 SMS sent' : '❌ SMS failed');
-    }
-
     // Update sale record with customer contact
     if (lastSaleId) {
       var contactUpdate = { receiptSent: true, customerContact: {} };
       if (email) contactUpdate.customerContact.email = email;
-      if (phone) contactUpdate.customerContact.phone = phone;
       contactUpdate.customerContact.optIn = optIn;
       MastDB.update(SALES_PATH + '/' + lastSaleId, contactUpdate);
     }
@@ -1164,7 +1147,7 @@ function openCommissionForm(pid, pieceName) {
     '<p style="margin:0 0 12px 0;color:var(--muted);font-size:0.82rem;">For: ' + (pieceName || 'Unknown piece') + '</p>' +
     '<div style="margin-bottom:12px;"><label style="display:block;font-size:0.78rem;color:var(--muted);margin-bottom:4px;">Customer Name</label>' +
       '<input type="text" id="commName" style="width:100%;padding:10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.88rem;box-sizing:border-box;"></div>' +
-    '<div style="margin-bottom:12px;"><label style="display:block;font-size:0.78rem;color:var(--muted);margin-bottom:4px;">Email or Phone</label>' +
+    '<div style="margin-bottom:12px;"><label style="display:block;font-size:0.78rem;color:var(--muted);margin-bottom:4px;">Email</label>' +
       '<input type="text" id="commContact" style="width:100%;padding:10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.88rem;box-sizing:border-box;"></div>' +
     '<div style="margin-bottom:16px;"><label style="display:block;font-size:0.78rem;color:var(--muted);margin-bottom:4px;">Notes (optional)</label>' +
       '<textarea id="commNotes" rows="2" style="width:100%;padding:10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.88rem;resize:vertical;box-sizing:border-box;"></textarea></div>' +

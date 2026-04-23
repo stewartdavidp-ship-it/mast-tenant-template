@@ -301,12 +301,11 @@ BUILD COMPLETE → CAMERA INTAKE (per piece) → VISION ID + CONFIRM → INVENTO
 - Event-aware: accepts `?eventId=` URL parameter, shows event banner, auto-links sales, updates event allocations
 
 **Receipt flow (Phase D):**
-- Success screen shows receipt form: email input, phone input, opt-in checkbox
-- `sendReceipt()` calls `sendReceipt` (SendGrid email) and/or `sendSMS` (Twilio SMS)
+- Success screen shows receipt form: email input, opt-in checkbox
+- `sendReceipt()` calls `sendReceipt` (SendGrid email)
 - Branded HTML email receipt with items, total, date, thank you message
-- Plain text SMS receipt summary
 - `autoReconcileSquare()` called after Square payment sales — matches to webhook-received payments
-- Sale record updated with `receiptSent`, `customerContact` (email, phone, optIn)
+- Sale record updated with `receiptSent`, `customerContact` (email, optIn)
 
 **Admin Sales tab:**
 - Sales list with date filter, status filter (all/captured/reconciled/voided)
@@ -449,9 +448,6 @@ BUILD COMPLETE → CAMERA INTAKE (per piece) → VISION ID + CONFIRM → INVENTO
   - Shir Glassworks logo, itemized list, total, date, thank you message
   - Auth: Firebase ID token required
   - Config: `sendgrid.api_key`, `shir.from_email` in Firebase Functions config
-- `sendSMS` Cloud Function: plain text SMS via Twilio HTTP API (no SDK)
-  - Format: "Shir Glassworks — {items}, ${amount}, {date}. Thank you!"
-  - Config: `twilio.account_sid`, `twilio.auth_token`, `twilio.from_number`
 - `reconcileSquarePayment` Cloud Function: timestamp-based auto-matching
   - Takes `saleId`, `saleTimestamp`, `toleranceMinutes` (default 5)
   - Finds closest unmatched Square payment within tolerance window
@@ -643,7 +639,6 @@ payment_failed → cancelled
 | `bootstrapImageLibrary` | Cloud Functions (HTTP, one-time) | Deployed |
 | `migrateImagesToStorage` | Cloud Functions (HTTP, 2GB, 540s) | Deployed |
 | `sendReceipt` | Cloud Functions (HTTP) | Deployed |
-| `sendSMS` | Cloud Functions (HTTP) | Deployed |
 | `reconcileSquarePayment` | Cloud Functions (HTTP) | Deployed |
 | Firebase rules | `database.rules.json` | Deployed |
 
@@ -703,7 +698,7 @@ payment_failed → cancelled
 | Location-tracked inventory (nested under variant stock structure) | Data Model | Phase D |
 | Event location lifecycle (auto-create, pack into, return, archive) | Events | Phase D |
 | Square PoS reconciliation (timestamp-based auto-match + manual match UI) | Payments | Phase D |
-| Receipt delivery via SendGrid email + Twilio SMS | Receipts | Phase D |
+| Receipt delivery via SendGrid email | Receipts | Phase D |
 | Vision API attribute extraction for intake/training contexts | Vision | Phase D |
 | Auto-save visual descriptions for progressive classification improvement | Vision | Phase D |
 | Three-tier RBAC model (Admin/User/Guest) with 16-entity permission matrix | Security | Phase E |
@@ -752,7 +747,7 @@ Full end-to-end "day in the life" walkthrough covering: Production → Inventory
 | Shipping → pull from stock | ✅ Works | Correctly decrements reserved (variant-aware). |
 | PoS sale → inventory decrement | ✅ Works | Camera ID or manual pick, auto-decrements on save. |
 | PoS sale → Square reconciliation | ✅ Works | Auto-reconcile on Square sales, manual match for misses. |
-| PoS sale → receipt delivery | ✅ Works | Email (SendGrid) and SMS (Twilio) from success screen. |
+| PoS sale → receipt delivery | ✅ Works | Email (SendGrid) from success screen. |
 | Event packing → location move | ✅ Works | Items move from Home to event location on pack confirm. |
 | Event close → inventory return | ✅ Works | Unsold items returned to source locations, event location archived. |
 | Camera intake → inventory + training | ✅ Works | First photo = +1 stock, subsequent = training reference. |
@@ -772,5 +767,5 @@ Full end-to-end "day in the life" walkthrough covering: Production → Inventory
 - **Refund integration:** Square Refunds API for order cancellations after payment.
 - **Customer order lookup:** Public page for customers to check order status by email + order number.
 - **Inventory display on public site:** Show In Stock / Made to Order badges on public product cards.
-- **SendGrid/Twilio configuration:** Store API keys in Firebase Functions config; admin UI for from-email and phone number settings.
+- **SendGrid configuration:** Store API key in Firebase Functions config; admin UI for from-email settings.
 - **Per-record history embedding:** Wire `renderRecordHistory()` into order detail, product detail, and inventory views to show inline change history.
