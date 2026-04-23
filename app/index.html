@@ -5884,9 +5884,10 @@
           </div>
           <div class="form-group" style="margin-bottom:14px;">
             <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Roughly, annual revenue? <span style="color:var(--warm-gray);font-weight:400;">(optional)</span></label>
-            <select id="wizardNwRevenue" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;background:#fff;">
+            <select id="wizardNwRevenue" onchange="_wizardUpdateBracketProjection('wizardNwRevenue','wizardNwRevenueProjection')" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;background:#fff;">
               <option value="">— Prefer not to say —</option>
             </select>
+            <p id="wizardNwRevenueProjection" style="font-size:0.78rem;color:var(--warm-gray);margin:6px 0 0;line-height:1.4;">We use this to show what your monthly software subscription will look like. Mast charges 1% of net revenue, capped at $1,000/mo; free when net is under $500/mo.</p>
           </div>
           <div class="form-group" style="margin-bottom:18px;">
             <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Your role <span style="color:var(--warm-gray);font-weight:400;">(optional)</span></label>
@@ -5923,9 +5924,10 @@
           <p style="color:var(--warm-gray);margin-bottom:20px;">Helps Mast tailor recommendations. Both questions are optional.</p>
           <div class="form-group" style="margin-bottom:16px;">
             <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Roughly, your annual revenue?</label>
-            <select id="wizardRevenueBracket" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;background:#fff;">
+            <select id="wizardRevenueBracket" onchange="_wizardUpdateBracketProjection('wizardRevenueBracket','wizardRevenueBracketProjection')" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;background:#fff;">
               <option value="">— Prefer not to say —</option>
             </select>
+            <p id="wizardRevenueBracketProjection" style="font-size:0.78rem;color:var(--warm-gray);margin:6px 0 0;line-height:1.4;">We use this to show what your monthly software subscription will look like. Mast charges 1% of net revenue, capped at $1,000/mo; free when net is under $500/mo.</p>
           </div>
           <div class="form-group" style="margin-bottom:16px;">
             <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">The one thing you wish was easier?</label>
@@ -5975,6 +5977,9 @@
 
           <!-- Auto-applied summary (always shown) -->
           <div id="wizardSummary" style="text-align:left;background:var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;font-size:0.9rem;"></div>
+
+          <!-- Step 3b: fee-projection summary (Checkpoint 4a) -->
+          <div id="wizardFeeProjectionCard" style="text-align:left;margin-bottom:16px;"></div>
 
           <!-- Capability preview (what we can import from your platform) -->
           <div id="wizardCapabilityPreview" style="display:none;text-align:left;background:var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;font-size:0.9rem;"></div>
@@ -8360,11 +8365,9 @@
         <h2>Subscription</h2>
       </div>
       <div id="subscriptionBillingInfo" style="margin-bottom:24px;"></div>
-      <div id="subscriptionRevenueMeter" style="display:none;margin-bottom:24px;"></div>
-      <div id="subscriptionMonthlyBill" style="display:none;margin-bottom:24px;"></div>
-      <div id="subscriptionBillHistory" style="display:none;margin-bottom:24px;"></div>
-      <div id="subscriptionTierSelector" style="margin-bottom:24px;"></div>
-      <div id="moduleSelectionUI"></div>
+      <div id="subscriptionRevenueMeter" style="margin-bottom:24px;"></div>
+      <div id="subscriptionMonthlyBill" style="margin-bottom:24px;"></div>
+      <div id="subscriptionBillHistory" style="margin-bottom:24px;"></div>
     </div>
 
     <!-- Admin: About Tab (standalone) -->
@@ -10148,7 +10151,10 @@ var MODULE_SYNERGY_MAP = {
   'show-light:market': "You're at shows. Market turns them into content."
 };
 
-// Tier definitions. Journey stages, not feature lists.
+// [DEPRECATED Checkpoint 4b] Tier definitions are retained as an inert lookup
+// table for displaying historical records only. Revenue-based pricing replaced
+// tier-based plans in 2026-04 — no code path should gate or render based on
+// these values anymore. Do not add new callers.
 var TIER_CONFIG = {
   publish: { id: 'publish', name: 'Publish', price: 0,   moduleLimit: 0, studioAssistant: false, monthlyTokens: 50,  annualTokens: 0,   description: 'Public site + product catalog. Your digital presence.' },
   launch:  { id: 'launch',  name: 'Launch',  price: 49,  moduleLimit: 1, studioAssistant: true,  monthlyTokens: 100, annualTokens: 125, description: 'Choose 1 module. Start running your business.' },
@@ -10570,6 +10576,10 @@ async function purchaseCoins() {
 // Does the tenant have a specific purchasable module active?
 function hasModule(moduleId) {
   var sub = getTenantSubscription();
+  // Revenue-based pricing (Checkpoint 4b): all modules unlocked by default.
+  // Module gating no longer applies; the only paid add-on is Events, checked
+  // separately via sub.eventsAddOn or channel-specific flags where relevant.
+  if (sub.model === 'revenue-1pct') return true;
   if (sub.tier === 'command') return true;
   return (sub.modules || []).indexOf(moduleId) >= 0;
 }
@@ -10599,6 +10609,7 @@ function getLockedModules() {
 // Can the tenant access the Studio Assistant?
 function canAccessStudioAssistant() {
   var sub = getTenantSubscription();
+  if (sub.model === 'revenue-1pct') return true;
   var tier = TIER_CONFIG[sub.tier];
   return tier ? tier.studioAssistant : false;
 }
@@ -10645,330 +10656,16 @@ function getSynergyMessage(lockedModuleId) {
 // ============================================================
 
 // ============================================================
-// Module Selection UI — Session B
-// ============================================================
-
-// In-memory selection state for module picker
-var _moduleSelectionState = {
-  selected: [],
-  locked: [],
-  tier: null,
-  saving: false,
-  onConfirm: null,
-  onCancel: null,
-  containerId: null
-};
-
-// Get synergy hint text for a module (which other modules it pairs with)
-function getModuleSynergyHints(moduleId) {
-  var mod = MODULE_REGISTRY[moduleId];
-  if (!mod || !mod.synergies || mod.synergies.length === 0) return '';
-  var names = mod.synergies.map(function(sid) {
-    var s = MODULE_REGISTRY[sid];
-    return s ? s.name : sid;
-  });
-  return 'Pairs with ' + names.join(' &amp; ');
-}
-
-// Render the module selection UI into a container element
-// options: { tier, currentModules, lockedModules, isUpgrade, onConfirm, onCancel }
-function renderModuleSelectionUI(containerId, options) {
-  var container = document.getElementById(containerId);
-  if (!container) return;
-
-  var sub = getTenantSubscription();
-  var tier = (options && options.tier) || sub.tier || 'command';
-  var tierConfig = TIER_CONFIG[tier];
-  if (!tierConfig) { container.innerHTML = '<p>Invalid tier: ' + esc(tier) + '</p>'; return; }
-
-  var currentModules = (options && options.currentModules) || sub.modules || [];
-  var lockedModules = (options && options.lockedModules) || [];
-  if (options && options.isUpgrade && currentModules.length > 0) {
-    lockedModules = currentModules.slice();
-  }
-
-  // Initialize state
-  _moduleSelectionState.tier = tier;
-  _moduleSelectionState.locked = lockedModules;
-  _moduleSelectionState.onConfirm = (options && options.onConfirm) || null;
-  _moduleSelectionState.onCancel = (options && options.onCancel) || null;
-  _moduleSelectionState.containerId = containerId;
-  // Only reset selected if tier changed or first render
-  if (!_moduleSelectionState._lastTier || _moduleSelectionState._lastTier !== tier) {
-    _moduleSelectionState.selected = currentModules.slice();
-    _moduleSelectionState._lastTier = tier;
-  }
-
-  var limit = tierConfig.moduleLimit;
-  var isCommand = tier === 'command';
-  var isPublish = tier === 'publish';
-  var purchasable = Object.keys(MODULE_REGISTRY)
-    .filter(function(id) { return MODULE_REGISTRY[id].purchasable; })
-    .sort(function(a, b) { return MODULE_REGISTRY[a].navPosition - MODULE_REGISTRY[b].navPosition; });
-  // Modules to show in grid: purchasable + always-included (e.g. Web)
-  var gridModules = Object.keys(MODULE_REGISTRY)
-    .filter(function(id) { return MODULE_REGISTRY[id].purchasable || MODULE_REGISTRY[id].showInGrid; })
-    .sort(function(a, b) { return MODULE_REGISTRY[a].navPosition - MODULE_REGISTRY[b].navPosition; });
-
-  var effectiveSelected = isCommand
-    ? purchasable.filter(function(id) { return MODULE_REGISTRY[id].status !== 'coming-soon'; })
-    : _moduleSelectionState.selected;
-  var atLimit = !isCommand && effectiveSelected.length >= limit;
-
-  // --- 48-hour module change cooldown ---
-  var moduleCooldownMs = 48 * 60 * 60 * 1000;
-  var moduleCooldownActive = false;
-  var moduleCooldownRemaining = '';
-  if (sub.moduleChangedAt) {
-    var elapsed = Date.now() - new Date(sub.moduleChangedAt).getTime();
-    if (elapsed < moduleCooldownMs) {
-      moduleCooldownActive = true;
-      var remainMs = moduleCooldownMs - elapsed;
-      var remainHrs = Math.floor(remainMs / (60 * 60 * 1000));
-      var remainMin = Math.ceil((remainMs % (60 * 60 * 1000)) / (60 * 1000));
-      moduleCooldownRemaining = remainHrs > 0 ? remainHrs + 'h ' + remainMin + 'm' : remainMin + 'm';
-    }
-  }
-
-  var h = '';
-
-  // --- Tier Context Bar ---
-  var priceLabel = tierConfig.price === 0 ? 'Free' : '$' + tierConfig.price + '/mo';
-  var counterText = isCommand ? 'All modules included'
-    : isPublish ? 'Web only — no additional modules'
-    : 'Choose ' + limit + ' module' + (limit !== 1 ? 's' : '') + ' — ' + effectiveSelected.length + ' of ' + limit + ' selected';
-
-  h += '<div style="background:var(--cream-dark, var(--cream-dark));border-radius:10px;padding:16px 20px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">';
-  h += '<div>';
-  h += '<span style="font-size:1.15rem;font-weight:700;font-family:\'Cormorant Garamond\', serif;color:var(--charcoal, var(--charcoal));">' + esc(tierConfig.name) + ' Tier</span>';
-  h += '<span style="margin-left:12px;font-size:1rem;font-weight:600;color:var(--amber, var(--amber));">' + priceLabel + '</span>';
-  h += '</div>';
-  h += '<div style="font-size:0.9rem;color:var(--warm-gray, var(--warm-gray));">' + counterText + '</div>';
-  h += '</div>';
-
-  // --- Cooldown notice ---
-  if (moduleCooldownActive && !isCommand && !isPublish) {
-    h += '<div style="background:rgba(196,133,60,0.12);border:1px solid var(--amber, var(--amber));border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px;font-size:0.9rem;color:var(--charcoal, var(--charcoal));">';
-    h += '<span style="font-size:1.15rem;">&#128338;</span>';
-    h += '<span>Module changes are locked for <strong>' + moduleCooldownRemaining + '</strong>. You can switch modules once every 48 hours.</span>';
-    h += '</div>';
-  }
-
-  // --- Module Cards ---
-  if (isPublish) {
-    h += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray, var(--warm-gray));font-size:0.9rem;">';
-    h += '<div style="font-size:1.6rem;margin-bottom:12px;">&#127760;</div>';
-    h += 'The Publish tier includes your website and product catalog.<br>Upgrade to add business modules.';
-    h += '</div>';
-  } else {
-    h += '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-bottom:24px;">';
-    gridModules.forEach(function(moduleId) {
-      var mod = MODULE_REGISTRY[moduleId];
-      var isAlwaysIncluded = !mod.purchasable && mod.showInGrid;
-      var isSelected = isAlwaysIncluded || effectiveSelected.indexOf(moduleId) >= 0;
-      var isComingSoon = mod.status === 'coming-soon';
-      var isLocked = isAlwaysIncluded || lockedModules.indexOf(moduleId) >= 0;
-      var canClick = !isAlwaysIncluded && !isComingSoon && !isCommand && !isPublish && !isLocked && !moduleCooldownActive && (!atLimit || isSelected);
-
-      var borderStyle = isSelected ? '2px solid var(--amber, var(--amber))' : '2px solid var(--cream-dark, var(--cream-dark))';
-      var bgStyle = isSelected ? 'var(--cream, var(--cream))' : 'var(--cream-dark, var(--cream-dark))';
-      var opacityStyle = (isComingSoon || (atLimit && !isSelected && !isCommand)) ? '0.5' : '1';
-      var shadowStyle = isSelected ? '0 2px 12px rgba(196, 133, 60, 0.25)' : '0 1px 4px rgba(0,0,0,0.06)';
-      var cursorStyle = canClick ? 'pointer' : 'default';
-      var onclick = canClick ? 'onclick="toggleModuleSelection(\'' + moduleId + '\')"' : '';
-
-      h += '<div ' + onclick + ' style="background:' + bgStyle + ';border:' + borderStyle + ';border-radius:12px;padding:20px;cursor:' + cursorStyle + ';opacity:' + opacityStyle + ';box-shadow:' + shadowStyle + ';transition:all 0.2s ease;position:relative;min-height:140px;display:flex;flex-direction:column;justify-content:space-between;">';
-
-      // Badge (top-right)
-      if (isAlwaysIncluded) {
-        h += '<span style="position:absolute;top:10px;right:10px;background:var(--teal, var(--teal));color:white;font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:4px;text-transform:uppercase;letter-spacing:0.5px;">Included</span>';
-      } else if (isComingSoon) {
-        h += '<span style="position:absolute;top:10px;right:10px;background:var(--warm-gray, var(--warm-gray));color:white;font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:4px;text-transform:uppercase;letter-spacing:0.5px;">Coming Soon</span>';
-      } else if (isLocked && isSelected) {
-        h += '<span style="position:absolute;top:10px;right:10px;background:var(--teal, var(--teal));color:white;font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:4px;">Current</span>';
-      } else if (isSelected && !isCommand) {
-        h += '<span style="position:absolute;top:10px;right:10px;background:var(--amber, var(--amber));color:white;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.85rem;font-weight:700;">&#10003;</span>';
-      }
-
-      // Icon + Name + Description
-      h += '<div>';
-      h += '<div style="font-size:1.6rem;margin-bottom:6px;">' + mod.icon + '</div>';
-      h += '<div style="font-size:1.15rem;font-weight:700;font-family:\'Cormorant Garamond\', serif;color:var(--charcoal, var(--charcoal));margin-bottom:4px;">' + esc(mod.name) + '</div>';
-      h += '<div style="font-size:0.85rem;color:var(--warm-gray, var(--warm-gray));line-height:1.4;margin-bottom:8px;">' + esc(mod.description) + '</div>';
-      h += '</div>';
-
-      // Synergy hint
-      var hint = getModuleSynergyHints(moduleId);
-      if (hint) {
-        h += '<div style="font-size:0.78rem;color:var(--teal, var(--teal));font-style:italic;margin-top:auto;padding-top:8px;border-top:1px solid rgba(0,0,0,0.06);">' + hint + '</div>';
-      }
-
-      h += '</div>';
-    });
-    h += '</div>';
-  }
-
-  // --- Confirm / Cancel ---
-  var confirmLabel = isPublish ? 'Confirm — Web Only'
-    : isCommand ? 'Confirm — All Modules'
-    : 'Confirm Selection (' + effectiveSelected.length + '/' + limit + ')';
-  var confirmDisabled = _moduleSelectionState.saving || moduleCooldownActive || (!isCommand && !isPublish && effectiveSelected.length === 0);
-
-  h += '<div style="display:flex;gap:12px;justify-content:flex-end;flex-wrap:wrap;">';
-  if (_moduleSelectionState.onCancel) {
-    h += '<button class="btn" onclick="cancelModuleSelection()" style="background:var(--cream, var(--cream));color:var(--charcoal, var(--charcoal));">Cancel</button>';
-  }
-  h += '<button class="btn btn-primary" onclick="confirmSettingsModuleSelection()" ' + (confirmDisabled ? 'disabled' : '') + ' style="min-width:160px;">';
-  h += _moduleSelectionState.saving ? 'Saving...' : esc(confirmLabel);
-  h += '</button>';
-  h += '</div>';
-
-  container.innerHTML = h;
-}
-
-// Toggle a module in the selection state and re-render
-function toggleModuleSelection(moduleId) {
-  var state = _moduleSelectionState;
-  if (state.saving) return;
-  var mod = MODULE_REGISTRY[moduleId];
-  if (!mod || mod.status === 'coming-soon') return;
-  if (state.locked.indexOf(moduleId) >= 0) return;
-
-  var tierConfig = TIER_CONFIG[state.tier];
-  if (!tierConfig) return;
-  var limit = tierConfig.moduleLimit;
-
-  var idx = state.selected.indexOf(moduleId);
-  if (idx >= 0) {
-    state.selected.splice(idx, 1);
-  } else if (state.selected.length < limit) {
-    state.selected.push(moduleId);
-  }
-
-  // Re-render
-  renderModuleSelectionUI(state.containerId, {
-    tier: state.tier,
-    currentModules: state.selected,
-    lockedModules: state.locked,
-    onConfirm: state.onConfirm,
-    onCancel: state.onCancel
-  });
-}
-
-// Confirm the module selection from Settings page — save to Firebase
-function confirmSettingsModuleSelection() {
-  var state = _moduleSelectionState;
-  if (state.saving) return;
-
-  var tier = state.tier;
-  var tierConfig = TIER_CONFIG[tier];
-  if (!tierConfig) return;
-
-  var isCommand = tier === 'command';
-  var isPublish = tier === 'publish';
-  var purchasable = Object.keys(MODULE_REGISTRY)
-    .filter(function(id) { return MODULE_REGISTRY[id].purchasable; })
-    .sort(function(a, b) { return MODULE_REGISTRY[a].navPosition - MODULE_REGISTRY[b].navPosition; });
-
-  var modulesToSave = isCommand
-    ? purchasable.filter(function(id) { return MODULE_REGISTRY[id].status !== 'coming-soon'; })
-    : isPublish ? [] : state.selected.slice();
-
-  // Detect upgrade: if new tier is higher than current Stripe-backed tier, show upgrade confirmation
-  var sub = getTenantSubscription();
-  var currentTierIdx = TIER_ORDER.indexOf(sub.tier || 'publish');
-  var newTierIdx = TIER_ORDER.indexOf(tier);
-  var hasStripeSubscription = _subscriptionDetails && _subscriptionDetails.subscriptionId;
-
-  if (newTierIdx > currentTierIdx && hasStripeSubscription) {
-    // Tier upgrade — requires Stripe subscription change
-    showUpgradeConfirmation(tier, modulesToSave);
-    return;
-  }
-
-  // Free tier upgrade (publish → paid) without existing Stripe sub — handled by checkout flow
-  if (newTierIdx > currentTierIdx && !hasStripeSubscription && tierConfig.price > 0) {
-    showToast('Please subscribe first to upgrade to ' + tierConfig.name, true);
-    return;
-  }
-
-  state.saving = true;
-  // Re-render to show "Saving..."
-  renderModuleSelectionUI(state.containerId, {
-    tier: tier, currentModules: state.selected, lockedModules: state.locked,
-    onConfirm: state.onConfirm, onCancel: state.onCancel
-  });
-
-  // Check if modules actually changed — only set cooldown if they did
-  var prevModules = (_tenantSubscription && _tenantSubscription.modules) || [];
-  var modulesChanged = modulesToSave.length !== prevModules.length || modulesToSave.some(function(m) { return prevModules.indexOf(m) < 0; });
-
-  var updateData = {
-    tier: tier,
-    modules: modulesToSave,
-    updatedAt: new Date().toISOString()
-  };
-  if (modulesChanged) {
-    updateData.moduleChangedAt = new Date().toISOString();
-  }
-  if (!_tenantSubscription || !_tenantSubscription.effectiveDate) {
-    updateData.effectiveDate = new Date().toISOString();
-    updateData.billingAnchor = new Date().getDate();
-  }
-
-  MastDB.subscription.update(updateData).then(function() {
-    _tenantSubscription = Object.assign({}, _tenantSubscription || {}, updateData);
-    state.saving = false;
-    showToast('Subscription updated — ' + tierConfig.name + ' tier with ' + modulesToSave.length + ' module' + (modulesToSave.length !== 1 ? 's' : ''));
-    // Re-apply gating after subscription change
-    applySidebarGating();
-    applySettingsGating();
-    if (state.onConfirm) state.onConfirm(modulesToSave);
-  }).catch(function(err) {
-    state.saving = false;
-    showToast('Failed to save: ' + err.message, true);
-    renderModuleSelectionUI(state.containerId, {
-      tier: tier, currentModules: state.selected, lockedModules: state.locked,
-      onConfirm: state.onConfirm, onCancel: state.onCancel
-    });
-  });
-}
-
-// Cancel module selection
-function cancelModuleSelection() {
-  var state = _moduleSelectionState;
-  if (state.onCancel) state.onCancel();
-}
-
-// ============================================================
-// End Module Selection UI
+// Module Selection UI — [REMOVED Checkpoint 4b]
+// Selection state, synergy hints, and picker rendering all removed. Module
+// gating is no longer part of the subscription flow after the revenue-based
+// pricing cutover. The
+// subscription tab now shows the revenue meter unconditionally.
 // ============================================================
 
 // ============================================================
 // Subscription Enforcement & Gating UI — Session C
 // ============================================================
-
-// --- Locked Module Preview Card (reusable) ---
-// Returns HTML string for a locked module preview. Used by route guard and sidebar nudge.
-function renderLockedModuleCard(moduleId) {
-  var mod = MODULE_REGISTRY[moduleId];
-  if (!mod) return '';
-  var synergy = getSynergyMessage(moduleId);
-  var nextTier = getNextTier();
-  var ctaLabel = nextTier ? 'Upgrade to ' + nextTier.name : 'View Plans';
-
-  var h = '<div class="locked-module-card">';
-  h += '<div class="lmc-icon">' + mod.icon + '</div>';
-  h += '<div class="lmc-name">' + esc(mod.name) + '</div>';
-  h += '<div class="lmc-desc">' + esc(mod.description) + '</div>';
-  if (synergy) {
-    h += '<div class="lmc-synergy">' + esc(synergy) + '</div>';
-  }
-  var tierToSelect = nextTier ? nextTier.id : '';
-  h += '<button class="lmc-cta" onclick="navigateTo(\'settings\'); setTimeout(function(){ switchSettingsSubView(\'subscription\'); ' + (tierToSelect ? 'selectSubscriptionTier(\'' + esc(tierToSelect) + '\');' : '') + ' }, 100);">' + esc(ctaLabel) + '</button>';
-  h += '</div>';
-  return h;
-}
 
 // --- Sidebar Gating ---
 // Dynamically applies locked/unlocked state to sidebar sections based on subscription.
@@ -15659,6 +15356,107 @@ function _revenueMeterFormatCents(cents) {
   return (neg ? '-$' : '$') + withCommas + '.' + remStr;
 }
 
+// Wizard fee-projection helpers (Checkpoint 4a). Map a REVENUE_BRACKETS value to
+// the top-of-range monthly net in cents, then run the same cap-then-round 1%
+// pricing model as the admin revenue meter so the wizard shows the same number
+// the tenant will see in Settings after launch.
+var _WIZARD_BRACKET_TOP_ANNUAL_DOLLARS = {
+  'under-10k':  10000,
+  '10k-50k':    50000,
+  '50k-250k':   250000,
+  '250k-1m':    1000000,
+  '1m+':        12000000
+};
+
+function _wizardBracketMonthlyNetCents(bracket) {
+  var topAnnualDollars = _WIZARD_BRACKET_TOP_ANNUAL_DOLLARS[bracket] || 0;
+  if (!topAnnualDollars) return 0;
+  return Math.round((topAnnualDollars * 100) / 12);
+}
+
+function _wizardBracketProjectedFeeCents(bracket) {
+  return _revenueMeterFeeCents(_wizardBracketMonthlyNetCents(bracket));
+}
+
+function _wizardBracketProjectionSentence(bracket) {
+  var intro = 'We use this to show what your monthly software subscription will look like. ';
+  if (!bracket) {
+    return intro + 'Mast charges 1% of net revenue, capped at ' +
+      _revenueMeterFormatCents(PRICING_MODEL.maxFeeCents) + '/mo; free when net is under ' +
+      _revenueMeterFormatCents(PRICING_MODEL.thresholdCents) + '/mo.';
+  }
+  var monthlyNet = _wizardBracketMonthlyNetCents(bracket);
+  var fee = _revenueMeterFeeCents(monthlyNet);
+  if (fee === 0) {
+    return intro + 'At the top of this range, your fee is $0/mo (net stays under ' +
+      _revenueMeterFormatCents(PRICING_MODEL.thresholdCents) + '/mo).';
+  }
+  var atCap = fee >= PRICING_MODEL.maxFeeCents;
+  return intro + 'At the top of this range, your fee is about ' +
+    _revenueMeterFormatCents(fee) + '/mo' + (atCap ? ' (capped)' : '') + '.';
+}
+
+function _wizardUpdateBracketProjection(selectId, targetId) {
+  var sel = document.getElementById(selectId);
+  var target = document.getElementById(targetId);
+  if (!sel || !target) return;
+  target.textContent = _wizardBracketProjectionSentence(sel.value || '');
+}
+
+// Render the Step 3b "Your monthly software fee" summary card. Reads the
+// captured bracket from engagement.calibration (or falls back to window cache
+// when the user skipped calibration). Safe to call when the container is
+// missing — falls through silently.
+async function renderWizardFeeProjection() {
+  var el = document.getElementById('wizardFeeProjectionCard');
+  if (!el) return;
+  var bracket = window._wizardRevenueBracket || '';
+  if (!bracket) {
+    try {
+      var view = await MastDB.businessEntity.get('engagement');
+      var calibration = (view && view.data && view.data.calibration) || {};
+      bracket = calibration.revenueBracket || '';
+    } catch (e) { /* non-fatal */ }
+  }
+
+  var h = '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:10px;padding:16px;">';
+  h += '<div style="font-family:\'Cormorant Garamond\',serif;font-weight:700;font-size:1.15rem;color:var(--charcoal);margin-bottom:6px;">Your monthly software fee</div>';
+
+  if (!bracket) {
+    h += '<div style="font-size:0.88rem;color:var(--warm-gray);">' +
+      esc(_wizardBracketProjectionSentence('')) +
+      ' You can add your revenue estimate in Settings once you\u2019re in.</div>';
+  } else {
+    var monthlyNet = _wizardBracketMonthlyNetCents(bracket);
+    var capped = Math.min(monthlyNet, PRICING_MODEL.capCents);
+    var rounded = Math.round(capped / PRICING_MODEL.roundToCents) * PRICING_MODEL.roundToCents;
+    var fee = _revenueMeterFeeCents(monthlyNet);
+    var bracketLabel = (_WIZARD_BRACKET_TOP_ANNUAL_DOLLARS[bracket]
+      ? 'top of ' + esc(bracket.replace('-', '\u2013').replace('k', 'K').replace('+', '+'))
+      : '');
+    h += '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:10px 0 12px;">';
+    h += '<div style="background:var(--cream-dark);border-radius:8px;padding:10px 12px;">' +
+      '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;">Est. monthly revenue</div>' +
+      '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.25rem;font-weight:700;color:var(--charcoal);">' +
+      esc(_revenueMeterFormatCents(monthlyNet)) + '</div></div>';
+    h += '<div style="background:var(--cream-dark);border-radius:8px;padding:10px 12px;">' +
+      '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;">Capped + rounded net</div>' +
+      '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.25rem;font-weight:700;color:var(--charcoal);">' +
+      esc(_revenueMeterFormatCents(rounded)) + '</div></div>';
+    h += '<div style="background:var(--cream-dark);border-radius:8px;padding:10px 12px;">' +
+      '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;">Monthly software fee</div>' +
+      '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.25rem;font-weight:700;color:var(--amber);">' +
+      esc(_revenueMeterFormatCents(fee)) + '</div></div>';
+    h += '</div>';
+    h += '<div style="font-size:0.82rem;color:var(--warm-gray);">' +
+      'Software subscription priced by revenue. This fee scales with your revenue \u2014 capped at ' +
+      esc(_revenueMeterFormatCents(PRICING_MODEL.maxFeeCents)) + '/mo; free below ' +
+      esc(_revenueMeterFormatCents(PRICING_MODEL.thresholdCents)) + '/mo of net.</div>';
+  }
+  h += '</div>';
+  el.innerHTML = h;
+}
+
 async function _revenueMeterReadFlag() {
   try {
     var tid = MastDB.tenantId();
@@ -15685,126 +15483,17 @@ async function _revenueMeterFetchMonth(monthKey) {
   }
 }
 
-var _subscriptionSettingsTier = null;
 var _subscriptionDetails = null;
 var _subscriptionDetailsLoading = false;
-var _revenueMeterFlag = null; // null = unknown; loaded async on first render
 
+// Revenue-based pricing is the single path post-cutover. The feature-flag branch
+// and tier/module picker rendering were removed in Checkpoint 4b.
 function renderSubscriptionSettings() {
   var sub = getTenantSubscription();
-  var currentTier = _subscriptionSettingsTier || sub.tier || 'command';
-  _subscriptionSettingsTier = currentTier;
-
-  // Render billing info section (shared between flag on/off)
   renderSubscriptionBillingInfo(sub);
-
-  // Feature-flag gate: load once, then re-render with known value.
-  if (_revenueMeterFlag === null) {
-    _revenueMeterReadFlag().then(function(val) {
-      _revenueMeterFlag = !!val;
-      renderSubscriptionSettings();
-    }).catch(function() {
-      _revenueMeterFlag = false;
-      renderSubscriptionSettings();
-    });
-    return;
-  }
-
-  var meterEl = document.getElementById('subscriptionRevenueMeter');
-  var billEl = document.getElementById('subscriptionMonthlyBill');
-  var histEl = document.getElementById('subscriptionBillHistory');
-  var tierEl = document.getElementById('subscriptionTierSelector');
-  var modEl = document.getElementById('moduleSelectionUI');
-
-  if (_revenueMeterFlag) {
-    // Flag ON — render revenue meter three-card view. Hide legacy tier/module pickers.
-    if (tierEl) { tierEl.style.display = 'none'; tierEl.innerHTML = ''; }
-    if (modEl)  { modEl.style.display = 'none';  modEl.innerHTML = '';  }
-    if (meterEl) meterEl.style.display = '';
-    if (billEl)  billEl.style.display  = '';
-    if (histEl)  histEl.style.display  = '';
-    renderRevenueMeter();
-    renderMonthlyBill();
-    renderBillHistory();
-    return;
-  }
-
-  // Flag OFF — legacy tier + module picker (unchanged behavior).
-  if (meterEl) { meterEl.style.display = 'none'; meterEl.innerHTML = ''; }
-  if (billEl)  { billEl.style.display  = 'none'; billEl.innerHTML  = ''; }
-  if (histEl)  { histEl.style.display  = 'none'; histEl.innerHTML  = ''; }
-  if (tierEl)  tierEl.style.display = '';
-  if (modEl)   modEl.style.display  = '';
-
-  // Render tier selector — Artist tiers + Events tier family
-  var selectorEl = document.getElementById('subscriptionTierSelector');
-  if (selectorEl) {
-    var h = '<div style="margin-bottom:8px;">';
-    h += '<label style="font-weight:600;font-size:0.9rem;color:var(--charcoal);display:block;margin-bottom:12px;">Select Your Tier</label>';
-    h += '<div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:16px;">';
-
-    // Artist tier cards
-    var activeTier = sub.tier || 'publish';
-    TIER_ORDER.forEach(function(tierId) {
-      var tc = TIER_CONFIG[tierId];
-      var isCurrent = tierId === activeTier;
-      var isSelected = tierId === currentTier;
-      var borderColor = isSelected ? 'var(--amber)' : 'var(--cream-dark)';
-      var bg = isSelected ? 'var(--cream)' : 'var(--cream-dark)';
-      var shadow = isSelected ? '0 2px 8px rgba(196, 133, 60, 0.2)' : 'none';
-      h += '<div onclick="selectSubscriptionTier(\'' + tierId + '\')" style="' +
-        'background:' + bg + ';border:2px solid ' + borderColor + ';border-radius:12px;padding:20px;cursor:pointer;' +
-        'box-shadow:' + shadow + ';transition:all 0.2s;display:flex;flex-direction:column;">';
-      h += '<div style="font-weight:700;font-family:\'Cormorant Garamond\', serif;font-size:1.15rem;color:var(--text, var(--charcoal));">' + esc(tc.name) + '</div>';
-      h += '<div style="font-size:0.9rem;color:var(--amber);font-weight:600;">' + (tc.price === 0 ? 'Free' : '$' + tc.price + '/mo') + '</div>';
-      h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;flex:1;">' + esc(tc.description) + '</div>';
-      if (isCurrent) {
-        h += '<span class="status-badge" style="background:var(--teal);color:white;margin-top:12px;display:inline-block;align-self:flex-start;">Current Plan</span>';
-      } else if (TIER_ORDER.indexOf(tierId) > TIER_ORDER.indexOf(activeTier)) {
-        h += '<button class="btn btn-primary btn-small" style="margin-top:12px;align-self:flex-start;" onclick="event.stopPropagation();initiateUpgrade(\'' + tierId + '\');">Upgrade</button>';
-      }
-      h += '</div>';
-    });
-
-    // Events tier card — same grid, same gap as artist tiers
-    var eventsActive = sub.modules && sub.modules.indexOf('events') >= 0;
-    var eventsBorder = 'var(--teal)';
-    var eventsBg = eventsActive ? 'var(--cream)' : 'var(--cream-dark)';
-    var eventsShadow = eventsActive ? '0 2px 8px rgba(42, 124, 111, 0.2)' : 'none';
-    h += '<div style="margin-left:16px;background:' + eventsBg + ';border:2px solid ' + eventsBorder + ';border-radius:12px;padding:20px;cursor:default;box-shadow:' + eventsShadow + ';transition:all 0.2s;">';
-    h += '<div style="font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--teal);margin-bottom:6px;">Add-on</div>';
-    h += '<div style="font-weight:700;font-family:\'Cormorant Garamond\', serif;font-size:1.15rem;color:var(--charcoal);">Events</div>';
-    h += '<div style="font-size:0.9rem;color:var(--teal);font-weight:600;">Separate plan</div>';
-    h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">Organize shows, manage vendors and booths.</div>';
-    if (eventsActive) {
-      h += '<span class="status-badge" style="background:var(--teal);color:white;margin-top:8px;display:inline-block;">Active</span>';
-    }
-    h += '</div>';
-
-    h += '</div></div>';
-    selectorEl.innerHTML = h;
-  }
-
-  // Render module selection — only count purchasable modules
-  var isUpgrade = TIER_ORDER.indexOf(currentTier) > TIER_ORDER.indexOf(sub.tier);
-  var currentModules = (sub.modules || []).filter(function(id) { return MODULE_REGISTRY[id] && MODULE_REGISTRY[id].purchasable; });
-  var lockedMods = isUpgrade ? currentModules.slice() : [];
-  var preSelected = isUpgrade ? currentModules.slice() : (currentTier === sub.tier ? currentModules.slice() : []);
-
-  renderModuleSelectionUI('moduleSelectionUI', {
-    tier: currentTier,
-    currentModules: preSelected,
-    lockedModules: lockedMods,
-    isUpgrade: isUpgrade,
-    onConfirm: function(modules) {
-      _subscriptionSettingsTier = null;
-      setTimeout(function() { renderSubscriptionSettings(); }, 100);
-    },
-    onCancel: function() {
-      _subscriptionSettingsTier = null;
-      renderSubscriptionSettings();
-    }
-  });
+  renderRevenueMeter();
+  renderMonthlyBill();
+  renderBillHistory();
 }
 
 async function renderRevenueMeter() {
@@ -15990,17 +15679,8 @@ async function renderBillHistory() {
   el.innerHTML = h;
 }
 
-function selectSubscriptionTier(tierId) {
-  _subscriptionSettingsTier = tierId;
-  renderSubscriptionSettings();
-}
-
-function initiateUpgrade(tierId) {
-  selectSubscriptionTier(tierId);
-  var sub = getTenantSubscription();
-  var currentModules = (sub.modules || []).filter(function(id) { return MODULE_REGISTRY[id] && MODULE_REGISTRY[id].purchasable; });
-  showUpgradeConfirmation(tierId, currentModules);
-}
+// [REMOVED Checkpoint 4b] selectSubscriptionTier / initiateUpgrade — tier
+// switching is gone. Revenue-based pricing doesn't need a tier picker.
 
 // --- Billing Info Section ---
 
@@ -16008,21 +15688,8 @@ function renderSubscriptionBillingInfo(sub) {
   var el = document.getElementById('subscriptionBillingInfo');
   if (!el) return;
 
-  var tierConfig = TIER_CONFIG[sub.tier] || {};
+  var isRevenueModel = sub && sub.model === 'revenue-1pct';
   var details = _subscriptionDetails;
-
-  // Free tier — no billing info to show
-  if (sub.tier === 'publish' && (!details || details.status === 'free')) {
-    el.innerHTML = '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px 20px;margin-bottom:8px;">' +
-      '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
-        '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--charcoal);">Publish</div>' +
-        '<span class="status-badge" style="background:#16a34a;color:white;">Active</span>' +
-        '<span style="font-size:0.85rem;color:var(--warm-gray);">Free</span>' +
-      '</div>' +
-      '<p style="font-size:0.85rem;color:var(--warm-gray);margin-top:8px;">Upgrade to unlock modules and grow your business.</p>' +
-    '</div>';
-    return;
-  }
 
   // Loading state
   if (_subscriptionDetailsLoading && !details) {
@@ -16045,11 +15712,14 @@ function renderSubscriptionBillingInfo(sub) {
     return;
   }
 
-  // Build billing card
-  var planName = tierConfig.name || sub.tier;
-  var priceStr = details && details.planAmount ? '$' + (details.planAmount / 100) : (tierConfig.price ? '$' + tierConfig.price : 'Free');
-  var intervalStr = details && details.planInterval === 'year' ? '/yr' : '/mo';
-  if (priceStr === 'Free' || priceStr === '$0') intervalStr = '';
+  // Build billing card — revenue-1pct tenants get a priced-by-revenue header;
+  // legacy tenants without a model field fall back to a neutral header (the
+  // tier picker is gone, so no TIER_CONFIG lookup).
+  var planName = isRevenueModel ? 'Software subscription' : 'Subscription';
+  var priceStr = isRevenueModel ? 'Priced by revenue' : (details && details.planAmount ? '$' + (details.planAmount / 100) : 'Free');
+  var intervalStr = (isRevenueModel || priceStr === 'Free' || priceStr === '$0')
+    ? ''
+    : (details && details.planInterval === 'year' ? '/yr' : '/mo');
 
   var statusColor = '#16a34a';
   var statusText = 'Active';
@@ -16066,7 +15736,7 @@ function renderSubscriptionBillingInfo(sub) {
   h += '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;">';
   h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--charcoal);">' + esc(planName) + '</div>';
   h += '<span class="status-badge" style="background:' + statusColor + ';color:white;">' + statusText + '</span>';
-  h += '<span style="font-size:0.9rem;color:var(--amber);font-weight:600;">' + priceStr + intervalStr + '</span>';
+  h += '<span style="font-size:0.9rem;color:var(--amber);font-weight:600;">' + esc(priceStr) + intervalStr + '</span>';
   h += '</div>';
 
   // Details grid
@@ -16099,7 +15769,7 @@ function renderSubscriptionBillingInfo(sub) {
   if (details && details.cancelAtPeriodEnd && details.currentPeriodEnd) {
     var endDate = new Date(details.currentPeriodEnd).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
     h += '<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:0.85rem;color:#92400e;">';
-    h += 'Your subscription will end on <strong>' + endDate + '</strong>. After that, you\'ll be downgraded to the free Publish tier.';
+    h += 'Your subscription will end on <strong>' + endDate + '</strong>. After that, Mast will stop billing you for new revenue.';
     h += '</div>';
   }
 
@@ -16191,15 +15861,9 @@ async function stopAutoRenewalUI() {
 function cancelSubscriptionUI() {
   var sub = getTenantSubscription();
   var details = _subscriptionDetails;
-  var currentTier = sub.tier || 'command';
-  var tierConfig = TIER_CONFIG[currentTier] || {};
   var endDate = details && details.currentPeriodEnd
     ? new Date(details.currentPeriodEnd).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
     : 'the end of your billing period';
-
-  // Find a downgrade offer (one tier below current)
-  var currentIdx = TIER_ORDER.indexOf(currentTier);
-  var downgradeOption = currentIdx > 1 ? TIER_CONFIG[TIER_ORDER[currentIdx - 1]] : null;
 
   var overlay = document.createElement('div');
   overlay.id = 'cancelSubscriptionOverlay';
@@ -16214,14 +15878,8 @@ function cancelSubscriptionUI() {
   h += '<p style="font-size:0.85rem;color:var(--warm-gray);margin-top:6px;">Before you cancel, we\'d love to understand how we can do better.</p>';
   h += '</div>';
 
-  // Downgrade offer
-  if (downgradeOption) {
-    h += '<div style="background:var(--cream-dark);border:1px solid var(--amber);border-radius:8px;padding:14px 16px;margin-bottom:16px;">';
-    h += '<div style="font-size:0.85rem;font-weight:600;color:var(--amber);margin-bottom:4px;">💡 Would a different tier work better?</div>';
-    h += '<p style="font-size:0.85rem;color:var(--charcoal);margin-bottom:10px;">Switch to <strong>' + esc(downgradeOption.name) + '</strong> at $' + downgradeOption.price + '/mo — ' + esc(downgradeOption.description) + '</p>';
-    h += '<button class="btn btn-primary btn-small" onclick="acceptDowngradeOffer(\'' + esc(downgradeOption.id) + '\')">Switch to ' + esc(downgradeOption.name) + '</button>';
-    h += '</div>';
-  }
+  // [REMOVED Checkpoint 4b] tier-downgrade offer — revenue-based pricing scales
+  // automatically with revenue, so there's no downgrade to offer.
 
   // Feedback
   h += '<div style="margin-bottom:16px;">';
@@ -16244,7 +15902,7 @@ function cancelSubscriptionUI() {
 
   // What happens next
   h += '<div style="background:#fef3c7;border-radius:6px;padding:10px 14px;margin-bottom:20px;font-size:0.85rem;color:#92400e;">';
-  h += 'Your access continues until <strong>' + endDate + '</strong>. After that, you\'ll be on the free Publish tier (public site + product catalog).';
+  h += 'Your access continues until <strong>' + endDate + '</strong>. After that, your software subscription will end and Mast will stop billing for new revenue.';
   h += '</div>';
 
   // Buttons
@@ -16268,206 +15926,10 @@ function closeCancelModal() {
   if (overlay) overlay.remove();
 }
 
-async function acceptDowngradeOffer(newPlan) {
-  closeCancelModal();
-  showToast('Switching to ' + newPlan + '...');
-  try {
-    var token = await firebase.auth().currentUser.getIdToken();
-    var resp = await fetch(CLOUD_FUNCTIONS_BASE + '/updateSubscription', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + token,
-        'X-Tenant-ID': MastDB.tenantId(),
-      },
-      body: JSON.stringify({ tenantId: MastDB.tenantId(), newPlan: newPlan }),
-    });
-    if (!resp.ok) {
-      var errData = await resp.json().catch(function() { return {}; });
-      throw new Error(errData.error || 'Failed to change plan');
-    }
-    showToast('Switched to ' + newPlan + '! Your new plan takes effect immediately.');
-    _subscriptionDetails = null; // Force refresh
-    renderSubscriptionSettings();
-  } catch (err) {
-    showToast(err.message, true);
-  }
-}
-
-// --- Upgrade Subscription Flow ---
-
-function showUpgradeConfirmation(newTierId, pendingModules) {
-  var sub = getTenantSubscription();
-  var currentTier = sub.tier || 'publish';
-  var currentConfig = TIER_CONFIG[currentTier] || {};
-  var newConfig = TIER_CONFIG[newTierId];
-  if (!newConfig) return;
-
-  var priceDiff = newConfig.price - (currentConfig.price || 0);
-
-  var overlay = document.createElement('div');
-  overlay.id = 'upgradeConfirmOverlay';
-  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
-
-  var isDark = document.body.classList.contains('dark-mode');
-  var modalBg = isDark ? '#2a2a2a' : 'var(--cream)';
-  var cardBg = isDark ? '#333' : 'var(--cream-dark)';
-  var textColor = isDark ? '#e0e0e0' : 'var(--charcoal)';
-  var noteBg = isDark ? '#3d2e00' : '#fef3c7';
-  var noteText = isDark ? '#fbbf24' : '#92400e';
-
-  var h = '<div style="background:' + modalBg + ';border-radius:10px;max-width:480px;width:90%;padding:24px 28px;box-shadow:0 8px 30px rgba(0,0,0,0.3);">';
-
-  // Header
-  h += '<div style="text-align:center;margin-bottom:20px;">';
-  h += '<div style="font-size:1.6rem;margin-bottom:8px;">🚀</div>';
-  h += '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:600;color:' + textColor + ';">Upgrade Your Plan</div>';
-  h += '</div>';
-
-  // Plan comparison
-  h += '<div style="display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:20px;">';
-  h += '<div style="text-align:center;padding:12px 16px;background:' + cardBg + ';border-radius:8px;min-width:120px;">';
-  h += '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;">Current</div>';
-  h += '<div style="font-weight:700;color:' + textColor + ';font-size:1rem;">' + esc(currentConfig.name || 'Publish') + '</div>';
-  h += '<div style="font-size:0.85rem;color:var(--warm-gray);">' + (currentConfig.price ? '$' + currentConfig.price + '/mo' : 'Free') + '</div>';
-  h += '</div>';
-  h += '<div style="font-size:1.15rem;color:var(--amber);">→</div>';
-  h += '<div style="text-align:center;padding:12px 16px;background:' + modalBg + ';border:2px solid var(--amber);border-radius:8px;min-width:120px;">';
-  h += '<div style="font-size:0.78rem;color:var(--amber);text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">New Plan</div>';
-  h += '<div style="font-weight:700;color:' + textColor + ';font-size:1rem;">' + esc(newConfig.name) + '</div>';
-  h += '<div style="font-size:0.85rem;color:var(--amber);font-weight:600;">$' + newConfig.price + '/mo</div>';
-  h += '</div>';
-  h += '</div>';
-
-  // What changes
-  h += '<div style="background:' + cardBg + ';border-radius:8px;padding:14px 16px;margin-bottom:16px;">';
-  h += '<div style="font-size:0.85rem;font-weight:600;color:' + textColor + ';margin-bottom:8px;">What changes:</div>';
-  h += '<ul style="margin:0;padding-left:20px;font-size:0.85rem;color:' + textColor + ';list-style:disc;">';
-  h += '<li>Module limit: ' + (currentConfig.moduleLimit || 0) + ' → <strong>' + newConfig.moduleLimit + '</strong></li>';
-  h += '<li>Monthly tokens: ' + (currentConfig.monthlyTokens || 0) + ' → <strong>' + newConfig.monthlyTokens + '</strong></li>';
-  if (!currentConfig.studioAssistant && newConfig.studioAssistant) {
-    h += '<li><strong>Studio Assistant unlocked</strong></li>';
-  }
-  h += '</ul>';
-  h += '</div>';
-
-  // Proration note
-  h += '<div id="upgradeProrationNote" style="background:' + noteBg + ';border-radius:6px;padding:10px 14px;margin-bottom:20px;font-size:0.85rem;color:' + noteText + ';">';
-  h += 'Calculating your prorated charge... <span style="opacity:0.6">(~$' + priceDiff + ' estimate)</span>';
-  h += '</div>';
-
-  // Buttons
-  h += '<div style="display:flex;justify-content:flex-end;gap:8px;">';
-  h += '<button class="btn btn-secondary" onclick="closeUpgradeModal()">Cancel</button>';
-  h += '<button class="btn btn-primary" onclick="confirmUpgradeSubscription(\'' + esc(newTierId) + '\')">Confirm Upgrade</button>';
-  h += '</div>';
-
-  h += '</div>';
-  overlay.innerHTML = h;
-  document.body.appendChild(overlay);
-
-  // Store pending modules for after upgrade completes
-  overlay._pendingModules = pendingModules;
-
-  overlay.addEventListener('click', function(e) {
-    if (e.target === overlay) closeUpgradeModal();
-  });
-
-  // Fetch real proration preview from Stripe (non-blocking)
-  fetchUpgradePreview(newTierId, priceDiff, newConfig.price);
-}
-
-async function fetchUpgradePreview(newPlan, estimateDiff, newMonthlyPrice) {
-  var noteEl = document.getElementById('upgradeProrationNote');
-  if (!noteEl) return;
-  try {
-    var token = await firebase.auth().currentUser.getIdToken();
-    var resp = await fetch(CLOUD_FUNCTIONS_BASE + '/getUpgradePreview', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + token,
-        'X-Tenant-ID': MastDB.tenantId(),
-      },
-      body: JSON.stringify({ tenantId: MastDB.tenantId(), newPlan: newPlan }),
-    });
-    if (resp.ok) {
-      var data = await resp.json();
-      noteEl.innerHTML = 'You\'ll be charged <strong>' + esc(data.proratedAmountFormatted) + '</strong> today (prorated for the rest of this billing period). Your next full charge will be <strong>$' + newMonthlyPrice + '/mo</strong>.';
-    } else {
-      // Fallback to estimate
-      noteEl.innerHTML = 'You\'ll be charged approximately <strong>~$' + estimateDiff + '</strong> for the remainder of this billing period. Your next full charge will be <strong>$' + newMonthlyPrice + '/mo</strong>.';
-    }
-  } catch (err) {
-    // Fallback to estimate on network error
-    noteEl.innerHTML = 'You\'ll be charged approximately <strong>~$' + estimateDiff + '</strong> for the remainder of this billing period. Your next full charge will be <strong>$' + newMonthlyPrice + '/mo</strong>.';
-  }
-}
-
-function closeUpgradeModal() {
-  var overlay = document.getElementById('upgradeConfirmOverlay');
-  if (overlay) overlay.remove();
-}
-
-async function confirmUpgradeSubscription(newPlan) {
-  var overlay = document.getElementById('upgradeConfirmOverlay');
-  var pendingModules = overlay ? overlay._pendingModules : null;
-  closeUpgradeModal();
-
-  var newConfig = TIER_CONFIG[newPlan];
-  showToast('Upgrading to ' + (newConfig ? newConfig.name : newPlan) + '...');
-
-  try {
-    var token = await firebase.auth().currentUser.getIdToken();
-    var resp = await fetch(CLOUD_FUNCTIONS_BASE + '/updateSubscription', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + token,
-        'X-Tenant-ID': MastDB.tenantId(),
-      },
-      body: JSON.stringify({ tenantId: MastDB.tenantId(), newPlan: newPlan }),
-    });
-    if (!resp.ok) {
-      var errData = await resp.json().catch(function() { return {}; });
-      throw new Error(errData.error || 'Failed to upgrade plan');
-    }
-
-    var result = await resp.json();
-
-    // Free → paid: server returns a Stripe checkout URL — redirect to payment
-    if (result.checkoutUrl) {
-      showToast('Redirecting to checkout...');
-      window.location.href = result.checkoutUrl;
-      return;
-    }
-
-    // Update local subscription with new tier and modules
-    var updateData = {
-      tier: newPlan,
-      updatedAt: new Date().toISOString()
-    };
-
-    // If we have pending module selections, save them too
-    if (pendingModules) {
-      updateData.modules = pendingModules;
-      updateData.moduleChangedAt = new Date().toISOString();
-    }
-
-    await MastDB.subscription.update(updateData);
-    _tenantSubscription = Object.assign({}, _tenantSubscription || {}, updateData);
-    _subscriptionDetails = null; // Force refresh
-    _subscriptionSettingsTier = null;
-
-    applySidebarGating();
-    applySettingsGating();
-    renderSubscriptionSettings();
-
-    showToast('Upgraded to ' + (newConfig ? newConfig.name : newPlan) + '! Your new plan is active.');
-  } catch (err) {
-    showToast(err.message, true);
-  }
-}
+// [REMOVED Checkpoint 4b] acceptDowngradeOffer / showUpgradeConfirmation /
+// fetchUpgradePreview / closeUpgradeModal / confirmUpgradeSubscription — the
+// tier upgrade/downgrade flow is gone with revenue-based pricing. Backend CFs
+// updateSubscription + getUpgradePreview were deleted in the same pass.
 
 async function confirmCancelSubscription() {
   var reason = document.getElementById('cancelReasonSelect');
@@ -19771,6 +19233,7 @@ async function wizardConfirmEngagement() {
       renderCapabilityPreview();
       showWizardImportTimeline();
     } catch (e) { /* non-fatal if legacy helpers error */ }
+    try { renderWizardFeeProjection(); } catch (e) { /* non-fatal — card is optional */ }
     try { renderWizardActivationGate(); } catch (e) { /* render-on-demand fallback below */ }
     saveWizardProgress(3, { engagementConfirmed: { mode: mode, surface: surface, goalsCount: goals.length } });
   } catch (err) {
@@ -19823,6 +19286,7 @@ function renderWizardCalibration() {
     };
     if (cnt) cnt.textContent = (txt.value || '').length + ' / 500';
   }
+  _wizardUpdateBracketProjection('wizardRevenueBracket', 'wizardRevenueBracketProjection');
 }
 
 // B2: write engagement.calibration, advance to B3.
@@ -19837,6 +19301,7 @@ async function wizardConfirmCalibration() {
   var calibration = { capturedAt: new Date().toISOString() };
   if (bracket) calibration.revenueBracket = bracket;
   if (wish) calibration.wishStatement = wish;
+  window._wizardRevenueBracket = bracket || '';
   try {
     await MastDB.businessEntity.update('engagement', { calibration: calibration });
     logWizardEvent(2, 'calibration_saved', {
@@ -20020,6 +19485,7 @@ function renderWizardNoWebsite() {
       revSel.appendChild(o);
     }
   }
+  _wizardUpdateBracketProjection('wizardNwRevenue', 'wizardNwRevenueProjection');
 
   var rolesEl = document.getElementById('wizardNwRoles');
   if (rolesEl && rolesEl.childNodes.length === 0) {
@@ -20057,6 +19523,7 @@ async function wizardConfirmNoWebsite() {
   var businessName = nameEl ? (nameEl.value || '').trim() : '';
   var sells = sellsEl ? (sellsEl.value || '').trim() : '';
   var revenueBracket = revEl ? (revEl.value || '') : '';
+  window._wizardRevenueBracket = revenueBracket || '';
   if (!businessName) {
     showToast('Please enter a business name.', true);
     return;
@@ -21866,6 +21333,23 @@ async function wizardComplete() {
     await MastDB.config.set('setupProgress/completed', true);
     await MastDB.config.set('setupProgress/completedAt', new Date().toISOString());
     await updateConfigChecklist('brand', true);
+
+    // Revenue-based pricing (Checkpoint 4a): stamp the subscription model and
+    // clear any legacy tier fields so the subscription tab routes to the
+    // revenue meter unconditionally after cutover.
+    try {
+      await MastDB.subscription.update({
+        model: 'revenue-1pct',
+        tier: null,
+        selectedModules: null,
+        moduleLimit: null,
+        selectableModules: null,
+        needsModuleSelection: false,
+        updatedAt: new Date().toISOString()
+      });
+    } catch (subErr) {
+      console.warn('[Wizard] Failed to stamp revenue-1pct subscription model:', subErr && subErr.message);
+    }
 
     // Legacy planStatus guard: per v1 risk #3, only promote 'none' → 'draft'; never
     // touch an 'active' plan from the wizard.
