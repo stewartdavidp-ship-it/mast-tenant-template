@@ -842,8 +842,19 @@ var MastDB = (function() {
   var tenantStore = null;
   var platformStore = null;
   function _ensureStores() {
+    // Lazy-init _fs from the default Firebase app if MastDB.init() hasn't been
+    // called yet. Platform reads don't need a tenantId, so the auth callback can
+    // hit MastDB.platform.get() before resolveTenant has chosen a tenant.
+    if (!_fs && typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length && firebase.firestore) {
+      try { _fs = firebase.firestore(); } catch (e) { /* firebase app not ready */ }
+    }
     if (!tenantStore && _fs) tenantStore = _makeFirestoreStore();
     if (!platformStore && _fs) platformStore = _makeFirestorePlatformStore();
+  }
+  function _platform() {
+    _ensureStores();
+    if (!platformStore) throw new Error('MastDB: platform store unavailable (Firebase not initialized)');
+    return platformStore;
   }
 
   return {
@@ -865,17 +876,17 @@ var MastDB = (function() {
     serverTimestamp: serverTimestamp,
     serverIncrement: serverIncrement,
     platform: {
-      get: function(p) { return platformStore.get(p); },
-      list: function(p, o) { return platformStore.list(p, o); },
-      set: function(p, v) { return platformStore.set(p, v); },
-      update: function(p, x) { return platformStore.update(p, x); },
-      push: function(p, v) { return platformStore.push(p, v); },
-      newKey: function(p) { return platformStore.newKey(p); },
-      remove: function(p) { return platformStore.remove(p); },
-      multiUpdate: function(u) { return platformStore.multiUpdate(u); },
-      query: function(p) { return platformStore.query(p); },
-      subscribe: function(p, cb) { return platformStore.subscribe(p, cb); },
-      transaction: function(p, fn) { return platformStore.transaction(p, fn); },
+      get: function(p) { return _platform().get(p); },
+      list: function(p, o) { return _platform().list(p, o); },
+      set: function(p, v) { return _platform().set(p, v); },
+      update: function(p, x) { return _platform().update(p, x); },
+      push: function(p, v) { return _platform().push(p, v); },
+      newKey: function(p) { return _platform().newKey(p); },
+      remove: function(p) { return _platform().remove(p); },
+      multiUpdate: function(u) { return _platform().multiUpdate(u); },
+      query: function(p) { return _platform().query(p); },
+      subscribe: function(p, cb) { return _platform().subscribe(p, cb); },
+      transaction: function(p, fn) { return _platform().transaction(p, fn); },
       serverTimestamp: serverTimestamp,
       serverIncrement: serverIncrement
     },
