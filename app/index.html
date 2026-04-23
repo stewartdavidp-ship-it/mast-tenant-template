@@ -14432,8 +14432,8 @@ function loadEmailTriggers() {
   if (!container) return;
 
   // Load saved preferences from Firebase
-  MastDB.get('config/emailTriggers').then(function(snapVal) {
-    emailTriggerPrefs = snap.val() || {};
+  MastDB.get('config/emailTriggers').then(function(val) {
+    emailTriggerPrefs = val || {};
     emailTriggersLoaded = true;
     renderEmailTriggers();
   }).catch(function(err) {
@@ -16562,8 +16562,8 @@ function clearFieldBadges(prefix) {
 // ============================================================
 
 function loadPaymentProcessor() {
-  MastDB.get('config/paymentProcessor').then(function(snapVal) {
-    var processor = snap.val() || 'square';
+  MastDB.get('config/paymentProcessor').then(function(val) {
+    var processor = val || 'square';
     showPaymentProcessor(processor);
     if (processor === 'stripe') {
       loadStripeConfig();
@@ -20166,8 +20166,7 @@ async function wizardRequestEnrichment() {
     if (data.updatedReport) {
       // Re-fetch and re-render the report
       try {
-        MastDB.get('webPresence/importJobs/' + _wizardImportJobId + '/collectionReport').then(function(snapVal) {
-          var report = snap.val();
+        MastDB.get('webPresence/importJobs/' + _wizardImportJobId + '/collectionReport').then(function(report) {
           if (report) wizardRenderCollectionReport(report);
         });
       } catch (e) { /* non-critical */ }
@@ -20584,8 +20583,7 @@ function wizardExecuteEnrichment() {
     }
 
     // Re-fetch updated collection report and re-render gap rows
-    MastDB.get('webPresence/importJobs/' + _wizardGapJobId + '/collectionReport').then(function(snapVal) {
-      var report = snap.val();
+    MastDB.get('webPresence/importJobs/' + _wizardGapJobId + '/collectionReport').then(function(report) {
       if (report && report.gapAnalysis) {
         _wizardGapSelections = {};
         wizardRenderGapRows(report.gapAnalysis, report.gaps || []);
@@ -24932,8 +24930,8 @@ function renderChannelSyncBadges(product, opts) {
 
 function loadAdminChannels(callback) {
   if (window.__mastChannelsCache) { callback(window.__mastChannelsCache); return; }
-  MastDB.get('admin/channels').then(function(snapVal) {
-    window.__mastChannelsCache = snap.val() || {};
+  MastDB.get('admin/channels').then(function(data) {
+    window.__mastChannelsCache = data || {};
     callback(window.__mastChannelsCache);
   }).catch(function(err) {
     console.error('[channelBindings] load failed:', err);
@@ -32795,8 +32793,8 @@ function loadPublicFeedbackSetting() {
 var _testingModeVisible = false;
 
 function loadTestingModeVisibility() {
-  MastDB.get('config/testingModeVisible').then(function(snapVal) {
-    _testingModeVisible = snap.val() === true;
+  MastDB.get('config/testingModeVisible').then(function(val) {
+    _testingModeVisible = val === true;
     applyTestingModeVisibility();
     // Sync the toggle in Settings if it exists
     var toggle = document.getElementById('testingModeVisibleToggle');
