@@ -14305,7 +14305,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260424-d22-readonly-dashboard';
+var MAST_MODULES_V = '20260424-d22-readonly-dashboard-v2';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -36775,7 +36775,8 @@ async function renderDashboardTodos() {
       '#businessTab .bz-rail { position:sticky; top:70px; max-height:calc(100vh - 90px); overflow-y:auto; padding:8px 0; }',
       '#businessTab .bz-rail a { display:block; padding:6px 10px; border-radius:6px; font-size:0.85rem; color:var(--warm-gray,#888); text-decoration:none; margin-bottom:2px; cursor:pointer; transition:color 0.15s, background 0.15s; }',
       '#businessTab .bz-rail a:hover  { color:var(--text,#fff); background:rgba(255,255,255,0.04); }',
-      '#businessTab .bz-rail a:focus  { outline:2px solid var(--amber-glow,#f59e0b); outline-offset:1px; }',
+      '#businessTab .bz-rail a:focus { outline:none; }',
+      '#businessTab .bz-rail a:focus-visible { outline:2px solid var(--amber-glow,#f59e0b); outline-offset:1px; }',
       '#businessTab .bz-rail a.active { color:var(--amber,#c4853c); font-weight:600; border-left:2px solid var(--amber,#c4853c); padding-left:8px; }',
       '#businessTab .bz-mobile-nav { display:none; width:100%; padding:8px 10px; margin-bottom:14px; background:var(--bg-secondary,#232323); color:var(--text,#fff); border:1px solid rgba(255,255,255,0.1); border-radius:6px; font-size:0.85rem; font-family:inherit; }',
       '@media (max-width:767px) { #businessTab .bz-mobile-nav { display:block; } }',
@@ -36786,7 +36787,8 @@ async function renderDashboardTodos() {
       '#businessTab .bz-section-links  { display:flex; flex-wrap:wrap; gap:14px; font-size:0.85rem; }',
       '#businessTab .bz-link { color:var(--teal,#2a9d8f); cursor:pointer; text-decoration:none; background:none; border:none; padding:0; font-size:inherit; font-family:inherit; }',
       '#businessTab .bz-link:hover { text-decoration:underline; }',
-      '#businessTab .bz-link:focus { outline:2px solid var(--amber-glow,#f59e0b); outline-offset:2px; border-radius:2px; }',
+      '#businessTab .bz-link:focus { outline:none; }',
+      '#businessTab .bz-link:focus-visible { outline:2px solid var(--amber-glow,#f59e0b); outline-offset:2px; border-radius:2px; }',
       '#businessTab .bz-card { background:var(--bg-secondary,#232323); border-radius:10px; padding:14px 18px; border:1px solid rgba(255,255,255,0.04); }',
       '#businessTab .bz-row  { display:flex; align-items:flex-start; gap:12px; padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.04); font-size:0.9rem; color:var(--text,#fff); line-height:1.5; }',
       '#businessTab .bz-row:last-child { border-bottom:none; padding-bottom:0; }',
@@ -36949,7 +36951,7 @@ async function renderDashboardTodos() {
     h += '<nav class="bz-rail" aria-label="Section navigation">';
     SECTIONS.forEach(function(s, i){
       h += '<a href="#" data-bz-anchor="' + s.id + '"' + (i === 0 ? ' class="active"' : '') +
-           ' onclick="event.preventDefault(); document.getElementById(\'bz-' + s.id + '\').scrollIntoView({behavior:\'smooth\'});">' +
+           ' onclick="event.preventDefault(); document.getElementById(\'bz-' + s.id + '\').scrollIntoView({behavior:\'smooth\'}); this.blur();">' +
            esc(s.label) + '</a>';
     });
     h += '</nav>';
@@ -37337,15 +37339,25 @@ async function renderDashboardTodos() {
   function bindScrollSpy() {
     var anchors = document.querySelectorAll('#businessTab .bz-rail a');
     function onScroll() {
-      var active = null;
+      // Pick the section with the largest visible area in the viewport
+      // (discounting the top 80px for the page header). Tie-breaks toward
+      // the earlier section in SECTIONS order.
+      var vh = window.innerHeight;
+      var bestId = null, bestArea = 0;
       for (var i = 0; i < SECTIONS.length; i++) {
         var el = document.getElementById('bz-' + SECTIONS[i].id);
         if (!el) continue;
-        if (el.getBoundingClientRect().top <= 110) active = SECTIONS[i].id;
+        var rect = el.getBoundingClientRect();
+        var visTop    = Math.max(rect.top, 80);
+        var visBottom = Math.min(rect.bottom, vh);
+        var area = Math.max(0, visBottom - visTop);
+        if (area > bestArea) { bestArea = area; bestId = SECTIONS[i].id; }
       }
-      if (!active && SECTIONS.length) active = SECTIONS[0].id;
+      // Fallback: if nothing is visible (scrolled past the last section),
+      // highlight the last section.
+      if (!bestId && SECTIONS.length) bestId = SECTIONS[SECTIONS.length - 1].id;
       anchors.forEach(function(a){
-        if (a.getAttribute('data-bz-anchor') === active) a.classList.add('active');
+        if (a.getAttribute('data-bz-anchor') === bestId) a.classList.add('active');
         else a.classList.remove('active');
       });
     }
