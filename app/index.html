@@ -5248,6 +5248,13 @@
         <div class="sidebar-item" data-route="historical-orders" onclick="navigateTo('historical-orders')">Past Orders</div>
       </div>
     </div>
+    <!-- Business (D-22: Unified Business Entity page) -->
+    <div class="sidebar-section" data-section="business">
+      <div class="sidebar-section-header dashboard-link" onclick="navigateTo('business')">
+        <span class="sidebar-section-icon">&#127970;</span>
+        <span class="sidebar-section-label">Business</span>
+      </div>
+    </div>
     <!-- Manage -->
     <div class="sidebar-section" data-section="manage">
       <div class="sidebar-section-header" onclick="toggleSection('manage')">
@@ -5310,6 +5317,10 @@
 
     <!-- ===== ADVISOR TAB ===== -->
     <div id="advisorTab" style="display:none;">
+    </div>
+
+    <!-- ===== BUSINESS TAB (D-22: Unified Business Entity page) ===== -->
+    <div id="businessTab" style="display:none;">
     </div>
 
     <!-- ===== MIGRATION TABS ===== -->
@@ -13840,6 +13851,7 @@ var ROUTE_MAP = {
   // contacts route handled by contacts module (lazy-loaded)
   'auditlog':    { tab: 'auditLogTab' },
   // financials route handled by financials module (lazy-loaded)
+  'business':    { tab: 'businessTab', setup: function() { if (typeof loadBusinessView === 'function') loadBusinessView(); } },
   'settings':    { tab: 'settingsTab' },
   'subscription': { tab: 'subscriptionTab', setup: function() { renderSubscriptionSettings(); } },
   'about':        { tab: 'aboutTab', setup: function() { renderAboutSettings(); } },
@@ -13878,10 +13890,11 @@ var SECTION_ROUTES = {
   'web':    ['website', 'homepage', 'images'],
   'manage': ['products', 'inventory', 'employees', 'analytics', 'auditlog', 'settings'],
   'advise': ['advisor'],
+  'business': ['business'],
   'migration': ['migration', 'migration-confirm', 'migration-plan', 'migration-import', 'historical-orders']
 };
 
-var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'forecastTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'expensesTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab', 'channelsTab'];
+var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'forecastTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'expensesTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab', 'channelsTab', 'businessTab'];
 
 var currentRoute = 'dashboard';
 
@@ -14292,7 +14305,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260424-p2d-s2-ops-uis';
+var MAST_MODULES_V = '20260424-d22-unified-biz-page';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -36731,6 +36744,843 @@ async function renderDashboardTodos() {
 // financials code handled by financials module (lazy-loaded)
 
 // Events Organizer Module moved to standalone app: ../events/index.html
+
+// ============================================================
+// D-22: Unified Business Entity page (Build BU-1)
+// ============================================================
+(function() {
+  'use strict';
+
+  var entityData = null;
+  var renewalsData = [];
+  var documentsData = [];
+  var channelsData = [];
+  var entitySub = null, renewalsSub = null, documentsSub = null, channelsSub = null;
+  var cssInjected = false;
+  var loaded = false;
+
+  function injectCss() {
+    if (cssInjected) return;
+    cssInjected = true;
+    var style = document.createElement('style');
+    style.textContent = [
+      '.biz-wrap { display:grid; grid-template-columns:220px 1fr; gap:24px; align-items:start; }',
+      '@media (max-width: 1023px) { .biz-wrap { grid-template-columns:180px 1fr; gap:16px; } }',
+      '@media (max-width: 767px) { .biz-wrap { grid-template-columns:1fr; } .biz-anchor-nav { display:none !important; } }',
+      '.biz-anchor-nav { position:sticky; top:70px; max-height:calc(100vh - 90px); overflow-y:auto; padding:12px 0; background:transparent; }',
+      '.biz-anchor-nav a { display:block; padding:6px 10px; border-radius:6px; font-size:0.85rem; color:var(--warm-gray,#888); text-decoration:none; margin-bottom:2px; transition:background 0.15s, color 0.15s; cursor:pointer; }',
+      '.biz-anchor-nav a:hover, .biz-anchor-nav a.active { background:rgba(255,255,255,0.05); color:var(--text,#fff); }',
+      '.biz-anchor-nav a.active { border-left:3px solid var(--teal,#2a9d8f); padding-left:7px; font-weight:600; }',
+      '.biz-mobile-nav { display:none; width:100%; padding:8px 10px; margin-bottom:14px; background:var(--bg-secondary,#232323); color:var(--text,#fff); border:1px solid rgba(255,255,255,0.1); border-radius:6px; font-size:0.9rem; font-family:inherit; }',
+      '@media (max-width: 767px) { .biz-mobile-nav { display:block; } }',
+      '.biz-content { scroll-padding-top:80px; }',
+      '.biz-section { margin-bottom:20px; scroll-margin-top:80px; }',
+      '.biz-section-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; gap:12px; flex-wrap:wrap; }',
+      '.biz-section-title { font-size:1.05rem; font-weight:700; color:var(--text,#fff); display:flex; align-items:center; gap:8px; }',
+      '.biz-edit-link { font-size:0.82rem; color:var(--teal,#2a9d8f); text-decoration:none; cursor:pointer; }',
+      '.biz-edit-link:hover { text-decoration:underline; }',
+      '.biz-card { background:var(--bg-secondary,#232323); border-radius:10px; padding:16px 18px; border:1px solid rgba(255,255,255,0.04); }',
+      '.biz-row { display:flex; align-items:flex-start; gap:12px; padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.04); font-size:0.9rem; color:var(--text,#fff); }',
+      '.biz-row:last-child { border-bottom:none; padding-bottom:0; }',
+      '.biz-row .label { color:var(--warm-gray,#888); font-size:0.78rem; min-width:140px; text-transform:uppercase; letter-spacing:0.5px; padding-top:2px; }',
+      '.biz-row .val { flex:1; word-break:break-word; line-height:1.5; }',
+      '.biz-row .pencil { opacity:0.4; cursor:pointer; font-size:0.8rem; padding:4px 8px; border-radius:4px; transition:opacity 0.15s, background 0.15s; align-self:center; }',
+      '.biz-row .pencil:hover { opacity:1; background:rgba(255,255,255,0.06); }',
+      '.biz-empty { color:var(--warm-gray-light,#666); font-style:italic; }',
+      '.biz-chip { display:inline-block; padding:2px 10px; border-radius:12px; background:rgba(42,157,143,0.15); color:var(--teal,#2a9d8f); font-size:0.78rem; margin-right:4px; margin-bottom:4px; }',
+      '.biz-chip.muted { background:rgba(255,255,255,0.05); color:var(--warm-gray,#888); }',
+      '.biz-chip.warning { background:rgba(234,179,8,0.15); color:#eab308; }',
+      '.biz-chip.danger { background:rgba(239,68,68,0.15); color:#ef4444; }',
+      '.biz-pill { display:inline-block; padding:3px 10px; border-radius:12px; font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; }',
+      '.biz-pill.active  { background:rgba(34,197,94,0.15); color:#22c55e; }',
+      '.biz-pill.draft   { background:rgba(234,179,8,0.15); color:#eab308; }',
+      '.biz-pill.none    { background:rgba(156,163,175,0.15); color:#9ca3af; }',
+      '.biz-pill.warning { background:rgba(234,179,8,0.15); color:#eab308; }',
+      '.biz-pill.expired { background:rgba(239,68,68,0.15); color:#ef4444; }',
+      '.biz-pill.archived{ background:rgba(156,163,175,0.15); color:#9ca3af; }',
+      '.biz-status-strip { background:var(--bg-secondary,#232323); border-radius:10px; padding:12px 18px; margin-bottom:20px; display:flex; align-items:center; gap:18px; flex-wrap:wrap; font-size:0.85rem; color:var(--warm-gray,#888); }',
+      '.biz-status-strip .status-item { display:flex; align-items:center; gap:6px; }',
+      '.biz-status-strip .status-sep { width:1px; height:16px; background:rgba(255,255,255,0.1); }',
+      '.biz-edit-input { width:100%; box-sizing:border-box; padding:7px 10px; background:var(--bg-primary,var(--charcoal,#1a1a1a)); color:var(--text,#fff); border:1px solid var(--teal,#2a9d8f); border-radius:6px; font-size:0.9rem; font-family:inherit; }',
+      '.biz-edit-actions { margin-top:8px; display:flex; gap:8px; }',
+      '.biz-edit-actions button { font-size:0.78rem; padding:5px 12px; }',
+      '.biz-empty-global { text-align:center; padding:60px 20px; }',
+      '.biz-empty-global h2 { font-size:1.6rem; margin-bottom:8px; color:var(--text,#fff); }',
+      '.biz-empty-global p  { color:var(--warm-gray,#888); font-size:0.9rem; margin-bottom:24px; max-width:460px; margin-left:auto; margin-right:auto; }',
+      '.biz-draft-banner { background:rgba(234,179,8,0.08); border:1px solid rgba(234,179,8,0.25); border-radius:8px; padding:10px 14px; margin-bottom:16px; font-size:0.88rem; color:var(--text,#fff); }',
+      '.biz-section-empty { padding:14px; color:var(--warm-gray,#888); font-size:0.88rem; background:rgba(255,255,255,0.02); border:1px dashed rgba(255,255,255,0.08); border-radius:8px; text-align:center; }',
+      '.biz-section-empty a { color:var(--teal,#2a9d8f); cursor:pointer; text-decoration:underline; }',
+      '.biz-checkbox-grid { display:flex; flex-wrap:wrap; gap:4px 14px; }',
+      '.biz-checkbox-grid label { display:inline-flex; align-items:center; gap:6px; font-size:0.85rem; cursor:pointer; color:var(--text,#fff); }',
+      '.biz-sub-row { padding-left:12px; border-left:2px solid rgba(255,255,255,0.06); margin-left:2px; }'
+    ].join('\n');
+    document.head.appendChild(style);
+  }
+
+  function esc(s) {
+    if (s === null || s === undefined) return '';
+    return String(s).replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; });
+  }
+  function timeAgo(dateStr) {
+    if (!dateStr) return '';
+    var diff = Date.now() - new Date(dateStr).getTime();
+    if (isNaN(diff)) return '';
+    var days = Math.floor(diff / 86400000);
+    if (days === 0) {
+      var hrs = Math.floor(diff / 3600000);
+      if (hrs === 0) return 'just now';
+      return hrs + 'h ago';
+    }
+    if (days === 1) return 'yesterday';
+    if (days < 30) return days + 'd ago';
+    var mo = Math.floor(days / 30);
+    if (mo < 12) return mo + 'mo ago';
+    return Math.floor(mo / 12) + 'y ago';
+  }
+  function fmtDate(dateStr) {
+    if (!dateStr) return '';
+    var d = new Date(dateStr);
+    if (isNaN(d.getTime())) return '';
+    return d.toISOString().slice(0, 10);
+  }
+  function daysUntil(dateStr) {
+    if (!dateStr) return null;
+    var t = new Date(dateStr).getTime();
+    if (isNaN(t)) return null;
+    return Math.floor((t - Date.now()) / 86400000);
+  }
+
+  var SECTIONS = [
+    { id: 'overview',    label: 'Overview' },
+    { id: 'identity',    label: 'Identity' },
+    { id: 'presence',    label: 'Presence' },
+    { id: 'channels',    label: 'Channels' },
+    { id: 'compliance',  label: 'Compliance' },
+    { id: 'renewals',    label: 'Renewals' },
+    { id: 'people',      label: 'People' },
+    { id: 'operations',  label: 'Operations' },
+    { id: 'engagement',  label: 'Engagement' },
+    { id: 'discovery',   label: 'Discovery' }
+  ];
+
+  var EDITABLE = {
+    'identity.businessName':      { section:'identity',   type:'text',     label:'Business name' },
+    'identity.legalName':         { section:'identity',   type:'text',     label:'Legal name' },
+    'identity.dba':               { section:'identity',   type:'csvlist',  label:'DBA / trade names' },
+    'identity.entityType':        { section:'identity',   type:'select',   label:'Entity type', options:[
+      {value:'sole-prop',label:'Sole proprietor'},{value:'llc',label:'LLC'},{value:'s-corp',label:'S-corp'},
+      {value:'c-corp',label:'C-corp'},{value:'partnership',label:'Partnership'},{value:'nonprofit',label:'Nonprofit'},{value:'other',label:'Other'}
+    ] },
+    'identity.yearFounded':       { section:'identity',   type:'number',   label:'Year founded' },
+    'identity.yearsInBusiness':   { section:'identity',   type:'number',   label:'Years in business' },
+    'identity.tagline':           { section:'identity',   type:'text',     label:'Tagline' },
+    'identity.oneLineDescription':{ section:'identity',   type:'textarea', label:'One-line description' },
+    'identity.archetype':         { section:'identity',   type:'archetype',label:'Archetype' },
+    'presence.primaryDomain':     { section:'presence',   type:'text',     label:'Primary domain' },
+    'presence.declaredChannels':  { section:'presence',   type:'multi',    label:'Declared channels', source:'channels' },
+    'presence.socialProfiles':    { section:'presence',   type:'urllist',  label:'Social profiles' },
+    'people.primaryContact.name':             { section:'people', type:'text',   label:'Primary contact name' },
+    'people.primaryContact.phone':            { section:'people', type:'text',   label:'Phone' },
+    'people.primaryContact.role':             { section:'people', type:'select', label:'Role', optionsKey:'PRIMARY_CONTACT_ROLES' },
+    'people.primaryContact.preferredChannel': { section:'people', type:'select', label:'Preferred contact channel', options:[
+      {value:'email',label:'Email'},{value:'phone',label:'Phone'},{value:'in-app',label:'In-app'}
+    ] },
+    'people.teamSize':            { section:'people', type:'select', label:'Team size', optionsKey:'TEAM_SIZE_BANDS' },
+    'people.hasEmployees':        { section:'people', type:'bool',   label:'Has employees' },
+    'people.hasContractors':      { section:'people', type:'bool',   label:'Has contractors' },
+    'operations.businessModel':              { section:'operations', type:'select', label:'Business model', options:[
+      {value:'retail',label:'Retail'},{value:'wholesale',label:'Wholesale'},{value:'consignment',label:'Consignment'},
+      {value:'commission',label:'Commission / bespoke'},{value:'subscription',label:'Subscription'},{value:'mixed',label:'Mixed'}
+    ] },
+    'operations.fulfillmentModes':           { section:'operations', type:'multi', label:'Fulfillment modes', options:[
+      {value:'shipped',label:'Shipped'},{value:'local-pickup',label:'Local pickup'},{value:'local-delivery',label:'Local delivery'},
+      {value:'in-person-only',label:'In-person only'},{value:'digital',label:'Digital'}
+    ] },
+    'operations.localization.currency':      { section:'operations', type:'text',   label:'Currency' },
+    'operations.localization.timezone':      { section:'operations', type:'text',   label:'Timezone' },
+    'operations.localization.language':      { section:'operations', type:'text',   label:'Language' },
+    'operations.localization.fiscalYearStartMonth': { section:'operations', type:'number', label:'Fiscal year start month' },
+    'engagement.goals':                      { section:'engagement', type:'multi',  label:'Goals', source:'goals' }
+  };
+
+  function digPath(obj, dotted) {
+    if (!obj) return undefined;
+    var parts = dotted.split('.');
+    var cur = obj;
+    for (var i = 0; i < parts.length; i++) {
+      if (cur === null || cur === undefined) return undefined;
+      cur = cur[parts[i]];
+    }
+    return cur;
+  }
+  function setPathOnObj(obj, dotted, value) {
+    var parts = dotted.split('.');
+    var cur = obj;
+    for (var i = 0; i < parts.length - 1; i++) {
+      if (cur[parts[i]] === undefined || cur[parts[i]] === null) cur[parts[i]] = {};
+      cur = cur[parts[i]];
+    }
+    cur[parts[parts.length - 1]] = value;
+  }
+  function currentValue(editKey) {
+    if (!entityData) return null;
+    var cfg = EDITABLE[editKey];
+    if (!cfg) return null;
+    var sec = entityData[cfg.section];
+    var relPath = editKey.slice(cfg.section.length + 1);
+    return digPath(sec, relPath);
+  }
+
+  // --- Main entry ---
+  function loadBusinessView() {
+    injectCss();
+    var container = document.getElementById('businessTab');
+    if (!container) return;
+    if (!loaded) {
+      container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--warm-gray,#888);">Loading business profile...</div>';
+    }
+
+    if (!entitySub && window.MastDB && MastDB.businessEntity && MastDB.businessEntity.subscribe) {
+      try {
+        entitySub = MastDB.businessEntity.subscribe(function(ent) {
+          entityData = ent;
+          loaded = true;
+          if (document.getElementById('businessTab').style.display !== 'none') renderAll();
+        });
+      } catch (err) {
+        console.warn('[biz] entity subscribe failed:', err && err.message);
+        MastDB.businessEntity.get().then(function(ent) { entityData = ent; loaded = true; renderAll(); }).catch(function(){ renderAll(); });
+      }
+    }
+    if (!renewalsSub && window.MastDB && MastDB.businessEntity && MastDB.businessEntity.renewals && MastDB.businessEntity.renewals.subscribeItems) {
+      try {
+        renewalsSub = MastDB.businessEntity.renewals.subscribeItems(function(items) {
+          renewalsData = Array.isArray(items) ? items : [];
+          rerenderSection('renewals');
+        });
+      } catch (err) { console.warn('[biz] renewals subscribe failed:', err && err.message); }
+    }
+    if (!documentsSub && window.MastDB && MastDB.businessEntity && MastDB.businessEntity.documents && MastDB.businessEntity.documents.subscribe) {
+      try {
+        documentsSub = MastDB.businessEntity.documents.subscribe(function(docs) {
+          documentsData = Array.isArray(docs) ? docs : [];
+          rerenderSection('compliance');
+        });
+      } catch (err) { console.warn('[biz] documents subscribe failed:', err && err.message); }
+    }
+    if (!channelsSub && window.MastDB && MastDB.businessEntity && MastDB.businessEntity.channels && MastDB.businessEntity.channels.subscribe) {
+      try {
+        channelsSub = MastDB.businessEntity.channels.subscribe(function(items) {
+          channelsData = Array.isArray(items) ? items : [];
+          rerenderSection('channels');
+        });
+      } catch (err) { console.warn('[biz] channels subscribe failed:', err && err.message); }
+    }
+  }
+
+  function detachBusinessListeners() {
+    [entitySub, renewalsSub, documentsSub, channelsSub].forEach(function(fn) {
+      if (typeof fn === 'function') { try { fn(); } catch (_) {} }
+    });
+    entitySub = renewalsSub = documentsSub = channelsSub = null;
+  }
+  window.loadBusinessView = loadBusinessView;
+  window.detachBusinessListeners = detachBusinessListeners;
+
+  // --- Render ---
+  function renderAll() {
+    var container = document.getElementById('businessTab');
+    if (!container) return;
+    var status = (entityData && entityData.entityStatus) || 'none';
+    if (status === 'none' || !entityData) {
+      container.innerHTML =
+        '<div class="biz-empty-global">' +
+          '<div style="font-size:2.4rem;margin-bottom:12px;">&#127970;</div>' +
+          '<h2>Let\'s set up your business</h2>' +
+          '<p>Takes about 2 minutes. We\'ll tailor Mast to how you actually work — identity, channels, compliance, renewals, and more all in one place.</p>' +
+          '<button class="btn btn-primary" onclick="navigateTo(\'settings\'); setTimeout(function(){ switchSettingsSubView(\'engagement\'); },80);">Start setup</button>' +
+        '</div>';
+      return;
+    }
+
+    var h = '';
+    h += '<div class="section-header" style="margin-bottom:14px;"><h2 style="margin:0;">&#127970; Business</h2></div>';
+    h += renderStatusStrip();
+    if (status === 'draft') {
+      h += '<div class="biz-draft-banner"><strong>&#9999;&#65039; Onboarding in progress.</strong> ' +
+        '<a class="biz-edit-link" onclick="navigateTo(\'settings\'); setTimeout(function(){ switchSettingsSubView(\'engagement\'); },80);">Complete setup</a> to unlock all features.</div>';
+    }
+    h += '<select class="biz-mobile-nav" onchange="if(this.value) { document.getElementById(\'bizSection-\'+this.value).scrollIntoView({behavior:\'smooth\'}); this.value=\'\'; }"><option value="">Jump to section…</option>';
+    SECTIONS.forEach(function(s) { h += '<option value="' + s.id + '">' + esc(s.label) + '</option>'; });
+    h += '</select>';
+    h += '<div class="biz-wrap">';
+    h += '<nav class="biz-anchor-nav">';
+    SECTIONS.forEach(function(s, i) {
+      h += '<a data-biz-anchor="' + s.id + '"' + (i === 0 ? ' class="active"' : '') + ' onclick="document.getElementById(\'bizSection-' + s.id + '\').scrollIntoView({behavior:\'smooth\'}); return false;">' + esc(s.label) + '</a>';
+    });
+    h += '</nav>';
+    h += '<div class="biz-content">';
+    SECTIONS.forEach(function(s) {
+      h += '<div class="biz-section" id="bizSection-' + s.id + '">' + renderSection(s.id) + '</div>';
+    });
+    h += '</div></div>';
+    container.innerHTML = h;
+    bindScrollSpy();
+  }
+
+  function rerenderSection(id) {
+    var el = document.getElementById('bizSection-' + id);
+    if (el) el.innerHTML = renderSection(id);
+    if (id === 'identity' || id === 'people' || id === 'presence' || id === 'operations' || id === 'engagement') {
+      var strip = document.getElementById('bizStatusStrip');
+      if (strip) strip.outerHTML = renderStatusStrip();
+    }
+  }
+  function renderSection(id) {
+    switch (id) {
+      case 'overview':   return renderOverview();
+      case 'identity':   return renderIdentity();
+      case 'presence':   return renderPresence();
+      case 'channels':   return renderChannels();
+      case 'compliance': return renderCompliance();
+      case 'renewals':   return renderRenewals();
+      case 'people':     return renderPeople();
+      case 'operations': return renderOperations();
+      case 'engagement': return renderEngagement();
+      case 'discovery':  return renderDiscovery();
+    }
+    return '';
+  }
+
+  function renderStatusStrip() {
+    var status = (entityData && entityData.entityStatus) || 'none';
+    var people = (entityData && entityData.people) || {};
+    var pc = people.primaryContact || {};
+    var residency = (entityData && entityData.residency) || null;
+    var updatedAt = entityData && entityData.updatedAt;
+    var h = '<div class="biz-status-strip" id="bizStatusStrip">';
+    h += '<span class="status-item"><span class="biz-pill ' + esc(status) + '">' + esc(status) + '</span></span>';
+    if (residency && residency.region) {
+      h += '<span class="status-sep"></span><span class="status-item">&#127760; ' + esc(residency.region) + '</span>';
+    }
+    if (pc.dpaAcceptedAt && pc.dpaVersion) {
+      h += '<span class="status-sep"></span><span class="status-item">DPA ' + esc(pc.dpaVersion) + ' accepted ' + esc(fmtDate(pc.dpaAcceptedAt)) + '</span>';
+    }
+    if (updatedAt) {
+      h += '<span class="status-sep"></span><span class="status-item">Updated ' + esc(timeAgo(updatedAt)) + '</span>';
+    }
+    h += '</div>';
+    return h;
+  }
+
+  function sectionHeader(title, icon, editHref) {
+    var h = '<div class="biz-section-header">';
+    h += '<div class="biz-section-title">' + (icon || '') + ' ' + esc(title) + '</div>';
+    if (editHref) {
+      h += '<a class="biz-edit-link" onclick="' + editHref + '; return false;">Edit in Settings &rarr;</a>';
+    }
+    h += '</div>';
+    return h;
+  }
+
+  function row(editKey, valueHtml, isEditable) {
+    var cfg = EDITABLE[editKey];
+    var label = cfg ? cfg.label : editKey;
+    var h = '<div class="biz-row" data-biz-field="' + esc(editKey) + '">';
+    h += '<span class="label">' + esc(label) + '</span>';
+    h += '<span class="val">' + (valueHtml === '' || valueHtml === null || valueHtml === undefined ? '<span class="biz-empty">Not set</span>' : valueHtml) + '</span>';
+    if (isEditable !== false && cfg) {
+      h += '<span class="pencil" onclick="window.bizStartEdit(\'' + esc(editKey) + '\')" title="Edit ' + esc(label) + '">&#9998;</span>';
+    }
+    h += '</div>';
+    return h;
+  }
+  function rowRaw(label, valueHtml) {
+    return '<div class="biz-row"><span class="label">' + esc(label) + '</span><span class="val">' + (valueHtml || '<span class="biz-empty">Not set</span>') + '</span></div>';
+  }
+
+  function renderOverview() {
+    var identity = (entityData && entityData.identity) || {};
+    var eng = (entityData && entityData.engagement) || {};
+    var arch = archetypeLabel(identity.archetype);
+    var modeTxt = eng.mode ? (modeLabel(eng.mode) + (eng.surface ? ' \u00b7 ' + eng.surface : '')) : '';
+    var lines = [];
+    if (identity.businessName) lines.push('<strong>' + esc(identity.businessName) + '</strong>');
+    if (arch) lines.push(esc(arch));
+    if (modeTxt) lines.push(esc(modeTxt));
+    var summary = lines.length ? lines.join(' &middot; ') : '<span class="biz-empty">Not yet set up</span>';
+    return sectionHeader('Overview', '&#128269;') +
+      '<div class="biz-card"><div style="font-size:1rem;line-height:1.6;">' + summary + '</div></div>';
+  }
+
+  function renderIdentity() {
+    var id = (entityData && entityData.identity) || {};
+    var h = sectionHeader('Identity', '&#127976;');
+    h += '<div class="biz-card">';
+    h += row('identity.businessName', esc(id.businessName || ''));
+    h += row('identity.archetype', esc(archetypeLabel(id.archetype) || ''));
+    h += row('identity.legalName', esc(id.legalName || ''));
+    var dba = Array.isArray(id.dba) ? id.dba.join(', ') : '';
+    h += row('identity.dba', esc(dba));
+    h += row('identity.entityType', esc(id.entityType || ''));
+    h += row('identity.yearFounded', id.yearFounded != null ? esc(String(id.yearFounded)) : '');
+    h += row('identity.yearsInBusiness', id.yearsInBusiness != null ? esc(String(id.yearsInBusiness)) : '');
+    h += row('identity.tagline', esc(id.tagline || ''));
+    h += row('identity.oneLineDescription', esc(id.oneLineDescription || ''));
+    // EIN — redirect to Settings
+    var einDisplay = id.ein ? '<span class="biz-chip muted">&#128274; On file</span>' : '<span class="biz-empty">Not set</span>';
+    h += '<div class="biz-row"><span class="label">EIN</span><span class="val">' + einDisplay +
+      ' &nbsp; <a class="biz-edit-link" onclick="navigateTo(\'settings\'); setTimeout(function(){ switchSettingsSubView(\'tax\'); },80); return false;">Edit in Settings &rarr;</a></span></div>';
+    h += '</div>';
+    return h;
+  }
+
+  function renderPresence() {
+    var p = (entityData && entityData.presence) || {};
+    var h = sectionHeader('Presence', '&#127760;');
+    h += '<div class="biz-card">';
+    h += row('presence.primaryDomain', esc(p.primaryDomain || ''));
+    var chans = Array.isArray(p.declaredChannels) ? p.declaredChannels : [];
+    var chanHtml = chans.length ? chans.map(function(c) { return '<span class="biz-chip">' + esc(channelLabel(c)) + '</span>'; }).join('') : '';
+    h += row('presence.declaredChannels', chanHtml);
+    var socials = Array.isArray(p.socialProfiles) ? p.socialProfiles : [];
+    var socialHtml = socials.length ? socials.map(function(s) {
+      var url = typeof s === 'string' ? s : (s && (s.url || s.handle)) || '';
+      return url ? '<a href="' + esc(url) + '" target="_blank" rel="noopener" class="biz-edit-link">' + esc(url) + '</a>' : '';
+    }).filter(Boolean).join('<br>') : '';
+    h += row('presence.socialProfiles', socialHtml);
+    // Owned domains + external channels — read-only for now per plan
+    var owned = Array.isArray(p.ownedDomains) ? p.ownedDomains : [];
+    if (owned.length) h += rowRaw('Other domains', owned.map(function(d) { return '<span class="biz-chip muted">' + esc(d) + '</span>'; }).join(''));
+    var ext = Array.isArray(p.externalChannels) ? p.externalChannels : [];
+    if (ext.length) h += rowRaw('Other channels', ext.map(function(e) { var lbl = typeof e === 'string' ? e : (e && (e.name || e.url)) || ''; return '<span class="biz-chip muted">' + esc(lbl) + '</span>'; }).join(''));
+    h += '</div>';
+    return h;
+  }
+
+  function renderChannels() {
+    var items = Array.isArray(channelsData) ? channelsData : [];
+    var h = sectionHeader('Channels', '&#128279;', "navigateTo('settings'); setTimeout(function(){ switchSettingsSubView('channels'); },80)");
+    if (items.length === 0) {
+      h += '<div class="biz-section-empty">No sales channels connected yet. ' +
+        '<a onclick="navigateTo(\'settings\'); setTimeout(function(){ switchSettingsSubView(\'channels\'); },80); return false;">Connect your first channel</a></div>';
+      return h;
+    }
+    h += '<div class="biz-card">';
+    items.forEach(function(c, idx) {
+      var platform = c.platform || c.channelId || '—';
+      var status = c.status || 'unknown';
+      var statusCls = (status === 'connected') ? 'active' : (status === 'expired' || status === 'error' || status === 'revoked') ? 'expired' : 'none';
+      var sub = [];
+      if (c.shopDomain || c.shopId) sub.push(esc(c.shopDomain || c.shopId));
+      if (typeof c.webhookSubscriptionCount === 'number') sub.push(c.webhookSubscriptionCount + ' webhook' + (c.webhookSubscriptionCount === 1 ? '' : 's'));
+      if (c.lastSyncAt) sub.push('Synced ' + esc(timeAgo(c.lastSyncAt)));
+      var rowHtml = '<div class="biz-row" style="' + (idx === items.length - 1 ? 'border-bottom:none;' : '') + '">' +
+        '<span class="label" style="text-transform:capitalize;">' + esc(platform) + '</span>' +
+        '<span class="val">' +
+          '<span class="biz-pill ' + statusCls + '">' + esc(status) + '</span>' +
+          (sub.length ? '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-top:4px;">' + sub.join(' &middot; ') + '</div>' : '') +
+        '</span>' +
+        '<a class="biz-edit-link" style="align-self:center;" onclick="navigateTo(\'settings\'); setTimeout(function(){ switchSettingsSubView(\'channels\'); },80); return false;">Manage &rarr;</a>' +
+        '</div>';
+      h += rowHtml;
+    });
+    h += '</div>';
+    return h;
+  }
+
+  function renderCompliance() {
+    var comp = (entityData && entityData.compliance) || {};
+    var lic = Array.isArray(comp.licenses) ? comp.licenses : [];
+    var ins = Array.isArray(comp.insurance) ? comp.insurance : [];
+    var cert = Array.isArray(comp.certifications) ? comp.certifications : [];
+    var tax = Array.isArray(comp.taxJurisdictions) ? comp.taxJurisdictions : [];
+    var total = lic.length + ins.length + cert.length + tax.length;
+    var h = sectionHeader('Compliance', '&#128737;&#65039;', "navigateTo('settings'); setTimeout(function(){ switchSettingsSubView('compliance'); },80)");
+    if (total === 0) {
+      h += '<div class="biz-section-empty">No compliance records yet. ' +
+        '<a onclick="navigateTo(\'settings\'); setTimeout(function(){ switchSettingsSubView(\'compliance\'); },80); return false;">Add your first license</a></div>';
+      return h;
+    }
+    h += '<div class="biz-card">';
+    h += rowRaw('Licenses',     lic.length  ? esc(String(lic.length))  + ' on file' : '<span class="biz-empty">None</span>');
+    h += rowRaw('Insurance',    ins.length  ? esc(String(ins.length))  + ' policies' : '<span class="biz-empty">None</span>');
+    h += rowRaw('Certifications', cert.length ? esc(String(cert.length)) + ' certs' : '<span class="biz-empty">None</span>');
+    h += rowRaw('Tax jurisdictions', tax.length ? esc(String(tax.length)) + ' registered' : '<span class="biz-empty">None</span>');
+    var docCount = Array.isArray(documentsData) ? documentsData.filter(function(d){ return d && d.status !== 'deleted-pending-purge' && d.status !== 'deleted'; }).length : 0;
+    h += rowRaw('Documents', docCount ? esc(String(docCount)) + ' stored' : '<span class="biz-empty">None</span>');
+    // Seed-renewals inline CTA mirrors PA-9 dashboard banner logic
+    var ui = (entityData && entityData.ui) || {};
+    var activeRenewals = Array.isArray(renewalsData) ? renewalsData.filter(function(r){ return r && r.status !== 'archived' && r.status !== 'completed'; }).length : 0;
+    if (total >= 1 && activeRenewals === 0 && !ui.renewalSeedDismissedAt) {
+      h += '<div class="biz-row" style="border-bottom:none;"><span class="label"></span><span class="val">' +
+        '<div style="padding:10px 12px;background:rgba(42,157,143,0.08);border:1px solid rgba(42,157,143,0.25);border-radius:8px;font-size:0.85rem;">' +
+        '&#128161; You have compliance items but no renewals scheduled. ' +
+        '<a class="biz-edit-link" onclick="navigateTo(\'settings\'); setTimeout(function(){ switchSettingsSubView(\'compliance\'); },80); return false;">Seed renewals &rarr;</a>' +
+        '</div></span></div>';
+    }
+    h += '</div>';
+    return h;
+  }
+
+  function renderRenewals() {
+    var items = Array.isArray(renewalsData) ? renewalsData : [];
+    var active   = items.filter(function(r){ return r.status === 'active'; }).length;
+    var warning  = items.filter(function(r){ return r.status === 'warning'; }).length;
+    var expired  = items.filter(function(r){ return r.status === 'expired'; }).length;
+    var archived = items.filter(function(r){ return r.status === 'archived'; }).length;
+    var h = sectionHeader('Renewals', '&#128197;', "navigateTo('settings'); setTimeout(function(){ switchSettingsSubView('notifications'); },80)");
+    if (items.length === 0) {
+      h += '<div class="biz-section-empty">No renewals tracked yet. ' +
+        '<a onclick="navigateTo(\'settings\'); setTimeout(function(){ switchSettingsSubView(\'compliance\'); },80); return false;">Seed renewals from Compliance &rarr;</a></div>';
+      return h;
+    }
+    h += '<div class="biz-card">';
+    h += '<div class="biz-row"><span class="label">Summary</span><span class="val">' +
+      '<span class="biz-chip">' + active + ' active</span>' +
+      (warning  ? '<span class="biz-chip warning">' + warning  + ' warning</span>' : '') +
+      (expired  ? '<span class="biz-chip danger">'  + expired  + ' expired</span>' : '') +
+      (archived ? '<span class="biz-chip muted">'   + archived + ' archived</span>' : '') +
+      '</span></div>';
+    var upcoming = items
+      .filter(function(r){ return r && r.status !== 'archived' && r.status !== 'completed' && r.expiresAt; })
+      .map(function(r){ return Object.assign({}, r, { _daysUntil: daysUntil(r.expiresAt) }); })
+      .filter(function(r){ return r._daysUntil !== null && r._daysUntil <= 60; })
+      .sort(function(a, b){ return a._daysUntil - b._daysUntil; })
+      .slice(0, 3);
+    if (upcoming.length) {
+      h += '<div class="biz-row" style="border-bottom:none;align-items:flex-start;"><span class="label">Upcoming</span><span class="val">';
+      upcoming.forEach(function(r) {
+        var pillCls = r._daysUntil < 0 ? 'expired' : r._daysUntil <= 14 ? 'warning' : 'active';
+        var daysTxt = r._daysUntil < 0 ? Math.abs(r._daysUntil) + 'd overdue' : r._daysUntil + 'd';
+        h += '<div style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04);display:flex;justify-content:space-between;gap:10px;">' +
+          '<span>' + esc(r.title || r.sourceType || 'Renewal') + '</span>' +
+          '<span><span class="biz-pill ' + pillCls + '">' + esc(daysTxt) + '</span></span>' +
+        '</div>';
+      });
+      h += '</span></div>';
+    }
+    h += '<div style="margin-top:10px;font-size:0.82rem;color:var(--warm-gray,#888);">' +
+      '<a class="biz-edit-link" onclick="navigateTo(\'settings\'); setTimeout(function(){ switchSettingsSubView(\'notifications\'); },80); return false;">Configure reminders &rarr;</a>' +
+      '</div>';
+    h += '</div>';
+    return h;
+  }
+
+  function renderPeople() {
+    var p = (entityData && entityData.people) || {};
+    var pc = p.primaryContact || {};
+    var h = sectionHeader('People', '&#128101;');
+    h += '<div class="biz-card">';
+    h += row('people.primaryContact.name', esc(pc.name || ''));
+    h += rowRaw('Email', esc(pc.email || ''));
+    h += row('people.primaryContact.phone', esc(pc.phone || ''));
+    h += row('people.primaryContact.role', esc(roleLabel(pc.role) || ''));
+    h += row('people.primaryContact.preferredChannel', esc(pc.preferredChannel || ''));
+    h += row('people.teamSize', esc(teamSizeLabel(p.teamSize) || ''));
+    h += row('people.hasEmployees', p.hasEmployees ? '<span class="biz-chip">Yes</span>' : '<span class="biz-chip muted">No</span>');
+    h += row('people.hasContractors', p.hasContractors ? '<span class="biz-chip">Yes</span>' : '<span class="biz-chip muted">No</span>');
+    var owners = Array.isArray(p.owners) ? p.owners : [];
+    if (owners.length) h += rowRaw('Owners', owners.map(function(o){ return '<span class="biz-chip muted">' + esc(typeof o === 'string' ? o : (o && (o.name || o.email) || '')) + '</span>'; }).join(''));
+    var roles = Array.isArray(p.roles) ? p.roles : [];
+    if (roles.length) h += rowRaw('Additional roles', roles.map(function(o){ return '<span class="biz-chip muted">' + esc(typeof o === 'string' ? o : (o && (o.name || o.role) || '')) + '</span>'; }).join(''));
+    h += '</div>';
+    return h;
+  }
+
+  function renderOperations() {
+    var o = (entityData && entityData.operations) || {};
+    var loc = o.localization || {};
+    var h = sectionHeader('Operations', '&#9881;&#65039;');
+    h += '<div class="biz-card">';
+    h += row('operations.businessModel', esc(o.businessModel || ''));
+    var modes = Array.isArray(o.fulfillmentModes) ? o.fulfillmentModes : [];
+    h += row('operations.fulfillmentModes', modes.length ? modes.map(function(m){ return '<span class="biz-chip">' + esc(m) + '</span>'; }).join('') : '');
+    h += row('operations.localization.currency', esc(loc.currency || ''));
+    h += row('operations.localization.timezone', esc(loc.timezone || ''));
+    h += row('operations.localization.language', esc(loc.language || ''));
+    h += row('operations.localization.fiscalYearStartMonth', loc.fiscalYearStartMonth != null ? esc(String(loc.fiscalYearStartMonth)) : '');
+    if (o.serviceArea) {
+      var sa = o.serviceArea;
+      var txt = typeof sa === 'string' ? sa : (sa.type ? sa.type + (sa.note ? ' — ' + sa.note : '') : JSON.stringify(sa));
+      h += '<div class="biz-row" style="border-bottom:none;"><span class="label">Service area</span><span class="val">' + esc(txt) +
+        ' &nbsp; <a class="biz-edit-link" onclick="navigateTo(\'settings\'); setTimeout(function(){ switchSettingsSubView(\'operations\'); },80); return false;">Edit in Settings &rarr;</a></span></div>';
+    }
+    h += '</div>';
+    return h;
+  }
+
+  function renderEngagement() {
+    var eng = (entityData && entityData.engagement) || {};
+    var cal = eng.calibration || {};
+    var goals = Array.isArray(eng.goals) ? eng.goals : [];
+    var mods = Array.isArray(eng.modulesShown) ? eng.modulesShown : [];
+    var h = sectionHeader('Engagement', '&#128161;', "navigateTo('settings'); setTimeout(function(){ switchSettingsSubView('engagement'); },80)");
+    h += '<div class="biz-card">';
+    h += rowRaw('Mode', eng.mode ? esc(modeLabel(eng.mode)) : '');
+    h += rowRaw('Surface', eng.surface ? esc(eng.surface) : '');
+    h += row('engagement.goals', goals.length ? goals.map(function(g){ return '<span class="biz-chip">' + esc(goalLabel(g)) + '</span>'; }).join('') : '');
+    if (cal.revenueBracket) h += rowRaw('Revenue', esc(cal.revenueBracket));
+    if (cal.wishStatement) {
+      var wish = cal.wishStatement;
+      if (wish.length > 160) wish = wish.slice(0, 157) + '...';
+      h += rowRaw('Wish', esc(wish));
+    }
+    if (mods.length) h += rowRaw('Modules shown', mods.map(function(m){ return '<span class="biz-chip muted">' + esc(m) + '</span>'; }).join(''));
+    h += '</div>';
+    return h;
+  }
+
+  function renderDiscovery() {
+    var d = (entityData && entityData.discovery) || null;
+    var h = sectionHeader('Discovery', '&#128269;');
+    if (!d || !d.lastScrapeAt) {
+      h += '<div class="biz-section-empty">No site scan on record yet.</div>';
+      return h;
+    }
+    h += '<div class="biz-card">';
+    h += rowRaw('Last scanned', esc(timeAgo(d.lastScrapeAt)) + ' (' + esc(fmtDate(d.lastScrapeAt)) + ')');
+    if (d.scrapeUrl) h += rowRaw('Site', '<a href="' + esc(d.scrapeUrl) + '" target="_blank" rel="noopener" class="biz-edit-link">' + esc(d.scrapeUrl) + '</a>');
+    if (d.inferredArchetype) {
+      var conf = d.archetypeConfidence != null ? ' (' + Math.round(d.archetypeConfidence * 100) + '% confident)' : '';
+      h += rowRaw('Inferred archetype', esc(archetypeLabel(d.inferredArchetype)) + esc(conf));
+    }
+    var types = Array.isArray(d.inferredProductTypes) ? d.inferredProductTypes : [];
+    if (types.length) h += rowRaw('Inferred products', types.map(function(t){ return '<span class="biz-chip muted">' + esc(t) + '</span>'; }).join(''));
+    var chans = Array.isArray(d.inferredChannels) ? d.inferredChannels : [];
+    if (chans.length) h += rowRaw('Inferred channels', chans.map(function(c){ return '<span class="biz-chip muted">' + esc(channelLabel(c)) + '</span>'; }).join(''));
+    h += '</div>';
+    return h;
+  }
+
+  // --- Labels (reuse BusinessEntityConstants where possible) ---
+  function archetypeLabel(val) {
+    var list = (window.BusinessEntityConstants && BusinessEntityConstants.ARCHETYPES) || [];
+    var m = list.filter(function(a){ return a.value === val; })[0];
+    return m ? m.label : (val || '');
+  }
+  function goalLabel(val) {
+    var map = (window.BusinessEntityConstants && BusinessEntityConstants.GOAL_LABELS) || {};
+    return map[val] || val;
+  }
+  function channelLabel(val) {
+    var list = (window.BusinessEntityConstants && BusinessEntityConstants.DECLARED_CHANNELS) || [];
+    var m = list.filter(function(c){ return c.value === val; })[0];
+    return m ? m.label : val;
+  }
+  function modeLabel(val) {
+    var list = (window.BusinessEntityConstants && BusinessEntityConstants.ENGAGEMENT_MODE_CARDS) || [];
+    var m = list.filter(function(c){ return c.value === val; })[0];
+    return m ? m.title : (val || '');
+  }
+  function roleLabel(val) {
+    var list = (window.BusinessEntityConstants && BusinessEntityConstants.PRIMARY_CONTACT_ROLES) || [];
+    var m = list.filter(function(c){ return c.value === val; })[0];
+    return m ? m.label : (val || '');
+  }
+  function teamSizeLabel(val) {
+    var list = (window.BusinessEntityConstants && BusinessEntityConstants.TEAM_SIZE_BANDS) || [];
+    var m = list.filter(function(c){ return c.value === val; })[0];
+    return m ? m.label : (val || '');
+  }
+
+  // --- Inline edit ---
+  function bizStartEdit(editKey) {
+    var cfg = EDITABLE[editKey];
+    if (!cfg) return;
+    var fieldEl = document.querySelector('.biz-row[data-biz-field="' + editKey + '"]');
+    if (!fieldEl) return;
+    if (fieldEl.dataset.editing === '1') return;
+    fieldEl.dataset.editing = '1';
+    var valEl = fieldEl.querySelector('.val');
+    var pencilEl = fieldEl.querySelector('.pencil');
+    if (pencilEl) pencilEl.style.display = 'none';
+    var current = currentValue(editKey);
+
+    if (cfg.type === 'text' || cfg.type === 'number') {
+      var t = cfg.type === 'number' ? 'number' : 'text';
+      valEl.innerHTML = '<input type="' + t + '" class="biz-edit-input" value="' + esc(current == null ? '' : current) + '">';
+      var input = valEl.querySelector('input');
+      input.focus(); try { input.select(); } catch(_) {}
+      var commit = function() {
+        var v = input.value;
+        if (cfg.type === 'number') {
+          v = v === '' ? null : Number(v);
+          if (v !== null && isNaN(v)) { bizCancelEdit(editKey); return; }
+        } else {
+          v = v.trim();
+          if (v === '') v = null;
+        }
+        bizSaveEdit(editKey, v);
+      };
+      input.addEventListener('blur', commit);
+      input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') input.blur();
+        else if (e.key === 'Escape') { input.removeEventListener('blur', commit); bizCancelEdit(editKey); }
+      });
+
+    } else if (cfg.type === 'textarea') {
+      valEl.innerHTML = '<textarea class="biz-edit-input" rows="3">' + esc(current == null ? '' : current) + '</textarea>' +
+        '<div class="biz-edit-actions"><button class="btn btn-primary btn-small" data-save>Save</button> <button class="btn btn-secondary btn-small" data-cancel>Cancel</button></div>';
+      var ta = valEl.querySelector('textarea');
+      ta.focus();
+      valEl.querySelector('[data-save]').addEventListener('click', function(){
+        var v = ta.value.trim();
+        bizSaveEdit(editKey, v === '' ? null : v);
+      });
+      valEl.querySelector('[data-cancel]').addEventListener('click', function(){ bizCancelEdit(editKey); });
+
+    } else if (cfg.type === 'csvlist' || cfg.type === 'urllist') {
+      var arr = Array.isArray(current) ? current : [];
+      var joined = cfg.type === 'csvlist' ? arr.join(', ') : arr.map(function(x){ return typeof x === 'string' ? x : (x && (x.url || x.handle)) || ''; }).filter(Boolean).join('\n');
+      valEl.innerHTML = '<textarea class="biz-edit-input" rows="3" placeholder="' + (cfg.type === 'csvlist' ? 'Comma-separated values' : 'One URL per line') + '">' + esc(joined) + '</textarea>' +
+        '<div class="biz-edit-actions"><button class="btn btn-primary btn-small" data-save>Save</button> <button class="btn btn-secondary btn-small" data-cancel>Cancel</button></div>';
+      var ta2 = valEl.querySelector('textarea');
+      ta2.focus();
+      valEl.querySelector('[data-save]').addEventListener('click', function(){
+        var splitter = cfg.type === 'csvlist' ? /\s*,\s*/ : /\s*\n\s*/;
+        var parts = ta2.value.split(splitter).map(function(p){ return p.trim(); }).filter(Boolean);
+        bizSaveEdit(editKey, parts);
+      });
+      valEl.querySelector('[data-cancel]').addEventListener('click', function(){ bizCancelEdit(editKey); });
+
+    } else if (cfg.type === 'select' || cfg.type === 'archetype') {
+      var opts;
+      if (cfg.type === 'archetype') {
+        var list = (window.BusinessEntityConstants && BusinessEntityConstants.ARCHETYPES) || [];
+        opts = list.map(function(a){ return { value:a.value, label:a.label }; });
+      } else if (cfg.optionsKey) {
+        opts = ((window.BusinessEntityConstants && BusinessEntityConstants[cfg.optionsKey]) || []).map(function(o){
+          return { value:o.value, label:o.label || o.title || o.value };
+        });
+      } else {
+        opts = cfg.options || [];
+      }
+      var optsHtml = '<option value="">(pick one)</option>' + opts.map(function(o){
+        return '<option value="' + esc(o.value) + '"' + (o.value === current ? ' selected' : '') + '>' + esc(o.label) + '</option>';
+      }).join('');
+      valEl.innerHTML = '<select class="biz-edit-input">' + optsHtml + '</select>';
+      var sel = valEl.querySelector('select');
+      sel.focus();
+      sel.addEventListener('change', function(){
+        var v = sel.value || null;
+        if (cfg.type === 'archetype' && v && v !== current) {
+          if (!confirm('Changing your archetype will reset module recommendations and goal defaults. Continue?')) {
+            bizCancelEdit(editKey); return;
+          }
+        }
+        bizSaveEdit(editKey, v);
+      });
+      sel.addEventListener('blur', function(){ setTimeout(function(){ if (fieldEl.dataset.editing === '1') bizCancelEdit(editKey); }, 120); });
+
+    } else if (cfg.type === 'multi') {
+      var source = [];
+      if (cfg.source === 'channels') {
+        source = ((window.BusinessEntityConstants && BusinessEntityConstants.DECLARED_CHANNELS) || []).map(function(c){ return { value:c.value, label:c.label }; });
+      } else if (cfg.source === 'goals') {
+        var id2 = (entityData && entityData.identity) || {};
+        var arch = id2.archetype;
+        var defaults = arch && MastDB.businessEntity && MastDB.businessEntity.archetypeDefaults ? MastDB.businessEntity.archetypeDefaults(arch) : null;
+        var labels = (window.BusinessEntityConstants && BusinessEntityConstants.GOAL_LABELS) || {};
+        var avail = (defaults && Array.isArray(defaults.goalsAvailable)) ? defaults.goalsAvailable : Object.keys(labels);
+        source = avail.map(function(v){ return { value:v, label: labels[v] || v }; });
+      } else {
+        source = cfg.options || [];
+      }
+      var currArr = Array.isArray(current) ? current : [];
+      var seen = {};
+      source.forEach(function(o){ seen[o.value] = true; });
+      currArr.forEach(function(v){ if (!seen[v]) source.push({ value:v, label:v }); });
+      var checks = source.map(function(o){
+        var checked = currArr.indexOf(o.value) !== -1;
+        return '<label><input type="checkbox" value="' + esc(o.value) + '"' + (checked ? ' checked' : '') + '><span>' + esc(o.label) + '</span></label>';
+      }).join('');
+      valEl.innerHTML = '<div class="biz-checkbox-grid">' + checks + '</div>' +
+        '<div class="biz-edit-actions"><button class="btn btn-primary btn-small" data-save>Save</button> <button class="btn btn-secondary btn-small" data-cancel>Cancel</button></div>';
+      valEl.querySelector('[data-save]').addEventListener('click', function(){
+        var picked = [];
+        valEl.querySelectorAll('input[type="checkbox"]').forEach(function(c){ if (c.checked) picked.push(c.value); });
+        bizSaveEdit(editKey, picked);
+      });
+      valEl.querySelector('[data-cancel]').addEventListener('click', function(){ bizCancelEdit(editKey); });
+
+    } else if (cfg.type === 'bool') {
+      valEl.innerHTML = '<select class="biz-edit-input"><option value="">(choose)</option><option value="yes"' + (current ? ' selected' : '') + '>Yes</option><option value="no"' + (current === false ? ' selected' : '') + '>No</option></select>';
+      var bsel = valEl.querySelector('select');
+      bsel.focus();
+      bsel.addEventListener('change', function(){
+        var v = bsel.value;
+        bizSaveEdit(editKey, v === 'yes' ? true : v === 'no' ? false : null);
+      });
+      bsel.addEventListener('blur', function(){ setTimeout(function(){ if (fieldEl.dataset.editing === '1') bizCancelEdit(editKey); }, 120); });
+    }
+  }
+
+  function bizCancelEdit(editKey) {
+    var fieldEl = document.querySelector('.biz-row[data-biz-field="' + editKey + '"]');
+    if (!fieldEl) return;
+    delete fieldEl.dataset.editing;
+    var cfg = EDITABLE[editKey];
+    rerenderSection(cfg ? cfg.section : null);
+  }
+
+  function bizSaveEdit(editKey, newValue) {
+    var cfg = EDITABLE[editKey];
+    if (!cfg) return;
+    var fieldEl = document.querySelector('.biz-row[data-biz-field="' + editKey + '"]');
+    if (fieldEl) {
+      var v = fieldEl.querySelector('.val');
+      if (v) v.innerHTML = '<span class="biz-empty">Saving...</span>';
+    }
+    // Build section payload — nested paths (e.g. primaryContact.phone) need nested object
+    var relPath = editKey.slice(cfg.section.length + 1);
+    var payload = {};
+    setPathOnObj(payload, relPath, newValue);
+    MastDB.businessEntity.update(cfg.section, payload).then(function() {
+      setTimeout(function() {
+        // Subscribe-driven re-render expected; belt + suspenders
+        if (!entitySub) {
+          MastDB.businessEntity.get().then(function(ent){ entityData = ent; rerenderSection(cfg.section); }).catch(function(){});
+        }
+      }, 400);
+    }).catch(function(err) {
+      console.error('[biz] save failed:', err);
+      alert('Save failed: ' + (err && err.message ? err.message : 'unknown error'));
+      rerenderSection(cfg.section);
+    });
+  }
+
+  window.bizStartEdit = bizStartEdit;
+  window.bizSaveEdit = bizSaveEdit;
+  window.bizCancelEdit = bizCancelEdit;
+
+  // --- Scroll spy for anchor nav ---
+  function bindScrollSpy() {
+    var contentEl = document.querySelector('#businessTab .biz-content');
+    if (!contentEl) return;
+    var anchors = document.querySelectorAll('#businessTab .biz-anchor-nav a');
+    function onScroll() {
+      var hdrOffset = 90;
+      var activeId = null;
+      for (var i = 0; i < SECTIONS.length; i++) {
+        var el = document.getElementById('bizSection-' + SECTIONS[i].id);
+        if (!el) continue;
+        var rect = el.getBoundingClientRect();
+        if (rect.top <= hdrOffset + 20) activeId = SECTIONS[i].id;
+      }
+      if (!activeId && SECTIONS.length) activeId = SECTIONS[0].id;
+      anchors.forEach(function(a) {
+        if (a.getAttribute('data-biz-anchor') === activeId) a.classList.add('active');
+        else a.classList.remove('active');
+      });
+    }
+    window.removeEventListener('scroll', window._bizScrollSpy || function(){});
+    window._bizScrollSpy = onScroll;
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+  }
+
+})();
 </script>
 </body>
 </html>
