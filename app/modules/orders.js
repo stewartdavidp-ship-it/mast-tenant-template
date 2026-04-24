@@ -2256,11 +2256,14 @@
   function loadCommissions() {
     var loading = document.getElementById('commissionsLoading');
     if (loading) loading.style.display = '';
-    MastDB.commissions.query().limitToLast(200).once('value', function(snap) {
+    MastDB.commissions.query().limitToLast(200).once().then(function(snap) {
       commissionsData = snap.val() || {};
       commissionsLoaded = true;
       if (loading) loading.style.display = 'none';
       renderCommissions();
+    }).catch(function(err) {
+      if (loading) loading.style.display = 'none';
+      showToast('Error loading commissions: ' + err.message, true);
     });
   }
 
