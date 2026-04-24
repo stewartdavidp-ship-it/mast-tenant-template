@@ -29768,10 +29768,10 @@ async function loadAnalytics() {
   loading.style.display = '';
 
   try {
-    var snap = await MastDB.config.analyticsHits()
+    var snap = await MastDB.query('analytics/hits')
       .orderByChild('ts')
       .limitToLast(2000)
-      .once('value');
+      .once();
     var data = snap.val() || {};
     var hits = Object.values(data);
     hits.sort(function(a, b) { return (b.ts || 0) - (a.ts || 0); });
@@ -30696,7 +30696,7 @@ function loadAdminUsers() {
     return;
   }
   document.getElementById('usersLoading').style.display = '';
-  MastDB.adminUsers.get().then(function(snap) {
+  MastDB.adminUsers.list().then(function(snap) {
     adminUsers = snap || {};
     adminUsersLoaded = true;
     document.getElementById('usersLoading').style.display = 'none';
