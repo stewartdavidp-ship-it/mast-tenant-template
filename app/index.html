@@ -9519,7 +9519,7 @@ function _makeRefCompat(basePath) {
     child.key = key;
     return child;
   };
-  r.once = function() { return MastDB.get(basePath); };
+  r.once = function() { return MastDB.get(basePath).once(); };
   r.on = function(event, cb) { return MastDB.subscribe(basePath, cb); };
   r.off = function() {}; // no-op for compat
   // Backward-compat: Firebase RTDB transaction(fn). Non-atomic read-modify-write

@@ -211,7 +211,7 @@
         return doc;
       });
 
-      var wtVal = results[3].val() || {};
+      var wtVal = results[3] || {};
       waiverTemplatesData = Object.entries(wtVal).map(function(entry) {
         var wt = entry[1]; wt._key = entry[0]; return wt;
       });
