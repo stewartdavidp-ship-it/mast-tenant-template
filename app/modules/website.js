@@ -116,11 +116,9 @@
   // ── Load config from RTDB ──
   async function loadWebsiteConfig() {
     try {
-      var snap = await MastDB.get('webPresence/config');
-      websiteConfig = snap.val() || {};
+      websiteConfig = (await MastDB.get('webPresence/config')) || {};
       // Also load last analyzed URL
-      var analysisSnap = await MastDB.get('webPresence/siteAnalysis/url');
-      websiteConfig._lastAnalyzedUrl = analysisSnap.val() || '';
+      websiteConfig._lastAnalyzedUrl = (await MastDB.get('webPresence/siteAnalysis/url')) || '';
     } catch (err) {
       console.warn('[Website] Failed to load config:', err.message);
       websiteConfig = {};
@@ -178,16 +176,14 @@
 
   async function loadThemeConfig() {
     try {
-      var snap = await MastDB.get('public/config/theme');
-      themeConfig = snap.val() || {};
+      themeConfig = (await MastDB.get('public/config/theme')) || {};
     } catch (err) {
       console.warn('[Website] Failed to load theme config:', err.message);
       themeConfig = {};
     }
     // Also load nav section enabled states for section toggles
     try {
-      var navSnap = await MastDB.get('public/config/nav/sections');
-      themeConfig._navSections = navSnap.val() || {};
+      themeConfig._navSections = (await MastDB.get('public/config/nav/sections')) || {};
     } catch (err) {
       themeConfig._navSections = {};
     }

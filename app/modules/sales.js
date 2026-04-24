@@ -1552,7 +1552,7 @@ async function exitPackingMode() {
     var btn = document.getElementById('goLiveBtn');
     if (!btn) return;
     MastDB.get('admin/channels').then(function(snapVal) {
-      var chs = snap.val() || {};
+      var chs = snapVal || {};
       var socialChannels = [];
       Object.keys(chs).forEach(function(id) {
         var ch = chs[id];
@@ -1918,8 +1918,8 @@ async function exitPackingMode() {
   ];
 
   function loadTermsConfig() {
-    MastDB.termsConfig.get().then(function(snap) {
-      termsConfig = snap.val() || null;
+    MastDB.termsConfig.get().then(function(snapVal) {
+      termsConfig = snapVal || null;
       termsLoaded = true;
       renderTermsAdmin();
     }).catch(function(err) {

@@ -36,10 +36,8 @@
 
   async function loadBrandData() {
     try {
-      var logoSnap = await MastDB.get('config/brand/logo');
-      logoConfig = logoSnap.val() || null;
-      var legacySnap = await MastDB.get('public/config/nav/logoUrl');
-      legacyLogoUrl = legacySnap.val() || null;
+      logoConfig = (await MastDB.get('config/brand/logo')) || null;
+      legacyLogoUrl = (await MastDB.get('public/config/nav/logoUrl')) || null;
     } catch (err) {
       console.warn('[Brand] Failed to load:', err.message);
       logoConfig = null;
