@@ -73,12 +73,26 @@ function updateShowTabBadges() {
   });
 }
 
+var SHOW_VIEW_HEADINGS = {
+  find: { title: 'Find Shows', actions: '' },
+  apply: { title: 'Apply to Shows', actions: '<button class="btn btn-primary btn-sm" onclick="openCreateShowModal()">+ New Show</button>' },
+  prep: { title: 'Show Prep', actions: '' },
+  execute: { title: 'Active Show', actions: '' },
+  history: { title: 'Show History', actions: '' }
+};
+
 function switchShowSubView(view) {
   showSubView = view;
   // Update sub-nav active state
   document.querySelectorAll('#showSubNav .view-tab').forEach(function(tab) {
     tab.classList.toggle('active', tab.getAttribute('data-show-view') === view);
   });
+  // Update page heading + action slot per sub-view
+  var heading = SHOW_VIEW_HEADINGS[view] || SHOW_VIEW_HEADINGS.apply;
+  var h2 = document.getElementById('showPageHeading');
+  if (h2) h2.textContent = heading.title;
+  var actions = document.getElementById('showHeaderActions');
+  if (actions) actions.innerHTML = heading.actions;
   // Update route
   currentRoute = 'show-' + view;
   location.hash = currentRoute;
