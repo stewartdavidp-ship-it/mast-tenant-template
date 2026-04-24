@@ -14305,7 +14305,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260424-d22-readonly-dashboard-v2';
+var MAST_MODULES_V = '20260424-d22-readonly-dashboard-v3';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -36780,7 +36780,7 @@ async function renderDashboardTodos() {
       '#businessTab .bz-rail a.active { color:var(--amber,#c4853c); font-weight:600; border-left:2px solid var(--amber,#c4853c); padding-left:8px; }',
       '#businessTab .bz-mobile-nav { display:none; width:100%; padding:8px 10px; margin-bottom:14px; background:var(--bg-secondary,#232323); color:var(--text,#fff); border:1px solid rgba(255,255,255,0.1); border-radius:6px; font-size:0.85rem; font-family:inherit; }',
       '@media (max-width:767px) { #businessTab .bz-mobile-nav { display:block; } }',
-      '#businessTab .bz-content { scroll-padding-top:80px; }',
+      '#businessTab .bz-content { scroll-padding-top:80px; padding-bottom:60vh; }',
       '#businessTab .bz-section { scroll-margin-top:80px; margin-bottom:24px; }',
       '#businessTab .bz-section-header { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:10px; }',
       '#businessTab .bz-section-title  { font-size:1.15rem; font-weight:600; color:var(--text,#fff); display:flex; align-items:center; gap:8px; margin:0; }',
@@ -37339,23 +37339,23 @@ async function renderDashboardTodos() {
   function bindScrollSpy() {
     var anchors = document.querySelectorAll('#businessTab .bz-rail a');
     function onScroll() {
-      // Pick the section with the largest visible area in the viewport
-      // (discounting the top 80px for the page header). Tie-breaks toward
-      // the earlier section in SECTIONS order.
-      var vh = window.innerHeight;
-      var bestId = null, bestArea = 0;
+      // Pick the section whose header most recently passed the top threshold.
+      // "Most recent" = smallest non-negative distance between threshold and top.
+      // Matches "which section am I currently reading from the top?"
+      var threshold = 120;
+      var bestId = null, bestDist = Infinity;
       for (var i = 0; i < SECTIONS.length; i++) {
         var el = document.getElementById('bz-' + SECTIONS[i].id);
         if (!el) continue;
-        var rect = el.getBoundingClientRect();
-        var visTop    = Math.max(rect.top, 80);
-        var visBottom = Math.min(rect.bottom, vh);
-        var area = Math.max(0, visBottom - visTop);
-        if (area > bestArea) { bestArea = area; bestId = SECTIONS[i].id; }
+        var top = el.getBoundingClientRect().top;
+        if (top <= threshold) {
+          var dist = threshold - top;
+          if (dist < bestDist) { bestDist = dist; bestId = SECTIONS[i].id; }
+        }
       }
-      // Fallback: if nothing is visible (scrolled past the last section),
-      // highlight the last section.
-      if (!bestId && SECTIONS.length) bestId = SECTIONS[SECTIONS.length - 1].id;
+      // Before first section passes threshold, highlight the first.
+      // After scrolling past the last, keep the last highlighted.
+      if (!bestId && SECTIONS.length) bestId = SECTIONS[0].id;
       anchors.forEach(function(a){
         if (a.getAttribute('data-bz-anchor') === bestId) a.classList.add('active');
         else a.classList.remove('active');
