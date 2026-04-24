@@ -37322,6 +37322,9 @@ async function renderDashboardTodos() {
     if (roles.length) h += row('Additional roles', roles.map(function(r){
       return '<span class="bz-chip muted">' + esc(typeof r === 'string' ? r : (r && (r.name || r.role) || '')) + '</span>';
     }).join(''));
+    h += '<div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.06);font-size:0.82rem;color:var(--warm-gray,#a09890);">' +
+         '<button type="button" class="bz-link" onclick="window.bizNavToModule(\'employees\')" style="font-size:0.82rem;color:var(--warm-gray,#a09890);">Manage Mast admin users &rarr;</button>' +
+         '</div>';
     h += '</div>';
     return h;
   }
