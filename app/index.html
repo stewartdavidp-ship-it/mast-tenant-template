@@ -8551,37 +8551,68 @@
           <div id="channelsSaveStatus" style="margin-top:8px;font-size:0.85rem;"></div>
         </div>
 
-        <!-- Connected Integrations — Phase 2 P2B PB-3 -->
+        <!-- Connected Integrations — Phase 2 P2B PB-6 (all 3 platforms) -->
         <div class="form-group" style="margin-top:32px;border-top:1px solid rgba(255,255,255,0.08);padding-top:24px;">
           <label style="font-size:1.05rem;font-weight:600;">Connected integrations</label>
           <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
-            OAuth-authenticated channels with live token + webhook subscriptions. Shopify lands in this session (P2B PB-3); Etsy + Square arrive in follow-up sessions.
+            OAuth-authenticated channels with live token + webhook subscriptions. Connect each platform to pull your catalog and sync inventory.
           </p>
 
-          <!-- Shopify card -->
-          <div id="shopifyConnectCard" style="background:var(--bg-secondary,#232323);border-radius:10px;padding:16px;margin-bottom:12px;">
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
-              <div style="display:flex;align-items:center;gap:12px;min-width:0;">
-                <span style="font-size:1.4rem;">&#128722;</span>
-                <div style="min-width:0;">
-                  <div style="font-weight:600;">Shopify</div>
-                  <div id="shopifyConnectStatus" style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">Loading&hellip;</div>
-                </div>
-              </div>
-              <div id="shopifyConnectActions" style="display:flex;gap:8px;flex-wrap:wrap;">
-                <!-- populated by loadShopifyCard() -->
-              </div>
-            </div>
-            <div id="shopifyConnectDetail" style="margin-top:10px;font-size:0.78rem;color:var(--warm-gray-light,#666);display:none;"></div>
-            <div id="shopifyConnectNote" style="margin-top:10px;font-size:0.78rem;color:var(--danger,#ef4444);display:none;"></div>
+          <!-- EU residency gate placeholder (spec-bugs item 6, counsel marker #5 / D-7) -->
+          <div id="channelsEuGate" style="display:none;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);border-radius:10px;padding:14px 16px;margin-bottom:14px;font-size:0.85rem;color:var(--warm-gray);">
+            <div style="font-weight:600;color:var(--warning,#f59e0b);margin-bottom:4px;">&#9888;&#65039; Channel connections gated for EU tenants</div>
+            <div>Marketplace connectors (Shopify / Etsy / Square) are held pending counsel review of EU DPA subprocessor classification (GDPR Article 28). Once cleared, you'll see the platform cards here. No action required from you.</div>
           </div>
 
-          <div style="background:rgba(255,255,255,0.03);border:1px dashed rgba(255,255,255,0.15);border-radius:10px;padding:14px;margin-bottom:8px;font-size:0.85rem;color:var(--warm-gray-light,#666);">
-            <strong>Etsy</strong> &mdash; connect flow lands in P2B&#8209;S3 (PB&#8209;4).
+          <!-- Aggregate Channel Health card -->
+          <div id="channelsHealthCard" style="display:none;background:rgba(42,124,111,0.08);border:1px solid rgba(42,124,111,0.25);border-radius:10px;padding:12px 16px;margin-bottom:14px;font-size:0.85rem;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="font-size:1rem;">&#128202;</span>
+                <span style="font-weight:600;">Channel health</span>
+              </div>
+              <div id="channelsHealthSummary" style="color:var(--warm-gray);font-size:0.78rem;"></div>
+            </div>
           </div>
-          <div style="background:rgba(255,255,255,0.03);border:1px dashed rgba(255,255,255,0.15);border-radius:10px;padding:14px;font-size:0.85rem;color:var(--warm-gray-light,#666);">
-            <strong>Square</strong> &mdash; connect flow lands in P2B&#8209;S4 (PB&#8209;5).
+
+          <div id="channelsCardGroup">
+            <!-- populated by loadChannelsConnectCards() — one card per platform -->
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Square credentials modal (PB-6) -->
+    <div id="squareCredsModal" class="modal" style="display:none;">
+      <div class="modal-content" style="max-width:480px;">
+        <div class="modal-header">
+          <h3>Connect Square</h3>
+          <button class="modal-close" onclick="closeSquareCredsModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:14px;">
+            Register a Square Developer app, then paste the Application ID + Secret below. Mast stores them in encrypted secret storage and never shows them again.
+          </p>
+          <div class="form-group">
+            <label style="font-weight:600;font-size:0.85rem;">Environment</label>
+            <div style="display:flex;gap:8px;margin-top:4px;">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="radio" name="squareEnv" value="sandbox" checked> Sandbox</label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="radio" name="squareEnv" value="production"> Production</label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label style="font-weight:600;font-size:0.85rem;">Application ID (client_id)</label>
+            <input type="text" id="squareClientIdInput" placeholder="sq0idp-..." style="width:100%;padding:7px 10px;border:1px solid var(--cream-dark);border-radius:6px;font-family:monospace;font-size:0.85rem;">
+          </div>
+          <div class="form-group">
+            <label style="font-weight:600;font-size:0.85rem;">Application Secret (client_secret)</label>
+            <input type="password" id="squareClientSecretInput" placeholder="sq0csp-..." style="width:100%;padding:7px 10px;border:1px solid var(--cream-dark);border-radius:6px;font-family:monospace;font-size:0.85rem;">
+          </div>
+          <div id="squareCredsStatus" style="margin-top:8px;font-size:0.78rem;color:var(--warm-gray);"></div>
+        </div>
+        <div class="modal-footer" style="display:flex;gap:8px;justify-content:flex-end;">
+          <button class="btn btn-secondary" onclick="closeSquareCredsModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="saveSquareCredsAndConnect()">Save &amp; Continue</button>
         </div>
       </div>
     </div>
@@ -14297,7 +14328,7 @@ function switchSettingsSubView(view) {
   if (view === 'engagement') loadEngagementSettings();
   if (view === 'tax') loadTaxLegalSettings();
   if (view === 'compliance') loadComplianceSettings();
-  if (view === 'channels') { loadChannelsSettings(); loadShopifyCard(); }
+  if (view === 'channels') { loadChannelsSettings(); loadChannelsConnectCards(); }
 }
 
 // ============================================================
@@ -14717,71 +14748,207 @@ async function saveDeclaredChannels() {
 }
 
 // ============================================================
-// Shopify Connect Card (Phase 2 P2B PB-3)
+// Channels Connect Cards (Phase 2 P2B PB-6 / PB-7 / PB-8)
 // ============================================================
 //
-// Renders the admin/businessEntity/channels/shopify record in Settings >
-// Channels. Reads via MastDB.businessEntity.channels.getHealth('shopify').
-// Initiates OAuth via the existing shopifyOAuthStart CF. Disconnects via
-// the disconnect_channel MCP tool (wired through a thin adminMcp() bridge
-// if present; otherwise falls back to a manual reconnect prompt).
+// Renders admin/businessEntity/channels/{platform} records for all 3
+// supported OAuth platforms (Shopify, Etsy, Square) in Settings > Channels.
+// Reads via MastDB.businessEntity.channels.list() + getHealth(). Connect
+// dispatches to the platform's OAuthStart CF; disconnect calls the
+// disconnectChannelCallable CF (platform-specific revoke + Secret Manager
+// cleanup + Firestore flip + audit); sync calls syncChannelCallable.
+//
+// EU residency placeholder gate (spec-bugs item 6 / counsel marker #5 / D-7):
+// checks tenant's identity.countryCode; EU tenants see the #channelsEuGate
+// banner and the platform-card group is hidden. Real enforcement waits
+// for counsel sign-off on Shopify/Etsy/Square data-source classification.
 // ============================================================
-async function loadShopifyCard() {
-  var statusEl = document.getElementById('shopifyConnectStatus');
-  var actionsEl = document.getElementById('shopifyConnectActions');
-  var detailEl = document.getElementById('shopifyConnectDetail');
-  var noteEl = document.getElementById('shopifyConnectNote');
-  if (!statusEl || !actionsEl) return;
 
-  var health = null;
+var CHANNEL_PLATFORMS = [
+  { id: 'shopify', label: 'Shopify', icon: '\uD83D\uDED2', note: 'Custom distribution — store sub-domain only.' },
+  { id: 'etsy', label: 'Etsy', icon: '\uD83C\uDF3F', note: 'Per-tenant developer app — enter your Etsy API keystring first.' },
+  { id: 'square', label: 'Square', icon: '\u25A1', note: 'Per-tenant developer app — enter sandbox or production credentials first.' }
+];
+
+var EU_COUNTRY_CODES = new Set(['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE','GB','IS','NO','LI','CH']);
+
+async function _isEuTenant() {
   try {
-    health = await MastDB.businessEntity.channels.getHealth('shopify');
+    var section = await MastDB.businessEntity.get('identity');
+    var ident = (section && section.data) || section || {};
+    var cc = (ident.countryCode || '').toUpperCase();
+    return EU_COUNTRY_CODES.has(cc);
   } catch (err) {
-    statusEl.textContent = 'Unable to load status (' + (err && err.message ? err.message : 'unknown') + ')';
-    statusEl.style.color = 'var(--warm-gray)';
-    actionsEl.innerHTML = '';
-    return;
-  }
-
-  var status = (health && health.status) || 'not-connected';
-  if (detailEl) { detailEl.style.display = 'none'; detailEl.textContent = ''; }
-  if (noteEl) { noteEl.style.display = 'none'; noteEl.textContent = ''; }
-
-  if (status === 'connected') {
-    statusEl.textContent = 'Connected';
-    statusEl.style.color = 'var(--success,#22c55e)';
-    if (detailEl) {
-      var parts = [];
-      if (health.connectedAt) parts.push('Connected: ' + new Date(health.connectedAt).toLocaleDateString());
-      if (typeof health.webhookSubscriptionCount === 'number') parts.push(health.webhookSubscriptionCount + ' webhook subscription' + (health.webhookSubscriptionCount === 1 ? '' : 's'));
-      if (health.lastSyncAt) parts.push('Last sync: ' + new Date(health.lastSyncAt).toLocaleString()); else parts.push('No manual sync yet');
-      detailEl.textContent = parts.join(' \u2022 ');
-      detailEl.style.display = '';
-    }
-    actionsEl.innerHTML =
-      '<button class="btn btn-secondary btn-small" onclick="reconnectShopify()">Reconnect</button>' +
-      '<button class="btn btn-danger btn-small" onclick="disconnectShopify()">Disconnect</button>';
-  } else if (status === 'expired') {
-    statusEl.textContent = 'Access token expired';
-    statusEl.style.color = 'var(--warning,#f59e0b)';
-    actionsEl.innerHTML = '<button class="btn btn-primary btn-small" onclick="reconnectShopify()">Reconnect</button>';
-  } else if (status === 'revoked') {
-    statusEl.textContent = 'Disconnected';
-    statusEl.style.color = 'var(--warm-gray)';
-    actionsEl.innerHTML = '<button class="btn btn-primary btn-small" onclick="connectShopify()">Reconnect</button>';
-  } else if (status === 'error') {
-    statusEl.textContent = 'Connection error';
-    statusEl.style.color = 'var(--danger,#ef4444)';
-    if (noteEl && health.lastErrorMessage) { noteEl.textContent = health.lastErrorMessage; noteEl.style.display = ''; }
-    actionsEl.innerHTML = '<button class="btn btn-primary btn-small" onclick="reconnectShopify()">Reconnect</button>';
-  } else {
-    statusEl.textContent = 'Not connected';
-    statusEl.style.color = 'var(--warm-gray)';
-    actionsEl.innerHTML = '<button class="btn btn-primary btn-small" onclick="connectShopify()">Connect Shopify</button>';
+    return false;
   }
 }
 
-async function connectShopify() {
+async function loadChannelsConnectCards() {
+  var groupEl = document.getElementById('channelsCardGroup');
+  var healthCardEl = document.getElementById('channelsHealthCard');
+  var healthSummaryEl = document.getElementById('channelsHealthSummary');
+  var euGateEl = document.getElementById('channelsEuGate');
+  if (!groupEl) return;
+
+  // EU residency placeholder gate
+  var euBlocked = await _isEuTenant();
+  if (euBlocked) {
+    if (euGateEl) euGateEl.style.display = '';
+    if (healthCardEl) healthCardEl.style.display = 'none';
+    groupEl.innerHTML = '';
+    return;
+  }
+  if (euGateEl) euGateEl.style.display = 'none';
+
+  var list = [];
+  try {
+    list = await MastDB.businessEntity.channels.list();
+  } catch (err) {
+    groupEl.innerHTML = '<div style="color:var(--warm-gray);font-size:0.85rem;">Unable to load channels: ' + (err && err.message ? err.message : 'unknown') + '</div>';
+    return;
+  }
+  var byPlatform = {};
+  (list || []).forEach(function(rec) { byPlatform[rec.channelId] = rec; });
+
+  var connected = 0, expired = 0, errored = 0, revoked = 0;
+  CHANNEL_PLATFORMS.forEach(function(p) {
+    var s = byPlatform[p.id] && byPlatform[p.id].status;
+    if (s === 'connected') connected++;
+    else if (s === 'expired') expired++;
+    else if (s === 'error') errored++;
+    else if (s === 'revoked') revoked++;
+  });
+
+  if (healthCardEl && healthSummaryEl) {
+    healthCardEl.style.display = '';
+    var chips = [];
+    chips.push(connected + ' connected');
+    if (expired) chips.push(expired + ' expired');
+    if (errored) chips.push(errored + ' error');
+    if (revoked) chips.push(revoked + ' revoked');
+    var notConnected = CHANNEL_PLATFORMS.length - (connected + expired + errored + revoked);
+    if (notConnected) chips.push(notConnected + ' not connected');
+    healthSummaryEl.textContent = chips.join(' \u2022 ');
+  }
+
+  var html = '';
+  CHANNEL_PLATFORMS.forEach(function(p) {
+    html += _renderChannelCardHtml(p, byPlatform[p.id] || null);
+  });
+  groupEl.innerHTML = html;
+}
+
+function _renderChannelCardHtml(p, rec) {
+  var status = (rec && rec.status) || 'not-connected';
+  var statusColor = 'var(--warm-gray)';
+  var statusText = 'Not connected';
+  if (status === 'connected') { statusColor = 'var(--success,#22c55e)'; statusText = 'Connected'; }
+  else if (status === 'expired') { statusColor = 'var(--warning,#f59e0b)'; statusText = 'Access token expired'; }
+  else if (status === 'revoked') { statusColor = 'var(--warm-gray)'; statusText = 'Disconnected'; }
+  else if (status === 'error') { statusColor = 'var(--danger,#ef4444)'; statusText = 'Connection error'; }
+  else if (status === 'pending') { statusColor = 'var(--warning,#f59e0b)'; statusText = 'Connection pending'; }
+
+  var detailParts = [];
+  if (rec) {
+    if (rec.shopDomain) detailParts.push(rec.shopDomain);
+    if (rec.env && p.id === 'square') detailParts.push('env: ' + rec.env);
+    if (rec.connectedAt) detailParts.push('Connected ' + new Date(rec.connectedAt).toLocaleDateString());
+    if (typeof rec.webhookSubscriptionCount === 'number' && rec.webhookSubscriptionCount > 0) {
+      detailParts.push(rec.webhookSubscriptionCount + ' webhook' + (rec.webhookSubscriptionCount === 1 ? '' : 's'));
+    }
+    if (rec.lastSyncAt) detailParts.push('Last sync ' + new Date(rec.lastSyncAt).toLocaleString());
+    else if (status === 'connected') detailParts.push('No manual sync yet');
+    if (rec.expiresAt) {
+      var expMs = Date.parse(rec.expiresAt);
+      if (!isNaN(expMs)) {
+        var secs = Math.floor((expMs - Date.now()) / 1000);
+        if (secs > 0) {
+          if (secs > 86400) detailParts.push('Expires in ' + Math.floor(secs / 86400) + 'd');
+          else if (secs > 3600) detailParts.push('Expires in ' + Math.floor(secs / 3600) + 'h');
+          else detailParts.push('Expires soon');
+        }
+      }
+    }
+  }
+
+  var actions = '';
+  if (status === 'connected') {
+    actions = '<button class="btn btn-secondary btn-small" onclick="syncChannelNow(\'' + p.id + '\')">Sync now</button>' +
+              '<button class="btn btn-secondary btn-small" onclick="reconnectChannel(\'' + p.id + '\')">Reconnect</button>' +
+              '<button class="btn btn-danger btn-small" onclick="disconnectChannel(\'' + p.id + '\')">Disconnect</button>';
+  } else if (status === 'expired' || status === 'error') {
+    actions = '<button class="btn btn-primary btn-small" onclick="reconnectChannel(\'' + p.id + '\')">Reconnect</button>' +
+              '<button class="btn btn-danger btn-small" onclick="disconnectChannel(\'' + p.id + '\')">Disconnect</button>';
+  } else if (status === 'revoked') {
+    actions = '<button class="btn btn-primary btn-small" onclick="connectChannel(\'' + p.id + '\')">Reconnect</button>';
+  } else if (status === 'pending') {
+    actions = '<button class="btn btn-secondary btn-small" onclick="loadChannelsConnectCards()">Reload</button>';
+  } else {
+    actions = '<button class="btn btn-primary btn-small" onclick="connectChannel(\'' + p.id + '\')">Connect ' + p.label + '</button>';
+  }
+
+  var cadence = (rec && rec.syncConfig && rec.syncConfig.cadence) || 'realtime';
+  var cadenceRow = '';
+  if (status === 'connected') {
+    cadenceRow =
+      '<div style="margin-top:10px;display:flex;align-items:center;gap:8px;font-size:0.78rem;color:var(--warm-gray);">' +
+        '<label for="channelCadence_' + p.id + '">Sync cadence:</label>' +
+        '<select id="channelCadence_' + p.id + '" onchange="updateChannelCadence(\'' + p.id + '\', this.value)" style="padding:4px 8px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.78rem;">' +
+          '<option value="realtime"' + (cadence === 'realtime' ? ' selected' : '') + '>Realtime (webhook-driven)</option>' +
+          '<option value="daily"' + (cadence === 'daily' ? ' selected' : '') + '>Daily</option>' +
+          '<option value="manual-only"' + (cadence === 'manual-only' ? ' selected' : '') + '>Manual only</option>' +
+        '</select>' +
+      '</div>';
+  }
+
+  var errNote = '';
+  if (status === 'error' && rec && rec.lastErrorMessage) {
+    errNote = '<div style="margin-top:8px;font-size:0.78rem;color:var(--danger,#ef4444);">' + _escHtml(rec.lastErrorMessage) + '</div>';
+  }
+
+  return '<div id="channelCard_' + p.id + '" style="background:var(--bg-secondary,#232323);border-radius:10px;padding:16px;margin-bottom:12px;">' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">' +
+      '<div style="display:flex;align-items:center;gap:12px;min-width:0;">' +
+        '<span style="font-size:1.4rem;">' + p.icon + '</span>' +
+        '<div style="min-width:0;">' +
+          '<div style="font-weight:600;">' + p.label + '</div>' +
+          '<div style="font-size:0.78rem;color:' + statusColor + ';margin-top:2px;">' + statusText + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;">' + actions + '</div>' +
+    '</div>' +
+    (detailParts.length ? '<div style="margin-top:10px;font-size:0.78rem;color:var(--warm-gray-light,#666);">' + detailParts.map(_escHtml).join(' \u2022 ') + '</div>' : '') +
+    errNote +
+    cadenceRow +
+    '<div id="channelNote_' + p.id + '" style="margin-top:10px;font-size:0.78rem;display:none;"></div>' +
+  '</div>';
+}
+
+function _escHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function _setChannelNote(platform, text, kind) {
+  var el = document.getElementById('channelNote_' + platform);
+  if (!el) return;
+  if (!text) { el.style.display = 'none'; el.textContent = ''; return; }
+  el.textContent = text;
+  el.style.color = kind === 'error' ? 'var(--danger,#ef4444)' : 'var(--warm-gray)';
+  el.style.display = '';
+}
+
+async function connectChannel(platform) {
+  if (platform === 'shopify') return _connectShopifyFlow();
+  if (platform === 'etsy') return _connectEtsyFlow();
+  if (platform === 'square') return _connectSquareFlow();
+}
+
+async function reconnectChannel(platform) {
+  return connectChannel(platform);
+}
+
+async function _connectShopifyFlow() {
   var shopDomain = prompt('Enter your Shopify store sub-domain (the part before .myshopify.com):');
   if (!shopDomain) return;
   shopDomain = shopDomain.trim().toLowerCase().replace(/\.myshopify\.com\/?$/, '');
@@ -14789,53 +14956,128 @@ async function connectShopify() {
     alert('Invalid shop domain. Use letters, digits, and dashes only (e.g. "my-store").');
     return;
   }
-  var noteEl = document.getElementById('shopifyConnectNote');
   try {
     var fn = firebase.functions().httpsCallable('shopifyOAuthStart');
-    var result = await fn({ shopDomain: shopDomain });
+    var result = await fn({ tenantId: MastDB.tenantId(), shopDomain: shopDomain });
     var data = (result && result.data) || {};
     if (!data.authUrl) throw new Error('shopifyOAuthStart returned no authUrl');
-    // Open in a new window so the admin page isn't replaced.
     window.open(data.authUrl, '_blank', 'noopener');
-    if (noteEl) {
-      noteEl.textContent = 'Approve the install in the new tab. When it completes, come back to this page and press Reload.';
-      noteEl.style.color = 'var(--warm-gray)';
-      noteEl.style.display = '';
-    }
+    _setChannelNote('shopify', 'Approve the install in the new tab, then reload this page to see the updated status.');
   } catch (err) {
-    if (noteEl) { noteEl.textContent = 'Connect failed: ' + (err.message || err); noteEl.style.color = 'var(--danger,#ef4444)'; noteEl.style.display = ''; }
+    _setChannelNote('shopify', 'Connect failed: ' + (err.message || err), 'error');
   }
 }
 
-async function reconnectShopify() {
-  // Reconnect = same install flow; callback overwrites the existing record.
-  return connectShopify();
+async function _connectEtsyFlow() {
+  var apiKey = prompt('Enter your Etsy Developer App API Keystring:\n\n(Register a Developer App at https://www.etsy.com/developers/ — paste the keystring below.)');
+  if (!apiKey) return;
+  apiKey = apiKey.trim();
+  if (apiKey.length < 10) { alert('API keystring looks too short. Double-check and try again.'); return; }
+  try {
+    _setChannelNote('etsy', 'Storing credentials\u2026');
+    var setFn = firebase.functions().httpsCallable('setChannelCredentialsCallable');
+    await setFn({ tenantId: MastDB.tenantId(), platform: 'etsy', credentials: { apiKey: apiKey } });
+    var startFn = firebase.functions().httpsCallable('etsyOAuthStart');
+    var result = await startFn({ tenantId: MastDB.tenantId() });
+    var data = (result && result.data) || {};
+    if (!data.authUrl) throw new Error('etsyOAuthStart returned no authUrl');
+    window.open(data.authUrl, '_blank', 'noopener');
+    _setChannelNote('etsy', 'Approve the connection in the new tab, then reload this page.');
+  } catch (err) {
+    _setChannelNote('etsy', 'Connect failed: ' + (err.message || err), 'error');
+  }
 }
 
-async function disconnectShopify() {
-  if (!confirm('Disconnect Shopify? Tokens will be revoked and webhook subscriptions removed. You can reconnect later.')) return;
-  var noteEl = document.getElementById('shopifyConnectNote');
+function _connectSquareFlow() {
+  var modal = document.getElementById('squareCredsModal');
+  if (!modal) return;
+  var idEl = document.getElementById('squareClientIdInput');
+  var secEl = document.getElementById('squareClientSecretInput');
+  var statusEl = document.getElementById('squareCredsStatus');
+  if (idEl) idEl.value = '';
+  if (secEl) secEl.value = '';
+  if (statusEl) statusEl.textContent = '';
+  modal.style.display = '';
+}
+
+function closeSquareCredsModal() {
+  var modal = document.getElementById('squareCredsModal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function saveSquareCredsAndConnect() {
+  var envEl = document.querySelector('input[name="squareEnv"]:checked');
+  var env = envEl ? envEl.value : 'sandbox';
+  var clientId = (document.getElementById('squareClientIdInput') || {}).value;
+  var clientSecret = (document.getElementById('squareClientSecretInput') || {}).value;
+  var statusEl = document.getElementById('squareCredsStatus');
+  if (!clientId || !clientSecret) {
+    if (statusEl) { statusEl.textContent = 'Both Application ID and Secret are required.'; statusEl.style.color = 'var(--danger,#ef4444)'; }
+    return;
+  }
   try {
-    // Prefer MCP bridge if present (admin.html may wire it); otherwise fall
-    // back to a direct Firestore status flip for optimistic UI + leave
-    // server-side cleanup to the app/uninstalled webhook.
-    if (window.adminMcp && typeof window.adminMcp.runTool === 'function') {
-      await window.adminMcp.runTool('disconnect_channel', { channelId: 'shopify' });
-    } else {
-      // Optimistic local flip — server-side revoke happens when the
-      // tenant re-opens Settings after app uninstallation in Shopify
-      // admin (app/uninstalled webhook flips status → revoked via
-      // channelWebhookProcessor).
-      await MastDB.businessEntity.update('channels/shopify', { status: 'revoked', updatedAt: new Date().toISOString() });
-      if (noteEl) {
-        noteEl.textContent = 'Disconnected locally. For a full revoke, uninstall the Mast app from your Shopify admin.';
-        noteEl.style.color = 'var(--warm-gray)';
-        noteEl.style.display = '';
-      }
-    }
-    loadShopifyCard();
+    if (statusEl) { statusEl.textContent = 'Storing credentials\u2026'; statusEl.style.color = 'var(--warm-gray)'; }
+    var setFn = firebase.functions().httpsCallable('setChannelCredentialsCallable');
+    await setFn({ tenantId: MastDB.tenantId(), platform: 'square', env: env, credentials: { clientId: clientId.trim(), clientSecret: clientSecret.trim() } });
+    if (statusEl) statusEl.textContent = 'Starting OAuth\u2026';
+    var startFn = firebase.functions().httpsCallable('squareOAuthStart');
+    var result = await startFn({ tenantId: MastDB.tenantId(), environment: env });
+    var data = (result && result.data) || {};
+    if (!data.authUrl) throw new Error('squareOAuthStart returned no authUrl');
+    closeSquareCredsModal();
+    window.open(data.authUrl, '_blank', 'noopener');
+    _setChannelNote('square', 'Approve the connection in the new tab, then reload this page.');
   } catch (err) {
-    if (noteEl) { noteEl.textContent = 'Disconnect failed: ' + (err.message || err); noteEl.style.color = 'var(--danger,#ef4444)'; noteEl.style.display = ''; }
+    if (statusEl) { statusEl.textContent = 'Connect failed: ' + (err.message || err); statusEl.style.color = 'var(--danger,#ef4444)'; }
+  }
+}
+
+async function disconnectChannel(platform) {
+  if (!CHANNEL_PLATFORMS.some(function(p) { return p.id === platform; })) return;
+  var label = CHANNEL_PLATFORMS.find(function(p) { return p.id === platform; }).label;
+  var ok = await mastConfirm('Disconnect ' + label + '? Tokens will be revoked, stored credentials deleted, and webhook subscriptions removed. You can reconnect later.', {
+    title: 'Disconnect ' + label,
+    confirmLabel: 'Disconnect',
+    cancelLabel: 'Cancel',
+    danger: true
+  });
+  if (!ok) return;
+
+  _setChannelNote(platform, 'Disconnecting\u2026');
+  try {
+    var fn = firebase.functions().httpsCallable('disconnectChannelCallable');
+    var result = await fn({ tenantId: MastDB.tenantId(), platform: platform });
+    var data = (result && result.data) || {};
+    var msg = 'Disconnected.';
+    if (data.platformRevokeStatus === 'revoke-best-effort') msg += ' Platform revoke was best-effort \u2014 the Mast app may still appear in your ' + label + ' admin until you remove it there.';
+    _setChannelNote(platform, msg);
+    loadChannelsConnectCards();
+  } catch (err) {
+    _setChannelNote(platform, 'Disconnect failed: ' + (err.message || err), 'error');
+  }
+}
+
+async function syncChannelNow(platform) {
+  _setChannelNote(platform, 'Syncing\u2026');
+  try {
+    var fn = firebase.functions().httpsCallable('syncChannelCallable');
+    await fn({ tenantId: MastDB.tenantId(), platform: platform });
+    _setChannelNote(platform, 'Sync recorded. Product/inventory materialization lands in Phase 3.');
+    loadChannelsConnectCards();
+  } catch (err) {
+    _setChannelNote(platform, 'Sync failed: ' + (err.message || err), 'error');
+  }
+}
+
+async function updateChannelCadence(platform, cadence) {
+  var validCadences = ['realtime', 'daily', 'manual-only'];
+  if (!validCadences.indexOf || validCadences.indexOf(cadence) === -1) return;
+  try {
+    await MastDB.businessEntity.channels.updateSyncConfig(platform, { cadence: cadence });
+    _setChannelNote(platform, 'Sync cadence updated.');
+  } catch (err) {
+    _setChannelNote(platform, 'Cadence update failed: ' + (err.message || err), 'error');
+    loadChannelsConnectCards();
   }
 }
 
